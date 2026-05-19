@@ -1,0 +1,10 @@
+node_modules/
+dist/
+dist-electron/
+release/
+*.log
+.DS_Store
+
+# Local bundled OfficeCLI binaries for packaging.
+officecli-bin/officecli
+officecli-bin/officecli.exe

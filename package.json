@@ -1,0 +1,65 @@
+{
+  "name": "officedex",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist-electron/main/index.js",
+  "scripts": {
+    "dev": "vite --host=0.0.0.0 --port=3100",
+    "build": "tsc --noEmit && vite build && npm run build:main",
+    "build:main": "tsc -p tsconfig.electron.json",
+    "dist:mac": "npm run build && electron-builder --mac dir --publish never -c.electronDist=node_modules/electron/dist",
+    "test": "vitest run",
+    "lint": "tsc --noEmit && tsc -p tsconfig.electron.json --noEmit"
+  },
+  "dependencies": {
+    "@ant-design/icons": "^6.1.0",
+    "@tanstack/react-query": "^5.66.9",
+    "antd": "^6.4.2",
+    "clsx": "^2.1.1",
+    "electron-squirrel-startup": "^1.0.1",
+    "lucide-react": "^0.546.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.8.0",
+    "@testing-library/react": "^16.3.0",
+    "@types/node": "^22.13.10",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^5.0.4",
+    "electron": "^39.2.6",
+    "electron-builder": "^26.0.12",
+    "jsdom": "^26.1.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.4.1",
+    "vitest": "^3.2.4"
+  },
+  "build": {
+    "appId": "io.officecli.officedex",
+    "productName": "OfficeDex",
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "officecli-bin",
+        "to": "officecli-bin",
+        "filter": [
+          "officecli*"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "identity": null,
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    }
+  }
+}
