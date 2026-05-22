@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -319,7 +320,10 @@ func TestDownloadAndInstall_HappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm()&0o111 == 0 {
+	// POSIX-only assertion: NTFS reports a synthetic 0666 mode that drops the
+	// executable bit even after a chmod 0755, so this check is meaningless on
+	// Windows. The os.Rename + chmod flow itself is still exercised above.
+	if goruntime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0 {
 		t.Errorf("binary not executable: %v", info.Mode())
 	}
 	versionData, err := os.ReadFile(filepath.Join(root, "version.json"))
@@ -413,6 +417,9 @@ func TestAssertManualBinaryAccessible_NotExecutablePOSIX(t *testing.T) {
 }
 
 func TestAssertManualBinaryAccessible_ExecutableOK(t *testing.T) {
+	if goruntime.GOOS == "windows" {
+		t.Skip("POSIX-only: NTFS does not honour chmod 0755, so the X_OK path cannot be exercised on Windows runners")
+	}
 	dir := t.TempDir()
 	p := filepath.Join(dir, "officecli")
 	if err := os.WriteFile(p, []byte("x"), 0o755); err != nil {
