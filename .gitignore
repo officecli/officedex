@@ -6,5 +6,18 @@ release/
 .DS_Store
 
 # Local bundled OfficeCLI binaries for packaging.
-officecli-bin/officecli
-officecli-bin/officecli.exe
+build/officecli/
+officecli-bin/
+
+# Wails / Go build artifacts.
+build/bin/
+/officedex
+src/renderer/generated/
+
+# Tooling caches (Claude Code, OMC, Playwright MCP).
+.claude/
+.omc/
+.playwright-mcp/
+
+# Misc local marker files.
+package.json.md5

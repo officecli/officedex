@@ -1,4 +1,4 @@
-import type { Artifact, BridgeEvent, DesktopTask, TaskQuestion } from "../shared/types";
+import type { Artifact, BridgeEvent, DesktopTask, StageState, TaskQuestion } from "../shared/types";
 
 export interface TaskState {
   tasks: Record<string, DesktopTask>;
@@ -17,12 +17,16 @@ export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState 
     status: "starting",
     events: [],
   };
+  const events = [...previous.events, event];
+  const { stages, activeStageId } = reduceStages(events);
   const nextTask: DesktopTask = {
     ...previous,
     status: statusFromEvent(event.type, previous.status),
     documentType: stringPayload(event, "document_type") || previous.documentType,
     topic: stringPayload(event, "topic") || previous.topic,
-    events: [...previous.events, event],
+    events,
+    stages,
+    activeStageId,
   };
   if (event.type === "task.question") {
     nextTask.question = questionFromPayload(event.payload);
@@ -118,4 +122,143 @@ function stringPayload(event: BridgeEvent, key: string): string {
 
 function stringValue(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+const DEFAULT_STAGE_DEFS: ReadonlyArray<{ id: string; label: string }> = [
+  { id: "analyze", label: "Analyzing request" },
+  { id: "outline", label: "Drafting outline" },
+  { id: "writing", label: "Writing content" },
+  { id: "format", label: "Formatting & export" },
+];
+
+export function reduceStages(events: BridgeEvent[]): { stages: StageState[]; activeStageId?: string } {
+  const stageMap = new Map<string, StageState>();
+  const order: string[] = [];
+  let nativeMode = false;
+  let activeId: string | undefined;
+  let derivedIndex = -1;
+
+  function upsert(id: string, label: string, status: StageState["status"], ts?: string) {
+    const existing = stageMap.get(id);
+    if (!existing) {
+      const stage: StageState = { id, label, status };
+      if (status === "active" && ts) stage.startedAt = ts;
+      if ((status === "completed" || status === "failed") && ts) {
+        stage.startedAt = ts;
+        stage.completedAt = ts;
+      }
+      stageMap.set(id, stage);
+      order.push(id);
+      return;
+    }
+    if (label && label !== existing.label) existing.label = label;
+    if (status === "active") {
+      existing.startedAt = existing.startedAt || ts;
+    } else if (status === "completed" || status === "failed") {
+      existing.startedAt = existing.startedAt || ts;
+      existing.completedAt = ts || existing.completedAt;
+    }
+    existing.status = status;
+  }
+
+  function ensureDerivedDefaults() {
+    for (const def of DEFAULT_STAGE_DEFS) {
+      if (!stageMap.has(def.id)) {
+        stageMap.set(def.id, { id: def.id, label: def.label, status: "pending" });
+        order.push(def.id);
+      }
+    }
+  }
+
+  for (const event of events) {
+    const payload = (event.payload || {}) as Record<string, unknown>;
+    const stageId = stringValue(payload.stage_id);
+    const stageLabel = stringValue(payload.stage_label) || stringValue(payload.stage);
+    const ts = event.ts;
+
+    if (stageId) {
+      nativeMode = true;
+      for (const id of order) {
+        const stage = stageMap.get(id);
+        if (stage && id !== stageId && stage.status === "active") {
+          upsert(id, stage.label, "completed", ts);
+        }
+      }
+      if (event.type === "task.failed") {
+        upsert(stageId, stageLabel || stageId, "failed", ts);
+        activeId = undefined;
+      } else if (event.type === "task.completed") {
+        upsert(stageId, stageLabel || stageId, "completed", ts);
+        activeId = undefined;
+      } else {
+        upsert(stageId, stageLabel || stageId, "active", ts);
+        activeId = stageId;
+      }
+      continue;
+    }
+
+    if (nativeMode) {
+      if (event.type === "task.completed") {
+        for (const id of order) {
+          const stage = stageMap.get(id);
+          if (stage && stage.status !== "failed") {
+            upsert(id, stage.label, "completed", ts);
+          }
+        }
+        activeId = undefined;
+      } else if (event.type === "task.failed" && activeId) {
+        const cur = stageMap.get(activeId);
+        if (cur) upsert(activeId, cur.label, "failed", ts);
+        activeId = undefined;
+      }
+      continue;
+    }
+
+    switch (event.type) {
+      case "task.started":
+        break;
+      case "task.progress": {
+        ensureDerivedDefaults();
+        derivedIndex = Math.min(derivedIndex + 1, DEFAULT_STAGE_DEFS.length - 1);
+        for (let i = 0; i < derivedIndex; i++) {
+          const def = DEFAULT_STAGE_DEFS[i];
+          const stage = stageMap.get(def.id);
+          if (stage && stage.status !== "completed") {
+            upsert(def.id, stage.label, "completed", ts);
+          }
+        }
+        const def = DEFAULT_STAGE_DEFS[derivedIndex];
+        upsert(def.id, stageLabel || def.label, "active", ts);
+        activeId = def.id;
+        break;
+      }
+      case "task.completed": {
+        ensureDerivedDefaults();
+        for (const def of DEFAULT_STAGE_DEFS) {
+          const stage = stageMap.get(def.id);
+          if (stage && stage.status !== "failed") {
+            upsert(def.id, stage.label, "completed", ts);
+          }
+        }
+        activeId = undefined;
+        break;
+      }
+      case "task.failed": {
+        if (activeId) {
+          const cur = stageMap.get(activeId);
+          if (cur) upsert(activeId, cur.label, "failed", ts);
+        } else {
+          ensureDerivedDefaults();
+          const def = DEFAULT_STAGE_DEFS[Math.max(derivedIndex, 0)];
+          const stage = stageMap.get(def.id);
+          if (stage) upsert(def.id, stage.label, "failed", ts);
+        }
+        activeId = undefined;
+        break;
+      }
+    }
+  }
+
+  const stages = order.map((id) => stageMap.get(id)).filter((s): s is StageState => Boolean(s));
+  return { stages, activeStageId: activeId };
 }
