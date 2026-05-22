@@ -51,6 +51,9 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      - name: Generate Wails bindings
+        run: wails generate module
+
       - name: Lint (typecheck)
         run: npm run lint
 
