@@ -76,7 +76,20 @@ async function main() {
 
     await mkdir(STAGE_DIR, { recursive: true });
     await rm(STAGED_BINARY, { force: true });
-    await rename(extractedBinary, STAGED_BINARY);
+    try {
+      await rename(extractedBinary, STAGED_BINARY);
+    } catch (err) {
+      // EXDEV: rename across volumes is not allowed on Windows (the temp dir
+      // lives on C: while the workspace can be on D:). Fall back to a
+      // copy + delete which works for any combination of source/target volumes.
+      if (err && err.code === "EXDEV") {
+        const { copyFile } = await import("node:fs/promises");
+        await copyFile(extractedBinary, STAGED_BINARY);
+        await rm(extractedBinary, { force: true });
+      } else {
+        throw err;
+      }
+    }
     if (!IS_WINDOWS) {
       const { chmod } = await import("node:fs/promises");
       await chmod(STAGED_BINARY, 0o755);
