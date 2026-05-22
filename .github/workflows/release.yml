@@ -51,6 +51,9 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      - name: Build renderer (dist/ is required by //go:embed)
+        run: npx vite build
+
       - name: Generate Wails bindings
         run: wails generate module
 
@@ -67,7 +70,7 @@ jobs:
         run: npm run prefetch:officecli
 
       - name: Wails build
-        run: wails build -platform ${{ matrix.platform }} -trimpath
+        run: wails build -platform ${{ matrix.platform }} -trimpath -s
 
       - name: Codesign + embed officecli (macOS)
         if: runner.os == 'macOS'
