@@ -51,8 +51,13 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
-      - name: Build renderer (dist/ is required by //go:embed)
-        run: npx vite build
+      - name: Stub dist/ so `wails generate module` can compile main.go
+        # main.go has `//go:embed all:dist`; the renderer build that fills
+        # dist/ depends on the very bindings `wails generate module` produces.
+        # Drop a placeholder file so the embed pattern resolves now; vite
+        # will overwrite it during the real frontend build below.
+        shell: bash
+        run: mkdir -p dist && touch dist/.placeholder
 
       - name: Generate Wails bindings
         run: wails generate module
@@ -70,7 +75,7 @@ jobs:
         run: npm run prefetch:officecli
 
       - name: Wails build
-        run: wails build -platform ${{ matrix.platform }} -trimpath -s
+        run: wails build -platform ${{ matrix.platform }} -trimpath
 
       - name: Codesign + embed officecli (macOS)
         if: runner.os == 'macOS'
