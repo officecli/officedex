@@ -156,3 +156,70 @@ jobs:
             dist-release/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  sync-to-dist:
+    name: Sync to officedex-dist
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source repo (for scripts/build-manifest.mjs)
+        uses: actions/checkout@v4
+        with:
+          path: src
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: officedex-macos
+          path: artifacts/
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: officedex-windows
+          path: artifacts/
+
+      - name: Clone officedex-dist
+        env:
+          GH_TOKEN: ${{ secrets.DIST_DEPLOY_TOKEN }}
+        run: |
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/officecli/officedex-dist.git" dist
+          cd dist
+          git config user.email "release-bot@officedex.app"
+          git config user.name "OfficeDex Release Bot"
+
+      - name: Stage release artifacts into dist repo
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          mkdir -p "dist/releases/${tag}"
+          cp artifacts/OfficeDex-${tag}-darwin-universal.zip "dist/releases/${tag}/"
+          cp artifacts/OfficeDex-${tag}-windows-amd64.zip   "dist/releases/${tag}/"
+
+      - name: Generate manifest.json
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          notes=$(gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" --json body --jq .body 2>/dev/null || echo "")
+          node src/scripts/build-manifest.mjs \
+            --version "${version}" \
+            --darwin "artifacts/OfficeDex-${tag}-darwin-universal.zip" \
+            --windows "artifacts/OfficeDex-${tag}-windows-amd64.zip" \
+            --notes "${notes:-Release ${tag}}" \
+            --out dist/manifest.json
+          cp dist/manifest.json "dist/archive/manifest-${tag}.json"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Commit and push to officedex-dist
+        run: |
+          cd dist
+          tag="${GITHUB_REF_NAME}"
+          git add manifest.json archive/ "releases/${tag}/"
+          git commit -m "release: ${tag}" -m "Auto-synced from officecli/officedex@${GITHUB_SHA}"
+          git push origin main
