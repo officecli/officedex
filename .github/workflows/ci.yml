@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    env:
+      WAILS_VERSION: v2.12.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Stub dist/ so `wails generate module` can compile main.go
+        # Mirrors release.yml: main.go has `//go:embed all:dist`; the
+        # renderer build that fills dist/ depends on the very bindings
+        # `wails generate module` produces. Drop a placeholder so the
+        # embed pattern resolves now.
+        run: mkdir -p dist && touch dist/.placeholder
+
+      - name: Generate Wails TypeScript bindings
+        run: wails generate module
+
+      - name: TypeScript lint (tsc --noEmit)
+        run: npm run lint
+
+      - name: Renderer tests (vitest)
+        run: npx vitest run
+
+      - name: Go tests
+        run: go test ./... -count=1
