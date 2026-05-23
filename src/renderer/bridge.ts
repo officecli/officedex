@@ -1,4 +1,7 @@
 import type {
+  AppUpdateCheckResult,
+  AppUpdateEvent,
+  AppUpdateStatus,
   Artifact,
   AuthEvent,
   BinaryFileData,
@@ -53,6 +56,9 @@ function createBrowserPreviewAPI(): DesktopAPI {
     },
     openFileDialog: async () => null,
     openMultiFileDialog: async () => null,
+    savePastedImage: async () => {
+      throw new Error("Saving pasted images requires desktop file access.");
+    },
     previewArtifact: async (artifact) => {
       const params = new URLSearchParams({
         offlinePreview: "1",
@@ -91,6 +97,28 @@ function createBrowserPreviewAPI(): DesktopAPI {
     getDefaultWorkspaceDir: async () => "(default workspace inside desktop app)",
     onAuthEvent: () => () => undefined,
     onBridgeEvent: () => () => undefined,
+    getAppVersion: async () => "0.0.0-browser",
+    getAppUpdateStatus: async () => ({
+      currentVersion: "0.0.0-browser",
+      latestVersion: null,
+      updateAvailable: false,
+      mandatory: false,
+      downloading: false,
+      downloadedPath: null,
+      lastCheckedAt: null,
+      lastError: null,
+    }),
+    checkAppUpdate: async () => {
+      throw new Error("App updates require the desktop app.");
+    },
+    downloadAppUpdate: async () => {
+      throw new Error("App updates require the desktop app.");
+    },
+    installAppUpdate: async () => {
+      throw new Error("App updates require the desktop app.");
+    },
+    cancelAppUpdate: async () => undefined,
+    onAppUpdateEvent: () => () => undefined,
   };
 }
 
@@ -109,6 +137,15 @@ function decodeRawBytes(bytes: number[] | null | undefined): unknown {
   } catch {
     return text;
   }
+}
+
+function uint8ArrayToBase64(data: Uint8Array): string {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < data.length; i += chunk) {
+    binary += String.fromCharCode(...data.subarray(i, i + chunk));
+  }
+  return btoa(binary);
 }
 
 /**
@@ -183,6 +220,12 @@ function createWailsAPI(): DesktopAPI {
       const result = await WailsApp.OpenMultiFileDialog((options ?? { filters: [] }) as never);
       return result && result.length > 0 ? result : null;
     },
+    savePastedImage: async (data: Uint8Array, ext: string) => {
+      return WailsApp.SavePastedImage({
+        dataBase64: uint8ArrayToBase64(data),
+        ext,
+      } as never);
+    },
     previewArtifact: (artifact: Artifact) => WailsApp.PreviewArtifact(artifact as never),
     issuePreviewToken: async (artifact: Artifact): Promise<PreviewGrant> =>
       WailsApp.IssuePreviewToken(artifact as never),
@@ -223,6 +266,40 @@ function createWailsAPI(): DesktopAPI {
       EventsOn("auth:event", (payload: unknown) => callback(payload as AuthEvent)),
     onBridgeEvent: (callback: (event: BridgeEvent) => void) =>
       EventsOn("bridge:event", (payload: unknown) => callback(payload as BridgeEvent)),
+    getAppVersion: () => WailsApp.GetAppVersion(),
+    getAppUpdateStatus: async () => normaliseAppUpdateStatus(await WailsApp.GetAppUpdateStatus()),
+    checkAppUpdate: async () => {
+      const result = await WailsApp.CheckAppUpdate();
+      return normaliseAppUpdateCheckResult(result);
+    },
+    downloadAppUpdate: () => WailsApp.DownloadAppUpdate(),
+    installAppUpdate: () => WailsApp.InstallAppUpdate(),
+    cancelAppUpdate: () => WailsApp.CancelAppUpdate(),
+    onAppUpdateEvent: (callback: (event: AppUpdateEvent) => void) =>
+      EventsOn("appupdate:event", (payload: unknown) => callback(payload as AppUpdateEvent)),
+  };
+}
+
+function normaliseAppUpdateStatus(raw: unknown): AppUpdateStatus {
+  const value = (raw ?? {}) as Partial<AppUpdateStatus>;
+  return {
+    currentVersion: value.currentVersion ?? "0.0.0",
+    latestVersion: value.latestVersion ?? null,
+    updateAvailable: Boolean(value.updateAvailable),
+    mandatory: Boolean(value.mandatory),
+    downloading: Boolean(value.downloading),
+    downloadedPath: value.downloadedPath ?? null,
+    lastCheckedAt: value.lastCheckedAt ?? null,
+    lastError: value.lastError ?? null,
+    notes: value.notes,
+  };
+}
+
+function normaliseAppUpdateCheckResult(raw: unknown): AppUpdateCheckResult {
+  const value = (raw ?? {}) as Partial<AppUpdateCheckResult>;
+  return {
+    release: (value.release ?? null) as AppUpdateCheckResult["release"],
+    status: normaliseAppUpdateStatus(value.status),
   };
 }
 

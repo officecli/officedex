@@ -7,11 +7,14 @@ import { theme } from "./designTokens";
 import type { NavKey } from "./mockData";
 import { Shell } from "./components/Shell";
 import { PreviewPanel } from "./components/PreviewPanel";
+import { UpdateBanner } from "./components/UpdateBanner";
+import { ForceUpdateOverlay } from "./components/ForceUpdateOverlay";
 import { DialogueScreen, type FailureKind } from "./screens/DialogueScreens";
 import { ArtifactsScreen, TasksScreen, TemplatesScreen } from "./screens/DataScreens";
 import { LoginScreen, SettingsScreen } from "./screens/SettingsScreens";
 import { OnboardingScreen } from "./screens/OnboardingScreen";
 import { useSettings } from "./useSettings";
+import { useAppUpdate } from "./useAppUpdate";
 
 export function App() {
   const [state, setState] = useState<TaskState>(() => createInitialTaskState());
@@ -26,6 +29,8 @@ export function App() {
   const [previewGrant, setPreviewGrant] = useState<PreviewGrant | null>(null);
   const { settings: persistedSettings, defaultWorkspaceDir, loading: settingsLoading } = useSettings();
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+  const appUpdate = useAppUpdate();
+  const forceUpdate = appUpdate.status.mandatory && Boolean(appUpdate.release);
 
   const recordError = useCallback((text: string, kind: FailureKind, details?: string) => {
     setLastError(text);
@@ -41,6 +46,10 @@ export function App() {
   const showOnboarding = !settingsLoading && !onboardingDismissed && persistedSettings.onboardingCompletedAt === null;
 
   useEffect(() => {
+    if (forceUpdate) {
+      setCapabilityStatus("Update required to continue");
+      return;
+    }
     const off = officecli.onBridgeEvent((event: BridgeEvent) => {
       if (event.type === "bridge.reconnecting") {
         setCapabilityStatus(String(event.payload?.message || "Reconnecting..."));
@@ -97,7 +106,7 @@ export function App() {
         setCapabilityStatus(text);
       });
     return off;
-  }, [connectAttempt, clearError, recordError, settingsLoading, showOnboarding]);
+  }, [connectAttempt, clearError, recordError, settingsLoading, showOnboarding, forceUpdate]);
 
   const selectedTask = selectedTaskID === null ? undefined : selectedTaskID ? state.tasks[selectedTaskID] : state.taskOrder.length > 0 ? state.tasks[state.taskOrder[0]] : undefined;
   const displayTask = selectedTask;
@@ -108,6 +117,10 @@ export function App() {
   const tasks = useMemo(() => state.taskOrder.map((taskID) => state.tasks[taskID]).filter(Boolean), [state]);
 
   async function submit(values: GenerateInput) {
+    if (forceUpdate) {
+      recordError("Update required before continuing", "setup");
+      return;
+    }
     setBusy(true);
     clearError();
     try {
@@ -161,14 +174,48 @@ export function App() {
     ? <PreviewPanel grant={previewGrant} onClose={closeInlinePreview} />
     : undefined;
 
+  const showBanner =
+    appUpdate.release !== null &&
+    appUpdate.status.updateAvailable &&
+    !appUpdate.status.mandatory &&
+    !appUpdate.dismissed;
+
+  if (forceUpdate && appUpdate.release) {
+    return (
+      <ConfigProvider theme={theme}>
+        <ForceUpdateOverlay
+          release={appUpdate.release}
+          phase={appUpdate.phase}
+          progress={appUpdate.progress}
+          error={appUpdate.error}
+          currentVersion={appUpdate.status.currentVersion}
+          onUpdate={() => void appUpdate.download()}
+          onInstall={() => void appUpdate.install()}
+        />
+      </ConfigProvider>
+    );
+  }
+
   return (
     <ConfigProvider theme={theme}>
+      {showBanner && appUpdate.release ? (
+        <UpdateBanner
+          release={appUpdate.release}
+          phase={appUpdate.phase}
+          progress={appUpdate.progress}
+          error={appUpdate.error}
+          onUpdate={() => void appUpdate.download()}
+          onInstall={() => void appUpdate.install()}
+          onDismiss={appUpdate.dismiss}
+        />
+      ) : null}
       <Shell
         activeNav={activeNav}
         bridgeStatus={capabilityStatus}
         failed={Boolean(lastError)}
         errorKind={lastError ? errorKind : undefined}
         inspector={sidePanel}
+        credit={{ used: 1240, total: 2000, planLabel: "Free plan" }}
         onNavChange={setActiveNav}
         onNewGeneration={newGeneration}
       >

@@ -1,14 +1,17 @@
-import { Avatar, Button, Form, Input, Modal, Radio, Select, Space, Spin, Switch, Tabs, Tag, message } from "antd";
+import { Avatar, Button, Form, Input, Modal, Progress, Radio, Select, Space, Spin, Switch, Tabs, Tag, message } from "antd";
 import {
   CheckCircleFilled,
   CopyOutlined,
+  DownloadOutlined,
   ExclamationCircleFilled,
   FolderOpenOutlined,
   GlobalOutlined,
   Loading3QuartersOutlined,
   LogoutOutlined,
+  RocketOutlined,
   SafetyCertificateOutlined,
   SaveOutlined,
+  SyncOutlined,
   UploadOutlined,
   UserOutlined,
 } from "@ant-design/icons";
@@ -16,6 +19,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { MaterialSymbol, StatusDot } from "../components/Shell";
 import { officecli } from "../bridge";
 import { useSettings } from "../useSettings";
+import { useAppUpdate } from "../useAppUpdate";
 import { ProviderForm } from "./OnboardingScreen";
 import type { AuthEvent, DocumentType, GenerateDefaults, LlmProvider, WhoAmIResult } from "../../shared/types";
 
@@ -239,6 +243,10 @@ export function SettingsScreen({ fluid }: { fluid: boolean }) {
               </SettingRow>
             </div>
             <div className="setting-group">
+              <h2>About</h2>
+              <AboutCard />
+            </div>
+            <div className="setting-group">
               <h2>Reset</h2>
               <SettingRow title="Show onboarding wizard again" desc="Re-runs the 3-step setup on next app launch. Current settings are preserved.">
                 <Button onClick={rerunOnboarding}>Show wizard</Button>
@@ -255,6 +263,104 @@ export function SettingsScreen({ fluid }: { fluid: boolean }) {
 }
 
 type LoginPhase = "loading" | "anonymous" | "awaiting" | "success" | "failure";
+
+function AboutCard() {
+  const update = useAppUpdate();
+  const [version, setVersion] = useState<string>("");
+  const [checking, setChecking] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    officecli
+      .getAppVersion()
+      .then((v) => {
+        if (!cancelled) setVersion(v);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const status = update.status;
+  const release = update.release;
+  const downloading = update.phase === "downloading";
+  const downloaded = update.phase === "downloaded" || update.phase === "installing";
+  const percent =
+    update.progress.bytesTotal > 0
+      ? Math.min(100, Math.round((update.progress.bytesDone / update.progress.bytesTotal) * 100))
+      : 0;
+
+  const handleCheck = useCallback(async () => {
+    setChecking(true);
+    try {
+      await update.check();
+    } finally {
+      setChecking(false);
+    }
+  }, [update]);
+
+  const handleUpdate = useCallback(() => {
+    if (downloaded) {
+      void update.install();
+    } else {
+      void update.download();
+    }
+  }, [downloaded, update]);
+
+  return (
+    <div className="about-card">
+      <div className="about-row">
+        <span className="about-label">Version</span>
+        <span className="about-value">OfficeDex {version || status.currentVersion}</span>
+      </div>
+      <div className="about-row">
+        <span className="about-label">Last checked</span>
+        <span className="about-value">{formatLastChecked(status.lastCheckedAt)}</span>
+      </div>
+      {status.lastError ? (
+        <div className="about-row about-row-error">
+          <span className="about-label">Last error</span>
+          <span className="about-value">{status.lastError}</span>
+        </div>
+      ) : null}
+      {downloading ? (
+        <div className="about-progress">
+          <Progress percent={percent} size="small" showInfo={false} />
+          <span className="about-progress-label">Downloading {percent}%</span>
+        </div>
+      ) : null}
+      <Space size={8} className="about-actions">
+        <Button icon={<SyncOutlined spin={checking} />} onClick={handleCheck} disabled={checking || downloading}>
+          Check for updates
+        </Button>
+        {status.updateAvailable && release ? (
+          <Button
+            type="primary"
+            icon={downloaded ? <RocketOutlined /> : <DownloadOutlined />}
+            onClick={handleUpdate}
+            disabled={downloading}
+          >
+            {downloaded ? `Restart to install ${release.version}` : downloading ? "Downloading..." : `Update to ${release.version}`}
+          </Button>
+        ) : !checking ? (
+          <span className="about-uptodate">You're on the latest version</span>
+        ) : null}
+      </Space>
+    </div>
+  );
+}
+
+function formatLastChecked(timestamp: string | null): string {
+  if (!timestamp) return "Never";
+  const then = Date.parse(timestamp);
+  if (Number.isNaN(then)) return timestamp;
+  const elapsed = Math.max(0, Date.now() - then);
+  if (elapsed < 60_000) return "just now";
+  if (elapsed < 60 * 60_000) return `${Math.floor(elapsed / 60_000)} minutes ago`;
+  if (elapsed < 24 * 60 * 60_000) return `${Math.floor(elapsed / (60 * 60_000))} hours ago`;
+  return new Date(then).toLocaleString();
+}
 
 export function LoginScreen() {
   const [phase, setPhase] = useState<LoginPhase>("loading");

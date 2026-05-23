@@ -1,4 +1,4 @@
-import { Badge, Button, Dropdown, Input, Space, Tooltip } from "antd";
+import { Badge, Button, Dropdown, Input, Progress, Space, Tooltip } from "antd";
 import type { MenuProps } from "antd";
 import { useState } from "react";
 import {
@@ -33,11 +33,25 @@ import {
   SettingOutlined,
   StarOutlined,
   TableOutlined,
+  ThunderboltOutlined,
   UserOutlined,
   UnlockOutlined,
   UnorderedListOutlined,
 } from "@ant-design/icons";
+import { notion } from "../designTokens";
 import type { NavKey } from "../mockData";
+
+export interface CreditInfo {
+  used: number;
+  total: number;
+  planLabel?: string;
+}
+
+const DEFAULT_CREDIT: CreditInfo = {
+  used: 1240,
+  total: 2000,
+  planLabel: "Free plan",
+};
 
 interface ShellProps {
   activeNav: NavKey;
@@ -46,6 +60,7 @@ interface ShellProps {
   errorKind?: "connection" | "auth" | "task" | "setup" | "other";
   children: React.ReactNode;
   inspector?: React.ReactNode;
+  credit?: CreditInfo;
   onNavChange: (key: NavKey) => void;
   onNewGeneration: () => void;
 }
@@ -81,6 +96,7 @@ export function Shell({
   errorKind,
   children,
   inspector,
+  credit,
   onNavChange,
   onNewGeneration,
 }: ShellProps) {
@@ -112,6 +128,7 @@ export function Shell({
             </button>
           ))}
         </nav>
+        <CreditMeter info={credit ?? DEFAULT_CREDIT} collapsed={collapsed || Boolean(inspector)} />
         <button className={`nav-item profile-link ${activeNav === "login" ? "active" : ""}`} onClick={() => onNavChange("login")}>
           <UserOutlined />
           <span>{fluid ? "Profile" : "Help Center"}</span>
@@ -158,6 +175,49 @@ export function Shell({
 export function MaterialSymbol({ name }: { name: string }) {
   const icon = symbolIcons[name] ?? <AppstoreOutlined />;
   return <span className="material-symbol">{icon}</span>;
+}
+
+function CreditMeter({ info, collapsed }: { info: CreditInfo; collapsed: boolean }) {
+  const total = Math.max(0, Math.floor(info.total));
+  const used = Math.max(0, Math.floor(info.used));
+  const clampedUsed = Math.min(used, total);
+  const remaining = total - clampedUsed;
+  const percent = total === 0 ? 0 : Math.round((clampedUsed / total) * 100);
+  const remainingRatio = total === 0 ? 1 : remaining / total;
+  const tone = remainingRatio <= 0.1 ? "critical" : remainingRatio <= 0.25 ? "low" : "normal";
+  const strokeColor = tone === "critical" ? notion.error : tone === "low" ? notion.warning : notion.primary;
+  const tooltipBody = `${formatNumber(remaining)} credits remaining of ${formatNumber(total)}${info.planLabel ? ` · ${info.planLabel}` : ""}`;
+
+  return (
+    <Tooltip title={tooltipBody} placement="right">
+      <div className={`credit-meter credit-meter-${tone}${collapsed ? " credit-meter-collapsed" : ""}`} role="group" aria-label={`Credit balance: ${tooltipBody}`}>
+        <div className="credit-meter-row">
+          <ThunderboltOutlined className="credit-meter-icon" aria-hidden />
+          <div className="credit-meter-text">
+            <span className="credit-meter-label">Credits</span>
+            <span className="credit-meter-value">
+              {formatNumber(clampedUsed)} / {formatNumber(total)}
+            </span>
+          </div>
+          <span className="credit-meter-percent">{percent}%</span>
+        </div>
+        <Progress
+          className="credit-meter-bar"
+          percent={percent}
+          showInfo={false}
+          size="small"
+          strokeColor={strokeColor}
+          railColor={notion.hairline}
+          aria-hidden
+        />
+        {info.planLabel ? <div className="credit-meter-plan">{info.planLabel}</div> : null}
+      </div>
+    </Tooltip>
+  );
+}
+
+function formatNumber(value: number): string {
+  return value.toLocaleString("en-US");
 }
 
 export function StatusDot({ tone = "blue" }: { tone?: "blue" | "green" | "orange" | "red" | "gray" }) {

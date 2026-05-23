@@ -200,7 +200,104 @@ select {
 }
 
 .profile-link {
+  margin-top: 4px;
+}
+
+.credit-meter {
   margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 12px 10px;
+  border: 1px solid var(--n-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--n-canvas);
+  color: var(--n-charcoal);
+  cursor: default;
+}
+
+.fluid-shell .credit-meter {
+  background: var(--n-surface);
+  border-color: var(--n-hairline-soft);
+}
+
+.credit-meter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.credit-meter-icon {
+  font-size: 16px;
+  color: var(--n-primary);
+}
+
+.credit-meter-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.credit-meter-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--n-steel);
+  letter-spacing: 0.2px;
+}
+
+.credit-meter-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--n-charcoal);
+  font-variant-numeric: tabular-nums;
+}
+
+.credit-meter-percent {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--n-slate);
+  font-variant-numeric: tabular-nums;
+}
+
+.credit-meter-bar.ant-progress {
+  margin: 0;
+  line-height: 1;
+}
+
+.credit-meter-plan {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--n-steel);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.credit-meter-low .credit-meter-percent {
+  color: var(--n-warning);
+}
+
+.credit-meter-critical .credit-meter-percent {
+  color: var(--n-error);
+}
+
+.credit-meter-critical {
+  border-color: rgba(224, 49, 49, 0.35);
+}
+
+.credit-meter-collapsed {
+  padding: 8px;
+  align-items: center;
+}
+
+.credit-meter-collapsed .credit-meter-text,
+.credit-meter-collapsed .credit-meter-percent,
+.credit-meter-collapsed .credit-meter-plan {
+  display: none;
+}
+
+.credit-meter-collapsed .credit-meter-row {
+  justify-content: center;
 }
 
 /* ─── Main Frame ─── */
@@ -2011,4 +2108,252 @@ select {
   font-size: 12px;
   font-family: 'SFMono-Regular', Menlo, Consolas, monospace;
   word-break: break-all;
+}
+
+/* ───── App auto-update UI ───── */
+
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #5645d4 0%, #4534b3 100%);
+  color: #ffffff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.update-banner-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.16);
+  font-size: 18px;
+}
+
+.update-banner-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.update-banner-title {
+  font-family: 'DM Serif Display', Georgia, serif;
+  font-size: 16px;
+  line-height: 1.2;
+  margin-bottom: 2px;
+}
+
+.update-banner-notes {
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.82);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.update-banner-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.update-banner-progress .ant-progress {
+  flex: 1 1 auto;
+  margin: 0;
+}
+
+.update-banner-bytes {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.84);
+}
+
+.update-banner-error {
+  font-size: 12px;
+  color: #ffe1e1;
+  margin-top: 4px;
+}
+
+.update-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.update-banner-actions .ant-btn-primary {
+  background: #ffffff;
+  color: #4534b3;
+  border-color: #ffffff;
+}
+
+.update-banner-actions .ant-btn-primary:hover {
+  background: rgba(255, 255, 255, 0.92);
+  color: #3a2a99;
+  border-color: rgba(255, 255, 255, 0.92);
+}
+
+.update-banner-actions .ant-btn-text {
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.update-banner-actions .ant-btn-text:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* ───── Force update overlay ───── */
+
+.force-update-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(15, 15, 15, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  backdrop-filter: blur(6px);
+}
+
+.force-update-card {
+  width: min(480px, 100%);
+  background: #fafaf9;
+  border: 1px solid #e5e3df;
+  border-radius: 12px;
+  padding: 32px 28px;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.32);
+  text-align: center;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  color: #37352f;
+}
+
+.force-update-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: #e6e0f5;
+  color: #5645d4;
+  font-size: 24px;
+  margin-bottom: 16px;
+}
+
+.force-update-title {
+  font-family: 'DM Serif Display', Georgia, serif;
+  font-size: 28px;
+  line-height: 1.15;
+  margin: 0 0 8px;
+  color: #1a1a1a;
+}
+
+.force-update-version {
+  font-size: 14px;
+  color: #5d5b54;
+  margin-bottom: 14px;
+}
+
+.force-update-version-current {
+  color: #a4a097;
+}
+
+.force-update-notes {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #37352f;
+  margin: 0 0 12px;
+  white-space: pre-line;
+}
+
+.force-update-reason {
+  font-size: 13px;
+  color: #787671;
+  margin: 0 0 20px;
+}
+
+.force-update-action {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.force-update-progress {
+  margin-top: 8px;
+}
+
+.force-update-progress-label {
+  font-size: 12px;
+  color: #5d5b54;
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.force-update-error {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #e03131;
+}
+
+/* ───── Settings > About card ───── */
+
+.about-card {
+  background: #ffffff;
+  border: 1px solid #e5e3df;
+  border-radius: 12px;
+  padding: 20px 24px;
+}
+
+.about-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 6px 0;
+  font-size: 14px;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+
+.about-label {
+  color: #787671;
+}
+
+.about-value {
+  color: #1a1a1a;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.about-row-error .about-value {
+  color: #e03131;
+}
+
+.about-progress {
+  margin: 12px 0 6px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.about-progress .ant-progress {
+  flex: 1 1 auto;
+  margin: 0;
+}
+
+.about-progress-label {
+  font-size: 12px;
+  color: #5d5b54;
+  font-variant-numeric: tabular-nums;
+}
+
+.about-actions {
+  margin-top: 12px;
+}
+
+.about-uptodate {
+  color: #787671;
+  font-size: 13px;
+  font-style: italic;
 }

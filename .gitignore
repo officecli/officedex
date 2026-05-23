@@ -21,3 +21,8 @@ src/renderer/generated/
 
 # Misc local marker files.
 package.json.md5
+
+# Playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/

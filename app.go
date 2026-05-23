@@ -11,6 +11,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,6 +25,7 @@ import (
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"officedex/internal/appupdate"
 	"officedex/internal/binresolver"
 	"officedex/internal/bridge"
 	"officedex/internal/localstore"
@@ -35,10 +37,13 @@ import (
 
 const (
 	appName             = "OfficeDex"
+	appVersion          = "0.2.0"
 	previewExtraWidth   = 500
 	bridgeEventChannel  = "bridge:event"
 	authEventChannel    = "auth:event"
 	previewEventChannel = "preview:open"
+	appUpdateChannel    = "appupdate:event"
+	defaultUpdateManifestURL = "https://officedex.releases.example.com/manifest.json"
 )
 
 // App is the Wails-bound object surfaced to the renderer.
@@ -59,6 +64,7 @@ type App struct {
 	loginUnsub      func()
 	pendingLoginURL string
 	previewModeWidthBefore int
+	appUpdateMgr    *appupdate.Manager
 }
 
 // NewApp resolves user-scoped paths and constructs the per-user services
@@ -92,14 +98,33 @@ func NewApp() (*App, error) {
 
 	localStore := localstore.New(filepath.Join(userDataDir, "officedex.sqlite"))
 
-	return &App{
+	app := &App{
 		userDataDir:    userDataDir,
 		workspaceDir:   workspaceDir,
 		settingsStore:  settingsStore,
 		localStore:     localStore,
 		previewReg:     previewReg,
 		cachedSettings: cached,
-	}, nil
+	}
+
+	manifestURL := os.Getenv("OFFICEDEX_UPDATE_MANIFEST_URL")
+	if strings.TrimSpace(manifestURL) == "" {
+		manifestURL = defaultUpdateManifestURL
+	}
+	updateMgr, err := appupdate.New(appupdate.Options{
+		ManifestURL:    manifestURL,
+		CurrentVersion: appVersion,
+		UpdatesDir:     filepath.Join(userDataDir, "updates"),
+		Listener: func(ev appupdate.Event) {
+			emit(app.ctx, appUpdateChannel, ev)
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("appupdate manager: %w", err)
+	}
+	app.appUpdateMgr = updateMgr
+
+	return app, nil
 }
 
 // startup is called by Wails after the renderer is ready. The context is
@@ -265,6 +290,52 @@ func (a *App) OpenMultiFileDialog(options *FileDialogOptions) ([]string, error) 
 	return wailsruntime.OpenMultipleFilesDialog(a.ctx, wailsruntime.OpenDialogOptions{
 		Filters: dialogFilters(options),
 	})
+}
+
+// PastedImageInput is the renderer-facing payload for SavePastedImage.
+// DataBase64 is the standard base64-encoded image bytes (no data: URL
+// prefix), and Ext is the file extension without a leading dot. Unsupported
+// extensions normalise to "png".
+type PastedImageInput struct {
+	DataBase64 string `json:"dataBase64"`
+	Ext        string `json:"ext"`
+}
+
+// SavePastedImage persists clipboard image bytes inside the workspace and
+// returns the absolute file path so the renderer can append it to the
+// reference-images list.
+func (a *App) SavePastedImage(input PastedImageInput) (string, error) {
+	if input.DataBase64 == "" {
+		return "", errors.New("save pasted image: empty data")
+	}
+	data, err := base64.StdEncoding.DecodeString(input.DataBase64)
+	if err != nil {
+		return "", fmt.Errorf("decode pasted image: %w", err)
+	}
+	if len(data) == 0 {
+		return "", errors.New("save pasted image: empty data")
+	}
+	ext := normalizePastedImageExt(input.Ext)
+	dir := filepath.Join(a.workspaceDir, ".pasted-images")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("mkdir pasted-images dir: %w", err)
+	}
+	name := fmt.Sprintf("paste-%d.%s", time.Now().UnixNano(), ext)
+	dest := filepath.Join(dir, name)
+	if err := os.WriteFile(dest, data, 0o644); err != nil {
+		return "", fmt.Errorf("write pasted image: %w", err)
+	}
+	return dest, nil
+}
+
+func normalizePastedImageExt(ext string) string {
+	cleaned := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(ext), "."))
+	switch cleaned {
+	case "png", "jpg", "jpeg", "gif", "webp", "bmp", "svg":
+		return cleaned
+	default:
+		return "png"
+	}
 }
 
 // SetPreviewMode resizes the main window to make room for the preview pane,
@@ -460,6 +531,88 @@ func (a *App) UpdateSettings(patch settings.Patch) (types.UserSettings, error) {
 // GetDefaultWorkspaceDir returns the per-user workspace folder.
 func (a *App) GetDefaultWorkspaceDir() string {
 	return a.workspaceDir
+}
+
+// ─── App update bindings ────────────────────────────────────────────────────
+
+// AppUpdateCheckResult is the renderer-facing result of CheckAppUpdate.
+type AppUpdateCheckResult struct {
+	Release *appupdate.ReleaseInfo `json:"release"`
+	Status  appupdate.Status       `json:"status"`
+}
+
+// GetAppVersion returns the desktop app version string.
+func (a *App) GetAppVersion() string { return appVersion }
+
+// GetAppUpdateStatus returns the cached status snapshot.
+func (a *App) GetAppUpdateStatus() appupdate.Status {
+	return a.appUpdateMgr.Status()
+}
+
+// CheckAppUpdate polls the manifest URL and returns the parsed release info
+// plus a fresh status snapshot.
+func (a *App) CheckAppUpdate() (AppUpdateCheckResult, error) {
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	rel, err := a.appUpdateMgr.CheckLatest(ctx)
+	if err != nil {
+		return AppUpdateCheckResult{Status: a.appUpdateMgr.Status()}, err
+	}
+	return AppUpdateCheckResult{Release: rel, Status: a.appUpdateMgr.Status()}, nil
+}
+
+// DownloadAppUpdate fetches the asset for the current platform and returns
+// the absolute path to the verified file.
+func (a *App) DownloadAppUpdate() (string, error) {
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return a.appUpdateMgr.DownloadUpdate(ctx)
+}
+
+// CancelAppUpdate aborts any in-flight download.
+func (a *App) CancelAppUpdate() error {
+	a.appUpdateMgr.CancelDownload()
+	return nil
+}
+
+// InstallAppUpdate launches the downloaded installer in a platform-specific
+// way then quits the current process so the installer can replace files.
+// Returns an error when no download has completed.
+func (a *App) InstallAppUpdate() error {
+	dp := a.appUpdateMgr.DownloadedPath()
+	if dp == nil {
+		return errors.New("appupdate: not downloaded")
+	}
+	path := *dp
+	if _, err := os.Stat(path); err != nil {
+		return fmt.Errorf("appupdate: installer file missing: %w", err)
+	}
+	if err := launchInstaller(path); err != nil {
+		return fmt.Errorf("appupdate: launch installer: %w", err)
+	}
+	rel := a.appUpdateMgr.LatestRelease()
+	if rel != nil {
+		a.appUpdateMgr.MarkInstalled(rel.Version)
+	}
+	if a.ctx != nil {
+		wailsruntime.Quit(a.ctx)
+	}
+	return nil
+}
+
+func launchInstaller(path string) error {
+	switch runtime.GOOS {
+	case "darwin":
+		return exec.Command("open", path).Start()
+	case "windows":
+		return exec.Command("cmd", "/c", "start", "", path).Start()
+	default:
+		return exec.Command("xdg-open", path).Start()
+	}
 }
 
 // ─── Internals ──────────────────────────────────────────────────────────────

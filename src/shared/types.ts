@@ -189,6 +189,45 @@ export interface UserSettings {
   onboardingCompletedAt: string | null;
 }
 
+export interface AppUpdateAsset {
+  url: string;
+  sha256: string;
+  size: number;
+}
+
+export interface AppUpdateRelease {
+  version: string;
+  notes: string;
+  minSupportedVersion: string;
+  mandatory: boolean;
+  publishedAt?: string;
+  assets: Record<string, AppUpdateAsset>;
+}
+
+export interface AppUpdateStatus {
+  currentVersion: string;
+  latestVersion: string | null;
+  updateAvailable: boolean;
+  mandatory: boolean;
+  downloading: boolean;
+  downloadedPath: string | null;
+  lastCheckedAt: string | null;
+  lastError: string | null;
+  notes?: string;
+}
+
+export interface AppUpdateCheckResult {
+  release: AppUpdateRelease | null;
+  status: AppUpdateStatus;
+}
+
+export type AppUpdateEvent =
+  | { type: "status"; status?: AppUpdateStatus; release?: AppUpdateRelease }
+  | { type: "progress"; bytesDone?: number; bytesTotal?: number }
+  | { type: "downloaded"; downloadedPath: string }
+  | { type: "installed"; message?: string }
+  | { type: "error"; message: string };
+
 export type BinaryFileData = ArrayBuffer | Uint8Array;
 
 export interface DesktopAPI {
@@ -202,6 +241,7 @@ export interface DesktopAPI {
   openExternal(url: string): Promise<void>;
   openFileDialog(options?: { filters?: Array<{ name: string; extensions: string[] }> }): Promise<string | null>;
   openMultiFileDialog(options?: { filters?: Array<{ name: string; extensions: string[] }> }): Promise<string[] | null>;
+  savePastedImage(data: Uint8Array, ext: string): Promise<string>;
   previewArtifact(artifact: Artifact): Promise<void>;
   issuePreviewToken(artifact: Artifact): Promise<PreviewGrant>;
   revokePreviewToken(token: string): Promise<void>;
@@ -217,4 +257,11 @@ export interface DesktopAPI {
   getDefaultWorkspaceDir(): Promise<string>;
   onAuthEvent(callback: (event: AuthEvent) => void): () => void;
   onBridgeEvent(callback: (event: BridgeEvent) => void): () => void;
+  getAppVersion(): Promise<string>;
+  getAppUpdateStatus(): Promise<AppUpdateStatus>;
+  checkAppUpdate(): Promise<AppUpdateCheckResult>;
+  downloadAppUpdate(): Promise<string>;
+  installAppUpdate(): Promise<void>;
+  cancelAppUpdate(): Promise<void>;
+  onAppUpdateEvent(callback: (event: AppUpdateEvent) => void): () => void;
 }

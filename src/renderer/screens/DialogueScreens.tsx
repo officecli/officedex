@@ -16,7 +16,7 @@ import {
   UserOutlined,
   WarningFilled,
 } from "@ant-design/icons";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent } from "react";
 import type { Artifact, BridgeEvent, DesktopTask, DocumentType, GenerateInput, StageState } from "../../shared/types";
 import { defaultGenerateInput } from "../defaults";
 import { useSettings } from "../useSettings";
@@ -141,7 +141,7 @@ function NewGeneration({ busy, onSubmit }: { busy: boolean; onSubmit: (values: G
           <Input />
         </Form.Item>
         <Form.Item name="prompt" rules={[{ required: true, message: "Please enter generation instructions" }]}>
-          <Input.TextArea rows={3} placeholder="e.g.: Generate a Q3 marketing plan including multi-channel distribution, retention, and budget allocation." onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form.submit(); } }} />
+          <Input.TextArea rows={3} placeholder="e.g.: Generate a Q3 marketing plan including multi-channel distribution, retention, and budget allocation." onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form.submit(); } }} onPaste={makePasteHandler(attachments)} />
         </Form.Item>
         {attachments.sourceWorkbookSpec && attachments.sourceFile ? (
           <div className="attached-file">
@@ -263,7 +263,7 @@ function FluidNewGeneration({ busy, onSubmit }: { busy: boolean; onSubmit: (valu
           <Input />
         </Form.Item>
         <Form.Item name="prompt" rules={[{ required: true, message: "Please enter generation instructions" }]}>
-          <Input.TextArea rows={3} placeholder="Enter what you want to generate, or choose a template above..." onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form.submit(); } }} />
+          <Input.TextArea rows={3} placeholder="Enter what you want to generate, or choose a template above..." onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form.submit(); } }} onPaste={makePasteHandler(attachments)} />
         </Form.Item>
         {attachments.sourceWorkbookSpec && attachments.sourceFile ? (
           <div className="attached-file">
@@ -777,6 +777,36 @@ function supportsOfflinePreview(artifact: Artifact) {
   const extension = artifact.fileName.split(".").pop()?.toLowerCase() || "";
   const supported = ["docx", "xlsx", "pptx", "pdf", "html", "htm"];
   return supported.includes(type) || supported.includes(extension);
+}
+
+function makePasteHandler(attachments: ReturnType<typeof useAttachments>) {
+  return (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = event.clipboardData?.files;
+    if (!items || items.length === 0) return;
+    const images: File[] = [];
+    for (const file of Array.from(items)) {
+      if (file.type.startsWith("image/")) images.push(file);
+    }
+    if (images.length === 0) return;
+    if (!attachments.supportsPaste) return;
+    event.preventDefault();
+    if (attachments.isReferenceLimitReached) {
+      message.warning(`Reference images limit reached (${attachments.referenceImagesSpec?.maxCount ?? 0}).`);
+      return;
+    }
+    void attachments.handlePastedFiles(images).then((added) => {
+      const max = attachments.referenceImagesSpec?.maxCount;
+      if (added === 0) {
+        if (max !== undefined) {
+          message.warning(`Reference images limit reached (${max}).`);
+        }
+        return;
+      }
+      message.success(added === 1 ? "Pasted image attached" : `Attached ${added} pasted images`);
+    }).catch((error) => {
+      message.error(`Failed to attach pasted image: ${(error as Error).message}`);
+    });
+  };
 }
 
 const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"];

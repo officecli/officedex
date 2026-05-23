@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, createEvent, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BridgeEvent, DesktopAPI } from "../shared/types";
 import { applyTaskEvent, createInitialTaskState, reduceStages } from "./taskState";
@@ -533,7 +533,156 @@ describe("App task flow", () => {
     await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
     expect(bridge.generate).toHaveBeenCalledWith(expect.not.objectContaining({ referenceImages: expect.anything() }));
   });
+
+  it("attaches pasted image files as reference images when documentType is Image", async () => {
+    const bridge = installBridgeMock();
+    const { App } = await import("./App");
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Start a New Generation" });
+    fireEvent.click(screen.getByLabelText("Image"));
+    await screen.findByRole("button", { name: /Add reference image/ });
+
+    const textarea = screen.getByPlaceholderText(/Enter what you want to generate/) as HTMLTextAreaElement;
+    const pastedFile = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "screenshot.png", { type: "image/png" });
+    firePasteWithFile(textarea, pastedFile);
+
+    await waitFor(() => expect(bridge.savePastedImage).toHaveBeenCalledTimes(1));
+    expect(bridge.savePastedImage).toHaveBeenCalledWith(expect.any(Uint8Array), "png");
+    expect(await screen.findByText("pasted-1.png")).toBeTruthy();
+  });
+
+  it("does not call savePastedImage when documentType is not Image", async () => {
+    const bridge = installBridgeMock();
+    const { App } = await import("./App");
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Start a New Generation" });
+
+    const textarea = screen.getByPlaceholderText(/Enter what you want to generate/) as HTMLTextAreaElement;
+    const pastedFile = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "screenshot.png", { type: "image/png" });
+    firePasteWithFile(textarea, pastedFile);
+
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(bridge.savePastedImage).not.toHaveBeenCalled();
+  });
 });
+
+describe("App auto-update flow", () => {
+  beforeEach(() => {
+    installDomStubs();
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+    delete (window as { officecli?: unknown }).officecli;
+  });
+
+  it("renders ForceUpdateOverlay and hides the main shell when release is mandatory", async () => {
+    const bridge = installBridgeMock();
+    const { officecli } = await import("./bridge");
+    const release = {
+      version: "0.5.0",
+      notes: "Critical migration",
+      minSupportedVersion: "0.5.0",
+      mandatory: true,
+      assets: {},
+    };
+    const status = {
+      currentVersion: "0.1.0",
+      latestVersion: "0.5.0",
+      updateAvailable: true,
+      mandatory: true,
+      downloading: false,
+      downloadedPath: null,
+      lastCheckedAt: new Date().toISOString(),
+      lastError: null,
+    };
+    const checkSpy = vi.fn(async () => ({ release, status }));
+    const downloadSpy = vi.fn(async () => "/tmp/x.dmg");
+    const installSpy = vi.fn(async () => undefined);
+    officecli.checkAppUpdate = checkSpy as unknown as DesktopAPI["checkAppUpdate"];
+    officecli.downloadAppUpdate = downloadSpy as unknown as DesktopAPI["downloadAppUpdate"];
+    officecli.installAppUpdate = installSpy as unknown as DesktopAPI["installAppUpdate"];
+    officecli.cancelAppUpdate = vi.fn(async () => undefined) as unknown as DesktopAPI["cancelAppUpdate"];
+    officecli.onAppUpdateEvent = (() => () => undefined) as unknown as DesktopAPI["onAppUpdateEvent"];
+    officecli.getAppVersion = (async () => "0.1.0") as unknown as DesktopAPI["getAppVersion"];
+
+    const { App } = await import("./App");
+    render(<App />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4_001);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole("alertdialog")).toBeTruthy();
+    expect(screen.getByText(/Required update/i)).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: /Start a New Generation/i })).toBeNull();
+    expect(bridge.generate).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByText("Update now"));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(downloadSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders UpdateBanner and keeps the Shell visible when release is non-mandatory", async () => {
+    installBridgeMock();
+    const { officecli } = await import("./bridge");
+    const release = {
+      version: "0.2.0",
+      notes: "Bug fixes.",
+      minSupportedVersion: "0.0.0",
+      mandatory: false,
+      assets: {},
+    };
+    const status = {
+      currentVersion: "0.1.0",
+      latestVersion: "0.2.0",
+      updateAvailable: true,
+      mandatory: false,
+      downloading: false,
+      downloadedPath: null,
+      lastCheckedAt: new Date().toISOString(),
+      lastError: null,
+    };
+    officecli.checkAppUpdate = (async () => ({ release, status })) as unknown as DesktopAPI["checkAppUpdate"];
+    officecli.downloadAppUpdate = (async () => "/tmp/x.dmg") as unknown as DesktopAPI["downloadAppUpdate"];
+    officecli.installAppUpdate = (async () => undefined) as unknown as DesktopAPI["installAppUpdate"];
+    officecli.cancelAppUpdate = (async () => undefined) as unknown as DesktopAPI["cancelAppUpdate"];
+    officecli.onAppUpdateEvent = (() => () => undefined) as unknown as DesktopAPI["onAppUpdateEvent"];
+    officecli.getAppVersion = (async () => "0.1.0") as unknown as DesktopAPI["getAppVersion"];
+
+    const { App } = await import("./App");
+    render(<App />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4_001);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText(/New version 0\.2\.0 available/i)).toBeTruthy();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+});
+
+function firePasteWithFile(target: HTMLElement, file: File) {
+  const dataTransfer = {
+    files: [file] as unknown as FileList,
+    items: [],
+    types: ["Files"],
+    getData: () => "",
+  } as unknown as DataTransfer;
+  const event = createEvent.paste(target, { bubbles: true, cancelable: true });
+  Object.defineProperty(event, "clipboardData", { value: dataTransfer });
+  fireEvent(target, event);
+}
 
 function installBridgeMock() {
   let listener: (event: BridgeEvent) => void = () => undefined;
@@ -541,6 +690,10 @@ function installBridgeMock() {
   const previewArtifact = vi.fn(async () => undefined);
   const openExternal = vi.fn(async () => undefined);
   const openMultiFileDialog = vi.fn<(options?: { filters?: Array<{ name: string; extensions: string[] }> }) => Promise<string[] | null>>(async () => null);
+  const savePastedImage = vi.fn<(data: Uint8Array, ext: string) => Promise<string>>(
+    async (_data: Uint8Array, ext: string): Promise<string> =>
+      `/tmp/pasted-${savePastedImage.mock.calls.length}.${ext || "png"}`,
+  );
   const api: DesktopAPI = {
     initialize: vi.fn(async () => ({})),
     getCapabilities: vi.fn(async () => ({})),
@@ -552,6 +705,7 @@ function installBridgeMock() {
     openExternal,
     openFileDialog: vi.fn(async () => null),
     openMultiFileDialog,
+    savePastedImage,
     previewArtifact,
     readArtifactFile: vi.fn(async () => ({ data: new Uint8Array() })),
     renderPreviewHtml: vi.fn(async () => ({ html: "<html><body>preview</body></html>" }) as { html: string } | null),
@@ -597,6 +751,34 @@ function installBridgeMock() {
       listener = callback;
       return () => undefined;
     }),
+    getAppVersion: vi.fn(async () => "0.1.0"),
+    getAppUpdateStatus: vi.fn(async () => ({
+      currentVersion: "0.1.0",
+      latestVersion: null,
+      updateAvailable: false,
+      mandatory: false,
+      downloading: false,
+      downloadedPath: null,
+      lastCheckedAt: null,
+      lastError: null,
+    })),
+    checkAppUpdate: vi.fn(async () => ({
+      release: null,
+      status: {
+        currentVersion: "0.1.0",
+        latestVersion: null,
+        updateAvailable: false,
+        mandatory: false,
+        downloading: false,
+        downloadedPath: null,
+        lastCheckedAt: new Date().toISOString(),
+        lastError: null,
+      },
+    })),
+    downloadAppUpdate: vi.fn(async () => ""),
+    installAppUpdate: vi.fn(async () => undefined),
+    cancelAppUpdate: vi.fn(async () => undefined),
+    onAppUpdateEvent: vi.fn(() => () => undefined),
   };
   window.officecli = api;
   return {
@@ -605,6 +787,7 @@ function installBridgeMock() {
     issuePreviewToken: api.issuePreviewToken,
     openExternal,
     openMultiFileDialog,
+    savePastedImage,
     emit(event: BridgeEvent) {
       listener(event);
     },
@@ -638,4 +821,14 @@ function installDomStubs() {
       }) as unknown as CSSStyleDeclaration,
   );
   window.HTMLElement.prototype.scrollIntoView = vi.fn();
+  if (typeof Blob.prototype.arrayBuffer !== "function") {
+    Blob.prototype.arrayBuffer = function arrayBuffer(this: Blob): Promise<ArrayBuffer> {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as ArrayBuffer);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsArrayBuffer(this);
+      });
+    };
+  }
 }

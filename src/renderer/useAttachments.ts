@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { officecli } from "./bridge";
 import { getAttachmentSpec } from "../shared/types";
 import type { AttachmentSpec, DocumentType } from "../shared/types";
@@ -18,6 +18,8 @@ export interface UseAttachmentsResult {
   pickReferenceImages: () => Promise<void>;
   removeReferenceImage: (path: string) => void;
   isReferenceLimitReached: boolean;
+  supportsPaste: boolean;
+  handlePastedFiles: (files: File[]) => Promise<number>;
   collect: () => AttachmentBundle;
   validateForSubmit: () => { ok: true } | { ok: false; reason: string };
 }
@@ -28,6 +30,10 @@ export function useAttachments(documentType: DocumentType): UseAttachmentsResult
 
   const [sourceFile, setSourceFile] = useState<string | null>(null);
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
+  const referenceImagesRef = useRef<string[]>(referenceImages);
+  useEffect(() => {
+    referenceImagesRef.current = referenceImages;
+  }, [referenceImages]);
 
   useEffect(() => {
     if (!sourceWorkbookSpec) {
@@ -70,6 +76,34 @@ export function useAttachments(documentType: DocumentType): UseAttachmentsResult
 
   const isReferenceLimitReached = referenceImagesSpec ? referenceImages.length >= referenceImagesSpec.maxCount : false;
 
+  const supportsPaste = Boolean(referenceImagesSpec);
+
+  const handlePastedFiles = useCallback(
+    async (files: File[]): Promise<number> => {
+      if (!referenceImagesSpec) return 0;
+      const allowedExtensions = new Set(referenceImagesSpec.extensions.map((ext) => ext.toLowerCase()));
+      const maxCount = referenceImagesSpec.maxCount;
+      if (referenceImagesRef.current.length >= maxCount) return 0;
+      const savedPaths: string[] = [];
+      for (const file of files) {
+        if (referenceImagesRef.current.length + savedPaths.length >= maxCount) break;
+        if (!file.type.startsWith("image/")) continue;
+        const ext = inferImageExtension(file, allowedExtensions);
+        if (!ext) continue;
+        const buffer = await file.arrayBuffer();
+        const path = await officecli.savePastedImage(new Uint8Array(buffer), ext);
+        if (path && !referenceImagesRef.current.includes(path) && !savedPaths.includes(path)) {
+          savedPaths.push(path);
+        }
+      }
+      if (savedPaths.length === 0) return 0;
+      referenceImagesRef.current = mergeUnique(referenceImagesRef.current, savedPaths, maxCount);
+      setReferenceImages(referenceImagesRef.current);
+      return savedPaths.length;
+    },
+    [referenceImagesSpec],
+  );
+
   const collect = useCallback((): AttachmentBundle => {
     const bundle: AttachmentBundle = {};
     if (sourceWorkbookSpec && sourceFile) {
@@ -107,9 +141,21 @@ export function useAttachments(documentType: DocumentType): UseAttachmentsResult
     pickReferenceImages,
     removeReferenceImage,
     isReferenceLimitReached,
+    supportsPaste,
+    handlePastedFiles,
     collect,
     validateForSubmit,
   };
+}
+
+function inferImageExtension(file: File, allowed: Set<string>): string | undefined {
+  const fromName = file.name.includes(".") ? file.name.split(".").pop()?.toLowerCase() : undefined;
+  if (fromName && allowed.has(fromName)) return fromName;
+  const subtype = file.type.startsWith("image/") ? file.type.slice("image/".length).toLowerCase() : "";
+  const fromMime = subtype === "jpeg" ? "jpeg" : subtype;
+  if (fromMime && allowed.has(fromMime)) return fromMime;
+  if (allowed.has("png")) return "png";
+  return undefined;
 }
 
 function mergeUnique(current: string[], incoming: string[], maxCount: number): string[] {
