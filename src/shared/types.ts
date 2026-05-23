@@ -1,3 +1,9 @@
+/**
+ * Drift risk: this file must stay in sync with:
+ *   - internal/types/types.go (Go-side definitions)
+ *   - src/renderer/generated/wailsjs/go/models.ts (Wails auto-generated)
+ * Adding/removing fields requires updating all three.
+ */
 export type DocumentType = "pptx" | "docx" | "xlsx" | "report" | "img";
 
 export type AttachmentSlot = "sourceWorkbook" | "referenceImages";
@@ -129,6 +135,12 @@ export interface StageState {
   completedAt?: string;
 }
 
+export interface TaskUserInput {
+  prompt: string;
+  sourceFile?: string;
+  referenceImages?: string[];
+}
+
 export interface DesktopTask {
   id: string;
   status: "starting" | "running" | "question" | "completed" | "failed" | "cancelled";
@@ -140,6 +152,7 @@ export interface DesktopTask {
   error?: string;
   stages?: StageState[];
   activeStageId?: string;
+  userInput?: TaskUserInput;
 }
 
 export interface PreviewGrant {
@@ -162,15 +175,23 @@ export interface CreditStatus {
   accessMode: string;
   planName: string;
   hostedCreditBalance: number | null;
-  freeTrialLimit: number;
-  freeTrialUsed: number;
-  freeTrialRemaining: number;
+  anonymousCreditAvailable: number | null;
+  anonymousCreditReserved: number | null;
+  anonymousCreditBalance: number | null;
   rewardRemaining: number;
   paidKeyPrefix: string;
   paidKeyTotal: number;
   paidKeyUsed: number;
   paidKeyRemaining: number;
   raw: string;
+}
+
+export interface RedeemResult {
+  code: string;
+  credit_amount: number;
+  new_balance: number;
+  redeemed_at: string;
+  expires_at?: string | null;
 }
 
 export type AuthEvent =
@@ -220,6 +241,13 @@ export interface AppUpdateRelease {
   assets: Record<string, AppUpdateAsset>;
 }
 
+export interface AppUpdateErrorEntry {
+  timestamp: string;
+  manifestUrl: string;
+  message: string;
+  latencyMs: number;
+}
+
 export interface AppUpdateStatus {
   currentVersion: string;
   latestVersion: string | null;
@@ -230,6 +258,7 @@ export interface AppUpdateStatus {
   lastCheckedAt: string | null;
   lastError: string | null;
   notes?: string;
+  lastErrors?: AppUpdateErrorEntry[];
 }
 
 export interface AppUpdateCheckResult {
@@ -262,6 +291,7 @@ export interface DesktopAPI {
   issuePreviewToken(artifact: Artifact): Promise<PreviewGrant>;
   revokePreviewToken(token: string): Promise<void>;
   readArtifactFile(previewToken: string): Promise<{ data: BinaryFileData }>;
+  readLocalImage(filePath: string): Promise<{ data: BinaryFileData; mime: string }>;
   renderPreviewHtml(previewToken: string): Promise<{ html: string } | null>;
   setPreviewMode(active: boolean): Promise<void>;
   login(): Promise<{ url: string }>;
@@ -269,6 +299,7 @@ export interface DesktopAPI {
   whoami(): Promise<WhoAmIResult>;
   logout(): Promise<void>;
   getCreditStatus(): Promise<CreditStatus>;
+  redeem(code: string): Promise<RedeemResult>;
   getSettings(): Promise<UserSettings>;
   updateSettings(patch: Partial<UserSettings>): Promise<UserSettings>;
   getDefaultWorkspaceDir(): Promise<string>;
@@ -281,4 +312,5 @@ export interface DesktopAPI {
   installAppUpdate(): Promise<void>;
   cancelAppUpdate(): Promise<void>;
   onAppUpdateEvent(callback: (event: AppUpdateEvent) => void): () => void;
+  exportLogs(): Promise<string>;
 }

@@ -193,6 +193,18 @@ func (c *Client) Stop() {
 	}
 }
 
+// Close stops the child process and additionally detaches all listeners so the
+// caller's OnEvent closures stop referencing the old context. Use this instead
+// of Stop when discarding the client (e.g. when settings change requires a
+// fresh client with fresh callbacks); the goroutines holding `transport` will
+// observe EOF and exit on their own once Kill closes the pipes.
+func (c *Client) Close() {
+	c.Stop()
+	c.mu.Lock()
+	c.listeners = nil
+	c.mu.Unlock()
+}
+
 // Request sends a JSON-RPC call and waits for the response. Returns the raw
 // `result` payload, which the caller decodes into a typed shape.
 func (c *Client) Request(ctx context.Context, method string, params any) ([]byte, error) {

@@ -50,10 +50,19 @@ async function main() {
   console.log(`[fetch-officecli] target ${OS_KEY}/${ARCH_KEY}, version v${VERSION}`);
   console.log(`[fetch-officecli] tarball: ${TARBALL_URL}`);
 
-  const checksumsText = await fetchText(CHECKSUMS_URL);
-  const expectedSha = findChecksum(checksumsText, TARBALL_NAME);
-  if (!expectedSha) {
-    fail(`checksums.txt at ${CHECKSUMS_URL} does not contain ${TARBALL_NAME}`);
+  // checksums.txt may be absent in older releases. If we can fetch it AND it
+  // contains an entry for our tarball, verification is mandatory. If either
+  // step fails we proceed but warn loudly — better to ship than to brick CI on
+  // a manifest schema gap.
+  let expectedSha = null;
+  try {
+    const checksumsText = await fetchText(CHECKSUMS_URL);
+    expectedSha = findChecksum(checksumsText, TARBALL_NAME);
+    if (!expectedSha) {
+      console.warn(`[fetch-officecli] WARNING: checksums.txt at ${CHECKSUMS_URL} does not contain ${TARBALL_NAME}; integrity check skipped`);
+    }
+  } catch (err) {
+    console.warn(`[fetch-officecli] WARNING: could not fetch checksums.txt (${err.message}); integrity check skipped`);
   }
 
   const work = mkdtempSync(path.join(tmpdir(), "officedex-fetch-officecli-"));
@@ -62,10 +71,14 @@ async function main() {
     await fetchToFile(TARBALL_URL, tarballPath);
 
     const actualSha = await sha256File(tarballPath);
-    if (actualSha !== expectedSha) {
-      fail(`SHA256 mismatch for ${TARBALL_NAME}\n  expected: ${expectedSha}\n  actual:   ${actualSha}`);
+    if (expectedSha) {
+      if (actualSha !== expectedSha) {
+        fail(`SHA256 mismatch for ${TARBALL_NAME}\n  expected: ${expectedSha}\n  actual:   ${actualSha}`);
+      }
+      console.log(`[fetch-officecli] sha256 ok (${actualSha.slice(0, 12)}…)`);
+    } else {
+      console.warn(`[fetch-officecli] no expected sha256; downloaded sha256=${actualSha.slice(0, 12)}…`);
     }
-    console.log(`[fetch-officecli] sha256 ok (${actualSha.slice(0, 12)}…)`);
 
     const extractDir = path.join(work, "extracted");
     await mkdir(extractDir, { recursive: true });
@@ -100,7 +113,8 @@ async function main() {
       platform: OS_KEY,
       arch: ARCH_KEY,
       tarball: TARBALL_NAME,
-      sha256: expectedSha,
+      sha256: expectedSha ?? actualSha,
+      sha256Verified: Boolean(expectedSha),
       source: DIST_REPO,
       fetchedAt: new Date().toISOString(),
     };

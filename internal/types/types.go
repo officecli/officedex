@@ -223,23 +223,32 @@ type WhoAmIResult struct {
 }
 
 // CreditStatus mirrors the quota fields surfaced by `officecli auth status`.
-// HostedCreditBalance is a pointer so we can distinguish "balance line absent"
-// (anonymous trial) from "balance is zero" (hosted plan with no credits left).
-// All other counters default to 0 when their line is missing.
+// HostedCreditBalance and AnonymousCredit* are pointers so we can distinguish
+// "line absent" from "value is zero".
 type CreditStatus struct {
-	Mode                WhoAmIMode `json:"mode"`
-	AccessMode          string     `json:"accessMode"`
-	PlanName            string     `json:"planName"`
-	HostedCreditBalance *int       `json:"hostedCreditBalance"`
-	FreeTrialLimit      int        `json:"freeTrialLimit"`
-	FreeTrialUsed       int        `json:"freeTrialUsed"`
-	FreeTrialRemaining  int        `json:"freeTrialRemaining"`
-	RewardRemaining     int        `json:"rewardRemaining"`
-	PaidKeyPrefix       string     `json:"paidKeyPrefix"`
-	PaidKeyTotal        int        `json:"paidKeyTotal"`
-	PaidKeyUsed         int        `json:"paidKeyUsed"`
-	PaidKeyRemaining    int        `json:"paidKeyRemaining"`
-	Raw                 string     `json:"raw"`
+	Mode                      WhoAmIMode `json:"mode"`
+	AccessMode                string     `json:"accessMode"`
+	PlanName                  string     `json:"planName"`
+	HostedCreditBalance       *int       `json:"hostedCreditBalance"`
+	AnonymousCreditAvailable  *int       `json:"anonymousCreditAvailable"`
+	AnonymousCreditReserved   *int       `json:"anonymousCreditReserved"`
+	AnonymousCreditBalance    *int       `json:"anonymousCreditBalance"`
+	RewardRemaining           int        `json:"rewardRemaining"`
+	PaidKeyPrefix             string     `json:"paidKeyPrefix"`
+	PaidKeyTotal              int        `json:"paidKeyTotal"`
+	PaidKeyUsed               int        `json:"paidKeyUsed"`
+	PaidKeyRemaining          int        `json:"paidKeyRemaining"`
+	Raw                       string     `json:"raw"`
+}
+
+// RedeemResult is the parsed payload returned by `officecli redeem --json`.
+// The shape mirrors platform's redemptionsvc.RedeemResponse.
+type RedeemResult struct {
+	Code         string  `json:"code"`
+	CreditAmount int     `json:"credit_amount"`
+	NewBalance   int     `json:"new_balance"`
+	RedeemedAt   string  `json:"redeemed_at"`
+	ExpiresAt    *string `json:"expires_at,omitempty"`
 }
 
 type AuthEventType string

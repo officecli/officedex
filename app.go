@@ -10,11 +10,13 @@
 package main
 
 import (
+	"archive/zip"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -37,7 +39,6 @@ import (
 
 const (
 	appName             = "OfficeDex"
-	appVersion          = "0.2.1"
 	previewExtraWidth   = 500
 	bridgeEventChannel  = "bridge:event"
 	authEventChannel    = "auth:event"
@@ -45,6 +46,10 @@ const (
 	appUpdateChannel    = "appupdate:event"
 	defaultUpdateManifestURL = "https://raw.githubusercontent.com/officecli/officedex-dist/main/manifest.json"
 )
+
+// appVersion is injected at build time via `-ldflags "-X main.appVersion=<v>"`.
+// The default "dev" sentinel makes `go run` / `wails dev` work without flags.
+var appVersion = "dev"
 
 // App is the Wails-bound object surfaced to the renderer.
 type App struct {
@@ -64,7 +69,16 @@ type App struct {
 	loginUnsub      func()
 	pendingLoginURL string
 	previewModeWidthBefore int
+	previewModeXBefore     int
+	previewModeXShifted    bool
 	appUpdateMgr    *appupdate.Manager
+
+	// resolver cache. binresolver.Resolve stats the filesystem on every call;
+	// runCommandOptions / ensureBridge run on every RPC. We cache the resolved
+	// path + env until UpdateSettings flips touchesBridge=true.
+	resolvedBinaryPath string
+	resolvedBinaryEnv  []string
+	binaryResolvedAt   time.Time
 }
 
 // NewApp resolves user-scoped paths and constructs the per-user services
@@ -339,7 +353,9 @@ func normalizePastedImageExt(ext string) string {
 }
 
 // SetPreviewMode resizes the main window to make room for the preview pane,
-// or restores the pre-preview width when active is false.
+// or restores the pre-preview width when active is false. The widened window
+// is clamped to the current screen width, and if the right edge would overflow
+// the screen the window is shifted left to keep it fully visible.
 func (a *App) SetPreviewMode(active bool) error {
 	if a.ctx == nil {
 		return errors.New("app: not started")
@@ -348,15 +364,64 @@ func (a *App) SetPreviewMode(active bool) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if active {
+		if a.previewModeWidthBefore > 0 {
+			return nil
+		}
 		a.previewModeWidthBefore = w
-		wailsruntime.WindowSetSize(a.ctx, w+previewExtraWidth, h)
+
+		targetW := w + previewExtraWidth
+		screenW := a.currentScreenWidthLocked()
+		if screenW > 0 && targetW > screenW {
+			targetW = screenW
+		}
+
+		x, y := wailsruntime.WindowGetPosition(a.ctx)
+		if screenW > 0 && x+targetW > screenW {
+			newX := screenW - targetW
+			if newX < 0 {
+				newX = 0
+			}
+			a.previewModeXBefore = x
+			a.previewModeXShifted = true
+			wailsruntime.WindowSetPosition(a.ctx, newX, y)
+		}
+
+		wailsruntime.WindowSetSize(a.ctx, targetW, h)
 		return nil
 	}
 	if a.previewModeWidthBefore > 0 {
 		wailsruntime.WindowSetSize(a.ctx, a.previewModeWidthBefore, h)
 		a.previewModeWidthBefore = 0
+		if a.previewModeXShifted {
+			_, y := wailsruntime.WindowGetPosition(a.ctx)
+			wailsruntime.WindowSetPosition(a.ctx, a.previewModeXBefore, y)
+			a.previewModeXShifted = false
+			a.previewModeXBefore = 0
+		}
 	}
 	return nil
+}
+
+// currentScreenWidthLocked returns the logical width of the screen currently
+// hosting the window, falling back to the primary screen, or 0 when unknown.
+// Caller must hold a.mu (the function does not touch shared state, but the
+// name documents the calling context).
+func (a *App) currentScreenWidthLocked() int {
+	screens, err := wailsruntime.ScreenGetAll(a.ctx)
+	if err != nil {
+		return 0
+	}
+	for _, s := range screens {
+		if s.IsCurrent {
+			return s.Size.Width
+		}
+	}
+	for _, s := range screens {
+		if s.IsPrimary {
+			return s.Size.Width
+		}
+	}
+	return 0
 }
 
 // ─── Preview bindings ───────────────────────────────────────────────────────
@@ -405,6 +470,41 @@ func (a *App) ReadArtifactFile(previewToken string) (ArtifactFile, error) {
 		return ArtifactFile{}, fmt.Errorf("read artifact: %w", err)
 	}
 	return ArtifactFile{Data: data}, nil
+}
+
+// LocalImageData wraps a read-back image for renderer preview.
+type LocalImageData struct {
+	Data []byte `json:"data"`
+	Mime string `json:"mime"`
+}
+
+var localImageMimeByExt = map[string]string{
+	"png":  "image/png",
+	"jpg":  "image/jpeg",
+	"jpeg": "image/jpeg",
+	"gif":  "image/gif",
+	"webp": "image/webp",
+	"bmp":  "image/bmp",
+	"svg":  "image/svg+xml",
+}
+
+// ReadLocalImage returns raw bytes for an image file the user has attached
+// (via OpenMultiFileDialog / SavePastedImage). The extension whitelist mirrors
+// the renderer-side reference-image spec so unrelated paths cannot be read.
+func (a *App) ReadLocalImage(filePath string) (LocalImageData, error) {
+	if filePath == "" {
+		return LocalImageData{}, errors.New("read local image: empty path")
+	}
+	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(filePath), "."))
+	mime, ok := localImageMimeByExt[ext]
+	if !ok {
+		return LocalImageData{}, fmt.Errorf("read local image: unsupported extension %q", ext)
+	}
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return LocalImageData{}, fmt.Errorf("read local image: %w", err)
+	}
+	return LocalImageData{Data: data, Mime: mime}, nil
 }
 
 // PreviewHTML is the renderer-facing wrapper for a sidecar HTML preview.
@@ -498,6 +598,15 @@ func (a *App) Logout() error {
 	return login.Logout(a.ctx, opts)
 }
 
+// Redeem runs `officecli redeem --json --source desktop <code>` to add hosted
+// credits to the signed-in account. Errors surfaced by the platform (expired
+// code, exhausted code, already-claimed, etc.) are returned as a normal error
+// so the renderer can show the message to the user.
+func (a *App) Redeem(code string) (types.RedeemResult, error) {
+	opts := a.runCommandOptions()
+	return login.Redeem(a.ctx, opts, code)
+}
+
 // ─── Settings bindings ──────────────────────────────────────────────────────
 
 // GetSettings returns the current sanitized settings.
@@ -521,6 +630,9 @@ func (a *App) UpdateSettings(patch settings.Patch) (types.UserSettings, error) {
 	client := a.bridgeClient
 	if touchesBridge {
 		a.bridgeClient = nil
+		a.resolvedBinaryPath = ""
+		a.resolvedBinaryEnv = nil
+		a.binaryResolvedAt = time.Time{}
 	}
 	if patch.BridgeBinaryPath != nil {
 		a.loginManager = nil
@@ -532,7 +644,7 @@ func (a *App) UpdateSettings(patch settings.Patch) (types.UserSettings, error) {
 	a.mu.Unlock()
 
 	if touchesBridge && client != nil {
-		client.Stop()
+		client.Close()
 	}
 	return merged, nil
 }
@@ -624,6 +736,150 @@ func launchInstaller(path string) error {
 	}
 }
 
+// ─── Diagnostics ────────────────────────────────────────────────────────────
+
+// ExportLogs zips the per-user logs directory and a scrubbed copy of
+// settings.json (apiKey masked) into ~/Downloads/officedex-logs-<ts>.zip and
+// returns the absolute path. Used by Settings → Diagnostics to give support
+// engineers a portable bundle.
+func (a *App) ExportLogs() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("export logs: home dir: %w", err)
+	}
+	downloads := filepath.Join(home, "Downloads")
+	if err := os.MkdirAll(downloads, 0o755); err != nil {
+		return "", fmt.Errorf("export logs: mkdir downloads: %w", err)
+	}
+	ts := time.Now().Format("20060102-150405")
+	dest := filepath.Join(downloads, fmt.Sprintf("officedex-logs-%s.zip", ts))
+
+	out, err := os.Create(dest)
+	if err != nil {
+		return "", fmt.Errorf("export logs: create zip: %w", err)
+	}
+	zw := zip.NewWriter(out)
+
+	logsDir := filepath.Join(a.userDataDir, "logs")
+	if err := addDirToZip(zw, logsDir, "logs"); err != nil {
+		_ = zw.Close()
+		_ = out.Close()
+		_ = os.Remove(dest)
+		return "", fmt.Errorf("export logs: include logs: %w", err)
+	}
+
+	// Scrubbed settings.json. We re-read from disk (not a.cachedSettings) so
+	// the bundle matches what the user actually has persisted, then mask the
+	// LLM provider apiKey before serialising. On read/parse failure we still
+	// write a placeholder entry so support engineers can see the error in
+	// context rather than wondering why settings is absent.
+	settingsPath := filepath.Join(a.userDataDir, "settings.json")
+	scrubbed, ok := readScrubbedSettings(settingsPath)
+	if !ok {
+		errMsg := "settings not readable"
+		if _, statErr := os.Stat(settingsPath); statErr != nil {
+			errMsg = "settings not readable: " + statErr.Error()
+		}
+		placeholder, _ := json.MarshalIndent(map[string]string{"_error": errMsg}, "", "  ")
+		scrubbed = placeholder
+	}
+	w, err := zw.Create("settings.scrubbed.json")
+	if err != nil {
+		_ = zw.Close()
+		_ = out.Close()
+		_ = os.Remove(dest)
+		return "", fmt.Errorf("export logs: zip entry: %w", err)
+	}
+	if _, err := w.Write(scrubbed); err != nil {
+		_ = zw.Close()
+		_ = out.Close()
+		_ = os.Remove(dest)
+		return "", fmt.Errorf("export logs: write settings: %w", err)
+	}
+
+	if err := zw.Close(); err != nil {
+		_ = out.Close()
+		_ = os.Remove(dest)
+		return "", fmt.Errorf("export logs: close zip: %w", err)
+	}
+	if err := out.Close(); err != nil {
+		return "", fmt.Errorf("export logs: close file: %w", err)
+	}
+	return dest, nil
+}
+
+// addDirToZip walks src and copies every regular file into the zip under
+// prefix/. A missing source dir is treated as empty (no error); this matches
+// the "logs folder hasn't been created yet" case on a fresh install.
+func addDirToZip(zw *zip.Writer, src, prefix string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	if !info.IsDir() {
+		return nil
+	}
+	return filepath.Walk(src, func(path string, fi os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if fi.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		entry := filepath.ToSlash(filepath.Join(prefix, rel))
+		w, err := zw.Create(entry)
+		if err != nil {
+			return err
+		}
+		f, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		_, err = io.Copy(w, f)
+		return err
+	})
+}
+
+// readScrubbedSettings reads the settings.json file at path and returns a
+// pretty-printed copy with llmProvider.apiKey replaced by a masked string.
+// Returns ok=false when the file is missing or unparseable so the caller can
+// silently skip the entry rather than failing the whole export.
+func readScrubbedSettings(path string) ([]byte, bool) {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return nil, false
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return nil, false
+	}
+	if provider, ok := raw["llmProvider"].(map[string]any); ok {
+		if key, ok := provider["apiKey"].(string); ok && key != "" {
+			provider["apiKey"] = maskAPIKey(key)
+		}
+	}
+	out, err := json.MarshalIndent(raw, "", "  ")
+	if err != nil {
+		return nil, false
+	}
+	return out, true
+}
+
+func maskAPIKey(key string) string {
+	if len(key) <= 4 {
+		return "****"
+	}
+	return key[:2] + strings.Repeat("*", len(key)-4) + key[len(key)-2:]
+}
+
 // ─── Internals ──────────────────────────────────────────────────────────────
 
 func (a *App) ensureBridge() (*bridge.Client, error) {
@@ -654,9 +910,17 @@ func (a *App) ensureBridge() (*bridge.Client, error) {
 		return nil, errors.New(message)
 	}
 
+	env := llmProviderEnv(settingsValue)
+
+	a.mu.Lock()
+	a.resolvedBinaryPath = resolved.Path
+	a.resolvedBinaryEnv = env
+	a.binaryResolvedAt = time.Now()
+	a.mu.Unlock()
+
 	client := bridge.New(bridge.Options{
 		BinaryPath: resolved.Path,
-		Env:        llmProviderEnv(settingsValue),
+		Env:        env,
 		Cwd:        a.workspaceDir,
 		RequestTimeout: 30 * time.Second,
 	})
@@ -696,9 +960,10 @@ func (a *App) ensureLoginManagerLocked() *login.Manager {
 	if a.loginManager != nil {
 		return a.loginManager
 	}
+	path, env := a.resolvedBinaryLocked()
 	manager := login.New(login.ManagerOptions{
-		BinaryPath: binresolver.ResolvePath(a.resolverOptions(a.cachedSettings)),
-		Env:        toEnvSlice(llmProviderEnv(a.cachedSettings)),
+		BinaryPath: path,
+		Env:        env,
 		URLTimeout: 30 * time.Second,
 	})
 	ctx := a.ctx
@@ -729,10 +994,26 @@ func (a *App) ensureLoginManagerLocked() *login.Manager {
 func (a *App) runCommandOptions() login.ManagerOptions {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	path, env := a.resolvedBinaryLocked()
 	return login.ManagerOptions{
-		BinaryPath: binresolver.ResolvePath(a.resolverOptions(a.cachedSettings)),
-		Env:        toEnvSlice(llmProviderEnv(a.cachedSettings)),
+		BinaryPath: path,
+		Env:        env,
 	}
+}
+
+// resolvedBinaryLocked returns the cached binary path + provider env, running
+// binresolver / llmProviderEnv at most once per settings change. Caller must
+// hold a.mu. The cache is invalidated by UpdateSettings when touchesBridge=true.
+func (a *App) resolvedBinaryLocked() (string, []string) {
+	if a.resolvedBinaryPath != "" {
+		return a.resolvedBinaryPath, a.resolvedBinaryEnv
+	}
+	path := binresolver.ResolvePath(a.resolverOptions(a.cachedSettings))
+	env := toEnvSlice(llmProviderEnv(a.cachedSettings))
+	a.resolvedBinaryPath = path
+	a.resolvedBinaryEnv = env
+	a.binaryResolvedAt = time.Now()
+	return path, env
 }
 
 func (a *App) resolverOptions(s types.UserSettings) binresolver.Options {
@@ -799,10 +1080,13 @@ func (a *App) resolveGenerateInput(input types.GenerateInput, s types.UserSettin
 }
 
 func llmProviderEnv(s types.UserSettings) []string {
-	if s.Defaults.RuntimeMode != types.RuntimeExternal || s.LlmProvider == nil {
-		return nil
-	}
 	out := []string{}
+	if s.Defaults.RuntimeMode != "" {
+		out = append(out, "OFFICE_CLI_RUNTIME_MODE="+string(s.Defaults.RuntimeMode))
+	}
+	if s.Defaults.RuntimeMode != types.RuntimeExternal || s.LlmProvider == nil {
+		return out
+	}
 	if s.LlmProvider.Type != "" {
 		out = append(out, "OFFICECLI_LLM_PROVIDER="+string(s.LlmProvider.Type))
 	}
