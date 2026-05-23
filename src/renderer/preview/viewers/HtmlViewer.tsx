@@ -8,14 +8,13 @@ interface HtmlViewerProps {
   previewToken: string;
   fileName: string;
   documentType?: string;
-  onClose?: () => void;
 }
 
 const ZOOM_STEP = 0.15;
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 3;
 
-export default function HtmlViewer({ previewToken, fileName, documentType, onClose }: HtmlViewerProps) {
+export default function HtmlViewer({ previewToken, fileName, documentType }: HtmlViewerProps) {
   const [html, setHtml] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -69,7 +68,6 @@ export default function HtmlViewer({ previewToken, fileName, documentType, onClo
         onZoomOut={zoomOut}
         onZoomReset={zoomReset}
         onOpenExternal={openExternal}
-        onClose={onClose}
       />
       <div className="preview-html-container">
         <iframe

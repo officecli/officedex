@@ -10,14 +10,13 @@ interface XlsxViewerProps {
   previewToken: string;
   fileName: string;
   documentType?: string;
-  onClose?: () => void;
 }
 
 const ZOOM_STEP = 0.15;
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 3;
 
-export default function XlsxViewer({ previewToken, fileName, documentType, onClose }: XlsxViewerProps) {
+export default function XlsxViewer({ previewToken, fileName, documentType }: XlsxViewerProps) {
   const [sheetNames, setSheetNames] = useState<string[]>([]);
   const [activeSheet, setActiveSheet] = useState(0);
   const [htmlContent, setHtmlContent] = useState<string>("");
@@ -77,7 +76,6 @@ export default function XlsxViewer({ previewToken, fileName, documentType, onClo
         onZoomOut={zoomOut}
         onZoomReset={zoomReset}
         onOpenExternal={openExternal}
-        onClose={onClose}
         center={
           sheetNames.length > 1 ? (
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>

@@ -8,6 +8,7 @@ import { officecli } from "../../bridge";
 interface PptxViewerProps {
   previewToken: string;
   fileName: string;
+  documentType?: string;
 }
 
 interface SlideContent {
@@ -19,7 +20,7 @@ const ZOOM_STEP = 0.15;
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 3;
 
-export default function PptxViewer({ previewToken, fileName }: PptxViewerProps) {
+export default function PptxViewer({ previewToken, fileName, documentType }: PptxViewerProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -64,9 +65,9 @@ export default function PptxViewer({ previewToken, fileName }: PptxViewerProps) 
         for (let i = 0; i < textNodes.length; i++) {
           const node = textNodes[i];
           const text = node.textContent || "";
-          const parentP = node.closest("a\\:p") || findAncestorByLocalName(node, "p");
+          const parentP = findAncestorByLocalName(node, "p");
           if (parentP && i > 0) {
-            const prevParentP = textNodes[i - 1].closest("a\\:p") || findAncestorByLocalName(textNodes[i - 1], "p");
+            const prevParentP = findAncestorByLocalName(textNodes[i - 1], "p");
             if (prevParentP !== parentP) {
               if (currentParagraph.trim()) paragraphs.push(currentParagraph.trim());
               currentParagraph = "";
@@ -120,6 +121,7 @@ export default function PptxViewer({ previewToken, fileName }: PptxViewerProps) 
       <>
         <PreviewToolbar
           fileName={fileName}
+          documentType={documentType}
           zoom={zoom}
           onZoomIn={zoomIn}
           onZoomOut={zoomOut}
@@ -150,6 +152,7 @@ export default function PptxViewer({ previewToken, fileName }: PptxViewerProps) 
     <>
       <PreviewToolbar
         fileName={fileName}
+        documentType={documentType}
         zoom={zoom}
         onZoomIn={zoomIn}
         onZoomOut={zoomOut}

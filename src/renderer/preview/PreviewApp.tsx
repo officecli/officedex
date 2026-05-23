@@ -1,17 +1,18 @@
-import { Component, Suspense, lazy, useMemo } from "react";
+import { Component, Suspense, useMemo } from "react";
 import type { ReactNode, ErrorInfo } from "react";
 import { ConfigProvider, Result, Button } from "antd";
 import { theme } from "../designTokens";
 import { LoadingState } from "./components/LoadingState";
 import { UnsupportedViewer } from "./viewers/UnsupportedViewer";
+import {
+  PptxViewer,
+  DocxViewer,
+  XlsxViewer,
+  PdfViewer,
+  HtmlViewer,
+} from "./viewers/previewViewers";
 import { officecli } from "../bridge";
 import "./PreviewApp.css";
-
-const PptxViewer = lazy(() => import("./viewers/PptxViewer"));
-const DocxViewer = lazy(() => import("./viewers/DocxViewer"));
-const XlsxViewer = lazy(() => import("./viewers/XlsxViewer"));
-const PdfViewer = lazy(() => import("./viewers/PdfViewer"));
-const HtmlViewer = lazy(() => import("./viewers/HtmlViewer"));
 
 class PreviewErrorBoundary extends Component<
   { children: ReactNode },
