@@ -1,4 +1,4 @@
-import type { Artifact, BridgeEvent, DesktopTask, StageState, TaskQuestion } from "../shared/types";
+import type { Artifact, BridgeEvent, DesktopTask, StageState, TaskQuestion, TaskUserInput } from "../shared/types";
 
 export interface TaskState {
   tasks: Record<string, DesktopTask>;
@@ -10,8 +10,20 @@ export function createInitialTaskState(): TaskState {
   return { tasks: {}, taskOrder: [], artifacts: [] };
 }
 
+export function attachUserInput(state: TaskState, taskID: string, input: TaskUserInput): TaskState {
+  const previous = state.tasks[taskID] || {
+    id: taskID,
+    status: "starting" as const,
+    events: [],
+  };
+  const tasks = { ...state.tasks, [taskID]: { ...previous, userInput: input } };
+  const taskOrder = state.taskOrder.includes(taskID) ? state.taskOrder : [taskID, ...state.taskOrder];
+  return { ...state, tasks, taskOrder };
+}
+
 export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState {
-  const taskID = event.task_id || "unknown";
+  if (!event.task_id) return state;
+  const taskID = event.task_id;
   const previous = state.tasks[taskID] || {
     id: taskID,
     status: "starting",

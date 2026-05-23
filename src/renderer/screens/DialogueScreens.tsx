@@ -1,9 +1,10 @@
-import { Button, Form, Image, Input, message, Progress, Radio, Select, Space, Tag, Timeline, Tooltip, Typography } from "antd";
+import { Button, Form, Image, Input, message, Progress, Radio, Space, Tag, Timeline, Tooltip } from "antd";
 import {
   CheckCircleFilled,
   CloseCircleFilled,
   CloseCircleOutlined,
   CloudOutlined,
+  CopyOutlined,
   DeleteOutlined,
   DisconnectOutlined,
   FileTextOutlined,
@@ -22,8 +23,13 @@ import { defaultGenerateInput } from "../defaults";
 import { useSettings } from "../useSettings";
 import { useAttachments } from "../useAttachments";
 import { officecli } from "../bridge";
-import { documentTypeOptions } from "../mockData";
+import { documentTypeOptions } from "../defaults";
 import { FileGlyph, MaterialSymbol } from "../components/Shell";
+import { acquireBlob, releaseBlob } from "../imageCache";
+import { useT } from "../i18n";
+import { useNow } from "../useNow";
+
+type Translator = (key: string, vars?: Record<string, string | number>) => string;
 
 export type FailureKind = "connection" | "auth" | "task" | "setup" | "other";
 
@@ -35,7 +41,6 @@ interface DialogueProps {
   errorKind: FailureKind;
   errorDetails?: string;
   bridgeStatus: string;
-  fluid: boolean;
   onSubmit: (values: GenerateInput) => Promise<void>;
   onOpenSettings: () => void;
   onOpenLogin: () => void;
@@ -43,7 +48,7 @@ interface DialogueProps {
   onPreview: (artifact: Artifact) => void;
 }
 
-export function DialogueScreen({ task, artifacts, busy, lastError, errorKind, errorDetails, bridgeStatus, fluid, onSubmit, onOpenSettings, onOpenLogin, onRetry, onPreview }: DialogueProps) {
+export function DialogueScreen({ task, artifacts, busy, lastError, errorKind, errorDetails, bridgeStatus, onSubmit, onOpenSettings, onOpenLogin, onRetry, onPreview }: DialogueProps) {
   if (lastError) {
     return <ConnectionFailure kind={errorKind} status={bridgeStatus} error={lastError} details={errorDetails} onOpenSettings={onOpenSettings} onOpenLogin={onOpenLogin} onRetry={onRetry} />;
   }
@@ -59,144 +64,13 @@ export function DialogueScreen({ task, artifacts, busy, lastError, errorKind, er
   if (task?.status === "running" || task?.status === "starting") {
     return <RunningDialogue task={task} />;
   }
-  if (fluid) {
-    return <FluidNewGeneration busy={busy} onSubmit={onSubmit} />;
-  }
-  return <NewGeneration busy={busy} onSubmit={onSubmit} />;
-}
-
-function NewGeneration({ busy, onSubmit }: { busy: boolean; onSubmit: (values: GenerateInput) => Promise<void> }) {
-  const [form] = Form.useForm<GenerateInput>();
-  const { settings } = useSettings();
-  const initialValues = { ...defaultGenerateInput, ...settings.defaults };
-  const docType = (Form.useWatch("documentType", form) ?? initialValues.documentType) as DocumentType;
-  const attachments = useAttachments(docType);
-
-  useEffect(() => {
-    form.setFieldsValue({
-      documentType: settings.defaults.documentType,
-      mode: settings.defaults.mode,
-      runtimeMode: settings.defaults.runtimeMode,
-    });
-  }, [form, settings.defaults.documentType, settings.defaults.mode, settings.defaults.runtimeMode]);
-
-  return (
-    <div className="document-workspace empty-workspace">
-      <div className="workspace-titlebar">
-        <div>
-          <div className="eyebrow">Untitled Generation</div>
-          <h1>Start building your professional documents here</h1>
-          <p>Enter instructions below or choose a template. OfficeDex will use Bridge to generate artifacts.</p>
-        </div>
-        <Tag color="blue">Local Bridge</Tag>
-      </div>
-      <div className="empty-hero">
-        <MaterialSymbol name="edit_document" />
-        <h2>Target Artifact</h2>
-        <div className="doc-type-grid">
-          {documentTypeOptions.slice(0, 3).map((option) => (
-            <button key={option.value} className={`doc-type-card ${docType === option.value ? "active" : ""}`} onClick={() => form.setFieldValue("documentType", option.value)}>
-              <MaterialSymbol name={option.icon} />
-              <span>{option.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-      <Form form={form} layout="vertical" initialValues={initialValues} onFinish={(values) => {
-        const validation = attachments.validateForSubmit();
-        if (!validation.ok) {
-          message.warning(validation.reason);
-          return;
-        }
-        onSubmit({ ...values, ...attachments.collect() });
-      }} className="docked-composer">
-        <div className="composer-options">
-          <Form.Item name="documentType" noStyle>
-            <Select
-              className="compact-select"
-              options={documentTypeOptions.map((item) => ({ value: item.value, label: item.label }))}
-            />
-          </Form.Item>
-          <Form.Item name="mode" noStyle>
-            <Radio.Group
-              optionType="button"
-              buttonStyle="solid"
-              options={[
-                { value: "fast", label: "Fast" },
-                { value: "best", label: "Smart" },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item name="runtimeMode" noStyle>
-            <Select
-              className="compact-select"
-              options={[
-                { value: "hosted", label: "Hosted" },
-                { value: "external", label: "Local Bridge" },
-              ]}
-            />
-          </Form.Item>
-        </div>
-        <Form.Item name="topic" hidden>
-          <Input />
-        </Form.Item>
-        <Form.Item name="prompt" rules={[{ required: true, message: "Please enter generation instructions" }]}>
-          <Input.TextArea rows={3} placeholder="e.g.: Generate a Q3 marketing plan including multi-channel distribution, retention, and budget allocation." onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form.submit(); } }} onPaste={makePasteHandler(attachments)} />
-        </Form.Item>
-        {attachments.sourceWorkbookSpec && attachments.sourceFile ? (
-          <div className="attached-file">
-            <PaperClipOutlined />
-            <span title={attachments.sourceFile}>{attachments.sourceFile.split(/[/\\]/).pop()}</span>
-            <Button type="text" size="small" icon={<DeleteOutlined />} onClick={attachments.clearSourceFile} />
-          </div>
-        ) : null}
-        {attachments.referenceImagesSpec ? (
-          <ReferenceImageStrip
-            items={attachments.referenceImages}
-            maxCount={attachments.referenceImagesSpec.maxCount}
-            onRemove={attachments.removeReferenceImage}
-            onAdd={attachments.pickReferenceImages}
-          />
-        ) : null}
-        <div className="composer-actions">
-          <Space>
-            {attachments.sourceWorkbookSpec ? (
-              <Tooltip
-                title={
-                  attachments.sourceWorkbookSpec.required
-                    ? `${attachments.sourceWorkbookSpec.label} (required, .${attachments.sourceWorkbookSpec.extensions[0]})`
-                    : attachments.sourceWorkbookSpec.label
-                }
-              >
-                <Button icon={<PaperClipOutlined />} onClick={attachments.pickSourceFile} aria-label="Attach source file" />
-              </Tooltip>
-            ) : null}
-            {attachments.referenceImagesSpec ? (
-              <Tooltip title={`Attach reference images (up to ${attachments.referenceImagesSpec.maxCount})`}>
-                <Button
-                  icon={<MaterialSymbol name="image" />}
-                  onClick={attachments.pickReferenceImages}
-                  disabled={attachments.isReferenceLimitReached}
-                  aria-label="Attach reference images"
-                />
-              </Tooltip>
-            ) : (
-              <Button icon={<MaterialSymbol name="auto_awesome_mosaic" />} />
-            )}
-            <Button icon={<MaterialSymbol name="temp_preferences_custom" />} />
-          </Space>
-          <Button type="primary" htmlType="submit" icon={<SendOutlined />} loading={busy}>
-            Generate
-          </Button>
-        </div>
-      </Form>
-    </div>
-  );
+  return <FluidNewGeneration busy={busy} onSubmit={onSubmit} />;
 }
 
 function FluidNewGeneration({ busy, onSubmit }: { busy: boolean; onSubmit: (values: GenerateInput) => Promise<void> }) {
   const [form] = Form.useForm<GenerateInput>();
   const { settings } = useSettings();
+  const t = useT();
   const initialValues = { ...defaultGenerateInput, ...settings.defaults };
   const docType = (Form.useWatch("documentType", form) ?? initialValues.documentType) as DocumentType;
   const attachments = useAttachments(docType);
@@ -213,32 +87,32 @@ function FluidNewGeneration({ busy, onSubmit }: { busy: boolean; onSubmit: (valu
     <div className="fluid-new-task">
       <div className="fluid-task-header">
         <Space>
-          <Tag icon={<MaterialSymbol name="schedule" />}>Just Created</Tag>
-          <Tag icon={<MaterialSymbol name="cloud_off" />}>Unsaved Draft</Tag>
-          <Tag icon={<MaterialSymbol name="lock_open" />}>Personal Workspace</Tag>
+          <Tag icon={<MaterialSymbol name="schedule" />}>{t("dialogue.tag.justCreated")}</Tag>
+          <Tag icon={<MaterialSymbol name="cloud_off" />}>{t("dialogue.tag.unsavedDraft")}</Tag>
+          <Tag icon={<MaterialSymbol name="lock_open" />}>{t("dialogue.tag.personalWorkspace")}</Tag>
         </Space>
       </div>
       <section className="fluid-start-card">
         <div className="fluid-spark">
           <MaterialSymbol name="auto_awesome" />
         </div>
-        <h1>Start a New Generation</h1>
-        <p>Choose a preset scenario or enter instructions to let OfficeDex AI generate documents, presentations, or data structures.</p>
+        <h1>{t("dialogue.startTitle")}</h1>
+        <p>{t("dialogue.startSubtitle")}</p>
         <div className="fluid-prompt-grid">
-          <button onClick={() => form.setFieldsValue({ documentType: "report", topic: "Quarterly Analysis Report", prompt: "Generate a standardized business report framework with data insights and trend forecasts." })}>
+          <button onClick={() => form.setFieldsValue({ documentType: "report", topic: t("dialogue.preset.report.title"), prompt: t("dialogue.preset.report.desc") })}>
             <MaterialSymbol name="analytics" />
-            <strong>Quarterly Analysis Report</strong>
-            <span>Generate a standardized business report framework with data insights and trend forecasts.</span>
+            <strong>{t("dialogue.preset.report.title")}</strong>
+            <span>{t("dialogue.preset.report.desc")}</span>
           </button>
-          <button onClick={() => form.setFieldsValue({ documentType: "pptx", topic: "Project Kickoff Presentation", prompt: "Create a 15-slide outline covering goals, timeline, and resource allocation." })}>
+          <button onClick={() => form.setFieldsValue({ documentType: "pptx", topic: t("dialogue.preset.pptx.title"), prompt: t("dialogue.preset.pptx.desc") })}>
             <MaterialSymbol name="present_to_all" />
-            <strong>Project Kickoff Presentation</strong>
-            <span>Create a 15-slide outline covering goals, timeline, and resource allocation.</span>
+            <strong>{t("dialogue.preset.pptx.title")}</strong>
+            <span>{t("dialogue.preset.pptx.desc")}</span>
           </button>
-          <button onClick={() => form.setFieldsValue({ documentType: "xlsx", topic: "Competitive Analysis", prompt: "Build a data table structure with core features, pricing, and market share metrics." })}>
+          <button onClick={() => form.setFieldsValue({ documentType: "xlsx", topic: t("dialogue.preset.xlsx.title"), prompt: t("dialogue.preset.xlsx.desc") })}>
             <MaterialSymbol name="table_chart" />
-            <strong>Competitive Analysis</strong>
-            <span>Build a data table structure with core features, pricing, and market share metrics.</span>
+            <strong>{t("dialogue.preset.xlsx.title")}</strong>
+            <span>{t("dialogue.preset.xlsx.desc")}</span>
           </button>
         </div>
       </section>
@@ -251,7 +125,7 @@ function FluidNewGeneration({ busy, onSubmit }: { busy: boolean; onSubmit: (valu
         onSubmit({ ...values, ...attachments.collect() });
       }} className="fluid-command-bar">
         <div className="format-row">
-          <span>Generate:</span>
+          <span>{t("dialogue.format.label")}</span>
           <Form.Item name="documentType" noStyle>
             <Radio.Group
               optionType="button"
@@ -262,8 +136,8 @@ function FluidNewGeneration({ busy, onSubmit }: { busy: boolean; onSubmit: (valu
         <Form.Item name="topic" hidden>
           <Input />
         </Form.Item>
-        <Form.Item name="prompt" rules={[{ required: true, message: "Please enter generation instructions" }]}>
-          <Input.TextArea rows={3} placeholder="Enter what you want to generate, or choose a template above..." onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form.submit(); } }} onPaste={makePasteHandler(attachments)} />
+        <Form.Item name="prompt" rules={[{ required: true, message: t("dialogue.prompt.required") }]}>
+          <Input.TextArea rows={3} placeholder={t("dialogue.prompt.placeholder")} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) { e.preventDefault(); form.submit(); } }} onPaste={makePasteHandler(attachments, t)} />
         </Form.Item>
         {attachments.sourceWorkbookSpec && attachments.sourceFile ? (
           <div className="attached-file">
@@ -286,29 +160,29 @@ function FluidNewGeneration({ busy, onSubmit }: { busy: boolean; onSubmit: (valu
               <Tooltip
                 title={
                   attachments.sourceWorkbookSpec.required
-                    ? `${attachments.sourceWorkbookSpec.label} (required, .${attachments.sourceWorkbookSpec.extensions[0]})`
+                    ? t("dialogue.attach.sourceFile.required", { label: attachments.sourceWorkbookSpec.label, ext: attachments.sourceWorkbookSpec.extensions[0] })
                     : attachments.sourceWorkbookSpec.label
                 }
               >
-                <Button icon={<PaperClipOutlined />} onClick={attachments.pickSourceFile} aria-label="Attach source file" />
+                <Button icon={<PaperClipOutlined />} onClick={attachments.pickSourceFile} aria-label={t("dialogue.attach.sourceFile.aria")} />
               </Tooltip>
             ) : null}
             {attachments.referenceImagesSpec ? (
-              <Tooltip title={`Attach reference images (up to ${attachments.referenceImagesSpec.maxCount})`}>
+              <Tooltip title={t("dialogue.attach.referenceImages.tooltip", { max: attachments.referenceImagesSpec.maxCount })}>
                 <Button
                   icon={<MaterialSymbol name="image" />}
                   onClick={attachments.pickReferenceImages}
                   disabled={attachments.isReferenceLimitReached}
-                  aria-label="Attach reference images"
+                  aria-label={t("dialogue.attach.referenceImages.attach")}
                 />
               </Tooltip>
             ) : null}
-            <Tooltip title="Advanced options (coming soon)">
+            <Tooltip title={t("dialogue.attach.advancedOptions")}>
               <Button icon={<MaterialSymbol name="tune" />} disabled />
             </Tooltip>
           </Space>
           <Button type="primary" htmlType="submit" icon={<SendOutlined />} loading={busy}>
-            Generate
+            {t("dialogue.generate")}
           </Button>
         </div>
       </Form>
@@ -318,6 +192,7 @@ function FluidNewGeneration({ busy, onSubmit }: { busy: boolean; onSubmit: (valu
 
 function RunningDialogue({ task }: { task: DesktopTask }) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const t = useT();
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -330,9 +205,9 @@ function RunningDialogue({ task }: { task: DesktopTask }) {
         <div ref={bottomRef} />
       </div>
       <div className="docked-composer readonly">
-        <Input prefix={<PaperClipOutlined />} suffix={<LoadingOutlined />} placeholder="OfficeDex is processing, please wait..." disabled />
+        <Input prefix={<PaperClipOutlined />} suffix={<LoadingOutlined />} placeholder={t("dialogue.running.placeholder")} disabled />
         <Button danger icon={<StopOutlined />} onClick={() => officecli.cancel(task.id)}>
-          Cancel
+          {t("dialogue.running.cancel")}
         </Button>
       </div>
     </div>
@@ -340,35 +215,36 @@ function RunningDialogue({ task }: { task: DesktopTask }) {
 }
 
 function GenerationHistoryThread({ task, hideLatestText }: { task: DesktopTask; hideLatestText?: boolean }) {
+  const t = useT();
   const latestEvent = task.events.at(-1);
   const latestText = eventText(latestEvent);
-  const subject = taskSubject(task);
-  const documentType = task.documentType || task.artifact?.documentType || "Target Document";
+  const subject = taskSubject(task, t);
+  const documentType = task.documentType || task.artifact?.documentType || t("dialogue.history.targetTypeDefault");
   const isRunning = task.status === "running" || task.status === "starting" || task.status === "question";
-  const timeMarker = latestEvent?.ts || (isRunning ? "Task in Progress" : "Generation History");
+  const timeMarker = latestEvent?.ts || (isRunning ? t("dialogue.history.taskInProgress") : t("dialogue.history.generationHistory"));
   return (
     <>
       <div className="time-marker">{timeMarker}</div>
-      <div className="message user-message">{subject}</div>
+      <UserMessage task={task} fallback={subject} />
       <div className="message ai-message">
         <div className="message-author">
           <MaterialSymbol name="smart_toy" />
-          <strong>OfficeDex AI</strong>
+          <strong>{t("dialogue.history.author")}</strong>
         </div>
         <ul className="ai-checks">
           <li>
-            <CheckCircleFilled /> Task received: {subject}
+            <CheckCircleFilled /> {t("dialogue.history.taskReceived", { subject })}
           </li>
           <li>
-            <CheckCircleFilled /> Target type: {documentType.toUpperCase()}
+            <CheckCircleFilled /> {t("dialogue.history.targetType", { type: documentType.toUpperCase() })}
           </li>
           {!hideLatestText ? (
             <li className={isRunning ? "active" : ""}>
               {isRunning ? <LoadingOutlined /> : <CheckCircleFilled />}{" "}
-              {latestText ? <span>{latestText}</span> : "Waiting for Bridge event updates"}
+              {latestText ? <span>{latestText}</span> : t("dialogue.history.waitingEvents")}
             </li>
           ) : null}
-          <li className="muted">Task ID: {task.id}</li>
+          <li className="muted">{t("dialogue.history.taskId", { id: task.id })}</li>
         </ul>
       </div>
       <FluidProgressPanel task={task} />
@@ -378,6 +254,7 @@ function GenerationHistoryThread({ task, hideLatestText }: { task: DesktopTask; 
 
 function QuestionDialogue({ task }: { task: DesktopTask }) {
   const [form] = Form.useForm<{ answer: string }>();
+  const t = useT();
   const question = task.question;
   if (!question) return null;
   const currentQuestion = question;
@@ -387,15 +264,15 @@ function QuestionDialogue({ task }: { task: DesktopTask }) {
   return (
     <div className="conversation-layout">
       <div className="chat-thread">
-        <div className="time-marker">Today 10:23 AM</div>
+        <div className="time-marker">{t("dialogue.question.timestamp")}</div>
         <div className="message ai-message warning">
           <div className="message-author">
             <WarningFilled />
-            <strong>Confirmation Required</strong>
+            <strong>{t("dialogue.question.title")}</strong>
           </div>
-          <p>{question.question || "Would you like to include last quarter's financial comparison data?"}</p>
+          <p>{question.question || t("dialogue.question.placeholderQuestion")}</p>
           <Space wrap>
-            {(question.options.length ? question.options : [{ id: "include", label: "Include" }, { id: "skip", label: "Exclude" }]).map((option) => (
+            {(question.options.length ? question.options : [{ id: "include", label: t("dialogue.question.option.include") }, { id: "skip", label: t("dialogue.question.option.skip") }]).map((option) => (
               <Button key={option.id} onClick={() => answer(option.id, option.label)}>
                 {option.label}
               </Button>
@@ -404,25 +281,25 @@ function QuestionDialogue({ task }: { task: DesktopTask }) {
           {question.allowFreeform ? (
             <Form form={form} className="inline-answer" onFinish={(values) => answer(undefined, values.answer)}>
               <Form.Item name="answer" noStyle>
-                <Input placeholder="Or add other instructions" />
+                <Input placeholder={t("dialogue.question.inputPlaceholder")} />
               </Form.Item>
               <Button type="primary" htmlType="submit" icon={<SendOutlined />} />
             </Form>
           ) : null}
         </div>
       </div>
-      <div className="context-note">OfficeDex AI may produce inaccurate information. Please verify important content.</div>
+      <div className="context-note">{t("dialogue.question.disclaimer")}</div>
     </div>
   );
 }
 
 function CompletedDialogue({ task, onPreview }: { task: DesktopTask; onPreview: (artifact: Artifact) => void }) {
+  const t = useT();
   const artifact = task.artifact;
   const latestEvent = task.events.at(-1);
   const completionMessage = eventText(latestEvent);
-  const subject = taskSubject(task);
-  const duration = taskDurationLabel(task.events);
-  const completedAt = artifact?.syncedAt || latestEvent?.ts || "Completion time unknown";
+  const duration = taskDurationLabel(task.events, t);
+  const completedAt = artifact?.syncedAt || latestEvent?.ts || t("dialogue.completed.completionTimeUnknown");
   return (
     <div className="conversation-layout">
       <div className="chat-thread">
@@ -430,10 +307,10 @@ function CompletedDialogue({ task, onPreview }: { task: DesktopTask; onPreview: 
         <div className="message ai-message success">
           <div className="message-author">
             <CheckCircleFilled />
-            <strong>Generation Complete</strong>
+            <strong>{t("dialogue.completed.title")}</strong>
             <Tag color="green">{duration}</Tag>
           </div>
-          <p>{completionMessage || "Completed"}</p>
+          <p>{completionMessage || t("dialogue.completed.completionFallback")}</p>
           {artifact ? (
             isImageArtifact(artifact) ? (
               <div className="result-image-card">
@@ -441,15 +318,15 @@ function CompletedDialogue({ task, onPreview }: { task: DesktopTask; onPreview: 
                 <div className="result-image-meta">
                   <strong>{artifact.fileName}</strong>
                   <span>
-                    {artifact.documentType.toUpperCase()} · {completedAt}
+                    {t("dialogue.completed.imageMeta", { type: artifact.documentType.toUpperCase(), time: completedAt })}
                   </span>
                 </div>
                 <Space>
                   <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => officecli.openPath(artifact.filePath)}>
-                    Open
+                    {t("dialogue.completed.open")}
                   </Button>
                   <Button icon={<FolderOpenOutlined />} onClick={() => officecli.showItemInFolder(artifact.filePath)}>
-                    Show in folder
+                    {t("dialogue.completed.showInFolder")}
                   </Button>
                 </Space>
               </div>
@@ -459,16 +336,16 @@ function CompletedDialogue({ task, onPreview }: { task: DesktopTask; onPreview: 
                 <div>
                   <strong>{artifact.fileName}</strong>
                   <span>
-                    {artifact.documentType.toUpperCase()} Document · {completedAt}
+                    {t("dialogue.completed.docMeta", { type: artifact.documentType.toUpperCase(), time: completedAt })}
                   </span>
                 </div>
                 <Space>
                   <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => officecli.openPath(artifact.filePath)}>
-                    Open
+                    {t("dialogue.completed.open")}
                   </Button>
-                  {supportsOfflinePreview(artifact) ? <Button onClick={() => onPreview(artifact)}>Preview</Button> : null}
+                  {supportsOfflinePreview(artifact) ? <Button onClick={() => onPreview(artifact)}>{t("dialogue.completed.preview")}</Button> : null}
                   <Button icon={<FolderOpenOutlined />} onClick={() => officecli.showItemInFolder(artifact.filePath)}>
-                    Show in folder
+                    {t("dialogue.completed.showInFolder")}
                   </Button>
                 </Space>
               </div>
@@ -477,17 +354,20 @@ function CompletedDialogue({ task, onPreview }: { task: DesktopTask; onPreview: 
         </div>
       </div>
       <div className="docked-composer readonly">
-        <Input suffix={<SendOutlined />} placeholder="Ask a message or command..." />
+        <Input suffix={<SendOutlined />} placeholder={t("dialogue.completed.askPlaceholder")} />
       </div>
     </div>
   );
 }
 
 function TerminalDialogue({ task }: { task: DesktopTask }) {
+  const t = useT();
   const failed = task.status === "failed";
   const latestEvent = task.events.at(-1);
-  const title = failed ? "Generation Failed" : "Task Cancelled";
-  const description = failed ? task.error || eventText(latestEvent) || "Bridge reported task.failed." : eventText(latestEvent) || "Bridge reported task.cancelled.";
+  const title = failed ? t("dialogue.terminal.failed.title") : t("dialogue.terminal.cancelled.title");
+  const description = failed
+    ? task.error || eventText(latestEvent) || t("dialogue.terminal.failed.fallback")
+    : eventText(latestEvent) || t("dialogue.terminal.cancelled.fallback");
   return (
     <div className="conversation-layout">
       <div className="chat-thread">
@@ -500,13 +380,13 @@ function TerminalDialogue({ task }: { task: DesktopTask }) {
           </div>
           <p>{description}</p>
           <div className="terminal-event-card">
-            <span>Task ID</span>
+            <span>{t("dialogue.history.taskIdLabel")}</span>
             <strong>{task.id}</strong>
           </div>
           <div className="terminal-events">
-            <h3>Bridge event context</h3>
+            <h3>{t("dialogue.terminal.eventsHeading")}</h3>
             <Timeline
-              items={eventsForTimeline(task.events).map((event) => ({
+              items={eventsForTimeline(task.events, t).map((event) => ({
                 color: event.color,
                 content: (
                   <div className="timeline-copy">
@@ -520,14 +400,15 @@ function TerminalDialogue({ task }: { task: DesktopTask }) {
         </div>
       </div>
       <div className="docked-composer readonly">
-        <Input placeholder={failed ? "Fix instructions and click New Generation to restart" : "Task cancelled. Click New Generation to create a new task"} disabled />
+        <Input placeholder={failed ? t("dialogue.terminal.failed.placeholder") : t("dialogue.terminal.cancelled.placeholder")} disabled />
       </div>
     </div>
   );
 }
 
 function ConnectionFailure({ kind, status, error, details, onOpenSettings, onRetry, onOpenLogin }: { kind: FailureKind; status: string; error: string; details?: string; onOpenSettings: () => void; onRetry: () => void; onOpenLogin: () => void }) {
-  const copy = failureCopy(kind);
+  const t = useT();
+  const copy = failureCopy(kind, t);
   const isSetup = kind === "setup";
   return (
     <div className="failure-workspace">
@@ -536,16 +417,16 @@ function ConnectionFailure({ kind, status, error, details, onOpenSettings, onRet
         <span>{copy.banner}</span>
         {kind === "auth" ? (
           <Button size="small" onClick={onOpenLogin}>
-            Login
+            {t("dialogue.failure.button.login")}
           </Button>
         ) : (
           <Button size="small" onClick={onOpenSettings}>
-            Settings
+            {t("dialogue.failure.button.settings")}
           </Button>
         )}
         {isSetup ? null : (
           <Button size="small" type="primary" onClick={onRetry}>
-            Retry
+            {t("dialogue.failure.button.retry")}
           </Button>
         )}
       </div>
@@ -553,11 +434,11 @@ function ConnectionFailure({ kind, status, error, details, onOpenSettings, onRet
         {kind === "connection" ? <DisconnectOutlined /> : <WarningFilled />}
         <h1>{copy.title}</h1>
         <p>{error || status}</p>
-        {details ? <pre className="failure-details">{details}</pre> : null}
+        {details ? <FailureDetails details={details} /> : null}
         <Space>
           {kind === "auth" ? (
             <Button type="primary" icon={<UserOutlined />} onClick={onOpenLogin}>
-              Sign In
+              {t("dialogue.failure.button.signIn")}
             </Button>
           ) : isSetup ? (
             <Button type="primary" icon={<FileTextOutlined />} onClick={onOpenSettings}>
@@ -570,11 +451,11 @@ function ConnectionFailure({ kind, status, error, details, onOpenSettings, onRet
           )}
           {isSetup ? (
             <Button icon={<CloudOutlined />} onClick={onRetry}>
-              Retry
+              {t("dialogue.failure.button.retry")}
             </Button>
           ) : (
             <Button icon={<FileTextOutlined />} onClick={onOpenSettings}>
-              Open Settings
+              {t("dialogue.failure.button.openSettings")}
             </Button>
           )}
         </Space>
@@ -583,42 +464,51 @@ function ConnectionFailure({ kind, status, error, details, onOpenSettings, onRet
   );
 }
 
-function failureCopy(kind: FailureKind): { banner: string; title: string; primaryAction: string } {
-  switch (kind) {
-    case "auth":
-      return {
-        banner: "OfficeCLI is not signed in. Sign in to enable generation.",
-        title: "Sign-in Required",
-        primaryAction: "Sign In",
-      };
-    case "task":
-      return {
-        banner: "The last generation failed. The bridge is still connected; try again or adjust your inputs.",
-        title: "Generation Failed",
-        primaryAction: "Try Again",
-      };
-    case "connection":
-      return {
-        banner: "OfficeCLI bridge service is not connected. Some features are unavailable.",
-        title: "Connection Lost",
-        primaryAction: "Restart CLI Service",
-      };
-    case "setup":
-      return {
-        banner: "OfficeCLI is not installed yet. Finish setup in Settings to enable generation.",
-        title: "Setup Required",
-        primaryAction: "Open Settings",
-      };
-    default:
-      return {
-        banner: "Something went wrong. See details below.",
-        title: "Unexpected Error",
-        primaryAction: "Retry",
-      };
+function FailureDetails({ details }: { details: string }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  const summaryLabel = open ? t("dialogue.failure.hideDetails") : t("dialogue.failure.showDetails");
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(details);
+      setCopyState("copied");
+    } catch {
+      setCopyState("failed");
+    }
+    window.setTimeout(() => setCopyState("idle"), 2000);
   }
+  const copyLabel =
+    copyState === "copied" ? t("dialogue.failure.copied") :
+    copyState === "failed" ? t("dialogue.failure.copyFailed") :
+    t("dialogue.failure.copy");
+  return (
+    <details
+      className="failure-details-block"
+      open={open}
+      onToggle={(event) => setOpen((event.target as HTMLDetailsElement).open)}
+    >
+      <summary>{summaryLabel}</summary>
+      <pre className="failure-details">{details}</pre>
+      <div className="failure-details-actions">
+        <Button size="small" icon={<CopyOutlined />} onClick={copy} aria-label={copyLabel}>
+          {copyLabel}
+        </Button>
+      </div>
+    </details>
+  );
+}
+
+function failureCopy(kind: FailureKind, t: Translator): { banner: string; title: string; primaryAction: string } {
+  return {
+    banner: t(`dialogue.failure.${kind}.banner`),
+    title: t(`dialogue.failure.${kind}.title`),
+    primaryAction: t(`dialogue.failure.${kind}.primary`),
+  };
 }
 
 function FluidProgressPanel({ task }: { task: DesktopTask }) {
+  const t = useT();
   const stages = task.stages ?? [];
   const startedMessage = startedEventText(task.events);
   const completedCount = stages.filter((s) => s.status === "completed").length;
@@ -631,7 +521,7 @@ function FluidProgressPanel({ task }: { task: DesktopTask }) {
     : stages.length === 0
       ? 12
       : Math.round(((completedCount + (hasActive ? 0.5 : 0)) / stages.length) * 100);
-  const header = headerForStatus(status);
+  const header = headerForStatus(status, t);
   const panelClassName = `fluid-progress-panel stage-progress-panel stage-panel-${status}${!isRunning ? " stage-panel-terminal" : ""}`;
   return (
     <div className={panelClassName}>
@@ -644,7 +534,7 @@ function FluidProgressPanel({ task }: { task: DesktopTask }) {
       {stages.length === 0 ? (
         <div className="stage-empty">
           {isRunning ? <LoadingOutlined /> : <CheckCircleFilled />}
-          <span>{isRunning ? "Preparing…" : "No stage details recorded"}</span>
+          <span>{isRunning ? t("dialogue.progress.preparing") : t("dialogue.progress.noStages")}</span>
         </div>
       ) : (
         <ul className="stage-list">
@@ -666,20 +556,21 @@ function FluidProgressPanel({ task }: { task: DesktopTask }) {
   );
 }
 
-function headerForStatus(status: DesktopTask["status"]) {
+function headerForStatus(status: DesktopTask["status"], t: Translator) {
   switch (status) {
     case "completed":
-      return { icon: <CheckCircleFilled />, title: "Generation complete", tagColor: "green", tagText: "Done" };
+      return { icon: <CheckCircleFilled />, title: t("dialogue.progress.header.completed.title"), tagColor: "green", tagText: t("dialogue.progress.header.completed.tag") };
     case "failed":
-      return { icon: <CloseCircleFilled />, title: "Generation failed", tagColor: "red", tagText: "Failed" };
+      return { icon: <CloseCircleFilled />, title: t("dialogue.progress.header.failed.title"), tagColor: "red", tagText: t("dialogue.progress.header.failed.tag") };
     case "cancelled":
-      return { icon: <StopOutlined />, title: "Generation cancelled", tagColor: "default", tagText: "Cancelled" };
+      return { icon: <StopOutlined />, title: t("dialogue.progress.header.cancelled.title"), tagColor: "default", tagText: t("dialogue.progress.header.cancelled.tag") };
     case "question":
-      return { icon: <LoadingOutlined />, title: "Waiting for your input", tagColor: "processing", tagText: "Awaiting" };
+      return { icon: <LoadingOutlined />, title: t("dialogue.progress.header.question.title"), tagColor: "processing", tagText: t("dialogue.progress.header.question.tag") };
     default:
-      return { icon: <LoadingOutlined />, title: "Processing your request...", tagColor: "processing", tagText: "Generating" };
+      return { icon: <LoadingOutlined />, title: t("dialogue.progress.header.running.title"), tagColor: "processing", tagText: t("dialogue.progress.header.running.tag") };
   }
 }
+
 
 function startedEventText(events: BridgeEvent[]): string {
   const started = events.find((event) => event.type === "task.started");
@@ -706,12 +597,7 @@ function StageMeta({ stage }: { stage: StageState }) {
 }
 
 function useElapsedSeconds(startedAt?: string): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!startedAt) return;
-    const id = window.setInterval(() => setNow(Date.now()), 200);
-    return () => window.clearInterval(id);
-  }, [startedAt]);
+  const now = useNow(200);
   if (!startedAt) return 0;
   const start = Date.parse(startedAt);
   if (!Number.isFinite(start)) return 0;
@@ -731,14 +617,14 @@ function formatSeconds(seconds: number): string {
   return seconds >= 10 ? `${Math.round(seconds)}s` : `${seconds.toFixed(1)}s`;
 }
 
-function eventsForTimeline(events: BridgeEvent[]) {
+function eventsForTimeline(events: BridgeEvent[], t: Translator) {
   const fallback = [
-    { title: "Waiting for Bridge events", meta: "No progress events", color: "gray" },
+    { title: t("dialogue.terminal.events.waiting"), meta: t("dialogue.terminal.events.noProgress"), color: "gray" },
   ];
   if (events.length === 0) return fallback;
   return events.map((event) => ({
     title: event.type,
-    meta: eventMeta(event),
+    meta: eventMeta(event, t),
     color: event.type === "task.failed" ? "red" : event.type === "task.completed" ? "green" : "blue",
   }));
 }
@@ -748,28 +634,28 @@ function eventText(event?: BridgeEvent): string {
   return String(payload.message || payload.stage || payload.status || payload.question || "");
 }
 
-function eventMeta(event: BridgeEvent): string {
-  const text = eventText(event) || "Bridge Event";
+function eventMeta(event: BridgeEvent, t: Translator): string {
+  const text = eventText(event) || t("dialogue.terminal.events.fallback");
   return event.ts ? `${event.ts} · ${text}` : text;
 }
 
-function taskSubject(task: DesktopTask): string {
-  return task.topic || task.artifact?.fileName || task.documentType || "Current generation task";
+function taskSubject(task: DesktopTask, t: Translator): string {
+  return task.topic || task.artifact?.fileName || task.documentType || t("dialogue.history.subject.fallback");
 }
 
-function taskDurationLabel(events: BridgeEvent[]): string {
+function taskDurationLabel(events: BridgeEvent[], t: Translator): string {
   const firstTs = events.find((event) => event.ts)?.ts;
   const lastTs = [...events].reverse().find((event) => event.ts)?.ts;
   if (!firstTs || !lastTs || firstTs === lastTs) {
-    return "Completed";
+    return t("dialogue.completed.duration.completed");
   }
   const start = Date.parse(firstTs);
   const end = Date.parse(lastTs);
   if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
-    return "Completed";
+    return t("dialogue.completed.duration.completed");
   }
   const seconds = Math.round((end - start) / 1000);
-  return seconds > 0 ? `${seconds}s elapsed` : "Completed";
+  return seconds > 0 ? t("dialogue.completed.duration.elapsed", { seconds }) : t("dialogue.completed.duration.completed");
 }
 
 function supportsOfflinePreview(artifact: Artifact) {
@@ -779,7 +665,7 @@ function supportsOfflinePreview(artifact: Artifact) {
   return supported.includes(type) || supported.includes(extension);
 }
 
-function makePasteHandler(attachments: ReturnType<typeof useAttachments>) {
+function makePasteHandler(attachments: ReturnType<typeof useAttachments>, t: Translator) {
   return (event: ClipboardEvent<HTMLTextAreaElement>) => {
     const items = event.clipboardData?.files;
     if (!items || items.length === 0) return;
@@ -791,20 +677,20 @@ function makePasteHandler(attachments: ReturnType<typeof useAttachments>) {
     if (!attachments.supportsPaste) return;
     event.preventDefault();
     if (attachments.isReferenceLimitReached) {
-      message.warning(`Reference images limit reached (${attachments.referenceImagesSpec?.maxCount ?? 0}).`);
+      message.warning(t("dialogue.attach.referenceImages.limit", { max: attachments.referenceImagesSpec?.maxCount ?? 0 }));
       return;
     }
     void attachments.handlePastedFiles(images).then((added) => {
       const max = attachments.referenceImagesSpec?.maxCount;
       if (added === 0) {
         if (max !== undefined) {
-          message.warning(`Reference images limit reached (${max}).`);
+          message.warning(t("dialogue.attach.referenceImages.limit", { max }));
         }
         return;
       }
-      message.success(added === 1 ? "Pasted image attached" : `Attached ${added} pasted images`);
+      message.success(added === 1 ? t("dialogue.attach.paste.attached") : t("dialogue.attach.paste.attachedMany", { count: added }));
     }).catch((error) => {
-      message.error(`Failed to attach pasted image: ${(error as Error).message}`);
+      message.error(t("dialogue.attach.paste.error", { error: (error as Error).message }));
     });
   };
 }
@@ -831,15 +717,16 @@ function ReferenceImageStrip({
   onRemove: (path: string) => void;
   onAdd: () => void;
 }) {
+  const t = useT();
   return (
-    <div className="reference-image-strip" aria-label="Reference images">
+    <div className="reference-image-strip" aria-label={t("dialogue.attach.referenceImages.aria.strip")}>
       {items.map((path) => (
         <ReferenceImageChip key={path} path={path} onRemove={() => onRemove(path)} />
       ))}
       {items.length < maxCount ? (
-        <button type="button" className="reference-image-add" onClick={onAdd} aria-label="Add reference image">
+        <button type="button" className="reference-image-add" onClick={onAdd} aria-label={t("dialogue.attach.referenceImages.aria")}>
           <MaterialSymbol name="add_photo_alternate" />
-          <span>{items.length === 0 ? "Add reference images" : "Add more"}</span>
+          <span>{items.length === 0 ? t("dialogue.attach.referenceImages.add") : t("dialogue.attach.referenceImages.addMore")}</span>
         </button>
       ) : null}
     </div>
@@ -847,12 +734,13 @@ function ReferenceImageStrip({
 }
 
 function ReferenceImageChip({ path, onRemove }: { path: string; onRemove: () => void }) {
+  const t = useT();
   const fileName = path.split(/[/\\]/).pop() || path;
   return (
     <div className="reference-image-chip" title={path}>
       <MaterialSymbol name="image" />
       <span className="reference-image-name">{fileName}</span>
-      <button type="button" className="reference-image-remove" onClick={onRemove} aria-label={`Remove ${fileName}`}>
+      <button type="button" className="reference-image-remove" onClick={onRemove} aria-label={t("dialogue.attach.referenceImages.remove", { name: fileName })}>
         <CloseCircleFilled />
       </button>
     </div>
@@ -873,43 +761,105 @@ function imageExtensionFor(artifact: Artifact): string {
   return IMAGE_EXTENSIONS.includes(extension) ? extension : "png";
 }
 
-function InlineImagePreview({ artifact }: { artifact: Artifact }) {
+function UserMessage({ task, fallback }: { task: DesktopTask; fallback: string }) {
+  const input = task.userInput;
+  const prompt = input?.prompt?.trim();
+  const referenceImages = input?.referenceImages ?? [];
+  const sourceFile = input?.sourceFile;
+  const hasAttachments = referenceImages.length > 0 || Boolean(sourceFile);
+  const displayText = prompt || (hasAttachments ? "" : fallback);
+
+  return (
+    <div className="message user-message">
+      {displayText ? <div className="user-message-prompt">{displayText}</div> : null}
+      {referenceImages.length > 0 ? (
+        <div className="user-message-images">
+          <Image.PreviewGroup>
+            {referenceImages.map((path) => (
+              <UserReferenceImage key={path} filePath={path} />
+            ))}
+          </Image.PreviewGroup>
+        </div>
+      ) : null}
+      {sourceFile ? (
+        <div className="user-message-file">
+          <PaperClipOutlined />
+          <span title={sourceFile}>{sourceFile.split(/[/\\]/).pop()}</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function UserReferenceImage({ filePath }: { filePath: string }) {
   const [src, setSrc] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const blobUrlRef = useRef<string | null>(null);
-  const tokenRef = useRef<string | null>(null);
+  const t = useT();
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        const grant = await officecli.issuePreviewToken(artifact);
-        if (cancelled) {
-          officecli.revokePreviewToken(grant.token).catch(() => {});
-          return;
-        }
-        tokenRef.current = grant.token;
-        const { data } = await officecli.readArtifactFile(grant.token);
-        const arrayBuf = data instanceof ArrayBuffer ? data : new Uint8Array(data as Uint8Array).buffer;
-        const mime = IMAGE_MIME_BY_EXT[imageExtensionFor(artifact)] || "application/octet-stream";
-        const blob = new Blob([new Uint8Array(arrayBuf as ArrayBuffer)], { type: mime });
-        const url = URL.createObjectURL(blob);
-        if (cancelled) {
-          URL.revokeObjectURL(url);
-          return;
-        }
-        blobUrlRef.current = url;
-        setSrc(url);
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
-      }
-    })();
+    const cacheKey = `ref:${filePath}`;
+    acquireBlob(cacheKey, async () => {
+      const { data, mime } = await officecli.readLocalImage(filePath);
+      const arrayBuf = data instanceof ArrayBuffer ? data : new Uint8Array(data as Uint8Array).buffer;
+      return new Blob([new Uint8Array(arrayBuf as ArrayBuffer)], { type: mime || "application/octet-stream" });
+    }).then((url) => {
+      if (!cancelled) setSrc(url);
+      else releaseBlob(cacheKey);
+    }).catch((err) => {
+      if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+    });
     return () => {
       cancelled = true;
-      if (blobUrlRef.current) {
-        URL.revokeObjectURL(blobUrlRef.current);
-        blobUrlRef.current = null;
-      }
+      releaseBlob(cacheKey);
+    };
+  }, [filePath]);
+
+  const fileName = filePath.split(/[/\\]/).pop() || filePath;
+
+  if (error) {
+    return (
+      <div className="user-message-image-fallback" title={`${fileName}: ${error}`}>
+        <PaperClipOutlined />
+        <span>{fileName}</span>
+      </div>
+    );
+  }
+  if (!src) {
+    return <div className="user-message-image-skeleton" />;
+  }
+  return (
+    <div className="user-message-image-thumb">
+      <Image src={src} alt={fileName} preview={{ mask: t("dialogue.userMessage.imagePreviewMask") }} />
+    </div>
+  );
+}
+
+function InlineImagePreview({ artifact }: { artifact: Artifact }) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const tokenRef = useRef<string | null>(null);
+  const t = useT();
+
+  useEffect(() => {
+    let cancelled = false;
+    const cacheKey = `artifact:${artifact.filePath}`;
+    acquireBlob(cacheKey, async () => {
+      const grant = await officecli.issuePreviewToken(artifact);
+      tokenRef.current = grant.token;
+      const { data } = await officecli.readArtifactFile(grant.token);
+      const arrayBuf = data instanceof ArrayBuffer ? data : new Uint8Array(data as Uint8Array).buffer;
+      const mime = IMAGE_MIME_BY_EXT[imageExtensionFor(artifact)] || "application/octet-stream";
+      return new Blob([new Uint8Array(arrayBuf as ArrayBuffer)], { type: mime });
+    }).then((url) => {
+      if (!cancelled) setSrc(url);
+      else releaseBlob(cacheKey);
+    }).catch((err) => {
+      if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+    });
+    return () => {
+      cancelled = true;
+      releaseBlob(cacheKey);
       if (tokenRef.current) {
         officecli.revokePreviewToken(tokenRef.current).catch(() => {});
         tokenRef.current = null;
@@ -930,7 +880,7 @@ function InlineImagePreview({ artifact }: { artifact: Artifact }) {
   }
   return (
     <div className="result-image-thumb">
-      <Image src={src} alt={artifact.fileName} preview={{ mask: "Click to enlarge" }} />
+      <Image src={src} alt={artifact.fileName} preview={{ mask: t("dialogue.completed.imagePreviewMask") }} />
     </div>
   );
 }

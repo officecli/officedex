@@ -4,6 +4,7 @@ import { LockOutlined, RocketOutlined } from "@ant-design/icons";
 import { notion } from "../designTokens";
 import type { AppUpdateRelease } from "../../shared/types";
 import type { UpdatePhase } from "../useAppUpdate";
+import { useT } from "../i18n";
 
 export interface ForceUpdateOverlayProps {
   release: AppUpdateRelease;
@@ -24,7 +25,7 @@ export function ForceUpdateOverlay({
   onUpdate,
   onInstall,
 }: ForceUpdateOverlayProps) {
-  // Lock background scroll while overlay is mounted.
+  const t = useT();
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -33,8 +34,6 @@ export function ForceUpdateOverlay({
     };
   }, []);
 
-  // Block ESC so users cannot try to dismiss (no dismiss path exists in
-  // force mode; this just suppresses the AntD/browser shortcut surface).
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -58,13 +57,13 @@ export function ForceUpdateOverlay({
         <div className="force-update-glyph">
           <LockOutlined />
         </div>
-        <h1 id="force-update-title" className="force-update-title">Required update</h1>
+        <h1 id="force-update-title" className="force-update-title">{t("update.force.title")}</h1>
         <div className="force-update-version">
-          Version {release.version} <span className="force-update-version-current">(current {currentVersion})</span>
+          {t("update.force.versionLine", { version: release.version })} <span className="force-update-version-current">{t("update.force.currentSuffix", { version: currentVersion })}</span>
         </div>
         {release.notes ? <p className="force-update-notes">{release.notes}</p> : null}
         <p className="force-update-reason">
-          This release contains required changes. OfficeDex will resume once the update is installed.
+          {t("update.force.reason")}
         </p>
         {downloading || downloaded || installing ? (
           <div className="force-update-progress">
@@ -78,10 +77,10 @@ export function ForceUpdateOverlay({
             />
             <div className="force-update-progress-label">
               {installing
-                ? "Restarting..."
+                ? t("update.force.restarting")
                 : downloaded
-                  ? "Download complete. Restarting..."
-                  : `Downloading... ${formatBytes(progress.bytesDone)} / ${formatBytes(progress.bytesTotal)}`}
+                  ? t("update.force.downloadComplete")
+                  : t("update.force.downloadingProgress", { done: formatBytes(progress.bytesDone), total: formatBytes(progress.bytesTotal) })}
             </div>
           </div>
         ) : (
@@ -92,12 +91,12 @@ export function ForceUpdateOverlay({
             onClick={onUpdate}
             className="force-update-action"
           >
-            Update now
+            {t("update.force.updateNow")}
           </Button>
         )}
         {downloaded && !installing ? (
           <Button type="primary" size="large" icon={<RocketOutlined />} onClick={onInstall} className="force-update-action">
-            Restart to install
+            {t("update.force.restartToInstall")}
           </Button>
         ) : null}
         {error ? <div className="force-update-error">{error}</div> : null}

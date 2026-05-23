@@ -1,6 +1,5 @@
-import { Avatar, Button, Form, Input, Modal, Progress, Radio, Select, Space, Spin, Switch, Tabs, Tag, message } from "antd";
+import { Button, Form, Input, Modal, Progress, Radio, Select, Space, Spin, Switch, Tag, message } from "antd";
 import {
-  CheckCircleFilled,
   CopyOutlined,
   DownloadOutlined,
   ExclamationCircleFilled,
@@ -9,10 +8,7 @@ import {
   Loading3QuartersOutlined,
   LogoutOutlined,
   RocketOutlined,
-  SafetyCertificateOutlined,
-  SaveOutlined,
   SyncOutlined,
-  UploadOutlined,
   UserOutlined,
 } from "@ant-design/icons";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -21,13 +17,12 @@ import { officecli } from "../bridge";
 import { useSettings } from "../useSettings";
 import { useAppUpdate } from "../useAppUpdate";
 import { ProviderForm } from "./OnboardingScreen";
+import { useT } from "../i18n";
 import type { AuthEvent, DocumentType, GenerateDefaults, LlmProvider, WhoAmIResult } from "../../shared/types";
 
-export function SettingsScreen({ fluid }: { fluid: boolean }) {
-  if (fluid) {
-    return <FluidSettings />;
-  }
+export function SettingsScreen() {
   const { settings, defaultWorkspaceDir, update, loading, saving, error } = useSettings();
+  const t = useT();
 
   const updateDefaults = useCallback(
     (patch: Partial<GenerateDefaults>) => {
@@ -52,21 +47,21 @@ export function SettingsScreen({ fluid }: { fluid: boolean }) {
 
   const rerunOnboarding = useCallback(() => {
     Modal.confirm({
-      title: "Show onboarding wizard again?",
-      content: "The 3-step wizard will appear next time you open OfficeDex. Your current settings are kept.",
-      okText: "Show wizard",
-      cancelText: "Cancel",
+      title: t("settings.row.onboarding.confirmTitle"),
+      content: t("settings.row.onboarding.confirmBody"),
+      okText: t("settings.row.onboarding.confirmOk"),
+      cancelText: t("settings.common.cancel"),
       onOk: () => update({ onboardingCompletedAt: null }).catch(() => undefined),
     });
-  }, [update]);
+  }, [update, t]);
 
   const resetAll = useCallback(() => {
     Modal.confirm({
-      title: "Reset all settings to defaults?",
-      content: "This clears the document type, mode, runtime, output directory, bridge binary path, and LLM provider. Onboarding will re-run on next launch.",
-      okText: "Reset everything",
+      title: t("settings.row.reset.confirmTitle"),
+      content: t("settings.row.reset.confirmBody"),
+      okText: t("settings.row.reset.button"),
       okButtonProps: { danger: true },
-      cancelText: "Cancel",
+      cancelText: t("settings.common.cancel"),
       onOk: () =>
         update({
           defaults: {
@@ -82,32 +77,17 @@ export function SettingsScreen({ fluid }: { fluid: boolean }) {
           onboardingCompletedAt: null,
         }).catch(() => undefined),
     });
-  }, [update]);
+  }, [update, t]);
 
   return (
     <div className="settings-layout">
-      <aside className="settings-nav">
-        {[
-          ["person", "Account"],
-          ["tune", "Generation Defaults"],
-          ["terminal", "OfficeCLI Connection"],
-          ["workspaces", "Workspace"],
-          ["palette", "Appearance"],
-          ["shield_lock", "Privacy & Data"],
-        ].map(([icon, label], index) => (
-          <button key={label} className={index === 1 ? "active" : ""}>
-            <MaterialSymbol name={icon} />
-            {label}
-          </button>
-        ))}
-      </aside>
       <section className="settings-panel">
         <div className="page-header">
           <div>
-            <h1>App Settings</h1>
-            <p>Manage your account preferences and workspace configuration.</p>
+            <h1>{t("settings.page.title")}</h1>
+            <p>{t("settings.page.subtitle")}</p>
           </div>
-          {saving ? <Tag color="processing">Saving…</Tag> : <Tag color="green">Auto-saved</Tag>}
+          {saving ? <Tag color="processing">{t("settings.tag.saving")}</Tag> : <Tag color="green">{t("settings.tag.autoSaved")}</Tag>}
         </div>
         {error ? (
           <div className="settings-error">
@@ -115,38 +95,38 @@ export function SettingsScreen({ fluid }: { fluid: boolean }) {
           </div>
         ) : null}
         {loading ? (
-          <div className="settings-loading"><Spin /> <span>Loading settings…</span></div>
+          <div className="settings-loading"><Spin /> <span>{t("settings.loading")}</span></div>
         ) : (
           <>
             <div className="setting-group">
-              <h2>Generation Defaults</h2>
-              <SettingRow title="Default Document Type" desc="Set the preferred output format for quick generation.">
+              <h2>{t("settings.group.generation")}</h2>
+              <SettingRow title={t("settings.row.documentType.title")} desc={t("settings.row.documentType.desc")}>
                 <Select
                   value={settings.defaults.documentType}
                   onChange={(value: DocumentType) => updateDefaults({ documentType: value })}
                   options={[
-                    { value: "pptx", label: "PowerPoint (.pptx)" },
-                    { value: "docx", label: "Word (.docx)" },
-                    { value: "xlsx", label: "Excel (.xlsx)" },
-                    { value: "report", label: "Report" },
-                    { value: "img", label: "Image" },
+                    { value: "pptx", label: t("settings.option.docType.pptx") },
+                    { value: "docx", label: t("settings.option.docType.docx") },
+                    { value: "xlsx", label: t("settings.option.docType.xlsx") },
+                    { value: "report", label: t("settings.option.docType.report") },
+                    { value: "img", label: t("settings.option.docType.img") },
                   ]}
                   style={{ minWidth: 220 }}
                 />
               </SettingRow>
-              <SettingRow title="Generation Mode" desc="Control the AI model's creativity level.">
+              <SettingRow title={t("settings.row.mode.title")} desc={t("settings.row.mode.desc")}>
                 <Radio.Group
                   value={settings.defaults.mode}
                   onChange={(event) => updateDefaults({ mode: event.target.value })}
                   optionType="button"
                   buttonStyle="solid"
                   options={[
-                    { value: "fast", label: "Fast" },
-                    { value: "best", label: "Smart" },
+                    { value: "fast", label: t("settings.option.mode.fast") },
+                    { value: "best", label: t("settings.option.mode.best") },
                   ]}
                 />
               </SettingRow>
-              <SettingRow title="Runtime Environment" desc="Choose the compute node for rendering and processing documents.">
+              <SettingRow title={t("settings.row.runtime.title")} desc={t("settings.row.runtime.desc")}>
                 <Radio.Group
                   value={settings.defaults.runtimeMode}
                   onChange={(event) => updateDefaults({ runtimeMode: event.target.value })}
@@ -155,60 +135,60 @@ export function SettingsScreen({ fluid }: { fluid: boolean }) {
                     <Radio value="hosted" className={`runtime-choice ${settings.defaults.runtimeMode === "hosted" ? "active" : ""}`}>
                       <StatusDot tone="green" />
                       <div>
-                        <strong>Hosted</strong>
-                        <span>Recommended — use OfficeCLI as the LLM provider. Fastest, highest concurrency.</span>
+                        <strong>{t("settings.row.runtime.hosted.title")}</strong>
+                        <span>{t("settings.row.runtime.hosted.desc")}</span>
                       </div>
                     </Radio>
                     <Radio value="external" className={`runtime-choice ${settings.defaults.runtimeMode === "external" ? "active" : ""}`}>
                       <StatusDot tone="gray" />
                       <div>
-                        <strong>External</strong>
-                        <span>Bring your own LLM provider. Routes generation through your configured OfficeCLI bridge.</span>
+                        <strong>{t("settings.row.runtime.external.title")}</strong>
+                        <span>{t("settings.row.runtime.external.desc")}</span>
                       </div>
                     </Radio>
                   </Space>
                 </Radio.Group>
               </SettingRow>
-              <SettingRow title="Enable Images" desc="Embed AI-generated images in supported documents.">
+              <SettingRow title={t("settings.row.enableImages.title")} desc={t("settings.row.enableImages.desc")}>
                 <Switch checked={settings.defaults.enableImages} onChange={(checked) => updateDefaults({ enableImages: checked })} />
               </SettingRow>
-              <SettingRow title="Image Quality" desc="Adjust the default resolution of images in documents.">
+              <SettingRow title={t("settings.row.imageQuality.title")} desc={t("settings.row.imageQuality.desc")}>
                 <Select
                   value={settings.defaults.imageQuality}
                   onChange={(value: "standard" | "premium") => updateDefaults({ imageQuality: value })}
                   options={[
-                    { value: "standard", label: "Standard" },
-                    { value: "premium", label: "Premium" },
+                    { value: "standard", label: t("settings.option.imageQuality.standard") },
+                    { value: "premium", label: t("settings.option.imageQuality.premium") },
                   ]}
                   style={{ minWidth: 180 }}
                 />
               </SettingRow>
             </div>
             <div className="setting-group">
-              <h2>Workspace</h2>
-              <SettingRow title="Workspace Output Directory" desc="Where generated artifacts are saved on disk. Leave empty to use the app data folder.">
+              <h2>{t("settings.group.workspace")}</h2>
+              <SettingRow title={t("settings.row.outputDir.title")} desc={t("settings.row.outputDir.desc")}>
                 <Space.Compact style={{ width: "100%" }}>
                   <Input
-                    placeholder={defaultWorkspaceDir || "(default workspace)"}
+                    placeholder={defaultWorkspaceDir || t("settings.row.outputDir.placeholder")}
                     value={settings.outputDir ?? ""}
                     onChange={(event) => {
                       const value = event.target.value;
                       update({ outputDir: value.trim() ? value : null }).catch(() => undefined);
                     }}
                   />
-                  <Button icon={<FolderOpenOutlined />} onClick={pickOutputDir}>Browse</Button>
+                  <Button icon={<FolderOpenOutlined />} onClick={pickOutputDir}>{t("settings.row.outputDir.browse")}</Button>
                 </Space.Compact>
                 {settings.outputDir ? (
                   <Button type="link" size="small" onClick={() => update({ outputDir: null }).catch(() => undefined)}>
-                    Reset to default
+                    {t("settings.row.outputDir.reset")}
                   </Button>
                 ) : null}
               </SettingRow>
             </div>
             <div className="setting-group">
-              <h2>OfficeCLI Connection</h2>
+              <h2>{t("settings.group.connection")}</h2>
               {settings.defaults.runtimeMode === "external" ? (
-                <SettingRow title="External LLM Provider" desc="Configure the LLM endpoint that OfficeCLI will route generation requests through.">
+                <SettingRow title={t("settings.row.provider.title")} desc={t("settings.row.provider.desc")}>
                   <ProviderForm
                     provider={settings.llmProvider ?? { type: "openai", baseUrl: "", apiKey: "", model: "" }}
                     onChange={(patch: Partial<LlmProvider>) => {
@@ -218,41 +198,47 @@ export function SettingsScreen({ fluid }: { fluid: boolean }) {
                   />
                   {settings.llmProvider ? (
                     <Button type="link" size="small" onClick={() => update({ llmProvider: null }).catch(() => undefined)}>
-                      Clear provider
+                      {t("settings.row.provider.clear")}
                     </Button>
                   ) : null}
                 </SettingRow>
               ) : null}
-              <SettingRow title="Bridge Binary Path" desc="Override the officecli binary used for bridge / login. Leave empty to use the bundled or PATH binary.">
+              <SettingRow title={t("settings.row.bridgeBinary.title")} desc={t("settings.row.bridgeBinary.desc")}>
                 <Space.Compact style={{ width: "100%" }}>
                   <Input
-                    placeholder="(use bundled / PATH)"
+                    placeholder={t("settings.row.bridgeBinary.placeholder")}
                     value={settings.bridgeBinaryPath ?? ""}
                     onChange={(event) => {
                       const value = event.target.value;
                       update({ bridgeBinaryPath: value.trim() ? value : null }).catch(() => undefined);
                     }}
                   />
-                  <Button icon={<FolderOpenOutlined />} onClick={pickBridgeBinary}>Browse</Button>
+                  <Button icon={<FolderOpenOutlined />} onClick={pickBridgeBinary}>{t("settings.row.outputDir.browse")}</Button>
                 </Space.Compact>
                 {settings.bridgeBinaryPath ? (
                   <Button type="link" size="small" onClick={() => update({ bridgeBinaryPath: null }).catch(() => undefined)}>
-                    Reset to default
+                    {t("settings.row.outputDir.reset")}
                   </Button>
                 ) : null}
               </SettingRow>
             </div>
             <div className="setting-group">
-              <h2>About</h2>
+              <h2>{t("settings.group.subscription")}</h2>
+              <SettingRow title={t("settings.row.redeem.title")} desc={t("settings.row.redeem.desc")}>
+                <RedeemCodeCard />
+              </SettingRow>
+            </div>
+            <div className="setting-group">
+              <h2>{t("settings.group.about")}</h2>
               <AboutCard />
             </div>
             <div className="setting-group">
-              <h2>Reset</h2>
-              <SettingRow title="Show onboarding wizard again" desc="Re-runs the 3-step setup on next app launch. Current settings are preserved.">
-                <Button onClick={rerunOnboarding}>Show wizard</Button>
+              <h2>{t("settings.group.reset")}</h2>
+              <SettingRow title={t("settings.row.onboarding.title")} desc={t("settings.row.onboarding.desc")}>
+                <Button onClick={rerunOnboarding}>{t("settings.row.onboarding.button")}</Button>
               </SettingRow>
-              <SettingRow title="Reset all settings" desc="Wipes every setting back to defaults and re-shows onboarding.">
-                <Button danger onClick={resetAll}>Reset everything</Button>
+              <SettingRow title={t("settings.row.reset.title")} desc={t("settings.row.reset.desc")}>
+                <Button danger onClick={resetAll}>{t("settings.row.reset.button")}</Button>
               </SettingRow>
             </div>
           </>
@@ -266,6 +252,7 @@ type LoginPhase = "loading" | "anonymous" | "awaiting" | "success" | "failure";
 
 function AboutCard() {
   const update = useAppUpdate();
+  const t = useT();
   const [version, setVersion] = useState<string>("");
   const [checking, setChecking] = useState(false);
 
@@ -311,28 +298,28 @@ function AboutCard() {
   return (
     <div className="about-card">
       <div className="about-row">
-        <span className="about-label">Version</span>
-        <span className="about-value">OfficeDex {version || status.currentVersion}</span>
+        <span className="about-label">{t("settings.about.version")}</span>
+        <span className="about-value">{t("settings.about.versionValue", { version: version || status.currentVersion })}</span>
       </div>
       <div className="about-row">
-        <span className="about-label">Last checked</span>
-        <span className="about-value">{formatLastChecked(status.lastCheckedAt)}</span>
+        <span className="about-label">{t("settings.about.lastChecked")}</span>
+        <span className="about-value">{formatLastChecked(status.lastCheckedAt, t)}</span>
       </div>
       {status.lastError ? (
         <div className="about-row about-row-error">
-          <span className="about-label">Last error</span>
+          <span className="about-label">{t("settings.about.lastError")}</span>
           <span className="about-value">{status.lastError}</span>
         </div>
       ) : null}
       {downloading ? (
         <div className="about-progress">
           <Progress percent={percent} size="small" showInfo={false} />
-          <span className="about-progress-label">Downloading {percent}%</span>
+          <span className="about-progress-label">{t("settings.about.downloading", { percent })}</span>
         </div>
       ) : null}
       <Space size={8} className="about-actions">
         <Button icon={<SyncOutlined spin={checking} />} onClick={handleCheck} disabled={checking || downloading}>
-          Check for updates
+          {t("settings.about.checking")}
         </Button>
         {status.updateAvailable && release ? (
           <Button
@@ -341,24 +328,28 @@ function AboutCard() {
             onClick={handleUpdate}
             disabled={downloading}
           >
-            {downloaded ? `Restart to install ${release.version}` : downloading ? "Downloading..." : `Update to ${release.version}`}
+            {downloaded
+              ? t("settings.about.restartToInstall", { version: release.version })
+              : downloading
+                ? t("settings.about.downloadingLabel")
+                : t("settings.about.updateTo", { version: release.version })}
           </Button>
         ) : !checking ? (
-          <span className="about-uptodate">You're on the latest version</span>
+          <span className="about-uptodate">{t("settings.about.upToDate")}</span>
         ) : null}
       </Space>
     </div>
   );
 }
 
-function formatLastChecked(timestamp: string | null): string {
-  if (!timestamp) return "Never";
+function formatLastChecked(timestamp: string | null, t: (key: string, vars?: Record<string, string | number>) => string): string {
+  if (!timestamp) return t("settings.about.lastCheckedNever");
   const then = Date.parse(timestamp);
   if (Number.isNaN(then)) return timestamp;
   const elapsed = Math.max(0, Date.now() - then);
-  if (elapsed < 60_000) return "just now";
-  if (elapsed < 60 * 60_000) return `${Math.floor(elapsed / 60_000)} minutes ago`;
-  if (elapsed < 24 * 60 * 60_000) return `${Math.floor(elapsed / (60 * 60_000))} hours ago`;
+  if (elapsed < 60_000) return t("settings.about.lastCheckedJustNow");
+  if (elapsed < 60 * 60_000) return t("settings.about.lastCheckedMinutes", { count: Math.floor(elapsed / 60_000) });
+  if (elapsed < 24 * 60 * 60_000) return t("settings.about.lastCheckedHours", { count: Math.floor(elapsed / (60 * 60_000)) });
   return new Date(then).toLocaleString();
 }
 
@@ -370,6 +361,7 @@ export function LoginScreen() {
   const [busy, setBusy] = useState(false);
   const mountedRef = useRef(true);
   const phaseRef = useRef<LoginPhase>("loading");
+  const t = useT();
 
   useEffect(() => {
     phaseRef.current = phase;
@@ -403,7 +395,7 @@ export function LoginScreen() {
         setPhase("failure");
       } else if (event.type === "exit") {
         if (event.code !== 0 && phaseRef.current === "awaiting") {
-          setErrorText(`Login process exited with code ${event.code ?? "null"}`);
+          setErrorText(t("login.exitCode", { code: event.code ?? "null" }));
           setPhase("failure");
         }
       }
@@ -445,11 +437,11 @@ export function LoginScreen() {
     if (!loginUrl) return;
     try {
       await navigator.clipboard.writeText(loginUrl);
-      void message.success("Login URL copied");
+      void message.success(t("login.url.copied"));
     } catch {
-      void message.error("Failed to copy");
+      void message.error(t("login.url.copyFailed"));
     }
-  }, [loginUrl]);
+  }, [loginUrl, t]);
 
   const doLogout = useCallback(async () => {
     setBusy(true);
@@ -472,22 +464,22 @@ export function LoginScreen() {
         <div className="login-mark">
           <MaterialSymbol name={phase === "success" ? "person" : "lock_open"} />
         </div>
-        <h1>{titleFor(phase)}</h1>
-        <p>{subtitleFor(phase, whoami)}</p>
+        <h1>{titleFor(phase, t)}</h1>
+        <p>{subtitleFor(phase, whoami, t)}</p>
 
         {phase === "loading" ? (
           <div className="login-status loading">
             <Loading3QuartersOutlined spin />
-            <span>Checking sign-in status…</span>
+            <span>{t("login.status.checking")}</span>
           </div>
         ) : null}
 
         {phase === "anonymous" ? (
           <Space direction="vertical" size={12} style={{ width: "100%", marginTop: 16 }}>
             <Button type="primary" icon={<GlobalOutlined />} block loading={busy} onClick={startLogin}>
-              Sign in via browser
+              {t("login.button.signIn")}
             </Button>
-            <p className="copyright">A browser window will open for sign-in. Return here once complete.</p>
+            <p className="copyright">{t("login.hint.signInBrowser")}</p>
           </Space>
         ) : null}
 
@@ -495,35 +487,25 @@ export function LoginScreen() {
           <Space direction="vertical" size={12} style={{ width: "100%", marginTop: 16 }}>
             <div className="login-status awaiting">
               <Loading3QuartersOutlined spin />
-              <span>Waiting for browser sign-in…</span>
+              <span>{t("login.status.awaiting")}</span>
             </div>
             {loginUrl ? (
               <div className="login-url-box">
                 <span className="login-url-text" title={loginUrl}>{loginUrl}</span>
                 <Space>
-                  <Button size="small" icon={<CopyOutlined />} onClick={copyLoginUrl}>Copy</Button>
-                  <Button size="small" type="link" onClick={openLoginUrl}>Open again</Button>
+                  <Button size="small" icon={<CopyOutlined />} onClick={copyLoginUrl}>{t("login.url.copy")}</Button>
+                  <Button size="small" type="link" onClick={openLoginUrl}>{t("login.url.openAgain")}</Button>
                 </Space>
               </div>
             ) : null}
-            <Button block onClick={cancelLogin}>Cancel</Button>
+            <Button block onClick={cancelLogin}>{t("login.button.cancel")}</Button>
           </Space>
         ) : null}
 
         {phase === "success" && whoami ? (
           <Space direction="vertical" size={12} style={{ width: "100%", marginTop: 16 }}>
-            <div className="login-status success">
-              <CheckCircleFilled />
-              <span>Signed in</span>
-            </div>
-            <div className="login-info">
-              <InfoRow label="Mode" value={modeLabel(whoami.mode)} />
-              {whoami.userId ? <InfoRow label="User ID" value={whoami.userId} /> : null}
-              {whoami.session ? <InfoRow label="Session" value={whoami.session} /> : null}
-              {whoami.expiresAt ? <InfoRow label="Expires" value={whoami.expiresAt} /> : null}
-            </div>
             <Button block icon={<LogoutOutlined />} loading={busy} onClick={doLogout}>
-              Sign out
+              {t("login.button.signOut")}
             </Button>
           </Space>
         ) : null}
@@ -532,144 +514,82 @@ export function LoginScreen() {
           <Space direction="vertical" size={12} style={{ width: "100%", marginTop: 16 }}>
             <div className="login-status failure">
               <ExclamationCircleFilled />
-              <span>{errorText || "Sign-in failed"}</span>
+              <span>{errorText || t("login.status.failure.default")}</span>
             </div>
             <Button type="primary" block onClick={startLogin}>
-              Try again
+              {t("login.button.tryAgain")}
             </Button>
           </Space>
         ) : null}
 
-        <span className="copyright">© 2026 OfficeDex</span>
+        <span className="copyright">{t("login.copyright")}</span>
       </div>
     </div>
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function RedeemCodeCard() {
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [lastSuccess, setLastSuccess] = useState<{ code: string; amount: number; balance: number } | null>(null);
+  const t = useT();
+
+  const handleSubmit = useCallback(async () => {
+    const trimmed = code.trim();
+    if (!trimmed) {
+      void message.error(t("settings.redeem.empty"));
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await officecli.redeem(trimmed);
+      setLastSuccess({ code: result.code, amount: result.credit_amount, balance: result.new_balance });
+      setCode("");
+      void message.success(t("settings.redeem.success", { amount: result.credit_amount }));
+    } catch (error) {
+      void message.error(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }, [code, t]);
+
   return (
-    <div className="login-info-row">
-      <span className="login-info-label">{label}</span>
-      <span className="login-info-value">{value}</span>
-    </div>
+    <Space direction="vertical" size={8} style={{ width: "100%" }}>
+      <Space.Compact style={{ width: "100%", display: "flex" }}>
+        <Input
+          style={{ flex: 1 }}
+          value={code}
+          onChange={(e) => setCode(e.target.value.toUpperCase())}
+          onPressEnter={handleSubmit}
+          placeholder={t("settings.redeem.placeholder")}
+          maxLength={64}
+          autoComplete="off"
+          disabled={busy}
+        />
+        <Button type="primary" loading={busy} onClick={handleSubmit}>{t("settings.redeem.submit")}</Button>
+      </Space.Compact>
+      {lastSuccess ? (
+        <div style={{ fontSize: 12, color: "#388E3C" }}>
+          {t("settings.redeem.successRecord", { code: lastSuccess.code, amount: lastSuccess.amount, balance: lastSuccess.balance })}
+        </div>
+      ) : null}
+    </Space>
   );
 }
 
-function titleFor(phase: LoginPhase): string {
-  switch (phase) {
-    case "loading":
-      return "Sign in to OfficeDex";
-    case "anonymous":
-      return "Sign in to OfficeDex";
-    case "awaiting":
-      return "Complete sign-in in your browser";
-    case "success":
-      return "You're signed in";
-    case "failure":
-      return "Sign-in failed";
-  }
+function titleFor(phase: LoginPhase, t: (key: string) => string): string {
+  return t(`login.title.${phase}`);
 }
 
-function subtitleFor(phase: LoginPhase, whoami: WhoAmIResult | null): string {
-  switch (phase) {
-    case "loading":
-      return "Verifying your local session.";
-    case "anonymous":
-      return "Open a browser to sign in with your OfficeCLI account.";
-    case "awaiting":
-      return "We've opened your browser. Finish sign-in there to continue.";
-    case "success":
-      return whoami?.userId ? `Connected as user ${whoami.userId}.` : "Your OfficeCLI account is connected.";
-    case "failure":
-      return "Try again, or check the OfficeCLI bridge in Settings.";
+function subtitleFor(phase: LoginPhase, whoami: WhoAmIResult | null, t: (key: string, vars?: Record<string, string | number>) => string): string {
+  if (phase === "success") {
+    return whoami?.userId ? t("login.subtitle.successUser", { userId: whoami.userId }) : t("login.subtitle.successDefault");
   }
-}
-
-function modeLabel(mode: WhoAmIResult["mode"]): string {
-  switch (mode) {
-    case "logged_in":
-      return "Account";
-    case "api_key":
-      return "API Key";
-    case "anonymous":
-      return "Anonymous";
-  }
+  return t(`login.subtitle.${phase}`);
 }
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function FluidSettings() {
-  return (
-    <div className="settings-layout fluid-settings">
-      <aside className="settings-nav">
-        {["Account", "Generation Defaults", "Connection", "Workspace", "Appearance"].map((label, index) => (
-          <button key={label} className={index === 0 ? "active" : ""}>
-            {label}
-          </button>
-        ))}
-      </aside>
-      <section className="settings-panel">
-        <div className="page-header">
-          <div>
-            <h1>Settings</h1>
-            <p>Manage your account preferences and workspace configuration.</p>
-          </div>
-          <Button icon={<SaveOutlined />} type="primary">
-            Save Changes
-          </Button>
-        </div>
-        <Tabs
-          items={[
-            {
-              key: "profile",
-              label: "Profile",
-              children: (
-                <div className="setting-group">
-                  <Space align="center" size={20}>
-                    <Avatar size={64} icon={<UserOutlined />} />
-                    <Button icon={<UploadOutlined />}>Change Avatar</Button>
-                  </Space>
-                  <Form layout="vertical" className="profile-form">
-                    <Form.Item label="First Name">
-                      <Input defaultValue="Alex" />
-                    </Form.Item>
-                    <Form.Item label="Last Name">
-                      <Input defaultValue="Chen" />
-                    </Form.Item>
-                    <Form.Item label="Email">
-                      <Input defaultValue="alex.chen@officedex.ai" />
-                    </Form.Item>
-                    <Form.Item label="Role / Title">
-                      <Input defaultValue="AI Product Manager" />
-                    </Form.Item>
-                  </Form>
-                </div>
-              ),
-            },
-            {
-              key: "security",
-              label: "Security",
-              children: (
-                <div className="setting-group">
-                  <SettingRow title="Password" desc="Last changed 3 months ago">
-                    <Button>Update</Button>
-                  </SettingRow>
-                  <SettingRow title="Two-Factor Authentication (2FA)" desc="Enhance account security">
-                    <Switch checked />
-                  </SettingRow>
-                  <SettingRow title="Session Protection" desc="Auto-lock idle workspaces">
-                    <SafetyCertificateOutlined className="large-setting-icon" />
-                  </SettingRow>
-                </div>
-              ),
-            },
-          ]}
-        />
-      </section>
-    </div>
-  );
 }
 
 function SettingRow({ title, desc, children }: { title: string; desc: string; children: React.ReactNode }) {

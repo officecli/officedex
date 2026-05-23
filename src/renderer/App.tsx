@@ -1,25 +1,33 @@
 import { ConfigProvider } from "antd";
+import zhCN from "antd/locale/zh_CN";
+import enUS from "antd/locale/en_US";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Artifact, BridgeEvent, GenerateInput, PreviewGrant } from "../shared/types";
-import { applyTaskEvent, createInitialTaskState, type TaskState } from "./taskState";
+import { applyTaskEvent, attachUserInput, createInitialTaskState, type TaskState } from "./taskState";
 import { officecli } from "./bridge";
 import { theme } from "./designTokens";
-import type { NavKey } from "./mockData";
+import type { NavKey } from "./defaults";
 import { Shell } from "./components/Shell";
 import { PreviewPanel } from "./components/PreviewPanel";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { ForceUpdateOverlay } from "./components/ForceUpdateOverlay";
 import { DialogueScreen, type FailureKind } from "./screens/DialogueScreens";
-import { ArtifactsScreen, TasksScreen, TemplatesScreen } from "./screens/DataScreens";
+import { TasksScreen } from "./screens/DataScreens";
 import { LoginScreen, SettingsScreen } from "./screens/SettingsScreens";
 import { OnboardingScreen } from "./screens/OnboardingScreen";
 import { useSettings } from "./useSettings";
 import { useAppUpdate } from "./useAppUpdate";
 import { useCreditStatus } from "./useCreditStatus";
+import { useLocale } from "./i18n";
+
+type SelectedTask =
+  | { kind: "auto" }
+  | { kind: "none" }
+  | { kind: "task"; id: string };
 
 export function App() {
   const [state, setState] = useState<TaskState>(() => createInitialTaskState());
-  const [selectedTaskID, setSelectedTaskID] = useState<string | null>();
+  const [selectedTaskID, setSelectedTaskID] = useState<SelectedTask>({ kind: "auto" });
   const [activeNav, setActiveNav] = useState<NavKey>("dialogue");
   const [busy, setBusy] = useState(false);
   const [capabilityStatus, setCapabilityStatus] = useState("Not connected");
@@ -32,6 +40,8 @@ export function App() {
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const appUpdate = useAppUpdate();
   const { credit } = useCreditStatus();
+  const locale = useLocale();
+  const antdLocale = locale === "zh" ? zhCN : enUS;
   const forceUpdate = appUpdate.status.mandatory && Boolean(appUpdate.release);
 
   const recordError = useCallback((text: string, kind: FailureKind, details?: string) => {
@@ -81,13 +91,7 @@ export function App() {
         setCapabilityStatus(`${message} — reconnecting…`);
         return;
       }
-      setState((current) => {
-        const next = applyTaskEvent(current, event);
-        if (event.task_id) {
-          setSelectedTaskID((currentTaskID) => (currentTaskID === undefined ? event.task_id : currentTaskID));
-        }
-        return next;
-      });
+      setState((current) => applyTaskEvent(current, event));
       if (event.task_id) {
         setActiveNav("dialogue");
       }
@@ -110,8 +114,24 @@ export function App() {
     return off;
   }, [connectAttempt, clearError, recordError, settingsLoading, showOnboarding, forceUpdate]);
 
-  const selectedTask = selectedTaskID === null ? undefined : selectedTaskID ? state.tasks[selectedTaskID] : state.taskOrder.length > 0 ? state.tasks[state.taskOrder[0]] : undefined;
-  const displayTask = selectedTask;
+  const firstTaskID = state.taskOrder[0];
+  useEffect(() => {
+    if (firstTaskID && selectedTaskID.kind === "auto") {
+      setSelectedTaskID({ kind: "task", id: firstTaskID });
+    }
+  }, [firstTaskID, selectedTaskID.kind]);
+
+  const selectedTask = useMemo(() => {
+    switch (selectedTaskID.kind) {
+      case "none":
+        return undefined;
+      case "task":
+        return state.tasks[selectedTaskID.id];
+      case "auto":
+        return firstTaskID ? state.tasks[firstTaskID] : undefined;
+    }
+  }, [selectedTaskID, state.tasks, firstTaskID]);
+  const displayTask = useMemo(() => selectedTask, [selectedTask]);
   const artifacts = useMemo(() => {
     const live = state.artifacts;
     return displayTask?.artifact && !live.some((artifact) => artifact.filePath === displayTask.artifact?.filePath) ? [displayTask.artifact, ...live] : live;
@@ -128,7 +148,12 @@ export function App() {
     try {
       const topic = values.topic || summarizePrompt(values.prompt);
       const result = await officecli.generate({ ...values, topic });
-      setSelectedTaskID(result.taskId);
+      setState((current) => attachUserInput(current, result.taskId, {
+        prompt: values.prompt,
+        sourceFile: values.sourceFile,
+        referenceImages: values.referenceImages,
+      }));
+      setSelectedTaskID({ kind: "task", id: result.taskId });
       setActiveNav("dialogue");
     } catch (error) {
       const text = errorMessage(error);
@@ -140,7 +165,7 @@ export function App() {
   }
 
   const newGeneration = useCallback(() => {
-    setSelectedTaskID(null);
+    setSelectedTaskID({ kind: "none" });
     clearError();
     setActiveNav("dialogue");
   }, [clearError]);
@@ -184,7 +209,7 @@ export function App() {
 
   if (forceUpdate && appUpdate.release) {
     return (
-      <ConfigProvider theme={theme}>
+      <ConfigProvider theme={theme} locale={antdLocale}>
         <ForceUpdateOverlay
           release={appUpdate.release}
           phase={appUpdate.phase}
@@ -199,7 +224,7 @@ export function App() {
   }
 
   return (
-    <ConfigProvider theme={theme}>
+    <ConfigProvider theme={theme} locale={antdLocale}>
       {showBanner && appUpdate.release ? (
         <UpdateBanner
           release={appUpdate.release}
@@ -230,7 +255,6 @@ export function App() {
             errorKind={errorKind}
             errorDetails={errorDetails}
             bridgeStatus={capabilityStatus}
-            fluid
             onSubmit={submit}
             onOpenSettings={() => setActiveNav("settings")}
             onOpenLogin={openLogin}
@@ -242,16 +266,14 @@ export function App() {
           <TasksScreen
             tasks={tasks}
             onSelectTask={(taskID) => {
-              setSelectedTaskID(taskID);
+              setSelectedTaskID({ kind: "task", id: taskID });
               setLastError(undefined);
               setActiveNav("dialogue");
             }}
             onNewGeneration={newGeneration}
           />
         ) : null}
-        {activeNav === "artifacts" ? <ArtifactsScreen artifacts={artifacts} fluid onNewGeneration={newGeneration} onPreview={openInlinePreview} /> : null}
-        {activeNav === "templates" ? <TemplatesScreen onNewGeneration={newGeneration} /> : null}
-        {activeNav === "settings" ? <SettingsScreen fluid={false} /> : null}
+        {activeNav === "settings" ? <SettingsScreen /> : null}
         {activeNav === "login" ? <LoginScreen /> : null}
       </Shell>
       {showOnboarding ? (

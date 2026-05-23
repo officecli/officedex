@@ -60,7 +60,6 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof DialogueScreen
     busy: false,
     errorKind: "connection" as const,
     bridgeStatus: "connected",
-    fluid: false,
     onSubmit: vi.fn(async () => undefined),
     onOpenSettings: vi.fn(),
     onOpenLogin: vi.fn(),

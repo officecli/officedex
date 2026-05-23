@@ -1,8 +1,9 @@
-import { Button, Input, Radio, Select, Space, Switch } from "antd";
+import { Button, Input, message, Radio, Select, Space, Switch } from "antd";
 import { FolderOpenOutlined } from "@ant-design/icons";
 import { useCallback, useState } from "react";
 import { officecli } from "../bridge";
 import { providerPresets } from "../providerPresets";
+import { useT } from "../i18n";
 import type { DocumentType, GenerateDefaults, LlmProvider, LlmProviderType, UserSettings } from "../../shared/types";
 
 interface OnboardingScreenProps {
@@ -23,6 +24,7 @@ const EMPTY_PROVIDER: LlmProvider = { type: "openai", baseUrl: "", apiKey: "", m
 export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: OnboardingScreenProps) {
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
+  const t = useT();
   const [draft, setDraft] = useState<DraftSettings>(() => ({
     defaults: { ...settings.defaults },
     outputDir: settings.outputDir,
@@ -60,10 +62,14 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
         onboardingCompletedAt: new Date().toISOString(),
       });
       onComplete();
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      message.error(t("onboarding.finishFailed", { error: errMsg }));
+      throw err;
     } finally {
       setBusy(false);
     }
-  }, [draft, onComplete]);
+  }, [draft, onComplete, t]);
 
   const skip = useCallback(async () => {
     setBusy(true);
@@ -77,49 +83,49 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
     }
   }, [onComplete]);
 
-  const stepTitle = ["Generation defaults", "Workspace & runtime"][step];
+  const stepTitle = t(`onboarding.step.${step}.title`);
   const isExternal = draft.defaults.runtimeMode === "external";
 
   return (
     <div className="onboarding-overlay" role="dialog" aria-modal="true">
       <div className="onboarding-card">
         <div className="onboarding-header">
-          <span className="onboarding-eyebrow">Welcome to OfficeDex</span>
+          <span className="onboarding-eyebrow">{t("onboarding.welcome")}</span>
           <div className="onboarding-title-row">
             <h1 className="onboarding-title">{stepTitle}</h1>
-            <span className="onboarding-step-counter">Step {step + 1}/2</span>
+            <span className="onboarding-step-counter">{t("onboarding.step.counter", { current: step + 1, total: 2 })}</span>
           </div>
         </div>
 
         {step === 0 ? (
           <Space direction="vertical" size={20} style={{ width: "100%" }}>
-            <Field label="Default document type">
+            <Field label={t("onboarding.field.documentType")}>
               <Select
                 value={draft.defaults.documentType}
                 onChange={(value: DocumentType) => updateDefaults({ documentType: value })}
                 options={[
-                  { value: "pptx", label: "PowerPoint (.pptx)" },
-                  { value: "docx", label: "Word (.docx)" },
-                  { value: "xlsx", label: "Excel (.xlsx)" },
-                  { value: "report", label: "Report" },
-                  { value: "img", label: "Image" },
+                  { value: "pptx", label: t("settings.option.docType.pptx") },
+                  { value: "docx", label: t("settings.option.docType.docx") },
+                  { value: "xlsx", label: t("settings.option.docType.xlsx") },
+                  { value: "report", label: t("settings.option.docType.report") },
+                  { value: "img", label: t("settings.option.docType.img") },
                 ]}
                 style={{ width: "100%" }}
               />
             </Field>
-            <Field label="Generation mode">
+            <Field label={t("onboarding.field.mode")}>
               <Radio.Group
                 optionType="button"
                 buttonStyle="solid"
                 value={draft.defaults.mode}
                 onChange={(event) => updateDefaults({ mode: event.target.value })}
                 options={[
-                  { value: "fast", label: "Fast" },
-                  { value: "best", label: "Smart" },
+                  { value: "fast", label: t("settings.option.mode.fast") },
+                  { value: "best", label: t("settings.option.mode.best") },
                 ]}
               />
             </Field>
-            <Field label="Embed AI-generated images">
+            <Field label={t("onboarding.field.images")}>
               <Switch checked={draft.defaults.enableImages} onChange={(checked) => updateDefaults({ enableImages: checked })} />
             </Field>
           </Space>
@@ -127,43 +133,43 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
 
         {step === 1 ? (
           <Space direction="vertical" size={20} style={{ width: "100%" }}>
-            <Field label="Runtime environment">
+            <Field label={t("onboarding.field.runtime")}>
               <Radio.Group
                 value={draft.defaults.runtimeMode}
                 onChange={(event) => updateDefaults({ runtimeMode: event.target.value })}
               >
                 <Space direction="vertical" size={8}>
-                  <Radio value="hosted">Hosted (Recommended — Use OfficeCLI as LLM provider)</Radio>
-                  <Radio value="external">External (Use my own LLM provider)</Radio>
+                  <Radio value="hosted">{t("onboarding.runtime.hosted")}</Radio>
+                  <Radio value="external">{t("onboarding.runtime.external")}</Radio>
                 </Space>
               </Radio.Group>
             </Field>
             {isExternal ? (
-              <Field label="LLM provider">
+              <Field label={t("onboarding.field.provider")}>
                 <ProviderForm provider={draft.llmProvider} onChange={updateProvider} />
               </Field>
             ) : null}
-            <Field label="Workspace output directory (optional)">
+            <Field label={t("onboarding.field.outputDir")}>
               <Space.Compact style={{ width: "100%" }}>
                 <Input
-                  placeholder={defaultWorkspaceDir || "(default workspace)"}
+                  placeholder={defaultWorkspaceDir || t("settings.row.outputDir.placeholder")}
                   value={draft.outputDir ?? ""}
                   onChange={(event) => setDraft((current) => ({ ...current, outputDir: event.target.value.trim() ? event.target.value : null }))}
                 />
-                <Button icon={<FolderOpenOutlined />} onClick={pickOutputDir}>Browse</Button>
+                <Button icon={<FolderOpenOutlined />} onClick={pickOutputDir}>{t("settings.row.outputDir.browse")}</Button>
               </Space.Compact>
             </Field>
           </Space>
         ) : null}
 
         <div className="onboarding-actions">
-          <Button type="link" onClick={skip} disabled={busy}>Skip for now</Button>
+          <Button type="link" onClick={skip} disabled={busy}>{t("onboarding.skip")}</Button>
           <Space>
-            {step > 0 ? <Button onClick={() => setStep((current) => current - 1)} disabled={busy}>Back</Button> : null}
+            {step > 0 ? <Button onClick={() => setStep((current) => current - 1)} disabled={busy}>{t("onboarding.back")}</Button> : null}
             {step < 1 ? (
-              <Button type="primary" onClick={() => setStep((current) => current + 1)}>Next</Button>
+              <Button type="primary" onClick={() => setStep((current) => current + 1)}>{t("onboarding.next")}</Button>
             ) : (
-              <Button type="primary" loading={busy} onClick={finish}>Finish</Button>
+              <Button type="primary" loading={busy} onClick={finish}>{t("onboarding.finish")}</Button>
             )}
           </Space>
         </div>
@@ -174,6 +180,7 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
 
 export function ProviderForm({ provider, onChange }: { provider: LlmProvider; onChange: (patch: Partial<LlmProvider>) => void }) {
   const preset = providerPresets[provider.type];
+  const t = useT();
   return (
     <Space direction="vertical" size={10} style={{ width: "100%" }}>
       <Select
@@ -187,26 +194,26 @@ export function ProviderForm({ provider, onChange }: { provider: LlmProvider; on
           });
         }}
         options={[
-          { value: "openai", label: "OpenAI (or OpenAI-compatible)" },
-          { value: "anthropic", label: "Anthropic" },
-          { value: "azure", label: "Azure OpenAI" },
-          { value: "custom", label: "Custom endpoint" },
+          { value: "openai", label: t("onboarding.provider.openai") },
+          { value: "anthropic", label: t("onboarding.provider.anthropic") },
+          { value: "azure", label: t("onboarding.provider.azure") },
+          { value: "custom", label: t("onboarding.provider.custom") },
         ]}
         style={{ width: "100%" }}
       />
       <Input
-        placeholder={preset.defaultBaseUrl || "https://your-endpoint.example.com/v1"}
+        placeholder={preset.defaultBaseUrl || t("onboarding.provider.baseUrlPlaceholder")}
         value={provider.baseUrl}
         onChange={(event) => onChange({ baseUrl: event.target.value })}
       />
       <Input.Password
-        placeholder="API key"
+        placeholder={t("onboarding.provider.apiKeyPlaceholder")}
         value={provider.apiKey}
         onChange={(event) => onChange({ apiKey: event.target.value })}
         autoComplete="off"
       />
       <Input
-        placeholder={preset.defaultModel || "Model name (e.g. gpt-4o-mini)"}
+        placeholder={preset.defaultModel || t("onboarding.provider.modelPlaceholder")}
         value={provider.model}
         onChange={(event) => onChange({ model: event.target.value })}
       />

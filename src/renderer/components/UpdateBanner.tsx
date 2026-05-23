@@ -3,6 +3,7 @@ import { CloseOutlined, DownloadOutlined, RocketOutlined } from "@ant-design/ico
 import { notion } from "../designTokens";
 import type { AppUpdateRelease } from "../../shared/types";
 import type { UpdatePhase } from "../useAppUpdate";
+import { useT } from "../i18n";
 
 export interface UpdateBannerProps {
   release: AppUpdateRelease;
@@ -23,6 +24,7 @@ export function UpdateBanner({
   onInstall,
   onDismiss,
 }: UpdateBannerProps) {
+  const t = useT();
   const downloading = phase === "downloading";
   const downloaded = phase === "downloaded" || phase === "installing";
   const percent =
@@ -34,7 +36,7 @@ export function UpdateBanner({
         <RocketOutlined />
       </div>
       <div className="update-banner-body">
-        <div className="update-banner-title">New version {release.version} available</div>
+        <div className="update-banner-title">{t("update.banner.title", { version: release.version })}</div>
         {release.notes ? <div className="update-banner-notes">{summarizeNotes(release.notes)}</div> : null}
         {downloading ? (
           <div className="update-banner-progress">
@@ -55,19 +57,19 @@ export function UpdateBanner({
       <div className="update-banner-actions">
         {downloaded ? (
           <Button type="primary" icon={<RocketOutlined />} onClick={onInstall}>
-            Restart to install
+            {t("update.banner.restartToInstall")}
           </Button>
         ) : downloading ? (
           <Button disabled icon={<DownloadOutlined />}>
-            Downloading...
+            {t("update.banner.downloading")}
           </Button>
         ) : (
           <Button type="primary" icon={<DownloadOutlined />} onClick={onUpdate}>
-            Update now
+            {t("update.banner.updateNow")}
           </Button>
         )}
-        <Button type="text" icon={<CloseOutlined />} aria-label="Dismiss update banner" onClick={onDismiss}>
-          Later
+        <Button type="text" icon={<CloseOutlined />} aria-label={t("update.banner.dismissAria")} onClick={onDismiss}>
+          {t("update.banner.later")}
         </Button>
       </div>
     </div>
