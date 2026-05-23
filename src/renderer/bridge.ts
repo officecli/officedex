@@ -6,6 +6,7 @@ import type {
   AuthEvent,
   BinaryFileData,
   BridgeEvent,
+  CreditStatus,
   DesktopAPI,
   GenerateInput,
   LlmProvider,
@@ -85,6 +86,7 @@ function createBrowserPreviewAPI(): DesktopAPI {
     cancelLogin: async () => undefined,
     whoami: async () => ({ mode: "anonymous" }),
     logout: async () => undefined,
+    getCreditStatus: async () => normaliseCreditStatus(null),
     getSettings: async () => browserSettings,
     updateSettings: async (patch) => {
       browserSettings = {
@@ -139,6 +141,23 @@ function decodeRawBytes(bytes: number[] | null | undefined): unknown {
   }
 }
 
+function decodeArtifactBytes(raw: unknown): Uint8Array {
+  // Wails serializes `[]byte` struct fields as standard Go-JSON base64 strings,
+  // while bare `[]byte` returns arrive as number arrays. Handle both, plus the
+  // Uint8Array shape used by unit tests.
+  if (!raw) return new Uint8Array();
+  if (raw instanceof Uint8Array) return raw;
+  if (raw instanceof ArrayBuffer) return new Uint8Array(raw);
+  if (typeof raw === "string") {
+    const binary = atob(raw);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+  if (Array.isArray(raw)) return new Uint8Array(raw as number[]);
+  return new Uint8Array();
+}
+
 function uint8ArrayToBase64(data: Uint8Array): string {
   let binary = "";
   const chunk = 0x8000;
@@ -146,6 +165,31 @@ function uint8ArrayToBase64(data: Uint8Array): string {
     binary += String.fromCharCode(...data.subarray(i, i + chunk));
   }
   return btoa(binary);
+}
+
+function normaliseCreditStatus(raw: Partial<CreditStatus> | null | undefined): CreditStatus {
+  const numberOrZero = (value: unknown): number => (typeof value === "number" && Number.isFinite(value) ? value : 0);
+  const stringOrEmpty = (value: unknown): string => (typeof value === "string" ? value : "");
+  const hosted = raw?.hostedCreditBalance;
+  const modes = ["anonymous", "logged_in", "api_key"] as const;
+  const mode = (modes as readonly string[]).includes(stringOrEmpty(raw?.mode))
+    ? (raw!.mode as CreditStatus["mode"])
+    : "anonymous";
+  return {
+    mode,
+    accessMode: stringOrEmpty(raw?.accessMode),
+    planName: stringOrEmpty(raw?.planName),
+    hostedCreditBalance: typeof hosted === "number" && Number.isFinite(hosted) ? hosted : null,
+    freeTrialLimit: numberOrZero(raw?.freeTrialLimit),
+    freeTrialUsed: numberOrZero(raw?.freeTrialUsed),
+    freeTrialRemaining: numberOrZero(raw?.freeTrialRemaining),
+    rewardRemaining: numberOrZero(raw?.rewardRemaining),
+    paidKeyPrefix: stringOrEmpty(raw?.paidKeyPrefix),
+    paidKeyTotal: numberOrZero(raw?.paidKeyTotal),
+    paidKeyUsed: numberOrZero(raw?.paidKeyUsed),
+    paidKeyRemaining: numberOrZero(raw?.paidKeyRemaining),
+    raw: stringOrEmpty(raw?.raw),
+  };
 }
 
 /**
@@ -234,8 +278,7 @@ function createWailsAPI(): DesktopAPI {
     },
     readArtifactFile: async (previewToken: string) => {
       const result = await WailsApp.ReadArtifactFile(previewToken);
-      const bytes = (result?.data ?? []) as number[];
-      const data: BinaryFileData = new Uint8Array(bytes);
+      const data: BinaryFileData = decodeArtifactBytes(result?.data);
       return { data };
     },
     renderPreviewHtml: async (previewToken: string) => {
@@ -258,6 +301,10 @@ function createWailsAPI(): DesktopAPI {
       };
     },
     logout: () => WailsApp.Logout(),
+    getCreditStatus: async (): Promise<CreditStatus> => {
+      const raw = (await WailsApp.GetCreditStatus()) as Partial<CreditStatus> | null | undefined;
+      return normaliseCreditStatus(raw);
+    },
     getSettings: async () => normaliseUserSettings(await WailsApp.GetSettings()),
     updateSettings: async (patch: Partial<UserSettings>) =>
       normaliseUserSettings(await WailsApp.UpdateSettings(adaptSettingsPatch(patch))),

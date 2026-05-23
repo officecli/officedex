@@ -37,13 +37,13 @@ import (
 
 const (
 	appName             = "OfficeDex"
-	appVersion          = "0.2.0"
+	appVersion          = "0.2.1"
 	previewExtraWidth   = 500
 	bridgeEventChannel  = "bridge:event"
 	authEventChannel    = "auth:event"
 	previewEventChannel = "preview:open"
 	appUpdateChannel    = "appupdate:event"
-	defaultUpdateManifestURL = "https://officedex.releases.example.com/manifest.json"
+	defaultUpdateManifestURL = "https://raw.githubusercontent.com/officecli/officedex-dist/main/manifest.json"
 )
 
 // App is the Wails-bound object surfaced to the renderer.
@@ -481,6 +481,15 @@ func (a *App) CancelLogin() error {
 func (a *App) WhoAmI() (types.WhoAmIResult, error) {
 	opts := a.runCommandOptions()
 	return login.GetWhoAmI(a.ctx, opts)
+}
+
+// GetCreditStatus runs `officecli auth status` and returns the parsed quota
+// snapshot (hosted credit balance, free trial / reward / paid-key counters,
+// access mode, plan name). A non-zero exit from the CLI is reported as an
+// anonymous status with zeroed counters rather than an error.
+func (a *App) GetCreditStatus() (types.CreditStatus, error) {
+	opts := a.runCommandOptions()
+	return login.GetCreditStatus(a.ctx, opts)
 }
 
 // Logout runs `officecli logout`.

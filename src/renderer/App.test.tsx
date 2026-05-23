@@ -672,6 +672,72 @@ describe("App auto-update flow", () => {
   });
 });
 
+describe("App credit display", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    installDomStubs();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  function overrideCreditStatus(status: {
+    mode: "anonymous" | "logged_in" | "api_key";
+    accessMode?: string;
+    planName?: string;
+    hostedCreditBalance?: number | null;
+    freeTrialLimit?: number;
+    freeTrialUsed?: number;
+    freeTrialRemaining?: number;
+    rewardRemaining?: number;
+    paidKeyPrefix?: string;
+    paidKeyTotal?: number;
+    paidKeyUsed?: number;
+    paidKeyRemaining?: number;
+  }) {
+    const api = (window as unknown as { officecli: DesktopAPI }).officecli;
+    api.getCreditStatus = (async () => ({
+      mode: status.mode,
+      accessMode: status.accessMode ?? "",
+      planName: status.planName ?? "",
+      hostedCreditBalance: status.hostedCreditBalance ?? null,
+      freeTrialLimit: status.freeTrialLimit ?? 0,
+      freeTrialUsed: status.freeTrialUsed ?? 0,
+      freeTrialRemaining: status.freeTrialRemaining ?? 0,
+      rewardRemaining: status.rewardRemaining ?? 0,
+      paidKeyPrefix: status.paidKeyPrefix ?? "",
+      paidKeyTotal: status.paidKeyTotal ?? 0,
+      paidKeyUsed: status.paidKeyUsed ?? 0,
+      paidKeyRemaining: status.paidKeyRemaining ?? 0,
+      raw: "",
+    })) as unknown as DesktopAPI["getCreditStatus"];
+  }
+
+  it("renders Free trial used/limit when getCreditStatus returns anonymous", async () => {
+    installBridgeMock();
+    overrideCreditStatus({ mode: "anonymous", freeTrialLimit: 100, freeTrialUsed: 25, freeTrialRemaining: 75 });
+
+    const { App } = await import("./App");
+    render(<App />);
+
+    expect(await screen.findByText("25 / 100")).toBeTruthy();
+    expect(screen.getAllByText("Free trial").length).toBeGreaterThan(0);
+  });
+
+  it("renders hosted balance when getCreditStatus returns logged_in with hostedCreditBalance", async () => {
+    installBridgeMock();
+    overrideCreditStatus({ mode: "logged_in", hostedCreditBalance: 42, planName: "Pro", accessMode: "hosted" });
+
+    const { App } = await import("./App");
+    render(<App />);
+
+    expect(await screen.findByText("0 / 42")).toBeTruthy();
+    expect(screen.getAllByText("Pro").length).toBeGreaterThan(0);
+  });
+});
+
 function firePasteWithFile(target: HTMLElement, file: File) {
   const dataTransfer = {
     files: [file] as unknown as FileList,
@@ -716,6 +782,21 @@ function installBridgeMock() {
     cancelLogin: vi.fn(async () => undefined),
     whoami: vi.fn(async () => ({ mode: "anonymous" as const })),
     logout: vi.fn(async () => undefined),
+    getCreditStatus: vi.fn(async () => ({
+      mode: "anonymous" as const,
+      accessMode: "",
+      planName: "",
+      hostedCreditBalance: null,
+      freeTrialLimit: 0,
+      freeTrialUsed: 0,
+      freeTrialRemaining: 0,
+      rewardRemaining: 0,
+      paidKeyPrefix: "",
+      paidKeyTotal: 0,
+      paidKeyUsed: 0,
+      paidKeyRemaining: 0,
+      raw: "",
+    })),
     getSettings: vi.fn(async () => ({
       version: 1,
       defaults: {

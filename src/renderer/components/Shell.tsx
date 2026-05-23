@@ -48,9 +48,9 @@ export interface CreditInfo {
 }
 
 const DEFAULT_CREDIT: CreditInfo = {
-  used: 1240,
-  total: 2000,
-  planLabel: "Free plan",
+  used: 0,
+  total: 0,
+  planLabel: "Free trial",
 };
 
 interface ShellProps {

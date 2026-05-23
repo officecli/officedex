@@ -222,6 +222,26 @@ type WhoAmIResult struct {
 	ExpiresAt string     `json:"expiresAt,omitempty"`
 }
 
+// CreditStatus mirrors the quota fields surfaced by `officecli auth status`.
+// HostedCreditBalance is a pointer so we can distinguish "balance line absent"
+// (anonymous trial) from "balance is zero" (hosted plan with no credits left).
+// All other counters default to 0 when their line is missing.
+type CreditStatus struct {
+	Mode                WhoAmIMode `json:"mode"`
+	AccessMode          string     `json:"accessMode"`
+	PlanName            string     `json:"planName"`
+	HostedCreditBalance *int       `json:"hostedCreditBalance"`
+	FreeTrialLimit      int        `json:"freeTrialLimit"`
+	FreeTrialUsed       int        `json:"freeTrialUsed"`
+	FreeTrialRemaining  int        `json:"freeTrialRemaining"`
+	RewardRemaining     int        `json:"rewardRemaining"`
+	PaidKeyPrefix       string     `json:"paidKeyPrefix"`
+	PaidKeyTotal        int        `json:"paidKeyTotal"`
+	PaidKeyUsed         int        `json:"paidKeyUsed"`
+	PaidKeyRemaining    int        `json:"paidKeyRemaining"`
+	Raw                 string     `json:"raw"`
+}
+
 type AuthEventType string
 
 const (

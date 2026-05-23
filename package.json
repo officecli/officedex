@@ -1,7 +1,7 @@
 {
   "name": "officedex",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "officecliVersion": "0.2.74",
   "scripts": {

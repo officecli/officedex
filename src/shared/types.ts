@@ -157,6 +157,22 @@ export interface WhoAmIResult {
   expiresAt?: string;
 }
 
+export interface CreditStatus {
+  mode: WhoAmIMode;
+  accessMode: string;
+  planName: string;
+  hostedCreditBalance: number | null;
+  freeTrialLimit: number;
+  freeTrialUsed: number;
+  freeTrialRemaining: number;
+  rewardRemaining: number;
+  paidKeyPrefix: string;
+  paidKeyTotal: number;
+  paidKeyUsed: number;
+  paidKeyRemaining: number;
+  raw: string;
+}
+
 export type AuthEvent =
   | { type: "url"; url: string }
   | { type: "success" }
@@ -252,6 +268,7 @@ export interface DesktopAPI {
   cancelLogin(): Promise<void>;
   whoami(): Promise<WhoAmIResult>;
   logout(): Promise<void>;
+  getCreditStatus(): Promise<CreditStatus>;
   getSettings(): Promise<UserSettings>;
   updateSettings(patch: Partial<UserSettings>): Promise<UserSettings>;
   getDefaultWorkspaceDir(): Promise<string>;

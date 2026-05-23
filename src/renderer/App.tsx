@@ -15,6 +15,7 @@ import { LoginScreen, SettingsScreen } from "./screens/SettingsScreens";
 import { OnboardingScreen } from "./screens/OnboardingScreen";
 import { useSettings } from "./useSettings";
 import { useAppUpdate } from "./useAppUpdate";
+import { useCreditStatus } from "./useCreditStatus";
 
 export function App() {
   const [state, setState] = useState<TaskState>(() => createInitialTaskState());
@@ -30,6 +31,7 @@ export function App() {
   const { settings: persistedSettings, defaultWorkspaceDir, loading: settingsLoading } = useSettings();
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const appUpdate = useAppUpdate();
+  const { credit } = useCreditStatus();
   const forceUpdate = appUpdate.status.mandatory && Boolean(appUpdate.release);
 
   const recordError = useCallback((text: string, kind: FailureKind, details?: string) => {
@@ -215,7 +217,7 @@ export function App() {
         failed={Boolean(lastError)}
         errorKind={lastError ? errorKind : undefined}
         inspector={sidePanel}
-        credit={{ used: 1240, total: 2000, planLabel: "Free plan" }}
+        credit={credit}
         onNavChange={setActiveNav}
         onNewGeneration={newGeneration}
       >
