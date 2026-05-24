@@ -3,8 +3,10 @@ package localstore
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"officedex/internal/types"
 )
@@ -222,5 +224,327 @@ func TestRecordEventGeneratesFallbackEventID(t *testing.T) {
 	}
 	if eventID == "" {
 		t.Error("expected synthesized event_id, got empty string")
+	}
+}
+
+func TestQueryEventsByTask(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+
+	events := []types.BridgeEvent{
+		{EventID: "e1", TaskID: "task-1", Type: "task.started", Payload: map[string]any{"topic": "test"}},
+		{EventID: "e2", TaskID: "task-1", Type: "task.progress", Payload: map[string]any{"stage": "generating"}},
+		{EventID: "e3", TaskID: "task-2", Type: "task.started", Payload: map[string]any{"topic": "other"}},
+		{EventID: "e4", TaskID: "task-1", Type: "task.completed"},
+	}
+	for _, ev := range events {
+		if err := store.RecordEvent(ev); err != nil {
+			t.Fatalf("RecordEvent(%s): %v", ev.EventID, err)
+		}
+	}
+
+	got, err := store.QueryEventsByTask(ctx, "task-1")
+	if err != nil {
+		t.Fatalf("QueryEventsByTask: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("expected 3 events for task-1, got %d", len(got))
+	}
+	if got[0].EventID != "e1" {
+		t.Errorf("first event = %q, want e1", got[0].EventID)
+	}
+	if got[2].EventID != "e4" {
+		t.Errorf("last event = %q, want e4", got[2].EventID)
+	}
+	if got[0].Payload == nil || got[0].Payload["topic"] != "test" {
+		t.Error("payload not reconstructed")
+	}
+}
+
+func TestQueryEventsByTaskEmpty(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+
+	got, err := store.QueryEventsByTask(ctx, "nonexistent")
+	if err != nil {
+		t.Fatalf("QueryEventsByTask: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("expected 0 events, got %d", len(got))
+	}
+}
+
+func TestQueryRecentEvents(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+
+	for i := 0; i < 5; i++ {
+		ev := types.BridgeEvent{
+			EventID: fmt.Sprintf("e%d", i),
+			TaskID:  fmt.Sprintf("task-%d", i%2),
+			Type:    "task.progress",
+			Payload: map[string]any{"index": float64(i)},
+		}
+		if err := store.RecordEvent(ev); err != nil {
+			t.Fatalf("RecordEvent: %v", err)
+		}
+	}
+
+	got, err := store.QueryRecentEvents(ctx, 3)
+	if err != nil {
+		t.Fatalf("QueryRecentEvents: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("expected 3 events, got %d", len(got))
+	}
+}
+
+func TestQueryRecentEventsReturnsAll(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+
+	for i := 0; i < 3; i++ {
+		if err := store.RecordEvent(types.BridgeEvent{
+			EventID: fmt.Sprintf("e%d", i),
+			TaskID:  "task-1",
+			Type:    "task.progress",
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, err := store.QueryRecentEvents(ctx, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 {
+		t.Errorf("expected 3 events, got %d", len(got))
+	}
+}
+
+func TestIndicesExist(t *testing.T) {
+	store := newTempStore(t)
+	var count int
+	err := store.db.QueryRow(
+		`SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name IN (
+			'idx_task_events_task_created', 'idx_task_events_created'
+		)`).Scan(&count)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Errorf("expected 2 indices, got %d", count)
+	}
+}
+
+func TestSchemaV1MigrationFromLegacyDB(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "officedex.db")
+	ctx := context.Background()
+
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, status TEXT, document_type TEXT, topic TEXT, updated_at TEXT);
+		PRAGMA user_version = 0;
+	`); err != nil {
+		t.Fatal(err)
+	}
+	_ = db.Close()
+
+	store := New(path)
+	if err := store.Open(ctx); err != nil {
+		t.Fatalf("first Open with migration: %v", err)
+	}
+	since, err := store.GetCreditFeatureSince(ctx)
+	if err != nil {
+		t.Fatalf("GetCreditFeatureSince: %v", err)
+	}
+	if since == "" {
+		t.Error("expected schema_migrations row after v1 migration")
+	}
+	var version int
+	if err := store.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	if version != 1 {
+		t.Errorf("user_version = %d, want 1", version)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store2 := New(path)
+	if err := store2.Open(ctx); err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer store2.Close()
+	since2, err := store2.GetCreditFeatureSince(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if since2 != since {
+		t.Errorf("applied_at changed on reopen: %q vs %q", since, since2)
+	}
+	var rowCount int
+	if err := store2.db.QueryRow(`SELECT COUNT(*) FROM schema_migrations WHERE version = 1`).Scan(&rowCount); err != nil {
+		t.Fatal(err)
+	}
+	if rowCount != 1 {
+		t.Errorf("schema_migrations row count = %d, want 1 (idempotent)", rowCount)
+	}
+}
+
+func TestRecordTaskCredit(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+
+	charged := 7
+	if err := store.RecordTaskCredit("task-hosted", &charged, "hosted"); err != nil {
+		t.Fatalf("RecordTaskCredit hosted: %v", err)
+	}
+	if err := store.RecordTaskCredit("task-legacy", nil, ""); err != nil {
+		t.Fatalf("RecordTaskCredit legacy: %v", err)
+	}
+	zero := 0
+	if err := store.RecordTaskCredit("task-failed", &zero, "anonymous"); err != nil {
+		t.Fatalf("RecordTaskCredit zero: %v", err)
+	}
+
+	var (
+		chargedSQL sql.NullInt64
+		modeSQL    sql.NullString
+	)
+	row := store.db.QueryRowContext(ctx,
+		`SELECT credits_charged, credit_mode FROM task_credit_records WHERE task_id = ?`, "task-hosted")
+	if err := row.Scan(&chargedSQL, &modeSQL); err != nil {
+		t.Fatal(err)
+	}
+	if !chargedSQL.Valid || chargedSQL.Int64 != 7 {
+		t.Errorf("hosted credits_charged = %+v, want 7", chargedSQL)
+	}
+	if !modeSQL.Valid || modeSQL.String != "hosted" {
+		t.Errorf("hosted credit_mode = %+v, want hosted", modeSQL)
+	}
+
+	row = store.db.QueryRowContext(ctx,
+		`SELECT credits_charged, credit_mode FROM task_credit_records WHERE task_id = ?`, "task-legacy")
+	if err := row.Scan(&chargedSQL, &modeSQL); err != nil {
+		t.Fatal(err)
+	}
+	if chargedSQL.Valid {
+		t.Errorf("legacy credits_charged should be NULL, got %+v", chargedSQL)
+	}
+	if modeSQL.Valid {
+		t.Errorf("legacy credit_mode should be NULL, got %+v", modeSQL)
+	}
+
+	row = store.db.QueryRowContext(ctx,
+		`SELECT credits_charged FROM task_credit_records WHERE task_id = ?`, "task-failed")
+	if err := row.Scan(&chargedSQL); err != nil {
+		t.Fatal(err)
+	}
+	if !chargedSQL.Valid || chargedSQL.Int64 != 0 {
+		t.Errorf("failed task credits_charged = %+v, want 0", chargedSQL)
+	}
+
+	updated := 999
+	if err := store.RecordTaskCredit("task-hosted", &updated, "api_key"); err != nil {
+		t.Fatal(err)
+	}
+	row = store.db.QueryRowContext(ctx,
+		`SELECT credits_charged FROM task_credit_records WHERE task_id = ?`, "task-hosted")
+	if err := row.Scan(&chargedSQL); err != nil {
+		t.Fatal(err)
+	}
+	if chargedSQL.Int64 != 7 {
+		t.Errorf("INSERT OR IGNORE should preserve original; got %d", chargedSQL.Int64)
+	}
+}
+
+func TestRecordTaskCreditEmptyTaskIDIsNoop(t *testing.T) {
+	store := newTempStore(t)
+	if err := store.RecordTaskCredit("", nil, ""); err != nil {
+		t.Fatalf("RecordTaskCredit empty: %v", err)
+	}
+	var count int
+	if err := store.db.QueryRow(`SELECT COUNT(*) FROM task_credit_records`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Errorf("expected no rows for empty task id, got %d", count)
+	}
+}
+
+func TestGetCreditFeatureSinceReturnsValidTimestamp(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+	since, err := store.GetCreditFeatureSince(ctx)
+	if err != nil {
+		t.Fatalf("GetCreditFeatureSince: %v", err)
+	}
+	if since == "" {
+		t.Fatal("expected non-empty applied_at after fresh Open")
+	}
+	if _, err := time.Parse(time.RFC3339Nano, since); err != nil {
+		t.Errorf("applied_at %q is not RFC3339Nano: %v", since, err)
+	}
+}
+
+func TestExistingRowsSurviveNewSchema(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "officedex.db")
+	ctx := context.Background()
+
+	oldSchema := `
+	CREATE TABLE IF NOT EXISTS tasks (
+	  id TEXT PRIMARY KEY, status TEXT NOT NULL, document_type TEXT,
+	  topic TEXT, updated_at TEXT NOT NULL
+	);
+	CREATE TABLE IF NOT EXISTS task_events (
+	  event_id TEXT PRIMARY KEY, task_id TEXT NOT NULL, type TEXT NOT NULL,
+	  payload_json TEXT NOT NULL, created_at TEXT NOT NULL
+	);
+	CREATE TABLE IF NOT EXISTS artifacts (
+	  file_path TEXT PRIMARY KEY, task_id TEXT, file_id TEXT,
+	  file_name TEXT NOT NULL, document_type TEXT NOT NULL,
+	  preview_url TEXT, edit_url TEXT, synced_at TEXT NOT NULL
+	);`
+
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, oldSchema); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO task_events(event_id, task_id, type, payload_json, created_at) VALUES (?, ?, ?, ?, ?)`,
+		"old-evt", "old-task", "task.started", `{"topic":"old"}`, "2024-01-01T00:00:00Z",
+	); err != nil {
+		t.Fatal(err)
+	}
+	_ = db.Close()
+
+	store := New(path)
+	if err := store.Open(ctx); err != nil {
+		t.Fatalf("Open with new schema: %v", err)
+	}
+	defer store.Close()
+
+	events, err := store.QueryEventsByTask(ctx, "old-task")
+	if err != nil {
+		t.Fatalf("QueryEventsByTask: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected 1 old event, got %d", len(events))
+	}
+	if events[0].EventID != "old-evt" {
+		t.Errorf("event_id = %q, want old-evt", events[0].EventID)
+	}
+	if events[0].Payload["topic"] != "old" {
+		t.Error("old payload not preserved")
 	}
 }

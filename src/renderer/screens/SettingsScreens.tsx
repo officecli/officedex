@@ -13,6 +13,7 @@ import {
 } from "@ant-design/icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MaterialSymbol, StatusDot } from "../components/Shell";
+import { DiagnosticsPanel } from "../components/DiagnosticsPanel";
 import { officecli } from "../bridge";
 import { useSettings } from "../useSettings";
 import { useAppUpdate } from "../useAppUpdate";
@@ -231,6 +232,10 @@ export function SettingsScreen() {
             <div className="setting-group">
               <h2>{t("settings.group.about")}</h2>
               <AboutCard />
+            </div>
+            <div className="setting-group">
+              <h2>{t("diagnostics.title")}</h2>
+              <DiagnosticsPanel />
             </div>
             <div className="setting-group">
               <h2>{t("settings.group.reset")}</h2>

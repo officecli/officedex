@@ -153,6 +153,8 @@ export interface DesktopTask {
   stages?: StageState[];
   activeStageId?: string;
   userInput?: TaskUserInput;
+  creditCharged?: number | null;
+  creditMode?: string;
 }
 
 export interface PreviewGrant {
@@ -273,6 +275,26 @@ export type AppUpdateEvent =
   | { type: "installed"; message?: string }
   | { type: "error"; message: string };
 
+export interface BundleManifestItem {
+  path: string;
+  sizeBytes: number;
+  preview?: string;
+  sectionId: string;
+}
+
+export interface BundleManifest {
+  schemaVersion: number;
+  bundleId: string;
+  items: BundleManifestItem[];
+  truncated: boolean;
+  excludedReasons?: string[];
+}
+
+export interface ExportLogsResult {
+  path: string;
+  manifest: BundleManifest;
+}
+
 export type BinaryFileData = ArrayBuffer | Uint8Array;
 
 export interface DesktopAPI {
@@ -312,5 +334,5 @@ export interface DesktopAPI {
   installAppUpdate(): Promise<void>;
   cancelAppUpdate(): Promise<void>;
   onAppUpdateEvent(callback: (event: AppUpdateEvent) => void): () => void;
-  exportLogs(): Promise<string>;
+  exportLogs(): Promise<ExportLogsResult>;
 }

@@ -225,6 +225,16 @@ export const zh: Record<string, string> = {
   "settings.row.reset.confirmBody": "将清除文档类型、模式、运行环境、输出目录、Bridge 可执行文件路径以及 LLM 提供方配置。下次启动会重新进入引导。",
   "settings.common.cancel": "取消",
 
+  // Diagnostics
+  "diagnostics.title": "诊断",
+  "diagnostics.description": "导出应用诊断日志，用于排查问题。",
+  "diagnostics.exportButton": "导出诊断日志到下载",
+  "diagnostics.exportSuccess": "诊断日志已导出到 {path}",
+  "diagnostics.exportError": "导出诊断日志失败，请重试",
+  "diagnostics.feedbackHint": "如需上报问题，请将下载的 zip 通过反馈渠道发送",
+  "diagnostics.supportLink": "联系支持",
+  "diagnostics.exported": "已导出",
+
   // Login
   "login.title.loading": "登录 OfficeDex",
   "login.title.anonymous": "登录 OfficeDex",

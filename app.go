@@ -10,13 +10,11 @@
 package main
 
 import (
-	"archive/zip"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,11 +23,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"officedex/internal/appupdate"
 	"officedex/internal/binresolver"
 	"officedex/internal/bridge"
+	"officedex/internal/diagnostics"
 	"officedex/internal/localstore"
 	"officedex/internal/login"
 	"officedex/internal/preview"
@@ -654,6 +654,21 @@ func (a *App) GetDefaultWorkspaceDir() string {
 	return a.workspaceDir
 }
 
+// GetCreditFeatureSince returns the timestamp at which per-task credit
+// tracking became available for this install (the schema_migrations v1 row).
+// The renderer uses this to label tasks predating the feature with "—"
+// instead of "0".
+func (a *App) GetCreditFeatureSince() (string, error) {
+	if a.localStore == nil {
+		return "", nil
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return a.localStore.GetCreditFeatureSince(ctx)
+}
+
 // ─── App update bindings ────────────────────────────────────────────────────
 
 // AppUpdateCheckResult is the renderer-facing result of CheckAppUpdate.
@@ -738,146 +753,57 @@ func launchInstaller(path string) error {
 
 // ─── Diagnostics ────────────────────────────────────────────────────────────
 
-// ExportLogs zips the per-user logs directory and a scrubbed copy of
-// settings.json (apiKey masked) into ~/Downloads/officedex-logs-<ts>.zip and
-// returns the absolute path. Used by Settings → Diagnostics to give support
-// engineers a portable bundle.
-func (a *App) ExportLogs() (string, error) {
+// ExportLogsResult is the value returned by ExportLogs to the renderer.
+type ExportLogsResult struct {
+	Path     string                    `json:"path"`
+	Manifest diagnostics.BundleManifest `json:"manifest"`
+}
+
+// ExportLogs assembles a diagnostics bundle (scrubbed settings, events, logs)
+// into ~/Downloads and returns the path + manifest.
+func (a *App) ExportLogs() (ExportLogsResult, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", fmt.Errorf("export logs: home dir: %w", err)
+		return ExportLogsResult{}, fmt.Errorf("export logs: home dir: %w", err)
 	}
 	downloads := filepath.Join(home, "Downloads")
-	if err := os.MkdirAll(downloads, 0o755); err != nil {
-		return "", fmt.Errorf("export logs: mkdir downloads: %w", err)
-	}
-	ts := time.Now().Format("20060102-150405")
-	dest := filepath.Join(downloads, fmt.Sprintf("officedex-logs-%s.zip", ts))
 
-	out, err := os.Create(dest)
-	if err != nil {
-		return "", fmt.Errorf("export logs: create zip: %w", err)
-	}
-	zw := zip.NewWriter(out)
+	a.mu.Lock()
+	currentSettings := a.cachedSettings
+	bridgeClient := a.bridgeClient
+	a.mu.Unlock()
 
-	logsDir := filepath.Join(a.userDataDir, "logs")
-	if err := addDirToZip(zw, logsDir, "logs"); err != nil {
-		_ = zw.Close()
-		_ = out.Close()
-		_ = os.Remove(dest)
-		return "", fmt.Errorf("export logs: include logs: %w", err)
+	var droppedBytes int64
+	if bridgeClient != nil {
+		droppedBytes = bridgeClient.LogfileDroppedBytes()
 	}
 
-	// Scrubbed settings.json. We re-read from disk (not a.cachedSettings) so
-	// the bundle matches what the user actually has persisted, then mask the
-	// LLM provider apiKey before serialising. On read/parse failure we still
-	// write a placeholder entry so support engineers can see the error in
-	// context rather than wondering why settings is absent.
-	settingsPath := filepath.Join(a.userDataDir, "settings.json")
-	scrubbed, ok := readScrubbedSettings(settingsPath)
-	if !ok {
-		errMsg := "settings not readable"
-		if _, statErr := os.Stat(settingsPath); statErr != nil {
-			errMsg = "settings not readable: " + statErr.Error()
-		}
-		placeholder, _ := json.MarshalIndent(map[string]string{"_error": errMsg}, "", "  ")
-		scrubbed = placeholder
-	}
-	w, err := zw.Create("settings.scrubbed.json")
-	if err != nil {
-		_ = zw.Close()
-		_ = out.Close()
-		_ = os.Remove(dest)
-		return "", fmt.Errorf("export logs: zip entry: %w", err)
-	}
-	if _, err := w.Write(scrubbed); err != nil {
-		_ = zw.Close()
-		_ = out.Close()
-		_ = os.Remove(dest)
-		return "", fmt.Errorf("export logs: write settings: %w", err)
-	}
+	bundleID := uuid.New().String()
 
-	if err := zw.Close(); err != nil {
-		_ = out.Close()
-		_ = os.Remove(dest)
-		return "", fmt.Errorf("export logs: close zip: %w", err)
-	}
-	if err := out.Close(); err != nil {
-		return "", fmt.Errorf("export logs: close file: %w", err)
-	}
-	return dest, nil
-}
-
-// addDirToZip walks src and copies every regular file into the zip under
-// prefix/. A missing source dir is treated as empty (no error); this matches
-// the "logs folder hasn't been created yet" case on a fresh install.
-func addDirToZip(zw *zip.Writer, src, prefix string) error {
-	info, err := os.Stat(src)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		return err
-	}
-	if !info.IsDir() {
-		return nil
-	}
-	return filepath.Walk(src, func(path string, fi os.FileInfo, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if fi.IsDir() {
-			return nil
-		}
-		rel, err := filepath.Rel(src, path)
-		if err != nil {
-			return err
-		}
-		entry := filepath.ToSlash(filepath.Join(prefix, rel))
-		w, err := zw.Create(entry)
-		if err != nil {
-			return err
-		}
-		f, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-		_, err = io.Copy(w, f)
-		return err
+	zipPath, manifest, err := diagnostics.BuildBundle(a.ctx, diagnostics.BundleOptions{
+		DestDir:             downloads,
+		UserDataDir:         a.userDataDir,
+		WorkspaceDir:        a.workspaceDir,
+		LocalStore:          a.localStore,
+		Settings:            currentSettings,
+		CachedBridgeEnv:     a.currentBridgeEnv(),
+		IncludeRecent:       true,
+		IncludeLogs:         true,
+		AppVersion:          appVersion,
+		BundleID:            bundleID,
+		RuntimeDroppedBytes: droppedBytes,
 	})
+	if err != nil {
+		return ExportLogsResult{}, fmt.Errorf("export logs: %w", err)
+	}
+	return ExportLogsResult{Path: zipPath, Manifest: manifest}, nil
 }
 
-// readScrubbedSettings reads the settings.json file at path and returns a
-// pretty-printed copy with llmProvider.apiKey replaced by a masked string.
-// Returns ok=false when the file is missing or unparseable so the caller can
-// silently skip the entry rather than failing the whole export.
-func readScrubbedSettings(path string) ([]byte, bool) {
-	body, err := os.ReadFile(path)
-	if err != nil {
-		return nil, false
-	}
-	var raw map[string]any
-	if err := json.Unmarshal(body, &raw); err != nil {
-		return nil, false
-	}
-	if provider, ok := raw["llmProvider"].(map[string]any); ok {
-		if key, ok := provider["apiKey"].(string); ok && key != "" {
-			provider["apiKey"] = maskAPIKey(key)
-		}
-	}
-	out, err := json.MarshalIndent(raw, "", "  ")
-	if err != nil {
-		return nil, false
-	}
-	return out, true
-}
-
-func maskAPIKey(key string) string {
-	if len(key) <= 4 {
-		return "****"
-	}
-	return key[:2] + strings.Repeat("*", len(key)-4) + key[len(key)-2:]
+func (a *App) currentBridgeEnv() []string {
+	a.mu.Lock()
+	s := a.cachedSettings
+	a.mu.Unlock()
+	return toEnvSlice(llmProviderEnv(s))
 }
 
 // ─── Internals ──────────────────────────────────────────────────────────────
@@ -919,9 +845,10 @@ func (a *App) ensureBridge() (*bridge.Client, error) {
 	a.mu.Unlock()
 
 	client := bridge.New(bridge.Options{
-		BinaryPath: resolved.Path,
-		Env:        env,
-		Cwd:        a.workspaceDir,
+		BinaryPath:     resolved.Path,
+		Env:            env,
+		Cwd:            a.workspaceDir,
+		LogDir:         filepath.Join(a.userDataDir, "logs"),
 		RequestTimeout: 30 * time.Second,
 	})
 	ctx := a.ctx
@@ -932,6 +859,17 @@ func (a *App) ensureBridge() (*bridge.Client, error) {
 		}
 		if a.localStore != nil {
 			_ = a.localStore.RecordEvent(event)
+		}
+		if event.Type == "task.completed" || event.Type == "task.failed" {
+			if a.localStore != nil && event.Payload != nil {
+				if c, ok := event.Payload["credits_charged"].(float64); ok {
+					charged := int(c)
+					mode, _ := event.Payload["credit_mode"].(string)
+					if err := a.localStore.RecordTaskCredit(event.TaskID, &charged, mode); err != nil {
+						wailsruntime.LogWarningf(ctx, "record task credit: %v", err)
+					}
+				}
+			}
 		}
 		if event.Type == "task.completed" {
 			if artifact := artifactFromCompletedEvent(event); artifact != nil {

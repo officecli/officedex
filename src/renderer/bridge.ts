@@ -360,7 +360,7 @@ function createWailsAPI(): DesktopAPI {
     cancelAppUpdate: () => WailsApp.CancelAppUpdate(),
     onAppUpdateEvent: (callback: (event: AppUpdateEvent) => void) =>
       EventsOn("appupdate:event", (payload: unknown) => callback(payload as AppUpdateEvent)),
-    exportLogs: () => WailsApp.ExportLogs(),
+    exportLogs: () => WailsApp.ExportLogs() as Promise<{ path: string; manifest: import("../shared/types").BundleManifest }>,
   };
 }
 

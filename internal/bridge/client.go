@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -52,6 +53,10 @@ type Options struct {
 	DisableAutoReconnect bool
 	MaxReconnectAttempts int
 	BaseReconnectDelay   time.Duration
+	// LogDir, when non-empty, enables async tee of stdout/stderr chunks to
+	// rotating per-day files under that directory (`bridge-YYYYMMDD.log`).
+	// Writes are non-blocking; see Logfile.
+	LogDir string
 }
 
 // EventListener is the callback shape registered via OnEvent.
@@ -75,6 +80,7 @@ type Client struct {
 	reconnectTimer   *time.Timer
 	stoppedManually  bool
 	initialized      bool
+	logfile          *Logfile
 }
 
 type listenerEntry struct {
@@ -112,6 +118,19 @@ func (c *Client) Connected() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.transport != nil
+}
+
+// LogfileDroppedBytes returns the cumulative bytes dropped by the async logfile
+// tee due to channel pressure, or 0 when no logfile is attached. Used by the
+// diagnostics bundle to expose `runtimeDroppedBytes` in meta.json.
+func (c *Client) LogfileDroppedBytes() int64 {
+	c.mu.Lock()
+	lf := c.logfile
+	c.mu.Unlock()
+	if lf == nil {
+		return 0
+	}
+	return lf.DroppedBytes()
 }
 
 // OnEvent registers a listener for bridge events. Returns an unsubscribe
@@ -156,6 +175,14 @@ func (c *Client) Start(ctx context.Context) error {
 	c.transport = transport
 	c.outputBuffer = nil
 	c.stderrBuffer = ""
+	if c.logfile == nil && c.options.LogDir != "" {
+		lf, lfErr := NewLogfile(c.options.LogDir, nil)
+		if lfErr != nil {
+			fmt.Fprintf(os.Stderr, "bridge: open logfile: %v\n", lfErr)
+		} else {
+			c.logfile = lf
+		}
+	}
 	c.mu.Unlock()
 
 	go c.readStdout(transport)
@@ -202,7 +229,12 @@ func (c *Client) Close() {
 	c.Stop()
 	c.mu.Lock()
 	c.listeners = nil
+	lf := c.logfile
+	c.logfile = nil
 	c.mu.Unlock()
+	if lf != nil {
+		_ = lf.Close()
+	}
 }
 
 // Request sends a JSON-RPC call and waits for the response. Returns the raw
@@ -382,6 +414,7 @@ func (c *Client) readStdout(transport Transport) {
 		n, err := transport.Stdout().Read(buf)
 		if n > 0 {
 			c.appendStdout(buf[:n])
+			c.teeLog(buf[:n])
 			c.drainFrames()
 		}
 		if err != nil {
@@ -396,10 +429,20 @@ func (c *Client) readStderr(transport Transport) {
 		n, err := transport.Stderr().Read(buf)
 		if n > 0 {
 			c.appendStderr(buf[:n])
+			c.teeLog(buf[:n])
 		}
 		if err != nil {
 			return
 		}
+	}
+}
+
+func (c *Client) teeLog(chunk []byte) {
+	c.mu.Lock()
+	lf := c.logfile
+	c.mu.Unlock()
+	if lf != nil {
+		lf.Write(chunk)
 	}
 }
 

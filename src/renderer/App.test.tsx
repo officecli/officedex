@@ -765,7 +765,7 @@ function installBridgeMock() {
     installAppUpdate: vi.fn(async () => undefined),
     cancelAppUpdate: vi.fn(async () => undefined),
     onAppUpdateEvent: vi.fn(() => () => undefined),
-    exportLogs: vi.fn(async () => "/Users/test/Downloads/officedex-logs.zip"),
+    exportLogs: vi.fn(async () => ({ path: "/Users/test/Downloads/officedex-logs.zip", manifest: { schemaVersion: 1, bundleId: "test", items: [], truncated: false } })),
   };
   window.officecli = api;
   return {

@@ -225,6 +225,16 @@ export const en: Record<string, string> = {
   "settings.row.reset.confirmBody": "This clears the document type, mode, runtime, output directory, bridge binary path, and LLM provider. Onboarding will re-run on next launch.",
   "settings.common.cancel": "Cancel",
 
+  // Diagnostics
+  "diagnostics.title": "Diagnostics",
+  "diagnostics.description": "Export application diagnostic logs for troubleshooting.",
+  "diagnostics.exportButton": "Export diagnostic logs",
+  "diagnostics.exportSuccess": "Diagnostic logs exported to {path}",
+  "diagnostics.exportError": "Failed to export diagnostic logs, please try again",
+  "diagnostics.feedbackHint": "To report an issue, send the downloaded zip via support channel",
+  "diagnostics.supportLink": "Contact support",
+  "diagnostics.exported": "Exported",
+
   // Login
   "login.title.loading": "Sign in to OfficeDex",
   "login.title.anonymous": "Sign in to OfficeDex",
