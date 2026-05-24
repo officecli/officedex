@@ -212,6 +212,7 @@ jobs:
             --windows "artifacts/OfficeDex-${tag}-windows-amd64.zip" \
             --notes "${notes:-Release ${tag}}" \
             --out dist/manifest.json
+          mkdir -p dist/archive
           cp dist/manifest.json "dist/archive/manifest-${tag}.json"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
