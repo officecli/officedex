@@ -190,18 +190,11 @@ export function SettingsScreen({ onCreditRefresh }: { onCreditRefresh?: () => vo
               <h2>{t("settings.group.connection")}</h2>
               {settings.defaults.runtimeMode === "external" ? (
                 <SettingRow title={t("settings.row.provider.title")} desc={t("settings.row.provider.desc")}>
-                  <ProviderForm
-                    provider={settings.llmProvider ?? { type: "openai", baseUrl: "", apiKey: "", model: "" }}
-                    onChange={(patch: Partial<LlmProvider>) => {
-                      const current = settings.llmProvider ?? { type: "openai" as const, baseUrl: "", apiKey: "", model: "" };
-                      update({ llmProvider: { ...current, ...patch } }).catch(() => undefined);
-                    }}
+                  <ProviderFormControl
+                    remote={settings.llmProvider}
+                    onSave={(next) => update({ llmProvider: next }).catch(() => undefined)}
+                    clearLabel={t("settings.row.provider.clear")}
                   />
-                  {settings.llmProvider ? (
-                    <Button type="link" size="small" onClick={() => update({ llmProvider: null }).catch(() => undefined)}>
-                      {t("settings.row.provider.clear")}
-                    </Button>
-                  ) : null}
                 </SettingRow>
               ) : null}
               <SettingRow title={t("settings.row.bridgeBinary.title")} desc={t("settings.row.bridgeBinary.desc")}>
@@ -254,6 +247,70 @@ export function SettingsScreen({ onCreditRefresh }: { onCreditRefresh?: () => vo
 }
 
 type LoginPhase = "loading" | "anonymous" | "awaiting" | "success" | "failure";
+
+const EMPTY_PROVIDER_DRAFT: LlmProvider = { type: "openai", baseUrl: "", apiKey: "", model: "" };
+
+function providerHasContent(p: LlmProvider): boolean {
+  return Boolean(p.baseUrl.trim() || p.apiKey.trim() || p.model.trim());
+}
+
+function ProviderFormControl({
+  remote,
+  onSave,
+  clearLabel,
+}: {
+  remote: LlmProvider | null;
+  onSave: (next: LlmProvider | null) => void;
+  clearLabel: string;
+}) {
+  const [draft, setDraft] = useState<LlmProvider>(() => remote ?? { ...EMPTY_PROVIDER_DRAFT });
+
+  // Reconcile when the remote value changes from outside (e.g. reset, initial load).
+  // We avoid overwriting the user's in-flight type choice when remote is still null
+  // because the backend drops all-empty providers on the round trip.
+  useEffect(() => {
+    if (remote) {
+      setDraft(remote);
+    } else if (!providerHasContent(draft)) {
+      // Keep the locally-chosen type even when remote is null, only reset to
+      // the canonical default when the local draft is also empty.
+      setDraft((current) => (providerHasContent(current) ? current : { ...EMPTY_PROVIDER_DRAFT, type: current.type }));
+    }
+    // We intentionally depend only on the remote identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remote]);
+
+  const handleChange = useCallback(
+    (patch: Partial<LlmProvider>) => {
+      setDraft((current) => {
+        const next = { ...current, ...patch };
+        if (providerHasContent(next)) {
+          onSave(next);
+        } else if (remote !== null) {
+          onSave(null);
+        }
+        return next;
+      });
+    },
+    [onSave, remote],
+  );
+
+  const handleClear = useCallback(() => {
+    setDraft({ ...EMPTY_PROVIDER_DRAFT });
+    onSave(null);
+  }, [onSave]);
+
+  return (
+    <>
+      <ProviderForm provider={draft} onChange={handleChange} />
+      {remote || providerHasContent(draft) ? (
+        <Button type="link" size="small" onClick={handleClear}>
+          {clearLabel}
+        </Button>
+      ) : null}
+    </>
+  );
+}
 
 function AboutCard() {
   const update = useAppUpdate();
