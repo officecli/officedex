@@ -1,46 +1,16 @@
 /* ─── Settings ─── */
 
 .settings-layout {
-  display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  gap: 24px;
+  display: block;
+  max-width: 920px;
+  margin: 0 auto;
   padding: 36px 44px;
 }
 
-.settings-nav {
+.settings-panel {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-}
-
-.settings-nav button {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 36px;
-  border: 0;
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--n-slate);
-  padding: 0 12px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 150ms ease, color 150ms ease;
-}
-
-.settings-nav button:hover {
-  background: var(--n-surface);
-  color: var(--n-charcoal);
-}
-
-.settings-nav button.active {
-  background: var(--n-tint-lavender);
-  color: var(--n-primary);
-  font-weight: 600;
-}
-
-.settings-panel {
+  gap: 24px;
   border: 1px solid var(--n-hairline);
   border-radius: var(--radius-lg);
   background: var(--n-canvas);
@@ -336,7 +306,9 @@
 }
 
 @media (max-width: 760px) {
-  .settings-layout,
+  .settings-layout {
+    padding: 24px 16px;
+  }
   .setting-row {
     grid-template-columns: 1fr;
   }
