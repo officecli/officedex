@@ -104,11 +104,13 @@ export const en: Record<string, string> = {
   "dialogue.terminal.events.noProgress": "No progress events",
   "dialogue.terminal.events.fallback": "Bridge Event",
   "dialogue.terminal.exportLogs": "Export diagnostic logs",
+  "dialogue.terminal.reportIssue": "Report Issue",
 
   // Dialogue — stalled
   "dialogue.stalled.title": "Task may be stalled",
   "dialogue.stalled.hint": "No progress update received for over 2 minutes. The task may have encountered an issue.",
   "dialogue.stalled.exportLogs": "Export diagnostic logs",
+  "dialogue.stalled.reportIssue": "Report Issue",
 
   // Dialogue — progress panel
   "dialogue.progress.preparing": "Preparing…",
@@ -240,6 +242,7 @@ export const en: Record<string, string> = {
   "diagnostics.feedbackHint": "To report an issue, send the downloaded zip via support channel",
   "diagnostics.supportLink": "Contact support",
   "diagnostics.exported": "Exported",
+  "diagnostics.reportIssue": "Report Issue",
   "diagnostics.includeSettings": "Include settings",
   "diagnostics.includeEvents": "Include events",
   "diagnostics.includeLogs": "Include logs",
@@ -353,4 +356,28 @@ export const en: Record<string, string> = {
   "update.force.downloadingProgress": "Downloading... {done} / {total}",
   "update.force.updateNow": "Update now",
   "update.force.restartToInstall": "Restart to install",
+
+  // Report Issue Dialog
+  "report.dialog.title": "Report Issue",
+  "report.dialog.description.label": "Description",
+  "report.dialog.description.placeholder": "Describe the steps, expected and actual behavior…",
+  "report.dialog.description.required": "Please enter a description",
+  "report.dialog.description.minLength": "Description must be at least 10 characters",
+  "report.dialog.email.label": "Contact email (optional)",
+  "report.dialog.email.placeholder": "your@email.com",
+  "report.dialog.email.invalid": "Please enter a valid email address",
+  "report.dialog.sections.label": "Include diagnostic data",
+  "report.dialog.sections.settings": "Include settings",
+  "report.dialog.sections.events": "Include events",
+  "report.dialog.sections.logs": "Include logs",
+  "report.dialog.sections.recent": "Include recent events",
+  "report.dialog.removePrompt": "Remove my prompt content",
+  "report.dialog.removePrompt.notice": "Event data (including prompt content) will be excluded",
+  "report.dialog.submit": "Submit",
+  "report.dialog.cancel": "Cancel",
+  "report.toast.success.ticket": "Reported, ticket #{ticketId}",
+  "report.toast.success.bundleOnly": "Local diagnostic bundle generated: {bundlePath}. Please send it via support channel.",
+  "report.toast.error": "Report failed, please try again",
+  "report.toast.copyTicket": "Copy ticket ID",
+  "report.toast.openFolder": "Open folder",
 };

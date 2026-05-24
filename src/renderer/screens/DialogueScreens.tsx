@@ -28,6 +28,8 @@ import { FileGlyph, MaterialSymbol } from "../components/Shell";
 import { acquireBlob, releaseBlob } from "../imageCache";
 import { useT } from "../i18n";
 import { useNow } from "../useNow";
+import { useReportCapability } from "../useReportCapability";
+import { ReportIssueDialog } from "../components/ReportIssueDialog";
 
 type Translator = (key: string, vars?: Record<string, string | number>) => string;
 
@@ -186,6 +188,8 @@ function FluidNewGeneration({ busy, onSubmit }: { busy: boolean; onSubmit: (valu
 function RunningDialogue({ task }: { task: DesktopTask }) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const t = useT();
+  const capability = useReportCapability();
+  const [reportOpen, setReportOpen] = useState(false);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -202,9 +206,15 @@ function RunningDialogue({ task }: { task: DesktopTask }) {
               <strong>{t("dialogue.stalled.title")}</strong>
             </div>
             <p>{t("dialogue.stalled.hint")}</p>
-            <Button size="small" onClick={() => officecli.exportLogs({ taskId: task.id, includeSettings: true, includeEvents: true, includeLogs: true, includeRecent: true })}>
-              {t("dialogue.stalled.exportLogs")}
-            </Button>
+            {capability?.enabled ? (
+              <Button size="small" onClick={() => setReportOpen(true)}>
+                {t("dialogue.stalled.reportIssue")}
+              </Button>
+            ) : (
+              <Button size="small" onClick={() => officecli.exportLogs({ taskId: task.id, includeSettings: true, includeEvents: true, includeLogs: true, includeRecent: true })}>
+                {t("dialogue.stalled.exportLogs")}
+              </Button>
+            )}
           </div>
         ) : null}
         <div ref={bottomRef} />
@@ -215,6 +225,7 @@ function RunningDialogue({ task }: { task: DesktopTask }) {
           {t("dialogue.running.cancel")}
         </Button>
       </div>
+      <ReportIssueDialog open={reportOpen} taskId={task.id} onClose={() => setReportOpen(false)} />
     </div>
   );
 }
@@ -369,6 +380,8 @@ function CompletedDialogue({ task, onPreview }: { task: DesktopTask; onPreview: 
 
 function TerminalDialogue({ task }: { task: DesktopTask }) {
   const t = useT();
+  const capability = useReportCapability();
+  const [reportOpen, setReportOpen] = useState(false);
   const failed = task.status === "failed";
   const latestEvent = task.events.at(-1);
   const title = failed ? t("dialogue.terminal.failed.title") : t("dialogue.terminal.cancelled.title");
@@ -388,9 +401,15 @@ function TerminalDialogue({ task }: { task: DesktopTask }) {
             {creditTag}
           </div>
           <p>{description}</p>
-          <Button size="small" onClick={() => officecli.exportLogs({ taskId: task.id, includeSettings: true, includeEvents: true, includeLogs: true, includeRecent: true })}>
-            {t("dialogue.terminal.exportLogs")}
-          </Button>
+          {capability?.enabled ? (
+            <Button size="small" onClick={() => setReportOpen(true)}>
+              {t("dialogue.terminal.reportIssue")}
+            </Button>
+          ) : (
+            <Button size="small" onClick={() => officecli.exportLogs({ taskId: task.id, includeSettings: true, includeEvents: true, includeLogs: true, includeRecent: true })}>
+              {t("dialogue.terminal.exportLogs")}
+            </Button>
+          )}
           <div className="terminal-event-card">
             <span>{t("dialogue.history.taskIdLabel")}</span>
             <strong>{task.id}</strong>
@@ -414,6 +433,7 @@ function TerminalDialogue({ task }: { task: DesktopTask }) {
       <div className="docked-composer readonly">
         <Input placeholder={failed ? t("dialogue.terminal.failed.placeholder") : t("dialogue.terminal.cancelled.placeholder")} disabled />
       </div>
+      <ReportIssueDialog open={reportOpen} taskId={task.id} onClose={() => setReportOpen(false)} />
     </div>
   );
 }

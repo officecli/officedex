@@ -316,12 +316,14 @@ type LlmProvider struct {
 }
 
 type UserSettings struct {
-	Version               int              `json:"version"`
-	Defaults              GenerateDefaults `json:"defaults"`
-	OutputDir             *string          `json:"outputDir"`
-	BridgeBinaryPath      *string          `json:"bridgeBinaryPath"`
-	LlmProvider           *LlmProvider     `json:"llmProvider"`
-	OnboardingCompletedAt *string          `json:"onboardingCompletedAt"`
+	Version                int              `json:"version"`
+	Defaults               GenerateDefaults `json:"defaults"`
+	OutputDir              *string          `json:"outputDir"`
+	BridgeBinaryPath       *string          `json:"bridgeBinaryPath"`
+	LlmProvider            *LlmProvider     `json:"llmProvider"`
+	OnboardingCompletedAt  *string          `json:"onboardingCompletedAt"`
+	SupportReportEndpoint  *string          `json:"supportReportEndpoint"`
+	SupportReportToken     *string          `json:"supportReportToken"`
 }
 
 // RuntimeStatus mirrors the renderer-facing status object emitted by the

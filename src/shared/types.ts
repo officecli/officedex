@@ -305,6 +305,32 @@ export interface ExportLogsInput {
   includeRecent: boolean;
 }
 
+export interface SubmitReportInput {
+  taskId?: string;
+  description: string;
+  contactEmail?: string;
+  exportOpts: {
+    includeSettings: boolean;
+    includeEvents: boolean;
+    includeLogs: boolean;
+    includeRecent: boolean;
+  };
+}
+
+export interface SubmitReportResult {
+  ticketId?: string;
+  viewUrl?: string;
+  bundlePath: string;
+  manifest: BundleManifest;
+  uploaded: boolean;
+  fallbackReason?: string;
+}
+
+export interface ReportCapabilityResult {
+  enabled: boolean;
+  reason?: string;
+}
+
 export type BinaryFileData = ArrayBuffer | Uint8Array;
 
 export interface DesktopAPI {
@@ -345,4 +371,6 @@ export interface DesktopAPI {
   cancelAppUpdate(): Promise<void>;
   onAppUpdateEvent(callback: (event: AppUpdateEvent) => void): () => void;
   exportLogs(input?: ExportLogsInput): Promise<ExportLogsResult>;
+  submitReport(input: SubmitReportInput): Promise<SubmitReportResult>;
+  getReportCapability(): Promise<ReportCapabilityResult>;
 }

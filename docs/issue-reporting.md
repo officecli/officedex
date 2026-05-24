@@ -158,6 +158,10 @@ Phase B 服务端实现 **必须** 遵守以下规则：
 
 此策略确保已发布的桌面客户端在用户未更新前仍能正常使用本地导出功能。
 
+### Phase B 实现交叉引用
+
+`unsupported_schema` 响应的具体处理逻辑位于 `internal/report/submit.go` 的 `handleSubmitResponse()` 中。当服务端返回该错误码时，submit 函数返回 `ReportResult{Uploaded: false, SchemaRejected: true, BundlePath: localZipPath}`，由 UI 层触发更新检查提示。详见 [Section 8: Failure Modes](#8-failure-modes失败模式)。
+
 ---
 
 ## 5. 如何添加 stderr Fixtures
@@ -236,3 +240,124 @@ go test -race -count=5 ./internal/diagnostics/...
 ```
 
 PR 作者跑一遍完整 checklist，reviewer 复跑关键项（race + privacy grep），output 贴 PR comment。
+
+---
+
+## 7. Phase B Issue Reporting Flow（一键上报）
+
+### 端到端流程
+
+1. **用户点击 Report Issue** — 在 Dialogue 区域或 Settings 面板中点击上报按钮
+2. **填写表单** — 输入问题描述（≥10 字必填）、联系邮箱（可选）；勾选需包含的 bundle sections（meta 必含）
+3. **Bundle 构建** — 复用 Phase A 的 `diagnostics.BuildBundle()`，根据用户选择组装 zip
+4. **Capability 探测** — 三重探测判断上传通道可用性（见下文）
+5. **路径选择** — CLI 通道优先 → HTTP 通道备选 → 本地 fallback
+6. **结果反馈** — 成功时显示 ticket ID + 查看链接；失败时保留本地 zip 并 toast 文件路径
+
+### Capability 三重探测
+
+上传通道可用性通过以下三个探测源综合判断，**任意两个为 true 即认为 enabled**：
+
+| 探测源 | 实现 | 说明 |
+|--------|------|------|
+| **Settings 配置** | `supportReportEndpoint` 非空 | 用户或管理员在 Settings → Diagnostics 中配置的上传端点 URL |
+| **CLI 子命令** | `officecli report submit --help` 退出码 == 0 | 当前安装的 officecli 是否包含 report 子命令 |
+| **GetCapabilities 协议** | `GetCapabilities` 返回 `report.submit = true` | Bridge 初始化时服务端协议声明 |
+
+探测结果在 session 内缓存，不重复探测。变更探测结果需要重启应用。
+
+实现位于 `internal/report/capability.go`，入口函数：
+
+```go
+func ProbeCapability(ctx context.Context, opts ProbeOptions) CapabilityResult
+```
+
+### 后端契约（Server Endpoint API）
+
+**请求：**
+
+```
+POST <supportReportEndpoint>
+Content-Type: multipart/form-data
+Authorization: Bearer <token>
+
+Parts:
+  - bundle: bundle.zip (application/zip)
+  - description: string
+  - email: string (optional)
+  - bundleId: string (UUID)
+  - bundleSchemaVersion: "1"
+```
+
+**成功响应（2xx）：**
+
+```json
+{
+  "ticketId": "TKT-20260524-abcd",
+  "viewUrl": "https://support.example.com/tickets/TKT-20260524-abcd"
+}
+```
+
+**Schema 拒绝响应（4xx）：**
+
+```json
+{
+  "code": "unsupported_schema",
+  "message": "Bundle schema version 1 is no longer supported",
+  "minVersion": 2
+}
+```
+
+Schema 拒绝时的客户端行为详见 [Section 4: Schema 演进策略](#4-schema-演进策略bundleschemaversion-forward-compat)。
+
+### Settings 配置项
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `supportReportEndpoint` | `string` | 上报端点 URL。为空则 HTTP 通道不可用 |
+| `supportReportToken` | `string?` | 可选的独立 auth token。未设置时 HTTP 通道使用 officecli 自带 token |
+
+配置方式：Settings → Diagnostics 面板，或直接编辑 `settings.json`。
+
+### CLI 通道路径
+
+当 CLI 子命令可用时（探测通过），调用：
+
+```bash
+officecli report submit \
+  --bundle <zip-path> \
+  --json \
+  --source desktop \
+  --task-id <task-id> \
+  --description "<user-description>"
+```
+
+成功时 stdout 输出 JSON `{"ticketId": "...", "viewUrl": "..."}`。
+
+实现位于 `internal/report/submit.go`，使用 fakeExec 模式可测试。
+
+---
+
+## 8. Failure Modes（失败模式）
+
+| 场景 | 触发条件 | 客户端行为 |
+|------|----------|-----------|
+| **Endpoint 不可达 / 5xx** | 网络超时或服务端错误 | Fallback 到本地 zip，toast 指向文件路径 |
+| **Schema 拒绝 (4xx `unsupported_schema`)** | 服务端不支持当前 bundle schema 版本 | 触发 app 更新检查 + 保留本地 zip + 提示用户更新 |
+| **CLI 子命令不存在** | `officecli report submit --help` 退出码 != 0 | 回退到 HTTP 通道（如 endpoint 已配置），否则回退到本地 zip |
+| **描述过短** | 用户输入 <10 字 | Renderer 侧校验拦截，不发起上传请求 |
+| **Auth token 缺失（HTTP 通道）** | `supportReportToken` 未配置且 officecli 未登录 | Toast："未配置 supportReportToken，请在 Settings 中设置或使用 hosted 模式（officecli 自带 token）" |
+| **Bundle 构建失败** | 磁盘空间不足、权限问题等 | Toast 显示错误原因，不尝试上传 |
+| **上传超时** | 大文件上传超过 60s | 中断上传，保留本地 zip，toast 提示手动发送 |
+
+### 降级优先级
+
+```
+CLI 通道 (officecli report submit)
+  ↓ 不可用
+HTTP 通道 (supportReportEndpoint + token)
+  ↓ 不可用
+本地 fallback (保留 zip + toast 路径)
+```
+
+每一级失败都不阻塞用户——最差情况下用户总是能拿到本地 zip 文件。

@@ -12,6 +12,9 @@ import type {
   LlmProvider,
   PreviewGrant,
   RedeemResult,
+  ReportCapabilityResult,
+  SubmitReportInput,
+  SubmitReportResult,
   UserSettings,
   WhoAmIResult,
 } from "../shared/types";
@@ -139,6 +142,12 @@ function createBrowserPreviewAPI(): DesktopAPI {
     onAppUpdateEvent: () => () => undefined,
     exportLogs: async (_input?: import("../shared/types").ExportLogsInput) => {
       throw new Error("Log export is only available inside the desktop app.");
+    },
+    submitReport: async (_input: SubmitReportInput): Promise<SubmitReportResult> => {
+      throw new Error("Issue reporting is only available inside the desktop app.");
+    },
+    getReportCapability: async (): Promise<ReportCapabilityResult> => {
+      return { enabled: false, reason: "browser-preview" };
     },
   };
 }
@@ -362,6 +371,10 @@ function createWailsAPI(): DesktopAPI {
       EventsOn("appupdate:event", (payload: unknown) => callback(payload as AppUpdateEvent)),
     exportLogs: (input?: import("../shared/types").ExportLogsInput) =>
       WailsApp.ExportLogs(toWails(input ?? {})) as Promise<{ path: string; manifest: import("../shared/types").BundleManifest }>,
+    submitReport: (input: SubmitReportInput) =>
+      WailsApp.SubmitReport(toWails(input)) as Promise<SubmitReportResult>,
+    getReportCapability: () =>
+      WailsApp.GetReportCapability() as Promise<ReportCapabilityResult>,
   };
 }
 

@@ -104,11 +104,13 @@ export const zh: Record<string, string> = {
   "dialogue.terminal.events.noProgress": "暂无进度事件",
   "dialogue.terminal.events.fallback": "Bridge 事件",
   "dialogue.terminal.exportLogs": "导出诊断日志",
+  "dialogue.terminal.reportIssue": "上报问题",
 
   // Dialogue — stalled
   "dialogue.stalled.title": "任务可能已停滞",
   "dialogue.stalled.hint": "超过 2 分钟未收到进度更新，任务可能遇到问题。",
   "dialogue.stalled.exportLogs": "导出诊断日志",
+  "dialogue.stalled.reportIssue": "上报问题",
 
   // Dialogue — progress panel
   "dialogue.progress.preparing": "准备中……",
@@ -240,6 +242,7 @@ export const zh: Record<string, string> = {
   "diagnostics.feedbackHint": "如需上报问题，请将下载的 zip 通过反馈渠道发送",
   "diagnostics.supportLink": "联系支持",
   "diagnostics.exported": "已导出",
+  "diagnostics.reportIssue": "上报问题",
   "diagnostics.includeSettings": "包含设置",
   "diagnostics.includeEvents": "包含事件",
   "diagnostics.includeLogs": "包含日志",
@@ -353,4 +356,28 @@ export const zh: Record<string, string> = {
   "update.force.downloadingProgress": "正在下载…… {done} / {total}",
   "update.force.updateNow": "立即更新",
   "update.force.restartToInstall": "重启以安装",
+
+  // Report Issue Dialog
+  "report.dialog.title": "上报问题",
+  "report.dialog.description.label": "问题描述",
+  "report.dialog.description.placeholder": "请描述问题发生时的操作步骤、预期行为与实际现象…",
+  "report.dialog.description.required": "请输入问题描述",
+  "report.dialog.description.minLength": "描述至少需要 10 个字符",
+  "report.dialog.email.label": "联系邮箱（可选）",
+  "report.dialog.email.placeholder": "你的邮箱地址",
+  "report.dialog.email.invalid": "请输入有效的邮箱地址",
+  "report.dialog.sections.label": "包含诊断信息",
+  "report.dialog.sections.settings": "包含设置",
+  "report.dialog.sections.events": "包含事件",
+  "report.dialog.sections.logs": "包含日志",
+  "report.dialog.sections.recent": "包含近期事件",
+  "report.dialog.removePrompt": "移除我的 prompt 内容",
+  "report.dialog.removePrompt.notice": "已排除事件数据（含 prompt 内容）",
+  "report.dialog.submit": "提交",
+  "report.dialog.cancel": "取消",
+  "report.toast.success.ticket": "已上报，工单号 #{ticketId}",
+  "report.toast.success.bundleOnly": "已生成本地诊断包：{bundlePath}，请通过反馈渠道发送",
+  "report.toast.error": "上报失败，请重试",
+  "report.toast.copyTicket": "复制工单号",
+  "report.toast.openFolder": "打开文件夹",
 };

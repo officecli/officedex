@@ -33,6 +33,7 @@ import (
 	"officedex/internal/localstore"
 	"officedex/internal/login"
 	"officedex/internal/preview"
+	"officedex/internal/report"
 	"officedex/internal/settings"
 	"officedex/internal/types"
 )
@@ -827,6 +828,177 @@ func (a *App) currentBridgeEnv() []string {
 	a.mu.Unlock()
 	return toEnvSlice(llmProviderEnv(s))
 }
+
+// ─── Issue report bindings ──────────────────────────────────────────────────
+
+// SubmitReportInput is the renderer-facing payload for SubmitReport. ExportOpts
+// is reused verbatim from ExportLogsInput so the renderer can drive both
+// bundle-only export and bundle+upload from the same form state.
+type SubmitReportInput struct {
+	TaskID       string          `json:"taskId,omitempty"`
+	Description  string          `json:"description"`
+	ContactEmail string          `json:"contactEmail,omitempty"`
+	ExportOpts   ExportLogsInput `json:"exportOpts"`
+}
+
+// SubmitReportResult is the value returned to the renderer. BundlePath is
+// always populated on success (whether or not the upload succeeded) so the UI
+// can offer a copy/share path when uploaded=false.
+type SubmitReportResult struct {
+	TicketID       string                     `json:"ticketId,omitempty"`
+	ViewURL        string                     `json:"viewUrl,omitempty"`
+	BundlePath     string                     `json:"bundlePath"`
+	Manifest       diagnostics.BundleManifest `json:"manifest"`
+	Uploaded       bool                       `json:"uploaded"`
+	FallbackReason string                     `json:"fallbackReason,omitempty"`
+}
+
+// ReportCapabilityResult is the gated view the renderer uses to decide whether
+// to surface a "Report issue" action vs falling back to "Export logs".
+type ReportCapabilityResult struct {
+	Enabled bool   `json:"enabled"`
+	Reason  string `json:"reason,omitempty"`
+}
+
+const reportDescriptionMinLen = 10
+
+// GetReportCapability runs the capability triple-probe and returns a renderer-
+// friendly snapshot. Always succeeds: errors during probing degrade to
+// Enabled=false with an explanatory reason.
+func (a *App) GetReportCapability() ReportCapabilityResult {
+	cap := a.detectReportCapability()
+	return ReportCapabilityResult{Enabled: cap.Enabled, Reason: cap.Reason}
+}
+
+// SubmitReport builds a diagnostics bundle and (when capability permits)
+// uploads it via CLI or HTTP. Validation, bundle build, and upload failures
+// each surface distinct error paths: validation returns a plain error;
+// bundle-build failures bubble up verbatim; upload failures degrade to
+// Uploaded=false with a FallbackReason so the renderer can keep the local
+// zip path visible.
+func (a *App) SubmitReport(input SubmitReportInput) (SubmitReportResult, error) {
+	desc := strings.TrimSpace(input.Description)
+	if len(desc) < reportDescriptionMinLen {
+		return SubmitReportResult{}, fmt.Errorf("submit report: description must be at least %d characters", reportDescriptionMinLen)
+	}
+
+	exportRes, err := a.ExportLogs(input.ExportOpts)
+	if err != nil {
+		return SubmitReportResult{}, fmt.Errorf("submit report: build bundle: %w", err)
+	}
+	result := SubmitReportResult{
+		BundlePath: exportRes.Path,
+		Manifest:   exportRes.Manifest,
+	}
+
+	cap := a.detectReportCapability()
+	if !cap.Enabled {
+		result.FallbackReason = "capability_not_enabled"
+		return result, nil
+	}
+
+	in := report.SubmitInput{
+		BundlePath:   exportRes.Path,
+		TaskID:       input.TaskID,
+		Description:  desc,
+		ContactEmail: strings.TrimSpace(input.ContactEmail),
+		BundleID:     exportRes.Manifest.BundleID,
+	}
+
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	if cap.HasCLISubcommand {
+		path, env := a.resolvedBinaryForReport()
+		sub := report.NewCLISubmitter(report.CLIOptions{BinaryPath: path, Env: env})
+		sr, err := sub.Submit(ctx, in)
+		if err == nil {
+			result.TicketID = sr.TicketID
+			result.ViewURL = sr.ViewURL
+			result.Uploaded = true
+			return result, nil
+		}
+		// Fall through to HTTP if endpoint is also available.
+		if !cap.HasHTTPEndpoint {
+			result.FallbackReason = fmt.Sprintf("cli_upload_failed: %v", err)
+			return result, nil
+		}
+	}
+
+	if cap.HasHTTPEndpoint {
+		a.mu.Lock()
+		s := a.cachedSettings
+		a.mu.Unlock()
+		endpoint := ""
+		token := ""
+		if s.SupportReportEndpoint != nil {
+			endpoint = *s.SupportReportEndpoint
+		}
+		if s.SupportReportToken != nil {
+			token = *s.SupportReportToken
+		}
+		sub := report.NewHTTPSubmitter(report.HTTPOptions{Endpoint: endpoint, Token: token})
+		sr, err := sub.Submit(ctx, in)
+		if err != nil {
+			result.FallbackReason = fmt.Sprintf("http_upload_failed: %v", err)
+			return result, nil
+		}
+		result.TicketID = sr.TicketID
+		result.ViewURL = sr.ViewURL
+		result.Uploaded = true
+		return result, nil
+	}
+
+	// Shouldn't reach here: cap.Enabled implied at least one path. Defensive.
+	result.FallbackReason = "no_upload_path"
+	return result, nil
+}
+
+// detectReportCapability resolves the inputs and runs report.DetectCapability.
+// Never panics; on any unexpected condition returns a disabled snapshot.
+func (a *App) detectReportCapability() report.ReportCapability {
+	a.mu.Lock()
+	s := a.cachedSettings
+	a.mu.Unlock()
+
+	endpoint := ""
+	if s.SupportReportEndpoint != nil {
+		endpoint = *s.SupportReportEndpoint
+	}
+
+	binaryPath, env := a.resolvedBinaryForReport()
+
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	var capsPayload []byte
+	a.mu.Lock()
+	client := a.bridgeClient
+	a.mu.Unlock()
+	if client != nil {
+		if payload, err := client.GetCapabilities(ctx); err == nil {
+			capsPayload = payload
+		}
+	}
+
+	return report.DetectCapability(ctx, report.CapabilityOptions{
+		BinaryPath:          binaryPath,
+		Env:                 env,
+		HTTPEndpoint:        endpoint,
+		CapabilitiesPayload: capsPayload,
+	})
+}
+
+func (a *App) resolvedBinaryForReport() (string, []string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.resolvedBinaryLocked()
+}
+
 
 // ─── Internals ──────────────────────────────────────────────────────────────
 

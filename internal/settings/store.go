@@ -160,6 +160,8 @@ type Patch struct {
 	BridgeBinaryPath      *string                `json:"bridgeBinaryPath,omitempty"`
 	LlmProvider           *types.LlmProvider     `json:"llmProvider,omitempty"`
 	OnboardingCompletedAt *string                `json:"onboardingCompletedAt,omitempty"`
+	SupportReportEndpoint *string                `json:"supportReportEndpoint,omitempty"`
+	SupportReportToken    *string                `json:"supportReportToken,omitempty"`
 	// ClearLlmProvider, when true, removes the stored provider. Ignored when
 	// LlmProvider is non-nil.
 	ClearLlmProvider bool `json:"clearLlmProvider,omitempty"`
@@ -209,6 +211,12 @@ func applyPatch(base types.UserSettings, patch Patch) types.UserSettings {
 	if patch.OnboardingCompletedAt != nil {
 		out.OnboardingCompletedAt = patch.OnboardingCompletedAt
 	}
+	if patch.SupportReportEndpoint != nil {
+		out.SupportReportEndpoint = patch.SupportReportEndpoint
+	}
+	if patch.SupportReportToken != nil {
+		out.SupportReportToken = patch.SupportReportToken
+	}
 	return out
 }
 
@@ -221,6 +229,8 @@ type rawSettings struct {
 	BridgeBinaryPath      *string              `json:"bridgeBinaryPath,omitempty"`
 	LlmProvider           *rawLlmProvider      `json:"llmProvider,omitempty"`
 	OnboardingCompletedAt *string              `json:"onboardingCompletedAt,omitempty"`
+	SupportReportEndpoint *string              `json:"supportReportEndpoint,omitempty"`
+	SupportReportToken    *string              `json:"supportReportToken,omitempty"`
 }
 
 type rawGenerateDefaults struct {
@@ -271,6 +281,8 @@ func sanitizeRaw(raw rawSettings) types.UserSettings {
 	out.BridgeBinaryPath = trimNullable(raw.BridgeBinaryPath)
 	out.LlmProvider = sanitizeRawProvider(raw.LlmProvider)
 	out.OnboardingCompletedAt = trimNullable(raw.OnboardingCompletedAt)
+	out.SupportReportEndpoint = trimNullable(raw.SupportReportEndpoint)
+	out.SupportReportToken = trimNullable(raw.SupportReportToken)
 	return out
 }
 
@@ -298,6 +310,8 @@ func sanitizeCanonical(s types.UserSettings) types.UserSettings {
 	out.BridgeBinaryPath = trimNullable(s.BridgeBinaryPath)
 	out.LlmProvider = sanitizeCanonicalProvider(s.LlmProvider)
 	out.OnboardingCompletedAt = trimNullable(s.OnboardingCompletedAt)
+	out.SupportReportEndpoint = trimNullable(s.SupportReportEndpoint)
+	out.SupportReportToken = trimNullable(s.SupportReportToken)
 	return out
 }
 
