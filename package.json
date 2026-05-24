@@ -1,0 +1,56 @@
+{
+  "name": "officedex",
+  "version": "0.1.0",
+  "description": "The AI desktop workspace for documents, slides, and spreadsheets. Wails v2 + React 19 client for OfficeCLI.",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/officecli/officedex#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/officecli/officedex.git"
+  },
+  "bugs": {
+    "url": "https://github.com/officecli/officedex/issues"
+  },
+  "type": "module",
+  "officecliVersion": "0.2.92",
+  "scripts": {
+    "prefetch:officecli": "node scripts/fetch-officecli.mjs",
+    "predev": "npm run prefetch:officecli",
+    "prebuild": "npm run prefetch:officecli",
+    "dev": "wails dev",
+    "dev:browser": "vite --host=0.0.0.0 --port=3100",
+    "build": "wails build -ldflags \"-X main.appVersion=$(node -p 'require(`./package.json`).version')\"",
+    "dist:mac": "npm run prefetch:officecli && wails build -ldflags \"-X main.appVersion=$(node -p 'require(`./package.json`).version')\" && node scripts/codesign-bundled-officecli.mjs --app build/bin/OfficeDex.app --source build/officecli/officecli",
+    "dist:win": "npm run prefetch:officecli && wails build -platform windows/amd64 -ldflags \"-X main.appVersion=$(node -p 'require(`./package.json`).version')\"",
+    "test": "vitest run",
+    "test:all": "npm run lint && npx vitest run && go test ./... -count=1 && npm run test:e2e",
+    "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install chromium",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ant-design/icons": "^6.1.0",
+    "@tanstack/react-query": "^5.66.9",
+    "antd": "^6.4.2",
+    "clsx": "^2.1.1",
+    "docx-preview": "^0.3.7",
+    "lucide-react": "^0.546.0",
+    "pdfjs-dist": "^3.11.174",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@testing-library/jest-dom": "^6.8.0",
+    "@testing-library/react": "^16.3.0",
+    "@types/node": "^22.13.10",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^5.0.4",
+    "jsdom": "^26.1.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.4.1",
+    "vitest": "^3.2.4"
+  }
+}

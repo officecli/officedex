@@ -1,0 +1,225 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  WAILS_VERSION: v2.12.0
+
+jobs:
+  build:
+    name: Build (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            label: macOS-universal
+            platform: darwin/universal
+            artifact: officedex-macos
+          - os: windows-latest
+            label: Windows-amd64
+            platform: windows/amd64
+            artifact: officedex-windows
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Stub dist/ so `wails generate module` can compile main.go
+        # main.go has `//go:embed all:dist`; the renderer build that fills
+        # dist/ depends on the very bindings `wails generate module` produces.
+        # Drop a placeholder file so the embed pattern resolves now; vite
+        # will overwrite it during the real frontend build below.
+        shell: bash
+        run: mkdir -p dist && touch dist/.placeholder
+
+      - name: Generate Wails bindings
+        run: wails generate module
+
+      - name: Lint (typecheck)
+        run: npm run lint
+
+      - name: Renderer tests (vitest)
+        run: npx vitest run
+
+      - name: Go tests
+        run: go test ./...
+
+      - name: Prefetch officecli binary
+        run: npm run prefetch:officecli
+
+      - name: Wails build
+        run: wails build -platform ${{ matrix.platform }} -trimpath
+
+      - name: Codesign + embed officecli (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          node scripts/codesign-bundled-officecli.mjs \
+            --app build/bin/OfficeDex.app \
+            --source build/officecli/officecli
+
+      - name: Bundle officecli (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $resDir = "build\bin\officecli"
+          New-Item -ItemType Directory -Force -Path $resDir | Out-Null
+          Copy-Item "build\officecli\officecli.exe" -Destination "$resDir\officecli.exe" -Force
+          Copy-Item "build\officecli\version.json" -Destination "$resDir\version.json" -Force
+
+      - name: Archive (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p dist-artifacts
+          tag="${GITHUB_REF_NAME}"
+          archive="OfficeDex-${tag}-darwin-universal.zip"
+          (cd build/bin && ditto -c -k --sequesterRsrc --keepParent OfficeDex.app "../../dist-artifacts/${archive}")
+          ls -la dist-artifacts/
+
+      - name: Archive (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist-artifacts | Out-Null
+          $tag = $env:GITHUB_REF_NAME
+          $archive = "OfficeDex-${tag}-windows-amd64.zip"
+          Compress-Archive -Path build\bin\* -DestinationPath "dist-artifacts\$archive" -Force
+          Get-ChildItem dist-artifacts
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist-artifacts/
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: officedex-macos
+          path: dist-release/
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: officedex-windows
+          path: dist-release/
+
+      - name: List artifacts
+        run: ls -la dist-release/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          fail_on_unmatched_files: false
+          files: |
+            dist-release/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  sync-to-dist:
+    name: Sync to officedex-dist
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source repo (for scripts/build-manifest.mjs)
+        uses: actions/checkout@v4
+        with:
+          path: src
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: officedex-macos
+          path: artifacts/
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: officedex-windows
+          path: artifacts/
+
+      - name: Clone officedex-dist
+        env:
+          GH_TOKEN: ${{ secrets.DIST_DEPLOY_TOKEN }}
+        run: |
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/officecli/officedex-dist.git" dist
+          cd dist
+          git config user.email "release-bot@officedex.app"
+          git config user.name "OfficeDex Release Bot"
+
+      - name: Stage release artifacts into dist repo
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          mkdir -p "dist/releases/${tag}"
+          cp artifacts/OfficeDex-${tag}-darwin-universal.zip "dist/releases/${tag}/"
+          cp artifacts/OfficeDex-${tag}-windows-amd64.zip   "dist/releases/${tag}/"
+
+      - name: Generate manifest.json
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          notes=$(gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" --json body --jq .body 2>/dev/null || echo "")
+          node src/scripts/build-manifest.mjs \
+            --version "${version}" \
+            --darwin "artifacts/OfficeDex-${tag}-darwin-universal.zip" \
+            --windows "artifacts/OfficeDex-${tag}-windows-amd64.zip" \
+            --notes "${notes:-Release ${tag}}" \
+            --out dist/manifest.json
+          cp dist/manifest.json "dist/archive/manifest-${tag}.json"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Commit and push to officedex-dist
+        run: |
+          cd dist
+          tag="${GITHUB_REF_NAME}"
+          git add manifest.json archive/ "releases/${tag}/"
+          git commit -m "release: ${tag}" -m "Auto-synced from officecli/officedex@${GITHUB_SHA}"
+          git push origin main

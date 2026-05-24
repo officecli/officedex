@@ -1,0 +1,10 @@
+2024-06-02T14:05:11.200Z [INFO] Sending generation request to provider...
+2024-06-02T14:05:11.201Z [DEBUG] Using apiKey=sk-FAKEKEY-DO-NOT-USE-PROVIDER9876543210XYZ
+2024-06-02T14:05:11.202Z [DEBUG] Endpoint: https://api.fakeprovider.example.com/v1/completions
+2024-06-02T14:05:11.500Z [ERROR] Provider returned HTTP 429: rate limit exceeded
+2024-06-02T14:05:11.501Z [DEBUG] Response headers: X-RateLimit-Remaining: 0
+2024-06-02T14:05:11.502Z [DEBUG] Retrying with fallback key apiKey=sk-FAKEKEY-DO-NOT-USE-FALLBACK00000000ABCDEF
+2024-06-02T14:05:12.100Z [ERROR] Fallback also failed: HTTP 401 Unauthorized
+2024-06-02T14:05:12.101Z [DEBUG] Authorization: Bearer sk-FAKEKEY-DO-NOT-USE-EXPIRED999888777666
+2024-06-02T14:05:12.102Z [ERROR] All provider attempts exhausted, task failed
+2024-06-02T14:05:12.103Z [INFO] Error details saved to /Users/testuser/Library/Application Support/OfficeDex/logs/errors.json
