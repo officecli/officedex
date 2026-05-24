@@ -47,10 +47,10 @@
     "@types/node": "^22.13.10",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
-    "@vitejs/plugin-react": "^5.0.4",
+    "@vitejs/plugin-react": "^6.0.2",
     "jsdom": "^26.1.0",
     "typescript": "^5.7.3",
-    "vite": "^6.4.1",
-    "vitest": "^3.2.4"
+    "vite": "^8.0.14",
+    "vitest": "^4.1.7"
   }
 }
