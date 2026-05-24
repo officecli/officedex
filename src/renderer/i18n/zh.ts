@@ -114,7 +114,7 @@ export const zh: Record<string, string> = {
 
   // Dialogue — stalled
   "dialogue.stalled.title": "任务可能已停滞",
-  "dialogue.stalled.hint": "超过 2 分钟未收到进度更新，任务可能遇到问题。",
+  "dialogue.stalled.hint": "超过 5 分钟未收到进度更新，任务可能遇到问题。",
   "dialogue.stalled.exportLogs": "导出诊断日志",
   "dialogue.stalled.reportIssue": "上报问题",
 

@@ -125,7 +125,7 @@ export function App() {
   }, [firstTaskID, selectedTaskID.kind]);
 
   useEffect(() => {
-    const STALL_THRESHOLD = 120_000;
+    const STALL_THRESHOLD = 300_000;
     const interval = setInterval(() => {
       setState((current) => {
         let changed = false;

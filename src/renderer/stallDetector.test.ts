@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyTaskEvent, createInitialTaskState, type TaskState } from "./taskState";
 
 function runStallDetector(state: TaskState): TaskState {
-  const STALL_THRESHOLD = 120_000;
+  const STALL_THRESHOLD = 300_000;
   const now = Date.now();
   let changed = false;
   const updatedTasks = { ...state.tasks };
@@ -28,7 +28,7 @@ describe("stallDetector", () => {
     vi.useRealTimers();
   });
 
-  it("marks a running task as stalled after 120s with no progress", () => {
+  it("marks a running task as stalled after 300s with no progress", () => {
     vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
     let state = createInitialTaskState();
     state = applyTaskEvent(state, {
@@ -45,12 +45,12 @@ describe("stallDetector", () => {
       payload: { message: "Starting..." },
     });
 
-    // Advance 119s — should NOT be stalled yet
-    vi.advanceTimersByTime(119_000);
+    // Advance 299s — should NOT be stalled yet
+    vi.advanceTimersByTime(299_000);
     let checked = runStallDetector(state);
     expect(checked.tasks["task-1"].stalledSince).toBeUndefined();
 
-    // Advance 2 more seconds (total 121s) — should be stalled
+    // Advance 2 more seconds (total 301s) — should be stalled
     vi.advanceTimersByTime(2_000);
     checked = runStallDetector(state);
     expect(checked.tasks["task-1"].stalledSince).toBeDefined();
@@ -75,7 +75,7 @@ describe("stallDetector", () => {
     });
 
     // Mark as stalled
-    vi.advanceTimersByTime(121_000);
+    vi.advanceTimersByTime(301_000);
     state = runStallDetector(state);
     expect(state.tasks["task-1"].stalledSince).toBeDefined();
 
@@ -84,7 +84,7 @@ describe("stallDetector", () => {
       event_id: "e3",
       task_id: "task-1",
       type: "task.progress",
-      ts: "2026-01-01T00:02:01Z",
+      ts: "2026-01-01T00:05:01Z",
       payload: { message: "Continuing..." },
     });
     expect(state.tasks["task-1"].stalledSince).toBeUndefined();
@@ -109,7 +109,7 @@ describe("stallDetector", () => {
       payload: {},
     });
 
-    vi.advanceTimersByTime(200_000);
+    vi.advanceTimersByTime(400_000);
     const checked = runStallDetector(state);
     expect(checked.tasks["task-1"].stalledSince).toBeUndefined();
   });
@@ -140,7 +140,7 @@ describe("stallDetector", () => {
       configurable: true,
     });
 
-    vi.advanceTimersByTime(130_000);
+    vi.advanceTimersByTime(310_000);
     const checked = runStallDetector(state);
     expect(checked.tasks["task-1"].stalledSince).toBeDefined();
 

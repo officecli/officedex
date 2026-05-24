@@ -114,7 +114,7 @@ export const en: Record<string, string> = {
 
   // Dialogue — stalled
   "dialogue.stalled.title": "Task may be stalled",
-  "dialogue.stalled.hint": "No progress update received for over 2 minutes. The task may have encountered an issue.",
+  "dialogue.stalled.hint": "No progress update received for over 5 minutes. The task may have encountered an issue.",
   "dialogue.stalled.exportLogs": "Export diagnostic logs",
   "dialogue.stalled.reportIssue": "Report Issue",
 
