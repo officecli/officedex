@@ -35,7 +35,7 @@
     "clsx": "^2.1.1",
     "docx-preview": "^0.3.7",
     "lucide-react": "^0.546.0",
-    "pdfjs-dist": "^3.11.174",
+    "pdfjs-dist": "^5.7.284",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "xlsx": "^0.18.5"
