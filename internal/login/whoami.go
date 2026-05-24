@@ -14,6 +14,7 @@ import (
 
 var (
 	userIDLine    = regexp.MustCompile(`(?i)user id:\s*(\S+)`)
+	emailLine     = regexp.MustCompile(`(?i)email:\s*(\S+)`)
 	sessionLine   = regexp.MustCompile(`(?i)session:\s*(\S+)`)
 	expiresAtLine = regexp.MustCompile(`(?i)expires at:\s*(\S+)`)
 )
@@ -66,6 +67,9 @@ func ParseWhoAmI(stdout string, exitCode int) types.WhoAmIResult {
 	result := types.WhoAmIResult{Mode: mode}
 	if v := firstSubmatch(userIDLine, stdout); v != "" {
 		result.UserID = v
+	}
+	if v := firstSubmatch(emailLine, stdout); v != "" {
+		result.Email = v
 	}
 	if v := firstSubmatch(sessionLine, stdout); v != "" {
 		result.Session = v

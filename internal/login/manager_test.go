@@ -243,13 +243,16 @@ func TestParseWhoAmIDetectsAPIKey(t *testing.T) {
 }
 
 func TestParseWhoAmILoggedInWithFields(t *testing.T) {
-	stdout := "Logged in as the following user.\nUser ID: usr-123\nSession: sess-abc\nExpires at: 2030-01-01T00:00:00Z\n"
+	stdout := "Logged in as the following user.\nUser ID: usr-123\nEmail: user@example.com\nSession: sess-abc\nExpires at: 2030-01-01T00:00:00Z\n"
 	result := ParseWhoAmI(stdout, 0)
 	if result.Mode != types.WhoAmILoggedIn {
 		t.Fatalf("expected logged_in, got %q", result.Mode)
 	}
 	if result.UserID != "usr-123" {
 		t.Fatalf("UserID: %q", result.UserID)
+	}
+	if result.Email != "user@example.com" {
+		t.Fatalf("Email: %q", result.Email)
 	}
 	if result.Session != "sess-abc" {
 		t.Fatalf("Session: %q", result.Session)

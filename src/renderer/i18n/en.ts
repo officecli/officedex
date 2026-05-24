@@ -271,7 +271,7 @@ export const en: Record<string, string> = {
   "login.subtitle.loading": "Verifying your local session.",
   "login.subtitle.anonymous": "Open a browser to sign in with your OfficeCLI account.",
   "login.subtitle.awaiting": "We've opened your browser. Finish sign-in there to continue.",
-  "login.subtitle.successUser": "Connected as user {userId}.",
+  "login.subtitle.successUser": "Connected as {userId}.",
   "login.subtitle.successDefault": "Your OfficeCLI account is connected.",
   "login.subtitle.failure": "Try again, or check the OfficeCLI bridge in Settings.",
   "login.status.checking": "Checking sign-in status…",

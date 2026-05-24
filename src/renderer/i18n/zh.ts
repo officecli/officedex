@@ -271,7 +271,7 @@ export const zh: Record<string, string> = {
   "login.subtitle.loading": "正在校验本地会话。",
   "login.subtitle.anonymous": "打开浏览器，使用你的 OfficeCLI 账号登录。",
   "login.subtitle.awaiting": "已为你打开浏览器，请在浏览器中完成登录后返回。",
-  "login.subtitle.successUser": "已连接为用户 {userId}。",
+  "login.subtitle.successUser": "已连接为 {userId}。",
   "login.subtitle.successDefault": "OfficeCLI 账号已连接。",
   "login.subtitle.failure": "请重试，或在设置中检查 OfficeCLI bridge。",
   "login.status.checking": "正在检查登录状态……",
