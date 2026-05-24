@@ -381,7 +381,7 @@ OfficeCLI runtime 也支持手动指定本地路径，无需联网下载。
 - 最近的 OfficeCLI 日志（脱敏）
 - 当前任务状态快照
 
-复制生成的 markdown，粘贴到 GitHub Issue 即可。详见 [`issue-reporting.md`](issue-reporting.md)。
+复制生成的 markdown，粘贴到 GitHub Issue 即可。
 
 </details>
 
@@ -391,8 +391,6 @@ OfficeCLI runtime 也支持手动指定本地路径，无需联网下载。
 
 - [`../DESIGN.md`](../DESIGN.md) — 完整设计规范
 - [`../CLAUDE.md`](../CLAUDE.md) — 项目约定 & 协作准则
-- [`E2E_TESTING.md`](E2E_TESTING.md) — E2E 测试手册
-- [`issue-reporting.md`](issue-reporting.md) — Bug 反馈流程
 
 ---
 

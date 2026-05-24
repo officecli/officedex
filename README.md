@@ -381,7 +381,7 @@ In the app, click **"Report Issue"** in the top-right corner. It automatically c
 - Recent OfficeCLI logs (sanitized)
 - Current task state snapshot
 
-Copy the generated markdown and paste it into a GitHub Issue. See [`docs/issue-reporting.md`](docs/issue-reporting.md) for details.
+Copy the generated markdown and paste it into a GitHub Issue.
 
 </details>
 
@@ -391,8 +391,6 @@ Copy the generated markdown and paste it into a GitHub Issue. See [`docs/issue-r
 
 - [`DESIGN.md`](DESIGN.md) — Full design spec
 - [`CLAUDE.md`](CLAUDE.md) — Project conventions & collaboration guidelines
-- [`docs/E2E_TESTING.md`](docs/E2E_TESTING.md) — E2E testing handbook
-- [`docs/issue-reporting.md`](docs/issue-reporting.md) — Bug-reporting workflow
 - [`docs/README.zh-CN.md`](docs/README.zh-CN.md) — 简体中文版
 
 ---
