@@ -10,6 +10,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -46,6 +47,32 @@ CREATE TABLE IF NOT EXISTS artifacts (
   edit_url TEXT,
   synced_at TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_task_events_task_created ON task_events(task_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_task_events_created ON task_events(created_at);
+`
+
+// schemaV1 adds bookkeeping for the per-task credit feature. Applied via a
+// PRAGMA user_version-gated migration in Open() so existing databases upgrade
+// in place exactly once.
+const schemaV1 = `
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  version INTEGER PRIMARY KEY,
+  applied_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS task_credit_records (
+  task_id TEXT PRIMARY KEY,
+  credits_charged INTEGER,
+  credit_mode TEXT,
+  recorded_at TEXT NOT NULL
+);
+`
+
+// schemaV2 adds request_id storage to task_events. The new column is
+// independent of payload_json (which preserves the raw bridge envelope) and
+// is the canonical source for the minimal report flow's "give support a
+// pointer to the server-side trace" need.
+const schemaV2 = `
+ALTER TABLE task_events ADD COLUMN request_id TEXT NOT NULL DEFAULT '';
 `
 
 // Store wraps a SQLite database used to persist bridge events and artifacts.
@@ -82,7 +109,70 @@ func (s *Store) Open(ctx context.Context) error {
 		_ = db.Close()
 		return fmt.Errorf("localstore: apply schema: %w", err)
 	}
+	if err := applyMigrations(ctx, db); err != nil {
+		_ = db.Close()
+		return fmt.Errorf("localstore: apply migrations: %w", err)
+	}
 	s.db = db
+	return nil
+}
+
+// applyMigrations advances the database to the latest schema_version. Each
+// migration is wrapped in its own transaction so a partial failure leaves the
+// previous schema intact. Re-running Open is idempotent.
+func applyMigrations(ctx context.Context, db *sql.DB) error {
+	var current int
+	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&current); err != nil {
+		return fmt.Errorf("read user_version: %w", err)
+	}
+	if current < 1 {
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("begin v1: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, schemaV1); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("v1 ddl: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (1, ?)`,
+			time.Now().UTC().Format(time.RFC3339Nano),
+		); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("v1 stamp: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, "PRAGMA user_version = 1"); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("v1 set user_version: %w", err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("v1 commit: %w", err)
+		}
+	}
+	if current < 2 {
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("begin v2: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, schemaV2); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("v2 ddl: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (2, ?)`,
+			time.Now().UTC().Format(time.RFC3339Nano),
+		); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("v2 stamp: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, "PRAGMA user_version = 2"); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("v2 set user_version: %w", err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("v2 commit: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -137,13 +227,103 @@ func (s *Store) RecordEvent(event types.BridgeEvent) error {
 		eventID = fmt.Sprintf("%s:%s:%s", event.TaskID, event.Type, now)
 	}
 	if _, err := s.db.Exec(
-		`INSERT OR REPLACE INTO task_events(event_id, task_id, type, payload_json, created_at)
-		 VALUES (?, ?, ?, ?, ?)`,
-		eventID, event.TaskID, event.Type, string(payloadJSON), now,
+		`INSERT OR REPLACE INTO task_events(event_id, task_id, type, payload_json, created_at, request_id)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		eventID, event.TaskID, event.Type, string(payloadJSON), now, event.RequestID,
 	); err != nil {
 		return fmt.Errorf("localstore: insert event: %w", err)
 	}
 	return nil
+}
+
+// QueryEventsByTask returns all BridgeEvent rows for the given task, ordered
+// by created_at ascending.
+func (s *Store) QueryEventsByTask(ctx context.Context, taskID string) ([]types.BridgeEvent, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return nil, fmt.Errorf("localstore: not open")
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT event_id, task_id, type, payload_json, created_at, request_id
+		 FROM task_events WHERE task_id = ? ORDER BY created_at ASC`, taskID)
+	if err != nil {
+		return nil, fmt.Errorf("localstore: query events by task: %w", err)
+	}
+	defer rows.Close()
+	return scanEvents(rows)
+}
+
+// QueryRecentEvents returns the most recent events across all tasks, ordered
+// by created_at descending, limited to the given count.
+func (s *Store) QueryRecentEvents(ctx context.Context, limit int) ([]types.BridgeEvent, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return nil, fmt.Errorf("localstore: not open")
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT event_id, task_id, type, payload_json, created_at, request_id
+		 FROM task_events ORDER BY created_at DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("localstore: query recent events: %w", err)
+	}
+	defer rows.Close()
+	return scanEvents(rows)
+}
+
+// LatestRequestID returns the most recent non-empty request_id for the given
+// task, or empty string when none exists. The minimal report flow uses it to
+// give support a pointer into the server-side trace.
+func (s *Store) LatestRequestID(ctx context.Context, taskID string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return "", fmt.Errorf("localstore: not open")
+	}
+	if taskID == "" {
+		return "", nil
+	}
+	var requestID string
+	err := s.db.QueryRowContext(ctx,
+		`SELECT request_id FROM task_events
+		 WHERE task_id = ? AND request_id != ''
+		 ORDER BY rowid DESC LIMIT 1`, taskID).Scan(&requestID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", nil
+		}
+		return "", fmt.Errorf("localstore: latest request id: %w", err)
+	}
+	return requestID, nil
+}
+
+func scanEvents(rows *sql.Rows) ([]types.BridgeEvent, error) {
+	var events []types.BridgeEvent
+	for rows.Next() {
+		var (
+			eventID     string
+			taskID      string
+			eventType   string
+			payloadJSON string
+			createdAt   string
+			requestID   string
+		)
+		if err := rows.Scan(&eventID, &taskID, &eventType, &payloadJSON, &createdAt, &requestID); err != nil {
+			return nil, fmt.Errorf("localstore: scan event: %w", err)
+		}
+		var payload map[string]any
+		_ = json.Unmarshal([]byte(payloadJSON), &payload)
+		events = append(events, types.BridgeEvent{
+			EventID:   eventID,
+			TaskID:    taskID,
+			RequestID: requestID,
+			Type:      eventType,
+			TS:        createdAt,
+			Payload:   payload,
+		})
+	}
+	return events, rows.Err()
 }
 
 // RecordArtifact upserts a row into the artifacts table keyed by file_path.
@@ -177,6 +357,54 @@ func (s *Store) RecordArtifact(artifact types.Artifact) error {
 		return fmt.Errorf("localstore: upsert artifact: %w", err)
 	}
 	return nil
+}
+
+// RecordTaskCredit persists the per-task credit charge reported by the agent
+// bridge on task.completed / task.failed. INSERT OR IGNORE keeps the first
+// observation per task immutable — server-side settled credits are
+// authoritative and never need updating. charged may be nil for legacy bridges
+// that do not report the field (stored as SQL NULL).
+func (s *Store) RecordTaskCredit(taskID string, charged *int, mode string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil || taskID == "" {
+		return nil
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	var chargedArg any
+	if charged != nil {
+		chargedArg = *charged
+	}
+	if _, err := s.db.Exec(
+		`INSERT OR IGNORE INTO task_credit_records(task_id, credits_charged, credit_mode, recorded_at)
+		 VALUES (?, ?, ?, ?)`,
+		taskID, chargedArg, nullableString(mode), now,
+	); err != nil {
+		return fmt.Errorf("localstore: insert task credit: %w", err)
+	}
+	return nil
+}
+
+// GetCreditFeatureSince returns the timestamp at which the v1 migration
+// applied — i.e. the earliest moment per-task credit tracking became
+// available for this user. Useful for distinguishing "missing because legacy"
+// from "missing because zero" in the UI.
+func (s *Store) GetCreditFeatureSince(ctx context.Context) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return "", fmt.Errorf("localstore: not open")
+	}
+	var appliedAt string
+	err := s.db.QueryRowContext(ctx,
+		`SELECT applied_at FROM schema_migrations WHERE version = 1`).Scan(&appliedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", nil
+		}
+		return "", fmt.Errorf("localstore: query credit feature since: %w", err)
+	}
+	return appliedAt, nil
 }
 
 func statusFromEvent(eventType string) string {

@@ -16,7 +16,6 @@ interface PdfViewerProps {
   previewToken: string;
   fileName: string;
   documentType?: string;
-  onClose?: () => void;
 }
 
 const ZOOM_STEP = 0.25;
@@ -24,7 +23,7 @@ const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 4;
 const DEFAULT_SCALE = 1.5;
 
-export default function PdfViewer({ previewToken, fileName, documentType, onClose }: PdfViewerProps) {
+export default function PdfViewer({ previewToken, fileName, documentType }: PdfViewerProps) {
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
@@ -59,7 +58,12 @@ export default function PdfViewer({ previewToken, fileName, documentType, onClos
     let cancelled = false;
 
     (async () => {
-      renderTaskRef.current?.cancel();
+      const prevTask = renderTaskRef.current;
+      if (prevTask) {
+        prevTask.cancel();
+        await prevTask.promise.catch(() => {});
+      }
+      if (cancelled) return;
       const page = await pdfDoc.getPage(currentPage);
       if (cancelled) return;
       const viewport = page.getViewport({ scale });
@@ -105,7 +109,6 @@ export default function PdfViewer({ previewToken, fileName, documentType, onClos
         onZoomOut={zoomOut}
         onZoomReset={zoomReset}
         onOpenExternal={openExternal}
-        onClose={onClose}
         center={
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <Button size="small" disabled={currentPage <= 1} onClick={prevPage}>

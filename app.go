@@ -23,21 +23,23 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"officedex/internal/appupdate"
 	"officedex/internal/binresolver"
 	"officedex/internal/bridge"
+	"officedex/internal/diagnostics"
 	"officedex/internal/localstore"
 	"officedex/internal/login"
 	"officedex/internal/preview"
+	"officedex/internal/report"
 	"officedex/internal/settings"
 	"officedex/internal/types"
 )
 
 const (
 	appName             = "OfficeDex"
-	appVersion          = "0.2.1"
 	previewExtraWidth   = 500
 	bridgeEventChannel  = "bridge:event"
 	authEventChannel    = "auth:event"
@@ -45,6 +47,10 @@ const (
 	appUpdateChannel    = "appupdate:event"
 	defaultUpdateManifestURL = "https://raw.githubusercontent.com/officecli/officedex-dist/main/manifest.json"
 )
+
+// appVersion is injected at build time via `-ldflags "-X main.appVersion=<v>"`.
+// The default "dev" sentinel makes `go run` / `wails dev` work without flags.
+var appVersion = "dev"
 
 // App is the Wails-bound object surfaced to the renderer.
 type App struct {
@@ -64,7 +70,16 @@ type App struct {
 	loginUnsub      func()
 	pendingLoginURL string
 	previewModeWidthBefore int
+	previewModeXBefore     int
+	previewModeXShifted    bool
 	appUpdateMgr    *appupdate.Manager
+
+	// resolver cache. binresolver.Resolve stats the filesystem on every call;
+	// runCommandOptions / ensureBridge run on every RPC. We cache the resolved
+	// path + env until UpdateSettings flips touchesBridge=true.
+	resolvedBinaryPath string
+	resolvedBinaryEnv  []string
+	binaryResolvedAt   time.Time
 }
 
 // NewApp resolves user-scoped paths and constructs the per-user services
@@ -339,7 +354,9 @@ func normalizePastedImageExt(ext string) string {
 }
 
 // SetPreviewMode resizes the main window to make room for the preview pane,
-// or restores the pre-preview width when active is false.
+// or restores the pre-preview width when active is false. The widened window
+// is clamped to the current screen width, and if the right edge would overflow
+// the screen the window is shifted left to keep it fully visible.
 func (a *App) SetPreviewMode(active bool) error {
 	if a.ctx == nil {
 		return errors.New("app: not started")
@@ -348,15 +365,64 @@ func (a *App) SetPreviewMode(active bool) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if active {
+		if a.previewModeWidthBefore > 0 {
+			return nil
+		}
 		a.previewModeWidthBefore = w
-		wailsruntime.WindowSetSize(a.ctx, w+previewExtraWidth, h)
+
+		targetW := w + previewExtraWidth
+		screenW := a.currentScreenWidthLocked()
+		if screenW > 0 && targetW > screenW {
+			targetW = screenW
+		}
+
+		x, y := wailsruntime.WindowGetPosition(a.ctx)
+		if screenW > 0 && x+targetW > screenW {
+			newX := screenW - targetW
+			if newX < 0 {
+				newX = 0
+			}
+			a.previewModeXBefore = x
+			a.previewModeXShifted = true
+			wailsruntime.WindowSetPosition(a.ctx, newX, y)
+		}
+
+		wailsruntime.WindowSetSize(a.ctx, targetW, h)
 		return nil
 	}
 	if a.previewModeWidthBefore > 0 {
 		wailsruntime.WindowSetSize(a.ctx, a.previewModeWidthBefore, h)
 		a.previewModeWidthBefore = 0
+		if a.previewModeXShifted {
+			_, y := wailsruntime.WindowGetPosition(a.ctx)
+			wailsruntime.WindowSetPosition(a.ctx, a.previewModeXBefore, y)
+			a.previewModeXShifted = false
+			a.previewModeXBefore = 0
+		}
 	}
 	return nil
+}
+
+// currentScreenWidthLocked returns the logical width of the screen currently
+// hosting the window, falling back to the primary screen, or 0 when unknown.
+// Caller must hold a.mu (the function does not touch shared state, but the
+// name documents the calling context).
+func (a *App) currentScreenWidthLocked() int {
+	screens, err := wailsruntime.ScreenGetAll(a.ctx)
+	if err != nil {
+		return 0
+	}
+	for _, s := range screens {
+		if s.IsCurrent {
+			return s.Size.Width
+		}
+	}
+	for _, s := range screens {
+		if s.IsPrimary {
+			return s.Size.Width
+		}
+	}
+	return 0
 }
 
 // ─── Preview bindings ───────────────────────────────────────────────────────
@@ -405,6 +471,41 @@ func (a *App) ReadArtifactFile(previewToken string) (ArtifactFile, error) {
 		return ArtifactFile{}, fmt.Errorf("read artifact: %w", err)
 	}
 	return ArtifactFile{Data: data}, nil
+}
+
+// LocalImageData wraps a read-back image for renderer preview.
+type LocalImageData struct {
+	Data []byte `json:"data"`
+	Mime string `json:"mime"`
+}
+
+var localImageMimeByExt = map[string]string{
+	"png":  "image/png",
+	"jpg":  "image/jpeg",
+	"jpeg": "image/jpeg",
+	"gif":  "image/gif",
+	"webp": "image/webp",
+	"bmp":  "image/bmp",
+	"svg":  "image/svg+xml",
+}
+
+// ReadLocalImage returns raw bytes for an image file the user has attached
+// (via OpenMultiFileDialog / SavePastedImage). The extension whitelist mirrors
+// the renderer-side reference-image spec so unrelated paths cannot be read.
+func (a *App) ReadLocalImage(filePath string) (LocalImageData, error) {
+	if filePath == "" {
+		return LocalImageData{}, errors.New("read local image: empty path")
+	}
+	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(filePath), "."))
+	mime, ok := localImageMimeByExt[ext]
+	if !ok {
+		return LocalImageData{}, fmt.Errorf("read local image: unsupported extension %q", ext)
+	}
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return LocalImageData{}, fmt.Errorf("read local image: %w", err)
+	}
+	return LocalImageData{Data: data, Mime: mime}, nil
 }
 
 // PreviewHTML is the renderer-facing wrapper for a sidecar HTML preview.
@@ -498,6 +599,15 @@ func (a *App) Logout() error {
 	return login.Logout(a.ctx, opts)
 }
 
+// Redeem runs `officecli redeem --json --source desktop <code>` to add hosted
+// credits to the signed-in account. Errors surfaced by the platform (expired
+// code, exhausted code, already-claimed, etc.) are returned as a normal error
+// so the renderer can show the message to the user.
+func (a *App) Redeem(code string) (types.RedeemResult, error) {
+	opts := a.runCommandOptions()
+	return login.Redeem(a.ctx, opts, code)
+}
+
 // ─── Settings bindings ──────────────────────────────────────────────────────
 
 // GetSettings returns the current sanitized settings.
@@ -521,6 +631,9 @@ func (a *App) UpdateSettings(patch settings.Patch) (types.UserSettings, error) {
 	client := a.bridgeClient
 	if touchesBridge {
 		a.bridgeClient = nil
+		a.resolvedBinaryPath = ""
+		a.resolvedBinaryEnv = nil
+		a.binaryResolvedAt = time.Time{}
 	}
 	if patch.BridgeBinaryPath != nil {
 		a.loginManager = nil
@@ -532,7 +645,7 @@ func (a *App) UpdateSettings(patch settings.Patch) (types.UserSettings, error) {
 	a.mu.Unlock()
 
 	if touchesBridge && client != nil {
-		client.Stop()
+		client.Close()
 	}
 	return merged, nil
 }
@@ -540,6 +653,21 @@ func (a *App) UpdateSettings(patch settings.Patch) (types.UserSettings, error) {
 // GetDefaultWorkspaceDir returns the per-user workspace folder.
 func (a *App) GetDefaultWorkspaceDir() string {
 	return a.workspaceDir
+}
+
+// GetCreditFeatureSince returns the timestamp at which per-task credit
+// tracking became available for this install (the schema_migrations v1 row).
+// The renderer uses this to label tasks predating the feature with "—"
+// instead of "0".
+func (a *App) GetCreditFeatureSince() (string, error) {
+	if a.localStore == nil {
+		return "", nil
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return a.localStore.GetCreditFeatureSince(ctx)
 }
 
 // ─── App update bindings ────────────────────────────────────────────────────
@@ -624,6 +752,314 @@ func launchInstaller(path string) error {
 	}
 }
 
+// ─── Diagnostics ────────────────────────────────────────────────────────────
+
+// ExportLogsInput is the optional input shape passed from the renderer. A
+// zero-value struct (no input from the renderer) is treated as "include all"
+// so that A0 callers continue to receive a fully-populated bundle.
+type ExportLogsInput struct {
+	TaskID          string `json:"taskId,omitempty"`
+	IncludeSettings bool   `json:"includeSettings"`
+	IncludeEvents   bool   `json:"includeEvents"`
+	IncludeLogs     bool   `json:"includeLogs"`
+	IncludeRecent   bool   `json:"includeRecent"`
+}
+
+// ExportLogsResult is the value returned by ExportLogs to the renderer.
+type ExportLogsResult struct {
+	Path     string                    `json:"path"`
+	Manifest diagnostics.BundleManifest `json:"manifest"`
+}
+
+// ExportLogs assembles a diagnostics bundle (scrubbed settings, events, logs)
+// into ~/Downloads and returns the path + manifest.
+func (a *App) ExportLogs(input ExportLogsInput) (ExportLogsResult, error) {
+	// Zero-value struct from a renderer that omitted input → default to all-on.
+	if !input.IncludeSettings && !input.IncludeEvents && !input.IncludeLogs && !input.IncludeRecent {
+		input.IncludeSettings = true
+		input.IncludeEvents = true
+		input.IncludeLogs = true
+		input.IncludeRecent = true
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ExportLogsResult{}, fmt.Errorf("export logs: home dir: %w", err)
+	}
+	downloads := filepath.Join(home, "Downloads")
+
+	a.mu.Lock()
+	currentSettings := a.cachedSettings
+	bridgeClient := a.bridgeClient
+	a.mu.Unlock()
+
+	var droppedBytes int64
+	if bridgeClient != nil {
+		droppedBytes = bridgeClient.LogfileDroppedBytes()
+	}
+
+	bundleID := uuid.New().String()
+
+	zipPath, manifest, err := diagnostics.BuildBundle(a.ctx, diagnostics.BundleOptions{
+		DestDir:             downloads,
+		UserDataDir:         a.userDataDir,
+		WorkspaceDir:        a.workspaceDir,
+		LocalStore:          a.localStore,
+		Settings:            currentSettings,
+		CachedBridgeEnv:     a.currentBridgeEnv(),
+		TaskID:              input.TaskID,
+		IncludeSettings:     input.IncludeSettings,
+		IncludeEvents:       input.IncludeEvents,
+		IncludeRecent:       input.IncludeRecent,
+		IncludeLogs:         input.IncludeLogs,
+		AppVersion:          appVersion,
+		BundleID:            bundleID,
+		RuntimeDroppedBytes: droppedBytes,
+	})
+	if err != nil {
+		return ExportLogsResult{}, fmt.Errorf("export logs: %w", err)
+	}
+	return ExportLogsResult{Path: zipPath, Manifest: manifest}, nil
+}
+
+func (a *App) currentBridgeEnv() []string {
+	a.mu.Lock()
+	s := a.cachedSettings
+	a.mu.Unlock()
+	return toEnvSlice(llmProviderEnv(s))
+}
+
+// ─── Issue report bindings ──────────────────────────────────────────────────
+
+// SubmitReportInput is the renderer-facing payload for SubmitReport.
+type SubmitReportInput struct {
+	TaskID       string `json:"taskId,omitempty"`
+	Description  string `json:"description"`
+	ContactEmail string `json:"contactEmail,omitempty"`
+}
+
+// SubmitReportResult is the value returned to the renderer.
+type SubmitReportResult struct {
+	TicketID       string `json:"ticketId,omitempty"`
+	ViewURL        string `json:"viewUrl,omitempty"`
+	RequestID      string `json:"requestId,omitempty"`
+	Uploaded       bool   `json:"uploaded"`
+	FallbackReason string `json:"fallbackReason,omitempty"`
+}
+
+// ReportCapabilityResult is the gated view the renderer uses to decide whether
+// to surface a "Report issue" action vs falling back to "Copy request id".
+type ReportCapabilityResult struct {
+	Enabled bool   `json:"enabled"`
+	Reason  string `json:"reason,omitempty"`
+}
+
+// PeekReportContextResult is the renderer-facing snapshot of the failed-task
+// context the report dialog renders in its header bar. All fields are empty
+// when the user opens the dialog without a task selection (e.g. from
+// Settings) or when no failure has been recorded yet.
+type PeekReportContextResult struct {
+	RequestID    string `json:"requestId"`
+	ErrorCode    string `json:"errorCode"`
+	ErrorMessage string `json:"errorMessage"`
+	RuntimeMode  string `json:"runtimeMode"`
+}
+
+const (
+	reportDescriptionMinLen = 10
+	reportErrorMessageCap   = 500
+)
+
+// GetReportCapability returns a renderer-friendly snapshot of whether report
+// submission is available.
+func (a *App) GetReportCapability() ReportCapabilityResult {
+	cap := a.detectReportCapability()
+	return ReportCapabilityResult{Enabled: cap.Enabled, Reason: cap.Reason}
+}
+
+// PeekReportContext returns the report header data the renderer renders in
+// the dialog (request_id + error code + error message + runtime mode). Safe
+// to call with empty taskID; returns zero-value result without error.
+func (a *App) PeekReportContext(taskID string) (PeekReportContextResult, error) {
+	out := PeekReportContextResult{}
+	if a.localStore == nil || strings.TrimSpace(taskID) == "" {
+		return out, nil
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	requestID, err := a.localStore.LatestRequestID(ctx, taskID)
+	if err != nil {
+		return out, fmt.Errorf("peek report context: latest request id: %w", err)
+	}
+	out.RequestID = requestID
+
+	events, err := a.localStore.QueryEventsByTask(ctx, taskID)
+	if err != nil {
+		return out, fmt.Errorf("peek report context: query events: %w", err)
+	}
+	if failure := latestFailedEvent(events); failure != nil {
+		out.ErrorCode, out.ErrorMessage = extractErrorFields(failure)
+	}
+	out.RuntimeMode = a.currentRuntimeMode()
+	return out, nil
+}
+
+// SubmitReport posts a minimal JSON payload to the configured support
+// endpoint. Validation errors return verbatim; upload failures degrade to
+// Uploaded=false with a FallbackReason so the renderer can prompt the user
+// to copy the request id manually.
+func (a *App) SubmitReport(input SubmitReportInput) (SubmitReportResult, error) {
+	desc := strings.TrimSpace(input.Description)
+	if len(desc) < reportDescriptionMinLen {
+		return SubmitReportResult{}, fmt.Errorf("submit report: description must be at least %d characters", reportDescriptionMinLen)
+	}
+
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	result := SubmitReportResult{}
+	payload := report.ReportPayload{
+		TaskID:       strings.TrimSpace(input.TaskID),
+		Description:  desc,
+		ContactEmail: strings.TrimSpace(input.ContactEmail),
+		Timestamp:    time.Now().UTC().Format(time.RFC3339),
+		Via:          "http",
+		RuntimeMode:  a.currentRuntimeMode(),
+	}
+
+	if payload.TaskID != "" && a.localStore != nil {
+		if requestID, err := a.localStore.LatestRequestID(ctx, payload.TaskID); err == nil {
+			payload.RequestID = requestID
+		}
+		if events, err := a.localStore.QueryEventsByTask(ctx, payload.TaskID); err == nil {
+			if failure := latestFailedEvent(events); failure != nil {
+				payload.ErrorCode, payload.ErrorMessage = extractErrorFields(failure)
+			}
+		}
+	}
+	result.RequestID = payload.RequestID
+
+	cap := a.detectReportCapability()
+	if !cap.Enabled {
+		result.FallbackReason = "capability_not_enabled"
+		return result, nil
+	}
+
+	a.mu.Lock()
+	s := a.cachedSettings
+	a.mu.Unlock()
+	endpoint := ""
+	token := ""
+	if s.SupportReportEndpoint != nil {
+		endpoint = *s.SupportReportEndpoint
+	}
+	if s.SupportReportToken != nil {
+		token = *s.SupportReportToken
+	}
+	sub := report.NewHTTPSubmitter(report.HTTPOptions{
+		Endpoint:  endpoint,
+		Token:     token,
+		UserAgent: fmt.Sprintf("OfficeDex/%s (%s; %s)", appVersion, runtime.GOOS, runtime.GOARCH),
+	})
+	sr, err := sub.Submit(ctx, payload)
+	if err != nil {
+		result.FallbackReason = fmt.Sprintf("http_upload_failed: %v", err)
+		return result, nil
+	}
+	result.TicketID = sr.TicketID
+	result.ViewURL = sr.ViewURL
+	result.Uploaded = true
+	return result, nil
+}
+
+// detectReportCapability resolves the inputs and runs report.DetectCapability.
+// Never panics; on any unexpected condition returns a disabled snapshot.
+func (a *App) detectReportCapability() report.ReportCapability {
+	a.mu.Lock()
+	s := a.cachedSettings
+	client := a.bridgeClient
+	a.mu.Unlock()
+
+	endpoint := ""
+	if s.SupportReportEndpoint != nil {
+		endpoint = *s.SupportReportEndpoint
+	}
+
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	var capsPayload []byte
+	if client != nil {
+		if payload, err := client.GetCapabilities(ctx); err == nil {
+			capsPayload = payload
+		}
+	}
+
+	return report.DetectCapability(ctx, report.CapabilityOptions{
+		HTTPEndpoint:        endpoint,
+		CapabilitiesPayload: capsPayload,
+	})
+}
+
+func (a *App) currentRuntimeMode() string {
+	a.mu.Lock()
+	mode := a.cachedSettings.Defaults.RuntimeMode
+	a.mu.Unlock()
+	if mode == "" {
+		return ""
+	}
+	return string(mode)
+}
+
+// latestFailedEvent walks the event slice in reverse and returns the most
+// recent task.failed entry, or nil when none exists.
+func latestFailedEvent(events []types.BridgeEvent) *types.BridgeEvent {
+	for i := len(events) - 1; i >= 0; i-- {
+		if events[i].Type == "task.failed" {
+			ev := events[i]
+			return &ev
+		}
+	}
+	return nil
+}
+
+// extractErrorFields pulls error_code + error_message from a task.failed
+// payload, handling both snake_case and camelCase keys the bridge has used
+// over time. Falls back to ("unknown", message) when no explicit code field
+// is present.
+func extractErrorFields(ev *types.BridgeEvent) (string, string) {
+	code := stringField(ev.Payload, "error_code", "errorCode", "code")
+	message := stringField(ev.Payload, "error_message", "errorMessage", "message", "error")
+	if code == "" {
+		code = "unknown"
+	}
+	if len(message) > reportErrorMessageCap {
+		message = message[:reportErrorMessageCap]
+	}
+	return code, message
+}
+
+func stringField(payload map[string]any, keys ...string) string {
+	if payload == nil {
+		return ""
+	}
+	for _, k := range keys {
+		if v, ok := payload[k]; ok {
+			if s, ok := v.(string); ok && s != "" {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
+
 // ─── Internals ──────────────────────────────────────────────────────────────
 
 func (a *App) ensureBridge() (*bridge.Client, error) {
@@ -654,10 +1090,19 @@ func (a *App) ensureBridge() (*bridge.Client, error) {
 		return nil, errors.New(message)
 	}
 
+	env := llmProviderEnv(settingsValue)
+
+	a.mu.Lock()
+	a.resolvedBinaryPath = resolved.Path
+	a.resolvedBinaryEnv = env
+	a.binaryResolvedAt = time.Now()
+	a.mu.Unlock()
+
 	client := bridge.New(bridge.Options{
-		BinaryPath: resolved.Path,
-		Env:        llmProviderEnv(settingsValue),
-		Cwd:        a.workspaceDir,
+		BinaryPath:     resolved.Path,
+		Env:            env,
+		Cwd:            a.workspaceDir,
+		LogDir:         filepath.Join(a.userDataDir, "logs"),
 		RequestTimeout: 30 * time.Second,
 	})
 	ctx := a.ctx
@@ -668,6 +1113,17 @@ func (a *App) ensureBridge() (*bridge.Client, error) {
 		}
 		if a.localStore != nil {
 			_ = a.localStore.RecordEvent(event)
+		}
+		if event.Type == "task.completed" || event.Type == "task.failed" {
+			if a.localStore != nil && event.Payload != nil {
+				if c, ok := event.Payload["credits_charged"].(float64); ok {
+					charged := int(c)
+					mode, _ := event.Payload["credit_mode"].(string)
+					if err := a.localStore.RecordTaskCredit(event.TaskID, &charged, mode); err != nil {
+						wailsruntime.LogWarningf(ctx, "record task credit: %v", err)
+					}
+				}
+			}
 		}
 		if event.Type == "task.completed" {
 			if artifact := artifactFromCompletedEvent(event); artifact != nil {
@@ -696,9 +1152,10 @@ func (a *App) ensureLoginManagerLocked() *login.Manager {
 	if a.loginManager != nil {
 		return a.loginManager
 	}
+	path, env := a.resolvedBinaryLocked()
 	manager := login.New(login.ManagerOptions{
-		BinaryPath: binresolver.ResolvePath(a.resolverOptions(a.cachedSettings)),
-		Env:        toEnvSlice(llmProviderEnv(a.cachedSettings)),
+		BinaryPath: path,
+		Env:        env,
 		URLTimeout: 30 * time.Second,
 	})
 	ctx := a.ctx
@@ -729,10 +1186,26 @@ func (a *App) ensureLoginManagerLocked() *login.Manager {
 func (a *App) runCommandOptions() login.ManagerOptions {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	path, env := a.resolvedBinaryLocked()
 	return login.ManagerOptions{
-		BinaryPath: binresolver.ResolvePath(a.resolverOptions(a.cachedSettings)),
-		Env:        toEnvSlice(llmProviderEnv(a.cachedSettings)),
+		BinaryPath: path,
+		Env:        env,
 	}
+}
+
+// resolvedBinaryLocked returns the cached binary path + provider env, running
+// binresolver / llmProviderEnv at most once per settings change. Caller must
+// hold a.mu. The cache is invalidated by UpdateSettings when touchesBridge=true.
+func (a *App) resolvedBinaryLocked() (string, []string) {
+	if a.resolvedBinaryPath != "" {
+		return a.resolvedBinaryPath, a.resolvedBinaryEnv
+	}
+	path := binresolver.ResolvePath(a.resolverOptions(a.cachedSettings))
+	env := toEnvSlice(llmProviderEnv(a.cachedSettings))
+	a.resolvedBinaryPath = path
+	a.resolvedBinaryEnv = env
+	a.binaryResolvedAt = time.Now()
+	return path, env
 }
 
 func (a *App) resolverOptions(s types.UserSettings) binresolver.Options {
@@ -799,10 +1272,13 @@ func (a *App) resolveGenerateInput(input types.GenerateInput, s types.UserSettin
 }
 
 func llmProviderEnv(s types.UserSettings) []string {
-	if s.Defaults.RuntimeMode != types.RuntimeExternal || s.LlmProvider == nil {
-		return nil
-	}
 	out := []string{}
+	if s.Defaults.RuntimeMode != "" {
+		out = append(out, "OFFICE_CLI_RUNTIME_MODE="+string(s.Defaults.RuntimeMode))
+	}
+	if s.Defaults.RuntimeMode != types.RuntimeExternal || s.LlmProvider == nil {
+		return out
+	}
 	if s.LlmProvider.Type != "" {
 		out = append(out, "OFFICECLI_LLM_PROVIDER="+string(s.LlmProvider.Type))
 	}

@@ -114,6 +114,52 @@ func TestCheckLatest_Success(t *testing.T) {
 	}
 }
 
+func TestCheckLatest_DevModeShortCircuit(t *testing.T) {
+	var fetched int32
+	events := captureEvents()
+	dir := t.TempDir()
+	o := Options{
+		ManifestURL:    "https://example.test/manifest.json",
+		CurrentVersion: "dev",
+		UpdatesDir:     dir,
+		Platform:       "darwin",
+		Arch:           "arm64",
+		Now:            fixedNow,
+		FetchManifest: func(ctx context.Context, _ string) ([]byte, error) {
+			atomic.AddInt32(&fetched, 1)
+			return []byte(`{"version":"0.2.0","assets":{}}`), nil
+		},
+		Listener: events.append,
+	}
+	m, err := New(o)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	rel, err := m.CheckLatest(context.Background())
+	if err != nil {
+		t.Fatalf("dev CheckLatest must not error: %v", err)
+	}
+	if rel != nil {
+		t.Fatalf("dev CheckLatest must return nil release, got %+v", rel)
+	}
+	if got := atomic.LoadInt32(&fetched); got != 0 {
+		t.Fatalf("dev mode should not hit fetchManifest; calls=%d", got)
+	}
+	st := m.Status()
+	if st.UpdateAvailable {
+		t.Fatal("dev mode must not flag UpdateAvailable")
+	}
+	if st.Mandatory {
+		t.Fatal("dev mode must not flag Mandatory")
+	}
+	if st.LastCheckedAt == nil {
+		t.Fatal("dev mode should still record LastCheckedAt")
+	}
+	if !containsAll(events.types(), EventStatus) {
+		t.Fatalf("missing status event in dev mode: %v", events.types())
+	}
+}
+
 func TestCheckLatest_NetworkError(t *testing.T) {
 	m := mustManager(t, withFetchManifest(func(ctx context.Context, url string) ([]byte, error) {
 		return nil, errors.New("boom")

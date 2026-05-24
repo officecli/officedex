@@ -8,14 +8,13 @@ interface OfficeHtmlViewerProps {
   previewToken: string;
   fileName: string;
   documentType: string;
-  onClose?: () => void;
 }
 
 const ZOOM_STEP = 0.15;
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 3;
 
-export default function OfficeHtmlViewer({ previewToken, fileName, documentType, onClose }: OfficeHtmlViewerProps) {
+export default function OfficeHtmlViewer({ previewToken, fileName, documentType }: OfficeHtmlViewerProps) {
   const [html, setHtml] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +84,6 @@ export default function OfficeHtmlViewer({ previewToken, fileName, documentType,
         onZoomOut={zoomOut}
         onZoomReset={zoomReset}
         onOpenExternal={openExternal}
-        onClose={onClose}
       />
       <div className="preview-office-container" ref={containerRef}>
         <iframe

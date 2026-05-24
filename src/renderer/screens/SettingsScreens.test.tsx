@@ -95,7 +95,7 @@ afterEach(() => {
 describe("SettingsScreen", () => {
   it("loads settings on mount and shows current generation defaults", async () => {
     const { SettingsScreen } = await import("./SettingsScreens");
-    render(<SettingsScreen fluid={false} />);
+    render(<SettingsScreen />);
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
     expect(await screen.findByRole("heading", { name: /generation defaults/i })).toBeTruthy();
     expect(screen.getByText("Workspace Output Directory")).toBeTruthy();
@@ -104,7 +104,7 @@ describe("SettingsScreen", () => {
 
   it("changing default document type calls updateSettings with the new value", async () => {
     const { SettingsScreen } = await import("./SettingsScreens");
-    render(<SettingsScreen fluid={false} />);
+    render(<SettingsScreen />);
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
 
     // antd Select: locate by current displayed label, click to open dropdown
@@ -120,7 +120,7 @@ describe("SettingsScreen", () => {
 
   it("switching to Smart mode sends mode=best in updateSettings", async () => {
     const { SettingsScreen } = await import("./SettingsScreens");
-    render(<SettingsScreen fluid={false} />);
+    render(<SettingsScreen />);
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
     await screen.findByRole("heading", { name: /generation defaults/i });
 
@@ -132,7 +132,7 @@ describe("SettingsScreen", () => {
 
   it("toggling enableImages persists the new value", async () => {
     const { SettingsScreen } = await import("./SettingsScreens");
-    render(<SettingsScreen fluid={false} />);
+    render(<SettingsScreen />);
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
     await screen.findByText("Enable Images");
 
@@ -147,7 +147,7 @@ describe("SettingsScreen", () => {
   it("Browse output directory calls openFileDialog and stores the picked path", async () => {
     openFileDialogSpy.mockResolvedValueOnce("/Users/test/picked/workspace");
     const { SettingsScreen } = await import("./SettingsScreens");
-    render(<SettingsScreen fluid={false} />);
+    render(<SettingsScreen />);
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
     await screen.findByText("Workspace Output Directory");
 
@@ -175,7 +175,7 @@ describe("SettingsScreen", () => {
       },
     });
     const { SettingsScreen } = await import("./SettingsScreens");
-    render(<SettingsScreen fluid={false} />);
+    render(<SettingsScreen />);
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
 
     const apiKeyField = await screen.findByPlaceholderText(/api key/i);
@@ -191,7 +191,7 @@ describe("SettingsScreen", () => {
 
   it("Reset everything opens a confirm modal and applies the reset patch on OK", async () => {
     const { SettingsScreen } = await import("./SettingsScreens");
-    render(<SettingsScreen fluid={false} />);
+    render(<SettingsScreen />);
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
     await screen.findByRole("heading", { name: /generation defaults/i });
 
@@ -218,7 +218,7 @@ describe("SettingsScreen", () => {
 
   it("'Show wizard' confirms then sets onboardingCompletedAt to null", async () => {
     const { SettingsScreen } = await import("./SettingsScreens");
-    render(<SettingsScreen fluid={false} />);
+    render(<SettingsScreen />);
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
     await screen.findByRole("heading", { name: /generation defaults/i });
 
@@ -314,7 +314,7 @@ describe("SettingsScreen > About card", () => {
 
   it("renders the version and a Check for updates button", async () => {
     const { SettingsScreen } = await import("./SettingsScreens");
-    render(<SettingsScreen fluid={false} />);
+    render(<SettingsScreen />);
     await waitFor(() => expect(getAppVersionSpy).toHaveBeenCalled());
     expect(await screen.findByText(/OfficeDex 0\.1\.0/)).toBeTruthy();
     expect(screen.getByText(/Check for updates/i)).toBeTruthy();
@@ -322,7 +322,7 @@ describe("SettingsScreen > About card", () => {
 
   it("Check for updates click invokes checkAppUpdate and surfaces the new version button", async () => {
     const { SettingsScreen } = await import("./SettingsScreens");
-    render(<SettingsScreen fluid={false} />);
+    render(<SettingsScreen />);
     await waitFor(() => expect(getAppVersionSpy).toHaveBeenCalled());
     const checkBtn = await screen.findByText(/Check for updates/i);
     fireEvent.click(checkBtn.closest("button")!);
@@ -332,7 +332,7 @@ describe("SettingsScreen > About card", () => {
 
   it("clicking Update to <version> triggers download", async () => {
     const { SettingsScreen } = await import("./SettingsScreens");
-    render(<SettingsScreen fluid={false} />);
+    render(<SettingsScreen />);
     await waitFor(() => expect(getAppVersionSpy).toHaveBeenCalled());
     fireEvent.click((await screen.findByText(/Check for updates/i)).closest("button")!);
     const updateBtn = await screen.findByText(/Update to 0\.2\.0/);

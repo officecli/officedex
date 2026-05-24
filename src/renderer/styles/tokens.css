@@ -1,0 +1,112 @@
+/* ─── Notion-inspired Design System for OfficeDex ─── */
+
+:root {
+  --n-primary: #5645d4;
+  --n-primary-pressed: #4534b3;
+  --n-primary-deep: #3a2a99;
+  --n-on-primary: #ffffff;
+  --n-navy: #0a1530;
+  --n-link: #0075de;
+
+  --n-canvas: #ffffff;
+  --n-surface: #f6f5f4;
+  --n-surface-soft: #fafaf9;
+  --n-hairline: #e5e3df;
+  --n-hairline-soft: #ede9e4;
+  --n-hairline-strong: #c8c4be;
+
+  --n-ink: #1a1a1a;
+  --n-charcoal: #37352f;
+  --n-slate: #5d5b54;
+  --n-steel: #787671;
+  --n-stone: #a4a097;
+  --n-muted: #bbb8b1;
+
+  --n-success: #1aae39;
+  --n-warning: #dd5b00;
+  --n-error: #e03131;
+
+  --n-tint-peach: #ffe8d4;
+  --n-tint-rose: #fde0ec;
+  --n-tint-mint: #d9f3e1;
+  --n-tint-lavender: #e6e0f5;
+  --n-tint-sky: #dcecfa;
+  --n-tint-yellow: #fef7d6;
+  --n-tint-yellow-bold: #f9e79f;
+  --n-tint-gray: #f0eeec;
+
+  --font-body: 'Plus Jakarta Sans', -apple-system, system-ui, 'Segoe UI', 'PingFang SC', sans-serif;
+  --font-heading: 'DM Serif Display', Georgia, 'Times New Roman', serif;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  --shadow-subtle: rgba(15, 15, 15, 0.04) 0px 1px 2px 0px;
+  --shadow-card: rgba(15, 15, 15, 0.08) 0px 4px 12px 0px;
+  --shadow-elevated: rgba(15, 15, 15, 0.20) 0px 24px 48px -8px;
+  --shadow-modal: rgba(15, 15, 15, 0.16) 0px 16px 48px -8px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--n-surface-soft);
+  color: var(--n-charcoal);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+.material-symbol {
+  display: inline-grid;
+  place-items: center;
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* ─── Status dots ─── */
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: var(--radius-full);
+  background: var(--n-primary);
+}
+
+.status-dot.green {
+  background: var(--n-success);
+}
+
+.status-dot.orange {
+  background: var(--n-warning);
+}
+
+.status-dot.red {
+  background: var(--n-error);
+}
+
+.status-dot.gray {
+  background: var(--n-stone);
+}

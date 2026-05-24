@@ -1,3 +1,9 @@
+/**
+ * Drift risk: this file must stay in sync with:
+ *   - internal/types/types.go (Go-side definitions)
+ *   - src/renderer/generated/wailsjs/go/models.ts (Wails auto-generated)
+ * Adding/removing fields requires updating all three.
+ */
 export type DocumentType = "pptx" | "docx" | "xlsx" | "report" | "img";
 
 export type AttachmentSlot = "sourceWorkbook" | "referenceImages";
@@ -129,6 +135,12 @@ export interface StageState {
   completedAt?: string;
 }
 
+export interface TaskUserInput {
+  prompt: string;
+  sourceFile?: string;
+  referenceImages?: string[];
+}
+
 export interface DesktopTask {
   id: string;
   status: "starting" | "running" | "question" | "completed" | "failed" | "cancelled";
@@ -140,6 +152,11 @@ export interface DesktopTask {
   error?: string;
   stages?: StageState[];
   activeStageId?: string;
+  userInput?: TaskUserInput;
+  creditCharged?: number | null;
+  creditMode?: string;
+  lastProgressAt?: number;
+  stalledSince?: number;
 }
 
 export interface PreviewGrant {
@@ -153,6 +170,7 @@ export type WhoAmIMode = "logged_in" | "anonymous" | "api_key";
 export interface WhoAmIResult {
   mode: WhoAmIMode;
   userId?: string;
+  email?: string;
   session?: string;
   expiresAt?: string;
 }
@@ -162,15 +180,23 @@ export interface CreditStatus {
   accessMode: string;
   planName: string;
   hostedCreditBalance: number | null;
-  freeTrialLimit: number;
-  freeTrialUsed: number;
-  freeTrialRemaining: number;
+  anonymousCreditAvailable: number | null;
+  anonymousCreditReserved: number | null;
+  anonymousCreditBalance: number | null;
   rewardRemaining: number;
   paidKeyPrefix: string;
   paidKeyTotal: number;
   paidKeyUsed: number;
   paidKeyRemaining: number;
   raw: string;
+}
+
+export interface RedeemResult {
+  code: string;
+  credit_amount: number;
+  new_balance: number;
+  redeemed_at: string;
+  expires_at?: string | null;
 }
 
 export type AuthEvent =
@@ -220,6 +246,13 @@ export interface AppUpdateRelease {
   assets: Record<string, AppUpdateAsset>;
 }
 
+export interface AppUpdateErrorEntry {
+  timestamp: string;
+  manifestUrl: string;
+  message: string;
+  latencyMs: number;
+}
+
 export interface AppUpdateStatus {
   currentVersion: string;
   latestVersion: string | null;
@@ -230,6 +263,7 @@ export interface AppUpdateStatus {
   lastCheckedAt: string | null;
   lastError: string | null;
   notes?: string;
+  lastErrors?: AppUpdateErrorEntry[];
 }
 
 export interface AppUpdateCheckResult {
@@ -243,6 +277,58 @@ export type AppUpdateEvent =
   | { type: "downloaded"; downloadedPath: string }
   | { type: "installed"; message?: string }
   | { type: "error"; message: string };
+
+export interface BundleManifestItem {
+  path: string;
+  sizeBytes: number;
+  preview?: string;
+  sectionId: string;
+}
+
+export interface BundleManifest {
+  schemaVersion: number;
+  bundleId: string;
+  items: BundleManifestItem[];
+  truncated: boolean;
+  excludedReasons?: string[];
+}
+
+export interface ExportLogsResult {
+  path: string;
+  manifest: BundleManifest;
+}
+
+export interface ExportLogsInput {
+  taskId?: string;
+  includeSettings: boolean;
+  includeEvents: boolean;
+  includeLogs: boolean;
+  includeRecent: boolean;
+}
+
+export interface SubmitReportInput {
+  taskId?: string;
+  description: string;
+  contactEmail?: string;
+}
+
+export interface SubmitReportResult {
+  ticketId?: string;
+  requestId?: string;
+  uploaded: boolean;
+  fallbackReason?: string;
+}
+
+export interface PeekReportContextResult {
+  requestId: string;
+  errorCode: string;
+  errorMessage: string;
+}
+
+export interface ReportCapabilityResult {
+  enabled: boolean;
+  reason?: string;
+}
 
 export type BinaryFileData = ArrayBuffer | Uint8Array;
 
@@ -262,6 +348,7 @@ export interface DesktopAPI {
   issuePreviewToken(artifact: Artifact): Promise<PreviewGrant>;
   revokePreviewToken(token: string): Promise<void>;
   readArtifactFile(previewToken: string): Promise<{ data: BinaryFileData }>;
+  readLocalImage(filePath: string): Promise<{ data: BinaryFileData; mime: string }>;
   renderPreviewHtml(previewToken: string): Promise<{ html: string } | null>;
   setPreviewMode(active: boolean): Promise<void>;
   login(): Promise<{ url: string }>;
@@ -269,6 +356,7 @@ export interface DesktopAPI {
   whoami(): Promise<WhoAmIResult>;
   logout(): Promise<void>;
   getCreditStatus(): Promise<CreditStatus>;
+  redeem(code: string): Promise<RedeemResult>;
   getSettings(): Promise<UserSettings>;
   updateSettings(patch: Partial<UserSettings>): Promise<UserSettings>;
   getDefaultWorkspaceDir(): Promise<string>;
@@ -281,4 +369,8 @@ export interface DesktopAPI {
   installAppUpdate(): Promise<void>;
   cancelAppUpdate(): Promise<void>;
   onAppUpdateEvent(callback: (event: AppUpdateEvent) => void): () => void;
+  exportLogs(input?: ExportLogsInput): Promise<ExportLogsResult>;
+  submitReport(input: SubmitReportInput): Promise<SubmitReportResult>;
+  getReportCapability(): Promise<ReportCapabilityResult>;
+  peekReportContext(taskId: string): Promise<PeekReportContextResult>;
 }

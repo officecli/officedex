@@ -1,14 +1,16 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
+import { X } from "lucide-react";
 import type { PreviewGrant } from "../../shared/types";
 import { LoadingState } from "../preview/components/LoadingState";
 import { UnsupportedViewer } from "../preview/viewers/UnsupportedViewer";
+import {
+  PptxViewer,
+  DocxViewer,
+  XlsxViewer,
+  PdfViewer,
+  HtmlViewer,
+} from "../preview/viewers/previewViewers";
 import "../preview/PreviewApp.css";
-
-const OfficeHtmlViewer = lazy(() => import("../preview/viewers/OfficeHtmlViewer"));
-const DocxViewer = lazy(() => import("../preview/viewers/DocxViewer"));
-const XlsxViewer = lazy(() => import("../preview/viewers/XlsxViewer"));
-const PdfViewer = lazy(() => import("../preview/viewers/PdfViewer"));
-const HtmlViewer = lazy(() => import("../preview/viewers/HtmlViewer"));
 
 interface PreviewPanelProps {
   grant: PreviewGrant;
@@ -21,16 +23,16 @@ export function PreviewPanel({ grant, onClose }: PreviewPanelProps) {
   const viewer = (() => {
     switch (documentType) {
       case "pptx":
-        return <OfficeHtmlViewer previewToken={token} fileName={fileName} documentType={documentType} onClose={onClose} />;
+        return <PptxViewer previewToken={token} fileName={fileName} documentType={documentType} />;
       case "docx":
-        return <DocxViewer previewToken={token} fileName={fileName} documentType={documentType} onClose={onClose} />;
+        return <DocxViewer previewToken={token} fileName={fileName} documentType={documentType} />;
       case "xlsx":
-        return <XlsxViewer previewToken={token} fileName={fileName} documentType={documentType} onClose={onClose} />;
+        return <XlsxViewer previewToken={token} fileName={fileName} documentType={documentType} />;
       case "pdf":
-        return <PdfViewer previewToken={token} fileName={fileName} documentType={documentType} onClose={onClose} />;
+        return <PdfViewer previewToken={token} fileName={fileName} documentType={documentType} />;
       case "html":
       case "htm":
-        return <HtmlViewer previewToken={token} fileName={fileName} documentType={documentType} onClose={onClose} />;
+        return <HtmlViewer previewToken={token} fileName={fileName} documentType={documentType} />;
       default:
         return <UnsupportedViewer fileName={fileName} documentType={documentType} onOpenExternal={() => {}} />;
     }
@@ -38,6 +40,15 @@ export function PreviewPanel({ grant, onClose }: PreviewPanelProps) {
 
   return (
     <div className="preview-panel-root">
+      <button
+        type="button"
+        className="preview-panel-close"
+        onClick={onClose}
+        title="Close Preview"
+        aria-label="Close Preview"
+      >
+        <X size={15} strokeWidth={1.8} />
+      </button>
       <div className="preview-panel-body">
         <Suspense fallback={<LoadingState fileName={fileName} />}>
           {viewer}

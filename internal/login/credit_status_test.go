@@ -15,12 +15,12 @@ func TestParseCreditStatus(t *testing.T) {
 		want     types.CreditStatus
 	}{
 		{
-			name:     "anonymous: trial-only output",
+			name:     "anonymous: credits-only output",
 			exitCode: 0,
 			stdout: `Current access mode: anonymous trial
 
 Quota summary
-Free trial quota (this machine, lifetime): 100 total / 25 used / 75 remaining
+Anonymous credit balance (this device): 100 available / 0 reserved / 100 total
 Reward quota remaining: 0
 API key: none configured
 Access checks enabled: true
@@ -28,24 +28,23 @@ Account session configured: false
 API key configured: false
 `,
 			want: types.CreditStatus{
-				Mode:                types.WhoAmIAnonymous,
-				AccessMode:          "anonymous trial",
-				FreeTrialLimit:      100,
-				FreeTrialUsed:       25,
-				FreeTrialRemaining:  75,
-				RewardRemaining:     0,
-				HostedCreditBalance: nil,
+				Mode:                     types.WhoAmIAnonymous,
+				AccessMode:               "anonymous trial",
+				AnonymousCreditAvailable: intPtr(100),
+				AnonymousCreditReserved:  intPtr(0),
+				AnonymousCreditBalance:   intPtr(100),
+				RewardRemaining:          0,
+				HostedCreditBalance:      nil,
 			},
 		},
 		{
-			name:     "logged_in: hosted + free trial + reward",
+			name:     "logged_in: hosted credits, no anonymous line",
 			exitCode: 0,
 			stdout: `Current access mode: hosted
 Current plan: Pro
 
 Quota summary
 Account hosted credits: 42
-Free trial quota (this machine, lifetime): 100 total / 100 used / 0 remaining
 Reward quota remaining: 5
 API key: none configured
 Access checks enabled: true
@@ -56,9 +55,6 @@ API key configured: false
 				Mode:                types.WhoAmILoggedIn,
 				AccessMode:          "hosted",
 				PlanName:            "Pro",
-				FreeTrialLimit:      100,
-				FreeTrialUsed:       100,
-				FreeTrialRemaining:  0,
 				RewardRemaining:     5,
 				HostedCreditBalance: intPtr(42),
 			},
@@ -72,7 +68,6 @@ Current plan: API
 
 Quota summary
 Account hosted credits: 0
-Free trial quota (this machine, lifetime): 0 total / 0 used / 0 remaining
 Reward quota remaining: 0
 Paid quota on current key (sk-abc123): 1000 total / 100 used / 900 remaining
 Access checks enabled: true
@@ -83,9 +78,6 @@ API key configured: true
 				Mode:                types.WhoAmIAPIKey,
 				AccessMode:          "api-key",
 				PlanName:            "API",
-				FreeTrialLimit:      0,
-				FreeTrialUsed:       0,
-				FreeTrialRemaining:  0,
 				RewardRemaining:     0,
 				HostedCreditBalance: intPtr(0),
 				PaidKeyPrefix:       "sk-abc123",
@@ -98,17 +90,17 @@ API key configured: true
 			name:     "non-zero exit short-circuits to anonymous",
 			exitCode: 2,
 			stdout: `Account hosted credits: 999
-Free trial quota (this machine, lifetime): 5 total / 1 used / 4 remaining
+Anonymous credit balance (this device): 5 available / 1 reserved / 6 total
 `,
 			want: types.CreditStatus{Mode: types.WhoAmIAnonymous},
 		},
 		{
-			name:     "missing hosted credits line leaves pointer nil",
+			name:     "anonymous: zero credits line still sets pointers",
 			exitCode: 0,
 			stdout: `Current access mode: anonymous trial
 
 Quota summary
-Free trial quota (this machine, lifetime): 50 total / 10 used / 40 remaining
+Anonymous credit balance (this device): 0 available / 0 reserved / 0 total
 Reward quota remaining: 0
 API key: none configured
 Access checks enabled: true
@@ -116,12 +108,35 @@ Account session configured: false
 API key configured: false
 `,
 			want: types.CreditStatus{
-				Mode:                types.WhoAmIAnonymous,
-				AccessMode:          "anonymous trial",
-				FreeTrialLimit:      50,
-				FreeTrialUsed:       10,
-				FreeTrialRemaining:  40,
-				HostedCreditBalance: nil,
+				Mode:                     types.WhoAmIAnonymous,
+				AccessMode:               "anonymous trial",
+				AnonymousCreditAvailable: intPtr(0),
+				AnonymousCreditReserved:  intPtr(0),
+				AnonymousCreditBalance:   intPtr(0),
+			},
+		},
+		{
+			name:     "logged_in: anonymous line absent leaves pointers nil",
+			exitCode: 0,
+			stdout: `Current access mode: hosted
+Current plan: Pro
+
+Quota summary
+Account hosted credits: 7
+Reward quota remaining: 0
+API key: none configured
+Access checks enabled: true
+Account session configured: true
+API key configured: false
+`,
+			want: types.CreditStatus{
+				Mode:                     types.WhoAmILoggedIn,
+				AccessMode:               "hosted",
+				PlanName:                 "Pro",
+				HostedCreditBalance:      intPtr(7),
+				AnonymousCreditAvailable: nil,
+				AnonymousCreditReserved:  nil,
+				AnonymousCreditBalance:   nil,
 			},
 		},
 	}

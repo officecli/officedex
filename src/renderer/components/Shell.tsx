@@ -1,11 +1,9 @@
-import { Badge, Button, Dropdown, Input, Progress, Space, Tooltip } from "antd";
-import type { MenuProps } from "antd";
+import { Button, Progress, Space, Spin, Tooltip } from "antd";
 import { useState } from "react";
 import {
   AppstoreOutlined,
   AudioOutlined,
   BgColorsOutlined,
-  BellOutlined,
   ClockCircleOutlined,
   CloseOutlined,
   CloudOutlined,
@@ -19,17 +17,14 @@ import {
   FolderOpenOutlined,
   FundProjectionScreenOutlined,
   HistoryOutlined,
-  LoginOutlined,
+  LeftOutlined,
   LineChartOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
   MessageOutlined,
   NotificationOutlined,
   PlusOutlined,
-  QuestionCircleOutlined,
+  RightOutlined,
   RobotOutlined,
   SafetyCertificateOutlined,
-  SearchOutlined,
   SettingOutlined,
   StarOutlined,
   TableOutlined,
@@ -39,7 +34,8 @@ import {
   UnorderedListOutlined,
 } from "@ant-design/icons";
 import { notion } from "../designTokens";
-import type { NavKey } from "../mockData";
+import type { NavKey } from "../defaults";
+import { useT } from "../i18n";
 
 export interface CreditInfo {
   used: number;
@@ -50,7 +46,7 @@ export interface CreditInfo {
 const DEFAULT_CREDIT: CreditInfo = {
   used: 0,
   total: 0,
-  planLabel: "Free trial",
+  planLabel: "Credits",
 };
 
 interface ShellProps {
@@ -65,27 +61,19 @@ interface ShellProps {
   onNewGeneration: () => void;
 }
 
-const navItems: Array<{ key: NavKey; label: string; fluidLabel: string; icon: React.ReactNode }> = [
-  { key: "dialogue", label: "Dialogue", fluidLabel: "Dialogue", icon: <MessageOutlined /> },
-  { key: "tasks", label: "Tasks", fluidLabel: "Tasks", icon: <HistoryOutlined /> },
-  { key: "artifacts", label: "Artifacts", fluidLabel: "Artifacts", icon: <FolderOpenOutlined /> },
-  { key: "templates", label: "Templates", fluidLabel: "Templates", icon: <FileTextOutlined /> },
-  { key: "settings", label: "Settings", fluidLabel: "Settings", icon: <SettingOutlined /> },
-];
-
-function pillLabel(failed: boolean, errorKind: ShellProps["errorKind"], fluid: boolean): string {
-  if (!failed) return fluid ? "Connected" : "AI Bridge Connected";
+function pillLabelKey(failed: boolean, errorKind: ShellProps["errorKind"]): string {
+  if (!failed) return "shell.brandPill.connected";
   switch (errorKind) {
     case "auth":
-      return "Sign-in Required";
+      return "shell.brandPill.signInRequired";
     case "task":
-      return "Last Task Failed";
+      return "shell.brandPill.lastTaskFailed";
     case "connection":
-      return "Bridge Disconnected";
+      return "shell.brandPill.bridgeDisconnected";
     case "setup":
-      return "Setup Required";
+      return "shell.brandPill.setupRequired";
     default:
-      return "Connection Failed";
+      return "shell.brandPill.connectionFailed";
   }
 }
 
@@ -100,73 +88,77 @@ export function Shell({
   onNavChange,
   onNewGeneration,
 }: ShellProps) {
-  const fluid = true;
   const [collapsed, setCollapsed] = useState(false);
-  const menuItems: MenuProps["items"] = [
-    { key: "login", label: "Profile", icon: <LoginOutlined /> },
-    { key: "settings", label: "Settings", icon: <SettingOutlined /> },
+  const t = useT();
+  const navItems: Array<{ key: NavKey; label: string; icon: React.ReactNode }> = [
+    { key: "dialogue", label: t("shell.nav.dialogue"), icon: <MessageOutlined /> },
+    { key: "tasks", label: t("shell.nav.tasks"), icon: <HistoryOutlined /> },
   ];
 
   return (
-    <div className={`app-shell ${fluid ? "fluid-shell" : "classic-shell"} ${inspector ? "preview-active sidebar-collapsed" : ""} ${collapsed ? "sidebar-collapsed" : ""}`}>
+    <div className={`app-shell fluid-shell ${inspector ? "preview-active sidebar-collapsed" : ""} ${collapsed ? "sidebar-collapsed" : ""}`}>
       <aside className="sidebar">
         <div className="brand-block">
-          <div className="brand-mark">{fluid ? <AppstoreOutlined /> : "O"}</div>
+          <div className="brand-mark"><AppstoreOutlined /></div>
           <div className="brand-text">
-            <div className="brand">OfficeDex</div>
-            <div className={`bridge-pill ${failed ? "failed" : ""}`}>{pillLabel(failed, errorKind, fluid)}</div>
+            <div className="brand">{t("shell.brand")}</div>
+            <div className={`bridge-pill ${failed ? "failed" : ""}`}>{t(pillLabelKey(failed, errorKind))}</div>
           </div>
         </div>
-        <Button type="primary" icon={<PlusOutlined />} block onClick={onNewGeneration}>
-          {fluid ? "New Generation" : "New Task"}
-        </Button>
+        <Tooltip title={collapsed ? t("shell.newGeneration") : ""} placement="right">
+          <Button type="primary" icon={<PlusOutlined />} block onClick={onNewGeneration}>
+            {t("shell.newGeneration")}
+          </Button>
+        </Tooltip>
         <nav className="side-nav">
           {navItems.map((item) => (
-            <button key={item.key} className={`nav-item ${activeNav === item.key ? "active" : ""}`} onClick={() => onNavChange(item.key)}>
-              {item.icon}
-              <span>{fluid ? item.fluidLabel : item.label}</span>
-            </button>
+            <Tooltip key={item.key} title={collapsed ? item.label : ""} placement="right">
+              <button className={`nav-item ${activeNav === item.key ? "active" : ""}`} onClick={() => onNavChange(item.key)}>
+                {item.icon}
+                <span>{item.label}</span>
+              </button>
+            </Tooltip>
           ))}
         </nav>
-        <CreditMeter info={credit ?? DEFAULT_CREDIT} collapsed={collapsed || Boolean(inspector)} />
-        <button className={`nav-item profile-link ${activeNav === "login" ? "active" : ""}`} onClick={() => onNavChange("login")}>
-          <UserOutlined />
-          <span>{fluid ? "Profile" : "Help Center"}</span>
-        </button>
-        <button className="nav-item sidebar-toggle" onClick={() => setCollapsed((c) => !c)}>
-          {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-          <span>{fluid ? "Collapse" : "Collapse"}</span>
-        </button>
+        <Tooltip title={collapsed ? t("shell.nav.profile") : ""} placement="right">
+          <button className={`nav-item profile-link ${activeNav === "login" ? "active" : ""}`} onClick={() => onNavChange("login")}>
+            <UserOutlined />
+            <span>{t("shell.nav.profile")}</span>
+          </button>
+        </Tooltip>
+        <Tooltip title={collapsed ? t("shell.nav.settings") : ""} placement="right">
+          <button
+            className={`nav-item sidebar-settings ${activeNav === "settings" ? "active" : ""}`}
+            onClick={() => onNavChange("settings")}
+          >
+            <SettingOutlined />
+            <span>{t("shell.nav.settings")}</span>
+          </button>
+        </Tooltip>
+        <Tooltip title={collapsed ? t("shell.sidebar.expand") : t("shell.sidebar.collapse")} placement="right">
+          <button
+            type="button"
+            className="sidebar-divider-toggle"
+            aria-label={collapsed ? t("shell.sidebar.expand") : t("shell.sidebar.collapse")}
+            onClick={() => setCollapsed((c) => !c)}
+          >
+            {collapsed ? <RightOutlined /> : <LeftOutlined />}
+          </button>
+        </Tooltip>
       </aside>
       <main className="main-frame">
         <header className="topbar">
           <Space size={12} className="breadcrumb">
-            <span>OfficeDex</span>
+            <span>{t("shell.brand")}</span>
             <span className="crumb-separator">/</span>
-            <strong>{fluid ? "OfficeDex Workspace" : "Default Workspace"}</strong>
+            <strong>{t("shell.workspace")}</strong>
           </Space>
-          <Input className="global-search" prefix={<SearchOutlined />} placeholder={fluid ? "Search workspace..." : "Search tasks, artifacts, templates..."} allowClear />
-          <Tooltip title={bridgeStatus}>
-            <Badge status={failed ? "error" : "success"} />
-          </Tooltip>
-          <Button icon={<BellOutlined />} />
-          <Button icon={<QuestionCircleOutlined />} />
-          <Dropdown
-            menu={{
-              items: menuItems,
-              onClick: ({ key }) => onNavChange(key as NavKey),
-            }}
-          >
-            <Button icon={<UserOutlined />} />
-          </Dropdown>
-          <Button type="primary" icon={<PlusOutlined />} onClick={onNewGeneration}>
-            {fluid ? "New Generation" : "New Generation"}
-          </Button>
         </header>
         <div className={`content-grid ${inspector ? "with-preview" : ""}`}>
           <section className="stage">{children}</section>
           {inspector ? <aside className="preview-panel">{inspector}</aside> : null}
         </div>
+        <CreditMeter info={credit} />
       </main>
     </div>
   );
@@ -177,40 +169,51 @@ export function MaterialSymbol({ name }: { name: string }) {
   return <span className="material-symbol">{icon}</span>;
 }
 
-function CreditMeter({ info, collapsed }: { info: CreditInfo; collapsed: boolean }) {
-  const total = Math.max(0, Math.floor(info.total));
-  const used = Math.max(0, Math.floor(info.used));
+export function CreditMeter({ info }: { info?: CreditInfo }) {
+  const t = useT();
+  const loading = !info;
+  const value = info ?? DEFAULT_CREDIT;
+  const total = Math.max(0, Math.floor(value.total));
+  const used = Math.max(0, Math.floor(value.used));
   const clampedUsed = Math.min(used, total);
   const remaining = total - clampedUsed;
-  const percent = total === 0 ? 0 : Math.round((clampedUsed / total) * 100);
   const remainingRatio = total === 0 ? 1 : remaining / total;
+  const percent = total === 0 ? 0 : Math.round(remainingRatio * 100);
   const tone = remainingRatio <= 0.1 ? "critical" : remainingRatio <= 0.25 ? "low" : "normal";
   const strokeColor = tone === "critical" ? notion.error : tone === "low" ? notion.warning : notion.primary;
-  const tooltipBody = `${formatNumber(remaining)} credits remaining of ${formatNumber(total)}${info.planLabel ? ` · ${info.planLabel}` : ""}`;
+  const planLabel = value.planLabel || t("shell.creditMeter.label");
+  const tooltipBody = loading
+    ? t("shell.creditMeter.loading")
+    : value.planLabel
+      ? t("shell.creditMeter.tooltipWithPlan", { remaining: formatNumber(remaining), total: formatNumber(total), plan: value.planLabel })
+      : t("shell.creditMeter.tooltip", { remaining: formatNumber(remaining), total: formatNumber(total) });
 
   return (
-    <Tooltip title={tooltipBody} placement="right">
-      <div className={`credit-meter credit-meter-${tone}${collapsed ? " credit-meter-collapsed" : ""}`} role="group" aria-label={`Credit balance: ${tooltipBody}`}>
+    <Tooltip title={tooltipBody} placement="top">
+      <div className={`credit-meter credit-meter-${tone}`} role="group" aria-label={t("shell.creditMeter.aria", { tooltip: tooltipBody })}>
         <div className="credit-meter-row">
-          <ThunderboltOutlined className="credit-meter-icon" aria-hidden />
-          <div className="credit-meter-text">
-            <span className="credit-meter-label">Credits</span>
-            <span className="credit-meter-value">
-              {formatNumber(clampedUsed)} / {formatNumber(total)}
-            </span>
-          </div>
-          <span className="credit-meter-percent">{percent}%</span>
+          {loading ? <Spin size="small" /> : <ThunderboltOutlined className="credit-meter-icon" aria-hidden />}
+          <span className="credit-meter-label">{loading ? t("shell.creditMeter.loading") : planLabel}</span>
+          {!loading && (
+            <>
+              <span className="credit-meter-value">
+                {formatNumber(remaining)} / {formatNumber(total)}
+              </span>
+              <span className="credit-meter-percent">{percent}%</span>
+            </>
+          )}
         </div>
-        <Progress
-          className="credit-meter-bar"
-          percent={percent}
-          showInfo={false}
-          size="small"
-          strokeColor={strokeColor}
-          railColor={notion.hairline}
-          aria-hidden
-        />
-        {info.planLabel ? <div className="credit-meter-plan">{info.planLabel}</div> : null}
+        {!loading && (
+          <Progress
+            className="credit-meter-bar"
+            percent={percent}
+            showInfo={false}
+            size="small"
+            strokeColor={strokeColor}
+            railColor={notion.hairline}
+            aria-hidden
+          />
+        )}
       </div>
     </Tooltip>
   );

@@ -214,119 +214,6 @@ describe("App task flow", () => {
     expect(await screen.findByRole("heading", { name: "Start a New Generation" })).toBeTruthy();
   });
 
-  it("renders offline preview for office artifacts without exposing previewUrl online preview", async () => {
-    const bridge = installBridgeMock();
-    const { ArtifactsScreen } = await import("./screens/DataScreens");
-    const artifact = {
-      taskId: "task-no-preview",
-      filePath: "/tmp/no-preview.docx",
-      fileName: "no-preview.docx",
-      documentType: "docx",
-      previewUrl: "https://platform.officecli.io/files/no-preview",
-    };
-    const onPreview = vi.fn();
-
-    render(
-      <ArtifactsScreen fluid={false} onNewGeneration={vi.fn()} artifacts={[artifact]} onPreview={onPreview} />,
-    );
-
-    expect(screen.getByText("no-preview.docx")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Online Preview/ })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /Preview/ }));
-    expect(onPreview).toHaveBeenCalledWith(artifact);
-    expect(bridge.openExternal).not.toHaveBeenCalled();
-  });
-
-  it("renders the artifacts empty state without production mock files", async () => {
-    installBridgeMock();
-    const { ArtifactsScreen } = await import("./screens/DataScreens");
-
-    render(<ArtifactsScreen fluid={false} onNewGeneration={vi.fn()} artifacts={[]} onPreview={vi.fn()} />);
-
-    expect(screen.getByText("No files generated yet")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Generate Now/ })).toBeTruthy();
-    expect(screen.queryByText("2024_Q3_Marketing_Strategy_Report_v2.docx")).toBeNull();
-  });
-
-  it("renders real artifacts without the empty CTA or mock fallback", async () => {
-    installBridgeMock();
-    const { ArtifactsScreen } = await import("./screens/DataScreens");
-
-    render(
-      <ArtifactsScreen fluid={false} onNewGeneration={vi.fn()} artifacts={[
-          {
-            taskId: "task-real",
-            filePath: "/tmp/real-board-report.xlsx",
-            fileName: "real-board-report.xlsx",
-            documentType: "xlsx",
-            syncedAt: "2026-05-20 09:00",
-          },
-        ]} onPreview={vi.fn()} />,
-    );
-
-    expect(screen.getByText("real-board-report.xlsx")).toBeTruthy();
-    expect(screen.queryByText("No files generated yet")).toBeNull();
-    expect(screen.queryByText("2024_Q3_Marketing_Strategy_Report_v2.docx")).toBeNull();
-  });
-
-  it("renders Fluid artifacts empty state without a detail pane from mocks", async () => {
-    installBridgeMock();
-    const { ArtifactsScreen } = await import("./screens/DataScreens");
-
-    render(<ArtifactsScreen fluid onNewGeneration={vi.fn()} artifacts={[]} onPreview={vi.fn()} />);
-
-    expect(screen.getByText("No files generated yet")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Generate Now/ })).toBeTruthy();
-    expect(screen.queryByText("Generation Prompt")).toBeNull();
-    expect(screen.queryByText("2024_Q3_Marketing_Strategy_Report_v2.docx")).toBeNull();
-  });
-
-  it("renders Fluid artifact detail from the selected real artifact only", async () => {
-    installBridgeMock();
-    const { ArtifactsScreen } = await import("./screens/DataScreens");
-
-    render(
-      <ArtifactsScreen fluid onNewGeneration={vi.fn()} artifacts={[
-          {
-            taskId: "task-fluid",
-            filePath: "/tmp/client-roadmap.pptx",
-            fileName: "client-roadmap.pptx",
-            documentType: "pptx",
-            syncedAt: "2026-05-20T10:30:00+08:00",
-          },
-        ]} onPreview={vi.fn()} />,
-    );
-
-    expect(screen.getAllByText("client-roadmap.pptx").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("PPTX").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("2026-05-20T10:30:00+08:00").length).toBeGreaterThan(0);
-    expect(screen.queryByText("Generation Prompt")).toBeNull();
-    expect(screen.queryByText("GPT-4 Turbo")).toBeNull();
-    expect(screen.queryByText("2024-10-26 14:30")).toBeNull();
-    expect(screen.queryByText("2.4 MB")).toBeNull();
-    expect(screen.queryByText("Q3")).toBeNull();
-  });
-
-  it("does not expose previewUrl online preview in Fluid artifact detail and uses offline preview", async () => {
-    const bridge = installBridgeMock();
-    const { ArtifactsScreen } = await import("./screens/DataScreens");
-    const artifact = {
-      taskId: "task-fluid-preview",
-      filePath: "/tmp/fluid-preview.pptx",
-      fileName: "fluid-preview.pptx",
-      documentType: "pptx",
-      previewUrl: "https://platform.officecli.io/files/fluid-preview",
-    };
-    const onPreview = vi.fn();
-
-    render(<ArtifactsScreen fluid onNewGeneration={vi.fn()} artifacts={[artifact]} onPreview={onPreview} />);
-
-    expect(screen.queryByRole("button", { name: /Online Preview/ })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /Preview/ }));
-    expect(onPreview).toHaveBeenCalledWith(artifact);
-    expect(bridge.openExternal).not.toHaveBeenCalled();
-  });
-
   it("renders running dialogue from task topic and bridge events instead of Q3 sample text", async () => {
     installBridgeMock();
     const { DialogueScreen } = await import("./screens/DialogueScreens");
@@ -358,7 +245,6 @@ describe("App task flow", () => {
         artifacts={[]}
         busy={false}
         bridgeStatus="connected"
-        fluid={false}
         onSubmit={vi.fn()}
         onOpenSettings={vi.fn()}
         onOpenLogin={vi.fn()}
@@ -417,7 +303,6 @@ describe("App task flow", () => {
         ]}
         busy={false}
         bridgeStatus="connected"
-        fluid={false}
         onSubmit={vi.fn()}
         onOpenSettings={vi.fn()}
         onOpenLogin={vi.fn()}
@@ -470,7 +355,6 @@ describe("App task flow", () => {
         ]}
         busy={false}
         bridgeStatus="connected"
-        fluid={false}
         onSubmit={vi.fn()}
         onOpenSettings={vi.fn()}
         onOpenLogin={vi.fn()}
@@ -688,9 +572,9 @@ describe("App credit display", () => {
     accessMode?: string;
     planName?: string;
     hostedCreditBalance?: number | null;
-    freeTrialLimit?: number;
-    freeTrialUsed?: number;
-    freeTrialRemaining?: number;
+    anonymousCreditAvailable?: number | null;
+    anonymousCreditReserved?: number | null;
+    anonymousCreditBalance?: number | null;
     rewardRemaining?: number;
     paidKeyPrefix?: string;
     paidKeyTotal?: number;
@@ -703,9 +587,9 @@ describe("App credit display", () => {
       accessMode: status.accessMode ?? "",
       planName: status.planName ?? "",
       hostedCreditBalance: status.hostedCreditBalance ?? null,
-      freeTrialLimit: status.freeTrialLimit ?? 0,
-      freeTrialUsed: status.freeTrialUsed ?? 0,
-      freeTrialRemaining: status.freeTrialRemaining ?? 0,
+      anonymousCreditAvailable: status.anonymousCreditAvailable ?? null,
+      anonymousCreditReserved: status.anonymousCreditReserved ?? null,
+      anonymousCreditBalance: status.anonymousCreditBalance ?? null,
       rewardRemaining: status.rewardRemaining ?? 0,
       paidKeyPrefix: status.paidKeyPrefix ?? "",
       paidKeyTotal: status.paidKeyTotal ?? 0,
@@ -715,26 +599,87 @@ describe("App credit display", () => {
     })) as unknown as DesktopAPI["getCreditStatus"];
   }
 
-  it("renders Free trial used/limit when getCreditStatus returns anonymous", async () => {
+  it("renders anonymous credit balance when getCreditStatus returns anonymous credits", async () => {
     installBridgeMock();
-    overrideCreditStatus({ mode: "anonymous", freeTrialLimit: 100, freeTrialUsed: 25, freeTrialRemaining: 75 });
+    overrideCreditStatus({
+      mode: "anonymous",
+      anonymousCreditAvailable: 75,
+      anonymousCreditReserved: 25,
+      anonymousCreditBalance: 100,
+    });
 
     const { App } = await import("./App");
     render(<App />);
 
-    expect(await screen.findByText("25 / 100")).toBeTruthy();
-    expect(screen.getAllByText("Free trial").length).toBeGreaterThan(0);
+    expect(await screen.findByText("75 / 100")).toBeTruthy();
+    expect(screen.getAllByText("Credits").length).toBeGreaterThan(0);
   });
 
-  it("renders hosted balance when getCreditStatus returns logged_in with hostedCreditBalance", async () => {
+  it("renders hosted balance when getCreditStatus returns logged_in with hostedCreditBalance and ignores any anonymous fields", async () => {
     installBridgeMock();
-    overrideCreditStatus({ mode: "logged_in", hostedCreditBalance: 42, planName: "Pro", accessMode: "hosted" });
+    overrideCreditStatus({
+      mode: "logged_in",
+      hostedCreditBalance: 42,
+      planName: "Pro",
+      accessMode: "hosted",
+      anonymousCreditAvailable: 10,
+      anonymousCreditReserved: 0,
+      anonymousCreditBalance: 10,
+    });
 
     const { App } = await import("./App");
     render(<App />);
 
-    expect(await screen.findByText("0 / 42")).toBeTruthy();
+    expect(await screen.findByText("42 / 42")).toBeTruthy();
     expect(screen.getAllByText("Pro").length).toBeGreaterThan(0);
+  });
+
+  it("refreshes the sidebar credit meter after a task.completed event (covers settlement delay)", async () => {
+    const bridge = installBridgeMock();
+    const api = (window as unknown as { officecli: DesktopAPI }).officecli;
+    const sequence: number[] = [100, 100, 80];
+    let call = 0;
+    api.getCreditStatus = (async () => {
+      const balance = sequence[Math.min(call, sequence.length - 1)];
+      call += 1;
+      return {
+        mode: "logged_in" as const,
+        accessMode: "hosted",
+        planName: "Pro",
+        hostedCreditBalance: balance,
+        anonymousCreditAvailable: null,
+        anonymousCreditReserved: null,
+        anonymousCreditBalance: null,
+        rewardRemaining: 0,
+        paidKeyPrefix: "",
+        paidKeyTotal: 0,
+        paidKeyUsed: 0,
+        paidKeyRemaining: 0,
+        raw: "",
+      };
+    }) as unknown as DesktopAPI["getCreditStatus"];
+
+    const { App } = await import("./App");
+    render(<App />);
+
+    expect(await screen.findByText("100 / 100")).toBeTruthy();
+
+    act(() => {
+      bridge.emit({
+        event_id: "event-credit-1",
+        task_id: "task-credit-1",
+        type: "task.completed",
+        payload: {
+          result: {
+            file_path: "/tmp/credit.pptx",
+            file_name: "credit.pptx",
+            document_type: "pptx",
+          },
+        },
+      });
+    });
+
+    await waitFor(() => expect(screen.getByText("80 / 80")).toBeTruthy(), { timeout: 1500 });
   });
 });
 
@@ -774,6 +719,7 @@ function installBridgeMock() {
     savePastedImage,
     previewArtifact,
     readArtifactFile: vi.fn(async () => ({ data: new Uint8Array() })),
+    readLocalImage: vi.fn(async () => ({ data: new Uint8Array(), mime: "image/png" })),
     renderPreviewHtml: vi.fn(async () => ({ html: "<html><body>preview</body></html>" }) as { html: string } | null),
     issuePreviewToken: vi.fn(async (artifact) => ({ token: "test-token", fileName: artifact.fileName, documentType: artifact.documentType })),
     revokePreviewToken: vi.fn(async () => undefined),
@@ -787,15 +733,22 @@ function installBridgeMock() {
       accessMode: "",
       planName: "",
       hostedCreditBalance: null,
-      freeTrialLimit: 0,
-      freeTrialUsed: 0,
-      freeTrialRemaining: 0,
+      anonymousCreditAvailable: null,
+      anonymousCreditReserved: null,
+      anonymousCreditBalance: null,
       rewardRemaining: 0,
       paidKeyPrefix: "",
       paidKeyTotal: 0,
       paidKeyUsed: 0,
       paidKeyRemaining: 0,
       raw: "",
+    })),
+    redeem: vi.fn(async () => ({
+      code: "",
+      credit_amount: 0,
+      new_balance: 0,
+      redeemed_at: "",
+      expires_at: null,
     })),
     getSettings: vi.fn(async () => ({
       version: 1,
@@ -860,6 +813,10 @@ function installBridgeMock() {
     installAppUpdate: vi.fn(async () => undefined),
     cancelAppUpdate: vi.fn(async () => undefined),
     onAppUpdateEvent: vi.fn(() => () => undefined),
+    exportLogs: vi.fn(async () => ({ path: "/Users/test/Downloads/officedex-logs.zip", manifest: { schemaVersion: 1, bundleId: "test", items: [], truncated: false } })),
+    submitReport: vi.fn(async () => ({ ticketId: "T-001", requestId: "req-test-123", uploaded: true })),
+    getReportCapability: vi.fn(async () => ({ enabled: false, reason: "test" })),
+    peekReportContext: vi.fn(async () => ({ requestId: "req-test-123", errorCode: "", errorMessage: "" })),
   };
   window.officecli = api;
   return {

@@ -17,9 +17,9 @@ function makeStatus(overrides: Partial<CreditStatus> = {}): CreditStatus {
     accessMode: "",
     planName: "",
     hostedCreditBalance: null,
-    freeTrialLimit: 0,
-    freeTrialUsed: 0,
-    freeTrialRemaining: 0,
+    anonymousCreditAvailable: null,
+    anonymousCreditReserved: null,
+    anonymousCreditBalance: null,
     rewardRemaining: 0,
     paidKeyPrefix: "",
     paidKeyTotal: 0,
@@ -43,23 +43,64 @@ afterEach(() => {
 });
 
 describe("deriveCreditInfo", () => {
-  it("anonymous trial → used/total comes from freeTrial fields", () => {
+  it("anonymous credits → used = total - available, total = balance", () => {
     const credit = deriveCreditInfo(
-      makeStatus({ mode: "anonymous", freeTrialLimit: 100, freeTrialUsed: 25, freeTrialRemaining: 75 }),
+      makeStatus({
+        mode: "anonymous",
+        anonymousCreditAvailable: 75,
+        anonymousCreditReserved: 25,
+        anonymousCreditBalance: 100,
+      }),
     );
-    expect(credit).toEqual({ used: 25, total: 100, planLabel: "Free trial" });
+    expect(credit).toEqual({ used: 25, total: 100, planLabel: "Credits" });
   });
 
-  it("logged_in + hostedCreditBalance → 0/balance with plan label", () => {
+  it("anonymous credits at full balance → 0/100", () => {
+    const credit = deriveCreditInfo(
+      makeStatus({
+        mode: "anonymous",
+        anonymousCreditAvailable: 100,
+        anonymousCreditReserved: 0,
+        anonymousCreditBalance: 100,
+      }),
+    );
+    expect(credit).toEqual({ used: 0, total: 100, planLabel: "Credits" });
+  });
+
+  it("logged_in + hostedCreditBalance → 0/balance with plan label, ignores any anonymous credits", () => {
     const credit = deriveCreditInfo(
       makeStatus({
         mode: "logged_in",
         hostedCreditBalance: 42,
         planName: "Pro",
         accessMode: "hosted",
+        anonymousCreditAvailable: 5,
+        anonymousCreditReserved: 0,
+        anonymousCreditBalance: 5,
       }),
     );
     expect(credit).toEqual({ used: 0, total: 42, planLabel: "Pro" });
+  });
+
+  it("logged_in + hostedCreditBalance without planName → falls back to 'Hosted credits'", () => {
+    const credit = deriveCreditInfo(
+      makeStatus({
+        mode: "logged_in",
+        hostedCreditBalance: 12,
+        accessMode: "",
+      }),
+    );
+    expect(credit).toEqual({ used: 0, total: 12, planLabel: "Hosted credits" });
+  });
+
+  it("anonymous with no anonymous-credits line → 0/0 fallback with 'Credits' label", () => {
+    const credit = deriveCreditInfo(
+      makeStatus({
+        mode: "anonymous",
+        anonymousCreditBalance: null,
+      }),
+    );
+    expect(credit).toEqual({ used: 0, total: 0, planLabel: "Credits" });
   });
 
   it("api_key + paidKeyTotal → uses paid-key burndown", () => {
@@ -83,13 +124,20 @@ describe("deriveCreditInfo", () => {
 
 describe("useCreditStatus", () => {
   it("fetches on mount and polls every 60 seconds", async () => {
-    const spy = vi.fn(async () => makeStatus({ mode: "anonymous", freeTrialLimit: 100, freeTrialUsed: 10 }));
+    const spy = vi.fn(async () =>
+      makeStatus({
+        mode: "anonymous",
+        anonymousCreditAvailable: 90,
+        anonymousCreditReserved: 10,
+        anonymousCreditBalance: 100,
+      }),
+    );
     officecli.getCreditStatus = spy as unknown as DesktopAPI["getCreditStatus"];
 
     const { result } = renderHook(() => useCreditStatus());
     await flush();
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(result.current.credit).toEqual({ used: 10, total: 100, planLabel: "Free trial" });
+    expect(result.current.credit).toEqual({ used: 10, total: 100, planLabel: "Credits" });
 
     await act(async () => {
       vi.advanceTimersByTime(60_000);
@@ -116,13 +164,20 @@ describe("useCreditStatus", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const spy = vi
       .fn<() => Promise<CreditStatus>>()
-      .mockResolvedValueOnce(makeStatus({ mode: "anonymous", freeTrialLimit: 50, freeTrialUsed: 5 }))
+      .mockResolvedValueOnce(
+        makeStatus({
+          mode: "anonymous",
+          anonymousCreditAvailable: 45,
+          anonymousCreditReserved: 5,
+          anonymousCreditBalance: 50,
+        }),
+      )
       .mockRejectedValueOnce(new Error("boom"));
     officecli.getCreditStatus = spy as unknown as DesktopAPI["getCreditStatus"];
 
     const { result } = renderHook(() => useCreditStatus());
     await flush();
-    expect(result.current.credit).toEqual({ used: 5, total: 50, planLabel: "Free trial" });
+    expect(result.current.credit).toEqual({ used: 5, total: 50, planLabel: "Credits" });
 
     await act(async () => {
       vi.advanceTimersByTime(60_000);
@@ -130,7 +185,7 @@ describe("useCreditStatus", () => {
     await flush();
     expect(spy).toHaveBeenCalledTimes(2);
     // Last successful credit is preserved when the second fetch fails.
-    expect(result.current.credit).toEqual({ used: 5, total: 50, planLabel: "Free trial" });
+    expect(result.current.credit).toEqual({ used: 5, total: 50, planLabel: "Credits" });
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
   });

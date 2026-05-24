@@ -1,4 +1,4 @@
-import type { Artifact, BridgeEvent, DesktopTask, StageState, TaskQuestion } from "../shared/types";
+import type { Artifact, BridgeEvent, DesktopTask, StageState, TaskQuestion, TaskUserInput } from "../shared/types";
 
 export interface TaskState {
   tasks: Record<string, DesktopTask>;
@@ -10,8 +10,20 @@ export function createInitialTaskState(): TaskState {
   return { tasks: {}, taskOrder: [], artifacts: [] };
 }
 
+export function attachUserInput(state: TaskState, taskID: string, input: TaskUserInput): TaskState {
+  const previous = state.tasks[taskID] || {
+    id: taskID,
+    status: "starting" as const,
+    events: [],
+  };
+  const tasks = { ...state.tasks, [taskID]: { ...previous, userInput: input } };
+  const taskOrder = state.taskOrder.includes(taskID) ? state.taskOrder : [taskID, ...state.taskOrder];
+  return { ...state, tasks, taskOrder };
+}
+
 export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState {
-  const taskID = event.task_id || "unknown";
+  if (!event.task_id) return state;
+  const taskID = event.task_id;
   const previous = state.tasks[taskID] || {
     id: taskID,
     status: "starting",
@@ -28,6 +40,10 @@ export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState 
     stages,
     activeStageId,
   };
+  if (event.type === "task.progress") {
+    nextTask.lastProgressAt = Date.now();
+    nextTask.stalledSince = undefined;
+  }
   if (event.type === "task.question") {
     nextTask.question = questionFromPayload(event.payload);
     nextTask.status = "question";
@@ -38,13 +54,18 @@ export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState 
       nextTask.artifact = artifact;
     }
     nextTask.question = undefined;
+    nextTask.stalledSince = undefined;
+    applyCreditPayload(nextTask, event.payload);
   }
   if (event.type === "task.failed") {
     nextTask.error = stringPayload(event, "message") || stringPayload(event, "error") || "Task failed";
     nextTask.question = undefined;
+    nextTask.stalledSince = undefined;
+    applyCreditPayload(nextTask, event.payload);
   }
   if (event.type === "task.cancelled") {
     nextTask.question = undefined;
+    nextTask.stalledSince = undefined;
   }
 
   const tasks = { ...state.tasks, [taskID]: nextTask };
@@ -118,6 +139,14 @@ function artifactFromPayload(taskID: string, payload: BridgeEvent["payload"]): A
 
 function stringPayload(event: BridgeEvent, key: string): string {
   return event.payload ? stringValue(event.payload[key]) : "";
+}
+
+function applyCreditPayload(task: DesktopTask, payload: BridgeEvent["payload"]): void {
+  if (!payload) return;
+  const charged = payload.credits_charged;
+  if (typeof charged !== "number") return;
+  task.creditCharged = charged;
+  task.creditMode = typeof payload.credit_mode === "string" ? payload.credit_mode : "";
 }
 
 function stringValue(value: unknown): string {

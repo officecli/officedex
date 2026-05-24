@@ -10,7 +10,12 @@ import type {
   DesktopAPI,
   GenerateInput,
   LlmProvider,
+  PeekReportContextResult,
   PreviewGrant,
+  RedeemResult,
+  ReportCapabilityResult,
+  SubmitReportInput,
+  SubmitReportResult,
   UserSettings,
   WhoAmIResult,
 } from "../shared/types";
@@ -21,6 +26,15 @@ import type {
 import * as WailsApp from "./generated/wailsjs/go/main/App";
 import { EventsOn } from "./generated/wailsjs/runtime";
 import type { settings as settingsNS } from "./generated/wailsjs/go/models";
+
+// toWails coerces a renderer-side typed value into the `never`-shaped argument
+// that the Wails-generated bindings expect. The generated d.ts files describe
+// arg types as `never` (the Wails codegen quirk), so every call site would
+// otherwise sprout an `as never`; concentrating that cast here makes the
+// suppression auditable and keeps call sites readable.
+function toWails<T>(value: T): never {
+  return value as unknown as never;
+}
 
 const DEFAULT_BROWSER_SETTINGS: UserSettings = {
   version: 1,
@@ -78,6 +92,9 @@ function createBrowserPreviewAPI(): DesktopAPI {
     readArtifactFile: async () => {
       throw new Error("Artifact file reading requires desktop file access.");
     },
+    readLocalImage: async () => {
+      throw new Error("Local image reading requires desktop file access.");
+    },
     renderPreviewHtml: async () => null,
     setPreviewMode: async () => undefined,
     login: async () => {
@@ -87,6 +104,9 @@ function createBrowserPreviewAPI(): DesktopAPI {
     whoami: async () => ({ mode: "anonymous" }),
     logout: async () => undefined,
     getCreditStatus: async () => normaliseCreditStatus(null),
+    redeem: async () => {
+      throw new Error("Redemption is only available inside the desktop app.");
+    },
     getSettings: async () => browserSettings,
     updateSettings: async (patch) => {
       browserSettings = {
@@ -121,6 +141,18 @@ function createBrowserPreviewAPI(): DesktopAPI {
     },
     cancelAppUpdate: async () => undefined,
     onAppUpdateEvent: () => () => undefined,
+    exportLogs: async (_input?: import("../shared/types").ExportLogsInput) => {
+      throw new Error("Log export is only available inside the desktop app.");
+    },
+    submitReport: async (_input: SubmitReportInput): Promise<SubmitReportResult> => {
+      throw new Error("Issue reporting is only available inside the desktop app.");
+    },
+    getReportCapability: async (): Promise<ReportCapabilityResult> => {
+      return { enabled: false, reason: "browser-preview" };
+    },
+    peekReportContext: async (): Promise<PeekReportContextResult> => {
+      return { requestId: "", errorCode: "", errorMessage: "" };
+    },
   };
 }
 
@@ -169,8 +201,9 @@ function uint8ArrayToBase64(data: Uint8Array): string {
 
 function normaliseCreditStatus(raw: Partial<CreditStatus> | null | undefined): CreditStatus {
   const numberOrZero = (value: unknown): number => (typeof value === "number" && Number.isFinite(value) ? value : 0);
+  const numberOrNull = (value: unknown): number | null =>
+    typeof value === "number" && Number.isFinite(value) ? value : null;
   const stringOrEmpty = (value: unknown): string => (typeof value === "string" ? value : "");
-  const hosted = raw?.hostedCreditBalance;
   const modes = ["anonymous", "logged_in", "api_key"] as const;
   const mode = (modes as readonly string[]).includes(stringOrEmpty(raw?.mode))
     ? (raw!.mode as CreditStatus["mode"])
@@ -179,10 +212,10 @@ function normaliseCreditStatus(raw: Partial<CreditStatus> | null | undefined): C
     mode,
     accessMode: stringOrEmpty(raw?.accessMode),
     planName: stringOrEmpty(raw?.planName),
-    hostedCreditBalance: typeof hosted === "number" && Number.isFinite(hosted) ? hosted : null,
-    freeTrialLimit: numberOrZero(raw?.freeTrialLimit),
-    freeTrialUsed: numberOrZero(raw?.freeTrialUsed),
-    freeTrialRemaining: numberOrZero(raw?.freeTrialRemaining),
+    hostedCreditBalance: numberOrNull(raw?.hostedCreditBalance),
+    anonymousCreditAvailable: numberOrNull(raw?.anonymousCreditAvailable),
+    anonymousCreditReserved: numberOrNull(raw?.anonymousCreditReserved),
+    anonymousCreditBalance: numberOrNull(raw?.anonymousCreditBalance),
     rewardRemaining: numberOrZero(raw?.rewardRemaining),
     paidKeyPrefix: stringOrEmpty(raw?.paidKeyPrefix),
     paidKeyTotal: numberOrZero(raw?.paidKeyTotal),
@@ -248,31 +281,31 @@ function createWailsAPI(): DesktopAPI {
     initialize: async () => decodeRawBytes(await WailsApp.Initialize()),
     getCapabilities: async () => decodeRawBytes(await WailsApp.GetCapabilities()),
     generate: async (input: GenerateInput) => {
-      const result = await WailsApp.Generate(input as never);
+      const result = await WailsApp.Generate(toWails(input));
       return { taskId: result.taskId, sessionId: result.sessionId, status: result.status };
     },
-    respond: async (input) => decodeRawBytes(await WailsApp.Respond(input as never)),
+    respond: async (input) => decodeRawBytes(await WailsApp.Respond(toWails(input))),
     cancel: async (taskId: string) => decodeRawBytes(await WailsApp.Cancel(taskId)),
     openPath: (filePath) => WailsApp.OpenPath(filePath),
     showItemInFolder: (filePath) => WailsApp.ShowItemInFolder(filePath),
     openExternal: (url) => WailsApp.OpenExternal(url),
     openFileDialog: async (options) => {
-      const result = await WailsApp.OpenFileDialog((options ?? { filters: [] }) as never);
+      const result = await WailsApp.OpenFileDialog(toWails(options ?? { filters: [] }));
       return result ? result : null;
     },
     openMultiFileDialog: async (options) => {
-      const result = await WailsApp.OpenMultiFileDialog((options ?? { filters: [] }) as never);
+      const result = await WailsApp.OpenMultiFileDialog(toWails(options ?? { filters: [] }));
       return result && result.length > 0 ? result : null;
     },
     savePastedImage: async (data: Uint8Array, ext: string) => {
-      return WailsApp.SavePastedImage({
+      return WailsApp.SavePastedImage(toWails({
         dataBase64: uint8ArrayToBase64(data),
         ext,
-      } as never);
+      }));
     },
-    previewArtifact: (artifact: Artifact) => WailsApp.PreviewArtifact(artifact as never),
+    previewArtifact: (artifact: Artifact) => WailsApp.PreviewArtifact(toWails(artifact)),
     issuePreviewToken: async (artifact: Artifact): Promise<PreviewGrant> =>
-      WailsApp.IssuePreviewToken(artifact as never),
+      WailsApp.IssuePreviewToken(toWails(artifact)),
     revokePreviewToken: async (token: string) => {
       await WailsApp.RevokePreviewToken(token);
     },
@@ -280,6 +313,12 @@ function createWailsAPI(): DesktopAPI {
       const result = await WailsApp.ReadArtifactFile(previewToken);
       const data: BinaryFileData = decodeArtifactBytes(result?.data);
       return { data };
+    },
+    readLocalImage: async (filePath: string) => {
+      const result = await WailsApp.ReadLocalImage(filePath);
+      const data: BinaryFileData = decodeArtifactBytes(result?.data);
+      const mime = typeof result?.mime === "string" ? result.mime : "application/octet-stream";
+      return { data, mime };
     },
     renderPreviewHtml: async (previewToken: string) => {
       const result = await WailsApp.RenderPreviewHtml(previewToken);
@@ -296,6 +335,7 @@ function createWailsAPI(): DesktopAPI {
       return {
         mode: (result.mode as WhoAmIResult["mode"]) ?? "anonymous",
         ...(result.userId ? { userId: result.userId } : {}),
+        ...(result.email ? { email: result.email } : {}),
         ...(result.session ? { session: result.session } : {}),
         ...(result.expiresAt ? { expiresAt: result.expiresAt } : {}),
       };
@@ -304,6 +344,16 @@ function createWailsAPI(): DesktopAPI {
     getCreditStatus: async (): Promise<CreditStatus> => {
       const raw = (await WailsApp.GetCreditStatus()) as Partial<CreditStatus> | null | undefined;
       return normaliseCreditStatus(raw);
+    },
+    redeem: async (code: string): Promise<RedeemResult> => {
+      const result = await WailsApp.Redeem(code);
+      return {
+        code: result?.code ?? "",
+        credit_amount: result?.credit_amount ?? 0,
+        new_balance: result?.new_balance ?? 0,
+        redeemed_at: result?.redeemed_at ?? "",
+        expires_at: result?.expires_at ?? null,
+      };
     },
     getSettings: async () => normaliseUserSettings(await WailsApp.GetSettings()),
     updateSettings: async (patch: Partial<UserSettings>) =>
@@ -324,6 +374,14 @@ function createWailsAPI(): DesktopAPI {
     cancelAppUpdate: () => WailsApp.CancelAppUpdate(),
     onAppUpdateEvent: (callback: (event: AppUpdateEvent) => void) =>
       EventsOn("appupdate:event", (payload: unknown) => callback(payload as AppUpdateEvent)),
+    exportLogs: (input?: import("../shared/types").ExportLogsInput) =>
+      WailsApp.ExportLogs(toWails(input ?? {})) as Promise<{ path: string; manifest: import("../shared/types").BundleManifest }>,
+    submitReport: (input: SubmitReportInput) =>
+      WailsApp.SubmitReport(toWails(input)) as Promise<SubmitReportResult>,
+    getReportCapability: () =>
+      WailsApp.GetReportCapability() as Promise<ReportCapabilityResult>,
+    peekReportContext: (taskId: string) =>
+      WailsApp.PeekReportContext(taskId) as Promise<PeekReportContextResult>,
   };
 }
 
@@ -339,6 +397,7 @@ function normaliseAppUpdateStatus(raw: unknown): AppUpdateStatus {
     lastCheckedAt: value.lastCheckedAt ?? null,
     lastError: value.lastError ?? null,
     notes: value.notes,
+    lastErrors: Array.isArray(value.lastErrors) ? value.lastErrors : [],
   };
 }
 
@@ -363,8 +422,13 @@ function selectAPI(): DesktopAPI {
   // window.officecli is the test-only injection point used by App.test.tsx
   // and the renderer vitest fixtures. Production desktop builds always go
   // through Wails above; the browser-preview fallback covers `npm run dev`
-  // in a plain browser.
-  if (typeof window !== "undefined" && (window as unknown as { officecli?: DesktopAPI }).officecli) {
+  // in a plain browser. The import.meta.env.MODE === 'test' guard lets
+  // Vite's dead-code elimination drop this branch from production bundles.
+  if (
+    import.meta.env.MODE === "test" &&
+    typeof window !== "undefined" &&
+    (window as unknown as { officecli?: DesktopAPI }).officecli
+  ) {
     return (window as unknown as { officecli: DesktopAPI }).officecli;
   }
   return createBrowserPreviewAPI();

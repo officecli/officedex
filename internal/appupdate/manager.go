@@ -104,7 +104,22 @@ type Status struct {
 	LastCheckedAt   *string `json:"lastCheckedAt"`
 	LastError       *string `json:"lastError"`
 	Notes           string  `json:"notes,omitempty"`
+	// LastErrors keeps the most recent CheckLatest failures (newest last) so
+	// the Settings → Diagnostics panel can render a timeline. The buffer is
+	// capped at maxErrorHistory.
+	LastErrors []ErrorEntry `json:"lastErrors,omitempty"`
 }
+
+// ErrorEntry records a single CheckLatest failure for the Diagnostics panel.
+// LatencyMs is the wall-clock time fetchManifest spent before failing.
+type ErrorEntry struct {
+	Timestamp   string `json:"timestamp"`
+	ManifestURL string `json:"manifestUrl"`
+	Message     string `json:"message"`
+	LatencyMs   int64  `json:"latencyMs"`
+}
+
+const maxErrorHistory = 5
 
 // Event is the value emitted on every state transition.
 type Event struct {
@@ -156,6 +171,7 @@ type Manager struct {
 	latestRelease  *ReleaseInfo
 	lastCheckedAt  *string
 	lastError      *string
+	lastErrors     []ErrorEntry
 	downloading    bool
 	downloadedPath *string
 	cancel         context.CancelFunc
@@ -222,6 +238,10 @@ func (m *Manager) statusLocked() Status {
 	if updateAvailable && m.latestRelease != nil {
 		mandatory = IsMandatory(m.latestRelease, m.currentVersion)
 	}
+	var errs []ErrorEntry
+	if len(m.lastErrors) > 0 {
+		errs = append(errs, m.lastErrors...)
+	}
 	return Status{
 		CurrentVersion:  m.currentVersion,
 		LatestVersion:   m.latestVersion,
@@ -232,26 +252,42 @@ func (m *Manager) statusLocked() Status {
 		LastCheckedAt:   m.lastCheckedAt,
 		LastError:       m.lastError,
 		Notes:           notes,
+		LastErrors:      errs,
 	}
 }
 
 // CheckLatest queries the manifest URL and updates the cached release.
+// When currentVersion is the "dev" sentinel (wails dev / go run), the
+// network call is skipped and a not-available snapshot is returned so
+// developers don't see spurious update banners.
 func (m *Manager) CheckLatest(ctx context.Context) (*ReleaseInfo, error) {
+	if strings.TrimSpace(m.currentVersion) == "dev" {
+		m.mu.Lock()
+		m.lastError = nil
+		ts := m.now().UTC().Format(time.RFC3339Nano)
+		m.lastCheckedAt = &ts
+		status := m.statusLocked()
+		m.mu.Unlock()
+		m.emit(Event{Type: EventStatus, Status: &status})
+		return nil, nil
+	}
 	m.mu.Lock()
 	m.lastError = nil
 	url := m.manifestURL
 	m.mu.Unlock()
 
+	start := m.now()
 	body, err := m.fetchManifest(ctx, url)
+	latency := m.now().Sub(start)
 	if err != nil {
-		return nil, m.failCheck(fmt.Errorf("fetch manifest: %w", err))
+		return nil, m.failCheck(fmt.Errorf("fetch manifest: %w", err), url, latency)
 	}
 	var release ReleaseInfo
 	if err := json.Unmarshal(body, &release); err != nil {
-		return nil, m.failCheck(fmt.Errorf("parse manifest: %w", err))
+		return nil, m.failCheck(fmt.Errorf("parse manifest: %w", err), url, latency)
 	}
 	if strings.TrimSpace(release.Version) == "" {
-		return nil, m.failCheck(errors.New("manifest missing version"))
+		return nil, m.failCheck(errors.New("manifest missing version"), url, latency)
 	}
 
 	m.mu.Lock()
@@ -271,12 +307,22 @@ func (m *Manager) CheckLatest(ctx context.Context) (*ReleaseInfo, error) {
 	return &release, nil
 }
 
-func (m *Manager) failCheck(err error) error {
+func (m *Manager) failCheck(err error, manifestURL string, latency time.Duration) error {
 	msg := err.Error()
 	m.mu.Lock()
 	m.lastError = &msg
 	ts := m.now().UTC().Format(time.RFC3339Nano)
 	m.lastCheckedAt = &ts
+	entry := ErrorEntry{
+		Timestamp:   ts,
+		ManifestURL: manifestURL,
+		Message:     msg,
+		LatencyMs:   latency.Milliseconds(),
+	}
+	m.lastErrors = append(m.lastErrors, entry)
+	if len(m.lastErrors) > maxErrorHistory {
+		m.lastErrors = m.lastErrors[len(m.lastErrors)-maxErrorHistory:]
+	}
 	status := m.statusLocked()
 	m.mu.Unlock()
 	m.emit(Event{Type: EventStatus, Status: &status})

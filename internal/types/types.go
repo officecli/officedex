@@ -218,28 +218,38 @@ const (
 type WhoAmIResult struct {
 	Mode      WhoAmIMode `json:"mode"`
 	UserID    string     `json:"userId,omitempty"`
+	Email     string     `json:"email,omitempty"`
 	Session   string     `json:"session,omitempty"`
 	ExpiresAt string     `json:"expiresAt,omitempty"`
 }
 
 // CreditStatus mirrors the quota fields surfaced by `officecli auth status`.
-// HostedCreditBalance is a pointer so we can distinguish "balance line absent"
-// (anonymous trial) from "balance is zero" (hosted plan with no credits left).
-// All other counters default to 0 when their line is missing.
+// HostedCreditBalance and AnonymousCredit* are pointers so we can distinguish
+// "line absent" from "value is zero".
 type CreditStatus struct {
-	Mode                WhoAmIMode `json:"mode"`
-	AccessMode          string     `json:"accessMode"`
-	PlanName            string     `json:"planName"`
-	HostedCreditBalance *int       `json:"hostedCreditBalance"`
-	FreeTrialLimit      int        `json:"freeTrialLimit"`
-	FreeTrialUsed       int        `json:"freeTrialUsed"`
-	FreeTrialRemaining  int        `json:"freeTrialRemaining"`
-	RewardRemaining     int        `json:"rewardRemaining"`
-	PaidKeyPrefix       string     `json:"paidKeyPrefix"`
-	PaidKeyTotal        int        `json:"paidKeyTotal"`
-	PaidKeyUsed         int        `json:"paidKeyUsed"`
-	PaidKeyRemaining    int        `json:"paidKeyRemaining"`
-	Raw                 string     `json:"raw"`
+	Mode                      WhoAmIMode `json:"mode"`
+	AccessMode                string     `json:"accessMode"`
+	PlanName                  string     `json:"planName"`
+	HostedCreditBalance       *int       `json:"hostedCreditBalance"`
+	AnonymousCreditAvailable  *int       `json:"anonymousCreditAvailable"`
+	AnonymousCreditReserved   *int       `json:"anonymousCreditReserved"`
+	AnonymousCreditBalance    *int       `json:"anonymousCreditBalance"`
+	RewardRemaining           int        `json:"rewardRemaining"`
+	PaidKeyPrefix             string     `json:"paidKeyPrefix"`
+	PaidKeyTotal              int        `json:"paidKeyTotal"`
+	PaidKeyUsed               int        `json:"paidKeyUsed"`
+	PaidKeyRemaining          int        `json:"paidKeyRemaining"`
+	Raw                       string     `json:"raw"`
+}
+
+// RedeemResult is the parsed payload returned by `officecli redeem --json`.
+// The shape mirrors platform's redemptionsvc.RedeemResponse.
+type RedeemResult struct {
+	Code         string  `json:"code"`
+	CreditAmount int     `json:"credit_amount"`
+	NewBalance   int     `json:"new_balance"`
+	RedeemedAt   string  `json:"redeemed_at"`
+	ExpiresAt    *string `json:"expires_at,omitempty"`
 }
 
 type AuthEventType string
@@ -307,12 +317,14 @@ type LlmProvider struct {
 }
 
 type UserSettings struct {
-	Version               int              `json:"version"`
-	Defaults              GenerateDefaults `json:"defaults"`
-	OutputDir             *string          `json:"outputDir"`
-	BridgeBinaryPath      *string          `json:"bridgeBinaryPath"`
-	LlmProvider           *LlmProvider     `json:"llmProvider"`
-	OnboardingCompletedAt *string          `json:"onboardingCompletedAt"`
+	Version                int              `json:"version"`
+	Defaults               GenerateDefaults `json:"defaults"`
+	OutputDir              *string          `json:"outputDir"`
+	BridgeBinaryPath       *string          `json:"bridgeBinaryPath"`
+	LlmProvider            *LlmProvider     `json:"llmProvider"`
+	OnboardingCompletedAt  *string          `json:"onboardingCompletedAt"`
+	SupportReportEndpoint  *string          `json:"supportReportEndpoint"`
+	SupportReportToken     *string          `json:"supportReportToken"`
 }
 
 // RuntimeStatus mirrors the renderer-facing status object emitted by the

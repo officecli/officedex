@@ -12,7 +12,7 @@
   display: flex;
   align-items: center;
   height: 44px;
-  padding: 0 8px 0 12px;
+  padding: 0 44px 0 12px;
   background: #ffffff;
   border-bottom: 1px solid #ebebeb;
   flex-shrink: 0;
@@ -138,6 +138,29 @@
   background: #e5e5e5;
   flex-shrink: 0;
   margin: 0 2px;
+}
+
+.preview-panel-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #dc2626;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.preview-panel-close:hover {
+  background: rgba(220, 38, 38, 0.1);
+  color: #b91c1c;
 }
 
 .preview-toolbar-close {

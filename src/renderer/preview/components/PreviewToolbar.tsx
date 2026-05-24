@@ -1,5 +1,5 @@
 import { Button, Tooltip } from "antd";
-import { FileText, FileSpreadsheet, Presentation, FileType, FileCode2, ZoomIn, ZoomOut, ExternalLink, X } from "lucide-react";
+import { FileText, FileSpreadsheet, Presentation, FileType, FileCode2, ZoomIn, ZoomOut, ExternalLink } from "lucide-react";
 import type { ReactNode } from "react";
 
 const TYPE_CONFIG: Record<string, { icon: typeof FileText; color: string; label: string }> = {
@@ -15,7 +15,6 @@ interface PreviewToolbarProps {
   fileName: string;
   documentType?: string;
   center?: ReactNode;
-  onClose?: () => void;
   onOpenExternal?: () => void;
   onZoomIn?: () => void;
   onZoomOut?: () => void;
@@ -27,7 +26,6 @@ export function PreviewToolbar({
   fileName,
   documentType,
   center,
-  onClose,
   onOpenExternal,
   onZoomIn,
   onZoomOut,
@@ -84,15 +82,6 @@ export function PreviewToolbar({
               onClick={onOpenExternal}
             />
           </Tooltip>
-        )}
-
-        {onClose && (
-          <>
-            <span className="preview-toolbar-divider" />
-            <button className="preview-toolbar-close" onClick={onClose} title="Close Preview">
-              <X size={15} strokeWidth={1.8} />
-            </button>
-          </>
         )}
       </div>
     </div>
