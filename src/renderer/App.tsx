@@ -301,7 +301,7 @@ export function App() {
           />
         ) : null}
         {activeNav === "settings" ? <SettingsScreen onCreditRefresh={nudgeForTaskTransition} /> : null}
-        {activeNav === "login" ? <LoginScreen onAuthChanged={nudgeForTaskTransition} /> : null}
+        {activeNav === "login" ? <LoginScreen /> : null}
       </Shell>
       {showOnboarding ? (
         <OnboardingScreen settings={persistedSettings} defaultWorkspaceDir={defaultWorkspaceDir} onComplete={() => setOnboardingDismissed(true)} />
