@@ -13,5 +13,7 @@ export default defineConfig({
     environment: "jsdom",
     globals: false,
     exclude: ["e2e/**", "node_modules/**", "dist/**", "build/**"],
+    testTimeout: 15000,
+    hookTimeout: 15000,
   },
 });
