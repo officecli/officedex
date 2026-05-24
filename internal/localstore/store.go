@@ -67,6 +67,14 @@ CREATE TABLE IF NOT EXISTS task_credit_records (
 );
 `
 
+// schemaV2 adds request_id storage to task_events. The new column is
+// independent of payload_json (which preserves the raw bridge envelope) and
+// is the canonical source for the minimal report flow's "give support a
+// pointer to the server-side trace" need.
+const schemaV2 = `
+ALTER TABLE task_events ADD COLUMN request_id TEXT NOT NULL DEFAULT '';
+`
+
 // Store wraps a SQLite database used to persist bridge events and artifacts.
 // Safe for concurrent use.
 type Store struct {
@@ -141,6 +149,30 @@ func applyMigrations(ctx context.Context, db *sql.DB) error {
 			return fmt.Errorf("v1 commit: %w", err)
 		}
 	}
+	if current < 2 {
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("begin v2: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, schemaV2); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("v2 ddl: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (2, ?)`,
+			time.Now().UTC().Format(time.RFC3339Nano),
+		); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("v2 stamp: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, "PRAGMA user_version = 2"); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("v2 set user_version: %w", err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("v2 commit: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -195,9 +227,9 @@ func (s *Store) RecordEvent(event types.BridgeEvent) error {
 		eventID = fmt.Sprintf("%s:%s:%s", event.TaskID, event.Type, now)
 	}
 	if _, err := s.db.Exec(
-		`INSERT OR REPLACE INTO task_events(event_id, task_id, type, payload_json, created_at)
-		 VALUES (?, ?, ?, ?, ?)`,
-		eventID, event.TaskID, event.Type, string(payloadJSON), now,
+		`INSERT OR REPLACE INTO task_events(event_id, task_id, type, payload_json, created_at, request_id)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		eventID, event.TaskID, event.Type, string(payloadJSON), now, event.RequestID,
 	); err != nil {
 		return fmt.Errorf("localstore: insert event: %w", err)
 	}
@@ -213,7 +245,7 @@ func (s *Store) QueryEventsByTask(ctx context.Context, taskID string) ([]types.B
 		return nil, fmt.Errorf("localstore: not open")
 	}
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT event_id, task_id, type, payload_json, created_at
+		`SELECT event_id, task_id, type, payload_json, created_at, request_id
 		 FROM task_events WHERE task_id = ? ORDER BY created_at ASC`, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("localstore: query events by task: %w", err)
@@ -231,13 +263,39 @@ func (s *Store) QueryRecentEvents(ctx context.Context, limit int) ([]types.Bridg
 		return nil, fmt.Errorf("localstore: not open")
 	}
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT event_id, task_id, type, payload_json, created_at
+		`SELECT event_id, task_id, type, payload_json, created_at, request_id
 		 FROM task_events ORDER BY created_at DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("localstore: query recent events: %w", err)
 	}
 	defer rows.Close()
 	return scanEvents(rows)
+}
+
+// LatestRequestID returns the most recent non-empty request_id for the given
+// task, or empty string when none exists. The minimal report flow uses it to
+// give support a pointer into the server-side trace.
+func (s *Store) LatestRequestID(ctx context.Context, taskID string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return "", fmt.Errorf("localstore: not open")
+	}
+	if taskID == "" {
+		return "", nil
+	}
+	var requestID string
+	err := s.db.QueryRowContext(ctx,
+		`SELECT request_id FROM task_events
+		 WHERE task_id = ? AND request_id != ''
+		 ORDER BY rowid DESC LIMIT 1`, taskID).Scan(&requestID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", nil
+		}
+		return "", fmt.Errorf("localstore: latest request id: %w", err)
+	}
+	return requestID, nil
 }
 
 func scanEvents(rows *sql.Rows) ([]types.BridgeEvent, error) {
@@ -249,18 +307,20 @@ func scanEvents(rows *sql.Rows) ([]types.BridgeEvent, error) {
 			eventType   string
 			payloadJSON string
 			createdAt   string
+			requestID   string
 		)
-		if err := rows.Scan(&eventID, &taskID, &eventType, &payloadJSON, &createdAt); err != nil {
+		if err := rows.Scan(&eventID, &taskID, &eventType, &payloadJSON, &createdAt, &requestID); err != nil {
 			return nil, fmt.Errorf("localstore: scan event: %w", err)
 		}
 		var payload map[string]any
 		_ = json.Unmarshal([]byte(payloadJSON), &payload)
 		events = append(events, types.BridgeEvent{
-			EventID: eventID,
-			TaskID:  taskID,
-			Type:    eventType,
-			TS:      createdAt,
-			Payload: payload,
+			EventID:   eventID,
+			TaskID:    taskID,
+			RequestID: requestID,
+			Type:      eventType,
+			TS:        createdAt,
+			Payload:   payload,
 		})
 	}
 	return events, rows.Err()

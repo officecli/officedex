@@ -190,10 +190,20 @@ function RunningDialogue({ task }: { task: DesktopTask }) {
   const t = useT();
   const capability = useReportCapability();
   const [reportOpen, setReportOpen] = useState(false);
+  const [stalledRequestId, setStalledRequestId] = useState<string | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [task.events.length]);
+
+  useEffect(() => {
+    if (capability?.enabled || !task.stalledSince) return;
+    let cancelled = false;
+    officecli.peekReportContext(task.id).then((ctx) => {
+      if (!cancelled) setStalledRequestId(ctx.requestId || null);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [task.id, task.stalledSince, capability?.enabled]);
 
   return (
     <div className="conversation-layout">
@@ -210,10 +220,16 @@ function RunningDialogue({ task }: { task: DesktopTask }) {
               <Button size="small" onClick={() => setReportOpen(true)}>
                 {t("dialogue.stalled.reportIssue")}
               </Button>
-            ) : (
-              <Button size="small" onClick={() => officecli.exportLogs({ taskId: task.id, includeSettings: true, includeEvents: true, includeLogs: true, includeRecent: true })}>
-                {t("dialogue.stalled.exportLogs")}
+            ) : stalledRequestId ? (
+              <Button size="small" icon={<CopyOutlined />} onClick={() => { void navigator.clipboard.writeText(stalledRequestId).then(() => { void message.success(t("report.toast.copiedRequestId")); }); }}>
+                {t("dialogue.stalled.copyRequestId")}
               </Button>
+            ) : (
+              <Tooltip title={t("dialogue.terminal.noRequestId")}>
+                <Button size="small" disabled>
+                  {t("dialogue.stalled.copyRequestId")}
+                </Button>
+              </Tooltip>
             )}
           </div>
         ) : null}
@@ -382,6 +398,7 @@ function TerminalDialogue({ task }: { task: DesktopTask }) {
   const t = useT();
   const capability = useReportCapability();
   const [reportOpen, setReportOpen] = useState(false);
+  const [requestId, setRequestId] = useState<string | null>(null);
   const failed = task.status === "failed";
   const latestEvent = task.events.at(-1);
   const title = failed ? t("dialogue.terminal.failed.title") : t("dialogue.terminal.cancelled.title");
@@ -389,6 +406,16 @@ function TerminalDialogue({ task }: { task: DesktopTask }) {
     ? task.error || eventText(latestEvent) || t("dialogue.terminal.failed.fallback")
     : eventText(latestEvent) || t("dialogue.terminal.cancelled.fallback");
   const creditTag = renderCreditTag(task, t);
+
+  useEffect(() => {
+    if (capability?.enabled) return;
+    let cancelled = false;
+    officecli.peekReportContext(task.id).then((ctx) => {
+      if (!cancelled) setRequestId(ctx.requestId || null);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [task.id, capability?.enabled]);
+
   return (
     <div className="conversation-layout">
       <div className="chat-thread">
@@ -405,10 +432,16 @@ function TerminalDialogue({ task }: { task: DesktopTask }) {
             <Button size="small" onClick={() => setReportOpen(true)}>
               {t("dialogue.terminal.reportIssue")}
             </Button>
-          ) : (
-            <Button size="small" onClick={() => officecli.exportLogs({ taskId: task.id, includeSettings: true, includeEvents: true, includeLogs: true, includeRecent: true })}>
-              {t("dialogue.terminal.exportLogs")}
+          ) : requestId ? (
+            <Button size="small" icon={<CopyOutlined />} onClick={() => { void navigator.clipboard.writeText(requestId).then(() => { void message.success(t("report.toast.copiedRequestId")); }); }}>
+              {t("dialogue.terminal.copyRequestId")}
             </Button>
+          ) : (
+            <Tooltip title={t("dialogue.terminal.noRequestId")}>
+              <Button size="small" disabled>
+                {t("dialogue.terminal.copyRequestId")}
+              </Button>
+            </Tooltip>
           )}
           <div className="terminal-event-card">
             <span>{t("dialogue.history.taskIdLabel")}</span>

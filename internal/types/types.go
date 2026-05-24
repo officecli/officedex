@@ -218,6 +218,7 @@ const (
 type WhoAmIResult struct {
 	Mode      WhoAmIMode `json:"mode"`
 	UserID    string     `json:"userId,omitempty"`
+	Email     string     `json:"email,omitempty"`
 	Session   string     `json:"session,omitempty"`
 	ExpiresAt string     `json:"expiresAt,omitempty"`
 }

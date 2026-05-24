@@ -342,22 +342,22 @@ officecli report submit \
 
 | 场景 | 触发条件 | 客户端行为 |
 |------|----------|-----------|
-| **Endpoint 不可达 / 5xx** | 网络超时或服务端错误 | Fallback 到本地 zip，toast 指向文件路径 |
-| **Schema 拒绝 (4xx `unsupported_schema`)** | 服务端不支持当前 bundle schema 版本 | 触发 app 更新检查 + 保留本地 zip + 提示用户更新 |
-| **CLI 子命令不存在** | `officecli report submit --help` 退出码 != 0 | 回退到 HTTP 通道（如 endpoint 已配置），否则回退到本地 zip |
-| **描述过短** | 用户输入 <10 字 | Renderer 侧校验拦截，不发起上传请求 |
-| **Auth token 缺失（HTTP 通道）** | `supportReportToken` 未配置且 officecli 未登录 | Toast："未配置 supportReportToken，请在 Settings 中设置或使用 hosted 模式（officecli 自带 token）" |
-| **Bundle 构建失败** | 磁盘空间不足、权限问题等 | Toast 显示错误原因，不尝试上传 |
-| **上传超时** | 大文件上传超过 60s | 中断上传，保留本地 zip，toast 提示手动发送 |
+| **Endpoint 不可达 / 5xx** | 网络超时或服务端错误 | Toast 提示失败,用户可重试;UI 暴露 Copy Request ID 让用户手工反馈 |
+| **Schema 拒绝 (4xx `unsupported_schema`)** | 服务端不支持当前 payload schema 版本 | 触发 app 更新检查 + 提示用户升级 |
+| **Payload 超过 4KB 限制** | description / errorMessage 超长导致 JSON > 4096 字节 | `ErrPayloadTooLarge` 在 client 端拦截,不发起 HTTP 请求;Toast "请精简描述后重试" |
+| **描述过短** | 用户输入 <10 字 | Renderer 侧校验拦截,不发起上传请求 |
+| **HTTP endpoint 未配置(capability=false)** | `settings.SupportReportEndpoint` 为空 | UI 切到 B3 真一等公民模式:卡片按钮变 "Copy Request ID",直接复制到剪贴板,引导用户走 Slack/邮件手工反馈 |
+| **Auth token 缺失** | `supportReportToken` 未配置且 endpoint 要求 Bearer | HTTP 请求 401,toast "未配置 supportReportToken,请在 Settings 中设置" |
+| **Server 自家日志查无 request_id** | `runtimeMode=external` 时本地 LLM 不经过 server,server 端无对应记录 | Payload 已带 `runtimeMode` 字段,server 端按字段路由响应(如"请走 Phase A1 导出 zip 手动反馈");客户端不感知 |
 
 ### 降级优先级
 
 ```
-CLI 通道 (officecli report submit)
-  ↓ 不可用
-HTTP 通道 (supportReportEndpoint + token)
-  ↓ 不可用
-本地 fallback (保留 zip + toast 路径)
+HTTP 通道 (supportReportEndpoint + 可选 token)
+  ↓ 不可用 (capability=false)
+B3 模式: 卡片直接 Copy Request ID + 用户手工反馈
+  ↓ 用户需要更多上下文
+Phase A1 本地 zip 导出(Settings → Diagnostics)
 ```
 
-每一级失败都不阻塞用户——最差情况下用户总是能拿到本地 zip 文件。
+每一级失败都不阻塞用户——最差情况下用户总是能拿到 Request ID 或本地 zip 文件。

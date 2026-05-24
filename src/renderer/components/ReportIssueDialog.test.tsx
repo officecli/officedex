@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { cleanup, render, screen, fireEvent, waitFor, within } from "@testing-library/react";
-import type { SubmitReportInput, SubmitReportResult } from "../../shared/types";
+import type { PeekReportContextResult, SubmitReportInput, SubmitReportResult } from "../../shared/types";
 
 const mockSubmitReport = vi.fn<(input: SubmitReportInput) => Promise<SubmitReportResult>>();
-const mockShowItemInFolder = vi.fn<(path: string) => Promise<void>>();
+const mockPeekReportContext = vi.fn<(taskId: string) => Promise<PeekReportContextResult>>();
 
 vi.mock("../bridge", () => ({
   officecli: {
     submitReport: (input: SubmitReportInput) => mockSubmitReport(input),
-    showItemInFolder: (path: string) => mockShowItemInFolder(path),
+    peekReportContext: (taskId: string) => mockPeekReportContext(taskId),
   },
 }));
 
@@ -61,26 +61,28 @@ Object.defineProperty(window, "matchMedia", {
 describe("ReportIssueDialog", () => {
   beforeEach(() => {
     mockSubmitReport.mockReset();
-    mockShowItemInFolder.mockReset();
+    mockPeekReportContext.mockReset();
+    mockPeekReportContext.mockResolvedValue({ requestId: "req-abc-123", errorCode: "rate_limit", errorMessage: "Too many requests" });
   });
 
   afterEach(() => {
     cleanup();
   });
 
-  it("renders all form fields when open", async () => {
+  it("displays context bar with requestId from peekReportContext", async () => {
     const { ReportIssueDialog } = await import("../components/ReportIssueDialog");
 
-    render(<ReportIssueDialog open={true} onClose={() => {}} />);
+    render(<ReportIssueDialog open={true} taskId="task-1" onClose={() => {}} />);
+
+    await waitFor(() => {
+      expect(mockPeekReportContext).toHaveBeenCalledWith("task-1");
+    });
 
     const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByText("report.dialog.title")).toBeTruthy();
-    expect(within(dialog).getByText("report.dialog.description.label")).toBeTruthy();
-    expect(within(dialog).getByText("report.dialog.sections.settings")).toBeTruthy();
-    expect(within(dialog).getByText("report.dialog.sections.events")).toBeTruthy();
-    expect(within(dialog).getByText("report.dialog.sections.logs")).toBeTruthy();
-    expect(within(dialog).getByText("report.dialog.sections.recent")).toBeTruthy();
-    expect(within(dialog).getByText("report.dialog.removePrompt")).toBeTruthy();
+    await waitFor(() => {
+      expect(within(dialog).getByText("report.dialog.contextBar.request")).toBeTruthy();
+      expect(within(dialog).getByText("report.dialog.contextBar.error")).toBeTruthy();
+    });
   });
 
   it("does not render dialog content when closed", async () => {
@@ -106,15 +108,13 @@ describe("ReportIssueDialog", () => {
     expect(mockSubmitReport).not.toHaveBeenCalled();
   });
 
-  it("submits with correct input for uploaded=true", async () => {
+  it("submit when capability enabled posts JSON payload", async () => {
     const { ReportIssueDialog } = await import("../components/ReportIssueDialog");
 
     mockSubmitReport.mockResolvedValue({
       ticketId: "T-123",
+      requestId: "req-abc-123",
       uploaded: true,
-      viewUrl: "https://example.com/tickets/T-123",
-      bundlePath: "/Users/test/Downloads/bundle.zip",
-      manifest: { schemaVersion: 1, bundleId: "b-123", items: [], truncated: false },
     });
 
     const onClose = vi.fn();
@@ -132,42 +132,7 @@ describe("ReportIssueDialog", () => {
         taskId: "task-42",
         description: "The application froze when generating a report",
         contactEmail: undefined,
-        exportOpts: {
-          includeSettings: true,
-          includeEvents: true,
-          includeLogs: true,
-          includeRecent: true,
-        },
       });
-    });
-
-    await waitFor(() => {
-      expect(onClose).toHaveBeenCalled();
-    });
-  });
-
-  it("submits with uploaded=false calls onClose", async () => {
-    const { ReportIssueDialog } = await import("../components/ReportIssueDialog");
-
-    mockSubmitReport.mockResolvedValue({
-      ticketId: "",
-      uploaded: false,
-      bundlePath: "/tmp/diag.zip",
-      manifest: { schemaVersion: 1, bundleId: "b-fallback", items: [], truncated: false },
-    });
-
-    const onClose = vi.fn();
-    render(<ReportIssueDialog open={true} onClose={onClose} />);
-
-    const dialog = screen.getByRole("dialog");
-    const textarea = within(dialog).getByRole("textbox", { name: /report\.dialog\.description\.label/i });
-    fireEvent.change(textarea, { target: { value: "Something went wrong during generation" } });
-
-    const submitBtn = within(dialog).getByRole("button", { name: /report\.dialog\.submit/i });
-    fireEvent.click(submitBtn);
-
-    await waitFor(() => {
-      expect(mockSubmitReport).toHaveBeenCalled();
     });
 
     await waitFor(() => {
@@ -180,7 +145,7 @@ describe("ReportIssueDialog", () => {
 
     mockSubmitReport.mockRejectedValue(new Error("Network error"));
 
-    render(<ReportIssueDialog open={true} onClose={() => {}} />);
+    render(<ReportIssueDialog open={true} taskId="task-1" onClose={() => {}} />);
 
     const dialog = screen.getByRole("dialog");
     const textarea = within(dialog).getByRole("textbox", { name: /report\.dialog\.description\.label/i });
@@ -194,37 +159,26 @@ describe("ReportIssueDialog", () => {
     });
   });
 
-  it("excludes events when removePrompt is checked", async () => {
+  it("shows copy request ID button when context available", async () => {
     const { ReportIssueDialog } = await import("../components/ReportIssueDialog");
 
-    mockSubmitReport.mockResolvedValue({
-      ticketId: "T-999",
-      uploaded: true,
-      bundlePath: "/tmp/diag.zip",
-      manifest: { schemaVersion: 1, bundleId: "b-999", items: [], truncated: false },
-    });
-
-    render(<ReportIssueDialog open={true} taskId="task-5" onClose={() => {}} />);
+    render(<ReportIssueDialog open={true} taskId="task-1" onClose={() => {}} />);
 
     const dialog = screen.getByRole("dialog");
-    const textarea = within(dialog).getByRole("textbox", { name: /report\.dialog\.description\.label/i });
-    fireEvent.change(textarea, { target: { value: "Prompt content should be removed from report" } });
-
-    const checkboxes = dialog.querySelectorAll<HTMLInputElement>("input[type='checkbox']");
-    const removePromptCheckbox = checkboxes[checkboxes.length - 1];
-    fireEvent.click(removePromptCheckbox);
-
-    const submitBtn = within(dialog).getByRole("button", { name: /report\.dialog\.submit/i });
-    fireEvent.click(submitBtn);
-
     await waitFor(() => {
-      expect(mockSubmitReport).toHaveBeenCalledWith(
-        expect.objectContaining({
-          exportOpts: expect.objectContaining({
-            includeEvents: false,
-          }),
-        }),
-      );
+      expect(within(dialog).getByText("report.dialog.copyRequestId")).toBeTruthy();
+    });
+  });
+
+  it("does not show sections or removePrompt checkboxes", async () => {
+    const { ReportIssueDialog } = await import("../components/ReportIssueDialog");
+
+    render(<ReportIssueDialog open={true} taskId="task-1" onClose={() => {}} />);
+
+    const dialog = screen.getByRole("dialog");
+    await waitFor(() => {
+      expect(within(dialog).queryByText("report.dialog.sections.settings")).toBeNull();
+      expect(within(dialog).queryByText("report.dialog.removePrompt")).toBeNull();
     });
   });
 });

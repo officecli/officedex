@@ -25,6 +25,124 @@ func newTempStore(t *testing.T) *Store {
 	return store
 }
 
+func TestRequestIDPersistsThroughRecordAndQuery(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+
+	events := []types.BridgeEvent{
+		{EventID: "e1", TaskID: "task-req", RequestID: "req-001", Type: "task.started", Payload: map[string]any{"topic": "t"}},
+		{EventID: "e2", TaskID: "task-req", RequestID: "req-001", Type: "task.progress"},
+		{EventID: "e3", TaskID: "task-req", RequestID: "", Type: "task.progress"},
+		{EventID: "e4", TaskID: "task-req", RequestID: "req-002", Type: "task.failed", Payload: map[string]any{"error_code": "rate_limit"}},
+	}
+	for _, ev := range events {
+		if err := store.RecordEvent(ev); err != nil {
+			t.Fatalf("RecordEvent(%s): %v", ev.EventID, err)
+		}
+	}
+
+	got, err := store.QueryEventsByTask(ctx, "task-req")
+	if err != nil {
+		t.Fatalf("QueryEventsByTask: %v", err)
+	}
+	if len(got) != 4 {
+		t.Fatalf("expected 4 events, got %d", len(got))
+	}
+	want := []string{"req-001", "req-001", "", "req-002"}
+	for i, ev := range got {
+		if ev.RequestID != want[i] {
+			t.Errorf("event[%d].RequestID = %q, want %q", i, ev.RequestID, want[i])
+		}
+	}
+
+	latest, err := store.LatestRequestID(ctx, "task-req")
+	if err != nil {
+		t.Fatalf("LatestRequestID: %v", err)
+	}
+	if latest != "req-002" {
+		t.Errorf("LatestRequestID = %q, want req-002 (most recent non-empty)", latest)
+	}
+
+	missing, err := store.LatestRequestID(ctx, "nope")
+	if err != nil {
+		t.Fatalf("LatestRequestID nope: %v", err)
+	}
+	if missing != "" {
+		t.Errorf("LatestRequestID(nope) = %q, want empty", missing)
+	}
+
+	if empty, err := store.LatestRequestID(ctx, ""); err != nil || empty != "" {
+		t.Errorf("LatestRequestID(\"\") = %q,%v, want \"\",nil", empty, err)
+	}
+}
+
+func TestSchemaV2MigrationFromV1DB(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "officedex.db")
+	ctx := context.Background()
+
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, status TEXT NOT NULL, document_type TEXT, topic TEXT, updated_at TEXT NOT NULL);
+		CREATE TABLE IF NOT EXISTS task_events (event_id TEXT PRIMARY KEY, task_id TEXT NOT NULL, type TEXT NOT NULL, payload_json TEXT NOT NULL, created_at TEXT NOT NULL);
+		CREATE TABLE IF NOT EXISTS artifacts (file_path TEXT PRIMARY KEY, task_id TEXT, file_id TEXT, file_name TEXT NOT NULL, document_type TEXT NOT NULL, preview_url TEXT, edit_url TEXT, synced_at TEXT NOT NULL);
+		CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
+		CREATE TABLE IF NOT EXISTS task_credit_records (task_id TEXT PRIMARY KEY, credits_charged INTEGER, credit_mode TEXT, recorded_at TEXT NOT NULL);
+		INSERT INTO schema_migrations(version, applied_at) VALUES (1, '2024-01-01T00:00:00Z');
+		PRAGMA user_version = 1;
+	`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO task_events(event_id, task_id, type, payload_json, created_at) VALUES (?, ?, ?, ?, ?)`,
+		"legacy-evt", "legacy-task", "task.started", `{"topic":"t"}`, "2024-06-01T00:00:00Z",
+	); err != nil {
+		t.Fatal(err)
+	}
+	_ = db.Close()
+
+	store := New(path)
+	if err := store.Open(ctx); err != nil {
+		t.Fatalf("Open with v2 migration: %v", err)
+	}
+	defer store.Close()
+
+	var version int
+	if err := store.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	if version != 2 {
+		t.Errorf("user_version = %d, want 2", version)
+	}
+
+	events, err := store.QueryEventsByTask(ctx, "legacy-task")
+	if err != nil {
+		t.Fatalf("QueryEventsByTask: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected 1 legacy event, got %d", len(events))
+	}
+	if events[0].RequestID != "" {
+		t.Errorf("legacy event RequestID = %q, want empty (DEFAULT '')", events[0].RequestID)
+	}
+
+	if err := store.RecordEvent(types.BridgeEvent{
+		EventID: "post-mig", TaskID: "legacy-task", RequestID: "req-post", Type: "task.failed",
+	}); err != nil {
+		t.Fatalf("RecordEvent after v2: %v", err)
+	}
+	latest, err := store.LatestRequestID(ctx, "legacy-task")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if latest != "req-post" {
+		t.Errorf("LatestRequestID after v2 = %q, want req-post", latest)
+	}
+}
+
 func TestOpenCloseReopen(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "officedex.db")
@@ -369,8 +487,8 @@ func TestSchemaV1MigrationFromLegacyDB(t *testing.T) {
 	if err := store.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 1 {
-		t.Errorf("user_version = %d, want 1", version)
+	if version != 2 {
+		t.Errorf("user_version = %d, want 2", version)
 	}
 	if err := store.Close(); err != nil {
 		t.Fatal(err)

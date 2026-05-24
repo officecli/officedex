@@ -1,7 +1,7 @@
-import { Button, Checkbox, Form, Input, Modal, message } from "antd";
-import { CopyOutlined, FolderOpenOutlined } from "@ant-design/icons";
-import { useState } from "react";
-import type { SubmitReportInput } from "../../shared/types";
+import { Button, Form, Input, Modal, message } from "antd";
+import { CopyOutlined } from "@ant-design/icons";
+import { useEffect, useState } from "react";
+import type { PeekReportContextResult, SubmitReportInput } from "../../shared/types";
 import { officecli } from "../bridge";
 import { useT } from "../i18n";
 
@@ -14,76 +14,73 @@ interface ReportIssueDialogProps {
 interface FormValues {
   description: string;
   contactEmail?: string;
-  includeSettings: boolean;
-  includeEvents: boolean;
-  includeLogs: boolean;
-  includeRecent: boolean;
-  removePrompt: boolean;
 }
 
 export function ReportIssueDialog({ open, taskId, onClose }: ReportIssueDialogProps) {
   const [form] = Form.useForm<FormValues>();
   const t = useT();
   const [submitting, setSubmitting] = useState(false);
+  const [context, setContext] = useState<PeekReportContextResult | null>(null);
+
+  useEffect(() => {
+    if (!open || !taskId) {
+      setContext(null);
+      return;
+    }
+    let cancelled = false;
+    officecli.peekReportContext(taskId).then((result) => {
+      if (!cancelled) setContext(result);
+    }).catch(() => {
+      if (!cancelled) setContext(null);
+    });
+    return () => { cancelled = true; };
+  }, [open, taskId]);
+
+  async function handleCopyRequestId() {
+    const requestId = context?.requestId;
+    if (!requestId) return;
+    try {
+      await navigator.clipboard.writeText(requestId);
+      void message.success(t("report.toast.copiedRequestId"));
+    } catch {
+      void message.error(t("report.toast.copyFailed"));
+    }
+  }
 
   async function handleSubmit(values: FormValues) {
     setSubmitting(true);
     try {
-      const includeEvents = values.removePrompt ? false : values.includeEvents;
       const input: SubmitReportInput = {
         taskId,
         description: values.description,
         contactEmail: values.contactEmail || undefined,
-        exportOpts: {
-          includeSettings: values.includeSettings,
-          includeEvents,
-          includeLogs: values.includeLogs,
-          includeRecent: values.includeRecent,
-        },
       };
       const result = await officecli.submitReport(input);
-      if (result.uploaded) {
-        void message.success({
-          content: (
-            <span>
-              {t("report.toast.success.ticket", { ticketId: result.ticketId ?? "" })}
-              {" "}
-              <Button
-                type="link"
-                size="small"
-                icon={<CopyOutlined />}
-                onClick={() => {
-                  void navigator.clipboard.writeText(result.ticketId ?? "");
-                  void message.success(t("report.toast.copyTicket"));
-                }}
-              >
-                {t("report.toast.copyTicket")}
-              </Button>
-            </span>
-          ),
-          duration: 6,
-        });
-      } else {
-        void message.success({
-          content: (
-            <span>
-              {t("report.toast.success.bundleOnly", { bundlePath: result.bundlePath ?? "" })}
-              {" "}
-              <Button
-                type="link"
-                size="small"
-                icon={<FolderOpenOutlined />}
-                onClick={() => {
-                  if (result.bundlePath) void officecli.showItemInFolder(result.bundlePath);
-                }}
-              >
-                {t("report.toast.openFolder")}
-              </Button>
-            </span>
-          ),
-          duration: 8,
-        });
-      }
+      const requestId = result.requestId || context?.requestId || "";
+      void message.success({
+        content: (
+          <span>
+            {t("report.toast.submitted", { ticketId: result.ticketId ?? "" })}
+            {requestId ? (
+              <>
+                {" "}
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<CopyOutlined />}
+                  onClick={() => {
+                    void navigator.clipboard.writeText(requestId);
+                    void message.success(t("report.toast.copiedRequestId"));
+                  }}
+                >
+                  {t("report.toast.copyRequestId")}
+                </Button>
+              </>
+            ) : null}
+          </span>
+        ),
+        duration: 6,
+      });
       onClose();
       form.resetFields();
     } catch (error) {
@@ -103,18 +100,28 @@ export function ReportIssueDialog({ open, taskId, onClose }: ReportIssueDialogPr
       footer={null}
       destroyOnHidden
     >
+      {context && (context.requestId || context.errorCode) ? (
+        <div className="report-context-bar">
+          {taskId ? <span className="report-context-item">{t("report.dialog.contextBar.task", { taskId })}</span> : null}
+          {context.requestId ? <span className="report-context-item">{t("report.dialog.contextBar.request", { requestId: context.requestId })}</span> : null}
+          {context.errorCode ? <span className="report-context-item">{t("report.dialog.contextBar.error", { errorCode: context.errorCode })}</span> : null}
+        </div>
+      ) : null}
+
+      {context?.requestId ? (
+        <Button
+          icon={<CopyOutlined />}
+          onClick={handleCopyRequestId}
+          style={{ marginBottom: 16, borderRadius: 8 }}
+        >
+          {t("report.dialog.copyRequestId")}
+        </Button>
+      ) : null}
+
       <Form
         form={form}
         layout="vertical"
-        initialValues={{
-          description: "",
-          contactEmail: "",
-          includeSettings: true,
-          includeEvents: true,
-          includeLogs: true,
-          includeRecent: true,
-          removePrompt: false,
-        }}
+        initialValues={{ description: "", contactEmail: "" }}
         onFinish={handleSubmit}
       >
         <Form.Item
@@ -123,14 +130,14 @@ export function ReportIssueDialog({ open, taskId, onClose }: ReportIssueDialogPr
           rules={[
             { required: true, message: t("report.dialog.description.required") },
             { min: 10, message: t("report.dialog.description.minLength") },
-            { max: 2000 },
+            { max: 500 },
           ]}
         >
           <Input.TextArea
             rows={4}
             placeholder={t("report.dialog.description.placeholder")}
             showCount
-            maxLength={2000}
+            maxLength={500}
           />
         </Form.Item>
 
@@ -142,38 +149,6 @@ export function ReportIssueDialog({ open, taskId, onClose }: ReportIssueDialogPr
           ]}
         >
           <Input placeholder={t("report.dialog.email.placeholder")} />
-        </Form.Item>
-
-        <Form.Item label={t("report.dialog.sections.label")}>
-          <Form.Item name="includeSettings" valuePropName="checked" noStyle>
-            <Checkbox>{t("report.dialog.sections.settings")}</Checkbox>
-          </Form.Item>
-          <br />
-          <Form.Item name="includeEvents" valuePropName="checked" noStyle>
-            <Checkbox>{t("report.dialog.sections.events")}</Checkbox>
-          </Form.Item>
-          <br />
-          <Form.Item name="includeLogs" valuePropName="checked" noStyle>
-            <Checkbox>{t("report.dialog.sections.logs")}</Checkbox>
-          </Form.Item>
-          <br />
-          <Form.Item name="includeRecent" valuePropName="checked" noStyle>
-            <Checkbox>{t("report.dialog.sections.recent")}</Checkbox>
-          </Form.Item>
-        </Form.Item>
-
-        <Form.Item name="removePrompt" valuePropName="checked">
-          <Checkbox>{t("report.dialog.removePrompt")}</Checkbox>
-        </Form.Item>
-
-        <Form.Item dependencies={["removePrompt"]} noStyle>
-          {() =>
-            form.getFieldValue("removePrompt") ? (
-              <p style={{ fontSize: 12, color: "#787671", marginTop: -12, marginBottom: 16 }}>
-                {t("report.dialog.removePrompt.notice")}
-              </p>
-            ) : null
-          }
         </Form.Item>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>

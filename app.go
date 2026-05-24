@@ -831,78 +831,89 @@ func (a *App) currentBridgeEnv() []string {
 
 // ─── Issue report bindings ──────────────────────────────────────────────────
 
-// SubmitReportInput is the renderer-facing payload for SubmitReport. ExportOpts
-// is reused verbatim from ExportLogsInput so the renderer can drive both
-// bundle-only export and bundle+upload from the same form state.
+// SubmitReportInput is the renderer-facing payload for SubmitReport.
 type SubmitReportInput struct {
-	TaskID       string          `json:"taskId,omitempty"`
-	Description  string          `json:"description"`
-	ContactEmail string          `json:"contactEmail,omitempty"`
-	ExportOpts   ExportLogsInput `json:"exportOpts"`
+	TaskID       string `json:"taskId,omitempty"`
+	Description  string `json:"description"`
+	ContactEmail string `json:"contactEmail,omitempty"`
 }
 
-// SubmitReportResult is the value returned to the renderer. BundlePath is
-// always populated on success (whether or not the upload succeeded) so the UI
-// can offer a copy/share path when uploaded=false.
+// SubmitReportResult is the value returned to the renderer.
 type SubmitReportResult struct {
-	TicketID       string                     `json:"ticketId,omitempty"`
-	ViewURL        string                     `json:"viewUrl,omitempty"`
-	BundlePath     string                     `json:"bundlePath"`
-	Manifest       diagnostics.BundleManifest `json:"manifest"`
-	Uploaded       bool                       `json:"uploaded"`
-	FallbackReason string                     `json:"fallbackReason,omitempty"`
+	TicketID       string `json:"ticketId,omitempty"`
+	ViewURL        string `json:"viewUrl,omitempty"`
+	RequestID      string `json:"requestId,omitempty"`
+	Uploaded       bool   `json:"uploaded"`
+	FallbackReason string `json:"fallbackReason,omitempty"`
 }
 
 // ReportCapabilityResult is the gated view the renderer uses to decide whether
-// to surface a "Report issue" action vs falling back to "Export logs".
+// to surface a "Report issue" action vs falling back to "Copy request id".
 type ReportCapabilityResult struct {
 	Enabled bool   `json:"enabled"`
 	Reason  string `json:"reason,omitempty"`
 }
 
-const reportDescriptionMinLen = 10
+// PeekReportContextResult is the renderer-facing snapshot of the failed-task
+// context the report dialog renders in its header bar. All fields are empty
+// when the user opens the dialog without a task selection (e.g. from
+// Settings) or when no failure has been recorded yet.
+type PeekReportContextResult struct {
+	RequestID    string `json:"requestId"`
+	ErrorCode    string `json:"errorCode"`
+	ErrorMessage string `json:"errorMessage"`
+	RuntimeMode  string `json:"runtimeMode"`
+}
 
-// GetReportCapability runs the capability triple-probe and returns a renderer-
-// friendly snapshot. Always succeeds: errors during probing degrade to
-// Enabled=false with an explanatory reason.
+const (
+	reportDescriptionMinLen = 10
+	reportErrorMessageCap   = 500
+)
+
+// GetReportCapability returns a renderer-friendly snapshot of whether report
+// submission is available.
 func (a *App) GetReportCapability() ReportCapabilityResult {
 	cap := a.detectReportCapability()
 	return ReportCapabilityResult{Enabled: cap.Enabled, Reason: cap.Reason}
 }
 
-// SubmitReport builds a diagnostics bundle and (when capability permits)
-// uploads it via CLI or HTTP. Validation, bundle build, and upload failures
-// each surface distinct error paths: validation returns a plain error;
-// bundle-build failures bubble up verbatim; upload failures degrade to
-// Uploaded=false with a FallbackReason so the renderer can keep the local
-// zip path visible.
+// PeekReportContext returns the report header data the renderer renders in
+// the dialog (request_id + error code + error message + runtime mode). Safe
+// to call with empty taskID; returns zero-value result without error.
+func (a *App) PeekReportContext(taskID string) (PeekReportContextResult, error) {
+	out := PeekReportContextResult{}
+	if a.localStore == nil || strings.TrimSpace(taskID) == "" {
+		return out, nil
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	requestID, err := a.localStore.LatestRequestID(ctx, taskID)
+	if err != nil {
+		return out, fmt.Errorf("peek report context: latest request id: %w", err)
+	}
+	out.RequestID = requestID
+
+	events, err := a.localStore.QueryEventsByTask(ctx, taskID)
+	if err != nil {
+		return out, fmt.Errorf("peek report context: query events: %w", err)
+	}
+	if failure := latestFailedEvent(events); failure != nil {
+		out.ErrorCode, out.ErrorMessage = extractErrorFields(failure)
+	}
+	out.RuntimeMode = a.currentRuntimeMode()
+	return out, nil
+}
+
+// SubmitReport posts a minimal JSON payload to the configured support
+// endpoint. Validation errors return verbatim; upload failures degrade to
+// Uploaded=false with a FallbackReason so the renderer can prompt the user
+// to copy the request id manually.
 func (a *App) SubmitReport(input SubmitReportInput) (SubmitReportResult, error) {
 	desc := strings.TrimSpace(input.Description)
 	if len(desc) < reportDescriptionMinLen {
 		return SubmitReportResult{}, fmt.Errorf("submit report: description must be at least %d characters", reportDescriptionMinLen)
-	}
-
-	exportRes, err := a.ExportLogs(input.ExportOpts)
-	if err != nil {
-		return SubmitReportResult{}, fmt.Errorf("submit report: build bundle: %w", err)
-	}
-	result := SubmitReportResult{
-		BundlePath: exportRes.Path,
-		Manifest:   exportRes.Manifest,
-	}
-
-	cap := a.detectReportCapability()
-	if !cap.Enabled {
-		result.FallbackReason = "capability_not_enabled"
-		return result, nil
-	}
-
-	in := report.SubmitInput{
-		BundlePath:   exportRes.Path,
-		TaskID:       input.TaskID,
-		Description:  desc,
-		ContactEmail: strings.TrimSpace(input.ContactEmail),
-		BundleID:     exportRes.Manifest.BundleID,
 	}
 
 	ctx := a.ctx
@@ -910,49 +921,58 @@ func (a *App) SubmitReport(input SubmitReportInput) (SubmitReportResult, error) 
 		ctx = context.Background()
 	}
 
-	if cap.HasCLISubcommand {
-		path, env := a.resolvedBinaryForReport()
-		sub := report.NewCLISubmitter(report.CLIOptions{BinaryPath: path, Env: env})
-		sr, err := sub.Submit(ctx, in)
-		if err == nil {
-			result.TicketID = sr.TicketID
-			result.ViewURL = sr.ViewURL
-			result.Uploaded = true
-			return result, nil
-		}
-		// Fall through to HTTP if endpoint is also available.
-		if !cap.HasHTTPEndpoint {
-			result.FallbackReason = fmt.Sprintf("cli_upload_failed: %v", err)
-			return result, nil
-		}
+	result := SubmitReportResult{}
+	payload := report.ReportPayload{
+		TaskID:       strings.TrimSpace(input.TaskID),
+		Description:  desc,
+		ContactEmail: strings.TrimSpace(input.ContactEmail),
+		Timestamp:    time.Now().UTC().Format(time.RFC3339),
+		Via:          "http",
+		RuntimeMode:  a.currentRuntimeMode(),
 	}
 
-	if cap.HasHTTPEndpoint {
-		a.mu.Lock()
-		s := a.cachedSettings
-		a.mu.Unlock()
-		endpoint := ""
-		token := ""
-		if s.SupportReportEndpoint != nil {
-			endpoint = *s.SupportReportEndpoint
+	if payload.TaskID != "" && a.localStore != nil {
+		if requestID, err := a.localStore.LatestRequestID(ctx, payload.TaskID); err == nil {
+			payload.RequestID = requestID
 		}
-		if s.SupportReportToken != nil {
-			token = *s.SupportReportToken
+		if events, err := a.localStore.QueryEventsByTask(ctx, payload.TaskID); err == nil {
+			if failure := latestFailedEvent(events); failure != nil {
+				payload.ErrorCode, payload.ErrorMessage = extractErrorFields(failure)
+			}
 		}
-		sub := report.NewHTTPSubmitter(report.HTTPOptions{Endpoint: endpoint, Token: token})
-		sr, err := sub.Submit(ctx, in)
-		if err != nil {
-			result.FallbackReason = fmt.Sprintf("http_upload_failed: %v", err)
-			return result, nil
-		}
-		result.TicketID = sr.TicketID
-		result.ViewURL = sr.ViewURL
-		result.Uploaded = true
+	}
+	result.RequestID = payload.RequestID
+
+	cap := a.detectReportCapability()
+	if !cap.Enabled {
+		result.FallbackReason = "capability_not_enabled"
 		return result, nil
 	}
 
-	// Shouldn't reach here: cap.Enabled implied at least one path. Defensive.
-	result.FallbackReason = "no_upload_path"
+	a.mu.Lock()
+	s := a.cachedSettings
+	a.mu.Unlock()
+	endpoint := ""
+	token := ""
+	if s.SupportReportEndpoint != nil {
+		endpoint = *s.SupportReportEndpoint
+	}
+	if s.SupportReportToken != nil {
+		token = *s.SupportReportToken
+	}
+	sub := report.NewHTTPSubmitter(report.HTTPOptions{
+		Endpoint:  endpoint,
+		Token:     token,
+		UserAgent: fmt.Sprintf("OfficeDex/%s (%s; %s)", appVersion, runtime.GOOS, runtime.GOARCH),
+	})
+	sr, err := sub.Submit(ctx, payload)
+	if err != nil {
+		result.FallbackReason = fmt.Sprintf("http_upload_failed: %v", err)
+		return result, nil
+	}
+	result.TicketID = sr.TicketID
+	result.ViewURL = sr.ViewURL
+	result.Uploaded = true
 	return result, nil
 }
 
@@ -961,6 +981,7 @@ func (a *App) SubmitReport(input SubmitReportInput) (SubmitReportResult, error) 
 func (a *App) detectReportCapability() report.ReportCapability {
 	a.mu.Lock()
 	s := a.cachedSettings
+	client := a.bridgeClient
 	a.mu.Unlock()
 
 	endpoint := ""
@@ -968,17 +989,12 @@ func (a *App) detectReportCapability() report.ReportCapability {
 		endpoint = *s.SupportReportEndpoint
 	}
 
-	binaryPath, env := a.resolvedBinaryForReport()
-
 	ctx := a.ctx
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
 	var capsPayload []byte
-	a.mu.Lock()
-	client := a.bridgeClient
-	a.mu.Unlock()
 	if client != nil {
 		if payload, err := client.GetCapabilities(ctx); err == nil {
 			capsPayload = payload
@@ -986,17 +1002,61 @@ func (a *App) detectReportCapability() report.ReportCapability {
 	}
 
 	return report.DetectCapability(ctx, report.CapabilityOptions{
-		BinaryPath:          binaryPath,
-		Env:                 env,
 		HTTPEndpoint:        endpoint,
 		CapabilitiesPayload: capsPayload,
 	})
 }
 
-func (a *App) resolvedBinaryForReport() (string, []string) {
+func (a *App) currentRuntimeMode() string {
 	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.resolvedBinaryLocked()
+	mode := a.cachedSettings.Defaults.RuntimeMode
+	a.mu.Unlock()
+	if mode == "" {
+		return ""
+	}
+	return string(mode)
+}
+
+// latestFailedEvent walks the event slice in reverse and returns the most
+// recent task.failed entry, or nil when none exists.
+func latestFailedEvent(events []types.BridgeEvent) *types.BridgeEvent {
+	for i := len(events) - 1; i >= 0; i-- {
+		if events[i].Type == "task.failed" {
+			ev := events[i]
+			return &ev
+		}
+	}
+	return nil
+}
+
+// extractErrorFields pulls error_code + error_message from a task.failed
+// payload, handling both snake_case and camelCase keys the bridge has used
+// over time. Falls back to ("unknown", message) when no explicit code field
+// is present.
+func extractErrorFields(ev *types.BridgeEvent) (string, string) {
+	code := stringField(ev.Payload, "error_code", "errorCode", "code")
+	message := stringField(ev.Payload, "error_message", "errorMessage", "message", "error")
+	if code == "" {
+		code = "unknown"
+	}
+	if len(message) > reportErrorMessageCap {
+		message = message[:reportErrorMessageCap]
+	}
+	return code, message
+}
+
+func stringField(payload map[string]any, keys ...string) string {
+	if payload == nil {
+		return ""
+	}
+	for _, k := range keys {
+		if v, ok := payload[k]; ok {
+			if s, ok := v.(string); ok && s != "" {
+				return s
+			}
+		}
+	}
+	return ""
 }
 
 

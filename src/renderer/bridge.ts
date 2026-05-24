@@ -10,6 +10,7 @@ import type {
   DesktopAPI,
   GenerateInput,
   LlmProvider,
+  PeekReportContextResult,
   PreviewGrant,
   RedeemResult,
   ReportCapabilityResult,
@@ -148,6 +149,9 @@ function createBrowserPreviewAPI(): DesktopAPI {
     },
     getReportCapability: async (): Promise<ReportCapabilityResult> => {
       return { enabled: false, reason: "browser-preview" };
+    },
+    peekReportContext: async (): Promise<PeekReportContextResult> => {
+      return { requestId: "", errorCode: "", errorMessage: "" };
     },
   };
 }
@@ -331,6 +335,7 @@ function createWailsAPI(): DesktopAPI {
       return {
         mode: (result.mode as WhoAmIResult["mode"]) ?? "anonymous",
         ...(result.userId ? { userId: result.userId } : {}),
+        ...(result.email ? { email: result.email } : {}),
         ...(result.session ? { session: result.session } : {}),
         ...(result.expiresAt ? { expiresAt: result.expiresAt } : {}),
       };
@@ -375,6 +380,8 @@ function createWailsAPI(): DesktopAPI {
       WailsApp.SubmitReport(toWails(input)) as Promise<SubmitReportResult>,
     getReportCapability: () =>
       WailsApp.GetReportCapability() as Promise<ReportCapabilityResult>,
+    peekReportContext: (taskId: string) =>
+      WailsApp.PeekReportContext(taskId) as Promise<PeekReportContextResult>,
   };
 }
 

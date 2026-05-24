@@ -300,8 +300,8 @@ export function App() {
             onNewGeneration={newGeneration}
           />
         ) : null}
-        {activeNav === "settings" ? <SettingsScreen /> : null}
-        {activeNav === "login" ? <LoginScreen /> : null}
+        {activeNav === "settings" ? <SettingsScreen onCreditRefresh={nudgeForTaskTransition} /> : null}
+        {activeNav === "login" ? <LoginScreen onAuthChanged={nudgeForTaskTransition} /> : null}
       </Shell>
       {showOnboarding ? (
         <OnboardingScreen settings={persistedSettings} defaultWorkspaceDir={defaultWorkspaceDir} onComplete={() => setOnboardingDismissed(true)} />

@@ -21,7 +21,7 @@ import { ProviderForm } from "./OnboardingScreen";
 import { useT } from "../i18n";
 import type { AuthEvent, DocumentType, GenerateDefaults, LlmProvider, WhoAmIResult } from "../../shared/types";
 
-export function SettingsScreen() {
+export function SettingsScreen({ onCreditRefresh }: { onCreditRefresh?: () => void } = {}) {
   const { settings, defaultWorkspaceDir, update, loading, saving, error } = useSettings();
   const t = useT();
 
@@ -226,7 +226,7 @@ export function SettingsScreen() {
             <div className="setting-group">
               <h2>{t("settings.group.subscription")}</h2>
               <SettingRow title={t("settings.row.redeem.title")} desc={t("settings.row.redeem.desc")}>
-                <RedeemCodeCard />
+                <RedeemCodeCard onCreditRefresh={onCreditRefresh} />
               </SettingRow>
             </div>
             <div className="setting-group">
@@ -533,7 +533,7 @@ export function LoginScreen() {
   );
 }
 
-function RedeemCodeCard() {
+function RedeemCodeCard({ onCreditRefresh }: { onCreditRefresh?: () => void }) {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [lastSuccess, setLastSuccess] = useState<{ code: string; amount: number; balance: number } | null>(null);
@@ -551,12 +551,13 @@ function RedeemCodeCard() {
       setLastSuccess({ code: result.code, amount: result.credit_amount, balance: result.new_balance });
       setCode("");
       void message.success(t("settings.redeem.success", { amount: result.credit_amount }));
+      onCreditRefresh?.();
     } catch (error) {
       void message.error(errorMessage(error));
     } finally {
       setBusy(false);
     }
-  }, [code, t]);
+  }, [code, t, onCreditRefresh]);
 
   return (
     <Space direction="vertical" size={8} style={{ width: "100%" }}>
@@ -588,7 +589,8 @@ function titleFor(phase: LoginPhase, t: (key: string) => string): string {
 
 function subtitleFor(phase: LoginPhase, whoami: WhoAmIResult | null, t: (key: string, vars?: Record<string, string | number>) => string): string {
   if (phase === "success") {
-    return whoami?.userId ? t("login.subtitle.successUser", { userId: whoami.userId }) : t("login.subtitle.successDefault");
+    const identifier = whoami?.email ?? whoami?.userId;
+    return identifier ? t("login.subtitle.successUser", { userId: identifier }) : t("login.subtitle.successDefault");
   }
   return t(`login.subtitle.${phase}`);
 }

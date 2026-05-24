@@ -170,6 +170,7 @@ export type WhoAmIMode = "logged_in" | "anonymous" | "api_key";
 export interface WhoAmIResult {
   mode: WhoAmIMode;
   userId?: string;
+  email?: string;
   session?: string;
   expiresAt?: string;
 }
@@ -309,21 +310,19 @@ export interface SubmitReportInput {
   taskId?: string;
   description: string;
   contactEmail?: string;
-  exportOpts: {
-    includeSettings: boolean;
-    includeEvents: boolean;
-    includeLogs: boolean;
-    includeRecent: boolean;
-  };
 }
 
 export interface SubmitReportResult {
   ticketId?: string;
-  viewUrl?: string;
-  bundlePath: string;
-  manifest: BundleManifest;
+  requestId?: string;
   uploaded: boolean;
   fallbackReason?: string;
+}
+
+export interface PeekReportContextResult {
+  requestId: string;
+  errorCode: string;
+  errorMessage: string;
 }
 
 export interface ReportCapabilityResult {
@@ -373,4 +372,5 @@ export interface DesktopAPI {
   exportLogs(input?: ExportLogsInput): Promise<ExportLogsResult>;
   submitReport(input: SubmitReportInput): Promise<SubmitReportResult>;
   getReportCapability(): Promise<ReportCapabilityResult>;
+  peekReportContext(taskId: string): Promise<PeekReportContextResult>;
 }
