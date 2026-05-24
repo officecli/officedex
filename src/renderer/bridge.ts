@@ -137,7 +137,7 @@ function createBrowserPreviewAPI(): DesktopAPI {
     },
     cancelAppUpdate: async () => undefined,
     onAppUpdateEvent: () => () => undefined,
-    exportLogs: async () => {
+    exportLogs: async (_input?: import("../shared/types").ExportLogsInput) => {
       throw new Error("Log export is only available inside the desktop app.");
     },
   };
@@ -360,7 +360,8 @@ function createWailsAPI(): DesktopAPI {
     cancelAppUpdate: () => WailsApp.CancelAppUpdate(),
     onAppUpdateEvent: (callback: (event: AppUpdateEvent) => void) =>
       EventsOn("appupdate:event", (payload: unknown) => callback(payload as AppUpdateEvent)),
-    exportLogs: () => WailsApp.ExportLogs() as Promise<{ path: string; manifest: import("../shared/types").BundleManifest }>,
+    exportLogs: (input?: import("../shared/types").ExportLogsInput) =>
+      WailsApp.ExportLogs(toWails(input ?? {})) as Promise<{ path: string; manifest: import("../shared/types").BundleManifest }>,
   };
 }
 

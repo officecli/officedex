@@ -124,6 +124,29 @@ export function App() {
     }
   }, [firstTaskID, selectedTaskID.kind]);
 
+  useEffect(() => {
+    const STALL_THRESHOLD = 120_000;
+    const interval = setInterval(() => {
+      setState((current) => {
+        let changed = false;
+        const now = Date.now();
+        const updatedTasks = { ...current.tasks };
+        for (const id of current.taskOrder) {
+          const task = updatedTasks[id];
+          if (!task || task.status !== "running") continue;
+          const lastActivity = task.lastProgressAt ?? (task.events[0]?.ts ? Date.parse(task.events[0].ts) : undefined);
+          if (lastActivity === undefined) continue;
+          if (now - lastActivity > STALL_THRESHOLD && !task.stalledSince) {
+            updatedTasks[id] = { ...task, stalledSince: now };
+            changed = true;
+          }
+        }
+        return changed ? { ...current, tasks: updatedTasks } : current;
+      });
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, []);
+
   const selectedTask = useMemo(() => {
     switch (selectedTaskID.kind) {
       case "none":
@@ -164,6 +187,7 @@ export function App() {
       setActiveNav("dialogue");
     } finally {
       setBusy(false);
+      nudgeForTaskTransition();
     }
   }
 

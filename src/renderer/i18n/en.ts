@@ -103,6 +103,12 @@ export const en: Record<string, string> = {
   "dialogue.terminal.events.waiting": "Waiting for Bridge events",
   "dialogue.terminal.events.noProgress": "No progress events",
   "dialogue.terminal.events.fallback": "Bridge Event",
+  "dialogue.terminal.exportLogs": "Export diagnostic logs",
+
+  // Dialogue — stalled
+  "dialogue.stalled.title": "Task may be stalled",
+  "dialogue.stalled.hint": "No progress update received for over 2 minutes. The task may have encountered an issue.",
+  "dialogue.stalled.exportLogs": "Export diagnostic logs",
 
   // Dialogue — progress panel
   "dialogue.progress.preparing": "Preparing…",
@@ -234,6 +240,18 @@ export const en: Record<string, string> = {
   "diagnostics.feedbackHint": "To report an issue, send the downloaded zip via support channel",
   "diagnostics.supportLink": "Contact support",
   "diagnostics.exported": "Exported",
+  "diagnostics.includeSettings": "Include settings",
+  "diagnostics.includeEvents": "Include events",
+  "diagnostics.includeLogs": "Include logs",
+  "diagnostics.includeRecent": "Include recent events",
+  "diagnostics.section.meta": "Meta",
+  "diagnostics.section.settings": "Settings",
+  "diagnostics.section.events": "Events",
+  "diagnostics.section.logs": "Logs",
+  "diagnostics.manifest.title": "Bundle Contents",
+  "diagnostics.manifest.empty": "No items in bundle",
+  "diagnostics.truncatedNotice": "Some files were truncated due to size limits.",
+  "diagnostics.excludedNotice": "Some items were excluded: {reasons}",
 
   // Login
   "login.title.loading": "Sign in to OfficeDex",

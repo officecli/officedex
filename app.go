@@ -753,6 +753,17 @@ func launchInstaller(path string) error {
 
 // ─── Diagnostics ────────────────────────────────────────────────────────────
 
+// ExportLogsInput is the optional input shape passed from the renderer. A
+// zero-value struct (no input from the renderer) is treated as "include all"
+// so that A0 callers continue to receive a fully-populated bundle.
+type ExportLogsInput struct {
+	TaskID          string `json:"taskId,omitempty"`
+	IncludeSettings bool   `json:"includeSettings"`
+	IncludeEvents   bool   `json:"includeEvents"`
+	IncludeLogs     bool   `json:"includeLogs"`
+	IncludeRecent   bool   `json:"includeRecent"`
+}
+
 // ExportLogsResult is the value returned by ExportLogs to the renderer.
 type ExportLogsResult struct {
 	Path     string                    `json:"path"`
@@ -761,7 +772,15 @@ type ExportLogsResult struct {
 
 // ExportLogs assembles a diagnostics bundle (scrubbed settings, events, logs)
 // into ~/Downloads and returns the path + manifest.
-func (a *App) ExportLogs() (ExportLogsResult, error) {
+func (a *App) ExportLogs(input ExportLogsInput) (ExportLogsResult, error) {
+	// Zero-value struct from a renderer that omitted input → default to all-on.
+	if !input.IncludeSettings && !input.IncludeEvents && !input.IncludeLogs && !input.IncludeRecent {
+		input.IncludeSettings = true
+		input.IncludeEvents = true
+		input.IncludeLogs = true
+		input.IncludeRecent = true
+	}
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ExportLogsResult{}, fmt.Errorf("export logs: home dir: %w", err)
@@ -787,8 +806,11 @@ func (a *App) ExportLogs() (ExportLogsResult, error) {
 		LocalStore:          a.localStore,
 		Settings:            currentSettings,
 		CachedBridgeEnv:     a.currentBridgeEnv(),
-		IncludeRecent:       true,
-		IncludeLogs:         true,
+		TaskID:              input.TaskID,
+		IncludeSettings:     input.IncludeSettings,
+		IncludeEvents:       input.IncludeEvents,
+		IncludeRecent:       input.IncludeRecent,
+		IncludeLogs:         input.IncludeLogs,
 		AppVersion:          appVersion,
 		BundleID:            bundleID,
 		RuntimeDroppedBytes: droppedBytes,

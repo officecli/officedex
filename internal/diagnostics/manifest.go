@@ -22,6 +22,8 @@ type BundleOptions struct {
 	TaskID          string
 	IncludeRecent   bool
 	IncludeLogs     bool
+	IncludeSettings bool
+	IncludeEvents   bool
 	AppVersion      string
 	Now             func() time.Time
 	BundleID        string

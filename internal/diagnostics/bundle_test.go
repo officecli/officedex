@@ -58,15 +58,17 @@ func TestBuildBundleBasic(t *testing.T) {
 
 	now := time.Date(2024, 3, 2, 12, 0, 0, 0, time.UTC)
 	zipPath, manifest, err := BuildBundle(context.Background(), BundleOptions{
-		DestDir:       destDir,
-		UserDataDir:   userDataDir,
-		LocalStore:    querier,
-		Settings:      types.UserSettings{LlmProvider: &types.LlmProvider{APIKey: "test-key-123", BaseURL: "https://api.test.com"}},
-		TaskID:        "task-1",
-		IncludeRecent: true,
-		IncludeLogs:   true,
-		AppVersion:    "1.0.0",
-		BundleID:      "test-bundle-id-123",
+		DestDir:         destDir,
+		UserDataDir:     userDataDir,
+		LocalStore:      querier,
+		Settings:        types.UserSettings{LlmProvider: &types.LlmProvider{APIKey: "test-key-123", BaseURL: "https://api.test.com"}},
+		TaskID:          "task-1",
+		IncludeSettings: true,
+		IncludeEvents:   true,
+		IncludeRecent:   true,
+		IncludeLogs:     true,
+		AppVersion:      "1.0.0",
+		BundleID:        "test-bundle-id-123",
 		Now:           func() time.Time { return now },
 	})
 	if err != nil {

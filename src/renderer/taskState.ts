@@ -40,6 +40,10 @@ export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState 
     stages,
     activeStageId,
   };
+  if (event.type === "task.progress") {
+    nextTask.lastProgressAt = Date.now();
+    nextTask.stalledSince = undefined;
+  }
   if (event.type === "task.question") {
     nextTask.question = questionFromPayload(event.payload);
     nextTask.status = "question";
@@ -50,15 +54,18 @@ export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState 
       nextTask.artifact = artifact;
     }
     nextTask.question = undefined;
+    nextTask.stalledSince = undefined;
     applyCreditPayload(nextTask, event.payload);
   }
   if (event.type === "task.failed") {
     nextTask.error = stringPayload(event, "message") || stringPayload(event, "error") || "Task failed";
     nextTask.question = undefined;
+    nextTask.stalledSince = undefined;
     applyCreditPayload(nextTask, event.payload);
   }
   if (event.type === "task.cancelled") {
     nextTask.question = undefined;
+    nextTask.stalledSince = undefined;
   }
 
   const tasks = { ...state.tasks, [taskID]: nextTask };

@@ -155,6 +155,8 @@ export interface DesktopTask {
   userInput?: TaskUserInput;
   creditCharged?: number | null;
   creditMode?: string;
+  lastProgressAt?: number;
+  stalledSince?: number;
 }
 
 export interface PreviewGrant {
@@ -295,6 +297,14 @@ export interface ExportLogsResult {
   manifest: BundleManifest;
 }
 
+export interface ExportLogsInput {
+  taskId?: string;
+  includeSettings: boolean;
+  includeEvents: boolean;
+  includeLogs: boolean;
+  includeRecent: boolean;
+}
+
 export type BinaryFileData = ArrayBuffer | Uint8Array;
 
 export interface DesktopAPI {
@@ -334,5 +344,5 @@ export interface DesktopAPI {
   installAppUpdate(): Promise<void>;
   cancelAppUpdate(): Promise<void>;
   onAppUpdateEvent(callback: (event: AppUpdateEvent) => void): () => void;
-  exportLogs(): Promise<ExportLogsResult>;
+  exportLogs(input?: ExportLogsInput): Promise<ExportLogsResult>;
 }

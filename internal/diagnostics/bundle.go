@@ -29,6 +29,16 @@ func BuildBundle(ctx context.Context, opts BundleOptions) (zipPath string, manif
 		now = time.Now
 	}
 
+	// Backward-compat: when no Include* flag is set (zero-value BundleOptions),
+	// include everything. This keeps older callers and tests working while
+	// letting newer callers opt out of specific sections.
+	if !opts.IncludeSettings && !opts.IncludeEvents && !opts.IncludeLogs && !opts.IncludeRecent {
+		opts.IncludeSettings = true
+		opts.IncludeEvents = true
+		opts.IncludeLogs = true
+		opts.IncludeRecent = true
+	}
+
 	manifest = BundleManifest{
 		SchemaVersion: 1,
 		BundleID:      opts.BundleID,
@@ -66,25 +76,27 @@ func BuildBundle(ctx context.Context, opts BundleOptions) (zipPath string, manif
 		SectionID: "meta",
 	})
 
-	settingsPath := filepath.Join(opts.UserDataDir, "settings.json")
-	scrubbedSettings := readAndScrubSettings(settingsPath, scrubber)
-	if err := writeZipEntry(zw, "settings.scrubbed.json", scrubbedSettings); err != nil {
-		_ = zw.Close()
-		_ = out.Close()
-		return "", manifest, fmt.Errorf("diagnostics: write settings: %w", err)
+	if opts.IncludeSettings {
+		settingsPath := filepath.Join(opts.UserDataDir, "settings.json")
+		scrubbedSettings := readAndScrubSettings(settingsPath, scrubber)
+		if err := writeZipEntry(zw, "settings.scrubbed.json", scrubbedSettings); err != nil {
+			_ = zw.Close()
+			_ = out.Close()
+			return "", manifest, fmt.Errorf("diagnostics: write settings: %w", err)
+		}
+		manifest.Items = append(manifest.Items, BundleItem{
+			Path:      "settings.scrubbed.json",
+			SizeBytes: int64(len(scrubbedSettings)),
+			SectionID: "settings",
+		})
 	}
-	manifest.Items = append(manifest.Items, BundleItem{
-		Path:      "settings.scrubbed.json",
-		SizeBytes: int64(len(scrubbedSettings)),
-		SectionID: "settings",
-	})
 
 	var totalSize int64
 	for _, item := range manifest.Items {
 		totalSize += item.SizeBytes
 	}
 
-	if opts.TaskID != "" && opts.LocalStore != nil {
+	if opts.IncludeEvents && opts.TaskID != "" && opts.LocalStore != nil {
 		events, qErr := opts.LocalStore.QueryEventsByTask(ctx, opts.TaskID)
 		if qErr == nil && len(events) > 0 {
 			entryName := fmt.Sprintf("events/task-%s.jsonl", opts.TaskID)

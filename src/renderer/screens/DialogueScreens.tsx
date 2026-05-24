@@ -195,6 +195,18 @@ function RunningDialogue({ task }: { task: DesktopTask }) {
     <div className="conversation-layout">
       <div className="chat-thread">
         <GenerationHistoryThread task={task} />
+        {task.stalledSince ? (
+          <div className="message ai-message stalled-hint" style={{ borderLeft: "3px solid #fa8c16" }}>
+            <div className="message-author">
+              <WarningFilled style={{ color: "#fa8c16" }} />
+              <strong>{t("dialogue.stalled.title")}</strong>
+            </div>
+            <p>{t("dialogue.stalled.hint")}</p>
+            <Button size="small" onClick={() => officecli.exportLogs({ taskId: task.id, includeSettings: true, includeEvents: true, includeLogs: true, includeRecent: true })}>
+              {t("dialogue.stalled.exportLogs")}
+            </Button>
+          </div>
+        ) : null}
         <div ref={bottomRef} />
       </div>
       <div className="docked-composer readonly">
@@ -283,33 +295,6 @@ function QuestionDialogue({ task }: { task: DesktopTask }) {
       </div>
       <div className="context-note">{t("dialogue.question.disclaimer")}</div>
     </div>
-  );
-}
-
-function renderCreditTag(task: DesktopTask, t: ReturnType<typeof useT>) {
-  if (task.status !== "completed" && task.status !== "failed" && task.status !== "cancelled") return null;
-  const charged = task.creditCharged;
-  if (charged === undefined || charged === null) {
-    return (
-      <Tooltip title={t("tasks.credit.legacy")}>
-        <Tag>—</Tag>
-      </Tooltip>
-    );
-  }
-  if (charged === 0) {
-    return (
-      <Tooltip title={t("tasks.credit.zero")}>
-        <Tag>0</Tag>
-      </Tooltip>
-    );
-  }
-  const modeKey = task.creditMode ? `tasks.credit.mode.${task.creditMode}` : "";
-  const modeLabel = modeKey ? t(modeKey) : "";
-  return (
-    <Tag color="purple">
-      {t("tasks.credit.unit", { count: String(charged) })}
-      {modeLabel ? ` · ${modeLabel}` : ""}
-    </Tag>
   );
 }
 
@@ -403,6 +388,9 @@ function TerminalDialogue({ task }: { task: DesktopTask }) {
             {creditTag}
           </div>
           <p>{description}</p>
+          <Button size="small" onClick={() => officecli.exportLogs({ taskId: task.id, includeSettings: true, includeEvents: true, includeLogs: true, includeRecent: true })}>
+            {t("dialogue.terminal.exportLogs")}
+          </Button>
           <div className="terminal-event-card">
             <span>{t("dialogue.history.taskIdLabel")}</span>
             <strong>{task.id}</strong>
@@ -665,6 +653,31 @@ function eventMeta(event: BridgeEvent, t: Translator): string {
 
 function taskSubject(task: DesktopTask, t: Translator): string {
   return task.topic || task.artifact?.fileName || task.documentType || t("dialogue.history.subject.fallback");
+}
+
+function renderCreditTag(task: DesktopTask, t: Translator) {
+  if (task.status !== "completed" && task.status !== "failed") return null;
+  const charged = task.creditCharged;
+  if (typeof charged !== "number") {
+    return (
+      <Tooltip title={t("tasks.credit.legacy")}>
+        <Tag color="default">—</Tag>
+      </Tooltip>
+    );
+  }
+  const mode = task.creditMode || "";
+  const modeKey = mode ? `tasks.credit.mode.${mode}` : "";
+  const modeLabel = modeKey ? t(modeKey) : "";
+  const modeText = modeLabel && modeLabel !== modeKey ? modeLabel : mode;
+  if (charged === 0) {
+    return (
+      <Tooltip title={t("tasks.credit.zero")}>
+        <Tag color="default">{modeText ? `0 · ${modeText}` : "0"}</Tag>
+      </Tooltip>
+    );
+  }
+  const text = t("tasks.credit.unit", { count: charged });
+  return <Tag color="purple">{modeText ? `${text} · ${modeText}` : text}</Tag>;
 }
 
 function taskDurationLabel(events: BridgeEvent[], t: Translator): string {

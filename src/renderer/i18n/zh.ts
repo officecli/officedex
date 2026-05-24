@@ -103,6 +103,12 @@ export const zh: Record<string, string> = {
   "dialogue.terminal.events.waiting": "等待 Bridge 事件",
   "dialogue.terminal.events.noProgress": "暂无进度事件",
   "dialogue.terminal.events.fallback": "Bridge 事件",
+  "dialogue.terminal.exportLogs": "导出诊断日志",
+
+  // Dialogue — stalled
+  "dialogue.stalled.title": "任务可能已停滞",
+  "dialogue.stalled.hint": "超过 2 分钟未收到进度更新，任务可能遇到问题。",
+  "dialogue.stalled.exportLogs": "导出诊断日志",
 
   // Dialogue — progress panel
   "dialogue.progress.preparing": "准备中……",
@@ -234,6 +240,18 @@ export const zh: Record<string, string> = {
   "diagnostics.feedbackHint": "如需上报问题，请将下载的 zip 通过反馈渠道发送",
   "diagnostics.supportLink": "联系支持",
   "diagnostics.exported": "已导出",
+  "diagnostics.includeSettings": "包含设置",
+  "diagnostics.includeEvents": "包含事件",
+  "diagnostics.includeLogs": "包含日志",
+  "diagnostics.includeRecent": "包含近期事件",
+  "diagnostics.section.meta": "元信息",
+  "diagnostics.section.settings": "设置",
+  "diagnostics.section.events": "事件",
+  "diagnostics.section.logs": "日志",
+  "diagnostics.manifest.title": "包内容",
+  "diagnostics.manifest.empty": "包中无内容",
+  "diagnostics.truncatedNotice": "部分文件因大小限制被截断。",
+  "diagnostics.excludedNotice": "部分内容被排除：{reasons}",
 
   // Login
   "login.title.loading": "登录 OfficeDex",
@@ -295,7 +313,7 @@ export const zh: Record<string, string> = {
   "tasks.column.runtime": "运行环境",
   "tasks.column.updatedAt": "更新时间",
   "tasks.column.artifacts": "产物",
-  "tasks.column.credit": "花费",
+  "tasks.column.credit": "本次花费",
   "tasks.column.actions": "操作",
   "tasks.runtime.localBridge": "本地 Bridge",
   "tasks.empty": "暂无 Bridge 任务",
@@ -311,8 +329,8 @@ export const zh: Record<string, string> = {
   "tasks.status.failed": "失败",
   "tasks.status.cancelled": "已取消",
   "tasks.credit.unit": "{count} credits",
-  "tasks.credit.legacy": "此任务由旧版 OfficeCLI 生成，未上报花费数据。",
-  "tasks.credit.zero": "未扣费（任务失败或匿名模式）。",
+  "tasks.credit.legacy": "此任务由旧版 OfficeCLI 生成，未上报本次花费。",
+  "tasks.credit.zero": "本次未扣除 credits（失败或匿名模式）。",
   "tasks.credit.mode.hosted": "托管",
   "tasks.credit.mode.api_key": "自带密钥",
   "tasks.credit.mode.anonymous": "匿名",
