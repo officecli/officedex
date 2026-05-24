@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.2.1",
   "type": "module",
-  "officecliVersion": "0.2.79",
+  "officecliVersion": "0.2.92",
   "scripts": {
     "prefetch:officecli": "node scripts/fetch-officecli.mjs",
     "predev": "npm run prefetch:officecli",
