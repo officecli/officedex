@@ -1,7 +1,16 @@
 {
   "name": "officedex",
-  "private": true,
   "version": "0.2.1",
+  "description": "The AI desktop workspace for documents, slides, and spreadsheets. Wails v2 + React 19 client for OfficeCLI.",
+  "license": "MIT",
+  "homepage": "https://github.com/officecli/officedex#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/officecli/officedex.git"
+  },
+  "bugs": {
+    "url": "https://github.com/officecli/officedex/issues"
+  },
   "type": "module",
   "officecliVersion": "0.2.92",
   "scripts": {

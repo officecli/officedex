@@ -16,8 +16,7 @@
 </p>
 
 <p>
-  <!-- TODO-RELEASE-URL: 把下面 href="#" 改成实际 GitHub Releases 链接 -->
-  <a href="#"><img src="https://img.shields.io/badge/下载-macOS%20%7C%20Windows-5645d4?style=for-the-badge" alt="Download" /></a>
+  <a href="https://github.com/officecli/officedex/releases/latest"><img src="https://img.shields.io/badge/下载-macOS%20%7C%20Windows-5645d4?style=for-the-badge" alt="Download" /></a>
   <a href="#-核心能力"><img src="https://img.shields.io/badge/AI%20文档%20·%20PPT%20·%20表格-生成-1aae39?style=for-the-badge" alt="Features" /></a>
   <img src="https://img.shields.io/badge/Wails%20v2%20%2B%20React%2019-跨平台原生-0075de?style=for-the-badge" alt="Tech Stack" />
 </p>
@@ -28,8 +27,7 @@
 
 <p>
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-37352f?style=flat-square" alt="Platform" />
-  <!-- TODO-RELEASE-URL: 仓库公开后改用动态徽章 https://img.shields.io/github/v/release/{owner}/{repo} -->
-  <img src="https://img.shields.io/badge/version-0.2.x-5645d4?style=flat-square" alt="Version" />
+  <img src="https://img.shields.io/github/v/release/officecli/officedex?style=flat-square&color=5645d4&label=version" alt="Version" />
   <img src="https://img.shields.io/badge/stack-Wails%20v2%20%2B%20React%2019-0075de?style=flat-square" alt="Stack" />
   <img src="https://img.shields.io/badge/UI-Notion%20Design-1aae39?style=flat-square" alt="UI" />
   <img src="https://img.shields.io/badge/license-MIT-1aae39?style=flat-square" alt="License" />
@@ -188,7 +186,7 @@
 | 🍎 macOS (Apple Silicon / Intel) | `OfficeDex-x.y.z-arm64.dmg` / `-x64.dmg` | 双击 .dmg → 拖入 Applications |
 | 🪟 Windows 10/11 | `OfficeDex-Setup-x.y.z.exe` | 双击安装，首次启动自动下载 OfficeCLI runtime |
 
-最新 Release：<!-- TODO-RELEASE-URL: 替换为实际的 GitHub Releases 链接 --> *待补充*
+最新 Release：**[github.com/officecli/officedex/releases/latest](https://github.com/officecli/officedex/releases/latest)**
 
 ### 开发者：本地跑起来
 

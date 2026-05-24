@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Discussions
+    url: https://github.com/officecli/officedex/discussions
+    about: Ask questions, share workflows, or float ideas before filing a feature request.
+  - name: 🔐 Security vulnerability
+    url: https://github.com/officecli/officedex/security/advisories/new
+    about: Report a security issue privately (do not open a public issue).
+  - name: 🛠 officecli (CLI engine) bugs
+    url: https://github.com/officecli/officecli/issues
+    about: Bugs in the bundled command-line generator live in the officecli repo.

@@ -16,8 +16,7 @@
 </p>
 
 <p>
-  <!-- TODO-RELEASE-URL: change href="#" to the actual GitHub Releases URL -->
-  <a href="#"><img src="https://img.shields.io/badge/Download-macOS%20%7C%20Windows-5645d4?style=for-the-badge" alt="Download" /></a>
+  <a href="https://github.com/officecli/officedex/releases/latest"><img src="https://img.shields.io/badge/Download-macOS%20%7C%20Windows-5645d4?style=for-the-badge" alt="Download" /></a>
   <a href="#-core-capabilities"><img src="https://img.shields.io/badge/AI%20Docs%20·%20Slides%20·%20Sheets-Generate-1aae39?style=for-the-badge" alt="Features" /></a>
   <img src="https://img.shields.io/badge/Wails%20v2%20%2B%20React%2019-Native%20Cross--platform-0075de?style=for-the-badge" alt="Tech Stack" />
 </p>
@@ -28,8 +27,7 @@
 
 <p>
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-37352f?style=flat-square" alt="Platform" />
-  <!-- TODO-RELEASE-URL: once repo is public, switch to dynamic badge https://img.shields.io/github/v/release/{owner}/{repo} -->
-  <img src="https://img.shields.io/badge/version-0.2.x-5645d4?style=flat-square" alt="Version" />
+  <img src="https://img.shields.io/github/v/release/officecli/officedex?style=flat-square&color=5645d4&label=version" alt="Version" />
   <img src="https://img.shields.io/badge/stack-Wails%20v2%20%2B%20React%2019-0075de?style=flat-square" alt="Stack" />
   <img src="https://img.shields.io/badge/UI-Notion%20Design-1aae39?style=flat-square" alt="UI" />
   <img src="https://img.shields.io/badge/license-MIT-1aae39?style=flat-square" alt="License" />
@@ -188,7 +186,7 @@ Powered by `docx-preview` / `pdfjs-dist` / `xlsx` for inline rendering. DOCX / P
 | 🍎 macOS (Apple Silicon / Intel) | `OfficeDex-x.y.z-arm64.dmg` / `-x64.dmg` | Double-click `.dmg` → drag to Applications |
 | 🪟 Windows 10/11 | `OfficeDex-Setup-x.y.z.exe` | Double-click to install. First launch auto-downloads the OfficeCLI runtime. |
 
-Latest Release: <!-- TODO-RELEASE-URL: replace with actual GitHub Releases URL --> *coming soon*
+Latest Release: **[github.com/officecli/officedex/releases/latest](https://github.com/officecli/officedex/releases/latest)**
 
 ### Developers: run from source
 
