@@ -19,7 +19,13 @@ export const zh: Record<string, string> = {
   "shell.creditMeter.loading": "加载中…",
   "shell.creditMeter.tooltip": "剩余 {remaining} credits，共 {total}",
   "shell.creditMeter.tooltipWithPlan": "剩余 {remaining} credits，共 {total} · {plan}",
+  "shell.creditMeter.tooltipBalance": "账户余额 {balance} credits",
+  "shell.creditMeter.tooltipBalanceWithPlan": "账户余额 {balance} credits · {plan}",
+  "shell.creditMeter.valueWithUnit": "{value} credits",
   "shell.creditMeter.aria": "Credit 余额：{tooltip}",
+  "shell.creditMeter.show": "显示余额",
+  "shell.creditMeter.hide": "隐藏余额",
+  "shell.creditMeter.hiddenTooltip": "余额已隐藏",
 
   // Dialogue — common
   "dialogue.tag.justCreated": "刚刚创建",

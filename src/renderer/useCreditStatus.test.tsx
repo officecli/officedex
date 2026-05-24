@@ -52,7 +52,7 @@ describe("deriveCreditInfo", () => {
         anonymousCreditBalance: 100,
       }),
     );
-    expect(credit).toEqual({ used: 25, total: 100, planLabel: "Credits" });
+    expect(credit).toEqual({ displayMode: "quota", used: 25, total: 100, planLabel: "Credits" });
   });
 
   it("anonymous credits at full balance → 0/100", () => {
@@ -64,10 +64,10 @@ describe("deriveCreditInfo", () => {
         anonymousCreditBalance: 100,
       }),
     );
-    expect(credit).toEqual({ used: 0, total: 100, planLabel: "Credits" });
+    expect(credit).toEqual({ displayMode: "quota", used: 0, total: 100, planLabel: "Credits" });
   });
 
-  it("logged_in + hostedCreditBalance → 0/balance with plan label, ignores any anonymous credits", () => {
+  it("logged_in + hostedCreditBalance → balance display, ignores any anonymous credits", () => {
     const credit = deriveCreditInfo(
       makeStatus({
         mode: "logged_in",
@@ -79,7 +79,7 @@ describe("deriveCreditInfo", () => {
         anonymousCreditBalance: 5,
       }),
     );
-    expect(credit).toEqual({ used: 0, total: 42, planLabel: "Pro" });
+    expect(credit).toEqual({ displayMode: "balance", used: 0, total: 42, planLabel: "Pro" });
   });
 
   it("logged_in + hostedCreditBalance without planName → falls back to 'Hosted credits'", () => {
@@ -90,7 +90,7 @@ describe("deriveCreditInfo", () => {
         accessMode: "",
       }),
     );
-    expect(credit).toEqual({ used: 0, total: 12, planLabel: "Hosted credits" });
+    expect(credit).toEqual({ displayMode: "balance", used: 0, total: 12, planLabel: "Hosted credits" });
   });
 
   it("anonymous with no anonymous-credits line → 0/0 fallback with 'Credits' label", () => {
@@ -100,7 +100,7 @@ describe("deriveCreditInfo", () => {
         anonymousCreditBalance: null,
       }),
     );
-    expect(credit).toEqual({ used: 0, total: 0, planLabel: "Credits" });
+    expect(credit).toEqual({ displayMode: "quota", used: 0, total: 0, planLabel: "Credits" });
   });
 
   it("api_key + paidKeyTotal → uses paid-key burndown", () => {
@@ -113,12 +113,12 @@ describe("deriveCreditInfo", () => {
         paidKeyRemaining: 900,
       }),
     );
-    expect(credit).toEqual({ used: 100, total: 1000, planLabel: "API key sk-abc" });
+    expect(credit).toEqual({ displayMode: "quota", used: 100, total: 1000, planLabel: "API key sk-abc" });
   });
 
   it("zero everywhere → 0/0 placeholder with sensible label", () => {
     const credit = deriveCreditInfo(makeStatus({ accessMode: "anonymous" }));
-    expect(credit).toEqual({ used: 0, total: 0, planLabel: "anonymous" });
+    expect(credit).toEqual({ displayMode: "quota", used: 0, total: 0, planLabel: "anonymous" });
   });
 });
 
@@ -137,7 +137,7 @@ describe("useCreditStatus", () => {
     const { result } = renderHook(() => useCreditStatus());
     await flush();
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(result.current.credit).toEqual({ used: 10, total: 100, planLabel: "Credits" });
+    expect(result.current.credit).toEqual({ displayMode: "quota", used: 10, total: 100, planLabel: "Credits" });
 
     await act(async () => {
       vi.advanceTimersByTime(60_000);
@@ -177,7 +177,7 @@ describe("useCreditStatus", () => {
 
     const { result } = renderHook(() => useCreditStatus());
     await flush();
-    expect(result.current.credit).toEqual({ used: 5, total: 50, planLabel: "Credits" });
+    expect(result.current.credit).toEqual({ displayMode: "quota", used: 5, total: 50, planLabel: "Credits" });
 
     await act(async () => {
       vi.advanceTimersByTime(60_000);
@@ -185,7 +185,7 @@ describe("useCreditStatus", () => {
     await flush();
     expect(spy).toHaveBeenCalledTimes(2);
     // Last successful credit is preserved when the second fetch fails.
-    expect(result.current.credit).toEqual({ used: 5, total: 50, planLabel: "Credits" });
+    expect(result.current.credit).toEqual({ displayMode: "quota", used: 5, total: 50, planLabel: "Credits" });
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
   });

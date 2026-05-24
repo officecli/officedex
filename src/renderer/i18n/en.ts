@@ -19,7 +19,13 @@ export const en: Record<string, string> = {
   "shell.creditMeter.loading": "Loading…",
   "shell.creditMeter.tooltip": "{remaining} credits remaining of {total}",
   "shell.creditMeter.tooltipWithPlan": "{remaining} credits remaining of {total} · {plan}",
+  "shell.creditMeter.tooltipBalance": "{balance} credits in account",
+  "shell.creditMeter.tooltipBalanceWithPlan": "{balance} credits in account · {plan}",
+  "shell.creditMeter.valueWithUnit": "{value} credits",
   "shell.creditMeter.aria": "Credit balance: {tooltip}",
+  "shell.creditMeter.show": "Show credit balance",
+  "shell.creditMeter.hide": "Hide credit balance",
+  "shell.creditMeter.hiddenTooltip": "Credit balance hidden",
 
   // Dialogue — common
   "dialogue.tag.justCreated": "Just Created",

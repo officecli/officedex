@@ -144,6 +144,40 @@
   gap: 6px;
 }
 
+.credit-meter-row-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.credit-meter-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--n-slate);
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 120ms ease, color 120ms ease;
+  flex-shrink: 0;
+}
+
+.credit-meter-toggle:hover {
+  background: var(--n-hairline);
+  color: var(--n-charcoal);
+}
+
+.credit-meter-toggle:focus-visible {
+  outline: 2px solid var(--n-primary);
+  outline-offset: 1px;
+}
+
 .credit-meter-icon {
   font-size: 14px;
   color: var(--n-primary);
@@ -161,7 +195,6 @@
 }
 
 .credit-meter-value {
-  flex: 1;
   min-width: 0;
   font-size: 12px;
   font-weight: 600;
@@ -170,7 +203,14 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-align: right;
+}
+
+.credit-meter-balance-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--n-charcoal);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .credit-meter-total {

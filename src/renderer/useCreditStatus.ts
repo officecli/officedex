@@ -7,12 +7,19 @@ const POLL_INTERVAL_MS = 60_000;
 const NUDGE_DELAY_MS = 800;
 
 // deriveCreditInfo maps the raw CLI quota snapshot onto the sidebar meter's
-// { used, total, planLabel } shape. Priority: paid API-key burndown →
-// hosted-credit balance → anonymous credits → zero placeholder.
+// shape. Two display modes:
+//   - "quota":   bounded plan (paid API-key burndown, anonymous device pool)
+//                — used/total with progress bar.
+//   - "balance": open-ended wallet (hosted credits) — just the balance, no bar,
+//                because the cap is unknown and would otherwise shrink alongside
+//                the remaining value on each charge.
+// Priority: paid API-key burndown → hosted-credit balance → anonymous credits →
+// zero placeholder.
 export function deriveCreditInfo(status: CreditStatus): CreditInfo {
   if (status.mode === "api_key" && status.paidKeyTotal > 0) {
     const prefix = status.paidKeyPrefix ? ` ${status.paidKeyPrefix}` : "";
     return {
+      displayMode: "quota",
       used: status.paidKeyUsed,
       total: status.paidKeyTotal,
       planLabel: `API key${prefix}`,
@@ -21,6 +28,7 @@ export function deriveCreditInfo(status: CreditStatus): CreditInfo {
   if (status.mode !== "anonymous" && status.hostedCreditBalance !== null) {
     const balance = Math.max(0, status.hostedCreditBalance);
     return {
+      displayMode: "balance",
       used: 0,
       total: balance,
       planLabel: status.planName || status.accessMode || "Hosted credits",
@@ -31,12 +39,14 @@ export function deriveCreditInfo(status: CreditStatus): CreditInfo {
     const available = Math.max(0, status.anonymousCreditAvailable ?? 0);
     const used = Math.max(0, total - available);
     return {
+      displayMode: "quota",
       used,
       total,
       planLabel: status.planName || "Credits",
     };
   }
   return {
+    displayMode: "quota",
     used: 0,
     total: 0,
     planLabel: status.planName || status.accessMode || "Credits",

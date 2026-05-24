@@ -11,6 +11,8 @@ import {
   ControlOutlined,
   DesktopOutlined,
   EditOutlined,
+  EyeInvisibleOutlined,
+  EyeOutlined,
   FileDoneOutlined,
   FileImageOutlined,
   FileTextOutlined,
@@ -38,12 +40,18 @@ import type { NavKey } from "../defaults";
 import { useT } from "../i18n";
 
 export interface CreditInfo {
+  // "quota" = bounded plan with a known cap (api_key burndown, anonymous device pool).
+  //           Renders as remaining/total + percent + progress bar.
+  // "balance" = open-ended wallet (hosted credits) with no meaningful cap.
+  //             Renders as a single balance number, no bar.
+  displayMode: "quota" | "balance";
   used: number;
   total: number;
   planLabel?: string;
 }
 
 const DEFAULT_CREDIT: CreditInfo = {
+  displayMode: "quota",
   used: 0,
   total: 0,
   planLabel: "Credits",
@@ -169,10 +177,58 @@ export function MaterialSymbol({ name }: { name: string }) {
   return <span className="material-symbol">{icon}</span>;
 }
 
+const MASKED_VALUE = "••••";
+
 export function CreditMeter({ info }: { info?: CreditInfo }) {
   const t = useT();
+  const [hidden, setHidden] = useState(true);
   const loading = !info;
   const value = info ?? DEFAULT_CREDIT;
+  const planLabel = value.planLabel || t("shell.creditMeter.label");
+  const toggleLabel = hidden ? t("shell.creditMeter.show") : t("shell.creditMeter.hide");
+
+  const toggleButton = (
+    <button
+      type="button"
+      className="credit-meter-toggle"
+      aria-label={toggleLabel}
+      aria-pressed={!hidden}
+      title={toggleLabel}
+      onClick={(event) => {
+        event.stopPropagation();
+        setHidden((prev) => !prev);
+      }}
+    >
+      {hidden ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+    </button>
+  );
+
+  if (!loading && value.displayMode === "balance") {
+    const balance = Math.max(0, Math.floor(value.total));
+    const balanceText = hidden
+      ? MASKED_VALUE
+      : t("shell.creditMeter.valueWithUnit", { value: formatNumber(balance) });
+    const tooltipBody = hidden
+      ? t("shell.creditMeter.hiddenTooltip")
+      : value.planLabel
+        ? t("shell.creditMeter.tooltipBalanceWithPlan", { balance: formatNumber(balance), plan: value.planLabel })
+        : t("shell.creditMeter.tooltipBalance", { balance: formatNumber(balance) });
+    return (
+      <div className="credit-meter credit-meter-balance" role="group" aria-label={t("shell.creditMeter.aria", { tooltip: tooltipBody })}>
+        <div className="credit-meter-row">
+          <Tooltip title={tooltipBody} placement="top">
+            <div className="credit-meter-row-main">
+              <ThunderboltOutlined className="credit-meter-icon" aria-hidden />
+              <span className="credit-meter-label">{planLabel}</span>
+              <span className="credit-meter-balance-value">{balanceText}</span>
+            </div>
+          </Tooltip>
+          {toggleButton}
+        </div>
+      </div>
+    );
+  }
+
   const total = Math.max(0, Math.floor(value.total));
   const used = Math.max(0, Math.floor(value.used));
   const clampedUsed = Math.min(used, total);
@@ -181,41 +237,45 @@ export function CreditMeter({ info }: { info?: CreditInfo }) {
   const percent = total === 0 ? 0 : Math.round(remainingRatio * 100);
   const tone = remainingRatio <= 0.1 ? "critical" : remainingRatio <= 0.25 ? "low" : "normal";
   const strokeColor = tone === "critical" ? notion.error : tone === "low" ? notion.warning : notion.primary;
-  const planLabel = value.planLabel || t("shell.creditMeter.label");
   const tooltipBody = loading
     ? t("shell.creditMeter.loading")
-    : value.planLabel
-      ? t("shell.creditMeter.tooltipWithPlan", { remaining: formatNumber(remaining), total: formatNumber(total), plan: value.planLabel })
-      : t("shell.creditMeter.tooltip", { remaining: formatNumber(remaining), total: formatNumber(total) });
+    : hidden
+      ? t("shell.creditMeter.hiddenTooltip")
+      : value.planLabel
+        ? t("shell.creditMeter.tooltipWithPlan", { remaining: formatNumber(remaining), total: formatNumber(total), plan: value.planLabel })
+        : t("shell.creditMeter.tooltip", { remaining: formatNumber(remaining), total: formatNumber(total) });
 
   return (
-    <Tooltip title={tooltipBody} placement="top">
-      <div className={`credit-meter credit-meter-${tone}`} role="group" aria-label={t("shell.creditMeter.aria", { tooltip: tooltipBody })}>
-        <div className="credit-meter-row">
-          {loading ? <Spin size="small" /> : <ThunderboltOutlined className="credit-meter-icon" aria-hidden />}
-          <span className="credit-meter-label">{loading ? t("shell.creditMeter.loading") : planLabel}</span>
-          {!loading && (
-            <>
-              <span className="credit-meter-value">
-                {formatNumber(remaining)} / {formatNumber(total)}
-              </span>
-              <span className="credit-meter-percent">{percent}%</span>
-            </>
-          )}
-        </div>
-        {!loading && (
-          <Progress
-            className="credit-meter-bar"
-            percent={percent}
-            showInfo={false}
-            size="small"
-            strokeColor={strokeColor}
-            railColor={notion.hairline}
-            aria-hidden
-          />
-        )}
+    <div className={`credit-meter credit-meter-${tone}`} role="group" aria-label={t("shell.creditMeter.aria", { tooltip: tooltipBody })}>
+      <div className="credit-meter-row">
+        <Tooltip title={tooltipBody} placement="top">
+          <div className="credit-meter-row-main">
+            {loading ? <Spin size="small" /> : <ThunderboltOutlined className="credit-meter-icon" aria-hidden />}
+            <span className="credit-meter-label">{loading ? t("shell.creditMeter.loading") : planLabel}</span>
+            {!loading && (
+              <>
+                <span className="credit-meter-value">
+                  {hidden ? MASKED_VALUE : `${formatNumber(remaining)} / ${formatNumber(total)}`}
+                </span>
+                {!hidden && <span className="credit-meter-percent">{percent}%</span>}
+              </>
+            )}
+          </div>
+        </Tooltip>
+        {!loading && toggleButton}
       </div>
-    </Tooltip>
+      {!loading && (
+        <Progress
+          className="credit-meter-bar"
+          percent={hidden ? 100 : percent}
+          showInfo={false}
+          size="small"
+          strokeColor={hidden ? notion.hairline : strokeColor}
+          railColor={notion.hairline}
+          aria-hidden
+        />
+      )}
+    </div>
   );
 }
 
