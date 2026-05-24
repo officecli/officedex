@@ -125,13 +125,10 @@
 }
 
 .credit-meter {
-  margin-top: auto;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 6px 10px 7px;
-  border: 1px solid var(--n-hairline);
-  border-radius: var(--radius-lg);
+  padding: 4px 12px;
   background: var(--n-canvas);
   color: var(--n-charcoal);
   cursor: default;
@@ -139,7 +136,6 @@
 
 .fluid-shell .credit-meter {
   background: var(--n-surface);
-  border-color: var(--n-hairline-soft);
 }
 
 .credit-meter-row {
@@ -214,28 +210,11 @@
   border-color: rgba(224, 49, 49, 0.35);
 }
 
-.credit-meter-collapsed {
-  padding: 6px;
-  align-items: center;
-}
 
-.credit-meter-collapsed .credit-meter-value,
-.credit-meter-collapsed .credit-meter-label,
-.credit-meter-collapsed .credit-meter-percent {
-  display: none;
-}
-
-.credit-meter-collapsed .credit-meter-row {
-  justify-content: center;
-}
-
-.credit-meter-sidebar {
-  padding: 8px 8px 0;
-  margin-top: auto;
-}
-
-.sidebar-collapsed .credit-meter-sidebar {
-  padding: 8px 4px 0;
+.main-frame .credit-meter {
+  max-width: none;
+  padding: 6px 48px;
+  border-top: 1px solid var(--n-hairline);
 }
 
 /* ─── Main Frame ─── */

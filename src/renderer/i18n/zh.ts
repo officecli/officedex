@@ -16,6 +16,7 @@ export const zh: Record<string, string> = {
   "shell.sidebar.expand": "展开侧栏",
   "shell.workspace": "OfficeDex 工作区",
   "shell.creditMeter.label": "Credits",
+  "shell.creditMeter.loading": "加载中…",
   "shell.creditMeter.tooltip": "剩余 {remaining} credits，共 {total}",
   "shell.creditMeter.tooltipWithPlan": "剩余 {remaining} credits，共 {total} · {plan}",
   "shell.creditMeter.aria": "Credit 余额：{tooltip}",

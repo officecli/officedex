@@ -85,13 +85,6 @@ function FluidNewGeneration({ busy, onSubmit }: { busy: boolean; onSubmit: (valu
 
   return (
     <div className="fluid-new-task">
-      <div className="fluid-task-header">
-        <Space>
-          <Tag icon={<MaterialSymbol name="schedule" />}>{t("dialogue.tag.justCreated")}</Tag>
-          <Tag icon={<MaterialSymbol name="cloud_off" />}>{t("dialogue.tag.unsavedDraft")}</Tag>
-          <Tag icon={<MaterialSymbol name="lock_open" />}>{t("dialogue.tag.personalWorkspace")}</Tag>
-        </Space>
-      </div>
       <section className="fluid-start-card">
         <div className="fluid-spark">
           <MaterialSymbol name="auto_awesome" />
@@ -146,7 +139,7 @@ function FluidNewGeneration({ busy, onSubmit }: { busy: boolean; onSubmit: (valu
             <Button type="text" size="small" icon={<DeleteOutlined />} onClick={attachments.clearSourceFile} />
           </div>
         ) : null}
-        {attachments.referenceImagesSpec ? (
+        {attachments.referenceImagesSpec && attachments.referenceImages.length > 0 ? (
           <ReferenceImageStrip
             items={attachments.referenceImages}
             maxCount={attachments.referenceImagesSpec.maxCount}

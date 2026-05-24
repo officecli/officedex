@@ -1,4 +1,4 @@
-import { Button, Progress, Space, Tooltip } from "antd";
+import { Button, Progress, Space, Spin, Tooltip } from "antd";
 import { useState } from "react";
 import {
   AppstoreOutlined,
@@ -120,9 +120,6 @@ export function Shell({
             </Tooltip>
           ))}
         </nav>
-        <div className="credit-meter-sidebar">
-          <CreditMeter info={credit} collapsed={collapsed} />
-        </div>
         <Tooltip title={collapsed ? t("shell.nav.profile") : ""} placement="right">
           <button className={`nav-item profile-link ${activeNav === "login" ? "active" : ""}`} onClick={() => onNavChange("login")}>
             <UserOutlined />
@@ -161,6 +158,7 @@ export function Shell({
           <section className="stage">{children}</section>
           {inspector ? <aside className="preview-panel">{inspector}</aside> : null}
         </div>
+        <CreditMeter info={credit} />
       </main>
     </div>
   );
@@ -171,8 +169,9 @@ export function MaterialSymbol({ name }: { name: string }) {
   return <span className="material-symbol">{icon}</span>;
 }
 
-export function CreditMeter({ info, collapsed = false }: { info?: CreditInfo; collapsed?: boolean }) {
+export function CreditMeter({ info }: { info?: CreditInfo }) {
   const t = useT();
+  const loading = !info;
   const value = info ?? DEFAULT_CREDIT;
   const total = Math.max(0, Math.floor(value.total));
   const used = Math.max(0, Math.floor(value.used));
@@ -183,30 +182,38 @@ export function CreditMeter({ info, collapsed = false }: { info?: CreditInfo; co
   const tone = remainingRatio <= 0.1 ? "critical" : remainingRatio <= 0.25 ? "low" : "normal";
   const strokeColor = tone === "critical" ? notion.error : tone === "low" ? notion.warning : notion.primary;
   const planLabel = value.planLabel || t("shell.creditMeter.label");
-  const tooltipBody = value.planLabel
-    ? t("shell.creditMeter.tooltipWithPlan", { remaining: formatNumber(remaining), total: formatNumber(total), plan: value.planLabel })
-    : t("shell.creditMeter.tooltip", { remaining: formatNumber(remaining), total: formatNumber(total) });
+  const tooltipBody = loading
+    ? t("shell.creditMeter.loading")
+    : value.planLabel
+      ? t("shell.creditMeter.tooltipWithPlan", { remaining: formatNumber(remaining), total: formatNumber(total), plan: value.planLabel })
+      : t("shell.creditMeter.tooltip", { remaining: formatNumber(remaining), total: formatNumber(total) });
 
   return (
-    <Tooltip title={tooltipBody} placement="right">
-      <div className={`credit-meter credit-meter-${tone}${collapsed ? " credit-meter-collapsed" : ""}`} role="group" aria-label={t("shell.creditMeter.aria", { tooltip: tooltipBody })}>
+    <Tooltip title={tooltipBody} placement="top">
+      <div className={`credit-meter credit-meter-${tone}`} role="group" aria-label={t("shell.creditMeter.aria", { tooltip: tooltipBody })}>
         <div className="credit-meter-row">
-          <ThunderboltOutlined className="credit-meter-icon" aria-hidden />
-          <span className="credit-meter-label">{planLabel}</span>
-          <span className="credit-meter-value">
-            {formatNumber(remaining)} / {formatNumber(total)}
-          </span>
-          <span className="credit-meter-percent">{percent}%</span>
+          {loading ? <Spin size="small" /> : <ThunderboltOutlined className="credit-meter-icon" aria-hidden />}
+          <span className="credit-meter-label">{loading ? t("shell.creditMeter.loading") : planLabel}</span>
+          {!loading && (
+            <>
+              <span className="credit-meter-value">
+                {formatNumber(remaining)} / {formatNumber(total)}
+              </span>
+              <span className="credit-meter-percent">{percent}%</span>
+            </>
+          )}
         </div>
-        <Progress
-          className="credit-meter-bar"
-          percent={percent}
-          showInfo={false}
-          size="small"
-          strokeColor={strokeColor}
-          railColor={notion.hairline}
-          aria-hidden
-        />
+        {!loading && (
+          <Progress
+            className="credit-meter-bar"
+            percent={percent}
+            showInfo={false}
+            size="small"
+            strokeColor={strokeColor}
+            railColor={notion.hairline}
+            aria-hidden
+          />
+        )}
       </div>
     </Tooltip>
   );

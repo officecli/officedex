@@ -47,11 +47,6 @@
   padding: 36px 48px 24px;
 }
 
-.fluid-task-header {
-  display: flex;
-  justify-content: flex-end;
-}
-
 .fluid-start-card {
   display: grid;
   flex: 1;
@@ -774,7 +769,7 @@
 
 .failure-center {
   display: grid;
-  min-height: calc(100vh - 100px);
+  min-height: calc(100vh - 140px);
   place-items: center;
   align-content: center;
   gap: 16px;

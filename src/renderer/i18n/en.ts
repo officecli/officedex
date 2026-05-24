@@ -16,6 +16,7 @@ export const en: Record<string, string> = {
   "shell.sidebar.expand": "Expand sidebar",
   "shell.workspace": "OfficeDex Workspace",
   "shell.creditMeter.label": "Credits",
+  "shell.creditMeter.loading": "Loading…",
   "shell.creditMeter.tooltip": "{remaining} credits remaining of {total}",
   "shell.creditMeter.tooltipWithPlan": "{remaining} credits remaining of {total} · {plan}",
   "shell.creditMeter.aria": "Credit balance: {tooltip}",
