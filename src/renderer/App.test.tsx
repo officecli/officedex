@@ -633,6 +633,54 @@ describe("App credit display", () => {
     expect(await screen.findByText("42 / 42")).toBeTruthy();
     expect(screen.getAllByText("Pro").length).toBeGreaterThan(0);
   });
+
+  it("refreshes the sidebar credit meter after a task.completed event (covers settlement delay)", async () => {
+    const bridge = installBridgeMock();
+    const api = (window as unknown as { officecli: DesktopAPI }).officecli;
+    const sequence: number[] = [100, 100, 80];
+    let call = 0;
+    api.getCreditStatus = (async () => {
+      const balance = sequence[Math.min(call, sequence.length - 1)];
+      call += 1;
+      return {
+        mode: "logged_in" as const,
+        accessMode: "hosted",
+        planName: "Pro",
+        hostedCreditBalance: balance,
+        anonymousCreditAvailable: null,
+        anonymousCreditReserved: null,
+        anonymousCreditBalance: null,
+        rewardRemaining: 0,
+        paidKeyPrefix: "",
+        paidKeyTotal: 0,
+        paidKeyUsed: 0,
+        paidKeyRemaining: 0,
+        raw: "",
+      };
+    }) as unknown as DesktopAPI["getCreditStatus"];
+
+    const { App } = await import("./App");
+    render(<App />);
+
+    expect(await screen.findByText("100 / 100")).toBeTruthy();
+
+    act(() => {
+      bridge.emit({
+        event_id: "event-credit-1",
+        task_id: "task-credit-1",
+        type: "task.completed",
+        payload: {
+          result: {
+            file_path: "/tmp/credit.pptx",
+            file_name: "credit.pptx",
+            document_type: "pptx",
+          },
+        },
+      });
+    });
+
+    await waitFor(() => expect(screen.getByText("80 / 80")).toBeTruthy(), { timeout: 1500 });
+  });
 });
 
 function firePasteWithFile(target: HTMLElement, file: File) {

@@ -55,4 +55,59 @@ describe("taskState", () => {
       allowFreeform: true,
     });
   });
+
+  it("captures credits_charged and credit_mode from task.completed payload", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-1",
+      task_id: "task-1",
+      type: "task.completed",
+      payload: {
+        credits_charged: 5,
+        credit_mode: "hosted",
+      },
+    });
+    expect(state.tasks["task-1"].creditCharged).toBe(5);
+    expect(state.tasks["task-1"].creditMode).toBe("hosted");
+  });
+
+  it("captures credits on task.failed payload (zero allowed)", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-1",
+      task_id: "task-1",
+      type: "task.failed",
+      payload: {
+        credits_charged: 0,
+        credit_mode: "anonymous",
+      },
+    });
+    expect(state.tasks["task-1"].creditCharged).toBe(0);
+    expect(state.tasks["task-1"].creditMode).toBe("anonymous");
+  });
+
+  it("leaves credit fields undefined when payload lacks credits_charged (legacy binary)", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-1",
+      task_id: "task-1",
+      type: "task.completed",
+      payload: {
+        result: { file_path: "/tmp/x.pptx", file_name: "x.pptx", document_type: "pptx" },
+      },
+    });
+    expect(state.tasks["task-1"].creditCharged).toBeUndefined();
+    expect(state.tasks["task-1"].creditMode).toBeUndefined();
+  });
+
+  it("ignores non-numeric credits_charged values", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-1",
+      task_id: "task-1",
+      type: "task.completed",
+      payload: {
+        credits_charged: "5",
+        credit_mode: "hosted",
+      },
+    });
+    expect(state.tasks["task-1"].creditCharged).toBeUndefined();
+    expect(state.tasks["task-1"].creditMode).toBeUndefined();
+  });
 });

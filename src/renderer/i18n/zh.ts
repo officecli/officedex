@@ -295,6 +295,7 @@ export const zh: Record<string, string> = {
   "tasks.column.runtime": "运行环境",
   "tasks.column.updatedAt": "更新时间",
   "tasks.column.artifacts": "产物",
+  "tasks.column.credit": "花费",
   "tasks.column.actions": "操作",
   "tasks.runtime.localBridge": "本地 Bridge",
   "tasks.empty": "暂无 Bridge 任务",
@@ -309,6 +310,12 @@ export const zh: Record<string, string> = {
   "tasks.status.completed": "已完成",
   "tasks.status.failed": "失败",
   "tasks.status.cancelled": "已取消",
+  "tasks.credit.unit": "{count} credits",
+  "tasks.credit.legacy": "此任务由旧版 OfficeCLI 生成，未上报花费数据。",
+  "tasks.credit.zero": "未扣费（任务失败或匿名模式）。",
+  "tasks.credit.mode.hosted": "托管",
+  "tasks.credit.mode.api_key": "自带密钥",
+  "tasks.credit.mode.anonymous": "匿名",
 
   // Update banner
   "update.banner.title": "新版本 {version} 可用",

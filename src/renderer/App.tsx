@@ -39,7 +39,7 @@ export function App() {
   const { settings: persistedSettings, defaultWorkspaceDir, loading: settingsLoading } = useSettings();
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const appUpdate = useAppUpdate();
-  const { credit } = useCreditStatus();
+  const { credit, nudgeForTaskTransition } = useCreditStatus();
   const locale = useLocale();
   const antdLocale = locale === "zh" ? zhCN : enUS;
   const forceUpdate = appUpdate.status.mandatory && Boolean(appUpdate.release);
@@ -95,6 +95,9 @@ export function App() {
       if (event.task_id) {
         setActiveNav("dialogue");
       }
+      if (event.type === "task.completed" || event.type === "task.failed" || event.type === "task.cancelled") {
+        nudgeForTaskTransition();
+      }
     });
     if (settingsLoading || showOnboarding) {
       return off;
@@ -112,7 +115,7 @@ export function App() {
         setCapabilityStatus(text);
       });
     return off;
-  }, [connectAttempt, clearError, recordError, settingsLoading, showOnboarding, forceUpdate]);
+  }, [connectAttempt, clearError, recordError, settingsLoading, showOnboarding, forceUpdate, nudgeForTaskTransition]);
 
   const firstTaskID = state.taskOrder[0];
   useEffect(() => {

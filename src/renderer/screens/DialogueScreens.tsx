@@ -286,6 +286,33 @@ function QuestionDialogue({ task }: { task: DesktopTask }) {
   );
 }
 
+function renderCreditTag(task: DesktopTask, t: ReturnType<typeof useT>) {
+  if (task.status !== "completed" && task.status !== "failed" && task.status !== "cancelled") return null;
+  const charged = task.creditCharged;
+  if (charged === undefined || charged === null) {
+    return (
+      <Tooltip title={t("tasks.credit.legacy")}>
+        <Tag>—</Tag>
+      </Tooltip>
+    );
+  }
+  if (charged === 0) {
+    return (
+      <Tooltip title={t("tasks.credit.zero")}>
+        <Tag>0</Tag>
+      </Tooltip>
+    );
+  }
+  const modeKey = task.creditMode ? `tasks.credit.mode.${task.creditMode}` : "";
+  const modeLabel = modeKey ? t(modeKey) : "";
+  return (
+    <Tag color="purple">
+      {t("tasks.credit.unit", { count: String(charged) })}
+      {modeLabel ? ` · ${modeLabel}` : ""}
+    </Tag>
+  );
+}
+
 function CompletedDialogue({ task, onPreview }: { task: DesktopTask; onPreview: (artifact: Artifact) => void }) {
   const t = useT();
   const artifact = task.artifact;
@@ -293,6 +320,7 @@ function CompletedDialogue({ task, onPreview }: { task: DesktopTask; onPreview: 
   const completionMessage = eventText(latestEvent);
   const duration = taskDurationLabel(task.events, t);
   const completedAt = artifact?.syncedAt || latestEvent?.ts || t("dialogue.completed.completionTimeUnknown");
+  const creditTag = renderCreditTag(task, t);
   return (
     <div className="conversation-layout">
       <div className="chat-thread">
@@ -302,6 +330,7 @@ function CompletedDialogue({ task, onPreview }: { task: DesktopTask; onPreview: 
             <CheckCircleFilled />
             <strong>{t("dialogue.completed.title")}</strong>
             <Tag color="green">{duration}</Tag>
+            {creditTag}
           </div>
           <p>{completionMessage || t("dialogue.completed.completionFallback")}</p>
           {artifact ? (
@@ -361,6 +390,7 @@ function TerminalDialogue({ task }: { task: DesktopTask }) {
   const description = failed
     ? task.error || eventText(latestEvent) || t("dialogue.terminal.failed.fallback")
     : eventText(latestEvent) || t("dialogue.terminal.cancelled.fallback");
+  const creditTag = renderCreditTag(task, t);
   return (
     <div className="conversation-layout">
       <div className="chat-thread">
@@ -370,6 +400,7 @@ function TerminalDialogue({ task }: { task: DesktopTask }) {
             {failed ? <CloseCircleOutlined /> : <StopOutlined />}
             <strong>{title}</strong>
             <Tag color={failed ? "red" : "default"}>{task.status}</Tag>
+            {creditTag}
           </div>
           <p>{description}</p>
           <div className="terminal-event-card">

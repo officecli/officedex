@@ -50,10 +50,12 @@ export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState 
       nextTask.artifact = artifact;
     }
     nextTask.question = undefined;
+    applyCreditPayload(nextTask, event.payload);
   }
   if (event.type === "task.failed") {
     nextTask.error = stringPayload(event, "message") || stringPayload(event, "error") || "Task failed";
     nextTask.question = undefined;
+    applyCreditPayload(nextTask, event.payload);
   }
   if (event.type === "task.cancelled") {
     nextTask.question = undefined;
@@ -130,6 +132,14 @@ function artifactFromPayload(taskID: string, payload: BridgeEvent["payload"]): A
 
 function stringPayload(event: BridgeEvent, key: string): string {
   return event.payload ? stringValue(event.payload[key]) : "";
+}
+
+function applyCreditPayload(task: DesktopTask, payload: BridgeEvent["payload"]): void {
+  if (!payload) return;
+  const charged = payload.credits_charged;
+  if (typeof charged !== "number") return;
+  task.creditCharged = charged;
+  task.creditMode = typeof payload.credit_mode === "string" ? payload.credit_mode : "";
 }
 
 function stringValue(value: unknown): string {

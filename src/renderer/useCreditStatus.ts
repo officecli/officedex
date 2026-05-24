@@ -4,6 +4,7 @@ import type { CreditInfo } from "./components/Shell";
 import { officecli } from "./bridge";
 
 const POLL_INTERVAL_MS = 60_000;
+const NUDGE_DELAY_MS = 800;
 
 // deriveCreditInfo maps the raw CLI quota snapshot onto the sidebar meter's
 // { used, total, planLabel } shape. Priority: paid API-key burndown →
@@ -46,6 +47,7 @@ export interface UseCreditStatusResult {
   credit: CreditInfo | undefined;
   status: CreditStatus | undefined;
   refresh: () => void;
+  nudgeForTaskTransition: () => void;
 }
 
 export function useCreditStatus(): UseCreditStatusResult {
@@ -54,6 +56,7 @@ export function useCreditStatus(): UseCreditStatusResult {
   const inflightRef = useRef(false);
   const generationRef = useRef(0);
   const mountedRef = useRef(true);
+  const pendingDeferRef = useRef(false);
 
   const refresh = useCallback(() => {
     if (inflightRef.current) return;
@@ -73,8 +76,24 @@ export function useCreditStatus(): UseCreditStatusResult {
       })
       .finally(() => {
         inflightRef.current = false;
+        if (pendingDeferRef.current && mountedRef.current) {
+          pendingDeferRef.current = false;
+          refresh();
+        }
       });
   }, []);
+
+  const nudgeForTaskTransition = useCallback(() => {
+    refresh();
+    window.setTimeout(() => {
+      if (!mountedRef.current) return;
+      if (inflightRef.current) {
+        pendingDeferRef.current = true;
+        return;
+      }
+      refresh();
+    }, NUDGE_DELAY_MS);
+  }, [refresh]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -92,5 +111,5 @@ export function useCreditStatus(): UseCreditStatusResult {
     };
   }, [refresh]);
 
-  return { credit, status, refresh };
+  return { credit, status, refresh, nudgeForTaskTransition };
 }
