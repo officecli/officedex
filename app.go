@@ -1008,14 +1008,83 @@ func (a *App) CancelRuntimeUpdate() error {
 func launchInstaller(path string) error {
 	switch runtime.GOOS {
 	case "darwin":
-		// Strip macOS quarantine flag so Gatekeeper won't block the update.
-		exec.Command("xattr", "-dr", "com.apple.quarantine", path).Run()
-		return exec.Command("open", path).Start()
+		return installDarwinUpdate(path)
 	case "windows":
 		return exec.Command("cmd", "/c", "start", "", path).Start()
 	default:
 		return exec.Command("xdg-open", path).Start()
 	}
+}
+
+// installDarwinUpdate extracts the downloaded .zip, strips the quarantine
+// attribute, and launches a trampoline script that replaces the running
+// .app bundle in-place so users never see a Gatekeeper prompt.
+func installDarwinUpdate(zipPath string) error {
+	// Resolve the running .app bundle path.
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("resolve executable: %w", err)
+	}
+	appBundle := exe
+	for !strings.HasSuffix(appBundle, ".app") {
+		parent := filepath.Dir(appBundle)
+		if parent == appBundle {
+			// Not running from an .app bundle — fall back to open.
+			return exec.Command("open", zipPath).Start()
+		}
+		appBundle = parent
+	}
+
+	// Extract zip to a temporary directory.
+	extractDir, err := os.MkdirTemp("", "officedex-update-*")
+	if err != nil {
+		return fmt.Errorf("create temp dir: %w", err)
+	}
+	if err := exec.Command("ditto", "-xk", zipPath, extractDir).Run(); err != nil {
+		os.RemoveAll(extractDir)
+		return fmt.Errorf("extract zip: %w", err)
+	}
+
+	// Locate the .app inside the extracted contents.
+	entries, err := os.ReadDir(extractDir)
+	if err != nil {
+		os.RemoveAll(extractDir)
+		return fmt.Errorf("read extract dir: %w", err)
+	}
+	var newApp string
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".app") {
+			newApp = filepath.Join(extractDir, e.Name())
+			break
+		}
+	}
+	if newApp == "" {
+		os.RemoveAll(extractDir)
+		return errors.New("no .app found in archive")
+	}
+
+	// Strip quarantine from the extracted .app.
+	exec.Command("xattr", "-dr", "com.apple.quarantine", newApp).Run()
+
+	// Write a trampoline script that waits for this process to exit,
+	// swaps the app bundle, relaunches, and cleans up.
+	script := fmt.Sprintf(`#!/bin/bash
+while kill -0 %d 2>/dev/null; do sleep 0.5; done
+rm -rf %q
+mv %q %q
+open %q
+rm -rf %q
+`, os.Getpid(), appBundle, newApp, appBundle, appBundle, extractDir)
+
+	scriptPath := filepath.Join(extractDir, "install.sh")
+	if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
+		os.RemoveAll(extractDir)
+		return fmt.Errorf("write install script: %w", err)
+	}
+
+	cmd := exec.Command("bash", scriptPath)
+	cmd.SysProcAttr = nil
+	return cmd.Start()
 }
 
 // ─── Diagnostics ────────────────────────────────────────────────────────────
