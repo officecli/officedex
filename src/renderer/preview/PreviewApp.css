@@ -1,0 +1,464 @@
+.preview-root {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #f0f1f3;
+  overflow: hidden;
+}
+
+/* ─── Toolbar ─── */
+.preview-toolbar {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 44px 0 12px;
+  background: #ffffff;
+  border-bottom: 1px solid #ebebeb;
+  flex-shrink: 0;
+  gap: 8px;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.preview-root .preview-toolbar {
+  -webkit-app-region: drag;
+}
+
+.preview-toolbar button,
+.preview-toolbar span {
+  -webkit-app-region: no-drag;
+}
+
+.preview-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.preview-toolbar-type-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: #5f6673;
+}
+
+.preview-toolbar-filename {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1a1c1c;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preview-toolbar-type-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.preview-toolbar-center {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.preview-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* ─── Zoom group ─── */
+.preview-toolbar-zoom-group {
+  display: flex;
+  align-items: center;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  overflow: hidden;
+  height: 28px;
+}
+
+.preview-toolbar-zoom-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: #5f6673;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.preview-toolbar-zoom-btn:hover {
+  background: #f5f5f5;
+  color: #1a1c1c;
+}
+
+.preview-toolbar-zoom-pct {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  height: 100%;
+  border: 0;
+  border-left: 1px solid #e0e0e0;
+  border-right: 1px solid #e0e0e0;
+  background: transparent;
+  color: #424752;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0 4px;
+  transition: background 120ms ease;
+}
+
+.preview-toolbar-zoom-pct:hover {
+  background: #f5f5f5;
+}
+
+/* ─── Divider & Close ─── */
+.preview-toolbar-divider {
+  width: 1px;
+  height: 18px;
+  background: #e5e5e5;
+  flex-shrink: 0;
+  margin: 0 2px;
+}
+
+.preview-panel-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #dc2626;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.preview-panel-close:hover {
+  background: rgba(220, 38, 38, 0.1);
+  color: #b91c1c;
+}
+
+.preview-toolbar-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #8a9099;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.preview-toolbar-close:hover {
+  background: #f0f0f0;
+  color: #424752;
+}
+
+/* ─── Loading ─── */
+.preview-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 16px;
+}
+
+.preview-loading-icon {
+  color: #bfc3cc;
+}
+
+.preview-loading-text {
+  color: #5f6673;
+  font-size: 13px;
+  margin: 0;
+}
+
+.preview-loading-bar {
+  width: 180px;
+  height: 3px;
+  border-radius: 3px;
+  background: #f0f0f0;
+  overflow: hidden;
+}
+
+.preview-loading-bar-fill {
+  width: 40%;
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #d4d8e0, #a8b0bc, #d4d8e0);
+  background-size: 200% 100%;
+  animation: preview-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes preview-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ─── Error ─── */
+.preview-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.preview-error-compact {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 320px;
+  text-align: center;
+}
+
+.preview-error-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: #fff1f0;
+  color: #dc3545;
+}
+
+.preview-error-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1c1c;
+  margin: 0;
+}
+
+.preview-error-msg {
+  font-size: 13px;
+  color: #667085;
+  margin: 0;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.preview-error-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* ─── Unsupported ─── */
+.preview-unsupported {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.preview-unsupported-compact {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 320px;
+  text-align: center;
+}
+
+.preview-unsupported-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: #fff8e6;
+  color: #b7791f;
+}
+
+.preview-unsupported-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1c1c;
+  margin: 0;
+}
+
+.preview-unsupported-msg {
+  font-size: 13px;
+  color: #667085;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ─── Office HTML Viewer ─── */
+.preview-office-container {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.preview-office-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: #ffffff;
+}
+
+/* ─── HTML Viewer ─── */
+.preview-html-container {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  background: #ffffff;
+}
+
+/* ─── PDF Viewer ─── */
+.preview-pdf-container {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  padding: 24px;
+  background: #525659;
+}
+
+.preview-pdf-canvas {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* ─── DOCX Viewer ─── */
+.preview-docx-container {
+  flex: 1;
+  overflow: auto;
+  background: #e8e9eb;
+  padding: 24px 0;
+}
+
+.preview-docx-content {
+  margin: 0 auto;
+}
+
+.preview-docx-content .docx-wrapper {
+  background: #e8e9eb;
+  padding: 0;
+}
+
+.preview-docx-content .docx-wrapper > section.docx {
+  margin: 0 auto 24px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+}
+
+/* ─── XLSX Viewer ─── */
+.preview-xlsx-container {
+  flex: 1;
+  overflow: auto;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.preview-xlsx-content table {
+  border-collapse: collapse;
+  font-size: 13px;
+  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.preview-xlsx-content th,
+.preview-xlsx-content td {
+  border: 1px solid #d9d9d9;
+  padding: 4px 8px;
+  white-space: nowrap;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preview-xlsx-content th {
+  background: #fafafa;
+  font-weight: 500;
+  text-align: center;
+}
+
+.preview-xlsx-content tr:first-child td,
+.preview-xlsx-content tr:first-child th {
+  background: #f0f0f0;
+  font-weight: 600;
+}
+
+/* ─── PPTX Gallery (text fallback) ─── */
+.preview-pptx-gallery {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  padding: 24px;
+  background: #525659;
+}
+
+.preview-pptx-slide-card {
+  width: 800px;
+  max-width: 90%;
+  min-height: 450px;
+  background: #ffffff;
+  border-radius: 6px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+  padding: 48px 56px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: relative;
+}
+
+.preview-pptx-slide-number {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  font-size: 11px;
+  color: #999;
+}
+
+.preview-pptx-slide-body p {
+  margin: 0 0 8px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #333;
+}
+
+.preview-pptx-slide-body p.preview-pptx-slide-title {
+  font-size: 22px;
+  font-weight: 600;
+  color: #1a1c1c;
+  margin-bottom: 16px;
+}
+
+.preview-pptx-slide img {
+  max-width: 100%;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+}

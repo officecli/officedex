@@ -1,0 +1,8 @@
+2024-06-01T08:12:33.001Z [DEBUG] Initiating OAuth token refresh...
+2024-06-01T08:12:33.045Z [DEBUG] POST https://auth.example.com/oauth/token
+2024-06-01T08:12:33.120Z [DEBUG] Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.FAKEJWT-DO-NOT-USE-oauth-refresh-sample-payload.FAKESIG
+2024-06-01T08:12:33.121Z [DEBUG] Refresh token=eyJhbGciOiJIUzI1NiJ9.FAKEREFRESHTOKEN-DO-NOT-USE-1234567890.fakesignature
+2024-06-01T08:12:33.250Z [INFO] Token refresh successful, new Bearer sk-FAKEKEY-DO-NOT-USE-OAUTHREFRESH1234567890ABCDEF
+2024-06-01T08:12:33.251Z [DEBUG] Set-Cookie: session=eyJhbGciOiJIUzI1NiJ9.FAKESESSIONTOKEN-DO-NOT-USE.fakesig; HttpOnly; Secure
+2024-06-01T08:12:33.300Z [INFO] Updated credentials in /Users/testuser/Library/Application Support/OfficeDex/credentials.json
+2024-06-01T08:12:33.301Z [DEBUG] Next refresh scheduled in 3600s

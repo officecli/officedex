@@ -1,0 +1,23 @@
+# GitHub Linguist directives — make OfficeDex show up as a Go project.
+#
+# The renderer is React (TS/TSX) but the *project* is a Wails desktop app
+# whose backend lifecycle, IPC, persistence, login, and runtime management
+# all live in Go. Mark the renderer as "vendored" so Linguist excludes it
+# from language statistics; mark auto-generated and side-car content as
+# generated.
+
+# Renderer source (still hand-edited, but not the project's primary language)
+src/renderer/**          linguist-vendored=true
+
+# Auto-generated Wails bindings (TS + JS reflecting the Go API surface)
+src/renderer/generated/** linguist-generated=true
+
+# Sidecar HTML previews emitted by officecli (binary preview format)
+*.preview.html           linguist-generated=true
+
+# Built artifacts (never committed, but listed defensively)
+dist/**                  linguist-generated=true
+build/bin/**             linguist-generated=true
+
+# Project documentation is not the project's language
+*.md                     linguist-documentation=true
