@@ -34,7 +34,7 @@
     "antd": "^6.4.2",
     "clsx": "^2.1.1",
     "docx-preview": "^0.3.7",
-    "lucide-react": "^0.546.0",
+    "lucide-react": "^1.16.0",
     "pdfjs-dist": "^3.11.174",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
