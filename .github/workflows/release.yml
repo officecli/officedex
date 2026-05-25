@@ -75,7 +75,10 @@ jobs:
         run: npm run prefetch:officecli
 
       - name: Wails build
-        run: wails build -platform ${{ matrix.platform }} -trimpath
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          wails build -platform ${{ matrix.platform }} -trimpath -ldflags "-X main.appVersion=${version}"
 
       - name: Codesign + embed officecli (macOS)
         if: runner.os == 'macOS'
