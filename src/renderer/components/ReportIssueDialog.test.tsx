@@ -65,8 +65,12 @@ describe("ReportIssueDialog", () => {
     mockPeekReportContext.mockResolvedValue({ requestId: "req-abc-123", errorCode: "rate_limit", errorMessage: "Too many requests" });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     cleanup();
+    // antd `message` portals schedule React work that lands after cleanup;
+    // yield one macrotask so the scheduler drains before vitest tears
+    // down jsdom, otherwise the late callback throws `window is not defined`.
+    await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
   it("displays context bar with requestId from peekReportContext", async () => {
