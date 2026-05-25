@@ -37,8 +37,10 @@ import {
 } from "@ant-design/icons";
 import { notion } from "../designTokens";
 import type { NavKey } from "../defaults";
+import type { DesktopTask } from "../../shared/types";
 import { useT } from "../i18n";
 import { RuntimeChip } from "./RuntimeChip";
+import { HistoryList } from "./HistoryList";
 
 export interface CreditInfo {
   // "quota" = bounded plan with a known cap (api_key burndown, anonymous device pool).
@@ -67,8 +69,12 @@ interface ShellProps {
   inspector?: React.ReactNode;
   credit?: CreditInfo;
   runtimeMode?: "external" | "hosted";
+  tasks: DesktopTask[];
+  selectedTaskId: string | undefined;
   onNavChange: (key: NavKey) => void;
   onNewGeneration: () => void;
+  onSelectTask: (taskId: string) => void;
+  onDeleteTask: (taskId: string) => void;
 }
 
 function pillLabelKey(failed: boolean, errorKind: ShellProps["errorKind"]): string {
@@ -96,15 +102,15 @@ export function Shell({
   inspector,
   credit,
   runtimeMode,
+  tasks,
+  selectedTaskId,
   onNavChange,
   onNewGeneration,
+  onSelectTask,
+  onDeleteTask,
 }: ShellProps) {
   const [collapsed, setCollapsed] = useState(false);
   const t = useT();
-  const navItems: Array<{ key: NavKey; label: string; icon: React.ReactNode }> = [
-    { key: "dialogue", label: t("shell.nav.dialogue"), icon: <MessageOutlined /> },
-    { key: "tasks", label: t("shell.nav.tasks"), icon: <HistoryOutlined /> },
-  ];
 
   return (
     <div className={`app-shell fluid-shell ${inspector ? "preview-active sidebar-collapsed" : ""} ${collapsed ? "sidebar-collapsed" : ""}`}>
@@ -121,20 +127,23 @@ export function Shell({
             {t("shell.newGeneration")}
           </Button>
         </Tooltip>
-        <nav className="side-nav">
-          {navItems.map((item) => (
-            <Tooltip key={item.key} title={collapsed ? item.label : ""} placement="right">
-              <button className={`nav-item ${activeNav === item.key ? "active" : ""}`} onClick={() => onNavChange(item.key)}>
-                {item.icon}
-                <span>{item.label}</span>
-              </button>
-            </Tooltip>
-          ))}
-        </nav>
+        <HistoryList
+          tasks={tasks}
+          selectedTaskId={selectedTaskId}
+          collapsed={collapsed}
+          onSelect={onSelectTask}
+          onDelete={onDeleteTask}
+        />
         <Tooltip title={collapsed ? t("shell.nav.profile") : ""} placement="right">
           <button className={`nav-item profile-link ${activeNav === "login" ? "active" : ""}`} onClick={() => onNavChange("login")}>
             <UserOutlined />
             <span>{t("shell.nav.profile")}</span>
+          </button>
+        </Tooltip>
+        <Tooltip title={collapsed ? t("shell.nav.tasks") : ""} placement="right">
+          <button className={`nav-item ${activeNav === "tasks" ? "active" : ""}`} onClick={() => onNavChange("tasks")}>
+            <HistoryOutlined />
+            <span>{t("shell.nav.tasks")}</span>
           </button>
         </Tooltip>
         <Tooltip title={collapsed ? t("shell.nav.settings") : ""} placement="right">

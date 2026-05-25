@@ -1,0 +1,11 @@
+{
+  "version": "1.0.97",
+  "requested": "latest",
+  "platform": "mac",
+  "arch": "arm64",
+  "asset": "officecli-mac-arm64",
+  "sha256": "59a3b170ed8825d7489bb2084d9ece75e281dbf7524cd69d046377b1e2e449f6",
+  "sha256Verified": true,
+  "source": "iOfficeAI/OfficeCLI",
+  "fetchedAt": "2026-05-25T10:33:00.266Z"
+}

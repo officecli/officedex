@@ -1,8 +1,7 @@
-import { Button, Empty, Space, Table, Tag, Tooltip, Typography } from "antd";
+import { Button, Empty, Table, Tag, Tooltip, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { MoreOutlined, PlusOutlined } from "@ant-design/icons";
+import { PlusOutlined } from "@ant-design/icons";
 import type { DesktopTask } from "../../shared/types";
-import { MaterialSymbol } from "../components/Shell";
 import { useT } from "../i18n";
 
 type Translator = (key: string, vars?: Record<string, string | number>) => string;
@@ -20,10 +19,24 @@ interface TaskRow {
   title: string;
   type: string;
   status: DesktopTask["status"];
-  runtime: string;
   updatedAt: string;
-  artifacts: number;
+  updatedAtRaw: string;
   credit: CreditCellModel;
+}
+
+function formatRelativeTime(iso: string | undefined, t: Translator): { label: string; raw: string } {
+  if (!iso) return { label: t("tasks.updatedAtUnknown"), raw: "" };
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return { label: t("tasks.updatedAtUnknown"), raw: iso };
+  const diffMs = Date.now() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  if (diffSec < 60) return { label: t("tasks.time.justNow"), raw: iso };
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return { label: t("tasks.time.minutesAgo", { count: diffMin }), raw: iso };
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return { label: t("tasks.time.hoursAgo", { count: diffHr }), raw: iso };
+  const diffDay = Math.floor(diffHr / 24);
+  return { label: t("tasks.time.daysAgo", { count: diffDay }), raw: iso };
 }
 
 export function TasksScreen({ tasks, onSelectTask, onNewGeneration }: { tasks: DesktopTask[]; onSelectTask: (taskID: string) => void; onNewGeneration: () => void }) {
@@ -33,11 +46,10 @@ export function TasksScreen({ tasks, onSelectTask, onNewGeneration }: { tasks: D
     {
       title: t("tasks.column.title"),
       dataIndex: "title",
-      render: (title, record) => (
-        <button className="table-title task-title-button" onClick={() => onSelectTask(record.id)}>
+      render: (title) => (
+        <span className="task-title-button">
           <strong>{title}</strong>
-          <span>{record.id}</span>
-        </button>
+        </span>
       ),
     },
     { title: t("tasks.column.documentType"), dataIndex: "type" },
@@ -47,27 +59,16 @@ export function TasksScreen({ tasks, onSelectTask, onNewGeneration }: { tasks: D
       render: (status) => <Tag color={taskStatusColor(status)}>{taskStatusLabel(status, t)}</Tag>,
     },
     {
-      title: t("tasks.column.runtime"),
-      dataIndex: "runtime",
-      render: (runtime) => (
-        <Space>
-          <MaterialSymbol name="laptop_mac" />
-          {runtime}
-        </Space>
+      title: t("tasks.column.updatedAt"),
+      dataIndex: "updatedAt",
+      render: (label, record) => (
+        <Tooltip title={record.updatedAtRaw}><span>{label}</span></Tooltip>
       ),
     },
-    { title: t("tasks.column.updatedAt"), dataIndex: "updatedAt" },
-    { title: t("tasks.column.artifacts"), dataIndex: "artifacts" },
     {
       title: t("tasks.column.credit"),
       dataIndex: "credit",
       render: (credit: CreditCellModel) => <CreditCell credit={credit} t={t} />,
-    },
-    {
-      title: t("tasks.column.actions"),
-      render: (_, record) => (
-        <Button icon={<MoreOutlined />} onClick={() => onSelectTask(record.id)} />
-      ),
     },
   ];
   return (
@@ -81,7 +82,9 @@ export function TasksScreen({ tasks, onSelectTask, onNewGeneration }: { tasks: D
           pagination={{ pageSize: 8, showSizeChanger: false }}
           className="flat-table"
           onRow={(record) => ({
+            onClick: () => onSelectTask(record.id),
             onDoubleClick: () => onSelectTask(record.id),
+            style: { cursor: "pointer" },
           })}
         />
       ) : (
@@ -107,21 +110,16 @@ function PageHeader({ title, description, action, onAction }: { title: string; d
   );
 }
 
-function taskToRow(task: DesktopTask, t: (key: string) => string): TaskRow {
+function taskToRow(task: DesktopTask, t: Translator): TaskRow {
   const latestEvent = task.events.at(-1);
-  const runtimeLabel = task.runtimeMode === "external"
-    ? t("tasks.runtime.external")
-    : task.runtimeMode === "hosted"
-      ? t("tasks.runtime.hosted")
-      : t("tasks.runtime.localBridge");
+  const { label, raw } = formatRelativeTime(latestEvent?.ts, t);
   return {
     id: task.id,
     title: task.topic || task.artifact?.fileName || task.id,
     type: task.documentType || task.artifact?.documentType || t("tasks.documentType.empty"),
     status: task.status,
-    runtime: runtimeLabel,
-    updatedAt: latestEvent?.ts || t("tasks.updatedAtUnknown"),
-    artifacts: task.artifact ? 1 : 0,
+    updatedAt: label,
+    updatedAtRaw: raw,
     credit: creditModel(task),
   };
 }
@@ -153,20 +151,20 @@ function CreditCell({ credit, t }: { credit: CreditCellModel; t: Translator }) {
   if (credit.state === "zero") {
     return (
       <Tooltip title={t("tasks.credit.zero")}>
-        <Space size={4}>
+        <span className="task-credit-inline">
           <span className="task-credit-cell">0</span>
           {credit.mode ? <CreditModeBadge mode={credit.mode} t={t} /> : null}
-        </Space>
+        </span>
       </Tooltip>
     );
   }
   return (
-    <Space size={4}>
+    <span className="task-credit-inline">
       <span className="task-credit-cell">
         {t("tasks.credit.unit", { count: credit.charged })}
       </span>
       {credit.mode ? <CreditModeBadge mode={credit.mode} t={t} /> : null}
-    </Space>
+    </span>
   );
 }
 

@@ -10,6 +10,13 @@ export function createInitialTaskState(): TaskState {
   return { tasks: {}, taskOrder: [], artifacts: [] };
 }
 
+export function deleteTask(state: TaskState, taskID: string): TaskState {
+  const { [taskID]: _, ...tasks } = state.tasks;
+  const taskOrder = state.taskOrder.filter((id) => id !== taskID);
+  const artifacts = state.artifacts.filter((a) => a.taskId !== taskID);
+  return { tasks, taskOrder, artifacts };
+}
+
 export function attachUserInput(state: TaskState, taskID: string, input: TaskUserInput): TaskState {
   const previous = state.tasks[taskID] || {
     id: taskID,
@@ -56,6 +63,9 @@ export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState 
         nextTask.runtimeSnapshot = snapshot;
       }
     }
+  }
+  if (event.type === "task.user_input") {
+    nextTask.userInput = userInputFromPayload(event.payload);
   }
   if (event.type === "task.question") {
     nextTask.question = questionFromPayload(event.payload);
@@ -160,6 +170,16 @@ function applyCreditPayload(task: DesktopTask, payload: BridgeEvent["payload"]):
   if (typeof charged !== "number") return;
   task.creditCharged = charged;
   task.creditMode = typeof payload.credit_mode === "string" ? payload.credit_mode : "";
+}
+
+function userInputFromPayload(payload: BridgeEvent["payload"]): TaskUserInput | undefined {
+  if (!payload) return undefined;
+  const prompt = stringValue(payload.prompt);
+  if (!prompt) return undefined;
+  const sourceFile = stringValue(payload.source_file) || undefined;
+  const raw = payload.reference_images;
+  const referenceImages = Array.isArray(raw) ? raw.filter((v): v is string => typeof v === "string") : undefined;
+  return { prompt, sourceFile, referenceImages };
 }
 
 function stringValue(value: unknown): string {

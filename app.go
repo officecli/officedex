@@ -34,6 +34,7 @@ import (
 	"officedex/internal/binresolver"
 	"officedex/internal/bridge"
 	"officedex/internal/diagnostics"
+	"officedex/internal/extrender"
 	"officedex/internal/localstore"
 	"officedex/internal/login"
 	"officedex/internal/mask"
@@ -83,6 +84,7 @@ type App struct {
 	appUpdateMgr    *appupdate.Manager
 	runtimeMgr      *runtimemgr.Manager
 	proxyPool       *netproxy.Pool
+	extRenderer     *extrender.Renderer
 
 	// resolver cache. binresolver.Resolve stats the filesystem on every call;
 	// runCommandOptions / ensureBridge run on every RPC. We cache the resolved
@@ -186,6 +188,10 @@ func (a *App) startup(ctx context.Context) {
 	if err := a.localStore.Open(ctx); err != nil {
 		wailsruntime.LogErrorf(ctx, "open local store: %v", err)
 	}
+	if binPath := a.resolveIOfficeCliBinary(); binPath != "" {
+		a.extRenderer = extrender.New(binPath)
+		wailsruntime.LogInfof(ctx, "iOfficeAI renderer: %s", binPath)
+	}
 }
 
 // shutdown is called by Wails when the window is about to close. It stops
@@ -261,6 +267,22 @@ func (a *App) Generate(input types.GenerateInput) (GenerateResult, error) {
 	result, err := client.InvokeGenerate(a.ctx, resolved)
 	if err != nil {
 		return GenerateResult{}, err
+	}
+	if a.localStore != nil && result.TaskID != "" {
+		payload := map[string]any{
+			"prompt": resolved.Prompt,
+		}
+		if resolved.SourceFile != "" {
+			payload["source_file"] = resolved.SourceFile
+		}
+		if len(resolved.ReferenceImages) > 0 {
+			payload["reference_images"] = resolved.ReferenceImages
+		}
+		_ = a.localStore.RecordEvent(types.BridgeEvent{
+			TaskID:  result.TaskID,
+			Type:    "task.user_input",
+			Payload: payload,
+		})
 	}
 	return GenerateResult{TaskID: result.TaskID, SessionID: result.SessionID, Status: result.Status}, nil
 }
@@ -565,8 +587,18 @@ func (a *App) RenderPreviewHtml(previewToken string) (*PreviewHTML, error) {
 	if err != nil {
 		return nil, err
 	}
-	ext := filepath.Ext(entry.FilePath)
-	base := strings.TrimSuffix(entry.FilePath, ext)
+
+	ext := strings.ToLower(filepath.Ext(entry.FilePath))
+	if ext == ".pptx" && a.extRenderer.Available() {
+		html, err := a.extRenderer.RenderHTML(a.ctx, entry.FilePath)
+		if err != nil {
+			wailsruntime.LogWarningf(a.ctx, "extrender fallback to sidecar: %v", err)
+		} else {
+			return &PreviewHTML{HTML: html}, nil
+		}
+	}
+
+	base := strings.TrimSuffix(entry.FilePath, filepath.Ext(entry.FilePath))
 	sidecar := base + ".preview.html"
 	body, err := os.ReadFile(sidecar)
 	if err != nil {
@@ -1816,6 +1848,28 @@ func (a *App) bundledBinaryPath() string {
 	}
 	if cwd, err := os.Getwd(); err == nil {
 		candidate := filepath.Join(cwd, "build", "officecli", binaryName)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+	return ""
+}
+
+func (a *App) resolveIOfficeCliBinary() string {
+	binaryName := "iofficecli"
+	if runtime.GOOS == "windows" {
+		binaryName = "iofficecli.exe"
+	}
+	exe, err := os.Executable()
+	if err == nil {
+		candidate := filepath.Join(filepath.Dir(exe), "..", "Resources", "iofficecli", binaryName)
+		if _, err := os.Stat(candidate); err == nil {
+			abs, _ := filepath.Abs(candidate)
+			return abs
+		}
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		candidate := filepath.Join(cwd, "build", "iofficecli", binaryName)
 		if _, err := os.Stat(candidate); err == nil {
 			return candidate
 		}

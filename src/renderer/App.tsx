@@ -3,7 +3,7 @@ import zhCN from "antd/locale/zh_CN";
 import enUS from "antd/locale/en_US";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Artifact, BridgeEvent, GenerateInput, PreviewGrant } from "../shared/types";
-import { applyTaskEvent, attachUserInput, createInitialTaskState, type TaskState } from "./taskState";
+import { applyTaskEvent, attachUserInput, createInitialTaskState, deleteTask, type TaskState } from "./taskState";
 import { officecli } from "./bridge";
 import { theme } from "./designTokens";
 import type { NavKey } from "./defaults";
@@ -227,6 +227,12 @@ export function App() {
     setActiveNav("dialogue");
   }, [clearError]);
 
+  const selectTask = useCallback((taskId: string) => {
+    setSelectedTaskID({ kind: "task", id: taskId });
+    setLastError(undefined);
+    setActiveNav("dialogue");
+  }, []);
+
   const retry = useCallback(() => {
     clearError();
     setCapabilityStatus("Reconnecting...");
@@ -235,6 +241,11 @@ export function App() {
 
   const openLogin = useCallback(() => {
     setActiveNav("login");
+  }, []);
+
+  const handleDeleteTask = useCallback((taskId: string) => {
+    setState((current) => deleteTask(current, taskId));
+    setSelectedTaskID((current) => current.kind === "task" && current.id === taskId ? { kind: "auto" } : current);
   }, []);
 
   const openInlinePreview = useCallback(async (artifact: Artifact) => {
@@ -306,8 +317,12 @@ export function App() {
         inspector={sidePanel}
         credit={credit}
         runtimeMode={persistedSettings.defaults.runtimeMode}
+        tasks={tasks}
+        selectedTaskId={selectedTaskID.kind === "task" ? selectedTaskID.id : selectedTaskID.kind === "auto" ? firstTaskID : undefined}
         onNavChange={setActiveNav}
         onNewGeneration={newGeneration}
+        onSelectTask={selectTask}
+        onDeleteTask={handleDeleteTask}
       >
         {activeNav === "dialogue" ? (
           <DialogueScreen
@@ -323,16 +338,19 @@ export function App() {
             onOpenLogin={openLogin}
             onRetry={retry}
             onPreview={openInlinePreview}
+            onForceCancel={(taskId) => {
+              setState((current) => applyTaskEvent(current, {
+                type: "task.cancelled",
+                task_id: taskId,
+                ts: new Date().toISOString(),
+              }));
+            }}
           />
         ) : null}
         {activeNav === "tasks" ? (
           <TasksScreen
             tasks={tasks}
-            onSelectTask={(taskID) => {
-              setSelectedTaskID({ kind: "task", id: taskID });
-              setLastError(undefined);
-              setActiveNav("dialogue");
-            }}
+            onSelectTask={selectTask}
             onNewGeneration={newGeneration}
           />
         ) : null}

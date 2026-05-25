@@ -76,6 +76,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Prefetch iOfficeAI binary
+        run: npm run prefetch:iofficecli
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Wails build
         shell: bash
         run: |
@@ -89,6 +94,15 @@ jobs:
             --app build/bin/OfficeDex.app \
             --source build/officecli/officecli
 
+      - name: Bundle iOfficeAI (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          resDir="build/bin/OfficeDex.app/Contents/Resources/iofficecli"
+          mkdir -p "$resDir"
+          cp build/iofficecli/iofficecli "$resDir/iofficecli"
+          chmod +x "$resDir/iofficecli"
+          codesign --force --sign - "$resDir/iofficecli" || true
+
       - name: Bundle officecli (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -97,6 +111,14 @@ jobs:
           New-Item -ItemType Directory -Force -Path $resDir | Out-Null
           Copy-Item "build\officecli\officecli.exe" -Destination "$resDir\officecli.exe" -Force
           Copy-Item "build\officecli\version.json" -Destination "$resDir\version.json" -Force
+
+      - name: Bundle iOfficeAI (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $resDir = "build\bin\iofficecli"
+          New-Item -ItemType Directory -Force -Path $resDir | Out-Null
+          Copy-Item "build\iofficecli\iofficecli.exe" -Destination "$resDir\iofficecli.exe" -Force
 
       - name: Archive (macOS)
         if: runner.os == 'macOS'

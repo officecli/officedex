@@ -49,9 +49,10 @@ interface DialogueProps {
   onOpenLogin: () => void;
   onRetry: () => void;
   onPreview: (artifact: Artifact) => void;
+  onForceCancel?: (taskId: string) => void;
 }
 
-export function DialogueScreen({ task, artifacts, busy, lastError, errorKind, errorDetails, bridgeStatus, onSubmit, onOpenSettings, onOpenLogin, onRetry, onPreview }: DialogueProps) {
+export function DialogueScreen({ task, artifacts, busy, lastError, errorKind, errorDetails, bridgeStatus, onSubmit, onOpenSettings, onOpenLogin, onRetry, onPreview, onForceCancel }: DialogueProps) {
   if (lastError) {
     return <ConnectionFailure kind={errorKind} status={bridgeStatus} error={lastError} details={errorDetails} onOpenSettings={onOpenSettings} onOpenLogin={onOpenLogin} onRetry={onRetry} />;
   }
@@ -65,7 +66,7 @@ export function DialogueScreen({ task, artifacts, busy, lastError, errorKind, er
     return <TerminalDialogue task={task} />;
   }
   if (task?.status === "running" || task?.status === "starting") {
-    return <RunningDialogue task={task} />;
+    return <RunningDialogue task={task} onForceCancel={onForceCancel} />;
   }
   return <FluidNewGeneration busy={busy} onSubmit={onSubmit} />;
 }
@@ -186,12 +187,13 @@ function FluidNewGeneration({ busy, onSubmit }: { busy: boolean; onSubmit: (valu
   );
 }
 
-function RunningDialogue({ task }: { task: DesktopTask }) {
+function RunningDialogue({ task, onForceCancel }: { task: DesktopTask; onForceCancel?: (taskId: string) => void }) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const t = useT();
   const capability = useReportCapability();
   const [reportOpen, setReportOpen] = useState(false);
   const [stalledRequestId, setStalledRequestId] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -238,7 +240,21 @@ function RunningDialogue({ task }: { task: DesktopTask }) {
       </div>
       <div className="docked-composer readonly">
         <Input prefix={<PaperClipOutlined />} suffix={<LoadingOutlined />} placeholder={t("dialogue.running.placeholder")} disabled />
-        <Button danger icon={<StopOutlined />} onClick={() => officecli.cancel(task.id)}>
+        <Button danger icon={<StopOutlined />} loading={cancelling} onClick={async () => {
+          setCancelling(true);
+          try {
+            await officecli.cancel(task.id);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (msg.includes("not found") && onForceCancel) {
+              onForceCancel(task.id);
+            } else {
+              message.error(`Cancel failed: ${msg}`);
+            }
+          } finally {
+            setCancelling(false);
+          }
+        }}>
           {t("dialogue.running.cancel")}
         </Button>
       </div>

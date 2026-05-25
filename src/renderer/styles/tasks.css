@@ -13,12 +13,6 @@
   background: var(--n-canvas);
 }
 
-.table-title {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
 .task-title-button {
   width: 100%;
   border: 0;
@@ -26,16 +20,23 @@
   color: inherit;
   padding: 0;
   text-align: left;
-  cursor: pointer;
 }
 
 .task-title-button:hover strong {
   color: var(--n-primary);
 }
 
-.table-title span {
-  color: var(--n-steel);
-  font-size: 12px;
+.task-credit-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.task-credit-mode.ant-tag {
+  margin: 0;
+  font-size: 11px;
+  line-height: 18px;
 }
 
 /* ─── Empty card ─── */
