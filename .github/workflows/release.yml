@@ -222,14 +222,6 @@ jobs:
           git config user.email "release-bot@officedex.app"
           git config user.name "OfficeDex Release Bot"
 
-      - name: Stage release artifacts into dist repo
-        run: |
-          tag="${GITHUB_REF_NAME}"
-          mkdir -p "dist/releases/${tag}"
-          cp artifacts/OfficeDex-${tag}-darwin-universal.zip "dist/releases/${tag}/"
-          cp artifacts/OfficeDex-${tag}-darwin-universal.dmg "dist/releases/${tag}/"
-          cp artifacts/OfficeDex-${tag}-windows-amd64.zip   "dist/releases/${tag}/"
-
       - name: Generate manifest.json
         run: |
           tag="${GITHUB_REF_NAME}"
@@ -250,6 +242,6 @@ jobs:
         run: |
           cd dist
           tag="${GITHUB_REF_NAME}"
-          git add manifest.json archive/ "releases/${tag}/"
-          git commit -m "release: ${tag}" -m "Auto-synced from officecli/officedex@${GITHUB_SHA}"
+          git add manifest.json archive/
+          git commit -m "release: ${tag}" -m "Auto-synced from officecli/officedex@${GITHUB_SHA} (assets served from source repo release)"
           git push origin main

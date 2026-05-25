@@ -9,7 +9,7 @@
 //     [--min-supported 0.1.0] \
 //     [--mandatory] \
 //     [--notes "Release notes here..."] \
-//     [--base-url https://raw.githubusercontent.com/officecli/officedex-dist/main] \
+//     [--base-url https://github.com/officecli/officedex] \
 //     [--out manifest.json]
 //
 // The output matches the schema parsed by internal/appupdate.ReleaseInfo:
@@ -18,13 +18,18 @@
 // `--darwin` is treated as `darwin-universal` and also exposed as `darwin-arm64`
 // and `darwin-amd64` aliases (universal binary works on both). `--windows` is
 // `windows-amd64`. Add more flags here when new platform builds get added.
+//
+// Asset URLs point at the source repo's GitHub Release download endpoint
+// (public since the repo was open-sourced); the manifest itself is still
+// published from officedex-dist for atomic schema updates + custom fields
+// (mandatory / minSupportedVersion) the GitHub Releases API doesn't carry.
 
 import { createReadStream, statSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { basename } from "node:path";
 
-const DEFAULT_BASE_URL = "https://raw.githubusercontent.com/officecli/officedex-dist/main";
+const DEFAULT_BASE_URL = "https://github.com/officecli/officedex";
 
 function parseArgs(argv) {
   const args = {};
@@ -58,7 +63,7 @@ async function buildAsset(filePath, baseUrl, version) {
   const sha = await sha256File(filePath);
   const name = basename(filePath);
   return {
-    url: `${baseUrl}/releases/v${version}/${name}`,
+    url: `${baseUrl}/releases/download/v${version}/${name}`,
     sha256: sha,
     size: stat.size,
   };
