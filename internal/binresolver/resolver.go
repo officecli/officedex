@@ -19,6 +19,7 @@ type BinarySource string
 const (
 	SourceUser     BinarySource = "user"
 	SourceBundled  BinarySource = "bundled"
+	SourceManaged  BinarySource = "managed"
 	SourceEnv      BinarySource = "env"
 	SourceFallback BinarySource = "fallback"
 )
@@ -32,6 +33,7 @@ const fallbackBinary = "officecli"
 type Options struct {
 	UserBinaryPath    *string
 	BundledBinaryPath *string
+	ManagedBinaryPath *string
 	EnvBinaryPath     *string
 }
 
@@ -49,6 +51,9 @@ func Resolve(opts Options) Resolved {
 	}
 	if path, ok := pickTrimmed(opts.BundledBinaryPath); ok {
 		return Resolved{Path: path, Source: SourceBundled}
+	}
+	if path, ok := pickTrimmed(opts.ManagedBinaryPath); ok {
+		return Resolved{Path: path, Source: SourceManaged}
 	}
 	if path, ok := pickTrimmed(opts.EnvBinaryPath); ok {
 		return Resolved{Path: path, Source: SourceEnv}

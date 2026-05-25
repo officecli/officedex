@@ -25,6 +25,7 @@ import { useAttachments } from "../useAttachments";
 import { officecli } from "../bridge";
 import { documentTypeOptions } from "../defaults";
 import { FileGlyph, MaterialSymbol } from "../components/Shell";
+import { TaskRuntimePanel } from "../components/TaskRuntimePanel";
 import { acquireBlob, releaseBlob } from "../imageCache";
 import { useT } from "../i18n";
 import { useNow } from "../useNow";
@@ -279,6 +280,7 @@ function GenerationHistoryThread({ task, hideLatestText }: { task: DesktopTask; 
           <li className="muted">{t("dialogue.history.taskId", { id: task.id })}</li>
         </ul>
       </div>
+      <TaskRuntimePanel task={task} />
       <FluidProgressPanel task={task} />
     </>
   );

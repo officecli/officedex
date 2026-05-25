@@ -292,6 +292,17 @@
   color: var(--n-hairline-strong);
 }
 
+.topbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.runtime-chip {
+  margin: 0;
+}
+
 .global-search {
   max-width: 440px;
 }

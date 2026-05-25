@@ -19,11 +19,24 @@ import { useSettings } from "../useSettings";
 import { useAppUpdate } from "../useAppUpdate";
 import { ProviderForm } from "./OnboardingScreen";
 import { useT } from "../i18n";
-import type { AuthEvent, DocumentType, GenerateDefaults, LlmProvider, WhoAmIResult } from "../../shared/types";
+import type { AuthEvent, DocumentType, GenerateDefaults, LlmProvider, ProviderTestResult, ProxySettings, WhoAmIResult } from "../../shared/types";
 
 export function SettingsScreen({ onCreditRefresh }: { onCreditRefresh?: () => void } = {}) {
-  const { settings, defaultWorkspaceDir, update, loading, saving, error } = useSettings();
+  const { settings, defaultWorkspaceDir, update: rawUpdate, loading, saving, error } = useSettings();
   const t = useT();
+
+  const update = useCallback<typeof rawUpdate>(
+    async (patch) => {
+      const next = await rawUpdate(patch);
+      void message.success({
+        content: t("settings.toast.autoSaved"),
+        key: "settings-auto-saved",
+        duration: 2,
+      });
+      return next;
+    },
+    [rawUpdate, t],
+  );
 
   const updateDefaults = useCallback(
     (patch: Partial<GenerateDefaults>) => {
@@ -36,13 +49,6 @@ export function SettingsScreen({ onCreditRefresh }: { onCreditRefresh?: () => vo
     const picked = await officecli.openFileDialog();
     if (picked) {
       await update({ outputDir: picked }).catch(() => undefined);
-    }
-  }, [update]);
-
-  const pickBridgeBinary = useCallback(async () => {
-    const picked = await officecli.openFileDialog({ filters: [{ name: "All Files", extensions: ["*"] }] });
-    if (picked) {
-      await update({ bridgeBinaryPath: picked }).catch(() => undefined);
     }
   }, [update]);
 
@@ -73,7 +79,6 @@ export function SettingsScreen({ onCreditRefresh }: { onCreditRefresh?: () => vo
             imageQuality: "standard",
           },
           outputDir: null,
-          bridgeBinaryPath: null,
           llmProvider: null,
           onboardingCompletedAt: null,
         }).catch(() => undefined),
@@ -197,23 +202,11 @@ export function SettingsScreen({ onCreditRefresh }: { onCreditRefresh?: () => vo
                   />
                 </SettingRow>
               ) : null}
-              <SettingRow title={t("settings.row.bridgeBinary.title")} desc={t("settings.row.bridgeBinary.desc")}>
-                <Space.Compact style={{ width: "100%" }}>
-                  <Input
-                    placeholder={t("settings.row.bridgeBinary.placeholder")}
-                    value={settings.bridgeBinaryPath ?? ""}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      update({ bridgeBinaryPath: value.trim() ? value : null }).catch(() => undefined);
-                    }}
-                  />
-                  <Button icon={<FolderOpenOutlined />} onClick={pickBridgeBinary}>{t("settings.row.outputDir.browse")}</Button>
-                </Space.Compact>
-                {settings.bridgeBinaryPath ? (
-                  <Button type="link" size="small" onClick={() => update({ bridgeBinaryPath: null }).catch(() => undefined)}>
-                    {t("settings.row.outputDir.reset")}
-                  </Button>
-                ) : null}
+              <SettingRow title={t("settings.row.proxy.title")} desc={t("settings.row.proxy.desc")}>
+                <ProxyCard
+                  remote={settings.proxy}
+                  onSave={(next) => update({ proxy: next })}
+                />
               </SettingRow>
             </div>
             <div className="setting-group">
@@ -263,7 +256,10 @@ function ProviderFormControl({
   onSave: (next: LlmProvider | null) => void;
   clearLabel: string;
 }) {
+  const t = useT();
   const [draft, setDraft] = useState<LlmProvider>(() => remote ?? { ...EMPTY_PROVIDER_DRAFT });
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<ProviderTestResult | null>(null);
 
   // Reconcile when the remote value changes from outside (e.g. reset, initial load).
   // We avoid overwriting the user's in-flight type choice when remote is still null
@@ -291,6 +287,8 @@ function ProviderFormControl({
         }
         return next;
       });
+      // Stale test result no longer reflects the current configuration.
+      setTestResult(null);
     },
     [onSave, remote],
   );
@@ -298,18 +296,82 @@ function ProviderFormControl({
   const handleClear = useCallback(() => {
     setDraft({ ...EMPTY_PROVIDER_DRAFT });
     onSave(null);
+    setTestResult(null);
   }, [onSave]);
+
+  const runTest = useCallback(async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const result = await officecli.testProvider();
+      setTestResult(result);
+    } catch (err) {
+      setTestResult({
+        ok: false,
+        httpStatus: 0,
+        latencyMs: 0,
+        url: "",
+        error: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setTesting(false);
+    }
+  }, []);
+
+  const canTest = providerHasContent(draft);
+  const testTag = testResult ? formatTestResult(testResult, t) : null;
 
   return (
     <>
       <ProviderForm provider={draft} onChange={handleChange} />
-      {remote || providerHasContent(draft) ? (
-        <Button type="link" size="small" onClick={handleClear}>
-          {clearLabel}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
+        <Button
+          icon={<RocketOutlined />}
+          loading={testing}
+          disabled={!canTest && !testing}
+          onClick={runTest}
+        >
+          {testing ? t("settings.effective.testRunning") : t("settings.effective.testButton")}
         </Button>
-      ) : null}
+        {testTag ? (
+          <Tag color={testTag.tone === "green" ? "success" : testTag.tone === "red" ? "error" : "warning"}>
+            {testTag.text}
+          </Tag>
+        ) : null}
+        {remote || providerHasContent(draft) ? (
+          <Button type="link" size="small" onClick={handleClear} style={{ marginLeft: "auto" }}>
+            {clearLabel}
+          </Button>
+        ) : null}
+      </div>
     </>
   );
+}
+
+function formatTestResult(
+  result: ProviderTestResult,
+  t: (key: string) => string,
+): { tone: "green" | "red" | "amber"; text: string } {
+  if (result.error && result.httpStatus === 0) {
+    return { tone: "red", text: t("settings.effective.testNetworkError").replace("{error}", result.error) };
+  }
+  if (result.ok) {
+    return {
+      tone: "green",
+      text: t("settings.effective.testOk")
+        .replace("{status}", String(result.httpStatus))
+        .replace("{latency}", String(result.latencyMs)),
+    };
+  }
+  const status = result.httpStatus;
+  let key = "settings.effective.testFail";
+  if (status === 401 || status === 403) key = "settings.effective.testFailAuth";
+  else if (status === 404) key = "settings.effective.testFailNotFound";
+  else if (status >= 500) key = "settings.effective.testFailUpstream";
+  return {
+    tone: "red",
+    text: t(key).replace("{status}", String(status)),
+  };
 }
 
 function AboutCard() {
@@ -665,5 +727,94 @@ function SettingRow({ title, desc, children }: { title: string; desc: string; ch
       </div>
       <div className="setting-control">{children}</div>
     </div>
+  );
+}
+
+const PROXY_URL_PATTERN = /^(https?|socks5h?):\/\/[^\s/$.?#].[^\s]*$/i;
+
+function ProxyCard({
+  remote,
+  onSave,
+}: {
+  remote: ProxySettings | null;
+  onSave: (next: ProxySettings | null) => Promise<unknown>;
+}) {
+  const t = useT();
+  const [enabled, setEnabled] = useState<boolean>(remote?.enabled ?? false);
+  const [url, setUrl] = useState<string>(remote?.url ?? "");
+  const [submitting, setSubmitting] = useState(false);
+  const [validationError, setValidationError] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    setEnabled(remote?.enabled ?? false);
+    setUrl(remote?.url ?? "");
+    setValidationError(undefined);
+  }, [remote?.enabled, remote?.url]);
+
+  const trimmedUrl = url.trim();
+  const dirty =
+    enabled !== (remote?.enabled ?? false) || trimmedUrl !== (remote?.url ?? "");
+  const canSave = dirty && !submitting && (!enabled || (trimmedUrl !== "" && PROXY_URL_PATTERN.test(trimmedUrl)));
+
+  const handleSave = useCallback(async () => {
+    if (enabled && (trimmedUrl === "" || !PROXY_URL_PATTERN.test(trimmedUrl))) {
+      setValidationError(t("settings.row.proxy.invalidUrl"));
+      return;
+    }
+    setSubmitting(true);
+    setValidationError(undefined);
+    try {
+      const next: ProxySettings | null = enabled
+        ? { enabled: true, url: trimmedUrl }
+        : null;
+      await onSave(next);
+      void message.success({
+        content: t("settings.row.proxy.saveSuccess"),
+        key: "settings-proxy-saved",
+        duration: 2,
+      });
+    } catch {
+      // useSettings already surfaces the error via its error state.
+    } finally {
+      setSubmitting(false);
+    }
+  }, [enabled, trimmedUrl, onSave, t]);
+
+  return (
+    <Space direction="vertical" style={{ width: "100%" }} size="middle">
+      <Space align="center" size="small">
+        <Switch
+          checked={enabled}
+          onChange={(checked) => {
+            setEnabled(checked);
+            if (!checked) {
+              setValidationError(undefined);
+            }
+          }}
+          aria-label={t("settings.row.proxy.enableLabel")}
+        />
+        <span>{t("settings.row.proxy.enableLabel")}</span>
+      </Space>
+      {enabled ? (
+        <Input
+          placeholder={t("settings.row.proxy.urlPlaceholder")}
+          value={url}
+          onChange={(event) => {
+            setUrl(event.target.value);
+            if (validationError) setValidationError(undefined);
+          }}
+          aria-label={t("settings.row.proxy.urlLabel")}
+          status={validationError ? "error" : undefined}
+        />
+      ) : null}
+      {validationError ? (
+        <div role="alert" style={{ color: "var(--n-red, #d92d20)" }}>
+          {validationError}
+        </div>
+      ) : null}
+      <Button type="primary" onClick={handleSave} disabled={!canSave} loading={submitting}>
+        {t("settings.row.proxy.save")}
+      </Button>
+    </Space>
   );
 }

@@ -327,6 +327,52 @@ func TestBuildBridgeEnvOverridesProcessEnv(t *testing.T) {
 	}
 }
 
+func TestBuildBridgeEnvInjectsProxySupplier(t *testing.T) {
+	clearProcessProxyEnv(t)
+	t.Cleanup(func() { SetProxyEnvSupplier(nil) })
+	SetProxyEnvSupplier(func() []string {
+		return []string{
+			"HTTP_PROXY=http://127.0.0.1:7890",
+			"HTTPS_PROXY=http://127.0.0.1:7890",
+			"ALL_PROXY=http://127.0.0.1:7890",
+		}
+	})
+	env := BuildBridgeEnv(nil)
+	for _, want := range []string{
+		"HTTP_PROXY=http://127.0.0.1:7890",
+		"HTTPS_PROXY=http://127.0.0.1:7890",
+		"ALL_PROXY=http://127.0.0.1:7890",
+	} {
+		if !containsEntry(env, want) {
+			t.Errorf("env missing %q", want)
+		}
+	}
+}
+
+func TestBuildBridgeEnvExtraBeatsProxySupplier(t *testing.T) {
+	clearProcessProxyEnv(t)
+	t.Cleanup(func() { SetProxyEnvSupplier(nil) })
+	SetProxyEnvSupplier(func() []string { return []string{"HTTPS_PROXY=http://supplier:1"} })
+	env := BuildBridgeEnv([]string{"HTTPS_PROXY=http://override:2"})
+	if !containsEntry(env, "HTTPS_PROXY=http://override:2") {
+		t.Errorf("override missing in %v", env)
+	}
+	if containsEntry(env, "HTTPS_PROXY=http://supplier:1") {
+		t.Errorf("supplier value still present in %v", env)
+	}
+}
+
+func clearProcessProxyEnv(t *testing.T) {
+	t.Helper()
+	for _, key := range []string{
+		"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
+		"http_proxy", "https_proxy", "all_proxy",
+	} {
+		t.Setenv(key, "")
+		os.Unsetenv(key)
+	}
+}
+
 func captureEvents(mgr *Manager) *eventLog {
 	log := &eventLog{ch: make(chan LoginEvent, 16)}
 	log.unsub = mgr.OnEvent(func(ev LoginEvent) {

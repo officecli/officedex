@@ -39,7 +39,7 @@ export function App() {
   const { settings: persistedSettings, defaultWorkspaceDir, loading: settingsLoading } = useSettings();
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const appUpdate = useAppUpdate();
-  const { credit, nudgeForTaskTransition } = useCreditStatus();
+  const { credit, refresh: refreshCredit, nudgeForTaskTransition } = useCreditStatus();
   const locale = useLocale();
   const antdLocale = locale === "zh" ? zhCN : enUS;
   const forceUpdate = appUpdate.status.mandatory && Boolean(appUpdate.release);
@@ -56,6 +56,11 @@ export function App() {
   }, []);
 
   const showOnboarding = !settingsLoading && !onboardingDismissed && persistedSettings.onboardingCompletedAt === null;
+
+  useEffect(() => {
+    if (settingsLoading) return;
+    refreshCredit();
+  }, [persistedSettings.defaults.runtimeMode, settingsLoading, refreshCredit]);
 
   useEffect(() => {
     if (forceUpdate) {
@@ -116,6 +121,31 @@ export function App() {
       });
     return off;
   }, [connectAttempt, clearError, recordError, settingsLoading, showOnboarding, forceUpdate, nudgeForTaskTransition]);
+
+  useEffect(() => {
+    let cancelled = false;
+    officecli
+      .getTaskHistory(50)
+      .then((entries) => {
+        if (cancelled || entries.length === 0) return;
+        setState((current) => {
+          let next = current;
+          for (const entry of entries) {
+            if (next.tasks[entry.taskId]) continue;
+            for (const event of entry.events) {
+              next = applyTaskEvent(next, event);
+            }
+          }
+          return next;
+        });
+      })
+      .catch(() => {
+        // History hydration is best-effort; live events still flow.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const firstTaskID = state.taskOrder[0];
   useEffect(() => {
@@ -270,6 +300,7 @@ export function App() {
         errorKind={lastError ? errorKind : undefined}
         inspector={sidePanel}
         credit={credit}
+        runtimeMode={persistedSettings.defaults.runtimeMode}
         onNavChange={setActiveNav}
         onNewGeneration={newGeneration}
       >

@@ -199,12 +199,23 @@ type DesktopTask struct {
 	Error         string            `json:"error,omitempty"`
 	Stages        []StageState      `json:"stages,omitempty"`
 	ActiveStageID string            `json:"activeStageId,omitempty"`
+	// RuntimeMode records which mode ("external" / "hosted") the task ran
+	// under, captured from the task.started event payload so the renderer can
+	// label finished tasks correctly even after the user switches modes.
+	RuntimeMode string `json:"runtimeMode,omitempty"`
 }
 
 type PreviewGrant struct {
 	Token        string `json:"token"`
 	FileName     string `json:"fileName"`
 	DocumentType string `json:"documentType"`
+}
+
+// TaskHistoryEntry carries a persisted task and its bridge events back to
+// the renderer so it can replay them into TaskState on startup.
+type TaskHistoryEntry struct {
+	TaskID string        `json:"taskId"`
+	Events []BridgeEvent `json:"events"`
 }
 
 type WhoAmIMode string
@@ -316,6 +327,13 @@ type LlmProvider struct {
 	Model   string          `json:"model"`
 }
 
+// ProxySettings configures an HTTP/SOCKS proxy that routes all outbound
+// network traffic from the desktop app and its officecli subprocess.
+type ProxySettings struct {
+	Enabled bool   `json:"enabled"`
+	URL     string `json:"url"`
+}
+
 type UserSettings struct {
 	Version                int              `json:"version"`
 	Defaults               GenerateDefaults `json:"defaults"`
@@ -325,6 +343,7 @@ type UserSettings struct {
 	OnboardingCompletedAt  *string          `json:"onboardingCompletedAt"`
 	SupportReportEndpoint  *string          `json:"supportReportEndpoint"`
 	SupportReportToken     *string          `json:"supportReportToken"`
+	Proxy                  *ProxySettings   `json:"proxy,omitempty"`
 }
 
 // RuntimeStatus mirrors the renderer-facing status object emitted by the
@@ -372,4 +391,44 @@ type RuntimeEvent struct {
 	BytesDone  *int64           `json:"bytesDone,omitempty"`
 	BytesTotal *int64           `json:"bytesTotal,omitempty"`
 	Version    string           `json:"version,omitempty"`
+}
+
+// BridgeRuntimeSnapshot is the renderer-facing description of what the
+// currently-resolved officecli subprocess is configured with. EnvApplied is
+// true only when ensureBridge has populated the cached resolved fields — i.e.
+// a subprocess has actually been spawned with this configuration. Provider is
+// always sourced from the env slice that was handed to the subprocess; we do
+// not fall back to settings.json so the snapshot's promise to the user is
+// strictly "what is running" rather than "what is configured".
+type BridgeRuntimeSnapshot struct {
+	RuntimeMode RuntimeMode       `json:"runtimeMode"`
+	Provider    *ProviderSnapshot `json:"provider,omitempty"`
+	BinaryPath  string            `json:"binaryPath"`
+	ResolvedAt  string            `json:"resolvedAt,omitempty"`
+	EnvApplied  bool              `json:"envApplied"`
+	ProxyHost   string            `json:"proxyHost,omitempty"`
+}
+
+// ProviderSnapshot mirrors the OFFICECLI_LLM_* env vars that were passed to
+// the bridge subprocess. The API key is rendered through internal/mask before
+// being stored here; APIKeyLength reports the rune length of the original
+// (untrimmed) value so users can sanity-check they configured the right key.
+type ProviderSnapshot struct {
+	Type         LlmProviderType `json:"type"`
+	BaseURLHost  string          `json:"baseUrlHost"`
+	Model        string          `json:"model"`
+	APIKeyMasked string          `json:"apiKeyMasked"`
+	APIKeyLength int             `json:"apiKeyLength"`
+}
+
+// ProviderTestResult is the outcome of a TestProvider probe. For HTTP-based
+// providers HTTPStatus reflects the response code; for the custom TCP/TLS
+// reachability probe it is left at 0 and OK indicates whether the host
+// accepted a connection.
+type ProviderTestResult struct {
+	OK         bool   `json:"ok"`
+	HTTPStatus int    `json:"httpStatus"`
+	LatencyMs  int64  `json:"latencyMs"`
+	URL        string `json:"url"`
+	Error      string `json:"error,omitempty"`
 }

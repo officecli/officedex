@@ -272,3 +272,76 @@ func TestAtomicWriteCleansUpTmp(t *testing.T) {
 		t.Errorf("expected .tmp removed, stat err = %v", err)
 	}
 }
+
+func TestProxyRoundTrip(t *testing.T) {
+	store, path, _ := newTempStore(t)
+	patch := Patch{Proxy: &types.ProxySettings{Enabled: true, URL: "http://127.0.0.1:7890"}}
+	got, err := store.Update(patch)
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if got.Proxy == nil || !got.Proxy.Enabled || got.Proxy.URL != "http://127.0.0.1:7890" {
+		t.Fatalf("Proxy = %+v, want enabled + url", got.Proxy)
+	}
+
+	// Read back from disk via a fresh store to confirm persistence + sanitize.
+	logger := &recordingLogger{}
+	fresh := New(path, logger)
+	reloaded, err := fresh.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if reloaded.Proxy == nil || reloaded.Proxy.URL != "http://127.0.0.1:7890" {
+		t.Fatalf("reloaded Proxy = %+v", reloaded.Proxy)
+	}
+}
+
+func TestProxyInvalidSchemeIsDropped(t *testing.T) {
+	store, path, logger := newTempStore(t)
+	raw := map[string]any{
+		"version":  1,
+		"defaults": map[string]any{},
+		"proxy":    map[string]any{"enabled": true, "url": "ftp://nope:21"},
+	}
+	body, _ := json.Marshal(raw)
+	if err := os.WriteFile(path, body, 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	got, err := store.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got.Proxy != nil {
+		t.Errorf("Proxy = %+v, want nil (invalid scheme dropped)", got.Proxy)
+	}
+	if len(logger.calls) != 0 {
+		// The store currently only warns for top-level JSON errors; proxy
+		// rejection is silent. If that ever changes, the assertion lives here.
+		t.Logf("logger calls: %v", logger.calls)
+	}
+}
+
+func TestProxyClearRemovesValue(t *testing.T) {
+	store, _, _ := newTempStore(t)
+	if _, err := store.Update(Patch{Proxy: &types.ProxySettings{Enabled: true, URL: "http://h:1"}}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	got, err := store.Update(Patch{ClearProxy: true})
+	if err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+	if got.Proxy != nil {
+		t.Errorf("Proxy = %+v, want nil after clear", got.Proxy)
+	}
+}
+
+func TestProxyEnabledWithoutURLDropped(t *testing.T) {
+	store, _, _ := newTempStore(t)
+	got, err := store.Update(Patch{Proxy: &types.ProxySettings{Enabled: true, URL: "   "}})
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if got.Proxy != nil {
+		t.Errorf("Proxy = %+v, want nil (enabled but empty URL is meaningless)", got.Proxy)
+	}
+}

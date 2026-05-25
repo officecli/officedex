@@ -16,6 +16,8 @@
 package runtime
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -62,9 +64,10 @@ type FetchDownloadFunc func(ctx context.Context, url string) (*FetchDownload, er
 
 // LatestRelease is the resolved result of CheckLatestVersion.
 type LatestRelease struct {
-	Version  string
-	AssetURL string
-	Size     int64
+	Version   string `json:"version"`
+	AssetURL  string `json:"assetUrl"`
+	AssetName string `json:"assetName"`
+	Size      int64  `json:"size"`
 }
 
 // ManagerOptions configures a Manager. InstallRoot and Repo are required.
@@ -75,14 +78,18 @@ type ManagerOptions struct {
 	Arch          string
 	FetchJSON     FetchJSONFunc
 	FetchDownload FetchDownloadFunc
-	Now           func() time.Time
-	Listener      func(types.RuntimeEvent)
+	// HTTPClient drives the default fetchers. nil falls back to the
+	// std-lib defaults. Ignored when FetchJSON/FetchDownload are set.
+	HTTPClient *http.Client
+	Now        func() time.Time
+	Listener   func(types.RuntimeEvent)
 }
 
 // Manager owns the lifecycle of the officecli binary under InstallRoot. It
-// queries GitHub Releases for new versions and atomically installs raw-binary
-// assets named `officecli-<platform>-<arch>[.exe]`. Archive assets are rejected
-// on purpose so the desktop app never needs an extraction dependency.
+// queries GitHub Releases for new versions and atomically installs goreleaser
+// archive assets named `officecli_<version>_<os>_<arch>.tar.gz`. The
+// `officecli` (or `officecli.exe`) binary is extracted from the archive into
+// InstallRoot.
 type Manager struct {
 	installRoot   string
 	repo          string
@@ -122,11 +129,11 @@ func New(opts ManagerOptions) (*Manager, error) {
 	}
 	fetchJSON := opts.FetchJSON
 	if fetchJSON == nil {
-		fetchJSON = defaultFetchJSON
+		fetchJSON = newDefaultFetchJSON(opts.HTTPClient)
 	}
 	fetchDownload := opts.FetchDownload
 	if fetchDownload == nil {
-		fetchDownload = defaultFetchDownload
+		fetchDownload = newDefaultFetchDownload(opts.HTTPClient)
 	}
 	now := opts.Now
 	if now == nil {
@@ -214,14 +221,13 @@ func (m *Manager) ResolveBinaryPath() *string {
 }
 
 // CheckLatestVersion queries GitHub Releases for the latest tag and the asset
-// matching ExpectedAssetName. It updates latestVersion + lastCheckedAt and
-// emits status/error events. Returns nil on failure (error info available via
-// the status event).
+// matching the goreleaser naming convention. It updates latestVersion +
+// lastCheckedAt and emits status/error events. Returns nil on failure (error
+// info available via the status event).
 func (m *Manager) CheckLatestVersion(ctx context.Context) (*LatestRelease, error) {
 	m.mu.Lock()
 	m.lastError = nil
 	repo := m.repo
-	assetName := m.expectedAssetNameLocked()
 	m.mu.Unlock()
 
 	m.emit(types.RuntimeEvent{
@@ -238,9 +244,9 @@ func (m *Manager) CheckLatestVersion(ctx context.Context) (*LatestRelease, error
 	var raw struct {
 		TagName string `json:"tag_name"`
 		Assets  []struct {
-			Name              string `json:"name"`
+			Name               string `json:"name"`
 			BrowserDownloadURL string `json:"browser_download_url"`
-			Size              int64  `json:"size"`
+			Size               int64  `json:"size"`
 		} `json:"assets"`
 	}
 	if err := json.Unmarshal(body, &raw); err != nil {
@@ -250,10 +256,13 @@ func (m *Manager) CheckLatestVersion(ctx context.Context) (*LatestRelease, error
 	if tag == "" {
 		return nil, m.failCheck(errors.New("Release response missing tag_name"))
 	}
+	m.mu.Lock()
+	assetName := m.expectedAssetNameLocked(tag)
+	m.mu.Unlock()
 	var matched *struct {
-		Name              string `json:"name"`
+		Name               string `json:"name"`
 		BrowserDownloadURL string `json:"browser_download_url"`
-		Size              int64  `json:"size"`
+		Size               int64  `json:"size"`
 	}
 	for i := range raw.Assets {
 		if raw.Assets[i].Name == assetName {
@@ -273,7 +282,7 @@ func (m *Manager) CheckLatestVersion(ctx context.Context) (*LatestRelease, error
 	m.mu.Unlock()
 	m.emit(types.RuntimeEvent{Type: types.RuntimeEventStatus, Status: &status})
 
-	return &LatestRelease{Version: tag, AssetURL: matched.BrowserDownloadURL, Size: matched.Size}, nil
+	return &LatestRelease{Version: tag, AssetURL: matched.BrowserDownloadURL, Size: matched.Size, AssetName: assetName}, nil
 }
 
 func (m *Manager) failCheck(err error) error {
@@ -305,7 +314,6 @@ func (m *Manager) DownloadAndInstall(ctx context.Context) (types.RuntimeStatus, 
 	installRoot := m.installRoot
 	platform := m.platform
 	arch := m.arch
-	assetName := m.expectedAssetNameLocked()
 	finalPath := m.managedBinaryPathLocked()
 	versionFile := m.versionFilePathLocked()
 	downloadCtx, cancel := context.WithCancel(ctx)
@@ -341,16 +349,12 @@ func (m *Manager) DownloadAndInstall(ctx context.Context) (types.RuntimeStatus, 
 		return status, nil
 	}
 
-	if err := assertRawBinaryAsset(assetName); err != nil {
-		cancel()
-		return finish(err)
-	}
-
 	latest, err := m.CheckLatestVersion(downloadCtx)
 	if err != nil {
 		cancel()
 		return finish(err)
 	}
+	assetName := latest.AssetName
 
 	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
 		cancel()
@@ -416,14 +420,11 @@ func (m *Manager) DownloadAndInstall(ctx context.Context) (types.RuntimeStatus, 
 		cancel()
 		return finish(fmt.Errorf("mkdir install root: %w", err))
 	}
-	if err := os.Chmod(tmpFile, 0o755); err != nil {
+	if err := extractOfficecliFromTarGz(tmpFile, finalPath, platform); err != nil {
 		cancel()
-		return finish(fmt.Errorf("chmod tmp: %w", err))
+		return finish(err)
 	}
-	if err := os.Rename(tmpFile, finalPath); err != nil {
-		cancel()
-		return finish(fmt.Errorf("rename binary: %w", err))
-	}
+	_ = os.Remove(tmpFile)
 	tmpFile = ""
 
 	record := struct {
@@ -491,11 +492,11 @@ func (m *Manager) VersionFilePath() string {
 }
 
 // ExpectedAssetName returns the GitHub Releases asset filename this manager
-// expects for the configured platform/arch.
-func (m *Manager) ExpectedAssetName() string {
+// expects for the given release tag and the configured platform/arch.
+func (m *Manager) ExpectedAssetName(tag string) string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.expectedAssetNameLocked()
+	return m.expectedAssetNameLocked(tag)
 }
 
 func (m *Manager) statusLocked() types.RuntimeStatus {
@@ -535,14 +536,11 @@ func (m *Manager) versionFilePathLocked() string {
 	return filepath.Join(m.installRoot, "version.json")
 }
 
-func (m *Manager) expectedAssetNameLocked() string {
+func (m *Manager) expectedAssetNameLocked(tag string) string {
 	platformKey := mapPlatform(m.platform)
 	archKey := mapArch(m.arch)
-	suffix := ""
-	if m.platform == "win32" {
-		suffix = ".exe"
-	}
-	return fmt.Sprintf("officecli-%s-%s%s", platformKey, archKey, suffix)
+	version := strings.TrimPrefix(strings.TrimSpace(tag), "v")
+	return fmt.Sprintf("officecli_%s_%s_%s.tar.gz", version, platformKey, archKey)
 }
 
 func (m *Manager) emit(event types.RuntimeEvent) {
@@ -552,17 +550,61 @@ func (m *Manager) emit(event types.RuntimeEvent) {
 	m.listener(event)
 }
 
-func assertRawBinaryAsset(assetName string) error {
-	lower := strings.ToLower(assetName)
-	if strings.HasSuffix(lower, ".zip") || strings.HasSuffix(lower, ".tar.gz") || strings.HasSuffix(lower, ".tgz") {
-		return fmt.Errorf("archive extraction not supported; please use raw-binary asset format (got %s)", assetName)
+// extractOfficecliFromTarGz reads a goreleaser-produced tar.gz archive and
+// copies the `officecli` (or `officecli.exe`) entry into outPath. The output
+// file is created with 0o755 mode on POSIX so the binary is immediately
+// executable. Returns an error if the archive does not contain the binary.
+func extractOfficecliFromTarGz(archivePath, outPath, platform string) error {
+	f, err := os.Open(archivePath)
+	if err != nil {
+		return fmt.Errorf("open archive: %w", err)
 	}
-	return nil
+	defer f.Close()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return fmt.Errorf("gzip reader: %w", err)
+	}
+	defer gz.Close()
+	binaryName := "officecli"
+	if platform == "win32" {
+		binaryName = "officecli.exe"
+	}
+	tr := tar.NewReader(gz)
+	for {
+		hdr, err := tr.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("tar next: %w", err)
+		}
+		if !hdr.FileInfo().Mode().IsRegular() {
+			continue
+		}
+		if filepath.Base(hdr.Name) != binaryName {
+			continue
+		}
+		out, err := os.OpenFile(outPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
+		if err != nil {
+			return fmt.Errorf("create binary: %w", err)
+		}
+		if _, err := io.Copy(out, tr); err != nil {
+			out.Close()
+			return fmt.Errorf("write binary: %w", err)
+		}
+		if err := out.Close(); err != nil {
+			return fmt.Errorf("close binary: %w", err)
+		}
+		return nil
+	}
+	return fmt.Errorf("archive does not contain %s", binaryName)
 }
 
 func mapPlatform(platform string) string {
 	switch platform {
-	case "darwin", "win32", "linux":
+	case "win32":
+		return "windows"
+	case "darwin", "linux":
 		return platform
 	default:
 		return platform
@@ -571,7 +613,9 @@ func mapPlatform(platform string) string {
 
 func mapArch(arch string) string {
 	switch arch {
-	case "arm64", "x64":
+	case "x64":
+		return "amd64"
+	case "arm64":
 		return arch
 	default:
 		return arch
@@ -661,62 +705,76 @@ func AssertManualBinaryAccessible(filePath string, platform string) error {
 // defaultFetchJSON performs a GET request with redirect-following and a 15s
 // context timeout, returning the raw body when the response is 2xx.
 func defaultFetchJSON(ctx context.Context, target string) ([]byte, error) {
-	c, cancel := context.WithTimeout(ctx, FetchJSONTimeoutMs)
-	defer cancel()
-	req, err := http.NewRequestWithContext(c, http.MethodGet, target, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", userAgent)
-	req.Header.Set("Accept", "application/json")
-	resp, err := jsonClient().Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		snippet := body
-		if len(snippet) > 200 {
-			snippet = snippet[:200]
+	return newDefaultFetchJSON(nil)(ctx, target)
+}
+
+func newDefaultFetchJSON(base *http.Client) FetchJSONFunc {
+	client := jsonClientFrom(base)
+	return func(ctx context.Context, target string) ([]byte, error) {
+		c, cancel := context.WithTimeout(ctx, FetchJSONTimeoutMs)
+		defer cancel()
+		req, err := http.NewRequestWithContext(c, http.MethodGet, target, nil)
+		if err != nil {
+			return nil, err
 		}
-		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(snippet))
+		req.Header.Set("User-Agent", userAgent)
+		req.Header.Set("Accept", "application/json")
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			snippet := body
+			if len(snippet) > 200 {
+				snippet = snippet[:200]
+			}
+			return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(snippet))
+		}
+		return body, nil
 	}
-	return body, nil
 }
 
 // defaultFetchDownload streams a GET response without loading it into memory.
 // The caller is responsible for closing FetchDownload.Stream.
 func defaultFetchDownload(ctx context.Context, target string) (*FetchDownload, error) {
-	c, cancel := context.WithTimeout(ctx, FetchDownloadTimeoutMs)
-	req, err := http.NewRequestWithContext(c, http.MethodGet, target, nil)
-	if err != nil {
-		cancel()
-		return nil, err
+	return newDefaultFetchDownload(nil)(ctx, target)
+}
+
+func newDefaultFetchDownload(base *http.Client) FetchDownloadFunc {
+	client := downloadClientFrom(base)
+	return func(ctx context.Context, target string) (*FetchDownload, error) {
+		c, cancel := context.WithTimeout(ctx, FetchDownloadTimeoutMs)
+		req, err := http.NewRequestWithContext(c, http.MethodGet, target, nil)
+		if err != nil {
+			cancel()
+			return nil, err
+		}
+		req.Header.Set("User-Agent", userAgent)
+		req.Header.Set("Accept", "application/octet-stream")
+		resp, err := client.Do(req)
+		if err != nil {
+			cancel()
+			return nil, err
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			resp.Body.Close()
+			cancel()
+			return nil, fmt.Errorf("HTTP %d downloading %s", resp.StatusCode, target)
+		}
+		size := resp.ContentLength
+		if size < 0 {
+			size = 0
+		}
+		return &FetchDownload{
+			Stream: &cancellingReader{ReadCloser: resp.Body, cancel: cancel},
+			Size:   size,
+		}, nil
 	}
-	req.Header.Set("User-Agent", userAgent)
-	req.Header.Set("Accept", "application/octet-stream")
-	resp, err := downloadClient().Do(req)
-	if err != nil {
-		cancel()
-		return nil, err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		resp.Body.Close()
-		cancel()
-		return nil, fmt.Errorf("HTTP %d downloading %s", resp.StatusCode, target)
-	}
-	size := resp.ContentLength
-	if size < 0 {
-		size = 0
-	}
-	return &FetchDownload{
-		Stream: &cancellingReader{ReadCloser: resp.Body, cancel: cancel},
-		Size:   size,
-	}, nil
 }
 
 // cancellingReader is a ReadCloser wrapper that cancels the parent context
@@ -735,18 +793,50 @@ func (c *cancellingReader) Close() error {
 }
 
 func jsonClient() *http.Client {
-	return &http.Client{
-		CheckRedirect: redirectPolicy,
+	return jsonClientFrom(nil)
+}
+
+// jsonClientFrom returns the small-body GET client used for manifest/release
+// JSON. When base is non-nil, its Transport is reused so the proxy pool's
+// ProxyFunc applies; otherwise we fall back to the std-lib default transport.
+func jsonClientFrom(base *http.Client) *http.Client {
+	if base == nil {
+		return &http.Client{CheckRedirect: redirectPolicy}
 	}
+	out := *base
+	out.CheckRedirect = redirectPolicy
+	return &out
 }
 
 func downloadClient() *http.Client {
-	return &http.Client{
-		Transport: &http.Transport{
-			ResponseHeaderTimeout: FetchDownloadSocketIdleMs,
-		},
-		CheckRedirect: redirectPolicy,
+	return downloadClientFrom(nil)
+}
+
+// downloadClientFrom layers the per-call response-header idle timeout onto
+// base's Transport while preserving Proxy/TLS settings. When base.Transport
+// is not *http.Transport we leave it alone — the caller already opted into
+// a custom transport and the manager's redirect/timeouts still apply.
+func downloadClientFrom(base *http.Client) *http.Client {
+	if base == nil {
+		return &http.Client{
+			Transport: &http.Transport{
+				ResponseHeaderTimeout: FetchDownloadSocketIdleMs,
+			},
+			CheckRedirect: redirectPolicy,
+		}
 	}
+	out := *base
+	out.CheckRedirect = redirectPolicy
+	if t, ok := base.Transport.(*http.Transport); ok && t != nil {
+		clone := t.Clone()
+		clone.ResponseHeaderTimeout = FetchDownloadSocketIdleMs
+		out.Transport = clone
+	} else if base.Transport == nil {
+		out.Transport = &http.Transport{
+			ResponseHeaderTimeout: FetchDownloadSocketIdleMs,
+		}
+	}
+	return &out
 }
 
 func redirectPolicy(req *http.Request, via []*http.Request) error {

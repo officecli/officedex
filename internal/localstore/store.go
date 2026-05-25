@@ -254,6 +254,39 @@ func (s *Store) QueryEventsByTask(ctx context.Context, taskID string) ([]types.B
 	return scanEvents(rows)
 }
 
+// QueryRecentTaskIDs returns task ids ordered by tasks.updated_at ASC,
+// so callers can replay them chronologically (oldest first). The result is
+// capped at `limit` of the most recent rows; passing a non-positive limit
+// returns the empty slice.
+func (s *Store) QueryRecentTaskIDs(ctx context.Context, limit int) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return nil, fmt.Errorf("localstore: not open")
+	}
+	if limit <= 0 {
+		return nil, nil
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id FROM (
+		   SELECT id, updated_at FROM tasks
+		   ORDER BY updated_at DESC LIMIT ?
+		 ) ORDER BY updated_at ASC`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("localstore: query recent task ids: %w", err)
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("localstore: scan recent task id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 // QueryRecentEvents returns the most recent events across all tasks, ordered
 // by created_at descending, limited to the given count.
 func (s *Store) QueryRecentEvents(ctx context.Context, limit int) ([]types.BridgeEvent, error) {

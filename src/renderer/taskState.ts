@@ -1,4 +1,4 @@
-import type { Artifact, BridgeEvent, DesktopTask, StageState, TaskQuestion, TaskUserInput } from "../shared/types";
+import type { Artifact, BridgeEvent, DesktopTask, ProviderSnapshot, StageState, TaskQuestion, TaskRuntimeSnapshot, TaskUserInput } from "../shared/types";
 
 export interface TaskState {
   tasks: Record<string, DesktopTask>;
@@ -29,6 +29,9 @@ export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState 
     status: "starting",
     events: [],
   };
+  if (event.event_id && previous.events.some((existing) => existing.event_id === event.event_id)) {
+    return state;
+  }
   const events = [...previous.events, event];
   const { stages, activeStageId } = reduceStages(events);
   const nextTask: DesktopTask = {
@@ -43,6 +46,16 @@ export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState 
   if (event.type === "task.progress") {
     nextTask.lastProgressAt = Date.now();
     nextTask.stalledSince = undefined;
+  }
+  if (event.type === "task.started") {
+    const mode = stringPayload(event, "runtime_mode");
+    if (mode === "external" || mode === "hosted") {
+      nextTask.runtimeMode = mode;
+      const snapshot = runtimeSnapshotFromPayload(mode, event.payload);
+      if (snapshot) {
+        nextTask.runtimeSnapshot = snapshot;
+      }
+    }
   }
   if (event.type === "task.question") {
     nextTask.question = questionFromPayload(event.payload);
@@ -151,6 +164,33 @@ function applyCreditPayload(task: DesktopTask, payload: BridgeEvent["payload"]):
 
 function stringValue(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+function runtimeSnapshotFromPayload(
+  mode: "external" | "hosted",
+  payload: BridgeEvent["payload"],
+): TaskRuntimeSnapshot | undefined {
+  const snapshot: TaskRuntimeSnapshot = { mode };
+  if (!payload) return snapshot;
+  const provider = providerSnapshotFromUnknown(payload.runtime_provider);
+  if (provider) snapshot.provider = provider;
+  const appliedAt = stringValue(payload.runtime_applied_at);
+  if (appliedAt) snapshot.appliedAt = appliedAt;
+  return snapshot;
+}
+
+function providerSnapshotFromUnknown(raw: unknown): ProviderSnapshot | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const obj = raw as Record<string, unknown>;
+  const t = obj.type;
+  if (t !== "openai" && t !== "anthropic" && t !== "azure" && t !== "custom") return undefined;
+  return {
+    type: t,
+    baseUrlHost: stringValue(obj.base_url_host),
+    model: stringValue(obj.model),
+    apiKeyMasked: stringValue(obj.api_key_masked),
+    apiKeyLength: typeof obj.api_key_length === "number" ? obj.api_key_length : 0,
+  };
 }
 
 const DEFAULT_STAGE_DEFS: ReadonlyArray<{ id: string; label: string }> = [

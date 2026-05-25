@@ -234,6 +234,54 @@
   color: #e03131;
 }
 
+.effective-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--n-canvas-warm, #faf8f5);
+  border: 1px solid var(--n-hairline, #ece9e3);
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+
+.effective-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.effective-label {
+  color: #787671;
+  flex-shrink: 0;
+}
+
+.effective-value {
+  color: #1a1a1a;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  word-break: break-all;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.effective-hint {
+  color: #a06200;
+  font-size: 12px;
+}
+
+.effective-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 .about-progress {
   margin: 12px 0 6px;
   display: flex;

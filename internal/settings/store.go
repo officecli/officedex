@@ -22,6 +22,7 @@ import (
 	"strings"
 	"sync"
 
+	"officedex/internal/netproxy"
 	"officedex/internal/types"
 )
 
@@ -162,9 +163,13 @@ type Patch struct {
 	OnboardingCompletedAt *string                `json:"onboardingCompletedAt,omitempty"`
 	SupportReportEndpoint *string                `json:"supportReportEndpoint,omitempty"`
 	SupportReportToken    *string                `json:"supportReportToken,omitempty"`
+	Proxy                 *types.ProxySettings   `json:"proxy,omitempty"`
 	// ClearLlmProvider, when true, removes the stored provider. Ignored when
 	// LlmProvider is non-nil.
 	ClearLlmProvider bool `json:"clearLlmProvider,omitempty"`
+	// ClearProxy, when true, removes the stored proxy. Ignored when Proxy is
+	// non-nil.
+	ClearProxy bool `json:"clearProxy,omitempty"`
 }
 
 // GenerateDefaultsPatch is the partial form of GenerateDefaults. Nil pointer =
@@ -217,6 +222,11 @@ func applyPatch(base types.UserSettings, patch Patch) types.UserSettings {
 	if patch.SupportReportToken != nil {
 		out.SupportReportToken = patch.SupportReportToken
 	}
+	if patch.Proxy != nil {
+		out.Proxy = patch.Proxy
+	} else if patch.ClearProxy {
+		out.Proxy = nil
+	}
 	return out
 }
 
@@ -231,6 +241,7 @@ type rawSettings struct {
 	OnboardingCompletedAt *string              `json:"onboardingCompletedAt,omitempty"`
 	SupportReportEndpoint *string              `json:"supportReportEndpoint,omitempty"`
 	SupportReportToken    *string              `json:"supportReportToken,omitempty"`
+	Proxy                 *rawProxySettings    `json:"proxy,omitempty"`
 }
 
 type rawGenerateDefaults struct {
@@ -246,6 +257,11 @@ type rawLlmProvider struct {
 	BaseURL *string `json:"baseUrl,omitempty"`
 	APIKey  *string `json:"apiKey,omitempty"`
 	Model   *string `json:"model,omitempty"`
+}
+
+type rawProxySettings struct {
+	Enabled *bool   `json:"enabled,omitempty"`
+	URL     *string `json:"url,omitempty"`
 }
 
 func sanitizeRaw(raw rawSettings) types.UserSettings {
@@ -283,6 +299,7 @@ func sanitizeRaw(raw rawSettings) types.UserSettings {
 	out.OnboardingCompletedAt = trimNullable(raw.OnboardingCompletedAt)
 	out.SupportReportEndpoint = trimNullable(raw.SupportReportEndpoint)
 	out.SupportReportToken = trimNullable(raw.SupportReportToken)
+	out.Proxy = sanitizeRawProxy(raw.Proxy)
 	return out
 }
 
@@ -312,6 +329,7 @@ func sanitizeCanonical(s types.UserSettings) types.UserSettings {
 	out.OnboardingCompletedAt = trimNullable(s.OnboardingCompletedAt)
 	out.SupportReportEndpoint = trimNullable(s.SupportReportEndpoint)
 	out.SupportReportToken = trimNullable(s.SupportReportToken)
+	out.Proxy = sanitizeCanonicalProxy(s.Proxy)
 	return out
 }
 
@@ -397,4 +415,55 @@ func derefString(p *string) string {
 
 func isValidProviderType(t types.LlmProviderType) bool {
 	return slices.Contains(types.LlmProviderTypes, t)
+}
+
+// sanitizeRawProxy lifts the optional on-disk proxy block into a typed value.
+// An invalid URL silently drops the proxy so a corrupted settings file cannot
+// brick the app at startup; the renderer will simply show the proxy as off.
+func sanitizeRawProxy(p *rawProxySettings) *types.ProxySettings {
+	if p == nil {
+		return nil
+	}
+	url := strings.TrimSpace(derefString(p.URL))
+	enabled := false
+	if p.Enabled != nil {
+		enabled = *p.Enabled
+	}
+	if url == "" && !enabled {
+		return nil
+	}
+	if url != "" {
+		parsed, err := netproxy.ValidateURL(url)
+		if err != nil || parsed == nil {
+			return nil
+		}
+		url = parsed.String()
+	}
+	if enabled && url == "" {
+		return nil
+	}
+	return &types.ProxySettings{Enabled: enabled, URL: url}
+}
+
+// sanitizeCanonicalProxy re-validates a fully-typed ProxySettings after an
+// applyPatch round-trip. Mirrors sanitizeRawProxy's tolerance.
+func sanitizeCanonicalProxy(p *types.ProxySettings) *types.ProxySettings {
+	if p == nil {
+		return nil
+	}
+	url := strings.TrimSpace(p.URL)
+	if url == "" && !p.Enabled {
+		return nil
+	}
+	if url != "" {
+		parsed, err := netproxy.ValidateURL(url)
+		if err != nil || parsed == nil {
+			return nil
+		}
+		url = parsed.String()
+	}
+	if p.Enabled && url == "" {
+		return nil
+	}
+	return &types.ProxySettings{Enabled: p.Enabled, URL: url}
 }

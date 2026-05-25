@@ -43,6 +43,29 @@ func TestResolveEnvWhenUserAndBundledMissing(t *testing.T) {
 	}
 }
 
+func TestResolveManagedSlotPriority(t *testing.T) {
+	got := Resolve(Options{
+		ManagedBinaryPath: ptr("/managed/officecli"),
+		EnvBinaryPath:     ptr("/env/officecli"),
+	})
+	if got.Source != SourceManaged {
+		t.Errorf("Source = %q, want %q", got.Source, SourceManaged)
+	}
+	if got.Path != "/managed/officecli" {
+		t.Errorf("Path = %q, want %q", got.Path, "/managed/officecli")
+	}
+}
+
+func TestResolveBundledBeatsManaged(t *testing.T) {
+	got := Resolve(Options{
+		BundledBinaryPath: ptr("/bundled/officecli"),
+		ManagedBinaryPath: ptr("/managed/officecli"),
+	})
+	if got.Source != SourceBundled {
+		t.Errorf("Source = %q, want %q", got.Source, SourceBundled)
+	}
+}
+
 func TestResolveFallbackWhenAllNil(t *testing.T) {
 	got := Resolve(Options{})
 	if got.Source != SourceFallback {

@@ -15,7 +15,6 @@ interface OnboardingScreenProps {
 interface DraftSettings {
   defaults: GenerateDefaults;
   outputDir: string | null;
-  bridgeBinaryPath: string | null;
   llmProvider: LlmProvider;
 }
 
@@ -28,7 +27,6 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
   const [draft, setDraft] = useState<DraftSettings>(() => ({
     defaults: { ...settings.defaults },
     outputDir: settings.outputDir,
-    bridgeBinaryPath: settings.bridgeBinaryPath,
     llmProvider: settings.llmProvider ?? { ...EMPTY_PROVIDER },
   }));
 
@@ -57,7 +55,6 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
       await officecli.updateSettings({
         defaults: draft.defaults,
         outputDir: draft.outputDir,
-        bridgeBinaryPath: draft.bridgeBinaryPath,
         llmProvider: provider,
         onboardingCompletedAt: new Date().toISOString(),
       });
@@ -205,17 +202,26 @@ export function ProviderForm({ provider, onChange }: { provider: LlmProvider; on
         placeholder={preset.defaultBaseUrl || t("onboarding.provider.baseUrlPlaceholder")}
         value={provider.baseUrl}
         onChange={(event) => onChange({ baseUrl: event.target.value })}
+        autoCapitalize="off"
+        autoCorrect="off"
+        spellCheck={false}
       />
       <Input.Password
         placeholder={t("onboarding.provider.apiKeyPlaceholder")}
         value={provider.apiKey}
         onChange={(event) => onChange({ apiKey: event.target.value })}
         autoComplete="off"
+        autoCapitalize="off"
+        autoCorrect="off"
+        spellCheck={false}
       />
       <Input
         placeholder={preset.defaultModel || t("onboarding.provider.modelPlaceholder")}
         value={provider.model}
         onChange={(event) => onChange({ model: event.target.value })}
+        autoCapitalize="off"
+        autoCorrect="off"
+        spellCheck={false}
       />
     </Space>
   );

@@ -6,16 +6,20 @@ import type {
   AuthEvent,
   BinaryFileData,
   BridgeEvent,
+  BridgeRuntimeSnapshot,
   CreditStatus,
   DesktopAPI,
   GenerateInput,
   LlmProvider,
   PeekReportContextResult,
   PreviewGrant,
+  ProviderSnapshot,
+  ProviderTestResult,
   RedeemResult,
   ReportCapabilityResult,
   SubmitReportInput,
   SubmitReportResult,
+  TaskHistoryEntry,
   UserSettings,
   WhoAmIResult,
 } from "../shared/types";
@@ -46,9 +50,9 @@ const DEFAULT_BROWSER_SETTINGS: UserSettings = {
     imageQuality: "standard",
   },
   outputDir: null,
-  bridgeBinaryPath: null,
   llmProvider: null,
   onboardingCompletedAt: null,
+  proxy: null,
 };
 
 function createBrowserPreviewAPI(): DesktopAPI {
@@ -153,6 +157,15 @@ function createBrowserPreviewAPI(): DesktopAPI {
     peekReportContext: async (): Promise<PeekReportContextResult> => {
       return { requestId: "", errorCode: "", errorMessage: "" };
     },
+    getTaskHistory: async (): Promise<TaskHistoryEntry[]> => [],
+    getBridgeRuntimeSnapshot: async () => ({
+      runtimeMode: "hosted",
+      binaryPath: "",
+      envApplied: false,
+    }),
+    testProvider: async () => {
+      throw new Error("Provider test is only available inside the desktop app.");
+    },
   };
 }
 
@@ -246,9 +259,6 @@ function adaptSettingsPatch(patch: Partial<UserSettings>): settingsNS.Patch {
   if (patch.outputDir !== undefined) {
     out.outputDir = patch.outputDir ?? "";
   }
-  if (patch.bridgeBinaryPath !== undefined) {
-    out.bridgeBinaryPath = patch.bridgeBinaryPath ?? "";
-  }
   if (patch.llmProvider !== undefined) {
     if (patch.llmProvider === null) {
       out.clearLlmProvider = true;
@@ -258,6 +268,13 @@ function adaptSettingsPatch(patch: Partial<UserSettings>): settingsNS.Patch {
   }
   if (patch.onboardingCompletedAt !== undefined) {
     out.onboardingCompletedAt = patch.onboardingCompletedAt ?? "";
+  }
+  if (patch.proxy !== undefined) {
+    if (patch.proxy === null) {
+      out.clearProxy = true;
+    } else {
+      out.proxy = patch.proxy;
+    }
   }
   return out as unknown as settingsNS.Patch;
 }
@@ -270,10 +287,29 @@ function normaliseUserSettings(raw: unknown): UserSettings {
   return {
     ...merged,
     outputDir: merged.outputDir ?? null,
-    bridgeBinaryPath: merged.bridgeBinaryPath ?? null,
     llmProvider: (merged.llmProvider ?? null) as LlmProvider | null,
     onboardingCompletedAt: merged.onboardingCompletedAt ?? null,
+    proxy: merged.proxy ?? null,
   };
+}
+
+function normaliseTaskHistory(raw: unknown): TaskHistoryEntry[] {
+  if (!Array.isArray(raw)) return [];
+  const entries: TaskHistoryEntry[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const record = item as Record<string, unknown>;
+    const taskId = typeof record.taskId === "string" ? record.taskId : "";
+    if (!taskId) continue;
+    const events = Array.isArray(record.events)
+      ? (record.events.filter(
+          (event): event is BridgeEvent =>
+            Boolean(event) && typeof event === "object" && typeof (event as { type?: unknown }).type === "string",
+        ))
+      : [];
+    entries.push({ taskId, events });
+  }
+  return entries;
 }
 
 function createWailsAPI(): DesktopAPI {
@@ -382,6 +418,24 @@ function createWailsAPI(): DesktopAPI {
       WailsApp.GetReportCapability() as Promise<ReportCapabilityResult>,
     peekReportContext: (taskId: string) =>
       WailsApp.PeekReportContext(taskId) as Promise<PeekReportContextResult>,
+    getTaskHistory: async (limit?: number): Promise<TaskHistoryEntry[]> => {
+      const raw = (await WailsApp.GetTaskHistory(toWails(limit ?? 50))) as unknown;
+      return normaliseTaskHistory(raw);
+    },
+    getBridgeRuntimeSnapshot: async (): Promise<BridgeRuntimeSnapshot> => {
+      const raw = (await WailsApp.GetBridgeRuntimeSnapshot()) as Partial<BridgeRuntimeSnapshot> | null;
+      return normaliseBridgeRuntimeSnapshot(raw);
+    },
+    testProvider: async (): Promise<ProviderTestResult> => {
+      const raw = (await WailsApp.TestProvider()) as Partial<ProviderTestResult> | null;
+      return {
+        ok: Boolean(raw?.ok),
+        httpStatus: typeof raw?.httpStatus === "number" ? raw.httpStatus : 0,
+        latencyMs: typeof raw?.latencyMs === "number" ? raw.latencyMs : 0,
+        url: typeof raw?.url === "string" ? raw.url : "",
+        ...(raw?.error ? { error: raw.error } : {}),
+      };
+    },
   };
 }
 
@@ -406,6 +460,34 @@ function normaliseAppUpdateCheckResult(raw: unknown): AppUpdateCheckResult {
   return {
     release: (value.release ?? null) as AppUpdateCheckResult["release"],
     status: normaliseAppUpdateStatus(value.status),
+  };
+}
+
+function normaliseBridgeRuntimeSnapshot(raw: Partial<BridgeRuntimeSnapshot> | null | undefined): BridgeRuntimeSnapshot {
+  const value = raw ?? {};
+  const mode: BridgeRuntimeSnapshot["runtimeMode"] = value.runtimeMode === "external" ? "external" : "hosted";
+  const provider = normaliseProviderSnapshot(value.provider ?? null);
+  const snap: BridgeRuntimeSnapshot = {
+    runtimeMode: mode,
+    binaryPath: typeof value.binaryPath === "string" ? value.binaryPath : "",
+    envApplied: Boolean(value.envApplied),
+  };
+  if (typeof value.resolvedAt === "string" && value.resolvedAt) snap.resolvedAt = value.resolvedAt;
+  if (typeof value.proxyHost === "string" && value.proxyHost) snap.proxyHost = value.proxyHost;
+  if (provider) snap.provider = provider;
+  return snap;
+}
+
+function normaliseProviderSnapshot(raw: Partial<ProviderSnapshot> | null | undefined): ProviderSnapshot | null {
+  if (!raw || typeof raw !== "object") return null;
+  const t = raw.type;
+  if (t !== "openai" && t !== "anthropic" && t !== "azure" && t !== "custom") return null;
+  return {
+    type: t,
+    baseUrlHost: typeof raw.baseUrlHost === "string" ? raw.baseUrlHost : "",
+    model: typeof raw.model === "string" ? raw.model : "",
+    apiKeyMasked: typeof raw.apiKeyMasked === "string" ? raw.apiKeyMasked : "",
+    apiKeyLength: typeof raw.apiKeyLength === "number" ? raw.apiKeyLength : 0,
   };
 }
 

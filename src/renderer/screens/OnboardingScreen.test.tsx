@@ -14,9 +14,9 @@ const baseSettings: UserSettings = {
     imageQuality: "standard",
   },
   outputDir: null,
-  bridgeBinaryPath: null,
   llmProvider: null,
   onboardingCompletedAt: null,
+  proxy: null,
 };
 
 let updateSettingsSpy: ReturnType<typeof vi.fn>;
@@ -69,7 +69,6 @@ describe("OnboardingScreen", () => {
     expect(patch.defaults?.mode).toBe("fast");
     expect(patch.defaults?.runtimeMode).toBe("hosted");
     expect(patch.outputDir).toBeNull();
-    expect(patch.bridgeBinaryPath).toBeNull();
     expect(typeof patch.onboardingCompletedAt).toBe("string");
     expect(patch.onboardingCompletedAt && new Date(patch.onboardingCompletedAt).toString()).not.toBe("Invalid Date");
   });

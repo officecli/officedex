@@ -219,3 +219,35 @@ func TestReportPayloadJSONShape(t *testing.T) {
 		}
 	}
 }
+
+// roundTripCounter records every request and returns a canned success body.
+type roundTripCounter struct {
+	calls int
+}
+
+func (r *roundTripCounter) RoundTrip(req *http.Request) (*http.Response, error) {
+	r.calls++
+	body := io.NopCloser(strings.NewReader(`{"ticketId":"t-1","status":"queued"}`))
+	return &http.Response{
+		StatusCode: 200,
+		Body:       body,
+		Header:     make(http.Header),
+		Request:    req,
+	}, nil
+}
+
+func TestHTTPSubmitterUsesProvidedClient(t *testing.T) {
+	rt := &roundTripCounter{}
+	sub := NewHTTPSubmitter(HTTPOptions{
+		Endpoint:   "https://example.com/reports",
+		Token:      "tok",
+		UserAgent:  "OfficeDex/test",
+		HTTPClient: &http.Client{Transport: rt},
+	})
+	if _, err := sub.Submit(context.Background(), basePayload()); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if rt.calls != 1 {
+		t.Fatalf("expected provided client to be used once, got %d calls", rt.calls)
+	}
+}

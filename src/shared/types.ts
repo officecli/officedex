@@ -92,6 +92,11 @@ export interface BridgeEvent {
   payload?: Record<string, unknown>;
 }
 
+export interface TaskHistoryEntry {
+  taskId: string;
+  events: BridgeEvent[];
+}
+
 export interface Artifact {
   taskId?: string;
   fileID?: string;
@@ -157,6 +162,14 @@ export interface DesktopTask {
   creditMode?: string;
   lastProgressAt?: number;
   stalledSince?: number;
+  runtimeMode?: "external" | "hosted";
+  runtimeSnapshot?: TaskRuntimeSnapshot;
+}
+
+export interface TaskRuntimeSnapshot {
+  mode: "external" | "hosted";
+  provider?: ProviderSnapshot;
+  appliedAt?: string;
 }
 
 export interface PreviewGrant {
@@ -222,13 +235,18 @@ export interface LlmProvider {
   model: string;
 }
 
+export interface ProxySettings {
+  enabled: boolean;
+  url: string;
+}
+
 export interface UserSettings {
   version: number;
   defaults: GenerateDefaults;
   outputDir: string | null;
-  bridgeBinaryPath: string | null;
   llmProvider: LlmProvider | null;
   onboardingCompletedAt: string | null;
+  proxy: ProxySettings | null;
 }
 
 export interface AppUpdateAsset {
@@ -373,4 +391,32 @@ export interface DesktopAPI {
   submitReport(input: SubmitReportInput): Promise<SubmitReportResult>;
   getReportCapability(): Promise<ReportCapabilityResult>;
   peekReportContext(taskId: string): Promise<PeekReportContextResult>;
+  getTaskHistory(limit?: number): Promise<TaskHistoryEntry[]>;
+  getBridgeRuntimeSnapshot(): Promise<BridgeRuntimeSnapshot>;
+  testProvider(): Promise<ProviderTestResult>;
+}
+
+export interface ProviderSnapshot {
+  type: "openai" | "anthropic" | "azure" | "custom";
+  baseUrlHost: string;
+  model: string;
+  apiKeyMasked: string;
+  apiKeyLength: number;
+}
+
+export interface BridgeRuntimeSnapshot {
+  runtimeMode: "external" | "hosted";
+  provider?: ProviderSnapshot | null;
+  binaryPath: string;
+  resolvedAt?: string;
+  envApplied: boolean;
+  proxyHost?: string;
+}
+
+export interface ProviderTestResult {
+  ok: boolean;
+  httpStatus: number;
+  latencyMs: number;
+  url: string;
+  error?: string;
 }

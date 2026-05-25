@@ -48,9 +48,9 @@ function makeSettings(overrides: Partial<UserSettings> = {}): UserSettings {
       ...(overrides.defaults ?? {}),
     },
     outputDir: overrides.outputDir ?? null,
-    bridgeBinaryPath: overrides.bridgeBinaryPath ?? null,
     llmProvider: overrides.llmProvider ?? null,
     onboardingCompletedAt: overrides.onboardingCompletedAt ?? "2026-05-22T00:00:00Z",
+    proxy: overrides.proxy ?? null,
   };
 }
 
@@ -99,7 +99,7 @@ describe("SettingsScreen", () => {
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
     expect(await screen.findByRole("heading", { name: /generation defaults/i })).toBeTruthy();
     expect(screen.getByText("Workspace Output Directory")).toBeTruthy();
-    expect(screen.getAllByText("OfficeCLI Connection").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Core Settings").length).toBeGreaterThan(0);
   });
 
   it("changing default document type calls updateSettings with the new value", async () => {
@@ -239,6 +239,47 @@ describe("SettingsScreen", () => {
       });
       expect(matched).toBe(true);
     });
+  });
+
+  it("Proxy card saves enabled+url patch and disabling clears proxy", async () => {
+    const { SettingsScreen } = await import("./SettingsScreens");
+    render(<SettingsScreen />);
+    await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
+
+    const enableSwitch = await screen.findByRole("switch", { name: /enable proxy/i });
+    fireEvent.click(enableSwitch);
+
+    const urlInput = await screen.findByLabelText(/proxy url/i);
+    fireEvent.change(urlInput, { target: { value: "http://127.0.0.1:7890" } });
+
+    const saveButton = screen.getByRole("button", { name: /save proxy/i });
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      const matched = updateSettingsSpy.mock.calls.some((args) => {
+        const patch = args[0] as Partial<UserSettings>;
+        return patch.proxy?.enabled === true && patch.proxy?.url === "http://127.0.0.1:7890";
+      });
+      expect(matched).toBe(true);
+    });
+
+    currentSettings = makeSettings({ proxy: { enabled: true, url: "http://127.0.0.1:7890" } });
+    updateSettingsSpy.mockClear();
+  });
+
+  it("Proxy card rejects an obviously malformed URL", async () => {
+    const { SettingsScreen } = await import("./SettingsScreens");
+    render(<SettingsScreen />);
+    await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(await screen.findByRole("switch", { name: /enable proxy/i }));
+    const urlInput = await screen.findByLabelText(/proxy url/i);
+    fireEvent.change(urlInput, { target: { value: "not-a-url" } });
+    const saveButton = screen.getByRole("button", { name: /save proxy/i });
+    expect(saveButton.hasAttribute("disabled")).toBe(true);
+    expect(
+      updateSettingsSpy.mock.calls.every((args) => (args[0] as Partial<UserSettings>).proxy === undefined),
+    ).toBe(true);
   });
 });
 

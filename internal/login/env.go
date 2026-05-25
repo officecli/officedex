@@ -5,6 +5,12 @@ import (
 	"strings"
 )
 
+// proxyEnvSupplier mirrors bridge.proxyEnvSupplier — see SetProxyEnvSupplier.
+var proxyEnvSupplier func() []string
+
+// SetProxyEnvSupplier registers the proxy env supplier. Pass nil to clear.
+func SetProxyEnvSupplier(fn func() []string) { proxyEnvSupplier = fn }
+
 // BuildBridgeEnv layers the officecli "skip" environment variables on top of
 // os.Environ(). The extra slice (KEY=VAL entries) takes precedence: any KEY
 // present in extra replaces an earlier occurrence with the same key. This is
@@ -19,6 +25,9 @@ func BuildBridgeEnv(extra []string) []string {
 	}
 	merged := append([]string{}, os.Environ()...)
 	merged = append(merged, defaults...)
+	if proxyEnvSupplier != nil {
+		merged = append(merged, proxyEnvSupplier()...)
+	}
 	for _, kv := range extra {
 		merged = append(merged, kv)
 	}

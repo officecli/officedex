@@ -109,12 +109,17 @@ function PageHeader({ title, description, action, onAction }: { title: string; d
 
 function taskToRow(task: DesktopTask, t: (key: string) => string): TaskRow {
   const latestEvent = task.events.at(-1);
+  const runtimeLabel = task.runtimeMode === "external"
+    ? t("tasks.runtime.external")
+    : task.runtimeMode === "hosted"
+      ? t("tasks.runtime.hosted")
+      : t("tasks.runtime.localBridge");
   return {
     id: task.id,
     title: task.topic || task.artifact?.fileName || task.id,
     type: task.documentType || task.artifact?.documentType || t("tasks.documentType.empty"),
     status: task.status,
-    runtime: t("tasks.runtime.localBridge"),
+    runtime: runtimeLabel,
     updatedAt: latestEvent?.ts || t("tasks.updatedAtUnknown"),
     artifacts: task.artifact ? 1 : 0,
     credit: creditModel(task),

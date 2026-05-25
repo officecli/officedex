@@ -12,7 +12,7 @@ const release: AppUpdateRelease = {
 };
 
 describe("UpdateBanner", () => {
-  it("renders version + notes and triggers onUpdate when Update now is clicked", () => {
+  it("renders version and triggers onUpdate when Update now is clicked", () => {
     const onUpdate = vi.fn();
     render(
       <UpdateBanner
@@ -26,7 +26,6 @@ describe("UpdateBanner", () => {
       />,
     );
     expect(screen.getByText(/New version 0\.2\.0 available/i)).toBeTruthy();
-    expect(screen.getByText(/Bug fixes/i)).toBeTruthy();
     fireEvent.click(screen.getByText("Update now"));
     expect(onUpdate).toHaveBeenCalledTimes(1);
   });

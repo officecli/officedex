@@ -149,8 +149,12 @@ type Options struct {
 	Arch           string // empty = auto-detect via runtime.GOARCH
 	FetchManifest  FetchFunc
 	FetchDownload  DownloadFunc
-	Now            func() time.Time
-	Listener       func(Event)
+	// HTTPClient drives the default manifest+download fetchers. nil falls
+	// back to http.DefaultClient. Ignored when FetchManifest/FetchDownload
+	// are supplied explicitly (tests typically set those instead).
+	HTTPClient *http.Client
+	Now        func() time.Time
+	Listener   func(Event)
 }
 
 // Manager owns the lifecycle of self-update polling, download, and
@@ -198,11 +202,11 @@ func New(opts Options) (*Manager, error) {
 	}
 	fetchManifest := opts.FetchManifest
 	if fetchManifest == nil {
-		fetchManifest = defaultFetchManifest
+		fetchManifest = newDefaultFetchManifest(opts.HTTPClient)
 	}
 	fetchDownload := opts.FetchDownload
 	if fetchDownload == nil {
-		fetchDownload = defaultFetchDownload
+		fetchDownload = newDefaultFetchDownload(opts.HTTPClient)
 	}
 	now := opts.Now
 	if now == nil {
@@ -607,48 +611,66 @@ func assetFileName(rawURL string) string {
 }
 
 func defaultFetchManifest(ctx context.Context, target string) ([]byte, error) {
-	reqCtx, cancel := context.WithTimeout(ctx, fetchManifestTimeout)
-	defer cancel()
-	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, target, nil)
-	if err != nil {
-		return nil, err
+	return newDefaultFetchManifest(nil)(ctx, target)
+}
+
+func newDefaultFetchManifest(client *http.Client) FetchFunc {
+	if client == nil {
+		client = http.DefaultClient
 	}
-	req.Header.Set("User-Agent", userAgent)
-	req.Header.Set("Accept", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
+	return func(ctx context.Context, target string) ([]byte, error) {
+		reqCtx, cancel := context.WithTimeout(ctx, fetchManifestTimeout)
+		defer cancel()
+		req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, target, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("User-Agent", userAgent)
+		req.Header.Set("Accept", "application/json")
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return nil, fmt.Errorf("manifest request: status %d", resp.StatusCode)
+		}
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		if err != nil {
+			return nil, err
+		}
+		return body, nil
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("manifest request: status %d", resp.StatusCode)
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return nil, err
-	}
-	return body, nil
 }
 
 func defaultFetchDownload(ctx context.Context, target string) (io.ReadCloser, int64, error) {
-	reqCtx, cancel := context.WithTimeout(ctx, fetchDownloadTimeout)
-	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, target, nil)
-	if err != nil {
-		cancel()
-		return nil, 0, err
+	return newDefaultFetchDownload(nil)(ctx, target)
+}
+
+func newDefaultFetchDownload(client *http.Client) DownloadFunc {
+	if client == nil {
+		client = http.DefaultClient
 	}
-	req.Header.Set("User-Agent", userAgent)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		cancel()
-		return nil, 0, err
+	return func(ctx context.Context, target string) (io.ReadCloser, int64, error) {
+		reqCtx, cancel := context.WithTimeout(ctx, fetchDownloadTimeout)
+		req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, target, nil)
+		if err != nil {
+			cancel()
+			return nil, 0, err
+		}
+		req.Header.Set("User-Agent", userAgent)
+		resp, err := client.Do(req)
+		if err != nil {
+			cancel()
+			return nil, 0, err
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			resp.Body.Close()
+			cancel()
+			return nil, 0, fmt.Errorf("download request: status %d", resp.StatusCode)
+		}
+		return &cancelReader{ReadCloser: resp.Body, cancel: cancel}, resp.ContentLength, nil
 	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		resp.Body.Close()
-		cancel()
-		return nil, 0, fmt.Errorf("download request: status %d", resp.StatusCode)
-	}
-	return &cancelReader{ReadCloser: resp.Body, cancel: cancel}, resp.ContentLength, nil
 }
 
 type cancelReader struct {

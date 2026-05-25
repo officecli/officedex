@@ -12,10 +12,18 @@ const FALLBACK: UserSettings = {
     imageQuality: "standard",
   },
   outputDir: null,
-  bridgeBinaryPath: null,
   llmProvider: null,
   onboardingCompletedAt: null,
+  proxy: null,
 };
+
+// Cross-instance broadcast: multiple components call useSettings() independently
+// (App, SettingsScreen, DialogueScreen). Without this, a successful update in
+// one instance never reaches the others — they keep showing stale state until
+// the page is reloaded.
+const settingsBus =
+  typeof window !== "undefined" && typeof EventTarget !== "undefined" ? new EventTarget() : null;
+const SETTINGS_CHANGED = "officedex:settings-changed";
 
 export interface UseSettingsResult {
   settings: UserSettings;
@@ -51,8 +59,15 @@ export function useSettings(): UseSettingsResult {
         if (!mountedRef.current) return;
         setLoading(false);
       });
+    const onChanged = (event: Event) => {
+      const detail = (event as CustomEvent<UserSettings>).detail;
+      if (!mountedRef.current || !detail) return;
+      setSettings(detail);
+    };
+    settingsBus?.addEventListener(SETTINGS_CHANGED, onChanged);
     return () => {
       mountedRef.current = false;
+      settingsBus?.removeEventListener(SETTINGS_CHANGED, onChanged);
     };
   }, []);
 
@@ -63,6 +78,10 @@ export function useSettings(): UseSettingsResult {
       if (mountedRef.current) {
         setSettings(next);
         setError(undefined);
+      }
+      settingsBus?.dispatchEvent(new CustomEvent<UserSettings>(SETTINGS_CHANGED, { detail: next }));
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent<UserSettings>("officedex:settings-updated", { detail: next }));
       }
       return next;
     } catch (err) {

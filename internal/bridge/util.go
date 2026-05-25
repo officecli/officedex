@@ -8,6 +8,15 @@ import (
 	"officedex/internal/types"
 )
 
+// proxyEnvSupplier returns proxy env entries (HTTP_PROXY=…, HTTPS_PROXY=…,
+// etc.) layered onto the SKIP_* defaults. App-level wiring registers
+// netproxy.Pool.SubprocessEnv so a renderer-side proxy toggle reaches the
+// officecli subprocess on the next bridge restart.
+var proxyEnvSupplier func() []string
+
+// SetProxyEnvSupplier registers the proxy env supplier. Pass nil to clear.
+func SetProxyEnvSupplier(fn func() []string) { proxyEnvSupplier = fn }
+
 // BuildBridgeEnv returns the child-process environment with the three
 // officecli SKIP_* flags baked in. extra is a list of KEY=VALUE strings that
 // override any earlier entry with the same key (mirroring shell semantics).
@@ -16,6 +25,15 @@ func BuildBridgeEnv(extra []string) []string {
 	base = appendKV(base, "OFFICECLI_SKIP_SKILL_PREFLIGHT", "1")
 	base = appendKV(base, "OFFICECLI_SKIP_PUBLISH_SETUP", "1")
 	base = appendKV(base, "OFFICECLI_SKIP_UPDATE_CHECK", "1")
+	if proxyEnvSupplier != nil {
+		for _, kv := range proxyEnvSupplier() {
+			key, _, ok := strings.Cut(kv, "=")
+			if !ok {
+				continue
+			}
+			base = setKV(base, key, kv)
+		}
+	}
 	for _, kv := range extra {
 		key, _, ok := strings.Cut(kv, "=")
 		if !ok {

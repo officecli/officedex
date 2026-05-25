@@ -54,7 +54,7 @@ describe("DiagnosticsPanel", () => {
     });
 
     render(<DiagnosticsPanel />);
-    const button = screen.getByRole("button");
+    const button = screen.getByRole("button", { name: /Export diagnostic logs/i });
     fireEvent.click(button);
 
     await waitFor(() => {
@@ -72,7 +72,7 @@ describe("DiagnosticsPanel", () => {
     mockExportLogs.mockRejectedValueOnce(new Error("disk full"));
 
     render(<DiagnosticsPanel />);
-    const button = screen.getByRole("button");
+    const button = screen.getByRole("button", { name: /Export diagnostic logs/i });
     fireEvent.click(button);
 
     await waitFor(() => {

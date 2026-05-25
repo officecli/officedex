@@ -240,15 +240,6 @@
   margin-bottom: 2px;
 }
 
-.update-banner-notes {
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.82);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .update-banner-progress {
   display: flex;
   align-items: center;

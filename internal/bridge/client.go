@@ -357,6 +357,11 @@ func (c *Client) InvokeGenerate(ctx context.Context, input types.GenerateInput) 
 		// on. Renderer code that needs to opt out should be revisited as part
 		// of the Wails binding rewrite.
 		"local_preview": true,
+		// EmitPreview asks officecli to write a `<basename>.preview.html`
+		// sidecar next to the produced artifact. The renderer uses this to
+		// render a high-fidelity preview; see docs/sidecar-preview-html.md
+		// for the expected sidecar contract.
+		"emit_preview": true,
 	}
 	for k, v := range buildAttachmentArgs(input) {
 		args[k] = v

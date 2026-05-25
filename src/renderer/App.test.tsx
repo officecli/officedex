@@ -763,9 +763,9 @@ function installBridgeMock() {
         imageQuality: "standard" as const,
       },
       outputDir: null,
-      bridgeBinaryPath: null,
       llmProvider: null,
       onboardingCompletedAt: "2026-05-22T00:00:00.000Z",
+      proxy: null,
     })),
     updateSettings: vi.fn(async (patch) => ({
       version: 1,
@@ -778,9 +778,9 @@ function installBridgeMock() {
         ...(patch.defaults ?? {}),
       },
       outputDir: patch.outputDir ?? null,
-      bridgeBinaryPath: patch.bridgeBinaryPath ?? null,
       llmProvider: patch.llmProvider ?? null,
       onboardingCompletedAt: patch.onboardingCompletedAt ?? "2026-05-22T00:00:00.000Z",
+      proxy: patch.proxy ?? null,
     })),
     getDefaultWorkspaceDir: vi.fn(async () => "/Users/test/Library/Application Support/OfficeDex/workspace"),
     onAuthEvent: vi.fn(() => () => undefined),
@@ -820,6 +820,9 @@ function installBridgeMock() {
     submitReport: vi.fn(async () => ({ ticketId: "T-001", requestId: "req-test-123", uploaded: true })),
     getReportCapability: vi.fn(async () => ({ enabled: false, reason: "test" })),
     peekReportContext: vi.fn(async () => ({ requestId: "req-test-123", errorCode: "", errorMessage: "" })),
+    getTaskHistory: vi.fn(async () => []),
+    getBridgeRuntimeSnapshot: vi.fn(async () => ({ runtimeMode: "hosted" as const, binaryPath: "", envApplied: false })),
+    testProvider: vi.fn(async () => ({ ok: true, httpStatus: 200, latencyMs: 12, url: "https://api.openai.com" })),
   };
   window.officecli = api;
   return {

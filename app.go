@@ -10,14 +10,18 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -32,8 +36,11 @@ import (
 	"officedex/internal/diagnostics"
 	"officedex/internal/localstore"
 	"officedex/internal/login"
+	"officedex/internal/mask"
+	"officedex/internal/netproxy"
 	"officedex/internal/preview"
 	"officedex/internal/report"
+	runtimemgr "officedex/internal/runtime"
 	"officedex/internal/settings"
 	"officedex/internal/types"
 )
@@ -45,6 +52,7 @@ const (
 	authEventChannel    = "auth:event"
 	previewEventChannel = "preview:open"
 	appUpdateChannel    = "appupdate:event"
+	runtimeEventChannel = "runtime:event"
 	defaultUpdateManifestURL = "https://raw.githubusercontent.com/officecli/officedex-dist/main/manifest.json"
 )
 
@@ -73,6 +81,8 @@ type App struct {
 	previewModeXBefore     int
 	previewModeXShifted    bool
 	appUpdateMgr    *appupdate.Manager
+	runtimeMgr      *runtimemgr.Manager
+	proxyPool       *netproxy.Pool
 
 	// resolver cache. binresolver.Resolve stats the filesystem on every call;
 	// runCommandOptions / ensureBridge run on every RPC. We cache the resolved
@@ -113,6 +123,16 @@ func NewApp() (*App, error) {
 
 	localStore := localstore.New(filepath.Join(userDataDir, "officedex.sqlite"))
 
+	proxyPool := netproxy.NewPool()
+	if cached.Proxy != nil && cached.Proxy.Enabled && cached.Proxy.URL != "" {
+		// Settings sanitize on Load already drops any URL that fails
+		// netproxy.ValidateURL, so Set cannot return an error for cached
+		// settings; the explicit discard documents that invariant.
+		_ = proxyPool.Set(cached.Proxy.URL)
+	}
+	bridge.SetProxyEnvSupplier(proxyPool.SubprocessEnv)
+	login.SetProxyEnvSupplier(proxyPool.SubprocessEnv)
+
 	app := &App{
 		userDataDir:    userDataDir,
 		workspaceDir:   workspaceDir,
@@ -120,6 +140,7 @@ func NewApp() (*App, error) {
 		localStore:     localStore,
 		previewReg:     previewReg,
 		cachedSettings: cached,
+		proxyPool:      proxyPool,
 	}
 
 	manifestURL := os.Getenv("OFFICEDEX_UPDATE_MANIFEST_URL")
@@ -130,6 +151,7 @@ func NewApp() (*App, error) {
 		ManifestURL:    manifestURL,
 		CurrentVersion: appVersion,
 		UpdatesDir:     filepath.Join(userDataDir, "updates"),
+		HTTPClient:     proxyPool.NewClient(0),
 		Listener: func(ev appupdate.Event) {
 			emit(app.ctx, appUpdateChannel, ev)
 		},
@@ -138,6 +160,21 @@ func NewApp() (*App, error) {
 		return nil, fmt.Errorf("appupdate manager: %w", err)
 	}
 	app.appUpdateMgr = updateMgr
+
+	runtimeInstallRoot := filepath.Join(userDataDir, "runtime")
+	rtMgr, err := runtimemgr.New(runtimemgr.ManagerOptions{
+		InstallRoot: runtimeInstallRoot,
+		Repo:        "officecli/officecli-dist",
+		HTTPClient:  proxyPool.NewClient(0),
+		Listener: func(ev types.RuntimeEvent) {
+			emit(app.ctx, runtimeEventChannel, ev)
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("runtime manager: %w", err)
+	}
+	_ = rtMgr.LoadFromDisk()
+	app.runtimeMgr = rtMgr
 
 	return app, nil
 }
@@ -169,6 +206,9 @@ func (a *App) shutdown(ctx context.Context) {
 	}
 	if a.localStore != nil {
 		_ = a.localStore.Close()
+	}
+	if a.runtimeMgr != nil {
+		a.runtimeMgr.CancelDownload()
 	}
 }
 
@@ -210,6 +250,9 @@ func (a *App) Generate(input types.GenerateInput) (GenerateResult, error) {
 	settings, err := a.settingsStore.Load()
 	if err != nil {
 		return GenerateResult{}, fmt.Errorf("load settings: %w", err)
+	}
+	if err := validateExternalProvider(settings); err != nil {
+		return GenerateResult{}, err
 	}
 	resolved, err := a.resolveGenerateInput(input, settings)
 	if err != nil {
@@ -514,7 +557,9 @@ type PreviewHTML struct {
 }
 
 // RenderPreviewHtml returns the `*.preview.html` sidecar next to an artifact,
-// or nil when the sidecar does not exist.
+// or nil when the sidecar does not exist. Relative <img src> / <link href>
+// references inside the sidecar are inlined as data: URLs so the renderer can
+// load them inside a sandboxed iframe (which has no filesystem access).
 func (a *App) RenderPreviewHtml(previewToken string) (*PreviewHTML, error) {
 	entry, err := a.previewReg.ResolveToken(previewToken)
 	if err != nil {
@@ -530,7 +575,112 @@ func (a *App) RenderPreviewHtml(previewToken string) (*PreviewHTML, error) {
 		}
 		return nil, fmt.Errorf("read sidecar: %w", err)
 	}
-	return &PreviewHTML{HTML: string(body)}, nil
+	inlined := inlineSidecarResources(string(body), filepath.Dir(sidecar))
+	return &PreviewHTML{HTML: inlined}, nil
+}
+
+var (
+	// Captures <img ... src="..."> and <link ... href="..."> with single or
+	// double-quoted attribute values. Used to rewrite relative resource paths
+	// inside sidecar HTML to data: URLs.
+	sidecarImgSrcRE  = regexp.MustCompile(`(?i)(<img\b[^>]*?\bsrc\s*=\s*)(["'])([^"'<>]+)(["'])`)
+	sidecarLinkHrefRE = regexp.MustCompile(`(?i)(<link\b[^>]*?\bhref\s*=\s*)(["'])([^"'<>]+)(["'])`)
+)
+
+// sidecarMimeByExt maps lowercase file extensions (without dot) to MIME types
+// used when inlining sidecar HTML resources. Kept intentionally narrow:
+// officecli sidecars should bundle their own CSS — we only support a small
+// allowlist to avoid surprises.
+var sidecarMimeByExt = map[string]string{
+	"png":  "image/png",
+	"jpg":  "image/jpeg",
+	"jpeg": "image/jpeg",
+	"gif":  "image/gif",
+	"webp": "image/webp",
+	"bmp":  "image/bmp",
+	"svg":  "image/svg+xml",
+	"css":  "text/css",
+}
+
+// inlineSidecarResources rewrites relative <img src> / <link href> attribute
+// values in html so they become self-contained data: URLs sourced from baseDir.
+// Absolute (http/https/data/protocol-relative/root-absolute) URLs are left
+// untouched. If a referenced file cannot be read or its extension is not in
+// sidecarMimeByExt, the original attribute is preserved so the iframe surfaces
+// a normal "broken image" instead of crashing the preview pipeline.
+func inlineSidecarResources(html, baseDir string) string {
+	if baseDir == "" {
+		return html
+	}
+	rewriteAttr := func(prefix, openQuote, url, closeQuote string) string {
+		original := prefix + openQuote + url + closeQuote
+		if !isRelativeResource(url) {
+			return original
+		}
+		dataURL, ok := readAsDataURL(baseDir, url)
+		if !ok {
+			return original
+		}
+		return prefix + openQuote + dataURL + closeQuote
+	}
+
+	html = sidecarImgSrcRE.ReplaceAllStringFunc(html, func(m string) string {
+		parts := sidecarImgSrcRE.FindStringSubmatch(m)
+		return rewriteAttr(parts[1], parts[2], parts[3], parts[4])
+	})
+	html = sidecarLinkHrefRE.ReplaceAllStringFunc(html, func(m string) string {
+		parts := sidecarLinkHrefRE.FindStringSubmatch(m)
+		return rewriteAttr(parts[1], parts[2], parts[3], parts[4])
+	})
+	return html
+}
+
+func isRelativeResource(url string) bool {
+	if url == "" {
+		return false
+	}
+	if strings.HasPrefix(url, "data:") || strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
+		return false
+	}
+	if strings.HasPrefix(url, "//") || strings.HasPrefix(url, "/") {
+		return false
+	}
+	if strings.HasPrefix(url, "#") {
+		return false
+	}
+	return true
+}
+
+func readAsDataURL(baseDir, relURL string) (string, bool) {
+	// Strip query/fragment before resolving on disk.
+	clean := relURL
+	if i := strings.IndexAny(clean, "?#"); i >= 0 {
+		clean = clean[:i]
+	}
+	resolved := filepath.Join(baseDir, filepath.FromSlash(clean))
+	absBase, err := filepath.Abs(baseDir)
+	if err != nil {
+		return "", false
+	}
+	absResolved, err := filepath.Abs(resolved)
+	if err != nil {
+		return "", false
+	}
+	rel, err := filepath.Rel(absBase, absResolved)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		// Refuse to traverse out of the sidecar directory.
+		return "", false
+	}
+	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(absResolved), "."))
+	mime, ok := sidecarMimeByExt[ext]
+	if !ok {
+		return "", false
+	}
+	data, err := os.ReadFile(absResolved)
+	if err != nil {
+		return "", false
+	}
+	return "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data), true
 }
 
 // ─── Auth bindings ──────────────────────────────────────────────────────────
@@ -616,18 +766,29 @@ func (a *App) GetSettings() (types.UserSettings, error) {
 }
 
 // UpdateSettings applies a patch and restarts the bridge if the change might
-// affect it (binary path, LLM provider, runtime mode).
+// affect it (binary path, LLM provider, runtime mode, proxy).
 func (a *App) UpdateSettings(patch settings.Patch) (types.UserSettings, error) {
 	merged, err := a.settingsStore.Update(patch)
 	if err != nil {
 		return types.UserSettings{}, err
+	}
+	proxyChanged := patch.Proxy != nil || patch.ClearProxy
+	if proxyChanged {
+		if merged.Proxy != nil && merged.Proxy.Enabled && merged.Proxy.URL != "" {
+			if err := a.proxyPool.Set(merged.Proxy.URL); err != nil {
+				return types.UserSettings{}, fmt.Errorf("apply proxy: %w", err)
+			}
+		} else {
+			a.proxyPool.Clear()
+		}
 	}
 	a.mu.Lock()
 	a.cachedSettings = merged
 	touchesBridge := patch.BridgeBinaryPath != nil ||
 		patch.LlmProvider != nil ||
 		patch.ClearLlmProvider ||
-		(patch.Defaults != nil && patch.Defaults.RuntimeMode != nil)
+		(patch.Defaults != nil && patch.Defaults.RuntimeMode != nil) ||
+		proxyChanged
 	client := a.bridgeClient
 	if touchesBridge {
 		a.bridgeClient = nil
@@ -635,7 +796,7 @@ func (a *App) UpdateSettings(patch settings.Patch) (types.UserSettings, error) {
 		a.resolvedBinaryEnv = nil
 		a.binaryResolvedAt = time.Time{}
 	}
-	if patch.BridgeBinaryPath != nil {
+	if patch.BridgeBinaryPath != nil || proxyChanged {
 		a.loginManager = nil
 		if a.loginUnsub != nil {
 			a.loginUnsub()
@@ -668,6 +829,39 @@ func (a *App) GetCreditFeatureSince() (string, error) {
 		ctx = context.Background()
 	}
 	return a.localStore.GetCreditFeatureSince(ctx)
+}
+
+// GetTaskHistory returns the persisted bridge events for the most recently
+// active tasks so the renderer can replay them into TaskState on startup.
+// Entries are ordered oldest-first; events within each entry are sorted
+// ascending by created_at. A non-positive limit is clamped to a default cap.
+func (a *App) GetTaskHistory(limit int) ([]types.TaskHistoryEntry, error) {
+	if a.localStore == nil {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ids, err := a.localStore.QueryRecentTaskIDs(ctx, limit)
+	if err != nil {
+		return nil, fmt.Errorf("get task history: list tasks: %w", err)
+	}
+	entries := make([]types.TaskHistoryEntry, 0, len(ids))
+	for _, id := range ids {
+		events, err := a.localStore.QueryEventsByTask(ctx, id)
+		if err != nil {
+			return nil, fmt.Errorf("get task history: events for %s: %w", id, err)
+		}
+		if len(events) == 0 {
+			continue
+		}
+		entries = append(entries, types.TaskHistoryEntry{TaskID: id, Events: events})
+	}
+	return entries, nil
 }
 
 // ─── App update bindings ────────────────────────────────────────────────────
@@ -738,6 +932,62 @@ func (a *App) InstallAppUpdate() error {
 	if a.ctx != nil {
 		wailsruntime.Quit(a.ctx)
 	}
+	return nil
+}
+
+// ─── Runtime (OfficeCLI) update bindings ───────────────────────────────────
+
+// RuntimeUpdateCheckResult is the renderer-facing result of CheckRuntimeUpdate.
+type RuntimeUpdateCheckResult struct {
+	Latest *runtimemgr.LatestRelease `json:"latest"`
+	Status types.RuntimeStatus       `json:"status"`
+}
+
+// GetRuntimeStatus returns the cached runtime manager status snapshot.
+func (a *App) GetRuntimeStatus() types.RuntimeStatus {
+	return a.runtimeMgr.Status()
+}
+
+// CheckRuntimeUpdate queries GitHub Releases for the latest officecli version.
+func (a *App) CheckRuntimeUpdate() (RuntimeUpdateCheckResult, error) {
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	latest, err := a.runtimeMgr.CheckLatestVersion(ctx)
+	if err != nil {
+		return RuntimeUpdateCheckResult{Status: a.runtimeMgr.Status()}, err
+	}
+	return RuntimeUpdateCheckResult{Latest: latest, Status: a.runtimeMgr.Status()}, nil
+}
+
+// DownloadRuntimeUpdate fetches the latest officecli binary and installs it
+// into the managed runtime directory.
+func (a *App) DownloadRuntimeUpdate() (types.RuntimeStatus, error) {
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	status, err := a.runtimeMgr.DownloadAndInstall(ctx)
+	if err != nil {
+		return status, err
+	}
+	a.mu.Lock()
+	a.resolvedBinaryPath = ""
+	a.resolvedBinaryEnv = nil
+	a.binaryResolvedAt = time.Time{}
+	client := a.bridgeClient
+	a.bridgeClient = nil
+	a.mu.Unlock()
+	if client != nil {
+		client.Close()
+	}
+	return status, nil
+}
+
+// CancelRuntimeUpdate aborts any in-flight runtime download.
+func (a *App) CancelRuntimeUpdate() error {
+	a.runtimeMgr.CancelDownload()
 	return nil
 }
 
@@ -827,6 +1077,203 @@ func (a *App) currentBridgeEnv() []string {
 	s := a.cachedSettings
 	a.mu.Unlock()
 	return toEnvSlice(llmProviderEnv(s))
+}
+
+// GetBridgeRuntimeSnapshot returns the renderer-facing description of the
+// officecli subprocess as it was actually resolved. EnvApplied is true only
+// when ensureBridge has populated the cached path/env/timestamp — i.e. a real
+// subprocess has been spawned. Provider is parsed strictly from the env slice
+// that was handed to the subprocess; we do not consult cachedSettings as a
+// stand-in, because the whole point of this method is to prove what is
+// running rather than echo what is merely configured.
+func (a *App) GetBridgeRuntimeSnapshot() (types.BridgeRuntimeSnapshot, error) {
+	a.mu.Lock()
+	mode := a.cachedSettings.Defaults.RuntimeMode
+	path := a.resolvedBinaryPath
+	env := append([]string(nil), a.resolvedBinaryEnv...)
+	at := a.binaryResolvedAt
+	a.mu.Unlock()
+
+	snap := types.BridgeRuntimeSnapshot{
+		RuntimeMode: mode,
+		BinaryPath:  path,
+		EnvApplied:  path != "" && len(env) > 0 && !at.IsZero(),
+	}
+	if !at.IsZero() {
+		snap.ResolvedAt = at.UTC().Format(time.RFC3339)
+	}
+	if a.proxyPool != nil {
+		if u := a.proxyPool.Get(); u != nil {
+			snap.ProxyHost = mask.Host(u.String())
+		}
+	}
+	if snap.EnvApplied && mode == types.RuntimeExternal {
+		snap.Provider = providerSnapshotFromEnv(env)
+	}
+	return snap, nil
+}
+
+// providerSnapshotFromEnv parses the OFFICECLI_LLM_* lines emitted by
+// llmProviderEnv and returns a renderer-safe view. Returns nil when none of
+// the provider keys are present (e.g. hosted mode subprocess).
+func providerSnapshotFromEnv(env []string) *types.ProviderSnapshot {
+	const (
+		keyType    = "OFFICECLI_LLM_PROVIDER="
+		keyBaseURL = "OFFICECLI_LLM_BASE_URL="
+		keyKey     = "OFFICECLI_LLM_API_KEY="
+		keyModel   = "OFFICECLI_LLM_MODEL="
+	)
+	var providerType, baseURL, apiKey, model string
+	var found bool
+	for _, kv := range env {
+		switch {
+		case strings.HasPrefix(kv, keyType):
+			providerType = kv[len(keyType):]
+			found = true
+		case strings.HasPrefix(kv, keyBaseURL):
+			baseURL = kv[len(keyBaseURL):]
+			found = true
+		case strings.HasPrefix(kv, keyKey):
+			apiKey = kv[len(keyKey):]
+			found = true
+		case strings.HasPrefix(kv, keyModel):
+			model = kv[len(keyModel):]
+			found = true
+		}
+	}
+	if !found {
+		return nil
+	}
+	return &types.ProviderSnapshot{
+		Type:         types.LlmProviderType(providerType),
+		BaseURLHost:  mask.Host(baseURL),
+		Model:        model,
+		APIKeyMasked: mask.APIKey(apiKey),
+		APIKeyLength: len([]rune(strings.TrimSpace(apiKey))),
+	}
+}
+
+// providerProbe describes the network request TestProvider should issue to
+// validate the user's configured provider. Every provider type ends up issuing
+// a real HTTP request — we deliberately avoid host-only TCP probes here
+// because "host alive" is a false trust signal: it greenlights wrong paths,
+// rejected keys, and nonexistent model names.
+type providerProbe struct {
+	method     string
+	url        string
+	headers    map[string]string
+	body       []byte
+	displayURL string
+}
+
+func providerProbeFor(p types.LlmProvider) (providerProbe, error) {
+	base := strings.TrimRight(strings.TrimSpace(p.BaseURL), "/")
+	if base == "" {
+		return providerProbe{}, errors.New("test_provider.base_url_required")
+	}
+	switch p.Type {
+	case types.LlmOpenAI:
+		return providerProbe{
+			method:     http.MethodGet,
+			url:        base + "/models",
+			headers:    map[string]string{"Authorization": "Bearer " + p.APIKey},
+			displayURL: mask.Host(base) + "/models",
+		}, nil
+	case types.LlmAzure:
+		probeURL := base + "/openai/models?api-version=2024-02-15-preview"
+		return providerProbe{
+			method:     http.MethodGet,
+			url:        probeURL,
+			headers:    map[string]string{"api-key": p.APIKey},
+			displayURL: mask.Host(base) + "/openai/models",
+		}, nil
+	case types.LlmAnthropic:
+		return providerProbe{
+			method: http.MethodGet,
+			url:    base + "/v1/models",
+			headers: map[string]string{
+				"x-api-key":         p.APIKey,
+				"anthropic-version": "2023-06-01",
+			},
+			displayURL: mask.Host(base) + "/v1/models",
+		}, nil
+	case types.LlmCustom:
+		// Custom endpoints are almost always OpenAI-compatible (4zapi,
+		// OpenRouter, Deepseek, local llama.cpp, etc.). A POST to
+		// /chat/completions with max_tokens=1 exercises the same code path
+		// officecli will use for real generation: wrong baseURL path 404s,
+		// wrong key 401s, wrong model name 400s with model_not_found. The
+		// payload costs ~1 token and finishes in <2s on a healthy endpoint.
+		body, err := json.Marshal(map[string]any{
+			"model":      p.Model,
+			"messages":   []map[string]string{{"role": "user", "content": "ping"}},
+			"max_tokens": 1,
+			"stream":     false,
+		})
+		if err != nil {
+			return providerProbe{}, fmt.Errorf("test_provider.marshal: %w", err)
+		}
+		return providerProbe{
+			method: http.MethodPost,
+			url:    base + "/chat/completions",
+			headers: map[string]string{
+				"Authorization": "Bearer " + p.APIKey,
+				"Content-Type":  "application/json",
+			},
+			body:       body,
+			displayURL: mask.Host(base) + "/chat/completions",
+		}, nil
+	default:
+		return providerProbe{}, fmt.Errorf("test_provider.unsupported_type: %s", p.Type)
+	}
+}
+
+// TestProvider issues a minimal probe against the configured external provider
+// and reports reachability. Returns an error only for misconfiguration (e.g.
+// not in external mode); transport-level failures are encoded in the result
+// so the renderer can surface them inline.
+func (a *App) TestProvider() (types.ProviderTestResult, error) {
+	a.mu.Lock()
+	s := a.cachedSettings
+	a.mu.Unlock()
+	if s.Defaults.RuntimeMode != types.RuntimeExternal || s.LlmProvider == nil {
+		return types.ProviderTestResult{}, errors.New("test_provider.not_external")
+	}
+	probe, err := providerProbeFor(*s.LlmProvider)
+	if err != nil {
+		return types.ProviderTestResult{}, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	return runHTTPProbe(ctx, a.proxyPool, probe), nil
+}
+
+func runHTTPProbe(ctx context.Context, pool *netproxy.Pool, p providerProbe) types.ProviderTestResult {
+	client := pool.NewClient(15 * time.Second)
+	var bodyReader io.Reader
+	if len(p.body) > 0 {
+		bodyReader = bytes.NewReader(p.body)
+	}
+	req, err := http.NewRequestWithContext(ctx, p.method, p.url, bodyReader)
+	if err != nil {
+		return types.ProviderTestResult{URL: p.displayURL, Error: err.Error()}
+	}
+	for k, v := range p.headers {
+		req.Header.Set(k, v)
+	}
+	start := time.Now()
+	resp, err := client.Do(req)
+	latency := time.Since(start).Milliseconds()
+	if err != nil {
+		return types.ProviderTestResult{URL: p.displayURL, LatencyMs: latency, Error: err.Error()}
+	}
+	defer resp.Body.Close()
+	return types.ProviderTestResult{
+		OK:         resp.StatusCode >= 200 && resp.StatusCode < 300,
+		HTTPStatus: resp.StatusCode,
+		LatencyMs:  latency,
+		URL:        p.displayURL,
+	}
 }
 
 // ─── Issue report bindings ──────────────────────────────────────────────────
@@ -961,9 +1408,10 @@ func (a *App) SubmitReport(input SubmitReportInput) (SubmitReportResult, error) 
 		token = *s.SupportReportToken
 	}
 	sub := report.NewHTTPSubmitter(report.HTTPOptions{
-		Endpoint:  endpoint,
-		Token:     token,
-		UserAgent: fmt.Sprintf("OfficeDex/%s (%s; %s)", appVersion, runtime.GOOS, runtime.GOARCH),
+		Endpoint:   endpoint,
+		Token:      token,
+		UserAgent:  fmt.Sprintf("OfficeDex/%s (%s; %s)", appVersion, runtime.GOOS, runtime.GOARCH),
+		HTTPClient: a.proxyPool.NewClient(30 * time.Second),
 	})
 	sr, err := sub.Submit(ctx, payload)
 	if err != nil {
@@ -1111,6 +1559,33 @@ func (a *App) ensureBridge() (*bridge.Client, error) {
 			emit(ctx, bridgeEventChannel, event)
 			return
 		}
+		if event.Type == "task.started" {
+			a.mu.Lock()
+			mode := a.cachedSettings.Defaults.RuntimeMode
+			env := append([]string(nil), a.resolvedBinaryEnv...)
+			at := a.binaryResolvedAt
+			a.mu.Unlock()
+			if mode != "" {
+				if event.Payload == nil {
+					event.Payload = map[string]any{}
+				}
+				event.Payload["runtime_mode"] = string(mode)
+				if mode == types.RuntimeExternal {
+					if p := providerSnapshotFromEnv(env); p != nil {
+						event.Payload["runtime_provider"] = map[string]any{
+							"type":           string(p.Type),
+							"base_url_host":  p.BaseURLHost,
+							"model":          p.Model,
+							"api_key_masked": p.APIKeyMasked,
+							"api_key_length": p.APIKeyLength,
+						}
+						if !at.IsZero() {
+							event.Payload["runtime_applied_at"] = at.UTC().Format(time.RFC3339)
+						}
+					}
+				}
+			}
+		}
 		if a.localStore != nil {
 			_ = a.localStore.RecordEvent(event)
 		}
@@ -1223,9 +1698,18 @@ func (a *App) resolverOptions(s types.UserSettings) binresolver.Options {
 	if env != "" {
 		envPtr = &env
 	}
+	var managedPtr *string
+	if a.runtimeMgr != nil {
+		status := a.runtimeMgr.Status()
+		if status.Installed {
+			mp := a.runtimeMgr.ManagedBinaryPath()
+			managedPtr = &mp
+		}
+	}
 	return binresolver.Options{
 		UserBinaryPath:    userPath,
 		BundledBinaryPath: bundledPtr,
+		ManagedBinaryPath: managedPtr,
 		EnvBinaryPath:     envPtr,
 	}
 }
@@ -1292,6 +1776,27 @@ func llmProviderEnv(s types.UserSettings) []string {
 		out = append(out, "OFFICECLI_LLM_MODEL="+s.LlmProvider.Model)
 	}
 	return out
+}
+
+// validateExternalProvider rejects Generate calls that would silently fall
+// through to officecli's built-in default endpoint. When the user selects
+// external mode without supplying BaseURL/APIKey/Model, the subprocess
+// receives OFFICE_CLI_RUNTIME_MODE=external but no provider env, and
+// officecli routes the request to its hosted fallback — which is misleading.
+// Block here with a sentinel error the renderer can translate.
+func validateExternalProvider(s types.UserSettings) error {
+	if s.Defaults.RuntimeMode != types.RuntimeExternal {
+		return nil
+	}
+	if s.LlmProvider == nil {
+		return errors.New("generate.external_provider_missing")
+	}
+	if strings.TrimSpace(s.LlmProvider.BaseURL) == "" ||
+		strings.TrimSpace(s.LlmProvider.APIKey) == "" ||
+		strings.TrimSpace(s.LlmProvider.Model) == "" {
+		return errors.New("generate.external_provider_incomplete")
+	}
+	return nil
 }
 
 // toEnvSlice keeps callers symmetric: many of them already pass []string-shaped

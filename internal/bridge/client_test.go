@@ -428,6 +428,9 @@ func TestInvokeGenerateOpensSessionFirst(t *testing.T) {
 	if args["local_preview"] != true {
 		t.Errorf("local_preview = %v, want true", args["local_preview"])
 	}
+	if args["emit_preview"] != true {
+		t.Errorf("emit_preview = %v, want true", args["emit_preview"])
+	}
 	fake.writeResponse(t, second.idString(), map[string]any{
 		"task_id":    "task-x",
 		"session_id": "sess-1",
@@ -528,6 +531,54 @@ func TestBuildBridgeEnvExtraOverrides(t *testing.T) {
 	}
 	if !contains(env, "EXTRA=val") {
 		t.Errorf("extra missing in %v", env)
+	}
+}
+
+func TestBuildBridgeEnvInjectsProxySupplier(t *testing.T) {
+	t.Cleanup(func() { SetProxyEnvSupplier(nil) })
+	prevEnviron := syscallEnviron
+	syscallEnviron = func() []string { return nil }
+	t.Cleanup(func() { syscallEnviron = prevEnviron })
+	SetProxyEnvSupplier(func() []string {
+		return []string{"HTTP_PROXY=http://127.0.0.1:7890", "HTTPS_PROXY=http://127.0.0.1:7890"}
+	})
+	env := BuildBridgeEnv(nil)
+	if !contains(env, "HTTP_PROXY=http://127.0.0.1:7890") {
+		t.Errorf("HTTP_PROXY missing in %v", env)
+	}
+	if !contains(env, "HTTPS_PROXY=http://127.0.0.1:7890") {
+		t.Errorf("HTTPS_PROXY missing in %v", env)
+	}
+}
+
+func TestBuildBridgeEnvNilSupplierEmitsNoProxy(t *testing.T) {
+	SetProxyEnvSupplier(nil)
+	prevEnviron := syscallEnviron
+	syscallEnviron = func() []string { return nil }
+	t.Cleanup(func() { syscallEnviron = prevEnviron })
+	env := BuildBridgeEnv(nil)
+	for _, kv := range env {
+		key, _, _ := strings.Cut(kv, "=")
+		switch key {
+		case "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
+			"http_proxy", "https_proxy", "all_proxy":
+			t.Errorf("supplier added proxy env unexpectedly: %q", kv)
+		}
+	}
+}
+
+func TestBuildBridgeEnvExtraBeatsProxySupplier(t *testing.T) {
+	t.Cleanup(func() { SetProxyEnvSupplier(nil) })
+	prevEnviron := syscallEnviron
+	syscallEnviron = func() []string { return nil }
+	t.Cleanup(func() { syscallEnviron = prevEnviron })
+	SetProxyEnvSupplier(func() []string { return []string{"HTTPS_PROXY=http://proxy:1"} })
+	env := BuildBridgeEnv([]string{"HTTPS_PROXY=http://override:2"})
+	if !contains(env, "HTTPS_PROXY=http://override:2") {
+		t.Errorf("extra override missing in %v", env)
+	}
+	if contains(env, "HTTPS_PROXY=http://proxy:1") {
+		t.Errorf("supplier value not overridden in %v", env)
 	}
 }
 

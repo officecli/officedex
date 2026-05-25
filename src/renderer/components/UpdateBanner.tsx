@@ -37,7 +37,6 @@ export function UpdateBanner({
       </div>
       <div className="update-banner-body">
         <div className="update-banner-title">{t("update.banner.title", { version: release.version })}</div>
-        {release.notes ? <div className="update-banner-notes">{summarizeNotes(release.notes)}</div> : null}
         {downloading ? (
           <div className="update-banner-progress">
             <Progress
@@ -74,11 +73,6 @@ export function UpdateBanner({
       </div>
     </div>
   );
-}
-
-function summarizeNotes(notes: string): string {
-  const cleaned = notes.replace(/\s+/g, " ").trim();
-  return cleaned.length > 140 ? `${cleaned.slice(0, 137)}...` : cleaned;
 }
 
 function formatBytes(bytes: number): string {

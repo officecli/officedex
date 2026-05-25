@@ -1,7 +1,9 @@
 package runtime
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -59,18 +61,18 @@ func TestNew_RequiresRepo(t *testing.T) {
 
 func TestExpectedAssetName(t *testing.T) {
 	cases := []struct {
-		platform, arch, want string
+		platform, arch, tag, want string
 	}{
-		{"darwin", "arm64", "officecli-darwin-arm64"},
-		{"darwin", "x64", "officecli-darwin-x64"},
-		{"linux", "x64", "officecli-linux-x64"},
-		{"win32", "x64", "officecli-win32-x64.exe"},
-		{"win32", "arm64", "officecli-win32-arm64.exe"},
+		{"darwin", "arm64", "v0.2.97", "officecli_0.2.97_darwin_arm64.tar.gz"},
+		{"darwin", "x64", "v0.2.97", "officecli_0.2.97_darwin_amd64.tar.gz"},
+		{"linux", "x64", "v1.0.0", "officecli_1.0.0_linux_amd64.tar.gz"},
+		{"win32", "x64", "v1.0.0", "officecli_1.0.0_windows_amd64.tar.gz"},
+		{"win32", "arm64", "2.5.1", "officecli_2.5.1_windows_arm64.tar.gz"},
 	}
 	for _, tc := range cases {
 		m := newTestManager(t, ManagerOptions{Platform: tc.platform, Arch: tc.arch})
-		if got := m.ExpectedAssetName(); got != tc.want {
-			t.Errorf("ExpectedAssetName(%s,%s) = %q, want %q", tc.platform, tc.arch, got, tc.want)
+		if got := m.ExpectedAssetName(tc.tag); got != tc.want {
+			t.Errorf("ExpectedAssetName(%s,%s,%s) = %q, want %q", tc.platform, tc.arch, tc.tag, got, tc.want)
 		}
 	}
 }
@@ -205,7 +207,7 @@ func releaseJSON(tag, assetName, assetURL string, size int64) []byte {
 func TestCheckLatestVersion_Success(t *testing.T) {
 	m := newTestManager(t, ManagerOptions{
 		FetchJSON: func(ctx context.Context, url string) ([]byte, error) {
-			return releaseJSON("v2.0.0", "officecli-darwin-arm64", "https://dl/example", 1234), nil
+			return releaseJSON("v2.0.0", "officecli_2.0.0_darwin_arm64.tar.gz", "https://dl/example", 1234), nil
 		},
 	})
 	rel, err := m.CheckLatestVersion(context.Background())
@@ -214,6 +216,9 @@ func TestCheckLatestVersion_Success(t *testing.T) {
 	}
 	if rel.Version != "v2.0.0" || rel.Size != 1234 || rel.AssetURL != "https://dl/example" {
 		t.Errorf("unexpected release: %+v", rel)
+	}
+	if rel.AssetName != "officecli_2.0.0_darwin_arm64.tar.gz" {
+		t.Errorf("AssetName = %q", rel.AssetName)
 	}
 	st := m.Status()
 	if st.LatestVersion == nil || *st.LatestVersion != "v2.0.0" {
@@ -228,7 +233,7 @@ func TestCheckLatestVersion_AssetMissing(t *testing.T) {
 	var errEvent string
 	m := newTestManager(t, ManagerOptions{
 		FetchJSON: func(ctx context.Context, url string) ([]byte, error) {
-			return releaseJSON("v1.0.0", "officecli-windows-x64.exe", "https://dl/other", 0), nil
+			return releaseJSON("v1.0.0", "officecli_1.0.0_windows_amd64.tar.gz", "https://dl/other", 0), nil
 		},
 		Listener: func(e types.RuntimeEvent) {
 			if e.Type == types.RuntimeEventError {
@@ -239,7 +244,7 @@ func TestCheckLatestVersion_AssetMissing(t *testing.T) {
 	if rel, err := m.CheckLatestVersion(context.Background()); rel != nil || err == nil {
 		t.Fatalf("expected nil rel + error, got rel=%v err=%v", rel, err)
 	}
-	if !strings.Contains(errEvent, "no asset named officecli-darwin-arm64") {
+	if !strings.Contains(errEvent, "no asset named officecli_1.0.0_darwin_arm64.tar.gz") {
 		t.Errorf("error event = %q", errEvent)
 	}
 	if last := m.Status().LastError; last == nil || !strings.Contains(*last, "no asset named") {
@@ -270,21 +275,54 @@ func TestCheckLatestVersion_FetchFails(t *testing.T) {
 	}
 }
 
+// makeTarGz builds an in-memory tar.gz containing the given files.
+func makeTarGz(t *testing.T, files map[string][]byte) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gw)
+	for name, body := range files {
+		hdr := &tar.Header{
+			Name:     name,
+			Mode:     0o755,
+			Size:     int64(len(body)),
+			Typeflag: tar.TypeReg,
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			t.Fatalf("tar header: %v", err)
+		}
+		if _, err := tw.Write(body); err != nil {
+			t.Fatalf("tar write: %v", err)
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatalf("tar close: %v", err)
+	}
+	if err := gw.Close(); err != nil {
+		t.Fatalf("gzip close: %v", err)
+	}
+	return buf.Bytes()
+}
+
 func TestDownloadAndInstall_HappyPath(t *testing.T) {
 	root := t.TempDir()
-	payload := []byte("the-binary-bytes")
+	binary := []byte("the-binary-bytes")
+	archive := makeTarGz(t, map[string][]byte{
+		"officecli":  binary,
+		"LICENSE.md": []byte("noise"),
+	})
 	var progressEvents []types.RuntimeEvent
 	var installedEvent bool
 	var mu sync.Mutex
 	m := newTestManager(t, ManagerOptions{
 		InstallRoot: root,
 		FetchJSON: func(ctx context.Context, url string) ([]byte, error) {
-			return releaseJSON("v3.0.0", "officecli-darwin-arm64", "https://dl/asset", int64(len(payload))), nil
+			return releaseJSON("v3.0.0", "officecli_3.0.0_darwin_arm64.tar.gz", "https://dl/asset", int64(len(archive))), nil
 		},
 		FetchDownload: func(ctx context.Context, url string) (*FetchDownload, error) {
 			return &FetchDownload{
-				Stream: io.NopCloser(bytes.NewReader(payload)),
-				Size:   int64(len(payload)),
+				Stream: io.NopCloser(bytes.NewReader(archive)),
+				Size:   int64(len(archive)),
 			}, nil
 		},
 		Listener: func(e types.RuntimeEvent) {
@@ -313,7 +351,7 @@ func TestDownloadAndInstall_HappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read binary: %v", err)
 	}
-	if !bytes.Equal(got, payload) {
+	if !bytes.Equal(got, binary) {
 		t.Errorf("binary content mismatch")
 	}
 	info, err := os.Stat(binPath)
@@ -322,7 +360,7 @@ func TestDownloadAndInstall_HappyPath(t *testing.T) {
 	}
 	// POSIX-only assertion: NTFS reports a synthetic 0666 mode that drops the
 	// executable bit even after a chmod 0755, so this check is meaningless on
-	// Windows. The os.Rename + chmod flow itself is still exercised above.
+	// Windows. The OpenFile with 0o755 is still exercised above.
 	if goruntime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0 {
 		t.Errorf("binary not executable: %v", info.Mode())
 	}
@@ -337,7 +375,7 @@ func TestDownloadAndInstall_HappyPath(t *testing.T) {
 	if err := json.Unmarshal(versionData, &record); err != nil {
 		t.Fatalf("unmarshal version: %v", err)
 	}
-	if record.Version != "v3.0.0" || record.AssetName != "officecli-darwin-arm64" {
+	if record.Version != "v3.0.0" || record.AssetName != "officecli_3.0.0_darwin_arm64.tar.gz" {
 		t.Errorf("version record = %+v", record)
 	}
 	if _, err := os.Stat(filepath.Join(root, "tmp")); !os.IsNotExist(err) {
@@ -362,40 +400,36 @@ func TestDownloadAndInstall_HappyPath(t *testing.T) {
 	}
 }
 
-func TestDownloadAndInstall_ArchiveAssetRejected(t *testing.T) {
-	root := t.TempDir()
-	m := newTestManager(t, ManagerOptions{
-		InstallRoot: root,
-		Platform:    "linux",
-		Arch:        "x64",
-		FetchJSON: func(ctx context.Context, url string) ([]byte, error) {
-			// asset name resolves to "officecli-linux-x64.zip" — but the manager's
-			// ExpectedAssetName ignores extension, so we craft a release where the
-			// asset name happens to be the archive variant.
-			return releaseJSON("v1", "officecli-linux-x64", "https://dl/asset", 4), nil
-		},
-		FetchDownload: func(ctx context.Context, url string) (*FetchDownload, error) {
-			return &FetchDownload{Stream: io.NopCloser(bytes.NewReader([]byte("abcd"))), Size: 4}, nil
-		},
-	})
+func TestExtractOfficecliFromTarGz_MissingBinary(t *testing.T) {
+	dir := t.TempDir()
+	archive := makeTarGz(t, map[string][]byte{"README.md": []byte("only docs")})
+	archivePath := filepath.Join(dir, "asset.tar.gz")
+	if err := os.WriteFile(archivePath, archive, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(dir, "officecli")
+	if err := extractOfficecliFromTarGz(archivePath, out, "darwin"); err == nil {
+		t.Fatal("expected error when archive lacks officecli")
+	}
+}
 
-	// Sanity: archives are rejected by the standalone helper.
-	if err := assertRawBinaryAsset("officecli-linux-x64.zip"); err == nil {
-		t.Error("expected zip rejection")
+func TestExtractOfficecliFromTarGz_Windows(t *testing.T) {
+	dir := t.TempDir()
+	archive := makeTarGz(t, map[string][]byte{"officecli.exe": []byte("win-binary")})
+	archivePath := filepath.Join(dir, "asset.tar.gz")
+	if err := os.WriteFile(archivePath, archive, 0o644); err != nil {
+		t.Fatal(err)
 	}
-	if err := assertRawBinaryAsset("officecli-linux-x64.tar.gz"); err == nil {
-		t.Error("expected tar.gz rejection")
+	out := filepath.Join(dir, "officecli.exe")
+	if err := extractOfficecliFromTarGz(archivePath, out, "win32"); err != nil {
+		t.Fatalf("extract: %v", err)
 	}
-	if err := assertRawBinaryAsset("officecli-linux-x64.tgz"); err == nil {
-		t.Error("expected tgz rejection")
+	got, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if err := assertRawBinaryAsset("officecli-linux-x64"); err != nil {
-		t.Errorf("plain binary should be allowed: %v", err)
-	}
-
-	// The full pipeline with a plain asset name succeeds.
-	if _, err := m.DownloadAndInstall(context.Background()); err != nil {
-		t.Fatalf("plain binary install should succeed: %v", err)
+	if string(got) != "win-binary" {
+		t.Errorf("content = %q", got)
 	}
 }
 

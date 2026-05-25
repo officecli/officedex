@@ -38,6 +38,7 @@ import {
 import { notion } from "../designTokens";
 import type { NavKey } from "../defaults";
 import { useT } from "../i18n";
+import { RuntimeChip } from "./RuntimeChip";
 
 export interface CreditInfo {
   // "quota" = bounded plan with a known cap (api_key burndown, anonymous device pool).
@@ -65,6 +66,7 @@ interface ShellProps {
   children: React.ReactNode;
   inspector?: React.ReactNode;
   credit?: CreditInfo;
+  runtimeMode?: "external" | "hosted";
   onNavChange: (key: NavKey) => void;
   onNewGeneration: () => void;
 }
@@ -93,6 +95,7 @@ export function Shell({
   children,
   inspector,
   credit,
+  runtimeMode,
   onNavChange,
   onNewGeneration,
 }: ShellProps) {
@@ -161,12 +164,15 @@ export function Shell({
             <span className="crumb-separator">/</span>
             <strong>{t("shell.workspace")}</strong>
           </Space>
+          <div className="topbar-right">
+            <RuntimeChip onClick={() => onNavChange("settings")} />
+          </div>
         </header>
         <div className={`content-grid ${inspector ? "with-preview" : ""}`}>
           <section className="stage">{children}</section>
           {inspector ? <aside className="preview-panel">{inspector}</aside> : null}
         </div>
-        <CreditMeter info={credit} />
+        <CreditMeter info={credit} runtimeMode={runtimeMode} />
       </main>
     </div>
   );
@@ -179,13 +185,30 @@ export function MaterialSymbol({ name }: { name: string }) {
 
 const MASKED_VALUE = "••••";
 
-export function CreditMeter({ info }: { info?: CreditInfo }) {
+export function CreditMeter({ info, runtimeMode }: { info?: CreditInfo; runtimeMode?: "external" | "hosted" }) {
   const t = useT();
   const [hidden, setHidden] = useState(true);
   const loading = !info;
   const value = info ?? DEFAULT_CREDIT;
   const planLabel = value.planLabel || t("shell.creditMeter.label");
   const toggleLabel = hidden ? t("shell.creditMeter.show") : t("shell.creditMeter.hide");
+
+  if (runtimeMode === "external") {
+    const tooltipBody = t("shell.creditMeter.freeTooltip");
+    return (
+      <div className="credit-meter credit-meter-balance credit-meter-free" role="group" aria-label={t("shell.creditMeter.aria", { tooltip: tooltipBody })}>
+        <div className="credit-meter-row">
+          <Tooltip title={tooltipBody} placement="top">
+            <div className="credit-meter-row-main">
+              <ThunderboltOutlined className="credit-meter-icon" aria-hidden />
+              <span className="credit-meter-label">{planLabel}</span>
+              <span className="credit-meter-balance-value">{t("shell.creditMeter.freeLabel")}</span>
+            </div>
+          </Tooltip>
+        </div>
+      </div>
+    );
+  }
 
   const toggleButton = (
     <button
