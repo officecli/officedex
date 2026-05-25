@@ -1,0 +1,55 @@
+/* ─── Page stack (Tasks) ─── */
+
+.page-stack {
+  padding: 36px 44px;
+}
+
+/* ─── Tables ─── */
+
+.flat-table {
+  overflow: hidden;
+  border: 1px solid var(--n-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--n-canvas);
+}
+
+.task-title-button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.task-title-button:hover strong {
+  color: var(--n-primary);
+}
+
+.task-credit-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.task-credit-mode.ant-tag {
+  margin: 0;
+  font-size: 11px;
+  line-height: 18px;
+}
+
+/* ─── Empty card ─── */
+
+.empty-card {
+  border: 1px solid var(--n-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--n-canvas);
+  padding: 18px;
+}
+
+@media (max-width: 760px) {
+  .page-stack {
+    padding: 20px;
+  }
+}

@@ -1,0 +1,52 @@
+name: ✨ Feature request
+description: Suggest a new capability or an improvement to an existing one.
+title: "[Feature] "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Tell us about the situation you ran into. What were you trying to do?
+      placeholder: When generating a PPTX from a long brief I lose track of which slide…
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How would you like OfficeDex to behave? Mockups, ASCII sketches, references welcome.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you ruled out, and why.
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Surface area
+      options:
+        - Dialogue / generation flow
+        - Settings & providers
+        - Preview / artifact handling
+        - Diagnostics / issue reporting
+        - Login & credits
+        - Auto-update
+        - i18n / localization
+        - UI / theming
+        - Other
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I have searched existing issues and discussions.
+          required: true
+        - label: This request is in scope for OfficeDex (desktop client), not officecli (the CLI engine).
+          required: true

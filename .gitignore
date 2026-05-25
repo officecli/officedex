@@ -1,0 +1,43 @@
+node_modules/
+dist/
+dist-electron/
+/release/
+*.log
+!internal/diagnostics/testdata/stderr-samples/*.log
+.DS_Store
+
+# Local bundled OfficeCLI binaries for packaging.
+build/officecli/
+officecli-bin/
+
+# Wails / Go build artifacts.
+build/bin/
+/officedex
+src/renderer/generated/
+
+# Tooling caches (Claude Code, OMC, Playwright MCP).
+.claude/
+.omc/
+.playwright-mcp/
+
+# Misc local marker files.
+package.json.md5
+
+# Playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/
+
+# Secrets / credentials (defense in depth)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+*.p12
+*.pfx
+.npmrc
+.netrc
+credentials*
+secrets*

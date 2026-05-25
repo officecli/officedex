@@ -1,0 +1,86 @@
+name: 🐛 Bug report
+description: Something broke or behaves differently than documented.
+title: "[Bug] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report.
+
+        For **security vulnerabilities**, please follow [SECURITY.md](../SECURITY.md) instead of filing a public issue.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear, concise description of the bug.
+      placeholder: When I clicked X, the app showed Y but I expected Z.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps that reliably trigger the bug.
+      placeholder: |
+        1. Open Settings → Provider
+        2. Switch to "Custom"
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: I expected the saved choice to persist after restart.
+
+  - type: input
+    id: version
+    attributes:
+      label: OfficeDex version
+      description: Find it in Settings → About, or run `OfficeDex --version`.
+      placeholder: "v0.2.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Windows 11
+        - Windows 10
+        - Other (please describe)
+    validations:
+      required: true
+
+  - type: input
+    id: officecli-version
+    attributes:
+      label: Bundled officecli version
+      description: Settings → About → "officecli runtime"
+      placeholder: "0.2.92"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Diagnostics bundle / logs
+      description: |
+        If possible, attach a diagnostics bundle (Settings → Diagnostics → Export). PII is auto-scrubbed.
+        Or paste the relevant log snippet here.
+      render: shell
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I have searched existing issues and this is not a duplicate.
+          required: true
+        - label: I have read the [Code of Conduct](../CODE_OF_CONDUCT.md).
+          required: true

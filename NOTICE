@@ -1,0 +1,11 @@
+OfficeDex
+Copyright 2026 OfficeDex Contributors
+
+This product is the official desktop client for OfficeCLI
+(https://officecli.io) and is distributed under the
+Apache License, Version 2.0 (see LICENSE).
+
+It bundles a copy of the `officecli` Go binary at build time;
+that binary is fetched from https://github.com/officecli/officecli-dist
+and is licensed under its own terms — see the upstream project for
+details.

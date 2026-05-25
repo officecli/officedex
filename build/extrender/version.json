@@ -1,0 +1,14 @@
+{
+  "version": "1.0.98",
+  "source": "extrender",
+  "platforms": {
+    "mac-arm64": {
+      "asset": "officecli-mac-arm64",
+      "sha256": "1572f2a81f69c15590c60365c38bebde1236aaa619a68b370935c1c60d8d1a8c"
+    },
+    "win-x64": {
+      "asset": "officecli-win-x64.exe",
+      "sha256": "90d2ce2e0fbc218e885ebe881cf62880c10f8909e3eeb1497878fe00d607d9cc"
+    }
+  }
+}
