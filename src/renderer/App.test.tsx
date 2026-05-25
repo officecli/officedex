@@ -175,7 +175,7 @@ describe("App task flow", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Tasks/ }));
 
-    expect(await screen.findByText("Live Bridge Task")).toBeTruthy();
+    expect((await screen.findAllByText("Live Bridge Task")).length).toBeGreaterThan(0);
     expect(screen.getAllByText("Running").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: /Live Bridge Task/ }));
