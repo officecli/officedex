@@ -195,6 +195,19 @@ Powered by `docx-preview` / `pdfjs-dist` / `xlsx` for inline rendering. DOCX / P
 
 Latest Release: **[github.com/officecli/officedex/releases/latest](https://github.com/officecli/officedex/releases/latest)**
 
+> [!IMPORTANT]
+> ### 🍎 macOS 用户必读 — "OfficeDex.app" Not Opened?
+>
+> 因为 app 尚未做 Apple 公证（notarization），首次打开时 Gatekeeper 会弹窗拦截，提示 **"Apple could not verify..."**。
+>
+> **解决方法**：在终端运行一次以下命令，去掉隔离属性后即可正常双击打开：
+>
+> ```bash
+> xattr -dr com.apple.quarantine /Applications/OfficeDex.app
+> ```
+>
+> 如果你把 app 放在了别处（比如 `~/Downloads/OfficeDex.app`），把路径替换成实际位置即可。这是一次性操作，不会重复出现。
+
 ### Developers: run from source
 
 ```bash

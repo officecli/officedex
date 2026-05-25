@@ -27,3 +27,17 @@ package.json.md5
 /test-results/
 /playwright-report/
 /playwright/.cache/
+
+# Secrets / credentials (defense in depth)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+*.p12
+*.pfx
+.npmrc
+.netrc
+credentials*
+secrets*
