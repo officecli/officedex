@@ -73,6 +73,8 @@ jobs:
 
       - name: Prefetch officecli binary
         run: npm run prefetch:officecli
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Wails build
         shell: bash
