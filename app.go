@@ -859,6 +859,20 @@ func (a *App) GetTaskHistory(limit int) ([]types.TaskHistoryEntry, error) {
 		if len(events) == 0 {
 			continue
 		}
+		// Re-register completed artifacts with the preview registry so the
+		// renderer can issue preview tokens after an app restart. Without this,
+		// `IssuePreviewToken` rejects historical artifacts with "artifact is not
+		// registered" and the preview button appears to do nothing.
+		for _, ev := range events {
+			if ev.Type != "task.completed" {
+				continue
+			}
+			if artifact := artifactFromCompletedEvent(ev); artifact != nil {
+				if err := a.previewReg.AllowArtifact(*artifact); err != nil {
+					wailsruntime.LogWarningf(ctx, "preview register (history): %v", err)
+				}
+			}
+		}
 		entries = append(entries, types.TaskHistoryEntry{TaskID: id, Events: events})
 	}
 	return entries, nil
@@ -994,6 +1008,8 @@ func (a *App) CancelRuntimeUpdate() error {
 func launchInstaller(path string) error {
 	switch runtime.GOOS {
 	case "darwin":
+		// Strip macOS quarantine flag so Gatekeeper won't block the update.
+		exec.Command("xattr", "-dr", "com.apple.quarantine", path).Run()
 		return exec.Command("open", path).Start()
 	case "windows":
 		return exec.Command("cmd", "/c", "start", "", path).Start()

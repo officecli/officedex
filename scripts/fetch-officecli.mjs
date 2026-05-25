@@ -3,6 +3,10 @@
 // verifies its SHA256 against checksums.txt, extracts the tarball, and stages
 // the binary under build/officecli/ so electron-builder can bundle it as an
 // extraResource. Idempotent: re-running with the same version is a no-op.
+//
+// VERSION resolution:
+//   - "latest" (or empty) → resolved via the GitHub releases API.
+//   - "0.2.98" or "v0.2.98" → used verbatim (the leading "v" is stripped).
 
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
@@ -17,8 +21,8 @@ const REPO_ROOT = path.resolve(HERE, "..");
 const DIST_REPO = process.env.OFFICECLI_DIST_REPO || "officecli/officecli-dist";
 
 const pkg = JSON.parse(readFileSync(path.join(REPO_ROOT, "package.json"), "utf8"));
-const VERSION = process.env.OFFICECLI_VERSION || pkg.officecliVersion;
-if (!VERSION) {
+const REQUESTED_VERSION = process.env.OFFICECLI_VERSION || pkg.officecliVersion;
+if (!REQUESTED_VERSION) {
   fail("officecliVersion is not set in package.json (and OFFICECLI_VERSION env is empty).");
 }
 
@@ -30,10 +34,6 @@ const OS_KEY = mapPlatform(TARGET_PLATFORM);
 const ARCH_KEY = mapArch(TARGET_ARCH);
 const IS_WINDOWS = OS_KEY === "windows";
 const BINARY_NAME = IS_WINDOWS ? "officecli.exe" : "officecli";
-const TARBALL_NAME = `officecli_${VERSION}_${OS_KEY}_${ARCH_KEY}.tar.gz`;
-const RELEASE_BASE = `https://github.com/${DIST_REPO}/releases/download/v${VERSION}`;
-const TARBALL_URL = `${RELEASE_BASE}/${TARBALL_NAME}`;
-const CHECKSUMS_URL = `${RELEASE_BASE}/checksums.txt`;
 
 const STAGE_DIR = path.join(REPO_ROOT, "build", "officecli");
 const STAGED_BINARY = path.join(STAGE_DIR, BINARY_NAME);
@@ -42,12 +42,18 @@ const STAGED_VERSION = path.join(STAGE_DIR, "version.json");
 await main();
 
 async function main() {
-  if (!FORCE && (await hasMatchingStage())) {
+  const VERSION = await resolveVersion(REQUESTED_VERSION);
+  const TARBALL_NAME = `officecli_${VERSION}_${OS_KEY}_${ARCH_KEY}.tar.gz`;
+  const RELEASE_BASE = `https://github.com/${DIST_REPO}/releases/download/v${VERSION}`;
+  const TARBALL_URL = `${RELEASE_BASE}/${TARBALL_NAME}`;
+  const CHECKSUMS_URL = `${RELEASE_BASE}/checksums.txt`;
+
+  if (!FORCE && (await hasMatchingStage(VERSION))) {
     console.log(`[fetch-officecli] already staged: ${VERSION} ${OS_KEY}/${ARCH_KEY} — skipping`);
     return;
   }
 
-  console.log(`[fetch-officecli] target ${OS_KEY}/${ARCH_KEY}, version v${VERSION}`);
+  console.log(`[fetch-officecli] target ${OS_KEY}/${ARCH_KEY}, version v${VERSION}${REQUESTED_VERSION === "latest" ? " (resolved from \"latest\")" : ""}`);
   console.log(`[fetch-officecli] tarball: ${TARBALL_URL}`);
 
   // checksums.txt may be absent in older releases. If we can fetch it AND it
@@ -110,6 +116,7 @@ async function main() {
 
     const versionRecord = {
       version: VERSION,
+      requested: REQUESTED_VERSION,
       platform: OS_KEY,
       arch: ARCH_KEY,
       tarball: TARBALL_NAME,
@@ -125,11 +132,38 @@ async function main() {
   }
 }
 
-async function hasMatchingStage() {
+// resolveVersion maps the requested version string to a concrete semver
+// (without leading "v"). "latest" / "" hit the GitHub releases API; explicit
+// versions are returned verbatim (after stripping an optional leading "v").
+async function resolveVersion(requested) {
+  const trimmed = String(requested ?? "").trim();
+  if (trimmed && trimmed.toLowerCase() !== "latest") {
+    return trimmed.replace(/^v/, "");
+  }
+  const apiUrl = `https://api.github.com/repos/${DIST_REPO}/releases/latest`;
+  const response = await fetch(apiUrl, {
+    headers: {
+      "accept": "application/vnd.github+json",
+      "user-agent": "officedex-fetch-officecli",
+      ...(process.env.GITHUB_TOKEN ? { "authorization": `Bearer ${process.env.GITHUB_TOKEN}` } : {}),
+    },
+  });
+  if (!response.ok) {
+    fail(`HTTP ${response.status} resolving latest officecli release from ${apiUrl} — set OFFICECLI_VERSION or GITHUB_TOKEN to retry`);
+  }
+  const payload = await response.json();
+  const tag = String(payload.tag_name || "").trim();
+  if (!tag) {
+    fail(`could not parse tag_name from ${apiUrl}`);
+  }
+  return tag.replace(/^v/, "");
+}
+
+async function hasMatchingStage(version) {
   try {
     const text = await readFile(STAGED_VERSION, "utf8");
     const meta = JSON.parse(text);
-    return meta.version === VERSION && meta.platform === OS_KEY && meta.arch === ARCH_KEY;
+    return meta.version === version && meta.platform === OS_KEY && meta.arch === ARCH_KEY;
   } catch {
     return false;
   }

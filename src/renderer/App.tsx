@@ -1,4 +1,4 @@
-import { ConfigProvider } from "antd";
+import { ConfigProvider, message } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import enUS from "antd/locale/en_US";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -241,9 +241,14 @@ export function App() {
     if (previewGrant) {
       await officecli.revokePreviewToken(previewGrant.token).catch(() => {});
     }
-    const grant = await officecli.issuePreviewToken(artifact);
-    setPreviewGrant(grant);
-    officecli.setPreviewMode(true).catch(() => {});
+    try {
+      const grant = await officecli.issuePreviewToken(artifact);
+      setPreviewGrant(grant);
+      officecli.setPreviewMode(true).catch(() => {});
+    } catch (error) {
+      const text = error instanceof Error ? error.message : String(error);
+      message.error(`Preview unavailable: ${text}`);
+    }
   }, [previewGrant]);
 
   const closeInlinePreview = useCallback(async () => {
