@@ -98,6 +98,7 @@ export const en: Record<string, string> = {
   "dialogue.completed.open": "Open",
   "dialogue.completed.preview": "Preview",
   "dialogue.completed.showInFolder": "Show in folder",
+  "dialogue.completed.continuationPlaceholder": "Continue editing this image. Open a new conversation to start fresh.",
   "dialogue.completed.askPlaceholder": "Ask a message or command...",
   "dialogue.completed.imagePreviewMask": "Click to enlarge",
   "dialogue.userMessage.imagePreviewMask": "Preview",
@@ -115,6 +116,9 @@ export const en: Record<string, string> = {
   "dialogue.terminal.events.fallback": "Bridge Event",
   "dialogue.terminal.exportLogs": "Export diagnostic logs",
   "dialogue.terminal.reportIssue": "Report Issue",
+  "dialogue.terminal.creditsExhausted.title": "Anonymous credits used up",
+  "dialogue.terminal.creditsExhausted.message": "You've used up the free credits for anonymous use. Sign in to continue generating, and add hosted credits to your account when you need more.",
+  "dialogue.terminal.creditsExhausted.signIn": "Sign In to Continue",
 
   // Dialogue — stalled
   "dialogue.stalled.title": "Task may be stalled",

@@ -7,6 +7,7 @@ import {
   CopyOutlined,
   DeleteOutlined,
   DisconnectOutlined,
+
   FileTextOutlined,
   FolderOpenOutlined,
   LoadingOutlined,
@@ -50,9 +51,10 @@ interface DialogueProps {
   onRetry: () => void;
   onPreview: (artifact: Artifact) => void;
   onForceCancel?: (taskId: string) => void;
+  onContinueGeneration?: (priorArtifact: Artifact, prompt: string) => void;
 }
 
-export function DialogueScreen({ task, artifacts, busy, lastError, errorKind, errorDetails, bridgeStatus, onSubmit, onOpenSettings, onOpenLogin, onRetry, onPreview, onForceCancel }: DialogueProps) {
+export function DialogueScreen({ task, artifacts, busy, lastError, errorKind, errorDetails, bridgeStatus, onSubmit, onOpenSettings, onOpenLogin, onRetry, onPreview, onForceCancel, onContinueGeneration }: DialogueProps) {
   if (lastError) {
     return <ConnectionFailure kind={errorKind} status={bridgeStatus} error={lastError} details={errorDetails} onOpenSettings={onOpenSettings} onOpenLogin={onOpenLogin} onRetry={onRetry} />;
   }
@@ -60,10 +62,10 @@ export function DialogueScreen({ task, artifacts, busy, lastError, errorKind, er
     return <QuestionDialogue task={task} />;
   }
   if (task?.status === "completed") {
-    return <CompletedDialogue task={task} onPreview={onPreview} />;
+    return <CompletedDialogue task={task} onPreview={onPreview} onContinueGeneration={onContinueGeneration} />;
   }
   if (task?.status === "failed" || task?.status === "cancelled") {
-    return <TerminalDialogue task={task} />;
+    return <TerminalDialogue task={task} onOpenLogin={onOpenLogin} />;
   }
   if (task?.status === "running" || task?.status === "starting") {
     return <RunningDialogue task={task} onForceCancel={onForceCancel} />;
@@ -270,7 +272,7 @@ function GenerationHistoryThread({ task, hideLatestText }: { task: DesktopTask; 
   const subject = taskSubject(task, t);
   const documentType = task.documentType || task.artifact?.documentType || t("dialogue.history.targetTypeDefault");
   const isRunning = task.status === "running" || task.status === "starting" || task.status === "question";
-  const timeMarker = latestEvent?.ts || (isRunning ? t("dialogue.history.taskInProgress") : t("dialogue.history.generationHistory"));
+  const timeMarker = formatLocalTimestamp(latestEvent?.ts) || (isRunning ? t("dialogue.history.taskInProgress") : t("dialogue.history.generationHistory"));
   return (
     <>
       <div className="time-marker">{timeMarker}</div>
@@ -343,14 +345,16 @@ function QuestionDialogue({ task }: { task: DesktopTask }) {
   );
 }
 
-function CompletedDialogue({ task, onPreview }: { task: DesktopTask; onPreview: (artifact: Artifact) => void }) {
+function CompletedDialogue({ task, onPreview, onContinueGeneration }: { task: DesktopTask; onPreview: (artifact: Artifact) => void; onContinueGeneration?: (priorArtifact: Artifact, prompt: string) => void }) {
   const t = useT();
+  const [continuationPrompt, setContinuationPrompt] = useState("");
   const artifact = task.artifact;
   const latestEvent = task.events.at(-1);
   const completionMessage = eventText(latestEvent);
   const duration = taskDurationLabel(task.events, t);
-  const completedAt = artifact?.syncedAt || latestEvent?.ts || t("dialogue.completed.completionTimeUnknown");
+  const completedAt = formatLocalTimestamp(artifact?.syncedAt) || formatLocalTimestamp(latestEvent?.ts) || t("dialogue.completed.completionTimeUnknown");
   const creditTag = renderCreditTag(task, t);
+  const showContinuationComposer = artifact && isImageArtifact(artifact);
   return (
     <div className="conversation-layout">
       <div className="chat-thread">
@@ -405,24 +409,63 @@ function CompletedDialogue({ task, onPreview }: { task: DesktopTask; onPreview: 
           ) : null}
         </div>
       </div>
-      <div className="docked-composer readonly">
-        <Input suffix={<SendOutlined />} placeholder={t("dialogue.completed.askPlaceholder")} />
-      </div>
+      {showContinuationComposer ? (
+        <div className="docked-composer" data-testid="continuation-composer">
+          <Input.TextArea
+            autoSize={{ minRows: 1, maxRows: 4 }}
+            placeholder={t("dialogue.completed.continuationPlaceholder")}
+            value={continuationPrompt}
+            onChange={(e) => setContinuationPrompt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
+                e.preventDefault();
+                if (continuationPrompt.trim() && artifact) {
+                  onContinueGeneration?.(artifact, continuationPrompt.trim());
+                  setContinuationPrompt("");
+                }
+              }
+            }}
+          />
+          <Button
+            type="primary"
+            icon={<SendOutlined />}
+            disabled={!continuationPrompt.trim()}
+            onClick={() => {
+              if (continuationPrompt.trim() && artifact) {
+                onContinueGeneration?.(artifact, continuationPrompt.trim());
+                setContinuationPrompt("");
+              }
+            }}
+          />
+        </div>
+      ) : (
+        <div className="docked-composer readonly">
+          <Input suffix={<SendOutlined />} placeholder={t("dialogue.completed.askPlaceholder")} />
+        </div>
+      )}
     </div>
   );
 }
 
-function TerminalDialogue({ task }: { task: DesktopTask }) {
+function TerminalDialogue({ task, onOpenLogin }: { task: DesktopTask; onOpenLogin: () => void }) {
   const t = useT();
   const capability = useReportCapability();
   const [reportOpen, setReportOpen] = useState(false);
   const [requestId, setRequestId] = useState<string | null>(null);
   const failed = task.status === "failed";
   const latestEvent = task.events.at(-1);
-  const title = failed ? t("dialogue.terminal.failed.title") : t("dialogue.terminal.cancelled.title");
-  const description = failed
+  const rawDescription = failed
     ? task.error || eventText(latestEvent) || t("dialogue.terminal.failed.fallback")
     : eventText(latestEvent) || t("dialogue.terminal.cancelled.fallback");
+  const creditsExhausted = failed && isCreditsExhaustedError(rawDescription);
+  const title = creditsExhausted
+    ? t("dialogue.terminal.creditsExhausted.title")
+    : failed
+      ? t("dialogue.terminal.failed.title")
+      : t("dialogue.terminal.cancelled.title");
+  const description = creditsExhausted
+    ? t("dialogue.terminal.creditsExhausted.message")
+    : rawDescription;
   const creditTag = renderCreditTag(task, t);
 
   useEffect(() => {
@@ -446,7 +489,11 @@ function TerminalDialogue({ task }: { task: DesktopTask }) {
             {creditTag}
           </div>
           <p>{description}</p>
-          {capability?.enabled ? (
+          {creditsExhausted ? (
+            <Button size="small" type="primary" icon={<UserOutlined />} onClick={onOpenLogin}>
+              {t("dialogue.terminal.creditsExhausted.signIn")}
+            </Button>
+          ) : capability?.enabled ? (
             <Button size="small" onClick={() => setReportOpen(true)}>
               {t("dialogue.terminal.reportIssue")}
             </Button>
@@ -717,9 +764,34 @@ function eventText(event?: BridgeEvent): string {
   return String(payload.message || payload.stage || payload.status || payload.question || "");
 }
 
+// Recognises the officecli error emitted when the device's anonymous credit
+// pool is depleted (e.g. "Anonymous credits are exhausted. Run `officecli
+// login`, then buy hosted credits for your account."). The wording can shift
+// across CLI versions, so we match the durable phrase plus the login hint.
+export function isCreditsExhaustedError(text: string | undefined): boolean {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  if (!lower.includes("credit")) return false;
+  return (
+    lower.includes("credits are exhausted") ||
+    lower.includes("credits exhausted") ||
+    (lower.includes("credit") && lower.includes("officecli login"))
+  );
+}
+
+function formatLocalTimestamp(ts: string | undefined | null): string {
+  if (!ts) return "";
+  const ms = Date.parse(ts);
+  if (!Number.isFinite(ms)) return ts;
+  const d = new Date(ms);
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 function eventMeta(event: BridgeEvent, t: Translator): string {
   const text = eventText(event) || t("dialogue.terminal.events.fallback");
-  return event.ts ? `${event.ts} · ${text}` : text;
+  const ts = formatLocalTimestamp(event.ts);
+  return ts ? `${ts} · ${text}` : text;
 }
 
 function taskSubject(task: DesktopTask, t: Translator): string {

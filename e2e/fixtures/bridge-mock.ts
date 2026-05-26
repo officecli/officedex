@@ -114,6 +114,10 @@ export async function installBridgeMock(page: Page, options: BridgeMockOptions =
         record("readArtifactFile", args);
         return { data: new Uint8Array() };
       },
+      readLocalImage: async (...args: unknown[]) => {
+        record("readLocalImage", args);
+        return { data: new Uint8Array(), mime: "image/png" };
+      },
       renderPreviewHtml: async (...args: unknown[]) => {
         record("renderPreviewHtml", args);
         return { html: "<html><body>mock</body></html>" };

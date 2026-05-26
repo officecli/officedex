@@ -172,4 +172,39 @@ test.describe("Generation flow", () => {
     const calls = await getBridgeCalls(page, "generate");
     expect(calls[0][0]).toMatchObject({ documentType: "report", sourceFile: "/tmp/source.xlsx" });
   });
+
+  test("Bottom composer on completed image submits continuation with referenceImages", async ({ page }) => {
+    await installBridgeMock(page);
+    await page.goto("/");
+    await expect(page.getByPlaceholder(/enter what you want to generate/i)).toBeVisible();
+
+    await emitBridgeEvent(page, {
+      event_id: "ev-start-ce", task_id: "mock-task-ce", type: "task.started",
+      payload: { document_type: "img", topic: "Hero banner", message: "Task started" },
+    });
+    await emitBridgeEvent(page, {
+      event_id: "ev-done-ce", task_id: "mock-task-ce", type: "task.completed",
+      ts: "2026-05-26T10:30:00+08:00",
+      payload: {
+        message: "Image ready",
+        result: { file_path: "/tmp/hero-banner.png", file_name: "hero-banner.png", document_type: "img" },
+      },
+    });
+
+    await expect(page.getByText(/Generation Complete/i).first()).toBeVisible();
+    await expect(page.getByText("hero-banner.png").first()).toBeVisible();
+
+    const composer = page.getByTestId("continuation-composer");
+    await expect(composer).toBeVisible();
+
+    await composer.getByRole("textbox").fill("Make the sky brighter");
+    await composer.locator("button").click();
+
+    await expect.poll(async () => (await getBridgeCalls(page, "generate")).length).toBe(1);
+    const calls = await getBridgeCalls(page, "generate");
+    expect(calls[0][0]).toMatchObject({
+      documentType: "img",
+      referenceImages: ["/tmp/hero-banner.png"],
+    });
+  });
 });

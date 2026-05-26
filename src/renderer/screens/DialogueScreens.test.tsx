@@ -5,21 +5,20 @@ import { officecli } from "../bridge";
 import { DialogueScreen } from "./DialogueScreens";
 
 function installDomStubs() {
-  if (!window.matchMedia) {
-    Object.defineProperty(window, "matchMedia", {
-      writable: true,
-      value: vi.fn().mockImplementation((query: string) => ({
-        matches: false,
-        media: query,
-        onchange: null,
-        addListener: vi.fn(),
-        removeListener: vi.fn(),
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-        dispatchEvent: vi.fn(),
-      })),
-    });
-  }
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    configurable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
   class ResizeObserverStub {
     observe() {}
     unobserve() {}
@@ -66,6 +65,35 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof DialogueScreen
     onRetry: vi.fn(),
     onPreview: vi.fn(),
     ...overrides,
+  };
+}
+
+function makeCompletedImageTask(overrides: Partial<DesktopTask> = {}): DesktopTask {
+  return {
+    id: "task-img",
+    status: "completed",
+    events: [{ task_id: "task-img", type: "task.completed", payload: { message: "done" } }],
+    artifact: {
+      taskId: "task-img",
+      filePath: "/tmp/banner.png",
+      fileName: "banner.png",
+      documentType: "img",
+    },
+    ...overrides,
+  };
+}
+
+function makeCompletedDocTask(docType: string, fileName: string): DesktopTask {
+  return {
+    id: `task-${docType}`,
+    status: "completed",
+    events: [{ task_id: `task-${docType}`, type: "task.completed", payload: { message: "done" } }],
+    artifact: {
+      taskId: `task-${docType}`,
+      filePath: `/tmp/${fileName}`,
+      fileName,
+      documentType: docType,
+    },
   };
 }
 
@@ -182,5 +210,104 @@ describe("DialogueScreen state machine", () => {
     const openButtons = screen.getAllByRole("button", { name: /open/i });
     expect(openButtons.length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: /show in folder/i })).toBeTruthy();
+  });
+
+  it("failed task with credits-exhausted error shows Sign In button wired to onOpenLogin", () => {
+    const onOpenLogin = vi.fn();
+    const task: DesktopTask = {
+      id: "task-credits",
+      status: "failed",
+      events: [{ task_id: "task-credits", type: "task.failed", payload: { message: "Anonymous credits are exhausted. Run `officecli login`, then buy hosted credits for your account." } }],
+      error: "Anonymous credits are exhausted. Run `officecli login`, then buy hosted credits for your account.",
+    };
+    render(<DialogueScreen {...baseProps({ onOpenLogin })} task={task} />);
+    expect(screen.getByText(/used up the free credits for anonymous use/i)).toBeTruthy();
+    const signInBtn = screen.getByRole("button", { name: /sign in to continue/i });
+    fireEvent.click(signInBtn);
+    expect(onOpenLogin).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Bottom continuation composer — acceptance criteria", () => {
+  it("T1: renders on a completed image task with correct placeholder", () => {
+    const task = makeCompletedImageTask();
+    render(<DialogueScreen {...baseProps()} task={task} />);
+    const composer = screen.getByTestId("continuation-composer");
+    expect(composer).toBeTruthy();
+    expect(screen.getByPlaceholderText(/continue editing this image/i)).toBeTruthy();
+  });
+
+  it("T2: NOT rendered on completed non-image tasks", () => {
+    for (const [docType, fileName] of [
+      ["pptx", "deck.pptx"],
+      ["docx", "letter.docx"],
+      ["xlsx", "data.xlsx"],
+      ["report", "analysis.report"],
+    ] as const) {
+      cleanup();
+      const task = makeCompletedDocTask(docType, fileName);
+      render(<DialogueScreen {...baseProps()} task={task} />);
+      expect(screen.queryByTestId("continuation-composer")).toBeNull();
+    }
+  });
+
+  it("T3: NOT rendered on running/terminal/failed tasks", () => {
+    const runningTask: DesktopTask = {
+      id: "task-run",
+      status: "running",
+      events: [{ task_id: "task-run", type: "task.started", payload: {} }],
+    };
+    render(<DialogueScreen {...baseProps()} task={runningTask} />);
+    expect(screen.queryByTestId("continuation-composer")).toBeNull();
+    cleanup();
+
+    const failedTask: DesktopTask = {
+      id: "task-fail",
+      status: "failed",
+      events: [{ task_id: "task-fail", type: "task.failed", payload: { message: "err" } }],
+    };
+    render(<DialogueScreen {...baseProps()} task={failedTask} />);
+    expect(screen.queryByTestId("continuation-composer")).toBeNull();
+  });
+
+  it("T4: submit button disabled when textarea empty, enabled with non-whitespace", () => {
+    const task = makeCompletedImageTask();
+    render(<DialogueScreen {...baseProps()} task={task} />);
+    const submitBtn = screen.getByTestId("continuation-composer").querySelector("button")!;
+    expect(submitBtn.disabled).toBe(true);
+
+    const textarea = screen.getByPlaceholderText(/continue editing this image/i);
+    fireEvent.change(textarea, { target: { value: "Make sky brighter" } });
+    expect(submitBtn.disabled).toBe(false);
+  });
+
+  it("T5: clicking submit calls onContinueGeneration with artifact and prompt", () => {
+    const onContinueGeneration = vi.fn();
+    const task = makeCompletedImageTask();
+    render(<DialogueScreen {...baseProps({ onContinueGeneration })} task={task} />);
+
+    const textarea = screen.getByPlaceholderText(/continue editing this image/i);
+    fireEvent.change(textarea, { target: { value: "Add a sunset" } });
+    const submitBtn = screen.getByTestId("continuation-composer").querySelector("button")!;
+    fireEvent.click(submitBtn);
+
+    expect(onContinueGeneration).toHaveBeenCalledTimes(1);
+    expect(onContinueGeneration).toHaveBeenCalledWith(task.artifact, "Add a sunset");
+  });
+
+  it("T6: Enter submits, Shift+Enter does not", () => {
+    const onContinueGeneration = vi.fn();
+    const task = makeCompletedImageTask();
+    render(<DialogueScreen {...baseProps({ onContinueGeneration })} task={task} />);
+
+    const textarea = screen.getByPlaceholderText(/continue editing this image/i);
+    fireEvent.change(textarea, { target: { value: "Brighten colors" } });
+
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: true });
+    expect(onContinueGeneration).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
+    expect(onContinueGeneration).toHaveBeenCalledTimes(1);
+    expect(onContinueGeneration).toHaveBeenCalledWith(task.artifact, "Brighten colors");
   });
 });

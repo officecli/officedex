@@ -233,6 +233,40 @@ export function App() {
     setActiveNav("dialogue");
   }, []);
 
+  const continueImageGeneration = useCallback(async (priorArtifact: Artifact, prompt: string) => {
+    if (forceUpdate) {
+      recordError("Update required before continuing", "setup");
+      return;
+    }
+    setBusy(true);
+    clearError();
+    try {
+      const topic = summarizePrompt(prompt);
+      const result = await officecli.generate({
+        documentType: "img",
+        topic,
+        prompt,
+        mode: persistedSettings.defaults.mode,
+        runtimeMode: persistedSettings.defaults.runtimeMode,
+        enableImages: persistedSettings.defaults.enableImages,
+        imageQuality: persistedSettings.defaults.imageQuality,
+        referenceImages: [priorArtifact.filePath],
+      });
+      setState((current) => attachUserInput(current, result.taskId, {
+        prompt,
+        referenceImages: [priorArtifact.filePath],
+      }));
+      setSelectedTaskID({ kind: "task", id: result.taskId });
+      setActiveNav("dialogue");
+    } catch (error) {
+      const text = errorMessage(error);
+      recordError(text, classifyError(text), extractStderr(text));
+    } finally {
+      setBusy(false);
+      nudgeForTaskTransition();
+    }
+  }, [forceUpdate, recordError, clearError, persistedSettings.defaults, nudgeForTaskTransition]);
+
   const retry = useCallback(() => {
     clearError();
     setCapabilityStatus("Reconnecting...");
@@ -338,6 +372,7 @@ export function App() {
             onOpenLogin={openLogin}
             onRetry={retry}
             onPreview={openInlinePreview}
+            onContinueGeneration={continueImageGeneration}
             onForceCancel={(taskId) => {
               setState((current) => applyTaskEvent(current, {
                 type: "task.cancelled",

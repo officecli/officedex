@@ -98,6 +98,7 @@ export const zh: Record<string, string> = {
   "dialogue.completed.open": "打开",
   "dialogue.completed.preview": "预览",
   "dialogue.completed.showInFolder": "在文件夹中显示",
+  "dialogue.completed.continuationPlaceholder": "继续修改这张图。要从零开始生成新图，请开启新对话。",
   "dialogue.completed.askPlaceholder": "输入消息或命令……",
   "dialogue.completed.imagePreviewMask": "点击放大",
   "dialogue.userMessage.imagePreviewMask": "预览",
@@ -115,6 +116,9 @@ export const zh: Record<string, string> = {
   "dialogue.terminal.events.fallback": "Bridge 事件",
   "dialogue.terminal.exportLogs": "导出诊断日志",
   "dialogue.terminal.reportIssue": "上报问题",
+  "dialogue.terminal.creditsExhausted.title": "匿名额度已用完",
+  "dialogue.terminal.creditsExhausted.message": "你已经用完了匿名使用的免费额度。登录后可继续生成，需要更多额度时可为账号添加托管额度。",
+  "dialogue.terminal.creditsExhausted.signIn": "登录以继续",
 
   // Dialogue — stalled
   "dialogue.stalled.title": "任务可能已停滞",

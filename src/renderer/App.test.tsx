@@ -418,6 +418,46 @@ describe("App task flow", () => {
     expect(bridge.generate).toHaveBeenCalledWith(expect.not.objectContaining({ referenceImages: expect.anything() }));
   });
 
+  it("continuation composer on completed image task calls generate with referenceImages and new prompt", async () => {
+    const bridge = installBridgeMock();
+    const { App } = await import("./App");
+
+    render(<App />);
+
+    act(() => {
+      bridge.emit({
+        event_id: "event-img-done",
+        task_id: "task-img-done",
+        type: "task.completed",
+        payload: {
+          result: {
+            file_path: "/tmp/generated.png",
+            file_name: "generated.png",
+            document_type: "img",
+          },
+        },
+      });
+    });
+
+    expect(await screen.findByText("Generation Complete")).toBeTruthy();
+
+    const composer = screen.getByTestId("continuation-composer");
+    expect(composer).toBeTruthy();
+    const textarea = within(composer).getByRole("textbox");
+    fireEvent.change(textarea, { target: { value: "Make the sky brighter" } });
+    const submitBtn = composer.querySelector("button")!;
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
+    expect(bridge.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        documentType: "img",
+        referenceImages: ["/tmp/generated.png"],
+        prompt: "Make the sky brighter",
+      }),
+    );
+  });
+
   it("attaches pasted image files as reference images when documentType is Image", async () => {
     const bridge = installBridgeMock();
     const { App } = await import("./App");
