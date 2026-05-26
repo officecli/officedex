@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { cleanup, render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { message } from "antd";
+import { actDestroy, actWrapper } from "antd/es/message";
 import type { PeekReportContextResult, SubmitReportInput, SubmitReportResult } from "../../shared/types";
 
 const mockSubmitReport = vi.fn<(input: SubmitReportInput) => Promise<SubmitReportResult>>();
@@ -58,6 +60,10 @@ Object.defineProperty(window, "matchMedia", {
   })),
 });
 
+actWrapper((callback) => {
+  act(callback);
+});
+
 describe("ReportIssueDialog", () => {
   beforeEach(() => {
     mockSubmitReport.mockReset();
@@ -66,11 +72,15 @@ describe("ReportIssueDialog", () => {
   });
 
   afterEach(async () => {
+    message.destroy();
     cleanup();
-    // antd `message` portals schedule React work that lands after cleanup;
-    // yield one macrotask so the scheduler drains before vitest tears
-    // down jsdom, otherwise the late callback throws `window is not defined`.
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await act(async () => {
+      // antd `message` portals schedule React work that lands after cleanup;
+      // yield macrotasks so the scheduler drains before vitest tears down jsdom.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    actDestroy();
   });
 
   it("displays context bar with requestId from peekReportContext", async () => {
