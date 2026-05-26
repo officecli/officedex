@@ -97,8 +97,8 @@ func TestLoadUnknownEnumFallsBack(t *testing.T) {
 	if got.Defaults.EnableImages {
 		t.Errorf("EnableImages should preserve explicit false")
 	}
-	if got.Defaults.ImageQuality != types.ImageStandard {
-		t.Errorf("ImageQuality = %v, want standard", got.Defaults.ImageQuality)
+	if got.Defaults.ImageQuality != types.ImagePremium {
+		t.Errorf("ImageQuality = %v, want premium", got.Defaults.ImageQuality)
 	}
 }
 
