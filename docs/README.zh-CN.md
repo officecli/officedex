@@ -1,8 +1,6 @@
 <div align="center">
 
-<img src="../build/appicon.png" alt="OfficeDex" width="120" />
-
-# OfficeDex
+<img src="screenshots/logo-horizontal.png" alt="OfficeDex" width="360" />
 
 ### AI-Native VibeOfficing 平台
 
