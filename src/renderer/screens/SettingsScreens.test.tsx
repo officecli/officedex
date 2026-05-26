@@ -42,7 +42,6 @@ function makeSettings(overrides: Partial<UserSettings> = {}): UserSettings {
     defaults: {
       documentType: "pptx",
       mode: "fast",
-      runtimeMode: "hosted",
       enableImages: true,
       imageQuality: "premium",
       ...(overrides.defaults ?? {}),
@@ -100,7 +99,7 @@ describe("SettingsScreen", () => {
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
     expect(await screen.findByRole("heading", { name: /generation defaults/i })).toBeTruthy();
     expect(screen.getByText("Workspace Output Directory")).toBeTruthy();
-    expect(screen.getAllByText("Core Settings").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Connection").length).toBeGreaterThan(0);
   });
 
   it("changing default document type calls updateSettings with the new value", async () => {
@@ -165,12 +164,11 @@ describe("SettingsScreen", () => {
     });
   });
 
-  it("External runtime selection reveals ProviderForm and lets user edit api key", async () => {
+  it("Provider form is always visible and lets user edit api key", async () => {
     currentSettings = makeSettings({
       defaults: {
         documentType: "pptx",
         mode: "fast",
-        runtimeMode: "custom",
         enableImages: true,
         imageQuality: "premium",
       },
@@ -178,6 +176,14 @@ describe("SettingsScreen", () => {
     const { SettingsScreen } = await import("./SettingsScreens");
     render(<SettingsScreen />);
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
+
+    // Select Custom endpoint to reveal the input fields (Official is default)
+    // Ant Design Select: find the displayed value, click to open dropdown
+    const officialLabel = await screen.findByText("Official");
+    fireEvent.mouseDown(officialLabel);
+
+    const customOption = await screen.findByText("Custom endpoint");
+    fireEvent.click(customOption);
 
     const apiKeyField = await screen.findByPlaceholderText(/api key/i);
     fireEvent.change(apiKeyField, { target: { value: "sk-new-key" } });

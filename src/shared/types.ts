@@ -113,7 +113,6 @@ export interface GenerateInput {
   topic: string;
   prompt: string;
   mode?: "fast" | "best";
-  runtimeMode?: "custom" | "hosted";
   sourceFile?: string;
   referenceImages?: string[];
   outputDir?: string;
@@ -148,6 +147,10 @@ export interface TaskUserInput {
 
 export interface DesktopTask {
   id: string;
+  /** Groups related tasks into a single conversation view. First task uses its own id as conversationId. */
+  conversationId: string;
+  /** The task that this task is a continuation of (for conversation ordering). */
+  parentTaskId?: string;
   status: "starting" | "running" | "question" | "completed" | "failed" | "cancelled";
   documentType?: string;
   topic?: string;
@@ -162,7 +165,6 @@ export interface DesktopTask {
   creditMode?: string;
   lastProgressAt?: number;
   stalledSince?: number;
-  runtimeMode?: "custom" | "hosted";
   runtimeSnapshot?: TaskRuntimeSnapshot;
 }
 
@@ -221,12 +223,11 @@ export type AuthEvent =
 export interface GenerateDefaults {
   documentType: DocumentType;
   mode: "fast" | "best";
-  runtimeMode: "custom" | "hosted";
   enableImages: boolean;
   imageQuality: "standard" | "premium";
 }
 
-export type LlmProviderType = "openai" | "anthropic" | "azure" | "custom";
+export type LlmProviderType = "openai" | "anthropic" | "azure" | "custom" | "official";
 
 export interface LlmProvider {
   type: LlmProviderType;
@@ -420,4 +421,5 @@ export interface ProviderTestResult {
   latencyMs: number;
   url: string;
   error?: string;
+  responseMessage?: string;
 }

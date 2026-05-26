@@ -72,7 +72,6 @@ func TestLoadUnknownEnumFallsBack(t *testing.T) {
 		"defaults": map[string]any{
 			"documentType": "no-such-doc",
 			"mode":         "experimental",
-			"runtimeMode":  "remote",
 			"enableImages": false,
 			"imageQuality": "ultra",
 		},
@@ -90,9 +89,6 @@ func TestLoadUnknownEnumFallsBack(t *testing.T) {
 	}
 	if got.Defaults.Mode != types.ModeFast {
 		t.Errorf("Mode = %v, want fast", got.Defaults.Mode)
-	}
-	if got.Defaults.RuntimeMode != types.RuntimeHosted {
-		t.Errorf("RuntimeMode = %v, want hosted", got.Defaults.RuntimeMode)
 	}
 	if got.Defaults.EnableImages {
 		t.Errorf("EnableImages should preserve explicit false")

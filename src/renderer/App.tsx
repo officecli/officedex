@@ -1,9 +1,9 @@
 import { ConfigProvider, message } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import enUS from "antd/locale/en_US";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Artifact, BridgeEvent, GenerateInput, PreviewGrant } from "../shared/types";
-import { applyTaskEvent, attachUserInput, createInitialTaskState, deleteTask, type TaskState } from "./taskState";
+import { applyTaskEvent, attachUserInput, createInitialTaskState, deleteTask, getConversationTasks, type TaskState } from "./taskState";
 import { officecli } from "./bridge";
 import { theme } from "./designTokens";
 import type { NavKey } from "./defaults";
@@ -25,6 +25,16 @@ type SelectedTask =
   | { kind: "none" }
   | { kind: "task"; id: string };
 
+type PendingGenerate = {
+  localTaskId: string;
+  input: {
+    prompt: string;
+    sourceFile?: string;
+    referenceImages?: string[];
+  };
+  parentTaskId?: string;
+};
+
 export function App() {
   const [state, setState] = useState<TaskState>(() => createInitialTaskState());
   const [selectedTaskID, setSelectedTaskID] = useState<SelectedTask>({ kind: "auto" });
@@ -36,6 +46,7 @@ export function App() {
   const [errorDetails, setErrorDetails] = useState<string>();
   const [connectAttempt, setConnectAttempt] = useState(0);
   const [previewGrant, setPreviewGrant] = useState<PreviewGrant | null>(null);
+  const pendingGenerateRef = useRef<PendingGenerate | null>(null);
   const { settings: persistedSettings, defaultWorkspaceDir, loading: settingsLoading } = useSettings();
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const appUpdate = useAppUpdate();
@@ -60,7 +71,7 @@ export function App() {
   useEffect(() => {
     if (settingsLoading) return;
     refreshCredit();
-  }, [persistedSettings.defaults.runtimeMode, settingsLoading, refreshCredit]);
+  }, [persistedSettings.llmProvider, settingsLoading, refreshCredit]);
 
   useEffect(() => {
     if (forceUpdate) {
@@ -96,8 +107,28 @@ export function App() {
         setCapabilityStatus(`${message} — reconnecting…`);
         return;
       }
-      setState((current) => applyTaskEvent(current, event));
+      const pending = pendingGenerateRef.current;
+      const shouldReplaceLocalTask = Boolean(
+        event.task_id &&
+        pending &&
+        event.task_id !== pending.localTaskId,
+      );
+      setState((current) => {
+        let next = applyTaskEvent(current, event);
+        if (event.task_id && pending && shouldReplaceLocalTask) {
+          next = deleteTask(next, pending.localTaskId);
+          next = attachUserInput(next, event.task_id, pending.input, pending.parentTaskId);
+        }
+        return next;
+      });
       if (event.task_id) {
+        if (pending && shouldReplaceLocalTask) {
+          pendingGenerateRef.current = null;
+          setSelectedTaskID({ kind: "task", id: event.task_id });
+          setBusy(false);
+        } else {
+          setSelectedTaskID((current) => current.kind === "none" ? { kind: "task", id: event.task_id! } : current);
+        }
         setActiveNav("dialogue");
       }
       if (event.type === "task.completed" || event.type === "task.failed" || event.type === "task.cancelled") {
@@ -134,6 +165,19 @@ export function App() {
             if (next.tasks[entry.taskId]) continue;
             for (const event of entry.events) {
               next = applyTaskEvent(next, event);
+            }
+            // After replaying persisted events, if the task is still
+            // running or starting, it means the task was interrupted
+            // (e.g. force-quit while generating). Mark it cancelled so
+            // the UI does not show a perpetual loading spinner.
+            const task = next.tasks[entry.taskId];
+            if (task && (task.status === "running" || task.status === "starting")) {
+              next = applyTaskEvent(next, {
+                type: "task.cancelled",
+                task_id: entry.taskId,
+                ts: new Date().toISOString(),
+                payload: { message: "Task was interrupted when the application quit" },
+              });
             }
           }
           return next;
@@ -177,21 +221,21 @@ export function App() {
     return () => clearInterval(interval);
   }, []);
 
-  const selectedTask = useMemo(() => {
-    switch (selectedTaskID.kind) {
-      case "none":
-        return undefined;
-      case "task":
-        return state.tasks[selectedTaskID.id];
-      case "auto":
-        return firstTaskID ? state.tasks[firstTaskID] : undefined;
+  const conversationId = useMemo(() => {
+    if (selectedTaskID.kind === "task") {
+      return state.tasks[selectedTaskID.id]?.conversationId;
     }
+    if (selectedTaskID.kind === "auto" && firstTaskID) {
+      return state.tasks[firstTaskID]?.conversationId;
+    }
+    return undefined;
   }, [selectedTaskID, state.tasks, firstTaskID]);
-  const displayTask = useMemo(() => selectedTask, [selectedTask]);
-  const artifacts = useMemo(() => {
-    const live = state.artifacts;
-    return displayTask?.artifact && !live.some((artifact) => artifact.filePath === displayTask.artifact?.filePath) ? [displayTask.artifact, ...live] : live;
-  }, [displayTask, state.artifacts]);
+
+  const conversationTasks = useMemo(() => {
+    if (!conversationId) return [];
+    return getConversationTasks(state, conversationId);
+  }, [state, conversationId]);
+  const artifacts = useMemo(() => state.artifacts, [state.artifacts]);
   const tasks = useMemo(() => state.taskOrder.map((taskID) => state.tasks[taskID]).filter(Boolean), [state]);
 
   async function submit(values: GenerateInput) {
@@ -199,19 +243,43 @@ export function App() {
       recordError("Update required before continuing", "setup");
       return;
     }
-    setBusy(true);
     clearError();
-    try {
-      const topic = values.topic || summarizePrompt(values.prompt);
-      const result = await officecli.generate({ ...values, topic });
-      setState((current) => attachUserInput(current, result.taskId, {
+    const topic = values.topic || summarizePrompt(values.prompt);
+    const localTaskId = createLocalTaskId();
+    pendingGenerateRef.current = {
+      localTaskId,
+      input: {
         prompt: values.prompt,
         sourceFile: values.sourceFile,
         referenceImages: values.referenceImages,
-      }));
-      setSelectedTaskID({ kind: "task", id: result.taskId });
-      setActiveNav("dialogue");
+      },
+    };
+    setState((current) => attachUserInput(applyTaskEvent(current, {
+      task_id: localTaskId,
+      type: "task.started",
+      ts: new Date().toISOString(),
+      payload: {
+        document_type: values.documentType,
+        topic,
+        message: "Task submitted",
+      },
+    }), localTaskId, pendingGenerateRef.current!.input));
+    setSelectedTaskID({ kind: "task", id: localTaskId });
+    setActiveNav("dialogue");
+    setBusy(false);
+    try {
+      const result = await officecli.generate({ ...values, topic });
+      if (pendingGenerateRef.current?.localTaskId === localTaskId && result.taskId) {
+        const pending = pendingGenerateRef.current;
+        pendingGenerateRef.current = null;
+        setState((current) => attachUserInput(deleteTask(current, localTaskId), result.taskId, pending.input));
+        setSelectedTaskID({ kind: "task", id: result.taskId });
+        setActiveNav("dialogue");
+      }
     } catch (error) {
+      if (pendingGenerateRef.current?.localTaskId !== localTaskId) return;
+      pendingGenerateRef.current = null;
+      setState((current) => deleteTask(current, localTaskId));
       const text = errorMessage(error);
       recordError(text, classifyError(text), extractStderr(text));
       setActiveNav("dialogue");
@@ -233,39 +301,64 @@ export function App() {
     setActiveNav("dialogue");
   }, []);
 
-  const continueImageGeneration = useCallback(async (priorArtifact: Artifact, prompt: string) => {
+  const continueGeneration = useCallback(async (documentType: string, prompt: string, referenceImages?: string[]) => {
     if (forceUpdate) {
       recordError("Update required before continuing", "setup");
       return;
     }
-    setBusy(true);
+    const parentTaskId = conversationTasks.at(-1)?.id;
     clearError();
+    const topic = summarizePrompt(prompt);
+    const localTaskId = createLocalTaskId();
+    pendingGenerateRef.current = {
+      localTaskId,
+      input: {
+        prompt,
+        referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
+      },
+      parentTaskId,
+    };
+    setState((current) => attachUserInput(applyTaskEvent(current, {
+      task_id: localTaskId,
+      type: "task.started",
+      ts: new Date().toISOString(),
+      payload: {
+        document_type: documentType,
+        topic,
+        message: "Task submitted",
+      },
+    }), localTaskId, pendingGenerateRef.current!.input, parentTaskId));
+    setSelectedTaskID({ kind: "task", id: localTaskId });
+    setActiveNav("dialogue");
+    setBusy(false);
     try {
-      const topic = summarizePrompt(prompt);
       const result = await officecli.generate({
-        documentType: "img",
+        documentType: documentType as GenerateInput["documentType"],
         topic,
         prompt,
         mode: persistedSettings.defaults.mode,
-        runtimeMode: persistedSettings.defaults.runtimeMode,
         enableImages: persistedSettings.defaults.enableImages,
         imageQuality: persistedSettings.defaults.imageQuality,
-        referenceImages: [priorArtifact.filePath],
+        referenceImages,
       });
-      setState((current) => attachUserInput(current, result.taskId, {
-        prompt,
-        referenceImages: [priorArtifact.filePath],
-      }));
-      setSelectedTaskID({ kind: "task", id: result.taskId });
-      setActiveNav("dialogue");
+      if (pendingGenerateRef.current?.localTaskId === localTaskId && result.taskId) {
+        const pending = pendingGenerateRef.current;
+        pendingGenerateRef.current = null;
+        setState((current) => attachUserInput(deleteTask(current, localTaskId), result.taskId, pending.input, parentTaskId));
+        setSelectedTaskID({ kind: "task", id: result.taskId });
+        setActiveNav("dialogue");
+      }
     } catch (error) {
+      if (pendingGenerateRef.current?.localTaskId !== localTaskId) return;
+      pendingGenerateRef.current = null;
+      setState((current) => deleteTask(current, localTaskId));
       const text = errorMessage(error);
       recordError(text, classifyError(text), extractStderr(text));
     } finally {
       setBusy(false);
       nudgeForTaskTransition();
     }
-  }, [forceUpdate, recordError, clearError, persistedSettings.defaults, nudgeForTaskTransition]);
+  }, [forceUpdate, recordError, clearError, persistedSettings.defaults, nudgeForTaskTransition, conversationTasks]);
 
   const retry = useCallback(() => {
     clearError();
@@ -350,7 +443,7 @@ export function App() {
         errorKind={lastError ? errorKind : undefined}
         inspector={sidePanel}
         credit={credit}
-        runtimeMode={persistedSettings.defaults.runtimeMode}
+        hasCustomProvider={persistedSettings.llmProvider !== null}
         tasks={tasks}
         selectedTaskId={selectedTaskID.kind === "task" ? selectedTaskID.id : selectedTaskID.kind === "auto" ? firstTaskID : undefined}
         onNavChange={setActiveNav}
@@ -360,7 +453,8 @@ export function App() {
       >
         {activeNav === "dialogue" ? (
           <DialogueScreen
-            task={displayTask}
+            tasks={conversationTasks}
+            conversationId={conversationId}
             artifacts={artifacts}
             busy={busy}
             lastError={lastError}
@@ -372,7 +466,7 @@ export function App() {
             onOpenLogin={openLogin}
             onRetry={retry}
             onPreview={openInlinePreview}
-            onContinueGeneration={continueImageGeneration}
+            onContinueGeneration={continueGeneration}
             onForceCancel={(taskId) => {
               setState((current) => applyTaskEvent(current, {
                 type: "task.cancelled",
@@ -402,6 +496,10 @@ export function App() {
 function summarizePrompt(prompt: string) {
   const normalized = prompt.trim().replace(/\s+/g, " ");
   return normalized.length > 24 ? `${normalized.slice(0, 24)}...` : normalized || "Untitled generation";
+}
+
+function createLocalTaskId(): string {
+  return `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function errorMessage(error: unknown): string {

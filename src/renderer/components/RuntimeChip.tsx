@@ -42,7 +42,7 @@ export function RuntimeChip({ onClick }: RuntimeChipProps) {
 
   if (snapshot.runtimeMode === "hosted") {
     return (
-      <Tooltip title={t("runtime.chip.tooltip.hosted")}>
+      <Tooltip title={t("runtime.chip.tooltip.official")}>
         <Tag
           color="success"
           icon={<CloudOutlined />}
@@ -50,7 +50,7 @@ export function RuntimeChip({ onClick }: RuntimeChipProps) {
           onClick={onClick}
           style={onClick ? { cursor: "pointer" } : undefined}
         >
-          {t("runtime.chip.hosted")}
+          {t("runtime.chip.official")}
         </Tag>
       </Tooltip>
     );

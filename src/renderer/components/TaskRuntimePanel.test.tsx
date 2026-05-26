@@ -6,10 +6,11 @@ import type { DesktopTask } from "../../shared/types";
 function makeTask(overrides: Partial<DesktopTask> = {}): DesktopTask {
   return {
     id: "task-1",
+    conversationId: "task-1",
     status: "completed",
     events: [],
     ...overrides,
-  };
+  } as DesktopTask;
 }
 
 describe("TaskRuntimePanel", () => {
@@ -42,13 +43,13 @@ describe("TaskRuntimePanel", () => {
     expect(screen.queryByText("sk-abcdefghijklmnopqrstuvwxyz0123456789ABCD")).toBeNull();
   });
 
-  it("renders only mode badge for a hosted snapshot (no provider rows)", () => {
+  it("renders only mode badge for an official provider snapshot (no provider rows)", () => {
     const task = makeTask({
       runtimeSnapshot: { mode: "hosted" },
     });
     const { container } = render(<TaskRuntimePanel task={task} />);
 
-    expect(screen.getByText("Hosted")).toBeTruthy();
+    expect(screen.getByText("Official")).toBeTruthy();
     const rows = container.querySelectorAll(".effective-row");
     expect(rows.length).toBe(1);
   });

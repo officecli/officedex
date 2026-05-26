@@ -304,7 +304,6 @@ const (
 type GenerateDefaults struct {
 	DocumentType DocumentType `json:"documentType"`
 	Mode         GenerateMode `json:"mode"`
-	RuntimeMode  RuntimeMode  `json:"runtimeMode"`
 	EnableImages bool         `json:"enableImages"`
 	ImageQuality ImageQuality `json:"imageQuality"`
 }
@@ -316,9 +315,10 @@ const (
 	LlmAnthropic LlmProviderType = "anthropic"
 	LlmAzure     LlmProviderType = "azure"
 	LlmCustom    LlmProviderType = "custom"
+	LlmOfficial  LlmProviderType = "official"
 )
 
-var LlmProviderTypes = []LlmProviderType{LlmOpenAI, LlmAnthropic, LlmAzure, LlmCustom}
+var LlmProviderTypes = []LlmProviderType{LlmOpenAI, LlmAnthropic, LlmAzure, LlmCustom, LlmOfficial}
 
 type LlmProvider struct {
 	Type    LlmProviderType `json:"type"`
@@ -421,14 +421,15 @@ type ProviderSnapshot struct {
 	APIKeyLength int             `json:"apiKeyLength"`
 }
 
-// ProviderTestResult is the outcome of a TestProvider probe. For HTTP-based
-// providers HTTPStatus reflects the response code; for the custom TCP/TLS
-// reachability probe it is left at 0 and OK indicates whether the host
-// accepted a connection.
+// ProviderTestResult is the outcome of a TestProvider probe. The test sends a
+// real "hi" chat completion to verify the LLM can respond. For bridge-based
+// probes (official/hosted mode) HTTPStatus is left at 0 and OK indicates
+// whether the bridge initialized successfully.
 type ProviderTestResult struct {
-	OK         bool   `json:"ok"`
-	HTTPStatus int    `json:"httpStatus"`
-	LatencyMs  int64  `json:"latencyMs"`
-	URL        string `json:"url"`
-	Error      string `json:"error,omitempty"`
+	OK              bool   `json:"ok"`
+	HTTPStatus      int    `json:"httpStatus"`
+	LatencyMs       int64  `json:"latencyMs"`
+	URL             string `json:"url"`
+	Error           string `json:"error,omitempty"`
+	ResponseMessage string `json:"responseMessage,omitempty"`
 }

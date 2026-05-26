@@ -45,7 +45,6 @@ const DEFAULT_BROWSER_SETTINGS: UserSettings = {
   defaults: {
     documentType: "pptx",
     mode: "fast",
-    runtimeMode: "hosted",
     enableImages: true,
     imageQuality: "standard",
   },
@@ -160,7 +159,7 @@ function createBrowserPreviewAPI(): DesktopAPI {
     },
     getTaskHistory: async (): Promise<TaskHistoryEntry[]> => [],
     getBridgeRuntimeSnapshot: async () => ({
-      runtimeMode: "hosted",
+      runtimeMode: "custom",
       binaryPath: "",
       envApplied: false,
     }),
@@ -252,7 +251,6 @@ function adaptSettingsPatch(patch: Partial<UserSettings>): settingsNS.Patch {
     const d: Record<string, unknown> = {};
     if (patch.defaults.documentType !== undefined) d.documentType = patch.defaults.documentType;
     if (patch.defaults.mode !== undefined) d.mode = patch.defaults.mode;
-    if (patch.defaults.runtimeMode !== undefined) d.runtimeMode = patch.defaults.runtimeMode;
     if (patch.defaults.enableImages !== undefined) d.enableImages = patch.defaults.enableImages;
     if (patch.defaults.imageQuality !== undefined) d.imageQuality = patch.defaults.imageQuality;
     out.defaults = d;
@@ -439,6 +437,7 @@ function createWailsAPI(): DesktopAPI {
         latencyMs: typeof raw?.latencyMs === "number" ? raw.latencyMs : 0,
         url: typeof raw?.url === "string" ? raw.url : "",
         ...(raw?.error ? { error: raw.error } : {}),
+        ...(raw?.responseMessage ? { responseMessage: raw.responseMessage } : {}),
       };
     },
   };
@@ -471,7 +470,7 @@ function normaliseAppUpdateCheckResult(raw: unknown): AppUpdateCheckResult {
 function normaliseBridgeRuntimeSnapshot(raw: Partial<BridgeRuntimeSnapshot> | null | undefined): BridgeRuntimeSnapshot {
   const value = raw ?? {};
   const raw_mode = value.runtimeMode as string | undefined;
-  const mode: BridgeRuntimeSnapshot["runtimeMode"] = (raw_mode === "custom" || raw_mode === "external") ? "custom" : "hosted";
+  const mode: BridgeRuntimeSnapshot["runtimeMode"] = (raw_mode === "custom") ? "custom" : "hosted";
   const provider = normaliseProviderSnapshot(value.provider ?? null);
   const snap: BridgeRuntimeSnapshot = {
     runtimeMode: mode,

@@ -6,7 +6,6 @@ export type NavKey = "dialogue" | "tasks" | "settings" | "login";
 export const defaultGenerateInput: Partial<GenerateInput> = {
   documentType: "pptx",
   mode: "fast",
-  runtimeMode: "hosted",
   enableImages: true,
 };
 

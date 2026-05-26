@@ -82,7 +82,7 @@ describe("deriveCreditInfo", () => {
     expect(credit).toEqual({ displayMode: "balance", used: 0, total: 42, planLabel: "Pro" });
   });
 
-  it("logged_in + hostedCreditBalance without planName → falls back to 'Hosted credits'", () => {
+  it("logged_in + hostedCreditBalance without planName → falls back to 'Official credits'", () => {
     const credit = deriveCreditInfo(
       makeStatus({
         mode: "logged_in",
@@ -90,7 +90,7 @@ describe("deriveCreditInfo", () => {
         accessMode: "",
       }),
     );
-    expect(credit).toEqual({ displayMode: "balance", used: 0, total: 12, planLabel: "Hosted credits" });
+    expect(credit).toEqual({ displayMode: "balance", used: 0, total: 12, planLabel: "Official credits" });
   });
 
   it("anonymous with no anonymous-credits line → 0/0 fallback with 'Credits' label", () => {

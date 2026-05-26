@@ -1,6 +1,6 @@
 {
   "name": "officedex",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "The AI desktop workspace for documents, slides, and spreadsheets. Wails v2 + React 19 client for OfficeCLI.",
   "license": "GPL-3.0-only",
   "homepage": "https://github.com/officecli/officedex#readme",
@@ -20,7 +20,7 @@
     "dev": "wails dev",
     "dev:browser": "vite --host=0.0.0.0 --port=3100",
     "build": "wails build -ldflags \"-X main.appVersion=$(node -p 'require(`./package.json`).version')\"",
-    "dist:mac": "npm run prefetch:officecli && wails build -ldflags \"-X main.appVersion=$(node -p 'require(`./package.json`).version')\" && node scripts/notarize.mjs build/bin/OfficeDex.app",
+    "dist:mac": "npm run prefetch:officecli && wails build -ldflags \"-X main.appVersion=$(node -p 'require(`./package.json`).version')\" && node scripts/bundle-runtime.mjs && node scripts/notarize.mjs build/bin/OfficeDex.app",
     "dist:win": "npm run prefetch:officecli && wails build -platform windows/amd64 -ldflags \"-X main.appVersion=$(node -p 'require(`./package.json`).version')\"",
     "test": "vitest run",
     "test:all": "npm run lint && npx vitest run && go test ./... -count=1 && npm run test:e2e",

@@ -3,6 +3,7 @@ package bridge
 import (
 	"encoding/json"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"officedex/internal/types"
@@ -17,22 +18,62 @@ var proxyEnvSupplier func() []string
 // SetProxyEnvSupplier registers the proxy env supplier. Pass nil to clear.
 func SetProxyEnvSupplier(fn func() []string) { proxyEnvSupplier = fn }
 
+// proxyClearKeys lists proxy-related env-var keys (upper-case) that should be
+// stripped from the child-process environment when no proxy is configured in
+// OfficeDex settings. Stripping these prevents an unintentional system-level
+// proxy leak that can block the officecli subprocess from reaching the hosted
+// LLM service.
+var proxyClearKeys = []string{
+	"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY",
+}
+
+// stripProxyKV removes all proxy-related entries (case-insensitive match
+// against proxyClearKeys) from env. Used to erase system-level proxy settings
+// so the subprocess gets a clean baseline.
+func stripProxyKV(env []string) []string {
+	filtered := env[:0]
+	for _, kv := range env {
+		key, _, ok := strings.Cut(kv, "=")
+		if !ok {
+			filtered = append(filtered, kv)
+			continue
+		}
+		if !slices.Contains(proxyClearKeys, strings.ToUpper(key)) {
+			filtered = append(filtered, kv)
+		}
+	}
+	return filtered
+}
+
 // BuildBridgeEnv returns the child-process environment with the three
 // officecli SKIP_* flags baked in. extra is a list of KEY=VALUE strings that
 // override any earlier entry with the same key (mirroring shell semantics).
+//
+// System-level proxy env vars (HTTP_PROXY, etc.) are stripped before the
+// OfficeDex-configured proxy (if any) is injected, so the subprocess always
+// uses the proxy explicitly set in Settings – never an accidental system
+// proxy leak.
 func BuildBridgeEnv(extra []string) []string {
 	base := append([]string{}, syscallEnviron()...)
+	// Collect proxy env from the supplier once. When nil or no proxy is
+	// configured, strip any system-level proxy vars so the subprocess uses a
+	// direct connection.
+	var suppliedProxy []string
+	if proxyEnvSupplier != nil {
+		suppliedProxy = proxyEnvSupplier()
+	}
+	if suppliedProxy == nil {
+		base = stripProxyKV(base)
+	}
 	base = appendKV(base, "OFFICECLI_SKIP_SKILL_PREFLIGHT", "1")
 	base = appendKV(base, "OFFICECLI_SKIP_PUBLISH_SETUP", "1")
 	base = appendKV(base, "OFFICECLI_SKIP_UPDATE_CHECK", "1")
-	if proxyEnvSupplier != nil {
-		for _, kv := range proxyEnvSupplier() {
-			key, _, ok := strings.Cut(kv, "=")
-			if !ok {
-				continue
-			}
-			base = setKV(base, key, kv)
+	for _, kv := range suppliedProxy {
+		key, _, ok := strings.Cut(kv, "=")
+		if !ok {
+			continue
 		}
+		base = setKV(base, key, kv)
 	}
 	for _, kv := range extra {
 		key, _, ok := strings.Cut(kv, "=")

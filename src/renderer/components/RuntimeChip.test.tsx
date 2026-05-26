@@ -34,11 +34,11 @@ function snapshot(overrides: Partial<BridgeRuntimeSnapshot>): BridgeRuntimeSnaps
 }
 
 describe("RuntimeChip", () => {
-  it("renders Hosted tag when in hosted mode", async () => {
+  it("renders Official tag when in hosted mode", async () => {
     mockGetSnapshot.mockResolvedValueOnce(snapshot({ runtimeMode: "hosted" }));
     render(<RuntimeChip />);
     await waitFor(() => {
-      expect(screen.getByText(/Hosted|托管/)).toBeTruthy();
+      expect(screen.getByText(/Official|官方/)).toBeTruthy();
     });
   });
 

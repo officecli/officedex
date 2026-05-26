@@ -7,7 +7,6 @@ const FALLBACK: UserSettings = {
   defaults: {
     documentType: "pptx",
     mode: "fast",
-    runtimeMode: "hosted",
     enableImages: true,
     imageQuality: "premium",
   },

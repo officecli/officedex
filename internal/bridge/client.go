@@ -32,6 +32,7 @@ import (
 // Defaults mirror the TypeScript constructor defaults.
 const (
 	DefaultRequestTimeout       = 30 * time.Second
+	DefaultTaskInvokeTimeout    = 30 * time.Minute
 	DefaultMaxReconnectAttempts = 8
 	DefaultBaseReconnectDelay   = 1 * time.Second
 	maxReconnectDelay           = 30 * time.Second
@@ -50,6 +51,7 @@ type Options struct {
 	Env                  []string
 	CreateTransport      TransportFactory
 	RequestTimeout       time.Duration
+	TaskInvokeTimeout    time.Duration
 	DisableAutoReconnect bool
 	MaxReconnectAttempts int
 	BaseReconnectDelay   time.Duration
@@ -98,6 +100,9 @@ type pendingRequest struct {
 func New(opts Options) *Client {
 	if opts.RequestTimeout == 0 {
 		opts.RequestTimeout = DefaultRequestTimeout
+	}
+	if opts.TaskInvokeTimeout == 0 {
+		opts.TaskInvokeTimeout = DefaultTaskInvokeTimeout
 	}
 	if opts.MaxReconnectAttempts == 0 {
 		opts.MaxReconnectAttempts = DefaultMaxReconnectAttempts
@@ -240,6 +245,10 @@ func (c *Client) Close() {
 // Request sends a JSON-RPC call and waits for the response. Returns the raw
 // `result` payload, which the caller decodes into a typed shape.
 func (c *Client) Request(ctx context.Context, method string, params any) ([]byte, error) {
+	return c.requestWithTimeout(ctx, method, params, c.options.RequestTimeout)
+}
+
+func (c *Client) requestWithTimeout(ctx context.Context, method string, params any, timeout time.Duration) ([]byte, error) {
 	c.mu.Lock()
 	if c.transport == nil {
 		tail := strings.TrimSpace(c.stderrBuffer)
@@ -255,7 +264,7 @@ func (c *Client) Request(ctx context.Context, method string, params any) ([]byte
 	transport := c.transport
 	key := fmt.Sprintf("%d", id)
 	respChan := make(chan rpcResponse, 1)
-	timer := time.AfterFunc(c.options.RequestTimeout, func() {
+	timer := time.AfterFunc(timeout, func() {
 		c.mu.Lock()
 		pending, ok := c.pending[key]
 		if ok {
@@ -366,13 +375,13 @@ func (c *Client) InvokeGenerate(ctx context.Context, input types.GenerateInput) 
 	for k, v := range buildAttachmentArgs(input) {
 		args[k] = v
 	}
-	raw, err := c.Request(ctx, "task/invoke", map[string]any{
+	raw, err := c.requestWithTimeout(ctx, "task/invoke", map[string]any{
 		"session_id":    sessionID,
 		"tool":          "office.generate",
 		"interactive":   true,
 		"output_format": "bundle",
 		"args":          args,
-	})
+	}, c.options.TaskInvokeTimeout)
 	if err != nil {
 		return TaskInvokeResult{}, err
 	}

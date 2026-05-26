@@ -9,7 +9,6 @@ const baseSettings: UserSettings = {
   defaults: {
     documentType: "pptx",
     mode: "fast",
-    runtimeMode: "hosted",
     enableImages: true,
     imageQuality: "premium",
   },
@@ -36,6 +35,12 @@ beforeEach(() => {
       }),
     });
   }
+  class ResizeObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  vi.stubGlobal("ResizeObserver", ResizeObserverStub);
   updateSettingsSpy = vi.fn(async (patch: Partial<UserSettings>) => ({
     ...baseSettings,
     ...patch,
@@ -58,7 +63,7 @@ describe("OnboardingScreen", () => {
     expect(screen.getByText("Generation defaults")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /next/i }));
 
-    expect(await screen.findByText("Workspace & runtime")).toBeTruthy();
+    expect(await screen.findByText("Provider & workspace")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /finish/i }));
 
     await waitFor(() => expect(updateSettingsSpy).toHaveBeenCalledTimes(1));
@@ -67,7 +72,6 @@ describe("OnboardingScreen", () => {
     const patch = updateSettingsSpy.mock.calls[0][0] as Partial<UserSettings>;
     expect(patch.defaults?.documentType).toBe("pptx");
     expect(patch.defaults?.mode).toBe("fast");
-    expect(patch.defaults?.runtimeMode).toBe("hosted");
     expect(patch.outputDir).toBeNull();
     expect(typeof patch.onboardingCompletedAt).toBe("string");
     expect(patch.onboardingCompletedAt && new Date(patch.onboardingCompletedAt).toString()).not.toBe("Invalid Date");
@@ -89,39 +93,42 @@ describe("OnboardingScreen", () => {
     const onComplete = vi.fn();
     render(<OnboardingScreen settings={baseSettings} defaultWorkspaceDir="/tmp/default-workspace" onComplete={onComplete} />);
     fireEvent.click(screen.getByRole("button", { name: /next/i }));
-    expect(await screen.findByText("Workspace & runtime")).toBeTruthy();
+    expect(await screen.findByText("Provider & workspace")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /back/i }));
     expect(await screen.findByText("Generation defaults")).toBeTruthy();
     expect(onComplete).not.toHaveBeenCalled();
   });
 
-  it("shows ProviderForm only when custom runtime is selected and persists provider on finish", async () => {
+  it("ProviderForm is always visible in step 1 and persists provider on finish", async () => {
     const onComplete = vi.fn();
     render(<OnboardingScreen settings={baseSettings} defaultWorkspaceDir="/tmp/default-workspace" onComplete={onComplete} />);
     fireEvent.click(screen.getByRole("button", { name: /next/i }));
-    expect(await screen.findByText("Workspace & runtime")).toBeTruthy();
+    expect(await screen.findByText("Provider & workspace")).toBeTruthy();
 
-    // hosted is default, ProviderForm should be hidden
-    expect(screen.queryByPlaceholderText(/api key/i)).toBeNull();
+    // Select Custom endpoint to reveal the input fields (Official is default)
+    // Ant Design Select: find the displayed value, click to open dropdown
+    const officialLabel = await screen.findByText("Official");
+    fireEvent.mouseDown(officialLabel);
 
-    fireEvent.click(screen.getByRole("radio", { name: /custom/i }));
+    const customOption = await screen.findByText("Custom endpoint");
+    fireEvent.click(customOption);
+
     const apiKeyField = await screen.findByPlaceholderText(/api key/i);
     fireEvent.change(apiKeyField, { target: { value: "sk-test-key" } });
     fireEvent.click(screen.getByRole("button", { name: /finish/i }));
 
     await waitFor(() => expect(updateSettingsSpy).toHaveBeenCalledTimes(1));
     const patch = updateSettingsSpy.mock.calls[0][0] as Partial<UserSettings>;
-    expect(patch.defaults?.runtimeMode).toBe("custom");
     expect(patch.llmProvider).not.toBeNull();
     expect(patch.llmProvider?.apiKey).toBe("sk-test-key");
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
   });
 
-  it("hosted runtime finish never sends an llmProvider payload", async () => {
+  it("empty provider finish never sends an llmProvider payload", async () => {
     const onComplete = vi.fn();
     render(<OnboardingScreen settings={baseSettings} defaultWorkspaceDir="/tmp/default-workspace" onComplete={onComplete} />);
     fireEvent.click(screen.getByRole("button", { name: /next/i }));
-    expect(await screen.findByText("Workspace & runtime")).toBeTruthy();
+    expect(await screen.findByText("Provider & workspace")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /finish/i }));
 
     await waitFor(() => expect(updateSettingsSpy).toHaveBeenCalledTimes(1));

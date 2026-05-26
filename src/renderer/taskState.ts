@@ -17,15 +17,39 @@ export function deleteTask(state: TaskState, taskID: string): TaskState {
   return { tasks, taskOrder, artifacts };
 }
 
-export function attachUserInput(state: TaskState, taskID: string, input: TaskUserInput): TaskState {
+export function attachUserInput(
+  state: TaskState,
+  taskID: string,
+  input: TaskUserInput,
+  parentTaskId?: string,
+): TaskState {
+  const parentTask = parentTaskId ? state.tasks[parentTaskId] : undefined;
+  const conversationId = parentTask ? parentTask.conversationId : taskID;
   const previous = state.tasks[taskID] || {
     id: taskID,
+    conversationId,
     status: "starting" as const,
     events: [],
   };
-  const tasks = { ...state.tasks, [taskID]: { ...previous, userInput: input } };
+  const tasks = {
+    ...state.tasks,
+    [taskID]: {
+      ...previous,
+      conversationId: previous.conversationId || conversationId,
+      parentTaskId: parentTaskId || previous.parentTaskId,
+      userInput: input,
+    },
+  };
   const taskOrder = state.taskOrder.includes(taskID) ? state.taskOrder : [taskID, ...state.taskOrder];
   return { ...state, tasks, taskOrder };
+}
+
+/** Group tasks by conversationId and return them in taskOrder sequence per conversation. */
+export function getConversationTasks(state: TaskState, conversationId: string): DesktopTask[] {
+  return state.taskOrder
+    .map((id) => state.tasks[id])
+    .filter((task): task is DesktopTask => Boolean(task) && task.conversationId === conversationId)
+    .reverse(); // taskOrder is newest-first; reverse to show oldest-first in conversation
 }
 
 export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState {
@@ -33,6 +57,7 @@ export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState 
   const taskID = event.task_id;
   const previous = state.tasks[taskID] || {
     id: taskID,
+    conversationId: taskID,
     status: "starting",
     events: [],
   };
@@ -56,9 +81,8 @@ export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState 
   }
   if (event.type === "task.started") {
     const mode = stringPayload(event, "runtime_mode");
-    if (mode === "custom" || mode === "external" || mode === "hosted") {
-      nextTask.runtimeMode = mode === "external" ? "custom" : mode;
-      const snapshot = runtimeSnapshotFromPayload(nextTask.runtimeMode, event.payload);
+    if (mode === "custom" || mode === "hosted") {
+      const snapshot = runtimeSnapshotFromPayload(mode, event.payload);
       if (snapshot) {
         nextTask.runtimeSnapshot = snapshot;
       }

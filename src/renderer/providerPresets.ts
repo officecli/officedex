@@ -22,4 +22,8 @@ export const providerPresets: Record<LlmProviderType, ProviderPreset> = {
     defaultBaseUrl: "",
     defaultModel: "",
   },
+  official: {
+    defaultBaseUrl: "",
+    defaultModel: "",
+  },
 };

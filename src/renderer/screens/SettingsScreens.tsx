@@ -74,7 +74,6 @@ export function SettingsScreen({ onCreditRefresh }: { onCreditRefresh?: () => vo
           defaults: {
             documentType: "pptx",
             mode: "fast",
-            runtimeMode: "hosted",
             enableImages: true,
             imageQuality: "premium",
           },
@@ -132,29 +131,6 @@ export function SettingsScreen({ onCreditRefresh }: { onCreditRefresh?: () => vo
                   ]}
                 />
               </SettingRow>
-              <SettingRow title={t("settings.row.runtime.title")} desc={t("settings.row.runtime.desc")}>
-                <Radio.Group
-                  value={settings.defaults.runtimeMode}
-                  onChange={(event) => updateDefaults({ runtimeMode: event.target.value })}
-                >
-                  <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                    <Radio value="hosted" className={`runtime-choice ${settings.defaults.runtimeMode === "hosted" ? "active" : ""}`}>
-                      <StatusDot tone="green" />
-                      <div>
-                        <strong>{t("settings.row.runtime.hosted.title")}</strong>
-                        <span>{t("settings.row.runtime.hosted.desc")}</span>
-                      </div>
-                    </Radio>
-                    <Radio value="custom" className={`runtime-choice ${settings.defaults.runtimeMode === "custom" ? "active" : ""}`}>
-                      <StatusDot tone="gray" />
-                      <div>
-                        <strong>{t("settings.row.runtime.custom.title")}</strong>
-                        <span>{t("settings.row.runtime.custom.desc")}</span>
-                      </div>
-                    </Radio>
-                  </Space>
-                </Radio.Group>
-              </SettingRow>
               <SettingRow title={t("settings.row.enableImages.title")} desc={t("settings.row.enableImages.desc")}>
                 <Switch checked={settings.defaults.enableImages} onChange={(checked) => updateDefaults({ enableImages: checked })} />
               </SettingRow>
@@ -182,15 +158,13 @@ export function SettingsScreen({ onCreditRefresh }: { onCreditRefresh?: () => vo
             </div>
             <div className="setting-group">
               <h2>{t("settings.group.connection")}</h2>
-              {settings.defaults.runtimeMode === "custom" ? (
-                <SettingRow title={t("settings.row.provider.title")} desc={t("settings.row.provider.desc")}>
-                  <ProviderFormControl
-                    remote={settings.llmProvider}
-                    onSave={(next) => update({ llmProvider: next }).catch(() => undefined)}
-                    clearLabel={t("settings.row.provider.clear")}
-                  />
-                </SettingRow>
-              ) : null}
+              <SettingRow title={t("settings.row.provider.title")} desc={t("settings.row.provider.desc")}>
+                <ProviderFormControl
+                  remote={settings.llmProvider}
+                  onSave={(next) => update({ llmProvider: next }).catch(() => undefined)}
+                  clearLabel={t("settings.row.provider.clear")}
+                />
+              </SettingRow>
               <SettingRow title={t("settings.row.proxy.title")} desc={t("settings.row.proxy.desc")}>
                 <ProxyCard
                   remote={settings.proxy}
@@ -230,10 +204,10 @@ export function SettingsScreen({ onCreditRefresh }: { onCreditRefresh?: () => vo
 
 type LoginPhase = "loading" | "anonymous" | "awaiting" | "success" | "failure";
 
-const EMPTY_PROVIDER_DRAFT: LlmProvider = { type: "openai", baseUrl: "", apiKey: "", model: "" };
+const EMPTY_PROVIDER_DRAFT: LlmProvider = { type: "official", baseUrl: "", apiKey: "", model: "" };
 
 function providerHasContent(p: LlmProvider): boolean {
-  return Boolean(p.baseUrl.trim() || p.apiKey.trim() || p.model.trim());
+  return p.type !== "official" && Boolean(p.baseUrl.trim() || p.apiKey.trim() || p.model.trim());
 }
 
 function ProviderFormControl({
@@ -307,7 +281,7 @@ function ProviderFormControl({
     }
   }, []);
 
-  const canTest = providerHasContent(draft);
+  const canTest = draft.type === "official" || providerHasContent(draft);
   const testTag = testResult ? formatTestResult(testResult, t) : null;
 
   return (
@@ -341,16 +315,20 @@ function formatTestResult(
   result: ProviderTestResult,
   t: (key: string) => string,
 ): { tone: "green" | "red" | "amber"; text: string } {
-  if (result.error && result.httpStatus === 0) {
+  if (result.error && result.httpStatus === 0 && !result.ok) {
     return { tone: "red", text: t("settings.effective.testNetworkError").replace("{error}", result.error) };
   }
   if (result.ok) {
-    return {
-      tone: "green",
-      text: t("settings.effective.testOk")
+    const base = result.httpStatus > 0
+      ? t("settings.effective.testOkHttp")
         .replace("{status}", String(result.httpStatus))
-        .replace("{latency}", String(result.latencyMs)),
-    };
+        .replace("{latency}", String(result.latencyMs))
+      : t("settings.effective.testOkBridge")
+        .replace("{latency}", String(result.latencyMs));
+    if (result.responseMessage) {
+      return { tone: "green", text: base + ` · ${t("settings.effective.testReply")}: ${result.responseMessage}` };
+    }
+    return { tone: "green", text: base };
   }
   const status = result.httpStatus;
   let key = "settings.effective.testFail";

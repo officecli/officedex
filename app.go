@@ -47,13 +47,13 @@ import (
 )
 
 const (
-	appName             = "OfficeDex"
-	previewExtraWidth   = 500
-	bridgeEventChannel  = "bridge:event"
-	authEventChannel    = "auth:event"
-	previewEventChannel = "preview:open"
-	appUpdateChannel    = "appupdate:event"
-	runtimeEventChannel = "runtime:event"
+	appName                  = "OfficeDex"
+	previewExtraWidth        = 500
+	bridgeEventChannel       = "bridge:event"
+	authEventChannel         = "auth:event"
+	previewEventChannel      = "preview:open"
+	appUpdateChannel         = "appupdate:event"
+	runtimeEventChannel      = "runtime:event"
 	defaultUpdateManifestURL = "https://raw.githubusercontent.com/officecli/officedex-dist/main/manifest.json"
 )
 
@@ -72,19 +72,19 @@ type App struct {
 	localStore    *localstore.Store
 	previewReg    *preview.Registry
 
-	mu              sync.Mutex
-	cachedSettings  types.UserSettings
-	bridgeClient    *bridge.Client
-	loginManager    *login.Manager
-	loginUnsub      func()
-	pendingLoginURL string
+	mu                     sync.Mutex
+	cachedSettings         types.UserSettings
+	bridgeClient           *bridge.Client
+	loginManager           *login.Manager
+	loginUnsub             func()
+	pendingLoginURL        string
 	previewModeWidthBefore int
 	previewModeXBefore     int
 	previewModeXShifted    bool
-	appUpdateMgr    *appupdate.Manager
-	runtimeMgr      *runtimemgr.Manager
-	proxyPool       *netproxy.Pool
-	extRenderer     *extrender.Renderer
+	appUpdateMgr           *appupdate.Manager
+	runtimeMgr             *runtimemgr.Manager
+	proxyPool              *netproxy.Pool
+	extRenderer            *extrender.Renderer
 
 	// resolver cache. binresolver.Resolve stats the filesystem on every call;
 	// runCommandOptions / ensureBridge run on every RPC. We cache the resolved
@@ -623,7 +623,7 @@ var (
 	// Captures <img ... src="..."> and <link ... href="..."> with single or
 	// double-quoted attribute values. Used to rewrite relative resource paths
 	// inside sidecar HTML to data: URLs.
-	sidecarImgSrcRE  = regexp.MustCompile(`(?i)(<img\b[^>]*?\bsrc\s*=\s*)(["'])([^"'<>]+)(["'])`)
+	sidecarImgSrcRE   = regexp.MustCompile(`(?i)(<img\b[^>]*?\bsrc\s*=\s*)(["'])([^"'<>]+)(["'])`)
 	sidecarLinkHrefRE = regexp.MustCompile(`(?i)(<link\b[^>]*?\bhref\s*=\s*)(["'])([^"'<>]+)(["'])`)
 )
 
@@ -826,7 +826,6 @@ func (a *App) UpdateSettings(patch settings.Patch) (types.UserSettings, error) {
 	touchesBridge := patch.BridgeBinaryPath != nil ||
 		patch.LlmProvider != nil ||
 		patch.ClearLlmProvider ||
-		(patch.Defaults != nil && patch.Defaults.RuntimeMode != nil) ||
 		proxyChanged
 	client := a.bridgeClient
 	if touchesBridge {
@@ -1070,7 +1069,7 @@ type ExportLogsInput struct {
 
 // ExportLogsResult is the value returned by ExportLogs to the renderer.
 type ExportLogsResult struct {
-	Path     string                    `json:"path"`
+	Path     string                     `json:"path"`
 	Manifest diagnostics.BundleManifest `json:"manifest"`
 }
 
@@ -1141,7 +1140,13 @@ func (a *App) currentBridgeEnv() []string {
 // running rather than echo what is merely configured.
 func (a *App) GetBridgeRuntimeSnapshot() (types.BridgeRuntimeSnapshot, error) {
 	a.mu.Lock()
-	mode := a.cachedSettings.Defaults.RuntimeMode
+	provider := a.cachedSettings.LlmProvider
+	var mode types.RuntimeMode
+	if provider == nil {
+		mode = types.RuntimeHosted
+	} else {
+		mode = types.RuntimeCustom
+	}
 	path := a.resolvedBinaryPath
 	env := append([]string(nil), a.resolvedBinaryEnv...)
 	at := a.binaryResolvedAt
@@ -1224,43 +1229,81 @@ func providerProbeFor(p types.LlmProvider) (providerProbe, error) {
 	if base == "" {
 		return providerProbe{}, errors.New("test_provider.base_url_required")
 	}
+
+	// Build a "hi" chat completion request body. All providers now send a
+	// real conversation message instead of probing /models — this exercises
+	// the same code path officecli uses for generation, catching issues like
+	// wrong model names, rate limits, and auth errors that a GET /models
+	// probe would miss.
+	model := strings.TrimSpace(p.Model)
+	chatMessages := []map[string]string{{"role": "user", "content": "hi"}}
+
 	switch p.Type {
 	case types.LlmOpenAI:
+		body, err := json.Marshal(map[string]any{
+			"model":      model,
+			"messages":   chatMessages,
+			"max_tokens": 50,
+			"stream":     false,
+		})
+		if err != nil {
+			return providerProbe{}, fmt.Errorf("test_provider.marshal: %w", err)
+		}
 		return providerProbe{
-			method:     http.MethodGet,
-			url:        base + "/models",
-			headers:    map[string]string{"Authorization": "Bearer " + p.APIKey},
-			displayURL: mask.Host(base) + "/models",
+			method:     http.MethodPost,
+			url:        base + "/chat/completions",
+			headers:    map[string]string{"Authorization": "Bearer " + p.APIKey, "Content-Type": "application/json"},
+			body:       body,
+			displayURL: mask.Host(base) + "/chat/completions",
 		}, nil
+
 	case types.LlmAzure:
-		probeURL := base + "/openai/models?api-version=2024-02-15-preview"
+		probeURL := base + "/openai/deployments/" + model + "/chat/completions?api-version=2024-02-15-preview"
+		body, err := json.Marshal(map[string]any{
+			"messages":   chatMessages,
+			"max_tokens": 50,
+			"stream":     false,
+		})
+		if err != nil {
+			return providerProbe{}, fmt.Errorf("test_provider.marshal: %w", err)
+		}
 		return providerProbe{
-			method:     http.MethodGet,
+			method:     http.MethodPost,
 			url:        probeURL,
-			headers:    map[string]string{"api-key": p.APIKey},
-			displayURL: mask.Host(base) + "/openai/models",
+			headers:    map[string]string{"api-key": p.APIKey, "Content-Type": "application/json"},
+			body:       body,
+			displayURL: mask.Host(base) + "/openai/deployments/" + model + "/chat/completions",
 		}, nil
+
 	case types.LlmAnthropic:
+		body, err := json.Marshal(map[string]any{
+			"model":      model,
+			"messages":   []map[string]string{{"role": "user", "content": "hi"}},
+			"max_tokens": 50,
+		})
+		if err != nil {
+			return providerProbe{}, fmt.Errorf("test_provider.marshal: %w", err)
+		}
 		return providerProbe{
-			method: http.MethodGet,
-			url:    base + "/v1/models",
+			method: http.MethodPost,
+			url:    base + "/v1/messages",
 			headers: map[string]string{
 				"x-api-key":         p.APIKey,
 				"anthropic-version": "2023-06-01",
+				"Content-Type":      "application/json",
 			},
-			displayURL: mask.Host(base) + "/v1/models",
+			body:       body,
+			displayURL: mask.Host(base) + "/v1/messages",
 		}, nil
+
 	case types.LlmCustom:
 		// Custom endpoints are almost always OpenAI-compatible (4zapi,
-		// OpenRouter, Deepseek, local llama.cpp, etc.). A POST to
-		// /chat/completions with max_tokens=1 exercises the same code path
-		// officecli will use for real generation: wrong baseURL path 404s,
-		// wrong key 401s, wrong model name 400s with model_not_found. The
-		// payload costs ~1 token and finishes in <2s on a healthy endpoint.
+		// OpenRouter, Deepseek, local llama.cpp, etc.). Send a real chat
+		// completion to exercise the full generation path.
 		body, err := json.Marshal(map[string]any{
-			"model":      p.Model,
-			"messages":   []map[string]string{{"role": "user", "content": "ping"}},
-			"max_tokens": 1,
+			"model":      model,
+			"messages":   chatMessages,
+			"max_tokens": 50,
 			"stream":     false,
 		})
 		if err != nil {
@@ -1276,22 +1319,27 @@ func providerProbeFor(p types.LlmProvider) (providerProbe, error) {
 			body:       body,
 			displayURL: mask.Host(base) + "/chat/completions",
 		}, nil
+
 	default:
 		return providerProbe{}, fmt.Errorf("test_provider.unsupported_type: %s", p.Type)
 	}
 }
 
-// TestProvider issues a minimal probe against the configured custom provider
-// and reports reachability. Returns an error only for misconfiguration (e.g.
-// not in custom mode); transport-level failures are encoded in the result
-// so the renderer can surface them inline.
+// TestProvider issues a probe against the configured provider. For custom
+// providers (OpenAI/Azure/Anthropic/Custom) it sends a real "hi" chat
+// completion. For the official (hosted) mode it verifies the officecli bridge
+// can start and initialize — which implicitly tests connectivity to the hosted
+// service.
 func (a *App) TestProvider() (types.ProviderTestResult, error) {
 	a.mu.Lock()
 	s := a.cachedSettings
 	a.mu.Unlock()
-	if s.Defaults.RuntimeMode != types.RuntimeCustom || s.LlmProvider == nil {
-		return types.ProviderTestResult{}, errors.New("test_provider.not_custom")
+
+	// Official / hosted mode: test through the bridge.
+	if s.LlmProvider == nil {
+		return a.testOfficialProvider()
 	}
+
 	probe, err := providerProbeFor(*s.LlmProvider)
 	if err != nil {
 		return types.ProviderTestResult{}, err
@@ -1299,6 +1347,47 @@ func (a *App) TestProvider() (types.ProviderTestResult, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	return runHTTPProbe(ctx, a.proxyPool, probe), nil
+}
+
+// testOfficialProvider starts the officecli bridge and verifies it can
+// initialize. This exercises the same binary resolution + subprocess spawn
+// path that real tasks use, and the Initialize handshake confirms the binary
+// can reach the hosted service.
+func (a *App) testOfficialProvider() (types.ProviderTestResult, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	startTime := time.Now()
+	client, err := a.ensureBridge()
+	if err != nil {
+		latency := time.Since(startTime).Milliseconds()
+		return types.ProviderTestResult{
+			URL:       "bridge:start",
+			LatencyMs: latency,
+			Error:     err.Error(),
+		}, nil
+	}
+
+	// Initialize handshake: sends a JSON-RPC request to the binary and
+	// waits for a response. On hosted mode this implicitly confirms the
+	// binary can communicate with the hosted LLM backend.
+	latencyStart := time.Now()
+	_, initErr := client.Initialize(ctx)
+	latency := time.Since(latencyStart).Milliseconds()
+
+	if initErr != nil {
+		return types.ProviderTestResult{
+			URL:       "bridge:initialize",
+			LatencyMs: latency,
+			Error:     initErr.Error(),
+		}, nil
+	}
+
+	return types.ProviderTestResult{
+		OK:        true,
+		URL:       "bridge:initialize",
+		LatencyMs: latency,
+	}, nil
 }
 
 func runHTTPProbe(ctx context.Context, pool *netproxy.Pool, p providerProbe) types.ProviderTestResult {
@@ -1321,12 +1410,102 @@ func runHTTPProbe(ctx context.Context, pool *netproxy.Pool, p providerProbe) typ
 		return types.ProviderTestResult{URL: p.displayURL, LatencyMs: latency, Error: err.Error()}
 	}
 	defer resp.Body.Close()
-	return types.ProviderTestResult{
+
+	respBody, readErr := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
+	if readErr != nil {
+		return types.ProviderTestResult{
+			URL:       p.displayURL,
+			LatencyMs: latency,
+			Error:     fmt.Sprintf("read response: %v", readErr),
+		}
+	}
+
+	result := types.ProviderTestResult{
 		OK:         resp.StatusCode >= 200 && resp.StatusCode < 300,
 		HTTPStatus: resp.StatusCode,
 		LatencyMs:  latency,
 		URL:        p.displayURL,
 	}
+
+	if result.OK {
+		if msg := extractResponseMessage(respBody); msg != "" {
+			result.ResponseMessage = msg
+		}
+	} else {
+		// Include body snippet in error for debugging (e.g. model_not_found).
+		if msg := extractErrorFromBody(respBody); msg != "" {
+			result.Error = msg
+		}
+	}
+
+	return result
+}
+
+// extractResponseMessage parses a chat completion response body and returns
+// the first line of the assistant's reply, or empty on failure.
+func extractResponseMessage(body []byte) string {
+	// Try OpenAI-compatible format: {"choices":[{"message":{"content":"..."}}]}
+	var openaiResp struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if json.Unmarshal(body, &openaiResp) == nil {
+		for _, c := range openaiResp.Choices {
+			if c.Message.Content != "" {
+				return firstLine(c.Message.Content, 200)
+			}
+		}
+	}
+
+	// Try Anthropic format: {"content":[{"type":"text","text":"..."}]}
+	var anthropicResp struct {
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+	if json.Unmarshal(body, &anthropicResp) == nil {
+		for _, c := range anthropicResp.Content {
+			if c.Type == "text" && c.Text != "" {
+				return firstLine(c.Text, 200)
+			}
+		}
+	}
+
+	return ""
+}
+
+// extractErrorFromBody tries to pull a human-readable error message from the
+// response body. Handles OpenAI-style {"error":{"message":"..."}} and
+// Anthropic-style {"error":{"message":"..."}}.
+func extractErrorFromBody(body []byte) string {
+	var errResp struct {
+		Error struct {
+			Message string `json:"message"`
+			Type    string `json:"type"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(body, &errResp) == nil && errResp.Error.Message != "" {
+		msg := errResp.Error.Message
+		if errResp.Error.Type != "" {
+			msg = errResp.Error.Type + ": " + msg
+		}
+		return firstLine(msg, 200)
+	}
+	return ""
+}
+
+func firstLine(s string, maxLen int) string {
+	if idx := strings.IndexAny(s, "\r\n"); idx >= 0 {
+		s = s[:idx]
+	}
+	if len(s) > maxLen {
+		s = s[:maxLen] + "…"
+	}
+	return s
 }
 
 // ─── Issue report bindings ──────────────────────────────────────────────────
@@ -1402,7 +1581,7 @@ func (a *App) PeekReportContext(taskID string) (PeekReportContextResult, error) 
 	if failure := latestFailedEvent(events); failure != nil {
 		out.ErrorCode, out.ErrorMessage = extractErrorFields(failure)
 	}
-	out.RuntimeMode = a.currentRuntimeMode()
+	out.RuntimeMode = string(a.currentRuntimeMode())
 	return out, nil
 }
 
@@ -1428,7 +1607,7 @@ func (a *App) SubmitReport(input SubmitReportInput) (SubmitReportResult, error) 
 		ContactEmail: strings.TrimSpace(input.ContactEmail),
 		Timestamp:    time.Now().UTC().Format(time.RFC3339),
 		Via:          "http",
-		RuntimeMode:  a.currentRuntimeMode(),
+		RuntimeMode:  string(a.currentRuntimeMode()),
 	}
 
 	if payload.TaskID != "" && a.localStore != nil {
@@ -1508,14 +1687,21 @@ func (a *App) detectReportCapability() report.ReportCapability {
 	})
 }
 
-func (a *App) currentRuntimeMode() string {
+func (a *App) currentRuntimeMode() types.RuntimeMode {
 	a.mu.Lock()
-	mode := a.cachedSettings.Defaults.RuntimeMode
+	mode := a.currentRuntimeModeLocked()
 	a.mu.Unlock()
-	if mode == "" {
-		return ""
+	return mode
+}
+
+// currentRuntimeModeLocked returns the cached runtime mode. Caller must hold
+// a.mu; bridge event callbacks use this to avoid blocking the stdout reader by
+// trying to acquire the same mutex twice.
+func (a *App) currentRuntimeModeLocked() types.RuntimeMode {
+	if a.cachedSettings.LlmProvider == nil {
+		return types.RuntimeHosted
 	}
-	return string(mode)
+	return types.RuntimeCustom
 }
 
 // latestFailedEvent walks the event slice in reverse and returns the most
@@ -1559,7 +1745,6 @@ func stringField(payload map[string]any, keys ...string) string {
 	}
 	return ""
 }
-
 
 // ─── Internals ──────────────────────────────────────────────────────────────
 
@@ -1614,7 +1799,7 @@ func (a *App) ensureBridge() (*bridge.Client, error) {
 		}
 		if event.Type == "task.started" {
 			a.mu.Lock()
-			mode := a.cachedSettings.Defaults.RuntimeMode
+			mode := a.currentRuntimeModeLocked()
 			env := append([]string(nil), a.resolvedBinaryEnv...)
 			at := a.binaryResolvedAt
 			a.mu.Unlock()
@@ -1768,23 +1953,42 @@ func (a *App) resolverOptions(s types.UserSettings) binresolver.Options {
 }
 
 func (a *App) bundledBinaryPath() string {
+	exe := ""
+	if resolvedExe, err := os.Executable(); err == nil {
+		exe = resolvedExe
+	}
+	cwd := ""
+	if resolvedCwd, err := os.Getwd(); err == nil {
+		cwd = resolvedCwd
+	}
+	return findBundledBinaryPath(runtime.GOOS, exe, cwd, func(candidate string) bool {
+		_, err := os.Stat(candidate)
+		return err == nil
+	})
+}
+
+func findBundledBinaryPath(goos, exePath, cwd string, exists func(string) bool) string {
 	binaryName := "officecli"
-	if runtime.GOOS == "windows" {
+	if goos == "windows" {
 		binaryName = "officecli.exe"
 	}
-	// Packaged Wails app: <App>.app/Contents/Resources/officecli/<binary>
-	// Dev: <repo>/build/officecli/<binary>
-	exe, err := os.Executable()
-	if err == nil {
-		candidate := filepath.Join(filepath.Dir(exe), "..", "Resources", "officecli", binaryName)
-		if _, err := os.Stat(candidate); err == nil {
-			abs, _ := filepath.Abs(candidate)
-			return abs
+	if exePath != "" {
+		exeDir := filepath.Dir(exePath)
+		candidates := []string{
+			// Packaged macOS Wails app: <App>.app/Contents/Resources/officecli/<binary>
+			filepath.Join(exeDir, "..", "Resources", "officecli", binaryName),
+			// Windows release zip: OfficeDex.exe sits beside officecli/<binary>.
+			filepath.Join(exeDir, "officecli", binaryName),
+		}
+		for _, candidate := range candidates {
+			if exists(candidate) {
+				return filepath.Clean(candidate)
+			}
 		}
 	}
-	if cwd, err := os.Getwd(); err == nil {
+	if cwd != "" {
 		candidate := filepath.Join(cwd, "build", "officecli", binaryName)
-		if _, err := os.Stat(candidate); err == nil {
+		if exists(candidate) {
 			return candidate
 		}
 	}
@@ -1893,12 +2097,11 @@ func slugify(input string) string {
 
 func llmProviderEnv(s types.UserSettings) []string {
 	out := []string{}
-	if s.Defaults.RuntimeMode != "" {
-		out = append(out, "OFFICE_CLI_RUNTIME_MODE="+string(s.Defaults.RuntimeMode))
-	}
-	if s.Defaults.RuntimeMode != types.RuntimeCustom || s.LlmProvider == nil {
+	if s.LlmProvider == nil {
+		out = append(out, "OFFICE_CLI_RUNTIME_MODE=hosted")
 		return out
 	}
+	out = append(out, "OFFICE_CLI_RUNTIME_MODE=custom")
 	if s.LlmProvider.Type != "" {
 		out = append(out, "OFFICECLI_LLM_PROVIDER="+string(s.LlmProvider.Type))
 	}
@@ -1921,7 +2124,7 @@ func llmProviderEnv(s types.UserSettings) []string {
 // officecli routes the request to its hosted fallback — which is misleading.
 // Block here with a sentinel error the renderer can translate.
 func validateCustomProvider(s types.UserSettings) error {
-	if s.Defaults.RuntimeMode != types.RuntimeCustom {
+	if s.LlmProvider == nil {
 		return nil
 	}
 	if s.LlmProvider == nil {

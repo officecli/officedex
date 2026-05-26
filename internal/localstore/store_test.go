@@ -235,6 +235,35 @@ func TestRecordEventUpsertUpdatesStatus(t *testing.T) {
 	}
 }
 
+func TestRecordEventAllowsSameBridgeEventIDAcrossTasks(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+
+	for _, taskID := range []string{"task-a", "task-b"} {
+		if err := store.RecordEvent(types.BridgeEvent{
+			EventID: "event-000002",
+			TaskID:  taskID,
+			Type:    "task.started",
+			Payload: map[string]any{"document_type": "docx"},
+		}); err != nil {
+			t.Fatalf("RecordEvent(%s): %v", taskID, err)
+		}
+	}
+
+	for _, taskID := range []string{"task-a", "task-b"} {
+		events, err := store.QueryEventsByTask(ctx, taskID)
+		if err != nil {
+			t.Fatalf("QueryEventsByTask(%s): %v", taskID, err)
+		}
+		if len(events) != 1 {
+			t.Fatalf("task %s event count = %d, want 1", taskID, len(events))
+		}
+		if events[0].EventID != "event-000002" {
+			t.Errorf("task %s event id = %q, want original event-000002", taskID, events[0].EventID)
+		}
+	}
+}
+
 func TestStatusFromEventTypeMapping(t *testing.T) {
 	cases := []struct {
 		eventType string
@@ -295,11 +324,11 @@ func TestRecordArtifactUpsert(t *testing.T) {
 	}
 
 	var (
-		count       int
-		taskID      string
-		fileName    string
-		previewURL  string
-		editURL     sql.NullString
+		count      int
+		taskID     string
+		fileName   string
+		previewURL string
+		editURL    sql.NullString
 	)
 	if err := store.db.QueryRow(`SELECT COUNT(*) FROM artifacts`).Scan(&count); err != nil {
 		t.Fatal(err)

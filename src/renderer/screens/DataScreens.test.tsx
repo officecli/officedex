@@ -5,10 +5,11 @@ import { creditModel } from "./DataScreens";
 function makeTask(overrides: Partial<DesktopTask>): DesktopTask {
   return {
     id: "task-1",
+    conversationId: "task-1",
     status: "completed",
     events: [],
     ...overrides,
-  };
+  } as DesktopTask;
 }
 
 describe("creditModel", () => {

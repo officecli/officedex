@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { officecli } from "../bridge";
 import { providerPresets } from "../providerPresets";
 import { useT } from "../i18n";
-import type { DocumentType, GenerateDefaults, LlmProvider, LlmProviderType, UserSettings } from "../../shared/types";
+import type { DocumentType, GenerateDefaults, LlmProvider, UserSettings } from "../../shared/types";
 
 interface OnboardingScreenProps {
   settings: UserSettings;
@@ -18,7 +18,7 @@ interface DraftSettings {
   llmProvider: LlmProvider;
 }
 
-const EMPTY_PROVIDER: LlmProvider = { type: "openai", baseUrl: "", apiKey: "", model: "" };
+const EMPTY_PROVIDER: LlmProvider = { type: "official", baseUrl: "", apiKey: "", model: "" };
 
 export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: OnboardingScreenProps) {
   const [step, setStep] = useState(0);
@@ -48,8 +48,7 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
   const finish = useCallback(async () => {
     setBusy(true);
     try {
-      const isCustom = draft.defaults.runtimeMode === "custom";
-      const provider = isCustom && (draft.llmProvider.baseUrl || draft.llmProvider.apiKey || draft.llmProvider.model)
+      const provider = (draft.llmProvider.baseUrl || draft.llmProvider.apiKey || draft.llmProvider.model)
         ? draft.llmProvider
         : null;
       await officecli.updateSettings({
@@ -81,7 +80,6 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
   }, [onComplete]);
 
   const stepTitle = t(`onboarding.step.${step}.title`);
-  const isCustom = draft.defaults.runtimeMode === "custom";
 
   return (
     <div className="onboarding-overlay" role="dialog" aria-modal="true">
@@ -130,22 +128,9 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
 
         {step === 1 ? (
           <Space direction="vertical" size={20} style={{ width: "100%" }}>
-            <Field label={t("onboarding.field.runtime")}>
-              <Radio.Group
-                value={draft.defaults.runtimeMode}
-                onChange={(event) => updateDefaults({ runtimeMode: event.target.value })}
-              >
-                <Space direction="vertical" size={8}>
-                  <Radio value="hosted">{t("onboarding.runtime.hosted")}</Radio>
-                  <Radio value="custom">{t("onboarding.runtime.custom")}</Radio>
-                </Space>
-              </Radio.Group>
+            <Field label={t("onboarding.field.provider")}>
+              <ProviderForm provider={draft.llmProvider} onChange={updateProvider} />
             </Field>
-            {isCustom ? (
-              <Field label={t("onboarding.field.provider")}>
-                <ProviderForm provider={draft.llmProvider} onChange={updateProvider} />
-              </Field>
-            ) : null}
             <Field label={t("onboarding.field.outputDir")}>
               <Space.Compact style={{ width: "100%" }}>
                 <Input
@@ -176,53 +161,62 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
 }
 
 export function ProviderForm({ provider, onChange }: { provider: LlmProvider; onChange: (patch: Partial<LlmProvider>) => void }) {
-  const preset = providerPresets[provider.type];
+  // Normalize display type: any non-official type is treated as "custom"
+  const displayType: "official" | "custom" = provider.type === "official" ? "official" : "custom";
+  const isCustom = displayType === "custom";
+  const preset = isCustom ? providerPresets.custom : providerPresets.official;
   const t = useT();
   return (
     <Space direction="vertical" size={10} style={{ width: "100%" }}>
       <Select
-        value={provider.type}
-        onChange={(value: LlmProviderType) => {
-          const presetForValue = providerPresets[value];
-          onChange({
-            type: value,
-            baseUrl: provider.baseUrl || presetForValue.defaultBaseUrl,
-            model: provider.model || presetForValue.defaultModel,
-          });
+        value={displayType}
+        onChange={(value) => {
+          if (value === "official") {
+            onChange({ type: "official", baseUrl: "", apiKey: "", model: "" });
+          } else {
+            onChange({
+              type: "custom",
+              baseUrl: provider.baseUrl || providerPresets.custom.defaultBaseUrl,
+              model: provider.model || providerPresets.custom.defaultModel,
+            });
+          }
         }}
         options={[
-          { value: "openai", label: t("onboarding.provider.openai") },
-          { value: "anthropic", label: t("onboarding.provider.anthropic") },
-          { value: "azure", label: t("onboarding.provider.azure") },
+          { value: "official", label: t("onboarding.provider.official") },
           { value: "custom", label: t("onboarding.provider.custom") },
         ]}
         style={{ width: "100%" }}
       />
-      <Input
-        placeholder={preset.defaultBaseUrl || t("onboarding.provider.baseUrlPlaceholder")}
-        value={provider.baseUrl}
-        onChange={(event) => onChange({ baseUrl: event.target.value })}
-        autoCapitalize="off"
-        autoCorrect="off"
-        spellCheck={false}
-      />
-      <Input.Password
-        placeholder={t("onboarding.provider.apiKeyPlaceholder")}
-        value={provider.apiKey}
-        onChange={(event) => onChange({ apiKey: event.target.value })}
-        autoComplete="off"
-        autoCapitalize="off"
-        autoCorrect="off"
-        spellCheck={false}
-      />
-      <Input
-        placeholder={preset.defaultModel || t("onboarding.provider.modelPlaceholder")}
-        value={provider.model}
-        onChange={(event) => onChange({ model: event.target.value })}
-        autoCapitalize="off"
-        autoCorrect="off"
-        spellCheck={false}
-      />
+      {isCustom ? (
+        <>
+          <Input
+            placeholder={preset.defaultBaseUrl || t("onboarding.provider.baseUrlPlaceholder")}
+            value={provider.baseUrl}
+            onChange={(event) => onChange({ baseUrl: event.target.value })}
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+          <span className="provider-hint">{t("onboarding.provider.customEndpointHint")}</span>
+          <Input.Password
+            placeholder={t("onboarding.provider.apiKeyPlaceholder")}
+            value={provider.apiKey}
+            onChange={(event) => onChange({ apiKey: event.target.value })}
+            autoComplete="off"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+          <Input
+            placeholder={preset.defaultModel || t("onboarding.provider.modelPlaceholder")}
+            value={provider.model}
+            onChange={(event) => onChange({ model: event.target.value })}
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+        </>
+      ) : null}
     </Space>
   );
 }

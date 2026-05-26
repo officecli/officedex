@@ -35,6 +35,35 @@ describe("taskState", () => {
     ]);
   });
 
+  it("stores completed artifacts from OfficeCLI top-level result payloads", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-1",
+      task_id: "task-1",
+      type: "task.completed",
+      payload: {
+        file_path: "/tmp/Request_123_Business_Brief.docx",
+        document_name: "Request_123_Business_Brief.docx",
+        document_type: "docx",
+        status: "success",
+      },
+    });
+
+    expect(state.tasks["task-1"].artifact).toEqual({
+      taskId: "task-1",
+      filePath: "/tmp/Request_123_Business_Brief.docx",
+      fileName: "Request_123_Business_Brief.docx",
+      documentType: "docx",
+    });
+    expect(state.artifacts).toEqual([
+      {
+        taskId: "task-1",
+        filePath: "/tmp/Request_123_Business_Brief.docx",
+        fileName: "Request_123_Business_Brief.docx",
+        documentType: "docx",
+      },
+    ]);
+  });
+
   it("tracks active questions for interactive bridge tasks", () => {
     const state = applyTaskEvent(createInitialTaskState(), {
       event_id: "event-1",
@@ -111,22 +140,24 @@ describe("taskState", () => {
     expect(state.tasks["task-1"].creditMode).toBeUndefined();
   });
 
-  it("captures runtime_mode from task.started payload", () => {
-    const customStart = applyTaskEvent(createInitialTaskState(), {
+  it("captures runtimeSnapshot from task.started payload", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
       event_id: "ev-e1",
       task_id: "task-ext",
       type: "task.started",
       payload: { runtime_mode: "custom", topic: "demo" },
     });
-    expect(customStart.tasks["task-ext"].runtimeMode).toBe("custom");
+    expect(state.tasks["task-ext"].runtimeSnapshot).toBeDefined();
+    expect(state.tasks["task-ext"].runtimeSnapshot!.mode).toBe("custom");
 
-    const hostedStart = applyTaskEvent(createInitialTaskState(), {
+    const hostedState = applyTaskEvent(createInitialTaskState(), {
       event_id: "ev-h1",
       task_id: "task-hos",
       type: "task.started",
       payload: { runtime_mode: "hosted" },
     });
-    expect(hostedStart.tasks["task-hos"].runtimeMode).toBe("hosted");
+    expect(hostedState.tasks["task-hos"].runtimeSnapshot).toBeDefined();
+    expect(hostedState.tasks["task-hos"].runtimeSnapshot!.mode).toBe("hosted");
 
     const noMode = applyTaskEvent(createInitialTaskState(), {
       event_id: "ev-x1",
@@ -134,10 +165,10 @@ describe("taskState", () => {
       type: "task.started",
       payload: { topic: "no mode" },
     });
-    expect(noMode.tasks["task-x"].runtimeMode).toBeUndefined();
+    expect(noMode.tasks["task-x"].runtimeSnapshot).toBeUndefined();
   });
 
-  it("builds runtimeSnapshot with provider from task.started payload", () => {
+  it("builds runtimeSnapshot with provider details from task.started payload", () => {
     const state = applyTaskEvent(createInitialTaskState(), {
       event_id: "ev-snap",
       task_id: "task-snap",

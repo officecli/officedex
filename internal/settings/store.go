@@ -37,7 +37,6 @@ var defaultSettings = types.UserSettings{
 	Defaults: types.GenerateDefaults{
 		DocumentType: types.DocPPTX,
 		Mode:         types.ModeFast,
-		RuntimeMode:  types.RuntimeHosted,
 		EnableImages: true,
 		ImageQuality: types.ImagePremium,
 	},
@@ -177,7 +176,6 @@ type Patch struct {
 type GenerateDefaultsPatch struct {
 	DocumentType *types.DocumentType `json:"documentType,omitempty"`
 	Mode         *types.GenerateMode `json:"mode,omitempty"`
-	RuntimeMode  *types.RuntimeMode  `json:"runtimeMode,omitempty"`
 	EnableImages *bool               `json:"enableImages,omitempty"`
 	ImageQuality *types.ImageQuality `json:"imageQuality,omitempty"`
 }
@@ -191,9 +189,6 @@ func applyPatch(base types.UserSettings, patch Patch) types.UserSettings {
 		}
 		if d.Mode != nil {
 			out.Defaults.Mode = *d.Mode
-		}
-		if d.RuntimeMode != nil {
-			out.Defaults.RuntimeMode = *d.RuntimeMode
 		}
 		if d.EnableImages != nil {
 			out.Defaults.EnableImages = *d.EnableImages
@@ -247,7 +242,6 @@ type rawSettings struct {
 type rawGenerateDefaults struct {
 	DocumentType *string `json:"documentType,omitempty"`
 	Mode         *string `json:"mode,omitempty"`
-	RuntimeMode  *string `json:"runtimeMode,omitempty"`
 	EnableImages *bool   `json:"enableImages,omitempty"`
 	ImageQuality *string `json:"imageQuality,omitempty"`
 }
@@ -277,11 +271,6 @@ func sanitizeRaw(raw rawSettings) types.UserSettings {
 		if d.Mode != nil {
 			if v, ok := pickMode(*d.Mode); ok {
 				out.Defaults.Mode = v
-			}
-		}
-		if d.RuntimeMode != nil {
-			if v, ok := pickRuntimeMode(*d.RuntimeMode); ok {
-				out.Defaults.RuntimeMode = v
 			}
 		}
 		if d.EnableImages != nil {
@@ -316,9 +305,6 @@ func sanitizeCanonical(s types.UserSettings) types.UserSettings {
 	if v, ok := pickMode(string(s.Defaults.Mode)); ok {
 		out.Defaults.Mode = v
 	}
-	if v, ok := pickRuntimeMode(string(s.Defaults.RuntimeMode)); ok {
-		out.Defaults.RuntimeMode = v
-	}
 	out.Defaults.EnableImages = s.Defaults.EnableImages
 	if v, ok := pickImageQuality(string(s.Defaults.ImageQuality)); ok {
 		out.Defaults.ImageQuality = v
@@ -342,17 +328,6 @@ func pickMode(value string) (types.GenerateMode, bool) {
 	switch types.GenerateMode(value) {
 	case types.ModeFast, types.ModeBest:
 		return types.GenerateMode(value), true
-	}
-	return "", false
-}
-
-func pickRuntimeMode(value string) (types.RuntimeMode, bool) {
-	if value == "external" {
-		return types.RuntimeCustom, true
-	}
-	switch types.RuntimeMode(value) {
-	case types.RuntimeCustom, types.RuntimeHosted:
-		return types.RuntimeMode(value), true
 	}
 	return "", false
 }

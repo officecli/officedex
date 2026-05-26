@@ -115,6 +115,70 @@ describe("App task flow", () => {
     expect(bridge.generate).toHaveBeenCalledWith(expect.objectContaining({ prompt: "Generate a new quarterly review PPT" }));
   });
 
+  it("switches from submit spinner to the running task when task.started arrives before generate resolves", async () => {
+    const bridge = installBridgeMock();
+    bridge.generate.mockImplementation(() => new Promise(() => undefined));
+    const { App } = await import("./App");
+
+    render(<App />);
+
+    act(() => {
+      bridge.emit({
+        event_id: "event-existing-task",
+        task_id: "existing-task",
+        type: "task.completed",
+        payload: {
+          result: {
+            file_path: "/tmp/existing.pptx",
+            file_name: "existing.pptx",
+            document_type: "pptx",
+          },
+        },
+      });
+    });
+    expect(await screen.findByText("Generation Complete")).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button", { name: /New Generation/ })[0]);
+
+    expect(await screen.findByRole("heading", { name: "Start a New Generation" })).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText(/Enter what you want to generate/), {
+      target: { value: "Create a stuck DOCX" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Generate$/ }));
+    await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      bridge.emit({
+        event_id: "event-started-before-return",
+        task_id: "task-started-before-return",
+        type: "task.started",
+        payload: { document_type: "docx", topic: "Create a stuck DOCX", message: "Task accepted" },
+      });
+    });
+
+    expect(await screen.findByText("Processing your request...")).toBeTruthy();
+    expect(screen.getAllByText("Create a stuck DOCX").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("heading", { name: "Start a New Generation" })).toBeNull();
+  });
+
+  it("switches to a local pending task immediately when generate does not resolve and no bridge event arrives", async () => {
+    const bridge = installBridgeMock();
+    bridge.generate.mockImplementation(() => new Promise(() => undefined));
+    const { App } = await import("./App");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Start a New Generation" })).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText(/Enter what you want to generate/), {
+      target: { value: "Create a pending DOCX" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Generate$/ }));
+    await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
+
+    expect(await screen.findByText("Processing your request...")).toBeTruthy();
+    expect(screen.getAllByText("Create a pending DOCX").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("heading", { name: "Start a New Generation" })).toBeNull();
+  });
+
   it("renders a failed task with its recorded error and bridge event context", async () => {
     const bridge = installBridgeMock();
     const { App } = await import("./App");
@@ -220,8 +284,9 @@ describe("App task flow", () => {
 
     render(
       <DialogueScreen
-        task={{
+        tasks={[{
           id: "task-running",
+          conversationId: "task-running",
           status: "running",
           topic: "Auto-generate product roadmap",
           documentType: "pptx",
@@ -241,7 +306,7 @@ describe("App task flow", () => {
               payload: { stage: "Generating milestone sections" },
             },
           ],
-        }}
+        }]}
         artifacts={[]}
         busy={false}
         bridgeStatus="connected"
@@ -277,8 +342,9 @@ describe("App task flow", () => {
 
     render(
       <DialogueScreen
-        task={{
+        tasks={[{
           id: "task-completed-real",
+          conversationId: "task-completed-real",
           status: "completed",
           topic: "Annual budget review",
           documentType: "docx",
@@ -292,7 +358,7 @@ describe("App task flow", () => {
             },
           ],
           artifact,
-        }}
+        }]}
         artifacts={[
           {
             taskId: "other-task",
@@ -331,8 +397,9 @@ describe("App task flow", () => {
 
     render(
       <DialogueScreen
-        task={{
+        tasks={[{
           id: "task-completed-empty",
+          conversationId: "task-completed-empty",
           status: "completed",
           topic: "Completed only",
           documentType: "report",
@@ -344,7 +411,7 @@ describe("App task flow", () => {
               payload: { status: "completed" },
             },
           ],
-        }}
+        }]}
         artifacts={[
           {
             taskId: "other-task",
@@ -418,7 +485,7 @@ describe("App task flow", () => {
     expect(bridge.generate).toHaveBeenCalledWith(expect.not.objectContaining({ referenceImages: expect.anything() }));
   });
 
-  it("continuation composer on completed image task calls generate with referenceImages and new prompt", async () => {
+  it("continuation composer on completed image task calls generate with new prompt and no referenceImages by default", async () => {
     const bridge = installBridgeMock();
     const { App } = await import("./App");
 
@@ -452,7 +519,6 @@ describe("App task flow", () => {
     expect(bridge.generate).toHaveBeenCalledWith(
       expect.objectContaining({
         documentType: "img",
-        referenceImages: ["/tmp/generated.png"],
         prompt: "Make the sky brighter",
       }),
     );
@@ -799,7 +865,6 @@ function installBridgeMock() {
       defaults: {
         documentType: "pptx" as const,
         mode: "fast" as const,
-        runtimeMode: "hosted" as const,
         enableImages: true,
         imageQuality: "premium" as const,
       },
@@ -813,7 +878,6 @@ function installBridgeMock() {
       defaults: {
         documentType: "pptx" as const,
         mode: "fast" as const,
-        runtimeMode: "hosted" as const,
         enableImages: true,
         imageQuality: "premium" as const,
         ...(patch.defaults ?? {}),

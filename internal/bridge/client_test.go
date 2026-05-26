@@ -441,6 +441,53 @@ func TestInvokeGenerateOpensSessionFirst(t *testing.T) {
 	}
 }
 
+func TestInvokeGenerateUsesTaskInvokeTimeout(t *testing.T) {
+	fake := newFakeTransport()
+	client := New(Options{
+		RequestTimeout:    20 * time.Millisecond,
+		TaskInvokeTimeout: 250 * time.Millisecond,
+		CreateTransport: func(opts Options) (Transport, error) {
+			return fake, nil
+		},
+		DisableAutoReconnect: true,
+	})
+	if err := client.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer client.Stop()
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := client.InvokeGenerate(context.Background(), types.GenerateInput{
+			DocumentType: types.DocDOCX,
+			Topic:        "Slow doc",
+			Prompt:       "write a docx",
+		})
+		done <- err
+	}()
+
+	first := fake.readRequest(t)
+	if first.Method != "session/open" {
+		t.Fatalf("first method = %q, want session/open", first.Method)
+	}
+	fake.writeResponse(t, first.idString(), map[string]any{"id": "sess-slow"}, nil)
+
+	second := fake.readRequest(t)
+	if second.Method != "task/invoke" {
+		t.Fatalf("second method = %q, want task/invoke", second.Method)
+	}
+	time.Sleep(60 * time.Millisecond)
+	fake.writeResponse(t, second.idString(), map[string]any{
+		"task_id":    "task-slow",
+		"session_id": "sess-slow",
+		"status":     "starting",
+	}, nil)
+
+	if err := <-done; err != nil {
+		t.Fatalf("InvokeGenerate returned before the task timeout: %v", err)
+	}
+}
+
 func TestBuildAttachmentArgsReportSourceFile(t *testing.T) {
 	args := buildAttachmentArgs(types.GenerateInput{
 		DocumentType: types.DocReport,
@@ -564,6 +611,69 @@ func TestBuildBridgeEnvNilSupplierEmitsNoProxy(t *testing.T) {
 			"http_proxy", "https_proxy", "all_proxy":
 			t.Errorf("supplier added proxy env unexpectedly: %q", kv)
 		}
+	}
+}
+
+func TestBuildBridgeEnvStripsSystemProxyWhenNoSupplierProxy(t *testing.T) {
+	t.Cleanup(func() { SetProxyEnvSupplier(nil) })
+	SetProxyEnvSupplier(nil)
+	prevEnviron := syscallEnviron
+	syscallEnviron = func() []string {
+		return []string{
+			"PATH=/usr/bin",
+			"HOME=/home/user",
+			"HTTP_PROXY=http://127.0.0.1:7890",
+			"HTTPS_PROXY=http://127.0.0.1:7890",
+			"http_proxy=http://127.0.0.1:7890",
+			"ALL_PROXY=socks5://127.0.0.1:7890",
+			"NO_PROXY=localhost",
+		}
+	}
+	t.Cleanup(func() { syscallEnviron = prevEnviron })
+	env := BuildBridgeEnv(nil)
+	// System env vars that are NOT proxy-related should survive.
+	if !contains(env, "PATH=/usr/bin") {
+		t.Errorf("non-proxy env PATH missing in %v", env)
+	}
+	if !contains(env, "HOME=/home/user") {
+		t.Errorf("non-proxy env HOME missing in %v", env)
+	}
+	// All proxy env vars (any case variant) must be stripped.
+	for _, kv := range env {
+		key, _, _ := strings.Cut(kv, "=")
+		upper := strings.ToUpper(key)
+		switch upper {
+		case "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY":
+			t.Errorf("system proxy env leaked: %q", kv)
+		}
+	}
+}
+
+func TestBuildBridgeEnvKeepsSupplierProxyOverSystem(t *testing.T) {
+	t.Cleanup(func() { SetProxyEnvSupplier(nil) })
+	prevEnviron := syscallEnviron
+	syscallEnviron = func() []string {
+		return []string{
+			"PATH=/usr/bin",
+			"HTTP_PROXY=http://127.0.0.1:7890", // system proxy (should be replaced)
+		}
+	}
+	t.Cleanup(func() { syscallEnviron = prevEnviron })
+	SetProxyEnvSupplier(func() []string {
+		return []string{"HTTP_PROXY=http://settings:3128", "HTTPS_PROXY=http://settings:3128"}
+	})
+	env := BuildBridgeEnv(nil)
+	if !contains(env, "HTTP_PROXY=http://settings:3128") {
+		t.Errorf("supplier HTTP_PROXY missing in %v", env)
+	}
+	if !contains(env, "HTTPS_PROXY=http://settings:3128") {
+		t.Errorf("supplier HTTPS_PROXY missing in %v", env)
+	}
+	if contains(env, "HTTP_PROXY=http://127.0.0.1:7890") {
+		t.Errorf("system HTTP_PROXY should have been replaced by supplier in %v", env)
+	}
+	if !contains(env, "PATH=/usr/bin") {
+		t.Errorf("non-proxy env PATH missing in %v", env)
 	}
 }
 

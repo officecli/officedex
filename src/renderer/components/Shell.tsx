@@ -68,7 +68,7 @@ interface ShellProps {
   children: React.ReactNode;
   inspector?: React.ReactNode;
   credit?: CreditInfo;
-  runtimeMode?: "custom" | "hosted";
+  hasCustomProvider?: boolean;
   tasks: DesktopTask[];
   selectedTaskId: string | undefined;
   onNavChange: (key: NavKey) => void;
@@ -101,7 +101,7 @@ export function Shell({
   children,
   inspector,
   credit,
-  runtimeMode,
+  hasCustomProvider,
   tasks,
   selectedTaskId,
   onNavChange,
@@ -181,7 +181,7 @@ export function Shell({
           <section className="stage">{children}</section>
           {inspector ? <aside className="preview-panel">{inspector}</aside> : null}
         </div>
-        <CreditMeter info={credit} runtimeMode={runtimeMode} />
+        <CreditMeter info={credit} hasCustomProvider={hasCustomProvider} />
       </main>
     </div>
   );
@@ -194,7 +194,7 @@ export function MaterialSymbol({ name }: { name: string }) {
 
 const MASKED_VALUE = "••••";
 
-export function CreditMeter({ info, runtimeMode }: { info?: CreditInfo; runtimeMode?: "custom" | "hosted" }) {
+export function CreditMeter({ info, hasCustomProvider }: { info?: CreditInfo; hasCustomProvider?: boolean }) {
   const t = useT();
   const [hidden, setHidden] = useState(true);
   const loading = !info;
@@ -202,7 +202,7 @@ export function CreditMeter({ info, runtimeMode }: { info?: CreditInfo; runtimeM
   const planLabel = value.planLabel || t("shell.creditMeter.label");
   const toggleLabel = hidden ? t("shell.creditMeter.show") : t("shell.creditMeter.hide");
 
-  if (runtimeMode === "custom") {
+  if (hasCustomProvider) {
     const tooltipBody = t("shell.creditMeter.freeTooltip");
     return (
       <div className="credit-meter credit-meter-balance credit-meter-free" role="group" aria-label={t("shell.creditMeter.aria", { tooltip: tooltipBody })}>

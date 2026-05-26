@@ -157,6 +157,21 @@
   margin-bottom: 10px;
 }
 
+.composer-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.composer-row > textarea.ant-input,
+.composer-row > .ant-input {
+  flex: 1;
+}
+
+.composer-row > .ant-btn {
+  flex-shrink: 0;
+}
+
 .composer-actions {
   display: flex;
   align-items: center;

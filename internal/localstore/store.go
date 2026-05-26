@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -222,10 +223,7 @@ func (s *Store) RecordEvent(event types.BridgeEvent) error {
 	if err != nil {
 		return fmt.Errorf("localstore: marshal payload: %w", err)
 	}
-	eventID := event.EventID
-	if eventID == "" {
-		eventID = fmt.Sprintf("%s:%s:%s", event.TaskID, event.Type, now)
-	}
+	eventID := storedEventID(event, now)
 	if _, err := s.db.Exec(
 		`INSERT OR REPLACE INTO task_events(event_id, task_id, type, payload_json, created_at, request_id)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
@@ -348,7 +346,7 @@ func scanEvents(rows *sql.Rows) ([]types.BridgeEvent, error) {
 		var payload map[string]any
 		_ = json.Unmarshal([]byte(payloadJSON), &payload)
 		events = append(events, types.BridgeEvent{
-			EventID:   eventID,
+			EventID:   originalEventID(taskID, eventID),
 			TaskID:    taskID,
 			RequestID: requestID,
 			Type:      eventType,
@@ -470,6 +468,21 @@ func nullableString(v string) any {
 		return nil
 	}
 	return v
+}
+
+func storedEventID(event types.BridgeEvent, now string) string {
+	if event.EventID != "" {
+		return event.TaskID + ":" + event.EventID
+	}
+	return fmt.Sprintf("%s:%s:%s", event.TaskID, event.Type, now)
+}
+
+func originalEventID(taskID string, stored string) string {
+	prefix := taskID + ":"
+	if strings.HasPrefix(stored, prefix) {
+		return strings.TrimPrefix(stored, prefix)
+	}
+	return stored
 }
 
 func orEmptyPayload(p map[string]any) map[string]any {

@@ -95,9 +95,14 @@ export function DiagnosticsPanel() {
           {testResult ? (
             <Tag color={testResult.ok ? "success" : "error"}>
               {testResult.ok
-                ? t("settings.effective.testOk")
+                ? (testResult.httpStatus > 0
+                    ? t("settings.effective.testOkHttp")
+                    : t("settings.effective.testOkBridge"))
                     .replace("{status}", String(testResult.httpStatus))
-                    .replace("{latency}", String(testResult.latencyMs))
+                    .replace("{latency}", String(testResult.latencyMs)) +
+                  (testResult.responseMessage
+                    ? ` · ${t("settings.effective.testReply")}: ${testResult.responseMessage}`
+                    : "")
                 : testResult.error
                   ? t("settings.effective.testNetworkError").replace("{error}", testResult.error)
                   : t("settings.effective.testFail").replace("{status}", String(testResult.httpStatus))}

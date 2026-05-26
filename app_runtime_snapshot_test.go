@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -57,12 +58,25 @@ func TestProviderSnapshotFromEnv(t *testing.T) {
 	})
 }
 
+func TestFindBundledBinaryPathFindsWindowsSiblingRuntime(t *testing.T) {
+	exePath := filepath.Join("C:", "Users", "test", "AppData", "Local", "Programs", "OfficeDex", "OfficeDex.exe")
+	want := filepath.Join("C:", "Users", "test", "AppData", "Local", "Programs", "OfficeDex", "officecli", "officecli.exe")
+
+	got := findBundledBinaryPath("windows", exePath, "", func(path string) bool {
+		return path == want
+	})
+
+	if got != want {
+		t.Fatalf("findBundledBinaryPath = %q, want %q", got, want)
+	}
+}
+
 func TestGetBridgeRuntimeSnapshot(t *testing.T) {
 	t.Run("pre-spawn-hosted", func(t *testing.T) {
 		a := &App{
-			proxyPool: netproxy.NewPool(),
+			proxyPool:      netproxy.NewPool(),
 			cachedSettings: types.UserSettings{
-				Defaults: types.GenerateDefaults{RuntimeMode: types.RuntimeHosted},
+				// No LlmProvider → official (hosted) mode
 			},
 		}
 		snap, err := a.GetBridgeRuntimeSnapshot()
@@ -73,7 +87,7 @@ func TestGetBridgeRuntimeSnapshot(t *testing.T) {
 			t.Errorf("expected EnvApplied=false pre-spawn")
 		}
 		if snap.Provider != nil {
-			t.Errorf("expected Provider=nil for hosted mode")
+			t.Errorf("expected Provider=nil for official mode")
 		}
 		if snap.RuntimeMode != types.RuntimeHosted {
 			t.Errorf("RuntimeMode = %q, want hosted", snap.RuntimeMode)
@@ -85,7 +99,9 @@ func TestGetBridgeRuntimeSnapshot(t *testing.T) {
 		a := &App{
 			proxyPool: netproxy.NewPool(),
 			cachedSettings: types.UserSettings{
-				Defaults: types.GenerateDefaults{RuntimeMode: types.RuntimeCustom},
+				LlmProvider: &types.LlmProvider{
+					Type: types.LlmAnthropic,
+				},
 			},
 			resolvedBinaryPath: "/tmp/officecli",
 			resolvedBinaryEnv: []string{
@@ -123,9 +139,9 @@ func TestGetBridgeRuntimeSnapshot(t *testing.T) {
 
 	t.Run("post-spawn-hosted-has-no-provider", func(t *testing.T) {
 		a := &App{
-			proxyPool: netproxy.NewPool(),
+			proxyPool:      netproxy.NewPool(),
 			cachedSettings: types.UserSettings{
-				Defaults: types.GenerateDefaults{RuntimeMode: types.RuntimeHosted},
+				// No LlmProvider → official (hosted) mode
 			},
 			resolvedBinaryPath: "/tmp/officecli",
 			resolvedBinaryEnv:  []string{"OFFICE_CLI_RUNTIME_MODE=hosted"},
@@ -159,6 +175,20 @@ func TestGetBridgeRuntimeSnapshot(t *testing.T) {
 	})
 }
 
+func TestCurrentRuntimeModeLockedUsesCachedSettingsUnderAppLock(t *testing.T) {
+	a := &App{}
+
+	a.mu.Lock()
+	if got := a.currentRuntimeModeLocked(); got != types.RuntimeHosted {
+		t.Errorf("hosted mode = %q, want %q", got, types.RuntimeHosted)
+	}
+	a.cachedSettings.LlmProvider = &types.LlmProvider{Type: types.LlmOpenAI}
+	if got := a.currentRuntimeModeLocked(); got != types.RuntimeCustom {
+		t.Errorf("custom mode = %q, want %q", got, types.RuntimeCustom)
+	}
+	a.mu.Unlock()
+}
+
 func TestValidateCustomProvider(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -166,22 +196,24 @@ func TestValidateCustomProvider(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name: "hosted-mode-skips-check",
+			name:  "hosted-mode-skips-check",
 			input: types.UserSettings{
-				Defaults: types.GenerateDefaults{RuntimeMode: types.RuntimeHosted},
+				// No LlmProvider → official (hosted) mode → skip check
 			},
 		},
 		{
 			name: "custom-without-provider-blocks",
 			input: types.UserSettings{
-				Defaults: types.GenerateDefaults{RuntimeMode: types.RuntimeCustom},
+				LlmProvider: &types.LlmProvider{
+					Type: types.LlmOpenAI, APIKey: "sk-x", Model: "gpt-4",
+					// BaseURL is missing
+				},
 			},
-			wantErr: "generate.custom_provider_missing",
+			wantErr: "generate.custom_provider_incomplete",
 		},
 		{
 			name: "custom-missing-base-url-blocks",
 			input: types.UserSettings{
-				Defaults: types.GenerateDefaults{RuntimeMode: types.RuntimeCustom},
 				LlmProvider: &types.LlmProvider{
 					Type: types.LlmOpenAI, APIKey: "sk-x", Model: "gpt-4",
 				},
@@ -191,7 +223,6 @@ func TestValidateCustomProvider(t *testing.T) {
 		{
 			name: "custom-missing-api-key-blocks",
 			input: types.UserSettings{
-				Defaults: types.GenerateDefaults{RuntimeMode: types.RuntimeCustom},
 				LlmProvider: &types.LlmProvider{
 					Type: types.LlmOpenAI, BaseURL: "https://api.openai.com/v1", Model: "gpt-4",
 				},
@@ -201,7 +232,6 @@ func TestValidateCustomProvider(t *testing.T) {
 		{
 			name: "custom-missing-model-blocks",
 			input: types.UserSettings{
-				Defaults: types.GenerateDefaults{RuntimeMode: types.RuntimeCustom},
 				LlmProvider: &types.LlmProvider{
 					Type: types.LlmOpenAI, BaseURL: "https://api.openai.com/v1", APIKey: "sk-x",
 				},
@@ -211,7 +241,6 @@ func TestValidateCustomProvider(t *testing.T) {
 		{
 			name: "custom-whitespace-counts-as-missing",
 			input: types.UserSettings{
-				Defaults: types.GenerateDefaults{RuntimeMode: types.RuntimeCustom},
 				LlmProvider: &types.LlmProvider{
 					Type: types.LlmOpenAI, BaseURL: "   ", APIKey: "sk-x", Model: "gpt-4",
 				},
@@ -221,7 +250,6 @@ func TestValidateCustomProvider(t *testing.T) {
 		{
 			name: "custom-fully-configured-passes",
 			input: types.UserSettings{
-				Defaults: types.GenerateDefaults{RuntimeMode: types.RuntimeCustom},
 				LlmProvider: &types.LlmProvider{
 					Type: types.LlmOpenAI, BaseURL: "https://api.openai.com/v1", APIKey: "sk-x", Model: "gpt-4",
 				},

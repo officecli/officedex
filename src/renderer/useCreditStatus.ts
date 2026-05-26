@@ -31,7 +31,7 @@ export function deriveCreditInfo(status: CreditStatus): CreditInfo {
       displayMode: "balance",
       used: 0,
       total: balance,
-      planLabel: status.planName || status.accessMode || "Hosted credits",
+      planLabel: status.planName || status.accessMode || "Official credits",
     };
   }
   if (status.anonymousCreditBalance !== null) {

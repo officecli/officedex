@@ -10,6 +10,7 @@ import {
 
   FileTextOutlined,
   FolderOpenOutlined,
+  LinkOutlined,
   LoadingOutlined,
   PaperClipOutlined,
   PlayCircleOutlined,
@@ -38,7 +39,8 @@ type Translator = (key: string, vars?: Record<string, string | number>) => strin
 export type FailureKind = "connection" | "auth" | "task" | "setup" | "other";
 
 interface DialogueProps {
-  task?: DesktopTask;
+  tasks: DesktopTask[];
+  conversationId?: string;
   artifacts: Artifact[];
   busy: boolean;
   lastError?: string;
@@ -51,26 +53,19 @@ interface DialogueProps {
   onRetry: () => void;
   onPreview: (artifact: Artifact) => void;
   onForceCancel?: (taskId: string) => void;
-  onContinueGeneration?: (priorArtifact: Artifact, prompt: string) => void;
+  onContinueGeneration?: (documentType: string, prompt: string, referenceImages?: string[]) => void;
 }
 
-export function DialogueScreen({ task, artifacts, busy, lastError, errorKind, errorDetails, bridgeStatus, onSubmit, onOpenSettings, onOpenLogin, onRetry, onPreview, onForceCancel, onContinueGeneration }: DialogueProps) {
+export function DialogueScreen({ tasks, conversationId, artifacts, busy, lastError, errorKind, errorDetails, bridgeStatus, onSubmit, onOpenSettings, onOpenLogin, onRetry, onPreview, onForceCancel, onContinueGeneration }: DialogueProps) {
   if (lastError) {
     return <ConnectionFailure kind={errorKind} status={bridgeStatus} error={lastError} details={errorDetails} onOpenSettings={onOpenSettings} onOpenLogin={onOpenLogin} onRetry={onRetry} />;
   }
-  if (task?.status === "question" && task.question) {
-    return <QuestionDialogue task={task} />;
+  // No tasks = fresh new generation prompt
+  if (tasks.length === 0) {
+    return <FluidNewGeneration busy={busy} onSubmit={onSubmit} />;
   }
-  if (task?.status === "completed") {
-    return <CompletedDialogue task={task} onPreview={onPreview} onContinueGeneration={onContinueGeneration} />;
-  }
-  if (task?.status === "failed" || task?.status === "cancelled") {
-    return <TerminalDialogue task={task} onOpenLogin={onOpenLogin} />;
-  }
-  if (task?.status === "running" || task?.status === "starting") {
-    return <RunningDialogue task={task} onForceCancel={onForceCancel} />;
-  }
-  return <FluidNewGeneration busy={busy} onSubmit={onSubmit} />;
+  // Conversation view with all rounds
+  return <ConversationView tasks={tasks} busy={busy} onPreview={onPreview} onForceCancel={onForceCancel} onContinueGeneration={onContinueGeneration} onOpenLogin={onOpenLogin} />;
 }
 
 function FluidNewGeneration({ busy, onSubmit }: { busy: boolean; onSubmit: (values: GenerateInput) => Promise<void> }) {
@@ -85,9 +80,8 @@ function FluidNewGeneration({ busy, onSubmit }: { busy: boolean; onSubmit: (valu
     form.setFieldsValue({
       documentType: settings.defaults.documentType,
       mode: settings.defaults.mode,
-      runtimeMode: settings.defaults.runtimeMode,
     });
-  }, [form, settings.defaults.documentType, settings.defaults.mode, settings.defaults.runtimeMode]);
+  }, [form, settings.defaults.documentType, settings.defaults.mode]);
 
   return (
     <div className="fluid-new-task">
@@ -189,17 +183,86 @@ function FluidNewGeneration({ busy, onSubmit }: { busy: boolean; onSubmit: (valu
   );
 }
 
-function RunningDialogue({ task, onForceCancel }: { task: DesktopTask; onForceCancel?: (taskId: string) => void }) {
+/* ─── Conversation View ─── */
+
+function ConversationView({ tasks, busy, onPreview, onForceCancel, onContinueGeneration, onOpenLogin }: {
+  tasks: DesktopTask[];
+  busy: boolean;
+  onPreview: (artifact: Artifact) => void;
+  onForceCancel?: (taskId: string) => void;
+  onContinueGeneration?: (documentType: string, prompt: string, referenceImages?: string[]) => void;
+  onOpenLogin: () => void;
+}) {
+  const latestTask = tasks[tasks.length - 1];
   const bottomRef = useRef<HTMLDivElement>(null);
+  const t = useT();
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [latestTask.events.length]);
+
+  const isActive = ["running", "starting", "question"].includes(latestTask.status);
+
+  return (
+    <div className="conversation-layout">
+      <div className="chat-thread">
+        {tasks.map((task) => {
+          const isLatest = task.id === latestTask.id;
+          // Past rounds: always show as completed/failed/cancelled
+          if (!isLatest || !isActive) {
+            return <ConversationRound key={task.id} task={task} onPreview={onPreview} onOpenLogin={onOpenLogin} />;
+          }
+          // Latest + active: show as active round
+          return <ActiveTaskRound key={task.id} task={task} onForceCancel={onForceCancel} />;
+        })}
+        <div ref={bottomRef} />
+      </div>
+      <ConversationFooter
+        latestTask={latestTask}
+        busy={busy}
+        onContinueGeneration={onContinueGeneration}
+        onForceCancel={onForceCancel}
+        onOpenLogin={onOpenLogin}
+      />
+    </div>
+  );
+}
+
+/* ─── Conversation Round (completed / failed / cancelled) ─── */
+
+function ConversationRound({ task, onPreview, onOpenLogin }: {
+  task: DesktopTask;
+  onPreview: (artifact: Artifact) => void;
+  onOpenLogin: () => void;
+}) {
+  const t = useT();
+  const subject = taskSubject(task, t);
+  const timeMarker = formatLocalTimestamp(task.events[0]?.ts) || t("dialogue.history.generationHistory");
+
+  return (
+    <>
+      <div className="time-marker">{timeMarker}</div>
+      <UserMessage task={task} fallback={subject} />
+      <TaskResultMessage task={task} onPreview={onPreview} onOpenLogin={onOpenLogin} />
+    </>
+  );
+}
+
+/* ─── Active Task Round (running / starting / question) ─── */
+
+function ActiveTaskRound({ task, onForceCancel }: {
+  task: DesktopTask;
+  onForceCancel?: (taskId: string) => void;
+}) {
   const t = useT();
   const capability = useReportCapability();
   const [reportOpen, setReportOpen] = useState(false);
   const [stalledRequestId, setStalledRequestId] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [task.events.length]);
+  const subject = taskSubject(task, t);
+  const documentType = task.documentType || task.artifact?.documentType || t("dialogue.history.targetTypeDefault");
+  const isRunning = task.status === "running" || task.status === "starting";
+  const timeMarker = formatLocalTimestamp(task.events[0]?.ts) || (isRunning ? t("dialogue.history.taskInProgress") : t("dialogue.history.generationHistory"));
 
   useEffect(() => {
     if (capability?.enabled || !task.stalledSince) return;
@@ -210,69 +273,9 @@ function RunningDialogue({ task, onForceCancel }: { task: DesktopTask; onForceCa
     return () => { cancelled = true; };
   }, [task.id, task.stalledSince, capability?.enabled]);
 
-  return (
-    <div className="conversation-layout">
-      <div className="chat-thread">
-        <GenerationHistoryThread task={task} />
-        {task.stalledSince ? (
-          <div className="message ai-message stalled-hint" style={{ borderLeft: "3px solid #fa8c16" }}>
-            <div className="message-author">
-              <WarningFilled style={{ color: "#fa8c16" }} />
-              <strong>{t("dialogue.stalled.title")}</strong>
-            </div>
-            <p>{t("dialogue.stalled.hint")}</p>
-            {capability?.enabled ? (
-              <Button size="small" onClick={() => setReportOpen(true)}>
-                {t("dialogue.stalled.reportIssue")}
-              </Button>
-            ) : stalledRequestId ? (
-              <Button size="small" icon={<CopyOutlined />} onClick={() => { void navigator.clipboard.writeText(stalledRequestId).then(() => { void message.success(t("report.toast.copiedRequestId")); }); }}>
-                {t("dialogue.stalled.copyRequestId")}
-              </Button>
-            ) : (
-              <Tooltip title={t("dialogue.terminal.noRequestId")}>
-                <Button size="small" disabled>
-                  {t("dialogue.stalled.copyRequestId")}
-                </Button>
-              </Tooltip>
-            )}
-          </div>
-        ) : null}
-        <div ref={bottomRef} />
-      </div>
-      <div className="docked-composer readonly">
-        <Input prefix={<PaperClipOutlined />} suffix={<LoadingOutlined />} placeholder={t("dialogue.running.placeholder")} disabled />
-        <Button danger icon={<StopOutlined />} loading={cancelling} onClick={async () => {
-          setCancelling(true);
-          try {
-            await officecli.cancel(task.id);
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            if (msg.includes("not found") && onForceCancel) {
-              onForceCancel(task.id);
-            } else {
-              message.error(`Cancel failed: ${msg}`);
-            }
-          } finally {
-            setCancelling(false);
-          }
-        }}>
-          {t("dialogue.running.cancel")}
-        </Button>
-      </div>
-      <ReportIssueDialog open={reportOpen} taskId={task.id} onClose={() => setReportOpen(false)} />
-    </div>
-  );
-}
-
-function GenerationHistoryThread({ task, hideLatestText }: { task: DesktopTask; hideLatestText?: boolean }) {
-  const t = useT();
   const latestEvent = task.events.at(-1);
   const latestText = eventText(latestEvent);
-  const subject = taskSubject(task, t);
-  const documentType = task.documentType || task.artifact?.documentType || t("dialogue.history.targetTypeDefault");
-  const isRunning = task.status === "running" || task.status === "starting" || task.status === "question";
-  const timeMarker = formatLocalTimestamp(latestEvent?.ts) || (isRunning ? t("dialogue.history.taskInProgress") : t("dialogue.history.generationHistory"));
+
   return (
     <>
       <div className="time-marker">{timeMarker}</div>
@@ -289,171 +292,125 @@ function GenerationHistoryThread({ task, hideLatestText }: { task: DesktopTask; 
           <li>
             <CheckCircleFilled /> {t("dialogue.history.targetType", { type: documentType.toUpperCase() })}
           </li>
-          {!hideLatestText ? (
-            <li className={isRunning ? "active" : ""}>
-              {isRunning ? <LoadingOutlined /> : <CheckCircleFilled />}{" "}
-              {latestText ? <span>{latestText}</span> : t("dialogue.history.waitingEvents")}
-            </li>
-          ) : null}
+          <li className={isRunning || task.status === "question" ? "active" : ""}>
+            {isRunning ? <LoadingOutlined /> : <CheckCircleFilled />}{" "}
+            {latestText ? <span>{latestText}</span> : t("dialogue.history.waitingEvents")}
+          </li>
           <li className="muted">{t("dialogue.history.taskId", { id: task.id })}</li>
         </ul>
       </div>
       <TaskRuntimePanel task={task} />
       <FluidProgressPanel task={task} />
+      {task.stalledSince ? (
+        <div className="message ai-message stalled-hint" style={{ borderLeft: "3px solid #fa8c16" }}>
+          <div className="message-author">
+            <WarningFilled style={{ color: "#fa8c16" }} />
+            <strong>{t("dialogue.stalled.title")}</strong>
+          </div>
+          <p>{t("dialogue.stalled.hint")}</p>
+          {capability?.enabled ? (
+            <Button size="small" onClick={() => setReportOpen(true)}>
+              {t("dialogue.stalled.reportIssue")}
+            </Button>
+          ) : stalledRequestId ? (
+            <Button size="small" icon={<CopyOutlined />} onClick={() => { void navigator.clipboard.writeText(stalledRequestId).then(() => { void message.success(t("report.toast.copiedRequestId")); }); }}>
+              {t("dialogue.stalled.copyRequestId")}
+            </Button>
+          ) : (
+            <Tooltip title={t("dialogue.terminal.noRequestId")}>
+              <Button size="small" disabled>
+                {t("dialogue.stalled.copyRequestId")}
+              </Button>
+            </Tooltip>
+          )}
+        </div>
+      ) : null}
+      <ReportIssueDialog open={reportOpen} taskId={task.id} onClose={() => setReportOpen(false)} />
     </>
   );
 }
 
-function QuestionDialogue({ task }: { task: DesktopTask }) {
-  const [form] = Form.useForm<{ answer: string }>();
-  const t = useT();
-  const question = task.question;
-  if (!question) return null;
-  const currentQuestion = question;
-  async function answer(optionId?: string, value?: string) {
-    await officecli.respond({ taskId: task.id, questionId: currentQuestion.id, optionId, answer: value });
-  }
-  return (
-    <div className="conversation-layout">
-      <div className="chat-thread">
-        <div className="time-marker">{t("dialogue.question.timestamp")}</div>
-        <div className="message ai-message warning">
-          <div className="message-author">
-            <WarningFilled />
-            <strong>{t("dialogue.question.title")}</strong>
-          </div>
-          <p>{question.question || t("dialogue.question.placeholderQuestion")}</p>
-          <Space wrap>
-            {(question.options.length ? question.options : [{ id: "include", label: t("dialogue.question.option.include") }, { id: "skip", label: t("dialogue.question.option.skip") }]).map((option) => (
-              <Button key={option.id} onClick={() => answer(option.id, option.label)}>
-                {option.label}
-              </Button>
-            ))}
-          </Space>
-          {question.allowFreeform ? (
-            <Form form={form} className="inline-answer" onFinish={(values) => answer(undefined, values.answer)}>
-              <Form.Item name="answer" noStyle>
-                <Input placeholder={t("dialogue.question.inputPlaceholder")} />
-              </Form.Item>
-              <Button type="primary" htmlType="submit" icon={<SendOutlined />} />
-            </Form>
-          ) : null}
-        </div>
-      </div>
-      <div className="context-note">{t("dialogue.question.disclaimer")}</div>
-    </div>
-  );
-}
+/* ─── Task Result Message (completed / failed / cancelled) ─── */
 
-function CompletedDialogue({ task, onPreview, onContinueGeneration }: { task: DesktopTask; onPreview: (artifact: Artifact) => void; onContinueGeneration?: (priorArtifact: Artifact, prompt: string) => void }) {
-  const t = useT();
-  const [continuationPrompt, setContinuationPrompt] = useState("");
-  const artifact = task.artifact;
-  const latestEvent = task.events.at(-1);
-  const completionMessage = eventText(latestEvent);
-  const duration = taskDurationLabel(task.events, t);
-  const completedAt = formatLocalTimestamp(artifact?.syncedAt) || formatLocalTimestamp(latestEvent?.ts) || t("dialogue.completed.completionTimeUnknown");
-  const creditTag = renderCreditTag(task, t);
-  const showContinuationComposer = artifact && isImageArtifact(artifact);
-  return (
-    <div className="conversation-layout">
-      <div className="chat-thread">
-        <GenerationHistoryThread task={task} hideLatestText />
-        <div className="message ai-message success">
-          <div className="message-author">
-            <CheckCircleFilled />
-            <strong>{t("dialogue.completed.title")}</strong>
-            <Tag color="green">{duration}</Tag>
-            {creditTag}
-          </div>
-          <p>{completionMessage || t("dialogue.completed.completionFallback")}</p>
-          {artifact ? (
-            isImageArtifact(artifact) ? (
-              <div className="result-image-card">
-                <InlineImagePreview artifact={artifact} />
-                <div className="result-image-meta">
-                  <strong>{artifact.fileName}</strong>
-                  <span>
-                    {t("dialogue.completed.imageMeta", { type: artifact.documentType.toUpperCase(), time: completedAt })}
-                  </span>
-                </div>
-                <Space>
-                  <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => officecli.openPath(artifact.filePath)}>
-                    {t("dialogue.completed.open")}
-                  </Button>
-                  <Button icon={<FolderOpenOutlined />} onClick={() => officecli.showItemInFolder(artifact.filePath)}>
-                    {t("dialogue.completed.showInFolder")}
-                  </Button>
-                </Space>
-              </div>
-            ) : (
-              <div className="result-card">
-                <FileGlyph type={artifact.documentType} />
-                <div>
-                  <strong>{artifact.fileName}</strong>
-                  <span>
-                    {t("dialogue.completed.docMeta", { type: artifact.documentType.toUpperCase(), time: completedAt })}
-                  </span>
-                </div>
-                <Space>
-                  <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => officecli.openPath(artifact.filePath)}>
-                    {t("dialogue.completed.open")}
-                  </Button>
-                  {supportsOfflinePreview(artifact) ? <Button onClick={() => onPreview(artifact)}>{t("dialogue.completed.preview")}</Button> : null}
-                  <Button icon={<FolderOpenOutlined />} onClick={() => officecli.showItemInFolder(artifact.filePath)}>
-                    {t("dialogue.completed.showInFolder")}
-                  </Button>
-                </Space>
-              </div>
-            )
-          ) : null}
-        </div>
-      </div>
-      {showContinuationComposer ? (
-        <div className="docked-composer" data-testid="continuation-composer">
-          <Input.TextArea
-            autoSize={{ minRows: 1, maxRows: 4 }}
-            placeholder={t("dialogue.completed.continuationPlaceholder")}
-            value={continuationPrompt}
-            onChange={(e) => setContinuationPrompt(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
-                e.preventDefault();
-                if (continuationPrompt.trim() && artifact) {
-                  onContinueGeneration?.(artifact, continuationPrompt.trim());
-                  setContinuationPrompt("");
-                }
-              }
-            }}
-          />
-          <Button
-            type="primary"
-            icon={<SendOutlined />}
-            disabled={!continuationPrompt.trim()}
-            onClick={() => {
-              if (continuationPrompt.trim() && artifact) {
-                onContinueGeneration?.(artifact, continuationPrompt.trim());
-                setContinuationPrompt("");
-              }
-            }}
-          />
-        </div>
-      ) : (
-        <div className="docked-composer readonly">
-          <Input suffix={<SendOutlined />} placeholder={t("dialogue.completed.askPlaceholder")} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TerminalDialogue({ task, onOpenLogin }: { task: DesktopTask; onOpenLogin: () => void }) {
+function TaskResultMessage({ task, onPreview, onOpenLogin }: {
+  task: DesktopTask;
+  onPreview: (artifact: Artifact) => void;
+  onOpenLogin: () => void;
+}) {
   const t = useT();
   const capability = useReportCapability();
   const [reportOpen, setReportOpen] = useState(false);
   const [requestId, setRequestId] = useState<string | null>(null);
   const failed = task.status === "failed";
+  const cancelled = task.status === "cancelled";
+  const completed = task.status === "completed";
+  const artifact = task.artifact;
   const latestEvent = task.events.at(-1);
+  const creditTag = renderCreditTag(task, t);
+
+  useEffect(() => {
+    if (capability?.enabled || completed) return;
+    let c = false;
+    officecli.peekReportContext(task.id).then((ctx) => {
+      if (!c) setRequestId(ctx.requestId || null);
+    }).catch(() => {});
+    return () => { c = true; };
+  }, [task.id, capability?.enabled, completed]);
+
+  if (completed) {
+    const completionMessage = eventText(latestEvent);
+    const duration = taskDurationLabel(task.events, t);
+    const completedAt = formatLocalTimestamp(artifact?.syncedAt) || formatLocalTimestamp(latestEvent?.ts) || t("dialogue.completed.completionTimeUnknown");
+    return (
+      <div className="message ai-message success">
+        <div className="message-author">
+          <CheckCircleFilled />
+          <strong>{t("dialogue.completed.title")}</strong>
+          <Tag color="green">{duration}</Tag>
+          {creditTag}
+        </div>
+        <p>{completionMessage || t("dialogue.completed.completionFallback")}</p>
+        {artifact ? (
+          isImageArtifact(artifact) ? (
+            <div className="result-image-card">
+              <InlineImagePreview artifact={artifact} />
+              <div className="result-image-meta">
+                <strong>{artifact.fileName}</strong>
+                <span>{t("dialogue.completed.imageMeta", { type: artifact.documentType.toUpperCase(), time: completedAt })}</span>
+              </div>
+              <Space>
+                <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => officecli.openPath(artifact.filePath)}>
+                  {t("dialogue.completed.open")}
+                </Button>
+                <Button icon={<FolderOpenOutlined />} onClick={() => officecli.showItemInFolder(artifact.filePath)}>
+                  {t("dialogue.completed.showInFolder")}
+                </Button>
+              </Space>
+            </div>
+          ) : (
+            <div className="result-card">
+              <FileGlyph type={artifact.documentType} />
+              <div>
+                <strong>{artifact.fileName}</strong>
+                <span>{t("dialogue.completed.docMeta", { type: artifact.documentType.toUpperCase(), time: completedAt })}</span>
+              </div>
+              <Space>
+                <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => officecli.openPath(artifact.filePath)}>
+                  {t("dialogue.completed.open")}
+                </Button>
+                {supportsOfflinePreview(artifact) ? <Button onClick={() => onPreview(artifact)}>{t("dialogue.completed.preview")}</Button> : null}
+                <Button icon={<FolderOpenOutlined />} onClick={() => officecli.showItemInFolder(artifact.filePath)}>
+                  {t("dialogue.completed.showInFolder")}
+                </Button>
+              </Space>
+            </div>
+          )
+        ) : null}
+      </div>
+    );
+  }
+
+  // failed or cancelled
   const rawDescription = failed
     ? task.error || eventText(latestEvent) || t("dialogue.terminal.failed.fallback")
     : eventText(latestEvent) || t("dialogue.terminal.cancelled.fallback");
@@ -466,72 +423,193 @@ function TerminalDialogue({ task, onOpenLogin }: { task: DesktopTask; onOpenLogi
   const description = creditsExhausted
     ? t("dialogue.terminal.creditsExhausted.message")
     : rawDescription;
-  const creditTag = renderCreditTag(task, t);
-
-  useEffect(() => {
-    if (capability?.enabled) return;
-    let cancelled = false;
-    officecli.peekReportContext(task.id).then((ctx) => {
-      if (!cancelled) setRequestId(ctx.requestId || null);
-    }).catch(() => {});
-    return () => { cancelled = true; };
-  }, [task.id, capability?.enabled]);
 
   return (
-    <div className="conversation-layout">
-      <div className="chat-thread">
-        <GenerationHistoryThread task={task} hideLatestText />
-        <div className={`message ai-message terminal ${failed ? "failed" : "cancelled"}`}>
-          <div className="message-author">
-            {failed ? <CloseCircleOutlined /> : <StopOutlined />}
-            <strong>{title}</strong>
-            <Tag color={failed ? "red" : "default"}>{task.status}</Tag>
-            {creditTag}
-          </div>
-          <p>{description}</p>
-          {creditsExhausted ? (
-            <Button size="small" type="primary" icon={<UserOutlined />} onClick={onOpenLogin}>
-              {t("dialogue.terminal.creditsExhausted.signIn")}
-            </Button>
-          ) : capability?.enabled ? (
-            <Button size="small" onClick={() => setReportOpen(true)}>
-              {t("dialogue.terminal.reportIssue")}
-            </Button>
-          ) : requestId ? (
-            <Button size="small" icon={<CopyOutlined />} onClick={() => { void navigator.clipboard.writeText(requestId).then(() => { void message.success(t("report.toast.copiedRequestId")); }); }}>
-              {t("dialogue.terminal.copyRequestId")}
-            </Button>
-          ) : (
-            <Tooltip title={t("dialogue.terminal.noRequestId")}>
-              <Button size="small" disabled>
-                {t("dialogue.terminal.copyRequestId")}
-              </Button>
-            </Tooltip>
-          )}
-          <div className="terminal-event-card">
-            <span>{t("dialogue.history.taskIdLabel")}</span>
-            <strong>{task.id}</strong>
-          </div>
-          <div className="terminal-events">
-            <h3>{t("dialogue.terminal.eventsHeading")}</h3>
-            <Timeline
-              items={eventsForTimeline(task.events, t).map((event) => ({
-                color: event.color,
-                content: (
-                  <div className="timeline-copy">
-                    <strong>{event.title}</strong>
-                    <span>{event.meta}</span>
-                  </div>
-                ),
-              }))}
-            />
-          </div>
-        </div>
+    <div className={`message ai-message terminal ${failed ? "failed" : "cancelled"}`}>
+      <div className="message-author">
+        {failed ? <CloseCircleOutlined /> : <StopOutlined />}
+        <strong>{title}</strong>
+        <Tag color={failed ? "red" : "default"}>{task.status}</Tag>
+        {creditTag}
       </div>
-      <div className="docked-composer readonly">
-        <Input placeholder={failed ? t("dialogue.terminal.failed.placeholder") : t("dialogue.terminal.cancelled.placeholder")} disabled />
+      <p>{description}</p>
+      {creditsExhausted ? (
+        <Button size="small" type="primary" icon={<UserOutlined />} onClick={onOpenLogin}>
+          {t("dialogue.terminal.creditsExhausted.signIn")}
+        </Button>
+      ) : capability?.enabled ? (
+        <Button size="small" onClick={() => setReportOpen(true)}>
+          {t("dialogue.terminal.reportIssue")}
+        </Button>
+      ) : requestId ? (
+        <Button size="small" icon={<CopyOutlined />} onClick={() => { void navigator.clipboard.writeText(requestId).then(() => { void message.success(t("report.toast.copiedRequestId")); }); }}>
+          {t("dialogue.terminal.copyRequestId")}
+        </Button>
+      ) : (
+        <Tooltip title={t("dialogue.terminal.noRequestId")}>
+          <Button size="small" disabled>
+            {t("dialogue.terminal.copyRequestId")}
+          </Button>
+        </Tooltip>
+      )}
+      <div className="terminal-event-card">
+        <span>{t("dialogue.history.taskIdLabel")}</span>
+        <strong>{task.id}</strong>
+      </div>
+      <div className="terminal-events">
+        <h3>{t("dialogue.terminal.eventsHeading")}</h3>
+        <Timeline
+          items={eventsForTimeline(task.events, t).map((event) => ({
+            color: event.color,
+            content: (
+              <div className="timeline-copy">
+                <strong>{event.title}</strong>
+                <span>{event.meta}</span>
+              </div>
+            ),
+          }))}
+        />
       </div>
       <ReportIssueDialog open={reportOpen} taskId={task.id} onClose={() => setReportOpen(false)} />
+    </div>
+  );
+}
+
+/* ─── Conversation Footer ─── */
+
+function ConversationFooter({ latestTask, busy, onContinueGeneration, onForceCancel, onOpenLogin }: {
+  latestTask: DesktopTask;
+  busy: boolean;
+  onContinueGeneration?: (documentType: string, prompt: string, referenceImages?: string[]) => void;
+  onForceCancel?: (taskId: string) => void;
+  onOpenLogin: () => void;
+}) {
+  const t = useT();
+  const status = latestTask.status;
+  const [continuationPrompt, setContinuationPrompt] = useState("");
+  const [referenceImages, setReferenceImages] = useState<string[]>([]);
+  const [cancelling, setCancelling] = useState(false);
+  const artifact = latestTask.artifact;
+
+  // Running / Starting / Question: readonly composer with cancel
+  if (status === "running" || status === "starting") {
+    return (
+      <div className="docked-composer readonly">
+        <Input prefix={<PaperClipOutlined />} suffix={<LoadingOutlined />} placeholder={t("dialogue.running.placeholder")} disabled />
+        <Button danger icon={<StopOutlined />} loading={cancelling} onClick={async () => {
+          setCancelling(true);
+          try {
+            await officecli.cancel(latestTask.id);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (msg.includes("not found") && onForceCancel) {
+              onForceCancel(latestTask.id);
+            } else {
+              message.error(`Cancel failed: ${msg}`);
+            }
+          } finally {
+            setCancelling(false);
+          }
+        }}>
+          {t("dialogue.running.cancel")}
+        </Button>
+      </div>
+    );
+  }
+
+  // Question: show answer form
+  if (status === "question" && latestTask.question) {
+    const question = latestTask.question;
+    const [form] = Form.useForm<{ answer: string }>();
+    async function answer(optionId?: string, value?: string) {
+      await officecli.respond({ taskId: latestTask.id, questionId: question.id, optionId, answer: value });
+    }
+    return (
+      <div className="docked-composer readonly">
+        <Space wrap>
+          {(question.options.length ? question.options : [
+            { id: "include", label: t("dialogue.question.option.include") },
+            { id: "skip", label: t("dialogue.question.option.skip") },
+          ]).map((option) => (
+            <Button key={option.id} onClick={() => answer(option.id, option.label)}>
+              {option.label}
+            </Button>
+          ))}
+        </Space>
+        {question.allowFreeform ? (
+          <Form form={form} className="inline-answer" onFinish={(values) => answer(undefined, values.answer)}>
+            <Form.Item name="answer" noStyle>
+              <Input placeholder={t("dialogue.question.inputPlaceholder")} />
+            </Form.Item>
+            <Button type="primary" htmlType="submit" icon={<SendOutlined />} />
+          </Form>
+        ) : null}
+      </div>
+    );
+  }
+
+  // Completed / Failed / Cancelled: show continuation composer for ALL types
+  if (status === "completed" || status === "failed" || status === "cancelled") {
+    // Get document type from artifact or task
+    const docType = latestTask.documentType || latestTask.artifact?.documentType || "docx";
+
+    // Only image type allows continuation editing when there's already an artifact
+    const inputDisabled = artifact && !isImageArtifact(artifact);
+
+    return (
+      <div className="docked-composer" data-testid="continuation-composer">
+        {referenceImages.length > 0 ? (
+          <ReferenceImageStrip
+            items={referenceImages}
+            maxCount={referenceImages.length}
+            onRemove={(path) => setReferenceImages((prev) => prev.filter((p) => p !== path))}
+            onAdd={() => {
+              // Fallback for non-image types that don't support image attachment
+              officecli.openMultiFileDialog({ filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp"] }] }).then((paths) => {
+                if (paths) setReferenceImages((prev) => [...prev, ...paths]);
+              }).catch(() => {});
+            }}
+          />
+        ) : null}
+        <div className="composer-row">
+          <Input.TextArea
+            autoSize={{ minRows: 1, maxRows: 4 }}
+            placeholder={artifact && isImageArtifact(artifact) ? t("dialogue.completed.continuationPlaceholder") : t("dialogue.completed.askPlaceholder")}
+            value={continuationPrompt}
+            onChange={(e) => setContinuationPrompt(e.target.value)}
+            disabled={inputDisabled}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
+                e.preventDefault();
+                if (!inputDisabled && continuationPrompt.trim() && onContinueGeneration) {
+                  onContinueGeneration(docType, continuationPrompt.trim(), referenceImages.length > 0 ? referenceImages : undefined);
+                  setContinuationPrompt("");
+                  setReferenceImages([]);
+                }
+              }
+            }}
+          />
+          <Button
+            type="primary"
+            icon={<SendOutlined />}
+            disabled={inputDisabled || !continuationPrompt.trim()}
+            onClick={() => {
+              if (!inputDisabled && continuationPrompt.trim() && onContinueGeneration) {
+                onContinueGeneration(docType, continuationPrompt.trim(), referenceImages.length > 0 ? referenceImages : undefined);
+                setContinuationPrompt("");
+                setReferenceImages([]);
+              }
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Fallback: readonly composer
+  return (
+    <div className="docked-composer readonly">
+      <Input disabled suffix={<SendOutlined />} placeholder={t("dialogue.completed.askPlaceholder")} />
     </div>
   );
 }
