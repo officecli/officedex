@@ -8,28 +8,12 @@
 
 **VibeCoding writes code. VibeOfficing writes documents. Powered by OfficeDex.**
 
-![Hero - Dialogue main screen](docs/screenshots/hero-dialogue.png)
-
-<p>
-  <img src="https://img.shields.io/badge/Language-English-5645d4?style=flat-square" alt="English" />
-  <a href="docs/README.zh-CN.md"><img src="https://img.shields.io/badge/语言-简体中文-37352f?style=flat-square" alt="Chinese" /></a>
-</p>
-
-<p>
-  <a href="https://github.com/officecli/officedex/releases/latest"><img src="https://img.shields.io/badge/Download-macOS%20%7C%20Windows-5645d4?style=for-the-badge" alt="Download" /></a>
-  <a href="#-core-capabilities"><img src="https://img.shields.io/badge/AI%20Docs%20·%20Slides%20·%20Sheets-Generate-1aae39?style=for-the-badge" alt="Features" /></a>
-  <img src="https://img.shields.io/badge/Wails%20v2%20%2B%20React%2019-Native%20Cross--platform-0075de?style=for-the-badge" alt="Tech Stack" />
-</p>
-
-<sub>OfficeDex is the official desktop client for OfficeCLI — the AI-Native VibeOfficing platform that turns natural language into Word, PPT, Excel & images, locally.</sub>
-
 <br/>
 
 <p>
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-37352f?style=flat-square" alt="Platform" />
   <img src="https://img.shields.io/github/v/release/officecli/officedex?style=flat-square&color=5645d4&label=version" alt="Version" />
   <img src="https://img.shields.io/badge/stack-Wails%20v2%20%2B%20React%2019-0075de?style=flat-square" alt="Stack" />
-  <img src="https://img.shields.io/badge/UI-Notion%20Design-1aae39?style=flat-square" alt="UI" />
   <img src="https://img.shields.io/badge/license-Apache--2.0-1aae39?style=flat-square" alt="License" />
 </p>
 
@@ -41,6 +25,39 @@
 </p>
 
 </div>
+
+---
+
+## 💡 VibeOfficing
+
+Developers already **VibeCode** — describe intent, AI writes the program.
+**VibeOfficing** is the same paradigm for documents.
+
+> Say what you need → OfficeDex produces native `.docx` / `.pptx` / `.xlsx` directly.
+
+- **Understands OOXML** formats, templates, and layout conventions — the same way coding AI understands languages, frameworks, and design patterns
+- **No intermediate HTML.** No copy-paste. No manual formatting.
+- The output **is** the final file.
+
+![VibeCoding = VibeOfficing](docs/screenshots/vibeofficing-analogy.png)
+
+| Coding World                         | Office World                                                     | What AI Learns        |
+| ------------------------------------ | ---------------------------------------------------------------- | --------------------- |
+| Languages (Python / Go / TS)         | Formats (OOXML: .docx / .pptx / .xlsx)                           | **Syntax**            |
+| Frameworks (React / Django / Spring) | Templates (quarterly reports, pitch decks, competitive analysis) | **Structure**         |
+| Design patterns (MVC / Observer)     | Layout habits (heading hierarchy, color schemes, chart styles)   | **Style conventions** |
+
+### Memory · Format · Agent
+
+OfficeDex is not just "one prompt → one file." It's a **document workspace with memory**.
+
+- **Memory** — Remembers your style and design language across sessions. Your 50th report inherits the same polish as your 1st.
+- **Format** — Handles OOXML natively. No HTML rendering, no export-and-pray.
+- **Agent** — Multiple AI agents collaborate: one plans structure, one writes content, one handles formatting.
+
+> **OfficeDex remembers how your documents look — not just what they say.** Digitize your style into OfficeDex — never start from scratch again.
+
+![OfficeDex Engine](docs/screenshots/vibeofficing-engine.png)
 
 ---
 
@@ -130,41 +147,17 @@ In one sentence: **Tell it what you want — it generates Word / PPT / Excel for
 
 ---
 
-## 💡 VibeOfficing
-
-**VibeCoding** changed how developers write code — describe intent, AI writes the program. **VibeOfficing** is the same revolution for documents: describe what you need, AI generates native Office files — no manual formatting, no copy-paste, no starting from scratch.
-
-<div align="center">
-
-![VibeOfficing — AI-Native Office](docs/screenshots/vibeofficing.png)
-
-<sub>Digitize your style, your habits, your design language into OfficeDex — never start from scratch again.</sub>
-
-</div>
-
-Just like AI coding tools understand programming languages, frameworks, and design patterns, OfficeDex understands the document equivalents:
-
-| Coding World | Office World | What AI Learns |
-|---|---|---|
-| Languages (Python / Go / TS) | Formats (OOXML: .docx / .pptx / .xlsx) | **Syntax** |
-| Frameworks (React / Django / Spring) | Templates (quarterly reports, pitch decks, competitive analysis) | **Structure** |
-| Design patterns (MVC / Observer) | Layout habits (heading hierarchy, color schemes, chart styles) | **Style conventions** |
-
-> **OfficeDex remembers how your documents look — not just what they say.** Every new file picks up where the last one left off.
-
----
-
 ## 🔥 Why OfficeDex
 
-| Dimension | Web AI assistants | CLI tools | **OfficeDex** |
-|---|:---:|:---:|:---:|
-| 🖥 Native desktop feel | In-browser | Terminal | ✅ Wails native window |
-| 📂 Local-first files | Manual download | ✅ Direct save | ✅ Direct save + one-click open |
-| 👀 Inline preview | Open Office needed | None | ✅ DOCX/PPTX/XLSX rendered inline |
-| 🔌 Custom LLM | Vendor-locked | ✅ Any | ✅ Any + GUI config |
-| 🎨 UI & interaction | Generic | Plain text | ✅ Notion design system |
-| 🔒 Data sovereignty | Cloud-first | ✅ Local | ✅ Local (hosted optional) |
-| 💬 Mid-task interaction | Single-turn chat | None | ✅ AI asks back in real time, streaming status |
+| Dimension               | Web AI assistants  |   CLI tools    |                 **OfficeDex**                  |
+| ----------------------- | :----------------: | :------------: | :--------------------------------------------: |
+| 🖥 Native desktop feel   |     In-browser     |    Terminal    |             ✅ Wails native window             |
+| 📂 Local-first files    |  Manual download   | ✅ Direct save |        ✅ Direct save + one-click open         |
+| 👀 Inline preview       | Open Office needed |      None      |       ✅ DOCX/PPTX/XLSX rendered inline        |
+| 🔌 Custom LLM           |   Vendor-locked    |     ✅ Any     |              ✅ Any + GUI config               |
+| 🎨 UI & interaction     |      Generic       |   Plain text   |            ✅ Notion design system             |
+| 🔒 Data sovereignty     |    Cloud-first     |    ✅ Local    |           ✅ Local (hosted optional)           |
+| 💬 Mid-task interaction |  Single-turn chat  |      None      | ✅ AI asks back in real time, streaming status |
 
 > In a phrase: **Stop formatting. Start VibeOfficing.**
 
@@ -213,14 +206,15 @@ Powered by `docx-preview` / `pdfjs-dist` / `xlsx` for inline rendering. DOCX / P
 
 ### Users: download the installer
 
-| Platform | Installer | Notes |
-|---|---|---|
-| 🍎 macOS (Apple Silicon / Intel) | `OfficeDex-x.y.z-arm64.dmg` / `-x64.dmg` | Double-click `.dmg` → drag to Applications |
-| 🪟 Windows 10/11 | `OfficeDex-Setup-x.y.z.exe` | Double-click to install. First launch auto-downloads the OfficeCLI runtime. |
+| Platform                         | Installer                                | Notes                                                                       |
+| -------------------------------- | ---------------------------------------- | --------------------------------------------------------------------------- |
+| 🍎 macOS (Apple Silicon / Intel) | `OfficeDex-x.y.z-arm64.dmg` / `-x64.dmg` | Double-click `.dmg` → drag to Applications                                  |
+| 🪟 Windows 10/11                 | `OfficeDex-Setup-x.y.z.exe`              | Double-click to install. First launch auto-downloads the OfficeCLI runtime. |
 
 Latest Release: **[github.com/officecli/officedex/releases/latest](https://github.com/officecli/officedex/releases/latest)**
 
 > [!IMPORTANT]
+>
 > ### 🍎 macOS users — "OfficeDex.app" cannot be opened?
 >
 > Because the app is not yet Apple-notarized, Gatekeeper will block the first launch with a **"Apple could not verify..."** dialog.
@@ -323,18 +317,18 @@ From **Settings → OfficeCLI Runtime** you can: check for updates / switch vers
 
 What's on the way (in priority order):
 
-| Status | Capability | Notes |
-|:---:|---|---|
-| ✅ Shipped | Document / PPT / Excel generation | Three core formats |
-| ✅ Shipped | Inline preview panel | DOCX / PPTX / XLSX / PDF |
-| ✅ Shipped | Image input (visual understanding) | Paste or upload reference images |
-| ✅ Shipped | Notion-style UI | Customizable design tokens |
-| 🚧 In progress | Multilingual UI (EN / 日本語) | Translation in preparation |
-| 🚧 In progress | Template marketplace | Community-shared prompts and styles |
-| 🔜 Planned | Collaborative mode | Multi-user editing on the same task |
-| 🔜 Planned | Plugin system | Third-party generators |
-| 🔜 Planned | Official Linux installers | AppImage / deb |
-| 💭 Exploring | Mobile companion app | iOS / Android: view and trigger |
+|     Status     | Capability                         | Notes                               |
+| :------------: | ---------------------------------- | ----------------------------------- |
+|   ✅ Shipped   | Document / PPT / Excel generation  | Three core formats                  |
+|   ✅ Shipped   | Inline preview panel               | DOCX / PPTX / XLSX / PDF            |
+|   ✅ Shipped   | Image input (visual understanding) | Paste or upload reference images    |
+|   ✅ Shipped   | Notion-style UI                    | Customizable design tokens          |
+| 🚧 In progress | Multilingual UI (EN / 日本語)      | Translation in preparation          |
+| 🚧 In progress | Template marketplace               | Community-shared prompts and styles |
+|   🔜 Planned   | Collaborative mode                 | Multi-user editing on the same task |
+|   🔜 Planned   | Plugin system                      | Third-party generators              |
+|   🔜 Planned   | Official Linux installers          | AppImage / deb                      |
+|  💭 Exploring  | Mobile companion app               | iOS / Android: view and trigger     |
 
 ---
 
@@ -395,11 +389,11 @@ Change it via **Settings → Workspace**. After each generation, click "Show in 
 <details>
 <summary><b>Which document formats are supported?</b></summary>
 
-| Input | Output | Preview |
-|---|---|---|
-| Natural-language prompt | `.docx` / `.pptx` / `.xlsx` / `.pdf` | ✅ All inline-previewable |
-| Upload `.docx` / `.pdf` / `.md` as source material | Same | ✅ |
-| Paste / upload images as reference | Same | ✅ |
+| Input                                              | Output                               | Preview                   |
+| -------------------------------------------------- | ------------------------------------ | ------------------------- |
+| Natural-language prompt                            | `.docx` / `.pptx` / `.xlsx` / `.pdf` | ✅ All inline-previewable |
+| Upload `.docx` / `.pdf` / `.md` as source material | Same                                 | ✅                        |
+| Paste / upload images as reference                 | Same                                 | ✅                        |
 
 </details>
 
@@ -449,3 +443,13 @@ Copy the generated markdown and paste it into a GitHub Issue.
 <sub>Made with 💜 by the OfficeDex team · Runs natively on macOS / Windows</sub>
 
 </div>
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=officecli%2Fofficedex&type=date&legend=bottom-right">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=officecli/officedex&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=officecli/officedex&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=officecli/officedex&type=date&legend=top-left" />
+ </picture>
+</a>

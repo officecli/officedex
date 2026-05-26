@@ -44,6 +44,39 @@
 
 ---
 
+## 💡 VibeOfficing
+
+程序员已经在 **VibeCoding** — 描述意图，AI 写程序。
+**VibeOfficing** 是同一范式在文档领域的映射。
+
+> 说出你要什么 → OfficeDex 直接产出原生 `.docx` / `.pptx` / `.xlsx`。
+
+- **理解 OOXML** 格式、模板和排版惯例 — 就像编码 AI 理解编程语言、框架和设计模式
+- **没有中间产物。** 不用复制粘贴，不用手动排版。
+- 输出的**就是**最终文件。
+
+![VibeCoding = VibeOfficing](screenshots/vibeofficing-analogy.png)
+
+| 编程世界 | 办公世界 | AI 需要理解的 |
+|---|---|---|
+| 编程语言（Python / Go / TS） | 文档格式（OOXML：.docx / .pptx / .xlsx） | **底层语法** |
+| 框架（React / Django / Spring） | 文档模板（季报模板、路演 PPT、竞品分析表） | **结构范式** |
+| 设计模式（MVC / Observer） | 排版习惯（标题层级、配色方案、图表风格） | **风格惯例** |
+
+### Memory · Format · Agent
+
+OfficeDex 不只是"一句话 → 一个文件"，而是一个**带记忆的文档工作台**。
+
+- **Memory** — 跨会话记住你的风格和设计语言。第 50 份报告自动延续第 1 份的品质。
+- **Format** — 原生处理 OOXML，不走 HTML 渲染，不靠导出碰运气。
+- **Agent** — 多个 AI 智能体协作：一个规划结构，一个撰写内容，一个处理排版。
+
+> **OfficeDex 不只记住你说了什么，还记住你的文档长什么样。** 把你的风格数字化到 OfficeDex — 再也不用从零开始。
+
+![OfficeDex Engine](screenshots/vibeofficing-engine.png)
+
+---
+
 ## ⚡ 30 秒看懂 OfficeDex
 
 <table>
@@ -127,30 +160,6 @@
 - ⚙️ **本地或托管运行** — 既能跑你自己的 LLM（OpenAI / Claude / 自托管），也能用 OfficeCLI 托管运行时
 
 ![功能矩阵](screenshots/features-grid.png)
-
----
-
-## 💡 VibeOfficing
-
-**VibeCoding** 改变了程序员写代码的方式 — 描述意图，AI 写程序。**VibeOfficing** 是同一场革命在文档领域的发生：描述你要什么，AI 直接生成原生 Office 文件 — 不用手动排版，不用复制粘贴，不用从零开始。
-
-<div align="center">
-
-![VibeOfficing — AI-Native Office](screenshots/vibeofficing.png)
-
-<sub>把你的风格、习惯、设计语言数字化到 OfficeDex — 再也不用从零开始。</sub>
-
-</div>
-
-就像 AI 编码工具理解编程语言、框架和设计模式一样，OfficeDex 理解文档世界的对等概念：
-
-| 编程世界 | 办公世界 | AI 需要理解的 |
-|---|---|---|
-| 编程语言（Python / Go / TS） | 文档格式（OOXML：.docx / .pptx / .xlsx） | **底层语法** |
-| 框架（React / Django / Spring） | 文档模板（季报模板、路演 PPT、竞品分析表） | **结构范式** |
-| 设计模式（MVC / Observer） | 排版习惯（标题层级、配色方案、图表风格） | **风格惯例** |
-
-> **OfficeDex 不只记住你说了什么，还记住你的文档长什么样。** 每一份新文件，都从上一份的风格延续开始。
 
 ---
 
