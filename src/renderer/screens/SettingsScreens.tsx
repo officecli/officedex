@@ -46,7 +46,7 @@ export function SettingsScreen({ onCreditRefresh }: { onCreditRefresh?: () => vo
   );
 
   const pickOutputDir = useCallback(async () => {
-    const picked = await officecli.openFileDialog();
+    const picked = await officecli.openDirectoryDialog();
     if (picked) {
       await update({ outputDir: picked }).catch(() => undefined);
     }
@@ -76,7 +76,7 @@ export function SettingsScreen({ onCreditRefresh }: { onCreditRefresh?: () => vo
             mode: "fast",
             runtimeMode: "hosted",
             enableImages: true,
-            imageQuality: "standard",
+            imageQuality: "premium",
           },
           outputDir: null,
           llmProvider: null,
@@ -157,17 +157,6 @@ export function SettingsScreen({ onCreditRefresh }: { onCreditRefresh?: () => vo
               </SettingRow>
               <SettingRow title={t("settings.row.enableImages.title")} desc={t("settings.row.enableImages.desc")}>
                 <Switch checked={settings.defaults.enableImages} onChange={(checked) => updateDefaults({ enableImages: checked })} />
-              </SettingRow>
-              <SettingRow title={t("settings.row.imageQuality.title")} desc={t("settings.row.imageQuality.desc")}>
-                <Select
-                  value={settings.defaults.imageQuality}
-                  onChange={(value: "standard" | "premium") => updateDefaults({ imageQuality: value })}
-                  options={[
-                    { value: "standard", label: t("settings.option.imageQuality.standard") },
-                    { value: "premium", label: t("settings.option.imageQuality.premium") },
-                  ]}
-                  style={{ minWidth: 180 }}
-                />
               </SettingRow>
             </div>
             <div className="setting-group">

@@ -39,7 +39,7 @@ var defaultSettings = types.UserSettings{
 		Mode:         types.ModeFast,
 		RuntimeMode:  types.RuntimeHosted,
 		EnableImages: true,
-		ImageQuality: types.ImageStandard,
+		ImageQuality: types.ImagePremium,
 	},
 }
 

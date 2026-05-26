@@ -37,7 +37,7 @@ export async function installBridgeMock(page: Page, options: BridgeMockOptions =
         mode: opts.settings?.mode ?? "fast",
         runtimeMode: opts.settings?.runtimeMode ?? "hosted",
         enableImages: true,
-        imageQuality: "standard",
+        imageQuality: "premium",
       },
       outputDir: opts.settings?.outputDir ?? null,
       bridgeBinaryPath: opts.settings?.bridgeBinaryPath ?? null,
@@ -85,6 +85,10 @@ export async function installBridgeMock(page: Page, options: BridgeMockOptions =
       },
       openFileDialog: async (...args: unknown[]) => {
         record("openFileDialog", args);
+        return opts.pickedFile ?? null;
+      },
+      openDirectoryDialog: async (...args: unknown[]) => {
+        record("openDirectoryDialog", args);
         return opts.pickedFile ?? null;
       },
       openMultiFileDialog: async (...args: unknown[]) => {

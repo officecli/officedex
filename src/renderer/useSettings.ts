@@ -9,7 +9,7 @@ const FALLBACK: UserSettings = {
     mode: "fast",
     runtimeMode: "hosted",
     enableImages: true,
-    imageQuality: "standard",
+    imageQuality: "premium",
   },
   outputDir: null,
   llmProvider: null,

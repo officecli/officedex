@@ -74,6 +74,7 @@ function createBrowserPreviewAPI(): DesktopAPI {
       window.open(url, "_blank", "noopener,noreferrer");
     },
     openFileDialog: async () => null,
+    openDirectoryDialog: async () => null,
     openMultiFileDialog: async () => null,
     savePastedImage: async () => {
       throw new Error("Saving pasted images requires desktop file access.");
@@ -327,6 +328,10 @@ function createWailsAPI(): DesktopAPI {
     openExternal: (url) => WailsApp.OpenExternal(url),
     openFileDialog: async (options) => {
       const result = await WailsApp.OpenFileDialog(toWails(options ?? { filters: [] }));
+      return result ? result : null;
+    },
+    openDirectoryDialog: async () => {
+      const result = await WailsApp.OpenDirectoryDialog();
       return result ? result : null;
     },
     openMultiFileDialog: async (options) => {

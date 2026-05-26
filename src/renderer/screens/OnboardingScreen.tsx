@@ -39,7 +39,7 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
   }, []);
 
   const pickOutputDir = useCallback(async () => {
-    const picked = await officecli.openFileDialog();
+    const picked = await officecli.openDirectoryDialog();
     if (picked) {
       setDraft((current) => ({ ...current, outputDir: picked }));
     }

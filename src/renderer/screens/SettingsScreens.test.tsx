@@ -44,7 +44,7 @@ function makeSettings(overrides: Partial<UserSettings> = {}): UserSettings {
       mode: "fast",
       runtimeMode: "hosted",
       enableImages: true,
-      imageQuality: "standard",
+      imageQuality: "premium",
       ...(overrides.defaults ?? {}),
     },
     outputDir: overrides.outputDir ?? null,
@@ -57,7 +57,7 @@ function makeSettings(overrides: Partial<UserSettings> = {}): UserSettings {
 let getSettingsSpy: ReturnType<typeof vi.fn>;
 let updateSettingsSpy: ReturnType<typeof vi.fn>;
 let getDefaultWorkspaceDirSpy: ReturnType<typeof vi.fn>;
-let openFileDialogSpy: ReturnType<typeof vi.fn>;
+let openDirectoryDialogSpy: ReturnType<typeof vi.fn>;
 let originals: Partial<DesktopAPI>;
 
 beforeEach(() => {
@@ -73,17 +73,17 @@ beforeEach(() => {
     return currentSettings;
   });
   getDefaultWorkspaceDirSpy = vi.fn(async () => "/tmp/default-workspace");
-  openFileDialogSpy = vi.fn(async () => null);
+  openDirectoryDialogSpy = vi.fn(async () => null);
   originals = {
     getSettings: officecli.getSettings,
     updateSettings: officecli.updateSettings,
     getDefaultWorkspaceDir: officecli.getDefaultWorkspaceDir,
-    openFileDialog: officecli.openFileDialog,
+    openDirectoryDialog: officecli.openDirectoryDialog,
   };
   officecli.getSettings = getSettingsSpy as unknown as DesktopAPI["getSettings"];
   officecli.updateSettings = updateSettingsSpy as unknown as DesktopAPI["updateSettings"];
   officecli.getDefaultWorkspaceDir = getDefaultWorkspaceDirSpy as unknown as DesktopAPI["getDefaultWorkspaceDir"];
-  officecli.openFileDialog = openFileDialogSpy as unknown as DesktopAPI["openFileDialog"];
+  officecli.openDirectoryDialog = openDirectoryDialogSpy as unknown as DesktopAPI["openDirectoryDialog"];
 });
 
 afterEach(async () => {
@@ -145,8 +145,8 @@ describe("SettingsScreen", () => {
     expect(last.defaults?.enableImages).toBe(false);
   });
 
-  it("Browse output directory calls openFileDialog and stores the picked path", async () => {
-    openFileDialogSpy.mockResolvedValueOnce("/Users/test/picked/workspace");
+  it("Browse output directory calls openDirectoryDialog and stores the picked path", async () => {
+    openDirectoryDialogSpy.mockResolvedValueOnce("/Users/test/picked/workspace");
     const { SettingsScreen } = await import("./SettingsScreens");
     render(<SettingsScreen />);
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
@@ -155,7 +155,7 @@ describe("SettingsScreen", () => {
     const browseButtons = screen.getAllByRole("button", { name: /browse/i });
     fireEvent.click(browseButtons[0]);
 
-    await waitFor(() => expect(openFileDialogSpy).toHaveBeenCalled());
+    await waitFor(() => expect(openDirectoryDialogSpy).toHaveBeenCalled());
     await waitFor(() => {
       const matched = updateSettingsSpy.mock.calls.some((args) => {
         const patch = args[0] as Partial<UserSettings>;
@@ -172,7 +172,7 @@ describe("SettingsScreen", () => {
         mode: "fast",
         runtimeMode: "external",
         enableImages: true,
-        imageQuality: "standard",
+        imageQuality: "premium",
       },
     });
     const { SettingsScreen } = await import("./SettingsScreens");
@@ -299,7 +299,7 @@ describe("SettingsScreen > About card", () => {
     getSettingsSpy = vi.fn(async () => currentSettings);
     updateSettingsSpy = vi.fn(async () => currentSettings);
     getDefaultWorkspaceDirSpy = vi.fn(async () => "/tmp/default-workspace");
-    openFileDialogSpy = vi.fn(async () => null);
+    openDirectoryDialogSpy = vi.fn(async () => null);
     getAppVersionSpy = vi.fn(async () => "0.1.0");
     checkAppUpdateSpy = vi.fn(async () => ({
       release: {
@@ -328,7 +328,7 @@ describe("SettingsScreen > About card", () => {
       getSettings: officecli.getSettings,
       updateSettings: officecli.updateSettings,
       getDefaultWorkspaceDir: officecli.getDefaultWorkspaceDir,
-      openFileDialog: officecli.openFileDialog,
+      openDirectoryDialog: officecli.openDirectoryDialog,
       getAppVersion: officecli.getAppVersion,
       checkAppUpdate: officecli.checkAppUpdate,
       downloadAppUpdate: officecli.downloadAppUpdate,
@@ -339,7 +339,7 @@ describe("SettingsScreen > About card", () => {
     officecli.getSettings = getSettingsSpy as unknown as DesktopAPI["getSettings"];
     officecli.updateSettings = updateSettingsSpy as unknown as DesktopAPI["updateSettings"];
     officecli.getDefaultWorkspaceDir = getDefaultWorkspaceDirSpy as unknown as DesktopAPI["getDefaultWorkspaceDir"];
-    officecli.openFileDialog = openFileDialogSpy as unknown as DesktopAPI["openFileDialog"];
+    officecli.openDirectoryDialog = openDirectoryDialogSpy as unknown as DesktopAPI["openDirectoryDialog"];
     officecli.getAppVersion = getAppVersionSpy as unknown as DesktopAPI["getAppVersion"];
     officecli.checkAppUpdate = checkAppUpdateSpy as unknown as DesktopAPI["checkAppUpdate"];
     officecli.downloadAppUpdate = downloadAppUpdateSpy as unknown as DesktopAPI["downloadAppUpdate"];

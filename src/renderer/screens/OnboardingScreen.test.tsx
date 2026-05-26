@@ -11,7 +11,7 @@ const baseSettings: UserSettings = {
     mode: "fast",
     runtimeMode: "hosted",
     enableImages: true,
-    imageQuality: "standard",
+    imageQuality: "premium",
   },
   outputDir: null,
   llmProvider: null,
@@ -20,7 +20,7 @@ const baseSettings: UserSettings = {
 };
 
 let updateSettingsSpy: ReturnType<typeof vi.fn>;
-let openFileDialogSpy: ReturnType<typeof vi.fn>;
+let openDirectoryDialogSpy: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   if (!window.matchMedia) {
@@ -41,9 +41,9 @@ beforeEach(() => {
     ...patch,
     defaults: { ...baseSettings.defaults, ...(patch.defaults ?? {}) },
   }));
-  openFileDialogSpy = vi.fn(async () => null);
+  openDirectoryDialogSpy = vi.fn(async () => null);
   officecli.updateSettings = updateSettingsSpy as unknown as typeof officecli.updateSettings;
-  officecli.openFileDialog = openFileDialogSpy as unknown as typeof officecli.openFileDialog;
+  officecli.openDirectoryDialog = openDirectoryDialogSpy as unknown as typeof officecli.openDirectoryDialog;
 });
 
 afterEach(() => {

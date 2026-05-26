@@ -360,6 +360,7 @@ export interface DesktopAPI {
   showItemInFolder(filePath: string): Promise<void>;
   openExternal(url: string): Promise<void>;
   openFileDialog(options?: { filters?: Array<{ name: string; extensions: string[] }> }): Promise<string | null>;
+  openDirectoryDialog(): Promise<string | null>;
   openMultiFileDialog(options?: { filters?: Array<{ name: string; extensions: string[] }> }): Promise<string[] | null>;
   savePastedImage(data: Uint8Array, ext: string): Promise<string>;
   previewArtifact(artifact: Artifact): Promise<void>;

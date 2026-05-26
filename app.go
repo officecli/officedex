@@ -361,6 +361,14 @@ func (a *App) OpenFileDialog(options *FileDialogOptions) (string, error) {
 	})
 }
 
+// OpenDirectoryDialog shows a folder picker. Returns "" when the user cancels.
+func (a *App) OpenDirectoryDialog() (string, error) {
+	if a.ctx == nil {
+		return "", errors.New("app: not started")
+	}
+	return wailsruntime.OpenDirectoryDialog(a.ctx, wailsruntime.OpenDialogOptions{})
+}
+
 // OpenMultiFileDialog shows a multi-file picker. Returns an empty slice when
 // the user cancels.
 func (a *App) OpenMultiFileDialog(options *FileDialogOptions) ([]string, error) {
