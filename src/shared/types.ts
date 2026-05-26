@@ -59,7 +59,7 @@ export const DOCUMENT_TYPE_CAPABILITIES: Record<DocumentType, DocumentTypeCapabi
         required: false,
         multiple: true,
         maxCount: 6,
-        extensions: ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"],
+        extensions: ["png", "jpg", "jpeg", "webp", "svg", "bmp"],
         bridgeArgKey: "reference_images",
         label: "Reference images",
         description: "Optional style references blended into the generated image.",

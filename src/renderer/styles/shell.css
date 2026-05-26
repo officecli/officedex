@@ -621,7 +621,7 @@
 }
 
 .preview-active .content-grid.with-preview {
-  grid-template-columns: minmax(320px, 1fr) minmax(400px, 1.6fr);
+  grid-template-columns: minmax(480px, 1fr) minmax(400px, 1.6fr);
 }
 
 /* ─── Responsive ─── */

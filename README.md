@@ -4,7 +4,7 @@
 
 # OfficeDex
 
-### The AI-Native VibeOfficing Platform
+### The First AI-Native VibeOfficing Platform
 
 **VibeCoding writes code. VibeOfficing writes documents. Powered by OfficeDex.**
 
