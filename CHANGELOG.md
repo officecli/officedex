@@ -49,7 +49,7 @@ Initial open-source release of OfficeDex — the desktop client for OfficeCLI.
 - macOS universal + Windows amd64 builds, tag-driven release pipeline.
 
 ### Project scaffolding
-- Apache 2.0 LICENSE + NOTICE.
+- GNU General Public License v3.0 LICENSE + NOTICE.
 - CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, issue/PR templates, Dependabot.
 
 [Unreleased]: https://github.com/officecli/officedex/compare/v0.5.1...HEAD
