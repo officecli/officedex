@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [0.5.1] - 2026-05-26
+
+### Fixed
+- **macOS "is damaged" Gatekeeper error on download** — the CI release pipeline now signs the bundled `officecli` / `extrender` binaries and the outer `.app` with the Developer ID identity (hardened runtime + timestamp), submits both the `.app` and the `.dmg` to Apple's notary service via an App Store Connect API key, and staples the resulting tickets. Prior releases shipped ad-hoc-signed artifacts that Gatekeeper rejected as "damaged" after Chrome (or any browser) attached `com.apple.quarantine`.
+
+### Changed
+- `scripts/notarize.mjs` accepts App Store Connect API key credentials (`NOTARIZE_API_KEY_PATH` / `NOTARIZE_API_KEY_ID` / `NOTARIZE_API_ISSUER`) for CI use, in addition to the existing `OfficeDex-Notarize` keychain profile for local builds. It also handles `.dmg` targets directly.
+
 ## [0.5.0] - 2026-05-26
 
 ### Added
@@ -44,5 +52,6 @@ Initial open-source release of OfficeDex — the desktop client for OfficeCLI.
 - Apache 2.0 LICENSE + NOTICE.
 - CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, issue/PR templates, Dependabot.
 
-[Unreleased]: https://github.com/officecli/officedex/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/officecli/officedex/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/officecli/officedex/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/officecli/officedex/compare/v0.4.1...v0.5.0
