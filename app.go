@@ -1829,20 +1829,67 @@ func resolveExtrenderPlatformDir() string {
 }
 
 func (a *App) resolveGenerateInput(input types.GenerateInput, s types.UserSettings) (types.GenerateInput, error) {
+	// Caller-provided OutputDir wins. This is the seam the future
+	// "continue editing" path uses to reuse a prior task's directory so
+	// follow-up edits land alongside the original artifact.
 	if strings.TrimSpace(input.OutputDir) != "" {
 		return input, nil
 	}
+	base := a.workspaceDir
 	if s.OutputDir != nil && strings.TrimSpace(*s.OutputDir) != "" {
-		if err := os.MkdirAll(*s.OutputDir, 0o755); err != nil {
-			return types.GenerateInput{}, fmt.Errorf("mkdir output dir: %w", err)
-		}
-		out := input
-		out.OutputDir = *s.OutputDir
-		return out, nil
+		base = *s.OutputDir
+	}
+	taskDir := filepath.Join(base, buildTaskDirName(input.Topic, string(input.DocumentType)))
+	if err := os.MkdirAll(taskDir, 0o755); err != nil {
+		return types.GenerateInput{}, fmt.Errorf("mkdir task output dir: %w", err)
 	}
 	out := input
-	out.OutputDir = a.workspaceDir
+	out.OutputDir = taskDir
 	return out, nil
+}
+
+// buildTaskDirName returns a unique, filesystem-safe folder name for a single
+// generation task. The format is `<yyyymmdd-HHMMSS>-<slug>-<shortid>` so the
+// directories sort chronologically and remain readable when browsed.
+func buildTaskDirName(topic, docType string) string {
+	slug := slugify(topic)
+	if slug == "" {
+		slug = slugify(docType)
+	}
+	if slug == "" {
+		slug = "task"
+	}
+	short := strings.ReplaceAll(uuid.New().String(), "-", "")
+	if len(short) > 8 {
+		short = short[:8]
+	}
+	return fmt.Sprintf("%s-%s-%s", time.Now().Format("20060102-150405"), slug, short)
+}
+
+// slugify maps an arbitrary topic/document-type label to an ASCII, lowercase,
+// hyphen-separated slug capped at 40 characters. Non-ASCII characters
+// (e.g. CJK) are dropped entirely; if the result would be empty the caller
+// falls back to a sensible default.
+func slugify(input string) string {
+	var b strings.Builder
+	b.Grow(len(input))
+	lastDash := true
+	for _, r := range strings.ToLower(strings.TrimSpace(input)) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+			lastDash = false
+		default:
+			if !lastDash {
+				b.WriteByte('-')
+				lastDash = true
+			}
+		}
+		if b.Len() >= 40 {
+			break
+		}
+	}
+	return strings.Trim(b.String(), "-")
 }
 
 func llmProviderEnv(s types.UserSettings) []string {
