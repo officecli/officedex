@@ -470,7 +470,8 @@ function normaliseAppUpdateCheckResult(raw: unknown): AppUpdateCheckResult {
 
 function normaliseBridgeRuntimeSnapshot(raw: Partial<BridgeRuntimeSnapshot> | null | undefined): BridgeRuntimeSnapshot {
   const value = raw ?? {};
-  const mode: BridgeRuntimeSnapshot["runtimeMode"] = value.runtimeMode === "external" ? "external" : "hosted";
+  const raw_mode = value.runtimeMode as string | undefined;
+  const mode: BridgeRuntimeSnapshot["runtimeMode"] = (raw_mode === "custom" || raw_mode === "external") ? "custom" : "hosted";
   const provider = normaliseProviderSnapshot(value.provider ?? null);
   const snap: BridgeRuntimeSnapshot = {
     runtimeMode: mode,

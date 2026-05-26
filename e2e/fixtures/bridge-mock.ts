@@ -16,7 +16,7 @@ export interface BridgeMockOptions {
     onboardingCompletedAt?: string | null;
     documentType?: "pptx" | "docx" | "xlsx" | "report" | "img";
     mode?: "fast" | "best";
-    runtimeMode?: "external" | "hosted";
+    runtimeMode?: "custom" | "hosted";
     outputDir?: string | null;
     bridgeBinaryPath?: string | null;
     llmProvider?: unknown;

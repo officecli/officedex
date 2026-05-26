@@ -18,10 +18,10 @@ describe("TaskRuntimePanel", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("renders provider details for an external snapshot", () => {
+  it("renders provider details for a custom snapshot", () => {
     const task = makeTask({
       runtimeSnapshot: {
-        mode: "external",
+        mode: "custom",
         provider: {
           type: "openai",
           baseUrlHost: "https://api.openai.com",
@@ -34,7 +34,7 @@ describe("TaskRuntimePanel", () => {
     });
     render(<TaskRuntimePanel task={task} />);
 
-    expect(screen.getByText("External")).toBeTruthy();
+    expect(screen.getByText("Custom")).toBeTruthy();
     expect(screen.getByText("openai")).toBeTruthy();
     expect(screen.getByText("https://api.openai.com")).toBeTruthy();
     expect(screen.getByText("gpt-4o-mini")).toBeTruthy();

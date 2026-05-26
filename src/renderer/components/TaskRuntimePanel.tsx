@@ -16,7 +16,7 @@ export function TaskRuntimePanel({ task }: Props) {
   const t = useT();
   const snap = task.runtimeSnapshot;
   if (!snap) return null;
-  const isExternal = snap.mode === "external";
+  const isCustom = snap.mode === "custom";
   const provider = snap.provider;
 
   return (
@@ -24,11 +24,11 @@ export function TaskRuntimePanel({ task }: Props) {
       <div className="effective-row">
         <span className="effective-label">{t("dialogue.runtime.title")}</span>
         <span className="effective-value">
-          <StatusDot tone={isExternal ? "green" : "gray"} />
-          {isExternal ? "External" : "Hosted"}
+          <StatusDot tone={isCustom ? "green" : "gray"} />
+          {isCustom ? "Custom" : "Hosted"}
         </span>
       </div>
-      {isExternal && provider ? (
+      {isCustom && provider ? (
         <>
           <div className="effective-row">
             <span className="effective-label">{t("settings.effective.provider")}</span>

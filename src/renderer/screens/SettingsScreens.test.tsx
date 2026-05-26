@@ -170,7 +170,7 @@ describe("SettingsScreen", () => {
       defaults: {
         documentType: "pptx",
         mode: "fast",
-        runtimeMode: "external",
+        runtimeMode: "custom",
         enableImages: true,
         imageQuality: "premium",
       },

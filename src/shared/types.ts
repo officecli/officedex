@@ -113,7 +113,7 @@ export interface GenerateInput {
   topic: string;
   prompt: string;
   mode?: "fast" | "best";
-  runtimeMode?: "external" | "hosted";
+  runtimeMode?: "custom" | "hosted";
   sourceFile?: string;
   referenceImages?: string[];
   outputDir?: string;
@@ -162,12 +162,12 @@ export interface DesktopTask {
   creditMode?: string;
   lastProgressAt?: number;
   stalledSince?: number;
-  runtimeMode?: "external" | "hosted";
+  runtimeMode?: "custom" | "hosted";
   runtimeSnapshot?: TaskRuntimeSnapshot;
 }
 
 export interface TaskRuntimeSnapshot {
-  mode: "external" | "hosted";
+  mode: "custom" | "hosted";
   provider?: ProviderSnapshot;
   appliedAt?: string;
 }
@@ -221,7 +221,7 @@ export type AuthEvent =
 export interface GenerateDefaults {
   documentType: DocumentType;
   mode: "fast" | "best";
-  runtimeMode: "external" | "hosted";
+  runtimeMode: "custom" | "hosted";
   enableImages: boolean;
   imageQuality: "standard" | "premium";
 }
@@ -406,7 +406,7 @@ export interface ProviderSnapshot {
 }
 
 export interface BridgeRuntimeSnapshot {
-  runtimeMode: "external" | "hosted";
+  runtimeMode: "custom" | "hosted";
   provider?: ProviderSnapshot | null;
   binaryPath: string;
   resolvedAt?: string;

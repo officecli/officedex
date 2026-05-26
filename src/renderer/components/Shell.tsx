@@ -68,7 +68,7 @@ interface ShellProps {
   children: React.ReactNode;
   inspector?: React.ReactNode;
   credit?: CreditInfo;
-  runtimeMode?: "external" | "hosted";
+  runtimeMode?: "custom" | "hosted";
   tasks: DesktopTask[];
   selectedTaskId: string | undefined;
   onNavChange: (key: NavKey) => void;
@@ -194,7 +194,7 @@ export function MaterialSymbol({ name }: { name: string }) {
 
 const MASKED_VALUE = "••••";
 
-export function CreditMeter({ info, runtimeMode }: { info?: CreditInfo; runtimeMode?: "external" | "hosted" }) {
+export function CreditMeter({ info, runtimeMode }: { info?: CreditInfo; runtimeMode?: "custom" | "hosted" }) {
   const t = useT();
   const [hidden, setHidden] = useState(true);
   const loading = !info;
@@ -202,7 +202,7 @@ export function CreditMeter({ info, runtimeMode }: { info?: CreditInfo; runtimeM
   const planLabel = value.planLabel || t("shell.creditMeter.label");
   const toggleLabel = hidden ? t("shell.creditMeter.show") : t("shell.creditMeter.hide");
 
-  if (runtimeMode === "external") {
+  if (runtimeMode === "custom") {
     const tooltipBody = t("shell.creditMeter.freeTooltip");
     return (
       <div className="credit-meter credit-meter-balance credit-meter-free" role="group" aria-label={t("shell.creditMeter.aria", { tooltip: tooltipBody })}>

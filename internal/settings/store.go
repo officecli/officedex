@@ -347,8 +347,11 @@ func pickMode(value string) (types.GenerateMode, bool) {
 }
 
 func pickRuntimeMode(value string) (types.RuntimeMode, bool) {
+	if value == "external" {
+		return types.RuntimeCustom, true
+	}
 	switch types.RuntimeMode(value) {
-	case types.RuntimeExternal, types.RuntimeHosted:
+	case types.RuntimeCustom, types.RuntimeHosted:
 		return types.RuntimeMode(value), true
 	}
 	return "", false

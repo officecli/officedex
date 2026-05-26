@@ -145,11 +145,11 @@ export function SettingsScreen({ onCreditRefresh }: { onCreditRefresh?: () => vo
                         <span>{t("settings.row.runtime.hosted.desc")}</span>
                       </div>
                     </Radio>
-                    <Radio value="external" className={`runtime-choice ${settings.defaults.runtimeMode === "external" ? "active" : ""}`}>
+                    <Radio value="custom" className={`runtime-choice ${settings.defaults.runtimeMode === "custom" ? "active" : ""}`}>
                       <StatusDot tone="gray" />
                       <div>
-                        <strong>{t("settings.row.runtime.external.title")}</strong>
-                        <span>{t("settings.row.runtime.external.desc")}</span>
+                        <strong>{t("settings.row.runtime.custom.title")}</strong>
+                        <span>{t("settings.row.runtime.custom.desc")}</span>
                       </div>
                     </Radio>
                   </Space>
@@ -182,7 +182,7 @@ export function SettingsScreen({ onCreditRefresh }: { onCreditRefresh?: () => vo
             </div>
             <div className="setting-group">
               <h2>{t("settings.group.connection")}</h2>
-              {settings.defaults.runtimeMode === "external" ? (
+              {settings.defaults.runtimeMode === "custom" ? (
                 <SettingRow title={t("settings.row.provider.title")} desc={t("settings.row.provider.desc")}>
                   <ProviderFormControl
                     remote={settings.llmProvider}

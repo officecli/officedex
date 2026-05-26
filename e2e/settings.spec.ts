@@ -33,13 +33,13 @@ test.describe("Settings screen", () => {
     }).toBe(true);
   });
 
-  test("switching to External runtime reveals the LLM provider form", async ({ page }) => {
+  test("switching to Custom runtime reveals the LLM provider form", async ({ page }) => {
     await installBridgeMock(page);
     await page.goto("/");
     await page.getByRole("button", { name: "Settings" }).click();
     await expect(page.getByRole("heading", { name: /generation defaults/i })).toBeVisible();
 
-    await page.getByRole("radio", { name: /external/i }).click();
+    await page.getByRole("radio", { name: /custom/i }).click();
 
     await expect(page.getByPlaceholder(/api key/i)).toBeVisible();
     await page.getByPlaceholder(/api key/i).fill("sk-e2e-key");

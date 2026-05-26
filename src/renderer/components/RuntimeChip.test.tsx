@@ -42,9 +42,9 @@ describe("RuntimeChip", () => {
     });
   });
 
-  it("renders pending tag when external mode but env not applied", async () => {
+  it("renders pending tag when custom mode but env not applied", async () => {
     mockGetSnapshot.mockResolvedValueOnce(
-      snapshot({ runtimeMode: "external", envApplied: false }),
+      snapshot({ runtimeMode: "custom", envApplied: false }),
     );
     render(<RuntimeChip />);
     await waitFor(() => {
@@ -52,10 +52,10 @@ describe("RuntimeChip", () => {
     });
   });
 
-  it("renders external label with model when applied", async () => {
+  it("renders custom label with model when applied", async () => {
     mockGetSnapshot.mockResolvedValueOnce(
       snapshot({
-        runtimeMode: "external",
+        runtimeMode: "custom",
         envApplied: true,
         resolvedAt: "2026-05-25T10:00:00Z",
         binaryPath: "/tmp/officecli",

@@ -95,7 +95,7 @@ describe("OnboardingScreen", () => {
     expect(onComplete).not.toHaveBeenCalled();
   });
 
-  it("shows ProviderForm only when external runtime is selected and persists provider on finish", async () => {
+  it("shows ProviderForm only when custom runtime is selected and persists provider on finish", async () => {
     const onComplete = vi.fn();
     render(<OnboardingScreen settings={baseSettings} defaultWorkspaceDir="/tmp/default-workspace" onComplete={onComplete} />);
     fireEvent.click(screen.getByRole("button", { name: /next/i }));
@@ -104,14 +104,14 @@ describe("OnboardingScreen", () => {
     // hosted is default, ProviderForm should be hidden
     expect(screen.queryByPlaceholderText(/api key/i)).toBeNull();
 
-    fireEvent.click(screen.getByRole("radio", { name: /external/i }));
+    fireEvent.click(screen.getByRole("radio", { name: /custom/i }));
     const apiKeyField = await screen.findByPlaceholderText(/api key/i);
     fireEvent.change(apiKeyField, { target: { value: "sk-test-key" } });
     fireEvent.click(screen.getByRole("button", { name: /finish/i }));
 
     await waitFor(() => expect(updateSettingsSpy).toHaveBeenCalledTimes(1));
     const patch = updateSettingsSpy.mock.calls[0][0] as Partial<UserSettings>;
-    expect(patch.defaults?.runtimeMode).toBe("external");
+    expect(patch.defaults?.runtimeMode).toBe("custom");
     expect(patch.llmProvider).not.toBeNull();
     expect(patch.llmProvider?.apiKey).toBe("sk-test-key");
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));

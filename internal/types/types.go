@@ -199,7 +199,7 @@ type DesktopTask struct {
 	Error         string            `json:"error,omitempty"`
 	Stages        []StageState      `json:"stages,omitempty"`
 	ActiveStageID string            `json:"activeStageId,omitempty"`
-	// RuntimeMode records which mode ("external" / "hosted") the task ran
+	// RuntimeMode records which mode ("custom" / "hosted") the task ran
 	// under, captured from the task.started event payload so the renderer can
 	// label finished tasks correctly even after the user switches modes.
 	RuntimeMode string `json:"runtimeMode,omitempty"`
@@ -290,8 +290,8 @@ const (
 type RuntimeMode string
 
 const (
-	RuntimeExternal RuntimeMode = "external"
-	RuntimeHosted   RuntimeMode = "hosted"
+	RuntimeCustom RuntimeMode = "custom"
+	RuntimeHosted RuntimeMode = "hosted"
 )
 
 type ImageQuality string

@@ -74,15 +74,15 @@ export function RuntimeChip({ onClick }: RuntimeChipProps) {
 
   const { provider } = snapshot;
   const label = provider.model
-    ? t("runtime.chip.external").replace("{model}", provider.model)
-    : t("runtime.chip.externalNoModel");
-  const tooltip = t("runtime.chip.tooltip.external").replace("{host}", provider.baseUrlHost || provider.type);
+    ? t("runtime.chip.custom").replace("{model}", provider.model)
+    : t("runtime.chip.customNoModel");
+  const tooltip = t("runtime.chip.tooltip.custom").replace("{host}", provider.baseUrlHost || provider.type);
   return (
     <Tooltip title={tooltip}>
       <Tag
         color="processing"
         icon={<ThunderboltOutlined />}
-        className="runtime-chip runtime-chip-external"
+        className="runtime-chip runtime-chip-custom"
         onClick={onClick}
         style={onClick ? { cursor: "pointer" } : undefined}
       >

@@ -56,9 +56,9 @@ export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState 
   }
   if (event.type === "task.started") {
     const mode = stringPayload(event, "runtime_mode");
-    if (mode === "external" || mode === "hosted") {
-      nextTask.runtimeMode = mode;
-      const snapshot = runtimeSnapshotFromPayload(mode, event.payload);
+    if (mode === "custom" || mode === "external" || mode === "hosted") {
+      nextTask.runtimeMode = mode === "external" ? "custom" : mode;
+      const snapshot = runtimeSnapshotFromPayload(nextTask.runtimeMode, event.payload);
       if (snapshot) {
         nextTask.runtimeSnapshot = snapshot;
       }
@@ -187,7 +187,7 @@ function stringValue(value: unknown): string {
 }
 
 function runtimeSnapshotFromPayload(
-  mode: "external" | "hosted",
+  mode: "custom" | "hosted",
   payload: BridgeEvent["payload"],
 ): TaskRuntimeSnapshot | undefined {
   const snapshot: TaskRuntimeSnapshot = { mode };

@@ -257,7 +257,7 @@ func (a *App) Generate(input types.GenerateInput) (GenerateResult, error) {
 	if err != nil {
 		return GenerateResult{}, fmt.Errorf("load settings: %w", err)
 	}
-	if err := validateExternalProvider(settings); err != nil {
+	if err := validateCustomProvider(settings); err != nil {
 		return GenerateResult{}, err
 	}
 	resolved, err := a.resolveGenerateInput(input, settings)
@@ -1161,7 +1161,7 @@ func (a *App) GetBridgeRuntimeSnapshot() (types.BridgeRuntimeSnapshot, error) {
 			snap.ProxyHost = mask.Host(u.String())
 		}
 	}
-	if snap.EnvApplied && mode == types.RuntimeExternal {
+	if snap.EnvApplied && mode == types.RuntimeCustom {
 		snap.Provider = providerSnapshotFromEnv(env)
 	}
 	return snap, nil
@@ -1282,16 +1282,16 @@ func providerProbeFor(p types.LlmProvider) (providerProbe, error) {
 	}
 }
 
-// TestProvider issues a minimal probe against the configured external provider
+// TestProvider issues a minimal probe against the configured custom provider
 // and reports reachability. Returns an error only for misconfiguration (e.g.
-// not in external mode); transport-level failures are encoded in the result
+// not in custom mode); transport-level failures are encoded in the result
 // so the renderer can surface them inline.
 func (a *App) TestProvider() (types.ProviderTestResult, error) {
 	a.mu.Lock()
 	s := a.cachedSettings
 	a.mu.Unlock()
-	if s.Defaults.RuntimeMode != types.RuntimeExternal || s.LlmProvider == nil {
-		return types.ProviderTestResult{}, errors.New("test_provider.not_external")
+	if s.Defaults.RuntimeMode != types.RuntimeCustom || s.LlmProvider == nil {
+		return types.ProviderTestResult{}, errors.New("test_provider.not_custom")
 	}
 	probe, err := providerProbeFor(*s.LlmProvider)
 	if err != nil {
@@ -1624,7 +1624,7 @@ func (a *App) ensureBridge() (*bridge.Client, error) {
 					event.Payload = map[string]any{}
 				}
 				event.Payload["runtime_mode"] = string(mode)
-				if mode == types.RuntimeExternal {
+				if mode == types.RuntimeCustom {
 					if p := providerSnapshotFromEnv(env); p != nil {
 						event.Payload["runtime_provider"] = map[string]any{
 							"type":           string(p.Type),
@@ -1897,7 +1897,7 @@ func llmProviderEnv(s types.UserSettings) []string {
 	if s.Defaults.RuntimeMode != "" {
 		out = append(out, "OFFICE_CLI_RUNTIME_MODE="+string(s.Defaults.RuntimeMode))
 	}
-	if s.Defaults.RuntimeMode != types.RuntimeExternal || s.LlmProvider == nil {
+	if s.Defaults.RuntimeMode != types.RuntimeCustom || s.LlmProvider == nil {
 		return out
 	}
 	if s.LlmProvider.Type != "" {
@@ -1915,23 +1915,23 @@ func llmProviderEnv(s types.UserSettings) []string {
 	return out
 }
 
-// validateExternalProvider rejects Generate calls that would silently fall
+// validateCustomProvider rejects Generate calls that would silently fall
 // through to officecli's built-in default endpoint. When the user selects
-// external mode without supplying BaseURL/APIKey/Model, the subprocess
-// receives OFFICE_CLI_RUNTIME_MODE=external but no provider env, and
+// custom mode without supplying BaseURL/APIKey/Model, the subprocess
+// receives OFFICE_CLI_RUNTIME_MODE=custom but no provider env, and
 // officecli routes the request to its hosted fallback — which is misleading.
 // Block here with a sentinel error the renderer can translate.
-func validateExternalProvider(s types.UserSettings) error {
-	if s.Defaults.RuntimeMode != types.RuntimeExternal {
+func validateCustomProvider(s types.UserSettings) error {
+	if s.Defaults.RuntimeMode != types.RuntimeCustom {
 		return nil
 	}
 	if s.LlmProvider == nil {
-		return errors.New("generate.external_provider_missing")
+		return errors.New("generate.custom_provider_missing")
 	}
 	if strings.TrimSpace(s.LlmProvider.BaseURL) == "" ||
 		strings.TrimSpace(s.LlmProvider.APIKey) == "" ||
 		strings.TrimSpace(s.LlmProvider.Model) == "" {
-		return errors.New("generate.external_provider_incomplete")
+		return errors.New("generate.custom_provider_incomplete")
 	}
 	return nil
 }

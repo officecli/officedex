@@ -48,8 +48,8 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
   const finish = useCallback(async () => {
     setBusy(true);
     try {
-      const isExternal = draft.defaults.runtimeMode === "external";
-      const provider = isExternal && (draft.llmProvider.baseUrl || draft.llmProvider.apiKey || draft.llmProvider.model)
+      const isCustom = draft.defaults.runtimeMode === "custom";
+      const provider = isCustom && (draft.llmProvider.baseUrl || draft.llmProvider.apiKey || draft.llmProvider.model)
         ? draft.llmProvider
         : null;
       await officecli.updateSettings({
@@ -81,7 +81,7 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
   }, [onComplete]);
 
   const stepTitle = t(`onboarding.step.${step}.title`);
-  const isExternal = draft.defaults.runtimeMode === "external";
+  const isCustom = draft.defaults.runtimeMode === "custom";
 
   return (
     <div className="onboarding-overlay" role="dialog" aria-modal="true">
@@ -137,11 +137,11 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
               >
                 <Space direction="vertical" size={8}>
                   <Radio value="hosted">{t("onboarding.runtime.hosted")}</Radio>
-                  <Radio value="external">{t("onboarding.runtime.external")}</Radio>
+                  <Radio value="custom">{t("onboarding.runtime.custom")}</Radio>
                 </Space>
               </Radio.Group>
             </Field>
-            {isExternal ? (
+            {isCustom ? (
               <Field label={t("onboarding.field.provider")}>
                 <ProviderForm provider={draft.llmProvider} onChange={updateProvider} />
               </Field>

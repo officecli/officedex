@@ -16,9 +16,9 @@ func TestProviderSnapshotFromEnv(t *testing.T) {
 		}
 	})
 
-	t.Run("full-external-env", func(t *testing.T) {
+	t.Run("full-custom-env", func(t *testing.T) {
 		env := []string{
-			"OFFICE_CLI_RUNTIME_MODE=external",
+			"OFFICE_CLI_RUNTIME_MODE=custom",
 			"OFFICECLI_LLM_PROVIDER=openai",
 			"OFFICECLI_LLM_BASE_URL=https://api.openai.com/v1",
 			"OFFICECLI_LLM_API_KEY=sk-abcdefghijklmnopqrstuvwxyz0123456789ABCD",
@@ -80,16 +80,16 @@ func TestGetBridgeRuntimeSnapshot(t *testing.T) {
 		}
 	})
 
-	t.Run("post-spawn-external", func(t *testing.T) {
+	t.Run("post-spawn-custom", func(t *testing.T) {
 		now := time.Now()
 		a := &App{
 			proxyPool: netproxy.NewPool(),
 			cachedSettings: types.UserSettings{
-				Defaults: types.GenerateDefaults{RuntimeMode: types.RuntimeExternal},
+				Defaults: types.GenerateDefaults{RuntimeMode: types.RuntimeCustom},
 			},
 			resolvedBinaryPath: "/tmp/officecli",
 			resolvedBinaryEnv: []string{
-				"OFFICE_CLI_RUNTIME_MODE=external",
+				"OFFICE_CLI_RUNTIME_MODE=custom",
 				"OFFICECLI_LLM_PROVIDER=anthropic",
 				"OFFICECLI_LLM_BASE_URL=https://api.anthropic.com",
 				"OFFICECLI_LLM_API_KEY=sk-ant-livekey-1234567890abcdef",
@@ -111,7 +111,7 @@ func TestGetBridgeRuntimeSnapshot(t *testing.T) {
 			t.Errorf("ResolvedAt unset")
 		}
 		if snap.Provider == nil {
-			t.Fatalf("Provider unset for external mode")
+			t.Fatalf("Provider unset for custom mode")
 		}
 		if snap.Provider.Type != types.LlmAnthropic {
 			t.Errorf("Provider.Type = %q", snap.Provider.Type)
@@ -159,7 +159,7 @@ func TestGetBridgeRuntimeSnapshot(t *testing.T) {
 	})
 }
 
-func TestValidateExternalProvider(t *testing.T) {
+func TestValidateCustomProvider(t *testing.T) {
 	cases := []struct {
 		name    string
 		input   types.UserSettings
@@ -172,56 +172,56 @@ func TestValidateExternalProvider(t *testing.T) {
 			},
 		},
 		{
-			name: "external-without-provider-blocks",
+			name: "custom-without-provider-blocks",
 			input: types.UserSettings{
-				Defaults: types.GenerateDefaults{RuntimeMode: types.RuntimeExternal},
+				Defaults: types.GenerateDefaults{RuntimeMode: types.RuntimeCustom},
 			},
-			wantErr: "generate.external_provider_missing",
+			wantErr: "generate.custom_provider_missing",
 		},
 		{
-			name: "external-missing-base-url-blocks",
+			name: "custom-missing-base-url-blocks",
 			input: types.UserSettings{
-				Defaults: types.GenerateDefaults{RuntimeMode: types.RuntimeExternal},
+				Defaults: types.GenerateDefaults{RuntimeMode: types.RuntimeCustom},
 				LlmProvider: &types.LlmProvider{
 					Type: types.LlmOpenAI, APIKey: "sk-x", Model: "gpt-4",
 				},
 			},
-			wantErr: "generate.external_provider_incomplete",
+			wantErr: "generate.custom_provider_incomplete",
 		},
 		{
-			name: "external-missing-api-key-blocks",
+			name: "custom-missing-api-key-blocks",
 			input: types.UserSettings{
-				Defaults: types.GenerateDefaults{RuntimeMode: types.RuntimeExternal},
+				Defaults: types.GenerateDefaults{RuntimeMode: types.RuntimeCustom},
 				LlmProvider: &types.LlmProvider{
 					Type: types.LlmOpenAI, BaseURL: "https://api.openai.com/v1", Model: "gpt-4",
 				},
 			},
-			wantErr: "generate.external_provider_incomplete",
+			wantErr: "generate.custom_provider_incomplete",
 		},
 		{
-			name: "external-missing-model-blocks",
+			name: "custom-missing-model-blocks",
 			input: types.UserSettings{
-				Defaults: types.GenerateDefaults{RuntimeMode: types.RuntimeExternal},
+				Defaults: types.GenerateDefaults{RuntimeMode: types.RuntimeCustom},
 				LlmProvider: &types.LlmProvider{
 					Type: types.LlmOpenAI, BaseURL: "https://api.openai.com/v1", APIKey: "sk-x",
 				},
 			},
-			wantErr: "generate.external_provider_incomplete",
+			wantErr: "generate.custom_provider_incomplete",
 		},
 		{
-			name: "external-whitespace-counts-as-missing",
+			name: "custom-whitespace-counts-as-missing",
 			input: types.UserSettings{
-				Defaults: types.GenerateDefaults{RuntimeMode: types.RuntimeExternal},
+				Defaults: types.GenerateDefaults{RuntimeMode: types.RuntimeCustom},
 				LlmProvider: &types.LlmProvider{
 					Type: types.LlmOpenAI, BaseURL: "   ", APIKey: "sk-x", Model: "gpt-4",
 				},
 			},
-			wantErr: "generate.external_provider_incomplete",
+			wantErr: "generate.custom_provider_incomplete",
 		},
 		{
-			name: "external-fully-configured-passes",
+			name: "custom-fully-configured-passes",
 			input: types.UserSettings{
-				Defaults: types.GenerateDefaults{RuntimeMode: types.RuntimeExternal},
+				Defaults: types.GenerateDefaults{RuntimeMode: types.RuntimeCustom},
 				LlmProvider: &types.LlmProvider{
 					Type: types.LlmOpenAI, BaseURL: "https://api.openai.com/v1", APIKey: "sk-x", Model: "gpt-4",
 				},
@@ -231,7 +231,7 @@ func TestValidateExternalProvider(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validateExternalProvider(tc.input)
+			err := validateCustomProvider(tc.input)
 			if tc.wantErr == "" {
 				if err != nil {
 					t.Fatalf("expected nil, got %v", err)

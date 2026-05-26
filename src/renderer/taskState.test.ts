@@ -112,13 +112,13 @@ describe("taskState", () => {
   });
 
   it("captures runtime_mode from task.started payload", () => {
-    const externalStart = applyTaskEvent(createInitialTaskState(), {
+    const customStart = applyTaskEvent(createInitialTaskState(), {
       event_id: "ev-e1",
       task_id: "task-ext",
       type: "task.started",
-      payload: { runtime_mode: "external", topic: "demo" },
+      payload: { runtime_mode: "custom", topic: "demo" },
     });
-    expect(externalStart.tasks["task-ext"].runtimeMode).toBe("external");
+    expect(customStart.tasks["task-ext"].runtimeMode).toBe("custom");
 
     const hostedStart = applyTaskEvent(createInitialTaskState(), {
       event_id: "ev-h1",
@@ -143,7 +143,7 @@ describe("taskState", () => {
       task_id: "task-snap",
       type: "task.started",
       payload: {
-        runtime_mode: "external",
+        runtime_mode: "custom",
         runtime_provider: {
           type: "openai",
           base_url_host: "https://api.openai.com",
@@ -156,7 +156,7 @@ describe("taskState", () => {
     });
     const task = state.tasks["task-snap"];
     expect(task.runtimeSnapshot).toBeDefined();
-    expect(task.runtimeSnapshot!.mode).toBe("external");
+    expect(task.runtimeSnapshot!.mode).toBe("custom");
     expect(task.runtimeSnapshot!.appliedAt).toBe("2026-05-25T10:00:00Z");
     expect(task.runtimeSnapshot!.provider).toEqual({
       type: "openai",
