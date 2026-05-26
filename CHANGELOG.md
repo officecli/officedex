@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_No unreleased changes._
+
+## [0.5.0] - 2026-05-26
+
+### Added
+- **Continue editing on completed image** — completing an image generation now shows an inline composer at the bottom of the dialogue. Submitting a follow-up prompt auto-attaches the prior image as a reference, so the conversation itself becomes the iterate-on-this-image flow. Open a new conversation to start fresh.
+- **Per-task time-stamped output directories** — each generation now resolves to `<output-dir>/<yyyymmdd-HHMMSS>-<slug>-<shortid>/`. Follow-up edits land alongside the original artifact and directories sort chronologically.
+- **Automated macOS code signing + notarization** in the `dist:mac` build script (`scripts/notarize.mjs`), so local mac builds match the signed CI output.
+
+### Fixed
+- Workspace Output Directory picker now opens a directory dialog (was inadvertently opening a file picker).
+
+### Changed
+- Drop `gif` from the img reference-image accepted extensions (officecli pipeline does not support animated input).
+- Preview pane left-column min-width widened from 320px to 480px for readable dialogue when the preview is open.
+- README: tighten VibeOfficing tagline to "The First AI-Native …".
+
+## Project Foundation (v0.1.0 – v0.4.1)
+
 Initial open-source release of OfficeDex — the desktop client for OfficeCLI.
 
 ### Added
@@ -25,4 +44,5 @@ Initial open-source release of OfficeDex — the desktop client for OfficeCLI.
 - Apache 2.0 LICENSE + NOTICE.
 - CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, issue/PR templates, Dependabot.
 
-[Unreleased]: https://github.com/officecli/officedex/commits/main
+[Unreleased]: https://github.com/officecli/officedex/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/officecli/officedex/compare/v0.4.1...v0.5.0
