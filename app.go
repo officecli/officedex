@@ -752,7 +752,6 @@ func (a *App) Login() (LoginURLResult, error) {
 
 	if a.ctx != nil {
 		wailsruntime.EventsEmit(a.ctx, authEventChannel, types.AuthEvent{Type: types.AuthEventURL, URL: url})
-		wailsruntime.BrowserOpenURL(a.ctx, url)
 	}
 	return LoginURLResult{URL: url}, nil
 }
