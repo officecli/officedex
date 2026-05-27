@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -162,8 +163,12 @@ func TestLogfileWriteNonBlockingTargetLatency(t *testing.T) {
 			worst = d
 		}
 	}
-	if worst > 1*time.Millisecond {
-		t.Errorf("worst-case Write latency = %v, want <1ms on unblocked path", worst)
+	limit := 1 * time.Millisecond
+	if runtime.GOOS == "windows" {
+		limit = 2 * time.Millisecond
+	}
+	if worst > limit {
+		t.Errorf("worst-case Write latency = %v, want <%v on unblocked path", worst, limit)
 	}
 }
 

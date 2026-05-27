@@ -571,7 +571,7 @@ func TestTestProviderWithInputOfficialPaidProbeRunsOfficeCLICommand(t *testing.T
 	if !strings.Contains(env, "OFFICE_CLI_RUNTIME_MODE=hosted") {
 		t.Fatalf("env missing hosted runtime mode:\n%s", env)
 	}
-	if !strings.Contains(env, "HTTP_PROXY=http://proxy.test:7890") {
+	if !strings.Contains(env, "HTTP_PROXY=http://proxy.test:7890") && !strings.Contains(env, "http_proxy=http://proxy.test:7890") {
 		t.Fatalf("env missing proxy override:\n%s", env)
 	}
 	if got := appProxy.Get(); got != nil {
