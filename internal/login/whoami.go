@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os/exec"
 	"regexp"
 	"strings"
 	"syscall"
 
+	"officedex/internal/subprocess"
 	"officedex/internal/types"
 )
 
@@ -148,7 +148,7 @@ func spawnOnce(opts ManagerOptions, args []string) (Transport, error) {
 	if binary == "" {
 		binary = "officecli"
 	}
-	cmd := exec.Command(binary, args...)
+	cmd := subprocess.Command(binary, args...)
 	cmd.Env = BuildBridgeEnv(opts.Env)
 	return newProcessTransport(cmd)
 }

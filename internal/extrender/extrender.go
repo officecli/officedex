@@ -6,9 +6,10 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
+
+	"officedex/internal/subprocess"
 )
 
 const defaultTimeout = 30 * time.Second
@@ -38,7 +39,7 @@ func (r *Renderer) RenderHTML(ctx context.Context, filePath string) (string, err
 	defer cancel()
 
 	var stdout, stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, r.binaryPath, "view", filePath, "html")
+	cmd := subprocess.CommandContext(ctx, r.binaryPath, "view", filePath, "html")
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 

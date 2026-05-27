@@ -28,6 +28,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"officedex/internal/subprocess"
 )
 
 // urlPattern captures the verification URL body. The TS source used a
@@ -377,7 +379,7 @@ func (m *Manager) spawn(args []string) (Transport, error) {
 	if binary == "" {
 		binary = "officecli"
 	}
-	cmd := exec.Command(binary, args...)
+	cmd := subprocess.Command(binary, args...)
 	cmd.Env = BuildBridgeEnv(m.opts.Env)
 	return newProcessTransport(cmd)
 }

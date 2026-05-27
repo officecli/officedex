@@ -19,7 +19,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -43,6 +42,7 @@ import (
 	"officedex/internal/report"
 	runtimemgr "officedex/internal/runtime"
 	"officedex/internal/settings"
+	"officedex/internal/subprocess"
 	"officedex/internal/types"
 )
 
@@ -1048,9 +1048,9 @@ func launchInstaller(path string) error {
 	case "darwin":
 		return installDarwinUpdate(path)
 	case "windows":
-		return exec.Command("cmd", "/c", "start", "", path).Start()
+		return subprocess.Command("cmd", "/c", "start", "", path).Start()
 	default:
-		return exec.Command("xdg-open", path).Start()
+		return subprocess.Command("xdg-open", path).Start()
 	}
 }
 
@@ -2177,22 +2177,22 @@ func toGlobPatterns(extensions []string) []string {
 func openOSPath(filePath string) error {
 	switch runtime.GOOS {
 	case "darwin":
-		return exec.Command("open", filePath).Start()
+		return subprocess.Command("open", filePath).Start()
 	case "windows":
-		return exec.Command("cmd", "/c", "start", "", filePath).Start()
+		return subprocess.Command("cmd", "/c", "start", "", filePath).Start()
 	default:
-		return exec.Command("xdg-open", filePath).Start()
+		return subprocess.Command("xdg-open", filePath).Start()
 	}
 }
 
 func revealOSPath(filePath string) error {
 	switch runtime.GOOS {
 	case "darwin":
-		return exec.Command("open", "-R", filePath).Start()
+		return subprocess.Command("open", "-R", filePath).Start()
 	case "windows":
-		return exec.Command("explorer", "/select,", filePath).Start()
+		return subprocess.Command("explorer", "/select,", filePath).Start()
 	default:
-		return exec.Command("xdg-open", filepath.Dir(filePath)).Start()
+		return subprocess.Command("xdg-open", filepath.Dir(filePath)).Start()
 	}
 }
 

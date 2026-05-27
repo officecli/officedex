@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"syscall"
+
+	"officedex/internal/subprocess"
 )
 
 // Transport abstracts the agent-bridge child process so tests can inject a
@@ -42,7 +44,7 @@ func defaultProcessTransport(opts Options) (Transport, error) {
 	if binary == "" {
 		binary = "officecli"
 	}
-	cmd := exec.Command(binary, "agent-bridge")
+	cmd := subprocess.Command(binary, "agent-bridge")
 	if opts.Cwd != "" {
 		cmd.Dir = opts.Cwd
 	}
