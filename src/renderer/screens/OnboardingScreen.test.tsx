@@ -48,7 +48,7 @@ beforeEach(() => {
     defaults: { ...baseSettings.defaults, ...(patch.defaults ?? {}) },
   }));
   openDirectoryDialogSpy = vi.fn(async () => null);
-  testProviderSpy = vi.fn(async () => ({ ok: true, httpStatus: 200, latencyMs: 12, url: "official" }));
+  testProviderSpy = vi.fn(async () => ({ ok: true, httpStatus: 0, latencyMs: 12, url: "official", probeType: "officialPaid" }));
   officecli.updateSettings = updateSettingsSpy as unknown as typeof officecli.updateSettings;
   officecli.openDirectoryDialog = openDirectoryDialogSpy as unknown as typeof officecli.openDirectoryDialog;
   officecli.testProvider = testProviderSpy as unknown as typeof officecli.testProvider;
@@ -68,6 +68,14 @@ describe("OnboardingScreen", () => {
 
     expect(await screen.findByText("Provider & workspace")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /finish/i }));
+
+    expect(await screen.findByText(/may consume credits/i)).toBeTruthy();
+    const okButton = await waitFor(() => {
+      const buttons = document.querySelectorAll(".ant-modal-confirm-btns button");
+      if (buttons.length < 2) throw new Error("OK button not rendered yet");
+      return buttons[buttons.length - 1] as HTMLButtonElement;
+    });
+    fireEvent.click(okButton);
 
     await waitFor(() => expect(updateSettingsSpy).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
@@ -134,19 +142,35 @@ describe("OnboardingScreen", () => {
     expect(await screen.findByText("Provider & workspace")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /finish/i }));
 
+    const okButton = await waitFor(() => {
+      const buttons = document.querySelectorAll(".ant-modal-confirm-btns button");
+      if (buttons.length < 2) throw new Error("OK button not rendered yet");
+      return buttons[buttons.length - 1] as HTMLButtonElement;
+    });
+    fireEvent.click(okButton);
+
     await waitFor(() => expect(updateSettingsSpy).toHaveBeenCalledTimes(1));
     const patch = updateSettingsSpy.mock.calls[0][0] as Partial<UserSettings>;
     expect(patch.llmProvider).toBeNull();
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
   });
 
-  it("tests the draft official provider before finishing", async () => {
+  it("confirms the paid draft official provider test before finishing", async () => {
     const onComplete = vi.fn();
     render(<OnboardingScreen settings={baseSettings} defaultWorkspaceDir="/tmp/default-workspace" onComplete={onComplete} />);
     fireEvent.click(screen.getByRole("button", { name: /next/i }));
     expect(await screen.findByText("Provider & workspace")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /finish/i }));
+
+    expect(await screen.findByText(/may consume credits/i)).toBeTruthy();
+    expect(testProviderSpy).not.toHaveBeenCalled();
+    const okButton = await waitFor(() => {
+      const buttons = document.querySelectorAll(".ant-modal-confirm-btns button");
+      if (buttons.length < 2) throw new Error("OK button not rendered yet");
+      return buttons[buttons.length - 1] as HTMLButtonElement;
+    });
+    fireEvent.click(okButton);
 
     await waitFor(() => expect(testProviderSpy).toHaveBeenCalledTimes(1));
     expect(testProviderSpy).toHaveBeenCalledWith({
@@ -154,18 +178,40 @@ describe("OnboardingScreen", () => {
       proxy: null,
       useProviderOverride: true,
       useProxyOverride: true,
+      allowPaidOfficialProbe: true,
     });
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
   });
 
-  it("shows the proxy step when the official provider test is unavailable", async () => {
+  it("cancelling the paid official provider confirmation does not test or finish", async () => {
+    const onComplete = vi.fn();
+    render(<OnboardingScreen settings={baseSettings} defaultWorkspaceDir="/tmp/default-workspace" onComplete={onComplete} />);
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    expect(await screen.findByText("Provider & workspace")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /finish/i }));
+    expect(await screen.findByText(/may consume credits/i)).toBeTruthy();
+    const cancelButton = await waitFor(() => {
+      const buttons = document.querySelectorAll(".ant-modal-confirm-btns button");
+      if (buttons.length < 1) throw new Error("Cancel button not rendered yet");
+      return buttons[0] as HTMLButtonElement;
+    });
+    fireEvent.click(cancelButton);
+
+    await waitFor(() => expect(document.querySelector(".ant-modal-confirm")).toBeNull());
+    expect(testProviderSpy).not.toHaveBeenCalled();
+    expect(updateSettingsSpy).not.toHaveBeenCalled();
+    expect(onComplete).not.toHaveBeenCalled();
+  });
+
+  it("shows the proxy step when the paid official provider test has a network error", async () => {
     testProviderSpy.mockResolvedValueOnce({
       ok: false,
       httpStatus: 0,
       latencyMs: 0,
       url: "official",
-      unavailable: true,
-      error: "official provider connection test is not available",
+      probeType: "officialPaid",
+      error: "connect: network is unreachable",
     });
     const onComplete = vi.fn();
     render(<OnboardingScreen settings={baseSettings} defaultWorkspaceDir="/tmp/default-workspace" onComplete={onComplete} />);
@@ -173,9 +219,43 @@ describe("OnboardingScreen", () => {
     expect(await screen.findByText("Provider & workspace")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /finish/i }));
+    const okButton = await waitFor(() => {
+      const buttons = document.querySelectorAll(".ant-modal-confirm-btns button");
+      if (buttons.length < 2) throw new Error("OK button not rendered yet");
+      return buttons[buttons.length - 1] as HTMLButtonElement;
+    });
+    fireEvent.click(okButton);
 
     expect(await screen.findByText("Configure proxy")).toBeTruthy();
     expect(((await screen.findByLabelText(/proxy url/i)) as HTMLInputElement).value).toBe("http://127.0.0.1:7890");
+    expect(onComplete).not.toHaveBeenCalled();
+  });
+
+  it("keeps the user on provider setup when the paid official provider test fails for credits", async () => {
+    testProviderSpy.mockResolvedValueOnce({
+      ok: false,
+      httpStatus: 0,
+      latencyMs: 0,
+      url: "official",
+      probeType: "officialPaid",
+      error: "not enough credits",
+    });
+    const onComplete = vi.fn();
+    render(<OnboardingScreen settings={baseSettings} defaultWorkspaceDir="/tmp/default-workspace" onComplete={onComplete} />);
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    expect(await screen.findByText("Provider & workspace")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /finish/i }));
+    const okButton = await waitFor(() => {
+      const buttons = document.querySelectorAll(".ant-modal-confirm-btns button");
+      if (buttons.length < 2) throw new Error("OK button not rendered yet");
+      return buttons[buttons.length - 1] as HTMLButtonElement;
+    });
+    fireEvent.click(okButton);
+
+    expect(await screen.findByText(/not enough credits/i)).toBeTruthy();
+    expect(screen.queryByText("Configure proxy")).toBeNull();
+    expect(updateSettingsSpy).not.toHaveBeenCalled();
     expect(onComplete).not.toHaveBeenCalled();
   });
 
@@ -188,11 +268,17 @@ describe("OnboardingScreen", () => {
         url: "official",
         error: "connect: network is unreachable",
       })
-      .mockResolvedValueOnce({ ok: true, httpStatus: 200, latencyMs: 18, url: "official" });
+      .mockResolvedValueOnce({ ok: true, httpStatus: 0, latencyMs: 18, url: "official", probeType: "officialPaid" });
     const onComplete = vi.fn();
     render(<OnboardingScreen settings={baseSettings} defaultWorkspaceDir="/tmp/default-workspace" onComplete={onComplete} />);
     fireEvent.click(screen.getByRole("button", { name: /next/i }));
     fireEvent.click(await screen.findByRole("button", { name: /finish/i }));
+    const okButton = await waitFor(() => {
+      const buttons = document.querySelectorAll(".ant-modal-confirm-btns button");
+      if (buttons.length < 2) throw new Error("OK button not rendered yet");
+      return buttons[buttons.length - 1] as HTMLButtonElement;
+    });
+    fireEvent.click(okButton);
     expect(await screen.findByText("Configure proxy")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /save proxy and retry/i }));

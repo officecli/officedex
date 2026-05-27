@@ -246,6 +246,7 @@ export interface ProviderTestInput {
   llmProvider?: LlmProvider | null;
   useProxyOverride?: boolean;
   proxy?: ProxySettings | null;
+  allowPaidOfficialProbe?: boolean;
 }
 
 export interface UserSettings {
@@ -430,4 +431,5 @@ export interface ProviderTestResult {
   error?: string;
   responseMessage?: string;
   unavailable?: boolean;
+  probeType?: "http" | "officialPaid";
 }

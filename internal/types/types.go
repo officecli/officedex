@@ -24,8 +24,8 @@ func IsValidDocumentType(value string) bool {
 type AttachmentSlot string
 
 const (
-	SlotSourceWorkbook   AttachmentSlot = "sourceWorkbook"
-	SlotReferenceImages  AttachmentSlot = "referenceImages"
+	SlotSourceWorkbook  AttachmentSlot = "sourceWorkbook"
+	SlotReferenceImages AttachmentSlot = "referenceImages"
 )
 
 type AttachmentBridgeArgKey string
@@ -113,12 +113,12 @@ func SupportsAttachment(t DocumentType, slot AttachmentSlot) bool {
 }
 
 type BridgeEvent struct {
-	EventID   string                 `json:"event_id,omitempty"`
-	SessionID string                 `json:"session_id,omitempty"`
-	RequestID string                 `json:"request_id,omitempty"`
-	TaskID    string                 `json:"task_id,omitempty"`
-	Type      string                 `json:"type"`
-	TS        string                 `json:"ts,omitempty"`
+	EventID   string         `json:"event_id,omitempty"`
+	SessionID string         `json:"session_id,omitempty"`
+	RequestID string         `json:"request_id,omitempty"`
+	TaskID    string         `json:"task_id,omitempty"`
+	Type      string         `json:"type"`
+	TS        string         `json:"ts,omitempty"`
 	Payload   map[string]any `json:"payload,omitempty"`
 }
 
@@ -134,18 +134,18 @@ type Artifact struct {
 }
 
 type GenerateInput struct {
-	DocumentType     DocumentType `json:"documentType"`
-	Topic            string       `json:"topic"`
-	Prompt           string       `json:"prompt"`
-	Mode             string       `json:"mode,omitempty"`
-	RuntimeMode      string       `json:"runtimeMode,omitempty"`
-	SourceFile       string       `json:"sourceFile,omitempty"`
-	ReferenceImages  []string     `json:"referenceImages,omitempty"`
-	OutputDir        string       `json:"outputDir,omitempty"`
-	Publish          bool         `json:"publish,omitempty"`
-	EnableImages     *bool        `json:"enableImages,omitempty"`
-	ImageQuality     string       `json:"imageQuality,omitempty"`
-	LocalPreview     bool         `json:"localPreview,omitempty"`
+	DocumentType    DocumentType `json:"documentType"`
+	Topic           string       `json:"topic"`
+	Prompt          string       `json:"prompt"`
+	Mode            string       `json:"mode,omitempty"`
+	RuntimeMode     string       `json:"runtimeMode,omitempty"`
+	SourceFile      string       `json:"sourceFile,omitempty"`
+	ReferenceImages []string     `json:"referenceImages,omitempty"`
+	OutputDir       string       `json:"outputDir,omitempty"`
+	Publish         bool         `json:"publish,omitempty"`
+	EnableImages    *bool        `json:"enableImages,omitempty"`
+	ImageQuality    string       `json:"imageQuality,omitempty"`
+	LocalPreview    bool         `json:"localPreview,omitempty"`
 }
 
 type TaskQuestionOption struct {
@@ -180,12 +180,12 @@ type StageState struct {
 type DesktopTaskStatus string
 
 const (
-	TaskStarting  DesktopTaskStatus = "starting"
-	TaskRunning   DesktopTaskStatus = "running"
+	TaskStarting       DesktopTaskStatus = "starting"
+	TaskRunning        DesktopTaskStatus = "running"
 	TaskQuestionStatus DesktopTaskStatus = "question"
-	TaskCompleted DesktopTaskStatus = "completed"
-	TaskFailed    DesktopTaskStatus = "failed"
-	TaskCancelled DesktopTaskStatus = "cancelled"
+	TaskCompleted      DesktopTaskStatus = "completed"
+	TaskFailed         DesktopTaskStatus = "failed"
+	TaskCancelled      DesktopTaskStatus = "cancelled"
 )
 
 type DesktopTask struct {
@@ -238,19 +238,19 @@ type WhoAmIResult struct {
 // HostedCreditBalance and AnonymousCredit* are pointers so we can distinguish
 // "line absent" from "value is zero".
 type CreditStatus struct {
-	Mode                      WhoAmIMode `json:"mode"`
-	AccessMode                string     `json:"accessMode"`
-	PlanName                  string     `json:"planName"`
-	HostedCreditBalance       *int       `json:"hostedCreditBalance"`
-	AnonymousCreditAvailable  *int       `json:"anonymousCreditAvailable"`
-	AnonymousCreditReserved   *int       `json:"anonymousCreditReserved"`
-	AnonymousCreditBalance    *int       `json:"anonymousCreditBalance"`
-	RewardRemaining           int        `json:"rewardRemaining"`
-	PaidKeyPrefix             string     `json:"paidKeyPrefix"`
-	PaidKeyTotal              int        `json:"paidKeyTotal"`
-	PaidKeyUsed               int        `json:"paidKeyUsed"`
-	PaidKeyRemaining          int        `json:"paidKeyRemaining"`
-	Raw                       string     `json:"raw"`
+	Mode                     WhoAmIMode `json:"mode"`
+	AccessMode               string     `json:"accessMode"`
+	PlanName                 string     `json:"planName"`
+	HostedCreditBalance      *int       `json:"hostedCreditBalance"`
+	AnonymousCreditAvailable *int       `json:"anonymousCreditAvailable"`
+	AnonymousCreditReserved  *int       `json:"anonymousCreditReserved"`
+	AnonymousCreditBalance   *int       `json:"anonymousCreditBalance"`
+	RewardRemaining          int        `json:"rewardRemaining"`
+	PaidKeyPrefix            string     `json:"paidKeyPrefix"`
+	PaidKeyTotal             int        `json:"paidKeyTotal"`
+	PaidKeyUsed              int        `json:"paidKeyUsed"`
+	PaidKeyRemaining         int        `json:"paidKeyRemaining"`
+	Raw                      string     `json:"raw"`
 }
 
 // RedeemResult is the parsed payload returned by `officecli redeem --json`.
@@ -337,22 +337,23 @@ type ProxySettings struct {
 // ProviderTestInput optionally overrides provider/proxy settings for a single
 // provider test without mutating persisted settings or the app-wide proxy pool.
 type ProviderTestInput struct {
-	UseProviderOverride bool           `json:"useProviderOverride"`
-	LlmProvider         *LlmProvider   `json:"llmProvider"`
-	UseProxyOverride    bool           `json:"useProxyOverride"`
-	Proxy               *ProxySettings `json:"proxy"`
+	UseProviderOverride    bool           `json:"useProviderOverride"`
+	LlmProvider            *LlmProvider   `json:"llmProvider"`
+	UseProxyOverride       bool           `json:"useProxyOverride"`
+	Proxy                  *ProxySettings `json:"proxy"`
+	AllowPaidOfficialProbe bool           `json:"allowPaidOfficialProbe,omitempty"`
 }
 
 type UserSettings struct {
-	Version                int              `json:"version"`
-	Defaults               GenerateDefaults `json:"defaults"`
-	OutputDir              *string          `json:"outputDir"`
-	BridgeBinaryPath       *string          `json:"bridgeBinaryPath"`
-	LlmProvider            *LlmProvider     `json:"llmProvider"`
-	OnboardingCompletedAt  *string          `json:"onboardingCompletedAt"`
-	SupportReportEndpoint  *string          `json:"supportReportEndpoint"`
-	SupportReportToken     *string          `json:"supportReportToken"`
-	Proxy                  *ProxySettings   `json:"proxy,omitempty"`
+	Version               int              `json:"version"`
+	Defaults              GenerateDefaults `json:"defaults"`
+	OutputDir             *string          `json:"outputDir"`
+	BridgeBinaryPath      *string          `json:"bridgeBinaryPath"`
+	LlmProvider           *LlmProvider     `json:"llmProvider"`
+	OnboardingCompletedAt *string          `json:"onboardingCompletedAt"`
+	SupportReportEndpoint *string          `json:"supportReportEndpoint"`
+	SupportReportToken    *string          `json:"supportReportToken"`
+	Proxy                 *ProxySettings   `json:"proxy,omitempty"`
 }
 
 // RuntimeStatus mirrors the renderer-facing status object emitted by the
@@ -442,4 +443,5 @@ type ProviderTestResult struct {
 	Error           string `json:"error,omitempty"`
 	ResponseMessage string `json:"responseMessage,omitempty"`
 	Unavailable     bool   `json:"unavailable,omitempty"`
+	ProbeType       string `json:"probeType,omitempty"`
 }

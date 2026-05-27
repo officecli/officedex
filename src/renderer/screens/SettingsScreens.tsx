@@ -267,7 +267,13 @@ function ProviderFormControl({
     setTesting(true);
     setTestResult(null);
     try {
-      const result = await officecli.testProvider();
+      const result = draft.type === "official"
+        ? await officecli.testProvider({
+          useProviderOverride: true,
+          llmProvider: null,
+          allowPaidOfficialProbe: true,
+        })
+        : await officecli.testProvider();
       setTestResult(result);
     } catch (err) {
       setTestResult({
@@ -280,7 +286,21 @@ function ProviderFormControl({
     } finally {
       setTesting(false);
     }
-  }, []);
+  }, [draft.type]);
+
+  const confirmAndRunTest = useCallback(() => {
+    if (draft.type !== "official") {
+      void runTest();
+      return;
+    }
+    Modal.confirm({
+      title: t("onboarding.provider.paidProbeTitle"),
+      content: t("onboarding.provider.paidProbeBody"),
+      okText: t("onboarding.provider.paidProbeOk"),
+      cancelText: t("settings.common.cancel"),
+      onOk: () => runTest(),
+    });
+  }, [draft.type, runTest, t]);
 
   const canTest = draft.type === "official" || providerHasContent(draft);
   const testTag = testResult ? formatTestResult(testResult, t) : null;
@@ -292,9 +312,9 @@ function ProviderFormControl({
         <Button
           icon={<RocketOutlined />}
           loading={testing}
-          disabled={!canTest && !testing}
-          onClick={runTest}
-        >
+	          disabled={!canTest && !testing}
+	          onClick={confirmAndRunTest}
+	        >
           {testing ? t("settings.effective.testRunning") : t("settings.effective.testButton")}
         </Button>
         {testTag ? (

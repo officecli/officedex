@@ -202,7 +202,47 @@ describe("SettingsScreen", () => {
     });
   });
 
-  it("Provider test in Settings uses the saved settings without an override payload", async () => {
+  it("Provider test in Settings confirms before running a paid official probe", async () => {
+    testProviderSpy.mockResolvedValueOnce({
+      ok: true,
+      httpStatus: 0,
+      latencyMs: 25,
+      url: "official",
+      probeType: "officialPaid",
+    });
+    const { SettingsScreen } = await import("./SettingsScreens");
+    render(<SettingsScreen />);
+    await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(await screen.findByRole("button", { name: /test connection/i }));
+
+    expect(await screen.findByText(/may consume credits/i)).toBeTruthy();
+    expect(testProviderSpy).not.toHaveBeenCalled();
+    const okButton = await waitFor(() => {
+      const buttons = document.querySelectorAll(".ant-modal-confirm-btns button");
+      if (buttons.length < 2) throw new Error("OK button not rendered yet");
+      return buttons[buttons.length - 1] as HTMLButtonElement;
+    });
+    fireEvent.click(okButton);
+
+    await waitFor(() => expect(testProviderSpy).toHaveBeenCalledTimes(1));
+    expect(testProviderSpy).toHaveBeenCalledWith({
+      useProviderOverride: true,
+      llmProvider: null,
+      allowPaidOfficialProbe: true,
+    });
+    expect(await screen.findByText(/Official generation probe passed/)).toBeTruthy();
+  });
+
+  it("Provider test in Settings uses the saved custom settings without an override payload", async () => {
+    currentSettings = makeSettings({
+      llmProvider: {
+        type: "custom",
+        baseUrl: "https://custom.example/v1",
+        apiKey: "sk-test",
+        model: "gpt-test",
+      },
+    });
     const { SettingsScreen } = await import("./SettingsScreens");
     render(<SettingsScreen />);
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));

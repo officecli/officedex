@@ -8,6 +8,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -485,6 +487,116 @@ func TestTestProviderOfficialModeDoesNotClaimBridgeInitializeAsProviderOK(t *tes
 	}
 }
 
+func TestTestProviderWithInputOfficialPaidProbeRunsOfficeCLICommand(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	envPath := filepath.Join(dir, "env.txt")
+	scriptPath := filepath.Join(dir, "officecli-probe.sh")
+	script := fmt.Sprintf(`#!/bin/sh
+printf '%%s\n' "$@" > %q
+env > %q
+printf '{"ok":true}\n'
+exit 0
+`, argsPath, envPath)
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake officecli: %v", err)
+	}
+
+	appProxy := netproxy.NewPool()
+	a := &App{
+		proxyPool: appProxy,
+		cachedSettings: types.UserSettings{
+			BridgeBinaryPath: &scriptPath,
+			LlmProvider: &types.LlmProvider{
+				Type:    types.LlmCustom,
+				BaseURL: "http://cached.example/v1",
+				APIKey:  "cached-key",
+				Model:   "cached-model",
+			},
+		},
+	}
+
+	result, err := a.TestProviderWithInput(types.ProviderTestInput{
+		UseProviderOverride:    true,
+		LlmProvider:            nil,
+		UseProxyOverride:       true,
+		Proxy:                  &types.ProxySettings{Enabled: true, URL: "http://proxy.test:7890"},
+		AllowPaidOfficialProbe: true,
+	})
+	if err != nil {
+		t.Fatalf("TestProviderWithInput: %v", err)
+	}
+	if !result.OK || result.URL != "official" || result.ProbeType != "officialPaid" {
+		t.Fatalf("official paid probe result = %+v, want success", result)
+	}
+
+	argsBytes, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args: %v", err)
+	}
+	args := strings.Split(strings.TrimSpace(string(argsBytes)), "\n")
+	wantPrefix := []string{"new", "docx", "OfficeDex Provider Connection Test"}
+	for i, want := range wantPrefix {
+		if len(args) <= i || args[i] != want {
+			t.Fatalf("args = %#v, want prefix %#v", args, wantPrefix)
+		}
+	}
+	if !containsString(args, "--prompt") || !containsString(args, "--no-publish") || !containsString(args, "--json") {
+		t.Fatalf("args missing required probe flags: %#v", args)
+	}
+
+	envBytes, err := os.ReadFile(envPath)
+	if err != nil {
+		t.Fatalf("read env: %v", err)
+	}
+	env := string(envBytes)
+	if !strings.Contains(env, "OFFICE_CLI_RUNTIME_MODE=hosted") {
+		t.Fatalf("env missing hosted runtime mode:\n%s", env)
+	}
+	if !strings.Contains(env, "HTTP_PROXY=http://proxy.test:7890") {
+		t.Fatalf("env missing proxy override:\n%s", env)
+	}
+	if got := appProxy.Get(); got != nil {
+		t.Fatalf("app proxy pool was mutated: %v", got)
+	}
+}
+
+func TestTestProviderWithInputOfficialPaidProbeReturnsFailureSummary(t *testing.T) {
+	dir := t.TempDir()
+	scriptPath := filepath.Join(dir, "officecli-probe.sh")
+	script := `#!/bin/sh
+printf 'stdout says not enough credits with extra details\n'
+printf 'stderr says hosted provider unreachable\n' >&2
+exit 42
+`
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake officecli: %v", err)
+	}
+
+	a := &App{
+		proxyPool: netproxy.NewPool(),
+		cachedSettings: types.UserSettings{
+			BridgeBinaryPath: &scriptPath,
+		},
+	}
+	result, err := a.TestProviderWithInput(types.ProviderTestInput{
+		UseProviderOverride:    true,
+		LlmProvider:            nil,
+		AllowPaidOfficialProbe: true,
+	})
+	if err != nil {
+		t.Fatalf("TestProviderWithInput: %v", err)
+	}
+	if result.OK || result.ProbeType != "officialPaid" || result.URL != "official" {
+		t.Fatalf("official paid failure result = %+v, want failed paid probe", result)
+	}
+	if !strings.Contains(result.Error, "exit code 42") ||
+		!strings.Contains(result.Error, "hosted provider unreachable") ||
+		!strings.Contains(result.Error, "not enough credits") {
+		t.Fatalf("failure summary = %q", result.Error)
+	}
+}
+
 func TestTestProviderWithInputUsesOverridesWithoutMutatingCachedSettings(t *testing.T) {
 	var seenProxyRequest bool
 	proxyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -540,4 +652,13 @@ func TestTestProviderWithInputUsesOverridesWithoutMutatingCachedSettings(t *test
 	if got := appProxy.Get(); got != nil {
 		t.Fatalf("app proxy pool was mutated: %v", got)
 	}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }

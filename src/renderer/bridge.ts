@@ -443,6 +443,7 @@ function createWailsAPI(): DesktopAPI {
         ...(raw?.error ? { error: raw.error } : {}),
         ...(raw?.responseMessage ? { responseMessage: raw.responseMessage } : {}),
         ...(raw?.unavailable ? { unavailable: Boolean(raw.unavailable) } : {}),
+        ...(raw?.probeType === "officialPaid" || raw?.probeType === "http" ? { probeType: raw.probeType } : {}),
       };
     },
   };

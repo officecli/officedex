@@ -70,6 +70,18 @@ export function formatTestResult(
   if (result.unavailable) {
     return { tone: "amber", text: t("settings.effective.testUnavailable") };
   }
+  if (result.probeType === "officialPaid") {
+    if (result.ok) {
+      return {
+        tone: "green",
+        text: t("settings.effective.testOkOfficialPaid").replace("{latency}", String(result.latencyMs)),
+      };
+    }
+    return {
+      tone: "red",
+      text: t("settings.effective.testFailOfficialPaid").replace("{error}", result.error || "unknown error"),
+    };
+  }
   if (result.error && result.httpStatus === 0 && !result.ok) {
     return { tone: "red", text: t("settings.effective.testNetworkError").replace("{error}", result.error) };
   }

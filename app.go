@@ -1342,7 +1342,7 @@ func (a *App) TestProvider() (types.ProviderTestResult, error) {
 	s := a.cachedSettings
 	a.mu.Unlock()
 
-	return testProviderWithSettings(s, a.proxyPool)
+	return a.testProviderWithSettings(s, a.proxyPool, false)
 }
 
 // TestProviderWithInput runs the same provider probe as TestProvider, but with
@@ -1366,11 +1366,14 @@ func (a *App) TestProviderWithInput(input types.ProviderTestInput) (types.Provid
 		}
 		pool = tempPool
 	}
-	return testProviderWithSettings(s, pool)
+	return a.testProviderWithSettings(s, pool, input.AllowPaidOfficialProbe)
 }
 
-func testProviderWithSettings(s types.UserSettings, pool *netproxy.Pool) (types.ProviderTestResult, error) {
+func (a *App) testProviderWithSettings(s types.UserSettings, pool *netproxy.Pool, allowPaidOfficialProbe bool) (types.ProviderTestResult, error) {
 	if s.LlmProvider == nil {
+		if allowPaidOfficialProbe {
+			return a.runOfficialPaidProviderProbe(s, pool)
+		}
 		return testOfficialProvider()
 	}
 
@@ -1392,6 +1395,155 @@ func testOfficialProvider() (types.ProviderTestResult, error) {
 		Error:       officialProviderTestUnavailable,
 		Unavailable: true,
 	}, nil
+}
+
+func (a *App) runOfficialPaidProviderProbe(s types.UserSettings, pool *netproxy.Pool) (types.ProviderTestResult, error) {
+	probeCtx := a.ctx
+	if probeCtx == nil {
+		probeCtx = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(probeCtx, 2*time.Minute)
+	defer cancel()
+
+	outDir, err := os.MkdirTemp("", "officedex-provider-test-*")
+	if err != nil {
+		return types.ProviderTestResult{}, fmt.Errorf("official provider test temp dir: %w", err)
+	}
+	defer os.RemoveAll(outDir)
+
+	binary := binresolver.ResolvePath(a.resolverOptions(s))
+	if strings.TrimSpace(binary) == "" {
+		binary = "officecli"
+	}
+	args := []string{
+		"new",
+		"docx",
+		"OfficeDex Provider Connection Test",
+		"--prompt",
+		"Write exactly: OfficeDex provider connection test OK.",
+		"--mode",
+		"fast",
+		"--out",
+		outDir,
+		"--no-publish",
+		"--json",
+	}
+	cmd := subprocess.CommandContext(ctx, binary, args...)
+	cmd.Env = buildOfficialProbeEnv(llmProviderEnv(types.UserSettings{}), pool)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	start := time.Now()
+	err = cmd.Run()
+	latency := time.Since(start).Milliseconds()
+	if ctx.Err() != nil {
+		return types.ProviderTestResult{
+			URL:       "official",
+			LatencyMs: latency,
+			Error:     "official provider paid probe timed out",
+			ProbeType: "officialPaid",
+		}, nil
+	}
+	if err != nil {
+		exitCode := -1
+		if cmd.ProcessState != nil {
+			exitCode = cmd.ProcessState.ExitCode()
+		}
+		return types.ProviderTestResult{
+			URL:       "official",
+			LatencyMs: latency,
+			Error:     officialProbeFailureSummary(exitCode, stdout.String(), stderr.String(), err),
+			ProbeType: "officialPaid",
+		}, nil
+	}
+	return types.ProviderTestResult{
+		OK:        true,
+		URL:       "official",
+		LatencyMs: latency,
+		ProbeType: "officialPaid",
+	}, nil
+}
+
+func buildOfficialProbeEnv(extra []string, pool *netproxy.Pool) []string {
+	env := stripProxyEnv(append([]string{}, os.Environ()...))
+	env = appendKVForCommand(env, "OFFICECLI_SKIP_SKILL_PREFLIGHT", "1")
+	env = appendKVForCommand(env, "OFFICECLI_SKIP_PUBLISH_SETUP", "1")
+	env = appendKVForCommand(env, "OFFICECLI_SKIP_UPDATE_CHECK", "1")
+	if pool != nil {
+		for _, kv := range pool.SubprocessEnv() {
+			key, _, ok := strings.Cut(kv, "=")
+			if ok {
+				env = setKVForCommand(env, key, kv)
+			}
+		}
+	}
+	for _, kv := range extra {
+		key, _, ok := strings.Cut(kv, "=")
+		if ok {
+			env = setKVForCommand(env, key, kv)
+		}
+	}
+	return env
+}
+
+func stripProxyEnv(env []string) []string {
+	filtered := env[:0]
+	for _, kv := range env {
+		key, _, ok := strings.Cut(kv, "=")
+		if !ok {
+			filtered = append(filtered, kv)
+			continue
+		}
+		switch strings.ToUpper(key) {
+		case "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY":
+			continue
+		default:
+			filtered = append(filtered, kv)
+		}
+	}
+	return filtered
+}
+
+func appendKVForCommand(env []string, key, value string) []string {
+	return setKVForCommand(env, key, key+"="+value)
+}
+
+func setKVForCommand(env []string, key, kv string) []string {
+	prefix := key + "="
+	for i, current := range env {
+		if strings.HasPrefix(current, prefix) {
+			env[i] = kv
+			return env
+		}
+	}
+	return append(env, kv)
+}
+
+func officialProbeFailureSummary(exitCode int, stdout string, stderr string, runErr error) string {
+	parts := []string{fmt.Sprintf("official provider paid probe exited with exit code %d", exitCode)}
+	if trimmed := limitProbeOutput(stderr); trimmed != "" {
+		parts = append(parts, "stderr: "+trimmed)
+	}
+	if trimmed := limitProbeOutput(stdout); trimmed != "" {
+		parts = append(parts, "stdout: "+trimmed)
+	}
+	if len(parts) == 1 && runErr != nil {
+		parts = append(parts, runErr.Error())
+	}
+	return strings.Join(parts, "\n")
+}
+
+func limitProbeOutput(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return ""
+	}
+	const max = 2000
+	if len(trimmed) > max {
+		return trimmed[:max] + "...(truncated)"
+	}
+	return trimmed
 }
 
 func runHTTPProbe(ctx context.Context, pool *netproxy.Pool, p providerProbe) types.ProviderTestResult {

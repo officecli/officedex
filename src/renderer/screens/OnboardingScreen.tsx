@@ -1,4 +1,4 @@
-import { Alert, Button, Input, message, Radio, Select, Space, Switch, Tag } from "antd";
+import { Alert, Button, Input, Modal, message, Radio, Select, Space, Switch, Tag } from "antd";
 import { FolderOpenOutlined } from "@ant-design/icons";
 import { useCallback, useState } from "react";
 import { officecli } from "../bridge";
@@ -22,6 +22,25 @@ interface DraftSettings {
 }
 
 const EMPTY_PROVIDER: LlmProvider = { type: "official", baseUrl: "", apiKey: "", model: "" };
+
+function shouldOfferProxyStep(result: ProviderTestResult): boolean {
+  if (result.unavailable) return false;
+  const messageText = `${result.error ?? ""}`.toLowerCase();
+  return [
+    "network",
+    "connect",
+    "connection",
+    "timeout",
+    "timed out",
+    "proxy",
+    "dial",
+    "lookup",
+    "unreachable",
+    "refused",
+    "reset",
+    "tls",
+  ].some((needle) => messageText.includes(needle));
+}
 
 export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: OnboardingScreenProps) {
   const [step, setStep] = useState(0);
@@ -85,10 +104,65 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
       proxy,
       useProviderOverride: true,
       useProxyOverride: true,
+      allowPaidOfficialProbe: true,
     });
     setProviderTestResult(result);
     return result;
   }, []);
+
+  const runOfficialProbeAndFinish = useCallback(async (proxy: ProxySettings | null, proxyOverride?: ProxySettings | null) => {
+    setBusy(true);
+    try {
+      const result = await testOfficialProvider(proxy);
+      if (result.ok) {
+        await finish(proxyOverride);
+        return;
+      }
+      if (shouldOfferProxyStep(result)) {
+        setDraft((current) => ({
+          ...current,
+          proxy: {
+            enabled: true,
+            url: current.proxy?.url || defaultProxySettings.url,
+          },
+        }));
+        setProxyValidationError(undefined);
+        setStep(2);
+      }
+    } catch (err) {
+      const result: ProviderTestResult = {
+        ok: false,
+        httpStatus: 0,
+        latencyMs: 0,
+        url: "",
+        error: err instanceof Error ? err.message : String(err),
+        probeType: "officialPaid",
+      };
+      setProviderTestResult(result);
+      if (shouldOfferProxyStep(result)) {
+        setDraft((current) => ({
+          ...current,
+          proxy: {
+            enabled: true,
+            url: current.proxy?.url || defaultProxySettings.url,
+          },
+        }));
+        setStep(2);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }, [finish, testOfficialProvider]);
+
+  const confirmOfficialProbe = useCallback((onOk: () => Promise<void>) => {
+    Modal.confirm({
+      title: t("onboarding.provider.paidProbeTitle"),
+      content: t("onboarding.provider.paidProbeBody"),
+      okText: t("onboarding.provider.paidProbeOk"),
+      cancelText: t("settings.common.cancel"),
+      onOk,
+    });
+  }, [t]);
 
   const finishOrTestOfficial = useCallback(async () => {
     const provider = (draft.llmProvider.baseUrl || draft.llmProvider.apiKey || draft.llmProvider.model)
@@ -99,42 +173,8 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
       return;
     }
 
-    setBusy(true);
-    try {
-      const result = await testOfficialProvider(draft.proxy);
-      if (result.ok) {
-        await finish();
-        return;
-      }
-      setDraft((current) => ({
-        ...current,
-        proxy: {
-          enabled: true,
-          url: current.proxy?.url || defaultProxySettings.url,
-        },
-      }));
-      setProxyValidationError(undefined);
-      setStep(2);
-    } catch (err) {
-      setProviderTestResult({
-        ok: false,
-        httpStatus: 0,
-        latencyMs: 0,
-        url: "",
-        error: err instanceof Error ? err.message : String(err),
-      });
-      setDraft((current) => ({
-        ...current,
-        proxy: {
-          enabled: true,
-          url: current.proxy?.url || defaultProxySettings.url,
-        },
-      }));
-      setStep(2);
-    } finally {
-      setBusy(false);
-    }
-  }, [draft.llmProvider, draft.proxy, finish, testOfficialProvider]);
+    confirmOfficialProbe(() => runOfficialProbeAndFinish(draft.proxy));
+  }, [confirmOfficialProbe, draft.llmProvider, draft.proxy, finish, runOfficialProbeAndFinish]);
 
   const saveProxyAndRetry = useCallback(async () => {
     const proxy = draft.proxy ?? { ...defaultProxySettings, enabled: true };
@@ -229,14 +269,19 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
           </Space>
         ) : null}
 
-        {step === 1 ? (
-          <Space direction="vertical" size={20} style={{ width: "100%" }}>
-            <Field label={t("onboarding.field.provider")}>
-              <ProviderForm provider={draft.llmProvider} onChange={updateProvider} />
-              {draft.llmProvider.type === "official" ? (
-                <span className="provider-hint">{t("onboarding.provider.officialTestHint")}</span>
-              ) : null}
-            </Field>
+	        {step === 1 ? (
+	          <Space direction="vertical" size={20} style={{ width: "100%" }}>
+	            <Field label={t("onboarding.field.provider")}>
+	              <ProviderForm provider={draft.llmProvider} onChange={updateProvider} />
+	              {draft.llmProvider.type === "official" ? (
+	                <span className="provider-hint">{t("onboarding.provider.officialTestHint")}</span>
+	              ) : null}
+	              {providerTestTag ? (
+	                <Tag color={providerTestTag.tone === "green" ? "success" : providerTestTag.tone === "red" ? "error" : "warning"}>
+	                  {providerTestTag.text}
+	                </Tag>
+	              ) : null}
+	            </Field>
             <Field label={t("onboarding.field.outputDir")}>
               <Space.Compact style={{ width: "100%" }}>
                 <Input
