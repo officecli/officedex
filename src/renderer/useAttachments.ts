@@ -8,6 +8,12 @@ export interface AttachmentBundle {
   referenceImages?: string[];
 }
 
+export interface UseAttachmentsOptions {
+  sourceFile?: string | null;
+  referenceImages?: string[];
+  onChange?: (next: AttachmentBundle) => void;
+}
+
 export interface UseAttachmentsResult {
   sourceWorkbookSpec?: AttachmentSpec;
   referenceImagesSpec?: AttachmentSpec;
@@ -24,28 +30,55 @@ export interface UseAttachmentsResult {
   validateForSubmit: () => { ok: true } | { ok: false; reason: string };
 }
 
-export function useAttachments(documentType: DocumentType): UseAttachmentsResult {
+export function useAttachments(documentType: DocumentType, options: UseAttachmentsOptions = {}): UseAttachmentsResult {
   const sourceWorkbookSpec = getAttachmentSpec(documentType, "sourceWorkbook");
   const referenceImagesSpec = getAttachmentSpec(documentType, "referenceImages");
+  const sourceFileControlled = options.sourceFile !== undefined;
+  const referenceImagesControlled = options.referenceImages !== undefined;
 
-  const [sourceFile, setSourceFile] = useState<string | null>(null);
-  const [referenceImages, setReferenceImages] = useState<string[]>([]);
+  const [internalSourceFile, setInternalSourceFile] = useState<string | null>(null);
+  const [internalReferenceImages, setInternalReferenceImages] = useState<string[]>([]);
+  const sourceFile = sourceFileControlled ? options.sourceFile ?? null : internalSourceFile;
+  const referenceImages = referenceImagesControlled ? options.referenceImages ?? [] : internalReferenceImages;
   const referenceImagesRef = useRef<string[]>(referenceImages);
   useEffect(() => {
     referenceImagesRef.current = referenceImages;
   }, [referenceImages]);
 
-  useEffect(() => {
-    if (!sourceWorkbookSpec) {
-      setSourceFile(null);
+  const updateSourceFile = useCallback((next: string | null) => {
+    if (sourceFileControlled) {
+      options.onChange?.({
+        sourceFile: next || undefined,
+        referenceImages,
+      });
+      return;
     }
-  }, [sourceWorkbookSpec]);
+    setInternalSourceFile(next);
+  }, [sourceFileControlled, options, referenceImages]);
+
+  const updateReferenceImages = useCallback((next: string[]) => {
+    referenceImagesRef.current = next;
+    if (referenceImagesControlled) {
+      options.onChange?.({
+        sourceFile: sourceFile || undefined,
+        referenceImages: next,
+      });
+      return;
+    }
+    setInternalReferenceImages(next);
+  }, [referenceImagesControlled, options, sourceFile]);
 
   useEffect(() => {
-    if (!referenceImagesSpec) {
-      setReferenceImages([]);
+    if (!sourceWorkbookSpec && sourceFile) {
+      updateSourceFile(null);
     }
-  }, [referenceImagesSpec]);
+  }, [sourceWorkbookSpec, sourceFile, updateSourceFile]);
+
+  useEffect(() => {
+    if (!referenceImagesSpec && referenceImages.length > 0) {
+      updateReferenceImages([]);
+    }
+  }, [referenceImagesSpec, referenceImages.length, updateReferenceImages]);
 
   const pickSourceFile = useCallback(async () => {
     if (!sourceWorkbookSpec) return;
@@ -53,13 +86,13 @@ export function useAttachments(documentType: DocumentType): UseAttachmentsResult
       filters: [{ name: sourceWorkbookSpec.label, extensions: sourceWorkbookSpec.extensions }],
     });
     if (picked) {
-      setSourceFile(picked);
+      updateSourceFile(picked);
     }
-  }, [sourceWorkbookSpec]);
+  }, [sourceWorkbookSpec, updateSourceFile]);
 
   const clearSourceFile = useCallback(() => {
-    setSourceFile(null);
-  }, []);
+    updateSourceFile(null);
+  }, [updateSourceFile]);
 
   const pickReferenceImages = useCallback(async () => {
     if (!referenceImagesSpec) return;
@@ -67,12 +100,12 @@ export function useAttachments(documentType: DocumentType): UseAttachmentsResult
       filters: [{ name: referenceImagesSpec.label, extensions: referenceImagesSpec.extensions }],
     });
     if (!picked || picked.length === 0) return;
-    setReferenceImages((current) => mergeUnique(current, picked, referenceImagesSpec.maxCount));
-  }, [referenceImagesSpec]);
+    updateReferenceImages(mergeUnique(referenceImagesRef.current, picked, referenceImagesSpec.maxCount));
+  }, [referenceImagesSpec, updateReferenceImages]);
 
   const removeReferenceImage = useCallback((path: string) => {
-    setReferenceImages((current) => current.filter((entry) => entry !== path));
-  }, []);
+    updateReferenceImages(referenceImagesRef.current.filter((entry) => entry !== path));
+  }, [updateReferenceImages]);
 
   const isReferenceLimitReached = referenceImagesSpec ? referenceImages.length >= referenceImagesSpec.maxCount : false;
 
@@ -97,11 +130,10 @@ export function useAttachments(documentType: DocumentType): UseAttachmentsResult
         }
       }
       if (savedPaths.length === 0) return 0;
-      referenceImagesRef.current = mergeUnique(referenceImagesRef.current, savedPaths, maxCount);
-      setReferenceImages(referenceImagesRef.current);
+      updateReferenceImages(mergeUnique(referenceImagesRef.current, savedPaths, maxCount));
       return savedPaths.length;
     },
-    [referenceImagesSpec],
+    [referenceImagesSpec, updateReferenceImages],
   );
 
   const collect = useCallback((): AttachmentBundle => {

@@ -38,10 +38,20 @@ type Translator = (key: string, vars?: Record<string, string | number>) => strin
 
 export type FailureKind = "connection" | "auth" | "task" | "setup" | "other";
 
+export interface NewGenerationDraft {
+  documentType: DocumentType;
+  topic: string;
+  prompt: string;
+  mode?: GenerateInput["mode"];
+  sourceFile?: string;
+  referenceImages?: string[];
+}
+
 interface DialogueProps {
   tasks: DesktopTask[];
   conversationId?: string;
   artifacts: Artifact[];
+  newGenerationDraft?: NewGenerationDraft;
   busy: boolean;
   lastError?: string;
   errorKind: FailureKind;
@@ -52,36 +62,60 @@ interface DialogueProps {
   onOpenLogin: () => void;
   onRetry: () => void;
   onPreview: (artifact: Artifact) => void;
+  onNewGenerationDraftChange?: (patch: Partial<NewGenerationDraft>) => void;
   onForceCancel?: (taskId: string) => void;
   onContinueGeneration?: (documentType: string, prompt: string, referenceImages?: string[]) => void;
 }
 
-export function DialogueScreen({ tasks, conversationId, artifacts, busy, lastError, errorKind, errorDetails, bridgeStatus, onSubmit, onOpenSettings, onOpenLogin, onRetry, onPreview, onForceCancel, onContinueGeneration }: DialogueProps) {
+const EMPTY_NEW_GENERATION_DRAFT: NewGenerationDraft = {
+  documentType: "pptx",
+  topic: "",
+  prompt: "",
+  mode: "fast",
+};
+
+export function DialogueScreen({ tasks, conversationId, artifacts, newGenerationDraft, busy, lastError, errorKind, errorDetails, bridgeStatus, onSubmit, onOpenSettings, onOpenLogin, onRetry, onPreview, onNewGenerationDraftChange, onForceCancel, onContinueGeneration }: DialogueProps) {
   if (lastError) {
     return <ConnectionFailure kind={errorKind} status={bridgeStatus} error={lastError} details={errorDetails} onOpenSettings={onOpenSettings} onOpenLogin={onOpenLogin} onRetry={onRetry} />;
   }
   // No tasks = fresh new generation prompt
   if (tasks.length === 0) {
-    return <FluidNewGeneration busy={busy} onSubmit={onSubmit} />;
+    return <FluidNewGeneration draft={newGenerationDraft ?? EMPTY_NEW_GENERATION_DRAFT} busy={busy} onSubmit={onSubmit} onDraftChange={onNewGenerationDraftChange ?? (() => undefined)} />;
   }
   // Conversation view with all rounds
   return <ConversationView tasks={tasks} busy={busy} onPreview={onPreview} onForceCancel={onForceCancel} onContinueGeneration={onContinueGeneration} onOpenLogin={onOpenLogin} />;
 }
 
-function FluidNewGeneration({ busy, onSubmit }: { busy: boolean; onSubmit: (values: GenerateInput) => Promise<void> }) {
+function FluidNewGeneration({ draft, busy, onSubmit, onDraftChange }: {
+  draft: NewGenerationDraft;
+  busy: boolean;
+  onSubmit: (values: GenerateInput) => Promise<void>;
+  onDraftChange: (patch: Partial<NewGenerationDraft>) => void;
+}) {
   const [form] = Form.useForm<GenerateInput>();
   const { settings } = useSettings();
   const t = useT();
-  const initialValues = { ...defaultGenerateInput, ...settings.defaults };
+  const initialValues = { ...defaultGenerateInput, ...settings.defaults, ...draft };
   const docType = (Form.useWatch("documentType", form) ?? initialValues.documentType) as DocumentType;
-  const attachments = useAttachments(docType);
+  const attachments = useAttachments(docType, {
+    sourceFile: draft.sourceFile ?? null,
+    referenceImages: draft.referenceImages ?? [],
+    onChange: (next) => onDraftChange(next),
+  });
 
   useEffect(() => {
     form.setFieldsValue({
-      documentType: settings.defaults.documentType,
-      mode: settings.defaults.mode,
+      documentType: draft.documentType,
+      topic: draft.topic,
+      prompt: draft.prompt,
+      mode: draft.mode,
     });
-  }, [form, settings.defaults.documentType, settings.defaults.mode]);
+  }, [form, draft.documentType, draft.topic, draft.prompt, draft.mode]);
+
+  function applyDraftPatch(patch: Partial<NewGenerationDraft>) {
+    form.setFieldsValue(patch);
+    onDraftChange(patch);
+  }
 
   return (
     <div className="fluid-new-task">
@@ -92,24 +126,31 @@ function FluidNewGeneration({ busy, onSubmit }: { busy: boolean; onSubmit: (valu
         <h1>{t("dialogue.startTitle")}</h1>
         <p>{t("dialogue.startSubtitle")}</p>
         <div className="fluid-prompt-grid">
-          <button onClick={() => form.setFieldsValue({ documentType: "report", topic: t("dialogue.preset.report.title"), prompt: t("dialogue.preset.report.desc") })}>
+          <button onClick={() => applyDraftPatch({ documentType: "report", topic: t("dialogue.preset.report.title"), prompt: t("dialogue.preset.report.desc") })}>
             <MaterialSymbol name="analytics" />
             <strong>{t("dialogue.preset.report.title")}</strong>
             <span>{t("dialogue.preset.report.desc")}</span>
           </button>
-          <button onClick={() => form.setFieldsValue({ documentType: "pptx", topic: t("dialogue.preset.pptx.title"), prompt: t("dialogue.preset.pptx.desc") })}>
+          <button onClick={() => applyDraftPatch({ documentType: "pptx", topic: t("dialogue.preset.pptx.title"), prompt: t("dialogue.preset.pptx.desc") })}>
             <MaterialSymbol name="present_to_all" />
             <strong>{t("dialogue.preset.pptx.title")}</strong>
             <span>{t("dialogue.preset.pptx.desc")}</span>
           </button>
-          <button onClick={() => form.setFieldsValue({ documentType: "xlsx", topic: t("dialogue.preset.xlsx.title"), prompt: t("dialogue.preset.xlsx.desc") })}>
+          <button onClick={() => applyDraftPatch({ documentType: "xlsx", topic: t("dialogue.preset.xlsx.title"), prompt: t("dialogue.preset.xlsx.desc") })}>
             <MaterialSymbol name="table_chart" />
             <strong>{t("dialogue.preset.xlsx.title")}</strong>
             <span>{t("dialogue.preset.xlsx.desc")}</span>
           </button>
         </div>
       </section>
-      <Form form={form} layout="vertical" initialValues={initialValues} onFinish={(values) => {
+      <Form form={form} layout="vertical" initialValues={initialValues} onValuesChange={(_, values) => {
+        onDraftChange({
+          documentType: (values.documentType ?? draft.documentType) as DocumentType,
+          topic: values.topic ?? "",
+          prompt: values.prompt ?? "",
+          mode: values.mode,
+        });
+      }} onFinish={(values) => {
         const validation = attachments.validateForSubmit();
         if (!validation.ok) {
           message.warning(validation.reason);

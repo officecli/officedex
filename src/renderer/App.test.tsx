@@ -278,6 +278,180 @@ describe("App task flow", () => {
     expect(await screen.findByRole("heading", { name: "Start a New Generation" })).toBeTruthy();
   });
 
+  it("preserves a typed new generation prompt after switching to another conversation and back", async () => {
+    const bridge = installBridgeMock();
+    const { App } = await import("./App");
+
+    render(<App />);
+
+    act(() => {
+      bridge.emit({
+        event_id: "event-previous",
+        task_id: "task-previous",
+        type: "task.completed",
+        payload: {
+          result: {
+            file_path: "/tmp/previous.pptx",
+            file_name: "previous.pptx",
+            document_type: "pptx",
+          },
+        },
+      });
+    });
+    expect(await screen.findByText("Generation Complete")).toBeTruthy();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /New Generation/ })[0]);
+    const prompt = await screen.findByPlaceholderText(/Enter what you want to generate/);
+    fireEvent.change(prompt, { target: { value: "Draft a quarterly board deck" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /previous\.pptx/ }));
+    expect(await screen.findByText("Generation Complete")).toBeTruthy();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /New Generation/ })[0]);
+    expect(await screen.findByDisplayValue("Draft a quarterly board deck")).toBeTruthy();
+  });
+
+  it("preserves image reference attachments after switching to another conversation and submits them", async () => {
+    const bridge = installBridgeMock();
+    bridge.openMultiFileDialog.mockResolvedValueOnce(["/tmp/ref-a.png", "/tmp/ref-b.jpg"]);
+    const { App } = await import("./App");
+
+    render(<App />);
+
+    act(() => {
+      bridge.emit({
+        event_id: "event-previous-img",
+        task_id: "task-previous-img",
+        type: "task.completed",
+        payload: {
+          result: {
+            file_path: "/tmp/previous.pptx",
+            file_name: "previous.pptx",
+            document_type: "pptx",
+          },
+        },
+      });
+    });
+    expect(await screen.findByText("Generation Complete")).toBeTruthy();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /New Generation/ })[0]);
+    expect(await screen.findByRole("heading", { name: "Start a New Generation" })).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("Image"));
+    fireEvent.click(await screen.findByRole("button", { name: /Attach reference images/ }));
+    await waitFor(() => expect(bridge.openMultiFileDialog).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("ref-a.png")).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText(/Enter what you want to generate/), {
+      target: { value: "Create a poster in this visual style" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /previous\.pptx/ }));
+    expect(await screen.findByText("Generation Complete")).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button", { name: /New Generation/ })[0]);
+
+    expect(await screen.findByText("ref-a.png")).toBeTruthy();
+    expect(screen.getByText("ref-b.jpg")).toBeTruthy();
+    expect(screen.getByDisplayValue("Create a poster in this visual style")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Generate$/ }));
+
+    await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
+    expect(bridge.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        documentType: "img",
+        prompt: "Create a poster in this visual style",
+        referenceImages: ["/tmp/ref-a.png", "/tmp/ref-b.jpg"],
+      }),
+    );
+  });
+
+  it("preserves a report source workbook after switching to another conversation and submits it", async () => {
+    const bridge = installBridgeMock();
+    bridge.openFileDialog.mockResolvedValueOnce("/tmp/source.xlsx");
+    const { App } = await import("./App");
+
+    render(<App />);
+
+    act(() => {
+      bridge.emit({
+        event_id: "event-previous-report",
+        task_id: "task-previous-report",
+        type: "task.completed",
+        payload: {
+          result: {
+            file_path: "/tmp/previous.docx",
+            file_name: "previous.docx",
+            document_type: "docx",
+          },
+        },
+      });
+    });
+    expect(await screen.findByText("Generation Complete")).toBeTruthy();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /New Generation/ })[0]);
+    expect(await screen.findByRole("heading", { name: "Start a New Generation" })).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("Report"));
+    fireEvent.click(await screen.findByRole("button", { name: /Attach source file/ }));
+    await waitFor(() => expect(bridge.openFileDialog).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("source.xlsx")).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText(/Enter what you want to generate/), {
+      target: { value: "Analyze workbook trends" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /previous\.docx/ }));
+    expect(await screen.findByText("Generation Complete")).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button", { name: /New Generation/ })[0]);
+
+    expect(await screen.findByText("source.xlsx")).toBeTruthy();
+    expect(screen.getByDisplayValue("Analyze workbook trends")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Generate$/ }));
+
+    await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
+    expect(bridge.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        documentType: "report",
+        prompt: "Analyze workbook trends",
+        sourceFile: "/tmp/source.xlsx",
+      }),
+    );
+  });
+
+  it("clears the new generation draft after a successful submit", async () => {
+    const bridge = installBridgeMock();
+    const { App } = await import("./App");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Start a New Generation" })).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText(/Enter what you want to generate/), {
+      target: { value: "Create a sales deck" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Generate$/ }));
+    await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getAllByRole("button", { name: /New Generation/ })[0]);
+
+    const prompt = await screen.findByPlaceholderText(/Enter what you want to generate/) as HTMLTextAreaElement;
+    expect(prompt.value).toBe("");
+  });
+
+  it("restores the submitted new generation draft when generate rejects before task acceptance", async () => {
+    const bridge = installBridgeMock();
+    bridge.generate.mockRejectedValueOnce(new Error("provider unavailable"));
+    const { App } = await import("./App");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Start a New Generation" })).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText(/Enter what you want to generate/), {
+      target: { value: "Create a deck that should be retried" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Generate$/ }));
+
+    expect(await screen.findByText("provider unavailable")).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button", { name: /New Generation/ })[0]);
+
+    expect(await screen.findByDisplayValue("Create a deck that should be retried")).toBeTruthy();
+  });
+
   it("renders running dialogue from task topic and bridge events instead of Q3 sample text", async () => {
     installBridgeMock();
     const { DialogueScreen } = await import("./screens/DialogueScreens");
@@ -809,6 +983,7 @@ function installBridgeMock() {
   const generate = vi.fn(async () => ({ taskId: "task-2", sessionId: "session-2", status: "starting" }));
   const previewArtifact = vi.fn(async () => undefined);
   const openExternal = vi.fn(async () => undefined);
+  const openFileDialog = vi.fn<(options?: { filters?: Array<{ name: string; extensions: string[] }> }) => Promise<string | null>>(async () => null);
   const openMultiFileDialog = vi.fn<(options?: { filters?: Array<{ name: string; extensions: string[] }> }) => Promise<string[] | null>>(async () => null);
   const savePastedImage = vi.fn<(data: Uint8Array, ext: string) => Promise<string>>(
     async (_data: Uint8Array, ext: string): Promise<string> =>
@@ -823,7 +998,7 @@ function installBridgeMock() {
     openPath: vi.fn(async () => undefined),
     showItemInFolder: vi.fn(async () => undefined),
     openExternal,
-    openFileDialog: vi.fn(async () => null),
+    openFileDialog,
     openDirectoryDialog: vi.fn(async () => null),
     openMultiFileDialog,
     savePastedImage,
@@ -935,6 +1110,7 @@ function installBridgeMock() {
     previewArtifact,
     issuePreviewToken: api.issuePreviewToken,
     openExternal,
+    openFileDialog,
     openMultiFileDialog,
     savePastedImage,
     emit(event: BridgeEvent) {

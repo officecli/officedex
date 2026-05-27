@@ -6,12 +6,12 @@ import type { Artifact, BridgeEvent, GenerateInput, PreviewGrant } from "../shar
 import { applyTaskEvent, attachUserInput, createInitialTaskState, deleteTask, getConversationTasks, type TaskState } from "./taskState";
 import { officecli } from "./bridge";
 import { theme } from "./designTokens";
-import type { NavKey } from "./defaults";
+import { defaultGenerateInput, type NavKey } from "./defaults";
 import { Shell } from "./components/Shell";
 import { PreviewPanel } from "./components/PreviewPanel";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { ForceUpdateOverlay } from "./components/ForceUpdateOverlay";
-import { DialogueScreen, type FailureKind } from "./screens/DialogueScreens";
+import { DialogueScreen, type FailureKind, type NewGenerationDraft } from "./screens/DialogueScreens";
 import { TasksScreen } from "./screens/DataScreens";
 import { LoginScreen, SettingsScreen } from "./screens/SettingsScreens";
 import { OnboardingScreen } from "./screens/OnboardingScreen";
@@ -48,6 +48,8 @@ export function App() {
   const [previewGrant, setPreviewGrant] = useState<PreviewGrant | null>(null);
   const pendingGenerateRef = useRef<PendingGenerate | null>(null);
   const { settings: persistedSettings, defaultWorkspaceDir, loading: settingsLoading } = useSettings();
+  const [newGenerationDraft, setNewGenerationDraft] = useState<NewGenerationDraft>(() => createNewGenerationDraft());
+  const [newGenerationDraftDirty, setNewGenerationDraftDirty] = useState(false);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const appUpdate = useAppUpdate();
   const { credit, refresh: refreshCredit, nudgeForTaskTransition } = useCreditStatus();
@@ -67,6 +69,21 @@ export function App() {
   }, []);
 
   const showOnboarding = !settingsLoading && !onboardingDismissed && persistedSettings.onboardingCompletedAt === null;
+
+  useEffect(() => {
+    if (settingsLoading || newGenerationDraftDirty) return;
+    setNewGenerationDraft(createNewGenerationDraft(persistedSettings.defaults));
+  }, [settingsLoading, newGenerationDraftDirty, persistedSettings.defaults]);
+
+  const updateNewGenerationDraft = useCallback((patch: Partial<NewGenerationDraft>) => {
+    setNewGenerationDraft((current) => ({ ...current, ...patch }));
+    setNewGenerationDraftDirty(true);
+  }, []);
+
+  const resetNewGenerationDraft = useCallback(() => {
+    setNewGenerationDraft(createNewGenerationDraft(persistedSettings.defaults));
+    setNewGenerationDraftDirty(false);
+  }, [persistedSettings.defaults]);
 
   useEffect(() => {
     if (settingsLoading) return;
@@ -246,6 +263,7 @@ export function App() {
     clearError();
     const topic = values.topic || summarizePrompt(values.prompt);
     const localTaskId = createLocalTaskId();
+    const submittedDraft = createNewGenerationDraft(values);
     pendingGenerateRef.current = {
       localTaskId,
       input: {
@@ -266,6 +284,7 @@ export function App() {
     }), localTaskId, pendingGenerateRef.current!.input));
     setSelectedTaskID({ kind: "task", id: localTaskId });
     setActiveNav("dialogue");
+    resetNewGenerationDraft();
     setBusy(false);
     try {
       const result = await officecli.generate({ ...values, topic });
@@ -280,6 +299,8 @@ export function App() {
       if (pendingGenerateRef.current?.localTaskId !== localTaskId) return;
       pendingGenerateRef.current = null;
       setState((current) => deleteTask(current, localTaskId));
+      setNewGenerationDraft(submittedDraft);
+      setNewGenerationDraftDirty(true);
       const text = errorMessage(error);
       recordError(text, classifyError(text), extractStderr(text));
       setActiveNav("dialogue");
@@ -456,6 +477,7 @@ export function App() {
             tasks={conversationTasks}
             conversationId={conversationId}
             artifacts={artifacts}
+            newGenerationDraft={newGenerationDraft}
             busy={busy}
             lastError={lastError}
             errorKind={errorKind}
@@ -466,6 +488,7 @@ export function App() {
             onOpenLogin={openLogin}
             onRetry={retry}
             onPreview={openInlinePreview}
+            onNewGenerationDraftChange={updateNewGenerationDraft}
             onContinueGeneration={continueGeneration}
             onForceCancel={(taskId) => {
               setState((current) => applyTaskEvent(current, {
@@ -496,6 +519,17 @@ export function App() {
 function summarizePrompt(prompt: string) {
   const normalized = prompt.trim().replace(/\s+/g, " ");
   return normalized.length > 24 ? `${normalized.slice(0, 24)}...` : normalized || "Untitled generation";
+}
+
+function createNewGenerationDraft(input: Partial<GenerateInput> = {}): NewGenerationDraft {
+  return {
+    documentType: input.documentType ?? defaultGenerateInput.documentType ?? "pptx",
+    topic: input.topic ?? "",
+    prompt: input.prompt ?? "",
+    mode: input.mode ?? defaultGenerateInput.mode,
+    sourceFile: input.sourceFile,
+    referenceImages: input.referenceImages,
+  };
 }
 
 function createLocalTaskId(): string {
