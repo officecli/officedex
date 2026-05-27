@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { Modal } from "antd";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DesktopAPI, UserSettings } from "../../shared/types";
 import { officecli } from "../bridge";
@@ -62,6 +63,14 @@ let openDirectoryDialogSpy: ReturnType<typeof vi.fn>;
 let testProviderSpy: ReturnType<typeof vi.fn>;
 let originals: Partial<DesktopAPI>;
 
+async function cleanupAntdPortals() {
+  Modal.destroyAll();
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  cleanup();
+}
+
 beforeEach(() => {
   installDomStubs();
   currentSettings = makeSettings();
@@ -92,8 +101,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  await act(async () => {});
-  cleanup();
+  await cleanupAntdPortals();
   Object.assign(officecli, originals);
   vi.restoreAllMocks();
 });
@@ -442,8 +450,7 @@ describe("SettingsScreen > About card", () => {
   });
 
   afterEach(async () => {
-    await act(async () => {});
-    cleanup();
+    await cleanupAntdPortals();
     Object.assign(officecli, aboutOriginals);
     vi.restoreAllMocks();
   });

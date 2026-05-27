@@ -1,4 +1,5 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { Modal } from "antd";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OnboardingScreen } from "./OnboardingScreen";
 import { officecli } from "../bridge";
@@ -21,6 +22,14 @@ const baseSettings: UserSettings = {
 let updateSettingsSpy: ReturnType<typeof vi.fn>;
 let openDirectoryDialogSpy: ReturnType<typeof vi.fn>;
 let testProviderSpy: ReturnType<typeof vi.fn>;
+
+async function cleanupAntdPortals() {
+  Modal.destroyAll();
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  cleanup();
+}
 
 beforeEach(() => {
   if (!window.matchMedia) {
@@ -54,8 +63,8 @@ beforeEach(() => {
   officecli.testProvider = testProviderSpy as unknown as typeof officecli.testProvider;
 });
 
-afterEach(() => {
-  cleanup();
+afterEach(async () => {
+  await cleanupAntdPortals();
 });
 
 describe("OnboardingScreen", () => {

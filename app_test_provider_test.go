@@ -20,6 +20,30 @@ import (
 	"officedex/internal/types"
 )
 
+const (
+	fakeOfficeCLIBehaviorEnv = "OFFICEDEX_TEST_FAKE_OFFICECLI_BEHAVIOR"
+	fakeOfficeCLIArgsPathEnv = "OFFICEDEX_TEST_FAKE_OFFICECLI_ARGS_PATH"
+	fakeOfficeCLIEnvPathEnv  = "OFFICEDEX_TEST_FAKE_OFFICECLI_ENV_PATH"
+)
+
+func init() {
+	switch os.Getenv(fakeOfficeCLIBehaviorEnv) {
+	case "success":
+		if argsPath := os.Getenv(fakeOfficeCLIArgsPathEnv); argsPath != "" {
+			_ = os.WriteFile(argsPath, []byte(strings.Join(os.Args[1:], "\n")+"\n"), 0o644)
+		}
+		if envPath := os.Getenv(fakeOfficeCLIEnvPathEnv); envPath != "" {
+			_ = os.WriteFile(envPath, []byte(strings.Join(os.Environ(), "\n")+"\n"), 0o644)
+		}
+		fmt.Println(`{"ok":true}`)
+		os.Exit(0)
+	case "failure":
+		fmt.Println("stdout says not enough credits with extra details")
+		_, _ = fmt.Fprintln(os.Stderr, "stderr says hosted provider unreachable")
+		os.Exit(42)
+	}
+}
+
 type providerTestFakeTransport struct {
 	stdin   *providerTestBufferedPipe
 	stdoutR *io.PipeReader
@@ -491,22 +515,16 @@ func TestTestProviderWithInputOfficialPaidProbeRunsOfficeCLICommand(t *testing.T
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
 	envPath := filepath.Join(dir, "env.txt")
-	scriptPath := filepath.Join(dir, "officecli-probe.sh")
-	script := fmt.Sprintf(`#!/bin/sh
-printf '%%s\n' "$@" > %q
-env > %q
-printf '{"ok":true}\n'
-exit 0
-`, argsPath, envPath)
-	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
-		t.Fatalf("write fake officecli: %v", err)
-	}
+	t.Setenv(fakeOfficeCLIBehaviorEnv, "success")
+	t.Setenv(fakeOfficeCLIArgsPathEnv, argsPath)
+	t.Setenv(fakeOfficeCLIEnvPathEnv, envPath)
+	fakeOfficeCLIPath := os.Args[0]
 
 	appProxy := netproxy.NewPool()
 	a := &App{
 		proxyPool: appProxy,
 		cachedSettings: types.UserSettings{
-			BridgeBinaryPath: &scriptPath,
+			BridgeBinaryPath: &fakeOfficeCLIPath,
 			LlmProvider: &types.LlmProvider{
 				Type:    types.LlmCustom,
 				BaseURL: "http://cached.example/v1",
@@ -562,21 +580,13 @@ exit 0
 }
 
 func TestTestProviderWithInputOfficialPaidProbeReturnsFailureSummary(t *testing.T) {
-	dir := t.TempDir()
-	scriptPath := filepath.Join(dir, "officecli-probe.sh")
-	script := `#!/bin/sh
-printf 'stdout says not enough credits with extra details\n'
-printf 'stderr says hosted provider unreachable\n' >&2
-exit 42
-`
-	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
-		t.Fatalf("write fake officecli: %v", err)
-	}
+	t.Setenv(fakeOfficeCLIBehaviorEnv, "failure")
+	fakeOfficeCLIPath := os.Args[0]
 
 	a := &App{
 		proxyPool: netproxy.NewPool(),
 		cachedSettings: types.UserSettings{
-			BridgeBinaryPath: &scriptPath,
+			BridgeBinaryPath: &fakeOfficeCLIPath,
 		},
 	}
 	result, err := a.TestProviderWithInput(types.ProviderTestInput{
