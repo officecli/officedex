@@ -3,55 +3,167 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync"
 	"testing"
+	"time"
 
+	"officedex/internal/bridge"
 	"officedex/internal/netproxy"
 	"officedex/internal/types"
 )
 
+type providerTestFakeTransport struct {
+	stdin   *providerTestBufferedPipe
+	stdoutR *io.PipeReader
+	stdoutW *io.PipeWriter
+	stderrR *io.PipeReader
+	stderrW *io.PipeWriter
+}
+
+type providerTestBufferedPipe struct {
+	mu   sync.Mutex
+	cond *sync.Cond
+	data []byte
+}
+
+func newProviderTestBufferedPipe() *providerTestBufferedPipe {
+	b := &providerTestBufferedPipe{}
+	b.cond = sync.NewCond(&b.mu)
+	return b
+}
+
+func (b *providerTestBufferedPipe) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	b.data = append(b.data, p...)
+	b.cond.Broadcast()
+	b.mu.Unlock()
+	return len(p), nil
+}
+
+func (b *providerTestBufferedPipe) readFrame() []byte {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for {
+		headerEnd := strings.Index(string(b.data), "\r\n\r\n")
+		if headerEnd < 0 {
+			b.cond.Wait()
+			continue
+		}
+		header := string(b.data[:headerEnd])
+		var length int
+		if _, err := fmt.Sscanf(header, "Content-Length: %d", &length); err != nil || length <= 0 {
+			b.cond.Wait()
+			continue
+		}
+		start := headerEnd + 4
+		if len(b.data) < start+length {
+			b.cond.Wait()
+			continue
+		}
+		body := append([]byte(nil), b.data[start:start+length]...)
+		b.data = b.data[start+length:]
+		return body
+	}
+}
+
+func newProviderTestFakeTransport() *providerTestFakeTransport {
+	stdoutR, stdoutW := io.Pipe()
+	stderrR, stderrW := io.Pipe()
+	return &providerTestFakeTransport{
+		stdin:   newProviderTestBufferedPipe(),
+		stdoutR: stdoutR,
+		stdoutW: stdoutW,
+		stderrR: stderrR,
+		stderrW: stderrW,
+	}
+}
+
+func (f *providerTestFakeTransport) Stdin() io.Writer  { return f.stdin }
+func (f *providerTestFakeTransport) Stdout() io.Reader { return f.stdoutR }
+func (f *providerTestFakeTransport) Stderr() io.Reader { return f.stderrR }
+func (f *providerTestFakeTransport) Kill() error {
+	_ = f.stdoutW.Close()
+	_ = f.stderrW.Close()
+	return nil
+}
+func (f *providerTestFakeTransport) Wait() (*int, string, error) {
+	zero := 0
+	return &zero, "", nil
+}
+
+func (f *providerTestFakeTransport) answerInitialize(t *testing.T) {
+	t.Helper()
+	var req struct {
+		ID     int    `json:"id"`
+		Method string `json:"method"`
+	}
+	if err := json.Unmarshal(f.stdin.readFrame(), &req); err != nil {
+		t.Fatalf("decode bridge request: %v", err)
+	}
+	if req.Method != "initialize" {
+		t.Fatalf("bridge request method = %q, want initialize", req.Method)
+	}
+	body, err := json.Marshal(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      req.ID,
+		"result":  map[string]any{"serverName": "fake-officecli-agent-bridge"},
+	})
+	if err != nil {
+		t.Fatalf("marshal bridge response: %v", err)
+	}
+	if _, err := fmt.Fprintf(f.stdoutW, "Content-Length: %d\r\n\r\n", len(body)); err != nil {
+		t.Fatalf("write bridge header: %v", err)
+	}
+	if _, err := f.stdoutW.Write(body); err != nil {
+		t.Fatalf("write bridge body: %v", err)
+	}
+}
+
 func TestProviderProbeFor(t *testing.T) {
 	cases := []struct {
-		name   string
-		input  types.LlmProvider
-		wantU  string
-		wantH  map[string]string
-		wantM  string
+		name    string
+		input   types.LlmProvider
+		wantU   string
+		wantH   map[string]string
+		wantM   string
 		hasBody bool
 	}{
 		{
-			name:   "openai",
-			input:  types.LlmProvider{Type: types.LlmOpenAI, BaseURL: "https://api.openai.com/v1", APIKey: "sk-abc", Model: "gpt-4"},
-			wantU:  "https://api.openai.com/v1/chat/completions",
-			wantH:  map[string]string{"Authorization": "Bearer sk-abc", "Content-Type": "application/json"},
-			wantM:  http.MethodPost,
+			name:    "openai",
+			input:   types.LlmProvider{Type: types.LlmOpenAI, BaseURL: "https://api.openai.com/v1", APIKey: "sk-abc", Model: "gpt-4"},
+			wantU:   "https://api.openai.com/v1/chat/completions",
+			wantH:   map[string]string{"Authorization": "Bearer sk-abc", "Content-Type": "application/json"},
+			wantM:   http.MethodPost,
 			hasBody: true,
 		},
 		{
-			name:   "azure",
-			input:  types.LlmProvider{Type: types.LlmAzure, BaseURL: "https://x.openai.azure.com", APIKey: "az-key", Model: "gpt-4"},
-			wantU:  "https://x.openai.azure.com/openai/deployments/gpt-4/chat/completions?api-version=2024-02-15-preview",
-			wantH:  map[string]string{"api-key": "az-key", "Content-Type": "application/json"},
-			wantM:  http.MethodPost,
+			name:    "azure",
+			input:   types.LlmProvider{Type: types.LlmAzure, BaseURL: "https://x.openai.azure.com", APIKey: "az-key", Model: "gpt-4"},
+			wantU:   "https://x.openai.azure.com/openai/deployments/gpt-4/chat/completions?api-version=2024-02-15-preview",
+			wantH:   map[string]string{"api-key": "az-key", "Content-Type": "application/json"},
+			wantM:   http.MethodPost,
 			hasBody: true,
 		},
 		{
-			name:   "anthropic",
-			input:  types.LlmProvider{Type: types.LlmAnthropic, BaseURL: "https://api.anthropic.com", APIKey: "ant-key", Model: "claude-3-opus"},
-			wantU:  "https://api.anthropic.com/v1/messages",
-			wantH:  map[string]string{"x-api-key": "ant-key", "anthropic-version": "2023-06-01", "Content-Type": "application/json"},
-			wantM:  http.MethodPost,
+			name:    "anthropic",
+			input:   types.LlmProvider{Type: types.LlmAnthropic, BaseURL: "https://api.anthropic.com", APIKey: "ant-key", Model: "claude-3-opus"},
+			wantU:   "https://api.anthropic.com/v1/messages",
+			wantH:   map[string]string{"x-api-key": "ant-key", "anthropic-version": "2023-06-01", "Content-Type": "application/json"},
+			wantM:   http.MethodPost,
 			hasBody: true,
 		},
 		{
-			name:   "custom-chat-completions",
-			input:  types.LlmProvider{Type: types.LlmCustom, BaseURL: "https://4zapi.com/v1", APIKey: "sk-x", Model: "gpt-4"},
-			wantU:  "https://4zapi.com/v1/chat/completions",
-			wantH:  map[string]string{"Authorization": "Bearer sk-x", "Content-Type": "application/json"},
-			wantM:  http.MethodPost,
+			name:    "custom-chat-completions",
+			input:   types.LlmProvider{Type: types.LlmCustom, BaseURL: "https://4zapi.com/v1", APIKey: "sk-x", Model: "gpt-4"},
+			wantU:   "https://4zapi.com/v1/chat/completions",
+			wantH:   map[string]string{"Authorization": "Bearer sk-x", "Content-Type": "application/json"},
+			wantM:   http.MethodPost,
 			hasBody: true,
 		},
 	}
@@ -310,29 +422,122 @@ func TestRunHTTPProbe(t *testing.T) {
 	})
 }
 
-func TestTestProviderOfficialModeReturnsSuccess(t *testing.T) {
-	// Official mode now tests through the bridge. Since no bridge binary is
-	// available in unit tests, it will fail at ensureBridge() — but it should
-	// no longer reject with "not_custom". Verify the result has an error
-	// from the bridge, not from a configuration rejection.
+func TestTestProviderOfficialModeReportsUnavailable(t *testing.T) {
 	a := &App{
 		proxyPool:      netproxy.NewPool(),
-		cachedSettings: types.UserSettings{
-			// No LlmProvider → official (hosted) mode → should attempt bridge test
-		},
+		cachedSettings: types.UserSettings{},
 	}
 	result, err := a.TestProvider()
 	if err != nil {
-		t.Fatalf("TestProvider should not return an error for official mode anymore: %v", err)
+		t.Fatalf("TestProvider: %v", err)
 	}
-	// Should have attempted the bridge test (which fails gracefully in unit
-	// tests since no officecli binary is available).
-	if result.OK {
-		t.Log("bridge test succeeded (binary may be available)")
-	} else {
-		if result.Error == "" {
-			t.Error("expected Error field to be populated when bridge fails")
+	if result.OK || !result.Unavailable || result.URL != "official" {
+		t.Fatalf("official mode result = %+v, want unavailable official result", result)
+	}
+	if !strings.Contains(result.Error, "official provider connection test is not available") {
+		t.Fatalf("official mode error = %q", result.Error)
+	}
+}
+
+func TestTestProviderOfficialModeDoesNotClaimBridgeInitializeAsProviderOK(t *testing.T) {
+	fake := newProviderTestFakeTransport()
+	client := bridge.New(bridge.Options{
+		RequestTimeout: 500 * time.Millisecond,
+		CreateTransport: func(opts bridge.Options) (bridge.Transport, error) {
+			return fake, nil
+		},
+		DisableAutoReconnect: true,
+	})
+	if err := client.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer client.Stop()
+
+	a := &App{
+		proxyPool:      netproxy.NewPool(),
+		cachedSettings: types.UserSettings{},
+		bridgeClient:   client,
+	}
+
+	type outcome struct {
+		result types.ProviderTestResult
+		err    error
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		result, err := a.TestProvider()
+		done <- outcome{result: result, err: err}
+	}()
+
+	var out outcome
+	select {
+	case out = <-done:
+	case <-time.After(20 * time.Millisecond):
+		fake.answerInitialize(t)
+		out = <-done
+	}
+
+	if out.err != nil {
+		t.Fatalf("TestProvider: %v", out.err)
+	}
+	if out.result.OK || out.result.URL == "bridge:initialize" || !out.result.Unavailable || !strings.Contains(out.result.Error, "official provider connection test is not available") {
+		t.Fatalf("official provider test should not report bridge initialize as provider OK, got %+v", out.result)
+	}
+}
+
+func TestTestProviderWithInputUsesOverridesWithoutMutatingCachedSettings(t *testing.T) {
+	var seenProxyRequest bool
+	proxyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seenProxyRequest = true
+		if r.URL.String() != "http://upstream.example/v1/chat/completions" {
+			t.Errorf("proxy request URL = %q", r.URL.String())
 		}
-		t.Logf("expected bridge failure in unit tests: %s", result.Error)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"proxied ok"}}]}`))
+	}))
+	defer proxyServer.Close()
+
+	appProxy := netproxy.NewPool()
+	a := &App{
+		proxyPool: appProxy,
+		cachedSettings: types.UserSettings{
+			LlmProvider: &types.LlmProvider{
+				Type:    types.LlmCustom,
+				BaseURL: "http://cached.example/v1",
+				APIKey:  "cached-key",
+				Model:   "cached-model",
+			},
+		},
+	}
+
+	result, err := a.TestProviderWithInput(types.ProviderTestInput{
+		UseProviderOverride: true,
+		LlmProvider: &types.LlmProvider{
+			Type:    types.LlmCustom,
+			BaseURL: "http://upstream.example/v1",
+			APIKey:  "input-key",
+			Model:   "input-model",
+		},
+		UseProxyOverride: true,
+		Proxy: &types.ProxySettings{
+			Enabled: true,
+			URL:     proxyServer.URL,
+		},
+	})
+	if err != nil {
+		t.Fatalf("TestProviderWithInput: %v", err)
+	}
+	if !result.OK || result.ResponseMessage != "proxied ok" {
+		t.Fatalf("result = %+v, want proxied success", result)
+	}
+	if !seenProxyRequest {
+		t.Fatal("proxy server did not receive the provider test request")
+	}
+	if a.cachedSettings.LlmProvider == nil || a.cachedSettings.LlmProvider.BaseURL != "http://cached.example/v1" {
+		t.Fatalf("cached settings were mutated: %+v", a.cachedSettings.LlmProvider)
+	}
+	if got := appProxy.Get(); got != nil {
+		t.Fatalf("app proxy pool was mutated: %v", got)
 	}
 }

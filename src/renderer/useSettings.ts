@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { officecli } from "./bridge";
 import type { UserSettings } from "../shared/types";
+import { defaultProxySettings } from "./defaults";
 
 const FALLBACK: UserSettings = {
   version: 1,
@@ -13,7 +14,7 @@ const FALLBACK: UserSettings = {
   outputDir: null,
   llmProvider: null,
   onboardingCompletedAt: null,
-  proxy: null,
+  proxy: { ...defaultProxySettings },
 };
 
 // Cross-instance broadcast: multiple components call useSettings() independently
@@ -23,6 +24,13 @@ const FALLBACK: UserSettings = {
 const settingsBus =
   typeof window !== "undefined" && typeof EventTarget !== "undefined" ? new EventTarget() : null;
 const SETTINGS_CHANGED = "officedex:settings-changed";
+
+export function broadcastSettingsChanged(next: UserSettings) {
+  settingsBus?.dispatchEvent(new CustomEvent<UserSettings>(SETTINGS_CHANGED, { detail: next }));
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent<UserSettings>("officedex:settings-updated", { detail: next }));
+  }
+}
 
 export interface UseSettingsResult {
   settings: UserSettings;
@@ -78,10 +86,7 @@ export function useSettings(): UseSettingsResult {
         setSettings(next);
         setError(undefined);
       }
-      settingsBus?.dispatchEvent(new CustomEvent<UserSettings>(SETTINGS_CHANGED, { detail: next }));
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent<UserSettings>("officedex:settings-updated", { detail: next }));
-      }
+      broadcastSettingsChanged(next);
       return next;
     } catch (err) {
       if (mountedRef.current) {

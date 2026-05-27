@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [0.5.3] - 2026-05-27
+
+### Added
+- Onboarding now tests the official provider before completion and guides users into proxy setup when the Settings-equivalent provider test does not pass.
+- Added a draft-settings provider test path so onboarding can test the selected provider/proxy values before they are saved.
+
+### Changed
+- Proxy settings now default to `http://127.0.0.1:7890` when users enable proxy configuration, matching the startup guidance flow.
+
 ## [0.5.1] - 2026-05-26
 
 ### Fixed
@@ -52,6 +61,7 @@ Initial open-source release of OfficeDex — the desktop client for OfficeCLI.
 - GNU General Public License v3.0 LICENSE + NOTICE.
 - CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, issue/PR templates, Dependabot.
 
-[Unreleased]: https://github.com/officecli/officedex/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/officecli/officedex/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/officecli/officedex/compare/v0.5.2...v0.5.3
 [0.5.1]: https://github.com/officecli/officedex/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/officecli/officedex/compare/v0.4.1...v0.5.0

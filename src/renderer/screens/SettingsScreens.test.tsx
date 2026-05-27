@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DesktopAPI, UserSettings } from "../../shared/types";
 import { officecli } from "../bridge";
 
+const DEFAULT_PROXY = { enabled: false, url: "http://127.0.0.1:7890" };
+
 let currentSettings: UserSettings;
 
 function installDomStubs() {
@@ -49,7 +51,7 @@ function makeSettings(overrides: Partial<UserSettings> = {}): UserSettings {
     outputDir: overrides.outputDir ?? null,
     llmProvider: overrides.llmProvider ?? null,
     onboardingCompletedAt: overrides.onboardingCompletedAt ?? "2026-05-22T00:00:00Z",
-    proxy: overrides.proxy ?? null,
+    proxy: overrides.proxy ?? DEFAULT_PROXY,
   };
 }
 
@@ -57,6 +59,7 @@ let getSettingsSpy: ReturnType<typeof vi.fn>;
 let updateSettingsSpy: ReturnType<typeof vi.fn>;
 let getDefaultWorkspaceDirSpy: ReturnType<typeof vi.fn>;
 let openDirectoryDialogSpy: ReturnType<typeof vi.fn>;
+let testProviderSpy: ReturnType<typeof vi.fn>;
 let originals: Partial<DesktopAPI>;
 
 beforeEach(() => {
@@ -73,16 +76,19 @@ beforeEach(() => {
   });
   getDefaultWorkspaceDirSpy = vi.fn(async () => "/tmp/default-workspace");
   openDirectoryDialogSpy = vi.fn(async () => null);
+  testProviderSpy = vi.fn(async () => ({ ok: true, httpStatus: 200, latencyMs: 10, url: "official" }));
   originals = {
     getSettings: officecli.getSettings,
     updateSettings: officecli.updateSettings,
     getDefaultWorkspaceDir: officecli.getDefaultWorkspaceDir,
     openDirectoryDialog: officecli.openDirectoryDialog,
+    testProvider: officecli.testProvider,
   };
   officecli.getSettings = getSettingsSpy as unknown as DesktopAPI["getSettings"];
   officecli.updateSettings = updateSettingsSpy as unknown as DesktopAPI["updateSettings"];
   officecli.getDefaultWorkspaceDir = getDefaultWorkspaceDirSpy as unknown as DesktopAPI["getDefaultWorkspaceDir"];
   officecli.openDirectoryDialog = openDirectoryDialogSpy as unknown as DesktopAPI["openDirectoryDialog"];
+  officecli.testProvider = testProviderSpy as unknown as DesktopAPI["testProvider"];
 });
 
 afterEach(async () => {
@@ -196,6 +202,18 @@ describe("SettingsScreen", () => {
     });
   });
 
+  it("Provider test in Settings uses the saved settings without an override payload", async () => {
+    const { SettingsScreen } = await import("./SettingsScreens");
+    render(<SettingsScreen />);
+    await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(await screen.findByRole("button", { name: /test connection/i }));
+
+    await waitFor(() => expect(testProviderSpy).toHaveBeenCalledTimes(1));
+    expect(testProviderSpy).toHaveBeenCalledWith();
+    expect(await screen.findByText(/HTTP 200/)).toBeTruthy();
+  });
+
   it("Reset everything opens a confirm modal and applies the reset patch on OK", async () => {
     const { SettingsScreen } = await import("./SettingsScreens");
     render(<SettingsScreen />);
@@ -248,7 +266,19 @@ describe("SettingsScreen", () => {
     });
   });
 
-  it("Proxy card saves enabled+url patch and disabling clears proxy", async () => {
+  it("Proxy card starts disabled with the default local proxy URL ready when enabled", async () => {
+    const { SettingsScreen } = await import("./SettingsScreens");
+    render(<SettingsScreen />);
+    await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
+
+    const enableSwitch = await screen.findByRole("switch", { name: /enable proxy/i });
+    expect(enableSwitch.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(enableSwitch);
+
+    expect(((await screen.findByLabelText(/proxy url/i)) as HTMLInputElement).value).toBe("http://127.0.0.1:7890");
+  });
+
+  it("Proxy card saves enabled+url patch and disabling keeps the URL but turns proxy off", async () => {
     const { SettingsScreen } = await import("./SettingsScreens");
     render(<SettingsScreen />);
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
@@ -272,6 +302,17 @@ describe("SettingsScreen", () => {
 
     currentSettings = makeSettings({ proxy: { enabled: true, url: "http://127.0.0.1:7890" } });
     updateSettingsSpy.mockClear();
+
+    fireEvent.click(await screen.findByRole("switch", { name: /enable proxy/i }));
+    fireEvent.click(screen.getByRole("button", { name: /save proxy/i }));
+
+    await waitFor(() => {
+      const matched = updateSettingsSpy.mock.calls.some((args) => {
+        const patch = args[0] as Partial<UserSettings>;
+        return patch.proxy?.enabled === false && patch.proxy?.url === "http://127.0.0.1:7890";
+      });
+      expect(matched).toBe(true);
+    });
   });
 
   it("Proxy card rejects an obviously malformed URL", async () => {

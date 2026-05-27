@@ -40,6 +40,10 @@ var defaultSettings = types.UserSettings{
 		EnableImages: true,
 		ImageQuality: types.ImagePremium,
 	},
+	Proxy: &types.ProxySettings{
+		Enabled: false,
+		URL:     "http://127.0.0.1:7890",
+	},
 }
 
 // Defaults returns a copy of the package-level defaults.
@@ -166,8 +170,8 @@ type Patch struct {
 	// ClearLlmProvider, when true, removes the stored provider. Ignored when
 	// LlmProvider is non-nil.
 	ClearLlmProvider bool `json:"clearLlmProvider,omitempty"`
-	// ClearProxy, when true, removes the stored proxy. Ignored when Proxy is
-	// non-nil.
+	// ClearProxy, when true, resets the stored proxy to the disabled default.
+	// Ignored when Proxy is non-nil.
 	ClearProxy bool `json:"clearProxy,omitempty"`
 }
 
@@ -220,7 +224,8 @@ func applyPatch(base types.UserSettings, patch Patch) types.UserSettings {
 	if patch.Proxy != nil {
 		out.Proxy = patch.Proxy
 	} else if patch.ClearProxy {
-		out.Proxy = nil
+		defaults := cloneDefaults()
+		out.Proxy = defaults.Proxy
 	}
 	return out
 }
@@ -288,7 +293,9 @@ func sanitizeRaw(raw rawSettings) types.UserSettings {
 	out.OnboardingCompletedAt = trimNullable(raw.OnboardingCompletedAt)
 	out.SupportReportEndpoint = trimNullable(raw.SupportReportEndpoint)
 	out.SupportReportToken = trimNullable(raw.SupportReportToken)
-	out.Proxy = sanitizeRawProxy(raw.Proxy)
+	if raw.Proxy != nil {
+		out.Proxy = sanitizeRawProxy(raw.Proxy)
+	}
 	return out
 }
 
@@ -321,6 +328,10 @@ func sanitizeCanonical(s types.UserSettings) types.UserSettings {
 
 func cloneDefaults() types.UserSettings {
 	out := defaultSettings
+	if defaultSettings.Proxy != nil {
+		proxy := *defaultSettings.Proxy
+		out.Proxy = &proxy
+	}
 	return out
 }
 

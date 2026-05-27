@@ -1,4 +1,4 @@
-import type { DocumentType, GenerateInput } from "../shared/types";
+import type { DocumentType, GenerateInput, ProxySettings } from "../shared/types";
 import { DOCUMENT_TYPES, getCapability } from "../shared/types";
 
 export type NavKey = "dialogue" | "tasks" | "settings" | "login";
@@ -8,6 +8,17 @@ export const defaultGenerateInput: Partial<GenerateInput> = {
   mode: "fast",
   enableImages: true,
 };
+
+export const defaultProxySettings: ProxySettings = {
+  enabled: false,
+  url: "http://127.0.0.1:7890",
+};
+
+export const PROXY_URL_PATTERN = /^(https?|socks5h?):\/\/[^\s/$.?#].[^\s]*$/i;
+
+export function isValidProxyUrl(url: string): boolean {
+  return PROXY_URL_PATTERN.test(url.trim());
+}
 
 export const documentTypeOptions: Array<{ value: DocumentType; label: string; icon: string }> = DOCUMENT_TYPES.map((type) => {
   const capability = getCapability(type);

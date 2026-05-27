@@ -13,6 +13,7 @@ import type {
   LlmProvider,
   PeekReportContextResult,
   PreviewGrant,
+  ProviderTestInput,
   ProviderSnapshot,
   ProviderTestResult,
   RedeemResult,
@@ -23,6 +24,7 @@ import type {
   UserSettings,
   WhoAmIResult,
 } from "../shared/types";
+import { defaultProxySettings } from "./defaults";
 
 // The Wails-generated bindings live alongside the renderer; tsconfig must
 // include them. Imports are static so the build picks them up; calls only
@@ -51,7 +53,7 @@ const DEFAULT_BROWSER_SETTINGS: UserSettings = {
   outputDir: null,
   llmProvider: null,
   onboardingCompletedAt: null,
-  proxy: null,
+  proxy: { ...defaultProxySettings },
 };
 
 function createBrowserPreviewAPI(): DesktopAPI {
@@ -163,7 +165,7 @@ function createBrowserPreviewAPI(): DesktopAPI {
       binaryPath: "",
       envApplied: false,
     }),
-    testProvider: async () => {
+    testProvider: async (_input?: ProviderTestInput) => {
       throw new Error("Provider test is only available inside the desktop app.");
     },
   };
@@ -288,7 +290,7 @@ function normaliseUserSettings(raw: unknown): UserSettings {
     outputDir: merged.outputDir ?? null,
     llmProvider: (merged.llmProvider ?? null) as LlmProvider | null,
     onboardingCompletedAt: merged.onboardingCompletedAt ?? null,
-    proxy: merged.proxy ?? null,
+    proxy: merged.proxy ?? { ...defaultProxySettings },
   };
 }
 
@@ -429,8 +431,10 @@ function createWailsAPI(): DesktopAPI {
       const raw = (await WailsApp.GetBridgeRuntimeSnapshot()) as Partial<BridgeRuntimeSnapshot> | null;
       return normaliseBridgeRuntimeSnapshot(raw);
     },
-    testProvider: async (): Promise<ProviderTestResult> => {
-      const raw = (await WailsApp.TestProvider()) as Partial<ProviderTestResult> | null;
+    testProvider: async (input?: ProviderTestInput): Promise<ProviderTestResult> => {
+      const raw = input
+        ? ((await WailsApp.TestProviderWithInput(toWails(input))) as Partial<ProviderTestResult> | null)
+        : ((await WailsApp.TestProvider()) as Partial<ProviderTestResult> | null);
       return {
         ok: Boolean(raw?.ok),
         httpStatus: typeof raw?.httpStatus === "number" ? raw.httpStatus : 0,
@@ -438,6 +442,7 @@ function createWailsAPI(): DesktopAPI {
         url: typeof raw?.url === "string" ? raw.url : "",
         ...(raw?.error ? { error: raw.error } : {}),
         ...(raw?.responseMessage ? { responseMessage: raw.responseMessage } : {}),
+        ...(raw?.unavailable ? { unavailable: Boolean(raw.unavailable) } : {}),
       };
     },
   };

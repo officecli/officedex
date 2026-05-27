@@ -20,6 +20,7 @@ const baseSettings: UserSettings = {
 
 let updateSettingsSpy: ReturnType<typeof vi.fn>;
 let openDirectoryDialogSpy: ReturnType<typeof vi.fn>;
+let testProviderSpy: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   if (!window.matchMedia) {
@@ -47,8 +48,10 @@ beforeEach(() => {
     defaults: { ...baseSettings.defaults, ...(patch.defaults ?? {}) },
   }));
   openDirectoryDialogSpy = vi.fn(async () => null);
+  testProviderSpy = vi.fn(async () => ({ ok: true, httpStatus: 200, latencyMs: 12, url: "official" }));
   officecli.updateSettings = updateSettingsSpy as unknown as typeof officecli.updateSettings;
   officecli.openDirectoryDialog = openDirectoryDialogSpy as unknown as typeof officecli.openDirectoryDialog;
+  officecli.testProvider = testProviderSpy as unknown as typeof officecli.testProvider;
 });
 
 afterEach(() => {
@@ -134,6 +137,71 @@ describe("OnboardingScreen", () => {
     await waitFor(() => expect(updateSettingsSpy).toHaveBeenCalledTimes(1));
     const patch = updateSettingsSpy.mock.calls[0][0] as Partial<UserSettings>;
     expect(patch.llmProvider).toBeNull();
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
+  });
+
+  it("tests the draft official provider before finishing", async () => {
+    const onComplete = vi.fn();
+    render(<OnboardingScreen settings={baseSettings} defaultWorkspaceDir="/tmp/default-workspace" onComplete={onComplete} />);
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    expect(await screen.findByText("Provider & workspace")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /finish/i }));
+
+    await waitFor(() => expect(testProviderSpy).toHaveBeenCalledTimes(1));
+    expect(testProviderSpy).toHaveBeenCalledWith({
+      llmProvider: null,
+      proxy: null,
+      useProviderOverride: true,
+      useProxyOverride: true,
+    });
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
+  });
+
+  it("shows the proxy step when the official provider test is unavailable", async () => {
+    testProviderSpy.mockResolvedValueOnce({
+      ok: false,
+      httpStatus: 0,
+      latencyMs: 0,
+      url: "official",
+      unavailable: true,
+      error: "official provider connection test is not available",
+    });
+    const onComplete = vi.fn();
+    render(<OnboardingScreen settings={baseSettings} defaultWorkspaceDir="/tmp/default-workspace" onComplete={onComplete} />);
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    expect(await screen.findByText("Provider & workspace")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /finish/i }));
+
+    expect(await screen.findByText("Configure proxy")).toBeTruthy();
+    expect(((await screen.findByLabelText(/proxy url/i)) as HTMLInputElement).value).toBe("http://127.0.0.1:7890");
+    expect(onComplete).not.toHaveBeenCalled();
+  });
+
+  it("saves proxy settings and finishes after the retry test passes", async () => {
+    testProviderSpy
+      .mockResolvedValueOnce({
+        ok: false,
+        httpStatus: 0,
+        latencyMs: 0,
+        url: "official",
+        error: "connect: network is unreachable",
+      })
+      .mockResolvedValueOnce({ ok: true, httpStatus: 200, latencyMs: 18, url: "official" });
+    const onComplete = vi.fn();
+    render(<OnboardingScreen settings={baseSettings} defaultWorkspaceDir="/tmp/default-workspace" onComplete={onComplete} />);
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /finish/i }));
+    expect(await screen.findByText("Configure proxy")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /save proxy and retry/i }));
+
+    await waitFor(() => expect(testProviderSpy).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(updateSettingsSpy).toHaveBeenCalledTimes(1));
+    const patch = updateSettingsSpy.mock.calls[0][0] as Partial<UserSettings>;
+    expect(patch.proxy).toEqual({ enabled: true, url: "http://127.0.0.1:7890" });
+    expect(typeof patch.onboardingCompletedAt).toBe("string");
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
   });
 });

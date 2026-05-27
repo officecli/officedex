@@ -334,6 +334,15 @@ type ProxySettings struct {
 	URL     string `json:"url"`
 }
 
+// ProviderTestInput optionally overrides provider/proxy settings for a single
+// provider test without mutating persisted settings or the app-wide proxy pool.
+type ProviderTestInput struct {
+	UseProviderOverride bool           `json:"useProviderOverride"`
+	LlmProvider         *LlmProvider   `json:"llmProvider"`
+	UseProxyOverride    bool           `json:"useProxyOverride"`
+	Proxy               *ProxySettings `json:"proxy"`
+}
+
 type UserSettings struct {
 	Version                int              `json:"version"`
 	Defaults               GenerateDefaults `json:"defaults"`
@@ -432,4 +441,5 @@ type ProviderTestResult struct {
 	URL             string `json:"url"`
 	Error           string `json:"error,omitempty"`
 	ResponseMessage string `json:"responseMessage,omitempty"`
+	Unavailable     bool   `json:"unavailable,omitempty"`
 }

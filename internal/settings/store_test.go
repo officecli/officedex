@@ -43,6 +43,9 @@ func TestLoadMissingFileReturnsDefaults(t *testing.T) {
 	if got.OutputDir != nil || got.BridgeBinaryPath != nil || got.LlmProvider != nil || got.OnboardingCompletedAt != nil {
 		t.Errorf("expected nil pointer fields, got %+v", got)
 	}
+	if got.Proxy == nil || got.Proxy.Enabled || got.Proxy.URL != "http://127.0.0.1:7890" {
+		t.Errorf("Proxy = %+v, want disabled default proxy URL", got.Proxy)
+	}
 	if len(logger.calls) != 0 {
 		t.Errorf("expected no warnings for missing file, got %v", logger.calls)
 	}
@@ -269,6 +272,25 @@ func TestAtomicWriteCleansUpTmp(t *testing.T) {
 	}
 }
 
+func TestLoadMissingProxyUsesDisabledDefault(t *testing.T) {
+	store, path, _ := newTempStore(t)
+	raw := map[string]any{
+		"version":  1,
+		"defaults": map[string]any{},
+	}
+	body, _ := json.Marshal(raw)
+	if err := os.WriteFile(path, body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got.Proxy == nil || got.Proxy.Enabled || got.Proxy.URL != "http://127.0.0.1:7890" {
+		t.Fatalf("Proxy = %+v, want disabled default proxy URL", got.Proxy)
+	}
+}
+
 func TestProxyRoundTrip(t *testing.T) {
 	store, path, _ := newTempStore(t)
 	patch := Patch{Proxy: &types.ProxySettings{Enabled: true, URL: "http://127.0.0.1:7890"}}
@@ -317,7 +339,7 @@ func TestProxyInvalidSchemeIsDropped(t *testing.T) {
 	}
 }
 
-func TestProxyClearRemovesValue(t *testing.T) {
+func TestProxyClearResetsToDisabledDefault(t *testing.T) {
 	store, _, _ := newTempStore(t)
 	if _, err := store.Update(Patch{Proxy: &types.ProxySettings{Enabled: true, URL: "http://h:1"}}); err != nil {
 		t.Fatalf("seed: %v", err)
@@ -326,8 +348,8 @@ func TestProxyClearRemovesValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("clear: %v", err)
 	}
-	if got.Proxy != nil {
-		t.Errorf("Proxy = %+v, want nil after clear", got.Proxy)
+	if got.Proxy == nil || got.Proxy.Enabled || got.Proxy.URL != "http://127.0.0.1:7890" {
+		t.Errorf("Proxy = %+v, want disabled default proxy after clear", got.Proxy)
 	}
 }
 

@@ -17,8 +17,9 @@ import { DiagnosticsPanel } from "../components/DiagnosticsPanel";
 import { officecli } from "../bridge";
 import { useSettings } from "../useSettings";
 import { useAppUpdate } from "../useAppUpdate";
-import { ProviderForm } from "./OnboardingScreen";
+import { formatTestResult, ProviderForm } from "../components/ProviderForm";
 import { useT } from "../i18n";
+import { defaultProxySettings, isValidProxyUrl } from "../defaults";
 import type { AuthEvent, DocumentType, GenerateDefaults, LlmProvider, ProviderTestResult, ProxySettings, WhoAmIResult } from "../../shared/types";
 
 export function SettingsScreen({ onCreditRefresh }: { onCreditRefresh?: () => void } = {}) {
@@ -309,36 +310,6 @@ function ProviderFormControl({
       </div>
     </>
   );
-}
-
-function formatTestResult(
-  result: ProviderTestResult,
-  t: (key: string) => string,
-): { tone: "green" | "red" | "amber"; text: string } {
-  if (result.error && result.httpStatus === 0 && !result.ok) {
-    return { tone: "red", text: t("settings.effective.testNetworkError").replace("{error}", result.error) };
-  }
-  if (result.ok) {
-    const base = result.httpStatus > 0
-      ? t("settings.effective.testOkHttp")
-        .replace("{status}", String(result.httpStatus))
-        .replace("{latency}", String(result.latencyMs))
-      : t("settings.effective.testOkBridge")
-        .replace("{latency}", String(result.latencyMs));
-    if (result.responseMessage) {
-      return { tone: "green", text: base + ` · ${t("settings.effective.testReply")}: ${result.responseMessage}` };
-    }
-    return { tone: "green", text: base };
-  }
-  const status = result.httpStatus;
-  let key = "settings.effective.testFail";
-  if (status === 401 || status === 403) key = "settings.effective.testFailAuth";
-  else if (status === 404) key = "settings.effective.testFailNotFound";
-  else if (status >= 500) key = "settings.effective.testFailUpstream";
-  return {
-    tone: "red",
-    text: t(key).replace("{status}", String(status)),
-  };
 }
 
 function AboutCard() {
@@ -697,8 +668,6 @@ function SettingRow({ title, desc, children }: { title: string; desc: string; ch
   );
 }
 
-const PROXY_URL_PATTERN = /^(https?|socks5h?):\/\/[^\s/$.?#].[^\s]*$/i;
-
 function ProxyCard({
   remote,
   onSave,
@@ -707,33 +676,35 @@ function ProxyCard({
   onSave: (next: ProxySettings | null) => Promise<unknown>;
 }) {
   const t = useT();
-  const [enabled, setEnabled] = useState<boolean>(remote?.enabled ?? false);
-  const [url, setUrl] = useState<string>(remote?.url ?? "");
+  const effectiveRemote = remote ?? defaultProxySettings;
+  const [enabled, setEnabled] = useState<boolean>(effectiveRemote.enabled);
+  const [url, setUrl] = useState<string>(effectiveRemote.url);
   const [submitting, setSubmitting] = useState(false);
   const [validationError, setValidationError] = useState<string | undefined>(undefined);
 
   useEffect(() => {
-    setEnabled(remote?.enabled ?? false);
-    setUrl(remote?.url ?? "");
+    const nextRemote = remote ?? defaultProxySettings;
+    setEnabled(nextRemote.enabled);
+    setUrl(nextRemote.url);
     setValidationError(undefined);
   }, [remote?.enabled, remote?.url]);
 
   const trimmedUrl = url.trim();
   const dirty =
-    enabled !== (remote?.enabled ?? false) || trimmedUrl !== (remote?.url ?? "");
-  const canSave = dirty && !submitting && (!enabled || (trimmedUrl !== "" && PROXY_URL_PATTERN.test(trimmedUrl)));
+    enabled !== effectiveRemote.enabled || trimmedUrl !== effectiveRemote.url;
+  const canSave = dirty && !submitting && (!enabled || (trimmedUrl !== "" && isValidProxyUrl(trimmedUrl)));
 
   const handleSave = useCallback(async () => {
-    if (enabled && (trimmedUrl === "" || !PROXY_URL_PATTERN.test(trimmedUrl))) {
+    if (enabled && (trimmedUrl === "" || !isValidProxyUrl(trimmedUrl))) {
       setValidationError(t("settings.row.proxy.invalidUrl"));
       return;
     }
     setSubmitting(true);
     setValidationError(undefined);
     try {
-      const next: ProxySettings | null = enabled
+      const next: ProxySettings = enabled
         ? { enabled: true, url: trimmedUrl }
-        : null;
+        : { enabled: false, url: trimmedUrl || defaultProxySettings.url };
       await onSave(next);
       void message.success({
         content: t("settings.row.proxy.saveSuccess"),

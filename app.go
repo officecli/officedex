@@ -1325,19 +1325,48 @@ func providerProbeFor(p types.LlmProvider) (providerProbe, error) {
 	}
 }
 
+const officialProviderTestUnavailable = "official provider connection test is not available; run a generation task to verify the hosted provider"
+
 // TestProvider issues a probe against the configured provider. For custom
 // providers (OpenAI/Azure/Anthropic/Custom) it sends a real "hi" chat
-// completion. For the official (hosted) mode it verifies the officecli bridge
-// can start and initialize — which implicitly tests connectivity to the hosted
-// service.
+// completion. Official hosted mode does not expose a zero-cost provider ping, so
+// it returns an explicit unavailable result instead of treating a local bridge
+// handshake as proof that the hosted provider is reachable.
 func (a *App) TestProvider() (types.ProviderTestResult, error) {
 	a.mu.Lock()
 	s := a.cachedSettings
 	a.mu.Unlock()
 
-	// Official / hosted mode: test through the bridge.
+	return testProviderWithSettings(s, a.proxyPool)
+}
+
+// TestProviderWithInput runs the same provider probe as TestProvider, but with
+// per-call provider/proxy overrides. It is used by onboarding before draft
+// settings have been persisted.
+func (a *App) TestProviderWithInput(input types.ProviderTestInput) (types.ProviderTestResult, error) {
+	a.mu.Lock()
+	s := a.cachedSettings
+	a.mu.Unlock()
+	if input.UseProviderOverride {
+		s.LlmProvider = input.LlmProvider
+	}
+
+	pool := a.proxyPool
+	if input.UseProxyOverride {
+		tempPool := netproxy.NewPool()
+		if input.Proxy != nil && input.Proxy.Enabled && strings.TrimSpace(input.Proxy.URL) != "" {
+			if err := tempPool.Set(input.Proxy.URL); err != nil {
+				return types.ProviderTestResult{}, fmt.Errorf("apply test proxy: %w", err)
+			}
+		}
+		pool = tempPool
+	}
+	return testProviderWithSettings(s, pool)
+}
+
+func testProviderWithSettings(s types.UserSettings, pool *netproxy.Pool) (types.ProviderTestResult, error) {
 	if s.LlmProvider == nil {
-		return a.testOfficialProvider()
+		return testOfficialProvider()
 	}
 
 	probe, err := providerProbeFor(*s.LlmProvider)
@@ -1346,47 +1375,17 @@ func (a *App) TestProvider() (types.ProviderTestResult, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	return runHTTPProbe(ctx, a.proxyPool, probe), nil
+	return runHTTPProbe(ctx, pool, probe), nil
 }
 
-// testOfficialProvider starts the officecli bridge and verifies it can
-// initialize. This exercises the same binary resolution + subprocess spawn
-// path that real tasks use, and the Initialize handshake confirms the binary
-// can reach the hosted service.
-func (a *App) testOfficialProvider() (types.ProviderTestResult, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-
-	startTime := time.Now()
-	client, err := a.ensureBridge()
-	if err != nil {
-		latency := time.Since(startTime).Milliseconds()
-		return types.ProviderTestResult{
-			URL:       "bridge:start",
-			LatencyMs: latency,
-			Error:     err.Error(),
-		}, nil
-	}
-
-	// Initialize handshake: sends a JSON-RPC request to the binary and
-	// waits for a response. On hosted mode this implicitly confirms the
-	// binary can communicate with the hosted LLM backend.
-	latencyStart := time.Now()
-	_, initErr := client.Initialize(ctx)
-	latency := time.Since(latencyStart).Milliseconds()
-
-	if initErr != nil {
-		return types.ProviderTestResult{
-			URL:       "bridge:initialize",
-			LatencyMs: latency,
-			Error:     initErr.Error(),
-		}, nil
-	}
-
+// testOfficialProvider deliberately does not call bridge initialize. That RPC is
+// a local stdio handshake and can return in 0ms even when no hosted LLM request
+// would succeed, so reporting it as a provider connection test is misleading.
+func testOfficialProvider() (types.ProviderTestResult, error) {
 	return types.ProviderTestResult{
-		OK:        true,
-		URL:       "bridge:initialize",
-		LatencyMs: latency,
+		URL:         "official",
+		Error:       officialProviderTestUnavailable,
+		Unavailable: true,
 	}, nil
 }
 

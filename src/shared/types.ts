@@ -241,6 +241,13 @@ export interface ProxySettings {
   url: string;
 }
 
+export interface ProviderTestInput {
+  useProviderOverride?: boolean;
+  llmProvider?: LlmProvider | null;
+  useProxyOverride?: boolean;
+  proxy?: ProxySettings | null;
+}
+
 export interface UserSettings {
   version: number;
   defaults: GenerateDefaults;
@@ -395,7 +402,7 @@ export interface DesktopAPI {
   peekReportContext(taskId: string): Promise<PeekReportContextResult>;
   getTaskHistory(limit?: number): Promise<TaskHistoryEntry[]>;
   getBridgeRuntimeSnapshot(): Promise<BridgeRuntimeSnapshot>;
-  testProvider(): Promise<ProviderTestResult>;
+  testProvider(input?: ProviderTestInput): Promise<ProviderTestResult>;
 }
 
 export interface ProviderSnapshot {
@@ -422,4 +429,5 @@ export interface ProviderTestResult {
   url: string;
   error?: string;
   responseMessage?: string;
+  unavailable?: boolean;
 }
