@@ -22,9 +22,31 @@ import { useT } from "../i18n";
 import { defaultProxySettings, isValidProxyUrl } from "../defaults";
 import type { AuthEvent, DocumentType, GenerateDefaults, LlmProvider, ProviderTestResult, ProxySettings, WhoAmIResult } from "../../shared/types";
 
-export function SettingsScreen({ onCreditRefresh }: { onCreditRefresh?: () => void } = {}) {
+export function SettingsScreen({
+  onCreditRefresh,
+  onOpenLogin,
+}: {
+  onCreditRefresh?: () => void;
+  onOpenLogin?: () => void;
+} = {}) {
   const { settings, defaultWorkspaceDir, update: rawUpdate, loading, saving, error } = useSettings();
   const t = useT();
+  const [whoami, setWhoami] = useState<WhoAmIResult | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    officecli
+      .whoami()
+      .then((result) => {
+        if (!cancelled) setWhoami(result);
+      })
+      .catch(() => {
+        if (!cancelled) setWhoami({ mode: "anonymous" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const update = useCallback<typeof rawUpdate>(
     async (patch) => {
@@ -164,6 +186,8 @@ export function SettingsScreen({ onCreditRefresh }: { onCreditRefresh?: () => vo
                   remote={settings.llmProvider}
                   onSave={(next) => update({ llmProvider: next }).catch(() => undefined)}
                   clearLabel={t("settings.row.provider.clear")}
+                  customProviderEnabled={whoami === null || whoami.mode === "logged_in"}
+                  onOpenLogin={onOpenLogin}
                 />
               </SettingRow>
               <SettingRow title={t("settings.row.proxy.title")} desc={t("settings.row.proxy.desc")}>
@@ -215,10 +239,14 @@ function ProviderFormControl({
   remote,
   onSave,
   clearLabel,
+  customProviderEnabled,
+  onOpenLogin,
 }: {
   remote: LlmProvider | null;
   onSave: (next: LlmProvider | null) => void;
   clearLabel: string;
+  customProviderEnabled: boolean;
+  onOpenLogin?: () => void;
 }) {
   const t = useT();
   const [draft, setDraft] = useState<LlmProvider>(() => remote ?? { ...EMPTY_PROVIDER_DRAFT });
@@ -242,6 +270,9 @@ function ProviderFormControl({
 
   const handleChange = useCallback(
     (patch: Partial<LlmProvider>) => {
+      if (!customProviderEnabled && (patch.type === "custom" || draft.type !== "official")) {
+        return;
+      }
       setDraft((current) => {
         const next = { ...current, ...patch };
         if (providerHasContent(next)) {
@@ -264,6 +295,7 @@ function ProviderFormControl({
   }, [onSave]);
 
   const runTest = useCallback(async () => {
+    if (draft.type !== "official" && !customProviderEnabled) return;
     setTesting(true);
     setTestResult(null);
     try {
@@ -286,7 +318,7 @@ function ProviderFormControl({
     } finally {
       setTesting(false);
     }
-  }, [draft.type]);
+  }, [draft.type, customProviderEnabled]);
 
   const confirmAndRunTest = useCallback(() => {
     if (draft.type !== "official") {
@@ -302,19 +334,29 @@ function ProviderFormControl({
     });
   }, [draft.type, runTest, t]);
 
-  const canTest = draft.type === "official" || providerHasContent(draft);
+  const canTest = draft.type === "official" || (customProviderEnabled && providerHasContent(draft));
   const testTag = testResult ? formatTestResult(testResult, t) : null;
 
   return (
     <>
-      <ProviderForm provider={draft} onChange={handleChange} />
+      <ProviderForm provider={draft} onChange={handleChange} customProviderEnabled={customProviderEnabled} />
+      {!customProviderEnabled ? (
+        <div className="provider-hint" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span>{t("settings.row.provider.loginRequired")}</span>
+          {onOpenLogin ? (
+            <Button type="link" size="small" onClick={onOpenLogin} style={{ paddingInline: 0 }}>
+              {t("login.button.signIn")}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
         <Button
           icon={<RocketOutlined />}
           loading={testing}
-	          disabled={!canTest && !testing}
-	          onClick={confirmAndRunTest}
-	        >
+          disabled={(!canTest && !testing) || (draft.type !== "official" && !customProviderEnabled)}
+          onClick={confirmAndRunTest}
+        >
           {testing ? t("settings.effective.testRunning") : t("settings.effective.testButton")}
         </Button>
         {testTag ? (
@@ -323,7 +365,7 @@ function ProviderFormControl({
           </Tag>
         ) : null}
         {remote || providerHasContent(draft) ? (
-          <Button type="link" size="small" onClick={handleClear} style={{ marginLeft: "auto" }}>
+          <Button type="link" size="small" onClick={handleClear} disabled={draft.type !== "official" && !customProviderEnabled} style={{ marginLeft: "auto" }}>
             {clearLabel}
           </Button>
         ) : null}

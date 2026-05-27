@@ -3,16 +3,27 @@ import { providerPresets } from "../providerPresets";
 import { useT } from "../i18n";
 import type { LlmProvider, ProviderTestResult } from "../../shared/types";
 
-export function ProviderForm({ provider, onChange }: { provider: LlmProvider; onChange: (patch: Partial<LlmProvider>) => void }) {
+export function ProviderForm({
+  provider,
+  onChange,
+  customProviderEnabled = true,
+}: {
+  provider: LlmProvider;
+  onChange: (patch: Partial<LlmProvider>) => void;
+  customProviderEnabled?: boolean;
+}) {
   const displayType: "official" | "custom" = provider.type === "official" ? "official" : "custom";
   const isCustom = displayType === "custom";
+  const customLocked = isCustom && !customProviderEnabled;
   const preset = isCustom ? providerPresets.custom : providerPresets.official;
   const t = useT();
   return (
     <Space direction="vertical" size={10} style={{ width: "100%" }}>
       <Select
         value={displayType}
+        disabled={customLocked}
         onChange={(value) => {
+          if (value === "custom" && !customProviderEnabled) return;
           if (value === "official") {
             onChange({ type: "official", baseUrl: "", apiKey: "", model: "" });
           } else {
@@ -25,7 +36,7 @@ export function ProviderForm({ provider, onChange }: { provider: LlmProvider; on
         }}
         options={[
           { value: "official", label: t("onboarding.provider.official") },
-          { value: "custom", label: t("onboarding.provider.custom") },
+          { value: "custom", label: t("onboarding.provider.custom"), disabled: !customProviderEnabled },
         ]}
         style={{ width: "100%" }}
       />
@@ -35,6 +46,7 @@ export function ProviderForm({ provider, onChange }: { provider: LlmProvider; on
             placeholder={preset.defaultBaseUrl || t("onboarding.provider.baseUrlPlaceholder")}
             value={provider.baseUrl}
             onChange={(event) => onChange({ baseUrl: event.target.value })}
+            disabled={!customProviderEnabled}
             autoCapitalize="off"
             autoCorrect="off"
             spellCheck={false}
@@ -44,6 +56,7 @@ export function ProviderForm({ provider, onChange }: { provider: LlmProvider; on
             placeholder={t("onboarding.provider.apiKeyPlaceholder")}
             value={provider.apiKey}
             onChange={(event) => onChange({ apiKey: event.target.value })}
+            disabled={!customProviderEnabled}
             autoComplete="off"
             autoCapitalize="off"
             autoCorrect="off"
@@ -53,6 +66,7 @@ export function ProviderForm({ provider, onChange }: { provider: LlmProvider; on
             placeholder={preset.defaultModel || t("onboarding.provider.modelPlaceholder")}
             value={provider.model}
             onChange={(event) => onChange({ model: event.target.value })}
+            disabled={!customProviderEnabled}
             autoCapitalize="off"
             autoCorrect="off"
             spellCheck={false}

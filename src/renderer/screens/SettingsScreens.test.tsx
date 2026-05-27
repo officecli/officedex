@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Modal } from "antd";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { DesktopAPI, UserSettings } from "../../shared/types";
+import type { DesktopAPI, UserSettings, WhoAmIResult } from "../../shared/types";
 import { officecli } from "../bridge";
 
 const DEFAULT_PROXY = { enabled: false, url: "http://127.0.0.1:7890" };
@@ -61,6 +61,7 @@ let updateSettingsSpy: ReturnType<typeof vi.fn>;
 let getDefaultWorkspaceDirSpy: ReturnType<typeof vi.fn>;
 let openDirectoryDialogSpy: ReturnType<typeof vi.fn>;
 let testProviderSpy: ReturnType<typeof vi.fn>;
+let whoamiSpy: ReturnType<typeof vi.fn>;
 let originals: Partial<DesktopAPI>;
 
 async function cleanupAntdPortals() {
@@ -86,18 +87,21 @@ beforeEach(() => {
   getDefaultWorkspaceDirSpy = vi.fn(async () => "/tmp/default-workspace");
   openDirectoryDialogSpy = vi.fn(async () => null);
   testProviderSpy = vi.fn(async () => ({ ok: true, httpStatus: 200, latencyMs: 10, url: "official" }));
+  whoamiSpy = vi.fn(async (): Promise<WhoAmIResult> => ({ mode: "logged_in", userId: "user-settings" }));
   originals = {
     getSettings: officecli.getSettings,
     updateSettings: officecli.updateSettings,
     getDefaultWorkspaceDir: officecli.getDefaultWorkspaceDir,
     openDirectoryDialog: officecli.openDirectoryDialog,
     testProvider: officecli.testProvider,
+    whoami: officecli.whoami,
   };
   officecli.getSettings = getSettingsSpy as unknown as DesktopAPI["getSettings"];
   officecli.updateSettings = updateSettingsSpy as unknown as DesktopAPI["updateSettings"];
   officecli.getDefaultWorkspaceDir = getDefaultWorkspaceDirSpy as unknown as DesktopAPI["getDefaultWorkspaceDir"];
   officecli.openDirectoryDialog = openDirectoryDialogSpy as unknown as DesktopAPI["openDirectoryDialog"];
   officecli.testProvider = testProviderSpy as unknown as DesktopAPI["testProvider"];
+  officecli.whoami = whoamiSpy as unknown as DesktopAPI["whoami"];
 });
 
 afterEach(async () => {
@@ -208,6 +212,29 @@ describe("SettingsScreen", () => {
       });
       expect(matched).toBe(true);
     });
+  });
+
+  it("requires sign-in before selecting and saving Custom endpoint", async () => {
+    whoamiSpy.mockResolvedValueOnce({ mode: "anonymous" });
+    const onOpenLogin = vi.fn();
+    const { SettingsScreen } = await import("./SettingsScreens");
+    render(<SettingsScreen onOpenLogin={onOpenLogin} />);
+    await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(whoamiSpy).toHaveBeenCalledTimes(1));
+
+    expect(await screen.findByText(/sign in to use custom endpoints/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    expect(onOpenLogin).toHaveBeenCalledTimes(1);
+
+    const officialLabel = await screen.findByText("Official");
+    fireEvent.mouseDown(officialLabel);
+    const customOption = await screen.findByText("Custom endpoint");
+    fireEvent.click(customOption);
+
+    expect(screen.queryByPlaceholderText(/api key/i)).toBeNull();
+    expect(
+      updateSettingsSpy.mock.calls.every((args) => (args[0] as Partial<UserSettings>).llmProvider === undefined),
+    ).toBe(true);
   });
 
   it("Provider test in Settings confirms before running a paid official probe", async () => {

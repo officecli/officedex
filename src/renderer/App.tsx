@@ -506,7 +506,7 @@ export function App() {
             onNewGeneration={newGeneration}
           />
         ) : null}
-        {activeNav === "settings" ? <SettingsScreen onCreditRefresh={nudgeForTaskTransition} /> : null}
+        {activeNav === "settings" ? <SettingsScreen onCreditRefresh={nudgeForTaskTransition} onOpenLogin={openLogin} /> : null}
         {activeNav === "login" ? <LoginScreen /> : null}
       </Shell>
       {showOnboarding ? (

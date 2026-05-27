@@ -203,6 +203,7 @@ export const zh: Record<string, string> = {
   "settings.row.provider.title": "LLM 提供方",
   "settings.row.provider.desc": "配置自定义 LLM 端点。留空则使用官方 OfficeCLI 提供方。",
   "settings.row.provider.clear": "清除提供方",
+  "settings.row.provider.loginRequired": "登录后可使用自定义端点。",
   "settings.row.proxy.title": "网络代理",
   "settings.row.proxy.desc": "通过代理转发 OfficeDex 的所有网络请求——应用更新、生成、OfficeCLI 子进程都将走该代理。",
   "settings.row.proxy.enableLabel": "启用代理",

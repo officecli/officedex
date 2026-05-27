@@ -249,15 +249,18 @@ type GenerateResult struct {
 // Generate dispatches `office.generate` against the agent bridge after
 // applying settings-driven defaults (output dir, runtime mode).
 func (a *App) Generate(input types.GenerateInput) (GenerateResult, error) {
-	client, err := a.ensureBridge()
-	if err != nil {
-		return GenerateResult{}, err
-	}
 	settings, err := a.settingsStore.Load()
 	if err != nil {
 		return GenerateResult{}, fmt.Errorf("load settings: %w", err)
 	}
 	if err := validateCustomProvider(settings); err != nil {
+		return GenerateResult{}, err
+	}
+	if err := a.requireLoggedInForCustomProvider(settings); err != nil {
+		return GenerateResult{}, err
+	}
+	client, err := a.ensureBridge()
+	if err != nil {
 		return GenerateResult{}, err
 	}
 	resolved, err := a.resolveGenerateInput(input, settings)
@@ -807,6 +810,11 @@ func (a *App) GetSettings() (types.UserSettings, error) {
 // UpdateSettings applies a patch and restarts the bridge if the change might
 // affect it (binary path, LLM provider, runtime mode, proxy).
 func (a *App) UpdateSettings(patch settings.Patch) (types.UserSettings, error) {
+	if patch.LlmProvider != nil {
+		if err := a.requireLoggedInForProvider(patch.LlmProvider); err != nil {
+			return types.UserSettings{}, err
+		}
+	}
 	merged, err := a.settingsStore.Update(patch)
 	if err != nil {
 		return types.UserSettings{}, err
@@ -1375,6 +1383,9 @@ func (a *App) testProviderWithSettings(s types.UserSettings, pool *netproxy.Pool
 			return a.runOfficialPaidProviderProbe(s, pool)
 		}
 		return testOfficialProvider()
+	}
+	if err := a.requireLoggedInForCustomProvider(s); err != nil {
+		return types.ProviderTestResult{}, err
 	}
 
 	probe, err := providerProbeFor(*s.LlmProvider)
@@ -2333,6 +2344,32 @@ func validateCustomProvider(s types.UserSettings) error {
 		strings.TrimSpace(s.LlmProvider.APIKey) == "" ||
 		strings.TrimSpace(s.LlmProvider.Model) == "" {
 		return errors.New("generate.custom_provider_incomplete")
+	}
+	return nil
+}
+
+func (a *App) requireLoggedInForCustomProvider(s types.UserSettings) error {
+	if s.LlmProvider == nil {
+		return nil
+	}
+	return a.requireLoggedInForProvider(s.LlmProvider)
+}
+
+func (a *App) requireLoggedInForProvider(provider *types.LlmProvider) error {
+	if provider == nil {
+		return nil
+	}
+	opts := a.runCommandOptions()
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	whoami, err := login.GetWhoAmI(ctx, opts)
+	if err != nil {
+		return fmt.Errorf("custom_provider.login_required: %w", err)
+	}
+	if whoami.Mode != types.WhoAmILoggedIn {
+		return errors.New("custom_provider.login_required")
 	}
 	return nil
 }

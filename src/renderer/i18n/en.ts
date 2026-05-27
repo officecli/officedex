@@ -203,6 +203,7 @@ export const en: Record<string, string> = {
   "settings.row.provider.title": "LLM Provider",
   "settings.row.provider.desc": "Configure your own LLM endpoint. Leave empty to use the official OfficeCLI provider.",
   "settings.row.provider.clear": "Clear provider",
+  "settings.row.provider.loginRequired": "Sign in to use custom endpoints.",
   "settings.row.proxy.title": "Network Proxy",
   "settings.row.proxy.desc": "Route every OfficeDex network request — app updates, generation, OfficeCLI subprocess — through a proxy.",
   "settings.row.proxy.enableLabel": "Enable proxy",

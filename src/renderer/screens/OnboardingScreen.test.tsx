@@ -3,7 +3,7 @@ import { Modal } from "antd";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OnboardingScreen } from "./OnboardingScreen";
 import { officecli } from "../bridge";
-import type { UserSettings } from "../../shared/types";
+import type { UserSettings, WhoAmIResult } from "../../shared/types";
 
 const baseSettings: UserSettings = {
   version: 1,
@@ -22,6 +22,7 @@ const baseSettings: UserSettings = {
 let updateSettingsSpy: ReturnType<typeof vi.fn>;
 let openDirectoryDialogSpy: ReturnType<typeof vi.fn>;
 let testProviderSpy: ReturnType<typeof vi.fn>;
+let whoamiSpy: ReturnType<typeof vi.fn>;
 
 async function cleanupAntdPortals() {
   Modal.destroyAll();
@@ -58,9 +59,11 @@ beforeEach(() => {
   }));
   openDirectoryDialogSpy = vi.fn(async () => null);
   testProviderSpy = vi.fn(async () => ({ ok: true, httpStatus: 0, latencyMs: 12, url: "official", probeType: "officialPaid" }));
+  whoamiSpy = vi.fn(async (): Promise<WhoAmIResult> => ({ mode: "logged_in", userId: "user-onboarding" }));
   officecli.updateSettings = updateSettingsSpy as unknown as typeof officecli.updateSettings;
   officecli.openDirectoryDialog = openDirectoryDialogSpy as unknown as typeof officecli.openDirectoryDialog;
   officecli.testProvider = testProviderSpy as unknown as typeof officecli.testProvider;
+  officecli.whoami = whoamiSpy as unknown as typeof officecli.whoami;
 });
 
 afterEach(async () => {
@@ -142,6 +145,34 @@ describe("OnboardingScreen", () => {
     expect(patch.llmProvider).not.toBeNull();
     expect(patch.llmProvider?.apiKey).toBe("sk-test-key");
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
+  });
+
+  it("does not allow anonymous users to select or save Custom endpoint during onboarding", async () => {
+    whoamiSpy.mockResolvedValueOnce({ mode: "anonymous" });
+    const onComplete = vi.fn();
+    render(<OnboardingScreen settings={baseSettings} defaultWorkspaceDir="/tmp/default-workspace" onComplete={onComplete} />);
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    expect(await screen.findByText("Provider & workspace")).toBeTruthy();
+    expect(await screen.findByText(/sign in to use custom endpoints/i)).toBeTruthy();
+
+    const officialLabel = await screen.findByText("Official");
+    fireEvent.mouseDown(officialLabel);
+    const customOption = await screen.findByText("Custom endpoint");
+    fireEvent.click(customOption);
+
+    expect(screen.queryByPlaceholderText(/api key/i)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /finish/i }));
+
+    const okButton = await waitFor(() => {
+      const buttons = document.querySelectorAll(".ant-modal-confirm-btns button");
+      if (buttons.length < 2) throw new Error("OK button not rendered yet");
+      return buttons[buttons.length - 1] as HTMLButtonElement;
+    });
+    fireEvent.click(okButton);
+
+    await waitFor(() => expect(updateSettingsSpy).toHaveBeenCalledTimes(1));
+    const patch = updateSettingsSpy.mock.calls[0][0] as Partial<UserSettings>;
+    expect(patch.llmProvider).toBeNull();
   });
 
   it("empty provider finish never sends an llmProvider payload", async () => {

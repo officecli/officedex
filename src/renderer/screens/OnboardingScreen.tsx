@@ -1,12 +1,12 @@
 import { Alert, Button, Input, Modal, message, Radio, Select, Space, Switch, Tag } from "antd";
 import { FolderOpenOutlined } from "@ant-design/icons";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { officecli } from "../bridge";
 import { useT } from "../i18n";
 import { broadcastSettingsChanged } from "../useSettings";
 import { defaultProxySettings, isValidProxyUrl } from "../defaults";
 import { formatTestResult, ProviderForm } from "../components/ProviderForm";
-import type { DocumentType, GenerateDefaults, LlmProvider, ProviderTestResult, ProxySettings, UserSettings } from "../../shared/types";
+import type { DocumentType, GenerateDefaults, LlmProvider, ProviderTestResult, ProxySettings, UserSettings, WhoAmIResult } from "../../shared/types";
 
 interface OnboardingScreenProps {
   settings: UserSettings;
@@ -47,6 +47,7 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
   const [busy, setBusy] = useState(false);
   const [providerTestResult, setProviderTestResult] = useState<ProviderTestResult | null>(null);
   const [proxyValidationError, setProxyValidationError] = useState<string | undefined>(undefined);
+  const [whoami, setWhoami] = useState<WhoAmIResult | null>(null);
   const t = useT();
   const [draft, setDraft] = useState<DraftSettings>(() => ({
     defaults: { ...settings.defaults },
@@ -54,6 +55,22 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
     llmProvider: settings.llmProvider ?? { ...EMPTY_PROVIDER },
     proxy: settings.proxy,
   }));
+  const customProviderEnabled = whoami === null || whoami.mode === "logged_in";
+
+  useEffect(() => {
+    let cancelled = false;
+    officecli
+      .whoami()
+      .then((result) => {
+        if (!cancelled) setWhoami(result);
+      })
+      .catch(() => {
+        if (!cancelled) setWhoami({ mode: "anonymous" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const updateDefaults = useCallback((patch: Partial<GenerateDefaults>) => {
     setDraft((current) => ({ ...current, defaults: { ...current.defaults, ...patch } }));
@@ -74,15 +91,18 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
   const finish = useCallback(async (proxyOverride?: ProxySettings | null) => {
     setBusy(true);
     try {
-      const provider = (draft.llmProvider.baseUrl || draft.llmProvider.apiKey || draft.llmProvider.model)
+      const providerHasDraftContent = Boolean(draft.llmProvider.baseUrl || draft.llmProvider.apiKey || draft.llmProvider.model);
+      const provider = providerHasDraftContent
         ? draft.llmProvider
         : null;
       const patch: Partial<UserSettings> = {
         defaults: draft.defaults,
         outputDir: draft.outputDir,
-        llmProvider: provider,
         onboardingCompletedAt: new Date().toISOString(),
       };
+      if (provider === null || customProviderEnabled) {
+        patch.llmProvider = provider;
+      }
       if (proxyOverride !== undefined) {
         patch.proxy = proxyOverride;
       }
@@ -96,7 +116,7 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
     } finally {
       setBusy(false);
     }
-  }, [draft, onComplete, t]);
+  }, [customProviderEnabled, draft, onComplete, t]);
 
   const testOfficialProvider = useCallback(async (proxy: ProxySettings | null) => {
     const result = await officecli.testProvider({
@@ -165,7 +185,7 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
   }, [t]);
 
   const finishOrTestOfficial = useCallback(async () => {
-    const provider = (draft.llmProvider.baseUrl || draft.llmProvider.apiKey || draft.llmProvider.model)
+    const provider = customProviderEnabled && (draft.llmProvider.baseUrl || draft.llmProvider.apiKey || draft.llmProvider.model)
       ? draft.llmProvider
       : null;
     if (provider !== null) {
@@ -174,7 +194,7 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
     }
 
     confirmOfficialProbe(() => runOfficialProbeAndFinish(draft.proxy));
-  }, [confirmOfficialProbe, draft.llmProvider, draft.proxy, finish, runOfficialProbeAndFinish]);
+  }, [confirmOfficialProbe, customProviderEnabled, draft.llmProvider, draft.proxy, finish, runOfficialProbeAndFinish]);
 
   const saveProxyAndRetry = useCallback(async () => {
     const proxy = draft.proxy ?? { ...defaultProxySettings, enabled: true };
@@ -272,7 +292,10 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
 	        {step === 1 ? (
 	          <Space direction="vertical" size={20} style={{ width: "100%" }}>
 	            <Field label={t("onboarding.field.provider")}>
-	              <ProviderForm provider={draft.llmProvider} onChange={updateProvider} />
+	              <ProviderForm provider={draft.llmProvider} onChange={updateProvider} customProviderEnabled={customProviderEnabled} />
+	              {!customProviderEnabled ? (
+	                <span className="provider-hint">{t("settings.row.provider.loginRequired")}</span>
+	              ) : null}
 	              {draft.llmProvider.type === "official" ? (
 	                <span className="provider-hint">{t("onboarding.provider.officialTestHint")}</span>
 	              ) : null}
