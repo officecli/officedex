@@ -300,8 +300,14 @@ describe("SettingsScreen", () => {
       expect(matched).toBe(true);
     });
 
+    cleanup();
     currentSettings = makeSettings({ proxy: { enabled: true, url: "http://127.0.0.1:7890" } });
     updateSettingsSpy.mockClear();
+    render(<SettingsScreen />);
+    await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(2));
+    await waitFor(() => {
+      expect(screen.getByRole("switch", { name: /enable proxy/i }).getAttribute("aria-checked")).toBe("true");
+    });
 
     fireEvent.click(await screen.findByRole("switch", { name: /enable proxy/i }));
     fireEvent.click(screen.getByRole("button", { name: /save proxy/i }));
