@@ -67,14 +67,14 @@ OfficeDex is not just "one prompt → one file." It's a **document workspace wit
 
 **Input**
 
-> "Write a Q3 sales analysis report focused on the East China region, include YoY and QoQ charts, target audience is the CFO."
+> "Write a Q3 sales analysis report focused on the eastern region, include YoY and QoQ charts, target audience is the CFO."
 
 </td>
 <td width="50%">
 
 **Output**
 
-📄 `Q3-East-China-Sales.docx` (12 pages)
+📄 `Q3-East-Sales.docx` (12 pages)
 📊 4 data charts + 3 trend analyses
 ⏱ Typical generation: 45–90s
 👁 One-click inline preview — no need to open Word
