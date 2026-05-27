@@ -60,25 +60,18 @@ type RegistryOptions struct {
 // Registry tracks which artifact paths are allowed for local preview and
 // mints opaque tokens that map back to them. Safe for concurrent use.
 type Registry struct {
-	mu                sync.Mutex
-	allowedArtifacts  map[string]ArtifactEntry
-	tokens            map[string]ArtifactEntry
-	trustedRoots      []string
-	createToken       func() string
+	mu               sync.Mutex
+	allowedArtifacts map[string]ArtifactEntry
+	tokens           map[string]ArtifactEntry
+	trustedRoots     []string
+	createToken      func() string
 }
 
 // New constructs a Registry. Returns an error if no trusted roots are given.
 func New(opts RegistryOptions) (*Registry, error) {
-	if len(opts.TrustedRoots) == 0 {
-		return nil, errors.New("preview: at least one trusted preview root is required")
-	}
-	roots := make([]string, 0, len(opts.TrustedRoots))
-	for _, root := range opts.TrustedRoots {
-		canonical, err := canonicalPath(root)
-		if err != nil {
-			return nil, fmt.Errorf("preview: trusted root: %w", err)
-		}
-		roots = append(roots, canonical)
+	roots, err := canonicalTrustedRoots(opts.TrustedRoots)
+	if err != nil {
+		return nil, err
 	}
 	create := opts.CreateToken
 	if create == nil {
@@ -90,6 +83,20 @@ func New(opts RegistryOptions) (*Registry, error) {
 		trustedRoots:     roots,
 		createToken:      create,
 	}, nil
+}
+
+// SetTrustedRoots atomically replaces the preview trust boundary. It validates
+// every root before mutating state so a bad settings value cannot partially
+// update the registry.
+func (r *Registry) SetTrustedRoots(trustedRoots []string) error {
+	roots, err := canonicalTrustedRoots(trustedRoots)
+	if err != nil {
+		return err
+	}
+	r.mu.Lock()
+	r.trustedRoots = roots
+	r.mu.Unlock()
+	return nil
 }
 
 // AllowArtifact registers an artifact path so future IssueToken calls can
@@ -169,12 +176,35 @@ func (r *Registry) entryFromArtifact(artifact types.Artifact) (ArtifactEntry, er
 }
 
 func (r *Registry) withinTrustedRoots(filePath string) bool {
-	for _, root := range r.trustedRoots {
+	r.mu.Lock()
+	roots := append([]string(nil), r.trustedRoots...)
+	r.mu.Unlock()
+	for _, root := range roots {
 		if isWithinRoot(filePath, root) {
 			return true
 		}
 	}
 	return false
+}
+
+func canonicalTrustedRoots(trustedRoots []string) ([]string, error) {
+	if len(trustedRoots) == 0 {
+		return nil, errors.New("preview: at least one trusted preview root is required")
+	}
+	roots := make([]string, 0, len(trustedRoots))
+	seen := make(map[string]struct{}, len(trustedRoots))
+	for _, root := range trustedRoots {
+		canonical, err := canonicalPath(root)
+		if err != nil {
+			return nil, fmt.Errorf("preview: trusted root: %w", err)
+		}
+		if _, ok := seen[canonical]; ok {
+			continue
+		}
+		seen[canonical] = struct{}{}
+		roots = append(roots, canonical)
+	}
+	return roots, nil
 }
 
 func canonicalPath(filePath string) (string, error) {

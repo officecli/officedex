@@ -114,6 +114,66 @@ func TestRejectsPathOutsideTrustedRoots(t *testing.T) {
 	}
 }
 
+func TestSetTrustedRootsAllowsNewRootAndReplacesOldRoot(t *testing.T) {
+	oldDir := t.TempDir()
+	newDir := t.TempDir()
+	oldRoot := canonRoot(t, oldDir)
+	newRoot := canonRoot(t, newDir)
+
+	oldPath := writeFile(t, oldDir, "old.pptx")
+	reg, err := New(RegistryOptions{TrustedRoots: []string{oldRoot}})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := reg.AllowArtifact(types.Artifact{FilePath: oldPath}); err != nil {
+		t.Fatalf("AllowArtifact old root before replace: %v", err)
+	}
+
+	if err := reg.SetTrustedRoots([]string{newRoot}); err != nil {
+		t.Fatalf("SetTrustedRoots: %v", err)
+	}
+	err = reg.AllowArtifact(types.Artifact{FilePath: oldPath})
+	if err == nil || !strings.Contains(err.Error(), "outside trusted") {
+		t.Fatalf("expected old root to be rejected after replace, got %v", err)
+	}
+
+	for _, name := range []string{"doc.docx", "deck.pptx", "sheet.xlsx", "report.pdf"} {
+		path := writeFile(t, newDir, name)
+		artifact := types.Artifact{FilePath: path}
+		if err := reg.AllowArtifact(artifact); err != nil {
+			t.Fatalf("AllowArtifact %s: %v", name, err)
+		}
+		if _, err := reg.IssueToken(artifact); err != nil {
+			t.Fatalf("IssueToken %s: %v", name, err)
+		}
+	}
+}
+
+func TestSetTrustedRootsRejectsInvalidRootsWithoutReplacingExistingRoots(t *testing.T) {
+	oldDir := t.TempDir()
+	newDir := t.TempDir()
+	oldRoot := canonRoot(t, oldDir)
+	newRoot := canonRoot(t, newDir)
+	oldPath := writeFile(t, oldDir, "old.docx")
+	newPath := writeFile(t, newDir, "new.docx")
+
+	reg, err := New(RegistryOptions{TrustedRoots: []string{oldRoot}})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	err = reg.SetTrustedRoots([]string{newRoot, "relative/root"})
+	if err == nil || !strings.Contains(err.Error(), "trusted root") {
+		t.Fatalf("expected invalid trusted root error, got %v", err)
+	}
+	if err := reg.AllowArtifact(types.Artifact{FilePath: oldPath}); err != nil {
+		t.Fatalf("old root should remain trusted after failed update: %v", err)
+	}
+	err = reg.AllowArtifact(types.Artifact{FilePath: newPath})
+	if err == nil || !strings.Contains(err.Error(), "outside trusted") {
+		t.Fatalf("new root should not be trusted after failed update, got %v", err)
+	}
+}
+
 func TestRejectsUnsupportedExtension(t *testing.T) {
 	dir := t.TempDir()
 	root := canonRoot(t, dir)

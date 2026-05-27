@@ -117,7 +117,7 @@ func NewApp() (*App, error) {
 	}
 
 	previewReg, err := preview.New(preview.RegistryOptions{
-		TrustedRoots: []string{workspaceDir},
+		TrustedRoots: previewTrustedRoots(workspaceDir, cached),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("preview registry: %w", err)
@@ -843,6 +843,11 @@ func (a *App) UpdateSettings(patch settings.Patch) (types.UserSettings, error) {
 	}
 	a.mu.Unlock()
 
+	if patch.OutputDir != nil {
+		if err := a.refreshPreviewTrustedRoots(merged); err != nil {
+			return types.UserSettings{}, err
+		}
+	}
 	if touchesBridge && client != nil {
 		client.Close()
 	}
@@ -2035,11 +2040,21 @@ func (a *App) resolveGenerateInput(input types.GenerateInput, s types.UserSettin
 	// "continue editing" path uses to reuse a prior task's directory so
 	// follow-up edits land alongside the original artifact.
 	if strings.TrimSpace(input.OutputDir) != "" {
-		return input, nil
+		outputDir, err := cleanGenerateOutputDir(input.OutputDir)
+		if err != nil {
+			return types.GenerateInput{}, err
+		}
+		out := input
+		out.OutputDir = outputDir
+		return out, nil
 	}
 	base := a.workspaceDir
 	if s.OutputDir != nil && strings.TrimSpace(*s.OutputDir) != "" {
-		base = *s.OutputDir
+		outputDir, err := cleanGenerateOutputDir(*s.OutputDir)
+		if err != nil {
+			return types.GenerateInput{}, err
+		}
+		base = outputDir
 	}
 	taskDir := filepath.Join(base, buildTaskDirName(input.Topic, string(input.DocumentType)))
 	if err := os.MkdirAll(taskDir, 0o755); err != nil {
@@ -2048,6 +2063,39 @@ func (a *App) resolveGenerateInput(input types.GenerateInput, s types.UserSettin
 	out := input
 	out.OutputDir = taskDir
 	return out, nil
+}
+
+func cleanGenerateOutputDir(outputDir string) (string, error) {
+	cleaned := strings.TrimSpace(outputDir)
+	if strings.ContainsRune(cleaned, 0) {
+		return "", errors.New("generate output dir is invalid")
+	}
+	if !filepath.IsAbs(cleaned) {
+		return "", errors.New("generate output dir must be absolute")
+	}
+	return cleaned, nil
+}
+
+func (a *App) refreshPreviewTrustedRoots(s types.UserSettings) error {
+	if a.previewReg == nil {
+		return nil
+	}
+	if err := a.previewReg.SetTrustedRoots(previewTrustedRoots(a.workspaceDir, s)); err != nil {
+		return fmt.Errorf("refresh preview trusted roots: %w", err)
+	}
+	return nil
+}
+
+func previewTrustedRoots(workspaceDir string, s types.UserSettings) []string {
+	roots := []string{workspaceDir}
+	if s.OutputDir == nil {
+		return roots
+	}
+	outputDir := strings.TrimSpace(*s.OutputDir)
+	if outputDir == "" || strings.ContainsRune(outputDir, 0) || !filepath.IsAbs(outputDir) {
+		return roots
+	}
+	return append(roots, outputDir)
 }
 
 // buildTaskDirName returns a unique, filesystem-safe folder name for a single
