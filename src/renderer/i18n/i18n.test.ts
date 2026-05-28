@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { en } from "./en";
 import { zh } from "./zh";
 
-const PROPER_NOUNS = ["OfficeDex", "OfficeCLI", "Bridge", "JWT", "API", "Credits", "PROMO2026", "Anthropic", "OpenAI"];
+const PROPER_NOUNS = ["OfficeDex", "OfficeCLI", "Bridge", "JWT", "API", "Credits", "PROMO2026", "Anthropic", "OpenAI", "GitHub"];
 const ASCII_TECHNICAL = /^[\x20-\x7E]+$/;
 
 describe("i18n dictionaries", () => {
@@ -31,9 +31,10 @@ describe("i18n dictionaries", () => {
         const isCopyright = enValue.startsWith("©");
         const isPromoCode = enValue === "PROMO2026";
         const isApiKeyPlaceholder = enValue === "API key";
+        const isLicenseIdentifier = /^[A-Z][A-Z0-9.-]+$/.test(enValue);
         const isPunctuationOnly = /^[\s\-·.,:;]+$/.test(enValue);
         expect(
-          isProperNounOnly || isTechnical || isUrl || isPlaceholderOnly || isPlaceholderTemplate || isCopyright || isPromoCode || isApiKeyPlaceholder || isPunctuationOnly,
+          isProperNounOnly || isTechnical || isUrl || isPlaceholderOnly || isPlaceholderTemplate || isCopyright || isPromoCode || isApiKeyPlaceholder || isLicenseIdentifier || isPunctuationOnly,
           `zh[${key}] is identical to en value but not whitelisted: ${enValue}`,
         ).toBe(true);
       }

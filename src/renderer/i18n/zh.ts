@@ -232,7 +232,7 @@ export const zh: Record<string, string> = {
   "settings.about.disclaimerTitle": "免责声明",
   "settings.about.disclaimerBody": "OfficeDex AI 可能生成不准确内容。请在使用、分享或交付重要信息前进行人工核实。",
   "settings.about.updateChannel": "更新通道",
-  "settings.about.channelStable": "Stable",
+  "settings.about.channelStable": "稳定版",
   "settings.about.version": "版本",
   "settings.about.versionValue": "OfficeDex {version}",
   "settings.about.lastChecked": "上次检查",
