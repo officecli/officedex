@@ -208,10 +208,6 @@ export function SettingsScreen({
               </SettingRow>
             </div>
             <div className="setting-group">
-              <h2>{t("settings.group.about")}</h2>
-              <AboutCard />
-            </div>
-            <div className="setting-group">
               <h2>{t("diagnostics.title")}</h2>
               <DiagnosticsPanel />
             </div>
@@ -223,6 +219,10 @@ export function SettingsScreen({
               <SettingRow title={t("settings.row.reset.title")} desc={t("settings.row.reset.desc")}>
                 <Button danger onClick={resetAll}>{t("settings.row.reset.button")}</Button>
               </SettingRow>
+            </div>
+            <div className="setting-group">
+              <h2>{t("settings.group.about")}</h2>
+              <AboutCard />
             </div>
           </>
         )}

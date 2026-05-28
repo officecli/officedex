@@ -120,6 +120,19 @@ describe("SettingsScreen", () => {
     expect(screen.getAllByText("Connection").length).toBeGreaterThan(0);
   });
 
+  it("places About after the other Settings sections", async () => {
+    const { SettingsScreen } = await import("./SettingsScreens");
+    render(<SettingsScreen />);
+    await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
+
+    const about = await screen.findByRole("heading", { level: 2, name: "About" });
+    const diagnostics = screen.getByRole("heading", { level: 2, name: "Diagnostics" });
+    const reset = screen.getByRole("heading", { level: 2, name: "Reset" });
+
+    expect(diagnostics.compareDocumentPosition(about) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(reset.compareDocumentPosition(about) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("changing default document type calls updateSettings with the new value", async () => {
     const { SettingsScreen } = await import("./SettingsScreens");
     render(<SettingsScreen />);

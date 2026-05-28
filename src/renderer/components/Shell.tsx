@@ -135,6 +135,7 @@ export function Shell({
           onDelete={onDeleteTask}
         />
         <div className="sidebar-footer">
+          <CreditMeter info={credit} hasCustomProvider={hasCustomProvider} />
           <div className="sidebar-footer-nav">
             <Tooltip title={collapsed ? t("shell.nav.profile") : ""} placement="right">
               <button className={`nav-item profile-link ${activeNav === "login" ? "active" : ""}`} onClick={() => onNavChange("login")}>
@@ -158,7 +159,6 @@ export function Shell({
               </button>
             </Tooltip>
           </div>
-          <CreditMeter info={credit} hasCustomProvider={hasCustomProvider} />
         </div>
         <Tooltip title={collapsed ? t("shell.sidebar.expand") : t("shell.sidebar.collapse")} placement="right">
           <button

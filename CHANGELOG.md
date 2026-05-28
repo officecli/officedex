@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [0.5.5] - 2026-05-28
+
+### Changed
+- Move the sidebar credit meter above Profile so account actions stay beneath current usage.
+- Move Settings → About to the bottom of Settings, after diagnostics and reset controls.
+
 ## [0.5.3] - 2026-05-27
 
 ### Added
@@ -61,7 +67,8 @@ Initial open-source release of OfficeDex — the desktop client for OfficeCLI.
 - GNU General Public License v3.0 LICENSE + NOTICE.
 - CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, issue/PR templates, Dependabot.
 
-[Unreleased]: https://github.com/officecli/officedex/compare/v0.5.3...HEAD
+[Unreleased]: https://github.com/officecli/officedex/compare/v0.5.5...HEAD
+[0.5.5]: https://github.com/officecli/officedex/compare/v0.5.4...v0.5.5
 [0.5.3]: https://github.com/officecli/officedex/compare/v0.5.2...v0.5.3
 [0.5.1]: https://github.com/officecli/officedex/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/officecli/officedex/compare/v0.4.1...v0.5.0
