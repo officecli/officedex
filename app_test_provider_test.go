@@ -622,7 +622,8 @@ func TestTestProviderWithInputUsesOverridesWithoutMutatingCachedSettings(t *test
 
 	appProxy := netproxy.NewPool()
 	a := &App{
-		proxyPool: appProxy,
+		proxyPool:          appProxy,
+		resolvedBinaryPath: writeWhoamiFakeOfficeCLI(t, "logged_in"),
 		cachedSettings: types.UserSettings{
 			LlmProvider: &types.LlmProvider{
 				Type:    types.LlmCustom,

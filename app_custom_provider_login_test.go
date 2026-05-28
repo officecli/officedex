@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -146,6 +147,9 @@ func customProviderForLoginTest() *types.LlmProvider {
 
 func writeWhoamiFakeOfficeCLI(t *testing.T, mode string) string {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		return writeWindowsWhoamiFakeOfficeCLI(t, mode)
+	}
 	var body string
 	switch mode {
 	case "logged_in":
@@ -164,6 +168,27 @@ func writeWhoamiFakeOfficeCLI(t *testing.T, mode string) string {
 	}
 	if strings.TrimSpace(path) == "" {
 		t.Fatal("empty fake officecli path")
+	}
+	return path
+}
+
+func writeWindowsWhoamiFakeOfficeCLI(t *testing.T, mode string) string {
+	t.Helper()
+	var body string
+	switch mode {
+	case "logged_in":
+		body = "echo Mode: logged in\r\necho User ID: user-test\r\necho Session: sess-test\r\nexit /b 0\r\n"
+	case "api_key":
+		body = "echo API key configured: true\r\nexit /b 0\r\n"
+	case "anonymous":
+		body = "echo Not logged in\r\nexit /b 1\r\n"
+	default:
+		t.Fatalf("unknown whoami mode %q", mode)
+	}
+	script := "@echo off\r\nif \"%~1\"==\"whoami\" (\r\n" + body + ")\r\necho unexpected command: %~1 1>&2\r\nexit /b 64\r\n"
+	path := filepath.Join(t.TempDir(), "officecli-fake.cmd")
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake officecli: %v", err)
 	}
 	return path
 }
