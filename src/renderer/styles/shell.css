@@ -123,6 +123,21 @@
   margin-top: 4px;
 }
 
+.sidebar-footer {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid var(--n-hairline-soft);
+  padding-top: 8px;
+}
+
+.sidebar-footer-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 /* ─── History List ─── */
 
 .sidebar-spacer {
@@ -269,7 +284,10 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 4px 12px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--n-hairline-soft);
+  border-radius: var(--radius-md);
   background: var(--n-canvas);
   color: var(--n-charcoal);
   cursor: default;
@@ -283,10 +301,12 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
 }
 
 .credit-meter-row-main {
   display: flex;
+  flex: 1;
   align-items: center;
   gap: 6px;
   min-width: 0;
@@ -347,11 +367,14 @@
 }
 
 .credit-meter-balance-value {
+  min-width: 0;
   font-size: 12px;
   font-weight: 600;
   color: var(--n-charcoal);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .credit-meter-total {
@@ -389,13 +412,6 @@
 
 .credit-meter-critical {
   border-color: rgba(224, 49, 49, 0.35);
-}
-
-
-.main-frame .credit-meter {
-  max-width: none;
-  padding: 6px 48px;
-  border-top: 1px solid var(--n-hairline);
 }
 
 /* ─── Main Frame ─── */
@@ -556,6 +572,49 @@
 
 .sidebar-collapsed .brand-block {
   justify-content: center;
+}
+
+.sidebar-collapsed .sidebar-footer {
+  align-items: center;
+  width: 100%;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.sidebar-collapsed .sidebar-footer-nav {
+  align-items: center;
+  width: 100%;
+}
+
+.sidebar-collapsed .credit-meter {
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: var(--radius-md);
+}
+
+.sidebar-collapsed .credit-meter-row {
+  justify-content: center;
+}
+
+.sidebar-collapsed .credit-meter-row-main {
+  flex: 0 0 auto;
+  justify-content: center;
+}
+
+.sidebar-collapsed .credit-meter-icon {
+  font-size: 20px;
+}
+
+.sidebar-collapsed .credit-meter-label,
+.sidebar-collapsed .credit-meter-value,
+.sidebar-collapsed .credit-meter-balance-value,
+.sidebar-collapsed .credit-meter-percent,
+.sidebar-collapsed .credit-meter-toggle,
+.sidebar-collapsed .credit-meter-bar {
+  display: none;
 }
 
 .sidebar-settings {

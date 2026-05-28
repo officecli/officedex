@@ -134,27 +134,32 @@ export function Shell({
           onSelect={onSelectTask}
           onDelete={onDeleteTask}
         />
-        <Tooltip title={collapsed ? t("shell.nav.profile") : ""} placement="right">
-          <button className={`nav-item profile-link ${activeNav === "login" ? "active" : ""}`} onClick={() => onNavChange("login")}>
-            <UserOutlined />
-            <span>{t("shell.nav.profile")}</span>
-          </button>
-        </Tooltip>
-        <Tooltip title={collapsed ? t("shell.nav.tasks") : ""} placement="right">
-          <button className={`nav-item ${activeNav === "tasks" ? "active" : ""}`} onClick={() => onNavChange("tasks")}>
-            <HistoryOutlined />
-            <span>{t("shell.nav.tasks")}</span>
-          </button>
-        </Tooltip>
-        <Tooltip title={collapsed ? t("shell.nav.settings") : ""} placement="right">
-          <button
-            className={`nav-item sidebar-settings ${activeNav === "settings" ? "active" : ""}`}
-            onClick={() => onNavChange("settings")}
-          >
-            <SettingOutlined />
-            <span>{t("shell.nav.settings")}</span>
-          </button>
-        </Tooltip>
+        <div className="sidebar-footer">
+          <div className="sidebar-footer-nav">
+            <Tooltip title={collapsed ? t("shell.nav.profile") : ""} placement="right">
+              <button className={`nav-item profile-link ${activeNav === "login" ? "active" : ""}`} onClick={() => onNavChange("login")}>
+                <UserOutlined />
+                <span>{t("shell.nav.profile")}</span>
+              </button>
+            </Tooltip>
+            <Tooltip title={collapsed ? t("shell.nav.tasks") : ""} placement="right">
+              <button className={`nav-item ${activeNav === "tasks" ? "active" : ""}`} onClick={() => onNavChange("tasks")}>
+                <HistoryOutlined />
+                <span>{t("shell.nav.tasks")}</span>
+              </button>
+            </Tooltip>
+            <Tooltip title={collapsed ? t("shell.nav.settings") : ""} placement="right">
+              <button
+                className={`nav-item sidebar-settings ${activeNav === "settings" ? "active" : ""}`}
+                onClick={() => onNavChange("settings")}
+              >
+                <SettingOutlined />
+                <span>{t("shell.nav.settings")}</span>
+              </button>
+            </Tooltip>
+          </div>
+          <CreditMeter info={credit} hasCustomProvider={hasCustomProvider} />
+        </div>
         <Tooltip title={collapsed ? t("shell.sidebar.expand") : t("shell.sidebar.collapse")} placement="right">
           <button
             type="button"
@@ -181,7 +186,6 @@ export function Shell({
           <section className="stage">{children}</section>
           {inspector ? <aside className="preview-panel">{inspector}</aside> : null}
         </div>
-        <CreditMeter info={credit} hasCustomProvider={hasCustomProvider} />
       </main>
     </div>
   );

@@ -894,6 +894,9 @@ describe("App credit display", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Show credit balance/i }));
     expect(await screen.findByText("75 / 100")).toBeTruthy();
     expect(screen.getAllByText("Credits").length).toBeGreaterThan(0);
+    const meter = document.querySelector(".credit-meter");
+    expect(meter?.closest(".sidebar")).toBeTruthy();
+    expect(document.querySelector(".main-frame .credit-meter")).toBeNull();
   });
 
   it("renders hosted balance when getCreditStatus returns logged_in with hostedCreditBalance and ignores any anonymous fields", async () => {
@@ -914,6 +917,30 @@ describe("App credit display", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Show credit balance/i }));
     expect(await screen.findByText("42 credits")).toBeTruthy();
     expect(screen.getAllByText("Pro").length).toBeGreaterThan(0);
+    const meter = document.querySelector(".credit-meter");
+    expect(meter?.closest(".sidebar")).toBeTruthy();
+    expect(document.querySelector(".main-frame .credit-meter")).toBeNull();
+  });
+
+  it("keeps the credit meter in the sidebar when the sidebar is collapsed", async () => {
+    installBridgeMock();
+    overrideCreditStatus({
+      mode: "logged_in",
+      hostedCreditBalance: 42,
+      planName: "Pro",
+      accessMode: "hosted",
+    });
+
+    const { App } = await import("./App");
+    render(<App />);
+
+    await screen.findByRole("button", { name: /Show credit balance/i });
+    fireEvent.click(screen.getByRole("button", { name: /Collapse sidebar/i }));
+
+    expect(document.querySelector(".app-shell.sidebar-collapsed")).toBeTruthy();
+    const meter = document.querySelector(".credit-meter");
+    expect(meter?.closest(".sidebar")).toBeTruthy();
+    expect(document.querySelector(".main-frame .credit-meter")).toBeNull();
   });
 
   it("refreshes the sidebar credit meter after a task.completed event (covers settlement delay)", async () => {
