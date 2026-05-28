@@ -62,6 +62,10 @@ export async function installBridgeMock(page: Page, options: BridgeMockOptions =
         record("getCapabilities", args);
         return opts.capabilities ?? {};
       },
+      listImageTemplates: async (...args: unknown[]) => {
+        record("listImageTemplates", args);
+        return [];
+      },
       generate: async (...args: unknown[]) => {
         record("generate", args);
         return { taskId: "mock-task-1", sessionId: "mock-session-1", status: "starting" };

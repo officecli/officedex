@@ -239,6 +239,16 @@ func (a *App) GetCapabilities() ([]byte, error) {
 	return client.GetCapabilities(a.ctx)
 }
 
+// ListImageTemplates returns server-managed image prompt templates exposed by
+// officecli agent-bridge.
+func (a *App) ListImageTemplates() ([]types.ImagePromptTemplate, error) {
+	client, err := a.ensureBridge()
+	if err != nil {
+		return nil, err
+	}
+	return client.ListImageTemplates(a.ctx)
+}
+
 // GenerateResult is the renderer-facing shape of a task invocation result.
 type GenerateResult struct {
 	TaskID    string `json:"taskId"`
@@ -274,6 +284,9 @@ func (a *App) Generate(input types.GenerateInput) (GenerateResult, error) {
 	if a.localStore != nil && result.TaskID != "" {
 		payload := map[string]any{
 			"prompt": resolved.Prompt,
+		}
+		if resolved.PromptTemplateID != "" {
+			payload["prompt_template_id"] = resolved.PromptTemplateID
 		}
 		if resolved.SourceFile != "" {
 			payload["source_file"] = resolved.SourceFile

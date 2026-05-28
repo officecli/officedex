@@ -134,18 +134,30 @@ type Artifact struct {
 }
 
 type GenerateInput struct {
-	DocumentType    DocumentType `json:"documentType"`
-	Topic           string       `json:"topic"`
-	Prompt          string       `json:"prompt"`
-	Mode            string       `json:"mode,omitempty"`
-	RuntimeMode     string       `json:"runtimeMode,omitempty"`
-	SourceFile      string       `json:"sourceFile,omitempty"`
-	ReferenceImages []string     `json:"referenceImages,omitempty"`
-	OutputDir       string       `json:"outputDir,omitempty"`
-	Publish         bool         `json:"publish,omitempty"`
-	EnableImages    *bool        `json:"enableImages,omitempty"`
-	ImageQuality    string       `json:"imageQuality,omitempty"`
-	LocalPreview    bool         `json:"localPreview,omitempty"`
+	DocumentType     DocumentType `json:"documentType"`
+	Topic            string       `json:"topic"`
+	Prompt           string       `json:"prompt"`
+	Mode             string       `json:"mode,omitempty"`
+	RuntimeMode      string       `json:"runtimeMode,omitempty"`
+	PromptTemplateID string       `json:"promptTemplateId,omitempty"`
+	SourceFile       string       `json:"sourceFile,omitempty"`
+	ReferenceImages  []string     `json:"referenceImages,omitempty"`
+	OutputDir        string       `json:"outputDir,omitempty"`
+	Publish          bool         `json:"publish,omitempty"`
+	EnableImages     *bool        `json:"enableImages,omitempty"`
+	ImageQuality     string       `json:"imageQuality,omitempty"`
+	LocalPreview     bool         `json:"localPreview,omitempty"`
+}
+
+type ImagePromptTemplate struct {
+	ID           uint64 `json:"id"`
+	Slug         string `json:"slug"`
+	Title        string `json:"title"`
+	Description  string `json:"description"`
+	PromptPreset string `json:"promptPreset"`
+	ThumbnailURL string `json:"thumbnailUrl,omitempty"`
+	SortOrder    int    `json:"sortOrder"`
+	Enabled      bool   `json:"enabled"`
 }
 
 type TaskQuestionOption struct {

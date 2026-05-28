@@ -441,6 +441,86 @@ func TestInvokeGenerateOpensSessionFirst(t *testing.T) {
 	}
 }
 
+func TestInvokeGenerateSendsPromptTemplateID(t *testing.T) {
+	client, fake := newClientWithFake(t)
+	defer client.Stop()
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := client.InvokeGenerate(context.Background(), types.GenerateInput{
+			DocumentType:     types.DocIMG,
+			Topic:            "Poster",
+			Prompt:           "red bicycle",
+			PromptTemplateID: "7",
+		})
+		done <- err
+	}()
+
+	first := fake.readRequest(t)
+	fake.writeResponse(t, first.idString(), map[string]any{"id": "sess-1"}, nil)
+
+	second := fake.readRequest(t)
+	var params map[string]any
+	if err := json.Unmarshal(second.Params, &params); err != nil {
+		t.Fatalf("decode params: %v", err)
+	}
+	args, _ := params["args"].(map[string]any)
+	if args["prompt_template_id"] != "7" {
+		t.Fatalf("prompt_template_id = %v, want 7", args["prompt_template_id"])
+	}
+	fake.writeResponse(t, second.idString(), map[string]any{
+		"task_id":    "task-img",
+		"session_id": "sess-1",
+		"status":     "starting",
+	}, nil)
+	if err := <-done; err != nil {
+		t.Errorf("InvokeGenerate: %v", err)
+	}
+}
+
+func TestListImageTemplatesMapsBridgeResponse(t *testing.T) {
+	client, fake := newClientWithFake(t)
+	defer client.Stop()
+
+	done := make(chan struct {
+		items []types.ImagePromptTemplate
+		err   error
+	}, 1)
+	go func() {
+		items, err := client.ListImageTemplates(context.Background())
+		done <- struct {
+			items []types.ImagePromptTemplate
+			err   error
+		}{items: items, err: err}
+	}()
+
+	req := fake.readRequest(t)
+	if req.Method != "image_templates/list" {
+		t.Fatalf("method = %q, want image_templates/list", req.Method)
+	}
+	fake.writeResponse(t, req.idString(), []map[string]any{{
+		"id":            7,
+		"slug":          "poster",
+		"title":         "Poster",
+		"description":   "Poster style",
+		"prompt_preset": "cinematic preset",
+		"thumbnail_url": "/api/image-templates/7/thumbnail",
+		"sort_order":    10,
+		"enabled":       true,
+	}}, nil)
+
+	result := <-done
+	if result.err != nil {
+		t.Fatalf("ListImageTemplates: %v", result.err)
+	}
+	if len(result.items) != 1 || result.items[0].ID != 7 || result.items[0].ThumbnailURL != "/api/image-templates/7/thumbnail" {
+		t.Fatalf("unexpected items: %#v", result.items)
+	}
+	if result.items[0].PromptPreset != "cinematic preset" {
+		t.Fatalf("PromptPreset = %q", result.items[0].PromptPreset)
+	}
+}
+
 func TestInvokeGenerateUsesTaskInvokeTimeout(t *testing.T) {
 	fake := newFakeTransport()
 	client := New(Options{

@@ -10,6 +10,7 @@ import type {
   CreditStatus,
   DesktopAPI,
   GenerateInput,
+  ImagePromptTemplate,
   LlmProvider,
   PeekReportContextResult,
   PreviewGrant,
@@ -64,6 +65,7 @@ function createBrowserPreviewAPI(): DesktopAPI {
   return {
     initialize: async () => ({ browserPreview: true }),
     getCapabilities: async () => ({ browserPreview: true }),
+    listImageTemplates: async () => [],
     generate: async () => {
       throw new Error("Bridge IPC is only available inside the desktop app.");
     },
@@ -317,6 +319,10 @@ function createWailsAPI(): DesktopAPI {
   return {
     initialize: async () => decodeRawBytes(await WailsApp.Initialize()),
     getCapabilities: async () => decodeRawBytes(await WailsApp.GetCapabilities()),
+    listImageTemplates: async (): Promise<ImagePromptTemplate[]> => {
+      const fn = (WailsApp as unknown as { ListImageTemplates?: () => Promise<ImagePromptTemplate[]> }).ListImageTemplates;
+      return fn ? fn() : [];
+    },
     generate: async (input: GenerateInput) => {
       const result = await WailsApp.Generate(toWails(input));
       return { taskId: result.taskId, sessionId: result.sessionId, status: result.status };

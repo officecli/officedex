@@ -113,6 +113,7 @@ export interface GenerateInput {
   topic: string;
   prompt: string;
   mode?: "fast" | "best";
+  promptTemplateId?: string;
   sourceFile?: string;
   referenceImages?: string[];
   outputDir?: string;
@@ -141,8 +142,20 @@ export interface StageState {
 
 export interface TaskUserInput {
   prompt: string;
+  promptTemplateId?: string;
   sourceFile?: string;
   referenceImages?: string[];
+}
+
+export interface ImagePromptTemplate {
+  id: number;
+  slug: string;
+  title: string;
+  description: string;
+  promptPreset: string;
+  thumbnailUrl?: string;
+  sortOrder: number;
+  enabled: boolean;
 }
 
 export interface DesktopTask {
@@ -362,6 +375,7 @@ export type BinaryFileData = ArrayBuffer | Uint8Array;
 export interface DesktopAPI {
   initialize(): Promise<unknown>;
   getCapabilities(): Promise<unknown>;
+  listImageTemplates(): Promise<ImagePromptTemplate[]>;
   generate(input: GenerateInput): Promise<{ taskId: string; sessionId: string; status: string }>;
   respond(input: { taskId: string; questionId?: string; optionId?: string; answer?: string }): Promise<unknown>;
   cancel(taskId: string): Promise<unknown>;

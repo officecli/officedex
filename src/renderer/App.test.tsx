@@ -1019,6 +1019,7 @@ function installBridgeMock() {
   const api: DesktopAPI = {
     initialize: vi.fn(async () => ({})),
     getCapabilities: vi.fn(async () => ({})),
+    listImageTemplates: vi.fn(async () => []),
     generate,
     respond: vi.fn(async () => undefined),
     cancel: vi.fn(async () => undefined),

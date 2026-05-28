@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { DesktopAPI, DesktopTask } from "../../shared/types";
+import type { DesktopAPI, DesktopTask, GenerateInput } from "../../shared/types";
 import { officecli } from "../bridge";
 import { DialogueScreen } from "./DialogueScreens";
 
@@ -33,18 +33,22 @@ function installDomStubs() {
 
 let respondSpy: ReturnType<typeof vi.fn>;
 let cancelSpy: ReturnType<typeof vi.fn>;
+let listImageTemplatesSpy: ReturnType<typeof vi.fn>;
 let originals: Partial<DesktopAPI>;
 
 beforeEach(() => {
   installDomStubs();
   respondSpy = vi.fn(async () => undefined);
   cancelSpy = vi.fn(async () => undefined);
+  listImageTemplatesSpy = vi.fn(async () => []);
   originals = {
     respond: officecli.respond,
     cancel: officecli.cancel,
+    listImageTemplates: officecli.listImageTemplates,
   };
   officecli.respond = respondSpy as unknown as DesktopAPI["respond"];
   officecli.cancel = cancelSpy as unknown as DesktopAPI["cancel"];
+  officecli.listImageTemplates = listImageTemplatesSpy as unknown as DesktopAPI["listImageTemplates"];
 });
 
 afterEach(() => {
@@ -233,6 +237,61 @@ describe("DialogueScreen state machine", () => {
     const signInBtn = screen.getByRole("button", { name: /sign in to continue/i });
     fireEvent.click(signInBtn);
     expect(onOpenLogin).toHaveBeenCalledTimes(1);
+  });
+
+  it("image generation inserts template prompt and submits edited prompt only", async () => {
+    listImageTemplatesSpy.mockResolvedValueOnce([
+      { id: 7, slug: "poster", title: "Poster", description: "Cinematic poster", promptPreset: "Template prompt: replace PRODUCT", thumbnailUrl: "/api/image-templates/7/thumbnail", sortOrder: 10, enabled: true },
+    ]);
+    const onSubmit = vi.fn(async (_values: GenerateInput) => undefined);
+    render(<DialogueScreen {...baseProps({ onSubmit })} newGenerationDraft={{ documentType: "img", topic: "", prompt: "", mode: "fast" }} />);
+
+    expect(await screen.findByText("Poster")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Poster/i }));
+    const textarea = screen.getByPlaceholderText(/Enter what you want to generate/i);
+    const picker = document.querySelector(".image-template-picker");
+    expect(picker).toBeTruthy();
+    expect(Boolean(picker!.compareDocumentPosition(textarea) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect((textarea as HTMLTextAreaElement).value).toBe("Template prompt: replace PRODUCT");
+    expect(screen.getByText(/Template text has been inserted/i)).toBeTruthy();
+    fireEvent.change(textarea, { target: { value: "A red bicycle" } });
+    fireEvent.submit(textarea.closest("form")!);
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const submitted = onSubmit.mock.calls[0][0];
+    expect(submitted).toEqual(expect.objectContaining({ documentType: "img", prompt: "A red bicycle" }));
+    expect(submitted).not.toHaveProperty("promptTemplateId");
+  });
+
+  it("image generation confirms before replacing an existing prompt with a template", async () => {
+    listImageTemplatesSpy.mockResolvedValueOnce([
+      { id: 7, slug: "poster", title: "Poster", description: "Cinematic poster", promptPreset: "Template prompt: replace PRODUCT", thumbnailUrl: "/api/image-templates/7/thumbnail", sortOrder: 10, enabled: true },
+    ]);
+    render(<DialogueScreen {...baseProps()} newGenerationDraft={{ documentType: "img", topic: "", prompt: "Existing prompt", mode: "fast" }} />);
+
+    expect(await screen.findByText("Poster")).toBeTruthy();
+    const textarea = screen.getByPlaceholderText(/Enter what you want to generate/i);
+    expect((textarea as HTMLTextAreaElement).value).toBe("Existing prompt");
+
+    fireEvent.click(screen.getByRole("button", { name: /Poster/i }));
+    expect((await screen.findAllByText("Replace current prompt?")).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: /^Cancel$/i }));
+    await waitFor(() => expect(screen.queryAllByText("Replace current prompt?")).toHaveLength(0));
+    expect((textarea as HTMLTextAreaElement).value).toBe("Existing prompt");
+    expect(screen.queryByText(/Template text has been inserted/i)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /Poster/i }));
+    expect((await screen.findAllByText("Replace current prompt?")).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: /^Replace$/i }));
+    await waitFor(() => expect((textarea as HTMLTextAreaElement).value).toBe("Template prompt: replace PRODUCT"));
+    expect(screen.getByText(/Template text has been inserted/i)).toBeTruthy();
+  });
+
+  it("image generation shows an empty state when no templates are configured", async () => {
+    listImageTemplatesSpy.mockResolvedValueOnce([]);
+    render(<DialogueScreen {...baseProps()} newGenerationDraft={{ documentType: "img", topic: "", prompt: "", mode: "fast" }} />);
+
+    expect(await screen.findByText(/No image templates are configured yet/i)).toBeTruthy();
   });
 });
 

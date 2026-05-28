@@ -308,6 +308,44 @@ func (c *Client) GetCapabilities(ctx context.Context) ([]byte, error) {
 	return c.Request(ctx, "capabilities/get", nil)
 }
 
+type bridgeImagePromptTemplate struct {
+	ID           uint64 `json:"id"`
+	Slug         string `json:"slug"`
+	Title        string `json:"title"`
+	Description  string `json:"description"`
+	PromptPreset string `json:"prompt_preset"`
+	ThumbnailURL string `json:"thumbnail_url,omitempty"`
+	SortOrder    int    `json:"sort_order"`
+	Enabled      bool   `json:"enabled"`
+}
+
+// ListImageTemplates calls "image_templates/list" and maps bridge snake_case
+// fields to the renderer-facing camelCase shape.
+func (c *Client) ListImageTemplates(ctx context.Context) ([]types.ImagePromptTemplate, error) {
+	raw, err := c.Request(ctx, "image_templates/list", nil)
+	if err != nil {
+		return nil, err
+	}
+	var bridgeItems []bridgeImagePromptTemplate
+	if err := decodeJSON(raw, &bridgeItems); err != nil {
+		return nil, fmt.Errorf("bridge: decode image_templates/list: %w", err)
+	}
+	items := make([]types.ImagePromptTemplate, 0, len(bridgeItems))
+	for _, item := range bridgeItems {
+		items = append(items, types.ImagePromptTemplate{
+			ID:           item.ID,
+			Slug:         item.Slug,
+			Title:        item.Title,
+			Description:  item.Description,
+			PromptPreset: item.PromptPreset,
+			ThumbnailURL: item.ThumbnailURL,
+			SortOrder:    item.SortOrder,
+			Enabled:      item.Enabled,
+		})
+	}
+	return items, nil
+}
+
 // OpenSession calls "session/open" and caches the returned session id.
 func (c *Client) OpenSession(ctx context.Context) (string, error) {
 	raw, err := c.Request(ctx, "session/open", nil)
@@ -350,15 +388,16 @@ func (c *Client) InvokeGenerate(ctx context.Context, input types.GenerateInput) 
 		mode = "fast"
 	}
 	args := map[string]any{
-		"document_type": input.DocumentType,
-		"topic":         input.Topic,
-		"prompt":        input.Prompt,
-		"mode":          mode,
-		"runtime_mode":  input.RuntimeMode,
-		"out":           input.OutputDir,
-		"publish":       input.Publish,
-		"enable_images": input.EnableImages,
-		"image_quality": input.ImageQuality,
+		"document_type":      input.DocumentType,
+		"topic":              input.Topic,
+		"prompt":             input.Prompt,
+		"mode":               mode,
+		"runtime_mode":       input.RuntimeMode,
+		"prompt_template_id": input.PromptTemplateID,
+		"out":                input.OutputDir,
+		"publish":            input.Publish,
+		"enable_images":      input.EnableImages,
+		"image_quality":      input.ImageQuality,
 		// LocalPreview is forced to true to match the TS origin's
 		// `input.localPreview ?? true`. The boolean field can't distinguish
 		// "renderer omitted" from "renderer sent false" once it lands here,

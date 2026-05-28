@@ -1,4 +1,4 @@
-import { Button, Form, Image, Input, message, Progress, Radio, Space, Tag, Timeline, Tooltip } from "antd";
+import { Button, Form, Image, Input, message, Modal, Progress, Radio, Space, Tag, Timeline, Tooltip } from "antd";
 import {
   CheckCircleFilled,
   CloseCircleFilled,
@@ -20,7 +20,7 @@ import {
   WarningFilled,
 } from "@ant-design/icons";
 import { useEffect, useRef, useState, type ClipboardEvent } from "react";
-import type { Artifact, BridgeEvent, DesktopTask, DocumentType, GenerateInput, StageState } from "../../shared/types";
+import type { Artifact, BridgeEvent, DesktopTask, DocumentType, GenerateInput, ImagePromptTemplate, StageState } from "../../shared/types";
 import { defaultGenerateInput } from "../defaults";
 import { useSettings } from "../useSettings";
 import { useAttachments } from "../useAttachments";
@@ -97,6 +97,10 @@ function FluidNewGeneration({ draft, busy, onSubmit, onDraftChange }: {
   const t = useT();
   const initialValues = { ...defaultGenerateInput, ...settings.defaults, ...draft };
   const docType = (Form.useWatch("documentType", form) ?? initialValues.documentType) as DocumentType;
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>();
+  const [imageTemplates, setImageTemplates] = useState<ImagePromptTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templatesError, setTemplatesError] = useState("");
   const attachments = useAttachments(docType, {
     sourceFile: draft.sourceFile ?? null,
     referenceImages: draft.referenceImages ?? [],
@@ -112,9 +116,58 @@ function FluidNewGeneration({ draft, busy, onSubmit, onDraftChange }: {
     });
   }, [form, draft.documentType, draft.topic, draft.prompt, draft.mode]);
 
+  useEffect(() => {
+    if (docType !== "img") {
+      form.setFieldValue("promptTemplateId", undefined);
+      setSelectedTemplateId(undefined);
+      setTemplatesError("");
+      return;
+    }
+    let cancelled = false;
+    setTemplatesLoading(true);
+    officecli.listImageTemplates()
+      .then((items) => {
+        if (cancelled) return;
+        setImageTemplates(items.filter((item) => item.enabled));
+        setTemplatesError("");
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setTemplatesError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (!cancelled) setTemplatesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [docType, form]);
+
   function applyDraftPatch(patch: Partial<NewGenerationDraft>) {
     form.setFieldsValue(patch);
     onDraftChange(patch);
+  }
+
+  function applyImageTemplate(template: ImagePromptTemplate) {
+    const nextPrompt = template.promptPreset.trim();
+    const currentPrompt = String(form.getFieldValue("prompt") ?? "");
+    const apply = () => {
+      form.setFieldValue("prompt", nextPrompt);
+      form.setFieldValue("promptTemplateId", undefined);
+      setSelectedTemplateId(String(template.id));
+      onDraftChange({ prompt: nextPrompt });
+    };
+    if (currentPrompt.trim()) {
+      Modal.confirm({
+        title: t("dialogue.imageTemplates.confirmReplaceTitle"),
+        content: t("dialogue.imageTemplates.confirmReplaceBody"),
+        okText: t("dialogue.imageTemplates.confirmReplaceOk"),
+        cancelText: t("dialogue.imageTemplates.confirmReplaceCancel"),
+        onOk: apply,
+      });
+      return;
+    }
+    apply();
   }
 
   return (
@@ -156,7 +209,9 @@ function FluidNewGeneration({ draft, busy, onSubmit, onDraftChange }: {
           message.warning(validation.reason);
           return;
         }
-        onSubmit({ ...values, ...attachments.collect() });
+        const { promptTemplateId: _promptTemplateId, ...submitValues } = values;
+        void _promptTemplateId;
+        onSubmit({ ...submitValues, ...attachments.collect() });
       }} className="fluid-command-bar">
         <div className="format-row">
           <span>{t("dialogue.format.label")}</span>
@@ -170,8 +225,25 @@ function FluidNewGeneration({ draft, busy, onSubmit, onDraftChange }: {
         <Form.Item name="topic" hidden>
           <Input />
         </Form.Item>
+        <Form.Item name="promptTemplateId" hidden>
+          <Input />
+        </Form.Item>
+        {docType === "img" ? (
+          <ImageTemplatePicker
+            templates={imageTemplates}
+            selectedId={selectedTemplateId}
+            loading={templatesLoading}
+            error={templatesError}
+            onSelect={applyImageTemplate}
+            onClear={() => setSelectedTemplateId(undefined)}
+            t={t}
+          />
+        ) : null}
+        {docType === "img" && selectedTemplateId ? (
+          <div className="image-template-replace-hint">{t("dialogue.imageTemplates.replaceHint")}</div>
+        ) : null}
         <Form.Item name="prompt" rules={[{ required: true, message: t("dialogue.prompt.required") }]}>
-          <Input.TextArea rows={3} placeholder={t("dialogue.prompt.placeholder")} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) { e.preventDefault(); form.submit(); } }} onPaste={makePasteHandler(attachments, t)} />
+          <Input.TextArea autoSize={{ minRows: 4, maxRows: 8 }} placeholder={t("dialogue.prompt.placeholder")} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) { e.preventDefault(); form.submit(); } }} onPaste={makePasteHandler(attachments, t)} />
         </Form.Item>
         {attachments.sourceWorkbookSpec && attachments.sourceFile ? (
           <div className="attached-file">
@@ -220,6 +292,55 @@ function FluidNewGeneration({ draft, busy, onSubmit, onDraftChange }: {
           </Button>
         </div>
       </Form>
+    </div>
+  );
+}
+
+function ImageTemplatePicker({ templates, selectedId, loading, error, onSelect, onClear, t }: {
+  templates: ImagePromptTemplate[];
+  selectedId?: string;
+  loading: boolean;
+  error: string;
+  onSelect: (template: ImagePromptTemplate) => void;
+  onClear: () => void;
+  t: Translator;
+}) {
+  if (loading) {
+    return <div className="image-template-status">{t("dialogue.imageTemplates.loading")}</div>;
+  }
+  if (error) {
+    return <div className="image-template-status image-template-status-error">{t("dialogue.imageTemplates.error", { error })}</div>;
+  }
+  if (templates.length === 0) {
+    return <div className="image-template-status">{t("dialogue.imageTemplates.empty")}</div>;
+  }
+  return (
+    <div className="image-template-picker" aria-label={t("dialogue.imageTemplates.label")}>
+      <div className="image-template-picker-head">
+        <span>{t("dialogue.imageTemplates.label")}</span>
+        {selectedId ? <button type="button" onClick={() => onClear()}>{t("dialogue.imageTemplates.clear")}</button> : null}
+      </div>
+      <div className="image-template-grid">
+        {templates.map((template) => {
+          const id = String(template.id);
+          const selected = selectedId === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              className={`image-template-card ${selected ? "image-template-card-selected" : ""}`}
+              aria-pressed={selected}
+              onClick={() => onSelect(template)}
+            >
+              <div className="image-template-thumb">
+                {template.thumbnailUrl ? <img src={template.thumbnailUrl} alt="" /> : <MaterialSymbol name="image" />}
+              </div>
+              <strong>{template.title}</strong>
+              {template.description ? <span>{template.description}</span> : null}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

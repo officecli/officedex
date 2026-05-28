@@ -144,6 +144,122 @@
   font-weight: 500;
 }
 
+.image-template-picker {
+  display: grid;
+  gap: 10px;
+  margin: -2px 0 10px;
+}
+
+.image-template-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--n-slate);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.image-template-picker-head button {
+  border: 0;
+  background: transparent;
+  color: var(--n-primary);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.image-template-grid {
+  display: flex;
+  gap: 10px;
+  margin: 0 -4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0 4px 8px;
+  scroll-padding-inline: 4px;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.image-template-card {
+  flex: 0 0 156px;
+  display: grid;
+  gap: 7px;
+  border: 1px solid var(--n-hairline);
+  border-radius: var(--radius-md);
+  background: var(--n-paper);
+  padding: 8px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.image-template-card:hover,
+.image-template-card-selected {
+  border-color: var(--n-primary);
+  box-shadow: var(--shadow-card);
+}
+
+.image-template-card-selected {
+  transform: translateY(-1px);
+}
+
+.image-template-thumb {
+  display: grid;
+  aspect-ratio: 16 / 10;
+  place-items: center;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--n-tint-lavender);
+  color: var(--n-primary);
+}
+
+.image-template-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.image-template-card strong {
+  color: var(--n-charcoal);
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.image-template-card span {
+  color: var(--n-slate);
+  font-size: 12px;
+  line-height: 1.4;
+  display: -webkit-box;
+  min-height: 34px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.image-template-status {
+  margin: -4px 0 12px;
+  color: var(--n-slate);
+  font-size: 13px;
+}
+
+.image-template-status-error {
+  color: var(--n-error);
+}
+
+.image-template-replace-hint {
+  margin: -2px 0 10px;
+  border: 1px solid color-mix(in srgb, var(--n-primary) 18%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--n-primary) 8%, var(--n-paper));
+  color: var(--n-slate);
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 8px 10px;
+}
+
 /* ─── Docked composer ─── */
 
 .docked-composer {
