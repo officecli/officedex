@@ -28,7 +28,7 @@
   <img src="https://img.shields.io/github/v/release/officecli/officedex?style=flat-square&color=5645d4&label=version" alt="Version" />
   <img src="https://img.shields.io/badge/stack-Wails%20v2%20%2B%20React%2019-0075de?style=flat-square" alt="Stack" />
   <img src="https://img.shields.io/badge/UI-Notion%20Design-1aae39?style=flat-square" alt="UI" />
-  <img src="https://img.shields.io/badge/license-Apache--2.0-1aae39?style=flat-square" alt="License" />
+  <img src="https://img.shields.io/badge/license-GPL--3.0-1aae39?style=flat-square" alt="License" />
 </p>
 
 <p>
