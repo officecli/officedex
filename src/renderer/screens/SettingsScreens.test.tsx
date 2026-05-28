@@ -419,6 +419,7 @@ describe("SettingsScreen > About card", () => {
   let installAppUpdateSpy: ReturnType<typeof vi.fn>;
   let cancelAppUpdateSpy: ReturnType<typeof vi.fn>;
   let onAppUpdateEventSpy: ReturnType<typeof vi.fn>;
+  let openExternalSpy: ReturnType<typeof vi.fn>;
   let aboutOriginals: Partial<DesktopAPI>;
 
   beforeEach(() => {
@@ -452,11 +453,13 @@ describe("SettingsScreen > About card", () => {
     installAppUpdateSpy = vi.fn(async () => undefined);
     cancelAppUpdateSpy = vi.fn(async () => undefined);
     onAppUpdateEventSpy = vi.fn(() => () => undefined);
+    openExternalSpy = vi.fn(async () => undefined);
     aboutOriginals = {
       getSettings: officecli.getSettings,
       updateSettings: officecli.updateSettings,
       getDefaultWorkspaceDir: officecli.getDefaultWorkspaceDir,
       openDirectoryDialog: officecli.openDirectoryDialog,
+      openExternal: officecli.openExternal,
       getAppVersion: officecli.getAppVersion,
       checkAppUpdate: officecli.checkAppUpdate,
       downloadAppUpdate: officecli.downloadAppUpdate,
@@ -468,6 +471,7 @@ describe("SettingsScreen > About card", () => {
     officecli.updateSettings = updateSettingsSpy as unknown as DesktopAPI["updateSettings"];
     officecli.getDefaultWorkspaceDir = getDefaultWorkspaceDirSpy as unknown as DesktopAPI["getDefaultWorkspaceDir"];
     officecli.openDirectoryDialog = openDirectoryDialogSpy as unknown as DesktopAPI["openDirectoryDialog"];
+    officecli.openExternal = openExternalSpy as unknown as DesktopAPI["openExternal"];
     officecli.getAppVersion = getAppVersionSpy as unknown as DesktopAPI["getAppVersion"];
     officecli.checkAppUpdate = checkAppUpdateSpy as unknown as DesktopAPI["checkAppUpdate"];
     officecli.downloadAppUpdate = downloadAppUpdateSpy as unknown as DesktopAPI["downloadAppUpdate"];
@@ -486,8 +490,30 @@ describe("SettingsScreen > About card", () => {
     const { SettingsScreen } = await import("./SettingsScreens");
     render(<SettingsScreen />);
     await waitFor(() => expect(getAppVersionSpy).toHaveBeenCalled());
+    expect(await screen.findByRole("heading", { name: "OfficeDex" })).toBeTruthy();
     expect(await screen.findByText(/OfficeDex 0\.1\.0/)).toBeTruthy();
+    expect(screen.getByText(/AI desktop workspace for documents/i)).toBeTruthy();
+    expect(screen.getByText("Stable")).toBeTruthy();
     expect(screen.getByText(/Check for updates/i)).toBeTruthy();
+  });
+
+  it("opens About links and shows the disclaimer modal", async () => {
+    const { SettingsScreen } = await import("./SettingsScreens");
+    render(<SettingsScreen />);
+    await waitFor(() => expect(getAppVersionSpy).toHaveBeenCalled());
+
+    fireEvent.click(await screen.findByRole("button", { name: /visit website/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /github/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /gpl-3\.0/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /feedback/i }));
+
+    expect(openExternalSpy).toHaveBeenCalledWith("https://officecli.io");
+    expect(openExternalSpy).toHaveBeenCalledWith("https://github.com/officecli/officedex");
+    expect(openExternalSpy).toHaveBeenCalledWith("https://github.com/officecli/officedex/blob/main/LICENSE");
+    expect(openExternalSpy).toHaveBeenCalledWith("https://github.com/officecli/officedex/issues");
+
+    fireEvent.click(await screen.findByRole("button", { name: /disclaimer/i }));
+    expect(await screen.findByText(/OfficeDex AI may produce inaccurate content/i)).toBeTruthy();
   });
 
   it("Check for updates click invokes checkAppUpdate and surfaces the new version button", async () => {

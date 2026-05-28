@@ -1,13 +1,17 @@
 import { Button, Form, Input, Modal, Progress, Radio, Select, Space, Spin, Switch, Tag, message } from "antd";
 import {
+  CommentOutlined,
   CopyOutlined,
   DownloadOutlined,
   ExclamationCircleFilled,
   FolderOpenOutlined,
+  GithubOutlined,
   GlobalOutlined,
+  InfoCircleOutlined,
   Loading3QuartersOutlined,
   LogoutOutlined,
   RocketOutlined,
+  SafetyCertificateOutlined,
   SyncOutlined,
   UserOutlined,
 } from "@ant-design/icons";
@@ -419,29 +423,72 @@ function AboutCard() {
     }
   }, [downloaded, update]);
 
+  const openExternal = useCallback((url: string) => {
+    void officecli.openExternal(url).catch(() => undefined);
+  }, []);
+
+  const showDisclaimer = useCallback(() => {
+    Modal.info({
+      title: t("settings.about.disclaimerTitle"),
+      content: t("settings.about.disclaimerBody"),
+      okText: t("settings.common.ok"),
+    });
+  }, [t]);
+
+  const displayVersion = version || status.currentVersion;
+
   return (
     <div className="about-card">
-      <div className="about-row">
-        <span className="about-label">{t("settings.about.version")}</span>
-        <span className="about-value">{t("settings.about.versionValue", { version: version || status.currentVersion })}</span>
-      </div>
-      <div className="about-row">
-        <span className="about-label">{t("settings.about.lastChecked")}</span>
-        <span className="about-value">{formatLastChecked(status.lastCheckedAt, t)}</span>
-      </div>
-      {status.lastError ? (
-        <div className="about-row about-row-error">
-          <span className="about-label">{t("settings.about.lastError")}</span>
-          <span className="about-value">{status.lastError}</span>
+      <div className="about-hero">
+        <div className="about-app-icon" aria-hidden>
+          <MaterialSymbol name="grid_view" />
         </div>
-      ) : null}
+        <h3>{t("settings.about.productName")}</h3>
+        <div className="about-version">{t("settings.about.versionValue", { version: displayVersion })}</div>
+        <p className="about-description">{t("settings.about.description")}</p>
+        <div className="about-links" aria-label={t("settings.about.linksLabel")}>
+          <Button type="text" icon={<GlobalOutlined />} onClick={() => openExternal("https://officecli.io")}>
+            {t("settings.about.website")}
+          </Button>
+          <Button type="text" icon={<GithubOutlined />} onClick={() => openExternal("https://github.com/officecli/officedex")}>
+            {t("settings.about.github")}
+          </Button>
+          <Button type="text" icon={<SafetyCertificateOutlined />} onClick={() => openExternal("https://github.com/officecli/officedex/blob/main/LICENSE")}>
+            {t("settings.about.license")}
+          </Button>
+        </div>
+      </div>
+
+      <div className="about-channel">
+        <span>{t("settings.about.updateChannel")}</span>
+        <Select
+          value="stable"
+          disabled
+          options={[{ value: "stable", label: t("settings.about.channelStable") }]}
+          aria-label={t("settings.about.updateChannel")}
+          style={{ width: 136 }}
+        />
+      </div>
+
+      <div className="about-meta">
+        <span className="about-label">{t("settings.about.lastChecked")}: {formatLastChecked(status.lastCheckedAt, t)}</span>
+        {status.lastError ? <span className="about-error">{t("settings.about.lastError")}: {status.lastError}</span> : null}
+      </div>
+
       {downloading ? (
         <div className="about-progress">
           <Progress percent={percent} size="small" showInfo={false} />
           <span className="about-progress-label">{t("settings.about.downloading", { percent })}</span>
         </div>
       ) : null}
-      <Space size={8} className="about-actions">
+
+      <div className="about-actions">
+        <Button icon={<CommentOutlined />} onClick={() => openExternal("https://github.com/officecli/officedex/issues")}>
+          {t("settings.about.feedback")}
+        </Button>
+        <Button icon={<InfoCircleOutlined />} onClick={showDisclaimer}>
+          {t("settings.about.disclaimer")}
+        </Button>
         <Button icon={<SyncOutlined spin={checking} />} onClick={handleCheck} disabled={checking || downloading}>
           {t("settings.about.checking")}
         </Button>
@@ -461,7 +508,7 @@ function AboutCard() {
         ) : !checking ? (
           <span className="about-uptodate">{t("settings.about.upToDate")}</span>
         ) : null}
-      </Space>
+      </div>
     </div>
   );
 }

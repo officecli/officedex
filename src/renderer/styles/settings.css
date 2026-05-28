@@ -199,19 +199,95 @@
 /* ─── Settings > About card ─── */
 
 .about-card {
-  background: #ffffff;
-  border: 1px solid #e5e3df;
-  border-radius: 12px;
-  padding: 20px 24px;
+  display: grid;
+  gap: 22px;
+  width: 100%;
+  border: 1px solid var(--n-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--n-canvas);
+  padding: 36px 24px;
 }
 
-.about-row {
+.about-hero {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.about-app-icon {
+  display: grid;
+  width: 56px;
+  height: 56px;
+  place-items: center;
+  border: 1px solid rgba(86, 69, 212, 0.32);
+  border-radius: 14px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0)),
+    var(--n-primary);
+  color: var(--n-on-primary);
+  box-shadow: 0 12px 28px rgba(86, 69, 212, 0.22);
+  font-size: 24px;
+}
+
+.about-card h3 {
+  margin: 8px 0 0;
+  color: var(--n-ink);
+  font-family: var(--font-body);
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.about-version {
+  color: var(--n-steel);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.about-description {
+  max-width: 700px;
+  margin: 18px 0 0;
+  color: var(--n-slate);
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+.about-links,
+.about-actions {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  padding: 6px 0;
-  font-size: 14px;
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.about-links {
+  margin-top: 2px;
+}
+
+.about-links .ant-btn {
+  color: var(--n-steel);
+  font-weight: 500;
+}
+
+.about-channel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--n-charcoal);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.about-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 16px;
+  color: var(--n-steel);
+  font-size: 12px;
 }
 
 .about-row-column {
@@ -221,17 +297,11 @@
 }
 
 .about-label {
-  color: #787671;
+  color: var(--n-steel);
 }
 
-.about-value {
-  color: #1a1a1a;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-}
-
-.about-row-error .about-value {
-  color: #e03131;
+.about-error {
+  color: var(--n-error);
 }
 
 .effective-card {
@@ -301,11 +371,12 @@
 }
 
 .about-actions {
-  margin-top: 12px;
+  margin-top: 2px;
 }
 
 .about-uptodate {
-  color: #787671;
+  align-self: center;
+  color: var(--n-steel);
   font-size: 13px;
   font-style: italic;
 }
@@ -359,5 +430,17 @@
   }
   .setting-row {
     grid-template-columns: 1fr;
+  }
+  .about-card {
+    padding: 28px 16px;
+  }
+  .about-card h3 {
+    font-size: 30px;
+  }
+  .about-description {
+    font-size: 15px;
+  }
+  .about-actions .ant-btn {
+    flex: 1 1 180px;
   }
 }
