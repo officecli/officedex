@@ -518,17 +518,18 @@ function selectAPI(): DesktopAPI {
   if (isWailsAvailable()) {
     return createWailsAPI();
   }
-  // window.officecli is the test-only injection point used by App.test.tsx
-  // and the renderer vitest fixtures. Production desktop builds always go
-  // through Wails above; the browser-preview fallback covers `npm run dev`
-  // in a plain browser. The import.meta.env.MODE === 'test' guard lets
-  // Vite's dead-code elimination drop this branch from production bundles.
+  // window.officecli is the test-only injection point used by App.test.tsx,
+  // renderer vitest fixtures, and Playwright's dev-server bridge mock.
+  // Production desktop builds always go through Wails above; the browser
+  // preview fallback covers `npm run dev` unless the E2E mock marker exists.
+  const injected = typeof window !== "undefined"
+    ? (window as unknown as { officecli?: DesktopAPI; __bridgeMock?: unknown })
+    : undefined;
   if (
-    import.meta.env.MODE === "test" &&
-    typeof window !== "undefined" &&
-    (window as unknown as { officecli?: DesktopAPI }).officecli
+    injected?.officecli &&
+    (import.meta.env.MODE === "test" || (import.meta.env.DEV && injected.__bridgeMock))
   ) {
-    return (window as unknown as { officecli: DesktopAPI }).officecli;
+    return injected.officecli;
   }
   return createBrowserPreviewAPI();
 }

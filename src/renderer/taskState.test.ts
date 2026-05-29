@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyTaskEvent, createInitialTaskState } from "./taskState";
+import { applyTaskEvent, attachUserInput, createInitialTaskState, deleteConversation, getConversationList } from "./taskState";
 
 describe("taskState", () => {
   it("records task lifecycle events and stores completed artifacts", () => {
@@ -209,5 +209,100 @@ describe("taskState", () => {
     expect(task.runtimeSnapshot).toBeDefined();
     expect(task.runtimeSnapshot!.mode).toBe("hosted");
     expect(task.runtimeSnapshot!.provider).toBeUndefined();
+  });
+
+  it("groups multiple tasks in one conversation into one conversation list item", () => {
+    let state = createInitialTaskState();
+    state = applyTaskEvent(state, {
+      event_id: "ev-1",
+      task_id: "task-1",
+      type: "task.completed",
+      payload: {
+        result: { file_path: "/tmp/original.png", file_name: "original.png", document_type: "img" },
+      },
+    });
+    state = attachUserInput(state, "task-2", { prompt: "Make it brighter" }, "task-1");
+    state = applyTaskEvent(state, {
+      event_id: "ev-2",
+      task_id: "task-2",
+      type: "task.started",
+      payload: { document_type: "img", topic: "Make it brighter" },
+    });
+
+    expect(getConversationList(state)).toEqual([
+      {
+        conversationId: "task-1",
+        firstTaskId: "task-1",
+        latestTaskId: "task-2",
+        title: "original.png",
+        status: "running",
+        documentType: "img",
+      },
+    ]);
+  });
+
+  it("deletes all tasks and artifacts in a conversation", () => {
+    let state = createInitialTaskState();
+    state = applyTaskEvent(state, {
+      event_id: "ev-1",
+      task_id: "task-1",
+      type: "task.completed",
+      payload: {
+        result: { file_path: "/tmp/original.png", file_name: "original.png", document_type: "img" },
+      },
+    });
+    state = attachUserInput(state, "task-2", { prompt: "Make it brighter" }, "task-1");
+    state = applyTaskEvent(state, {
+      event_id: "ev-2",
+      task_id: "task-2",
+      type: "task.completed",
+      payload: {
+        result: { file_path: "/tmp/brighter.png", file_name: "brighter.png", document_type: "img" },
+      },
+    });
+    state = applyTaskEvent(state, {
+      event_id: "ev-3",
+      task_id: "task-other",
+      type: "task.completed",
+      payload: {
+        result: { file_path: "/tmp/other.pptx", file_name: "other.pptx", document_type: "pptx" },
+      },
+    });
+
+    const next = deleteConversation(state, "task-1");
+
+    expect(Object.keys(next.tasks)).toEqual(["task-other"]);
+    expect(next.taskOrder).toEqual(["task-other"]);
+    expect(next.artifacts).toEqual([
+      {
+        taskId: "task-other",
+        filePath: "/tmp/other.pptx",
+        fileName: "other.pptx",
+        documentType: "pptx",
+      },
+    ]);
+  });
+
+  it("overrides a bridge-created conversation id when continuation parent is attached after task.started", () => {
+    let state = createInitialTaskState();
+    state = applyTaskEvent(state, {
+      event_id: "ev-1",
+      task_id: "task-1",
+      type: "task.completed",
+      payload: {
+        result: { file_path: "/tmp/original.png", file_name: "original.png", document_type: "img" },
+      },
+    });
+    state = applyTaskEvent(state, {
+      event_id: "ev-2",
+      task_id: "task-2",
+      type: "task.started",
+      payload: { document_type: "img", topic: "Make it brighter" },
+    });
+
+    state = attachUserInput(state, "task-2", { prompt: "Make it brighter" }, "task-1");
+
+    expect(state.tasks["task-2"].conversationId).toBe("task-1");
+    expect(getConversationList(state)).toHaveLength(1);
   });
 });

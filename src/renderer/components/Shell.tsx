@@ -37,7 +37,7 @@ import {
 } from "@ant-design/icons";
 import { notion } from "../designTokens";
 import type { NavKey } from "../defaults";
-import type { DesktopTask } from "../../shared/types";
+import type { ConversationListItem } from "../taskState";
 import { useT } from "../i18n";
 import { RuntimeChip } from "./RuntimeChip";
 import { HistoryList } from "./HistoryList";
@@ -69,12 +69,12 @@ interface ShellProps {
   inspector?: React.ReactNode;
   credit?: CreditInfo;
   hasCustomProvider?: boolean;
-  tasks: DesktopTask[];
-  selectedTaskId: string | undefined;
+  conversations: ConversationListItem[];
+  selectedConversationId: string | undefined;
   onNavChange: (key: NavKey) => void;
   onNewGeneration: () => void;
   onSelectTask: (taskId: string) => void;
-  onDeleteTask: (taskId: string) => void;
+  onDeleteConversation: (conversationId: string) => void;
 }
 
 function pillLabelKey(failed: boolean, errorKind: ShellProps["errorKind"]): string {
@@ -102,12 +102,12 @@ export function Shell({
   inspector,
   credit,
   hasCustomProvider,
-  tasks,
-  selectedTaskId,
+  conversations,
+  selectedConversationId,
   onNavChange,
   onNewGeneration,
   onSelectTask,
-  onDeleteTask,
+  onDeleteConversation,
 }: ShellProps) {
   const [collapsed, setCollapsed] = useState(false);
   const t = useT();
@@ -128,11 +128,11 @@ export function Shell({
           </Button>
         </Tooltip>
         <HistoryList
-          tasks={tasks}
-          selectedTaskId={selectedTaskId}
+          conversations={conversations}
+          selectedConversationId={selectedConversationId}
           collapsed={collapsed}
           onSelect={onSelectTask}
-          onDelete={onDeleteTask}
+          onDelete={onDeleteConversation}
         />
         <div className="sidebar-footer">
           <CreditMeter info={credit} hasCustomProvider={hasCustomProvider} />

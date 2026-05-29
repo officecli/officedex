@@ -3,7 +3,7 @@ import zhCN from "antd/locale/zh_CN";
 import enUS from "antd/locale/en_US";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Artifact, BridgeEvent, GenerateInput, PreviewGrant } from "../shared/types";
-import { applyTaskEvent, attachUserInput, createInitialTaskState, deleteTask, getConversationTasks, type TaskState } from "./taskState";
+import { applyTaskEvent, attachUserInput, createInitialTaskState, deleteConversation, deleteTask, getConversationList, getConversationTasks, type TaskState } from "./taskState";
 import { officecli } from "./bridge";
 import { theme } from "./designTokens";
 import { defaultGenerateInput, type NavKey } from "./defaults";
@@ -262,6 +262,7 @@ export function App() {
   }, [state, conversationId]);
   const artifacts = useMemo(() => state.artifacts, [state.artifacts]);
   const tasks = useMemo(() => state.taskOrder.map((taskID) => state.tasks[taskID]).filter(Boolean), [state]);
+  const conversations = useMemo(() => getConversationList(state), [state]);
 
   async function submit(values: GenerateInput) {
     if (forceUpdate) {
@@ -399,10 +400,13 @@ export function App() {
     setActiveNav("login");
   }, []);
 
-  const handleDeleteTask = useCallback((taskId: string) => {
-    setState((current) => deleteTask(current, taskId));
-    setSelectedTaskID((current) => current.kind === "task" && current.id === taskId ? { kind: "auto" } : current);
-  }, []);
+  const handleDeleteConversation = useCallback((targetConversationId: string) => {
+    setState((current) => deleteConversation(current, targetConversationId));
+    setSelectedTaskID((current) => {
+      if (current.kind !== "task") return current;
+      return state.tasks[current.id]?.conversationId === targetConversationId ? { kind: "auto" } : current;
+    });
+  }, [state.tasks]);
 
   const openInlinePreview = useCallback(async (artifact: Artifact) => {
     if (previewGrant) {
@@ -473,12 +477,12 @@ export function App() {
         inspector={sidePanel}
         credit={credit}
         hasCustomProvider={persistedSettings.llmProvider !== null}
-        tasks={tasks}
-        selectedTaskId={selectedTaskID.kind === "task" ? selectedTaskID.id : selectedTaskID.kind === "auto" ? firstTaskID : undefined}
+        conversations={conversations}
+        selectedConversationId={conversationId}
         onNavChange={setActiveNav}
         onNewGeneration={newGeneration}
         onSelectTask={selectTask}
-        onDeleteTask={handleDeleteTask}
+        onDeleteConversation={handleDeleteConversation}
       >
         {activeNav === "dialogue" ? (
           <DialogueScreen

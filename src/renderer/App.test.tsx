@@ -698,6 +698,106 @@ describe("App task flow", () => {
     );
   });
 
+  it("keeps a continued image generation in the same sidebar conversation when bridge events arrive before generate resolves", async () => {
+    const bridge = installBridgeMock();
+    bridge.generate.mockImplementation(() => new Promise(() => undefined));
+    const { App } = await import("./App");
+
+    render(<App />);
+
+    act(() => {
+      bridge.emit({
+        event_id: "event-img-done",
+        task_id: "task-img-done",
+        type: "task.completed",
+        payload: {
+          result: {
+            file_path: "/tmp/generated.png",
+            file_name: "generated.png",
+            document_type: "img",
+          },
+        },
+      });
+    });
+
+    expect(await screen.findByText("Generation Complete")).toBeTruthy();
+    expect(document.querySelectorAll(".history-list .history-item")).toHaveLength(1);
+
+    const composer = screen.getByTestId("continuation-composer");
+    fireEvent.change(within(composer).getByRole("textbox"), {
+      target: { value: "Make the sky brighter" },
+    });
+    fireEvent.click(composer.querySelector(".composer-row .ant-btn-primary")!);
+    await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      bridge.emit({
+        event_id: "event-img-edit-started",
+        task_id: "task-img-edit",
+        type: "task.started",
+        payload: { document_type: "img", topic: "Make the sky brighter" },
+      });
+    });
+
+    await waitFor(() => expect(document.querySelectorAll(".history-list .history-item")).toHaveLength(1));
+    expect(screen.getByText("Processing your request...")).toBeTruthy();
+    expect(screen.getAllByText("generated.png").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Make the sky brighter").length).toBeGreaterThan(0);
+  });
+
+  it("deletes every task in a sidebar conversation", async () => {
+    const bridge = installBridgeMock();
+    const { App } = await import("./App");
+
+    render(<App />);
+
+    act(() => {
+      bridge.emit({
+        event_id: "event-img-done",
+        task_id: "task-img-done",
+        type: "task.completed",
+        payload: {
+          result: {
+            file_path: "/tmp/generated.png",
+            file_name: "generated.png",
+            document_type: "img",
+          },
+        },
+      });
+    });
+    expect(await screen.findByText("Generation Complete")).toBeTruthy();
+
+    const composer = screen.getByTestId("continuation-composer");
+    fireEvent.change(within(composer).getByRole("textbox"), {
+      target: { value: "Make the sky brighter" },
+    });
+    fireEvent.click(composer.querySelector(".composer-row .ant-btn-primary")!);
+    await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      bridge.emit({
+        event_id: "event-img-edit-completed",
+        task_id: "task-2",
+        type: "task.completed",
+        payload: {
+          result: {
+            file_path: "/tmp/brighter.png",
+            file_name: "brighter.png",
+            document_type: "img",
+          },
+        },
+      });
+    });
+    expect(await screen.findByText("brighter.png")).toBeTruthy();
+
+    fireEvent.click(document.querySelector(".history-item-delete") as HTMLElement);
+
+    await screen.findByRole("heading", { name: "Start a New Generation" });
+    expect(document.querySelectorAll(".history-list .history-item")).toHaveLength(0);
+    expect(screen.queryByText("generated.png")).toBeNull();
+    expect(screen.queryByText("brighter.png")).toBeNull();
+  });
+
   it("attaches pasted image files as reference images when documentType is Image", async () => {
     const bridge = installBridgeMock();
     const { App } = await import("./App");

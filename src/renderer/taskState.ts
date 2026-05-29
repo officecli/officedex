@@ -6,6 +6,15 @@ export interface TaskState {
   artifacts: Artifact[];
 }
 
+export interface ConversationListItem {
+  conversationId: string;
+  firstTaskId: string;
+  latestTaskId: string;
+  title: string;
+  status: DesktopTask["status"];
+  documentType?: string;
+}
+
 export function createInitialTaskState(): TaskState {
   return { tasks: {}, taskOrder: [], artifacts: [] };
 }
@@ -17,6 +26,19 @@ export function deleteTask(state: TaskState, taskID: string): TaskState {
   return { tasks, taskOrder, artifacts };
 }
 
+export function deleteConversation(state: TaskState, conversationId: string): TaskState {
+  const taskIDs = new Set(
+    state.taskOrder.filter((id) => state.tasks[id]?.conversationId === conversationId),
+  );
+  if (taskIDs.size === 0) return state;
+  const tasks = Object.fromEntries(
+    Object.entries(state.tasks).filter(([id]) => !taskIDs.has(id)),
+  );
+  const taskOrder = state.taskOrder.filter((id) => !taskIDs.has(id));
+  const artifacts = state.artifacts.filter((artifact) => !artifact.taskId || !taskIDs.has(artifact.taskId));
+  return { tasks, taskOrder, artifacts };
+}
+
 export function attachUserInput(
   state: TaskState,
   taskID: string,
@@ -24,8 +46,9 @@ export function attachUserInput(
   parentTaskId?: string,
 ): TaskState {
   const parentTask = parentTaskId ? state.tasks[parentTaskId] : undefined;
-  const conversationId = parentTask ? parentTask.conversationId : taskID;
-  const previous = state.tasks[taskID] || {
+  const previous = state.tasks[taskID];
+  const conversationId = parentTask ? parentTask.conversationId : previous?.conversationId || taskID;
+  const existing = previous || {
     id: taskID,
     conversationId,
     status: "starting" as const,
@@ -34,9 +57,9 @@ export function attachUserInput(
   const tasks = {
     ...state.tasks,
     [taskID]: {
-      ...previous,
-      conversationId: previous.conversationId || conversationId,
-      parentTaskId: parentTaskId || previous.parentTaskId,
+      ...existing,
+      conversationId,
+      parentTaskId: parentTaskId || previous?.parentTaskId,
       userInput: input,
     },
   };
@@ -50,6 +73,31 @@ export function getConversationTasks(state: TaskState, conversationId: string): 
     .map((id) => state.tasks[id])
     .filter((task): task is DesktopTask => Boolean(task) && task.conversationId === conversationId)
     .reverse(); // taskOrder is newest-first; reverse to show oldest-first in conversation
+}
+
+export function getConversationList(state: TaskState): ConversationListItem[] {
+  const seen = new Set<string>();
+  const conversations: ConversationListItem[] = [];
+  for (const taskID of state.taskOrder) {
+    const latestTask = state.tasks[taskID];
+    if (!latestTask || seen.has(latestTask.conversationId)) continue;
+    const tasks = getConversationTasks(state, latestTask.conversationId);
+    const firstTask = tasks[0] || latestTask;
+    seen.add(latestTask.conversationId);
+    conversations.push({
+      conversationId: latestTask.conversationId,
+      firstTaskId: firstTask.id,
+      latestTaskId: latestTask.id,
+      title: conversationTitle(firstTask),
+      status: latestTask.status,
+      documentType: latestTask.documentType || latestTask.artifact?.documentType || firstTask.documentType || firstTask.artifact?.documentType,
+    });
+  }
+  return conversations;
+}
+
+function conversationTitle(task: DesktopTask): string {
+  return task.topic || task.artifact?.fileName || task.id;
 }
 
 export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState {

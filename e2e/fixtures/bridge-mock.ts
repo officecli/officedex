@@ -143,6 +143,28 @@ export async function installBridgeMock(page: Page, options: BridgeMockOptions =
       logout: async (...args: unknown[]) => {
         record("logout", args);
       },
+      getCreditStatus: async (...args: unknown[]) => {
+        record("getCreditStatus", args);
+        return {
+          mode: opts.whoami?.mode ?? "anonymous",
+          accessMode: "free",
+          planName: "",
+          hostedCreditBalance: null,
+          anonymousCreditAvailable: null,
+          anonymousCreditReserved: null,
+          anonymousCreditBalance: null,
+          rewardRemaining: 0,
+          paidKeyPrefix: "",
+          paidKeyTotal: 0,
+          paidKeyUsed: 0,
+          paidKeyRemaining: 0,
+          raw: "",
+        };
+      },
+      redeem: async (...args: unknown[]) => {
+        record("redeem", args);
+        return { ok: false, message: "mock" };
+      },
       getSettings: async (...args: unknown[]) => {
         record("getSettings", args);
         return settingsState;
@@ -159,6 +181,78 @@ export async function installBridgeMock(page: Page, options: BridgeMockOptions =
       getDefaultWorkspaceDir: async (...args: unknown[]) => {
         record("getDefaultWorkspaceDir", args);
         return "/tmp/mock-workspace";
+      },
+      getBridgeRuntimeSnapshot: async (...args: unknown[]) => {
+        record("getBridgeRuntimeSnapshot", args);
+        return { runtimeMode: opts.settings?.runtimeMode ?? "hosted", binaryPath: "", envApplied: true };
+      },
+      getTaskHistory: async (...args: unknown[]) => {
+        record("getTaskHistory", args);
+        return [];
+      },
+      getAppVersion: async (...args: unknown[]) => {
+        record("getAppVersion", args);
+        return "0.0.0-e2e";
+      },
+      getAppUpdateStatus: async (...args: unknown[]) => {
+        record("getAppUpdateStatus", args);
+        return {
+          currentVersion: "0.0.0-e2e",
+          latestVersion: null,
+          updateAvailable: false,
+          mandatory: false,
+          downloading: false,
+          downloadedPath: null,
+          lastCheckedAt: null,
+          lastError: null,
+        };
+      },
+      checkAppUpdate: async (...args: unknown[]) => {
+        record("checkAppUpdate", args);
+        return {
+          status: {
+            currentVersion: "0.0.0-e2e",
+            latestVersion: null,
+            updateAvailable: false,
+            mandatory: false,
+            downloading: false,
+            downloadedPath: null,
+            lastCheckedAt: null,
+            lastError: null,
+          },
+          release: null,
+        };
+      },
+      downloadAppUpdate: async (...args: unknown[]) => {
+        record("downloadAppUpdate", args);
+        return "";
+      },
+      installAppUpdate: async (...args: unknown[]) => {
+        record("installAppUpdate", args);
+      },
+      cancelAppUpdate: async (...args: unknown[]) => {
+        record("cancelAppUpdate", args);
+      },
+      onAppUpdateEvent: () => () => undefined,
+      exportLogs: async (...args: unknown[]) => {
+        record("exportLogs", args);
+        return { path: "/tmp/officedex-logs.zip" };
+      },
+      getReportCapability: async (...args: unknown[]) => {
+        record("getReportCapability", args);
+        return { enabled: false, endpointConfigured: false };
+      },
+      submitReport: async (...args: unknown[]) => {
+        record("submitReport", args);
+        return { ticketId: "mock-ticket", requestId: "mock-request", uploaded: false };
+      },
+      peekReportContext: async (...args: unknown[]) => {
+        record("peekReportContext", args);
+        return { requestId: "mock-request" };
+      },
+      testProvider: async (...args: unknown[]) => {
+        record("testProvider", args);
+        return { ok: true, message: "mock" };
       },
       onAuthEvent: (cb: (event: unknown) => void) => {
         authListeners.push(cb);
