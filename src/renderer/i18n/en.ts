@@ -51,6 +51,7 @@ export const en: Record<string, string> = {
   "dialogue.imageTemplates.error": "Failed to load image templates: {error}",
   "dialogue.imageTemplates.empty": "No image templates are configured yet. Add and enable one in the OfficeCLI admin.",
   "dialogue.imageTemplates.clear": "Clear",
+  "dialogue.imageTemplates.refresh": "Refresh",
   "dialogue.imageTemplates.replaceHint": "Template text has been inserted. Replace product, brand, scene, and style placeholders before generating your own image.",
   "dialogue.imageTemplates.confirmReplaceTitle": "Replace current prompt?",
   "dialogue.imageTemplates.confirmReplaceBody": "Choosing this template will clear your current prompt and insert the template text.",

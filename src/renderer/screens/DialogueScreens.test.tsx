@@ -1,7 +1,8 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DesktopAPI, DesktopTask, GenerateInput } from "../../shared/types";
 import { officecli } from "../bridge";
+import { LocaleProvider, type Locale } from "../i18n";
 import { DialogueScreen, assembleSlots } from "./DialogueScreens";
 import type { ImagePromptSlot } from "../../shared/types";
 
@@ -103,6 +104,16 @@ function makeCompletedDocTask(docType: string, fileName: string): DesktopTask {
       documentType: docType,
     },
   };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
 }
 
 describe("DialogueScreen state machine", () => {
@@ -294,6 +305,42 @@ describe("DialogueScreen state machine", () => {
 
     expect(await screen.findByText(/No image templates are configured yet/i)).toBeTruthy();
   });
+
+  it("shows an antd spinner and loading text while image templates are pending", async () => {
+    const pending = deferred<Awaited<ReturnType<DesktopAPI["listImageTemplates"]>>>();
+    listImageTemplatesSpy.mockReturnValueOnce(pending.promise);
+    render(<DialogueScreen {...baseProps()} newGenerationDraft={{ documentType: "img", topic: "", prompt: "", mode: "fast" }} />);
+
+    expect(document.querySelector(".ant-spin")).toBeTruthy();
+    const loadingStatus = document.querySelector(".image-template-status")!;
+    const loadingText = Array.from(loadingStatus.children).find((child) => !child.classList.contains("ant-spin"));
+    expect(loadingText?.textContent).toBe("Loading image templates…");
+
+    await act(async () => {
+      pending.resolve([
+        { id: 7, slug: "poster", title: "Poster", description: "Cinematic poster", promptPreset: "Template prompt", thumbnailUrl: "/api/image-templates/7/thumbnail", sortOrder: 10, enabled: true },
+      ]);
+      await pending.promise;
+    });
+    expect(await screen.findByText("Poster")).toBeTruthy();
+  });
+
+  it("refreshes the image-template list from the picker head", async () => {
+    listImageTemplatesSpy
+      .mockResolvedValueOnce([
+        { id: 7, slug: "poster", title: "Poster", description: "Cinematic poster", promptPreset: "Template prompt", thumbnailUrl: "/api/image-templates/7/thumbnail", sortOrder: 10, enabled: true },
+      ])
+      .mockResolvedValueOnce([
+        { id: 8, slug: "banner", title: "Banner", description: "Hero banner", promptPreset: "Second prompt", thumbnailUrl: "/api/image-templates/8/thumbnail", sortOrder: 20, enabled: true },
+      ]);
+    render(<DialogueScreen {...baseProps()} newGenerationDraft={{ documentType: "img", topic: "", prompt: "", mode: "fast" }} />);
+
+    expect(await screen.findByText("Poster")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Refresh$/i }));
+
+    await waitFor(() => expect(listImageTemplatesSpy).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("Banner")).toBeTruthy();
+  });
 });
 
 const SLOTTED_TEMPLATE = {
@@ -312,11 +359,12 @@ const SLOTTED_TEMPLATE = {
   ] as ImagePromptSlot[],
 };
 
-async function selectSlottedTemplate() {
-  render(<DialogueScreen {...baseProps()} newGenerationDraft={{ documentType: "img", topic: "", prompt: "", mode: "fast" }} />);
+async function selectSlottedTemplate(locale?: Locale, template = SLOTTED_TEMPLATE) {
+  const screenNode = <DialogueScreen {...baseProps()} newGenerationDraft={{ documentType: "img", topic: "", prompt: "", mode: "fast" }} />;
+  render(locale ? <LocaleProvider value={locale}>{screenNode}</LocaleProvider> : screenNode);
   expect(await screen.findByText("Promo")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: /Promo/i }));
-  return screen.getByPlaceholderText("PRODUCT_HINT") as HTMLInputElement;
+  return screen.getByPlaceholderText(template.slots[0].example!) as HTMLInputElement;
 }
 
 describe("assembleSlots (pure assembly)", () => {
@@ -416,6 +464,47 @@ describe("Image template slots (guided fill-in)", () => {
       prompt: "Poster for sneakers, minimalist style. Notes: bright colors",
     }));
     expect(submitted).not.toHaveProperty("promptTemplateId");
+  });
+
+  it("renders zh slot labels and uses them in required warnings", async () => {
+    listImageTemplatesSpy.mockResolvedValueOnce([SLOTTED_TEMPLATE]);
+    const onSubmit = vi.fn(async (_values: GenerateInput) => undefined);
+    render(
+      <LocaleProvider value="zh">
+        <DialogueScreen {...baseProps({ onSubmit })} newGenerationDraft={{ documentType: "img", topic: "", prompt: "", mode: "fast" }} />
+      </LocaleProvider>,
+    );
+    expect(await screen.findByText("Promo")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Promo/i }));
+
+    expect(screen.getByText("产品")).toBeTruthy();
+    expect(screen.getByText("风格")).toBeTruthy();
+    expect(screen.getByText("备注")).toBeTruthy();
+
+    fireEvent.submit(screen.getByPlaceholderText("PRODUCT_HINT").closest("form")!);
+    await waitFor(() => expect(screen.getAllByText(/请填写产品/).length).toBeGreaterThan(0));
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the English slot label when a slug/key is not translated", async () => {
+    const untranslatedTemplate = {
+      ...SLOTTED_TEMPLATE,
+      id: 9,
+      slug: "untranslated",
+      slots: [
+        { key: "hero", label: "Hero Product", example: "HERO_HINT", required: true },
+      ] as ImagePromptSlot[],
+    };
+    listImageTemplatesSpy.mockResolvedValueOnce([untranslatedTemplate]);
+    render(
+      <LocaleProvider value="zh">
+        <DialogueScreen {...baseProps()} newGenerationDraft={{ documentType: "img", topic: "", prompt: "", mode: "fast" }} />
+      </LocaleProvider>,
+    );
+    expect(await screen.findByText("Promo")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Promo/i }));
+
+    expect(screen.getByText("Hero Product")).toBeTruthy();
   });
 
   it("escape hatch: editing the raw prompt detaches slots, and reset re-attaches them", async () => {

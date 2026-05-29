@@ -1,4 +1,4 @@
-import { Button, Form, Image, Input, message, Modal, Progress, Radio, Space, Tag, Timeline, Tooltip } from "antd";
+import { Button, Form, Image, Input, message, Modal, Progress, Radio, Space, Spin, Tag, Timeline, Tooltip } from "antd";
 import {
   CheckCircleFilled,
   CloseCircleFilled,
@@ -19,7 +19,7 @@ import {
   UserOutlined,
   WarningFilled,
 } from "@ant-design/icons";
-import { useEffect, useMemo, useRef, useState, type ClipboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent } from "react";
 import { getAttachmentSpec } from "../../shared/types";
 import type { Artifact, BridgeEvent, DesktopTask, DocumentType, GenerateInput, ImagePromptSlot, ImagePromptTemplate, StageState } from "../../shared/types";
 import { defaultGenerateInput } from "../defaults";
@@ -97,6 +97,12 @@ export function assembleSlots(
   });
 }
 
+function localizedSlotLabel(slot: ImagePromptSlot, slug: string, t: Translator): string {
+  const key = `dialogue.imageTemplates.slotLabel.${slug}.${slot.key}`;
+  const translated = t(key);
+  return translated === key ? slot.label : translated;
+}
+
 export function DialogueScreen({ tasks, conversationId, artifacts, newGenerationDraft, busy, lastError, errorKind, errorDetails, bridgeStatus, onSubmit, onOpenSettings, onOpenLogin, onRetry, onPreview, onNewGenerationDraftChange, onForceCancel, onContinueGeneration }: DialogueProps) {
   if (lastError) {
     return <ConnectionFailure kind={errorKind} status={bridgeStatus} error={lastError} details={errorDetails} onOpenSettings={onOpenSettings} onOpenLogin={onOpenLogin} onRetry={onRetry} />;
@@ -128,6 +134,7 @@ function FluidNewGeneration({ draft, busy, onSubmit, onDraftChange }: {
   const [slotErrors, setSlotErrors] = useState<Record<string, string>>({});
   const [rawDecoupled, setRawDecoupled] = useState(false);
   const [rawOpen, setRawOpen] = useState(false);
+  const imageTemplateRequestId = useRef(0);
   const selectedTemplate = useMemo(
     () => imageTemplates.find((tpl) => String(tpl.id) === selectedTemplateId),
     [imageTemplates, selectedTemplateId],
@@ -152,6 +159,25 @@ function FluidNewGeneration({ draft, busy, onSubmit, onDraftChange }: {
     });
   }, [form, draft.documentType, draft.topic, draft.prompt, draft.mode]);
 
+  const loadImageTemplates = useCallback(() => {
+    const requestId = imageTemplateRequestId.current + 1;
+    imageTemplateRequestId.current = requestId;
+    setTemplatesLoading(true);
+    officecli.listImageTemplates()
+      .then((items) => {
+        if (requestId !== imageTemplateRequestId.current) return;
+        setImageTemplates(items.filter((item) => item.enabled));
+        setTemplatesError("");
+      })
+      .catch((error: unknown) => {
+        if (requestId !== imageTemplateRequestId.current) return;
+        setTemplatesError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (requestId === imageTemplateRequestId.current) setTemplatesLoading(false);
+      });
+  }, []);
+
   useEffect(() => {
     if (docType !== "img") {
       form.setFieldValue("promptTemplateId", undefined);
@@ -163,25 +189,11 @@ function FluidNewGeneration({ draft, busy, onSubmit, onDraftChange }: {
       setRawOpen(false);
       return;
     }
-    let cancelled = false;
-    setTemplatesLoading(true);
-    officecli.listImageTemplates()
-      .then((items) => {
-        if (cancelled) return;
-        setImageTemplates(items.filter((item) => item.enabled));
-        setTemplatesError("");
-      })
-      .catch((error: unknown) => {
-        if (cancelled) return;
-        setTemplatesError(error instanceof Error ? error.message : String(error));
-      })
-      .finally(() => {
-        if (!cancelled) setTemplatesLoading(false);
-      });
+    loadImageTemplates();
     return () => {
-      cancelled = true;
+      imageTemplateRequestId.current += 1;
     };
-  }, [docType, form]);
+  }, [docType, form, loadImageTemplates]);
 
   function applyDraftPatch(patch: Partial<NewGenerationDraft>) {
     form.setFieldsValue(patch);
@@ -261,7 +273,7 @@ function FluidNewGeneration({ draft, busy, onSubmit, onDraftChange }: {
     for (const slot of slots) {
       const value = slotValues[slot.key] ?? "";
       if (slot.required && !value.trim()) {
-        errs[slot.key] = t("dialogue.imageTemplates.slotRequired", { label: slot.label });
+        errs[slot.key] = t("dialogue.imageTemplates.slotRequired", { label: localizedSlotLabel(slot, selectedTemplate?.slug ?? "", t) });
       } else if (value.includes("{{")) {
         errs[slot.key] = t("dialogue.imageTemplates.slotBraceForbidden");
       }
@@ -345,12 +357,14 @@ function FluidNewGeneration({ draft, busy, onSubmit, onDraftChange }: {
             error={templatesError}
             onSelect={applyImageTemplate}
             onClear={() => setSelectedTemplateId(undefined)}
+            onRefresh={loadImageTemplates}
             t={t}
           />
         ) : null}
         {docType === "img" && hasSlots && !rawDecoupled ? (
           <TemplateSlotForm
             slots={slots}
+            slug={selectedTemplate?.slug ?? ""}
             values={slotValues}
             errors={slotErrors}
             previewText={assembledPreview}
@@ -426,57 +440,72 @@ function FluidNewGeneration({ draft, busy, onSubmit, onDraftChange }: {
   );
 }
 
-function ImageTemplatePicker({ templates, selectedId, loading, error, onSelect, onClear, t }: {
+function ImageTemplatePicker({ templates, selectedId, loading, error, onSelect, onClear, onRefresh, t }: {
   templates: ImagePromptTemplate[];
   selectedId?: string;
   loading: boolean;
   error: string;
   onSelect: (template: ImagePromptTemplate) => void;
   onClear: () => void;
+  onRefresh: () => void;
   t: Translator;
 }) {
-  if (loading) {
-    return <div className="image-template-status">{t("dialogue.imageTemplates.loading")}</div>;
-  }
-  if (error) {
-    return <div className="image-template-status image-template-status-error">{t("dialogue.imageTemplates.error", { error })}</div>;
-  }
-  if (templates.length === 0) {
-    return <div className="image-template-status">{t("dialogue.imageTemplates.empty")}</div>;
-  }
   return (
     <div className="image-template-picker" aria-label={t("dialogue.imageTemplates.label")}>
       <div className="image-template-picker-head">
         <span>{t("dialogue.imageTemplates.label")}</span>
-        {selectedId ? <button type="button" onClick={() => onClear()}>{t("dialogue.imageTemplates.clear")}</button> : null}
+        <div className="image-template-picker-actions">
+          <button
+            type="button"
+            className="image-template-refresh"
+            onClick={() => onRefresh()}
+            disabled={loading}
+            aria-label={t("dialogue.imageTemplates.refresh")}
+            title={t("dialogue.imageTemplates.refresh")}
+          >
+            <MaterialSymbol name="refresh" />
+          </button>
+          {selectedId && templates.length > 0 ? <button type="button" onClick={() => onClear()}>{t("dialogue.imageTemplates.clear")}</button> : null}
+        </div>
       </div>
-      <div className="image-template-grid">
-        {templates.map((template) => {
-          const id = String(template.id);
-          const selected = selectedId === id;
-          return (
-            <button
-              key={id}
-              type="button"
-              className={`image-template-card ${selected ? "image-template-card-selected" : ""}`}
-              aria-pressed={selected}
-              onClick={() => onSelect(template)}
-            >
-              <div className="image-template-thumb">
-                {template.thumbnailUrl ? <img src={template.thumbnailUrl} alt="" /> : <MaterialSymbol name="image" />}
-              </div>
-              <strong>{template.title}</strong>
-              {template.description ? <span>{template.description}</span> : null}
-            </button>
-          );
-        })}
-      </div>
+      {loading ? (
+        <div className="image-template-status">
+          <Spin size="small" /> <span>{t("dialogue.imageTemplates.loading")}</span>
+        </div>
+      ) : error ? (
+        <div className="image-template-status image-template-status-error">{t("dialogue.imageTemplates.error", { error })}</div>
+      ) : templates.length === 0 ? (
+        <div className="image-template-status">{t("dialogue.imageTemplates.empty")}</div>
+      ) : (
+        <div className="image-template-grid">
+          {templates.map((template) => {
+            const id = String(template.id);
+            const selected = selectedId === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                className={`image-template-card ${selected ? "image-template-card-selected" : ""}`}
+                aria-pressed={selected}
+                onClick={() => onSelect(template)}
+              >
+                <div className="image-template-thumb">
+                  {template.thumbnailUrl ? <img src={template.thumbnailUrl} alt="" /> : <MaterialSymbol name="image" />}
+                </div>
+                <strong>{template.title}</strong>
+                {template.description ? <span>{template.description}</span> : null}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
-function TemplateSlotForm({ slots, values, errors, previewText, onChange, t }: {
+function TemplateSlotForm({ slots, slug, values, errors, previewText, onChange, t }: {
   slots: ImagePromptSlot[];
+  slug: string;
   values: Record<string, string>;
   errors: Record<string, string>;
   previewText: string;
@@ -489,7 +518,7 @@ function TemplateSlotForm({ slots, values, errors, previewText, onChange, t }: {
       {slots.map((slot) => (
         <Form.Item
           key={slot.key}
-          label={slot.label}
+          label={localizedSlotLabel(slot, slug, t)}
           extra={slot.helpText}
           required={slot.required}
           validateStatus={errors[slot.key] ? "error" : undefined}

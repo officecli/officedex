@@ -4,6 +4,11 @@ import { zh } from "./zh";
 
 const PROPER_NOUNS = ["OfficeDex", "OfficeCLI", "Bridge", "JWT", "API", "Credits", "PROMO2026", "Anthropic", "OpenAI", "GitHub"];
 const ASCII_TECHNICAL = /^[\x20-\x7E]+$/;
+const ZH_ONLY_PREFIXES = ["dialogue.imageTemplates.slotLabel."];
+
+function isZhOnlyKey(key: string): boolean {
+  return ZH_ONLY_PREFIXES.some((prefix) => key.startsWith(prefix));
+}
 
 describe("i18n dictionaries", () => {
   it("zh has every key in en", () => {
@@ -14,6 +19,7 @@ describe("i18n dictionaries", () => {
 
   it("en has every key in zh", () => {
     for (const key of Object.keys(zh)) {
+      if (isZhOnlyKey(key)) continue;
       expect(en[key], `missing key in en: ${key}`).toBeDefined();
     }
   });
