@@ -123,6 +123,18 @@ export interface GenerateInput {
   localPreview?: boolean;
 }
 
+// ModifyInput drives the "继续修改" (office.modify) flow: an LLM-driven in-place
+// edit of an existing pptx/docx/xlsx artifact. sourceFile is the artifact being
+// modified; the result is written as <base>.modified.<ext> next to it.
+export interface ModifyInput {
+  documentType: DocumentType;
+  sourceFile: string;
+  prompt: string;
+  language?: string;
+  style?: string;
+  outputDir?: string;
+}
+
 export interface TaskQuestion {
   id: string;
   question: string;
@@ -390,6 +402,7 @@ export interface DesktopAPI {
   getCapabilities(): Promise<unknown>;
   listImageTemplates(): Promise<ImagePromptTemplate[]>;
   generate(input: GenerateInput): Promise<{ taskId: string; sessionId: string; status: string }>;
+  modify(input: ModifyInput): Promise<{ taskId: string; sessionId: string; status: string }>;
   respond(input: { taskId: string; questionId?: string; optionId?: string; answer?: string }): Promise<unknown>;
   cancel(taskId: string): Promise<unknown>;
   openPath(filePath: string): Promise<void>;

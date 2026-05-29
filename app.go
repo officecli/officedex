@@ -303,6 +303,53 @@ func (a *App) Generate(input types.GenerateInput) (GenerateResult, error) {
 	return GenerateResult{TaskID: result.TaskID, SessionID: result.SessionID, Status: result.Status}, nil
 }
 
+// Modify dispatches `office.modify` ("继续修改") against the agent bridge: an
+// LLM-driven in-place edit of an existing pptx/docx/xlsx artifact. The modified
+// file is written next to the source (officecli derives the output directory
+// from the source path when OutputDir is empty, but we resolve it explicitly so
+// the result lands within a preview-trusted root).
+func (a *App) Modify(input types.ModifyInput) (GenerateResult, error) {
+	settings, err := a.settingsStore.Load()
+	if err != nil {
+		return GenerateResult{}, fmt.Errorf("load settings: %w", err)
+	}
+	if err := validateCustomProvider(settings); err != nil {
+		return GenerateResult{}, err
+	}
+	if err := a.requireLoggedInForCustomProvider(settings); err != nil {
+		return GenerateResult{}, err
+	}
+	if strings.TrimSpace(input.SourceFile) == "" {
+		return GenerateResult{}, errors.New("modify: source file is required")
+	}
+	if strings.TrimSpace(input.Prompt) == "" {
+		return GenerateResult{}, errors.New("modify: prompt is required")
+	}
+	client, err := a.ensureBridge()
+	if err != nil {
+		return GenerateResult{}, err
+	}
+	resolved := input
+	if strings.TrimSpace(resolved.OutputDir) == "" {
+		resolved.OutputDir = filepath.Dir(input.SourceFile)
+	}
+	result, err := client.InvokeModify(a.ctx, resolved)
+	if err != nil {
+		return GenerateResult{}, err
+	}
+	if a.localStore != nil && result.TaskID != "" {
+		_ = a.localStore.RecordEvent(types.BridgeEvent{
+			TaskID: result.TaskID,
+			Type:   "task.user_input",
+			Payload: map[string]any{
+				"prompt":      resolved.Prompt,
+				"source_file": resolved.SourceFile,
+			},
+		})
+	}
+	return GenerateResult{TaskID: result.TaskID, SessionID: result.SessionID, Status: result.Status}, nil
+}
+
 // RespondInput is the renderer payload for the respond binding.
 type RespondInput struct {
 	TaskID     string `json:"taskId"`

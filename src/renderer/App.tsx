@@ -2,7 +2,7 @@ import { ConfigProvider, message } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import enUS from "antd/locale/en_US";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Artifact, BridgeEvent, GenerateInput, PreviewGrant } from "../shared/types";
+import type { Artifact, BridgeEvent, GenerateInput, ModifyInput, PreviewGrant } from "../shared/types";
 import { applyTaskEvent, attachUserInput, createInitialTaskState, deleteConversation, deleteTask, getConversationList, getConversationTasks, type TaskState } from "./taskState";
 import { officecli } from "./bridge";
 import { theme } from "./designTokens";
@@ -390,6 +390,64 @@ export function App() {
     }
   }, [forceUpdate, recordError, clearError, persistedSettings.defaults, nudgeForTaskTransition, conversationTasks]);
 
+  const continueModify = useCallback(async (documentType: string, prompt: string) => {
+    if (forceUpdate) {
+      recordError("Update required before continuing", "setup");
+      return;
+    }
+    const parent = conversationTasks.at(-1);
+    const sourceFile = parent?.artifact?.filePath;
+    if (!sourceFile) {
+      recordError("No source document to modify", "other");
+      return;
+    }
+    const parentTaskId = parent?.id;
+    clearError();
+    const topic = summarizePrompt(prompt);
+    const localTaskId = createLocalTaskId();
+    pendingGenerateRef.current = {
+      localTaskId,
+      input: { prompt, sourceFile },
+      parentTaskId,
+    };
+    setState((current) => attachUserInput(applyTaskEvent(current, {
+      task_id: localTaskId,
+      type: "task.started",
+      ts: new Date().toISOString(),
+      payload: {
+        document_type: documentType,
+        topic,
+        message: "Task submitted",
+      },
+    }), localTaskId, pendingGenerateRef.current!.input, parentTaskId));
+    setSelectedTaskID({ kind: "task", id: localTaskId });
+    setActiveNav("dialogue");
+    setBusy(false);
+    try {
+      const result = await officecli.modify({
+        documentType: documentType as ModifyInput["documentType"],
+        sourceFile,
+        prompt,
+      });
+      if (pendingGenerateRef.current?.localTaskId === localTaskId && result.taskId) {
+        const pending = pendingGenerateRef.current;
+        pendingGenerateRef.current = null;
+        setState((current) => attachUserInput(deleteTask(current, localTaskId), result.taskId, pending.input, parentTaskId));
+        setSelectedTaskID({ kind: "task", id: result.taskId });
+        setActiveNav("dialogue");
+      }
+    } catch (error) {
+      if (pendingGenerateRef.current?.localTaskId !== localTaskId) return;
+      pendingGenerateRef.current = null;
+      setState((current) => deleteTask(current, localTaskId));
+      const text = errorMessage(error);
+      recordError(text, classifyError(text), extractStderr(text));
+    } finally {
+      setBusy(false);
+      nudgeForTaskTransition();
+    }
+  }, [forceUpdate, recordError, clearError, nudgeForTaskTransition, conversationTasks]);
+
   const retry = useCallback(() => {
     clearError();
     setCapabilityStatus("Reconnecting...");
@@ -502,6 +560,7 @@ export function App() {
             onPreview={openInlinePreview}
             onNewGenerationDraftChange={updateNewGenerationDraft}
             onContinueGeneration={continueGeneration}
+            onContinueModify={continueModify}
             onForceCancel={(taskId) => {
               setState((current) => applyTaskEvent(current, {
                 type: "task.cancelled",

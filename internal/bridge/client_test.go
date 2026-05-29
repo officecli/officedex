@@ -478,6 +478,111 @@ func TestInvokeGenerateSendsPromptTemplateID(t *testing.T) {
 	}
 }
 
+func TestInvokeModifyBuildsOfficeModifyRequest(t *testing.T) {
+	client, fake := newClientWithFake(t)
+	defer client.Stop()
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := client.InvokeModify(context.Background(), types.ModifyInput{
+			DocumentType: types.DocDOCX,
+			SourceFile:   "/tmp/report.docx",
+			Prompt:       "make the title bigger",
+			Language:     "zh",
+			Style:        "formal",
+			OutputDir:    "/tmp/out",
+		})
+		done <- err
+	}()
+
+	first := fake.readRequest(t)
+	if first.Method != "session/open" {
+		t.Fatalf("first method = %q, want session/open", first.Method)
+	}
+	fake.writeResponse(t, first.idString(), map[string]any{"id": "sess-m"}, nil)
+
+	second := fake.readRequest(t)
+	if second.Method != "task/invoke" {
+		t.Fatalf("second method = %q, want task/invoke", second.Method)
+	}
+	var params map[string]any
+	if err := json.Unmarshal(second.Params, &params); err != nil {
+		t.Fatalf("decode params: %v", err)
+	}
+	if params["tool"] != "office.modify" {
+		t.Errorf("tool = %v, want office.modify", params["tool"])
+	}
+	if params["session_id"] != "sess-m" {
+		t.Errorf("session_id = %v, want sess-m", params["session_id"])
+	}
+	args, _ := params["args"].(map[string]any)
+	if args["source_file"] != "/tmp/report.docx" {
+		t.Errorf("source_file = %v, want /tmp/report.docx", args["source_file"])
+	}
+	if args["prompt"] != "make the title bigger" {
+		t.Errorf("prompt = %v, want 'make the title bigger'", args["prompt"])
+	}
+	if args["format"] != "docx" {
+		t.Errorf("format = %v, want docx", args["format"])
+	}
+	if args["out"] != "/tmp/out" {
+		t.Errorf("out = %v, want /tmp/out", args["out"])
+	}
+	if args["lang"] != "zh" {
+		t.Errorf("lang = %v, want zh", args["lang"])
+	}
+	if args["style"] != "formal" {
+		t.Errorf("style = %v, want formal", args["style"])
+	}
+	fake.writeResponse(t, second.idString(), map[string]any{
+		"task_id":    "task-m",
+		"session_id": "sess-m",
+		"status":     "starting",
+	}, nil)
+	if err := <-done; err != nil {
+		t.Errorf("InvokeModify: %v", err)
+	}
+}
+
+func TestInvokeModifyOmitsEmptyLangAndStyle(t *testing.T) {
+	client, fake := newClientWithFake(t)
+	defer client.Stop()
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := client.InvokeModify(context.Background(), types.ModifyInput{
+			DocumentType: types.DocXLSX,
+			SourceFile:   "/tmp/data.xlsx",
+			Prompt:       "add a summary sheet",
+		})
+		done <- err
+	}()
+
+	first := fake.readRequest(t)
+	fake.writeResponse(t, first.idString(), map[string]any{"id": "sess-m2"}, nil)
+
+	second := fake.readRequest(t)
+	var params map[string]any
+	if err := json.Unmarshal(second.Params, &params); err != nil {
+		t.Fatalf("decode params: %v", err)
+	}
+	args, _ := params["args"].(map[string]any)
+	if _, ok := args["lang"]; ok {
+		t.Errorf("lang should be omitted when empty, got %v", args["lang"])
+	}
+	if _, ok := args["style"]; ok {
+		t.Errorf("style should be omitted when empty, got %v", args["style"])
+	}
+	fake.writeResponse(t, second.idString(), map[string]any{
+		"task_id":    "task-m2",
+		"session_id": "sess-m2",
+		"status":     "starting",
+	}, nil)
+	if err := <-done; err != nil {
+		t.Errorf("InvokeModify: %v", err)
+	}
+}
+
 func TestListImageTemplatesMapsBridgeResponse(t *testing.T) {
 	client, fake := newClientWithFake(t)
 	defer client.Stop()

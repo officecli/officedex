@@ -1,6 +1,6 @@
 {
   "name": "officedex",
-  "version": "0.5.8",
+  "version": "0.5.9",
   "description": "The AI desktop workspace for documents, slides, and spreadsheets. Wails v2 + React 19 client for OfficeCLI.",
   "license": "GPL-3.0-only",
   "homepage": "https://github.com/officecli/officedex#readme",
@@ -12,7 +12,7 @@
     "url": "https://github.com/officecli/officedex/issues"
   },
   "type": "module",
-  "officecliVersion": "latest",
+  "officecliVersion": "0.2.107",
   "scripts": {
     "prefetch:officecli": "node scripts/fetch-officecli.mjs",
     "predev": "npm run prefetch:officecli",

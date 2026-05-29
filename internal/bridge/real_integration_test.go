@@ -70,6 +70,41 @@ func TestRealOfficeCliInitializeAndCapabilities(t *testing.T) {
 	t.Logf("capabilities (%d bytes): %s", len(caps), truncate(caps, 256))
 }
 
+// TestRealOfficeCliExposesDocumentModification proves the staged binary serves
+// the office.modify capability for pptx/docx/xlsx. Deterministic (no LLM call),
+// so it runs whenever OFFICEDEX_E2E_REAL=1 without OFFICEDEX_E2E_REAL_GENERATE.
+func TestRealOfficeCliExposesDocumentModification(t *testing.T) {
+	binary := realBinary(t)
+
+	client := New(Options{
+		BinaryPath:           binary,
+		DisableAutoReconnect: true,
+		RequestTimeout:       60 * time.Second,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	if err := client.Start(ctx); err != nil {
+		t.Fatalf("client.Start: %v", err)
+	}
+	defer client.Stop()
+
+	if _, err := client.Initialize(ctx); err != nil {
+		t.Fatalf("client.Initialize: %v", err)
+	}
+	caps, err := client.GetCapabilities(ctx)
+	if err != nil {
+		t.Fatalf("client.GetCapabilities: %v", err)
+	}
+	payload := string(caps)
+	for _, want := range []string{"document_modification", "office.modify", "pptx", "docx", "xlsx"} {
+		if !strings.Contains(payload, want) {
+			t.Errorf("capabilities missing %q; staged binary may lack office.modify", want)
+		}
+	}
+}
+
 func TestRealOfficeCliGenerateSmoke(t *testing.T) {
 	if os.Getenv("OFFICEDEX_E2E_REAL_GENERATE") != "1" {
 		t.Skip("OFFICEDEX_E2E_REAL_GENERATE not set; skipping real LLM-backed generate smoke")

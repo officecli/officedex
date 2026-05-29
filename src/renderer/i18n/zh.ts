@@ -140,6 +140,7 @@ export const zh: Record<string, string> = {
   "dialogue.completed.referenceImage": "引用",
   "dialogue.completed.continuationPlaceholder": "描述你想要生成的内容……",
   "dialogue.completed.askPlaceholder": "输入消息或命令……",
+  "dialogue.completed.modifyPlaceholder": "描述你想对该文档做的修改……",
   "dialogue.completed.imagePreviewMask": "点击放大",
   "dialogue.userMessage.imagePreviewMask": "预览",
 

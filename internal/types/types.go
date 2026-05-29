@@ -149,6 +149,20 @@ type GenerateInput struct {
 	LocalPreview     bool         `json:"localPreview,omitempty"`
 }
 
+// ModifyInput is the renderer payload for the office.modify ("继续修改") flow:
+// an LLM-driven in-place edit of an existing pptx/docx/xlsx artifact. SourceFile
+// is the path to the artifact being modified; the modified file is written as
+// <base>.modified.<ext> next to it (officecli derives Out from SourceFile's
+// directory when OutputDir is empty).
+type ModifyInput struct {
+	DocumentType DocumentType `json:"documentType"`
+	SourceFile   string       `json:"sourceFile"`
+	Prompt       string       `json:"prompt"`
+	Language     string       `json:"language,omitempty"`
+	Style        string       `json:"style,omitempty"`
+	OutputDir    string       `json:"outputDir,omitempty"`
+}
+
 type ImagePromptSlot struct {
 	Key          string `json:"key"`
 	Label        string `json:"label"`

@@ -12,6 +12,7 @@ import type {
   GenerateInput,
   ImagePromptTemplate,
   LlmProvider,
+  ModifyInput,
   PeekReportContextResult,
   PreviewGrant,
   ProviderTestInput,
@@ -67,6 +68,9 @@ function createBrowserPreviewAPI(): DesktopAPI {
     getCapabilities: async () => ({ browserPreview: true }),
     listImageTemplates: async () => [],
     generate: async () => {
+      throw new Error("Bridge IPC is only available inside the desktop app.");
+    },
+    modify: async () => {
       throw new Error("Bridge IPC is only available inside the desktop app.");
     },
     respond: async () => undefined,
@@ -325,6 +329,10 @@ function createWailsAPI(): DesktopAPI {
     },
     generate: async (input: GenerateInput) => {
       const result = await WailsApp.Generate(toWails(input));
+      return { taskId: result.taskId, sessionId: result.sessionId, status: result.status };
+    },
+    modify: async (input: ModifyInput) => {
+      const result = await WailsApp.Modify(toWails(input));
       return { taskId: result.taskId, sessionId: result.sessionId, status: result.status };
     },
     respond: async (input) => decodeRawBytes(await WailsApp.Respond(toWails(input))),

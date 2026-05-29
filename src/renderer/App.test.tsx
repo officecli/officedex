@@ -1121,6 +1121,7 @@ function installBridgeMock() {
     getCapabilities: vi.fn(async () => ({})),
     listImageTemplates: vi.fn(async () => []),
     generate,
+    modify: vi.fn(async () => ({ taskId: "task-modify", sessionId: "session-2", status: "starting" })),
     respond: vi.fn(async () => undefined),
     cancel: vi.fn(async () => undefined),
     openPath: vi.fn(async () => undefined),

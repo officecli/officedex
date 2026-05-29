@@ -120,6 +120,7 @@ export const en: Record<string, string> = {
   "dialogue.completed.referenceImage": "Reference",
   "dialogue.completed.continuationPlaceholder": "Describe what you want to generate...",
   "dialogue.completed.askPlaceholder": "Ask a message or command...",
+  "dialogue.completed.modifyPlaceholder": "Describe the changes you want to make to this document...",
   "dialogue.completed.imagePreviewMask": "Click to enlarge",
   "dialogue.userMessage.imagePreviewMask": "Preview",
 

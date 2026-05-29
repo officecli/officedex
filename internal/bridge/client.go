@@ -458,6 +458,54 @@ func (c *Client) InvokeGenerate(ctx context.Context, input types.GenerateInput) 
 	return result, nil
 }
 
+// InvokeModify calls "task/invoke" with the office.modify tool args projected
+// from a ModifyInput. This is the "继续修改" path: an LLM-driven in-place edit
+// of an existing pptx/docx/xlsx artifact. officecli writes the result as
+// <base>.modified.<ext> next to the source (or under `out` when provided).
+func (c *Client) InvokeModify(ctx context.Context, input types.ModifyInput) (TaskInvokeResult, error) {
+	c.mu.Lock()
+	sessionID := c.sessionID
+	c.mu.Unlock()
+	if sessionID == "default" {
+		opened, err := c.OpenSession(ctx)
+		if err != nil {
+			return TaskInvokeResult{}, err
+		}
+		sessionID = opened
+	}
+	args := map[string]any{
+		"source_file": input.SourceFile,
+		"prompt":      input.Prompt,
+		"format":      input.DocumentType,
+		"out":         input.OutputDir,
+		// Mirror InvokeGenerate: ask officecli to emit a preview sidecar and run
+		// the local preview pipeline so the renderer can show the modified file.
+		"local_preview": true,
+		"emit_preview":  true,
+	}
+	if strings.TrimSpace(input.Language) != "" {
+		args["lang"] = input.Language
+	}
+	if strings.TrimSpace(input.Style) != "" {
+		args["style"] = input.Style
+	}
+	raw, err := c.requestWithTimeout(ctx, "task/invoke", map[string]any{
+		"session_id":    sessionID,
+		"tool":          "office.modify",
+		"interactive":   true,
+		"output_format": "bundle",
+		"args":          args,
+	}, c.options.TaskInvokeTimeout)
+	if err != nil {
+		return TaskInvokeResult{}, err
+	}
+	var result TaskInvokeResult
+	if err := decodeJSON(raw, &result); err != nil {
+		return TaskInvokeResult{}, fmt.Errorf("bridge: decode task/invoke: %w", err)
+	}
+	return result, nil
+}
+
 // RespondTask calls "task/respond".
 func (c *Client) RespondTask(ctx context.Context, params RespondParams) ([]byte, error) {
 	return c.Request(ctx, "task/respond", map[string]any{

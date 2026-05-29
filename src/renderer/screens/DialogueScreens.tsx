@@ -66,6 +66,7 @@ interface DialogueProps {
   onNewGenerationDraftChange?: (patch: Partial<NewGenerationDraft>) => void;
   onForceCancel?: (taskId: string) => void;
   onContinueGeneration?: (documentType: string, prompt: string, referenceImages?: string[]) => void;
+  onContinueModify?: (documentType: string, prompt: string) => void;
 }
 
 const EMPTY_NEW_GENERATION_DRAFT: NewGenerationDraft = {
@@ -103,7 +104,7 @@ function localizedSlotLabel(slot: ImagePromptSlot, slug: string, t: Translator):
   return translated === key ? slot.label : translated;
 }
 
-export function DialogueScreen({ tasks, conversationId, artifacts, newGenerationDraft, busy, lastError, errorKind, errorDetails, bridgeStatus, onSubmit, onOpenSettings, onOpenLogin, onRetry, onPreview, onNewGenerationDraftChange, onForceCancel, onContinueGeneration }: DialogueProps) {
+export function DialogueScreen({ tasks, conversationId, artifacts, newGenerationDraft, busy, lastError, errorKind, errorDetails, bridgeStatus, onSubmit, onOpenSettings, onOpenLogin, onRetry, onPreview, onNewGenerationDraftChange, onForceCancel, onContinueGeneration, onContinueModify }: DialogueProps) {
   if (lastError) {
     return <ConnectionFailure kind={errorKind} status={bridgeStatus} error={lastError} details={errorDetails} onOpenSettings={onOpenSettings} onOpenLogin={onOpenLogin} onRetry={onRetry} />;
   }
@@ -112,7 +113,7 @@ export function DialogueScreen({ tasks, conversationId, artifacts, newGeneration
     return <FluidNewGeneration draft={newGenerationDraft ?? EMPTY_NEW_GENERATION_DRAFT} busy={busy} onSubmit={onSubmit} onDraftChange={onNewGenerationDraftChange ?? (() => undefined)} />;
   }
   // Conversation view with all rounds
-  return <ConversationView tasks={tasks} busy={busy} onPreview={onPreview} onForceCancel={onForceCancel} onContinueGeneration={onContinueGeneration} onOpenLogin={onOpenLogin} />;
+  return <ConversationView tasks={tasks} busy={busy} onPreview={onPreview} onForceCancel={onForceCancel} onContinueGeneration={onContinueGeneration} onContinueModify={onContinueModify} onOpenLogin={onOpenLogin} />;
 }
 
 function FluidNewGeneration({ draft, busy, onSubmit, onDraftChange }: {
@@ -550,12 +551,13 @@ function TemplateSlotForm({ slots, slug, values, errors, previewText, onChange, 
 
 /* ─── Conversation View ─── */
 
-function ConversationView({ tasks, busy, onPreview, onForceCancel, onContinueGeneration, onOpenLogin }: {
+function ConversationView({ tasks, busy, onPreview, onForceCancel, onContinueGeneration, onContinueModify, onOpenLogin }: {
   tasks: DesktopTask[];
   busy: boolean;
   onPreview: (artifact: Artifact) => void;
   onForceCancel?: (taskId: string) => void;
   onContinueGeneration?: (documentType: string, prompt: string, referenceImages?: string[]) => void;
+  onContinueModify?: (documentType: string, prompt: string) => void;
   onOpenLogin: () => void;
 }) {
   const latestTask = tasks[tasks.length - 1];
@@ -598,6 +600,7 @@ function ConversationView({ tasks, busy, onPreview, onForceCancel, onContinueGen
         latestTask={latestTask}
         busy={busy}
         onContinueGeneration={onContinueGeneration}
+        onContinueModify={onContinueModify}
         onForceCancel={onForceCancel}
         onOpenLogin={onOpenLogin}
         referenceImages={referenceImages}
@@ -861,10 +864,11 @@ function TaskResultMessage({ task, onPreview, onOpenLogin, onUseAsReference }: {
 
 /* ─── Conversation Footer ─── */
 
-function ConversationFooter({ latestTask, busy, onContinueGeneration, onForceCancel, onOpenLogin, referenceImages, onReferenceImagesChange }: {
+function ConversationFooter({ latestTask, busy, onContinueGeneration, onContinueModify, onForceCancel, onOpenLogin, referenceImages, onReferenceImagesChange }: {
   latestTask: DesktopTask;
   busy: boolean;
   onContinueGeneration?: (documentType: string, prompt: string, referenceImages?: string[]) => void;
+  onContinueModify?: (documentType: string, prompt: string) => void;
   onForceCancel?: (taskId: string) => void;
   onOpenLogin: () => void;
   referenceImages: string[];
@@ -940,8 +944,10 @@ function ConversationFooter({ latestTask, busy, onContinueGeneration, onForceCan
     // Get document type from artifact or task
     const docType = latestTask.documentType || latestTask.artifact?.documentType || "docx";
 
-    // Only image type allows continuation editing when there's already an artifact
-    const inputDisabled = artifact && !isImageArtifact(artifact);
+    // Completed office documents (pptx/docx/xlsx) support in-place "continue editing" via office.modify.
+    const isModifiable = status === "completed" && Boolean(artifact) && isModifiableArtifact(artifact!) && Boolean(onContinueModify);
+    // Disable input only for completed non-image, non-modifiable artifacts (e.g. report).
+    const inputDisabled = Boolean(artifact && !isImageArtifact(artifact) && !isModifiable);
     const supportsReferenceImages = docType === "img" || (artifact ? isImageArtifact(artifact) : false);
     const referenceLimitReached = referenceImages.length >= referenceImageMaxCount;
     const pickReferenceImages = async () => {
@@ -958,8 +964,14 @@ function ConversationFooter({ latestTask, busy, onContinueGeneration, onForceCan
       }
     };
     const submitContinuation = () => {
-      if (inputDisabled || !continuationPrompt.trim() || !onContinueGeneration) return;
-      onContinueGeneration(docType, continuationPrompt.trim(), referenceImages.length > 0 ? referenceImages : undefined);
+      if (inputDisabled || !continuationPrompt.trim()) return;
+      if (isModifiable && onContinueModify) {
+        onContinueModify(docType, continuationPrompt.trim());
+      } else if (onContinueGeneration) {
+        onContinueGeneration(docType, continuationPrompt.trim(), referenceImages.length > 0 ? referenceImages : undefined);
+      } else {
+        return;
+      }
       setContinuationPrompt("");
       onReferenceImagesChange([]);
     };
@@ -987,7 +999,7 @@ function ConversationFooter({ latestTask, busy, onContinueGeneration, onForceCan
           ) : null}
           <Input.TextArea
             autoSize={{ minRows: 1, maxRows: 4 }}
-            placeholder={artifact && isImageArtifact(artifact) ? t("dialogue.completed.continuationPlaceholder") : t("dialogue.completed.askPlaceholder")}
+            placeholder={artifact && isImageArtifact(artifact) ? t("dialogue.completed.continuationPlaceholder") : isModifiable ? t("dialogue.completed.modifyPlaceholder") : t("dialogue.completed.askPlaceholder")}
             value={continuationPrompt}
             onChange={(e) => setContinuationPrompt(e.target.value)}
             disabled={inputDisabled}
@@ -1422,6 +1434,17 @@ function isImageArtifact(artifact: Artifact): boolean {
   if (type === "img" || IMAGE_EXTENSIONS.includes(type)) return true;
   const extension = artifact.fileName.split(".").pop()?.toLowerCase() || "";
   return IMAGE_EXTENSIONS.includes(extension);
+}
+
+// office.modify supports in-place editing of these office document types.
+const MODIFIABLE_EXTENSIONS = ["pptx", "docx", "xlsx"];
+
+function isModifiableArtifact(artifact: Artifact): boolean {
+  if (isImageArtifact(artifact)) return false;
+  const type = (artifact.documentType || "").toLowerCase();
+  if (MODIFIABLE_EXTENSIONS.includes(type)) return true;
+  const extension = artifact.fileName.split(".").pop()?.toLowerCase() || "";
+  return MODIFIABLE_EXTENSIONS.includes(extension);
 }
 
 function imageExtensionFor(artifact: Artifact): string {
