@@ -801,7 +801,11 @@ func (a *App) GetCreditStatus() (types.CreditStatus, error) {
 // Logout runs `officecli logout`.
 func (a *App) Logout() error {
 	opts := a.runCommandOptions()
-	return login.Logout(a.ctx, opts)
+	if err := login.Logout(a.ctx, opts); err != nil {
+		return err
+	}
+	a.resetBridgeRuntime()
+	return nil
 }
 
 // Redeem runs `officecli redeem --json --source desktop <code>` to add hosted
@@ -810,7 +814,12 @@ func (a *App) Logout() error {
 // so the renderer can show the message to the user.
 func (a *App) Redeem(code string) (types.RedeemResult, error) {
 	opts := a.runCommandOptions()
-	return login.Redeem(a.ctx, opts, code)
+	result, err := login.Redeem(a.ctx, opts, code)
+	if err != nil {
+		return types.RedeemResult{}, err
+	}
+	a.resetBridgeRuntime()
+	return result, nil
 }
 
 // ─── Settings bindings ──────────────────────────────────────────────────────
@@ -2058,6 +2067,7 @@ func (a *App) ensureLoginManagerLocked() *login.Manager {
 			a.mu.Lock()
 			a.pendingLoginURL = ""
 			a.mu.Unlock()
+			a.resetBridgeRuntime()
 			emit(ctx, authEventChannel, types.AuthEvent{Type: types.AuthEventSuccess})
 		case login.EventFailure:
 			a.mu.Lock()
@@ -2074,6 +2084,20 @@ func (a *App) ensureLoginManagerLocked() *login.Manager {
 	a.loginManager = manager
 	a.loginUnsub = unsub
 	return manager
+}
+
+func (a *App) resetBridgeRuntime() {
+	a.mu.Lock()
+	client := a.bridgeClient
+	a.bridgeClient = nil
+	a.resolvedBinaryPath = ""
+	a.resolvedBinaryEnv = nil
+	a.binaryResolvedAt = time.Time{}
+	a.mu.Unlock()
+
+	if client != nil {
+		client.Close()
+	}
 }
 
 func (a *App) runCommandOptions() login.ManagerOptions {
