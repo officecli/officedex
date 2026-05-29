@@ -212,6 +212,13 @@ export const en: Record<string, string> = {
   "settings.option.docType.xlsx": "Excel (.xlsx)",
   "settings.option.docType.report": "Report",
   "settings.option.docType.img": "Image",
+  "settings.group.appearance": "Appearance",
+  "settings.row.language.title": "Language",
+  "settings.row.language.desc": "Choose the display language for the OfficeDex interface.",
+  "settings.option.language.zh": "中文",
+  "settings.option.language.en": "English",
+  "settings.notifications.label": "Desktop notifications",
+  "settings.notifications.desc": "Notify me when a generation finishes while the window is in the background",
   "settings.group.workspace": "Workspace",
   "settings.row.outputDir.title": "Workspace Output Directory",
   "settings.row.outputDir.desc": "Where generated artifacts are saved on disk. Leave empty to use the app data folder.",
@@ -280,6 +287,9 @@ export const en: Record<string, string> = {
   "settings.row.reset.confirmBody": "This clears the document type, mode, output directory, bridge binary path, and LLM provider. Onboarding will re-run on next launch.",
   "settings.common.cancel": "Cancel",
   "settings.common.ok": "OK",
+  "notification.title": "OfficeDex",
+  "notification.taskCompleted": "Generation finished",
+  "notification.taskFailed": "Generation failed",
 
   // Diagnostics
   "diagnostics.title": "Diagnostics",

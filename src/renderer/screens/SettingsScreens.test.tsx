@@ -3,10 +3,35 @@ import { Modal } from "antd";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DesktopAPI, UserSettings, WhoAmIResult } from "../../shared/types";
 import { officecli } from "../bridge";
+import { NOTIFICATIONS_STORAGE_KEY, readNotificationsEnabled } from "../notifications";
 
 const DEFAULT_PROXY = { enabled: false, url: "http://127.0.0.1:7890" };
 
 let currentSettings: UserSettings;
+
+function createMemoryStorage(): Storage {
+  let store: Record<string, string> = {};
+  return {
+    get length() {
+      return Object.keys(store).length;
+    },
+    clear() {
+      store = {};
+    },
+    getItem(key: string) {
+      return key in store ? store[key] : null;
+    },
+    key(index: number) {
+      return Object.keys(store)[index] ?? null;
+    },
+    removeItem(key: string) {
+      delete store[key];
+    },
+    setItem(key: string, value: string) {
+      store[key] = value;
+    },
+  };
+}
 
 function installDomStubs() {
   if (!window.matchMedia) {
@@ -73,7 +98,9 @@ async function cleanupAntdPortals() {
 }
 
 beforeEach(() => {
+  vi.stubGlobal("localStorage", createMemoryStorage());
   installDomStubs();
+  localStorage.removeItem(NOTIFICATIONS_STORAGE_KEY);
   currentSettings = makeSettings();
   getSettingsSpy = vi.fn(async () => currentSettings);
   updateSettingsSpy = vi.fn(async (patch: Partial<UserSettings>) => {
@@ -107,6 +134,7 @@ beforeEach(() => {
 afterEach(async () => {
   await cleanupAntdPortals();
   Object.assign(officecli, originals);
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
@@ -173,6 +201,22 @@ describe("SettingsScreen", () => {
     await waitFor(() => expect(updateSettingsSpy).toHaveBeenCalled());
     const last = updateSettingsSpy.mock.calls.at(-1)![0] as Partial<UserSettings>;
     expect(last.defaults?.enableImages).toBe(false);
+  });
+
+  it("toggles desktop notifications in localStorage without writing Go settings", async () => {
+    const { SettingsScreen } = await import("./SettingsScreens");
+    render(<SettingsScreen />);
+    await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
+    await screen.findByText("Desktop notifications");
+
+    const desktopNotificationsSwitch = screen.getAllByRole("switch")[1];
+    fireEvent.click(desktopNotificationsSwitch);
+
+    expect(readNotificationsEnabled()).toBe(false);
+    expect(localStorage.getItem(NOTIFICATIONS_STORAGE_KEY)).toBe("false");
+    expect(
+      updateSettingsSpy.mock.calls.every((args) => (args[0] as Partial<UserSettings>).defaults?.enableImages === undefined),
+    ).toBe(true);
   });
 
   it("Browse output directory calls openDirectoryDialog and stores the picked path", async () => {

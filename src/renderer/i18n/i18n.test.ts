@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { en } from "./en";
 import { zh } from "./zh";
 
-const PROPER_NOUNS = ["OfficeDex", "OfficeCLI", "Bridge", "JWT", "API", "Credits", "PROMO2026", "Anthropic", "OpenAI", "GitHub"];
+const PROPER_NOUNS = ["OfficeDex", "OfficeCLI", "Bridge", "JWT", "API", "Credits", "PROMO2026", "Anthropic", "OpenAI", "GitHub", "中文", "English"];
 const ASCII_TECHNICAL = /^[\x20-\x7E]+$/;
 const ZH_ONLY_PREFIXES = ["dialogue.imageTemplates.slotLabel."];
 

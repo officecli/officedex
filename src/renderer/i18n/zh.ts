@@ -232,6 +232,13 @@ export const zh: Record<string, string> = {
   "settings.option.docType.xlsx": "Excel（.xlsx）",
   "settings.option.docType.report": "报告",
   "settings.option.docType.img": "图片",
+  "settings.group.appearance": "外观",
+  "settings.row.language.title": "界面语言",
+  "settings.row.language.desc": "选择 OfficeDex 界面的显示语言。",
+  "settings.option.language.zh": "中文",
+  "settings.option.language.en": "English",
+  "settings.notifications.label": "桌面通知",
+  "settings.notifications.desc": "窗口在后台时，生成完成后通知我",
   "settings.group.workspace": "工作区",
   "settings.row.outputDir.title": "工作区输出目录",
   "settings.row.outputDir.desc": "生成产物保存到磁盘的位置。留空时使用应用数据目录。",
@@ -300,6 +307,9 @@ export const zh: Record<string, string> = {
   "settings.row.reset.confirmBody": "将清除文档类型、模式、输出目录、Bridge 可执行文件路径以及 LLM 提供方配置。下次启动会重新进入引导。",
   "settings.common.cancel": "取消",
   "settings.common.ok": "确定",
+  "notification.title": "OfficeDex",
+  "notification.taskCompleted": "生成已完成",
+  "notification.taskFailed": "生成失败",
 
   // Diagnostics
   "diagnostics.title": "诊断",

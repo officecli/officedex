@@ -18,7 +18,8 @@ import { OnboardingScreen } from "./screens/OnboardingScreen";
 import { useSettings } from "./useSettings";
 import { useAppUpdate } from "./useAppUpdate";
 import { useCreditStatus } from "./useCreditStatus";
-import { useLocale } from "./i18n";
+import { useLocale, useT } from "./i18n";
+import { maybeNotify } from "./notifications";
 
 type SelectedTask =
   | { kind: "auto" }
@@ -54,6 +55,7 @@ export function App() {
   const appUpdate = useAppUpdate();
   const { credit, refresh: refreshCredit, nudgeForTaskTransition } = useCreditStatus();
   const locale = useLocale();
+  const t = useT();
   const antdLocale = locale === "zh" ? zhCN : enUS;
   const forceUpdate = appUpdate.status.mandatory && Boolean(appUpdate.release);
 
@@ -149,6 +151,12 @@ export function App() {
         setActiveNav("dialogue");
       }
       if (event.type === "task.completed" || event.type === "task.failed" || event.type === "task.cancelled") {
+        if (event.type === "task.completed") {
+          maybeNotify({ title: t("notification.title"), body: t("notification.taskCompleted") });
+        }
+        if (event.type === "task.failed") {
+          maybeNotify({ title: t("notification.title"), body: t("notification.taskFailed") });
+        }
         nudgeForTaskTransition();
       }
     });
@@ -168,7 +176,7 @@ export function App() {
         setCapabilityStatus(text);
       });
     return off;
-  }, [connectAttempt, clearError, recordError, settingsLoading, showOnboarding, forceUpdate, nudgeForTaskTransition]);
+  }, [connectAttempt, clearError, recordError, settingsLoading, showOnboarding, forceUpdate, nudgeForTaskTransition, t]);
 
   useEffect(() => {
     let cancelled = false;

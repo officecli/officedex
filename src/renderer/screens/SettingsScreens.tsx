@@ -22,8 +22,9 @@ import { officecli } from "../bridge";
 import { useSettings } from "../useSettings";
 import { useAppUpdate } from "../useAppUpdate";
 import { formatTestResult, ProviderForm } from "../components/ProviderForm";
-import { useT } from "../i18n";
+import { useT, useLocale, useSetLocale, type Locale } from "../i18n";
 import { defaultProxySettings, isValidProxyUrl } from "../defaults";
+import { readNotificationsEnabled, setNotificationsEnabled as persistNotificationsEnabled } from "../notifications";
 import type { AuthEvent, DocumentType, GenerateDefaults, LlmProvider, ProviderTestResult, ProxySettings, WhoAmIResult } from "../../shared/types";
 
 export function SettingsScreen({
@@ -35,6 +36,9 @@ export function SettingsScreen({
 } = {}) {
   const { settings, defaultWorkspaceDir, update: rawUpdate, loading, saving, error } = useSettings();
   const t = useT();
+  const locale = useLocale();
+  const setLocale = useSetLocale();
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => readNotificationsEnabled());
   const [whoami, setWhoami] = useState<WhoAmIResult | null>(null);
 
   useEffect(() => {
@@ -88,6 +92,14 @@ export function SettingsScreen({
       onOk: () => update({ onboardingCompletedAt: null }).catch(() => undefined),
     });
   }, [update, t]);
+
+  const updateNotificationsEnabled = useCallback((checked: boolean) => {
+    setNotificationsEnabled(checked);
+    persistNotificationsEnabled(checked);
+    if (checked && typeof Notification !== "undefined" && Notification.permission === "default") {
+      Notification.requestPermission().catch(() => undefined);
+    }
+  }, []);
 
   const resetAll = useCallback(() => {
     Modal.confirm({
@@ -160,6 +172,23 @@ export function SettingsScreen({
               </SettingRow>
               <SettingRow title={t("settings.row.enableImages.title")} desc={t("settings.row.enableImages.desc")}>
                 <Switch checked={settings.defaults.enableImages} onChange={(checked) => updateDefaults({ enableImages: checked })} />
+              </SettingRow>
+            </div>
+            <div className="setting-group">
+              <h2>{t("settings.group.appearance")}</h2>
+              <SettingRow title={t("settings.row.language.title")} desc={t("settings.row.language.desc")}>
+                <Select
+                  value={locale}
+                  onChange={(value: Locale) => setLocale(value)}
+                  options={[
+                    { value: "zh", label: t("settings.option.language.zh") },
+                    { value: "en", label: t("settings.option.language.en") },
+                  ]}
+                  style={{ minWidth: 220 }}
+                />
+              </SettingRow>
+              <SettingRow title={t("settings.notifications.label")} desc={t("settings.notifications.desc")}>
+                <Switch checked={notificationsEnabled} onChange={updateNotificationsEnabled} />
               </SettingRow>
             </div>
             <div className="setting-group">
