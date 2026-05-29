@@ -686,7 +686,7 @@ describe("App task flow", () => {
     expect(composer).toBeTruthy();
     const textarea = within(composer).getByRole("textbox");
     fireEvent.change(textarea, { target: { value: "Make the sky brighter" } });
-    const submitBtn = composer.querySelector("button")!;
+    const submitBtn = composer.querySelector(".composer-row .ant-btn-primary")!;
     fireEvent.click(submitBtn);
 
     await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
