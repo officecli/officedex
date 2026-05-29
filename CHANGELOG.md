@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [0.5.7] - 2026-05-29
+
+### Added
+- Guided slot fill for image generation templates. When a template defines structured slots, the composer now renders a per-field form with a live preview instead of dropping a several-hundred-word prompt into the textarea. Unfilled slots show their default value or a `[label]` placeholder (never the raw `{{key}}`), required slots block submission, and values containing `{{` are rejected. The raw prompt stays available as an editable escape hatch, and "reset to template" re-applies the slot form. Templates without slots keep the existing raw-textarea behavior.
+
 ## [0.5.5] - 2026-05-28
 
 ### Changed
