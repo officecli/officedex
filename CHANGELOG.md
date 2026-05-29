@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [0.5.8] - 2026-05-29
+
+### Added
+- Language switcher in Settings with full English/Simplified Chinese localization across the UI.
+- Desktop notifications for long-running generation and rendering tasks.
+- Image generation template picker now shows a loading spinner, a refresh button, and localized template labels.
+
+### Changed
+- Reworked the sidebar and follow-up replies to be conversation-centric so multi-turn threads stay grouped.
+- Refresh the runtime bridge after authentication state changes so newly logged-in sessions pick up bindings without a restart.
+
+### Fixed
+- Bundle a universal2 (Intel + Apple Silicon) officecli binary so the generation CLI no longer crashes with "bad CPU type in executable" on Intel Macs.
+- Bundle a universal2 extrender binary so rich document previews (e.g. PPTX) render as slides instead of falling back to plain text on Intel Macs. Release builds now fail if either bundled binary is missing an architecture slice.
+
 ## [0.5.7] - 2026-05-29
 
 ### Added
