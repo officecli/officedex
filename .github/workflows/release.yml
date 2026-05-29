@@ -124,6 +124,23 @@ jobs:
             --source build/officecli/officecli \
             --identity "$APPLE_DEVELOPER_ID"
 
+      - name: Verify bundled officecli is universal2 (macOS)
+        if: runner.os == 'macOS'
+        # The .app is darwin/universal; an arch-specific officecli would crash on
+        # the other architecture with "bad CPU type in executable". Fail the
+        # release rather than ship a binary that bricks Intel (or Apple Silicon).
+        run: |
+          set -euo pipefail
+          bin="build/bin/OfficeDex.app/Contents/Resources/officecli/officecli"
+          archs="$(lipo -archs "$bin")"
+          echo "bundled officecli archs: $archs"
+          for required in x86_64 arm64; do
+            echo "$archs" | grep -qw "$required" || {
+              echo "::error::bundled officecli is missing the $required slice (got: $archs)"
+              exit 1
+            }
+          done
+
       - name: Bundle extrender (macOS)
         if: runner.os == 'macOS'
         env:

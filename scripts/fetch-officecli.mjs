@@ -1,8 +1,16 @@
 #!/usr/bin/env node
 // Downloads the officecli Go binary from officecli/officecli-dist releases,
 // verifies its SHA256 against checksums.txt, extracts the tarball, and stages
-// the binary under build/officecli/ so electron-builder can bundle it as an
-// extraResource. Idempotent: re-running with the same version is a no-op.
+// the binary under build/officecli/ so the packaging scripts can bundle it.
+// Idempotent: re-running with the same version/target is a no-op.
+//
+// On macOS the staged binary is a universal2 (x86_64 + arm64) Mach-O built by
+// fetching both per-arch tarballs and merging them with `lipo`. This is
+// required because the release builds a `darwin/universal` .app: an arch-
+// specific officecli would crash on the other architecture with
+// "bad CPU type in executable". Set OFFICECLI_TARGET_ARCH to force a single
+// slice (escape hatch for dev/iteration); Windows and Linux are always single
+// slice.
 //
 // VERSION resolution:
 //   - "latest" (or empty) → resolved via the GitHub releases API.
@@ -11,7 +19,7 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync } from "node:fs";
-import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, copyFile, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,13 +35,18 @@ if (!REQUESTED_VERSION) {
 }
 
 const TARGET_PLATFORM = process.env.OFFICECLI_TARGET_PLATFORM || process.platform;
-const TARGET_ARCH = process.env.OFFICECLI_TARGET_ARCH || process.arch;
+const ARCH_OVERRIDE = (process.env.OFFICECLI_TARGET_ARCH || "").trim();
 const FORCE = process.env.OFFICECLI_FORCE === "1";
 
 const OS_KEY = mapPlatform(TARGET_PLATFORM);
-const ARCH_KEY = mapArch(TARGET_ARCH);
 const IS_WINDOWS = OS_KEY === "windows";
 const BINARY_NAME = IS_WINDOWS ? "officecli.exe" : "officecli";
+
+// macOS ships a universal2 binary so the darwin/universal .app runs on both
+// Intel and Apple Silicon. An explicit arch override forces a single slice.
+const UNIVERSAL = OS_KEY === "darwin" && ARCH_OVERRIDE === "";
+const ARCH_KEYS = UNIVERSAL ? ["amd64", "arm64"] : [mapArch(ARCH_OVERRIDE || process.arch)];
+const STAGE_ARCH = UNIVERSAL ? "universal" : ARCH_KEYS[0];
 
 const STAGE_DIR = path.join(REPO_ROOT, "build", "officecli");
 const STAGED_BINARY = path.join(STAGE_DIR, BINARY_NAME);
@@ -43,93 +56,168 @@ await main();
 
 async function main() {
   const VERSION = await resolveVersion(REQUESTED_VERSION);
-  const TARBALL_NAME = `officecli_${VERSION}_${OS_KEY}_${ARCH_KEY}.tar.gz`;
-  const RELEASE_BASE = `https://github.com/${DIST_REPO}/releases/download/v${VERSION}`;
-  const TARBALL_URL = `${RELEASE_BASE}/${TARBALL_NAME}`;
-  const CHECKSUMS_URL = `${RELEASE_BASE}/checksums.txt`;
 
   if (!FORCE && (await hasMatchingStage(VERSION))) {
-    console.log(`[fetch-officecli] already staged: ${VERSION} ${OS_KEY}/${ARCH_KEY} — skipping`);
+    console.log(`[fetch-officecli] already staged: ${VERSION} ${OS_KEY}/${STAGE_ARCH} — skipping`);
     return;
   }
 
-  console.log(`[fetch-officecli] target ${OS_KEY}/${ARCH_KEY}, version v${VERSION}${REQUESTED_VERSION === "latest" ? " (resolved from \"latest\")" : ""}`);
-  console.log(`[fetch-officecli] tarball: ${TARBALL_URL}`);
+  const RELEASE_BASE = `https://github.com/${DIST_REPO}/releases/download/v${VERSION}`;
+  const CHECKSUMS_URL = `${RELEASE_BASE}/checksums.txt`;
+
+  console.log(
+    `[fetch-officecli] target ${OS_KEY}/${STAGE_ARCH}, version v${VERSION}` +
+      `${REQUESTED_VERSION === "latest" ? ' (resolved from "latest")' : ""}`,
+  );
 
   // checksums.txt may be absent in older releases. If we can fetch it AND it
-  // contains an entry for our tarball, verification is mandatory. If either
-  // step fails we proceed but warn loudly — better to ship than to brick CI on
-  // a manifest schema gap.
-  let expectedSha = null;
+  // contains an entry for a tarball, verification is mandatory for that
+  // tarball. If either step fails we proceed but warn loudly — better to ship
+  // than to brick CI on a manifest schema gap.
+  let checksumsText = null;
   try {
-    const checksumsText = await fetchText(CHECKSUMS_URL);
-    expectedSha = findChecksum(checksumsText, TARBALL_NAME);
-    if (!expectedSha) {
-      console.warn(`[fetch-officecli] WARNING: checksums.txt at ${CHECKSUMS_URL} does not contain ${TARBALL_NAME}; integrity check skipped`);
-    }
+    checksumsText = await fetchText(CHECKSUMS_URL);
   } catch (err) {
     console.warn(`[fetch-officecli] WARNING: could not fetch checksums.txt (${err.message}); integrity check skipped`);
   }
 
   const work = mkdtempSync(path.join(tmpdir(), "officedex-fetch-officecli-"));
   try {
-    const tarballPath = path.join(work, TARBALL_NAME);
-    await fetchToFile(TARBALL_URL, tarballPath);
-
-    const actualSha = await sha256File(tarballPath);
-    if (expectedSha) {
-      if (actualSha !== expectedSha) {
-        fail(`SHA256 mismatch for ${TARBALL_NAME}\n  expected: ${expectedSha}\n  actual:   ${actualSha}`);
-      }
-      console.log(`[fetch-officecli] sha256 ok (${actualSha.slice(0, 12)}…)`);
-    } else {
-      console.warn(`[fetch-officecli] no expected sha256; downloaded sha256=${actualSha.slice(0, 12)}…`);
+    const slices = [];
+    for (const archKey of ARCH_KEYS) {
+      slices.push(await fetchArchBinary(VERSION, RELEASE_BASE, archKey, checksumsText, work));
     }
-
-    const extractDir = path.join(work, "extracted");
-    await mkdir(extractDir, { recursive: true });
-    runTar(tarballPath, extractDir);
-
-    const extractedBinary = path.join(extractDir, BINARY_NAME);
-    await stat(extractedBinary); // ensure tarball contained the binary at the top level
 
     await mkdir(STAGE_DIR, { recursive: true });
-    await rm(STAGED_BINARY, { force: true });
-    try {
-      await rename(extractedBinary, STAGED_BINARY);
-    } catch (err) {
-      // EXDEV: rename across volumes is not allowed on Windows (the temp dir
-      // lives on C: while the workspace can be on D:). Fall back to a
-      // copy + delete which works for any combination of source/target volumes.
-      if (err && err.code === "EXDEV") {
-        const { copyFile } = await import("node:fs/promises");
-        await copyFile(extractedBinary, STAGED_BINARY);
-        await rm(extractedBinary, { force: true });
-      } else {
-        throw err;
-      }
+
+    // Build the binary at a temp path inside STAGE_DIR, then atomically rename
+    // over the staged binary on success. This way a lipo/move failure leaves
+    // any previously staged binary intact instead of deleting it up front.
+    const tmpBinary = `${STAGED_BINARY}.tmp`;
+    await rm(tmpBinary, { force: true });
+
+    if (slices.length === 1) {
+      await moveInto(slices[0].binaryPath, tmpBinary);
+    } else {
+      lipoCreate(slices.map((s) => s.binaryPath), tmpBinary);
+      assertUniversal(tmpBinary);
     }
+
     if (!IS_WINDOWS) {
-      const { chmod } = await import("node:fs/promises");
-      await chmod(STAGED_BINARY, 0o755);
+      await chmod(tmpBinary, 0o755);
     }
+    await rename(tmpBinary, STAGED_BINARY);
 
     const versionRecord = {
       version: VERSION,
       requested: REQUESTED_VERSION,
       platform: OS_KEY,
-      arch: ARCH_KEY,
-      tarball: TARBALL_NAME,
-      sha256: expectedSha ?? actualSha,
-      sha256Verified: Boolean(expectedSha),
+      arch: STAGE_ARCH,
       source: DIST_REPO,
       fetchedAt: new Date().toISOString(),
     };
+    if (slices.length === 1) {
+      versionRecord.tarball = slices[0].tarball;
+      versionRecord.sha256 = slices[0].sha256;
+      versionRecord.sha256Verified = slices[0].verified;
+    } else {
+      versionRecord.slices = Object.fromEntries(
+        slices.map((s) => [s.arch, { tarball: s.tarball, sha256: s.sha256, sha256Verified: s.verified }]),
+      );
+    }
     await writeFile(STAGED_VERSION, `${JSON.stringify(versionRecord, null, 2)}\n`, "utf8");
-    console.log(`[fetch-officecli] staged ${STAGED_BINARY}`);
+    console.log(`[fetch-officecli] staged ${STAGED_BINARY} (${STAGE_ARCH})`);
   } finally {
     await rm(work, { recursive: true, force: true }).catch(() => undefined);
   }
+}
+
+// fetchArchBinary downloads one per-arch tarball, verifies its sha256 (when an
+// expected value is available), extracts it, and returns the path to the
+// extracted binary plus integrity metadata.
+async function fetchArchBinary(version, releaseBase, archKey, checksumsText, work) {
+  const tarballName = `officecli_${version}_${OS_KEY}_${archKey}.tar.gz`;
+  const tarballUrl = `${releaseBase}/${tarballName}`;
+  console.log(`[fetch-officecli] tarball: ${tarballUrl}`);
+
+  let expectedSha = null;
+  if (checksumsText) {
+    expectedSha = findChecksum(checksumsText, tarballName);
+    if (!expectedSha) {
+      console.warn(`[fetch-officecli] WARNING: checksums.txt does not contain ${tarballName}; integrity check skipped`);
+    }
+  }
+
+  const tarballPath = path.join(work, tarballName);
+  await fetchToFile(tarballUrl, tarballPath);
+
+  const actualSha = await sha256File(tarballPath);
+  if (expectedSha) {
+    if (actualSha !== expectedSha) {
+      fail(`SHA256 mismatch for ${tarballName}\n  expected: ${expectedSha}\n  actual:   ${actualSha}`);
+    }
+    console.log(`[fetch-officecli] sha256 ok (${actualSha.slice(0, 12)}…) for ${archKey}`);
+  } else {
+    console.warn(`[fetch-officecli] no expected sha256 for ${archKey}; downloaded sha256=${actualSha.slice(0, 12)}…`);
+  }
+
+  const extractDir = path.join(work, `extracted-${archKey}`);
+  await mkdir(extractDir, { recursive: true });
+  runTar(tarballPath, extractDir);
+
+  const extractedBinary = path.join(extractDir, BINARY_NAME);
+  await stat(extractedBinary); // ensure tarball contained the binary at the top level
+
+  return {
+    arch: archKey,
+    binaryPath: extractedBinary,
+    tarball: tarballName,
+    sha256: expectedSha ?? actualSha,
+    verified: Boolean(expectedSha),
+  };
+}
+
+// moveInto renames a file, falling back to copy+delete across volumes (EXDEV),
+// which Windows hits when the temp dir is on C: and the workspace on D:.
+async function moveInto(src, dest) {
+  try {
+    await rename(src, dest);
+  } catch (err) {
+    if (err && err.code === "EXDEV") {
+      await copyFile(src, dest);
+      await rm(src, { force: true });
+    } else {
+      throw err;
+    }
+  }
+}
+
+// lipoCreate merges per-arch Mach-O binaries into a single universal2 binary.
+function lipoCreate(inputs, output) {
+  const result = spawnSync("lipo", ["-create", ...inputs, "-output", output], { stdio: "inherit" });
+  if (result.error) {
+    fail(`lipo failed to run (${result.error.message}); is the Xcode command line tools installed?`);
+  }
+  if (result.status !== 0) {
+    fail(`lipo -create exited with code ${result.status}`);
+  }
+}
+
+// assertUniversal fails the build unless the staged binary carries both the
+// x86_64 and arm64 slices — the exact invariant that prevents Intel users from
+// hitting "bad CPU type in executable".
+function assertUniversal(binary) {
+  const result = spawnSync("lipo", ["-archs", binary], { encoding: "utf8" });
+  if (result.status !== 0) {
+    fail(`lipo -archs ${binary} exited with code ${result.status}`);
+  }
+  const archs = String(result.stdout || "").trim().split(/\s+/);
+  for (const required of ["x86_64", "arm64"]) {
+    if (!archs.includes(required)) {
+      fail(`staged universal officecli is missing the ${required} slice (got: ${archs.join(", ")})`);
+    }
+  }
+  console.log(`[fetch-officecli] universal2 verified: ${archs.join(", ")}`);
 }
 
 // resolveVersion maps the requested version string to a concrete semver
@@ -163,7 +251,7 @@ async function hasMatchingStage(version) {
   try {
     const text = await readFile(STAGED_VERSION, "utf8");
     const meta = JSON.parse(text);
-    return meta.version === version && meta.platform === OS_KEY && meta.arch === ARCH_KEY;
+    return meta.version === version && meta.platform === OS_KEY && meta.arch === STAGE_ARCH;
   } catch {
     return false;
   }
@@ -227,6 +315,7 @@ function mapPlatform(p) {
 function mapArch(a) {
   switch (a) {
     case "x64": return "amd64";
+    case "amd64": return "amd64";
     case "arm64": return "arm64";
     default: fail(`unsupported arch: ${a}`);
   }
