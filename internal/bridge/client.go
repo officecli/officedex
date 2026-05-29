@@ -308,15 +308,26 @@ func (c *Client) GetCapabilities(ctx context.Context) ([]byte, error) {
 	return c.Request(ctx, "capabilities/get", nil)
 }
 
+type bridgeImagePromptSlot struct {
+	Key          string `json:"key"`
+	Label        string `json:"label"`
+	Example      string `json:"example,omitempty"`
+	DefaultValue string `json:"default_value,omitempty"`
+	HelpText     string `json:"help_text,omitempty"`
+	Required     bool   `json:"required,omitempty"`
+	Multiline    bool   `json:"multiline,omitempty"`
+}
+
 type bridgeImagePromptTemplate struct {
-	ID           uint64 `json:"id"`
-	Slug         string `json:"slug"`
-	Title        string `json:"title"`
-	Description  string `json:"description"`
-	PromptPreset string `json:"prompt_preset"`
-	ThumbnailURL string `json:"thumbnail_url,omitempty"`
-	SortOrder    int    `json:"sort_order"`
-	Enabled      bool   `json:"enabled"`
+	ID           uint64                  `json:"id"`
+	Slug         string                  `json:"slug"`
+	Title        string                  `json:"title"`
+	Description  string                  `json:"description"`
+	PromptPreset string                  `json:"prompt_preset"`
+	ThumbnailURL string                  `json:"thumbnail_url,omitempty"`
+	SortOrder    int                     `json:"sort_order"`
+	Enabled      bool                    `json:"enabled"`
+	Slots        []bridgeImagePromptSlot `json:"slots,omitempty"`
 }
 
 // ListImageTemplates calls "image_templates/list" and maps bridge snake_case
@@ -332,6 +343,21 @@ func (c *Client) ListImageTemplates(ctx context.Context) ([]types.ImagePromptTem
 	}
 	items := make([]types.ImagePromptTemplate, 0, len(bridgeItems))
 	for _, item := range bridgeItems {
+		var slots []types.ImagePromptSlot
+		if len(item.Slots) > 0 {
+			slots = make([]types.ImagePromptSlot, 0, len(item.Slots))
+			for _, s := range item.Slots {
+				slots = append(slots, types.ImagePromptSlot{
+					Key:          s.Key,
+					Label:        s.Label,
+					Example:      s.Example,
+					DefaultValue: s.DefaultValue,
+					HelpText:     s.HelpText,
+					Required:     s.Required,
+					Multiline:    s.Multiline,
+				})
+			}
+		}
 		items = append(items, types.ImagePromptTemplate{
 			ID:           item.ID,
 			Slug:         item.Slug,
@@ -341,6 +367,7 @@ func (c *Client) ListImageTemplates(ctx context.Context) ([]types.ImagePromptTem
 			ThumbnailURL: item.ThumbnailURL,
 			SortOrder:    item.SortOrder,
 			Enabled:      item.Enabled,
+			Slots:        slots,
 		})
 	}
 	return items, nil

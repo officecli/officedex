@@ -2,7 +2,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DesktopAPI, DesktopTask, GenerateInput } from "../../shared/types";
 import { officecli } from "../bridge";
-import { DialogueScreen } from "./DialogueScreens";
+import { DialogueScreen, assembleSlots } from "./DialogueScreens";
+import type { ImagePromptSlot } from "../../shared/types";
 
 function installDomStubs() {
   Object.defineProperty(window, "matchMedia", {
@@ -295,6 +296,148 @@ describe("DialogueScreen state machine", () => {
   });
 });
 
+const SLOTTED_TEMPLATE = {
+  id: 8,
+  slug: "promo",
+  title: "Promo",
+  description: "Promo poster",
+  promptPreset: "Poster for {{product}}, {{style}} style. Notes: {{notes}}",
+  thumbnailUrl: "/api/image-templates/8/thumbnail",
+  sortOrder: 5,
+  enabled: true,
+  slots: [
+    { key: "product", label: "Product", example: "PRODUCT_HINT", required: true },
+    { key: "style", label: "Style", example: "STYLE_HINT", defaultValue: "minimalist" },
+    { key: "notes", label: "Notes", example: "NOTES_HINT", multiline: true },
+  ] as ImagePromptSlot[],
+};
+
+async function selectSlottedTemplate() {
+  render(<DialogueScreen {...baseProps()} newGenerationDraft={{ documentType: "img", topic: "", prompt: "", mode: "fast" }} />);
+  expect(await screen.findByText("Promo")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: /Promo/i }));
+  return screen.getByPlaceholderText("PRODUCT_HINT") as HTMLInputElement;
+}
+
+describe("assembleSlots (pure assembly)", () => {
+  const slots: ImagePromptSlot[] = [
+    { key: "product", label: "Product", defaultValue: "a gadget" },
+    { key: "style", label: "Style" },
+  ];
+
+  it("uses the user value when provided", () => {
+    expect(assembleSlots("Make {{product}} in {{style}}", slots, { product: "shoes", style: "retro" }))
+      .toBe("Make shoes in retro");
+  });
+
+  it("falls back to defaultValue, then [label] — never the literal marker", () => {
+    const out = assembleSlots("Make {{product}} in {{style}}", slots, {});
+    expect(out).toBe("Make a gadget in [Style]");
+    expect(out).not.toContain("{{");
+  });
+
+  it("treats a whitespace-only value as empty", () => {
+    expect(assembleSlots("X {{product}}", slots, { product: "   " })).toBe("X a gadget");
+  });
+
+  it("leaves orphan markers (no matching slot) verbatim", () => {
+    expect(assembleSlots("Has {{ghost}} marker", slots, {})).toBe("Has {{ghost}} marker");
+  });
+});
+
+describe("Image template slots (guided fill-in)", () => {
+  it("renders the slot form with a multiline field and a live preview free of markers", async () => {
+    listImageTemplatesSpy.mockResolvedValueOnce([SLOTTED_TEMPLATE]);
+    await selectSlottedTemplate();
+
+    expect(screen.getByText("Fill in the template")).toBeTruthy();
+    // multiline slot renders a <textarea>, single-line slots render <input>
+    expect((screen.getByPlaceholderText("PRODUCT_HINT") as HTMLElement).tagName).toBe("INPUT");
+    expect((screen.getByPlaceholderText("NOTES_HINT") as HTMLElement).tagName).toBe("TEXTAREA");
+
+    const preview = document.querySelector(".template-slot-preview-body")!;
+    expect(preview.textContent).toBe("Poster for [Product], minimalist style. Notes: [Notes]");
+    expect(preview.textContent).not.toContain("{{");
+  });
+
+  it("updates the preview live as slots are filled", async () => {
+    listImageTemplatesSpy.mockResolvedValueOnce([SLOTTED_TEMPLATE]);
+    const productInput = await selectSlottedTemplate();
+    fireEvent.change(productInput, { target: { value: "sneakers" } });
+
+    const preview = document.querySelector(".template-slot-preview-body")!;
+    expect(preview.textContent).toBe("Poster for sneakers, minimalist style. Notes: [Notes]");
+  });
+
+  it("blocks submit when a required slot is empty", async () => {
+    listImageTemplatesSpy.mockResolvedValueOnce([SLOTTED_TEMPLATE]);
+    const onSubmit = vi.fn(async (_values: GenerateInput) => undefined);
+    render(<DialogueScreen {...baseProps({ onSubmit })} newGenerationDraft={{ documentType: "img", topic: "", prompt: "", mode: "fast" }} />);
+    expect(await screen.findByText("Promo")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Promo/i }));
+
+    const productInput = screen.getByPlaceholderText("PRODUCT_HINT");
+    fireEvent.submit(productInput.closest("form")!);
+
+    await waitFor(() => expect(screen.getAllByText(/Please fill in Product/i).length).toBeGreaterThan(0));
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("rejects a slot value containing double-brace markers", async () => {
+    listImageTemplatesSpy.mockResolvedValueOnce([SLOTTED_TEMPLATE]);
+    const onSubmit = vi.fn(async (_values: GenerateInput) => undefined);
+    render(<DialogueScreen {...baseProps({ onSubmit })} newGenerationDraft={{ documentType: "img", topic: "", prompt: "", mode: "fast" }} />);
+    expect(await screen.findByText("Promo")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Promo/i }));
+
+    const productInput = screen.getByPlaceholderText("PRODUCT_HINT");
+    fireEvent.change(productInput, { target: { value: "evil {{inject}}" } });
+    fireEvent.submit(productInput.closest("form")!);
+
+    await waitFor(() => expect(screen.getAllByText(/double-brace markers/i).length).toBeGreaterThan(0));
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("submits the assembled prompt (slots filled) with no promptTemplateId", async () => {
+    listImageTemplatesSpy.mockResolvedValueOnce([SLOTTED_TEMPLATE]);
+    const onSubmit = vi.fn(async (_values: GenerateInput) => undefined);
+    render(<DialogueScreen {...baseProps({ onSubmit })} newGenerationDraft={{ documentType: "img", topic: "", prompt: "", mode: "fast" }} />);
+    expect(await screen.findByText("Promo")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Promo/i }));
+
+    fireEvent.change(screen.getByPlaceholderText("PRODUCT_HINT"), { target: { value: "sneakers" } });
+    fireEvent.change(screen.getByPlaceholderText("NOTES_HINT"), { target: { value: "bright colors" } });
+    fireEvent.submit(screen.getByPlaceholderText("PRODUCT_HINT").closest("form")!);
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const submitted = onSubmit.mock.calls[0][0];
+    expect(submitted).toEqual(expect.objectContaining({
+      documentType: "img",
+      prompt: "Poster for sneakers, minimalist style. Notes: bright colors",
+    }));
+    expect(submitted).not.toHaveProperty("promptTemplateId");
+  });
+
+  it("escape hatch: editing the raw prompt detaches slots, and reset re-attaches them", async () => {
+    listImageTemplatesSpy.mockResolvedValueOnce([SLOTTED_TEMPLATE]);
+    await selectSlottedTemplate();
+
+    // Open the raw prompt editor, then edit it to decouple from the slots.
+    fireEvent.click(screen.getByRole("button", { name: /Edit raw prompt/i }));
+    const rawTextarea = screen.getByPlaceholderText(/Enter what you want to generate/i);
+    fireEvent.change(rawTextarea, { target: { value: "fully custom raw prompt" } });
+
+    expect(screen.getByText(/You're editing the raw prompt/i)).toBeTruthy();
+    expect(screen.queryByText("Fill in the template")).toBeNull();
+
+    // Reset re-seeds the guided form and restores the assembled prompt.
+    fireEvent.click(screen.getByRole("button", { name: /Reset to template/i }));
+    expect(screen.getByText("Fill in the template")).toBeTruthy();
+    expect((screen.getByPlaceholderText(/Enter what you want to generate/i) as HTMLTextAreaElement).value)
+      .toBe("Poster for [Product], minimalist style. Notes: [Notes]");
+  });
+});
+
 describe("Conversation multi-round", () => {
   it("renders time markers for each task round", () => {
     const task1: DesktopTask = {
@@ -370,7 +513,7 @@ describe("Bottom continuation composer — acceptance criteria", () => {
   it("T4: submit button disabled when textarea empty, enabled with non-whitespace", () => {
     const task = makeCompletedImageTask();
     render(<DialogueScreen {...baseProps()} tasks={[task]} />);
-    const submitBtn = screen.getByTestId("continuation-composer").querySelector("button")!;
+    const submitBtn = document.querySelector(".composer-row .ant-btn-primary") as HTMLButtonElement;
     expect(submitBtn.disabled).toBe(true);
 
     const textarea = screen.getByPlaceholderText(/describe what you want to generate/i);
@@ -385,7 +528,7 @@ describe("Bottom continuation composer — acceptance criteria", () => {
 
     const textarea = screen.getByPlaceholderText(/describe what you want to generate/i);
     fireEvent.change(textarea, { target: { value: "Add a sunset" } });
-    const submitBtn = screen.getByTestId("continuation-composer").querySelector("button")!;
+    const submitBtn = document.querySelector(".composer-row .ant-btn-primary") as HTMLButtonElement;
     fireEvent.click(submitBtn);
 
     expect(onContinueGeneration).toHaveBeenCalledTimes(1);
@@ -406,5 +549,41 @@ describe("Bottom continuation composer — acceptance criteria", () => {
     fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
     expect(onContinueGeneration).toHaveBeenCalledTimes(1);
     expect(onContinueGeneration).toHaveBeenCalledWith("img", "Brighten colors", undefined);
+  });
+
+  it("adds a completed image as a continuation reference only after Continue editing is clicked", () => {
+    const onContinueGeneration = vi.fn();
+    const task = makeCompletedImageTask();
+    render(<DialogueScreen {...baseProps({ onContinueGeneration })} tasks={[task]} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /continue editing/i }));
+    fireEvent.click(screen.getByRole("button", { name: /continue editing/i }));
+
+    expect(document.querySelectorAll(".reference-image-chip")).toHaveLength(1);
+    const textarea = screen.getByPlaceholderText(/describe what you want to generate/i);
+    fireEvent.change(textarea, { target: { value: "Add a sunset" } });
+    const submitBtn = document.querySelector(".composer-row .ant-btn-primary")!;
+    fireEvent.click(submitBtn);
+
+    expect(onContinueGeneration).toHaveBeenCalledTimes(1);
+    expect(onContinueGeneration).toHaveBeenCalledWith("img", "Add a sunset", ["/tmp/banner.png"]);
+  });
+
+  it("does not submit a generated image reference after it is removed from the continuation composer", () => {
+    const onContinueGeneration = vi.fn();
+    const task = makeCompletedImageTask();
+    render(<DialogueScreen {...baseProps({ onContinueGeneration })} tasks={[task]} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /continue editing/i }));
+    fireEvent.click(screen.getByRole("button", { name: /remove banner.png/i }));
+
+    expect(document.querySelectorAll(".reference-image-chip")).toHaveLength(0);
+    const textarea = screen.getByPlaceholderText(/describe what you want to generate/i);
+    fireEvent.change(textarea, { target: { value: "Add a sunset" } });
+    const submitBtn = document.querySelector(".composer-row .ant-btn-primary")!;
+    fireEvent.click(submitBtn);
+
+    expect(onContinueGeneration).toHaveBeenCalledTimes(1);
+    expect(onContinueGeneration).toHaveBeenCalledWith("img", "Add a sunset", undefined);
   });
 });

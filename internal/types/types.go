@@ -149,15 +149,26 @@ type GenerateInput struct {
 	LocalPreview     bool         `json:"localPreview,omitempty"`
 }
 
+type ImagePromptSlot struct {
+	Key          string `json:"key"`
+	Label        string `json:"label"`
+	Example      string `json:"example,omitempty"`
+	DefaultValue string `json:"defaultValue,omitempty"`
+	HelpText     string `json:"helpText,omitempty"`
+	Required     bool   `json:"required,omitempty"`
+	Multiline    bool   `json:"multiline,omitempty"`
+}
+
 type ImagePromptTemplate struct {
-	ID           uint64 `json:"id"`
-	Slug         string `json:"slug"`
-	Title        string `json:"title"`
-	Description  string `json:"description"`
-	PromptPreset string `json:"promptPreset"`
-	ThumbnailURL string `json:"thumbnailUrl,omitempty"`
-	SortOrder    int    `json:"sortOrder"`
-	Enabled      bool   `json:"enabled"`
+	ID           uint64            `json:"id"`
+	Slug         string            `json:"slug"`
+	Title        string            `json:"title"`
+	Description  string            `json:"description"`
+	PromptPreset string            `json:"promptPreset"`
+	ThumbnailURL string            `json:"thumbnailUrl,omitempty"`
+	SortOrder    int               `json:"sortOrder"`
+	Enabled      bool              `json:"enabled"`
+	Slots        []ImagePromptSlot `json:"slots,omitempty"`
 }
 
 type TaskQuestionOption struct {

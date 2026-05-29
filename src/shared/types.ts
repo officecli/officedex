@@ -147,6 +147,17 @@ export interface TaskUserInput {
   referenceImages?: string[];
 }
 
+export interface ImagePromptSlot {
+  /** Matches a {{key}} marker in promptPreset. Server-validated as ^[a-z0-9_]+$ and unique. */
+  key: string;
+  label: string;
+  example?: string;
+  defaultValue?: string;
+  helpText?: string;
+  required?: boolean;
+  multiline?: boolean;
+}
+
 export interface ImagePromptTemplate {
   id: number;
   slug: string;
@@ -156,6 +167,8 @@ export interface ImagePromptTemplate {
   thumbnailUrl?: string;
   sortOrder: number;
   enabled: boolean;
+  /** When present and non-empty, the renderer shows a guided fill-in form instead of the raw textarea. */
+  slots?: ImagePromptSlot[];
 }
 
 export interface DesktopTask {

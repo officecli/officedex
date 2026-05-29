@@ -19,8 +19,9 @@ import {
   UserOutlined,
   WarningFilled,
 } from "@ant-design/icons";
-import { useEffect, useRef, useState, type ClipboardEvent } from "react";
-import type { Artifact, BridgeEvent, DesktopTask, DocumentType, GenerateInput, ImagePromptTemplate, StageState } from "../../shared/types";
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent } from "react";
+import { getAttachmentSpec } from "../../shared/types";
+import type { Artifact, BridgeEvent, DesktopTask, DocumentType, GenerateInput, ImagePromptSlot, ImagePromptTemplate, StageState } from "../../shared/types";
 import { defaultGenerateInput } from "../defaults";
 import { useSettings } from "../useSettings";
 import { useAttachments } from "../useAttachments";
@@ -74,6 +75,28 @@ const EMPTY_NEW_GENERATION_DRAFT: NewGenerationDraft = {
   mode: "fast",
 };
 
+/**
+ * Frontend-only assembly of a slotted image-template preset into a flat prompt.
+ * For each `{{key}}` marker: a matching slot resolves to the user value, then its
+ * defaultValue, then `[label]` — never the literal `{{key}}`. Orphan markers with
+ * no matching slot are left verbatim (admin-side warns; runtime stays lossless).
+ */
+export function assembleSlots(
+  preset: string,
+  slots: ImagePromptSlot[],
+  values: Record<string, string>,
+): string {
+  const byKey = new Map(slots.map((slot) => [slot.key, slot] as const));
+  return preset.replace(/\{\{(\w+)\}\}/g, (match, key: string) => {
+    const slot = byKey.get(key);
+    if (!slot) return match;
+    const raw = values[key];
+    if (raw && raw.trim()) return raw;
+    if (slot.defaultValue) return slot.defaultValue;
+    return `[${slot.label}]`;
+  });
+}
+
 export function DialogueScreen({ tasks, conversationId, artifacts, newGenerationDraft, busy, lastError, errorKind, errorDetails, bridgeStatus, onSubmit, onOpenSettings, onOpenLogin, onRetry, onPreview, onNewGenerationDraftChange, onForceCancel, onContinueGeneration }: DialogueProps) {
   if (lastError) {
     return <ConnectionFailure kind={errorKind} status={bridgeStatus} error={lastError} details={errorDetails} onOpenSettings={onOpenSettings} onOpenLogin={onOpenLogin} onRetry={onRetry} />;
@@ -101,6 +124,19 @@ function FluidNewGeneration({ draft, busy, onSubmit, onDraftChange }: {
   const [imageTemplates, setImageTemplates] = useState<ImagePromptTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [templatesError, setTemplatesError] = useState("");
+  const [slotValues, setSlotValues] = useState<Record<string, string>>({});
+  const [slotErrors, setSlotErrors] = useState<Record<string, string>>({});
+  const [rawDecoupled, setRawDecoupled] = useState(false);
+  const [rawOpen, setRawOpen] = useState(false);
+  const selectedTemplate = useMemo(
+    () => imageTemplates.find((tpl) => String(tpl.id) === selectedTemplateId),
+    [imageTemplates, selectedTemplateId],
+  );
+  const slots = useMemo(() => selectedTemplate?.slots ?? [], [selectedTemplate]);
+  const hasSlots = slots.length > 0;
+  const assembledPreview = hasSlots && selectedTemplate
+    ? assembleSlots(selectedTemplate.promptPreset, slots, slotValues)
+    : "";
   const attachments = useAttachments(docType, {
     sourceFile: draft.sourceFile ?? null,
     referenceImages: draft.referenceImages ?? [],
@@ -121,6 +157,10 @@ function FluidNewGeneration({ draft, busy, onSubmit, onDraftChange }: {
       form.setFieldValue("promptTemplateId", undefined);
       setSelectedTemplateId(undefined);
       setTemplatesError("");
+      setSlotValues({});
+      setSlotErrors({});
+      setRawDecoupled(false);
+      setRawOpen(false);
       return;
     }
     let cancelled = false;
@@ -148,10 +188,36 @@ function FluidNewGeneration({ draft, busy, onSubmit, onDraftChange }: {
     onDraftChange(patch);
   }
 
+  function seedSlots(template: ImagePromptTemplate) {
+    const templateSlots = template.slots ?? [];
+    const initial: Record<string, string> = {};
+    for (const slot of templateSlots) initial[slot.key] = slot.defaultValue ?? "";
+    const assembled = assembleSlots(template.promptPreset, templateSlots, initial);
+    setSlotValues(initial);
+    setSlotErrors({});
+    setRawDecoupled(false);
+    setRawOpen(false);
+    form.setFieldValue("prompt", assembled);
+    form.setFieldValue("promptTemplateId", undefined);
+    onDraftChange({ prompt: assembled });
+  }
+
   function applyImageTemplate(template: ImagePromptTemplate) {
+    const templateSlots = template.slots ?? [];
+    // Slotted templates seed defaults + preview directly (the guided form owns the prompt).
+    if (templateSlots.length > 0) {
+      setSelectedTemplateId(String(template.id));
+      seedSlots(template);
+      return;
+    }
+    // Legacy (no slots): raw fill, with a confirm when there's already a prompt.
     const nextPrompt = template.promptPreset.trim();
     const currentPrompt = String(form.getFieldValue("prompt") ?? "");
     const apply = () => {
+      setSlotValues({});
+      setSlotErrors({});
+      setRawDecoupled(false);
+      setRawOpen(false);
       form.setFieldValue("prompt", nextPrompt);
       form.setFieldValue("promptTemplateId", undefined);
       setSelectedTemplateId(String(template.id));
@@ -168,6 +234,41 @@ function FluidNewGeneration({ draft, busy, onSubmit, onDraftChange }: {
       return;
     }
     apply();
+  }
+
+  function handleSlotChange(key: string, value: string) {
+    const next = { ...slotValues, [key]: value };
+    setSlotValues(next);
+    if (slotErrors[key]) setSlotErrors({ ...slotErrors, [key]: "" });
+    if (hasSlots && !rawDecoupled && selectedTemplate) {
+      const assembled = assembleSlots(selectedTemplate.promptPreset, slots, next);
+      form.setFieldValue("prompt", assembled);
+      onDraftChange({ prompt: assembled });
+    }
+  }
+
+  function handleRawPromptEdit() {
+    if (hasSlots && !rawDecoupled) setRawDecoupled(true);
+  }
+
+  function resetToTemplate() {
+    if (selectedTemplate) seedSlots(selectedTemplate);
+  }
+
+  function validateSlots(): { ok: boolean; firstError?: string } {
+    if (!hasSlots || rawDecoupled) return { ok: true };
+    const errs: Record<string, string> = {};
+    for (const slot of slots) {
+      const value = slotValues[slot.key] ?? "";
+      if (slot.required && !value.trim()) {
+        errs[slot.key] = t("dialogue.imageTemplates.slotRequired", { label: slot.label });
+      } else if (value.includes("{{")) {
+        errs[slot.key] = t("dialogue.imageTemplates.slotBraceForbidden");
+      }
+    }
+    setSlotErrors(errs);
+    const firstKey = slots.find((slot) => errs[slot.key])?.key;
+    return { ok: firstKey === undefined, firstError: firstKey ? errs[firstKey] : undefined };
   }
 
   return (
@@ -209,9 +310,17 @@ function FluidNewGeneration({ draft, busy, onSubmit, onDraftChange }: {
           message.warning(validation.reason);
           return;
         }
+        const slotCheck = validateSlots();
+        if (!slotCheck.ok) {
+          if (slotCheck.firstError) message.warning(slotCheck.firstError);
+          return;
+        }
         const { promptTemplateId: _promptTemplateId, ...submitValues } = values;
         void _promptTemplateId;
-        onSubmit({ ...submitValues, ...attachments.collect() });
+        const prompt = hasSlots && !rawDecoupled && selectedTemplate
+          ? assembleSlots(selectedTemplate.promptPreset, slots, slotValues)
+          : submitValues.prompt;
+        onSubmit({ ...submitValues, prompt, ...attachments.collect() });
       }} className="fluid-command-bar">
         <div className="format-row">
           <span>{t("dialogue.format.label")}</span>
@@ -239,11 +348,32 @@ function FluidNewGeneration({ draft, busy, onSubmit, onDraftChange }: {
             t={t}
           />
         ) : null}
-        {docType === "img" && selectedTemplateId ? (
+        {docType === "img" && hasSlots && !rawDecoupled ? (
+          <TemplateSlotForm
+            slots={slots}
+            values={slotValues}
+            errors={slotErrors}
+            previewText={assembledPreview}
+            onChange={handleSlotChange}
+            t={t}
+          />
+        ) : null}
+        {docType === "img" && hasSlots && rawDecoupled ? (
+          <div className="slot-raw-decoupled">
+            <span>{t("dialogue.imageTemplates.rawDecoupledHint")}</span>
+            <Button size="small" onClick={resetToTemplate}>{t("dialogue.imageTemplates.resetToTemplate")}</Button>
+          </div>
+        ) : null}
+        {docType === "img" && hasSlots && !rawDecoupled ? (
+          <Button type="link" size="small" className="slot-edit-raw-toggle" onClick={() => setRawOpen((open) => !open)}>
+            {t("dialogue.imageTemplates.editRawToggle")}
+          </Button>
+        ) : null}
+        {docType === "img" && selectedTemplateId && !hasSlots ? (
           <div className="image-template-replace-hint">{t("dialogue.imageTemplates.replaceHint")}</div>
         ) : null}
-        <Form.Item name="prompt" rules={[{ required: true, message: t("dialogue.prompt.required") }]}>
-          <Input.TextArea autoSize={{ minRows: 4, maxRows: 8 }} placeholder={t("dialogue.prompt.placeholder")} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) { e.preventDefault(); form.submit(); } }} onPaste={makePasteHandler(attachments, t)} />
+        <Form.Item name="prompt" rules={[{ required: true, message: t("dialogue.prompt.required") }]} hidden={hasSlots && !rawDecoupled && !rawOpen}>
+          <Input.TextArea autoSize={{ minRows: 4, maxRows: 8 }} placeholder={t("dialogue.prompt.placeholder")} onChange={handleRawPromptEdit} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) { e.preventDefault(); form.submit(); } }} onPaste={makePasteHandler(attachments, t)} />
         </Form.Item>
         {attachments.sourceWorkbookSpec && attachments.sourceFile ? (
           <div className="attached-file">
@@ -345,6 +475,50 @@ function ImageTemplatePicker({ templates, selectedId, loading, error, onSelect, 
   );
 }
 
+function TemplateSlotForm({ slots, values, errors, previewText, onChange, t }: {
+  slots: ImagePromptSlot[];
+  values: Record<string, string>;
+  errors: Record<string, string>;
+  previewText: string;
+  onChange: (key: string, value: string) => void;
+  t: Translator;
+}) {
+  return (
+    <div className="template-slot-form">
+      <div className="template-slot-form-title">{t("dialogue.imageTemplates.slotFormTitle")}</div>
+      {slots.map((slot) => (
+        <Form.Item
+          key={slot.key}
+          label={slot.label}
+          extra={slot.helpText}
+          required={slot.required}
+          validateStatus={errors[slot.key] ? "error" : undefined}
+          help={errors[slot.key]}
+        >
+          {slot.multiline ? (
+            <Input.TextArea
+              autoSize={{ minRows: 2, maxRows: 6 }}
+              value={values[slot.key] ?? ""}
+              placeholder={slot.example}
+              onChange={(e) => onChange(slot.key, e.target.value)}
+            />
+          ) : (
+            <Input
+              value={values[slot.key] ?? ""}
+              placeholder={slot.example}
+              onChange={(e) => onChange(slot.key, e.target.value)}
+            />
+          )}
+        </Form.Item>
+      ))}
+      <div className="template-slot-preview">
+        <div className="template-slot-preview-label">{t("dialogue.imageTemplates.previewLabel")}</div>
+        <div className="template-slot-preview-body">{previewText}</div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Conversation View ─── */
 
 function ConversationView({ tasks, busy, onPreview, onForceCancel, onContinueGeneration, onOpenLogin }: {
@@ -357,11 +531,23 @@ function ConversationView({ tasks, busy, onPreview, onForceCancel, onContinueGen
 }) {
   const latestTask = tasks[tasks.length - 1];
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [referenceImages, setReferenceImages] = useState<string[]>([]);
   const t = useT();
+  const conversationId = tasks[0]?.conversationId;
+  const referenceImagesSpec = getAttachmentSpec("img", "referenceImages");
+  const referenceImageMaxCount = referenceImagesSpec?.maxCount ?? 6;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [latestTask.events.length]);
+
+  useEffect(() => {
+    setReferenceImages([]);
+  }, [conversationId]);
+
+  function addReferenceImage(path: string) {
+    setReferenceImages((current) => mergeUniquePaths(current, [path], referenceImageMaxCount));
+  }
 
   const isActive = ["running", "starting", "question"].includes(latestTask.status);
 
@@ -372,7 +558,7 @@ function ConversationView({ tasks, busy, onPreview, onForceCancel, onContinueGen
           const isLatest = task.id === latestTask.id;
           // Past rounds: always show as completed/failed/cancelled
           if (!isLatest || !isActive) {
-            return <ConversationRound key={task.id} task={task} onPreview={onPreview} onOpenLogin={onOpenLogin} />;
+            return <ConversationRound key={task.id} task={task} onPreview={onPreview} onOpenLogin={onOpenLogin} onUseAsReference={addReferenceImage} />;
           }
           // Latest + active: show as active round
           return <ActiveTaskRound key={task.id} task={task} onForceCancel={onForceCancel} />;
@@ -385,6 +571,8 @@ function ConversationView({ tasks, busy, onPreview, onForceCancel, onContinueGen
         onContinueGeneration={onContinueGeneration}
         onForceCancel={onForceCancel}
         onOpenLogin={onOpenLogin}
+        referenceImages={referenceImages}
+        onReferenceImagesChange={setReferenceImages}
       />
     </div>
   );
@@ -392,10 +580,11 @@ function ConversationView({ tasks, busy, onPreview, onForceCancel, onContinueGen
 
 /* ─── Conversation Round (completed / failed / cancelled) ─── */
 
-function ConversationRound({ task, onPreview, onOpenLogin }: {
+function ConversationRound({ task, onPreview, onOpenLogin, onUseAsReference }: {
   task: DesktopTask;
   onPreview: (artifact: Artifact) => void;
   onOpenLogin: () => void;
+  onUseAsReference: (path: string) => void;
 }) {
   const t = useT();
   const subject = taskSubject(task, t);
@@ -405,7 +594,7 @@ function ConversationRound({ task, onPreview, onOpenLogin }: {
     <>
       <div className="time-marker">{timeMarker}</div>
       <UserMessage task={task} fallback={subject} />
-      <TaskResultMessage task={task} onPreview={onPreview} onOpenLogin={onOpenLogin} />
+      <TaskResultMessage task={task} onPreview={onPreview} onOpenLogin={onOpenLogin} onUseAsReference={onUseAsReference} />
     </>
   );
 }
@@ -494,10 +683,11 @@ function ActiveTaskRound({ task, onForceCancel }: {
 
 /* ─── Task Result Message (completed / failed / cancelled) ─── */
 
-function TaskResultMessage({ task, onPreview, onOpenLogin }: {
+function TaskResultMessage({ task, onPreview, onOpenLogin, onUseAsReference }: {
   task: DesktopTask;
   onPreview: (artifact: Artifact) => void;
   onOpenLogin: () => void;
+  onUseAsReference: (path: string) => void;
 }) {
   const t = useT();
   const capability = useReportCapability();
@@ -541,6 +731,9 @@ function TaskResultMessage({ task, onPreview, onOpenLogin }: {
                 <span>{t("dialogue.completed.imageMeta", { type: artifact.documentType.toUpperCase(), time: completedAt })}</span>
               </div>
               <Space>
+                <Button icon={<LinkOutlined />} onClick={() => onUseAsReference(artifact.filePath)}>
+                  {t("dialogue.completed.continueEditing")}
+                </Button>
                 <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => officecli.openPath(artifact.filePath)}>
                   {t("dialogue.completed.open")}
                 </Button>
@@ -639,19 +832,22 @@ function TaskResultMessage({ task, onPreview, onOpenLogin }: {
 
 /* ─── Conversation Footer ─── */
 
-function ConversationFooter({ latestTask, busy, onContinueGeneration, onForceCancel, onOpenLogin }: {
+function ConversationFooter({ latestTask, busy, onContinueGeneration, onForceCancel, onOpenLogin, referenceImages, onReferenceImagesChange }: {
   latestTask: DesktopTask;
   busy: boolean;
   onContinueGeneration?: (documentType: string, prompt: string, referenceImages?: string[]) => void;
   onForceCancel?: (taskId: string) => void;
   onOpenLogin: () => void;
+  referenceImages: string[];
+  onReferenceImagesChange: (next: string[]) => void;
 }) {
   const t = useT();
   const status = latestTask.status;
   const [continuationPrompt, setContinuationPrompt] = useState("");
-  const [referenceImages, setReferenceImages] = useState<string[]>([]);
   const [cancelling, setCancelling] = useState(false);
   const artifact = latestTask.artifact;
+  const referenceImagesSpec = getAttachmentSpec("img", "referenceImages");
+  const referenceImageMaxCount = referenceImagesSpec?.maxCount ?? 6;
 
   // Running / Starting / Question: readonly composer with cancel
   if (status === "running" || status === "starting") {
@@ -717,23 +913,49 @@ function ConversationFooter({ latestTask, busy, onContinueGeneration, onForceCan
 
     // Only image type allows continuation editing when there's already an artifact
     const inputDisabled = artifact && !isImageArtifact(artifact);
+    const supportsReferenceImages = docType === "img" || (artifact ? isImageArtifact(artifact) : false);
+    const referenceLimitReached = referenceImages.length >= referenceImageMaxCount;
+    const pickReferenceImages = async () => {
+      if (!referenceImagesSpec || referenceLimitReached) return;
+      try {
+        const paths = await officecli.openMultiFileDialog({
+          filters: [{ name: referenceImagesSpec.label, extensions: referenceImagesSpec.extensions }],
+        });
+        if (paths && paths.length > 0) {
+          onReferenceImagesChange(mergeUniquePaths(referenceImages, paths, referenceImageMaxCount));
+        }
+      } catch {
+        // File picking is user-driven and non-critical; cancellation should not surface as an error.
+      }
+    };
+    const submitContinuation = () => {
+      if (inputDisabled || !continuationPrompt.trim() || !onContinueGeneration) return;
+      onContinueGeneration(docType, continuationPrompt.trim(), referenceImages.length > 0 ? referenceImages : undefined);
+      setContinuationPrompt("");
+      onReferenceImagesChange([]);
+    };
 
     return (
       <div className="docked-composer" data-testid="continuation-composer">
         {referenceImages.length > 0 ? (
           <ReferenceImageStrip
             items={referenceImages}
-            maxCount={referenceImages.length}
-            onRemove={(path) => setReferenceImages((prev) => prev.filter((p) => p !== path))}
-            onAdd={() => {
-              // Fallback for non-image types that don't support image attachment
-              officecli.openMultiFileDialog({ filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp"] }] }).then((paths) => {
-                if (paths) setReferenceImages((prev) => [...prev, ...paths]);
-              }).catch(() => {});
-            }}
+            maxCount={referenceImageMaxCount}
+            onRemove={(path) => onReferenceImagesChange(referenceImages.filter((p) => p !== path))}
+            onAdd={pickReferenceImages}
           />
         ) : null}
         <div className="composer-row">
+          {supportsReferenceImages ? (
+            <Tooltip title={t("dialogue.attach.referenceImages.tooltip", { max: referenceImageMaxCount })}>
+              <Button
+                icon={<MaterialSymbol name="image" />}
+                onClick={pickReferenceImages}
+                disabled={inputDisabled || referenceLimitReached}
+                aria-label={t("dialogue.attach.referenceImages.attach")}
+              />
+            </Tooltip>
+          ) : null}
           <Input.TextArea
             autoSize={{ minRows: 1, maxRows: 4 }}
             placeholder={artifact && isImageArtifact(artifact) ? t("dialogue.completed.continuationPlaceholder") : t("dialogue.completed.askPlaceholder")}
@@ -743,11 +965,7 @@ function ConversationFooter({ latestTask, busy, onContinueGeneration, onForceCan
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
                 e.preventDefault();
-                if (!inputDisabled && continuationPrompt.trim() && onContinueGeneration) {
-                  onContinueGeneration(docType, continuationPrompt.trim(), referenceImages.length > 0 ? referenceImages : undefined);
-                  setContinuationPrompt("");
-                  setReferenceImages([]);
-                }
+                submitContinuation();
               }
             }}
           />
@@ -755,13 +973,7 @@ function ConversationFooter({ latestTask, busy, onContinueGeneration, onForceCan
             type="primary"
             icon={<SendOutlined />}
             disabled={inputDisabled || !continuationPrompt.trim()}
-            onClick={() => {
-              if (!inputDisabled && continuationPrompt.trim() && onContinueGeneration) {
-                onContinueGeneration(docType, continuationPrompt.trim(), referenceImages.length > 0 ? referenceImages : undefined);
-                setContinuationPrompt("");
-                setReferenceImages([]);
-              }
-            }}
+            onClick={submitContinuation}
           />
         </div>
       </div>
@@ -1165,6 +1377,15 @@ function ReferenceImageChip({ path, onRemove }: { path: string; onRemove: () => 
       </button>
     </div>
   );
+}
+
+function mergeUniquePaths(current: string[], incoming: string[], maxCount: number): string[] {
+  const merged = [...current];
+  for (const path of incoming) {
+    if (typeof path !== "string" || path.length === 0) continue;
+    if (!merged.includes(path)) merged.push(path);
+  }
+  return merged.slice(0, maxCount);
 }
 
 function isImageArtifact(artifact: Artifact): boolean {
