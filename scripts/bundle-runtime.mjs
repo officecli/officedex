@@ -51,7 +51,7 @@ async function main() {
 function resolveExtrenderPlatformDir() {
   const goos = process.platform;
   const goarch = process.arch;
-  if (goos === "darwin" && goarch === "arm64") return "mac-arm64";
+  if (goos === "darwin") return "mac-universal";
   if (goos === "win32" && goarch === "x64") return "win-x64";
   return `${goos}-${goarch}`;
 }

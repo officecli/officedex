@@ -1,10 +1,21 @@
 {
-  "version": "1.0.98",
+  "version": "1.0.102",
   "source": "extrender",
   "platforms": {
-    "mac-arm64": {
-      "asset": "officecli-mac-arm64",
-      "sha256": "1572f2a81f69c15590c60365c38bebde1236aaa619a68b370935c1c60d8d1a8c"
+    "mac-universal": {
+      "asset": "extrender-mac-universal",
+      "sha256": "b61598c60eeeeab13f4686d8e6c540d6077296d5281d6ca403fd7d65fc1a6dbe",
+      "note": "universal2 (x86_64 + arm64) merged with lipo so the darwin/universal .app runs on both Intel and Apple Silicon",
+      "slices": {
+        "x86_64": {
+          "asset": "officecli-mac-x64",
+          "sha256": "99be36950b43782cc0e02ba6be4afe5db3d6b4788f0fb32853f4d3ead5950b78"
+        },
+        "arm64": {
+          "asset": "officecli-mac-arm64",
+          "sha256": "964b23466549681f5283c922cc535d8914d8d089d453bb5d0a100cec6c5fe206"
+        }
+      }
     },
     "win-x64": {
       "asset": "officecli-win-x64.exe",

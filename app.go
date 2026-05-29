@@ -2226,8 +2226,8 @@ func (a *App) resolveExtrenderBinary() string {
 
 func resolveExtrenderPlatformDir() string {
 	switch runtime.GOOS + "/" + runtime.GOARCH {
-	case "darwin/arm64":
-		return "mac-arm64"
+	case "darwin/arm64", "darwin/amd64":
+		return "mac-universal"
 	case "windows/amd64":
 		return "win-x64"
 	default:

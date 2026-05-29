@@ -148,10 +148,28 @@ jobs:
         run: |
           resDir="build/bin/OfficeDex.app/Contents/Resources/extrender"
           mkdir -p "$resDir"
-          cp build/extrender/mac-arm64/extrender "$resDir/extrender"
+          cp build/extrender/mac-universal/extrender "$resDir/extrender"
           chmod +x "$resDir/extrender"
           codesign --force --sign "$APPLE_DEVELOPER_ID" \
             --options runtime --timestamp "$resDir/extrender"
+
+      - name: Verify bundled extrender is universal2 (macOS)
+        if: runner.os == 'macOS'
+        # The .app is darwin/universal; an arch-specific extrender would crash on
+        # the other architecture with "bad CPU type in executable", silently
+        # degrading rich previews to the low-fidelity sidecar. Fail the release
+        # rather than ship a binary that bricks Intel (or Apple Silicon).
+        run: |
+          set -euo pipefail
+          bin="build/bin/OfficeDex.app/Contents/Resources/extrender/extrender"
+          archs="$(lipo -archs "$bin")"
+          echo "bundled extrender archs: $archs"
+          for required in x86_64 arm64; do
+            echo "$archs" | grep -qw "$required" || {
+              echo "::error::bundled extrender is missing the $required slice (got: $archs)"
+              exit 1
+            }
+          done
 
       - name: Notarize .app (macOS)
         if: runner.os == 'macOS'
