@@ -122,7 +122,13 @@ export const en: Record<string, string> = {
   "dialogue.completed.askPlaceholder": "Ask a message or command...",
   "dialogue.completed.modifyPlaceholder": "Describe the changes you want to make to this document...",
   "dialogue.completed.imagePreviewMask": "Click to enlarge",
+  "dialogue.completed.copyImage": "Copy Image",
+  "dialogue.completed.imageCopied": "Copied",
+  "dialogue.completed.imageCopyFailed": "Copy failed",
   "dialogue.userMessage.imagePreviewMask": "Preview",
+  "dialogue.userMessage.copyImage": "Copy Image",
+  "dialogue.userMessage.imageCopied": "Copied",
+  "dialogue.userMessage.imageCopyFailed": "Copy failed",
 
   // Dialogue — terminal
   "dialogue.terminal.failed.title": "Generation Failed",

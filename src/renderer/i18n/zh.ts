@@ -142,7 +142,13 @@ export const zh: Record<string, string> = {
   "dialogue.completed.askPlaceholder": "输入消息或命令……",
   "dialogue.completed.modifyPlaceholder": "描述你想对该文档做的修改……",
   "dialogue.completed.imagePreviewMask": "点击放大",
+  "dialogue.completed.copyImage": "复制图片",
+  "dialogue.completed.imageCopied": "已复制",
+  "dialogue.completed.imageCopyFailed": "复制失败",
   "dialogue.userMessage.imagePreviewMask": "预览",
+  "dialogue.userMessage.copyImage": "复制图片",
+  "dialogue.userMessage.imageCopied": "已复制",
+  "dialogue.userMessage.imageCopyFailed": "复制失败",
 
   // Dialogue — terminal
   "dialogue.terminal.failed.title": "生成失败",

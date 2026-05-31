@@ -1467,11 +1467,9 @@ function UserMessage({ task, fallback }: { task: DesktopTask; fallback: string }
       {displayText ? <div className="user-message-prompt">{displayText}</div> : null}
       {referenceImages.length > 0 ? (
         <div className="user-message-images">
-          <Image.PreviewGroup>
-            {referenceImages.map((path) => (
-              <UserReferenceImage key={path} filePath={path} />
-            ))}
-          </Image.PreviewGroup>
+          {referenceImages.map((path) => (
+            <UserReferenceImage key={path} filePath={path} />
+          ))}
         </div>
       ) : null}
       {sourceFile ? (
@@ -1487,6 +1485,8 @@ function UserMessage({ task, fallback }: { task: DesktopTask; fallback: string }
 function UserReferenceImage({ filePath }: { filePath: string }) {
   const [src, setSrc] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [copyLabel, setCopyLabel] = useState<string | null>(null);
   const t = useT();
 
   useEffect(() => {
@@ -1508,6 +1508,21 @@ function UserReferenceImage({ filePath }: { filePath: string }) {
     };
   }, [filePath]);
 
+  async function copyImage() {
+    if (!src) return;
+    try {
+      const response = await fetch(src);
+      const blob = await response.blob();
+      await navigator.clipboard.write([
+        new ClipboardItem({ [blob.type]: blob }),
+      ]);
+      setCopyLabel(t("dialogue.userMessage.imageCopied"));
+    } catch {
+      setCopyLabel(t("dialogue.userMessage.imageCopyFailed"));
+    }
+    window.setTimeout(() => setCopyLabel(null), 2000);
+  }
+
   const fileName = filePath.split(/[/\\]/).pop() || filePath;
 
   if (error) {
@@ -1522,15 +1537,40 @@ function UserReferenceImage({ filePath }: { filePath: string }) {
     return <div className="user-message-image-skeleton" />;
   }
   return (
-    <div className="user-message-image-thumb">
-      <Image src={src} alt={fileName} preview={{ mask: t("dialogue.userMessage.imagePreviewMask") }} />
-    </div>
+    <>
+      <div className="user-message-image-thumb" onClick={() => setPreviewOpen(true)}>
+        <Image src={src} alt={fileName} preview={false} />
+      </div>
+      <Modal
+        open={previewOpen}
+        footer={null}
+        onCancel={() => setPreviewOpen(false)}
+        width="auto"
+        centered
+        styles={{ body: { padding: 0 } }}
+        title={fileName}
+      >
+        <img
+          src={src}
+          alt={fileName}
+          style={{ maxWidth: "100%", maxHeight: "80vh", display: "block" }}
+        />
+        <div style={{ display: "flex", justifyContent: "flex-end", padding: "8px 12px", gap: 8 }}>
+          {copyLabel ? <span style={{ fontSize: 12, color: "var(--n-slate)" }}>{copyLabel}</span> : null}
+          <Button size="small" icon={<CopyOutlined />} onClick={copyImage}>
+            {t("dialogue.userMessage.copyImage")}
+          </Button>
+        </div>
+      </Modal>
+    </>
   );
 }
 
 function InlineImagePreview({ artifact }: { artifact: Artifact }) {
   const [src, setSrc] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [copyLabel, setCopyLabel] = useState<string | null>(null);
   const tokenRef = useRef<string | null>(null);
   const t = useT();
 
@@ -1560,6 +1600,21 @@ function InlineImagePreview({ artifact }: { artifact: Artifact }) {
     };
   }, [artifact.filePath]);
 
+  async function copyImage() {
+    if (!src) return;
+    try {
+      const response = await fetch(src);
+      const blob = await response.blob();
+      await navigator.clipboard.write([
+        new ClipboardItem({ [blob.type]: blob }),
+      ]);
+      setCopyLabel(t("dialogue.completed.imageCopied"));
+    } catch {
+      setCopyLabel(t("dialogue.completed.imageCopyFailed"));
+    }
+    window.setTimeout(() => setCopyLabel(null), 2000);
+  }
+
   if (error) {
     return (
       <div className="result-image-fallback">
@@ -1572,8 +1627,31 @@ function InlineImagePreview({ artifact }: { artifact: Artifact }) {
     return <div className="result-image-skeleton" />;
   }
   return (
-    <div className="result-image-thumb">
-      <Image src={src} alt={artifact.fileName} preview={{ mask: t("dialogue.completed.imagePreviewMask") }} />
-    </div>
+    <>
+      <div className="result-image-thumb" onClick={() => setPreviewOpen(true)}>
+        <Image src={src} alt={artifact.fileName} preview={false} />
+      </div>
+      <Modal
+        open={previewOpen}
+        footer={null}
+        onCancel={() => setPreviewOpen(false)}
+        width="auto"
+        centered
+        styles={{ body: { padding: 0 } }}
+        title={artifact.fileName}
+      >
+        <img
+          src={src}
+          alt={artifact.fileName}
+          style={{ maxWidth: "100%", maxHeight: "80vh", display: "block" }}
+        />
+        <div style={{ display: "flex", justifyContent: "flex-end", padding: "8px 12px", gap: 8 }}>
+          {copyLabel ? <span style={{ fontSize: 12, color: "var(--n-slate)" }}>{copyLabel}</span> : null}
+          <Button size="small" icon={<CopyOutlined />} onClick={copyImage}>
+            {t("dialogue.completed.copyImage")}
+          </Button>
+        </div>
+      </Modal>
+    </>
   );
 }
