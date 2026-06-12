@@ -30,7 +30,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@ant-design/icons": "^6.1.0",
+    "@ant-design/icons": "^6.2.5",
     "@tanstack/react-query": "^5.66.9",
     "antd": "^6.4.2",
     "clsx": "^2.1.1",
