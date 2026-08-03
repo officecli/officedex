@@ -46,10 +46,10 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@ant-design/icons": "^6.1.0",
+    "@ant-design/icons": "^6.3.2",
     "@tanstack/react-query": "^5.66.9",
     "@xyflow/react": "^12.11.1",
-    "antd": "^6.4.2",
+    "antd": "^6.5.2",
     "clsx": "^2.1.1",
     "docx-preview": "^0.3.7",
     "lucide-react": "^0.546.0",
