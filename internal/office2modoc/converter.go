@@ -28,6 +28,11 @@ func NewConverter(repoRoot string, factory NativeFactory) *Converter {
 	return &Converter{repoRoot: repoRoot, factory: factory}
 }
 
+// New returns a Converter configured to lazily load the local office2modoc FFI.
+func New(repoRoot string) *Converter {
+	return NewConverter(repoRoot, openNative)
+}
+
 func (c *Converter) ImportXlsx(ctx context.Context, inputOfficePath, shimoPath, tempPath string) error {
 	if err := ctx.Err(); err != nil {
 		return err
