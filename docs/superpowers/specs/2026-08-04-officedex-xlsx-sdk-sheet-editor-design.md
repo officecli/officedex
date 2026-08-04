@@ -185,6 +185,7 @@ CloseXlsxEditor({ previewToken, sessionId }) -> void
 
 - `@shimo/sdk-sheet@5.0.14-jsapi.4`
 - `@shimo/editor-sdk-core@0.0.1-124-jsapi.51`
+- `@shimo/simple-i18n@4.0.27`（加载 SDK 独立简体中文资源所需）
 
 当前探索阶段只保证 Vite/Wails 开发模式可加载 SDK 主文件、chunk、CSS 和简体中文语言包。
 不把 SDK 资源接入正式安装包的复制和签名流程；正式发布支持留给后续独立设计。
