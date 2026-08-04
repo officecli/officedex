@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "antd";
-import * as XLSX from "xlsx";
+import type { AbstractedSheetSDK } from "@shimo/sdk-sheet";
 import { PreviewToolbar } from "../components/PreviewToolbar";
 import { LoadingState } from "../components/LoadingState";
 import { ErrorState } from "../components/ErrorState";
 import { officecli } from "../../bridge";
+import { createOfflineSheetEditor } from "./sheetSdk";
 
 interface XlsxViewerProps {
   previewToken: string;
@@ -12,94 +13,201 @@ interface XlsxViewerProps {
   documentType?: string;
 }
 
-const ZOOM_STEP = 0.15;
-const ZOOM_MIN = 0.25;
-const ZOOM_MAX = 3;
+type EditorState = "loading" | "clean" | "dirty" | "saving" | "saved" | "error";
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 export default function XlsxViewer({ previewToken, fileName, documentType }: XlsxViewerProps) {
-  const [sheetNames, setSheetNames] = useState<string[]>([]);
-  const [activeSheet, setActiveSheet] = useState(0);
-  const [htmlContent, setHtmlContent] = useState<string>("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(1);
-  const [workbook, setWorkbook] = useState<XLSX.WorkBook | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<AbstractedSheetSDK | null>(null);
+  const sessionIDRef = useRef("");
+  const focusedRef = useRef(false);
+  const saveInFlightRef = useRef(false);
+  const lifecycleVersionRef = useRef(0);
+  const changeVersionRef = useRef(0);
+  const saveHandlerRef = useRef<() => void>(() => undefined);
+  const [state, setState] = useState<EditorState>("loading");
+  const [prepareError, setPrepareError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
-  const loadXlsx = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const openExternal = useCallback(() => {
+    officecli.openPath(fileName).catch(() => undefined);
+  }, [fileName]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const lifecycleVersion = ++lifecycleVersionRef.current;
+    let disposed = false;
+    let tornDown = false;
+    let sessionID = "";
+    let editor: AbstractedSheetSDK | null = null;
+    let unsubscribe: (() => void) | undefined;
+    let observer: ResizeObserver | undefined;
+
+    const teardown = async () => {
+      if (tornDown) return;
+      tornDown = true;
+      unsubscribe?.();
+      observer?.disconnect();
+      if (editor) {
+        await editor.unmount().catch(() => undefined);
+        await editor.destroy().catch(() => undefined);
+      }
+      if (sessionID) {
+        await officecli.closeXlsxEditor({ previewToken, sessionId: sessionID }).catch(() => undefined);
+      }
+    };
+
+    setState("loading");
+    setPrepareError(null);
+    setSaveError(null);
+    editorRef.current = null;
+    sessionIDRef.current = "";
+    saveInFlightRef.current = false;
+    changeVersionRef.current = 0;
+
+    void (async () => {
+      try {
+        const prepared = await officecli.prepareXlsxEditor(previewToken);
+        sessionID = prepared.sessionId;
+        if (disposed) {
+          await teardown();
+          return;
+        }
+        editor = await createOfflineSheetEditor(container, prepared.modocContent);
+        if (disposed) {
+          await teardown();
+          return;
+        }
+        observer = new ResizeObserver(() => window.dispatchEvent(new Event("resize")));
+        observer.observe(container);
+        unsubscribe = editor.content.addChangeListener(() => {
+          changeVersionRef.current += 1;
+          setSaveError(null);
+          setState("dirty");
+        });
+        editorRef.current = editor;
+        sessionIDRef.current = sessionID;
+        setState("clean");
+      } catch (error) {
+        await teardown();
+        if (!disposed) {
+          setPrepareError(errorMessage(error));
+          setState("error");
+        }
+      }
+    })();
+
+    return () => {
+      disposed = true;
+      if (lifecycleVersionRef.current === lifecycleVersion) {
+        lifecycleVersionRef.current += 1;
+        saveInFlightRef.current = false;
+      }
+      editorRef.current = null;
+      sessionIDRef.current = "";
+      void teardown();
+    };
+  }, [loadAttempt, previewToken]);
+
+  const save = useCallback(async () => {
+    const editor = editorRef.current;
+    const sessionID = sessionIDRef.current;
+    if (!editor || !sessionID || saveInFlightRef.current) return;
+
+    saveInFlightRef.current = true;
+    const lifecycleVersion = lifecycleVersionRef.current;
+    const versionAtSaveStart = changeVersionRef.current;
+    setState("saving");
+    setSaveError(null);
     try {
-      const { data } = await officecli.readArtifactFile(previewToken);
-      const wb = XLSX.read(data, { type: "array" });
-      setWorkbook(wb);
-      setSheetNames(wb.SheetNames);
-      setActiveSheet(0);
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      setHtmlContent(XLSX.utils.sheet_to_html(sheet, { id: "xlsx-table" }));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const delta = await editor.content.getContent();
+      const modocContent = delta.stringify();
+      await officecli.saveXlsxEditor({ previewToken, sessionId: sessionID, modocContent });
+      if (lifecycleVersionRef.current === lifecycleVersion) {
+        setState(changeVersionRef.current === versionAtSaveStart ? "saved" : "dirty");
+      }
+    } catch (error) {
+      if (lifecycleVersionRef.current === lifecycleVersion) {
+        setSaveError(errorMessage(error));
+        setState("error");
+      }
     } finally {
-      setLoading(false);
+      if (lifecycleVersionRef.current === lifecycleVersion) {
+        saveInFlightRef.current = false;
+      }
     }
   }, [previewToken]);
+  saveHandlerRef.current = () => void save();
 
   useEffect(() => {
-    loadXlsx();
-  }, [loadXlsx]);
+    const handlePointerDown = (event: PointerEvent) => {
+      focusedRef.current = Boolean(containerRef.current?.contains(event.target as Node));
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!focusedRef.current || !event.metaKey || event.key.toLowerCase() !== "s") return;
+      event.preventDefault();
+      saveHandlerRef.current();
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
 
-  useEffect(() => {
-    if (!workbook || sheetNames.length === 0) return;
-    const sheet = workbook.Sheets[sheetNames[activeSheet]];
-    if (sheet) {
-      setHtmlContent(XLSX.utils.sheet_to_html(sheet, { id: "xlsx-table" }));
-    }
-  }, [workbook, activeSheet, sheetNames]);
+  if (prepareError) {
+    return (
+      <ErrorState
+        message={prepareError}
+        fileName={fileName}
+        onRetry={() => {
+          setPrepareError(null);
+          setLoadAttempt((attempt) => attempt + 1);
+        }}
+        onOpenExternal={openExternal}
+      />
+    );
+  }
 
-  const zoomIn = () => setZoom((z) => Math.min(z + ZOOM_STEP, ZOOM_MAX));
-  const zoomOut = () => setZoom((z) => Math.max(z - ZOOM_STEP, ZOOM_MIN));
-  const zoomReset = () => setZoom(1);
-
-  const openExternal = () => {
-    officecli.openPath(fileName).catch(() => {});
-  };
-
-  if (loading) return <LoadingState fileName={fileName} />;
-  if (error) return <ErrorState message={error} fileName={fileName} onRetry={loadXlsx} onOpenExternal={openExternal} />;
+  const status = state === "dirty"
+    ? "未保存"
+    : state === "saving"
+      ? "保存中"
+      : state === "error"
+        ? "保存失败"
+        : "已保存";
+  const canSave = Boolean(editorRef.current) && (state === "dirty" || state === "error");
 
   return (
     <>
       <PreviewToolbar
         fileName={fileName}
-        documentType={documentType}
-        zoom={zoom}
-        onZoomIn={zoomIn}
-        onZoomOut={zoomOut}
-        onZoomReset={zoomReset}
+        documentType={documentType ?? "xlsx"}
         onOpenExternal={openExternal}
-        center={
-          sheetNames.length > 1 ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              {sheetNames.map((name, idx) => (
-                <Button
-                  key={name}
-                  size="small"
-                  type={idx === activeSheet ? "primary" : "default"}
-                  onClick={() => setActiveSheet(idx)}
-                  style={{ maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                >
-                  {name}
-                </Button>
-              ))}
-            </div>
-          ) : undefined
-        }
+        center={(
+          <div className="preview-xlsx-save-controls">
+            <span className={`preview-xlsx-save-status preview-xlsx-save-status-${state}`}>{status}</span>
+            <Button size="small" type="primary" onClick={() => void save()} disabled={!canSave}>
+              保存
+            </Button>
+          </div>
+        )}
       />
-      <div className="preview-xlsx-container">
-        <div
-          className="preview-xlsx-content"
-          style={{ transform: `scale(${zoom})`, transformOrigin: "top left" }}
-          dangerouslySetInnerHTML={{ __html: htmlContent }}
-        />
+      <div className="preview-xlsx-editor-shell">
+        <div ref={containerRef} className="preview-xlsx-editor" />
+        {state === "loading" && (
+          <div className="preview-xlsx-loading">
+            <LoadingState fileName={fileName} />
+          </div>
+        )}
+        {saveError && <div className="preview-xlsx-save-error" role="alert">{saveError}</div>}
       </div>
     </>
   );
