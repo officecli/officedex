@@ -66,11 +66,12 @@ func (fingerprint fileFingerprint) Equal(other fileFingerprint) bool {
 }
 
 type editSession struct {
-	previewToken string
-	filePath     string
-	directory    string
-	modocPath    string
-	fingerprint  fileFingerprint
+	previewToken     string
+	filePath         string
+	directory        string
+	modocPath        string
+	modocContentPath string
+	fingerprint      fileFingerprint
 }
 
 type Service struct {
@@ -146,7 +147,11 @@ func (s *Service) Prepare(ctx context.Context, previewToken string) (PrepareResu
 	if err := s.converter.ImportXlsx(ctx, filePath, modocPath, directory); err != nil {
 		return PrepareResult{}, fmt.Errorf("xlsx editor: import XLSX: %w", err)
 	}
-	modoc, err := readBoundedNonEmptyFile(modocPath, s.maxModocBytes)
+	modocContentPath, err := resolveModocContentPath(modocPath)
+	if err != nil {
+		return PrepareResult{}, fmt.Errorf("xlsx editor: resolve imported MODoc content: %w", err)
+	}
+	modoc, err := readBoundedNonEmptyFile(modocContentPath, s.maxModocBytes)
 	if err != nil {
 		return PrepareResult{}, fmt.Errorf("xlsx editor: read imported MODoc: %w", err)
 	}
@@ -157,11 +162,12 @@ func (s *Service) Prepare(ctx context.Context, previewToken string) (PrepareResu
 
 	sessionID := s.newSessionID()
 	s.sessions[sessionID] = &editSession{
-		previewToken: previewToken,
-		filePath:     filePath,
-		directory:    directory,
-		modocPath:    modocPath,
-		fingerprint:  baseline,
+		previewToken:     previewToken,
+		filePath:         filePath,
+		directory:        directory,
+		modocPath:        modocPath,
+		modocContentPath: modocContentPath,
+		fingerprint:      baseline,
 	}
 	cleanup = false
 	return PrepareResult{SessionID: sessionID, ModocContent: string(modoc)}, nil
@@ -196,7 +202,7 @@ func (s *Service) Save(ctx context.Context, previewToken, sessionID, modocConten
 	if err != nil || !current.Equal(session.fingerprint) {
 		return SaveResult{}, ErrSourceChanged
 	}
-	if err := os.WriteFile(session.modocPath, []byte(modocContent), 0o600); err != nil {
+	if err := os.WriteFile(session.modocContentPath, []byte(modocContent), 0o600); err != nil {
 		return SaveResult{}, fmt.Errorf("xlsx editor: write MODoc: %w", err)
 	}
 
@@ -410,4 +416,27 @@ func readBoundedNonEmptyFile(path string, maxBytes int64) ([]byte, error) {
 		return nil, ErrModocTooLarge
 	}
 	return content, nil
+}
+
+func resolveModocContentPath(path string) (string, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return "", err
+	}
+	if info.Mode().IsRegular() {
+		return path, nil
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("MODoc output is neither a regular file nor a directory")
+	}
+
+	contentPath := filepath.Join(path, "content")
+	contentInfo, err := os.Lstat(contentPath)
+	if err != nil {
+		return "", fmt.Errorf("inspect MODoc directory content: %w", err)
+	}
+	if !contentInfo.Mode().IsRegular() {
+		return "", fmt.Errorf("MODoc directory content is not a regular file")
+	}
+	return contentPath, nil
 }

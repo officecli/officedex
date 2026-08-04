@@ -38,8 +38,15 @@ func TestIntegrationXlsxRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat imported MODoc: %v", err)
 	}
-	if info.Size() <= 0 || info.Size() > MaxModocBytes {
-		t.Fatalf("imported MODoc size = %d, want 1..%d", info.Size(), MaxModocBytes)
+	payloadInfo := info
+	if info.IsDir() {
+		payloadInfo, err = os.Stat(filepath.Join(modocPath, "content"))
+		if err != nil {
+			t.Fatalf("stat imported MODoc directory content: %v", err)
+		}
+	}
+	if !payloadInfo.Mode().IsRegular() || payloadInfo.Size() <= 0 || payloadInfo.Size() > MaxModocBytes {
+		t.Fatalf("imported MODoc payload mode/size = %v/%d, want regular file of 1..%d bytes", payloadInfo.Mode(), payloadInfo.Size(), MaxModocBytes)
 	}
 
 	if err := converter.ExportXlsx(context.Background(), outputPath, modocPath, dir); err != nil {

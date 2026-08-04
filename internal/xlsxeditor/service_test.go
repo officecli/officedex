@@ -3,6 +3,7 @@ package xlsxeditor
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -112,6 +113,70 @@ func TestPrepareImportsModocAndBindsCanonicalPath(t *testing.T) {
 	}
 	if filepath.Dir(converter.imports[0][1]) != converter.imports[0][2] {
 		t.Fatalf("MODoc path/temp = %q/%q, want same private directory", converter.imports[0][1], converter.imports[0][2])
+	}
+}
+
+func TestPrepareReadsContentFromDirectoryModocPackage(t *testing.T) {
+	dir := t.TempDir()
+	originalPath := filepath.Join(dir, "workbook.xlsx")
+	writeXlsxFixture(t, originalPath, "[Content_Types].xml", "xl/workbook.xml")
+	converter := &fakeConverter{importFn: func(_, shimo, _ string) error {
+		if err := os.Mkdir(shimo, 0o700); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(shimo, "content"), []byte("directory-modoc"), 0o600)
+	}}
+	service := NewService(&fakePreviewResolver{entries: map[string]preview.ArtifactEntry{
+		"token": {FilePath: originalPath, DocumentType: "xlsx"},
+	}}, converter, dir)
+
+	result, err := service.Prepare(context.Background(), "token")
+	if err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+	if result.ModocContent != "directory-modoc" {
+		t.Fatalf("Prepare().ModocContent = %q, want directory package content", result.ModocContent)
+	}
+}
+
+func TestSaveUpdatesDirectoryModocContentBeforeExport(t *testing.T) {
+	dir := t.TempDir()
+	originalPath := filepath.Join(dir, "workbook.xlsx")
+	writeXlsxFixture(t, originalPath, "[Content_Types].xml", "xl/workbook.xml")
+	converter := &fakeConverter{importFn: func(_, shimo, _ string) error {
+		if err := os.Mkdir(shimo, 0o700); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(shimo, "content"), []byte("directory-modoc"), 0o600)
+	}}
+	converter.exportFn = func(output, shimo, _ string) error {
+		info, err := os.Stat(shimo)
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("export MODoc path is not a directory")
+		}
+		content, err := os.ReadFile(filepath.Join(shimo, "content"))
+		if err != nil {
+			return err
+		}
+		if string(content) != "changed-modoc" {
+			return fmt.Errorf("export MODoc content = %q", content)
+		}
+		writeXlsxFixture(t, output, "[Content_Types].xml", "xl/workbook.xml")
+		return nil
+	}
+	service := NewService(&fakePreviewResolver{entries: map[string]preview.ArtifactEntry{
+		"token": {FilePath: originalPath, DocumentType: "xlsx"},
+	}}, converter, dir)
+	prepared, err := service.Prepare(context.Background(), "token")
+	if err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+
+	if _, err := service.Save(context.Background(), "token", prepared.SessionID, "changed-modoc"); err != nil {
+		t.Fatalf("Save() error = %v", err)
 	}
 }
 
