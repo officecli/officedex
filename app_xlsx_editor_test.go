@@ -1,0 +1,177 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"officedex/internal/preview"
+	"officedex/internal/types"
+	"officedex/internal/xlsxeditor"
+)
+
+type fakeXlsxEditorService struct {
+	prepareToken  string
+	prepareResult xlsxeditor.PrepareResult
+	prepareErr    error
+
+	saveToken   string
+	saveSession string
+	saveContent string
+	saveResult  xlsxeditor.SaveResult
+	saveErr     error
+
+	closeToken   string
+	closeSession string
+	closeErr     error
+
+	closeByToken string
+	closeByErr   error
+	onCloseBy    func(string)
+
+	closeAllCalls int
+	closeAllErr   error
+	cleanupCalls  int
+	cleanupErr    error
+}
+
+func (s *fakeXlsxEditorService) Prepare(_ context.Context, token string) (xlsxeditor.PrepareResult, error) {
+	s.prepareToken = token
+	return s.prepareResult, s.prepareErr
+}
+
+func (s *fakeXlsxEditorService) Save(_ context.Context, token, sessionID, content string) (xlsxeditor.SaveResult, error) {
+	s.saveToken, s.saveSession, s.saveContent = token, sessionID, content
+	return s.saveResult, s.saveErr
+}
+
+func (s *fakeXlsxEditorService) Close(token, sessionID string) error {
+	s.closeToken, s.closeSession = token, sessionID
+	return s.closeErr
+}
+
+func (s *fakeXlsxEditorService) CloseByToken(token string) error {
+	s.closeByToken = token
+	if s.onCloseBy != nil {
+		s.onCloseBy(token)
+	}
+	return s.closeByErr
+}
+
+func (s *fakeXlsxEditorService) CloseAll() error {
+	s.closeAllCalls++
+	return s.closeAllErr
+}
+
+func (s *fakeXlsxEditorService) CleanupStale() error {
+	s.cleanupCalls++
+	return s.cleanupErr
+}
+
+func TestPrepareXlsxEditorDelegatesOpaqueToken(t *testing.T) {
+	service := &fakeXlsxEditorService{prepareResult: xlsxeditor.PrepareResult{SessionID: "session-1", ModocContent: "modoc"}}
+	app := &App{ctx: context.Background(), xlsxEditorService: service}
+
+	result, err := app.PrepareXlsxEditor("opaque-preview-token")
+	if err != nil {
+		t.Fatalf("PrepareXlsxEditor() error = %v", err)
+	}
+	if service.prepareToken != "opaque-preview-token" || result != service.prepareResult {
+		t.Fatalf("delegation token/result = %q/%+v", service.prepareToken, result)
+	}
+}
+
+func TestSaveXlsxEditorDelegatesSessionAndContent(t *testing.T) {
+	service := &fakeXlsxEditorService{saveResult: xlsxeditor.SaveResult{FilePath: "/tmp/workbook.xlsx"}}
+	app := &App{ctx: context.Background(), xlsxEditorService: service}
+	input := SaveXlsxEditorInput{PreviewToken: "token", SessionID: "session", ModocContent: "modoc-content"}
+
+	result, err := app.SaveXlsxEditor(input)
+	if err != nil {
+		t.Fatalf("SaveXlsxEditor() error = %v", err)
+	}
+	if service.saveToken != input.PreviewToken || service.saveSession != input.SessionID || service.saveContent != input.ModocContent {
+		t.Fatalf("Save delegation = %q/%q/%q", service.saveToken, service.saveSession, service.saveContent)
+	}
+	if result != service.saveResult {
+		t.Fatalf("SaveXlsxEditor() = %+v, want %+v", result, service.saveResult)
+	}
+}
+
+func TestCloseXlsxEditorClosesBoundSession(t *testing.T) {
+	service := &fakeXlsxEditorService{}
+	app := &App{xlsxEditorService: service}
+	input := CloseXlsxEditorInput{PreviewToken: "token", SessionID: "session"}
+
+	if err := app.CloseXlsxEditor(input); err != nil {
+		t.Fatalf("CloseXlsxEditor() error = %v", err)
+	}
+	if service.closeToken != input.PreviewToken || service.closeSession != input.SessionID {
+		t.Fatalf("Close delegation = %q/%q", service.closeToken, service.closeSession)
+	}
+}
+
+func TestRevokePreviewTokenAlsoClosesXlsxSessions(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "workbook.xlsx")
+	writeFileForAppTest(t, path, []byte("xlsx"))
+	registry, err := preview.New(preview.RegistryOptions{TrustedRoots: []string{dir}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact := types.Artifact{FilePath: path, FileName: "workbook.xlsx", DocumentType: "xlsx"}
+	if err := registry.AllowArtifact(artifact); err != nil {
+		t.Fatal(err)
+	}
+	grant, err := registry.IssueToken(artifact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := &fakeXlsxEditorService{}
+	service.onCloseBy = func(token string) {
+		if _, err := registry.ResolveToken(token); err != nil {
+			t.Fatalf("token was revoked before XLSX sessions closed: %v", err)
+		}
+	}
+	app := &App{previewReg: registry, xlsxEditorService: service}
+
+	app.RevokePreviewToken(grant.Token)
+	if service.closeByToken != grant.Token {
+		t.Fatalf("CloseByToken token = %q, want %q", service.closeByToken, grant.Token)
+	}
+	if _, err := registry.ResolveToken(grant.Token); err == nil {
+		t.Fatal("preview token remains valid after revoke")
+	}
+}
+
+func TestShutdownClosesAllXlsxSessions(t *testing.T) {
+	service := &fakeXlsxEditorService{}
+	app := &App{xlsxEditorService: service}
+
+	app.shutdown(nil)
+	if service.closeAllCalls != 1 {
+		t.Fatalf("CloseAll calls = %d, want 1", service.closeAllCalls)
+	}
+}
+
+func TestXlsxEditorBindingsReturnConfigurationError(t *testing.T) {
+	app := &App{}
+	if _, err := app.PrepareXlsxEditor("token"); !errors.Is(err, errXlsxEditorUnavailable) {
+		t.Fatalf("PrepareXlsxEditor() error = %v, want unavailable", err)
+	}
+	if _, err := app.SaveXlsxEditor(SaveXlsxEditorInput{}); !errors.Is(err, errXlsxEditorUnavailable) {
+		t.Fatalf("SaveXlsxEditor() error = %v, want unavailable", err)
+	}
+	if err := app.CloseXlsxEditor(CloseXlsxEditorInput{}); !errors.Is(err, errXlsxEditorUnavailable) {
+		t.Fatalf("CloseXlsxEditor() error = %v, want unavailable", err)
+	}
+}
+
+func writeFileForAppTest(t *testing.T, path string, content []byte) {
+	t.Helper()
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}

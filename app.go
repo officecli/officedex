@@ -40,12 +40,14 @@ import (
 	"officedex/internal/login"
 	"officedex/internal/mask"
 	"officedex/internal/netproxy"
+	"officedex/internal/office2modoc"
 	"officedex/internal/preview"
 	"officedex/internal/report"
 	runtimemgr "officedex/internal/runtime"
 	"officedex/internal/settings"
 	"officedex/internal/subprocess"
 	"officedex/internal/types"
+	"officedex/internal/xlsxeditor"
 )
 
 const (
@@ -78,6 +80,17 @@ type desktopNotificationRuntime interface {
 type pptistDeckPlanner interface {
 	PlanPptistEdit(context.Context, bridge.PlanPptistEditInput) (bridge.PlanPptistEditResult, error)
 }
+
+type xlsxEditorService interface {
+	Prepare(context.Context, string) (xlsxeditor.PrepareResult, error)
+	Save(context.Context, string, string, string) (xlsxeditor.SaveResult, error)
+	Close(string, string) error
+	CloseByToken(string) error
+	CloseAll() error
+	CleanupStale() error
+}
+
+var errXlsxEditorUnavailable = errors.New("XLSX editor is unavailable")
 
 type wailsDesktopNotificationRuntime struct{}
 
@@ -123,6 +136,7 @@ type App struct {
 	appUpdateMgr           *appupdate.Manager
 	runtimeMgr             *runtimemgr.Manager
 	proxyPool              *netproxy.Pool
+	xlsxEditorService      xlsxEditorService
 
 	// resolver cache. binresolver.Resolve stats the filesystem on every call;
 	// runCommandOptions / ensureBridge run on every RPC. We cache the resolved
@@ -192,6 +206,11 @@ func NewApp() (*App, error) {
 		cachedSettings: cached,
 		proxyPool:      proxyPool,
 	}
+	repoRoot, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("resolve XLSX editor repo root: %w", err)
+	}
+	app.xlsxEditorService = xlsxeditor.NewService(previewReg, office2modoc.New(repoRoot), os.TempDir())
 	app.demoFlow = demoflow.New(demoflow.Options{Recorder: app})
 
 	manifestURL := os.Getenv("OFFICEDEX_UPDATE_MANIFEST_URL")
@@ -234,6 +253,11 @@ func NewApp() (*App, error) {
 // retained so binding methods can dispatch events and open OS dialogs.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	if a.xlsxEditorService != nil {
+		if err := a.xlsxEditorService.CleanupStale(); err != nil {
+			wailsruntime.LogWarningf(ctx, "cleanup stale XLSX sessions: %v", err)
+		}
+	}
 	if err := wailsruntime.InitializeNotifications(ctx); err != nil {
 		wailsruntime.LogWarningf(ctx, "init notifications: %v", err)
 	}
@@ -269,6 +293,11 @@ func (a *App) shutdown(ctx context.Context) {
 	}
 	if a.runtimeMgr != nil {
 		a.runtimeMgr.CancelDownload()
+	}
+	if a.xlsxEditorService != nil {
+		if err := a.xlsxEditorService.CloseAll(); err != nil && ctx != nil {
+			wailsruntime.LogWarningf(ctx, "close XLSX editor sessions: %v", err)
+		}
 	}
 	if ctx != nil {
 		wailsruntime.CleanupNotifications(ctx)
@@ -2089,8 +2118,53 @@ func (a *App) IssuePreviewToken(artifact types.Artifact) (types.PreviewGrant, er
 	return a.previewReg.IssueToken(artifact)
 }
 
+type SaveXlsxEditorInput struct {
+	PreviewToken string `json:"previewToken"`
+	SessionID    string `json:"sessionId"`
+	ModocContent string `json:"modocContent"`
+}
+
+type CloseXlsxEditorInput struct {
+	PreviewToken string `json:"previewToken"`
+	SessionID    string `json:"sessionId"`
+}
+
+func (a *App) PrepareXlsxEditor(previewToken string) (xlsxeditor.PrepareResult, error) {
+	if a.xlsxEditorService == nil {
+		return xlsxeditor.PrepareResult{}, errXlsxEditorUnavailable
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return a.xlsxEditorService.Prepare(ctx, previewToken)
+}
+
+func (a *App) SaveXlsxEditor(input SaveXlsxEditorInput) (xlsxeditor.SaveResult, error) {
+	if a.xlsxEditorService == nil {
+		return xlsxeditor.SaveResult{}, errXlsxEditorUnavailable
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return a.xlsxEditorService.Save(ctx, input.PreviewToken, input.SessionID, input.ModocContent)
+}
+
+func (a *App) CloseXlsxEditor(input CloseXlsxEditorInput) error {
+	if a.xlsxEditorService == nil {
+		return errXlsxEditorUnavailable
+	}
+	return a.xlsxEditorService.Close(input.PreviewToken, input.SessionID)
+}
+
 // RevokePreviewToken invalidates a token. No-op if unknown.
 func (a *App) RevokePreviewToken(token string) {
+	if a.xlsxEditorService != nil {
+		if err := a.xlsxEditorService.CloseByToken(token); err != nil && a.ctx != nil {
+			wailsruntime.LogWarningf(a.ctx, "close XLSX sessions for revoked preview token: %v", err)
+		}
+	}
 	a.previewReg.RevokeToken(token)
 }
 
