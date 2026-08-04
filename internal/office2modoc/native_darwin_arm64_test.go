@@ -1,4 +1,4 @@
-//go:build darwin && arm64
+//go:build darwin && arm64 && cgo
 
 package office2modoc
 
@@ -132,6 +132,38 @@ func TestOpenNativeLoadsConfiguredRealLibrary(t *testing.T) {
 	}
 	if err := native.Close(); err != nil {
 		t.Fatalf("close real library: %v", err)
+	}
+}
+
+func TestNativeImportCallsConfiguredRealLibrary(t *testing.T) {
+	path := os.Getenv("OFFICE2MODOC_FFI_PATH")
+	if path == "" {
+		t.Skip("OFFICE2MODOC_FFI_PATH is not configured")
+	}
+
+	native, err := openNative(path)
+	if err != nil {
+		t.Fatalf("openNative real library: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := native.Close(); err != nil {
+			t.Fatalf("close real library: %v", err)
+		}
+	})
+
+	dir := t.TempDir()
+	status, err := native.Import(ImportParams{
+		RequestID:       "office2modoc-ffi-abi-test",
+		InputOfficePath: filepath.Join(dir, "missing-input.xlsx"),
+		ShimoPath:       filepath.Join(dir, "result.modoc"),
+		TempPath:        dir,
+		Lang:            "zh-CN",
+	})
+	if err != nil {
+		t.Fatalf("real library import call: %v", err)
+	}
+	if status == 0 {
+		t.Fatal("real library import unexpectedly succeeded for a missing input file")
 	}
 }
 
