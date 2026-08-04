@@ -114,6 +114,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"time"
 	"unsafe"
 )
 
@@ -161,11 +162,15 @@ func (n *native) Import(params ImportParams) (uint8, error) {
 	defer C.free(unsafe.Pointer(shimoPath))
 	tempPath := C.CString(params.TempPath)
 	defer C.free(unsafe.Pointer(tempPath))
-	token := C.CString("")
+	offlineToken, err := generateOfflineToken(params.RequestID, time.Now().Unix())
+	if err != nil {
+		return 0, err
+	}
+	token := C.CString(offlineToken)
 	defer C.free(unsafe.Pointer(token))
 	configPath := C.CString("")
 	defer C.free(unsafe.Pointer(configPath))
-	password := C.CString(params.Password)
+	password := optionalCString(params.Password)
 	defer C.free(unsafe.Pointer(password))
 	limit := C.CString(ImportLimitJSON)
 	defer C.free(unsafe.Pointer(limit))
@@ -202,15 +207,19 @@ func (n *native) Export(params ExportParams) (uint8, error) {
 	defer C.free(unsafe.Pointer(shimoPath))
 	tempPath := C.CString(params.TempPath)
 	defer C.free(unsafe.Pointer(tempPath))
-	token := C.CString("")
+	offlineToken, err := generateOfflineToken(params.RequestID, time.Now().Unix())
+	if err != nil {
+		return 0, err
+	}
+	token := C.CString(offlineToken)
 	defer C.free(unsafe.Pointer(token))
 	configPath := C.CString("")
 	defer C.free(unsafe.Pointer(configPath))
-	password := C.CString(params.Password)
+	password := optionalCString(params.Password)
 	defer C.free(unsafe.Pointer(password))
 	toType := C.CString("xlsx")
 	defer C.free(unsafe.Pointer(toType))
-	sheetID := C.CString("")
+	sheetID := optionalCString("")
 	defer C.free(unsafe.Pointer(sheetID))
 	lang := C.CString(params.Lang)
 	defer C.free(unsafe.Pointer(lang))
@@ -229,6 +238,13 @@ func (n *native) Export(params ExportParams) (uint8, error) {
 		lang:                    lang,
 	}
 	return uint8(C.office2modoc_export(n.handle, &cParams)), nil
+}
+
+func optionalCString(value string) *C.char {
+	if value == "" {
+		return nil
+	}
+	return C.CString(value)
 }
 
 func (n *native) Close() error {

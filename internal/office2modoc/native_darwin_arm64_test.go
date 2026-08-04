@@ -71,14 +71,15 @@ uint8_t shimo_import(const ImportParam_t *p) {
   return p != 0 && p->file_type == 1 && strcmp(p->request_id, "import-request") == 0 &&
     strcmp(p->input_office_file_path, "/input.xlsx") == 0 && strcmp(p->shimo_file_path, "/input.modoc") == 0 &&
     strcmp(p->temp_path, "/tmp") == 0 && strcmp(p->password, "password") == 0 &&
-	    strcmp(p->limit, "{\"slideSize\":10000,\"wordCharCount\":100000000,\"excelSingleSheetCell\":2000000,\"excelAllSheetCell\":5000000}") == 0 &&
-    strcmp(p->lang, "en-US") == 0 ? 41 : 201;
+    strcmp(p->limit, "{\"slideSize\":10000,\"wordCharCount\":100000000,\"excelSingleSheetCell\":2000000,\"excelAllSheetCell\":5000000}") == 0 &&
+    strcmp(p->lang, "en-US") == 0 && p->token != 0 && p->token[0] != '\0' ? 41 : 201;
 }
 uint8_t shimo_export(const ExportParam_t *p) {
   return p != 0 && p->file_type == 1 && strcmp(p->request_id, "export-request") == 0 &&
     strcmp(p->output_office_file_path, "/output.xlsx") == 0 && strcmp(p->shimo_file_path, "/input.modoc") == 0 &&
     strcmp(p->temp_path, "/tmp") == 0 && strcmp(p->password, "password") == 0 &&
-    strcmp(p->to_type, "xlsx") == 0 && strcmp(p->sheet_id, "") == 0 && strcmp(p->lang, "en-US") == 0 ? 42 : 202;
+    strcmp(p->to_type, "xlsx") == 0 && p->sheet_id == 0 && strcmp(p->lang, "en-US") == 0 &&
+    p->token != 0 && p->token[0] != '\0' ? 42 : 202;
 }
 `)
 
@@ -117,6 +118,58 @@ uint8_t shimo_export(const ExportParam_t *p) {
 	})
 	if err != nil || exportStatus != 42 {
 		t.Fatalf("export = (%d, %v), want (42, nil)", exportStatus, err)
+	}
+}
+
+func TestNativeUsesNullForEmptyOptionalParams(t *testing.T) {
+	path := buildTestDylib(t, `
+#include <stdint.h>
+#include <string.h>
+typedef struct {
+  const char *request_id;
+  const char *input_office_file_path;
+  const char *shimo_file_path;
+  const char *temp_path;
+  const char *token;
+  const char *config_path;
+  const char *password;
+  uint8_t file_type;
+  const char *limit;
+  const char *lang;
+} ImportParam_t;
+typedef struct {
+  const char *request_id;
+  const char *output_office_file_path;
+  const char *shimo_file_path;
+  const char *temp_path;
+  const char *token;
+  const char *config_path;
+  const char *password;
+  uint8_t file_type;
+  const char *to_type;
+  const char *sheet_id;
+  const char *lang;
+} ExportParam_t;
+uint8_t shimo_import(const ImportParam_t *p) {
+  return p != 0 && p->password == 0 && p->token != 0 && p->token[0] != '\0' ? 0 : 201;
+}
+uint8_t shimo_export(const ExportParam_t *p) {
+  return p != 0 && p->password == 0 && p->sheet_id == 0 &&
+    p->to_type != 0 && strcmp(p->to_type, "xlsx") == 0 && p->token != 0 && p->token[0] != '\0' ? 0 : 202;
+}
+`)
+
+	native, err := openNative(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = native.Close() })
+
+	if status, err := native.Import(ImportParams{RequestID: "import", Lang: "zh"}); err != nil || status != 0 {
+		t.Fatalf("import = (%d, %v), want (0, nil)", status, err)
+	}
+	if status, err := native.Export(ExportParams{RequestID: "export", Lang: "zh"}); err != nil || status != 0 {
+		t.Fatalf("export = (%d, %v), want (0, nil)", status, err)
 	}
 }
 

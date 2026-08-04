@@ -60,6 +60,16 @@ func TestStatusErrorMapsExportCodes(t *testing.T) {
 	}
 }
 
+func TestGenerateOfflineTokenMatchesFFIContract(t *testing.T) {
+	got, err := generateOfflineToken("asdfjhhthhthwert", 1613801446)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "ESvh1Doa/j8GzNA/MgRqcQ=="; got != want {
+		t.Fatalf("token = %q, want %q", got, want)
+	}
+}
+
 func TestConverterSerializesNativeCalls(t *testing.T) {
 	inputOfficePath := makeFile(t, "input.xlsx", 0)
 	shimoPath := makeFile(t, "input.modoc", 0)
