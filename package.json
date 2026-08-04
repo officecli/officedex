@@ -47,6 +47,9 @@
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
+    "@shimo/editor-sdk-core": "0.0.1-124-jsapi.51",
+    "@shimo/sdk-sheet": "5.0.14-jsapi.4",
+    "@shimo/simple-i18n": "4.0.27",
     "@tanstack/react-query": "^5.66.9",
     "@xyflow/react": "^12.11.1",
     "antd": "^6.4.2",
