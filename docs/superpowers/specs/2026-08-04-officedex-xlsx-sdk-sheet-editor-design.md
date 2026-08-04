@@ -28,11 +28,12 @@ OfficeDex Go 后端通过带 `darwin && arm64` build tag 的小型 cgo 适配器
 
 - `shimo_import`：XLS/XLSX 转 MODoc
 - `shimo_export`：MODoc 转 XLSX
-- `free_result`：释放 FFI 返回结果
 
 FFI 数据结构在 OfficeDex 的适配层中按已发布头文件重新声明，不复制或提交
 `office2modoc-ffi` 源码。动态加载避免在编译期链接本地 dylib，也避免将本地绝对路径
-写入产物。非 `darwin/arm64` 使用不包含 cgo 调用的 stub，返回明确的平台不支持错误。
+写入产物。`shimo_import` 与 `shimo_export` 均直接返回 `uint8_t` 状态码；本需求不调用
+返回 `Result_t *` 的 `calculate_secret`，因此也不解析或释放该结果类型。非 `darwin/arm64`
+使用不包含 cgo 调用的 stub，返回明确的平台不支持错误。
 
 ### 未采用方案
 
@@ -60,7 +61,7 @@ build/cache/office2modoc/0.1.34/darwin-arm64/liboffice2modoc_ffi.dylib
 - 文件存在且为普通文件
 - 当前系统为 `darwin`、架构为 `arm64`
 - dylib 可以被加载
-- `shimo_import`、`shimo_export` 与 `free_result` 符号存在
+- `shimo_import` 与 `shimo_export` 符号存在
 
 不自动联网下载，不把下载动作放进 `npm install`、`prebuild`、Wails build 或发布脚本。
 
@@ -74,7 +75,6 @@ build/cache/office2modoc/0.1.34/darwin-arm64/liboffice2modoc_ffi.dylib
 - 将 Go 参数安全转换为 C ABI 参数
 - 调用 XLSX → MODoc 与 MODoc → XLSX
 - 在单进程互斥锁内串行执行转换，避免对 FFI 的并发安全作未经验证的假设
-- 复制 FFI 返回信息后始终调用 `free_result`
 - 将 FFI 状态码映射为稳定的 Go 错误
 - 管理转换临时目录和文件清理
 
@@ -161,8 +161,10 @@ CloseXlsxEditor({ previewToken, sessionId }) -> void
 - `shimo_file_path`：会话临时 MODoc 文件路径
 - `temp_path`：会话临时目录
 - `file_type`：`1`
-- `limit`：固定传 `{}` 使用转换器默认限制，不在 renderer 中开放覆盖；后端另外拒绝
-  超过 100 MiB 的输入 XLSX、超过 256 MiB 的 MODoc 输入或输出，避免无界内存和磁盘占用
+- `limit`：固定传
+  `{"slideSize":10000,"wordCharCount":100000000,"excelSingleSheetCell":2000000,"excelAllSheetCell":5000000}`，
+  不在 renderer 中开放覆盖；后端另外拒绝超过 100 MiB 的输入 XLSX、超过 256 MiB 的
+  MODoc 输入或输出，避免无界内存和磁盘占用
 - `lang`：`zh-CN`
 
 导出参数使用：
@@ -238,7 +240,7 @@ CloseXlsxEditor({ previewToken, sessionId }) -> void
 - 原文件基线未变、被修改、被替换和被删除四种情况
 - 临时目录生命周期
 - 关闭会话和启动时清理崩溃遗留目录
-- FFI 返回结果在成功和失败路径都被释放，且转换调用被串行化
+- FFI 返回状态码在成功和失败路径都被正确映射，且转换调用被串行化
 - FFI 状态码映射
 - 导出失败时原文件保持不变
 - 成功保存使用原子替换并保留权限
