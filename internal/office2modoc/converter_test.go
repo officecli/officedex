@@ -197,6 +197,48 @@ func TestConverterHonorsCanceledContextBeforeLoadingNative(t *testing.T) {
 	}
 }
 
+func TestConverterDoesNotImportWhenContextIsCanceledDuringNativeLoad(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	importCalls := 0
+	converter := NewConverter(t.TempDir(), func(string) (Native, error) {
+		cancel()
+		return &fakeNative{importFn: func(ImportParams) (uint8, error) {
+			importCalls++
+			return 0, nil
+		}}, nil
+	})
+
+	err := converter.ImportXlsx(ctx, makeFile(t, "input.xlsx", 0), makeFile(t, "input.modoc", 0), t.TempDir())
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("got %v, want context.Canceled", err)
+	}
+	if importCalls != 0 {
+		t.Fatalf("native import called %d times", importCalls)
+	}
+}
+
+func TestConverterDoesNotExportWhenContextIsCanceledDuringNativeLoad(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	exportCalls := 0
+	converter := NewConverter(t.TempDir(), func(string) (Native, error) {
+		cancel()
+		return &fakeNative{exportFn: func(ExportParams) (uint8, error) {
+			exportCalls++
+			return 0, nil
+		}}, nil
+	})
+
+	err := converter.ExportXlsx(ctx, makeFile(t, "output.xlsx", 0), makeFile(t, "input.modoc", 0), t.TempDir())
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("got %v, want context.Canceled", err)
+	}
+	if exportCalls != 0 {
+		t.Fatalf("native export called %d times", exportCalls)
+	}
+}
+
 func TestConverterCloseIsSafeBeforeAndAfterLoading(t *testing.T) {
 	unloaded := NewConverter(t.TempDir(), func(string) (Native, error) { return &fakeNative{}, nil })
 	if err := unloaded.Close(); err != nil {

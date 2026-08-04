@@ -45,6 +45,9 @@ func (c *Converter) ImportXlsx(ctx context.Context, inputOfficePath, shimoPath, 
 	if err != nil {
 		return err
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	status, err := native.Import(ImportParams{
 		RequestID:       uuid.NewString(),
 		InputOfficePath: inputOfficePath,
@@ -73,6 +76,9 @@ func (c *Converter) ExportXlsx(ctx context.Context, outputOfficePath, shimoPath,
 	}
 	native, err := c.loadNative()
 	if err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 	status, err := native.Export(ExportParams{
