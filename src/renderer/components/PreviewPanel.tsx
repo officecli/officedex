@@ -17,15 +17,17 @@ import "../preview/PreviewApp.css";
 interface PreviewPanelProps {
   grant: PreviewGrant | null;
   onClose: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
   /** The artifact behind the grant — drives the footer actions (reveal / open externally). */
   artifact?: Artifact | null;
 }
 
 const PREVIEW_PANEL_SLIDE_MS = 420;
 
-export function PreviewPanel({ grant, onClose, artifact }: PreviewPanelProps) {
+export function PreviewPanel({ grant, onClose, onDirtyChange, artifact }: PreviewPanelProps) {
   const t = useT();
   const [closing, setClosing] = useState(false);
+  const [xlsxDirty, setXlsxDirty] = useState(false);
   const closeTimerRef = useRef<number | null>(null);
 
   // The preview is a full-screen overlay, but the cockpit underneath keeps auto-opening its
@@ -41,14 +43,20 @@ export function PreviewPanel({ grant, onClose, artifact }: PreviewPanelProps) {
     };
   }, []);
 
+  const handleDirtyChange = useCallback((dirty: boolean) => {
+    setXlsxDirty(dirty);
+    onDirtyChange?.(dirty);
+  }, [onDirtyChange]);
+
   const requestClose = useCallback(() => {
     if (closing) return;
+    if (xlsxDirty && !window.confirm("This spreadsheet has unsaved changes. Close it without saving?")) return;
     setClosing(true);
     closeTimerRef.current = window.setTimeout(() => {
       closeTimerRef.current = null;
       onClose();
     }, PREVIEW_PANEL_SLIDE_MS);
-  }, [closing, onClose]);
+  }, [closing, onClose, xlsxDirty]);
 
   const viewer = (() => {
     if (!grant) return null;
@@ -59,7 +67,14 @@ export function PreviewPanel({ grant, onClose, artifact }: PreviewPanelProps) {
       case "docx":
         return <DocxViewer previewToken={token} fileName={fileName} documentType={documentType} />;
       case "xlsx":
-        return <XlsxViewer previewToken={token} fileName={fileName} documentType={documentType} />;
+        return (
+          <XlsxViewer
+            previewToken={token}
+            fileName={fileName}
+            documentType={documentType}
+            onDirtyChange={handleDirtyChange}
+          />
+        );
       case "pdf":
         return <PdfViewer previewToken={token} fileName={fileName} documentType={documentType} />;
       case "html":

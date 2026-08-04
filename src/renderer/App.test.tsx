@@ -974,6 +974,59 @@ describe("App task flow", () => {
     expect(screen.queryByText(/Just now/)).toBeNull();
   });
 
+  it("keeps the current dirty xlsx grant when switching artifacts is cancelled", async () => {
+    vi.doMock("./components/PreviewPanel", () => ({
+      PreviewPanel: ({ grant, onDirtyChange }: {
+        grant: { fileName: string };
+        onDirtyChange?: (dirty: boolean) => void;
+      }) => (
+        <div>
+          <span>{`panel:${grant.fileName}`}</span>
+          <button type="button" onClick={() => onDirtyChange?.(true)}>mark xlsx dirty</button>
+        </div>
+      ),
+    }));
+    try {
+      const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+      const bridge = installBridgeMock();
+      const { App } = await import("./App");
+      render(<App />);
+
+      act(() => bridge.emit({
+        event_id: "event-xlsx-preview",
+        task_id: "task-xlsx-preview",
+        type: "task.completed",
+        payload: { result: {
+          file_path: "/tmp/budget.xlsx",
+          file_name: "budget.xlsx",
+          document_type: "xlsx",
+        } },
+      }));
+      fireEvent.click(await screen.findByRole("button", { name: /Preview/ }));
+      expect(await screen.findByText("panel:budget.xlsx")).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "mark xlsx dirty" }));
+
+      act(() => bridge.emit({
+        event_id: "event-docx-preview",
+        task_id: "task-docx-preview",
+        type: "task.completed",
+        payload: { result: {
+          file_path: "/tmp/notes.docx",
+          file_name: "notes.docx",
+          document_type: "docx",
+        } },
+      }));
+      fireEvent.click(await screen.findByRole("button", { name: /Preview/ }));
+
+      expect(confirm).toHaveBeenCalledWith("This spreadsheet has unsaved changes. Close it without saving?");
+      expect(bridge.issuePreviewToken).toHaveBeenCalledTimes(1);
+      expect(bridge.revokePreviewToken).not.toHaveBeenCalled();
+      expect(screen.getByText("panel:budget.xlsx")).toBeTruthy();
+    } finally {
+      vi.doUnmock("./components/PreviewPanel");
+    }
+  });
+
   it("does not show another task artifact when a completed task has no artifact", async () => {
     installBridgeMock();
     const { DialogueScreen } = await import("./screens/DialogueScreens");
@@ -1837,6 +1890,7 @@ function installBridgeMock() {
     generate,
     previewArtifact,
     issuePreviewToken: api.issuePreviewToken,
+    revokePreviewToken: api.revokePreviewToken,
     openExternal,
     openFileDialog,
     openMultiFileDialog,

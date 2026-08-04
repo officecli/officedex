@@ -98,6 +98,7 @@ function OfficeDexApp() {
   const [connectAttempt, setConnectAttempt] = useState(0);
   const [previewGrant, setPreviewGrant] = useState<PreviewGrant | null>(null);
   const [previewArtifact, setPreviewArtifact] = useState<Artifact | null>(null);
+  const [previewDirty, setPreviewDirty] = useState(false);
   const pendingGenerateRef = useRef<PendingGenerate | null>(null);
   const { settings: persistedSettings, defaultWorkspaceDir, loading: settingsLoading } = useSettings();
   const [newGenerationDraft, setNewGenerationDraft] = useState<NewGenerationDraft>(() => createNewGenerationDraft());
@@ -768,7 +769,9 @@ function OfficeDexApp() {
 
   const openInlinePreview = useCallback(async (artifact: Artifact) => {
     if (previewGrant) {
+      if (previewDirty && !window.confirm("This spreadsheet has unsaved changes. Close it without saving?")) return;
       await officecli.revokePreviewToken(previewGrant.token).catch(() => {});
+      setPreviewDirty(false);
     }
     try {
       const grant = await officecli.issuePreviewToken(artifact);
@@ -778,7 +781,7 @@ function OfficeDexApp() {
       const text = error instanceof Error ? error.message : String(error);
       message.error(`Preview unavailable: ${text}`);
     }
-  }, [previewGrant]);
+  }, [previewDirty, previewGrant]);
 
   const closeInlinePreview = useCallback(async () => {
     if (previewGrant) {
@@ -786,6 +789,7 @@ function OfficeDexApp() {
     }
     setPreviewGrant(null);
     setPreviewArtifact(null);
+    setPreviewDirty(false);
     setDeckPanelDismissedId(activeVibeTask?.id ?? null);
   }, [previewGrant, activeVibeTask?.id]);
 
@@ -793,7 +797,14 @@ function OfficeDexApp() {
   // stages, so auto-opening the full-window PreviewPanel is no longer needed for vibe tasks.
 
   const sidePanel = previewGrant
-    ? <PreviewPanel grant={previewGrant} onClose={closeInlinePreview} artifact={previewArtifact} />
+    ? (
+      <PreviewPanel
+        grant={previewGrant}
+        onClose={closeInlinePreview}
+        onDirtyChange={setPreviewDirty}
+        artifact={previewArtifact}
+      />
+    )
     : undefined;
 
   const showBanner =

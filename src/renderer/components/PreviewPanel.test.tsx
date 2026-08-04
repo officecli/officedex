@@ -2,9 +2,29 @@ import { readFileSync } from "node:fs";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PreviewGrant } from "../../shared/types";
+
+const viewerMocks = vi.hoisted(() => ({
+  onDirtyChange: undefined as ((dirty: boolean) => void) | undefined,
+}));
+
+vi.mock("../preview/viewers/previewViewers", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../preview/viewers/previewViewers")>();
+  const React = await import("react");
+  return {
+    ...actual,
+    XlsxViewer: React.lazy(async () => ({
+      default: (props: { onDirtyChange?: (dirty: boolean) => void }) => {
+        viewerMocks.onDirtyChange = props.onDirtyChange;
+        return React.createElement("div", null, "XLSX test viewer");
+      },
+    })),
+  };
+});
+
 import { PreviewPanel } from "./PreviewPanel";
 
 beforeEach(() => {
+  viewerMocks.onDirtyChange = undefined;
   if (!window.matchMedia) {
     Object.defineProperty(window, "matchMedia", {
       writable: true,
@@ -93,6 +113,46 @@ describe("PreviewPanel", () => {
     await act(async () => {
       vi.advanceTimersByTime(1);
     });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["back", "Back to project tree"],
+    ["close", "Close preview"],
+  ])("keeps a dirty xlsx open when %s confirmation is cancelled", async (_control, accessibleName) => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const onClose = vi.fn();
+    render(<PreviewPanel grant={{
+      token: "preview-token-dirty",
+      fileName: "budget.xlsx",
+      documentType: "xlsx",
+    }} onClose={onClose} />);
+    await screen.findByText("XLSX test viewer");
+    act(() => viewerMocks.onDirtyChange?.(true));
+
+    fireEvent.click(screen.getByRole("button", { name: accessibleName }));
+
+    expect(confirm).toHaveBeenCalledWith("This spreadsheet has unsaved changes. Close it without saving?");
+    expect(document.querySelector(".preview-panel-root.is-closing")).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("closes a dirty xlsx after confirmation", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const onClose = vi.fn();
+    render(<PreviewPanel grant={{
+      token: "preview-token-dirty-confirmed",
+      fileName: "budget.xlsx",
+      documentType: "xlsx",
+    }} onClose={onClose} />);
+    await screen.findByText("XLSX test viewer");
+    act(() => viewerMocks.onDirtyChange?.(true));
+    vi.useFakeTimers();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close preview" }));
+    expect(document.querySelector(".preview-panel-root.is-closing")).toBeTruthy();
+
+    await act(async () => vi.advanceTimersByTime(420));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

@@ -80,6 +80,34 @@ describe("XlsxViewer", () => {
     expect(screen.getByText("未保存")).toBeInTheDocument();
   });
 
+  it("reports dirty changes to the host and clears them after saving", async () => {
+    const onDirtyChange = vi.fn();
+    render(<XlsxViewer previewToken="preview-token" fileName="book.xlsx" onDirtyChange={onDirtyChange} />);
+    await waitFor(() => expect(mocks.editor.content.addChangeListener).toHaveBeenCalled());
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+
+    act(() => mocks.emitChange());
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+
+    fireEvent.click(screen.getByRole("button", { name: /保\s*存/ }));
+    await waitFor(() => expect(screen.getByText("已保存")).toBeInTheDocument());
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("blocks beforeunload only while the workbook is dirty", async () => {
+    render(<XlsxViewer previewToken="preview-token" fileName="book.xlsx" />);
+    await waitFor(() => expect(mocks.editor.content.addChangeListener).toHaveBeenCalled());
+
+    const cleanEvent = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(cleanEvent);
+    expect(cleanEvent.defaultPrevented).toBe(false);
+
+    act(() => mocks.emitChange());
+    const dirtyEvent = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(dirtyEvent);
+    expect(dirtyEvent.defaultPrevented).toBe(true);
+  });
+
   it("serializes current content and saves once", async () => {
     render(<XlsxViewer previewToken="preview-token" fileName="book.xlsx" />);
     await waitFor(() => expect(mocks.editor.content.addChangeListener).toHaveBeenCalled());

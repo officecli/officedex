@@ -11,6 +11,7 @@ interface XlsxViewerProps {
   previewToken: string;
   fileName: string;
   documentType?: string;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 type EditorState = "loading" | "clean" | "dirty" | "saving" | "saved" | "error";
@@ -19,7 +20,7 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export default function XlsxViewer({ previewToken, fileName, documentType }: XlsxViewerProps) {
+export default function XlsxViewer({ previewToken, fileName, documentType, onDirtyChange }: XlsxViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<AbstractedSheetSDK | null>(null);
   const sessionIDRef = useRef("");
@@ -28,10 +29,13 @@ export default function XlsxViewer({ previewToken, fileName, documentType }: Xls
   const lifecycleVersionRef = useRef(0);
   const changeVersionRef = useRef(0);
   const saveHandlerRef = useRef<() => void>(() => undefined);
+  const onDirtyChangeRef = useRef(onDirtyChange);
   const [state, setState] = useState<EditorState>("loading");
+  const [dirty, setDirty] = useState(false);
   const [prepareError, setPrepareError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
+  onDirtyChangeRef.current = onDirtyChange;
 
   const openExternal = useCallback(() => {
     officecli.openPath(fileName).catch(() => undefined);
@@ -64,6 +68,7 @@ export default function XlsxViewer({ previewToken, fileName, documentType }: Xls
     };
 
     setState("loading");
+    setDirty(false);
     setPrepareError(null);
     setSaveError(null);
     editorRef.current = null;
@@ -88,6 +93,7 @@ export default function XlsxViewer({ previewToken, fileName, documentType }: Xls
         observer.observe(container);
         unsubscribe = editor.content.addChangeListener(() => {
           changeVersionRef.current += 1;
+          setDirty(true);
           setSaveError(null);
           setState("dirty");
         });
@@ -130,7 +136,9 @@ export default function XlsxViewer({ previewToken, fileName, documentType }: Xls
       const modocContent = delta.stringify();
       await officecli.saveXlsxEditor({ previewToken, sessionId: sessionID, modocContent });
       if (lifecycleVersionRef.current === lifecycleVersion) {
-        setState(changeVersionRef.current === versionAtSaveStart ? "saved" : "dirty");
+        const changedDuringSave = changeVersionRef.current !== versionAtSaveStart;
+        setDirty(changedDuringSave);
+        setState(changedDuringSave ? "dirty" : "saved");
       }
     } catch (error) {
       if (lifecycleVersionRef.current === lifecycleVersion) {
@@ -144,6 +152,24 @@ export default function XlsxViewer({ previewToken, fileName, documentType }: Xls
     }
   }, [previewToken]);
   saveHandlerRef.current = () => void save();
+
+  useEffect(() => {
+    onDirtyChangeRef.current?.(dirty);
+  }, [dirty]);
+
+  useEffect(() => () => {
+    onDirtyChangeRef.current?.(false);
+  }, []);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [dirty]);
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
