@@ -20,6 +20,7 @@ import type {
   ModifyPptistDeckResult,
   ModifyInput,
   PeekReportContextResult,
+  PrepareXlsxEditorResult,
   PreviewGrant,
   ProviderTestInput,
   ProviderSnapshot,
@@ -29,6 +30,9 @@ import type {
   RendererLogInput,
   SubmitReportInput,
   SubmitReportResult,
+  SaveXlsxEditorInput,
+  SaveXlsxEditorResult,
+  CloseXlsxEditorInput,
   TaskHistoryEntry,
   UserSettings,
   WorkspaceConversationSummary,
@@ -156,6 +160,15 @@ function createBrowserPreviewAPI(): DesktopAPI {
       documentType: artifact.documentType,
     }),
     revokePreviewToken: async () => undefined,
+    prepareXlsxEditor: async () => {
+      throw new Error("XLSX editing requires the Wails desktop runtime.");
+    },
+    saveXlsxEditor: async () => {
+      throw new Error("XLSX editing requires the Wails desktop runtime.");
+    },
+    closeXlsxEditor: async () => {
+      throw new Error("XLSX editing requires the Wails desktop runtime.");
+    },
     readArtifactFile: async () => {
       throw new Error("Artifact file reading requires desktop file access.");
     },
@@ -560,6 +573,21 @@ function createWailsAPI(): DesktopAPI {
     revokePreviewToken: async (token: string) => {
       await WailsApp.RevokePreviewToken(token);
     },
+    prepareXlsxEditor: async (previewToken: string): Promise<PrepareXlsxEditorResult> => {
+      const fn = optionalWailsFunction<(token: string) => Promise<PrepareXlsxEditorResult>>("PrepareXlsxEditor");
+      if (!fn) throw new Error("XLSX editing requires a newer OfficeDex runtime.");
+      return fn(previewToken);
+    },
+    saveXlsxEditor: async (input: SaveXlsxEditorInput): Promise<SaveXlsxEditorResult> => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<SaveXlsxEditorResult>>("SaveXlsxEditor");
+      if (!fn) throw new Error("XLSX editing requires a newer OfficeDex runtime.");
+      return fn(toWails(input));
+    },
+    closeXlsxEditor: async (input: CloseXlsxEditorInput): Promise<void> => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<void>>("CloseXlsxEditor");
+      if (!fn) throw new Error("XLSX editing requires a newer OfficeDex runtime.");
+      await fn(toWails(input));
+    },
     readArtifactFile: async (previewToken: string) => {
       const result = await WailsApp.ReadArtifactFile(previewToken);
       const data: BinaryFileData = decodeArtifactBytes(result?.data);
@@ -768,6 +796,12 @@ function createRealE2EAPI(endpoint: string): DesktopAPI {
     previewArtifact: (artifact: Artifact) => rpc<void>("PreviewArtifact", artifact),
     issuePreviewToken: (artifact: Artifact) => rpc<PreviewGrant>("IssuePreviewToken", artifact),
     revokePreviewToken: (token: string) => rpc<void>("RevokePreviewToken", token),
+    prepareXlsxEditor: (previewToken: string) =>
+      rpc<PrepareXlsxEditorResult>("PrepareXlsxEditor", previewToken),
+    saveXlsxEditor: (input: SaveXlsxEditorInput) =>
+      rpc<SaveXlsxEditorResult>("SaveXlsxEditor", input),
+    closeXlsxEditor: (input: CloseXlsxEditorInput) =>
+      rpc<void>("CloseXlsxEditor", input),
     readArtifactFile: async (previewToken: string) => {
       const result = await rpc<{ data?: unknown }>("ReadArtifactFile", previewToken);
       return { data: decodeArtifactBytes(result?.data) };
