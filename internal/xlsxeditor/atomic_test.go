@@ -3,17 +3,20 @@ package xlsxeditor
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
 
 const (
-	testMaxXlsxEntryUncompressedBytes = 16 * 1024 * 1024
-	testMaxXlsxTotalUncompressedBytes = 64 * 1024 * 1024
+	testMaxXlsxCompressedBytes        = 100 * 1024 * 1024
+	testMaxXlsxEntryUncompressedBytes = 512 * 1024 * 1024
+	testMaxXlsxTotalUncompressedBytes = 2 * 1024 * 1024 * 1024
 )
 
 func TestValidateXlsxRequiresContentTypesAndWorkbook(t *testing.T) {
@@ -74,37 +77,77 @@ func TestValidateXlsxReadsEntryPayloads(t *testing.T) {
 func TestValidateXlsxEnforcesUncompressedEntryAndTotalLimits(t *testing.T) {
 	dir := t.TempDir()
 
-	atLimitPath := filepath.Join(dir, "at-entry-limit.xlsx")
-	writeLargeXlsxFixture(t, atLimitPath, map[string]int64{
+	largeWorksheetPath := filepath.Join(dir, "large-worksheet.xlsx")
+	writeLargeXlsxFixture(t, largeWorksheetPath, map[string]int64{
 		"[Content_Types].xml":      1,
 		"xl/workbook.xml":          1,
-		"xl/worksheets/sheet1.xml": testMaxXlsxEntryUncompressedBytes,
+		"xl/worksheets/sheet1.xml": 33 * 1024 * 1024,
 	})
-	if err := validateXlsx(atLimitPath); err != nil {
-		t.Fatalf("validateXlsx(entry at limit) error = %v", err)
+	if err := validateXlsx(largeWorksheetPath); err != nil {
+		t.Fatalf("validateXlsx(33 MiB worksheet) error = %v", err)
 	}
 
 	overEntryPath := filepath.Join(dir, "over-entry-limit.xlsx")
-	writeLargeXlsxFixture(t, overEntryPath, map[string]int64{
-		"[Content_Types].xml":      1,
-		"xl/workbook.xml":          1,
-		"xl/worksheets/sheet1.xml": testMaxXlsxEntryUncompressedBytes + 1,
-	})
+	writeStoredXlsxFixture(t, overEntryPath, "[Content_Types].xml", "xl/workbook.xml", "xl/worksheets/sheet1.xml")
+	declareZipEntryUncompressedSize(t, overEntryPath, "xl/worksheets/sheet1.xml", testMaxXlsxEntryUncompressedBytes+1)
 	if err := validateXlsx(overEntryPath); err == nil || !strings.Contains(err.Error(), "entry size limit") {
 		t.Fatalf("validateXlsx(entry over limit) error = %v, want entry size limit error", err)
 	}
 
 	overTotalPath := filepath.Join(dir, "over-total-limit.xlsx")
-	entries := map[string]int64{
-		"[Content_Types].xml": 1,
-		"xl/workbook.xml":     1,
+	entries := []string{
+		"[Content_Types].xml",
+		"xl/workbook.xml",
 	}
 	for i := 0; i < 5; i++ {
-		entries["xl/worksheets/sheet"+string(rune('a'+i))+".xml"] = 13 * 1024 * 1024
+		entries = append(entries, "xl/worksheets/sheet"+string(rune('a'+i))+".xml")
 	}
-	writeLargeXlsxFixture(t, overTotalPath, entries)
+	writeStoredXlsxFixture(t, overTotalPath, entries...)
+	for _, entry := range entries[2:] {
+		declareZipEntryUncompressedSize(t, overTotalPath, entry, testMaxXlsxEntryUncompressedBytes)
+	}
 	if err := validateXlsx(overTotalPath); err == nil || !strings.Contains(err.Error(), "total size limit") {
 		t.Fatalf("validateXlsx(total over limit) error = %v, want total size limit error", err)
+	}
+
+	overCompressedPath := filepath.Join(dir, "over-compressed-limit.xlsx")
+	writeXlsxFixture(t, overCompressedPath, "[Content_Types].xml", "xl/workbook.xml")
+	if err := os.Truncate(overCompressedPath, testMaxXlsxCompressedBytes+1); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateXlsx(overCompressedPath); err == nil || !strings.Contains(err.Error(), "compressed size limit") {
+		t.Fatalf("validateXlsx(compressed file over limit) error = %v, want compressed size limit error", err)
+	}
+}
+
+func TestValidateXlsxEnforcesEntryCountLimit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "too-many-entries.xlsx")
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zw := zip.NewWriter(file)
+	for i := 0; i <= maxXlsxEntryCount; i++ {
+		name := "entry-" + strconv.Itoa(i)
+		if i == 0 {
+			name = "[Content_Types].xml"
+		} else if i == 1 {
+			name = "xl/workbook.xml"
+		}
+		if _, err := zw.Create(name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	err = validateXlsx(path)
+	if err == nil || !strings.Contains(err.Error(), "entry count limit") {
+		t.Fatalf("validateXlsx() error = %v, want entry count limit error", err)
 	}
 }
 
@@ -400,6 +443,40 @@ func corruptStoredEntryPayload(t *testing.T, path, entry string) {
 	if err := os.WriteFile(path, content, 0o600); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func declareZipEntryUncompressedSize(t *testing.T, path, entry string, size int64) {
+	t.Helper()
+	if size < 0 || size > int64(^uint32(0)) {
+		t.Fatalf("unsupported declared ZIP size %d", size)
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for offset := 0; offset+46 <= len(content); {
+		next := bytes.Index(content[offset:], []byte("PK\x01\x02"))
+		if next < 0 {
+			break
+		}
+		offset += next
+		nameLength := int(binary.LittleEndian.Uint16(content[offset+28 : offset+30]))
+		extraLength := int(binary.LittleEndian.Uint16(content[offset+30 : offset+32]))
+		commentLength := int(binary.LittleEndian.Uint16(content[offset+32 : offset+34]))
+		entryEnd := offset + 46 + nameLength + extraLength + commentLength
+		if entryEnd > len(content) {
+			t.Fatalf("invalid central directory entry for %q", entry)
+		}
+		if string(content[offset+46:offset+46+nameLength]) == entry {
+			binary.LittleEndian.PutUint32(content[offset+24:offset+28], uint32(size))
+			if err := os.WriteFile(path, content, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			return
+		}
+		offset = entryEnd
+	}
+	t.Fatalf("central directory entry %q not found", entry)
 }
 
 func writeLargeXlsxFixture(t *testing.T, path string, entries map[string]int64) {

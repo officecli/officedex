@@ -9,8 +9,12 @@ import (
 )
 
 const (
-	maxXlsxEntryUncompressedBytes int64 = 16 * 1024 * 1024
-	maxXlsxTotalUncompressedBytes int64 = 64 * 1024 * 1024
+	// maxXlsxCompressedBytes mirrors office2modoc.MaxOfficeBytes without
+	// importing that package into this low-level replacement layer.
+	maxXlsxCompressedBytes        int64 = 100 * 1024 * 1024
+	maxXlsxEntryUncompressedBytes int64 = 512 * 1024 * 1024
+	maxXlsxTotalUncompressedBytes int64 = 2 * 1024 * 1024 * 1024
+	maxXlsxEntryCount                   = 100_000
 )
 
 type fileHandle interface {
@@ -79,6 +83,9 @@ func validateXlsx(path string) error {
 	if !info.Mode().IsRegular() {
 		return fmt.Errorf("XLSX %q is not a regular file", path)
 	}
+	if info.Size() > maxXlsxCompressedBytes {
+		return fmt.Errorf("XLSX %q exceeds compressed size limit of %d bytes", path, maxXlsxCompressedBytes)
+	}
 
 	reader, err := zip.OpenReader(path)
 	if err != nil {
@@ -86,7 +93,11 @@ func validateXlsx(path string) error {
 	}
 	defer reader.Close()
 
-	var totalUncompressed int64
+	if len(reader.File) > maxXlsxEntryCount {
+		return fmt.Errorf("XLSX %q exceeds entry count limit of %d", path, maxXlsxEntryCount)
+	}
+
+	var declaredUncompressed uint64
 	hasContentTypes := false
 	hasWorkbook := false
 	for _, file := range reader.File {
@@ -95,6 +106,24 @@ func validateXlsx(path string) error {
 		}
 		if file.UncompressedSize64 > uint64(maxXlsxEntryUncompressedBytes) {
 			return fmt.Errorf("XLSX entry %q exceeds entry size limit of %d bytes", file.Name, maxXlsxEntryUncompressedBytes)
+		}
+		if declaredUncompressed > uint64(maxXlsxTotalUncompressedBytes)-file.UncompressedSize64 {
+			return fmt.Errorf("XLSX entry %q exceeds total size limit of %d bytes", file.Name, maxXlsxTotalUncompressedBytes)
+		}
+		declaredUncompressed += file.UncompressedSize64
+
+		switch file.Name {
+		case "[Content_Types].xml":
+			hasContentTypes = true
+		case "xl/workbook.xml":
+			hasWorkbook = true
+		}
+	}
+
+	var totalUncompressed int64
+	for _, file := range reader.File {
+		if file.FileInfo().IsDir() {
+			continue
 		}
 
 		entry, err := file.Open()
@@ -121,13 +150,6 @@ func validateXlsx(path string) error {
 			return fmt.Errorf("close XLSX entry %q: %w", file.Name, closeErr)
 		}
 		totalUncompressed += readBytes
-
-		switch file.Name {
-		case "[Content_Types].xml":
-			hasContentTypes = true
-		case "xl/workbook.xml":
-			hasWorkbook = true
-		}
 	}
 	if !hasContentTypes {
 		return fmt.Errorf("XLSX %q is missing [Content_Types].xml", path)
