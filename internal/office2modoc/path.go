@@ -15,5 +15,16 @@ func ResolveLibraryPath(repoRoot string) (string, error) {
 		}
 		return override, nil
 	}
-	return filepath.Join(repoRoot, DefaultRelativeLibraryPath), nil
+	executablePath, _ := os.Executable()
+	return resolveLibraryPathForExecutable(repoRoot, executablePath), nil
+}
+
+func resolveLibraryPathForExecutable(repoRoot, executablePath string) string {
+	if executablePath != "" {
+		bundledPath := filepath.Clean(filepath.Join(filepath.Dir(executablePath), BundledRelativeLibraryPath))
+		if info, err := os.Stat(bundledPath); err == nil && info.Mode().IsRegular() {
+			return bundledPath
+		}
+	}
+	return filepath.Join(repoRoot, DefaultRelativeLibraryPath)
 }

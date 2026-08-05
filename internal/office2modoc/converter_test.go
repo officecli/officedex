@@ -31,6 +31,24 @@ func TestResolveLibraryPathUsesRepositoryCache(t *testing.T) {
 	}
 }
 
+func TestResolveLibraryPathUsesBundledAppResource(t *testing.T) {
+	t.Setenv("OFFICE2MODOC_FFI_PATH", "")
+	appRoot := t.TempDir()
+	executablePath := filepath.Join(appRoot, "Contents", "MacOS", "officedex")
+	libraryPath := filepath.Join(appRoot, "Contents", "Resources", "office2modoc", "liboffice2modoc_ffi.dylib")
+	if err := os.MkdirAll(filepath.Dir(libraryPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(libraryPath, []byte("ffi"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got := resolveLibraryPathForExecutable(t.TempDir(), executablePath)
+	if got != libraryPath {
+		t.Fatalf("bundled path = %q, want %q", got, libraryPath)
+	}
+}
+
 func TestStatusErrorMapsImportCodes(t *testing.T) {
 	tests := []struct {
 		status uint8
