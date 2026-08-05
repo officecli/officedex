@@ -44,6 +44,7 @@ New renderer units:
 ### Task 1: Bundle the Sheet SDK entirely offline
 
 **Files:**
+- Create: `.npmrc`
 - Modify: `package.json`
 - Modify: `package-lock.json`
 - Modify: `vite.config.ts`
@@ -93,7 +94,7 @@ Expected: FAIL because the dependencies and build assets are absent.
 HTTPS_PROXY=http://127.0.0.1:7890 HTTP_PROXY=http://127.0.0.1:7890 npm install --save-exact @shimo/editor-sdk-core@0.0.1-124-jsapi.51 @shimo/sdk-sheet@5.0.14-jsapi.4 @shimo/simple-i18n@4.0.27
 ```
 
-Expected: React remains `^19.0.0`; only the three Sheet SDK packages are added.
+Expected: React remains `^19.0.0`; only the three Sheet SDK packages are added. The tracked `.npmrc` routes only the `@shimo` scope to `http://registry.npm.shimo.run`; all other dependencies continue to use the default registry.
 
 - [ ] **Step 4: Implement secure Vite asset routing**
 
@@ -119,7 +120,7 @@ Expected: PASS and TypeScript exit 0.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add package.json package-lock.json vite.config.ts scripts/sdk-sheet-build-assets.test.mjs
+git add .npmrc package.json package-lock.json vite.config.ts scripts/sdk-sheet-build-assets.test.mjs docs/superpowers/plans/2026-08-05-officedex-genoffice-excel-workspace.md
 git commit -m "build: bundle local Sheet SDK assets"
 ```
 
