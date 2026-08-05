@@ -35,6 +35,36 @@ afterEach(() => {
 });
 
 describe("Shell sidebar layout", () => {
+  it("returns to Home from the dialogue sidebar brand", () => {
+    const onNavChange = vi.fn();
+    render(
+      <LocaleProvider value="en">
+        {createElement(
+          Shell as unknown as ComponentType<Record<string, unknown>>,
+          {
+            activeNav: "dialogue",
+            failed: false,
+            tasks: [],
+            workspaces: [],
+            chats: [],
+            onNavChange,
+            onNewGeneration: vi.fn(),
+            onSelectWorkspace: vi.fn(),
+            onAddWorkspace: vi.fn(),
+            onRevealWorkspace: vi.fn(),
+            onRemoveWorkspace: vi.fn(),
+            onSelectTask: vi.fn(),
+            onDeleteConversation: vi.fn(),
+          },
+          <div />,
+        )}
+      </LocaleProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    expect(onNavChange).toHaveBeenCalledWith("home");
+  });
+
   it("uses the OfficeDex PNG app icon for the sidebar brand mark", () => {
     render(
       <LocaleProvider value="en">

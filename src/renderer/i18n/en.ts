@@ -64,6 +64,7 @@ export const en: Record<string, string> = {
   "shell.nav.dialogue": "Dialogue",
   "shell.nav.tasks": "Tasks",
   "shell.nav.profile": "Profile",
+  "shell.nav.home": "Home",
   "shell.nav.settings": "Settings",
   "shell.sidebar.collapse": "Collapse sidebar",
   "shell.sidebar.expand": "Expand sidebar",

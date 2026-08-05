@@ -64,6 +64,7 @@ export const zh: Record<string, string> = {
   "shell.nav.dialogue": "对话",
   "shell.nav.tasks": "任务",
   "shell.nav.profile": "账户",
+  "shell.nav.home": "首页",
   "shell.nav.settings": "设置",
   "shell.sidebar.collapse": "折叠侧栏",
   "shell.sidebar.expand": "展开侧栏",

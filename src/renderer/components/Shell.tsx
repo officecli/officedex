@@ -200,9 +200,9 @@ export function Shell({
         onMouseLeave={() => setSidebarPreview(false)}
       >
         <div className="brand-block">
-          <div className="brand-mark">
+          <button type="button" className="brand-mark" aria-label={t("shell.nav.home")} onClick={() => onNavChange("home")}>
             <img src="./officedex-logo.png" alt="OfficeDex logo" />
-          </div>
+          </button>
           <div className="brand-text">
             <div className="brand">{t("shell.brand")}</div>
             <div className={`bridge-pill ${failed ? "failed" : ""}`}>{t(pillLabelKey(failed, errorKind))}</div>
