@@ -120,6 +120,21 @@ CREATE TABLE IF NOT EXISTS task_answers (
 CREATE INDEX IF NOT EXISTS idx_task_answers_task_order ON task_answers(task_id, question_index, updated_at);
 `
 
+const schemaV6 = `
+CREATE TABLE IF NOT EXISTS recent_files (
+  file_path TEXT PRIMARY KEY,
+  file_name TEXT NOT NULL,
+  document_type TEXT NOT NULL,
+  source TEXT NOT NULL,
+  workspace_id TEXT NOT NULL DEFAULT '',
+  task_id TEXT NOT NULL DEFAULT '',
+  conversation_id TEXT NOT NULL DEFAULT '',
+  last_opened_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_recent_files_opened ON recent_files(last_opened_at DESC);
+CREATE INDEX IF NOT EXISTS idx_recent_files_workspace_opened ON recent_files(workspace_id, last_opened_at DESC);
+`
+
 // Store wraps a SQLite database used to persist bridge events and artifacts.
 // Safe for concurrent use.
 type Store struct {
@@ -312,6 +327,30 @@ func applyMigrations(ctx context.Context, db *sql.DB) error {
 			return fmt.Errorf("v5 commit: %w", err)
 		}
 	}
+	if current < 6 {
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("begin v6: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, schemaV6); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("v6 ddl: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (6, ?)`,
+			time.Now().UTC().Format(time.RFC3339Nano),
+		); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("v6 stamp: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, "PRAGMA user_version = 6"); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("v6 set user_version: %w", err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("v6 commit: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -358,6 +397,136 @@ func (s *Store) EnsureWorkspace(ctx context.Context, workspacePath string) (Work
 		return Workspace{}, fmt.Errorf("localstore: ensure workspace: %w", err)
 	}
 	return Workspace{ID: id, Path: path, Name: name, UpdatedAt: now, LastActiveAt: now}, nil
+}
+
+func (s *Store) RenameWorkspace(ctx context.Context, workspaceID, name string) (Workspace, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return Workspace{}, fmt.Errorf("localstore: not open")
+	}
+	workspaceID = strings.TrimSpace(workspaceID)
+	if workspaceID == "" {
+		return Workspace{}, fmt.Errorf("localstore: workspace id is empty")
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return Workspace{}, fmt.Errorf("localstore: workspace name is empty")
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	result, err := s.db.ExecContext(ctx,
+		`UPDATE workspaces SET name = ?, updated_at = ? WHERE id = ?`, name, now, workspaceID,
+	)
+	if err != nil {
+		return Workspace{}, fmt.Errorf("localstore: rename workspace: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return Workspace{}, fmt.Errorf("localstore: rename workspace rows affected: %w", err)
+	}
+	if rows == 0 {
+		return Workspace{}, fmt.Errorf("localstore: workspace not found")
+	}
+	return s.queryWorkspaceLocked(ctx, workspaceID)
+}
+
+func (s *Store) UpsertRecentFile(ctx context.Context, file types.RecentFile) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return fmt.Errorf("localstore: not open")
+	}
+	filePath := filepath.Clean(strings.TrimSpace(file.FilePath))
+	if filePath == "." || filePath == "" || !filepath.IsAbs(filePath) {
+		return fmt.Errorf("localstore: recent file path must be absolute")
+	}
+	fileName := strings.TrimSpace(file.FileName)
+	if fileName == "" {
+		return fmt.Errorf("localstore: recent file name is empty")
+	}
+	source := strings.TrimSpace(file.Source)
+	if source != "generated" && source != "local" {
+		return fmt.Errorf("localstore: recent file source must be generated or local")
+	}
+	lastOpenedAt := strings.TrimSpace(file.LastOpenedAt)
+	if lastOpenedAt == "" {
+		lastOpenedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	}
+	if _, err := s.db.ExecContext(ctx,
+		`INSERT INTO recent_files(file_path, file_name, document_type, source, workspace_id, task_id, conversation_id, last_opened_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		 ON CONFLICT(file_path) DO UPDATE SET
+		   file_name=excluded.file_name,
+		   document_type=excluded.document_type,
+		   source=excluded.source,
+		   workspace_id=excluded.workspace_id,
+		   task_id=excluded.task_id,
+		   conversation_id=excluded.conversation_id,
+		   last_opened_at=excluded.last_opened_at`,
+		filePath, fileName, strings.TrimSpace(file.DocumentType), source,
+		strings.TrimSpace(file.WorkspaceID), strings.TrimSpace(file.TaskID),
+		strings.TrimSpace(file.ConversationID), lastOpenedAt,
+	); err != nil {
+		return fmt.Errorf("localstore: upsert recent file: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) QueryRecentFiles(ctx context.Context, workspaceID string, limit int) ([]types.RecentFile, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return nil, fmt.Errorf("localstore: not open")
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	workspaceID = strings.TrimSpace(workspaceID)
+	query := `SELECT file_path, file_name, document_type, source, workspace_id, task_id, conversation_id, last_opened_at
+		FROM recent_files`
+	args := []any{}
+	if workspaceID != "" {
+		query += ` WHERE workspace_id = ?`
+		args = append(args, workspaceID)
+	}
+	query += ` ORDER BY last_opened_at DESC, file_path ASC LIMIT ?`
+	args = append(args, limit)
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("localstore: query recent files: %w", err)
+	}
+	defer rows.Close()
+	out := make([]types.RecentFile, 0)
+	for rows.Next() {
+		var file types.RecentFile
+		if err := rows.Scan(
+			&file.FilePath, &file.FileName, &file.DocumentType, &file.Source,
+			&file.WorkspaceID, &file.TaskID, &file.ConversationID, &file.LastOpenedAt,
+		); err != nil {
+			return nil, fmt.Errorf("localstore: scan recent file: %w", err)
+		}
+		out = append(out, file)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("localstore: iterate recent files: %w", err)
+	}
+	return out, nil
+}
+
+func (s *Store) RemoveRecentFile(ctx context.Context, filePath string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return fmt.Errorf("localstore: not open")
+	}
+	filePath = filepath.Clean(strings.TrimSpace(filePath))
+	if filePath == "." || filePath == "" || !filepath.IsAbs(filePath) {
+		return fmt.Errorf("localstore: recent file path must be absolute")
+	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM recent_files WHERE file_path = ?`, filePath); err != nil {
+		return fmt.Errorf("localstore: remove recent file: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) RemoveWorkspace(ctx context.Context, workspaceID string) error {

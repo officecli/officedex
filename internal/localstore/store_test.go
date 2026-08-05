@@ -148,6 +148,143 @@ func TestWorkspaceConversationMetadataPersists(t *testing.T) {
 	}
 }
 
+func TestRecentFilesUpsertSortFilterAndRemove(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+	root := t.TempDir()
+	olderPath := filepath.Join(root, "a.pptx")
+	newerPath := filepath.Join(root, "b.docx")
+	older := types.RecentFile{
+		FilePath: olderPath, FileName: "a.pptx", DocumentType: "pptx",
+		Source: "generated", WorkspaceID: "ws-a", LastOpenedAt: "2026-08-05T01:00:00Z",
+	}
+	newer := types.RecentFile{
+		FilePath: newerPath, FileName: "b.docx", DocumentType: "docx",
+		Source: "local", WorkspaceID: "ws-b", LastOpenedAt: "2026-08-05T02:00:00Z",
+	}
+	if err := store.UpsertRecentFile(ctx, older); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpsertRecentFile(ctx, newer); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.QueryRecentFiles(ctx, "", 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].FilePath != newerPath || got[1].FilePath != olderPath {
+		t.Fatalf("unexpected order: %#v", got)
+	}
+	filtered, err := store.QueryRecentFiles(ctx, "ws-a", 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(filtered) != 1 || filtered[0].FilePath != olderPath {
+		t.Fatalf("unexpected filter: %#v", filtered)
+	}
+	if err := store.RemoveRecentFile(ctx, olderPath); err != nil {
+		t.Fatal(err)
+	}
+	remaining, err := store.QueryRecentFiles(ctx, "", 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(remaining) != 1 || remaining[0].FilePath != newerPath {
+		t.Fatalf("unexpected remaining files: %#v", remaining)
+	}
+}
+
+func TestRecentFilesValidateInputAndDefaultLimit(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+	if err := store.UpsertRecentFile(ctx, types.RecentFile{FilePath: "relative.pptx", FileName: "relative.pptx", DocumentType: "pptx", Source: "generated", LastOpenedAt: "2026-08-05T01:00:00Z"}); err == nil {
+		t.Fatal("expected relative file path to be rejected")
+	}
+	if err := store.UpsertRecentFile(ctx, types.RecentFile{FilePath: filepath.Join(t.TempDir(), "bad.pptx"), FileName: "bad.pptx", DocumentType: "pptx", Source: "remote", LastOpenedAt: "2026-08-05T01:00:00Z"}); err == nil {
+		t.Fatal("expected invalid source to be rejected")
+	}
+	files, err := store.QueryRecentFiles(ctx, "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if files == nil {
+		t.Fatal("expected an empty slice, got nil")
+	}
+}
+
+func TestRenameWorkspacePreservesPathAndConversations(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+	workspace, err := store.EnsureWorkspace(ctx, filepath.Join(t.TempDir(), "client-a"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.EnsureConversation(ctx, workspace.ID, "conv-rename", "Quarterly plan"); err != nil {
+		t.Fatal(err)
+	}
+	renamed, err := store.RenameWorkspace(ctx, workspace.ID, "  New client name  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if renamed.Name != "New client name" || renamed.Path != workspace.Path {
+		t.Fatalf("renamed workspace = %#v, want preserved path and trimmed name", renamed)
+	}
+	summaries, err := store.QueryWorkspaceSummaries(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(summaries) != 1 || summaries[0].Name != "New client name" || len(summaries[0].Conversations) != 1 || summaries[0].Conversations[0].ConversationID != "conv-rename" {
+		t.Fatalf("unexpected summaries after rename: %#v", summaries)
+	}
+	if _, err := store.RenameWorkspace(ctx, workspace.ID, "   "); err == nil {
+		t.Fatal("expected empty workspace name to be rejected")
+	}
+}
+
+func TestMigrateV5ToV6PreservesTasks(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "officedex.db")
+	ctx := context.Background()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ddl := range []string{schema, schemaV1, schemaV2, schemaV3, schemaV4, schemaV5} {
+		if _, err := db.ExecContext(ctx, ddl); err != nil {
+			t.Fatalf("apply v5 fixture schema: %v", err)
+		}
+	}
+	if _, err := db.ExecContext(ctx, `
+		INSERT INTO tasks(id, status, document_type, topic, updated_at, conversation_id, parent_task_id, workspace_id)
+		VALUES ('legacy-task', 'completed', 'pptx', 'Legacy deck', '2026-08-01T00:00:00Z', '', '', '');
+		PRAGMA user_version = 5;
+	`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store := New(path)
+	if err := store.Open(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	var version, taskCount, recentTableCount int
+	if err := store.db.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM tasks WHERE id = 'legacy-task'`).Scan(&taskCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'recent_files'`).Scan(&recentTableCount); err != nil {
+		t.Fatal(err)
+	}
+	if version != 6 || taskCount != 1 || recentTableCount != 1 {
+		t.Fatalf("version=%d taskCount=%d recentTableCount=%d, want 6/1/1", version, taskCount, recentTableCount)
+	}
+}
+
 func TestTaskAnswersPersistAndHydrateHistory(t *testing.T) {
 	store := newTempStore(t)
 	ctx := context.Background()
@@ -496,8 +633,8 @@ func TestSchemaMigrationFromV1DB(t *testing.T) {
 	if err := store.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 5 {
-		t.Errorf("user_version = %d, want 5", version)
+	if version != 6 {
+		t.Errorf("user_version = %d, want 6", version)
 	}
 
 	events, err := store.QueryEventsByTask(ctx, "legacy-task")
@@ -898,8 +1035,8 @@ func TestSchemaV1MigrationFromLegacyDB(t *testing.T) {
 	if err := store.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 5 {
-		t.Errorf("user_version = %d, want 5", version)
+	if version != 6 {
+		t.Errorf("user_version = %d, want 6", version)
 	}
 	if err := store.Close(); err != nil {
 		t.Fatal(err)

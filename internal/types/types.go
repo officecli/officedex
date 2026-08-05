@@ -153,6 +153,17 @@ type Artifact struct {
 	SyncedAt     string `json:"syncedAt,omitempty"`
 }
 
+type RecentFile struct {
+	FilePath       string `json:"filePath"`
+	FileName       string `json:"fileName"`
+	DocumentType   string `json:"documentType"`
+	Source         string `json:"source"`
+	WorkspaceID    string `json:"workspaceId,omitempty"`
+	TaskID         string `json:"taskId,omitempty"`
+	ConversationID string `json:"conversationId,omitempty"`
+	LastOpenedAt   string `json:"lastOpenedAt"`
+}
+
 type GenerateInput struct {
 	DocumentType     DocumentType                   `json:"documentType"`
 	Topic            string                         `json:"topic"`
