@@ -1,7 +1,7 @@
 import type { DocumentType, GenerateInput, ProxySettings } from "../shared/types";
 import { DOCUMENT_TYPES, getCapability } from "../shared/types";
 
-export type NavKey = "home" | "dialogue" | "tasks" | "settings" | "login";
+export type NavKey = "home" | "spreadsheet" | "dialogue" | "tasks" | "settings" | "login";
 
 export const defaultGenerateInput: Partial<GenerateInput> = {
   documentType: "pptx",
