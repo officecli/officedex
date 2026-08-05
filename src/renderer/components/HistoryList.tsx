@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
-import { DeleteOutlined, DownOutlined, EditOutlined, FolderAddOutlined, FolderOpenOutlined, MoreOutlined, RightOutlined } from "@ant-design/icons";
+import { DeleteOutlined, DownOutlined, EditOutlined, FolderAddOutlined, FolderOpenOutlined, MoreOutlined, RightOutlined } from "../ui/icons";
 import { Dropdown, Tooltip, type MenuProps } from "antd";
 import type { DesktopTask, WorkspaceConversationSummary, WorkspaceSummary } from "../../shared/types";
 import { FileGlyph, StatusDot } from "./Shell";

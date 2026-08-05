@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Tooltip } from "antd";
-import { BarChartOutlined, PictureOutlined } from "@ant-design/icons";
+import { BarChartOutlined, PictureOutlined } from "../ui/icons";
 import type { VibeProjectTreeNode, VibeVisualAsset } from "../../shared/types";
 import { workerSetTimeout, workerClearTimeout } from "../workerTimer";
 

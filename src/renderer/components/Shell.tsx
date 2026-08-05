@@ -32,7 +32,7 @@ import {
   UserOutlined,
   UnlockOutlined,
   UnorderedListOutlined,
-} from "@ant-design/icons";
+} from "../ui/icons";
 import { PanelLeft, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { notion } from "../designTokens";
 import type { NavKey } from "../defaults";

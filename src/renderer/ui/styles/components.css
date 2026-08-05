@@ -203,6 +203,10 @@
   to { transform: rotate(360deg); }
 }
 
+.ui-icon--spin {
+  animation: ui-spin 700ms linear infinite;
+}
+
 .ui-dialog-mask {
   position: fixed;
   inset: 0;
