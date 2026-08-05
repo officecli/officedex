@@ -9,12 +9,15 @@ import "./styles/tokens.css";
 import "./styles/components.css";
 
 export { Button, type ButtonProps } from "./components/Button";
+export { Form, useForm, type FormInstance, type FormItemProps, type FormProps, type FormRule } from "./components/Form";
 export { Input, type InputProps } from "./components/Input";
 export { Loading, type LoadingProps } from "./components/Loading";
+export { PasswordInput, type PasswordInputProps } from "./components/PasswordInput";
 export { Popover, type PopoverProps } from "./components/Popover";
 export { RadioGroup, type RadioGroupItemProps, type RadioGroupProps } from "./components/RadioGroup";
 export { Select, type SelectOption, type SelectProps, type SelectValue } from "./components/Select";
 export { Switch, type SwitchProps } from "./components/Switch";
+export { TextArea, type TextAreaProps } from "./components/TextArea";
 export { DialogHost, dialog, type DialogRequest } from "./services/dialog";
 export { ToastHost, toast, type ToastOptions, type ToastTone } from "./services/toast";
 export * from "./types";
