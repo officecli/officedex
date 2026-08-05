@@ -456,6 +456,26 @@ export interface PreviewGrant {
   documentType: string;
 }
 
+export interface PrepareXlsxEditorResult {
+  sessionId: string;
+  modocContent: string;
+}
+
+export interface SaveXlsxEditorInput {
+  previewToken: string;
+  sessionId: string;
+  modocContent: string;
+}
+
+export interface SaveXlsxEditorResult {
+  filePath: string;
+}
+
+export interface CloseXlsxEditorInput {
+  previewToken: string;
+  sessionId: string;
+}
+
 export type WhoAmIMode = "logged_in" | "anonymous" | "api_key";
 
 export interface WhoAmIResult {
@@ -703,6 +723,9 @@ export interface DesktopAPI {
   previewArtifact(artifact: Artifact): Promise<void>;
   issuePreviewToken(artifact: Artifact): Promise<PreviewGrant>;
   revokePreviewToken(token: string): Promise<void>;
+  prepareXlsxEditor(previewToken: string): Promise<PrepareXlsxEditorResult>;
+  saveXlsxEditor(input: SaveXlsxEditorInput): Promise<SaveXlsxEditorResult>;
+  closeXlsxEditor(input: CloseXlsxEditorInput): Promise<void>;
   readArtifactFile(previewToken: string): Promise<{ data: BinaryFileData }>;
   readLocalImage(filePath: string): Promise<{ data: BinaryFileData; mime: string }>;
   copyImageToClipboard(filePath: string): Promise<void>;
