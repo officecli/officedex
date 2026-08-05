@@ -1,4 +1,4 @@
-import { Button, Modal, Progress, Select, Space, Spin, Switch, Tag, message } from "antd";
+import { Button, Modal, Progress, Select, Space, Spin, Switch, Tag, toast as message } from "../ui";
 import {
   CommentOutlined,
   CopyOutlined,
@@ -13,7 +13,7 @@ import {
   RocketOutlined,
   SafetyCertificateOutlined,
   SyncOutlined,
-} from "@ant-design/icons";
+} from "../ui/icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MaterialSymbol } from "../components/Shell";
 import { DiagnosticsPanel } from "../components/DiagnosticsPanel";
@@ -600,19 +600,17 @@ function ProviderFormControl({
       if (!customProviderEnabled && (patch.type === "custom" || draft.type !== "official")) {
         return;
       }
-      setDraft((current) => {
-        const next = { ...current, ...patch };
-        if (providerHasContent(next)) {
-          onSave(next);
-        } else if (remote !== null) {
-          onSave(null);
-        }
-        return next;
-      });
+      const next = { ...draft, ...patch };
+      setDraft(next);
+      if (providerHasContent(next)) {
+        onSave(next);
+      } else if (remote !== null) {
+        onSave(null);
+      }
       // Stale test result no longer reflects the current configuration.
       setTestResult(null);
     },
-    [onSave, remote],
+    [customProviderEnabled, draft, onSave, remote],
   );
 
   const handleClear = useCallback(() => {

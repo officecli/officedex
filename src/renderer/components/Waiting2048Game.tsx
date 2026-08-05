@@ -1,4 +1,4 @@
-import { Button } from "antd";
+import { Button } from "../ui";
 import { RotateCcw, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { useT } from "../i18n";

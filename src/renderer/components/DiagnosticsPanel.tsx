@@ -1,5 +1,5 @@
-import { Button, Tag, message } from "antd";
-import { CopyOutlined, DownloadOutlined, RocketOutlined } from "@ant-design/icons";
+import { Button, Tag, toast as message } from "../ui";
+import { CopyOutlined, DownloadOutlined, RocketOutlined } from "../ui/icons";
 import { useCallback, useState } from "react";
 import { officecli } from "../bridge";
 import { useT } from "../i18n";

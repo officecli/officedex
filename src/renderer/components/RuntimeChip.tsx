@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Tag, Tooltip } from "antd";
-import { ThunderboltOutlined, CloudOutlined, ClockCircleOutlined } from "@ant-design/icons";
+import { Tag, Tooltip } from "../ui";
+import { ThunderboltOutlined, CloudOutlined, ClockCircleOutlined } from "../ui/icons";
 import { officecli } from "../bridge";
 import { useT } from "../i18n";
 import type { BridgeRuntimeSnapshot, UserSettings } from "../../shared/types";

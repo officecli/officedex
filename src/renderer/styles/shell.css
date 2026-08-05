@@ -476,16 +476,16 @@
   font-variant-numeric: tabular-nums;
 }
 
-.credit-meter-bar.ant-progress {
+.credit-meter-bar.ui-progress {
   margin: 0;
   line-height: 1;
 }
 
-.credit-meter-bar.ant-progress .ant-progress-inner {
+.credit-meter-bar.ui-progress .ui-progress__track {
   height: 4px !important;
 }
 
-.credit-meter-bar.ant-progress .ant-progress-bg {
+.credit-meter-bar.ui-progress .ui-progress__bar {
   height: 4px !important;
 }
 
@@ -686,7 +686,7 @@
 .fluid-shell h1,
 .fluid-shell h2,
 .fluid-shell h3,
-.fluid-shell .page-header .ant-typography {
+.fluid-shell .page-header .ui-typography {
   font-family: var(--font-body);
   font-weight: 650;
 }
@@ -781,7 +781,7 @@
     width: 100%;
   }
 
-  .sidebar .ant-btn {
+  .sidebar .ui-button {
     width: 100%;
     padding-inline: 0;
   }
@@ -802,7 +802,7 @@
   .workspace-row-action,
   .history-item-delete,
   .profile-link span,
-  .sidebar .ant-btn > span:not(.anticon):not(.ant-btn-icon) {
+  .sidebar .ui-button > span:not(.anticon):not(.ui-button__icon) {
     display: none;
   }
 
@@ -824,8 +824,8 @@
 
   .global-search,
   .breadcrumb,
-  .topbar .ant-badge,
-  .topbar > .ant-btn:not(:last-child) {
+  .topbar .ui-badge,
+  .topbar > .ui-button:not(:last-child) {
     display: none;
   }
 }

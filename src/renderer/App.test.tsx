@@ -1141,7 +1141,7 @@ describe("App task flow", () => {
     expect(composer).toBeTruthy();
     const textarea = within(composer).getByRole("textbox");
     fireEvent.change(textarea, { target: { value: "Make the sky brighter" } });
-    const submitBtn = composer.querySelector(".composer-row .ant-btn-primary")!;
+    const submitBtn = within(composer).getByRole("button", { name: /generate/i });
     fireEvent.click(submitBtn);
 
     await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
@@ -1180,7 +1180,7 @@ describe("App task flow", () => {
     fireEvent.click(within(composer).getByLabelText("Portrait"));
     const textarea = within(composer).getByRole("textbox");
     fireEvent.change(textarea, { target: { value: "Make it vertical" } });
-    const submitBtn = composer.querySelector(".composer-row .ant-btn-primary")!;
+    const submitBtn = within(composer).getByRole("button", { name: /generate/i });
     fireEvent.click(submitBtn);
 
     await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
@@ -1222,7 +1222,7 @@ describe("App task flow", () => {
     fireEvent.change(within(composer).getByRole("textbox"), {
       target: { value: "Make the sky brighter" },
     });
-    fireEvent.click(composer.querySelector(".composer-row .ant-btn-primary")!);
+    fireEvent.click(within(composer).getByRole("button", { name: /generate/i }));
     await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
 
     act(() => {
@@ -1266,7 +1266,7 @@ describe("App task flow", () => {
     fireEvent.change(within(composer).getByRole("textbox"), {
       target: { value: "Make the sky brighter" },
     });
-    fireEvent.click(composer.querySelector(".composer-row .ant-btn-primary")!);
+    fireEvent.click(within(composer).getByRole("button", { name: /generate/i }));
     await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
 
     act(() => {
@@ -1365,7 +1365,7 @@ function demoNodeCard(title: string) {
 }
 
 function currentOpenDemoPopover(title?: string, summary?: string) {
-  const popovers = Array.from(document.querySelectorAll(".ant-popover:not(.ant-popover-hidden) .living-tree-popover"));
+  const popovers = Array.from(document.querySelectorAll(".ui-popover[data-open='true'] .living-tree-popover"));
   if (title) {
     const matched = popovers.find((popover) => {
       const text = popover.textContent ?? "";

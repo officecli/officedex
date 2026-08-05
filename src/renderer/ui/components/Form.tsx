@@ -1,7 +1,7 @@
 import { Children, cloneElement, createContext, isValidElement, useContext, useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactElement, type ReactNode } from "react";
 import { formValueEvent, type FormAwareComponent, type FormValueEventName } from "../formControl";
 
-type FormValues = Record<string, unknown>;
+type FormValues = object;
 
 export interface FormRule {
   readonly required?: boolean;
@@ -54,7 +54,7 @@ interface RegisteredField {
 }
 
 interface FormContextValue {
-  readonly values: FormValues;
+  readonly values: Record<string, unknown>;
   readonly errors: Record<string, string>;
   readonly setField: (name: string, value: unknown) => void;
   readonly register: (field: RegisteredField) => () => void;
@@ -73,8 +73,9 @@ export interface FormProps<T extends FormValues> extends Omit<React.FormHTMLAttr
 
 function valueFromArgs(args: unknown[]): unknown {
   const first = args[0];
-  if (first && typeof first === "object" && "currentTarget" in first) {
-    const target = (first as { currentTarget?: { value?: unknown; checked?: boolean; type?: string } }).currentTarget;
+  if (first && typeof first === "object" && ("currentTarget" in first || "target" in first)) {
+    const event = first as { currentTarget?: { value?: unknown; checked?: boolean; type?: string }; target?: { value?: unknown; checked?: boolean; type?: string } };
+    const target = event.currentTarget ?? event.target;
     return target?.type === "checkbox" ? target.checked : target?.value;
   }
   return first;
@@ -153,7 +154,7 @@ function FormRoot<T extends FormValues>({ form, initialValues, onFinish, onValue
   });
 
   const context = useMemo<FormContextValue>(() => ({
-    values: values as FormValues,
+    values: values as Record<string, unknown>,
     errors,
     setField: (name, value) => {
       if (Object.is(valuesRef.current[name as keyof T], value)) return;
@@ -190,29 +191,34 @@ function FormRoot<T extends FormValues>({ form, initialValues, onFinish, onValue
 }
 
 export interface FormItemProps {
-  readonly name: string;
+  readonly name?: string;
   readonly label?: ReactNode;
   readonly rules?: readonly FormRule[];
   readonly hidden?: boolean;
   readonly noStyle?: boolean;
+  readonly extra?: ReactNode;
+  readonly required?: boolean;
+  readonly validateStatus?: "success" | "warning" | "error" | "validating";
+  readonly help?: ReactNode;
   readonly children: ReactElement;
 }
 
-function FormItem({ name, label, rules = [], hidden, noStyle, children }: FormItemProps) {
+function FormItem({ name, label, rules = [], hidden, noStyle, extra, required, validateStatus, help, children }: FormItemProps) {
   const context = useContext(FormContext);
   const id = useId();
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   if (!context) throw new Error("Form.Item must be rendered inside Form");
 
-  useEffect(() => context.register({ name, rules, element: wrapperRef.current }), [context, name, rules]);
+  useEffect(() => name ? context.register({ name, rules, element: wrapperRef.current }) : undefined, [context, name, rules]);
 
   const child = Children.only(children);
   if (!isValidElement(child)) return null;
   const component = child.type as FormAwareComponent;
   const trigger: FormValueEventName = component[formValueEvent] ?? "onChange";
   const original = (child.props as Record<string, unknown>)[trigger];
-  const error = context.errors[name];
-  const control = cloneElement(child, {
+  const error = name ? context.errors[name] : undefined;
+  const control = name ? cloneElement(child, {
+    id: (child.props as { id?: string }).id ?? id,
     value: context.values[name] ?? "",
     [trigger]: (...args: unknown[]) => {
       if (typeof original === "function") (original as (...values: unknown[]) => void)(...args);
@@ -220,13 +226,14 @@ function FormItem({ name, label, rules = [], hidden, noStyle, children }: FormIt
     },
     "aria-invalid": error ? true : undefined,
     "aria-describedby": error ? id : undefined,
-  } as Record<string, unknown>);
+  } as Record<string, unknown>) : child;
 
   return (
     <div ref={wrapperRef} className={noStyle ? "ui-form-item ui-form-item--no-style" : "ui-form-item"} hidden={hidden}>
-      {label && !noStyle ? <label className="ui-form-item__label">{label}</label> : null}
+      {label && !noStyle ? <label className="ui-form-item__label" htmlFor={name ? ((child.props as { id?: string }).id ?? id) : undefined}>{label}{required ? <span aria-hidden="true"> *</span> : null}</label> : null}
       {control}
-      {error ? <div className="ui-form-item__error" id={id} role="alert">{error}</div> : null}
+      {extra ? <div className="ui-form-item__extra">{extra}</div> : null}
+      {error || help ? <div className="ui-form-item__error" data-status={validateStatus} id={id} role="alert">{error ?? help}</div> : null}
     </div>
   );
 }

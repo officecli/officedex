@@ -1,5 +1,5 @@
-import { Button, Form, Modal, message } from "antd";
-import { CopyOutlined } from "@ant-design/icons";
+import { Button, Form, Modal, toast as message } from "../ui";
+import { CopyOutlined } from "../ui/icons";
 import { useEffect, useState } from "react";
 import type { PeekReportContextResult, SubmitReportInput } from "../../shared/types";
 import { officecli } from "../bridge";

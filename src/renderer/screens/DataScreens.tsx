@@ -1,6 +1,5 @@
-import { Button, Empty, Table, Tag, Tooltip, Typography } from "antd";
-import type { ColumnsType } from "antd/es/table";
-import { PlusOutlined } from "@ant-design/icons";
+import { Button, Empty, Table, Tag, Tooltip, Typography, type TableColumn } from "../ui";
+import { PlusOutlined } from "../ui/icons";
 import type { DesktopTask } from "../../shared/types";
 import { useT } from "../i18n";
 
@@ -42,7 +41,7 @@ function formatRelativeTime(iso: string | undefined, t: Translator): { label: st
 export function TasksScreen({ tasks, onSelectTask, onNewGeneration }: { tasks: DesktopTask[]; onSelectTask: (taskID: string) => void; onNewGeneration: () => void }) {
   const t = useT();
   const rows = tasks.map((task) => taskToRow(task, t));
-  const columns: ColumnsType<TaskRow> = [
+  const columns: TableColumn<TaskRow>[] = [
     {
       title: t("tasks.column.title"),
       dataIndex: "title",

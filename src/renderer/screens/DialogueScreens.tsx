@@ -1,4 +1,4 @@
-import { Button, Dropdown, Form, Image, InputNumber, message, Modal, Popover, Progress, Radio, Space, Spin, Tag, Timeline, Tooltip, type MenuProps } from "antd";
+import { Button, Dropdown, Form, Image, InputNumber, Modal, Popover, Progress, Radio, Space, Spin, Tag, Timeline, Tooltip, toast as message, type MenuProps } from "../ui";
 import {
   CheckCircleFilled,
   CheckCircleOutlined,
@@ -24,7 +24,7 @@ import {
   StopOutlined,
   UserOutlined,
   WarningFilled,
-} from "@ant-design/icons";
+} from "../ui/icons";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type DragEvent, type FormEvent, type ReactNode } from "react";
 import { getAttachmentSpec } from "../../shared/types";
 import type { Artifact, BridgeEvent, DesktopTask, DocumentType, GenerateInput, GenerationMode, ImagePromptSlot, ImagePromptTemplate, ImageRatio, ModifyPptistDeckResult, StageState, VibeProjectTreeNode, VibeTreeSnapshot, WorkspaceSummary } from "../../shared/types";
@@ -5732,6 +5732,7 @@ function ConversationFooter({ latestTask, onContinueGeneration, onContinueModify
           <Button
             type="primary"
             icon={<SendOutlined />}
+            aria-label={t("dialogue.generate")}
             disabled={inputDisabled || !continuationPrompt.trim()}
             onClick={submitContinuation}
           />

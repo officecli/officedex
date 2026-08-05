@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { createRoot, type Root } from "react-dom/client";
 import { Button } from "../components/Button";
 
 export interface DialogRequest {
@@ -9,16 +10,30 @@ export interface DialogRequest {
   readonly cancelText?: string;
   readonly tone?: "default" | "danger";
   readonly kind?: "confirm" | "info";
-  readonly onOk?: () => void | Promise<void>;
+  readonly onOk?: () => unknown | Promise<unknown>;
   readonly onCancel?: () => void;
 }
 
 let request: DialogRequest | null = null;
 const listeners = new Set<(next: DialogRequest | null) => void>();
+let fallbackRoot: Root | null = null;
+let fallbackContainer: HTMLDivElement | null = null;
+
+function ensureFallbackHost() {
+  if (listeners.size > 0 || typeof document === "undefined") return;
+  if (!fallbackRoot || !fallbackContainer?.isConnected) {
+    fallbackContainer = document.createElement("div");
+    fallbackContainer.dataset.uiDialogFallback = "true";
+    document.body.appendChild(fallbackContainer);
+    fallbackRoot = createRoot(fallbackContainer);
+    fallbackRoot.render(<DialogHost />);
+  }
+}
 
 function emit(next: DialogRequest | null) {
   request = next;
   listeners.forEach((listener) => listener(next));
+  if (next) ensureFallbackHost();
 }
 
 export const dialog = {

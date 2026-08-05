@@ -1,4 +1,4 @@
-import { Alert, Button, Modal, message, Select, Space, Switch, Tag } from "antd";
+import { Alert, Button, Modal, Select, Space, Switch, Tag, toast as message } from "../ui";
 import { useCallback, useEffect, useState } from "react";
 import { officecli } from "../bridge";
 import { useT } from "../i18n";

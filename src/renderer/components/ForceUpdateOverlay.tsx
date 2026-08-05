@@ -1,6 +1,6 @@
 import { useEffect } from "react";
-import { Button, Progress } from "antd";
-import { LockOutlined, RocketOutlined } from "@ant-design/icons";
+import { Button, Progress } from "../ui";
+import { LockOutlined, RocketOutlined } from "../ui/icons";
 import { notion } from "../designTokens";
 import type { AppUpdateRelease } from "../../shared/types";
 import type { UpdatePhase } from "../useAppUpdate";

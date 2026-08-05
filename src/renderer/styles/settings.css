@@ -130,7 +130,7 @@
   gap: 10px;
 }
 
-.setting-control > .ant-switch {
+.setting-control > .ui-switch {
   justify-self: end;
 }
 
@@ -141,7 +141,7 @@
   align-items: center;
 }
 
-.settings-stack .ant-input {
+.settings-stack .ui-input {
   grid-column: 1 / -1;
 }
 
@@ -237,7 +237,7 @@
   font-size: 24px;
 }
 
-.login-card .ant-form {
+.login-card .ui-form {
   margin-top: 24px;
   text-align: left;
 }
@@ -368,7 +368,7 @@
   margin-top: 2px;
 }
 
-.about-links .ant-btn {
+.about-links .ui-button {
   color: var(--n-steel);
   font-weight: 500;
 }
@@ -462,7 +462,7 @@
   gap: 12px;
 }
 
-.about-progress .ant-progress {
+.about-progress .ui-progress {
   flex: 1 1 auto;
   margin: 0;
 }
@@ -559,7 +559,7 @@
   .about-description {
     font-size: 15px;
   }
-  .about-actions .ant-btn {
+  .about-actions .ui-button {
     flex: 1 1 180px;
   }
 }

@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
 import type { DesktopAPI } from "../../shared/types";
+import { toast } from "../ui";
 
 const mockExportLogs = vi.fn();
 
@@ -13,17 +14,6 @@ vi.mock("../bridge", () => ({
     },
   }),
 }));
-
-vi.mock("antd", async () => {
-  const actual = await vi.importActual<typeof import("antd")>("antd");
-  return {
-    ...actual,
-    message: {
-      success: vi.fn(),
-      error: vi.fn(),
-    },
-  };
-});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -42,7 +32,7 @@ describe("DiagnosticsPanel", () => {
   });
 
   it("calls exportLogs on button click and shows success", async () => {
-    const { message: antdMessage } = await import("antd");
+    const success = vi.spyOn(toast, "success").mockImplementation(() => "toast-success");
     mockExportLogs.mockResolvedValueOnce({
       path: "/Users/test/Downloads/diag-bundle.zip",
       manifest: {
@@ -61,14 +51,14 @@ describe("DiagnosticsPanel", () => {
       expect(mockExportLogs).toHaveBeenCalledTimes(1);
     });
     await waitFor(() => {
-      expect(antdMessage.success).toHaveBeenCalledWith(
+      expect(success).toHaveBeenCalledWith(
         expect.stringContaining("/Users/test/Downloads/diag-bundle.zip"),
       );
     });
   });
 
   it("shows error message on export failure", async () => {
-    const { message: antdMessage } = await import("antd");
+    const error = vi.spyOn(toast, "error").mockImplementation(() => "toast-error");
     mockExportLogs.mockRejectedValueOnce(new Error("disk full"));
 
     render(<DiagnosticsPanel />);
@@ -76,7 +66,7 @@ describe("DiagnosticsPanel", () => {
     fireEvent.click(button);
 
     await waitFor(() => {
-      expect(antdMessage.error).toHaveBeenCalledWith("disk full");
+      expect(error).toHaveBeenCalledWith("disk full");
     });
   });
 });

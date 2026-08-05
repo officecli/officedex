@@ -81,16 +81,16 @@
   color: #1a2530;
 }
 
-.onboarding-field .ant-switch {
+.onboarding-field .ui-switch {
   align-self: flex-start;
 }
 
-.onboarding-field .ant-radio-group {
+.onboarding-field .ui-radio-group {
   align-self: flex-start;
 }
 
-.onboarding-field .ant-space-compact .ant-btn,
-.settings-panel .ant-space-compact .ant-btn {
+.onboarding-field .ui-space-compact .ui-button,
+.settings-panel .ui-space-compact .ui-button {
   height: 44px;
 }
 
@@ -121,7 +121,7 @@
   margin-top: 28px;
 }
 
-.onboarding-actions > .ant-btn-link {
+.onboarding-actions > .ui-button[data-variant="ghost-normal"] {
   height: 38px;
   padding-inline: 0;
 }
@@ -259,7 +259,7 @@
   margin-top: 6px;
 }
 
-.update-banner-progress .ant-progress {
+.update-banner-progress .ui-progress {
   flex: 1 1 auto;
   margin: 0;
 }
@@ -288,29 +288,29 @@
   align-self: flex-end;
 }
 
-.update-banner-actions .ant-btn-primary {
+.update-banner-actions .ui-button[data-variant="primary"] {
   background: #ffffff;
   color: var(--n-primary-pressed, #1a2530);
   border-color: #ffffff;
 }
 
-.update-banner-actions .ant-btn-primary:hover {
+.update-banner-actions .ui-button[data-variant="primary"]:hover {
   background: rgba(255, 255, 255, 0.92);
   color: var(--n-primary-deep, #05101a);
   border-color: rgba(255, 255, 255, 0.92);
 }
 
-.update-banner-actions .ant-btn-default:disabled {
+.update-banner-actions .ui-button[data-variant="secondary"]:disabled {
   background: transparent;
   color: rgba(255, 255, 255, 0.86);
   border-color: rgba(255, 255, 255, 0.5);
 }
 
-.update-banner-actions .ant-btn-text {
+.update-banner-actions .ui-button[data-variant="ghost-normal"] {
   color: rgba(255, 255, 255, 0.86);
 }
 
-.update-banner-actions .ant-btn-text:hover {
+.update-banner-actions .ui-button[data-variant="ghost-normal"]:hover {
   color: #ffffff;
   background: rgba(255, 255, 255, 0.12);
 }

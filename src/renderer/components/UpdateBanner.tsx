@@ -1,5 +1,5 @@
-import { Button, Progress } from "antd";
-import { CloseOutlined, DownloadOutlined, RocketOutlined } from "@ant-design/icons";
+import { Button, Progress } from "../ui";
+import { CloseOutlined, DownloadOutlined, RocketOutlined } from "../ui/icons";
 import { notion } from "../designTokens";
 import type { AppUpdateRelease } from "../../shared/types";
 import type { UpdatePhase } from "../useAppUpdate";

@@ -1,7 +1,6 @@
 import { Component, Suspense, useMemo } from "react";
 import type { ReactNode, ErrorInfo } from "react";
-import { ConfigProvider, Result, Button } from "antd";
-import { theme } from "../designTokens";
+import { Button, DialogHost, Result } from "../ui";
 import { LoadingState } from "./components/LoadingState";
 import { UnsupportedViewer } from "./viewers/UnsupportedViewer";
 import {
@@ -92,7 +91,8 @@ export default function PreviewApp() {
   })();
 
   return (
-    <ConfigProvider theme={theme}>
+    <>
+      <DialogHost />
       <div className="preview-root">
         <PreviewErrorBoundary>
           <Suspense fallback={<LoadingState fileName={fileName} />}>
@@ -100,6 +100,6 @@ export default function PreviewApp() {
           </Suspense>
         </PreviewErrorBoundary>
       </div>
-    </ConfigProvider>
+    </>
   );
 }

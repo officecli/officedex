@@ -1,4 +1,4 @@
-import { Select, Space } from "antd";
+import { Select, Space } from "../ui";
 import { providerPresets } from "../providerPresets";
 import { useT } from "../i18n";
 import type { LlmProvider, ProviderTestResult } from "../../shared/types";

@@ -66,14 +66,14 @@
   line-height: 1.55;
 }
 
-.vibe-demo-start textarea.ant-input {
+.vibe-demo-start textarea.ui-textarea {
   border-radius: 8px;
   color: var(--n-ink);
   font-size: 15px;
   line-height: 1.55;
 }
 
-.vibe-demo-start .ant-btn {
+.vibe-demo-start .ui-button {
   justify-self: end;
 }
 
@@ -123,8 +123,8 @@
   }
 
   .vibe-demo-nav,
-  .vibe-demo-nav .ant-btn,
-  .vibe-demo-start .ant-btn {
+  .vibe-demo-nav .ui-button,
+  .vibe-demo-start .ui-button {
     width: 100%;
   }
 }

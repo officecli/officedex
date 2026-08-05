@@ -1,5 +1,5 @@
-import { Button, ConfigProvider, Tag } from "antd";
-import { FileTextOutlined, FolderOpenOutlined, GlobalOutlined, LinkOutlined, SendOutlined } from "@ant-design/icons";
+import { Button, Tag } from "../ui";
+import { FileTextOutlined, FolderOpenOutlined, GlobalOutlined, LinkOutlined, SendOutlined } from "../ui/icons";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PptistSlide } from "../../shared/pptistProtocol";
 import { PptistEmbedPanel, type PptistEmbedPanelHandle } from "../components/PptistEmbedPanel";
@@ -178,8 +178,7 @@ export function PerfPptistCompletedScreen() {
   }
 
   return (
-    <ConfigProvider theme={{ token: { borderRadius: 8 } }}>
-      <main className="perf-pptist-page">
+    <main className="perf-pptist-page">
         <header className="perf-pptist-topbar">
           <div>
             <span>OfficeDex / OfficeDex Workspace</span>
@@ -261,7 +260,6 @@ export function PerfPptistCompletedScreen() {
             </aside>
           </div>
         </section>
-      </main>
-    </ConfigProvider>
+    </main>
   );
 }

@@ -167,7 +167,7 @@ describe("Shell sidebar layout", () => {
     fireEvent.click(toggle);
 
     await waitFor(() => {
-      expect(document.querySelector(".ant-tooltip:not(.ant-tooltip-hidden)")).toBeNull();
+      expect(document.querySelector(".ui-tooltip")).toBeNull();
     });
 
     expect(shell?.classList.contains("sidebar-collapsed")).toBe(true);
@@ -183,7 +183,7 @@ describe("Shell sidebar layout", () => {
     await screen.findByText("Expand sidebar");
     fireEvent.click(expandToggle);
     await waitFor(() => {
-      expect(document.querySelector(".ant-tooltip:not(.ant-tooltip-hidden)")).toBeNull();
+      expect(document.querySelector(".ui-tooltip")).toBeNull();
     });
     expect(css).toMatch(/\.sidebar-collapsed\s*\.sidebar-hover-zone:hover\s*\+\s*\.sidebar/s);
     expect(css).toMatch(/\.sidebar-collapsed\s*\.sidebar:hover/s);

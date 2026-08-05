@@ -1,11 +1,8 @@
-import { ConfigProvider, message } from "antd";
-import zhCN from "antd/locale/zh_CN";
-import enUS from "antd/locale/en_US";
+import { DialogHost, ToastHost, toast as message } from "./ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Artifact, BridgeEvent, DesktopTask, GenerateInput, ModifyInput, PreviewGrant, WorkspaceConversationSummary, WorkspaceSummary } from "../shared/types";
 import { applyTaskEvent, attachTaskContext, attachUserInput, createInitialTaskState, deleteConversation, deleteTask, getConversationList, getConversationTasks, type TaskContextPatch, type TaskState } from "./taskState";
 import { officecli } from "./bridge";
-import { theme } from "./designTokens";
 import { defaultGenerateInput, type NavKey } from "./defaults";
 import { Shell } from "./components/Shell";
 import { PreviewPanel } from "./components/PreviewPanel";
@@ -109,7 +106,6 @@ function OfficeDexApp() {
   const { credit, refresh: refreshCredit, nudgeForTaskTransition } = useCreditStatus();
   const locale = useLocale();
   const t = useT();
-  const antdLocale = locale === "zh" ? zhCN : enUS;
   const forceUpdate = appUpdate.status.mandatory && Boolean(appUpdate.release);
 
   const recordError = useCallback((text: string, kind: FailureKind, details?: string) => {
@@ -235,7 +231,6 @@ function OfficeDexApp() {
       .then((capabilities) => {
         const preview = typeof capabilities === "object" && capabilities !== null && "browserPreview" in capabilities;
         setCapabilityStatus(preview ? "Browser preview; bridge IPC requires Electron" : "Connected to officecli agent-bridge");
-        clearError();
       })
       .catch((error) => {
         const text = errorMessage(error);
@@ -804,7 +799,9 @@ function OfficeDexApp() {
 
   if (forceUpdate && appUpdate.release) {
     return (
-      <ConfigProvider theme={theme} locale={antdLocale}>
+      <>
+        <DialogHost />
+        <ToastHost />
         <ForceUpdateOverlay
           release={appUpdate.release}
           phase={appUpdate.phase}
@@ -814,12 +811,14 @@ function OfficeDexApp() {
           onUpdate={() => void appUpdate.download()}
           onInstall={() => void appUpdate.install()}
         />
-      </ConfigProvider>
+      </>
     );
   }
 
   return (
-    <ConfigProvider theme={theme} locale={antdLocale}>
+    <>
+      <DialogHost />
+      <ToastHost />
       {showBanner && appUpdate.release ? (
         <UpdateBanner
           release={appUpdate.release}
@@ -898,7 +897,7 @@ function OfficeDexApp() {
       {showOnboarding ? (
         <OnboardingScreen settings={persistedSettings} defaultWorkspaceDir={defaultWorkspaceDir} onComplete={() => setOnboardingDismissed(true)} />
       ) : null}
-    </ConfigProvider>
+    </>
   );
 }
 

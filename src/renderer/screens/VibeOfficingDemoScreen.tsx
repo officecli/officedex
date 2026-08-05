@@ -1,4 +1,4 @@
-import { Button, Tag } from "antd";
+import { Button, Tag } from "../ui";
 import { Presentation, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { DesktopTask, VibeProjectTreeNode, VibeTreeSnapshot, VibeTreeStage } from "../../shared/types";

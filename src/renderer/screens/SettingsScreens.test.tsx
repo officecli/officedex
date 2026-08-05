@@ -1,22 +1,9 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { Modal, message as antdMessage } from "antd";
+import { Modal, toast as antdMessage } from "../ui";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CreditStatus, DesktopAPI, UserSettings, WhoAmIResult } from "../../shared/types";
 import { officecli } from "../bridge";
 import { NOTIFICATIONS_STORAGE_KEY, readNotificationsEnabled } from "../notifications";
-
-vi.mock("antd", async () => {
-  const actual = await vi.importActual<typeof import("antd")>("antd");
-  return {
-    ...actual,
-    message: {
-      success: vi.fn(),
-      error: vi.fn(),
-      warning: vi.fn(),
-      destroy: vi.fn(),
-    },
-  };
-});
 
 const DEFAULT_PROXY = { enabled: false, url: "http://127.0.0.1:7890" };
 
@@ -127,6 +114,9 @@ async function cleanupAntdPortals() {
 }
 
 beforeEach(() => {
+  vi.spyOn(antdMessage, "success").mockImplementation(() => "test-toast");
+  vi.spyOn(antdMessage, "error").mockImplementation(() => "test-toast");
+  vi.spyOn(antdMessage, "warning").mockImplementation(() => "test-toast");
   vi.stubGlobal("localStorage", createMemoryStorage());
   installDomStubs();
   localStorage.removeItem(NOTIFICATIONS_STORAGE_KEY);
@@ -248,11 +238,8 @@ describe("SettingsScreen", () => {
     render(<SettingsScreen />);
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
 
-    // antd Select: locate by current displayed label, click to open dropdown
-    const trigger = await screen.findByText(/PowerPoint \(\.pptx\)/);
-    fireEvent.mouseDown(trigger);
-    const docxOption = await screen.findByText(/Word \(\.docx\)/);
-    fireEvent.click(docxOption);
+    const trigger = await screen.findByDisplayValue(/PowerPoint \(\.pptx\)/);
+    fireEvent.change(trigger, { target: { value: "docx" } });
 
     await waitFor(() => expect(updateSettingsSpy).toHaveBeenCalled());
     const last = updateSettingsSpy.mock.calls.at(-1)![0] as Partial<UserSettings>;
@@ -411,6 +398,7 @@ describe("SettingsScreen", () => {
   });
 
   it("Provider form is always visible and lets user edit api key", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     currentSettings = makeSettings({
       defaults: {
         documentType: "pptx",
@@ -423,13 +411,8 @@ describe("SettingsScreen", () => {
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
     await selectSettingsSection("Connection");
 
-    // Select Custom endpoint to reveal the input fields (Official is default)
-    // Ant Design Select: find the displayed value, click to open dropdown
-    const officialLabel = await screen.findByText("Official");
-    fireEvent.mouseDown(officialLabel);
-
-    const customOption = await screen.findByText("Custom endpoint");
-    fireEvent.click(customOption);
+    const providerSelect = await screen.findByDisplayValue("Official");
+    fireEvent.change(providerSelect, { target: { value: "custom" } });
 
     const apiKeyField = await screen.findByPlaceholderText(/api key/i);
     fireEvent.change(apiKeyField, { target: { value: "sk-new-key" } });
@@ -440,6 +423,7 @@ describe("SettingsScreen", () => {
       });
       expect(matched).toBe(true);
     });
+    expect(consoleError.mock.calls.flat().join("\n")).not.toContain("Cannot update a component");
   });
 
   it("requires sign-in before selecting and saving Custom endpoint", async () => {
@@ -483,11 +467,7 @@ describe("SettingsScreen", () => {
 
     expect(await screen.findByText(/may consume credits/i)).toBeTruthy();
     expect(testProviderSpy).not.toHaveBeenCalled();
-    const okButton = await waitFor(() => {
-      const buttons = document.querySelectorAll(".ant-modal-confirm-btns button");
-      if (buttons.length < 2) throw new Error("OK button not rendered yet");
-      return buttons[buttons.length - 1] as HTMLButtonElement;
-    });
+    const okButton = await screen.findByRole("button", { name: /run test/i });
     fireEvent.click(okButton);
 
     await waitFor(() => expect(testProviderSpy).toHaveBeenCalledTimes(1));
@@ -528,14 +508,7 @@ describe("SettingsScreen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /reset everything/i }));
 
-    // Modal.confirm renders portal-mounted buttons in .ant-modal-confirm-btns.
-    // Wait for it, then click the OK button (the danger-styled one).
-    const okButton = await waitFor(() => {
-      const buttons = document.querySelectorAll(".ant-modal-confirm-btns button");
-      const ok = Array.from(buttons).find((btn) => btn.classList.contains("ant-btn-dangerous"));
-      if (!ok) throw new Error("OK button not rendered yet");
-      return ok as HTMLButtonElement;
-    });
+    const okButton = within(await screen.findByRole("dialog")).getByRole("button", { name: /reset everything/i });
     fireEvent.click(okButton);
 
     await waitFor(() => {
@@ -555,12 +528,7 @@ describe("SettingsScreen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /show wizard/i }));
 
-    // OK button is the second action inside .ant-modal-confirm-btns (after Cancel).
-    const okButton = await waitFor(() => {
-      const buttons = document.querySelectorAll(".ant-modal-confirm-btns button");
-      if (buttons.length < 2) throw new Error("OK button not rendered yet");
-      return buttons[buttons.length - 1] as HTMLButtonElement;
-    });
+    const okButton = within(await screen.findByRole("dialog")).getByRole("button", { name: /show wizard/i });
     fireEvent.click(okButton);
 
     await waitFor(() => {

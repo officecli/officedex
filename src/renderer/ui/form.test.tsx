@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { Button, Form, Input, PasswordInput, TextArea } from "./index";
+import { Button, Form, Input, InputNumber, PasswordInput, Radio, TextArea } from "./index";
 
 describe("local form primitives", () => {
   it("focuses the first invalid field and submits valid values", async () => {
@@ -64,5 +64,22 @@ describe("local form primitives", () => {
     fireEvent.keyDown(input, { key: "Enter" });
     fireEvent.compositionEnd(input);
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("binds numeric and radio values through Form.Item", async () => {
+    const onFinish = vi.fn();
+    render(
+      <Form initialValues={{ fps: 12, ratio: "16:9" }} onFinish={onFinish}>
+        <Form.Item name="fps"><InputNumber aria-label="FPS" min={1} max={30} /></Form.Item>
+        <Form.Item name="ratio"><Radio.Group options={[{ value: "16:9", label: "Wide" }, { value: "1:1", label: "Square" }]} /></Form.Item>
+        <Button htmlType="submit">Generate</Button>
+      </Form>,
+    );
+    expect(screen.getByLabelText("Wide")).toBeChecked();
+    fireEvent.change(screen.getByLabelText("FPS"), { target: { value: "24" } });
+    fireEvent.click(screen.getByLabelText("Square"));
+    expect(screen.getByLabelText("Square")).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    await waitFor(() => expect(onFinish).toHaveBeenCalledWith({ fps: 24, ratio: "1:1" }));
   });
 });

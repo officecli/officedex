@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, cleanup, render, screen, fireEvent, waitFor, within } from "@testing-library/react";
-import { message } from "antd";
-import { actDestroy, actWrapper } from "antd/es/message";
+import { toast as message } from "../ui";
 import type { PeekReportContextResult, SubmitReportInput, SubmitReportResult } from "../../shared/types";
 
 const mockSubmitReport = vi.fn<(input: SubmitReportInput) => Promise<SubmitReportResult>>();
@@ -60,27 +59,23 @@ Object.defineProperty(window, "matchMedia", {
   })),
 });
 
-actWrapper((callback) => {
-  act(callback);
-});
-
 describe("ReportIssueDialog", () => {
   beforeEach(() => {
     mockSubmitReport.mockReset();
     mockPeekReportContext.mockReset();
     mockPeekReportContext.mockResolvedValue({ requestId: "req-abc-123", errorCode: "rate_limit", errorMessage: "Too many requests" });
+    vi.spyOn(message, "success").mockImplementation(() => "test-toast");
+    vi.spyOn(message, "error").mockImplementation(() => "test-toast");
   });
 
   afterEach(async () => {
     message.destroy();
     cleanup();
     await act(async () => {
-      // antd `message` portals schedule React work that lands after cleanup;
-      // yield macrotasks so the scheduler drains before vitest tears down jsdom.
       await new Promise((resolve) => setTimeout(resolve, 0));
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    actDestroy();
+    vi.restoreAllMocks();
   });
 
   it("displays context bar with requestId from peekReportContext", async () => {

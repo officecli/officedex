@@ -1,7 +1,8 @@
-import { act } from "@testing-library/react";
+import { act, render } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
-import { message, Modal } from "antd";
-import { afterEach } from "vitest";
+import { DialogHost, Modal, toast } from "../ui";
+import { createElement } from "react";
+import { afterEach, beforeEach } from "vitest";
 
 const getComputedStyleWithoutPseudo = window.getComputedStyle.bind(window);
 
@@ -33,8 +34,12 @@ Object.defineProperty(window, "getComputedStyle", {
   value: (element: Element, _pseudoElement?: string | null) => getComputedStyleWithoutPseudo(element),
 });
 
+beforeEach(() => {
+  render(createElement(DialogHost));
+});
+
 afterEach(async () => {
-  message.destroy();
+  toast.destroy();
   Modal.destroyAll();
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));

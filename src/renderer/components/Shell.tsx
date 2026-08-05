@@ -1,4 +1,4 @@
-import { Button, Progress, Space, Spin, Tooltip } from "antd";
+import { Button, Progress, Space, Spin, Tooltip } from "../ui";
 import { useEffect, useRef, useState } from "react";
 import {
   AppstoreOutlined,

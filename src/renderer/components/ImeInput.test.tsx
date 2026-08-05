@@ -75,7 +75,7 @@ describe("IME-safe inputs", () => {
 
     expect(textarea.tagName).toBe("TEXTAREA");
     expect(textarea.classList.contains("ui-textarea")).toBe(true);
-    expect(textarea.closest(".ant-input-textarea")).toBeNull();
+    expect(textarea).toHaveClass("ui-textarea");
 
     fireEvent.compositionStart(textarea);
     fireEvent.change(textarea, { target: { value: "zhong wen" } });

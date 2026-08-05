@@ -1,5 +1,3 @@
-import type { ThemeConfig } from "antd";
-
 export const notion = {
   primary: "#05101a",
   primaryPressed: "#1a2530",
@@ -40,7 +38,7 @@ export const notion = {
 const fontFamily = "'Inter', -apple-system, system-ui, 'Segoe UI', 'PingFang SC', sans-serif";
 const fontFamilyHeading = "'Plus Jakarta Sans', -apple-system, system-ui, 'Segoe UI', 'PingFang SC', sans-serif";
 
-export const theme: ThemeConfig = {
+export const theme = {
   token: {
     colorPrimary: notion.primary,
     colorLink: notion.secondary,

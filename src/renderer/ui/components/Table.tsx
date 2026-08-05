@@ -4,7 +4,7 @@ export interface TableColumn<Row> {
   readonly key?: string;
   readonly title: ReactNode;
   readonly dataIndex?: keyof Row;
-  readonly render?: (value: Row[keyof Row], row: Row, index: number) => ReactNode;
+  readonly render?: (value: any, row: Row, index: number) => ReactNode;
   readonly width?: number | string;
 }
 

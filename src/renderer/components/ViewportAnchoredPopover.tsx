@@ -1,6 +1,5 @@
-import { Popover, type PopoverProps } from "antd";
-import type { TooltipRef } from "antd/es/tooltip";
-import { useCallback, useLayoutEffect, useRef, type ReactElement } from "react";
+import { Popover, type PopoverProps } from "../ui";
+import { useCallback, useLayoutEffect, type ReactElement } from "react";
 
 type ViewportAnchoredPopoverProps = PopoverProps & {
   children: ReactElement;
@@ -8,8 +7,7 @@ type ViewportAnchoredPopoverProps = PopoverProps & {
 };
 
 export function ViewportAnchoredPopover({ children, onAlignerChange, open, ...popoverProps }: ViewportAnchoredPopoverProps) {
-  const popoverRef = useRef<TooltipRef>(null);
-  const forceAlign = useCallback(() => popoverRef.current?.forceAlign(), []);
+  const forceAlign = useCallback(() => window.dispatchEvent(new Event("resize")), []);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -19,7 +17,7 @@ export function ViewportAnchoredPopover({ children, onAlignerChange, open, ...po
   }, [forceAlign, onAlignerChange, open]);
 
   return (
-    <Popover ref={popoverRef} open={open} {...popoverProps}>
+    <Popover open={open} {...popoverProps}>
       {children}
     </Popover>
   );

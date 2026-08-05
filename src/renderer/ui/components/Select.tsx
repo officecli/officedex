@@ -1,33 +1,39 @@
 import type { ChangeEvent, ReactNode, SelectHTMLAttributes } from "react";
+import { formValueEvent } from "../formControl";
 
 export type SelectValue = string | number;
-export interface SelectOption {
-  readonly value: SelectValue;
+export interface SelectOption<T extends SelectValue = SelectValue> {
+  readonly value: T;
   readonly label: ReactNode;
   readonly disabled?: boolean;
 }
 
-export interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, "defaultValue" | "onChange" | "size" | "value"> {
+export interface SelectProps<T extends SelectValue = SelectValue> extends Omit<SelectHTMLAttributes<HTMLSelectElement>, "defaultValue" | "onChange" | "size" | "value"> {
   readonly ariaLabel?: string;
-  readonly options: readonly SelectOption[];
-  readonly value?: SelectValue | null;
-  readonly defaultValue?: SelectValue | null;
+  readonly options: readonly SelectOption<T>[];
+  readonly value?: T | null;
+  readonly defaultValue?: T | null;
   readonly size?: "small" | "smallPlus" | "medium" | "large";
-  readonly onValueChange?: (value: SelectValue, option: SelectOption, event: ChangeEvent<HTMLSelectElement>) => void;
+  readonly onValueChange?: (value: T, option: SelectOption<T>, event: ChangeEvent<HTMLSelectElement>) => void;
+  readonly onChange?: (value: T, option: SelectOption<T>) => void;
 }
 
-export function Select({ ariaLabel, options, value, defaultValue, size = "medium", onValueChange, className, ...props }: SelectProps) {
+function SelectRoot<T extends SelectValue>({ ariaLabel, options, value, defaultValue, size = "medium", onValueChange, onChange, className, ...props }: SelectProps<T>) {
+  const resolvedAriaLabel = ariaLabel ?? (props as Record<string, unknown>)["aria-label"] as string | undefined;
   return (
     <select
       {...props}
-      aria-label={ariaLabel}
+      aria-label={resolvedAriaLabel}
       className={["ui-select", className].filter(Boolean).join(" ")}
       data-size={size}
       value={value ?? undefined}
       defaultValue={defaultValue ?? undefined}
       onChange={(event) => {
         const option = options.find((item) => String(item.value) === event.currentTarget.value);
-        if (option) onValueChange?.(option.value, option, event);
+        if (option) {
+          onChange?.(option.value, option);
+          onValueChange?.(option.value, option, event);
+        }
       }}
     >
       {options.map((option) => (
@@ -38,3 +44,5 @@ export function Select({ ariaLabel, options, value, defaultValue, size = "medium
     </select>
   );
 }
+
+export const Select = Object.assign(SelectRoot, { [formValueEvent]: "onChange" as const });

@@ -1,4 +1,4 @@
-import { Button } from "antd";
+import { Button } from "../../ui";
 import { FileX2 } from "lucide-react";
 
 interface UnsupportedViewerProps {

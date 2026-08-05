@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { act, cleanup, createEvent, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { message as antdMessage } from "antd";
+import { toast as antdMessage } from "../ui";
 import { getAttachmentSpec } from "../../shared/types";
 import type { DesktopAPI, DesktopTask, GenerateInput, UserSettings, WorkspaceSummary } from "../../shared/types";
 import { officecli } from "../bridge";
@@ -12,19 +12,6 @@ import type { ImagePromptSlot, VibeTreeSnapshot } from "../../shared/types";
 import type { PptistSlide } from "../../shared/pptistProtocol";
 
 let resizeObserverRecords: Array<{ callback: ResizeObserverCallback; observed: Element[] }> = [];
-
-vi.mock("antd", async () => {
-  const actual = await vi.importActual<typeof import("antd")>("antd");
-  return {
-    ...actual,
-    message: {
-      success: vi.fn(),
-      error: vi.fn(),
-      warning: vi.fn(),
-      destroy: vi.fn(),
-    },
-  };
-});
 
 function installDomStubs() {
   Object.defineProperty(window, "matchMedia", {
@@ -110,6 +97,9 @@ function makeUserSettings(overrides: Partial<UserSettings> = {}): UserSettings {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.spyOn(antdMessage, "success").mockImplementation(() => "test-toast");
+  vi.spyOn(antdMessage, "error").mockImplementation(() => "test-toast");
+  vi.spyOn(antdMessage, "warning").mockImplementation(() => "test-toast");
   localStorage.clear();
   setPptistParsedSlidesPersistentCacheForTests(null);
   clearPptistParsedSlidesMemoryCacheForTests();
@@ -305,7 +295,7 @@ function deferred<T>() {
 }
 
 function currentVibePopoverTitle() {
-  const openPopovers = Array.from(document.querySelectorAll<HTMLElement>(".ant-popover:not(.ant-popover-hidden) .living-tree-popover"));
+  const openPopovers = Array.from(document.querySelectorAll<HTMLElement>(".ui-popover[data-open='true'] .living-tree-popover"));
   const fallbackPopovers = Array.from(document.querySelectorAll<HTMLElement>(".living-tree-popover"));
   const popover = openPopovers.at(-1) ?? fallbackPopovers.at(-1);
   if (popover?.dataset.nodeTitle) return popover.dataset.nodeTitle;
@@ -319,11 +309,11 @@ async function waitForVibePopoverTitle(title: string) {
 }
 
 function hasOpenVibeConfirmationPopover() {
-  return Boolean(document.querySelector(".ant-popover:not(.ant-popover-hidden) .living-tree-popover-confirm"));
+  return Boolean(document.querySelector(".ui-popover[data-open='true'] .living-tree-popover-confirm"));
 }
 
 function activeVibeStepOwnsOpenPopover() {
-  return Boolean(document.querySelector(".living-tree-step.is-active.ant-popover-open"));
+  return document.querySelector(".living-tree-step.is-active")?.getAttribute("aria-expanded") === "true";
 }
 
 function clickCurrentVibeConfirmButton() {
@@ -337,7 +327,7 @@ function clickCurrentVibeButton(name: string) {
 }
 
 function currentOpenVibePopover() {
-  const popovers = Array.from(document.querySelectorAll(".ant-popover:not(.ant-popover-hidden) .living-tree-popover"));
+  const popovers = Array.from(document.querySelectorAll(".ui-popover[data-open='true'] .living-tree-popover"));
   return popovers.at(-1) as HTMLElement | undefined;
 }
 
@@ -570,7 +560,7 @@ describe("DialogueScreen state machine", () => {
     rerender(<DialogueScreen {...baseProps()} tasks={[{ ...task, question: { ...question, id: "question-restore-option-next", currentIndex: 1 } }]} />);
     fireEvent.click(screen.getByRole("button", { name: /previous question/i }));
 
-    expect(screen.getByRole("button", { name: /^leadership$/i }).classList.contains("ant-btn-primary")).toBe(true);
+    expect(screen.getByRole("button", { name: /^leadership$/i })).toHaveAttribute("data-variant", "primary");
   });
 
   it("restores a custom plan question answer after the composer remounts", async () => {
@@ -656,7 +646,7 @@ describe("DialogueScreen state machine", () => {
     expect(input.closest("form")?.classList.contains("user-answer-selected")).toBe(true);
 
     fireEvent.click(screen.getByRole("button", { name: /previous question/i }));
-    expect(screen.getByRole("button", { name: /^leadership$/i }).classList.contains("ant-btn-primary")).toBe(true);
+    expect(screen.getByRole("button", { name: /^leadership$/i })).toHaveAttribute("data-variant", "primary");
   });
 
   it("submits ordered answers for a restored multi-step plan question", async () => {
@@ -1817,7 +1807,7 @@ describe("DialogueScreen state machine", () => {
     const deckRule = css.match(/^\.living-tree-flow-node\.is-deck\s*\{(?<body>[^}]*)\}/m)?.groups?.body ?? "";
     const deckPptxArtRule = css.match(/^\.living-tree-deck-pptx-art\s*\{(?<body>[^}]*)\}/m)?.groups?.body ?? "";
     const deckActionsRule = css.match(/^\.living-tree-flow-node\.is-deck\.has-completed-artifact \.living-tree-artifact-actions\s*\{(?<body>[^}]*)\}/m)?.groups?.body ?? "";
-    const deckButtonRule = css.match(/^\.living-tree-flow-node\.is-deck\.has-completed-artifact \.living-tree-artifact-actions \.ant-btn\s*\{(?<body>[^}]*)\}/m)?.groups?.body ?? "";
+    const deckButtonRule = css.match(/^\.living-tree-flow-node\.is-deck\.has-completed-artifact \.living-tree-artifact-actions \.ui-button\s*\{(?<body>[^}]*)\}/m)?.groups?.body ?? "";
 
     expect(firstSlide).toEqual(expect.objectContaining({ width: 416, height: 234 }));
     expect(secondSlide).toEqual(expect.objectContaining({ width: 416, height: 234 }));
@@ -4556,7 +4546,7 @@ describe("DialogueScreen state machine", () => {
       "More actions",
     ]);
     const openButton = within(actions as HTMLElement).getByRole("button", { name: /^open$/i });
-    expect(openButton.classList.contains("ant-btn-primary")).toBe(false);
+    expect(openButton).toHaveAttribute("data-variant", "secondary");
     expect(within(actions as HTMLElement).getByRole("button", { name: /show in folder/i })).toBeTruthy();
     expect(within(actions as HTMLElement).getByRole("button", { name: /more actions/i })).toBeTruthy();
   });
@@ -5478,14 +5468,14 @@ describe("DialogueScreen state machine", () => {
     expect(within(header as HTMLElement).queryByText(/^Image templates$/i)).toBeNull();
   });
 
-  it("shows an antd spinner and loading text while image templates are pending", async () => {
+  it("shows the facade loading indicator and loading text while image templates are pending", async () => {
     const pending = deferred<Awaited<ReturnType<DesktopAPI["listImageTemplates"]>>>();
     listImageTemplatesSpy.mockReturnValueOnce(pending.promise);
     render(<DialogueScreen {...baseProps()} newGenerationDraft={{ documentType: "img", topic: "", prompt: "" }} />);
 
-    expect(document.querySelector(".ant-spin")).toBeTruthy();
+    expect(document.querySelector(".ui-loading")).toBeTruthy();
     const loadingStatus = document.querySelector(".image-template-status")!;
-    const loadingText = Array.from(loadingStatus.children).find((child) => !child.classList.contains("ant-spin"));
+    const loadingText = Array.from(loadingStatus.children).find((child) => !child.classList.contains("ui-loading"));
     expect(loadingText?.textContent).toBe("Loading image templates…");
 
     await act(async () => {
@@ -5960,7 +5950,7 @@ describe("Bottom continuation composer — acceptance criteria", () => {
   it("T4: submit button disabled when textarea empty, enabled with non-whitespace", () => {
     const task = makeCompletedImageTask();
     render(<DialogueScreen {...baseProps()} tasks={[task]} />);
-    const submitBtn = document.querySelector(".composer-row .ant-btn-primary") as HTMLButtonElement;
+    const submitBtn = screen.getByRole("button", { name: /generate/i }) as HTMLButtonElement;
     expect(submitBtn.disabled).toBe(true);
 
     const textarea = screen.getByPlaceholderText(/describe what you want to generate/i);
@@ -5977,7 +5967,7 @@ describe("Bottom continuation composer — acceptance criteria", () => {
     fireEvent.click(screen.getByLabelText("Portrait"));
     const textarea = screen.getByPlaceholderText(/describe what you want to generate/i);
     fireEvent.change(textarea, { target: { value: "Add a sunset" } });
-    const submitBtn = document.querySelector(".composer-row .ant-btn-primary") as HTMLButtonElement;
+    const submitBtn = screen.getByRole("button", { name: /generate/i });
     fireEvent.click(submitBtn);
 
     expect(onContinueGeneration).toHaveBeenCalledTimes(1);
@@ -5995,7 +5985,7 @@ describe("Bottom continuation composer — acceptance criteria", () => {
     fireEvent.change(fpsInput, { target: { value: "12" } });
     const textarea = screen.getByPlaceholderText(/describe what you want to generate/i);
     fireEvent.change(textarea, { target: { value: "Make the wink slower" } });
-    const submitBtn = document.querySelector(".composer-row .ant-btn-primary") as HTMLButtonElement;
+    const submitBtn = screen.getByRole("button", { name: /generate/i });
     fireEvent.click(submitBtn);
 
     expect(onContinueGeneration).toHaveBeenCalledTimes(1);
@@ -6029,7 +6019,7 @@ describe("Bottom continuation composer — acceptance criteria", () => {
     expect(document.querySelectorAll(".reference-image-chip")).toHaveLength(1);
     const textarea = screen.getByPlaceholderText(/describe what you want to generate/i);
     fireEvent.change(textarea, { target: { value: "Add a sunset" } });
-    const submitBtn = document.querySelector(".composer-row .ant-btn-primary")!;
+    const submitBtn = screen.getByRole("button", { name: /generate/i });
     fireEvent.click(submitBtn);
 
     expect(onContinueGeneration).toHaveBeenCalledTimes(1);
@@ -6047,7 +6037,7 @@ describe("Bottom continuation composer — acceptance criteria", () => {
     expect(document.querySelectorAll(".reference-image-chip")).toHaveLength(0);
     const textarea = screen.getByPlaceholderText(/describe what you want to generate/i);
     fireEvent.change(textarea, { target: { value: "Add a sunset" } });
-    const submitBtn = document.querySelector(".composer-row .ant-btn-primary")!;
+    const submitBtn = screen.getByRole("button", { name: /generate/i });
     fireEvent.click(submitBtn);
 
     expect(onContinueGeneration).toHaveBeenCalledTimes(1);

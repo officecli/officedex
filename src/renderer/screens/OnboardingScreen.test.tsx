@@ -1,5 +1,5 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { Modal } from "antd";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { Modal } from "../ui";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OnboardingScreen } from "./OnboardingScreen";
 import { officecli } from "../bridge";
@@ -26,12 +26,23 @@ let openDirectoryDialogSpy: ReturnType<typeof vi.fn>;
 let testProviderSpy: ReturnType<typeof vi.fn>;
 let whoamiSpy: ReturnType<typeof vi.fn>;
 
-async function cleanupAntdPortals() {
+async function cleanupDialogPortals() {
   Modal.destroyAll();
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
   cleanup();
+}
+
+async function confirmationButton(kind: "cancel" | "ok") {
+  return waitFor(() => {
+    const dialogs = screen.getAllByRole("dialog");
+    const confirmation = dialogs.at(-1);
+    if (!confirmation || !confirmation.classList.contains("ui-dialog")) throw new Error("Confirmation dialog not rendered yet");
+    const buttons = within(confirmation).getAllByRole("button");
+    if (buttons.length < 2) throw new Error("Confirmation buttons not rendered yet");
+    return buttons[kind === "cancel" ? 0 : buttons.length - 1] as HTMLButtonElement;
+  });
 }
 
 beforeEach(() => {
@@ -69,7 +80,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  await cleanupAntdPortals();
+  await cleanupDialogPortals();
 });
 
 describe("OnboardingScreen", () => {
@@ -87,11 +98,7 @@ describe("OnboardingScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: /finish/i }));
 
     expect(await screen.findByText(/may consume credits/i)).toBeTruthy();
-    const okButton = await waitFor(() => {
-      const buttons = document.querySelectorAll(".ant-modal-confirm-btns button");
-      if (buttons.length < 2) throw new Error("OK button not rendered yet");
-      return buttons[buttons.length - 1] as HTMLButtonElement;
-    });
+    const okButton = await confirmationButton("ok");
     fireEvent.click(okButton);
 
     await waitFor(() => expect(updateSettingsSpy).toHaveBeenCalledTimes(1));
@@ -132,13 +139,7 @@ describe("OnboardingScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: /next/i }));
     expect(await screen.findByText("Provider setup")).toBeTruthy();
 
-    // Select Custom endpoint to reveal the input fields (Official is default)
-    // Ant Design Select: find the displayed value, click to open dropdown
-    const officialLabel = await screen.findByText("Official");
-    fireEvent.mouseDown(officialLabel);
-
-    const customOption = await screen.findByText("Custom endpoint");
-    fireEvent.click(customOption);
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "custom" } });
 
     const apiKeyField = await screen.findByPlaceholderText(/api key/i);
     fireEvent.change(apiKeyField, { target: { value: "sk-test-key" } });
@@ -159,19 +160,12 @@ describe("OnboardingScreen", () => {
     expect(await screen.findByText("Provider setup")).toBeTruthy();
     expect(await screen.findByText(/sign in to use custom endpoints/i)).toBeTruthy();
 
-    const officialLabel = await screen.findByText("Official");
-    fireEvent.mouseDown(officialLabel);
-    const customOption = await screen.findByText("Custom endpoint");
-    fireEvent.click(customOption);
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "custom" } });
 
     expect(screen.queryByPlaceholderText(/api key/i)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /finish/i }));
 
-    const okButton = await waitFor(() => {
-      const buttons = document.querySelectorAll(".ant-modal-confirm-btns button");
-      if (buttons.length < 2) throw new Error("OK button not rendered yet");
-      return buttons[buttons.length - 1] as HTMLButtonElement;
-    });
+    const okButton = await confirmationButton("ok");
     fireEvent.click(okButton);
 
     await waitFor(() => expect(updateSettingsSpy).toHaveBeenCalledTimes(1));
@@ -186,11 +180,7 @@ describe("OnboardingScreen", () => {
     expect(await screen.findByText("Provider setup")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /finish/i }));
 
-    const okButton = await waitFor(() => {
-      const buttons = document.querySelectorAll(".ant-modal-confirm-btns button");
-      if (buttons.length < 2) throw new Error("OK button not rendered yet");
-      return buttons[buttons.length - 1] as HTMLButtonElement;
-    });
+    const okButton = await confirmationButton("ok");
     fireEvent.click(okButton);
 
     await waitFor(() => expect(updateSettingsSpy).toHaveBeenCalledTimes(1));
@@ -209,11 +199,7 @@ describe("OnboardingScreen", () => {
 
     expect(await screen.findByText(/may consume credits/i)).toBeTruthy();
     expect(testProviderSpy).not.toHaveBeenCalled();
-    const okButton = await waitFor(() => {
-      const buttons = document.querySelectorAll(".ant-modal-confirm-btns button");
-      if (buttons.length < 2) throw new Error("OK button not rendered yet");
-      return buttons[buttons.length - 1] as HTMLButtonElement;
-    });
+    const okButton = await confirmationButton("ok");
     fireEvent.click(okButton);
 
     await waitFor(() => expect(testProviderSpy).toHaveBeenCalledTimes(1));
@@ -235,14 +221,10 @@ describe("OnboardingScreen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /finish/i }));
     expect(await screen.findByText(/may consume credits/i)).toBeTruthy();
-    const cancelButton = await waitFor(() => {
-      const buttons = document.querySelectorAll(".ant-modal-confirm-btns button");
-      if (buttons.length < 1) throw new Error("Cancel button not rendered yet");
-      return buttons[0] as HTMLButtonElement;
-    });
+    const cancelButton = await confirmationButton("cancel");
     fireEvent.click(cancelButton);
 
-    await waitFor(() => expect(document.querySelector(".ant-modal-confirm")).toBeNull());
+    await waitFor(() => expect(document.querySelector(".ui-dialog")).toBeNull());
     expect(testProviderSpy).not.toHaveBeenCalled();
     expect(updateSettingsSpy).not.toHaveBeenCalled();
     expect(onComplete).not.toHaveBeenCalled();
@@ -263,11 +245,7 @@ describe("OnboardingScreen", () => {
     expect(await screen.findByText("Provider setup")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /finish/i }));
-    const okButton = await waitFor(() => {
-      const buttons = document.querySelectorAll(".ant-modal-confirm-btns button");
-      if (buttons.length < 2) throw new Error("OK button not rendered yet");
-      return buttons[buttons.length - 1] as HTMLButtonElement;
-    });
+    const okButton = await confirmationButton("ok");
     fireEvent.click(okButton);
 
     expect(await screen.findByText("Configure proxy")).toBeTruthy();
@@ -290,11 +268,7 @@ describe("OnboardingScreen", () => {
     expect(await screen.findByText("Provider setup")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /finish/i }));
-    const okButton = await waitFor(() => {
-      const buttons = document.querySelectorAll(".ant-modal-confirm-btns button");
-      if (buttons.length < 2) throw new Error("OK button not rendered yet");
-      return buttons[buttons.length - 1] as HTMLButtonElement;
-    });
+    const okButton = await confirmationButton("ok");
     fireEvent.click(okButton);
 
     expect(await screen.findByText(/not enough credits/i)).toBeTruthy();
@@ -317,11 +291,7 @@ describe("OnboardingScreen", () => {
     render(<OnboardingScreen settings={baseSettings} defaultWorkspaceDir="/tmp/default-workspace" onComplete={onComplete} />);
     fireEvent.click(screen.getByRole("button", { name: /next/i }));
     fireEvent.click(await screen.findByRole("button", { name: /finish/i }));
-    const okButton = await waitFor(() => {
-      const buttons = document.querySelectorAll(".ant-modal-confirm-btns button");
-      if (buttons.length < 2) throw new Error("OK button not rendered yet");
-      return buttons[buttons.length - 1] as HTMLButtonElement;
-    });
+    const okButton = await confirmationButton("ok");
     fireEvent.click(okButton);
     expect(await screen.findByText("Configure proxy")).toBeTruthy();
 
