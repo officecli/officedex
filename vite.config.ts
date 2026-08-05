@@ -1,6 +1,6 @@
-import { readFile, lstat } from "node:fs/promises";
+import { cp, lstat, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, type Plugin, type ResolvedConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
 import { resolveUiKitBackendAlias } from "./src/renderer/ui/resolveUiKit";
@@ -14,25 +14,25 @@ const alias = [
   },
 ];
 
-function sdkSheetDevAssets(): Plugin {
-  const routes = [
-    {
-      prefix: "/sdk-sheet/",
-      root: fileURLToPath(new URL("./node_modules/@shimo/sdk-sheet/lib", import.meta.url)),
-    },
-    {
-      prefix: "/sdk-sheet-locales/",
-      root: fileURLToPath(new URL("./node_modules/@shimo/sdk-sheet/locales", import.meta.url)),
-    },
-  ];
+const sdkSheetAssetRoutes = [
+  {
+    prefix: "/sdk-sheet/",
+    root: fileURLToPath(new URL("./node_modules/@shimo/sdk-sheet/lib", import.meta.url)),
+  },
+  {
+    prefix: "/sdk-sheet-locales/",
+    root: fileURLToPath(new URL("./node_modules/@shimo/sdk-sheet/locales", import.meta.url)),
+  },
+];
 
+function sdkSheetDevAssets(): Plugin {
   return {
     name: "officedex-sdk-sheet-dev-assets",
     apply: "serve",
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
         const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
-        const route = routes.find(({ prefix }) => pathname.startsWith(prefix));
+        const route = sdkSheetAssetRoutes.find(({ prefix }) => pathname.startsWith(prefix));
         if (!route) {
           next();
           return;
@@ -73,8 +73,29 @@ function sdkSheetDevAssets(): Plugin {
   };
 }
 
+function sdkSheetBuildAssets(): Plugin {
+  let config: ResolvedConfig;
+
+  return {
+    name: "officedex-sdk-sheet-build-assets",
+    apply: "build",
+    configResolved(resolvedConfig) {
+      config = resolvedConfig;
+    },
+    async writeBundle() {
+      const outDir = path.resolve(config.root, config.build.outDir);
+      await mkdir(outDir, { recursive: true });
+      await Promise.all(
+        sdkSheetAssetRoutes.map(({ prefix, root }) =>
+          cp(root, path.join(outDir, prefix.replaceAll("/", "")), { recursive: true }),
+        ),
+      );
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [sdkSheetDevAssets(), react()],
+  plugins: [sdkSheetDevAssets(), sdkSheetBuildAssets(), react()],
   root: ".",
   base: "./",
   resolve: {
