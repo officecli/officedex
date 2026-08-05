@@ -1,6 +1,6 @@
 import { DialogHost, ToastHost, toast as message } from "./ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Artifact, BridgeEvent, DesktopTask, GenerateInput, ModifyInput, PreviewGrant, WorkspaceConversationSummary, WorkspaceSummary } from "../shared/types";
+import type { Artifact, BridgeEvent, DesktopTask, GenerateInput, ModifyInput, PreviewGrant, RecentFile, WorkspaceConversationSummary, WorkspaceSummary } from "../shared/types";
 import { applyTaskEvent, attachTaskContext, attachUserInput, createInitialTaskState, deleteConversation, deleteTask, getConversationList, getConversationTasks, type TaskContextPatch, type TaskState } from "./taskState";
 import { officecli } from "./bridge";
 import { defaultGenerateInput, type NavKey } from "./defaults";
@@ -11,6 +11,7 @@ import { ForceUpdateOverlay } from "./components/ForceUpdateOverlay";
 import { DialogueScreen, type FailureKind, type NewChatTarget, type NewGenerationDraft } from "./screens/DialogueScreens";
 import { TasksScreen } from "./screens/DataScreens";
 import { LoginScreen, SettingsScreen } from "./screens/SettingsScreens";
+import { HomeScreen } from "./screens/HomeScreen";
 import { OnboardingScreen } from "./screens/OnboardingScreen";
 import { useSettings } from "./useSettings";
 import { useAppUpdate } from "./useAppUpdate";
@@ -85,8 +86,12 @@ function OfficeDexApp() {
   const [state, setState] = useState<TaskState>(() => createInitialTaskState());
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
   const [chats, setChats] = useState<WorkspaceConversationSummary[]>([]);
+  const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
+  const [recentFilesLoading, setRecentFilesLoading] = useState(true);
+  const [recentFilesError, setRecentFilesError] = useState<string>();
+  const [homeWorkspaceId, setHomeWorkspaceId] = useState<string>();
   const [selectedTaskID, setSelectedTaskID] = useState<SelectedTask>({ kind: "auto" });
-  const [activeNav, setActiveNav] = useState<NavKey>("dialogue");
+  const [activeNav, setActiveNav] = useState<NavKey>(() => initialNavFromLocation());
   const [busy, setBusy] = useState(false);
   const [capabilityStatus, setCapabilityStatus] = useState("Not connected");
   const [lastError, setLastError] = useState<string>();
@@ -131,9 +136,25 @@ function OfficeDexApp() {
       .catch(() => undefined);
   }, []);
 
+  const refreshRecentFiles = useCallback(async (workspaceId?: string) => {
+    setRecentFilesLoading(true);
+    setRecentFilesError(undefined);
+    try {
+      setRecentFiles(await officecli.listRecentFiles(workspaceId));
+    } catch (error) {
+      setRecentFilesError(errorMessage(error));
+    } finally {
+      setRecentFilesLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     refreshProjectLists();
   }, [refreshProjectLists]);
+
+  useEffect(() => {
+    void refreshRecentFiles();
+  }, [refreshRecentFiles]);
 
   useEffect(() => {
     if (settingsLoading || newGenerationDraftDirty) return;
@@ -498,6 +519,47 @@ function OfficeDexApp() {
     }
   }, [clearError, recordError]);
 
+  const createFromHome = useCallback((documentType: Exclude<GenerateInput["documentType"], "gif">) => {
+    resetNewGenerationDraft();
+    updateNewGenerationDraft({ documentType });
+    setSelectedTaskID({ kind: "none" });
+    setNewChatTarget(homeWorkspaceId ? { kind: "workspace", workspaceId: homeWorkspaceId } : { kind: "none" });
+    clearError();
+    setActiveNav("dialogue");
+    setNewChatNudgeKey((current) => current + 1);
+  }, [clearError, homeWorkspaceId, resetNewGenerationDraft, updateNewGenerationDraft]);
+
+  const selectHomeWorkspace = useCallback(async (workspaceId: string) => {
+    await selectWorkspace(workspaceId);
+    setHomeWorkspaceId(workspaceId);
+    await refreshRecentFiles(workspaceId);
+  }, [refreshRecentFiles, selectWorkspace]);
+
+  const selectAllHomeFiles = useCallback(() => {
+    setHomeWorkspaceId(undefined);
+    void refreshRecentFiles();
+  }, [refreshRecentFiles]);
+
+  const renameWorkspace = useCallback(async (workspaceId: string, name: string) => {
+    try {
+      const renamed = await officecli.renameWorkspace(workspaceId, name);
+      setWorkspaces((current) => current.map((workspace) => workspace.id === renamed.id ? renamed : workspace));
+      clearError();
+    } catch (error) {
+      const text = errorMessage(error);
+      void message.error(text);
+    }
+  }, [clearError]);
+
+  const removeRecentFile = useCallback(async (filePath: string) => {
+    try {
+      await officecli.removeRecentFile(filePath);
+      setRecentFiles((current) => current.filter((file) => file.filePath !== filePath));
+    } catch (error) {
+      void message.error(errorMessage(error));
+    }
+  }, []);
+
   const newGeneration = useCallback((workspaceId?: string) => {
     const alreadyOnBlankNewChat =
       !workspaceId &&
@@ -775,6 +837,51 @@ function OfficeDexApp() {
     }
   }, [previewGrant]);
 
+  const openRecentFile = useCallback(async (file: RecentFile) => {
+    try {
+      const artifact = await officecli.openRecentFile(file);
+      if (file.source === "generated") {
+        const matchingTask = tasks.find((task) =>
+          (file.taskId && task.id === file.taskId) ||
+          (file.conversationId && task.conversationId === file.conversationId));
+        if (matchingTask) selectTask(matchingTask.id);
+      }
+      await openInlinePreview(artifact);
+      void refreshRecentFiles(homeWorkspaceId);
+    } catch (error) {
+      const text = errorMessage(error);
+      if (isUnsupportedRecentFileError(text)) {
+        void message.info(t("home.systemOpenFallback"));
+        await officecli.openPath(file.filePath);
+        return;
+      }
+      if (isMissingRecentFileError(text)) {
+        void message.error({
+          content: t("home.missingFile"),
+          action: { label: t("home.removeRecentAction"), onClick: () => void removeRecentFile(file.filePath) },
+        });
+        return;
+      }
+      void message.error(isPermissionRecentFileError(text) ? t("home.permissionError") : text);
+    }
+  }, [homeWorkspaceId, openInlinePreview, refreshRecentFiles, removeRecentFile, selectTask, t, tasks]);
+
+  const openLocalFileFromHome = useCallback(async () => {
+    const filePath = await officecli.openFileDialog({
+      filters: [{ name: "Office files", extensions: ["docx", "xlsx", "pptx", "pdf", "html", "htm"] }],
+    });
+    if (!filePath) return;
+    const file: RecentFile = {
+      filePath,
+      fileName: fileNameFromPath(filePath),
+      documentType: documentTypeFromPath(filePath),
+      source: "local",
+      ...(homeWorkspaceId ? { workspaceId: homeWorkspaceId } : {}),
+      lastOpenedAt: new Date().toISOString(),
+    };
+    await openRecentFile(file);
+  }, [homeWorkspaceId, openRecentFile]);
+
   const closeInlinePreview = useCallback(async () => {
     if (previewGrant) {
       await officecli.revokePreviewToken(previewGrant.token).catch(() => {});
@@ -840,18 +947,32 @@ function OfficeDexApp() {
         hasCustomProvider={persistedSettings.llmProvider !== null}
         workspaces={sidebarWorkspaces}
         chats={sidebarChats}
-        activeWorkspaceId={activeWorkspace?.id}
-        activeWorkspaceName={activeWorkspace?.name}
+        activeWorkspaceId={activeNav === "home" ? homeWorkspaceId : activeWorkspace?.id}
+        activeWorkspaceName={activeNav === "home" ? workspaces.find((workspace) => workspace.id === homeWorkspaceId)?.name : activeWorkspace?.name}
         selectedConversationId={conversationId}
         onNavChange={setActiveNav}
         onNewGeneration={newGeneration}
-        onSelectWorkspace={selectWorkspace}
+        onSelectWorkspace={activeNav === "home" ? selectHomeWorkspace : selectWorkspace}
+        onSelectAllFiles={selectAllHomeFiles}
         onAddWorkspace={addWorkspace}
+        onRenameWorkspace={renameWorkspace}
         onRevealWorkspace={revealWorkspace}
         onRemoveWorkspace={removeWorkspace}
         onSelectTask={selectTask}
         onDeleteConversation={handleDeleteConversation}
       >
+        {activeNav === "home" ? (
+          <HomeScreen
+            files={recentFiles}
+            loading={recentFilesLoading}
+            error={recentFilesError}
+            activeWorkspaceId={homeWorkspaceId}
+            onCreate={createFromHome}
+            onOpenFile={openRecentFile}
+            onRemoveFile={removeRecentFile}
+            onOpenLocalFile={openLocalFileFromHome}
+          />
+        ) : null}
         {activeNav === "dialogue" ? (
           <DialogueScreen
             tasks={conversationTasks}
@@ -904,6 +1025,34 @@ function OfficeDexApp() {
 function summarizePrompt(prompt: string) {
   const normalized = prompt.trim().replace(/\s+/g, " ");
   return normalized.length > 24 ? `${normalized.slice(0, 24)}...` : normalized || "Untitled generation";
+}
+
+function initialNavFromLocation(): NavKey {
+  return new URLSearchParams(window.location.search).get("view") === "dialogue" ? "dialogue" : "home";
+}
+
+function fileNameFromPath(filePath: string): string {
+  return filePath.split(/[/\\]/).filter(Boolean).at(-1) ?? filePath;
+}
+
+function documentTypeFromPath(filePath: string): string {
+  const fileName = fileNameFromPath(filePath);
+  const dot = fileName.lastIndexOf(".");
+  return dot >= 0 ? fileName.slice(dot + 1).toLowerCase() : "";
+}
+
+function isUnsupportedRecentFileError(message: string): boolean {
+  return message.toLowerCase().includes("unsupported preview file type");
+}
+
+function isMissingRecentFileError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes("recent file is unavailable") || normalized.includes("no such file") || normalized.includes("not found");
+}
+
+function isPermissionRecentFileError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes("permission") || normalized.includes("access denied");
 }
 
 function createNewGenerationDraft(input: Partial<GenerateInput> = {}): NewGenerationDraft {

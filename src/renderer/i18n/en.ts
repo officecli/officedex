@@ -30,6 +30,7 @@ export const en: Record<string, string> = {
   "home.column.opened": "Last opened",
   "home.openFile": "Open {name}",
   "home.removeFile": "Remove {name}",
+  "home.removeRecentAction": "Remove from recents",
   "home.missingFile": "This file was moved or deleted.",
   "home.permissionError": "OfficeDex cannot access this file. Check its permissions and try again.",
   "home.systemOpenFallback": "This format will open in the system app.",

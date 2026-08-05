@@ -30,6 +30,7 @@ export const zh: Record<string, string> = {
   "home.column.opened": "最近打开",
   "home.openFile": "打开 {name}",
   "home.removeFile": "移除 {name}",
+  "home.removeRecentAction": "从最近文件中移除",
   "home.missingFile": "文件已移动或删除。",
   "home.permissionError": "OfficeDex 无法访问该文件，请检查权限后重试。",
   "home.systemOpenFallback": "该格式将使用系统默认应用打开。",

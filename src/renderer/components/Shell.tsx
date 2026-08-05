@@ -40,6 +40,7 @@ import type { WorkspaceConversationSummary, WorkspaceSummary } from "../../share
 import { useT } from "../i18n";
 import { RuntimeChip } from "./RuntimeChip";
 import { HistoryList } from "./HistoryList";
+import { ProjectSidebar } from "./ProjectSidebar";
 
 export interface CreditInfo {
   // "quota" = bounded plan with a known cap (api_key burndown, anonymous device pool).
@@ -76,7 +77,9 @@ interface ShellProps {
   onNavChange: (key: NavKey) => void;
   onNewGeneration: (workspaceId?: string) => void;
   onSelectWorkspace: (workspaceId: string) => void;
+  onSelectAllFiles: () => void;
   onAddWorkspace: () => void;
+  onRenameWorkspace: (workspaceId: string, name: string) => void | Promise<void>;
   onRevealWorkspace: (workspacePath: string) => void;
   onRemoveWorkspace: (workspaceId: string) => void;
   onSelectTask: (taskId: string) => void;
@@ -116,7 +119,9 @@ export function Shell({
   onNavChange,
   onNewGeneration,
   onSelectWorkspace,
+  onSelectAllFiles,
   onAddWorkspace,
+  onRenameWorkspace,
   onRevealWorkspace,
   onRemoveWorkspace,
   onSelectTask,
@@ -141,6 +146,40 @@ export function Shell({
     setCollapsed(true);
     setSidebarPreview(false);
   }, [autoCollapseSidebarKey]);
+
+  if (activeNav === "home") {
+    return (
+      <div className="home-shell">
+        <ProjectSidebar
+          workspaces={workspaces}
+          activeWorkspaceId={activeWorkspaceId}
+          onSelectAll={onSelectAllFiles}
+          onSelectWorkspace={onSelectWorkspace}
+          onAddWorkspace={onAddWorkspace}
+          onRenameWorkspace={onRenameWorkspace}
+          onRevealWorkspace={onRevealWorkspace}
+          onRemoveWorkspace={onRemoveWorkspace}
+          onOpenTasks={() => onNavChange("tasks")}
+          onOpenSettings={() => onNavChange("settings")}
+          onOpenAccount={() => onNavChange("login")}
+        />
+        <main className="home-shell__main">
+          <header className="home-shell__topbar">
+            <Space size={12} className="breadcrumb">
+              <span>{t("shell.brand")}</span>
+              <span className="crumb-separator">/</span>
+              <strong>{activeWorkspaceName || t("projectSidebar.allFiles")}</strong>
+            </Space>
+            <RuntimeChip onClick={() => onNavChange("settings")} />
+          </header>
+          <div className={`home-shell__content ${inspector ? "with-preview" : ""}`}>
+            <section className="home-shell__stage">{children}</section>
+            {inspector ? <aside className="preview-panel">{inspector}</aside> : null}
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div

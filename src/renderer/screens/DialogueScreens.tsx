@@ -773,6 +773,8 @@ function FluidNewGeneration({ draft, newChatNudgeKey, busy, workspaces, newChatT
   return (
     <div
       className={`fluid-new-task ${docType === "img" ? "image-template-workspace" : ""}`}
+      data-testid="new-generation-form"
+      data-document-type={docType}
       ref={bindDropTarget}
     >
       {docType === "img" ? (

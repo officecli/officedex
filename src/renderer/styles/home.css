@@ -1,3 +1,46 @@
+.home-shell {
+  display: grid;
+  width: 100vw;
+  height: 100vh;
+  min-width: 0;
+  grid-template-columns: 232px minmax(0, 1fr);
+  overflow: hidden;
+  background: var(--od-surface);
+}
+
+.home-shell__main {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: 52px minmax(0, 1fr);
+}
+
+.home-shell__topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--od-border-subtle);
+  padding: 0 20px;
+  background: var(--od-surface);
+}
+
+.home-shell__content {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.home-shell__content.with-preview {
+  grid-template-columns: minmax(0, 1fr) minmax(420px, 48vw);
+}
+
+.home-shell__stage {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
 .home-screen {
   box-sizing: border-box;
   width: min(1120px, 100%);

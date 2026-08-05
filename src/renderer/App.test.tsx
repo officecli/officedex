@@ -144,12 +144,149 @@ describe("App task flow", () => {
   beforeEach(() => {
     vi.resetModules();
     installDomStubs();
-    window.history.pushState({}, "", "/");
+    window.history.pushState({}, "", "/?view=dialogue");
   });
 
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+  });
+
+  it("opens Home by default and enters dialogue with the chosen type", async () => {
+    window.history.pushState({}, "", "/");
+    installBridgeMock();
+    const { App } = await import("./App");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: /what will you create today/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Presentation" }));
+    expect(await screen.findByTestId("new-generation-form")).toHaveAttribute("data-document-type", "pptx");
+  });
+
+  it("selects a project and reloads recent files for that workspace", async () => {
+    window.history.pushState({}, "", "/");
+    installBridgeMock();
+    const api = window.officecli as DesktopAPI;
+    api.listWorkspaces = vi.fn(async () => [{ id: "ws-a", name: "Client A", path: "/tmp/client-a", active: false, conversations: [] }]);
+    api.listRecentFiles = vi.fn(async (workspaceId?: string) => workspaceId === "ws-a" ? [{
+      filePath: "/tmp/client-a/deck.pptx",
+      fileName: "Client deck.pptx",
+      documentType: "pptx",
+      source: "generated" as const,
+      workspaceId: "ws-a",
+      lastOpenedAt: "2026-08-05T02:00:00Z",
+    }] : []);
+    const { App } = await import("./App");
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Client A" }));
+
+    await waitFor(() => expect(api.selectWorkspace).toHaveBeenCalledWith("ws-a"));
+    await waitFor(() => expect(api.listRecentFiles).toHaveBeenCalledWith("ws-a"));
+    expect(await screen.findByText("Client deck.pptx")).toBeTruthy();
+  });
+
+  it("opens a local recent file in the existing preview panel", async () => {
+    window.history.pushState({}, "", "/");
+    installBridgeMock();
+    const api = window.officecli as DesktopAPI;
+    const recent = {
+      filePath: "/tmp/local.pdf",
+      fileName: "Local brief.pdf",
+      documentType: "pdf",
+      source: "local" as const,
+      lastOpenedAt: "2026-08-05T02:00:00Z",
+    };
+    api.listRecentFiles = vi.fn(async () => [recent]);
+    api.openRecentFile = vi.fn(async () => ({ filePath: recent.filePath, fileName: recent.fileName, documentType: recent.documentType }));
+    const { App } = await import("./App");
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Open Local brief.pdf" }));
+
+    await waitFor(() => expect(api.openRecentFile).toHaveBeenCalledWith(recent));
+    await waitFor(() => expect(api.issuePreviewToken).toHaveBeenCalledWith(expect.objectContaining({ filePath: recent.filePath })));
+    expect(await screen.findByLabelText("Close preview")).toBeTruthy();
+  });
+
+  it("restores a generated recent file conversation before opening its preview", async () => {
+    window.history.pushState({}, "", "/");
+    installBridgeMock();
+    const api = window.officecli as DesktopAPI;
+    const recent = {
+      filePath: "/tmp/generated-deck.pptx",
+      fileName: "Generated deck.pptx",
+      documentType: "pptx",
+      source: "generated" as const,
+      taskId: "task-generated",
+      conversationId: "conversation-generated",
+      lastOpenedAt: "2026-08-05T02:00:00Z",
+    };
+    api.listRecentFiles = vi.fn(async () => [recent]);
+    api.getTaskHistory = vi.fn(async () => [{
+      taskId: "task-generated",
+      conversationId: "conversation-generated",
+      events: [
+        { task_id: "task-generated", type: "task.started", payload: { document_type: "pptx", topic: "Generated deck" } },
+        { task_id: "task-generated", type: "task.completed", payload: { result: { file_path: recent.filePath, file_name: recent.fileName, document_type: "pptx" } } },
+      ],
+    }]);
+    api.openRecentFile = vi.fn(async () => ({ taskId: recent.taskId, filePath: recent.filePath, fileName: recent.fileName, documentType: recent.documentType }));
+    const { App } = await import("./App");
+
+    render(<App />);
+    await waitFor(() => expect(api.getTaskHistory).toHaveBeenCalled());
+    fireEvent.click(await screen.findByRole("button", { name: "Open Generated deck.pptx" }));
+
+    expect(await screen.findByText("Generation Complete")).toBeTruthy();
+    expect(await screen.findByLabelText("Close preview")).toBeTruthy();
+  });
+
+  it("falls back to the system app for an unsupported recent file", async () => {
+    window.history.pushState({}, "", "/");
+    installBridgeMock();
+    const api = window.officecli as DesktopAPI;
+    const recent = { filePath: "/tmp/notes.txt", fileName: "notes.txt", documentType: "txt", source: "local" as const, lastOpenedAt: "2026-08-05T02:00:00Z" };
+    api.listRecentFiles = vi.fn(async () => [recent]);
+    api.openRecentFile = vi.fn(async () => { throw new Error("unsupported preview file type"); });
+    const { App } = await import("./App");
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Open notes.txt" }));
+
+    await waitFor(() => expect(api.openPath).toHaveBeenCalledWith(recent.filePath));
+    expect(await screen.findByText("This format will open in the system app.")).toBeTruthy();
+  });
+
+  it("offers to remove a missing recent file", async () => {
+    window.history.pushState({}, "", "/");
+    installBridgeMock();
+    const api = window.officecli as DesktopAPI;
+    const recent = { filePath: "/tmp/missing.pdf", fileName: "missing.pdf", documentType: "pdf", source: "local" as const, lastOpenedAt: "2026-08-05T02:00:00Z" };
+    api.listRecentFiles = vi.fn(async () => [recent]);
+    api.openRecentFile = vi.fn(async () => { throw new Error("recent file is unavailable: no such file"); });
+    const { App } = await import("./App");
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Open missing.pdf" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Remove from recents" }));
+
+    await waitFor(() => expect(api.removeRecentFile).toHaveBeenCalledWith(recent.filePath));
+    expect(screen.queryByText("missing.pdf")).toBeNull();
+  });
+
+  it("keeps projects usable when recent files fail to load", async () => {
+    window.history.pushState({}, "", "/");
+    installBridgeMock();
+    const api = window.officecli as DesktopAPI;
+    api.listRecentFiles = vi.fn(async () => { throw new Error("recent files unavailable"); });
+    const { App } = await import("./App");
+
+    render(<App />);
+
+    expect(await screen.findByRole("button", { name: "workspace" })).toBeTruthy();
+    expect(await screen.findByRole("alert")).toHaveTextContent("recent files unavailable");
   });
 
   it("keeps New chat on a blank composer after a previous task exists and submits another generate request", async () => {
@@ -196,7 +333,7 @@ describe("App task flow", () => {
   });
 
   it("does not render the hardcoded Vibe-Officing demo route", async () => {
-    window.history.pushState({}, "", "/?demo=vibe-officing");
+    window.history.pushState({}, "", "/?view=dialogue&demo=vibe-officing");
     const bridge = installBridgeMock();
     const { App } = await import("./App");
 
