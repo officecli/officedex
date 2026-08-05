@@ -192,7 +192,7 @@
 }
 
 .project-picker-button span:first-child,
-.project-picker-button .anticon:first-child + * {
+.project-picker-button > svg:first-child + * {
   min-width: 0;
 }
 
@@ -2341,7 +2341,7 @@
   color: var(--n-text-secondary);
 }
 
-.living-tree-pptx-toolbar-status .anticon-check-circle {
+.living-tree-pptx-toolbar-status > svg {
   color: #52c41a;
 }
 
@@ -2432,7 +2432,7 @@
   color: var(--n-ink);
 }
 
-.living-tree-pptx-file-title .anticon {
+.living-tree-pptx-file-title > svg {
   flex: 0 0 auto;
   color: var(--n-primary);
 }
@@ -2643,7 +2643,7 @@
   line-height: 1.45;
 }
 
-.living-tree-pptx-dialogue-message p .anticon {
+.living-tree-pptx-dialogue-message p > svg {
   flex: 0 0 auto;
   margin-top: 2px;
   color: var(--n-primary);
@@ -6675,7 +6675,7 @@ li.living-tree-animated-line {
   background: var(--n-tint-yellow);
 }
 
-.warning .anticon {
+.warning svg {
   color: var(--n-warning);
 }
 
@@ -6684,7 +6684,7 @@ li.living-tree-animated-line {
   background: var(--n-tint-mint);
 }
 
-.success .anticon {
+.success svg {
   color: var(--n-success);
 }
 
@@ -6693,7 +6693,7 @@ li.living-tree-animated-line {
   background: #fff5f5;
 }
 
-.terminal.failed .message-author .anticon {
+.terminal.failed .message-author svg {
   color: var(--n-error);
 }
 
@@ -6758,7 +6758,7 @@ li.living-tree-animated-line {
   box-shadow: var(--shadow-subtle);
 }
 
-.result-card > .anticon {
+.result-card > svg {
   display: grid;
   width: 40px;
   height: 40px;
@@ -6996,7 +6996,7 @@ li.living-tree-animated-line {
   text-align: center;
 }
 
-.failure-center > .anticon {
+.failure-center > svg {
   color: var(--n-error);
   font-size: 44px;
 }
@@ -7294,7 +7294,7 @@ li.living-tree-animated-line {
   outline-offset: 2px;
 }
 
-.plan-review-expand-chin .anticon {
+.plan-review-expand-chin svg {
   margin-left: 8px;
   font-size: 12px;
   line-height: 1;

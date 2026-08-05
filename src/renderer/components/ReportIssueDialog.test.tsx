@@ -20,7 +20,7 @@ vi.mock("../i18n", () => ({
   },
 }));
 
-// jsdom polyfills required by antd
+// jsdom polyfills required by the dialog and upload controls
 const fakeStyle = new Proxy({} as CSSStyleDeclaration, {
   get(_target, prop) {
     if (prop === "getPropertyValue") return () => "";

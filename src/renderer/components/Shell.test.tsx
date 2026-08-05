@@ -118,8 +118,8 @@ describe("Shell sidebar layout", () => {
     const settingsRule = css.match(/\.sidebar-settings\s*\{[^}]*\}/s)?.[0] ?? "";
 
     expect(css).toContain("grid-template-columns: 28px minmax(0, 1fr)");
-    expect(css).toMatch(/\.nav-item > \.anticon\s*\{[^}]*place-items:\s*center;/s);
-    expect(css).toMatch(/\.nav-item > span:not\(\.anticon\)\s*\{[^}]*line-height:\s*20px;/s);
+    expect(css).toMatch(/\.nav-item > svg\s*\{[^}]*place-items:\s*center;/s);
+    expect(css).toMatch(/\.nav-item > span\s*\{[^}]*line-height:\s*20px;/s);
     expect(settingsRule).not.toContain("border-top");
     expect(settingsRule).not.toContain("padding-top");
     expect(css).toMatch(/\.sidebar-settings::after\s*\{[^}]*background:\s*var\(--n-hairline-soft\);/s);

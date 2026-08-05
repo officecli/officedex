@@ -105,7 +105,7 @@
   transition: background 150ms ease, color 150ms ease;
 }
 
-.nav-item > .anticon {
+.nav-item > svg {
   display: grid;
   width: 28px;
   height: 28px;
@@ -113,7 +113,7 @@
   line-height: 1;
 }
 
-.nav-item > span:not(.anticon) {
+.nav-item > span {
   min-width: 0;
   overflow: hidden;
   line-height: 20px;
@@ -776,7 +776,7 @@
     padding: 0;
   }
 
-  .nav-item > .anticon,
+  .nav-item > svg,
   .history-item-icon {
     width: 100%;
   }
@@ -802,7 +802,7 @@
   .workspace-row-action,
   .history-item-delete,
   .profile-link span,
-  .sidebar .ui-button > span:not(.anticon):not(.ui-button__icon) {
+  .sidebar .ui-button > span:not(.ui-button__icon) {
     display: none;
   }
 

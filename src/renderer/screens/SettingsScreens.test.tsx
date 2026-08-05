@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { Modal, toast as antdMessage } from "../ui";
+import { Modal, toast as uiToast } from "../ui";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CreditStatus, DesktopAPI, UserSettings, WhoAmIResult } from "../../shared/types";
 import { officecli } from "../bridge";
@@ -105,7 +105,7 @@ let getCreditStatusSpy: ReturnType<typeof vi.fn>;
 let getInviteInfoSpy: ReturnType<typeof vi.fn>;
 let originals: Partial<DesktopAPI>;
 
-async function cleanupAntdPortals() {
+async function cleanupUiPortals() {
   Modal.destroyAll();
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -114,9 +114,9 @@ async function cleanupAntdPortals() {
 }
 
 beforeEach(() => {
-  vi.spyOn(antdMessage, "success").mockImplementation(() => "test-toast");
-  vi.spyOn(antdMessage, "error").mockImplementation(() => "test-toast");
-  vi.spyOn(antdMessage, "warning").mockImplementation(() => "test-toast");
+  vi.spyOn(uiToast, "success").mockImplementation(() => "test-toast");
+  vi.spyOn(uiToast, "error").mockImplementation(() => "test-toast");
+  vi.spyOn(uiToast, "warning").mockImplementation(() => "test-toast");
   vi.stubGlobal("localStorage", createMemoryStorage());
   installDomStubs();
   localStorage.removeItem(NOTIFICATIONS_STORAGE_KEY);
@@ -175,7 +175,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  await cleanupAntdPortals();
+  await cleanupUiPortals();
   Object.assign(officecli, originals);
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -370,7 +370,7 @@ describe("SettingsScreen", () => {
       title: "OfficeDex",
       body: "This is a test desktop notification from OfficeDex.",
     });
-    expect(antdMessage.success).toHaveBeenCalledWith("Test notification sent");
+    expect(uiToast.success).toHaveBeenCalledWith("Test notification sent");
   });
 
   it("reports desktop notification test failures", async () => {
@@ -382,7 +382,7 @@ describe("SettingsScreen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /test desktop notification/i }));
 
-    await waitFor(() => expect(antdMessage.error).toHaveBeenCalledWith("Test notification failed: permission denied"));
+    await waitFor(() => expect(uiToast.error).toHaveBeenCalledWith("Test notification failed: permission denied"));
   });
 
   it("Workspace section is read-only and does not write workspaceDir", async () => {
@@ -723,7 +723,7 @@ describe("SettingsScreen", () => {
 
     await waitFor(() => expect(screen.getByText("1 local template saved")).toBeTruthy());
     expect(JSON.parse(localStorage.getItem("officedex:local-image-templates") || "{}").templates[0].title).toBe("Local Admission");
-    expect(antdMessage.success).toHaveBeenCalledWith("Imported 1 local templates");
+    expect(uiToast.success).toHaveBeenCalledWith("Imported 1 local templates");
   });
 
   it("imports local image-template JSON from the paste modal in Settings", async () => {
@@ -745,7 +745,7 @@ describe("SettingsScreen", () => {
 
     await waitFor(() => expect(screen.getByText("1 local template saved")).toBeTruthy());
     expect(JSON.parse(localStorage.getItem("officedex:local-image-templates") || "{}").templates[0].title).toBe("Pasted Admission");
-    expect(antdMessage.success).toHaveBeenCalledWith("Imported 1 local templates");
+    expect(uiToast.success).toHaveBeenCalledWith("Imported 1 local templates");
   });
 
   it("downloads local image-template JSON from Settings", async () => {
@@ -768,7 +768,7 @@ describe("SettingsScreen", () => {
     expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
     expect(click).toHaveBeenCalledTimes(1);
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:local-templates");
-    expect(antdMessage.success).toHaveBeenCalledWith("Exported 1 local templates");
+    expect(uiToast.success).toHaveBeenCalledWith("Exported 1 local templates");
   });
 
   it("copies local image-template JSON to the clipboard from Settings", async () => {
@@ -792,7 +792,7 @@ describe("SettingsScreen", () => {
 
     await waitFor(() => expect(writeTextSpy).toHaveBeenCalledTimes(1));
     expect(writeTextSpy.mock.calls[0][0]).toContain("\"title\": \"Local Admission\"");
-    expect(antdMessage.success).toHaveBeenCalledWith("Copied 1 local templates");
+    expect(uiToast.success).toHaveBeenCalledWith("Copied 1 local templates");
   });
 
   it("keeps existing local image templates when pasted JSON is invalid", async () => {
@@ -812,7 +812,7 @@ describe("SettingsScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Import$/i }));
 
     expect(JSON.parse(localStorage.getItem("officedex:local-image-templates") || "{}").templates[0].title).toBe("Existing");
-    expect(antdMessage.error).toHaveBeenCalledWith(expect.stringMatching(/^Template import failed:/));
+    expect(uiToast.error).toHaveBeenCalledWith(expect.stringMatching(/^Template import failed:/));
   });
 });
 
@@ -885,7 +885,7 @@ describe("SettingsScreen > About card", () => {
   });
 
   afterEach(async () => {
-    await cleanupAntdPortals();
+    await cleanupUiPortals();
     Object.assign(officecli, aboutOriginals);
     vi.restoreAllMocks();
   });

@@ -68,7 +68,7 @@ describe("IME-safe inputs", () => {
     expect(onValueChange).toHaveBeenCalledWith("密码");
   });
 
-  it("keeps plain textarea composition local without AntD autosize wrappers", () => {
+  it("keeps plain textarea composition local without autosize wrappers", () => {
     const onValueChange = vi.fn();
     render(<ImePlainTextArea aria-label="follow up" value="" onValueChange={onValueChange} />);
     const textarea = screen.getByLabelText("follow up") as HTMLTextAreaElement;

@@ -20,7 +20,7 @@ describe("UI feedback services", () => {
     await waitFor(() => expect(screen.queryByText("Remove project?")).toBeNull());
   });
 
-  it("renders project toasts without AntD", () => {
+  it("renders project toasts through the local facade", () => {
     render(<ToastHost />);
 
     act(() => {

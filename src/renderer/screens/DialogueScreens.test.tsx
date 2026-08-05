@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { act, cleanup, createEvent, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { toast as antdMessage } from "../ui";
+import { toast as uiToast } from "../ui";
 import { getAttachmentSpec } from "../../shared/types";
 import type { DesktopAPI, DesktopTask, GenerateInput, UserSettings, WorkspaceSummary } from "../../shared/types";
 import { officecli } from "../bridge";
@@ -97,9 +97,9 @@ function makeUserSettings(overrides: Partial<UserSettings> = {}): UserSettings {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.spyOn(antdMessage, "success").mockImplementation(() => "test-toast");
-  vi.spyOn(antdMessage, "error").mockImplementation(() => "test-toast");
-  vi.spyOn(antdMessage, "warning").mockImplementation(() => "test-toast");
+  vi.spyOn(uiToast, "success").mockImplementation(() => "test-toast");
+  vi.spyOn(uiToast, "error").mockImplementation(() => "test-toast");
+  vi.spyOn(uiToast, "warning").mockImplementation(() => "test-toast");
   localStorage.clear();
   setPptistParsedSlidesPersistentCacheForTests(null);
   clearPptistParsedSlidesMemoryCacheForTests();
@@ -211,7 +211,7 @@ function expectDialogueBubble(text: string, role: "ai" | "user") {
 
 function expectDialogueBubbleNotLoading(text: string) {
   const node = screen.getByText(text);
-  expect(node.closest(".living-tree-pptx-dialogue-message")?.querySelector(".anticon-loading")).toBeNull();
+  expect(node.closest(".living-tree-pptx-dialogue-message")?.querySelector(".ui-loading")).toBeNull();
 }
 
 function makeCompletedImageTask(overrides: Partial<DesktopTask> = {}): DesktopTask {
@@ -4573,7 +4573,7 @@ describe("DialogueScreen state machine", () => {
       requestID: "req-img-1",
       submitterNote: "",
     }));
-    expect(antdMessage.success).toHaveBeenCalledWith("Submitted for review");
+    expect(uiToast.success).toHaveBeenCalledWith("Submitted for review");
   });
 
   it("copies generated images through the desktop clipboard bridge", async () => {
@@ -4585,7 +4585,7 @@ describe("DialogueScreen state machine", () => {
 
     await waitFor(() => expect(copyImageToClipboardSpy).toHaveBeenCalledWith("/tmp/banner.png"));
     expect(await screen.findByText("Copied")).toBeTruthy();
-    expect(antdMessage.success).toHaveBeenCalledWith("Copied");
+    expect(uiToast.success).toHaveBeenCalledWith("Copied");
   });
 
   it("shows top error feedback when generated image copy fails", async () => {
@@ -4596,7 +4596,7 @@ describe("DialogueScreen state machine", () => {
     fireEvent.click(await screen.findByAltText("banner.png"));
     fireEvent.click(await screen.findByRole("button", { name: /copy image/i }));
 
-    await waitFor(() => expect(antdMessage.error).toHaveBeenCalledWith("Copy failed"));
+    await waitFor(() => expect(uiToast.error).toHaveBeenCalledWith("Copy failed"));
   });
 
   it("failed task with credits-exhausted error shows Sign In button wired to onOpenLogin", () => {
@@ -4628,7 +4628,7 @@ describe("DialogueScreen state machine", () => {
     fireEvent.click(screen.getByRole("button", { name: /copy user message/i }));
 
     await waitFor(() => expect(writeTextSpy).toHaveBeenCalledWith("Build a quarterly planning deck"));
-    expect(antdMessage.success).toHaveBeenCalledWith("Copied");
+    expect(uiToast.success).toHaveBeenCalledWith("Copied");
   });
 
   it("shows top error feedback when conversation bubble copy fails", async () => {
@@ -4644,7 +4644,7 @@ describe("DialogueScreen state machine", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /copy user message/i }));
 
-    await waitFor(() => expect(antdMessage.error).toHaveBeenCalledWith("Copy failed"));
+    await waitFor(() => expect(uiToast.error).toHaveBeenCalledWith("Copy failed"));
   });
 
   it("copies the assistant result message from the conversation bubble", async () => {
@@ -4659,7 +4659,7 @@ describe("DialogueScreen state machine", () => {
     fireEvent.click(screen.getByRole("button", { name: /copy assistant message/i }));
 
     await waitFor(() => expect(writeTextSpy).toHaveBeenCalledWith("Deck generated successfully"));
-    expect(antdMessage.success).toHaveBeenCalledWith("Copied");
+    expect(uiToast.success).toHaveBeenCalledWith("Copied");
   });
 
   it("image generation inserts template prompt and submits edited prompt only", async () => {
