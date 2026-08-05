@@ -15,6 +15,7 @@ package preview
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -62,6 +63,7 @@ type RegistryOptions struct {
 type Registry struct {
 	mu               sync.Mutex
 	allowedArtifacts map[string]ArtifactEntry
+	allowedFiles     map[string]struct{}
 	tokens           map[string]ArtifactEntry
 	trustedRoots     []string
 	createToken      func() string
@@ -79,10 +81,39 @@ func New(opts RegistryOptions) (*Registry, error) {
 	}
 	return &Registry{
 		allowedArtifacts: make(map[string]ArtifactEntry),
+		allowedFiles:     make(map[string]struct{}),
 		tokens:           make(map[string]ArtifactEntry),
 		trustedRoots:     roots,
 		createToken:      create,
 	}, nil
+}
+
+// AllowSelectedArtifact grants preview access to one explicit user-selected
+// file. Unlike trusted roots, this never extends trust to the file's parent
+// directory or any sibling paths.
+func (r *Registry) AllowSelectedArtifact(artifact types.Artifact) error {
+	canonical, err := canonicalPath(artifact.FilePath)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(canonical)
+	if err != nil || !info.Mode().IsRegular() {
+		return errors.New("preview: selected file is unavailable")
+	}
+	extension := previewExtension(canonical)
+	if _, ok := supportedPreviewExtensions[extension]; !ok {
+		return errors.New("preview: unsupported preview file type")
+	}
+	entry := ArtifactEntry{
+		FilePath:     canonical,
+		FileName:     filepath.Base(canonical),
+		DocumentType: extension,
+	}
+	r.mu.Lock()
+	r.allowedFiles[canonical] = struct{}{}
+	r.allowedArtifacts[canonical] = entry
+	r.mu.Unlock()
+	return nil
 }
 
 // SetTrustedRoots atomically replaces the preview trust boundary. It validates
@@ -165,7 +196,7 @@ func (r *Registry) entryFromArtifact(artifact types.Artifact) (ArtifactEntry, er
 	if _, ok := supportedPreviewExtensions[extension]; !ok {
 		return ArtifactEntry{}, errors.New("preview: unsupported preview file type")
 	}
-	if !r.withinTrustedRoots(canonical) {
+	if !r.withinTrustedRoots(canonical) && !r.isAllowedFile(canonical) {
 		return ArtifactEntry{}, errors.New("preview: preview file is outside trusted preview roots")
 	}
 	return ArtifactEntry{
@@ -173,6 +204,13 @@ func (r *Registry) entryFromArtifact(artifact types.Artifact) (ArtifactEntry, er
 		FileName:     filepath.Base(canonical),
 		DocumentType: extension,
 	}, nil
+}
+
+func (r *Registry) isAllowedFile(filePath string) bool {
+	r.mu.Lock()
+	_, ok := r.allowedFiles[filePath]
+	r.mu.Unlock()
+	return ok
 }
 
 func (r *Registry) withinTrustedRoots(filePath string) bool {

@@ -114,6 +114,79 @@ func TestRejectsPathOutsideTrustedRoots(t *testing.T) {
 	}
 }
 
+func TestAllowSelectedArtifactTrustsOnlyExactFile(t *testing.T) {
+	dir := t.TempDir()
+	selected := writeFile(t, dir, "selected.pdf")
+	sibling := writeFile(t, dir, "sibling.pdf")
+	trustedRoot := canonRoot(t, t.TempDir())
+	reg, err := New(RegistryOptions{TrustedRoots: []string{trustedRoot}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.AllowSelectedArtifact(types.Artifact{FilePath: selected}); err != nil {
+		t.Fatal(err)
+	}
+	grant, err := reg.IssueToken(types.Artifact{FilePath: selected})
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, err := reg.ResolveToken(grant.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry.FilePath != selected {
+		t.Fatalf("resolved path = %q, want %q", entry.FilePath, selected)
+	}
+	if err := reg.AllowArtifact(types.Artifact{FilePath: sibling}); err == nil || !strings.Contains(err.Error(), "outside trusted") {
+		t.Fatalf("expected sibling to remain untrusted, got %v", err)
+	}
+}
+
+func TestAllowSelectedArtifactValidatesAndCanonicalizes(t *testing.T) {
+	outside := t.TempDir()
+	selected := writeFile(t, outside, "selected.PDF")
+	link := filepath.Join(outside, "selected-link.pdf")
+	if err := os.Symlink(selected, link); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+	reg, err := New(RegistryOptions{TrustedRoots: []string{canonRoot(t, t.TempDir())}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.AllowSelectedArtifact(types.Artifact{FilePath: link}); err != nil {
+		t.Fatalf("AllowSelectedArtifact symlink: %v", err)
+	}
+	grant, err := reg.IssueToken(types.Artifact{FilePath: selected})
+	if err != nil {
+		t.Fatalf("IssueToken canonical target: %v", err)
+	}
+	entry, err := reg.ResolveToken(grant.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry.FilePath != selected || entry.DocumentType != "pdf" {
+		t.Fatalf("canonical entry = %#v", entry)
+	}
+
+	invalid := []struct {
+		name string
+		path string
+	}{
+		{name: "relative", path: "relative.pdf"},
+		{name: "nul", path: "/tmp/file\x00.pdf"},
+		{name: "missing", path: filepath.Join(outside, "missing.pdf")},
+		{name: "unsupported", path: writeFile(t, outside, "script.exe")},
+		{name: "directory", path: outside},
+	}
+	for _, tc := range invalid {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := reg.AllowSelectedArtifact(types.Artifact{FilePath: tc.path}); err == nil {
+				t.Fatal("expected selected artifact to be rejected")
+			}
+		})
+	}
+}
+
 func TestSetTrustedRootsAllowsNewRootAndReplacesOldRoot(t *testing.T) {
 	oldDir := t.TempDir()
 	newDir := t.TempDir()
