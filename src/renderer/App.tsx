@@ -13,6 +13,11 @@ import { TasksScreen } from "./screens/DataScreens";
 import { LoginScreen, SettingsScreen } from "./screens/SettingsScreens";
 import { HomeScreen } from "./screens/HomeScreen";
 import { OnboardingScreen } from "./screens/OnboardingScreen";
+import { SpreadsheetWorkspace, type SpreadsheetWorkspaceHandle } from "./spreadsheet/SpreadsheetWorkspace";
+import { SpreadsheetAgentPanel } from "./spreadsheet/SpreadsheetAgentPanel";
+import { UnsavedChangesDialog } from "./spreadsheet/UnsavedChangesDialog";
+import { useSpreadsheetSession } from "./spreadsheet/useSpreadsheetSession";
+import type { SpreadsheetEntry } from "./spreadsheet/types";
 import { useSettings } from "./useSettings";
 import { useAppUpdate } from "./useAppUpdate";
 import { useCreditStatus } from "./useCreditStatus";
@@ -100,6 +105,14 @@ function OfficeDexApp() {
   const [connectAttempt, setConnectAttempt] = useState(0);
   const [previewGrant, setPreviewGrant] = useState<PreviewGrant | null>(null);
   const [previewArtifact, setPreviewArtifact] = useState<Artifact | null>(null);
+  const [spreadsheetEntry, setSpreadsheetEntry] = useState<SpreadsheetEntry | null>(null);
+  const spreadsheet = useSpreadsheetSession(spreadsheetEntry);
+  const spreadsheetWorkspaceRef = useRef<SpreadsheetWorkspaceHandle>(null);
+  const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false);
+  const [unsavedDialogSaving, setUnsavedDialogSaving] = useState(false);
+  const pendingSpreadsheetActionRef = useRef<{ action: () => Promise<void>; resolve: (continued: boolean) => void } | null>(null);
+  const activeNavRef = useRef(activeNav);
+  activeNavRef.current = activeNav;
   const pendingGenerateRef = useRef<PendingGenerate | null>(null);
   const { settings: persistedSettings, defaultWorkspaceDir, loading: settingsLoading } = useSettings();
   const [newGenerationDraft, setNewGenerationDraft] = useState<NewGenerationDraft>(() => createNewGenerationDraft());
@@ -126,6 +139,47 @@ function OfficeDexApp() {
 
   const showOnboarding = !settingsLoading && !onboardingDismissed && persistedSettings.onboardingCompletedAt === null;
   const activeWorkspace = useMemo(() => workspaces.find((workspace) => workspace.active), [workspaces]);
+
+  const runSpreadsheetAction = useCallback((action: () => Promise<void>): Promise<boolean> => {
+    if (activeNavRef.current !== "spreadsheet" || !spreadsheet.session.dirty) {
+      return action().then(() => true);
+    }
+    return new Promise<boolean>((resolve) => {
+      pendingSpreadsheetActionRef.current?.resolve(false);
+      pendingSpreadsheetActionRef.current = { action, resolve };
+      setUnsavedDialogOpen(true);
+    });
+  }, [spreadsheet.session.dirty]);
+
+  const continuePendingSpreadsheetAction = useCallback(async (discard: boolean) => {
+    const pending = pendingSpreadsheetActionRef.current;
+    if (!pending) return;
+    if (!discard) {
+      setUnsavedDialogSaving(true);
+      const saved = await spreadsheetWorkspaceRef.current?.save();
+      setUnsavedDialogSaving(false);
+      if (!saved) {
+        pending.resolve(false);
+        pendingSpreadsheetActionRef.current = null;
+        return;
+      }
+    }
+    pendingSpreadsheetActionRef.current = null;
+    setUnsavedDialogOpen(false);
+    try {
+      await pending.action();
+      pending.resolve(true);
+    } catch (error) {
+      pending.resolve(false);
+      throw error;
+    }
+  }, []);
+
+  const cancelPendingSpreadsheetAction = useCallback(() => {
+    pendingSpreadsheetActionRef.current?.resolve(false);
+    pendingSpreadsheetActionRef.current = null;
+    setUnsavedDialogOpen(false);
+  }, []);
 
   const refreshProjectLists = useCallback(() => {
     Promise.all([officecli.listWorkspaces(), officecli.listChats()])
@@ -365,6 +419,18 @@ function OfficeDexApp() {
   );
   const vibeStage = activeVibeTask?.vibeTree?.stage;
   const tasks = useMemo(() => state.taskOrder.map((taskID) => state.tasks[taskID]).filter(Boolean), [state]);
+  const spreadsheetTask = spreadsheet.session.taskId ? state.tasks[spreadsheet.session.taskId] : undefined;
+
+  useEffect(() => {
+    const artifact = spreadsheetTask?.status === "completed" ? spreadsheetTask.artifact : undefined;
+    if (!artifact || !isXlsxArtifact(artifact) || spreadsheet.session.artifact?.filePath === artifact.filePath) return;
+    void spreadsheet.openArtifact(artifact, spreadsheetTask?.conversationId)
+      .then(() => {
+        void refreshRecentFiles(spreadsheet.session.workspaceId);
+        refreshProjectLists();
+      })
+      .catch((error) => recordError(errorMessage(error), "other"));
+  }, [recordError, refreshProjectLists, refreshRecentFiles, spreadsheet.openArtifact, spreadsheet.session.artifact?.filePath, spreadsheet.session.workspaceId, spreadsheetTask]);
   const conversations = useMemo(() => getConversationList(state), [state]);
   const sidebarWorkspaces = useMemo(() => {
     return workspaces.map((workspace) => {
@@ -520,6 +586,12 @@ function OfficeDexApp() {
   }, [clearError, recordError]);
 
   const createFromHome = useCallback((documentType: Exclude<GenerateInput["documentType"], "gif">) => {
+    if (documentType === "xlsx") {
+      setSpreadsheetEntry({ kind: "new", ...(homeWorkspaceId ? { workspaceId: homeWorkspaceId } : {}) });
+      clearError();
+      setActiveNav("spreadsheet");
+      return;
+    }
     resetNewGenerationDraft();
     updateNewGenerationDraft({ documentType });
     setSelectedTaskID({ kind: "none" });
@@ -839,6 +911,23 @@ function OfficeDexApp() {
 
   const openRecentFile = useCallback(async (file: RecentFile) => {
     try {
+      if (isXlsxFile(file)) {
+        await runSpreadsheetAction(async () => {
+          const artifact = await officecli.openRecentFile(file);
+          const grant = await officecli.issuePreviewToken(artifact);
+          setSpreadsheetEntry({
+            kind: "artifact",
+            artifact,
+            grant,
+            ...(file.workspaceId ? { workspaceId: file.workspaceId } : homeWorkspaceId ? { workspaceId: homeWorkspaceId } : {}),
+            ...(file.conversationId ? { conversationId: file.conversationId } : {}),
+          });
+          setActiveNav("spreadsheet");
+          clearError();
+          void refreshRecentFiles(homeWorkspaceId);
+        });
+        return;
+      }
       const artifact = await officecli.openRecentFile(file);
       if (file.source === "generated") {
         const matchingTask = tasks.find((task) =>
@@ -864,7 +953,7 @@ function OfficeDexApp() {
       }
       void message.error(isPermissionRecentFileError(text) ? t("home.permissionError") : text);
     }
-  }, [homeWorkspaceId, openInlinePreview, refreshRecentFiles, removeRecentFile, selectTask, t, tasks]);
+  }, [clearError, homeWorkspaceId, openInlinePreview, refreshRecentFiles, removeRecentFile, runSpreadsheetAction, selectTask, t, tasks]);
 
   const openLocalFileFromHome = useCallback(async () => {
     const filePath = await officecli.openFileDialog({
@@ -890,6 +979,48 @@ function OfficeDexApp() {
     setPreviewArtifact(null);
     setDeckPanelDismissedId(activeVibeTask?.id ?? null);
   }, [previewGrant, activeVibeTask?.id]);
+
+  const startSpreadsheetGeneration = useCallback(async (input: GenerateInput) => {
+    clearError();
+    try {
+      await spreadsheet.startGeneration({
+        ...input,
+        enableImages: persistedSettings.defaults.enableImages,
+        imageQuality: persistedSettings.defaults.imageQuality,
+      });
+      refreshProjectLists();
+    } catch (error) {
+      const text = errorMessage(error);
+      recordError(text, classifyError(text), extractStderr(text));
+      throw error;
+    } finally {
+      nudgeForTaskTransition();
+    }
+  }, [clearError, nudgeForTaskTransition, persistedSettings.defaults.enableImages, persistedSettings.defaults.imageQuality, recordError, refreshProjectLists, spreadsheet.startGeneration]);
+
+  const startSpreadsheetModify = useCallback(async (input: ModifyInput) => {
+    clearError();
+    const continued = await runSpreadsheetAction(async () => {
+      try {
+        await spreadsheet.startModify(input);
+        refreshProjectLists();
+      } catch (error) {
+        const text = errorMessage(error);
+        recordError(text, classifyError(text), extractStderr(text));
+        throw error;
+      } finally {
+        nudgeForTaskTransition();
+      }
+    });
+    if (!continued) return;
+  }, [clearError, nudgeForTaskTransition, recordError, refreshProjectLists, runSpreadsheetAction, spreadsheet.startModify]);
+
+  const changeNavigation = useCallback((key: NavKey) => {
+    if (key === activeNavRef.current) return;
+    void runSpreadsheetAction(async () => {
+      setActiveNav(key);
+    });
+  }, [runSpreadsheetAction]);
 
   // The Living Tree Cockpit already embeds a PPTist preview at the slides_ready/completed
   // stages, so auto-opening the full-window PreviewPanel is no longer needed for vibe tasks.
@@ -947,10 +1078,10 @@ function OfficeDexApp() {
         hasCustomProvider={persistedSettings.llmProvider !== null}
         workspaces={sidebarWorkspaces}
         chats={sidebarChats}
-        activeWorkspaceId={activeNav === "home" ? homeWorkspaceId : activeWorkspace?.id}
-        activeWorkspaceName={activeNav === "home" ? workspaces.find((workspace) => workspace.id === homeWorkspaceId)?.name : activeWorkspace?.name}
+        activeWorkspaceId={activeNav === "home" ? homeWorkspaceId : activeNav === "spreadsheet" ? spreadsheet.session.workspaceId : activeWorkspace?.id}
+        activeWorkspaceName={activeNav === "home" ? workspaces.find((workspace) => workspace.id === homeWorkspaceId)?.name : activeNav === "spreadsheet" ? workspaces.find((workspace) => workspace.id === spreadsheet.session.workspaceId)?.name : activeWorkspace?.name}
         selectedConversationId={conversationId}
-        onNavChange={setActiveNav}
+        onNavChange={changeNavigation}
         onNewGeneration={newGeneration}
         onSelectWorkspace={activeNav === "home" ? selectHomeWorkspace : selectWorkspace}
         onSelectAllFiles={selectAllHomeFiles}
@@ -1005,6 +1136,31 @@ function OfficeDexApp() {
             }}
           />
         ) : null}
+        {activeNav === "spreadsheet" ? (
+          <SpreadsheetWorkspace
+            ref={spreadsheetWorkspaceRef}
+            session={spreadsheet.session}
+            workspaceName={workspaces.find((workspace) => workspace.id === spreadsheet.session.workspaceId)?.name}
+            onBack={() => changeNavigation("home")}
+            onDirtyChange={spreadsheet.setDirty}
+            onCanvasStateChange={spreadsheet.setCanvasState}
+            onCanvasError={spreadsheet.setError}
+            onCanvasSessionClosed={(previewToken) => void officecli.revokePreviewToken(previewToken).catch(() => undefined)}
+            agentPanel={(
+              <SpreadsheetAgentPanel
+                workspaceId={spreadsheet.session.workspaceId}
+                artifactPath={spreadsheet.session.artifact?.filePath}
+                conversationId={spreadsheet.session.conversationId}
+                sourceTaskId={spreadsheet.session.artifact?.taskId ?? spreadsheet.session.taskId}
+                task={spreadsheetTask}
+                error={activeNav === "spreadsheet" ? lastError : undefined}
+                onGenerate={startSpreadsheetGeneration}
+                onModify={startSpreadsheetModify}
+                onCancel={(taskId) => officecli.cancel(taskId)}
+              />
+            )}
+          />
+        ) : null}
         {activeNav === "tasks" ? (
           <TasksScreen
             tasks={tasks}
@@ -1015,6 +1171,16 @@ function OfficeDexApp() {
         {activeNav === "settings" ? <SettingsScreen onCreditRefresh={nudgeForTaskTransition} onOpenLogin={openLogin} /> : null}
         {activeNav === "login" ? <LoginScreen /> : null}
       </Shell>
+      <UnsavedChangesDialog
+        open={unsavedDialogOpen}
+        saving={unsavedDialogSaving}
+        onSave={async () => {
+          await continuePendingSpreadsheetAction(false);
+          return !unsavedDialogOpen;
+        }}
+        onDiscard={() => void continuePendingSpreadsheetAction(true)}
+        onCancel={cancelPendingSpreadsheetAction}
+      />
       {showOnboarding ? (
         <OnboardingScreen settings={persistedSettings} defaultWorkspaceDir={defaultWorkspaceDir} onComplete={() => setOnboardingDismissed(true)} />
       ) : null}
@@ -1039,6 +1205,14 @@ function documentTypeFromPath(filePath: string): string {
   const fileName = fileNameFromPath(filePath);
   const dot = fileName.lastIndexOf(".");
   return dot >= 0 ? fileName.slice(dot + 1).toLowerCase() : "";
+}
+
+function isXlsxArtifact(artifact: Artifact): boolean {
+  return artifact.documentType.toLowerCase() === "xlsx" || artifact.fileName.toLowerCase().endsWith(".xlsx");
+}
+
+function isXlsxFile(file: RecentFile): boolean {
+  return file.documentType.toLowerCase() === "xlsx" || file.fileName.toLowerCase().endsWith(".xlsx");
 }
 
 function isUnsupportedRecentFileError(message: string): boolean {

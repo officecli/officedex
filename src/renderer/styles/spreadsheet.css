@@ -52,6 +52,34 @@
 .spreadsheet-agent__header { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--od-border-subtle); padding: 0 16px; font-size: 13px; }
 .spreadsheet-agent__header svg { width: 16px; height: 16px; color: var(--od-guidance); }
 .spreadsheet-agent__content { min-height: 0; overflow: auto; padding: 16px; color: var(--od-ink-secondary); font-size: 13px; line-height: 20px; }
+.spreadsheet-agent-panel { display: grid; height: 100%; min-height: 0; grid-template-rows: minmax(0, 1fr) auto; }
+.spreadsheet-agent-panel__timeline { min-height: 0; overflow: auto; }
+.spreadsheet-agent-panel__welcome { padding: 8px 0 20px; }
+.spreadsheet-agent-panel__welcome strong { color: var(--od-ink); font-size: 14px; font-weight: 500; }
+.spreadsheet-agent-panel__welcome p { margin: 8px 0 0; }
+.spreadsheet-agent-panel__task { display: flex; align-items: flex-start; gap: 10px; border: 1px solid var(--od-border-subtle); border-radius: 6px; background: var(--od-surface-subtle); padding: 12px; }
+.spreadsheet-agent-panel__task > svg { width: 18px; height: 18px; flex: 0 0 auto; color: var(--od-guidance); }
+.spreadsheet-agent-panel__task > div { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.spreadsheet-agent-panel__task strong { color: var(--od-ink); font-weight: 500; }
+.spreadsheet-agent-panel__task span { font-size: 12px; }
+.spreadsheet-agent-panel__stages { display: grid; gap: 6px; margin: 12px 0 0; padding: 0; list-style: none; }
+.spreadsheet-agent-panel__stages li { position: relative; padding-left: 18px; font-size: 12px; }
+.spreadsheet-agent-panel__stages li::before { position: absolute; top: 7px; left: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--od-border-hover); content: ""; }
+.spreadsheet-agent-panel__stages li[data-status="active"]::before { background: var(--od-guidance); }
+.spreadsheet-agent-panel__stages li[data-status="completed"]::before { background: var(--od-success); }
+.spreadsheet-agent-panel__error { margin-top: 12px; border-radius: 6px; background: color-mix(in srgb, var(--od-danger) 8%, transparent); color: var(--od-danger); padding: 10px 12px; font-size: 12px; }
+.spreadsheet-agent-panel__composer { display: grid; gap: 8px; border-top: 1px solid var(--od-border-subtle); padding-top: 12px; }
+.spreadsheet-agent-panel__composer .ui-textarea { resize: none; }
+.spreadsheet-agent-panel__composer-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.is-spinning { animation: spreadsheet-spin 900ms linear infinite; }
+
+.spreadsheet-unsaved { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; background: rgb(0 0 0 / 32%); padding: 24px; }
+.spreadsheet-unsaved__dialog { width: min(440px, 100%); border: 1px solid var(--od-border-subtle); border-radius: 8px; background: var(--od-surface); padding: 20px; box-shadow: 0 16px 48px rgb(0 0 0 / 18%); }
+.spreadsheet-unsaved__dialog h2 { margin: 0; color: var(--od-ink); font-size: 16px; line-height: 24px; font-weight: 500; }
+.spreadsheet-unsaved__dialog p { margin: 8px 0 20px; color: var(--od-ink-secondary); font-size: 13px; line-height: 20px; }
+.spreadsheet-unsaved__actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+@keyframes spreadsheet-spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 1024px) {
   .spreadsheet-workspace__body { grid-template-columns: minmax(0, 1fr) 300px; }

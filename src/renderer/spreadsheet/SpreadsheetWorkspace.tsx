@@ -17,6 +17,7 @@ export interface SpreadsheetWorkspaceProps {
   onDirtyChange?: (dirty: boolean) => void;
   onCanvasStateChange?: (state: SpreadsheetCanvasState) => void;
   onCanvasError?: (error?: string) => void;
+  onCanvasSessionClosed?: (previewToken: string) => void;
   agentPanel?: React.ReactNode;
 }
 
@@ -29,7 +30,7 @@ function saveStateFor(session: SpreadsheetSessionState): SpreadsheetSaveState {
 }
 
 export const SpreadsheetWorkspace = forwardRef<SpreadsheetWorkspaceHandle, SpreadsheetWorkspaceProps>(
-  function SpreadsheetWorkspace({ session, workspaceName, onBack, onDirtyChange, onCanvasStateChange, onCanvasError, agentPanel }, ref) {
+  function SpreadsheetWorkspace({ session, workspaceName, onBack, onDirtyChange, onCanvasStateChange, onCanvasError, onCanvasSessionClosed, agentPanel }, ref) {
     const canvasRef = useRef<SpreadsheetCanvasHandle>(null);
     const [agentOpen, setAgentOpen] = useState(true);
     const fileName = session.artifact?.fileName ?? "Untitled.xlsx";
@@ -64,6 +65,7 @@ export const SpreadsheetWorkspace = forwardRef<SpreadsheetWorkspaceHandle, Sprea
                 onDirtyChange={onDirtyChange}
                 onStateChange={onCanvasStateChange}
                 onError={onCanvasError}
+                onSessionClosed={onCanvasSessionClosed}
               />
             ) : (
               <div className="spreadsheet-workspace__empty">

@@ -164,6 +164,62 @@ describe("App task flow", () => {
     expect(await screen.findByTestId("new-generation-form")).toHaveAttribute("data-document-type", "pptx");
   });
 
+  it("opens Spreadsheet directly in the new workbook workspace", async () => {
+    window.history.pushState({}, "", "/");
+    installBridgeMock();
+    const { App } = await import("./App");
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Spreadsheet" }));
+
+    expect(await screen.findByRole("region", { name: "Untitled workbook" })).toBeTruthy();
+    expect(screen.getByRole("complementary", { name: "AI Assistant" })).toBeTruthy();
+    expect(screen.queryByTestId("new-generation-form")).toBeNull();
+  });
+
+  it("generates XLSX inside the spreadsheet workspace and opens the matching artifact", async () => {
+    window.history.pushState({}, "", "/");
+    const bridge = installBridgeMock();
+    const { App } = await import("./App");
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Spreadsheet" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Spreadsheet generation request" }), { target: { value: "Build a quarterly sales forecast" } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    await waitFor(() => expect(bridge.generate).toHaveBeenCalledWith(expect.objectContaining({
+      documentType: "xlsx",
+      generationMode: "plan",
+      prompt: "Build a quarterly sales forecast",
+    })));
+    act(() => {
+      bridge.emit({
+        task_id: "task-2",
+        type: "task.completed",
+        payload: { result: { file_path: "/tmp/forecast.xlsx", file_name: "forecast.xlsx", document_type: "xlsx" } },
+      });
+    });
+
+    expect(await screen.findByRole("region", { name: "forecast.xlsx workbook" })).toBeTruthy();
+    expect(screen.queryByTestId("new-generation-form")).toBeNull();
+  });
+
+  it("opens recent XLSX files in the same spreadsheet workspace", async () => {
+    window.history.pushState({}, "", "/");
+    installBridgeMock();
+    const api = window.officecli as DesktopAPI;
+    const recent = { filePath: "/tmp/local.xlsx", fileName: "Local workbook.xlsx", documentType: "xlsx", source: "local" as const, lastOpenedAt: "2026-08-05T02:00:00Z" };
+    api.listRecentFiles = vi.fn(async () => [recent]);
+    const { App } = await import("./App");
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Open Local workbook.xlsx" }));
+
+    expect(await screen.findByRole("region", { name: "Local workbook.xlsx workbook" })).toBeTruthy();
+    expect(screen.queryByLabelText("Close preview")).toBeNull();
+    expect(api.issuePreviewToken).toHaveBeenCalledWith(expect.objectContaining({ filePath: recent.filePath }));
+  });
+
   it("selects a project and reloads recent files for that workspace", async () => {
     window.history.pushState({}, "", "/");
     installBridgeMock();

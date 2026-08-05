@@ -19,6 +19,7 @@ export interface SpreadsheetCanvasProps {
   onDirtyChange?: (dirty: boolean) => void;
   onStateChange?: (state: SpreadsheetCanvasState) => void;
   onError?: (error?: string) => void;
+  onSessionClosed?: (previewToken: string) => void;
 }
 
 function errorMessage(error: unknown): string {
@@ -26,7 +27,7 @@ function errorMessage(error: unknown): string {
 }
 
 export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, SpreadsheetCanvasProps>(
-  function SpreadsheetCanvas({ artifact, grant, onDirtyChange, onStateChange, onError }, ref) {
+  function SpreadsheetCanvas({ artifact, grant, onDirtyChange, onStateChange, onError, onSessionClosed }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const editorRef = useRef<AbstractedSheetSDK | null>(null);
     const sessionIdRef = useRef("");
@@ -36,13 +37,13 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
     const dirtyRef = useRef(false);
     const savePromiseRef = useRef<Promise<boolean> | null>(null);
     const saveHandlerRef = useRef<() => Promise<boolean>>(async () => false);
-    const callbacksRef = useRef({ onDirtyChange, onStateChange, onError });
+    const callbacksRef = useRef({ onDirtyChange, onStateChange, onError, onSessionClosed });
     const [state, setState] = useState<SpreadsheetCanvasState>("loading");
     const [prepareError, setPrepareError] = useState<string | null>(null);
     const [saveError, setSaveError] = useState<string | null>(null);
     const [loadAttempt, setLoadAttempt] = useState(0);
 
-    callbacksRef.current = { onDirtyChange, onStateChange, onError };
+    callbacksRef.current = { onDirtyChange, onStateChange, onError, onSessionClosed };
 
     const publishState = useCallback((nextState: SpreadsheetCanvasState) => {
       setState(nextState);
@@ -82,6 +83,7 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
         if (sessionId) {
           await officecli.closeXlsxEditor({ previewToken: grant.token, sessionId }).catch(() => undefined);
         }
+        callbacksRef.current.onSessionClosed?.(grant.token);
       };
 
       publishState("loading");
