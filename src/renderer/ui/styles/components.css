@@ -1,0 +1,120 @@
+.ui-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.ui-button,
+.ui-input,
+.ui-select,
+.ui-radio-group__item,
+.ui-switch {
+  font-family: var(--od-font-ui);
+}
+
+.ui-button {
+  min-height: var(--od-control-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 12px;
+  border: 1px solid var(--od-border-subtle);
+  border-radius: var(--od-radius-control);
+  background: var(--od-surface-muted);
+  color: var(--od-ink);
+  cursor: pointer;
+}
+
+.ui-button[data-variant="primary"] {
+  background: var(--od-ink);
+  color: var(--od-surface);
+}
+
+.ui-button:disabled {
+  cursor: not-allowed;
+  color: var(--od-ink-disabled);
+  background: #41464b0d;
+}
+
+.ui-input,
+.ui-select {
+  height: var(--od-control-md);
+  padding: 0 12px;
+  border: 1px solid var(--od-border-subtle);
+  border-radius: var(--od-radius-control);
+  background: var(--od-surface);
+  color: var(--od-ink);
+}
+
+.ui-radio-group {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.ui-radio-group__item {
+  height: var(--od-control-md);
+  padding: 0 12px;
+  border: 1px solid var(--od-border-subtle);
+  border-radius: var(--od-radius-control);
+  background: var(--od-surface);
+  color: var(--od-ink);
+}
+
+.ui-radio-group__item[data-selected="true"] {
+  background: var(--od-ink);
+  color: var(--od-surface);
+}
+
+.ui-switch {
+  width: 28px;
+  height: 16px;
+  padding: 2px;
+  border: 0;
+  border-radius: 1000px;
+  background: var(--od-surface-muted);
+}
+
+.ui-switch[aria-checked="true"] {
+  background: var(--od-ink);
+}
+
+.ui-switch__thumb {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 1000px;
+  background: var(--od-surface);
+  transition: transform 120ms ease;
+}
+
+.ui-switch[aria-checked="true"] .ui-switch__thumb {
+  transform: translateX(12px);
+}
+
+.ui-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--od-ink-secondary);
+}
+
+.ui-loading__spinner,
+.ui-button__spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: ui-spin 700ms linear infinite;
+}
+
+@keyframes ui-spin {
+  to { transform: rotate(360deg); }
+}

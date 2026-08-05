@@ -1,0 +1,22 @@
+:root {
+  --od-ink: #41464b;
+  --od-ink-medium: #41464bcc;
+  --od-ink-secondary: #41464b99;
+  --od-ink-disabled: #41464b4d;
+  --od-guidance: #5da4e3;
+  --od-danger: #e86666;
+  --od-surface: #ffffff;
+  --od-surface-subtle: #f9f9f9;
+  --od-surface-muted: #f7f7f7;
+  --od-border-subtle: #41464b1a;
+  --od-border-hover: #41464b33;
+  --od-radius-control: 4px;
+  --od-radius-popover: 6px;
+  --od-radius-dialog: 8px;
+  --od-control-sm: 24px;
+  --od-control-sm-plus: 28px;
+  --od-control-md: 32px;
+  --od-control-lg: 40px;
+  --od-shadow-floating: 0 20px 32px #0000000f;
+  --od-font-ui: "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
