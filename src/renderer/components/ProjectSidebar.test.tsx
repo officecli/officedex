@@ -73,4 +73,29 @@ describe("ProjectSidebar", () => {
     expect(props.onOpenSettings).toHaveBeenCalledOnce();
     expect(props.onOpenAccount).toHaveBeenCalledOnce();
   });
+
+  it("supports compact project navigation while keeping every action labelled", () => {
+    const onCompactChange = vi.fn();
+    const props: React.ComponentProps<typeof ProjectSidebar> = {
+      workspaces,
+      activeWorkspaceId: "ws-a",
+      compact: true,
+      onCompactChange,
+      onSelectAll: vi.fn(),
+      onSelectWorkspace: vi.fn(),
+      onAddWorkspace: vi.fn(),
+      onRenameWorkspace: vi.fn(),
+      onRevealWorkspace: vi.fn(),
+      onRemoveWorkspace: vi.fn(),
+      onOpenTasks: vi.fn(),
+      onOpenSettings: vi.fn(),
+      onOpenAccount: vi.fn(),
+    };
+    const { container } = render(<LocaleProvider value="en"><ProjectSidebar {...props} /></LocaleProvider>);
+
+    expect(container.querySelector(".project-sidebar")).toHaveAttribute("data-compact", "true");
+    expect(screen.getByRole("button", { name: "Client A" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Expand project sidebar" }));
+    expect(onCompactChange).toHaveBeenCalledWith(false);
+  });
 });

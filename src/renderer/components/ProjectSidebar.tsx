@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import type { WorkspaceSummary } from "../../shared/types";
 import { Button, Input, dialog } from "../ui";
 import {
@@ -26,9 +27,11 @@ export interface ProjectSidebarProps {
   onOpenTasks: () => void;
   onOpenSettings: () => void;
   onOpenAccount: () => void;
+  compact?: boolean;
+  onCompactChange?: (compact: boolean) => void;
 }
 
-export function ProjectSidebar({ workspaces, activeWorkspaceId, onSelectAll, onSelectWorkspace, onAddWorkspace, onRenameWorkspace, onRevealWorkspace, onRemoveWorkspace, onOpenTasks, onOpenSettings, onOpenAccount }: ProjectSidebarProps) {
+export function ProjectSidebar({ workspaces, activeWorkspaceId, onSelectAll, onSelectWorkspace, onAddWorkspace, onRenameWorkspace, onRevealWorkspace, onRemoveWorkspace, onOpenTasks, onOpenSettings, onOpenAccount, compact = false, onCompactChange }: ProjectSidebarProps) {
   const t = useT();
   const [renamingId, setRenamingId] = useState<string>();
   const [renameValue, setRenameValue] = useState("");
@@ -42,10 +45,20 @@ export function ProjectSidebar({ workspaces, activeWorkspaceId, onSelectAll, onS
   };
 
   return (
-    <aside className="project-sidebar" aria-label={t("projectSidebar.label")}>
+    <aside className="project-sidebar" aria-label={t("projectSidebar.label")} data-compact={compact ? "true" : "false"}>
       <div className="project-sidebar__brand">
         <img src="./officedex-logo.png" alt="OfficeDex" />
-        <span>OfficeDex</span>
+        <span className="project-sidebar__brand-name">OfficeDex</span>
+        {onCompactChange ? (
+          <button
+            type="button"
+            className="project-sidebar__compact-toggle"
+            aria-label={compact ? "Expand project sidebar" : "Collapse project sidebar"}
+            onClick={() => onCompactChange(!compact)}
+          >
+            {compact ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
+          </button>
+        ) : null}
       </div>
       <nav className="project-sidebar__primary" aria-label={t("projectSidebar.navigation")}>
         <button type="button" className={!activeWorkspaceId ? "is-active" : ""} onClick={onSelectAll}><AppstoreOutlined aria-hidden /><span>{t("projectSidebar.allFiles")}</span></button>
@@ -71,7 +84,7 @@ export function ProjectSidebar({ workspaces, activeWorkspaceId, onSelectAll, onS
                   }}
                 />
               ) : (
-                <button type="button" className="project-sidebar__workspace-select" onClick={() => onSelectWorkspace(workspace.id)}>
+                <button type="button" className="project-sidebar__workspace-select" aria-label={workspace.name} onClick={() => onSelectWorkspace(workspace.id)}>
                   <FolderOpenOutlined aria-hidden /><span>{workspace.name}</span>
                 </button>
               )}

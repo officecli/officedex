@@ -130,6 +130,7 @@ export function Shell({
   const [collapsed, setCollapsed] = useState(false);
   const [sidebarPreview, setSidebarPreview] = useState(false);
   const [sidebarToggleTooltipOpen, setSidebarToggleTooltipOpen] = useState(false);
+  const [projectSidebarCompact, setProjectSidebarCompact] = useState(true);
   const lastAutoCollapseSidebarKey = useRef<string | undefined>(undefined);
   const t = useT();
   const sidebarToggleLabel = collapsed ? t("shell.sidebar.expand") : t("shell.sidebar.collapse");
@@ -147,9 +148,10 @@ export function Shell({
     setSidebarPreview(false);
   }, [autoCollapseSidebarKey]);
 
-  if (activeNav === "home") {
+  if (activeNav === "home" || activeNav === "spreadsheet") {
+    const spreadsheetMode = activeNav === "spreadsheet";
     return (
-      <div className="home-shell">
+      <div className={`home-shell ${spreadsheetMode ? "home-shell--spreadsheet" : ""}`}>
         <ProjectSidebar
           workspaces={workspaces}
           activeWorkspaceId={activeWorkspaceId}
@@ -162,20 +164,26 @@ export function Shell({
           onOpenTasks={() => onNavChange("tasks")}
           onOpenSettings={() => onNavChange("settings")}
           onOpenAccount={() => onNavChange("login")}
+          compact={spreadsheetMode ? projectSidebarCompact : false}
+          onCompactChange={spreadsheetMode ? setProjectSidebarCompact : undefined}
         />
-        <main className="home-shell__main">
-          <header className="home-shell__topbar">
-            <Space size={12} className="breadcrumb">
-              <span>{t("shell.brand")}</span>
-              <span className="crumb-separator">/</span>
-              <strong>{activeWorkspaceName || t("projectSidebar.allFiles")}</strong>
-            </Space>
-            <RuntimeChip onClick={() => onNavChange("settings")} />
-          </header>
-          <div className={`home-shell__content ${inspector ? "with-preview" : ""}`}>
-            <section className="home-shell__stage">{children}</section>
-            {inspector ? <aside className="preview-panel">{inspector}</aside> : null}
-          </div>
+        <main className={`home-shell__main ${spreadsheetMode ? "home-shell__main--spreadsheet" : ""}`}>
+          {!spreadsheetMode ? (
+            <header className="home-shell__topbar">
+              <Space size={12} className="breadcrumb">
+                <span>{t("shell.brand")}</span>
+                <span className="crumb-separator">/</span>
+                <strong>{activeWorkspaceName || t("projectSidebar.allFiles")}</strong>
+              </Space>
+              <RuntimeChip onClick={() => onNavChange("settings")} />
+            </header>
+          ) : null}
+          {spreadsheetMode ? children : (
+            <div className={`home-shell__content ${inspector ? "with-preview" : ""}`}>
+              <section className="home-shell__stage">{children}</section>
+              {inspector ? <aside className="preview-panel">{inspector}</aside> : null}
+            </div>
+          )}
         </main>
       </div>
     );

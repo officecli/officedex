@@ -35,6 +35,40 @@ afterEach(() => {
 });
 
 describe("Shell sidebar layout", () => {
+  it("uses the project-shell family for spreadsheet mode without adding a second topbar", () => {
+    render(
+      <LocaleProvider value="en">
+        {createElement(
+          Shell as unknown as ComponentType<Record<string, unknown>>,
+          {
+            activeNav: "spreadsheet",
+            failed: false,
+            workspaces: [],
+            chats: [],
+            activeWorkspaceId: undefined,
+            activeWorkspaceName: undefined,
+            selectedConversationId: undefined,
+            onNavChange: vi.fn(),
+            onNewGeneration: vi.fn(),
+            onSelectWorkspace: vi.fn(),
+            onSelectAllFiles: vi.fn(),
+            onAddWorkspace: vi.fn(),
+            onRenameWorkspace: vi.fn(),
+            onRevealWorkspace: vi.fn(),
+            onRemoveWorkspace: vi.fn(),
+            onSelectTask: vi.fn(),
+            onDeleteConversation: vi.fn(),
+          },
+          <div data-testid="spreadsheet-workspace" />,
+        )}
+      </LocaleProvider>,
+    );
+
+    expect(document.querySelector(".home-shell--spreadsheet")).toBeInTheDocument();
+    expect(document.querySelector(".project-sidebar")).toHaveAttribute("data-compact", "true");
+    expect(document.querySelector(".home-shell__topbar")).toBeNull();
+    expect(screen.getByTestId("spreadsheet-workspace")).toBeInTheDocument();
+  });
   it("returns to Home from the dialogue sidebar brand", () => {
     const onNavChange = vi.fn();
     render(

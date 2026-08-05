@@ -7,6 +7,7 @@ import { LocaleProvider } from "./i18n";
 import "./styles/tokens.css";
 import "./styles/shell.css";
 import "./styles/home.css";
+import "./styles/spreadsheet.css";
 import "./styles/dialogue.css";
 import "./styles/settings.css";
 import "./styles/tasks.css";
