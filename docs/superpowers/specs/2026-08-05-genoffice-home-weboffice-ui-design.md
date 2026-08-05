@@ -5,7 +5,9 @@
 OfficeDex 当前使用 Ant Design，并已存在一个早期 `src/renderer/ui` facade、`UI_KIT` 构建变量和 AntD/WebOffice 双后端切换骨架。现阶段目标不再是渐进式双后端迁移，而是一次性交付以下两项改造：
 
 1. 将应用默认入口改为 GenOffice 式首页 / 项目中心。
-2. 从渲染层彻底移除 `antd` 与 `@ant-design/icons`，统一使用 `weboffice-design`、项目内兼容组件和 `lucide-react`。
+2. 从渲染层彻底移除 `antd` 与 `@ant-design/icons`，统一使用 `weboffice-design` 的样式/Token/图标资源、项目内 React 组件和 `lucide-react`。
+
+实施前的最小运行验证确认：`weboffice-design@0.3.2` 的 React 组件产物内嵌 React 18 runtime，在 OfficeDex React 19 环境中会触发 `ReactCurrentDispatcher` 错误。因此项目不得导入该包的 React/JavaScript 组件入口；所有 React 组件由 `src/renderer/ui` 本地实现，并按 WebOffice 样式变量和 Shimo 规范对齐。
 
 本设计覆盖 `officedex`，不修改 `officecli-internal` 或其他兄弟仓库。应用现有图标、打包图标和品牌标识保持不变。
 
@@ -59,6 +61,7 @@ GIF 能力和历史记录继续保留，但首页不展示 GIF 快捷入口。
 
 - `src/renderer/ui` 是业务代码唯一允许使用的 UI 入口。
 - 业务代码不得直接导入 `weboffice-design`、第三方 UI 组件库或具体后端实现。
+- facade 不导入 `weboffice-design` 的 React/JavaScript 组件产物，只加载其 CSS、读取设计 Token 并复用原始 SVG 图标资源。
 - 删除 `UI_KIT`、Vite 双后端 alias、AntD backend 和构建时 UI 后端选择逻辑。
 - 删除 `antd` 与 `@ant-design/icons` 依赖。
 - 不模拟完整 AntD API，只实现 OfficeDex 当前真实使用的能力。
@@ -114,33 +117,33 @@ src/renderer/ui/
     index.ts
 ```
 
-可直接由 `weboffice-design` 提供的组件仍通过 `ui/index.ts` 统一导出。项目本地组件应保持文件职责单一，不建立一个包含所有兼容逻辑的巨型文件。
+所有 React 组件均由项目本地实现并通过 `ui/index.ts` 统一导出。项目本地组件应保持文件职责单一，不建立一个包含所有兼容逻辑的巨型文件。
 
-### 4.2 直接使用的 WebOffice 组件
+### 4.2 WebOffice 设计资源覆盖的组件
 
-以下能力由 `weboffice-design@0.3.2` 提供，但需要通过 facade 收窄属性：
+以下能力在 `weboffice-design@0.3.2` 中存在相应样式、Token 或交互规范，但其 React 组件产物不能在当前 React 19 环境直接使用。项目按这些规范实现本地组件，并通过 facade 收窄属性：
 
-| OfficeDex UI 能力 | WebOffice 实现 | 适配重点 |
+| OfficeDex UI 能力 | 本地实现参考 | 适配重点 |
 | --- | --- | --- |
-| Button | `Button` | 类型、尺寸、图标、加载、danger |
-| Input | `Input` | value、change、状态、IME |
-| InputNumber | `InputNumber` | 数字转换、范围、步长 |
-| Select | `Select` | options、value、搜索、禁用 |
-| Radio | `Radio` | checked、change、disabled |
-| Radio.Group | `RadioGroup` | value、items、模式 |
-| Switch | `Switch` | checked、change、disabled |
-| Tooltip | `Tooltip` | 内容、方向、显隐控制 |
-| Dropdown | `Dropdown` | trigger、open、placement |
-| Menu | `Menu` | item 模型、选择、子菜单 |
-| Tabs | `Tabs` | items、activeKey、change |
-| Spin | `Loading` | 尺寸、状态、容器布局 |
-| Modal | `Dialog` | open、footer、关闭语义 |
-| message | `Toast` | success、warning、error、loading |
-| Alert | `MessageBar` + 本地封装 | tone、关闭、说明文本 |
+| Button | WebOffice Button 样式/Token | 类型、尺寸、图标、加载、danger |
+| Input | WebOffice Input 样式/Token | value、change、状态、IME |
+| InputNumber | WebOffice InputNumber 样式/Token | 数字转换、范围、步长 |
+| Select | WebOffice Select/Menu 样式/Token | options、value、搜索、禁用 |
+| Radio | WebOffice Radio 样式/Token | checked、change、disabled |
+| Radio.Group | WebOffice RadioGroup 规范 | value、items、模式 |
+| Switch | WebOffice Switch 样式/Token | checked、change、disabled |
+| Tooltip | WebOffice Tooltip 样式/Token | 内容、方向、显隐控制 |
+| Dropdown | WebOffice Dropdown 样式/Token | trigger、open、placement |
+| Menu | WebOffice Menu 样式/Token | item 模型、选择、子菜单 |
+| Tabs | WebOffice Tabs 样式/Token | items、activeKey、change |
+| Spin | WebOffice Loading 样式/Token | 尺寸、状态、容器布局 |
+| Modal | WebOffice Dialog 规范 | open、footer、关闭语义 |
+| message | WebOffice Toast 规范 | success、warning、error、loading |
+| Alert | WebOffice MessageBar 规范 | tone、关闭、说明文本 |
 
 ### 4.3 组件库真正缺失的能力
 
-以下能力未出现在 `weboffice-design@0.3.2` 的公开组件导出中，且 OfficeDex 当前正在使用：
+以下能力未出现在 `weboffice-design@0.3.2` 的公开组件导出中，且 OfficeDex 当前正在使用。它们与上一节组件一样由本地 React 实现，但文档单独记录其“组件库缺失”事实：
 
 | 缺失能力 | 当前使用场景 | 本地替代 | 行为边界 | 必测内容 |
 | --- | --- | --- | --- | --- |

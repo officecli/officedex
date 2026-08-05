@@ -4,7 +4,7 @@
 
 **Goal:** Replace Ant Design completely with a single `weboffice-design`-backed UI facade and add a GenOffice-style home/project center that unifies generated artifacts and user-opened local files.
 
-**Architecture:** Business code imports only from `src/renderer/ui`; the facade wraps `weboffice-design` where available and supplies focused local React/CSS implementations for missing components. A versioned Go/SQLite recent-file model feeds a new Home screen while existing generation, task, preview, settings, login, update, and PPTist flows remain behaviorally unchanged.
+**Architecture:** Business code imports only from `src/renderer/ui`. Because `weboffice-design@0.3.2` embeds a React 18 runtime that fails under OfficeDex React 19, the facade must not import its React/JavaScript component entries; it implements focused local React components using the package CSS, design tokens, raw SVG assets, and Shimo specification. A versioned Go/SQLite recent-file model feeds a new Home screen while existing generation, task, preview, settings, login, update, and PPTist flows remain behaviorally unchanged.
 
 **Tech Stack:** React 19, TypeScript 5.7, Vite 6, Vitest/Testing Library, Wails v2, Go, modernc SQLite, `weboffice-design@0.3.2`, `lucide-react`.
 
@@ -16,11 +16,11 @@
 
 ### UI foundation
 
-- Modify `src/renderer/ui/index.ts` — public facade exports.
+- Modify `src/renderer/ui/index.ts` — public facade exports; no WebOffice React/JavaScript imports.
 - Replace `src/renderer/ui/types.ts` — focused UI contracts used by OfficeDex.
 - Create `src/renderer/ui/styles/tokens.css` — Shimo color, spacing, radius, typography, elevation, and state tokens.
 - Create `src/renderer/ui/styles/components.css` — local facade component styling.
-- Create `src/renderer/ui/components/*` — local implementations for missing WebOffice components.
+- Create `src/renderer/ui/components/*` — local implementations for every React component, including controls whose WebOffice CSS/Token exists.
 - Create `src/renderer/ui/services/dialog.tsx` — imperative confirm/info service over the declarative Dialog host.
 - Create `src/renderer/ui/services/toast.ts` — project message API over WebOffice Toast.
 - Create `src/renderer/ui/icons/index.tsx` — single icon boundary using WebOffice SVG assets and `lucide-react`.
@@ -53,18 +53,24 @@
 
 ---
 
-### Task 1: Establish the single-facade token and export boundary
+### Task 1: Establish the single-facade token and local control boundary
 
 **Files:**
 - Create: `src/renderer/ui/styles/tokens.css`
 - Create: `src/renderer/ui/styles/components.css`
+- Create: `src/renderer/ui/components/Button.tsx`
+- Create: `src/renderer/ui/components/Input.tsx`
+- Create: `src/renderer/ui/components/Loading.tsx`
+- Create: `src/renderer/ui/components/RadioGroup.tsx`
+- Create: `src/renderer/ui/components/Select.tsx`
+- Create: `src/renderer/ui/components/Switch.tsx`
 - Modify: `src/renderer/ui/types.ts`
 - Modify: `src/renderer/ui/index.ts`
 - Test: `src/renderer/ui/ui.test.tsx`
 
 - [ ] **Step 1: Write failing facade-boundary tests**
 
-Add tests proving the public facade exports the direct WebOffice controls and no longer relies on `@vo-ui/backend`:
+Add tests proving the public facade exports local React 19 controls, no longer relies on `@vo-ui/backend`, and never loads the incompatible WebOffice React bundle:
 
 ```tsx
 import { render, screen } from "@testing-library/react";
@@ -130,9 +136,9 @@ Create `src/renderer/ui/styles/tokens.css` with the approved fixed contract:
 }
 ```
 
-- [ ] **Step 4: Replace facade contracts and exports**
+- [ ] **Step 4: Implement local React 19 controls and facade exports**
 
-Define narrow contracts in `src/renderer/ui/types.ts` and export WebOffice controls from `src/renderer/ui/index.ts`:
+Define narrow contracts in `src/renderer/ui/types.ts`. Implement the six controls with native React elements, WebOffice CSS variable names where useful, and Shimo tokens. Export only local components from `src/renderer/ui/index.ts`:
 
 ```ts
 import type { ReactNode } from "react";
@@ -144,22 +150,21 @@ export interface UiOption<T extends string = string> { value: T; label: ReactNod
 
 ```ts
 import "weboffice-design/style/base";
-import "weboffice-design/css";
+import "weboffice-design/button/style";
+import "weboffice-design/input/style";
+import "weboffice-design/loading/style";
+import "weboffice-design/radio-group/style";
+import "weboffice-design/select/style";
+import "weboffice-design/switch/style";
 import "./styles/tokens.css";
 import "./styles/components.css";
 
-export { Button } from "weboffice-design/button";
-export { Dropdown } from "weboffice-design/dropdown";
-export { Input } from "weboffice-design/input";
-export { InputNumber } from "weboffice-design/input-number";
-export { Loading } from "weboffice-design/loading";
-export { Menu } from "weboffice-design/menu";
-export { Radio } from "weboffice-design/radio";
-export { RadioGroup } from "weboffice-design/radio-group";
-export { Select } from "weboffice-design/select";
-export { Switch } from "weboffice-design/switch";
-export { Tabs } from "weboffice-design/tabs";
-export { Tooltip } from "weboffice-design/tooltip";
+export { Button } from "./components/Button";
+export { Input } from "./components/Input";
+export { Loading } from "./components/Loading";
+export { RadioGroup } from "./components/RadioGroup";
+export { Select } from "./components/Select";
+export { Switch } from "./components/Switch";
 export * from "./types";
 ```
 
@@ -167,7 +172,7 @@ export * from "./types";
 
 Run `npx vitest run src/renderer/ui/ui.test.tsx`.
 
-Expected: PASS for the public export contract; if a WebOffice prop differs, adapt only in a focused wrapper rather than widening business imports.
+Expected: PASS for the public export contract with React 19 and no `ReactCurrentDispatcher` failure.
 
 - [ ] **Step 6: Commit**
 
@@ -217,21 +222,15 @@ Expected: FAIL because `DialogHost`, `dialog`, and `toast` do not exist.
 
 - [ ] **Step 3: Implement the Toast adapter**
 
-Expose the current call shape without importing AntD:
+Expose the current call shape without importing AntD or WebOffice React code. Implement the host locally in Task 2:
 
 ```ts
-import { showToast } from "weboffice-design/toast";
-
-function show(status: "success" | "warning" | "fail" | "info", content: string) {
-  return showToast({ status, title: content });
-}
-
 export const toast = {
-  success: (content: string) => show("success", content),
-  warning: (content: string) => show("warning", content),
-  error: (content: string) => show("fail", content),
-  info: (content: string) => show("info", content),
-  loading: (content: string) => showToast({ status: "loading", title: content, duration: null }),
+  success: (content: string) => publishToast({ tone: "success", content }),
+  warning: (content: string) => publishToast({ tone: "warning", content }),
+  error: (content: string) => publishToast({ tone: "error", content }),
+  info: (content: string) => publishToast({ tone: "info", content }),
+  loading: (content: string) => publishToast({ tone: "loading", content, duration: null }),
 };
 ```
 
@@ -256,7 +255,7 @@ export const dialog = {
 };
 ```
 
-Render `weboffice-design/dialog` inside `DialogHost`, keep one request active, and close on Escape, cancel, successful OK, or mask click only when the request permits it.
+Render the local Dialog implementation inside `DialogHost`, following WebOffice Dialog tokens. Keep one request active, and close on Escape, cancel, successful OK, or mask click only when the request permits it.
 
 - [ ] **Step 5: Implement the local Popover contract**
 
