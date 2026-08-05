@@ -1,9 +1,10 @@
 import type { AbstractedSheetSDK } from "@shimo/sdk-sheet";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { AlertCircle, FileSpreadsheet } from "lucide-react";
 import type { Artifact, PreviewGrant } from "../../shared/types";
 import { officecli } from "../bridge";
-import { ErrorState } from "../preview/components/ErrorState";
-import { LoadingState } from "../preview/components/LoadingState";
+import { useT } from "../i18n";
+import { Button } from "../ui";
 import { createOfflineSheetEditor } from "./sheetSdk";
 
 export type SpreadsheetCanvasState = "loading" | "clean" | "dirty" | "saving" | "saved" | "error";
@@ -29,6 +30,7 @@ function errorMessage(error: unknown): string {
 export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, SpreadsheetCanvasProps>(
   function SpreadsheetCanvas({ artifact, grant, onDirtyChange, onStateChange, onError, onSessionClosed }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
+    const t = useT();
     const editorRef = useRef<AbstractedSheetSDK | null>(null);
     const sessionIdRef = useRef("");
     const focusedRef = useRef(false);
@@ -233,15 +235,18 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
     if (prepareError) {
       return (
         <section className="spreadsheet-canvas spreadsheet-canvas--error" aria-label={artifact.fileName}>
-          <ErrorState
-            message={prepareError}
-            fileName={artifact.fileName}
-            onRetry={() => {
-              setPrepareError(null);
-              setLoadAttempt((attempt) => attempt + 1);
-            }}
-            onOpenExternal={openExternal}
-          />
+          <div className="spreadsheet-canvas__error">
+            <AlertCircle aria-hidden="true" />
+            <strong>{t("spreadsheet.error.cannotOpen", { file: artifact.fileName })}</strong>
+            <span>{prepareError}</span>
+            <div>
+              <Button variant="primary" size="small" onClick={() => {
+                setPrepareError(null);
+                setLoadAttempt((attempt) => attempt + 1);
+              }}>{t("spreadsheet.error.retry")}</Button>
+              <Button size="small" onClick={openExternal}>{t("spreadsheet.error.openExternal")}</Button>
+            </div>
+          </div>
         </section>
       );
     }
@@ -251,7 +256,8 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
         <div ref={containerRef} className="spreadsheet-canvas__editor" tabIndex={-1} />
         {state === "loading" ? (
           <div className="spreadsheet-canvas__loading">
-            <LoadingState fileName={artifact.fileName} />
+            <FileSpreadsheet aria-hidden="true" />
+            <span>{t("spreadsheet.loading", { file: artifact.fileName })}</span>
           </div>
         ) : null}
         {saveError ? <div className="spreadsheet-canvas__save-error" role="alert">{saveError}</div> : null}

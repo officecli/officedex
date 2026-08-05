@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AlertCircle, CheckCircle2, LoaderCircle, Send, Square } from "lucide-react";
 import type { DesktopTask, GenerateInput, ModifyInput } from "../../shared/types";
 import { Button, TextArea } from "../ui";
+import { useT } from "../i18n";
 
 export interface SpreadsheetAgentPanelProps {
   workspaceId?: string;
@@ -16,6 +17,7 @@ export interface SpreadsheetAgentPanelProps {
 }
 
 export function SpreadsheetAgentPanel({ workspaceId, artifactPath, conversationId, sourceTaskId, task, error, onGenerate, onModify, onCancel }: SpreadsheetAgentPanelProps) {
+  const t = useT();
   const [prompt, setPrompt] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const running = submitting || task?.status === "starting" || task?.status === "running";
@@ -56,15 +58,15 @@ export function SpreadsheetAgentPanel({ workspaceId, artifactPath, conversationI
       <div className="spreadsheet-agent-panel__timeline" aria-live="polite">
         {!task ? (
           <div className="spreadsheet-agent-panel__welcome">
-            <strong>{artifactPath ? "Continue editing with AI" : "Create a spreadsheet"}</strong>
-            <p>{artifactPath ? "Ask for formulas, formatting, charts, or structural changes." : "Describe the workbook, data, formulas, and charts you need."}</p>
+            <strong>{artifactPath ? t("spreadsheet.agent.modifyTitle") : t("spreadsheet.agent.createTitle")}</strong>
+            <p>{artifactPath ? t("spreadsheet.agent.modifyBody") : t("spreadsheet.agent.createBody")}</p>
           </div>
         ) : (
           <div className="spreadsheet-agent-panel__task" data-status={task.status}>
             {running ? <LoaderCircle className="is-spinning" aria-hidden="true" /> : task.status === "completed" ? <CheckCircle2 aria-hidden="true" /> : <AlertCircle aria-hidden="true" />}
             <div>
-              <strong>{task.topic || "Spreadsheet task"}</strong>
-              <span>{task.status === "completed" ? "Workbook ready" : task.status === "failed" ? "Generation failed" : "Working on your workbook…"}</span>
+              <strong>{task.topic || t("spreadsheet.agent.taskTitle")}</strong>
+              <span>{task.status === "completed" ? t("spreadsheet.agent.ready") : task.status === "failed" ? t("spreadsheet.agent.failed") : t("spreadsheet.agent.running")}</span>
             </div>
           </div>
         )}
@@ -77,10 +79,10 @@ export function SpreadsheetAgentPanel({ workspaceId, artifactPath, conversationI
       </div>
       <div className="spreadsheet-agent-panel__composer">
         <TextArea
-          aria-label={artifactPath ? "Spreadsheet modification request" : "Spreadsheet generation request"}
+          aria-label={artifactPath ? t("spreadsheet.agent.modifyAria") : t("spreadsheet.agent.generateAria")}
           value={prompt}
           rows={4}
-          placeholder={artifactPath ? "e.g. Add a monthly trend chart and highlight negative growth" : "e.g. Build a quarterly sales forecast with formulas and charts"}
+          placeholder={artifactPath ? t("spreadsheet.agent.modifyPlaceholder") : t("spreadsheet.agent.generatePlaceholder")}
           onChange={(event) => setPrompt(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
@@ -90,9 +92,9 @@ export function SpreadsheetAgentPanel({ workspaceId, artifactPath, conversationI
           }}
         />
         <div className="spreadsheet-agent-panel__composer-actions">
-          {running && task?.id && onCancel ? <Button size="small" variant="secondary" icon={<Square />} onClick={() => void onCancel(task.id)}>Cancel</Button> : null}
+          {running && task?.id && onCancel ? <Button size="small" variant="secondary" icon={<Square />} onClick={() => void onCancel(task.id)}>{t("spreadsheet.agent.cancel")}</Button> : null}
           <Button size="small" variant="primary" icon={<Send />} loading={submitting} disabled={!prompt.trim() || running} onClick={() => void submit()}>
-            {artifactPath ? "Modify" : "Generate"}
+            {artifactPath ? t("spreadsheet.agent.modify") : t("spreadsheet.agent.generate")}
           </Button>
         </div>
       </div>

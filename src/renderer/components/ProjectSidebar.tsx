@@ -53,7 +53,7 @@ export function ProjectSidebar({ workspaces, activeWorkspaceId, onSelectAll, onS
           <button
             type="button"
             className="project-sidebar__compact-toggle"
-            aria-label={compact ? "Expand project sidebar" : "Collapse project sidebar"}
+            aria-label={compact ? t("spreadsheet.sidebar.expand") : t("spreadsheet.sidebar.collapse")}
             onClick={() => onCompactChange(!compact)}
           >
             {compact ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}

@@ -1,5 +1,6 @@
 import { ArrowLeft, ExternalLink, PanelRightClose, PanelRightOpen, Save } from "lucide-react";
 import { Button } from "../ui";
+import { useT } from "../i18n";
 
 export type SpreadsheetSaveState = "unopened" | "saved" | "dirty" | "saving" | "error";
 
@@ -15,26 +16,20 @@ export interface SpreadsheetTopbarProps {
   onToggleAgent: () => void;
 }
 
-const saveLabels: Record<SpreadsheetSaveState, string> = {
-  unopened: "Not opened",
-  saved: "Saved",
-  dirty: "Unsaved",
-  saving: "Saving…",
-  error: "Save failed",
-};
-
 export function SpreadsheetTopbar({ fileName, workspaceName, saveState, canSave, agentOpen, onBack, onSave, onOpenExternal, onToggleAgent }: SpreadsheetTopbarProps) {
+  const t = useT();
+  const saveLabel = t(`spreadsheet.save.${saveState}`);
   return (
     <header className="spreadsheet-topbar">
       <div className="spreadsheet-topbar__leading">
-        <Button variant="ghost-normal" size="small" ariaLabel="Back to project home" icon={<ArrowLeft />} onClick={onBack} />
+        <Button variant="ghost-normal" size="small" ariaLabel={t("spreadsheet.topbar.back")} icon={<ArrowLeft />} onClick={onBack} />
         <div className="spreadsheet-topbar__document">
           {workspaceName ? <span>{workspaceName}</span> : null}
           <strong>{fileName}</strong>
         </div>
       </div>
       <div className="spreadsheet-topbar__actions">
-        <span className="spreadsheet-topbar__save-state" data-state={saveState}>{saveLabels[saveState]}</span>
+        <span className="spreadsheet-topbar__save-state" data-state={saveState}>{saveLabel}</span>
         <Button
           variant="primary"
           size="small"
@@ -43,13 +38,13 @@ export function SpreadsheetTopbar({ fileName, workspaceName, saveState, canSave,
           loading={saveState === "saving"}
           onClick={onSave}
         >
-          Save
+          {t("spreadsheet.topbar.save")}
         </Button>
-        {onOpenExternal ? <Button variant="ghost-normal" size="small" ariaLabel="Open in System App" icon={<ExternalLink />} onClick={onOpenExternal} /> : null}
+        {onOpenExternal ? <Button variant="ghost-normal" size="small" ariaLabel={t("spreadsheet.topbar.openExternal")} icon={<ExternalLink />} onClick={onOpenExternal} /> : null}
         <Button
           variant="ghost-normal"
           size="small"
-          ariaLabel={agentOpen ? "Hide AI assistant" : "Show AI assistant"}
+          ariaLabel={agentOpen ? t("spreadsheet.topbar.hideAgent") : t("spreadsheet.topbar.showAgent")}
           icon={agentOpen ? <PanelRightClose /> : <PanelRightOpen />}
           onClick={onToggleAgent}
         />

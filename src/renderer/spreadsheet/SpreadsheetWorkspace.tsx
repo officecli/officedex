@@ -4,6 +4,7 @@ import { officecli } from "../bridge";
 import { SpreadsheetCanvas, type SpreadsheetCanvasHandle, type SpreadsheetCanvasState } from "./SpreadsheetCanvas";
 import { SpreadsheetTopbar, type SpreadsheetSaveState } from "./SpreadsheetTopbar";
 import type { SpreadsheetSessionState } from "./types";
+import { useT } from "../i18n";
 
 export interface SpreadsheetWorkspaceHandle {
   save(): Promise<boolean>;
@@ -32,8 +33,9 @@ function saveStateFor(session: SpreadsheetSessionState): SpreadsheetSaveState {
 export const SpreadsheetWorkspace = forwardRef<SpreadsheetWorkspaceHandle, SpreadsheetWorkspaceProps>(
   function SpreadsheetWorkspace({ session, workspaceName, onBack, onDirtyChange, onCanvasStateChange, onCanvasError, onCanvasSessionClosed, agentPanel }, ref) {
     const canvasRef = useRef<SpreadsheetCanvasHandle>(null);
+    const t = useT();
     const [agentOpen, setAgentOpen] = useState(true);
-    const fileName = session.artifact?.fileName ?? "Untitled.xlsx";
+    const fileName = session.artifact?.fileName ?? t("spreadsheet.untitled");
     const saveState = saveStateFor(session);
 
     const save = useCallback(() => canvasRef.current?.save() ?? Promise.resolve(false), []);
@@ -56,7 +58,7 @@ export const SpreadsheetWorkspace = forwardRef<SpreadsheetWorkspaceHandle, Sprea
           onToggleAgent={() => setAgentOpen((open) => !open)}
         />
         <div className="spreadsheet-workspace__body">
-          <main className="spreadsheet-workspace__canvas" role="region" aria-label={session.artifact ? `${fileName} workbook` : "Untitled workbook"}>
+          <main className="spreadsheet-workspace__canvas" role="region" aria-label={session.artifact ? t("spreadsheet.workbook.aria", { file: fileName }) : t("spreadsheet.workbook.untitledAria")}>
             {session.artifact && session.grant ? (
               <SpreadsheetCanvas
                 ref={canvasRef}
@@ -70,15 +72,15 @@ export const SpreadsheetWorkspace = forwardRef<SpreadsheetWorkspaceHandle, Sprea
             ) : (
               <div className="spreadsheet-workspace__empty">
                 <FileSpreadsheet aria-hidden="true" />
-                <strong>Your spreadsheet will appear here</strong>
-                <span>Describe what you need in the AI assistant to create a workbook.</span>
+                <strong>{t("spreadsheet.workbook.emptyTitle")}</strong>
+                <span>{t("spreadsheet.workbook.emptyBody")}</span>
               </div>
             )}
           </main>
           {agentOpen ? (
-            <aside className="spreadsheet-agent" aria-label="AI Assistant">
-              <header className="spreadsheet-agent__header"><Sparkles aria-hidden="true" /><strong>AI Assistant</strong></header>
-              <div className="spreadsheet-agent__content">{agentPanel ?? <p>Describe the spreadsheet you want to create.</p>}</div>
+            <aside className="spreadsheet-agent" aria-label={t("spreadsheet.agent.title")}>
+              <header className="spreadsheet-agent__header"><Sparkles aria-hidden="true" /><strong>{t("spreadsheet.agent.title")}</strong></header>
+              <div className="spreadsheet-agent__content">{agentPanel ?? <p>{t("spreadsheet.agent.empty")}</p>}</div>
             </aside>
           ) : null}
         </div>
