@@ -2396,6 +2396,129 @@ func (a *App) ListChats() ([]types.WorkspaceConversationSummary, error) {
 	return a.localStore.QueryChatSummaries(ctx, 50)
 }
 
+func (a *App) ListRecentFiles(workspaceID string) ([]types.RecentFile, error) {
+	if a.localStore == nil {
+		return []types.RecentFile{}, nil
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return a.localStore.QueryRecentFiles(ctx, strings.TrimSpace(workspaceID), 50)
+}
+
+func (a *App) RemoveRecentFile(filePath string) error {
+	if a.localStore == nil {
+		return errors.New("workspace store is unavailable")
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return a.localStore.RemoveRecentFile(ctx, filePath)
+}
+
+func (a *App) RenameWorkspace(workspaceID, name string) (types.WorkspaceSummary, error) {
+	if a.localStore == nil {
+		return types.WorkspaceSummary{}, errors.New("workspace store is unavailable")
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	workspaceID = strings.TrimSpace(workspaceID)
+	name = strings.TrimSpace(name)
+	if workspaceID == "" {
+		return types.WorkspaceSummary{}, errors.New("workspace id is empty")
+	}
+	if name == "" {
+		return types.WorkspaceSummary{}, errors.New("workspace name is empty")
+	}
+	if _, err := a.localStore.RenameWorkspace(ctx, workspaceID, name); err != nil {
+		return types.WorkspaceSummary{}, err
+	}
+	summaries, err := a.localStore.QueryWorkspaceSummaries(ctx, 20)
+	if err != nil {
+		return types.WorkspaceSummary{}, err
+	}
+	for _, summary := range summaries {
+		if summary.ID == workspaceID {
+			return summary, nil
+		}
+	}
+	return types.WorkspaceSummary{}, errors.New("workspace not found")
+}
+
+func (a *App) OpenRecentFile(file types.RecentFile) (types.Artifact, error) {
+	filePath := filepath.Clean(strings.TrimSpace(file.FilePath))
+	if filePath == "." || filePath == "" || !filepath.IsAbs(filePath) {
+		return types.Artifact{}, errors.New("recent file path must be absolute")
+	}
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return types.Artifact{}, fmt.Errorf("recent file is unavailable: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return types.Artifact{}, errors.New("recent file is unavailable")
+	}
+	documentType := strings.ToLower(strings.TrimSpace(file.DocumentType))
+	extensionType := strings.TrimPrefix(strings.ToLower(filepath.Ext(filePath)), ".")
+	if !isSupportedRecentPreviewType(documentType) && isSupportedRecentPreviewType(extensionType) {
+		documentType = extensionType
+	}
+	if !isSupportedRecentPreviewType(documentType) {
+		return types.Artifact{}, errors.New("unsupported preview file type")
+	}
+	fileName := strings.TrimSpace(file.FileName)
+	if fileName == "" {
+		fileName = filepath.Base(filePath)
+	}
+	artifact := types.Artifact{
+		TaskID:       strings.TrimSpace(file.TaskID),
+		FilePath:     filePath,
+		FileName:     fileName,
+		DocumentType: documentType,
+	}
+	if a.previewReg == nil {
+		return types.Artifact{}, errors.New("preview registry is unavailable")
+	}
+	if err := a.previewReg.AllowSelectedArtifact(artifact); err != nil {
+		return types.Artifact{}, err
+	}
+	if a.localStore != nil {
+		ctx := a.ctx
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		source := strings.TrimSpace(file.Source)
+		if source == "" {
+			source = "local"
+		}
+		if err := a.localStore.UpsertRecentFile(ctx, types.RecentFile{
+			FilePath:       filePath,
+			FileName:       fileName,
+			DocumentType:   documentType,
+			Source:         source,
+			WorkspaceID:    strings.TrimSpace(file.WorkspaceID),
+			TaskID:         strings.TrimSpace(file.TaskID),
+			ConversationID: strings.TrimSpace(file.ConversationID),
+			LastOpenedAt:   time.Now().UTC().Format(time.RFC3339Nano),
+		}); err != nil {
+			return types.Artifact{}, err
+		}
+	}
+	return artifact, nil
+}
+
+func isSupportedRecentPreviewType(documentType string) bool {
+	switch strings.ToLower(strings.TrimSpace(documentType)) {
+	case "docx", "xlsx", "pptx", "pdf", "html", "htm", "png", "jpg", "jpeg", "gif", "webp", "svg", "bmp":
+		return true
+	default:
+		return false
+	}
+}
+
 func (a *App) DeleteConversation(conversationID string) error {
 	if a.localStore == nil {
 		return errors.New("workspace store is unavailable")
@@ -4378,7 +4501,31 @@ func (a *App) RecordArtifact(artifact types.Artifact) error {
 	if a.localStore == nil {
 		return nil
 	}
-	return a.localStore.RecordArtifact(artifact)
+	if err := a.localStore.RecordArtifact(artifact); err != nil {
+		return err
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	taskContext, _, err := a.localStore.TaskContext(ctx, artifact.TaskID)
+	if err != nil {
+		return err
+	}
+	fileName := strings.TrimSpace(artifact.FileName)
+	if fileName == "" {
+		fileName = filepath.Base(artifact.FilePath)
+	}
+	return a.localStore.UpsertRecentFile(ctx, types.RecentFile{
+		FilePath:       artifact.FilePath,
+		FileName:       fileName,
+		DocumentType:   artifact.DocumentType,
+		Source:         "generated",
+		WorkspaceID:    taskContext.WorkspaceID,
+		TaskID:         artifact.TaskID,
+		ConversationID: taskContext.ConversationID,
+		LastOpenedAt:   time.Now().UTC().Format(time.RFC3339Nano),
+	})
 }
 
 func (a *App) UserDataDir() string {

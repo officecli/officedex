@@ -1770,6 +1770,21 @@ function installBridgeMock() {
       conversations: [],
     }]),
     listChats: vi.fn(async () => []),
+    listRecentFiles: vi.fn(async () => []),
+    removeRecentFile: vi.fn(async () => undefined),
+    renameWorkspace: vi.fn(async (workspaceId: string, name: string) => ({
+      id: workspaceId,
+      name: name.trim(),
+      path: "/Users/test/Library/Application Support/OfficeDex/workspace",
+      active: true,
+      conversations: [],
+    })),
+    openRecentFile: vi.fn(async (file) => ({
+      taskId: file.taskId,
+      filePath: file.filePath,
+      fileName: file.fileName,
+      documentType: file.documentType,
+    })),
     deleteConversation: vi.fn(async () => undefined),
     addWorkspace: vi.fn(async (path: string) => ({
       id: "ws-picked",

@@ -25,6 +25,7 @@ import type {
   ProviderSnapshot,
   ProviderTestResult,
   RedeemResult,
+  RecentFile,
   ReportCapabilityResult,
   RendererLogInput,
   SubmitReportInput,
@@ -102,6 +103,7 @@ function createBrowserPreviewAPI(): DesktopAPI {
     },
   ];
   const browserChats: WorkspaceConversationSummary[] = [];
+  let browserRecentFiles: RecentFile[] = [];
   return {
     initialize: async () => ({ browserPreview: true }),
     getCapabilities: async () => ({ browserPreview: true }),
@@ -192,6 +194,29 @@ function createBrowserPreviewAPI(): DesktopAPI {
     getDefaultWorkspaceDir: async () => "(default workspace inside desktop app)",
     listWorkspaces: async () => browserWorkspaces,
     listChats: async () => browserChats,
+    listRecentFiles: async (workspaceId?: string) => browserRecentFiles.filter((file) => !workspaceId || file.workspaceId === workspaceId),
+    removeRecentFile: async (filePath: string) => {
+      browserRecentFiles = browserRecentFiles.filter((file) => file.filePath !== filePath);
+    },
+    renameWorkspace: async (workspaceId: string, name: string) => {
+      const trimmed = name.trim();
+      const workspace = browserWorkspaces.find((item) => item.id === workspaceId);
+      if (!workspace || !trimmed) throw new Error("Workspace name is required.");
+      browserWorkspaces = browserWorkspaces.map((item) => item.id === workspaceId ? { ...item, name: trimmed } : item);
+      return { ...workspace, name: trimmed };
+    },
+    openRecentFile: async (file: RecentFile) => {
+      const normalized = normaliseRecentFiles([file])[0];
+      if (!normalized) throw new Error("Recent file is invalid.");
+      const refreshed = { ...normalized, lastOpenedAt: new Date().toISOString() };
+      browserRecentFiles = [refreshed, ...browserRecentFiles.filter((item) => item.filePath !== refreshed.filePath)];
+      return {
+        taskId: refreshed.taskId,
+        filePath: refreshed.filePath,
+        fileName: refreshed.fileName,
+        documentType: refreshed.documentType,
+      };
+    },
     deleteConversation: async (conversationId: string) => {
       browserWorkspaces = browserWorkspaces.map((workspace) => ({
         ...workspace,
@@ -487,6 +512,31 @@ function normaliseConversationSummaries(raw: unknown): WorkspaceConversationSumm
     .filter((conversation) => conversation.conversationId && conversation.latestTaskId);
 }
 
+export function normaliseRecentFiles(raw: unknown): RecentFile[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    .map((item): RecentFile | null => {
+      const filePath = typeof item.filePath === "string" ? item.filePath.trim() : "";
+      const source = item.source === "generated" || item.source === "local" ? item.source : null;
+      if (!filePath || !source) return null;
+      const pathName = filePath.split(/[\\/]/).pop() || filePath;
+      const fileName = typeof item.fileName === "string" && item.fileName.trim() ? item.fileName.trim() : pathName;
+      const extension = pathName.includes(".") ? pathName.split(".").pop()?.toLowerCase() ?? "" : "";
+      return {
+        filePath,
+        fileName,
+        documentType: typeof item.documentType === "string" && item.documentType.trim() ? item.documentType.trim().toLowerCase() : extension,
+        source,
+        ...(typeof item.workspaceId === "string" && item.workspaceId ? { workspaceId: item.workspaceId } : {}),
+        ...(typeof item.taskId === "string" && item.taskId ? { taskId: item.taskId } : {}),
+        ...(typeof item.conversationId === "string" && item.conversationId ? { conversationId: item.conversationId } : {}),
+        lastOpenedAt: typeof item.lastOpenedAt === "string" ? item.lastOpenedAt : "",
+      };
+    })
+    .filter((file): file is RecentFile => file !== null);
+}
+
 function createWailsAPI(): DesktopAPI {
   return {
     initialize: async () => decodeRawBytes(await WailsApp.Initialize()),
@@ -619,6 +669,26 @@ function createWailsAPI(): DesktopAPI {
       const fn = optionalWailsFunction<() => Promise<unknown>>(["List", "Chats"].join(""));
       if (!fn) return [];
       return normaliseConversationSummaries(await fn());
+    },
+    listRecentFiles: async (workspaceId?: string) => {
+      const fn = optionalWailsFunction<(workspaceId: string) => Promise<unknown>>(["List", "Recent", "Files"].join(""));
+      if (!fn) throw new Error("Recent files require a newer OfficeDex runtime.");
+      return normaliseRecentFiles(await fn(workspaceId ?? ""));
+    },
+    removeRecentFile: async (filePath: string) => {
+      const fn = optionalWailsFunction<(filePath: string) => Promise<void>>(["Remove", "Recent", "File"].join(""));
+      if (!fn) throw new Error("Recent file removal requires a newer OfficeDex runtime.");
+      await fn(filePath);
+    },
+    renameWorkspace: async (workspaceId: string, name: string) => {
+      const fn = optionalWailsFunction<(workspaceId: string, name: string) => Promise<unknown>>(["Rename", "Workspace"].join(""));
+      if (!fn) throw new Error("Workspace rename requires a newer OfficeDex runtime.");
+      return normaliseWorkspaceSummaries([await fn(workspaceId, name)])[0];
+    },
+    openRecentFile: async (file: RecentFile) => {
+      const fn = optionalWailsFunction<(file: never) => Promise<Artifact>>(["Open", "Recent", "File"].join(""));
+      if (!fn) throw new Error("Opening recent files requires a newer OfficeDex runtime.");
+      return fn(toWails(file));
     },
     deleteConversation: async (conversationId: string) => {
       const fn = optionalWailsFunction<(conversationId: string) => Promise<void>>(["Delete", "Conversation"].join(""));
@@ -815,6 +885,10 @@ function createRealE2EAPI(endpoint: string): DesktopAPI {
     getDefaultWorkspaceDir: () => rpc<string>("GetDefaultWorkspaceDir"),
     listWorkspaces: async () => normaliseWorkspaceSummaries(await rpc<unknown>("ListWorkspaces")),
     listChats: async () => normaliseConversationSummaries(await rpc<unknown>("ListChats")),
+    listRecentFiles: async (workspaceId?: string) => normaliseRecentFiles(await rpc<unknown>("ListRecentFiles", workspaceId ?? "")),
+    removeRecentFile: (filePath: string) => rpc<void>("RemoveRecentFile", filePath),
+    renameWorkspace: async (workspaceId: string, name: string) => normaliseWorkspaceSummaries([await rpc<unknown>("RenameWorkspace", { workspaceId, name })])[0],
+    openRecentFile: (file: RecentFile) => rpc<Artifact>("OpenRecentFile", file),
     deleteConversation: (conversationId: string) => rpc<void>("DeleteConversation", conversationId),
     addWorkspace: async (path: string) => normaliseWorkspaceSummaries([await rpc<unknown>("AddWorkspace", path)])[0],
     selectWorkspace: async (workspaceId: string) => normaliseWorkspaceSummaries([await rpc<unknown>("SelectWorkspace", workspaceId)])[0],

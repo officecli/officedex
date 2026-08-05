@@ -153,6 +153,17 @@ export interface Artifact {
   syncedAt?: string;
 }
 
+export interface RecentFile {
+  filePath: string;
+  fileName: string;
+  documentType: string;
+  source: "generated" | "local";
+  workspaceId?: string;
+  taskId?: string;
+  conversationId?: string;
+  lastOpenedAt: string;
+}
+
 export interface GenerateInput {
   documentType: DocumentType;
   generationMode?: GenerationMode;
@@ -709,6 +720,10 @@ export interface DesktopAPI {
   getDefaultWorkspaceDir(): Promise<string>;
   listWorkspaces(): Promise<WorkspaceSummary[]>;
   listChats(): Promise<WorkspaceConversationSummary[]>;
+  listRecentFiles(workspaceId?: string): Promise<RecentFile[]>;
+  removeRecentFile(filePath: string): Promise<void>;
+  renameWorkspace(workspaceId: string, name: string): Promise<WorkspaceSummary>;
+  openRecentFile(file: RecentFile): Promise<Artifact>;
   deleteConversation(conversationId: string): Promise<void>;
   addWorkspace(path: string): Promise<WorkspaceSummary>;
   selectWorkspace(workspaceId: string): Promise<WorkspaceSummary>;
