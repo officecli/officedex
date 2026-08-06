@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+      Local builds are ad-hoc signed, so the app and bundled office2modoc
+      dylib do not share a Developer ID TeamIdentifier. Allow the local app to
+      load that pinned, bundled dylib. Release builds are signed with one
+      Developer ID identity and intentionally do not use this entitlement.
+    -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+</dict>
+</plist>
