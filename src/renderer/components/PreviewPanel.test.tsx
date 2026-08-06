@@ -67,6 +67,22 @@ describe("PreviewPanel", () => {
     expect(css).toMatch(/transform:\s*translateX\(0\)/);
   });
 
+  it("keeps the back and close controls outside the Wails window drag region", () => {
+    const css = readFileSync("src/renderer/preview/PreviewApp.css", "utf8");
+
+    expect(css).toMatch(/\.preview-panel-header\s*\{[^}]*--wails-draggable:\s*drag/s);
+    expect(css).toMatch(
+      /\.preview-panel-back,\s*\.preview-panel-close\s*\{[^}]*-webkit-app-region:\s*no-drag[^}]*--wails-draggable:\s*no-drag/s,
+    );
+  });
+
+  it("uses the in-app dialog instead of window.confirm for unsaved changes", () => {
+    const source = readFileSync("src/renderer/components/PreviewPanel.tsx", "utf8");
+
+    expect(source).toContain("dialog.confirm({");
+    expect(source).not.toContain("window.confirm(");
+  });
+
   it.each([
     ["back", "Back to project tree"],
     ["close", "Close preview"],

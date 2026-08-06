@@ -157,6 +157,17 @@ body.preview-overlay-active .living-tree-popover-overlay {
   border-bottom: 1px solid #ebebeb;
   flex-shrink: 0;
   gap: 8px;
+  -webkit-app-region: drag;
+  --wails-draggable: drag;
+}
+
+.preview-panel-back,
+.preview-panel-close {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
+  --wails-draggable: no-drag;
 }
 
 .preview-panel-back {

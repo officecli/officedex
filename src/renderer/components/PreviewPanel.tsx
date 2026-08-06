@@ -5,6 +5,7 @@ import { officecli } from "../bridge";
 import { useT } from "../i18n";
 import { LoadingState } from "../preview/components/LoadingState";
 import { UnsupportedViewer } from "../preview/viewers/UnsupportedViewer";
+import { dialog } from "../ui";
 import {
   PptxViewer,
   DocxViewer,
@@ -42,15 +43,30 @@ export function PreviewPanel({ grant, onClose, artifact }: PreviewPanelProps) {
     };
   }, []);
 
-  const requestClose = useCallback(() => {
+  const beginClose = useCallback(() => {
     if (closing) return;
-    if (documentDirty && !window.confirm("文档还有未保存的修改，确认关闭吗？")) return;
     setClosing(true);
     closeTimerRef.current = window.setTimeout(() => {
       closeTimerRef.current = null;
       onClose();
     }, PREVIEW_PANEL_SLIDE_MS);
-  }, [closing, documentDirty, onClose]);
+  }, [closing, onClose]);
+
+  const requestClose = useCallback(() => {
+    if (closing) return;
+    if (documentDirty) {
+      dialog.confirm({
+        title: "关闭文档？",
+        content: "文档还有未保存的修改。关闭后，这些修改将丢失。",
+        okText: "放弃修改并关闭",
+        cancelText: "继续编辑",
+        tone: "danger",
+        onOk: beginClose,
+      });
+      return;
+    }
+    beginClose();
+  }, [beginClose, closing, documentDirty]);
 
   const viewer = (() => {
     if (!grant) return null;

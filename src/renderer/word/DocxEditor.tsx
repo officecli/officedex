@@ -25,6 +25,7 @@ import {
   Undo2,
 } from "lucide-react";
 import { officecli } from "../bridge";
+import { dialog } from "../ui";
 import { exportDocx } from "./docxExport";
 import { importDocx } from "./docxImport";
 
@@ -125,13 +126,8 @@ export function DocxEditor({ previewToken, fileName, onDirtyChange }: DocxEditor
     };
   }, [editor, previewToken]);
 
-  const save = useCallback(async (saveAsCopy = false) => {
+  const persistDocx = useCallback(async (saveAsCopy: boolean) => {
     if (!editor || saving) return;
-    if (!saveAsCopy && !overwriteConfirmedRef.current) {
-      const confirmed = window.confirm("OfficeDex 会根据当前编辑内容重新生成 DOCX。复杂版式可能发生变化，建议先保存副本。确认覆盖原文档吗？");
-      if (!confirmed) return;
-      overwriteConfirmedRef.current = true;
-    }
     setSaving(true);
     setError(null);
     setMessage(null);
@@ -155,6 +151,25 @@ export function DocxEditor({ previewToken, fileName, onDirtyChange }: DocxEditor
       setSaving(false);
     }
   }, [editor, fileName, previewToken, saving]);
+
+  const save = useCallback(async (saveAsCopy = false) => {
+    if (!editor || saving) return;
+    if (!saveAsCopy && !overwriteConfirmedRef.current) {
+      dialog.confirm({
+        title: "覆盖原文档？",
+        content: "OfficeDex 会根据当前编辑内容重新生成 DOCX，复杂版式可能发生变化。建议先保存副本。",
+        okText: "覆盖保存",
+        cancelText: "取消",
+        tone: "danger",
+        onOk: async () => {
+          overwriteConfirmedRef.current = true;
+          await persistDocx(false);
+        },
+      });
+      return;
+    }
+    await persistDocx(saveAsCopy);
+  }, [editor, persistDocx, saving]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {

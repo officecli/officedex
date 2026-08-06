@@ -1,9 +1,17 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableRow, TextRun } from "docx";
 import { exportDocx } from "./docxExport";
 import { importDocx } from "./docxImport";
 
 describe("local DOCX conversion", () => {
+  it("uses the in-app dialog before overwriting the source document", () => {
+    const source = readFileSync("src/renderer/word/DocxEditor.tsx", "utf8");
+
+    expect(source).toContain("dialog.confirm({");
+    expect(source).not.toContain("window.confirm(");
+  });
+
   it("imports common Word content without a cloud service", async () => {
     const source = new Document({
       sections: [{
