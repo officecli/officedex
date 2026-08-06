@@ -29,9 +29,10 @@ import type {
   RecentFile,
   ReportCapabilityResult,
   RendererLogInput,
+  CloseXlsxEditorInput,
+  SaveDocxResult,
   SaveXlsxEditorInput,
   SaveXlsxEditorResult,
-  CloseXlsxEditorInput,
   SubmitReportInput,
   SubmitReportResult,
   TaskHistoryEntry,
@@ -140,6 +141,9 @@ function createBrowserPreviewAPI(): DesktopAPI {
     },
     savePptx: async () => {
       throw new Error("Saving PPTX requires desktop file access.");
+    },
+    saveDocx: async () => {
+      throw new Error("Saving DOCX requires desktop file access.");
     },
     exportVibeTreePptx: async () => {
       throw new Error("Exporting PPTX via pptxgenjs requires desktop bridge access.");
@@ -604,6 +608,17 @@ function createWailsAPI(): DesktopAPI {
         targetFilePath: options.targetFilePath,
       }));
     },
+    saveDocx: async (data, fileName, options): Promise<SaveDocxResult> => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<SaveDocxResult>>("SaveDocx");
+      if (!fn) throw new Error("DOCX editing requires a newer OfficeDex runtime.");
+      return fn(toWails({
+        dataBase64: uint8ArrayToBase64(data),
+        fileName,
+        previewToken: options.previewToken,
+        expectedSHA256: options.expectedSHA256,
+        saveAsCopy: options.saveAsCopy,
+      }));
+    },
     exportVibeTreePptx: async (tree, fileName) => {
       return WailsApp.ExportVibeTreePptx(toWails({
         treeJSON: JSON.stringify(tree),
@@ -637,9 +652,9 @@ function createWailsAPI(): DesktopAPI {
       await fn(toWails(input));
     },
     readArtifactFile: async (previewToken: string) => {
-      const result = await WailsApp.ReadArtifactFile(previewToken);
+      const result = await WailsApp.ReadArtifactFile(previewToken) as { data?: unknown; sha256?: unknown };
       const data: BinaryFileData = decodeArtifactBytes(result?.data);
-      return { data };
+      return { data, sha256: typeof result?.sha256 === "string" ? result.sha256 : undefined };
     },
     readLocalImage: async (filePath: string) => {
       const result = await WailsApp.ReadLocalImage(filePath);
@@ -858,6 +873,14 @@ function createRealE2EAPI(endpoint: string): DesktopAPI {
       rpc<string>("SavePastedImage", { dataBase64: uint8ArrayToBase64(data), ext }),
     savePptx: (data: Uint8Array, fileName: string, options = {}) =>
       rpc<string>("SavePptx", { dataBase64: uint8ArrayToBase64(data), fileName, targetFilePath: options.targetFilePath }),
+    saveDocx: (data, fileName, options) =>
+      rpc<SaveDocxResult>("SaveDocx", {
+        dataBase64: uint8ArrayToBase64(data),
+        fileName,
+        previewToken: options.previewToken,
+        expectedSHA256: options.expectedSHA256,
+        saveAsCopy: options.saveAsCopy,
+      }),
     exportVibeTreePptx: (tree, fileName) =>
       rpc<string>("ExportVibeTreePptx", { treeJSON: JSON.stringify(tree), fileName }),
     modifyPptistDeck: (input) => rpc("ModifyPptistDeck", input),
@@ -871,8 +894,11 @@ function createRealE2EAPI(endpoint: string): DesktopAPI {
     closeXlsxEditor: (input: CloseXlsxEditorInput) =>
       rpc<void>("CloseXlsxEditor", input),
     readArtifactFile: async (previewToken: string) => {
-      const result = await rpc<{ data?: unknown }>("ReadArtifactFile", previewToken);
-      return { data: decodeArtifactBytes(result?.data) };
+      const result = await rpc<{ data?: unknown; sha256?: unknown }>("ReadArtifactFile", previewToken);
+      return {
+        data: decodeArtifactBytes(result?.data),
+        sha256: typeof result?.sha256 === "string" ? result.sha256 : undefined,
+      };
     },
     readLocalImage: async (filePath: string) => {
       const result = await rpc<{ data?: unknown; mime?: unknown }>("ReadLocalImage", filePath);

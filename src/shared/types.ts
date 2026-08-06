@@ -676,6 +676,17 @@ export interface SavePptxOptions {
   targetFilePath?: string;
 }
 
+export interface SaveDocxOptions {
+  previewToken: string;
+  expectedSHA256?: string;
+  saveAsCopy?: boolean;
+}
+
+export interface SaveDocxResult {
+  filePath: string;
+  sha256: string;
+}
+
 export interface ModifyPptistDeckInput {
   prompt: string;
   snapshot: PptistDeckSnapshot;
@@ -718,6 +729,7 @@ export interface DesktopAPI {
   openMultiFileDialog(options?: { filters?: Array<{ name: string; extensions: string[] }> }): Promise<string[] | null>;
   savePastedImage(data: Uint8Array, ext: string): Promise<string>;
   savePptx(data: Uint8Array, fileName: string, options?: SavePptxOptions): Promise<string>;
+  saveDocx(data: Uint8Array, fileName: string, options: SaveDocxOptions): Promise<SaveDocxResult>;
   exportVibeTreePptx(tree: VibeProjectTree, fileName: string): Promise<string>;
   modifyPptistDeck(input: ModifyPptistDeckInput): Promise<ModifyPptistDeckResult>;
   previewArtifact(artifact: Artifact): Promise<void>;
@@ -726,7 +738,7 @@ export interface DesktopAPI {
   prepareXlsxEditor(previewToken: string): Promise<PrepareXlsxEditorResult>;
   saveXlsxEditor(input: SaveXlsxEditorInput): Promise<SaveXlsxEditorResult>;
   closeXlsxEditor(input: CloseXlsxEditorInput): Promise<void>;
-  readArtifactFile(previewToken: string): Promise<{ data: BinaryFileData }>;
+  readArtifactFile(previewToken: string): Promise<{ data: BinaryFileData; sha256?: string }>;
   readLocalImage(filePath: string): Promise<{ data: BinaryFileData; mime: string }>;
   copyImageToClipboard(filePath: string): Promise<void>;
   setPreviewMode(active: boolean): Promise<void>;

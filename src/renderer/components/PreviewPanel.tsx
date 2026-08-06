@@ -26,6 +26,7 @@ const PREVIEW_PANEL_SLIDE_MS = 420;
 export function PreviewPanel({ grant, onClose, artifact }: PreviewPanelProps) {
   const t = useT();
   const [closing, setClosing] = useState(false);
+  const [documentDirty, setDocumentDirty] = useState(false);
   const closeTimerRef = useRef<number | null>(null);
 
   // The preview is a full-screen overlay, but the cockpit underneath keeps auto-opening its
@@ -43,12 +44,13 @@ export function PreviewPanel({ grant, onClose, artifact }: PreviewPanelProps) {
 
   const requestClose = useCallback(() => {
     if (closing) return;
+    if (documentDirty && !window.confirm("文档还有未保存的修改，确认关闭吗？")) return;
     setClosing(true);
     closeTimerRef.current = window.setTimeout(() => {
       closeTimerRef.current = null;
       onClose();
     }, PREVIEW_PANEL_SLIDE_MS);
-  }, [closing, onClose]);
+  }, [closing, documentDirty, onClose]);
 
   const viewer = (() => {
     if (!grant) return null;
@@ -57,7 +59,7 @@ export function PreviewPanel({ grant, onClose, artifact }: PreviewPanelProps) {
       case "pptx":
         return <PptxViewer previewToken={token} fileName={fileName} documentType={documentType} />;
       case "docx":
-        return <DocxViewer previewToken={token} fileName={fileName} documentType={documentType} />;
+        return <DocxViewer previewToken={token} fileName={fileName} documentType={documentType} onDirtyChange={setDocumentDirty} />;
       case "xlsx":
         return <XlsxViewer previewToken={token} fileName={fileName} documentType={documentType} />;
       case "pdf":

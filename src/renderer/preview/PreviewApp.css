@@ -493,7 +493,84 @@ body.preview-overlay-active .living-tree-popover-overlay {
 }
 
 /* ─── DOCX Viewer ─── */
+.docx-workspace {
+  display: flex;
+  min-height: 0;
+  height: 100%;
+  flex-direction: column;
+}
+
+.docx-workspace-body {
+  min-height: 0;
+  flex: 1;
+  position: relative;
+}
+
+.docx-mode-pane {
+  position: absolute;
+  inset: 0;
+  display: none;
+  min-height: 0;
+}
+
+.docx-mode-pane.is-active {
+  display: block;
+}
+
+.docx-mode-switch {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 7px;
+  background: #eef1f5;
+}
+
+.docx-mode-switch button {
+  min-width: 76px;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #5f6b7a;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.docx-mode-switch button.is-active {
+  background: #fff;
+  color: #185abc;
+  box-shadow: 0 1px 3px rgba(24, 35, 52, .14);
+  font-weight: 600;
+}
+
+.docx-preview-floating-zoom {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  display: flex;
+  overflow: hidden;
+  border: 1px solid #d5dae2;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(24, 35, 52, .14);
+}
+
+.docx-preview-floating-zoom button {
+  min-width: 34px;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid #e4e7ec;
+  background: #fff;
+  color: #465366;
+  cursor: pointer;
+}
+
+.docx-preview-floating-zoom button:last-child { border-right: 0; }
+
 .preview-docx-container {
+  position: relative;
+  box-sizing: border-box;
+  height: 100%;
   flex: 1;
   overflow: auto;
   background: #e8e9eb;

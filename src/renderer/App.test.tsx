@@ -1923,6 +1923,7 @@ function installBridgeMock() {
     openMultiFileDialog,
 	    savePastedImage,
 	    savePptx: vi.fn(async () => "/tmp/deck.pptx"),
+	    saveDocx: vi.fn(async () => ({ filePath: "/tmp/document.docx", sha256: "saved" })),
 	    exportVibeTreePptx: vi.fn(async () => "/tmp/deck.pptx"),
 	    modifyPptistDeck: vi.fn(async () => ({ summary: "updated", ops: [] })),
 	    previewArtifact,

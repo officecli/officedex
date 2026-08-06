@@ -10,9 +10,12 @@
 package main
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -60,6 +63,11 @@ const (
 	runtimeEventChannel      = "runtime:event"
 	defaultUpdateManifestURL = "https://raw.githubusercontent.com/officecli/officedex-dist/main/manifest.json"
 )
+
+func sha256Hex(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
 
 // appVersion is injected at build time via `-ldflags "-X main.appVersion=<v>"`.
 // The default "dev" sentinel makes `go run` / `wails dev` work without flags.
@@ -2284,7 +2292,8 @@ func (a *App) RevokePreviewToken(token string) {
 
 // ArtifactFile is the renderer-facing wrapper for raw artifact bytes.
 type ArtifactFile struct {
-	Data []byte `json:"data"`
+	Data   []byte `json:"data"`
+	SHA256 string `json:"sha256"`
 }
 
 // ReadArtifactFile returns the raw bytes for a granted preview token.
@@ -2297,7 +2306,116 @@ func (a *App) ReadArtifactFile(previewToken string) (ArtifactFile, error) {
 	if err != nil {
 		return ArtifactFile{}, fmt.Errorf("read artifact: %w", err)
 	}
-	return ArtifactFile{Data: data}, nil
+	return ArtifactFile{Data: data, SHA256: sha256Hex(data)}, nil
+}
+
+// SaveDocxInput carries a locally exported DOCX. Overwriting is only allowed
+// through the preview token that granted the renderer read access to the same
+// source file. SaveAsCopy writes a distinct file to Downloads instead.
+type SaveDocxInput struct {
+	DataBase64     string `json:"dataBase64"`
+	FileName       string `json:"fileName"`
+	PreviewToken   string `json:"previewToken"`
+	ExpectedSHA256 string `json:"expectedSHA256,omitempty"`
+	SaveAsCopy     bool   `json:"saveAsCopy,omitempty"`
+}
+
+type SaveDocxResult struct {
+	FilePath string `json:"filePath"`
+	SHA256   string `json:"sha256"`
+}
+
+func (a *App) SaveDocx(input SaveDocxInput) (SaveDocxResult, error) {
+	if strings.TrimSpace(input.DataBase64) == "" {
+		return SaveDocxResult{}, errors.New("save docx: empty data")
+	}
+	data, err := base64.StdEncoding.DecodeString(input.DataBase64)
+	if err != nil {
+		return SaveDocxResult{}, fmt.Errorf("save docx: decode: %w", err)
+	}
+	if err := validateDocxPackage(data); err != nil {
+		return SaveDocxResult{}, fmt.Errorf("save docx: invalid DOCX package: %w", err)
+	}
+
+	dest, err := a.resolveSaveDocxDestination(input)
+	if err != nil {
+		return SaveDocxResult{}, err
+	}
+	if !input.SaveAsCopy && strings.TrimSpace(input.ExpectedSHA256) != "" {
+		current, readErr := os.ReadFile(dest)
+		if readErr != nil {
+			return SaveDocxResult{}, fmt.Errorf("save docx: read current file: %w", readErr)
+		}
+		if !strings.EqualFold(sha256Hex(current), strings.TrimSpace(input.ExpectedSHA256)) {
+			return SaveDocxResult{}, errors.New("save docx: source file changed outside OfficeDex; reopen it before saving")
+		}
+	}
+	if err := writeFileAtomic(dest, data, 0o644); err != nil {
+		return SaveDocxResult{}, fmt.Errorf("save docx: write: %w", err)
+	}
+	if a.previewReg != nil {
+		_ = a.previewReg.AllowArtifact(types.Artifact{FilePath: dest, FileName: filepath.Base(dest), DocumentType: "docx"})
+	}
+	return SaveDocxResult{FilePath: dest, SHA256: sha256Hex(data)}, nil
+}
+
+func validateDocxPackage(data []byte) error {
+	reader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return err
+	}
+	foundContentTypes := false
+	foundDocument := false
+	for _, file := range reader.File {
+		switch file.Name {
+		case "[Content_Types].xml":
+			foundContentTypes = true
+		case "word/document.xml":
+			foundDocument = true
+		}
+	}
+	if !foundContentTypes || !foundDocument {
+		return errors.New("required Word document parts are missing")
+	}
+	return nil
+}
+
+func (a *App) resolveSaveDocxDestination(input SaveDocxInput) (string, error) {
+	if !input.SaveAsCopy {
+		if a.previewReg == nil {
+			return "", errors.New("save docx: preview registry unavailable")
+		}
+		entry, err := a.previewReg.ResolveToken(input.PreviewToken)
+		if err != nil {
+			return "", fmt.Errorf("save docx: %w", err)
+		}
+		if strings.ToLower(filepath.Ext(entry.FilePath)) != ".docx" {
+			return "", errors.New("save docx: preview token does not reference a DOCX file")
+		}
+		return entry.FilePath, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("save docx: home dir: %w", err)
+	}
+	dir := filepath.Join(home, "Downloads")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("save docx: mkdir: %w", err)
+	}
+	name := normalizeDocxFileName(input.FileName)
+	base := strings.TrimSuffix(name, ".docx")
+	return filepath.Join(dir, fmt.Sprintf("%s-edited-%d.docx", base, time.Now().UnixNano())), nil
+}
+
+func normalizeDocxFileName(name string) string {
+	name = filepath.Base(strings.TrimSpace(name))
+	if name == "" || name == "." {
+		return "OfficeDex-Document.docx"
+	}
+	if strings.ToLower(filepath.Ext(name)) != ".docx" {
+		name += ".docx"
+	}
+	return name
 }
 
 // LocalImageData wraps a read-back image for renderer preview.
