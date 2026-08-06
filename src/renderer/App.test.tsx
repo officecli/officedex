@@ -220,7 +220,7 @@ describe("App task flow", () => {
         event_id: "event-vibe-started",
         task_id: "task-vibe-shell",
         type: "task.started",
-        payload: { document_type: "pptx", topic: "Introduce Shimo Docs" },
+        payload: { document_type: "pptx", topic: "Introduce OfficeDex Docs" },
       });
       bridge.emit({
         event_id: "event-vibe-tree",
@@ -231,9 +231,9 @@ describe("App task flow", () => {
           tree: {
             id: "tree-shell",
             rootId: "root",
-            title: "Introduce Shimo Docs",
+            title: "Introduce OfficeDex Docs",
             nodes: [
-              { id: "root", kind: "root", title: "Introduce Shimo Docs" },
+              { id: "root", kind: "root", title: "Introduce OfficeDex Docs" },
               { id: "branch-1", parentId: "root", kind: "branch", title: "Scale Adoption", summary: "Lower decision barriers with paths and benefits." },
             ],
           },

@@ -1388,9 +1388,9 @@ describe("DialogueScreen state machine", () => {
         tree: {
           id: "tree-idea-thinking",
           rootId: "root",
-          title: "Introduce Shimo Docs",
+          title: "Introduce OfficeDex Docs",
           nodes: [
-            { id: "root", kind: "root", title: "Introduce Shimo Docs" },
+            { id: "root", kind: "root", title: "Introduce OfficeDex Docs" },
           ],
         },
         confirmation: { nodeIds: ["root"] },
@@ -1399,7 +1399,7 @@ describe("DialogueScreen state machine", () => {
 
     render(<DialogueScreen {...baseProps()} tasks={[task]} />);
 
-    await waitForVibePopoverTitle("Introduce Shimo Docs");
+    await waitForVibePopoverTitle("Introduce OfficeDex Docs");
     clickCurrentVibeConfirmButton();
 
     const thinkingNodeId = "thinking-root-story_ready";

@@ -1,14 +1,12 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
-import { resolveUiKitBackendAlias } from "./src/renderer/ui/resolveUiKit";
 
 const realE2E = Boolean(process.env.VITE_OFFICEDEX_REAL_E2E_ENDPOINT);
-const rendererRoot = fileURLToPath(new URL("./src/renderer", import.meta.url));
 const alias = [
   {
     find: "@vo-ui/backend",
-    replacement: resolveUiKitBackendAlias(rendererRoot, process.env.UI_KIT),
+    replacement: fileURLToPath(new URL("./src/renderer/ui/backends/antd/index.tsx", import.meta.url)),
   },
 ];
 

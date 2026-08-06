@@ -51,6 +51,9 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      - name: Verify release dependency boundary
+        run: npm run verify:release-boundary
+
       - name: Install vendored PPTist test dependencies (Windows)
         if: runner.os == 'Windows'
         shell: bash
@@ -119,6 +122,9 @@ jobs:
         run: |
           version="${GITHUB_REF_NAME#v}"
           wails build -platform ${{ matrix.platform }} -trimpath -ldflags "-X main.appVersion=${version}"
+
+      - name: Verify built frontend dependency boundary
+        run: npm run verify:release-boundary -- --dist dist
 
       - name: Bundle PptxGenJS runtime (macOS)
         if: runner.os == 'macOS'

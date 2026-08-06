@@ -236,7 +236,7 @@ func TestRespondRecoveryUsesLivePendingQuestionID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnsureWorkspace: %v", err)
 	}
-	if err := store.EnsureConversation(ctx, workspace.ID, "conversation-idea", "Introduce Shimo Docs"); err != nil {
+	if err := store.EnsureConversation(ctx, workspace.ID, "conversation-idea", "Introduce OfficeDex Docs"); err != nil {
 		t.Fatalf("EnsureConversation: %v", err)
 	}
 	if err := store.RecordTaskContext(ctx, oldTaskID, localstore.TaskContext{
@@ -251,8 +251,8 @@ func TestRespondRecoveryUsesLivePendingQuestionID(t *testing.T) {
 		Type:    "task.user_input",
 		Payload: map[string]any{
 			"document_type": "pptx",
-			"topic":         "Introduce Shimo Docs",
-			"prompt":        "Introduce Shimo Docs",
+			"topic":         "Introduce OfficeDex Docs",
+			"prompt":        "Introduce OfficeDex Docs",
 			"local_preview": true,
 		},
 	}); err != nil {
@@ -436,7 +436,7 @@ func TestRespondRecoveryReplaysFullAnswerHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnsureWorkspace: %v", err)
 	}
-	if err := store.EnsureConversation(ctx, workspace.ID, "conversation-later", "Introduce Shimo Docs"); err != nil {
+	if err := store.EnsureConversation(ctx, workspace.ID, "conversation-later", "Introduce OfficeDex Docs"); err != nil {
 		t.Fatalf("EnsureConversation: %v", err)
 	}
 	if err := store.RecordTaskContext(ctx, oldTaskID, localstore.TaskContext{
@@ -451,8 +451,8 @@ func TestRespondRecoveryReplaysFullAnswerHistory(t *testing.T) {
 		Type:    "task.user_input",
 		Payload: map[string]any{
 			"document_type": "pptx",
-			"topic":         "Introduce Shimo Docs",
-			"prompt":        "Introduce Shimo Docs",
+			"topic":         "Introduce OfficeDex Docs",
+			"prompt":        "Introduce OfficeDex Docs",
 			"local_preview": true,
 		},
 	}); err != nil {
@@ -610,7 +610,7 @@ func TestRespondRecoverySkipsStalePerNodeFeedback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnsureWorkspace: %v", err)
 	}
-	if err := store.EnsureConversation(ctx, workspace.ID, "conversation-fb", "Introduce Shimo Docs"); err != nil {
+	if err := store.EnsureConversation(ctx, workspace.ID, "conversation-fb", "Introduce OfficeDex Docs"); err != nil {
 		t.Fatalf("EnsureConversation: %v", err)
 	}
 	if err := store.RecordTaskContext(ctx, oldTaskID, localstore.TaskContext{
@@ -623,7 +623,7 @@ func TestRespondRecoverySkipsStalePerNodeFeedback(t *testing.T) {
 		EventID: "event-user-input",
 		TaskID:  oldTaskID,
 		Type:    "task.user_input",
-		Payload: map[string]any{"document_type": "pptx", "topic": "Introduce Shimo Docs", "prompt": "Introduce Shimo Docs", "local_preview": true},
+		Payload: map[string]any{"document_type": "pptx", "topic": "Introduce OfficeDex Docs", "prompt": "Introduce OfficeDex Docs", "local_preview": true},
 	}); err != nil {
 		t.Fatalf("RecordEvent user input: %v", err)
 	}
