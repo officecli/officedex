@@ -67,6 +67,7 @@ export function DocxEditor({ previewToken, fileName, onDirtyChange }: DocxEditor
   const [message, setMessage] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [dirty, setDirty] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const fingerprintRef = useRef<string | undefined>(undefined);
   const loadingContentRef = useRef(false);
   const overwriteConfirmedRef = useRef(false);
@@ -102,6 +103,7 @@ export function DocxEditor({ previewToken, fileName, onDirtyChange }: DocxEditor
     if (!editor) return;
     let cancelled = false;
     setLoading(true);
+    setLoadFailed(false);
     setError(null);
     void officecli.readArtifactFile(previewToken)
       .then(async ({ data, sha256 }) => {
@@ -114,11 +116,13 @@ export function DocxEditor({ previewToken, fileName, onDirtyChange }: DocxEditor
         fingerprintRef.current = sha256;
         setWarnings(imported.warnings);
         setDirty(false);
+        setLoadFailed(false);
         setLoading(false);
       })
       .catch((cause) => {
         if (cancelled) return;
         setError(cause instanceof Error ? cause.message : String(cause));
+        setLoadFailed(true);
         setLoading(false);
       });
     return () => {
@@ -193,6 +197,7 @@ export function DocxEditor({ previewToken, fileName, onDirtyChange }: DocxEditor
 
   if (loading) return <div className="word-editor-state">正在转换 DOCX 为可编辑文档…</div>;
   if (!editor) return <div className="word-editor-state">正在初始化编辑器…</div>;
+  if (loadFailed) return <div className="word-editor-state is-error">无法打开 DOCX：{error}</div>;
 
   return (
     <div className="word-editor-shell">

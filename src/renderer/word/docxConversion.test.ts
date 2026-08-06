@@ -35,6 +35,11 @@ describe("local DOCX conversion", () => {
     expect(imported.html).toContain("<table>");
   });
 
+  it("rejects a non-ZIP file that only uses a DOCX extension", async () => {
+    await expect(importDocx(new TextEncoder().encode("plain text, not a Word package")))
+      .rejects.toThrow("不是有效的 DOCX 文档");
+  });
+
   it("exports Tiptap JSON as a readable DOCX", async () => {
     const bytes = await exportDocx({
       type: "doc",
