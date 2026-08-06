@@ -25,7 +25,7 @@
     "bundle:pptxgenjs-runtime:mac": "node scripts/bundle-pptxgenjs-runtime.mjs --target build/bin/OfficeDex.app",
     "bundle:pptxgenjs-runtime:win": "node scripts/bundle-pptxgenjs-runtime.mjs --target build/bin",
     "bundle:office2modoc:mac": "node scripts/bundle-office2modoc.mjs --app build/bin/OfficeDex.app",
-    "bundle:officecli:mac": "node scripts/codesign-bundled-officecli.mjs --app build/bin/OfficeDex.app --source build/officecli/officecli",
+    "bundle:officecli:mac": "node scripts/codesign-bundled-officecli.mjs --app build/bin/OfficeDex.app --source build/officecli/officecli --entitlements build/darwin/local-entitlements.plist",
     "build:pptist": "bash scripts/build-embedded-pptist.sh",
     "build:local": "bash scripts/build-local-app.sh",
     "build": "wails build -ldflags \"-X main.appVersion=$(node -p 'require(`./package.json`).version')\" && npm run bundle:office2modoc:mac && npm run bundle:pptxgenjs-runtime:mac && npm run bundle:officecli:mac",

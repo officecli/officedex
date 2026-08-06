@@ -419,7 +419,13 @@ function OfficeDexApp() {
   );
   const vibeStage = activeVibeTask?.vibeTree?.stage;
   const tasks = useMemo(() => state.taskOrder.map((taskID) => state.tasks[taskID]).filter(Boolean), [state]);
-  const spreadsheetTask = spreadsheet.session.taskId ? state.tasks[spreadsheet.session.taskId] : undefined;
+  const spreadsheetTask = useMemo(() => {
+    const sessionTask = spreadsheet.session.taskId ? state.tasks[spreadsheet.session.taskId] : undefined;
+    const activeConversationId = spreadsheet.session.conversationId || sessionTask?.conversationId;
+    if (!activeConversationId) return sessionTask;
+    const relatedTasks = getConversationTasks(state, activeConversationId);
+    return relatedTasks[relatedTasks.length - 1] || sessionTask;
+  }, [spreadsheet.session.conversationId, spreadsheet.session.taskId, state]);
 
   useEffect(() => {
     const artifact = spreadsheetTask?.status === "completed" ? spreadsheetTask.artifact : undefined;
@@ -1156,6 +1162,7 @@ function OfficeDexApp() {
                 error={activeNav === "spreadsheet" ? lastError : undefined}
                 onGenerate={startSpreadsheetGeneration}
                 onModify={startSpreadsheetModify}
+                onRespond={(input) => officecli.respond(input)}
                 onCancel={(taskId) => officecli.cancel(taskId)}
               />
             )}

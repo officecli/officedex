@@ -204,6 +204,43 @@ describe("App task flow", () => {
     expect(screen.queryByTestId("new-generation-form")).toBeNull();
   });
 
+  it("follows a recovered XLSX task and submits the live question id", async () => {
+    window.history.pushState({}, "", "/");
+    const bridge = installBridgeMock();
+    const api = window.officecli as DesktopAPI;
+    const { App } = await import("./App");
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Spreadsheet" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Spreadsheet generation request" }), { target: { value: "Build a finance report" } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    await waitFor(() => expect(bridge.generate).toHaveBeenCalled());
+
+    const questions = [
+      { id: "q1", question: "Which report?", options: [{ id: "overview", label: "Overview" }], allow_freeform: true },
+      { id: "q2", question: "Which granularity?", options: [{ id: "monthly", label: "Monthly" }], allow_freeform: true },
+    ];
+    act(() => {
+      bridge.emit({ task_id: "task-2", type: "task.started", payload: { document_type: "xlsx", conversation_id: "task-2" } });
+      bridge.emit({ task_id: "task-2", type: "task.question", payload: { id: "question-old", question: "Which report?", current_index: 0, questions } });
+    });
+    expect(await screen.findByText("Which report?")).toBeTruthy();
+
+    act(() => {
+      bridge.emit({ task_id: "task-2", type: "task.cancelled", payload: { message: "Recovered" } });
+      bridge.emit({ task_id: "task-live", type: "task.started", payload: { document_type: "xlsx", conversation_id: "task-2", parent_task_id: "task-2" } });
+      bridge.emit({ task_id: "task-live", type: "task.question", payload: { id: "question-live", question: "Which granularity?", current_index: 1, questions } });
+    });
+
+    expect(await screen.findByText("Which granularity?")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Monthly" }));
+    await waitFor(() => expect(api.respond).toHaveBeenCalledWith(expect.objectContaining({
+      taskId: "task-live",
+      questionId: "question-live",
+      optionId: "monthly",
+    })));
+  });
+
   it("opens recent XLSX files in the same spreadsheet workspace", async () => {
     window.history.pushState({}, "", "/");
     installBridgeMock();

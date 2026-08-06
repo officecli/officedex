@@ -610,6 +610,18 @@ func (a *App) Respond(input RespondInput) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	questionID := input.QuestionID
+	if taskID != input.TaskID {
+		// The renderer may still hold the interrupted task's question id while
+		// the recovered bridge task has already minted the next one. Resolve the
+		// live pending id for every follow-up routed through a recovery mapping;
+		// otherwise the bridge rejects an otherwise valid answer with
+		// "question mismatch".
+		questionID, err = waitForRecoverablePendingInput(a.ctx, client, taskID)
+		if err != nil {
+			return nil, err
+		}
+	}
 	answers := make([]bridge.RespondAnswer, 0, len(input.Answers))
 	for _, answer := range input.Answers {
 		answers = append(answers, bridge.RespondAnswer{
@@ -620,7 +632,7 @@ func (a *App) Respond(input RespondInput) ([]byte, error) {
 	}
 	raw, err := client.RespondTask(a.ctx, bridge.RespondParams{
 		TaskID:     taskID,
-		QuestionID: input.QuestionID,
+		QuestionID: questionID,
 		OptionID:   input.OptionID,
 		Answer:     input.Answer,
 		Answers:    answers,
@@ -740,6 +752,18 @@ func (a *App) recoverStaleInteractiveRespond(input RespondInput, originalErr err
 	if err != nil {
 		return nil, err
 	}
+	answers, err = a.inheritRecoveredMultiQuestionAnswers(ctx, taskCtx, events, answers)
+	if err != nil {
+		return nil, err
+	}
+	// A replacement task can itself be interrupted by another app restart. Keep
+	// the replayable answer history on the live replacement as well as its
+	// predecessor so a recovery chain never loses the earlier question steps.
+	if len(answers) > 0 {
+		if err := a.localStore.RecordTaskAnswers(ctx, result.TaskID, answers); err != nil {
+			return nil, err
+		}
+	}
 	// The fresh bridge run always restarts at the first interactive gate (for
 	// the vibe flow, idea confirmation). Replaying only the current answer works
 	// when the user was interrupted at that first gate, but breaks when they had
@@ -792,6 +816,96 @@ func (a *App) recoverStaleInteractiveRespond(input RespondInput, originalErr err
 		return nil, err
 	}
 	return payload, nil
+}
+
+func (a *App) inheritRecoveredMultiQuestionAnswers(ctx context.Context, taskCtx localstore.TaskContext, events []types.BridgeEvent, current []localstore.TaskAnswer) ([]localstore.TaskAnswer, error) {
+	parentTaskID := strings.TrimSpace(taskCtx.ParentTaskID)
+	questionIDs := latestMultiQuestionIDs(events)
+	if parentTaskID == "" || len(questionIDs) == 0 {
+		return current, nil
+	}
+	parentEvents, err := a.localStore.QueryEventsByTask(ctx, parentTaskID)
+	if err != nil {
+		return nil, err
+	}
+	if !wasRecoverySourceTask(parentEvents) {
+		return current, nil
+	}
+	parentAnswers, err := a.localStore.QueryTaskAnswers(ctx, parentTaskID)
+	if err != nil {
+		return nil, err
+	}
+	merged := make([]localstore.TaskAnswer, 0, len(parentAnswers)+len(current))
+	indexByQuestionID := make(map[string]int)
+	for _, item := range parentAnswers {
+		questionID := strings.TrimSpace(item.QuestionID)
+		if _, ok := questionIDs[questionID]; !ok {
+			continue
+		}
+		indexByQuestionID[questionID] = len(merged)
+		merged = append(merged, item)
+	}
+	for _, item := range current {
+		questionID := strings.TrimSpace(item.QuestionID)
+		if index, ok := indexByQuestionID[questionID]; ok {
+			// Preserve the ancestor's group id so all sub-answers remain one
+			// atomic multi-question response, while preferring the latest value.
+			if strings.TrimSpace(merged[index].QuestionGroupID) != "" {
+				item.QuestionGroupID = merged[index].QuestionGroupID
+			}
+			merged[index] = item
+			continue
+		}
+		indexByQuestionID[questionID] = len(merged)
+		merged = append(merged, item)
+	}
+	if len(merged) == 0 {
+		return current, nil
+	}
+	return merged, nil
+}
+
+func latestMultiQuestionIDs(events []types.BridgeEvent) map[string]struct{} {
+	for index := len(events) - 1; index >= 0; index-- {
+		event := events[index]
+		if event.Type != "task.question" || event.Payload == nil {
+			continue
+		}
+		rawQuestions, ok := event.Payload["questions"].([]any)
+		if !ok {
+			// In-process events may retain their concrete slice type.
+			if typed, typedOK := event.Payload["questions"].([]map[string]any); typedOK {
+				rawQuestions = make([]any, len(typed))
+				for i := range typed {
+					rawQuestions[i] = typed[i]
+				}
+			}
+		}
+		ids := make(map[string]struct{})
+		for _, raw := range rawQuestions {
+			question, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			id := strings.TrimSpace(fmt.Sprint(question["id"]))
+			if id != "" {
+				ids[id] = struct{}{}
+			}
+		}
+		return ids
+	}
+	return nil
+}
+
+func wasRecoverySourceTask(events []types.BridgeEvent) bool {
+	for index := len(events) - 1; index >= 0; index-- {
+		event := events[index]
+		if event.Type != "task.cancelled" || event.Payload == nil {
+			continue
+		}
+		return strings.TrimSpace(fmt.Sprint(event.Payload["message"])) == "Task was recovered after the application restarted"
+	}
+	return false
 }
 
 // recoveryReplayGroup is one answer to replay against one pending question of a

@@ -209,6 +209,66 @@ func TestRespondRecoversStalePlanQuestionTask(t *testing.T) {
 	if len(answers) != 2 || answers[1].QuestionID != "q-tone" || answers[1].OptionID != "concise" {
 		t.Fatalf("persisted answers after recovery = %#v", answers)
 	}
+	recoveredAnswers, err := store.QueryTaskAnswers(ctx, newTaskID)
+	if err != nil {
+		t.Fatalf("QueryTaskAnswers recovered: %v", err)
+	}
+	if len(recoveredAnswers) != 2 || recoveredAnswers[0].QuestionID != "q-audience" || recoveredAnswers[1].QuestionID != "q-tone" {
+		t.Fatalf("replacement answer history = %#v, want both prior answers", recoveredAnswers)
+	}
+}
+
+func TestRecoveryInheritsMultiQuestionAnswersFromRecoveredParent(t *testing.T) {
+	ctx := context.Background()
+	store := localstore.New(filepath.Join(t.TempDir(), "officedex.db"))
+	if err := store.Open(ctx); err != nil {
+		t.Fatalf("open local store: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	parentTaskID := "task-recovery-parent"
+	childTaskID := "task-recovery-child"
+	if err := store.RecordEvent(types.BridgeEvent{
+		TaskID: parentTaskID,
+		Type:   "task.cancelled",
+		Payload: map[string]any{
+			"message": "Task was recovered after the application restarted",
+		},
+	}); err != nil {
+		t.Fatalf("RecordEvent parent cancellation: %v", err)
+	}
+	if err := store.RecordTaskAnswers(ctx, parentTaskID, []localstore.TaskAnswer{
+		{QuestionGroupID: "question-old", QuestionID: "q1", OptionID: "overview", Answer: "Overview", QuestionIndex: 0},
+		{QuestionGroupID: "question-old", QuestionID: "q2", OptionID: "monthly", Answer: "Monthly", QuestionIndex: 1},
+		{QuestionGroupID: "question-old", QuestionID: "q3", OptionID: "company", Answer: "Company", QuestionIndex: 2},
+	}); err != nil {
+		t.Fatalf("RecordTaskAnswers parent: %v", err)
+	}
+	childEvents := []types.BridgeEvent{{
+		TaskID: childTaskID,
+		Type:   "task.question",
+		Payload: map[string]any{
+			"id": "question-live",
+			"questions": []map[string]any{
+				{"id": "q1"},
+				{"id": "q2"},
+				{"id": "q3"},
+			},
+		},
+	}}
+	app := &App{ctx: ctx, localStore: store}
+	merged, err := app.inheritRecoveredMultiQuestionAnswers(ctx, localstore.TaskContext{ParentTaskID: parentTaskID}, childEvents, []localstore.TaskAnswer{
+		{QuestionGroupID: "question-live", QuestionID: "q2", OptionID: "quarterly", Answer: "Quarterly", QuestionIndex: 1},
+	})
+	if err != nil {
+		t.Fatalf("inheritRecoveredMultiQuestionAnswers: %v", err)
+	}
+	if len(merged) != 3 {
+		t.Fatalf("merged answers = %#v, want three inherited answers", merged)
+	}
+	if merged[1].OptionID != "quarterly" || merged[1].Answer != "Quarterly" || merged[1].QuestionGroupID != "question-old" {
+		t.Fatalf("merged current answer = %#v, want latest value in inherited group", merged[1])
+	}
 }
 
 // TestRespondRecoveryUsesLivePendingQuestionID reproduces the restart bug where
@@ -379,7 +439,7 @@ func TestRespondRecoveryUsesLivePendingQuestionID(t *testing.T) {
 	go func() {
 		raw, err := app.Respond(RespondInput{
 			TaskID:     oldTaskID,
-			QuestionID: "vibe_story_ready",
+			QuestionID: "stale-vibe-story-ready",
 			OptionID:   "generate_chapters",
 		})
 		done2 <- struct {
@@ -389,8 +449,22 @@ func TestRespondRecoveryUsesLivePendingQuestionID(t *testing.T) {
 	}()
 
 	req = transport.readRequest(t)
+	if req.Method != "task/status" {
+		t.Fatalf("follow-up request method = %q, want task/status to resolve the live question id", req.Method)
+	}
+	transport.writeResponse(t, req.ID, map[string]any{
+		"task_id":    newTaskID,
+		"session_id": "session-recovered",
+		"status":     "question",
+		"current_question": map[string]any{
+			"id":       "vibe-story-live-id",
+			"question": "Generate Chapters?",
+		},
+	})
+
+	req = transport.readRequest(t)
 	if req.Method != "task/respond" {
-		t.Fatalf("follow-up request method = %q, want task/respond (no re-recovery)", req.Method)
+		t.Fatalf("follow-up request method = %q, want task/respond after live status lookup", req.Method)
 	}
 	var followParams map[string]any
 	if err := json.Unmarshal(req.Params, &followParams); err != nil {
@@ -398,6 +472,9 @@ func TestRespondRecoveryUsesLivePendingQuestionID(t *testing.T) {
 	}
 	if followParams["task_id"] != newTaskID {
 		t.Fatalf("follow-up task_id = %#v, want live %q", followParams["task_id"], newTaskID)
+	}
+	if followParams["question_id"] != "vibe-story-live-id" {
+		t.Fatalf("follow-up question_id = %#v, want live pending id", followParams["question_id"])
 	}
 	if followParams["option_id"] != "generate_chapters" {
 		t.Fatalf("follow-up option_id = %#v, want generate_chapters", followParams["option_id"])
@@ -645,8 +722,8 @@ func TestRespondRecoverySkipsStalePerNodeFeedback(t *testing.T) {
 
 	transport := newCancelPersistTransport()
 	client := bridge.New(bridge.Options{
-		RequestTimeout: 500 * time.Millisecond,
-		CreateTransport: func(opts bridge.Options) (bridge.Transport, error) { return transport, nil },
+		RequestTimeout:       500 * time.Millisecond,
+		CreateTransport:      func(opts bridge.Options) (bridge.Transport, error) { return transport, nil },
 		DisableAutoReconnect: true,
 	})
 	if err := client.Start(ctx); err != nil {

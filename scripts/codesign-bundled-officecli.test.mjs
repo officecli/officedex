@@ -11,6 +11,8 @@ import {
   refreshRuntimeManifestNodeChecksum,
 } from "./codesign-bundled-officecli.mjs";
 
+const LOCAL_ENTITLEMENTS = path.join(process.cwd(), "build", "darwin", "local-entitlements.plist");
+
 test("notarization preserves Node JIT entitlements and refreshes its checksum before sealing the app", () => {
   const app = path.join("build", "bin", "OfficeDex.app");
   const runtimeNode = path.join(app, "Contents", "Resources", "pptxgenjs-runtime", "bin", "node");
@@ -79,4 +81,10 @@ test("refreshes runtime.json after codesign changes the Node binary", async (t) 
   assert.notEqual(manifest.nodeSha256, "before");
   assert.equal(manifest.nodeSigned, true);
   assert.deepEqual(JSON.parse(await readFile(path.join(root, "runtime.json"), "utf8")), manifest);
+});
+
+test("local ad-hoc app signing disables library validation for bundled FFI", async () => {
+  const plist = await readFile(LOCAL_ENTITLEMENTS, "utf8");
+  assert.match(plist, /com\.apple\.security\.cs\.disable-library-validation/);
+  assert.match(plist, /<true\s*\/>/);
 });
