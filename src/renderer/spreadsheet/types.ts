@@ -15,6 +15,7 @@ export interface SpreadsheetSessionState {
   grant?: PreviewGrant;
   dirty: boolean;
   error?: string;
+  saveError?: string;
 }
 
 export type SpreadsheetSessionAction =

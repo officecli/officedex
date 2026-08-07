@@ -43,7 +43,6 @@
 .spreadsheet-canvas__editor { width: 100%; height: 100%; outline: none; }
 .spreadsheet-canvas__loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 10px; background: var(--od-surface); color: var(--od-ink-secondary); font-size: 12px; }
 .spreadsheet-canvas__loading svg { width: 36px; height: 36px; color: var(--od-guidance); stroke-width: 1.2; }
-.spreadsheet-canvas__save-error { position: absolute; right: 16px; bottom: 16px; border: 1px solid color-mix(in srgb, var(--od-danger) 30%, transparent); border-radius: 6px; background: var(--od-surface); color: var(--od-danger); padding: 8px 12px; box-shadow: var(--od-shadow-floating); font-size: 12px; }
 .spreadsheet-canvas--error { display: grid; place-items: center; }
 .spreadsheet-canvas__error { display: flex; max-width: 440px; align-items: center; flex-direction: column; gap: 8px; color: var(--od-ink-secondary); padding: 24px; text-align: center; }
 .spreadsheet-canvas__error > svg { width: 28px; height: 28px; color: var(--od-danger); }

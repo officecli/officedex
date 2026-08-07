@@ -75,4 +75,16 @@ describe("SpreadsheetWorkspace", () => {
     expect(screen.getByRole("region", { name: "Untitled workbook" })).toBeInTheDocument();
     expect(screen.getByText("Your spreadsheet will appear here")).toBeInTheDocument();
   });
+
+  it("shows only Save failed in the topbar after a conversion failure", () => {
+    render(
+      <SpreadsheetWorkspace
+        session={{ ...readySession, phase: "dirty", dirty: true, saveError: "export failed" }}
+        onBack={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Save failed")).toHaveAttribute("data-state", "error");
+    expect(screen.queryByText("export failed")).toBeNull();
+  });
 });

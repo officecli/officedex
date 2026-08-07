@@ -127,20 +127,22 @@ describe("SpreadsheetCanvas", () => {
     expect(onDirtyChange).toHaveBeenLastCalledWith(true);
   });
 
-  it("keeps the workbook dirty and reports an error when save fails", async () => {
+  it("keeps the workbook dirty and reports only a save error when save fails", async () => {
     mocks.officecli.saveXlsxEditor.mockRejectedValueOnce(new Error("export failed"));
     const onDirtyChange = vi.fn();
     const onError = vi.fn();
+    const onSaveError = vi.fn();
     const ref = createRef<SpreadsheetCanvasHandle>();
-    render(<SpreadsheetCanvas ref={ref} artifact={artifact} grant={grant} onDirtyChange={onDirtyChange} onError={onError} />);
+    render(<SpreadsheetCanvas ref={ref} artifact={artifact} grant={grant} onDirtyChange={onDirtyChange} onError={onError} onSaveError={onSaveError} />);
     await waitFor(() => expect(mocks.editor.content.addChangeListener).toHaveBeenCalled());
     act(() => mocks.emitChange());
 
     await expect(ref.current?.save()).resolves.toBe(false);
 
     expect(onDirtyChange).toHaveBeenLastCalledWith(true);
-    expect(onError).toHaveBeenCalledWith("export failed");
-    expect(await screen.findByRole("alert")).toHaveTextContent("export failed");
+    expect(onSaveError).toHaveBeenCalledWith("export failed");
+    expect(onError).not.toHaveBeenCalledWith("export failed");
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("coalesces repeated imperative saves", async () => {

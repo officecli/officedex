@@ -18,6 +18,7 @@ export interface SpreadsheetWorkspaceProps {
   onDirtyChange?: (dirty: boolean) => void;
   onCanvasStateChange?: (state: SpreadsheetCanvasState) => void;
   onCanvasError?: (error?: string) => void;
+  onCanvasSaveError?: (error?: string) => void;
   onCanvasSessionClosed?: (previewToken: string) => void;
   agentPanel?: React.ReactNode;
 }
@@ -25,13 +26,14 @@ export interface SpreadsheetWorkspaceProps {
 function saveStateFor(session: SpreadsheetSessionState): SpreadsheetSaveState {
   if (!session.artifact) return "unopened";
   if (session.phase === "saving") return "saving";
+  if (session.saveError) return "error";
   if (session.phase === "error") return "error";
   if (session.dirty || session.phase === "dirty") return "dirty";
   return "saved";
 }
 
 export const SpreadsheetWorkspace = forwardRef<SpreadsheetWorkspaceHandle, SpreadsheetWorkspaceProps>(
-  function SpreadsheetWorkspace({ session, workspaceName, onBack, onDirtyChange, onCanvasStateChange, onCanvasError, onCanvasSessionClosed, agentPanel }, ref) {
+  function SpreadsheetWorkspace({ session, workspaceName, onBack, onDirtyChange, onCanvasStateChange, onCanvasError, onCanvasSaveError, onCanvasSessionClosed, agentPanel }, ref) {
     const canvasRef = useRef<SpreadsheetCanvasHandle>(null);
     const t = useT();
     const [agentOpen, setAgentOpen] = useState(true);
@@ -67,6 +69,7 @@ export const SpreadsheetWorkspace = forwardRef<SpreadsheetWorkspaceHandle, Sprea
                 onDirtyChange={onDirtyChange}
                 onStateChange={onCanvasStateChange}
                 onError={onCanvasError}
+                onSaveError={onCanvasSaveError}
                 onSessionClosed={onCanvasSessionClosed}
               />
             ) : (

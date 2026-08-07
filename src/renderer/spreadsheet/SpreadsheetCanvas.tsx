@@ -20,6 +20,7 @@ export interface SpreadsheetCanvasProps {
   onDirtyChange?: (dirty: boolean) => void;
   onStateChange?: (state: SpreadsheetCanvasState) => void;
   onError?: (error?: string) => void;
+  onSaveError?: (error?: string) => void;
   onSessionClosed?: (previewToken: string) => void;
 }
 
@@ -28,7 +29,7 @@ function errorMessage(error: unknown): string {
 }
 
 export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, SpreadsheetCanvasProps>(
-  function SpreadsheetCanvas({ artifact, grant, onDirtyChange, onStateChange, onError, onSessionClosed }, ref) {
+  function SpreadsheetCanvas({ artifact, grant, onDirtyChange, onStateChange, onError, onSaveError, onSessionClosed }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const t = useT();
     const editorRef = useRef<AbstractedSheetSDK | null>(null);
@@ -39,13 +40,12 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
     const dirtyRef = useRef(false);
     const savePromiseRef = useRef<Promise<boolean> | null>(null);
     const saveHandlerRef = useRef<() => Promise<boolean>>(async () => false);
-    const callbacksRef = useRef({ onDirtyChange, onStateChange, onError, onSessionClosed });
+    const callbacksRef = useRef({ onDirtyChange, onStateChange, onError, onSaveError, onSessionClosed });
     const [state, setState] = useState<SpreadsheetCanvasState>("loading");
     const [prepareError, setPrepareError] = useState<string | null>(null);
-    const [saveError, setSaveError] = useState<string | null>(null);
     const [loadAttempt, setLoadAttempt] = useState(0);
 
-    callbacksRef.current = { onDirtyChange, onStateChange, onError, onSessionClosed };
+    callbacksRef.current = { onDirtyChange, onStateChange, onError, onSaveError, onSessionClosed };
 
     const publishState = useCallback((nextState: SpreadsheetCanvasState) => {
       setState(nextState);
@@ -91,8 +91,8 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
       publishState("loading");
       publishDirty(false);
       setPrepareError(null);
-      setSaveError(null);
       callbacksRef.current.onError?.(undefined);
+      callbacksRef.current.onSaveError?.(undefined);
       editorRef.current = null;
       sessionIdRef.current = "";
       savePromiseRef.current = null;
@@ -116,8 +116,8 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
           unsubscribe = editor.content.addChangeListener(() => {
             changeVersionRef.current += 1;
             publishDirty(true);
-            setSaveError(null);
             callbacksRef.current.onError?.(undefined);
+            callbacksRef.current.onSaveError?.(undefined);
             publishState("dirty");
           });
           editorRef.current = editor;
@@ -157,8 +157,8 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
       const lifecycleVersion = lifecycleVersionRef.current;
       const versionAtSaveStart = changeVersionRef.current;
       publishState("saving");
-      setSaveError(null);
       callbacksRef.current.onError?.(undefined);
+      callbacksRef.current.onSaveError?.(undefined);
 
       const pending = (async () => {
         try {
@@ -177,8 +177,7 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
           if (lifecycleVersionRef.current === lifecycleVersion) {
             const message = errorMessage(error);
             publishDirty(true);
-            setSaveError(message);
-            callbacksRef.current.onError?.(message);
+            callbacksRef.current.onSaveError?.(message);
             publishState("error");
           }
           return false;
@@ -260,7 +259,6 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
             <span>{t("spreadsheet.loading", { file: artifact.fileName })}</span>
           </div>
         ) : null}
-        {saveError ? <div className="spreadsheet-canvas__save-error" role="alert">{saveError}</div> : null}
       </section>
     );
   },

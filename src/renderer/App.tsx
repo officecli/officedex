@@ -1151,6 +1151,7 @@ function OfficeDexApp() {
             onDirtyChange={spreadsheet.setDirty}
             onCanvasStateChange={spreadsheet.setCanvasState}
             onCanvasError={spreadsheet.setError}
+            onCanvasSaveError={spreadsheet.setSaveError}
             onCanvasSessionClosed={(previewToken) => void officecli.revokePreviewToken(previewToken).catch(() => undefined)}
             agentPanel={(
               <SpreadsheetAgentPanel

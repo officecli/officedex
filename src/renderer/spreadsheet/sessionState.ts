@@ -56,22 +56,23 @@ export function spreadsheetSessionReducer(
         error: undefined,
       };
     case "editor.ready":
-      return { ...state, phase: state.dirty ? "dirty" : "ready", error: undefined };
+      return { ...state, phase: state.dirty ? "dirty" : "ready", error: undefined, saveError: undefined };
     case "editor.failed":
-      return { ...state, phase: "error", error: action.error };
+      return { ...state, phase: "error", error: action.error, saveError: undefined };
     case "editor.dirty":
-      return { ...state, phase: action.dirty ? "dirty" : "ready", dirty: action.dirty, error: undefined };
+      return { ...state, phase: action.dirty ? "dirty" : "ready", dirty: action.dirty, error: undefined, saveError: undefined };
     case "save.started":
-      return { ...state, phase: "saving", error: undefined };
+      return { ...state, phase: "saving", error: undefined, saveError: undefined };
     case "save.succeeded":
       return {
         ...state,
         phase: action.changedDuringSave ? "dirty" : "ready",
         dirty: action.changedDuringSave,
         error: undefined,
+        saveError: undefined,
       };
     case "save.failed":
-      return { ...state, phase: "error", dirty: true, error: action.error };
+      return { ...state, phase: "dirty", dirty: true, error: undefined, saveError: action.error };
     case "reset":
       return createSpreadsheetSession(action.entry);
   }

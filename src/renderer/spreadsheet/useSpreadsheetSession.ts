@@ -49,6 +49,9 @@ export function useSpreadsheetSession(entry: SpreadsheetEntry | null) {
     setError: useCallback((error?: string) => {
       if (error) dispatch({ type: "editor.failed", error });
     }, []),
+    setSaveError: useCallback((error?: string) => {
+      if (error) dispatch({ type: "save.failed", error });
+    }, []),
     reset: useCallback((nextEntry: SpreadsheetEntry = emptyEntry) => dispatch({ type: "reset", entry: nextEntry }), []),
   };
 }

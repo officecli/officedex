@@ -63,8 +63,15 @@ describe("spreadsheet session state", () => {
     expect(ready).toMatchObject({ phase: "ready", dirty: false });
     expect(dirty).toMatchObject({ phase: "dirty", dirty: true });
     expect(saving).toMatchObject({ phase: "saving", dirty: true });
-    expect(failed).toMatchObject({ phase: "error", dirty: true, error: "disk full" });
+    expect(failed).toMatchObject({ phase: "dirty", dirty: true, error: undefined, saveError: "disk full" });
     expect(saved).toMatchObject({ phase: "ready", dirty: false, error: undefined });
+  });
+
+  it("keeps editor failures separate from save failures", () => {
+    const loading = createSpreadsheetSession({ kind: "artifact", artifact });
+    const failed = spreadsheetSessionReducer(loading, { type: "editor.failed", error: "editor unavailable" });
+
+    expect(failed).toMatchObject({ phase: "error", error: "editor unavailable", saveError: undefined });
   });
 
   it("rejects non-XLSX artifacts", () => {
