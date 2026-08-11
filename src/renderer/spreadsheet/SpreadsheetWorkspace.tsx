@@ -1,10 +1,13 @@
-import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { FileSpreadsheet, Sparkles } from "lucide-react";
 import { officecli } from "../bridge";
 import { SpreadsheetCanvas, type SpreadsheetCanvasHandle, type SpreadsheetCanvasState } from "./SpreadsheetCanvas";
 import { SpreadsheetTopbar, type SpreadsheetSaveState } from "./SpreadsheetTopbar";
 import type { SpreadsheetSessionState } from "./types";
 import { useT } from "../i18n";
+import { WorkbookAppBuilder } from "../appBuilder/WorkbookAppBuilder";
+import { PublishedWorkbookAppPage } from "../appBuilder/PublishedWorkbookAppPage";
+import type { PublishedWorkbookApp } from "../appBuilder/types";
 
 export interface SpreadsheetWorkspaceHandle {
   save(): Promise<boolean>;
@@ -37,8 +40,17 @@ export const SpreadsheetWorkspace = forwardRef<SpreadsheetWorkspaceHandle, Sprea
     const canvasRef = useRef<SpreadsheetCanvasHandle>(null);
     const t = useT();
     const [agentOpen, setAgentOpen] = useState(true);
+    const [appBuilderOpen, setAppBuilderOpen] = useState(false);
+    const [publishedApp, setPublishedApp] = useState<PublishedWorkbookApp>();
+    const [sourceRevision, setSourceRevision] = useState(0);
     const fileName = session.artifact?.fileName ?? t("spreadsheet.untitled");
     const saveState = saveStateFor(session);
+
+    useEffect(() => {
+      setAppBuilderOpen(false);
+      setPublishedApp(undefined);
+      setSourceRevision(0);
+    }, [session.artifact?.filePath]);
 
     const save = useCallback(() => canvasRef.current?.save() ?? Promise.resolve(false), []);
     useImperativeHandle(ref, () => ({
@@ -57,6 +69,7 @@ export const SpreadsheetWorkspace = forwardRef<SpreadsheetWorkspaceHandle, Sprea
           onBack={onBack}
           onSave={() => void save()}
           onOpenExternal={session.artifact ? () => void officecli.openPath(session.artifact!.filePath) : undefined}
+          onOpenAppBuilder={session.artifact && session.grant ? () => setAppBuilderOpen(true) : undefined}
           onToggleAgent={() => setAgentOpen((open) => !open)}
         />
         <div className="spreadsheet-workspace__body">
@@ -67,7 +80,10 @@ export const SpreadsheetWorkspace = forwardRef<SpreadsheetWorkspaceHandle, Sprea
                 artifact={session.artifact}
                 grant={session.grant}
                 onDirtyChange={onDirtyChange}
-                onStateChange={onCanvasStateChange}
+                onStateChange={(state) => {
+                  onCanvasStateChange?.(state);
+                  if (state === "saved") setSourceRevision((current) => current + 1);
+                }}
                 onError={onCanvasError}
                 onSaveError={onCanvasSaveError}
                 onSessionClosed={onCanvasSessionClosed}
@@ -87,6 +103,27 @@ export const SpreadsheetWorkspace = forwardRef<SpreadsheetWorkspaceHandle, Sprea
             </aside>
           ) : null}
         </div>
+        {publishedApp && session.grant ? (
+          <div className="spreadsheet-workspace__app-layer">
+            <PublishedWorkbookAppPage app={publishedApp} grant={session.grant} sourceRevision={sourceRevision} onBack={() => {
+              setPublishedApp(undefined);
+              setAppBuilderOpen(true);
+            }} />
+          </div>
+        ) : appBuilderOpen && session.artifact && session.grant ? (
+          <div className="spreadsheet-workspace__app-layer">
+            <WorkbookAppBuilder
+              artifact={session.artifact}
+              grant={session.grant}
+              sourceRevision={sourceRevision}
+              onClose={() => setAppBuilderOpen(false)}
+              onOpenPublished={(app) => {
+                setPublishedApp(app);
+                setAppBuilderOpen(false);
+              }}
+            />
+          </div>
+        ) : null}
       </section>
     );
   },

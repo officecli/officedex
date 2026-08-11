@@ -8,6 +8,7 @@ import "./styles/tokens.css";
 import "./styles/shell.css";
 import "./styles/home.css";
 import "./styles/spreadsheet.css";
+import "./styles/app-builder.css";
 import "./styles/dialogue.css";
 import "./styles/settings.css";
 import "./styles/tasks.css";

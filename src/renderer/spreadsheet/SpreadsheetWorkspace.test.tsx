@@ -56,6 +56,7 @@ describe("SpreadsheetWorkspace", () => {
     expect(screen.getByText("Client A")).toBeInTheDocument();
     expect(screen.getAllByText("forecast.xlsx")).toHaveLength(2);
     expect(screen.getByRole("complementary", { name: "AI Assistant" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create App" })).toBeInTheDocument();
     expect(screen.queryByText("What should we work on?")).toBeNull();
     expect(screen.queryByRole("button", { name: /New chat/i })).toBeNull();
     expect(screen.queryByTestId("new-generation-form")).toBeNull();
@@ -67,6 +68,15 @@ describe("SpreadsheetWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Hide AI assistant" }));
     expect(screen.queryByRole("complementary", { name: "AI Assistant" })).toBeNull();
     expect(screen.getByRole("button", { name: "Show AI assistant" })).toBeInTheDocument();
+  });
+
+  it("keeps the workbook canvas mounted while App Builder is open", () => {
+    render(<SpreadsheetWorkspace session={readySession} onBack={vi.fn()} agentPanel={<div>Assistant</div>} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Create App" }));
+
+    expect(screen.getByRole("region", { name: "App Builder" })).toBeInTheDocument();
+    expect(screen.getByTestId("spreadsheet-canvas")).toHaveTextContent("forecast.xlsx");
   });
 
   it("shows a stable workbook placeholder before generation completes", () => {

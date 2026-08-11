@@ -1,4 +1,4 @@
-import { ArrowLeft, ExternalLink, PanelRightClose, PanelRightOpen, Save } from "lucide-react";
+import { AppWindow, ArrowLeft, ExternalLink, PanelRightClose, PanelRightOpen, Save } from "lucide-react";
 import { Button } from "../ui";
 import { useT } from "../i18n";
 
@@ -13,10 +13,11 @@ export interface SpreadsheetTopbarProps {
   onBack: () => void;
   onSave: () => void;
   onOpenExternal?: () => void;
+  onOpenAppBuilder?: () => void;
   onToggleAgent: () => void;
 }
 
-export function SpreadsheetTopbar({ fileName, workspaceName, saveState, canSave, agentOpen, onBack, onSave, onOpenExternal, onToggleAgent }: SpreadsheetTopbarProps) {
+export function SpreadsheetTopbar({ fileName, workspaceName, saveState, canSave, agentOpen, onBack, onSave, onOpenExternal, onOpenAppBuilder, onToggleAgent }: SpreadsheetTopbarProps) {
   const t = useT();
   const saveLabel = t(`spreadsheet.save.${saveState}`);
   return (
@@ -30,6 +31,7 @@ export function SpreadsheetTopbar({ fileName, workspaceName, saveState, canSave,
       </div>
       <div className="spreadsheet-topbar__actions">
         <span className="spreadsheet-topbar__save-state" data-state={saveState}>{saveLabel}</span>
+        {onOpenAppBuilder ? <Button variant="secondary" size="small" icon={<AppWindow />} onClick={onOpenAppBuilder}>{t("spreadsheet.topbar.appBuilder")}</Button> : null}
         <Button
           variant="primary"
           size="small"

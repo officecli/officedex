@@ -1,0 +1,160 @@
+.app-builder,
+.published-workbook-app {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  color: var(--od-ink);
+  background: var(--od-surface-muted);
+  font-family: var(--od-font-ui);
+}
+
+.app-builder { grid-template-rows: 52px 46px minmax(0, 1fr); }
+.app-builder__topbar,
+.published-workbook-app > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--od-border-subtle);
+  background: var(--od-surface);
+  padding: 0 14px;
+}
+.app-builder__identity,
+.app-builder__top-actions,
+.app-builder__identity > div,
+.published-workbook-app > header > div { display: flex; min-width: 0; align-items: center; gap: 9px; }
+.app-builder__identity > div:last-child,
+.published-workbook-app > header > div { align-items: flex-start; flex-direction: column; gap: 1px; }
+.app-builder__identity strong,
+.published-workbook-app > header strong { font-size: 13px; font-weight: 600; }
+.app-builder__identity span,
+.published-workbook-app > header span { color: var(--od-ink-secondary); font-size: 11px; }
+.app-builder__mark { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 7px; background: var(--od-guidance); color: white !important; }
+.app-builder__mark svg { width: 15px; height: 15px; }
+.app-builder__connection { display: inline-flex; align-items: center; gap: 6px; color: var(--n-success); font-size: 11px; }
+.app-builder__connection i,
+.workbook-app-preview__live i { width: 7px; height: 7px; border-radius: 50%; background: var(--n-success); box-shadow: 0 0 0 4px color-mix(in srgb, var(--n-success) 14%, transparent); }
+
+.app-builder__steps { display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid var(--od-border-subtle); background: var(--od-surface); padding: 0 16px; }
+.app-builder__steps button { position: relative; border: 0; background: transparent; color: var(--od-ink-secondary); font: inherit; font-size: 12px; cursor: pointer; }
+.app-builder__steps button span { display: inline-grid; width: 19px; height: 19px; margin-right: 7px; place-items: center; border: 1px solid var(--od-border-hover); border-radius: 50%; font-size: 10px; }
+.app-builder__steps button[data-active="true"] { color: var(--od-guidance); font-weight: 600; }
+.app-builder__steps button[data-active="true"]::after { position: absolute; right: 24%; bottom: -1px; left: 24%; height: 2px; background: var(--od-guidance); content: ""; }
+.app-builder__steps button[data-active="true"] span { border-color: var(--od-guidance); background: var(--od-guidance); color: white; }
+
+.app-builder__state { display: flex; height: 100%; align-items: center; justify-content: center; flex-direction: column; gap: 10px; color: var(--od-ink-secondary); font-size: 13px; }
+.app-builder__state svg { width: 28px; height: 28px; color: var(--od-guidance); }
+.app-builder__state--error svg { color: var(--od-danger); }
+.app-builder__state--error span { max-width: 520px; text-align: center; }
+
+.app-builder__configure { display: grid; min-width: 0; min-height: 0; grid-template-columns: minmax(0, 1fr) 340px; }
+.app-builder__source { min-width: 0; overflow: auto; padding: 28px; }
+.app-builder__source > header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 18px; }
+.app-builder__source > header span { color: var(--od-guidance); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+.app-builder__source h2 { margin: 5px 0 2px; font-size: 20px; font-weight: 600; }
+.app-builder__source p,
+.app-builder__config-panel p,
+.app-builder__publish p { margin: 0; color: var(--od-ink-secondary); font-size: 12px; line-height: 19px; }
+.app-builder__source > header > svg { width: 42px; height: 42px; color: var(--od-guidance); stroke-width: 1.2; }
+.app-builder__sample { overflow: auto; border: 1px solid var(--od-border-subtle); border-radius: 8px; background: var(--od-surface); }
+.app-builder__sample table,
+.workbook-app-preview__table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.app-builder__sample th,
+.app-builder__sample td,
+.workbook-app-preview__table th,
+.workbook-app-preview__table td { max-width: 220px; overflow: hidden; border-right: 1px solid var(--od-border-subtle); border-bottom: 1px solid var(--od-border-subtle); padding: 9px 11px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.app-builder__sample th,
+.workbook-app-preview__table th { background: var(--od-surface-subtle); color: var(--od-ink-secondary); font-weight: 600; }
+
+.app-builder__config-panel { display: flex; min-height: 0; overflow: auto; flex-direction: column; gap: 18px; border-left: 1px solid var(--od-border-subtle); background: var(--od-surface); padding: 22px; }
+.app-builder__config-panel h2,
+.app-builder__publish h2 { margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+.app-builder__config-panel > label,
+.app-builder__publish-card > label { display: grid; gap: 7px; color: var(--od-ink); font-size: 12px; font-weight: 600; }
+.app-builder select { width: 100%; height: 34px; border: 1px solid var(--od-border-default); border-radius: 6px; outline: none; background: var(--od-surface); color: var(--od-ink); padding: 0 9px; }
+.app-builder fieldset { min-width: 0; margin: 0; border: 0; padding: 0; }
+.app-builder legend { margin-bottom: 8px; font-size: 12px; font-weight: 600; }
+.app-builder__field-list { display: grid; max-height: 190px; overflow: auto; gap: 2px; border: 1px solid var(--od-border-subtle); border-radius: 7px; padding: 5px; }
+.app-builder__field-list label { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; border-radius: 5px; padding: 6px; color: var(--od-ink); font-size: 12px; font-weight: 400; }
+.app-builder__field-list label:hover { background: var(--od-surface-subtle); }
+.app-builder input[type="checkbox"] { accent-color: var(--od-guidance); }
+.app-builder__field-list small { color: var(--od-ink-secondary); font-size: 10px; }
+
+.app-builder__preview-stage { display: grid; min-width: 0; min-height: 0; grid-template-columns: 330px minmax(0, 1fr); }
+.app-builder__chat { display: grid; min-height: 0; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 14px; border-right: 1px solid var(--od-border-subtle); background: var(--od-surface); padding: 18px; }
+.app-builder__chat > header { display: flex; align-items: center; gap: 9px; }
+.app-builder__chat > header > svg { width: 18px; height: 18px; color: var(--od-guidance); }
+.app-builder__chat > header > div { display: flex; flex-direction: column; }
+.app-builder__chat > header strong { font-size: 13px; }
+.app-builder__chat > header span { color: var(--od-ink-secondary); font-size: 11px; }
+.app-builder__message { align-self: flex-start; border-radius: 8px; background: var(--od-surface-subtle); color: var(--od-ink); padding: 10px 11px; font-size: 12px; line-height: 19px; }
+.app-builder__message--user { justify-self: end; background: var(--od-guidance); color: white; }
+.app-builder__message ul { display: grid; gap: 7px; margin: 10px 0 0; padding: 0; list-style: none; color: var(--od-ink-secondary); }
+.app-builder__message li { display: flex; align-items: center; gap: 6px; }
+.app-builder__message li svg { width: 13px; height: 13px; color: var(--n-success); }
+.app-builder__chat-compose { display: grid; gap: 8px; border-top: 1px solid var(--od-border-subtle); padding-top: 12px; }
+.app-builder__chat-compose .ui-button { justify-self: end; }
+.app-builder__preview-shell { min-width: 0; min-height: 0; overflow: auto; background: var(--od-surface-muted); padding: 14px; }
+.app-builder__preview-toolbar { display: flex; height: 36px; align-items: center; justify-content: space-between; border: 1px solid var(--od-border-subtle); border-radius: 8px 8px 0 0; background: var(--od-surface); color: var(--od-ink-secondary); padding: 0 11px; font-size: 11px; }
+
+.workbook-app-preview { min-height: 100%; border: 1px solid var(--od-border-subtle); background: var(--od-surface); padding: 24px; }
+.app-builder__preview-shell .workbook-app-preview { border-top: 0; border-radius: 0 0 8px 8px; }
+.workbook-app-preview__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 20px; }
+.workbook-app-preview__eyebrow { color: var(--od-guidance); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.workbook-app-preview h1 { margin: 4px 0 3px; font-size: 22px; font-weight: 650; }
+.workbook-app-preview p { margin: 0; color: var(--od-ink-secondary); font-size: 12px; }
+.workbook-app-preview__header-actions { display: flex; align-items: center; gap: 13px; }
+.workbook-app-preview__header-actions .ui-input-shell { width: 200px; }
+.workbook-app-preview__live { display: inline-flex; align-items: center; gap: 7px; color: var(--n-success); font-size: 11px; white-space: nowrap; }
+.workbook-app-preview__metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+.workbook-app-preview__metrics article { border: 1px solid var(--od-border-subtle); border-radius: 8px; background: var(--od-surface); padding: 13px; }
+.workbook-app-preview__metrics span { color: var(--od-ink-secondary); font-size: 11px; }
+.workbook-app-preview__metrics strong { display: block; margin-top: 4px; font-size: 22px; font-weight: 650; }
+.workbook-app-preview__board { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); align-items: start; gap: 11px; }
+.workbook-app-preview__column { border-radius: 8px; background: var(--od-surface-muted); padding: 10px; }
+.workbook-app-preview__column > header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; font-size: 12px; }
+.workbook-app-preview__column > header span { display: grid; min-width: 20px; height: 20px; place-items: center; border-radius: 10px; background: var(--od-surface); color: var(--od-ink-secondary); font-size: 10px; }
+.workbook-app-preview__card { margin-bottom: 7px; border: 1px solid var(--od-border-subtle); border-radius: 7px; background: var(--od-surface); padding: 10px; }
+.workbook-app-preview__card > strong { font-size: 12px; font-weight: 600; }
+.workbook-app-preview__card > div { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; color: var(--od-ink-secondary); font-size: 10px; }
+.workbook-app-preview__table-wrap { overflow: auto; border: 1px solid var(--od-border-subtle); border-radius: 8px; }
+.workbook-app-preview > footer { margin-top: 14px; color: var(--od-ink-secondary); font-size: 10px; text-align: right; }
+
+.app-builder__publish { display: grid; min-width: 0; min-height: 0; grid-template-columns: minmax(0, 1fr) 330px; }
+.app-builder__publish > main { overflow: auto; padding: 32px; }
+.app-builder__publish-card { display: grid; max-width: 590px; gap: 16px; margin: 0 auto; border: 1px solid var(--od-border-subtle); border-radius: 10px; background: var(--od-surface); padding: 24px; box-shadow: var(--od-shadow-floating); }
+.app-builder__publish-card > svg { width: 34px; height: 34px; color: var(--od-guidance); }
+.app-builder__url { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; border: 1px solid var(--od-border-default); border-radius: 6px; overflow: hidden; }
+.app-builder__url > span { color: var(--od-ink-secondary); padding-left: 10px; font-size: 12px; font-weight: 400; }
+.app-builder__url .ui-input { border: 0; }
+.app-builder__publish > aside { overflow: auto; border-left: 1px solid var(--od-border-subtle); background: var(--od-surface); padding: 22px; }
+.app-builder__publish > aside > label { display: flex; align-items: flex-start; gap: 9px; margin-top: 11px; border: 1px solid var(--od-border-subtle); border-radius: 7px; padding: 11px; }
+.app-builder__publish > aside > label span { display: flex; color: var(--od-ink-secondary); flex-direction: column; gap: 3px; font-size: 11px; }
+.app-builder__publish > aside > label strong { color: var(--od-ink); font-size: 12px; font-weight: 600; }
+
+.published-workbook-app { grid-template-rows: 52px minmax(0, 1fr); }
+.published-workbook-app > main { min-height: 0; overflow: auto; padding: 22px; }
+.published-workbook-app > main .workbook-app-preview { max-width: 1180px; min-height: calc(100% - 2px); margin: 0 auto; border-radius: 10px; }
+.published-workbook-app__error { max-width: 1180px; margin: 0 auto 12px; border-radius: 6px; background: color-mix(in srgb, var(--od-danger) 8%, transparent); color: var(--od-danger); padding: 9px 12px; font-size: 12px; }
+
+@media (max-width: 980px) {
+  .app-builder__configure,
+  .app-builder__publish { grid-template-columns: minmax(0, 1fr) 300px; }
+  .app-builder__preview-stage { grid-template-columns: 290px minmax(0, 1fr); }
+}
+
+@media (max-width: 760px) {
+  .app-builder__configure,
+  .app-builder__preview-stage,
+  .app-builder__publish { grid-template-columns: 1fr; }
+  .app-builder__source,
+  .app-builder__preview-shell,
+  .app-builder__publish > main { padding: 12px; }
+  .app-builder__config-panel,
+  .app-builder__chat,
+  .app-builder__publish > aside { border: 0; }
+  .app-builder__top-actions .app-builder__connection { display: none; }
+  .workbook-app-preview__header { flex-direction: column; }
+  .workbook-app-preview__metrics { grid-template-columns: 1fr; }
+}
