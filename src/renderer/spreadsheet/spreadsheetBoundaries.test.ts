@@ -21,4 +21,10 @@ describe("spreadsheet workspace boundaries", () => {
     expect(source).not.toContain(["Dialogue", "Screen"].join(""));
     expect(source).not.toContain(["preview", "components"].join("/"));
   });
+
+  it("contains Sheet SDK stacking so App Builder overlays remain fully visible", () => {
+    const css = readFileSync("src/renderer/styles/spreadsheet.css", "utf8");
+    expect(css).toMatch(/\.spreadsheet-workspace__body\s*\{[^}]*isolation:\s*isolate/s);
+    expect(css).toMatch(/\.spreadsheet-workspace__app-layer\s*\{[^}]*z-index:\s*40/s);
+  });
 });
