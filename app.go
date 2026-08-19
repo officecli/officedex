@@ -153,6 +153,11 @@ type App struct {
 	resolvedBinaryEnv  []string
 	binaryResolvedAt   time.Time
 
+	// retiredBridges holds bridge clients that were replaced while they still
+	// had tasks in flight. They keep their event listeners so the tasks can
+	// finish and report normally; reapRetiredBridge closes them once idle.
+	retiredBridges []*bridge.Client
+
 	// recoveredTaskIDs maps an interrupted task id (the one the renderer keeps
 	// using after an app restart) to the live replacement task created during
 	// stale-respond recovery. Subsequent answers for the old id are routed to
@@ -271,9 +276,49 @@ func (a *App) startup(ctx context.Context) {
 	}
 	if err := a.localStore.Open(ctx); err != nil {
 		wailsruntime.LogErrorf(ctx, "open local store: %v", err)
-	} else if err := a.initializeWorkspaces(ctx); err != nil {
-		wailsruntime.LogErrorf(ctx, "init workspace: %v", err)
+	} else {
+		if err := a.failInterruptedTasks(ctx); err != nil {
+			wailsruntime.LogWarningf(ctx, "fail interrupted tasks: %v", err)
+		}
+		if err := a.initializeWorkspaces(ctx); err != nil {
+			wailsruntime.LogErrorf(ctx, "init workspace: %v", err)
+		}
 	}
+}
+
+// interruptedTaskMessage is shown for tasks whose bridge process died with the
+// previous app session.
+const interruptedTaskMessage = "OfficeDex was closed before this task finished. Please run it again."
+
+// failInterruptedTasks marks tasks left in the `running` state by an earlier
+// process as failed. No bridge child survives a restart, and a running task --
+// unlike one parked in `question` / `plan_review`, which stale-respond recovery
+// can replay -- has no pending user action to resume from. Without this pass the
+// renderer replays those rows as cards that spin forever.
+func (a *App) failInterruptedTasks(ctx context.Context) error {
+	if a.localStore == nil {
+		return nil
+	}
+	taskIDs, err := a.localStore.QueryTaskIDsByStatus(ctx, "running")
+	if err != nil {
+		return err
+	}
+	for _, taskID := range taskIDs {
+		if err := a.localStore.RecordEvent(types.BridgeEvent{
+			EventID: "local-interrupted-" + uuid.NewString(),
+			TaskID:  taskID,
+			Type:    "task.failed",
+			TS:      time.Now().UTC().Format(time.RFC3339Nano),
+			Payload: map[string]any{
+				"message":  interruptedTaskMessage,
+				"code":     bridge.StrandedTaskCode,
+				"stranded": true,
+			},
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // shutdown is called by Wails when the window is about to close. It stops
@@ -317,7 +362,7 @@ func (a *App) shutdown(ctx context.Context) {
 // Initialize starts the agent-bridge if needed and forwards the initialize
 // JSON-RPC call.
 func (a *App) Initialize() ([]byte, error) {
-	client, err := a.ensureBridge()
+	client, err := a.bridgeForMetadata()
 	if err != nil {
 		return nil, err
 	}
@@ -326,7 +371,7 @@ func (a *App) Initialize() ([]byte, error) {
 
 // GetCapabilities returns the agent capability map.
 func (a *App) GetCapabilities() ([]byte, error) {
-	client, err := a.ensureBridge()
+	client, err := a.bridgeForMetadata()
 	if err != nil {
 		return nil, err
 	}
@@ -391,7 +436,7 @@ func (a *App) ensureDesktopNotificationAuthorization(ctx context.Context, notifi
 // ListImageTemplates returns server-managed image prompt templates exposed by
 // officecli agent-bridge.
 func (a *App) ListImageTemplates() ([]types.ImagePromptTemplate, error) {
-	client, err := a.ensureBridge()
+	client, err := a.bridgeForMetadata()
 	if err != nil {
 		return nil, err
 	}
@@ -399,7 +444,7 @@ func (a *App) ListImageTemplates() ([]types.ImagePromptTemplate, error) {
 }
 
 func (a *App) CreateImageTemplate(input types.CreateUserImageTemplateInput) (types.ImagePromptTemplate, error) {
-	client, err := a.ensureBridge()
+	client, err := a.bridgeForMetadata()
 	if err != nil {
 		return types.ImagePromptTemplate{}, err
 	}
@@ -411,7 +456,7 @@ func (a *App) CreateImageTemplate(input types.CreateUserImageTemplateInput) (typ
 }
 
 func (a *App) CreateImageTemplatePublishRequest(input types.CreateImageTemplatePublishRequestInput) (types.ImageTemplatePublishRequest, error) {
-	client, err := a.ensureBridge()
+	client, err := a.bridgeForMetadata()
 	if err != nil {
 		return types.ImageTemplatePublishRequest{}, err
 	}
@@ -1490,7 +1535,7 @@ func (a *App) ModifyPptistDeck(input ModifyPptistDeckInput) (ModifyPptistDeckRes
 	}
 	planner := a.pptistPlanner
 	if planner == nil {
-		client, err := a.ensureBridge()
+		client, err := a.bridgeForMetadata()
 		if err != nil {
 			return ModifyPptistDeckResult{}, fmt.Errorf("modify pptist: bridge unavailable: %w", err)
 		}
@@ -2664,7 +2709,15 @@ func (a *App) UpdateSettings(patch settings.Patch) (types.UserSettings, error) {
 		}
 	}
 	if touchesBridge && client != nil {
-		client.Close()
+		if patch.BridgeBinaryPath != nil || patch.LlmProvider != nil || patch.ClearLlmProvider || proxyChanged {
+			// The binary / provider / proxy the child was started with is no
+			// longer valid, so it has to go even with work in flight; Close
+			// reports those tasks as failed instead of leaving them running.
+			client.Close()
+		} else {
+			// Workspace-only change: let the old process finish what it started.
+			a.retireBridge(client)
+		}
 	}
 	return merged, nil
 }
@@ -4257,88 +4310,13 @@ func generateInputEventPayload(input types.GenerateInput, taskCtx localstore.Tas
 
 // ─── Internals ──────────────────────────────────────────────────────────────
 
-func (a *App) ensureBridge() (*bridge.Client, error) {
-	a.mu.Lock()
-	settingsValue := a.cachedSettings
-	a.mu.Unlock()
-	return a.ensureBridgeForCwd(a.effectiveWorkspaceDirForRuntime(settingsValue))
-}
-
-func (a *App) ensureBridgeForTask(taskID string) (*bridge.Client, error) {
-	if a.localStore == nil || strings.TrimSpace(taskID) == "" {
-		return a.ensureBridge()
-	}
+// bridgeEventListener builds the event callback for a bridge client: it stamps
+// runtime provenance onto task.started, records and forwards every task event,
+// and releases the client when a retired one goes idle. The Wails context is
+// captured at construction time, matching the client's own lifetime.
+func (a *App) bridgeEventListener(client *bridge.Client) bridge.EventListener {
 	ctx := a.ctx
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	workspacePath, ok, err := a.localStore.TaskWorkspacePath(ctx, taskID)
-	if err != nil {
-		return nil, err
-	}
-	if !ok || strings.TrimSpace(workspacePath) == "" {
-		return a.ensureBridge()
-	}
-	cwd, err := cleanExistingWorkspaceDir(workspacePath)
-	if err != nil {
-		return nil, err
-	}
-	return a.ensureBridgeForCwd(cwd)
-}
-
-func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
-	a.mu.Lock()
-	if a.bridgeClient != nil && a.bridgeCwd == cwd {
-		client := a.bridgeClient
-		a.mu.Unlock()
-		if !client.Connected() {
-			if err := client.Start(a.ctx); err != nil {
-				return nil, err
-			}
-		}
-		return client, nil
-	}
-	if a.bridgeClient != nil {
-		client := a.bridgeClient
-		a.bridgeClient = nil
-		a.bridgeCwd = ""
-		a.mu.Unlock()
-		client.Close()
-		a.mu.Lock()
-	}
-
-	settingsValue := a.cachedSettings
-	a.mu.Unlock()
-
-	resolved := binresolver.Resolve(a.resolverOptions(settingsValue))
-	if resolved.Source == binresolver.SourceFallback {
-		message := "OfficeCLI binary is not configured. Install it or set a Bridge binary path in Settings."
-		if a.ctx != nil {
-			emit(a.ctx, bridgeEventChannel, types.BridgeEvent{
-				Type:    "bridge.unconfigured",
-				Payload: map[string]any{"message": message},
-			})
-		}
-		return nil, errors.New(message)
-	}
-
-	env := appendPptxgenjsRuntimeEnv(llmProviderEnv(settingsValue), bundledPptxgenjsRuntimeEnv())
-
-	a.mu.Lock()
-	a.resolvedBinaryPath = resolved.Path
-	a.resolvedBinaryEnv = env
-	a.binaryResolvedAt = time.Now()
-	a.mu.Unlock()
-
-	client := bridge.New(bridge.Options{
-		BinaryPath:     resolved.Path,
-		Env:            env,
-		Cwd:            cwd,
-		LogDir:         filepath.Join(a.userDataDir, "logs"),
-		RequestTimeout: 30 * time.Second,
-	})
-	ctx := a.ctx
-	client.OnEvent(func(event types.BridgeEvent) {
+	return func(event types.BridgeEvent) {
 		if strings.HasPrefix(event.Type, "bridge.") {
 			emit(ctx, bridgeEventChannel, event)
 			return
@@ -4384,7 +4362,168 @@ func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
 				}
 			}
 		}
+		a.reapRetiredBridge(client)
+	}
+}
+
+func (a *App) ensureBridge() (*bridge.Client, error) {
+	a.mu.Lock()
+	settingsValue := a.cachedSettings
+	a.mu.Unlock()
+	return a.ensureBridgeForCwd(a.effectiveWorkspaceDirForRuntime(settingsValue))
+}
+
+func (a *App) ensureBridgeForTask(taskID string) (*bridge.Client, error) {
+	if a.localStore == nil || strings.TrimSpace(taskID) == "" {
+		return a.ensureBridge()
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	workspacePath, ok, err := a.localStore.TaskWorkspacePath(ctx, taskID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok || strings.TrimSpace(workspacePath) == "" {
+		return a.ensureBridge()
+	}
+	cwd, err := cleanExistingWorkspaceDir(workspacePath)
+	if err != nil {
+		return nil, err
+	}
+	return a.ensureBridgeForCwd(cwd)
+}
+
+// retiredBridgeGrace bounds how long a replaced-but-busy child process may
+// linger. It matches bridge.DefaultTaskInvokeTimeout: past that point the task
+// would have timed out anyway, so the process is killed and its tasks are
+// reported as failed rather than leaking forever.
+const retiredBridgeGrace = 30 * time.Minute
+
+// retireBridge lets go of a bridge client that is no longer the active one.
+// An idle client is closed immediately; a client with tasks still in flight is
+// parked instead, keeping its process and event listeners alive so those tasks
+// reach the renderer and the local store normally. Closing it unconditionally
+// is what used to strand generations as permanently "running" whenever a second
+// task -- or any call resolving to a different cwd -- swapped the bridge out.
+func (a *App) retireBridge(client *bridge.Client) {
+	if client == nil {
+		return
+	}
+	if !client.HasActiveWork() {
+		client.Close()
+		return
+	}
+	a.mu.Lock()
+	a.retiredBridges = append(a.retiredBridges, client)
+	a.mu.Unlock()
+	time.AfterFunc(retiredBridgeGrace, func() { a.forceCloseRetiredBridge(client) })
+	// The client may have gone idle between the check and the append.
+	a.reapRetiredBridge(client)
+}
+
+// reapRetiredBridge closes a parked client once its last task finishes. It runs
+// from the client's own event listener, so every terminal event is a chance to
+// release the process.
+func (a *App) reapRetiredBridge(client *bridge.Client) {
+	if client == nil || client.HasActiveWork() {
+		return
+	}
+	if a.takeRetiredBridge(client) {
+		client.Close()
+	}
+}
+
+// forceCloseRetiredBridge drops a parked client that outlived the grace period.
+// Client.Close reports the still-running tasks as failed on its way out.
+func (a *App) forceCloseRetiredBridge(client *bridge.Client) {
+	if a.takeRetiredBridge(client) {
+		client.Close()
+	}
+}
+
+// takeRetiredBridge removes client from the parking lot, reporting whether this
+// call is the one that owns closing it.
+func (a *App) takeRetiredBridge(client *bridge.Client) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for i, parked := range a.retiredBridges {
+		if parked == client {
+			a.retiredBridges = append(a.retiredBridges[:i], a.retiredBridges[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+// bridgeForMetadata returns a client for calls that only read bridge-side state
+// (capabilities, image templates, the PPTist planner) and do not care about the
+// child process working directory. Reusing whichever client is already
+// connected keeps these calls from swapping the bridge out from under a task
+// that is still running.
+func (a *App) bridgeForMetadata() (*bridge.Client, error) {
+	a.mu.Lock()
+	client := a.bridgeClient
+	a.mu.Unlock()
+	if client != nil && client.Connected() {
+		return client, nil
+	}
+	return a.ensureBridge()
+}
+
+func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
+	a.mu.Lock()
+	if a.bridgeClient != nil && a.bridgeCwd == cwd {
+		client := a.bridgeClient
+		a.mu.Unlock()
+		if !client.Connected() {
+			if err := client.Start(a.ctx); err != nil {
+				return nil, err
+			}
+		}
+		return client, nil
+	}
+	if a.bridgeClient != nil {
+		client := a.bridgeClient
+		a.bridgeClient = nil
+		a.bridgeCwd = ""
+		a.mu.Unlock()
+		a.retireBridge(client)
+		a.mu.Lock()
+	}
+
+	settingsValue := a.cachedSettings
+	a.mu.Unlock()
+
+	resolved := binresolver.Resolve(a.resolverOptions(settingsValue))
+	if resolved.Source == binresolver.SourceFallback {
+		message := "OfficeCLI binary is not configured. Install it or set a Bridge binary path in Settings."
+		if a.ctx != nil {
+			emit(a.ctx, bridgeEventChannel, types.BridgeEvent{
+				Type:    "bridge.unconfigured",
+				Payload: map[string]any{"message": message},
+			})
+		}
+		return nil, errors.New(message)
+	}
+
+	env := appendPptxgenjsRuntimeEnv(llmProviderEnv(settingsValue), bundledPptxgenjsRuntimeEnv())
+
+	a.mu.Lock()
+	a.resolvedBinaryPath = resolved.Path
+	a.resolvedBinaryEnv = env
+	a.binaryResolvedAt = time.Now()
+	a.mu.Unlock()
+
+	client := bridge.New(bridge.Options{
+		BinaryPath:     resolved.Path,
+		Env:            env,
+		Cwd:            cwd,
+		LogDir:         filepath.Join(a.userDataDir, "logs"),
+		RequestTimeout: 30 * time.Second,
 	})
+	client.OnEvent(a.bridgeEventListener(client))
 
 	if err := client.Start(a.ctx); err != nil {
 		return nil, err
