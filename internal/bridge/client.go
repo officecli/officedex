@@ -41,6 +41,18 @@ const (
 	stderrTailBytes              = 8192
 )
 
+// StrandedTaskCode tags the synthetic task.failed events emitted when the child
+// process goes away while tasks are still running.
+const StrandedTaskCode = "BRIDGE_PROCESS_GONE"
+
+// taskInvokeMethod is the JSON-RPC method that starts a task.
+const taskInvokeMethod = "task/invoke"
+
+const (
+	strandedStoppedMessage = "OfficeCLI agent-bridge was stopped before this task finished. Please run it again."
+	strandedExitedMessage  = "OfficeCLI agent-bridge exited before this task finished. Please run it again."
+)
+
 // Options configures a new Client.
 //
 // Either BinaryPath or ResolveBinary should be set for the default transport
@@ -87,6 +99,14 @@ type Client struct {
 	initialized      bool
 	capabilities     bridgeCapabilities
 	logfile          *Logfile
+	// activeTasks holds the tasks whose completion still depends on this
+	// child process: killing it now strands them with no terminal event.
+	// Interactive waits (task.question / task.plan) are deliberately not
+	// counted, because the app replays those against a fresh process.
+	activeTasks map[string]struct{}
+	// pendingInvokes counts in-flight task/invoke calls, closing the window
+	// between "invoke written" and "task.started received".
+	pendingInvokes int
 }
 
 type bridgeCapabilities struct {
@@ -123,10 +143,11 @@ func New(opts Options) *Client {
 		opts.BaseReconnectDelay = DefaultBaseReconnectDelay
 	}
 	return &Client{
-		options:   opts,
-		nextID:    1,
-		pending:   make(map[string]*pendingRequest),
-		sessionID: "default",
+		options:     opts,
+		nextID:      1,
+		pending:     make(map[string]*pendingRequest),
+		sessionID:   "default",
+		activeTasks: make(map[string]struct{}),
 	}
 }
 
@@ -135,6 +156,79 @@ func (c *Client) Connected() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.transport != nil
+}
+
+// HasActiveWork reports whether killing the child process right now would
+// strand work: either a task/invoke is still in flight or a task has started
+// and not yet reached a terminal or interactive-wait state. Callers that swap
+// clients (see App.ensureBridgeForCwd) use this to keep a busy process alive
+// instead of orphaning its tasks.
+func (c *Client) HasActiveWork() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.pendingInvokes > 0 || len(c.activeTasks) > 0
+}
+
+// ActiveTaskIDs returns the tasks currently tracked as mid-flight. The order is
+// unspecified.
+func (c *Client) ActiveTaskIDs() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	ids := make([]string, 0, len(c.activeTasks))
+	for id := range c.activeTasks {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+// takeActiveTasks atomically drains the active set so a single stranded-task
+// notification wins the race between Stop and waitExit.
+func (c *Client) takeActiveTasks() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.activeTasks) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(c.activeTasks))
+	for id := range c.activeTasks {
+		ids = append(ids, id)
+	}
+	c.activeTasks = make(map[string]struct{})
+	return ids
+}
+
+// failStrandedTasks synthesizes a task.failed for every task the dead process
+// still owed an answer for. Without it those tasks keep their `running` status
+// forever and the UI spins with no way to recover.
+func (c *Client) failStrandedTasks(taskIDs []string, message string) {
+	for _, taskID := range taskIDs {
+		c.emitEvent(types.BridgeEvent{
+			TaskID: taskID,
+			Type:   "task.failed",
+			TS:     time.Now().UTC().Format(time.RFC3339Nano),
+			Payload: map[string]any{
+				"message":  message,
+				"code":     StrandedTaskCode,
+				"stranded": true,
+			},
+		})
+	}
+}
+
+// trackTaskEvent maintains activeTasks from the bridge's own event stream.
+func (c *Client) trackTaskEvent(event types.BridgeEvent) {
+	taskID := strings.TrimSpace(event.TaskID)
+	if taskID == "" || !strings.HasPrefix(event.Type, "task.") {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	switch event.Type {
+	case "task.completed", "task.failed", "task.cancelled", "task.question", "task.plan":
+		delete(c.activeTasks, taskID)
+	default:
+		c.activeTasks[taskID] = struct{}{}
+	}
 }
 
 // LogfileDroppedBytes returns the cumulative bytes dropped by the async logfile
@@ -235,6 +329,9 @@ func (c *Client) Stop() {
 	if transport != nil {
 		_ = transport.Kill()
 	}
+	// Emitted synchronously so Close (which detaches listeners right after
+	// Stop returns) still delivers the failures to the app.
+	c.failStrandedTasks(c.takeActiveTasks(), strandedStoppedMessage)
 }
 
 // Close stops the child process and additionally detaches all listeners so the
@@ -261,6 +358,18 @@ func (c *Client) Request(ctx context.Context, method string, params any) ([]byte
 }
 
 func (c *Client) requestWithTimeout(ctx context.Context, method string, params any, timeout time.Duration) ([]byte, error) {
+	if method == taskInvokeMethod {
+		c.mu.Lock()
+		c.pendingInvokes++
+		c.mu.Unlock()
+		defer func() {
+			c.mu.Lock()
+			if c.pendingInvokes > 0 {
+				c.pendingInvokes--
+			}
+			c.mu.Unlock()
+		}()
+	}
 	c.mu.Lock()
 	if c.transport == nil {
 		tail := strings.TrimSpace(c.stderrBuffer)
@@ -575,7 +684,7 @@ func (c *Client) InvokeGenerate(ctx context.Context, input types.GenerateInput) 
 	for k, v := range buildAttachmentArgs(input) {
 		args[k] = v
 	}
-	raw, err := c.requestWithTimeout(ctx, "task/invoke", map[string]any{
+	raw, err := c.requestWithTimeout(ctx, taskInvokeMethod, map[string]any{
 		"session_id":    sessionID,
 		"tool":          "office.generate",
 		"interactive":   interactive,
@@ -732,7 +841,7 @@ func (c *Client) InvokeModify(ctx context.Context, input types.ModifyInput) (Tas
 	if strings.TrimSpace(input.Style) != "" {
 		args["style"] = input.Style
 	}
-	raw, err := c.requestWithTimeout(ctx, "task/invoke", map[string]any{
+	raw, err := c.requestWithTimeout(ctx, taskInvokeMethod, map[string]any{
 		"session_id":    sessionID,
 		"tool":          "office.modify",
 		"interactive":   true,
@@ -1099,6 +1208,7 @@ func (c *Client) waitExit(transport Transport) {
 		}
 	}
 
+	c.failStrandedTasks(c.takeActiveTasks(), strandedExitedMessage)
 	c.emitExitEvent(code, signal, stderr)
 
 	if !c.options.DisableAutoReconnect && !stopped {
@@ -1245,6 +1355,7 @@ func (c *Client) afterReconnectFailure() {
 }
 
 func (c *Client) emitEvent(event types.BridgeEvent) {
+	c.trackTaskEvent(event)
 	c.mu.Lock()
 	listeners := make([]EventListener, len(c.listeners))
 	for i, e := range c.listeners {
