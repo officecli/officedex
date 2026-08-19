@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.9] - 2026-08-19
+
+### Fixed
+- Generating several documents in a row no longer leaves the earlier ones stuck on a spinner. Starting a new generation, opening the image template panel, or switching projects used to stop the OfficeCLI process that was still working on them.
+- Tasks interrupted by a quit, a settings change, or a crashed OfficeCLI process are now reported as failed instead of staying "in progress" forever, including tasks left over from a previous session.
+
 ## [0.5.37] - 2026-06-12
 
 ### Changed
