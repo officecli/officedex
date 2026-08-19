@@ -747,6 +747,34 @@ func (s *Store) QueryEventsByTask(ctx context.Context, taskID string) ([]types.B
 	return scanEvents(rows)
 }
 
+// QueryTaskIDsByStatus returns the ids of tasks currently stored with the given
+// status, oldest first.
+func (s *Store) QueryTaskIDsByStatus(ctx context.Context, status string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return nil, fmt.Errorf("localstore: not open")
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id FROM tasks WHERE status = ? ORDER BY updated_at ASC`, status)
+	if err != nil {
+		return nil, fmt.Errorf("localstore: query tasks by status: %w", err)
+	}
+	defer rows.Close()
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("localstore: scan task id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("localstore: iterate tasks by status: %w", err)
+	}
+	return ids, nil
+}
+
 // QueryRecentTaskIDs returns task ids ordered by tasks.updated_at ASC,
 // so callers can replay them chronologically (oldest first). The result is
 // capped at `limit` of the most recent rows; passing a non-positive limit
