@@ -6054,3 +6054,35 @@ describe("Bottom continuation composer — acceptance criteria", () => {
     expect(onContinueGeneration).toHaveBeenCalledWith("img", "Add a sunset", undefined, "square");
   });
 });
+
+describe("DialogueScreen solution catalog", () => {
+  it("offers scenario solutions with their output type and estimate", () => {
+    render(<DialogueScreen {...baseProps()} newGenerationDraft={{ documentType: "pptx", topic: "", prompt: "" }} />);
+
+    expect(screen.getByText("Weekly Business Review")).toBeTruthy();
+    expect(screen.getByText("Quarterly Business Review")).toBeTruthy();
+    expect(screen.getByText("Competitive One-pager")).toBeTruthy();
+
+    const card = screen.getByText("Weekly Business Review").closest("button");
+    expect(card).toBeTruthy();
+    expect(card?.querySelector(".fluid-prompt-meta")?.textContent).toContain("PPTX");
+    expect(card?.querySelector(".fluid-prompt-meta")?.textContent).toContain("2 min");
+  });
+
+  it("enters the solution workflow with its document type and prompt prefilled", () => {
+    const onNewGenerationDraftChange = vi.fn();
+    render(
+      <DialogueScreen
+        {...baseProps()}
+        newGenerationDraft={{ documentType: "pptx", topic: "", prompt: "" }}
+        onNewGenerationDraftChange={onNewGenerationDraftChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Competitive One-pager"));
+
+    expect(onNewGenerationDraftChange).toHaveBeenCalledWith(
+      expect.objectContaining({ documentType: "docx", topic: "Competitive One-pager" }),
+    );
+  });
+});

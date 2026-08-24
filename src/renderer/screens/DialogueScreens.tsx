@@ -29,6 +29,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 import { getAttachmentSpec } from "../../shared/types";
 import type { Artifact, BridgeEvent, DesktopTask, DocumentType, GenerateInput, GenerationMode, ImagePromptSlot, ImagePromptTemplate, ImageRatio, ModifyPptistDeckResult, StageState, VibeProjectTreeNode, VibeTreeSnapshot, WorkspaceSummary } from "../../shared/types";
 import { defaultGenerateInput, documentTypeOptions, normalizeNewGenerationDocumentType } from "../defaults";
+import { solutions } from "./solutions";
 import { useSettings } from "../useSettings";
 import { useAttachments } from "../useAttachments";
 import { officecli } from "../bridge";
@@ -836,21 +837,25 @@ function FluidNewGeneration({ draft, newChatNudgeKey, busy, workspaces, newChatT
           <>
             <p>{t("dialogue.startSubtitle")}</p>
             <div className="fluid-prompt-grid">
-              <button onClick={() => applyDraftPatch({ documentType: "report", topic: t("dialogue.preset.report.title"), prompt: t("dialogue.preset.report.desc") })}>
-                <MaterialSymbol name="analytics" />
-                <strong>{t("dialogue.preset.report.title")}</strong>
-                <span>{t("dialogue.preset.report.desc")}</span>
-              </button>
-              <button onClick={() => applyDraftPatch({ documentType: "pptx", topic: t("dialogue.preset.pptx.title"), prompt: t("dialogue.preset.pptx.desc") })}>
-                <MaterialSymbol name="present_to_all" />
-                <strong>{t("dialogue.preset.pptx.title")}</strong>
-                <span>{t("dialogue.preset.pptx.desc")}</span>
-              </button>
-              <button onClick={() => applyDraftPatch({ documentType: "xlsx", topic: t("dialogue.preset.xlsx.title"), prompt: t("dialogue.preset.xlsx.desc") })}>
-                <MaterialSymbol name="table_chart" />
-                <strong>{t("dialogue.preset.xlsx.title")}</strong>
-                <span>{t("dialogue.preset.xlsx.desc")}</span>
-              </button>
+              {solutions.map((solution) => {
+                const title = t(`dialogue.preset.${solution.id}.title`);
+                const description = t(`dialogue.preset.${solution.id}.desc`);
+                const outputLabel = documentTypeOptions.find((option) => option.value === solution.documentType)?.label ?? solution.documentType;
+                return (
+                  <button
+                    key={solution.id}
+                    onClick={() => applyDraftPatch({ documentType: solution.documentType, topic: title, prompt: description })}
+                  >
+                    <MaterialSymbol name={solution.icon} />
+                    <strong>{title}</strong>
+                    <span>{description}</span>
+                    <span className="fluid-prompt-meta">
+                      <span className="fluid-prompt-output">{outputLabel}</span>
+                      <span>{t("dialogue.solutionMeta.estimate").replace("{{minutes}}", String(solution.estimateMinutes))}</span>
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </>
         )}
