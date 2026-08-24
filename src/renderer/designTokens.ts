@@ -42,7 +42,7 @@ export const shimo = {
 /** @deprecated 历史名称，请改用 `shimo`。 */
 export const notion = shimo;
 
-const fontFamily = "'Inter', -apple-system, system-ui, 'Segoe UI', 'PingFang SC', sans-serif";
+const fontFamily = "'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', -apple-system, system-ui, 'Segoe UI', sans-serif";
 const fontFamilyHeading = "'Plus Jakarta Sans', -apple-system, system-ui, 'Segoe UI', 'PingFang SC', sans-serif";
 
 export const theme: ThemeConfig = {
@@ -59,31 +59,31 @@ export const theme: ThemeConfig = {
     colorBorder: shimo.hairline,
     colorBgBase: shimo.surfaceSoft,
     colorBgContainer: shimo.canvas,
-    borderRadius: 8,
+    borderRadius: 4,
     fontFamily,
   },
   components: {
     Button: {
-      controlHeight: 38,
-      borderRadius: 8,
+      controlHeight: 32,
+      borderRadius: 4,
       primaryShadow: "none",
       fontWeight: 500,
     },
     Input: {
-      borderRadius: 8,
-      controlHeight: 44,
-      activeShadow: `0 0 0 2px rgba(5, 16, 26, 0.08)`,
+      borderRadius: 4,
+      controlHeight: 32,
+      activeShadow: `0 0 0 2px rgba(93, 164, 227, 0.24)`,
     },
     Select: {
-      borderRadius: 8,
-      controlHeight: 38,
+      borderRadius: 4,
+      controlHeight: 32,
     },
     Table: {
       headerBg: shimo.surface,
       borderColor: shimo.hairline,
     },
     Tag: {
-      borderRadiusSM: 6,
+      borderRadiusSM: 4,
     },
     Tabs: {
       itemColor: shimo.steel,
