@@ -1,4 +1,4 @@
-import { act } from "@testing-library/react";
+import { act, cleanup } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { message, Modal } from "antd";
 import { afterEach } from "vitest";
@@ -34,6 +34,8 @@ Object.defineProperty(window, "getComputedStyle", {
 });
 
 afterEach(async () => {
+  // vitest runs with globals: false, so RTL cannot register its own auto-cleanup
+  cleanup();
   message.destroy();
   Modal.destroyAll();
   await act(async () => {

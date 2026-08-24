@@ -1,3 +1,12 @@
+> **[已废弃 / DEPRECATED]** 本文件是早期的 Notion 竞品视觉分析，**不是 OfficeDex 的设计规范**，请勿据此写 UI 代码。
+>
+> OfficeDex 的设计令牌以石墨 `weboffice-design` 为唯一来源：
+> - 颜色/字体/圆角/阴影：`weboffice-design/theme` 运行时注入的 `--ui-*` 变量
+> - 应用层语义别名：`src/renderer/ui/design-tokens.css` 中的 `--od-*`
+> - 组件：统一从 `@vo-ui/backend` 引入（接缝在 `src/renderer/ui/backend.ts`）
+>
+> 保留本文件仅为历史参考。
+
 ---
 version: alpha
 name: Notion-design-analysis
