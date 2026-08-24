@@ -159,3 +159,12 @@ describe("ui facade select adapter", () => {
     expect(onValueChange).toHaveBeenCalledWith("docx", expect.anything(), expect.anything());
   });
 });
+
+describe("ui facade select sizing", () => {
+  it("defaults to the 32px rhythm the app's other controls use", () => {
+    const { container } = render(
+      <Select aria-label="格式" value="pptx" options={[{ value: "pptx", label: "PowerPoint" }]} />,
+    );
+    expect(container.querySelector(".ui-select")?.getAttribute("data-size")).toBe("medium");
+  });
+});

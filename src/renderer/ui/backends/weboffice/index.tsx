@@ -178,12 +178,16 @@ export function Select<T extends NonNullable<WdSelectValue>>({
   onChange,
   onValueChange,
   "aria-label": nativeLabel,
+  // the design system's own default is `default` (28px); the app runs on the
+  // 32px rhythm its buttons and inputs use
+  size = "medium",
   ...rest
 }: UiSelectProps<T>) {
   const handler = onValueChange ?? onChange;
   return (
     <WdSelect
       {...(rest as WdSelectProps)}
+      size={size}
       ariaLabel={ariaLabel ?? nativeLabel}
       onValueChange={handler ? (value, option, event) => handler(value as T, option, event) : undefined}
     />
