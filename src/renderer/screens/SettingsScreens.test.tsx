@@ -248,10 +248,9 @@ describe("SettingsScreen", () => {
     render(<SettingsScreen />);
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
 
-    // antd Select: locate by current displayed label, click to open dropdown
     const trigger = await screen.findByText(/PowerPoint \(\.pptx\)/);
-    fireEvent.mouseDown(trigger);
-    const docxOption = await screen.findByText(/Word \(\.docx\)/);
+    fireEvent.click(trigger.closest("button") ?? trigger);
+    const docxOption = await screen.findByRole("menuitemradio", { name: /Word \(\.docx\)/ });
     fireEvent.click(docxOption);
 
     await waitFor(() => expect(updateSettingsSpy).toHaveBeenCalled());
@@ -426,7 +425,7 @@ describe("SettingsScreen", () => {
     // Select Custom endpoint to reveal the input fields (Official is default)
     // Ant Design Select: find the displayed value, click to open dropdown
     const officialLabel = await screen.findByText("Official");
-    fireEvent.mouseDown(officialLabel);
+    fireEvent.click(officialLabel.closest("button") ?? officialLabel);
 
     const customOption = await screen.findByText("Custom endpoint");
     fireEvent.click(customOption);
@@ -456,7 +455,7 @@ describe("SettingsScreen", () => {
     expect(onOpenLogin).toHaveBeenCalledTimes(1);
 
     const officialLabel = await screen.findByText("Official");
-    fireEvent.mouseDown(officialLabel);
+    fireEvent.click(officialLabel.closest("button") ?? officialLabel);
     const customOption = await screen.findByText("Custom endpoint");
     fireEvent.click(customOption);
 

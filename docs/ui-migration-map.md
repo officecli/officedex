@@ -66,3 +66,25 @@ rather than styling ones:
 The rule they share: do not mix libraries inside one composition chain. Both
 resolve once `Dropdown` migrates, or if the design system gains controlled
 tooltips.
+
+## Modal: blocked, not deferred
+
+Modal is deliberately left on AntD in full. The app uses it eleven times and
+weboffice-design's Dialog can only absorb three of them:
+
+- Six are `Modal.confirm()` / `Modal.info()`. Dialog is declarative only — there
+  is no imperative equivalent, so these need a confirm service (a provider plus
+  a promise-returning hook) before they can move. That is a product decision
+  about how confirmations behave app-wide, not a mechanical swap.
+- Two are image lightboxes using `width="auto"` with zero body padding. Dialog
+  sizes are a fixed enum (`small` … `xxlarge`) with no auto width.
+- The remaining three (publish template, report issue, paste JSON) would map
+  cleanly.
+
+Migrating only those three would leave three dialog implementations in one app,
+which is worse than the current two. Revisit when the confirm service is built,
+and move all eleven together.
+
+Consequence for tests: the thirteen assertions on `.ant-modal-confirm-btns` are
+all against `Modal.confirm()`, so they stay valid and are not cleanup targets
+for any partial migration.

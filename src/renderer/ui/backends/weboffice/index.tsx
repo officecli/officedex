@@ -1,12 +1,15 @@
 import { forwardRef } from "react";
+import type * as React from "react";
 import { Button as WdButton } from "weboffice-design/button";
 import { Tooltip as WdTooltip } from "weboffice-design/tooltip";
 import { Switch as WdSwitch } from "weboffice-design/switch";
 import { Loading as WdLoading } from "weboffice-design/loading";
+import { Select as WdSelect } from "weboffice-design/select";
 import type { ButtonSize, ButtonVariant } from "weboffice-design/button";
 import type { TooltipPlacement, TooltipProps as WdTooltipProps } from "weboffice-design/tooltip";
 import type { SwitchProps as WdSwitchProps } from "weboffice-design/switch";
 import type { LoadingProps as WdLoadingProps, LoadingSize } from "weboffice-design/loading";
+import type { SelectProps as WdSelectProps } from "weboffice-design/select";
 import type { UiButtonProps, UiButtonSize, UiButtonType } from "../../types";
 
 export { Checkbox } from "weboffice-design/checkbox";
@@ -17,14 +20,12 @@ export { Input } from "weboffice-design/input";
 export { InputNumber } from "weboffice-design/input-number";
 export { Menu } from "weboffice-design/menu";
 export { MessageBar } from "weboffice-design/message-bar";
-export { Select } from "weboffice-design/select";
 export { RadioGroup } from "weboffice-design/radio-group";
 export { Radio } from "weboffice-design/radio";
 export { Tabs } from "weboffice-design/tabs";
 export { Toast } from "weboffice-design/toast";
 
 export type { InputProps } from "weboffice-design/input";
-export type { SelectOption, SelectProps, SelectValue } from "weboffice-design/select";
 export type { SwitchProps } from "weboffice-design/switch";
 export type { RadioGroupProps } from "weboffice-design/radio-group";
 export type { LoadingProps } from "weboffice-design/loading";
@@ -153,3 +154,38 @@ export function Loading({ size, ...rest }: UiLoadingProps) {
 
 /** AntD's spinner name, kept so call sites migrate by import alone. */
 export const Spin = Loading;
+
+type WdSelectOption = WdSelectProps["options"][number];
+type WdSelectValue = WdSelectProps["value"];
+
+/**
+ * Kept generic over the option value so call sites can go on annotating their
+ * own unions (`DocumentType`, `Locale`, …) the way AntD's Select allowed.
+ */
+export interface UiSelectProps<T extends NonNullable<WdSelectValue> = NonNullable<WdSelectValue>>
+  extends Omit<WdSelectProps, "ariaLabel" | "value" | "options" | "onValueChange"> {
+  readonly ariaLabel?: string;
+  readonly "aria-label"?: string;
+  readonly value?: T | null;
+  readonly options: readonly (Omit<WdSelectOption, "value"> & { readonly value: T })[];
+  /** AntD's callback name; the design system spells it `onValueChange`. */
+  readonly onChange?: (value: T, option: WdSelectOption, event: React.MouseEvent<HTMLButtonElement>) => void;
+  readonly onValueChange?: (value: T, option: WdSelectOption, event: React.MouseEvent<HTMLButtonElement>) => void;
+}
+
+export function Select<T extends NonNullable<WdSelectValue>>({
+  ariaLabel,
+  onChange,
+  onValueChange,
+  "aria-label": nativeLabel,
+  ...rest
+}: UiSelectProps<T>) {
+  const handler = onValueChange ?? onChange;
+  return (
+    <WdSelect
+      {...(rest as WdSelectProps)}
+      ariaLabel={ariaLabel ?? nativeLabel}
+      onValueChange={handler ? (value, option, event) => handler(value as T, option, event) : undefined}
+    />
+  );
+}

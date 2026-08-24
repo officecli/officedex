@@ -135,7 +135,7 @@ describe("OnboardingScreen", () => {
     // Select Custom endpoint to reveal the input fields (Official is default)
     // Ant Design Select: find the displayed value, click to open dropdown
     const officialLabel = await screen.findByText("Official");
-    fireEvent.mouseDown(officialLabel);
+    fireEvent.click(officialLabel.closest("button") ?? officialLabel);
 
     const customOption = await screen.findByText("Custom endpoint");
     fireEvent.click(customOption);
@@ -160,7 +160,7 @@ describe("OnboardingScreen", () => {
     expect(await screen.findByText(/sign in to use custom endpoints/i)).toBeTruthy();
 
     const officialLabel = await screen.findByText("Official");
-    fireEvent.mouseDown(officialLabel);
+    fireEvent.click(officialLabel.closest("button") ?? officialLabel);
     const customOption = await screen.findByText("Custom endpoint");
     fireEvent.click(customOption);
 

@@ -1,4 +1,5 @@
-import { Select, Space } from "antd";
+import { Space } from "antd";
+import { Select } from "@vo-ui/backend";
 import { providerPresets } from "../providerPresets";
 import { useT } from "../i18n";
 import type { LlmProvider, ProviderTestResult } from "../../shared/types";

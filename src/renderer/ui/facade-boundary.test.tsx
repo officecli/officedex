@@ -132,3 +132,30 @@ describe("ui facade switch and spin adapters", () => {
     expect(document.querySelector(".ui-loading")).toBeTruthy();
   });
 });
+
+describe("ui facade select adapter", () => {
+  const options = [
+    { value: "pptx", label: "PowerPoint" },
+    { value: "docx", label: "Word" },
+  ];
+
+  it("reports selection through the legacy onChange signature", () => {
+    const onChange = vi.fn();
+    render(<Select aria-label="默认格式" value="pptx" options={options} onChange={onChange} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /默认格式/ }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Word" }));
+
+    expect(onChange).toHaveBeenCalledWith("docx", expect.anything(), expect.anything());
+  });
+
+  it("keeps the design-system callback working", () => {
+    const onValueChange = vi.fn();
+    render(<Select ariaLabel="格式" value="pptx" options={options} onValueChange={onValueChange} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /格式/ }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Word" }));
+
+    expect(onValueChange).toHaveBeenCalledWith("docx", expect.anything(), expect.anything());
+  });
+});

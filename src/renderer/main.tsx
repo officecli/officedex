@@ -30,8 +30,13 @@ function isPptistPerfRoute() {
 // before the first render so `ui/design-tokens.css` can resolve `--od-*`.
 mountTheme();
 
+// Rendered without StrictMode: weboffice-design 0.18.0's layered components do
+// not survive its double mount — the dropdown layer is torn down by the first
+// effect cleanup and never re-registers, so every Select stops opening in dev.
+// src/renderer/ui/strictmode-select.test.tsx pins this down and will fail once
+// upstream fixes it, which is the signal to restore StrictMode.
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <StrictMode>
+  <>
     <LocaleProvider>
       {isOfflinePreviewRoute() ? (
         <Suspense>
@@ -43,5 +48,5 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <App />
       )}
     </LocaleProvider>
-  </StrictMode>,
+  </>,
 );

@@ -18,24 +18,50 @@ import type { Plugin } from "vite";
 const JSX_RUNTIME_CHUNK = /weboffice-design[\\/]dist[\\/]assets[\\/]jsx-runtime-[\w-]+\.js$/;
 const DOM_CLIENT_CHUNK = /weboffice-design[\\/]dist[\\/]assets[\\/]client-[\w-]+\.js$/;
 
+const JSX_RUNTIME_SHIM = [
+  'import { Fragment, jsx, jsxs } from "react/jsx-runtime";',
+  "export const j = { Fragment, jsx, jsxs };",
+].join("\n");
+
+const DOM_CLIENT_SHIM = [
+  'import { createRoot, hydrateRoot } from "react-dom/client";',
+  "export const c = { createRoot, hydrateRoot };",
+].join("\n");
+
 export function webofficeDesignReact19(): Plugin {
   return {
     name: "weboffice-design-react19-runtime",
     enforce: "pre",
+    config() {
+      // The same rewrite has to happen during dependency pre-bundling. Excluding
+      // weboffice-design instead would leave it importing an unversioned
+      // `react.js`, which the browser loads as a second React instance — state
+      // updates inside the design system's components then never reach the app.
+      return {
+        optimizeDeps: {
+          esbuildOptions: {
+            plugins: [
+              {
+                name: "weboffice-design-react19-prebundle",
+                setup(build: {
+                  onLoad: (
+                    options: { filter: RegExp },
+                    callback: () => { contents: string; loader: "js" },
+                  ) => void;
+                }) {
+                  build.onLoad({ filter: JSX_RUNTIME_CHUNK }, () => ({ contents: JSX_RUNTIME_SHIM, loader: "js" }));
+                  build.onLoad({ filter: DOM_CLIENT_CHUNK }, () => ({ contents: DOM_CLIENT_SHIM, loader: "js" }));
+                },
+              },
+            ],
+          },
+        },
+      };
+    },
     load(id) {
       const file = id.split("?")[0];
-      if (JSX_RUNTIME_CHUNK.test(file)) {
-        return [
-          'import { Fragment, jsx, jsxs } from "react/jsx-runtime";',
-          "export const j = { Fragment, jsx, jsxs };",
-        ].join("\n");
-      }
-      if (DOM_CLIENT_CHUNK.test(file)) {
-        return [
-          'import { createRoot, hydrateRoot } from "react-dom/client";',
-          "export const c = { createRoot, hydrateRoot };",
-        ].join("\n");
-      }
+      if (JSX_RUNTIME_CHUNK.test(file)) return JSX_RUNTIME_SHIM;
+      if (DOM_CLIENT_CHUNK.test(file)) return DOM_CLIENT_SHIM;
       return null;
     },
   };

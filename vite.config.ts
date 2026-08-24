@@ -20,10 +20,6 @@ export default defineConfig({
     alias,
     dedupe: ["react", "react-dom"],
   },
-  optimizeDeps: {
-    // the react19 shim above runs as a vite plugin, which esbuild pre-bundling would bypass
-    exclude: ["weboffice-design"],
-  },
   server: realE2E && !realE2EHMR ? { hmr: false } : undefined,
   build: {
     outDir: "dist",
