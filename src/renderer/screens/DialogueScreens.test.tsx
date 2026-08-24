@@ -6086,3 +6086,51 @@ describe("DialogueScreen solution catalog", () => {
     );
   });
 });
+
+describe("DialogueScreen intent entry", () => {
+  it("separates one-line creation types from the scenario solutions", () => {
+    render(<DialogueScreen {...baseProps()} newGenerationDraft={{ documentType: "pptx", topic: "", prompt: "" }} />);
+
+    const creation = document.querySelector(".fluid-create-grid")!;
+    const scenarios = document.querySelector(".fluid-prompt-grid")!;
+    expect(within(creation as HTMLElement).getByText("Write a deck")).toBeTruthy();
+    expect(within(scenarios as HTMLElement).getByText("Weekly Business Review")).toBeTruthy();
+  });
+
+  it("states how often each solution has been run", () => {
+    render(<DialogueScreen {...baseProps()} newGenerationDraft={{ documentType: "pptx", topic: "", prompt: "" }} />);
+
+    const card = screen.getByText("Weekly Business Review").closest("button");
+    expect(card?.querySelector(".fluid-prompt-meta")?.textContent).toMatch(/24/);
+  });
+
+  it("routes a typed intent into the solution it matches", () => {
+    const onNewGenerationDraftChange = vi.fn();
+    render(
+      <DialogueScreen
+        {...baseProps()}
+        newGenerationDraft={{ documentType: "pptx", topic: "", prompt: "" }}
+        onNewGenerationDraftChange={onNewGenerationDraftChange}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText(/describe what you want delivered/i), {
+      target: { value: "put together a competitive one-pager" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^Deliver$/ }));
+
+    expect(onNewGenerationDraftChange).toHaveBeenCalledWith(
+      expect.objectContaining({ documentType: "docx", topic: "put together a competitive one-pager" }),
+    );
+  });
+
+  it("offers example intents that fill the box", () => {
+    render(<DialogueScreen {...baseProps()} newGenerationDraft={{ documentType: "pptx", topic: "", prompt: "" }} />);
+
+    const example = document.querySelector(".fluid-intent-examples button")!;
+    fireEvent.click(example);
+
+    expect((screen.getByPlaceholderText(/describe what you want delivered/i) as HTMLInputElement).value)
+      .toBe(example.textContent);
+  });
+});

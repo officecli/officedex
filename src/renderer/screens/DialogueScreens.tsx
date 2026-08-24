@@ -30,7 +30,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 import { getAttachmentSpec } from "../../shared/types";
 import type { Artifact, BridgeEvent, DesktopTask, DocumentType, GenerateInput, GenerationMode, ImagePromptSlot, ImagePromptTemplate, ImageRatio, ModifyPptistDeckResult, StageState, VibeProjectTreeNode, VibeTreeSnapshot, WorkspaceSummary } from "../../shared/types";
 import { defaultGenerateInput, documentTypeOptions, normalizeNewGenerationDocumentType } from "../defaults";
-import { solutions } from "./solutions";
+import { creationSolutions, matchSolution, scenarioSolutions, type Solution } from "./solutions";
 import { useSettings } from "../useSettings";
 import { useAttachments } from "../useAttachments";
 import { officecli } from "../bridge";
@@ -366,6 +366,68 @@ export function DialogueScreen({ tasks, newGenerationDraft, newChatNudgeKey = 0,
   return <ConversationView tasks={tasks} onPreview={onPreview} onForceCancel={onForceCancel} onContinueGeneration={onContinueGeneration} onContinueModify={onContinueModify} onRetryTask={onRetryTask} onOpenLogin={onOpenLogin} />;
 }
 
+
+function IntentBox({ value, onValueChange, onSubmit, t }: {
+  value: string;
+  onValueChange: (next: string) => void;
+  onSubmit: (text: string) => void;
+  t: (key: string) => string;
+}) {
+  const submit = () => {
+    const text = value.trim();
+    if (text) onSubmit(text);
+  };
+  const examples = ["1", "2", "3", "4"].map((n) => t(`dialogue.intent.example.${n}`));
+  return (
+    <div className="fluid-intent">
+      <div className="fluid-intent-box">
+        <MaterialSymbol name="auto_awesome" />
+        <input
+          value={value}
+          placeholder={t("dialogue.intent.placeholder")}
+          onChange={(event) => onValueChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              submit();
+            }
+          }}
+        />
+        <Button type="primary" onClick={submit}>{t("dialogue.intent.submit")}</Button>
+      </div>
+      <div className="fluid-intent-examples">
+        {examples.map((example) => (
+          <button key={example} type="button" onClick={() => onValueChange(example)}>{example}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SolutionCard({ solution, compact, onPick, t }: {
+  solution: Solution;
+  compact?: boolean;
+  onPick: (patch: { documentType: DocumentType; topic: string; prompt: string }) => void;
+  t: (key: string) => string;
+}) {
+  const title = t(`dialogue.preset.${solution.id}.title`);
+  const description = t(`dialogue.preset.${solution.id}.desc`);
+  const outputLabel =
+    documentTypeOptions.find((option) => option.value === solution.documentType)?.label ?? solution.documentType;
+  return (
+    <button onClick={() => onPick({ documentType: solution.documentType, topic: title, prompt: description })}>
+      <MaterialSymbol name={solution.icon} />
+      <strong>{title}</strong>
+      {compact ? null : <span>{description}</span>}
+      <span className="fluid-prompt-meta">
+        <span className="fluid-prompt-output">{outputLabel}</span>
+        <span>{t("dialogue.solutionMeta.estimate").replace("{{minutes}}", String(solution.estimateMinutes))}</span>
+        <span>{t("dialogue.solutionMeta.runs").replace("{{count}}", String(solution.runs))}</span>
+      </span>
+    </button>
+  );
+}
+
 function FluidNewGeneration({ draft, newChatNudgeKey, busy, workspaces, newChatTarget, onSubmit, onDraftChange, onNewChatTargetChange, onAddWorkspace }: {
   draft: NewGenerationDraft;
   newChatNudgeKey: number;
@@ -377,6 +439,7 @@ function FluidNewGeneration({ draft, newChatNudgeKey, busy, workspaces, newChatT
   onNewChatTargetChange: (target: NewChatTarget) => void;
   onAddWorkspace: () => void;
 }) {
+  const [intent, setIntent] = useState("");
   const [form] = Form.useForm<GenerateInput>();
   const { settings } = useSettings();
   const t = useT();
@@ -837,26 +900,31 @@ function FluidNewGeneration({ draft, newChatNudgeKey, busy, workspaces, newChatT
         ) : (
           <>
             <p>{t("dialogue.startSubtitle")}</p>
+            <IntentBox
+              value={intent}
+              onValueChange={setIntent}
+              onSubmit={(text) => {
+                const solution = matchSolution(text);
+                applyDraftPatch({
+                  documentType: solution.documentType,
+                  topic: text,
+                  prompt: t(`dialogue.preset.${solution.id}.desc`),
+                });
+                setIntent("");
+              }}
+              t={t}
+            />
+            <div className="fluid-group-label">{t("dialogue.group.create")}</div>
+            <div className="fluid-create-grid">
+              {creationSolutions.map((solution) => (
+                <SolutionCard key={solution.id} solution={solution} compact onPick={applyDraftPatch} t={t} />
+              ))}
+            </div>
+            <div className="fluid-group-label">{t("dialogue.group.scenarios")}</div>
             <div className="fluid-prompt-grid">
-              {solutions.map((solution) => {
-                const title = t(`dialogue.preset.${solution.id}.title`);
-                const description = t(`dialogue.preset.${solution.id}.desc`);
-                const outputLabel = documentTypeOptions.find((option) => option.value === solution.documentType)?.label ?? solution.documentType;
-                return (
-                  <button
-                    key={solution.id}
-                    onClick={() => applyDraftPatch({ documentType: solution.documentType, topic: title, prompt: description })}
-                  >
-                    <MaterialSymbol name={solution.icon} />
-                    <strong>{title}</strong>
-                    <span>{description}</span>
-                    <span className="fluid-prompt-meta">
-                      <span className="fluid-prompt-output">{outputLabel}</span>
-                      <span>{t("dialogue.solutionMeta.estimate").replace("{{minutes}}", String(solution.estimateMinutes))}</span>
-                    </span>
-                  </button>
-                );
-              })}
+              {scenarioSolutions.map((solution) => (
+                <SolutionCard key={solution.id} solution={solution} onPick={applyDraftPatch} t={t} />
+              ))}
             </div>
           </>
         )}
