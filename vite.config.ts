@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
+import { webofficeDesignPalette } from "./scripts/vite/weboffice-design-palette";
 import { webofficeDesignReact19 } from "./scripts/vite/weboffice-design-react19";
 
 const realE2E = Boolean(process.env.VITE_OFFICEDEX_REAL_E2E_ENDPOINT);
@@ -13,7 +14,7 @@ const alias = [
 ];
 
 export default defineConfig({
-  plugins: [webofficeDesignReact19(), react()],
+  plugins: [webofficeDesignReact19(), webofficeDesignPalette(), react()],
   root: ".",
   base: "./",
   resolve: {
