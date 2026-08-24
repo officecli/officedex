@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Tag, Tooltip } from "antd";
+import { Tag } from "antd";
+import { Tooltip } from "@vo-ui/backend";
 import { ThunderboltOutlined, CloudOutlined, ClockCircleOutlined } from "@ant-design/icons";
 import { officecli } from "../bridge";
 import { useT } from "../i18n";

@@ -219,6 +219,8 @@ export function Shell({
       <main className="main-frame">
         <header className="topbar">
           <div className="topbar-sidebar-slot">
+            {/* stays on AntD: weboffice-design has no controlled `open`,
+                and this tooltip must be forced shut when the button is clicked */}
             <Tooltip
               title={sidebarToggleLabel}
               placement="bottom"

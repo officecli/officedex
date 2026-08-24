@@ -1,6 +1,8 @@
 import { forwardRef } from "react";
 import { Button as WdButton } from "weboffice-design/button";
+import { Tooltip as WdTooltip } from "weboffice-design/tooltip";
 import type { ButtonSize, ButtonVariant } from "weboffice-design/button";
+import type { TooltipPlacement, TooltipProps as WdTooltipProps } from "weboffice-design/tooltip";
 import type { UiButtonProps, UiButtonSize, UiButtonType } from "../../types";
 
 export { Checkbox } from "weboffice-design/checkbox";
@@ -18,13 +20,13 @@ export { Radio } from "weboffice-design/radio";
 export { Loading } from "weboffice-design/loading";
 export { Tabs } from "weboffice-design/tabs";
 export { Toast } from "weboffice-design/toast";
-export { Tooltip } from "weboffice-design/tooltip";
 
 export type { InputProps } from "weboffice-design/input";
 export type { SelectOption, SelectProps, SelectValue } from "weboffice-design/select";
 export type { SwitchProps } from "weboffice-design/switch";
 export type { RadioGroupProps } from "weboffice-design/radio-group";
 export type { LoadingProps } from "weboffice-design/loading";
+export type { TooltipPlacement } from "weboffice-design/tooltip";
 export type { CheckboxProps } from "weboffice-design/checkbox";
 export type { DialogProps } from "weboffice-design/dialog";
 export type { DropdownProps } from "weboffice-design/dropdown";
@@ -82,3 +84,36 @@ export const Button = forwardRef<HTMLButtonElement, UiButtonProps>(function Butt
     />
   );
 });
+
+/**
+ * AntD names the four cardinal placements `top`/`bottom`/`left`/`right`;
+ * weboffice-design spells the same alignments `topCenter` and friends. Corner
+ * placements already share a name.
+ */
+const TOOLTIP_PLACEMENT_ALIASES: Record<string, TooltipPlacement> = {
+  top: "topCenter",
+  bottom: "bottomCenter",
+  left: "leftCenter",
+  right: "rightCenter",
+};
+
+export function toTooltipPlacement(placement?: string): TooltipPlacement | undefined {
+  if (!placement) return undefined;
+  return TOOLTIP_PLACEMENT_ALIASES[placement] ?? (placement as TooltipPlacement);
+}
+
+export interface UiTooltipProps extends Omit<WdTooltipProps, "content" | "placement"> {
+  /** AntD's name for the tooltip body. */
+  readonly title?: WdTooltipProps["content"];
+  readonly content?: WdTooltipProps["content"];
+  readonly placement?: string;
+}
+
+export function Tooltip({ title, content, placement, children, ...rest }: UiTooltipProps) {
+  const body = content ?? title ?? "";
+  return (
+    <WdTooltip {...rest} content={body} placement={toTooltipPlacement(placement)}>
+      {children}
+    </WdTooltip>
+  );
+}

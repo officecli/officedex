@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { Tooltip } from "antd";
+import { Tooltip } from "@vo-ui/backend";
 import { BarChartOutlined, PictureOutlined } from "@ant-design/icons";
 import type { VibeProjectTreeNode, VibeVisualAsset } from "../../shared/types";
 import { workerSetTimeout, workerClearTimeout } from "../workerTimer";

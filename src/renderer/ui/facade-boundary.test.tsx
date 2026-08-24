@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { Button, Input, Loading, RadioGroup, Select, Switch } from "./index";
+import { Button, Input, Loading, RadioGroup, Select, Switch, Tooltip, toTooltipPlacement } from "./index";
 
 describe("ui facade backed by weboffice-design", () => {
   it("renders a primary button and forwards clicks", () => {
@@ -78,5 +78,25 @@ describe("ui facade button contract details", () => {
   it("stretches a block button to fill its container", () => {
     const { container } = render(<Button block>宽按钮</Button>);
     expect(container.querySelector("button")?.style.width).toBe("100%");
+  });
+});
+
+describe("ui facade tooltip", () => {
+  it("renders its trigger and accepts the legacy title prop", () => {
+    render(
+      <Tooltip title="保存草稿">
+        <button type="button">保存</button>
+      </Tooltip>,
+    );
+    expect(screen.getByRole("button", { name: "保存" })).toBeTruthy();
+  });
+
+  it("translates AntD placements onto the design-system alignment names", () => {
+    expect(toTooltipPlacement("top")).toBe("topCenter");
+    expect(toTooltipPlacement("bottom")).toBe("bottomCenter");
+    expect(toTooltipPlacement("right")).toBe("rightCenter");
+    expect(toTooltipPlacement("left")).toBe("leftCenter");
+    expect(toTooltipPlacement("bottomRight")).toBe("bottomRight");
+    expect(toTooltipPlacement(undefined)).toBeUndefined();
   });
 });

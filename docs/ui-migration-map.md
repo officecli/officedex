@@ -48,3 +48,21 @@
 读取 React 19 已移除的 `__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED`。
 `scripts/vite/weboffice-design-react19.ts` 负责把这两个 chunk 换成宿主 React 运行时；
 上游发布 React 19 兼容版本后即可删除该插件与 `vite.config.ts` 中的 `optimizeDeps.exclude`。
+
+## Call sites that stay on AntD
+
+Two Tooltips are deliberately left behind, and both are composition problems
+rather than styling ones:
+
+- `components/Shell.tsx` — the sidebar toggle drives its tooltip with `open` /
+  `onOpenChange` so it can force it shut on click. weboffice-design's Tooltip is
+  uncontrolled (`onWillOpen` / `onClose` hooks only), so mapping this would
+  silently lose the force-close.
+- `components/HistoryList.tsx` — the tooltip sits inside an AntD `Dropdown`,
+  which hands its trigger props to its child and relies on an AntD Tooltip to
+  pass them through to the button. A weboffice Tooltip swallows them and the
+  dropdown stops opening.
+
+The rule they share: do not mix libraries inside one composition chain. Both
+resolve once `Dropdown` migrates, or if the design system gains controlled
+tooltips.

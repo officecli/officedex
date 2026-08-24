@@ -119,6 +119,8 @@ export function HistoryList({ workspaces, chats, activeWorkspaceId, selectedConv
     <div className="history-list" ref={scrollRef}>
       <div className="history-list-header">
         {!collapsed && <span className="history-list-title">{t("shell.projects.title")}</span>}
+        {/* Tooltip stays on AntD here: AntD Dropdown hands its trigger props to its
+            child, and only an AntD Tooltip passes them through to the button */}
         {!collapsed && (
           <Dropdown menu={addProjectMenu} trigger={["click"]}>
             <Tooltip title={t("shell.projects.add")}>
