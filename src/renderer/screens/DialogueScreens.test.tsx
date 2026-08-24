@@ -5478,14 +5478,14 @@ describe("DialogueScreen state machine", () => {
     expect(within(header as HTMLElement).queryByText(/^Image templates$/i)).toBeNull();
   });
 
-  it("shows an antd spinner and loading text while image templates are pending", async () => {
+  it("shows a spinner and loading text while image templates are pending", async () => {
     const pending = deferred<Awaited<ReturnType<DesktopAPI["listImageTemplates"]>>>();
     listImageTemplatesSpy.mockReturnValueOnce(pending.promise);
     render(<DialogueScreen {...baseProps()} newGenerationDraft={{ documentType: "img", topic: "", prompt: "" }} />);
 
-    expect(document.querySelector(".ant-spin")).toBeTruthy();
     const loadingStatus = document.querySelector(".image-template-status")!;
-    const loadingText = Array.from(loadingStatus.children).find((child) => !child.classList.contains("ant-spin"));
+    expect(loadingStatus.querySelector(".ui-loading")).toBeTruthy();
+    const loadingText = Array.from(loadingStatus.children).find((child) => !child.classList.contains("ui-loading"));
     expect(loadingText?.textContent).toBe("Loading image templates…");
 
     await act(async () => {

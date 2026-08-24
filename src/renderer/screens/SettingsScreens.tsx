@@ -1,5 +1,5 @@
-import { Modal, Progress, Select, Space, Spin, Switch, Tag, message } from "antd";
-import { Button } from "@vo-ui/backend";
+import { Modal, Progress, Select, Space, Tag, message } from "antd";
+import { Button, Spin, Switch } from "@vo-ui/backend";
 import {
   CommentOutlined,
   CopyOutlined,

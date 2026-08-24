@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { Button, Input, Loading, RadioGroup, Select, Switch, Tooltip, toTooltipPlacement } from "./index";
+import { Button, Input, Loading, RadioGroup, Select, Spin, Switch, Tooltip, toLoadingSize, toTooltipPlacement } from "./index";
 
 describe("ui facade backed by weboffice-design", () => {
   it("renders a primary button and forwards clicks", () => {
@@ -98,5 +98,37 @@ describe("ui facade tooltip", () => {
     expect(toTooltipPlacement("left")).toBe("leftCenter");
     expect(toTooltipPlacement("bottomRight")).toBe("bottomRight");
     expect(toTooltipPlacement(undefined)).toBeUndefined();
+  });
+});
+
+describe("ui facade switch and spin adapters", () => {
+  it("reports switch changes through the legacy onChange signature", () => {
+    const onChange = vi.fn();
+    render(<Switch aria-label="启用配图" checked={false} onChange={onChange} />);
+
+    fireEvent.click(screen.getByRole("switch", { name: "启用配图" }));
+
+    expect(onChange).toHaveBeenCalledWith(true, expect.anything());
+  });
+
+  it("still supports the design-system switch callback", () => {
+    const onCheckedChange = vi.fn();
+    render(<Switch ariaLabel="水印" checked onCheckedChange={onCheckedChange} />);
+
+    fireEvent.click(screen.getByRole("switch", { name: "水印" }));
+
+    expect(onCheckedChange).toHaveBeenCalledWith(false, expect.anything());
+  });
+
+  it("maps AntD spinner sizes onto the design-system loading sizes", () => {
+    expect(toLoadingSize("small")).toBe("small");
+    expect(toLoadingSize("default")).toBe("medium");
+    expect(toLoadingSize("large")).toBe("large");
+    expect(toLoadingSize(undefined)).toBe("medium");
+  });
+
+  it("renders a spinner for the legacy Spin call shape", () => {
+    render(<Spin size="small" />);
+    expect(document.querySelector(".ui-loading")).toBeTruthy();
   });
 });

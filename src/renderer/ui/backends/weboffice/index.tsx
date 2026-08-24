@@ -1,8 +1,12 @@
 import { forwardRef } from "react";
 import { Button as WdButton } from "weboffice-design/button";
 import { Tooltip as WdTooltip } from "weboffice-design/tooltip";
+import { Switch as WdSwitch } from "weboffice-design/switch";
+import { Loading as WdLoading } from "weboffice-design/loading";
 import type { ButtonSize, ButtonVariant } from "weboffice-design/button";
 import type { TooltipPlacement, TooltipProps as WdTooltipProps } from "weboffice-design/tooltip";
+import type { SwitchProps as WdSwitchProps } from "weboffice-design/switch";
+import type { LoadingProps as WdLoadingProps, LoadingSize } from "weboffice-design/loading";
 import type { UiButtonProps, UiButtonSize, UiButtonType } from "../../types";
 
 export { Checkbox } from "weboffice-design/checkbox";
@@ -14,10 +18,8 @@ export { InputNumber } from "weboffice-design/input-number";
 export { Menu } from "weboffice-design/menu";
 export { MessageBar } from "weboffice-design/message-bar";
 export { Select } from "weboffice-design/select";
-export { Switch } from "weboffice-design/switch";
 export { RadioGroup } from "weboffice-design/radio-group";
 export { Radio } from "weboffice-design/radio";
-export { Loading } from "weboffice-design/loading";
 export { Tabs } from "weboffice-design/tabs";
 export { Toast } from "weboffice-design/toast";
 
@@ -117,3 +119,37 @@ export function Tooltip({ title, content, placement, children, ...rest }: UiTool
     </WdTooltip>
   );
 }
+
+export interface UiSwitchProps extends Omit<WdSwitchProps, "ariaLabel"> {
+  readonly ariaLabel?: string;
+  /** AntD's callback shape; the design system omits the native attribute too. */
+  readonly onChange?: WdSwitchProps["onCheckedChange"];
+  readonly "aria-label"?: string;
+}
+
+export function Switch({ ariaLabel, onChange, onCheckedChange, "aria-label": nativeLabel, ...rest }: UiSwitchProps) {
+  return (
+    <WdSwitch
+      {...rest}
+      ariaLabel={ariaLabel ?? nativeLabel}
+      onCheckedChange={onCheckedChange ?? onChange}
+    />
+  );
+}
+
+/** AntD spinners are `small | default | large`; the design system adds `mini`. */
+export function toLoadingSize(size?: string): LoadingSize {
+  if (size === "small" || size === "large" || size === "mini") return size;
+  return "medium";
+}
+
+export interface UiLoadingProps extends Omit<WdLoadingProps, "size"> {
+  readonly size?: string;
+}
+
+export function Loading({ size, ...rest }: UiLoadingProps) {
+  return <WdLoading {...rest} size={toLoadingSize(size)} />;
+}
+
+/** AntD's spinner name, kept so call sites migrate by import alone. */
+export const Spin = Loading;
