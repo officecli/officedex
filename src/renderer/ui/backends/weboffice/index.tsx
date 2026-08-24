@@ -63,9 +63,22 @@ const SIZE_BY_UI_SIZE: Record<UiButtonSize, ButtonSize> = {
  * directly; the mapping exists so existing screens keep compiling.
  */
 export const Button = forwardRef<HTMLButtonElement, UiButtonProps>(function Button(
-  { type = "default", htmlType, size = "middle", danger, ...rest },
+  { type = "default", htmlType, size = "middle", danger, block, style, "aria-label": ariaLabel, ...rest },
   ref,
 ) {
   const variant = danger ? DANGER_VARIANT_BY_TYPE[type] : VARIANT_BY_TYPE[type];
-  return <WdButton {...rest} ref={ref} variant={variant} size={SIZE_BY_UI_SIZE[size]} type={htmlType} />;
+  // weboffice-design has no full-width variant, so `block` is applied as layout.
+  const resolvedStyle = block ? { width: "100%", ...style } : style;
+  return (
+    <WdButton
+      {...rest}
+      ref={ref}
+      variant={variant}
+      size={SIZE_BY_UI_SIZE[size]}
+      type={htmlType}
+      style={resolvedStyle}
+      // the design system drops the native attribute in favour of `ariaLabel`
+      ariaLabel={ariaLabel}
+    />
+  );
 });

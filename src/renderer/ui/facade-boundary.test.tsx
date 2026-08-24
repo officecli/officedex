@@ -64,3 +64,19 @@ describe("ui facade backed by weboffice-design", () => {
     expect(screen.getByRole("radiogroup", { name: "密度" })).toBeTruthy();
   });
 });
+
+describe("ui facade button contract details", () => {
+  it("forwards the native aria-label onto the design-system prop", () => {
+    render(
+      <Button aria-label="关闭横幅">
+        <span aria-hidden="true">×</span>
+      </Button>,
+    );
+    expect(screen.getByRole("button", { name: "关闭横幅" })).toBeTruthy();
+  });
+
+  it("stretches a block button to fill its container", () => {
+    const { container } = render(<Button block>宽按钮</Button>);
+    expect(container.querySelector("button")?.style.width).toBe("100%");
+  });
+});

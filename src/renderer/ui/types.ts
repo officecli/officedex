@@ -10,5 +10,7 @@ export interface UiButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonEleme
   readonly icon?: ReactNode;
   readonly loading?: boolean;
   readonly danger?: boolean;
+  /** Stretches the button to fill its container, matching AntD's `block`. */
+  readonly block?: boolean;
   readonly children?: ReactNode;
 }

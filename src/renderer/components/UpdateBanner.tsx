@@ -1,4 +1,5 @@
-import { Button, Progress } from "antd";
+import { Progress } from "antd";
+import { Button } from "@vo-ui/backend";
 import { CloseOutlined, DownloadOutlined, RocketOutlined } from "@ant-design/icons";
 import { notion } from "../designTokens";
 import type { AppUpdateRelease } from "../../shared/types";

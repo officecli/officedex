@@ -5,6 +5,8 @@ import { App } from "./App";
 import { PerfPptistCompletedScreen } from "./screens/PerfPptistCompletedScreen";
 import { LocaleProvider } from "./i18n";
 import { mountTheme } from "./ui/theme";
+// component styles for the design system; mountTheme() only injects the --ui-* variables
+import "weboffice-design/css";
 import "./ui/design-tokens.css";
 import "./styles/tokens.css";
 import "./styles/shell.css";

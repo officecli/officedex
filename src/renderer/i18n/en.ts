@@ -66,6 +66,7 @@ export const en: Record<string, string> = {
   "dialogue.preset.compete.title": "Competitive One-pager",
   "dialogue.preset.compete.desc": "Condense competitor research into a single comparison matrix with a verdict.",
   "dialogue.solutionMeta.estimate": "{{minutes}} min",
+  "dialogue.continuation.send": "Send",
   "dialogue.format.label": "Generate:",
   "dialogue.imageRatio.label": "Image ratio",
   "dialogue.imageRatio.square": "Square",

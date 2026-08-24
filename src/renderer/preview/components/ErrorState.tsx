@@ -1,4 +1,4 @@
-import { Button } from "antd";
+import { Button } from "@vo-ui/backend";
 import { AlertCircle } from "lucide-react";
 
 interface ErrorStateProps {

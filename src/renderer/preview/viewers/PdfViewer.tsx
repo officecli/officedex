@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Button } from "antd";
+import { Button } from "@vo-ui/backend";
 import * as pdfjsLib from "pdfjs-dist";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import { PreviewToolbar } from "../components/PreviewToolbar";

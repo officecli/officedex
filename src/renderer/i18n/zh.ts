@@ -66,6 +66,7 @@ export const zh: Record<string, string> = {
   "dialogue.preset.compete.title": "竞品对比一页纸",
   "dialogue.preset.compete.desc": "把竞品调研浓缩成一页对比矩阵并给出结论。",
   "dialogue.solutionMeta.estimate": "{{minutes}} 分钟",
+  "dialogue.continuation.send": "发送",
   "dialogue.format.label": "生成：",
   "dialogue.imageRatio.label": "画面比例",
   "dialogue.imageRatio.square": "正方形",

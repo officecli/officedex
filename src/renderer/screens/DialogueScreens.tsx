@@ -1,4 +1,5 @@
-import { Button, Dropdown, Form, Image, InputNumber, message, Modal, Popover, Progress, Radio, Space, Spin, Tag, Timeline, Tooltip, type MenuProps } from "antd";
+import { Dropdown, Form, Image, InputNumber, message, Modal, Popover, Progress, Radio, Space, Spin, Tag, Timeline, Tooltip, type MenuProps } from "antd";
+import { Button } from "@vo-ui/backend";
 import {
   CheckCircleFilled,
   CheckCircleOutlined,
@@ -5737,6 +5738,7 @@ function ConversationFooter({ latestTask, onContinueGeneration, onContinueModify
           <Button
             type="primary"
             icon={<SendOutlined />}
+            aria-label={t("dialogue.continuation.send")}
             disabled={inputDisabled || !continuationPrompt.trim()}
             onClick={submitContinuation}
           />

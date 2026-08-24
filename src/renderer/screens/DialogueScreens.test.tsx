@@ -570,7 +570,7 @@ describe("DialogueScreen state machine", () => {
     rerender(<DialogueScreen {...baseProps()} tasks={[{ ...task, question: { ...question, id: "question-restore-option-next", currentIndex: 1 } }]} />);
     fireEvent.click(screen.getByRole("button", { name: /previous question/i }));
 
-    expect(screen.getByRole("button", { name: /^leadership$/i }).classList.contains("ant-btn-primary")).toBe(true);
+    expect(screen.getByRole("button", { name: /^leadership$/i }).dataset.variant === "primary").toBe(true);
   });
 
   it("restores a custom plan question answer after the composer remounts", async () => {
@@ -656,7 +656,7 @@ describe("DialogueScreen state machine", () => {
     expect(input.closest("form")?.classList.contains("user-answer-selected")).toBe(true);
 
     fireEvent.click(screen.getByRole("button", { name: /previous question/i }));
-    expect(screen.getByRole("button", { name: /^leadership$/i }).classList.contains("ant-btn-primary")).toBe(true);
+    expect(screen.getByRole("button", { name: /^leadership$/i }).dataset.variant === "primary").toBe(true);
   });
 
   it("submits ordered answers for a restored multi-step plan question", async () => {
@@ -4556,7 +4556,7 @@ describe("DialogueScreen state machine", () => {
       "More actions",
     ]);
     const openButton = within(actions as HTMLElement).getByRole("button", { name: /^open$/i });
-    expect(openButton.classList.contains("ant-btn-primary")).toBe(false);
+    expect(openButton.dataset.variant === "primary").toBe(false);
     expect(within(actions as HTMLElement).getByRole("button", { name: /show in folder/i })).toBeTruthy();
     expect(within(actions as HTMLElement).getByRole("button", { name: /more actions/i })).toBeTruthy();
   });
@@ -5960,7 +5960,7 @@ describe("Bottom continuation composer — acceptance criteria", () => {
   it("T4: submit button disabled when textarea empty, enabled with non-whitespace", () => {
     const task = makeCompletedImageTask();
     render(<DialogueScreen {...baseProps()} tasks={[task]} />);
-    const submitBtn = document.querySelector(".composer-row .ant-btn-primary") as HTMLButtonElement;
+    const submitBtn = screen.getByRole("button", { name: "Send" }) as HTMLButtonElement;
     expect(submitBtn.disabled).toBe(true);
 
     const textarea = screen.getByPlaceholderText(/describe what you want to generate/i);
@@ -5977,7 +5977,7 @@ describe("Bottom continuation composer — acceptance criteria", () => {
     fireEvent.click(screen.getByLabelText("Portrait"));
     const textarea = screen.getByPlaceholderText(/describe what you want to generate/i);
     fireEvent.change(textarea, { target: { value: "Add a sunset" } });
-    const submitBtn = document.querySelector(".composer-row .ant-btn-primary") as HTMLButtonElement;
+    const submitBtn = screen.getByRole("button", { name: "Send" }) as HTMLButtonElement;
     fireEvent.click(submitBtn);
 
     expect(onContinueGeneration).toHaveBeenCalledTimes(1);
@@ -5995,7 +5995,7 @@ describe("Bottom continuation composer — acceptance criteria", () => {
     fireEvent.change(fpsInput, { target: { value: "12" } });
     const textarea = screen.getByPlaceholderText(/describe what you want to generate/i);
     fireEvent.change(textarea, { target: { value: "Make the wink slower" } });
-    const submitBtn = document.querySelector(".composer-row .ant-btn-primary") as HTMLButtonElement;
+    const submitBtn = screen.getByRole("button", { name: "Send" }) as HTMLButtonElement;
     fireEvent.click(submitBtn);
 
     expect(onContinueGeneration).toHaveBeenCalledTimes(1);
@@ -6029,7 +6029,7 @@ describe("Bottom continuation composer — acceptance criteria", () => {
     expect(document.querySelectorAll(".reference-image-chip")).toHaveLength(1);
     const textarea = screen.getByPlaceholderText(/describe what you want to generate/i);
     fireEvent.change(textarea, { target: { value: "Add a sunset" } });
-    const submitBtn = document.querySelector(".composer-row .ant-btn-primary")!;
+    const submitBtn = screen.getByRole("button", { name: "Send" });
     fireEvent.click(submitBtn);
 
     expect(onContinueGeneration).toHaveBeenCalledTimes(1);
@@ -6047,7 +6047,7 @@ describe("Bottom continuation composer — acceptance criteria", () => {
     expect(document.querySelectorAll(".reference-image-chip")).toHaveLength(0);
     const textarea = screen.getByPlaceholderText(/describe what you want to generate/i);
     fireEvent.change(textarea, { target: { value: "Add a sunset" } });
-    const submitBtn = document.querySelector(".composer-row .ant-btn-primary")!;
+    const submitBtn = screen.getByRole("button", { name: "Send" });
     fireEvent.click(submitBtn);
 
     expect(onContinueGeneration).toHaveBeenCalledTimes(1);

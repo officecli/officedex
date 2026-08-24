@@ -1,6 +1,7 @@
 import { Component, Suspense, useMemo } from "react";
 import type { ReactNode, ErrorInfo } from "react";
-import { ConfigProvider, Result, Button } from "antd";
+import { ConfigProvider, Result } from "antd";
+import { Button } from "@vo-ui/backend";
 import { theme } from "../designTokens";
 import { LoadingState } from "./components/LoadingState";
 import { UnsupportedViewer } from "./viewers/UnsupportedViewer";
