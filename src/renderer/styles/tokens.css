@@ -1,46 +1,49 @@
-/* ─── Paper & Ink Design System for OfficeDex ─── */
+/* ─── OfficeDex 应用令牌 ───
+ * 取值来源：石墨 weboffice-design。这一层是历史命名（--n-*），
+ * 新代码请用 ui/design-tokens.css 的 --od-*。
+ */
 
 :root {
-  --n-primary: #05101a;
-  --n-primary-pressed: #1a2530;
-  --n-primary-deep: #05101a;
-  --n-primary-soft: #f0eee6;
-  --n-on-primary: #ffffff;
-  --n-navy: #05101a;
-  --n-link: #006876;
+  --n-primary: #41464B;
+  --n-primary-pressed: #2C3033;
+  --n-primary-deep: #2C3033;
+  --n-primary-soft: #F1F1F1;
+  --n-on-primary: #FFFFFF;
+  --n-navy: #41464B;
+  --n-link: #5DA4E3;
 
-  --n-secondary: #006876;
-  --n-secondary-container: #9fecfc;
-  --n-on-secondary: #ffffff;
+  --n-secondary: #5DA4E3;
+  --n-secondary-container: #F0FAFF;
+  --n-on-secondary: #FFFFFF;
 
-  --n-canvas: #ffffff;
-  --n-surface: #f0eee6;
-  --n-surface-soft: #fcfaf2;
-  --n-paper: #ffffff;
-  --n-white: #ffffff;
-  --n-hairline: #e6e4d8;
-  --n-hairline-soft: #eae8e0;
-  --n-hairline-strong: #c4c6cc;
+  --n-canvas: #FFFFFF;
+  --n-surface: #F7F7F7;
+  --n-surface-soft: #F9F9F9;
+  --n-paper: #FFFFFF;
+  --n-white: #FFFFFF;
+  --n-hairline: rgba(65,70,75,0.1);
+  --n-hairline-soft: rgba(65,70,75,0.05);
+  --n-hairline-strong: rgba(65,70,75,0.2);
 
-  --n-ink: #1a2530;
-  --n-charcoal: #1b1c17;
-  --n-slate: #44474b;
-  --n-steel: #74777c;
-  --n-stone: #c4c6cc;
-  --n-muted: #c4c6cc;
+  --n-ink: #41464B;
+  --n-charcoal: #2C3033;
+  --n-slate: rgba(65,70,75,0.8);
+  --n-steel: rgba(65,70,75,0.6);
+  --n-stone: rgba(65,70,75,0.3);
+  --n-muted: rgba(65,70,75,0.3);
 
-  --n-success: #1aae39;
-  --n-warning: #dd5b00;
-  --n-error: #ba1a1a;
+  --n-success: #4FBD6C;
+  --n-warning: #EDA14A;
+  --n-error: #E86666;
 
-  --n-tint-peach: #ffe8d4;
-  --n-tint-rose: #fde0ec;
-  --n-tint-mint: #d9f3e1;
-  --n-tint-lavender: #e6e0f5;
-  --n-tint-sky: #dcecfa;
-  --n-tint-yellow: #fef7d6;
-  --n-tint-yellow-bold: #f9e79f;
-  --n-tint-gray: #f0eee6;
+  --n-tint-peach: #FFFAF0;
+  --n-tint-rose: #FFF2F0;
+  --n-tint-mint: #EDFCEF;
+  --n-tint-lavender: #F4EDFC;
+  --n-tint-sky: #F0FAFF;
+  --n-tint-yellow: #FFFFF0;
+  --n-tint-yellow-bold: #FFFAB3;
+  --n-tint-gray: #F7F7F7;
 
   --font-body: 'Inter', -apple-system, system-ui, 'Segoe UI', 'PingFang SC', sans-serif;
   --font-heading: 'Plus Jakarta Sans', -apple-system, system-ui, 'Segoe UI', 'PingFang SC', sans-serif;

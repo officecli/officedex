@@ -2865,7 +2865,7 @@
 
 .pptxgenjs-assembling-icon {
   font-size: 48px;
-  color: #006876;
+  color: var(--n-secondary);
   animation: pptxgenjs-pulse 2s ease-in-out infinite;
 }
 
@@ -2892,7 +2892,7 @@
 .pptxgenjs-assembling-bar-fill {
   width: 40%;
   height: 100%;
-  background: #006876;
+  background: var(--n-secondary);
   border-radius: 2px;
   animation: pptxgenjs-bar-slide 1.8s ease-in-out infinite;
 }
@@ -3505,7 +3505,7 @@
 
 .living-tree-pptx-placeholder-chart i:nth-child(2) {
   height: 78%;
-  background: #006876;
+  background: var(--n-secondary);
 }
 
 .living-tree-pptx-placeholder-chart i:nth-child(3) {
@@ -3534,7 +3534,7 @@
 }
 
 .living-tree-flow-node.is-slide-thumbnail.is-selected {
-  border-color: #006876 !important;
+  border-color: var(--n-secondary) !important;
   box-shadow: 0 0 0 3px rgba(0, 104, 118, 0.22) !important;
 }
 
@@ -3777,7 +3777,7 @@
 }
 
 .living-tree-flow-node[data-slide-push="pushing"] {
-  border-color: #006876 !important;
+  border-color: var(--n-secondary) !important;
   box-shadow: 0 0 0 3px rgba(0, 104, 118, 0.18) !important;
   animation: living-tree-slide-push-glow 0.8s ease-in-out !important;
 }
@@ -6536,7 +6536,7 @@ li.living-tree-animated-line {
 }
 
 .stage-progress-panel .stage-dot-active {
-  color: var(--n-primary, #05101a);
+  color: var(--n-primary);
 }
 
 .stage-progress-panel .stage-dot-completed {

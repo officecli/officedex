@@ -192,7 +192,7 @@
   align-items: center;
   gap: 12px;
   padding: 24px;
-  color: var(--text-muted, #74777c);
+  color: var(--n-steel);
 }
 
 .settings-error {

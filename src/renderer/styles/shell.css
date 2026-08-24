@@ -428,7 +428,7 @@
 
 .credit-meter-icon {
   font-size: 14px;
-  color: var(--n-secondary, #006876);
+  color: var(--n-secondary);
 }
 
 .credit-meter-label {
@@ -570,8 +570,8 @@
   height: 8px;
   border: 2px solid var(--n-canvas);
   border-radius: var(--radius-full);
-  background: var(--n-secondary, #006876);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--n-secondary, #006876) 20%, transparent);
+  background: var(--n-secondary);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--n-secondary) 20%, transparent);
 }
 
 .sidebar-hover-zone {
