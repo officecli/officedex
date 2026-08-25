@@ -241,6 +241,21 @@
   padding: 54px clamp(28px, 4.5vw, 72px) 72px;
 }
 
+.home-pointer-field {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+
+.home-screen > :not(.home-pointer-field) {
+  position: relative;
+  z-index: 1;
+}
+
 .home-hero {
   position: relative;
   display: flex;
@@ -318,6 +333,11 @@
   background: transparent;
   font-size: 15px;
   line-height: 24px;
+}
+
+.home-intake .ui-textarea::placeholder {
+  color: color-mix(in srgb, var(--od-ink-secondary) 58%, transparent);
+  opacity: 1;
 }
 
 .home-intake .ui-textarea:focus { box-shadow: none; }
@@ -509,4 +529,8 @@
   .home-section-header { align-items: flex-start; flex-direction: column; gap: 4px; }
   .home-template-grid { grid-auto-columns: minmax(250px, 82vw); }
   .home-recent-list { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) {
+  .home-pointer-field { display: none; }
 }
