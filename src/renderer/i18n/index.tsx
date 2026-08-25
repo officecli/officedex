@@ -1,10 +1,14 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { en } from "./en";
+import { homeEn, homeZh } from "./home";
 import { zh } from "./zh";
 
 export type Locale = "en" | "zh";
 type Dictionary = Record<string, string>;
-const dictionaries: Record<Locale, Dictionary> = { en, zh };
+const dictionaries: Record<Locale, Dictionary> = {
+  en: { ...en, ...homeEn },
+  zh: { ...zh, ...homeZh },
+};
 
 export const LOCALE_STORAGE_KEY = "officedex.locale";
 

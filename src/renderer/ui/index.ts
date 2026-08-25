@@ -1,10 +1,3 @@
-import "weboffice-design/style/base";
-import "weboffice-design/button/style";
-import "weboffice-design/input/style";
-import "weboffice-design/loading/style";
-import "weboffice-design/radio-group/style";
-import "weboffice-design/select/style";
-import "weboffice-design/switch/style";
 import "./styles/tokens.css";
 import "./styles/components.css";
 

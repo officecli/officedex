@@ -12,6 +12,7 @@ import { DialogueScreen, type FailureKind, type NewChatTarget, type NewGeneratio
 import { TasksScreen } from "./screens/DataScreens";
 import { LoginScreen, SettingsScreen } from "./screens/SettingsScreens";
 import { HomeScreen } from "./screens/HomeScreen";
+import { inferHomeTaskRoute, type HomeTaskAnalysis, type HomeTaskIntake } from "./homeIntake";
 import { OnboardingScreen } from "./screens/OnboardingScreen";
 import { SpreadsheetWorkspace, type SpreadsheetWorkspaceHandle } from "./spreadsheet/SpreadsheetWorkspace";
 import { SpreadsheetAgentPanel } from "./spreadsheet/SpreadsheetAgentPanel";
@@ -51,11 +52,11 @@ function materializePendingContext(pending: PendingGenerate, taskId: string): Ta
 }
 
 function generationModeForDocumentType(documentType: string | undefined): GenerateInput["generationMode"] | undefined {
-  return documentType === "pptx" || documentType === "docx" || documentType === "xlsx" || documentType === "report" ? "plan" : undefined;
+  return documentType === "pptx" || documentType === "docx" || documentType === "xlsx" || documentType === "report" ? "fast" : undefined;
 }
 
 function normalizeGenerationMode(_value: unknown): GenerateInput["generationMode"] {
-  return "plan";
+  return "fast";
 }
 
 function normalizeGenerateInputForGeneration(values: GenerateInput): GenerateInput {
@@ -607,6 +608,81 @@ function OfficeDexApp() {
     setNewChatNudgeKey((current) => current + 1);
   }, [clearError, homeWorkspaceId, resetNewGenerationDraft, updateNewGenerationDraft]);
 
+  const pickHomeTaskFile = useCallback(async () => {
+    const selected = await officecli.openFileDialog({
+      filters: [{
+        name: "Work files",
+        extensions: ["xlsx", "csv", "pptx", "docx", "pdf", "png", "jpg", "jpeg", "webp"],
+      }],
+    });
+    return selected || undefined;
+  }, []);
+
+  function analyzeTaskFromHome(input: HomeTaskIntake): HomeTaskAnalysis {
+    const fallback = isGenerateDocumentType(input.documentType)
+      ? input.documentType
+      : isGenerateDocumentType(persistedSettings.defaults.documentType)
+        ? persistedSettings.defaults.documentType
+        : "pptx";
+    const route = inferHomeTaskRoute(input, fallback);
+    if (route.kind === "needs_source") {
+      throw new Error(t("home.catalogSourceRequired"));
+    }
+    return {
+      prompt: input.prompt.trim(),
+      sourceFile: route.sourceFile,
+      documentType: route.documentType,
+      kind: route.kind,
+      nextStep: route.kind === "catalog_cleanup" ? "configure" : "execute",
+    };
+  }
+
+  async function startTaskFromHome(input: HomeTaskIntake) {
+    const fallback = isGenerateDocumentType(input.documentType)
+      ? input.documentType
+      : isGenerateDocumentType(persistedSettings.defaults.documentType)
+        ? persistedSettings.defaults.documentType
+        : "pptx";
+    const route = inferHomeTaskRoute(input, fallback);
+    if (route.kind === "needs_source") {
+      throw new Error(t("home.catalogSourceRequired"));
+    }
+    if (route.kind === "catalog_cleanup") {
+      const file: RecentFile = {
+        filePath: route.sourceFile,
+        fileName: fileNameFromPath(route.sourceFile),
+        documentType: "xlsx",
+        source: "local",
+        ...(homeWorkspaceId ? { workspaceId: homeWorkspaceId } : {}),
+        lastOpenedAt: new Date().toISOString(),
+      };
+      await runSpreadsheetAction(async () => {
+        const artifact = await officecli.openRecentFile(file);
+        const grant = await officecli.issuePreviewToken(artifact);
+        setSpreadsheetEntry({
+          kind: "artifact",
+          artifact,
+          grant,
+          ...(homeWorkspaceId ? { workspaceId: homeWorkspaceId } : {}),
+        });
+        clearError();
+        setActiveNav("spreadsheet");
+        void refreshRecentFiles(homeWorkspaceId);
+      });
+      return;
+    }
+    await submit({
+      documentType: route.documentType,
+      generationMode: generationModeForDocumentType(route.documentType),
+      topic: summarizePrompt(input.prompt),
+      prompt: input.prompt,
+      sourceFile: route.sourceFile,
+      ...(homeWorkspaceId ? { workspaceId: homeWorkspaceId } : { noProject: true }),
+      enableImages: persistedSettings.defaults.enableImages,
+      imageQuality: persistedSettings.defaults.imageQuality,
+    });
+  }
+
   const selectHomeWorkspace = useCallback(async (workspaceId: string) => {
     await selectWorkspace(workspaceId);
     setHomeWorkspaceId(workspaceId);
@@ -1101,6 +1177,7 @@ function OfficeDexApp() {
         {activeNav === "home" ? (
           <HomeScreen
             files={recentFiles}
+            attentionTasks={tasks}
             loading={recentFilesLoading}
             error={recentFilesError}
             activeWorkspaceId={homeWorkspaceId}
@@ -1108,6 +1185,12 @@ function OfficeDexApp() {
             onOpenFile={openRecentFile}
             onRemoveFile={removeRecentFile}
             onOpenLocalFile={openLocalFileFromHome}
+            onPickTaskFile={pickHomeTaskFile}
+            onAnalyzeTask={analyzeTaskFromHome}
+            onStartTask={startTaskFromHome}
+            onOpenTask={selectTask}
+            onOpenTasks={() => setActiveNav("tasks")}
+            onRetryRecentFiles={() => void refreshRecentFiles(homeWorkspaceId)}
           />
         ) : null}
         {activeNav === "dialogue" ? (

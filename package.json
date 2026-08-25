@@ -67,7 +67,6 @@
     "pdfjs-dist": "^3.11.174",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "weboffice-design": "^0.3.2",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

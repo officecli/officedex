@@ -152,16 +152,16 @@ describe("App task flow", () => {
     vi.restoreAllMocks();
   });
 
-  it("opens Home by default and enters dialogue with the chosen type", async () => {
+  it("opens Home by default with PPTX selected", async () => {
     window.history.pushState({}, "", "/");
     installBridgeMock();
     const { App } = await import("./App");
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: /what will you create today/i })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Presentation" }));
-    expect(await screen.findByTestId("new-generation-form")).toHaveAttribute("data-document-type", "pptx");
+    expect(await screen.findByRole("heading", { name: /what would you like to finish today/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "PPTX" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Technology Product Launch" })).toBeTruthy();
   });
 
   it("opens Spreadsheet directly in the new workbook workspace", async () => {
