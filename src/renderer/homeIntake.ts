@@ -4,6 +4,7 @@ import { fileExtension } from "./utils/path";
 export interface HomeTaskIntake {
   prompt: string;
   sourceFile?: string;
+  referenceDirectory?: string;
   documentType?: DocumentType;
 }
 

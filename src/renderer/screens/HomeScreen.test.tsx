@@ -28,8 +28,8 @@ function renderHome(overrides: Partial<React.ComponentProps<typeof HomeScreen>> 
     onCreate: vi.fn(),
     onOpenFile: vi.fn(),
     onRemoveFile: vi.fn(),
-    onOpenLocalFile: vi.fn(),
     onPickTaskFile: vi.fn(),
+    onPickTaskDirectory: vi.fn(),
     onAnalyzeTask: vi.fn(async (input) => ({ ...input, kind: "generate" as const, documentType: "pptx" as const, nextStep: "plan" as const })),
     onStartTask: vi.fn(),
     onOpenTask: vi.fn(),
@@ -41,6 +41,16 @@ function renderHome(overrides: Partial<React.ComponentProps<typeof HomeScreen>> 
 }
 
 describe("HomeScreen", () => {
+  it("renders the OpenDesign-inspired brand, prompt filters, gallery, and recent project cards", () => {
+    renderHome();
+
+    expect(document.querySelector(".home-brand-lockup img")?.getAttribute("src")).toBe("./officedex-logo.png");
+    expect(screen.getByRole("navigation", { name: "Output type" })).toBeTruthy();
+    expect(screen.getByLabelText("Example prompts")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Use prompt: Technology Product Launch" })).toBeTruthy();
+    expect(document.querySelectorAll(".home-recent-preview")).toHaveLength(2);
+  });
+
   it("uses 优秀案例 wording for the Chinese homepage case section", () => {
     renderHome({}, "zh");
     expect(screen.getByText("用一句话、一份资料或一个优秀案例，开始制作幻灯片、图片、文档或表格。")).toBeTruthy();
@@ -96,7 +106,6 @@ describe("HomeScreen", () => {
       sourceFile: "/tmp/supplier.xlsx",
       documentType: "xlsx",
     }));
-    expect(props.onOpenLocalFile).not.toHaveBeenCalled();
   });
 
   it("keeps the intake in place when analysis needs more input", async () => {
@@ -122,9 +131,8 @@ describe("HomeScreen", () => {
     const generatedRow = screen.getByRole("button", { name: "Open Launch deck.pptx" });
     const localRow = screen.getByRole("button", { name: "Open Q3 forecast.xlsx" });
     expect(generatedRow.compareDocumentPosition(localRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Open local file" }));
     fireEvent.click(screen.getByRole("button", { name: "Remove Launch deck.pptx" }));
-    expect(props.onOpenLocalFile).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("button", { name: "Open local file" })).toBeNull();
     expect(props.onRemoveFile).toHaveBeenCalledWith("/tmp/generated.pptx");
   });
 
@@ -141,10 +149,10 @@ describe("HomeScreen", () => {
 
   it("keeps loading and errors local to the recent-file section", () => {
     const retry = vi.fn();
-    const { rerender } = render(<LocaleProvider value="en"><HomeScreen files={[]} loading onCreate={vi.fn()} onOpenFile={vi.fn()} onRemoveFile={vi.fn()} onOpenLocalFile={vi.fn()} onRetryRecentFiles={retry} /></LocaleProvider>);
+    const { rerender } = render(<LocaleProvider value="en"><HomeScreen files={[]} loading onCreate={vi.fn()} onOpenFile={vi.fn()} onRemoveFile={vi.fn()} onRetryRecentFiles={retry} /></LocaleProvider>);
     expect(screen.getByText("Loading recent files…")).toBeTruthy();
     expect(screen.getByRole("button", { name: "PPTX" })).toBeTruthy();
-    rerender(<LocaleProvider value="en"><HomeScreen files={[]} loading={false} error="Offline" onCreate={vi.fn()} onOpenFile={vi.fn()} onRemoveFile={vi.fn()} onOpenLocalFile={vi.fn()} onRetryRecentFiles={retry} /></LocaleProvider>);
+    rerender(<LocaleProvider value="en"><HomeScreen files={[]} loading={false} error="Offline" onCreate={vi.fn()} onOpenFile={vi.fn()} onRemoveFile={vi.fn()} onRetryRecentFiles={retry} /></LocaleProvider>);
     expect(screen.getByText("Offline")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(retry).toHaveBeenCalledOnce();
