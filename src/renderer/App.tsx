@@ -618,6 +618,11 @@ function OfficeDexApp() {
     return selected || undefined;
   }, []);
 
+  const pickHomeTaskDirectory = useCallback(async () => {
+    const selected = await officecli.openDirectoryDialog();
+    return selected || undefined;
+  }, []);
+
   function analyzeTaskFromHome(input: HomeTaskIntake): HomeTaskAnalysis {
     const fallback = isGenerateDocumentType(input.documentType)
       ? input.documentType
@@ -631,6 +636,7 @@ function OfficeDexApp() {
     return {
       prompt: input.prompt.trim(),
       sourceFile: route.sourceFile,
+      referenceDirectory: input.referenceDirectory,
       documentType: route.documentType,
       kind: route.kind,
       nextStep: route.kind === "catalog_cleanup" ? "configure" : "execute",
@@ -644,6 +650,9 @@ function OfficeDexApp() {
         ? persistedSettings.defaults.documentType
         : "pptx";
     const route = inferHomeTaskRoute(input, fallback);
+    const taskPrompt = input.referenceDirectory
+      ? `${input.prompt.trim()}\n\nReference directory: ${input.referenceDirectory}`
+      : input.prompt;
     if (route.kind === "needs_source") {
       throw new Error(t("home.catalogSourceRequired"));
     }
@@ -675,7 +684,7 @@ function OfficeDexApp() {
       documentType: route.documentType,
       generationMode: generationModeForDocumentType(route.documentType),
       topic: summarizePrompt(input.prompt),
-      prompt: input.prompt,
+      prompt: taskPrompt,
       sourceFile: route.sourceFile,
       ...(homeWorkspaceId ? { workspaceId: homeWorkspaceId } : { noProject: true }),
       enableImages: persistedSettings.defaults.enableImages,
@@ -1037,22 +1046,6 @@ function OfficeDexApp() {
     }
   }, [clearError, homeWorkspaceId, openInlinePreview, refreshRecentFiles, removeRecentFile, runSpreadsheetAction, selectTask, t, tasks]);
 
-  const openLocalFileFromHome = useCallback(async () => {
-    const filePath = await officecli.openFileDialog({
-      filters: [{ name: "Office files", extensions: ["docx", "xlsx", "pptx", "pdf", "html", "htm"] }],
-    });
-    if (!filePath) return;
-    const file: RecentFile = {
-      filePath,
-      fileName: fileNameFromPath(filePath),
-      documentType: documentTypeFromPath(filePath),
-      source: "local",
-      ...(homeWorkspaceId ? { workspaceId: homeWorkspaceId } : {}),
-      lastOpenedAt: new Date().toISOString(),
-    };
-    await openRecentFile(file);
-  }, [homeWorkspaceId, openRecentFile]);
-
   const closeInlinePreview = useCallback(async () => {
     if (previewGrant) {
       await officecli.revokePreviewToken(previewGrant.token).catch(() => {});
@@ -1181,11 +1174,15 @@ function OfficeDexApp() {
             loading={recentFilesLoading}
             error={recentFilesError}
             activeWorkspaceId={homeWorkspaceId}
+            workspaces={workspaces}
             onCreate={createFromHome}
             onOpenFile={openRecentFile}
             onRemoveFile={removeRecentFile}
-            onOpenLocalFile={openLocalFileFromHome}
             onPickTaskFile={pickHomeTaskFile}
+            onPickTaskDirectory={pickHomeTaskDirectory}
+            onSelectWorkspace={selectHomeWorkspace}
+            onSelectAllWorkspaces={selectAllHomeFiles}
+            onAddWorkspace={addWorkspace}
             onAnalyzeTask={analyzeTaskFromHome}
             onStartTask={startTaskFromHome}
             onOpenTask={selectTask}

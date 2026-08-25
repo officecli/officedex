@@ -1,11 +1,14 @@
 import { useMemo, useState, type FormEvent } from "react";
-import type { DesktopTask, DocumentType, RecentFile } from "../../shared/types";
-import { Button, Empty, Loading, TextArea } from "../ui";
+import type { DesktopTask, DocumentType, RecentFile, WorkspaceSummary } from "../../shared/types";
+import { Button, Dropdown, Empty, Loading, TextArea, type MenuProps } from "../ui";
 import type { HomeTaskAnalysis, HomeTaskIntake } from "../homeIntake";
 import {
   CloseOutlined,
   FileTextOutlined,
+  DownOutlined,
+  FolderAddOutlined,
   FolderOpenOutlined,
+  PlusOutlined,
   RightOutlined,
 } from "../ui/icons";
 import { useT } from "../i18n";
@@ -20,11 +23,15 @@ export interface HomeScreenProps {
   loading: boolean;
   error?: string;
   activeWorkspaceId?: string;
+  workspaces?: WorkspaceSummary[];
   onCreate: (documentType: HomeDocumentType) => void | Promise<void>;
   onOpenFile: (file: RecentFile) => void;
   onRemoveFile: (filePath: string) => void;
-  onOpenLocalFile: () => void;
   onPickTaskFile?: () => Promise<string | undefined>;
+  onPickTaskDirectory?: () => Promise<string | undefined>;
+  onSelectWorkspace?: (workspaceId: string) => void | Promise<void>;
+  onSelectAllWorkspaces?: () => void;
+  onAddWorkspace?: () => void;
   onAnalyzeTask?: (input: HomeTaskIntake) => HomeTaskAnalysis | Promise<HomeTaskAnalysis>;
   onStartTask?: (input: HomeTaskIntake) => void | Promise<void>;
   onOpenTask?: (taskId: string) => void;
@@ -74,11 +81,12 @@ const HOME_TEMPLATES: HomeTemplate[] = [
   { id: "budget", type: "xlsx", icon: "account_balance_wallet", minutes: 2 },
 ];
 
-export function HomeScreen({ files, attentionTasks = [], loading, error, activeWorkspaceId, onOpenFile, onRemoveFile, onOpenLocalFile, onPickTaskFile, onAnalyzeTask, onStartTask, onOpenTask, onOpenTasks, onRetryRecentFiles }: HomeScreenProps) {
+export function HomeScreen({ files, attentionTasks = [], loading, error, activeWorkspaceId, workspaces = [], onOpenFile, onRemoveFile, onPickTaskFile, onPickTaskDirectory, onSelectWorkspace, onSelectAllWorkspaces, onAddWorkspace, onAnalyzeTask, onStartTask, onOpenTask, onOpenTasks, onRetryRecentFiles }: HomeScreenProps) {
   const t = useT();
   const [prompt, setPrompt] = useState("");
   const [selectedDocumentType, setSelectedDocumentType] = useState<HomeDocumentType>("pptx");
   const [sourceFile, setSourceFile] = useState<string>();
+  const [referenceDirectory, setReferenceDirectory] = useState<string>();
   const [intakeError, setIntakeError] = useState<string>();
   const [analyzing, setAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<HomeTaskAnalysis>();
@@ -98,7 +106,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
     setIntakeError(undefined);
     setAnalyzing(true);
     try {
-      const next = await onAnalyzeTask({ prompt: value, sourceFile, documentType: selectedDocumentType });
+      const next = await onAnalyzeTask({ prompt: value, sourceFile, referenceDirectory, documentType: selectedDocumentType });
       setAnalysis(next);
     } catch (error) {
       setIntakeError(error instanceof Error ? error.message : String(error));
@@ -117,7 +125,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
     setIntakeError(undefined);
     setStarting(true);
     try {
-      await onStartTask({ prompt: analysis.prompt, sourceFile: analysis.sourceFile, documentType: analysis.documentType });
+      await onStartTask({ prompt: analysis.prompt, sourceFile: analysis.sourceFile, referenceDirectory: analysis.referenceDirectory, documentType: analysis.documentType });
     } catch (error) {
       setIntakeError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -144,15 +152,56 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
     }
   };
 
+  const pickTaskDirectory = async () => {
+    if (!onPickTaskDirectory) return;
+    setIntakeError(undefined);
+    try {
+      const selected = await onPickTaskDirectory();
+      if (selected) {
+        setReferenceDirectory(selected);
+        setAnalysis(undefined);
+      }
+    } catch (error) {
+      setIntakeError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const referenceMenu: MenuProps = {
+    items: [
+      { key: "file", label: t("home.referenceFile"), icon: <FileTextOutlined aria-hidden /> },
+      { key: "directory", label: t("home.referenceDirectory"), icon: <FolderOpenOutlined aria-hidden /> },
+    ],
+    onClick: ({ key }) => {
+      if (key === "file") void pickTaskFile();
+      if (key === "directory") void pickTaskDirectory();
+    },
+  };
+  const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId);
+  const workspaceMenu: MenuProps = {
+    items: [
+      { key: "none", label: t("home.workdir.none") },
+      ...workspaces.map((workspace) => ({ key: `workspace:${workspace.id}`, label: workspace.name, icon: <FolderOpenOutlined aria-hidden /> })),
+      { type: "divider" as const },
+      { key: "add", label: t("home.workdir.add"), icon: <FolderAddOutlined aria-hidden /> },
+    ],
+    onClick: ({ key }) => {
+      if (key === "none") onSelectAllWorkspaces?.();
+      if (key === "add") onAddWorkspace?.();
+      if (key.startsWith("workspace:")) void onSelectWorkspace?.(key.slice("workspace:".length));
+    },
+  };
+
   return (
     <section className="home-screen" aria-labelledby="home-title">
       <header className="home-hero">
-        <div>
-          <p className="home-eyebrow">{t("home.eyebrow")}</p>
+        <div className="home-brand-lockup" aria-label="OfficeDex">
+          <img src="./officedex-logo.png" alt="" />
+          <span>OfficeDex</span>
+        </div>
+        <div className="home-hero__copy">
           <h1 id="home-title">{t("home.title")}</h1>
           <p>{t("home.subtitle")}</p>
         </div>
-        <Button variant="outline" icon={<FolderOpenOutlined />} onClick={onOpenLocalFile}>{t("home.openLocalFile")}</Button>
       </header>
 
       <nav className="home-output-types" aria-label={t("home.outputTypes")}>
@@ -185,23 +234,56 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
           }}
           onSubmit={() => void analyzeTask()}
         />
-        {sourceFile ? (
-          <div className="home-intake__attachment" aria-label={t("home.attachedFile")}>
-            <FileTextOutlined aria-hidden />
-            <span title={sourceFile}>{fileNameFromPath(sourceFile)}</span>
-            <Button variant="ghost-normal" size="small" ariaLabel={t("home.removeAttachedFile")} icon={<CloseOutlined />} onClick={() => {
-              setSourceFile(undefined);
-              invalidateAnalysis();
-            }} />
+        {sourceFile || referenceDirectory ? (
+          <div className="home-intake__references" aria-label={t("home.references")}>
+            {sourceFile ? (
+              <div className="home-intake__attachment" aria-label={t("home.attachedFile")}>
+                <FileTextOutlined aria-hidden />
+                <span title={sourceFile}>{fileNameFromPath(sourceFile)}</span>
+                <Button variant="ghost-normal" size="small" ariaLabel={t("home.removeAttachedFile")} icon={<CloseOutlined />} onClick={() => {
+                  setSourceFile(undefined);
+                  invalidateAnalysis();
+                }} />
+              </div>
+            ) : null}
+            {referenceDirectory ? (
+              <div className="home-intake__attachment" aria-label={t("home.attachedDirectory")}>
+                <FolderOpenOutlined aria-hidden />
+                <span title={referenceDirectory}>{fileNameFromPath(referenceDirectory)}</span>
+                <Button variant="ghost-normal" size="small" ariaLabel={t("home.removeAttachedDirectory")} icon={<CloseOutlined />} onClick={() => {
+                  setReferenceDirectory(undefined);
+                  invalidateAnalysis();
+                }} />
+              </div>
+            ) : null}
           </div>
         ) : null}
         {intakeError ? <div className="home-intake__error" role="alert">{intakeError}</div> : null}
         <div className="home-intake__footer">
-          <Button variant="ghost-normal" icon={<FolderOpenOutlined />} onClick={() => void pickTaskFile()}>{t("home.addFile")}</Button>
-          <span>{t("home.supportedFiles")}</span>
+          <div className="home-intake__footer-left">
+            <Dropdown menu={referenceMenu} trigger={["click"]} placement="top">
+              <button type="button" className="home-intake__add-trigger" aria-label={t("home.addReference")}>
+                <PlusOutlined aria-hidden />
+              </button>
+            </Dropdown>
+          </div>
+          <span className="home-intake__selected-type">
+            <MaterialSymbol name={HOME_CATEGORIES.find((category) => category.type === selectedDocumentType)?.icon ?? "description"} />
+            {t(`home.type.${selectedDocumentType}`)}
+          </span>
           <Button htmlType="submit" variant="primary" icon={<RightOutlined />} loading={analyzing} disabled={!prompt.trim()}>{t("home.analyze")}</Button>
         </div>
       </form>
+      <div className="home-workdir">
+        <Dropdown menu={workspaceMenu} trigger={["click"]} placement="top">
+          <button type="button" className="home-workdir__trigger" aria-label={t("home.workdir.select")}>
+            <FolderOpenOutlined aria-hidden />
+            <span>{activeWorkspace?.name ?? t("home.workdir.empty")}</span>
+            {activeWorkspace ? <small title={activeWorkspace.path}>{activeWorkspace.path}</small> : null}
+            <DownOutlined aria-hidden />
+          </button>
+        </Dropdown>
+      </div>
 
       {analysis ? (
         <section className="home-analysis" aria-labelledby="home-analysis-title">
@@ -216,7 +298,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
           <dl className="home-analysis__details">
             <div><dt>{t("home.analysis.goal")}</dt><dd>{analysis.prompt}</dd></div>
             <div><dt>{t("home.analysis.deliverable")}</dt><dd>{homeDeliverableLabel(analysis.documentType, t)}</dd></div>
-            <div><dt>{t("home.analysis.source")}</dt><dd>{analysis.sourceFile ? fileNameFromPath(analysis.sourceFile) : t("home.analysis.noSource")}</dd></div>
+            <div><dt>{t("home.analysis.source")}</dt><dd>{[analysis.sourceFile && fileNameFromPath(analysis.sourceFile), analysis.referenceDirectory && fileNameFromPath(analysis.referenceDirectory)].filter(Boolean).join(" · ") || t("home.analysis.noSource")}</dd></div>
             <div><dt>{t("home.analysis.credit")}</dt><dd>{t("home.analysis.creditUnavailable")}</dd></div>
           </dl>
           <div className="home-analysis__actions">
@@ -229,6 +311,23 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
       <section className="home-templates" aria-labelledby="home-templates-title">
         <div className="home-section-header">
           <h2 id="home-templates-title">{t("home.templates", { type: t(`home.type.${selectedDocumentType}`) })}</h2>
+        </div>
+        <div className="home-template-filters" role="group" aria-label={t("home.templateFilters")}>
+          <button type="button" className="is-selected" aria-pressed="true">{t("home.templateAll")}</button>
+          {visibleTemplates.slice(0, 6).map((template) => (
+            <button
+              key={template.id}
+              type="button"
+              aria-label={t("home.usePrompt", { name: t(`home.template.${template.id}.title`) })}
+              onClick={() => {
+                setPrompt(t(`home.template.${template.id}.description`));
+                invalidateAnalysis();
+              }}
+            >
+              <MaterialSymbol name={template.icon} />
+              {t(`home.template.${template.id}.title`)}
+            </button>
+          ))}
         </div>
         <div className="home-template-grid">
           {visibleTemplates.map((template) => {
@@ -304,8 +403,11 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
             {visibleFiles.map((file) => (
               <div className="home-recent-row" key={file.filePath}>
                 <button type="button" className="home-recent-open" aria-label={t("home.openFile", { name: file.fileName })} onClick={() => onOpenFile(file)}>
-                  <span className="home-file-icon"><FileTextOutlined aria-hidden /></span>
-                  <span><strong>{file.fileName}</strong><small>{file.documentType.toUpperCase()} · {t(`home.source.${file.source}`)} · {formatOpenedAt(file.lastOpenedAt)}</small></span>
+                  <span className={`home-recent-preview home-recent-preview--${file.documentType.toLowerCase()}`} aria-hidden="true">
+                    <span className="home-recent-preview__toolbar" />
+                    <span className="home-recent-preview__content"><i /><i /><i /><i /></span>
+                  </span>
+                  <span className="home-recent-copy"><strong>{file.fileName}</strong><small>{file.documentType.toUpperCase()} · {t(`home.source.${file.source}`)} · {formatOpenedAt(file.lastOpenedAt)}</small></span>
                 </button>
                 <Button className="home-file-remove" variant="ghost-normal" size="small" ariaLabel={t("home.removeFile", { name: file.fileName })} icon={<CloseOutlined />} onClick={() => onRemoveFile(file.filePath)} />
               </div>

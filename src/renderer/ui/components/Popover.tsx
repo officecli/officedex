@@ -63,12 +63,22 @@ export function Popover({ content, children, open, placement = "bottom", onOpenC
 
   useEffect(() => {
     if (!visible) return;
-    const close = (event: KeyboardEvent) => {
+    const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") setVisible(false);
     };
-    document.addEventListener("keydown", close);
-    return () => document.removeEventListener("keydown", close);
-  });
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (anchorRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      setVisible(false);
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    return () => {
+      document.removeEventListener("keydown", closeOnEscape);
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+    };
+  }, [visible]);
 
   const child = Children.only(children);
   if (!isValidElement(child)) return null;
