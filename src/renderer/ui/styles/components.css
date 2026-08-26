@@ -37,11 +37,49 @@
   color: var(--od-surface);
 }
 
+.ui-button[data-variant="ghost-normal"],
+.ui-button[data-variant="ghost-guidance"],
+.ui-button[data-variant="ghost-danger"] { border-color: transparent; background: transparent; }
+.ui-button[data-variant="ghost-normal"] { color: var(--od-ink-secondary); }
+.ui-button[data-variant="ghost-normal"]:hover:not(:disabled) { background: color-mix(in srgb, var(--od-ink) 6%, transparent); color: var(--od-ink); }
+.ui-button[data-variant="ghost-guidance"] { color: var(--od-guidance); }
+.ui-button[data-variant="ghost-guidance"]:hover:not(:disabled) { background: color-mix(in srgb, var(--od-guidance) 10%, transparent); }
+.ui-button[data-variant="ghost-danger"] { color: var(--od-danger); }
+.ui-button[data-variant="ghost-danger"]:hover:not(:disabled) { background: color-mix(in srgb, var(--od-danger) 8%, transparent); }
+.ui-button[data-variant="ghost-normal"]:disabled,
+.ui-button[data-variant="ghost-guidance"]:disabled,
+.ui-button[data-variant="ghost-danger"]:disabled { border-color: transparent; background: transparent; }
+.ui-button[data-size="small"] { min-height: var(--od-control-sm); padding: 0 8px; font-size: 12px; }
+.ui-button[data-size="smallPlus"] { min-height: var(--od-control-sm-plus); padding: 0 10px; font-size: 12px; }
+.ui-button[data-size="small"] .ui-button__icon svg { width: 14px; height: 14px; }
+
 .ui-button:disabled {
   cursor: not-allowed;
   color: var(--od-ink-disabled);
   background: #41464b0d;
 }
+
+.ui-button[data-variant="ghost-normal"],
+.ui-button[data-variant="ghost-guidance"],
+.ui-button[data-variant="ghost-danger"] {
+  border-color: transparent;
+  background: transparent;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.ui-button[data-variant="ghost-normal"] { color: var(--od-ink-secondary); }
+.ui-button[data-variant="ghost-normal"]:hover:not(:disabled) { background: color-mix(in srgb, var(--od-ink) 6%, transparent); color: var(--od-ink); }
+.ui-button[data-variant="ghost-guidance"] { color: var(--od-guidance); }
+.ui-button[data-variant="ghost-guidance"]:hover:not(:disabled) { background: color-mix(in srgb, var(--od-guidance) 10%, transparent); }
+.ui-button[data-variant="ghost-danger"] { color: var(--od-danger); }
+.ui-button[data-variant="ghost-danger"]:hover:not(:disabled) { background: color-mix(in srgb, var(--od-danger) 8%, transparent); }
+.ui-button[data-variant="ghost-normal"]:disabled,
+.ui-button[data-variant="ghost-guidance"]:disabled,
+.ui-button[data-variant="ghost-danger"]:disabled { border-color: transparent; background: transparent; }
+
+.ui-button[data-size="small"] { min-height: var(--od-control-sm); padding: 0 8px; font-size: 12px; }
+.ui-button[data-size="small"] .ui-button__icon svg { width: 14px; height: 14px; }
+.ui-button[data-size="smallPlus"] { min-height: var(--od-control-sm-plus); padding: 0 10px; font-size: 12px; }
+.ui-button[data-size="small"]:not(:has(.ui-button__label)) { min-width: var(--od-control-sm); padding: 0; border-radius: 6px; }
 
 .ui-input,
 .ui-textarea,
@@ -205,6 +243,70 @@
 
 .ui-switch[aria-checked="true"] .ui-switch__thumb {
   transform: translateX(12px);
+}
+
+.ui-checkbox {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--od-ink);
+  cursor: pointer;
+  font: 400 13px/20px var(--od-font-ui);
+}
+
+.ui-checkbox > input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.ui-checkbox__control {
+  position: relative;
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  margin-top: 2px;
+  border: 1px solid var(--od-border-hover);
+  border-radius: 2px;
+  background: var(--od-surface);
+}
+
+.ui-checkbox > input:checked + .ui-checkbox__control {
+  border-color: var(--od-ink);
+  background: var(--od-ink);
+}
+
+.ui-checkbox > input:checked + .ui-checkbox__control::after {
+  position: absolute;
+  top: 2px;
+  left: 5px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--od-surface);
+  border-width: 0 2px 2px 0;
+  content: "";
+  transform: rotate(45deg);
+}
+
+.ui-checkbox > input:focus-visible + .ui-checkbox__control {
+  outline: 2px solid var(--od-guidance);
+  outline-offset: 2px;
+}
+
+.ui-checkbox[data-disabled="true"] {
+  color: var(--od-ink-disabled);
+  cursor: not-allowed;
+}
+
+.ui-checkbox[data-disabled="true"] .ui-checkbox__control {
+  background: var(--od-surface-muted);
+  opacity: .7;
 }
 
 .ui-loading {
@@ -402,6 +504,10 @@
 .ui-table td { padding: 12px; border-bottom: 1px solid var(--od-border-subtle); }
 .ui-table tbody tr:hover { background: var(--od-surface-subtle); }
 .ui-table__empty { padding: 24px; color: var(--od-ink-secondary); text-align: center; }
+.ui-table__pagination { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--od-border-subtle); color: var(--od-ink-secondary); font-size: 12px; }
+.ui-table__pagination button { min-width: 72px; border: 1px solid var(--od-border-subtle); border-radius: 4px; padding: 5px 10px; background: var(--od-surface); color: var(--od-ink); font: inherit; cursor: pointer; }
+.ui-table__pagination button:hover:not(:disabled) { border-color: var(--od-guidance); color: var(--od-guidance); }
+.ui-table__pagination button:disabled { color: var(--od-ink-tertiary); cursor: not-allowed; opacity: .6; }
 
 .ui-tag { display: inline-flex; min-height: 22px; align-items: center; gap: 4px; padding: 0 8px; border-radius: 999px; background: var(--od-surface-muted); color: var(--od-ink-medium); font: 400 12px/20px var(--od-font-ui); }
 .ui-tag[data-tone="brand"] { background: #5da4e31a; color: #347fbf; }
@@ -416,3 +522,34 @@
 
 .ui-typography-title { margin: 0; color: var(--od-ink); font-family: var(--od-font-ui); font-weight: 500; }
 .ui-typography--ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-approval-center {
+  display: grid;
+  gap: 12px;
+}
+
+.agent-approval-center > p {
+  margin: 0;
+  color: var(--n-text-secondary, #667085);
+}
+
+.agent-approval-center dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.agent-approval-center dl > div {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.agent-approval-center dt {
+  color: var(--n-text-tertiary, #98a2b3);
+}
+
+.agent-approval-center dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}

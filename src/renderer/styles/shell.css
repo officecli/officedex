@@ -1,17 +1,55 @@
 /* ─── App Shell ─── */
 
+/* Document-format identity (DocTypeIcon): one icon + one color per format,
+   app-wide. The hue rides --doc-color so a single class pair styles both the
+   bare icon and the tinted chip. */
+.doc-type-icon { display: inline-grid; place-items: center; color: var(--doc-color, var(--od-ink-secondary)); }
+.doc-type-icon svg { width: 16px; height: 16px; }
+.doc-type-chip { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border-radius: 9px; background: color-mix(in srgb, var(--doc-color, var(--od-ink)) 11%, transparent); color: var(--doc-color, var(--od-ink)); }
+.doc-type-chip svg { width: 17px; height: 17px; }
+.doc-type--pptx { --doc-color: var(--od-doc-pptx); }
+.doc-type--docx { --doc-color: var(--od-doc-docx); }
+.doc-type--xlsx { --doc-color: var(--od-doc-xlsx); }
+.doc-type--img,
+.doc-type--gif { --doc-color: var(--od-doc-img); }
+.doc-type--report { --doc-color: var(--od-doc-report); }
+
+/* The update banner is optional, so the frame stacks its children instead of
+   assigning them fixed grid rows: with `grid-template-rows: auto minmax(0, 1fr)`
+   a banner-less frame put the shell in the banner's `auto` row, which sized to
+   content and left the rest of the window blank below it. */
+.app-frame {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-frame > .update-banner {
+  flex: none;
+}
+
+.app-frame > .app-shell,
+.app-frame > .home-shell {
+  height: auto;
+  min-height: 0;
+  flex: 1;
+}
+
 .app-shell {
   position: relative;
   display: grid;
-  grid-template-columns: 256px minmax(0, 1fr);
+  grid-template-columns: 232px minmax(0, 1fr);
   height: 100vh;
   overflow: hidden;
   background: var(--n-canvas);
 }
 
 .fluid-shell {
-  grid-template-columns: 248px minmax(0, 1fr);
-  background: var(--n-surface-soft);
+  grid-template-columns: 232px minmax(0, 1fr);
+  background: var(--od-surface);
 }
 
 /* ─── Sidebar ─── */
@@ -19,38 +57,38 @@
 .sidebar {
   position: relative;
   display: flex;
-  width: 248px;
+  width: 232px;
   box-sizing: border-box;
   min-height: 0;
   flex-direction: column;
-  gap: 16px;
-  border-right: 1px solid var(--n-hairline);
-  background: var(--n-canvas);
-  padding: 20px 16px;
+  gap: 12px;
+  border-right: 1px solid var(--od-border-subtle);
+  background: var(--od-surface-subtle);
+  padding: 16px 12px;
   transition: width 200ms ease, padding 200ms ease;
 }
 
 .fluid-shell .sidebar {
-  background: var(--n-surface-soft);
-  border-right-color: var(--n-hairline-soft);
+  background: var(--od-surface-subtle);
+  border-right-color: var(--od-border-subtle);
 }
 
 .brand-block {
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-height: 42px;
-  padding: 0 4px;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 8px;
 }
 
 .brand-mark {
   display: grid;
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   place-items: center;
   overflow: hidden;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   padding: 0;
   cursor: pointer;
@@ -65,16 +103,16 @@
 
 .brand {
   font-family: var(--font-body);
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--n-ink);
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--od-ink);
   letter-spacing: 0;
 }
 
 .bridge-pill {
   color: var(--n-success);
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 11px;
+  line-height: 16px;
   font-weight: 500;
 }
 
@@ -82,27 +120,20 @@
   color: var(--n-error);
 }
 
-.side-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-height: 0;
-}
-
 .nav-item {
   position: relative;
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
+  grid-template-columns: 20px minmax(0, 1fr);
   width: 100%;
-  height: 36px;
+  height: 32px;
   align-items: center;
-  column-gap: 10px;
+  column-gap: 8px;
   border: 0;
-  border-radius: var(--radius-md);
+  border-radius: 4px;
   background: transparent;
-  color: var(--n-slate);
-  padding: 0 12px;
-  font-size: 14px;
+  color: var(--od-ink-medium);
+  padding: 0 8px;
+  font-size: 13px;
   font-weight: 500;
   text-align: left;
   cursor: pointer;
@@ -131,8 +162,9 @@
 }
 
 .nav-item.active {
-  background: var(--n-primary);
-  color: var(--n-on-primary);
+  background: var(--od-surface);
+  color: var(--od-ink);
+  box-shadow: inset 0 0 0 1px var(--od-border-subtle);
   font-weight: 600;
 }
 
@@ -157,12 +189,6 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-}
-
-/* ─── History List ─── */
-
-.sidebar-spacer {
-  flex: 1;
 }
 
 .history-list {
@@ -608,10 +634,6 @@
   margin: 0;
 }
 
-.global-search {
-  max-width: 440px;
-}
-
 .content-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -826,9 +848,7 @@
     grid-template-columns: auto 1fr auto;
   }
 
-  .global-search,
   .breadcrumb,
-  .topbar .ui-badge,
   .topbar > .ui-button:not(:last-child) {
     display: none;
   }

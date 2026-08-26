@@ -19,4 +19,13 @@
   --od-control-lg: 40px;
   --od-shadow-floating: 0 20px 32px #0000000f;
   --od-font-ui: "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  /* Document-format identity colors. One hue per format, everywhere — they
+     follow the Office conventions users already know (PPT orange-red, Word
+     blue, Excel green), slightly desaturated to sit in the Shimo palette. */
+  --od-doc-pptx: #c65533;
+  --od-doc-docx: #3674b5;
+  --od-doc-xlsx: #217a4b;
+  --od-doc-img: #8a63d2;
+  --od-doc-report: #0f8b8d;
 }
