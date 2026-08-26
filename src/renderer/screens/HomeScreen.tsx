@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
 import type { DesktopTask, DocumentType, RecentFile, WorkspaceSummary } from "../../shared/types";
-import { Button, Dropdown, Empty, Loading, TextArea, type MenuProps } from "../ui";
+import { Button, Dropdown, Empty, Loading, TextArea, toast, type MenuProps } from "../ui";
+import { dragHasFiles, setHomeDropZone } from "../homeDropZone";
 import type { HomeTaskAnalysis, HomeTaskIntake } from "../homeIntake";
 import {
   ArrowUpOutlined,
@@ -15,6 +16,8 @@ import {
 import { useT } from "../i18n";
 import { fileNameFromPath } from "../utils/path";
 import { MaterialSymbol } from "../components/Shell";
+import { DocTypeIcon, docTypeFromPath } from "../components/DocTypeIcon";
+import { RuntimePrompts } from "../components/RuntimePrompts";
 
 type HomeDocumentType = Extract<DocumentType, "pptx" | "img" | "docx" | "xlsx">;
 
@@ -30,12 +33,14 @@ export interface HomeScreenProps {
   onRemoveFile: (filePath: string) => void;
   onPickTaskFile?: () => Promise<string | undefined>;
   onPickTaskDirectory?: () => Promise<string | undefined>;
+  droppedTaskPaths?: { paths: string[]; seq: number };
   onSelectWorkspace?: (workspaceId: string) => void | Promise<void>;
   onSelectAllWorkspaces?: () => void;
   onAddWorkspace?: () => void;
   onAnalyzeTask?: (input: HomeTaskIntake) => HomeTaskAnalysis | Promise<HomeTaskAnalysis>;
   onStartTask?: (input: HomeTaskIntake) => void | Promise<void>;
   onOpenTask?: (taskId: string) => void;
+  onRetryTask?: (task: DesktopTask) => void;
   onOpenTasks?: () => void;
   onRetryRecentFiles?: () => void;
 }
@@ -82,7 +87,7 @@ const HOME_TEMPLATES: HomeTemplate[] = [
   { id: "budget", type: "xlsx", icon: "account_balance_wallet", minutes: 2 },
 ];
 
-export function HomeScreen({ files, attentionTasks = [], loading, error, activeWorkspaceId, workspaces = [], onOpenFile, onRemoveFile, onPickTaskFile, onPickTaskDirectory, onSelectWorkspace, onSelectAllWorkspaces, onAddWorkspace, onAnalyzeTask, onStartTask, onOpenTask, onOpenTasks, onRetryRecentFiles }: HomeScreenProps) {
+export function HomeScreen({ files, attentionTasks = [], loading, error, activeWorkspaceId, workspaces = [], onOpenFile, onRemoveFile, onPickTaskFile, onPickTaskDirectory, droppedTaskPaths, onSelectWorkspace, onSelectAllWorkspaces, onAddWorkspace, onAnalyzeTask, onStartTask, onOpenTask, onRetryTask, onOpenTasks, onRetryRecentFiles }: HomeScreenProps) {
   const t = useT();
   const homeScreenRef = useRef<HTMLElement>(null);
   const pointerFieldRef = useRef<HTMLCanvasElement>(null);
@@ -96,14 +101,30 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
   const [analyzing, setAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<HomeTaskAnalysis>();
   const [starting, setStarting] = useState(false);
+  const [dropActive, setDropActive] = useState(false);
+  const [dismissedTaskIds, setDismissedTaskIds] = useState<string[]>([]);
+  const [runtimePromptCount, setRuntimePromptCount] = useState(0);
+  const lastDropSeq = useRef(0);
   const visibleTemplates = useMemo(() => HOME_TEMPLATES.filter((template) => template.type === selectedDocumentType), [selectedDocumentType]);
   const visibleFiles = useMemo(() => [...files]
     .filter((file) => !activeWorkspaceId || file.workspaceId === activeWorkspaceId)
     .sort((left, right) => right.lastOpenedAt.localeCompare(left.lastOpenedAt))
     .slice(0, 6), [activeWorkspaceId, files]);
+  // The home inbox is now the only surface for work that needs the user, so it
+  // must not truncate: there is no "view all" page to overflow into.
   const actionableTasks = useMemo(() => attentionTasks
-    .filter((task) => task.status === "question" || task.status === "plan_review")
-    .slice(0, 3), [attentionTasks]);
+    .filter((task) => task.status === "question" || task.status === "plan_review"), [attentionTasks]);
+  // Work in flight belongs where its result will land: running and failed tasks
+  // ride at the top of Recent and turn into (or give way to) the file card when
+  // they settle, so the user never has to leave home to see how it is going.
+  // Failures age out: a week-old failure is history for the tasks page, not
+  // something to greet the user with every time they open the app.
+  const liveTasks = useMemo(() => attentionTasks
+    .filter((task) => task.status === "starting" || task.status === "running"
+      || (task.status === "failed" && isRecentFailure(task)))
+    .filter((task) => !activeWorkspaceId || task.workspaceId === activeWorkspaceId)
+    .filter((task) => !dismissedTaskIds.includes(task.id))
+    .slice(0, 4), [attentionTasks, activeWorkspaceId, dismissedTaskIds]);
 
   useEffect(() => {
     if (prompt) {
@@ -171,6 +192,37 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
       window.clearTimeout(timer);
     };
   }, [prompt, t]);
+
+  useEffect(() => {
+    if (!droppedTaskPaths || droppedTaskPaths.paths.length === 0 || droppedTaskPaths.seq === lastDropSeq.current) return;
+    lastDropSeq.current = droppedTaskPaths.seq;
+    const [path] = droppedTaskPaths.paths;
+    const name = fileNameFromPath(path);
+    // No fs access here: a trailing extension is the best available signal for
+    // file-vs-directory, and a wrong guess is one chip removal away.
+    if (/\.[A-Za-z0-9]{1,8}$/.test(name)) {
+      setSourceFile(path);
+    } else {
+      setReferenceDirectory(path);
+    }
+    setAnalysis(undefined);
+    setIntakeError(undefined);
+    setDropActive(false);
+    toast.success(t("home.dropAttached", { name }));
+  }, [droppedTaskPaths, t]);
+
+  const intakeDragOver = (event: ReactDragEvent<HTMLFormElement>) => {
+    if (!dragHasFiles(event)) return;
+    event.preventDefault();
+    setHomeDropZone("intake");
+    setDropActive(true);
+  };
+
+  const intakeDragLeave = (event: ReactDragEvent<HTMLFormElement>) => {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+    setHomeDropZone(null);
+    setDropActive(false);
+  };
 
   const analyzeTask = async () => {
     const value = prompt.trim();
@@ -395,7 +447,17 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
         </div>
       </header>
 
-      <form className="home-intake" aria-label={t("home.promptLabel")} onSubmit={submitTask}>
+      <form
+        className={`home-intake ${dropActive ? "is-drop-active" : ""}`}
+        aria-label={t("home.promptLabel")}
+        onSubmit={submitTask}
+        onDragOver={intakeDragOver}
+        onDragLeave={intakeDragLeave}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDropActive(false);
+        }}
+      >
         <TextArea
           aria-label={t("home.promptLabel")}
           autoSize={{ minRows: 3, maxRows: 6 }}
@@ -411,7 +473,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
           <div className="home-intake__references" aria-label={t("home.references")}>
             {sourceFile ? (
               <div className="home-intake__attachment" aria-label={t("home.attachedFile")}>
-                <FileTextOutlined aria-hidden />
+                <DocTypeIcon type={docTypeFromPath(sourceFile)} />
                 <span title={sourceFile}>{fileNameFromPath(sourceFile)}</span>
                 <Button variant="ghost-normal" size="small" ariaLabel={t("home.removeAttachedFile")} icon={<CloseOutlined />} onClick={() => {
                   setSourceFile(undefined);
@@ -513,7 +575,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
               >
                 <span className="home-template-card__preview" aria-hidden="true">
                   {template.cover ? <img src={template.cover} alt="" loading="lazy" /> : (
-                    <span className="home-template-card__sheet">
+                    <span className={`home-template-card__sheet doc-type--${template.type}`}>
                       <span /><span /><span />
                       <MaterialSymbol name={template.icon} />
                     </span>
@@ -531,11 +593,10 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
         </div>
       </section>
 
-      {actionableTasks.length > 0 ? (
+      {actionableTasks.length > 0 || runtimePromptCount > 0 ? (
         <section className="home-attention" aria-labelledby="home-attention-title">
           <div className="home-section-header">
-            <h2 id="home-attention-title">{t("home.attentionTitle")} <span>{actionableTasks.length}</span></h2>
-            {onOpenTasks ? <Button variant="ghost-guidance" size="small" onClick={onOpenTasks}>{t("home.viewAll")}</Button> : null}
+            <h2 id="home-attention-title">{t("home.attentionTitle")} <span>{actionableTasks.length + runtimePromptCount}</span></h2>
           </div>
           <div className="home-attention-list">
             {actionableTasks.map((task) => (
@@ -546,6 +607,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
                 <em>{t(task.status === "plan_review" ? "home.review" : "home.respond")}</em>
               </button>
             ))}
+            <RuntimePrompts onCountChange={setRuntimePromptCount} />
           </div>
         </section>
       ) : null}
@@ -562,15 +624,22 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
             {onRetryRecentFiles ? <Button size="small" onClick={onRetryRecentFiles}>{t("home.retry")}</Button> : null}
           </div>
         ) : null}
-        {!loading && !error && visibleFiles.length === 0 ? <Empty description={t("home.empty")} /> : null}
-        {!loading && !error && visibleFiles.length > 0 ? (
+        {!loading && !error && visibleFiles.length === 0 && liveTasks.length === 0 ? <Empty description={t("home.empty")} /> : null}
+        {!loading && !error && (visibleFiles.length > 0 || liveTasks.length > 0) ? (
           <div className="home-recent-list">
+            {liveTasks.map((task) => (
+              <HomeTaskCard
+                key={task.id}
+                task={task}
+                onOpen={() => onOpenTask?.(task.id)}
+                onRetry={onRetryTask ? () => onRetryTask(task) : undefined}
+                onDismiss={() => setDismissedTaskIds((current) => [...current, task.id])}
+              />
+            ))}
             {visibleFiles.map((file) => (
               <div className="home-recent-row" key={file.filePath}>
                 <button type="button" className="home-recent-open" aria-label={t("home.openFile", { name: file.fileName })} onClick={() => onOpenFile(file)}>
-                  <span className={`home-recent-icon home-recent-icon--${file.documentType.toLowerCase()}`} aria-hidden="true">
-                    <MaterialSymbol name={recentIconName(file.documentType)} />
-                  </span>
+                  <DocTypeIcon type={file.documentType} chip />
                   <span className="home-recent-copy"><strong>{file.fileName}</strong><small>{file.documentType.toUpperCase()} · {t(`home.source.${file.source}`)} · {formatOpenedAt(file.lastOpenedAt)}</small></span>
                 </button>
                 <Button className="home-file-remove" variant="ghost-normal" size="small" ariaLabel={t("home.removeFile", { name: file.fileName })} icon={<CloseOutlined />} onClick={() => onRemoveFile(file.filePath)} />
@@ -584,12 +653,61 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
   );
 }
 
-function recentIconName(documentType: string): string {
-  const type = documentType.toLowerCase();
-  if (type === "pptx") return "slideshow";
-  if (type === "xlsx") return "table_chart";
-  if (type === "img" || type === "gif") return "image";
-  return "description";
+const RECENT_FAILURE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+// A failure is worth interrupting home for only while it is still actionable.
+// Undated failures are treated as old: better to under-surface on home (the
+// tasks page still lists them) than to pin ancient errors to the front door.
+function isRecentFailure(task: DesktopTask): boolean {
+  const ts = task.events.at(-1)?.ts;
+  if (!ts) return false;
+  const at = new Date(ts).getTime();
+  if (Number.isNaN(at)) return false;
+  return Date.now() - at < RECENT_FAILURE_WINDOW_MS;
+}
+
+function HomeTaskCard({ task, onOpen, onRetry, onDismiss }: {
+  task: DesktopTask;
+  onOpen: () => void;
+  onRetry?: () => void;
+  onDismiss: () => void;
+}) {
+  const t = useT();
+  const failed = task.status === "failed";
+  const stages = task.stages ?? [];
+  const done = stages.filter((stage) => stage.status === "completed").length;
+  const activeStage = stages.find((stage) => stage.id === task.activeStageId);
+  const percent = stages.length > 0 ? Math.round((done / stages.length) * 100) : undefined;
+  const title = task.topic || task.artifact?.fileName || task.userInput?.prompt || t("tasks.untitled");
+  const meta = failed
+    ? (task.error || t("home.task.failed"))
+    : (activeStage?.label || t("home.task.running")) + (stages.length > 0 ? ` · ${done}/${stages.length}` : "");
+
+  return (
+    <div className={`home-recent-row home-task-row ${failed ? "home-task-row--failed" : "home-task-row--running"}`}>
+      <button type="button" className="home-recent-open" aria-label={t("home.openTask", { name: title })} onClick={onOpen}>
+        <span className="home-task-icon" aria-hidden="true">
+          <DocTypeIcon type={task.documentType || task.artifact?.documentType} chip />
+          {!failed ? <span className="home-task-icon__spinner" /> : null}
+        </span>
+        <span className="home-recent-copy">
+          <strong>{title}</strong>
+          <small title={failed ? task.error : undefined}>{meta}</small>
+          {!failed && percent !== undefined ? (
+            <span className="home-task-progress" aria-hidden="true"><i style={{ width: `${percent}%` }} /></span>
+          ) : null}
+        </span>
+      </button>
+      <div className="home-task-actions">
+        {failed && onRetry ? (
+          <Button variant="ghost-guidance" size="small" onClick={onRetry}>{t("home.task.retry")}</Button>
+        ) : null}
+        {failed ? (
+          <Button className="home-file-remove" variant="ghost-normal" size="small" ariaLabel={t("home.task.dismiss", { name: title })} icon={<CloseOutlined />} onClick={onDismiss} />
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
 function formatOpenedAt(value: string): string {

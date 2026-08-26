@@ -40,7 +40,11 @@ import type { WorkspaceConversationSummary, WorkspaceSummary } from "../../share
 import { useT } from "../i18n";
 import { RuntimeChip } from "./RuntimeChip";
 import { HistoryList } from "./HistoryList";
-import { ProjectSidebar } from "./ProjectSidebar";
+import { ProjectSidebar, type SidebarAccount } from "./ProjectSidebar";
+import { SidebarUpdateRow, type SidebarUpdateRowProps } from "./SidebarUpdateRow";
+import type { SidebarSignal } from "../taskSignals";
+
+const HOME_SIDEBAR_COMPACT_KEY = "officedex.homeSidebarCompact";
 
 export interface CreditInfo {
   // "quota" = bounded plan with a known cap (api_key burndown, anonymous device pool).
@@ -69,6 +73,9 @@ interface ShellProps {
   autoCollapseSidebarKey?: string;
   credit?: CreditInfo;
   hasCustomProvider?: boolean;
+  signal?: SidebarSignal;
+  account?: SidebarAccount;
+  update?: SidebarUpdateRowProps;
   workspaces: WorkspaceSummary[];
   chats: WorkspaceConversationSummary[];
   activeWorkspaceId: string | undefined;
@@ -111,6 +118,9 @@ export function Shell({
   autoCollapseSidebarKey,
   credit,
   hasCustomProvider,
+  signal,
+  account,
+  update,
   workspaces,
   chats,
   activeWorkspaceId,
@@ -131,6 +141,21 @@ export function Shell({
   const [sidebarPreview, setSidebarPreview] = useState(false);
   const [sidebarToggleTooltipOpen, setSidebarToggleTooltipOpen] = useState(false);
   const [projectSidebarCompact, setProjectSidebarCompact] = useState(true);
+  const [homeSidebarCompact, setHomeSidebarCompact] = useState(() => {
+    try {
+      return localStorage.getItem(HOME_SIDEBAR_COMPACT_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const changeHomeSidebarCompact = (next: boolean) => {
+    setHomeSidebarCompact(next);
+    try {
+      localStorage.setItem(HOME_SIDEBAR_COMPACT_KEY, next ? "1" : "0");
+    } catch {
+      // preference persistence is best-effort
+    }
+  };
   const lastAutoCollapseSidebarKey = useRef<string | undefined>(undefined);
   const t = useT();
   const sidebarToggleLabel = collapsed ? t("shell.sidebar.expand") : t("shell.sidebar.collapse");
@@ -148,6 +173,8 @@ export function Shell({
     setSidebarPreview(false);
   }, [autoCollapseSidebarKey]);
 
+  const updateRow = update ? <SidebarUpdateRow {...update} /> : null;
+
   if (activeNav === "home" || activeNav === "spreadsheet") {
     const spreadsheetMode = activeNav === "spreadsheet";
     return (
@@ -161,11 +188,15 @@ export function Shell({
           onRenameWorkspace={onRenameWorkspace}
           onRevealWorkspace={onRevealWorkspace}
           onRemoveWorkspace={onRemoveWorkspace}
-          onOpenTasks={() => onNavChange("tasks")}
           onOpenSettings={() => onNavChange("settings")}
           onOpenAccount={() => onNavChange("login")}
-          compact={spreadsheetMode ? projectSidebarCompact : false}
-          onCompactChange={spreadsheetMode ? setProjectSidebarCompact : undefined}
+          signal={signal}
+          credit={credit}
+          hasCustomProvider={hasCustomProvider}
+          account={account}
+          updateRow={updateRow}
+          compact={spreadsheetMode ? projectSidebarCompact : homeSidebarCompact}
+          onCompactChange={spreadsheetMode ? setProjectSidebarCompact : changeHomeSidebarCompact}
         />
         <main className={`home-shell__main ${spreadsheetMode ? "home-shell__main--spreadsheet" : ""}`}>
           {!spreadsheetMode ? (
@@ -236,18 +267,13 @@ export function Shell({
           onRemoveWorkspace={onRemoveWorkspace}
         />
         <div className="sidebar-footer">
+          {updateRow}
           <CreditMeter info={credit} hasCustomProvider={hasCustomProvider} />
           <div className="sidebar-footer-nav">
             <Tooltip title={sidebarContentsCollapsed ? t("shell.nav.profile") : ""} placement="right">
               <button className={`nav-item profile-link ${activeNav === "login" ? "active" : ""}`} onClick={() => onNavChange("login")}>
                 <UserOutlined />
                 <span>{t("shell.nav.profile")}</span>
-              </button>
-            </Tooltip>
-            <Tooltip title={sidebarContentsCollapsed ? t("shell.nav.tasks") : ""} placement="right">
-              <button className={`nav-item ${activeNav === "tasks" ? "active" : ""}`} onClick={() => onNavChange("tasks")}>
-                <HistoryOutlined />
-                <span>{t("shell.nav.tasks")}</span>
               </button>
             </Tooltip>
             <Tooltip title={sidebarContentsCollapsed ? t("shell.nav.settings") : ""} placement="right">
@@ -313,7 +339,7 @@ export function MaterialSymbol({ name }: { name: string }) {
 
 const MASKED_VALUE = "••••";
 
-export function CreditMeter({ info, hasCustomProvider }: { info?: CreditInfo; hasCustomProvider?: boolean }) {
+function CreditMeter({ info, hasCustomProvider }: { info?: CreditInfo; hasCustomProvider?: boolean }) {
   const t = useT();
   const [hidden, setHidden] = useState(true);
   const loading = !info;

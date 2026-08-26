@@ -636,7 +636,7 @@ describe("App task flow", () => {
     expect(await screen.findByLabelText("Close preview")).toBeTruthy();
   });
 
-  it("closes an open document preview before showing Tasks", async () => {
+  it("closes an open document preview when navigating away", async () => {
     window.history.pushState({}, "", "/");
     installBridgeMock();
     const api = window.officecli as DesktopAPI;
@@ -659,9 +659,9 @@ describe("App task flow", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Open Local brief.pdf" }));
     expect(await screen.findByLabelText("Close preview")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Task history" }));
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
 
-    expect(await screen.findByRole("heading", { name: "Recent Tasks" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Generation" })).toBeTruthy();
     await waitFor(() => expect(screen.queryByLabelText("Close preview")).toBeNull());
     expect(api.revokePreviewToken).toHaveBeenCalledWith("test-token");
   });
@@ -1455,7 +1455,7 @@ describe("App task flow", () => {
     expect(screen.getByText("cancelled")).toBeTruthy();
   });
 
-  it("shows real bridge tasks in Recent Tasks and reopens the selected task dialogue", async () => {
+  it("surfaces a live bridge task on home and reopens its dialogue", async () => {
     const bridge = installBridgeMock();
     const { App } = await import("./App");
 
@@ -1475,20 +1475,19 @@ describe("App task flow", () => {
       await screen.findByRole("heading", { name: /What should we work on/i }),
     ).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: /Tasks/ }));
+    // No tasks page any more: work in flight rides in Recent on home, where its
+    // result will land.
+    fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    const card = await screen.findByRole("button", { name: "Open task Live Bridge Task" });
+    expect(card.closest(".home-task-row--running")).not.toBeNull();
 
-    expect(
-      (await screen.findAllByText("Live Bridge Task")).length,
-    ).toBeGreaterThan(0);
-    expect(screen.getAllByText("Running").length).toBeGreaterThan(0);
-
-    fireEvent.click(screen.getByRole("button", { name: /Live Bridge Task/ }));
+    fireEvent.click(card);
 
     expect(await screen.findByText("Generating PPTX...")).toBeTruthy();
     expect(document.querySelector(".generation-loading-pptx")).toBeTruthy();
   });
 
-  it("uses the page-level New chat button to return to a blank composer", async () => {
+  it("returns to a blank composer from Settings via the sidebar New chat", async () => {
     const bridge = installBridgeMock();
     const { App } = await import("./App");
 
@@ -1510,17 +1509,9 @@ describe("App task flow", () => {
     });
 
     expect(await screen.findByText("Generation Complete")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /Tasks/ }));
-
-    const tasksPage = screen
-      .getByRole("heading", { name: "Recent Tasks" })
-      .closest(".page-stack");
-    expect(tasksPage).toBeTruthy();
-    fireEvent.click(
-      within(tasksPage as HTMLElement).getByRole("button", {
-        name: /New chat/,
-      }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(await screen.findByRole("heading", { name: "Generation" })).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button", { name: /New chat/ })[0]);
 
     expect(
       await screen.findByRole("heading", { name: /What should we work on/i }),

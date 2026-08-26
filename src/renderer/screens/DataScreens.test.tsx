@@ -1,62 +1,35 @@
-import { describe, expect, it } from "vitest";
-import type { DesktopTask } from "../../shared/types";
-import { creditModel } from "./DataScreens";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { LocaleProvider } from "../i18n";
 
-function makeTask(overrides: Partial<DesktopTask>): DesktopTask {
-  return {
-    id: "task-1",
-    conversationId: "task-1",
-    status: "completed",
-    events: [],
-    ...overrides,
-  } as DesktopTask;
-}
+const bridge = vi.hoisted(() => ({
+	listAgentRuns: vi.fn(),
+	cancelAgentRun: vi.fn(),
+	retryAgentRun: vi.fn(),
+	respondAgentRun: vi.fn(),
+	approveAgentRun: vi.fn(),
+}));
+vi.mock("../bridge", () => ({ officecli: bridge }));
 
-describe("creditModel", () => {
-  it("returns empty state for running tasks", () => {
-    expect(creditModel(makeTask({ status: "running", creditCharged: 5 }))).toEqual({
-      state: "empty",
-      charged: 0,
-      mode: "",
-    });
-  });
+import { isExternalAgentRuntimeRun, isHistoricalRuntimeRun } from "./DataScreens";
 
-  it("returns empty state for starting/question/cancelled tasks", () => {
-    for (const status of ["starting", "question", "cancelled"] as const) {
-      expect(creditModel(makeTask({ status, creditCharged: 3 })).state).toBe("empty");
+afterEach(() => { cleanup(); vi.restoreAllMocks(); for (const mock of Object.values(bridge)) mock.mockReset(); });
+
+describe("runtime run audience", () => {
+  it("separates the external-agent surface from retired legacy runs", () => {
+    // The two prefixes are orthogonal: "agent." says who calls it, "legacy."
+    // says it is retired. Collapsing them would resurrect the audit mistake
+    // where an external-agent workflow read as unfinished product work.
+    expect(isExternalAgentRuntimeRun({ workflow: "agent.office.render" })).toBe(true);
+    expect(isHistoricalRuntimeRun({ workflow: "agent.office.render" })).toBe(false);
+
+    expect(isHistoricalRuntimeRun({ workflow: "legacy.office-generate" })).toBe(true);
+    expect(isExternalAgentRuntimeRun({ workflow: "legacy.office-generate" })).toBe(false);
+
+    // Product-surface workflows belong to neither bucket.
+    for (const workflow of ["catalog.cleanup.v1", "liquipedia.sync.v1", "office.generate"]) {
+      expect(isExternalAgentRuntimeRun({ workflow })).toBe(false);
+      expect(isHistoricalRuntimeRun({ workflow })).toBe(false);
     }
-  });
-
-  it("returns legacy when completed task lacks creditCharged (old binary)", () => {
-    const model = creditModel(makeTask({ status: "completed" }));
-    expect(model.state).toBe("legacy");
-    expect(model.charged).toBe(0);
-  });
-
-  it("returns zero state when creditCharged is exactly 0", () => {
-    const model = creditModel(
-      makeTask({ status: "completed", creditCharged: 0, creditMode: "anonymous" }),
-    );
-    expect(model.state).toBe("zero");
-    expect(model.mode).toBe("anonymous");
-  });
-
-  it("returns value state with charged amount and mode for hosted tasks", () => {
-    const model = creditModel(
-      makeTask({ status: "completed", creditCharged: 12, creditMode: "hosted" }),
-    );
-    expect(model).toEqual({ state: "value", charged: 12, mode: "hosted" });
-  });
-
-  it("applies to failed tasks (zero settled)", () => {
-    const model = creditModel(
-      makeTask({ status: "failed", creditCharged: 0, creditMode: "hosted" }),
-    );
-    expect(model.state).toBe("zero");
-  });
-
-  it("falls back to empty mode string when creditMode is missing", () => {
-    const model = creditModel(makeTask({ status: "completed", creditCharged: 4 }));
-    expect(model).toEqual({ state: "value", charged: 4, mode: "" });
   });
 });

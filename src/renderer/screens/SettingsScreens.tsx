@@ -1,4 +1,4 @@
-import { Button, Modal, Progress, Select, Space, Spin, Switch, Tag, toast as message } from "../ui";
+import { Button, Input, Modal, PasswordInput, Progress, Select, Space, Spin, Switch, Tag, toast as message } from "../ui";
 import {
   CommentOutlined,
   CopyOutlined,
@@ -16,7 +16,9 @@ import {
 } from "../ui/icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MaterialSymbol } from "../components/Shell";
+import type { ReactNode } from "react";
 import { DiagnosticsPanel } from "../components/DiagnosticsPanel";
+import { RuntimeRunsPanel } from "../components/RuntimeRunsPanel";
 import { officecli } from "../bridge";
 import { useSettings } from "../useSettings";
 import { useAppUpdate } from "../useAppUpdate";
@@ -24,16 +26,19 @@ import { formatTestResult, ProviderForm } from "../components/ProviderForm";
 import { useT, useLocale, useSetLocale, type Locale } from "../i18n";
 import { defaultProxySettings, isValidProxyUrl } from "../defaults";
 import { readNotificationsEnabled, setNotificationsEnabled as persistNotificationsEnabled } from "../notifications";
-import type { AuthEvent, CreditStatus, DocumentType, GenerateDefaults, ImagePromptTemplate, InviteInfo, LlmProvider, ProviderTestResult, ProxySettings, WhoAmIResult } from "../../shared/types";
+import type { AuthEvent, CreditStatus, DocumentType, GenerateDefaults, ImagePromptTemplate, InviteInfo, JiraAuthType, JiraConnectionSummary, JiraProbeResult, LiquipediaConnectionSummary, LiquipediaProbeResult, LlmProvider, ProviderTestResult, ProxySettings, WhoAmIResult } from "../../shared/types";
 import { exportLocalImageTemplatesJSON, importLocalImageTemplatesJSON, loadLocalImageTemplates, saveLocalImageTemplates } from "../localImageTemplates";
 import { ImeInput, ImeTextArea } from "../components/ImeInput";
+import { errorMessage } from "../utils/values";
 
 export function SettingsScreen({
   onCreditRefresh,
   onOpenLogin,
+  activity,
 }: {
   onCreditRefresh?: () => void;
   onOpenLogin?: () => void;
+  activity?: ReactNode;
 } = {}) {
   const { settings, defaultWorkspaceDir, update: rawUpdate, loading, saving, error } = useSettings();
   const t = useT();
@@ -263,6 +268,7 @@ export function SettingsScreen({
     { key: "workspace", label: t("settings.group.workspace"), icon: "folder_open" },
     { key: "connection", label: t("settings.group.connection"), icon: "tune" },
     { key: "subscription", label: t("settings.group.subscription"), icon: "shield_lock" },
+    { key: "activity", label: t("settings.group.activity"), icon: "schedule" },
     { key: "diagnostics", label: t("diagnostics.title"), icon: "query_stats" },
     { key: "reset", label: t("settings.group.reset"), icon: "history_edu" },
     { key: "about", label: t("settings.group.about"), icon: "grid_view" },
@@ -270,8 +276,15 @@ export function SettingsScreen({
 
   return (
     <div className="settings-layout">
-      <aside className="settings-secondary-menu">
-        <h2>{t("settings.page.title")}</h2>
+      <section className="settings-panel">
+        <div className="page-header">
+          <div>
+            <h1>{t("settings.page.title")}</h1>
+            <p>{t("settings.page.subtitle")}</p>
+          </div>
+          {saving ? <Tag color="processing">{t("settings.tag.saving")}</Tag> : <Tag color="green">{t("settings.tag.autoSaved")}</Tag>}
+        </div>
+        <div className="settings-secondary-menu">
         <nav aria-label={t("settings.secondaryMenu.label")}>
           {settingsSections.map((section) => (
             <button
@@ -287,14 +300,6 @@ export function SettingsScreen({
             </button>
           ))}
         </nav>
-      </aside>
-      <section className="settings-panel">
-        <div className="page-header">
-          <div>
-            <h1>{t("settings.page.title")}</h1>
-            <p>{t("settings.page.subtitle")}</p>
-          </div>
-          {saving ? <Tag color="processing">{t("settings.tag.saving")}</Tag> : <Tag color="green">{t("settings.tag.autoSaved")}</Tag>}
         </div>
         {error ? (
           <div className="settings-error">
@@ -451,6 +456,12 @@ export function SettingsScreen({
                   onSave={(next) => update({ proxy: next })}
                 />
               </SettingRow>
+              <SettingRow title={t("settings.row.jira.title")} desc={t("settings.row.jira.desc")}>
+                <JiraConnectionCard />
+              </SettingRow>
+              <SettingRow title="Liquipedia Dota 2" desc="通过官方 MediaWiki API 获取赛事和版本更新，数据写入 OfficeDex 托管 Sheet。">
+                <LiquipediaConnectionCard />
+              </SettingRow>
             </div>
             ) : null}
             {activeSettingsSection === "subscription" ? (
@@ -483,10 +494,19 @@ export function SettingsScreen({
               ) : null}
             </div>
             ) : null}
+            {activeSettingsSection === "activity" ? (
+            <div className="setting-group" id={settingsSectionId("activity")}>
+              <h2>{t("settings.group.activity")}</h2>
+              <p className="setting-group__hint">{t("settings.activity.hint")}</p>
+              {activity}
+            </div>
+            ) : null}
             {activeSettingsSection === "diagnostics" ? (
             <div className="setting-group" id={settingsSectionId("diagnostics")}>
               <h2>{t("diagnostics.title")}</h2>
               <DiagnosticsPanel />
+              <h2 className="setting-group__subhead">{t("tasks.runtime.title")}</h2>
+              <RuntimeRunsPanel />
             </div>
             ) : null}
             {activeSettingsSection === "reset" ? (
@@ -1082,10 +1102,6 @@ function subtitleFor(phase: LoginPhase, whoami: WhoAmIResult | null, t: (key: st
   return t(`login.subtitle.${phase}`);
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 function SettingRow({ title, desc, children }: { title: string; desc: string; children: React.ReactNode }) {
   return (
     <div className="setting-row">
@@ -1096,6 +1112,247 @@ function SettingRow({ title, desc, children }: { title: string; desc: string; ch
       <div className="setting-control">{children}</div>
     </div>
   );
+}
+
+const ATLASSIAN_PAT_DOCUMENTATION_URL = "https://confluence.atlassian.com/enterprise/using-personal-access-tokens-1026032365.html";
+const LIQUIPEDIA_API_TERMS_URL = "https://liquipedia.net/api-terms-of-use";
+
+function JiraConnectionCard() {
+  const t = useT();
+  const [remote, setRemote] = useState<JiraConnectionSummary>({ configured: false, baseUrl: "", authType: "" });
+  const [baseUrl, setBaseUrl] = useState("");
+  const [authType, setAuthType] = useState<JiraAuthType>("token");
+  const [username, setUsername] = useState("");
+  const [secret, setSecret] = useState("");
+  const [probe, setProbe] = useState<JiraProbeResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const timeout = window.setTimeout(() => {
+      if (!cancelled) {
+        setLoading(false);
+        setError("Jira 连接读取超时，请稍后重试。");
+      }
+    }, 15_000);
+    officecli.getJiraConnection()
+      .then((summary) => {
+        if (cancelled) return;
+        setRemote(summary);
+        if (summary.baseUrl) {
+          setBaseUrl(summary.baseUrl);
+        }
+        if (summary.configured) {
+          setAuthType(summary.authType === "basic" ? "basic" : "token");
+          setUsername(summary.username ?? "");
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setError(errorMessage(err));
+      })
+      .finally(() => {
+        window.clearTimeout(timeout);
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, []);
+
+  const sameStoredScope = remote.configured &&
+    remote.baseUrl.replace(/\/+$/, "") === baseUrl.trim().replace(/\/+$/, "") &&
+    remote.authType === authType &&
+    (remote.username ?? "") === (authType === "basic" ? username.trim() : "");
+  const canSave = Boolean(baseUrl.trim()) && (authType !== "basic" || Boolean(username.trim())) &&
+    (Boolean(secret.trim()) || sameStoredScope) && !saving;
+
+  const save = useCallback(async () => {
+    if (!canSave) return;
+    setSaving(true);
+    setError(null);
+    setProbe(null);
+    try {
+      const nextProbe = await officecli.saveJiraConnection({
+        baseUrl: baseUrl.trim(),
+        auth: {
+          type: authType,
+          ...(authType === "basic" ? { username: username.trim() } : {}),
+          secret,
+        },
+      });
+      const summary = await officecli.getJiraConnection();
+      setRemote(summary);
+      setProbe(nextProbe);
+      setSecret("");
+      window.dispatchEvent(new Event("officedex:jira-connection-updated"));
+      void message.success(t("settings.row.jira.saveSuccess"));
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  }, [authType, baseUrl, canSave, secret, t, username]);
+
+  const clear = useCallback(async () => {
+    setClearing(true);
+    setError(null);
+    try {
+      await officecli.clearJiraConnection();
+      setRemote({ configured: false, baseUrl: "", authType: "" });
+      setProbe(null);
+      setSecret("");
+      window.dispatchEvent(new Event("officedex:jira-connection-updated"));
+      void message.success(t("settings.row.jira.clearSuccess"));
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setClearing(false);
+    }
+  }, [t]);
+
+  if (loading) return <Spin />;
+
+  return (
+    <div className="jira-connection-card">
+      <label>
+        <span>{t("settings.row.jira.baseUrl")}</span>
+        <Input aria-label={t("settings.row.jira.baseUrl")} value={baseUrl} onChange={(event) => { setBaseUrl(event.target.value); setProbe(null); }} />
+      </label>
+      <label>
+        <span>{t("settings.row.jira.authType")}</span>
+        <Select<JiraAuthType>
+          ariaLabel={t("settings.row.jira.authType")}
+          value={authType}
+          options={[
+            { value: "token", label: "Personal Access Token" },
+            { value: "basic", label: t("settings.row.jira.basicAuth") },
+          ]}
+          onChange={(value) => { setAuthType(value); setSecret(""); setProbe(null); }}
+        />
+      </label>
+      {authType === "basic" ? (
+        <label>
+          <span>{t("settings.row.jira.username")}</span>
+          <Input aria-label={t("settings.row.jira.username")} autoComplete="username" value={username} onChange={(event) => { setUsername(event.target.value); setProbe(null); }} />
+        </label>
+      ) : null}
+      <label>
+        <span>{authType === "token" ? "PAT" : t("settings.row.jira.password")}</span>
+        <PasswordInput
+          aria-label={authType === "token" ? "PAT" : t("settings.row.jira.password")}
+          autoComplete="off"
+          value={secret}
+          placeholder={remote.configured && sameStoredScope ? t("settings.row.jira.keepSecret") : undefined}
+          onChange={(event) => { setSecret(event.target.value); setProbe(null); }}
+          visibilityLabels={{ show: t("settings.row.jira.showSecret"), hide: t("settings.row.jira.hideSecret") }}
+        />
+      </label>
+      {authType === "token" ? (
+        <div className="jira-connection-card__help">
+          <strong>{t("settings.row.jira.patHelpTitle")}</strong>
+          <ol>
+            <li>{t("settings.row.jira.patHelpStep1")}</li>
+            <li>{t("settings.row.jira.patHelpStep2")}</li>
+            <li>{t("settings.row.jira.patHelpStep3")}</li>
+          </ol>
+          <div className="settings-note">{t("settings.row.jira.patHelpAdminNote")}</div>
+          <a
+            className="jira-connection-card__documentation-link"
+            href={ATLASSIAN_PAT_DOCUMENTATION_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <GlobalOutlined />
+            <span>{t("settings.row.jira.patDocumentation")}</span>
+          </a>
+        </div>
+      ) : null}
+      <div className="settings-note">{t("settings.row.jira.secretNote")}</div>
+      {remote.configured ? (
+        <div className="jira-connection-card__status">
+          <Tag color="success">{t("settings.row.jira.configured")}</Tag>
+          <span>{remote.baseUrl}</span>
+        </div>
+      ) : null}
+      {probe ? <div className="jira-connection-card__probe">{probe.server.serverTitle || "Jira"} {probe.server.version} · {probe.user.displayName || probe.user.name}</div> : null}
+      {error ? <div className="jira-connection-card__error" role="alert">{error}</div> : null}
+      <div className="jira-connection-card__actions">
+        <Button type="primary" loading={saving} disabled={!canSave} onClick={() => void save()}>
+          {t("settings.row.jira.saveAndTest")}
+        </Button>
+        {remote.configured ? <Button type="link" danger loading={clearing} onClick={() => void clear()}>{t("settings.row.jira.clear")}</Button> : null}
+      </div>
+    </div>
+  );
+}
+
+function LiquipediaConnectionCard() {
+  const [remote, setRemote] = useState<LiquipediaConnectionSummary>({ configured: false, baseUrl: "https://liquipedia.net/dota2" });
+  const [baseUrl, setBaseUrl] = useState("https://liquipedia.net/dota2");
+  const [contact, setContact] = useState("");
+  const [probe, setProbe] = useState<LiquipediaProbeResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const timeout = window.setTimeout(() => {
+      if (!cancelled) {
+        setLoading(false);
+        setError("Liquipedia 连接读取超时，请稍后重试。");
+      }
+    }, 15_000);
+    officecli.getLiquipediaConnection().then((summary) => {
+      if (cancelled) return;
+      setRemote(summary);
+      if (summary.baseUrl) setBaseUrl(summary.baseUrl);
+      if (summary.contact) setContact(summary.contact);
+    }).catch((err) => { if (!cancelled) setError(errorMessage(err)); }).finally(() => { window.clearTimeout(timeout); if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; window.clearTimeout(timeout); };
+  }, []);
+
+  const canSave = Boolean(baseUrl.trim() && contact.trim()) && !saving;
+  const save = useCallback(async () => {
+    if (!canSave) return;
+    setSaving(true); setError(null); setProbe(null);
+    try {
+      const nextProbe = await officecli.saveLiquipediaConnection({ baseUrl: baseUrl.trim(), contact: contact.trim() });
+      const summary = await officecli.getLiquipediaConnection();
+      setRemote(summary); setProbe(nextProbe);
+      window.dispatchEvent(new Event("officedex:liquipedia-connection-updated"));
+      void message.success("Liquipedia 连接已测试并保存。");
+    } catch (err) { setError(errorMessage(err)); } finally { setSaving(false); }
+  }, [baseUrl, canSave, contact]);
+  const clear = useCallback(async () => {
+    setClearing(true); setError(null);
+    try {
+      await officecli.clearLiquipediaConnection();
+      setRemote({ configured: false, baseUrl: "https://liquipedia.net/dota2" }); setProbe(null);
+      window.dispatchEvent(new Event("officedex:liquipedia-connection-updated"));
+      void message.success("Liquipedia 连接已清除。");
+    } catch (err) { setError(errorMessage(err)); } finally { setClearing(false); }
+  }, []);
+  if (loading) return <Spin />;
+  return <div className="jira-connection-card">
+    <label><span>数据源地址</span><Input aria-label="Liquipedia 数据源地址" value={baseUrl} onChange={(event) => { setBaseUrl(event.target.value); setProbe(null); }} /></label>
+    <label><span>联系邮箱或网址</span><Input aria-label="Liquipedia 联系方式" value={contact} placeholder="例如：dev@example.com" onChange={(event) => { setContact(event.target.value); setProbe(null); }} /></label>
+    <div className="jira-connection-card__help">
+      <strong>为什么需要联系方式</strong>
+      <div>Liquipedia 官方要求 API User-Agent 标识项目并包含联系方式。OfficeDex 会使用 MediaWiki API，并缓存结果、限制到每 2 秒最多 1 次请求；解析请求每 30 秒最多 1 次。</div>
+      <div className="settings-note">自动访问 HTML 页面不被允许；OfficeDex 只同步文本字段与来源链接，并在 Sheet 中保留 CC BY-SA 署名。</div>
+      <a className="jira-connection-card__documentation-link" href={LIQUIPEDIA_API_TERMS_URL} target="_blank" rel="noopener noreferrer"><GlobalOutlined /><span>查看 Liquipedia 官方 API 条款</span></a>
+    </div>
+    {remote.configured ? <div className="jira-connection-card__status"><Tag color="success">已配置</Tag><span>{remote.baseUrl}</span></div> : null}
+    {probe ? <div className="jira-connection-card__probe">{probe.siteName} · {probe.generator}<br />{probe.userAgent}</div> : null}
+    {error ? <div className="jira-connection-card__error" role="alert">{error}</div> : null}
+    <div className="jira-connection-card__actions"><Button type="primary" loading={saving} disabled={!canSave} onClick={() => void save()}>测试并保存</Button>{remote.configured ? <Button type="link" danger loading={clearing} onClick={() => void clear()}>清除连接</Button> : null}</div>
+  </div>;
 }
 
 function ProxyCard({

@@ -1,7 +1,16 @@
-import { Button, Empty, Table, Tag, Tooltip, Typography, type TableColumn } from "../ui";
-import { PlusOutlined } from "../ui/icons";
-import type { DesktopTask } from "../../shared/types";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { Button, Empty, Input, Table, Tag, Tooltip, Typography, dialog, type TableColumn } from "../ui";
+import { DeleteOutlined, PlusOutlined } from "../ui/icons";
+import type { AgentRun, Artifact, DesktopTask } from "../../shared/types";
+import { officecli } from "../bridge";
+import { DocTypeIcon } from "../components/DocTypeIcon";
+import { isClientToolForThisHost, pendingAgentClientToolEvents, resumeAgentClientTools } from "../AgentClientToolHost";
+import { agentClientId } from "../agentClientIdentity";
 import { useT } from "../i18n";
+import { isExternalAgentRuntimeRun, isHistoricalRuntimeRun } from "../runtimeRuns";
+
+export { isExternalAgentRuntimeRun, isHistoricalRuntimeRun } from "../runtimeRuns";
+import { recordValue, trimmedStringValue as stringValue } from "../utils/values";
 
 type Translator = (key: string, vars?: Record<string, string | number>) => string;
 
@@ -15,18 +24,23 @@ export interface CreditCellModel {
 
 interface TaskRow {
   id: string;
+  conversationId: string;
   title: string;
   type: string;
   status: DesktopTask["status"];
   updatedAt: string;
   updatedAtRaw: string;
   credit: CreditCellModel;
+  artifact?: Artifact;
+  error?: string;
+  hint?: string;
 }
 
 function formatRelativeTime(iso: string | undefined, t: Translator): { label: string; raw: string } {
-  if (!iso) return { label: t("tasks.updatedAtUnknown"), raw: "" };
+  // No timestamp → no meta text at all; "unknown" placeholders are noise.
+  if (!iso) return { label: "", raw: "" };
   const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return { label: t("tasks.updatedAtUnknown"), raw: iso };
+  if (Number.isNaN(date.getTime())) return { label: "", raw: iso };
   const diffMs = Date.now() - date.getTime();
   const diffSec = Math.floor(diffMs / 1000);
   if (diffSec < 60) return { label: t("tasks.time.justNow"), raw: iso };
@@ -38,54 +52,108 @@ function formatRelativeTime(iso: string | undefined, t: Translator): { label: st
   return { label: t("tasks.time.daysAgo", { count: diffDay }), raw: iso };
 }
 
-export function TasksScreen({ tasks, onSelectTask, onNewGeneration }: { tasks: DesktopTask[]; onSelectTask: (taskID: string) => void; onNewGeneration: () => void }) {
+/**
+ * Activity archive: what already happened, plus the credit each run cost.
+ * Work that still needs the user lives in the home inbox — this panel is
+ * deliberately read-mostly (open a deliverable, clean up failures).
+ */
+export function ActivityPanel({ tasks, onSelectTask, onOpenArtifact, onDeleteConversation }: { tasks: DesktopTask[]; onSelectTask: (taskID: string) => void; onOpenArtifact?: (artifact: Artifact) => void; onDeleteConversation?: (conversationId: string) => void }) {
   const t = useT();
+	const [showSettled, setShowSettled] = useState(false);
   const rows = tasks.map((task) => taskToRow(task, t));
-  const columns: TableColumn<TaskRow>[] = [
-    {
-      title: t("tasks.column.title"),
-      dataIndex: "title",
-      render: (title) => (
-        <span className="task-title-button">
-          <strong>{title}</strong>
-        </span>
-      ),
+  const activeRows = rows.filter((row) => row.status === "starting" || row.status === "running");
+  const failedRows = rows.filter((row) => row.status === "failed");
+  const settledRows = rows.filter((row) => row.status === "completed" || row.status === "cancelled");
+  const rowMeta = (row: TaskRow): string => {
+    const parts: string[] = [];
+    if (row.hint) parts.push(row.hint);
+    if (row.status === "failed" && row.error) parts.push(row.error);
+    if (row.updatedAt) parts.push(row.updatedAt);
+    if (row.credit.state === "value") parts.push(t("tasks.credit.meta", { amount: row.credit.charged }));
+    return parts.join(" · ");
+  };
+  const confirmDeleteTask = (row: TaskRow) => dialog.confirm({
+    title: t("tasks.delete.title", { name: row.title }),
+    content: t("tasks.delete.body"),
+    okText: t("tasks.delete.ok"),
+    cancelText: t("tasks.delete.cancel"),
+    tone: "danger",
+    onOk: () => onDeleteConversation?.(row.conversationId),
+  });
+  const confirmClearFailed = () => dialog.confirm({
+    title: t("tasks.clearFailed.title", { count: failedRows.length }),
+    content: t("tasks.delete.body"),
+    okText: t("tasks.clearFailed.ok"),
+    cancelText: t("tasks.delete.cancel"),
+    tone: "danger",
+    onOk: () => {
+      const conversationIds = new Set(failedRows.map((row) => row.conversationId));
+      for (const conversationId of conversationIds) onDeleteConversation?.(conversationId);
     },
-    { title: t("tasks.column.documentType"), dataIndex: "type" },
-    {
-      title: t("tasks.column.status"),
-      dataIndex: "status",
-      render: (status) => <Tag color={taskStatusColor(status)}>{taskStatusLabel(status, t)}</Tag>,
-    },
-    {
-      title: t("tasks.column.updatedAt"),
-      dataIndex: "updatedAt",
-      render: (label, record) => (
-        <Tooltip title={record.updatedAtRaw}><span>{label}</span></Tooltip>
-      ),
-    },
-    {
-      title: t("tasks.column.credit"),
-      dataIndex: "credit",
-      render: (credit: CreditCellModel) => <CreditCell credit={credit} t={t} />,
-    },
-  ];
+  });
+  const renderRows = (groupRows: TaskRow[], options?: { showArtifact?: boolean; allowDelete?: boolean }) => (
+    <div className="task-list">
+      {groupRows.map((row) => (
+        <div className="task-item" key={row.id}>
+          <button type="button" className="task-item__open" onClick={() => onSelectTask(row.id)}>
+            <DocTypeIcon type={row.type} chip />
+            <span className="task-item__copy">
+              <strong>{row.title}</strong>
+              {rowMeta(row) ? <small title={row.error ?? undefined}>{rowMeta(row)}</small> : null}
+            </span>
+          </button>
+          <div className="task-item__actions">
+            {options?.showArtifact && row.artifact ? (
+              <button
+                type="button"
+                className="task-artifact-link"
+                title={row.artifact.filePath}
+                onClick={() => onOpenArtifact?.(row.artifact as Artifact)}
+              >
+                <DocTypeIcon type={row.artifact.documentType} />
+                <span>{row.artifact.fileName}</span>
+              </button>
+            ) : null}
+            {options?.allowDelete && onDeleteConversation ? (
+              <Button className="task-item__delete" variant="ghost-normal" size="small" ariaLabel={t("tasks.deleteAria", { name: row.title })} icon={<DeleteOutlined />} onClick={() => confirmDeleteTask(row)} />
+            ) : null}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+  const renderGroup = (title: string, groupRows: TaskRow[], options?: { showArtifact?: boolean; allowDelete?: boolean; headerExtra?: ReactNode }) => groupRows.length === 0 ? null : (
+    <section className="task-group" aria-label={title}>
+      <div className="task-group__header">
+        <h3>{title} <span>{groupRows.length}</span></h3>
+        {options?.headerExtra}
+      </div>
+      {renderRows(groupRows, options)}
+    </section>
+  );
   return (
     <div className="page-stack">
-      <PageHeader title={t("tasks.page.title")} description={t("tasks.page.subtitle")} action={t("tasks.action.newGeneration")} onAction={onNewGeneration} />
       {rows.length > 0 ? (
-        <Table
-          rowKey="id"
-          columns={columns}
-          dataSource={rows}
-          pagination={{ pageSize: 8, showSizeChanger: false }}
-          className="flat-table"
-          onRow={(record) => ({
-            onClick: () => onSelectTask(record.id),
-            onDoubleClick: () => onSelectTask(record.id),
-            style: { cursor: "pointer" },
+        <>
+          {renderGroup(t("tasks.group.active"), activeRows)}
+          {renderGroup(t("tasks.group.failed"), failedRows, {
+            allowDelete: true,
+            headerExtra: onDeleteConversation && failedRows.length > 1 ? (
+              <Button variant="ghost-normal" size="small" onClick={confirmClearFailed}>{t("tasks.clearFailed")}</Button>
+            ) : undefined,
           })}
-        />
+          {settledRows.length > 0 ? (
+            <section className="task-group" aria-label={t("tasks.group.settled")}>
+              <div className="task-group__header">
+                <h3>{t("tasks.group.settled")} <span>{settledRows.length}</span></h3>
+                <Button variant="ghost-normal" size="small" onClick={() => setShowSettled((visible) => !visible)}>
+                  {showSettled ? t("tasks.group.hide") : t("tasks.group.show")}
+                </Button>
+              </div>
+              {showSettled ? renderRows(settledRows, { showArtifact: true }) : null}
+            </section>
+          ) : null}
+        </>
       ) : (
         <div className="empty-card">
           <Empty description={t("tasks.empty")} />
@@ -95,35 +163,30 @@ export function TasksScreen({ tasks, onSelectTask, onNewGeneration }: { tasks: D
   );
 }
 
-function PageHeader({ title, description, action, onAction }: { title: string; description: string; action: string; onAction: () => void }) {
-  return (
-    <div className="page-header">
-      <div>
-        <Typography.Title level={2}>{title}</Typography.Title>
-        <p>{description}</p>
-      </div>
-      <Button type="primary" icon={<PlusOutlined />} onClick={onAction}>
-        {action}
-      </Button>
-    </div>
-  );
-}
 
 function taskToRow(task: DesktopTask, t: Translator): TaskRow {
   const latestEvent = task.events.at(-1);
   const { label, raw } = formatRelativeTime(latestEvent?.ts, t);
+  const hint = task.status === "question"
+    ? (task.question?.question || t("home.answerRequired"))
+    : task.status === "plan_review" ? t("home.planReview") : undefined;
   return {
     id: task.id,
-    title: task.topic || task.artifact?.fileName || task.id,
-    type: task.documentType || task.artifact?.documentType || t("tasks.documentType.empty"),
+    conversationId: task.conversationId,
+    // Raw task ids are meaningless to people — fall back to a label instead.
+    title: task.topic || task.artifact?.fileName || t("tasks.untitled"),
+    type: task.documentType || task.artifact?.documentType || "",
     status: task.status,
     updatedAt: label,
     updatedAtRaw: raw,
     credit: creditModel(task),
+    artifact: task.artifact,
+    error: task.error,
+    hint,
   };
 }
 
-export function creditModel(task: DesktopTask): CreditCellModel {
+function creditModel(task: DesktopTask): CreditCellModel {
   if (task.status !== "completed" && task.status !== "failed") {
     return { state: "empty", charged: 0, mode: "" };
   }
@@ -138,34 +201,6 @@ export function creditModel(task: DesktopTask): CreditCellModel {
   return { state: "value", charged, mode };
 }
 
-function CreditCell({ credit, t }: { credit: CreditCellModel; t: Translator }) {
-  if (credit.state === "empty") return null;
-  if (credit.state === "legacy") {
-    return (
-      <Tooltip title={t("tasks.credit.legacy")}>
-        <span className="task-credit-cell task-credit-legacy">—</span>
-      </Tooltip>
-    );
-  }
-  if (credit.state === "zero") {
-    return (
-      <Tooltip title={t("tasks.credit.zero")}>
-        <span className="task-credit-inline">
-          <span className="task-credit-cell">0</span>
-          {credit.mode ? <CreditModeBadge mode={credit.mode} t={t} /> : null}
-        </span>
-      </Tooltip>
-    );
-  }
-  return (
-    <span className="task-credit-inline">
-      <span className="task-credit-cell">
-        {t("tasks.credit.unit", { count: credit.charged })}
-      </span>
-      {credit.mode ? <CreditModeBadge mode={credit.mode} t={t} /> : null}
-    </span>
-  );
-}
 
 function CreditModeBadge({ mode, t }: { mode: string; t: Translator }) {
   const key = `tasks.credit.mode.${mode}`;
@@ -178,14 +213,4 @@ function CreditModeBadge({ mode, t }: { mode: string; t: Translator }) {
   );
 }
 
-function taskStatusLabel(status: DesktopTask["status"], t: (key: string) => string) {
-  return t(`tasks.status.${status}`);
-}
 
-function taskStatusColor(status: DesktopTask["status"]) {
-  if (status === "completed") return "green";
-  if (status === "failed") return "red";
-  if (status === "cancelled") return "default";
-  if (status === "question" || status === "plan_review") return "gold";
-  return "purple";
-}

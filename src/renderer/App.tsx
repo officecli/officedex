@@ -1,29 +1,51 @@
 import { DialogHost, ToastHost, toast as message } from "./ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Artifact, BridgeEvent, DesktopTask, GenerateInput, ModifyInput, PreviewGrant, RecentFile, WorkspaceConversationSummary, WorkspaceSummary } from "../shared/types";
+import type { AgentRun, Artifact, BridgeEvent, ConfiguredJiraSyncResult, ConfiguredLiquipediaSyncResult, DesktopTask, GenerateInput, JiraSyncResult, LiquipediaSyncResult, ModifyInput, PreviewGrant, RecentFile, WorkspaceConversationSummary, WorkspaceSummary } from "../shared/types";
+import { AgentClientToolDeferredError, AgentClientToolHost, type AgentClientToolSurfaces } from "./AgentClientToolHost";
+import { executeActiveEditorClientTool, waitForActiveEditorSurface, type ActiveEditorSurface } from "./activeEditorClientTools";
 import { applyTaskEvent, attachTaskContext, attachUserInput, createInitialTaskState, deleteConversation, deleteTask, getConversationList, getConversationTasks, type TaskContextPatch, type TaskState } from "./taskState";
 import { officecli } from "./bridge";
 import { defaultGenerateInput, type NavKey } from "./defaults";
+import { getHomeDropZone, setHomeDropZone } from "./homeDropZone";
+import type { SidebarAccount } from "./components/ProjectSidebar";
 import { Shell } from "./components/Shell";
 import { PreviewPanel } from "./components/PreviewPanel";
-import { UpdateBanner } from "./components/UpdateBanner";
+import { buildReplayFeed, registerLiveDraft, VIBE_REPLAY_FINISHED_EVENT, type VibeReplayFinishedDetail } from "./presentation/vibeReplay";
+import type { TimelineDeck, TimelineNode, VibeOp } from "../shared/types";
+import type { SidebarUpdateRowProps } from "./components/SidebarUpdateRow";
 import { ForceUpdateOverlay } from "./components/ForceUpdateOverlay";
 import { DialogueScreen, type FailureKind, type NewChatTarget, type NewGenerationDraft } from "./screens/DialogueScreens";
-import { TasksScreen } from "./screens/DataScreens";
+import { ActivityPanel } from "./screens/DataScreens";
 import { LoginScreen, SettingsScreen } from "./screens/SettingsScreens";
 import { HomeScreen } from "./screens/HomeScreen";
 import { inferHomeTaskRoute, type HomeTaskAnalysis, type HomeTaskIntake } from "./homeIntake";
+import { PPT_VIBE_CANVAS_ENABLED } from "./featureFlags";
 import { OnboardingScreen } from "./screens/OnboardingScreen";
 import { SpreadsheetWorkspace, type SpreadsheetWorkspaceHandle } from "./spreadsheet/SpreadsheetWorkspace";
-import { SpreadsheetAgentPanel } from "./spreadsheet/SpreadsheetAgentPanel";
+import { SpreadsheetAgentPanel, type SpreadsheetAgentTool } from "./spreadsheet/SpreadsheetAgentPanel";
+import { SpreadsheetMarketingPanel } from "./spreadsheet/SpreadsheetMarketingPanel";
+import { SpreadsheetJiraPanel } from "./spreadsheet/SpreadsheetJiraPanel";
+import { SpreadsheetLiquipediaPanel } from "./spreadsheet/SpreadsheetLiquipediaPanel";
+import { SpreadsheetCatalogCleanupPanel } from "./spreadsheet/SpreadsheetCatalogCleanupPanel";
+import type { MarketingBatchDraft, MarketingSheetRow } from "./spreadsheet/marketingWorkflow";
+import type { CatalogCleanupBatch } from "./spreadsheet/catalogCleanupWorkflow";
+import { loadPublishedWorkbookApps, savePublishedWorkbookApp } from "./appBuilder/appStore";
+import type { PublishedWorkbookApp } from "./appBuilder/types";
+import { parseWorkbookFormatCellsRequest, parseWorkbookSnapshotRequest, parseWorkbookStageMediaRequest, parseWorkbookWriteCellsRequest } from "./spreadsheet/workbookClientTools";
 import { UnsavedChangesDialog } from "./spreadsheet/UnsavedChangesDialog";
 import { useSpreadsheetSession } from "./spreadsheet/useSpreadsheetSession";
 import type { SpreadsheetEntry } from "./spreadsheet/types";
+import { clearSpreadsheetEntryGrant } from "./spreadsheet/entryLifecycle";
 import { useSettings } from "./useSettings";
 import { useAppUpdate } from "./useAppUpdate";
 import { useCreditStatus } from "./useCreditStatus";
 import { useLocale, useT } from "./i18n";
 import { maybeNotify } from "./notifications";
+import { computeTaskSignals, failedTaskIds, readSeenFailures, sidebarSignal, taskNotificationBody, writeSeenFailures } from "./taskSignals";
+import { pollTaskHistoryUntilTerminal } from "./taskHistoryPoll";
+import { errorMessage, recordValue, trimmedStringValue as stringValue } from "./utils/values";
+import { fileExtension, fileNameFromPath } from "./utils/path";
+import { delay } from "./utils/timing";
 
 type SelectedTask =
   | { kind: "auto" }
@@ -43,6 +65,8 @@ type PendingGenerate = {
   };
   parentTaskId?: string;
 };
+
+const RECENT_FILES_TIMEOUT_MS = 8_000;
 
 function materializePendingContext(pending: PendingGenerate, taskId: string): TaskContextPatch | undefined {
   if (pending.context?.conversationId !== pending.localTaskId) {
@@ -102,19 +126,24 @@ function OfficeDexApp() {
   const [capabilityStatus, setCapabilityStatus] = useState("Not connected");
   const [lastError, setLastError] = useState<string>();
   const [errorKind, setErrorKind] = useState<FailureKind>("connection");
+  const [bridgeInterruptionKey, setBridgeInterruptionKey] = useState(0);
   const [errorDetails, setErrorDetails] = useState<string>();
   const [connectAttempt, setConnectAttempt] = useState(0);
   const [previewGrant, setPreviewGrant] = useState<PreviewGrant | null>(null);
   const [previewArtifact, setPreviewArtifact] = useState<Artifact | null>(null);
   const [spreadsheetEntry, setSpreadsheetEntry] = useState<SpreadsheetEntry | null>(null);
+  const [spreadsheetPreferredTool, setSpreadsheetPreferredTool] = useState<SpreadsheetAgentTool>("assistant");
+  const [catalogAutoScanFile, setCatalogAutoScanFile] = useState<string>();
   const spreadsheet = useSpreadsheetSession(spreadsheetEntry);
   const spreadsheetWorkspaceRef = useRef<SpreadsheetWorkspaceHandle>(null);
   const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false);
   const [unsavedDialogSaving, setUnsavedDialogSaving] = useState(false);
   const pendingSpreadsheetActionRef = useRef<{ action: () => Promise<void>; resolve: (continued: boolean) => void } | null>(null);
+  const recentFilesRequestRef = useRef(0);
   const activeNavRef = useRef(activeNav);
   activeNavRef.current = activeNav;
   const pendingGenerateRef = useRef<PendingGenerate | null>(null);
+  const agentClientToolReportedErrorsRef = useRef(new Set<string>());
   const { settings: persistedSettings, defaultWorkspaceDir, loading: settingsLoading } = useSettings();
   const [newGenerationDraft, setNewGenerationDraft] = useState<NewGenerationDraft>(() => createNewGenerationDraft());
   const [newChatTarget, setNewChatTarget] = useState<NewChatTarget>({ kind: "none" });
@@ -122,7 +151,9 @@ function OfficeDexApp() {
   const [newGenerationDraftDirty, setNewGenerationDraftDirty] = useState(false);
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const appUpdate = useAppUpdate();
-  const { credit, refresh: refreshCredit, nudgeForTaskTransition } = useCreditStatus();
+  const { credit, status: creditStatus, refresh: refreshCredit, nudgeForTaskTransition } = useCreditStatus();
+  const [account, setAccount] = useState<SidebarAccount | undefined>();
+  const [droppedTaskPaths, setDroppedTaskPaths] = useState<{ paths: string[]; seq: number }>();
   const locale = useLocale();
   const t = useT();
   const forceUpdate = appUpdate.status.mandatory && Boolean(appUpdate.release);
@@ -160,10 +191,27 @@ function OfficeDexApp() {
       const saved = await spreadsheetWorkspaceRef.current?.save();
       setUnsavedDialogSaving(false);
       if (!saved) {
-        pending.resolve(false);
-        pendingSpreadsheetActionRef.current = null;
+        // Keep the pending navigation alive so the user can retry the save,
+        // explicitly discard, or cancel. Clearing it here leaves the dialog
+        // open with buttons that can no longer complete the original action.
         return;
       }
+    } else if (spreadsheet.session.artifact) {
+      // Dropping edits must also drop the live editor grant. Keeping the same
+      // granted entry mounted can leave Sheet SDK bound to an editor session
+      // that became invalid while the Bridge/API restarted. Re-entering the
+      // artifact without a grant unmounts that canvas; a resumed Run can then
+      // reopen the workbook with a fresh token even when the path is unchanged.
+      setSpreadsheetEntry({
+        kind: "artifact",
+        artifact: spreadsheet.session.artifact,
+        ...(spreadsheet.session.workspaceId
+          ? { workspaceId: spreadsheet.session.workspaceId }
+          : {}),
+        ...(spreadsheet.session.conversationId
+          ? { conversationId: spreadsheet.session.conversationId }
+          : {}),
+      });
     }
     pendingSpreadsheetActionRef.current = null;
     setUnsavedDialogOpen(false);
@@ -174,7 +222,11 @@ function OfficeDexApp() {
       pending.resolve(false);
       throw error;
     }
-  }, []);
+  }, [
+    spreadsheet.session.artifact,
+    spreadsheet.session.conversationId,
+    spreadsheet.session.workspaceId,
+  ]);
 
   const cancelPendingSpreadsheetAction = useCallback(() => {
     pendingSpreadsheetActionRef.current?.resolve(false);
@@ -192,16 +244,27 @@ function OfficeDexApp() {
   }, []);
 
   const refreshRecentFiles = useCallback(async (workspaceId?: string) => {
+    const requestId = recentFilesRequestRef.current + 1;
+    recentFilesRequestRef.current = requestId;
     setRecentFilesLoading(true);
     setRecentFilesError(undefined);
     try {
-      setRecentFiles(await officecli.listRecentFiles(workspaceId));
+      const files = await promiseWithTimeout(
+        officecli.listRecentFiles(workspaceId),
+        RECENT_FILES_TIMEOUT_MS,
+        t("home.loadTimeout"),
+      );
+      if (recentFilesRequestRef.current !== requestId) return;
+      setRecentFiles(files);
     } catch (error) {
+      if (recentFilesRequestRef.current !== requestId) return;
       setRecentFilesError(errorMessage(error));
     } finally {
-      setRecentFilesLoading(false);
+      if (recentFilesRequestRef.current === requestId) {
+        setRecentFilesLoading(false);
+      }
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     refreshProjectLists();
@@ -244,6 +307,8 @@ function OfficeDexApp() {
       if (event.type === "bridge.reconnected") {
         setCapabilityStatus("Connected to officecli agent-bridge");
         clearError();
+        refreshProjectLists();
+        void refreshRecentFiles(homeWorkspaceId);
         return;
       }
       if (event.type === "bridge.unconfigured") {
@@ -263,6 +328,27 @@ function OfficeDexApp() {
       if (event.type === "bridge.exited") {
         const message = String(event.payload?.message || "officecli agent-bridge exited");
         setCapabilityStatus(`${message} — reconnecting…`);
+        recentFilesRequestRef.current += 1;
+        setRecentFilesLoading(false);
+        setRecentFilesError(t("home.bridgeUnavailable"));
+        setBridgeInterruptionKey((current) => current + 1);
+        const interruptedMessage = t("task.interrupted.bridge");
+        setState((current) => {
+          let next = current;
+          for (const taskID of current.taskOrder) {
+            const task = next.tasks[taskID];
+            if (!task || !["starting", "running", "question", "plan_review"].includes(task.status)) continue;
+            next = applyTaskEvent(next, {
+              type: "task.failed",
+              task_id: taskID,
+              ts: new Date().toISOString(),
+              payload: { message: interruptedMessage, reason: "bridge_interrupted" },
+            });
+          }
+          return next;
+        });
+        pendingGenerateRef.current = null;
+        setBusy(false);
         return;
       }
       const pending = pendingGenerateRef.current;
@@ -271,12 +357,16 @@ function OfficeDexApp() {
         pending &&
         event.task_id !== pending.localTaskId,
       );
+      // Captured from the reduced state so the notification below can name the
+      // task; reading component state here would see the pre-event snapshot.
+      let settledTask: DesktopTask | undefined;
       setState((current) => {
         let next = applyTaskEvent(current, event);
         if (event.task_id && pending && shouldReplaceLocalTask) {
           next = deleteTask(next, pending.localTaskId);
           next = attachUserInput(next, event.task_id, pending.input, pending.parentTaskId, materializePendingContext(pending, event.task_id));
         }
+        if (event.task_id) settledTask = next.tasks[event.task_id];
         return next;
       });
       if (event.task_id) {
@@ -289,11 +379,14 @@ function OfficeDexApp() {
         }
       }
       if (event.type === "task.completed" || event.type === "task.failed" || event.type === "task.cancelled") {
+        // Name the task in the body: "a generation finished" makes the user
+        // hunt for which one, which is the trip to the tasks page we are
+        // trying to remove.
         if (event.type === "task.completed") {
-          maybeNotify({ title: t("notification.title"), body: t("notification.taskCompleted") });
+          maybeNotify({ title: t("notification.title"), body: taskNotificationBody(settledTask, t("notification.taskCompleted")) });
         }
         if (event.type === "task.failed") {
-          maybeNotify({ title: t("notification.title"), body: t("notification.taskFailed") });
+          maybeNotify({ title: t("notification.title"), body: taskNotificationBody(settledTask, t("notification.taskFailed")) });
         }
         nudgeForTaskTransition();
       }
@@ -313,7 +406,7 @@ function OfficeDexApp() {
         setCapabilityStatus(text);
       });
     return off;
-  }, [connectAttempt, clearError, recordError, settingsLoading, showOnboarding, forceUpdate, nudgeForTaskTransition, refreshProjectLists, t]);
+  }, [connectAttempt, clearError, homeWorkspaceId, recordError, refreshRecentFiles, settingsLoading, showOnboarding, forceUpdate, nudgeForTaskTransition, refreshProjectLists, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -358,6 +451,62 @@ function OfficeDexApp() {
       cancelled = true;
     };
   }, []);
+
+  const activeTaskHistoryKey = state.taskOrder
+    .filter((taskId) => {
+      const status = state.tasks[taskId]?.status;
+      return status === "starting" || status === "running" || status === "question" || status === "plan_review";
+    })
+    .join("|");
+
+  useEffect(() => {
+    if (!activeTaskHistoryKey) return;
+    let cancelled = false;
+    let syncing = false;
+
+    const reconcileActiveTaskHistory = async () => {
+      if (cancelled || syncing) return;
+      syncing = true;
+      try {
+        const entries = await officecli.getTaskHistory(50);
+        if (cancelled || entries.length === 0) return;
+        setState((current) => {
+          const activeTaskIds = new Set(current.taskOrder.filter((taskId) => {
+            const status = current.tasks[taskId]?.status;
+            return status === "starting" || status === "running" || status === "question" || status === "plan_review";
+          }));
+          let next = current;
+          for (const entry of entries) {
+            if (!activeTaskIds.has(entry.taskId)) continue;
+            const beforeEntry = next;
+            for (const event of entry.events) next = applyTaskEvent(next, event);
+            if (next !== beforeEntry) {
+              next = attachTaskContext(next, entry.taskId, {
+                conversationId: entry.conversationId,
+                parentTaskId: entry.parentTaskId,
+                workspaceId: entry.workspaceId,
+                workspacePath: entry.workspacePath,
+              });
+            }
+          }
+          return next;
+        });
+      } catch {
+        // Live events remain the fast path. The next reconciliation tick retries.
+      } finally {
+        syncing = false;
+      }
+    };
+
+    void reconcileActiveTaskHistory();
+    const interval = window.setInterval(() => {
+      void reconcileActiveTaskHistory();
+    }, 1_500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [activeTaskHistoryKey]);
 
   const firstTaskID = state.taskOrder[0];
   useEffect(() => {
@@ -409,17 +558,44 @@ function OfficeDexApp() {
     return getConversationTasks(state, conversationId);
   }, [state, conversationId]);
   const activePptCanvasTaskId = useMemo(() => {
-    if (activeNav !== "dialogue") return undefined;
+    if (!PPT_VIBE_CANVAS_ENABLED || activeNav !== "dialogue") return undefined;
     return conversationTasks.find((task) => task.documentType === "pptx" && task.vibeTree)?.id;
   }, [activeNav, conversationTasks]);
   const activeVibeTask = useMemo(
-    () => (activeNav === "dialogue"
+    () => (PPT_VIBE_CANVAS_ENABLED && activeNav === "dialogue"
       ? conversationTasks.find((task) => task.documentType === "pptx" && task.vibeTree)
       : undefined),
     [activeNav, conversationTasks],
   );
   const vibeStage = activeVibeTask?.vibeTree?.stage;
   const tasks = useMemo(() => state.taskOrder.map((taskID) => state.tasks[taskID]).filter(Boolean), [state]);
+  // One sidebar signal, highest urgency first: needs-you > running > unseen
+  // failures. Failures count as seen once the user opens the tasks page, so a
+  // stale red dot cannot outlive the visit that acknowledged it.
+  const [seenFailures, setSeenFailures] = useState<string[]>(() => readSeenFailures());
+  const taskSignals = useMemo(() => computeTaskSignals(tasks, seenFailures), [tasks, seenFailures]);
+  const sidebarTaskSignal = useMemo(() => sidebarSignal(taskSignals), [taskSignals]);
+  useEffect(() => {
+    if (activeNav !== "settings") return;
+    const ids = failedTaskIds(tasks);
+    setSeenFailures((current) => {
+      if (ids.length === current.length && ids.every((id) => current.includes(id))) return current;
+      writeSeenFailures(ids);
+      return ids;
+    });
+  }, [activeNav, tasks]);
+
+  useEffect(() => {
+    let cancelled = false;
+    officecli.whoami()
+      .then((result) => {
+        if (!cancelled) setAccount({ mode: result.mode, email: result.email });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [creditStatus?.mode]);
   const spreadsheetTask = useMemo(() => {
     const sessionTask = spreadsheet.session.taskId ? state.tasks[spreadsheet.session.taskId] : undefined;
     const activeConversationId = spreadsheet.session.conversationId || sessionTask?.conversationId;
@@ -592,11 +768,31 @@ function OfficeDexApp() {
     }
   }, [clearError, recordError]);
 
-  const createFromHome = useCallback((documentType: Exclude<GenerateInput["documentType"], "gif">) => {
+  const createFromHome = useCallback(async (documentType: Exclude<GenerateInput["documentType"], "gif">) => {
     if (documentType === "xlsx") {
-      setSpreadsheetEntry({ kind: "new", ...(homeWorkspaceId ? { workspaceId: homeWorkspaceId } : {}) });
-      clearError();
-      setActiveNav("spreadsheet");
+      try {
+        const artifact = await officecli.createWorkbookFromSheet({
+          fileName: t("spreadsheet.untitled"),
+          sheetName: "Sheet1",
+          headers: [],
+          rows: [],
+          workspaceId: homeWorkspaceId,
+        });
+        const grant = await officecli.issuePreviewToken(artifact);
+        setSpreadsheetEntry({
+          kind: "artifact",
+          artifact,
+          grant,
+          ...(homeWorkspaceId ? { workspaceId: homeWorkspaceId } : {}),
+        });
+        clearError();
+        setActiveNav("spreadsheet");
+        void refreshRecentFiles(homeWorkspaceId);
+      } catch (error) {
+        const text = errorMessage(error);
+        recordError(text, classifyError(text), extractStderr(text));
+        void message.error(text);
+      }
       return;
     }
     resetNewGenerationDraft();
@@ -606,7 +802,7 @@ function OfficeDexApp() {
     clearError();
     setActiveNav("dialogue");
     setNewChatNudgeKey((current) => current + 1);
-  }, [clearError, homeWorkspaceId, resetNewGenerationDraft, updateNewGenerationDraft]);
+  }, [clearError, homeWorkspaceId, recordError, refreshRecentFiles, resetNewGenerationDraft, t, updateNewGenerationDraft]);
 
   const pickHomeTaskFile = useCallback(async () => {
     const selected = await officecli.openFileDialog({
@@ -639,7 +835,9 @@ function OfficeDexApp() {
       referenceDirectory: input.referenceDirectory,
       documentType: route.documentType,
       kind: route.kind,
-      nextStep: route.kind === "catalog_cleanup" ? "configure" : "execute",
+      nextStep: route.kind === "catalog_cleanup"
+        ? "configure"
+        : "execute",
     };
   }
 
@@ -668,6 +866,8 @@ function OfficeDexApp() {
       await runSpreadsheetAction(async () => {
         const artifact = await officecli.openRecentFile(file);
         const grant = await officecli.issuePreviewToken(artifact);
+        setSpreadsheetPreferredTool("catalog");
+        setCatalogAutoScanFile(artifact.filePath);
         setSpreadsheetEntry({
           kind: "artifact",
           artifact,
@@ -680,6 +880,8 @@ function OfficeDexApp() {
       });
       return;
     }
+    setSpreadsheetPreferredTool("assistant");
+    setCatalogAutoScanFile(undefined);
     await submit({
       documentType: route.documentType,
       generationMode: generationModeForDocumentType(route.documentType),
@@ -779,6 +981,37 @@ function OfficeDexApp() {
       recordError(text, classifyError(text), extractStderr(text));
     }
   }, [refreshProjectLists, recordError]);
+
+  const addWorkspaceFromPath = useCallback(async (path: string) => {
+    try {
+      const workspace = await officecli.addWorkspace(path);
+      setNewChatTarget({ kind: "workspace", workspaceId: workspace.id });
+      refreshProjectLists();
+    } catch (error) {
+      const text = errorMessage(error);
+      recordError(text, classifyError(text), extractStderr(text));
+    }
+  }, [refreshProjectLists, recordError]);
+
+  // Native drops carry no coordinates, so the hovered zone recorded during
+  // dragover decides where the paths go: the sidebar's workspace list or the
+  // home intake. Only armed on the home screen; DialogueScreens owns its own
+  // onFileDrop subscription on other navs.
+  useEffect(() => {
+    if (activeNav !== "home") return undefined;
+    return officecli.onFileDrop((paths) => {
+      if (paths.length === 0) return;
+      const zone = getHomeDropZone();
+      setHomeDropZone(null);
+      if (zone === "workspaces") {
+        for (const path of paths) void addWorkspaceFromPath(path);
+        return;
+      }
+      if (zone === "intake") {
+        setDroppedTaskPaths((previous) => ({ paths, seq: (previous?.seq ?? 0) + 1 }));
+      }
+    });
+  }, [activeNav, addWorkspaceFromPath]);
 
   const revealWorkspace = useCallback((workspacePath: string) => {
     void officecli.showItemInFolder(workspacePath).catch(() => officecli.openPath(workspacePath));
@@ -1006,6 +1239,8 @@ function OfficeDexApp() {
         await runSpreadsheetAction(async () => {
           const artifact = await officecli.openRecentFile(file);
           const grant = await officecli.issuePreviewToken(artifact);
+          setSpreadsheetPreferredTool("assistant");
+          setCatalogAutoScanFile(undefined);
           setSpreadsheetEntry({
             kind: "artifact",
             artifact,
@@ -1046,14 +1281,198 @@ function OfficeDexApp() {
     }
   }, [clearError, homeWorkspaceId, openInlinePreview, refreshRecentFiles, removeRecentFile, runSpreadsheetAction, selectTask, t, tasks]);
 
+  // Which recorded node of a deck's timeline is on screen. Null means the
+  // newest deck — the one the task produced, or the one being drawn.
+  const [timelineNodeId, setTimelineNodeId] = useState<string | null>(null);
   const closeInlinePreview = useCallback(async () => {
     if (previewGrant) {
       await officecli.revokePreviewToken(previewGrant.token).catch(() => {});
     }
     setPreviewGrant(null);
     setPreviewArtifact(null);
+    setTimelineNodeId(null);
     setDeckPanelDismissedId(activeVibeTask?.id ?? null);
   }, [previewGrant, activeVibeTask?.id]);
+
+  // ---- MOP live drawing --------------------------------------------------
+  // First task.vibe_primitives for a task opens the presentation editor on a
+  // blank draft and the replay sequencer inside PptxViewer draws the deck as
+  // the primitives stream in. One draft per task; never steal an open preview.
+  const [liveDraftTaskId, setLiveDraftTaskId] = useState<string | null>(null);
+
+  const timelineTaskId = liveDraftTaskId ?? previewArtifact?.taskId ?? undefined;
+
+  const openTimelineNode = useCallback(async (deck: TimelineDeck, node: TimelineNode) => {
+    await openInlinePreview({
+      taskId: timelineTaskId ?? "",
+      filePath: deck.filePath,
+      fileName: deck.fileName,
+      documentType: "pptx",
+    } as Artifact);
+    setTimelineNodeId(node.id);
+  }, [openInlinePreview, timelineTaskId]);
+
+  const returnToLatestDeck = useCallback(async () => {
+    const latest = timelineTaskId ? state.tasks[timelineTaskId]?.artifact : undefined;
+    if (!latest?.filePath) return;
+    await openInlinePreview(latest);
+    setTimelineNodeId(null);
+  }, [openInlinePreview, state.tasks, timelineTaskId]);
+
+  const liveDraftAttemptsRef = useRef<Set<string>>(new Set());
+  const liveDraftOpenRef = useRef(false);
+  liveDraftOpenRef.current = Boolean(previewGrant);
+  const liveCandidateTaskId = useMemo(() => {
+    for (const taskID of state.taskOrder) {
+      const task = state.tasks[taskID];
+      // Only a still-active task qualifies: history replay on page load
+      // restores completed tasks' primitives in the same state batch, and
+      // redrawing a finished deck would look like a phantom generation.
+      // The outline alone also qualifies — it lands well before the first
+      // op frame, and opening the draft then lets the user read the deck's
+      // shape while the slides are still being written.
+      if (task && ((task.vibeOps?.length ?? 0) > 0 || task.vibeOutline) && ["starting", "running", "question", "plan_review"].includes(task.status)) {
+        return taskID;
+      }
+    }
+    return null;
+  }, [state]);
+  useEffect(() => {
+    if (!liveCandidateTaskId || liveDraftAttemptsRef.current.has(liveCandidateTaskId)) return;
+    if (liveDraftOpenRef.current) return;
+    liveDraftAttemptsRef.current.add(liveCandidateTaskId);
+    void (async () => {
+      try {
+        const draft = await officecli.createLivePptxDraft(liveCandidateTaskId);
+        registerLiveDraft(draft.filePath, liveCandidateTaskId);
+        const grant = await officecli.issuePreviewToken({
+          taskId: liveCandidateTaskId,
+          filePath: draft.filePath,
+          fileName: draft.fileName,
+          documentType: "pptx",
+        } as Artifact);
+        setPreviewGrant(grant);
+        setPreviewArtifact({
+          taskId: liveCandidateTaskId,
+          filePath: draft.filePath,
+          fileName: draft.fileName,
+          documentType: "pptx",
+        } as Artifact);
+        setLiveTrace(false);
+        setLiveDraftTaskId(liveCandidateTaskId);
+      } catch {
+        // Live drawing is an enhancement; generation itself is unaffected.
+      }
+    })();
+  }, [liveCandidateTaskId]);
+  // When the replay finishes, hand the preview over to the task's official
+  // artifact: the reviewed deck with real images. The live draft was the
+  // preview of the drawing; the artifact is the deliverable.
+  useEffect(() => {
+    const onFinished = (event: Event) => {
+      const detail = (event as CustomEvent<VibeReplayFinishedDetail>).detail;
+      if (!detail || detail.taskId !== liveDraftTaskId) return;
+      const artifact = state.tasks[detail.taskId]?.artifact;
+      if (!artifact?.filePath) return;
+      window.setTimeout(() => {
+        void (async () => {
+          try {
+            const grant = await officecli.issuePreviewToken(artifact);
+            setPreviewGrant((current) => {
+              if (current) void officecli.revokePreviewToken(current.token).catch(() => {});
+              return grant;
+            });
+            setPreviewArtifact(artifact);
+            setLiveDraftTaskId(null);
+          } catch {
+            // Keep showing the drawn draft; the artifact stays reachable from
+            // the task card.
+          }
+        })();
+      }, 1_500);
+    };
+    window.addEventListener(VIBE_REPLAY_FINISHED_EVENT, onFinished);
+    return () => window.removeEventListener(VIBE_REPLAY_FINISHED_EVENT, onFinished);
+  }, [liveDraftTaskId, state.tasks]);
+
+  // Debug helper: `__officedexReplayDemo()` in the console replays the latest
+  // (or a given) task's drawing from a fresh blank draft — the live-generation
+  // experience on demand, no model calls, no credits. It bypasses the
+  // active-status guard on purpose and ends with the normal handover to the
+  // task's official artifact.
+  const replayDemoRef = useRef<(source?: string | VibeOp[]) => Promise<string>>(async () => "not ready");
+  const [liveTrace, setLiveTrace] = useState(false);
+  // An op stream handed straight to the replay, with no task behind it —
+  // a recovered recording, or one captured from a run that is long gone.
+  const [replayOps, setReplayOps] = useState<VibeOp[] | undefined>();
+  // A replay started from the console is a performance whatever it replays —
+  // a recording or a finished task. Without this the task branch inherits
+  // "already complete, so catch up fast" and the drawing finishes instantly.
+  const [replayPerform, setReplayPerform] = useState(false);
+  replayDemoRef.current = async (source?: string | VibeOp[]) => {
+    const finish = (message: string) => {
+      // The command is usually invoked bare in the console, so the resolved
+      // message would go unseen; announce it there as well.
+      console.info("[vibeReplayDemo]", message);
+      return message;
+    };
+    const loaded =
+      typeof source === "string" && /^(https?:)?\//.test(source)
+        ? ((await (await fetch(source)).json()) as VibeOp[])
+        : Array.isArray(source)
+          ? source
+          : undefined;
+    if (loaded) return startReplay(`recording-${loaded.length}`, loaded);
+    const taskId = typeof source === "string" ? source : undefined;
+    const target = taskId ?? state.taskOrder.find((id) => (state.tasks[id]?.vibeOps?.length ?? 0) > 0);
+    if (!target) {
+      return finish("no task with drawing ops in this session — open the generated conversation in the left sidebar first (its events load on open), then rerun __officedexReplayDemo()");
+    }
+    const task = state.tasks[target];
+    if (!task) return finish(`unknown task: ${target}`);
+    const opCount = task.vibeOps?.length ?? 0;
+    if (opCount === 0) return finish(`task ${target} has no drawing ops`);
+    return startReplay(target, undefined, opCount);
+  };
+  const startReplay = async (target: string, ops?: VibeOp[], opCount = ops?.length ?? 0) => {
+    const finish = (message: string) => {
+      console.info("[vibeReplayDemo]", message);
+      return message;
+    };
+    liveDraftAttemptsRef.current.delete(target);
+    if (previewGrant) await officecli.revokePreviewToken(previewGrant.token).catch(() => {});
+    const draft = await officecli.createLivePptxDraft(target);
+    registerLiveDraft(draft.filePath, target);
+    const artifact = { taskId: target, filePath: draft.filePath, fileName: draft.fileName, documentType: "pptx" } as Artifact;
+    const grant = await officecli.issuePreviewToken(artifact);
+    setPreviewGrant(grant);
+    setPreviewArtifact(artifact);
+    setReplayOps(ops);
+    setReplayPerform(true);
+    setLiveTrace(true);
+    setLiveDraftTaskId(target);
+    const from = ops ? "a recording" : `task ${target}`;
+    return finish(`replaying ${opCount} ops of ${from} from a blank draft — each op is logged before it executes`);
+  };
+  useEffect(() => {
+    const host = window as unknown as { __officedexReplayDemo?: (source?: string | VibeOp[]) => Promise<string> };
+    host.__officedexReplayDemo = (source?: string | VibeOp[]) => replayDemoRef.current(source);
+    return () => {
+      delete host.__officedexReplayDemo;
+    };
+  }, []);
+
+  const liveReplayFeed = useMemo(
+    () =>
+      buildReplayFeed({
+        taskId: liveDraftTaskId,
+        ops: replayOps,
+        performing: replayPerform,
+        trace: liveTrace,
+        task: liveDraftTaskId ? state.tasks[liveDraftTaskId] : undefined,
+      }),
+    [liveDraftTaskId, liveTrace, replayOps, replayPerform, state.tasks],
+  );
 
   const startSpreadsheetGeneration = useCallback(async (input: GenerateInput) => {
     clearError();
@@ -1090,25 +1509,330 @@ function OfficeDexApp() {
     if (!continued) return;
   }, [clearError, nudgeForTaskTransition, recordError, refreshProjectLists, runSpreadsheetAction, spreadsheet.startModify]);
 
+  const startSpreadsheetMarketingImage = useCallback(async (row: MarketingSheetRow, ratio: NonNullable<GenerateInput["imageRatio"]>) => {
+    if (forceUpdate) throw new Error("Update required before continuing");
+    clearError();
+    try {
+      const workspaceId = spreadsheet.session.workspaceId;
+      const result = await officecli.generate({
+        documentType: "img",
+        topic: `营销图 · ${row.productName}${row.campaignChannel ? ` · ${row.campaignChannel}` : ""}`,
+        prompt: row.prompt,
+        ...(workspaceId ? { workspaceId } : { noProject: true }),
+        ...(row.referenceImages.length > 0 ? { referenceImages: row.referenceImages } : {}),
+        imageRatio: ratio,
+        imageQuality: persistedSettings.defaults.imageQuality,
+        enableImages: true,
+      });
+      void pollTaskHistoryUntilTerminal(
+        result.taskId,
+        () => officecli.getTaskHistory(50),
+        (entry) => {
+          setState((current) => {
+            let next = current;
+            for (const event of entry.events) next = applyTaskEvent(next, event);
+            return attachTaskContext(next, entry.taskId, {
+              conversationId: entry.conversationId,
+              parentTaskId: entry.parentTaskId,
+              workspaceId: entry.workspaceId,
+              workspacePath: entry.workspacePath,
+            });
+          });
+        },
+      );
+      refreshProjectLists();
+      return { taskId: result.taskId };
+    } catch (error) {
+      const text = errorMessage(error);
+      recordError(text, classifyError(text), extractStderr(text));
+      throw error;
+    } finally {
+      nudgeForTaskTransition();
+    }
+  }, [clearError, forceUpdate, nudgeForTaskTransition, persistedSettings.defaults.imageQuality, recordError, refreshProjectLists, spreadsheet.session.workspaceId]);
+
   const changeNavigation = useCallback((key: NavKey) => {
-    if (key === activeNavRef.current) return;
+    if (key === activeNavRef.current && !previewGrant) return;
     void runSpreadsheetAction(async () => {
+      if (previewGrant) await closeInlinePreview();
       setActiveNav(key);
     });
-  }, [runSpreadsheetAction]);
+  }, [closeInlinePreview, previewGrant, runSpreadsheetAction]);
+
+  const waitForSpreadsheetWorkspace = useCallback(async () => {
+    const deadline = Date.now() + 30_000;
+    while (Date.now() < deadline) {
+      if (spreadsheetWorkspaceRef.current) return spreadsheetWorkspaceRef.current;
+      await delay(50);
+    }
+    throw new AgentClientToolDeferredError("等待表格工作区恢复超时，请从 Tasks 页面重试该 Run。");
+  }, []);
+
+  // What this page currently has open, for the client-tool host's pre-write check.
+  const currentAgentDocumentPath = useCallback(
+    () => spreadsheet.session.artifact?.filePath ?? previewArtifact?.filePath,
+    [spreadsheet.session.artifact?.filePath, previewArtifact?.filePath],
+  );
+
+  const routeAgentClientToolSurface = useCallback(async (surface: string, run: AgentRun) => {
+    if (surface === "pptx-editor" || surface === "docx-editor") {
+      const expectedType = surface === "pptx-editor" ? "pptx" : "docx";
+      const sourcePath = run.metadata?.source_path;
+      if (previewArtifact && previewArtifact.documentType !== expectedType) {
+        throw new AgentClientToolDeferredError(`当前预览不是 ${expectedType.toUpperCase()} 文档，请关闭后从 Tasks 页面恢复该 Run。`);
+      }
+      if (sourcePath && previewArtifact?.filePath !== sourcePath) {
+        if (previewArtifact || previewGrant) {
+          throw new AgentClientToolDeferredError("另一个文档仍在预览中；请先关闭它，再恢复该 Run。");
+        }
+        const file: RecentFile = {
+          filePath: sourcePath,
+          fileName: fileNameFromPath(sourcePath),
+          documentType: expectedType,
+          source: "local",
+          lastOpenedAt: new Date().toISOString(),
+        };
+        const artifact = await officecli.openRecentFile(file);
+        const grant = await officecli.issuePreviewToken(artifact);
+        setPreviewArtifact(artifact);
+        setPreviewGrant(grant);
+      } else if (!sourcePath && !previewArtifact) {
+        throw new AgentClientToolDeferredError(`Run ${run.id} 缺少可恢复的 source_path。`);
+      }
+      if (!await waitForActiveEditorSurface(surface as ActiveEditorSurface)) {
+        throw new AgentClientToolDeferredError(`${expectedType.toUpperCase()} 编辑器尚未准备好，请从 Tasks 页面重试该 Run。`);
+      }
+      return;
+    }
+    const preferredTool: SpreadsheetAgentTool = surface === "spreadsheet.catalog-cleanup"
+      ? "catalog"
+      : surface === "spreadsheet.marketing"
+        ? "campaign"
+        : surface === "spreadsheet.jira"
+          ? "jira"
+          : surface === "spreadsheet.liquipedia"
+            ? "liquipedia"
+            : "assistant";
+    const workbookPath = run.metadata?.workbook_path || run.metadata?.source_path;
+    const currentPath = spreadsheet.session.artifact?.filePath;
+    const requiresExistingWorkbook = surface === "spreadsheet"
+      || surface === "spreadsheet.catalog-cleanup"
+      || surface === "spreadsheet.marketing"
+      || surface === "app-builder";
+    if (
+      workbookPath
+      && (workbookPath !== currentPath || !spreadsheet.session.grant)
+    ) {
+      if (spreadsheet.session.dirty) {
+        throw new AgentClientToolDeferredError("另一个工作簿存在未保存修改；请先保存或放弃修改，再恢复该 Run。");
+      }
+      const artifact = await officecli.openRecentFile({
+        filePath: workbookPath,
+        fileName: fileNameFromPath(workbookPath),
+        documentType: "xlsx",
+        source: "local",
+        ...(run.metadata?.workspace_id ? { workspaceId: run.metadata.workspace_id } : {}),
+        lastOpenedAt: new Date().toISOString(),
+      });
+      const grant = await officecli.issuePreviewToken(artifact);
+      const previousToken = spreadsheet.session.grant?.token;
+      setSpreadsheetEntry({
+        kind: "artifact",
+        artifact,
+        grant,
+        ...(run.metadata?.workspace_id ? { workspaceId: run.metadata.workspace_id } : {}),
+      });
+      if (previousToken && previousToken !== grant.token) {
+        void officecli.revokePreviewToken(previousToken).catch(() => undefined);
+      }
+    } else if (!workbookPath && !currentPath && requiresExistingWorkbook) {
+      throw new AgentClientToolDeferredError(`Run ${run.id} 缺少可恢复的 workbook_path。`);
+    }
+    setSpreadsheetPreferredTool(preferredTool);
+    setCatalogAutoScanFile(undefined);
+    setActiveNav("spreadsheet");
+    const workspace = await waitForSpreadsheetWorkspace();
+    if (surface === "app-builder") workspace.openAppBuilder();
+  }, [previewArtifact, previewGrant, spreadsheet.session.artifact?.filePath, spreadsheet.session.dirty, spreadsheet.session.grant?.token, waitForSpreadsheetWorkspace]);
+
+  const agentClientToolSurfaces = useMemo<AgentClientToolSurfaces>(() => {
+    const workspace = () => {
+      if (!spreadsheetWorkspaceRef.current) {
+        throw new AgentClientToolDeferredError("表格工作区尚未恢复。");
+      }
+      return spreadsheetWorkspaceRef.current;
+    };
+    const saveWorkbook = async () => {
+      if (!await workspace().save()) throw new Error("工作簿写入已经完成，但保存失败。");
+      return { saved: true };
+    };
+    const genericWorkbookTools = {
+      "workbook.snapshot": async (request: Parameters<NonNullable<AgentClientToolSurfaces[string][string]>>[0]) => (
+        workspace().snapshot(parseWorkbookSnapshotRequest(request.arguments))
+      ),
+      "workbook.read_selection": async () => workspace().readSelection(),
+      "workbook.write_cells": async (request: Parameters<NonNullable<AgentClientToolSurfaces[string][string]>>[0]) => (
+        workspace().writeCells(parseWorkbookWriteCellsRequest(request.arguments))
+      ),
+      "workbook.format_cells": async (request: Parameters<NonNullable<AgentClientToolSurfaces[string][string]>>[0]) => (
+        workspace().formatCells(parseWorkbookFormatCellsRequest(request.arguments))
+      ),
+      "workbook.stage_media": async (request: Parameters<NonNullable<AgentClientToolSurfaces[string][string]>>[0]) => (
+        workspace().stageMedia(parseWorkbookStageMediaRequest(request.arguments))
+      ),
+    };
+    const writeJiraSheet = async (response: ConfiguredJiraSyncResult | undefined) => {
+      if (response?.status !== "completed" || !response.result) throw new Error(response?.message || "Jira Runtime did not return Sheet data.");
+      const result: JiraSyncResult = response.result;
+      if (spreadsheet.session.artifact) {
+        await workspace().replaceManagedSheet({ ...result, keyColumn: "Issue Key", preserveColumns: ["OfficeDex Notes"] });
+      } else {
+        const artifact = await officecli.createWorkbookFromSheet({
+          fileName: "Jira Issues.xlsx", sheetName: result.sheetName, headers: result.headers, rows: result.rows,
+          workspaceId: spreadsheet.session.workspaceId,
+        });
+        await spreadsheet.openArtifact(artifact);
+        void refreshRecentFiles(spreadsheet.session.workspaceId);
+      }
+      return { sheetName: result.sheetName, rows: result.fetched };
+    };
+    const writeLiquipediaSheet = async (response: ConfiguredLiquipediaSyncResult | undefined) => {
+      if (response?.status !== "completed" || !response.result) throw new Error(response?.message || "Liquipedia Runtime did not return Sheet data.");
+      const result: LiquipediaSyncResult = response.result;
+      if (spreadsheet.session.artifact) {
+        await workspace().replaceManagedSheet({ ...result, keyColumn: "Source URL" });
+      } else {
+        const artifact = await officecli.createWorkbookFromSheet({
+          fileName: result.sheetName === "Liquipedia Updates" ? "Liquipedia Updates.xlsx" : "Liquipedia Tournaments.xlsx",
+          sheetName: result.sheetName, headers: result.headers, rows: result.rows,
+          workspaceId: spreadsheet.session.workspaceId,
+        });
+        await spreadsheet.openArtifact(artifact);
+        void refreshRecentFiles(spreadsheet.session.workspaceId);
+      }
+      return { sheetName: result.sheetName, rows: result.fetched };
+    };
+    return {
+      "spreadsheet": {
+        ...genericWorkbookTools,
+        "workbook.save": saveWorkbook,
+      },
+      "spreadsheet.catalog-cleanup": {
+        ...genericWorkbookTools,
+        "workbook.catalog_cleanup.apply": async (request) => {
+          const batch = request.arguments.batch as CatalogCleanupBatch | undefined;
+          if (!batch) throw new Error("Catalog cleanup Runtime did not provide a batch for writeback.");
+          await workspace().applyCatalogCleanup(batch);
+          return { applied: true, sheet_id: batch.sheetId };
+        },
+        "workbook.save": saveWorkbook,
+      },
+      "spreadsheet.marketing": {
+        ...genericWorkbookTools,
+        "workbook.insert_image": async (request) => {
+          const batch = request.arguments.batch as MarketingBatchDraft | undefined;
+          const rowIndex = numberValue(request.arguments.row_index);
+          const workflowResult = recordValue(request.arguments.workflow_result);
+          const filePath = stringValue(workflowResult.filePath) || stringValue(request.arguments.file_path);
+          if (!batch || rowIndex < 0 || !filePath) throw new Error("Marketing Runtime did not persist enough workbook context to insert the image.");
+          await workspace().insertMarketingImage(batch, rowIndex, filePath);
+          return { inserted: true, file_path: filePath, row_index: rowIndex };
+        },
+        "workbook.set_status": async (request) => {
+          const batch = request.arguments.batch as MarketingBatchDraft | undefined;
+          const rowIndex = numberValue(request.arguments.row_index);
+          const status = stringValue(request.arguments.status);
+          if (!batch || rowIndex < 0 || !status) throw new Error("Marketing Runtime did not persist enough workbook context to update status.");
+          await workspace().setMarketingStatus(batch, rowIndex, status);
+          return { updated: true, status };
+        },
+        "workbook.save": saveWorkbook,
+      },
+      "spreadsheet.jira": {
+        ...genericWorkbookTools,
+        "workbook.write_managed_sheet": (request) => writeJiraSheet(request.arguments.workflow_result as ConfiguredJiraSyncResult | undefined),
+        "workbook.save": saveWorkbook,
+      },
+      "spreadsheet.liquipedia": {
+        ...genericWorkbookTools,
+        "workbook.write_managed_sheet": (request) => writeLiquipediaSheet(request.arguments.workflow_result as ConfiguredLiquipediaSyncResult | undefined),
+        "workbook.save": saveWorkbook,
+      },
+      "app-builder": {
+        ...genericWorkbookTools,
+        "app.preview": async (request) => {
+          const inline = request.arguments.app as PublishedWorkbookApp | undefined;
+          const appId = stringValue(request.arguments.app_id);
+          const app = inline ?? loadPublishedWorkbookApps().find((candidate) => candidate.id === appId);
+          if (!app) throw new Error("app.preview requires an app payload or an existing app_id.");
+          workspace().previewApp(app);
+          return { app_id: app.id, previewed: true };
+        },
+        "app.publish": async (request) => {
+          const app = request.arguments.app as PublishedWorkbookApp | undefined;
+          if (!app) throw new Error("App Builder Runtime did not provide the App payload.");
+          savePublishedWorkbookApp(app);
+          return { app_id: app.id, published_at: app.publishedAt };
+        },
+      },
+      "pptx-editor": {
+        "pptx.editor.save": (request) => executeActiveEditorClientTool("pptx-editor", request.tool, request.arguments),
+      },
+      "docx-editor": {
+        "docx.editor.save": (request) => executeActiveEditorClientTool("docx-editor", request.tool, request.arguments),
+      },
+    };
+  }, [refreshRecentFiles, spreadsheet.openArtifact, spreadsheet.session.artifact, spreadsheet.session.workspaceId]);
+
+  const reportAgentClientToolError = useCallback((error: Error, run: AgentRun) => {
+    const key = `${run.id}:${error.message}`;
+    if (agentClientToolReportedErrorsRef.current.has(key)) return;
+    agentClientToolReportedErrorsRef.current.add(key);
+    void message.error(error.message);
+  }, []);
 
   // The Living Tree Cockpit already embeds a PPTist preview at the slides_ready/completed
   // stages, so auto-opening the full-window PreviewPanel is no longer needed for vibe tasks.
 
   const sidePanel = previewGrant
-    ? <PreviewPanel grant={previewGrant} onClose={closeInlinePreview} artifact={previewArtifact} />
+    ? (
+        <PreviewPanel
+          grant={previewGrant}
+          onClose={closeInlinePreview}
+          artifact={previewArtifact}
+          live={liveReplayFeed}
+          timelineTaskId={timelineTaskId}
+          timelineNodeId={timelineNodeId}
+          onOpenTimelineNode={openTimelineNode}
+          onTimelineNodeSwapped={(node) => setTimelineNodeId(node.id)}
+          onTimelineNodeReturned={() => setTimelineNodeId(null)}
+          onReturnToLatestDeck={returnToLatestDeck}
+          onReplayGeneration={
+            previewArtifact?.taskId && (state.tasks[previewArtifact.taskId]?.vibeOps?.length ?? 0) > 0
+              ? () => {
+                  void replayDemoRef.current(previewArtifact.taskId);
+                }
+              : undefined
+          }
+        />
+      )
     : undefined;
 
-  const showBanner =
+  const sidebarUpdate: SidebarUpdateRowProps | undefined =
     appUpdate.release !== null &&
     appUpdate.status.updateAvailable &&
     !appUpdate.status.mandatory &&
-    !appUpdate.dismissed;
+    !appUpdate.dismissed
+      ? {
+        release: appUpdate.release,
+        phase: appUpdate.phase,
+        progress: appUpdate.progress,
+        error: appUpdate.error,
+        onUpdate: () => void appUpdate.download(),
+        onInstall: () => void appUpdate.install(),
+        onDismiss: appUpdate.dismiss,
+      }
+      : undefined;
 
   if (forceUpdate && appUpdate.release) {
     return (
@@ -1132,18 +1856,9 @@ function OfficeDexApp() {
     <>
       <DialogHost />
       <ToastHost />
-      {showBanner && appUpdate.release ? (
-        <UpdateBanner
-          release={appUpdate.release}
-          phase={appUpdate.phase}
-          progress={appUpdate.progress}
-          error={appUpdate.error}
-          onUpdate={() => void appUpdate.download()}
-          onInstall={() => void appUpdate.install()}
-          onDismiss={appUpdate.dismiss}
-        />
-      ) : null}
-      <Shell
+      <AgentClientToolHost surfaces={agentClientToolSurfaces} routeToSurface={routeAgentClientToolSurface} onError={reportAgentClientToolError} currentDocumentPath={currentAgentDocumentPath} />
+      <div className="app-frame">
+        <Shell
         activeNav={activeNav}
         failed={Boolean(lastError)}
         errorKind={lastError ? errorKind : undefined}
@@ -1151,6 +1866,9 @@ function OfficeDexApp() {
         autoCollapseSidebarKey={activePptCanvasTaskId}
         credit={credit}
         hasCustomProvider={persistedSettings.llmProvider !== null}
+        signal={sidebarTaskSignal}
+        account={account}
+        update={sidebarUpdate}
         workspaces={sidebarWorkspaces}
         chats={sidebarChats}
         activeWorkspaceId={activeNav === "home" ? homeWorkspaceId : activeNav === "spreadsheet" ? spreadsheet.session.workspaceId : activeWorkspace?.id}
@@ -1171,6 +1889,7 @@ function OfficeDexApp() {
           <HomeScreen
             files={recentFiles}
             attentionTasks={tasks}
+            onRetryTask={retryTaskGeneration}
             loading={recentFilesLoading}
             error={recentFilesError}
             activeWorkspaceId={homeWorkspaceId}
@@ -1180,13 +1899,13 @@ function OfficeDexApp() {
             onRemoveFile={removeRecentFile}
             onPickTaskFile={pickHomeTaskFile}
             onPickTaskDirectory={pickHomeTaskDirectory}
+            droppedTaskPaths={droppedTaskPaths}
             onSelectWorkspace={selectHomeWorkspace}
             onSelectAllWorkspaces={selectAllHomeFiles}
             onAddWorkspace={addWorkspace}
             onAnalyzeTask={analyzeTaskFromHome}
             onStartTask={startTaskFromHome}
             onOpenTask={selectTask}
-            onOpenTasks={() => setActiveNav("tasks")}
             onRetryRecentFiles={() => void refreshRecentFiles(homeWorkspaceId)}
           />
         ) : null}
@@ -1232,7 +1951,10 @@ function OfficeDexApp() {
             onCanvasStateChange={spreadsheet.setCanvasState}
             onCanvasError={spreadsheet.setError}
             onCanvasSaveError={spreadsheet.setSaveError}
-            onCanvasSessionClosed={(previewToken) => void officecli.revokePreviewToken(previewToken).catch(() => undefined)}
+            onCanvasSessionClosed={(previewToken) => {
+              setSpreadsheetEntry((current) => clearSpreadsheetEntryGrant(current, previewToken));
+              void officecli.revokePreviewToken(previewToken).catch(() => undefined);
+            }}
             agentPanel={(
               <SpreadsheetAgentPanel
                 workspaceId={spreadsheet.session.workspaceId}
@@ -1245,20 +1967,143 @@ function OfficeDexApp() {
                 onModify={startSpreadsheetModify}
                 onRespond={(input) => officecli.respond(input)}
                 onCancel={(taskId) => officecli.cancel(taskId)}
+                preferredTool={spreadsheetPreferredTool}
+                catalogPanel={spreadsheet.session.artifact ? (
+                  <SpreadsheetCatalogCleanupPanel
+                    fileName={spreadsheet.session.artifact.fileName}
+                    filePath={spreadsheet.session.artifact.filePath}
+                    workspaceId={spreadsheet.session.workspaceId}
+                    autoScan={spreadsheetPreferredTool === "catalog"
+                      && catalogAutoScanFile === spreadsheet.session.artifact.filePath
+                      && (spreadsheet.session.phase === "ready" || spreadsheet.session.phase === "dirty")}
+                    onInspect={() => {
+                      if (!spreadsheetWorkspaceRef.current) throw new Error("表格仍在加载，请稍后重试。");
+                      return spreadsheetWorkspaceRef.current.inspectCatalogSheets();
+                    }}
+                    onPreview={(batch) => spreadsheetWorkspaceRef.current?.previewCatalogCleanup(batch)}
+                    onApply={(batch) => {
+                      if (!spreadsheetWorkspaceRef.current) return Promise.reject(new Error("表格编辑器已关闭。"));
+                      return spreadsheetWorkspaceRef.current.applyCatalogCleanup(batch);
+                    }}
+                    onSave={() => spreadsheetWorkspaceRef.current?.save() ?? Promise.resolve(false)}
+                  />
+                ) : undefined}
+                jiraPanel={(
+                  <SpreadsheetJiraPanel
+                    workbookReady={Boolean(spreadsheet.session.artifact)}
+                    workbookPath={spreadsheet.session.artifact?.filePath}
+                    workspaceId={spreadsheet.session.workspaceId}
+                    onOpenSettings={() => setActiveNav("settings")}
+                    onCreateWorkbook={async (result) => {
+                      const artifact = await officecli.createWorkbookFromSheet({
+                        fileName: "Jira Issues.xlsx",
+                        sheetName: result.sheetName,
+                        headers: result.headers,
+                        rows: result.rows,
+                        workspaceId: spreadsheet.session.workspaceId,
+                      });
+                      await spreadsheet.openArtifact(artifact);
+                      void refreshRecentFiles(spreadsheet.session.workspaceId);
+                    }}
+                    onWriteSheet={(result) => {
+                      if (!spreadsheetWorkspaceRef.current) return Promise.reject(new Error("表格编辑器已关闭。"));
+                      return spreadsheetWorkspaceRef.current.replaceManagedSheet({ ...result, keyColumn: "Issue Key", preserveColumns: ["OfficeDex Notes"] });
+                    }}
+                    onSave={() => spreadsheetWorkspaceRef.current?.save() ?? Promise.resolve(false)}
+                  />
+                )}
+                liquipediaPanel={(
+                  <SpreadsheetLiquipediaPanel
+                    workbookReady={Boolean(spreadsheet.session.artifact)}
+                    workbookPath={spreadsheet.session.artifact?.filePath}
+                    workspaceId={spreadsheet.session.workspaceId}
+                    onOpenSettings={() => setActiveNav("settings")}
+                    onCreateWorkbook={async (result) => {
+                      const artifact = await officecli.createWorkbookFromSheet({
+                        fileName: result.sheetName === "Liquipedia Updates" ? "Liquipedia Updates.xlsx" : "Liquipedia Tournaments.xlsx",
+                        sheetName: result.sheetName,
+                        headers: result.headers,
+                        rows: result.rows,
+                        workspaceId: spreadsheet.session.workspaceId,
+                      });
+                      await spreadsheet.openArtifact(artifact);
+                      void refreshRecentFiles(spreadsheet.session.workspaceId);
+                    }}
+                    onWriteSheet={(result) => {
+                      if (!spreadsheetWorkspaceRef.current) return Promise.reject(new Error("表格编辑器已关闭。"));
+                      return spreadsheetWorkspaceRef.current.replaceManagedSheet({ ...result, keyColumn: "Source URL" });
+                    }}
+                    onSave={() => spreadsheetWorkspaceRef.current?.save() ?? Promise.resolve(false)}
+                  />
+                )}
+                marketingPanel={(
+                  <SpreadsheetMarketingPanel
+                    tasks={state.tasks}
+                    workbookPath={spreadsheet.session.artifact?.filePath}
+                    workspaceId={spreadsheet.session.workspaceId}
+                    creditBalance={creditStatus?.mode === "api_key"
+                      ? creditStatus.paidKeyRemaining
+                      : creditStatus?.mode !== "anonymous"
+                        ? creditStatus?.hostedCreditBalance ?? null
+                        : creditStatus?.anonymousCreditAvailable ?? null}
+                    bridgeInterruptionKey={bridgeInterruptionKey}
+                    existingImages={recentFiles}
+                    onInspect={(assetKind) => {
+                      if (!spreadsheetWorkspaceRef.current) throw new Error("表格仍在加载，请稍后重试。");
+                      return spreadsheetWorkspaceRef.current.inspectMarketingSelection(assetKind);
+                    }}
+                    onAnalyze={(batch) => officecli.planSpreadsheetFields({
+                      ...(spreadsheet.session.workspaceId
+                        ? { workspaceId: spreadsheet.session.workspaceId }
+                        : { noProject: true }),
+                      sheetName: batch.sheetName,
+                      headerRowIndex: batch.headerRowIndex,
+                      headers: batch.source.headers,
+                      sampleRows: batch.source.rows.slice(0, 5),
+                    })}
+                    onMappingChange={(mapping) => spreadsheetWorkspaceRef.current?.setMarketingMapping(mapping)}
+                    mappingStorageKey={spreadsheet.session.artifact?.filePath}
+                    onPrepare={(batch) => spreadsheetWorkspaceRef.current?.prepareMarketingBatch(batch)}
+                    onSetStatus={(batch, rowIndex, status) => {
+                      if (!spreadsheetWorkspaceRef.current) return Promise.reject(new Error("表格编辑器已关闭。"));
+                      return spreadsheetWorkspaceRef.current.setMarketingStatus(batch, rowIndex, status);
+                    }}
+                    onInsertImage={(batch, rowIndex, filePath) => {
+                      if (!spreadsheetWorkspaceRef.current) return Promise.reject(new Error("表格编辑器已关闭。"));
+                      return spreadsheetWorkspaceRef.current.insertMarketingImage(batch, rowIndex, filePath);
+                    }}
+                    onGenerate={startSpreadsheetMarketingImage}
+                    onSave={() => spreadsheetWorkspaceRef.current?.save() ?? Promise.resolve(false)}
+                  />
+                )}
               />
             )}
           />
         ) : null}
-        {activeNav === "tasks" ? (
-          <TasksScreen
-            tasks={tasks}
-            onSelectTask={selectTask}
-            onNewGeneration={newGeneration}
+        {activeNav === "settings" ? (
+          <SettingsScreen
+            onCreditRefresh={nudgeForTaskTransition}
+            onOpenLogin={openLogin}
+            activity={(
+            <ActivityPanel
+              tasks={tasks}
+              onSelectTask={selectTask}
+              onDeleteConversation={(conversationId) => void handleDeleteConversation(conversationId)}
+              onOpenArtifact={(artifact) => void openRecentFile({
+                filePath: artifact.filePath,
+                fileName: artifact.fileName,
+                documentType: artifact.documentType,
+                source: "generated",
+                lastOpenedAt: new Date().toISOString(),
+                ...(artifact.taskId ? { taskId: artifact.taskId } : {}),
+              })}
+            />
+            )}
           />
         ) : null}
-        {activeNav === "settings" ? <SettingsScreen onCreditRefresh={nudgeForTaskTransition} onOpenLogin={openLogin} /> : null}
         {activeNav === "login" ? <LoginScreen /> : null}
-      </Shell>
+        </Shell>
+      </div>
       <UnsavedChangesDialog
         open={unsavedDialogOpen}
         saving={unsavedDialogSaving}
@@ -1285,14 +2130,8 @@ function initialNavFromLocation(): NavKey {
   return new URLSearchParams(window.location.search).get("view") === "dialogue" ? "dialogue" : "home";
 }
 
-function fileNameFromPath(filePath: string): string {
-  return filePath.split(/[/\\]/).filter(Boolean).at(-1) ?? filePath;
-}
-
-function documentTypeFromPath(filePath: string): string {
-  const fileName = fileNameFromPath(filePath);
-  const dot = fileName.lastIndexOf(".");
-  return dot >= 0 ? fileName.slice(dot + 1).toLowerCase() : "";
+function numberValue(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : -1;
 }
 
 function isXlsxArtifact(artifact: Artifact): boolean {
@@ -1346,8 +2185,20 @@ function isGenerateDocumentType(value: unknown): value is GenerateInput["documen
   return value === "pptx" || value === "docx" || value === "xlsx" || value === "report" || value === "img" || value === "gif";
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+function promiseWithTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeout);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
 }
 
 function stringOrUndef(value: unknown): string | undefined {

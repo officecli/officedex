@@ -32,6 +32,8 @@ vi.mock("./bridge", () => ({
   officecli: {
     initialize: vi.fn(async () => ({})),
     getCapabilities: vi.fn(async () => ({})),
+    whoami: vi.fn(async () => ({ mode: "anonymous" as const })),
+    onFileDrop: vi.fn(() => () => undefined),
     getTaskHistory: vi.fn(async () => []),
     listWorkspaces: vi.fn(async () => []),
     listChats: vi.fn(async () => []),

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DesktopTask, RecentFile } from "../../shared/types";
 import { LocaleProvider } from "../i18n";
@@ -33,7 +33,7 @@ function renderHome(overrides: Partial<React.ComponentProps<typeof HomeScreen>> 
     onAnalyzeTask: vi.fn(async (input) => ({ ...input, kind: "generate" as const, documentType: "pptx" as const, nextStep: "plan" as const })),
     onStartTask: vi.fn(),
     onOpenTask: vi.fn(),
-    onOpenTasks: vi.fn(),
+    onRetryTask: vi.fn(),
     ...overrides,
   };
   render(<LocaleProvider value={locale}><HomeScreen {...props} /></LocaleProvider>);
@@ -48,7 +48,9 @@ describe("HomeScreen", () => {
     expect(screen.getByRole("group", { name: "Output type" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Select working directory" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Technology Product Launch" })).toBeTruthy();
-    expect(document.querySelectorAll(".home-recent-icon")).toHaveLength(2);
+    expect(document.querySelectorAll(".doc-type-chip")).toHaveLength(2);
+    expect(document.querySelector(".doc-type-chip.doc-type--pptx")).toBeTruthy();
+    expect(document.querySelector(".doc-type-chip.doc-type--xlsx")).toBeTruthy();
   });
 
   it("uses 从范例开始 wording for the Chinese homepage case section", () => {
@@ -137,15 +139,48 @@ describe("HomeScreen", () => {
     expect(props.onRemoveFile).toHaveBeenCalledWith("/tmp/generated.pptx");
   });
 
-  it("shows only tasks that require a user decision", () => {
+  it("keeps the attention list to decisions and shows running work as a live card", () => {
     const runningTask: DesktopTask = { ...attentionTasks[0], id: "task-running", conversationId: "task-running", status: "running", topic: "Running task", plan: undefined };
     const props = renderHome({ attentionTasks: [...attentionTasks, runningTask] });
-    expect(screen.getByText("Client proposal")).toBeTruthy();
-    expect(screen.queryByText("Running task")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /Client proposal/i }));
-    fireEvent.click(screen.getByRole("button", { name: "View all" }));
+    const attention = screen.getByRole("region", { name: /Needs your attention/i });
+    expect(within(attention).getByText("Client proposal")).toBeTruthy();
+    // Running work is not a decision, so it stays out of the attention list —
+    // it rides in Recent instead, where its result will land.
+    expect(within(attention).queryByText("Running task")).toBeNull();
+    expect(document.querySelector(".home-task-row--running")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open task Running task" })).toBeTruthy();
+
+    fireEvent.click(within(attention).getByRole("button", { name: /Client proposal/i }));
     expect(props.onOpenTask).toHaveBeenCalledWith("task-review");
-    expect(props.onOpenTasks).toHaveBeenCalledOnce();
+  });
+
+  it("offers retry and dismiss on a failed task card", () => {
+    const failedTask: DesktopTask = {
+      id: "task-failed", conversationId: "task-failed", status: "failed", documentType: "pptx",
+      topic: "Broken deck", error: "render failed: layout validation",
+      events: [{ event_id: "e1", task_id: "task-failed", type: "task.failed", ts: new Date().toISOString(), payload: {} }],
+    };
+    const props = renderHome({ attentionTasks: [failedTask] });
+    expect(document.querySelector(".home-task-row--failed")).toBeTruthy();
+    expect(screen.getByText("render failed: layout validation")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(props.onRetryTask).toHaveBeenCalledWith(expect.objectContaining({ id: "task-failed" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss Broken deck" }));
+    expect(document.querySelector(".home-task-row--failed")).toBeNull();
+  });
+
+  it("ages stale failures off the home page", () => {
+    const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+    renderHome({ attentionTasks: [{
+      id: "task-old", conversationId: "task-old", status: "failed", documentType: "pptx",
+      topic: "Ancient failure", error: "boom",
+      events: [{ event_id: "e0", task_id: "task-old", type: "task.failed", ts: eightDaysAgo, payload: {} }],
+    }] });
+    // Still listed on the tasks page, but the front door stays clean.
+    expect(document.querySelector(".home-task-row--failed")).toBeNull();
+    expect(screen.queryByText("Ancient failure")).toBeNull();
   });
 
   it("keeps loading and errors local to the recent-file section", () => {

@@ -43,7 +43,6 @@ export function RuntimeChip({ onClick }: RuntimeChipProps) {
     return (
       <Tooltip title={t("runtime.chip.tooltip.official")}>
         <Tag
-          color="success"
           icon={<CloudOutlined />}
           className="runtime-chip runtime-chip-hosted"
           onClick={onClick}

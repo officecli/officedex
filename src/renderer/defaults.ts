@@ -1,11 +1,11 @@
 import type { DocumentType, GenerateInput, ProxySettings } from "../shared/types";
 import { DOCUMENT_TYPES, getCapability } from "../shared/types";
 
-export type NavKey = "home" | "spreadsheet" | "dialogue" | "tasks" | "settings" | "login";
+export type NavKey = "home" | "spreadsheet" | "dialogue" | "settings" | "login";
 
 export const defaultGenerateInput: Partial<GenerateInput> = {
   documentType: "pptx",
-  generationMode: "plan",
+  generationMode: "fast",
   enableImages: true,
   imageRatio: "square",
   fps: 16,
@@ -16,13 +16,13 @@ export const defaultProxySettings: ProxySettings = {
   url: "http://127.0.0.1:7890",
 };
 
-export const PROXY_URL_PATTERN = /^(https?|socks5h?):\/\/[^\s/$.?#].[^\s]*$/i;
+const PROXY_URL_PATTERN = /^(https?|socks5h?):\/\/[^\s/$.?#].[^\s]*$/i;
 
 export function isValidProxyUrl(url: string): boolean {
   return PROXY_URL_PATTERN.test(url.trim());
 }
 
-export const newGenerationDocumentTypes: DocumentType[] = DOCUMENT_TYPES.slice();
+const newGenerationDocumentTypes: DocumentType[] = DOCUMENT_TYPES.slice();
 
 export function normalizeNewGenerationDocumentType(value: unknown): DocumentType {
   return newGenerationDocumentTypes.includes(value as DocumentType) ? (value as DocumentType) : "pptx";
