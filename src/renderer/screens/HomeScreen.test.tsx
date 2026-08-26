@@ -41,21 +41,20 @@ function renderHome(overrides: Partial<React.ComponentProps<typeof HomeScreen>> 
 }
 
 describe("HomeScreen", () => {
-  it("renders the OpenDesign-inspired brand, prompt filters, gallery, and recent project cards", () => {
+  it("keeps the brand in the sidebar only and renders the intake controls, gallery, and recent rows", () => {
     renderHome();
 
-    expect(document.querySelector(".home-brand-lockup img")?.getAttribute("src")).toBe("./officedex-logo.png");
-    expect(screen.getByRole("navigation", { name: "Output type" })).toBeTruthy();
-    expect(screen.getByLabelText("Example prompts")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Use prompt: Technology Product Launch" })).toBeTruthy();
-    expect(document.querySelectorAll(".home-recent-preview")).toHaveLength(2);
+    expect(document.querySelector(".home-brand-lockup")).toBeNull();
+    expect(screen.getByRole("group", { name: "Output type" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Select working directory" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Technology Product Launch" })).toBeTruthy();
+    expect(document.querySelectorAll(".home-recent-icon")).toHaveLength(2);
   });
 
-  it("uses 优秀案例 wording for the Chinese homepage case section", () => {
+  it("uses 从范例开始 wording for the Chinese homepage case section", () => {
     renderHome({}, "zh");
     expect(screen.getByText("用一句话、一份资料或一个优秀案例，开始制作幻灯片、图片、文档或表格。")).toBeTruthy();
-    expect(screen.getByRole("region", { name: "优秀案例" })).toBeTruthy();
-    expect(screen.getAllByText("参考案例").length).toBeGreaterThan(0);
+    expect(screen.getByRole("region", { name: "从范例开始" })).toBeTruthy();
   });
 
   it("defaults to PPTX and shows templates only for the selected output type", () => {
@@ -95,7 +94,8 @@ describe("HomeScreen", () => {
       onPickTaskFile,
       onAnalyzeTask: vi.fn(async (input) => ({ ...input, kind: "catalog_cleanup" as const, documentType: "xlsx" as const, nextStep: "configure" as const })),
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add file" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add reference" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Reference file" }));
     expect(await screen.findByText("supplier.xlsx")).toBeTruthy();
     fireEvent.change(screen.getByRole("textbox", { name: "Describe the result you want" }), { target: { value: "Clean for Shopify import" } });
     fireEvent.click(screen.getByRole("button", { name: "Analyze" }));
@@ -118,7 +118,8 @@ describe("HomeScreen", () => {
 
   it("shows file picker failures inside the task intake", async () => {
     renderHome({ onPickTaskFile: vi.fn(async () => { throw new Error("File picker timed out"); }) });
-    fireEvent.click(screen.getByRole("button", { name: "Add file" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add reference" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Reference file" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("File picker timed out");
   });
 

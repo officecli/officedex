@@ -70,6 +70,7 @@ vi.mock("./useAppUpdate", () => ({
 
 vi.mock("./components/Shell", () => ({
   Shell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  MaterialSymbol: ({ name }: { name: string }) => <span className="material-symbol" data-icon={name} />,
 }));
 
 vi.mock("./screens/DialogueScreens", () => ({

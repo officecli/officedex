@@ -1,6 +1,6 @@
 import {
-  AudioLines, Bell, Bot, ChartBar, ChartLine, ChevronDown, ChevronRight, CircleAlert, CircleCheck, CircleStop, CircleX,
-  Cloud, Code2, Copy, Download, Ellipsis, Eye, EyeOff, File, FileCheck2, FileImage, FileText, FolderOpen, FolderPlus,
+  ArrowUp, AudioLines, Bell, Bot, ChartBar, ChartLine, ChevronDown, ChevronRight, CircleAlert, CircleCheck, CircleStop, CircleX,
+  Cloud, Code2, Copy, Download, Ellipsis, Eye, EyeOff, FileCheck2, FileImage, FileText, FolderOpen, FolderPlus,
   Github, Globe2, History, Image as ImageGlyph, Info, LayoutGrid, Link, List, LoaderCircle, Lock, LogOut, MessageCircle,
   MessageSquare, Monitor, Palette, Paperclip, Pencil, PlayCircle, Plus, Presentation, RefreshCw, Rocket, Send, Settings,
   ShieldCheck, SlidersHorizontal, Star, Table2, Trash2, TriangleAlert, Unlock, Unplug, User, X, Zap,
@@ -16,6 +16,7 @@ function projectIcon(Icon: LucideIcon) {
 }
 
 export const AppstoreOutlined = projectIcon(LayoutGrid);
+export const ArrowUpOutlined = projectIcon(ArrowUp);
 export const AudioOutlined = projectIcon(AudioLines);
 export const BarChartOutlined = projectIcon(ChartBar);
 export const BgColorsOutlined = projectIcon(Palette);
@@ -78,13 +79,4 @@ export const UnorderedListOutlined = projectIcon(List);
 export const UserOutlined = projectIcon(User);
 export const WarningFilled = projectIcon(TriangleAlert);
 
-export const AddIcon = PlusOutlined;
-export const FileIcon = projectIcon(File);
-export const SettingsIcon = SettingOutlined;
-export const NotificationIcon = NotificationOutlined;
-export const DownIcon = DownOutlined;
 export const CopyIcon = CopyOutlined;
-export const FolderOpenIcon = FolderOpenOutlined;
-export const HistoryIcon = HistoryOutlined;
-export const UserIcon = UserOutlined;
-export const CloseIcon = CloseOutlined;

@@ -3,6 +3,7 @@ import type { DesktopTask, DocumentType, RecentFile, WorkspaceSummary } from "..
 import { Button, Dropdown, Empty, Loading, TextArea, type MenuProps } from "../ui";
 import type { HomeTaskAnalysis, HomeTaskIntake } from "../homeIntake";
 import {
+  ArrowUpOutlined,
   CloseOutlined,
   FileTextOutlined,
   DownOutlined,
@@ -54,7 +55,7 @@ interface HomeTemplate {
 }
 
 const HOME_CATEGORIES: HomeCategory[] = [
-  { type: "pptx", icon: "fund_projection_screen" },
+  { type: "pptx", icon: "slideshow" },
   { type: "img", icon: "image" },
   { type: "docx", icon: "description" },
   { type: "xlsx", icon: "table_chart" },
@@ -319,11 +320,11 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
       const motion = pointerMotionRef.current;
       const elapsed = lastFrameTime === 0 ? 16 : Math.min(40, time - lastFrameTime);
       lastFrameTime = time;
-      motion.x += (motion.targetX - motion.x) * 0.2;
-      motion.y += (motion.targetY - motion.y) * 0.2;
+      motion.x += (motion.targetX - motion.x) * 0.42;
+      motion.y += (motion.targetY - motion.y) * 0.42;
       motion.strength += (motion.targetStrength - motion.strength) * 0.09;
       animatedPhase += elapsed * motion.activity;
-      motion.activity *= 0.82;
+      motion.activity *= 0.76;
       if (motion.activity < 0.006) motion.activity = 0;
       context.clearRect(0, 0, width, height);
 
@@ -388,33 +389,11 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
     >
       <canvas className="home-pointer-field" ref={pointerFieldRef} aria-hidden="true" />
       <header className="home-hero">
-        <div className="home-brand-lockup" aria-label="OfficeDex">
-          <img src="./officedex-logo.png" alt="" />
-          <span>OfficeDex</span>
-        </div>
         <div className="home-hero__copy">
           <h1 id="home-title">{t("home.title")}</h1>
           <p>{t("home.subtitle")}</p>
         </div>
       </header>
-
-      <nav className="home-output-types" aria-label={t("home.outputTypes")}>
-        {HOME_CATEGORIES.map((category) => (
-          <button
-            key={category.type}
-            type="button"
-            className={selectedDocumentType === category.type ? "is-selected" : ""}
-            aria-pressed={selectedDocumentType === category.type}
-            onClick={() => {
-              setSelectedDocumentType(category.type);
-              invalidateAnalysis();
-            }}
-          >
-            <MaterialSymbol name={category.icon} />
-            <span>{t(`home.type.${category.type}`)}</span>
-          </button>
-        ))}
-      </nav>
 
       <form className="home-intake" aria-label={t("home.promptLabel")} onSubmit={submitTask}>
         <TextArea
@@ -460,24 +439,34 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
                 <PlusOutlined aria-hidden />
               </button>
             </Dropdown>
+            <Dropdown menu={workspaceMenu} trigger={["click"]} placement="top">
+              <button type="button" className="home-intake__workdir" aria-label={t("home.workdir.select")} title={activeWorkspace?.path}>
+                <FolderOpenOutlined aria-hidden />
+                <span>{activeWorkspace?.name ?? t("home.workdir.empty")}</span>
+                <DownOutlined aria-hidden />
+              </button>
+            </Dropdown>
           </div>
-          <span className="home-intake__selected-type">
-            <MaterialSymbol name={HOME_CATEGORIES.find((category) => category.type === selectedDocumentType)?.icon ?? "description"} />
-            {t(`home.type.${selectedDocumentType}`)}
-          </span>
-          <Button htmlType="submit" variant="primary" icon={<RightOutlined />} loading={analyzing} disabled={!prompt.trim()}>{t("home.analyze")}</Button>
+          <div className="home-intake__types" role="group" aria-label={t("home.outputTypes")}>
+            {HOME_CATEGORIES.map((category) => (
+              <button
+                key={category.type}
+                type="button"
+                className={selectedDocumentType === category.type ? "is-selected" : ""}
+                aria-pressed={selectedDocumentType === category.type}
+                onClick={() => {
+                  setSelectedDocumentType(category.type);
+                  invalidateAnalysis();
+                }}
+              >
+                {selectedDocumentType === category.type ? <MaterialSymbol name={category.icon} /> : null}
+                <span>{t(`home.type.${category.type}`)}</span>
+              </button>
+            ))}
+          </div>
+          <Button htmlType="submit" variant="primary" icon={<ArrowUpOutlined />} loading={analyzing} disabled={!prompt.trim()}>{t("home.analyze")}</Button>
         </div>
       </form>
-      <div className="home-workdir">
-        <Dropdown menu={workspaceMenu} trigger={["click"]} placement="top">
-          <button type="button" className="home-workdir__trigger" aria-label={t("home.workdir.select")}>
-            <FolderOpenOutlined aria-hidden />
-            <span>{activeWorkspace?.name ?? t("home.workdir.empty")}</span>
-            {activeWorkspace ? <small title={activeWorkspace.path}>{activeWorkspace.path}</small> : null}
-            <DownOutlined aria-hidden />
-          </button>
-        </Dropdown>
-      </div>
 
       {analysis ? (
         <section className="home-analysis" aria-labelledby="home-analysis-title">
@@ -504,24 +493,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
 
       <section className="home-templates" aria-labelledby="home-templates-title">
         <div className="home-section-header">
-          <h2 id="home-templates-title">{t("home.templates", { type: t(`home.type.${selectedDocumentType}`) })}</h2>
-        </div>
-        <div className="home-template-filters" role="group" aria-label={t("home.templateFilters")}>
-          <button type="button" className="is-selected" aria-pressed="true">{t("home.templateAll")}</button>
-          {visibleTemplates.slice(0, 6).map((template) => (
-            <button
-              key={template.id}
-              type="button"
-              aria-label={t("home.usePrompt", { name: t(`home.template.${template.id}.title`) })}
-              onClick={() => {
-                setPrompt(t(`home.template.${template.id}.description`));
-                invalidateAnalysis();
-              }}
-            >
-              <MaterialSymbol name={template.icon} />
-              {t(`home.template.${template.id}.title`)}
-            </button>
-          ))}
+          <h2 id="home-templates-title">{t("home.templates")}</h2>
         </div>
         <div className="home-template-grid">
           {visibleTemplates.map((template) => {
@@ -533,6 +505,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
                 type="button"
                 className="home-template-card"
                 aria-label={title}
+                title={description}
                 onClick={() => {
                   setPrompt(description);
                   invalidateAnalysis();
@@ -547,12 +520,10 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
                   )}
                 </span>
                 <span className="home-template-card__copy">
+                  <strong>{title}</strong>
                   <small>{template.pages
                     ? t("home.templateMeta.pages", { type: t(`home.type.${template.type}`), pages: template.pages })
                     : t("home.templateMeta.minutes", { type: t(`home.type.${template.type}`), minutes: template.minutes ?? 1 })}</small>
-                  <strong>{title}</strong>
-                  <span>{description}</span>
-                  <em>{t("home.useTemplate")}</em>
                 </span>
               </button>
             );
@@ -597,9 +568,8 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
             {visibleFiles.map((file) => (
               <div className="home-recent-row" key={file.filePath}>
                 <button type="button" className="home-recent-open" aria-label={t("home.openFile", { name: file.fileName })} onClick={() => onOpenFile(file)}>
-                  <span className={`home-recent-preview home-recent-preview--${file.documentType.toLowerCase()}`} aria-hidden="true">
-                    <span className="home-recent-preview__toolbar" />
-                    <span className="home-recent-preview__content"><i /><i /><i /><i /></span>
+                  <span className={`home-recent-icon home-recent-icon--${file.documentType.toLowerCase()}`} aria-hidden="true">
+                    <MaterialSymbol name={recentIconName(file.documentType)} />
                   </span>
                   <span className="home-recent-copy"><strong>{file.fileName}</strong><small>{file.documentType.toUpperCase()} · {t(`home.source.${file.source}`)} · {formatOpenedAt(file.lastOpenedAt)}</small></span>
                 </button>
@@ -612,6 +582,14 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
 
     </section>
   );
+}
+
+function recentIconName(documentType: string): string {
+  const type = documentType.toLowerCase();
+  if (type === "pptx") return "slideshow";
+  if (type === "xlsx") return "table_chart";
+  if (type === "img" || type === "gif") return "image";
+  return "description";
 }
 
 function formatOpenedAt(value: string): string {

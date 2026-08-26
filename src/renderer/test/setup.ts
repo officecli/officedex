@@ -28,6 +28,23 @@ if (typeof localStorage === "undefined" || typeof localStorage.clear !== "functi
   });
 }
 
+if (typeof window.matchMedia !== "function") {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+}
+
 Object.defineProperty(window, "getComputedStyle", {
   configurable: true,
   writable: true,

@@ -1,8 +1,21 @@
-import { act, cleanup, createEvent, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  createEvent,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BridgeEvent, DesktopAPI } from "../shared/types";
-import { applyTaskEvent, createInitialTaskState, reduceStages } from "./taskState";
+import {
+  applyTaskEvent,
+  createInitialTaskState,
+  reduceStages,
+} from "./taskState";
 import { IDEA_NODE_DRAWING_MS } from "./screens/DialogueScreens";
 
 const DEMO_NODE_SEQUENCE_TIMEOUT_MS = IDEA_NODE_DRAWING_MS * 24 + 3000;
@@ -15,7 +28,12 @@ describe("reduceStages", () => {
       { task_id: "t", type: "task.progress", payload: {} },
     ]);
     expect(stages).toHaveLength(4);
-    expect(stages.map((s) => s.id)).toEqual(["analyze", "outline", "writing", "format"]);
+    expect(stages.map((s) => s.id)).toEqual([
+      "analyze",
+      "outline",
+      "writing",
+      "format",
+    ]);
     expect(stages[0].status).toBe("completed");
     expect(stages[1].status).toBe("active");
     expect(stages[2].status).toBe("pending");
@@ -25,7 +43,11 @@ describe("reduceStages", () => {
 
   it("uses payload.stage as the human-readable label override", () => {
     const { stages } = reduceStages([
-      { task_id: "t", type: "task.progress", payload: { stage: "Generating milestone sections" } },
+      {
+        task_id: "t",
+        type: "task.progress",
+        payload: { stage: "Generating milestone sections" },
+      },
     ]);
     expect(stages[0].label).toBe("Generating milestone sections");
     expect(stages[0].status).toBe("active");
@@ -52,8 +74,16 @@ describe("reduceStages", () => {
 
   it("honors native payload.stage_id and ignores derived defaults", () => {
     const { stages, activeStageId } = reduceStages([
-      { task_id: "t", type: "task.progress", payload: { stage_id: "ingest", stage_label: "Ingesting" } },
-      { task_id: "t", type: "task.progress", payload: { stage_id: "render", stage_label: "Rendering" } },
+      {
+        task_id: "t",
+        type: "task.progress",
+        payload: { stage_id: "ingest", stage_label: "Ingesting" },
+      },
+      {
+        task_id: "t",
+        type: "task.progress",
+        payload: { stage_id: "render", stage_label: "Rendering" },
+      },
     ]);
     expect(stages.map((s) => s.id)).toEqual(["ingest", "render"]);
     expect(stages[0].status).toBe("completed");
@@ -63,8 +93,16 @@ describe("reduceStages", () => {
 
   it("applyTaskEvent attaches stages to the DesktopTask", () => {
     let state = createInitialTaskState();
-    state = applyTaskEvent(state, { task_id: "t", type: "task.started", payload: {} });
-    state = applyTaskEvent(state, { task_id: "t", type: "task.progress", payload: {} });
+    state = applyTaskEvent(state, {
+      task_id: "t",
+      type: "task.started",
+      payload: {},
+    });
+    state = applyTaskEvent(state, {
+      task_id: "t",
+      type: "task.progress",
+      payload: {},
+    });
     const task = state.tasks["t"];
     expect(task.stages).toBeDefined();
     expect(task.stages![0].status).toBe("active");
@@ -73,7 +111,11 @@ describe("reduceStages", () => {
 
   it("applyTaskEvent stores the latest Vibe Project Tree snapshot", () => {
     let state = createInitialTaskState();
-    state = applyTaskEvent(state, { task_id: "t", type: "task.started", payload: { document_type: "pptx" } });
+    state = applyTaskEvent(state, {
+      task_id: "t",
+      type: "task.started",
+      payload: { document_type: "pptx" },
+    });
     state = applyTaskEvent(state, {
       task_id: "t",
       type: "task.vibe_tree",
@@ -84,8 +126,18 @@ describe("reduceStages", () => {
           rootId: "root",
           title: "Rebuild Internal Knowledge Base",
           nodes: [
-            { id: "root", kind: "root", title: "Rebuild Internal Knowledge Base" },
-            { id: "branch-problem", parentId: "root", kind: "branch", title: "Problem", summary: "Can't find, can't trust, can't use" },
+            {
+              id: "root",
+              kind: "root",
+              title: "Rebuild Internal Knowledge Base",
+            },
+            {
+              id: "branch-problem",
+              parentId: "root",
+              kind: "branch",
+              title: "Problem",
+              summary: "Can't find, can't trust, can't use",
+            },
           ],
         },
         actions: [{ id: "refine_slides", label: "Refine Page Content" }],
@@ -102,33 +154,36 @@ describe("reduceStages", () => {
 describe("App task flow", () => {
   it("uses the latest prior PPTX artifact as the source for follow-up modify tasks", async () => {
     const { findModifySourceTask } = await import("./App");
-    const task = findModifySourceTask([
-      {
-        id: "task-vibe",
-        conversationId: "conversation-vibe",
-        status: "completed",
-        documentType: "pptx",
-        events: [],
-        artifact: {
-          taskId: "task-vibe",
-          filePath: "/tmp/deck.pptx",
-          fileName: "deck.pptx",
+    const task = findModifySourceTask(
+      [
+        {
+          id: "task-vibe",
+          conversationId: "conversation-vibe",
+          status: "completed",
           documentType: "pptx",
+          events: [],
+          artifact: {
+            taskId: "task-vibe",
+            filePath: "/tmp/deck.pptx",
+            fileName: "deck.pptx",
+            documentType: "pptx",
+          },
         },
-      },
-      {
-        id: "task-edit",
-        conversationId: "conversation-vibe",
-        parentTaskId: "task-vibe",
-        status: "running",
-        documentType: "pptx",
-        events: [],
-        userInput: {
-          prompt: "把最后一页标题改成 hello void",
-          sourceFile: "/tmp/deck.pptx",
+        {
+          id: "task-edit",
+          conversationId: "conversation-vibe",
+          parentTaskId: "task-vibe",
+          status: "running",
+          documentType: "pptx",
+          events: [],
+          userInput: {
+            prompt: "把最后一页标题改成 hello void",
+            sourceFile: "/tmp/deck.pptx",
+          },
         },
-      },
-    ], "pptx");
+      ],
+      "pptx",
+    );
 
     expect(task?.id).toBe("task-vibe");
     expect(task?.artifact?.filePath).toBe("/tmp/deck.pptx");
@@ -159,22 +214,190 @@ describe("App task flow", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: /what would you like to finish today/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "PPTX" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "Technology Product Launch" })).toBeTruthy();
+    expect(
+      await screen.findByRole("heading", {
+        name: /what would you like to finish today/i,
+      }),
+    ).toBeTruthy();
+    const pptxButton = screen.getByRole("button", { name: "PPTX" });
+    expect(pptxButton).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("region", { name: "Start from an example" })).toBeTruthy();
+  });
+
+  it("replays a recorded op stream from a blank draft, with no task behind it", async () => {
+    // Recordings outlive the run that produced them: a stream recovered from
+    // logs, or captured for a demo, replays without the task in the store.
+    window.history.pushState({}, "", "/");
+    const bridge = installBridgeMock();
+    const { App } = await import("./App");
+    render(<App />);
+    await screen.findByRole("heading", { name: /what would you like to finish today/i });
+
+    const ops = [
+      { seq: 1, op: "deck.begin", slides: 1, fonts: { latin: "Aptos", cjk: "Microsoft YaHei" } },
+      { seq: 2, op: "slide.begin", slide: 1, background: "#FFFFFF" },
+      { seq: 3, op: "shape.add", slide: 1, shape: { kind: "text", text: "recovered", left: 0, top: 0, width: 10, height: 10 } },
+      { seq: 4, op: "slide.end", slide: 1 },
+      { seq: 5, op: "deck.end", slides: 1 },
+    ];
+    const replay = (window as unknown as { __officedexReplayDemo: (source: unknown) => Promise<string> })
+      .__officedexReplayDemo;
+    let message = "";
+    await act(async () => {
+      message = await replay(ops);
+    });
+
+    expect(message).toContain("5 ops of a recording");
+    expect(window.officecli.createLivePptxDraft).toHaveBeenCalledWith("recording-5");
+    expect(bridge.issuePreviewToken).toHaveBeenCalledWith(
+      expect.objectContaining({ fileName: "live-recording-5.pptx" }),
+    );
+  });
+
+  it("reviews the inferred task on Home before creating its execution plan", async () => {
+    window.history.pushState({}, "", "/");
+    const bridge = installBridgeMock();
+    const { App } = await import("./App");
+
+    render(<App />);
+    fireEvent.change(
+      await screen.findByRole("textbox", { name: "Describe the result you want" }),
+      { target: { value: "Write a client proposal document" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Analyze" }));
+
+    expect(await screen.findByRole("heading", { name: "Confirm the task scope" })).toBeTruthy();
+    expect(screen.getByText("DOCX document")).toBeTruthy();
+    expect(bridge.generate).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm and start" }));
+
+    await waitFor(() => expect(bridge.generate).toHaveBeenCalledWith(expect.objectContaining({
+      documentType: "docx",
+      generationMode: "fast",
+      prompt: "Write a client proposal document",
+      noProject: true,
+    })));
+    expect(screen.queryByTestId("new-generation-form")).toBeNull();
+  });
+
+  it("reconciles a missed question event for an active generated task", async () => {
+    window.history.pushState({}, "", "/");
+    const bridge = installBridgeMock();
+    const api = window.officecli as DesktopAPI;
+    api.getTaskHistory = vi.fn(async () => bridge.generate.mock.calls.length === 0 ? [] : [
+      {
+        taskId: "task-2",
+        conversationId: "task-2",
+        events: [
+          {
+            event_id: "event-started",
+            task_id: "task-2",
+            type: "task.started",
+            ts: "2026-08-17T09:23:15Z",
+            payload: { document_type: "pptx", topic: "Introduce Shimo" },
+          },
+          {
+            event_id: "event-question",
+            task_id: "task-2",
+            type: "task.question",
+            ts: "2026-08-17T09:23:38Z",
+            payload: {
+              id: "question-audience",
+              question: "Who is the audience for this presentation?",
+              options: [{ id: "new", label: "New users", recommended: true }],
+              allow_freeform: true,
+            },
+          },
+        ],
+      },
+    ]);
+    const { App } = await import("./App");
+
+    render(<App />);
+    fireEvent.change(
+      await screen.findByRole("textbox", { name: "Describe the result you want" }),
+      { target: { value: "Create a three-slide presentation about Shimo" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Analyze" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm and start" }));
+
+    expect(await screen.findByText("Who is the audience for this presentation?")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /New users/ })).toBeTruthy();
+    expect(api.getTaskHistory).toHaveBeenCalled();
+  });
+
+  it("keeps a catalog request on Home until a source workbook is attached", async () => {
+    window.history.pushState({}, "", "/");
+    const bridge = installBridgeMock();
+    const { App } = await import("./App");
+
+    render(<App />);
+    fireEvent.change(
+      await screen.findByRole("textbox", { name: "Describe the result you want" }),
+      { target: { value: "Clean this supplier catalog for Shopify import" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Analyze" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Add the supplier Excel workbook");
+    expect(bridge.generate).not.toHaveBeenCalled();
+  });
+
+  it("routes an attached Shopify workbook into the catalog cleanup tool", async () => {
+    window.history.pushState({}, "", "/");
+    const bridge = installBridgeMock();
+    bridge.openFileDialog.mockResolvedValueOnce("/tmp/supplier.xlsx");
+    const api = window.officecli as DesktopAPI;
+    const { App } = await import("./App");
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Add reference" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Reference file" }));
+    expect(await screen.findByText("supplier.xlsx")).toBeTruthy();
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Describe the result you want" }),
+      { target: { value: "Clean this supplier catalog for Shopify import" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Analyze" }));
+
+    expect(await screen.findByRole("heading", { name: "Confirm the task scope" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Configure task" }));
+
+    await waitFor(() => expect(api.openRecentFile).toHaveBeenCalledWith(expect.objectContaining({
+      filePath: "/tmp/supplier.xlsx",
+      documentType: "xlsx",
+    })));
+    const catalogTool = await screen.findByRole("button", { name: "Cleanup" });
+    expect(catalogTool).toHaveAttribute("data-active", "true");
+    expect(bridge.generate).not.toHaveBeenCalled();
   });
 
   it("opens Spreadsheet directly in the new workbook workspace", async () => {
     window.history.pushState({}, "", "/");
-    installBridgeMock();
+    const bridge = installBridgeMock();
     const { App } = await import("./App");
 
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Spreadsheet" }));
 
-    expect(await screen.findByRole("region", { name: "Untitled workbook" })).toBeTruthy();
-    expect(screen.getByRole("complementary", { name: "AI Assistant" })).toBeTruthy();
+    await waitFor(() => expect(bridge.createWorkbookFromSheet).toHaveBeenCalledWith({
+      fileName: "Untitled.xlsx",
+      sheetName: "Sheet1",
+      headers: [],
+      rows: [],
+      workspaceId: undefined,
+    }));
+    expect(
+      await screen.findByRole("region", { name: "Untitled.xlsx workbook" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("complementary", { name: "AI Assistant" }),
+    ).toBeTruthy();
     expect(screen.queryByTestId("new-generation-form")).toBeNull();
+    // The spreadsheet editor auto-mounts (no "open editor" step) and starts
+    // preparing the SDK session behind the loading state.
+    await waitFor(() =>
+      expect((window.officecli as DesktopAPI).prepareXlsxEditor).toHaveBeenCalled(),
+    );
   });
 
   it("generates XLSX inside the spreadsheet workspace and opens the matching artifact", async () => {
@@ -184,23 +407,38 @@ describe("App task flow", () => {
 
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Spreadsheet" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Spreadsheet generation request" }), { target: { value: "Build a quarterly sales forecast" } });
-    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    fireEvent.change(
+      await screen.findByRole("textbox", { name: "Spreadsheet modification request" }),
+      { target: { value: "Build a quarterly sales forecast" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Modify" }));
 
-    await waitFor(() => expect(bridge.generate).toHaveBeenCalledWith(expect.objectContaining({
-      documentType: "xlsx",
-      generationMode: "plan",
-      prompt: "Build a quarterly sales forecast",
-    })));
+    await waitFor(() =>
+      expect((window.officecli as DesktopAPI).modify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentType: "xlsx",
+          prompt: "Build a quarterly sales forecast",
+          sourceFile: "/tmp/Untitled.xlsx",
+        }),
+      ),
+    );
     act(() => {
       bridge.emit({
-        task_id: "task-2",
+        task_id: "task-modify",
         type: "task.completed",
-        payload: { result: { file_path: "/tmp/forecast.xlsx", file_name: "forecast.xlsx", document_type: "xlsx" } },
+        payload: {
+          result: {
+            file_path: "/tmp/forecast.xlsx",
+            file_name: "forecast.xlsx",
+            document_type: "xlsx",
+          },
+        },
       });
     });
 
-    expect(await screen.findByRole("region", { name: "forecast.xlsx workbook" })).toBeTruthy();
+    expect(
+      await screen.findByRole("region", { name: "forecast.xlsx workbook" }),
+    ).toBeTruthy();
     expect(screen.queryByTestId("new-generation-form")).toBeNull();
   });
 
@@ -212,71 +450,154 @@ describe("App task flow", () => {
 
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Spreadsheet" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Spreadsheet generation request" }), { target: { value: "Build a finance report" } });
-    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
-    await waitFor(() => expect(bridge.generate).toHaveBeenCalled());
+    fireEvent.change(
+      await screen.findByRole("textbox", { name: "Spreadsheet modification request" }),
+      { target: { value: "Build a finance report" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Modify" }));
+    await waitFor(() => expect((window.officecli as DesktopAPI).modify).toHaveBeenCalled());
 
     const questions = [
-      { id: "q1", question: "Which report?", options: [{ id: "overview", label: "Overview" }], allow_freeform: true },
-      { id: "q2", question: "Which granularity?", options: [{ id: "monthly", label: "Monthly" }], allow_freeform: true },
+      {
+        id: "q1",
+        question: "Which report?",
+        options: [{ id: "overview", label: "Overview" }],
+        allow_freeform: true,
+      },
+      {
+        id: "q2",
+        question: "Which granularity?",
+        options: [{ id: "monthly", label: "Monthly" }],
+        allow_freeform: true,
+      },
     ];
     act(() => {
-      bridge.emit({ task_id: "task-2", type: "task.started", payload: { document_type: "xlsx", conversation_id: "task-2" } });
-      bridge.emit({ task_id: "task-2", type: "task.question", payload: { id: "question-old", question: "Which report?", current_index: 0, questions } });
+      bridge.emit({
+        task_id: "task-modify",
+        type: "task.started",
+        payload: { document_type: "xlsx", conversation_id: "task-modify" },
+      });
+      bridge.emit({
+        task_id: "task-modify",
+        type: "task.question",
+        payload: {
+          id: "question-old",
+          question: "Which report?",
+          current_index: 0,
+          questions,
+        },
+      });
     });
     expect(await screen.findByText("Which report?")).toBeTruthy();
 
     act(() => {
-      bridge.emit({ task_id: "task-2", type: "task.cancelled", payload: { message: "Recovered" } });
-      bridge.emit({ task_id: "task-live", type: "task.started", payload: { document_type: "xlsx", conversation_id: "task-2", parent_task_id: "task-2" } });
-      bridge.emit({ task_id: "task-live", type: "task.question", payload: { id: "question-live", question: "Which granularity?", current_index: 1, questions } });
+      bridge.emit({
+        task_id: "task-modify",
+        type: "task.cancelled",
+        payload: { message: "Recovered" },
+      });
+      bridge.emit({
+        task_id: "task-live",
+        type: "task.started",
+        payload: {
+          document_type: "xlsx",
+          conversation_id: "task-modify",
+          parent_task_id: "task-modify",
+        },
+      });
+      bridge.emit({
+        task_id: "task-live",
+        type: "task.question",
+        payload: {
+          id: "question-live",
+          question: "Which granularity?",
+          current_index: 1,
+          questions,
+        },
+      });
     });
 
     expect(await screen.findByText("Which granularity?")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Monthly" }));
-    await waitFor(() => expect(api.respond).toHaveBeenCalledWith(expect.objectContaining({
-      taskId: "task-live",
-      questionId: "question-live",
-      optionId: "monthly",
-    })));
+    await waitFor(() =>
+      expect(api.respond).toHaveBeenCalledWith(
+        expect.objectContaining({
+          taskId: "task-live",
+          questionId: "question-live",
+          optionId: "monthly",
+        }),
+      ),
+    );
   });
 
   it("opens recent XLSX files in the same spreadsheet workspace", async () => {
     window.history.pushState({}, "", "/");
     installBridgeMock();
     const api = window.officecli as DesktopAPI;
-    const recent = { filePath: "/tmp/local.xlsx", fileName: "Local workbook.xlsx", documentType: "xlsx", source: "local" as const, lastOpenedAt: "2026-08-05T02:00:00Z" };
+    const recent = {
+      filePath: "/tmp/local.xlsx",
+      fileName: "Local workbook.xlsx",
+      documentType: "xlsx",
+      source: "local" as const,
+      lastOpenedAt: "2026-08-05T02:00:00Z",
+    };
     api.listRecentFiles = vi.fn(async () => [recent]);
     const { App } = await import("./App");
 
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "Open Local workbook.xlsx" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Open Local workbook.xlsx" }),
+    );
 
-    expect(await screen.findByRole("region", { name: "Local workbook.xlsx workbook" })).toBeTruthy();
+    expect(
+      await screen.findByRole("region", {
+        name: "Local workbook.xlsx workbook",
+      }),
+    ).toBeTruthy();
     expect(screen.queryByLabelText("Close preview")).toBeNull();
-    expect(api.issuePreviewToken).toHaveBeenCalledWith(expect.objectContaining({ filePath: recent.filePath }));
+    expect(api.issuePreviewToken).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: recent.filePath }),
+    );
   });
 
   it("selects a project and reloads recent files for that workspace", async () => {
     window.history.pushState({}, "", "/");
     installBridgeMock();
     const api = window.officecli as DesktopAPI;
-    api.listWorkspaces = vi.fn(async () => [{ id: "ws-a", name: "Client A", path: "/tmp/client-a", active: false, conversations: [] }]);
-    api.listRecentFiles = vi.fn(async (workspaceId?: string) => workspaceId === "ws-a" ? [{
-      filePath: "/tmp/client-a/deck.pptx",
-      fileName: "Client deck.pptx",
-      documentType: "pptx",
-      source: "generated" as const,
-      workspaceId: "ws-a",
-      lastOpenedAt: "2026-08-05T02:00:00Z",
-    }] : []);
+    api.listWorkspaces = vi.fn(async () => [
+      {
+        id: "ws-a",
+        name: "Client A",
+        path: "/tmp/client-a",
+        active: false,
+        conversations: [],
+      },
+    ]);
+    api.listRecentFiles = vi.fn(async (workspaceId?: string) =>
+      workspaceId === "ws-a"
+        ? [
+            {
+              filePath: "/tmp/client-a/deck.pptx",
+              fileName: "Client deck.pptx",
+              documentType: "pptx",
+              source: "generated" as const,
+              workspaceId: "ws-a",
+              lastOpenedAt: "2026-08-05T02:00:00Z",
+            },
+          ]
+        : [],
+    );
     const { App } = await import("./App");
 
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Client A" }));
 
-    await waitFor(() => expect(api.selectWorkspace).toHaveBeenCalledWith("ws-a"));
-    await waitFor(() => expect(api.listRecentFiles).toHaveBeenCalledWith("ws-a"));
+    await waitFor(() =>
+      expect(api.selectWorkspace).toHaveBeenCalledWith("ws-a"),
+    );
+    await waitFor(() =>
+      expect(api.listRecentFiles).toHaveBeenCalledWith("ws-a"),
+    );
     expect(await screen.findByText("Client deck.pptx")).toBeTruthy();
   });
 
@@ -292,15 +613,57 @@ describe("App task flow", () => {
       lastOpenedAt: "2026-08-05T02:00:00Z",
     };
     api.listRecentFiles = vi.fn(async () => [recent]);
-    api.openRecentFile = vi.fn(async () => ({ filePath: recent.filePath, fileName: recent.fileName, documentType: recent.documentType }));
+    api.openRecentFile = vi.fn(async () => ({
+      filePath: recent.filePath,
+      fileName: recent.fileName,
+      documentType: recent.documentType,
+    }));
+    const { App } = await import("./App");
+
+    render(<App />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Open Local brief.pdf" }),
+    );
+
+    await waitFor(() =>
+      expect(api.openRecentFile).toHaveBeenCalledWith(recent),
+    );
+    await waitFor(() =>
+      expect(api.issuePreviewToken).toHaveBeenCalledWith(
+        expect.objectContaining({ filePath: recent.filePath }),
+      ),
+    );
+    expect(await screen.findByLabelText("Close preview")).toBeTruthy();
+  });
+
+  it("closes an open document preview before showing Tasks", async () => {
+    window.history.pushState({}, "", "/");
+    installBridgeMock();
+    const api = window.officecli as DesktopAPI;
+    const recent = {
+      filePath: "/tmp/local.pdf",
+      fileName: "Local brief.pdf",
+      documentType: "pdf",
+      source: "local" as const,
+      lastOpenedAt: "2026-08-05T02:00:00Z",
+    };
+    api.listRecentFiles = vi.fn(async () => [recent]);
+    api.openRecentFile = vi.fn(async () => ({
+      filePath: recent.filePath,
+      fileName: recent.fileName,
+      documentType: recent.documentType,
+    }));
     const { App } = await import("./App");
 
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Open Local brief.pdf" }));
-
-    await waitFor(() => expect(api.openRecentFile).toHaveBeenCalledWith(recent));
-    await waitFor(() => expect(api.issuePreviewToken).toHaveBeenCalledWith(expect.objectContaining({ filePath: recent.filePath })));
     expect(await screen.findByLabelText("Close preview")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Task history" }));
+
+    expect(await screen.findByRole("heading", { name: "Recent Tasks" })).toBeTruthy();
+    await waitFor(() => expect(screen.queryByLabelText("Close preview")).toBeNull());
+    expect(api.revokePreviewToken).toHaveBeenCalledWith("test-token");
   });
 
   it("restores a generated recent file conversation before opening its preview", async () => {
@@ -317,20 +680,43 @@ describe("App task flow", () => {
       lastOpenedAt: "2026-08-05T02:00:00Z",
     };
     api.listRecentFiles = vi.fn(async () => [recent]);
-    api.getTaskHistory = vi.fn(async () => [{
-      taskId: "task-generated",
-      conversationId: "conversation-generated",
-      events: [
-        { task_id: "task-generated", type: "task.started", payload: { document_type: "pptx", topic: "Generated deck" } },
-        { task_id: "task-generated", type: "task.completed", payload: { result: { file_path: recent.filePath, file_name: recent.fileName, document_type: "pptx" } } },
-      ],
-    }]);
-    api.openRecentFile = vi.fn(async () => ({ taskId: recent.taskId, filePath: recent.filePath, fileName: recent.fileName, documentType: recent.documentType }));
+    api.getTaskHistory = vi.fn(async () => [
+      {
+        taskId: "task-generated",
+        conversationId: "conversation-generated",
+        events: [
+          {
+            task_id: "task-generated",
+            type: "task.started",
+            payload: { document_type: "pptx", topic: "Generated deck" },
+          },
+          {
+            task_id: "task-generated",
+            type: "task.completed",
+            payload: {
+              result: {
+                file_path: recent.filePath,
+                file_name: recent.fileName,
+                document_type: "pptx",
+              },
+            },
+          },
+        ],
+      },
+    ]);
+    api.openRecentFile = vi.fn(async () => ({
+      taskId: recent.taskId,
+      filePath: recent.filePath,
+      fileName: recent.fileName,
+      documentType: recent.documentType,
+    }));
     const { App } = await import("./App");
 
     render(<App />);
     await waitFor(() => expect(api.getTaskHistory).toHaveBeenCalled());
-    fireEvent.click(await screen.findByRole("button", { name: "Open Generated deck.pptx" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Open Generated deck.pptx" }),
+    );
 
     expect(await screen.findByText("Generation Complete")).toBeTruthy();
     expect(await screen.findByLabelText("Close preview")).toBeTruthy();
@@ -340,32 +726,60 @@ describe("App task flow", () => {
     window.history.pushState({}, "", "/");
     installBridgeMock();
     const api = window.officecli as DesktopAPI;
-    const recent = { filePath: "/tmp/notes.txt", fileName: "notes.txt", documentType: "txt", source: "local" as const, lastOpenedAt: "2026-08-05T02:00:00Z" };
+    const recent = {
+      filePath: "/tmp/notes.txt",
+      fileName: "notes.txt",
+      documentType: "txt",
+      source: "local" as const,
+      lastOpenedAt: "2026-08-05T02:00:00Z",
+    };
     api.listRecentFiles = vi.fn(async () => [recent]);
-    api.openRecentFile = vi.fn(async () => { throw new Error("unsupported preview file type"); });
+    api.openRecentFile = vi.fn(async () => {
+      throw new Error("unsupported preview file type");
+    });
     const { App } = await import("./App");
 
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "Open notes.txt" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Open notes.txt" }),
+    );
 
-    await waitFor(() => expect(api.openPath).toHaveBeenCalledWith(recent.filePath));
-    expect(await screen.findByText("This format will open in the system app.")).toBeTruthy();
+    await waitFor(() =>
+      expect(api.openPath).toHaveBeenCalledWith(recent.filePath),
+    );
+    expect(
+      await screen.findByText("This format will open in the system app."),
+    ).toBeTruthy();
   });
 
   it("offers to remove a missing recent file", async () => {
     window.history.pushState({}, "", "/");
     installBridgeMock();
     const api = window.officecli as DesktopAPI;
-    const recent = { filePath: "/tmp/missing.pdf", fileName: "missing.pdf", documentType: "pdf", source: "local" as const, lastOpenedAt: "2026-08-05T02:00:00Z" };
+    const recent = {
+      filePath: "/tmp/missing.pdf",
+      fileName: "missing.pdf",
+      documentType: "pdf",
+      source: "local" as const,
+      lastOpenedAt: "2026-08-05T02:00:00Z",
+    };
     api.listRecentFiles = vi.fn(async () => [recent]);
-    api.openRecentFile = vi.fn(async () => { throw new Error("recent file is unavailable: no such file"); });
+    api.openRecentFile = vi.fn(async () => {
+      throw new Error("recent file is unavailable: no such file");
+    });
     const { App } = await import("./App");
 
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "Open missing.pdf" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Remove from recents" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Open missing.pdf" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Remove from recents" }),
+    );
 
-    await waitFor(() => expect(api.removeRecentFile).toHaveBeenCalledWith(recent.filePath));
+    await waitFor(() =>
+      expect(api.removeRecentFile).toHaveBeenCalledWith(recent.filePath),
+    );
     expect(screen.queryByText("missing.pdf")).toBeNull();
   });
 
@@ -373,13 +787,62 @@ describe("App task flow", () => {
     window.history.pushState({}, "", "/");
     installBridgeMock();
     const api = window.officecli as DesktopAPI;
-    api.listRecentFiles = vi.fn(async () => { throw new Error("recent files unavailable"); });
+    api.listRecentFiles = vi.fn(async () => {
+      throw new Error("recent files unavailable");
+    });
     const { App } = await import("./App");
 
     render(<App />);
 
-    expect(await screen.findByRole("button", { name: "workspace" })).toBeTruthy();
-    expect(await screen.findByRole("alert")).toHaveTextContent("recent files unavailable");
+    expect(
+      await screen.findByRole("button", { name: "workspace" }),
+    ).toBeTruthy();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "recent files unavailable",
+    );
+  });
+
+  it("stops loading recent files after the request times out and allows retry", async () => {
+    vi.useFakeTimers();
+    try {
+      window.history.pushState({}, "", "/");
+      installBridgeMock();
+      const api = window.officecli as DesktopAPI;
+      api.listRecentFiles = vi.fn(() => new Promise<import("../shared/types").RecentFile[]>(() => undefined));
+      const { App } = await import("./App");
+
+      render(<App />);
+      expect(screen.getByText("Loading recent files…")).toBeTruthy();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(8_000);
+      });
+
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Recent files took too long to load. Try again.",
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+      expect(api.listRecentFiles).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("retries recent files after the bridge reconnects", async () => {
+    window.history.pushState({}, "", "/");
+    const bridge = installBridgeMock();
+    const api = window.officecli as DesktopAPI;
+    api.listRecentFiles = vi.fn(async () => []);
+    const { App } = await import("./App");
+
+    render(<App />);
+    await waitFor(() => expect(api.listRecentFiles).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      bridge.emit({ type: "bridge.reconnected", payload: {} });
+    });
+
+    await waitFor(() => expect(api.listRecentFiles).toHaveBeenCalledTimes(2));
   });
 
   it("keeps New chat on a blank composer after a previous task exists and submits another generate request", async () => {
@@ -408,21 +871,30 @@ describe("App task flow", () => {
     expect(screen.queryByText("Fluid")).toBeNull();
     fireEvent.click(screen.getAllByRole("button", { name: /New chat/ })[0]);
 
-    expect(await screen.findByRole("heading", { name: /What should we work on/i })).toBeTruthy();
-    fireEvent.change(screen.getByPlaceholderText(/Enter what you want to generate/), {
-      target: { value: "Generate a new quarterly review PPT" },
-    });
+    expect(
+      await screen.findByRole("heading", { name: /What should we work on/i }),
+    ).toBeTruthy();
+    fireEvent.change(
+      screen.getByPlaceholderText(/Enter what you want to generate/),
+      {
+        target: { value: "Generate a new quarterly review PPT" },
+      },
+    );
     expect(screen.queryByText(/^Mode$/)).toBeNull();
     expect(screen.queryByRole("radio", { name: "Fast" })).toBeNull();
     expect(screen.queryByRole("radio", { name: "Plan" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Generate$/ }));
 
     await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
-    expect(bridge.generate).toHaveBeenCalledWith(expect.objectContaining({
-      prompt: "Generate a new quarterly review PPT",
-      generationMode: "plan",
-    }));
-    expect(bridge.generate).toHaveBeenCalledWith(expect.not.objectContaining({ runtimeMode: expect.anything() }));
+    expect(bridge.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: "Generate a new quarterly review PPT",
+        generationMode: "fast",
+      }),
+    );
+    expect(bridge.generate).toHaveBeenCalledWith(
+      expect.not.objectContaining({ runtimeMode: expect.anything() }),
+    );
   });
 
   it("does not render the hardcoded Vibe-Officing demo route", async () => {
@@ -432,8 +904,14 @@ describe("App task flow", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: /What should we work on/i })).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: "From a Single Idea to a Complete PPTX" })).toBeNull();
+    expect(
+      await screen.findByRole("heading", { name: /What should we work on/i }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("heading", {
+        name: "From a Single Idea to a Complete PPTX",
+      }),
+    ).toBeNull();
     expect(screen.queryByText("OfficeDex Vibe-Officing Demo")).toBeNull();
     expect(screen.queryByText("Living Tree Cockpit")).toBeNull();
     expect(bridge.generate).not.toHaveBeenCalled();
@@ -464,7 +942,13 @@ describe("App task flow", () => {
             title: "Introduce Shimo Docs",
             nodes: [
               { id: "root", kind: "root", title: "Introduce Shimo Docs" },
-              { id: "branch-1", parentId: "root", kind: "branch", title: "Scale Adoption", summary: "Lower decision barriers with paths and benefits." },
+              {
+                id: "branch-1",
+                parentId: "root",
+                kind: "branch",
+                title: "Scale Adoption",
+                summary: "Lower decision barriers with paths and benefits.",
+              },
             ],
           },
           actions: [{ id: "generate_chapter", label: "Generate Chapters" }],
@@ -473,7 +957,11 @@ describe("App task flow", () => {
     });
 
     expect(await screen.findByText("Living Tree Cockpit")).toBeTruthy();
-    await waitFor(() => expect(document.querySelector(".app-shell.sidebar-collapsed")).toBeTruthy());
+    await waitFor(() =>
+      expect(
+        document.querySelector(".app-shell.sidebar-collapsed"),
+      ).toBeTruthy(),
+    );
   });
 
   it("keeps a blank new chat selected when an existing running task updates", async () => {
@@ -494,7 +982,9 @@ describe("App task flow", () => {
     expect(document.querySelector(".generation-loading-pptx")).toBeTruthy();
 
     fireEvent.click(screen.getAllByRole("button", { name: /New chat/ })[0]);
-    expect(await screen.findByRole("heading", { name: /What should we work on/i })).toBeTruthy();
+    expect(
+      await screen.findByRole("heading", { name: /What should we work on/i }),
+    ).toBeTruthy();
 
     act(() => {
       bridge.emit({
@@ -505,9 +995,15 @@ describe("App task flow", () => {
       });
     });
 
-    expect(await screen.findByRole("heading", { name: /What should we work on/i })).toBeTruthy();
+    expect(
+      await screen.findByRole("heading", { name: /What should we work on/i }),
+    ).toBeTruthy();
     expect(screen.queryByText("Thinking...")).toBeNull();
-    expect(screen.getByRole("button", { name: /Background deck/ }).classList.contains("active")).toBe(false);
+    expect(
+      screen
+        .getByRole("button", { name: /Background deck/ })
+        .classList.contains("active"),
+    ).toBe(false);
   });
 
   it("nudges the prompt input instead of resetting when New chat is clicked on an existing blank composer", async () => {
@@ -516,14 +1012,18 @@ describe("App task flow", () => {
 
     render(<App />);
 
-    const textarea = await screen.findByPlaceholderText(/Enter what you want to generate/i) as HTMLTextAreaElement;
+    const textarea = (await screen.findByPlaceholderText(
+      /Enter what you want to generate/i,
+    )) as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "Keep this draft" } });
 
     fireEvent.click(screen.getAllByRole("button", { name: /New chat/ })[0]);
 
     expect(bridge.generate).not.toHaveBeenCalled();
     expect(textarea.value).toBe("Keep this draft");
-    await waitFor(() => expect(textarea.classList.contains("is-new-chat-nudging")).toBe(true));
+    await waitFor(() =>
+      expect(textarea.classList.contains("is-new-chat-nudging")).toBe(true),
+    );
 
     const css = readFileSync("src/renderer/styles/dialogue.css", "utf8");
     expect(css).toMatch(/@keyframes\s+new-chat-input-nudge/);
@@ -532,7 +1032,10 @@ describe("App task flow", () => {
 
   it("removes a project from the sidebar and refreshes chats", async () => {
     installBridgeMock();
-    vi.stubGlobal("confirm", vi.fn(() => true));
+    vi.stubGlobal(
+      "confirm",
+      vi.fn(() => true),
+    );
     const api = window.officecli as DesktopAPI;
     const projectConversation = {
       conversationId: "conv-project",
@@ -543,34 +1046,47 @@ describe("App task flow", () => {
       documentType: "pptx",
       updatedAt: "2026-06-10T10:00:00Z",
     };
-    api.listWorkspaces = vi.fn()
-      .mockResolvedValueOnce([{
-        id: "ws-project",
-        name: "void-oversea",
-        path: "/Users/test/void-oversea",
-        active: true,
-        conversations: [projectConversation],
-      }])
+    api.listWorkspaces = vi
+      .fn()
+      .mockResolvedValueOnce([
+        {
+          id: "ws-project",
+          name: "void-oversea",
+          path: "/Users/test/void-oversea",
+          active: true,
+          conversations: [projectConversation],
+        },
+      ])
       .mockResolvedValueOnce([]);
-    api.listChats = vi.fn()
+    api.listChats = vi
+      .fn()
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([projectConversation]);
     api.removeWorkspace = vi.fn(async () => undefined);
     const { App } = await import("./App");
 
     render(<App />);
-    await screen.findByRole("button", { name: "Project actions for void-oversea" });
+    await screen.findByRole("button", {
+      name: "Project actions for void-oversea",
+    });
 
-    fireEvent.click(screen.getByRole("button", { name: "Project actions for void-oversea" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Project actions for void-oversea" }),
+    );
     fireEvent.click(screen.getByRole("menuitem", { name: /^Remove$/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Remove$/ }));
 
-    await waitFor(() => expect(api.removeWorkspace).toHaveBeenCalledWith("ws-project"));
+    await waitFor(() =>
+      expect(api.removeWorkspace).toHaveBeenCalledWith("ws-project"),
+    );
     await waitFor(() => expect(api.listChats).toHaveBeenCalledTimes(2));
   });
 
   it("deletes a persisted project conversation from the sidebar", async () => {
     installBridgeMock();
-    const api = window.officecli as DesktopAPI & { deleteConversation?: ReturnType<typeof vi.fn> };
+    const api = window.officecli as DesktopAPI & {
+      deleteConversation?: ReturnType<typeof vi.fn>;
+    };
     const projectConversation = {
       conversationId: "conv-ppt-test",
       firstTaskId: "task-ppt-1",
@@ -580,37 +1096,52 @@ describe("App task flow", () => {
       documentType: "pptx",
       updatedAt: "2026-06-10T10:00:00Z",
     };
-    api.listWorkspaces = vi.fn()
-      .mockResolvedValueOnce([{
-        id: "ws-ppt-test",
-        name: "ppt-test",
-        path: "/Users/test/ppt-test",
-        active: true,
-        conversations: [projectConversation],
-      }])
-      .mockResolvedValueOnce([{
-        id: "ws-ppt-test",
-        name: "ppt-test",
-        path: "/Users/test/ppt-test",
-        active: true,
-        conversations: [],
-      }]);
+    api.listWorkspaces = vi
+      .fn()
+      .mockResolvedValueOnce([
+        {
+          id: "ws-ppt-test",
+          name: "ppt-test",
+          path: "/Users/test/ppt-test",
+          active: true,
+          conversations: [projectConversation],
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: "ws-ppt-test",
+          name: "ppt-test",
+          path: "/Users/test/ppt-test",
+          active: true,
+          conversations: [],
+        },
+      ]);
     api.listChats = vi.fn(async () => []);
     api.deleteConversation = vi.fn(async () => undefined);
     const { App } = await import("./App");
 
     render(<App />);
-    await screen.findByRole("button", { name: /Create a realistic pitch deck/ });
+    await screen.findByRole("button", {
+      name: /Create a realistic pitch deck/,
+    });
 
     fireEvent.click(screen.getByRole("button", { name: /Delete/ }));
 
-    await waitFor(() => expect(api.deleteConversation).toHaveBeenCalledWith("conv-ppt-test"));
-    await waitFor(() => expect(screen.queryByRole("button", { name: /Create a realistic pitch deck/ })).toBeNull());
+    await waitFor(() =>
+      expect(api.deleteConversation).toHaveBeenCalledWith("conv-ppt-test"),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: /Create a realistic pitch deck/ }),
+      ).toBeNull(),
+    );
   });
 
   it("does not switch to a fatal error screen when the conversation delete bridge is unavailable", async () => {
     installBridgeMock();
-    const api = window.officecli as Omit<DesktopAPI, "deleteConversation"> & { deleteConversation?: DesktopAPI["deleteConversation"] };
+    const api = window.officecli as Omit<DesktopAPI, "deleteConversation"> & {
+      deleteConversation?: DesktopAPI["deleteConversation"];
+    };
     const projectConversation = {
       conversationId: "conv-ppt-test",
       firstTaskId: "task-ppt-1",
@@ -620,25 +1151,35 @@ describe("App task flow", () => {
       documentType: "pptx",
       updatedAt: "2026-06-10T10:00:00Z",
     };
-    api.listWorkspaces = vi.fn(async () => [{
-      id: "ws-ppt-test",
-      name: "ppt-test",
-      path: "/Users/test/ppt-test",
-      active: true,
-      conversations: [projectConversation],
-    }]);
+    api.listWorkspaces = vi.fn(async () => [
+      {
+        id: "ws-ppt-test",
+        name: "ppt-test",
+        path: "/Users/test/ppt-test",
+        active: true,
+        conversations: [projectConversation],
+      },
+    ]);
     api.listChats = vi.fn(async () => []);
     delete api.deleteConversation;
     const { App } = await import("./App");
 
     render(<App />);
-    await screen.findByRole("button", { name: /Create a realistic pitch deck/ });
+    await screen.findByRole("button", {
+      name: /Create a realistic pitch deck/,
+    });
 
     fireEvent.click(screen.getByRole("button", { name: /Delete/ }));
 
-    await waitFor(() => expect(screen.queryByRole("button", { name: /Create a realistic pitch deck/ })).toBeNull());
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: /Create a realistic pitch deck/ }),
+      ).toBeNull(),
+    );
     expect(screen.queryByText(/Conversation deletion requires/i)).toBeNull();
-    expect(screen.getByRole("heading", { name: /What should we work on/i })).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: /In ppt-test/i }),
+    ).toBeTruthy();
   });
 
   it("switches from submit spinner to the running task when task.started arrives before generate resolves", async () => {
@@ -665,11 +1206,16 @@ describe("App task flow", () => {
     expect(await screen.findByText("Generation Complete")).toBeTruthy();
     fireEvent.click(screen.getAllByRole("button", { name: /New chat/ })[0]);
 
-    expect(await screen.findByRole("heading", { name: /What should we work on/i })).toBeTruthy();
+    expect(
+      await screen.findByRole("heading", { name: /What should we work on/i }),
+    ).toBeTruthy();
     fireEvent.click(screen.getByRole("radio", { name: "DOCX" }));
-    fireEvent.change(screen.getByPlaceholderText(/Enter what you want to generate/), {
-      target: { value: "Create a stuck DOCX" },
-    });
+    fireEvent.change(
+      screen.getByPlaceholderText(/Enter what you want to generate/),
+      {
+        target: { value: "Create a stuck DOCX" },
+      },
+    );
     fireEvent.click(screen.getByRole("button", { name: /Generate$/ }));
     await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
 
@@ -678,14 +1224,22 @@ describe("App task flow", () => {
         event_id: "event-started-before-return",
         task_id: "task-started-before-return",
         type: "task.started",
-        payload: { document_type: "docx", topic: "Create a stuck DOCX", message: "Task accepted" },
+        payload: {
+          document_type: "docx",
+          topic: "Create a stuck DOCX",
+          message: "Task accepted",
+        },
       });
     });
 
-    expect(await screen.findByText("Writing plan...")).toBeTruthy();
-    expect(document.querySelector(".generation-loading-plan")).toBeTruthy();
-    expect(screen.getAllByText("Create a stuck DOCX").length).toBeGreaterThan(0);
-    expect(screen.queryByRole("heading", { name: /What should we work on/i })).toBeNull();
+    expect(await screen.findByText("Generating DOCX...")).toBeTruthy();
+    expect(document.querySelector(".generation-loading-docx")).toBeTruthy();
+    expect(screen.getAllByText("Create a stuck DOCX").length).toBeGreaterThan(
+      0,
+    );
+    expect(
+      screen.queryByRole("heading", { name: /What should we work on/i }),
+    ).toBeNull();
   });
 
   it("does not duplicate the first running conversation when persisted workspace summaries arrive after an early task.started event", async () => {
@@ -697,27 +1251,40 @@ describe("App task flow", () => {
       path: "/Users/test/Library/Application Support/OfficeDex/workspace",
       active: true,
     };
-    api.listWorkspaces = vi.fn()
+    api.listWorkspaces = vi
+      .fn()
       .mockResolvedValueOnce([{ ...workspace, conversations: [] }])
-      .mockResolvedValue([{ ...workspace, conversations: [{
-        conversationId: "task-started-before-return",
-        firstTaskId: "task-started-before-return",
-        latestTaskId: "task-started-before-return",
-        status: "running" as const,
-        title: "Create a stuck DOCX",
-        documentType: "docx",
-        updatedAt: "2026-06-11T07:50:11Z",
-      }] }]);
+      .mockResolvedValue([
+        {
+          ...workspace,
+          conversations: [
+            {
+              conversationId: "task-started-before-return",
+              firstTaskId: "task-started-before-return",
+              latestTaskId: "task-started-before-return",
+              status: "running" as const,
+              title: "Create a stuck DOCX",
+              documentType: "docx",
+              updatedAt: "2026-06-11T07:50:11Z",
+            },
+          ],
+        },
+      ]);
     bridge.generate.mockImplementation(() => new Promise(() => undefined));
     const { App } = await import("./App");
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: /What should we work on/i })).toBeTruthy();
+    expect(
+      await screen.findByRole("heading", { name: /What should we work on/i }),
+    ).toBeTruthy();
     fireEvent.click(screen.getByRole("radio", { name: "DOCX" }));
-    fireEvent.change(screen.getByPlaceholderText(/Enter what you want to generate/), {
-      target: { value: "Create a stuck DOCX" },
-    });
+    fireEvent.change(
+      screen.getByPlaceholderText(/Enter what you want to generate/),
+      {
+        target: { value: "Create a stuck DOCX" },
+      },
+    );
     fireEvent.click(screen.getByRole("button", { name: /Generate$/ }));
     await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
 
@@ -726,12 +1293,20 @@ describe("App task flow", () => {
         event_id: "event-started-before-return",
         task_id: "task-started-before-return",
         type: "task.started",
-        payload: { document_type: "docx", topic: "Create a stuck DOCX", message: "Task accepted" },
+        payload: {
+          document_type: "docx",
+          topic: "Create a stuck DOCX",
+          message: "Task accepted",
+        },
       });
     });
 
     await waitFor(() => expect(api.listWorkspaces).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(document.querySelectorAll(".workspace-conversations .history-item")).toHaveLength(1));
+    await waitFor(() =>
+      expect(
+        document.querySelectorAll(".workspace-conversations .history-item"),
+      ).toHaveLength(1),
+    );
   });
 
   it("switches to a local pending task immediately when generate does not resolve and no bridge event arrives", async () => {
@@ -741,18 +1316,27 @@ describe("App task flow", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: /What should we work on/i })).toBeTruthy();
+    expect(
+      await screen.findByRole("heading", { name: /What should we work on/i }),
+    ).toBeTruthy();
     fireEvent.click(screen.getByRole("radio", { name: "DOCX" }));
-    fireEvent.change(screen.getByPlaceholderText(/Enter what you want to generate/), {
-      target: { value: "Create a pending DOCX" },
-    });
+    fireEvent.change(
+      screen.getByPlaceholderText(/Enter what you want to generate/),
+      {
+        target: { value: "Create a pending DOCX" },
+      },
+    );
     fireEvent.click(screen.getByRole("button", { name: /Generate$/ }));
     await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
 
-    expect(await screen.findByText("Writing plan...")).toBeTruthy();
-    expect(document.querySelector(".generation-loading-plan")).toBeTruthy();
-    expect(screen.getAllByText("Create a pending DOCX").length).toBeGreaterThan(0);
-    expect(screen.queryByRole("heading", { name: /What should we work on/i })).toBeNull();
+    expect(await screen.findByText("Generating DOCX...")).toBeTruthy();
+    expect(document.querySelector(".generation-loading-docx")).toBeTruthy();
+    expect(screen.getAllByText("Create a pending DOCX").length).toBeGreaterThan(
+      0,
+    );
+    expect(
+      screen.queryByRole("heading", { name: /What should we work on/i }),
+    ).toBeNull();
   });
 
   it("renders a failed task with its recorded error and bridge event context", async () => {
@@ -771,8 +1355,37 @@ describe("App task flow", () => {
     });
 
     expect(await screen.findByText("Generation Failed")).toBeTruthy();
-    expect(screen.getAllByText("model quota exceeded").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("model quota exceeded").length).toBeGreaterThan(
+      0,
+    );
     expect(screen.getByText("task.failed")).toBeTruthy();
+  });
+
+  it("fails active tasks when the bridge process exits", async () => {
+    const bridge = installBridgeMock();
+    const { App } = await import("./App");
+
+    render(<App />);
+
+    act(() => {
+      bridge.emit({
+        event_id: "event-running-before-bridge-exit",
+        task_id: "task-interrupted",
+        type: "task.started",
+        payload: { document_type: "img", topic: "Generate a product image" },
+      });
+      bridge.emit({
+        type: "bridge.exited",
+        payload: { message: "officecli agent-bridge exited" },
+      });
+    });
+
+    expect(await screen.findByText("Generation Failed")).toBeTruthy();
+    expect(
+      screen.getAllByText(
+        "The Bridge connection was interrupted and the task stopped. Please retry.",
+      ).length,
+    ).toBeGreaterThan(0);
   });
 
   it("retries a failed generation with the original task input", async () => {
@@ -836,7 +1449,9 @@ describe("App task flow", () => {
     });
 
     expect(await screen.findByText("Task Cancelled")).toBeTruthy();
-    expect(screen.getAllByText("User cancelled the task").length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText("User cancelled the task").length,
+    ).toBeGreaterThan(0);
     expect(screen.getByText("cancelled")).toBeTruthy();
   });
 
@@ -856,11 +1471,15 @@ describe("App task flow", () => {
     });
 
     fireEvent.click(screen.getAllByRole("button", { name: /New chat/ })[0]);
-    expect(await screen.findByRole("heading", { name: /What should we work on/i })).toBeTruthy();
+    expect(
+      await screen.findByRole("heading", { name: /What should we work on/i }),
+    ).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /Tasks/ }));
 
-    expect((await screen.findAllByText("Live Bridge Task")).length).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByText("Live Bridge Task")).length,
+    ).toBeGreaterThan(0);
     expect(screen.getAllByText("Running").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: /Live Bridge Task/ }));
@@ -893,11 +1512,19 @@ describe("App task flow", () => {
     expect(await screen.findByText("Generation Complete")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Tasks/ }));
 
-    const tasksPage = screen.getByRole("heading", { name: "Recent Tasks" }).closest(".page-stack");
+    const tasksPage = screen
+      .getByRole("heading", { name: "Recent Tasks" })
+      .closest(".page-stack");
     expect(tasksPage).toBeTruthy();
-    fireEvent.click(within(tasksPage as HTMLElement).getByRole("button", { name: /New chat/ }));
+    fireEvent.click(
+      within(tasksPage as HTMLElement).getByRole("button", {
+        name: /New chat/,
+      }),
+    );
 
-    expect(await screen.findByRole("heading", { name: /What should we work on/i })).toBeTruthy();
+    expect(
+      await screen.findByRole("heading", { name: /What should we work on/i }),
+    ).toBeTruthy();
   });
 
   it("preserves a typed new generation prompt after switching to another conversation and back", async () => {
@@ -923,14 +1550,20 @@ describe("App task flow", () => {
     expect(await screen.findByText("Generation Complete")).toBeTruthy();
 
     fireEvent.click(screen.getAllByRole("button", { name: /New chat/ })[0]);
-    const prompt = await screen.findByPlaceholderText(/Enter what you want to generate/);
-    fireEvent.change(prompt, { target: { value: "Draft a quarterly board deck" } });
+    const prompt = await screen.findByPlaceholderText(
+      /Enter what you want to generate/,
+    );
+    fireEvent.change(prompt, {
+      target: { value: "Draft a quarterly board deck" },
+    });
 
     fireEvent.click(screen.getByRole("button", { name: /previous\.pptx/ }));
     expect(await screen.findByText("Generation Complete")).toBeTruthy();
 
     fireEvent.click(screen.getAllByRole("button", { name: /New chat/ })[0]);
-    expect(await screen.findByDisplayValue("Draft a quarterly board deck")).toBeTruthy();
+    expect(
+      await screen.findByDisplayValue("Draft a quarterly board deck"),
+    ).toBeTruthy();
   });
 
   it("preserves image reference attachments after switching to another conversation and submits them", async () => {
@@ -956,14 +1589,30 @@ describe("App task flow", () => {
     expect(await screen.findByText("Generation Complete")).toBeTruthy();
 
     fireEvent.click(screen.getAllByRole("button", { name: /New chat/ })[0]);
-    expect(await screen.findByRole("heading", { name: /What should we work on/i })).toBeTruthy();
+    expect(
+      await screen.findByRole("heading", { name: /What should we work on/i }),
+    ).toBeTruthy();
     fireEvent.click(screen.getByLabelText("Image"));
     expect(await screen.findByText("Image ratio")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Attach reference images/ })).toBeNull();
-    const textarea = screen.getByPlaceholderText(/Enter what you want to generate/);
-    firePasteWithFile(textarea, new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "ref-a.png", { type: "image/png" }));
+    expect(
+      screen.queryByRole("button", { name: /Attach reference images/ }),
+    ).toBeNull();
+    const textarea = screen.getByPlaceholderText(
+      /Enter what you want to generate/,
+    );
+    firePasteWithFile(
+      textarea,
+      new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "ref-a.png", {
+        type: "image/png",
+      }),
+    );
     expect(await screen.findByText("pasted-1.png")).toBeTruthy();
-    firePasteWithFile(screen.getByPlaceholderText(/Enter what you want to generate/), new File([new Uint8Array([0xff, 0xd8, 0xff])], "ref-b.jpg", { type: "image/jpeg" }));
+    firePasteWithFile(
+      screen.getByPlaceholderText(/Enter what you want to generate/),
+      new File([new Uint8Array([0xff, 0xd8, 0xff])], "ref-b.jpg", {
+        type: "image/jpeg",
+      }),
+    );
     expect(await screen.findByText("pasted-2.jpg")).toBeTruthy();
     fireEvent.change(textarea, {
       target: { value: "Create a poster in this visual style" },
@@ -975,7 +1624,9 @@ describe("App task flow", () => {
 
     expect(await screen.findByText("pasted-1.png")).toBeTruthy();
     expect(screen.getByText("pasted-2.jpg")).toBeTruthy();
-    expect(screen.getByDisplayValue("Create a poster in this visual style")).toBeTruthy();
+    expect(
+      screen.getByDisplayValue("Create a poster in this visual style"),
+    ).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Generate$/ }));
 
     await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
@@ -1012,14 +1663,21 @@ describe("App task flow", () => {
     expect(await screen.findByText("Generation Complete")).toBeTruthy();
 
     fireEvent.click(screen.getAllByRole("button", { name: /New chat/ })[0]);
-    expect(await screen.findByRole("heading", { name: /What should we work on/i })).toBeTruthy();
+    expect(
+      await screen.findByRole("heading", { name: /What should we work on/i }),
+    ).toBeTruthy();
     fireEvent.click(screen.getByLabelText("Report"));
-    fireEvent.click(await screen.findByRole("button", { name: /Attach source file/ }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Attach source file/ }),
+    );
     await waitFor(() => expect(bridge.openFileDialog).toHaveBeenCalledTimes(1));
     expect(await screen.findByText("source.xlsx")).toBeTruthy();
-    fireEvent.change(screen.getByPlaceholderText(/Enter what you want to generate/), {
-      target: { value: "Analyze workbook trends" },
-    });
+    fireEvent.change(
+      screen.getByPlaceholderText(/Enter what you want to generate/),
+      {
+        target: { value: "Analyze workbook trends" },
+      },
+    );
 
     fireEvent.click(screen.getByRole("button", { name: /previous\.docx/ }));
     expect(await screen.findByText("Generation Complete")).toBeTruthy();
@@ -1045,36 +1703,56 @@ describe("App task flow", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: /What should we work on/i })).toBeTruthy();
-    fireEvent.change(screen.getByPlaceholderText(/Enter what you want to generate/), {
-      target: { value: "Create a sales deck" },
-    });
+    expect(
+      await screen.findByRole("heading", { name: /What should we work on/i }),
+    ).toBeTruthy();
+    fireEvent.change(
+      screen.getByPlaceholderText(/Enter what you want to generate/),
+      {
+        target: { value: "Create a sales deck" },
+      },
+    );
     fireEvent.click(screen.getByRole("button", { name: /Generate$/ }));
     await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getAllByRole("button", { name: /New chat/ })[0]);
 
-    const prompt = await screen.findByPlaceholderText(/Enter what you want to generate/) as HTMLTextAreaElement;
+    const prompt = (await screen.findByPlaceholderText(
+      /Enter what you want to generate/,
+    )) as HTMLTextAreaElement;
     expect(prompt.value).toBe("");
   });
 
   it("keeps submitted input stable when generate resolves before the optimistic task render", async () => {
     const bridge = installBridgeMock();
-    bridge.generate.mockResolvedValueOnce({ taskId: "fast-task", sessionId: "session-fast", status: "starting" });
+    bridge.generate.mockResolvedValueOnce({
+      taskId: "fast-task",
+      sessionId: "session-fast",
+      status: "starting",
+    });
     const unhandled = vi.fn();
     window.addEventListener("error", unhandled);
     const { App } = await import("./App");
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: /What should we work on/i })).toBeTruthy();
-    fireEvent.change(screen.getByPlaceholderText(/Enter what you want to generate/), {
-      target: { value: "Create a fast deck" },
-    });
+    expect(
+      await screen.findByRole("heading", { name: /What should we work on/i }),
+    ).toBeTruthy();
+    fireEvent.change(
+      screen.getByPlaceholderText(/Enter what you want to generate/),
+      {
+        target: { value: "Create a fast deck" },
+      },
+    );
     fireEvent.click(screen.getByRole("button", { name: /Generate$/ }));
 
     await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.getAllByText("Create a fast deck").length).toBeGreaterThan(0));
+    await waitFor(() =>
+      expect(screen.getAllByText("Create a fast deck").length).toBeGreaterThan(
+        0,
+      ),
+    );
     expect(unhandled).not.toHaveBeenCalled();
     window.removeEventListener("error", unhandled);
   });
@@ -1086,16 +1764,23 @@ describe("App task flow", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: /What should we work on/i })).toBeTruthy();
-    fireEvent.change(screen.getByPlaceholderText(/Enter what you want to generate/), {
-      target: { value: "Create a deck that should be retried" },
-    });
+    expect(
+      await screen.findByRole("heading", { name: /What should we work on/i }),
+    ).toBeTruthy();
+    fireEvent.change(
+      screen.getByPlaceholderText(/Enter what you want to generate/),
+      {
+        target: { value: "Create a deck that should be retried" },
+      },
+    );
     fireEvent.click(screen.getByRole("button", { name: /Generate$/ }));
 
     expect(await screen.findByText("provider unavailable")).toBeTruthy();
     fireEvent.click(screen.getAllByRole("button", { name: /New chat/ })[0]);
 
-    expect(await screen.findByDisplayValue("Create a deck that should be retried")).toBeTruthy();
+    expect(
+      await screen.findByDisplayValue("Create a deck that should be retried"),
+    ).toBeTruthy();
   });
 
   it("renders running dialogue from task topic and bridge events instead of Q3 sample text", async () => {
@@ -1104,29 +1789,31 @@ describe("App task flow", () => {
 
     render(
       <DialogueScreen
-        tasks={[{
-          id: "task-running",
-          conversationId: "task-running",
-          status: "running",
-          topic: "Auto-generate product roadmap",
-          documentType: "pptx",
-          events: [
-            {
-              event_id: "event-started",
-              task_id: "task-running",
-              type: "task.started",
-              ts: "2026-05-20T10:00:00+08:00",
-              payload: { message: "Roadmap task started" },
-            },
-            {
-              event_id: "event-progress",
-              task_id: "task-running",
-              type: "task.progress",
-              ts: "2026-05-20T10:00:05+08:00",
-              payload: { stage: "Generating milestone sections" },
-            },
-          ],
-        }]}
+        tasks={[
+          {
+            id: "task-running",
+            conversationId: "task-running",
+            status: "running",
+            topic: "Auto-generate product roadmap",
+            documentType: "pptx",
+            events: [
+              {
+                event_id: "event-started",
+                task_id: "task-running",
+                type: "task.started",
+                ts: "2026-05-20T10:00:00+08:00",
+                payload: { message: "Roadmap task started" },
+              },
+              {
+                event_id: "event-progress",
+                task_id: "task-running",
+                type: "task.progress",
+                ts: "2026-05-20T10:00:05+08:00",
+                payload: { stage: "Generating milestone sections" },
+              },
+            ],
+          },
+        ]}
         busy={false}
         bridgeStatus="connected"
         onSubmit={vi.fn()}
@@ -1163,23 +1850,25 @@ describe("App task flow", () => {
 
     render(
       <DialogueScreen
-        tasks={[{
-          id: "task-completed-real",
-          conversationId: "task-completed-real",
-          status: "completed",
-          topic: "Annual budget review",
-          documentType: "docx",
-          events: [
-            {
-              event_id: "event-completed-real",
-              task_id: "task-completed-real",
-              type: "task.completed",
-              ts: "2026-05-20T11:30:00+08:00",
-              payload: { message: "Budget review synced" },
-            },
-          ],
-          artifact,
-        }]}
+        tasks={[
+          {
+            id: "task-completed-real",
+            conversationId: "task-completed-real",
+            status: "completed",
+            topic: "Annual budget review",
+            documentType: "docx",
+            events: [
+              {
+                event_id: "event-completed-real",
+                task_id: "task-completed-real",
+                type: "task.completed",
+                ts: "2026-05-20T11:30:00+08:00",
+                payload: { message: "Budget review synced" },
+              },
+            ],
+            artifact,
+          },
+        ]}
         busy={false}
         bridgeStatus="connected"
         onSubmit={vi.fn()}
@@ -1210,21 +1899,23 @@ describe("App task flow", () => {
 
     render(
       <DialogueScreen
-        tasks={[{
-          id: "task-completed-empty",
-          conversationId: "task-completed-empty",
-          status: "completed",
-          topic: "Completed only",
-          documentType: "report",
-          events: [
-            {
-              event_id: "event-completed-empty",
-              task_id: "task-completed-empty",
-              type: "task.completed",
-              payload: { status: "completed" },
-            },
-          ],
-        }]}
+        tasks={[
+          {
+            id: "task-completed-empty",
+            conversationId: "task-completed-empty",
+            status: "completed",
+            topic: "Completed only",
+            documentType: "report",
+            events: [
+              {
+                event_id: "event-completed-empty",
+                task_id: "task-completed-empty",
+                type: "task.completed",
+                payload: { status: "completed" },
+              },
+            ],
+          },
+        ]}
         busy={false}
         bridgeStatus="connected"
         onSubmit={vi.fn()}
@@ -1247,16 +1938,30 @@ describe("App task flow", () => {
 
     render(<App />);
 
-    await screen.findByRole("heading", { name: /What should we work on/i });
+    await screen.findByRole("heading", { name: /In workspace/i });
 
     fireEvent.click(screen.getByLabelText("Image"));
     expect(await screen.findByText("Image ratio")).toBeTruthy();
 
-    expect(screen.queryByRole("button", { name: /Attach reference images/ })).toBeNull();
-    const textarea = screen.getByPlaceholderText(/Enter what you want to generate/);
-    firePasteWithFile(textarea, new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "ref-a.png", { type: "image/png" }));
+    expect(
+      screen.queryByRole("button", { name: /Attach reference images/ }),
+    ).toBeNull();
+    const textarea = screen.getByPlaceholderText(
+      /Enter what you want to generate/,
+    );
+    firePasteWithFile(
+      textarea,
+      new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "ref-a.png", {
+        type: "image/png",
+      }),
+    );
     expect(await screen.findByText("pasted-1.png")).toBeTruthy();
-    firePasteWithFile(screen.getByPlaceholderText(/Enter what you want to generate/), new File([new Uint8Array([0xff, 0xd8, 0xff])], "ref-b.jpg", { type: "image/jpeg" }));
+    firePasteWithFile(
+      screen.getByPlaceholderText(/Enter what you want to generate/),
+      new File([new Uint8Array([0xff, 0xd8, 0xff])], "ref-b.jpg", {
+        type: "image/jpeg",
+      }),
+    );
     expect(await screen.findByText("pasted-2.jpg")).toBeTruthy();
     expect(bridge.openMultiFileDialog).not.toHaveBeenCalled();
 
@@ -1285,9 +1990,12 @@ describe("App task flow", () => {
     fireEvent.click(screen.getByLabelText("Image"));
     expect(await screen.findByText("Image ratio")).toBeTruthy();
     fireEvent.click(screen.getByLabelText("Landscape"));
-    fireEvent.change(screen.getByPlaceholderText(/Enter what you want to generate/), {
-      target: { value: "Create a wide launch visual" },
-    });
+    fireEvent.change(
+      screen.getByPlaceholderText(/Enter what you want to generate/),
+      {
+        target: { value: "Create a wide launch visual" },
+      },
+    );
     fireEvent.click(screen.getByRole("button", { name: /Generate$/ }));
 
     await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
@@ -1310,9 +2018,12 @@ describe("App task flow", () => {
 
     fireEvent.click(screen.getByRole("radio", { name: "GIF" }));
     expect(await screen.findByText("GIF FPS")).toBeTruthy();
-    fireEvent.change(screen.getByPlaceholderText(/Enter what you want to generate/), {
-      target: { value: "Create a launch GIF" },
-    });
+    fireEvent.change(
+      screen.getByPlaceholderText(/Enter what you want to generate/),
+      {
+        target: { value: "Create a launch GIF" },
+      },
+    );
     fireEvent.click(screen.getByRole("button", { name: /Generate$/ }));
 
     await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
@@ -1323,7 +2034,9 @@ describe("App task flow", () => {
         fps: 16,
       }),
     );
-    expect(bridge.generate).toHaveBeenCalledWith(expect.not.objectContaining({ imageRatio: expect.anything() }));
+    expect(bridge.generate).toHaveBeenCalledWith(
+      expect.not.objectContaining({ imageRatio: expect.anything() }),
+    );
   });
 
   it("does not include referenceImages when documentType is not Image", async () => {
@@ -1334,14 +2047,21 @@ describe("App task flow", () => {
 
     await screen.findByRole("heading", { name: /What should we work on/i });
 
-    fireEvent.change(screen.getByPlaceholderText(/Enter what you want to generate/), {
-      target: { value: "Build a deck" },
-    });
+    fireEvent.change(
+      screen.getByPlaceholderText(/Enter what you want to generate/),
+      {
+        target: { value: "Build a deck" },
+      },
+    );
     fireEvent.click(screen.getByRole("button", { name: /Generate$/ }));
 
     await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
-    expect(bridge.generate).toHaveBeenCalledWith(expect.not.objectContaining({ referenceImages: expect.anything() }));
-    expect(bridge.generate).toHaveBeenCalledWith(expect.not.objectContaining({ imageRatio: expect.anything() }));
+    expect(bridge.generate).toHaveBeenCalledWith(
+      expect.not.objectContaining({ referenceImages: expect.anything() }),
+    );
+    expect(bridge.generate).toHaveBeenCalledWith(
+      expect.not.objectContaining({ imageRatio: expect.anything() }),
+    );
   });
 
   it("continuation composer on completed image task calls generate with new prompt and no referenceImages by default", async () => {
@@ -1371,7 +2091,9 @@ describe("App task flow", () => {
     expect(composer).toBeTruthy();
     const textarea = within(composer).getByRole("textbox");
     fireEvent.change(textarea, { target: { value: "Make the sky brighter" } });
-    const submitBtn = within(composer).getByRole("button", { name: /generate/i });
+    const submitBtn = within(composer).getByRole("button", {
+      name: /generate/i,
+    });
     fireEvent.click(submitBtn);
 
     await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
@@ -1410,7 +2132,9 @@ describe("App task flow", () => {
     fireEvent.click(within(composer).getByLabelText("Portrait"));
     const textarea = within(composer).getByRole("textbox");
     fireEvent.change(textarea, { target: { value: "Make it vertical" } });
-    const submitBtn = within(composer).getByRole("button", { name: /generate/i });
+    const submitBtn = within(composer).getByRole("button", {
+      name: /generate/i,
+    });
     fireEvent.click(submitBtn);
 
     await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
@@ -1446,13 +2170,17 @@ describe("App task flow", () => {
     });
 
     expect(await screen.findByText("Generation Complete")).toBeTruthy();
-    expect(document.querySelectorAll(".history-list .history-item")).toHaveLength(1);
+    expect(
+      document.querySelectorAll(".history-list .history-item"),
+    ).toHaveLength(1);
 
     const composer = screen.getByTestId("continuation-composer");
     fireEvent.change(within(composer).getByRole("textbox"), {
       target: { value: "Make the sky brighter" },
     });
-    fireEvent.click(within(composer).getByRole("button", { name: /generate/i }));
+    fireEvent.click(
+      within(composer).getByRole("button", { name: /generate/i }),
+    );
     await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
 
     act(() => {
@@ -1464,10 +2192,16 @@ describe("App task flow", () => {
       });
     });
 
-    await waitFor(() => expect(document.querySelectorAll(".history-list .history-item")).toHaveLength(1));
+    await waitFor(() =>
+      expect(
+        document.querySelectorAll(".history-list .history-item"),
+      ).toHaveLength(1),
+    );
     expect(screen.getByText("Thinking...")).toBeTruthy();
     expect(screen.getAllByText("generated.png").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Make the sky brighter").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Make the sky brighter").length).toBeGreaterThan(
+      0,
+    );
   });
 
   it("deletes every task in a sidebar conversation", async () => {
@@ -1496,7 +2230,9 @@ describe("App task flow", () => {
     fireEvent.change(within(composer).getByRole("textbox"), {
       target: { value: "Make the sky brighter" },
     });
-    fireEvent.click(within(composer).getByRole("button", { name: /generate/i }));
+    fireEvent.click(
+      within(composer).getByRole("button", { name: /generate/i }),
+    );
     await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
 
     act(() => {
@@ -1515,10 +2251,14 @@ describe("App task flow", () => {
     });
     expect(await screen.findByText("brighter.png")).toBeTruthy();
 
-    fireEvent.click(document.querySelector(".history-item-delete") as HTMLElement);
+    fireEvent.click(
+      document.querySelector(".history-item-delete") as HTMLElement,
+    );
 
-    await screen.findByRole("heading", { name: /What should we work on/i });
-    expect(document.querySelectorAll(".history-list .history-item")).toHaveLength(0);
+    await screen.findByRole("heading", { name: /In workspace/i });
+    expect(
+      document.querySelectorAll(".history-list .history-item"),
+    ).toHaveLength(0);
     expect(screen.queryByText("generated.png")).toBeNull();
     expect(screen.queryByText("brighter.png")).toBeNull();
   });
@@ -1532,14 +2272,27 @@ describe("App task flow", () => {
     await screen.findByRole("heading", { name: /What should we work on/i });
     fireEvent.click(screen.getByLabelText("Image"));
     expect(await screen.findByText("Image ratio")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Attach reference images/ })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /Attach reference images/ }),
+    ).toBeNull();
 
-    const textarea = screen.getByPlaceholderText(/Enter what you want to generate/) as HTMLTextAreaElement;
-    const pastedFile = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "screenshot.png", { type: "image/png" });
+    const textarea = screen.getByPlaceholderText(
+      /Enter what you want to generate/,
+    ) as HTMLTextAreaElement;
+    const pastedFile = new File(
+      [new Uint8Array([0x89, 0x50, 0x4e, 0x47])],
+      "screenshot.png",
+      { type: "image/png" },
+    );
     firePasteWithFile(textarea, pastedFile);
 
-    await waitFor(() => expect(bridge.savePastedImage).toHaveBeenCalledTimes(1));
-    expect(bridge.savePastedImage).toHaveBeenCalledWith(expect.any(Uint8Array), "png");
+    await waitFor(() =>
+      expect(bridge.savePastedImage).toHaveBeenCalledTimes(1),
+    );
+    expect(bridge.savePastedImage).toHaveBeenCalledWith(
+      expect.any(Uint8Array),
+      "png",
+    );
     expect(await screen.findByText("pasted-1.png")).toBeTruthy();
   });
 
@@ -1551,8 +2304,14 @@ describe("App task flow", () => {
 
     await screen.findByRole("heading", { name: /What should we work on/i });
 
-    const textarea = screen.getByPlaceholderText(/Enter what you want to generate/) as HTMLTextAreaElement;
-    const pastedFile = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "screenshot.png", { type: "image/png" });
+    const textarea = screen.getByPlaceholderText(
+      /Enter what you want to generate/,
+    ) as HTMLTextAreaElement;
+    const pastedFile = new File(
+      [new Uint8Array([0x89, 0x50, 0x4e, 0x47])],
+      "screenshot.png",
+      { type: "image/png" },
+    );
     firePasteWithFile(textarea, pastedFile);
 
     await new Promise((resolve) => setTimeout(resolve, 30));
@@ -1561,41 +2320,73 @@ describe("App task flow", () => {
 });
 
 async function confirmDemoNode(title: string) {
-  await waitFor(() => expect(pendingDemoNodeCard(title)).toBeTruthy(), { timeout: DEMO_NODE_SEQUENCE_TIMEOUT_MS });
+  await waitFor(() => expect(pendingDemoNodeCard(title)).toBeTruthy(), {
+    timeout: DEMO_NODE_SEQUENCE_TIMEOUT_MS,
+  });
   const nodeCard = pendingDemoNodeCard(title) as HTMLElement;
   const nodeId = nodeCard.closest(".react-flow__node")?.getAttribute("data-id");
   const nodeSummary = nodeCard.querySelector("p")?.textContent;
   fireEvent.click(nodeCard);
-  await waitFor(() => {
-    const popover = currentOpenDemoPopover(title, nodeSummary);
-    expect(popover?.querySelector("strong")?.textContent).toBe(title);
-    expect(within(popover as HTMLElement).getByRole("button", { name: "Confirm this node" })).toBeTruthy();
-  }, { timeout: DEMO_NODE_SEQUENCE_TIMEOUT_MS });
-  fireEvent.click(within(currentOpenDemoPopover(title, nodeSummary) as HTMLElement).getByRole("button", { name: "Confirm this node" }));
+  await waitFor(
+    () => {
+      const popover = currentOpenDemoPopover(title, nodeSummary);
+      expect(popover?.querySelector("strong")?.textContent).toBe(title);
+      expect(
+        within(popover as HTMLElement).getByRole("button", {
+          name: "Confirm this node",
+        }),
+      ).toBeTruthy();
+    },
+    { timeout: DEMO_NODE_SEQUENCE_TIMEOUT_MS },
+  );
+  fireEvent.click(
+    within(currentOpenDemoPopover(title, nodeSummary) as HTMLElement).getByRole(
+      "button",
+      { name: "Confirm this node" },
+    ),
+  );
   if (nodeId) {
-    await waitFor(() => expect(demoNodeCardById(nodeId)?.classList.contains("is-confirmed")).toBe(true), { timeout: DEMO_NODE_SEQUENCE_TIMEOUT_MS });
+    await waitFor(
+      () =>
+        expect(
+          demoNodeCardById(nodeId)?.classList.contains("is-confirmed"),
+        ).toBe(true),
+      { timeout: DEMO_NODE_SEQUENCE_TIMEOUT_MS },
+    );
   }
 }
 
 async function waitForDemoNodeTitle(title: string) {
-  await waitFor(() => expect(demoNodeCard(title)).toBeTruthy(), { timeout: DEMO_NODE_SEQUENCE_TIMEOUT_MS });
+  await waitFor(() => expect(demoNodeCard(title)).toBeTruthy(), {
+    timeout: DEMO_NODE_SEQUENCE_TIMEOUT_MS,
+  });
 }
 
 async function clickReadyDemoStageButton(name: string) {
-  await waitFor(() => {
-    const button = screen.getByRole("button", { name }) as HTMLButtonElement;
-    expect(button.disabled).toBe(false);
-  }, { timeout: DEMO_NODE_SEQUENCE_TIMEOUT_MS });
+  await waitFor(
+    () => {
+      const button = screen.getByRole("button", { name }) as HTMLButtonElement;
+      expect(button.disabled).toBe(false);
+    },
+    { timeout: DEMO_NODE_SEQUENCE_TIMEOUT_MS },
+  );
   fireEvent.click(screen.getByRole("button", { name }));
 }
 
 function demoNodeCard(title: string) {
-  return (Array.from(document.querySelectorAll(".living-tree-flow-node"))
-    .find((node) => node.querySelector("strong")?.textContent === title) as HTMLElement | undefined) ?? null;
+  return (
+    (Array.from(document.querySelectorAll(".living-tree-flow-node")).find(
+      (node) => node.querySelector("strong")?.textContent === title,
+    ) as HTMLElement | undefined) ?? null
+  );
 }
 
 function currentOpenDemoPopover(title?: string, summary?: string) {
-  const popovers = Array.from(document.querySelectorAll(".ui-popover[data-open='true'] .living-tree-popover"));
+  const popovers = Array.from(
+    document.querySelectorAll(
+      ".ui-popover[data-open='true'] .living-tree-popover",
+    ),
+  );
   if (title) {
     const matched = popovers.find((popover) => {
       const text = popover.textContent ?? "";
@@ -1608,16 +2399,29 @@ function currentOpenDemoPopover(title?: string, summary?: string) {
 }
 
 function pendingDemoNodeCard(title: string) {
-  return Array.from(document.querySelectorAll(".living-tree-flow-node.is-confirmable.is-pending"))
-    .find((node) => !document.querySelector(".living-tree-flow-node.is-node-drawing") && !node.classList.contains("is-node-drawing") && !node.classList.contains("is-node-waiting") && node.querySelector("strong")?.textContent === title) as HTMLElement | undefined;
+  return Array.from(
+    document.querySelectorAll(
+      ".living-tree-flow-node.is-confirmable.is-pending",
+    ),
+  ).find(
+    (node) =>
+      !document.querySelector(".living-tree-flow-node.is-node-drawing") &&
+      !node.classList.contains("is-node-drawing") &&
+      !node.classList.contains("is-node-waiting") &&
+      node.querySelector("strong")?.textContent === title,
+  ) as HTMLElement | undefined;
 }
 
 function pendingDemoNodeCardById(nodeId: string) {
-  return document.querySelector(`.react-flow__node[data-id="${nodeId}"] .living-tree-flow-node.is-confirmable.is-pending`);
+  return document.querySelector(
+    `.react-flow__node[data-id="${nodeId}"] .living-tree-flow-node.is-confirmable.is-pending`,
+  );
 }
 
 function demoNodeCardById(nodeId: string) {
-  return document.querySelector(`.react-flow__node[data-id="${nodeId}"] .living-tree-flow-node`) as HTMLElement | null;
+  return document.querySelector(
+    `.react-flow__node[data-id="${nodeId}"] .living-tree-flow-node`,
+  ) as HTMLElement | null;
 }
 
 describe("App auto-update flow", () => {
@@ -1654,12 +2458,19 @@ describe("App auto-update flow", () => {
     const checkSpy = vi.fn(async () => ({ release, status }));
     const downloadSpy = vi.fn(async () => "/tmp/x.dmg");
     const installSpy = vi.fn(async () => undefined);
-    officecli.checkAppUpdate = checkSpy as unknown as DesktopAPI["checkAppUpdate"];
-    officecli.downloadAppUpdate = downloadSpy as unknown as DesktopAPI["downloadAppUpdate"];
-    officecli.installAppUpdate = installSpy as unknown as DesktopAPI["installAppUpdate"];
-    officecli.cancelAppUpdate = vi.fn(async () => undefined) as unknown as DesktopAPI["cancelAppUpdate"];
-    officecli.onAppUpdateEvent = (() => () => undefined) as unknown as DesktopAPI["onAppUpdateEvent"];
-    officecli.getAppVersion = (async () => "0.1.0") as unknown as DesktopAPI["getAppVersion"];
+    officecli.checkAppUpdate =
+      checkSpy as unknown as DesktopAPI["checkAppUpdate"];
+    officecli.downloadAppUpdate =
+      downloadSpy as unknown as DesktopAPI["downloadAppUpdate"];
+    officecli.installAppUpdate =
+      installSpy as unknown as DesktopAPI["installAppUpdate"];
+    officecli.cancelAppUpdate = vi.fn(
+      async () => undefined,
+    ) as unknown as DesktopAPI["cancelAppUpdate"];
+    officecli.onAppUpdateEvent = (() => () =>
+      undefined) as unknown as DesktopAPI["onAppUpdateEvent"];
+    officecli.getAppVersion = (async () =>
+      "0.1.0") as unknown as DesktopAPI["getAppVersion"];
 
     const { App } = await import("./App");
     render(<App />);
@@ -1671,7 +2482,9 @@ describe("App auto-update flow", () => {
 
     expect(screen.getByRole("alertdialog")).toBeTruthy();
     expect(screen.getByText(/Required update/i)).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: /What should we work on/i })).toBeNull();
+    expect(
+      screen.queryByRole("heading", { name: /What should we work on/i }),
+    ).toBeNull();
     expect(bridge.generate).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByText("Update now"));
@@ -1702,12 +2515,20 @@ describe("App auto-update flow", () => {
       lastCheckedAt: new Date().toISOString(),
       lastError: null,
     };
-    officecli.checkAppUpdate = (async () => ({ release, status })) as unknown as DesktopAPI["checkAppUpdate"];
-    officecli.downloadAppUpdate = (async () => "/tmp/x.dmg") as unknown as DesktopAPI["downloadAppUpdate"];
-    officecli.installAppUpdate = (async () => undefined) as unknown as DesktopAPI["installAppUpdate"];
-    officecli.cancelAppUpdate = (async () => undefined) as unknown as DesktopAPI["cancelAppUpdate"];
-    officecli.onAppUpdateEvent = (() => () => undefined) as unknown as DesktopAPI["onAppUpdateEvent"];
-    officecli.getAppVersion = (async () => "0.1.0") as unknown as DesktopAPI["getAppVersion"];
+    officecli.checkAppUpdate = (async () => ({
+      release,
+      status,
+    })) as unknown as DesktopAPI["checkAppUpdate"];
+    officecli.downloadAppUpdate = (async () =>
+      "/tmp/x.dmg") as unknown as DesktopAPI["downloadAppUpdate"];
+    officecli.installAppUpdate = (async () =>
+      undefined) as unknown as DesktopAPI["installAppUpdate"];
+    officecli.cancelAppUpdate = (async () =>
+      undefined) as unknown as DesktopAPI["cancelAppUpdate"];
+    officecli.onAppUpdateEvent = (() => () =>
+      undefined) as unknown as DesktopAPI["onAppUpdateEvent"];
+    officecli.getAppVersion = (async () =>
+      "0.1.0") as unknown as DesktopAPI["getAppVersion"];
 
     const { App } = await import("./App");
     render(<App />);
@@ -1718,6 +2539,7 @@ describe("App auto-update flow", () => {
     });
 
     expect(screen.getByText(/New version 0\.2\.0 available/i)).toBeTruthy();
+    expect(screen.getByText(/New version 0\.2\.0 available/i).closest(".app-frame")).not.toBeNull();
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
 });
@@ -1779,7 +2601,9 @@ describe("App credit display", () => {
     const { App } = await import("./App");
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Show credit balance/i }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Show credit balance/i }),
+    );
     expect(await screen.findByText("75 / 100")).toBeTruthy();
     expect(screen.getAllByText("Credits").length).toBeGreaterThan(0);
     const meter = document.querySelector(".credit-meter");
@@ -1802,7 +2626,9 @@ describe("App credit display", () => {
     const { App } = await import("./App");
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Show credit balance/i }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Show credit balance/i }),
+    );
     expect(await screen.findByText("42 credits")).toBeTruthy();
     expect(screen.getAllByText("Pro").length).toBeGreaterThan(0);
     const meter = document.querySelector(".credit-meter");
@@ -1860,7 +2686,9 @@ describe("App credit display", () => {
     const { App } = await import("./App");
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Show credit balance/i }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Show credit balance/i }),
+    );
     expect(await screen.findByText("100 credits")).toBeTruthy();
 
     act(() => {
@@ -1878,7 +2706,9 @@ describe("App credit display", () => {
       });
     });
 
-    await waitFor(() => expect(screen.getByText("80 credits")).toBeTruthy(), { timeout: 1500 });
+    await waitFor(() => expect(screen.getByText("80 credits")).toBeTruthy(), {
+      timeout: 1500,
+    });
   });
 });
 
@@ -1896,23 +2726,158 @@ function firePasteWithFile(target: HTMLElement, file: File) {
 
 function installBridgeMock() {
   let listener: (event: BridgeEvent) => void = () => undefined;
-  const generate = vi.fn(async () => ({ taskId: "task-2", sessionId: "session-2", status: "starting" }));
+  const generate = vi.fn(async () => ({
+    taskId: "task-2",
+    sessionId: "session-2",
+    status: "starting",
+  }));
   const previewArtifact = vi.fn(async () => undefined);
   const openExternal = vi.fn(async () => undefined);
-  const openFileDialog = vi.fn<(options?: { filters?: Array<{ name: string; extensions: string[] }> }) => Promise<string | null>>(async () => null);
-  const openMultiFileDialog = vi.fn<(options?: { filters?: Array<{ name: string; extensions: string[] }> }) => Promise<string[] | null>>(async () => null);
-  const savePastedImage = vi.fn<(data: Uint8Array, ext: string) => Promise<string>>(
+  const openFileDialog = vi.fn<
+    (options?: {
+      filters?: Array<{ name: string; extensions: string[] }>;
+    }) => Promise<string | null>
+  >(async () => null);
+  const openMultiFileDialog = vi.fn<
+    (options?: {
+      filters?: Array<{ name: string; extensions: string[] }>;
+    }) => Promise<string[] | null>
+  >(async () => null);
+  const savePastedImage = vi.fn<
+    (data: Uint8Array, ext: string) => Promise<string>
+  >(
     async (_data: Uint8Array, ext: string): Promise<string> =>
       `/tmp/pasted-${savePastedImage.mock.calls.length}.${ext || "png"}`,
   );
   const api: DesktopAPI = {
     initialize: vi.fn(async () => ({})),
     getCapabilities: vi.fn(async () => ({})),
+		startAgentRun: vi.fn(async (input) => ({
+			id: "run-test",
+			workflow: input.workflow,
+			status: "running" as const,
+			created_at: new Date().toISOString(),
+			updated_at: new Date().toISOString(),
+		})),
+		getAgentRun: vi.fn(async () => ({
+			id: "run-test",
+			workflow: "test.workflow",
+			status: "completed" as const,
+			created_at: new Date().toISOString(),
+			updated_at: new Date().toISOString(),
+		})),
+		listAgentRuns: vi.fn(async () => []),
+		respondAgentRun: vi.fn(async () => undefined),
+		approveAgentRun: vi.fn(async () => undefined),
+		retryAgentRun: vi.fn(async () => ({
+			id: "run-test",
+			workflow: "test.workflow",
+			status: "running" as const,
+			created_at: new Date().toISOString(),
+			updated_at: new Date().toISOString(),
+		})),
+		cancelAgentRun: vi.fn(async () => undefined),
+		completeAgentClientTool: vi.fn(async () => undefined),
+		reassignAgentClientTool: vi.fn(async () => undefined),
     listImageTemplates: vi.fn(async () => []),
-    createImageTemplate: vi.fn(async () => ({ id: 1, slug: "mock", title: "Mock", description: "", promptPreset: "", sortOrder: 0, enabled: true })),
-    createImageTemplatePublishRequest: vi.fn(async () => ({ id: 1, privateTemplateID: 1, provenanceID: 1, status: "pending" })),
+    createImageTemplate: vi.fn(async () => ({
+      id: 1,
+      slug: "mock",
+      title: "Mock",
+      description: "",
+      promptPreset: "",
+      sortOrder: 0,
+      enabled: true,
+    })),
+    createImageTemplatePublishRequest: vi.fn(async () => ({
+      id: 1,
+      privateTemplateID: 1,
+      provenanceID: 1,
+      status: "pending",
+    })),
     generate,
-    modify: vi.fn(async () => ({ taskId: "task-modify", sessionId: "session-2", status: "starting" })),
+    modify: vi.fn(async () => ({
+      taskId: "task-modify",
+      sessionId: "session-2",
+      status: "starting",
+    })),
+    planSpreadsheetFields: vi.fn(async (input) => ({
+      summary: "AI mapping",
+      confidence: "high" as const,
+      warnings: [],
+      columns: input.headers.map((_header: string, column: number) => ({
+        column,
+        role: "ignored" as const,
+        confidence: 0,
+        reason: "test",
+      })),
+    })),
+    cleanupShopifyCatalog: vi.fn(async () => {
+      throw new Error("not used in this test");
+    }),
+    planShopifyCatalogCampaign: vi.fn(async () => {
+      throw new Error("not used in this test");
+    }),
+    probeJiraConnection: vi.fn(async () => ({
+      server: {
+        baseUrl: "https://jira.test",
+        version: "9.17.5",
+        deploymentType: "Server",
+        serverTitle: "Jira",
+      },
+      user: { name: "tester", displayName: "Tester" },
+    })),
+    getJiraConnection: vi.fn(async () => ({
+      configured: false,
+      baseUrl: "",
+      authType: "" as const,
+    })),
+    saveJiraConnection: vi.fn(async () => ({
+      server: {
+        baseUrl: "https://jira.test",
+        version: "9.17.5",
+        deploymentType: "Server",
+        serverTitle: "Jira",
+      },
+      user: { name: "tester", displayName: "Tester" },
+    })),
+    clearJiraConnection: vi.fn(async () => undefined),
+    listConfiguredJiraProjects: vi.fn(async () => []),
+    listConfiguredJiraFields: vi.fn(async () => []),
+    syncConfiguredJiraIssues: vi.fn(async () => ({
+	  status: "completed" as const,
+	  result: {
+		sheetName: "Jira Issues",
+		headers: ["Issue Key"],
+		rows: [],
+		jql: "ORDER BY updated DESC",
+		total: 0,
+		fetched: 0,
+		truncated: false,
+		syncedAt: "2026-08-12T00:00:00Z",
+	  },
+    })),
+    listJiraProjects: vi.fn(async () => []),
+    listJiraFields: vi.fn(async () => []),
+    syncJiraIssues: vi.fn(async () => ({
+      sheetName: "Jira Issues",
+      headers: ["Issue Key"],
+      rows: [],
+      jql: "ORDER BY updated DESC",
+      total: 0,
+      fetched: 0,
+      truncated: false,
+      syncedAt: "2026-08-12T00:00:00Z",
+    })),
+    updateJiraIssue: vi.fn(async () => undefined),
+    addJiraComment: vi.fn(async () => undefined),
+    listJiraTransitions: vi.fn(async () => []),
+    transitionJiraIssue: vi.fn(async () => undefined),
+    probeLiquipediaConnection: vi.fn(async () => ({ siteName: "Liquipedia Dota 2 Wiki", generator: "MediaWiki", language: "en", apiUrl: "https://liquipedia.net/dota2/api.php", userAgent: "OfficeDex/1.0 (dev@example.com)" })),
+    getLiquipediaConnection: vi.fn(async () => ({ configured: false, baseUrl: "https://liquipedia.net/dota2" })),
+    saveLiquipediaConnection: vi.fn(async () => ({ siteName: "Liquipedia Dota 2 Wiki", generator: "MediaWiki", language: "en", apiUrl: "https://liquipedia.net/dota2/api.php", userAgent: "OfficeDex/1.0 (dev@example.com)" })),
+    clearLiquipediaConnection: vi.fn(async () => undefined),
+    syncConfiguredLiquipedia: vi.fn(async () => ({ status: "completed" as const, result: { sheetName: "Liquipedia Tournaments", headers: ["Tournament"], rows: [], total: 0, fetched: 0, truncated: false, syncedAt: "2026-08-13T00:00:00Z", attribution: "Source: Liquipedia (CC BY-SA 3.0)" } })),
     respond: vi.fn(async () => undefined),
     cancel: vi.fn(async () => undefined),
     openPath: vi.fn(async () => undefined),
@@ -1921,20 +2886,74 @@ function installBridgeMock() {
     openFileDialog,
     openDirectoryDialog: vi.fn(async () => null),
     openMultiFileDialog,
-	    savePastedImage,
-	    savePptx: vi.fn(async () => "/tmp/deck.pptx"),
-	    saveDocx: vi.fn(async () => ({ filePath: "/tmp/document.docx", sha256: "saved" })),
-	    exportVibeTreePptx: vi.fn(async () => "/tmp/deck.pptx"),
-	    modifyPptistDeck: vi.fn(async () => ({ summary: "updated", ops: [] })),
-	    previewArtifact,
+    savePastedImage,
+    savePptx: vi.fn(async () => "/tmp/deck.pptx"),
+    saveDocx: vi.fn(async () => ({
+      filePath: "/tmp/document.docx",
+      sha256: "saved",
+    })),
+    exportVibeTreePptx: vi.fn(async () => "/tmp/deck.pptx"),
+    modifyPptistDeck: vi.fn(async () => ({ summary: "updated", ops: [] })),
+    planPptxJS: vi.fn(async () => ({ summary: "planned", source: "return 1;" })),
+
+    createLivePptxDraft: vi.fn(async (taskId: string) => ({ filePath: `/tmp/live-${taskId}.pptx`, fileName: `live-${taskId}.pptx` })),
+    readDrawingAsset: vi.fn(async (_assetsDir: string, digest: string) => ({ digest, contentType: "image/jpeg", base64: "" })),
+    captureTimelineNode: vi.fn(async () => ({ id: "n001", kind: "generation", label: "第 1 页完成", createdAt: "2026-08-20T12:00:00Z" })),
+    listTimeline: vi.fn(async () => []),
+    openTimelineNode: vi.fn(async (_taskId: string, nodeId: string) => ({ nodeId, filePath: `/tmp/${nodeId}.pptx`, fileName: `${nodeId}.pptx` })),
+    readTimelineNode: vi.fn(async (_taskId: string, nodeId: string) => ({ nodeId, content: "", assets: [] })),
+    readEditorDocument: vi.fn(async () => ({ nodeId: "", content: "", assets: [] })),
+    previewArtifact,
     readArtifactFile: vi.fn(async () => ({ data: new Uint8Array() })),
-    readLocalImage: vi.fn(async () => ({ data: new Uint8Array(), mime: "image/png" })),
+    readLocalImage: vi.fn(async () => ({
+      data: new Uint8Array(),
+      mime: "image/png",
+    })),
     copyImageToClipboard: vi.fn(async () => undefined),
-    issuePreviewToken: vi.fn(async (artifact) => ({ token: "test-token", fileName: artifact.fileName, documentType: artifact.documentType })),
+    issuePreviewToken: vi.fn(async (artifact) => ({
+      token: "test-token",
+      fileName: artifact.fileName,
+      documentType: artifact.documentType,
+    })),
     revokePreviewToken: vi.fn(async () => undefined),
-    prepareXlsxEditor: vi.fn(async () => ({ sessionId: "xlsx-session", modocContent: "modoc" })),
+    prepareXlsxEditor: vi.fn(async () => ({
+      sessionId: "xlsx-session",
+      modocContent: "modoc",
+    })),
     saveXlsxEditor: vi.fn(async () => ({ filePath: "/tmp/workbook.xlsx" })),
+    stageXlsxEditorImage: vi.fn(async () => ({
+      url: "modoc-assets:/media/image.png",
+    })),
+    composeCampaignImage: vi.fn(async (input) => ({
+      filePath: input.sourcePath,
+      width: 1080,
+      height: 1080,
+    })),
     closeXlsxEditor: vi.fn(async () => undefined),
+    preparePptxEditor: vi.fn(async () => ({
+      sessionId: "pptx-session",
+      fileId: "pptx-session",
+      title: "Deck",
+      sourceFileName: "deck.pptx",
+      content: new Uint8Array(),
+      documentRevision: 0,
+    })),
+    savePptxEditorSnapshot: vi.fn(async (input) => ({
+      filePath: "/tmp/deck.pptx",
+      revision: input.revision,
+    })),
+    savePptxEditorAsset: vi.fn(async (input) => ({
+      resourceUri: `mop-asset:/${input.relativePath}`,
+      digest: "sha256:test",
+      resourceSize: input.data.byteLength,
+      contentType: input.contentType ?? "application/octet-stream",
+      extension: input.relativePath.split(".").pop() ?? "bin",
+    })),
+    exportPptxEditor: vi.fn(async (input) => ({
+      filePath: "/tmp/deck.pptx",
+      revision: input.revision,
+    })),
+    closePptxEditor: vi.fn(async () => undefined),
     setPreviewMode: vi.fn(async () => undefined),
     login: vi.fn(async () => ({ url: "https://example.com/login" })),
     cancelLogin: vi.fn(async () => undefined),
@@ -1976,7 +2995,10 @@ function installBridgeMock() {
       llmProvider: null,
       onboardingCompletedAt: "2026-05-22T00:00:00.000Z",
       proxy: null,
-      imageWatermark: { showWatermark: true, preferenceSource: "system" as const },
+      imageWatermark: {
+        showWatermark: true,
+        preferenceSource: "system" as const,
+      },
       waiting2048Enabled: false,
     })),
     updateSettings: vi.fn(async (patch) => ({
@@ -1990,19 +3012,27 @@ function installBridgeMock() {
       workspaceDir: patch.workspaceDir ?? null,
       outputDir: patch.outputDir ?? null,
       llmProvider: patch.llmProvider ?? null,
-      onboardingCompletedAt: patch.onboardingCompletedAt ?? "2026-05-22T00:00:00.000Z",
+      onboardingCompletedAt:
+        patch.onboardingCompletedAt ?? "2026-05-22T00:00:00.000Z",
       proxy: patch.proxy ?? null,
-      imageWatermark: patch.imageWatermark ?? { showWatermark: true, preferenceSource: "system" as const },
+      imageWatermark: patch.imageWatermark ?? {
+        showWatermark: true,
+        preferenceSource: "system" as const,
+      },
       waiting2048Enabled: patch.waiting2048Enabled ?? false,
     })),
-    getDefaultWorkspaceDir: vi.fn(async () => "/Users/test/Library/Application Support/OfficeDex/workspace"),
-    listWorkspaces: vi.fn(async () => [{
-      id: "ws-default",
-      name: "workspace",
-      path: "/Users/test/Library/Application Support/OfficeDex/workspace",
-      active: true,
-      conversations: [],
-    }]),
+    getDefaultWorkspaceDir: vi.fn(
+      async () => "/Users/test/Library/Application Support/OfficeDex/workspace",
+    ),
+    listWorkspaces: vi.fn(async () => [
+      {
+        id: "ws-default",
+        name: "workspace",
+        path: "/Users/test/Library/Application Support/OfficeDex/workspace",
+        active: true,
+        conversations: [],
+      },
+    ]),
     listChats: vi.fn(async () => []),
     listRecentFiles: vi.fn(async () => []),
     removeRecentFile: vi.fn(async () => undefined),
@@ -2018,6 +3048,11 @@ function installBridgeMock() {
       filePath: file.filePath,
       fileName: file.fileName,
       documentType: file.documentType,
+    })),
+    createWorkbookFromSheet: vi.fn(async (input) => ({
+      filePath: `/tmp/${input.fileName || "Jira Issues.xlsx"}`,
+      fileName: input.fileName || "Jira Issues.xlsx",
+      documentType: "xlsx",
     })),
     deleteConversation: vi.fn(async () => undefined),
     addWorkspace: vi.fn(async (path: string) => ({
@@ -2069,18 +3104,47 @@ function installBridgeMock() {
     installAppUpdate: vi.fn(async () => undefined),
     cancelAppUpdate: vi.fn(async () => undefined),
     onAppUpdateEvent: vi.fn(() => () => undefined),
-    exportLogs: vi.fn(async () => ({ path: "/Users/test/Downloads/officedex-logs.zip", manifest: { schemaVersion: 1, bundleId: "test", items: [], truncated: false } })),
-    submitReport: vi.fn(async () => ({ ticketId: "T-001", requestId: "req-test-123", uploaded: true })),
-    getReportCapability: vi.fn(async () => ({ enabled: false, reason: "test" })),
-    peekReportContext: vi.fn(async () => ({ requestId: "req-test-123", errorCode: "", errorMessage: "" })),
+    exportLogs: vi.fn(async () => ({
+      path: "/Users/test/Downloads/officedex-logs.zip",
+      manifest: {
+        schemaVersion: 1,
+        bundleId: "test",
+        items: [],
+        truncated: false,
+      },
+    })),
+    submitReport: vi.fn(async () => ({
+      ticketId: "T-001",
+      requestId: "req-test-123",
+      uploaded: true,
+    })),
+    getReportCapability: vi.fn(async () => ({
+      enabled: false,
+      reason: "test",
+    })),
+    peekReportContext: vi.fn(async () => ({
+      requestId: "req-test-123",
+      errorCode: "",
+      errorMessage: "",
+    })),
     getTaskHistory: vi.fn(async () => []),
-    getBridgeRuntimeSnapshot: vi.fn(async () => ({ runtimeMode: "hosted" as const, binaryPath: "", envApplied: false })),
+    getBridgeRuntimeSnapshot: vi.fn(async () => ({
+      runtimeMode: "hosted" as const,
+      binaryPath: "",
+      envApplied: false,
+    })),
     recordRendererLog: vi.fn(async () => undefined),
-    testProvider: vi.fn(async () => ({ ok: true, httpStatus: 200, latencyMs: 12, url: "https://api.openai.com" })),
+    testProvider: vi.fn(async () => ({
+      ok: true,
+      httpStatus: 200,
+      latencyMs: 12,
+      url: "https://api.openai.com",
+    })),
   };
   window.officecli = api;
   return {
     generate,
+    createWorkbookFromSheet: api.createWorkbookFromSheet,
     previewArtifact,
     issuePreviewToken: api.issuePreviewToken,
     openExternal,
@@ -2121,7 +3185,9 @@ function installDomStubs() {
   );
   window.HTMLElement.prototype.scrollIntoView = vi.fn();
   if (typeof Blob.prototype.arrayBuffer !== "function") {
-    Blob.prototype.arrayBuffer = function arrayBuffer(this: Blob): Promise<ArrayBuffer> {
+    Blob.prototype.arrayBuffer = function arrayBuffer(
+      this: Blob,
+    ): Promise<ArrayBuffer> {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result as ArrayBuffer);
