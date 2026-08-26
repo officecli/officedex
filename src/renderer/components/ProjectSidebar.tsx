@@ -3,11 +3,11 @@ import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import type { WhoAmIMode, WorkspaceSummary } from "../../shared/types";
 import { Button, Dropdown, Input, Tooltip, dialog, type MenuProps } from "../ui";
 import {
-  AppstoreOutlined,
   DeleteOutlined,
   EditOutlined,
   FolderAddOutlined,
   FolderOpenOutlined,
+  HomeOutlined,
   MoreOutlined,
   PlusOutlined,
   SettingOutlined,
@@ -122,7 +122,7 @@ export function ProjectSidebar({ workspaces, activeWorkspaceId, onSelectAll, onS
         {/* Home is the inbox now, so it carries the signal: there is no separate
             tasks page to route people to. */}
         <button type="button" className={!activeWorkspaceId ? "is-active" : ""} onClick={onSelectAll}>
-          <AppstoreOutlined aria-hidden /><span>{t("projectSidebar.allFiles")}</span>
+          <HomeOutlined aria-hidden /><span>{t("projectSidebar.home")}</span>
           {signal ? (
             <Tooltip title={t(`projectSidebar.signal.${signal.kind}`, { count: signal.count })} placement="right">
               <em

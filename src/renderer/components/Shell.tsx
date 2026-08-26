@@ -204,7 +204,7 @@ export function Shell({
               <Space size={12} className="breadcrumb">
                 <span>{t("shell.brand")}</span>
                 <span className="crumb-separator">/</span>
-                <strong>{activeWorkspaceName || t("projectSidebar.allFiles")}</strong>
+                <strong>{activeWorkspaceName || t("shell.scope.allContent")}</strong>
               </Space>
               <RuntimeChip onClick={() => onNavChange("settings")} />
             </header>

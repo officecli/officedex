@@ -37,10 +37,10 @@ function renderSidebar(overrides: Partial<React.ComponentProps<typeof ProjectSid
 }
 
 describe("ProjectSidebar", () => {
-  it("keeps the OfficeDex icon and supports all-content selection", () => {
+  it("keeps the OfficeDex icon and returns to the unfiltered home", () => {
     const props = renderSidebar();
     expect(screen.getByRole("img", { name: "OfficeDex" })).toHaveAttribute("src", "./officedex-logo.png");
-    fireEvent.click(screen.getByRole("button", { name: "All content" }));
+    fireEvent.click(screen.getByRole("button", { name: "Home" }));
     fireEvent.click(screen.getByRole("button", { name: "Client A" }));
     expect(props.onSelectAll).toHaveBeenCalledOnce();
     expect(props.onSelectWorkspace).toHaveBeenCalledWith("ws-a");
@@ -98,7 +98,7 @@ describe("ProjectSidebar", () => {
 
   it("keeps task history, settings, and account keyboard-accessible", () => {
     const props = renderSidebar();
-    fireEvent.click(screen.getByRole("button", { name: /All content/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Home" }));
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     fireEvent.click(screen.getByRole("button", { name: "Account" }));
     expect(props.onSelectAll).toHaveBeenCalled();
