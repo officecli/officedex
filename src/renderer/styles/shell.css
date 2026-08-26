@@ -3,10 +3,12 @@
 /* Document-format identity (DocTypeIcon): one icon + one color per format,
    app-wide. The hue rides --doc-color so a single class pair styles both the
    bare icon and the tinted chip. */
-.doc-type-icon { display: inline-grid; place-items: center; color: var(--doc-color, var(--od-ink-secondary)); }
-.doc-type-icon svg { width: 16px; height: 16px; }
-.doc-type-chip { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border-radius: 9px; background: color-mix(in srgb, var(--doc-color, var(--od-ink)) 11%, transparent); color: var(--doc-color, var(--od-ink)); }
-.doc-type-chip svg { width: 17px; height: 17px; }
+.doc-type-icon { display: inline-grid; flex: 0 0 auto; place-items: center; color: var(--doc-color, var(--od-ink-secondary)); }
+.doc-type-icon svg { width: 17px; height: 17px; }
+/* File rows show the document miniature, which brings its own paper — a tinted
+   plate behind it would only muddy the artwork. */
+.doc-type-chip { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; }
+.doc-type-chip svg { width: 100%; height: 100%; }
 .doc-type--pptx { --doc-color: var(--od-doc-pptx); }
 .doc-type--docx { --doc-color: var(--od-doc-docx); }
 .doc-type--xlsx { --doc-color: var(--od-doc-xlsx); }

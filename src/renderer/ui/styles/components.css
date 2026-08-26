@@ -413,13 +413,15 @@
   position: fixed;
   z-index: 1050;
   min-width: 160px;
-  padding: 8px;
-  border: 1px solid var(--od-border-subtle);
-  border-radius: var(--od-radius-popover);
+  padding: 6px;
+  /* Hairline plus a two-stop shadow: the panel needs to read as floating above
+     the surface, which a single hard border cannot do on its own. */
+  border: 1px solid color-mix(in srgb, var(--od-border-subtle) 70%, transparent);
+  border-radius: 12px;
   background: var(--od-surface);
   color: var(--od-ink);
-  box-shadow: var(--od-shadow-floating);
-  font: 400 14px/24px var(--od-font-ui);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 6%), 0 12px 32px rgb(15 23 42 / 12%);
+  font: 400 13px/20px var(--od-font-ui);
 }
 
 .ui-tooltip-anchor {
@@ -446,13 +448,31 @@
 .ui-tooltip[data-placement="right"] { top: 50%; bottom: auto; left: calc(100% + 6px); transform: translateY(-50%); }
 .ui-tooltip[data-placement="left"] { top: 50%; right: calc(100% + 6px); bottom: auto; left: auto; transform: translateY(-50%); }
 
-.ui-menu { display: flex; min-width: 160px; flex-direction: column; gap: 2px; }
+.ui-menu { display: flex; min-width: 180px; max-width: 320px; flex-direction: column; gap: 1px; }
+/* Group label: tells the user what the choices below have in common, which a
+   bare list of rows cannot. */
+.ui-menu__section { padding: 6px 10px 4px; color: var(--od-ink-secondary); font-size: 11px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
+.ui-menu__section:not(:first-child) { margin-top: 4px; }
+/* Reserved icon column so labels share one left edge whether or not a given
+   row has an icon. */
+.ui-menu--with-icons .ui-menu__item { padding-left: 8px; }
+.ui-menu__icon { display: grid; width: 18px; height: 18px; flex: 0 0 auto; place-items: center; color: var(--od-ink-secondary); }
+.ui-menu__icon svg { width: 16px; height: 16px; }
+.ui-menu__body { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 1px; }
+.ui-menu__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-menu__description { color: var(--od-ink-secondary); font-size: 11.5px; line-height: 16px; white-space: normal; }
+.ui-menu__check { width: 15px; height: 15px; flex: 0 0 auto; color: var(--od-guidance); }
+.ui-menu__item[data-selected="true"] { background: color-mix(in srgb, var(--od-guidance) 8%, transparent); }
+.ui-menu__item[data-selected="true"] .ui-menu__label { font-weight: 600; }
+.ui-menu__item[data-selected="true"] .ui-menu__icon { color: var(--od-guidance); }
 .ui-dropdown-trigger { display: inline-flex; }
-.ui-menu__item { display: flex; min-height: 32px; align-items: center; gap: 8px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; color: var(--od-ink); text-align: left; }
+.ui-menu__item { display: flex; min-height: 32px; align-items: center; gap: 9px; padding: 6px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--od-ink); font-size: 13px; line-height: 20px; text-align: left; cursor: pointer; transition: background-color 120ms ease; }
 .ui-menu__item:hover:not(:disabled) { background: var(--od-surface-muted); }
 .ui-menu__item[data-danger="true"] { color: var(--od-danger); }
 .ui-menu__item:disabled { color: var(--od-ink-disabled); }
-.ui-menu__divider { height: 1px; margin: 4px 0; background: var(--od-border-subtle); }
+/* Full-bleed rule: it separates picking a target from acting on the list, a
+   stronger break than the inset hairline it replaces. */
+.ui-menu__divider { height: 1px; margin: 6px -8px; background: var(--od-border-subtle); }
 
 .ui-alert {
   display: flex;
