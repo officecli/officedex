@@ -1,7 +1,7 @@
 import { useState, type DragEvent, type ReactNode } from "react";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import type { WhoAmIMode, WorkspaceSummary } from "../../shared/types";
-import { Button, Dropdown, Input, dialog, type MenuProps } from "../ui";
+import { Button, Dropdown, Input, Tooltip, dialog, type MenuProps } from "../ui";
 import {
   AppstoreOutlined,
   DeleteOutlined,
@@ -124,12 +124,14 @@ export function ProjectSidebar({ workspaces, activeWorkspaceId, onSelectAll, onS
         <button type="button" className={!activeWorkspaceId ? "is-active" : ""} onClick={onSelectAll}>
           <AppstoreOutlined aria-hidden /><span>{t("projectSidebar.allFiles")}</span>
           {signal ? (
-            <em
-              className={`project-sidebar__badge project-sidebar__badge--${signal.kind}`}
-              aria-label={t(`projectSidebar.signal.${signal.kind}`, { count: signal.count })}
-            >
-              {signal.kind === "attention" ? signal.count : null}
-            </em>
+            <Tooltip title={t(`projectSidebar.signal.${signal.kind}`, { count: signal.count })} placement="right">
+              <em
+                className={`project-sidebar__badge project-sidebar__badge--${signal.kind}`}
+                aria-label={t(`projectSidebar.signal.${signal.kind}`, { count: signal.count })}
+              >
+                {signal.kind === "attention" ? signal.count : null}
+              </em>
+            </Tooltip>
           ) : null}
         </button>
       </nav>

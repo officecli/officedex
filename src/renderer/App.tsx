@@ -575,15 +575,17 @@ function OfficeDexApp() {
   const [seenFailures, setSeenFailures] = useState<string[]>(() => readSeenFailures());
   const taskSignals = useMemo(() => computeTaskSignals(tasks, seenFailures), [tasks, seenFailures]);
   const sidebarTaskSignal = useMemo(() => sidebarSignal(taskSignals), [taskSignals]);
+  const [activityVisible, setActivityVisible] = useState(false);
   useEffect(() => {
-    if (activeNav !== "settings") return;
+    // Acknowledge only while the activity list is actually on screen.
+    if (!activityVisible) return;
     const ids = failedTaskIds(tasks);
     setSeenFailures((current) => {
       if (ids.length === current.length && ids.every((id) => current.includes(id))) return current;
       writeSeenFailures(ids);
       return ids;
     });
-  }, [activeNav, tasks]);
+  }, [activityVisible, tasks]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2088,6 +2090,7 @@ function OfficeDexApp() {
             <ActivityPanel
               tasks={tasks}
               onSelectTask={selectTask}
+              onViewed={setActivityVisible}
               onDeleteConversation={(conversationId) => void handleDeleteConversation(conversationId)}
               onOpenArtifact={(artifact) => void openRecentFile({
                 filePath: artifact.filePath,

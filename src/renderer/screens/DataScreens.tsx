@@ -57,8 +57,16 @@ function formatRelativeTime(iso: string | undefined, t: Translator): { label: st
  * Work that still needs the user lives in the home inbox — this panel is
  * deliberately read-mostly (open a deliverable, clean up failures).
  */
-export function ActivityPanel({ tasks, onSelectTask, onOpenArtifact, onDeleteConversation }: { tasks: DesktopTask[]; onSelectTask: (taskID: string) => void; onOpenArtifact?: (artifact: Artifact) => void; onDeleteConversation?: (conversationId: string) => void }) {
+export function ActivityPanel({ tasks, onSelectTask, onOpenArtifact, onDeleteConversation, onViewed }: { tasks: DesktopTask[]; onSelectTask: (taskID: string) => void; onOpenArtifact?: (artifact: Artifact) => void; onDeleteConversation?: (conversationId: string) => void; onViewed?: (visible: boolean) => void }) {
   const t = useT();
+  // This panel is mounted only while its settings section is open, so its
+  // lifetime *is* "the user is looking at the activity list" — the signal that
+  // acknowledges failures. Opening settings for anything else must not clear
+  // the sidebar's unseen-failure dot.
+  useEffect(() => {
+    onViewed?.(true);
+    return () => onViewed?.(false);
+  }, [onViewed]);
 	const [showSettled, setShowSettled] = useState(false);
   const rows = tasks.map((task) => taskToRow(task, t));
   const activeRows = rows.filter((row) => row.status === "starting" || row.status === "running");

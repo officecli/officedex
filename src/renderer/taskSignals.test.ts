@@ -33,6 +33,18 @@ describe("task signals", () => {
     expect(failedTaskIds([task("a", "failed"), task("b", "running"), task("c", "failed")])).toEqual(["a", "c"]);
   });
 
+
+  it("keeps a failure unseen until it is actually acknowledged", () => {
+    // Regression: acknowledgement used to fire on opening settings at all, so
+    // changing an unrelated preference silently cleared the red dot.
+    const tasks = [task("a", "failed"), task("b", "failed")];
+    expect(sidebarSignal(computeTaskSignals(tasks, []))).toEqual({ kind: "failed", count: 2 });
+    expect(sidebarSignal(computeTaskSignals(tasks, failedTaskIds(tasks)))).toBeUndefined();
+    // A newly failed task lights the dot again even after an earlier ack.
+    const withNew = [...tasks, task("c", "failed")];
+    expect(sidebarSignal(computeTaskSignals(withNew, failedTaskIds(tasks)))).toEqual({ kind: "failed", count: 1 });
+  });
+
   it("names the task in a notification body when it has one", () => {
     expect(taskNotificationBody(task("a", "completed", { topic: "Q3 review" }), "Generation finished")).toBe("Generation finished · Q3 review");
     expect(taskNotificationBody(

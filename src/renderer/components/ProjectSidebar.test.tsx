@@ -69,7 +69,7 @@ describe("ProjectSidebar", () => {
 
   it("shows an attention badge on tasks and an empty-state hint without workspaces", () => {
     const props = renderSidebar({ workspaces: [], signal: { kind: "attention", count: 2 } });
-    expect(screen.getByLabelText("2 tasks need your attention")).toHaveTextContent("2");
+    expect(screen.getByLabelText(/2 items need you/)).toHaveTextContent("2");
     fireEvent.click(screen.getByRole("button", { name: /Folders you work in become workspaces/ }));
     expect(props.onAddWorkspace).toHaveBeenCalledOnce();
   });
@@ -77,13 +77,13 @@ describe("ProjectSidebar", () => {
   it("shows running and failed as dots, without a count the user cannot act on", () => {
     cleanup();
     renderSidebar({ workspaces: [], signal: { kind: "running", count: 3 } });
-    const running = screen.getByLabelText("3 tasks running");
+    const running = screen.getByLabelText(/3 tasks running/);
     expect(running).toHaveTextContent("");
     expect(running.className).toContain("project-sidebar__badge--running");
 
     cleanup();
     renderSidebar({ workspaces: [], signal: { kind: "failed", count: 2 } });
-    expect(screen.getByLabelText("2 tasks failed").className).toContain("project-sidebar__badge--failed");
+    expect(screen.getByLabelText(/2 failed tasks/).className).toContain("project-sidebar__badge--failed");
   });
 
   it("shows credit and the signed-in account in the footer", () => {
