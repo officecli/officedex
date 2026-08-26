@@ -342,7 +342,9 @@
 .home-intake:focus-within { border-color: color-mix(in srgb, var(--od-guidance) 46%, var(--od-border-hover)); box-shadow: 0 20px 50px rgb(15 23 42 / 8%), 0 0 0 3px color-mix(in srgb, var(--od-guidance) 9%, transparent); }
 .home-intake { --wails-drop-target: drop; }
 .home-intake.is-drop-active { border-color: color-mix(in srgb, var(--od-guidance) 60%, var(--od-border-hover)); box-shadow: 0 20px 50px rgb(15 23 42 / 8%), 0 0 0 3px color-mix(in srgb, var(--od-guidance) 18%, transparent); }
-.home-intake__footer { min-height: 64px; border-top-color: color-mix(in srgb, var(--od-border-subtle) 78%, transparent); background: transparent; padding: 8px 12px 10px; }
+/* The toolbar sizes to its tallest control; a taller floor only shows up as
+   dead space under the type labels. */
+.home-intake__footer { min-height: 56px; border-top-color: color-mix(in srgb, var(--od-border-subtle) 78%, transparent); background: transparent; padding: 8px 12px; }
 .home-intake__footer-left { display: flex; min-width: 0; align-items: center; flex: 1; gap: 6px; }
 .home-intake__footer-left .ui-button { flex: 0 0 auto; white-space: nowrap; }
 .home-intake__footer-left > span { overflow: hidden; color: var(--od-ink-secondary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
@@ -389,10 +391,14 @@
 .home-intake__types { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; }
 .home-intake__types button { display: inline-flex; height: 32px; align-items: center; gap: 6px; border: 0; border-radius: 999px; background: transparent; color: var(--od-ink-secondary); padding: 0 14px; font: 500 12.5px/20px var(--od-font-ui); cursor: pointer; transition: background-color 140ms ease, color 140ms ease; }
 .home-intake__types button:hover { background: var(--od-surface-muted); color: var(--od-ink); }
-.home-intake__types button.is-selected { background: var(--od-ink); color: var(--od-surface); }
+/* The selected option shows the format's real mark, so the pill cannot invert
+   to charcoal — a white-paper illustration would sink into it. Tint with that
+   format's own colour instead: one tinted pill at a time reads as a selection,
+   not as a row of swatches. */
+.home-intake__types button.is-selected { background: color-mix(in srgb, var(--doc-color, var(--od-ink)) 14%, transparent); color: var(--od-ink); font-weight: 600; }
 .home-intake__types button:focus-visible { outline: 2px solid var(--od-guidance); outline-offset: 2px; }
-.home-intake__types button svg { width: 15px; height: 15px; }
-.home-intake__footer > .ui-button:last-child { width: 44px; min-width: 44px; height: 44px; overflow: hidden; gap: 0; border: 0; border-radius: 50%; padding: 0; color: white; font-size: 0; }
+.home-intake__types button .doc-type-icon { margin-left: -2px; }
+.home-intake__footer > .ui-button:last-child { width: 40px; min-width: 40px; height: 40px; overflow: hidden; gap: 0; border: 0; border-radius: 50%; padding: 0; color: white; font-size: 0; }
 .home-intake__footer > .ui-button:last-child svg { width: 18px; height: 18px; }
 .home-intake__footer > .ui-button:last-child:disabled { background: var(--od-ink); opacity: .3; }
 .home-intake__references { display: flex; flex-wrap: wrap; gap: 8px; border-top: 1px solid var(--od-border-subtle); padding: 10px 12px; }
@@ -413,6 +419,7 @@
 .home-section-header h2 { font-size: 20px; line-height: 28px; font-weight: 650; letter-spacing: -.02em; }
 .home-section-header > span { color: var(--od-ink-secondary); font-size: 12px; }
 
+.home-template-rail { position: relative; }
 .home-template-grid {
   display: grid;
   overflow-x: auto;
@@ -421,11 +428,33 @@
   grid-template-columns: none;
   gap: 16px;
   margin: 14px 0 0;
-  padding: 2px 2px 14px;
+  padding: 2px 2px 4px;
   scroll-snap-type: x proximity;
-  scrollbar-color: color-mix(in srgb, var(--od-ink) 18%, transparent) transparent;
-  scrollbar-width: thin;
+  /* Overflow is signalled by the rail arrows, so the bar itself is noise. */
+  scrollbar-width: none;
 }
+.home-template-grid::-webkit-scrollbar { display: none; }
+.home-template-rail__arrow {
+  position: absolute;
+  top: calc(50% + 5px);
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  transform: translateY(-50%);
+  border: 1px solid var(--od-border-subtle);
+  border-radius: 50%;
+  background: var(--od-surface);
+  color: var(--od-ink);
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgb(15 23 42 / 14%);
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+.home-template-rail__arrow:hover { background: var(--od-surface-subtle); box-shadow: 0 6px 18px rgb(15 23 42 / 18%); }
+.home-template-rail__arrow:focus-visible { outline: 2px solid var(--od-guidance); outline-offset: 2px; }
+.home-template-rail__arrow svg { width: 17px; height: 17px; }
+.home-template-rail__arrow--left { left: -14px; }
+.home-template-rail__arrow--right { right: -14px; }
 
 .home-template-card {
   scroll-snap-align: start;

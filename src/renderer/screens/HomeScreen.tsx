@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { DesktopTask, DocumentType, RecentFile, WorkspaceSummary } from "../../shared/types";
 import { Button, Dropdown, Empty, Loading, TextArea, toast, type MenuProps } from "../ui";
 import { dragHasFiles, setHomeDropZone } from "../homeDropZone";
@@ -9,7 +9,9 @@ import {
   FileTextOutlined,
   DownOutlined,
   FolderAddOutlined,
+  FolderUnsetOutlined,
   FolderOpenOutlined,
+  LeftOutlined,
   PlusOutlined,
   RightOutlined,
 } from "../ui/icons";
@@ -47,7 +49,6 @@ export interface HomeScreenProps {
 
 interface HomeCategory {
   type: HomeDocumentType;
-  icon: string;
 }
 
 interface HomeTemplate {
@@ -60,10 +61,10 @@ interface HomeTemplate {
 }
 
 const HOME_CATEGORIES: HomeCategory[] = [
-  { type: "pptx", icon: "slideshow" },
-  { type: "img", icon: "image" },
-  { type: "docx", icon: "description" },
-  { type: "xlsx", icon: "table_chart" },
+  { type: "pptx" },
+  { type: "img" },
+  { type: "docx" },
+  { type: "xlsx" },
 ];
 
 const HOME_TEMPLATES: HomeTemplate[] = [
@@ -292,8 +293,8 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
 
   const referenceMenu: MenuProps = {
     items: [
-      { key: "file", label: t("home.referenceFile"), icon: <FileTextOutlined aria-hidden /> },
-      { key: "directory", label: t("home.referenceDirectory"), icon: <FolderOpenOutlined aria-hidden /> },
+      { key: "file", label: t("home.referenceFile"), description: t("home.referenceFile.hint"), icon: <FileTextOutlined aria-hidden /> },
+      { key: "directory", label: t("home.referenceDirectory"), description: t("home.referenceDirectory.hint"), icon: <FolderOpenOutlined aria-hidden /> },
     ],
     onClick: ({ key }) => {
       if (key === "file") void pickTaskFile();
@@ -303,8 +304,17 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId);
   const workspaceMenu: MenuProps = {
     items: [
-      { key: "none", label: t("home.workdir.none") },
-      ...workspaces.map((workspace) => ({ key: `workspace:${workspace.id}`, label: workspace.name, icon: <FolderOpenOutlined aria-hidden /> })),
+      // A single-choice list: it says which target is current and separates
+      // switching targets from creating one.
+      { type: "section" as const, label: t("home.workdir.sectionUse") },
+      { key: "none", label: t("home.workdir.none"), icon: <FolderUnsetOutlined aria-hidden />, selected: !activeWorkspaceId },
+      ...workspaces.map((workspace) => ({
+        key: `workspace:${workspace.id}`,
+        label: workspace.name,
+        description: workspace.path,
+        icon: <FolderOpenOutlined aria-hidden />,
+        selected: workspace.id === activeWorkspaceId,
+      })),
       { type: "divider" as const },
       { key: "add", label: t("home.workdir.add"), icon: <FolderAddOutlined aria-hidden /> },
     ],
@@ -514,14 +524,14 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
               <button
                 key={category.type}
                 type="button"
-                className={selectedDocumentType === category.type ? "is-selected" : ""}
+                className={`doc-type--${category.type}${selectedDocumentType === category.type ? " is-selected" : ""}`}
                 aria-pressed={selectedDocumentType === category.type}
                 onClick={() => {
                   setSelectedDocumentType(category.type);
                   invalidateAnalysis();
                 }}
               >
-                {selectedDocumentType === category.type ? <MaterialSymbol name={category.icon} /> : null}
+                {selectedDocumentType === category.type ? <DocTypeIcon type={category.type} /> : null}
                 <span>{t(`home.type.${category.type}`)}</span>
               </button>
             ))}
@@ -557,7 +567,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
         <div className="home-section-header">
           <h2 id="home-templates-title">{t("home.templates")}</h2>
         </div>
-        <div className="home-template-grid">
+        <TemplateRail dependencies={[selectedDocumentType, visibleTemplates.length]}>
           {visibleTemplates.map((template) => {
             const title = t(`home.template.${template.id}.title`);
             const description = t(`home.template.${template.id}.description`);
@@ -590,7 +600,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
               </button>
             );
           })}
-        </div>
+        </TemplateRail>
       </section>
 
       {actionableTasks.length > 0 || runtimePromptCount > 0 ? (
@@ -650,6 +660,77 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
       </section>
 
     </section>
+  );
+}
+
+
+/**
+ * Horizontal shelf whose overflow is signalled by arrows rather than a
+ * scrollbar: an arrow appears only while that direction has more to show, so
+ * the control says "there is more this way" instead of leaving a grey bar
+ * across the cards.
+ */
+function TemplateRail({ children, dependencies }: { children: ReactNode; dependencies: unknown[] }) {
+  const t = useT();
+  const railRef = useRef<HTMLDivElement>(null);
+  const [overflow, setOverflow] = useState({ left: false, right: false });
+
+  const measure = useCallback(() => {
+    const rail = railRef.current;
+    if (!rail) return;
+    // Scroll snapping and the rail's own padding leave a couple of pixels of
+    // residual offset at either end, which is not scroll the user can perceive
+    // or act on. Only treat a visible amount as "there is more this way".
+    const PERCEPTIBLE_SCROLL_PX = 8;
+    setOverflow({
+      left: rail.scrollLeft > PERCEPTIBLE_SCROLL_PX,
+      right: rail.scrollLeft + rail.clientWidth < rail.scrollWidth - PERCEPTIBLE_SCROLL_PX,
+    });
+  }, []);
+
+  useEffect(() => {
+    const rail = railRef.current;
+    // A different set of examples starts from its own beginning: keeping the
+    // old offset drops the user into the middle of a list they never scrolled.
+    if (rail) rail.scrollLeft = 0;
+    measure();
+    if (!rail) return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(rail);
+    // Native listener rather than React's onScroll: scroll events do not
+    // bubble, so delegated handlers miss scrolls that did not come from a
+    // direct user gesture on this element (the arrow buttons' own scrollBy
+    // among them).
+    rail.addEventListener("scroll", measure, { passive: true });
+    return () => {
+      observer.disconnect();
+      rail.removeEventListener("scroll", measure);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [measure, ...dependencies]);
+
+  const scrollBy = (direction: -1 | 1) => {
+    const rail = railRef.current;
+    if (!rail) return;
+    rail.scrollBy({ left: direction * rail.clientWidth * 0.8, behavior: "smooth" });
+  };
+
+  return (
+    <div className="home-template-rail">
+      <div className="home-template-grid" ref={railRef}>
+        {children}
+      </div>
+      {overflow.left ? (
+        <button type="button" className="home-template-rail__arrow home-template-rail__arrow--left" aria-label={t("home.templateScrollBack")} onClick={() => scrollBy(-1)}>
+          <LeftOutlined aria-hidden />
+        </button>
+      ) : null}
+      {overflow.right ? (
+        <button type="button" className="home-template-rail__arrow home-template-rail__arrow--right" aria-label={t("home.templateScrollForward")} onClick={() => scrollBy(1)}>
+          <RightOutlined aria-hidden />
+        </button>
+      ) : null}
+    </div>
   );
 }
 

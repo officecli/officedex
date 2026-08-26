@@ -97,7 +97,7 @@ describe("HomeScreen", () => {
       onAnalyzeTask: vi.fn(async (input) => ({ ...input, kind: "catalog_cleanup" as const, documentType: "xlsx" as const, nextStep: "configure" as const })),
     });
     fireEvent.click(screen.getByRole("button", { name: "Add reference" }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Reference file" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /^Reference file/ }));
     expect(await screen.findByText("supplier.xlsx")).toBeTruthy();
     fireEvent.change(screen.getByRole("textbox", { name: "Describe the result you want" }), { target: { value: "Clean for Shopify import" } });
     fireEvent.click(screen.getByRole("button", { name: "Analyze" }));
@@ -121,7 +121,7 @@ describe("HomeScreen", () => {
   it("shows file picker failures inside the task intake", async () => {
     renderHome({ onPickTaskFile: vi.fn(async () => { throw new Error("File picker timed out"); }) });
     fireEvent.click(screen.getByRole("button", { name: "Add reference" }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Reference file" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /^Reference file/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent("File picker timed out");
   });
 

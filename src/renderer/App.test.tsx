@@ -351,7 +351,7 @@ describe("App task flow", () => {
 
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Add reference" }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Reference file" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /^Reference file/ }));
     expect(await screen.findByText("supplier.xlsx")).toBeTruthy();
     fireEvent.change(
       screen.getByRole("textbox", { name: "Describe the result you want" }),

@@ -45,6 +45,21 @@ if (typeof window.matchMedia !== "function") {
   });
 }
 
+// jsdom ships no ResizeObserver; components that measure their own box (the
+// template rail's overflow arrows) would otherwise throw on mount.
+if (typeof globalThis.ResizeObserver === "undefined") {
+  class NoopResizeObserver implements ResizeObserver {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  }
+  Object.defineProperty(globalThis, "ResizeObserver", {
+    configurable: true,
+    writable: true,
+    value: NoopResizeObserver,
+  });
+}
+
 Object.defineProperty(window, "getComputedStyle", {
   configurable: true,
   writable: true,
