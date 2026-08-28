@@ -4615,19 +4615,6 @@ describe("DialogueScreen state machine", () => {
     expect(onOpenLogin).toHaveBeenCalledTimes(1);
   });
 
-  it("does not turn historical hosted-credit exhaustion into an anonymous sign-in blocker", () => {
-    const task: DesktopTask = {
-      id: "task-hosted-credit-history",
-      conversationId: "task-hosted-credit-history",
-      status: "failed",
-      events: [{ task_id: "task-hosted-credit-history", type: "task.failed", payload: { message: "Hosted credits are exhausted." } }],
-      error: "Hosted credits are exhausted.",
-    };
-    render(<DialogueScreen {...baseProps()} tasks={[task]} />);
-    expect(screen.getAllByText("Hosted credits are exhausted.").length).toBeGreaterThan(0);
-    expect(screen.queryByRole("button", { name: /sign in to continue/i })).toBeNull();
-  });
-
   it("copies the user message prompt from the conversation bubble", async () => {
     const task: DesktopTask = {
       id: "task-user-copy",

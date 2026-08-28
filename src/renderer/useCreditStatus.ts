@@ -26,7 +26,7 @@ export function deriveCreditInfo(status: CreditStatus): CreditInfo {
     };
   }
   if (status.mode !== "anonymous" && status.hostedCreditBalance !== null) {
-    const balance = status.hostedCreditBalance;
+    const balance = Math.max(0, status.hostedCreditBalance);
     return {
       displayMode: "balance",
       used: 0,

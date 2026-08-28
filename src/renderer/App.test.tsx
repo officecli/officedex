@@ -2627,19 +2627,6 @@ describe("App credit display", () => {
     expect(document.querySelector(".main-frame .credit-meter")).toBeNull();
   });
 
-  it("renders postpaid debt and keeps new generation available", async () => {
-    installBridgeMock();
-    overrideCreditStatus({ mode: "logged_in", hostedCreditBalance: -12, planName: "Official", accessMode: "hosted" });
-
-    const { App } = await import("./App");
-    render(<App />);
-
-    fireEvent.click(await screen.findByRole("button", { name: /Show credit balance/i }));
-    expect(await screen.findByText("12 credits due")).toBeTruthy();
-    expect(screen.getByRole("group", { name: /Outstanding balance: 12 credits/ })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /New chat/i })).toBeEnabled();
-  });
-
   it("keeps the credit meter in the sidebar when the sidebar is collapsed", async () => {
     installBridgeMock();
     overrideCreditStatus({

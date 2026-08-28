@@ -75,9 +75,9 @@ export const en: Record<string, string> = {
   "home.analysis.deliverable": "Deliverable",
   "home.analysis.source": "Source material",
   "home.analysis.noSource": "No material attached",
-  "home.analysis.credit": "Billing",
+  "home.analysis.credit": "Estimated Credits",
   "home.analysis.creditUnavailable":
-    "No estimate or balance check. Actual usage is billed after the task runs.",
+    "This runtime cannot quote yet; the final amount comes from the task settlement record",
   "home.analysis.edit": "Edit request",
   "home.analysis.createPlan": "Create execution plan",
   "home.analysis.configureJob": "Configure task",
@@ -193,9 +193,6 @@ export const en: Record<string, string> = {
   "shell.creditMeter.tooltipBalanceWithPlan":
     "{balance} credits in account · {plan}",
   "shell.creditMeter.valueWithUnit": "{value} credits",
-  "shell.creditMeter.outstandingValue": "{value} credits due",
-  "shell.creditMeter.outstandingTooltip": "Outstanding balance: {balance} credits. New work is still allowed and is billed after completion.",
-  "shell.creditMeter.outstandingTooltipWithPlan": "Outstanding balance: {balance} credits · {plan}. New work is still allowed and is billed after completion.",
   "shell.creditMeter.aria": "Credit balance: {tooltip}",
   "shell.creditMeter.show": "Show credit balance",
   "shell.creditMeter.hide": "Hide credit balance",

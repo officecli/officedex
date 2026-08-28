@@ -230,8 +230,6 @@
 .project-sidebar__credit svg { width: 14px; height: 14px; flex: 0 0 auto; color: var(--od-guidance); }
 .project-sidebar__credit span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-sidebar__credit strong { margin-left: auto; color: var(--od-ink); font-weight: 500; white-space: nowrap; }
-.project-sidebar__credit.is-outstanding svg,
-.project-sidebar__credit.is-outstanding strong { color: var(--od-warning); }
 .project-sidebar[data-compact="true"] .project-sidebar__credit { display: none; }
 .project-sidebar__compact-toggle { display: grid; width: 28px; height: 28px; margin-left: auto; place-items: center; border: 0; border-radius: 4px; background: transparent; color: var(--od-ink-secondary); cursor: pointer; }
 .project-sidebar__compact-toggle:hover { background: color-mix(in srgb, var(--od-ink) 6%, transparent); color: var(--od-ink); }
