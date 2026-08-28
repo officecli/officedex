@@ -91,6 +91,59 @@ type pptistDeckPlanner interface {
 	PlanPptistEdit(context.Context, bridge.PlanPptistEditInput) (bridge.PlanPptistEditResult, error)
 }
 
+type pptxJSPlanner interface {
+	PlanPptxJS(context.Context, bridge.PlanPptxJSInput) (bridge.PlanPptxJSResult, error)
+}
+
+type PlanPptxJSInput struct {
+	Prompt  string           `json:"prompt"`
+	Context any              `json:"context"`
+	History []PptistEditTurn `json:"history,omitempty"`
+}
+type PlanPptxJSResult = bridge.PlanPptxJSResult
+
+// PlanPptxJS asks OfficeCLI for an Office.js PowerPoint.run plan. The plan is
+// returned to the embedded editor for explicit user confirmation and execution.
+func (a *App) PlanPptxJS(input PlanPptxJSInput) (PlanPptxJSResult, error) {
+	if strings.TrimSpace(input.Prompt) == "" {
+		return PlanPptxJSResult{}, errors.New("plan pptx: prompt is required")
+	}
+	if input.Context == nil {
+		return PlanPptxJSResult{}, errors.New("plan pptx: context is required")
+	}
+	history := make([]bridge.PlanPptxJSTurn, 0, len(input.History))
+	for _, turn := range input.History {
+		if strings.TrimSpace(turn.Content) != "" {
+			history = append(history, bridge.PlanPptxJSTurn{Role: turn.Role, Content: strings.TrimSpace(turn.Content)})
+		}
+	}
+	planner := a.pptxJSPlanner
+	if planner == nil {
+		client, err := a.ensureBridge()
+		if err != nil {
+			return PlanPptxJSResult{}, err
+		}
+		planner = client
+	}
+	result, err := planner.PlanPptxJS(a.ctx, bridge.PlanPptxJSInput{Prompt: strings.TrimSpace(input.Prompt), Context: input.Context, History: history})
+	if err != nil {
+		return PlanPptxJSResult{}, fmt.Errorf("plan pptx: %w", err)
+	}
+	if strings.TrimSpace(result.Source) == "" {
+		return PlanPptxJSResult{}, errors.New("plan pptx: empty source")
+	}
+	if result.Warnings == nil {
+		result.Warnings = []string{}
+	}
+	if strings.EqualFold(result.Confidence, "low") {
+		result.RequiresConfirmation = true
+		if result.Confirmation == nil {
+			result.Confirmation = &bridge.PlanPptxJSConfirmation{Message: result.Summary}
+		}
+	}
+	return result, nil
+}
+
 type xlsxEditorService interface {
 	Prepare(context.Context, string) (xlsxeditor.PrepareResult, error)
 	Save(context.Context, string, string, string) (xlsxeditor.SaveResult, error)
@@ -151,6 +204,7 @@ type App struct {
 	cachedSettings         types.UserSettings
 	bridgeClient           *bridge.Client
 	pptistPlanner          pptistDeckPlanner
+	pptxJSPlanner          pptxJSPlanner
 	bridgeCwd              string
 	loginManager           *login.Manager
 	loginUnsub             func()
@@ -5415,6 +5469,12 @@ func hasImageWatermarkEntitlement(credit types.CreditStatus, creditErr error) bo
 
 // resolveUserDataDir mirrors what Electron's app.getPath("userData") returns.
 func resolveUserDataDir(appName string) (string, error) {
+	if override := strings.TrimSpace(os.Getenv("OFFICEDEX_DEV_USER_DATA_DIR")); override != "" {
+		if !filepath.IsAbs(override) {
+			return "", fmt.Errorf("OFFICEDEX_DEV_USER_DATA_DIR must be an absolute path: %q", override)
+		}
+		return filepath.Clean(override), nil
+	}
 	switch runtime.GOOS {
 	case "darwin":
 		home, err := os.UserHomeDir()
@@ -5427,4 +5487,12 @@ func resolveUserDataDir(appName string) (string, error) {
 		return "", err
 	}
 	return filepath.Join(base, appName), nil
+}
+
+func developmentOfficeCLIEnv() []string {
+	home := strings.TrimSpace(os.Getenv("OFFICEDEX_DEV_OFFICECLI_HOME"))
+	if home == "" || !filepath.IsAbs(home) {
+		return nil
+	}
+	return []string{"HOME=" + filepath.Clean(home), "XDG_CONFIG_HOME=" + filepath.Join(filepath.Clean(home), ".config")}
 }

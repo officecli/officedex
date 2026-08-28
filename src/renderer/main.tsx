@@ -4,6 +4,9 @@ import "@xyflow/react/dist/style.css";
 import { App } from "./App";
 import { PerfPptistCompletedScreen } from "./screens/PerfPptistCompletedScreen";
 import { LocaleProvider } from "./i18n";
+import { mountTheme } from "./ui/theme";
+import "./ui/design-tokens.css";
+import "./styles/beautiful.css";
 import "./styles/tokens.css";
 import "./styles/shell.css";
 import "./styles/home.css";
@@ -14,6 +17,8 @@ import "./styles/settings.css";
 import "./styles/tasks.css";
 import "./styles/onboarding-update.css";
 import "./styles/vibe-officing-demo.css";
+
+mountTheme();
 
 const PreviewApp = lazy(() => import("./preview/PreviewApp"));
 

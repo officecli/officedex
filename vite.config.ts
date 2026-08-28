@@ -1,10 +1,11 @@
 import { cp, lstat, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin, type ResolvedConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { fileURLToPath } from "node:url";
 
 const realE2E = Boolean(process.env.VITE_OFFICEDEX_REAL_E2E_ENDPOINT);
+const alias = [{ find: "@vo-ui/backend", replacement: fileURLToPath(new URL("./src/renderer/ui/backend.ts", import.meta.url)) }];
 
 const sdkSheetAssetRoutes = [
   {
@@ -91,6 +92,7 @@ export default defineConfig({
   root: ".",
   base: "./",
   resolve: {
+    alias,
     dedupe: ["react", "react-dom"],
   },
   server: realE2E ? { hmr: false } : undefined,

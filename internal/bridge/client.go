@@ -1086,6 +1086,56 @@ type PlanPptistEditTurn struct {
 	Content string `json:"content"`
 }
 
+type PlanPptxJSTurn struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type PlanPptxJSInput struct {
+	Prompt  string           `json:"prompt"`
+	Context any              `json:"context"`
+	History []PlanPptxJSTurn `json:"history,omitempty"`
+}
+
+type PlanPptxJSResult struct {
+	Summary              string                  `json:"summary"`
+	Source               string                  `json:"source"`
+	Confidence           string                  `json:"confidence,omitempty"`
+	RequiresConfirmation bool                    `json:"requires_confirmation,omitempty"`
+	Confirmation         *PlanPptxJSConfirmation `json:"confirmation,omitempty"`
+	Warnings             []string                `json:"warnings,omitempty"`
+}
+
+type PlanPptxJSConfirmation struct {
+	Title     string   `json:"title,omitempty"`
+	Message   string   `json:"message,omitempty"`
+	Target    string   `json:"target,omitempty"`
+	Changes   []string `json:"changes,omitempty"`
+	Preserved []string `json:"preserved,omitempty"`
+}
+
+func (c *Client) PlanPptxJS(ctx context.Context, input PlanPptxJSInput) (PlanPptxJSResult, error) {
+	params := map[string]any{"prompt": strings.TrimSpace(input.Prompt), "context": input.Context}
+	if len(input.History) > 0 {
+		params["history"] = input.History
+	}
+	if params["prompt"] == "" {
+		return PlanPptxJSResult{}, errors.New("bridge: pptx planner prompt is empty")
+	}
+	raw, err := c.requestWithTimeout(ctx, "pptx/plan-js", params, c.options.PptistPlanEditTimeout)
+	if err != nil {
+		return PlanPptxJSResult{}, err
+	}
+	var result PlanPptxJSResult
+	if err := decodeJSON(raw, &result); err != nil {
+		return PlanPptxJSResult{}, fmt.Errorf("bridge: decode pptx/plan-js: %w", err)
+	}
+	if strings.TrimSpace(result.Source) == "" {
+		return PlanPptxJSResult{}, errors.New("bridge: pptx planner returned empty source")
+	}
+	return result, nil
+}
+
 type PlanPptistEditInput struct {
 	Tool               string               `json:"tool,omitempty"`
 	Prompt             string               `json:"prompt"`
