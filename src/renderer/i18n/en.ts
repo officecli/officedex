@@ -62,6 +62,7 @@ export const en: Record<string, string> = {
   "home.catalogSourceRequired": "Add the supplier Excel workbook before starting catalog cleanup.",
   "home.supportedFiles": "Excel, CSV, PPT, Word, PDF, and images",
   "home.analyze": "Analyze",
+  "home.startTask": "Start creating",
   "home.analysis.eyebrow": "Task understanding",
   "home.analysis.title": "Confirm the task scope",
   "home.analysis.notStarted": "Execution has not started",

@@ -30,7 +30,6 @@ function renderHome(overrides: Partial<React.ComponentProps<typeof HomeScreen>> 
     onRemoveFile: vi.fn(),
     onPickTaskFile: vi.fn(),
     onPickTaskDirectory: vi.fn(),
-    onAnalyzeTask: vi.fn(async (input) => ({ ...input, kind: "generate" as const, documentType: "pptx" as const, nextStep: "plan" as const })),
     onStartTask: vi.fn(),
     onOpenTask: vi.fn(),
     onRetryTask: vi.fn(),
@@ -76,17 +75,13 @@ describe("HomeScreen", () => {
     const props = renderHome();
     fireEvent.click(screen.getByRole("button", { name: "Brand Product Launch" }));
     expect(screen.getByRole("textbox", { name: "Describe the result you want" })).toHaveValue("Create a brand product launch covering the product story, key benefits, visual direction, and go-to-market plan.");
-    expect(props.onAnalyzeTask).not.toHaveBeenCalled();
     expect(props.onStartTask).not.toHaveBeenCalled();
   });
 
-  it("shows a task review before starting from the result prompt", async () => {
+  it("starts directly and leaves progressive review to the production stage", async () => {
     const props = renderHome();
     fireEvent.change(screen.getByRole("textbox", { name: "Describe the result you want" }), { target: { value: "Clean this supplier catalog" } });
     fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
-    expect(await screen.findByRole("heading", { name: "Confirm the task scope" })).toBeTruthy();
-    expect(props.onStartTask).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Create execution plan" }));
     await waitFor(() => expect(props.onStartTask).toHaveBeenCalledWith({ prompt: "Clean this supplier catalog", documentType: "pptx" }));
   });
 
@@ -95,7 +90,6 @@ describe("HomeScreen", () => {
     const onStartTask = vi.fn(() => new Promise<void>((resolve) => { resolveStart = resolve; }));
     renderHome({
       onStartTask,
-      onAnalyzeTask: vi.fn(async (input) => ({ ...input, kind: "generate" as const, documentType: "pptx" as const, nextStep: "execute" as const })),
     });
     fireEvent.change(screen.getByRole("textbox", { name: "Describe the result you want" }), { target: { value: "Create a launch deck" } });
     fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
@@ -112,9 +106,8 @@ describe("HomeScreen", () => {
     renderHome({ onStartTask });
     fireEvent.change(screen.getByRole("textbox", { name: "Describe the result you want" }), { target: { value: "Create a launch deck" } });
     fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
-    fireEvent.click(await screen.findByRole("button", { name: /Create execution plan|Confirm and start/ }));
     expect(await screen.findByRole("status")).toHaveTextContent("Starting");
-    expect(screen.getByRole("button", { name: /Create execution plan|Confirm and start/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Start creating" })).toBeDisabled();
     resolveStart();
     await waitFor(() => expect(onStartTask).toHaveBeenCalledTimes(1));
   });
@@ -123,15 +116,13 @@ describe("HomeScreen", () => {
     const onPickTaskFile = vi.fn(async () => "/tmp/supplier.xlsx");
     const props = renderHome({
       onPickTaskFile,
-      onAnalyzeTask: vi.fn(async (input) => ({ ...input, kind: "catalog_cleanup" as const, documentType: "xlsx" as const, nextStep: "configure" as const })),
     });
     fireEvent.click(screen.getByRole("button", { name: "Add reference" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: /^Reference file/ }));
     expect(await screen.findByText("supplier.xlsx")).toBeTruthy();
     fireEvent.change(screen.getByRole("textbox", { name: "Describe the result you want" }), { target: { value: "Clean for Shopify import" } });
     fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
-    expect(await screen.findByText("XLSX workbook")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Configure task" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
     await waitFor(() => expect(props.onStartTask).toHaveBeenCalledWith({
       prompt: "Clean for Shopify import",
       sourceFile: "/tmp/supplier.xlsx",
@@ -140,7 +131,7 @@ describe("HomeScreen", () => {
   });
 
   it("keeps the intake in place when analysis needs more input", async () => {
-    renderHome({ onAnalyzeTask: vi.fn(async () => { throw new Error("Add the source workbook first"); }) });
+    renderHome({ onStartTask: vi.fn(async () => { throw new Error("Add the source workbook first"); }) });
     fireEvent.change(screen.getByRole("textbox", { name: "Describe the result you want" }), { target: { value: "Clean for Shopify import" } });
     fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Add the source workbook first");

@@ -61,6 +61,7 @@ export const zh: Record<string, string> = {
   "home.catalogSourceRequired": "请先添加需要清洗的供应商 Excel 工作簿。",
   "home.supportedFiles": "支持 Excel、CSV、PPT、Word、PDF 和图片",
   "home.analyze": "开始分析",
+  "home.startTask": "开始制作",
   "home.analysis.eyebrow": "任务理解",
   "home.analysis.title": "请确认任务范围",
   "home.analysis.notStarted": "尚未开始执行",

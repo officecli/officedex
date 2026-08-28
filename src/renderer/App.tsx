@@ -834,33 +834,6 @@ function OfficeDexApp() {
     return selected || undefined;
   }, []);
 
-  function analyzeTaskFromHome(input: HomeTaskIntake): HomeTaskAnalysis {
-    const fallback = isGenerateDocumentType(input.documentType)
-      ? input.documentType
-      : isGenerateDocumentType(persistedSettings.defaults.documentType)
-        ? persistedSettings.defaults.documentType
-        : "pptx";
-    const route = inferHomeTaskRoute(input, fallback);
-    if (route.kind === "needs_source") {
-      throw new Error(t("home.catalogSourceRequired"));
-    }
-    return {
-      prompt: input.prompt.trim(),
-      sourceFile: route.sourceFile,
-      referenceDirectory: input.referenceDirectory,
-      documentType: route.documentType,
-      kind: route.kind,
-      nextStep: route.kind === "catalog_cleanup"
-        ? "configure"
-        // Keep the intake review as an explicit progressive-disclosure step.
-        // The Home screen owns the transition into the live Stage after the
-        // user confirms the inferred deliverable; bypassing it makes the
-        // submit action appear to do nothing while the task starts in the
-        // background.
-        : "plan",
-    };
-  }
-
   async function startTaskFromHome(input: HomeTaskIntake) {
     const fallback = isGenerateDocumentType(input.documentType)
       ? input.documentType
@@ -912,6 +885,14 @@ function OfficeDexApp() {
       enableImages: persistedSettings.defaults.enableImages,
       imageQuality: persistedSettings.defaults.imageQuality,
     });
+  }
+
+  async function analyzeTaskFromHome(input: HomeTaskIntake): Promise<HomeTaskAnalysis> {
+    const route = inferHomeTaskRoute(input, "pptx");
+    if (route.kind === "needs_source") {
+      throw new Error("Add the supplier Excel workbook before starting catalog cleanup.");
+    }
+    return { ...input, documentType: route.documentType, kind: route.kind === "catalog_cleanup" ? "catalog_cleanup" : "generate", nextStep: route.kind === "catalog_cleanup" ? "configure" : "plan" };
   }
 
   const selectHomeWorkspace = useCallback(async (workspaceId: string) => {
@@ -1971,6 +1952,8 @@ function OfficeDexApp() {
             onSteerTask={steerPptxTask}
             onResumeTask={resumePptxTask}
             onCancelTask={async (task) => { await officecli.cancel(task.id); }}
+            onAnalyzeTask={analyzeTaskFromHome}
+            onStartTask={startTaskFromHome}
             productionTaskId={stageFirstTaskId}
             productionEditor={previewGrant && previewArtifact?.taskId === stageFirstTaskId ? {
               previewToken: previewGrant.token,
@@ -1990,8 +1973,6 @@ function OfficeDexApp() {
             onSelectWorkspace={selectHomeWorkspace}
             onSelectAllWorkspaces={selectAllHomeFiles}
             onAddWorkspace={addWorkspace}
-            onAnalyzeTask={analyzeTaskFromHome}
-            onStartTask={startTaskFromHome}
             onOpenTask={openTaskFromHome}
             onRetryRecentFiles={() => void refreshRecentFiles(homeWorkspaceId)}
           />

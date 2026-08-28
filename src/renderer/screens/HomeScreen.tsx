@@ -43,7 +43,8 @@ export interface HomeScreenProps {
   onSelectWorkspace?: (workspaceId: string) => void | Promise<void>;
   onSelectAllWorkspaces?: () => void;
   onAddWorkspace?: () => void;
-  onAnalyzeTask?: (input: HomeTaskIntake) => HomeTaskAnalysis | Promise<HomeTaskAnalysis>;
+  /** @deprecated Intake analysis was removed; kept for source compatibility with older callers. */
+  onAnalyzeTask?: (input: HomeTaskIntake) => unknown;
   onStartTask?: (input: HomeTaskIntake) => void | Promise<void>;
   onOpenTask?: (taskId: string) => void;
   onRetryTask?: (task: DesktopTask) => void;
@@ -108,8 +109,6 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
   const [sourceFile, setSourceFile] = useState<string>();
   const [referenceDirectory, setReferenceDirectory] = useState<string>();
   const [intakeError, setIntakeError] = useState<string>();
-  const [analyzing, setAnalyzing] = useState(false);
-  const [analysis, setAnalysis] = useState<HomeTaskAnalysis>();
   const [starting, setStarting] = useState(false);
   const [startingPrompt, setStartingPrompt] = useState<string>();
   const [dropActive, setDropActive] = useState(false);
@@ -132,6 +131,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
   // something to greet the user with every time they open the app.
   const liveTasks = useMemo(() => attentionTasks
     .filter((task) => task.status === "starting" || task.status === "running"
+      || task.status === "question" || task.status === "plan_review"
       || (task.status === "failed" && isRecentFailure(task)))
     .filter((task) => !activeWorkspaceId || task.workspaceId === activeWorkspaceId)
     .filter((task) => !dismissedTaskIds.includes(task.id))
@@ -217,7 +217,6 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
     } else {
       setReferenceDirectory(path);
     }
-    setAnalysis(undefined);
     setIntakeError(undefined);
     setDropActive(false);
     toast.success(t("home.dropAttached", { name }));
@@ -236,13 +235,15 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
     setDropActive(false);
   };
 
-  const startAnalyzedTask = async (next: HomeTaskAnalysis) => {
-    if (!onStartTask || starting) return;
+  const startTask = async () => {
+    if (starting) return;
+    const value = prompt.trim();
+    if (!value) return;
     setIntakeError(undefined);
-    setStartingPrompt(next.prompt);
+    setStartingPrompt(value);
     setStarting(true);
     try {
-      await onStartTask({ prompt: next.prompt, sourceFile: next.sourceFile, referenceDirectory: next.referenceDirectory, documentType: next.documentType });
+      await onStartTask({ prompt: value, sourceFile, referenceDirectory, documentType: sourceFile ? docTypeFromPath(sourceFile) as HomeDocumentType : selectedDocumentType });
     } catch (error) {
       setIntakeError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -251,42 +252,10 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
     }
   };
 
-  const analyzeTask = async () => {
-    const value = prompt.trim();
-    if (!value || !onAnalyzeTask || analyzing) return;
-    setIntakeError(undefined);
-    setAnalyzing(true);
-    try {
-      const next = await onAnalyzeTask({ prompt: value, sourceFile, referenceDirectory, documentType: selectedDocumentType });
-      if (next.nextStep === "execute") {
-        // Clear, low-risk generation requests go straight to the stage. Keep
-        // the full review card only for tasks that genuinely need setup or a
-        // plan approval.
-        setAnalysis(undefined);
-        void startAnalyzedTask(next);
-      } else {
-        setAnalysis(next);
-      }
-    } catch (error) {
-      setIntakeError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setAnalyzing(false);
-    }
-  };
-
   const submitTask = (event: FormEvent) => {
     event.preventDefault();
-    void analyzeTask();
-  };
-
-  const confirmTask = async () => {
-    if (!analysis || !onStartTask || starting) return;
-    await startAnalyzedTask(analysis);
-  };
-
-  const invalidateAnalysis = () => {
-    setAnalysis(undefined);
     setIntakeError(undefined);
+    void startTask();
   };
 
   const pickTaskFile = async () => {
@@ -296,7 +265,6 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
       const selected = await onPickTaskFile();
       if (selected) {
         setSourceFile(selected);
-        setAnalysis(undefined);
       }
     } catch (error) {
       setIntakeError(error instanceof Error ? error.message : String(error));
@@ -310,7 +278,6 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
       const selected = await onPickTaskDirectory();
       if (selected) {
         setReferenceDirectory(selected);
-        setAnalysis(undefined);
       }
     } catch (error) {
       setIntakeError(error instanceof Error ? error.message : String(error));
@@ -536,9 +503,9 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
           value={prompt}
           onChange={(event) => {
             setPrompt(event.target.value);
-            invalidateAnalysis();
+            setIntakeError(undefined);
           }}
-          onSubmit={() => void analyzeTask()}
+          onSubmit={() => void startTask()}
         />
         {sourceFile || referenceDirectory ? (
           <div className="home-intake__references" aria-label={t("home.references")}>
@@ -548,7 +515,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
                 <span title={sourceFile}>{fileNameFromPath(sourceFile)}</span>
                 <Button variant="ghost-normal" size="small" ariaLabel={t("home.removeAttachedFile")} icon={<CloseOutlined />} onClick={() => {
                   setSourceFile(undefined);
-                  invalidateAnalysis();
+                  setIntakeError(undefined);
                 }} />
               </div>
             ) : null}
@@ -558,7 +525,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
                 <span title={referenceDirectory}>{fileNameFromPath(referenceDirectory)}</span>
                 <Button variant="ghost-normal" size="small" ariaLabel={t("home.removeAttachedDirectory")} icon={<CloseOutlined />} onClick={() => {
                   setReferenceDirectory(undefined);
-                  invalidateAnalysis();
+                  setIntakeError(undefined);
                 }} />
               </div>
             ) : null}
@@ -589,7 +556,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
                 aria-pressed={selectedDocumentType === category.type}
                 onClick={() => {
                   setSelectedDocumentType(category.type);
-                  invalidateAnalysis();
+                  setIntakeError(undefined);
                 }}
               >
                 {selectedDocumentType === category.type ? <DocTypeIcon type={category.type} /> : null}
@@ -597,7 +564,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
               </button>
             ))}
           </div>
-          <Button htmlType="submit" variant="primary" icon={<ArrowUpOutlined />} loading={analyzing} disabled={!prompt.trim()}>{t("home.analyze")}</Button>
+          <Button htmlType="submit" variant="primary" icon={<ArrowUpOutlined />} loading={starting} disabled={!prompt.trim()}>{t("home.startTask")}</Button>
         </div>
       </form>
 
@@ -607,31 +574,6 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
           <span>{t("home.starting")}</span>
           <span className="home-starting__prompt">{startingPrompt}</span>
         </div>
-      ) : null}
-
-      {analysis ? (
-        <section className="home-analysis" aria-labelledby="home-analysis-title">
-          <div className="home-analysis__header">
-            <div>
-              <p>{t("home.analysis.eyebrow")}</p>
-              <h2 id="home-analysis-title">{t("home.analysis.title")}</h2>
-            </div>
-            <span>
-              {starting ? `${t("tasks.status.starting")}…` : t("home.analysis.notStarted")}
-            </span>
-          </div>
-          <p className="home-analysis__description">{t(`home.analysis.description.${analysis.nextStep}`)}</p>
-          <dl className="home-analysis__details">
-            <div><dt>{t("home.analysis.goal")}</dt><dd>{analysis.prompt}</dd></div>
-            <div><dt>{t("home.analysis.deliverable")}</dt><dd>{homeDeliverableLabel(analysis.documentType, t)}</dd></div>
-            <div><dt>{t("home.analysis.source")}</dt><dd>{[analysis.sourceFile && fileNameFromPath(analysis.sourceFile), analysis.referenceDirectory && fileNameFromPath(analysis.referenceDirectory)].filter(Boolean).join(" · ") || t("home.analysis.noSource")}</dd></div>
-            <div><dt>{t("home.analysis.credit")}</dt><dd>{t("home.analysis.creditUnavailable")}</dd></div>
-          </dl>
-          <div className="home-analysis__actions">
-            <Button variant="ghost-normal" onClick={invalidateAnalysis}>{t("home.analysis.edit")}</Button>
-            <Button variant="primary" icon={<RightOutlined />} loading={starting} onClick={() => void confirmTask()}>{t(analysis.nextStep === "configure" ? "home.analysis.configureJob" : analysis.nextStep === "plan" ? "home.analysis.createPlan" : "home.analysis.start")}</Button>
-          </div>
-        </section>
       ) : null}
 
       {liveTasks.length > 0 ? (
@@ -672,7 +614,6 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
                 title={description}
                 onClick={() => {
                   setPrompt(description);
-                  invalidateAnalysis();
                 }}
               >
                 <span className="home-template-card__preview" aria-hidden="true">
@@ -900,14 +841,4 @@ function formatOpenedAt(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
-function homeDeliverableLabel(documentType: DocumentType, t: ReturnType<typeof useT>) {
-  const key = documentType === "pptx" ? "home.analysis.output.pptx"
-    : documentType === "docx" ? "home.analysis.output.docx"
-      : documentType === "xlsx" ? "home.analysis.output.xlsx"
-        : documentType === "report" ? "home.analysis.output.report"
-          : documentType === "gif" ? "home.analysis.output.gif"
-            : "home.analysis.output.img";
-  return t(key);
 }
