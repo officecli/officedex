@@ -43,8 +43,6 @@ export interface HomeScreenProps {
   onSelectWorkspace?: (workspaceId: string) => void | Promise<void>;
   onSelectAllWorkspaces?: () => void;
   onAddWorkspace?: () => void;
-  /** @deprecated Intake analysis was removed; kept for source compatibility with older callers. */
-  onAnalyzeTask?: (input: HomeTaskIntake) => unknown;
   onStartTask?: (input: HomeTaskIntake) => void | Promise<void>;
   onOpenTask?: (taskId: string) => void;
   onRetryTask?: (task: DesktopTask) => void;
@@ -98,7 +96,7 @@ const HOME_TEMPLATES: HomeTemplate[] = [
   { id: "budget", type: "xlsx", icon: "account_balance_wallet", minutes: 2 },
 ];
 
-export function HomeScreen({ files, attentionTasks = [], loading, error, activeWorkspaceId, workspaces = [], onOpenFile, onRemoveFile, onPickTaskFile, onPickTaskDirectory, droppedTaskPaths, onSelectWorkspace, onSelectAllWorkspaces, onAddWorkspace, onAnalyzeTask, onStartTask, onOpenTask, onRetryTask, onSteerTask, onResumeTask, onCancelTask, productionTaskId, productionEditor, onOpenTasks, onRetryRecentFiles }: HomeScreenProps) {
+export function HomeScreen({ files, attentionTasks = [], loading, error, activeWorkspaceId, workspaces = [], onOpenFile, onRemoveFile, onPickTaskFile, onPickTaskDirectory, droppedTaskPaths, onSelectWorkspace, onSelectAllWorkspaces, onAddWorkspace, onStartTask, onOpenTask, onRetryTask, onSteerTask, onResumeTask, onCancelTask, productionTaskId, productionEditor, onOpenTasks, onRetryRecentFiles }: HomeScreenProps) {
   const t = useT();
   const homeScreenRef = useRef<HTMLElement>(null);
   const pointerFieldRef = useRef<HTMLCanvasElement>(null);
