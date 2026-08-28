@@ -1265,6 +1265,14 @@ function OfficeDexApp() {
       void openInlinePreview(task.artifact);
       return;
     }
+    // Keep active PPTX production on the home stage so its live status/events
+    // remain visible. Opening it through the legacy conversation would lose
+    // the production-stage context and make the task appear idle.
+    if (task?.documentType === "pptx") {
+      setSelectedTaskID({ kind: "task", id: taskId });
+      setActiveNav("home");
+      return;
+    }
     selectTask(taskId);
   }, [openInlinePreview, selectTask, state.tasks]);
 
