@@ -159,6 +159,13 @@ export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState 
     stages,
     activeStageId,
   };
+  if (event.type === "task.progress" && (previous.status === "plan_review" || previous.status === "question")) {
+    const step = stringPayload(event, "step");
+    const progressStatus = stringPayload(event, "status");
+    if (progressStatus === "waiting_input" || step === "plan_confirm" || step === "question") {
+      nextTask.status = previous.status;
+    }
+  }
   if (event.type === "task.progress") {
     nextTask.lastProgressAt = Date.now();
     nextTask.stalledSince = undefined;
