@@ -126,7 +126,7 @@ export async function selectDocumentType(page: Page, documentType: DocumentType)
 }
 
 export async function openNewGeneration(page: Page): Promise<void> {
-  const prompt = page.getByPlaceholder(/Enter what you want to generate/i);
+  const prompt = page.getByRole("textbox", { name: /describe the result|what you want to generate/i }).first();
   if (await prompt.isVisible().catch(() => false)) {
     return;
   }
@@ -134,12 +134,15 @@ export async function openNewGeneration(page: Page): Promise<void> {
   if (await expandSidebar.isVisible().catch(() => false)) {
     await expandSidebar.click({ force: true });
   }
-  await page.getByRole("button", { name: /New chat/i }).first().click({ force: true, timeout: 60_000 });
+  const newChat = page.getByRole("button", { name: /New chat/i }).first();
+  if (await newChat.isVisible().catch(() => false)) await newChat.click({ force: true, timeout: 60_000 });
   await expect(prompt).toBeVisible({ timeout: 60_000 });
 }
 
 async function clickAntRadioButton(page: Page, label: string): Promise<void> {
-  await page.locator("label.ant-radio-button-wrapper").filter({ hasText: new RegExp(`^${escapeRegExp(label)}$`, "i") }).first().click();
+  const ant = page.locator("label.ant-radio-button-wrapper").filter({ hasText: new RegExp(`^${escapeRegExp(label)}$`, "i") }).first();
+  if (await ant.isVisible().catch(() => false)) { await ant.click(); return; }
+  await page.getByRole("button", { name: new RegExp(`^${escapeRegExp(label)}$`, "i") }).first().click();
 }
 
 function escapeRegExp(value: string): string {
@@ -159,8 +162,12 @@ export async function submitGeneration(page: Page, input: {
     await page.getByRole("button", { name: /Attach source file/i }).click();
     await expect(page.getByText(input.sourceFile.split(/[\\/]/).pop() ?? input.sourceFile)).toBeVisible();
   }
-  await page.getByPlaceholder(/Enter what you want to generate/i).fill(input.prompt);
-  await page.locator(".fluid-command-footer button").filter({ hasText: /Generate/i }).last().click();
+  const prompt = page.getByRole("textbox", { name: /describe the result|what you want to generate/i }).first();
+  await prompt.fill(input.prompt);
+  const start = page.getByRole("button", { name: /Start creating|Analyze|Generate|Create/i }).last();
+  await start.click();
+  const planButton = page.getByRole("button", { name: /Create execution plan|Confirm and start/i });
+  if (await planButton.isVisible().catch(() => false)) await planButton.click();
 }
 
 export async function waitForCompletedArtifact(page: Page, documentType: DocumentType): Promise<{ taskId: string; artifactPath: string; fileSize: number }> {
