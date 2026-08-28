@@ -83,11 +83,27 @@ describe("HomeScreen", () => {
   it("shows a task review before starting from the result prompt", async () => {
     const props = renderHome();
     fireEvent.change(screen.getByRole("textbox", { name: "Describe the result you want" }), { target: { value: "Clean this supplier catalog" } });
-    fireEvent.click(screen.getByRole("button", { name: "Analyze" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
     expect(await screen.findByRole("heading", { name: "Confirm the task scope" })).toBeTruthy();
     expect(props.onStartTask).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Create execution plan" }));
     await waitFor(() => expect(props.onStartTask).toHaveBeenCalledWith({ prompt: "Clean this supplier catalog", documentType: "pptx" }));
+  });
+
+  it("starts a clear generation request without showing the full review card", async () => {
+    let resolveStart!: () => void;
+    const onStartTask = vi.fn(() => new Promise<void>((resolve) => { resolveStart = resolve; }));
+    renderHome({
+      onStartTask,
+      onAnalyzeTask: vi.fn(async (input) => ({ ...input, kind: "generate" as const, documentType: "pptx" as const, nextStep: "execute" as const })),
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Describe the result you want" }), { target: { value: "Create a launch deck" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Starting production");
+    expect(screen.queryByRole("heading", { name: "Confirm the task scope" })).toBeNull();
+    expect(onStartTask).toHaveBeenCalledWith({ prompt: "Create a launch deck", documentType: "pptx" });
+    resolveStart();
+    await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
   });
 
   it("shows immediate starting feedback while the task request is in flight", async () => {
@@ -95,7 +111,7 @@ describe("HomeScreen", () => {
     const onStartTask = vi.fn(() => new Promise<void>((resolve) => { resolveStart = resolve; }));
     renderHome({ onStartTask });
     fireEvent.change(screen.getByRole("textbox", { name: "Describe the result you want" }), { target: { value: "Create a launch deck" } });
-    fireEvent.click(screen.getByRole("button", { name: "Analyze" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
     fireEvent.click(await screen.findByRole("button", { name: /Create execution plan|Confirm and start/ }));
     expect(await screen.findByRole("status")).toHaveTextContent("Starting");
     expect(screen.getByRole("button", { name: /Create execution plan|Confirm and start/ })).toBeDisabled();
@@ -113,7 +129,7 @@ describe("HomeScreen", () => {
     fireEvent.click(await screen.findByRole("menuitem", { name: /^Reference file/ }));
     expect(await screen.findByText("supplier.xlsx")).toBeTruthy();
     fireEvent.change(screen.getByRole("textbox", { name: "Describe the result you want" }), { target: { value: "Clean for Shopify import" } });
-    fireEvent.click(screen.getByRole("button", { name: "Analyze" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
     expect(await screen.findByText("XLSX workbook")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Configure task" }));
     await waitFor(() => expect(props.onStartTask).toHaveBeenCalledWith({
@@ -126,7 +142,7 @@ describe("HomeScreen", () => {
   it("keeps the intake in place when analysis needs more input", async () => {
     renderHome({ onAnalyzeTask: vi.fn(async () => { throw new Error("Add the source workbook first"); }) });
     fireEvent.change(screen.getByRole("textbox", { name: "Describe the result you want" }), { target: { value: "Clean for Shopify import" } });
-    fireEvent.click(screen.getByRole("button", { name: "Analyze" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Add the source workbook first");
     expect(screen.getByDisplayValue("Clean for Shopify import")).toBeTruthy();
   });

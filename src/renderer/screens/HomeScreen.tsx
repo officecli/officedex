@@ -102,6 +102,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
   const [analyzing, setAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<HomeTaskAnalysis>();
   const [starting, setStarting] = useState(false);
+  const [startingPrompt, setStartingPrompt] = useState<string>();
   const [dropActive, setDropActive] = useState(false);
   const [dismissedTaskIds, setDismissedTaskIds] = useState<string[]>([]);
   const [runtimePromptCount, setRuntimePromptCount] = useState(0);
@@ -225,6 +226,21 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
     setDropActive(false);
   };
 
+  const startAnalyzedTask = async (next: HomeTaskAnalysis) => {
+    if (!onStartTask || starting) return;
+    setIntakeError(undefined);
+    setStartingPrompt(next.prompt);
+    setStarting(true);
+    try {
+      await onStartTask({ prompt: next.prompt, sourceFile: next.sourceFile, referenceDirectory: next.referenceDirectory, documentType: next.documentType });
+    } catch (error) {
+      setIntakeError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setStarting(false);
+      setStartingPrompt(undefined);
+    }
+  };
+
   const analyzeTask = async () => {
     const value = prompt.trim();
     if (!value || !onAnalyzeTask || analyzing) return;
@@ -232,7 +248,15 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
     setAnalyzing(true);
     try {
       const next = await onAnalyzeTask({ prompt: value, sourceFile, referenceDirectory, documentType: selectedDocumentType });
-      setAnalysis(next);
+      if (next.nextStep === "execute") {
+        // Clear, low-risk generation requests go straight to the stage. Keep
+        // the full review card only for tasks that genuinely need setup or a
+        // plan approval.
+        setAnalysis(undefined);
+        void startAnalyzedTask(next);
+      } else {
+        setAnalysis(next);
+      }
     } catch (error) {
       setIntakeError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -247,15 +271,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
 
   const confirmTask = async () => {
     if (!analysis || !onStartTask || starting) return;
-    setIntakeError(undefined);
-    setStarting(true);
-    try {
-      await onStartTask({ prompt: analysis.prompt, sourceFile: analysis.sourceFile, referenceDirectory: analysis.referenceDirectory, documentType: analysis.documentType });
-    } catch (error) {
-      setIntakeError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setStarting(false);
-    }
+    await startAnalyzedTask(analysis);
   };
 
   const invalidateAnalysis = () => {
@@ -540,6 +556,14 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
         </div>
       </form>
 
+      {startingPrompt ? (
+        <div className="home-starting" role="status" aria-live="polite">
+          <Loading />
+          <span>{t("home.starting")}</span>
+          <span className="home-starting__prompt">{startingPrompt}</span>
+        </div>
+      ) : null}
+
       {analysis ? (
         <section className="home-analysis" aria-labelledby="home-analysis-title">
           <div className="home-analysis__header">
@@ -547,7 +571,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
               <p>{t("home.analysis.eyebrow")}</p>
               <h2 id="home-analysis-title">{t("home.analysis.title")}</h2>
             </div>
-            <span role={starting ? "status" : undefined} aria-live={starting ? "polite" : undefined}>
+            <span>
               {starting ? `${t("tasks.status.starting")}…` : t("home.analysis.notStarted")}
             </span>
           </div>
