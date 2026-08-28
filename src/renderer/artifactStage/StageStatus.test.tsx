@@ -8,7 +8,9 @@ afterEach(() => cleanup());
 describe("ArtifactStageStatusBanner", () => {
   it.each([
     ["pending", "Pending"],
+    ["starting", "Starting"],
     ["running", "In progress"],
+    ["paused", "Paused"],
     ["completed", "Completed"],
     ["failed", "Failed"],
     ["cancelled", "Cancelled"],
@@ -33,6 +35,21 @@ describe("ArtifactStageStatusBanner", () => {
     render(<ArtifactStageStatusBanner status="failed" onRetry={onRetry} />);
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("retry unavailable");
+  });
+
+  it("exposes pause, resume, and continue actions for lifecycle states", async () => {
+    const onPause = vi.fn(async () => undefined);
+    const onResume = vi.fn(async () => undefined);
+    const onContinue = vi.fn(async () => undefined);
+    const { rerender } = render(<ArtifactStageStatusBanner status="running" onPause={onPause} />);
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    await waitFor(() => expect(onPause).toHaveBeenCalledOnce());
+    rerender(<ArtifactStageStatusBanner status="paused" onResume={onResume} />);
+    fireEvent.click(screen.getByRole("button", { name: "Resume" }));
+    await waitFor(() => expect(onResume).toHaveBeenCalledOnce());
+    rerender(<ArtifactStageStatusBanner status="completed" onContinue={onContinue} />);
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(onContinue).toHaveBeenCalledOnce());
   });
 });
 

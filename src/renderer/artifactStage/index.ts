@@ -17,6 +17,8 @@ export {
   type ArtifactStageStatus,
   type ArtifactStageStatusProps,
 } from "./StageStatus";
+export { StageIntentBar, type StageIntentBarProps } from "../presentation/StageIntentBar";
+export { LiveSteeringBar, type LiveSteeringBarProps } from "../presentation/LiveSteeringBar";
 export {
   ArtifactStageExecutionUnsupportedError,
   resolveArtifactStageExecutionRoute,
