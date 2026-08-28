@@ -381,17 +381,24 @@ function CreditMeter({ info, hasCustomProvider }: { info?: CreditInfo; hasCustom
   );
 
   if (!loading && value.displayMode === "balance") {
-    const balance = Math.max(0, Math.floor(value.total));
+    const balance = Math.floor(value.total);
+    const outstanding = balance < 0;
     const balanceText = hidden
       ? MASKED_VALUE
-      : t("shell.creditMeter.valueWithUnit", { value: formatNumber(balance) });
+      : outstanding
+        ? t("shell.creditMeter.outstandingValue", { value: formatNumber(Math.abs(balance)) })
+        : t("shell.creditMeter.valueWithUnit", { value: formatNumber(balance) });
     const tooltipBody = hidden
       ? t("shell.creditMeter.hiddenTooltip")
+      : outstanding
+        ? value.planLabel
+          ? t("shell.creditMeter.outstandingTooltipWithPlan", { balance: formatNumber(Math.abs(balance)), plan: value.planLabel })
+          : t("shell.creditMeter.outstandingTooltip", { balance: formatNumber(Math.abs(balance)) })
       : value.planLabel
         ? t("shell.creditMeter.tooltipBalanceWithPlan", { balance: formatNumber(balance), plan: value.planLabel })
         : t("shell.creditMeter.tooltipBalance", { balance: formatNumber(balance) });
     return (
-      <div className="credit-meter credit-meter-balance" role="group" aria-label={t("shell.creditMeter.aria", { tooltip: tooltipBody })}>
+      <div className={`credit-meter credit-meter-balance${outstanding ? " credit-meter-outstanding" : ""}`} role="group" aria-label={t("shell.creditMeter.aria", { tooltip: tooltipBody })}>
         <div className="credit-meter-row">
           <Tooltip title={tooltipBody} placement="top">
             <div className="credit-meter-row-main">

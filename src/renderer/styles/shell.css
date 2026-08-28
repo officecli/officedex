@@ -496,6 +496,11 @@
   text-overflow: ellipsis;
 }
 
+.credit-meter-outstanding .credit-meter-icon,
+.credit-meter-outstanding .credit-meter-balance-value {
+  color: var(--n-warning);
+}
+
 .credit-meter-total {
   font-weight: 500;
   color: var(--n-steel);

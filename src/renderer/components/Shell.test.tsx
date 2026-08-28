@@ -177,6 +177,44 @@ describe("Shell sidebar layout", () => {
     expect(meter.compareDocumentPosition(profile) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it("shows postpaid debt without disabling the new-chat action", () => {
+    const onNewGeneration = vi.fn();
+    render(
+      <LocaleProvider value="en">
+        {createElement(
+          Shell as unknown as ComponentType<Record<string, unknown>>,
+          {
+            activeNav: "tasks",
+            failed: false,
+            tasks: [],
+            selectedTaskId: undefined,
+            workspaces: [],
+            chats: [],
+            credit: { displayMode: "balance", used: 0, total: -12, planLabel: "Official" },
+            onNavChange: vi.fn(),
+            onNewGeneration,
+            onSelectWorkspace: vi.fn(),
+            onAddWorkspace: vi.fn(),
+            onRevealWorkspace: vi.fn(),
+            onRemoveWorkspace: vi.fn(),
+            onSelectTask: vi.fn(),
+            onDeleteTask: vi.fn(),
+            onDeleteConversation: vi.fn(),
+          },
+          <div />,
+        )}
+      </LocaleProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /show credit balance/i }));
+    expect(screen.getByText("12 credits due")).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: /Outstanding balance: 12 credits/ })).toBeInTheDocument();
+    const newChat = screen.getByRole("button", { name: /new chat/i });
+    expect(newChat).toBeEnabled();
+    fireEvent.click(newChat);
+    expect(onNewGeneration).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps sidebar footer navigation controls vertically centered", () => {
     const css = readFileSync("src/renderer/styles/shell.css", "utf8");
     const settingsRule = css.match(/\.sidebar-settings\s*\{[^}]*\}/s)?.[0] ?? "";

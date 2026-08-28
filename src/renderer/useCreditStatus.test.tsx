@@ -94,6 +94,11 @@ describe("deriveCreditInfo", () => {
     expect(credit).toEqual({ displayMode: "balance", used: 0, total: 12, planLabel: "Official credits" });
   });
 
+  it("preserves a negative hosted balance as postpaid debt", () => {
+    const credit = deriveCreditInfo(makeStatus({ mode: "logged_in", hostedCreditBalance: -12, planName: "Pro", accessMode: "hosted" }));
+    expect(credit).toEqual({ displayMode: "balance", used: 0, total: -12, planLabel: "Pro" });
+  });
+
   it("anonymous with no anonymous-credits line → 0/0 fallback with 'Credits' label", () => {
     const credit = deriveCreditInfo(
       makeStatus({
