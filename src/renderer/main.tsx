@@ -5,8 +5,6 @@ import { App } from "./App";
 import { PerfPptistCompletedScreen } from "./screens/PerfPptistCompletedScreen";
 import { LocaleProvider } from "./i18n";
 import { mountTheme } from "./ui/theme";
-// component styles for the design system; mountTheme() only injects the --ui-* variables
-import "weboffice-design/css";
 import "./ui/design-tokens.css";
 import "./styles/tokens.css";
 import "./styles/shell.css";
@@ -15,6 +13,7 @@ import "./styles/settings.css";
 import "./styles/tasks.css";
 import "./styles/onboarding-update.css";
 import "./styles/vibe-officing-demo.css";
+import "./styles/beautiful.css";
 
 const PreviewApp = lazy(() => import("./preview/PreviewApp"));
 
@@ -26,15 +25,13 @@ function isPptistPerfRoute() {
   return import.meta.env.DEV && new URLSearchParams(window.location.search).get("perf") === "pptist-completed";
 }
 
-// weboffice-design ships its palette as runtime-injected CSS variables; mount it
-// before the first render so `ui/design-tokens.css` can resolve `--od-*`.
+// Mount the local Beautiful UI semantic palette before the first render so
+// `ui/design-tokens.css` can resolve the app-level `--od-*` aliases.
 mountTheme();
 
-// Rendered without StrictMode: weboffice-design 0.18.0's layered components do
-// not survive its double mount — the dropdown layer is torn down by the first
-// effect cleanup and never re-registers, so every Select stops opening in dev.
-// src/renderer/ui/strictmode-select.test.tsx pins this down and will fail once
-// upstream fixes it, which is the signal to restore StrictMode.
+// Keep the existing non-StrictMode shell while bridge and embedded editor
+// lifecycles are still being normalized; local primitives themselves are
+// StrictMode-safe (see strictmode-select.test.tsx).
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <>
     <LocaleProvider>

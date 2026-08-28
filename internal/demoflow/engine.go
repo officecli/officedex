@@ -7,6 +7,19 @@ import (
 	"officedex/internal/types"
 )
 
+type DemoSession struct {
+	Auth    string `json:"auth"`
+	Credits int    `json:"credits"`
+}
+
+func SessionOverride() (types.WhoAmIResult, types.CreditStatus, DemoSession, bool) {
+	return sessionOverride()
+}
+
+func UpdateSession(auth string, credits int) (DemoSession, error) {
+	return updateSession(auth, credits)
+}
+
 type GenerateResult struct {
 	TaskID    string
 	SessionID string

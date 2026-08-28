@@ -791,6 +791,31 @@ func (c *Client) PlanPptistEdit(ctx context.Context, input PlanPptistEditInput) 
 	return result, nil
 }
 
+// PlanPptxJS converts a natural-language edit request plus the live
+// learnof/pptx context into PowerPoint.run source. It plans only; execution is
+// owned by the isolated editor Worker.
+func (c *Client) PlanPptxJS(ctx context.Context, input PlanPptxJSInput) (PlanPptxJSResult, error) {
+	params := map[string]any{
+		"prompt":  strings.TrimSpace(input.Prompt),
+		"context": input.Context,
+	}
+	if len(input.History) > 0 {
+		params["history"] = append([]PlanPptxJSTurn(nil), input.History...)
+	}
+	raw, err := c.requestWithTimeout(ctx, "pptx/plan-js", params, c.options.PptistPlanEditTimeout)
+	if err != nil {
+		return PlanPptxJSResult{}, err
+	}
+	var result PlanPptxJSResult
+	if err := decodeJSON(raw, &result); err != nil {
+		return PlanPptxJSResult{}, fmt.Errorf("bridge: decode pptx/plan-js: %w", err)
+	}
+	if strings.TrimSpace(result.Source) == "" {
+		return PlanPptxJSResult{}, errors.New("bridge: PPTX JS planner returned empty source")
+	}
+	return result, nil
+}
+
 const (
 	pptistPlannerMaxStringBytes = 4096
 	pptistPlannerMaxListItems   = 80
@@ -982,6 +1007,34 @@ type PlanPptistEditResult struct {
 	RequiresConfirmation bool                        `json:"requires_confirmation,omitempty"`
 	Confirmation         *PlanPptistEditConfirmation `json:"confirmation,omitempty"`
 	Warnings             []string                    `json:"warnings,omitempty"`
+}
+
+type PlanPptxJSTurn struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type PlanPptxJSInput struct {
+	Prompt  string           `json:"prompt"`
+	Context any              `json:"context"`
+	History []PlanPptxJSTurn `json:"history,omitempty"`
+}
+
+type PlanPptxJSConfirmation struct {
+	Title     string   `json:"title,omitempty"`
+	Message   string   `json:"message,omitempty"`
+	Target    string   `json:"target,omitempty"`
+	Changes   []string `json:"changes,omitempty"`
+	Preserved []string `json:"preserved,omitempty"`
+}
+
+type PlanPptxJSResult struct {
+	Summary              string                  `json:"summary"`
+	Source               string                  `json:"source"`
+	Confidence           string                  `json:"confidence,omitempty"`
+	RequiresConfirmation bool                    `json:"requires_confirmation,omitempty"`
+	Confirmation         *PlanPptxJSConfirmation `json:"confirmation,omitempty"`
+	Warnings             []string                `json:"warnings,omitempty"`
 }
 
 // ExportPptxFromTree renders a vibe tree into a PPTX file via pptxgenjs on the

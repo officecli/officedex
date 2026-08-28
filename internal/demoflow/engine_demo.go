@@ -23,9 +23,10 @@ import (
 )
 
 type demoImplementation struct {
-	recorder EventRecorder
-	delay    func(context.Context) <-chan time.Time
-	newID    func() string
+	recorder        EventRecorder
+	delay           func(context.Context) <-chan time.Time
+	newID           func() string
+	acceptAnyPrompt bool
 
 	mu    sync.Mutex
 	tasks map[string]*demoTask
@@ -34,6 +35,7 @@ type demoImplementation struct {
 type demoTask struct {
 	ID              string
 	Prompt          string
+	DocumentType    types.DocumentType
 	QuestionID      string
 	ConfirmationIdx int
 	Done            bool
@@ -63,10 +65,11 @@ func newImplementation(options Options) implementation {
 		newID = func() string { return "demo-" + uuid.NewString() }
 	}
 	return &demoImplementation{
-		recorder: options.Recorder,
-		delay:    delay,
-		newID:    newID,
-		tasks:    map[string]*demoTask{},
+		recorder:        options.Recorder,
+		delay:           delay,
+		newID:           newID,
+		acceptAnyPrompt: os.Getenv("OFFICEDEX_DEMO_ACCEPT_ANY_PROMPT") == "1" && os.Getenv("OFFICEDEX_E2E_HOST") == "1",
+		tasks:           map[string]*demoTask{},
 	}
 }
 
@@ -76,7 +79,8 @@ func (d *demoImplementation) TryGenerate(ctx context.Context, input types.Genera
 	if prompt == "" {
 		prompt = topic
 	}
-	if input.DocumentType != types.DocPPTX || input.GenerationMode != "plan" || (topic != magicPrompt && prompt != magicPrompt) {
+	magicMatch := input.DocumentType == types.DocPPTX && input.GenerationMode == "plan" && (topic == magicPrompt || prompt == magicPrompt)
+	if !magicMatch && !d.acceptAnyPrompt {
 		return GenerateResult{}, false, nil
 	}
 	if d.recorder == nil {
@@ -84,21 +88,36 @@ func (d *demoImplementation) TryGenerate(ctx context.Context, input types.Genera
 	}
 
 	taskID := d.newID()
-	task := &demoTask{ID: taskID, Prompt: prompt}
+	if prompt == "" {
+		prompt = topic
+	}
+	if prompt == "" {
+		prompt = "Local OfficeDex demo"
+	}
+	task := &demoTask{ID: taskID, Prompt: prompt, DocumentType: input.DocumentType}
 	d.mu.Lock()
 	d.tasks[taskID] = task
 	d.mu.Unlock()
 
-	if err := d.emit(ctx, taskID, "task.started", map[string]any{
-		"document_type": "pptx",
-		"topic":         prompt,
-		"stage_id":      demoStages[0].ID,
-		"stage_label":   demoStages[0].Label,
-	}); err != nil {
+	startedPayload := map[string]any{
+		"document_type":   string(input.DocumentType),
+		"topic":           prompt,
+		"credit_mode":     "local_demo",
+		"credits_charged": 0,
+	}
+	if magicMatch {
+		startedPayload["stage_id"] = demoStages[0].ID
+		startedPayload["stage_label"] = demoStages[0].Label
+	}
+	if err := d.emit(ctx, taskID, "task.started", startedPayload); err != nil {
 		return GenerateResult{}, true, err
 	}
 
-	go d.advanceToQuestion(context.Background(), taskID)
+	if magicMatch {
+		go d.advanceToQuestion(context.Background(), taskID)
+	} else {
+		go d.completeLocalTask(context.Background(), taskID)
+	}
 	return GenerateResult{TaskID: taskID, SessionID: taskID, Status: "running"}, true, nil
 }
 
@@ -495,8 +514,78 @@ func (d *demoImplementation) emit(ctx context.Context, taskID, typ string, paylo
 	})
 }
 
+func (d *demoImplementation) completeLocalTask(ctx context.Context, taskID string) {
+	<-d.delay(ctx)
+	d.mu.Lock()
+	task := d.tasks[taskID]
+	d.mu.Unlock()
+	if task == nil {
+		return
+	}
+	path, err := d.writeLocalDemoArtifact(taskID, task.DocumentType, task.Prompt)
+	if err != nil {
+		_ = d.emit(ctx, taskID, "task.failed", map[string]any{
+			"message":         "Demo Mode: failed to write local artifact: " + err.Error(),
+			"credit_mode":     "local_demo",
+			"credits_charged": 0,
+		})
+		return
+	}
+	artifact := types.Artifact{
+		TaskID:       taskID,
+		FilePath:     path,
+		FileName:     filepath.Base(path),
+		DocumentType: string(task.DocumentType),
+	}
+	if err := d.recorder.AllowArtifact(artifact); err != nil {
+		_ = d.emit(ctx, taskID, "task.failed", map[string]any{"message": err.Error(), "credit_mode": "local_demo", "credits_charged": 0})
+		return
+	}
+	if err := d.recorder.RecordArtifact(artifact); err != nil {
+		_ = d.emit(ctx, taskID, "task.failed", map[string]any{"message": err.Error(), "credit_mode": "local_demo", "credits_charged": 0})
+		return
+	}
+	d.mu.Lock()
+	if current := d.tasks[taskID]; current != nil {
+		current.Done = true
+	}
+	d.mu.Unlock()
+	_ = d.emit(ctx, taskID, "task.completed", map[string]any{
+		"status":          "completed",
+		"credit_mode":     "local_demo",
+		"credits_charged": 0,
+		"result": map[string]any{
+			"file_path":     path,
+			"file_name":     filepath.Base(path),
+			"document_type": string(task.DocumentType),
+		},
+	})
+}
+
+func (d *demoImplementation) writeLocalDemoArtifact(taskID string, documentType types.DocumentType, prompt string) (string, error) {
+	root := strings.TrimSpace(d.recorder.WorkspaceDir())
+	if root == "" {
+		root = d.recorder.UserDataDir()
+	}
+	dir := filepath.Join(root, "demo-flow", taskID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	fileName, err := writeLocalArtifact(dir, documentType, prompt)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, fileName), nil
+}
+
 func (d *demoImplementation) completeTask(ctx context.Context, taskID string) error {
-	path, err := d.writeDemoPptx(taskID)
+	d.mu.Lock()
+	task := d.tasks[taskID]
+	d.mu.Unlock()
+	if task == nil {
+		return errors.New("Demo Mode: unknown demo task")
+	}
+	path, err := d.writeDemoPptx(taskID, task.Prompt)
 	if err != nil {
 		_ = d.emit(ctx, taskID, "task.failed", map[string]any{"message": "Demo Mode: failed to write deterministic PPTX: " + err.Error()})
 		return err
@@ -529,7 +618,7 @@ func (d *demoImplementation) completeTask(ctx context.Context, taskID string) er
 	})
 }
 
-func (d *demoImplementation) writeDemoPptx(taskID string) (string, error) {
+func (d *demoImplementation) writeDemoPptx(taskID, prompt string) (string, error) {
 	root := strings.TrimSpace(d.recorder.WorkspaceDir())
 	if root == "" {
 		root = d.recorder.UserDataDir()
@@ -538,8 +627,8 @@ func (d *demoImplementation) writeDemoPptx(taskID string) (string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	path := filepath.Join(dir, "launch-strategy-demo.pptx")
-	return path, writePptx(path)
+	path := filepath.Join(dir, promptPptxFileName(prompt))
+	return path, writePromptPptx(path, prompt)
 }
 
 func MagicPromptForTests() string { return magicPrompt }

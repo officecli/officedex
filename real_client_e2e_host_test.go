@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -20,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"officedex/internal/demoflow"
 	"officedex/internal/settings"
 	"officedex/internal/types"
 )
@@ -81,7 +83,7 @@ func TestRealOfficeDexClientBridgeHost(t *testing.T) {
 	}
 
 	host := newRealClientE2EHost(t, app, reportServer)
-	server := httptest.NewServer(host.routes())
+	server := newRealClientE2EServer(t, host.routes())
 	defer server.Close()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -90,6 +92,30 @@ func TestRealOfficeDexClientBridgeHost(t *testing.T) {
 
 	fmt.Printf("OFFICEDEX_REAL_E2E_ENDPOINT=%s\n", server.URL)
 	<-ctx.Done()
+}
+
+func newRealClientE2EServer(t *testing.T, handler http.Handler) *httptest.Server {
+	t.Helper()
+	address := strings.TrimSpace(os.Getenv("OFFICEDEX_E2E_BRIDGE_ADDR"))
+	if address == "" {
+		return httptest.NewServer(handler)
+	}
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		t.Fatalf("parse OFFICEDEX_E2E_BRIDGE_ADDR: %v", err)
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || !ip.IsLoopback() {
+		t.Fatalf("OFFICEDEX_E2E_BRIDGE_ADDR must use a loopback IP: %s", address)
+	}
+	listener, err := net.Listen("tcp", address)
+	if err != nil {
+		t.Fatalf("listen on OFFICEDEX_E2E_BRIDGE_ADDR: %v", err)
+	}
+	server := httptest.NewUnstartedServer(handler)
+	server.Listener = listener
+	server.Start()
+	return server
 }
 
 func newRealClientE2EHost(t *testing.T, app *App, reportServer *realReportServer) *realClientE2EHost {
@@ -138,7 +164,9 @@ func (h *realClientE2EHost) routes() http.Handler {
 	mux.HandleFunc("/control/preview-tokens", h.handlePreviewTokens)
 	mux.HandleFunc("/control/artifacts/latest", h.handleLatestArtifactControl)
 	mux.HandleFunc("/control/auth-event", h.handleAuthEvent)
+	mux.HandleFunc("/control/demo/session", h.handleDemoSessionControl)
 	mux.HandleFunc("/control/seed/failed-task", h.handleSeedFailedTask)
+	mux.HandleFunc("/control/seed/completed-pptx-artifact", h.handleSeedCompletedPptxArtifact)
 	mux.HandleFunc("/control/task/", h.handleTaskControl)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -266,6 +294,12 @@ func (h *realClientE2EHost) call(method string, raw json.RawMessage) (any, error
 			return nil, err
 		}
 		return h.app.ModifyPptistDeck(input)
+	case "PlanPptxJS":
+		var input PlanPptxJSInput
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return h.app.PlanPptxJS(input)
 	case "PreviewArtifact":
 		var artifact types.Artifact
 		if err := decodeRealClientInput(raw, &artifact); err != nil {
@@ -329,6 +363,13 @@ func (h *realClientE2EHost) call(method string, raw json.RawMessage) (any, error
 			if err := decodeRealClientInput(raw, &input); err != nil {
 				return nil, err
 			}
+		}
+		// The browser dev bridge normally behaves like the app rather than an
+		// auth fixture. Keep the deterministic loopback URL for isolated E2E
+		// tests, but allow devctl's non-demo browser instance to start the
+		// user's real OfficeCLI login flow.
+		if os.Getenv("OFFICEDEX_DEV_BROWSER_REAL_LOGIN") == "1" {
+			return h.app.Login(input)
 		}
 		url := "http://127.0.0.1/oauth/local-real-e2e"
 		event := types.AuthEvent{Type: types.AuthEventURL, URL: url}
@@ -553,6 +594,34 @@ func (h *realClientE2EHost) handleRecordControl(w http.ResponseWriter, r *http.R
 	writeRealClientJSON(w, map[string]any{"ok": true})
 }
 
+func (h *realClientE2EHost) handleDemoSessionControl(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		whoami, credit, session, ok := demoflow.SessionOverride()
+		if !ok {
+			writeRealClientError(w, http.StatusNotFound, "demo session is not enabled")
+			return
+		}
+		writeRealClientJSON(w, map[string]any{"session": session, "whoami": whoami, "credit": credit})
+	case http.MethodPost:
+		var input demoflow.DemoSession
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			writeRealClientError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		session, err := demoflow.UpdateSession(input.Auth, input.Credits)
+		if err != nil {
+			writeRealClientError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		whoami, credit, _, _ := demoflow.SessionOverride()
+		h.broadcast("auth", types.AuthEvent{Type: types.AuthEventSuccess})
+		writeRealClientJSON(w, map[string]any{"session": session, "whoami": whoami, "credit": credit})
+	default:
+		writeRealClientError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
 func (h *realClientE2EHost) handleReport(w http.ResponseWriter, r *http.Request) {
 	writeRealClientJSON(w, h.snapshotReport())
 }
@@ -621,6 +690,81 @@ func (h *realClientE2EHost) handleSeedFailedTask(w http.ResponseWriter, r *http.
 	}
 	h.broadcast("bridge", event)
 	writeRealClientJSON(w, map[string]any{"taskId": input.TaskID})
+}
+
+// handleSeedCompletedPptxArtifact copies an existing .pptx into the app
+// workspace and records a completed task whose artifact points at it, so a
+// browser E2E can open a real, pre-existing deck in the PPTX workbench without
+// running a generation first.
+func (h *realClientE2EHost) handleSeedCompletedPptxArtifact(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeRealClientError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var input struct {
+		TaskID     string `json:"taskId"`
+		SourcePath string `json:"sourcePath"`
+		FileName   string `json:"fileName"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeRealClientError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if input.SourcePath == "" || strings.ToLower(filepath.Ext(input.SourcePath)) != ".pptx" {
+		writeRealClientError(w, http.StatusBadRequest, "sourcePath must point at a .pptx file")
+		return
+	}
+	if input.TaskID == "" {
+		input.TaskID = "real-e2e-seeded-pptx-" + fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	if input.FileName == "" {
+		input.FileName = filepath.Base(input.SourcePath)
+	}
+	data, err := os.ReadFile(input.SourcePath)
+	if err != nil {
+		writeRealClientError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	dest := filepath.Join(h.app.workspaceDir, input.FileName)
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		writeRealClientError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := writeFileAtomic(dest, data, 0o644); err != nil {
+		writeRealClientError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	artifact := types.Artifact{TaskID: input.TaskID, FilePath: dest, FileName: input.FileName, DocumentType: "pptx"}
+	if err := h.app.previewReg.AllowArtifact(artifact); err != nil {
+		writeRealClientError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	event := types.BridgeEvent{
+		EventID:   "real-client-e2e-seeded-pptx-" + input.TaskID,
+		TaskID:    input.TaskID,
+		RequestID: "req-real-client-e2e-seeded-pptx",
+		Type:      "task.completed",
+		TS:        time.Now().UTC().Format(time.RFC3339Nano),
+		Payload: map[string]any{
+			"document_type":   "pptx",
+			"topic":           strings.TrimSuffix(input.FileName, ".pptx"),
+			"prompt":          "Open " + input.FileName,
+			"request_id":      "req-real-client-e2e-seeded-pptx",
+			"credits_charged": 0,
+			"credit_mode":     "hosted",
+			"result": map[string]any{
+				"file_path":     dest,
+				"file_name":     input.FileName,
+				"document_type": "pptx",
+			},
+		},
+	}
+	if err := h.app.localStore.RecordEvent(event); err != nil {
+		writeRealClientError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	h.broadcast("bridge", event)
+	writeRealClientJSON(w, map[string]any{"taskId": input.TaskID, "path": dest, "size": len(data)})
 }
 
 func (h *realClientE2EHost) handleTaskControl(w http.ResponseWriter, r *http.Request) {

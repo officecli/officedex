@@ -1,13 +1,21 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
 import { PreviewToolbar } from "../components/PreviewToolbar";
 import { LoadingState } from "../components/LoadingState";
 import { ErrorState } from "../components/ErrorState";
 import { officecli } from "../../bridge";
+import { useT } from "../../i18n";
+import { resolveLearnofPptxBaseUrl } from "./learnof/learnofPptxUrl";
+
+const LearnofPptxWorkbench = lazy(() => import("./learnof/LearnofPptxWorkbench"));
 
 interface PptxViewerProps {
   previewToken: string;
   fileName: string;
   documentType?: string;
+  /** Absolute path of the artifact. When present, AI edits are saved back to it. */
+  filePath?: string;
+  /** Overrides the learnof/pptx editor URL (tests); `null` forces the read-only fallback. */
+  editorBaseUrl?: string | null;
 }
 
 // PPTist is a standalone Vue SPA vendored under public/pptist. We embed it in `?mode=embed`,
@@ -19,7 +27,71 @@ const PPTIST_URL = "/pptist/index.html?mode=embed";
 const MSG_PREVIEW_READY = "pptist:embed-ready"; // PPTist → host: container booted, send the file
 const MSG_LOAD_PPTX = "pptist:load-pptx"; // host → PPTist: here is the .pptx ArrayBuffer
 
-export default function PptxViewer({ previewToken, fileName, documentType }: PptxViewerProps) {
+/**
+ * PPTX viewer. When a learnof/pptx editor URL is configured the deck opens in
+ * the editable MOP workbench with the AI conversation panel; otherwise (or when
+ * the editor fails to start) it falls back to the read-only PPTist preview and
+ * says so explicitly — no AI entry point is shown in that case.
+ */
+export default function PptxViewer({ previewToken, fileName, documentType, filePath, editorBaseUrl }: PptxViewerProps) {
+  const t = useT();
+  const resolvedEditorUrl = useMemo(
+    () => (editorBaseUrl === undefined ? resolveLearnofPptxBaseUrl() : editorBaseUrl),
+    [editorBaseUrl],
+  );
+  const [fallbackReason, setFallbackReason] = useState<string | null>(null);
+  const [useReadOnly, setUseReadOnly] = useState(false);
+
+  const openExternal = () => {
+    officecli.openPath(filePath || fileName).catch(() => {});
+  };
+
+  const showWorkbench = Boolean(resolvedEditorUrl) && !useReadOnly;
+
+  return (
+    <>
+      <PreviewToolbar fileName={fileName} documentType={documentType} onOpenExternal={openExternal} />
+      {showWorkbench && resolvedEditorUrl ? (
+        <div className="pptx-deck-layout pptx-deck-layout-workbench">
+          <Suspense fallback={<LoadingState fileName={fileName} />}>
+            <LearnofPptxWorkbench
+              editorBaseUrl={resolvedEditorUrl}
+              previewToken={previewToken}
+              fileName={fileName}
+              filePath={filePath}
+              onEditorUnavailable={(reason) => setFallbackReason(reason)}
+            />
+          </Suspense>
+          {fallbackReason && (
+            <div className="pptx-workbench-fallback-bar" role="note">
+              <span>{t("pptx.workbench.editorUnavailableTitle")}</span>
+              <button type="button" onClick={() => setUseReadOnly(true)}>
+                {t("pptx.workbench.readOnlyFallback")}
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          <div className="pptx-readonly-notice" role="note">
+            {t("pptx.workbench.editorUnavailableTitle")} — {t("pptx.workbench.editorUnavailableNotConfigured")}
+          </div>
+          <PptistReadOnlyViewer previewToken={previewToken} fileName={fileName} onOpenExternal={openExternal} />
+        </>
+      )}
+    </>
+  );
+}
+
+function PptistReadOnlyViewer({
+  previewToken,
+  fileName,
+  onOpenExternal,
+}: {
+  previewToken: string;
+  fileName: string;
+  onOpenExternal: () => void;
+}) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -85,30 +157,23 @@ export default function PptxViewer({ previewToken, fileName, documentType }: Ppt
     return () => window.removeEventListener("message", onMessage);
   }, [sendToPptist]);
 
-  const openExternal = () => {
-    officecli.openPath(fileName).catch(() => {});
-  };
-
   if (error) {
-    return <ErrorState message={error} fileName={fileName} onRetry={load} onOpenExternal={openExternal} />;
+    return <ErrorState message={error} fileName={fileName} onRetry={load} onOpenExternal={onOpenExternal} />;
   }
 
   return (
-    <>
-      <PreviewToolbar fileName={fileName} documentType={documentType} onOpenExternal={openExternal} />
-      <div className="pptx-deck-layout">
-        <div className="pptx-embed-stage">
-          {loading && <LoadingState fileName={fileName} />}
-          <iframe
-            ref={iframeRef}
-            src={PPTIST_URL}
-            className="pptx-embed-frame"
-            title={fileName}
-            // PPTist renders images/media from blob: URLs and runs its own scripts.
-            sandbox="allow-same-origin allow-scripts"
-          />
-        </div>
+    <div className="pptx-deck-layout">
+      <div className="pptx-embed-stage">
+        {loading && <LoadingState fileName={fileName} />}
+        <iframe
+          ref={iframeRef}
+          src={PPTIST_URL}
+          className="pptx-embed-frame"
+          title={fileName}
+          // PPTist renders images/media from blob: URLs and runs its own scripts.
+          sandbox="allow-same-origin allow-scripts"
+        />
       </div>
-    </>
+    </div>
   );
 }

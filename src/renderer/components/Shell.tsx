@@ -123,6 +123,7 @@ export function Shell({
   onSelectTask,
   onDeleteConversation,
 }: ShellProps) {
+  const shellRef = useRef<HTMLDivElement>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [sidebarPreview, setSidebarPreview] = useState(false);
   const [sidebarToggleTooltipOpen, setSidebarToggleTooltipOpen] = useState(false);
@@ -131,6 +132,42 @@ export function Shell({
   const sidebarToggleLabel = collapsed ? t("shell.sidebar.expand") : t("shell.sidebar.collapse");
   const SidebarToggleIcon = collapsed ? (sidebarPreview ? PanelLeftClose : PanelLeftOpen) : PanelLeft;
   const sidebarContentsCollapsed = collapsed && !sidebarPreview;
+
+  useEffect(() => {
+    const shell = shellRef.current;
+    if (!shell) return;
+
+    let frame = 0;
+    let nextX = 50;
+    let nextY = 50;
+
+    const paintPointer = () => {
+      frame = 0;
+      shell.style.setProperty("--dot-mouse-x", `${nextX}%`);
+      shell.style.setProperty("--dot-mouse-y", `${nextY}%`);
+      shell.style.setProperty("--dot-mouse-opacity", "1");
+    };
+
+    const onPointerMove = (event: PointerEvent) => {
+      const bounds = shell.getBoundingClientRect();
+      if (!bounds.width || !bounds.height) return;
+      nextX = Math.max(0, Math.min(100, ((event.clientX - bounds.left) / bounds.width) * 100));
+      nextY = Math.max(0, Math.min(100, ((event.clientY - bounds.top) / bounds.height) * 100));
+      if (!frame) frame = window.requestAnimationFrame(paintPointer);
+    };
+
+    const onPointerLeave = () => {
+      shell.style.setProperty("--dot-mouse-opacity", "0.72");
+    };
+
+    shell.addEventListener("pointermove", onPointerMove, { passive: true });
+    shell.addEventListener("pointerleave", onPointerLeave, { passive: true });
+    return () => {
+      shell.removeEventListener("pointermove", onPointerMove);
+      shell.removeEventListener("pointerleave", onPointerLeave);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, []);
 
   useEffect(() => {
     if (!autoCollapseSidebarKey) {
@@ -145,6 +182,7 @@ export function Shell({
 
   return (
     <div
+      ref={shellRef}
       className={`app-shell fluid-shell ${collapsed ? "sidebar-collapsed" : ""} ${sidebarPreview ? "sidebar-preview" : ""}`}
     >
       <div

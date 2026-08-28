@@ -4,9 +4,18 @@ package demoflow
 
 import (
 	"context"
+	"errors"
 
 	"officedex/internal/types"
 )
+
+func sessionOverride() (types.WhoAmIResult, types.CreditStatus, DemoSession, bool) {
+	return types.WhoAmIResult{}, types.CreditStatus{}, DemoSession{}, false
+}
+
+func updateSession(string, int) (DemoSession, error) {
+	return DemoSession{}, errors.New("demo session is unavailable outside the officedex_demo build")
+}
 
 type disabledImplementation struct{}
 

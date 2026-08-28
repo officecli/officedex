@@ -190,7 +190,7 @@ describe("App task flow", () => {
     await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
     expect(bridge.generate).toHaveBeenCalledWith(expect.objectContaining({
       prompt: "Generate a new quarterly review PPT",
-      generationMode: "plan",
+      generationMode: "fast",
     }));
     expect(bridge.generate).toHaveBeenCalledWith(expect.not.objectContaining({ runtimeMode: expect.anything() }));
   });
@@ -436,7 +436,7 @@ describe("App task flow", () => {
     fireEvent.click(screen.getAllByRole("button", { name: /New chat/ })[0]);
 
     expect(await screen.findByRole("heading", { name: /What should we work on/i })).toBeTruthy();
-    fireEvent.click(screen.getByRole("radio", { name: "DOCX" }));
+    fireEvent.click(screen.getByLabelText("DOCX"));
     fireEvent.change(screen.getByPlaceholderText(/Enter what you want to generate/), {
       target: { value: "Create a stuck DOCX" },
     });
@@ -452,8 +452,8 @@ describe("App task flow", () => {
       });
     });
 
-    expect(await screen.findByText("Writing plan...")).toBeTruthy();
-    expect(document.querySelector(".generation-loading-plan")).toBeTruthy();
+    expect(await screen.findByText("Generating DOCX...")).toBeTruthy();
+    expect(document.querySelector(".generation-loading-docx")).toBeTruthy();
     expect(screen.getAllByText("Create a stuck DOCX").length).toBeGreaterThan(0);
     expect(screen.queryByRole("heading", { name: /What should we work on/i })).toBeNull();
   });
@@ -484,7 +484,7 @@ describe("App task flow", () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: /What should we work on/i })).toBeTruthy();
-    fireEvent.click(screen.getByRole("radio", { name: "DOCX" }));
+    fireEvent.click(screen.getByLabelText("DOCX"));
     fireEvent.change(screen.getByPlaceholderText(/Enter what you want to generate/), {
       target: { value: "Create a stuck DOCX" },
     });
@@ -512,15 +512,15 @@ describe("App task flow", () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: /What should we work on/i })).toBeTruthy();
-    fireEvent.click(screen.getByRole("radio", { name: "DOCX" }));
+    fireEvent.click(screen.getByLabelText("DOCX"));
     fireEvent.change(screen.getByPlaceholderText(/Enter what you want to generate/), {
       target: { value: "Create a pending DOCX" },
     });
     fireEvent.click(screen.getByRole("button", { name: /Generate$/ }));
     await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
 
-    expect(await screen.findByText("Writing plan...")).toBeTruthy();
-    expect(document.querySelector(".generation-loading-plan")).toBeTruthy();
+    expect(await screen.findByText("Generating DOCX...")).toBeTruthy();
+    expect(document.querySelector(".generation-loading-docx")).toBeTruthy();
     expect(screen.getAllByText("Create a pending DOCX").length).toBeGreaterThan(0);
     expect(screen.queryByRole("heading", { name: /What should we work on/i })).toBeNull();
   });
@@ -729,7 +729,7 @@ describe("App task flow", () => {
     expect(await screen.findByRole("heading", { name: /What should we work on/i })).toBeTruthy();
     fireEvent.click(screen.getByLabelText("Image"));
     expect(await screen.findByText("Image ratio")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Attach reference images/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /Attach reference images/ })).toBeTruthy();
     const textarea = screen.getByPlaceholderText(/Enter what you want to generate/);
     firePasteWithFile(textarea, new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "ref-a.png", { type: "image/png" }));
     expect(await screen.findByText("pasted-1.png")).toBeTruthy();
@@ -758,55 +758,14 @@ describe("App task flow", () => {
     );
   });
 
-  it("preserves a report source workbook after switching to another conversation and submits it", async () => {
-    const bridge = installBridgeMock();
-    bridge.openFileDialog.mockResolvedValueOnce("/tmp/source.xlsx");
+  it("keeps Report out of the new-chat categories", async () => {
+    installBridgeMock();
     const { App } = await import("./App");
 
     render(<App />);
-
-    act(() => {
-      bridge.emit({
-        event_id: "event-previous-report",
-        task_id: "task-previous-report",
-        type: "task.completed",
-        payload: {
-          result: {
-            file_path: "/tmp/previous.docx",
-            file_name: "previous.docx",
-            document_type: "docx",
-          },
-        },
-      });
-    });
-    expect(await screen.findByText("Generation Complete")).toBeTruthy();
-
-    fireEvent.click(screen.getAllByRole("button", { name: /New chat/ })[0]);
     expect(await screen.findByRole("heading", { name: /What should we work on/i })).toBeTruthy();
-    fireEvent.click(screen.getByLabelText("Report"));
-    fireEvent.click(await screen.findByRole("button", { name: /Attach source file/ }));
-    await waitFor(() => expect(bridge.openFileDialog).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText("source.xlsx")).toBeTruthy();
-    fireEvent.change(screen.getByPlaceholderText(/Enter what you want to generate/), {
-      target: { value: "Analyze workbook trends" },
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /previous\.docx/ }));
-    expect(await screen.findByText("Generation Complete")).toBeTruthy();
-    fireEvent.click(screen.getAllByRole("button", { name: /New chat/ })[0]);
-
-    expect(await screen.findByText("source.xlsx")).toBeTruthy();
-    expect(screen.getByDisplayValue("Analyze workbook trends")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /Generate$/ }));
-
-    await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
-    expect(bridge.generate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        documentType: "report",
-        prompt: "Analyze workbook trends",
-        sourceFile: "/tmp/source.xlsx",
-      }),
-    );
+    expect(screen.queryByLabelText("Report")).toBeNull();
+    expect(screen.queryByText("Source workbook")).toBeNull();
   });
 
   it("clears the new generation draft after a successful submit", async () => {
@@ -1022,7 +981,7 @@ describe("App task flow", () => {
     fireEvent.click(screen.getByLabelText("Image"));
     expect(await screen.findByText("Image ratio")).toBeTruthy();
 
-    expect(screen.queryByRole("button", { name: /Attach reference images/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /Attach reference images/ })).toBeTruthy();
     const textarea = screen.getByPlaceholderText(/Enter what you want to generate/);
     firePasteWithFile(textarea, new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "ref-a.png", { type: "image/png" }));
     expect(await screen.findByText("pasted-1.png")).toBeTruthy();
@@ -1070,30 +1029,16 @@ describe("App task flow", () => {
     );
   });
 
-  it("shows GIF in new generation and submits fps", async () => {
-    const bridge = installBridgeMock();
+  it("keeps GIF out of the new-chat categories", async () => {
+    installBridgeMock();
     const { App } = await import("./App");
 
     render(<App />);
 
     await screen.findByRole("heading", { name: /What should we work on/i });
 
-    fireEvent.click(screen.getByRole("radio", { name: "GIF" }));
-    expect(await screen.findByText("GIF FPS")).toBeTruthy();
-    fireEvent.change(screen.getByPlaceholderText(/Enter what you want to generate/), {
-      target: { value: "Create a launch GIF" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /Generate$/ }));
-
-    await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
-    expect(bridge.generate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        documentType: "gif",
-        prompt: "Create a launch GIF",
-        fps: 16,
-      }),
-    );
-    expect(bridge.generate).toHaveBeenCalledWith(expect.not.objectContaining({ imageRatio: expect.anything() }));
+    expect(screen.queryByLabelText("GIF")).toBeNull();
+    expect(screen.queryByText("GIF FPS")).toBeNull();
   });
 
   it("does not include referenceImages when documentType is not Image", async () => {
@@ -1302,7 +1247,7 @@ describe("App task flow", () => {
     await screen.findByRole("heading", { name: /What should we work on/i });
     fireEvent.click(screen.getByLabelText("Image"));
     expect(await screen.findByText("Image ratio")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Attach reference images/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /Attach reference images/ })).toBeTruthy();
 
     const textarea = screen.getByPlaceholderText(/Enter what you want to generate/) as HTMLTextAreaElement;
     const pastedFile = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "screenshot.png", { type: "image/png" });
@@ -1695,6 +1640,7 @@ function installBridgeMock() {
 	    savePptx: vi.fn(async () => "/tmp/deck.pptx"),
 	    exportVibeTreePptx: vi.fn(async () => "/tmp/deck.pptx"),
 	    modifyPptistDeck: vi.fn(async () => ({ summary: "updated", ops: [] })),
+	    planPptxJS: vi.fn(async () => ({ summary: "updated", source: "return await PowerPoint.run(async () => ({}));" })),
 	    previewArtifact,
     readArtifactFile: vi.fn(async () => ({ data: new Uint8Array() })),
     readLocalImage: vi.fn(async () => ({ data: new Uint8Array(), mime: "image/png" })),

@@ -233,14 +233,30 @@ git clone <your-repo-url>
 cd officedex
 npm install
 
-# 2. Start dev mode (auto-prefetch OfficeCLI binary)
-npm run dev
+# 2. Start or reuse the isolated dev instance for this Git worktree
+./scripts/devctl ensure --scope worktree
 
 # 3. Type-check / unit tests / E2E
 npm run lint
 npx vitest run
 npm run test:e2e
 ```
+
+For concurrent AI/Codex sessions, keep the returned lease ID and release it at
+session end with `./scripts/devctl release --lease <id>`. See
+[`docs/local-development-coordinator.md`](docs/local-development-coordinator.md)
+for shared instances, runtime/worktree verification, logs, safe stop, GC, and
+rollback. `npm run dev` remains available for explicit single-process manual
+debugging and as an internal command, but is not the multi-session entrypoint.
+
+To test the renderer in a local browser while using the real Go/OfficeCLI
+bridge, run `./scripts/devctl ensure --scope worktree --browser`. It starts a
+separate loopback-only browser instance, enables Vite HMR, and opens the page.
+Use `--no-open` when a test runner will open the returned `web_url` itself.
+The assigned URL is stable for that worktree/mode across source changes and
+service or daemon restarts. If an external process takes a reserved port,
+devctl fails closed; use `devctl reallocate-ports --instance <id>` only when an
+intentional URL change is acceptable.
 
 In dev mode, OfficeDex resolves the CLI in this order:
 

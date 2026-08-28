@@ -359,8 +359,7 @@ async function confirmInitialIdeaNode(firstStoryBeatTitle = "Current State") {
 }
 
 describe("DialogueScreen state machine", () => {
-  it("shows a project picker headline for new chats and switches to no-project", async () => {
-    const onTargetChange = vi.fn();
+  it("shows project context without rendering the removed project picker", async () => {
     render(
       <DialogueScreen
         {...baseProps({
@@ -369,16 +368,13 @@ describe("DialogueScreen state machine", () => {
             { id: "ws-b", name: "officedex", path: "/tmp/officedex", active: false, conversations: [] },
           ],
           newChatTarget: { kind: "workspace", workspaceId: "ws-a" },
-          onNewChatTargetChange: onTargetChange,
         })}
       />,
     );
 
     expect(await screen.findByRole("heading", { name: /What should we work on in void-oversea/i })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /void-oversea/ }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: /Don't work in a project/ }));
-
-    expect(onTargetChange).toHaveBeenCalledWith({ kind: "none" });
+    expect(screen.queryByRole("button", { name: /void-oversea/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Don't work in a project/ })).toBeNull();
   });
 
   it("submits no-project chats without a workspaceId", async () => {
@@ -4505,6 +4501,24 @@ describe("DialogueScreen state machine", () => {
     expect(screen.getByRole("button", { name: /show in folder/i })).toBeTruthy();
   });
 
+  it("does not render a raw completed status token as assistant copy", () => {
+    const task: DesktopTask = {
+      id: "task-pptx-completed-token",
+      conversationId: "task-pptx-completed-token",
+      status: "completed",
+      events: [{ task_id: "task-pptx-completed-token", type: "task.completed", payload: { status: "completed" } }],
+      artifact: {
+        taskId: "task-pptx-completed-token",
+        filePath: "/tmp/qbr.pptx",
+        fileName: "qbr.pptx",
+        documentType: "pptx",
+      },
+    };
+    const { container } = render(<DialogueScreen {...baseProps()} tasks={[task]} />);
+    expect(container.querySelector(".message.ai-message.success > p")).toBeNull();
+    expect(screen.getAllByText("qbr.pptx").length).toBeGreaterThan(0);
+  });
+
   it("shows paid users that image watermarks can be disabled in Settings", () => {
     const task = makeCompletedImageTask({
       imageWatermark: { applied: true, paidEntitlement: true, canDisable: true },
@@ -4951,23 +4965,26 @@ describe("DialogueScreen state machine", () => {
     fireEvent.submit(screen.getByPlaceholderText(/Enter what you want to generate/i).closest("form")!);
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
-    expect(onSubmit.mock.calls[0][0]).toEqual(expect.objectContaining({ documentType: "pptx", prompt: "Build a deck", generationMode: "plan" }));
+    expect(onSubmit.mock.calls[0][0]).toEqual(expect.objectContaining({ documentType: "pptx", prompt: "Build a deck", generationMode: "fast" }));
     expect(onSubmit.mock.calls[0][0]).not.toHaveProperty("imageRatio");
   });
 
-  it("keeps the non-image new generation composer fixed to the bottom", () => {
+  it("places the only non-image generation composer in the home hero", () => {
+    render(<DialogueScreen {...baseProps()} newGenerationDraft={{ documentType: "pptx", topic: "", prompt: "" }} />);
+
     const css = readFileSync("src/renderer/styles/dialogue.css", "utf8");
     const startRule = css.match(/\.fluid-new-task:not\(\.image-template-workspace\)\s+\.fluid-start-card\s*\{[^}]*\}/s)?.[0] ?? "";
-    const footerRule = css.match(/\.fluid-new-task:not\(\.image-template-workspace\)\s+\.fluid-command-footer\s*\{[^}]*\}/s)?.[0] ?? "";
+    const heroRule = css.match(/\.fluid-hero-composer\s*\{[^}]*\}/s)?.[0] ?? "";
 
     expect(startRule).toContain("flex: 1 1 auto;");
-    expect(startRule).toContain("align-content: center;");
-    expect(footerRule).toContain("position: sticky;");
-    expect(footerRule).toContain("bottom: 0;");
-    expect(footerRule).toContain("flex: 0 0 auto;");
+    expect(startRule).toContain("align-content: start;");
+    expect(heroRule).toContain("width: min(880px, 100%);");
+    expect(document.querySelectorAll(".fluid-hero-composer textarea")).toHaveLength(1);
+    expect(document.querySelector(".fluid-new-task > .fluid-command-footer")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Deliver$/ })).toBeNull();
   });
 
-  it("keeps the non-image start content scrollable above the fixed composer on mobile", () => {
+  it("keeps the single-composer home scrollable on mobile", () => {
     const css = readFileSync("src/renderer/styles/dialogue.css", "utf8");
     const mobileStartRule = css.match(/@media \(max-width: 760px\)[\s\S]*?\.fluid-new-task:not\(\.image-template-workspace\)\s+\.fluid-start-card\s*\{[^}]*\}/s)?.[0] ?? "";
 
@@ -4975,27 +4992,26 @@ describe("DialogueScreen state machine", () => {
     expect(mobileStartRule).toContain("overflow-y: auto;");
   });
 
-  it("shows GIF in new generation and submits fps for GIF drafts", async () => {
+  it("hides GIF from the homepage and normalizes legacy GIF drafts to PPTX", async () => {
     const onSubmit = vi.fn(async (_values: GenerateInput) => undefined);
     render(<DialogueScreen {...baseProps({ onSubmit })} newGenerationDraft={{ documentType: "gif", topic: "", prompt: "", fps: 16 }} />);
 
-    expect(screen.getByText("GIF")).toBeTruthy();
-    expect(screen.getByText("GIF FPS")).toBeTruthy();
+    expect(screen.queryByText("GIF")).toBeNull();
+    expect(screen.queryByText("GIF FPS")).toBeNull();
     fireEvent.change(screen.getByPlaceholderText(/Enter what you want to generate/i), {
-      target: { value: "Make a launch animation" },
+      target: { value: "Build a launch deck" },
     });
     fireEvent.submit(screen.getByPlaceholderText(/Enter what you want to generate/i).closest("form")!);
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect(onSubmit.mock.calls[0][0]).toEqual(expect.objectContaining({
-      documentType: "gif",
-      prompt: "Make a launch animation",
-      fps: 16,
+      documentType: "pptx",
+      prompt: "Build a launch deck",
     }));
-    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty("imageRatio");
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty("fps");
   });
 
-  it("hides generation mode and submits plan generationMode without runtimeMode", async () => {
+  it("hides generation mode and submits direct generation without the legacy canvas mode", async () => {
     const onSubmit = vi.fn(async (_values: GenerateInput) => undefined);
     render(<DialogueScreen {...baseProps({ onSubmit })} newGenerationDraft={{ documentType: "docx", topic: "", prompt: "", generationMode: "fast" }} />);
 
@@ -5003,15 +5019,15 @@ describe("DialogueScreen state machine", () => {
     expect(screen.queryByRole("radio", { name: "Fast" })).toBeNull();
     expect(screen.queryByRole("radio", { name: "Plan" })).toBeNull();
     fireEvent.change(screen.getByPlaceholderText(/Enter what you want to generate/i), {
-      target: { value: "Write a plan-mode document" },
+      target: { value: "Write a direct-generation document" },
     });
     fireEvent.submit(screen.getByPlaceholderText(/Enter what you want to generate/i).closest("form")!);
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect(onSubmit.mock.calls[0][0]).toEqual(expect.objectContaining({
       documentType: "docx",
-      prompt: "Write a plan-mode document",
-      generationMode: "plan",
+      prompt: "Write a direct-generation document",
+      generationMode: "fast",
     }));
     expect(onSubmit.mock.calls[0][0]).not.toHaveProperty("runtimeMode");
   });
@@ -5047,18 +5063,22 @@ describe("DialogueScreen state machine", () => {
     expect(await screen.findByText(/No image templates are configured yet/i)).toBeTruthy();
   });
 
-  it("replaces the start presets with the image template list when Image is selected", async () => {
+  it("filters homepage image templates before explicitly opening the advanced image library", async () => {
     listImageTemplatesSpy.mockResolvedValueOnce([
       { id: 7, slug: "poster", title: "Poster", description: "Cinematic poster", promptPreset: "Template prompt", thumbnailUrl: "/api/image-templates/7/thumbnail", sortOrder: 10, enabled: true },
     ]);
     render(<DialogueScreen {...baseProps()} newGenerationDraft={{ documentType: "pptx", topic: "", prompt: "" }} />);
 
-    expect(screen.getByText("Quarterly Analysis Report")).toBeTruthy();
+    expect(screen.getByText("Weekly Business Review")).toBeTruthy();
     fireEvent.click(screen.getByLabelText("Image"));
 
+    expect(screen.getByText("Product Image Set")).toBeTruthy();
+    expect(screen.getByText("Product Launch Poster")).toBeTruthy();
+    expect(screen.queryByText("Weekly Business Review")).toBeNull();
+    expect(document.querySelector(".image-template-picker")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /Open image template library/i }));
     expect(await screen.findByText("Poster")).toBeTruthy();
-    expect(screen.queryByText("Quarterly Analysis Report")).toBeNull();
-    expect(screen.queryByText(/Choose a preset scenario/i)).toBeNull();
     expect(document.querySelectorAll(".image-template-picker")).toHaveLength(1);
     expect(document.querySelector(".fluid-start-card .image-template-picker")).toBeTruthy();
     expect(document.querySelector(".fluid-command-bar .image-template-picker")).toBeNull();
@@ -6056,17 +6076,18 @@ describe("Bottom continuation composer — acceptance criteria", () => {
 });
 
 describe("DialogueScreen solution catalog", () => {
-  it("offers scenario solutions with their output type and estimate", () => {
+  it("offers only the selected category templates with their type and estimate", () => {
     render(<DialogueScreen {...baseProps()} newGenerationDraft={{ documentType: "pptx", topic: "", prompt: "" }} />);
 
     expect(screen.getByText("Weekly Business Review")).toBeTruthy();
     expect(screen.getByText("Quarterly Business Review")).toBeTruthy();
-    expect(screen.getByText("Competitive One-pager")).toBeTruthy();
+    expect(screen.getByText("Project Kickoff Presentation")).toBeTruthy();
+    expect(screen.queryByText("Competitive One-pager")).toBeNull();
 
     const card = screen.getByText("Weekly Business Review").closest("button");
     expect(card).toBeTruthy();
-    expect(card?.querySelector(".fluid-prompt-meta")?.textContent).toContain("PPTX");
-    expect(card?.querySelector(".fluid-prompt-meta")?.textContent).toContain("2 min");
+    expect(card?.querySelector(".fluid-template-type")?.textContent).toContain("PPTX");
+    expect(card?.querySelector(".fluid-template-type")?.textContent).toContain("2 min");
   });
 
   it("enters the solution workflow with its document type and prompt prefilled", () => {
@@ -6079,6 +6100,7 @@ describe("DialogueScreen solution catalog", () => {
       />,
     );
 
+    fireEvent.click(screen.getByLabelText("DOCX"));
     fireEvent.click(screen.getByText("Competitive One-pager"));
 
     expect(onNewGenerationDraftChange).toHaveBeenCalledWith(
@@ -6088,23 +6110,23 @@ describe("DialogueScreen solution catalog", () => {
 });
 
 describe("DialogueScreen intent entry", () => {
-  it("separates one-line creation types from the scenario solutions", () => {
+  it("uses one filtered template grid instead of parallel creation and solution grids", () => {
     render(<DialogueScreen {...baseProps()} newGenerationDraft={{ documentType: "pptx", topic: "", prompt: "" }} />);
 
-    const creation = document.querySelector(".fluid-create-grid")!;
-    const scenarios = document.querySelector(".fluid-prompt-grid")!;
-    expect(within(creation as HTMLElement).getByText("Write a deck")).toBeTruthy();
-    expect(within(scenarios as HTMLElement).getByText("Weekly Business Review")).toBeTruthy();
+    expect(document.querySelectorAll(".fluid-template-grid")).toHaveLength(1);
+    expect(document.querySelector(".fluid-create-grid")).toBeNull();
+    expect(document.querySelector(".fluid-prompt-grid")).toBeNull();
+    expect(screen.getByText("Weekly Business Review")).toBeTruthy();
   });
 
-  it("states how often each solution has been run", () => {
+  it("does not present static run counts as live usage data", () => {
     render(<DialogueScreen {...baseProps()} newGenerationDraft={{ documentType: "pptx", topic: "", prompt: "" }} />);
 
     const card = screen.getByText("Weekly Business Review").closest("button");
-    expect(card?.querySelector(".fluid-prompt-meta")?.textContent).toMatch(/24/);
+    expect(card?.textContent).not.toMatch(/run|已运行/i);
   });
 
-  it("routes a typed intent into the solution it matches", () => {
+  it("routes a typed prompt while preserving the exact user text", () => {
     const onNewGenerationDraftChange = vi.fn();
     render(
       <DialogueScreen
@@ -6114,23 +6136,145 @@ describe("DialogueScreen intent entry", () => {
       />,
     );
 
-    fireEvent.change(screen.getByPlaceholderText(/describe what you want delivered/i), {
+    fireEvent.change(screen.getByPlaceholderText(/Enter what you want to generate/i), {
       target: { value: "put together a competitive one-pager" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /^Deliver$/ }));
 
     expect(onNewGenerationDraftChange).toHaveBeenCalledWith(
-      expect.objectContaining({ documentType: "docx", topic: "put together a competitive one-pager" }),
+      expect.objectContaining({ documentType: "docx", prompt: "put together a competitive one-pager" }),
     );
+    expect((screen.getByPlaceholderText(/Enter what you want to generate/i) as HTMLTextAreaElement).value)
+      .toBe("put together a competitive one-pager");
   });
 
-  it("offers example intents that fill the box", () => {
+  it("does not render the removed example intent shortcuts", () => {
     render(<DialogueScreen {...baseProps()} newGenerationDraft={{ documentType: "pptx", topic: "", prompt: "" }} />);
 
-    const example = document.querySelector(".fluid-intent-examples button")!;
-    fireEvent.click(example);
+    expect(document.querySelector(".fluid-intent-examples")).toBeNull();
+    expect(document.querySelector(".fluid-capabilities")).toBeNull();
+    expect(document.querySelector(".project-picker-secondary")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Build a project schedule spreadsheet" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Write a deck on AI industry trends" })).toBeNull();
+  });
 
-    expect((screen.getByPlaceholderText(/describe what you want delivered/i) as HTMLInputElement).value)
-      .toBe(example.textContent);
+  it("submits the freeform prompt from the single composer unchanged", async () => {
+    const onSubmit = vi.fn(async (_values: GenerateInput) => undefined);
+    render(<DialogueScreen {...baseProps({ onSubmit })} newGenerationDraft={{ documentType: "pptx", topic: "", prompt: "" }} />);
+
+    const prompt = screen.getByPlaceholderText(/Enter what you want to generate/i);
+    fireEvent.change(prompt, { target: { value: "Summarize the launch risks in six slides" } });
+    fireEvent.click(screen.getByRole("button", { name: /Generate$/ }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0]).toEqual(expect.objectContaining({
+      documentType: "pptx",
+      prompt: "Summarize the launch risks in six slides",
+    }));
+  });
+
+  it("keeps a manually selected output type when the prompt suggests another one", async () => {
+    const onSubmit = vi.fn(async (_values: GenerateInput) => undefined);
+    render(<DialogueScreen {...baseProps({ onSubmit })} newGenerationDraft={{ documentType: "pptx", topic: "", prompt: "" }} />);
+
+    fireEvent.click(screen.getByLabelText("XLSX"));
+    fireEvent.change(screen.getByPlaceholderText(/Enter what you want to generate/i), {
+      target: { value: "put together a competitive one-pager" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Generate$/ }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0]).toEqual(expect.objectContaining({
+      documentType: "xlsx",
+      prompt: "put together a competitive one-pager",
+    }));
+  });
+});
+
+describe("DialogueScreen home prototype contract", () => {
+  function renderChineseHome(overrides: Partial<React.ComponentProps<typeof DialogueScreen>> = {}) {
+    return render(
+      <LocaleProvider value="zh">
+        <DialogueScreen
+          {...baseProps()}
+          newGenerationDraft={{ documentType: "pptx", topic: "", prompt: "" }}
+          {...overrides}
+        />
+      </LocaleProvider>,
+    );
+  }
+
+  it("defaults to 幻灯片 and exposes only the four supported home categories in product order", () => {
+    renderChineseHome();
+
+    const formatButtons = ["幻灯片", "图片", "文档", "表格"].map((label) =>
+      screen.getByRole("radio", { name: new RegExp(`${label}$`) }),
+    );
+    expect(Array.from(document.querySelectorAll<HTMLInputElement>(".home-document-type-tabs input")).map((input) => input.value))
+      .toEqual(["pptx", "img", "docx", "xlsx"]);
+    expect(formatButtons[0]).toBeChecked();
+    expect(formatButtons.slice(1).every((button) => !(button as HTMLInputElement).checked)).toBe(true);
+    expect(screen.queryByRole("radio", { name: /报告$/ })).toBeNull();
+    expect(screen.queryByRole("radio", { name: /GIF$/ })).toBeNull();
+  });
+
+  it("shows only the selected category's templates and filters them when the category changes", () => {
+    renderChineseHome();
+    const templateGrid = () => within(document.querySelector(".fluid-template-grid") as HTMLElement);
+
+    expect(screen.getByRole("heading", { name: "幻灯片模板" })).toBeTruthy();
+    expect(templateGrid().getByText("每周经营周报")).toBeTruthy();
+    expect(templateGrid().getByText("季度经营汇报")).toBeTruthy();
+    expect(templateGrid().getByText("项目启动会")).toBeTruthy();
+    expect(templateGrid().queryByText("商品主图套图")).toBeNull();
+    expect(templateGrid().queryByText("竞品对比一页纸")).toBeNull();
+    expect(templateGrid().queryByText("项目启动排期")).toBeNull();
+
+    fireEvent.click(screen.getByRole("radio", { name: /图片$/ }));
+
+    expect(screen.getByRole("heading", { name: "图片模板" })).toBeTruthy();
+    expect(templateGrid().getByText("商品主图套图")).toBeTruthy();
+    expect(templateGrid().getByText("新品发布海报")).toBeTruthy();
+    expect(templateGrid().getByText("社交媒体配图")).toBeTruthy();
+    expect(templateGrid().queryByText("每周经营周报")).toBeNull();
+    expect(templateGrid().queryByText("竞品对比一页纸")).toBeNull();
+  });
+
+  it("uses a template to prefill the single composer without submitting", () => {
+    const onSubmit = vi.fn(async (_values: GenerateInput) => undefined);
+    renderChineseHome({ onSubmit });
+
+    fireEvent.click(screen.getByRole("button", { name: /每周经营周报/ }));
+
+    const composer = screen.getByPlaceholderText(/说说你想做什么/) as HTMLTextAreaElement;
+    expect(composer.value).toContain("本周");
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(document.querySelectorAll(".fluid-hero-composer textarea")).toHaveLength(1);
+  });
+
+  it("keeps a manually selected category when the prompt suggests another format", async () => {
+    const onSubmit = vi.fn(async (_values: GenerateInput) => undefined);
+    renderChineseHome({ onSubmit });
+
+    fireEvent.click(screen.getByRole("radio", { name: /表格$/ }));
+    fireEvent.change(screen.getByPlaceholderText(/说说你想做什么/), {
+      target: { value: "做一份 AI 行业趋势幻灯片" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /生成$/ }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0]).toEqual(expect.objectContaining({
+      documentType: "xlsx",
+      prompt: "做一份 AI 行业趋势幻灯片",
+    }));
+  });
+
+  it("provides an explicit entry into the image advanced template workspace", async () => {
+    renderChineseHome();
+
+    fireEvent.click(screen.getByRole("radio", { name: /图片$/ }));
+    fireEvent.click(screen.getByRole("button", { name: /打开图片模板库/ }));
+
+    expect(await screen.findByRole("button", { name: /返回首页/ })).toBeTruthy();
+    expect(document.querySelector(".image-template-picker")).toBeTruthy();
   });
 });

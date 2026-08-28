@@ -669,6 +669,37 @@ export interface ModifyPptistDeckResult {
   warnings?: string[];
 }
 
+export interface PlanPptxJSTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+/** Request for the learnof/pptx AI planner (`PlanPptxJS`). */
+export interface PlanPptxJSInput {
+  prompt: string;
+  /** Inspect result from the embedded editor: slides, selectedSlideIds, selectedShapes. */
+  context: unknown;
+  history?: PlanPptxJSTurn[];
+}
+
+export interface PlanPptxJSConfirmation {
+  title?: string;
+  message?: string;
+  target?: string;
+  changes?: string[];
+  preserved?: string[];
+}
+
+/** PowerPoint.run plan produced by OfficeCLI; executed only inside the editor's Worker. */
+export interface PlanPptxJSResult {
+  summary: string;
+  source: string;
+  confidence?: "high" | "medium" | "low";
+  requires_confirmation?: boolean;
+  confirmation?: PlanPptxJSConfirmation | null;
+  warnings?: string[];
+}
+
 export interface DesktopAPI {
   initialize(): Promise<unknown>;
   getCapabilities(): Promise<unknown>;
@@ -689,6 +720,7 @@ export interface DesktopAPI {
   savePptx(data: Uint8Array, fileName: string, options?: SavePptxOptions): Promise<string>;
   exportVibeTreePptx(tree: VibeProjectTree, fileName: string): Promise<string>;
   modifyPptistDeck(input: ModifyPptistDeckInput): Promise<ModifyPptistDeckResult>;
+  planPptxJS(input: PlanPptxJSInput): Promise<PlanPptxJSResult>;
   previewArtifact(artifact: Artifact): Promise<void>;
   issuePreviewToken(artifact: Artifact): Promise<PreviewGrant>;
   revokePreviewToken(token: string): Promise<void>;

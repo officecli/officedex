@@ -79,6 +79,13 @@ type pptistDeckPlanner interface {
 	PlanPptistEdit(context.Context, bridge.PlanPptistEditInput) (bridge.PlanPptistEditResult, error)
 }
 
+// pptxJSPlanner turns a natural-language request plus the live learnof/pptx
+// editor context into PowerPoint.run source. OfficeDex only plans through it;
+// the returned JavaScript is executed by the embedded editor's isolated Worker.
+type pptxJSPlanner interface {
+	PlanPptxJS(context.Context, bridge.PlanPptxJSInput) (bridge.PlanPptxJSResult, error)
+}
+
 type wailsDesktopNotificationRuntime struct{}
 
 func (wailsDesktopNotificationRuntime) IsNotificationAvailable(ctx context.Context) bool {
@@ -113,6 +120,7 @@ type App struct {
 	cachedSettings         types.UserSettings
 	bridgeClient           *bridge.Client
 	pptistPlanner          pptistDeckPlanner
+	pptxJSPlanner          pptxJSPlanner
 	bridgeCwd              string
 	loginManager           *login.Manager
 	loginUnsub             func()
@@ -1243,6 +1251,79 @@ func writeFileAtomic(dest string, data []byte, perm os.FileMode) error {
 	return nil
 }
 
+// PlanPptxJSInput is the renderer-facing request for the learnof/pptx AI
+// planner. Context is the inspect result produced by the embedded editor
+// (slides, selectedSlideIds, selectedShapes) and is forwarded verbatim.
+type PlanPptxJSInput struct {
+	Prompt  string           `json:"prompt"`
+	Context any              `json:"context"`
+	History []PptistEditTurn `json:"history,omitempty"`
+}
+
+const pptxJSPlannerMaxContextBytes = 512 * 1024
+
+// PlanPptxJS asks OfficeCLI for PowerPoint.run JavaScript that edits the
+// presentation currently open in the embedded learnof/pptx editor. It never
+// executes JavaScript in Go and never touches the document; it only returns the
+// plan (source, summary, confirmation requirements) to the renderer.
+func (a *App) PlanPptxJS(input PlanPptxJSInput) (bridge.PlanPptxJSResult, error) {
+	prompt := strings.TrimSpace(input.Prompt)
+	if prompt == "" {
+		return bridge.PlanPptxJSResult{}, errors.New("plan pptx js: prompt is required")
+	}
+	if input.Context == nil {
+		return bridge.PlanPptxJSResult{}, errors.New("plan pptx js: editor context is required")
+	}
+	if encoded, err := json.Marshal(input.Context); err != nil {
+		return bridge.PlanPptxJSResult{}, fmt.Errorf("plan pptx js: encode editor context: %w", err)
+	} else if len(encoded) > pptxJSPlannerMaxContextBytes {
+		return bridge.PlanPptxJSResult{}, fmt.Errorf("plan pptx js: editor context is too large (%d bytes)", len(encoded))
+	}
+	planner := a.pptxJSPlanner
+	if planner == nil {
+		client, err := a.ensureBridge()
+		if err != nil {
+			return bridge.PlanPptxJSResult{}, fmt.Errorf("plan pptx js: bridge unavailable: %w", err)
+		}
+		planner = client
+	}
+	history := make([]bridge.PlanPptxJSTurn, 0, len(input.History))
+	for _, turn := range input.History {
+		if strings.TrimSpace(turn.Content) == "" {
+			continue
+		}
+		history = append(history, bridge.PlanPptxJSTurn{Role: turn.Role, Content: turn.Content})
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	result, err := planner.PlanPptxJS(ctx, bridge.PlanPptxJSInput{
+		Prompt:  prompt,
+		Context: input.Context,
+		History: history,
+	})
+	if err != nil {
+		return bridge.PlanPptxJSResult{}, fmt.Errorf("plan pptx js: %w", err)
+	}
+	if strings.TrimSpace(result.Source) == "" {
+		return bridge.PlanPptxJSResult{}, errors.New("plan pptx js: planner returned empty source")
+	}
+	if result.Confidence == "low" || result.RequiresConfirmation {
+		result.RequiresConfirmation = true
+		if result.Confirmation == nil {
+			result.Confirmation = &bridge.PlanPptxJSConfirmation{
+				Title:   "Confirm AI edit",
+				Message: firstNonEmptyPptist(result.Summary, "Review this edit before applying it."),
+			}
+		}
+	}
+	if result.Warnings == nil {
+		result.Warnings = []string{}
+	}
+	return result, nil
+}
+
 type ModifyPptistDeckInput struct {
 	Prompt             string             `json:"prompt"`
 	Snapshot           PptistDeckSnapshot `json:"snapshot"`
@@ -2250,6 +2331,9 @@ func (a *App) CancelLogin() error {
 
 // WhoAmI runs `officecli whoami` and returns the parsed result.
 func (a *App) WhoAmI() (types.WhoAmIResult, error) {
+	if whoami, _, _, ok := demoflow.SessionOverride(); ok {
+		return whoami, nil
+	}
 	opts := a.runCommandOptions()
 	return login.GetWhoAmI(a.ctx, opts)
 }
@@ -2259,6 +2343,9 @@ func (a *App) WhoAmI() (types.WhoAmIResult, error) {
 // access mode, plan name). A non-zero exit from the CLI is reported as an
 // anonymous status with zeroed counters rather than an error.
 func (a *App) GetCreditStatus() (types.CreditStatus, error) {
+	if _, credit, _, ok := demoflow.SessionOverride(); ok {
+		return credit, nil
+	}
 	opts := a.runCommandOptions()
 	return login.GetCreditStatus(a.ctx, opts)
 }
@@ -2272,6 +2359,14 @@ func (a *App) GetInviteInfo() (types.InviteInfo, error) {
 
 // Logout runs `officecli logout`.
 func (a *App) Logout() error {
+	if _, _, session, ok := demoflow.SessionOverride(); ok {
+		credits := session.Credits
+		if credits < 0 {
+			credits = 0
+		}
+		_, err := demoflow.UpdateSession("anonymous", credits)
+		return err
+	}
 	opts := a.runCommandOptions()
 	if err := login.Logout(a.ctx, opts); err != nil {
 		return err
@@ -4524,7 +4619,7 @@ func slugify(input string) string {
 }
 
 func llmProviderEnv(s types.UserSettings) []string {
-	out := []string{}
+	out := developmentOfficeCLIEnv()
 	if s.LlmProvider == nil {
 		out = append(out, "OFFICE_CLI_RUNTIME_MODE=hosted")
 		return out
@@ -4543,6 +4638,24 @@ func llmProviderEnv(s types.UserSettings) []string {
 		out = append(out, "OFFICECLI_LLM_MODEL="+s.LlmProvider.Model)
 	}
 	return out
+}
+
+// developmentOfficeCLIEnv isolates officecli's os.UserConfigDir-backed
+// auxiliary state (for example license-state.json) without changing HOME for
+// the Wails build process itself. Production launches do not set the sentinel
+// and therefore retain the normal user environment.
+func developmentOfficeCLIEnv() []string {
+	home := strings.TrimSpace(os.Getenv("OFFICEDEX_DEV_OFFICECLI_HOME"))
+	if home == "" || !filepath.IsAbs(home) {
+		return nil
+	}
+	home = filepath.Clean(home)
+	return []string{
+		"HOME=" + home,
+		"XDG_CONFIG_HOME=" + filepath.Join(home, ".config"),
+		"XDG_CACHE_HOME=" + filepath.Join(home, ".cache"),
+		"XDG_DATA_HOME=" + filepath.Join(home, ".local", "share"),
+	}
 }
 
 // validateCustomProvider rejects Generate calls that would silently fall
@@ -4762,6 +4875,12 @@ func hasImageWatermarkEntitlement(credit types.CreditStatus, creditErr error) bo
 
 // resolveUserDataDir mirrors what Electron's app.getPath("userData") returns.
 func resolveUserDataDir(appName string) (string, error) {
+	if override := strings.TrimSpace(os.Getenv("OFFICEDEX_DEV_USER_DATA_DIR")); override != "" {
+		if !filepath.IsAbs(override) {
+			return "", errors.New("OFFICEDEX_DEV_USER_DATA_DIR must be an absolute path")
+		}
+		return filepath.Clean(override), nil
+	}
 	switch runtime.GOOS {
 	case "darwin":
 		home, err := os.UserHomeDir()

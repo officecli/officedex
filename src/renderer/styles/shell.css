@@ -829,3 +829,77 @@
     display: none;
   }
 }
+
+/* ─── Beautiful UI shell skin ─── */
+.app-shell,
+.fluid-shell {
+  grid-template-columns: 264px minmax(0, 1fr);
+  background: var(--beautiful-bg);
+  color: var(--beautiful-ink);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.app-shell::after,
+.fluid-shell::after {
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(
+      260px 260px at var(--dot-mouse-x, 50%) var(--dot-mouse-y, 50%),
+      color-mix(in srgb, var(--beautiful-accent) 14%, transparent),
+      transparent 72%
+    ),
+    radial-gradient(circle, color-mix(in srgb, var(--beautiful-ink) 8%, transparent) 1px, transparent 1.4px);
+  background-size: auto, 24px 24px;
+  opacity: var(--dot-mouse-opacity, 0.72);
+  transition: opacity 220ms ease;
+  content: "";
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell::after,
+  .fluid-shell::after {
+    opacity: 0.72;
+    transition: none;
+  }
+}
+.sidebar {
+  z-index: 2;
+  width: 264px;
+  border-right: 1px dashed var(--beautiful-line-dashed);
+  background: color-mix(in srgb, var(--beautiful-bg) 90%, transparent);
+  padding: 22px 16px 18px;
+  backdrop-filter: blur(16px);
+}
+.fluid-shell .sidebar { border-right-color: var(--beautiful-line-dashed); background: color-mix(in srgb, var(--beautiful-bg) 90%, transparent); }
+.brand-block { min-height: 48px; gap: 11px; padding: 0 5px 14px; border-bottom: 1px dashed var(--beautiful-line-dashed); }
+.brand-mark { width: 34px; height: 34px; border: 1px solid color-mix(in srgb, var(--beautiful-accent) 55%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--beautiful-accent) 16%, transparent); box-shadow: 0 0 24px color-mix(in srgb, var(--beautiful-accent) 20%, transparent); }
+.brand { color: var(--beautiful-ink); font-size: 15px; letter-spacing: -0.02em; }
+.bridge-pill { color: var(--beautiful-success); font-size: 11px; }
+.sidebar > .ui-tooltip { margin-top: 2px; }
+.sidebar .ui-button { width: 100%; }
+.history-list { border-top: 0; padding-top: 6px; }
+.history-list-title, .chat-section-title { color: var(--beautiful-faint); font-size: 10px; letter-spacing: .12em; }
+.nav-item, .workspace-item, .history-item { border-radius: 9px; color: var(--beautiful-muted); }
+.nav-item:hover, .workspace-item:hover, .history-item:hover { background: var(--beautiful-panel-strong); color: var(--beautiful-ink); }
+.nav-item.active { background: var(--beautiful-panel-strong); color: var(--beautiful-ink); box-shadow: inset 2px 0 0 var(--beautiful-accent); }
+.history-item.active { background: color-mix(in srgb, var(--beautiful-accent) 15%, transparent); color: var(--beautiful-ink); }
+.sidebar-footer { border-top: 1px dashed var(--beautiful-line-dashed); }
+.sidebar-footer-nav { gap: 4px; }
+.main-frame { position: relative; z-index: 1; min-width: 0; background: transparent; }
+.topbar { min-height: 64px; border-bottom: 1px dashed var(--beautiful-line-dashed); background: color-mix(in srgb, var(--beautiful-bg) 90%, transparent); color: var(--beautiful-muted); backdrop-filter: blur(16px); }
+.topbar-sidebar-toggle { border-color: var(--beautiful-line); background: var(--beautiful-panel); color: var(--beautiful-muted); }
+.topbar-sidebar-toggle:hover { border-color: var(--beautiful-accent); color: var(--beautiful-ink); }
+.breadcrumb { color: var(--beautiful-muted); font-size: 12px; }
+.breadcrumb strong { color: var(--beautiful-ink); font-weight: 600; }
+.crumb-separator { color: var(--beautiful-faint); }
+.content-grid { min-height: 0; background: transparent; }
+.stage { min-width: 0; background: transparent; }
+.preview-panel { border-left: 1px dashed var(--beautiful-line-dashed); background: var(--beautiful-panel); }
+.credit-meter { border-color: var(--beautiful-line); background: var(--beautiful-panel); }
+
+@media (max-width: 1100px) {
+  .app-shell, .fluid-shell { grid-template-columns: 78px minmax(0, 1fr); }
+  .sidebar { width: 78px; }
+}

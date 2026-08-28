@@ -29,8 +29,8 @@ import {
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type DragEvent, type FormEvent, type ReactNode } from "react";
 import { getAttachmentSpec } from "../../shared/types";
 import type { Artifact, BridgeEvent, DesktopTask, DocumentType, GenerateInput, GenerationMode, ImagePromptSlot, ImagePromptTemplate, ImageRatio, ModifyPptistDeckResult, StageState, VibeProjectTreeNode, VibeTreeSnapshot, WorkspaceSummary } from "../../shared/types";
-import { defaultGenerateInput, documentTypeOptions, normalizeNewGenerationDocumentType } from "../defaults";
-import { creationSolutions, matchSolution, scenarioSolutions, type Solution } from "./solutions";
+import { defaultGenerateInput, normalizeNewGenerationDocumentType } from "../defaults";
+import { findMatchingSolution, scenarioSolutions, type Solution } from "./solutions";
 import { useSettings } from "../useSettings";
 import { useAttachments } from "../useAttachments";
 import { officecli } from "../bridge";
@@ -244,7 +244,33 @@ function vibeNodeEditLabel(kind: VibeCanvasNodeKind, t: (key: string, vars?: Rec
 }
 
 function generationModeForNewDocumentType(documentType: DocumentType): GenerationMode | undefined {
-  return documentType === "pptx" || documentType === "docx" || documentType === "xlsx" || documentType === "report" ? "plan" : undefined;
+  // `plan` is the deprecated Living Tree Cockpit protocol. New documents use
+  // the standard OfficeCLI generation route and never enter that canvas.
+  return documentType === "pptx" || documentType === "docx" || documentType === "xlsx" || documentType === "report" ? "fast" : undefined;
+}
+
+const HOME_DOCUMENT_TYPES = ["pptx", "img", "docx", "xlsx"] as const satisfies readonly DocumentType[];
+
+function isHomeDocumentType(value: DocumentType): value is (typeof HOME_DOCUMENT_TYPES)[number] {
+  return HOME_DOCUMENT_TYPES.includes(value as (typeof HOME_DOCUMENT_TYPES)[number]);
+}
+
+function normalizeHomeDocumentType(value: unknown): DocumentType {
+  const normalized = normalizeNewGenerationDocumentType(value);
+  return isHomeDocumentType(normalized) ? normalized : "pptx";
+}
+
+function homeDocumentTypeLabel(documentType: DocumentType, t: (key: string) => string): string {
+  return t(`dialogue.homeType.${normalizeHomeDocumentType(documentType)}`);
+}
+
+function homeDocumentTypeIcon(documentType: DocumentType): string {
+  switch (normalizeHomeDocumentType(documentType)) {
+    case "img": return "image";
+    case "docx": return "description";
+    case "xlsx": return "table_chart";
+    default: return "present_to_all";
+  }
 }
 
 function randomCanvasPreparationDurationMs() {
@@ -257,7 +283,7 @@ const GIF_FPS_MAX = 24;
 const DEFAULT_GIF_FPS = 16;
 
 function normalizeGenerationMode(_value: unknown): GenerationMode {
-  return "plan";
+  return "fast";
 }
 
 function normalizeImageRatio(value: unknown): ImageRatio {
@@ -367,62 +393,34 @@ export function DialogueScreen({ tasks, newGenerationDraft, newChatNudgeKey = 0,
 }
 
 
-function IntentBox({ value, onValueChange, onSubmit, t }: {
-  value: string;
-  onValueChange: (next: string) => void;
-  onSubmit: (text: string) => void;
-  t: (key: string) => string;
-}) {
-  const submit = () => {
-    const text = value.trim();
-    if (text) onSubmit(text);
-  };
-  const examples = ["1", "2", "3", "4"].map((n) => t(`dialogue.intent.example.${n}`));
-  return (
-    <div className="fluid-intent">
-      <div className="fluid-intent-box">
-        <MaterialSymbol name="auto_awesome" />
-        <input
-          value={value}
-          placeholder={t("dialogue.intent.placeholder")}
-          onChange={(event) => onValueChange(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              submit();
-            }
-          }}
-        />
-        <Button type="primary" onClick={submit}>{t("dialogue.intent.submit")}</Button>
-      </div>
-      <div className="fluid-intent-examples">
-        {examples.map((example) => (
-          <button key={example} type="button" onClick={() => onValueChange(example)}>{example}</button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function SolutionCard({ solution, compact, onPick, t }: {
+function SolutionCard({ solution, onPick, t }: {
   solution: Solution;
-  compact?: boolean;
   onPick: (patch: { documentType: DocumentType; topic: string; prompt: string }) => void;
   t: (key: string) => string;
 }) {
   const title = t(`dialogue.preset.${solution.id}.title`);
   const description = t(`dialogue.preset.${solution.id}.desc`);
-  const outputLabel =
-    documentTypeOptions.find((option) => option.value === solution.documentType)?.label ?? solution.documentType;
+  const outputLabel = homeDocumentTypeLabel(solution.documentType, t);
   return (
-    <button onClick={() => onPick({ documentType: solution.documentType, topic: title, prompt: description })}>
-      <MaterialSymbol name={solution.icon} />
-      <strong>{title}</strong>
-      {compact ? null : <span>{description}</span>}
-      <span className="fluid-prompt-meta">
-        <span className="fluid-prompt-output">{outputLabel}</span>
-        <span>{t("dialogue.solutionMeta.estimate").replace("{{minutes}}", String(solution.estimateMinutes))}</span>
-        <span>{t("dialogue.solutionMeta.runs").replace("{{count}}", String(solution.runs))}</span>
+    <button
+      className={`fluid-template-card is-${solution.documentType}`}
+      data-solution-id={solution.id}
+      onClick={() => onPick({ documentType: solution.documentType, topic: title, prompt: description })}
+    >
+      <span className="fluid-template-preview" aria-hidden="true">
+        <span className="fluid-template-sheet">
+          <span className="fluid-template-preview-title" />
+          <span className="fluid-template-preview-body">
+            <span /><span /><span /><span /><span /><span /><span /><span />
+          </span>
+          <MaterialSymbol name={solution.icon} />
+        </span>
+      </span>
+      <span className="fluid-template-copy">
+        <span className="fluid-template-type">{outputLabel} · {t("dialogue.solutionMeta.estimate").replace("{{minutes}}", String(solution.estimateMinutes))}</span>
+        <strong>{title}</strong>
+        <span className="fluid-template-description">{description}</span>
+        <span className="fluid-template-use">{t("dialogue.template.use")}</span>
       </span>
     </button>
   );
@@ -439,15 +437,16 @@ function FluidNewGeneration({ draft, newChatNudgeKey, busy, workspaces, newChatT
   onNewChatTargetChange: (target: NewChatTarget) => void;
   onAddWorkspace: () => void;
 }) {
-  const [intent, setIntent] = useState("");
   const [form] = Form.useForm<GenerateInput>();
   const { settings } = useSettings();
   const t = useT();
   const initialValues = { ...defaultGenerateInput, ...settings.defaults, ...draft };
-  initialValues.documentType = normalizeNewGenerationDocumentType(initialValues.documentType);
+  initialValues.documentType = normalizeHomeDocumentType(initialValues.documentType);
   initialValues.generationMode = normalizeGenerationMode(initialValues.generationMode);
   const [currentDocumentType, setCurrentDocumentType] = useState<DocumentType>(initialValues.documentType as DocumentType);
   const docType = currentDocumentType;
+  const [imageTemplateWorkspaceOpen, setImageTemplateWorkspaceOpen] = useState(initialValues.documentType === "img");
+  const imageTemplateWorkspace = docType === "img" && imageTemplateWorkspaceOpen;
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>();
   const [imageTemplates, setImageTemplates] = useState<ImagePromptTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
@@ -457,6 +456,7 @@ function FluidNewGeneration({ draft, newChatNudgeKey, busy, workspaces, newChatT
   const [rawDecoupled, setRawDecoupled] = useState(false);
   const [rawOpen, setRawOpen] = useState(false);
   const [promptNudgeActive, setPromptNudgeActive] = useState(false);
+  const [documentTypeManuallySelected, setDocumentTypeManuallySelected] = useState(false);
   const imageTemplateRequestId = useRef(0);
   const dropTargetRef = useRef<HTMLDivElement | null>(null);
   const attachmentDropHandlersRef = useRef({
@@ -466,6 +466,10 @@ function FluidNewGeneration({ draft, newChatNudgeKey, busy, workspaces, newChatT
   const selectedTemplate = useMemo(
     () => imageTemplates.find((tpl) => String(tpl.id) === selectedTemplateId),
     [imageTemplates, selectedTemplateId],
+  );
+  const visibleTemplateSolutions = useMemo(
+    () => scenarioSolutions.filter((solution) => solution.documentType === docType),
+    [docType],
   );
   const targetWorkspace = newChatTarget.kind === "workspace"
     ? workspaces.find((workspace) => workspace.id === newChatTarget.workspaceId)
@@ -509,6 +513,7 @@ function FluidNewGeneration({ draft, newChatNudgeKey, busy, workspaces, newChatT
           <DownOutlined />
         </button>
       </Dropdown>
+      <span>{t("dialogue.startTitleInProjectSuffix")}</span>
     </h1>
   ) : (
     <>
@@ -566,8 +571,9 @@ function FluidNewGeneration({ draft, newChatNudgeKey, busy, workspaces, newChatT
   }, [nativeDragOverHandler, nativeDropHandler]);
 
   useEffect(() => {
-    const nextDocumentType = normalizeNewGenerationDocumentType(draft.documentType);
+    const nextDocumentType = normalizeHomeDocumentType(draft.documentType);
     setCurrentDocumentType(nextDocumentType);
+    if (nextDocumentType !== "img") setImageTemplateWorkspaceOpen(false);
     form.setFieldsValue({
       documentType: nextDocumentType,
       generationMode: normalizeGenerationMode(draft.generationMode),
@@ -610,7 +616,7 @@ function FluidNewGeneration({ draft, newChatNudgeKey, busy, workspaces, newChatT
   }, []);
 
   useEffect(() => {
-    if (docType !== "img") {
+    if (!imageTemplateWorkspace) {
       form.setFieldValue("promptTemplateId", undefined);
       setSelectedTemplateId(undefined);
       setTemplatesError("");
@@ -624,14 +630,26 @@ function FluidNewGeneration({ draft, newChatNudgeKey, busy, workspaces, newChatT
     return () => {
       imageTemplateRequestId.current += 1;
     };
-  }, [docType, form, loadImageTemplates]);
+  }, [form, imageTemplateWorkspace, loadImageTemplates]);
 
-  function applyDraftPatch(patch: Partial<NewGenerationDraft>) {
+  function applyDraftPatch(patch: Partial<NewGenerationDraft>, lockDocumentType = true) {
     if (patch.documentType) {
-      setCurrentDocumentType(normalizeNewGenerationDocumentType(patch.documentType));
+      if (lockDocumentType) setDocumentTypeManuallySelected(true);
+      const nextDocumentType = normalizeHomeDocumentType(patch.documentType);
+      setCurrentDocumentType(nextDocumentType);
+      if (nextDocumentType !== "img") setImageTemplateWorkspaceOpen(false);
     }
     form.setFieldsValue(patch);
     onDraftChange(patch);
+  }
+
+  function openImageTemplateWorkspace() {
+    applyDraftPatch({ documentType: "img", generationMode: undefined });
+    setImageTemplateWorkspaceOpen(true);
+  }
+
+  function closeImageTemplateWorkspace() {
+    setImageTemplateWorkspaceOpen(false);
   }
 
   function seedSlots(template: ImagePromptTemplate) {
@@ -728,7 +746,7 @@ function FluidNewGeneration({ draft, newChatNudgeKey, busy, workspaces, newChatT
   }
 
   const composerActions = (detached: boolean) => {
-    const showAuxiliaryActions = !(detached && docType === "img");
+    const showAuxiliaryActions = !(detached && imageTemplateWorkspace);
     return (
       <div className={`composer-actions ${detached ? "image-template-actions-footer" : ""}`}>
         {showAuxiliaryActions ? (
@@ -757,6 +775,11 @@ function FluidNewGeneration({ draft, newChatNudgeKey, busy, workspaces, newChatT
                 </Button>
               </Tooltip>
             ) : null}
+            {docType === "img" && !imageTemplateWorkspace ? (
+              <Button icon={<MaterialSymbol name="photo_library" />} onClick={openImageTemplateWorkspace}>
+                {t("dialogue.imageTemplates.openLibrary")}
+              </Button>
+            ) : null}
             <Tooltip title={t("dialogue.attach.advancedOptions")}>
               <Button icon={<MaterialSymbol name="tune" />} disabled />
             </Tooltip>
@@ -775,15 +798,48 @@ function FluidNewGeneration({ draft, newChatNudgeKey, busy, workspaces, newChatT
     );
   };
 
+  function handleFormValuesChange(changedValues: Partial<GenerateInput>, values: GenerateInput) {
+    const documentTypeChanged = Object.prototype.hasOwnProperty.call(changedValues, "documentType");
+    if (documentTypeChanged) {
+      setDocumentTypeManuallySelected(true);
+      setImageTemplateWorkspaceOpen(false);
+    }
+
+    let nextDocumentType = normalizeHomeDocumentType(values.documentType ?? draft.documentType);
+    const promptChanged = Object.prototype.hasOwnProperty.call(changedValues, "prompt");
+    if (promptChanged && !documentTypeManuallySelected && !documentTypeChanged) {
+      const matched = findMatchingSolution(String(values.prompt ?? ""));
+      if (matched && isHomeDocumentType(matched.documentType)) {
+        nextDocumentType = matched.documentType;
+        form.setFieldValue("documentType", nextDocumentType);
+      }
+    }
+
+    setCurrentDocumentType(nextDocumentType);
+    onDraftChange({
+      documentType: nextDocumentType,
+      generationMode: generationModeForNewDocumentType(nextDocumentType),
+      topic: values.topic ?? "",
+      prompt: values.prompt ?? "",
+      imageRatio: normalizeImageRatio(values.imageRatio),
+      fps: normalizeGIFFPS(values.fps),
+    });
+  }
+
+  const homeDocumentTypeRadioOptions = HOME_DOCUMENT_TYPES.map((value) => ({
+    value,
+    label: <span className="home-document-type-label"><MaterialSymbol name={homeDocumentTypeIcon(value)} />{homeDocumentTypeLabel(value, t)}</span>,
+  }));
   const documentTypeSelector = (
     <Radio.Group
+      className="home-document-type-tabs"
       optionType="button"
-      options={documentTypeOptions.map((option) => ({ value: option.value, label: option.label }))}
+      options={homeDocumentTypeRadioOptions}
     />
   );
   const promptField = (
     <Form.Item name="prompt" rules={[{ required: true, message: t("dialogue.prompt.required") }]} hidden={hasSlots && !rawDecoupled && !rawOpen}>
-      <ImeTextArea className={`new-chat-nudge-input ${promptNudgeActive ? "is-new-chat-nudging" : ""}`} autoSize={{ minRows: 4, maxRows: 8 }} placeholder={t("dialogue.prompt.placeholder")} onChange={handleRawPromptEdit} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) { e.preventDefault(); form.submit(); } }} onPaste={makePasteHandler(attachments, t)} />
+      <ImeTextArea className={`new-chat-nudge-input ${promptNudgeActive ? "is-new-chat-nudging" : ""}`} autoSize={{ minRows: imageTemplateWorkspace ? 4 : 3, maxRows: 8 }} placeholder={t("dialogue.prompt.placeholder")} onChange={handleRawPromptEdit} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) { e.preventDefault(); form.submit(); } }} onPaste={makePasteHandler(attachments, t)} />
     </Form.Item>
   );
   const sourceFileAttachment = attachments.sourceWorkbookSpec && attachments.sourceFile ? (
@@ -835,56 +891,160 @@ function FluidNewGeneration({ draft, newChatNudgeKey, busy, workspaces, newChatT
     </>
   );
 
+  const renderGenerationForm = () => (
+    <Form
+      form={form}
+      layout="vertical"
+      initialValues={initialValues}
+      onValuesChange={handleFormValuesChange}
+      onFinish={(values) => {
+        const validation = attachments.validateForSubmit();
+        if (!validation.ok) {
+          message.warning(validation.reason);
+          return;
+        }
+        const slotCheck = validateSlots();
+        if (!slotCheck.ok) {
+          if (slotCheck.firstError) message.warning(slotCheck.firstError);
+          return;
+        }
+        const { promptTemplateId: _promptTemplateId, imageRatio: rawImageRatio, fps: rawFPS, ...submitValues } = values;
+        void _promptTemplateId;
+        const documentType = normalizeNewGenerationDocumentType(submitValues.documentType);
+        const prompt = hasSlots && !rawDecoupled && selectedTemplate
+          ? assembleSlots(selectedTemplate.promptPreset, slots, slotValues)
+          : submitValues.prompt;
+        const nextInput: GenerateInput = { ...submitValues, documentType, prompt, ...attachments.collect() };
+        const generationMode = generationModeForNewDocumentType(documentType);
+        if (generationMode) {
+          nextInput.generationMode = generationMode;
+        } else {
+          delete nextInput.generationMode;
+        }
+        if (targetWorkspace) {
+          nextInput.workspaceId = targetWorkspace.id;
+          delete nextInput.noProject;
+        } else {
+          delete nextInput.workspaceId;
+          nextInput.noProject = true;
+        }
+        if (documentType === "img") {
+          nextInput.imageRatio = normalizeImageRatio(rawImageRatio);
+        } else if (documentType === "gif") {
+          nextInput.fps = normalizeGIFFPS(rawFPS);
+        }
+        onSubmit(nextInput);
+      }}
+      className="fluid-command-bar"
+    >
+      {imageTemplateWorkspace ? (
+        <Form.Item name="documentType" hidden>
+          <ImeInput />
+        </Form.Item>
+      ) : (
+        <div className="format-row">
+          <Form.Item name="documentType" noStyle>
+            {documentTypeSelector}
+          </Form.Item>
+        </div>
+      )}
+      {docType === "img" ? (
+        <div className="image-ratio-row">
+          <span>{t("dialogue.imageRatio.label")}</span>
+          <Form.Item name="imageRatio" noStyle>
+            <Radio.Group optionType="button" options={imageRatioOptions(t)} />
+          </Form.Item>
+        </div>
+      ) : null}
+      {docType === "gif" ? (
+        <div className="image-ratio-row">
+          <span>{t("dialogue.gifFps.label")}</span>
+          <Form.Item name="fps" noStyle>
+            <InputNumber min={GIF_FPS_MIN} max={GIF_FPS_MAX} precision={0} aria-label={t("dialogue.gifFps.label")} />
+          </Form.Item>
+        </div>
+      ) : null}
+      <Form.Item name="topic" hidden>
+        <ImeInput />
+      </Form.Item>
+      <Form.Item name="promptTemplateId" hidden>
+        <ImeInput />
+      </Form.Item>
+      {imageTemplateWorkspace ? (
+        selectedTemplateId ? (
+          <div className="image-template-template-composer">
+            <SelectedImageTemplateSummary template={selectedTemplate} onClear={clearImageTemplate} t={t} />
+            <div className="image-template-template-form-scroll">
+              {imageTemplateControls}
+            </div>
+          </div>
+        ) : (
+          <div className="image-template-scratch-composer">
+            <div className="image-template-scratch-prompt-card">
+              {promptField}
+            </div>
+            <div className="image-template-scratch-workspace">
+              <ReferenceImageDropZone attachments={attachments} nativeDropSignal={nativeReferenceDropSignal} t={t}>
+                {referenceImageStrip ?? <ReferenceImageEmptyState t={t} />}
+              </ReferenceImageDropZone>
+              <ImageOutputPreviewPlaceholder t={t} />
+            </div>
+            {sourceFileAttachment}
+          </div>
+        )
+      ) : (
+        <>
+          {promptField}
+          {sourceFileAttachment}
+          {attachments.referenceImagesSpec && attachments.referenceImages.length > 0 ? (
+            <ReferenceImageStrip
+              items={attachments.referenceImages}
+              maxCount={attachments.referenceImagesSpec.maxCount}
+              onRemove={attachments.removeReferenceImage}
+              onAdd={attachments.pickReferenceImages}
+            />
+          ) : null}
+          {composerActions(false)}
+        </>
+      )}
+    </Form>
+  );
+
   return (
     <div
-      className={`fluid-new-task ${docType === "img" ? "image-template-workspace" : ""}`}
+      className={`fluid-new-task ${imageTemplateWorkspace ? "image-template-workspace" : ""}`}
       ref={bindDropTarget}
     >
-      {docType === "img" ? (
+      {imageTemplateWorkspace ? (
         <div className="image-template-prompt-header image-template-form-header">
-          {projectHeading}
+          <div className="image-template-home-heading">
+            <Button type="text" icon={<MaterialSymbol name="arrow_back" />} onClick={closeImageTemplateWorkspace}>
+              {t("dialogue.imageTemplates.backHome")}
+            </Button>
+            {projectHeading}
+          </div>
           <div className="format-row">
-            <span>{t("dialogue.format.label")}</span>
             <Radio.Group
+              className="home-document-type-tabs"
               optionType="button"
               value={docType}
-              options={documentTypeOptions.map((option) => ({ value: option.value, label: option.label }))}
+              options={homeDocumentTypeRadioOptions}
               onChange={(event) => applyDraftPatch({ documentType: normalizeNewGenerationDocumentType(event.target.value) })}
             />
           </div>
         </div>
       ) : null}
-      <section className={`fluid-start-card ${docType === "img" ? "image-template-gallery-pane" : ""}`}>
-        {docType === "img" ? null : (
-          <div className="fluid-spark">
-            <MaterialSymbol name="auto_awesome" />
-          </div>
-        )}
-        {docType !== "img" ? (
+      <section className={`fluid-start-card ${imageTemplateWorkspace ? "image-template-gallery-pane" : ""}`}>
+        {!imageTemplateWorkspace ? (
           targetWorkspace ? (
             <h1 className="fluid-start-title">
               <span>{t("dialogue.startTitleInProjectPrefix")}</span>
-              <Dropdown menu={projectMenu} trigger={["click"]}>
-                <button type="button" className="project-picker-button" aria-label={targetWorkspace.name}>
-                  {targetWorkspace.name}
-                  <DownOutlined />
-                </button>
-              </Dropdown>
+              <span>{targetWorkspace.name}</span>
+              <span>{t("dialogue.startTitleInProjectSuffix")}</span>
             </h1>
-          ) : (
-            <>
-              <h1>{t("dialogue.startTitleNoProject")}</h1>
-              <Dropdown menu={projectMenu} trigger={["click"]}>
-                <button type="button" className="project-picker-button project-picker-secondary" aria-label={t("dialogue.projectPicker.noProject")}>
-                  <GlobalOutlined />
-                  {t("dialogue.projectPicker.noProject")}
-                  <DownOutlined />
-                </button>
-              </Dropdown>
-            </>
-          )
+          ) : <h1>{t("dialogue.startTitleNoProject")}</h1>
         ) : null}
-        {docType === "img" ? (
+        {imageTemplateWorkspace ? (
           <div className="fluid-start-template-list">
             <ImageTemplatePicker
               templates={imageTemplates}
@@ -900,159 +1060,26 @@ function FluidNewGeneration({ draft, newChatNudgeKey, busy, workspaces, newChatT
         ) : (
           <>
             <p>{t("dialogue.startSubtitle")}</p>
-            <IntentBox
-              value={intent}
-              onValueChange={setIntent}
-              onSubmit={(text) => {
-                const solution = matchSolution(text);
-                applyDraftPatch({
-                  documentType: solution.documentType,
-                  topic: text,
-                  prompt: t(`dialogue.preset.${solution.id}.desc`),
-                });
-                setIntent("");
-              }}
-              t={t}
-            />
-            <div className="fluid-group-label">{t("dialogue.group.create")}</div>
-            <div className="fluid-create-grid">
-              {creationSolutions.map((solution) => (
-                <SolutionCard key={solution.id} solution={solution} compact onPick={applyDraftPatch} t={t} />
-              ))}
+            <div className="fluid-hero-composer">
+              {renderGenerationForm()}
             </div>
-            <div className="fluid-group-label">{t("dialogue.group.scenarios")}</div>
-            <div className="fluid-prompt-grid">
-              {scenarioSolutions.map((solution) => (
+            <h2 className="fluid-group-label">
+              {t("dialogue.group.scenarios").replace("{{type}}", homeDocumentTypeLabel(docType, t))}
+            </h2>
+            <div className="fluid-template-grid">
+              {visibleTemplateSolutions.map((solution) => (
                 <SolutionCard key={solution.id} solution={solution} onPick={applyDraftPatch} t={t} />
               ))}
             </div>
           </>
         )}
       </section>
-      <div className={`fluid-command-footer ${docType === "img" ? "image-template-form-pane" : ""}`}>
-        <Form form={form} layout="vertical" initialValues={initialValues} onValuesChange={(_, values) => {
-          const nextDocumentType = normalizeNewGenerationDocumentType(values.documentType ?? draft.documentType);
-          setCurrentDocumentType(nextDocumentType);
-          onDraftChange({
-            documentType: nextDocumentType,
-            generationMode: generationModeForNewDocumentType(nextDocumentType),
-            topic: values.topic ?? "",
-            prompt: values.prompt ?? "",
-            imageRatio: normalizeImageRatio(values.imageRatio),
-            fps: normalizeGIFFPS(values.fps),
-          });
-        }} onFinish={(values) => {
-          const validation = attachments.validateForSubmit();
-          if (!validation.ok) {
-            message.warning(validation.reason);
-            return;
-          }
-          const slotCheck = validateSlots();
-          if (!slotCheck.ok) {
-            if (slotCheck.firstError) message.warning(slotCheck.firstError);
-            return;
-          }
-          const { promptTemplateId: _promptTemplateId, imageRatio: rawImageRatio, fps: rawFPS, ...submitValues } = values;
-          void _promptTemplateId;
-          const documentType = normalizeNewGenerationDocumentType(submitValues.documentType);
-          const prompt = hasSlots && !rawDecoupled && selectedTemplate
-            ? assembleSlots(selectedTemplate.promptPreset, slots, slotValues)
-            : submitValues.prompt;
-          const nextInput: GenerateInput = { ...submitValues, documentType, prompt, ...attachments.collect() };
-          const generationMode = generationModeForNewDocumentType(documentType);
-          if (generationMode) {
-            nextInput.generationMode = generationMode;
-          } else {
-            delete nextInput.generationMode;
-          }
-          if (targetWorkspace) {
-            nextInput.workspaceId = targetWorkspace.id;
-            delete nextInput.noProject;
-          } else {
-            delete nextInput.workspaceId;
-            nextInput.noProject = true;
-          }
-          if (documentType === "img") {
-            nextInput.imageRatio = normalizeImageRatio(rawImageRatio);
-          } else if (documentType === "gif") {
-            nextInput.fps = normalizeGIFFPS(rawFPS);
-          }
-          onSubmit(nextInput);
-        }} className="fluid-command-bar">
-          {docType === "img" ? (
-            <Form.Item name="documentType" hidden>
-              <ImeInput />
-            </Form.Item>
-          ) : (
-            <div className="format-row">
-              <span>{t("dialogue.format.label")}</span>
-              <Form.Item name="documentType" noStyle>
-                {documentTypeSelector}
-              </Form.Item>
-            </div>
-          )}
-          {docType === "img" ? (
-            <div className="image-ratio-row">
-              <span>{t("dialogue.imageRatio.label")}</span>
-              <Form.Item name="imageRatio" noStyle>
-                <Radio.Group optionType="button" options={imageRatioOptions(t)} />
-              </Form.Item>
-            </div>
-          ) : null}
-          {docType === "gif" ? (
-            <div className="image-ratio-row">
-              <span>{t("dialogue.gifFps.label")}</span>
-              <Form.Item name="fps" noStyle>
-                <InputNumber min={GIF_FPS_MIN} max={GIF_FPS_MAX} precision={0} aria-label={t("dialogue.gifFps.label")} />
-              </Form.Item>
-            </div>
-          ) : null}
-          <Form.Item name="topic" hidden>
-            <ImeInput />
-          </Form.Item>
-          <Form.Item name="promptTemplateId" hidden>
-            <ImeInput />
-          </Form.Item>
-          {docType === "img" ? (
-            selectedTemplateId ? (
-              <div className="image-template-template-composer">
-                <SelectedImageTemplateSummary template={selectedTemplate} onClear={clearImageTemplate} t={t} />
-                <div className="image-template-template-form-scroll">
-                  {imageTemplateControls}
-                </div>
-              </div>
-            ) : (
-              <div className="image-template-scratch-composer">
-                <div className="image-template-scratch-prompt-card">
-                  {promptField}
-                </div>
-                <div className="image-template-scratch-workspace">
-                  <ReferenceImageDropZone attachments={attachments} nativeDropSignal={nativeReferenceDropSignal} t={t}>
-                    {referenceImageStrip ?? <ReferenceImageEmptyState t={t} />}
-                  </ReferenceImageDropZone>
-                  <ImageOutputPreviewPlaceholder t={t} />
-                </div>
-                {sourceFileAttachment}
-              </div>
-            )
-          ) : (
-            <>
-              {promptField}
-              {sourceFileAttachment}
-              {attachments.referenceImagesSpec && attachments.referenceImages.length > 0 ? (
-                <ReferenceImageStrip
-                  items={attachments.referenceImages}
-                  maxCount={attachments.referenceImagesSpec.maxCount}
-                  onRemove={attachments.removeReferenceImage}
-                  onAdd={attachments.pickReferenceImages}
-                />
-              ) : null}
-              {composerActions(false)}
-            </>
-          )}
-        </Form>
-        {docType === "img" ? composerActions(true) : null}
-      </div>
+      {imageTemplateWorkspace ? (
+        <div className="fluid-command-footer image-template-form-pane">
+          {renderGenerationForm()}
+          {composerActions(true)}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -4672,10 +4699,9 @@ function CanvasPreparationVector() {
       </g>
       <g className="canvas-vector-media">
         <rect className="canvas-vector-media-card" x="178" y="103" width="58" height="43" rx="8" />
-        <rect className="canvas-vector-thumb canvas-vector-thumb-1" x="188" y="126" width="17" height="12" rx="6" />
-        <rect className="canvas-vector-thumb canvas-vector-thumb-2" x="210" y="122" width="17" height="16" rx="7" />
-        <rect className="canvas-vector-thumb canvas-vector-thumb-3" x="232" y="126" width="17" height="12" rx="6" />
-        <rect className="canvas-vector-floating-card" x="206" y="112" width="43" height="31" rx="6" />
+        <rect className="canvas-vector-thumb canvas-vector-thumb-1" x="185" y="126" width="12" height="12" rx="6" />
+        <rect className="canvas-vector-thumb canvas-vector-thumb-2" x="201" y="122" width="12" height="16" rx="6" />
+        <rect className="canvas-vector-thumb canvas-vector-thumb-3" x="217" y="126" width="12" height="12" rx="6" />
       </g>
       <path className="canvas-vector-route canvas-vector-route-1" d="M62 63 C98 36 151 36 183 62" />
       <path className="canvas-vector-route canvas-vector-route-2" d="M158 135 C178 169 228 166 248 135" />
@@ -5156,10 +5182,11 @@ function TaskResultMessage({ task, onPreview, onOpenLogin, onUseAsReference, onR
   }
 
   if (completed) {
-    const completionMessage = eventText(latestEvent);
+    const rawCompletionMessage = eventText(latestEvent).trim();
+    const completionMessage = /^(completed|complete|done)$/i.test(rawCompletionMessage) ? "" : rawCompletionMessage;
     const duration = taskDurationLabel(task.events, t);
     const completedAt = formatLocalTimestamp(artifact?.syncedAt) || formatLocalTimestamp(latestEvent?.ts) || t("dialogue.completed.completionTimeUnknown");
-    const resultMessage = completionMessage || t("dialogue.completed.completionFallback");
+    const resultMessage = completionMessage || [t("dialogue.completed.title"), artifact?.fileName].filter(Boolean).join("：");
     const publishMenu: MenuProps | undefined = imagePublishRequestID ? {
       items: [
         {
@@ -5181,7 +5208,7 @@ function TaskResultMessage({ task, onPreview, onOpenLogin, onUseAsReference, onR
           <Tag color="green">{duration}</Tag>
           {creditTag}
         </div>
-        <p>{resultMessage}</p>
+        {completionMessage ? <p>{completionMessage}</p> : null}
         {artifact ? (
           isImageArtifact(artifact) ? (
             <div className="result-image-card">
@@ -6124,7 +6151,7 @@ function renderCreditTag(task: DesktopTask, t: Translator) {
       </Tooltip>
     );
   }
-  const mode = task.creditMode || "";
+  const mode = task.creditMode === "local_demo" ? "" : task.creditMode || "";
   const modeKey = mode ? `tasks.credit.mode.${mode}` : "";
   const modeLabel = modeKey ? t(modeKey) : "";
   const modeText = modeLabel && modeLabel !== modeKey ? modeLabel : mode;

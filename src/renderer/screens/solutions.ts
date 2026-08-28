@@ -34,23 +34,42 @@ export const solutions: readonly Solution[] = [
     keywords: ["research", "study", "调研", "研究"] },
   { id: "picture", kind: "creation", documentType: "img", icon: "image", estimateMinutes: 1, runs: 33,
     keywords: ["image", "picture", "illustration", "配图", "图片"] },
-  // ── recurring jobs
+  // ── homepage templates
   { id: "weekly", kind: "scenario", documentType: "pptx", icon: "trending_up", estimateMinutes: 2, runs: 24,
     keywords: ["weekly", "week", "周报"] },
   { id: "qbr", kind: "scenario", documentType: "pptx", icon: "insert_chart", estimateMinutes: 5, runs: 6,
     keywords: ["quarterly business", "qbr", "季度经营"] },
-  { id: "report", kind: "scenario", documentType: "report", icon: "assessment", estimateMinutes: 4, runs: 18,
-    keywords: ["analysis report", "quarterly analysis", "分析报告"] },
+  { id: "pptx", kind: "scenario", documentType: "pptx", icon: "rocket_launch", estimateMinutes: 3, runs: 9,
+    keywords: ["kickoff", "project launch", "启动会", "项目启动"] },
+  { id: "product-images", kind: "scenario", documentType: "img", icon: "photo_library", estimateMinutes: 3, runs: 28,
+    keywords: ["product images", "product pack", "商品主图", "商品套图", "白底图"] },
+  { id: "launch-poster", kind: "scenario", documentType: "img", icon: "campaign", estimateMinutes: 2, runs: 17,
+    keywords: ["launch poster", "campaign poster", "活动海报", "新品海报"] },
+  { id: "social-cards", kind: "scenario", documentType: "img", icon: "collections", estimateMinutes: 2, runs: 21,
+    keywords: ["social cards", "social images", "社交媒体", "社媒配图"] },
   { id: "compete", kind: "scenario", documentType: "docx", icon: "compare_arrows", estimateMinutes: 3, runs: 11,
     keywords: ["competitive", "competitor", "one-pager", "竞品"] },
-  { id: "pptx", kind: "scenario", documentType: "pptx", icon: "rocket_launch", estimateMinutes: 3, runs: 9,
-    keywords: ["kickoff", "启动"] },
-  { id: "xlsx", kind: "scenario", documentType: "xlsx", icon: "grid_on", estimateMinutes: 1, runs: 7,
-    keywords: ["comparison table", "对比表"] },
+  { id: "meeting-notes", kind: "scenario", documentType: "docx", icon: "event_note", estimateMinutes: 2, runs: 19,
+    keywords: ["meeting notes", "minutes", "会议纪要", "会议记录"] },
+  { id: "project-proposal", kind: "scenario", documentType: "docx", icon: "article", estimateMinutes: 4, runs: 13,
+    keywords: ["project proposal", "proposal", "项目方案", "方案文档"] },
+  { id: "project-schedule", kind: "scenario", documentType: "xlsx", icon: "calendar_month", estimateMinutes: 1, runs: 23,
+    keywords: ["project schedule", "timeline sheet", "项目排期", "排期表"] },
+  { id: "sales-pipeline", kind: "scenario", documentType: "xlsx", icon: "conversion_path", estimateMinutes: 2, runs: 16,
+    keywords: ["sales pipeline", "sales tracker", "销售跟进", "客户跟进"] },
+  { id: "budget-plan", kind: "scenario", documentType: "xlsx", icon: "account_balance_wallet", estimateMinutes: 2, runs: 14,
+    keywords: ["budget plan", "budget sheet", "预算明细", "费用预算"] },
 ];
 
 export const creationSolutions = solutions.filter((solution) => solution.kind === "creation");
 export const scenarioSolutions = solutions.filter((solution) => solution.kind === "scenario");
+
+/** Returns an explicit keyword match without guessing a fallback output type. */
+export function findMatchingSolution(intent: string): Solution | undefined {
+  const text = intent.toLowerCase();
+  const ordered = [...scenarioSolutions, ...creationSolutions];
+  return ordered.find((solution) => solution.keywords.some((keyword) => text.includes(keyword.toLowerCase())));
+}
 
 /**
  * Picks the solution a typed intent belongs to. Scenarios win over the generic
@@ -58,10 +77,5 @@ export const scenarioSolutions = solutions.filter((solution) => solution.kind ==
  * deck. Falls back to a deck, which is what most requests turn out to be.
  */
 export function matchSolution(intent: string): Solution {
-  const text = intent.toLowerCase();
-  const ordered = [...scenarioSolutions, ...creationSolutions];
-  return (
-    ordered.find((solution) => solution.keywords.some((keyword) => text.includes(keyword.toLowerCase()))) ??
-    creationSolutions[0]
-  );
+  return findMatchingSolution(intent) ?? creationSolutions[0];
 }

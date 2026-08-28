@@ -18,6 +18,7 @@ import type {
   LlmProvider,
   LoginInput,
   ModifyPptistDeckResult,
+  PlanPptxJSResult,
   ModifyInput,
   PeekReportContextResult,
   PreviewGrant,
@@ -140,6 +141,9 @@ function createBrowserPreviewAPI(): DesktopAPI {
     },
     modifyPptistDeck: async () => {
       throw new Error("Editing PPTist decks with AI requires the desktop app.");
+    },
+    planPptxJS: async () => {
+      throw new Error("Editing presentations with AI requires the OfficeDex desktop bridge.");
     },
     previewArtifact: async (artifact) => {
       const params = new URLSearchParams({
@@ -554,6 +558,11 @@ function createWailsAPI(): DesktopAPI {
       if (!fn) throw new Error("ModifyPptistDeck bridge binding is unavailable.");
       return fn(toWails(input));
     },
+    planPptxJS: async (input) => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<PlanPptxJSResult>>("PlanPptxJS");
+      if (!fn) throw new Error("PlanPptxJS bridge binding is unavailable.");
+      return fn(toWails(input));
+    },
     previewArtifact: (artifact: Artifact) => WailsApp.PreviewArtifact(toWails(artifact)),
     issuePreviewToken: async (artifact: Artifact): Promise<PreviewGrant> =>
       WailsApp.IssuePreviewToken(toWails(artifact)),
@@ -765,6 +774,7 @@ function createRealE2EAPI(endpoint: string): DesktopAPI {
     exportVibeTreePptx: (tree, fileName) =>
       rpc<string>("ExportVibeTreePptx", { treeJSON: JSON.stringify(tree), fileName }),
     modifyPptistDeck: (input) => rpc("ModifyPptistDeck", input),
+    planPptxJS: (input) => rpc<PlanPptxJSResult>("PlanPptxJS", input),
     previewArtifact: (artifact: Artifact) => rpc<void>("PreviewArtifact", artifact),
     issuePreviewToken: (artifact: Artifact) => rpc<PreviewGrant>("IssuePreviewToken", artifact),
     revokePreviewToken: (token: string) => rpc<void>("RevokePreviewToken", token),

@@ -48,11 +48,14 @@ function materializePendingContext(pending: PendingGenerate, taskId: string): Ta
 }
 
 function generationModeForDocumentType(documentType: string | undefined): GenerateInput["generationMode"] | undefined {
-  return documentType === "pptx" || documentType === "docx" || documentType === "xlsx" || documentType === "report" ? "plan" : undefined;
+  // The plan/Vibe route is retired from the new-generation surface. `fast`
+  // still maps to OfficeCLI's normal best-mode generation, but deliberately
+  // omits the legacy `generation_mode=plan` argument that opens the canvas.
+  return documentType === "pptx" || documentType === "docx" || documentType === "xlsx" || documentType === "report" ? "fast" : undefined;
 }
 
 function normalizeGenerationMode(_value: unknown): GenerateInput["generationMode"] {
-  return "plan";
+  return "fast";
 }
 
 function normalizeGenerateInputForGeneration(values: GenerateInput): GenerateInput {
