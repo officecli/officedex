@@ -5997,7 +5997,7 @@ function latestRequestID(task: DesktopTask): string {
 export function isCreditsExhaustedError(text: string | undefined): boolean {
   if (!text) return false;
   const lower = text.toLowerCase();
-  if (!lower.includes("credit")) return false;
+  if (!lower.includes("anonymous") || !lower.includes("credit")) return false;
   return (
     lower.includes("credits are exhausted") ||
     lower.includes("credits exhausted") ||

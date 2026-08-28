@@ -96,6 +96,13 @@ describe("ProjectSidebar", () => {
     expect(screen.getByRole("button", { name: "luyang@example.com" })).toBeTruthy();
   });
 
+  it("shows a negative hosted balance as outstanding without disabling navigation", () => {
+    renderSidebar({ credit: { displayMode: "balance", used: 0, total: -12, planLabel: "Official" } });
+    expect(screen.getByRole("status")).toHaveTextContent("12 credits due");
+    expect(screen.getByRole("status")).toHaveClass("is-outstanding");
+    expect(screen.getByRole("button", { name: "Home" })).toBeEnabled();
+  });
+
   it("keeps task history, settings, and account keyboard-accessible", () => {
     const props = renderSidebar();
     fireEvent.click(screen.getByRole("button", { name: "Home" }));

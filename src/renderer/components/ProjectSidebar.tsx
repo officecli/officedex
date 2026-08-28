@@ -44,8 +44,12 @@ export interface ProjectSidebarProps {
   onCompactChange?: (compact: boolean) => void;
 }
 
-function creditValue(credit: CreditInfo): string {
-  if (credit.displayMode === "balance") return String(Math.max(0, credit.total));
+function creditValue(credit: CreditInfo, t: ReturnType<typeof useT>): string {
+  if (credit.displayMode === "balance") {
+    return credit.total < 0
+      ? t("shell.creditMeter.outstandingValue", { value: Math.abs(credit.total) })
+      : String(credit.total);
+  }
   return `${Math.max(0, credit.total - credit.used)} / ${credit.total}`;
 }
 
@@ -185,10 +189,10 @@ export function ProjectSidebar({ workspaces, activeWorkspaceId, onSelectAll, onS
       <nav className="project-sidebar__footer" aria-label={t("projectSidebar.utilities")}>
         {updateRow}
         {credit ? (
-          <div className="project-sidebar__credit" role="status">
+          <div className={`project-sidebar__credit${credit.displayMode === "balance" && credit.total < 0 ? " is-outstanding" : ""}`} role="status">
             <ThunderboltOutlined aria-hidden />
             <span>{hasCustomProvider ? t("shell.creditMeter.freeLabel") : credit.planLabel || t("shell.creditMeter.label")}</span>
-            {!hasCustomProvider ? <strong>{creditValue(credit)}</strong> : null}
+            {!hasCustomProvider ? <strong>{creditValue(credit, t)}</strong> : null}
           </div>
         ) : null}
         <button type="button" onClick={onOpenAccount} title={account?.email}>
