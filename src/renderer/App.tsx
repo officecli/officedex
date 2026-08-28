@@ -1265,8 +1265,24 @@ function OfficeDexApp() {
       void openInlinePreview(task.artifact);
       return;
     }
+    // Keep active PPTX production on the home stage so its live status/events
+    // remain visible. Opening it through the legacy conversation would lose
+    // the production-stage context and make the task appear idle.
+    if (task?.documentType === "pptx") {
+      setSelectedTaskID({ kind: "task", id: taskId });
+      setActiveNav("home");
+      return;
+    }
     selectTask(taskId);
   }, [openInlinePreview, selectTask, state.tasks]);
+
+  const steerPptxTask = useCallback(async (_task: DesktopTask, instruction: string) => {
+    await continueModify("pptx", instruction);
+  }, [continueModify]);
+
+  const resumePptxTask = useCallback(async (task: DesktopTask) => {
+    await officecli.respond({ taskId: task.id, answer: "continue" });
+  }, []);
 
   const openRecentFile = useCallback(async (file: RecentFile) => {
     try {
@@ -1887,6 +1903,19 @@ function OfficeDexApp() {
     );
   }
 
+  // Authentication is a full-page flow. Rendering it inside Shell leaves the
+  // workspace sidebar and content chrome visible behind the login card and
+  // makes the browser hand-off look like a broken in-app state.
+  if (activeNav === "login") {
+    return (
+      <>
+        <DialogHost />
+        <ToastHost />
+        <LoginScreen />
+      </>
+    );
+  }
+
   return (
     <>
       <DialogHost />
@@ -1925,6 +1954,15 @@ function OfficeDexApp() {
             files={recentFiles}
             attentionTasks={tasks}
             onRetryTask={retryTaskGeneration}
+            onSteerTask={steerPptxTask}
+            onResumeTask={resumePptxTask}
+            onCancelTask={(task) => officecli.cancel(task.id)}
+            productionTaskId={stageFirstTaskRef.current}
+            productionEditor={previewGrant && previewArtifact?.taskId === stageFirstTaskRef.current ? {
+              previewToken: previewGrant.token,
+              fileName: previewArtifact.fileName,
+              onUnavailable: (error) => recordError(error || "Presentation editor unavailable", "other"),
+            } : undefined}
             loading={recentFilesLoading}
             error={recentFilesError}
             activeWorkspaceId={homeWorkspaceId}
@@ -2137,7 +2175,6 @@ function OfficeDexApp() {
             )}
           />
         ) : null}
-        {activeNav === "login" ? <LoginScreen /> : null}
         </Shell>
       </div>
       <UnsavedChangesDialog

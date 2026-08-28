@@ -389,6 +389,14 @@ describe("DialogueScreen state machine", () => {
     expect(onSubmit.mock.calls[0][0]).not.toHaveProperty("workspaceId");
   });
 
+  it("labels persisted task conversations as a legacy compatibility view", () => {
+    render(<DialogueScreen {...baseProps()} tasks={[makeCompletedDocTask("docx", "legacy.docx")]} />);
+
+    const banner = screen.getByText("Legacy task view").closest("[data-legacy-entry]");
+    expect(banner?.getAttribute("role")).toBe("note");
+    expect(screen.getByText(/Older tasks remain available here while new work is organized by document and run/i)).toBeTruthy();
+  });
+
   it("Question state with options invokes respond without filling the custom answer input", async () => {
     const task: DesktopTask = {
       id: "task-q",

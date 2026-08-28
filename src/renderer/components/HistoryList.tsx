@@ -214,10 +214,12 @@ export function HistoryList({ workspaces, chats, activeWorkspaceId, selectedConv
             <button
               type="button"
               className="chat-section-title"
+              data-legacy-entry="true"
               aria-label={`${chatsExpanded ? "Collapse" : "Expand"} ${t("shell.chats.title")}`}
               onClick={() => setChatsExpanded((current) => !current)}
             >
               <span>{t("shell.chats.title")}</span>
+              <span className="history-legacy-badge">Legacy task history</span>
               {chatsExpanded ? <DownOutlined /> : <RightOutlined />}
             </button>
             {chatsExpanded ? (

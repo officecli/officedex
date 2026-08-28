@@ -88,6 +88,9 @@ export interface ArtifactStageShellProps<TSelection extends ArtifactStageSelecti
   readonly statusError?: ReactNode;
   readonly onCancel?: () => void | Promise<void>;
   readonly onRetry?: () => void | Promise<void>;
+  readonly onPause?: () => void | Promise<void>;
+  readonly onResume?: () => void | Promise<void>;
+  readonly onContinue?: () => void | Promise<void>;
   /** Optional runtime billing status. No numeric estimate is accepted here. */
   readonly billing?: ArtifactStageBillingState;
   readonly className?: string;
@@ -130,6 +133,9 @@ export function ArtifactStageShell<TSelection extends ArtifactStageSelection>({
   statusError,
   onCancel,
   onRetry,
+  onPause,
+  onResume,
+  onContinue,
   billing,
   className,
   "aria-label": ariaLabel = "Artifact workspace",
@@ -205,7 +211,7 @@ export function ArtifactStageShell<TSelection extends ArtifactStageSelection>({
 
   return (
     <section className={["artifact-stage-shell", className].filter(Boolean).join(" ")} aria-label={ariaLabel} data-tier={tier}>
-      {status ? <ArtifactStageStatusBanner status={status} message={statusMessage} error={statusError} onCancel={onCancel} onRetry={onRetry} /> : null}
+      {status ? <ArtifactStageStatusBanner status={status} message={statusMessage} error={statusError} onCancel={onCancel} onRetry={onRetry} onPause={onPause} onResume={onResume} onContinue={onContinue} /> : null}
       {tier !== "T0" && stage ? <div className="artifact-stage-shell__stage" data-slot="stage">{renderSlot(stage, slotContext)}</div> : null}
       {timeline ? <div className="artifact-stage-shell__timeline" data-slot="timeline">{renderSlot(timeline, slotContext)}</div> : null}
       {!hideIntent ? <div className="artifact-stage-shell__intent" data-slot="intent">

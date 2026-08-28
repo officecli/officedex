@@ -297,6 +297,62 @@ func TestNotificationWithoutTypeUsesMethod(t *testing.T) {
 	}
 }
 
+func TestNotificationPreservesTopLevelProgressivePPTXFields(t *testing.T) {
+	client, fake := newClientWithFake(t)
+	defer client.Stop()
+
+	got := make(chan types.BridgeEvent, 1)
+	client.OnEvent(func(event types.BridgeEvent) { got <- event })
+	fake.writeNotification(t, "task.vibe_ops", map[string]any{
+		"task_id":  "pptx-task",
+		"type":     "task.vibe_ops",
+		"run_id":   "run-1",
+		"firstSeq": 4,
+		"lastSeq":  5,
+		"ops":      []map[string]any{{"seq": 4, "op": "slide.begin", "slide": 2}},
+	})
+
+	select {
+	case event := <-got:
+		if event.Type != "task.vibe_ops" || event.TaskID != "pptx-task" {
+			t.Fatalf("event envelope = %#v", event)
+		}
+		if event.Payload["firstSeq"] != float64(4) || event.Payload["lastSeq"] != float64(5) {
+			t.Fatalf("sequence payload = %#v", event.Payload)
+		}
+		ops, ok := event.Payload["ops"].([]any)
+		if !ok || len(ops) != 1 {
+			t.Fatalf("ops payload = %#v", event.Payload["ops"])
+		}
+	case <-time.After(time.Second):
+		t.Fatal("listener never invoked")
+	}
+}
+
+func TestNotificationNestedProgressivePayloadWinsOverEnvelope(t *testing.T) {
+	client, fake := newClientWithFake(t)
+	defer client.Stop()
+
+	got := make(chan types.BridgeEvent, 1)
+	client.OnEvent(func(event types.BridgeEvent) { got <- event })
+	fake.writeNotification(t, "task.vibe_outline", map[string]any{
+		"task_id": "pptx-task",
+		"type":    "task.vibe_outline",
+		"outline": map[string]any{"title": "envelope"},
+		"payload": map[string]any{"outline": map[string]any{"title": "nested"}},
+	})
+
+	select {
+	case event := <-got:
+		outline, ok := event.Payload["outline"].(map[string]any)
+		if !ok || outline["title"] != "nested" {
+			t.Fatalf("outline payload = %#v", event.Payload["outline"])
+		}
+	case <-time.After(time.Second):
+		t.Fatal("listener never invoked")
+	}
+}
+
 func TestStopRejectsPending(t *testing.T) {
 	client, _ := newClientWithFake(t)
 

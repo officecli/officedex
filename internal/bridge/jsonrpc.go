@@ -120,6 +120,13 @@ func normalizeBridgeEvent(method string, params json.RawMessage) types.BridgeEve
 			if _, ok := probe["type"].(string); ok {
 				var event types.BridgeEvent
 				if err := json.Unmarshal(params, &event); err == nil {
+					// Some bridge hosts send the progressive PPTX payload fields
+					// alongside the event envelope instead of nesting them under
+					// `payload`. Keep those fields: encoding/json otherwise drops
+					// them while decoding BridgeEvent. This is deliberately scoped
+					// to the fields consumed by progressive disclosure so unrelated
+					// envelope extensions remain opaque.
+					event.Payload = mergeProgressivePPTXPayload(event.Payload, probe)
 					return event
 				}
 			}
@@ -130,6 +137,25 @@ func normalizeBridgeEvent(method string, params json.RawMessage) types.BridgeEve
 		_ = json.Unmarshal(params, &payload)
 	}
 	return types.BridgeEvent{Type: method, Payload: payload}
+}
+
+func mergeProgressivePPTXPayload(payload map[string]any, envelope map[string]any) map[string]any {
+	if payload == nil {
+		payload = make(map[string]any)
+	}
+	for _, key := range []string{
+		"kind", "outline", "ops", "firstSeq", "lastSeq", "first_seq", "last_seq",
+		"slide", "slideIndex", "slide_index", "totalSlides", "total_slides",
+		"completedSlides", "completed_slides", "seq", "op", "phase", "status", "message",
+	} {
+		if _, exists := payload[key]; exists {
+			continue
+		}
+		if value, exists := envelope[key]; exists {
+			payload[key] = value
+		}
+	}
+	return payload
 }
 
 func decodeJSON(raw []byte, dest any) error {

@@ -16,10 +16,14 @@ import {
   RightOutlined,
 } from "../ui/icons";
 import { useT } from "../i18n";
+import { ProgressivePptxStage } from "../presentation/ProgressivePptxStage";
+import { PptxProductionStage } from "../presentation/PptxProductionStage";
+import type { PresentationEditorFrameProps } from "../presentation/PresentationEditorFrame";
 import { fileNameFromPath } from "../utils/path";
 import { MaterialSymbol } from "../components/Shell";
 import { DocTypeIcon, docTypeFromPath } from "../components/DocTypeIcon";
 import { RuntimePrompts } from "../components/RuntimePrompts";
+import "../styles/home.css";
 
 type HomeDocumentType = Extract<DocumentType, "pptx" | "img" | "docx" | "xlsx">;
 
@@ -43,6 +47,11 @@ export interface HomeScreenProps {
   onStartTask?: (input: HomeTaskIntake) => void | Promise<void>;
   onOpenTask?: (taskId: string) => void;
   onRetryTask?: (task: DesktopTask) => void;
+  onSteerTask?: (task: DesktopTask, instruction: string) => void | Promise<void>;
+  onResumeTask?: (task: DesktopTask) => void | Promise<void>;
+  onCancelTask?: (task: DesktopTask) => void | Promise<void>;
+  productionTaskId?: string;
+  productionEditor?: Omit<PresentationEditorFrameProps, "previewToken" | "fileName"> & { previewToken: string; fileName: string };
   onOpenTasks?: () => void;
   onRetryRecentFiles?: () => void;
 }
@@ -88,7 +97,7 @@ const HOME_TEMPLATES: HomeTemplate[] = [
   { id: "budget", type: "xlsx", icon: "account_balance_wallet", minutes: 2 },
 ];
 
-export function HomeScreen({ files, attentionTasks = [], loading, error, activeWorkspaceId, workspaces = [], onOpenFile, onRemoveFile, onPickTaskFile, onPickTaskDirectory, droppedTaskPaths, onSelectWorkspace, onSelectAllWorkspaces, onAddWorkspace, onAnalyzeTask, onStartTask, onOpenTask, onRetryTask, onOpenTasks, onRetryRecentFiles }: HomeScreenProps) {
+export function HomeScreen({ files, attentionTasks = [], loading, error, activeWorkspaceId, workspaces = [], onOpenFile, onRemoveFile, onPickTaskFile, onPickTaskDirectory, droppedTaskPaths, onSelectWorkspace, onSelectAllWorkspaces, onAddWorkspace, onAnalyzeTask, onStartTask, onOpenTask, onRetryTask, onSteerTask, onResumeTask, onCancelTask, productionTaskId, productionEditor, onOpenTasks, onRetryRecentFiles }: HomeScreenProps) {
   const t = useT();
   const homeScreenRef = useRef<HTMLElement>(null);
   const pointerFieldRef = useRef<HTMLCanvasElement>(null);
@@ -102,6 +111,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
   const [analyzing, setAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<HomeTaskAnalysis>();
   const [starting, setStarting] = useState(false);
+  const [startingPrompt, setStartingPrompt] = useState<string>();
   const [dropActive, setDropActive] = useState(false);
   const [dismissedTaskIds, setDismissedTaskIds] = useState<string[]>([]);
   const [runtimePromptCount, setRuntimePromptCount] = useState(0);
@@ -126,6 +136,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
     .filter((task) => !activeWorkspaceId || task.workspaceId === activeWorkspaceId)
     .filter((task) => !dismissedTaskIds.includes(task.id))
     .slice(0, 4), [attentionTasks, activeWorkspaceId, dismissedTaskIds]);
+  const productionTask = productionTaskId ? liveTasks.find((task) => task.id === productionTaskId && task.documentType === "pptx") : undefined;
 
   useEffect(() => {
     if (prompt) {
@@ -225,6 +236,21 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
     setDropActive(false);
   };
 
+  const startAnalyzedTask = async (next: HomeTaskAnalysis) => {
+    if (!onStartTask || starting) return;
+    setIntakeError(undefined);
+    setStartingPrompt(next.prompt);
+    setStarting(true);
+    try {
+      await onStartTask({ prompt: next.prompt, sourceFile: next.sourceFile, referenceDirectory: next.referenceDirectory, documentType: next.documentType });
+    } catch (error) {
+      setIntakeError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setStarting(false);
+      setStartingPrompt(undefined);
+    }
+  };
+
   const analyzeTask = async () => {
     const value = prompt.trim();
     if (!value || !onAnalyzeTask || analyzing) return;
@@ -232,7 +258,15 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
     setAnalyzing(true);
     try {
       const next = await onAnalyzeTask({ prompt: value, sourceFile, referenceDirectory, documentType: selectedDocumentType });
-      setAnalysis(next);
+      if (next.nextStep === "execute") {
+        // Clear, low-risk generation requests go straight to the stage. Keep
+        // the full review card only for tasks that genuinely need setup or a
+        // plan approval.
+        setAnalysis(undefined);
+        void startAnalyzedTask(next);
+      } else {
+        setAnalysis(next);
+      }
     } catch (error) {
       setIntakeError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -247,15 +281,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
 
   const confirmTask = async () => {
     if (!analysis || !onStartTask || starting) return;
-    setIntakeError(undefined);
-    setStarting(true);
-    try {
-      await onStartTask({ prompt: analysis.prompt, sourceFile: analysis.sourceFile, referenceDirectory: analysis.referenceDirectory, documentType: analysis.documentType });
-    } catch (error) {
-      setIntakeError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setStarting(false);
-    }
+    await startAnalyzedTask(analysis);
   };
 
   const invalidateAnalysis = () => {
@@ -440,6 +466,37 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
     };
   }, []);
 
+  if (productionTask) {
+    const title = productionTask.topic || productionTask.userInput?.prompt || t("tasks.untitled");
+    return (
+      <section className="home-screen home-screen--production" aria-labelledby="home-production-title">
+        <header className="home-production-header">
+          <Button variant="ghost-normal" size="small" onClick={() => setDismissedTaskIds((current) => [...current, productionTask.id])}>
+            {t("home.production.back")}
+          </Button>
+          <div>
+            <p>{t("home.production.eyebrow")}</p>
+            <h1 id="home-production-title">{title}</h1>
+          </div>
+        </header>
+        <ProgressivePptxStage
+          task={productionTask}
+          draftReady={Boolean(productionEditor)}
+          editor={productionEditor}
+          onContinue={onResumeTask ? () => onResumeTask(productionTask) : undefined}
+          onStartDrawing={onResumeTask ? () => onResumeTask(productionTask) : undefined}
+          productionProps={{
+            onCancel: onCancelTask ? () => void onCancelTask(productionTask) : undefined,
+            onRetry: onRetryTask ? () => onRetryTask(productionTask) : undefined,
+            onSteer: onSteerTask ? (instruction) => onSteerTask(productionTask, instruction) : undefined,
+            onResume: onResumeTask ? () => onResumeTask(productionTask) : undefined,
+            onOpenEditor: onOpenTask ? () => onOpenTask(productionTask.id) : undefined,
+          }}
+        />
+      </section>
+    );
+  }
+
   return (
     <section
       className="home-screen"
@@ -540,6 +597,14 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
         </div>
       </form>
 
+      {startingPrompt ? (
+        <div className="home-starting" role="status" aria-live="polite">
+          <Loading />
+          <span>{t("home.starting")}</span>
+          <span className="home-starting__prompt">{startingPrompt}</span>
+        </div>
+      ) : null}
+
       {analysis ? (
         <section className="home-analysis" aria-labelledby="home-analysis-title">
           <div className="home-analysis__header">
@@ -547,7 +612,9 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
               <p>{t("home.analysis.eyebrow")}</p>
               <h2 id="home-analysis-title">{t("home.analysis.title")}</h2>
             </div>
-            <span>{t("home.analysis.notStarted")}</span>
+            <span>
+              {starting ? `${t("tasks.status.starting")}…` : t("home.analysis.notStarted")}
+            </span>
           </div>
           <p className="home-analysis__description">{t(`home.analysis.description.${analysis.nextStep}`)}</p>
           <dl className="home-analysis__details">
@@ -559,6 +626,27 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
           <div className="home-analysis__actions">
             <Button variant="ghost-normal" onClick={invalidateAnalysis}>{t("home.analysis.edit")}</Button>
             <Button variant="primary" icon={<RightOutlined />} loading={starting} onClick={() => void confirmTask()}>{t(analysis.nextStep === "configure" ? "home.analysis.configureJob" : analysis.nextStep === "plan" ? "home.analysis.createPlan" : "home.analysis.start")}</Button>
+          </div>
+        </section>
+      ) : null}
+
+      {liveTasks.length > 0 ? (
+        <section className="home-live-stage" aria-labelledby="home-live-stage-title">
+          <div className="home-section-header">
+            <h2 id="home-live-stage-title">{t("home.liveStageTitle")}</h2>
+          </div>
+          <div className="home-live-stage__list">
+            {liveTasks.map((task) => (
+              <HomeTaskCard
+                key={task.id}
+                task={task}
+                onOpen={() => onOpenTask?.(task.id)}
+                onRetry={onRetryTask ? () => onRetryTask(task) : undefined}
+                onSteer={onSteerTask ? (instruction) => onSteerTask(task, instruction) : undefined}
+                onResume={onResumeTask ? () => onResumeTask(task) : undefined}
+                onDismiss={() => setDismissedTaskIds((current) => [...current, task.id])}
+              />
+            ))}
           </div>
         </section>
       ) : null}
@@ -634,18 +722,9 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
             {onRetryRecentFiles ? <Button size="small" onClick={onRetryRecentFiles}>{t("home.retry")}</Button> : null}
           </div>
         ) : null}
-        {!loading && !error && visibleFiles.length === 0 && liveTasks.length === 0 ? <Empty description={t("home.empty")} /> : null}
-        {!loading && !error && (visibleFiles.length > 0 || liveTasks.length > 0) ? (
+        {!loading && !error && visibleFiles.length === 0 ? <Empty description={t("home.empty")} /> : null}
+        {!loading && !error && visibleFiles.length > 0 ? (
           <div className="home-recent-list">
-            {liveTasks.map((task) => (
-              <HomeTaskCard
-                key={task.id}
-                task={task}
-                onOpen={() => onOpenTask?.(task.id)}
-                onRetry={onRetryTask ? () => onRetryTask(task) : undefined}
-                onDismiss={() => setDismissedTaskIds((current) => [...current, task.id])}
-              />
-            ))}
             {visibleFiles.map((file) => (
               <div className="home-recent-row" key={file.filePath}>
                 <button type="button" className="home-recent-open" aria-label={t("home.openFile", { name: file.fileName })} onClick={() => onOpenFile(file)}>
@@ -747,10 +826,12 @@ function isRecentFailure(task: DesktopTask): boolean {
   return Date.now() - at < RECENT_FAILURE_WINDOW_MS;
 }
 
-function HomeTaskCard({ task, onOpen, onRetry, onDismiss }: {
+function HomeTaskCard({ task, onOpen, onRetry, onSteer, onResume, onDismiss }: {
   task: DesktopTask;
   onOpen: () => void;
   onRetry?: () => void;
+  onSteer?: (instruction: string) => void | Promise<void>;
+  onResume?: () => void | Promise<void>;
   onDismiss: () => void;
 }) {
   const t = useT();
@@ -763,6 +844,26 @@ function HomeTaskCard({ task, onOpen, onRetry, onDismiss }: {
   const meta = failed
     ? (task.error || t("home.task.failed"))
     : (activeStage?.label || t("home.task.running")) + (stages.length > 0 ? ` · ${done}/${stages.length}` : "");
+
+  if (task.documentType === "pptx") {
+    return (
+      <div className={`home-pptx-task-stage home-task-row ${failed ? "home-task-row--failed" : "home-task-row--running"}`}>
+        <button type="button" className="home-pptx-task-stage__open" aria-label={t("home.openTask", { name: title })} onClick={onOpen}>
+          {title}
+        </button>
+        <PptxProductionStage
+          task={task}
+          onRetry={onRetry}
+          onSteer={onSteer}
+          onResume={onResume}
+          onOpenEditor={onOpen}
+        />
+        {failed ? (
+          <Button className="home-file-remove" variant="ghost-normal" size="small" ariaLabel={t("home.task.dismiss", { name: title })} icon={<CloseOutlined />} onClick={onDismiss} />
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div className={`home-recent-row home-task-row ${failed ? "home-task-row--failed" : "home-task-row--running"}`}>

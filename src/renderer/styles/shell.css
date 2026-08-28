@@ -320,6 +320,20 @@
   cursor: pointer;
 }
 
+.history-legacy-badge {
+  margin-left: auto;
+  margin-right: 6px;
+  padding: 2px 6px;
+  border: 1px solid var(--n-hairline);
+  border-radius: 999px;
+  color: var(--n-stone);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+}
+
 .chat-section-title:hover {
   color: var(--n-charcoal);
 }

@@ -1,0 +1,25 @@
+.pptx-production-stage { display: grid; gap: 18px; border: 1px solid var(--od-border-subtle, #e1e4e8); border-radius: 12px; padding: 20px; background: var(--od-surface, #fff); color: var(--od-ink, #202124); }
+.pptx-production-stage__header, .pptx-production-stage__body, .pptx-production-stage__actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.pptx-production-stage__heading { min-width: 0; }
+.pptx-production-stage__eyebrow { color: var(--od-ink-secondary, #6b7280); font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+.pptx-production-stage h2 { margin: 4px 0; font-size: 20px; font-weight: 600; }
+.pptx-production-stage p { margin: 0; color: var(--od-ink-secondary, #6b7280); font-size: 13px; }
+.pptx-production-stage__status { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; color: var(--od-guidance, #2563eb); font-size: 13px; }
+.pptx-production-stage--completed .pptx-production-stage__status { color: #16803c; }
+.pptx-production-stage--failed .pptx-production-stage__status, .pptx-production-stage--cancelled .pptx-production-stage__status { color: #b42318; }
+.pptx-production-stage__spin { animation: pptx-stage-spin 1s linear infinite; }
+.pptx-production-stage__canvas { display: grid; min-height: 150px; flex: 1; place-items: center; border: 1px solid var(--od-border-subtle, #e1e4e8); border-radius: 8px; padding: 14px; background: var(--od-surface-muted, #f8fafc); }
+.pptx-production-stage__slides { display: grid; width: 100%; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: 8px; }
+.pptx-production-stage__slide { display: flex; min-height: 92px; align-items: center; justify-content: space-between; border: 1px solid #d9dee7; border-radius: 6px; padding: 8px; background: #fff; color: #94a3b8; font-size: 12px; }
+.pptx-production-stage__slide.is-ready { border-color: #b7dfc4; color: #16803c; }
+.pptx-production-stage__slide.is-current { outline: 2px solid var(--od-guidance, #2563eb); outline-offset: 1px; }
+.pptx-production-stage__empty { color: var(--od-ink-secondary, #6b7280); font-size: 13px; }
+.pptx-production-stage__progress { display: grid; min-width: 100px; gap: 4px; color: var(--od-ink-secondary, #6b7280); font-size: 12px; }
+.pptx-production-stage__progress strong { color: var(--od-ink, #202124); font-size: 20px; }
+.pptx-production-stage__error { border-radius: 6px; padding: 10px 12px; background: #fff1f0; color: #b42318; font-size: 13px; }
+.pptx-production-stage__actions { justify-content: flex-start; }
+.pptx-production-stage .stage-intent-bar { width: 100%; margin-top: 12px; }
+.pptx-production-stage__button, .pptx-production-stage__primary { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--od-border-subtle, #d9dee7); border-radius: 6px; padding: 8px 12px; background: var(--od-surface, #fff); color: inherit; cursor: pointer; font: inherit; font-size: 13px; }
+.pptx-production-stage__primary { border-color: #30343b; background: #30343b; color: #fff; }
+@keyframes pptx-stage-spin { to { transform: rotate(360deg); } }
+@media (max-width: 640px) { .pptx-production-stage__header, .pptx-production-stage__body { align-items: stretch; flex-direction: column; } .pptx-production-stage__status { align-self: flex-start; } .pptx-production-stage__progress { min-width: 0; } }

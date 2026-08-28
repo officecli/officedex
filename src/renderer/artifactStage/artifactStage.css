@@ -108,3 +108,13 @@
 .artifact-stage-shell__billing-error {
   color: var(--od-danger, #b42318);
   font: var(--od-font-caption);
+}
+
+.stage-intent-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.stage-intent-bar > .ui-input,
+.stage-intent-bar > .ui-input-shell { flex: 1; min-width: 0; }

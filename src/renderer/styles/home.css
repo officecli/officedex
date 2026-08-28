@@ -88,6 +88,8 @@
 .home-intake__attachment > span { min-width: 0; flex: 1; overflow: hidden; color: var(--od-ink); text-overflow: ellipsis; white-space: nowrap; }
 .home-intake__error { border-top: 1px solid color-mix(in srgb, var(--od-danger) 25%, transparent); background: color-mix(in srgb, var(--od-danger) 6%, var(--od-surface)); color: var(--od-danger); padding: 8px 16px; font-size: 12px; line-height: 20px; }
 .home-intake__footer { display: flex; min-height: 48px; align-items: center; gap: 8px; border-top: 1px solid var(--od-border-subtle); background: var(--od-surface-muted); padding: 4px 8px; }
+.home-starting { display: flex; align-items: center; gap: 10px; margin-top: 12px; border: 1px solid color-mix(in srgb, var(--od-guidance) 32%, transparent); border-radius: 16px; background: var(--od-surface); padding: 14px 16px; color: var(--od-ink); font-size: 14px; box-shadow: 0 8px 20px rgba(31, 41, 51, 0.05); }
+.home-starting__prompt { min-width: 0; overflow: hidden; color: var(--od-ink-secondary); text-overflow: ellipsis; white-space: nowrap; }
 .home-analysis { margin-top: 12px; border: 1px solid color-mix(in srgb, var(--od-border-hover) 72%, transparent); border-radius: 20px; background: var(--od-surface); padding: 16px; box-shadow: 0 10px 24px rgba(31, 41, 51, 0.06); }
 .home-analysis__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .home-analysis__header p { margin: 0; color: var(--od-guidance); font-size: 12px; line-height: 20px; font-weight: 500; }
@@ -519,3 +521,28 @@
 .home-task-progress i { display: block; height: 100%; border-radius: 999px; background: var(--od-guidance); transition: width 240ms ease; }
 .home-task-actions { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; padding-right: 8px; }
 .home-task-row .home-file-remove { position: static; transform: none; }
+.home-screen--production {
+  min-height: 100%;
+  padding: 24px 32px 40px;
+}
+
+.home-production-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.home-production-header p {
+  margin: 0 0 4px;
+  color: var(--od-accent, #3b82f6);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.home-production-header h1 {
+  margin: 0;
+  font-size: 24px;
+}
