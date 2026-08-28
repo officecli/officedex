@@ -68,6 +68,11 @@ test.describe("OfficeDex real client generation and artifact flows", () => {
       const sourceFile = item.sourceFixture ? await fixturePath(item.sourceFixture) : undefined;
       if (item.documentType === "pptx" && process.env.OFFICEDEX_E2E_PPTX_NO_IMAGES === "1") {
         await hostRPC("UpdateSettings", { defaults: { enableImages: false } });
+        // UpdateSettings mutates the bridge store, while the renderer keeps a
+        // local settings snapshot. Reload so the actual user submission picks
+        // up the persisted no-images flag instead of sending the stale default.
+        await page.reload();
+        await dismissOnboarding(page);
       }
 
       await submitGeneration(page, {
