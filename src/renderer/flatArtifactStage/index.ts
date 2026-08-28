@@ -1,0 +1,46 @@
+export {
+  FLAT_ARTIFACT_MIN_REGION_AREA,
+  FlatArtifactContractError,
+  clampNormalizedRegion,
+  createFlatArtifactEditRequest,
+  createFlatArtifactSelection,
+  normalizedToPixelRegion,
+  pixelToNormalizedRegion,
+  validateNormalizedRegion,
+  type FlatArtifactDescriptor,
+  type FlatArtifactDocumentScope,
+  type FlatArtifactEditInput,
+  type FlatArtifactEditRequest,
+  type FlatArtifactFrameSelection,
+  type FlatArtifactIdentity,
+  type FlatArtifactKind,
+  type FlatArtifactRegionScope,
+  type FlatArtifactScope,
+  type FlatArtifactSelection,
+  type FrameRangeSelection,
+  type NormalizedRegion,
+  type PixelRegion,
+  type SingleFrameSelection,
+} from "./contract";
+export {
+  createFlatArtifactStageIntent,
+  flatArtifactStageAdapter,
+  getFlatArtifactIntentCost,
+  scopeForRegion,
+  type FlatArtifactIntentCost,
+  type FlatArtifactScopeOption,
+  type FlatArtifactStageAdapter,
+} from "./adapter";
+export {
+  flatArtifactDocumentEditFixture,
+  flatArtifactDocumentSelectionFixture,
+  flatArtifactGifFixture,
+  flatArtifactGifSelectionFixture,
+  flatArtifactRegionEditFixture,
+  flatArtifactRegionFixture,
+} from "./fixtures";
+export {
+  FlatArtifactStage,
+  FlatArtifactEditor,
+  type FlatArtifactStageProps,
+} from "./FlatArtifactStage";

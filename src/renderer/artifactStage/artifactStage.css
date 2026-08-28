@@ -1,0 +1,66 @@
+.artifact-stage-shell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 12px;
+  color: var(--od-ink);
+  font-family: var(--od-font-ui);
+}
+
+.artifact-stage-shell__stage,
+.artifact-stage-shell__timeline,
+.artifact-stage-shell__intent {
+  min-width: 0;
+}
+
+.artifact-stage-shell__stage {
+  overflow: hidden;
+  min-height: 160px;
+  border: 1px solid var(--od-border-subtle);
+  border-radius: var(--od-radius-dialog);
+  background: var(--od-surface);
+}
+
+.artifact-stage-shell__timeline {
+  padding: 0 4px;
+}
+
+.artifact-stage-shell__intent {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--od-border-subtle);
+  border-radius: var(--od-radius-dialog);
+  background: var(--od-surface-subtle);
+}
+
+.artifact-stage-intent__scopes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.artifact-stage-intent__scope--selected {
+  background: var(--od-surface-muted);
+}
+
+.artifact-stage-intent__input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.artifact-stage-intent__input-row > .ui-input,
+.artifact-stage-intent__input-row > .ui-input-shell {
+  flex: 1;
+  min-width: 0;
+}
+
+.artifact-stage-intent__cost {
+  color: var(--od-ink-secondary);
+  font: var(--od-font-caption);
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
