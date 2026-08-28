@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 import { Select } from "./index";
 
 const options = [
@@ -9,6 +9,7 @@ const options = [
 ];
 
 describe("Beautiful UI Select and StrictMode", () => {
+  afterEach(() => cleanup());
   it("opens its menu when rendered the way the app renders it", () => {
     render(<Select aria-label="格式" value="pptx" options={options} onChange={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: /格式/ }));
