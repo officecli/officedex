@@ -44,11 +44,13 @@ import (
 	"officedex/internal/mask"
 	"officedex/internal/netproxy"
 	"officedex/internal/office2modoc"
+	"officedex/internal/pptxeditor"
 	"officedex/internal/preview"
 	"officedex/internal/report"
 	runtimemgr "officedex/internal/runtime"
 	"officedex/internal/settings"
 	"officedex/internal/subprocess"
+	"officedex/internal/timeline"
 	"officedex/internal/types"
 	"officedex/internal/xlsxeditor"
 )
@@ -100,6 +102,20 @@ type xlsxEditorService interface {
 
 var errXlsxEditorUnavailable = errors.New("XLSX editor is unavailable")
 
+type pptxEditorService interface {
+	Prepare(context.Context, string) (pptxeditor.PrepareResult, error)
+	SaveSnapshot(string, string, []byte, int, int) (pptxeditor.SaveResult, error)
+	SaveAsset(string, string, string, string, []byte) (pptxeditor.SaveAssetResult, error)
+	Export(context.Context, string, string, int) (pptxeditor.SaveResult, error)
+	Close(string, string) error
+	CloseByToken(string) error
+	CloseByFile(string) error
+	CloseAll() error
+	CleanupStale() error
+}
+
+var errPptxEditorUnavailable = errors.New("PPTX editor is unavailable")
+
 type wailsDesktopNotificationRuntime struct{}
 
 func (wailsDesktopNotificationRuntime) IsNotificationAvailable(ctx context.Context) bool {
@@ -145,6 +161,8 @@ type App struct {
 	runtimeMgr             *runtimemgr.Manager
 	proxyPool              *netproxy.Pool
 	xlsxEditorService      xlsxEditorService
+	pptxEditorService      pptxEditorService
+	timelineStore          *timeline.Store
 
 	// resolver cache. binresolver.Resolve stats the filesystem on every call;
 	// runCommandOptions / ensureBridge run on every RPC. We cache the resolved
@@ -224,6 +242,8 @@ func NewApp() (*App, error) {
 		return nil, fmt.Errorf("resolve XLSX editor repo root: %w", err)
 	}
 	app.xlsxEditorService = xlsxeditor.NewService(previewReg, office2modoc.New(repoRoot), os.TempDir())
+	app.pptxEditorService = pptxeditor.NewService(previewReg, pptxeditor.NewCLIConverter(repoRoot), os.TempDir())
+	app.timelineStore = timeline.New(filepath.Join(workspaceDir, "timeline"), pptxeditor.NewCLIConverter(repoRoot))
 	app.demoFlow = demoflow.New(demoflow.Options{Recorder: app})
 
 	manifestURL := os.Getenv("OFFICEDEX_UPDATE_MANIFEST_URL")
@@ -269,6 +289,11 @@ func (a *App) startup(ctx context.Context) {
 	if a.xlsxEditorService != nil {
 		if err := a.xlsxEditorService.CleanupStale(); err != nil {
 			wailsruntime.LogWarningf(ctx, "cleanup stale XLSX sessions: %v", err)
+		}
+	}
+	if a.pptxEditorService != nil {
+		if err := a.pptxEditorService.CleanupStale(); err != nil {
+			wailsruntime.LogWarningf(ctx, "cleanup stale PPTX sessions: %v", err)
 		}
 	}
 	if err := wailsruntime.InitializeNotifications(ctx); err != nil {
@@ -350,6 +375,11 @@ func (a *App) shutdown(ctx context.Context) {
 	if a.xlsxEditorService != nil {
 		if err := a.xlsxEditorService.CloseAll(); err != nil && ctx != nil {
 			wailsruntime.LogWarningf(ctx, "close XLSX editor sessions: %v", err)
+		}
+	}
+	if a.pptxEditorService != nil {
+		if err := a.pptxEditorService.CloseAll(); err != nil && ctx != nil {
+			wailsruntime.LogWarningf(ctx, "close PPTX editor sessions: %v", err)
 		}
 	}
 	if ctx != nil {
