@@ -20,7 +20,6 @@ import { LoginScreen, SettingsScreen } from "./screens/SettingsScreens";
 import { HomeScreen } from "./screens/HomeScreen";
 import { inferHomeTaskRoute, type HomeTaskAnalysis, type HomeTaskIntake } from "./homeIntake";
 import { PPT_VIBE_CANVAS_ENABLED } from "./featureFlags";
-import { OnboardingScreen } from "./screens/OnboardingScreen";
 import { SpreadsheetWorkspace, type SpreadsheetWorkspaceHandle } from "./spreadsheet/SpreadsheetWorkspace";
 import { SpreadsheetAgentPanel, type SpreadsheetAgentTool } from "./spreadsheet/SpreadsheetAgentPanel";
 import { SpreadsheetMarketingPanel } from "./spreadsheet/SpreadsheetMarketingPanel";
@@ -144,12 +143,11 @@ function OfficeDexApp() {
   activeNavRef.current = activeNav;
   const pendingGenerateRef = useRef<PendingGenerate | null>(null);
   const agentClientToolReportedErrorsRef = useRef(new Set<string>());
-  const { settings: persistedSettings, defaultWorkspaceDir, loading: settingsLoading } = useSettings();
+  const { settings: persistedSettings, loading: settingsLoading } = useSettings();
   const [newGenerationDraft, setNewGenerationDraft] = useState<NewGenerationDraft>(() => createNewGenerationDraft());
   const [newChatTarget, setNewChatTarget] = useState<NewChatTarget>({ kind: "none" });
   const [newChatNudgeKey, setNewChatNudgeKey] = useState(0);
   const [newGenerationDraftDirty, setNewGenerationDraftDirty] = useState(false);
-  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const appUpdate = useAppUpdate();
   const { credit, status: creditStatus, refresh: refreshCredit, nudgeForTaskTransition } = useCreditStatus();
   const [account, setAccount] = useState<SidebarAccount | undefined>();
@@ -169,7 +167,6 @@ function OfficeDexApp() {
     setErrorDetails(undefined);
   }, []);
 
-  const showOnboarding = !settingsLoading && !onboardingDismissed && persistedSettings.onboardingCompletedAt === null;
   const activeWorkspace = useMemo(() => workspaces.find((workspace) => workspace.active), [workspaces]);
 
   const runSpreadsheetAction = useCallback((action: () => Promise<void>): Promise<boolean> => {
@@ -391,7 +388,7 @@ function OfficeDexApp() {
         nudgeForTaskTransition();
       }
     });
-    if (settingsLoading || showOnboarding) {
+    if (settingsLoading) {
       return off;
     }
     officecli
@@ -406,7 +403,7 @@ function OfficeDexApp() {
         setCapabilityStatus(text);
       });
     return off;
-  }, [connectAttempt, clearError, homeWorkspaceId, recordError, refreshRecentFiles, settingsLoading, showOnboarding, forceUpdate, nudgeForTaskTransition, refreshProjectLists, t]);
+  }, [connectAttempt, clearError, homeWorkspaceId, recordError, refreshRecentFiles, settingsLoading, forceUpdate, nudgeForTaskTransition, refreshProjectLists, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2117,9 +2114,6 @@ function OfficeDexApp() {
         onDiscard={() => void continuePendingSpreadsheetAction(true)}
         onCancel={cancelPendingSpreadsheetAction}
       />
-      {showOnboarding ? (
-        <OnboardingScreen settings={persistedSettings} defaultWorkspaceDir={defaultWorkspaceDir} onComplete={() => setOnboardingDismissed(true)} />
-      ) : null}
     </>
   );
 }
