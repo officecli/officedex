@@ -147,6 +147,45 @@ describe("ArtifactStageShell", () => {
     expect(input).toBeEnabled();
   });
 
+  it("shows postpaid settlement semantics instead of a pre-execution cost estimate", () => {
+    render(
+      <ArtifactStageShell
+        adapter={fixtureAdapter()}
+        selection={{ selectedId: "one" }}
+        billing={{ mode: "account", balance: -12 }}
+      />,
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Outstanding 12 credits · billed after completion");
+    expect(screen.queryByText(/^metered$/i)).toBeNull();
+    expect(screen.queryByText(/^heavy$/i)).toBeNull();
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Make it clearer" } });
+    expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
+  });
+
+  it("reports settled actual usage and resulting balance", () => {
+    render(
+      <ArtifactStageShell
+        adapter={fixtureAdapter()}
+        selection={{ selectedId: "one" }}
+        billing={{ mode: "account", balance: -12, settlement: "settled", settledCredits: 8 }}
+      />,
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Used 8 credits · outstanding 12 credits");
+  });
+
+  it("keeps anonymous exhaustion as an explicit submission gate", () => {
+    render(
+      <ArtifactStageShell
+        adapter={fixtureAdapter()}
+        selection={{ selectedId: "one" }}
+        billing={{ mode: "anonymous", anonymousExhausted: true }}
+      />,
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Sign in required");
+    expect(screen.getByRole("alert")).toHaveTextContent("Anonymous credits are used up");
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
+  });
+
 
   it("uses the adapter dynamic default scope when selection changes", async () => {
     const adapter: ArtifactStageAdapter<FixtureSelection> = {

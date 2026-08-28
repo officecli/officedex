@@ -57,10 +57,14 @@
   min-width: 0;
 }
 
-.artifact-stage-intent__cost {
+.artifact-stage-intent__billing {
   color: var(--od-ink-secondary);
   font: var(--od-font-caption);
   text-transform: capitalize;
   white-space: nowrap;
 }
 
+.artifact-stage-shell__billing-error {
+  color: var(--od-danger, #b42318);
+  font: var(--od-font-caption);
+}
