@@ -91,6 +91,7 @@ describe("LoginScreen", () => {
     await waitFor(() => expect(loginSpy).toHaveBeenCalledTimes(1));
     expect(await screen.findByText(/waiting for browser sign-in/i)).toBeTruthy();
     expect(screen.getByText("https://example.com/login")).toBeTruthy();
+    expect(openExternalSpy).toHaveBeenCalledWith("https://example.com/login");
   });
 
   it("starts sign-in without showing an invite code field", async () => {
