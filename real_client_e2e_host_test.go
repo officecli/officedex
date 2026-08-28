@@ -109,6 +109,10 @@ func newRealClientE2EHost(t *testing.T, app *App, reportServer *realReportServer
 	if err := os.WriteFile(referenceImage, onePixelPNG(), 0o644); err != nil {
 		t.Fatalf("write reference image: %v", err)
 	}
+	blankPptx := filepath.Join(fixtureDir, "blank.pptx")
+	if err := os.WriteFile(blankPptx, blankPptxDraft, 0o644); err != nil {
+		t.Fatalf("write blank PPTX fixture: %v", err)
+	}
 
 	return &realClientE2EHost{
 		app:         app,
@@ -122,6 +126,7 @@ func newRealClientE2EHost(t *testing.T, app *App, reportServer *realReportServer
 			"workspace":         workspaceDir,
 			"sales-report.xlsx": sourceWorkbook,
 			"reference.png":     referenceImage,
+			"blank.pptx":        blankPptx,
 		},
 	}
 }
@@ -203,6 +208,12 @@ func (h *realClientE2EHost) call(method string, raw json.RawMessage) (any, error
 			return nil, err
 		}
 		return h.app.Modify(input)
+	case "ArtifactStageEdit":
+		var input types.ArtifactStageEditInput
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return h.app.ArtifactStageEdit(input)
 	case "Respond":
 		var input RespondInput
 		if err := decodeRealClientInput(raw, &input); err != nil {
