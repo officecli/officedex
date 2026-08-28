@@ -1268,7 +1268,16 @@ function OfficeDexApp() {
   }, [continueModify]);
 
   const resumePptxTask = useCallback(async (task: DesktopTask) => {
-    await officecli.respond({ taskId: task.id, answer: task.status === "plan_review" ? "approve" : "continue" });
+    // Send the plan decision through the typed option channel.  Using a
+    // freeform "approve" answer is ambiguous to older OfficeCLI runtimes and
+    // can be interpreted as a revision/continuation, which reopens the plan
+    // gate indefinitely.  Non-plan questions still use the existing
+    // continuation answer.
+    if (task.status === "plan_review") {
+      await officecli.respond({ taskId: task.id, optionId: "approve", answer: "" });
+      return;
+    }
+    await officecli.respond({ taskId: task.id, answer: "continue" });
   }, []);
 
   const openRecentFile = useCallback(async (file: RecentFile) => {
