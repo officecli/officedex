@@ -23,6 +23,7 @@ const CATALOG_SUBJECT = /(shopify|supplier|catalog|product|sku|供应商|商品|
 const CATALOG_ACTION = /(clean|cleanup|validate|normalize|import|convert|csv|清洗|校验|规范|整理|导入|转换)/i;
 
 function isCatalogCleanupIntent(prompt: string) {
+  if (/(image|illustration|poster|banner|图片|插画|海报|封面|配图)/i.test(prompt)) return false;
   return CATALOG_SUBJECT.test(prompt) && CATALOG_ACTION.test(prompt);
 }
 

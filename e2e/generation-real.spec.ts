@@ -87,7 +87,7 @@ test.describe("OfficeDex real client generation and artifact flows", () => {
         await dismissOnboarding(page);
         await expectPptistText(page, verifiedTitle);
       } else {
-        await expect(page.getByText(artifact.artifactPath.split(/[\\/]/).pop() ?? artifact.artifactPath)).toBeVisible();
+        await expect(page.getByText(artifact.artifactPath.split(/[\\/]/).pop() ?? artifact.artifactPath).first()).toBeVisible();
       }
 
       await recordScenario({

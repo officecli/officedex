@@ -232,7 +232,7 @@ async function answerVisibleInteraction(page: Page): Promise<boolean> {
     await page.waitForTimeout(300);
     return true;
   }
-  const stageContinue = page.getByRole("button", { name: /Continue|继续确认|Start drawing|开始绘制/i }).first();
+  const stageContinue = page.getByRole("button", { name: /Continue|继续确认|Start drawing|开始绘制|Approve plan|确认计划|开始执行/i }).first();
   if (await stageContinue.isVisible().catch(() => false)) {
     await stageContinue.click();
     await page.waitForTimeout(1_000);
