@@ -364,9 +364,9 @@ describe("DialogueScreen state machine", () => {
       />,
     );
 
-    expect(await screen.findByRole("heading", { name: /What should we work on in void-oversea/i })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: /In void-oversea/i })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /void-oversea/ }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: /Don't work in a project/ }));
+    fireEvent.click(await screen.findByText(/Leave ungrouped/));
 
     expect(onTargetChange).toHaveBeenCalledWith({ kind: "none" });
   });
@@ -3035,7 +3035,8 @@ describe("DialogueScreen state machine", () => {
     expect(document.querySelector(".living-tree-pptx-toolbar")).toBeNull();
     expect(document.querySelector(".living-tree-pptist-embed")).toBeNull();
     expect(document.querySelector(".pptx-assembling-panel")).toBeTruthy();
-    expect(screen.getByText(/Assembling your presentation/)).toBeTruthy();
+    const assemblingPanel = document.querySelector(".pptx-assembling-panel") as HTMLElement;
+    expect(within(assemblingPanel).getByText(/Assembling your presentation/)).toBeTruthy();
     expect(screen.getByText(/Generating slide code/)).toBeTruthy();
   });
 
@@ -5484,7 +5485,7 @@ describe("DialogueScreen state machine", () => {
 
     expect(await screen.findByText("Promo")).toBeTruthy();
     const header = document.querySelector(".image-template-form-header")!;
-    expect(within(header as HTMLElement).getByText("What should we work on in")).toBeTruthy();
+    expect(within(header as HTMLElement).getByText("In")).toBeTruthy();
     expect(within(header as HTMLElement).getByRole("button", { name: "ppt-test" })).toBeTruthy();
     expect(within(header as HTMLElement).queryByText(/^Image templates$/i)).toBeNull();
   });

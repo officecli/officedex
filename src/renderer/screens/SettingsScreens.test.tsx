@@ -238,8 +238,9 @@ describe("SettingsScreen", () => {
     render(<SettingsScreen />);
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
 
-    const trigger = await screen.findByDisplayValue(/PowerPoint \(\.pptx\)/);
-    fireEvent.change(trigger, { target: { value: "docx" } });
+    const trigger = await screen.findByRole("button", { name: /PowerPoint \(\.pptx\)/ });
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: "Word (.docx)" }));
 
     await waitFor(() => expect(updateSettingsSpy).toHaveBeenCalled());
     const last = updateSettingsSpy.mock.calls.at(-1)![0] as Partial<UserSettings>;
@@ -411,8 +412,8 @@ describe("SettingsScreen", () => {
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
     await selectSettingsSection("Connection");
 
-    const providerSelect = await screen.findByDisplayValue("Official");
-    fireEvent.change(providerSelect, { target: { value: "custom" } });
+    fireEvent.click(await screen.findByRole("button", { name: "Official" }));
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: "Custom endpoint" }));
 
     const apiKeyField = await screen.findByPlaceholderText(/api key/i);
     fireEvent.change(apiKeyField, { target: { value: "sk-new-key" } });
@@ -439,10 +440,10 @@ describe("SettingsScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
     expect(onOpenLogin).toHaveBeenCalledTimes(1);
 
-    const officialLabel = await screen.findByText("Official");
-    fireEvent.mouseDown(officialLabel);
-    const customOption = await screen.findByText("Custom endpoint");
-    fireEvent.click(customOption);
+    const officialTrigger = await screen.findByRole("button", { name: "Official" });
+    fireEvent.click(officialTrigger);
+    const customOption = await screen.findByRole("menuitemradio", { name: "Custom endpoint" });
+    expect(customOption).toBeDisabled();
 
     expect(screen.queryByPlaceholderText(/api key/i)).toBeNull();
     expect(

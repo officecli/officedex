@@ -2763,7 +2763,7 @@ export function LivingTreeCockpit({ task, snapshot, progressIndex, stageActionLa
 }
 
 function assembleStepKey(content: string): string {
-  if (/generating.*code/i.test(content)) return "vibe.pptx.assembleStep.generating";
+  if (/generating.*(?:code|presentation layout)/i.test(content)) return "vibe.pptx.assembleStep.generating";
   if (/executing.*script/i.test(content)) return "vibe.pptx.assembleStep.executing";
   if (/script failed|retrying/i.test(content)) return "vibe.pptx.assembleStep.fixing";
   if (/qa detected|layout issue|qa-fixed/i.test(content)) return "vibe.pptx.assembleStep.qa";
