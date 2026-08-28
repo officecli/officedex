@@ -166,6 +166,9 @@ export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState 
       nextTask.status = previous.status;
     }
   }
+  if (event.type === "task.progress" && stringPayload(event, "status") === "waiting_input" && stringPayload(event, "step") === "plan_confirm") {
+    nextTask.status = "plan_review";
+  }
   if (event.type === "task.progress") {
     nextTask.lastProgressAt = Date.now();
     nextTask.stalledSince = undefined;
