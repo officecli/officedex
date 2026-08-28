@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OfficeDex History List Scroll Optimization</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --canvas: #f7f6f2;
+      --surface: #ffffff;
+      --surface-soft: #f3f1ec;
+      --surface-hover: #f6f4ef;
+      --active: #ebe4ff;
+      --primary: #5b48dc;
+      --ink: #1f1b16;
+      --muted: #716d66;
+      --line: #e5e0d7;
+      --green: #21b34b;
+      --red: #e53b3b;
+      --blue: #3578e5;
+      --shadow: 0 18px 50px rgba(36, 32, 26, 0.13);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--canvas);
+      color: var(--ink);
+      font: 15px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    main {
+      width: min(1180px, calc(100vw - 40px));
+      margin: 0 auto;
+      padding: 28px 0 36px;
+    }
+
+    .page-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 24px;
+      align-items: end;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      font-weight: 720;
+      letter-spacing: 0;
+    }
+
+    .lead {
+      max-width: 760px;
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 32px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      padding: 0 12px;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .lab {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 20px;
+      align-items: start;
+    }
+
+    .panel {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 54px;
+      border-bottom: 1px solid var(--line);
+      padding: 0 16px;
+    }
+
+    .panel-title {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .panel-title strong {
+      font-size: 15px;
+    }
+
+    .panel-title span {
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 12px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .metric {
+      flex: 0 0 auto;
+      min-width: 104px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 5px 8px;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: 252px minmax(0, 1fr);
+      height: 720px;
+      background: #fbfaf7;
+    }
+
+    .sidebar {
+      display: flex;
+      min-height: 0;
+      flex-direction: column;
+      gap: 16px;
+      border-right: 1px solid var(--line);
+      background: #faf9f5;
+      padding: 20px 16px;
+    }
+
+    .brand-block {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 42px;
+      padding: 0 4px;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 42px;
+      height: 42px;
+      place-items: center;
+      border: 1.5px solid #222;
+      border-radius: 8px;
+      color: #222;
+      font-size: 22px;
+    }
+
+    .brand {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 26px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .connected {
+      margin-top: 5px;
+      color: var(--green);
+      font-size: 14px;
+      font-weight: 560;
+    }
+
+    .new-button {
+      display: flex;
+      height: 48px;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--primary);
+      color: white;
+      font-size: 17px;
+      font-weight: 700;
+      cursor: default;
+    }
+
+    .history {
+      display: flex;
+      min-height: 0;
+      flex: 1;
+      flex-direction: column;
+      border-top: 1px solid var(--line);
+      padding-top: 14px;
+    }
+
+    .history-label {
+      min-height: 28px;
+      padding: 0 12px;
+      color: #8a8379;
+      font-weight: 700;
+    }
+
+    .history-list {
+      min-height: 0;
+      flex: 1;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+      scrollbar-color: #c9c3ba transparent;
+    }
+
+    .history-list::-webkit-scrollbar {
+      width: 10px;
+    }
+
+    .history-list::-webkit-scrollbar-thumb {
+      border: 3px solid transparent;
+      border-radius: 999px;
+      background: #c9c3ba;
+      background-clip: padding-box;
+    }
+
+    .bad-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      padding-right: 4px;
+    }
+
+    .bad-item {
+      position: relative;
+      display: flex;
+      width: 100%;
+      align-items: center;
+      gap: 8px;
+      min-height: 40px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      padding: 6px 12px;
+      font: inherit;
+      text-align: left;
+    }
+
+    .bad-item:hover {
+      background: var(--surface-hover);
+      color: #34302a;
+    }
+
+    .bad-item.active {
+      background: var(--active);
+      color: var(--primary);
+      font-weight: 650;
+    }
+
+    .bad-title {
+      min-width: 0;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .bad-delete {
+      display: none;
+      width: 22px;
+      height: 22px;
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      border-radius: 5px;
+      background: transparent;
+      color: #9b948c;
+      font-size: 16px;
+    }
+
+    .bad-item:hover .bad-delete {
+      display: flex;
+    }
+
+    .good-list {
+      display: grid;
+      grid-auto-rows: 40px;
+      gap: 1px;
+      padding-right: 4px;
+      scrollbar-gutter: stable;
+    }
+
+    .good-item {
+      position: relative;
+      display: grid;
+      grid-template-columns: 22px minmax(0, 1fr) 14px 24px;
+      column-gap: 8px;
+      align-items: center;
+      width: 100%;
+      height: 40px;
+      contain: layout paint;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      padding: 0 8px 0 12px;
+      font: inherit;
+      font-weight: 560;
+      text-align: left;
+      transition: background-color 110ms ease, color 110ms ease;
+    }
+
+    .good-item:hover {
+      background: var(--surface-hover);
+      color: #34302a;
+    }
+
+    .good-item.active {
+      background: var(--active);
+      color: var(--primary);
+    }
+
+    .good-title {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .good-delete {
+      display: grid;
+      width: 24px;
+      height: 24px;
+      place-items: center;
+      border: 0;
+      border-radius: 5px;
+      background: transparent;
+      color: #9b948c;
+      font-size: 16px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 90ms ease, background-color 90ms ease, color 90ms ease;
+    }
+
+    .good-item:hover .good-delete,
+    .good-item:focus-within .good-delete {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .good-delete:hover {
+      background: #e9e4dc;
+      color: var(--red);
+    }
+
+    .icon {
+      display: grid;
+      width: 22px;
+      height: 22px;
+      place-items: center;
+      color: currentColor;
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .dot {
+      display: block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--green);
+    }
+
+    .dot.red {
+      background: var(--red);
+    }
+
+    .dot.blue {
+      background: var(--blue);
+    }
+
+    .content {
+      padding: 22px;
+    }
+
+    .notes {
+      display: grid;
+      gap: 12px;
+      margin-top: 20px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      padding: 16px;
+    }
+
+    .notes h2 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+
+    .notes ol {
+      margin: 0;
+      padding-left: 22px;
+      color: var(--muted);
+    }
+
+    .notes li + li {
+      margin-top: 8px;
+    }
+
+    code {
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: #faf8f2;
+      padding: 1px 5px;
+      color: #3b342b;
+      font-size: 0.92em;
+    }
+
+    @media (max-width: 980px) {
+      .page-head,
+      .lab {
+        grid-template-columns: 1fr;
+      }
+
+      .badge {
+        justify-self: start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="page-head">
+      <div>
+        <h1>左侧历史对话列表滚动优化方案</h1>
+        <p class="lead">对比两个可滚动侧栏：左边复现 hover 触发布局重排，右边使用固定列宽、固定行高、透明度切换操作按钮。把鼠标停在列表上滚轮上下滑动，观察标题和状态点是否横向抖动。</p>
+      </div>
+      <div class="badge">测试重点：滚轮滑动时 hover 行不断变化</div>
+    </div>
+
+    <section class="lab" aria-label="scroll comparison">
+      <article class="panel">
+        <div class="panel-head">
+          <div class="panel-title">
+            <strong>当前布局复现</strong>
+            <span>删除按钮 display:none → display:flex，占用空间突然变化</span>
+          </div>
+          <div class="metric" id="badMetric">shift 0px</div>
+        </div>
+        <div class="shell">
+          <aside class="sidebar">
+            <div class="brand-block">
+              <div class="brand-mark">▤</div>
+              <div>
+                <div class="brand">OfficeDex</div>
+                <div class="connected">已连接</div>
+              </div>
+            </div>
+            <button class="new-button" type="button"><span>＋</span><span>新建生成</span></button>
+            <div class="history">
+              <div class="history-label">历史记录</div>
+              <div class="history-list bad-list" id="badList"></div>
+            </div>
+          </aside>
+          <div class="content"></div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head">
+          <div class="panel-title">
+            <strong>优化后布局</strong>
+            <span>右侧操作区始终占位，只切 opacity，不再改 grid/flex 分配</span>
+          </div>
+          <div class="metric" id="goodMetric">shift 0px</div>
+        </div>
+        <div class="shell">
+          <aside class="sidebar">
+            <div class="brand-block">
+              <div class="brand-mark">▤</div>
+              <div>
+                <div class="brand">OfficeDex</div>
+                <div class="connected">已连接</div>
+              </div>
+            </div>
+            <button class="new-button" type="button"><span>＋</span><span>新建生成</span></button>
+            <div class="history">
+              <div class="history-label">历史记录</div>
+              <div class="history-list good-list" id="goodList"></div>
+            </div>
+          </aside>
+          <div class="content"></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="notes">
+      <h2>落到正式代码时的改动点</h2>
+      <ol>
+        <li>把每行从纯 flex 改成稳定列：<code>grid-template-columns: 22px minmax(0, 1fr) 14px 24px</code>，图标、标题、状态点、删除按钮各自有固定槽位。</li>
+        <li>删除按钮不要再用 <code>display: none</code> 隐藏，改为 <code>opacity: 0</code>、<code>pointer-events: none</code>；hover/focus 时只改透明度。</li>
+        <li>固定行高和垂直节奏：列表用 <code>grid-auto-rows: 40px</code> 或 item <code>height: 40px</code>，hover 不改变 padding、font-size、border、gap。</li>
+        <li>active/hover 只改颜色和背景，不改 <code>font-weight</code>；字体粗细变化会改变文本宽度，长标题省略号会跟着抖。</li>
+        <li>滚动容器增加 <code>scrollbar-gutter: stable</code> 和 <code>overscroll-behavior: contain</code>，避免滚动条出现/消失或滚动串联带来的侧向变化。</li>
+      </ol>
+    </section>
+  </main>
+
+  <script>
+    const titles = [
+      "Create a realistic local city planning report",
+      "Using the uploaded product screenshot to write specs",
+      "Using the uploaded brand deck to generate slides",
+      "Create a realistic location scouting document",
+      "Create a realistic Chinese restaurant menu",
+      "Create a realistic TV newsroom briefing",
+      "天线宝宝写前端代码",
+      "天线宝宝写后端代码",
+      "天线宝宝写代码",
+      "月光下的白猫",
+      "Quarterly business review with tables",
+      "Analyze uploaded contract and list risks",
+      "Generate a pitch deck for overseas launch",
+      "Create a training manual from meeting notes",
+      "Using the uploaded PDF to produce summary"
+    ];
+
+    function itemData(index) {
+      return {
+        title: titles[index % titles.length],
+        status: index % 5 === 0 || index % 7 === 0 ? "red" : index % 9 === 0 ? "blue" : "green",
+        active: index === 0
+      };
+    }
+
+    function renderBadItem(data) {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = `bad-item${data.active ? " active" : ""}`;
+      item.innerHTML = `
+        <span class="icon">▧</span>
+        <span class="bad-title">${data.title}</span>
+        <span class="dot ${data.status}"></span>
+        <span class="bad-delete" aria-hidden="true">⌫</span>
+      `;
+      return item;
+    }
+
+    function renderGoodItem(data) {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = `good-item${data.active ? " active" : ""}`;
+      item.innerHTML = `
+        <span class="icon">▧</span>
+        <span class="good-title">${data.title}</span>
+        <span class="dot ${data.status}"></span>
+        <span class="good-delete" aria-hidden="true">⌫</span>
+      `;
+      return item;
+    }
+
+    function fillList(id, renderer) {
+      const list = document.getElementById(id);
+      for (let index = 0; index < 80; index += 1) {
+        list.appendChild(renderer(itemData(index)));
+      }
+    }
+
+    function attachShiftMeter(listId, selector, metricId) {
+      const list = document.getElementById(listId);
+      const metric = document.getElementById(metricId);
+      let baseline = null;
+      let maxShift = 0;
+
+      function sample() {
+        const visible = [...list.querySelectorAll(selector)].find((node) => {
+          const rect = node.getBoundingClientRect();
+          const parent = list.getBoundingClientRect();
+          return rect.top >= parent.top && rect.bottom <= parent.bottom;
+        });
+        if (!visible) return;
+        const left = Math.round(visible.getBoundingClientRect().left);
+        if (baseline === null) baseline = left;
+        maxShift = Math.max(maxShift, Math.abs(left - baseline));
+        metric.textContent = `shift ${maxShift}px`;
+      }
+
+      list.addEventListener("scroll", () => requestAnimationFrame(sample), { passive: true });
+      list.addEventListener("mousemove", () => requestAnimationFrame(sample), { passive: true });
+      list.addEventListener("mouseleave", () => {
+        baseline = null;
+      });
+      sample();
+    }
+
+    fillList("badList", renderBadItem);
+    fillList("goodList", renderGoodItem);
+    attachShiftMeter("badList", ".dot", "badMetric");
+    attachShiftMeter("goodList", ".dot", "goodMetric");
+  </script>
+</body>
+</html>
