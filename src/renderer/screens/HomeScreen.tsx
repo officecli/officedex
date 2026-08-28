@@ -236,7 +236,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
   };
 
   const startTask = async () => {
-    if (starting) return;
+    if (!onStartTask || starting) return;
     const value = prompt.trim();
     if (!value) return;
     setIntakeError(undefined);
