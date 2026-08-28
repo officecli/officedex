@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"os"
 	"path/filepath"
@@ -22,6 +23,17 @@ type fakeXlsxEditorService struct {
 	saveContent string
 	saveResult  xlsxeditor.SaveResult
 	saveErr     error
+
+	stageResult       xlsxeditor.StageImageResult
+	stageErr          error
+	stageToken        string
+	stageSession      string
+	stageData         []byte
+	stageMime         string
+	stageSheet        string
+	stageRow          int
+	stageColumn       int
+	stageStatusColumn int
 
 	closeToken   string
 	closeSession string
@@ -45,6 +57,13 @@ func (s *fakeXlsxEditorService) Prepare(_ context.Context, token string) (xlsxed
 func (s *fakeXlsxEditorService) Save(_ context.Context, token, sessionID, content string) (xlsxeditor.SaveResult, error) {
 	s.saveToken, s.saveSession, s.saveContent = token, sessionID, content
 	return s.saveResult, s.saveErr
+}
+
+func (s *fakeXlsxEditorService) StageImage(token, session string, data []byte, mime, sheet string, row, column, statusColumn int) (xlsxeditor.StageImageResult, error) {
+	s.stageToken, s.stageSession = token, session
+	s.stageData, s.stageMime, s.stageSheet = data, mime, sheet
+	s.stageRow, s.stageColumn, s.stageStatusColumn = row, column, statusColumn
+	return s.stageResult, s.stageErr
 }
 
 func (s *fakeXlsxEditorService) Close(token, sessionID string) error {
@@ -97,6 +116,28 @@ func TestSaveXlsxEditorDelegatesSessionAndContent(t *testing.T) {
 	}
 	if result != service.saveResult {
 		t.Fatalf("SaveXlsxEditor() = %+v, want %+v", result, service.saveResult)
+	}
+}
+
+func TestStageXlsxEditorImageDecodesRendererBytes(t *testing.T) {
+	service := &fakeXlsxEditorService{stageResult: xlsxeditor.StageImageResult{URL: "modoc-assets:/media/clipboard.png"}}
+	app := &App{xlsxEditorService: service}
+	input := StageXlsxEditorImageInput{PreviewToken: "token", SessionID: "session", DataBase64: base64.StdEncoding.EncodeToString([]byte("png-bytes")), Mime: "image/png", SheetName: "Catalog", Row: 4, Column: 6, StatusColumn: 9}
+	result, err := app.StageXlsxEditorImage(input)
+	if err != nil {
+		t.Fatalf("StageXlsxEditorImage() error = %v", err)
+	}
+	if result != service.stageResult || service.stageToken != input.PreviewToken || service.stageSession != input.SessionID || string(service.stageData) != "png-bytes" || service.stageMime != input.Mime || service.stageSheet != input.SheetName || service.stageRow != input.Row || service.stageColumn != input.Column || service.stageStatusColumn != input.StatusColumn {
+		t.Fatalf("staged image delegation = %+v token=%q session=%q mime=%q sheet=%q row=%d column=%d status=%d", result, service.stageToken, service.stageSession, service.stageMime, service.stageSheet, service.stageRow, service.stageColumn, service.stageStatusColumn)
+	}
+}
+
+func TestStageXlsxEditorImageRejectsInvalidBase64(t *testing.T) {
+	service := &fakeXlsxEditorService{}
+	app := &App{xlsxEditorService: service}
+	_, err := app.StageXlsxEditorImage(StageXlsxEditorImageInput{PreviewToken: "token", SessionID: "session", DataBase64: "not-base64!", Mime: "image/png", SheetName: "Catalog"})
+	if err == nil || service.stageToken != "" {
+		t.Fatalf("StageXlsxEditorImage() error=%v, delegation token=%q", err, service.stageToken)
 	}
 }
 

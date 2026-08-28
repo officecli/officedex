@@ -139,6 +139,34 @@ func TestPrepareReadsContentFromDirectoryModocPackage(t *testing.T) {
 	}
 }
 
+func TestStageImageWritesSessionMediaAsset(t *testing.T) {
+	dir := t.TempDir()
+	originalPath := filepath.Join(dir, "workbook.xlsx")
+	writeXlsxFixture(t, originalPath, "[Content_Types].xml", "xl/workbook.xml")
+	converter := &fakeConverter{importFn: func(_, modoc, _ string) error {
+		if err := os.MkdirAll(modoc, 0o700); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(modoc, "content"), []byte("prepared-modoc"), 0o600)
+	}}
+	service := NewService(&fakePreviewResolver{entries: map[string]preview.ArtifactEntry{"token": {FilePath: originalPath, DocumentType: "xlsx"}}}, converter, dir)
+	prepared, err := service.Prepare(context.Background(), "token")
+	if err != nil {
+		t.Fatalf("Prepare: %v", err)
+	}
+	result, err := service.StageImage("token", prepared.SessionID, []byte("png-bytes"), "image/png", "Catalog", 1, 2, 3)
+	if err != nil {
+		t.Fatalf("StageImage: %v", err)
+	}
+	if !strings.HasPrefix(result.URL, "modoc-assets:/media/") {
+		t.Fatalf("URL = %q", result.URL)
+	}
+	name := strings.TrimPrefix(result.URL, "modoc-assets:/media/")
+	if got, err := os.ReadFile(filepath.Join(service.sessions[prepared.SessionID].modocPath, "media", name)); err != nil || string(got) != "png-bytes" {
+		t.Fatalf("asset = %q, err=%v", got, err)
+	}
+}
+
 func TestSaveUpdatesDirectoryModocContentBeforeExport(t *testing.T) {
 	dir := t.TempDir()
 	originalPath := filepath.Join(dir, "workbook.xlsx")

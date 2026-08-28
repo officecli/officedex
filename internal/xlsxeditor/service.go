@@ -21,6 +21,7 @@ const (
 	sessionDirectoryPrefix = "officedex-xlsx-session-"
 	maxSourceXlsxBytes     = int64(100 << 20)
 	defaultMaxModocBytes   = int64(256 << 20)
+	maxStagedImageBytes    = int64(50 << 20)
 	staleSessionAge        = 24 * time.Hour
 )
 
@@ -50,6 +51,10 @@ type SaveResult struct {
 	FilePath string `json:"filePath"`
 }
 
+type StageImageResult struct {
+	URL string `json:"url"`
+}
+
 type fileFingerprint struct {
 	Size            int64
 	ModTimeUnixNano int64
@@ -72,21 +77,32 @@ type editSession struct {
 	modocPath        string
 	modocContentPath string
 	fingerprint      fileFingerprint
+	stagedImages     []stagedImage
+}
+
+type stagedImage struct {
+	filePath  string
+	extension string
+	sheetName string
+	row       int
+	column    int
+	statusCol int
 }
 
 type Service struct {
-	mu              sync.Mutex
-	resolver        PreviewResolver
-	converter       Converter
-	tempRoot        string
-	sessions        map[string]*editSession
-	maxModocBytes   int64
-	now             func() time.Time
-	newSessionID    func() string
-	mkdirTemp       func(string, string) (string, error)
-	removeAll       func(string) error
-	closed          bool
-	converterClosed bool
+	mu               sync.Mutex
+	resolver         PreviewResolver
+	converter        Converter
+	tempRoot         string
+	sessions         map[string]*editSession
+	maxModocBytes    int64
+	now              func() time.Time
+	newSessionID     func() string
+	mkdirTemp        func(string, string) (string, error)
+	removeAll        func(string) error
+	saveStagedImages func(string, string, []stagedImage) error
+	closed           bool
+	converterClosed  bool
 }
 
 func NewService(resolver PreviewResolver, converter Converter, tempRoot string) *Service {
@@ -94,15 +110,16 @@ func NewService(resolver PreviewResolver, converter Converter, tempRoot string) 
 		tempRoot = os.TempDir()
 	}
 	return &Service{
-		resolver:      resolver,
-		converter:     converter,
-		tempRoot:      tempRoot,
-		sessions:      make(map[string]*editSession),
-		maxModocBytes: defaultMaxModocBytes,
-		now:           time.Now,
-		newSessionID:  uuid.NewString,
-		mkdirTemp:     os.MkdirTemp,
-		removeAll:     os.RemoveAll,
+		resolver:         resolver,
+		converter:        converter,
+		tempRoot:         tempRoot,
+		sessions:         make(map[string]*editSession),
+		maxModocBytes:    defaultMaxModocBytes,
+		now:              time.Now,
+		newSessionID:     uuid.NewString,
+		mkdirTemp:        os.MkdirTemp,
+		removeAll:        os.RemoveAll,
+		saveStagedImages: saveStagedImagesToXlsx,
 	}
 }
 
@@ -202,6 +219,9 @@ func (s *Service) Save(ctx context.Context, previewToken, sessionID, modocConten
 	if err != nil || !current.Equal(session.fingerprint) {
 		return SaveResult{}, ErrSourceChanged
 	}
+	if len(session.stagedImages) > 0 {
+		return s.saveWithStagedImages(ctx, session)
+	}
 	if err := os.WriteFile(session.modocContentPath, []byte(modocContent), 0o600); err != nil {
 		return SaveResult{}, fmt.Errorf("xlsx editor: write MODoc: %w", err)
 	}
@@ -239,6 +259,87 @@ func (s *Service) Save(ctx context.Context, previewToken, sessionID, modocConten
 	}
 	session.fingerprint = refreshed
 	return SaveResult{FilePath: session.filePath}, nil
+}
+
+func (s *Service) saveWithStagedImages(ctx context.Context, session *editSession) (SaveResult, error) {
+	exportedFile, err := createTempXlsx(session.filePath)
+	if err != nil {
+		return SaveResult{}, fmt.Errorf("xlsx editor: create image export file: %w", err)
+	}
+	exportedPath := exportedFile.Name()
+	if err := exportedFile.Close(); err != nil {
+		_ = os.Remove(exportedPath)
+		return SaveResult{}, fmt.Errorf("xlsx editor: close image export file: %w", err)
+	}
+	defer os.Remove(exportedPath)
+	if err := s.saveStagedImages(session.filePath, exportedPath, session.stagedImages); err != nil {
+		return SaveResult{}, fmt.Errorf("xlsx editor: write staged images: %w", err)
+	}
+	validationDir, err := s.mkdirTemp(s.tempRoot, "officedex-xlsx-validation-")
+	if err != nil {
+		return SaveResult{}, fmt.Errorf("xlsx editor: create image validation directory: %w", err)
+	}
+	defer s.removeAll(validationDir)
+	if err := s.converter.ImportXlsx(ctx, exportedPath, filepath.Join(validationDir, "workbook.modoc"), validationDir); err != nil {
+		return SaveResult{}, fmt.Errorf("xlsx editor: validate staged-image XLSX import: %w", err)
+	}
+	if err := replaceAtomically(session.filePath, exportedPath); err != nil {
+		return SaveResult{}, fmt.Errorf("xlsx editor: replace XLSX with staged images: %w", err)
+	}
+	refreshed, err := fingerprintXlsx(session.filePath, maxSourceXlsxBytes)
+	if err != nil {
+		return SaveResult{FilePath: session.filePath}, &PostCommitError{Replaced: true, Err: fmt.Errorf("refresh source fingerprint: %w", err)}
+	}
+	session.fingerprint = refreshed
+	session.stagedImages = nil
+	return SaveResult{FilePath: session.filePath}, nil
+}
+
+func (s *Service) StageImage(previewToken, sessionID string, data []byte, mime, sheetName string, row, column, statusCol int) (StageImageResult, error) {
+	if len(data) == 0 {
+		return StageImageResult{}, errors.New("xlsx editor: staged image is empty")
+	}
+	if int64(len(data)) > maxStagedImageBytes {
+		return StageImageResult{}, errors.New("xlsx editor: staged image exceeds size limit")
+	}
+	ext, ok := map[string]string{
+		"image/png": "png", "image/jpeg": "jpg", "image/gif": "gif",
+		"image/webp": "webp", "image/bmp": "bmp", "image/svg+xml": "svg",
+	}[strings.ToLower(strings.TrimSpace(mime))]
+	if !ok {
+		return StageImageResult{}, fmt.Errorf("xlsx editor: unsupported staged image mime %q", mime)
+	}
+	if strings.TrimSpace(sheetName) == "" || row < 0 || column < 0 || statusCol < -1 {
+		return StageImageResult{}, errors.New("xlsx editor: staged image target is invalid")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return StageImageResult{}, ErrServiceClosed
+	}
+	session, ok := s.sessions[sessionID]
+	if !ok || session.previewToken != previewToken {
+		return StageImageResult{}, ErrSessionMismatch
+	}
+	info, err := os.Lstat(session.modocPath)
+	if err != nil {
+		return StageImageResult{}, fmt.Errorf("xlsx editor: inspect MODoc package: %w", err)
+	}
+	if !info.IsDir() {
+		return StageImageResult{}, errors.New("xlsx editor: MODoc package does not support media assets")
+	}
+	mediaDir := filepath.Join(session.modocPath, "media")
+	if err := os.MkdirAll(mediaDir, 0o700); err != nil {
+		return StageImageResult{}, fmt.Errorf("xlsx editor: create MODoc media directory: %w", err)
+	}
+	name := uuid.NewString() + "." + ext
+	assetPath := filepath.Join(mediaDir, name)
+	if err := os.WriteFile(assetPath, data, 0o600); err != nil {
+		return StageImageResult{}, fmt.Errorf("xlsx editor: write MODoc image: %w", err)
+	}
+	session.stagedImages = append(session.stagedImages, stagedImage{filePath: assetPath, extension: "." + ext, sheetName: sheetName, row: row, column: column, statusCol: statusCol})
+	return StageImageResult{URL: "modoc-assets:/media/" + name}, nil
 }
 
 func (s *Service) Close(previewToken, sessionID string) error {

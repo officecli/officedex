@@ -94,6 +94,7 @@ type pptistDeckPlanner interface {
 type xlsxEditorService interface {
 	Prepare(context.Context, string) (xlsxeditor.PrepareResult, error)
 	Save(context.Context, string, string, string) (xlsxeditor.SaveResult, error)
+	StageImage(string, string, []byte, string, string, int, int, int) (xlsxeditor.StageImageResult, error)
 	Close(string, string) error
 	CloseByToken(string) error
 	CloseAll() error
@@ -2321,6 +2322,18 @@ type SaveXlsxEditorInput struct {
 	ModocContent string `json:"modocContent"`
 }
 
+type StageXlsxEditorImageInput struct {
+	PreviewToken string `json:"previewToken"`
+	SessionID    string `json:"sessionId"`
+	FilePath     string `json:"filePath,omitempty"`
+	DataBase64   string `json:"dataBase64,omitempty"`
+	Mime         string `json:"mime,omitempty"`
+	SheetName    string `json:"sheetName"`
+	Row          int    `json:"row"`
+	Column       int    `json:"column"`
+	StatusColumn int    `json:"statusColumn"`
+}
+
 type CloseXlsxEditorInput struct {
 	PreviewToken string `json:"previewToken"`
 	SessionID    string `json:"sessionId"`
@@ -2346,6 +2359,29 @@ func (a *App) SaveXlsxEditor(input SaveXlsxEditorInput) (xlsxeditor.SaveResult, 
 		ctx = context.Background()
 	}
 	return a.xlsxEditorService.Save(ctx, input.PreviewToken, input.SessionID, input.ModocContent)
+}
+
+func (a *App) StageXlsxEditorImage(input StageXlsxEditorImageInput) (xlsxeditor.StageImageResult, error) {
+	if a.xlsxEditorService == nil {
+		return xlsxeditor.StageImageResult{}, errXlsxEditorUnavailable
+	}
+	var data []byte
+	mime := input.Mime
+	if input.DataBase64 != "" || strings.TrimSpace(input.FilePath) == "" {
+		decoded, err := base64.StdEncoding.DecodeString(input.DataBase64)
+		if err != nil {
+			return xlsxeditor.StageImageResult{}, fmt.Errorf("decode staged XLSX image: %w", err)
+		}
+		data = decoded
+	} else {
+		image, err := a.ReadLocalImage(input.FilePath)
+		if err != nil {
+			return xlsxeditor.StageImageResult{}, err
+		}
+		data = image.Data
+		mime = image.Mime
+	}
+	return a.xlsxEditorService.StageImage(input.PreviewToken, input.SessionID, data, mime, input.SheetName, input.Row, input.Column, input.StatusColumn)
 }
 
 func (a *App) CloseXlsxEditor(input CloseXlsxEditorInput) error {
