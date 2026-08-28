@@ -847,7 +847,12 @@ function OfficeDexApp() {
       kind: route.kind,
       nextStep: route.kind === "catalog_cleanup"
         ? "configure"
-        : "execute",
+        // Keep the intake review as an explicit progressive-disclosure step.
+        // The Home screen owns the transition into the live Stage after the
+        // user confirms the inferred deliverable; bypassing it makes the
+        // submit action appear to do nothing while the task starts in the
+        // background.
+        : "plan",
     };
   }
 
