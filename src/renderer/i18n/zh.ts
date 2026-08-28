@@ -1249,7 +1249,7 @@ export const zh: Record<string, string> = {
   "task.interrupted.bridge": "Bridge 连接中断，任务已停止，请重试。",
   "spreadsheet.error.cannotOpen": "表格编辑器加载失败",
   "spreadsheet.loading": "正在打开 {file}…",
-  "spreadsheet.error.retry": "重新加载",
+  "spreadsheet.error.retry": "重试",
   "spreadsheet.error.openExternal": "使用系统应用打开",
   "spreadsheet.unsaved.title": "要保存这份工作簿的修改吗？",
   "spreadsheet.unsaved.body": "最新的单元格修改尚未写入 XLSX 文件。",

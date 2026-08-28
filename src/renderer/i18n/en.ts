@@ -1292,7 +1292,7 @@ export const en: Record<string, string> = {
     "The Bridge connection was interrupted and the task stopped. Please retry.",
   "spreadsheet.error.cannotOpen": "Spreadsheet editor failed to load",
   "spreadsheet.loading": "Opening {file}…",
-  "spreadsheet.error.retry": "Reload",
+  "spreadsheet.error.retry": "Retry",
   "spreadsheet.error.openExternal": "Open in System App",
   "spreadsheet.unsaved.title": "Save changes to this workbook?",
   "spreadsheet.unsaved.body":
