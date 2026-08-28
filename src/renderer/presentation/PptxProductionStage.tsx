@@ -124,7 +124,16 @@ export function PptxProductionStage({ task, onCancel, onRetry, onPause, onResume
         {status === "failed" && onRetry ? <button type="button" className="pptx-production-stage__button" onClick={onRetry}><RotateCcw size={15} /> Retry</button> : null}
         {status === "completed" && onOpenEditor ? <button type="button" className="pptx-production-stage__primary" onClick={onOpenEditor}><CheckCircle2 size={15} /> Open editor</button> : null}
       </footer>
-      {onSteer ? <LiveSteeringBar onSteer={onSteer} onPause={onPause} onResume={onResume} onRetry={onRetry} onContinueFromNode={onContinueFromNode} disabled={active && !paused ? false : false} /> : null}
+      {onSteer && (status === "drawing" || paused || status === "failed" || status === "completed") ? (
+        <LiveSteeringBar
+          onSteer={onSteer}
+          onPause={status === "drawing" ? onPause : undefined}
+          onResume={paused ? onResume : undefined}
+          onRetry={status === "failed" ? onRetry : undefined}
+          onContinueFromNode={status === "completed" ? onContinueFromNode : undefined}
+          disabled={false}
+        />
+      ) : null}
     </section>
   );
 }

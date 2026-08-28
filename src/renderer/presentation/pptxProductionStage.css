@@ -17,7 +17,8 @@
 .pptx-production-stage__progress { display: grid; min-width: 100px; gap: 4px; color: var(--od-ink-secondary, #6b7280); font-size: 12px; }
 .pptx-production-stage__progress strong { color: var(--od-ink, #202124); font-size: 20px; }
 .pptx-production-stage__error { border-radius: 6px; padding: 10px 12px; background: #fff1f0; color: #b42318; font-size: 13px; }
-.pptx-production-stage__actions { justify-content: flex-end; }
+.pptx-production-stage__actions { justify-content: flex-start; }
+.pptx-production-stage .stage-intent-bar { width: 100%; margin-top: 12px; }
 .pptx-production-stage__button, .pptx-production-stage__primary { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--od-border-subtle, #d9dee7); border-radius: 6px; padding: 8px 12px; background: var(--od-surface, #fff); color: inherit; cursor: pointer; font: inherit; font-size: 13px; }
 .pptx-production-stage__primary { border-color: #30343b; background: #30343b; color: #fff; }
 @keyframes pptx-stage-spin { to { transform: rotate(360deg); } }
