@@ -1956,11 +1956,11 @@ function OfficeDexApp() {
             onRetryTask={retryTaskGeneration}
             onSteerTask={steerPptxTask}
             onResumeTask={resumePptxTask}
-            onCancelTask={(task) => officecli.cancel(task.id)}
+            onCancelTask={async (task) => { await officecli.cancel(task.id); }}
             productionTaskId={stageFirstTaskRef.current}
             productionEditor={previewGrant && previewArtifact?.taskId === stageFirstTaskRef.current ? {
               previewToken: previewGrant.token,
-              fileName: previewArtifact.fileName,
+              fileName: previewArtifact!.fileName,
               onUnavailable: (error) => recordError(error || "Presentation editor unavailable", "other"),
             } : undefined}
             loading={recentFilesLoading}

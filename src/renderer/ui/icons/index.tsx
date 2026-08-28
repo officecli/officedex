@@ -87,3 +87,6 @@ export const UserOutlined = projectIcon(User);
 export const WarningFilled = projectIcon(TriangleAlert);
 
 export const CopyIcon = CopyOutlined;
+export const AddIcon = PlusOutlined;
+export const FileIcon = FileOutlined;
+export const SettingsIcon = SettingOutlined;

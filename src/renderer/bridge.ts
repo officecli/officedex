@@ -38,6 +38,16 @@ import type {
   ReportCapabilityResult,
   RendererLogInput,
   CloseXlsxEditorInput,
+  JiraConnectionSummary,
+  JiraProbeResult,
+  LiquipediaConnectionSummary,
+  LiquipediaProbeResult,
+  MarketingCampaignPlanInput,
+  MarketingCampaignPlanResult,
+  CampaignImageInput,
+  CampaignImageResult,
+  SpreadsheetPlanFieldsInput,
+  SpreadsheetPlanFieldsResult,
   SaveDocxResult,
   SaveXlsxEditorInput,
   SaveXlsxEditorResult,
@@ -148,6 +158,15 @@ function createBrowserPreviewAPI(): DesktopAPI {
     generate: async () => {
       throw new Error("Bridge IPC is only available inside the desktop app.");
     },
+    getJiraConnection: async () => ({ configured: false, baseUrl: "", authType: "" }),
+    saveJiraConnection: async () => { throw new Error("Jira connections require the desktop app."); },
+    clearJiraConnection: async () => { throw new Error("Jira connections require the desktop app."); },
+    getLiquipediaConnection: async () => ({ configured: false, baseUrl: "https://liquipedia.net/dota2" }),
+    saveLiquipediaConnection: async () => { throw new Error("Liquipedia connections require the desktop app."); },
+    clearLiquipediaConnection: async () => { throw new Error("Liquipedia connections require the desktop app."); },
+    planSpreadsheetFields: async () => { throw new Error("Spreadsheet field planning requires the desktop app."); },
+    planShopifyCatalogCampaign: async () => { throw new Error("Shopify campaign planning requires the desktop app."); },
+    composeCampaignImage: async () => { throw new Error("Campaign image composition requires the desktop app."); },
     modify: async () => {
       throw new Error("Bridge IPC is only available inside the desktop app.");
     },
@@ -648,6 +667,51 @@ function createWailsAPI(): DesktopAPI {
       const result = await WailsApp.Generate(toWails(input));
       return { taskId: result.taskId, sessionId: result.sessionId, status: result.status };
     },
+    getJiraConnection: async () => {
+      const fn = optionalWailsFunction<() => Promise<JiraConnectionSummary>>("GetJiraConnection");
+      if (!fn) throw new Error("Jira connections require a newer OfficeDex runtime.");
+      return fn();
+    },
+    saveJiraConnection: async (input) => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<JiraProbeResult>>("SaveJiraConnection");
+      if (!fn) throw new Error("Jira connections require a newer OfficeDex runtime.");
+      return fn(toWails(input));
+    },
+    clearJiraConnection: async () => {
+      const fn = optionalWailsFunction<() => Promise<void>>("ClearJiraConnection");
+      if (!fn) throw new Error("Jira connections require a newer OfficeDex runtime.");
+      await fn();
+    },
+    getLiquipediaConnection: async () => {
+      const fn = optionalWailsFunction<() => Promise<LiquipediaConnectionSummary>>("GetLiquipediaConnection");
+      if (!fn) throw new Error("Liquipedia connections require a newer OfficeDex runtime.");
+      return fn();
+    },
+    saveLiquipediaConnection: async (input) => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<LiquipediaProbeResult>>("SaveLiquipediaConnection");
+      if (!fn) throw new Error("Liquipedia connections require a newer OfficeDex runtime.");
+      return fn(toWails(input));
+    },
+    clearLiquipediaConnection: async () => {
+      const fn = optionalWailsFunction<() => Promise<void>>("ClearLiquipediaConnection");
+      if (!fn) throw new Error("Liquipedia connections require a newer OfficeDex runtime.");
+      await fn();
+    },
+    planSpreadsheetFields: async (input) => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<SpreadsheetPlanFieldsResult>>("PlanSpreadsheetFields");
+      if (!fn) throw new Error("Spreadsheet field planning requires a newer OfficeDex runtime.");
+      return fn(toWails(input));
+    },
+    planShopifyCatalogCampaign: async (input) => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<MarketingCampaignPlanResult>>("PlanShopifyCatalogCampaign");
+      if (!fn) throw new Error("Shopify campaign planning requires a newer OfficeDex runtime.");
+      return fn(toWails(input));
+    },
+    composeCampaignImage: async (input) => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<CampaignImageResult>>("ComposeCampaignImage");
+      if (!fn) throw new Error("Campaign image composition requires a newer OfficeDex runtime.");
+      return fn(toWails(input));
+    },
     modify: async (input: ModifyInput) => {
       const result = await WailsApp.Modify(toWails(input));
       return { taskId: result.taskId, sessionId: result.sessionId, status: result.status };
@@ -938,6 +1002,15 @@ function createRealE2EAPI(endpoint: string): DesktopAPI {
       rpc<ImageTemplatePublishRequest>("CreateImageTemplatePublishRequest", input),
     generate: (input: GenerateInput) =>
       rpc<{ taskId: string; sessionId: string; status: string }>("Generate", input),
+    getJiraConnection: () => rpc<JiraConnectionSummary>("GetJiraConnection"),
+    saveJiraConnection: (input) => rpc<JiraProbeResult>("SaveJiraConnection", input),
+    clearJiraConnection: () => rpc<void>("ClearJiraConnection"),
+    getLiquipediaConnection: () => rpc<LiquipediaConnectionSummary>("GetLiquipediaConnection"),
+    saveLiquipediaConnection: (input) => rpc<LiquipediaProbeResult>("SaveLiquipediaConnection", input),
+    clearLiquipediaConnection: () => rpc<void>("ClearLiquipediaConnection"),
+    planSpreadsheetFields: (input) => rpc<SpreadsheetPlanFieldsResult>("PlanSpreadsheetFields", input),
+    planShopifyCatalogCampaign: (input) => rpc<MarketingCampaignPlanResult>("PlanShopifyCatalogCampaign", input),
+    composeCampaignImage: (input) => rpc<CampaignImageResult>("ComposeCampaignImage", input),
     modify: (input: ModifyInput) =>
       rpc<{ taskId: string; sessionId: string; status: string }>("Modify", input),
     artifactStageEdit: (input: ArtifactStageRuntimeInput) =>

@@ -5,6 +5,7 @@ import { Button, TextArea } from "../ui";
 import { useT } from "../i18n";
 
 type QuestionDraft = { optionId?: string; answer: string; freeform: string };
+export type SpreadsheetAgentTool = string;
 
 const spreadsheetQuestionDrafts = new Map<string, Record<string, QuestionDraft>>();
 
@@ -27,6 +28,9 @@ function draftsFromAnswers(answers?: TaskQuestionAnswer[]) {
 }
 
 export interface SpreadsheetAgentPanelProps {
+  [key: string]: any;
+  preferredTool?: SpreadsheetAgentTool;
+  catalogPanel?: React.ReactNode;
   workspaceId?: string;
   artifactPath?: string;
   conversationId?: string;

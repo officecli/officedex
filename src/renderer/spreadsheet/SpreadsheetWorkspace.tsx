@@ -10,6 +10,7 @@ import { PublishedWorkbookAppPage } from "../appBuilder/PublishedWorkbookAppPage
 import type { PublishedWorkbookApp } from "../appBuilder/types";
 
 export interface SpreadsheetWorkspaceHandle {
+  [key: string]: any;
   save(): Promise<boolean>;
   focus(): void;
 }

@@ -19,5 +19,6 @@ export interface UiButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonEleme
   readonly icon?: ReactNode;
   readonly loading?: boolean;
   readonly danger?: boolean;
+  readonly block?: boolean;
   readonly children?: ReactNode;
 }

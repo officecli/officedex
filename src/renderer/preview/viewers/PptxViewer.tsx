@@ -64,9 +64,9 @@ export default function PptxViewer({ previewToken, fileName, documentType, fileP
           </Suspense>
           {fallbackReason && (
             <div className="pptx-workbench-fallback-bar" role="note">
-              <span>{t("pptx.workbench.editorUnavailableTitle")}</span>
+              <span>{t("pptx.agent.editorUnavailableTitle")}</span>
               <button type="button" onClick={() => setUseReadOnly(true)}>
-                {t("pptx.workbench.readOnlyFallback")}
+                {t("pptx.agent.readOnlyFallback")}
               </button>
             </div>
           )}
@@ -74,7 +74,7 @@ export default function PptxViewer({ previewToken, fileName, documentType, fileP
       ) : (
         <>
           <div className="pptx-readonly-notice" role="note">
-            {t("pptx.workbench.editorUnavailableTitle")} — {t("pptx.workbench.editorUnavailableNotConfigured")}
+            {t("pptx.agent.editorUnavailableTitle")} — {t("pptx.agent.editorUnavailableNotConfigured")}
           </div>
           <PptistReadOnlyViewer previewToken={previewToken} fileName={fileName} onOpenExternal={openExternal} />
         </>

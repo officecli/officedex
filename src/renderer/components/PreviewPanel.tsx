@@ -1,6 +1,6 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, CheckCircle2, ExternalLink, FolderOpen, X } from "lucide-react";
-import type { Artifact, PreviewGrant } from "../../shared/types";
+import type { Artifact, PreviewGrant, TimelineDeck, TimelineNode } from "../../shared/types";
 import { officecli } from "../bridge";
 import { useT } from "../i18n";
 import { LoadingState } from "../preview/components/LoadingState";
@@ -20,6 +20,15 @@ interface PreviewPanelProps {
   onClose: () => void;
   /** The artifact behind the grant — drives the footer actions (reveal / open externally). */
   artifact?: Artifact | null;
+  live?: unknown;
+  timelineTaskId?: string;
+  timelineNodeId?: string | null;
+  onOpenTimelineNode?: (deck: TimelineDeck, node: TimelineNode) => void | Promise<void>;
+  onTimelineNodeSwapped?: (node: TimelineNode) => void;
+  onTimelineNodeReturned?: () => void;
+  onReturnToLatestDeck?: () => void;
+  onReplayGeneration?: () => void;
+  catalogPanel?: React.ReactNode;
 }
 
 const PREVIEW_PANEL_SLIDE_MS = 420;

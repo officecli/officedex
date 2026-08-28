@@ -274,7 +274,7 @@ export function PresentationEditorFrame({
               },
             });
             const content = toTransferableBuffer(prepared.content);
-            const assets = (prepared.assets ?? []).map((asset) => ({
+            const assets = (prepared.assets ?? []).map((asset: any) => ({
               path: asset.path,
               contentType: asset.contentType,
               data: toTransferableBuffer(asset.data),
@@ -291,7 +291,7 @@ export function PresentationEditorFrame({
                 documentRevision: prepared.documentRevision,
                 assets,
               },
-              [content, ...assets.map((asset) => asset.data)],
+              [content, ...assets.map((asset: { data: ArrayBuffer }) => asset.data)],
             );
             callbacksRef.current.onReady?.();
             callbacksRef.current.onController?.({
