@@ -142,6 +142,11 @@ function OfficeDexApp() {
   const activeNavRef = useRef(activeNav);
   activeNavRef.current = activeNav;
   const pendingGenerateRef = useRef<PendingGenerate | null>(null);
+  // A newly submitted task is shown in the Home stage shell first. Once its
+  // artifact is available, the existing PreviewPanel becomes the focused
+  // artifact stage. The ref scopes auto-opening to this submission only, so
+  // background/history tasks and legacy dialogue navigation remain unchanged.
+  const stageFirstTaskRef = useRef<string | undefined>(undefined);
   const agentClientToolReportedErrorsRef = useRef(new Set<string>());
   const { settings: persistedSettings, loading: settingsLoading } = useSettings();
   const [newGenerationDraft, setNewGenerationDraft] = useState<NewGenerationDraft>(() => createNewGenerationDraft());
@@ -368,11 +373,14 @@ function OfficeDexApp() {
       });
       if (event.task_id) {
         if (pending && shouldReplaceLocalTask) {
+          if (stageFirstTaskRef.current === pending.localTaskId) {
+            stageFirstTaskRef.current = event.task_id;
+          }
           pendingGenerateRef.current = null;
           setSelectedTaskID({ kind: "task", id: event.task_id });
           setBusy(false);
           refreshProjectLists();
-          setActiveNav("dialogue");
+          setActiveNav(stageFirstTaskRef.current === event.task_id ? "home" : "dialogue");
         }
       }
       if (event.type === "task.completed" || event.type === "task.failed" || event.type === "task.cancelled") {
@@ -683,6 +691,7 @@ function OfficeDexApp() {
         fps: submittedValues.fps,
       },
     };
+    stageFirstTaskRef.current = localTaskId;
     const pendingInput = pendingGenerateRef.current.input;
     setState((current) => attachUserInput(applyTaskEvent(current, {
       task_id: localTaskId,
@@ -695,7 +704,7 @@ function OfficeDexApp() {
       },
     }), localTaskId, pendingInput, undefined, context));
     setSelectedTaskID({ kind: "task", id: localTaskId });
-    setActiveNav("dialogue");
+    setActiveNav("home");
     resetNewGenerationDraft();
     setBusy(false);
     try {
@@ -709,12 +718,14 @@ function OfficeDexApp() {
         pendingGenerateRef.current = null;
         setState((current) => attachUserInput(deleteTask(current, localTaskId), result.taskId, pending.input, undefined, actualContext));
         setSelectedTaskID({ kind: "task", id: result.taskId });
-        setActiveNav("dialogue");
+        stageFirstTaskRef.current = result.taskId;
+        setActiveNav("home");
         refreshProjectLists();
       }
     } catch (error) {
       if (pendingGenerateRef.current?.localTaskId !== localTaskId) return;
       pendingGenerateRef.current = null;
+      stageFirstTaskRef.current = undefined;
       setState((current) => deleteTask(current, localTaskId));
       setNewGenerationDraft(submittedDraft);
       setNewGenerationDraftDirty(true);
@@ -1231,6 +1242,31 @@ function OfficeDexApp() {
       message.error(`Preview unavailable: ${text}`);
     }
   }, [previewGrant]);
+
+  useEffect(() => {
+    const taskId = stageFirstTaskRef.current;
+    if (!taskId) return;
+    const task = state.tasks[taskId];
+    if (!task) return;
+    if (task.status === "completed" && task.artifact?.filePath) {
+      stageFirstTaskRef.current = undefined;
+      void openInlinePreview(task.artifact);
+      return;
+    }
+    if (task.status === "failed" || task.status === "cancelled") {
+      stageFirstTaskRef.current = undefined;
+    }
+  }, [openInlinePreview, state.tasks]);
+
+  const openTaskFromHome = useCallback((taskId: string) => {
+    const task = state.tasks[taskId];
+    if (task?.status === "completed" && task.artifact?.filePath) {
+      setSelectedTaskID({ kind: "task", id: taskId });
+      void openInlinePreview(task.artifact);
+      return;
+    }
+    selectTask(taskId);
+  }, [openInlinePreview, selectTask, state.tasks]);
 
   const openRecentFile = useCallback(async (file: RecentFile) => {
     try {
@@ -1904,7 +1940,7 @@ function OfficeDexApp() {
             onAddWorkspace={addWorkspace}
             onAnalyzeTask={analyzeTaskFromHome}
             onStartTask={startTaskFromHome}
-            onOpenTask={selectTask}
+            onOpenTask={openTaskFromHome}
             onRetryRecentFiles={() => void refreshRecentFiles(homeWorkspaceId)}
           />
         ) : null}
