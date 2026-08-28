@@ -1903,6 +1903,19 @@ function OfficeDexApp() {
     );
   }
 
+  // Authentication is a full-page flow. Rendering it inside Shell leaves the
+  // workspace sidebar and content chrome visible behind the login card and
+  // makes the browser hand-off look like a broken in-app state.
+  if (activeNav === "login") {
+    return (
+      <>
+        <DialogHost />
+        <ToastHost />
+        <LoginScreen />
+      </>
+    );
+  }
+
   return (
     <>
       <DialogHost />
@@ -2157,7 +2170,6 @@ function OfficeDexApp() {
             )}
           />
         ) : null}
-        {activeNav === "login" ? <LoginScreen /> : null}
         </Shell>
       </div>
       <UnsavedChangesDialog
