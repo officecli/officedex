@@ -264,7 +264,7 @@ describe("App task flow", () => {
       await screen.findByRole("textbox", { name: "Describe the result you want" }),
       { target: { value: "Write a client proposal document" } },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Analyze" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
 
     expect(await screen.findByRole("heading", { name: "Confirm the task scope" })).toBeTruthy();
     expect(screen.getByText("DOCX document")).toBeTruthy();
@@ -318,8 +318,8 @@ describe("App task flow", () => {
       await screen.findByRole("textbox", { name: "Describe the result you want" }),
       { target: { value: "Create a three-slide presentation about Shimo" } },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Analyze" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Confirm and start" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Create execution plan|Confirm and start/ }));
 
     expect(await screen.findByText("Who is the audience for this presentation?")).toBeTruthy();
     expect(screen.getByRole("button", { name: /New users/ })).toBeTruthy();
@@ -336,7 +336,7 @@ describe("App task flow", () => {
       await screen.findByRole("textbox", { name: "Describe the result you want" }),
       { target: { value: "Clean this supplier catalog for Shopify import" } },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Analyze" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Add the supplier Excel workbook");
     expect(bridge.generate).not.toHaveBeenCalled();
@@ -357,7 +357,7 @@ describe("App task flow", () => {
       screen.getByRole("textbox", { name: "Describe the result you want" }),
       { target: { value: "Clean this supplier catalog for Shopify import" } },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Analyze" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
 
     expect(await screen.findByRole("heading", { name: "Confirm the task scope" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Configure task" }));
