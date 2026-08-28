@@ -30,11 +30,13 @@ test.describe("OfficeDex PPTX production stage", () => {
       });
     });
 
-    const prompt = page.getByPlaceholder(/Enter what you want to generate/i);
+    const prompt = page.getByRole("textbox", { name: /what you want to generate|describe the result/i }).first();
     await prompt.fill("Create a provider-free PPTX stage smoke test");
     const submit = page.getByRole("button", { name: /Analyze|Generate|Start creating|Create/i }).last();
     await submit.click();
-    await expect(page.getByRole("status")).toContainText(/Starting production|Starting/i, { timeout: 2_000 });
+    await expect(page.getByRole("heading", { name: /Confirm the task scope/i })).toBeVisible({ timeout: 5_000 });
+    await page.getByRole("button", { name: /Create execution plan|Confirm and start/i }).click();
+    await expect(page.getByTestId("pptx-production-status")).toContainText(/Starting production|Starting/i, { timeout: 5_000 });
     await expect(submit).toBeDisabled();
   });
 
@@ -49,6 +51,6 @@ test.describe("OfficeDex PPTX production stage", () => {
     await expect(stage).toHaveClass(/pptx-production-stage--failed/);
     await expect(stage.getByTestId("pptx-production-status")).toContainText(/Generation failed/i);
     await expect(stage.getByRole("alert")).toContainText(/Real E2E diagnostic failure fixture/i);
-    await expect(stage.getByRole("button", { name: /Retry/i })).toBeVisible();
+    await expect(stage.locator("footer").getByRole("button", { name: /Retry/i })).toBeVisible();
   });
 });
