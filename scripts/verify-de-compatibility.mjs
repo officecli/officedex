@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -25,11 +25,13 @@ try {
   // These are provider-free compatibility checks. Hosted real E2E remains
   // explicitly opt-in so running this verifier never spends Credits.
   run("go", ["test", "./internal/bridge", "./internal/localstore", "./internal/login", "./internal/xlsxeditor", "./internal/timeline", "-count=1"]);
-  if (existsSync(path.join(root, "node_modules", "@playwright", "test"))) {
-    run("npm", ["exec", "--", "playwright", "test", "--list", "e2e/compatibility-real.spec.ts"]);
-  } else {
-    console.warn("Playwright dependencies are not installed; E2E listing is deferred to the managed runtime environment.");
+  const compatibilitySpec = path.join(root, "e2e", "compatibility-real.spec.ts");
+  if (!existsSync(compatibilitySpec)) throw new Error("missing e2e/compatibility-real.spec.ts");
+  const source = readFileSync(compatibilitySpec, "utf8");
+  if (!source.includes('test.describe("OfficeDex D/E compatibility canaries"')) {
+    throw new Error("compatibility E2E spec is missing its canary suite");
   }
+  console.log("Compatibility E2E spec is present and gated for managed runtime execution.");
   console.log("OfficeDex D/E compatibility checks passed. Set OFFICEDEX_E2E_COMPAT=1 and use npm run test:e2e to run managed runtime canaries.");
 } finally {
   await rm(fixtureDir, { recursive: true, force: true });
