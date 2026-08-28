@@ -39,6 +39,7 @@ function TextAreaRoot({ autoSize, showCount, onChange, onSubmit, onCompositionSt
       onKeyDown={(event: KeyboardEvent<HTMLTextAreaElement>) => {
         onKeyDown?.(event);
         if (!event.defaultPrevented && event.key === "Enter" && !event.shiftKey && !composing.current && !event.nativeEvent.isComposing) {
+          event.preventDefault();
           onSubmit?.(event.currentTarget.value);
         }
       }}
