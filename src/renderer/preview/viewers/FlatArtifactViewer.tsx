@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Artifact, ArtifactStageEditIntent } from "../../../shared/types";
+import type { Artifact } from "../../../shared/types";
+import type { ArtifactStageEditIntent } from "../../../shared/artifactStageProtocol";
 import { officecli } from "../../bridge";
 import {
   FlatArtifactStage,
