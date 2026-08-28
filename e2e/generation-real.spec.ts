@@ -6,6 +6,7 @@ import {
   dismissOnboarding,
   expectPptistText,
   fixturePath,
+  hostRPC,
   preparePage,
   recordScenario,
   submitGeneration,
@@ -65,6 +66,9 @@ test.describe("OfficeDex real client generation and artifact flows", () => {
       await preparePage(page);
       const startedAt = Date.now();
       const sourceFile = item.sourceFixture ? await fixturePath(item.sourceFixture) : undefined;
+      if (item.documentType === "pptx" && process.env.OFFICEDEX_E2E_PPTX_NO_IMAGES === "1") {
+        await hostRPC("UpdateSettings", { defaults: { enableImages: false } });
+      }
 
       await submitGeneration(page, {
         documentType: item.documentType,
