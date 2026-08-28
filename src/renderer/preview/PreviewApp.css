@@ -481,6 +481,363 @@ body.preview-overlay-active .living-tree-popover-overlay {
   background: #1f1f1f;
 }
 
+/* ─── PPTX workbench: learnof/pptx editor + AI conversation ─── */
+.pptx-deck-layout-workbench {
+  position: relative;
+  flex-direction: column;
+}
+
+.pptx-readonly-notice {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: #7a4d00;
+  background: #fff7e0;
+  border-bottom: 1px solid #f5d75e;
+}
+
+.pptx-workbench {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  background: #f0f1f3;
+}
+
+.pptx-workbench-editor {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  background: #ffffff;
+}
+
+.pptx-workbench-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #ffffff;
+}
+
+.pptx-workbench-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  font-size: 13px;
+  color: #5f6673;
+  background: rgba(246, 245, 244, 0.92);
+}
+
+.pptx-workbench-overlay-error {
+  color: #7a1f1f;
+}
+
+.pptx-workbench-overlay-error strong {
+  color: #1a1c1c;
+}
+
+.pptx-workbench-spinner {
+  animation: pptx-workbench-spin 0.9s linear infinite;
+}
+
+@keyframes pptx-workbench-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.pptx-workbench-fallback-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: #7a4d00;
+  background: #fff7e0;
+  border-top: 1px solid #f5d75e;
+}
+
+.pptx-workbench-fallback-bar button {
+  border: 1px solid var(--n-hairline);
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 2px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.pptx-workbench-panel {
+  width: 340px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #ffffff;
+  border-left: 1px solid var(--n-hairline);
+}
+
+.pptx-workbench-panel-header {
+  flex-shrink: 0;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--n-hairline);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pptx-workbench-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1c1c;
+}
+
+.pptx-workbench-panel-target,
+.pptx-workbench-panel-selection {
+  font-size: 12px;
+  color: #5d5b54;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pptx-workbench-panel-selection {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pptx-workbench-panel-selection > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pptx-workbench-icon-button {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--n-hairline);
+  border-radius: 6px;
+  background: #ffffff;
+  color: #5d5b54;
+  cursor: pointer;
+}
+
+.pptx-workbench-icon-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.pptx-workbench-transcript {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pptx-workbench-empty {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #787671;
+}
+
+.pptx-workbench-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pptx-workbench-message {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.pptx-workbench-message-avatar {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #e3f1f2;
+  color: var(--n-secondary);
+}
+
+.pptx-workbench-message-user .pptx-workbench-message-avatar {
+  background: #f0eeec;
+  color: #37352f;
+}
+
+.pptx-workbench-message-body {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pptx-workbench-message-author {
+  font-size: 11px;
+  font-weight: 600;
+  color: #787671;
+}
+
+.pptx-workbench-message-text {
+  font-size: 13px;
+  line-height: 1.55;
+  color: #1a1c1c;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.pptx-workbench-confidence {
+  font-size: 11px;
+  color: #787671;
+}
+
+.pptx-workbench-warnings {
+  font-size: 12px;
+  color: #7a4d00;
+  background: #fff7e0;
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.pptx-workbench-warnings ul,
+.pptx-workbench-confirm ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.pptx-workbench-confirm {
+  font-size: 12px;
+  color: #37352f;
+  background: var(--n-surface-soft);
+  border: 1px solid var(--n-hairline);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pptx-workbench-confirm p {
+  margin: 0;
+}
+
+.pptx-workbench-confirm-title {
+  font-weight: 600;
+  color: #1a1c1c;
+}
+
+.pptx-workbench-confirm-actions,
+.pptx-workbench-turn-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.pptx-workbench-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #5d5b54;
+}
+
+.pptx-workbench-status-done {
+  color: #1aae39;
+}
+
+.pptx-workbench-status-error {
+  color: #e03131;
+}
+
+.pptx-workbench-debug {
+  font-size: 11px;
+  color: #787671;
+}
+
+.pptx-workbench-debug pre {
+  margin: 6px 0 0;
+  padding: 8px;
+  max-height: 200px;
+  overflow: auto;
+  font-size: 11px;
+  line-height: 1.4;
+  background: var(--n-surface-soft);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.pptx-workbench-composer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--n-hairline);
+  padding: 10px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pptx-workbench-input {
+  width: 100%;
+  resize: none;
+  border: 1px solid var(--n-hairline);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #1a1c1c;
+  background: #ffffff;
+  outline: none;
+}
+
+.pptx-workbench-input:focus {
+  border-color: var(--n-secondary);
+  box-shadow: 0 0 0 2px rgba(0, 104, 118, 0.15);
+}
+
+.pptx-workbench-input:disabled {
+  background: var(--n-surface-soft);
+  color: #a4a097;
+}
+
+.pptx-workbench-composer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.pptx-workbench-composer-hint {
+  font-size: 11px;
+  color: #787671;
+}
+
 /* ─── HTML Viewer ─── */
 .preview-html-container {
   flex: 1;

@@ -20,6 +20,7 @@ import (
 )
 
 func TestDemoBuildMatchesOnlyExactMagicPrompt(t *testing.T) {
+	t.Setenv("OFFICEDEX_DEMO_ACCEPT_ANY_PROMPT", "")
 	recorder := newMemoryRecorder(t)
 	engine := New(Options{Recorder: recorder, Delay: instantDelay, NewID: fixedID("demo-task-1")})
 	input := types.GenerateInput{
@@ -52,6 +53,66 @@ func TestDemoBuildMatchesOnlyExactMagicPrompt(t *testing.T) {
 		if _, ok, err := New(Options{Recorder: newMemoryRecorder(t), Delay: instantDelay}).TryGenerate(context.Background(), mismatch); err != nil || ok {
 			t.Fatalf("mismatch %#v returned ok %v err %v", mismatch, ok, err)
 		}
+	}
+}
+
+func TestDemoAcceptAnyPromptWritesLocalArtifactsWithoutCredits(t *testing.T) {
+	t.Setenv("OFFICEDEX_DEMO_ACCEPT_ANY_PROMPT", "1")
+	t.Setenv("OFFICEDEX_E2E_HOST", "1")
+	cases := []struct {
+		documentType types.DocumentType
+		extension    string
+	}{
+		{types.DocPPTX, ".pptx"},
+		{types.DocDOCX, ".docx"},
+		{types.DocXLSX, ".xlsx"},
+		{types.DocReport, ".html"},
+		{types.DocIMG, ".png"},
+		{types.DocGIF, ".gif"},
+	}
+	for _, tc := range cases {
+		t.Run(string(tc.documentType), func(t *testing.T) {
+			recorder := newMemoryRecorder(t)
+			taskID := "local-" + string(tc.documentType)
+			engine := New(Options{Recorder: recorder, Delay: instantDelay, NewID: fixedID(taskID)})
+			result, ok, err := engine.TryGenerate(context.Background(), types.GenerateInput{
+				DocumentType: tc.documentType,
+				Prompt:       "Ordinary local prompt for " + string(tc.documentType),
+			})
+			if err != nil || !ok {
+				t.Fatalf("TryGenerate ok=%v err=%v", ok, err)
+			}
+			if result.TaskID != taskID || result.Status != "running" {
+				t.Fatalf("result = %#v", result)
+			}
+			completed := waitForEventPayload(t, recorder, "task.completed")
+			if completed["credit_mode"] != "local_demo" || completed["credits_charged"] != 0 {
+				t.Fatalf("completed credit fields = %#v", completed)
+			}
+			artifact := recorder.lastArtifact()
+			if artifact == nil {
+				t.Fatal("expected local artifact")
+			}
+			if artifact.DocumentType != string(tc.documentType) || filepath.Ext(artifact.FilePath) != tc.extension {
+				t.Fatalf("artifact = %#v", artifact)
+			}
+			if !strings.HasPrefix(artifact.FilePath, recorder.WorkspaceDir()+string(os.PathSeparator)) {
+				t.Fatalf("artifact path = %q, want workspace path", artifact.FilePath)
+			}
+			assertLocalArtifactReadable(t, artifact.FilePath, tc.documentType)
+		})
+	}
+}
+
+func TestDemoAcceptAnyPromptRequiresE2EHost(t *testing.T) {
+	t.Setenv("OFFICEDEX_DEMO_ACCEPT_ANY_PROMPT", "1")
+	t.Setenv("OFFICEDEX_E2E_HOST", "")
+	_, ok, err := New(Options{Recorder: newMemoryRecorder(t), Delay: instantDelay}).TryGenerate(context.Background(), types.GenerateInput{
+		DocumentType: types.DocPPTX,
+		Prompt:       "Ordinary prompt must not bypass a non-E2E demo build",
+	})
+	if err != nil || ok {
+		t.Fatalf("TryGenerate ok=%v err=%v, want normal bridge fallback", ok, err)
 	}
 }
 
@@ -263,7 +324,7 @@ func TestDemoFlowRejectsWrongOrStaleConfirmation(t *testing.T) {
 	}
 }
 
-func TestDemoFlowCompletesWithNineSlidePptxArtifact(t *testing.T) {
+func TestDemoFlowCompletesWithPromptDrivenPptxArtifact(t *testing.T) {
 	recorder := newMemoryRecorder(t)
 	engine := New(Options{Recorder: recorder, Delay: instantDelay, NewID: fixedID("demo-task")})
 	_, ok, err := engine.TryGenerate(context.Background(), types.GenerateInput{DocumentType: types.DocPPTX, GenerationMode: "plan", Topic: magicPrompt})
@@ -302,37 +363,140 @@ func TestDemoFlowCompletesWithNineSlidePptxArtifact(t *testing.T) {
 			t.Fatalf("pptx missing %s", name)
 		}
 	}
-	for _, name := range []string{"docProps/app.xml", "docProps/core.xml", "ppt/presProps.xml"} {
-		if !names[name] {
-			t.Fatalf("pptx missing %s; demo artifact should be a real polished PPTX package, not a handcrafted minimal package", name)
-		}
-	}
-	if slideCount != 9 {
-		t.Fatalf("demo artifact slide count = %d; want exactly 9 polished demo slides", slideCount)
+	if slideCount < 4 {
+		t.Fatalf("demo artifact slide count = %d; want a dynamic deck with at least 4 slides", slideCount)
 	}
 	slide1XML := readZipFile(t, &reader.Reader, "ppt/slides/slide1.xml")
-	slide6XML := readZipFile(t, &reader.Reader, "ppt/slides/slide6.xml")
-	slide9XML := readZipFile(t, &reader.Reader, "ppt/slides/slide9.xml")
-	for _, assertion := range []struct {
-		name   string
-		xml    string
-		needle string
-	}{
-		{name: "slide 1", xml: slide1XML, needle: "OfficeDex turns prompts"},
-		{name: "slide 6", xml: slide6XML, needle: "90-DAY LAUNCH TIMELINE"},
-		{name: "slide 6", xml: slide6XML, needle: "Turn launch proof into a repeatable funnel"},
-		{name: "slide 9", xml: slide9XML, needle: "Download OfficeDex"},
-	} {
-		if !strings.Contains(assertion.xml, assertion.needle) {
-			t.Fatalf("%s missing %q", assertion.name, assertion.needle)
-		}
+	if !strings.Contains(slide1XML, "增长与发布方案") {
+		t.Fatalf("cover slide missing topic-derived title")
+	}
+	if strings.Contains(slide1XML, "需求拆解") || strings.Contains(slide1XML, "内容结构") || strings.Contains(slide1XML, "推进节奏") || strings.Contains(slide1XML, "需求原文") {
+		t.Fatalf("cover slide contains legacy fixed-template title")
 	}
 	if len(demoSlides) != 9 {
-		t.Fatalf("len(demoSlides) = %d, want 9", len(demoSlides))
+		t.Fatalf("len(demoSlides) = %d, want 9 staged UI slides", len(demoSlides))
 	}
-	if title := slideTitle(demoSlides[5]); title != "90-Day Launch Timeline" {
-		t.Fatalf("slide 6 title = %q, want 90-Day Launch Timeline", title)
+}
+
+func TestPromptDrivenPptxChangesWithPromptAndDoesNotUseFixture(t *testing.T) {
+	firstPath := filepath.Join(t.TempDir(), "first.pptx")
+	secondPath := filepath.Join(t.TempDir(), "second.pptx")
+	firstPrompt := "为新能源品牌制作一份面向投资人的增长计划。"
+	secondPrompt := "为教育产品制作一份面向校长的年度招生方案。"
+	if err := writePromptPptx(firstPath, firstPrompt); err != nil {
+		t.Fatalf("write first prompt PPTX: %v", err)
 	}
+	if err := writePromptPptx(secondPath, secondPrompt); err != nil {
+		t.Fatalf("write second prompt PPTX: %v", err)
+	}
+	first, err := os.ReadFile(firstPath)
+	if err != nil {
+		t.Fatalf("read first PPTX: %v", err)
+	}
+	second, err := os.ReadFile(secondPath)
+	if err != nil {
+		t.Fatalf("read second PPTX: %v", err)
+	}
+	if reflect.DeepEqual(first, second) {
+		t.Fatal("different prompts produced byte-identical PPTX artifacts")
+	}
+	firstReader, err := zip.OpenReader(firstPath)
+	if err != nil {
+		t.Fatalf("open first PPTX: %v", err)
+	}
+	defer firstReader.Close()
+	if promptPptxFileName(firstPrompt) == "local-demo.pptx" || promptPptxFileName(secondPrompt) == "local-demo.pptx" {
+		t.Fatal("prompt-driven PPTX must not use the local-demo filename")
+	}
+}
+
+func TestQBRPromptBuildsDynamicQBRSectionsAndEditableMetrics(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "qbr.pptx")
+	qbrPrompt := "生成 QBR 框架，涵盖目标达成、关键指标、项目复盘与资源诉求。"
+	if got := promptPptxFileName(qbrPrompt); got != "QBR-业务回顾.pptx" {
+		t.Fatalf("QBR filename = %q, want topic-specific filename", got)
+	}
+	if err := writePromptPptx(path, qbrPrompt); err != nil {
+		t.Fatalf("write QBR PPTX: %v", err)
+	}
+	reader, err := zip.OpenReader(path)
+	if err != nil {
+		t.Fatalf("open QBR PPTX: %v", err)
+	}
+	defer reader.Close()
+	if len(reader.File) == 0 {
+		t.Fatal("QBR PPTX is empty")
+	}
+	sections := []string{"QBR", "管理摘要", "目标达成", "关键指标", "项目复盘", "资源诉求", "下一步"}
+	allXML := ""
+	slideCount := 0
+	for _, file := range reader.File {
+		if strings.HasPrefix(file.Name, "ppt/slides/slide") && strings.HasSuffix(file.Name, ".xml") {
+			slideCount++
+			allXML += readZipFile(t, &reader.Reader, file.Name)
+		}
+	}
+	if slideCount != 7 {
+		t.Fatalf("QBR slide count = %d, want 7 sections", slideCount)
+	}
+	for _, section := range sections {
+		if !strings.Contains(allXML, section) {
+			t.Fatalf("QBR deck missing section %q", section)
+		}
+	}
+	if !strings.Contains(allXML, "QBR｜目标达成、关键指标、项目复盘与资源诉求") {
+		t.Fatal("QBR cover does not reflect the requested focus areas")
+	}
+	for _, legacy := range []string{"需求拆解", "内容结构", "推进节奏", "需求原文"} {
+		if strings.Contains(allXML, legacy) {
+			t.Fatalf("QBR deck contains legacy fixed title %q", legacy)
+		}
+	}
+	if !strings.Contains(allXML, "可编辑字段") || !strings.Contains(allXML, "待补充") {
+		t.Fatal("QBR deck must use explicit editable placeholders for missing metrics")
+	}
+	for _, fabricated := range []string{"90%", "100%", "1,000", "1000"} {
+		if strings.Contains(allXML, "<a:t>"+fabricated+"</a:t>") {
+			t.Fatalf("QBR deck contains fabricated metric %q", fabricated)
+		}
+	}
+}
+
+func TestPromptStructuresAndFilenamesVaryByRequest(t *testing.T) {
+	firstPath := filepath.Join(t.TempDir(), "growth.pptx")
+	secondPath := filepath.Join(t.TempDir(), "education.pptx")
+	if err := writePromptPptx(firstPath, "为新能源品牌制作一份面向投资人的增长计划。"); err != nil {
+		t.Fatalf("write growth PPTX: %v", err)
+	}
+	if err := writePromptPptx(secondPath, "为教育产品制作一份面向校长的年度招生方案。"); err != nil {
+		t.Fatalf("write education PPTX: %v", err)
+	}
+	firstReader, err := zip.OpenReader(firstPath)
+	if err != nil {
+		t.Fatalf("open growth PPTX: %v", err)
+	}
+	defer firstReader.Close()
+	secondReader, err := zip.OpenReader(secondPath)
+	if err != nil {
+		t.Fatalf("open education PPTX: %v", err)
+	}
+	defer secondReader.Close()
+	if countSlideXML(&firstReader.Reader) == countSlideXML(&secondReader.Reader) {
+		t.Fatalf("different prompts unexpectedly produced the same slide count")
+	}
+	if promptPptxFileName("为新能源品牌制作一份面向投资人的增长计划。") == promptPptxFileName("为教育产品制作一份面向校长的年度招生方案。") {
+		t.Fatal("different prompt topics unexpectedly produced the same filename")
+	}
+}
+
+func countSlideXML(reader *zip.Reader) int {
+	count := 0
+	for _, file := range reader.File {
+		if strings.HasPrefix(file.Name, "ppt/slides/slide") && strings.HasSuffix(file.Name, ".xml") {
+			count++
+		}
+	}
+	return count
 }
 
 func TestDemoTimelineEditRequiresExactPromptAndSlideSix(t *testing.T) {
@@ -471,6 +635,36 @@ func timelineElementByID(elements []map[string]any, id string) map[string]any {
 		}
 	}
 	return nil
+}
+
+func assertLocalArtifactReadable(t *testing.T, path string, documentType types.DocumentType) {
+	t.Helper()
+	switch documentType {
+	case types.DocPPTX, types.DocDOCX, types.DocXLSX:
+		reader, err := zip.OpenReader(path)
+		if err != nil {
+			t.Fatalf("open local OOXML artifact: %v", err)
+		}
+		defer reader.Close()
+		if len(reader.File) == 0 {
+			t.Fatal("local OOXML artifact is empty")
+		}
+	case types.DocReport:
+		data, err := os.ReadFile(path)
+		if err != nil || !strings.Contains(string(data), "OfficeDex Local Demo") {
+			t.Fatalf("local report data=%q err=%v", string(data), err)
+		}
+	case types.DocIMG:
+		data, err := os.ReadFile(path)
+		if err != nil || len(data) < 8 || string(data[:8]) != "\x89PNG\r\n\x1a\n" {
+			t.Fatalf("local PNG signature=%q err=%v", data, err)
+		}
+	case types.DocGIF:
+		data, err := os.ReadFile(path)
+		if err != nil || len(data) < 6 || !strings.HasPrefix(string(data[:6]), "GIF8") {
+			t.Fatalf("local GIF signature=%q err=%v", data, err)
+		}
+	}
 }
 
 type memoryRecorder struct {

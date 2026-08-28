@@ -73,7 +73,14 @@ export function PreviewPanel({ grant, onClose, artifact }: PreviewPanelProps) {
     const { token, fileName, documentType } = grant;
     switch (documentType) {
       case "pptx":
-        return <PptxViewer previewToken={token} fileName={fileName} documentType={documentType} />;
+        return (
+          <PptxViewer
+            previewToken={token}
+            fileName={fileName}
+            documentType={documentType}
+            filePath={artifact?.filePath}
+          />
+        );
       case "docx":
         return <DocxViewer previewToken={token} fileName={fileName} documentType={documentType} onDirtyChange={setDocumentDirty} />;
       case "xlsx":

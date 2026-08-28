@@ -1834,3 +1834,74 @@ func contains(haystack []string, needle string) bool {
 	}
 	return false
 }
+
+func TestPlanPptxJSCallsBridgePlanner(t *testing.T) {
+	client, fake := newClientWithFake(t)
+	defer client.Stop()
+
+	done := make(chan error, 1)
+	results := make(chan PlanPptxJSResult, 1)
+	go func() {
+		result, err := client.PlanPptxJS(context.Background(), PlanPptxJSInput{
+			Prompt: "  把选中的标题改为 OfficeDex 演示，但字体、颜色和位置不变 ",
+			Context: map[string]any{
+				"slides":           []map[string]any{{"id": "slide-1", "index": float64(0), "shapes": []map[string]any{{"id": "title", "type": "Placeholder", "text": "Old"}}}},
+				"selectedSlideIds": []string{"slide-1"},
+				"selectedShapes":   []map[string]any{{"id": "title", "type": "Placeholder"}},
+			},
+			History: []PlanPptxJSTurn{{Role: "user", Content: "先看看"}},
+		})
+		results <- result
+		done <- err
+	}()
+
+	req := fake.readRequest(t)
+	if req.Method != "pptx/plan-js" {
+		t.Fatalf("method = %q, want pptx/plan-js", req.Method)
+	}
+	var params map[string]any
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		t.Fatalf("decode params: %v", err)
+	}
+	if params["prompt"] != "把选中的标题改为 OfficeDex 演示，但字体、颜色和位置不变" {
+		t.Fatalf("prompt = %#v", params["prompt"])
+	}
+	ctx, ok := params["context"].(map[string]any)
+	if !ok || len(ctx["selectedShapes"].([]any)) != 1 {
+		t.Fatalf("context = %#v", params["context"])
+	}
+	if history, ok := params["history"].([]any); !ok || len(history) != 1 {
+		t.Fatalf("history = %#v", params["history"])
+	}
+	fake.writeResponse(t, req.idString(), map[string]any{
+		"summary":               "已将选中标题改为 OfficeDex 演示。",
+		"source":                "return await PowerPoint.run(async (context) => { await context.sync(); return { changed: 1 }; });",
+		"confidence":            "high",
+		"requires_confirmation": false,
+		"confirmation":          nil,
+		"warnings":              []string{},
+	}, nil)
+	if err := <-done; err != nil {
+		t.Fatalf("PlanPptxJS: %v", err)
+	}
+	result := <-results
+	if result.Summary == "" || !strings.Contains(result.Source, "PowerPoint.run") || result.Confidence != "high" {
+		t.Fatalf("result = %#v", result)
+	}
+}
+
+func TestPlanPptxJSRejectsEmptySource(t *testing.T) {
+	client, fake := newClientWithFake(t)
+	defer client.Stop()
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := client.PlanPptxJS(context.Background(), PlanPptxJSInput{Prompt: "x", Context: map[string]any{}})
+		done <- err
+	}()
+	req := fake.readRequest(t)
+	fake.writeResponse(t, req.idString(), map[string]any{"summary": "nothing", "source": "  "}, nil)
+	if err := <-done; err == nil || !strings.Contains(err.Error(), "empty source") {
+		t.Fatalf("PlanPptxJS error = %v, want empty source", err)
+	}
+}

@@ -1,0 +1,44 @@
+/* App-level semantic aliases. Values are owned by the local Beautiful theme. */
+:root {
+  --od-bg: var(--ui-color-background-pagelayer-default);
+  --od-panel: var(--ui-color-background-frame-white);
+  --od-surface: var(--ui-color-background-frame-subtle);
+  --od-surface-alt: var(--ui-color-background-frame-muted);
+  --od-surface-hover: var(--ui-color-background-frame-hover);
+  --od-surface-selected: var(--ui-color-background-frame-selected);
+  --od-scrim: var(--ui-color-background-mask-light);
+  --od-ink-strong: var(--ui-color-text-gray-primary);
+  --od-ink: var(--ui-color-text-gray-primary);
+  --od-muted: var(--ui-color-text-gray-secondary);
+  --od-faint: var(--ui-color-text-gray-disable);
+  --od-ink-inverse: var(--ui-color-text-gray-inverse);
+  --od-hairline: var(--ui-color-border-divider-lighter);
+  --od-hairline-hover: var(--ui-color-border-outline-hover);
+  --od-accent: var(--ui-color-text-status-guidance-normal);
+  --od-accent-hover: var(--ui-color-text-status-guidance-hover);
+  --od-accent-bg: var(--ui-color-background-accent-blue-muted);
+  --od-accent-solid: var(--ui-color-background-status-guidance);
+  --od-danger: var(--ui-color-text-status-danger);
+  --od-warning: var(--ui-color-text-status-warning);
+  --od-success: var(--ui-color-text-status-success);
+  --od-radius-xs: var(--ui-size-radius-xs);
+  --od-radius-ctl: var(--ui-size-radius-s);
+  --od-radius-card: var(--ui-size-radius-m);
+  --od-radius-dialog: var(--ui-size-radius-l);
+  --od-radius-pill: var(--ui-size-radius-circular);
+  --od-shadow-sm: var(--ui-shadow-small);
+  --od-shadow-md: var(--ui-shadow-medium);
+  --od-shadow-lg: var(--ui-shadow-large);
+  --od-font: var(--ui-typography-font-default);
+  --od-text-xs: var(--ui-typography-size-xs);
+  --od-text-s: var(--ui-typography-size-s);
+  --od-text-m: var(--ui-typography-size-m);
+  --od-text-l: var(--ui-typography-size-l);
+  --od-text-xl: var(--ui-typography-size-xl);
+  --od-weight-regular: var(--ui-typography-weight-regular);
+  --od-weight-medium: var(--ui-typography-weight-medium);
+  --od-h-xs: 24px;
+  --od-h-sm: 28px;
+  --od-h-md: 34px;
+  --od-h-lg: 42px;
+}
