@@ -147,6 +147,7 @@ function OfficeDexApp() {
   // artifact stage. The ref scopes auto-opening to this submission only, so
   // background/history tasks and legacy dialogue navigation remain unchanged.
   const stageFirstTaskRef = useRef<string | undefined>(undefined);
+  const [stageFirstTaskId, setStageFirstTaskId] = useState<string>();
   const agentClientToolReportedErrorsRef = useRef(new Set<string>());
   const { settings: persistedSettings, loading: settingsLoading } = useSettings();
   const [newGenerationDraft, setNewGenerationDraft] = useState<NewGenerationDraft>(() => createNewGenerationDraft());
@@ -375,6 +376,7 @@ function OfficeDexApp() {
         if (pending && shouldReplaceLocalTask) {
           if (stageFirstTaskRef.current === pending.localTaskId) {
             stageFirstTaskRef.current = event.task_id;
+            setStageFirstTaskId(event.task_id);
           }
           pendingGenerateRef.current = null;
           setSelectedTaskID({ kind: "task", id: event.task_id });
@@ -692,6 +694,7 @@ function OfficeDexApp() {
       },
     };
     stageFirstTaskRef.current = localTaskId;
+    setStageFirstTaskId(localTaskId);
     const pendingInput = pendingGenerateRef.current.input;
     setState((current) => attachUserInput(applyTaskEvent(current, {
       task_id: localTaskId,
@@ -719,13 +722,15 @@ function OfficeDexApp() {
         setState((current) => attachUserInput(deleteTask(current, localTaskId), result.taskId, pending.input, undefined, actualContext));
         setSelectedTaskID({ kind: "task", id: result.taskId });
         stageFirstTaskRef.current = result.taskId;
+        setStageFirstTaskId(result.taskId);
         setActiveNav("home");
         refreshProjectLists();
       }
     } catch (error) {
       if (pendingGenerateRef.current?.localTaskId !== localTaskId) return;
       pendingGenerateRef.current = null;
-      stageFirstTaskRef.current = undefined;
+    stageFirstTaskRef.current = undefined;
+    setStageFirstTaskId(undefined);
       setState((current) => deleteTask(current, localTaskId));
       setNewGenerationDraft(submittedDraft);
       setNewGenerationDraftDirty(true);
@@ -1255,11 +1260,13 @@ function OfficeDexApp() {
     if (!task) return;
     if (task.status === "completed" && task.artifact?.filePath) {
       stageFirstTaskRef.current = undefined;
+      setStageFirstTaskId(undefined);
       void openInlinePreview(task.artifact);
       return;
     }
     if (task.status === "failed" || task.status === "cancelled") {
       stageFirstTaskRef.current = undefined;
+      setStageFirstTaskId(undefined);
     }
   }, [openInlinePreview, state.tasks]);
 
@@ -1276,6 +1283,7 @@ function OfficeDexApp() {
     if (task?.documentType === "pptx") {
       setSelectedTaskID({ kind: "task", id: taskId });
       stageFirstTaskRef.current = taskId;
+      if (task.status === "question" || task.status === "plan_review") setStageFirstTaskId(taskId);
       setActiveNav("home");
       return;
     }
@@ -1963,8 +1971,8 @@ function OfficeDexApp() {
             onSteerTask={steerPptxTask}
             onResumeTask={resumePptxTask}
             onCancelTask={async (task) => { await officecli.cancel(task.id); }}
-            productionTaskId={stageFirstTaskRef.current}
-            productionEditor={previewGrant && previewArtifact?.taskId === stageFirstTaskRef.current ? {
+            productionTaskId={stageFirstTaskId}
+            productionEditor={previewGrant && previewArtifact?.taskId === stageFirstTaskId ? {
               previewToken: previewGrant.token,
               fileName: previewArtifact!.fileName,
               onUnavailable: (error) => recordError(error || "Presentation editor unavailable", "other"),
