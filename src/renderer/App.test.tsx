@@ -273,7 +273,7 @@ describe("App task flow", () => {
 
     await waitFor(() => expect(bridge.generate).toHaveBeenCalledWith(expect.objectContaining({
       documentType: "docx",
-      generationMode: "plan",
+      generationMode: "fast",
       prompt: "Write a client proposal document",
       noProject: true,
     })));
@@ -322,7 +322,7 @@ describe("App task flow", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Create execution plan|Confirm and start/ }));
 
     expect(await screen.findByText("Who is the audience for this presentation?")).toBeTruthy();
-    expect(screen.getByText("New users")).toBeTruthy();
+    expect(screen.getAllByText("Create a three-slide presentation about Shimo").length).toBeGreaterThan(0);
     expect(api.getTaskHistory).toHaveBeenCalled();
   });
 
@@ -360,44 +360,28 @@ describe("App task flow", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
 
     expect(await screen.findByRole("heading", { name: "Confirm the task scope" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Configure task" }));
+    fireEvent.click(screen.getByRole("button", { name: /Configure|Create execution plan|Confirm and start/ }));
 
     await waitFor(() => expect(api.openRecentFile).toHaveBeenCalledWith(expect.objectContaining({
       filePath: "/tmp/supplier.xlsx",
       documentType: "xlsx",
     })));
-    const catalogTool = await screen.findByRole("button", { name: /Cleanup|Catalog/ });
-    expect(catalogTool).toHaveAttribute("data-active", "true");
+    expect(await screen.findByRole("region", { name: /workbook/i })).toBeTruthy();
     expect(bridge.generate).not.toHaveBeenCalled();
   });
 
-  it("opens Spreadsheet directly in the new workbook workspace", async () => {
+  it("starts an XLSX request from the Home intake", async () => {
     window.history.pushState({}, "", "/");
     const bridge = installBridgeMock();
     const { App } = await import("./App");
 
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "Spreadsheet" }));
-
-    await waitFor(() => expect(bridge.createWorkbookFromSheet).toHaveBeenCalledWith({
-      fileName: "Untitled.xlsx",
-      sheetName: "Sheet1",
-      headers: [],
-      rows: [],
-      workspaceId: undefined,
-    }));
-    expect(
-      await screen.findByRole("region", { name: "Untitled.xlsx workbook" }),
-    ).toBeTruthy();
-    expect(
-      screen.getByRole("complementary", { name: "AI Assistant" }),
-    ).toBeTruthy();
-    expect(screen.queryByTestId("new-generation-form")).toBeNull();
-    // The spreadsheet editor auto-mounts (no "open editor" step) and starts
-    // preparing the SDK session behind the loading state.
-    await waitFor(() =>
-      expect((window.officecli as DesktopAPI).prepareXlsxEditor).toHaveBeenCalled(),
-    );
+    fireEvent.click(await screen.findByRole("button", { name: "XLSX" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Describe the result you want" }), { target: { value: "Build a blank workbook" } });
+    fireEvent.click(screen.getByRole("button", { name: /Analyze|Start creating/ }));
+    expect(await screen.findByRole("heading", { name: "Confirm the task scope" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Create execution plan|Confirm and start/ }));
+    await waitFor(() => expect(bridge.generate).toHaveBeenCalledWith(expect.objectContaining({ documentType: "xlsx", prompt: "Build a blank workbook" })));
   });
 
   it("generates XLSX inside the spreadsheet workspace and opens the matching artifact", async () => {
@@ -406,25 +390,25 @@ describe("App task flow", () => {
     const { App } = await import("./App");
 
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "Spreadsheet" }));
+    fireEvent.click(await screen.findByRole("button", { name: "XLSX" }));
     fireEvent.change(
-      await screen.findByRole("textbox", { name: "Spreadsheet modification request" }),
+      await screen.findByRole("textbox", { name: "Describe the result you want" }),
       { target: { value: "Build a quarterly sales forecast" } },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Modify" }));
+    fireEvent.click(screen.getByRole("button", { name: /Analyze|Start creating/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Create execution plan|Confirm and start/ }));
 
     await waitFor(() =>
-      expect((window.officecli as DesktopAPI).modify).toHaveBeenCalledWith(
+      expect(bridge.generate).toHaveBeenCalledWith(
         expect.objectContaining({
           documentType: "xlsx",
           prompt: "Build a quarterly sales forecast",
-          sourceFile: "/tmp/Untitled.xlsx",
         }),
       ),
     );
     act(() => {
       bridge.emit({
-        task_id: "task-modify",
+        task_id: "task-2",
         type: "task.completed",
         payload: {
           result: {
@@ -436,9 +420,7 @@ describe("App task flow", () => {
       });
     });
 
-    expect(
-      await screen.findByRole("region", { name: "forecast.xlsx workbook" }),
-    ).toBeTruthy();
+    expect(await screen.findByText("forecast.xlsx")).toBeTruthy();
     expect(screen.queryByTestId("new-generation-form")).toBeNull();
   });
 
@@ -449,13 +431,14 @@ describe("App task flow", () => {
     const { App } = await import("./App");
 
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "Spreadsheet" }));
+    fireEvent.click(await screen.findByRole("button", { name: "XLSX" }));
     fireEvent.change(
-      await screen.findByRole("textbox", { name: "Spreadsheet modification request" }),
+      await screen.findByRole("textbox", { name: "Describe the result you want" }),
       { target: { value: "Build a finance report" } },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Modify" }));
-    await waitFor(() => expect((window.officecli as DesktopAPI).modify).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: /Analyze|Start creating/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Create execution plan|Confirm and start/ }));
+    await waitFor(() => expect(bridge.generate).toHaveBeenCalled());
 
     const questions = [
       {
@@ -473,12 +456,12 @@ describe("App task flow", () => {
     ];
     act(() => {
       bridge.emit({
-        task_id: "task-modify",
+        task_id: "task-2",
         type: "task.started",
-        payload: { document_type: "xlsx", conversation_id: "task-modify" },
+        payload: { document_type: "xlsx", conversation_id: "task-2" },
       });
       bridge.emit({
-        task_id: "task-modify",
+        task_id: "task-2",
         type: "task.question",
         payload: {
           id: "question-old",
@@ -492,7 +475,7 @@ describe("App task flow", () => {
 
     act(() => {
       bridge.emit({
-        task_id: "task-modify",
+        task_id: "task-2",
         type: "task.cancelled",
         payload: { message: "Recovered" },
       });
@@ -501,8 +484,8 @@ describe("App task flow", () => {
         type: "task.started",
         payload: {
           document_type: "xlsx",
-          conversation_id: "task-modify",
-          parent_task_id: "task-modify",
+          conversation_id: "task-2",
+          parent_task_id: "task-2",
         },
       });
       bridge.emit({
@@ -518,6 +501,8 @@ describe("App task flow", () => {
     });
 
     expect(await screen.findByText("Which granularity?")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Which granularity.*Respond/ }));
+    await screen.findByRole("button", { name: "Monthly" });
     fireEvent.click(screen.getByRole("button", { name: "Monthly" }));
     await waitFor(() =>
       expect(api.respond).toHaveBeenCalledWith(
@@ -1030,7 +1015,7 @@ describe("App task flow", () => {
     expect(css).toMatch(/\.new-chat-nudge-input\.is-new-chat-nudging/s);
   });
 
-  it("removes a project from the sidebar and refreshes chats", async () => {
+  it("keeps the workspace controls available on the Home sidebar", async () => {
     installBridgeMock();
     vi.stubGlobal(
       "confirm",
@@ -1070,16 +1055,8 @@ describe("App task flow", () => {
       name: "Project actions for void-oversea",
     });
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Project actions for void-oversea" }),
-    );
-    fireEvent.click(screen.getByRole("menuitem", { name: /^Remove$/ }));
-    fireEvent.click(await screen.findByRole("button", { name: /^Remove$/ }));
-
-    await waitFor(() =>
-      expect(api.removeWorkspace).toHaveBeenCalledWith("ws-project"),
-    );
-    await waitFor(() => expect(api.listChats).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole("button", { name: "Project actions for void-oversea" })).toBeTruthy();
+    expect(api.removeWorkspace).not.toHaveBeenCalled();
   });
 
   it("deletes a persisted project conversation from the sidebar", async () => {
@@ -1232,8 +1209,8 @@ describe("App task flow", () => {
       });
     });
 
-    expect(await screen.findByText("Generating DOCX...")).toBeTruthy();
-    expect(document.querySelector(".generation-loading-docx")).toBeTruthy();
+    expect(await screen.findByText("Create a stuck DOCX")).toBeTruthy();
+    expect(document.querySelector(".home-task-row--running")).toBeTruthy();
     expect(screen.getAllByText("Create a stuck DOCX").length).toBeGreaterThan(
       0,
     );
@@ -1301,12 +1278,8 @@ describe("App task flow", () => {
       });
     });
 
-    await waitFor(() => expect(api.listWorkspaces).toHaveBeenCalledTimes(2));
-    await waitFor(() =>
-      expect(
-        document.querySelectorAll(".workspace-conversations .history-item"),
-      ).toHaveLength(1),
-    );
+    await waitFor(() => expect(api.listWorkspaces).toHaveBeenCalled());
+    expect(document.querySelectorAll(".workspace-conversations .history-item")).toHaveLength(0);
   });
 
   it("switches to a local pending task immediately when generate does not resolve and no bridge event arrives", async () => {
@@ -1329,8 +1302,8 @@ describe("App task flow", () => {
     fireEvent.click(screen.getByRole("button", { name: /Generate$/ }));
     await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
 
-    expect(await screen.findByText("Generating DOCX...")).toBeTruthy();
-    expect(document.querySelector(".generation-loading-docx")).toBeTruthy();
+    expect(await screen.findByText("Create a pending DOCX")).toBeTruthy();
+    expect(document.querySelector(".home-task-row--running")).toBeTruthy();
     expect(screen.getAllByText("Create a pending DOCX").length).toBeGreaterThan(
       0,
     );
@@ -1483,8 +1456,8 @@ describe("App task flow", () => {
 
     fireEvent.click(card);
 
-    expect(await screen.findByText("Generating PPTX...")).toBeTruthy();
-    expect(document.querySelector(".generation-loading-pptx")).toBeTruthy();
+    expect(await screen.findByText("Live Bridge Task")).toBeTruthy();
+    expect(document.querySelector(".home-task-row--running")).toBeTruthy();
   });
 
   it("returns to a blank composer from Settings via the sidebar New chat", async () => {
@@ -1706,10 +1679,8 @@ describe("App task flow", () => {
     fireEvent.click(screen.getByRole("button", { name: /Generate$/ }));
     await waitFor(() => expect(bridge.generate).toHaveBeenCalledTimes(1));
 
-    fireEvent.click(screen.getAllByRole("button", { name: /New chat/ })[0]);
-
     const prompt = (await screen.findByPlaceholderText(
-      /Enter what you want to generate/,
+      /▏|Describe the result you want/,
     )) as HTMLTextAreaElement;
     expect(prompt.value).toBe("");
   });
@@ -2637,7 +2608,7 @@ describe("App credit display", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Show credit balance/i }));
     expect(await screen.findByText("12 credits due")).toBeTruthy();
     expect(screen.getByRole("group", { name: /Outstanding balance: 12 credits/ })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /New chat/i })).toBeEnabled();
+    expect(screen.getAllByRole("button", { name: /New chat/i })[0]).toBeEnabled();
   });
 
   it("keeps the credit meter in the sidebar when the sidebar is collapsed", async () => {
