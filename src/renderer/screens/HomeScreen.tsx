@@ -483,8 +483,12 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
           task={productionTask}
           draftReady={Boolean(productionEditor)}
           editor={productionEditor}
-          onContinue={onResumeTask ? () => onResumeTask(productionTask) : undefined}
-          onStartDrawing={onResumeTask ? () => onResumeTask(productionTask) : undefined}
+          onContinue={productionTask.status === "question" || productionTask.status === "plan_review"
+            ? (onResumeTask ? () => onResumeTask(productionTask) : undefined)
+            : undefined}
+          onStartDrawing={productionTask.status === "question" || productionTask.status === "plan_review"
+            ? (onResumeTask ? () => onResumeTask(productionTask) : undefined)
+            : undefined}
           productionProps={{
             onCancel: onCancelTask ? () => void onCancelTask(productionTask) : undefined,
             onRetry: onRetryTask ? () => onRetryTask(productionTask) : undefined,

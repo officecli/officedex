@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Check, Circle, LoaderCircle, Pencil, Play, Presentation, SquarePen } from "lucide-react";
 import type { DesktopTask } from "../../shared/types";
 import { PptxProductionStage, type PptxProductionStageProps } from "./PptxProductionStage";
@@ -62,12 +63,26 @@ const phaseLabels: Record<ProgressivePptxPhase, string> = {
 };
 
 export function ProgressivePptxStage({ task, draftReady = false, editor, onBriefChange, onOutlineChange, onContinue, onStartDrawing, productionProps }: ProgressivePptxStageProps) {
+  const [actionBusy, setActionBusy] = useState(false);
+  const [actionError, setActionError] = useState<string>();
   const phase = phaseFor(task, draftReady);
   const items = outlineItems(task);
   const ops = opStream(task);
   const brief = field(task, "prompt") ?? task.topic ?? "未提供制作目标";
   const editableBrief = phase === "brief" || phase === "outline";
   const showEditor = draftReady || phase === "drawing" || phase === "ready";
+  const runAction = async (action?: () => void | Promise<void>) => {
+    if (!action || actionBusy) return;
+    setActionError(undefined);
+    setActionBusy(true);
+    try {
+      await action();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setActionBusy(false);
+    }
+  };
   return <section className="progressive-pptx-stage" data-testid="progressive-pptx-stage" data-phase={phase}>
     <header className="progressive-pptx-stage__header">
       <div><span className="progressive-pptx-stage__eyebrow"><Presentation size={14} /> PPTX 制作</span><h2>{phaseLabels[phase]}</h2><p>先确认方向，再逐步把每一页绘制成可编辑演示文稿。</p></div>
@@ -79,7 +94,8 @@ export function ProgressivePptxStage({ task, draftReady = false, editor, onBrief
     {(phase === "brief" || phase === "outline") ? <div className="progressive-pptx-stage__disclosure" data-testid="progressive-disclosure">
       <div className="progressive-pptx-stage__card"><div className="progressive-pptx-stage__card-title"><SquarePen size={16} /> Brief <span>现在就可以介入</span></div><textarea aria-label="Presentation brief" value={brief} disabled={!editableBrief || !onBriefChange} onChange={(event) => onBriefChange?.(event.target.value)} /></div>
       {phase === "outline" || items.length > 0 ? <div className="progressive-pptx-stage__card"><div className="progressive-pptx-stage__card-title"><Pencil size={16} /> Outline <span>可调整页面顺序和目的</span></div>{items.length ? <ol aria-label="Presentation outline">{items.map((item, index) => <li key={`${item.title}-${index}`}><input aria-label={`Slide ${index + 1} title`} defaultValue={item.title} disabled={!onOutlineChange} onChange={(event) => onOutlineChange?.(event.target.value)} /><small>{item.detail}</small></li>)}</ol> : <p className="progressive-pptx-stage__muted">大纲生成后会显示在这里。</p>}</div> : null}
-      <div className="progressive-pptx-stage__disclosure-actions">{onContinue ? <button type="button" onClick={() => void onContinue()}><Play size={15} />继续确认</button> : null}{onStartDrawing ? <button type="button" className="is-primary" onClick={() => void onStartDrawing()}><Play size={15} />开始绘制</button> : null}</div>
+      <div className="progressive-pptx-stage__disclosure-actions">{onContinue ? <button type="button" disabled={actionBusy} onClick={() => void runAction(onContinue)}><Play size={15} />{actionBusy ? "处理中…" : "继续确认"}</button> : null}{onStartDrawing ? <button type="button" className="is-primary" disabled={actionBusy} onClick={() => void runAction(onStartDrawing)}><Play size={15} />{actionBusy ? "处理中…" : "开始绘制"}</button> : null}</div>
+      {actionError ? <div className="progressive-pptx-stage__error" role="alert">{actionError}</div> : null}
     </div> : null}
 
     {phase === "draft" ? <div className="progressive-pptx-stage__draft" data-testid="draft-ready"><LoaderCircle className="progressive-pptx-stage__spin" size={19} /><strong>正在打开可编辑演示文稿</strong><span>画布准备好后，页面会按 op 逐步出现。</span></div> : null}
