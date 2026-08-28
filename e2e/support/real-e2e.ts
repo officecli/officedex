@@ -183,6 +183,10 @@ export async function waitForCompletedArtifact(page: Page, documentType: Documen
     if (await isCompletedArtifactVisible(page)) {
       break;
     }
+    const failed = page.getByText(/Generation failed|Task failed|Image generation failed/i).first();
+    if (await failed.isVisible().catch(() => false)) {
+      throw new Error(`Real ${documentType} generation failed in the user-visible UI.`);
+    }
     await assertNoResponseContractError(page);
     if (await answerVisibleInteraction(page)) {
       continue;
