@@ -5,7 +5,7 @@ export type NavKey = "home" | "spreadsheet" | "dialogue" | "settings" | "login";
 
 export const defaultGenerateInput: Partial<GenerateInput> = {
   documentType: "pptx",
-  generationMode: "fast",
+  generationMode: "plan",
   enableImages: true,
   imageRatio: "square",
   fps: 16,
