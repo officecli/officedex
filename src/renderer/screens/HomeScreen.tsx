@@ -281,31 +281,6 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
     await startAnalyzedTask(analysis);
   };
 
-  if (productionTask) {
-    const title = productionTask.topic || productionTask.userInput?.prompt || t("tasks.untitled");
-    return (
-      <section className="home-screen home-screen--production" aria-labelledby="home-production-title">
-        <header className="home-production-header">
-          <Button variant="ghost-normal" size="small" onClick={() => setDismissedTaskIds((current) => [...current, productionTask.id])}>
-            {t("home.production.back")}
-          </Button>
-          <div>
-            <p>{t("home.production.eyebrow")}</p>
-            <h1 id="home-production-title">{title}</h1>
-          </div>
-        </header>
-        <PptxProductionStage
-          task={productionTask}
-          onCancel={onCancelTask ? () => void onCancelTask(productionTask) : undefined}
-          onRetry={onRetryTask ? () => onRetryTask(productionTask) : undefined}
-          onSteer={onSteerTask ? (instruction) => onSteerTask(productionTask, instruction) : undefined}
-          onResume={onResumeTask ? () => onResumeTask(productionTask) : undefined}
-          onOpenEditor={onOpenTask ? () => onOpenTask(productionTask.id) : undefined}
-        />
-      </section>
-    );
-  }
-
   const invalidateAnalysis = () => {
     setAnalysis(undefined);
     setIntakeError(undefined);
@@ -487,6 +462,31 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
       window.cancelAnimationFrame(animationFrame);
     };
   }, []);
+
+  if (productionTask) {
+    const title = productionTask.topic || productionTask.userInput?.prompt || t("tasks.untitled");
+    return (
+      <section className="home-screen home-screen--production" aria-labelledby="home-production-title">
+        <header className="home-production-header">
+          <Button variant="ghost-normal" size="small" onClick={() => setDismissedTaskIds((current) => [...current, productionTask.id])}>
+            {t("home.production.back")}
+          </Button>
+          <div>
+            <p>{t("home.production.eyebrow")}</p>
+            <h1 id="home-production-title">{title}</h1>
+          </div>
+        </header>
+        <PptxProductionStage
+          task={productionTask}
+          onCancel={onCancelTask ? () => void onCancelTask(productionTask) : undefined}
+          onRetry={onRetryTask ? () => onRetryTask(productionTask) : undefined}
+          onSteer={onSteerTask ? (instruction) => onSteerTask(productionTask, instruction) : undefined}
+          onResume={onResumeTask ? () => onResumeTask(productionTask) : undefined}
+          onOpenEditor={onOpenTask ? () => onOpenTask(productionTask.id) : undefined}
+        />
+      </section>
+    );
+  }
 
   return (
     <section
