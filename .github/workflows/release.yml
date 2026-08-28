@@ -102,6 +102,30 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Fetch private Office2Modoc runtime
+        shell: bash
+        env:
+          OFFICECLI_INTERNAL_TOKEN: ${{ secrets.OFFICECLI_INTERNAL_TOKEN }}
+          OFFICECLI_INTERNAL_REF: ${{ secrets.OFFICECLI_INTERNAL_REF }}
+        run: |
+          set -euo pipefail
+          ref="${OFFICECLI_INTERNAL_REF:-}"
+          test -n "$OFFICECLI_INTERNAL_TOKEN"
+          test -n "$ref"
+          git clone --depth 1 --branch "$ref" "https://x-access-token:${OFFICECLI_INTERNAL_TOKEN}@github.com/officecli/officecli-internal.git" "$RUNNER_TEMP/officecli-internal"
+          export OFFICE2MODOC_SOURCE_ROOT="$RUNNER_TEMP/officecli-internal"
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            export OFFICE2MODOC_TARGET="aarch64-apple-darwin"
+            export OFFICE2MODOC_OUTPUT="$GITHUB_WORKSPACE/build/cache/office2modoc/0.1.34/darwin-arm64/liboffice2modoc_ffi.dylib"
+          elif [[ "${{ runner.os }}" == "Windows" ]]; then
+            export OFFICE2MODOC_TARGET="x86_64-pc-windows-msvc"
+            export OFFICE2MODOC_OUTPUT="$GITHUB_WORKSPACE/build/cache/office2modoc/0.1.34/windows-amd64/office2modoc_ffi.dll"
+          else
+            export OFFICE2MODOC_TARGET="x86_64-unknown-linux-gnu"
+            export OFFICE2MODOC_OUTPUT="$GITHUB_WORKSPACE/build/cache/office2modoc/0.1.34/linux-amd64/liboffice2modoc_ffi.so"
+          fi
+          node scripts/stage-office2modoc-ffi.mjs
+
       - name: Verify officecli Canvas Vibe contract
         run: npm run verify:officecli:canvas
 

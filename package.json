@@ -15,6 +15,7 @@
   "officecliVersion": "0.2.121",
   "scripts": {
     "prefetch:officecli": "node scripts/fetch-officecli.mjs",
+    "stage:office2modoc": "node scripts/stage-office2modoc-ffi.mjs",
     "predev": "npm run prefetch:officecli",
     "prebuild": "npm run prefetch:officecli",
     "dev": "wails dev",
