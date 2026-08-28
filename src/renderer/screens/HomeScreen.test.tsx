@@ -90,6 +90,19 @@ describe("HomeScreen", () => {
     await waitFor(() => expect(props.onStartTask).toHaveBeenCalledWith({ prompt: "Clean this supplier catalog", documentType: "pptx" }));
   });
 
+  it("shows immediate starting feedback while the task request is in flight", async () => {
+    let resolveStart!: () => void;
+    const onStartTask = vi.fn(() => new Promise<void>((resolve) => { resolveStart = resolve; }));
+    renderHome({ onStartTask });
+    fireEvent.change(screen.getByRole("textbox", { name: "Describe the result you want" }), { target: { value: "Create a launch deck" } });
+    fireEvent.click(screen.getByRole("button", { name: "Analyze" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Create execution plan|Confirm and start/ }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Starting");
+    expect(screen.getByRole("button", { name: /Create execution plan|Confirm and start/ })).toBeDisabled();
+    resolveStart();
+    await waitFor(() => expect(onStartTask).toHaveBeenCalledTimes(1));
+  });
+
   it("binds an added file to the task instead of opening it", async () => {
     const onPickTaskFile = vi.fn(async () => "/tmp/supplier.xlsx");
     const props = renderHome({

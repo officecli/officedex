@@ -547,7 +547,9 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
               <p>{t("home.analysis.eyebrow")}</p>
               <h2 id="home-analysis-title">{t("home.analysis.title")}</h2>
             </div>
-            <span>{t("home.analysis.notStarted")}</span>
+            <span role={starting ? "status" : undefined} aria-live={starting ? "polite" : undefined}>
+              {starting ? `${t("tasks.status.starting")}…` : t("home.analysis.notStarted")}
+            </span>
           </div>
           <p className="home-analysis__description">{t(`home.analysis.description.${analysis.nextStep}`)}</p>
           <dl className="home-analysis__details">
