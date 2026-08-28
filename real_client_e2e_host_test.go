@@ -609,11 +609,15 @@ func (h *realClientE2EHost) handleSeedFailedTask(w http.ResponseWriter, r *http.
 		return
 	}
 	var input struct {
-		TaskID string `json:"taskId"`
+		TaskID       string `json:"taskId"`
+		DocumentType string `json:"documentType"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&input)
 	if input.TaskID == "" {
 		input.TaskID = "real-e2e-failed-ui-task"
+	}
+	if input.DocumentType == "" {
+		input.DocumentType = "docx"
 	}
 	event := types.BridgeEvent{
 		EventID:   "real-client-e2e-failed-" + input.TaskID,
@@ -622,7 +626,7 @@ func (h *realClientE2EHost) handleSeedFailedTask(w http.ResponseWriter, r *http.
 		Type:      "task.failed",
 		TS:        time.Now().UTC().Format(time.RFC3339Nano),
 		Payload: map[string]any{
-			"document_type":   "docx",
+			"document_type":   input.DocumentType,
 			"topic":           "Real E2E failed task",
 			"message":         "Real E2E diagnostic failure fixture",
 			"error_code":      "real_client_e2e",
