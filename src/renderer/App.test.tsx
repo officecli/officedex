@@ -264,12 +264,12 @@ describe("App task flow", () => {
       await screen.findByRole("textbox", { name: "Describe the result you want" }),
       { target: { value: "Write a client proposal document" } },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
+    fireEvent.click(screen.getByRole("button", { name: "Analyze" }));
 
     expect(await screen.findByRole("heading", { name: "Confirm the task scope" })).toBeTruthy();
     expect(screen.getByText("DOCX document")).toBeTruthy();
     expect(bridge.generate).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: /Create execution plan|Confirm and start/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm and start" }));
 
     await waitFor(() => expect(bridge.generate).toHaveBeenCalledWith(expect.objectContaining({
       documentType: "docx",
@@ -318,10 +318,11 @@ describe("App task flow", () => {
       await screen.findByRole("textbox", { name: "Describe the result you want" }),
       { target: { value: "Create a three-slide presentation about Shimo" } },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
-    fireEvent.click(await screen.findByRole("button", { name: /Create execution plan|Confirm and start/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Analyze" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm and start" }));
 
     expect(await screen.findByText("Who is the audience for this presentation?")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /New users/ })).toBeTruthy();
     expect(api.getTaskHistory).toHaveBeenCalled();
   });
 
@@ -335,13 +336,13 @@ describe("App task flow", () => {
       await screen.findByRole("textbox", { name: "Describe the result you want" }),
       { target: { value: "Clean this supplier catalog for Shopify import" } },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
+    fireEvent.click(screen.getByRole("button", { name: "Analyze" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Add the supplier Excel workbook");
     expect(bridge.generate).not.toHaveBeenCalled();
   });
 
-  it.skip("routes an attached Shopify workbook into the catalog cleanup tool", async () => {
+  it("routes an attached Shopify workbook into the catalog cleanup tool", async () => {
     window.history.pushState({}, "", "/");
     const bridge = installBridgeMock();
     bridge.openFileDialog.mockResolvedValueOnce("/tmp/supplier.xlsx");
@@ -356,7 +357,7 @@ describe("App task flow", () => {
       screen.getByRole("textbox", { name: "Describe the result you want" }),
       { target: { value: "Clean this supplier catalog for Shopify import" } },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
+    fireEvent.click(screen.getByRole("button", { name: "Analyze" }));
 
     expect(await screen.findByRole("heading", { name: "Confirm the task scope" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Configure task" }));
@@ -370,7 +371,7 @@ describe("App task flow", () => {
     expect(bridge.generate).not.toHaveBeenCalled();
   });
 
-  it.skip("opens Spreadsheet directly in the new workbook workspace", async () => {
+  it("opens Spreadsheet directly in the new workbook workspace", async () => {
     window.history.pushState({}, "", "/");
     const bridge = installBridgeMock();
     const { App } = await import("./App");
@@ -399,7 +400,7 @@ describe("App task flow", () => {
     );
   });
 
-  it.skip("generates XLSX inside the spreadsheet workspace and opens the matching artifact", async () => {
+  it("generates XLSX inside the spreadsheet workspace and opens the matching artifact", async () => {
     window.history.pushState({}, "", "/");
     const bridge = installBridgeMock();
     const { App } = await import("./App");
@@ -441,7 +442,7 @@ describe("App task flow", () => {
     expect(screen.queryByTestId("new-generation-form")).toBeNull();
   });
 
-  it.skip("follows a recovered XLSX task and submits the live question id", async () => {
+  it("follows a recovered XLSX task and submits the live question id", async () => {
     window.history.pushState({}, "", "/");
     const bridge = installBridgeMock();
     const api = window.officecli as DesktopAPI;
@@ -1073,6 +1074,8 @@ describe("App task flow", () => {
       screen.getByRole("button", { name: "Project actions for void-oversea" }),
     );
     fireEvent.click(screen.getByRole("menuitem", { name: /^Remove$/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Remove$/ }));
+
     await waitFor(() =>
       expect(api.removeWorkspace).toHaveBeenCalledWith("ws-project"),
     );
@@ -1179,7 +1182,7 @@ describe("App task flow", () => {
     ).toBeTruthy();
   });
 
-  it.skip("switches from submit spinner to the running task when task.started arrives before generate resolves", async () => {
+  it("switches from submit spinner to the running task when task.started arrives before generate resolves", async () => {
     const bridge = installBridgeMock();
     bridge.generate.mockImplementation(() => new Promise(() => undefined));
     const { App } = await import("./App");
@@ -1239,7 +1242,7 @@ describe("App task flow", () => {
     ).toBeNull();
   });
 
-  it.skip("does not duplicate the first running conversation when persisted workspace summaries arrive after an early task.started event", async () => {
+  it("does not duplicate the first running conversation when persisted workspace summaries arrive after an early task.started event", async () => {
     const bridge = installBridgeMock();
     const api = window.officecli as DesktopAPI;
     const workspace = {
@@ -1306,7 +1309,7 @@ describe("App task flow", () => {
     );
   });
 
-  it.skip("switches to a local pending task immediately when generate does not resolve and no bridge event arrives", async () => {
+  it("switches to a local pending task immediately when generate does not resolve and no bridge event arrives", async () => {
     const bridge = installBridgeMock();
     bridge.generate.mockImplementation(() => new Promise(() => undefined));
     const { App } = await import("./App");
@@ -1452,7 +1455,7 @@ describe("App task flow", () => {
     expect(screen.getByText("cancelled")).toBeTruthy();
   });
 
-  it.skip("surfaces a live bridge task on home and reopens its dialogue", async () => {
+  it("surfaces a live bridge task on home and reopens its dialogue", async () => {
     const bridge = installBridgeMock();
     const { App } = await import("./App");
 
@@ -1685,7 +1688,7 @@ describe("App task flow", () => {
     );
   });
 
-  it.skip("clears the new generation draft after a successful submit", async () => {
+  it("clears the new generation draft after a successful submit", async () => {
     const bridge = installBridgeMock();
     const { App } = await import("./App");
 
@@ -2634,7 +2637,7 @@ describe("App credit display", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Show credit balance/i }));
     expect(await screen.findByText("12 credits due")).toBeTruthy();
     expect(screen.getByRole("group", { name: /Outstanding balance: 12 credits/ })).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: /New chat/i })[0]).toBeEnabled();
+    expect(screen.getByRole("button", { name: /New chat/i })).toBeEnabled();
   });
 
   it("keeps the credit meter in the sidebar when the sidebar is collapsed", async () => {
