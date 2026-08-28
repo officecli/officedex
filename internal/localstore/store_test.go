@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -280,8 +281,8 @@ func TestMigrateV5ToV6PreservesTasks(t *testing.T) {
 	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'recent_files'`).Scan(&recentTableCount); err != nil {
 		t.Fatal(err)
 	}
-	if version != 6 || taskCount != 1 || recentTableCount != 1 {
-		t.Fatalf("version=%d taskCount=%d recentTableCount=%d, want 6/1/1", version, taskCount, recentTableCount)
+	if version != 7 || taskCount != 1 || recentTableCount != 1 {
+		t.Fatalf("version=%d taskCount=%d recentTableCount=%d, want 7/1/1", version, taskCount, recentTableCount)
 	}
 }
 
@@ -528,7 +529,7 @@ func TestRemoveWorkspaceMovesConversationsToChats(t *testing.T) {
 	}
 }
 
-func TestRemoveConversationDeletesTasksEventsAndArtifacts(t *testing.T) {
+func TestRemoveArchivedConversationDeletesLegacyAndV7Rows(t *testing.T) {
 	store := newTempStore(t)
 	ctx := context.Background()
 	workspacePath := filepath.Join(t.TempDir(), "ppt-test")
@@ -555,14 +556,12 @@ func TestRemoveConversationDeletesTasksEventsAndArtifacts(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("RecordEvent(%s): %v", taskID, err)
 		}
-		if err := store.RecordArtifact(types.Artifact{
-			TaskID:       taskID,
-			FilePath:     fmt.Sprintf("/tmp/%s.pptx", taskID),
-			FileName:     taskID + ".pptx",
-			DocumentType: "pptx",
-		}); err != nil {
-			t.Fatalf("RecordArtifact(%s): %v", taskID, err)
-		}
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Open(ctx); err != nil {
+		t.Fatal(err)
 	}
 
 	if err := store.RemoveConversation(ctx, "conv-ppt"); err != nil {
@@ -583,15 +582,267 @@ func TestRemoveConversationDeletesTasksEventsAndArtifacts(t *testing.T) {
 	if len(history) != 0 {
 		t.Fatalf("history = %#v, want empty", history)
 	}
-	var eventCount, artifactCount int
+	var eventCount, artifactCount, runCount, activityCount, streamCount int
 	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM task_events`).Scan(&eventCount); err != nil {
 		t.Fatalf("count events: %v", err)
 	}
 	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM artifacts`).Scan(&artifactCount); err != nil {
 		t.Fatalf("count artifacts: %v", err)
 	}
-	if eventCount != 0 || artifactCount != 0 {
-		t.Fatalf("eventCount=%d artifactCount=%d, want 0/0", eventCount, artifactCount)
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM runs`).Scan(&runCount); err != nil {
+		t.Fatalf("count runs: %v", err)
+	}
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM activities`).Scan(&activityCount); err != nil {
+		t.Fatalf("count activities: %v", err)
+	}
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM activity_streams`).Scan(&streamCount); err != nil {
+		t.Fatalf("count activity streams: %v", err)
+	}
+	if eventCount != 0 || artifactCount != 0 || runCount != 0 || activityCount != 0 || streamCount != 0 {
+		t.Fatalf("counts events=%d artifacts=%d runs=%d activities=%d streams=%d, want all zero", eventCount, artifactCount, runCount, activityCount, streamCount)
+	}
+}
+
+func TestRemoveConversationRejectsDocumentAndPendingReferences(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+	if err := store.RecordTaskContext(ctx, "task-doc", TaskContext{ConversationID: "conv-doc"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordEvent(types.BridgeEvent{TaskID: "task-doc", Type: "task.completed"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordArtifact(types.Artifact{TaskID: "task-doc", FilePath: "/tmp/doc.pptx", FileName: "doc.pptx", DocumentType: "pptx"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RemoveConversation(ctx, "conv-doc"); err == nil || !strings.Contains(err.Error(), "referenced by a document") {
+		t.Fatalf("document deletion error = %v", err)
+	}
+
+	if err := store.RecordTaskContext(ctx, "task-pending", TaskContext{ConversationID: "conv-pending"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RemoveConversation(ctx, "conv-pending"); err == nil || !strings.Contains(err.Error(), "pending document") {
+		t.Fatalf("pending deletion error = %v", err)
+	}
+}
+
+func TestV7ProjectionReconcilesPostMigrationWritesOnReopen(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "officedex.db")
+	ctx := context.Background()
+	store := New(path)
+	if err := store.Open(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordTaskContext(ctx, "task-later", TaskContext{ConversationID: "conv-later"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordEvent(types.BridgeEvent{EventID: "completed-later", TaskID: "task-later", Type: "task.completed"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordArtifact(types.Artifact{TaskID: "task-later", FilePath: "/tmp/later.pptx", FileName: "later.pptx", DocumentType: "pptx"}); err != nil {
+		t.Fatal(err)
+	}
+	before, err := store.QueryDocuments(ctx, types.DocumentListInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(before.Items) != 1 || before.Items[0].CurrentArtifactTaskID != "task-later" {
+		t.Fatalf("live projection did not reflect writes: %#v", before.Items)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Open(ctx); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	after, err := store.QueryDocuments(ctx, types.DocumentListInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after.Items) != 1 || after.Items[0].CurrentArtifactTaskID != "task-later" {
+		t.Fatalf("reconciled documents = %#v", after.Items)
+	}
+	runs, err := store.QueryDocumentRuns(ctx, after.Items[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 1 || runs[0].ID != "task-later" {
+		t.Fatalf("reconciled runs = %#v", runs)
+	}
+}
+
+func TestV7ProjectionIsLiveAfterLegacyWrites(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+	if err := store.RecordTaskContext(ctx, "live-task", TaskContext{ConversationID: "live-conversation"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordEvent(types.BridgeEvent{EventID: "started", TaskID: "live-task", Type: "task.started"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordArtifact(types.Artifact{TaskID: "live-task", FilePath: "/tmp/live.pptx", FileName: "live.pptx", DocumentType: "pptx"}); err != nil {
+		t.Fatal(err)
+	}
+	docs, err := store.QueryDocuments(ctx, types.DocumentListInput{})
+	if err != nil || len(docs.Items) != 1 || docs.Items[0].FilePath != "/tmp/live.pptx" {
+		t.Fatalf("live documents = %#v, %v", docs, err)
+	}
+	runs, err := store.QueryDocumentRuns(ctx, docs.Items[0].ID)
+	if err != nil || len(runs) != 1 || runs[0].ID != "live-task" {
+		t.Fatalf("live runs = %#v, %v", runs, err)
+	}
+	activities, err := store.QueryDocumentActivities(ctx, types.DocumentActivityListInput{DocumentID: docs.Items[0].ID})
+	if err != nil || len(activities.Items) != 1 || activities.Items[0].TaskID != "live-task" {
+		t.Fatalf("live activities = %#v, %v", activities, err)
+	}
+}
+
+func TestV7ProjectionSourceOnlyRunAndSharedStream(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+	for _, taskID := range []string{"root-a", "root-b"} {
+		if err := store.RecordTaskContext(ctx, taskID, TaskContext{ConversationID: "shared-conversation"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.RecordEvent(types.BridgeEvent{EventID: "done-" + taskID, TaskID: taskID, Type: "task.completed"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.RecordArtifact(types.Artifact{TaskID: "root-a", FilePath: "/tmp/a.pptx", FileName: "a.pptx", DocumentType: "pptx"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordArtifact(types.Artifact{TaskID: "root-b", FilePath: "/tmp/b.pptx", FileName: "b.pptx", DocumentType: "pptx"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordTaskContext(ctx, "source-only", TaskContext{ConversationID: "shared-conversation"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordEvent(types.BridgeEvent{EventID: "source", TaskID: "source-only", Type: "task.user_input", Payload: map[string]any{"source_file": "/tmp/a.pptx"}}); err != nil {
+		t.Fatal(err)
+	}
+	runs, err := store.QueryDocumentRuns(ctx, documentIDForPath("/tmp/a.pptx"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, run := range runs {
+		if run.ID == "source-only" {
+			found = true
+			if run.DocumentID != documentIDForPath("/tmp/a.pptx") {
+				t.Fatalf("source-only document = %q", run.DocumentID)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("source-only run missing: %#v", runs)
+	}
+	for _, path := range []string{"/tmp/a.pptx", "/tmp/b.pptx"} {
+		page, err := store.QueryDocumentActivities(ctx, types.DocumentActivityListInput{DocumentID: documentIDForPath(path)})
+		if err != nil || len(page.Items) == 0 {
+			t.Fatalf("activities for %s = %#v, %v", path, page, err)
+		}
+		for _, activity := range page.Items {
+			if activity.ActivityStreamID != "activity:shared-conversation" {
+				t.Fatalf("activity stream for %s = %q", path, activity.ActivityStreamID)
+			}
+		}
+	}
+}
+
+func TestV7ProjectionAttachesLiveSourceOnlyRunAcrossConversations(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+	if err := store.RecordTaskContext(ctx, "root-document", TaskContext{ConversationID: "document-conversation"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordEvent(types.BridgeEvent{EventID: "root-completed", TaskID: "root-document", Type: "task.completed"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordArtifact(types.Artifact{TaskID: "root-document", FilePath: "/tmp/cross-conversation.pptx", FileName: "cross-conversation.pptx", DocumentType: "pptx"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordTaskContext(ctx, "source-rewrite", TaskContext{ConversationID: "rewrite-conversation"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordEvent(types.BridgeEvent{TaskID: "source-rewrite", Type: "task.user_input", TS: "2026-08-27T00:00:00Z", Payload: map[string]any{"source_file": "/tmp/cross-conversation.pptx"}}); err != nil {
+		t.Fatal(err)
+	}
+	runs, err := store.QueryDocumentRuns(ctx, documentIDForPath("/tmp/cross-conversation.pptx"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 2 || runs[1].ID != "source-rewrite" || runs[1].SourceConversationID != "rewrite-conversation" {
+		t.Fatalf("cross-conversation runs = %#v", runs)
+	}
+	activities, err := store.QueryDocumentActivities(ctx, types.DocumentActivityListInput{DocumentID: documentIDForPath("/tmp/cross-conversation.pptx")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	streams := map[string]bool{}
+	for _, activity := range activities.Items {
+		streams[activity.ActivityStreamID] = true
+	}
+	if !streams["activity:document-conversation"] || !streams["activity:rewrite-conversation"] {
+		t.Fatalf("cross-conversation activity streams = %#v", streams)
+	}
+}
+
+func TestV7ProjectionEventIdentityAndDuplicateWritesAreStable(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+	if err := store.RecordTaskContext(ctx, "stable-task", TaskContext{ConversationID: "stable-conversation"}); err != nil {
+		t.Fatal(err)
+	}
+	event := types.BridgeEvent{TaskID: "stable-task", Type: "task.progress", TS: "2026-08-27T00:00:01Z", Payload: map[string]any{"stage": "one"}}
+	if err := store.RecordEvent(event); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordEvent(event); err != nil {
+		t.Fatal(err)
+	}
+	page, err := store.QueryDocumentActivities(ctx, types.DocumentActivityListInput{DocumentID: documentIDForPath("/tmp/absent")})
+	if err != nil || len(page.Items) != 0 {
+		t.Fatalf("unexpected absent document activities = %#v, %v", page, err)
+	}
+	var count int
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM activities WHERE task_id = 'stable-task'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("duplicate event activities = %d, want 1", count)
+	}
+	var activityID, eventID string
+	if err := store.db.QueryRowContext(ctx, `SELECT id, COALESCE(event_id, '') FROM activities WHERE task_id = 'stable-task'`).Scan(&activityID, &eventID); err != nil {
+		t.Fatal(err)
+	}
+	if activityID != "stable-task:event:0:task.progress" || eventID != "" || strings.Contains(activityID, "2026") {
+		t.Fatalf("unstable event identity: activity=%q event=%q", activityID, eventID)
+	}
+	if err := store.RecordEvent(types.BridgeEvent{EventID: "second", TaskID: "stable-task", Type: "task.progress", Payload: map[string]any{"stage": "two"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM activities WHERE task_id = 'stable-task'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Fatalf("activities after second event = %d, want 2", count)
+	}
+	rows, err := store.db.QueryContext(ctx, `SELECT ordinal FROM activities WHERE task_id = 'stable-task' ORDER BY ordinal`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for want := 0; rows.Next(); want++ {
+		var ordinal int
+		if err := rows.Scan(&ordinal); err != nil {
+			t.Fatal(err)
+		}
+		if ordinal != want {
+			t.Fatalf("ordinal = %d, want %d", ordinal, want)
+		}
 	}
 }
 
@@ -633,8 +884,8 @@ func TestSchemaMigrationFromV1DB(t *testing.T) {
 	if err := store.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 6 {
-		t.Errorf("user_version = %d, want 6", version)
+	if version != 7 {
+		t.Errorf("user_version = %d, want 7", version)
 	}
 
 	events, err := store.QueryEventsByTask(ctx, "legacy-task")
@@ -662,6 +913,141 @@ func TestSchemaMigrationFromV1DB(t *testing.T) {
 	}
 }
 
+func TestMigrateV7BackfillsDocumentsRunsAndActivitiesIdempotently(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "officedex.db")
+	ctx := context.Background()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ddl := range []string{schema, schemaV1, schemaV2, schemaV3, schemaV4, schemaV5, schemaV6} {
+		if _, err := db.ExecContext(ctx, ddl); err != nil {
+			t.Fatalf("apply legacy schema: %v", err)
+		}
+	}
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO workspaces(id, path, name, created_at, updated_at) VALUES ('ws-1', '/workspace', 'Workspace', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+		INSERT INTO conversations(id, workspace_id, title, created_at, updated_at) VALUES
+			('conv-a', 'ws-1', 'Two documents', '2026-01-01T00:00:00Z', '2026-01-03T00:00:00Z'),
+			('conv-b', 'ws-1', 'Rewrite', '2026-01-02T00:00:00Z', '2026-01-04T00:00:00Z'),
+			('conv-c', 'ws-1', 'No artifact', '2026-01-03T00:00:00Z', '2026-01-05T00:00:00Z');
+		INSERT INTO tasks(id, status, document_type, topic, updated_at, conversation_id, parent_task_id, workspace_id) VALUES
+			('task-a', 'completed', 'pptx', 'A', '2026-01-01T00:00:01Z', 'conv-a', '', 'ws-1'),
+			('task-b', 'completed', 'docx', 'B', '2026-01-01T00:00:02Z', 'conv-a', '', 'ws-1'),
+			('task-c', 'completed', 'pptx', 'C', '2026-01-02T00:00:01Z', 'conv-b', '', 'ws-1'),
+			('task-d', 'completed', 'pptx', 'D', '2026-01-03T00:00:01Z', 'conv-c', '', 'ws-1'),
+			('task-e', 'completed', 'pptx', 'E', '2026-01-02T00:00:00Z', 'conv-b', '', 'ws-1');
+		INSERT INTO artifacts(file_path, task_id, file_id, file_name, document_type, preview_url, edit_url, synced_at) VALUES
+			('/tmp/shared.pptx', 'task-a', 'file-a', 'shared.pptx', 'pptx', 'preview-a', 'edit-a', '2026-01-01T00:01:00Z'),
+			('/tmp/second.docx', 'task-b', 'file-b', 'second.docx', 'docx', 'preview-b', 'edit-b', '2026-01-01T00:02:00Z');
+		INSERT INTO task_events(event_id, task_id, type, payload_json, created_at, request_id) VALUES
+			('task-a:e1', 'task-a', 'task.user_input', '{"source_file":""}', '2026-01-01T00:00:00Z', ''),
+			('task-a:e2', 'task-a', 'task.completed', '{}', '2026-01-01T00:00:01Z', ''),
+			('', 'task-b', 'task.completed', '{}', '2026-01-01T00:00:02Z', ''),
+			('task-c:e1', 'task-c', 'task.user_input', '{"source_file":"/tmp/shared.pptx"}', '2026-01-02T00:00:00Z', ''),
+			('task-d:e1', 'task-d', 'task.completed', '{}', '2026-01-03T00:00:01Z', ''),
+			('task-e:e1', 'task-e', 'task.completed', '{}', '2026-01-02T00:00:02Z', '');
+		PRAGMA user_version = 6;
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store := New(path)
+	if err := store.Open(ctx); err != nil {
+		t.Fatalf("Open v7: %v", err)
+	}
+	defer store.Close()
+	assertV7Backfill(t, store)
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	store = New(path)
+	if err := store.Open(ctx); err != nil {
+		t.Fatalf("reopen v7: %v", err)
+	}
+	defer store.Close()
+	assertV7Backfill(t, store)
+}
+
+func assertV7Backfill(t *testing.T, store *Store) {
+	t.Helper()
+	ctx := context.Background()
+	var count int
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM documents`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Fatalf("documents = %d, want 2", count)
+	}
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM runs`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 5 {
+		t.Fatalf("runs = %d, want 5 tasks including unassociated terminal run", count)
+	}
+	var documentID, streamID, sourceFile string
+	if err := store.db.QueryRowContext(ctx, `SELECT document_id, activity_stream_id, source_file FROM runs WHERE id = 'task-c'`).Scan(&documentID, &streamID, &sourceFile); err != nil {
+		t.Fatal(err)
+	}
+	if documentID != "document:%2Ftmp%2Fshared.pptx" || streamID != "activity:conv-b" || sourceFile != "/tmp/shared.pptx" {
+		t.Fatalf("source-only run = %q, %q, %q", documentID, streamID, sourceFile)
+	}
+	if err := store.db.QueryRowContext(ctx, `SELECT document_id FROM runs WHERE id = 'task-e'`).Scan(&documentID); err != nil {
+		t.Fatal(err)
+	}
+	if documentID != "document:%2Ftmp%2Fshared.pptx" {
+		t.Fatalf("same-conversation fallback run document = %q", documentID)
+	}
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM document_activity_streams WHERE document_id = 'document:%2Ftmp%2Fshared.pptx'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Fatalf("shared document streams = %d, want 2", count)
+	}
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM activities`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 6 {
+		t.Fatalf("activities = %d, want 6", count)
+	}
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM activities WHERE id = 'task-b:event:0:task.completed'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatal("missing event ID did not use task-local event index")
+	}
+	var streamCreated, streamUpdated, documentUpdated string
+	if err := store.db.QueryRowContext(ctx, `SELECT created_at, updated_at FROM activity_streams WHERE id = 'activity:conv-b'`).Scan(&streamCreated, &streamUpdated); err != nil {
+		t.Fatal(err)
+	}
+	if streamCreated != "2026-01-02T00:00:00Z" || streamUpdated != "2026-01-02T00:00:02Z" {
+		t.Fatalf("conv-b stream times = %q, %q", streamCreated, streamUpdated)
+	}
+	if err := store.db.QueryRowContext(ctx, `SELECT updated_at FROM documents WHERE id = 'document:%2Ftmp%2Fshared.pptx'`).Scan(&documentUpdated); err != nil {
+		t.Fatal(err)
+	}
+	if documentUpdated != "2026-01-02T00:00:01Z" {
+		t.Fatalf("document latest run time = %q, want source-only task-c time", documentUpdated)
+	}
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM tasks WHERE id = 'task-d'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatal("legacy task was not preserved")
+	}
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM legacy_migrations WHERE marker = 'documents-v1'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("migration marker count = %d, want 1", count)
+	}
+}
+
 func TestOpenCloseReopen(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "officedex.db")
@@ -678,6 +1064,89 @@ func TestOpenCloseReopen(t *testing.T) {
 	}
 	if err := store.Close(); err != nil {
 		t.Fatalf("second Close: %v", err)
+	}
+}
+
+func TestQueryDocumentsPaginatesAndFiltersWorkspace(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+	for _, row := range []struct{ id, path, name, workspace, updated string }{
+		{"document:new", "/tmp/new.pptx", "new.pptx", "ws-a", "2026-08-27T12:00:00Z"},
+		{"document:old", "/tmp/old.docx", "old.docx", "ws-a", "2026-08-27T10:00:00Z"},
+		{"document:other", "/tmp/other.xlsx", "other.xlsx", "ws-b", "2026-08-27T11:00:00Z"},
+	} {
+		if _, err := store.db.ExecContext(ctx, `INSERT INTO documents(id, file_path, file_name, document_type, current_artifact_task_id, workspace_id, created_at, updated_at, migration_source) VALUES (?, ?, ?, 'pptx', 'task', ?, '2026-08-27T09:00:00Z', ?, 'test')`, row.id, row.path, row.name, row.workspace, row.updated); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	first, err := store.QueryDocuments(ctx, types.DocumentListInput{WorkspaceID: "ws-a", Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first.Items) != 1 || first.Items[0].ID != "document:new" || first.NextCursor == "" {
+		t.Fatalf("first page = %#v", first)
+	}
+	second, err := store.QueryDocuments(ctx, types.DocumentListInput{WorkspaceID: "ws-a", Limit: 1, Cursor: first.NextCursor})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(second.Items) != 1 || second.Items[0].ID != "document:old" || second.NextCursor != "" {
+		t.Fatalf("second page = %#v", second)
+	}
+	document, found, err := store.GetDocument(ctx, "document:new")
+	if err != nil || !found || document.FilePath != "/tmp/new.pptx" {
+		t.Fatalf("GetDocument = %#v, %v, %v", document, found, err)
+	}
+}
+
+func TestQueryDocumentRunsAndActivity(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+	_, err := store.db.ExecContext(ctx, `
+		INSERT INTO documents(id, file_path, file_name, document_type, created_at, updated_at, migration_source) VALUES ('document:one', '/tmp/one.pptx', 'one.pptx', 'pptx', '2026-08-27T09:00:00Z', '2026-08-27T12:00:00Z', 'test');
+		INSERT INTO activity_streams(id, source_conversation_id, created_at, updated_at) VALUES ('activity:one', 'conversation-one', '2026-08-27T09:00:00Z', '2026-08-27T12:00:00Z');
+		INSERT INTO document_activity_streams(document_id, activity_stream_id) VALUES ('document:one', 'activity:one');
+		INSERT INTO runs(id, document_id, activity_stream_id, source_conversation_id, status, created_at, updated_at) VALUES
+			('run-1', 'document:one', 'activity:one', 'conversation-one', 'completed', '2026-08-27T09:00:00Z', '2026-08-27T10:00:00Z'),
+			('run-2', 'document:one', 'activity:one', 'conversation-one', 'running', '2026-08-27T11:00:00Z', '2026-08-27T12:00:00Z');
+		INSERT INTO activities(id, activity_stream_id, source_conversation_id, task_id, ordinal, kind, event_type, payload_json, created_at) VALUES
+			('activity-1', 'activity:one', 'conversation-one', 'run-1', 0, 'event', 'task.started', '{}', '2026-08-27T09:00:00Z'),
+			('activity-2', 'activity:one', 'conversation-one', 'run-2', 1, 'event', 'task.started', '{}', '2026-08-27T11:00:00Z');
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs, err := store.QueryDocumentRuns(ctx, "document:one")
+	if err != nil || len(runs) != 2 || runs[0].ID != "run-1" || runs[1].ID != "run-2" {
+		t.Fatalf("runs = %#v, %v", runs, err)
+	}
+	first, err := store.QueryDocumentActivities(ctx, types.DocumentActivityListInput{DocumentID: "document:one", Limit: 1})
+	if err != nil || len(first.Items) != 1 || first.Items[0].ID != "activity-1" || first.NextCursor == "" {
+		t.Fatalf("first activities = %#v, %v", first, err)
+	}
+	second, err := store.QueryDocumentActivities(ctx, types.DocumentActivityListInput{DocumentID: "document:one", Limit: 1, Cursor: first.NextCursor})
+	if err != nil || len(second.Items) != 1 || second.Items[0].ID != "activity-2" || second.NextCursor != "" {
+		t.Fatalf("second activities = %#v, %v", second, err)
+	}
+}
+
+func TestQueryTaskHistoryByIDIsExact(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+	if err := store.RecordTaskContext(ctx, "task-exact", TaskContext{ConversationID: "conversation-exact", WorkspaceID: ""}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordEvent(types.BridgeEvent{EventID: "exact-started", TaskID: "task-exact", Type: "task.started", Payload: map[string]any{"topic": "Exact"}}); err != nil {
+		t.Fatal(err)
+	}
+	entry, found, err := store.QueryTaskHistoryByID(ctx, "task-exact")
+	if err != nil || !found || entry.TaskID != "task-exact" || entry.ConversationID != "conversation-exact" || len(entry.Events) != 1 {
+		t.Fatalf("exact history = %#v, %v, %v", entry, found, err)
+	}
+	_, found, err = store.QueryTaskHistoryByID(ctx, "missing")
+	if err != nil || found {
+		t.Fatalf("missing found=%v err=%v", found, err)
 	}
 }
 
@@ -1035,8 +1504,8 @@ func TestSchemaV1MigrationFromLegacyDB(t *testing.T) {
 	if err := store.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 6 {
-		t.Errorf("user_version = %d, want 6", version)
+	if version != 7 {
+		t.Errorf("user_version = %d, want 7", version)
 	}
 	if err := store.Close(); err != nil {
 		t.Fatal(err)
