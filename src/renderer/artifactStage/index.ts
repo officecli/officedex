@@ -13,6 +13,11 @@ export {
   type IntentCost,
 } from "./ArtifactStageShell";
 export {
+  ArtifactStageStatusBanner,
+  type ArtifactStageStatus,
+  type ArtifactStageStatusProps,
+} from "./StageStatus";
+export {
   ArtifactStageExecutionUnsupportedError,
   resolveArtifactStageExecutionRoute,
   type ArtifactStageExecutionRoute,
