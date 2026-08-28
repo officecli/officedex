@@ -1366,7 +1366,6 @@ export const en: Record<string, string> = {
   "appBuilder.permissions.update": "Update records",
   "appBuilder.permissions.updateBody": "Allow changes to authorized fields",
   "appBuilder.appPage.back": "Back to Builder",
-};
   "flatStage.aria": "Image or GIF editing stage",
   "flatStage.region": "Artifact region selection",
   "flatStage.clear": "Clear selection",
@@ -1454,3 +1453,4 @@ export const en: Record<string, string> = {
   "docx.viewer.layoutPreview": "Layout Preview",
   "docx.viewer.previewUnavailable": "Could not access the layout preview.",
   "preview.externalPathUnavailable": "The artifact path is unavailable.",
+};

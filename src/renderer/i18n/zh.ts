@@ -1316,7 +1316,6 @@ export const zh: Record<string, string> = {
   "appBuilder.permissions.update": "修改记录",
   "appBuilder.permissions.updateBody": "允许从 App 修改已授权字段",
   "appBuilder.appPage.back": "返回 Builder",
-};
   "flatStage.aria": "图片或 GIF 编辑区域",
   "flatStage.region": "选择产物区域",
   "flatStage.clear": "清除选择",
@@ -1404,3 +1403,4 @@ export const zh: Record<string, string> = {
   "docx.viewer.layoutPreview": "版式预览",
   "docx.viewer.previewUnavailable": "无法访问版式预览。",
   "preview.externalPathUnavailable": "无法获取产物路径。",
+};
