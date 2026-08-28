@@ -7,6 +7,7 @@ export {
   type ArtifactStageScope,
   type ArtifactStageSelection,
   type ArtifactStageShellProps,
+  type ArtifactStageBillingState,
   type ArtifactStageSlot,
   type ArtifactStageSlotContext,
   type IntentCost,
