@@ -18,7 +18,7 @@ import { DialogueScreen, type FailureKind, type NewChatTarget, type NewGeneratio
 import { ActivityPanel } from "./screens/DataScreens";
 import { LoginScreen, SettingsScreen } from "./screens/SettingsScreens";
 import { HomeScreen } from "./screens/HomeScreen";
-import { inferHomeTaskRoute, type HomeTaskAnalysis, type HomeTaskIntake } from "./homeIntake";
+import { inferHomeTaskRoute, type HomeTaskIntake } from "./homeIntake";
 import { PPT_VIBE_CANVAS_ENABLED } from "./featureFlags";
 import { SpreadsheetWorkspace, type SpreadsheetWorkspaceHandle } from "./spreadsheet/SpreadsheetWorkspace";
 import { SpreadsheetAgentPanel, type SpreadsheetAgentTool } from "./spreadsheet/SpreadsheetAgentPanel";
@@ -885,14 +885,6 @@ function OfficeDexApp() {
       enableImages: persistedSettings.defaults.enableImages,
       imageQuality: persistedSettings.defaults.imageQuality,
     });
-  }
-
-  async function analyzeTaskFromHome(input: HomeTaskIntake): Promise<HomeTaskAnalysis> {
-    const route = inferHomeTaskRoute(input, "pptx");
-    if (route.kind === "needs_source") {
-      throw new Error("Add the supplier Excel workbook before starting catalog cleanup.");
-    }
-    return { ...input, documentType: route.documentType, kind: route.kind === "catalog_cleanup" ? "catalog_cleanup" : "generate", nextStep: route.kind === "catalog_cleanup" ? "configure" : "plan" };
   }
 
   const selectHomeWorkspace = useCallback(async (workspaceId: string) => {
@@ -1952,7 +1944,6 @@ function OfficeDexApp() {
             onSteerTask={steerPptxTask}
             onResumeTask={resumePptxTask}
             onCancelTask={async (task) => { await officecli.cancel(task.id); }}
-            onAnalyzeTask={analyzeTaskFromHome}
             onStartTask={startTaskFromHome}
             productionTaskId={stageFirstTaskId}
             productionEditor={previewGrant && previewArtifact?.taskId === stageFirstTaskId ? {
