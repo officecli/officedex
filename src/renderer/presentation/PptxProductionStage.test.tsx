@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DesktopTask } from "../../shared/types";
 import type { PptistSlide } from "../../shared/pptistProtocol";
@@ -48,6 +48,6 @@ describe("PptxProductionStage", () => {
     fireEvent.keyDown(screen.getByRole("textbox", { name: "Stage instruction" }), { key: "Enter" });
     expect(onSteer).toHaveBeenCalledWith("add a takeaway");
     fireEvent.click(screen.getByRole("button", { name: "Resume" }));
-    expect(onResume).toHaveBeenCalledOnce();
+    await waitFor(() => expect(onResume).toHaveBeenCalledOnce());
   });
 });

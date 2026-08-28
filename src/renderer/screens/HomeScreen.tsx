@@ -799,7 +799,7 @@ function HomeTaskCard({ task, onOpen, onRetry, onSteer, onResume, onDismiss }: {
 
   if (task.documentType === "pptx") {
     return (
-      <div className="home-pptx-task-stage">
+      <div className={`home-pptx-task-stage home-task-row ${failed ? "home-task-row--failed" : "home-task-row--running"}`}>
         <PptxProductionStage
           task={task}
           onRetry={onRetry}
