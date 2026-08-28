@@ -63,7 +63,7 @@ export interface PresentationAsset {
   data: ArrayBuffer;
 }
 
-interface PresentationEditorFrameProps {
+export interface PresentationEditorFrameProps {
   previewToken: string;
   fileName: string;
   onDirtyChange?: (dirty: boolean) => void;
@@ -431,4 +431,3 @@ export function PresentationEditorFrame({
     />
   );
 }
-
