@@ -136,7 +136,7 @@ describe("Shell sidebar layout", () => {
     const css = readFileSync("src/renderer/styles/shell.css", "utf8");
     const brandMarkRule = css.match(/\.brand-mark\s*\{[^}]*\}/s)?.[0] ?? "";
 
-    expect(brandMarkRule).toMatch(/border-radius:\s*8px;/);
+    expect(brandMarkRule).toMatch(/border-radius:\s*6px;/);
     expect(brandMarkRule).toMatch(/overflow:\s*hidden;/);
   });
 
@@ -219,7 +219,7 @@ describe("Shell sidebar layout", () => {
     const css = readFileSync("src/renderer/styles/shell.css", "utf8");
     const settingsRule = css.match(/\.sidebar-settings\s*\{[^}]*\}/s)?.[0] ?? "";
 
-    expect(css).toContain("grid-template-columns: 28px minmax(0, 1fr)");
+    expect(css).toContain("grid-template-columns: 20px minmax(0, 1fr)");
     expect(css).toMatch(/\.nav-item > svg\s*\{[^}]*place-items:\s*center;/s);
     expect(css).toMatch(/\.nav-item > span\s*\{[^}]*line-height:\s*20px;/s);
     expect(settingsRule).not.toContain("border-top");

@@ -139,7 +139,8 @@ describe("OnboardingScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: /next/i }));
     expect(await screen.findByText("Provider setup")).toBeTruthy();
 
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "custom" } });
+    fireEvent.click(screen.getByRole("button", { name: "Official" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Custom endpoint" }));
 
     const apiKeyField = await screen.findByPlaceholderText(/api key/i);
     fireEvent.change(apiKeyField, { target: { value: "sk-test-key" } });
@@ -160,7 +161,9 @@ describe("OnboardingScreen", () => {
     expect(await screen.findByText("Provider setup")).toBeTruthy();
     expect(await screen.findByText(/sign in to use custom endpoints/i)).toBeTruthy();
 
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "custom" } });
+    fireEvent.click(screen.getByRole("button", { name: "Official" }));
+    expect(screen.getByRole("menuitemradio", { name: "Custom endpoint" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Custom endpoint" }));
 
     expect(screen.queryByPlaceholderText(/api key/i)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /finish/i }));

@@ -157,9 +157,9 @@ describe("HistoryList", () => {
     ], { onRevealWorkspace, onRemoveWorkspace });
 
     fireEvent.click(screen.getByRole("button", { name: "Project actions for void-oversea" }));
-    expect(screen.getByRole("menuitem", { name: /Pin project/ }).getAttribute("aria-disabled")).toBe("true");
-    expect(screen.getByRole("menuitem", { name: /Create permanent worktree/ }).getAttribute("aria-disabled")).toBe("true");
-    expect(screen.getByRole("menuitem", { name: /Rename project/ }).getAttribute("aria-disabled")).toBe("true");
+    expect(screen.getByRole("menuitem", { name: "Pin" }).getAttribute("aria-disabled")).toBe("true");
+    expect(screen.getByRole("menuitem", { name: "Create permanent worktree" }).getAttribute("aria-disabled")).toBe("true");
+    expect(screen.getByRole("menuitem", { name: "Rename" }).getAttribute("aria-disabled")).toBe("true");
     expect(screen.getByRole("menuitem", { name: /Archive chats/ }).getAttribute("aria-disabled")).toBe("true");
 
     fireEvent.click(screen.getByRole("menuitem", { name: /Reveal in Finder/ }));
