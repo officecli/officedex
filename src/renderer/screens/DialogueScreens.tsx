@@ -1499,6 +1499,10 @@ function ConversationView({ tasks, onPreview, onForceCancel, onContinueGeneratio
 
   return (
     <div className="conversation-layout" ref={layoutRef}>
+      <div className="legacy-task-entry" role="note" data-legacy-entry="true">
+        <strong>Legacy task view</strong>
+        <span>Older tasks remain available here while new work is organized by document and run.</span>
+      </div>
       <div className="chat-thread">
         {tasks.map((task) => {
           const isLatest = task.id === latestTask.id;

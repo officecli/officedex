@@ -68,6 +68,15 @@ function renderHistory(workspaces: WorkspaceSummary[], overrides: Partial<Parame
 }
 
 describe("HistoryList", () => {
+  it("marks standalone task conversations as a legacy compatibility entry", () => {
+    renderHistory([], {
+      chats: [conversation({ conversationId: "legacy-chat", title: "Imported task" })],
+    });
+
+    expect(screen.getByText("Legacy task history")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Collapse Chats/ }).getAttribute("data-legacy-entry")).toBe("true");
+  });
+
   it("separates projects from no-project chats", () => {
     renderHistory([
       workspace({
@@ -91,6 +100,8 @@ describe("HistoryList", () => {
     expect(screen.getByRole("button", { name: /Workspace feature/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: "officecli" })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Standalone chat/ })).toBeTruthy();
+    expect(screen.getByText("Legacy task history")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Collapse Chats/ }).getAttribute("data-legacy-entry")).toBe("true");
     expect(screen.getByText("No chats")).toBeTruthy();
   });
 
