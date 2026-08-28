@@ -222,6 +222,13 @@ async function isCompletedArtifactVisible(page: Page): Promise<boolean> {
   if (await page.getByText("Generation Complete").first().isVisible().catch(() => false)) {
     return true;
   }
+  // PPTX environments without the embedded editor navigate directly to the
+  // real artifact Preview surface. That page is still a completed generation
+  // result and exposes the artifact actions, but it has no living-tree stage
+  // wrapper or "Generation Complete" heading.
+  if (await page.getByRole("button", { name: /Open in app|Show in folder/i }).first().isVisible().catch(() => false)) {
+    return true;
+  }
   return completedArtifactSurface(page).isVisible().catch(() => false);
 }
 
