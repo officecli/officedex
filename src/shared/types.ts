@@ -6,6 +6,17 @@
  */
 import type { PptistDeckSnapshot, PptistEditOp, PptistSlide } from "./pptistProtocol";
 
+export interface ArtifactStageRuntimeInput {
+  artifact_stage: {
+    version: 1; action: "rewrite" | "redraw"; instruction: string;
+    cost_class: "metered" | "heavy"; idempotency_key: string; expected_sha256: string;
+    write_mode: "new_artifact";
+    target: { artifact_id: string; artifact_path: string; document_type: string };
+    scope: { kind: string; block?: unknown; range?: unknown; region?: unknown };
+  };
+  workspaceId?: string; noProject?: boolean; conversationId?: string; parentTaskId?: string;
+}
+
 export type DocumentType = "pptx" | "docx" | "xlsx" | "report" | "img" | "gif";
 export type GenerationMode = "fast" | "plan";
 export type ImageRatio = "square" | "landscape" | "portrait";
@@ -719,6 +730,7 @@ export interface DesktopAPI {
   createImageTemplatePublishRequest(input: CreateImageTemplatePublishRequestInput): Promise<ImageTemplatePublishRequest>;
   generate(input: GenerateInput): Promise<{ taskId: string; sessionId: string; status: string }>;
   modify(input: ModifyInput): Promise<{ taskId: string; sessionId: string; status: string }>;
+  artifactStageEdit(input: ArtifactStageRuntimeInput): Promise<{ taskId: string; sessionId: string; status: string }>;
   respond(input: { taskId: string; questionId?: string; optionId?: string; answer?: string; answers?: TaskQuestionAnswer[] }): Promise<unknown>;
   cancel(taskId: string): Promise<unknown>;
   openPath(filePath: string): Promise<void>;

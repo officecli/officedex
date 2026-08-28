@@ -1008,6 +1008,60 @@ func TestInvokeModifyOmitsEmptyLangAndStyle(t *testing.T) {
 	}
 }
 
+func TestInvokeArtifactStageEditBuildsVersionedRequest(t *testing.T) {
+	client, fake := newClientWithFake(t)
+	defer client.Stop()
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := client.InvokeArtifactStageEdit(context.Background(), types.ArtifactStageEditInput{
+			ArtifactStage: types.ArtifactStageEnvelope{
+				Version: 1, Action: "rewrite", Instruction: "rewrite the title", CostClass: "metered",
+				IdempotencyKey: "idem-1", ExpectedSHA256: strings.Repeat("a", 64), WriteMode: "new_artifact",
+				Target: types.ArtifactStageTarget{ArtifactID: "artifact-1", ArtifactPath: "/tmp/report.docx", DocumentType: "docx"},
+				Scope:  types.ArtifactStageScope{Kind: "document"},
+			},
+		})
+		done <- err
+	}()
+
+	first := fake.readRequest(t)
+	if first.Method != "session/open" {
+		t.Fatalf("first method = %q, want session/open", first.Method)
+	}
+	fake.writeResponse(t, first.idString(), map[string]any{"id": "sess-stage"}, nil)
+	second := fake.readRequest(t)
+	if second.Method != "task/invoke" {
+		t.Fatalf("second method = %q, want task/invoke", second.Method)
+	}
+	var params map[string]any
+	if err := json.Unmarshal(second.Params, &params); err != nil {
+		t.Fatalf("decode params: %v", err)
+	}
+	if params["tool"] != "artifact_stage_edit.v1" {
+		t.Errorf("tool = %v", params["tool"])
+	}
+	if params["session_id"] != "sess-stage" {
+		t.Errorf("session_id = %v", params["session_id"])
+	}
+	args, _ := params["args"].(map[string]any)
+	stage, _ := args["artifact_stage"].(map[string]any)
+	if stage["write_mode"] != "new_artifact" {
+		t.Errorf("write_mode = %v", stage["write_mode"])
+	}
+	if stage["idempotency_key"] != "idem-1" {
+		t.Errorf("idempotency_key = %v", stage["idempotency_key"])
+	}
+	target, _ := stage["target"].(map[string]any)
+	if target["artifact_path"] != "/tmp/report.docx" {
+		t.Errorf("artifact_path = %v", target["artifact_path"])
+	}
+	fake.writeResponse(t, second.idString(), map[string]any{"task_id": "task-stage", "session_id": "sess-stage", "status": "starting"}, nil)
+	if err := <-done; err != nil {
+		t.Errorf("InvokeArtifactStageEdit: %v", err)
+	}
+}
+
 func TestPlanPptistEditCallsBridgePlanner(t *testing.T) {
 	client, fake := newClientWithFake(t)
 	defer client.Stop()

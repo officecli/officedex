@@ -619,6 +619,38 @@ func (a *App) Modify(input types.ModifyInput) (GenerateResult, error) {
 	return GenerateResult{TaskID: result.TaskID, SessionID: result.SessionID, Status: result.Status}, nil
 }
 
+func (a *App) ArtifactStageEdit(input types.ArtifactStageEditInput) (GenerateResult, error) {
+	settings, err := a.settingsStore.Load()
+	if err != nil {
+		return GenerateResult{}, fmt.Errorf("load settings: %w", err)
+	}
+	if err := validateCustomProvider(settings); err != nil {
+		return GenerateResult{}, err
+	}
+	if err := a.requireLoggedInForCustomProvider(settings); err != nil {
+		return GenerateResult{}, err
+	}
+	targetCwd, err := a.effectiveWorkspaceDirForInput(input.WorkspaceID, input.NoProject, settings)
+	if err != nil {
+		return GenerateResult{}, err
+	}
+	client, err := a.ensureBridgeForCwd(targetCwd)
+	if err != nil {
+		return GenerateResult{}, err
+	}
+	result, err := client.InvokeArtifactStageEdit(a.ctx, input)
+	if err != nil {
+		return GenerateResult{}, err
+	}
+	if a.localStore != nil && result.TaskID != "" {
+		if err := a.recordTaskWorkspaceContext(result.TaskID, input.WorkspaceID, input.ConversationID, input.ParentTaskID, input.ArtifactStage.Instruction, input.NoProject); err != nil {
+			return GenerateResult{}, err
+		}
+		_ = a.localStore.RecordEvent(types.BridgeEvent{TaskID: result.TaskID, Type: "task.user_input", Payload: map[string]any{"prompt": input.ArtifactStage.Instruction, "source_file": input.ArtifactStage.Target.ArtifactPath, "artifact_stage_scope": input.ArtifactStage.Scope.Kind}})
+	}
+	return GenerateResult{TaskID: result.TaskID, SessionID: result.SessionID, Status: result.Status}, nil
+}
+
 // RespondInput is the renderer payload for the respond binding.
 type RespondInput struct {
 	TaskID     string               `json:"taskId"`

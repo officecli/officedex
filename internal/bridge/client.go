@@ -858,6 +858,32 @@ func (c *Client) InvokeModify(ctx context.Context, input types.ModifyInput) (Tas
 	return result, nil
 }
 
+// InvokeArtifactStageEdit starts the versioned scoped-artifact workflow.
+func (c *Client) InvokeArtifactStageEdit(ctx context.Context, input types.ArtifactStageEditInput) (TaskInvokeResult, error) {
+	c.mu.Lock()
+	sessionID := c.sessionID
+	c.mu.Unlock()
+	if sessionID == "default" {
+		opened, err := c.OpenSession(ctx)
+		if err != nil {
+			return TaskInvokeResult{}, err
+		}
+		sessionID = opened
+	}
+	raw, err := c.requestWithTimeout(ctx, taskInvokeMethod, map[string]any{
+		"session_id": sessionID, "tool": "artifact_stage_edit.v1", "interactive": true,
+		"output_format": "bundle", "args": map[string]any{"artifact_stage": input.ArtifactStage},
+	}, c.options.TaskInvokeTimeout)
+	if err != nil {
+		return TaskInvokeResult{}, err
+	}
+	var result TaskInvokeResult
+	if err := decodeJSON(raw, &result); err != nil {
+		return TaskInvokeResult{}, fmt.Errorf("bridge: decode artifact stage task/invoke: %w", err)
+	}
+	return result, nil
+}
+
 // PlanPptistEdit asks the bridge-side PPTist planner to convert a natural
 // language edit prompt into PPTist edit operations. It never invokes
 // office.modify and never writes a local PPTX.

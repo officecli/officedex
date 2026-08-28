@@ -3,6 +3,7 @@ import type {
   AppUpdateEvent,
   AppUpdateStatus,
   Artifact,
+  ArtifactStageRuntimeInput,
   AuthEvent,
   BinaryFileData,
   BridgeEvent,
@@ -123,6 +124,9 @@ function createBrowserPreviewAPI(): DesktopAPI {
       throw new Error("Bridge IPC is only available inside the desktop app.");
     },
     modify: async () => {
+      throw new Error("Bridge IPC is only available inside the desktop app.");
+    },
+    artifactStageEdit: async () => {
       throw new Error("Bridge IPC is only available inside the desktop app.");
     },
     respond: async () => undefined,
@@ -578,6 +582,12 @@ function createWailsAPI(): DesktopAPI {
       const result = await WailsApp.Modify(toWails(input));
       return { taskId: result.taskId, sessionId: result.sessionId, status: result.status };
     },
+    artifactStageEdit: async (input: ArtifactStageRuntimeInput) => {
+      const fn = (WailsApp as unknown as { ArtifactStageEdit?: (arg1: never) => Promise<{ taskId: string; sessionId: string; status: string }> }).ArtifactStageEdit;
+      if (!fn) throw new Error("Artifact Stage editing requires a newer OfficeDex runtime.");
+      const result = await fn(toWails(input));
+      return { taskId: result.taskId, sessionId: result.sessionId, status: result.status };
+    },
     respond: async (input) => decodeRawBytes(await WailsApp.Respond(toWails(input))),
     cancel: async (taskId: string) => decodeRawBytes(await WailsApp.Cancel(taskId)),
     openPath: (filePath) => WailsApp.OpenPath(filePath),
@@ -852,6 +862,8 @@ function createRealE2EAPI(endpoint: string): DesktopAPI {
       rpc<{ taskId: string; sessionId: string; status: string }>("Generate", input),
     modify: (input: ModifyInput) =>
       rpc<{ taskId: string; sessionId: string; status: string }>("Modify", input),
+    artifactStageEdit: (input: ArtifactStageRuntimeInput) =>
+      rpc<{ taskId: string; sessionId: string; status: string }>("ArtifactStageEdit", input),
     respond: async (input) => decodeRealE2ERawBytes(await rpc<unknown>("Respond", input)),
     cancel: async (taskId: string) => decodeRealE2ERawBytes(await rpc<unknown>("Cancel", taskId)),
     openPath: (filePath: string) => rpc<void>("OpenPath", filePath),
