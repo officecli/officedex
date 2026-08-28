@@ -18,6 +18,7 @@ import {
 import { useT } from "../i18n";
 import { ProgressivePptxStage } from "../presentation/ProgressivePptxStage";
 import { PptxProductionStage } from "../presentation/PptxProductionStage";
+import type { PresentationEditorFrameProps } from "../presentation/PresentationEditorFrame";
 import { fileNameFromPath } from "../utils/path";
 import { MaterialSymbol } from "../components/Shell";
 import { DocTypeIcon, docTypeFromPath } from "../components/DocTypeIcon";
@@ -50,6 +51,7 @@ export interface HomeScreenProps {
   onResumeTask?: (task: DesktopTask) => void | Promise<void>;
   onCancelTask?: (task: DesktopTask) => void | Promise<void>;
   productionTaskId?: string;
+  productionEditor?: Omit<PresentationEditorFrameProps, "previewToken" | "fileName"> & { previewToken: string; fileName: string };
   onOpenTasks?: () => void;
   onRetryRecentFiles?: () => void;
 }
@@ -95,7 +97,7 @@ const HOME_TEMPLATES: HomeTemplate[] = [
   { id: "budget", type: "xlsx", icon: "account_balance_wallet", minutes: 2 },
 ];
 
-export function HomeScreen({ files, attentionTasks = [], loading, error, activeWorkspaceId, workspaces = [], onOpenFile, onRemoveFile, onPickTaskFile, onPickTaskDirectory, droppedTaskPaths, onSelectWorkspace, onSelectAllWorkspaces, onAddWorkspace, onAnalyzeTask, onStartTask, onOpenTask, onRetryTask, onSteerTask, onResumeTask, onCancelTask, productionTaskId, onOpenTasks, onRetryRecentFiles }: HomeScreenProps) {
+export function HomeScreen({ files, attentionTasks = [], loading, error, activeWorkspaceId, workspaces = [], onOpenFile, onRemoveFile, onPickTaskFile, onPickTaskDirectory, droppedTaskPaths, onSelectWorkspace, onSelectAllWorkspaces, onAddWorkspace, onAnalyzeTask, onStartTask, onOpenTask, onRetryTask, onSteerTask, onResumeTask, onCancelTask, productionTaskId, productionEditor, onOpenTasks, onRetryRecentFiles }: HomeScreenProps) {
   const t = useT();
   const homeScreenRef = useRef<HTMLElement>(null);
   const pointerFieldRef = useRef<HTMLCanvasElement>(null);
@@ -479,6 +481,8 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
         </header>
         <ProgressivePptxStage
           task={productionTask}
+          draftReady={Boolean(productionEditor)}
+          editor={productionEditor}
           onContinue={onResumeTask ? () => onResumeTask(productionTask) : undefined}
           onStartDrawing={onResumeTask ? () => onResumeTask(productionTask) : undefined}
           productionProps={{

@@ -1958,6 +1958,11 @@ function OfficeDexApp() {
             onResumeTask={resumePptxTask}
             onCancelTask={(task) => officecli.cancel(task.id)}
             productionTaskId={stageFirstTaskRef.current}
+            productionEditor={previewGrant && previewArtifact?.taskId === stageFirstTaskRef.current ? {
+              previewToken: previewGrant.token,
+              fileName: previewArtifact.fileName,
+              onUnavailable: (error) => recordError(error || "Presentation editor unavailable", "other"),
+            } : undefined}
             loading={recentFilesLoading}
             error={recentFilesError}
             activeWorkspaceId={homeWorkspaceId}
