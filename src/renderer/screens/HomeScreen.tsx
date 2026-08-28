@@ -44,6 +44,8 @@ export interface HomeScreenProps {
   onStartTask?: (input: HomeTaskIntake) => void | Promise<void>;
   onOpenTask?: (taskId: string) => void;
   onRetryTask?: (task: DesktopTask) => void;
+  onSteerTask?: (task: DesktopTask, instruction: string) => void | Promise<void>;
+  onResumeTask?: (task: DesktopTask) => void | Promise<void>;
   onOpenTasks?: () => void;
   onRetryRecentFiles?: () => void;
 }
@@ -89,7 +91,7 @@ const HOME_TEMPLATES: HomeTemplate[] = [
   { id: "budget", type: "xlsx", icon: "account_balance_wallet", minutes: 2 },
 ];
 
-export function HomeScreen({ files, attentionTasks = [], loading, error, activeWorkspaceId, workspaces = [], onOpenFile, onRemoveFile, onPickTaskFile, onPickTaskDirectory, droppedTaskPaths, onSelectWorkspace, onSelectAllWorkspaces, onAddWorkspace, onAnalyzeTask, onStartTask, onOpenTask, onRetryTask, onOpenTasks, onRetryRecentFiles }: HomeScreenProps) {
+export function HomeScreen({ files, attentionTasks = [], loading, error, activeWorkspaceId, workspaces = [], onOpenFile, onRemoveFile, onPickTaskFile, onPickTaskDirectory, droppedTaskPaths, onSelectWorkspace, onSelectAllWorkspaces, onAddWorkspace, onAnalyzeTask, onStartTask, onOpenTask, onRetryTask, onSteerTask, onResumeTask, onOpenTasks, onRetryRecentFiles }: HomeScreenProps) {
   const t = useT();
   const homeScreenRef = useRef<HTMLElement>(null);
   const pointerFieldRef = useRef<HTMLCanvasElement>(null);
@@ -670,6 +672,8 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
                 task={task}
                 onOpen={() => onOpenTask?.(task.id)}
                 onRetry={onRetryTask ? () => onRetryTask(task) : undefined}
+                onSteer={onSteerTask ? (instruction) => onSteerTask(task, instruction) : undefined}
+                onResume={onResumeTask ? () => onResumeTask(task) : undefined}
                 onDismiss={() => setDismissedTaskIds((current) => [...current, task.id])}
               />
             ))}
@@ -774,10 +778,12 @@ function isRecentFailure(task: DesktopTask): boolean {
   return Date.now() - at < RECENT_FAILURE_WINDOW_MS;
 }
 
-function HomeTaskCard({ task, onOpen, onRetry, onDismiss }: {
+function HomeTaskCard({ task, onOpen, onRetry, onSteer, onResume, onDismiss }: {
   task: DesktopTask;
   onOpen: () => void;
   onRetry?: () => void;
+  onSteer?: (instruction: string) => void | Promise<void>;
+  onResume?: () => void | Promise<void>;
   onDismiss: () => void;
 }) {
   const t = useT();
@@ -797,6 +803,8 @@ function HomeTaskCard({ task, onOpen, onRetry, onDismiss }: {
         <PptxProductionStage
           task={task}
           onRetry={onRetry}
+          onSteer={onSteer}
+          onResume={onResume}
           onOpenEditor={onOpen}
         />
         {failed ? (

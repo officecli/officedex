@@ -32,9 +32,10 @@ test.describe("OfficeDex PPTX production stage", () => {
 
     const prompt = page.getByPlaceholder(/Enter what you want to generate/i);
     await prompt.fill("Create a provider-free PPTX stage smoke test");
-    await page.getByRole("button", { name: /Generate/i }).last().click();
+    const submit = page.getByRole("button", { name: /Analyze|Generate|Start creating/i }).last();
+    await submit.click();
     await expect(page.getByRole("status")).toContainText(/Starting production|Starting/i, { timeout: 2_000 });
-    await expect(page.getByRole("button", { name: /Generate/i }).last()).toBeDisabled();
+    await expect(submit).toBeDisabled();
   });
 
   test("renders a failed PPTX task in the production stage", async ({ page }) => {
@@ -51,4 +52,3 @@ test.describe("OfficeDex PPTX production stage", () => {
     await expect(stage.getByRole("button", { name: /Retry/i })).toBeVisible();
   });
 });
-

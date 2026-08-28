@@ -1276,6 +1276,14 @@ function OfficeDexApp() {
     selectTask(taskId);
   }, [openInlinePreview, selectTask, state.tasks]);
 
+  const steerPptxTask = useCallback(async (_task: DesktopTask, instruction: string) => {
+    await continueModify("pptx", instruction);
+  }, [continueModify]);
+
+  const resumePptxTask = useCallback(async (task: DesktopTask) => {
+    await officecli.respond({ taskId: task.id, answer: "continue" });
+  }, []);
+
   const openRecentFile = useCallback(async (file: RecentFile) => {
     try {
       if (isXlsxFile(file)) {
@@ -1933,6 +1941,8 @@ function OfficeDexApp() {
             files={recentFiles}
             attentionTasks={tasks}
             onRetryTask={retryTaskGeneration}
+            onSteerTask={steerPptxTask}
+            onResumeTask={resumePptxTask}
             loading={recentFilesLoading}
             error={recentFilesError}
             activeWorkspaceId={homeWorkspaceId}

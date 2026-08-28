@@ -1,6 +1,7 @@
 import { CheckCircle2, CircleAlert, LoaderCircle, Pause, Play, RotateCcw, X } from "lucide-react";
 import type { DesktopTask } from "../../shared/types";
 import "./pptxProductionStage.css";
+import { LiveSteeringBar } from "./LiveSteeringBar";
 
 export type PptxProductionStageStatus =
   | "starting"
@@ -17,6 +18,8 @@ export interface PptxProductionStageProps {
   onPause?: () => void;
   onResume?: () => void;
   onOpenEditor?: () => void;
+  onSteer?: (instruction: string) => void | Promise<void>;
+  onContinueFromNode?: () => void | Promise<void>;
 }
 
 interface StatusCopy {
@@ -69,7 +72,7 @@ function slideProgress(task: DesktopTask): { completed: number; total?: number; 
   return { completed, total, current: current === undefined ? undefined : current + (current === 0 ? 1 : 0) };
 }
 
-export function PptxProductionStage({ task, onCancel, onRetry, onPause, onResume, onOpenEditor }: PptxProductionStageProps) {
+export function PptxProductionStage({ task, onCancel, onRetry, onPause, onResume, onOpenEditor, onSteer, onContinueFromNode }: PptxProductionStageProps) {
   const status = statusForTask(task);
   const copy = STATUS_COPY[status];
   const progress = slideProgress(task);
@@ -121,6 +124,7 @@ export function PptxProductionStage({ task, onCancel, onRetry, onPause, onResume
         {status === "failed" && onRetry ? <button type="button" className="pptx-production-stage__button" onClick={onRetry}><RotateCcw size={15} /> Retry</button> : null}
         {status === "completed" && onOpenEditor ? <button type="button" className="pptx-production-stage__primary" onClick={onOpenEditor}><CheckCircle2 size={15} /> Open editor</button> : null}
       </footer>
+      {onSteer ? <LiveSteeringBar onSteer={onSteer} onPause={onPause} onResume={onResume} onRetry={onRetry} onContinueFromNode={onContinueFromNode} disabled={active && !paused ? false : false} /> : null}
     </section>
   );
 }

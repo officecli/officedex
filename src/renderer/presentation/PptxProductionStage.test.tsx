@@ -39,4 +39,15 @@ describe("PptxProductionStage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Open editor/i }));
     expect(onOpenEditor).toHaveBeenCalledOnce();
   });
+
+  it("exposes a stage command bar and routes steering/resume controls", () => {
+    const onSteer = vi.fn(async () => undefined);
+    const onResume = vi.fn(async () => undefined);
+    render(<PptxProductionStage task={task({ status: "question", plan: { id: "p", markdown: "outline", revision: 1 } })} onSteer={onSteer} onResume={onResume} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Stage instruction" }), { target: { value: "add a takeaway" } });
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Stage instruction" }), { key: "Enter" });
+    expect(onSteer).toHaveBeenCalledWith("add a takeaway");
+    fireEvent.click(screen.getByRole("button", { name: "Resume" }));
+    expect(onResume).toHaveBeenCalledOnce();
+  });
 });
