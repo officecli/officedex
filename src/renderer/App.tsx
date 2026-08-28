@@ -1943,6 +1943,8 @@ function OfficeDexApp() {
             onRetryTask={retryTaskGeneration}
             onSteerTask={steerPptxTask}
             onResumeTask={resumePptxTask}
+            onCancelTask={(task) => officecli.cancel(task.id)}
+            productionTaskId={stageFirstTaskRef.current}
             loading={recentFilesLoading}
             error={recentFilesError}
             activeWorkspaceId={homeWorkspaceId}

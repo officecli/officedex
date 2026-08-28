@@ -521,3 +521,28 @@
 .home-task-progress i { display: block; height: 100%; border-radius: 999px; background: var(--od-guidance); transition: width 240ms ease; }
 .home-task-actions { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; padding-right: 8px; }
 .home-task-row .home-file-remove { position: static; transform: none; }
+.home-screen--production {
+  min-height: 100%;
+  padding: 24px 32px 40px;
+}
+
+.home-production-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.home-production-header p {
+  margin: 0 0 4px;
+  color: var(--od-accent, #3b82f6);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.home-production-header h1 {
+  margin: 0;
+  font-size: 24px;
+}

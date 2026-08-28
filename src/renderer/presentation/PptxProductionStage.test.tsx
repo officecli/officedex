@@ -40,13 +40,14 @@ describe("PptxProductionStage", () => {
     expect(onOpenEditor).toHaveBeenCalledOnce();
   });
 
-  it("exposes a stage command bar and routes steering/resume controls", () => {
+  it("exposes a stage command bar and routes steering/resume controls", async () => {
     const onSteer = vi.fn(async () => undefined);
     const onResume = vi.fn(async () => undefined);
     render(<PptxProductionStage task={task({ status: "question", plan: { id: "p", markdown: "outline", revision: 1 } })} onSteer={onSteer} onResume={onResume} />);
     fireEvent.change(screen.getByRole("textbox", { name: "Stage instruction" }), { target: { value: "add a takeaway" } });
     fireEvent.keyDown(screen.getByRole("textbox", { name: "Stage instruction" }), { key: "Enter" });
     expect(onSteer).toHaveBeenCalledWith("add a takeaway");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Resume" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Resume" }));
     await waitFor(() => expect(onResume).toHaveBeenCalledOnce());
   });

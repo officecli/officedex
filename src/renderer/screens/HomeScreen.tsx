@@ -21,6 +21,7 @@ import { fileNameFromPath } from "../utils/path";
 import { MaterialSymbol } from "../components/Shell";
 import { DocTypeIcon, docTypeFromPath } from "../components/DocTypeIcon";
 import { RuntimePrompts } from "../components/RuntimePrompts";
+import "../styles/home.css";
 
 type HomeDocumentType = Extract<DocumentType, "pptx" | "img" | "docx" | "xlsx">;
 
@@ -46,6 +47,8 @@ export interface HomeScreenProps {
   onRetryTask?: (task: DesktopTask) => void;
   onSteerTask?: (task: DesktopTask, instruction: string) => void | Promise<void>;
   onResumeTask?: (task: DesktopTask) => void | Promise<void>;
+  onCancelTask?: (task: DesktopTask) => void | Promise<void>;
+  productionTaskId?: string;
   onOpenTasks?: () => void;
   onRetryRecentFiles?: () => void;
 }
@@ -91,7 +94,7 @@ const HOME_TEMPLATES: HomeTemplate[] = [
   { id: "budget", type: "xlsx", icon: "account_balance_wallet", minutes: 2 },
 ];
 
-export function HomeScreen({ files, attentionTasks = [], loading, error, activeWorkspaceId, workspaces = [], onOpenFile, onRemoveFile, onPickTaskFile, onPickTaskDirectory, droppedTaskPaths, onSelectWorkspace, onSelectAllWorkspaces, onAddWorkspace, onAnalyzeTask, onStartTask, onOpenTask, onRetryTask, onSteerTask, onResumeTask, onOpenTasks, onRetryRecentFiles }: HomeScreenProps) {
+export function HomeScreen({ files, attentionTasks = [], loading, error, activeWorkspaceId, workspaces = [], onOpenFile, onRemoveFile, onPickTaskFile, onPickTaskDirectory, droppedTaskPaths, onSelectWorkspace, onSelectAllWorkspaces, onAddWorkspace, onAnalyzeTask, onStartTask, onOpenTask, onRetryTask, onSteerTask, onResumeTask, onCancelTask, productionTaskId, onOpenTasks, onRetryRecentFiles }: HomeScreenProps) {
   const t = useT();
   const homeScreenRef = useRef<HTMLElement>(null);
   const pointerFieldRef = useRef<HTMLCanvasElement>(null);
@@ -130,6 +133,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
     .filter((task) => !activeWorkspaceId || task.workspaceId === activeWorkspaceId)
     .filter((task) => !dismissedTaskIds.includes(task.id))
     .slice(0, 4), [attentionTasks, activeWorkspaceId, dismissedTaskIds]);
+  const productionTask = productionTaskId ? liveTasks.find((task) => task.id === productionTaskId && task.documentType === "pptx") : undefined;
 
   useEffect(() => {
     if (prompt) {
@@ -276,6 +280,31 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
     if (!analysis || !onStartTask || starting) return;
     await startAnalyzedTask(analysis);
   };
+
+  if (productionTask) {
+    const title = productionTask.topic || productionTask.userInput?.prompt || t("tasks.untitled");
+    return (
+      <section className="home-screen home-screen--production" aria-labelledby="home-production-title">
+        <header className="home-production-header">
+          <Button variant="ghost-normal" size="small" onClick={() => setDismissedTaskIds((current) => [...current, productionTask.id])}>
+            {t("home.production.back")}
+          </Button>
+          <div>
+            <p>{t("home.production.eyebrow")}</p>
+            <h1 id="home-production-title">{title}</h1>
+          </div>
+        </header>
+        <PptxProductionStage
+          task={productionTask}
+          onCancel={onCancelTask ? () => void onCancelTask(productionTask) : undefined}
+          onRetry={onRetryTask ? () => onRetryTask(productionTask) : undefined}
+          onSteer={onSteerTask ? (instruction) => onSteerTask(productionTask, instruction) : undefined}
+          onResume={onResumeTask ? () => onResumeTask(productionTask) : undefined}
+          onOpenEditor={onOpenTask ? () => onOpenTask(productionTask.id) : undefined}
+        />
+      </section>
+    );
+  }
 
   const invalidateAnalysis = () => {
     setAnalysis(undefined);
@@ -810,6 +839,9 @@ function HomeTaskCard({ task, onOpen, onRetry, onSteer, onResume, onDismiss }: {
   if (task.documentType === "pptx") {
     return (
       <div className={`home-pptx-task-stage home-task-row ${failed ? "home-task-row--failed" : "home-task-row--running"}`}>
+        <button type="button" className="home-pptx-task-stage__open" aria-label={t("home.openTask", { name: title })} onClick={onOpen}>
+          {title}
+        </button>
         <PptxProductionStage
           task={task}
           onRetry={onRetry}

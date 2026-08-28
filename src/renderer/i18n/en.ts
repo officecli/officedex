@@ -101,6 +101,8 @@ export const en: Record<string, string> = {
   "home.respond": "Respond",
   "home.recentTitle": "Recent",
   "home.liveStageTitle": "In production",
+  "home.production.back": "Back to home",
+  "home.production.eyebrow": "PPTX production",
   "home.filter.all": "All files",
   "home.source.generated": "Generated",
   "home.source.local": "Local",
