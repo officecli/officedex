@@ -77,7 +77,8 @@ describe("SpreadsheetCatalogCleanupPanel", () => {
     render(<SpreadsheetCatalogCleanupPanel onInspect={() => inspection} onApply={vi.fn()} onSave={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Detect product catalog" }));
     await screen.findByText("1 products found");
-    fireEvent.change(screen.getByLabelText("Shopify import intent"), { target: { value: "update" } });
+    fireEvent.click(screen.getByRole("button", { name: "Shopify import intent" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: /Update existing products/i }));
     await waitFor(() => expect(executeAgentWorkflowMock).toHaveBeenLastCalledWith("catalog.cleanup.v1", { parameters: expect.objectContaining({ intent: "update", confirmedMapping: expect.any(Array) }) }, {}, expect.any(Object)));
   });
 

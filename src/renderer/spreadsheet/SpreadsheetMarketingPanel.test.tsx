@@ -3,6 +3,7 @@ import {
   fireEvent,
   render,
   screen,
+  within,
   waitFor,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -871,11 +872,9 @@ describe("SpreadsheetMarketingPanel", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Read selected products" }),
     );
-    const alternateSelect = (await screen.findByText("Alternate name"))
-      .closest("label")
-      ?.querySelector("select");
-    expect(alternateSelect).toBeTruthy();
-    fireEvent.change(alternateSelect!, { target: { value: "productName" } });
+    const alternateLabel = (await screen.findByText("Alternate name")).closest("label")!;
+    fireEvent.click(within(alternateLabel).getByRole("button"));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: /商品名称|Product name/i }));
     fireEvent.click(
       screen.getByRole("button", { name: "Confirm field mapping" }),
     );
