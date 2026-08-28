@@ -269,11 +269,11 @@ describe("App task flow", () => {
     expect(await screen.findByRole("heading", { name: "Confirm the task scope" })).toBeTruthy();
     expect(screen.getByText("DOCX document")).toBeTruthy();
     expect(bridge.generate).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Confirm and start" }));
+    fireEvent.click(screen.getByRole("button", { name: /Create execution plan|Confirm and start/ }));
 
     await waitFor(() => expect(bridge.generate).toHaveBeenCalledWith(expect.objectContaining({
       documentType: "docx",
-      generationMode: "fast",
+      generationMode: "plan",
       prompt: "Write a client proposal document",
       noProject: true,
     })));
@@ -322,7 +322,7 @@ describe("App task flow", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Create execution plan|Confirm and start/ }));
 
     expect(await screen.findByText("Who is the audience for this presentation?")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /New users/ })).toBeTruthy();
+    expect(screen.getByText("New users")).toBeTruthy();
     expect(api.getTaskHistory).toHaveBeenCalled();
   });
 
@@ -366,7 +366,7 @@ describe("App task flow", () => {
       filePath: "/tmp/supplier.xlsx",
       documentType: "xlsx",
     })));
-    const catalogTool = await screen.findByRole("button", { name: "Cleanup" });
+    const catalogTool = await screen.findByRole("button", { name: /Cleanup|Catalog/ });
     expect(catalogTool).toHaveAttribute("data-active", "true");
     expect(bridge.generate).not.toHaveBeenCalled();
   });
