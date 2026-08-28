@@ -374,6 +374,12 @@ func (h *realClientE2EHost) call(method string, raw json.RawMessage) (any, error
 		return h.app.GetDefaultWorkspaceDir(), nil
 	case "ListWorkspaces":
 		return h.app.ListWorkspaces()
+	case "ListRecentFiles":
+		workspaceID, err := decodeRealClientString(raw)
+		if err != nil {
+			return nil, err
+		}
+		return h.app.ListRecentFiles(workspaceID)
 	case "ListChats":
 		return h.app.ListChats()
 	case "DeleteConversation":
