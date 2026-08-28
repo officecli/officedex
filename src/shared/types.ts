@@ -781,7 +781,6 @@ export interface DesktopAPI {
   savePastedImage(data: Uint8Array, ext: string): Promise<string>;
   savePptx(data: Uint8Array, fileName: string, options?: SavePptxOptions): Promise<string>;
   saveDocx(data: Uint8Array, fileName: string, options: SaveDocxOptions): Promise<SaveDocxResult>;
-  exportVibeTreePptx(tree: VibeProjectTree, fileName: string): Promise<string>;
   modifyPptistDeck(input: ModifyPptistDeckInput): Promise<ModifyPptistDeckResult>;
   previewArtifact(artifact: Artifact): Promise<void>;
   issuePreviewToken(artifact: Artifact): Promise<PreviewGrant>;

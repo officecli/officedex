@@ -32,7 +32,7 @@ A. 设置在线字体时会下载对应的字体文件，该文件较大，需�
 
 A. 作为一个在线幻灯片应用，导出、导入 PPTX 文件是非常重要的功能，但是经过调研发现，该功能实现起来的复杂度远超过了预期。由于个人能力和时间有限，这部分功能只能借助第三方的轮子来完成。
 
-- 导出：目前导出功能主要基于 [PptxGenJS](https://github.com/gitbrent/PptxGenJS/) 完成，能够实现大多数基本元素的导出，但还有非常多的缺陷需要一点点完善。同时需要知晓的是：1、该功能依赖 PptxGenJS，对于该库本身无法实现的部分（如动画），本项目也无能为力；2、导出功能的目标只是【导出样式尽可能一致的元素】，而不是一比一将网页还原到PPT，一些样式差异是必然存在的。
+- 导出：在 OfficeDex 中，PPTX 导出由宿主编辑器和原生转换服务负责；嵌入式编辑器不再内置独立的 PPTX 生成器。
 
 - 导入：导入功能目前暂时没有合适的解决方案，还在调研和观望中。如果有感兴趣或做过相关内容的朋友，欢迎来 issues 中讨论。
 
@@ -111,7 +111,7 @@ A. Setting an online font involves downloading the corresponding font file, whic
 
 A. As an online presentation application, the ability to import and export PPTX files is very important. However, it has been found that the complexity of implementing this feature far exceeds expectations. Due to limited personal capacity and time, this functionality can only be achieved with the help of third-party solutions.
 
-Export: The current export function is mainly based on [PptxGenJS](https://github.com/gitbrent/PptxGenJS/), and it can export most basic elements, but there are still many defects that need to be improved. It’s important to note that: 1) This feature relies on PptxGenJS, and for parts that the library itself cannot implement (such as animations), there’s nothing this project can do; 2) The goal of the export function is to export elements with styles as consistent as possible, not to recreate the web page one-to-one in PPT, and some style differences are inevitable.
+Export: In OfficeDex, PPTX export is owned by the host editor and native conversion service; the embedded editor does not bundle a separate PPTX generator.
 
 Import: The import function currently does not have a suitable solution and is still under investigation. If you are interested or have experience in related areas, please discuss in the issues.
 

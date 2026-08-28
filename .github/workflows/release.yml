@@ -102,31 +102,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Stage pinned PptxGenJS runtime
-        run: npm run prefetch:pptxgenjs-runtime
-
-      - name: Verify staged PptxGenJS runtime
-        run: npm run verify:pptxgenjs-runtime
-
       - name: Verify officecli Canvas Vibe contract
         run: npm run verify:officecli:canvas
-
-      - name: Complete a Canvas PPTX render with restricted child PATH
-        run: npm run verify:officecli:canvas-render
 
       - name: Wails build
         shell: bash
         run: |
           version="${GITHUB_REF_NAME#v}"
           wails build -platform ${{ matrix.platform }} -trimpath -ldflags "-X main.appVersion=${version}"
-
-      - name: Bundle PptxGenJS runtime (macOS)
-        if: runner.os == 'macOS'
-        run: npm run bundle:pptxgenjs-runtime:mac
-
-      - name: Verify bundled PptxGenJS runtime (macOS)
-        if: runner.os == 'macOS'
-        run: npm run verify:pptxgenjs-runtime -- --root build/bin/OfficeDex.app/Contents/Resources/pptxgenjs-runtime
 
       - name: Bundle release licenses (macOS)
         if: runner.os == 'macOS'
@@ -184,17 +167,6 @@ jobs:
             --source build/officecli/officecli \
             --identity "$APPLE_DEVELOPER_ID"
 
-      - name: Verify signed bundled PptxGenJS runtime (macOS)
-        if: runner.os == 'macOS'
-        run: npm run verify:pptxgenjs-runtime -- --root build/bin/OfficeDex.app/Contents/Resources/pptxgenjs-runtime
-
-      - name: Complete Canvas render from signed package contents (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          npm run verify:officecli:canvas-render -- \
-            --binary build/bin/OfficeDex.app/Contents/Resources/officecli/officecli \
-            --runtime-root build/bin/OfficeDex.app/Contents/Resources/pptxgenjs-runtime
-
       - name: Verify bundled officecli is universal2 (macOS)
         if: runner.os == 'macOS'
         # The .app is darwin/universal; an arch-specific officecli would crash on
@@ -208,20 +180,6 @@ jobs:
           for required in x86_64 arm64; do
             echo "$archs" | grep -qw "$required" || {
               echo "::error::bundled officecli is missing the $required slice (got: $archs)"
-              exit 1
-            }
-          done
-
-      - name: Verify bundled Node is universal2 (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          set -euo pipefail
-          bin="build/bin/OfficeDex.app/Contents/Resources/pptxgenjs-runtime/bin/node"
-          archs="$(lipo -archs "$bin")"
-          echo "bundled Node archs: $archs"
-          for required in x86_64 arm64; do
-            echo "$archs" | grep -qw "$required" || {
-              echo "::error::bundled Node is missing the $required slice (got: $archs)"
               exit 1
             }
           done
@@ -250,17 +208,6 @@ jobs:
             attempt=$((attempt + 1))
           done
 
-      - name: Verify notarized bundled PptxGenJS runtime (macOS)
-        if: runner.os == 'macOS'
-        run: npm run verify:pptxgenjs-runtime -- --root build/bin/OfficeDex.app/Contents/Resources/pptxgenjs-runtime
-
-      - name: Complete Canvas render from notarized package contents (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          npm run verify:officecli:canvas-render -- \
-            --binary build/bin/OfficeDex.app/Contents/Resources/officecli/officecli \
-            --runtime-root build/bin/OfficeDex.app/Contents/Resources/pptxgenjs-runtime
-
       - name: Bundle officecli (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -269,21 +216,6 @@ jobs:
           New-Item -ItemType Directory -Force -Path $resDir | Out-Null
           Copy-Item "build\officecli\officecli.exe" -Destination "$resDir\officecli.exe" -Force
           Copy-Item "build\officecli\version.json" -Destination "$resDir\version.json" -Force
-
-      - name: Bundle PptxGenJS runtime (Windows)
-        if: runner.os == 'Windows'
-        run: npm run bundle:pptxgenjs-runtime:win
-
-      - name: Verify bundled PptxGenJS runtime (Windows)
-        if: runner.os == 'Windows'
-        run: npm run verify:pptxgenjs-runtime -- --root build/bin/pptxgenjs-runtime
-
-      - name: Complete Canvas render from package contents (Windows)
-        if: runner.os == 'Windows'
-        run: >-
-          npm run verify:officecli:canvas-render --
-          --binary build/bin/officecli/officecli.exe
-          --runtime-root build/bin/pptxgenjs-runtime
 
       - name: Bundle release licenses (Windows)
         if: runner.os == 'Windows'

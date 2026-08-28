@@ -59,19 +59,11 @@ try {
     throw new ExitError(prefetchStatus);
   }
 
-  const runtimeStatus = run("npm", ["run", "prefetch:pptxgenjs-runtime"]);
-  if (runtimeStatus !== 0) {
-    failure = "prefetch:pptxgenjs-runtime failed";
-    throw new ExitError(runtimeStatus);
-  }
-
   const baseEnv = {
     ...process.env,
     OFFICEDEX_E2E_REAL: "1",
     OFFICEDEX_E2E_REAL_GENERATE: "1",
     OFFICECLI_DESKTOP_BINARY: officecliBinary,
-    OFFICECLI_PPTXGENJS_NODE: path.join(repoRoot, "build", "pptxgenjs-runtime", "bin", process.platform === "win32" ? "node.exe" : "node"),
-    OFFICECLI_PPTXGENJS_NODE_MODULES: path.join(repoRoot, "build", "pptxgenjs-runtime", "node_modules"),
     OFFICEDEX_E2E_OUTPUT_DIR: artifactDir,
     OFFICEDEX_E2E_RUN_DIR: runDir,
   };

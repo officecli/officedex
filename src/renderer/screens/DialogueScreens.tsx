@@ -2135,7 +2135,7 @@ export function LivingTreeCockpit({ task, snapshot, progressIndex, stageActionLa
   }, []);
   const hasPptxFile = Boolean(task.artifact?.filePath);
   const hasVibeSlides = (task.vibeSlides ?? []).length > 0;
-  const isPptxgenjsAssembling =
+  const isPptxAssembling =
     activeSnapshot.stage === "completed"
     && !hasPptxFile
     && task.status === "running"
@@ -2143,7 +2143,7 @@ export function LivingTreeCockpit({ task, snapshot, progressIndex, stageActionLa
   const awaitingGeneratedSlideApproval = activeSnapshot.stage === "slides_ready"
     && Boolean(activeSnapshot.confirmation?.nodeIds?.length)
     && actions.length > 0;
-  const showPptistEmbed = !isPptxgenjsAssembling
+  const showPptistEmbed = !isPptxAssembling
     && !awaitingGeneratedSlideApproval
     && (activeSnapshot.stage === "slides_ready" || activeSnapshot.stage === "rendering" || activeSnapshot.stage === "completed");
   const completedReviewMode = activeSnapshot.stage === "completed" && showPptistEmbed;
@@ -2158,8 +2158,8 @@ export function LivingTreeCockpit({ task, snapshot, progressIndex, stageActionLa
     pptistAnimationSessionKeysRef.current.add(pptistAnimationKey);
     savePptistAnimationPlayed(pptistAnimationKey);
   }, [pptistAnimationKey]);
-  const taskCardStage = isPptxgenjsAssembling ? "rendering" : activeSnapshot.stage;
-  const showTaskCardConfirmationProgress = !isPptxgenjsAssembling && confirmableNodeIds.size > 0;
+  const taskCardStage = isPptxAssembling ? "rendering" : activeSnapshot.stage;
+  const showTaskCardConfirmationProgress = !isPptxAssembling && confirmableNodeIds.size > 0;
   const pptistAllSlideNodes = useMemo(() => {
     if (!showPptistEmbed) return [];
     const byId = new Map<string, VibeProjectTreeNode>();
@@ -2549,7 +2549,7 @@ export function LivingTreeCockpit({ task, snapshot, progressIndex, stageActionLa
           </section>
         ) : undefined}
       />
-      <div className={`living-tree-workbench ${showPptistEmbed ? "has-pptist-embed" : ""} ${isPptxgenjsAssembling ? "has-assembling-panel" : ""} ${completedReviewMode ? "is-completed-review" : ""} ${completedCanvasTreeOpen ? "is-canvas-tree-open" : ""}`}>
+      <div className={`living-tree-workbench ${showPptistEmbed ? "has-pptist-embed" : ""} ${isPptxAssembling ? "has-assembling-panel" : ""} ${completedReviewMode ? "is-completed-review" : ""} ${completedCanvasTreeOpen ? "is-canvas-tree-open" : ""}`}>
         {canvasTreeMounted ? (
           <div
             className={`living-tree-flow-shell ${activeSnapshot.stage === "rendering" ? "is-deck-assembling" : ""} ${completedReviewMode ? "is-canvas-tree-drawer" : ""}`}
@@ -2754,8 +2754,8 @@ export function LivingTreeCockpit({ task, snapshot, progressIndex, stageActionLa
             </div>
           )
         ) : null}
-        {isPptxgenjsAssembling ? (
-          <PptxgenjsAssemblingPanel assembleProgress={task.assembleProgress} />
+        {isPptxAssembling ? (
+          <PptxAssemblingPanel assembleProgress={task.assembleProgress} />
         ) : null}
       </div>
     </div>
@@ -2771,20 +2771,20 @@ function assembleStepKey(content: string): string {
   return "vibe.pptx.assembling";
 }
 
-function PptxgenjsAssemblingPanel({ assembleProgress }: { assembleProgress?: { step: string; status: string; content: string } }) {
+function PptxAssemblingPanel({ assembleProgress }: { assembleProgress?: { step: string; status: string; content: string } }) {
   const t = useT();
   const stepKey = assembleProgress ? assembleStepKey(assembleProgress.content) : "vibe.pptx.assembling";
 
   return (
-    <div className="pptxgenjs-assembling-panel">
-      <div className="pptxgenjs-assembling-icon">
+    <div className="pptx-assembling-panel">
+      <div className="pptx-assembling-icon">
         <FileTextOutlined />
       </div>
-      <div className="pptxgenjs-assembling-title">{t("vibe.pptx.assembling")}</div>
-      <div className="pptxgenjs-assembling-bar">
-        <div className="pptxgenjs-assembling-bar-fill" />
+      <div className="pptx-assembling-title">{t("vibe.pptx.assembling")}</div>
+      <div className="pptx-assembling-bar">
+        <div className="pptx-assembling-bar-fill" />
       </div>
-      <div className="pptxgenjs-assembling-step">{t(stepKey)}</div>
+      <div className="pptx-assembling-step">{t(stepKey)}</div>
     </div>
   );
 }

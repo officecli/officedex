@@ -2191,43 +2191,6 @@ func htmlParagraph(text string) string {
 	return "<p>" + replacer.Replace(text) + "</p>"
 }
 
-// ExportVibeTreePptxInput carries the vibe tree to render and the desired file name.
-type ExportVibeTreePptxInput struct {
-	TreeJSON string `json:"treeJSON"`
-	FileName string `json:"fileName"`
-}
-
-// ExportVibeTreePptx renders the vibe tree via pptxgenjs on the backend and
-// saves the resulting PPTX to the user's Downloads folder.
-func (a *App) ExportVibeTreePptx(input ExportVibeTreePptxInput) (string, error) {
-	if strings.TrimSpace(input.TreeJSON) == "" {
-		return "", errors.New("export pptx: empty tree")
-	}
-	client := a.bridgeClient
-	if client == nil {
-		return "", errors.New("export pptx: bridge not connected")
-	}
-	result, err := client.ExportPptxFromTree(a.ctx, json.RawMessage(input.TreeJSON))
-	if err != nil {
-		return "", fmt.Errorf("export pptx: %w", err)
-	}
-	data, err := base64.StdEncoding.DecodeString(result.DataBase64)
-	if err != nil {
-		return "", fmt.Errorf("export pptx: decode: %w", err)
-	}
-	if len(data) == 0 {
-		return "", errors.New("export pptx: empty result")
-	}
-	fileName := result.FileName
-	if strings.TrimSpace(input.FileName) != "" {
-		fileName = input.FileName
-	}
-	return a.SavePptx(SavePptxInput{
-		DataBase64: result.DataBase64,
-		FileName:   normalizePptxFileName(fileName),
-	})
-}
-
 // normalizePptxFileName strips any path separators and guarantees a .pptx suffix.
 func normalizePptxFileName(name string) string {
 	name = strings.TrimSpace(name)
@@ -4606,7 +4569,7 @@ func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
 		return nil, errors.New(message)
 	}
 
-	env := appendPptxgenjsRuntimeEnv(llmProviderEnv(settingsValue), bundledPptxgenjsRuntimeEnv())
+	env := llmProviderEnv(settingsValue)
 
 	a.mu.Lock()
 	a.resolvedBinaryPath = resolved.Path

@@ -56,7 +56,7 @@ test.describe("OfficeDex real client generation and artifact flows", () => {
     test(`generates a real ${item.documentType} artifact from the UI`, async ({ page }) => {
       test.skip(
         item.documentType === "pptx" && process.env.OFFICEDEX_E2E_RUN_HOSTED_PPTX !== "1",
-        "Hosted PPTX rendering can spend several minutes in pptxgenjs layout QA repair loops; run with OFFICEDEX_E2E_RUN_HOSTED_PPTX=1 when validating the full hosted PPTX render path.",
+        "Hosted PPTX rendering can spend several minutes in provider-side layout QA; run with OFFICEDEX_E2E_RUN_HOSTED_PPTX=1 when validating the full hosted PPTX render path.",
       );
       test.skip(
         item.documentType === "gif" && process.env.OFFICEDEX_E2E_RUN_HOSTED_GIF !== "1",

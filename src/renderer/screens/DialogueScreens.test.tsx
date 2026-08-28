@@ -2999,7 +2999,7 @@ describe("DialogueScreen state machine", () => {
     expect(localStorage.getItem("officedex.pptistAnimation.played.task-vibe-first-play")).toBeNull();
   });
 
-  it("shows pptxgenjs assembling panel instead of empty PPTist when rendering without slides", () => {
+  it("shows the PPTX assembling panel instead of empty PPTist when rendering without slides", () => {
     const task: DesktopTask = {
       id: "task-vibe-assembling",
       conversationId: "task-vibe-assembling",
@@ -3009,9 +3009,9 @@ describe("DialogueScreen state machine", () => {
       events: [
         { task_id: "task-vibe-assembling", type: "task.started", payload: { document_type: "pptx", topic: "Rebuild Internal Knowledge Base" } },
         { task_id: "task-vibe-assembling", type: "task.vibe_tree", payload: { stage: "completed" } },
-        { task_id: "task-vibe-assembling", type: "task.progress", payload: { step: "assemble", status: "running", content: "Generating pptxgenjs code via LLM..." } },
+        { task_id: "task-vibe-assembling", type: "task.progress", payload: { step: "assemble", status: "running", content: "Generating presentation layout via OfficeCLI..." } },
       ],
-      assembleProgress: { step: "assemble", status: "running", content: "Generating pptxgenjs code via LLM..." },
+        assembleProgress: { step: "assemble", status: "running", content: "Generating presentation layout via OfficeCLI..." },
       vibeTree: {
         stage: "completed",
         actions: [],
@@ -3034,7 +3034,7 @@ describe("DialogueScreen state machine", () => {
 
     expect(document.querySelector(".living-tree-pptx-toolbar")).toBeNull();
     expect(document.querySelector(".living-tree-pptist-embed")).toBeNull();
-    expect(document.querySelector(".pptxgenjs-assembling-panel")).toBeTruthy();
+    expect(document.querySelector(".pptx-assembling-panel")).toBeTruthy();
     expect(screen.getByText(/Assembling your presentation/)).toBeTruthy();
     expect(screen.getByText(/Generating slide code/)).toBeTruthy();
   });

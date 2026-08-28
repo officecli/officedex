@@ -173,9 +173,6 @@ function createBrowserPreviewAPI(): DesktopAPI {
     saveDocx: async () => {
       throw new Error("Saving DOCX requires desktop file access.");
     },
-    exportVibeTreePptx: async () => {
-      throw new Error("Exporting PPTX via pptxgenjs requires desktop bridge access.");
-    },
     modifyPptistDeck: async () => {
       throw new Error("Editing PPTist decks with AI requires the desktop app.");
     },
@@ -698,12 +695,6 @@ function createWailsAPI(): DesktopAPI {
         saveAsCopy: options.saveAsCopy,
       }));
     },
-    exportVibeTreePptx: async (tree, fileName) => {
-      return WailsApp.ExportVibeTreePptx(toWails({
-        treeJSON: JSON.stringify(tree),
-        fileName,
-      }));
-    },
     modifyPptistDeck: async (input) => {
       const fn = optionalWailsFunction<(arg: never) => Promise<ModifyPptistDeckResult>>("ModifyPptistDeck");
       if (!fn) throw new Error("ModifyPptistDeck bridge binding is unavailable.");
@@ -971,8 +962,6 @@ function createRealE2EAPI(endpoint: string): DesktopAPI {
         expectedSHA256: options.expectedSHA256,
         saveAsCopy: options.saveAsCopy,
       }),
-    exportVibeTreePptx: (tree, fileName) =>
-      rpc<string>("ExportVibeTreePptx", { treeJSON: JSON.stringify(tree), fileName }),
     modifyPptistDeck: (input) => rpc("ModifyPptistDeck", input),
     previewArtifact: (artifact: Artifact) => rpc<void>("PreviewArtifact", artifact),
     issuePreviewToken: (artifact: Artifact) => rpc<PreviewGrant>("IssuePreviewToken", artifact),

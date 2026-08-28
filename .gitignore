@@ -13,7 +13,6 @@ build/officecli/
 build/cache/
 build/canvas-render-smoke/
 build/packaged-canvas-smoke/
-build/pptxgenjs-runtime/
 officecli-bin/
 
 # Wails / Go build artifacts.

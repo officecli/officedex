@@ -2867,7 +2867,7 @@
   grid-template-columns: minmax(0, 35%) minmax(0, 65%);
 }
 
-.pptxgenjs-assembling-panel {
+.pptx-assembling-panel {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -2882,25 +2882,25 @@
   padding: 32px;
 }
 
-.pptxgenjs-assembling-icon {
+.pptx-assembling-icon {
   font-size: 48px;
   color: #006876;
-  animation: pptxgenjs-pulse 2s ease-in-out infinite;
+  animation: pptx-pulse 2s ease-in-out infinite;
 }
 
-@keyframes pptxgenjs-pulse {
+@keyframes pptx-pulse {
   0%, 100% { opacity: 0.6; transform: scale(1); }
   50% { opacity: 1; transform: scale(1.05); }
 }
 
-.pptxgenjs-assembling-title {
+.pptx-assembling-title {
   font-family: 'Plus Jakarta Sans', sans-serif;
   font-size: 20px;
   color: var(--n-ink);
   text-align: center;
 }
 
-.pptxgenjs-assembling-bar {
+.pptx-assembling-bar {
   width: 200px;
   height: 4px;
   background: var(--n-hairline);
@@ -2908,20 +2908,20 @@
   overflow: hidden;
 }
 
-.pptxgenjs-assembling-bar-fill {
+.pptx-assembling-bar-fill {
   width: 40%;
   height: 100%;
   background: #006876;
   border-radius: 2px;
-  animation: pptxgenjs-bar-slide 1.8s ease-in-out infinite;
+  animation: pptx-bar-slide 1.8s ease-in-out infinite;
 }
 
-@keyframes pptxgenjs-bar-slide {
+@keyframes pptx-bar-slide {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(350%); }
 }
 
-.pptxgenjs-assembling-step {
+.pptx-assembling-step {
   font-size: 13px;
   color: var(--n-steel);
   text-align: center;

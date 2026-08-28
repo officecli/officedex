@@ -1395,9 +1395,8 @@ function setupEmbedMode() {
 	        break
 	      }
       case 'pptist:export-pptx': {
-         // Client-side export via pptxgenjs once the user is satisfied. Hand the
-         // bytes back to the host so it can save the file natively (desktop
-         // webviews can't surface blob downloads from inside the iframe).
+         // PPTX export is owned by the OfficeDex host editor. Keep this message
+         // for protocol compatibility so older hosts receive a clear error.
          const exportFileName = data.fileName || 'deck.pptx'
 	        exportPPTX(getEmbedEffectiveSlides(), false, false, (buffer: ArrayBuffer) => {
 	          window.parent?.postMessage(

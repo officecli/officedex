@@ -1081,12 +1081,6 @@ func (c *Client) CancelTask(ctx context.Context, taskID string) ([]byte, error) 
 	return c.Request(ctx, "task/cancel", map[string]any{"task_id": taskID})
 }
 
-// PptxExportResult holds the base64-encoded PPTX and its suggested file name.
-type PptxExportResult struct {
-	DataBase64 string `json:"dataBase64"`
-	FileName   string `json:"fileName"`
-}
-
 type PlanPptistEditTurn struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
@@ -1117,23 +1111,6 @@ type PlanPptistEditResult struct {
 	RequiresConfirmation bool                        `json:"requires_confirmation,omitempty"`
 	Confirmation         *PlanPptistEditConfirmation `json:"confirmation,omitempty"`
 	Warnings             []string                    `json:"warnings,omitempty"`
-}
-
-// ExportPptxFromTree renders a vibe tree into a PPTX file via pptxgenjs on the
-// backend. The tree JSON is forwarded to the bridge's "pptx/export-from-tree"
-// endpoint which handles LLM client creation and rendering.
-func (c *Client) ExportPptxFromTree(ctx context.Context, treeJSON json.RawMessage) (PptxExportResult, error) {
-	raw, err := c.requestWithTimeout(ctx, "pptx/export-from-tree", map[string]any{
-		"tree": json.RawMessage(treeJSON),
-	}, c.options.TaskInvokeTimeout)
-	if err != nil {
-		return PptxExportResult{}, err
-	}
-	var result PptxExportResult
-	if err := decodeJSON(raw, &result); err != nil {
-		return PptxExportResult{}, fmt.Errorf("bridge: decode pptx/export-from-tree: %w", err)
-	}
-	return result, nil
 }
 
 // TaskInvokeResult is the shape returned by InvokeGenerate.
