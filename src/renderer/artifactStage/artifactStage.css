@@ -13,6 +13,48 @@
   min-width: 0;
 }
 
+.artifact-stage-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--od-border-subtle);
+  border-radius: var(--od-radius-dialog);
+  background: var(--od-surface-subtle);
+}
+
+.artifact-stage-status__copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  min-width: 0;
+}
+
+.artifact-stage-status__copy > span {
+  color: var(--od-ink-secondary);
+}
+
+.artifact-stage-status__error {
+  color: var(--od-danger, #b42318) !important;
+}
+
+.artifact-stage-status__actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.artifact-stage-status--completed {
+  border-color: var(--od-success-border, var(--od-border-subtle));
+}
+
+.artifact-stage-status--failed {
+  border-color: var(--od-danger-border, var(--od-border-subtle));
+}
+
 .artifact-stage-shell__stage {
   overflow: hidden;
   min-height: 160px;
@@ -57,14 +99,9 @@
   min-width: 0;
 }
 
-.artifact-stage-intent__billing {
+.artifact-stage-intent__cost {
   color: var(--od-ink-secondary);
   font: var(--od-font-caption);
   text-transform: capitalize;
   white-space: nowrap;
-}
-
-.artifact-stage-shell__billing-error {
-  color: var(--od-danger, #b42318);
-  font: var(--od-font-caption);
 }
