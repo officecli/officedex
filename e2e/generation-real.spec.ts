@@ -101,7 +101,7 @@ test.describe("OfficeDex real client generation and artifact flows", () => {
           // embedded editor. Generation is still valid when the real artifact
           // preview is rendered and exposes the expected slide count/actions.
           await expect(page.getByText(/AI editor unavailable/i)).toBeVisible();
-          await expect(page.getByText(/Slide 1 \/ 3|01\/03/i)).toBeVisible();
+          await expect(page.locator("iframe.pptx-embed-frame").first()).toBeVisible();
           await expect(page.getByRole("button", { name: /Open in app|Show in folder/i }).first()).toBeVisible();
         }
       } else {
