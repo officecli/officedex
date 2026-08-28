@@ -592,6 +592,27 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
         </section>
       ) : null}
 
+      {liveTasks.length > 0 ? (
+        <section className="home-live-stage" aria-labelledby="home-live-stage-title">
+          <div className="home-section-header">
+            <h2 id="home-live-stage-title">{t("home.liveStageTitle")}</h2>
+          </div>
+          <div className="home-live-stage__list">
+            {liveTasks.map((task) => (
+              <HomeTaskCard
+                key={task.id}
+                task={task}
+                onOpen={() => onOpenTask?.(task.id)}
+                onRetry={onRetryTask ? () => onRetryTask(task) : undefined}
+                onSteer={onSteerTask ? (instruction) => onSteerTask(task, instruction) : undefined}
+                onResume={onResumeTask ? () => onResumeTask(task) : undefined}
+                onDismiss={() => setDismissedTaskIds((current) => [...current, task.id])}
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <section className="home-templates" aria-labelledby="home-templates-title">
         <div className="home-section-header">
           <h2 id="home-templates-title">{t("home.templates")}</h2>
@@ -663,20 +684,9 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
             {onRetryRecentFiles ? <Button size="small" onClick={onRetryRecentFiles}>{t("home.retry")}</Button> : null}
           </div>
         ) : null}
-        {!loading && !error && visibleFiles.length === 0 && liveTasks.length === 0 ? <Empty description={t("home.empty")} /> : null}
-        {!loading && !error && (visibleFiles.length > 0 || liveTasks.length > 0) ? (
+        {!loading && !error && visibleFiles.length === 0 ? <Empty description={t("home.empty")} /> : null}
+        {!loading && !error && visibleFiles.length > 0 ? (
           <div className="home-recent-list">
-            {liveTasks.map((task) => (
-              <HomeTaskCard
-                key={task.id}
-                task={task}
-                onOpen={() => onOpenTask?.(task.id)}
-                onRetry={onRetryTask ? () => onRetryTask(task) : undefined}
-                onSteer={onSteerTask ? (instruction) => onSteerTask(task, instruction) : undefined}
-                onResume={onResumeTask ? () => onResumeTask(task) : undefined}
-                onDismiss={() => setDismissedTaskIds((current) => [...current, task.id])}
-              />
-            ))}
             {visibleFiles.map((file) => (
               <div className="home-recent-row" key={file.filePath}>
                 <button type="button" className="home-recent-open" aria-label={t("home.openFile", { name: file.fileName })} onClick={() => onOpenFile(file)}>

@@ -100,6 +100,7 @@ export const en: Record<string, string> = {
   "home.review": "Review",
   "home.respond": "Respond",
   "home.recentTitle": "Recent",
+  "home.liveStageTitle": "In production",
   "home.filter.all": "All files",
   "home.source.generated": "Generated",
   "home.source.local": "Local",

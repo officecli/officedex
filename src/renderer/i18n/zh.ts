@@ -95,6 +95,7 @@ export const zh: Record<string, string> = {
   "home.review": "审核",
   "home.respond": "回复",
   "home.recentTitle": "最近",
+  "home.liveStageTitle": "正在制作",
   "home.filter.all": "全部文件",
   "home.source.generated": "生成产物",
   "home.source.local": "本地文件",
