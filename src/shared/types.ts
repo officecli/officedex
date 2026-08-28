@@ -119,6 +119,8 @@ export interface BridgeEvent {
   session_id?: string;
   request_id?: string;
   task_id?: string;
+  run_id?: string;
+  step_id?: string;
   type: string;
   ts?: string;
   payload?: Record<string, unknown>;
@@ -338,6 +340,34 @@ export interface StageState {
   startedAt?: string;
   completedAt?: string;
 }
+
+export interface AgentRunStartInput {
+  workflow: string;
+  input?: Record<string, unknown>;
+  session_id?: string;
+  metadata?: Record<string, string>;
+}
+
+export interface AgentRun {
+  id: string;
+  workflow: string;
+  status: "created" | "running" | "waiting_input" | "waiting_approval" | "waiting_client_tool" | "review_ready" | "completed" | "failed" | "cancelled";
+  session_id?: string;
+  request_id?: string;
+  input?: Record<string, unknown>;
+  metadata?: Record<string, string>;
+  result?: unknown;
+  last_error?: string;
+  current_step?: string;
+  created_at: string;
+  updated_at: string;
+  events?: BridgeEvent[];
+}
+
+export interface AgentRunRespondInput { run_id: string; request_id: string; value: unknown }
+export interface AgentRunApproveInput { run_id: string; request_id: string; approved: boolean; reason?: string; data?: unknown }
+export interface AgentClientToolResultInput { run_id: string; call_id: string; status: "completed" | "failed"; result?: unknown; error?: string }
+export interface AgentClientToolReassignInput { run_id: string; call_id: string; to_client_id?: string }
 
 export interface TaskUserInput {
   prompt: string;
@@ -731,6 +761,15 @@ export interface DesktopAPI {
   generate(input: GenerateInput): Promise<{ taskId: string; sessionId: string; status: string }>;
   modify(input: ModifyInput): Promise<{ taskId: string; sessionId: string; status: string }>;
   artifactStageEdit(input: ArtifactStageRuntimeInput): Promise<{ taskId: string; sessionId: string; status: string }>;
+  startAgentRun(input: AgentRunStartInput): Promise<AgentRun>;
+  getAgentRun(runId: string): Promise<AgentRun>;
+  listAgentRuns(limit?: number): Promise<AgentRun[]>;
+  respondAgentRun(input: AgentRunRespondInput): Promise<void>;
+  approveAgentRun(input: AgentRunApproveInput): Promise<void>;
+  retryAgentRun(runId: string): Promise<AgentRun>;
+  cancelAgentRun(runId: string): Promise<void>;
+  completeAgentClientTool(input: AgentClientToolResultInput): Promise<void>;
+  reassignAgentClientTool(input: AgentClientToolReassignInput): Promise<void>;
   respond(input: { taskId: string; questionId?: string; optionId?: string; answer?: string; answers?: TaskQuestionAnswer[] }): Promise<unknown>;
   cancel(taskId: string): Promise<unknown>;
   openPath(filePath: string): Promise<void>;

@@ -3,6 +3,12 @@ import type {
   AppUpdateEvent,
   AppUpdateStatus,
   Artifact,
+  AgentClientToolReassignInput,
+  AgentClientToolResultInput,
+  AgentRun,
+  AgentRunApproveInput,
+  AgentRunRespondInput,
+  AgentRunStartInput,
   ArtifactStageRuntimeInput,
   AuthEvent,
   BinaryFileData,
@@ -43,6 +49,7 @@ import type {
   WhoAmIResult,
 } from "../shared/types";
 import { defaultProxySettings } from "./defaults";
+import { agentClientId } from "./agentClientIdentity";
 
 // The Wails-generated bindings live alongside the renderer; tsconfig must
 // include them. Imports are static so the build picks them up; calls only
@@ -58,6 +65,14 @@ import type { settings as settingsNS } from "./generated/wailsjs/go/models";
 // suppression auditable and keeps call sites readable.
 function toWails<T>(value: T): never {
   return value as unknown as never;
+}
+
+function stampOriginClientId(input: AgentRunStartInput): AgentRunStartInput {
+  if (input.metadata?.origin_client_id) return input;
+  return {
+    ...input,
+    metadata: { ...(input.metadata ?? {}), origin_client_id: agentClientId() },
+  };
 }
 
 function optionalWailsFunction<T extends (...args: never[]) => unknown>(name: string): T | undefined {
@@ -113,6 +128,15 @@ function createBrowserPreviewAPI(): DesktopAPI {
   return {
     initialize: async () => ({ browserPreview: true }),
     getCapabilities: async () => ({ browserPreview: true }),
+    startAgentRun: async () => { throw new Error("Agent Runtime requires the OfficeDex bridge."); },
+    getAgentRun: async () => { throw new Error("Agent Runtime requires the OfficeDex bridge."); },
+    listAgentRuns: async () => [],
+    respondAgentRun: async () => { throw new Error("Agent Runtime requires the OfficeDex bridge."); },
+    approveAgentRun: async () => { throw new Error("Agent Runtime requires the OfficeDex bridge."); },
+    retryAgentRun: async () => { throw new Error("Agent Runtime requires the OfficeDex bridge."); },
+    cancelAgentRun: async () => undefined,
+    completeAgentClientTool: async () => { throw new Error("Agent Runtime requires the OfficeDex bridge."); },
+    reassignAgentClientTool: async () => { throw new Error("Agent Runtime requires the OfficeDex bridge."); },
     listImageTemplates: async () => [],
     createImageTemplate: async () => {
       throw new Error("Creating image templates requires the desktop app.");
@@ -560,6 +584,51 @@ function createWailsAPI(): DesktopAPI {
   return {
     initialize: async () => decodeRawBytes(await WailsApp.Initialize()),
     getCapabilities: async () => decodeRawBytes(await WailsApp.GetCapabilities()),
+    startAgentRun: async (input: AgentRunStartInput): Promise<AgentRun> => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<AgentRun>>("StartAgentRun");
+      if (!fn) throw new Error("Agent Runtime requires a newer OfficeDex runtime.");
+      return fn(toWails(stampOriginClientId(input)));
+    },
+    getAgentRun: async (runId: string): Promise<AgentRun> => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<AgentRun>>("GetAgentRun");
+      if (!fn) throw new Error("Agent Runtime requires a newer OfficeDex runtime.");
+      return fn(toWails(runId));
+    },
+    listAgentRuns: async (limit = 50): Promise<AgentRun[]> => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<AgentRun[]>>("ListAgentRuns");
+      if (!fn) throw new Error("Agent Runtime requires a newer OfficeDex runtime.");
+      return fn(toWails(limit));
+    },
+    respondAgentRun: async (input: AgentRunRespondInput): Promise<void> => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<void>>("RespondAgentRun");
+      if (!fn) throw new Error("Agent Runtime requires a newer OfficeDex runtime.");
+      await fn(toWails(input));
+    },
+    approveAgentRun: async (input: AgentRunApproveInput): Promise<void> => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<void>>("ApproveAgentRun");
+      if (!fn) throw new Error("Agent Runtime requires a newer OfficeDex runtime.");
+      await fn(toWails(input));
+    },
+    retryAgentRun: async (runId: string): Promise<AgentRun> => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<AgentRun>>("RetryAgentRun");
+      if (!fn) throw new Error("Agent Runtime requires a newer OfficeDex runtime.");
+      return fn(toWails(runId));
+    },
+    cancelAgentRun: async (runId: string): Promise<void> => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<void>>("CancelAgentRun");
+      if (!fn) throw new Error("Agent Runtime requires a newer OfficeDex runtime.");
+      await fn(toWails(runId));
+    },
+    completeAgentClientTool: async (input: AgentClientToolResultInput): Promise<void> => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<void>>("CompleteAgentClientTool");
+      if (!fn) throw new Error("Agent Runtime requires a newer OfficeDex runtime.");
+      await fn(toWails(input));
+    },
+    reassignAgentClientTool: async (input: AgentClientToolReassignInput): Promise<void> => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<void>>("ReassignAgentClientTool");
+      if (!fn) throw new Error("Agent Runtime requires a newer OfficeDex runtime.");
+      await fn(toWails(input));
+    },
     listImageTemplates: async (): Promise<ImagePromptTemplate[]> => {
       const fn = (WailsApp as unknown as { ListImageTemplates?: () => Promise<ImagePromptTemplate[]> }).ListImageTemplates;
       return fn ? fn() : [];
@@ -853,6 +922,15 @@ function createRealE2EAPI(endpoint: string): DesktopAPI {
   return {
     initialize: async () => decodeRealE2ERawBytes(await rpc<unknown>("Initialize")),
     getCapabilities: async () => decodeRealE2ERawBytes(await rpc<unknown>("GetCapabilities")),
+    startAgentRun: (input: AgentRunStartInput) => rpc<AgentRun>("StartAgentRun", stampOriginClientId(input)),
+    getAgentRun: (runId: string) => rpc<AgentRun>("GetAgentRun", runId),
+    listAgentRuns: (limit = 50) => rpc<AgentRun[]>("ListAgentRuns", limit),
+    respondAgentRun: (input: AgentRunRespondInput) => rpc<void>("RespondAgentRun", input),
+    approveAgentRun: (input: AgentRunApproveInput) => rpc<void>("ApproveAgentRun", input),
+    retryAgentRun: (runId: string) => rpc<AgentRun>("RetryAgentRun", runId),
+    cancelAgentRun: (runId: string) => rpc<void>("CancelAgentRun", runId),
+    completeAgentClientTool: (input: AgentClientToolResultInput) => rpc<void>("CompleteAgentClientTool", input),
+    reassignAgentClientTool: (input: AgentClientToolReassignInput) => rpc<void>("ReassignAgentClientTool", input),
     listImageTemplates: () => rpc<ImagePromptTemplate[]>("ListImageTemplates"),
     createImageTemplate: (input: CreateUserImageTemplateInput) =>
       rpc<ImagePromptTemplate>("CreateImageTemplate", input),
