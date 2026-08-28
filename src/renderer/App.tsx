@@ -1268,7 +1268,7 @@ function OfficeDexApp() {
   }, [continueModify]);
 
   const resumePptxTask = useCallback(async (task: DesktopTask) => {
-    await officecli.respond({ taskId: task.id, answer: "continue" });
+    await officecli.respond({ taskId: task.id, answer: task.status === "plan_review" ? "approve" : "continue" });
   }, []);
 
   const openRecentFile = useCallback(async (file: RecentFile) => {

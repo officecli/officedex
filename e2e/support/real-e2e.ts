@@ -45,6 +45,13 @@ export async function hostControl<T = unknown>(path: string, init?: RequestInit)
   return body as T;
 }
 
+export async function hostRPC<T = unknown>(method: string, input?: unknown): Promise<T> {
+  const response = await fetch(`${realE2EEndpoint()}/rpc/${encodeURIComponent(method)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input ?? null) });
+  const body = await response.json();
+  if (!response.ok || body?.ok === false) throw new Error(body?.error || `rpc ${method} failed`);
+  return body.result as T;
+}
+
 export async function recordScenario(record: ScenarioRecord): Promise<void> {
   await hostControl("/control/records", {
     method: "POST",
