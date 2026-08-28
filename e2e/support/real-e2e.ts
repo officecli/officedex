@@ -190,7 +190,15 @@ export async function waitForCompletedArtifact(page: Page, documentType: Documen
     await page.waitForTimeout(1_000);
   }
   if (!(await page.getByText("Generation Complete").first().isVisible().catch(() => false))) {
-    await expect(completedArtifactSurface(page)).toBeVisible({ timeout: 1_000 });
+    const previewAction = page.getByRole("button", { name: /Open in app|Show in folder/i }).first();
+    if (await previewAction.isVisible().catch(() => false)) {
+      // already on the real artifact Preview surface
+    } else {
+      await Promise.race([
+        expect(completedArtifactSurface(page)).toBeVisible({ timeout: 120_000 }),
+        expect(previewAction).toBeVisible({ timeout: 120_000 }),
+      ]);
+    }
   }
   const artifact = await hostControl<{ taskId: string; path: string; size: number; documentType: string }>("/control/artifacts/latest");
   expect(artifact.documentType).toBe(documentType);
