@@ -16,6 +16,7 @@ import {
   RightOutlined,
 } from "../ui/icons";
 import { useT } from "../i18n";
+import { PptxProductionStage } from "../presentation/PptxProductionStage";
 import { fileNameFromPath } from "../utils/path";
 import { MaterialSymbol } from "../components/Shell";
 import { DocTypeIcon, docTypeFromPath } from "../components/DocTypeIcon";
@@ -789,6 +790,21 @@ function HomeTaskCard({ task, onOpen, onRetry, onDismiss }: {
   const meta = failed
     ? (task.error || t("home.task.failed"))
     : (activeStage?.label || t("home.task.running")) + (stages.length > 0 ? ` · ${done}/${stages.length}` : "");
+
+  if (task.documentType === "pptx") {
+    return (
+      <div className="home-pptx-task-stage">
+        <PptxProductionStage
+          task={task}
+          onRetry={onRetry}
+          onOpenEditor={onOpen}
+        />
+        {failed ? (
+          <Button className="home-file-remove" variant="ghost-normal" size="small" ariaLabel={t("home.task.dismiss", { name: title })} icon={<CloseOutlined />} onClick={onDismiss} />
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div className={`home-recent-row home-task-row ${failed ? "home-task-row--failed" : "home-task-row--running"}`}>
