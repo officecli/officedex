@@ -226,6 +226,12 @@ function completedArtifactSurface(page: Page) {
 }
 
 async function answerVisibleInteraction(page: Page): Promise<boolean> {
+  const attention = page.locator(".home-attention-row").first();
+  if (await attention.isVisible().catch(() => false)) {
+    await attention.click();
+    await page.waitForTimeout(300);
+    return true;
+  }
   if (await answerVisibleVibeCanvas(page)) {
     return true;
   }
