@@ -16,6 +16,7 @@ import {
   RightOutlined,
 } from "../ui/icons";
 import { useT } from "../i18n";
+import { ProgressivePptxStage } from "../presentation/ProgressivePptxStage";
 import { PptxProductionStage } from "../presentation/PptxProductionStage";
 import { fileNameFromPath } from "../utils/path";
 import { MaterialSymbol } from "../components/Shell";
@@ -476,13 +477,17 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
             <h1 id="home-production-title">{title}</h1>
           </div>
         </header>
-        <PptxProductionStage
+        <ProgressivePptxStage
           task={productionTask}
-          onCancel={onCancelTask ? () => void onCancelTask(productionTask) : undefined}
-          onRetry={onRetryTask ? () => onRetryTask(productionTask) : undefined}
-          onSteer={onSteerTask ? (instruction) => onSteerTask(productionTask, instruction) : undefined}
-          onResume={onResumeTask ? () => onResumeTask(productionTask) : undefined}
-          onOpenEditor={onOpenTask ? () => onOpenTask(productionTask.id) : undefined}
+          onContinue={onResumeTask ? () => onResumeTask(productionTask) : undefined}
+          onStartDrawing={onResumeTask ? () => onResumeTask(productionTask) : undefined}
+          productionProps={{
+            onCancel: onCancelTask ? () => void onCancelTask(productionTask) : undefined,
+            onRetry: onRetryTask ? () => onRetryTask(productionTask) : undefined,
+            onSteer: onSteerTask ? (instruction) => onSteerTask(productionTask, instruction) : undefined,
+            onResume: onResumeTask ? () => onResumeTask(productionTask) : undefined,
+            onOpenEditor: onOpenTask ? () => onOpenTask(productionTask.id) : undefined,
+          }}
         />
       </section>
     );
