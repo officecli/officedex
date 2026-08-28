@@ -212,6 +212,10 @@ func (h *realClientE2EHost) call(method string, raw json.RawMessage) (any, error
 		return h.app.GetCapabilities()
 	case "ListImageTemplates":
 		return h.app.ListImageTemplates()
+	case "ListAgentRuns":
+		// The real generation E2E host does not run the separate Agent Runtime;
+		// return an empty, valid collection so the renderer can finish startup.
+		return []any{}, nil
 	case "CreateImageTemplate":
 		var input types.CreateUserImageTemplateInput
 		if err := decodeRealClientInput(raw, &input); err != nil {

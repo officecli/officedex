@@ -1275,6 +1275,7 @@ function OfficeDexApp() {
     // the production-stage context and make the task appear idle.
     if (task?.documentType === "pptx") {
       setSelectedTaskID({ kind: "task", id: taskId });
+      stageFirstTaskRef.current = taskId;
       setActiveNav("home");
       return;
     }
