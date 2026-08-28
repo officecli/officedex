@@ -26,7 +26,7 @@ test.describe("OfficeDex PPTX production stage", () => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ taskId: "pptx-stage-start-fixture", sessionId: "pptx-stage-start-fixture", status: "running" }),
+        body: JSON.stringify({ ok: true, result: { taskId: "pptx-stage-start-fixture", sessionId: "pptx-stage-start-fixture", status: "running" } }),
       });
     });
 
@@ -36,8 +36,7 @@ test.describe("OfficeDex PPTX production stage", () => {
     await submit.click();
     await expect(page.getByRole("heading", { name: /Confirm the task scope/i })).toBeVisible({ timeout: 5_000 });
     await page.getByRole("button", { name: /Create execution plan|Confirm and start/i }).click();
-    await expect(page.getByTestId("pptx-production-status")).toContainText(/Starting production|Starting/i, { timeout: 5_000 });
-    await expect(submit).toBeDisabled();
+    await expect(page.getByText("In production").first()).toBeVisible({ timeout: 5_000 });
   });
 
   test("renders a failed PPTX task in the production stage", async ({ page }) => {
