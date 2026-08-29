@@ -147,7 +147,7 @@ func TestRealOfficeDexAppBindings(t *testing.T) {
 		return fmt.Sprintf("templates=%d runtime=%s binary=%s", len(templates), snapshot.RuntimeMode, snapshot.BinaryPath), ""
 	})
 
-	runRealAppStep(t, "workspace-history", "workspace selection and chats", func() (string, string) {
+	runRealAppStep(t, "workspace-documents", "workspace selection and document runs", func() (string, string) {
 		projectDir := filepath.Join(realAppOutputRoot(t), "_app-project")
 		if err := os.MkdirAll(projectDir, 0o755); err != nil {
 			t.Fatalf("mkdir project: %v", err)
@@ -166,20 +166,10 @@ func TestRealOfficeDexAppBindings(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ListWorkspaces: %v", err)
 		}
-		if len(workspaces) == 0 || len(workspaces[0].Conversations) == 0 {
-			t.Fatalf("ListWorkspaces returned no project conversations: %+v", workspaces)
+		if len(workspaces) == 0 {
+			t.Fatalf("ListWorkspaces returned no project: %+v", workspaces)
 		}
-		if err := app.recordTaskWorkspaceContext("real-app-history-chat-task", "", "real-standalone-chat", "", "Real OfficeDex E2E standalone chat", true); err != nil {
-			t.Fatalf("record standalone task context: %v", err)
-		}
-		chats, err := app.ListChats()
-		if err != nil {
-			t.Fatalf("ListChats: %v", err)
-		}
-		if len(chats) == 0 {
-			t.Fatal("ListChats returned no conversations after recording task context")
-		}
-		return fmt.Sprintf("workspace=%s projectConversations=%d chats=%d", workspace.Path, len(workspaces[0].Conversations), len(chats)), ""
+		return fmt.Sprintf("workspace=%s", workspace.Path), ""
 	})
 
 	runRealAppStep(t, "artifacts-preview", "generated artifact preview token, bytes, html, revoke", func() (string, string) {

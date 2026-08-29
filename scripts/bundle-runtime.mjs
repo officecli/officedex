@@ -40,6 +40,20 @@ async function main() {
   const officecliSrc = path.join(REPO_ROOT, "build", "officecli", BINARY_NAME);
   const officecliDest = path.join(RESOURCES, "officecli");
   await copy(officecliSrc, officecliDest, BINARY_NAME);
+
+  // MOP authoring uses the embedded Node runtime directly. Keep it separate
+  // from any retired presentation runtime and fail release packaging when it is
+  // missing, otherwise the app would ship a generation path that only works
+  // on developers' machines.
+  const mopRuntimeSrc = path.join(REPO_ROOT, "build", "mop-runtime");
+  const mopRuntimeDest = path.join(RESOURCES, "mop-runtime");
+  if (!existsSync(mopRuntimeSrc)) {
+    throw new Error(`MOP runtime not found: ${mopRuntimeSrc}; stage Node before packaging`);
+  }
+  await mkdir(mopRuntimeDest, { recursive: true });
+  const { cp } = await import("node:fs/promises");
+  await cp(mopRuntimeSrc, mopRuntimeDest, { recursive: true, force: true });
+  console.log(`[bundle-runtime] ${mopRuntimeSrc} → ${mopRuntimeDest}`);
 }
 
 main().catch((err) => {

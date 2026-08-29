@@ -78,6 +78,14 @@ lease=$(printf '%s' "$result" | node -pe 'JSON.parse(require("fs").readFileSync(
 
 browser 实例会同时启动本地 learnof/pptx 编辑器；无论是否启用 demo，PPTX 预览都会指向该真实编辑器。
 
+desktop + 本地 learnof/pptx 编辑器：
+
+```bash
+./scripts/devctl ensure --scope worktree --with-learnof
+```
+
+`--with-learnof` 会在 Wails desktop 实例旁启动 sibling `pptx` checkout，并将其地址注入前端；未加该参数时 desktop 仍使用只读 PPTX 预览。
+
 如果需要用源码开发版 OfficeCLI 验证已登录的 hosted 路径，可显式指定二进制；该选择只作用于当前 browser 实例：
 
 ```bash

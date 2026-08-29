@@ -25,6 +25,7 @@ try {
     const scope = option("--scope", "worktree");
     if (!['shared', 'worktree'].includes(scope)) throw new Error("--scope must be shared or worktree");
     const browserMode = takeFlag("--browser");
+    const withLearnof = takeFlag("--with-learnof");
     const noOpen = takeFlag("--no-open");
     const demoMode = browserMode && process.env.OFFICEDEX_DEVCTL_BROWSER_DEMO === "1";
     const demoAuth = demoMode ? demoAuthOption(process.env.OFFICEDEX_DEVCTL_BROWSER_DEMO_AUTH) : "";
@@ -36,6 +37,7 @@ try {
       scope,
       cwd: process.cwd(),
       mode: browserMode ? "browser" : "desktop",
+      learnof: browserMode || withLearnof,
       demo_mode: demoMode,
       demo_auth: demoAuth,
       demo_credits: demoCredits,
@@ -310,7 +312,7 @@ function printHelp() {
 Usage:
   ./scripts/devctl daemon ensure|status [--json]
   ./scripts/devctl infra ensure|status|logs [--json]
-  ./scripts/devctl ensure --scope shared|worktree [--browser] [--no-open] [--json]
+  ./scripts/devctl ensure --scope shared|worktree [--browser] [--with-learnof] [--no-open] [--json]
   ./scripts/devctl status [--instance ID] [--json]
   ./scripts/devctl logs --instance ID --service api|web|learnof [--lines N]
   ./scripts/devctl restart --instance ID --service api|web|learnof [--json]
@@ -324,6 +326,9 @@ Usage:
 Desktop mode uses the Wails/Go process. Browser mode starts the local HTTP/SSE
 bridge plus Vite and opens the page by default. api_url is a loopback-only
 development runtime identity endpoint, not a production business API.
+
+Use --with-learnof in desktop mode to start the local sibling pptx editor and
+enable editable PPTX previews in the Wails app.
 
 Demo browser mode reads OFFICEDEX_DEVCTL_BROWSER_DEMO_AUTH=anonymous|logged_in
 and OFFICEDEX_DEVCTL_BROWSER_DEMO_CREDITS=<integer>. It never uses real account

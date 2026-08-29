@@ -327,7 +327,7 @@ return await PowerPoint.run(async (context) => {
   };
   // The editor's own encoder, when this runtime has one. Absent on an older
   // component, in which case the deck simply records less finely.
-  const captureHost = data.capture ? window.__presentationEmbeddedDocument : undefined;
+  const captureHost = data.capture ? globalThis.__presentationEmbeddedDocument : undefined;
   const captures = [];
   // A shape is named after the op that drew it, so a recorded step can point
   // back at exactly the object it added — per-chunk counters would repeat.
@@ -1211,4 +1211,3 @@ export function applyReslideOps(
     sequencer.update({ taskId: `reslide:${input.taskId}`, ops, completed: true, perform: true });
   });
 }
-

@@ -36,7 +36,6 @@ vi.mock("./bridge", () => ({
     onFileDrop: vi.fn(() => () => undefined),
     getTaskHistory: vi.fn(async () => []),
     listWorkspaces: vi.fn(async () => []),
-    listChats: vi.fn(async () => []),
     addWorkspace: vi.fn(),
     selectWorkspace: vi.fn(),
     removeWorkspace: vi.fn(),
@@ -73,10 +72,6 @@ vi.mock("./useAppUpdate", () => ({
 vi.mock("./components/Shell", () => ({
   Shell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   MaterialSymbol: ({ name }: { name: string }) => <span className="material-symbol" data-icon={name} />,
-}));
-
-vi.mock("./screens/DialogueScreens", () => ({
-  DialogueScreen: () => <div>Dialogue</div>,
 }));
 
 vi.mock("./screens/DataScreens", () => ({

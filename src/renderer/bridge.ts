@@ -55,7 +55,6 @@ import type {
   SubmitReportResult,
   TaskHistoryEntry,
   UserSettings,
-  WorkspaceConversationSummary,
   WorkspaceSummary,
   WhoAmIResult,
 } from "../shared/types";
@@ -131,10 +130,8 @@ function createBrowserPreviewAPI(): DesktopAPI {
       name: "Browser Preview",
       path: "(browser preview)",
       active: true,
-      conversations: [],
     },
   ];
-  const browserChats: WorkspaceConversationSummary[] = [];
   let browserRecentFiles: RecentFile[] = [];
   return {
     initialize: async () => ({ browserPreview: true }),
@@ -214,6 +211,9 @@ function createBrowserPreviewAPI(): DesktopAPI {
       documentType: artifact.documentType,
     }),
     revokePreviewToken: async () => undefined,
+    createLivePptxDraft: async () => {
+      throw new Error("Live PPTX drawing requires the desktop app.");
+    },
     prepareXlsxEditor: async () => {
       throw new Error("XLSX editor is unavailable in browser preview.");
     },
@@ -256,10 +256,12 @@ function createBrowserPreviewAPI(): DesktopAPI {
     },
     getDefaultWorkspaceDir: async () => "(default workspace inside desktop app)",
     listWorkspaces: async () => browserWorkspaces,
-    listChats: async () => browserChats,
     listRecentFiles: async (workspaceId?: string) => browserRecentFiles.filter((file) => !workspaceId || file.workspaceId === workspaceId),
     removeRecentFile: async (filePath: string) => {
       browserRecentFiles = browserRecentFiles.filter((file) => file.filePath !== filePath);
+    },
+    deleteDocument: async (taskId: string) => {
+      browserRecentFiles = browserRecentFiles.filter((file) => file.taskId !== taskId);
     },
     renameWorkspace: async (workspaceId: string, name: string) => {
       const trimmed = name.trim();
@@ -280,23 +282,12 @@ function createBrowserPreviewAPI(): DesktopAPI {
         documentType: refreshed.documentType,
       };
     },
-    deleteConversation: async (conversationId: string) => {
-      browserWorkspaces = browserWorkspaces.map((workspace) => ({
-        ...workspace,
-        conversations: workspace.conversations.filter((conversation) => conversation.conversationId !== conversationId),
-      }));
-      const chatIndex = browserChats.findIndex((conversation) => conversation.conversationId === conversationId);
-      if (chatIndex >= 0) {
-        browserChats.splice(chatIndex, 1);
-      }
-    },
     addWorkspace: async (path: string) => {
       const workspace: WorkspaceSummary = {
         id: `browser-${browserWorkspaces.length + 1}`,
         name: path.split(/[\\/]/).pop() || path,
         path,
         active: true,
-        conversations: [],
       };
       browserWorkspaces = browserWorkspaces.map((item) => ({ ...item, active: false })).concat(workspace);
       return workspace;
@@ -310,11 +301,7 @@ function createBrowserPreviewAPI(): DesktopAPI {
       return { ...selected, active: true };
     },
     removeWorkspace: async (workspaceId: string) => {
-      const removed = browserWorkspaces.find((workspace) => workspace.id === workspaceId);
-      if (removed) {
-        browserWorkspaces = browserWorkspaces.filter((workspace) => workspace.id !== workspaceId);
-        browserChats.push(...removed.conversations);
-      }
+      browserWorkspaces = browserWorkspaces.filter((workspace) => workspace.id !== workspaceId);
     },
     onAuthEvent: () => () => undefined,
     onBridgeEvent: () => () => undefined,
@@ -520,6 +507,7 @@ function normaliseTaskHistory(raw: unknown): TaskHistoryEntry[] {
       : [];
     entries.push({
       taskId,
+      createdAt: typeof record.createdAt === "string" ? record.createdAt : undefined,
       conversationId: typeof record.conversationId === "string" ? record.conversationId : undefined,
       parentTaskId: typeof record.parentTaskId === "string" ? record.parentTaskId : undefined,
       workspaceId: typeof record.workspaceId === "string" ? record.workspaceId : undefined,
@@ -541,38 +529,8 @@ function normaliseWorkspaceSummaries(raw: unknown): WorkspaceSummary[] {
       active: item.active === true,
       updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : undefined,
       lastActiveAt: typeof item.lastActiveAt === "string" ? item.lastActiveAt : undefined,
-      conversations: Array.isArray(item.conversations)
-        ? item.conversations
-            .filter((conversation): conversation is Record<string, unknown> => Boolean(conversation) && typeof conversation === "object")
-            .map((conversation) => ({
-              conversationId: typeof conversation.conversationId === "string" ? conversation.conversationId : "",
-              firstTaskId: typeof conversation.firstTaskId === "string" ? conversation.firstTaskId : "",
-              latestTaskId: typeof conversation.latestTaskId === "string" ? conversation.latestTaskId : "",
-              title: typeof conversation.title === "string" ? conversation.title : "",
-              status: typeof conversation.status === "string" ? conversation.status as WorkspaceSummary["conversations"][number]["status"] : "completed",
-              documentType: typeof conversation.documentType === "string" ? conversation.documentType : undefined,
-              updatedAt: typeof conversation.updatedAt === "string" ? conversation.updatedAt : undefined,
-            }))
-            .filter((conversation) => conversation.conversationId && conversation.latestTaskId)
-        : [],
     }))
     .filter((workspace) => workspace.id && workspace.path);
-}
-
-function normaliseConversationSummaries(raw: unknown): WorkspaceConversationSummary[] {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .filter((conversation): conversation is Record<string, unknown> => Boolean(conversation) && typeof conversation === "object")
-    .map((conversation) => ({
-      conversationId: typeof conversation.conversationId === "string" ? conversation.conversationId : "",
-      firstTaskId: typeof conversation.firstTaskId === "string" ? conversation.firstTaskId : "",
-      latestTaskId: typeof conversation.latestTaskId === "string" ? conversation.latestTaskId : "",
-      title: typeof conversation.title === "string" ? conversation.title : "",
-      status: typeof conversation.status === "string" ? conversation.status as WorkspaceConversationSummary["status"] : "completed",
-      documentType: typeof conversation.documentType === "string" ? conversation.documentType : undefined,
-      updatedAt: typeof conversation.updatedAt === "string" ? conversation.updatedAt : undefined,
-    }))
-    .filter((conversation) => conversation.conversationId && conversation.latestTaskId);
 }
 
 export function normaliseRecentFiles(raw: unknown): RecentFile[] {
@@ -779,6 +737,11 @@ function createWailsAPI(): DesktopAPI {
     revokePreviewToken: async (token: string) => {
       await WailsApp.RevokePreviewToken(token);
     },
+    createLivePptxDraft: async (taskId: string) => {
+      const fn = optionalWailsFunction<(arg: string) => Promise<{ filePath: string; fileName: string }>>("CreateLivePptxDraft");
+      if (!fn) throw new Error("Live PPTX drawing requires a newer OfficeDex runtime.");
+      return fn(taskId);
+    },
     prepareXlsxEditor: async (previewToken: string): Promise<PrepareXlsxEditorResult> => {
       const fn = optionalWailsFunction<(token: string) => Promise<PrepareXlsxEditorResult>>("PrepareXlsxEditor");
       if (!fn) throw new Error("XLSX editing requires a newer OfficeDex runtime.");
@@ -849,11 +812,6 @@ function createWailsAPI(): DesktopAPI {
       if (!fn) return [];
       return normaliseWorkspaceSummaries(await fn());
     },
-    listChats: async () => {
-      const fn = optionalWailsFunction<() => Promise<unknown>>(["List", "Chats"].join(""));
-      if (!fn) return [];
-      return normaliseConversationSummaries(await fn());
-    },
     listRecentFiles: async (workspaceId?: string) => {
       const fn = optionalWailsFunction<(workspaceId: string) => Promise<unknown>>(["List", "Recent", "Files"].join(""));
       if (!fn) throw new Error("Recent files require a newer OfficeDex runtime.");
@@ -864,6 +822,11 @@ function createWailsAPI(): DesktopAPI {
       if (!fn) throw new Error("Recent file removal requires a newer OfficeDex runtime.");
       await fn(filePath);
     },
+    deleteDocument: async (taskId: string) => {
+      const fn = optionalWailsFunction<(taskId: string) => Promise<void>>(["Delete", "Document"].join(""));
+      if (!fn) throw new Error("Document deletion requires a newer OfficeDex runtime.");
+      await fn(taskId);
+    },
     renameWorkspace: async (workspaceId: string, name: string) => {
       const fn = optionalWailsFunction<(workspaceId: string, name: string) => Promise<unknown>>(["Rename", "Workspace"].join(""));
       if (!fn) throw new Error("Workspace rename requires a newer OfficeDex runtime.");
@@ -873,11 +836,6 @@ function createWailsAPI(): DesktopAPI {
       const fn = optionalWailsFunction<(file: never) => Promise<Artifact>>(["Open", "Recent", "File"].join(""));
       if (!fn) throw new Error("Opening recent files requires a newer OfficeDex runtime.");
       return fn(toWails(file));
-    },
-    deleteConversation: async (conversationId: string) => {
-      const fn = optionalWailsFunction<(conversationId: string) => Promise<void>>(["Delete", "Conversation"].join(""));
-      if (!fn) throw new Error("Conversation deletion requires a newer OfficeDex runtime.");
-      await fn(conversationId);
     },
     addWorkspace: async (path: string) => {
       const fn = optionalWailsFunction<(path: string) => Promise<unknown>>(["Add", "Workspace"].join(""));
@@ -957,7 +915,7 @@ function createWailsAPI(): DesktopAPI {
   };
 }
 
-function createRealE2EAPI(endpoint: string): DesktopAPI {
+export function createRealE2EAPI(endpoint: string): DesktopAPI {
   const base = endpoint.replace(/\/+$/, "");
   const rpc = async <T,>(method: string, input?: unknown): Promise<T> => {
     const response = await fetch(`${base}/rpc/${encodeURIComponent(method)}`, {
@@ -972,16 +930,41 @@ function createRealE2EAPI(endpoint: string): DesktopAPI {
     }
     return body?.result as T;
   };
+  const subscribers = new Map<string, Set<(payload: unknown) => void>>();
+  let eventSource: EventSource | undefined;
+  const dispatchEvent = (message: MessageEvent) => {
+    if (!message.data) return;
+    const envelope = JSON.parse(message.data) as { channel?: string; payload?: unknown };
+    if (!envelope.channel) return;
+    for (const callback of subscribers.get(envelope.channel) ?? []) callback(envelope.payload);
+  };
+  const ensureEventSource = () => {
+    if (eventSource) return eventSource;
+    // One HTTP/1.1 EventSource per tab leaves connection capacity for RPCs.
+    // Opening one stream per channel exhausts Chrome's per-host connection
+    // limit as soon as a second OfficeDex tab is open, causing localstore RPCs
+    // to queue until the renderer timeout fires.
+    eventSource = new EventSource(`${base}/events?channel=*`);
+    for (const channel of ["auth", "bridge", "filedrop"]) {
+      eventSource.addEventListener(channel, dispatchEvent as EventListener);
+    }
+    eventSource.onmessage = dispatchEvent;
+    return eventSource;
+  };
   const subscribe = <T,>(channel: string, callback: (event: T) => void): (() => void) => {
-    const source = new EventSource(`${base}/events?channel=${encodeURIComponent(channel)}`);
-    const handle = (message: MessageEvent) => {
-      if (!message.data) return;
-      const envelope = JSON.parse(message.data) as { channel?: string; payload?: unknown };
-      callback(envelope.payload as T);
+    const callbacks = subscribers.get(channel) ?? new Set<(payload: unknown) => void>();
+    const wrapped = callback as (payload: unknown) => void;
+    callbacks.add(wrapped);
+    subscribers.set(channel, callbacks);
+    ensureEventSource();
+    return () => {
+      callbacks.delete(wrapped);
+      if (callbacks.size === 0) subscribers.delete(channel);
+      if (subscribers.size === 0 && eventSource) {
+        eventSource.close();
+        eventSource = undefined;
+      }
     };
-    source.addEventListener(channel, handle as EventListener);
-    source.onmessage = handle;
-    return () => source.close();
   };
   return {
     initialize: async () => decodeRealE2ERawBytes(await rpc<unknown>("Initialize")),
@@ -1049,6 +1032,7 @@ function createRealE2EAPI(endpoint: string): DesktopAPI {
     previewArtifact: (artifact: Artifact) => rpc<void>("PreviewArtifact", artifact),
     issuePreviewToken: (artifact: Artifact) => rpc<PreviewGrant>("IssuePreviewToken", artifact),
     revokePreviewToken: (token: string) => rpc<void>("RevokePreviewToken", token),
+    createLivePptxDraft: (taskId: string) => rpc<{ filePath: string; fileName: string }>("CreateLivePptxDraft", taskId),
     prepareXlsxEditor: (previewToken: string) =>
       rpc<PrepareXlsxEditorResult>("PrepareXlsxEditor", previewToken),
     saveXlsxEditor: (input: SaveXlsxEditorInput) =>
@@ -1104,12 +1088,11 @@ function createRealE2EAPI(endpoint: string): DesktopAPI {
       normaliseUserSettings(await rpc<unknown>("UpdateSettings", adaptSettingsPatch(patch))),
     getDefaultWorkspaceDir: () => rpc<string>("GetDefaultWorkspaceDir"),
     listWorkspaces: async () => normaliseWorkspaceSummaries(await rpc<unknown>("ListWorkspaces")),
-    listChats: async () => normaliseConversationSummaries(await rpc<unknown>("ListChats")),
     listRecentFiles: async (workspaceId?: string) => normaliseRecentFiles(await rpc<unknown>("ListRecentFiles", workspaceId ?? "")),
     removeRecentFile: (filePath: string) => rpc<void>("RemoveRecentFile", filePath),
+    deleteDocument: (taskId: string) => rpc<void>("DeleteDocument", taskId),
     renameWorkspace: async (workspaceId: string, name: string) => normaliseWorkspaceSummaries([await rpc<unknown>("RenameWorkspace", { workspaceId, name })])[0],
     openRecentFile: (file: RecentFile) => rpc<Artifact>("OpenRecentFile", file),
-    deleteConversation: (conversationId: string) => rpc<void>("DeleteConversation", conversationId),
     addWorkspace: async (path: string) => normaliseWorkspaceSummaries([await rpc<unknown>("AddWorkspace", path)])[0],
     selectWorkspace: async (workspaceId: string) => normaliseWorkspaceSummaries([await rpc<unknown>("SelectWorkspace", workspaceId)])[0],
     removeWorkspace: (workspaceId: string) => rpc<void>("RemoveWorkspace", workspaceId),
@@ -1240,7 +1223,10 @@ function selectAPI(): DesktopAPI {
     ? import.meta.env.VITE_OFFICEDEX_REAL_E2E_ENDPOINT.trim()
     : "";
   if (import.meta.env.DEV && realE2EEndpoint) {
-    return createRealE2EAPI(realE2EEndpoint);
+    // Keep browser RPC/SSE on the Vite origin. Besides avoiding CORS, this
+    // isolates new tabs from stale direct bridge connections left by older
+    // dev pages and lets Vite proxy the managed bridge endpoint consistently.
+    return createRealE2EAPI("/__officedex_bridge");
   }
   // Test-only injection is kept for Vitest. Dev-browser E2E uses the real
   // endpoint transport above; production desktop builds always go through Wails.

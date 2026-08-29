@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
-export const DAEMON_VERSION = "17";
+export const DAEMON_VERSION = "18";
 
 export function browserBridgeBuildTags(demoMode = false) {
   return demoMode

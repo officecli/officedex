@@ -665,6 +665,12 @@ func (c *Client) InvokeGenerate(ctx context.Context, input types.GenerateInput) 
 	}
 	if strings.TrimSpace(input.PPTXBackend) != "" {
 		args["pptx_backend"] = input.PPTXBackend
+	} else if input.DocumentType == types.DocPPTX {
+		// OfficeDex's primary PPTX path is op-driven MOP authoring: the
+		// OfficeCLI worker emits ordered vibe_ops while PowerPoint.run authors
+		// the editable deck. Keep officegen available only as an explicit
+		// compatibility choice.
+		args["pptx_backend"] = "mop-skill"
 	}
 	if officeMode != "" {
 		args["mode"] = officeMode

@@ -1,10 +1,13 @@
-import type { DocumentType } from "../shared/types";
+import type { DocumentType, ImageRatio } from "../shared/types";
 import { fileExtension } from "./utils/path";
 
 export interface HomeTaskIntake {
   prompt: string;
   sourceFile?: string;
   referenceDirectory?: string;
+  referenceImages?: string[];
+  imageRatio?: ImageRatio;
+  fps?: number;
   documentType?: DocumentType;
 }
 

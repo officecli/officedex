@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Button, Empty, Input, Table, Tag, Tooltip, Typography, dialog, type TableColumn } from "../ui";
-import { DeleteOutlined, PlusOutlined } from "../ui/icons";
+import { Button, Empty, Input, Table, Tag, Tooltip, Typography, type TableColumn } from "../ui";
+import { PlusOutlined } from "../ui/icons";
 import type { AgentRun, Artifact, DesktopTask } from "../../shared/types";
 import { officecli } from "../bridge";
 import { DocTypeIcon } from "../components/DocTypeIcon";
@@ -24,7 +24,6 @@ export interface CreditCellModel {
 
 interface TaskRow {
   id: string;
-  conversationId: string;
   title: string;
   type: string;
   status: DesktopTask["status"];
@@ -57,7 +56,7 @@ function formatRelativeTime(iso: string | undefined, t: Translator): { label: st
  * Work that still needs the user lives in the home inbox — this panel is
  * deliberately read-mostly (open a deliverable, clean up failures).
  */
-export function ActivityPanel({ tasks, onSelectTask, onOpenArtifact, onDeleteConversation, onViewed }: { tasks: DesktopTask[]; onSelectTask: (taskID: string) => void; onOpenArtifact?: (artifact: Artifact) => void; onDeleteConversation?: (conversationId: string) => void; onViewed?: (visible: boolean) => void }) {
+export function ActivityPanel({ tasks, onSelectTask, onOpenArtifact, onViewed }: { tasks: DesktopTask[]; onSelectTask: (taskID: string) => void; onOpenArtifact?: (artifact: Artifact) => void; onViewed?: (visible: boolean) => void }) {
   const t = useT();
   // This panel is mounted only while its settings section is open, so its
   // lifetime *is* "the user is looking at the activity list" — the signal that
@@ -80,26 +79,7 @@ export function ActivityPanel({ tasks, onSelectTask, onOpenArtifact, onDeleteCon
     if (row.credit.state === "value") parts.push(t("tasks.credit.meta", { amount: row.credit.charged }));
     return parts.join(" · ");
   };
-  const confirmDeleteTask = (row: TaskRow) => dialog.confirm({
-    title: t("tasks.delete.title", { name: row.title }),
-    content: t("tasks.delete.body"),
-    okText: t("tasks.delete.ok"),
-    cancelText: t("tasks.delete.cancel"),
-    tone: "danger",
-    onOk: () => onDeleteConversation?.(row.conversationId),
-  });
-  const confirmClearFailed = () => dialog.confirm({
-    title: t("tasks.clearFailed.title", { count: failedRows.length }),
-    content: t("tasks.delete.body"),
-    okText: t("tasks.clearFailed.ok"),
-    cancelText: t("tasks.delete.cancel"),
-    tone: "danger",
-    onOk: () => {
-      const conversationIds = new Set(failedRows.map((row) => row.conversationId));
-      for (const conversationId of conversationIds) onDeleteConversation?.(conversationId);
-    },
-  });
-  const renderRows = (groupRows: TaskRow[], options?: { showArtifact?: boolean; allowDelete?: boolean }) => (
+  const renderRows = (groupRows: TaskRow[], options?: { showArtifact?: boolean }) => (
     <div className="task-list">
       {groupRows.map((row) => (
         <div className="task-item" key={row.id}>
@@ -122,9 +102,6 @@ export function ActivityPanel({ tasks, onSelectTask, onOpenArtifact, onDeleteCon
                 <span>{row.artifact.fileName}</span>
               </button>
             ) : null}
-            {options?.allowDelete && onDeleteConversation ? (
-              <Button className="task-item__delete" variant="ghost-normal" size="small" ariaLabel={t("tasks.deleteAria", { name: row.title })} icon={<DeleteOutlined />} onClick={() => confirmDeleteTask(row)} />
-            ) : null}
           </div>
         </div>
       ))}
@@ -144,12 +121,7 @@ export function ActivityPanel({ tasks, onSelectTask, onOpenArtifact, onDeleteCon
       {rows.length > 0 ? (
         <>
           {renderGroup(t("tasks.group.active"), activeRows)}
-          {renderGroup(t("tasks.group.failed"), failedRows, {
-            allowDelete: true,
-            headerExtra: onDeleteConversation && failedRows.length > 1 ? (
-              <Button variant="ghost-normal" size="small" onClick={confirmClearFailed}>{t("tasks.clearFailed")}</Button>
-            ) : undefined,
-          })}
+          {renderGroup(t("tasks.group.failed"), failedRows)}
           {settledRows.length > 0 ? (
             <section className="task-group" aria-label={t("tasks.group.settled")}>
               <div className="task-group__header">
@@ -180,7 +152,6 @@ function taskToRow(task: DesktopTask, t: Translator): TaskRow {
     : task.status === "plan_review" ? t("home.planReview") : undefined;
   return {
     id: task.id,
-    conversationId: task.conversationId,
     // Raw task ids are meaningless to people — fall back to a label instead.
     title: task.topic || task.artifact?.fileName || t("tasks.untitled"),
     type: task.documentType || task.artifact?.documentType || "",
@@ -220,5 +191,3 @@ function CreditModeBadge({ mode, t }: { mode: string; t: Translator }) {
     </Tag>
   );
 }
-
-

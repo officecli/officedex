@@ -5,6 +5,7 @@ import { ErrorState } from "../components/ErrorState";
 import { officecli } from "../../bridge";
 import { useT } from "../../i18n";
 import { resolveLearnofPptxBaseUrl } from "./learnof/learnofPptxUrl";
+import type { VibeReplayFeed } from "../../presentation/vibeReplay";
 
 const LearnofPptxWorkbench = lazy(() => import("./learnof/LearnofPptxWorkbench"));
 
@@ -16,6 +17,8 @@ interface PptxViewerProps {
   filePath?: string;
   /** Overrides the learnof/pptx editor URL (tests); `null` forces the read-only fallback. */
   editorBaseUrl?: string | null;
+  /** Ordered generation ops to draw live in the same learnof editor. */
+  live?: VibeReplayFeed;
 }
 
 // PPTist is a standalone Vue SPA vendored under public/pptist. We embed it in `?mode=embed`,
@@ -33,7 +36,7 @@ const MSG_LOAD_PPTX = "pptist:load-pptx"; // host → PPTist: here is the .pptx 
  * the editor fails to start) it falls back to the read-only PPTist preview and
  * says so explicitly — no AI entry point is shown in that case.
  */
-export default function PptxViewer({ previewToken, fileName, documentType, filePath, editorBaseUrl }: PptxViewerProps) {
+export default function PptxViewer({ previewToken, fileName, documentType, filePath, editorBaseUrl, live }: PptxViewerProps) {
   const t = useT();
   const resolvedEditorUrl = useMemo(
     () => (editorBaseUrl === undefined ? resolveLearnofPptxBaseUrl() : editorBaseUrl),
@@ -55,10 +58,12 @@ export default function PptxViewer({ previewToken, fileName, documentType, fileP
         <div className="pptx-deck-layout pptx-deck-layout-workbench">
           <Suspense fallback={<LoadingState fileName={fileName} />}>
             <LearnofPptxWorkbench
+              key={`${previewToken}:${fileName}`}
               editorBaseUrl={resolvedEditorUrl}
               previewToken={previewToken}
               fileName={fileName}
               filePath={filePath}
+              live={live}
               onEditorUnavailable={(reason) => setFallbackReason(reason)}
             />
           </Suspense>

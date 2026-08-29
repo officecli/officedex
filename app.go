@@ -354,7 +354,7 @@ func (a *App) startup(ctx context.Context) {
 	if err := wailsruntime.InitializeNotifications(ctx); err != nil {
 		wailsruntime.LogWarningf(ctx, "init notifications: %v", err)
 	}
-	if err := a.localStore.Open(ctx); err != nil {
+	if err := a.ensureLocalStoreOpen(ctx); err != nil {
 		wailsruntime.LogErrorf(ctx, "open local store: %v", err)
 	} else {
 		if err := a.failInterruptedTasks(ctx); err != nil {
@@ -364,6 +364,19 @@ func (a *App) startup(ctx context.Context) {
 			wailsruntime.LogErrorf(ctx, "init workspace: %v", err)
 		}
 	}
+}
+
+func (a *App) ensureLocalStoreOpen(ctx context.Context) error {
+	if a.localStore == nil {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := a.localStore.Open(ctx); err != nil {
+		return fmt.Errorf("open local store: %w", err)
+	}
+	return nil
 }
 
 // interruptedTaskMessage is shown for tasks whose bridge process died with the
@@ -562,6 +575,9 @@ type GenerateResult struct {
 // Generate dispatches `office.generate` against the agent bridge after
 // applying settings-driven defaults (output dir, runtime mode).
 func (a *App) Generate(input types.GenerateInput) (GenerateResult, error) {
+	if err := a.ensureLocalStoreOpen(a.ctx); err != nil {
+		return GenerateResult{}, err
+	}
 	settings, err := a.settingsStore.Load()
 	if err != nil {
 		return GenerateResult{}, fmt.Errorf("load settings: %w", err)
@@ -2850,24 +2866,13 @@ func (a *App) ListWorkspaces() ([]types.WorkspaceSummary, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	if err := a.ensureLocalStoreOpen(ctx); err != nil {
+		return nil, err
+	}
 	if err := a.removeDefaultWorkspaceProject(ctx); err != nil {
 		return nil, err
 	}
 	return a.localStore.QueryWorkspaceSummaries(ctx, 20)
-}
-
-func (a *App) ListChats() ([]types.WorkspaceConversationSummary, error) {
-	if a.localStore == nil {
-		return nil, nil
-	}
-	ctx := a.ctx
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if err := a.removeDefaultWorkspaceProject(ctx); err != nil {
-		return nil, err
-	}
-	return a.localStore.QueryChatSummaries(ctx, 50)
 }
 
 func (a *App) ListRecentFiles(workspaceID string) ([]types.RecentFile, error) {
@@ -2877,6 +2882,9 @@ func (a *App) ListRecentFiles(workspaceID string) ([]types.RecentFile, error) {
 	ctx := a.ctx
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	if err := a.ensureLocalStoreOpen(ctx); err != nil {
+		return nil, err
 	}
 	return a.localStore.QueryRecentFiles(ctx, strings.TrimSpace(workspaceID), 50)
 }
@@ -2890,6 +2898,23 @@ func (a *App) RemoveRecentFile(filePath string) error {
 		ctx = context.Background()
 	}
 	return a.localStore.RemoveRecentFile(ctx, filePath)
+}
+
+// DeleteDocument removes a generated document's local task/history metadata
+// while deliberately leaving every file on disk untouched.
+func (a *App) DeleteDocument(taskID string) error {
+	if a.localStore == nil {
+		return errors.New("workspace store is unavailable")
+	}
+	taskID = strings.TrimSpace(taskID)
+	if taskID == "" {
+		return errors.New("task id is empty")
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return a.localStore.RemoveDocumentByTaskID(ctx, taskID)
 }
 
 func (a *App) RenameWorkspace(workspaceID, name string) (types.WorkspaceSummary, error) {
@@ -2993,21 +3018,6 @@ func isSupportedRecentPreviewType(documentType string) bool {
 	}
 }
 
-func (a *App) DeleteConversation(conversationID string) error {
-	if a.localStore == nil {
-		return errors.New("workspace store is unavailable")
-	}
-	conversationID = strings.TrimSpace(conversationID)
-	if conversationID == "" {
-		return errors.New("conversation id is empty")
-	}
-	ctx := a.ctx
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	return a.localStore.RemoveConversation(ctx, conversationID)
-}
-
 func (a *App) AddWorkspace(workspacePath string) (types.WorkspaceSummary, error) {
 	cleaned, err := cleanExistingWorkspaceDir(workspacePath)
 	if err != nil {
@@ -3017,7 +3027,7 @@ func (a *App) AddWorkspace(workspacePath string) (types.WorkspaceSummary, error)
 		return types.WorkspaceSummary{}, errors.New("workspace store is unavailable")
 	}
 	if sameCleanPath(cleaned, a.workspaceDir) {
-		return types.WorkspaceSummary{}, errors.New("default app workspace is reserved for chats without a project")
+		return types.WorkspaceSummary{}, errors.New("default app workspace is reserved for app-managed documents")
 	}
 	ctx := a.ctx
 	if ctx == nil {
@@ -3141,6 +3151,9 @@ func (a *App) GetTaskHistory(limit int) ([]types.TaskHistoryEntry, error) {
 	ctx := a.ctx
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	if err := a.ensureLocalStoreOpen(ctx); err != nil {
+		return nil, err
 	}
 	if err := a.refreshPreviewTrustedRoots(a.cachedSettings); err != nil {
 		return nil, err
@@ -4624,6 +4637,13 @@ func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
 	}
 
 	env := llmProviderEnv(settingsValue)
+	// The progressive PPTX worker is a subprocess of the OfficeCLI bridge. In
+	// local development the learnof/pptx checkout lives beside the OfficeDex
+	// checkout, so pass its absolute root explicitly instead of relying on the
+	// bridge's (often different) working directory. Packaged builds can place
+	// the same runtime under Resources/presentation; an explicit user env still
+	// wins and is never overwritten.
+	env = append(env, presentationRuntimeEnv(cwd)...)
 
 	a.mu.Lock()
 	a.resolvedBinaryPath = resolved.Path
@@ -4649,6 +4669,141 @@ func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
 	a.bridgeCwd = cwd
 	a.mu.Unlock()
 	return client, nil
+}
+
+func presentationRuntimeEnv(cwd string) []string {
+	rootExplicit := strings.TrimSpace(os.Getenv("OFFICECLI_MOP_PRESENTATION_ROOT")) != "" ||
+		strings.TrimSpace(os.Getenv("PRESENTATION_SOURCE_DIR")) != ""
+	nodeExplicit := strings.TrimSpace(os.Getenv("OFFICECLI_MOP_SKILL_NODE")) != ""
+	env := make([]string, 0, 3)
+	if !nodeExplicit {
+		if node := presentationNodeExecutable(); node != "" {
+			env = append(env, "OFFICECLI_MOP_SKILL_NODE="+node)
+		}
+	}
+	if rootExplicit {
+		if len(env) == 0 {
+			return nil
+		}
+		return env
+	}
+	candidates := make([]string, 0, 5)
+	if strings.TrimSpace(cwd) != "" {
+		candidates = append(candidates,
+			filepath.Join(cwd, "pptx"),
+			filepath.Join(cwd, "..", "pptx"),
+		)
+	}
+	if processCwd, err := os.Getwd(); err == nil && processCwd != cwd {
+		candidates = append(candidates,
+			filepath.Join(processCwd, "pptx"),
+			filepath.Join(processCwd, "..", "pptx"),
+		)
+	}
+	// GUI-launched macOS apps often have `/` as their real cwd but retain the
+	// launch shell's PWD. Include it as a local-development discovery hint.
+	if envPWD := strings.TrimSpace(os.Getenv("PWD")); envPWD != "" && envPWD != cwd {
+		candidates = append(candidates,
+			filepath.Join(envPWD, "pptx"),
+			filepath.Join(envPWD, "..", "pptx"),
+		)
+	}
+	if executable, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(executable)
+		candidates = append(candidates,
+			filepath.Join(exeDir, "..", "Resources", "presentation"),
+			filepath.Join(exeDir, "presentation"),
+		)
+	}
+	for _, candidate := range candidates {
+		root, err := filepath.Abs(candidate)
+		if err != nil {
+			continue
+		}
+		if presentationRuntimeRootValid(root) {
+			return append(env,
+				"PRESENTATION_SOURCE_DIR="+root,
+				"OFFICECLI_MOP_PRESENTATION_ROOT="+root,
+			)
+		}
+	}
+	if len(env) == 0 {
+		return nil
+	}
+	return env
+}
+
+func presentationNodeExecutable() string {
+	if executable, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(executable)
+		for _, candidate := range []string{
+			filepath.Join(exeDir, "..", "Resources", "mop-runtime", "bin", nodeExecutableName()),
+			filepath.Join(exeDir, "mop-runtime", "bin", nodeExecutableName()),
+		} {
+			if resolved := validPresentationNodeExecutable(candidate); resolved != "" {
+				return resolved
+			}
+		}
+	}
+	if node, err := exec.LookPath("node"); err == nil {
+		if resolved := validPresentationNodeExecutable(node); resolved != "" {
+			return resolved
+		}
+	}
+	// Finder-launched macOS apps typically do not inherit the user's Homebrew
+	// PATH. Check the standard package-manager locations so a local development
+	// build can still launch the MOP worker without requiring a shell wrapper.
+	for _, candidate := range []string{
+		"/opt/homebrew/bin/node",
+		"/usr/local/bin/node",
+		"/usr/bin/node",
+	} {
+		if resolved := validPresentationNodeExecutable(candidate); resolved != "" {
+			return resolved
+		}
+	}
+	return ""
+}
+
+func nodeExecutableName() string {
+	if runtime.GOOS == "windows" {
+		return "node.exe"
+	}
+	return "node"
+}
+
+func validPresentationNodeExecutable(candidate string) string {
+	candidate = strings.TrimSpace(candidate)
+	if candidate == "" {
+		return ""
+	}
+	resolved, err := filepath.Abs(candidate)
+	if err != nil {
+		return ""
+	}
+	info, err := os.Stat(resolved)
+	if err != nil || !info.Mode().IsRegular() {
+		return ""
+	}
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0 {
+		return ""
+	}
+	return resolved
+}
+
+func presentationRuntimeRootValid(root string) bool {
+	for _, relative := range []string{
+		"package.json",
+		filepath.Join("node_modules", "vite", "dist", "node", "index.js"),
+		filepath.Join("bos", "dist", "mop-wasm", "pkg", "mop_wasm_bg.wasm"),
+		filepath.Join("tools", "fixtures", "blank-presentation", "content.json"),
+	} {
+		info, err := os.Stat(filepath.Join(root, relative))
+		if err != nil || info.IsDir() {
+			return false
+		}
+	}
+	return true
 }
 
 func (a *App) ensureLoginManagerLocked() *login.Manager {

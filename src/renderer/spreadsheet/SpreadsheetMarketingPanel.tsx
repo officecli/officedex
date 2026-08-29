@@ -875,9 +875,9 @@ export function SpreadsheetMarketingPanel({
             value={ratio}
             disabled={working}
             options={[
-              { value: "square", label: t("dialogue.imageRatio.square") },
-              { value: "landscape", label: t("dialogue.imageRatio.landscape") },
-              { value: "portrait", label: t("dialogue.imageRatio.portrait") },
+              { value: "square", label: t("home.imageRatio.square") },
+              { value: "landscape", label: t("home.imageRatio.landscape") },
+              { value: "portrait", label: t("home.imageRatio.portrait") },
             ]}
             onChange={(value) => setRatio(value as ImageRatio)}
           />

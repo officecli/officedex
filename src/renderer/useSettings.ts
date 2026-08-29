@@ -20,7 +20,7 @@ const FALLBACK: UserSettings = {
 };
 
 // Cross-instance broadcast: multiple components call useSettings() independently
-// (App, SettingsScreen, DialogueScreen). Without this, a successful update in
+// (App, SettingsScreen, document workspaces). Without this, a successful update in
 // one instance never reaches the others — they keep showing stale state until
 // the page is reloaded.
 const settingsBus =

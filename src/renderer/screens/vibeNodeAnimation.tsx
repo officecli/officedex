@@ -4,9 +4,7 @@ import { BarChartOutlined, PictureOutlined } from "../ui/icons";
 import type { VibeProjectTreeNode, VibeVisualAsset } from "../../shared/types";
 import { workerSetTimeout, workerClearTimeout } from "../workerTimer";
 
-// Shared "living tree" node-drawing animation primitives. Extracted from DialogueScreens
-// so other surfaces can reuse the exact same typewriter + timing behaviour without
-// importing the multi-thousand-line DialogueScreens module.
+// Shared living-tree node-drawing animation primitives for staged document surfaces.
 
 export const VIBE_NODE_DRAWING_MS = 1400;
 export const IDEA_NODE_DRAWING_MS = VIBE_NODE_DRAWING_MS;

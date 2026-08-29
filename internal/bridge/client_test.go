@@ -496,6 +496,9 @@ func TestInvokeGenerateOpensSessionFirst(t *testing.T) {
 	if args["local_preview"] != true {
 		t.Errorf("local_preview = %v, want true", args["local_preview"])
 	}
+	if args["pptx_backend"] != "mop-skill" {
+		t.Errorf("pptx_backend = %v, want mop-skill for OfficeDex PPTX generation", args["pptx_backend"])
+	}
 	fake.writeResponse(t, second.idString(), map[string]any{
 		"task_id":    "task-x",
 		"session_id": "sess-1",

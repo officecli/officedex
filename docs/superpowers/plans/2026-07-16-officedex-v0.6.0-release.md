@@ -527,7 +527,6 @@ git commit -m "release: prepare OfficeDex 0.6.0 metadata"
 - Create: `docs/security/v0.6.0-dependency-risk.md`
 - Delete: `.superpowers/brainstorm/**`
 - Delete: root HTML design exploration files
-- Delete: `output-pptxgenjs-v9/**`
 
 - [ ] **Step 1: Record the post-update production audit**
 
@@ -551,7 +550,6 @@ deck-animation-options-v2.html
 deck-animation-options.html
 node-draw-animation-demo.html
 ppt-complete-layout-options.html
-output-pptxgenjs-v9/
 ```
 
 Keep `marketing/ppt-launch-video/` and `docs/superpowers/`.
@@ -568,7 +566,7 @@ Expected: only intentional release changes remain; no `.superpowers/brainstorm/s
 - [ ] **Step 4: Commit**
 
 ```bash
-git add -A docs/security .superpowers '*.html' output-pptxgenjs-v9
+git add -A docs/security .superpowers '*.html'
 git commit -m "chore: clean OfficeDex 0.6.0 release tree"
 ```
 

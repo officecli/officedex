@@ -238,21 +238,12 @@ export interface BridgeEvent {
 
 export interface TaskHistoryEntry {
   taskId: string;
+  createdAt?: string;
   conversationId?: string;
   parentTaskId?: string;
   workspaceId?: string;
   workspacePath?: string;
   events: BridgeEvent[];
-}
-
-export interface WorkspaceConversationSummary {
-  conversationId: string;
-  firstTaskId: string;
-  latestTaskId: string;
-  title: string;
-  status: DesktopTask["status"];
-  documentType?: string;
-  updatedAt?: string;
 }
 
 export interface WorkspaceSummary {
@@ -262,7 +253,6 @@ export interface WorkspaceSummary {
   active: boolean;
   updatedAt?: string;
   lastActiveAt?: string;
-  conversations: WorkspaceConversationSummary[];
 }
 
 export interface Artifact {
@@ -547,13 +537,18 @@ export interface ImageTemplatePublishRequest {
 
 export interface DesktopTask {
   id: string;
+  createdAt?: string;
   workspaceId?: string;
   workspacePath?: string;
-  /** Groups related tasks into a single conversation view. First task uses its own id as conversationId. */
+  /** Internal lineage key for related runs. It is not a user-visible chat identifier. */
   conversationId: string;
-  /** The task that this task is a continuation of (for conversation ordering). */
+  /** The run that this run continues. */
   parentTaskId?: string;
   status: "starting" | "running" | "question" | "plan_review" | "completed" | "failed" | "cancelled";
+  /** Renderer-only optimistic lock while an interactive response is being replayed or accepted. */
+  interactiveResponsePending?: boolean;
+  /** The Respond call returned; wait for a durable post-gate event before releasing the lock. */
+  interactiveResponseAccepted?: boolean;
   documentType?: string;
   topic?: string;
   events: BridgeEvent[];
@@ -945,6 +940,7 @@ export interface DesktopAPI {
   previewArtifact(artifact: Artifact): Promise<void>;
   issuePreviewToken(artifact: Artifact): Promise<PreviewGrant>;
   revokePreviewToken(token: string): Promise<void>;
+  createLivePptxDraft(taskId: string): Promise<{ filePath: string; fileName: string }>;
   prepareXlsxEditor(previewToken: string): Promise<PrepareXlsxEditorResult>;
   saveXlsxEditor(input: SaveXlsxEditorInput): Promise<SaveXlsxEditorResult>;
   closeXlsxEditor(input: CloseXlsxEditorInput): Promise<void>;
@@ -964,12 +960,11 @@ export interface DesktopAPI {
   updateSettings(patch: Partial<UserSettings>): Promise<UserSettings>;
   getDefaultWorkspaceDir(): Promise<string>;
   listWorkspaces(): Promise<WorkspaceSummary[]>;
-  listChats(): Promise<WorkspaceConversationSummary[]>;
   listRecentFiles(workspaceId?: string): Promise<RecentFile[]>;
   removeRecentFile(filePath: string): Promise<void>;
+  deleteDocument(taskId: string): Promise<void>;
   renameWorkspace(workspaceId: string, name: string): Promise<WorkspaceSummary>;
   openRecentFile(file: RecentFile): Promise<Artifact>;
-  deleteConversation(conversationId: string): Promise<void>;
   addWorkspace(path: string): Promise<WorkspaceSummary>;
   selectWorkspace(workspaceId: string): Promise<WorkspaceSummary>;
   removeWorkspace(workspaceId: string): Promise<void>;

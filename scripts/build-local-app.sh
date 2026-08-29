@@ -85,7 +85,8 @@ echo "[build-local-app] building OfficeDex.app"
 (
   cd "${OFFICEDEX_DIR}"
   APP_VERSION="$(node -p 'require(`./package.json`).version')"
-  env -u GOROOT wails build -ldflags "-X main.appVersion=${APP_VERSION}"
+  VITE_LEARNOF_PPTX_URL="http://127.0.0.1:4178/" \
+    env -u GOROOT wails build -ldflags "-X main.appVersion=${APP_VERSION} -X main.learnofSourceRoot=${REPO_ROOT}/pptx"
 )
 verify_app_executable
 

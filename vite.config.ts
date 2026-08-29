@@ -4,7 +4,8 @@ import { defineConfig, type Plugin, type ResolvedConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
 
-const realE2E = Boolean(process.env.VITE_OFFICEDEX_REAL_E2E_ENDPOINT);
+const realE2EEndpoint = process.env.VITE_OFFICEDEX_REAL_E2E_ENDPOINT?.trim();
+const realE2E = Boolean(realE2EEndpoint);
 const alias = [{ find: "@vo-ui/backend", replacement: fileURLToPath(new URL("./src/renderer/ui/backend.ts", import.meta.url)) }];
 
 const sdkSheetAssetRoutes = [
@@ -95,7 +96,16 @@ export default defineConfig({
     alias,
     dedupe: ["react", "react-dom"],
   },
-  server: realE2E ? { hmr: false } : undefined,
+  server: realE2E && realE2EEndpoint ? {
+    hmr: false,
+    proxy: {
+      "/__officedex_bridge": {
+        target: realE2EEndpoint,
+        changeOrigin: true,
+        rewrite: (requestPath) => requestPath.replace(/^\/__officedex_bridge/, ""),
+      },
+    },
+  } : undefined,
   build: {
     outDir: "dist",
     emptyOutDir: true,

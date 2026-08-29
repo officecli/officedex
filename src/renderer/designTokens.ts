@@ -89,10 +89,10 @@ export const theme = {
 export { fontFamily, fontFamilyHeading };
 
 export const pageMapping = [
-  { page: "_1", mappedTo: "Dialogue running state: Bridge Events execution pipeline + docked composer" },
+  { page: "_1", mappedTo: "Document running state: execution pipeline + docked intent controls" },
   { page: "_2", mappedTo: "New generation empty state: target artifact selection, mode, runtime, and bottom input" },
-  { page: "_3", mappedTo: "Dialogue completed state: result card, open file, session artifacts/sources sidebar" },
-  { page: "_4", mappedTo: "Dialogue confirmation state: questions needing user confirmation, quick options, task status sidebar" },
+  { page: "_3", mappedTo: "Document completed state: artifact preview and file actions" },
+  { page: "_4", mappedTo: "Document confirmation state: inline questions, quick options, and run status" },
   { page: "_5", mappedTo: "Connection failure page: bridge unavailable notice, retry, open settings, diagnostics" },
   { page: "_6", mappedTo: "App settings page: generation defaults, OfficeCLI connection, workspace, appearance config" },
   { page: "_7", mappedTo: "Login page: email/password login, Google sign-in, workspace sync prompt" },

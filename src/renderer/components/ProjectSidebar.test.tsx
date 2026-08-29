@@ -10,7 +10,6 @@ const workspaces: WorkspaceSummary[] = [{
   path: "/tmp/client-a",
   name: "Client A",
   active: true,
-  conversations: [],
 }];
 
 afterEach(() => {
@@ -96,7 +95,7 @@ describe("ProjectSidebar", () => {
     expect(screen.getByRole("button", { name: "luyang@example.com" })).toBeTruthy();
   });
 
-  it("keeps task history, settings, and account keyboard-accessible", () => {
+  it("keeps home, settings, and account keyboard-accessible", () => {
     const props = renderSidebar();
     fireEvent.click(screen.getByRole("button", { name: "Home" }));
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
@@ -104,6 +103,34 @@ describe("ProjectSidebar", () => {
     expect(props.onSelectAll).toHaveBeenCalled();
     expect(props.onOpenSettings).toHaveBeenCalledOnce();
     expect(props.onOpenAccount).toHaveBeenCalledOnce();
+  });
+
+  it("shows documents beneath their project and opens the selected document", () => {
+    const onOpenDocument = vi.fn();
+    renderSidebar({
+      documents: [{ id: "run-doc", title: "Quarterly report.docx", documentType: "docx", workspaceId: "ws-a", status: "running" }],
+      activeDocumentId: "run-doc",
+      onOpenDocument,
+    });
+    const documentButton = screen.getByRole("button", { name: /Quarterly report\.docx/i });
+    expect(documentButton).toHaveAttribute("data-active", "true");
+    fireEvent.click(documentButton);
+    expect(onOpenDocument).toHaveBeenCalledWith(expect.objectContaining({ id: "run-doc", documentType: "docx" }));
+    expect(screen.queryByText(/No chats|Legacy task history/i)).toBeNull();
+  });
+
+  it("deletes a sidebar document after confirmation without implying the file is deleted", async () => {
+    const onDeleteDocument = vi.fn(async () => undefined);
+    renderSidebar({
+      documents: [{ id: "run-doc", title: "Quarterly report.docx", documentType: "docx", workspaceId: "ws-a", status: "failed" }],
+      onDeleteDocument,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete Quarterly report.docx" }));
+    expect(await screen.findByText(/files on disk are not affected/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(onDeleteDocument).toHaveBeenCalledWith(expect.objectContaining({ id: "run-doc" }));
   });
 
   it("supports compact project navigation while keeping every action labelled", () => {

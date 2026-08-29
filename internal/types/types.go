@@ -327,6 +327,7 @@ type PreviewGrant struct {
 // the renderer so it can replay them into TaskState on startup.
 type TaskHistoryEntry struct {
 	TaskID         string        `json:"taskId"`
+	CreatedAt      string        `json:"createdAt,omitempty"`
 	ConversationID string        `json:"conversationId,omitempty"`
 	ParentTaskID   string        `json:"parentTaskId,omitempty"`
 	WorkspaceID    string        `json:"workspaceId,omitempty"`
@@ -334,24 +335,13 @@ type TaskHistoryEntry struct {
 	Events         []BridgeEvent `json:"events"`
 }
 
-type WorkspaceConversationSummary struct {
-	ConversationID string `json:"conversationId"`
-	FirstTaskID    string `json:"firstTaskId"`
-	LatestTaskID   string `json:"latestTaskId"`
-	Title          string `json:"title"`
-	Status         string `json:"status"`
-	DocumentType   string `json:"documentType,omitempty"`
-	UpdatedAt      string `json:"updatedAt,omitempty"`
-}
-
 type WorkspaceSummary struct {
-	ID            string                         `json:"id"`
-	Path          string                         `json:"path"`
-	Name          string                         `json:"name"`
-	Active        bool                           `json:"active"`
-	UpdatedAt     string                         `json:"updatedAt,omitempty"`
-	LastActiveAt  string                         `json:"lastActiveAt,omitempty"`
-	Conversations []WorkspaceConversationSummary `json:"conversations"`
+	ID           string `json:"id"`
+	Path         string `json:"path"`
+	Name         string `json:"name"`
+	Active       bool   `json:"active"`
+	UpdatedAt    string `json:"updatedAt,omitempty"`
+	LastActiveAt string `json:"lastActiveAt,omitempty"`
 }
 
 type WhoAmIMode string

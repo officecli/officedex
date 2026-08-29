@@ -33,10 +33,10 @@ const KEY_DIRECTIONS: Record<string, Waiting2048Direction | undefined> = {
 };
 
 const DIRECTION_LABEL_KEYS: Record<Waiting2048Direction, string> = {
-  UP: "dialogue.waiting2048.moveUp",
-  DOWN: "dialogue.waiting2048.moveDown",
-  LEFT: "dialogue.waiting2048.moveLeft",
-  RIGHT: "dialogue.waiting2048.moveRight",
+  UP: "waiting2048.moveUp",
+  DOWN: "waiting2048.moveDown",
+  LEFT: "waiting2048.moveLeft",
+  RIGHT: "waiting2048.moveRight",
 };
 
 const DIRECTION_GLYPHS: Record<Waiting2048Direction, string> = {
@@ -52,7 +52,7 @@ export function Waiting2048Game({ engine = defaultEngine }: { engine?: Waiting20
   const [game, setGame] = useState<Waiting2048GameState>(() => engine.startGame());
   const [bestScore, setBestScore] = useState(() => loadWaiting2048BestScore());
   const score = game.score;
-  const boardLabel = t("dialogue.waiting2048.boardLabel");
+  const boardLabel = t("waiting2048.boardLabel");
   const isGameOver = game.gameStatus === "GAME_OVER";
   const isWon = game.gameStatus === "WON";
 
@@ -86,11 +86,11 @@ export function Waiting2048Game({ engine = defaultEngine }: { engine?: Waiting20
     return (
       <div className="waiting-2048 waiting-2048-collapsed">
         <div>
-          <strong>{t("dialogue.waiting2048.title")}</strong>
-          <span>{t("dialogue.waiting2048.collapsedHint")}</span>
+          <strong>{t("waiting2048.title")}</strong>
+          <span>{t("waiting2048.collapsedHint")}</span>
         </div>
         <Button size="small" onClick={() => setExpanded(true)}>
-          {t("dialogue.waiting2048.play")}
+          {t("waiting2048.play")}
         </Button>
       </div>
     );
@@ -100,29 +100,29 @@ export function Waiting2048Game({ engine = defaultEngine }: { engine?: Waiting20
     <div
       className="waiting-2048 waiting-2048-expanded"
       role="region"
-      aria-label={t("dialogue.waiting2048.regionLabel")}
+      aria-label={t("waiting2048.regionLabel")}
       tabIndex={0}
       onKeyDown={onKeyDown}
     >
       <div className="waiting-2048-header">
         <div>
-          <strong>{t("dialogue.waiting2048.title")}</strong>
-          <span>{t("dialogue.waiting2048.instructions")}</span>
+          <strong>{t("waiting2048.title")}</strong>
+          <span>{t("waiting2048.instructions")}</span>
         </div>
         <div className="waiting-2048-actions">
           <Button size="small" icon={<RotateCcw size={14} />} onClick={restart}>
-            {t("dialogue.waiting2048.restart")}
+            {t("waiting2048.restart")}
           </Button>
           <Button size="small" icon={<X size={14} />} onClick={() => setExpanded(false)}>
-            {t("dialogue.waiting2048.collapse")}
+            {t("waiting2048.collapse")}
           </Button>
         </div>
       </div>
       <div className="waiting-2048-score-row">
-        <ScoreBox label={t("dialogue.waiting2048.score")} value={score} />
-        <ScoreBox label={t("dialogue.waiting2048.best")} value={bestScore} />
-        {isGameOver ? <div className="waiting-2048-state">{t("dialogue.waiting2048.gameOver")}</div> : null}
-        {isWon ? <div className="waiting-2048-state">{t("dialogue.waiting2048.won")}</div> : null}
+        <ScoreBox label={t("waiting2048.score")} value={score} />
+        <ScoreBox label={t("waiting2048.best")} value={bestScore} />
+        {isGameOver ? <div className="waiting-2048-state">{t("waiting2048.gameOver")}</div> : null}
+        {isWon ? <div className="waiting-2048-state">{t("waiting2048.won")}</div> : null}
       </div>
       <div className="waiting-2048-board" role="grid" aria-label={boardLabel}>
         {tiles.map((value, index) => (
@@ -130,13 +130,13 @@ export function Waiting2048Game({ engine = defaultEngine }: { engine?: Waiting20
             key={`${index}-${value}`}
             className={`waiting-2048-tile waiting-2048-tile-${Math.min(value, 2048) || "empty"}`}
             role="gridcell"
-            aria-label={value ? String(value) : t("dialogue.waiting2048.emptyCell")}
+            aria-label={value ? String(value) : t("waiting2048.emptyCell")}
           >
             {value || ""}
           </div>
         ))}
       </div>
-      <div className="waiting-2048-controls" aria-label={t("dialogue.waiting2048.controlsLabel")}>
+      <div className="waiting-2048-controls" aria-label={t("waiting2048.controlsLabel")}>
         {(["UP", "LEFT", "DOWN", "RIGHT"] as Waiting2048Direction[]).map((direction) => (
           <button
             key={direction}

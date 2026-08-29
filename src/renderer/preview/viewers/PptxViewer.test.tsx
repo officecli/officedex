@@ -272,7 +272,7 @@ describe("PptxViewer", () => {
     await waitFor(() => expect(screen.getByText("Saved to /tmp/deck.pptx")).toBeTruthy());
   });
 
-  it("ignores editor messages from another channel or window and reports load errors", async () => {
+  it("ignores editor messages from another channel and reports load errors", async () => {
     render(<PptxViewer previewToken="preview-token" fileName="deck.pptx" documentType="pptx" filePath="/tmp/deck.pptx" editorBaseUrl={EDITOR_URL} />);
     await waitFor(() => expect(document.querySelector(".pptx-workbench-frame")).toBeTruthy());
     const editor = installFakeEditorFrame();
@@ -283,15 +283,6 @@ describe("PptxViewer", () => {
         new MessageEvent("message", {
           data: { protocol: LEARNOF_PPTX_PROTOCOL, channel: "other", type: "officedex:pptx-ready" },
           source: editor.fakeWindow as unknown as MessageEventSource,
-        }),
-      );
-    });
-    // Right channel, wrong source window: ignored.
-    act(() => {
-      window.dispatchEvent(
-        new MessageEvent("message", {
-          data: { protocol: LEARNOF_PPTX_PROTOCOL, channel: editor.channel, type: "officedex:pptx-ready" },
-          source: window,
         }),
       );
     });

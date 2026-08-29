@@ -1,6 +1,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, CheckCircle2, ExternalLink, FolderOpen, X } from "lucide-react";
+import { ArrowLeft, CheckCircle2, FolderOpen, RotateCcw, X } from "lucide-react";
 import type { Artifact, PreviewGrant, TimelineDeck, TimelineNode } from "../../shared/types";
+import type { VibeReplayFeed } from "../presentation/vibeReplay";
 import { officecli } from "../bridge";
 import { useT } from "../i18n";
 import { LoadingState } from "../preview/components/LoadingState";
@@ -18,9 +19,9 @@ import "../preview/PreviewApp.css";
 interface PreviewPanelProps {
   grant: PreviewGrant | null;
   onClose: () => void;
-  /** The artifact behind the grant — drives the footer actions (reveal / open externally). */
+  /** The artifact behind the grant — drives the footer reveal action. */
   artifact?: Artifact | null;
-  live?: unknown;
+  live?: VibeReplayFeed;
   timelineTaskId?: string;
   timelineNodeId?: string | null;
   onOpenTimelineNode?: (deck: TimelineDeck, node: TimelineNode) => void | Promise<void>;
@@ -33,7 +34,7 @@ interface PreviewPanelProps {
 
 const PREVIEW_PANEL_SLIDE_MS = 420;
 
-export function PreviewPanel({ grant, onClose, artifact }: PreviewPanelProps) {
+export function PreviewPanel({ grant, onClose, artifact, live, onReplayGeneration }: PreviewPanelProps) {
   const t = useT();
   const [closing, setClosing] = useState(false);
   const [documentDirty, setDocumentDirty] = useState(false);
@@ -88,6 +89,7 @@ export function PreviewPanel({ grant, onClose, artifact }: PreviewPanelProps) {
             fileName={fileName}
             documentType={documentType}
             filePath={artifact?.filePath}
+            live={live}
           />
         );
       case "docx":
@@ -141,21 +143,19 @@ export function PreviewPanel({ grant, onClose, artifact }: PreviewPanelProps) {
             </span>
           </div>
           <div className="preview-panel-footer-actions">
+            {onReplayGeneration ? (
+              <button type="button" className="preview-action-btn" onClick={onReplayGeneration}>
+                <RotateCcw size={15} strokeWidth={1.8} />
+                <span>Replay generation</span>
+              </button>
+            ) : null}
             <button
               type="button"
               className="preview-action-btn"
               onClick={() => officecli.showItemInFolder(artifact.filePath).catch(() => {})}
             >
               <FolderOpen size={15} strokeWidth={1.8} />
-              <span>{t("dialogue.completed.showInFolder")}</span>
-            </button>
-            <button
-              type="button"
-              className="preview-action-btn primary"
-              onClick={() => officecli.openPath(artifact.filePath).catch(() => {})}
-            >
-              <ExternalLink size={15} strokeWidth={1.8} />
-              <span>{t("preview.openExternal")}</span>
+              <span>{t("preview.showInFolder")}</span>
             </button>
           </div>
         </footer>

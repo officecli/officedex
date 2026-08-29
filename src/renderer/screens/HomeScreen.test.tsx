@@ -30,6 +30,7 @@ function renderHome(overrides: Partial<React.ComponentProps<typeof HomeScreen>> 
     onRemoveFile: vi.fn(),
     onPickTaskFile: vi.fn(),
     onPickTaskDirectory: vi.fn(),
+    onPickReferenceImages: vi.fn(async () => []),
     onStartTask: vi.fn(),
     onOpenTask: vi.fn(),
     onRetryTask: vi.fn(),
@@ -76,6 +77,29 @@ describe("HomeScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: "Brand Product Launch" }));
     expect(screen.getByRole("textbox", { name: "Describe the result you want" })).toHaveValue("Create a brand product launch covering the product story, key benefits, visual direction, and go-to-market plan.");
     expect(props.onStartTask).not.toHaveBeenCalled();
+  });
+
+  it("keeps image and GIF controls in Home instead of opening a chat form", async () => {
+    const onPickReferenceImages = vi.fn(async () => ["/tmp/product.png"]);
+    const props = renderHome({ onPickReferenceImages });
+    fireEvent.click(screen.getByRole("button", { name: "Image" }));
+    fireEvent.click(screen.getByRole("button", { name: /Add reference|Add source or reference/ }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /^Reference images/ }));
+    expect(await screen.findByText("product.png")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Landscape" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Describe the result you want" }), { target: { value: "Create a product image" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
+    await waitFor(() => expect(props.onStartTask).toHaveBeenCalledWith(expect.objectContaining({
+      documentType: "img", referenceImages: ["/tmp/product.png"], imageRatio: "landscape",
+    })));
+
+    cleanup();
+    const gifProps = renderHome();
+    fireEvent.click(screen.getByRole("button", { name: "GIF" }));
+    fireEvent.click(screen.getByRole("button", { name: "24 FPS" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Describe the result you want" }), { target: { value: "Create an animated GIF" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
+    await waitFor(() => expect(gifProps.onStartTask).toHaveBeenCalledWith(expect.objectContaining({ documentType: "gif", fps: 24 })));
   });
 
   it("starts directly and leaves progressive review to the production stage", async () => {

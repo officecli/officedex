@@ -130,7 +130,6 @@ git commit -m "test: define PPTX Vibe generation contract"
 - Create: `internal/cli/vibe_llm_synthesis.go`
 - Create: `internal/cli/vibe_generate_cmd.go`
 - Create: `internal/cli/vibe_magic.go`
-- Create: `internal/runtime/pptxgenjs.go`
 - Create: `pkg/officegen/pptist_layout.go`
 - Test: `internal/cli/vibe_tree_test.go`
 - Test: `internal/cli/vibe_flow_test.go`
@@ -198,7 +197,7 @@ gofmt -w \
   internal/cli/vibe_tree.go internal/cli/vibe_flow.go internal/cli/vibe_llm_synthesis.go \
   internal/cli/vibe_generate_cmd.go internal/cli/vibe_magic.go \
   internal/cli/vibe_tree_test.go internal/cli/vibe_flow_test.go internal/cli/vibe_magic_test.go \
-  internal/cli/vibe_report_test.go internal/runtime/pptxgenjs.go internal/runtime/agent_render.go \
+  internal/cli/vibe_report_test.go internal/runtime/agent_render.go \
   pkg/officegen/pptist_layout.go pkg/officegen/pptx_generator.go \
   pkg/officegen/pptx_narrative_layouts.go pkg/officegen/pptx_style.go
 env -u GOROOT go test ./internal/cli ./internal/runtime ./pkg/officegen -count=1

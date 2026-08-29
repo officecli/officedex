@@ -436,13 +436,6 @@ func TestNoProjectGenerateUsesDefaultWorkspaceWithoutActivatingProject(t *testin
 	if active.ID != project.ID {
 		t.Fatalf("active workspace = %q, want project %q", active.ID, project.ID)
 	}
-	chats, err := store.QueryChatSummaries(ctx, 10)
-	if err != nil {
-		t.Fatalf("QueryChatSummaries: %v", err)
-	}
-	if len(chats) != 1 || chats[0].ConversationID != "chat-no-project" {
-		t.Fatalf("chat summaries = %#v, want chat-no-project", chats)
-	}
 }
 
 func TestListWorkspacesMigratesDefaultWorkspaceProjectToChats(t *testing.T) {
@@ -483,13 +476,6 @@ func TestListWorkspacesMigratesDefaultWorkspaceProjectToChats(t *testing.T) {
 	}
 	if len(workspaces) != 0 {
 		t.Fatalf("workspaces = %#v, want no default workspace project", workspaces)
-	}
-	chats, err := app.ListChats()
-	if err != nil {
-		t.Fatalf("ListChats: %v", err)
-	}
-	if len(chats) != 1 || chats[0].ConversationID != "legacy-chat" {
-		t.Fatalf("chats = %#v, want migrated legacy-chat", chats)
 	}
 }
 

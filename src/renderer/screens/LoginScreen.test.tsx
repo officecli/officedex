@@ -132,6 +132,32 @@ describe("LoginScreen", () => {
     expect(screen.getByRole("button", { name: /sign out/i })).toBeTruthy();
   });
 
+  it("returns to the previous page after a login success event", async () => {
+    whoamiSpy.mockResolvedValueOnce({ mode: "anonymous" });
+    whoamiSpy.mockResolvedValueOnce({ mode: "logged_in", userId: "user-123" });
+    const onAuthenticated = vi.fn();
+    const { LoginScreen } = await import("./SettingsScreens");
+    render(<LoginScreen onAuthenticated={onAuthenticated} />);
+    await waitFor(() => expect(whoamiSpy).toHaveBeenCalledTimes(1));
+    fireEvent.click(await screen.findByRole("button", { name: /sign in via browser/i }));
+    await waitFor(() => expect(loginSpy).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      authListener!({ type: "success" });
+    });
+
+    await waitFor(() => expect(onAuthenticated).toHaveBeenCalledTimes(1));
+  });
+
+  it("shows a button to return from the signed-in page", async () => {
+    whoamiSpy.mockResolvedValueOnce({ mode: "logged_in", userId: "user-123" });
+    const onReturn = vi.fn();
+    const { LoginScreen } = await import("./SettingsScreens");
+    render(<LoginScreen onReturn={onReturn} />);
+    fireEvent.click(await screen.findByRole("button", { name: /back to officedex/i }));
+    expect(onReturn).toHaveBeenCalledTimes(1);
+  });
+
   it("does not load or show invite code in the signed-in login screen", async () => {
     whoamiSpy.mockResolvedValueOnce({ mode: "logged_in", userId: "user-123" });
     const { LoginScreen } = await import("./SettingsScreens");

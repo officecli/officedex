@@ -98,6 +98,7 @@ async function ensureInstance(args) {
     auth: demoMode && args.demo_auth === "logged_in" ? "logged_in" : "anonymous",
     credits: demoMode && Number.isSafeInteger(args.demo_credits) ? args.demo_credits : 0,
   };
+  const learnofEnabled = mode === "browser" || args.learnof === true;
   const devOfficeCLIBinary = mode === "browser" ? resolveDevOfficeCLIBinary(args.dev_officecli_binary) : "";
   const id = instanceID(scope, worktree, mode);
   const dir = path.join(p.instances, id);
@@ -109,12 +110,12 @@ async function ensureInstance(args) {
     let instance = instances.get(id) || await readJSON(path.join(dir, "state.json"), null);
     if (instance) migrateInstanceState(instance);
     let reused = false;
-    if (instance && instance.mode === mode && instance.dev_officecli_binary === devOfficeCLIBinary && await instanceHealthy(instance, { fingerprint: true, demoMode, demoSession })) {
+    if (instance && instance.mode === mode && instance.learnof_enabled === learnofEnabled && instance.dev_officecli_binary === devOfficeCLIBinary && await instanceHealthy(instance, { fingerprint: true, demoMode, demoSession, learnofEnabled })) {
       reused = true;
     } else {
       const preferredPorts = instance ? persistentPorts(instance) : null;
       if (instance) await stopInstanceRecord(instance, "replace unhealthy instance", { tolerateMismatch: true });
-      instance = await startInstance({ id, scope, mode, demoMode, demoSession, devOfficeCLIBinary, worktree, dir, preferredPorts });
+      instance = await startInstance({ id, scope, mode, learnofEnabled, demoMode, demoSession, devOfficeCLIBinary, worktree, dir, preferredPorts });
       instances.set(id, instance);
     }
     const lease = await createLease(instance, args.lease_ttl_ms);
@@ -126,8 +127,8 @@ async function ensureInstance(args) {
   }
 }
 
-async function startInstance({ id, scope, mode, demoMode = false, demoSession = { auth: "anonymous", credits: 0 }, devOfficeCLIBinary = "", worktree, dir, preferredPorts = null, avoidPorts = new Set() }) {
-  const ports = allocateInstancePorts(id, { preferredPorts, avoidPorts, mode });
+async function startInstance({ id, scope, mode, learnofEnabled = mode === "browser", demoMode = false, demoSession = { auth: "anonymous", credits: 0 }, devOfficeCLIBinary = "", worktree, dir, preferredPorts = null, avoidPorts = new Set() }) {
+  const ports = allocateInstancePorts(id, { preferredPorts, avoidPorts, mode, learnofEnabled });
   const resources = instanceResources(id, dir);
   await Promise.all([
     mkdir(resources.user_data_dir, { recursive: true }), mkdir(resources.workspace, { recursive: true }),
@@ -140,11 +141,11 @@ async function startInstance({ id, scope, mode, demoMode = false, demoSession = 
   const instance = {
     schema_version: 1, daemon_version: DAEMON_VERSION, instance_id: id, scope, mode, demo_mode: Boolean(demoMode), demo_auth: demoSession.auth, demo_credits: demoSession.credits, dev_officecli_binary: devOfficeCLIBinary, status: "starting", worktree,
     git_revision: git.revision, dirty_fingerprint: git.dirty_fingerprint, dirty: git.dirty,
-    started_at: now, updated_at: now, idle_since: null, ports, resources,
+    started_at: now, updated_at: now, idle_since: null, ports, resources, learnof_enabled: learnofEnabled,
     web_url: `http://127.0.0.1:${ports.web}`,
     api_url: `http://127.0.0.1:${ports.api}`,
     runtime_url: `http://127.0.0.1:${ports.api}/api/dev/runtime`,
-    learnof_url: mode === "browser" && Number.isInteger(ports.learnof) ? `http://127.0.0.1:${ports.learnof}` : null,
+    learnof_url: learnofEnabled && Number.isInteger(ports.learnof) ? `http://127.0.0.1:${ports.learnof}` : null,
     logs: {
       web: path.join(dir, "web.log"),
       api: path.join(dir, "api.log"),
@@ -156,12 +157,14 @@ async function startInstance({ id, scope, mode, demoMode = false, demoSession = 
   try {
     await startRuntimeServer(instance);
     const fixtureMode = Boolean(process.env.OFFICEDEX_DEVCTL_WEB_COMMAND || process.env.OFFICEDEX_DEVCTL_API_COMMAND);
+    if (learnofEnabled) {
+      instance.processes.learnof = await spawnService(instance, "learnof");
+      await waitFor(async () => fetch(instance.learnof_url).then((response) => response.ok).catch(() => false), 120_000, "learnof/pptx editor");
+    }
     if (mode === "browser") {
       const bridge = await spawnBrowserBridge(instance);
       instance.processes.api = bridge.process;
       instance.bridge_url = bridge.endpoint;
-      instance.processes.learnof = await spawnService(instance, "learnof");
-      await waitFor(async () => fetch(instance.learnof_url).then((response) => response.ok).catch(() => false), 120_000, "learnof/pptx editor");
       instance.processes.web = await spawnService(instance, "web");
       await waitFor(async () => fetch(instance.web_url).then((response) => response.ok).catch(() => false), 120_000, "browser-mode Vite web server");
     } else if (fixtureMode) {
@@ -358,6 +361,16 @@ async function spawnBrowserBridge(instance) {
     OFFICEDEX_DEV_USER_DATA_DIR: instance.resources.user_data_dir,
     OFFICEDEX_DEV_OFFICECLI_HOME: instance.resources.officecli_home,
     OFFICE_CLI_CONFIG: instance.resources.officecli_config,
+    // Browser bridge runs from the OfficeDex checkout while the progressive
+    // PPTX runtime lives in the sibling learnof/pptx checkout. Supplying the
+    // source root here lets the converter and MOP worker resolve their assets
+    // instead of silently falling back to the monolithic pipeline.
+    PRESENTATION_SOURCE_DIR: learnofWorktree(instance.worktree),
+    OFFICECLI_MOP_PRESENTATION_ROOT: learnofWorktree(instance.worktree),
+    // devd is already running under the Node executable required by the MOP
+    // authoring worker. Pass that exact executable through so browser E2E does
+    // not depend on the shell PATH inherited by the Go bridge host.
+    OFFICECLI_MOP_SKILL_NODE: process.execPath,
     TMPDIR: instance.resources.temp_dir,
   };
   if (instance.demo_mode) {
@@ -450,7 +463,7 @@ async function startRuntimeServer(instance) {
   runtimeServers.set(instance.instance_id, server);
 }
 
-async function instanceHealthy(instance, { fingerprint = false, demoMode = undefined, demoSession = undefined } = {}) {
+async function instanceHealthy(instance, { fingerprint = false, demoMode = undefined, demoSession = undefined, learnofEnabled = instance?.learnof_enabled ?? instance?.mode === "browser" } = {}) {
   if (!instance || instance.status !== "ready") return false;
   if (instance.daemon_version !== DAEMON_VERSION || !instance.resources?.officecli_home) return false;
   if (typeof demoMode === "boolean" && Boolean(instance.demo_mode) !== demoMode) return false;
@@ -475,6 +488,8 @@ async function instanceHealthy(instance, { fingerprint = false, demoMode = undef
         const liveDemo = await fetch(`${instance.bridge_url}/control/demo/session`).then((response) => response.ok ? response.json() : null).catch(() => null);
         if (!liveDemo || liveDemo.session?.auth !== demoSession.auth || liveDemo.session?.credits !== demoSession.credits) return false;
       }
+    }
+    if (learnofEnabled) {
       if (!instance.learnof_url || !instance.processes?.learnof) return false;
       const learnof = await verifyOwnedProcess(instance.processes.learnof, { requirePort: true });
       if (!learnof.ok) return false;
@@ -708,7 +723,7 @@ async function reallocatePorts(id) {
     const avoidPorts = new Set(Object.values(oldPorts).filter(Number.isInteger));
     await stopInstanceRecord(instance, "explicit port reallocation");
     const replacement = await startInstance({
-      id: instance.instance_id, scope: instance.scope, mode: instance.mode, demoMode: Boolean(instance.demo_mode),
+      id: instance.instance_id, scope: instance.scope, mode: instance.mode, learnofEnabled: Boolean(instance.learnof_enabled), demoMode: Boolean(instance.demo_mode),
       demoSession: { auth: instance.demo_auth, credits: instance.demo_credits },
       devOfficeCLIBinary: instance.dev_officecli_binary,
       worktree: instance.worktree, dir: path.join(p.instances, id), avoidPorts,
@@ -906,11 +921,11 @@ function migrateInstanceState(instance) {
   if (instance.mode === "browser" && !Number.isInteger(instance.ports.bridge) && instance.bridge_url) {
     try { instance.ports.bridge = Number(new URL(instance.bridge_url).port); } catch {}
   }
-  if (instance.mode === "browser" && !Number.isInteger(instance.ports.learnof)) {
+  if (instance.learnof_enabled && !Number.isInteger(instance.ports.learnof)) {
     const reserved = new Set(Object.values(instance.ports).filter(Number.isInteger));
     instance.ports.learnof = allocatePersistentPort(instance.instance_id, Number(process.env.OFFICEDEX_DEVCTL_LEARNOF_PORT_BASE || 4178), reserved);
   }
-  if (instance.mode === "browser" && !instance.learnof_url) {
+  if (instance.learnof_enabled && !instance.learnof_url) {
     instance.learnof_url = `http://127.0.0.1:${instance.ports.learnof}`;
   }
   return instance;
@@ -921,14 +936,14 @@ function persistentPorts(instance) {
   return { ...instance.ports };
 }
 
-function allocateInstancePorts(id, { preferredPorts = null, avoidPorts = new Set(), mode = "desktop" } = {}) {
+function allocateInstancePorts(id, { preferredPorts = null, avoidPorts = new Set(), mode = "desktop", learnofEnabled = mode === "browser" } = {}) {
   const specs = [
     ["web", Number(process.env.OFFICEDEX_DEVCTL_WEB_PORT_BASE || 3100)],
     ["api", Number(process.env.OFFICEDEX_DEVCTL_API_PORT_BASE || 18100)],
     ["wails", Number(process.env.OFFICEDEX_DEVCTL_WAILS_PORT_BASE || 34115)],
   ];
   if (mode === "browser") specs.push(["bridge", Number(process.env.OFFICEDEX_DEVCTL_BRIDGE_PORT_BASE || 37100)]);
-  if (mode === "browser") specs.push(["learnof", Number(process.env.OFFICEDEX_DEVCTL_LEARNOF_PORT_BASE || 4178)]);
+  if (learnofEnabled) specs.push(["learnof", Number(process.env.OFFICEDEX_DEVCTL_LEARNOF_PORT_BASE || 4178)]);
   const reserved = new Set(avoidPorts);
   const result = {};
   for (const [service, base] of specs) {

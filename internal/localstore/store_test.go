@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -141,12 +142,6 @@ func TestWorkspaceConversationMetadataPersists(t *testing.T) {
 	if len(summaries) != 1 {
 		t.Fatalf("workspace summaries = %d, want 1", len(summaries))
 	}
-	if len(summaries[0].Conversations) != 1 {
-		t.Fatalf("conversation summaries = %d, want 1", len(summaries[0].Conversations))
-	}
-	if summaries[0].Conversations[0].LatestTaskID != "task-2" {
-		t.Fatalf("latest task = %q, want task-2", summaries[0].Conversations[0].LatestTaskID)
-	}
 }
 
 func TestRecentFilesUpsertSortFilterAndRemove(t *testing.T) {
@@ -213,7 +208,67 @@ func TestRecentFilesValidateInputAndDefaultLimit(t *testing.T) {
 	}
 }
 
-func TestRenameWorkspacePreservesPathAndConversations(t *testing.T) {
+func TestRemoveDocumentByTaskIDRemovesMetadataButKeepsFile(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+	filePath := filepath.Join(t.TempDir(), "deck.pptx")
+	if err := os.WriteFile(filePath, []byte("deck"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordTaskContext(ctx, "task-delete", TaskContext{ConversationID: "document-delete"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordEvent(types.BridgeEvent{TaskID: "task-delete", Type: "task.completed", Payload: map[string]any{"document_type": "pptx"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordArtifact(types.Artifact{TaskID: "task-delete", FilePath: filePath, FileName: "deck.pptx", DocumentType: "pptx"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpsertRecentFile(ctx, types.RecentFile{FilePath: filePath, FileName: "deck.pptx", DocumentType: "pptx", Source: "generated", TaskID: "task-delete", ConversationID: "document-delete"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := store.RemoveDocumentByTaskID(ctx, "task-delete"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filePath); err != nil {
+		t.Fatalf("generated file was removed: %v", err)
+	}
+	history, err := store.QueryRecentTaskHistory(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(history) != 0 {
+		t.Fatalf("task history = %#v, want empty", history)
+	}
+	recent, err := store.QueryRecentFiles(ctx, "", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recent) != 0 {
+		t.Fatalf("recent files = %#v, want empty", recent)
+	}
+	documents, err := store.QueryDocuments(ctx, types.DocumentListInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(documents.Items) != 0 {
+		t.Fatalf("documents = %#v, want empty", documents.Items)
+	}
+}
+
+func TestRemoveDocumentByTaskIDRejectsRunningTask(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+	if err := store.RecordTaskContext(ctx, "task-running", TaskContext{ConversationID: "document-running"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RemoveDocumentByTaskID(ctx, "task-running"); err == nil || !strings.Contains(err.Error(), "running tasks") {
+		t.Fatalf("RemoveDocumentByTaskID error = %v, want running task rejection", err)
+	}
+}
+
+func TestRenameWorkspacePreservesPath(t *testing.T) {
 	store := newTempStore(t)
 	ctx := context.Background()
 	workspace, err := store.EnsureWorkspace(ctx, filepath.Join(t.TempDir(), "client-a"))
@@ -234,7 +289,7 @@ func TestRenameWorkspacePreservesPathAndConversations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(summaries) != 1 || summaries[0].Name != "New client name" || len(summaries[0].Conversations) != 1 || summaries[0].Conversations[0].ConversationID != "conv-rename" {
+	if len(summaries) != 1 || summaries[0].Name != "New client name" {
 		t.Fatalf("unexpected summaries after rename: %#v", summaries)
 	}
 	if _, err := store.RenameWorkspace(ctx, workspace.ID, "   "); err == nil {
@@ -281,8 +336,8 @@ func TestMigrateV5ToV6PreservesTasks(t *testing.T) {
 	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'recent_files'`).Scan(&recentTableCount); err != nil {
 		t.Fatal(err)
 	}
-	if version != 7 || taskCount != 1 || recentTableCount != 1 {
-		t.Fatalf("version=%d taskCount=%d recentTableCount=%d, want 7/1/1", version, taskCount, recentTableCount)
+	if version != 8 || taskCount != 1 || recentTableCount != 1 {
+		t.Fatalf("version=%d taskCount=%d recentTableCount=%d, want 8/1/1", version, taskCount, recentTableCount)
 	}
 }
 
@@ -452,17 +507,6 @@ func TestNoProjectConversationMetadataPersistsOutsideWorkspaces(t *testing.T) {
 		t.Fatalf("no-project workspace metadata = %q %q, want empty", standalone.WorkspaceID, standalone.WorkspacePath)
 	}
 
-	chats, err := store.QueryChatSummaries(ctx, 10)
-	if err != nil {
-		t.Fatalf("QueryChatSummaries: %v", err)
-	}
-	if len(chats) != 1 {
-		t.Fatalf("chat summaries = %d, want 1", len(chats))
-	}
-	if chats[0].ConversationID != "chat-1" || chats[0].LatestTaskID != "task-chat-1" {
-		t.Fatalf("chat summary = %#v, want chat-1/task-chat-1", chats[0])
-	}
-
 	workspaces, err := store.QueryWorkspaceSummaries(ctx, 10)
 	if err != nil {
 		t.Fatalf("QueryWorkspaceSummaries: %v", err)
@@ -470,12 +514,9 @@ func TestNoProjectConversationMetadataPersistsOutsideWorkspaces(t *testing.T) {
 	if len(workspaces) != 1 {
 		t.Fatalf("workspace summaries = %d, want 1", len(workspaces))
 	}
-	if len(workspaces[0].Conversations) != 1 || workspaces[0].Conversations[0].ConversationID != "project-conv" {
-		t.Fatalf("workspace conversations = %#v, want only project-conv", workspaces[0].Conversations)
-	}
 }
 
-func TestRemoveWorkspaceMovesConversationsToChats(t *testing.T) {
+func TestRemoveWorkspaceDetachesRunsFromWorkspace(t *testing.T) {
 	store := newTempStore(t)
 	ctx := context.Background()
 	workspacePath := filepath.Join(t.TempDir(), "client-a")
@@ -513,117 +554,12 @@ func TestRemoveWorkspaceMovesConversationsToChats(t *testing.T) {
 	if len(workspaces) != 0 {
 		t.Fatalf("workspace summaries = %#v, want empty", workspaces)
 	}
-	chats, err := store.QueryChatSummaries(ctx, 10)
-	if err != nil {
-		t.Fatalf("QueryChatSummaries: %v", err)
-	}
-	if len(chats) != 1 || chats[0].ConversationID != "conv-1" {
-		t.Fatalf("chat summaries = %#v, want conv-1", chats)
-	}
 	entries, err := store.QueryRecentTaskHistory(ctx, 10)
 	if err != nil {
 		t.Fatalf("QueryRecentTaskHistory: %v", err)
 	}
 	if len(entries) != 1 || entries[0].WorkspaceID != "" || entries[0].WorkspacePath != "" {
 		t.Fatalf("history entries = %#v, want task detached from workspace", entries)
-	}
-}
-
-func TestRemoveArchivedConversationDeletesLegacyAndV7Rows(t *testing.T) {
-	store := newTempStore(t)
-	ctx := context.Background()
-	workspacePath := filepath.Join(t.TempDir(), "ppt-test")
-
-	workspace, err := store.EnsureWorkspace(ctx, workspacePath)
-	if err != nil {
-		t.Fatalf("EnsureWorkspace: %v", err)
-	}
-	if err := store.EnsureConversation(ctx, workspace.ID, "conv-ppt", "Create deck"); err != nil {
-		t.Fatalf("EnsureConversation: %v", err)
-	}
-	for _, taskID := range []string{"task-1", "task-2"} {
-		if err := store.RecordTaskContext(ctx, taskID, TaskContext{
-			WorkspaceID:    workspace.ID,
-			ConversationID: "conv-ppt",
-		}); err != nil {
-			t.Fatalf("RecordTaskContext(%s): %v", taskID, err)
-		}
-		if err := store.RecordEvent(types.BridgeEvent{
-			EventID: "event-" + taskID,
-			TaskID:  taskID,
-			Type:    "task.completed",
-			Payload: map[string]any{"document_type": "pptx", "topic": "Create deck"},
-		}); err != nil {
-			t.Fatalf("RecordEvent(%s): %v", taskID, err)
-		}
-	}
-	if err := store.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.Open(ctx); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := store.RemoveConversation(ctx, "conv-ppt"); err != nil {
-		t.Fatalf("RemoveConversation: %v", err)
-	}
-
-	workspaces, err := store.QueryWorkspaceSummaries(ctx, 10)
-	if err != nil {
-		t.Fatalf("QueryWorkspaceSummaries: %v", err)
-	}
-	if len(workspaces) != 1 || len(workspaces[0].Conversations) != 0 {
-		t.Fatalf("workspace conversations = %#v, want none", workspaces)
-	}
-	history, err := store.QueryRecentTaskHistory(ctx, 10)
-	if err != nil {
-		t.Fatalf("QueryRecentTaskHistory: %v", err)
-	}
-	if len(history) != 0 {
-		t.Fatalf("history = %#v, want empty", history)
-	}
-	var eventCount, artifactCount, runCount, activityCount, streamCount int
-	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM task_events`).Scan(&eventCount); err != nil {
-		t.Fatalf("count events: %v", err)
-	}
-	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM artifacts`).Scan(&artifactCount); err != nil {
-		t.Fatalf("count artifacts: %v", err)
-	}
-	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM runs`).Scan(&runCount); err != nil {
-		t.Fatalf("count runs: %v", err)
-	}
-	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM activities`).Scan(&activityCount); err != nil {
-		t.Fatalf("count activities: %v", err)
-	}
-	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM activity_streams`).Scan(&streamCount); err != nil {
-		t.Fatalf("count activity streams: %v", err)
-	}
-	if eventCount != 0 || artifactCount != 0 || runCount != 0 || activityCount != 0 || streamCount != 0 {
-		t.Fatalf("counts events=%d artifacts=%d runs=%d activities=%d streams=%d, want all zero", eventCount, artifactCount, runCount, activityCount, streamCount)
-	}
-}
-
-func TestRemoveConversationRejectsDocumentAndPendingReferences(t *testing.T) {
-	store := newTempStore(t)
-	ctx := context.Background()
-	if err := store.RecordTaskContext(ctx, "task-doc", TaskContext{ConversationID: "conv-doc"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.RecordEvent(types.BridgeEvent{TaskID: "task-doc", Type: "task.completed"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.RecordArtifact(types.Artifact{TaskID: "task-doc", FilePath: "/tmp/doc.pptx", FileName: "doc.pptx", DocumentType: "pptx"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.RemoveConversation(ctx, "conv-doc"); err == nil || !strings.Contains(err.Error(), "referenced by a document") {
-		t.Fatalf("document deletion error = %v", err)
-	}
-
-	if err := store.RecordTaskContext(ctx, "task-pending", TaskContext{ConversationID: "conv-pending"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.RemoveConversation(ctx, "conv-pending"); err == nil || !strings.Contains(err.Error(), "pending document") {
-		t.Fatalf("pending deletion error = %v", err)
 	}
 }
 
@@ -830,6 +766,24 @@ func TestV7ProjectionEventIdentityAndDuplicateWritesAreStable(t *testing.T) {
 	if count != 2 {
 		t.Fatalf("activities after second event = %d, want 2", count)
 	}
+	// Replacing the id-less event moves it after the named event. Its ordinal
+	// identity changes from event:0 to event:1; the obsolete projection row must
+	// be removed instead of accumulating alongside the new identity.
+	if err := store.RecordEvent(event); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM activities WHERE task_id = 'stable-task'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Fatalf("activities after ordinal shift = %d, want 2", count)
+	}
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM activities WHERE id = 'stable-task:event:0:task.progress'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatal("stale ordinal activity survived reprojection")
+	}
 	rows, err := store.db.QueryContext(ctx, `SELECT ordinal FROM activities WHERE task_id = 'stable-task' ORDER BY ordinal`)
 	if err != nil {
 		t.Fatal(err)
@@ -884,8 +838,8 @@ func TestSchemaMigrationFromV1DB(t *testing.T) {
 	if err := store.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 7 {
-		t.Errorf("user_version = %d, want 7", version)
+	if version != 8 {
+		t.Errorf("user_version = %d, want 8", version)
 	}
 
 	events, err := store.QueryEventsByTask(ctx, "legacy-task")
@@ -963,6 +917,12 @@ func TestMigrateV7BackfillsDocumentsRunsAndActivitiesIdempotently(t *testing.T) 
 	}
 	defer store.Close()
 	assertV7Backfill(t, store)
+	if _, err := store.db.ExecContext(ctx, `
+		INSERT INTO activities(id, activity_stream_id, source_conversation_id, task_id, ordinal, kind, event_type, payload_json, created_at)
+		VALUES ('stale-ordinal-activity', 'activity:conv-b', 'conv-b', 'task-c', 99, 'event', 'task.failed', '{}', '2026-01-02T00:00:03Z')
+	`); err != nil {
+		t.Fatalf("seed stale activity projection: %v", err)
+	}
 	if err := store.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -1223,6 +1183,38 @@ func TestRecordEventUpsertUpdatesStatus(t *testing.T) {
 	}
 }
 
+func TestTaskCreatedAtIsImmutableAndExposedInHistory(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+	if err := store.RecordEvent(types.BridgeEvent{EventID: "evt-1", TaskID: "task-created", Type: "task.started"}); err != nil {
+		t.Fatalf("first RecordEvent: %v", err)
+	}
+	var createdAt string
+	if err := store.db.QueryRow(`SELECT created_at FROM tasks WHERE id = ?`, "task-created").Scan(&createdAt); err != nil {
+		t.Fatalf("read created_at: %v", err)
+	}
+	if createdAt == "" {
+		t.Fatal("created_at is empty")
+	}
+	if err := store.RecordEvent(types.BridgeEvent{EventID: "evt-2", TaskID: "task-created", Type: "task.completed"}); err != nil {
+		t.Fatalf("second RecordEvent: %v", err)
+	}
+	var after string
+	if err := store.db.QueryRow(`SELECT created_at FROM tasks WHERE id = ?`, "task-created").Scan(&after); err != nil {
+		t.Fatalf("read updated created_at: %v", err)
+	}
+	if after != createdAt {
+		t.Fatalf("created_at changed from %q to %q", createdAt, after)
+	}
+	entry, found, err := store.QueryTaskHistoryByID(ctx, "task-created")
+	if err != nil || !found {
+		t.Fatalf("QueryTaskHistoryByID found=%v err=%v", found, err)
+	}
+	if entry.CreatedAt != createdAt {
+		t.Fatalf("history CreatedAt = %q, want %q", entry.CreatedAt, createdAt)
+	}
+}
+
 func TestRecordEventAllowsSameBridgeEventIDAcrossTasks(t *testing.T) {
 	store := newTempStore(t)
 	ctx := context.Background()
@@ -1462,13 +1454,13 @@ func TestIndicesExist(t *testing.T) {
 	var count int
 	err := store.db.QueryRow(
 		`SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name IN (
-			'idx_task_events_task_created', 'idx_task_events_created'
+			'idx_task_events_task_created', 'idx_task_events_created', 'idx_tasks_created'
 		)`).Scan(&count)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if count != 2 {
-		t.Errorf("expected 2 indices, got %d", count)
+	if count != 3 {
+		t.Errorf("expected 3 indices, got %d", count)
 	}
 }
 
@@ -1504,8 +1496,8 @@ func TestSchemaV1MigrationFromLegacyDB(t *testing.T) {
 	if err := store.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 7 {
-		t.Errorf("user_version = %d, want 7", version)
+	if version != 8 {
+		t.Errorf("user_version = %d, want 8", version)
 	}
 	if err := store.Close(); err != nil {
 		t.Fatal(err)

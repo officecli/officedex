@@ -200,6 +200,20 @@ CREATE TABLE IF NOT EXISTS legacy_migrations (
 );
 `
 
+// schemaV8 adds the immutable task creation timestamp used to order task
+// history. Existing rows are backfilled from their earliest persisted event;
+// tasks without events fall back to updated_at.
+const schemaV8 = `
+ALTER TABLE tasks ADD COLUMN created_at TEXT NOT NULL DEFAULT '';
+UPDATE tasks
+SET created_at = COALESCE(
+  (SELECT MIN(created_at) FROM task_events WHERE task_events.task_id = tasks.id),
+  updated_at
+)
+WHERE created_at = '';
+CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at DESC, id ASC);
+`
+
 // Store wraps a SQLite database used to persist bridge events and artifacts.
 // Safe for concurrent use.
 type Store struct {
@@ -468,6 +482,30 @@ func applyMigrations(ctx context.Context, db *sql.DB) error {
 			return fmt.Errorf("v7 reconcile commit: %w", err)
 		}
 	}
+	if current < 8 {
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("begin v8: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, schemaV8); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("v8 ddl/backfill: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (8, ?)`,
+			time.Now().UTC().Format(time.RFC3339Nano),
+		); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("v8 stamp: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, "PRAGMA user_version = 8"); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("v8 set user_version: %w", err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("v8 commit: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -485,6 +523,13 @@ type legacyV7Event struct {
 }
 
 func backfillV7(ctx context.Context, tx *sql.Tx) error {
+	// activities is a fully derived projection of task_events. Rebuild it on
+	// every reconcile so ordinal-based identities for events without a bridge
+	// event ID cannot leave stale rows behind when later events change their
+	// task-local position.
+	if _, err := tx.ExecContext(ctx, `DELETE FROM activities`); err != nil {
+		return fmt.Errorf("reset activities projection: %w", err)
+	}
 	tasks := map[string]legacyV7Task{}
 	rows, err := tx.QueryContext(ctx, `SELECT id, status, COALESCE(document_type, ''), COALESCE(conversation_id, ''), COALESCE(parent_task_id, ''), COALESCE(workspace_id, ''), updated_at FROM tasks`)
 	if err != nil {
@@ -1025,7 +1070,7 @@ func projectTaskTx(ctx context.Context, tx *sql.Tx, taskID string) error {
 
 	// Stream timestamps are derived from this conversation only.
 	var streamCreated, streamUpdated string
-	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(MIN(created_at), ''), COALESCE(MAX(created_at), '') FROM task_events e JOIN tasks t ON t.id = e.task_id WHERE COALESCE(NULLIF(t.conversation_id, ''), t.id) = ?`, seed.conversationID).Scan(&streamCreated, &streamUpdated); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(MIN(e.created_at), ''), COALESCE(MAX(e.created_at), '') FROM task_events e JOIN tasks t ON t.id = e.task_id WHERE COALESCE(NULLIF(t.conversation_id, ''), t.id) = ?`, seed.conversationID).Scan(&streamCreated, &streamUpdated); err != nil {
 		return err
 	}
 	if streamCreated == "" {
@@ -1068,6 +1113,9 @@ func projectTaskTx(ctx context.Context, tx *sql.Tx, taskID string) error {
 
 	// Recompute ordinals only within the affected stream. Ordering includes the
 	// legacy task-local event id, making missing bridge IDs deterministic.
+	if _, err := tx.ExecContext(ctx, `DELETE FROM activities WHERE activity_stream_id = ?`, "activity:"+seed.conversationID); err != nil {
+		return fmt.Errorf("reset stream activities projection: %w", err)
+	}
 	var events []liveProjectionEvent
 	rows, err = tx.QueryContext(ctx, `SELECT e.event_id, e.task_id, e.type, e.payload_json, e.created_at FROM task_events e JOIN tasks t ON t.id = e.task_id WHERE COALESCE(NULLIF(t.conversation_id, ''), t.id) = ? ORDER BY e.created_at ASC, e.task_id ASC, e.event_id ASC`, seed.conversationID)
 	if err != nil {
@@ -1281,6 +1329,150 @@ func (s *Store) RemoveRecentFile(ctx context.Context, filePath string) error {
 	return nil
 }
 
+// RemoveDocumentByTaskID deletes the local metadata for the document lineage
+// containing taskID. Generated files are never removed from disk.
+func (s *Store) RemoveDocumentByTaskID(ctx context.Context, taskID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return fmt.Errorf("localstore: not open")
+	}
+	taskID = strings.TrimSpace(taskID)
+	if taskID == "" {
+		return fmt.Errorf("localstore: task id is empty")
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("localstore: begin remove document: %w", err)
+	}
+	rollback := func(err error) error {
+		_ = tx.Rollback()
+		return err
+	}
+
+	var conversationID string
+	if err := tx.QueryRowContext(ctx,
+		`SELECT COALESCE(NULLIF(conversation_id, ''), id) FROM tasks WHERE id = ?`, taskID,
+	).Scan(&conversationID); errors.Is(err, sql.ErrNoRows) {
+		_ = tx.Rollback()
+		return nil
+	} else if err != nil {
+		return rollback(fmt.Errorf("localstore: resolve document lineage: %w", err))
+	}
+
+	var pendingTasks int
+	if err := tx.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM tasks WHERE COALESCE(NULLIF(conversation_id, ''), id) = ? AND status IN ('starting', 'running', 'question', 'plan_review')`,
+		conversationID,
+	).Scan(&pendingTasks); err != nil {
+		return rollback(fmt.Errorf("localstore: check pending document tasks: %w", err))
+	}
+	if pendingTasks > 0 {
+		return rollback(fmt.Errorf("localstore: document has running tasks"))
+	}
+
+	rows, err := tx.QueryContext(ctx,
+		`SELECT id FROM tasks WHERE COALESCE(NULLIF(conversation_id, ''), id) = ?`, conversationID,
+	)
+	if err != nil {
+		return rollback(fmt.Errorf("localstore: query document tasks: %w", err))
+	}
+	var taskIDs []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			_ = rows.Close()
+			return rollback(fmt.Errorf("localstore: scan document task: %w", err))
+		}
+		taskIDs = append(taskIDs, id)
+	}
+	if err := rows.Close(); err != nil {
+		return rollback(fmt.Errorf("localstore: close document tasks: %w", err))
+	}
+
+	artifactPaths := make([]string, 0)
+	for _, id := range taskIDs {
+		artifactRows, err := tx.QueryContext(ctx, `SELECT file_path FROM artifacts WHERE task_id = ?`, id)
+		if err != nil {
+			return rollback(fmt.Errorf("localstore: query document artifacts: %w", err))
+		}
+		for artifactRows.Next() {
+			var path string
+			if err := artifactRows.Scan(&path); err != nil {
+				_ = artifactRows.Close()
+				return rollback(fmt.Errorf("localstore: scan document artifact: %w", err))
+			}
+			artifactPaths = append(artifactPaths, path)
+		}
+		if err := artifactRows.Close(); err != nil {
+			return rollback(fmt.Errorf("localstore: close document artifacts: %w", err))
+		}
+	}
+
+	streamID := "activity:" + conversationID
+	if _, err := tx.ExecContext(ctx, `DELETE FROM document_activity_streams WHERE activity_stream_id = ?`, streamID); err != nil {
+		return rollback(fmt.Errorf("localstore: remove document activity links: %w", err))
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM activities WHERE source_conversation_id = ?`, conversationID); err != nil {
+		return rollback(fmt.Errorf("localstore: remove document activities: %w", err))
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM runs WHERE source_conversation_id = ?`, conversationID); err != nil {
+		return rollback(fmt.Errorf("localstore: remove document runs: %w", err))
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM activity_streams WHERE source_conversation_id = ?`, conversationID); err != nil {
+		return rollback(fmt.Errorf("localstore: remove document activity stream: %w", err))
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM recent_files WHERE conversation_id = ?`, conversationID); err != nil {
+		return rollback(fmt.Errorf("localstore: remove document recent files: %w", err))
+	}
+
+	for _, id := range taskIDs {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM recent_files WHERE task_id = ?`, id); err != nil {
+			return rollback(fmt.Errorf("localstore: remove task recent files: %w", err))
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM task_answers WHERE task_id = ?`, id); err != nil {
+			return rollback(fmt.Errorf("localstore: remove document answers: %w", err))
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM task_events WHERE task_id = ?`, id); err != nil {
+			return rollback(fmt.Errorf("localstore: remove document events: %w", err))
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM task_credit_records WHERE task_id = ?`, id); err != nil {
+			return rollback(fmt.Errorf("localstore: remove document credit records: %w", err))
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM document_activity_streams WHERE document_id IN (SELECT id FROM documents WHERE current_artifact_task_id = ?)`, id); err != nil {
+			return rollback(fmt.Errorf("localstore: remove projected document links: %w", err))
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM documents WHERE current_artifact_task_id = ?`, id); err != nil {
+			return rollback(fmt.Errorf("localstore: remove projected document: %w", err))
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM artifacts WHERE task_id = ?`, id); err != nil {
+			return rollback(fmt.Errorf("localstore: remove document artifacts: %w", err))
+		}
+	}
+	for _, path := range artifactPaths {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM recent_files WHERE file_path = ?`, path); err != nil {
+			return rollback(fmt.Errorf("localstore: remove artifact recent file: %w", err))
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM document_activity_streams WHERE document_id IN (SELECT id FROM documents WHERE file_path = ?)`, path); err != nil {
+			return rollback(fmt.Errorf("localstore: remove artifact document links: %w", err))
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM documents WHERE file_path = ?`, path); err != nil {
+			return rollback(fmt.Errorf("localstore: remove artifact document: %w", err))
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM tasks WHERE COALESCE(NULLIF(conversation_id, ''), id) = ?`, conversationID); err != nil {
+		return rollback(fmt.Errorf("localstore: remove document tasks: %w", err))
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM conversations WHERE id = ?`, conversationID); err != nil {
+		return rollback(fmt.Errorf("localstore: remove document conversation metadata: %w", err))
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("localstore: commit remove document: %w", err)
+	}
+	return nil
+}
+
 func (s *Store) RemoveWorkspace(ctx context.Context, workspaceID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1312,96 +1504,6 @@ func (s *Store) RemoveWorkspaceByPath(ctx context.Context, workspacePath string)
 		return false, err
 	}
 	return true, nil
-}
-
-func (s *Store) RemoveConversation(ctx context.Context, conversationID string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.db == nil {
-		return fmt.Errorf("localstore: not open")
-	}
-	conversationID = strings.TrimSpace(conversationID)
-	if conversationID == "" {
-		return fmt.Errorf("localstore: conversation id is empty")
-	}
-	var protectedArtifacts int
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM artifacts a JOIN tasks t ON t.id = a.task_id WHERE COALESCE(NULLIF(t.conversation_id, ''), t.id) = ?`, conversationID).Scan(&protectedArtifacts); err != nil {
-		return fmt.Errorf("localstore: check conversation documents: %w", err)
-	}
-	if protectedArtifacts > 0 {
-		return fmt.Errorf("localstore: conversation is referenced by a document")
-	}
-	var pendingTasks int
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM tasks WHERE COALESCE(NULLIF(conversation_id, ''), id) = ? AND status IN ('starting', 'running', 'question', 'plan_review')`, conversationID).Scan(&pendingTasks); err != nil {
-		return fmt.Errorf("localstore: check pending conversation: %w", err)
-	}
-	if pendingTasks > 0 {
-		return fmt.Errorf("localstore: conversation is referenced by a pending document")
-	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id FROM tasks WHERE conversation_id = ?`, conversationID)
-	if err != nil {
-		return fmt.Errorf("localstore: query conversation tasks: %w", err)
-	}
-	var taskIDs []string
-	for rows.Next() {
-		var taskID string
-		if err := rows.Scan(&taskID); err != nil {
-			_ = rows.Close()
-			return fmt.Errorf("localstore: scan conversation task: %w", err)
-		}
-		taskIDs = append(taskIDs, taskID)
-	}
-	if err := rows.Close(); err != nil {
-		return err
-	}
-
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("localstore: begin remove conversation: %w", err)
-	}
-	streamID := "activity:" + conversationID
-	if _, err := tx.ExecContext(ctx, `DELETE FROM document_activity_streams WHERE activity_stream_id = ?`, streamID); err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("localstore: remove conversation document streams: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM activities WHERE source_conversation_id = ?`, conversationID); err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("localstore: remove conversation activities: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM runs WHERE source_conversation_id = ?`, conversationID); err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("localstore: remove conversation runs: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM activity_streams WHERE source_conversation_id = ?`, conversationID); err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("localstore: remove conversation activity stream: %w", err)
-	}
-	for _, taskID := range taskIDs {
-		if _, err := tx.ExecContext(ctx, `DELETE FROM task_events WHERE task_id = ?`, taskID); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("localstore: remove conversation events: %w", err)
-		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM artifacts WHERE task_id = ?`, taskID); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("localstore: remove conversation artifacts: %w", err)
-		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM task_credit_records WHERE task_id = ?`, taskID); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("localstore: remove conversation credit records: %w", err)
-		}
-	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM tasks WHERE conversation_id = ?`, conversationID); err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("localstore: remove conversation tasks: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM conversations WHERE id = ?`, conversationID); err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("localstore: remove conversation: %w", err)
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("localstore: commit remove conversation: %w", err)
-	}
-	return nil
 }
 
 func (s *Store) ClearActiveWorkspace(ctx context.Context) error {
@@ -1486,14 +1588,14 @@ func (s *Store) RecordTaskContext(ctx context.Context, taskID string, taskCtx Ta
 		return fmt.Errorf("localstore: begin record task context: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO tasks(id, status, document_type, topic, updated_at, conversation_id, parent_task_id, workspace_id)
-		 VALUES (?, 'starting', NULL, NULL, ?, ?, ?, ?)
+		`INSERT INTO tasks(id, status, document_type, topic, updated_at, created_at, conversation_id, parent_task_id, workspace_id)
+		 VALUES (?, 'starting', NULL, NULL, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		   conversation_id = CASE WHEN excluded.conversation_id != '' THEN excluded.conversation_id ELSE tasks.conversation_id END,
 		   parent_task_id = CASE WHEN excluded.parent_task_id != '' THEN excluded.parent_task_id ELSE tasks.parent_task_id END,
 		   workspace_id = CASE WHEN excluded.workspace_id != '' THEN excluded.workspace_id ELSE tasks.workspace_id END,
 		   updated_at = excluded.updated_at`,
-		taskID, now, conversationID, strings.TrimSpace(taskCtx.ParentTaskID), strings.TrimSpace(taskCtx.WorkspaceID),
+		taskID, now, now, conversationID, strings.TrimSpace(taskCtx.ParentTaskID), strings.TrimSpace(taskCtx.WorkspaceID),
 	); err != nil {
 		_ = tx.Rollback()
 		return fmt.Errorf("localstore: record task context: %w", err)
@@ -1670,14 +1772,14 @@ func (s *Store) RecordEvent(event types.BridgeEvent) error {
 		return fmt.Errorf("localstore: begin record event: %w", err)
 	}
 	if _, err := tx.Exec(
-		`INSERT INTO tasks(id, status, document_type, topic, updated_at)
-		 VALUES (?, ?, ?, ?, ?)
+		`INSERT INTO tasks(id, status, document_type, topic, updated_at, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		   status=excluded.status,
 		   document_type=COALESCE(excluded.document_type, tasks.document_type),
 		   topic=COALESCE(excluded.topic, tasks.topic),
 		   updated_at=excluded.updated_at`,
-		event.TaskID, status, documentType, topic, now,
+		event.TaskID, status, documentType, topic, now, now,
 	); err != nil {
 		_ = tx.Rollback()
 		return fmt.Errorf("localstore: upsert task: %w", err)
@@ -1796,11 +1898,11 @@ func (s *Store) QueryRecentTaskHistory(ctx context.Context, limit int) ([]types.
 		return nil, nil
 	}
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, COALESCE(NULLIF(conversation_id, ''), id), parent_task_id, workspace_id
+		`SELECT id, COALESCE(NULLIF(conversation_id, ''), id), parent_task_id, workspace_id, created_at
 		 FROM (
-		   SELECT id, conversation_id, parent_task_id, workspace_id, updated_at FROM tasks
-		   ORDER BY updated_at DESC LIMIT ?
-		 ) ORDER BY updated_at ASC`, limit)
+		   SELECT id, conversation_id, parent_task_id, workspace_id, created_at, updated_at FROM tasks
+		   ORDER BY updated_at DESC, id ASC LIMIT ?
+		 ) ORDER BY updated_at ASC, id ASC`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("localstore: query recent task history: %w", err)
 	}
@@ -1808,7 +1910,7 @@ func (s *Store) QueryRecentTaskHistory(ctx context.Context, limit int) ([]types.
 	var entries []types.TaskHistoryEntry
 	for rows.Next() {
 		var entry types.TaskHistoryEntry
-		if err := rows.Scan(&entry.TaskID, &entry.ConversationID, &entry.ParentTaskID, &entry.WorkspaceID); err != nil {
+		if err := rows.Scan(&entry.TaskID, &entry.ConversationID, &entry.ParentTaskID, &entry.WorkspaceID, &entry.CreatedAt); err != nil {
 			return nil, fmt.Errorf("localstore: scan recent task history: %w", err)
 		}
 		if entry.WorkspaceID != "" {
@@ -2021,7 +2123,7 @@ func (s *Store) QueryTaskHistoryByID(ctx context.Context, taskID string) (types.
 		return types.TaskHistoryEntry{}, false, nil
 	}
 	var entry types.TaskHistoryEntry
-	err := s.db.QueryRowContext(ctx, `SELECT id, COALESCE(NULLIF(conversation_id, ''), id), parent_task_id, workspace_id FROM tasks WHERE id = ?`, taskID).Scan(&entry.TaskID, &entry.ConversationID, &entry.ParentTaskID, &entry.WorkspaceID)
+	err := s.db.QueryRowContext(ctx, `SELECT id, COALESCE(NULLIF(conversation_id, ''), id), parent_task_id, workspace_id, created_at FROM tasks WHERE id = ?`, taskID).Scan(&entry.TaskID, &entry.ConversationID, &entry.ParentTaskID, &entry.WorkspaceID, &entry.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return types.TaskHistoryEntry{}, false, nil
 	}
@@ -2046,14 +2148,11 @@ func (s *Store) QueryTaskHistoryByID(ctx context.Context, taskID string) (types.
 	return entry, true, nil
 }
 
-func (s *Store) QueryWorkspaceSummaries(ctx context.Context, conversationLimit int) ([]types.WorkspaceSummary, error) {
+func (s *Store) QueryWorkspaceSummaries(ctx context.Context, _ int) ([]types.WorkspaceSummary, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
 		return nil, fmt.Errorf("localstore: not open")
-	}
-	if conversationLimit <= 0 {
-		conversationLimit = 20
 	}
 	activeID := ""
 	_ = s.db.QueryRowContext(ctx, `SELECT id FROM workspaces WHERE last_active_at != '' ORDER BY last_active_at DESC, updated_at DESC LIMIT 1`).Scan(&activeID)
@@ -2071,26 +2170,9 @@ func (s *Store) QueryWorkspaceSummaries(ctx context.Context, conversationLimit i
 			return nil, fmt.Errorf("localstore: scan workspace: %w", err)
 		}
 		ws.Active = ws.ID == activeID
-		conversations, err := s.queryWorkspaceConversationsLocked(ctx, ws.ID, conversationLimit)
-		if err != nil {
-			return nil, err
-		}
-		ws.Conversations = conversations
 		out = append(out, ws)
 	}
 	return out, rows.Err()
-}
-
-func (s *Store) QueryChatSummaries(ctx context.Context, conversationLimit int) ([]types.WorkspaceConversationSummary, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.db == nil {
-		return nil, fmt.Errorf("localstore: not open")
-	}
-	if conversationLimit <= 0 {
-		conversationLimit = 20
-	}
-	return s.queryWorkspaceConversationsLocked(ctx, "", conversationLimit)
 }
 
 // QueryRecentEvents returns the most recent events across all tasks, ordered
@@ -2234,68 +2316,6 @@ func (s *Store) queryEventsByTaskLocked(ctx context.Context, taskID string) ([]t
 	}
 	defer rows.Close()
 	return scanEvents(rows)
-}
-
-func (s *Store) queryWorkspaceConversationsLocked(ctx context.Context, workspaceID string, limit int) ([]types.WorkspaceConversationSummary, error) {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, title, updated_at
-		 FROM conversations
-		 WHERE workspace_id = ?
-		 ORDER BY updated_at DESC LIMIT ?`, workspaceID, limit)
-	if err != nil {
-		return nil, fmt.Errorf("localstore: query workspace conversations: %w", err)
-	}
-	defer rows.Close()
-	var out []types.WorkspaceConversationSummary
-	for rows.Next() {
-		var conversationID, title, updatedAt string
-		if err := rows.Scan(&conversationID, &title, &updatedAt); err != nil {
-			return nil, fmt.Errorf("localstore: scan workspace conversation: %w", err)
-		}
-		summary := types.WorkspaceConversationSummary{
-			ConversationID: conversationID,
-			Title:          title,
-			UpdatedAt:      updatedAt,
-		}
-		taskRows, err := s.db.QueryContext(ctx,
-			`SELECT id, status, COALESCE(document_type, ''), COALESCE(topic, ''), updated_at
-			 FROM tasks
-			 WHERE conversation_id = ?
-			 ORDER BY updated_at ASC`, conversationID)
-		if err != nil {
-			return nil, fmt.Errorf("localstore: query conversation tasks: %w", err)
-		}
-		for taskRows.Next() {
-			var taskID, status, documentType, topic, taskUpdatedAt string
-			if err := taskRows.Scan(&taskID, &status, &documentType, &topic, &taskUpdatedAt); err != nil {
-				_ = taskRows.Close()
-				return nil, fmt.Errorf("localstore: scan conversation task: %w", err)
-			}
-			if summary.FirstTaskID == "" {
-				summary.FirstTaskID = taskID
-				if summary.Title == "" || summary.Title == conversationID {
-					summary.Title = topic
-				}
-			}
-			summary.LatestTaskID = taskID
-			summary.Status = status
-			summary.DocumentType = documentType
-			summary.UpdatedAt = taskUpdatedAt
-		}
-		if err := taskRows.Close(); err != nil {
-			return nil, err
-		}
-		if summary.FirstTaskID == "" {
-			summary.FirstTaskID = conversationID
-			summary.LatestTaskID = conversationID
-			summary.Status = "completed"
-		}
-		if strings.TrimSpace(summary.Title) == "" {
-			summary.Title = conversationID
-		}
-		out = append(out, summary)
-	}
-	return out, rows.Err()
 }
 
 func workspaceID(path string) string {

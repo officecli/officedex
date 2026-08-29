@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Button } from "@vo-ui/backend";
 import { AlertCircle, Bot, Check, Loader2, RefreshCw, User } from "lucide-react";
 import { officecli } from "../../../bridge";
@@ -7,9 +7,12 @@ import type { PlanPptxJSResult, PlanPptxJSTurn } from "../../../../shared/types"
 import {
   buildLearnofPptxEmbedUrl,
   createLearnofPptxChannel,
+  LEARNOF_PPTX_PROTOCOL,
   type LearnofPptxEditorContext,
 } from "../../../../shared/learnofPptxProtocol";
 import { LearnofPptxEmbedClient, type LearnofPptxEmbedState } from "./LearnofPptxEmbedClient";
+import { VibeReplaySequencer, type VibeReplayFeed, type VibeReplayStatus } from "../../../presentation/vibeReplay";
+import type { PresentationEditorController, PresentationScriptResult } from "../../../presentation/PresentationEditorFrame";
 
 export interface LearnofPptxWorkbenchProps {
   editorBaseUrl: string;
@@ -17,6 +20,8 @@ export interface LearnofPptxWorkbenchProps {
   fileName: string;
   /** Absolute path of the artifact; edits are saved back here. */
   filePath?: string;
+  /** Live generation feed executed inside this editor through PowerPoint.run. */
+  live?: VibeReplayFeed;
   /** Called when the editor cannot be started; the parent may fall back to a read-only preview. */
   onEditorUnavailable?: (reason: string) => void;
   /** Injected for tests. */
@@ -84,6 +89,7 @@ export default function LearnofPptxWorkbench({
   previewToken,
   fileName,
   filePath,
+  live,
   onEditorUnavailable,
   createClient,
 }: LearnofPptxWorkbenchProps) {
@@ -92,12 +98,14 @@ export default function LearnofPptxWorkbench({
   const channel = useMemo(() => createLearnofPptxChannel(), []);
   const embedUrl = useMemo(() => buildLearnofPptxEmbedUrl(editorBaseUrl, channel), [editorBaseUrl, channel]);
   const clientRef = useRef<LearnofPptxEmbedClient | null>(null);
+  const replayRef = useRef<VibeReplaySequencer | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const [editorStatus, setEditorStatus] = useState<EditorStatus>({ kind: "fetching" });
   const [selectionContext, setSelectionContext] = useState<LearnofPptxEditorContext | null>(null);
   const [turns, setTurns] = useState<ConversationTurn[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const [replayStatus, setReplayStatus] = useState<VibeReplayStatus>();
   const busyRef = useRef(false);
   const transcriptRef = useRef<HTMLDivElement>(null);
 
@@ -113,7 +121,7 @@ export default function LearnofPptxWorkbench({
   }, []);
 
   // Boot: create the client, fetch the bytes, wait for the editor shell, load, wait for the editor.
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!embedUrl) {
       setEditorStatus({ kind: "error", message: t("pptx.agent.editorUnavailableNotConfigured") });
       onEditorUnavailable?.("not-configured");
@@ -125,6 +133,13 @@ export default function LearnofPptxWorkbench({
     const client = factory({ channel, getTargetWindow: () => iframeRef.current?.contentWindow ?? null });
     clientRef.current = client;
     const detach = client.attach();
+    const announceHost = () => iframeRef.current?.contentWindow?.postMessage({
+      protocol: LEARNOF_PPTX_PROTOCOL,
+      channel,
+      type: "officedex:pptx-host-ready",
+    }, "*");
+    const hostReadyTimer = window.setInterval(announceHost, 500);
+    announceHost();
     const unsubscribe = client.subscribe((state: LearnofPptxEmbedState) => {
       if (cancelled) return;
       if (state.phase === "editor-ready" && state.fileId) setEditorStatus({ kind: "ready", fileId: state.fileId });
@@ -143,6 +158,7 @@ export default function LearnofPptxWorkbench({
       if (cancelled) return;
       setEditorStatus({ kind: "booting" });
       await client.waitForReady();
+      window.clearInterval(hostReadyTimer);
       if (cancelled) return;
       setEditorStatus({ kind: "importing" });
       await client.load(copy.buffer, fileName);
@@ -166,12 +182,64 @@ export default function LearnofPptxWorkbench({
       cancelled = true;
       unsubscribe();
       detach();
+      window.clearInterval(hostReadyTimer);
       client.dispose();
       if (clientRef.current === client) clientRef.current = null;
     };
     // `t` is stable per locale; a locale switch must not restart the editor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [embedUrl, channel, previewToken, fileName, reloadToken, createClient]);
+
+  useEffect(() => {
+    const client = clientRef.current;
+    if (!live || !client || editorStatus.kind !== "ready" || client.getState().phase !== "editor-ready") return;
+    if (!replayRef.current) {
+      const controller: PresentationEditorController = {
+        async executeScript(source): Promise<PresentationScriptResult> {
+          const value = await client.executeJs(source);
+          if (value && typeof value === "object" && "result" in value) {
+            return value as PresentationScriptResult;
+          }
+          return { result: value, snapshotSaved: false };
+        },
+        async inspect() {
+          return await client.inspect() as never;
+        },
+        async save() {
+          const exported = await client.export();
+          const savedPath = await officecli.savePptx(
+            new Uint8Array(exported.buffer),
+            fileName,
+            filePath ? { targetFilePath: filePath } : {},
+          );
+          return { filePath: savedPath, revision: exported.revision ?? 0 };
+        },
+        session() {
+          return { previewToken, sessionId: editorStatus.fileId };
+        },
+        async swapDocument() {
+          throw new Error("Document swapping is not available in the learnof live editor.");
+        },
+      };
+      replayRef.current = new VibeReplaySequencer({
+        controller,
+        onStatus: (status) => {
+          setReplayStatus(status);
+          void officecli.recordRendererLog({
+            source: "learnof-live-replay",
+            event: status.state,
+            details: { taskId: live.taskId, slide: status.slide, total: status.total, error: status.error },
+          }).catch(() => {});
+        },
+      });
+    }
+    replayRef.current.update(live);
+  }, [editorStatus, fileName, filePath, live, previewToken]);
+
+  useEffect(() => () => {
+    replayRef.current?.dispose();
+    replayRef.current = null;
+  }, []);
 
   useEffect(() => {
     const node = transcriptRef.current;
@@ -396,6 +464,11 @@ export default function LearnofPptxWorkbench({
             className="pptx-workbench-frame"
             title={fileName}
             allow="clipboard-read; clipboard-write"
+            onLoad={() => iframeRef.current?.contentWindow?.postMessage({
+              protocol: LEARNOF_PPTX_PROTOCOL,
+              channel,
+              type: "officedex:pptx-host-ready",
+            }, "*")}
           />
         )}
       </div>
@@ -421,6 +494,11 @@ export default function LearnofPptxWorkbench({
               <RefreshCw size={13} />
             </button>
           </div>
+          {live && replayStatus ? (
+            <div className="pptx-workbench-panel-target" role={replayStatus.state === "failed" ? "alert" : "status"}>
+              Live drawing: {replayStatus.state}{replayStatus.slide ? ` · slide ${replayStatus.slide}` : ""}{replayStatus.error ? ` · ${replayStatus.error}` : ""}
+            </div>
+          ) : null}
         </header>
         <div className="pptx-workbench-transcript" ref={transcriptRef}>
           {turns.length === 0 && <p className="pptx-workbench-empty">{t("pptx.agent.emptyHint")}</p>}

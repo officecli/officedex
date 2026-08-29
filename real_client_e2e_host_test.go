@@ -92,6 +92,32 @@ func TestRealOfficeDexClientBridgeHost(t *testing.T) {
 
 	fmt.Printf("OFFICEDEX_REAL_E2E_ENDPOINT=%s\n", server.URL)
 	<-ctx.Done()
+	// Stop accepting work before closing App resources. EventSource clients keep
+	// HTTP/1.1 connections open indefinitely; without an explicit disconnect,
+	// httptest.Server.Close blocks and devctl eventually has to SIGKILL a host
+	// that may already be partially torn down.
+	server.CloseClientConnections()
+	server.Close()
+	app.shutdown(context.Background())
+}
+
+func TestRealClientE2EHostReopensClosedLocalStore(t *testing.T) {
+	app := newRealOfficeDexApp(t)
+	host := newRealClientE2EHost(t, app, newRealReportServer(t))
+	if err := app.localStore.Close(); err != nil {
+		t.Fatalf("close local store: %v", err)
+	}
+
+	result, err := host.call("ListRecentFiles", json.RawMessage(`""`))
+	if err != nil {
+		t.Fatalf("ListRecentFiles should reopen local store: %v", err)
+	}
+	if files, ok := result.([]types.RecentFile); !ok || len(files) != 0 {
+		t.Fatalf("ListRecentFiles result = %#v, want empty recent files", result)
+	}
+	if _, err := app.localStore.QueryRecentFiles(context.Background(), "", 1); err != nil {
+		t.Fatalf("query reopened local store: %v", err)
+	}
 }
 
 func newRealClientE2EServer(t *testing.T, handler http.Handler) *httptest.Server {
@@ -205,6 +231,9 @@ func (h *realClientE2EHost) handleRPC(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *realClientE2EHost) call(method string, raw json.RawMessage) (any, error) {
+	if err := h.app.ensureLocalStoreOpen(context.Background()); err != nil {
+		return nil, err
+	}
 	switch method {
 	case "Initialize":
 		return h.app.Initialize()
@@ -303,6 +332,12 @@ func (h *realClientE2EHost) call(method string, raw json.RawMessage) (any, error
 			return nil, err
 		}
 		return h.app.SavePptx(input)
+	case "CreateLivePptxDraft":
+		value, err := decodeRealClientString(raw)
+		if err != nil {
+			return nil, err
+		}
+		return h.app.CreateLivePptxDraft(value)
 	case "ModifyPptistDeck":
 		var input ModifyPptistDeckInput
 		if err := decodeRealClientInput(raw, &input); err != nil {
@@ -425,14 +460,6 @@ func (h *realClientE2EHost) call(method string, raw json.RawMessage) (any, error
 			return nil, err
 		}
 		return h.app.ListRecentFiles(workspaceID)
-	case "ListChats":
-		return h.app.ListChats()
-	case "DeleteConversation":
-		id, err := decodeRealClientString(raw)
-		if err != nil {
-			return nil, err
-		}
-		return nil, h.app.DeleteConversation(id)
 	case "AddWorkspace":
 		value, err := decodeRealClientString(raw)
 		if err != nil {

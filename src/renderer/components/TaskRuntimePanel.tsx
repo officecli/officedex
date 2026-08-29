@@ -21,7 +21,7 @@ export function TaskRuntimePanel({ task }: Props) {
   return (
     <div className="effective-card" data-testid="task-runtime-panel">
       <div className="effective-row">
-        <span className="effective-label">{t("dialogue.runtime.title")}</span>
+        <span className="effective-label">{t("task.runtime.title")}</span>
         <span className="effective-value">
           <StatusDot tone={provider ? "green" : "gray"} />
           {provider ? t("runtime.chip.customNoModel") : t("runtime.chip.official")}

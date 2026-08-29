@@ -137,12 +137,8 @@ export async function openNewGeneration(page: Page): Promise<void> {
   if (await prompt.isVisible().catch(() => false)) {
     return;
   }
-  const expandSidebar = page.getByRole("button", { name: /Expand sidebar/i }).first();
-  if (await expandSidebar.isVisible().catch(() => false)) {
-    await expandSidebar.click({ force: true });
-  }
-  const newChat = page.getByRole("button", { name: /New chat/i }).first();
-  if (await newChat.isVisible().catch(() => false)) await newChat.click({ force: true, timeout: 60_000 });
+  const home = page.getByRole("button", { name: /^Home$/i }).first();
+  if (await home.isVisible().catch(() => false)) await home.click({ force: true, timeout: 60_000 });
   await expect(prompt).toBeVisible({ timeout: 60_000 });
 }
 
@@ -258,7 +254,7 @@ async function answerVisibleInteraction(page: Page): Promise<boolean> {
     await page.waitForTimeout(300);
     return true;
   }
-  const stageContinue = page.getByRole("button", { name: /Continue|继续确认|Start drawing|开始绘制|Approve plan|确认计划|开始执行/i }).first();
+  const stageContinue = page.getByRole("button", { name: /Continue|继续确认|确认方向并继续|Confirm direction|Start drawing|开始绘制|Approve plan|确认计划|开始执行/i }).first();
   if (await stageContinue.isVisible().catch(() => false)) {
     await stageContinue.click();
     await page.waitForTimeout(1_000);

@@ -24,11 +24,26 @@ export interface SidebarAccount {
   email?: string;
 }
 
+export interface SidebarDocument {
+  id: string;
+  createdAt?: string;
+  title: string;
+  documentType: string;
+  filePath?: string;
+  conversationId?: string;
+  workspaceId?: string;
+  status?: "starting" | "running" | "question" | "plan_review" | "completed" | "failed" | "cancelled";
+}
+
 export interface ProjectSidebarProps {
   workspaces: WorkspaceSummary[];
+  documents?: SidebarDocument[];
+  activeDocumentId?: string;
   activeWorkspaceId?: string;
   onSelectAll: () => void;
   onSelectWorkspace: (workspaceId: string) => void;
+  onOpenDocument?: (document: SidebarDocument) => void;
+  onDeleteDocument?: (document: SidebarDocument) => void | Promise<void>;
   onAddWorkspace: () => void;
   onRenameWorkspace: (workspaceId: string, name: string) => void | Promise<void>;
   onRevealWorkspace: (workspacePath: string) => void;
@@ -49,7 +64,7 @@ function creditValue(credit: CreditInfo): string {
   return `${Math.max(0, credit.total - credit.used)} / ${credit.total}`;
 }
 
-export function ProjectSidebar({ workspaces, activeWorkspaceId, onSelectAll, onSelectWorkspace, onAddWorkspace, onRenameWorkspace, onRevealWorkspace, onRemoveWorkspace, onOpenSettings, onOpenAccount, signal, credit, hasCustomProvider, account, updateRow, compact = false, onCompactChange }: ProjectSidebarProps) {
+export function ProjectSidebar({ workspaces, documents = [], activeWorkspaceId, activeDocumentId, onSelectAll, onSelectWorkspace, onOpenDocument, onDeleteDocument, onAddWorkspace, onRenameWorkspace, onRevealWorkspace, onRemoveWorkspace, onOpenSettings, onOpenAccount, signal, credit, hasCustomProvider, account, updateRow, compact = false, onCompactChange }: ProjectSidebarProps) {
   const t = useT();
   const [renamingId, setRenamingId] = useState<string>();
   const [renameValue, setRenameValue] = useState("");
@@ -101,6 +116,48 @@ export function ProjectSidebar({ workspaces, activeWorkspaceId, onSelectAll, onS
     setHomeDropZone(null);
     setDropActive(false);
   };
+
+  const confirmDeleteDocument = (document: SidebarDocument) => {
+    dialog.confirm({
+      title: t("projectSidebar.deleteDocumentTitle", { name: document.title }),
+      content: t("projectSidebar.deleteDocumentBody"),
+      okText: t("projectSidebar.deleteDocument"),
+      cancelText: t("projectSidebar.cancel"),
+      tone: "danger",
+      onOk: () => onDeleteDocument?.(document),
+    });
+  };
+
+  const renderDocument = (document: SidebarDocument) => (
+    <div
+      className="project-sidebar__document"
+      data-active={document.id === activeDocumentId ? "true" : undefined}
+      key={document.id}
+    >
+      <button
+        type="button"
+        className="project-sidebar__document-open"
+        data-active={document.id === activeDocumentId ? "true" : undefined}
+        title={document.title}
+        onClick={() => onOpenDocument?.(document)}
+      >
+        <span className={`project-sidebar__document-type project-sidebar__document-type--${document.documentType.toLowerCase()}`}>{document.documentType.slice(0, 1).toUpperCase()}</span>
+        <span>{document.title}</span>
+        {document.status && document.status !== "completed" ? <em data-status={document.status} aria-label={document.status} /> : null}
+      </button>
+      {onDeleteDocument ? (
+        <button
+          type="button"
+          className="project-sidebar__document-delete"
+          aria-label={t("projectSidebar.deleteDocumentAria", { name: document.title })}
+          title={t("projectSidebar.deleteDocument")}
+          onClick={() => confirmDeleteDocument(document)}
+        >
+          <DeleteOutlined aria-hidden />
+        </button>
+      ) : null}
+    </div>
+  );
 
   return (
     <aside className="project-sidebar" aria-label={t("projectSidebar.label")} data-compact={compact ? "true" : "false"}>
@@ -154,7 +211,8 @@ export function ProjectSidebar({ workspaces, activeWorkspaceId, onSelectAll, onS
               <em>{t("projectSidebar.emptyAction")}</em>
             </button>
           ) : workspaces.map((workspace) => (
-            <div className="project-sidebar__workspace" data-active={workspace.id === activeWorkspaceId ? "true" : undefined} key={workspace.id}>
+            <div className="project-sidebar__workspace-group" key={workspace.id}>
+            <div className="project-sidebar__workspace" data-active={workspace.id === activeWorkspaceId ? "true" : undefined}>
               {renamingId === workspace.id ? (
                 <Input
                   autoFocus
@@ -178,8 +236,15 @@ export function ProjectSidebar({ workspaces, activeWorkspaceId, onSelectAll, onS
                 </Dropdown>
               </div>
             </div>
+            {documents.filter((document) => document.workspaceId === workspace.id).map(renderDocument)}
+            </div>
           ))}
         </div>
+        {documents.some((document) => !document.workspaceId) ? (
+          <div className="project-sidebar__unscoped-documents">
+            {documents.filter((document) => !document.workspaceId).map(renderDocument)}
+          </div>
+        ) : null}
         {dropActive ? <div className="project-sidebar__drop-hint" aria-hidden="true">{t("projectSidebar.dropHint")}</div> : null}
       </section>
       <nav className="project-sidebar__footer" aria-label={t("projectSidebar.utilities")}>

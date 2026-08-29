@@ -10,6 +10,7 @@ import {
   InfoCircleOutlined,
   Loading3QuartersOutlined,
   LogoutOutlined,
+  LeftOutlined,
   RocketOutlined,
   SafetyCertificateOutlined,
   SyncOutlined,
@@ -865,7 +866,7 @@ function formatLastChecked(timestamp: string | null, t: (key: string, vars?: Rec
   return new Date(then).toLocaleString();
 }
 
-export function LoginScreen() {
+export function LoginScreen({ onReturn, onAuthenticated }: { onReturn?: () => void; onAuthenticated?: () => void } = {}) {
   const [phase, setPhase] = useState<LoginPhase>("loading");
   const [whoami, setWhoami] = useState<WhoAmIResult | null>(null);
   const [loginUrl, setLoginUrl] = useState<string | null>(null);
@@ -873,22 +874,25 @@ export function LoginScreen() {
   const [busy, setBusy] = useState(false);
   const mountedRef = useRef(true);
   const phaseRef = useRef<LoginPhase>("loading");
+  const loginStartedRef = useRef(false);
   const t = useT();
 
   useEffect(() => {
     phaseRef.current = phase;
   }, [phase]);
 
-  const refreshWhoami = useCallback(async () => {
+  const refreshWhoami = useCallback(async (): Promise<WhoAmIResult | null> => {
     try {
       const result = await officecli.whoami();
-      if (!mountedRef.current) return;
+      if (!mountedRef.current) return null;
       setWhoami(result);
       setPhase(result.mode === "anonymous" ? "anonymous" : "success");
+      return result;
     } catch (error) {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current) return null;
       setErrorText(errorMessage(error));
       setPhase("failure");
+      return null;
     }
   }, []);
 
@@ -901,7 +905,12 @@ export function LoginScreen() {
         setLoginUrl(event.url);
         setPhase("awaiting");
       } else if (event.type === "success") {
-        void refreshWhoami();
+        void refreshWhoami().then((result) => {
+          if (result?.mode === "logged_in" && loginStartedRef.current) {
+            loginStartedRef.current = false;
+            onAuthenticated?.();
+          }
+        });
       } else if (event.type === "failure") {
         setErrorText(event.message);
         setPhase("failure");
@@ -917,9 +926,10 @@ export function LoginScreen() {
       unsubscribe();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshWhoami]);
+  }, [onAuthenticated, refreshWhoami]);
 
   const startLogin = useCallback(async () => {
+    loginStartedRef.current = true;
     setBusy(true);
     setErrorText(null);
     try {
@@ -967,6 +977,7 @@ export function LoginScreen() {
       setWhoami({ mode: "anonymous" });
       setPhase("anonymous");
       setLoginUrl(null);
+      loginStartedRef.current = false;
     } catch (error) {
       setErrorText(errorMessage(error));
       setPhase("failure");
@@ -1021,6 +1032,9 @@ export function LoginScreen() {
 
         {phase === "success" && whoami ? (
           <Space direction="vertical" size={12} style={{ width: "100%", marginTop: 16 }}>
+            <Button type="primary" block icon={<LeftOutlined />} onClick={onReturn}>
+              {t("login.button.return")}
+            </Button>
             <Button block icon={<LogoutOutlined />} loading={busy} onClick={doLogout}>
               {t("login.button.signOut")}
             </Button>

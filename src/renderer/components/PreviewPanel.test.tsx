@@ -83,8 +83,26 @@ describe("PreviewPanel", () => {
     expect(source).not.toContain("window.confirm(");
   });
 
+  it("keeps the folder action without showing an external-open action", () => {
+    const grant: PreviewGrant = {
+      token: "preview-token-footer",
+      fileName: "deck.pptx",
+      documentType: "pptx",
+    };
+    const artifact = {
+      filePath: "/tmp/deck.pptx",
+      fileName: "deck.pptx",
+      documentType: "pptx",
+    };
+
+    render(<PreviewPanel grant={grant} artifact={artifact} onClose={vi.fn()} />);
+
+    expect(screen.getByRole("button", { name: "Show in folder" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Open externally" })).toBeNull();
+  });
+
   it.each([
-    ["back", "Back to project tree"],
+    ["back", "Back to document"],
     ["close", "Close preview"],
   ])("slides the full preview overlay out to the left before closing from %s", async (_control, accessibleName) => {
     vi.useFakeTimers();

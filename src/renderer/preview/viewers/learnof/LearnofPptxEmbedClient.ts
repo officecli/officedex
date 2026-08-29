@@ -276,7 +276,10 @@ export class LearnofPptxEmbedClient {
   private handleMessage(event: MessageEvent): void {
     if (this.disposed) return;
     const target = this.getTargetWindow();
-    if (!target || event.source !== target) return;
+    if (!target) return;
+    // Cross-origin WindowProxy identity is not stable in WKWebView. The
+    // cryptographically random channel and protocol are the authentication
+    // boundary; requiring object identity here drops legitimate editor events.
     if (!isLearnofPptxEditorMessage(event.data, this.channel)) return;
     const message = event.data;
     switch (message.type) {

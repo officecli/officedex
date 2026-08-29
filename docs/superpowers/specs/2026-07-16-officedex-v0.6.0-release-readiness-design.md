@@ -66,7 +66,6 @@ Remove files that are clearly local design or tool runtime output and are not re
 
 - `.superpowers/brainstorm/**`
 - root-level HTML design explorations
-- `output-pptxgenjs-v9/**`
 
 Keep intentional release materials under `marketing/ppt-launch-video/` and engineering specifications under `docs/superpowers/`.
 

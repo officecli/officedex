@@ -278,17 +278,6 @@ body.preview-overlay-active .living-tree-popover-overlay {
   background: #f6f5f4;
 }
 
-.preview-action-btn.primary {
-  border-color: #5645d4;
-  background: #5645d4;
-  color: #ffffff;
-}
-
-.preview-action-btn.primary:hover {
-  background: #4534b3;
-  border-color: #4534b3;
-}
-
 .preview-toolbar-close {
   display: flex;
   align-items: center;

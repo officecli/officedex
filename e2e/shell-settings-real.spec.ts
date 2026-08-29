@@ -71,10 +71,12 @@ test.describe("OfficeDex real client shell, account, settings, diagnostics, and 
       body: JSON.stringify({ type: "failure", message: "Local OAuth callback failure fixture" }),
     });
 
+    const returnButton = page.getByRole("button", { name: /Back to OfficeDex|返回 OfficeDex/i }).first();
+    if (await returnButton.isVisible().catch(() => false)) await returnButton.click();
+
     const workspace = await fixturePath("workspace");
     await queueFileDialog(workspace);
-    await page.getByRole("button", { name: /New chat/i }).first().click();
-    await page.getByRole("button", { name: /Add new project|Add project/i }).first().click();
+    await page.getByRole("button", { name: /Add content space|Add new project|Add project/i }).first().click();
 
     await recordScenario({
       uiScenario: "shell-settings-account-diagnostics-update-workspace",

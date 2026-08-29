@@ -1,4 +1,4 @@
-import type { Artifact, BridgeEvent, DesktopTask, GenerationMode, ImageRatio, ProviderSnapshot, StageState, TaskPlan, TaskQuestion, TaskQuestionAnswer, TaskRuntimeSnapshot, TaskUserInput, VibeProjectTreeNode, VibeTreeAction, VibeTreeConfirmation, VibeTreeSnapshot, VibeTreeStage, VibeVisualAsset } from "../shared/types";
+import type { Artifact, BridgeEvent, DesktopTask, GenerationMode, ImageRatio, ProviderSnapshot, StageState, TaskPlan, TaskQuestion, TaskQuestionAnswer, TaskRuntimeSnapshot, TaskUserInput, VibeOp, VibeProjectTreeNode, VibeTreeAction, VibeTreeConfirmation, VibeTreeSnapshot, VibeTreeStage, VibeVisualAsset } from "../shared/types";
 import type { PptistSlide } from "../shared/pptistProtocol";
 
 export interface TaskState {
@@ -7,16 +7,8 @@ export interface TaskState {
   artifacts: Artifact[];
 }
 
-export interface ConversationListItem {
-  conversationId: string;
-  firstTaskId: string;
-  latestTaskId: string;
-  title: string;
-  status: DesktopTask["status"];
-  documentType?: string;
-}
-
 export interface TaskContextPatch {
+  createdAt?: string;
   conversationId?: string;
   parentTaskId?: string;
   workspaceId?: string;
@@ -31,19 +23,6 @@ export function deleteTask(state: TaskState, taskID: string): TaskState {
   const { [taskID]: _, ...tasks } = state.tasks;
   const taskOrder = state.taskOrder.filter((id) => id !== taskID);
   const artifacts = state.artifacts.filter((a) => a.taskId !== taskID);
-  return { tasks, taskOrder, artifacts };
-}
-
-export function deleteConversation(state: TaskState, conversationId: string): TaskState {
-  const taskIDs = new Set(
-    state.taskOrder.filter((id) => state.tasks[id]?.conversationId === conversationId),
-  );
-  if (taskIDs.size === 0) return state;
-  const tasks = Object.fromEntries(
-    Object.entries(state.tasks).filter(([id]) => !taskIDs.has(id)),
-  );
-  const taskOrder = state.taskOrder.filter((id) => !taskIDs.has(id));
-  const artifacts = state.artifacts.filter((artifact) => !artifact.taskId || !taskIDs.has(artifact.taskId));
   return { tasks, taskOrder, artifacts };
 }
 
@@ -71,6 +50,7 @@ export function attachUserInput(
     ...state.tasks,
     [taskID]: {
       ...existing,
+      createdAt: context?.createdAt || existing.createdAt,
       conversationId,
       workspaceId,
       workspacePath,
@@ -89,6 +69,7 @@ export function attachTaskContext(state: TaskState, taskID: string, context: Tas
     ...state.tasks,
     [taskID]: {
       ...previous,
+      createdAt: context.createdAt || previous.createdAt,
       conversationId: context.conversationId || previous.conversationId,
       parentTaskId: context.parentTaskId || previous.parentTaskId,
       workspaceId: context.workspaceId || previous.workspaceId,
@@ -98,38 +79,20 @@ export function attachTaskContext(state: TaskState, taskID: string, context: Tas
   return { ...state, tasks };
 }
 
-/** Group tasks by conversationId and return them in taskOrder sequence per conversation. */
-export function getConversationTasks(state: TaskState, conversationId: string): DesktopTask[] {
+/** Group runs by their internal lineage key and return them oldest-first. */
+export function getRunLineage(state: TaskState, lineageId: string): DesktopTask[] {
   return state.taskOrder
     .map((id) => state.tasks[id])
-    .filter((task): task is DesktopTask => Boolean(task) && task.conversationId === conversationId)
-    .reverse(); // taskOrder is newest-first; reverse to show oldest-first in conversation
+    .filter((task): task is DesktopTask => Boolean(task) && task.conversationId === lineageId)
+    .reverse(); // taskOrder is newest-first.
 }
 
-export function getConversationList(state: TaskState): ConversationListItem[] {
-  const seen = new Set<string>();
-  const conversations: ConversationListItem[] = [];
-  for (const taskID of state.taskOrder) {
-    const latestTask = state.tasks[taskID];
-    if (!latestTask || seen.has(latestTask.conversationId)) continue;
-    const tasks = getConversationTasks(state, latestTask.conversationId);
-    const firstTask = tasks[0] || latestTask;
-    seen.add(latestTask.conversationId);
-    conversations.push({
-      conversationId: latestTask.conversationId,
-      firstTaskId: firstTask.id,
-      latestTaskId: latestTask.id,
-      title: conversationTitle(firstTask),
-      status: latestTask.status,
-      documentType: latestTask.documentType || latestTask.artifact?.documentType || firstTask.documentType || firstTask.artifact?.documentType,
-    });
-  }
-  return conversations;
-}
-
-function conversationTitle(task: DesktopTask): string {
-  const prompt = task.userInput?.prompt.trim();
-  return prompt || task.topic || task.artifact?.fileName || task.id;
+function vibeOpsFromPayload(payload: Record<string, any>): VibeOp[] {
+  const raw = payload.ops ?? payload.vibe_ops ?? payload.primitives;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((value): value is VibeOp => (
+    value && typeof value === "object" && typeof value.op === "string" && Number.isSafeInteger(value.seq)
+  ));
 }
 
 export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState {
@@ -148,6 +111,7 @@ export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState 
   const { stages, activeStageId } = reduceStages(events);
   const nextTask: DesktopTask = {
     ...previous,
+    createdAt: previous.createdAt || event.ts,
     status: statusFromEvent(event.type, previous.status),
     workspaceId: stringPayload(event, "workspace_id") || previous.workspaceId,
     workspacePath: stringPayload(event, "workspace_path") || previous.workspacePath,
@@ -159,6 +123,13 @@ export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState 
     stages,
     activeStageId,
   };
+  // A recovered native runtime can emit fresh started/progress events after
+  // the previous desktop process recorded BRIDGE_PROCESS_GONE. Once durable
+  // progress resumes, that interruption error is historical and must not stay
+  // attached to the live task UI.
+  if (event.type === "task.started" || event.type === "task.progress" || event.type === "task.question" || event.type === "task.plan") {
+    nextTask.error = undefined;
+  }
   if (event.type === "task.progress" && (previous.status === "plan_review" || previous.status === "question")) {
     const step = stringPayload(event, "step");
     const progressStatus = stringPayload(event, "status");
@@ -202,11 +173,29 @@ export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState 
   }
   if (event.type === "task.plan") {
     nextTask.plan = planFromPayload(event.payload);
-    nextTask.question = undefined;
+    // Keep the pending question envelope alongside the plan. Some bridge
+    // versions emit task.question immediately before task.plan and require
+    // that question id for the approval response; clearing it here made the
+    // UI send a plan id that the runtime did not recognize.
+    nextTask.question = previous.question;
     nextTask.status = "plan_review";
   }
   if (event.type === "task.vibe_tree") {
     nextTask.vibeTree = vibeTreeFromPayload(event.payload) ?? previous.vibeTree;
+  }
+  if (event.type === "task.vibe_outline") {
+    const outline = event.payload?.outline ?? event.payload?.vibe_outline ?? event.payload;
+    if (outline && typeof outline === "object") {
+      nextTask.vibeOutline = outline as DesktopTask["vibeOutline"];
+    }
+  }
+  if (event.type === "task.vibe_ops" || event.type === "task.vibe_op" || event.type === "task.vibe_primitives") {
+    const incoming = vibeOpsFromPayload(event.payload ?? {});
+    if (incoming.length > 0) {
+      const bySeq = new Map<number, VibeOp>((previous.vibeOps ?? []).map((op) => [op.seq, op]));
+      for (const op of incoming) bySeq.set(op.seq, op);
+      nextTask.vibeOps = [...bySeq.values()].sort((a, b) => a.seq - b.seq);
+    }
   }
   if (event.type === "task.vibe_slide") {
     const parsed = vibeSlideFromPayload(event.payload);
@@ -234,12 +223,86 @@ export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState 
   if (event.type === "task.cancelled") {
     nextTask.stalledSince = undefined;
   }
+  if (previous.interactiveResponsePending && (event.type === "task.question" || event.type === "task.plan")) {
+    // Stale-task recovery recreates historical input gates while it fast-
+    // forwards the replacement run. Do not expose those replay-only gates.
+    nextTask.status = "running";
+    nextTask.interactiveResponsePending = true;
+    nextTask.interactiveResponseAccepted = previous.interactiveResponseAccepted;
+  }
+  if (previous.interactiveResponsePending && previous.interactiveResponseAccepted && advancesPastInteractiveGate(event)) {
+    nextTask.interactiveResponsePending = undefined;
+    nextTask.interactiveResponseAccepted = undefined;
+  }
+  if (event.type === "task.completed" || event.type === "task.failed" || event.type === "task.cancelled") {
+    nextTask.interactiveResponsePending = undefined;
+    nextTask.interactiveResponseAccepted = undefined;
+  }
 
   const tasks = { ...state.tasks, [taskID]: nextTask };
   const taskOrder = state.taskOrder.includes(taskID) ? state.taskOrder : [taskID, ...state.taskOrder];
   const artifact = nextTask.artifact;
   const artifacts = artifact && !state.artifacts.some((item) => item.filePath === artifact.filePath) ? [artifact, ...state.artifacts] : state.artifacts;
   return { tasks, taskOrder, artifacts };
+}
+
+/** Move an accepted interactive response out of its stale visible gate while
+ * durable bridge events are still in flight. */
+export function markTaskContinuing(state: TaskState, taskID: string): TaskState {
+  const task = state.tasks[taskID];
+  if (!task || (task.status !== "question" && task.status !== "plan_review")) return state;
+  return {
+    ...state,
+    tasks: {
+      ...state.tasks,
+      [taskID]: {
+        ...task,
+        status: "running",
+        interactiveResponsePending: true,
+        interactiveResponseAccepted: false,
+        lastProgressAt: Date.now(),
+        stalledSince: undefined,
+      },
+    },
+  };
+}
+
+/** Mark the RPC accepted, but keep replay-only gates hidden until the bridge
+ * emits a durable event that advances beyond the submitted gate. */
+export function finishTaskContinuing(state: TaskState, taskID: string): TaskState {
+  const task = state.tasks[taskID];
+  if (!task?.interactiveResponsePending) return state;
+  return {
+    ...state,
+    tasks: {
+      ...state.tasks,
+      [taskID]: { ...task, interactiveResponseAccepted: true },
+    },
+  };
+}
+
+/** Restore the user's gate if Respond fails before accepting the response. */
+export function restoreTaskInteractiveGate(state: TaskState, taskID: string, status: "question" | "plan_review"): TaskState {
+  const task = state.tasks[taskID];
+  if (!task?.interactiveResponsePending) return state;
+  return {
+    ...state,
+    tasks: {
+      ...state.tasks,
+      [taskID]: { ...task, status, interactiveResponsePending: undefined, interactiveResponseAccepted: undefined },
+    },
+  };
+}
+
+function advancesPastInteractiveGate(event: BridgeEvent): boolean {
+  if (event.type === "task.vibe_tree" || event.type === "task.output" || event.type === "task.completed" || event.type === "task.failed" || event.type === "task.cancelled") {
+    return true;
+  }
+  if (event.type !== "task.progress") return false;
+  const step = stringPayload(event, "step");
+  const status = stringPayload(event, "status");
+  if ((step === "question" || step === "plan_confirm") && status !== "completed") return false;
+  return status === "running" || status === "completed";
 }
 
 function vibeSlideFromPayload(payload: BridgeEvent["payload"]): { index: number; slide: PptistSlide } | undefined {

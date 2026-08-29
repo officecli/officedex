@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyTaskEvent, attachUserInput, createInitialTaskState, deleteConversation, getConversationList } from "./taskState";
+import { applyTaskEvent, attachUserInput, createInitialTaskState, finishTaskContinuing, markTaskContinuing, restoreTaskInteractiveGate } from "./taskState";
 
 describe("taskState", () => {
   it("records task lifecycle events and stores completed artifacts", () => {
@@ -85,6 +85,42 @@ describe("taskState", () => {
     });
   });
 
+  it("clears a stranded bridge error when recovered task progress resumes", () => {
+    const failed = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-failed",
+      task_id: "task-recovered",
+      type: "task.failed",
+      payload: { code: "BRIDGE_PROCESS_GONE", message: "OfficeCLI agent-bridge was stopped before this task finished." },
+    });
+    const resumed = applyTaskEvent(failed, {
+      event_id: "event-progress",
+      task_id: "task-recovered",
+      type: "task.progress",
+      payload: { step: "generate", status: "running", content: "Generating document content" },
+    });
+
+    expect(resumed.tasks["task-recovered"].status).toBe("running");
+    expect(resumed.tasks["task-recovered"].error).toBeUndefined();
+  });
+
+  it("accumulates ordered PPTX drawing ops from streamed bridge events", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-ops-1",
+      task_id: "task-ops",
+      type: "task.vibe_ops",
+      payload: { ops: [{ seq: 2, op: "shape.add", slide: 1 }, { seq: 1, op: "slide.begin", slide: 1 }] },
+    });
+    const next = applyTaskEvent(state, {
+      event_id: "event-ops-2",
+      task_id: "task-ops",
+      type: "task.vibe_ops",
+      payload: { ops: [{ seq: 3, op: "slide.end", slide: 1 }, { seq: 2, op: "shape.add", slide: 1, shape: { kind: "text" } }] },
+    });
+
+    expect(next.tasks["task-ops"].vibeOps?.map((op) => op.seq)).toEqual([1, 2, 3]);
+    expect(next.tasks["task-ops"].vibeOps?.[1].shape).toEqual({ kind: "text" });
+  });
+
   it("hydrates persisted plan question answers from history replay", () => {
     const withQuestion = applyTaskEvent(createInitialTaskState(), {
       event_id: "event-question",
@@ -164,6 +200,80 @@ describe("taskState", () => {
       markdown: "# Proposed Plan\n\n- Confirm before generating.",
       revision: 2,
     });
+  });
+
+  it("moves an accepted plan response into running state before bridge events arrive", () => {
+    const waiting = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-plan",
+      task_id: "task-1",
+      type: "task.plan",
+      payload: { id: "plan-1", plan_id: "plan-1", markdown: "# Plan", revision: 1 },
+    });
+
+    const continuing = markTaskContinuing(waiting, "task-1");
+
+    expect(continuing.tasks["task-1"].status).toBe("running");
+    expect(continuing.tasks["task-1"].plan?.id).toBe("plan-1");
+    expect(continuing.tasks["task-1"].interactiveResponsePending).toBe(true);
+  });
+
+  it("hides recovery replay gates until the interactive response finishes", () => {
+    let state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-plan-1",
+      task_id: "task-1",
+      type: "task.plan",
+      payload: { id: "plan-1", plan_id: "plan-1", markdown: "# Plan", revision: 1 },
+    });
+    state = markTaskContinuing(state, "task-1");
+    state = applyTaskEvent(state, {
+      event_id: "event-replayed-plan",
+      task_id: "task-1",
+      type: "task.plan",
+      payload: { id: "plan-2", plan_id: "plan-2", markdown: "# Replayed plan", revision: 1 },
+    });
+
+    expect(state.tasks["task-1"].status).toBe("running");
+    expect(state.tasks["task-1"].plan?.id).toBe("plan-2");
+    expect(state.tasks["task-1"].interactiveResponsePending).toBe(true);
+
+    state = finishTaskContinuing(state, "task-1");
+    expect(state.tasks["task-1"].status).toBe("running");
+    expect(state.tasks["task-1"].interactiveResponsePending).toBe(true);
+    expect(state.tasks["task-1"].interactiveResponseAccepted).toBe(true);
+
+    state = applyTaskEvent(state, {
+      event_id: "event-replayed-plan-after-accept",
+      task_id: "task-1",
+      type: "task.plan",
+      payload: { id: "plan-3", plan_id: "plan-3", markdown: "# Final replayed plan", revision: 1 },
+    });
+    expect(state.tasks["task-1"].status).toBe("running");
+    expect(state.tasks["task-1"].interactiveResponsePending).toBe(true);
+
+    state = applyTaskEvent(state, {
+      event_id: "event-generate",
+      task_id: "task-1",
+      type: "task.progress",
+      payload: { step: "generate", status: "running" },
+    });
+    expect(state.tasks["task-1"].status).toBe("running");
+    expect(state.tasks["task-1"].interactiveResponsePending).toBeUndefined();
+    expect(state.tasks["task-1"].interactiveResponseAccepted).toBeUndefined();
+  });
+
+  it("restores the original gate when responding fails", () => {
+    let state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-plan",
+      task_id: "task-1",
+      type: "task.plan",
+      payload: { id: "plan-1", plan_id: "plan-1", markdown: "# Plan", revision: 1 },
+    });
+    state = markTaskContinuing(state, "task-1");
+    state = restoreTaskInteractiveGate(state, "task-1", "plan_review");
+
+    expect(state.tasks["task-1"].status).toBe("plan_review");
+    expect(state.tasks["task-1"].interactiveResponsePending).toBeUndefined();
+    expect(state.tasks["task-1"].interactiveResponseAccepted).toBeUndefined();
   });
 
   it("preserves execution_prompt when restoring plan review events", () => {
@@ -385,95 +495,6 @@ describe("taskState", () => {
     });
   });
 
-  it("uses attached user prompt for a running task title before bridge topic events arrive", () => {
-    const state = attachUserInput(createInitialTaskState(), "task-bridge-123", {
-      prompt: "Create a board update deck from the latest revenue notes",
-    });
-
-    expect(getConversationList(state)).toEqual([
-      {
-        conversationId: "task-bridge-123",
-        firstTaskId: "task-bridge-123",
-        latestTaskId: "task-bridge-123",
-        title: "Create a board update deck from the latest revenue notes",
-        status: "starting",
-        documentType: undefined,
-      },
-    ]);
-  });
-
-  it("groups multiple tasks in one conversation into one conversation list item", () => {
-    let state = createInitialTaskState();
-    state = applyTaskEvent(state, {
-      event_id: "ev-1",
-      task_id: "task-1",
-      type: "task.completed",
-      payload: {
-        result: { file_path: "/tmp/original.png", file_name: "original.png", document_type: "img" },
-      },
-    });
-    state = attachUserInput(state, "task-2", { prompt: "Make it brighter" }, "task-1");
-    state = applyTaskEvent(state, {
-      event_id: "ev-2",
-      task_id: "task-2",
-      type: "task.started",
-      payload: { document_type: "img", topic: "Make it brighter" },
-    });
-
-    expect(getConversationList(state)).toEqual([
-      {
-        conversationId: "task-1",
-        firstTaskId: "task-1",
-        latestTaskId: "task-2",
-        title: "original.png",
-        status: "running",
-        documentType: "img",
-      },
-    ]);
-  });
-
-  it("deletes all tasks and artifacts in a conversation", () => {
-    let state = createInitialTaskState();
-    state = applyTaskEvent(state, {
-      event_id: "ev-1",
-      task_id: "task-1",
-      type: "task.completed",
-      payload: {
-        result: { file_path: "/tmp/original.png", file_name: "original.png", document_type: "img" },
-      },
-    });
-    state = attachUserInput(state, "task-2", { prompt: "Make it brighter" }, "task-1");
-    state = applyTaskEvent(state, {
-      event_id: "ev-2",
-      task_id: "task-2",
-      type: "task.completed",
-      payload: {
-        result: { file_path: "/tmp/brighter.png", file_name: "brighter.png", document_type: "img" },
-      },
-    });
-    state = applyTaskEvent(state, {
-      event_id: "ev-3",
-      task_id: "task-other",
-      type: "task.completed",
-      payload: {
-        result: { file_path: "/tmp/other.pptx", file_name: "other.pptx", document_type: "pptx" },
-      },
-    });
-
-    const next = deleteConversation(state, "task-1");
-
-    expect(Object.keys(next.tasks)).toEqual(["task-other"]);
-    expect(next.taskOrder).toEqual(["task-other"]);
-    expect(next.artifacts).toEqual([
-      {
-        taskId: "task-other",
-        filePath: "/tmp/other.pptx",
-        fileName: "other.pptx",
-        documentType: "pptx",
-      },
-    ]);
-  });
-
   it("overrides a bridge-created conversation id when continuation parent is attached after task.started", () => {
     let state = createInitialTaskState();
     state = applyTaskEvent(state, {
@@ -494,7 +515,6 @@ describe("taskState", () => {
     state = attachUserInput(state, "task-2", { prompt: "Make it brighter" }, "task-1");
 
     expect(state.tasks["task-2"].conversationId).toBe("task-1");
-    expect(getConversationList(state)).toHaveLength(1);
   });
 
   it("replays demo staged PPTX events into a completed PPTist-reviewable task", () => {
@@ -513,5 +533,16 @@ describe("taskState", () => {
     expect(task.documentType).toBe("pptx");
     expect(task.artifact?.fileName).toBe("launch-strategy-demo.pptx");
     expect(task.vibeSlides?.[5]?.id).toBe("demo-slide-06");
+  });
+
+  it("stores a structured vibe outline event for chapter-first rendering", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      task_id: "outline-task",
+      type: "task.vibe_outline",
+      payload: { outline: { sections: [{ id: "s1", title: "背景与问题", purpose: "说明现状" }] } },
+    });
+    expect(state.tasks["outline-task"].vibeOutline).toEqual({
+      sections: [{ id: "s1", title: "背景与问题", purpose: "说明现状" }],
+    });
   });
 });

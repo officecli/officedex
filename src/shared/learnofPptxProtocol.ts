@@ -141,18 +141,21 @@ export function createLearnofPptxChannel(): string {
 
 /**
  * Builds the iframe URL for the editor: `<base>?officedexEmbed=1&channel=<nonce>&sessionMode=browser-local`.
- * Returns `null` when no editor base URL is configured.
+ * Relative bases (for example the packaged `/pptx/` asset route) are resolved
+ * against the current Wails/web document; absolute bases must be HTTP(S).
+ * Returns `null` when no editor base URL is configured or the URL is invalid.
  */
 export function buildLearnofPptxEmbedUrl(baseUrl: string | undefined | null, channel: string): string | null {
   const trimmed = (baseUrl ?? "").trim();
   if (!trimmed) return null;
   let url: URL;
   try {
-    url = new URL(trimmed);
+    url = new URL(trimmed, typeof window !== "undefined" ? window.location.href : "http://127.0.0.1/" );
   } catch {
     return null;
   }
-  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+  const absolute = /^[a-z][a-z\d+.-]*:/i.test(trimmed);
+  if (absolute && url.protocol !== "http:" && url.protocol !== "https:" && url.protocol !== "wails:") return null;
   url.searchParams.set(LEARNOF_PPTX_EMBED_QUERY.embed, "1");
   url.searchParams.set(LEARNOF_PPTX_EMBED_QUERY.channel, channel);
   url.searchParams.set(LEARNOF_PPTX_EMBED_QUERY.sessionMode, "browser-local");
