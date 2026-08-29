@@ -38,7 +38,7 @@ const GENERATION_MATRIX: Array<{
   },
   {
     documentType: "img",
-    prompt: "Generate a simple clean product illustration for OfficeDex real E2E, white background, no text.",
+    prompt: "画一只猫咪",
   },
   {
     documentType: "gif",
