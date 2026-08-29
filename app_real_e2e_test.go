@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"officedex/internal/appupdate"
+	"officedex/internal/bridge"
 	"officedex/internal/demoflow"
 	"officedex/internal/localstore"
 	"officedex/internal/netproxy"
@@ -412,6 +413,8 @@ func newRealOfficeDexApp(t *testing.T) *App {
 			t.Fatalf("proxy pool: %v", err)
 		}
 	}
+	bridge.SetProxyEnvSupplier(proxyPool.SubprocessEnv)
+	t.Cleanup(func() { bridge.SetProxyEnvSupplier(nil) })
 
 	runtimeMgr, err := runtimemgr.New(runtimemgr.ManagerOptions{
 		InstallRoot: filepath.Join(userDataDir, "runtime"),
