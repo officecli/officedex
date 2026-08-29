@@ -7,3 +7,8 @@
 @keyframes progressive-pptx-spin { to { transform: rotate(360deg); } }
 @media (max-width: 760px) { .progressive-pptx-stage__header { flex-direction: column; }.progressive-pptx-stage__disclosure { grid-template-columns: 1fr; } }
 .progressive-pptx-stage__ops { border: 1px solid #e1e4e8; border-radius: 12px; padding: 14px 16px; background: #fff; }.progressive-pptx-stage__ops > strong { display: block; margin-bottom: 10px; }.progressive-pptx-stage__ops ol { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }.progressive-pptx-stage__ops li { display: flex; align-items: center; gap: 7px; color: #4b5563; font-size: 13px; }.progressive-pptx-stage__ops li svg { color: #16803c; }.progressive-pptx-stage__ops small { color: #6b7280; }.progressive-pptx-stage__ops em { margin-left: auto; color: #9ca3af; font-size: 11px; font-style: normal; }
+.progressive-pptx-stage__processing { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; border: 1px solid #cfe0f8; border-radius: 12px; padding: 14px 16px; background: #f6f9fe; color: #30343b; }
+.progressive-pptx-stage__processing > div { display: grid; gap: 3px; }
+.progressive-pptx-stage__processing span { color: #6b7280; font-size: 12px; }
+.progressive-pptx-stage__processing button { margin-left: auto; background: transparent; }
+.progressive-pptx-stage textarea:disabled, .progressive-pptx-stage input:disabled { color: #30343b; background: #fafafa; cursor: default; opacity: 1; }
