@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const readDrawingAsset = vi.fn(async (_assetsDir: string, digest: string) => ({
   digest,
@@ -31,6 +31,19 @@ beforeEach(() => {
 import type { VibeOp, VibeOpShape } from "../../shared/types";
 import { VibeReplaySequencer, applyReslideOps, buildOpsChunkScript, buildReplayFeed } from "./vibeReplay";
 import type { PresentationEditorController } from "./PresentationEditorFrame";
+
+const liveSequencers = new Set<VibeReplaySequencer>();
+
+function makeSequencer(options: ConstructorParameters<typeof VibeReplaySequencer>[0]) {
+  const sequencer = new VibeReplaySequencer(options);
+  liveSequencers.add(sequencer);
+  return sequencer;
+}
+
+afterEach(() => {
+  for (const sequencer of liveSequencers) sequencer.dispose();
+  liveSequencers.clear();
+});
 
 /** Builds a well-formed op stream for `slides` slides with two shapes each. */
 function opStream(slides: number): VibeOp[] {
@@ -535,7 +548,7 @@ describe("VibeReplaySequencer", () => {
   it("executes streamed ops in seq order exactly once, then saves on completion", async () => {
     const { controller, executed, saved, powerPoint } = fakeController();
     const statuses: string[] = [];
-    const sequencer = new VibeReplaySequencer({ controller, paceMs: 0, onStatus: (s) => statuses.push(s.state) });
+    const sequencer = makeSequencer({ controller, paceMs: 0, onStatus: (s) => statuses.push(s.state) });
     const ops = opStream(3);
 
     // First frames arrive, then the full stream repeats them (history replay).
@@ -568,7 +581,7 @@ describe("VibeReplaySequencer", () => {
 
   it("never executes past a gap in the seq order", async () => {
     const { controller, executed } = fakeController();
-    const sequencer = new VibeReplaySequencer({ controller, paceMs: 0 });
+    const sequencer = makeSequencer({ controller, paceMs: 0 });
     const ops = opStream(2);
     // Deliver a stream with a hole: seq 4 missing.
     sequencer.update({ taskId: "t1", ops: ops.filter((op) => op.seq !== 4), completed: false });
@@ -587,7 +600,7 @@ describe("VibeReplaySequencer", () => {
     const { controller } = fakeController();
     (controller.executeScript as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("editor gone"));
     const statuses: Array<{ state: string; error?: string }> = [];
-    const sequencer = new VibeReplaySequencer({ controller, paceMs: 0, onStatus: (s) => statuses.push(s) });
+    const sequencer = makeSequencer({ controller, paceMs: 0, onStatus: (s) => statuses.push(s) });
     sequencer.update({ taskId: "t1", ops: opStream(1), completed: true });
     await flush();
     await flush();
@@ -601,7 +614,7 @@ describe("VibeReplaySequencer", () => {
   it("does not save when nothing was drawn", async () => {
     const { controller, saved } = fakeController();
     const statuses: string[] = [];
-    const sequencer = new VibeReplaySequencer({ controller, paceMs: 0, onStatus: (s) => statuses.push(s.state) });
+    const sequencer = makeSequencer({ controller, paceMs: 0, onStatus: (s) => statuses.push(s.state) });
     sequencer.update({ taskId: "t1", ops: [], completed: true });
     await flush();
     expect(saved).not.toHaveBeenCalled();
@@ -616,7 +629,7 @@ describe("replay finished event", () => {
     const listener = (event: Event) => events.push((event as CustomEvent).detail);
     window.addEventListener("officedex:vibe-replay-finished", listener);
     try {
-      const sequencer = new VibeReplaySequencer({ controller, paceMs: 0 });
+      const sequencer = makeSequencer({ controller, paceMs: 0 });
       sequencer.update({ taskId: "task-9", ops: opStream(1), completed: true });
       await flush();
       await flush();
@@ -631,7 +644,7 @@ describe("trace mode", () => {
   it("announces each op before executing, one op per chunk", async () => {
     const { controller, executed } = fakeController();
     const announced: number[] = [];
-    const sequencer = new VibeReplaySequencer({
+    const sequencer = makeSequencer({
       controller,
       paceMs: 0,
       onOp: (op) => announced.push(op.seq),
@@ -657,7 +670,7 @@ describe("trace mode", () => {
     // dropped onto an empty deck without a word.
     const { controller, powerPoint } = fakeController();
     const statuses: string[] = [];
-    const sequencer = new VibeReplaySequencer({ controller, paceMs: 0, onStatus: (s) => statuses.push(s.state) });
+    const sequencer = makeSequencer({ controller, paceMs: 0, onStatus: (s) => statuses.push(s.state) });
     sequencer.update({ taskId: "t1", ops: opStream(3), completed: true, trace: true });
     for (let tick = 0; tick < 6; tick += 1) await flush();
 
@@ -674,7 +687,7 @@ describe("trace mode", () => {
 describe("picture ops", () => {
   it("paints the real image when the pool resolves its digest", async () => {
     const { controller, powerPoint } = fakeController();
-    const sequencer = new VibeReplaySequencer({ controller, paceMs: 0 });
+    const sequencer = makeSequencer({ controller, paceMs: 0 });
     sequencer.update({ taskId: "t1", ops: pictureStream(), completed: true });
     for (let tick = 0; tick < 6; tick += 1) await flush();
 
@@ -690,7 +703,7 @@ describe("picture ops", () => {
     readDrawingAsset.mockRejectedValueOnce(new Error("pool is gone"));
     const { controller, powerPoint } = fakeController();
     const statuses: string[] = [];
-    const sequencer = new VibeReplaySequencer({ controller, paceMs: 0, onStatus: (s) => statuses.push(s.state) });
+    const sequencer = makeSequencer({ controller, paceMs: 0, onStatus: (s) => statuses.push(s.state) });
     sequencer.update({ taskId: "t1", ops: pictureStream(), completed: true });
     for (let tick = 0; tick < 6; tick += 1) await flush();
 
@@ -704,7 +717,7 @@ describe("picture ops", () => {
 
   it("does not reach for the pool when a deck has no pictures", async () => {
     const { controller } = fakeController();
-    const sequencer = new VibeReplaySequencer({ controller, paceMs: 0 });
+    const sequencer = makeSequencer({ controller, paceMs: 0 });
     sequencer.update({ taskId: "t1", ops: opStream(2), completed: true });
     for (let tick = 0; tick < 6; tick += 1) await flush();
     expect(readDrawingAsset).not.toHaveBeenCalled();
@@ -719,7 +732,7 @@ describe("performance", () => {
 
   it("performs the writing while the generation is still producing it", async () => {
     const { controller, executed } = fakeController();
-    const sequencer = new VibeReplaySequencer({ controller, paceMs: 90 });
+    const sequencer = makeSequencer({ controller, paceMs: 90 });
     // The stream is still open: this is the one showing worth watching.
     sequencer.update({ taskId: "t1", ops: opStream(1).slice(0, 3), completed: false });
     for (let tick = 0; tick < 4; tick += 1) await flush();
@@ -729,7 +742,7 @@ describe("performance", () => {
 
   it("keeps performing after the task it is following completes", async () => {
     const { controller, executed } = fakeController();
-    const sequencer = new VibeReplaySequencer({ controller, paceMs: 90 });
+    const sequencer = makeSequencer({ controller, paceMs: 90 });
     sequencer.update({ taskId: "t1", ops: opStream(2).slice(0, 3), completed: false });
     for (let tick = 0; tick < 4; tick += 1) await flush();
     // The rest of the stream arrives with the task already finished; a drawing
@@ -743,7 +756,7 @@ describe("performance", () => {
 
   it("replays a finished stream at full speed instead of acting it out", async () => {
     const { controller, executed, powerPoint } = fakeController();
-    const sequencer = new VibeReplaySequencer({ controller, paceMs: 90 });
+    const sequencer = makeSequencer({ controller, paceMs: 90 });
     // Nothing here is news: scrubbing, redrawing and the console demo all
     // replay a stream that already exists, and want the state, not a show.
     sequencer.update({ taskId: "t1", ops: opStream(2), completed: true });
@@ -759,7 +772,7 @@ describe("performance", () => {
 describe("timeline capture", () => {
   it("records a step for every shape, named by what it put on the page", async () => {
     const { controller } = fakeController();
-    const sequencer = new VibeReplaySequencer({ controller, paceMs: 0 });
+    const sequencer = makeSequencer({ controller, paceMs: 0 });
     sequencer.update({ taskId: "task-7", ops: opStream(2), completed: false });
     for (let tick = 0; tick < 8; tick += 1) await flush();
 
@@ -785,7 +798,7 @@ describe("timeline capture", () => {
 
   it("records a replay too: the draft it draws into started blank", async () => {
     const { controller } = fakeController();
-    const sequencer = new VibeReplaySequencer({ controller, paceMs: 0 });
+    const sequencer = makeSequencer({ controller, paceMs: 0 });
     // A replay redraws the deck from nothing, so the history it produces is
     // the deck's history. Skipping it would leave the reset draft with none.
     sequencer.update({ taskId: "task-7", ops: opStream(2), completed: true });
@@ -797,7 +810,7 @@ describe("timeline capture", () => {
     captureTimelineNode.mockRejectedValue(new Error("disk is full"));
     const { controller, powerPoint } = fakeController();
     const statuses: string[] = [];
-    const sequencer = new VibeReplaySequencer({ controller, paceMs: 0, onStatus: (s) => statuses.push(s.state) });
+    const sequencer = makeSequencer({ controller, paceMs: 0, onStatus: (s) => statuses.push(s.state) });
     // Live while it draws, finished by the time it drains: a recording failure
     // must not stop either.
     sequencer.update({ taskId: "task-7", ops: opStream(3).slice(0, 4), completed: false });
@@ -814,7 +827,7 @@ describe("timeline capture", () => {
 
   it("records nothing when there is no editor session to read", async () => {
     const { controller } = fakeController({ session: false });
-    const sequencer = new VibeReplaySequencer({ controller, paceMs: 0 });
+    const sequencer = makeSequencer({ controller, paceMs: 0 });
     sequencer.update({ taskId: "task-7", ops: opStream(2), completed: true });
     for (let tick = 0; tick < 8; tick += 1) await flush();
     expect(captureTimelineNode).not.toHaveBeenCalled();
@@ -825,7 +838,7 @@ describe("slide.replace", () => {
   it("clears the page before redrawing, and applyReslideOps renumbers a continued stream", async () => {
     const { controller, powerPoint } = fakeController();
     // First, draw a two-slide deck the ordinary way.
-    const sequencer = new VibeReplaySequencer({ controller: controller as unknown as PresentationEditorController, paceMs: 0 });
+    const sequencer = makeSequencer({ controller: controller as unknown as PresentationEditorController, paceMs: 0 });
     sequencer.update({ taskId: "t1", ops: opStream(2), completed: true });
     for (let tick = 0; tick < 20; tick += 1) await flush();
     sequencer.dispose();
@@ -853,7 +866,7 @@ describe("slide.replace", () => {
 describe("slide.delete", () => {
   it("shrinks the deck when a tail redo removed pages", async () => {
     const { controller, powerPoint } = fakeController();
-    const sequencer = new VibeReplaySequencer({ controller: controller as unknown as PresentationEditorController, paceMs: 0 });
+    const sequencer = makeSequencer({ controller: controller as unknown as PresentationEditorController, paceMs: 0 });
     sequencer.update({ taskId: "t1", ops: opStream(3), completed: true });
     for (let tick = 0; tick < 25; tick += 1) await flush();
     sequencer.dispose();
@@ -939,7 +952,7 @@ describe("performance pace", () => {
     }) as never;
     try {
       const { controller } = fakeController();
-      const sequencer = new VibeReplaySequencer({ controller });
+      const sequencer = makeSequencer({ controller });
       sequencer.update(feed);
       for (let tick = 0; tick < 8; tick += 1) await new Promise((r) => realSetTimeout(r, 0));
     } finally {
@@ -966,7 +979,7 @@ describe("chunk accounting", () => {
     // replay rather than leave a half-drawn deck looking finished.
     (controller.executeScript as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ result: { executed: 0, skipped: 0 } });
     const statuses: Array<{ state: string; error?: string }> = [];
-    const sequencer = new VibeReplaySequencer({ controller, paceMs: 0, onStatus: (s) => statuses.push(s) });
+    const sequencer = makeSequencer({ controller, paceMs: 0, onStatus: (s) => statuses.push(s) });
     sequencer.update({ taskId: "t1", ops: opStream(1), completed: true });
     await flush();
     await flush();
@@ -974,4 +987,3 @@ describe("chunk accounting", () => {
     expect(statuses.at(-1)?.error).toContain("of 2 shapes");
   });
 });
-
