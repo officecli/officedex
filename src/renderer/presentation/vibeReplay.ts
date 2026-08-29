@@ -982,7 +982,7 @@ export class VibeReplaySequencer {
     chunk: VibeOp[],
     captures: Array<{ seq: number; content: string; shape?: string }>,
   ) {
-    if (!this.capturing || !this.taskId || captures.length === 0) return;
+    if (this.disposed || !this.capturing || !this.taskId || captures.length === 0) return;
     const session = this.controller.session?.();
     if (!session?.sessionId) return;
     const bySeq = new Map(chunk.map((op) => [op.seq, op]));

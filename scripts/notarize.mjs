@@ -23,10 +23,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import {
-  buildNotarizationSigningPlan,
-  refreshRuntimeManifestNodeChecksum,
-} from "./codesign-bundled-officecli.mjs";
+import { buildNotarizationSigningPlan } from "./codesign-bundled-officecli.mjs";
 
 const IDENTITY =
   process.env.CODESIGN_IDENTITY ||
@@ -122,10 +119,6 @@ async function main() {
         continue;
       }
       signBinary(item.target, item.entitlements);
-      if (item.refreshRuntimeManifest) {
-        await refreshRuntimeManifestNodeChecksum(item.target);
-        console.log("[sign] refreshed notarized Node checksum in runtime.json");
-      }
     }
 
     console.log("[sign] verifying...");
