@@ -1714,6 +1714,33 @@ func TestBuildBridgeEnvStripsSystemProxyWhenNoSupplierProxy(t *testing.T) {
 	}
 }
 
+func TestBuildBridgeEnvStripsSystemProxyWhenSupplierReturnsNil(t *testing.T) {
+	t.Cleanup(func() { SetProxyEnvSupplier(nil) })
+	prevEnviron := syscallEnviron
+	syscallEnviron = func() []string {
+		return []string{
+			"PATH=/usr/bin",
+			"HTTP_PROXY=http://system-proxy:7890",
+			"HTTPS_PROXY=http://system-proxy:7890",
+			"ALL_PROXY=http://system-proxy:7890",
+			"NO_PROXY=localhost",
+		}
+	}
+	t.Cleanup(func() { syscallEnviron = prevEnviron })
+	SetProxyEnvSupplier(func() []string { return nil })
+	env := BuildBridgeEnv(nil)
+	for _, kv := range env {
+		key, _, _ := strings.Cut(kv, "=")
+		switch strings.ToUpper(key) {
+		case "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY":
+			t.Fatalf("system proxy env leaked: %q", kv)
+		}
+	}
+	if !contains(env, "PATH=/usr/bin") {
+		t.Errorf("non-proxy env PATH missing in %v", env)
+	}
+}
+
 func TestBuildBridgeEnvKeepsSupplierProxyOverSystem(t *testing.T) {
 	t.Cleanup(func() { SetProxyEnvSupplier(nil) })
 	prevEnviron := syscallEnviron

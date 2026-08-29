@@ -62,7 +62,11 @@ func BuildBridgeEnv(extra []string) []string {
 	if proxyEnvSupplier != nil {
 		suppliedProxy = proxyEnvSupplier()
 	}
-	if suppliedProxy == nil {
+	// A registered supplier may legitimately return nil when the app-level
+	// proxy is disabled. In that case system proxy variables must still be
+	// stripped; otherwise a stale HTTP_PROXY inherited by the desktop app leaks
+	// into the OfficeCLI subprocess and makes the direct path non-deterministic.
+	if len(suppliedProxy) == 0 {
 		base = stripProxyKV(base)
 	}
 	base = appendKV(base, "OFFICECLI_SKIP_SKILL_PREFLIGHT", "1")
