@@ -356,6 +356,11 @@ func newRealOfficeDexApp(t *testing.T) *App {
 	if os.Getenv("OFFICEDEX_E2E_REAL") != "1" {
 		t.Skip("OFFICEDEX_E2E_REAL=1 is required for real OfficeDex E2E")
 	}
+	// Keep every real E2E run's OfficeCLI subprocess isolated from the user's
+	// global CLI home. Without this, stale sessions/jobs from earlier runs are
+	// reattached by the bridge and appear as duplicate image generations.
+	restoreHome := setRealAppTemporaryHome(t)
+	t.Cleanup(restoreHome)
 
 	binary := realAppBinary(t)
 	root := filepath.Join(realAppOutputRoot(t), "_app")
