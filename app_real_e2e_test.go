@@ -356,6 +356,7 @@ func newRealOfficeDexApp(t *testing.T) *App {
 	if os.Getenv("OFFICEDEX_E2E_REAL") != "1" {
 		t.Skip("OFFICEDEX_E2E_REAL=1 is required for real OfficeDex E2E")
 	}
+	seedRealE2EOfficeCLIAuth(t)
 	// Keep every real E2E run's OfficeCLI subprocess isolated from the user's
 	// global CLI home. Without this, stale sessions/jobs from earlier runs are
 	// reattached by the bridge and appear as duplicate image generations.
@@ -443,6 +444,45 @@ func newRealOfficeDexApp(t *testing.T) *App {
 		t.Fatalf("initializeWorkspaces: %v", err)
 	}
 	return app
+}
+
+// seedRealE2EOfficeCLIAuth carries the user's existing hosted session into the
+// per-run isolated HOME. This keeps the E2E environment isolated without
+// silently falling back to anonymous image quota.
+func seedRealE2EOfficeCLIAuth(t *testing.T) {
+	t.Helper()
+	home := strings.TrimSpace(os.Getenv("HOME"))
+	if home == "" {
+		return
+	}
+	path := filepath.Join(home, "Library", "Application Support", "officecli", "config.json")
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	var cfg struct {
+		License struct {
+			BaseURL      string `json:"base_url"`
+			SessionToken string `json:"session_token"`
+			UserID       uint64 `json:"user_id"`
+		} `json:"license"`
+	}
+	if json.Unmarshal(body, &cfg) != nil || strings.TrimSpace(cfg.License.SessionToken) == "" {
+		return
+	}
+	for key, value := range map[string]string{
+		"OFFICE_CLI_SESSION_TOKEN":    cfg.License.SessionToken,
+		"OFFICE_CLI_LICENSE_BASE_URL": strings.TrimSpace(cfg.License.BaseURL),
+		"OFFICE_CLI_LICENSE_ENABLED":  "1",
+		"OFFICE_CLI_RUNTIME_MODE":     "hosted",
+	} {
+		if value != "" {
+			t.Setenv(key, value)
+		}
+	}
+	if cfg.License.UserID != 0 {
+		t.Setenv("OFFICE_CLI_LICENSE_USER_ID", fmt.Sprintf("%d", cfg.License.UserID))
+	}
 }
 
 type appUpdateFixtureOptions struct {
