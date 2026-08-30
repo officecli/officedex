@@ -34,7 +34,7 @@ export async function bundleWindowsOffice2modoc({ app, source, expectedSha256 = 
   return { target, sha256: actualSha256 };
 }
 
-export async function bundleOffice2modoc({ app, source = DEFAULT_OFFICE2MODOC_SOURCE, identity = "-", sign = true, expectedSha256 = "", validateUniversal = process.platform === "darwin" }) {
+export async function bundleOffice2modoc({ app, source = DEFAULT_OFFICE2MODOC_SOURCE, identity = "-", sign = true, expectedSha256 = "", expectedArch = "", validateUniversal = process.platform === "darwin" && !expectedArch }) {
   if (!app) throw new Error("--app <path/to/OfficeDex.app> is required");
   await access(source).catch(() => {
     throw new Error(`office2modoc FFI not found at ${source}; stage release ${OFFICE2MODOC_VERSION} before building`);
@@ -43,10 +43,17 @@ export async function bundleOffice2modoc({ app, source = DEFAULT_OFFICE2MODOC_SO
   if (expectedSha256 && actualSha256 !== expectedSha256) {
     throw new Error(`office2modoc FFI checksum mismatch: got ${actualSha256}, want ${expectedSha256}`);
   }
-  if (validateUniversal) {
+  if (validateUniversal || expectedArch) {
     const archs = await output("lipo", ["-archs", source]);
-    for (const required of ["arm64", "x86_64"]) {
-      if (!archs.split(/\s+/).includes(required)) throw new Error(`office2modoc macOS FFI is not universal2: ${archs.trim()}`);
+    const slices = archs.split(/\s+/).filter(Boolean);
+    if (expectedArch) {
+      if (slices.length !== 1 || slices[0] !== expectedArch) {
+        throw new Error(`office2modoc macOS FFI must be single-arch ${expectedArch}: ${archs.trim()}`);
+      }
+    } else {
+      for (const required of ["arm64", "x86_64"]) {
+        if (!slices.includes(required)) throw new Error(`office2modoc macOS FFI is not universal2: ${archs.trim()}`);
+      }
     }
   }
   const targetDir = path.join(app, "Contents", "Resources", "office2modoc");
@@ -61,12 +68,13 @@ export async function bundleOffice2modoc({ app, source = DEFAULT_OFFICE2MODOC_SO
 }
 
 function parseArgs(argv) {
-  const args = { app: "", source: DEFAULT_OFFICE2MODOC_SOURCE, identity: "-", expectedSha256: "", platform: process.platform === "win32" ? "windows" : "macos" };
+  const args = { app: "", source: DEFAULT_OFFICE2MODOC_SOURCE, identity: "-", expectedSha256: "", expectedArch: "", platform: process.platform === "win32" ? "windows" : "macos" };
   for (let index = 0; index < argv.length; index += 1) {
     if (argv[index] === "--app") args.app = argv[++index];
     else if (argv[index] === "--source") args.source = argv[++index];
     else if (argv[index] === "--identity") args.identity = argv[++index];
     else if (argv[index] === "--expected-sha256") args.expectedSha256 = argv[++index];
+    else if (argv[index] === "--expected-arch") args.expectedArch = argv[++index];
     else if (argv[index] === "--platform") args.platform = argv[++index];
   }
   return args;
