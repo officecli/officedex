@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 	"unsafe"
@@ -99,6 +100,7 @@ func (n *windowsNative) Import(params ImportParams) (uint8, error) {
 	_ = lang
 	cParams := windowsImportParams{requestID: requestIDPtr, inputOfficePath: inputPtr, shimoPath: shimoPtr, tempPath: tempPtr, token: tokenPtr, configPath: configPtr, password: passwordPtr, fileType: 1, limit: limitPtr, lang: langPtr}
 	r1, _, _ := n.importFn.Call(uintptr(unsafe.Pointer(&cParams)))
+	runtime.KeepAlive([][]byte{requestID, input, shimo, temp, token, config, password, limit, lang})
 	return uint8(r1), nil
 }
 
@@ -132,6 +134,7 @@ func (n *windowsNative) Export(params ExportParams) (uint8, error) {
 	_ = lang
 	cParams := windowsExportParams{requestID: requestIDPtr, outputOfficePath: outputPtr, shimoPath: shimoPtr, tempPath: tempPtr, token: tokenPtr, configPath: configPtr, password: passwordPtr, fileType: 1, toType: toTypePtr, lang: langPtr}
 	r1, _, _ := n.exportFn.Call(uintptr(unsafe.Pointer(&cParams)))
+	runtime.KeepAlive([][]byte{requestID, output, shimo, temp, token, config, password, toType, lang})
 	return uint8(r1), nil
 }
 

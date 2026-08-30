@@ -23,6 +23,7 @@
     "bundle:licenses:mac": "node scripts/bundle-licenses.mjs --target build/bin/OfficeDex.app",
     "bundle:licenses:win": "node scripts/bundle-licenses.mjs --target build/bin",
     "bundle:office2modoc:mac": "node scripts/bundle-office2modoc.mjs --app build/bin/OfficeDex.app",
+    "bundle:office2modoc:win": "node scripts/bundle-office2modoc.mjs --platform windows --app build/bin --source build/cache/office2modoc/0.1.34/windows-amd64/office2modoc_ffi.dll",
     "bundle:officecli:mac": "node scripts/codesign-bundled-officecli.mjs --app build/bin/OfficeDex.app --source build/officecli/officecli --entitlements build/darwin/local-entitlements.plist",
     "build:pptist": "bash scripts/build-embedded-pptist.sh",
     "build:learnof": "bash scripts/build-embedded-learnof.sh",

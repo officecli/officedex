@@ -14,7 +14,7 @@ test("bundles the office2modoc FFI into macOS app resources", async (t) => {
   await writeFile(source, "test ffi");
   const expectedSha256 = await sha256File(source);
 
-  const result = await bundleOffice2modoc({ app, source, sign: false, expectedSha256 });
+  const result = await bundleOffice2modoc({ app, source, sign: false, expectedSha256, validateUniversal: false });
 
   assert.equal(result.sha256, expectedSha256);
   assert.equal(await readFile(result.target, "utf8"), "test ffi");
@@ -26,7 +26,7 @@ test("rejects an unexpected office2modoc binary", async (t) => {
   const source = path.join(root, "liboffice2modoc_ffi.dylib");
   await writeFile(source, "unexpected");
   await assert.rejects(
-    bundleOffice2modoc({ app: path.join(root, "OfficeDex.app"), source, sign: false, expectedSha256: "0".repeat(64) }),
+    bundleOffice2modoc({ app: path.join(root, "OfficeDex.app"), source, sign: false, expectedSha256: "0".repeat(64), validateUniversal: false }),
     /checksum mismatch/,
   );
 });

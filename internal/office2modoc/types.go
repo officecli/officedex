@@ -3,7 +3,7 @@ package office2modoc
 import "errors"
 
 const (
-	DefaultRelativeLibraryPath       = "build/cache/office2modoc/0.1.34/darwin-arm64/liboffice2modoc_ffi.dylib"
+	DefaultRelativeLibraryPath       = "build/cache/office2modoc/0.1.34/darwin-universal/liboffice2modoc_ffi.dylib"
 	BundledRelativeLibraryPath       = "../Resources/office2modoc/liboffice2modoc_ffi.dylib"
 	ImportLimitJSON                  = `{"slideSize":10000,"wordCharCount":100000000,"excelSingleSheetCell":2000000,"excelAllSheetCell":5000000}`
 	MaxOfficeBytes             int64 = 100 << 20
