@@ -15,6 +15,26 @@ export async function sha256File(filePath) {
   return createHash("sha256").update(await readFile(filePath)).digest("hex");
 }
 
+/** Bundle the Windows DLL next to the executable in <app>/office2modoc/. */
+export async function bundleWindowsOffice2modoc({ app, source, expectedSha256 = "", validatePE = true }) {
+  if (!app) throw new Error("--app <path/to/OfficeDex> is required");
+  if (!source) throw new Error("--source <path/to/office2modoc_ffi.dll> is required");
+  await access(source).catch(() => { throw new Error(`office2modoc FFI not found at ${source}`); });
+  const bytes = await readFile(source);
+  if (validatePE && (bytes.length < 2 || bytes[0] !== 0x4d || bytes[1] !== 0x5a)) {
+    throw new Error(`office2modoc Windows FFI is not a PE DLL: ${source}`);
+  }
+  const actualSha256 = createHash("sha256").update(bytes).digest("hex");
+  if (expectedSha256 && actualSha256 !== expectedSha256) {
+    throw new Error(`office2modoc FFI checksum mismatch: got ${actualSha256}, want ${expectedSha256}`);
+  }
+  const targetDir = path.join(app, "office2modoc");
+  const target = path.join(targetDir, "office2modoc_ffi.dll");
+  await mkdir(targetDir, { recursive: true });
+  await copyFile(source, target);
+  return { target, sha256: actualSha256 };
+}
+
 export async function bundleOffice2modoc({ app, source = DEFAULT_OFFICE2MODOC_SOURCE, identity = "-", sign = true, expectedSha256 = OFFICE2MODOC_SHA256 }) {
   if (!app) throw new Error("--app <path/to/OfficeDex.app> is required");
   await access(source).catch(() => {
