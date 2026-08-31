@@ -48,6 +48,8 @@
 }
 
 .home-shell__stage {
+  position: relative;
+  isolation: isolate;
   min-width: 0;
   min-height: 0;
   overflow: auto;
@@ -206,7 +208,7 @@
 .project-sidebar__document:hover, .project-sidebar__document[data-active="true"] { background: var(--od-surface); color: var(--od-ink); }
 .project-sidebar__document-open { display: grid; min-width: 0; grid-template-columns: 20px minmax(0, 1fr) 8px; align-items: center; gap: 7px; min-height: 30px; padding: 0 7px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .project-sidebar__document-open > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.project-sidebar__document-type { display: grid; width: 18px; height: 18px; place-items: center; border-radius: 4px; background: color-mix(in srgb, var(--od-ink) 8%, transparent); font-size: 10px; font-weight: 650; }
+.project-sidebar__document-open .doc-type-icon { width: 18px; height: 18px; }
 .project-sidebar__document-open em { width: 7px; height: 7px; border-radius: 999px; background: var(--od-ink-tertiary); }
 .project-sidebar__document em[data-status="starting"], .project-sidebar__document em[data-status="running"] { background: #2f7dd1; }
 .project-sidebar__document em[data-status="question"], .project-sidebar__document em[data-status="plan_review"] { background: #d98524; }
@@ -215,7 +217,10 @@
 .project-sidebar__document:hover .project-sidebar__document-delete,
 .project-sidebar__document:focus-within .project-sidebar__document-delete { opacity: 1; }
 .project-sidebar__document-delete:hover { background: color-mix(in srgb, var(--od-danger) 10%, transparent); color: var(--od-danger); }
-.project-sidebar__unscoped-documents { display: grid; gap: 2px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--od-hairline); }
+.project-sidebar__unscoped-documents { display: grid; gap: 2px; margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--od-hairline); }
+.project-sidebar__unscoped-header { display: flex; align-items: center; gap: 5px; min-height: 20px; padding: 0 7px; color: var(--od-ink-secondary); font-size: 11px; font-weight: 500; }
+.project-sidebar__unscoped-count { color: var(--od-ink-tertiary); font-variant-numeric: tabular-nums; }
+.project-sidebar__unscoped-documents .project-sidebar__document { margin-left: 0; }
 .project-sidebar__workspace-select span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-sidebar__workspace-actions { display: flex; align-items: center; padding-right: 2px; opacity: 0; visibility: hidden; transition: opacity 120ms ease, visibility 120ms ease; }
 .project-sidebar__workspace:hover .project-sidebar__workspace-actions,
@@ -292,7 +297,7 @@
 
 /* OpenDesign-inspired homepage: retain OfficeDex workflows and assets while
    adopting the centered canvas, pill navigation and gallery rhythm. */
-.home-shell__stage:has(.home-screen) {
+.home-shell__stage--textured {
   background-color: color-mix(in srgb, var(--od-surface-muted) 72%, white);
   background-image:
     radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--od-ink) 10%, transparent) 1px, transparent 1.2px),
@@ -307,17 +312,17 @@
   padding: 54px clamp(28px, 4.5vw, 72px) 72px;
 }
 
-.home-pointer-field {
+.home-shell__pointer-field {
   position: absolute;
   z-index: 0;
-  inset: 0;
+  inset: 0 auto auto 0;
   width: 100%;
   height: 100%;
   pointer-events: none;
   mix-blend-mode: multiply;
 }
 
-.home-screen > :not(.home-pointer-field) {
+.home-shell__stage > :not(.home-shell__pointer-field) {
   position: relative;
   z-index: 1;
 }
@@ -420,11 +425,6 @@
 .home-intake__types button.is-selected { background: color-mix(in srgb, var(--doc-color, var(--od-ink)) 14%, transparent); color: var(--od-ink); font-weight: 600; }
 .home-intake__types button:focus-visible { outline: 2px solid var(--od-guidance); outline-offset: 2px; }
 .home-intake__types button .doc-type-icon { margin-left: -2px; }
-.home-intake__footer > .ui-button:last-child { width: 40px; min-width: 40px; height: 40px; overflow: hidden; gap: 0; border: 0; border-radius: 50%; padding: 0; color: white; font-size: 0; }
-.home-intake__footer > .ui-button:last-child .ui-button__icon { display: grid; width: 100%; height: 100%; place-items: center; line-height: 0; }
-.home-intake__footer > .ui-button:last-child .ui-button__icon svg { display: block; width: 18px; height: 18px; }
-.home-intake__footer > .ui-button:last-child .ui-button__label { display: none; }
-.home-intake__footer > .ui-button:last-child:disabled { background: var(--od-ink); opacity: .3; }
 .home-intake__references { display: flex; flex-wrap: wrap; gap: 8px; border-top: 1px solid var(--od-border-subtle); padding: 10px 12px; }
 .home-intake__type-options { display: flex; align-items: center; gap: 6px; padding: 0 16px 10px; color: var(--od-ink-secondary); font-size: 12px; }
 .home-intake__type-options > span { margin-right: 4px; }
@@ -532,7 +532,7 @@
 }
 
 @media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) {
-  .home-pointer-field { display: none; }
+  .home-shell__pointer-field { display: none; }
 }
 
 /* In-flight work sits in Recent: a running task shows its stage and progress,

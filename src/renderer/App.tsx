@@ -10,7 +10,8 @@ import { getHomeDropZone, setHomeDropZone } from "./homeDropZone";
 import type { SidebarAccount, SidebarDocument } from "./components/ProjectSidebar";
 import { Shell } from "./components/Shell";
 import { PreviewPanel } from "./components/PreviewPanel";
-import { buildReplayFeed, registerLiveDraft, VIBE_REPLAY_FINISHED_EVENT, type VibeReplayFinishedDetail } from "./presentation/vibeReplay";
+import { buildReplayFeed, liveTaskForFile, registerLiveDraft, VIBE_REPLAY_FINISHED_EVENT, type VibeReplayFinishedDetail } from "./presentation/vibeReplay";
+import { shouldKeepLivePreviewOnCompletion } from "./presentation/completionPreviewPolicy";
 import type { TimelineDeck, TimelineNode, VibeOp } from "../shared/types";
 import type { SidebarUpdateRowProps } from "./components/SidebarUpdateRow";
 import { ForceUpdateOverlay } from "./components/ForceUpdateOverlay";
@@ -380,23 +381,10 @@ function OfficeDexApp() {
         setRecentFilesLoading(false);
         setRecentFilesError(t("home.bridgeUnavailable"));
         setBridgeInterruptionKey((current) => current + 1);
-        const interruptedMessage = t("task.interrupted.bridge");
-        setState((current) => {
-          let next = current;
-          for (const taskID of current.taskOrder) {
-            const task = next.tasks[taskID];
-            if (!task || !["starting", "running", "question", "plan_review"].includes(task.status)) continue;
-            next = applyTaskEvent(next, {
-              type: "task.failed",
-              task_id: taskID,
-              ts: new Date().toISOString(),
-              payload: { message: interruptedMessage, reason: "bridge_interrupted" },
-            });
-          }
-          return next;
-        });
-        pendingGenerateRef.current = null;
-        setBusy(false);
+        // Native OfficeCLI Runtime tasks survive the stdio bridge process and
+        // are reattached after reconnect. Treat this as a transport outage,
+        // not a task failure; authoritative task/status or later task events
+        // decide whether any individual run actually failed.
         return;
       }
       const pending = pendingGenerateRef.current;
@@ -1185,22 +1173,32 @@ function OfficeDexApp() {
     }
   }, [previewGrant]);
 
+  const [liveDraftTaskId, setLiveDraftTaskId] = useState<string | null>(null);
+
   useEffect(() => {
     const taskId = stageFirstTaskRef.current;
     if (!taskId) return;
     const task = state.tasks[taskId];
     if (!task) return;
-    if (task.status === "completed" && task.artifact?.filePath) {
+    if (task.status === "completed") {
       stageFirstTaskRef.current = undefined;
       setStageFirstTaskId(undefined);
-      void openInlinePreview(task.artifact);
+      const keepLivePreview = shouldKeepLivePreviewOnCompletion({
+        taskId,
+        liveDraftTaskId,
+        previewTaskId: previewArtifact?.taskId,
+        previewLiveTaskId: previewArtifact?.filePath ? liveTaskForFile(previewArtifact.filePath) : undefined,
+      });
+      if (!keepLivePreview && task.artifact?.filePath) {
+        void openInlinePreview(task.artifact);
+      }
       return;
     }
     if (task.status === "failed" || task.status === "cancelled") {
       stageFirstTaskRef.current = undefined;
       setStageFirstTaskId(undefined);
     }
-  }, [openInlinePreview, state.tasks]);
+  }, [liveDraftTaskId, openInlinePreview, previewArtifact?.filePath, previewArtifact?.taskId, state.tasks]);
 
   const openTaskFromHome = useCallback((taskId: string) => {
     const task = state.tasks[taskId];
@@ -1407,8 +1405,6 @@ function OfficeDexApp() {
   // First task.vibe_primitives for a task opens the presentation editor on a
   // blank draft and the replay sequencer inside PptxViewer draws the deck as
   // the primitives stream in. One draft per task; never steal an open preview.
-  const [liveDraftTaskId, setLiveDraftTaskId] = useState<string | null>(null);
-
   const timelineTaskId = liveDraftTaskId ?? previewArtifact?.taskId ?? undefined;
 
   const openTimelineNode = useCallback(async (deck: TimelineDeck, node: TimelineNode) => {
@@ -1670,8 +1666,8 @@ function OfficeDexApp() {
       if (spreadsheetWorkspaceRef.current) return spreadsheetWorkspaceRef.current;
       await delay(50);
     }
-    throw new AgentClientToolDeferredError("等待表格工作区恢复超时，请从 Tasks 页面重试该 Run。");
-  }, []);
+    throw new AgentClientToolDeferredError(t("tasks.runtime.restoreTimeout"));
+  }, [t]);
 
   // What this page currently has open, for the client-tool host's pre-write check.
   const currentAgentDocumentPath = useCallback(
@@ -1684,11 +1680,11 @@ function OfficeDexApp() {
       const expectedType = surface === "pptx-editor" ? "pptx" : "docx";
       const sourcePath = run.metadata?.source_path;
       if (previewArtifact && previewArtifact.documentType !== expectedType) {
-        throw new AgentClientToolDeferredError(`当前预览不是 ${expectedType.toUpperCase()} 文档，请关闭后从 Tasks 页面恢复该 Run。`);
+        throw new AgentClientToolDeferredError(t("tasks.runtime.previewTypeMismatch", { type: expectedType.toUpperCase() }));
       }
       if (sourcePath && previewArtifact?.filePath !== sourcePath) {
         if (previewArtifact || previewGrant) {
-          throw new AgentClientToolDeferredError("另一个文档仍在预览中；请先关闭它，再恢复该 Run。");
+          throw new AgentClientToolDeferredError(t("tasks.runtime.otherDocumentOpen"));
         }
         const file: RecentFile = {
           filePath: sourcePath,
@@ -1702,10 +1698,10 @@ function OfficeDexApp() {
         setPreviewArtifact(artifact);
         setPreviewGrant(grant);
       } else if (!sourcePath && !previewArtifact) {
-        throw new AgentClientToolDeferredError(`Run ${run.id} 缺少可恢复的 source_path。`);
+        throw new AgentClientToolDeferredError(t("tasks.runtime.sourcePathMissing", { runId: run.id }));
       }
       if (!await waitForActiveEditorSurface(surface as ActiveEditorSurface)) {
-        throw new AgentClientToolDeferredError(`${expectedType.toUpperCase()} 编辑器尚未准备好，请从 Tasks 页面重试该 Run。`);
+        throw new AgentClientToolDeferredError(t("tasks.runtime.editorNotReady", { type: expectedType.toUpperCase() }));
       }
       return;
     }
@@ -1729,7 +1725,7 @@ function OfficeDexApp() {
       && (workbookPath !== currentPath || !spreadsheet.session.grant)
     ) {
       if (spreadsheet.session.dirty) {
-        throw new AgentClientToolDeferredError("另一个工作簿存在未保存修改；请先保存或放弃修改，再恢复该 Run。");
+        throw new AgentClientToolDeferredError(t("tasks.runtime.otherWorkbookDirty"));
       }
       const artifact = await officecli.openRecentFile({
         filePath: workbookPath,
@@ -1751,24 +1747,24 @@ function OfficeDexApp() {
         void officecli.revokePreviewToken(previousToken).catch(() => undefined);
       }
     } else if (!workbookPath && !currentPath && requiresExistingWorkbook) {
-      throw new AgentClientToolDeferredError(`Run ${run.id} 缺少可恢复的 workbook_path。`);
+      throw new AgentClientToolDeferredError(t("tasks.runtime.workbookPathMissing", { runId: run.id }));
     }
     setSpreadsheetPreferredTool(preferredTool);
     setCatalogAutoScanFile(undefined);
     setActiveNav("spreadsheet");
     const workspace = await waitForSpreadsheetWorkspace();
     if (surface === "app-builder") workspace.openAppBuilder();
-  }, [previewArtifact, previewGrant, spreadsheet.session.artifact?.filePath, spreadsheet.session.dirty, spreadsheet.session.grant?.token, waitForSpreadsheetWorkspace]);
+  }, [previewArtifact, previewGrant, spreadsheet.session.artifact?.filePath, spreadsheet.session.dirty, spreadsheet.session.grant?.token, t, waitForSpreadsheetWorkspace]);
 
   const agentClientToolSurfaces = useMemo<AgentClientToolSurfaces>(() => {
     const workspace = () => {
       if (!spreadsheetWorkspaceRef.current) {
-        throw new AgentClientToolDeferredError("表格工作区尚未恢复。");
+        throw new AgentClientToolDeferredError(t("tasks.runtime.workspaceNotReady"));
       }
       return spreadsheetWorkspaceRef.current;
     };
     const saveWorkbook = async () => {
-      if (!await workspace().save()) throw new Error("工作簿写入已经完成，但保存失败。");
+      if (!await workspace().save()) throw new Error(t("tasks.runtime.workbookSaveFailed"));
       return { saved: true };
     };
     const genericWorkbookTools = {
@@ -1887,7 +1883,7 @@ function OfficeDexApp() {
         "docx.editor.save": (request) => executeActiveEditorClientTool("docx-editor", request.tool, request.arguments),
       },
     };
-  }, [refreshRecentFiles, spreadsheet.openArtifact, spreadsheet.session.artifact, spreadsheet.session.workspaceId]);
+  }, [refreshRecentFiles, spreadsheet.openArtifact, spreadsheet.session.artifact, spreadsheet.session.workspaceId, t]);
 
   const reportAgentClientToolError = useCallback((error: Error, run: AgentRun) => {
     const key = `${run.id}:${error.message}`;
@@ -1912,13 +1908,6 @@ function OfficeDexApp() {
           onTimelineNodeSwapped={(node) => setTimelineNodeId(node.id)}
           onTimelineNodeReturned={() => setTimelineNodeId(null)}
           onReturnToLatestDeck={returnToLatestDeck}
-          onReplayGeneration={
-            previewArtifact?.taskId && (state.tasks[previewArtifact.taskId]?.vibeOps?.length ?? 0) > 0
-              ? () => {
-                  void replayDemoRef.current(previewArtifact.taskId);
-                }
-              : undefined
-          }
         />
       )
     : undefined;
@@ -2014,7 +2003,7 @@ function OfficeDexApp() {
                 task_id: task.id,
                 type: "task.cancelled",
                 ts: new Date().toISOString(),
-                payload: { message: "任务已取消" },
+                payload: { message: t("tasks.cancelled") },
               }));
             }}
             onStartTask={startTaskFromHome}
@@ -2127,12 +2116,12 @@ function OfficeDexApp() {
                       && catalogAutoScanFile === spreadsheet.session.artifact.filePath
                       && (spreadsheet.session.phase === "ready" || spreadsheet.session.phase === "dirty")}
                     onInspect={() => {
-                      if (!spreadsheetWorkspaceRef.current) throw new Error("表格仍在加载，请稍后重试。");
+                      if (!spreadsheetWorkspaceRef.current) throw new Error(t("tasks.runtime.workbookLoading"));
                       return spreadsheetWorkspaceRef.current.inspectCatalogSheets();
                     }}
                     onPreview={(batch) => spreadsheetWorkspaceRef.current?.previewCatalogCleanup(batch)}
                     onApply={(batch) => {
-                      if (!spreadsheetWorkspaceRef.current) return Promise.reject(new Error("表格编辑器已关闭。"));
+                      if (!spreadsheetWorkspaceRef.current) return Promise.reject(new Error(t("tasks.runtime.workbookClosed")));
                       return spreadsheetWorkspaceRef.current.applyCatalogCleanup(batch);
                     }}
                     onSave={() => spreadsheetWorkspaceRef.current?.save() ?? Promise.resolve(false)}
@@ -2156,7 +2145,7 @@ function OfficeDexApp() {
                       void refreshRecentFiles(spreadsheet.session.workspaceId);
                     }}
                     onWriteSheet={(result) => {
-                      if (!spreadsheetWorkspaceRef.current) return Promise.reject(new Error("表格编辑器已关闭。"));
+                      if (!spreadsheetWorkspaceRef.current) return Promise.reject(new Error(t("tasks.runtime.workbookClosed")));
                       return spreadsheetWorkspaceRef.current.replaceManagedSheet({ ...result, keyColumn: "Issue Key", preserveColumns: ["OfficeDex Notes"] });
                     }}
                     onSave={() => spreadsheetWorkspaceRef.current?.save() ?? Promise.resolve(false)}
@@ -2180,7 +2169,7 @@ function OfficeDexApp() {
                       void refreshRecentFiles(spreadsheet.session.workspaceId);
                     }}
                     onWriteSheet={(result) => {
-                      if (!spreadsheetWorkspaceRef.current) return Promise.reject(new Error("表格编辑器已关闭。"));
+                      if (!spreadsheetWorkspaceRef.current) return Promise.reject(new Error(t("tasks.runtime.workbookClosed")));
                       return spreadsheetWorkspaceRef.current.replaceManagedSheet({ ...result, keyColumn: "Source URL" });
                     }}
                     onSave={() => spreadsheetWorkspaceRef.current?.save() ?? Promise.resolve(false)}
@@ -2199,7 +2188,7 @@ function OfficeDexApp() {
                     bridgeInterruptionKey={bridgeInterruptionKey}
                     existingImages={recentFiles}
                     onInspect={(assetKind) => {
-                      if (!spreadsheetWorkspaceRef.current) throw new Error("表格仍在加载，请稍后重试。");
+                      if (!spreadsheetWorkspaceRef.current) throw new Error(t("tasks.runtime.workbookLoading"));
                       return spreadsheetWorkspaceRef.current.inspectMarketingSelection(assetKind);
                     }}
                     onAnalyze={(batch) => officecli.planSpreadsheetFields({
@@ -2215,11 +2204,11 @@ function OfficeDexApp() {
                     mappingStorageKey={spreadsheet.session.artifact?.filePath}
                     onPrepare={(batch) => spreadsheetWorkspaceRef.current?.prepareMarketingBatch(batch)}
                     onSetStatus={(batch, rowIndex, status) => {
-                      if (!spreadsheetWorkspaceRef.current) return Promise.reject(new Error("表格编辑器已关闭。"));
+                      if (!spreadsheetWorkspaceRef.current) return Promise.reject(new Error(t("tasks.runtime.workbookClosed")));
                       return spreadsheetWorkspaceRef.current.setMarketingStatus(batch, rowIndex, status);
                     }}
                     onInsertImage={(batch, rowIndex, filePath) => {
-                      if (!spreadsheetWorkspaceRef.current) return Promise.reject(new Error("表格编辑器已关闭。"));
+                      if (!spreadsheetWorkspaceRef.current) return Promise.reject(new Error(t("tasks.runtime.workbookClosed")));
                       return spreadsheetWorkspaceRef.current.insertMarketingImage(batch, rowIndex, filePath);
                     }}
                     onGenerate={startSpreadsheetMarketingImage}

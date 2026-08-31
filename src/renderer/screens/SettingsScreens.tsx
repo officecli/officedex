@@ -1,18 +1,25 @@
 import { Button, Input, Modal, PasswordInput, Progress, Select, Space, Spin, Switch, Tag, toast as message } from "../ui";
 import {
+  BgColorsOutlined,
+  ClockCircleOutlined,
   CommentOutlined,
+  ControlOutlined,
   CopyOutlined,
   DownloadOutlined,
   ExclamationCircleFilled,
-  FolderOpenOutlined,
+  GridOutlined,
   GithubOutlined,
   GlobalOutlined,
+  HistoryOutlined,
   InfoCircleOutlined,
   Loading3QuartersOutlined,
+  LineChartOutlined,
   LogoutOutlined,
   LeftOutlined,
+  NotificationOutlined,
   RocketOutlined,
   SafetyCertificateOutlined,
+  StarOutlined,
   SyncOutlined,
 } from "../ui/icons";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -27,8 +34,7 @@ import { formatTestResult, ProviderForm } from "../components/ProviderForm";
 import { useT, useLocale, useSetLocale, type Locale } from "../i18n";
 import { defaultProxySettings, isValidProxyUrl } from "../defaults";
 import { readNotificationsEnabled, setNotificationsEnabled as persistNotificationsEnabled } from "../notifications";
-import type { AuthEvent, CreditStatus, DocumentType, GenerateDefaults, ImagePromptTemplate, InviteInfo, JiraAuthType, JiraConnectionSummary, JiraProbeResult, LiquipediaConnectionSummary, LiquipediaProbeResult, LlmProvider, ProviderTestResult, ProxySettings, WhoAmIResult } from "../../shared/types";
-import { exportLocalImageTemplatesJSON, importLocalImageTemplatesJSON, loadLocalImageTemplates, saveLocalImageTemplates } from "../localImageTemplates";
+import type { AuthEvent, CreditStatus, DocumentType, GenerateDefaults, InviteInfo, JiraAuthType, JiraConnectionSummary, JiraProbeResult, LiquipediaConnectionSummary, LiquipediaProbeResult, LlmProvider, ProviderTestResult, ProxySettings, WhoAmIResult } from "../../shared/types";
 import { ImeInput, ImeTextArea } from "../components/ImeInput";
 import { errorMessage } from "../utils/values";
 
@@ -41,7 +47,7 @@ export function SettingsScreen({
   onOpenLogin?: () => void;
   activity?: ReactNode;
 } = {}) {
-  const { settings, defaultWorkspaceDir, update: rawUpdate, loading, saving, error } = useSettings();
+  const { settings, update: rawUpdate, loading, saving, error } = useSettings();
   const t = useT();
   const locale = useLocale();
   const setLocale = useSetLocale();
@@ -51,11 +57,7 @@ export function SettingsScreen({
   const [inviteInfo, setInviteInfo] = useState<InviteInfo | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteLoading, setInviteLoading] = useState(false);
-  const [localTemplates, setLocalTemplates] = useState<ImagePromptTemplate[]>(() => loadLocalImageTemplates());
-  const [pasteModalOpen, setPasteModalOpen] = useState(false);
-  const [pasteTemplateJSON, setPasteTemplateJSON] = useState("");
   const [activeSettingsSection, setActiveSettingsSection] = useState("generation");
-  const localTemplateFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -190,62 +192,9 @@ export function SettingsScreen({
           llmProvider: null,
           onboardingCompletedAt: null,
           imageWatermark: { showWatermark: true, preferenceSource: "system" },
-          waiting2048Enabled: false,
         }).catch(() => undefined),
     });
   }, [update, t]);
-
-  const replaceLocalTemplates = useCallback((raw: string): boolean => {
-    try {
-      const imported = importLocalImageTemplatesJSON(raw);
-      saveLocalImageTemplates(imported);
-      setLocalTemplates(imported);
-      void message.success(t("settings.localImageTemplates.importSuccess", { count: imported.length }));
-      return true;
-    } catch (error) {
-      void message.error(t("settings.localImageTemplates.importError", { error: error instanceof Error ? error.message : String(error) }));
-      return false;
-    }
-  }, [t]);
-
-  const importLocalTemplatesFile = useCallback(async (file: File) => {
-    try {
-      replaceLocalTemplates(await readFileText(file));
-    } catch (error) {
-      void message.error(t("settings.localImageTemplates.importError", { error: error instanceof Error ? error.message : String(error) }));
-    }
-  }, [replaceLocalTemplates, t]);
-
-  const downloadLocalTemplates = useCallback(() => {
-    const json = exportLocalImageTemplatesJSON(localTemplates);
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "officedex-local-image-templates.json";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-    void message.success(t("settings.localImageTemplates.exportSuccess", { count: localTemplates.length }));
-  }, [localTemplates, t]);
-
-  const copyLocalTemplatesJSON = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(exportLocalImageTemplatesJSON(localTemplates));
-      void message.success(t("settings.localImageTemplates.copySuccess", { count: localTemplates.length }));
-    } catch {
-      void message.error(t("settings.localImageTemplates.copyError"));
-    }
-  }, [localTemplates, t]);
-
-  const importPastedLocalTemplates = useCallback(() => {
-    const ok = replaceLocalTemplates(pasteTemplateJSON);
-    if (ok) {
-      setPasteTemplateJSON("");
-      setPasteModalOpen(false);
-    }
-  }, [pasteTemplateJSON, replaceLocalTemplates]);
 
   const selectSettingsSection = useCallback((section: string) => {
     setActiveSettingsSection(section);
@@ -262,46 +211,53 @@ export function SettingsScreen({
     }
   }, [inviteInfo, t]);
 
+  const advancedLabel = t("settings.group.advanced");
   const settingsSections = [
-    { key: "generation", label: t("settings.group.generation"), icon: "auto_awesome" },
-    { key: "notifications", label: t("settings.group.notifications"), icon: "notifications" },
-    { key: "appearance", label: t("settings.group.appearance"), icon: "palette" },
-    { key: "workspace", label: t("settings.group.workspace"), icon: "folder_open" },
-    { key: "connection", label: t("settings.group.connection"), icon: "tune" },
-    { key: "subscription", label: t("settings.group.subscription"), icon: "shield_lock" },
-    { key: "activity", label: t("settings.group.activity"), icon: "schedule" },
-    { key: "diagnostics", label: t("diagnostics.title"), icon: "query_stats" },
-    { key: "reset", label: t("settings.group.reset"), icon: "history_edu" },
-    { key: "about", label: t("settings.group.about"), icon: "grid_view" },
+    { key: "generation", label: t("settings.group.generation"), icon: <StarOutlined /> },
+    { key: "notifications", label: t("settings.group.notifications"), icon: <NotificationOutlined /> },
+    { key: "appearance", label: t("settings.group.appearance"), icon: <BgColorsOutlined /> },
+    { key: "connection", label: t("settings.group.connection"), icon: <ControlOutlined /> },
+    { key: "subscription", label: t("settings.group.subscription"), icon: <SafetyCertificateOutlined /> },
+    { key: "activity", label: t("settings.group.activity"), icon: <ClockCircleOutlined /> },
+    { key: "advanced", label: advancedLabel, icon: <LineChartOutlined /> },
+    { key: "reset", label: t("settings.group.reset"), icon: <HistoryOutlined /> },
+    { key: "about", label: t("settings.group.about"), icon: <GridOutlined /> },
   ];
 
   return (
-    <div className="settings-layout">
-      <section className="settings-panel">
-        <div className="page-header">
+    <div className="settings-stage">
+      <div className="settings-page">
+        <div className="settings-hero page-header">
           <div>
+            <p className="settings-eyebrow">OFFICEDEX SETTINGS</p>
             <h1>{t("settings.page.title")}</h1>
             <p>{t("settings.page.subtitle")}</p>
           </div>
-          {saving ? <Tag color="processing">{t("settings.tag.saving")}</Tag> : <Tag color="green">{t("settings.tag.autoSaved")}</Tag>}
+          <div className="settings-save-status" data-state={saving ? "saving" : "saved"}>
+            <span aria-hidden="true" />
+            {saving ? t("settings.tag.saving") : t("settings.tag.autoSaved")}
+          </div>
         </div>
+        <div className="settings-layout">
         <div className="settings-secondary-menu">
         <nav aria-label={t("settings.secondaryMenu.label")}>
           {settingsSections.map((section) => (
+            <div className={section.key === "activity" ? "settings-nav-group-start" : undefined} key={section.key}>
             <button
-              key={section.key}
               type="button"
               className={activeSettingsSection === section.key ? "active" : ""}
               aria-label={section.label}
               aria-current={activeSettingsSection === section.key ? "true" : undefined}
               onClick={() => selectSettingsSection(section.key)}
             >
-              <MaterialSymbol name={section.icon} />
+              <span className="settings-nav-icon" aria-hidden="true">{section.icon}</span>
               <span>{section.label}</span>
             </button>
+            </div>
           ))}
         </nav>
         </div>
+        <section className="settings-content">
         {error ? (
           <div className="settings-error">
             <ExclamationCircleFilled /> {error}
@@ -312,10 +268,13 @@ export function SettingsScreen({
         ) : (
           <>
             {activeSettingsSection === "generation" ? (
-            <div className="setting-group" id={settingsSectionId("generation")}>
-              <h2>{t("settings.group.generation")}</h2>
+            <SettingsSection
+              id={settingsSectionId("generation")}
+              title={t("settings.group.generation")}
+            >
               <SettingRow title={t("settings.row.documentType.title")} desc={t("settings.row.documentType.desc")}>
                 <Select
+                  className="settings-select"
                   value={settings.defaults.documentType}
                   onChange={(value: DocumentType) => updateDefaults({ documentType: value })}
                   options={[
@@ -330,93 +289,43 @@ export function SettingsScreen({
                 />
               </SettingRow>
               <SettingRow title={t("settings.row.enableImages.title")} desc={t("settings.row.enableImages.desc")}>
-                <Switch
-                  aria-label={t("settings.row.enableImages.title")}
+                <SettingsToggle
+                  label={toggleStatusLabel(settings.defaults.enableImages, locale)}
                   checked={settings.defaults.enableImages}
+                  ariaLabel={t("settings.row.enableImages.title")}
                   onChange={(checked) => updateDefaults({ enableImages: checked })}
                 />
               </SettingRow>
-              <SettingRow title={t("settings.row.waiting2048.title")} desc={t("settings.row.waiting2048.desc")}>
-                <Switch
-                  aria-label={t("settings.row.waiting2048.title")}
-                  checked={settings.waiting2048Enabled}
-                  onChange={(checked) => update({ waiting2048Enabled: checked }).catch(() => undefined)}
-                />
-              </SettingRow>
-              <SettingRow title={t("settings.row.imageWatermark.title")} desc={t("settings.row.imageWatermark.desc")}>
-                <div className="settings-stack">
-                  <Switch
-                    aria-label={t("settings.row.imageWatermark.showLabel")}
-                    checked={displayedShowWatermark}
-                    disabled={!hasPaidEntitlement}
-                    onChange={(checked) =>
-                      update({
-                        imageWatermark: { ...watermarkSettings, showWatermark: checked, preferenceSource: "user" },
-                      }).catch(() => undefined)
-                    }
-                  />
-                  <span className="settings-inline-label">{t("settings.row.imageWatermark.showLabel")}</span>
-                  <div className="settings-note">
-                    {hasPaidEntitlement
-                      ? t("settings.row.imageWatermark.paidNotice")
-                      : t("settings.row.imageWatermark.freeNotice")}
-                  </div>
-                </div>
-              </SettingRow>
-              <SettingRow title={t("settings.localImageTemplates.title")} desc={t("settings.localImageTemplates.desc")}>
-                <div className="local-image-template-tools">
-                  <div className="settings-note">{formatLocalTemplateCount(localTemplates.length, t)}</div>
-                  <Space wrap>
-                    <Button icon={<FolderOpenOutlined />} onClick={() => localTemplateFileInputRef.current?.click()}>
-                      {t("settings.localImageTemplates.importFile")}
-                    </Button>
-                    <Button icon={<CopyOutlined />} onClick={() => setPasteModalOpen(true)}>
-                      {t("settings.localImageTemplates.paste")}
-                    </Button>
-                    <Button icon={<DownloadOutlined />} onClick={downloadLocalTemplates}>
-                      {t("settings.localImageTemplates.download")}
-                    </Button>
-                    <Button icon={<CopyOutlined />} onClick={copyLocalTemplatesJSON}>
-                      {t("settings.localImageTemplates.copy")}
-                    </Button>
-                  </Space>
-                  <input
-                    ref={localTemplateFileInputRef}
-                    type="file"
-                    accept="application/json,.json"
-                    className="local-image-template-file-input"
-                    onChange={(event) => {
-                      const file = event.currentTarget.files?.[0];
-                      event.currentTarget.value = "";
-                      if (file) void importLocalTemplatesFile(file);
-                    }}
-                  />
-                </div>
-              </SettingRow>
-            </div>
+            </SettingsSection>
             ) : null}
             {activeSettingsSection === "notifications" ? (
-            <div className="setting-group" id={settingsSectionId("notifications")}>
-              <h2>{t("settings.group.notifications")}</h2>
+            <SettingsSection
+              id={settingsSectionId("notifications")}
+              title={t("settings.group.notifications")}
+            >
               <SettingRow title={t("settings.notifications.label")} desc={t("settings.notifications.desc")}>
-                <Switch
-                  aria-label={t("settings.notifications.label")}
+                <SettingsToggle
+                  label={toggleStatusLabel(notificationsEnabled, locale)}
                   checked={notificationsEnabled}
+                  ariaLabel={t("settings.notifications.label")}
                   onChange={updateNotificationsEnabled}
                 />
               </SettingRow>
               <SettingRow title={t("settings.notifications.testTitle")} desc={t("settings.notifications.testDesc")}>
-                <Button onClick={sendTestNotification} disabled={!notificationsEnabled}>
+                <Button className="settings-action" onClick={sendTestNotification} disabled={!notificationsEnabled}>
                   {t("settings.notifications.testButton")}
                 </Button>
               </SettingRow>
-            </div>
+            </SettingsSection>
             ) : null}
             {activeSettingsSection === "appearance" ? (
-            <div className="setting-group" id={settingsSectionId("appearance")}>
-              <h2>{t("settings.group.appearance")}</h2>
+            <SettingsSection
+              id={settingsSectionId("appearance")}
+              title={t("settings.group.appearance")}
+            >
               <SettingRow title={t("settings.row.language.title")} desc={t("settings.row.language.desc")}>
                 <Select
+                  className="settings-select"
                   value={locale}
                   onChange={(value: Locale) => setLocale(value)}
                   options={[
@@ -426,48 +335,26 @@ export function SettingsScreen({
                   style={{ minWidth: 220 }}
                 />
               </SettingRow>
-            </div>
-            ) : null}
-            {activeSettingsSection === "workspace" ? (
-            <div className="setting-group" id={settingsSectionId("workspace")}>
-              <h2>{t("settings.group.workspace")}</h2>
-              <SettingRow title={t("settings.row.outputDir.title")} desc={t("settings.row.outputDir.desc")}>
-                <ImeInput
-                  disabled
-                  value={defaultWorkspaceDir || t("settings.row.outputDir.placeholder")}
-                />
-              </SettingRow>
-            </div>
+            </SettingsSection>
             ) : null}
             {activeSettingsSection === "connection" ? (
-            <div className="setting-group" id={settingsSectionId("connection")}>
-              <h2>{t("settings.group.connection")}</h2>
-              <SettingRow title={t("settings.row.provider.title")} desc={t("settings.row.provider.desc")}>
-                <ProviderFormControl
-                  remote={settings.llmProvider}
-                  onSave={(next) => update({ llmProvider: next }).catch(() => undefined)}
-                  clearLabel={t("settings.row.provider.clear")}
-                  customProviderEnabled={whoami === null || whoami.mode === "logged_in"}
-                  onOpenLogin={onOpenLogin}
-                />
-              </SettingRow>
-              <SettingRow title={t("settings.row.proxy.title")} desc={t("settings.row.proxy.desc")}>
-                <ProxyCard
-                  remote={settings.proxy}
-                  onSave={(next) => update({ proxy: next })}
-                />
-              </SettingRow>
-              <SettingRow title={t("settings.row.jira.title")} desc={t("settings.row.jira.desc")}>
+            <SettingsSection
+              id={settingsSectionId("connection")}
+              title={t("settings.group.connection")}
+            >
+              <SettingRow variant="form" title={t("settings.row.jira.title")} desc={t("settings.row.jira.desc")}>
                 <JiraConnectionCard />
               </SettingRow>
-              <SettingRow title="Liquipedia Dota 2" desc="通过官方 MediaWiki API 获取赛事和版本更新，数据写入 OfficeDex 托管 Sheet。">
+              <SettingRow variant="form" title={t("settings.row.liquipedia.title")} desc={t("settings.row.liquipedia.desc")}>
                 <LiquipediaConnectionCard />
               </SettingRow>
-            </div>
+            </SettingsSection>
             ) : null}
             {activeSettingsSection === "subscription" ? (
-            <div className="setting-group" id={settingsSectionId("subscription")}>
-              <h2>{t("settings.group.subscription")}</h2>
+            <SettingsSection
+              id={settingsSectionId("subscription")}
+              title={t("settings.group.subscription")}
+            >
               <SettingRow title={t("settings.row.redeem.title")} desc={t("settings.row.redeem.desc")}>
                 <RedeemCodeCard onCreditRefresh={onCreditRefresh} />
               </SettingRow>
@@ -482,6 +369,7 @@ export function SettingsScreen({
                           : inviteInfo?.invite_code || t("login.invite.unavailable")}
                     </span>
                     <Button
+                      className="settings-action"
                       size="small"
                       icon={<CopyOutlined />}
                       aria-label={t("login.invite.copy")}
@@ -493,59 +381,74 @@ export function SettingsScreen({
                   </div>
                 </SettingRow>
               ) : null}
-            </div>
+            </SettingsSection>
             ) : null}
             {activeSettingsSection === "activity" ? (
-            <div className="setting-group" id={settingsSectionId("activity")}>
-              <h2>{t("settings.group.activity")}</h2>
-              <p className="setting-group__hint">{t("settings.activity.hint")}</p>
+            <SettingsSection
+              id={settingsSectionId("activity")}
+              title={t("settings.group.activity")}
+              variant="full"
+            >
               {activity}
-            </div>
+            </SettingsSection>
             ) : null}
-            {activeSettingsSection === "diagnostics" ? (
-            <div className="setting-group" id={settingsSectionId("diagnostics")}>
-              <h2>{t("diagnostics.title")}</h2>
+            {activeSettingsSection === "advanced" ? (
+            <SettingsSection
+              id={settingsSectionId("advanced")}
+              title={advancedLabel}
+              variant="full"
+            >
+              <SettingRow title={t("settings.row.imageWatermark.title")} desc={t("settings.row.imageWatermark.desc")}>
+                <div className="settings-toggle-stack">
+                  <SettingsToggle
+                    label={t("settings.row.imageWatermark.showLabel")}
+                    checked={displayedShowWatermark}
+                    ariaLabel={t("settings.row.imageWatermark.showLabel")}
+                    disabled={!hasPaidEntitlement}
+                    onChange={(checked) => update({ imageWatermark: { ...watermarkSettings, showWatermark: checked, preferenceSource: "user" } }).catch(() => undefined)}
+                  />
+                  <div className="settings-note">{hasPaidEntitlement ? t("settings.row.imageWatermark.paidNotice") : t("settings.row.imageWatermark.freeNotice")}</div>
+                </div>
+              </SettingRow>
+              <SettingRow variant="form" title={t("settings.row.provider.title")} desc={t("settings.row.provider.desc")}>
+                <ProviderFormControl remote={settings.llmProvider} onSave={(next) => update({ llmProvider: next }).catch(() => undefined)} clearLabel={t("settings.row.provider.clear")} customProviderEnabled={whoami === null || whoami.mode === "logged_in"} onOpenLogin={onOpenLogin} />
+              </SettingRow>
+              <SettingRow variant="form" title={t("settings.row.proxy.title")} desc={t("settings.row.proxy.desc")}>
+                <ProxyCard remote={settings.proxy} onSave={(next) => update({ proxy: next })} />
+              </SettingRow>
               <DiagnosticsPanel />
               <h2 className="setting-group__subhead">{t("tasks.runtime.title")}</h2>
               <RuntimeRunsPanel />
-            </div>
+              <SettingRow title={t("settings.row.onboarding.title")} desc={t("settings.row.onboarding.desc")}>
+                <Button className="settings-action" onClick={rerunOnboarding}>{t("settings.row.onboarding.button")}</Button>
+              </SettingRow>
+            </SettingsSection>
             ) : null}
             {activeSettingsSection === "reset" ? (
-            <div className="setting-group" id={settingsSectionId("reset")}>
-              <h2>{t("settings.group.reset")}</h2>
-              <SettingRow title={t("settings.row.onboarding.title")} desc={t("settings.row.onboarding.desc")}>
-                <Button onClick={rerunOnboarding}>{t("settings.row.onboarding.button")}</Button>
-              </SettingRow>
+            <SettingsSection
+              id={settingsSectionId("reset")}
+              title={t("settings.group.reset")}
+              variant="danger"
+            >
               <SettingRow title={t("settings.row.reset.title")} desc={t("settings.row.reset.desc")}>
-                <Button danger onClick={resetAll}>{t("settings.row.reset.button")}</Button>
+                <Button className="settings-action" danger onClick={resetAll}>{t("settings.row.reset.button")}</Button>
               </SettingRow>
-            </div>
+            </SettingsSection>
             ) : null}
             {activeSettingsSection === "about" ? (
-            <div className="setting-group" id={settingsSectionId("about")}>
-              <h2>{t("settings.group.about")}</h2>
-              <AboutCard />
-            </div>
-            ) : null}
-            <Modal
-              title={t("settings.localImageTemplates.pasteTitle")}
-              open={pasteModalOpen}
-              okText={t("settings.localImageTemplates.import")}
-              cancelText={t("settings.common.cancel")}
-              onOk={importPastedLocalTemplates}
-              onCancel={() => setPasteModalOpen(false)}
-              destroyOnHidden
+            <SettingsSection
+              id={settingsSectionId("about")}
+              title={t("settings.group.about")}
+              variant="full"
             >
-              <ImeTextArea
-                value={pasteTemplateJSON}
-                onValueChange={setPasteTemplateJSON}
-                placeholder={t("settings.localImageTemplates.pastePlaceholder")}
-                autoSize={{ minRows: 8, maxRows: 16 }}
-              />
-            </Modal>
+              <AboutCard />
+            </SettingsSection>
+            ) : null}
           </>
         )}
-      </section>
+        </section>
+        </div>
+      </div>
     </div>
   );
 }
@@ -553,22 +456,6 @@ export function SettingsScreen({
 function hasImageWatermarkEntitlement(status: CreditStatus | null | undefined): boolean {
   if (!status) return false;
   return status.paidEntitlement === true;
-}
-
-function formatLocalTemplateCount(count: number, t: (key: string, vars?: Record<string, string | number>) => string): string {
-  return count === 1
-    ? t("settings.localImageTemplates.countOne")
-    : t("settings.localImageTemplates.countOther", { count });
-}
-
-function readFileText(file: File): Promise<string> {
-  if (typeof file.text === "function") return file.text();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ""));
-    reader.onerror = () => reject(reader.error ?? new Error("Failed to read file."));
-    reader.readAsText(file);
-  });
 }
 
 function settingsSectionId(section: string): string {
@@ -799,17 +686,6 @@ function AboutCard() {
             {t("settings.about.license")}
           </Button>
         </div>
-      </div>
-
-      <div className="about-channel">
-        <span>{t("settings.about.updateChannel")}</span>
-        <Select
-          value="stable"
-          disabled
-          options={[{ value: "stable", label: t("settings.about.channelStable") }]}
-          aria-label={t("settings.about.updateChannel")}
-          style={{ width: 136 }}
-        />
       </div>
 
       <div className="about-meta">
@@ -1121,10 +997,66 @@ function subtitleFor(phase: LoginPhase, whoami: WhoAmIResult | null, t: (key: st
   return t(`login.subtitle.${phase}`);
 }
 
-function SettingRow({ title, desc, children }: { title: string; desc: string; children: React.ReactNode }) {
+function SettingsSection({
+  id,
+  title,
+  variant = "standard",
+  children,
+}: {
+  id: string;
+  title: string;
+  variant?: "standard" | "full" | "danger";
+  children: ReactNode;
+}) {
+  const titleId = `${id}-title`;
   return (
-    <div className="setting-row">
-      <div>
+    <section className="setting-group" id={id} data-variant={variant} aria-labelledby={titleId}>
+      <h2 className="ui-sr-only" id={titleId}>{title}</h2>
+      <div className="settings-section-body">{children}</div>
+    </section>
+  );
+}
+
+function SettingsToggle({
+  label,
+  ariaLabel,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  ariaLabel: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="settings-toggle-control">
+      <span>{label}</span>
+      <Switch aria-label={ariaLabel} checked={checked} disabled={disabled} onChange={onChange} />
+    </div>
+  );
+}
+
+function toggleStatusLabel(checked: boolean, locale: Locale): string {
+  if (locale === "zh") return checked ? "已开启" : "已关闭";
+  return checked ? "On" : "Off";
+}
+
+function SettingRow({
+  title,
+  desc,
+  variant = "standard",
+  children,
+}: {
+  title: string;
+  desc: string;
+  variant?: "standard" | "form" | "actions";
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="setting-row" data-variant={variant}>
+      <div className="setting-copy">
         <h3>{title}</h3>
         <p>{desc}</p>
       </div>
@@ -1154,7 +1086,7 @@ function JiraConnectionCard() {
     const timeout = window.setTimeout(() => {
       if (!cancelled) {
         setLoading(false);
-        setError("Jira 连接读取超时，请稍后重试。");
+        setError(t("settings.row.jira.loadTimeout"));
       }
     }, 15_000);
     officecli.getJiraConnection()
@@ -1180,7 +1112,7 @@ function JiraConnectionCard() {
       cancelled = true;
       window.clearTimeout(timeout);
     };
-  }, []);
+  }, [t]);
 
   const sameStoredScope = remote.configured &&
     remote.baseUrl.replace(/\/+$/, "") === baseUrl.trim().replace(/\/+$/, "") &&
@@ -1310,6 +1242,7 @@ function JiraConnectionCard() {
 }
 
 function LiquipediaConnectionCard() {
+  const t = useT();
   const [remote, setRemote] = useState<LiquipediaConnectionSummary>({ configured: false, baseUrl: "https://liquipedia.net/dota2" });
   const [baseUrl, setBaseUrl] = useState("https://liquipedia.net/dota2");
   const [contact, setContact] = useState("");
@@ -1324,7 +1257,7 @@ function LiquipediaConnectionCard() {
     const timeout = window.setTimeout(() => {
       if (!cancelled) {
         setLoading(false);
-        setError("Liquipedia 连接读取超时，请稍后重试。");
+        setError(t("settings.row.liquipedia.loadTimeout"));
       }
     }, 15_000);
     officecli.getLiquipediaConnection().then((summary) => {
@@ -1334,7 +1267,7 @@ function LiquipediaConnectionCard() {
       if (summary.contact) setContact(summary.contact);
     }).catch((err) => { if (!cancelled) setError(errorMessage(err)); }).finally(() => { window.clearTimeout(timeout); if (!cancelled) setLoading(false); });
     return () => { cancelled = true; window.clearTimeout(timeout); };
-  }, []);
+  }, [t]);
 
   const canSave = Boolean(baseUrl.trim() && contact.trim()) && !saving;
   const save = useCallback(async () => {
@@ -1345,32 +1278,32 @@ function LiquipediaConnectionCard() {
       const summary = await officecli.getLiquipediaConnection();
       setRemote(summary); setProbe(nextProbe);
       window.dispatchEvent(new Event("officedex:liquipedia-connection-updated"));
-      void message.success("Liquipedia 连接已测试并保存。");
+      void message.success(t("settings.row.liquipedia.saveSuccess"));
     } catch (err) { setError(errorMessage(err)); } finally { setSaving(false); }
-  }, [baseUrl, canSave, contact]);
+  }, [baseUrl, canSave, contact, t]);
   const clear = useCallback(async () => {
     setClearing(true); setError(null);
     try {
       await officecli.clearLiquipediaConnection();
       setRemote({ configured: false, baseUrl: "https://liquipedia.net/dota2" }); setProbe(null);
       window.dispatchEvent(new Event("officedex:liquipedia-connection-updated"));
-      void message.success("Liquipedia 连接已清除。");
+      void message.success(t("settings.row.liquipedia.clearSuccess"));
     } catch (err) { setError(errorMessage(err)); } finally { setClearing(false); }
-  }, []);
+  }, [t]);
   if (loading) return <Spin />;
   return <div className="jira-connection-card">
-    <label><span>数据源地址</span><Input aria-label="Liquipedia 数据源地址" value={baseUrl} onChange={(event) => { setBaseUrl(event.target.value); setProbe(null); }} /></label>
-    <label><span>联系邮箱或网址</span><Input aria-label="Liquipedia 联系方式" value={contact} placeholder="例如：dev@example.com" onChange={(event) => { setContact(event.target.value); setProbe(null); }} /></label>
+    <label><span>{t("settings.row.liquipedia.baseUrl")}</span><Input aria-label={t("settings.row.liquipedia.baseUrl")} value={baseUrl} onChange={(event) => { setBaseUrl(event.target.value); setProbe(null); }} /></label>
+    <label><span>{t("settings.row.liquipedia.contact")}</span><Input aria-label={t("settings.row.liquipedia.contact")} value={contact} placeholder={t("settings.row.liquipedia.contactPlaceholder")} onChange={(event) => { setContact(event.target.value); setProbe(null); }} /></label>
     <div className="jira-connection-card__help">
-      <strong>为什么需要联系方式</strong>
-      <div>Liquipedia 官方要求 API User-Agent 标识项目并包含联系方式。OfficeDex 会使用 MediaWiki API，并缓存结果、限制到每 2 秒最多 1 次请求；解析请求每 30 秒最多 1 次。</div>
-      <div className="settings-note">自动访问 HTML 页面不被允许；OfficeDex 只同步文本字段与来源链接，并在 Sheet 中保留 CC BY-SA 署名。</div>
-      <a className="jira-connection-card__documentation-link" href={LIQUIPEDIA_API_TERMS_URL} target="_blank" rel="noopener noreferrer"><GlobalOutlined /><span>查看 Liquipedia 官方 API 条款</span></a>
+      <strong>{t("settings.row.liquipedia.contactHelpTitle")}</strong>
+      <div>{t("settings.row.liquipedia.contactHelpBody")}</div>
+      <div className="settings-note">{t("settings.row.liquipedia.termsNote")}</div>
+      <a className="jira-connection-card__documentation-link" href={LIQUIPEDIA_API_TERMS_URL} target="_blank" rel="noopener noreferrer"><GlobalOutlined /><span>{t("settings.row.liquipedia.termsLink")}</span></a>
     </div>
-    {remote.configured ? <div className="jira-connection-card__status"><Tag color="success">已配置</Tag><span>{remote.baseUrl}</span></div> : null}
+    {remote.configured ? <div className="jira-connection-card__status"><Tag color="success">{t("settings.row.liquipedia.configured")}</Tag><span>{remote.baseUrl}</span></div> : null}
     {probe ? <div className="jira-connection-card__probe">{probe.siteName} · {probe.generator}<br />{probe.userAgent}</div> : null}
     {error ? <div className="jira-connection-card__error" role="alert">{error}</div> : null}
-    <div className="jira-connection-card__actions"><Button type="primary" loading={saving} disabled={!canSave} onClick={() => void save()}>测试并保存</Button>{remote.configured ? <Button type="link" danger loading={clearing} onClick={() => void clear()}>清除连接</Button> : null}</div>
+    <div className="jira-connection-card__actions"><Button type="primary" loading={saving} disabled={!canSave} onClick={() => void save()}>{t("settings.row.liquipedia.saveAndTest")}</Button>{remote.configured ? <Button type="link" danger loading={clearing} onClick={() => void clear()}>{t("settings.row.liquipedia.clear")}</Button> : null}</div>
   </div>;
 }
 
@@ -1452,7 +1385,7 @@ function ProxyCard({
         />
       ) : null}
       {validationError ? (
-        <div role="alert" style={{ color: "var(--n-red, #d92d20)" }}>
+        <div role="alert" style={{ color: "var(--od-danger, #d92d20)" }}>
           {validationError}
         </div>
       ) : null}

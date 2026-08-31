@@ -2,6 +2,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { officecli } from "../bridge";
 import { SpreadsheetLiquipediaPanel } from "./SpreadsheetLiquipediaPanel";
+import { LocaleProvider } from "../i18n";
+
+function renderPanel(props: React.ComponentProps<typeof SpreadsheetLiquipediaPanel>) {
+  return render(<LocaleProvider value="zh"><SpreadsheetLiquipediaPanel {...props} /></LocaleProvider>);
+}
 
 const result = { sheetName: "Liquipedia Tournaments", headers: ["Tournament", "Source URL"], rows: [["Future Cup", "https://liquipedia.net/dota2/Future"]], total: 20, fetched: 1, truncated: true, syncedAt: "2026-08-13T00:00:00Z", querySummary: "获取即将开始的 1 场赛事", attribution: "Source: Liquipedia (CC BY-SA 3.0)" };
 const runtimeTime = "2026-08-13T00:00:00Z";
@@ -27,7 +32,7 @@ describe("SpreadsheetLiquipediaPanel", () => {
     vi.spyOn(officecli, "getLiquipediaConnection").mockResolvedValue({ configured: true, baseUrl: "https://liquipedia.net/dota2", contact: "dev@example.com" });
 		const start = mockLiquipediaRun();
     const onWriteSheet = vi.fn(async () => undefined); const onSave = vi.fn(async () => true);
-    render(<SpreadsheetLiquipediaPanel onWriteSheet={onWriteSheet} onSave={onSave} />);
+    renderPanel({ onWriteSheet, onSave });
     expect(await screen.findByText("已连接 Liquipedia")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Liquipedia 数据需求"), { target: { value: "获取即将开始的 1 场赛事" } });
     fireEvent.click(screen.getByRole("button", { name: "获取数据并写入 Sheet" }));
@@ -41,8 +46,8 @@ describe("SpreadsheetLiquipediaPanel", () => {
     vi.spyOn(officecli, "getLiquipediaConnection").mockResolvedValue({ configured: true, baseUrl: "https://liquipedia.net/dota2" });
 		mockLiquipediaRun(false);
     const onCreateWorkbook = vi.fn(async () => undefined); const onSave = vi.fn(async () => true);
-    render(<SpreadsheetLiquipediaPanel workbookReady={false} onCreateWorkbook={onCreateWorkbook} onWriteSheet={vi.fn()} onSave={onSave} />);
-    expect(await screen.findByText("将自动创建工作簿")).toBeInTheDocument();
+    renderPanel({ workbookReady: false, onCreateWorkbook, onWriteSheet: vi.fn(), onSave });
+    expect(await screen.findByText("将自动创建 Liquipedia 工作簿")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Liquipedia 数据需求"), { target: { value: "获取即将开始的 1 场赛事" } });
     fireEvent.click(screen.getByRole("button", { name: "获取数据并创建工作簿" }));
     await waitFor(() => expect(onCreateWorkbook).toHaveBeenCalledWith(result)); expect(onSave).not.toHaveBeenCalled();
@@ -50,7 +55,7 @@ describe("SpreadsheetLiquipediaPanel", () => {
 
   it("opens connection settings when not configured", async () => {
     vi.spyOn(officecli, "getLiquipediaConnection").mockResolvedValue({ configured: false, baseUrl: "https://liquipedia.net/dota2" });
-    const onOpenSettings = vi.fn(); render(<SpreadsheetLiquipediaPanel onWriteSheet={vi.fn()} onSave={vi.fn(async () => true)} onOpenSettings={onOpenSettings} />);
+    const onOpenSettings = vi.fn(); renderPanel({ onWriteSheet: vi.fn(), onSave: vi.fn(async () => true), onOpenSettings });
     expect(await screen.findByText("尚未配置 Liquipedia 连接")).toBeInTheDocument(); fireEvent.click(screen.getByRole("button", { name: "打开连接设置" })); expect(onOpenSettings).toHaveBeenCalledOnce();
   });
 });

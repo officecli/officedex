@@ -6,6 +6,7 @@ import { ErrorState } from "../components/ErrorState";
 import { officecli } from "../../bridge";
 import { DocxEditor } from "../../word/DocxEditor";
 import "../../word/wordEditor.css";
+import { useT } from "../../i18n";
 
 interface DocxViewerProps {
   previewToken: string;
@@ -125,6 +126,7 @@ function DocxLayoutPreview({ previewToken, fileName }: Pick<DocxViewerProps, "pr
 }
 
 export default function DocxViewer({ previewToken, fileName, documentType, onDirtyChange }: DocxViewerProps) {
+  const t = useT();
   const [mode, setMode] = useState<DocxMode>("edit");
   const [previewOpened, setPreviewOpened] = useState(false);
   const openExternal = () => {
@@ -137,9 +139,9 @@ export default function DocxViewer({ previewToken, fileName, documentType, onDir
         fileName={fileName}
         documentType={documentType ?? "docx"}
         center={(
-          <div className="docx-mode-switch" role="group" aria-label="DOCX 查看模式">
-            <button type="button" className={mode === "edit" ? "is-active" : ""} onClick={() => setMode("edit")}>编辑</button>
-            <button type="button" className={mode === "preview" ? "is-active" : ""} onClick={() => { setPreviewOpened(true); setMode("preview"); }}>版式预览</button>
+          <div className="docx-mode-switch" role="group" aria-label={t("docx.viewer.mode")}>
+            <button type="button" className={mode === "edit" ? "is-active" : ""} onClick={() => setMode("edit")}>{t("docx.viewer.edit")}</button>
+            <button type="button" className={mode === "preview" ? "is-active" : ""} onClick={() => { setPreviewOpened(true); setMode("preview"); }}>{t("docx.viewer.layoutPreview")}</button>
           </div>
         )}
         onOpenExternal={openExternal}

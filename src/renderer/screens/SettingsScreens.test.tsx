@@ -85,7 +85,6 @@ function makeSettings(overrides: Partial<UserSettings> = {}): UserSettings {
     onboardingCompletedAt: overrides.onboardingCompletedAt ?? "2026-05-22T00:00:00Z",
     proxy: overrides.proxy ?? DEFAULT_PROXY,
     imageWatermark: overrides.imageWatermark ?? { showWatermark: true, preferenceSource: "system" },
-    waiting2048Enabled: overrides.waiting2048Enabled ?? false,
   };
 }
 
@@ -200,16 +199,18 @@ describe("SettingsScreen", () => {
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
 
     const menu = await screen.findByRole("navigation", { name: "Settings sections" });
+    expect(within(menu).getAllByRole("button")).toHaveLength(9);
     expect(within(menu).getByRole("button", { name: "Generation" })).toBeTruthy();
     expect(within(menu).getByRole("button", { name: "Notification" })).toBeTruthy();
     expect(within(menu).queryByRole("button", { name: "Generation Defaults" })).toBeNull();
     expect(within(menu).queryByRole("button", { name: "Image Watermark" })).toBeNull();
     expect(within(menu).queryByRole("button", { name: "Local Image Templates" })).toBeNull();
     expect(within(menu).getByRole("button", { name: "Connection" })).toBeTruthy();
+    expect(within(menu).getByRole("button", { name: /Advanced/ })).toBeTruthy();
+    expect(within(menu).queryByRole("button", { name: /Diagnostics/i })).toBeNull();
     expect(await screen.findByRole("heading", { level: 2, name: "Generation" })).toBeTruthy();
     expect(screen.getByText("Default Document Type")).toBeTruthy();
-    expect(screen.getByRole("switch", { name: /show watermark/i })).toBeTruthy();
-    expect(screen.getByText("Local template JSON")).toBeTruthy();
+    expect(screen.queryByRole("switch", { name: /show watermark/i })).toBeNull();
 
     fireEvent.click(within(menu).getByRole("button", { name: "Connection" }));
 
@@ -218,6 +219,40 @@ describe("SettingsScreen", () => {
     expect(await screen.findByRole("heading", { level: 2, name: "Connection" })).toBeTruthy();
     expect(screen.queryByRole("heading", { level: 2, name: "Generation" })).toBeNull();
     expect(screen.queryByRole("heading", { level: 2, name: "Appearance" })).toBeNull();
+  });
+
+  it("keeps the Settings navigation and content canvas as sibling layout columns", async () => {
+    const { SettingsScreen } = await import("./SettingsScreens");
+    const { container } = render(<SettingsScreen />);
+    await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
+
+    const layout = container.querySelector(".settings-layout");
+    const menu = container.querySelector(".settings-secondary-menu");
+    const content = container.querySelector(".settings-content");
+    const stage = container.querySelector(".settings-stage");
+    const page = container.querySelector(".settings-page");
+
+    expect(stage).not.toBeNull();
+    expect(page?.parentElement).toBe(stage);
+    expect(layout).not.toBeNull();
+    expect(menu?.parentElement).toBe(layout);
+    expect(content?.parentElement).toBe(layout);
+    expect(menu?.nextElementSibling).toBe(content);
+  });
+
+  it("keeps category titles accessible without rendering a duplicate card header", async () => {
+    const { SettingsScreen } = await import("./SettingsScreens");
+    const { container } = render(<SettingsScreen />);
+    await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
+
+    expect(container.querySelector(".settings-eyebrow")?.textContent).toBe("OFFICEDEX SETTINGS");
+    expect(container.querySelectorAll(".settings-nav-icon svg")).toHaveLength(9);
+    expect(container.querySelector(".settings-nav-group-start")).not.toBeNull();
+    expect(container.querySelector(".settings-section-header")).toBeNull();
+    expect(container.querySelector(".settings-document-chips")).toBeNull();
+    expect(screen.getByRole("heading", { level: 2, name: "Generation" })).toHaveClass("ui-sr-only");
+    expect(container.querySelector(".settings-section-body > .setting-row")).not.toBeNull();
+    expect(container.querySelector(".settings-toggle-control")?.textContent).toContain("On");
   });
 
   it("renders About only after selecting it from the Settings menu", async () => {
@@ -314,18 +349,6 @@ describe("SettingsScreen", () => {
     ).toBe(true);
   });
 
-  it("keeps waiting 2048 disabled by default and saves opt-in from Settings", async () => {
-    const { SettingsScreen } = await import("./SettingsScreens");
-    render(<SettingsScreen />);
-
-    const toggle = await screen.findByRole("switch", { name: /waiting 2048/i });
-    expect(toggle.getAttribute("aria-checked")).toBe("false");
-
-    fireEvent.click(toggle);
-
-    await waitFor(() => expect(updateSettingsSpy).toHaveBeenCalledWith({ waiting2048Enabled: true }));
-  });
-
   it("shows invite code only in the Subscription section and copies it", async () => {
     const writeText = vi.fn(async () => undefined);
     Object.defineProperty(navigator, "clipboard", {
@@ -386,18 +409,6 @@ describe("SettingsScreen", () => {
     await waitFor(() => expect(uiToast.error).toHaveBeenCalledWith("Test notification failed: permission denied"));
   });
 
-  it("Workspace section is read-only and does not write workspaceDir", async () => {
-    const { SettingsScreen } = await import("./SettingsScreens");
-    render(<SettingsScreen />);
-    await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
-    await selectSettingsSection("Workspace");
-    await screen.findByText("Workspace projects");
-    await screen.findByDisplayValue("/tmp/default-workspace");
-
-    expect(openDirectoryDialogSpy).not.toHaveBeenCalled();
-    expect(updateSettingsSpy.mock.calls.some((args) => (args[0] as Partial<UserSettings>).workspaceDir !== undefined)).toBe(false);
-  });
-
   it("Provider form is always visible and lets user edit api key", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     currentSettings = makeSettings({
@@ -410,7 +421,7 @@ describe("SettingsScreen", () => {
     const { SettingsScreen } = await import("./SettingsScreens");
     render(<SettingsScreen />);
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
-    await selectSettingsSection("Connection");
+    await selectSettingsSection("Advanced & Support");
 
     fireEvent.click(await screen.findByRole("button", { name: "Official" }));
     fireEvent.click(await screen.findByRole("menuitemradio", { name: "Custom endpoint" }));
@@ -434,7 +445,7 @@ describe("SettingsScreen", () => {
     render(<SettingsScreen onOpenLogin={onOpenLogin} />);
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(whoamiSpy).toHaveBeenCalledTimes(1));
-    await selectSettingsSection("Connection");
+    await selectSettingsSection("Advanced & Support");
 
     expect(await screen.findByText(/sign in to use custom endpoints/i)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
@@ -462,7 +473,7 @@ describe("SettingsScreen", () => {
     const { SettingsScreen } = await import("./SettingsScreens");
     render(<SettingsScreen />);
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
-    await selectSettingsSection("Connection");
+    await selectSettingsSection("Advanced & Support");
 
     fireEvent.click(await screen.findByRole("button", { name: /test connection/i }));
 
@@ -492,7 +503,7 @@ describe("SettingsScreen", () => {
     const { SettingsScreen } = await import("./SettingsScreens");
     render(<SettingsScreen />);
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
-    await selectSettingsSection("Connection");
+    await selectSettingsSection("Advanced & Support");
 
     fireEvent.click(await screen.findByRole("button", { name: /test connection/i }));
 
@@ -525,7 +536,7 @@ describe("SettingsScreen", () => {
     const { SettingsScreen } = await import("./SettingsScreens");
     render(<SettingsScreen />);
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
-    await selectSettingsSection("Reset");
+    await selectSettingsSection("Advanced & Support");
 
     fireEvent.click(screen.getByRole("button", { name: /show wizard/i }));
 
@@ -545,7 +556,7 @@ describe("SettingsScreen", () => {
     const { SettingsScreen } = await import("./SettingsScreens");
     render(<SettingsScreen />);
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
-    await selectSettingsSection("Connection");
+    await selectSettingsSection("Advanced & Support");
 
     const enableSwitch = await screen.findByRole("switch", { name: /enable proxy/i });
     expect(enableSwitch.getAttribute("aria-checked")).toBe("false");
@@ -558,7 +569,7 @@ describe("SettingsScreen", () => {
     const { SettingsScreen } = await import("./SettingsScreens");
     render(<SettingsScreen />);
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
-    await selectSettingsSection("Connection");
+    await selectSettingsSection("Advanced & Support");
 
     const enableSwitch = await screen.findByRole("switch", { name: /enable proxy/i });
     fireEvent.click(enableSwitch);
@@ -582,7 +593,7 @@ describe("SettingsScreen", () => {
     updateSettingsSpy.mockClear();
     render(<SettingsScreen />);
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(2));
-    await selectSettingsSection("Connection");
+    await selectSettingsSection("Advanced & Support");
     await waitFor(() => {
       expect(screen.getByRole("switch", { name: /enable proxy/i }).getAttribute("aria-checked")).toBe("true");
     });
@@ -603,7 +614,7 @@ describe("SettingsScreen", () => {
     const { SettingsScreen } = await import("./SettingsScreens");
     render(<SettingsScreen />);
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
-    await selectSettingsSection("Connection");
+    await selectSettingsSection("Advanced & Support");
 
     fireEvent.click(await screen.findByRole("switch", { name: /enable proxy/i }));
     const urlInput = await screen.findByLabelText(/proxy url/i);
@@ -634,7 +645,7 @@ describe("SettingsScreen", () => {
     } satisfies CreditStatus);
     const { SettingsScreen } = await import("./SettingsScreens");
     render(<SettingsScreen />);
-    await selectSettingsSection("Generation");
+    await selectSettingsSection("Advanced & Support");
 
     expect(await screen.findByText(/free images include the officedex watermark/i)).toBeTruthy();
     expect(screen.getByRole("switch", { name: /show watermark/i }).hasAttribute("disabled")).toBe(true);
@@ -660,7 +671,7 @@ describe("SettingsScreen", () => {
     } satisfies CreditStatus);
     const { SettingsScreen } = await import("./SettingsScreens");
     render(<SettingsScreen />);
-    await selectSettingsSection("Generation");
+    await selectSettingsSection("Advanced & Support");
 
     const toggle = await screen.findByRole("switch", { name: /show watermark/i });
     expect(toggle.hasAttribute("disabled")).toBe(true);
@@ -674,7 +685,7 @@ describe("SettingsScreen", () => {
   it("lets paid users opt into watermark and saves the setting", async () => {
     const { SettingsScreen } = await import("./SettingsScreens");
     render(<SettingsScreen />);
-    await selectSettingsSection("Generation");
+    await selectSettingsSection("Advanced & Support");
 
     const toggle = await screen.findByRole("switch", { name: /show watermark/i });
     fireEvent.click(toggle);
@@ -690,7 +701,7 @@ describe("SettingsScreen", () => {
     currentSettings = makeSettings({ imageWatermark: { showWatermark: true, preferenceSource: "user" } });
     const { SettingsScreen } = await import("./SettingsScreens");
     render(<SettingsScreen />);
-    await selectSettingsSection("Generation");
+    await selectSettingsSection("Advanced & Support");
 
     const toggle = await screen.findByRole("switch", { name: /show watermark/i });
     expect(toggle.getAttribute("aria-checked")).toBe("true");
@@ -704,117 +715,6 @@ describe("SettingsScreen", () => {
     expect(screen.queryByLabelText(/watermark text/i)).toBeNull();
   });
 
-  it("imports local image-template JSON from a selected file in Settings", async () => {
-    const { SettingsScreen } = await import("./SettingsScreens");
-    render(<SettingsScreen />);
-    await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
-    await selectSettingsSection("Generation");
-
-    expect(await screen.findByText("0 local templates saved")).toBeTruthy();
-    const file = new File([
-      JSON.stringify({
-        version: 1,
-        templates: [
-          { slug: "local-admission", title: "Local Admission", description: "Stored locally", promptPreset: "Local prompt", enabled: true },
-        ],
-      }),
-    ], "templates.json", { type: "application/json" });
-    const input = document.querySelector(".local-image-template-file-input") as HTMLInputElement;
-    fireEvent.change(input, { target: { files: [file] } });
-
-    await waitFor(() => expect(screen.getByText("1 local template saved")).toBeTruthy());
-    expect(JSON.parse(localStorage.getItem("officedex:local-image-templates") || "{}").templates[0].title).toBe("Local Admission");
-    expect(uiToast.success).toHaveBeenCalledWith("Imported 1 local templates");
-  });
-
-  it("imports local image-template JSON from the paste modal in Settings", async () => {
-    const { SettingsScreen } = await import("./SettingsScreens");
-    render(<SettingsScreen />);
-    await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
-    await selectSettingsSection("Generation");
-
-    fireEvent.click(await screen.findByRole("button", { name: /Paste JSON/i }));
-    const textarea = await screen.findByPlaceholderText(/Paste local image-template JSON/i);
-    fireEvent.change(textarea, {
-      target: {
-        value: JSON.stringify([
-          { slug: "pasted-admission", title: "Pasted Admission", description: "Pasted locally", promptPreset: "Pasted prompt", enabled: true },
-        ]),
-      },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /^Import$/i }));
-
-    await waitFor(() => expect(screen.getByText("1 local template saved")).toBeTruthy());
-    expect(JSON.parse(localStorage.getItem("officedex:local-image-templates") || "{}").templates[0].title).toBe("Pasted Admission");
-    expect(uiToast.success).toHaveBeenCalledWith("Imported 1 local templates");
-  });
-
-  it("downloads local image-template JSON from Settings", async () => {
-    localStorage.setItem("officedex:local-image-templates", JSON.stringify({
-      version: 1,
-      templates: [
-        { slug: "local-admission", title: "Local Admission", description: "Stored locally", promptPreset: "Local prompt", enabled: true },
-      ],
-    }));
-    const createObjectURL = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:local-templates");
-    const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
-    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
-    const { SettingsScreen } = await import("./SettingsScreens");
-    render(<SettingsScreen />);
-    await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
-    await selectSettingsSection("Generation");
-
-    fireEvent.click(await screen.findByRole("button", { name: /Download JSON/i }));
-
-    expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
-    expect(click).toHaveBeenCalledTimes(1);
-    expect(revokeObjectURL).toHaveBeenCalledWith("blob:local-templates");
-    expect(uiToast.success).toHaveBeenCalledWith("Exported 1 local templates");
-  });
-
-  it("copies local image-template JSON to the clipboard from Settings", async () => {
-    const writeTextSpy = vi.fn(async (_text: string) => undefined);
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: { writeText: writeTextSpy },
-    });
-    localStorage.setItem("officedex:local-image-templates", JSON.stringify({
-      version: 1,
-      templates: [
-        { slug: "local-admission", title: "Local Admission", description: "Stored locally", promptPreset: "Local prompt", enabled: true },
-      ],
-    }));
-    const { SettingsScreen } = await import("./SettingsScreens");
-    render(<SettingsScreen />);
-    await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
-    await selectSettingsSection("Generation");
-
-    fireEvent.click(await screen.findByRole("button", { name: /Copy JSON/i }));
-
-    await waitFor(() => expect(writeTextSpy).toHaveBeenCalledTimes(1));
-    expect(writeTextSpy.mock.calls[0][0]).toContain("\"title\": \"Local Admission\"");
-    expect(uiToast.success).toHaveBeenCalledWith("Copied 1 local templates");
-  });
-
-  it("keeps existing local image templates when pasted JSON is invalid", async () => {
-    localStorage.setItem("officedex:local-image-templates", JSON.stringify({
-      version: 1,
-      templates: [
-        { slug: "existing", title: "Existing", description: "Existing local", promptPreset: "Existing prompt", enabled: true },
-      ],
-    }));
-    const { SettingsScreen } = await import("./SettingsScreens");
-    render(<SettingsScreen />);
-    await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
-    await selectSettingsSection("Generation");
-
-    fireEvent.click(await screen.findByRole("button", { name: /Paste JSON/i }));
-    fireEvent.change(await screen.findByPlaceholderText(/Paste local image-template JSON/i), { target: { value: "{not-json" } });
-    fireEvent.click(screen.getByRole("button", { name: /^Import$/i }));
-
-    expect(JSON.parse(localStorage.getItem("officedex:local-image-templates") || "{}").templates[0].title).toBe("Existing");
-    expect(uiToast.error).toHaveBeenCalledWith(expect.stringMatching(/^Template import failed:/));
-  });
 });
 
 describe("SettingsScreen > About card", () => {
@@ -899,7 +799,7 @@ describe("SettingsScreen > About card", () => {
     expect(await screen.findByRole("heading", { name: "OfficeDex" })).toBeTruthy();
     expect(await screen.findByText(/OfficeDex 0\.1\.0/)).toBeTruthy();
     expect(screen.getByText(/AI desktop workspace for documents/i)).toBeTruthy();
-    expect(screen.getByText("Stable")).toBeTruthy();
+    expect(screen.queryByText("Stable")).toBeNull();
     expect(screen.getByText(/Check for updates/i)).toBeTruthy();
   });
 

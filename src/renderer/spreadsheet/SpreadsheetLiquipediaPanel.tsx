@@ -4,6 +4,7 @@ import type { ConfiguredLiquipediaSyncResult, LiquipediaConnectionSummary, Liqui
 import { confirmAgentApproval, restorePendingAgentInput, unwrapAgentRunResult, waitForAgentRun } from "../agentRuntime";
 import { officecli } from "../bridge";
 import { Button, TextArea } from "../ui";
+import { useT } from "../i18n";
 
 export interface SpreadsheetLiquipediaPanelProps {
   workbookReady?: boolean;
@@ -16,6 +17,7 @@ export interface SpreadsheetLiquipediaPanelProps {
 }
 
 export function SpreadsheetLiquipediaPanel({ workbookReady = true, workbookPath, workspaceId, onWriteSheet, onSave, onCreateWorkbook, onOpenSettings }: SpreadsheetLiquipediaPanelProps) {
+  const t = useT();
   const [connection, setConnection] = useState<LiquipediaConnectionSummary>();
   const [prompt, setPrompt] = useState("");
   const [result, setResult] = useState<LiquipediaSyncResult>();
@@ -80,37 +82,37 @@ export function SpreadsheetLiquipediaPanel({ workbookReady = true, workbookPath,
           writtenResult = response.result;
           if (workbookReady) await onWriteSheet(response.result);
           else {
-            if (!onCreateWorkbook) throw new Error("无法创建 Liquipedia 工作簿，请更新 OfficeDex 后重试。");
+            if (!onCreateWorkbook) throw new Error(t("settings.connector.createWorkbookError", { name: "Liquipedia" }));
             await onCreateWorkbook(response.result);
           }
           return { sheetName: response.result.sheetName, rows: response.result.fetched };
         },
         "workbook.save": async () => {
-          if (!await onSave()) throw new Error("Liquipedia 数据已经写入，但工作簿保存失败。请保留当前窗口并重试保存。");
+          if (!await onSave()) throw new Error(t("settings.connector.saveErrorLiquipedia"));
           return { saved: true };
         },
       } });
       if (outcome.kind === "input") { setPendingRun({ runId: outcome.run.id, requestId: outcome.requestId }); setClarification(outcome.question); setPrompt(""); return; }
       const response = unwrapAgentRunResult<ConfiguredLiquipediaSyncResult>(outcome.run);
-      if (response.status !== "completed" || !response.result) throw new Error(response.message || "当前无法完成这次 Liquipedia 数据请求。");
+      if (response.status !== "completed" || !response.result) throw new Error(response.message || t("settings.connector.requestErrorLiquipedia"));
       setResult(writtenResult ?? response.result); setPendingRun(undefined); setClarification(undefined);
     } catch (err) { setError(err instanceof Error ? err.message : String(err)); }
     finally { setSyncing(false); }
   };
 
-  return <section className="spreadsheet-jira-panel" aria-label="Liquipedia Connector">
+  return <section className="spreadsheet-jira-panel" aria-label={t("settings.connector.liquipedia.aria")}>
     <div className="spreadsheet-jira-panel__heading"><div><Globe2 aria-hidden="true" /><strong>Liquipedia Dota 2</strong></div><span>MediaWiki API</span></div>
-    <p>用自然语言获取 Dota 2 赛事与版本更新，写入托管 Sheet 作为后续 App、公式和自动化的数据源。</p>
-    {!loading && !connection?.configured ? <div className="spreadsheet-jira-panel__empty"><strong>尚未配置 Liquipedia 连接</strong><span>请先在设置 → 连接中填写合规联系方式并测试 API。</span>{onOpenSettings ? <Button size="small" variant="secondary" icon={<Settings />} onClick={onOpenSettings}>打开连接设置</Button> : null}</div> : null}
+    <p>{t("settings.row.liquipedia.desc")}</p>
+    {!loading && !connection?.configured ? <div className="spreadsheet-jira-panel__empty"><strong>{t("settings.connector.liquipediaNotConfigured")}</strong><span>{t("settings.connector.liquipediaConnectionHint")}</span>{onOpenSettings ? <Button size="small" variant="secondary" icon={<Settings />} onClick={onOpenSettings}>{t("settings.connector.openConnection")}</Button> : null}</div> : null}
     {connection?.configured ? <>
-      <div className="spreadsheet-jira-panel__connected"><CheckCircle2 aria-hidden="true" /><div><strong>已连接 Liquipedia</strong><span>{connection.baseUrl}</span></div></div>
-      {clarification ? <div className="spreadsheet-jira-panel__workbook-required" role="status"><strong>需要补充信息</strong><span>{clarification}</span></div> : null}
-      <label className="spreadsheet-jira-panel__request"><span>{clarification ? "回答上面的问题" : "告诉我你想获取什么 Dota 2 数据"}</span><TextArea aria-label="Liquipedia 数据需求" rows={4} value={prompt} placeholder={clarification ? "输入回答，OfficeDex 会结合上一轮请求继续处理" : "例如：获取正在进行和即将开始的 20 场 Dota 2 赛事"} onChange={(event) => setPrompt(event.target.value)} onSubmit={() => void sync()} /></label>
-      {!workbookReady ? <div className="spreadsheet-jira-panel__workbook-required"><strong>将自动创建工作簿</strong><span>获取完成后，OfficeDex 会创建并打开包含 Liquipedia 托管 Sheet 的 XLSX。</span></div> : null}
-      <Button size="small" variant="primary" icon={<Send />} loading={syncing} disabled={!prompt.trim()} onClick={() => void sync()}>{workbookReady ? "获取数据并写入 Sheet" : "获取数据并创建工作簿"}</Button>
+      <div className="spreadsheet-jira-panel__connected"><CheckCircle2 aria-hidden="true" /><div><strong>{t("settings.connector.connected", { name: "Liquipedia" })}</strong><span>{connection.baseUrl}</span></div></div>
+      {clarification ? <div className="spreadsheet-jira-panel__workbook-required" role="status"><strong>{t("settings.connector.needsInfo")}</strong><span>{clarification}</span></div> : null}
+      <label className="spreadsheet-jira-panel__request"><span>{clarification ? t("settings.connector.answerQuestion") : t("settings.connector.liquipedia.requestLabel")}</span><TextArea aria-label={t("settings.connector.liquipedia.requestAria")} rows={4} value={prompt} placeholder={clarification ? t("settings.connector.answerPlaceholder") : t("settings.connector.liquipedia.requestPlaceholder")} onChange={(event) => setPrompt(event.target.value)} onSubmit={() => void sync()} /></label>
+      {!workbookReady ? <div className="spreadsheet-jira-panel__workbook-required"><strong>{t("settings.connector.autoCreateWorkbook", { name: "Liquipedia" })}</strong><span>{t("settings.connector.workbookCreated", { name: "Liquipedia" })}</span></div> : null}
+      <Button size="small" variant="primary" icon={<Send />} loading={syncing} disabled={!prompt.trim()} onClick={() => void sync()}>{workbookReady ? t("settings.connector.fetchAndWrite") : t("settings.connector.fetchAndCreate")}</Button>
     </> : null}
-    {loading ? <small>正在读取 Liquipedia 连接……</small> : null}
-    {result ? <div className="spreadsheet-jira-panel__result"><strong>已获取并保存 {result.fetched} 条数据</strong><span>{result.querySummary ? `${result.querySummary}。` : ""}共匹配 {result.total} 条，本次获取 {result.fetched} 条。{result.attribution}</span></div> : null}
+    {loading ? <small>{t("settings.connector.loading", { name: "Liquipedia" })}</small> : null}
+    {result ? <div className="spreadsheet-jira-panel__result"><strong>{t("settings.connector.resultLiquipedia", { count: result.fetched })}</strong><span>{result.querySummary ? `${result.querySummary}. ` : ""}{t("settings.connector.resultSummaryGeneric", { total: result.total, count: result.fetched })} {result.attribution}</span></div> : null}
     {error ? <div className="spreadsheet-jira-panel__error" role="alert">{error}</div> : null}
   </section>;
 }

@@ -23,11 +23,12 @@ vi.mock("../../word/DocxEditor", async () => {
 });
 
 import DocxViewer from "./DocxViewer";
+import { LocaleProvider } from "../../i18n";
 
 describe("DocxViewer", () => {
   it("keeps editor state and dirty status while checking the layout preview", () => {
     const onDirtyChange = vi.fn();
-    render(<DocxViewer previewToken="token" fileName="report.docx" documentType="docx" onDirtyChange={onDirtyChange} />);
+    render(<LocaleProvider value="zh"><DocxViewer previewToken="token" fileName="report.docx" documentType="docx" onDirtyChange={onDirtyChange} /></LocaleProvider>);
 
     fireEvent.change(screen.getByRole("textbox", { name: "mock document" }), { target: { value: "edited draft" } });
     expect(onDirtyChange).toHaveBeenLastCalledWith(true);

@@ -2,6 +2,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { officecli } from "../bridge";
 import { SpreadsheetJiraPanel } from "./SpreadsheetJiraPanel";
+import { LocaleProvider } from "../i18n";
+
+function renderPanel(props: React.ComponentProps<typeof SpreadsheetJiraPanel>) {
+  return render(<LocaleProvider value="zh"><SpreadsheetJiraPanel {...props} /></LocaleProvider>);
+}
 
 const runtimeTime = "2026-08-13T00:00:00Z";
 
@@ -42,7 +47,7 @@ describe("SpreadsheetJiraPanel", () => {
     });
     const onWriteSheet = vi.fn(async () => undefined);
     const onSave = vi.fn(async () => true);
-    render(<SpreadsheetJiraPanel onWriteSheet={onWriteSheet} onSave={onSave} />);
+    renderPanel({ onWriteSheet, onSave });
 
     expect(await screen.findByText("已连接 Jira")).toBeInTheDocument();
     expect(screen.queryByLabelText("PAT")).not.toBeInTheDocument();
@@ -70,7 +75,7 @@ describe("SpreadsheetJiraPanel", () => {
         syncedAt: "2026-08-12T00:00:00Z",
       },
     });
-    render(<SpreadsheetJiraPanel onWriteSheet={vi.fn(async () => undefined)} onSave={vi.fn(async () => true)} />);
+    renderPanel({ onWriteSheet: vi.fn(async () => undefined), onSave: vi.fn(async () => true) });
 
     expect(await screen.findByText("已连接 Jira")).toBeInTheDocument();
     const prompt = screen.getByLabelText("Jira 数据需求");
@@ -83,7 +88,7 @@ describe("SpreadsheetJiraPanel", () => {
   it("guides users to Settings when Jira is not configured", async () => {
     vi.spyOn(officecli, "getJiraConnection").mockResolvedValue({ configured: false, baseUrl: "", authType: "" });
     const onOpenSettings = vi.fn();
-    render(<SpreadsheetJiraPanel onWriteSheet={vi.fn()} onSave={vi.fn(async () => true)} onOpenSettings={onOpenSettings} />);
+    renderPanel({ onWriteSheet: vi.fn(), onSave: vi.fn(async () => true), onOpenSettings });
 
     expect(await screen.findByText("尚未配置 Jira 连接")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "打开连接设置" }));
@@ -109,7 +114,7 @@ describe("SpreadsheetJiraPanel", () => {
     const onWriteSheet = vi.fn(async () => undefined);
     const onSave = vi.fn(async () => true);
 
-    render(<SpreadsheetJiraPanel workbookReady={false} onCreateWorkbook={onCreateWorkbook} onWriteSheet={onWriteSheet} onSave={onSave} />);
+    renderPanel({ workbookReady: false, onCreateWorkbook, onWriteSheet, onSave });
 
     expect(await screen.findByText("将自动创建 Jira 工作簿")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Jira 数据需求"), { target: { value: "获取最近 10 条 open 的 issue" } });
@@ -137,7 +142,7 @@ describe("SpreadsheetJiraPanel", () => {
 	  querySummary: "获取我最近更新的 10 条任务",
       },
 	});
-	render(<SpreadsheetJiraPanel onWriteSheet={vi.fn(async () => undefined)} onSave={vi.fn(async () => true)} />);
+	renderPanel({ onWriteSheet: vi.fn(async () => undefined), onSave: vi.fn(async () => true) });
 
 	await screen.findByText("已连接 Jira");
 	fireEvent.change(screen.getByLabelText("Jira 数据需求"), { target: { value: "获取我最近的 10 条任务" } });
@@ -172,7 +177,7 @@ describe("SpreadsheetJiraPanel", () => {
 	vi.spyOn(officecli, "getAgentRun").mockImplementation(async () => respond.mock.calls.length ? completedRun : waitingInputRun);
 	vi.spyOn(officecli, "completeAgentClientTool").mockResolvedValue();
 	const onWriteSheet = vi.fn(async () => undefined);
-	render(<SpreadsheetJiraPanel onWriteSheet={onWriteSheet} onSave={vi.fn(async () => true)} />);
+	renderPanel({ onWriteSheet, onSave: vi.fn(async () => true) });
 
 	await screen.findByText("已连接 Jira");
 	fireEvent.change(screen.getByLabelText("Jira 数据需求"), { target: { value: "获取我参与的任务" } });
@@ -194,7 +199,7 @@ describe("SpreadsheetJiraPanel", () => {
 	  message: "当前版本只能搜索 Issue，尚未开放评论读取能力。",
 	}, false);
 	const onWriteSheet = vi.fn(async () => undefined);
-	render(<SpreadsheetJiraPanel onWriteSheet={onWriteSheet} onSave={vi.fn(async () => true)} />);
+	renderPanel({ onWriteSheet, onSave: vi.fn(async () => true) });
 
 	await screen.findByText("已连接 Jira");
 	fireEvent.change(screen.getByLabelText("Jira 数据需求"), { target: { value: "获取任务以及每条任务的评论" } });

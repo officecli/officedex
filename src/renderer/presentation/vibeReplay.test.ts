@@ -779,10 +779,10 @@ describe("timeline capture", () => {
     const recorded = captureTimelineNode.mock.calls.map(([input]) => input as unknown as Record<string, unknown>);
     // Two shapes on each of two slides: four steps, one per shape, in order.
     expect(recorded.map((step) => [step.slide, step.label])).toEqual([
-      [1, "第 1 页 · card"],
-      [1, "第 1 页 · 第 1 页"],
-      [2, "第 2 页 · card"],
-      [2, "第 2 页 · 第 2 页"],
+      [1, "Slide 1 · card"],
+      [1, "Slide 1 · 第 1 页"],
+      [2, "Slide 2 · card"],
+      [2, "Slide 2 · 第 2 页"],
     ]);
     expect(recorded[0]).toMatchObject({
       taskId: "task-7", previewToken: "tok", sessionId: "sess", kind: "generation", slides: 2,

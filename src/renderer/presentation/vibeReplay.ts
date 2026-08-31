@@ -968,9 +968,9 @@ export class VibeReplaySequencer {
   private stepLabel(op: VibeOp | undefined, slide: number): string {
     const shape = op?.shape;
     const text = shape?.kind === "text" ? String(shape.text ?? "").trim() : "";
-    if (text) return `第 ${slide} 页 · ${text.length > 14 ? `${text.slice(0, 14)}…` : text}`;
+    if (text) return `Slide ${slide} · ${text.length > 14 ? `${text.slice(0, 14)}…` : text}`;
     const what = shape?.role || shape?.kind || "";
-    return what ? `第 ${slide} 页 · ${what}` : `第 ${slide} 页`;
+    return what ? `Slide ${slide} · ${what}` : `Slide ${slide}`;
   }
 
   /**
@@ -1032,7 +1032,7 @@ export class VibeReplaySequencer {
         seq: this.executedSeq,
         slide,
         slides: this.total ?? 0,
-        label: `第 ${slide} 页完成`,
+        label: `Slide ${slide} completed`,
       });
     } catch {
       this.capturing = false;

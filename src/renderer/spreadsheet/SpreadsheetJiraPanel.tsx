@@ -4,6 +4,7 @@ import type { ConfiguredJiraSyncResult, JiraConnectionSummary, JiraSyncResult } 
 import { confirmAgentApproval, restorePendingAgentInput, unwrapAgentRunResult, waitForAgentRun } from "../agentRuntime";
 import { officecli } from "../bridge";
 import { Button, TextArea } from "../ui";
+import { useT } from "../i18n";
 
 export interface SpreadsheetJiraPanelProps {
   workbookReady?: boolean;
@@ -16,6 +17,7 @@ export interface SpreadsheetJiraPanelProps {
 }
 
 export function SpreadsheetJiraPanel({ workbookReady = true, workbookPath, workspaceId, onWriteSheet, onSave, onCreateWorkbook, onOpenSettings }: SpreadsheetJiraPanelProps) {
+  const t = useT();
   const [connection, setConnection] = useState<JiraConnectionSummary>();
   const [prompt, setPrompt] = useState("");
   const [result, setResult] = useState<JiraSyncResult>();
@@ -99,13 +101,13 @@ export function SpreadsheetJiraPanel({ workbookReady = true, workbookPath, works
 			writtenResult = response.result;
 			if (workbookReady) await onWriteSheet(response.result);
 			else {
-			  if (!onCreateWorkbook) throw new Error("无法创建 Jira 工作簿，请更新 OfficeDex 后重试。");
+			  if (!onCreateWorkbook) throw new Error(t("settings.connector.createWorkbookError", { name: "Jira" }));
 			  await onCreateWorkbook(response.result);
 			}
 			return { sheetName: response.result.sheetName, rows: response.result.fetched };
 		  },
 		  "workbook.save": async () => {
-			if (!await onSave()) throw new Error("Jira 数据已经写入，但工作簿保存失败。请保留当前窗口并重试保存。");
+			if (!await onSave()) throw new Error(t("settings.connector.saveErrorJira"));
 			return { saved: true };
 		  },
 		},
@@ -117,7 +119,7 @@ export function SpreadsheetJiraPanel({ workbookReady = true, workbookPath, works
 		return;
 	  }
 	  const response = unwrapAgentRunResult<ConfiguredJiraSyncResult>(outcome.run);
-	  if (response.status !== "completed" || !response.result) throw new Error(response.message || "当前无法完成这次 Jira 数据请求。");
+	  if (response.status !== "completed" || !response.result) throw new Error(response.message || t("settings.connector.requestErrorJira"));
 	  const next = writtenResult ?? response.result;
 	  setResult(next);
 	  setPendingRun(undefined);
@@ -130,39 +132,39 @@ export function SpreadsheetJiraPanel({ workbookReady = true, workbookPath, works
   };
 
   return (
-    <section className="spreadsheet-jira-panel" aria-label="Jira Connector">
+    <section className="spreadsheet-jira-panel" aria-label={t("settings.connector.jira.aria")}>
       <div className="spreadsheet-jira-panel__heading">
         <div><DatabaseZap aria-hidden="true" /><strong>Jira Connector</strong></div>
         <span>Server / Data Center</span>
       </div>
-      <p>把 Jira Issue 同步到托管 Sheet，供 App Builder、公式和自动化继续使用。</p>
+      <p>{t("settings.row.jira.desc")}</p>
 
       {!loading && !connection?.configured ? (
         <div className="spreadsheet-jira-panel__empty">
-          <strong>尚未配置 Jira 连接</strong>
-          <span>请先在设置 → 连接中保存并测试 Jira。</span>
-          {onOpenSettings ? <Button size="small" variant="secondary" icon={<Settings />} onClick={onOpenSettings}>打开连接设置</Button> : null}
+          <strong>{t("settings.connector.notConfigured")}</strong>
+          <span>{t("settings.connector.connectionHint")}</span>
+          {onOpenSettings ? <Button size="small" variant="secondary" icon={<Settings />} onClick={onOpenSettings}>{t("settings.connector.openConnection")}</Button> : null}
         </div>
       ) : null}
 
       {connection?.configured ? <>
         <div className="spreadsheet-jira-panel__connected">
           <CheckCircle2 aria-hidden="true" />
-          <div><strong>已连接 Jira</strong><span>{connection.baseUrl}</span></div>
+          <div><strong>{t("settings.connector.connected", { name: "Jira" })}</strong><span>{connection.baseUrl}</span></div>
         </div>
-		{clarification ? <div className="spreadsheet-jira-panel__workbook-required" role="status"><strong>需要补充信息</strong><span>{clarification}</span></div> : null}
-        <label className="spreadsheet-jira-panel__request"><span>{clarification ? "回答上面的问题" : "告诉我你想获取什么 Jira 数据"}</span><TextArea aria-label="Jira 数据需求" rows={4} value={prompt} placeholder={clarification ? "输入你的回答，OfficeDex 会结合上一轮请求继续处理" : "例如：获取 BUSINESS 项目最近更新的 100 条未完成需求，优先显示高优先级"} onChange={(event) => setPrompt(event.target.value)} onSubmit={() => void sync()} /></label>
+		{clarification ? <div className="spreadsheet-jira-panel__workbook-required" role="status"><strong>{t("settings.connector.needsInfo")}</strong><span>{clarification}</span></div> : null}
+		        <label className="spreadsheet-jira-panel__request"><span>{clarification ? t("settings.connector.answerQuestion") : t("settings.connector.jira.requestLabel")}</span><TextArea aria-label={t("settings.connector.jira.requestAria")} rows={4} value={prompt} placeholder={clarification ? t("settings.connector.answerPlaceholder") : t("settings.connector.jira.requestPlaceholder")} onChange={(event) => setPrompt(event.target.value)} onSubmit={() => void sync()} /></label>
         {!workbookReady ? <div className="spreadsheet-jira-panel__workbook-required">
-          <strong>将自动创建 Jira 工作簿</strong>
-          <span>获取完成后，OfficeDex 会创建并打开一个包含 Jira Issues 的 XLSX 工作簿。</span>
+          <strong>{t("settings.connector.autoCreateWorkbook", { name: "Jira" })}</strong>
+          <span>{t("settings.connector.workbookCreated", { name: "Jira Issues" })}</span>
         </div> : null}
-        <Button size="small" variant="primary" icon={<Send />} loading={syncing} disabled={!prompt.trim()} onClick={() => void sync()}>{workbookReady ? "获取数据并写入 Sheet" : "获取数据并创建工作簿"}</Button>
+        <Button size="small" variant="primary" icon={<Send />} loading={syncing} disabled={!prompt.trim()} onClick={() => void sync()}>{workbookReady ? t("settings.connector.fetchAndWrite") : t("settings.connector.fetchAndCreate")}</Button>
       </> : null}
 
-      {loading ? <small>正在读取 Jira 连接……</small> : null}
+      {loading ? <small>{t("settings.connector.loading", { name: "Jira" })}</small> : null}
       {result ? <div className="spreadsheet-jira-panel__result">
-        <strong>已获取并保存 {result.fetched} 条 Issue</strong>
-        <span>{result.querySummary ? `${result.querySummary}。` : ""}Jira 共匹配 {result.total} 条，本次获取 {result.fetched} 条。现在可直接用此表创建 App。</span>
+        <strong>{t("settings.connector.resultJira", { count: result.fetched })}</strong>
+        <span>{result.querySummary ? `${result.querySummary}. ` : ""}{t("settings.connector.resultSummaryJira", { total: result.total, count: result.fetched })}</span>
       </div> : null}
       {error ? <div className="spreadsheet-jira-panel__error" role="alert">{error}</div> : null}
     </section>

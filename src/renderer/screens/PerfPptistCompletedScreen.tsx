@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PptistSlide } from "../../shared/pptistProtocol";
 import { PptistEmbedPanel, type PptistEmbedPanelHandle } from "../components/PptistEmbedPanel";
 import { ImeTextArea } from "../components/ImeInput";
+import { useLocale, type Locale } from "../i18n";
 
 type PerfMetric = {
   event: string;
@@ -23,8 +24,8 @@ declare global {
 
 const PERF_SLIDE_IDS = Array.from({ length: 10 }, (_, index) => `perf-slide-${index + 1}`);
 
-function createPerfSlides(): PptistSlide[] {
-  const titles = [
+function createPerfSlides(locale: Locale): PptistSlide[] {
+  const titles = locale === "zh" ? [
     "介绍石墨文档",
     "什么是石墨文档",
     "石墨文档的核心特点",
@@ -35,7 +36,27 @@ function createPerfSlides(): PptistSlide[] {
     "权限与版本管理",
     "AI 如何辅助文档处理",
     "总结与下一步",
+  ] : [
+    "Introducing Shimo Docs",
+    "What is Shimo Docs?",
+    "Core Shimo Docs capabilities",
+    "Common problems in traditional document collaboration",
+    "The productivity cost of collaboration friction",
+    "Core Shimo Docs use cases",
+    "How real-time collaboration improves efficiency",
+    "Permissions and version management",
+    "How AI assists document work",
+    "Summary and next steps",
   ];
+  const subtitle = locale === "zh"
+    ? "本页用于模拟真实完成态 PPTist 编辑页面，包含缩略图、画布和右侧 AI 继续修改输入。"
+    : "This page simulates a completed PPTist editing workspace with thumbnails, canvas, and AI follow-up editing.";
+  const body = locale === "zh"
+    ? "<p><strong>传统协作中的时间消耗分布示意</strong></p><p>版本核对、沟通确认、风险处理、权限调整等环节会持续占用团队注意力。</p>"
+    : "<p><strong>Where traditional collaboration consumes time</strong></p><p>Version checks, alignment, risk handling, and permission changes continuously consume team attention.</p>";
+  const side = locale === "zh"
+    ? "<p><strong>主要损耗来源</strong></p><p>1 版本核对挤占产出时间</p><p>2 沟通成本持续上升</p><p>3 风险处理增加负担</p>"
+    : "<p><strong>Main sources of loss</strong></p><p>1 Version checks displace productive work</p><p>2 Communication overhead keeps growing</p><p>3 Risk handling adds operational load</p>";
   return titles.map((title, index) => ({
     id: PERF_SLIDE_IDS[index],
     background: { type: "solid", color: "#f7fbfd" },
@@ -59,7 +80,7 @@ function createPerfSlides(): PptistSlide[] {
         top: 120,
         width: 780,
         height: 36,
-        content: `<p>本页用于模拟真实完成态 PPTist 编辑页面，包含缩略图、画布和右侧 AI 继续修改输入。</p>`,
+        content: `<p>${subtitle}</p>`,
         defaultFontName: "Microsoft Yahei",
         defaultColor: "#667085",
         defaultFontSize: 15,
@@ -76,7 +97,7 @@ function createPerfSlides(): PptistSlide[] {
         fill: "#ffffff",
         fixedRatio: false,
         text: {
-          content: `<p><strong>传统协作中的时间消耗分布示意</strong></p><p>版本核对、沟通确认、风险处理、权限调整等环节会持续占用团队注意力。</p>`,
+          content: body,
           defaultFontName: "Microsoft Yahei",
           defaultColor: "#172033",
           defaultFontSize: 18,
@@ -94,7 +115,7 @@ function createPerfSlides(): PptistSlide[] {
         fill: "#dff3ec",
         fixedRatio: false,
         text: {
-          content: `<p><strong>主要损耗来源</strong></p><p>1 版本核对挤占产出时间</p><p>2 沟通成本持续上升</p><p>3 风险处理增加负担</p>`,
+          content: side,
           defaultFontName: "Microsoft Yahei",
           defaultColor: "#24324a",
           defaultFontSize: 16,
@@ -142,13 +163,14 @@ function installPerfCollector() {
 }
 
 export function PerfPptistCompletedScreen() {
+  const locale = useLocale();
   const iframeRef = useRef<PptistEmbedPanelHandle>(null);
   const [prompt, setPrompt] = useState("");
   const [slideIndex, setSlideIndex] = useState(4);
   const [inputCount, setInputCount] = useState(0);
   const [lastInputRAF, setLastInputRAF] = useState(0);
   const [thumbnailCapturePaused, setThumbnailCapturePaused] = useState(false);
-  const slides = useMemo(() => createPerfSlides(), []);
+  const slides = useMemo(() => createPerfSlides(locale), [locale]);
 
   useEffect(() => {
     installPerfCollector();
@@ -189,7 +211,7 @@ export function PerfPptistCompletedScreen() {
         <section className="perf-pptist-cockpit">
           <div className="perf-pptist-title">
             <span>Living Tree Cockpit</span>
-            <strong>介绍石墨文档，十页</strong>
+            <strong>{locale === "zh" ? "介绍石墨文档，十页" : "Introducing Shimo Docs, 10 slides"}</strong>
           </div>
           <div className="perf-pptist-body">
             <div className="perf-pptist-stage">
@@ -208,7 +230,7 @@ export function PerfPptistCompletedScreen() {
                 <div className="living-tree-pptx-action-card">
                   <div className="living-tree-pptx-file-title">
                     <FileTextOutlined />
-                    <strong>介绍石墨文档十页.pptx</strong>
+                    <strong>{locale === "zh" ? "介绍石墨文档十页.pptx" : "Introducing Shimo Docs - 10 slides.pptx"}</strong>
                   </div>
                   <div className="living-tree-pptx-action-card-buttons">
                     <Button icon={<GlobalOutlined />} />

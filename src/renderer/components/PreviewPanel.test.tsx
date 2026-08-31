@@ -97,12 +97,16 @@ describe("PreviewPanel", () => {
 
     render(<PreviewPanel grant={grant} artifact={artifact} onClose={vi.fn()} />);
 
+    expect(screen.getByRole("button", { name: "Back to workspace" })).toBeTruthy();
+    expect(screen.queryByText("Document preview")).toBeNull();
+    expect(document.querySelector(".preview-panel-footer")).toBeNull();
     expect(screen.getByRole("button", { name: "Show in folder" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Open externally" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Replay generation" })).toBeNull();
   });
 
   it.each([
-    ["back", "Back to document"],
+    ["back", "Back to workspace"],
     ["close", "Close preview"],
   ])("slides the full preview overlay out to the left before closing from %s", async (_control, accessibleName) => {
     vi.useFakeTimers();

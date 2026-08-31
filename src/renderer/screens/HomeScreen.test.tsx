@@ -48,6 +48,7 @@ describe("HomeScreen", () => {
     expect(screen.getByRole("group", { name: "Output type" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Select working directory" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Technology Product Launch" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Start creating" })).toHaveClass("ui-button--circular-submit");
     expect(document.querySelectorAll(".doc-type-chip")).toHaveLength(2);
     expect(document.querySelector(".doc-type-chip.doc-type--pptx")).toBeTruthy();
     expect(document.querySelector(".doc-type-chip.doc-type--xlsx")).toBeTruthy();
@@ -107,6 +108,18 @@ describe("HomeScreen", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Describe the result you want" }), { target: { value: "Clean this supplier catalog" } });
     fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
     await waitFor(() => expect(props.onStartTask).toHaveBeenCalledWith({ prompt: "Clean this supplier catalog", documentType: "pptx" }));
+  });
+
+  it("keeps IME Enter inside the Chinese input method instead of starting a task", async () => {
+    const props = renderHome();
+    const prompt = screen.getByRole("textbox", { name: "Describe the result you want" });
+    fireEvent.change(prompt, { target: { value: "如ru'tu" } });
+
+    fireEvent.keyDown(prompt, { key: "Enter", keyCode: 229, which: 229 });
+
+    expect(props.onStartTask).not.toHaveBeenCalled();
+    fireEvent.keyDown(prompt, { key: "Enter", keyCode: 13, which: 13 });
+    await waitFor(() => expect(props.onStartTask).toHaveBeenCalledWith({ prompt: "如ru'tu", documentType: "pptx" }));
   });
 
   it("starts a clear generation request without showing the full review card", async () => {

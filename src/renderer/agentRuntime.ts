@@ -106,7 +106,7 @@ export async function restorePendingAgentInput(
   return {
     runId: run.id,
     requestId,
-    question: stringValue(request.question) || stringValue(request.message) || "请补充完成此任务所需的信息。",
+    question: stringValue(request.question) || stringValue(request.message) || "Please provide the information needed to continue.",
   };
 }
 
@@ -191,7 +191,7 @@ export async function waitForAgentRun(
         question:
           stringValue(nested.question) ||
           stringValue(nested.message) ||
-          "请补充完成此任务所需的信息。",
+          "Please provide the information needed to continue.",
         payload: nested,
       };
     }
@@ -279,5 +279,4 @@ async function handleApproval(
 function recordPayload(event: BridgeEvent): Record<string, unknown> {
   return recordValue(event.payload);
 }
-
 

@@ -1,12 +1,12 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, CheckCircle2, FolderOpen, RotateCcw, X } from "lucide-react";
+import { ArrowLeft, X } from "lucide-react";
 import type { Artifact, PreviewGrant, TimelineDeck, TimelineNode } from "../../shared/types";
 import type { VibeReplayFeed } from "../presentation/vibeReplay";
-import { officecli } from "../bridge";
 import { useT } from "../i18n";
 import { LoadingState } from "../preview/components/LoadingState";
 import { UnsupportedViewer } from "../preview/viewers/UnsupportedViewer";
 import { dialog } from "../ui";
+import { PreviewReadyNotice } from "./PreviewReadyNotice";
 import {
   PptxViewer,
   DocxViewer,
@@ -28,13 +28,12 @@ interface PreviewPanelProps {
   onTimelineNodeSwapped?: (node: TimelineNode) => void;
   onTimelineNodeReturned?: () => void;
   onReturnToLatestDeck?: () => void;
-  onReplayGeneration?: () => void;
   catalogPanel?: React.ReactNode;
 }
 
 const PREVIEW_PANEL_SLIDE_MS = 420;
 
-export function PreviewPanel({ grant, onClose, artifact, live, onReplayGeneration }: PreviewPanelProps) {
+export function PreviewPanel({ grant, onClose, artifact, live }: PreviewPanelProps) {
   const t = useT();
   const [closing, setClosing] = useState(false);
   const [documentDirty, setDocumentDirty] = useState(false);
@@ -66,17 +65,17 @@ export function PreviewPanel({ grant, onClose, artifact, live, onReplayGeneratio
     if (closing) return;
     if (documentDirty) {
       dialog.confirm({
-        title: "关闭文档？",
-        content: "文档还有未保存的修改。关闭后，这些修改将丢失。",
-        okText: "放弃修改并关闭",
-        cancelText: "继续编辑",
+        title: t("preview.closeDirtyTitle"),
+        content: t("preview.closeDirtyBody"),
+        okText: t("preview.closeDirtyConfirm"),
+        cancelText: t("preview.closeDirtyCancel"),
         tone: "danger",
         onOk: beginClose,
       });
       return;
     }
     beginClose();
-  }, [beginClose, closing, documentDirty]);
+  }, [beginClose, closing, documentDirty, t]);
 
   const viewer = (() => {
     if (!grant) return null;
@@ -116,7 +115,6 @@ export function PreviewPanel({ grant, onClose, artifact, live, onReplayGeneratio
             <ArrowLeft size={16} strokeWidth={1.8} />
             <span>{t("preview.back")}</span>
           </button>
-          <span className="preview-panel-title-tag">{t("preview.label")}</span>
           <button
             type="button"
             className="preview-panel-close"
@@ -133,33 +131,7 @@ export function PreviewPanel({ grant, onClose, artifact, live, onReplayGeneratio
           {viewer}
         </Suspense>
       </div>
-      {grant && artifact ? (
-        <footer className="preview-panel-footer">
-          <div className="preview-panel-footer-status">
-            <CheckCircle2 size={15} strokeWidth={1.8} />
-            <span>{t("preview.ready")}</span>
-            <span className="preview-footer-filename" title={grant.fileName}>
-              {grant.fileName}
-            </span>
-          </div>
-          <div className="preview-panel-footer-actions">
-            {onReplayGeneration ? (
-              <button type="button" className="preview-action-btn" onClick={onReplayGeneration}>
-                <RotateCcw size={15} strokeWidth={1.8} />
-                <span>Replay generation</span>
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="preview-action-btn"
-              onClick={() => officecli.showItemInFolder(artifact.filePath).catch(() => {})}
-            >
-              <FolderOpen size={15} strokeWidth={1.8} />
-              <span>{t("preview.showInFolder")}</span>
-            </button>
-          </div>
-        </footer>
-      ) : null}
+      {grant && artifact ? <PreviewReadyNotice grant={grant} artifact={artifact} /> : null}
     </div>
   );
 }

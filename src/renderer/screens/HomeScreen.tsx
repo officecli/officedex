@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type FormEvent, type ReactNode } from "react";
 import type { DesktopTask, DocumentType, RecentFile, TaskQuestionAnswer, WorkspaceSummary } from "../../shared/types";
 import { Button, Dropdown, Empty, Loading, TextArea, toast, type MenuProps } from "../ui";
 import { dragHasFiles, setHomeDropZone } from "../homeDropZone";
@@ -102,9 +102,6 @@ const HOME_TEMPLATES: HomeTemplate[] = [
 
 export function HomeScreen({ files, attentionTasks = [], loading, error, activeWorkspaceId, workspaces = [], onOpenFile, onRemoveFile, onPickTaskFile, onPickTaskDirectory, onPickReferenceImages, droppedTaskPaths, onSelectWorkspace, onSelectAllWorkspaces, onAddWorkspace, onStartTask, onOpenTask, onRetryTask, onSteerTask, onResumeTask, onAnswerTask, onCancelTask, onDeleteTask, productionTaskId, productionEditor, onRetryRecentFiles }: HomeScreenProps) {
   const t = useT();
-  const homeScreenRef = useRef<HTMLElement>(null);
-  const pointerFieldRef = useRef<HTMLCanvasElement>(null);
-  const pointerMotionRef = useRef({ x: 0, y: 0, targetX: 0, targetY: 0, strength: 0, targetStrength: 0, activity: 0 });
   const [prompt, setPrompt] = useState("");
   const [animatedPlaceholder, setAnimatedPlaceholder] = useState("");
   const [selectedDocumentType, setSelectedDocumentType] = useState<HomeDocumentType>("pptx");
@@ -347,121 +344,6 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
     },
   };
 
-  const movePointerGlow = (event: ReactPointerEvent<HTMLElement>) => {
-    const screen = homeScreenRef.current;
-    if (!screen || event.pointerType === "touch") return;
-    const bounds = screen.getBoundingClientRect();
-    const motion = pointerMotionRef.current;
-    const nextX = event.clientX - bounds.left;
-    const nextY = event.clientY - bounds.top;
-    const travel = Math.hypot(nextX - motion.targetX, nextY - motion.targetY);
-    motion.targetX = nextX;
-    motion.targetY = nextY;
-    motion.activity = Math.min(1, Math.max(motion.activity, 0.32 + travel / 24));
-    if (motion.strength < 0.01) {
-      motion.x = motion.targetX;
-      motion.y = motion.targetY;
-    }
-    motion.targetStrength = 1;
-  };
-
-  const hidePointerGlow = () => {
-    pointerMotionRef.current.targetStrength = 0;
-  };
-
-  useEffect(() => {
-    const screen = homeScreenRef.current;
-    const canvas = pointerFieldRef.current;
-    if (!screen || !canvas) return undefined;
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const coarsePointer = window.matchMedia("(hover: none), (pointer: coarse)");
-    if (reducedMotion.matches || coarsePointer.matches) return undefined;
-    const context = canvas.getContext("2d");
-    if (!context) return undefined;
-
-    let width = 0;
-    let height = 0;
-    let pixelRatio = 1;
-    let animationFrame = 0;
-    let lastFrameTime = 0;
-    let animatedPhase = 0;
-    const spacing = 22;
-    const radius = 230;
-
-    const resize = () => {
-      const bounds = screen.getBoundingClientRect();
-      width = Math.max(1, bounds.width);
-      height = Math.max(1, bounds.height);
-      pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.round(width * pixelRatio);
-      canvas.height = Math.round(height * pixelRatio);
-      canvas.style.width = `${width}px`;
-      canvas.style.height = `${height}px`;
-      context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-    };
-
-    const draw = (time: number) => {
-      const motion = pointerMotionRef.current;
-      const elapsed = lastFrameTime === 0 ? 16 : Math.min(40, time - lastFrameTime);
-      lastFrameTime = time;
-      motion.x += (motion.targetX - motion.x) * 0.42;
-      motion.y += (motion.targetY - motion.y) * 0.42;
-      motion.strength += (motion.targetStrength - motion.strength) * 0.09;
-      animatedPhase += elapsed * motion.activity;
-      motion.activity *= 0.76;
-      if (motion.activity < 0.006) motion.activity = 0;
-      context.clearRect(0, 0, width, height);
-
-      if (motion.strength > 0.008) {
-        const minColumn = Math.floor((motion.x - radius) / spacing);
-        const maxColumn = Math.ceil((motion.x + radius) / spacing);
-        const minRow = Math.floor((motion.y - radius) / spacing);
-        const maxRow = Math.ceil((motion.y + radius) / spacing);
-
-        for (let column = minColumn; column <= maxColumn; column += 1) {
-          const baseX = column * spacing + 1;
-          if (baseX < 0 || baseX > width) continue;
-          for (let row = minRow; row <= maxRow; row += 1) {
-            const baseY = row * spacing + 1;
-            if (baseY < 0 || baseY > height) continue;
-            const deltaX = baseX - motion.x;
-            const deltaY = baseY - motion.y;
-            const distance = Math.hypot(deltaX, deltaY);
-            if (distance >= radius) continue;
-
-            const normalized = 1 - distance / radius;
-            const influence = normalized * normalized * (3 - 2 * normalized) * motion.strength;
-            const safeDistance = Math.max(distance, 0.001);
-            const radialX = deltaX / safeDistance;
-            const radialY = deltaY / safeDistance;
-            const wave = Math.sin(distance * 0.054 - animatedPhase * 0.0046) * 7.2 * influence;
-            const crawl = Math.sin(animatedPhase * 0.0024 + column * 0.72 + row * 0.43) * 2.8 * influence;
-            const drawX = baseX + radialX * wave - radialY * crawl;
-            const drawY = baseY + radialY * wave + radialX * crawl;
-            const pulse = (Math.sin(animatedPhase * 0.005 + distance * 0.08) + 1) * 0.16;
-            const dotRadius = 0.72 + influence * (0.9 + pulse);
-            const alpha = (0.08 + influence * 0.34) * motion.strength;
-
-            context.beginPath();
-            context.arc(drawX, drawY, dotRadius, 0, Math.PI * 2);
-            context.fillStyle = `rgba(48, 53, 60, ${alpha})`;
-            context.fill();
-          }
-        }
-      }
-      animationFrame = window.requestAnimationFrame(draw);
-    };
-
-    resize();
-    const resizeObserver = new ResizeObserver(resize);
-    resizeObserver.observe(screen);
-    animationFrame = window.requestAnimationFrame(draw);
-    return () => {
-      resizeObserver.disconnect();
-      window.cancelAnimationFrame(animationFrame);
-    };
-  }, []);
-
   if (productionTask) {
     const title = productionTask.topic || productionTask.userInput?.prompt || t("tasks.untitled");
     return (
@@ -503,12 +385,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
     <section
       className="home-screen"
       aria-labelledby="home-title"
-      ref={homeScreenRef}
-      onPointerEnter={movePointerGlow}
-      onPointerMove={movePointerGlow}
-      onPointerLeave={hidePointerGlow}
     >
-      <canvas className="home-pointer-field" ref={pointerFieldRef} aria-hidden="true" />
       <header className="home-hero">
         <div className="home-hero__copy">
           <h1 id="home-title">{t("home.title")}</h1>
@@ -616,7 +493,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
               </button>
             ))}
           </div>
-          <Button htmlType="submit" variant="primary" icon={<ArrowUpOutlined />} loading={starting} disabled={!prompt.trim()}>{t("home.startTask")}</Button>
+          <Button className="ui-button--circular-submit" ariaLabel={t("home.startTask")} htmlType="submit" variant="primary" icon={<ArrowUpOutlined />} loading={starting} disabled={!prompt.trim()}>{t("home.startTask")}</Button>
         </div>
       </form>
 

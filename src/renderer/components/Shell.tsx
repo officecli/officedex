@@ -16,6 +16,7 @@ import { RuntimeChip } from "./RuntimeChip";
 import { ProjectSidebar, type SidebarAccount, type SidebarDocument } from "./ProjectSidebar";
 import { SidebarUpdateRow, type SidebarUpdateRowProps } from "./SidebarUpdateRow";
 import type { SidebarSignal } from "../taskSignals";
+import { usePointerDotField } from "../usePointerDotField";
 
 const SIDEBAR_COMPACT_KEY = "officedex.homeSidebarCompact";
 
@@ -58,6 +59,8 @@ export function Shell({ activeNav, children, inspector, credit, hasCustomProvide
   });
   const t = useT();
   const spreadsheetMode = activeNav === "spreadsheet";
+  const texturedStage = activeNav === "home" || activeNav === "settings";
+  const pointerDotField = usePointerDotField<HTMLElement>(texturedStage);
   const compact = spreadsheetMode ? spreadsheetCompact : defaultCompact;
   const setCompact = (next: boolean) => {
     if (spreadsheetMode) {
@@ -112,7 +115,16 @@ export function Shell({ activeNav, children, inspector, credit, hasCustomProvide
         ) : null}
         {spreadsheetMode ? children : (
           <div className={`home-shell__content ${inspector ? "with-preview" : ""}`}>
-            <section className="home-shell__stage">{children}</section>
+            <section
+              ref={pointerDotField.hostRef}
+              className={`home-shell__stage ${texturedStage ? "home-shell__stage--textured" : ""}`}
+              onPointerEnter={pointerDotField.movePointer}
+              onPointerMove={pointerDotField.movePointer}
+              onPointerLeave={pointerDotField.hidePointer}
+            >
+              {texturedStage ? <canvas className="home-shell__pointer-field" ref={pointerDotField.canvasRef} aria-hidden="true" /> : null}
+              {children}
+            </section>
             {inspector ? <aside className="preview-panel">{inspector}</aside> : null}
           </div>
         )}
