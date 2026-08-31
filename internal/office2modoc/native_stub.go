@@ -1,4 +1,4 @@
-//go:build !darwin || !arm64 || !cgo
+//go:build (!darwin || !cgo) && (!windows || !amd64)
 
 package office2modoc
 
