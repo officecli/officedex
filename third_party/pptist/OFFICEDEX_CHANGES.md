@@ -21,7 +21,11 @@ The OfficeDex-specific changes include:
   behavior;
 - large-PPTX import, canvas, image, and thumbnail performance modes;
 - reliable thumbnail loading and viewport sizing for the embedded desktop layout;
-- a curated set of redistributable fonts with committed upstream license texts.
+- a curated set of redistributable fonts with committed upstream license texts;
+- CJK faces (SourceHanSans, SourceHanSerif, ZhuQueFangSong, LXGWWenKai,
+  LXGWNeoZhiSong, LXGWNeoXiHei) resolved through `local()` to host-installed
+  fonts rather than shipped as webfonts, since the desktop app can rely on the
+  operating system's font stack. The font picker still offers every family.
 
 OfficeDex injects `scripts/assets/officedex-embed.css` after the PPTist build.
 The generated `public/pptist` directory is retained in Git for release review,

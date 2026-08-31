@@ -1,9 +1,30 @@
-$fonts: 'SourceHanSans', 'SourceHanSerif', 'ZhuQueFangSong', 'LXGWWenKai', 'LXGWNeoZhiSong', 'LXGWNeoXiHei', 'SourceSerif4', 'Inter', 'JetBrainsMono', 'Literata', 'Montserrat', 'SourceSansPro', 'Merriweather', 'Lato';
+// Latin/mono faces are small enough to ship (a few dozen KB each).
+$fonts: 'SourceSerif4', 'Inter', 'JetBrainsMono', 'Literata', 'Montserrat', 'SourceSansPro', 'Merriweather', 'Lato';
 
 @each $font in $fonts {
   @font-face {
     font-display: swap;
     font-family: $font;
     src: url('../fonts/#{$font}.woff2') format('woff2');
+  }
+}
+
+// CJK faces resolve to host-installed fonts instead of shipping ~28.5MB of
+// webfonts the desktop app never needs. The family names stay usable so decks
+// authored elsewhere keep rendering and the font picker keeps working.
+$system-cjk-fonts: (
+  'SourceHanSans': (local('Source Han Sans SC'), local('Noto Sans CJK SC'), local('PingFang SC'), local('Microsoft YaHei'), local('Heiti SC')),
+  'SourceHanSerif': (local('Source Han Serif SC'), local('Noto Serif CJK SC'), local('Songti SC'), local('SimSun'), local('STSong')),
+  'ZhuQueFangSong': (local('STFangsong'), local('FangSong'), local('Songti SC'), local('SimSun')),
+  'LXGWWenKai': (local('LXGW WenKai'), local('Kaiti SC'), local('KaiTi'), local('STKaiti')),
+  'LXGWNeoZhiSong': (local('Songti SC'), local('SimSun'), local('STSong'), local('Noto Serif CJK SC')),
+  'LXGWNeoXiHei': (local('PingFang SC'), local('Microsoft YaHei'), local('Heiti SC'), local('Noto Sans CJK SC')),
+);
+
+@each $family, $sources in $system-cjk-fonts {
+  @font-face {
+    font-display: swap;
+    font-family: $family;
+    src: $sources;
   }
 }
