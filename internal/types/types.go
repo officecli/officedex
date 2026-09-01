@@ -59,7 +59,16 @@ type DocumentTypeCapability struct {
 }
 
 var DocumentTypeCapabilities = map[DocumentType]DocumentTypeCapability{
-	DocPPTX: {Type: DocPPTX, Label: "PPTX", Icon: "slideshow", Attachments: []AttachmentSpec{}},
+	DocPPTX: {Type: DocPPTX, Label: "PPTX", Icon: "slideshow", Attachments: []AttachmentSpec{{
+		Slot:         SlotSourceWorkbook,
+		Required:     false,
+		Multiple:     false,
+		MaxCount:     1,
+		Extensions:   []string{"xlsx"},
+		BridgeArgKey: BridgeArgFilePath,
+		Label:        "Source workbook",
+		Description:  "Optional Excel workbook whose figures ground the deck.",
+	}}},
 	DocDOCX: {Type: DocDOCX, Label: "DOCX", Icon: "description", Attachments: []AttachmentSpec{}},
 	DocXLSX: {Type: DocXLSX, Label: "XLSX", Icon: "table", Attachments: []AttachmentSpec{}},
 	DocReport: {
