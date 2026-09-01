@@ -1,18 +1,47 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { Button } from "@vo-ui/backend";
-import { AlertCircle, Bot, Check, Loader2, RefreshCw, User } from "lucide-react";
+import {
+  AlertCircle,
+  Bot,
+  Check,
+  Loader2,
+  RefreshCw,
+  User,
+} from "lucide-react";
 import { officecli } from "../../../bridge";
 import { useT } from "../../../i18n";
-import type { PlanPptxJSResult, PlanPptxJSTurn } from "../../../../shared/types";
+import type {
+  PlanPptxJSResult,
+  PlanPptxJSTurn,
+} from "../../../../shared/types";
 import {
   buildLearnofPptxEmbedUrl,
   createLearnofPptxChannel,
   LEARNOF_PPTX_PROTOCOL,
   type LearnofPptxEditorContext,
 } from "../../../../shared/learnofPptxProtocol";
-import { LearnofPptxEmbedClient, type LearnofPptxEmbedState } from "./LearnofPptxEmbedClient";
-import { VibeReplaySequencer, type VibeReplayFeed, type VibeReplayStatus } from "../../../presentation/vibeReplay";
-import type { PresentationEditorController, PresentationScriptResult } from "../../../presentation/PresentationEditorFrame";
+import {
+  LearnofPptxEmbedClient,
+  type LearnofPptxEmbedState,
+} from "./LearnofPptxEmbedClient";
+import {
+  VibeReplaySequencer,
+  type VibeReplayFeed,
+  type VibeReplayStatus,
+} from "../../../presentation/vibeReplay";
+import type {
+  PresentationEditorController,
+  PresentationScriptResult,
+} from "../../../presentation/PresentationEditorFrame";
+import { registerActiveEditorClientTools } from "../../../activeEditorClientTools";
 
 export interface LearnofPptxWorkbenchProps {
   editorBaseUrl: string;
@@ -24,8 +53,13 @@ export interface LearnofPptxWorkbenchProps {
   live?: VibeReplayFeed;
   /** Called when the editor cannot be started; the parent may fall back to a read-only preview. */
   onEditorUnavailable?: (reason: string) => void;
+  onDirtyChange?: (dirty: boolean) => void;
+  onFlushReady?: (flush: (() => Promise<void>) | null) => void;
   /** Injected for tests. */
-  createClient?: (options: { channel: string; getTargetWindow: () => Window | null }) => LearnofPptxEmbedClient;
+  createClient?: (options: {
+    channel: string;
+    getTargetWindow: () => Window | null;
+  }) => LearnofPptxEmbedClient;
 }
 
 type EditorStatus =
@@ -71,15 +105,29 @@ function describeSelection(
     for (const slide of context.slides) {
       for (const shape of slide.shapes) {
         const text = (shape.text ?? "").trim();
-        shapeById.set(shape.id, text ? `${shape.name || shape.type}: “${text.slice(0, 40)}${text.length > 40 ? "…" : ""}”` : shape.name || shape.type);
+        shapeById.set(
+          shape.id,
+          text
+            ? `${shape.name || shape.type}: “${text.slice(0, 40)}${text.length > 40 ? "…" : ""}”`
+            : shape.name || shape.type,
+        );
       }
     }
-    const items = context.selectedShapes.map((shape) => shapeById.get(shape.id) ?? shape.name ?? shape.type).slice(0, 4);
-    const suffix = context.selectedShapes.length > 4 ? ` +${context.selectedShapes.length - 4}` : "";
-    return t("pptx.agent.selectionShapes", { items: items.join("、") + suffix });
+    const items = context.selectedShapes
+      .map((shape) => shapeById.get(shape.id) ?? shape.name ?? shape.type)
+      .slice(0, 4);
+    const suffix =
+      context.selectedShapes.length > 4
+        ? ` +${context.selectedShapes.length - 4}`
+        : "";
+    return t("pptx.agent.selectionShapes", {
+      items: items.join("、") + suffix,
+    });
   }
   if (context.selectedSlideIds.length > 0) {
-    return t("pptx.agent.selectionSlides", { count: context.selectedSlideIds.length });
+    return t("pptx.agent.selectionSlides", {
+      count: context.selectedSlideIds.length,
+    });
   }
   return t("pptx.agent.selectionNone");
 }
@@ -91,61 +139,188 @@ export default function LearnofPptxWorkbench({
   filePath,
   live,
   onEditorUnavailable,
+  onDirtyChange,
+  onFlushReady,
   createClient,
 }: LearnofPptxWorkbenchProps) {
   const t = useT();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const channel = useMemo(() => createLearnofPptxChannel(), []);
-  const embedUrl = useMemo(() => buildLearnofPptxEmbedUrl(editorBaseUrl, channel), [editorBaseUrl, channel]);
+  const embedUrl = useMemo(
+    () => buildLearnofPptxEmbedUrl(editorBaseUrl, channel),
+    [editorBaseUrl, channel],
+  );
   const clientRef = useRef<LearnofPptxEmbedClient | null>(null);
   const replayRef = useRef<VibeReplaySequencer | null>(null);
   // Which (task, document, editor session) the live sequencer was built for.
   const replayIdentityRef = useRef<string | undefined>(undefined);
   const [reloadToken, setReloadToken] = useState(0);
-  const [editorStatus, setEditorStatus] = useState<EditorStatus>({ kind: "fetching" });
-  const [selectionContext, setSelectionContext] = useState<LearnofPptxEditorContext | null>(null);
+  const [editorStatus, setEditorStatus] = useState<EditorStatus>({
+    kind: "fetching",
+  });
+  const [selectionContext, setSelectionContext] =
+    useState<LearnofPptxEditorContext | null>(null);
   const [turns, setTurns] = useState<ConversationTurn[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [replayStatus, setReplayStatus] = useState<VibeReplayStatus>();
   const busyRef = useRef(false);
   const transcriptRef = useRef<HTMLDivElement>(null);
+  const dirtyRef = useRef(false);
+  const saveInFlightRef = useRef(false);
+  const savePendingRef = useRef(false);
+  const savePromiseRef = useRef<Promise<void> | null>(null);
+  const dirtyVersionRef = useRef(0);
+  const unregisterClientToolsRef = useRef<(() => void) | null>(null);
+  const filePathRef = useRef(filePath);
+  const fileNameRef = useRef(fileName);
+  const editorStatusRef = useRef(editorStatus);
+  const onDirtyChangeRef = useRef(onDirtyChange);
+  const onFlushReadyRef = useRef(onFlushReady);
+  filePathRef.current = filePath;
+  fileNameRef.current = fileName;
+  editorStatusRef.current = editorStatus;
+  onDirtyChangeRef.current = onDirtyChange;
+  onFlushReadyRef.current = onFlushReady;
 
-  const targetLabel = filePath ? t("pptx.agent.target", { file: fileName }) : t("pptx.agent.targetDownloads");
+  const targetLabel = filePath
+    ? t("pptx.agent.target", { file: fileName })
+    : t("pptx.agent.targetDownloads");
 
-  const updateTurn = useCallback((id: string, patch: Partial<ConversationTurn>) => {
-    setTurns((prev) => prev.map((turn) => (turn.id === id ? { ...turn, ...patch } : turn)));
-  }, []);
+  const updateTurn = useCallback(
+    (id: string, patch: Partial<ConversationTurn>) => {
+      setTurns((prev) =>
+        prev.map((turn) => (turn.id === id ? { ...turn, ...patch } : turn)),
+      );
+    },
+    [],
+  );
 
   const setBusyState = useCallback((value: boolean) => {
     busyRef.current = value;
     setBusy(value);
   }, []);
 
+  const saveCurrentToDisk = useCallback(async (allowCopy = false) => {
+    const client = clientRef.current;
+    if (!client || editorStatusRef.current.kind !== "ready")
+      throw new Error("The presentation editor is not ready.");
+    const targetPath = filePathRef.current;
+    if (!targetPath && !allowCopy)
+      throw new Error("The presentation has no local target path.");
+    const version = dirtyVersionRef.current;
+    const exported = await client.export();
+    const savedPath = await officecli.savePptx(
+      new Uint8Array(exported.buffer),
+      fileNameRef.current,
+      targetPath ? { targetFilePath: targetPath } : {},
+    );
+    if (version === dirtyVersionRef.current) {
+      dirtyRef.current = false;
+      onDirtyChangeRef.current?.(false);
+    }
+    const recordLog = officecli.recordRendererLog;
+    if (typeof recordLog === "function") {
+      void recordLog({
+        source: "learnof-pptx-autosave",
+        event: "saved",
+        details: { filePath: savedPath, revision: exported.revision ?? 0 },
+      }).catch(() => {});
+    }
+  }, []);
+
+  const enqueueSave = useCallback(
+    (allowCopy = false): Promise<void> => {
+      savePendingRef.current = true;
+      if (!saveInFlightRef.current) {
+        saveInFlightRef.current = true;
+        savePromiseRef.current = (async () => {
+          do {
+            savePendingRef.current = false;
+            try {
+              await saveCurrentToDisk(allowCopy);
+            } catch (error) {
+              const recordLog = officecli.recordRendererLog;
+              if (typeof recordLog === "function") {
+                void recordLog({
+                  source: "learnof-pptx-autosave",
+                  event: "failed",
+                  details: {
+                    error:
+                      error instanceof Error ? error.message : String(error),
+                  },
+                }).catch(() => {});
+              }
+              throw error;
+            }
+          } while (savePendingRef.current);
+        })().finally(() => {
+          saveInFlightRef.current = false;
+          savePromiseRef.current = null;
+        });
+      }
+      return savePromiseRef.current ?? Promise.resolve();
+    },
+    [saveCurrentToDisk],
+  );
+
+  const requestSave = useCallback(() => {
+    if (!filePathRef.current) return;
+    void enqueueSave().catch(() => {
+      // Keep the document dirty; the next edit or explicit Agent save retries.
+    });
+  }, [enqueueSave]);
+
+  const flushPendingSave = useCallback(async () => {
+    if (savePendingRef.current && !saveInFlightRef.current) requestSave();
+    await savePromiseRef.current;
+  }, [requestSave]);
+
   // Boot: create the client, fetch the bytes, wait for the editor shell, load, wait for the editor.
   useLayoutEffect(() => {
     if (!embedUrl) {
-      setEditorStatus({ kind: "error", message: t("pptx.agent.editorUnavailableNotConfigured") });
+      setEditorStatus({
+        kind: "error",
+        message: t("pptx.agent.editorUnavailableNotConfigured"),
+      });
       onEditorUnavailable?.("not-configured");
       return;
     }
     let cancelled = false;
     const factory =
-      createClient ?? ((options: { channel: string; getTargetWindow: () => Window | null }) => new LearnofPptxEmbedClient(options));
-    const client = factory({ channel, getTargetWindow: () => iframeRef.current?.contentWindow ?? null });
+      createClient ??
+      ((options: { channel: string; getTargetWindow: () => Window | null }) =>
+        new LearnofPptxEmbedClient(options));
+    const client = factory({
+      channel,
+      getTargetWindow: () => iframeRef.current?.contentWindow ?? null,
+    });
     clientRef.current = client;
     const detach = client.attach();
-    const announceHost = () => iframeRef.current?.contentWindow?.postMessage({
-      protocol: LEARNOF_PPTX_PROTOCOL,
-      channel,
-      type: "officedex:pptx-host-ready",
-    }, "*");
+    const announceHost = () =>
+      iframeRef.current?.contentWindow?.postMessage(
+        {
+          protocol: LEARNOF_PPTX_PROTOCOL,
+          channel,
+          type: "officedex:pptx-host-ready",
+        },
+        "*",
+      );
     const hostReadyTimer = window.setInterval(announceHost, 500);
     announceHost();
     const unsubscribe = client.subscribe((state: LearnofPptxEmbedState) => {
       if (cancelled) return;
-      if (state.phase === "editor-ready" && state.fileId) setEditorStatus({ kind: "ready", fileId: state.fileId });
-      else if (state.phase === "detached") setEditorStatus({ kind: "detached" });
+      if (state.phase === "editor-ready" && state.fileId)
+        setEditorStatus({ kind: "ready", fileId: state.fileId });
+      else if (state.phase === "detached")
+        setEditorStatus({ kind: "detached" });
+    });
+    const unsubscribeDirty = client.subscribeDirty((dirty) => {
+      if (cancelled) return;
+      dirtyRef.current = dirty;
+      dirtyVersionRef.current += 1;
+      onDirtyChange?.(dirty);
+      if (dirty) requestSave();
     });
     setEditorStatus({ kind: "fetching" });
     setSelectionContext(null);
@@ -153,7 +328,8 @@ export default function LearnofPptxWorkbench({
     (async () => {
       const result = await officecli.readArtifactFile(previewToken);
       const data = result?.data;
-      if (!data || data.byteLength === 0) throw new Error("The presentation file is empty.");
+      if (!data || data.byteLength === 0)
+        throw new Error("The presentation file is empty.");
       const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
       const copy = new Uint8Array(bytes.byteLength);
       copy.set(bytes);
@@ -168,6 +344,24 @@ export default function LearnofPptxWorkbench({
       const fileId = await client.waitForEditorReady();
       if (cancelled) return;
       setEditorStatus({ kind: "ready", fileId });
+      dirtyRef.current = false;
+      dirtyVersionRef.current = 0;
+      onDirtyChangeRef.current?.(false);
+      unregisterClientToolsRef.current?.();
+      unregisterClientToolsRef.current = registerActiveEditorClientTools(
+        "pptx-editor",
+        {
+          "pptx.editor.save": async () => {
+            await enqueueSave(true);
+            return {
+              saved: true,
+              file_path: filePathRef.current ?? fileNameRef.current,
+              revision: client.getState().revision ?? 0,
+            };
+          },
+        },
+      );
+      onFlushReadyRef.current?.(flushPendingSave);
       try {
         setSelectionContext(await client.inspect());
       } catch {
@@ -183,6 +377,10 @@ export default function LearnofPptxWorkbench({
     return () => {
       cancelled = true;
       unsubscribe();
+      unsubscribeDirty();
+      unregisterClientToolsRef.current?.();
+      unregisterClientToolsRef.current = null;
+      onFlushReadyRef.current?.(null);
       detach();
       window.clearInterval(hostReadyTimer);
       client.dispose();
@@ -194,7 +392,13 @@ export default function LearnofPptxWorkbench({
 
   useEffect(() => {
     const client = clientRef.current;
-    if (!live || !client || editorStatus.kind !== "ready" || client.getState().phase !== "editor-ready") return;
+    if (
+      !live ||
+      !client ||
+      editorStatus.kind !== "ready" ||
+      client.getState().phase !== "editor-ready"
+    )
+      return;
     // One sequencer belongs to one (task, document, editor session). Any of the
     // three changing invalidates the controller closure below — it captures
     // this client and this file id — and mixing two tasks' op streams in one
@@ -215,7 +419,7 @@ export default function LearnofPptxWorkbench({
           return { result: value, snapshotSaved: false };
         },
         async inspect() {
-          return await client.inspect() as never;
+          return (await client.inspect()) as never;
         },
         async save() {
           const exported = await client.export();
@@ -230,29 +434,44 @@ export default function LearnofPptxWorkbench({
           return { previewToken, sessionId: editorStatus.fileId };
         },
         async swapDocument() {
-          throw new Error("Document swapping is not available in the learnof live editor.");
+          throw new Error(
+            "Document swapping is not available in the learnof live editor.",
+          );
         },
       };
       replayRef.current = new VibeReplaySequencer({
         controller,
         onStatus: (status) => {
           setReplayStatus(status);
-          void officecli.recordRendererLog({
-            source: "learnof-live-replay",
-            event: status.state,
-            details: { taskId: live.taskId, slide: status.slide, total: status.total, error: status.error },
-          }).catch(() => {});
+          void officecli
+            .recordRendererLog({
+              source: "learnof-live-replay",
+              event: status.state,
+              details: {
+                taskId: live.taskId,
+                slide: status.slide,
+                total: status.total,
+                error: status.error,
+              },
+            })
+            .catch(() => {});
         },
       });
     }
     replayRef.current.update(live);
   }, [editorStatus, fileName, filePath, live, previewToken]);
 
-  useEffect(() => () => {
-    replayRef.current?.dispose();
-    replayRef.current = null;
-    replayIdentityRef.current = undefined;
-  }, []);
+  useEffect(
+    () => () => {
+      replayRef.current?.dispose();
+      replayRef.current = null;
+      replayIdentityRef.current = undefined;
+      unregisterClientToolsRef.current?.();
+      unregisterClientToolsRef.current = null;
+      onFlushReadyRef.current?.(null);
+    },
+    [],
+  );
 
   useEffect(() => {
     const node = transcriptRef.current;
@@ -276,7 +495,8 @@ export default function LearnofPptxWorkbench({
       for (const turn of turns) {
         if (turn.id === excludeId) continue;
         history.push({ role: "user", content: turn.prompt });
-        if (turn.plan?.summary) history.push({ role: "assistant", content: turn.plan.summary });
+        if (turn.plan?.summary)
+          history.push({ role: "assistant", content: turn.plan.summary });
       }
       return history.slice(-MAX_HISTORY_TURNS * 2);
     },
@@ -285,10 +505,18 @@ export default function LearnofPptxWorkbench({
 
   /** Execute → export → save. `plan` must already be confirmed or auto-approved. */
   const applyPlan = useCallback(
-    async (turnId: string, plan: PlanPptxJSResult, options: { skipExecute?: boolean } = {}) => {
+    async (
+      turnId: string,
+      plan: PlanPptxJSResult,
+      options: { skipExecute?: boolean } = {},
+    ) => {
       const client = clientRef.current;
       if (!client) {
-        updateTurn(turnId, { stage: "failed", error: t("pptx.agent.editorNotReady"), failedStage: "executing" });
+        updateTurn(turnId, {
+          stage: "failed",
+          error: t("pptx.agent.editorNotReady"),
+          failedStage: "executing",
+        });
         return;
       }
       setBusyState(true);
@@ -298,25 +526,30 @@ export default function LearnofPptxWorkbench({
           await client.executeJs(plan.source);
         }
         updateTurn(turnId, { stage: "exporting", error: undefined });
-        let exported;
-        try {
-          exported = await client.export();
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          updateTurn(turnId, { stage: "failed", failedStage: "exporting", error: t("pptx.agent.saveFailed", { msg: message }) });
-          return;
-        }
         updateTurn(turnId, { stage: "saving" });
         try {
-          const savedPath = await officecli.savePptx(new Uint8Array(exported.buffer), fileName, filePath ? { targetFilePath: filePath } : {});
-          updateTurn(turnId, { stage: "done", savedPath, error: undefined });
+          await enqueueSave(true);
+          updateTurn(turnId, {
+            stage: "done",
+            savedPath: filePathRef.current ?? fileNameRef.current,
+            error: undefined,
+          });
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          updateTurn(turnId, { stage: "failed", failedStage: "saving", error: t("pptx.agent.saveFailed", { msg: message }) });
+          const message =
+            error instanceof Error ? error.message : String(error);
+          updateTurn(turnId, {
+            stage: "failed",
+            failedStage: "saving",
+            error: t("pptx.agent.saveFailed", { msg: message }),
+          });
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        updateTurn(turnId, { stage: "failed", failedStage: "executing", error: message });
+        updateTurn(turnId, {
+          stage: "failed",
+          failedStage: "executing",
+          error: message,
+        });
       } finally {
         setBusyState(false);
         void refreshSelection();
@@ -330,7 +563,11 @@ export default function LearnofPptxWorkbench({
     async (turnId: string, prompt: string) => {
       const client = clientRef.current;
       if (!client || editorStatus.kind !== "ready") {
-        updateTurn(turnId, { stage: "failed", error: t("pptx.agent.editorNotReady"), failedStage: "inspecting" });
+        updateTurn(turnId, {
+          stage: "failed",
+          error: t("pptx.agent.editorNotReady"),
+          failedStage: "inspecting",
+        });
         return;
       }
       setBusyState(true);
@@ -340,18 +577,27 @@ export default function LearnofPptxWorkbench({
         const context = await client.inspect();
         setSelectionContext(context);
         updateTurn(turnId, { stage: "planning", context });
-        plan = await officecli.planPptxJS({ prompt, context, history: buildHistory(turnId) });
+        plan = await officecli.planPptxJS({
+          prompt,
+          context,
+          history: buildHistory(turnId),
+        });
         if (!plan || typeof plan.source !== "string" || !plan.source.trim()) {
           throw new Error("The AI planner returned no script.");
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        updateTurn(turnId, { stage: "failed", failedStage: "planning", error: message });
+        updateTurn(turnId, {
+          stage: "failed",
+          failedStage: "planning",
+          error: message,
+        });
         setBusyState(false);
         return;
       }
       updateTurn(turnId, { plan });
-      const needsConfirmation = Boolean(plan.requires_confirmation) || plan.confidence === "low";
+      const needsConfirmation =
+        Boolean(plan.requires_confirmation) || plan.confidence === "low";
       if (needsConfirmation) {
         updateTurn(turnId, { stage: "awaiting-confirmation" });
         setBusyState(false);
@@ -395,7 +641,10 @@ export default function LearnofPptxWorkbench({
   const retryTurn = useCallback(
     (turn: ConversationTurn) => {
       if (busyRef.current) return;
-      if ((turn.failedStage === "exporting" || turn.failedStage === "saving") && turn.plan) {
+      if (
+        (turn.failedStage === "exporting" || turn.failedStage === "saving") &&
+        turn.plan
+      ) {
         // The edit already landed in the editor; only the export/save must be redone.
         void applyPlan(turn.id, turn.plan, { skipExecute: true });
         return;
@@ -409,8 +658,14 @@ export default function LearnofPptxWorkbench({
     [applyPlan, planTurn],
   );
 
-  const awaitingConfirmation = turns.some((turn) => turn.stage === "awaiting-confirmation");
-  const canSend = editorStatus.kind === "ready" && !busy && !awaitingConfirmation && draft.trim().length > 0;
+  const awaitingConfirmation = turns.some(
+    (turn) => turn.stage === "awaiting-confirmation",
+  );
+  const canSend =
+    editorStatus.kind === "ready" &&
+    !busy &&
+    !awaitingConfirmation &&
+    draft.trim().length > 0;
 
   const renderStage = (turn: ConversationTurn) => {
     switch (turn.stage) {
@@ -419,17 +674,36 @@ export default function LearnofPptxWorkbench({
       case "planning":
         return <StatusLine spinning text={t("pptx.agent.status.planning")} />;
       case "awaiting-confirmation":
-        return <StatusLine text={t("pptx.agent.status.awaitingConfirmation")} />;
+        return (
+          <StatusLine text={t("pptx.agent.status.awaitingConfirmation")} />
+        );
       case "executing":
         return <StatusLine spinning text={t("pptx.agent.status.executing")} />;
       case "exporting":
         return <StatusLine spinning text={t("pptx.agent.status.exporting")} />;
       case "saving":
-        return <StatusLine spinning text={t("pptx.agent.status.saving", { file: fileName })} />;
+        return (
+          <StatusLine
+            spinning
+            text={t("pptx.agent.status.saving", { file: fileName })}
+          />
+        );
       case "done":
-        return <StatusLine done text={t("pptx.agent.status.done", { path: turn.savedPath ?? fileName })} />;
+        return (
+          <StatusLine
+            done
+            text={t("pptx.agent.status.done", {
+              path: turn.savedPath ?? fileName,
+            })}
+          />
+        );
       case "failed":
-        return <StatusLine error text={t("pptx.agent.status.failed", { msg: turn.error ?? "" })} />;
+        return (
+          <StatusLine
+            error
+            text={t("pptx.agent.status.failed", { msg: turn.error ?? "" })}
+          />
+        );
       case "cancelled":
         return <StatusLine text={t("pptx.agent.status.cancelled")} />;
       default:
@@ -440,31 +714,46 @@ export default function LearnofPptxWorkbench({
   return (
     <div className="pptx-workbench" data-editor-status={editorStatus.kind}>
       <div className="pptx-workbench-editor">
-        {editorStatus.kind !== "ready" && editorStatus.kind !== "detached" && editorStatus.kind !== "error" && (
-          <div className="pptx-workbench-overlay" role="status">
-            <Loader2 className="pptx-workbench-spinner" size={22} />
-            <span>
-              {editorStatus.kind === "importing"
-                ? t("pptx.agent.editorImporting", { file: fileName })
-                : t("pptx.agent.editorLoading")}
-            </span>
-          </div>
-        )}
+        {editorStatus.kind !== "ready" &&
+          editorStatus.kind !== "detached" &&
+          editorStatus.kind !== "error" && (
+            <div className="pptx-workbench-overlay" role="status">
+              <Loader2 className="pptx-workbench-spinner" size={22} />
+              <span>
+                {editorStatus.kind === "importing"
+                  ? t("pptx.agent.editorImporting", { file: fileName })
+                  : t("pptx.agent.editorLoading")}
+              </span>
+            </div>
+          )}
         {editorStatus.kind === "detached" && (
           <div className="pptx-workbench-overlay" role="status">
             <AlertCircle size={22} />
             <span>{t("pptx.agent.editorDetached")}</span>
-            <Button size="small" onClick={() => setReloadToken((value) => value + 1)}>
+            <Button
+              size="small"
+              onClick={() => setReloadToken((value) => value + 1)}
+            >
               {t("pptx.agent.reload")}
             </Button>
           </div>
         )}
         {editorStatus.kind === "error" && (
-          <div className="pptx-workbench-overlay pptx-workbench-overlay-error" role="alert">
+          <div
+            className="pptx-workbench-overlay pptx-workbench-overlay-error"
+            role="alert"
+          >
             <AlertCircle size={22} />
             <strong>{t("pptx.agent.editorUnavailableTitle")}</strong>
-            <span>{t("pptx.agent.editorUnavailableFailed", { msg: editorStatus.message })}</span>
-            <Button size="small" onClick={() => setReloadToken((value) => value + 1)}>
+            <span>
+              {t("pptx.agent.editorUnavailableFailed", {
+                msg: editorStatus.message,
+              })}
+            </span>
+            <Button
+              size="small"
+              onClick={() => setReloadToken((value) => value + 1)}
+            >
               {t("pptx.agent.reload")}
             </Button>
           </div>
@@ -477,21 +766,32 @@ export default function LearnofPptxWorkbench({
             className="pptx-workbench-frame"
             title={fileName}
             allow="clipboard-read; clipboard-write"
-            onLoad={() => iframeRef.current?.contentWindow?.postMessage({
-              protocol: LEARNOF_PPTX_PROTOCOL,
-              channel,
-              type: "officedex:pptx-host-ready",
-            }, "*")}
+            onLoad={() =>
+              iframeRef.current?.contentWindow?.postMessage(
+                {
+                  protocol: LEARNOF_PPTX_PROTOCOL,
+                  channel,
+                  type: "officedex:pptx-host-ready",
+                },
+                "*",
+              )
+            }
           />
         )}
       </div>
-      <aside className="pptx-workbench-panel" aria-label={t("pptx.agent.panelTitle")}>
+      <aside
+        className="pptx-workbench-panel"
+        aria-label={t("pptx.agent.panelTitle")}
+      >
         <header className="pptx-workbench-panel-header">
           <div className="pptx-workbench-panel-title">
             <Bot size={16} />
             <span>{t("pptx.agent.panelTitle")}</span>
           </div>
-          <div className="pptx-workbench-panel-target" title={filePath ?? fileName}>
+          <div
+            className="pptx-workbench-panel-target"
+            title={filePath ?? fileName}
+          >
             {targetLabel}
           </div>
           <div className="pptx-workbench-panel-selection">
@@ -508,22 +808,37 @@ export default function LearnofPptxWorkbench({
             </button>
           </div>
           {live && replayStatus ? (
-            <div className="pptx-workbench-panel-target" role={replayStatus.state === "failed" ? "alert" : "status"}>
-              Live drawing: {replayStatus.state}{replayStatus.slide ? ` · slide ${replayStatus.slide}` : ""}{replayStatus.error ? ` · ${replayStatus.error}` : ""}
+            <div
+              className="pptx-workbench-panel-target"
+              role={replayStatus.state === "failed" ? "alert" : "status"}
+            >
+              Live drawing: {replayStatus.state}
+              {replayStatus.slide ? ` · slide ${replayStatus.slide}` : ""}
+              {replayStatus.error ? ` · ${replayStatus.error}` : ""}
             </div>
           ) : null}
         </header>
         <div className="pptx-workbench-transcript" ref={transcriptRef}>
-          {turns.length === 0 && <p className="pptx-workbench-empty">{t("pptx.agent.emptyHint")}</p>}
+          {turns.length === 0 && (
+            <p className="pptx-workbench-empty">{t("pptx.agent.emptyHint")}</p>
+          )}
           {turns.map((turn) => (
-            <div key={turn.id} className="pptx-workbench-turn" data-stage={turn.stage}>
+            <div
+              key={turn.id}
+              className="pptx-workbench-turn"
+              data-stage={turn.stage}
+            >
               <div className="pptx-workbench-message pptx-workbench-message-user">
                 <span className="pptx-workbench-message-avatar">
                   <User size={13} />
                 </span>
                 <div className="pptx-workbench-message-body">
-                  <div className="pptx-workbench-message-author">{t("pptx.agent.you")}</div>
-                  <div className="pptx-workbench-message-text">{turn.prompt}</div>
+                  <div className="pptx-workbench-message-author">
+                    {t("pptx.agent.you")}
+                  </div>
+                  <div className="pptx-workbench-message-text">
+                    {turn.prompt}
+                  </div>
                 </div>
               </div>
               <div className="pptx-workbench-message pptx-workbench-message-assistant">
@@ -531,10 +846,20 @@ export default function LearnofPptxWorkbench({
                   <Bot size={13} />
                 </span>
                 <div className="pptx-workbench-message-body">
-                  <div className="pptx-workbench-message-author">{t("pptx.agent.assistant")}</div>
-                  {turn.plan?.summary && <div className="pptx-workbench-message-text">{turn.plan.summary}</div>}
+                  <div className="pptx-workbench-message-author">
+                    {t("pptx.agent.assistant")}
+                  </div>
+                  {turn.plan?.summary && (
+                    <div className="pptx-workbench-message-text">
+                      {turn.plan.summary}
+                    </div>
+                  )}
                   {turn.plan?.confidence && (
-                    <div className="pptx-workbench-confidence">{t("pptx.agent.confidence", { level: turn.plan.confidence })}</div>
+                    <div className="pptx-workbench-confidence">
+                      {t("pptx.agent.confidence", {
+                        level: turn.plan.confidence,
+                      })}
+                    </div>
                   )}
                   {turn.plan?.warnings && turn.plan.warnings.length > 0 && (
                     <div className="pptx-workbench-warnings">
@@ -547,35 +872,65 @@ export default function LearnofPptxWorkbench({
                     </div>
                   )}
                   {turn.stage === "awaiting-confirmation" && turn.plan && (
-                    <div className="pptx-workbench-confirm" role="group" aria-label={t("pptx.agent.confirmTitle")}>
-                      <div className="pptx-workbench-confirm-title">{turn.plan.confirmation?.title || t("pptx.agent.confirmTitle")}</div>
-                      {turn.plan.confirmation?.message && <p>{turn.plan.confirmation.message}</p>}
-                      {turn.plan.confirmation?.target && <p>{t("pptx.agent.confirmTarget", { target: turn.plan.confirmation.target })}</p>}
-                      {turn.plan.confirmation?.changes && turn.plan.confirmation.changes.length > 0 && (
-                        <div>
+                    <div
+                      className="pptx-workbench-confirm"
+                      role="group"
+                      aria-label={t("pptx.agent.confirmTitle")}
+                    >
+                      <div className="pptx-workbench-confirm-title">
+                        {turn.plan.confirmation?.title ||
+                          t("pptx.agent.confirmTitle")}
+                      </div>
+                      {turn.plan.confirmation?.message && (
+                        <p>{turn.plan.confirmation.message}</p>
+                      )}
+                      {turn.plan.confirmation?.target && (
+                        <p>
+                          {t("pptx.agent.confirmTarget", {
+                            target: turn.plan.confirmation.target,
+                          })}
+                        </p>
+                      )}
+                      {turn.plan.confirmation?.changes &&
+                        turn.plan.confirmation.changes.length > 0 && (
+                          <div>
                             <strong>{t("pptx.agent.confirmChanges")}</strong>
-                          <ul>
-                            {turn.plan.confirmation.changes.map((item, index) => (
-                              <li key={index}>{item}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {turn.plan.confirmation?.preserved && turn.plan.confirmation.preserved.length > 0 && (
-                        <div>
-                          <strong>{t("pptx.agent.confirmPreserved")}</strong>
-                          <ul>
-                            {turn.plan.confirmation.preserved.map((item, index) => (
-                              <li key={index}>{item}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
+                            <ul>
+                              {turn.plan.confirmation.changes.map(
+                                (item, index) => (
+                                  <li key={index}>{item}</li>
+                                ),
+                              )}
+                            </ul>
+                          </div>
+                        )}
+                      {turn.plan.confirmation?.preserved &&
+                        turn.plan.confirmation.preserved.length > 0 && (
+                          <div>
+                            <strong>{t("pptx.agent.confirmPreserved")}</strong>
+                            <ul>
+                              {turn.plan.confirmation.preserved.map(
+                                (item, index) => (
+                                  <li key={index}>{item}</li>
+                                ),
+                              )}
+                            </ul>
+                          </div>
+                        )}
                       <div className="pptx-workbench-confirm-actions">
-                        <Button size="small" onClick={() => cancelTurn(turn)} disabled={busy}>
+                        <Button
+                          size="small"
+                          onClick={() => cancelTurn(turn)}
+                          disabled={busy}
+                        >
                           {t("pptx.agent.cancel")}
                         </Button>
-                        <Button size="small" type="primary" onClick={() => confirmTurn(turn)} disabled={busy}>
+                        <Button
+                          size="small"
+                          type="primary"
+                          onClick={() => confirmTurn(turn)}
+                          disabled={busy}
+                        >
                           {t("pptx.agent.apply")}
                         </Button>
                       </div>
@@ -584,8 +939,13 @@ export default function LearnofPptxWorkbench({
                   {renderStage(turn)}
                   {turn.stage === "failed" && (
                     <div className="pptx-workbench-turn-actions">
-                      <Button size="small" onClick={() => retryTurn(turn)} disabled={busy}>
-                        {turn.failedStage === "exporting" || turn.failedStage === "saving"
+                      <Button
+                        size="small"
+                        onClick={() => retryTurn(turn)}
+                        disabled={busy}
+                      >
+                        {turn.failedStage === "exporting" ||
+                        turn.failedStage === "saving"
                           ? t("pptx.agent.retrySave")
                           : t("pptx.agent.retry")}
                       </Button>
@@ -608,7 +968,11 @@ export default function LearnofPptxWorkbench({
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+              if (
+                event.key === "Enter" &&
+                !event.shiftKey &&
+                !event.nativeEvent.isComposing
+              ) {
                 event.preventDefault();
                 submit();
               }
@@ -619,8 +983,17 @@ export default function LearnofPptxWorkbench({
             aria-label={t("pptx.agent.placeholder")}
           />
           <div className="pptx-workbench-composer-actions">
-            {busy && <span className="pptx-workbench-composer-hint">{t("pptx.agent.busy")}</span>}
-            <Button type="primary" size="small" htmlType="submit" disabled={!canSend}>
+            {busy && (
+              <span className="pptx-workbench-composer-hint">
+                {t("pptx.agent.busy")}
+              </span>
+            )}
+            <Button
+              type="primary"
+              size="small"
+              htmlType="submit"
+              disabled={!canSend}
+            >
               {t("pptx.agent.send")}
             </Button>
           </div>
@@ -630,10 +1003,29 @@ export default function LearnofPptxWorkbench({
   );
 }
 
-function StatusLine({ text, spinning, done, error }: { text: string; spinning?: boolean; done?: boolean; error?: boolean }) {
+function StatusLine({
+  text,
+  spinning,
+  done,
+  error,
+}: {
+  text: string;
+  spinning?: boolean;
+  done?: boolean;
+  error?: boolean;
+}) {
   return (
-    <div className={`pptx-workbench-status${error ? " pptx-workbench-status-error" : done ? " pptx-workbench-status-done" : ""}`} role="status">
-      {spinning ? <Loader2 className="pptx-workbench-spinner" size={13} /> : done ? <Check size={13} /> : error ? <AlertCircle size={13} /> : null}
+    <div
+      className={`pptx-workbench-status${error ? " pptx-workbench-status-error" : done ? " pptx-workbench-status-done" : ""}`}
+      role="status"
+    >
+      {spinning ? (
+        <Loader2 className="pptx-workbench-spinner" size={13} />
+      ) : done ? (
+        <Check size={13} />
+      ) : error ? (
+        <AlertCircle size={13} />
+      ) : null}
       <span>{text}</span>
     </div>
   );

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import PptxViewer from "./PptxViewer";
 import { LEARNOF_PPTX_PROTOCOL, isLearnofPptxEditorContext } from "../../../shared/learnofPptxProtocol";
 import type { PlanPptxJSResult } from "../../../shared/types";
+import { executeActiveEditorClientTool } from "../../activeEditorClientTools";
 
 const planPptxJS = vi.fn<(input: { prompt: string; context: unknown; history?: unknown[] }) => Promise<PlanPptxJSResult>>();
 const savePptx = vi.fn<(data: Uint8Array, fileName: string, options?: { targetFilePath?: string }) => Promise<string>>();
@@ -72,13 +73,14 @@ const CONTEXT = {
   selectedShapes: [{ id: "title", name: "Title 1", type: "Placeholder" }],
 };
 
-async function bootWorkbench(filePath = "/tmp/deck.pptx") {
-  render(<PptxViewer previewToken="preview-token" fileName="deck.pptx" documentType="pptx" filePath={filePath} editorBaseUrl={EDITOR_URL} />);
+async function bootWorkbench(filePath = "/tmp/deck.pptx", extraProps: { onDirtyChange?: (dirty: boolean) => void } = {}) {
+  render(<PptxViewer previewToken="preview-token" fileName="deck.pptx" documentType="pptx" filePath={filePath} editorBaseUrl={EDITOR_URL} {...extraProps} />);
   const frame = await waitFor(() => {
     const node = document.querySelector<HTMLIFrameElement>(".pptx-workbench-frame");
     expect(node).toBeTruthy();
     return node as HTMLIFrameElement;
   });
+
   const editor = installFakeEditorFrame();
   expect(editor.url.origin).toBe("http://127.0.0.1:4178");
   expect(editor.url.searchParams.get("officedexEmbed")).toBe("1");
@@ -109,6 +111,26 @@ afterEach(() => {
 });
 
 describe("PptxViewer", () => {
+  it("autosaves a manual editor change reported through the embed protocol", async () => {
+    const dirtyChanges: boolean[] = [];
+    const { editor } = await bootWorkbench("/tmp/deck.pptx", {
+      onDirtyChange: (dirty) => dirtyChanges.push(dirty),
+    });
+    act(() => editor.reply({ type: "officedex:pptx-dirty-changed", fileId: "mop-1", dirty: true, revision: 1 }));
+    const exportMessage = await editor.waitForHostMessage("officedex:pptx-export");
+    act(() => editor.reply({ type: "officedex:pptx-export-result", requestId: exportMessage.requestId, buffer: new Uint8Array([0x50, 0x4b, 3, 4]).buffer, fileName: "deck.pptx", revision: 1 }));
+    await waitFor(() => expect(savePptx).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(dirtyChanges).toContain(false));
+  });
+
+  it("registers the active PPTX editor save surface for Agent calls", async () => {
+    const { editor } = await bootWorkbench();
+    const save = executeActiveEditorClientTool("pptx-editor", "pptx.editor.save", {});
+    const exportMessage = await editor.waitForHostMessage("officedex:pptx-export");
+    act(() => editor.reply({ type: "officedex:pptx-export-result", requestId: exportMessage.requestId, buffer: new Uint8Array([0x50, 0x4b, 3, 4]).buffer, fileName: "deck.pptx", revision: 2 }));
+    await expect(save).resolves.toMatchObject({ saved: true, file_path: "/tmp/deck.pptx" });
+  });
+
   it("falls back to the read-only PPTist preview without an AI entry point when no editor URL is configured", () => {
     render(<PptxViewer previewToken="preview-token" fileName="deck.pptx" documentType="pptx" editorBaseUrl={null} />);
 
@@ -178,6 +200,7 @@ describe("PptxViewer", () => {
     expect(details?.open).toBe(false);
     expect(details?.querySelector("pre")?.textContent).toContain("PowerPoint.run");
   });
+
 
   it("requires confirmation for flagged plans and does not execute until confirmed; cancel leaves the deck untouched", async () => {
     const { editor } = await bootWorkbench();

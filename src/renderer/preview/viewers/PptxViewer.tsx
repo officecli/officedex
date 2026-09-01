@@ -1,4 +1,12 @@
-import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+  lazy,
+  Suspense,
+} from "react";
 import { PreviewToolbar } from "../components/PreviewToolbar";
 import { LoadingState } from "../components/LoadingState";
 import { ErrorState } from "../components/ErrorState";
@@ -7,7 +15,9 @@ import { useT } from "../../i18n";
 import { resolveLearnofPptxBaseUrl } from "./learnof/learnofPptxUrl";
 import type { VibeReplayFeed } from "../../presentation/vibeReplay";
 
-const LearnofPptxWorkbench = lazy(() => import("./learnof/LearnofPptxWorkbench"));
+const LearnofPptxWorkbench = lazy(
+  () => import("./learnof/LearnofPptxWorkbench"),
+);
 
 interface PptxViewerProps {
   previewToken: string;
@@ -19,6 +29,8 @@ interface PptxViewerProps {
   editorBaseUrl?: string | null;
   /** Ordered generation ops to draw live in the same learnof editor. */
   live?: VibeReplayFeed;
+  onDirtyChange?: (dirty: boolean) => void;
+  onFlushReady?: (flush: (() => Promise<void>) | null) => void;
 }
 
 // PPTist is a standalone Vue SPA vendored under public/pptist. We embed it in `?mode=embed`,
@@ -36,10 +48,20 @@ const MSG_LOAD_PPTX = "pptist:load-pptx"; // host → PPTist: here is the .pptx 
  * the editor fails to start) it falls back to the read-only PPTist preview and
  * says so explicitly — no AI entry point is shown in that case.
  */
-export default function PptxViewer({ previewToken, fileName, documentType, filePath, editorBaseUrl, live }: PptxViewerProps) {
+export default function PptxViewer({
+  previewToken,
+  fileName,
+  documentType,
+  filePath,
+  editorBaseUrl,
+  live,
+  onDirtyChange,
+  onFlushReady,
+}: PptxViewerProps) {
   const t = useT();
   const resolvedEditorUrl = useMemo(
-    () => (editorBaseUrl === undefined ? resolveLearnofPptxBaseUrl() : editorBaseUrl),
+    () =>
+      editorBaseUrl === undefined ? resolveLearnofPptxBaseUrl() : editorBaseUrl,
     [editorBaseUrl],
   );
   const [fallbackReason, setFallbackReason] = useState<string | null>(null);
@@ -53,7 +75,11 @@ export default function PptxViewer({ previewToken, fileName, documentType, fileP
 
   return (
     <>
-      <PreviewToolbar fileName={fileName} documentType={documentType} onOpenExternal={openExternal} />
+      <PreviewToolbar
+        fileName={fileName}
+        documentType={documentType}
+        onOpenExternal={openExternal}
+      />
       {showWorkbench && resolvedEditorUrl ? (
         <div className="pptx-deck-layout pptx-deck-layout-workbench">
           <Suspense fallback={<LoadingState fileName={fileName} />}>
@@ -64,6 +90,8 @@ export default function PptxViewer({ previewToken, fileName, documentType, fileP
               fileName={fileName}
               filePath={filePath}
               live={live}
+              onDirtyChange={onDirtyChange}
+              onFlushReady={onFlushReady}
               onEditorUnavailable={(reason) => setFallbackReason(reason)}
             />
           </Suspense>
@@ -79,9 +107,14 @@ export default function PptxViewer({ previewToken, fileName, documentType, fileP
       ) : (
         <>
           <div className="pptx-readonly-notice" role="note">
-            {t("pptx.agent.editorUnavailableTitle")} — {t("pptx.agent.editorUnavailableNotConfigured")}
+            {t("pptx.agent.editorUnavailableTitle")} —{" "}
+            {t("pptx.agent.editorUnavailableNotConfigured")}
           </div>
-          <PptistReadOnlyViewer previewToken={previewToken} fileName={fileName} onOpenExternal={openExternal} />
+          <PptistReadOnlyViewer
+            previewToken={previewToken}
+            fileName={fileName}
+            onOpenExternal={openExternal}
+          />
         </>
       )}
     </>
@@ -129,7 +162,9 @@ function PptistReadOnlyViewer({
       const result = await officecli.readArtifactFile(previewToken);
       const data = result?.data;
       if (!data || data.byteLength === 0) {
-        setError("Preview not available for this slide deck. Open it with your system application instead.");
+        setError(
+          "Preview not available for this slide deck. Open it with your system application instead.",
+        );
         return;
       }
       // Copy into a fresh, standalone, transferable ArrayBuffer (data may be a Uint8Array view).
@@ -163,7 +198,14 @@ function PptistReadOnlyViewer({
   }, [sendToPptist]);
 
   if (error) {
-    return <ErrorState message={error} fileName={fileName} onRetry={load} onOpenExternal={onOpenExternal} />;
+    return (
+      <ErrorState
+        message={error}
+        fileName={fileName}
+        onRetry={load}
+        onOpenExternal={onOpenExternal}
+      />
+    );
   }
 
   return (

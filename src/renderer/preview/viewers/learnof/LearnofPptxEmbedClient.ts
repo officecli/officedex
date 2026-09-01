@@ -19,6 +19,8 @@ export interface LearnofPptxEmbedState {
   phase: LearnofPptxEmbedPhase;
   fileId: string | null;
   lastError: string | null;
+  dirty: boolean;
+  revision: number | null;
 }
 
 export interface LearnofPptxExportResult {
@@ -71,10 +73,29 @@ export class LearnofPptxEmbedClient {
   private readonly hostWindow: Window;
   private readonly timeouts: typeof DEFAULT_TIMEOUTS;
   private readonly pending = new Map<string, PendingRequest>();
-  private readonly stateListeners = new Set<(state: LearnofPptxEmbedState) => void>();
-  private readyWaiters: Array<{ resolve: () => void; reject: (error: Error) => void; timer: number }> = [];
-  private editorReadyWaiters: Array<{ resolve: (fileId: string) => void; reject: (error: Error) => void; timer: number }> = [];
-  private state: LearnofPptxEmbedState = { phase: "booting", fileId: null, lastError: null };
+  private readonly stateListeners = new Set<
+    (state: LearnofPptxEmbedState) => void
+  >();
+  private readonly dirtyListeners = new Set<
+    (dirty: boolean, revision: number | null) => void
+  >();
+  private readyWaiters: Array<{
+    resolve: () => void;
+    reject: (error: Error) => void;
+    timer: number;
+  }> = [];
+  private editorReadyWaiters: Array<{
+    resolve: (fileId: string) => void;
+    reject: (error: Error) => void;
+    timer: number;
+  }> = [];
+  private state: LearnofPptxEmbedState = {
+    phase: "booting",
+    fileId: null,
+    lastError: null,
+    dirty: false,
+    revision: null,
+  };
   private sequence = 0;
   private detachListener: (() => void) | null = null;
   private disposed = false;
@@ -93,6 +114,13 @@ export class LearnofPptxEmbedClient {
   subscribe(listener: (state: LearnofPptxEmbedState) => void): () => void {
     this.stateListeners.add(listener);
     return () => this.stateListeners.delete(listener);
+  }
+
+  subscribeDirty(
+    listener: (dirty: boolean, revision: number | null) => void,
+  ): () => void {
+    this.dirtyListeners.add(listener);
+    return () => this.dirtyListeners.delete(listener);
   }
 
   attach(): () => void {
@@ -127,6 +155,7 @@ export class LearnofPptxEmbedClient {
     }
     this.editorReadyWaiters = [];
     this.stateListeners.clear();
+    this.dirtyListeners.clear();
   }
 
   /** Resolves once the editor shell has posted `officedex:pptx-ready`. */
@@ -134,8 +163,14 @@ export class LearnofPptxEmbedClient {
     if (this.state.phase !== "booting") return Promise.resolve();
     return new Promise((resolve, reject) => {
       const timer = this.hostWindow.setTimeout(() => {
-        this.readyWaiters = this.readyWaiters.filter((waiter) => waiter.timer !== timer);
-        reject(new Error(`The presentation editor did not answer within ${Math.round(timeoutMs / 1000)}s.`));
+        this.readyWaiters = this.readyWaiters.filter(
+          (waiter) => waiter.timer !== timer,
+        );
+        reject(
+          new Error(
+            `The presentation editor did not answer within ${Math.round(timeoutMs / 1000)}s.`,
+          ),
+        );
       }, timeoutMs);
       this.readyWaiters.push({ resolve, reject, timer });
     });
@@ -143,19 +178,35 @@ export class LearnofPptxEmbedClient {
 
   /** Resolves with the file id once the MOP editor is mounted for the loaded deck. */
   waitForEditorReady(timeoutMs = this.timeouts.editorReady): Promise<string> {
-    if (this.state.phase === "editor-ready" && this.state.fileId) return Promise.resolve(this.state.fileId);
+    if (this.state.phase === "editor-ready" && this.state.fileId)
+      return Promise.resolve(this.state.fileId);
     return new Promise((resolve, reject) => {
       const timer = this.hostWindow.setTimeout(() => {
-        this.editorReadyWaiters = this.editorReadyWaiters.filter((waiter) => waiter.timer !== timer);
-        reject(new Error(`The presentation editor did not finish opening within ${Math.round(timeoutMs / 1000)}s.`));
+        this.editorReadyWaiters = this.editorReadyWaiters.filter(
+          (waiter) => waiter.timer !== timer,
+        );
+        reject(
+          new Error(
+            `The presentation editor did not finish opening within ${Math.round(timeoutMs / 1000)}s.`,
+          ),
+        );
       }, timeoutMs);
       this.editorReadyWaiters.push({ resolve, reject, timer });
     });
   }
 
   /** Sends the PPTX bytes (transferred) and resolves once the editor imported them. */
-  async load(buffer: ArrayBuffer, fileName: string): Promise<{ fileId: string; fileName: string }> {
-    this.setState({ phase: "loading", fileId: null, lastError: null });
+  async load(
+    buffer: ArrayBuffer,
+    fileName: string,
+  ): Promise<{ fileId: string; fileName: string }> {
+    this.setState({
+      phase: "loading",
+      fileId: null,
+      lastError: null,
+      dirty: false,
+      revision: null,
+    });
     const reply = await this.request(
       { type: "officedex:pptx-load", buffer, fileName },
       "officedex:pptx-loaded",
@@ -167,36 +218,50 @@ export class LearnofPptxEmbedClient {
       this.setState({ ...this.state, lastError: reply.error });
       throw new Error(reply.error || "The presentation could not be imported.");
     }
-    if (reply.type !== "officedex:pptx-loaded") throw new Error("Unexpected editor reply.");
+    if (reply.type !== "officedex:pptx-loaded")
+      throw new Error("Unexpected editor reply.");
     return { fileId: reply.fileId, fileName: reply.fileName };
   }
 
   async inspect(): Promise<LearnofPptxEditorContext> {
     this.assertEditorReady();
-    const reply = await this.request({ type: "officedex:pptx-inspect" }, "officedex:pptx-inspect-result", this.timeouts.inspect);
-    if (reply.type !== "officedex:pptx-inspect-result") throw new Error("Unexpected editor reply.");
+    const reply = await this.request(
+      { type: "officedex:pptx-inspect" },
+      "officedex:pptx-inspect-result",
+      this.timeouts.inspect,
+    );
+    if (reply.type !== "officedex:pptx-inspect-result")
+      throw new Error("Unexpected editor reply.");
     if (reply.error) throw new Error(reply.error);
-    if (!isLearnofPptxEditorContext(reply.context)) throw new Error("The editor returned an invalid slide context.");
+    if (!isLearnofPptxEditorContext(reply.context))
+      throw new Error("The editor returned an invalid slide context.");
     return reply.context;
   }
 
   async executeJs(source: string): Promise<unknown> {
     this.assertEditorReady();
-    if (typeof source !== "string" || !source.trim()) throw new Error("No script to execute.");
+    if (typeof source !== "string" || !source.trim())
+      throw new Error("No script to execute.");
     const reply = await this.request(
       { type: "officedex:pptx-execute-js", source },
       "officedex:pptx-execute-result",
       this.timeouts.execute,
     );
-    if (reply.type !== "officedex:pptx-execute-result") throw new Error("Unexpected editor reply.");
+    if (reply.type !== "officedex:pptx-execute-result")
+      throw new Error("Unexpected editor reply.");
     if (reply.error) throw new Error(reply.error);
     return reply.result;
   }
 
   async export(): Promise<LearnofPptxExportResult> {
     this.assertEditorReady();
-    const reply = await this.request({ type: "officedex:pptx-export" }, "officedex:pptx-export-result", this.timeouts.export);
-    if (reply.type !== "officedex:pptx-export-result") throw new Error("Unexpected editor reply.");
+    const reply = await this.request(
+      { type: "officedex:pptx-export" },
+      "officedex:pptx-export-result",
+      this.timeouts.export,
+    );
+    if (reply.type !== "officedex:pptx-export-result")
+      throw new Error("Unexpected editor reply.");
     if (reply.error) throw new Error(reply.error);
     const buffer = reply.buffer;
     if (!(buffer instanceof ArrayBuffer) || buffer.byteLength < 4) {
@@ -215,7 +280,8 @@ export class LearnofPptxEmbedClient {
 
   private assertEditorReady(): void {
     if (this.disposed) throw new Error("The presentation editor was closed.");
-    if (this.state.phase !== "editor-ready") throw new Error("The presentation editor is not ready.");
+    if (this.state.phase !== "editor-ready")
+      throw new Error("The presentation editor is not ready.");
   }
 
   private setState(next: LearnofPptxEmbedState): void {
@@ -230,19 +296,32 @@ export class LearnofPptxEmbedClient {
     transfer: Transferable[] = [],
     errorType?: LearnofPptxEditorMessage["type"],
   ): Promise<LearnofPptxEditorMessage> {
-    if (this.disposed) return Promise.reject(new Error("The presentation editor was closed."));
+    if (this.disposed)
+      return Promise.reject(new Error("The presentation editor was closed."));
     const target = this.getTargetWindow();
-    if (!target) return Promise.reject(new Error("The presentation editor frame is not available."));
+    if (!target)
+      return Promise.reject(
+        new Error("The presentation editor frame is not available."),
+      );
     const requestId = `officedex-${Date.now().toString(36)}-${++this.sequence}`;
     return new Promise((resolve, reject) => {
       const timer = this.hostWindow.setTimeout(() => {
         this.pending.delete(requestId);
-        reject(new Error(`The presentation editor did not respond to ${payload.type} within ${Math.round(timeoutMs / 1000)}s.`));
+        reject(
+          new Error(
+            `The presentation editor did not respond to ${payload.type} within ${Math.round(timeoutMs / 1000)}s.`,
+          ),
+        );
       }, timeoutMs);
       this.pending.set(requestId, { resolve, reject, timer, type: replyType });
       if (errorType) {
         // The load request has a dedicated error reply type; register it under the same id.
-        this.pending.set(`${requestId}:error`, { resolve, reject, timer, type: errorType });
+        this.pending.set(`${requestId}:error`, {
+          resolve,
+          reject,
+          timer,
+          type: errorType,
+        });
       }
       const message: LearnofPptxHostMessage = {
         ...payload,
@@ -261,10 +340,18 @@ export class LearnofPptxEmbedClient {
     });
   }
 
-  private settle(requestId: string, message: LearnofPptxEditorMessage): boolean {
+  private settle(
+    requestId: string,
+    message: LearnofPptxEditorMessage,
+  ): boolean {
     const direct = this.pending.get(requestId);
     const viaError = this.pending.get(`${requestId}:error`);
-    const match = direct && direct.type === message.type ? direct : viaError && viaError.type === message.type ? viaError : null;
+    const match =
+      direct && direct.type === message.type
+        ? direct
+        : viaError && viaError.type === message.type
+          ? viaError
+          : null;
     if (!match) return false;
     this.hostWindow.clearTimeout(match.timer);
     this.pending.delete(requestId);
@@ -284,7 +371,8 @@ export class LearnofPptxEmbedClient {
     const message = event.data;
     switch (message.type) {
       case "officedex:pptx-ready": {
-        if (this.state.phase === "booting") this.setState({ ...this.state, phase: "ready" });
+        if (this.state.phase === "booting")
+          this.setState({ ...this.state, phase: "ready" });
         const waiters = this.readyWaiters;
         this.readyWaiters = [];
         for (const waiter of waiters) {
@@ -294,7 +382,13 @@ export class LearnofPptxEmbedClient {
         return;
       }
       case "officedex:pptx-editor-ready": {
-        this.setState({ phase: "editor-ready", fileId: message.fileId, lastError: null });
+        this.setState({
+          phase: "editor-ready",
+          fileId: message.fileId,
+          lastError: null,
+          dirty: false,
+          revision: null,
+        });
         const waiters = this.editorReadyWaiters;
         this.editorReadyWaiters = [];
         for (const waiter of waiters) {
@@ -304,9 +398,27 @@ export class LearnofPptxEmbedClient {
         return;
       }
       case "officedex:pptx-editor-detached": {
-        if (this.state.fileId === message.fileId || this.state.phase === "editor-ready") {
-          this.setState({ phase: "detached", fileId: null, lastError: null });
+        if (
+          this.state.fileId === message.fileId ||
+          this.state.phase === "editor-ready"
+        ) {
+          this.setState({
+            phase: "detached",
+            fileId: null,
+            lastError: null,
+            dirty: false,
+            revision: null,
+          });
         }
+        return;
+      }
+      case "officedex:pptx-dirty-changed": {
+        if (this.state.fileId && this.state.fileId !== message.fileId) return;
+        const revision =
+          typeof message.revision === "number" ? message.revision : null;
+        this.setState({ ...this.state, dirty: message.dirty, revision });
+        for (const listener of this.dirtyListeners)
+          listener(message.dirty, revision);
         return;
       }
       case "officedex:pptx-loaded":

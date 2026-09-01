@@ -1,6 +1,11 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, X } from "lucide-react";
-import type { Artifact, PreviewGrant, TimelineDeck, TimelineNode } from "../../shared/types";
+import type {
+  Artifact,
+  PreviewGrant,
+  TimelineDeck,
+  TimelineNode,
+} from "../../shared/types";
 import type { VibeReplayFeed } from "../presentation/vibeReplay";
 import { useT } from "../i18n";
 import { LoadingState } from "../preview/components/LoadingState";
@@ -24,7 +29,10 @@ interface PreviewPanelProps {
   live?: VibeReplayFeed;
   timelineTaskId?: string;
   timelineNodeId?: string | null;
-  onOpenTimelineNode?: (deck: TimelineDeck, node: TimelineNode) => void | Promise<void>;
+  onOpenTimelineNode?: (
+    deck: TimelineDeck,
+    node: TimelineNode,
+  ) => void | Promise<void>;
   onTimelineNodeSwapped?: (node: TimelineNode) => void;
   onTimelineNodeReturned?: () => void;
   onReturnToLatestDeck?: () => void;
@@ -33,10 +41,16 @@ interface PreviewPanelProps {
 
 const PREVIEW_PANEL_SLIDE_MS = 420;
 
-export function PreviewPanel({ grant, onClose, artifact, live }: PreviewPanelProps) {
+export function PreviewPanel({
+  grant,
+  onClose,
+  artifact,
+  live,
+}: PreviewPanelProps) {
   const t = useT();
   const [closing, setClosing] = useState(false);
   const [documentDirty, setDocumentDirty] = useState(false);
+  const pptxFlushRef = useRef<(() => Promise<void>) | null>(null);
   const closeTimerRef = useRef<number | null>(null);
 
   // The preview is a full-screen overlay, but the cockpit underneath keeps auto-opening its
@@ -61,6 +75,15 @@ export function PreviewPanel({ grant, onClose, artifact, live }: PreviewPanelPro
     }, PREVIEW_PANEL_SLIDE_MS);
   }, [closing, onClose]);
 
+  const flushAndClose = useCallback(async () => {
+    try {
+      await pptxFlushRef.current?.();
+      beginClose();
+    } catch {
+      // Keep the preview open when the final save fails.
+    }
+  }, [beginClose]);
+
   const requestClose = useCallback(() => {
     if (closing) return;
     if (documentDirty) {
@@ -70,12 +93,14 @@ export function PreviewPanel({ grant, onClose, artifact, live }: PreviewPanelPro
         okText: t("preview.closeDirtyConfirm"),
         cancelText: t("preview.closeDirtyCancel"),
         tone: "danger",
-        onOk: beginClose,
+        onOk: () => {
+          void beginClose();
+        },
       });
       return;
     }
-    beginClose();
-  }, [beginClose, closing, documentDirty, t]);
+    void flushAndClose();
+  }, [beginClose, closing, documentDirty, flushAndClose, t]);
 
   const viewer = (() => {
     if (!grant) return null;
@@ -89,19 +114,54 @@ export function PreviewPanel({ grant, onClose, artifact, live }: PreviewPanelPro
             documentType={documentType}
             filePath={artifact?.filePath}
             live={live}
+            onDirtyChange={setDocumentDirty}
+            onFlushReady={(flush) => {
+              pptxFlushRef.current = flush;
+            }}
           />
         );
       case "docx":
-        return <DocxViewer previewToken={token} fileName={fileName} documentType={documentType} onDirtyChange={setDocumentDirty} />;
+        return (
+          <DocxViewer
+            previewToken={token}
+            fileName={fileName}
+            documentType={documentType}
+            onDirtyChange={setDocumentDirty}
+          />
+        );
       case "xlsx":
-        return <XlsxViewer previewToken={token} fileName={fileName} documentType={documentType} />;
+        return (
+          <XlsxViewer
+            previewToken={token}
+            fileName={fileName}
+            documentType={documentType}
+          />
+        );
       case "pdf":
-        return <PdfViewer previewToken={token} fileName={fileName} documentType={documentType} />;
+        return (
+          <PdfViewer
+            previewToken={token}
+            fileName={fileName}
+            documentType={documentType}
+          />
+        );
       case "html":
       case "htm":
-        return <HtmlViewer previewToken={token} fileName={fileName} documentType={documentType} />;
+        return (
+          <HtmlViewer
+            previewToken={token}
+            fileName={fileName}
+            documentType={documentType}
+          />
+        );
       default:
-        return <UnsupportedViewer fileName={fileName} documentType={documentType} onOpenExternal={() => {}} />;
+        return (
+          <UnsupportedViewer
+            fileName={fileName}
+            documentType={documentType}
+            onOpenExternal={() => {}}
+          />
+        );
     }
   })();
 
@@ -111,7 +171,11 @@ export function PreviewPanel({ grant, onClose, artifact, live }: PreviewPanelPro
     <div className={`preview-panel-root${closing ? " is-closing" : ""}`}>
       {grant ? (
         <header className="preview-panel-header">
-          <button type="button" className="preview-panel-back" onClick={requestClose}>
+          <button
+            type="button"
+            className="preview-panel-back"
+            onClick={requestClose}
+          >
             <ArrowLeft size={16} strokeWidth={1.8} />
             <span>{t("preview.back")}</span>
           </button>
@@ -131,7 +195,9 @@ export function PreviewPanel({ grant, onClose, artifact, live }: PreviewPanelPro
           {viewer}
         </Suspense>
       </div>
-      {grant && artifact ? <PreviewReadyNotice grant={grant} artifact={artifact} /> : null}
+      {grant && artifact ? (
+        <PreviewReadyNotice grant={grant} artifact={artifact} />
+      ) : null}
     </div>
   );
 }
