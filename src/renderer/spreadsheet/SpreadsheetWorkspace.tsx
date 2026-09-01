@@ -4,6 +4,7 @@ import { officecli } from "../bridge";
 import { SpreadsheetCanvas, type SpreadsheetCanvasHandle, type SpreadsheetCanvasState } from "./SpreadsheetCanvas";
 import { SpreadsheetTopbar, type SpreadsheetSaveState } from "./SpreadsheetTopbar";
 import type { SpreadsheetSessionState } from "./types";
+import type { WorkbookAddChartRequest, WorkbookAddChartResult } from "./workbookClientTools";
 import { useT } from "../i18n";
 import { WorkbookAppBuilder } from "../appBuilder/WorkbookAppBuilder";
 import { PublishedWorkbookAppPage } from "../appBuilder/PublishedWorkbookAppPage";
@@ -13,6 +14,7 @@ export interface SpreadsheetWorkspaceHandle {
   [key: string]: any;
   save(): Promise<boolean>;
   focus(): void;
+  addChart(request: WorkbookAddChartRequest): Promise<WorkbookAddChartResult>;
 }
 
 export interface SpreadsheetWorkspaceProps {
@@ -54,10 +56,16 @@ export const SpreadsheetWorkspace = forwardRef<SpreadsheetWorkspaceHandle, Sprea
     }, [session.artifact?.filePath]);
 
     const save = useCallback(() => canvasRef.current?.save() ?? Promise.resolve(false), []);
+    const addChart = useCallback((request: WorkbookAddChartRequest) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return Promise.reject(new Error("The workbook is not open yet."));
+      return canvas.addChart(request);
+    }, []);
     useImperativeHandle(ref, () => ({
       save,
       focus: () => canvasRef.current?.focus(),
-    }), [save]);
+      addChart,
+    }), [addChart, save]);
 
     return (
       <section className="spreadsheet-workspace" data-agent-open={agentOpen ? "true" : "false"}>

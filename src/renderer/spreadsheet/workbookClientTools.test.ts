@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  parseWorkbookAddChartRequest,
   parseWorkbookFormatCellsRequest,
   parseWorkbookSnapshotRequest,
   parseWorkbookStageMediaRequest,
@@ -99,5 +100,58 @@ describe("workbook.format_cells arguments", () => {
       .toThrow("limited to 50000 cells");
     expect(() => parseWorkbookFormatCellsRequest({ sheet_id: "a", sheet_name: "b", range, style: { bold: true } }))
       .toThrow("either sheet_id or sheet_name");
+  });
+
+  it("normalizes a chart request and preserves camelCase chart identifiers", () => {
+    expect(parseWorkbookAddChartRequest({
+      chart_type: "columnClustered",
+      range: { start_row: 0, start_column: 0, row_count: 5, column_count: 2 },
+      title: "Revenue by Region",
+      legend_visible: true,
+      width: 480,
+      height: 300,
+    })).toEqual({
+      sheetId: undefined,
+      sheetName: undefined,
+      range: { row: 0, column: 0, rowCount: 5, columnCount: 2 },
+      chartType: "columnClustered",
+      title: "Revenue by Region",
+      legendVisible: true,
+      width: 480,
+      height: 300,
+    });
+  });
+
+  it("accepts case-insensitive chart types but returns the SDK spelling", () => {
+    const range = { start_row: 0, start_column: 0, row_count: 4, column_count: 2 };
+    expect(parseWorkbookAddChartRequest({ chart_type: "columnclustered", range }).chartType).toBe("columnClustered");
+    expect(parseWorkbookAddChartRequest({ chart_type: "  LineMarkers  ", range }).chartType).toBe("lineMarkers");
+    expect(parseWorkbookAddChartRequest({ chart_type: "waterfall", range }).chartType).toBe("waterfall");
+  });
+
+  it("omits optional chart fields that were not supplied", () => {
+    const parsed = parseWorkbookAddChartRequest({
+      chart_type: "pie",
+      range: { start_row: 1, start_column: 2, row_count: 3, column_count: 2 },
+    });
+    expect(parsed).not.toHaveProperty("title");
+    expect(parsed).not.toHaveProperty("width");
+    expect(parsed.range).toEqual({ row: 1, column: 2, rowCount: 3, columnCount: 2 });
+  });
+
+  it("rejects unusable chart requests", () => {
+    const range = { start_row: 0, start_column: 0, row_count: 5, column_count: 2 };
+    expect(() => parseWorkbookAddChartRequest({ range }))
+      .toThrow("requires chart_type");
+    expect(() => parseWorkbookAddChartRequest({ chart_type: "3d-donut-explosion", range }))
+      .toThrow("chart_type must be one of");
+    expect(() => parseWorkbookAddChartRequest({ chart_type: "pie" }))
+      .toThrow("requires a range object");
+    expect(() => parseWorkbookAddChartRequest({ chart_type: "pie", range: { start_row: 0, start_column: 0, row_count: 1, column_count: 2 } }))
+      .toThrow("at least 2 rows and 2 columns");
+    expect(() => parseWorkbookAddChartRequest({ chart_type: "pie", sheet_id: "a", sheet_name: "b", range }))
+      .toThrow("either sheet_id or sheet_name");
+    expect(() => parseWorkbookAddChartRequest({ chart_type: "pie", range, width: 10 }))
+      .toThrow("width must be an integer between");
   });
 });

@@ -31,7 +31,7 @@ import type { MarketingBatchDraft, MarketingSheetRow } from "./spreadsheet/marke
 import type { CatalogCleanupBatch } from "./spreadsheet/catalogCleanupWorkflow";
 import { loadPublishedWorkbookApps, savePublishedWorkbookApp } from "./appBuilder/appStore";
 import type { PublishedWorkbookApp } from "./appBuilder/types";
-import { parseWorkbookFormatCellsRequest, parseWorkbookSnapshotRequest, parseWorkbookStageMediaRequest, parseWorkbookWriteCellsRequest } from "./spreadsheet/workbookClientTools";
+import { parseWorkbookAddChartRequest, parseWorkbookFormatCellsRequest, parseWorkbookSnapshotRequest, parseWorkbookStageMediaRequest, parseWorkbookWriteCellsRequest } from "./spreadsheet/workbookClientTools";
 import { UnsavedChangesDialog } from "./spreadsheet/UnsavedChangesDialog";
 import { useSpreadsheetSession } from "./spreadsheet/useSpreadsheetSession";
 import type { SpreadsheetEntry } from "./spreadsheet/types";
@@ -1780,6 +1780,9 @@ function OfficeDexApp() {
       ),
       "workbook.stage_media": async (request: Parameters<NonNullable<AgentClientToolSurfaces[string][string]>>[0]) => (
         workspace().stageMedia(parseWorkbookStageMediaRequest(request.arguments))
+      ),
+      "workbook.add_chart": async (request: Parameters<NonNullable<AgentClientToolSurfaces[string][string]>>[0]) => (
+        workspace().addChart(parseWorkbookAddChartRequest(request.arguments))
       ),
     };
     const writeJiraSheet = async (response: ConfiguredJiraSyncResult | undefined) => {

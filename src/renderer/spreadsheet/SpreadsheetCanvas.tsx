@@ -6,12 +6,14 @@ import { officecli } from "../bridge";
 import { useT } from "../i18n";
 import { Button } from "../ui";
 import { createOfflineSheetEditor } from "./sheetSdk";
+import type { WorkbookAddChartRequest, WorkbookAddChartResult } from "./workbookClientTools";
 
 export type SpreadsheetCanvasState = "loading" | "clean" | "dirty" | "saving" | "saved" | "error";
 
 export interface SpreadsheetCanvasHandle {
   save(): Promise<boolean>;
   focus(): void;
+  addChart(request: WorkbookAddChartRequest): Promise<WorkbookAddChartResult>;
 }
 
 export interface SpreadsheetCanvasProps {
@@ -26,6 +28,21 @@ export interface SpreadsheetCanvasProps {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+// The Sheet SDK installs its Chart plugin after the editor renders, and
+// addChartFromSelection silently returns undefined until that finishes. Wait
+// for the plugin rather than reporting a confusing "no chart was created".
+const CHART_PLUGIN_TIMEOUT_MS = 15_000;
+const CHART_PLUGIN_POLL_MS = 100;
+
+async function waitForChartPlugin(editor: AbstractedSheetSDK, timeoutMs = CHART_PLUGIN_TIMEOUT_MS): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if (typeof editor.charts?.addChartFromSelection === "function") return;
+    if (Date.now() >= deadline) throw new Error("The spreadsheet chart engine did not finish loading.");
+    await new Promise((resolve) => window.setTimeout(resolve, CHART_PLUGIN_POLL_MS));
+  }
 }
 
 export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, SpreadsheetCanvasProps>(
@@ -192,13 +209,59 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
     }, [grant.token, publishDirty, publishState, state]);
     saveHandlerRef.current = save;
 
+    const addChart = useCallback(async (request: WorkbookAddChartRequest): Promise<WorkbookAddChartResult> => {
+      const editor = editorRef.current;
+      if (!editor) throw new Error("The workbook is not open yet.");
+      await waitForChartPlugin(editor);
+
+      const targetSheet = request.sheetId
+        ? editor.workbook.getWorksheetById(request.sheetId)
+        : request.sheetName
+          ? editor.workbook.getWorksheets().find((sheet) => sheet.name === request.sheetName)
+          : editor.workbook.getActiveWorksheet();
+      if (!targetSheet) {
+        throw new Error(`The workbook has no sheet named ${request.sheetName ?? request.sheetId}.`);
+      }
+      // addChartFromSelection reads the active sheet, so the requested sheet has
+      // to be the active one before the chart is created.
+      if (!targetSheet.isActive) {
+        editor.workbook.setActiveWorksheet(targetSheet.id);
+      }
+
+      const created = editor.charts.addChartFromSelection({
+        range: { type: "cells", ...request.range },
+        chart: {
+          ...(request.title === undefined ? {} : { title: request.title }),
+          ...(request.legendVisible === undefined ? {} : { legendVisible: request.legendVisible }),
+          ...(request.width === undefined ? {} : { width: request.width }),
+          ...(request.height === undefined ? {} : { height: request.height }),
+          sheetId: targetSheet.id,
+        },
+        series: {
+          orientation: request.orientation ?? "auto",
+          trimPaddings: true,
+          firstAs: request.firstAs ?? "auto",
+        },
+        recommendation: { mode: "external", chartType: request.chartType },
+      });
+      if (!created) throw new Error("The spreadsheet editor did not create a chart for that range.");
+
+      return {
+        chartId: created.chartId,
+        chartType: created.chartType,
+        sheetId: targetSheet.id,
+        sheetName: targetSheet.name,
+      };
+    }, []);
+
     useImperativeHandle(ref, () => ({
       save,
       focus() {
         focusedRef.current = true;
         containerRef.current?.focus();
       },
-    }), [save]);
+      addChart,
+    }), [addChart, save]);
 
     useEffect(() => {
       const handlePointerDown = (event: PointerEvent) => {

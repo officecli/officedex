@@ -1,22 +1,34 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { createRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Artifact, PreviewGrant } from "../../shared/types";
 import type { SpreadsheetSessionState } from "./types";
+
+const canvasAddChart = vi.fn(async () => ({
+  chartId: "chart-1",
+  chartType: "columnClustered",
+  sheetId: "sheet-1",
+  sheetName: "Data",
+}));
 
 vi.mock("./SpreadsheetCanvas", async () => {
   const React = await import("react");
   return {
     SpreadsheetCanvas: React.forwardRef(function SpreadsheetCanvasMock(
       { artifact }: { artifact: Artifact },
-      ref: React.ForwardedRef<{ save(): Promise<boolean>; focus(): void }>,
+      ref: React.ForwardedRef<{ save(): Promise<boolean>; focus(): void; addChart: typeof canvasAddChart }>,
     ) {
-      React.useImperativeHandle(ref, () => ({ save: async () => true, focus: () => undefined }));
+      React.useImperativeHandle(ref, () => ({
+        save: async () => true,
+        focus: () => undefined,
+        addChart: canvasAddChart,
+      }));
       return <div data-testid="spreadsheet-canvas">{artifact.fileName}</div>;
     }),
   };
 });
 
-import { SpreadsheetWorkspace } from "./SpreadsheetWorkspace";
+import { SpreadsheetWorkspace, type SpreadsheetWorkspaceHandle } from "./SpreadsheetWorkspace";
 
 const artifact: Artifact = {
   taskId: "task-1",
@@ -96,5 +108,32 @@ describe("SpreadsheetWorkspace", () => {
 
     expect(screen.getByText("Save failed")).toHaveAttribute("data-state", "error");
     expect(screen.queryByText("export failed")).toBeNull();
+  });
+
+  it("exposes every workbook client tool the agent runtime can call", () => {
+    // App.tsx routes agent client tools straight at this handle. A method that
+    // is advertised but missing fails at call time, so the surface is asserted
+    // here rather than trusted to the interface alone.
+    const ref = createRef<SpreadsheetWorkspaceHandle>();
+    render(<SpreadsheetWorkspace ref={ref} session={readySession} onBack={vi.fn()} />);
+    for (const method of ["save", "focus", "addChart"]) {
+      expect(typeof ref.current?.[method]).toBe("function");
+    }
+  });
+
+  it("forwards chart requests to the canvas", async () => {
+    const ref = createRef<SpreadsheetWorkspaceHandle>();
+    render(<SpreadsheetWorkspace ref={ref} session={readySession} onBack={vi.fn()} />);
+    const request = {
+      range: { row: 0, column: 0, rowCount: 5, columnCount: 2 },
+      chartType: "columnClustered" as const,
+    };
+    await expect(ref.current?.addChart(request)).resolves.toEqual({
+      chartId: "chart-1",
+      chartType: "columnClustered",
+      sheetId: "sheet-1",
+      sheetName: "Data",
+    });
+    expect(canvasAddChart).toHaveBeenCalledWith(request);
   });
 });
