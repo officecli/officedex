@@ -390,6 +390,12 @@ func (h *realClientE2EHost) call(method string, raw json.RawMessage) (any, error
 			return nil, err
 		}
 		return h.app.ReadLocalImage(value)
+	case "ReadLocalTextDocuments":
+		var paths []string
+		if err := decodeRealClientInput(raw, &paths); err != nil {
+			return nil, err
+		}
+		return h.app.ReadLocalTextDocuments(paths)
 	case "CopyImageToClipboard":
 		value, err := decodeRealClientString(raw)
 		if err != nil {
