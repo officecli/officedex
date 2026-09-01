@@ -17,11 +17,18 @@ func SetProxyEnvSupplier(fn func() []string) { proxyEnvSupplier = fn }
 // the Go port of buildBridgeEnv in src/main/bridgeClient.ts; the bridge
 // package re-exports it so callers outside login can reuse the same layering
 // rules.
+//
+// OFFICECLI_NO_BROWSER=1 makes `officecli login` print the verification URL
+// without launching a browser itself. The desktop app is the single opener:
+// LoginScreen hands the URL to OpenExternal so exactly one tab appears.
+// Without it the CLI and the renderer each open the URL and the user gets two
+// tabs on the very first sign-in.
 func BuildBridgeEnv(extra []string) []string {
 	defaults := []string{
 		"OFFICECLI_SKIP_SKILL_PREFLIGHT=1",
 		"OFFICECLI_SKIP_PUBLISH_SETUP=1",
 		"OFFICECLI_SKIP_UPDATE_CHECK=1",
+		"OFFICECLI_NO_BROWSER=1",
 	}
 	merged := append([]string{}, os.Environ()...)
 	merged = append(merged, defaults...)

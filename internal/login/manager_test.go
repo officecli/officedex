@@ -361,6 +361,7 @@ func TestBuildBridgeEnvIncludesSkipDefaults(t *testing.T) {
 		"OFFICECLI_SKIP_SKILL_PREFLIGHT=1",
 		"OFFICECLI_SKIP_PUBLISH_SETUP=1",
 		"OFFICECLI_SKIP_UPDATE_CHECK=1",
+		"OFFICECLI_NO_BROWSER=1",
 	}
 	for _, w := range wants {
 		if !containsEntry(env, w) {

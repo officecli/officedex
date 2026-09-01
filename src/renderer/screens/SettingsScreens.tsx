@@ -812,10 +812,12 @@ export function LoginScreen({ onReturn, onAuthenticated }: { onReturn?: () => vo
       const result = await officecli.login({});
       setLoginUrl(result.url);
       setPhase("awaiting");
-      // Login() returns the verification URL but does not guarantee that the
-      // platform opened it. Open it explicitly so the desktop flow always
-      // leaves the user with an actionable browser step; the awaiting screen
-      // still keeps a manual "open again" fallback.
+      // The desktop app is the single opener of the verification URL: the
+      // login subprocess runs with OFFICECLI_NO_BROWSER=1 (see
+      // internal/login/env.go) so the CLI only prints the URL. Opening it here
+      // keeps the browser hand-off automatic without racing the CLI into a
+      // second tab; the awaiting screen still keeps a manual "open again"
+      // fallback.
       if (result.url) await officecli.openExternal(result.url).catch(() => undefined);
     } catch (error) {
       setErrorText(errorMessage(error));
