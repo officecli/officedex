@@ -51,6 +51,7 @@ import type {
   SpreadsheetPlanFieldsResult,
   SaveDocxResult,
   SaveXlsxEditorInput,
+  StageXlsxEditorImageInput,
   SaveXlsxEditorResult,
   SubmitReportInput,
   SubmitReportResult,
@@ -221,6 +222,9 @@ function createBrowserPreviewAPI(): DesktopAPI {
     saveXlsxEditor: async () => {
       throw new Error("XLSX editor is unavailable in browser preview.");
     },
+    stageXlsxEditorImage: async () => {
+      throw new Error("XLSX editor is unavailable in browser preview.");
+    },
     closeXlsxEditor: async () => undefined,
     readArtifactFile: async () => {
       throw new Error("Artifact file reading requires desktop file access.");
@@ -376,6 +380,12 @@ function decodeRawBytes(bytes: number[] | null | undefined): unknown {
 
 // The Go layer returns typed documents, but both transports hand back plain
 // JSON. Normalise defensively so a malformed row cannot reach the prompt.
+// The Go side takes base64; the renderer works in bytes.
+function serializeStageXlsxEditorImageInput(input: StageXlsxEditorImageInput) {
+  const { data, ...rest } = input;
+  return data === undefined ? rest : { ...rest, dataBase64: uint8ArrayToBase64(data) };
+}
+
 function normalizeLocalTextDocuments(raw: unknown): LocalTextDocument[] {
   if (!Array.isArray(raw)) return [];
   return raw.flatMap((entry) => {
@@ -775,6 +785,11 @@ function createWailsAPI(): DesktopAPI {
       if (!fn) throw new Error("XLSX editing requires a newer OfficeDex runtime.");
       return fn(toWails(input));
     },
+    stageXlsxEditorImage: async (input: StageXlsxEditorImageInput): Promise<{ url: string }> => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<{ url: string }>>("StageXlsxEditorImage");
+      if (!fn) throw new Error("XLSX editing requires a newer OfficeDex runtime.");
+      return fn(toWails(serializeStageXlsxEditorImageInput(input)));
+    },
     closeXlsxEditor: async (input: CloseXlsxEditorInput): Promise<void> => {
       const fn = optionalWailsFunction<(arg: never) => Promise<void>>("CloseXlsxEditor");
       if (!fn) throw new Error("XLSX editing requires a newer OfficeDex runtime.");
@@ -1063,6 +1078,8 @@ export function createRealE2EAPI(endpoint: string): DesktopAPI {
       rpc<PrepareXlsxEditorResult>("PrepareXlsxEditor", previewToken),
     saveXlsxEditor: (input: SaveXlsxEditorInput) =>
       rpc<SaveXlsxEditorResult>("SaveXlsxEditor", input),
+    stageXlsxEditorImage: (input: StageXlsxEditorImageInput) =>
+      rpc<{ url: string }>("StageXlsxEditorImage", serializeStageXlsxEditorImageInput(input)),
     closeXlsxEditor: (input: CloseXlsxEditorInput) =>
       rpc<void>("CloseXlsxEditor", input),
     readArtifactFile: async (previewToken: string) => {

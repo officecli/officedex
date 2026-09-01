@@ -16,14 +16,32 @@ vi.mock("./SpreadsheetCanvas", async () => {
   const React = await import("react");
   return {
     SpreadsheetCanvas: React.forwardRef(function SpreadsheetCanvasMock(
-      { artifact }: { artifact: Artifact },
-      ref: React.ForwardedRef<{ save: typeof canvasSave; focus(): void; addChart: typeof canvasAddChart }>,
+      { artifact, onStateChange }: { artifact: Artifact; onStateChange?: (state: string) => void },
+      ref: React.ForwardedRef<Record<string, unknown>>,
     ) {
       React.useImperativeHandle(ref, () => ({
         save: canvasSave,
         focus: () => undefined,
         addChart: canvasAddChart,
+        snapshot: vi.fn(),
+        readSelection: vi.fn(),
+        readSelectionAddress: vi.fn(),
+        writeCells: vi.fn(),
+        formatCells: vi.fn(),
+        stageMedia: vi.fn(),
+        inspectMarketingSelection: vi.fn(),
+        prepareMarketingBatch: vi.fn(),
+        setMarketingStatus: vi.fn(),
+        insertMarketingImage: vi.fn(),
+        setMarketingMapping: vi.fn(),
+        inspectCatalogSheets: vi.fn(),
+        previewCatalogCleanup: vi.fn(),
+        applyCatalogCleanup: vi.fn(),
+        replaceManagedSheet: vi.fn(),
       }));
+      // The workspace gates every tool on the editor reporting readiness, so the
+      // mock has to leave "loading" the way the real canvas does.
+      React.useEffect(() => { onStateChange?.("clean"); }, [onStateChange]);
       return <div data-testid="spreadsheet-canvas">{artifact.fileName}</div>;
     }),
   };
@@ -117,7 +135,16 @@ describe("SpreadsheetWorkspace", () => {
     // here rather than trusted to the interface alone.
     const ref = createRef<SpreadsheetWorkspaceHandle>();
     render(<SpreadsheetWorkspace ref={ref} session={readySession} onBack={vi.fn()} />);
-    for (const method of ["save", "focus", "addChart"]) {
+    const methods: Array<keyof SpreadsheetWorkspaceHandle> = [
+      "save", "focus", "openAppBuilder", "previewApp",
+      "snapshot", "readSelection", "readSelectionAddress", "writeCells", "formatCells",
+      "stageMedia", "addChart",
+      "inspectMarketingSelection", "prepareMarketingBatch", "setMarketingStatus",
+      "insertMarketingImage", "setMarketingMapping",
+      "inspectCatalogSheets", "previewCatalogCleanup", "applyCatalogCleanup",
+      "replaceManagedSheet",
+    ];
+    for (const method of methods) {
       expect(typeof ref.current?.[method]).toBe("function");
     }
   });

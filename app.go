@@ -147,7 +147,7 @@ func (a *App) PlanPptxJS(input PlanPptxJSInput) (PlanPptxJSResult, error) {
 
 type xlsxEditorService interface {
 	Prepare(context.Context, string) (xlsxeditor.PrepareResult, error)
-	Save(context.Context, string, string, string) (xlsxeditor.SaveResult, error)
+	Save(context.Context, string, string, string, []xlsxeditor.ManagedSheet) (xlsxeditor.SaveResult, error)
 	StageImage(string, string, []byte, string, string, int, int, int) (xlsxeditor.StageImageResult, error)
 	Close(string, string) error
 	CloseByToken(string) error
@@ -2383,9 +2383,10 @@ func (a *App) IssuePreviewToken(artifact types.Artifact) (types.PreviewGrant, er
 }
 
 type SaveXlsxEditorInput struct {
-	PreviewToken string `json:"previewToken"`
-	SessionID    string `json:"sessionId"`
-	ModocContent string `json:"modocContent"`
+	PreviewToken  string                    `json:"previewToken"`
+	SessionID     string                    `json:"sessionId"`
+	ModocContent  string                    `json:"modocContent"`
+	ManagedSheets []xlsxeditor.ManagedSheet `json:"managedSheets,omitempty"`
 }
 
 type StageXlsxEditorImageInput struct {
@@ -2424,7 +2425,7 @@ func (a *App) SaveXlsxEditor(input SaveXlsxEditorInput) (xlsxeditor.SaveResult, 
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return a.xlsxEditorService.Save(ctx, input.PreviewToken, input.SessionID, input.ModocContent)
+	return a.xlsxEditorService.Save(ctx, input.PreviewToken, input.SessionID, input.ModocContent, input.ManagedSheets)
 }
 
 func (a *App) StageXlsxEditorImage(input StageXlsxEditorImageInput) (xlsxeditor.StageImageResult, error) {

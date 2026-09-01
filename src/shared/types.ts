@@ -620,16 +620,30 @@ export interface PreviewGrant {
 export interface PrepareXlsxEditorResult {
   sessionId: string;
   modocContent: string;
+  imageAssets?: Array<{ url: string; dataUrl: string }>;
 }
 
 export interface SaveXlsxEditorInput {
   previewToken: string;
   sessionId: string;
   modocContent: string;
+  managedSheets?: Array<{ sheetName: string; rows: string[][] }>;
 }
 
 export interface SaveXlsxEditorResult {
   filePath: string;
+}
+
+export interface StageXlsxEditorImageInput {
+  previewToken: string;
+  sessionId: string;
+  filePath?: string;
+  data?: Uint8Array;
+  mime?: string;
+  sheetName: string;
+  row: number;
+  column: number;
+  statusColumn: number;
 }
 
 export interface CloseXlsxEditorInput {
@@ -950,6 +964,7 @@ export interface DesktopAPI {
   createLivePptxDraft(taskId: string): Promise<{ filePath: string; fileName: string }>;
   prepareXlsxEditor(previewToken: string): Promise<PrepareXlsxEditorResult>;
   saveXlsxEditor(input: SaveXlsxEditorInput): Promise<SaveXlsxEditorResult>;
+  stageXlsxEditorImage(input: StageXlsxEditorImageInput): Promise<{ url: string }>;
   closeXlsxEditor(input: CloseXlsxEditorInput): Promise<void>;
   readArtifactFile(previewToken: string): Promise<{ data: BinaryFileData; sha256?: string }>;
   readLocalImage(filePath: string): Promise<{ data: BinaryFileData; mime: string }>;

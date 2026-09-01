@@ -116,6 +116,27 @@ func TestPrepareImportsModocAndBindsCanonicalPath(t *testing.T) {
 	}
 }
 
+func TestPrepareCreatesMissingTempRoot(t *testing.T) {
+	dir := t.TempDir()
+	originalPath := filepath.Join(dir, "workbook.xlsx")
+	writeXlsxFixture(t, originalPath, "[Content_Types].xml", "xl/workbook.xml")
+	tempRoot := filepath.Join(dir, "app-data", "xlsx-editor")
+	service := NewService(&fakePreviewResolver{entries: map[string]preview.ArtifactEntry{
+		"token": {FilePath: originalPath, DocumentType: "xlsx"},
+	}}, &fakeConverter{}, tempRoot)
+
+	if _, err := service.Prepare(context.Background(), "token"); err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+	info, err := os.Stat(tempRoot)
+	if err != nil {
+		t.Fatalf("Stat(temp root) error = %v", err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("temp root mode = %v, want directory", info.Mode())
+	}
+}
+
 func TestPrepareReadsContentFromDirectoryModocPackage(t *testing.T) {
 	dir := t.TempDir()
 	originalPath := filepath.Join(dir, "workbook.xlsx")
@@ -139,31 +160,39 @@ func TestPrepareReadsContentFromDirectoryModocPackage(t *testing.T) {
 	}
 }
 
-func TestStageImageWritesSessionMediaAsset(t *testing.T) {
+func TestStageImageWritesModocMediaAsset(t *testing.T) {
 	dir := t.TempDir()
 	originalPath := filepath.Join(dir, "workbook.xlsx")
 	writeXlsxFixture(t, originalPath, "[Content_Types].xml", "xl/workbook.xml")
-	converter := &fakeConverter{importFn: func(_, modoc, _ string) error {
-		if err := os.MkdirAll(modoc, 0o700); err != nil {
+	converter := &fakeConverter{importFn: func(_, shimo, _ string) error {
+		if err := os.Mkdir(shimo, 0o700); err != nil {
 			return err
 		}
-		return os.WriteFile(filepath.Join(modoc, "content"), []byte("prepared-modoc"), 0o600)
+		return os.WriteFile(filepath.Join(shimo, "content"), []byte("directory-modoc"), 0o600)
 	}}
-	service := NewService(&fakePreviewResolver{entries: map[string]preview.ArtifactEntry{"token": {FilePath: originalPath, DocumentType: "xlsx"}}}, converter, dir)
+	service := NewService(&fakePreviewResolver{entries: map[string]preview.ArtifactEntry{
+		"token": {FilePath: originalPath, DocumentType: "xlsx"},
+	}}, converter, dir)
 	prepared, err := service.Prepare(context.Background(), "token")
 	if err != nil {
-		t.Fatalf("Prepare: %v", err)
+		t.Fatalf("Prepare() error = %v", err)
 	}
-	result, err := service.StageImage("token", prepared.SessionID, []byte("png-bytes"), "image/png", "Catalog", 1, 2, 3)
+
+	result, err := service.StageImage("token", prepared.SessionID, []byte("png-bytes"), "image/png", "商品素材", 1, 5, 6)
 	if err != nil {
-		t.Fatalf("StageImage: %v", err)
+		t.Fatalf("StageImage() error = %v", err)
 	}
-	if !strings.HasPrefix(result.URL, "modoc-assets:/media/") {
-		t.Fatalf("URL = %q", result.URL)
+	if !strings.HasPrefix(result.URL, "modoc-assets:/media/") || !strings.HasSuffix(result.URL, ".png") {
+		t.Fatalf("StageImage().URL = %q", result.URL)
 	}
-	name := strings.TrimPrefix(result.URL, "modoc-assets:/media/")
-	if got, err := os.ReadFile(filepath.Join(service.sessions[prepared.SessionID].modocPath, "media", name)); err != nil || string(got) != "png-bytes" {
-		t.Fatalf("asset = %q, err=%v", got, err)
+	assetName := strings.TrimPrefix(result.URL, "modoc-assets:/media/")
+	assetPath := filepath.Join(service.sessions[prepared.SessionID].modocPath, "media", assetName)
+	data, err := os.ReadFile(assetPath)
+	if err != nil {
+		t.Fatalf("ReadFile(staged image): %v", err)
+	}
+	if string(data) != "png-bytes" {
+		t.Fatalf("staged image = %q", data)
 	}
 }
 
@@ -203,8 +232,101 @@ func TestSaveUpdatesDirectoryModocContentBeforeExport(t *testing.T) {
 		t.Fatalf("Prepare() error = %v", err)
 	}
 
-	if _, err := service.Save(context.Background(), "token", prepared.SessionID, "changed-modoc"); err != nil {
+	if _, err := service.Save(context.Background(), "token", prepared.SessionID, "changed-modoc", nil); err != nil {
 		t.Fatalf("Save() error = %v", err)
+	}
+}
+
+func TestSaveWithStagedImageUsesNativeXlsxDrawingPath(t *testing.T) {
+	dir := t.TempDir()
+	originalPath := filepath.Join(dir, "workbook.xlsx")
+	writeXlsxFixture(t, originalPath, "[Content_Types].xml", "xl/workbook.xml")
+	converter := &fakeConverter{importFn: func(_, shimo, _ string) error {
+		if err := os.Mkdir(shimo, 0o700); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(shimo, "content"), []byte("directory-modoc"), 0o600)
+	}}
+	service := NewService(&fakePreviewResolver{entries: map[string]preview.ArtifactEntry{
+		"token": {FilePath: originalPath, DocumentType: "xlsx"},
+	}}, converter, dir)
+	prepared, err := service.Prepare(context.Background(), "token")
+	if err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+	staged, err := service.StageImage("token", prepared.SessionID, []byte("png-bytes"), "image/png", "商品素材", 1, 5, 6)
+	if err != nil {
+		t.Fatalf("StageImage() error = %v", err)
+	}
+	if !strings.HasPrefix(staged.URL, "modoc-assets:/media/") {
+		t.Fatalf("StageImage URL = %q", staged.URL)
+	}
+	service.saveStagedImages = func(source, output string, images []stagedImage) error {
+		if source != service.sessions[prepared.SessionID].filePath || len(images) != 1 {
+			return fmt.Errorf("staged save source/images = %q/%d", source, len(images))
+		}
+		image := images[0]
+		if image.sheetName != "商品素材" || image.row != 1 || image.column != 5 || image.statusCol != 6 || image.extension != ".png" {
+			return fmt.Errorf("staged image metadata = %+v", image)
+		}
+		data, err := os.ReadFile(image.filePath)
+		if err != nil || string(data) != "png-bytes" {
+			return fmt.Errorf("staged image data = %q, %v", data, err)
+		}
+		writeXlsxFixture(t, output, "[Content_Types].xml", "xl/workbook.xml")
+		return nil
+	}
+	if _, err := service.Save(context.Background(), "token", prepared.SessionID, `{"backgroundImage":"in-flight"}`, nil); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	if len(converter.exports) != 0 {
+		t.Fatalf("Export calls = %d, want 0", len(converter.exports))
+	}
+}
+
+func TestSaveWithStagedImagePreservesSourceWhenReimportValidationFails(t *testing.T) {
+	dir := t.TempDir()
+	originalPath := filepath.Join(dir, "workbook.xlsx")
+	writeXlsxFixture(t, originalPath, "[Content_Types].xml", "xl/workbook.xml")
+	original, err := os.ReadFile(originalPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	importCalls := 0
+	converter := &fakeConverter{importFn: func(_, shimo, _ string) error {
+		importCalls++
+		if importCalls > 1 {
+			return errors.New("generated workbook cannot be imported")
+		}
+		if err := os.Mkdir(shimo, 0o700); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(shimo, "content"), []byte("directory-modoc"), 0o600)
+	}}
+	service := NewService(&fakePreviewResolver{entries: map[string]preview.ArtifactEntry{
+		"token": {FilePath: originalPath, DocumentType: "xlsx"},
+	}}, converter, dir)
+	prepared, err := service.Prepare(context.Background(), "token")
+	if err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+	if _, err := service.StageImage("token", prepared.SessionID, []byte("png-bytes"), "image/png", "商品素材", 1, 5, 6); err != nil {
+		t.Fatalf("StageImage() error = %v", err)
+	}
+	service.saveStagedImages = func(_, output string, _ []stagedImage) error {
+		writeXlsxFixture(t, output, "[Content_Types].xml", "xl/workbook.xml")
+		return nil
+	}
+
+	if _, err := service.Save(context.Background(), "token", prepared.SessionID, prepared.ModocContent, nil); err == nil || !strings.Contains(err.Error(), "validate staged-image XLSX import") {
+		t.Fatalf("Save() error = %v, want reimport validation error", err)
+	}
+	current, err := os.ReadFile(originalPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(current) != string(original) {
+		t.Fatal("source XLSX changed after staged-image validation failure")
 	}
 }
 
@@ -215,7 +337,7 @@ func TestSaveRejectsTokenOrSessionMismatch(t *testing.T) {
 		{"wrong-token", sessionID},
 		{token, "wrong-session"},
 	} {
-		_, err := service.Save(context.Background(), tc.token, tc.session, "modoc")
+		_, err := service.Save(context.Background(), tc.token, tc.session, "modoc", nil)
 		if !errors.Is(err, ErrSessionMismatch) {
 			t.Fatalf("Save(%q, %q) error = %v, want ErrSessionMismatch", tc.token, tc.session, err)
 		}
@@ -229,7 +351,7 @@ func TestSaveRejectsOversizedModoc(t *testing.T) {
 	service, converter, token, sessionID, _ := preparedService(t)
 	service.maxModocBytes = 4
 
-	_, err := service.Save(context.Background(), token, sessionID, "12345")
+	_, err := service.Save(context.Background(), token, sessionID, "12345", nil)
 	if !errors.Is(err, ErrModocTooLarge) {
 		t.Fatalf("Save() error = %v, want ErrModocTooLarge", err)
 	}
@@ -244,7 +366,7 @@ func TestSaveRejectsExternalFileModification(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := service.Save(context.Background(), token, sessionID, "modoc")
+	_, err := service.Save(context.Background(), token, sessionID, "modoc", nil)
 	if !errors.Is(err, ErrSourceChanged) {
 		t.Fatalf("Save() error = %v, want ErrSourceChanged", err)
 	}
@@ -269,7 +391,7 @@ func TestSaveRejectsExternalFileReplacementWithSameFingerprintData(t *testing.T)
 		t.Fatal(err)
 	}
 
-	_, err = service.Save(context.Background(), token, sessionID, "modoc")
+	_, err = service.Save(context.Background(), token, sessionID, "modoc", nil)
 	if !errors.Is(err, ErrSourceChanged) {
 		t.Fatalf("Save() error = %v, want ErrSourceChanged", err)
 	}
@@ -283,7 +405,7 @@ func TestSaveKeepsOriginalWhenExportFails(t *testing.T) {
 	want := readFile(t, originalPath)
 	converter.exportFn = func(_, _, _ string) error { return errors.New("forced export failure") }
 
-	_, err := service.Save(context.Background(), token, sessionID, "changed-modoc")
+	_, err := service.Save(context.Background(), token, sessionID, "changed-modoc", nil)
 	if err == nil || !strings.Contains(err.Error(), "forced export failure") {
 		t.Fatalf("Save() error = %v, want export failure", err)
 	}
@@ -299,7 +421,7 @@ func TestSaveReplacesOriginalAndRefreshesFingerprint(t *testing.T) {
 		return nil
 	}
 
-	result, err := service.Save(context.Background(), token, sessionID, "changed-modoc")
+	result, err := service.Save(context.Background(), token, sessionID, "changed-modoc", nil)
 	if err != nil {
 		t.Fatalf("first Save() error = %v", err)
 	}
@@ -310,7 +432,7 @@ func TestSaveReplacesOriginalAndRefreshesFingerprint(t *testing.T) {
 	if result.FilePath != canonicalOriginalPath {
 		t.Fatalf("Save().FilePath = %q, want %q", result.FilePath, canonicalOriginalPath)
 	}
-	if _, err := service.Save(context.Background(), token, sessionID, "changed-again"); err != nil {
+	if _, err := service.Save(context.Background(), token, sessionID, "changed-again", nil); err != nil {
 		t.Fatalf("second Save() after fingerprint refresh error = %v", err)
 	}
 	if len(converter.exports) != 2 {

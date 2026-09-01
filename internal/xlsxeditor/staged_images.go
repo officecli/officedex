@@ -15,9 +15,9 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
-// saveStagedImagesToXlsx writes staged images as ordinary OOXML drawings. It
-// deliberately bypasses the MODoc exporter for this path because some
-// office2modoc versions can hang on cell-image operators.
+// saveStagedImagesToXlsx writes marketing images as ordinary OOXML drawings.
+// This deliberately bypasses office2modoc for the image-bearing save because
+// office2modoc 0.1.34 can wait forever on Sheet SDK cell-image operators.
 func saveStagedImagesToXlsx(sourcePath, outputPath string, images []stagedImage) error {
 	normalizedSource, cleanup, err := normalizeWorksheetDrawingTargets(sourcePath)
 	if err != nil {
@@ -30,6 +30,7 @@ func saveStagedImagesToXlsx(sourcePath, outputPath string, images []stagedImage)
 		return fmt.Errorf("open source workbook: %w", err)
 	}
 	defer book.Close()
+
 	for _, image := range images {
 		data, err := os.ReadFile(image.filePath)
 		if err != nil {
@@ -45,7 +46,12 @@ func saveStagedImagesToXlsx(sourcePath, outputPath string, images []stagedImage)
 		if err := book.AddPictureFromBytes(image.sheetName, cell, &excelize.Picture{
 			Extension: image.extension,
 			File:      data,
-			Format:    &excelize.GraphicOptions{AltText: "OfficeDex generated marketing image", LockAspectRatio: true, AutoFit: true, Positioning: "oneCell"},
+			Format: &excelize.GraphicOptions{
+				AltText:         "OfficeDex generated marketing image",
+				LockAspectRatio: true,
+				AutoFit:         true,
+				Positioning:     "oneCell",
+			},
 		}); err != nil {
 			return fmt.Errorf("add image at %s: %w", cell, err)
 		}
@@ -65,8 +71,12 @@ func saveStagedImagesToXlsx(sourcePath, outputPath string, images []stagedImage)
 	return nil
 }
 
-// normalizeWorksheetDrawingTargets fixes absolute drawing relationship
-// targets, which Excelize may otherwise duplicate as invalid ZIP entries.
+// normalizeWorksheetDrawingTargets works around an Excelize save bug triggered
+// by absolute worksheet drawing relationship targets. When a source workbook
+// uses Target="/xl/drawings/...", Excelize can emit both the real drawing part
+// and an invalid leading-slash ZIP entry. office2modoc rejects that package on
+// the next open. OOXML relationship targets are normally relative to the
+// worksheet part, so rewrite only these drawing targets before editing.
 func normalizeWorksheetDrawingTargets(sourcePath string) (string, func(), error) {
 	reader, err := zip.OpenReader(sourcePath)
 	if err != nil {
@@ -94,6 +104,7 @@ func normalizeWorksheetDrawingTargets(sourcePath string) (string, func(), error)
 	if !needsNormalization {
 		return sourcePath, func() {}, nil
 	}
+
 	temp, err := os.CreateTemp(filepath.Dir(sourcePath), ".officedex-normalized-*.xlsx")
 	if err != nil {
 		return "", func() {}, fmt.Errorf("create normalized workbook: %w", err)
@@ -107,6 +118,7 @@ func normalizeWorksheetDrawingTargets(sourcePath string) (string, func(), error)
 			cleanup()
 		}
 	}()
+
 	writer := zip.NewWriter(temp)
 	for _, entry := range reader.File {
 		canonicalName := strings.TrimPrefix(entry.Name, "/")

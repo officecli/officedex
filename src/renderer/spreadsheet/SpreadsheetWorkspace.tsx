@@ -4,16 +4,45 @@ import { officecli } from "../bridge";
 import { SpreadsheetCanvas, type SpreadsheetCanvasHandle, type SpreadsheetCanvasState } from "./SpreadsheetCanvas";
 import { SpreadsheetTopbar, type SpreadsheetSaveState } from "./SpreadsheetTopbar";
 import type { SpreadsheetSessionState } from "./types";
-import type { WorkbookAddChartRequest, WorkbookAddChartResult } from "./workbookClientTools";
 import { useT } from "../i18n";
 import { WorkbookAppBuilder } from "../appBuilder/WorkbookAppBuilder";
 import { PublishedWorkbookAppPage } from "../appBuilder/PublishedWorkbookAppPage";
 import type { PublishedWorkbookApp } from "../appBuilder/types";
+import type { MarketingAssetKind, MarketingBatchDraft, MarketingFieldMapping } from "./marketingWorkflow";
+import type { CatalogCleanupBatch, CatalogInspection } from "./catalogCleanupWorkflow";
+import type {
+  WorkbookAddChartRequest,
+  WorkbookAddChartResult,
+  WorkbookSelectionSnapshot,
+  WorkbookSnapshot,
+  WorkbookSnapshotRequest,
+  WorkbookStageMediaRequest,
+  WorkbookStageMediaResult,
+  WorkbookFormatCellsRequest,
+  WorkbookWriteCellsRequest,
+} from "./workbookClientTools";
+import { delay } from "../utils/timing";
 
 export interface SpreadsheetWorkspaceHandle {
-  [key: string]: any;
   save(): Promise<boolean>;
   focus(): void;
+  openAppBuilder(): void;
+  previewApp(app: PublishedWorkbookApp): void;
+  snapshot(request: WorkbookSnapshotRequest): Promise<WorkbookSnapshot>;
+  readSelection(): Promise<WorkbookSelectionSnapshot>;
+  readSelectionAddress(): Promise<Omit<WorkbookSelectionSnapshot, "values">>;
+  writeCells(request: WorkbookWriteCellsRequest): Promise<{ written: number; sheetId: string; sheetName: string }>;
+  formatCells(request: WorkbookFormatCellsRequest): Promise<{ formatted: number; sheetId: string; sheetName: string }>;
+  stageMedia(request: WorkbookStageMediaRequest): Promise<WorkbookStageMediaResult>;
+  inspectMarketingSelection(assetKind: MarketingAssetKind): MarketingBatchDraft;
+  prepareMarketingBatch(batch: MarketingBatchDraft): void;
+  setMarketingStatus(batch: MarketingBatchDraft, rowIndex: number, status: string): Promise<void>;
+  insertMarketingImage(batch: MarketingBatchDraft, rowIndex: number, filePath: string): Promise<void>;
+  setMarketingMapping(mapping?: MarketingFieldMapping): void;
+  inspectCatalogSheets(): Promise<CatalogInspection>;
+  previewCatalogCleanup(batch?: CatalogCleanupBatch): void;
+  applyCatalogCleanup(batch: CatalogCleanupBatch): Promise<void>;
+  replaceManagedSheet(input: { sheetName: string; headers: string[]; rows: string[][]; keyColumn?: string; preserveColumns?: string[] }): Promise<void>;
   addChart(request: WorkbookAddChartRequest): Promise<WorkbookAddChartResult>;
 }
 
@@ -45,9 +74,10 @@ export const SpreadsheetWorkspace = forwardRef<SpreadsheetWorkspaceHandle, Sprea
     const t = useT();
     const [agentOpen, setAgentOpen] = useState(true);
     const [appBuilderOpen, setAppBuilderOpen] = useState(false);
+    const [creatingDeck, setCreatingDeck] = useState(false);
     const [publishedApp, setPublishedApp] = useState<PublishedWorkbookApp>();
     const [sourceRevision, setSourceRevision] = useState(0);
-    const [creatingDeck, setCreatingDeck] = useState(false);
+    const editorStateRef = useRef<SpreadsheetCanvasState | "closed">("closed");
     const fileName = session.artifact?.fileName ?? t("spreadsheet.untitled");
     const saveState = saveStateFor(session);
 
@@ -57,17 +87,70 @@ export const SpreadsheetWorkspace = forwardRef<SpreadsheetWorkspaceHandle, Sprea
       setSourceRevision(0);
     }, [session.artifact?.filePath]);
 
-    const save = useCallback(() => canvasRef.current?.save() ?? Promise.resolve(false), []);
-    const addChart = useCallback((request: WorkbookAddChartRequest) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return Promise.reject(new Error("The workbook is not open yet."));
-      return canvas.addChart(request);
+    const ensureEditorReady = useCallback(async (): Promise<SpreadsheetCanvasHandle> => {
+      if (canvasRef.current && editorStateRef.current !== "closed" && editorStateRef.current !== "loading" && editorStateRef.current !== "error") {
+        return canvasRef.current;
+      }
+      const deadline = Date.now() + 30_000;
+      while (Date.now() < deadline) {
+        if (editorStateRef.current === "error") {
+          throw new Error("表格编辑器加载失败，请重试。");
+        }
+        if (canvasRef.current && editorStateRef.current !== "closed" && editorStateRef.current !== "loading") {
+          return canvasRef.current;
+        }
+        await delay(50);
+      }
+      throw new Error("表格编辑器加载超时，请重试。");
     }, []);
+    const save = useCallback(async () => {
+      if (!session.artifact || !session.grant) return false;
+      const canvas = await ensureEditorReady();
+      return canvas.save();
+    }, [ensureEditorReady, session.artifact, session.grant]);
     useImperativeHandle(ref, () => ({
       save,
       focus: () => canvasRef.current?.focus(),
-      addChart,
-    }), [addChart, save]);
+      openAppBuilder: () => setAppBuilderOpen(true),
+      previewApp: (app) => {
+        setPublishedApp(app);
+        setAppBuilderOpen(false);
+      },
+      snapshot: async (request) => (await ensureEditorReady()).snapshot(request),
+      readSelection: async () => (await ensureEditorReady()).readSelection(),
+      readSelectionAddress: async () => (await ensureEditorReady()).readSelectionAddress(),
+      writeCells: async (request) => (await ensureEditorReady()).writeCells(request),
+      formatCells: async (request) => (await ensureEditorReady()).formatCells(request),
+      stageMedia: async (request) => (await ensureEditorReady()).stageMedia(request),
+      inspectMarketingSelection: (assetKind) => {
+        if (!canvasRef.current) throw new Error("表格仍在加载，请稍后重试。");
+        return canvasRef.current.inspectMarketingSelection(assetKind);
+      },
+      prepareMarketingBatch: (batch) => canvasRef.current?.prepareMarketingBatch(batch),
+      setMarketingStatus: async (batch, rowIndex, status) => {
+        const canvas = await ensureEditorReady();
+        return canvas.setMarketingStatus(batch, rowIndex, status);
+      },
+      insertMarketingImage: async (batch, rowIndex, filePath) => {
+        const canvas = await ensureEditorReady();
+        await canvas.insertMarketingImage(batch, rowIndex, filePath);
+      },
+      setMarketingMapping: (mapping) => canvasRef.current?.setMarketingMapping(mapping),
+      inspectCatalogSheets: async () => {
+        const canvas = await ensureEditorReady();
+        return canvas.inspectCatalogSheets();
+      },
+      previewCatalogCleanup: (batch) => canvasRef.current?.previewCatalogCleanup(batch),
+      applyCatalogCleanup: async (batch) => {
+        const canvas = await ensureEditorReady();
+        return canvas.applyCatalogCleanup(batch);
+      },
+      replaceManagedSheet: async (input) => {
+        const canvas = await ensureEditorReady();
+        await canvas.replaceManagedSheet(input);
+      },
+      addChart: async (request) => (await ensureEditorReady()).addChart(request),
+    }), [ensureEditorReady, save]);
 
     return (
       <section className="spreadsheet-workspace" data-agent-open={agentOpen ? "true" : "false"}>
@@ -108,6 +191,7 @@ export const SpreadsheetWorkspace = forwardRef<SpreadsheetWorkspaceHandle, Sprea
                 grant={session.grant}
                 onDirtyChange={onDirtyChange}
                 onStateChange={(state) => {
+                  editorStateRef.current = state;
                   onCanvasStateChange?.(state);
                   if (state === "saved") setSourceRevision((current) => current + 1);
                 }}

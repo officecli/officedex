@@ -51,7 +51,7 @@
   },
   "dependencies": {
     "@shimo/editor-sdk-core": "0.0.1-124-jsapi.51",
-    "@shimo/sdk-sheet": "5.0.14-jsapi.4",
+    "@shimo/sdk-sheet": "5.0.14-jsapi.5",
     "@shimo/simple-i18n": "4.0.27",
     "@tanstack/react-query": "^5.66.9",
     "@tiptap/core": "^3.29.2",

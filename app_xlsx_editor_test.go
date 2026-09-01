@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"officedex/internal/preview"
@@ -18,11 +19,12 @@ type fakeXlsxEditorService struct {
 	prepareResult xlsxeditor.PrepareResult
 	prepareErr    error
 
-	saveToken   string
-	saveSession string
-	saveContent string
-	saveResult  xlsxeditor.SaveResult
-	saveErr     error
+	saveToken         string
+	saveSession       string
+	saveContent       string
+	saveManagedSheets []xlsxeditor.ManagedSheet
+	saveResult        xlsxeditor.SaveResult
+	saveErr           error
 
 	stageResult       xlsxeditor.StageImageResult
 	stageErr          error
@@ -54,8 +56,9 @@ func (s *fakeXlsxEditorService) Prepare(_ context.Context, token string) (xlsxed
 	return s.prepareResult, s.prepareErr
 }
 
-func (s *fakeXlsxEditorService) Save(_ context.Context, token, sessionID, content string) (xlsxeditor.SaveResult, error) {
+func (s *fakeXlsxEditorService) Save(_ context.Context, token, sessionID, content string, managedSheets []xlsxeditor.ManagedSheet) (xlsxeditor.SaveResult, error) {
 	s.saveToken, s.saveSession, s.saveContent = token, sessionID, content
+	s.saveManagedSheets = managedSheets
 	return s.saveResult, s.saveErr
 }
 
@@ -97,7 +100,7 @@ func TestPrepareXlsxEditorDelegatesOpaqueToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PrepareXlsxEditor() error = %v", err)
 	}
-	if service.prepareToken != "opaque-preview-token" || result != service.prepareResult {
+	if service.prepareToken != "opaque-preview-token" || !reflect.DeepEqual(result, service.prepareResult) {
 		t.Fatalf("delegation token/result = %q/%+v", service.prepareToken, result)
 	}
 }
