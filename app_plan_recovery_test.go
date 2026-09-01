@@ -90,12 +90,12 @@ func TestRespondRecoversStalePlanQuestionTask(t *testing.T) {
 	t.Cleanup(client.Stop)
 
 	app := &App{
-		ctx:          ctx,
-		userDataDir:  t.TempDir(),
-		workspaceDir: workspaceDir,
-		localStore:   store,
-		bridgeClient: client,
-		bridgeCwd:    workspaceDir,
+		ctx:             ctx,
+		userDataDir:     t.TempDir(),
+		workspaceDir:    workspaceDir,
+		localStore:      store,
+		bridgeClients:   map[string]*bridge.Client{workspaceDir: client},
+		bridgeRecentCwd: workspaceDir,
 	}
 
 	done := make(chan struct {
@@ -344,12 +344,12 @@ func TestRespondRecoveryUsesLivePendingQuestionID(t *testing.T) {
 	t.Cleanup(client.Stop)
 
 	app := &App{
-		ctx:          ctx,
-		userDataDir:  t.TempDir(),
-		workspaceDir: workspaceDir,
-		localStore:   store,
-		bridgeClient: client,
-		bridgeCwd:    workspaceDir,
+		ctx:             ctx,
+		userDataDir:     t.TempDir(),
+		workspaceDir:    workspaceDir,
+		localStore:      store,
+		bridgeClients:   map[string]*bridge.Client{workspaceDir: client},
+		bridgeRecentCwd: workspaceDir,
 	}
 
 	done := make(chan struct {
@@ -565,12 +565,12 @@ func TestRespondRecoveryReplaysFullAnswerHistory(t *testing.T) {
 	t.Cleanup(client.Stop)
 
 	app := &App{
-		ctx:          ctx,
-		userDataDir:  t.TempDir(),
-		workspaceDir: workspaceDir,
-		localStore:   store,
-		bridgeClient: client,
-		bridgeCwd:    workspaceDir,
+		ctx:             ctx,
+		userDataDir:     t.TempDir(),
+		workspaceDir:    workspaceDir,
+		localStore:      store,
+		bridgeClients:   map[string]*bridge.Client{workspaceDir: client},
+		bridgeRecentCwd: workspaceDir,
 	}
 
 	done := make(chan struct {
@@ -732,12 +732,12 @@ func TestRespondRecoverySkipsStalePerNodeFeedback(t *testing.T) {
 	t.Cleanup(client.Stop)
 
 	app := &App{
-		ctx:          ctx,
-		userDataDir:  t.TempDir(),
-		workspaceDir: workspaceDir,
-		localStore:   store,
-		bridgeClient: client,
-		bridgeCwd:    workspaceDir,
+		ctx:             ctx,
+		userDataDir:     t.TempDir(),
+		workspaceDir:    workspaceDir,
+		localStore:      store,
+		bridgeClients:   map[string]*bridge.Client{workspaceDir: client},
+		bridgeRecentCwd: workspaceDir,
 	}
 
 	done := make(chan struct {
