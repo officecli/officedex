@@ -10,8 +10,7 @@ import { getHomeDropZone, setHomeDropZone } from "./homeDropZone";
 import type { SidebarAccount, SidebarDocument } from "./components/ProjectSidebar";
 import { Shell } from "./components/Shell";
 import { PreviewPanel } from "./components/PreviewPanel";
-import { buildReplayFeed, liveTaskForFile, registerLiveDraft, VIBE_REPLAY_FINISHED_EVENT, type VibeReplayFinishedDetail } from "./presentation/vibeReplay";
-import { shouldKeepLivePreviewOnCompletion } from "./presentation/completionPreviewPolicy";
+import { buildReplayFeed, liveDraftFor, registerLiveDraft } from "./presentation/vibeReplay";
 import type { TimelineDeck, TimelineNode, VibeOp } from "../shared/types";
 import type { SidebarUpdateRowProps } from "./components/SidebarUpdateRow";
 import { ForceUpdateOverlay } from "./components/ForceUpdateOverlay";
@@ -102,13 +101,6 @@ type PendingGenerate = {
 };
 
 const RECENT_FILES_TIMEOUT_MS = 8_000;
-
-function materializePendingContext(pending: PendingGenerate, taskId: string): TaskContextPatch | undefined {
-  if (pending.context?.conversationId !== pending.localTaskId) {
-    return pending.context;
-  }
-  return { ...pending.context, conversationId: taskId };
-}
 
 export function hydrateTaskHistory(state: TaskState, entries: TaskHistoryEntry[]): TaskState {
   let next = state;
@@ -209,7 +201,17 @@ function OfficeDexApp() {
   const recentFilesRequestRef = useRef(0);
   const activeNavRef = useRef(activeNav);
   activeNavRef.current = activeNav;
-  const pendingGenerateRef = useRef<PendingGenerate | null>(null);
+  /**
+   * The optimistic tasks this page has submitted but whose real ids have not
+   * come back yet, keyed by the local placeholder id.
+   *
+   * A map rather than a slot: two submissions can be in flight at once, and a
+   * single slot meant the second one overwrote the first's prompt, parent, and
+   * conversation. The only thing that ever resolves an entry is the generate/
+   * modify RPC that created it — a task event carrying some other id proves
+   * nothing about which submission it belongs to.
+   */
+  const pendingGenerateRef = useRef<Map<string, PendingGenerate>>(new Map());
   // A newly submitted task is shown in the Home stage shell first. Once its
   // artifact is available, the existing PreviewPanel becomes the focused
   // artifact stage. The ref scopes auto-opening to this submission only.
@@ -388,37 +390,19 @@ function OfficeDexApp() {
         // decide whether any individual run actually failed.
         return;
       }
-      const pending = pendingGenerateRef.current;
-      const shouldReplaceLocalTask = Boolean(
-        event.task_id &&
-        pending &&
-        event.task_id !== pending.localTaskId,
-      );
-      // Captured from the reduced state so the notification below can name the
-      // task; reading component state here would see the pre-event snapshot.
+      // A task event names the task it belongs to and nothing else. It used to
+      // be treated as evidence that the newest optimistic submission had just
+      // been assigned that id, which is only true when exactly one submission
+      // is in flight: with two, an event from the older run adopted the newer
+      // run's prompt, parent, and conversation id, merging both into one
+      // lineage. The invoke RPC that created a placeholder is the only thing
+      // that can resolve it, so reduce the event and stop there.
       let settledTask: DesktopTask | undefined;
       setState((current) => {
-        let next = applyTaskEvent(current, event);
-        if (event.task_id && pending && shouldReplaceLocalTask) {
-          next = deleteTask(next, pending.localTaskId);
-          next = attachUserInput(next, event.task_id, pending.input, pending.parentTaskId, materializePendingContext(pending, event.task_id));
-        }
+        const next = applyTaskEvent(current, event);
         if (event.task_id) settledTask = next.tasks[event.task_id];
         return next;
       });
-      if (event.task_id) {
-        if (pending && shouldReplaceLocalTask) {
-          if (stageFirstTaskRef.current === pending.localTaskId) {
-            stageFirstTaskRef.current = event.task_id;
-            setStageFirstTaskId(event.task_id);
-          }
-          pendingGenerateRef.current = null;
-          setSelectedTaskID({ kind: "task", id: event.task_id });
-          setBusy(false);
-          refreshProjectLists();
-          setActiveNav("document");
-        }
-      }
       if (event.type === "task.completed" || event.type === "task.failed" || event.type === "task.cancelled") {
         // Name the task in the body: "a generation finished" makes the user
         // hunt for which one, which is the trip to the tasks page we are
@@ -680,7 +664,7 @@ function OfficeDexApp() {
       conversationId: localTaskId,
       ...(targetWorkspace ? { workspaceId: targetWorkspace.id, workspacePath: targetWorkspace.path } : {}),
     };
-    pendingGenerateRef.current = {
+    const pending: PendingGenerate = {
       localTaskId,
       context,
       input: {
@@ -692,9 +676,10 @@ function OfficeDexApp() {
         fps: submittedValues.fps,
       },
     };
+    pendingGenerateRef.current.set(localTaskId, pending);
     stageFirstTaskRef.current = localTaskId;
     setStageFirstTaskId(localTaskId);
-    const pendingInput = pendingGenerateRef.current.input;
+    const pendingInput = pending.input;
     setState((current) => attachUserInput(applyTaskEvent(current, {
       task_id: localTaskId,
       type: "task.started",
@@ -713,22 +698,23 @@ function OfficeDexApp() {
         ? { ...submittedValues, topic, noProject: true, workspaceId: undefined }
         : { ...submittedValues, topic, workspaceId: targetWorkspace?.id };
       const result = await officecli.generate(generateInput);
-      if (pendingGenerateRef.current?.localTaskId === localTaskId && result.taskId) {
-        const pending = pendingGenerateRef.current;
+      if (pendingGenerateRef.current.delete(localTaskId) && result.taskId) {
         const actualContext = { ...pending.context, conversationId: result.taskId };
-        pendingGenerateRef.current = null;
         setState((current) => attachUserInput(deleteTask(current, localTaskId), result.taskId, pending.input, undefined, actualContext));
         setSelectedTaskID({ kind: "task", id: result.taskId });
-        stageFirstTaskRef.current = result.taskId;
-        setStageFirstTaskId(result.taskId);
+        if (stageFirstTaskRef.current === localTaskId) {
+          stageFirstTaskRef.current = result.taskId;
+          setStageFirstTaskId(result.taskId);
+        }
         setActiveNav("document");
         refreshProjectLists();
       }
     } catch (error) {
-      if (pendingGenerateRef.current?.localTaskId !== localTaskId) return;
-      pendingGenerateRef.current = null;
-      stageFirstTaskRef.current = undefined;
-      setStageFirstTaskId(undefined);
+      if (!pendingGenerateRef.current.delete(localTaskId)) return;
+      if (stageFirstTaskRef.current === localTaskId) {
+        stageFirstTaskRef.current = undefined;
+        setStageFirstTaskId(undefined);
+      }
       setState((current) => deleteTask(current, localTaskId));
       const text = errorMessage(error);
       recordError(text, classifyError(text), extractStderr(text));
@@ -1022,7 +1008,7 @@ function OfficeDexApp() {
       parentTaskId,
       ...(targetWorkspace ? { workspaceId: targetWorkspace.id, workspacePath: targetWorkspace.path } : {}),
     };
-    pendingGenerateRef.current = {
+    const pending: PendingGenerate = {
       localTaskId,
       context,
       input: {
@@ -1034,7 +1020,8 @@ function OfficeDexApp() {
       },
       parentTaskId,
     };
-    const pendingInput = pendingGenerateRef.current.input;
+    pendingGenerateRef.current.set(localTaskId, pending);
+    const pendingInput = pending.input;
     setState((current) => attachUserInput(applyTaskEvent(current, {
       task_id: localTaskId,
       type: "task.started",
@@ -1064,17 +1051,14 @@ function OfficeDexApp() {
         imageRatio,
         fps,
       });
-      if (pendingGenerateRef.current?.localTaskId === localTaskId && result.taskId) {
-        const pending = pendingGenerateRef.current;
-        pendingGenerateRef.current = null;
+      if (pendingGenerateRef.current.delete(localTaskId) && result.taskId) {
         setState((current) => attachUserInput(deleteTask(current, localTaskId), result.taskId, pending.input, parentTaskId, pending.context));
         setSelectedTaskID({ kind: "task", id: result.taskId });
         setActiveNav("document");
         refreshProjectLists();
       }
     } catch (error) {
-      if (pendingGenerateRef.current?.localTaskId !== localTaskId) return;
-      pendingGenerateRef.current = null;
+      if (!pendingGenerateRef.current.delete(localTaskId)) return;
       setState((current) => deleteTask(current, localTaskId));
       const text = errorMessage(error);
       recordError(text, classifyError(text), extractStderr(text));
@@ -1108,13 +1092,14 @@ function OfficeDexApp() {
       parentTaskId,
       ...(targetWorkspace ? { workspaceId: targetWorkspace.id, workspacePath: targetWorkspace.path } : {}),
     };
-    pendingGenerateRef.current = {
+    const pending: PendingGenerate = {
       localTaskId,
       context,
       input: { prompt, sourceFile },
       parentTaskId,
     };
-    const pendingInput = pendingGenerateRef.current.input;
+    pendingGenerateRef.current.set(localTaskId, pending);
+    const pendingInput = pending.input;
     setState((current) => attachUserInput(applyTaskEvent(current, {
       task_id: localTaskId,
       type: "task.started",
@@ -1138,17 +1123,14 @@ function OfficeDexApp() {
         sourceFile,
         prompt,
       });
-      if (pendingGenerateRef.current?.localTaskId === localTaskId && result.taskId) {
-        const pending = pendingGenerateRef.current;
-        pendingGenerateRef.current = null;
+      if (pendingGenerateRef.current.delete(localTaskId) && result.taskId) {
         setState((current) => attachUserInput(deleteTask(current, localTaskId), result.taskId, pending.input, parentTaskId, pending.context));
         setSelectedTaskID({ kind: "task", id: result.taskId });
         setActiveNav("document");
         refreshProjectLists();
       }
     } catch (error) {
-      if (pendingGenerateRef.current?.localTaskId !== localTaskId) return;
-      pendingGenerateRef.current = null;
+      if (!pendingGenerateRef.current.delete(localTaskId)) return;
       setState((current) => deleteTask(current, localTaskId));
       const text = errorMessage(error);
       recordError(text, classifyError(text), extractStderr(text));
@@ -1188,7 +1170,10 @@ function OfficeDexApp() {
     }
   }, [previewGrant]);
 
-  const [liveDraftTaskId, setLiveDraftTaskId] = useState<string | null>(null);
+  // The live draft behind the deck currently on screen, if that deck is one.
+  // Registered synchronously when the draft is created, so it is already true
+  // by the time the preview artifact naming that file is committed.
+  const previewLiveDraft = previewArtifact?.filePath ? liveDraftFor(previewArtifact.filePath) : undefined;
 
   useEffect(() => {
     const taskId = stageFirstTaskRef.current;
@@ -1198,12 +1183,10 @@ function OfficeDexApp() {
     if (task.status === "completed") {
       stageFirstTaskRef.current = undefined;
       setStageFirstTaskId(undefined);
-      const keepLivePreview = shouldKeepLivePreviewOnCompletion({
-        taskId,
-        liveDraftTaskId,
-        previewTaskId: previewArtifact?.taskId,
-        previewLiveTaskId: previewArtifact?.filePath ? liveTaskForFile(previewArtifact.filePath) : undefined,
-      });
+      // Completion must not replace the op-authored editor with a second
+      // artifact import: the deck on screen is this task's own live draft and
+      // the sequencer already saved it.
+      const keepLivePreview = previewLiveDraft?.taskId === taskId;
       if (!keepLivePreview && task.artifact?.filePath) {
         void openInlinePreview(task.artifact);
       }
@@ -1213,7 +1196,7 @@ function OfficeDexApp() {
       stageFirstTaskRef.current = undefined;
       setStageFirstTaskId(undefined);
     }
-  }, [liveDraftTaskId, openInlinePreview, previewArtifact?.filePath, previewArtifact?.taskId, state.tasks]);
+  }, [openInlinePreview, previewLiveDraft, state.tasks]);
 
   const openTaskFromHome = useCallback((taskId: string) => {
     const task = state.tasks[taskId];
@@ -1420,7 +1403,7 @@ function OfficeDexApp() {
   // First task.vibe_primitives for a task opens the presentation editor on a
   // blank draft and the replay sequencer inside PptxViewer draws the deck as
   // the primitives stream in. One draft per task; never steal an open preview.
-  const timelineTaskId = liveDraftTaskId ?? previewArtifact?.taskId ?? undefined;
+  const timelineTaskId = previewLiveDraft?.taskId ?? previewArtifact?.taskId ?? undefined;
 
   const openTimelineNode = useCallback(async (deck: TimelineDeck, node: TimelineNode) => {
     await openInlinePreview({
@@ -1480,7 +1463,6 @@ function OfficeDexApp() {
           documentType: "pptx",
         } as Artifact);
         setLiveTrace(false);
-        setLiveDraftTaskId(liveCandidateTaskId);
       } catch (error) {
         liveDraftAttemptsRef.current.delete(liveCandidateTaskId);
         const message = errorMessage(error);
@@ -1488,21 +1470,6 @@ function OfficeDexApp() {
       }
     })();
   }, [liveCandidateTaskId, recordError]);
-  // Keep the live editor mounted after replay. Replacing it with the backend
-  // artifact creates a second iframe/import handshake at exactly the moment
-  // generation completes, causing a visible flash or another 30s timeout.
-  // The sequencer already exported and saved the op-authored deck; the same
-  // editor should remain the user's editable result.
-  useEffect(() => {
-    const onFinished = (event: Event) => {
-      const detail = (event as CustomEvent<VibeReplayFinishedDetail>).detail;
-      if (!detail || detail.taskId !== liveDraftTaskId) return;
-      setReplayPerform(false);
-    };
-    window.addEventListener(VIBE_REPLAY_FINISHED_EVENT, onFinished);
-    return () => window.removeEventListener(VIBE_REPLAY_FINISHED_EVENT, onFinished);
-  }, [liveDraftTaskId]);
-
   // Debug helper: `__officedexReplayDemo()` in the console replays the latest
   // (or a given) task's drawing from a fresh blank draft — the live-generation
   // experience on demand, no model calls, no credits. It bypasses the
@@ -1513,10 +1480,6 @@ function OfficeDexApp() {
   // An op stream handed straight to the replay, with no task behind it —
   // a recovered recording, or one captured from a run that is long gone.
   const [replayOps, setReplayOps] = useState<VibeOp[] | undefined>();
-  // A replay started from the console is a performance whatever it replays —
-  // a recording or a finished task. Without this the task branch inherits
-  // "already complete, so catch up fast" and the drawing finishes instantly.
-  const [replayPerform, setReplayPerform] = useState(false);
   replayDemoRef.current = async (source?: string | VibeOp[]) => {
     const finish = (message: string) => {
       // The command is usually invoked bare in the console, so the resolved
@@ -1556,9 +1519,7 @@ function OfficeDexApp() {
     setPreviewGrant(grant);
     setPreviewArtifact(artifact);
     setReplayOps(ops);
-    setReplayPerform(true);
     setLiveTrace(true);
-    setLiveDraftTaskId(target);
     const from = ops ? "a recording" : `task ${target}`;
     return finish(`replaying ${opCount} ops of ${from} from a blank draft — each op is logged before it executes`);
   };
@@ -1570,20 +1531,28 @@ function OfficeDexApp() {
     };
   }, []);
 
+  // The live feed belongs to the document on screen, not to the app. Anything
+  // else opened — a finished artifact, a recent file, another task's output —
+  // resolves to no draft and therefore no feed. Keying this off a single
+  // app-wide task id meant every pptx opened after one generation inherited
+  // that task's whole op stream and replayed it onto a document that already
+  // contained those objects.
   const liveReplayFeed = useMemo(
     () =>
-      buildReplayFeed({
-        taskId: liveDraftTaskId,
-        ops: replayOps,
-        // A live draft is a performance even when the editor finishes booting
-        // after the backend already emitted the complete op stream. Treating
-        // that case as historical catch-up makes the whole deck appear at
-        // once, which defeats the op-mode product experience.
-        performing: replayPerform || Boolean(liveDraftTaskId),
-        trace: liveTrace,
-        task: liveDraftTaskId ? state.tasks[liveDraftTaskId] : undefined,
-      }),
-    [liveDraftTaskId, liveTrace, replayOps, replayPerform, state.tasks],
+      previewLiveDraft
+        ? buildReplayFeed({
+          draft: previewLiveDraft,
+          ops: replayOps,
+          // A live draft is a performance even when the editor finishes booting
+          // after the backend already emitted the complete op stream. Treating
+          // that case as historical catch-up makes the whole deck appear at
+          // once, which defeats the op-mode product experience.
+          performing: true,
+          trace: liveTrace,
+          task: state.tasks[previewLiveDraft.taskId],
+        })
+        : undefined,
+    [liveTrace, previewLiveDraft, replayOps, state.tasks],
   );
 
   const startSpreadsheetGeneration = useCallback(async (input: GenerateInput) => {

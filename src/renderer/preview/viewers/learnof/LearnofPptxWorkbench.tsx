@@ -99,6 +99,8 @@ export default function LearnofPptxWorkbench({
   const embedUrl = useMemo(() => buildLearnofPptxEmbedUrl(editorBaseUrl, channel), [editorBaseUrl, channel]);
   const clientRef = useRef<LearnofPptxEmbedClient | null>(null);
   const replayRef = useRef<VibeReplaySequencer | null>(null);
+  // Which (task, document, editor session) the live sequencer was built for.
+  const replayIdentityRef = useRef<string | undefined>(undefined);
   const [reloadToken, setReloadToken] = useState(0);
   const [editorStatus, setEditorStatus] = useState<EditorStatus>({ kind: "fetching" });
   const [selectionContext, setSelectionContext] = useState<LearnofPptxEditorContext | null>(null);
@@ -193,7 +195,17 @@ export default function LearnofPptxWorkbench({
   useEffect(() => {
     const client = clientRef.current;
     if (!live || !client || editorStatus.kind !== "ready" || client.getState().phase !== "editor-ready") return;
+    // One sequencer belongs to one (task, document, editor session). Any of the
+    // three changing invalidates the controller closure below — it captures
+    // this client and this file id — and mixing two tasks' op streams in one
+    // sequencer draws the wrong deck. Retire the old one instead of reusing it.
+    const identity = `${live.taskId}::${filePath ?? fileName}::${editorStatus.fileId}`;
+    if (replayRef.current && replayIdentityRef.current !== identity) {
+      replayRef.current.dispose();
+      replayRef.current = null;
+    }
     if (!replayRef.current) {
+      replayIdentityRef.current = identity;
       const controller: PresentationEditorController = {
         async executeScript(source): Promise<PresentationScriptResult> {
           const value = await client.executeJs(source);
@@ -239,6 +251,7 @@ export default function LearnofPptxWorkbench({
   useEffect(() => () => {
     replayRef.current?.dispose();
     replayRef.current = null;
+    replayIdentityRef.current = undefined;
   }, []);
 
   useEffect(() => {

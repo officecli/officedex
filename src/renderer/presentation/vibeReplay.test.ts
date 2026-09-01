@@ -29,7 +29,7 @@ beforeEach(() => {
   }));
 });
 import type { VibeOp, VibeOpShape } from "../../shared/types";
-import { VibeReplaySequencer, applyReslideOps, buildOpsChunkScript, buildReplayFeed } from "./vibeReplay";
+import { VibeReplaySequencer, applyReslideOps, buildOpsChunkScript, buildReplayFeed, registerLiveDraft, releaseLiveDraft } from "./vibeReplay";
 import type { PresentationEditorController } from "./PresentationEditorFrame";
 
 const liveSequencers = new Set<VibeReplaySequencer>();
@@ -579,6 +579,59 @@ describe("VibeReplaySequencer", () => {
     expect(statuses).toContain("saving");
   });
 
+  it("resumes from what the draft already holds instead of drawing it again", async () => {
+    // A viewer remounts whenever its preview token is reissued — reopening the
+    // task, a reload, an editor restart. The draft on disk already carries the
+    // slides the previous sequencer drew and saved, so replaying that prefix
+    // stacked a second copy of every object onto the deck.
+    const filePath = "/live/live-resume-1.pptx";
+    registerLiveDraft(filePath, "t-resume");
+    const ops = opStream(2);
+
+    const first = fakeController();
+    const one = makeSequencer({ controller: first.controller, paceMs: 0 });
+    one.update({ taskId: "t-resume", filePath, ops, completed: true });
+    await flush();
+    await flush();
+    expect(first.saved).toHaveBeenCalledTimes(1);
+    expect(first.powerPoint.deck.flatMap((slide) => slide.shapes).length).toBe(4);
+
+    // The same document, reopened: the editor imports the saved deck, so the
+    // fake starts empty here only because it is a fresh surface — what matters
+    // is that the stream is not executed a second time.
+    const second = fakeController();
+    const two = makeSequencer({ controller: second.controller, paceMs: 0 });
+    two.update({ taskId: "t-resume", filePath, ops, completed: true });
+    await flush();
+    await flush();
+    expect(second.executed.filter((source) => source.includes("PowerPoint.run"))).toHaveLength(0);
+    expect(second.powerPoint.deck).toHaveLength(0);
+
+    releaseLiveDraft(filePath);
+  });
+
+  it("refuses a second task's stream rather than blending it into this drawing", async () => {
+    // Two tasks number their ops from 1 independently. Accepting the new feed
+    // kept executing the old task's ops while dropping the new task's ops of
+    // the same seq as duplicates — one deck built out of two runs.
+    const { controller, executed } = fakeController();
+    const sequencer = makeSequencer({ controller, paceMs: 0 });
+    sequencer.update({ taskId: "t-first", ops: opStream(1), completed: false });
+    await flush();
+    const drawn = executed.length;
+
+    const other = opStream(1).map((op) => (
+      op.op === "shape.add" && op.shape?.kind === "text"
+        ? { ...op, shape: { ...op.shape, text: "another task" } }
+        : op
+    ));
+    sequencer.update({ taskId: "t-second", ops: other, completed: true });
+    await flush();
+    await flush();
+    expect(executed.length).toBe(drawn);
+    expect(executed.join("\n")).not.toContain("another task");
+  });
+
   it("never executes past a gap in the seq order", async () => {
     const { controller, executed } = fakeController();
     const sequencer = makeSequencer({ controller, paceMs: 0 });
@@ -619,24 +672,6 @@ describe("VibeReplaySequencer", () => {
     await flush();
     expect(saved).not.toHaveBeenCalled();
     expect(statuses.at(-1)).toBe("done");
-  });
-});
-
-describe("replay finished event", () => {
-  it("dispatches the handover event with the task id after done", async () => {
-    const { controller } = fakeController();
-    const events: Array<{ taskId: string; drawnSlides: number }> = [];
-    const listener = (event: Event) => events.push((event as CustomEvent).detail);
-    window.addEventListener("officedex:vibe-replay-finished", listener);
-    try {
-      const sequencer = makeSequencer({ controller, paceMs: 0 });
-      sequencer.update({ taskId: "task-9", ops: opStream(1), completed: true });
-      await flush();
-      await flush();
-      expect(events).toEqual([{ taskId: "task-9", drawnSlides: 1 }]);
-    } finally {
-      window.removeEventListener("officedex:vibe-replay-finished", listener);
-    }
   });
 });
 
@@ -891,36 +926,44 @@ describe("slide.delete", () => {
 describe("buildReplayFeed", () => {
   const ops = opStream(1);
   const finished = { status: "completed", vibeOps: ops };
+  const draft = { filePath: "/live/live-t1-1.pptx", taskId: "t1", drawnSeq: 0 };
 
   it("performs a console replay whether it replays a recording or a finished task", () => {
     // Both are "complete" streams; both are being watched on purpose.
-    expect(buildReplayFeed({ taskId: "t1", ops, performing: true, trace: true })).toMatchObject({
+    expect(buildReplayFeed({ draft, ops, performing: true, trace: true })).toMatchObject({
       completed: true,
       perform: true,
     });
-    expect(buildReplayFeed({ taskId: "t1", performing: true, trace: true, task: finished })).toMatchObject({
+    expect(buildReplayFeed({ draft, performing: true, trace: true, task: finished })).toMatchObject({
       completed: true,
       perform: true,
+    });
+  });
+
+  it("names the draft it draws into, so a remount can resume instead of redraw", () => {
+    expect(buildReplayFeed({ draft, performing: true, trace: false, task: finished })).toMatchObject({
+      taskId: "t1",
+      filePath: "/live/live-t1-1.pptx",
     });
   });
 
   it("carries the outline gate only while the run is paused on it", () => {
     const paused = { status: "question", vibeOps: [], question: { id: "pptx-outline-gate", kind: "pptx_outline_gate" } };
-    expect(buildReplayFeed({ taskId: "t1", performing: false, trace: false, task: paused })).toMatchObject({
+    expect(buildReplayFeed({ draft, performing: false, trace: false, task: paused })).toMatchObject({
       gate: { questionId: "pptx-outline-gate" },
     });
     // A plain clarification question is not the gate.
     const plain = { status: "question", vibeOps: [], question: { id: "question-1" } };
-    expect(buildReplayFeed({ taskId: "t1", performing: false, trace: false, task: plain })?.gate).toBeUndefined();
+    expect(buildReplayFeed({ draft, performing: false, trace: false, task: plain })?.gate).toBeUndefined();
     // A finished task cannot be gated, whatever stale question it carries.
     const done = { status: "completed", vibeOps: ops, question: { id: "pptx-outline-gate", kind: "pptx_outline_gate" } };
-    expect(buildReplayFeed({ taskId: "t1", performing: false, trace: false, task: done })?.gate).toBeUndefined();
+    expect(buildReplayFeed({ draft, performing: false, trace: false, task: done })?.gate).toBeUndefined();
   });
 
   it("catches up on history nobody asked to watch", () => {
     // Opening an old conversation replays its ops into the draft; that is
     // history, and it should be there immediately.
-    expect(buildReplayFeed({ taskId: "t1", performing: false, trace: false, task: finished })).toMatchObject({
+    expect(buildReplayFeed({ draft, performing: false, trace: false, task: finished })).toMatchObject({
       completed: true,
       perform: undefined,
     });
@@ -928,7 +971,7 @@ describe("buildReplayFeed", () => {
 
   it("leaves a running generation alone: still arriving, so already a performance", () => {
     const live = buildReplayFeed({
-      taskId: "t1",
+      draft,
       performing: false,
       trace: false,
       task: { status: "running", vibeOps: ops },
@@ -936,9 +979,8 @@ describe("buildReplayFeed", () => {
     expect(live).toMatchObject({ completed: false, perform: undefined });
   });
 
-  it("has nothing to feed without a draft or a task", () => {
-    expect(buildReplayFeed({ taskId: null, performing: true, trace: true })).toBeUndefined();
-    expect(buildReplayFeed({ taskId: "t1", performing: true, trace: true })).toBeUndefined();
+  it("has nothing to feed for a draft whose task this session never saw", () => {
+    expect(buildReplayFeed({ draft, performing: true, trace: true })).toBeUndefined();
   });
 });
 

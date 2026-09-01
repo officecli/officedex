@@ -29,7 +29,7 @@ func TestDemoGenerateBypassesProviderValidation(t *testing.T) {
 	if result.TaskID == "" || result.Status != "running" {
 		t.Fatalf("result = %#v", result)
 	}
-	if app.bridgeClient != nil {
+	if len(app.bridgeClients) != 0 {
 		t.Fatal("demo generate started bridge client")
 	}
 }

@@ -236,7 +236,8 @@ func newAuthResetAppWithBridge(t *testing.T, binary string) (*App, *authResetBri
 		workspaceDir:       t.TempDir(),
 		proxyPool:          netproxy.NewPool(),
 		cachedSettings:     types.UserSettings{},
-		bridgeClient:       client,
+		bridgeClients:      map[string]*bridge.Client{"/ws": client},
+		bridgeRecentCwd:    "/ws",
 		resolvedBinaryPath: binary,
 		resolvedBinaryEnv:  []string{"OFFICE_CLI_RUNTIME_MODE=hosted"},
 		binaryResolvedAt:   time.Now(),
@@ -260,7 +261,7 @@ func waitForAuthReset(t *testing.T, app *App) {
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		app.mu.Lock()
-		cleared := app.bridgeClient == nil &&
+		cleared := len(app.bridgeClients) == 0 &&
 			app.resolvedBinaryPath == "" &&
 			app.resolvedBinaryEnv == nil &&
 			app.binaryResolvedAt.IsZero()
@@ -293,8 +294,8 @@ func assertAuthResetRuntimeCleared(t *testing.T, app *App) {
 	t.Helper()
 	app.mu.Lock()
 	defer app.mu.Unlock()
-	if app.bridgeClient != nil {
-		t.Fatal("bridgeClient should be nil")
+	if len(app.bridgeClients) != 0 {
+		t.Fatal("bridge clients should have been dropped")
 	}
 	if app.resolvedBinaryPath != "" {
 		t.Fatalf("resolvedBinaryPath = %q, want empty", app.resolvedBinaryPath)
@@ -311,8 +312,8 @@ func assertAuthResetRuntimePresent(t *testing.T, app *App) {
 	t.Helper()
 	app.mu.Lock()
 	defer app.mu.Unlock()
-	if app.bridgeClient == nil {
-		t.Fatal("bridgeClient should still be present")
+	if len(app.bridgeClients) == 0 {
+		t.Fatal("bridge clients should still be present")
 	}
 	if app.resolvedBinaryPath == "" {
 		t.Fatal("resolvedBinaryPath should still be populated")

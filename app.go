@@ -201,12 +201,20 @@ type App struct {
 	previewReg    *preview.Registry
 	demoFlow      *demoflow.Engine
 
-	mu                     sync.Mutex
-	cachedSettings         types.UserSettings
-	bridgeClient           *bridge.Client
+	mu             sync.Mutex
+	cachedSettings types.UserSettings
+	// bridgeClients holds one live child process per working directory, keyed
+	// by that cwd. A single slot meant starting a task in a second workspace
+	// swapped the first workspace's process out, and every later call for the
+	// first task — an answer, a cancel — swapped it back, starting a third
+	// process that had never heard of the task. Tasks live inside their
+	// process, so the process has to outlive the call that is not about it.
+	bridgeClients map[string]*bridge.Client
+	// bridgeRecentCwd is the cwd of the most recently used client, for calls
+	// that only read bridge-side state and do not care which one answers.
+	bridgeRecentCwd        string
 	pptistPlanner          pptistDeckPlanner
 	pptxJSPlanner          pptxJSPlanner
-	bridgeCwd              string
 	loginManager           *login.Manager
 	loginUnsub             func()
 	pendingLoginURL        string
@@ -419,15 +427,14 @@ func (a *App) failInterruptedTasks(ctx context.Context) error {
 // long-running children so we don't leak processes.
 func (a *App) shutdown(ctx context.Context) {
 	a.mu.Lock()
-	bridgeClient := a.bridgeClient
-	a.bridgeClient = nil
+	bridgeClients := a.takeBridgeClientsLocked()
 	loginUnsub := a.loginUnsub
 	a.loginUnsub = nil
 	demoFlow := a.demoFlow
 	a.mu.Unlock()
 
-	if bridgeClient != nil {
-		bridgeClient.Stop()
+	for _, client := range bridgeClients {
+		client.Stop()
 	}
 	if demoFlow != nil {
 		demoFlow.Shutdown()
@@ -2912,9 +2919,9 @@ func (a *App) UpdateSettings(patch settings.Patch) (types.UserSettings, error) {
 		patch.LlmProvider != nil ||
 		patch.ClearLlmProvider ||
 		proxyChanged
-	client := a.bridgeClient
+	var retiredClients []*bridge.Client
 	if touchesBridge {
-		a.bridgeClient = nil
+		retiredClients = a.takeBridgeClientsLocked()
 		a.resolvedBinaryPath = ""
 		a.resolvedBinaryEnv = nil
 		a.binaryResolvedAt = time.Time{}
@@ -2933,7 +2940,7 @@ func (a *App) UpdateSettings(patch settings.Patch) (types.UserSettings, error) {
 			return types.UserSettings{}, err
 		}
 	}
-	if touchesBridge && client != nil {
+	for _, client := range retiredClients {
 		if patch.BridgeBinaryPath != nil || patch.LlmProvider != nil || patch.ClearLlmProvider || proxyChanged {
 			// The binary / provider / proxy the child was started with is no
 			// longer valid, so it has to go even with work in flight; Close
@@ -3392,10 +3399,10 @@ func (a *App) DownloadRuntimeUpdate() (types.RuntimeStatus, error) {
 	a.resolvedBinaryPath = ""
 	a.resolvedBinaryEnv = nil
 	a.binaryResolvedAt = time.Time{}
-	client := a.bridgeClient
-	a.bridgeClient = nil
+	clients := a.takeBridgeClientsLocked()
 	a.mu.Unlock()
-	if client != nil {
+	// The binary every child was started from has been replaced.
+	for _, client := range clients {
 		client.Close()
 	}
 	return status, nil
@@ -3516,12 +3523,15 @@ func (a *App) ExportLogs(input ExportLogsInput) (ExportLogsResult, error) {
 
 	a.mu.Lock()
 	currentSettings := a.cachedSettings
-	bridgeClient := a.bridgeClient
+	bridgeClients := make([]*bridge.Client, 0, len(a.bridgeClients))
+	for _, client := range a.bridgeClients {
+		bridgeClients = append(bridgeClients, client)
+	}
 	a.mu.Unlock()
 
 	var droppedBytes int64
-	if bridgeClient != nil {
-		droppedBytes = bridgeClient.LogfileDroppedBytes()
+	for _, client := range bridgeClients {
+		droppedBytes += client.LogfileDroppedBytes()
 	}
 
 	bundleID := uuid.New().String()
@@ -4239,7 +4249,7 @@ func (a *App) SubmitReport(input SubmitReportInput) (SubmitReportResult, error) 
 func (a *App) detectReportCapability() report.ReportCapability {
 	a.mu.Lock()
 	s := a.cachedSettings
-	client := a.bridgeClient
+	client := a.bridgeClients[a.bridgeRecentCwd]
 	a.mu.Unlock()
 
 	endpoint := ""
@@ -4617,6 +4627,19 @@ func (a *App) ensureBridgeForTask(taskID string) (*bridge.Client, error) {
 	return a.ensureBridgeForCwd(cwd)
 }
 
+// takeBridgeClientsLocked empties the pool and returns everything that was in
+// it, for the callers that invalidate every child process at once (shutdown, a
+// binary/provider change, a runtime update). Callers already hold a.mu.
+func (a *App) takeBridgeClientsLocked() []*bridge.Client {
+	clients := make([]*bridge.Client, 0, len(a.bridgeClients))
+	for _, client := range a.bridgeClients {
+		clients = append(clients, client)
+	}
+	a.bridgeClients = nil
+	a.bridgeRecentCwd = ""
+	return clients
+}
+
 // retiredBridgeGrace bounds how long a replaced-but-busy child process may
 // linger. It matches bridge.DefaultTaskInvokeTimeout: past that point the task
 // would have timed out anyway, so the process is killed and its tasks are
@@ -4684,20 +4707,38 @@ func (a *App) takeRetiredBridge(client *bridge.Client) bool {
 // child process working directory. Reusing whichever client is already
 // connected keeps these calls from swapping the bridge out from under a task
 // that is still running.
+// bridgeForMetadata returns a client for calls that only read bridge-side state
+// (capabilities, image templates, the PPTist planner) and do not care about the
+// child process working directory. Reusing whichever client is already
+// connected keeps these calls from starting a process just to ask a question.
 func (a *App) bridgeForMetadata() (*bridge.Client, error) {
 	a.mu.Lock()
-	client := a.bridgeClient
+	client := a.bridgeClients[a.bridgeRecentCwd]
+	if client == nil || !client.Connected() {
+		client = nil
+		for _, candidate := range a.bridgeClients {
+			if candidate.Connected() {
+				client = candidate
+				break
+			}
+		}
+	}
 	a.mu.Unlock()
-	if client != nil && client.Connected() {
+	if client != nil {
 		return client, nil
 	}
 	return a.ensureBridge()
 }
 
+// ensureBridgeForCwd returns the live child process for a working directory,
+// starting one if this is the first call for it. Clients are pooled rather than
+// swapped: a task belongs to the process that started it, and replacing that
+// process to serve an unrelated call stranded the task inside a child nobody
+// could reach anymore.
 func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
 	a.mu.Lock()
-	if a.bridgeClient != nil && a.bridgeCwd == cwd {
-		client := a.bridgeClient
+	if client := a.bridgeClients[cwd]; client != nil {
+		a.bridgeRecentCwd = cwd
 		a.mu.Unlock()
 		if !client.Connected() {
 			if err := client.Start(a.ctx); err != nil {
@@ -4705,14 +4746,6 @@ func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
 			}
 		}
 		return client, nil
-	}
-	if a.bridgeClient != nil {
-		client := a.bridgeClient
-		a.bridgeClient = nil
-		a.bridgeCwd = ""
-		a.mu.Unlock()
-		a.retireBridge(client)
-		a.mu.Lock()
 	}
 
 	settingsValue := a.cachedSettings
@@ -4743,6 +4776,13 @@ func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
 	a.resolvedBinaryPath = resolved.Path
 	a.resolvedBinaryEnv = env
 	a.binaryResolvedAt = time.Now()
+	// Another call may have started this cwd's client while the binary was
+	// being resolved; one process per cwd, so that one wins.
+	if existing := a.bridgeClients[cwd]; existing != nil {
+		a.bridgeRecentCwd = cwd
+		a.mu.Unlock()
+		return existing, nil
+	}
 	a.mu.Unlock()
 
 	client := bridge.New(bridge.Options{
@@ -4759,8 +4799,17 @@ func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
 	}
 
 	a.mu.Lock()
-	a.bridgeClient = client
-	a.bridgeCwd = cwd
+	if existing := a.bridgeClients[cwd]; existing != nil {
+		a.bridgeRecentCwd = cwd
+		a.mu.Unlock()
+		client.Close()
+		return existing, nil
+	}
+	if a.bridgeClients == nil {
+		a.bridgeClients = make(map[string]*bridge.Client)
+	}
+	a.bridgeClients[cwd] = client
+	a.bridgeRecentCwd = cwd
 	a.mu.Unlock()
 	return client, nil
 }
@@ -4938,15 +4987,13 @@ func (a *App) ensureLoginManagerLocked() *login.Manager {
 
 func (a *App) resetBridgeRuntime() {
 	a.mu.Lock()
-	client := a.bridgeClient
-	a.bridgeClient = nil
-	a.bridgeCwd = ""
+	clients := a.takeBridgeClientsLocked()
 	a.resolvedBinaryPath = ""
 	a.resolvedBinaryEnv = nil
 	a.binaryResolvedAt = time.Time{}
 	a.mu.Unlock()
 
-	if client != nil {
+	for _, client := range clients {
 		client.Close()
 	}
 }
