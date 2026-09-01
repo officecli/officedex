@@ -50,7 +50,11 @@ echo "[build-local-latest] building OfficeDex.app"
 cd "${OFFICEDEX_DIR}"
 APP_VERSION="$(node -p 'require("./package.json").version')"
 env -u GOROOT wails build -ldflags "-X main.appVersion=${APP_VERSION} -X main.learnofSourceRoot=${LEARNOF_DIR}"
-npm run bundle:office2modoc:mac
+npm run stage:office2modoc
+node scripts/bundle-office2modoc.mjs \
+  --app build/bin/OfficeDex.app \
+  --source build/cache/office2modoc/0.1.34/darwin-arm64/liboffice2modoc_ffi.dylib \
+  --expected-arch arm64
 npm run bundle:licenses:mac
 npm run bundle:officecli:mac
 
