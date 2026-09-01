@@ -19,7 +19,7 @@ import { useT } from "../i18n";
 import { ProgressivePptxStage } from "../presentation/ProgressivePptxStage";
 import { PptxProductionStage } from "../presentation/PptxProductionStage";
 import type { PresentationEditorFrameProps } from "../presentation/PresentationEditorFrame";
-import { fileNameFromPath } from "../utils/path";
+import { fileExtension, fileNameFromPath } from "../utils/path";
 import { MaterialSymbol } from "../components/Shell";
 import { DocTypeIcon, docTypeFromPath } from "../components/DocTypeIcon";
 import { RuntimePrompts } from "../components/RuntimePrompts";
@@ -41,6 +41,7 @@ export interface HomeScreenProps {
   onPickTaskFile?: () => Promise<string | undefined>;
   onPickTaskDirectory?: () => Promise<string | undefined>;
   onPickReferenceImages?: () => Promise<string[]>;
+  onPickReferenceTextFiles?: () => Promise<string[]>;
   droppedTaskPaths?: { paths: string[]; seq: number };
   onSelectWorkspace?: (workspaceId: string) => void | Promise<void>;
   onSelectAllWorkspaces?: () => void;
@@ -79,6 +80,10 @@ const HOME_CATEGORIES: HomeCategory[] = [
   { type: "xlsx" },
 ];
 
+// Mirrors the Go allow-list in ReadLocalTextDocuments so a dropped file is
+// routed the same way the backend will later agree to read it.
+const TEXT_REFERENCE_EXTENSIONS = new Set(["txt", "md", "markdown", "csv", "tsv", "log", "json"]);
+
 const HOME_TEMPLATES: HomeTemplate[] = [
   { id: "techProductLaunch", type: "pptx", icon: "rocket_launch", pages: 22, cover: "/home-cases/pptx/tech-product-launch.webp" },
   { id: "brandProductLaunch", type: "pptx", icon: "campaign", pages: 21, cover: "/home-cases/pptx/brand-product-launch.webp" },
@@ -100,7 +105,7 @@ const HOME_TEMPLATES: HomeTemplate[] = [
   { id: "budget", type: "xlsx", icon: "account_balance_wallet", minutes: 2 },
 ];
 
-export function HomeScreen({ files, attentionTasks = [], loading, error, activeWorkspaceId, workspaces = [], onOpenFile, onRemoveFile, onPickTaskFile, onPickTaskDirectory, onPickReferenceImages, droppedTaskPaths, onSelectWorkspace, onSelectAllWorkspaces, onAddWorkspace, onStartTask, onOpenTask, onRetryTask, onSteerTask, onResumeTask, onAnswerTask, onCancelTask, onDeleteTask, productionTaskId, productionEditor, onRetryRecentFiles }: HomeScreenProps) {
+export function HomeScreen({ files, attentionTasks = [], loading, error, activeWorkspaceId, workspaces = [], onOpenFile, onRemoveFile, onPickTaskFile, onPickTaskDirectory, onPickReferenceImages, onPickReferenceTextFiles, droppedTaskPaths, onSelectWorkspace, onSelectAllWorkspaces, onAddWorkspace, onStartTask, onOpenTask, onRetryTask, onSteerTask, onResumeTask, onAnswerTask, onCancelTask, onDeleteTask, productionTaskId, productionEditor, onRetryRecentFiles }: HomeScreenProps) {
   const t = useT();
   const [prompt, setPrompt] = useState("");
   const [animatedPlaceholder, setAnimatedPlaceholder] = useState("");
@@ -108,6 +113,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
   const [sourceFile, setSourceFile] = useState<string>();
   const [referenceDirectory, setReferenceDirectory] = useState<string>();
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
+  const [referenceTextFiles, setReferenceTextFiles] = useState<string[]>([]);
   const [imageRatio, setImageRatio] = useState<"square" | "landscape" | "portrait">("square");
   const [gifFps, setGifFps] = useState(16);
   const [intakeError, setIntakeError] = useState<string>();
@@ -212,18 +218,30 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
   useEffect(() => {
     if (!droppedTaskPaths || droppedTaskPaths.paths.length === 0 || droppedTaskPaths.seq === lastDropSeq.current) return;
     lastDropSeq.current = droppedTaskPaths.seq;
-    const [path] = droppedTaskPaths.paths;
-    const name = fileNameFromPath(path);
-    // No fs access here: a trailing extension is the best available signal for
-    // file-vs-directory, and a wrong guess is one chip removal away.
-    if (/\.[A-Za-z0-9]{1,8}$/.test(name)) {
-      setSourceFile(path);
-    } else {
-      setReferenceDirectory(path);
+    // Plain-text drops accumulate as references; everything else keeps the
+    // single-source behaviour that decides the document type.
+    const textPaths = droppedTaskPaths.paths.filter((path) => TEXT_REFERENCE_EXTENSIONS.has(fileExtension(path)));
+    const otherPaths = droppedTaskPaths.paths.filter((path) => !TEXT_REFERENCE_EXTENSIONS.has(fileExtension(path)));
+    if (textPaths.length > 0) {
+      setReferenceTextFiles((current) => [...new Set([...current, ...textPaths])].slice(0, 20));
+    }
+    const [path] = otherPaths;
+    if (path) {
+      const name = fileNameFromPath(path);
+      // No fs access here: a trailing extension is the best available signal for
+      // file-vs-directory, and a wrong guess is one chip removal away.
+      if (/\.[A-Za-z0-9]{1,8}$/.test(name)) {
+        setSourceFile(path);
+      } else {
+        setReferenceDirectory(path);
+      }
     }
     setIntakeError(undefined);
     setDropActive(false);
-    toast.success(t("home.dropAttached", { name }));
+    const attachedName = fileNameFromPath(path ?? textPaths[0]);
+    toast.success(droppedTaskPaths.paths.length > 1
+      ? t("home.dropAttachedMany", { count: String(droppedTaskPaths.paths.length) })
+      : t("home.dropAttached", { name: attachedName }));
   }, [droppedTaskPaths, t]);
 
   const intakeDragOver = (event: ReactDragEvent<HTMLFormElement>) => {
@@ -253,6 +271,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
         sourceFile,
         referenceDirectory,
         documentType,
+        ...(referenceTextFiles.length > 0 ? { referenceTextFiles } : {}),
         ...((documentType === "img" || documentType === "gif") && referenceImages.length > 0 ? { referenceImages } : {}),
         ...(documentType === "img" ? { imageRatio } : {}),
         ...(documentType === "gif" ? { fps: gifFps } : {}),
@@ -308,14 +327,27 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
     }
   };
 
+  const pickReferenceTextFiles = async () => {
+    if (!onPickReferenceTextFiles) return;
+    setIntakeError(undefined);
+    try {
+      const selected = await onPickReferenceTextFiles();
+      if (selected.length > 0) setReferenceTextFiles((current) => [...new Set([...current, ...selected])].slice(0, 20));
+    } catch (error) {
+      setIntakeError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
   const referenceMenu: MenuProps = {
     items: [
       { key: "file", label: t("home.referenceFile"), description: t("home.referenceFile.hint"), icon: <FileTextOutlined aria-hidden /> },
+      { key: "texts", label: t("home.referenceTexts"), description: t("home.referenceTexts.hint"), icon: <FileTextOutlined aria-hidden /> },
       { key: "directory", label: t("home.referenceDirectory"), description: t("home.referenceDirectory.hint"), icon: <FolderOpenOutlined aria-hidden /> },
       { key: "images", label: t("home.referenceImages"), description: t("home.referenceImages.hint"), icon: <FileTextOutlined aria-hidden /> },
     ],
     onClick: ({ key }) => {
       if (key === "file") void pickTaskFile();
+      if (key === "texts") void pickReferenceTextFiles();
       if (key === "directory") void pickTaskDirectory();
       if (key === "images") void pickReferenceImages();
     },
@@ -415,7 +447,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
           }}
           onSubmit={() => void startTask()}
         />
-        {sourceFile || referenceDirectory || referenceImages.length > 0 ? (
+        {sourceFile || referenceDirectory || referenceImages.length > 0 || referenceTextFiles.length > 0 ? (
           <div className="home-intake__references" aria-label={t("home.references")}>
             {sourceFile ? (
               <div className="home-intake__attachment" aria-label={t("home.attachedFile")}>
@@ -437,6 +469,13 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
                 }} />
               </div>
             ) : null}
+            {referenceTextFiles.map((path) => (
+              <div className="home-intake__attachment" aria-label={t("home.referenceTexts")} key={path}>
+                <DocTypeIcon type={docTypeFromPath(path)} />
+                <span title={path}>{fileNameFromPath(path)}</span>
+                <Button variant="ghost-normal" size="small" ariaLabel={t("home.removeAttachedFile")} icon={<CloseOutlined />} onClick={() => setReferenceTextFiles((current) => current.filter((item) => item !== path))} />
+              </div>
+            ))}
             {referenceImages.map((path) => (
               <div className="home-intake__attachment" aria-label={t("home.referenceImages")} key={path}>
                 <DocTypeIcon type="img" />

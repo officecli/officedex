@@ -30,6 +30,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -2627,6 +2628,98 @@ func (a *App) ReadLocalImage(filePath string) (LocalImageData, error) {
 		return LocalImageData{}, fmt.Errorf("read local image: %w", err)
 	}
 	return LocalImageData{Data: data, Mime: mime}, nil
+}
+
+// LocalTextDocument is one attached plain-text reference file.
+type LocalTextDocument struct {
+	FilePath  string `json:"filePath"`
+	FileName  string `json:"fileName"`
+	Text      string `json:"text"`
+	Truncated bool   `json:"truncated"`
+}
+
+// localTextExtensions is the whitelist of plain-text reference formats. As with
+// ReadLocalImage this is an allow-list, so an unrelated path cannot be read
+// just because the user dropped it on the intake.
+var localTextExtensions = map[string]bool{
+	"txt": true, "md": true, "markdown": true, "csv": true, "tsv": true, "log": true, "json": true,
+}
+
+const (
+	// maxLocalTextBytesPerFile bounds a single attachment, and
+	// maxLocalTextBytesTotal bounds one intake, so a large folder cannot blow
+	// past the model's context or stall the UI.
+	maxLocalTextBytesPerFile = 256 * 1024
+	maxLocalTextBytesTotal   = 1024 * 1024
+	maxLocalTextDocuments    = 20
+)
+
+// ReadLocalTextDocuments reads attached plain-text files for prompt grounding.
+// Oversized files are truncated rather than rejected: a partial document still
+// grounds the request, while a hard failure would lose the whole attachment.
+func (a *App) ReadLocalTextDocuments(filePaths []string) ([]LocalTextDocument, error) {
+	if len(filePaths) == 0 {
+		return nil, nil
+	}
+	if len(filePaths) > maxLocalTextDocuments {
+		return nil, fmt.Errorf("read local text: at most %d files can be attached at once", maxLocalTextDocuments)
+	}
+	documents := make([]LocalTextDocument, 0, len(filePaths))
+	total := 0
+	for _, filePath := range filePaths {
+		if strings.TrimSpace(filePath) == "" {
+			return nil, errors.New("read local text: empty path")
+		}
+		ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(filePath), "."))
+		if !localTextExtensions[ext] {
+			return nil, fmt.Errorf("read local text: unsupported extension %q", ext)
+		}
+		info, err := os.Stat(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("read local text: %w", err)
+		}
+		if info.IsDir() {
+			return nil, fmt.Errorf("read local text: %s is a directory", filepath.Base(filePath))
+		}
+		if total >= maxLocalTextBytesTotal {
+			break
+		}
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("read local text: %w", err)
+		}
+		limit := maxLocalTextBytesPerFile
+		if remaining := maxLocalTextBytesTotal - total; remaining < limit {
+			limit = remaining
+		}
+		truncated := false
+		if len(data) > limit {
+			data = data[:limit]
+			truncated = true
+		}
+		total += len(data)
+		text := decodeLocalText(data)
+		documents = append(documents, LocalTextDocument{
+			FilePath:  filePath,
+			FileName:  filepath.Base(filePath),
+			Text:      text,
+			Truncated: truncated,
+		})
+	}
+	return documents, nil
+}
+
+// decodeLocalText normalises an attachment to valid UTF-8 text. Files written
+// by Windows tools commonly carry a BOM or CRLF line endings, neither of which
+// should reach the prompt.
+func decodeLocalText(data []byte) string {
+	data = bytes.TrimPrefix(data, []byte{0xEF, 0xBB, 0xBF})
+	text := string(data)
+	if !utf8.ValidString(text) {
+		text = strings.ToValidUTF8(text, "\uFFFD")
+	}
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	return strings.ReplaceAll(text, "\r", "\n")
 }
 
 // CopyImageToClipboard writes a local image file to the system clipboard. Wails

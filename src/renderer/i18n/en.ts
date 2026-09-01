@@ -1017,6 +1017,8 @@ export const en: Record<string, string> = {
   "spreadsheet.topbar.showAgent": "Show AI assistant",
   "spreadsheet.topbar.hideAgent": "Hide AI assistant",
   "spreadsheet.topbar.appBuilder": "Create App",
+  "spreadsheet.topbar.createDeck": "Create Deck",
+  "spreadsheet.deckPrompt": "Build a presentation from the data in {file}. Use the workbook figures for every chart and takeaway.",
   "spreadsheet.topbar.save": "Save",
   "spreadsheet.agent.tools": "Spreadsheet tools",
   "spreadsheet.agent.tool.assistant": "Assistant",

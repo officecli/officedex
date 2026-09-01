@@ -960,6 +960,8 @@ export const zh: Record<string, string> = {
   "spreadsheet.topbar.showAgent": "显示 AI 助手",
   "spreadsheet.topbar.hideAgent": "隐藏 AI 助手",
   "spreadsheet.topbar.appBuilder": "创建 App",
+  "spreadsheet.topbar.createDeck": "生成 PPT",
+  "spreadsheet.deckPrompt": "基于 {file} 中的数据生成一份演示文稿，所有图表和结论都必须使用工作簿中的真实数字。",
   "spreadsheet.topbar.save": "保存",
   "spreadsheet.agent.tools": "表格工具",
   "spreadsheet.agent.tool.assistant": "助手",

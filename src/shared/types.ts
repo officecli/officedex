@@ -266,6 +266,13 @@ export interface Artifact {
   syncedAt?: string;
 }
 
+export interface LocalTextDocument {
+  filePath: string;
+  fileName: string;
+  text: string;
+  truncated: boolean;
+}
+
 export interface RecentFile {
   filePath: string;
   fileName: string;
@@ -946,6 +953,7 @@ export interface DesktopAPI {
   closeXlsxEditor(input: CloseXlsxEditorInput): Promise<void>;
   readArtifactFile(previewToken: string): Promise<{ data: BinaryFileData; sha256?: string }>;
   readLocalImage(filePath: string): Promise<{ data: BinaryFileData; mime: string }>;
+  readLocalTextDocuments(filePaths: string[]): Promise<LocalTextDocument[]>;
   copyImageToClipboard(filePath: string): Promise<void>;
   setPreviewMode(active: boolean): Promise<void>;
   login(input?: LoginInput): Promise<{ url: string }>;

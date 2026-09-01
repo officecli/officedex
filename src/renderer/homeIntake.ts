@@ -6,6 +6,7 @@ export interface HomeTaskIntake {
   sourceFile?: string;
   referenceDirectory?: string;
   referenceImages?: string[];
+  referenceTextFiles?: string[];
   imageRatio?: ImageRatio;
   fps?: number;
   documentType?: DocumentType;

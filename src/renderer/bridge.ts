@@ -23,6 +23,7 @@ import type {
   ImagePromptTemplate,
   InviteInfo,
   LlmProvider,
+  LocalTextDocument,
   LoginInput,
   ModifyPptistDeckResult,
   PlanPptxJSResult,
@@ -227,6 +228,9 @@ function createBrowserPreviewAPI(): DesktopAPI {
     readLocalImage: async () => {
       throw new Error("Local image reading requires desktop file access.");
     },
+    readLocalTextDocuments: async () => {
+      throw new Error("Local text reading requires desktop file access.");
+    },
     copyImageToClipboard: async () => {
       throw new Error("Image clipboard access requires the desktop app.");
     },
@@ -368,6 +372,25 @@ function decodeRawBytes(bytes: number[] | null | undefined): unknown {
   } catch {
     return text;
   }
+}
+
+// The Go layer returns typed documents, but both transports hand back plain
+// JSON. Normalise defensively so a malformed row cannot reach the prompt.
+function normalizeLocalTextDocuments(raw: unknown): LocalTextDocument[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const row = entry as Record<string, unknown>;
+    const filePath = typeof row.filePath === "string" ? row.filePath : "";
+    const text = typeof row.text === "string" ? row.text : "";
+    if (!filePath) return [];
+    return [{
+      filePath,
+      fileName: typeof row.fileName === "string" && row.fileName ? row.fileName : filePath,
+      text,
+      truncated: row.truncated === true,
+    }];
+  });
 }
 
 function decodeArtifactBytes(raw: unknown): Uint8Array {
@@ -768,6 +791,9 @@ function createWailsAPI(): DesktopAPI {
       const mime = typeof result?.mime === "string" ? result.mime : "application/octet-stream";
       return { data, mime };
     },
+    readLocalTextDocuments: async (filePaths: string[]) => (
+      normalizeLocalTextDocuments(await WailsApp.ReadLocalTextDocuments(filePaths))
+    ),
     copyImageToClipboard: (filePath: string) => WailsApp.CopyImageToClipboard(filePath),
     setPreviewMode: (active: boolean) => WailsApp.SetPreviewMode(active),
     login: async (input?: LoginInput) => WailsApp.Login(toWails(input ?? {})),
@@ -1053,6 +1079,9 @@ export function createRealE2EAPI(endpoint: string): DesktopAPI {
         mime: typeof result?.mime === "string" ? result.mime : "application/octet-stream",
       };
     },
+    readLocalTextDocuments: async (filePaths: string[]) => (
+      normalizeLocalTextDocuments(await rpc<unknown>("ReadLocalTextDocuments", filePaths))
+    ),
     copyImageToClipboard: (filePath: string) => rpc<void>("CopyImageToClipboard", filePath),
     setPreviewMode: (active: boolean) => rpc<void>("SetPreviewMode", active),
     login: (input?: LoginInput) => rpc<{ url: string }>("Login", input ?? {}),

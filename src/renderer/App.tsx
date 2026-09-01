@@ -18,6 +18,7 @@ import { ForceUpdateOverlay } from "./components/ForceUpdateOverlay";
 import { ActivityPanel } from "./screens/DataScreens";
 import { LoginScreen, SettingsScreen } from "./screens/SettingsScreens";
 import { HomeScreen } from "./screens/HomeScreen";
+import { buildReferenceTextPrompt } from "./referenceTextPrompt";
 import { inferHomeTaskRoute, type HomeTaskIntake } from "./homeIntake";
 import { DocumentWorkspace } from "./document";
 import { ProgressivePptxStage } from "./presentation/ProgressivePptxStage";
@@ -782,7 +783,7 @@ function OfficeDexApp() {
     const selected = await officecli.openFileDialog({
       filters: [{
         name: "Work files",
-        extensions: ["xlsx", "csv", "pptx", "docx", "pdf", "png", "jpg", "jpeg", "webp"],
+        extensions: ["xlsx", "csv", "pptx", "docx", "pdf", "txt", "md", "png", "jpg", "jpeg", "webp"],
       }],
     });
     return selected || undefined;
@@ -800,6 +801,13 @@ function OfficeDexApp() {
     return selected ?? [];
   }, []);
 
+  const pickHomeReferenceTextFiles = useCallback(async () => {
+    const selected = await officecli.openMultiFileDialog({
+      filters: [{ name: "Text files", extensions: ["txt", "md", "markdown", "csv", "tsv", "log", "json"] }],
+    });
+    return selected ?? [];
+  }, []);
+
   async function startTaskFromHome(input: HomeTaskIntake) {
     const fallback = isGenerateDocumentType(input.documentType)
       ? input.documentType
@@ -807,9 +815,16 @@ function OfficeDexApp() {
         ? persistedSettings.defaults.documentType
         : "pptx";
     const route = inferHomeTaskRoute(input, fallback);
+    // Attached text is read here and inlined, because the runtime runs in a
+    // separate process that cannot open the user's files itself.
+    let groundedPrompt = input.prompt;
+    if (input.referenceTextFiles?.length) {
+      const documents = await officecli.readLocalTextDocuments(input.referenceTextFiles);
+      groundedPrompt = buildReferenceTextPrompt(input.prompt, documents);
+    }
     const taskPrompt = input.referenceDirectory
-      ? `${input.prompt.trim()}\n\nReference directory: ${input.referenceDirectory}`
-      : input.prompt;
+      ? `${groundedPrompt.trim()}\n\nReference directory: ${input.referenceDirectory}`
+      : groundedPrompt;
     if (route.kind === "needs_source") {
       throw new Error(t("home.catalogSourceRequired"));
     }
@@ -1589,6 +1604,27 @@ function OfficeDexApp() {
     }
   }, [clearError, nudgeForTaskTransition, persistedSettings.defaults.enableImages, persistedSettings.defaults.imageQuality, recordError, refreshProjectLists, spreadsheet.startGeneration]);
 
+  // Turns the open workbook into a deck. It routes through the same generate
+  // path as Home so the deck lands on the PPTX stage with the workbook as its
+  // source, and records the workbook's task as the parent so the two artifacts
+  // stay linked.
+  const createDeckFromWorkbook = useCallback(async (sourceFilePath: string) => {
+    const workspaceId = spreadsheet.session.workspaceId;
+    const parentTaskId = spreadsheet.session.artifact?.taskId ?? spreadsheet.session.taskId;
+    // submit() moves to the document stage itself once the task starts.
+    await submit({
+      documentType: "pptx",
+      generationMode: generationModeForDocumentType("pptx"),
+      topic: fileNameFromPath(sourceFilePath),
+      prompt: t("spreadsheet.deckPrompt", { file: fileNameFromPath(sourceFilePath) }),
+      sourceFile: sourceFilePath,
+      ...(parentTaskId ? { parentTaskId } : {}),
+      ...(workspaceId ? { workspaceId } : { noProject: true }),
+      enableImages: persistedSettings.defaults.enableImages,
+      imageQuality: persistedSettings.defaults.imageQuality,
+    });
+  }, [persistedSettings.defaults.enableImages, persistedSettings.defaults.imageQuality, spreadsheet.session.artifact?.taskId, spreadsheet.session.taskId, spreadsheet.session.workspaceId, t]);
+
   const startSpreadsheetModify = useCallback(async (input: ModifyInput) => {
     clearError();
     const continued = await runSpreadsheetAction(async () => {
@@ -2025,6 +2061,7 @@ function OfficeDexApp() {
             onPickTaskFile={pickHomeTaskFile}
             onPickTaskDirectory={pickHomeTaskDirectory}
             onPickReferenceImages={pickHomeReferenceImages}
+            onPickReferenceTextFiles={pickHomeReferenceTextFiles}
             droppedTaskPaths={droppedTaskPaths}
             onSelectWorkspace={selectHomeWorkspace}
             onSelectAllWorkspaces={selectAllHomeFiles}
@@ -2097,6 +2134,7 @@ function OfficeDexApp() {
               setSpreadsheetEntry((current) => clearSpreadsheetEntryGrant(current, previewToken));
               void officecli.revokePreviewToken(previewToken).catch(() => undefined);
             }}
+            onCreateDeck={createDeckFromWorkbook}
             agentPanel={(
               <SpreadsheetAgentPanel
                 workspaceId={spreadsheet.session.workspaceId}

@@ -26,6 +26,7 @@ export interface SpreadsheetWorkspaceProps {
   onCanvasError?: (error?: string) => void;
   onCanvasSaveError?: (error?: string) => void;
   onCanvasSessionClosed?: (previewToken: string) => void;
+  onCreateDeck?: (sourceFilePath: string) => Promise<void>;
   agentPanel?: React.ReactNode;
 }
 
@@ -39,13 +40,14 @@ function saveStateFor(session: SpreadsheetSessionState): SpreadsheetSaveState {
 }
 
 export const SpreadsheetWorkspace = forwardRef<SpreadsheetWorkspaceHandle, SpreadsheetWorkspaceProps>(
-  function SpreadsheetWorkspace({ session, workspaceName, onBack, onDirtyChange, onCanvasStateChange, onCanvasError, onCanvasSaveError, onCanvasSessionClosed, agentPanel }, ref) {
+  function SpreadsheetWorkspace({ session, workspaceName, onBack, onDirtyChange, onCanvasStateChange, onCanvasError, onCanvasSaveError, onCanvasSessionClosed, onCreateDeck, agentPanel }, ref) {
     const canvasRef = useRef<SpreadsheetCanvasHandle>(null);
     const t = useT();
     const [agentOpen, setAgentOpen] = useState(true);
     const [appBuilderOpen, setAppBuilderOpen] = useState(false);
     const [publishedApp, setPublishedApp] = useState<PublishedWorkbookApp>();
     const [sourceRevision, setSourceRevision] = useState(0);
+    const [creatingDeck, setCreatingDeck] = useState(false);
     const fileName = session.artifact?.fileName ?? t("spreadsheet.untitled");
     const saveState = saveStateFor(session);
 
@@ -79,6 +81,22 @@ export const SpreadsheetWorkspace = forwardRef<SpreadsheetWorkspaceHandle, Sprea
           onSave={() => void save()}
           onOpenExternal={session.artifact ? () => void officecli.openPath(session.artifact!.filePath) : undefined}
           onOpenAppBuilder={session.artifact && session.grant ? () => setAppBuilderOpen(true) : undefined}
+          onCreateDeck={session.artifact && onCreateDeck ? () => {
+            const artifact = session.artifact;
+            if (!artifact || creatingDeck) return;
+            setCreatingDeck(true);
+            // The deck is built from the file on disk, so pending edits — the
+            // charts included — have to be flushed before handing off the path.
+            void (async () => {
+              try {
+                if (session.dirty && !await save()) return;
+                await onCreateDeck(artifact.filePath);
+              } finally {
+                setCreatingDeck(false);
+              }
+            })();
+          } : undefined}
+          creatingDeck={creatingDeck}
           onToggleAgent={() => setAgentOpen((open) => !open)}
         />
         <div className="spreadsheet-workspace__body">
