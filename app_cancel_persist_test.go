@@ -211,12 +211,12 @@ func TestCancelPersistsLocalCancellationEvent(t *testing.T) {
 	t.Cleanup(client.Stop)
 
 	app := &App{
-		ctx:          ctx,
-		userDataDir:  t.TempDir(),
-		workspaceDir: workspaceDir,
-		localStore:   store,
-		bridgeClient: client,
-		bridgeCwd:    workspaceDir,
+		ctx:             ctx,
+		userDataDir:     t.TempDir(),
+		workspaceDir:    workspaceDir,
+		localStore:      store,
+		bridgeClients:   map[string]*bridge.Client{workspaceDir: client},
+		bridgeRecentCwd: workspaceDir,
 	}
 
 	type cancelResult struct {
@@ -322,12 +322,12 @@ func TestCancelPersistsLocalCancellationEventWhenBridgeTaskIsGone(t *testing.T) 
 	t.Cleanup(client.Stop)
 
 	app := &App{
-		ctx:          ctx,
-		userDataDir:  t.TempDir(),
-		workspaceDir: workspaceDir,
-		localStore:   store,
-		bridgeClient: client,
-		bridgeCwd:    workspaceDir,
+		ctx:             ctx,
+		userDataDir:     t.TempDir(),
+		workspaceDir:    workspaceDir,
+		localStore:      store,
+		bridgeClients:   map[string]*bridge.Client{workspaceDir: client},
+		bridgeRecentCwd: workspaceDir,
 	}
 
 	done := make(chan error, 1)

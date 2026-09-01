@@ -480,9 +480,10 @@ func TestTestProviderOfficialModeDoesNotClaimBridgeInitializeAsProviderOK(t *tes
 	defer client.Stop()
 
 	a := &App{
-		proxyPool:      netproxy.NewPool(),
-		cachedSettings: types.UserSettings{},
-		bridgeClient:   client,
+		proxyPool:       netproxy.NewPool(),
+		cachedSettings:  types.UserSettings{},
+		bridgeClients:   map[string]*bridge.Client{"/ws": client},
+		bridgeRecentCwd: "/ws",
 	}
 
 	type outcome struct {

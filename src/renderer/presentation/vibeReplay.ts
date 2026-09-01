@@ -33,18 +33,6 @@ export interface VibeReplayStatus {
 }
 
 /**
- * Fired on window when a live replay finishes (drawn + saved). App listens and
- * swaps the preview from the live draft to the task's official artifact — the
- * reviewed deck with real images — so the user ends on the authoritative file.
- */
-export const VIBE_REPLAY_FINISHED_EVENT = "officedex:vibe-replay-finished";
-
-export interface VibeReplayFinishedDetail {
-  taskId: string;
-  drawnSlides: number;
-}
-
-/**
  * The one speed dial. Every beat of the performance is derived from it, so
  * "slower" or "faster" is a single number rather than four that can drift out
  * of proportion. Zero means unpaced — nobody is watching (tests, warm-ups) and
@@ -125,11 +113,27 @@ if (import.meta.hot) {
 }
 
 // ---------------------------------------------------------------------------
-// Live draft registry: CreateLivePptxDraft names the file live-<taskId>.pptx;
-// App registers the mapping when it opens the draft and PptxViewer looks the
-// task up by file path to attach a replay feed. Module state is enough — the
-// draft and the viewer live in the same renderer.
+// Live draft registry
+//
+// CreateLivePptxDraft names the file live-<taskId>-<run>.pptx and hands it back
+// blank; App registers it here when it opens the draft. This registry is the
+// only answer to "should the editor showing this file be drawing a task into
+// it" — the question used to be answered by a single app-wide `liveDraftTaskId`,
+// which said yes for every deck opened afterwards and replayed a finished task
+// on top of unrelated documents.
+//
+// Each entry also carries how far the drawing got. The watermark belongs to the
+// document, not to the React component that happens to be showing it: a viewer
+// remounts whenever its preview token is reissued, and a sequencer that started
+// over from seq 1 drew the whole deck a second time on top of itself.
 // ---------------------------------------------------------------------------
+
+export interface LiveDraft {
+  readonly filePath: string;
+  readonly taskId: string;
+  /** Highest op seq already drawn into this file. */
+  drawnSeq: number;
+}
 
 /** The desktop bridge takes binary as base64; the editor encodes to text. */
 function base64FromText(text: string): string {
@@ -142,14 +146,29 @@ function base64FromText(text: string): string {
   return btoa(binary);
 }
 
-const liveDrafts = new Map<string, string>();
+const liveDrafts = new Map<string, LiveDraft>();
 
+/**
+ * Claims a freshly created blank draft for a task. The backend only ever hands
+ * back a blank file here (an untouched draft is reused, a dirtied one is
+ * replaced by the next run), so the watermark starts at zero — and any earlier
+ * draft of the same task is dropped, since its file is gone.
+ */
 export function registerLiveDraft(filePath: string, taskId: string) {
-  liveDrafts.set(filePath, taskId);
+  for (const [path, draft] of liveDrafts) {
+    if (draft.taskId === taskId && path !== filePath) liveDrafts.delete(path);
+  }
+  liveDrafts.set(filePath, { filePath, taskId, drawnSeq: 0 });
 }
 
-export function liveTaskForFile(filePath: string): string | undefined {
+export function liveDraftFor(filePath: string): LiveDraft | undefined {
   return liveDrafts.get(filePath);
+}
+
+/** Records how far the drawing has been persisted into this draft. */
+export function recordLiveDraftProgress(filePath: string, drawnSeq: number) {
+  const draft = liveDrafts.get(filePath);
+  if (draft && drawnSeq > draft.drawnSeq) draft.drawnSeq = drawnSeq;
 }
 
 export function releaseLiveDraft(filePath: string) {
@@ -164,18 +183,29 @@ export function releaseLiveDraft(filePath: string) {
  * recording is replayed on purpose; the first should be caught up instantly and
  * the second drawn at reading pace. Only the caller knows which, so a replay
  * started from the console says so explicitly.
+ *
+ * The feed is always scoped to a live draft. Without that scope any pptx the
+ * user opened inherited the last drawing's op stream and replayed it into a
+ * document that already had those objects on the page.
  */
 export function buildReplayFeed(input: {
-  readonly taskId: string | null;
+  readonly draft: LiveDraft;
   readonly ops?: readonly VibeOp[];
   readonly performing: boolean;
   readonly trace: boolean;
   readonly task?: { readonly status: string; readonly vibeOps?: readonly VibeOp[]; readonly vibeOutline?: VibeOutline; readonly question?: { readonly id: string; readonly kind?: string } };
 }): VibeReplayFeed | undefined {
-  if (!input.taskId) return undefined;
+  const { draft } = input;
   if (input.ops) {
     // A recording is complete by definition: nothing more will arrive.
-    return { taskId: input.taskId, ops: [...input.ops], completed: true, perform: true, trace: input.trace };
+    return {
+      taskId: draft.taskId,
+      filePath: draft.filePath,
+      ops: [...input.ops],
+      completed: true,
+      perform: true,
+      trace: input.trace,
+    };
   }
   if (!input.task) return undefined;
   const completed = ["completed", "failed", "cancelled"].includes(input.task.status);
@@ -185,7 +215,8 @@ export function buildReplayFeed(input: {
     ? { questionId: input.task.question.id }
     : undefined;
   return {
-    taskId: input.taskId,
+    taskId: draft.taskId,
+    filePath: draft.filePath,
     ops: [...(input.task.vibeOps ?? [])],
     completed,
     perform: input.performing || undefined,
@@ -771,6 +802,12 @@ return await PowerPoint.run(async (context) => {
 
 export interface VibeReplayFeed {
   taskId: string;
+  /**
+   * The live draft this stream is being drawn into. The sequencer reports its
+   * progress against this path so a viewer that remounts resumes where the
+   * document actually stands instead of redrawing the deck onto itself.
+   */
+  filePath?: string;
   ops: VibeOp[];
   /** True once the generation task reached a terminal state. */
   completed: boolean;
@@ -835,6 +872,7 @@ export class VibeReplaySequencer {
   private executedSeq = 0;
   private fonts: ChunkContext = { fontLatin: "Aptos", fontCJK: "Microsoft YaHei" };
   private taskId = "";
+  private filePath = "";
   private completed = false;
   /** Measured editor round-trip, seeded into each chunk's typing budget. */
   private tripHintMs = 60;
@@ -868,7 +906,23 @@ export class VibeReplaySequencer {
 
   update(feed: VibeReplayFeed) {
     if (this.disposed || this.finished) return;
+    if (this.taskId && feed.taskId !== this.taskId) {
+      // One sequencer draws one task into one document. Two tasks number their
+      // ops from 1 independently, so carrying the previous stream across meant
+      // the old task's ops kept executing while the new task's ops of the same
+      // seq were silently dropped as duplicates. The owner rebuilds the
+      // sequencer on a task change; refuse the feed rather than blend them.
+      return;
+    }
     this.taskId = feed.taskId;
+    if (feed.filePath && !this.filePath) {
+      this.filePath = feed.filePath;
+      // Whatever is already on this page was drawn by an earlier viewer of the
+      // same document and saved there. Resume from that watermark: replaying it
+      // would stack a second copy of every object onto the deck.
+      const drawn = liveDraftFor(feed.filePath)?.drawnSeq ?? 0;
+      if (drawn > this.executedSeq) this.executedSeq = drawn;
+    }
     // Ops arrive framed and may repeat on history replay: keep a single
     // seq-sorted list and never re-execute anything at or below executedSeq.
     const bySeq = new Map<number, VibeOp>();
@@ -879,7 +933,7 @@ export class VibeReplaySequencer {
     this.ops = [...bySeq.values()].sort((a, b) => a.seq - b.seq);
     this.cursor = this.ops.findIndex((op) => op.seq > this.executedSeq);
     if (this.cursor < 0) this.cursor = this.ops.length;
-      if (this.performing === undefined) {
+    if (this.performing === undefined) {
       // A stream that is already complete is usually history being caught up,
       // and catching up should be quick. A recording replayed on purpose is the
       // opposite: it exists to be watched, so it says so.
@@ -1143,13 +1197,12 @@ export class VibeReplaySequencer {
           // export ships the blank deck.
           await this.controller.executeScript("return true;", { timeoutMs: 30_000 });
           await this.controller.save();
+          // Only now is the drawing part of the file. A viewer that opens this
+          // draft again re-imports these objects, so the stream that produced
+          // them must not run a second time.
+          if (this.filePath) recordLiveDraftProgress(this.filePath, this.executedSeq);
         }
         this.emit({ state: "done", slide: this.drawnSlides.size });
-        if (!this.disposed && this.taskId && typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent<VibeReplayFinishedDetail>(VIBE_REPLAY_FINISHED_EVENT, {
-            detail: { taskId: this.taskId, drawnSlides: this.drawnSlides.size },
-          }));
-        }
       }
     } catch (error) {
       this.finished = true;
