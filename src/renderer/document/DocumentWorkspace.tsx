@@ -1,6 +1,7 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { Artifact, DesktopTask, TaskQuestionAnswer } from "../../shared/types";
 import { useT } from "../i18n";
+import { QuickReplyQuestion } from "../components/QuickReplyQuestion";
 import "./documentWorkspace.css";
 
 export type DocumentWorkspaceArtifactAction = "open" | "copy" | "locate";
@@ -37,14 +38,22 @@ export function DocumentWorkspace({ task, artifact = task.artifact, preview, ppt
   const t = useT();
   const [freeform, setFreeform] = useState("");
   const [busy, setBusy] = useState(false);
+  const [selectedOptionId, setSelectedOptionId] = useState<string>();
   const question = task.question;
+  useEffect(() => { setSelectedOptionId(undefined); setFreeform(""); }, [question?.id, question?.currentIndex]);
   const run = async (action: (() => void | Promise<void>) | undefined) => {
     if (!action || busy) return;
     setBusy(true);
     try { await action(); } finally { setBusy(false); }
   };
   const answer = (answerValue: string, optionId?: string) => run(() => onAnswer?.({ questionId: question?.id || "question", answer: answerValue, optionId, questionIndex: question?.currentIndex }));
-  const submitFreeform = () => { if (freeform.trim()) void answer(freeform.trim()); };
+  const submitFreeform = () => { if (freeform.trim()) { setSelectedOptionId(undefined); void answer(freeform.trim()); } };
+  const selectOption = (optionId: string) => {
+    const option = question?.options.find((item) => item.id === optionId);
+    if (!option) return;
+    setSelectedOptionId(optionId);
+    void answer(option.label, optionId);
+  };
   const showPptx = task.documentType?.toLowerCase() === "pptx" && pptxStage;
   const visibleArtifact = artifact || task.artifact;
   const statusCopy = t(`documentWorkspace.status.${task.status}`);
@@ -58,7 +67,10 @@ export function DocumentWorkspace({ task, artifact = task.artifact, preview, ppt
       {showPptx ? <div className="document-workspace__stage">{pptxStage}</div> : preview ? <div className="document-workspace__preview">{preview}</div> : visibleArtifact ? <div className="document-workspace__artifact-preview" aria-label={t("documentWorkspace.artifactPreview")}><div className="document-workspace__artifact-icon">{typeLabel(task.documentType, t).slice(0, 1)}</div><strong>{visibleArtifact.fileName}</strong></div> : <div className="document-workspace__empty">{t("documentWorkspace.empty")}</div>}
       {!showPptx ? <div className="document-workspace__status-panel">
         {(task.status === "starting" || task.status === "running") ? <><h2>{statusCopy}</h2><p>{t("documentWorkspace.progressHint")}</p><button type="button" onClick={() => void run(onCancel)} disabled={!onCancel || busy}>{t("documentWorkspace.cancel")}</button></> : null}
-        {task.status === "question" && question ? <div className="document-workspace__question"><span className="document-workspace__eyebrow">{t("documentWorkspace.step", { current: (question.currentIndex ?? 0) + 1 })}</span><h2>{question.question}</h2><div className="document-workspace__options">{question.options.map((option) => <button type="button" key={option.id} onClick={() => void answer(option.label, option.id)} disabled={busy}>{option.label}{option.recommended ? <small>{t("documentWorkspace.recommended")}</small> : null}{option.description ? <em>{option.description}</em> : null}</button>)}</div>{question.allowFreeform ? <div className="document-workspace__freeform"><input aria-label={t("documentWorkspace.customAnswer")} value={freeform} placeholder={t("documentWorkspace.customAnswerPlaceholder")} onChange={(event) => setFreeform(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") submitFreeform(); }} /><button type="button" onClick={submitFreeform} disabled={!freeform.trim() || busy}>{t("documentWorkspace.submit")}</button></div> : null}</div> : null}
+        {task.status === "question" && question ? <div className="document-workspace__question">
+          <QuickReplyQuestion key={`${question.id}:${question.currentIndex ?? 0}`} question={question.question} options={question.options} selectedOptionId={selectedOptionId} freeformDraft={freeform} allowFreeform={question.allowFreeform} responding={busy} onSelect={selectOption} />
+          {question.allowFreeform ? <div className="document-workspace__freeform"><input aria-label={t("documentWorkspace.customAnswer")} value={freeform} placeholder={t("documentWorkspace.customAnswerPlaceholder")} disabled={busy} onChange={(event) => setFreeform(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") submitFreeform(); }} /><button type="button" onClick={submitFreeform} disabled={!freeform.trim() || busy}>{t("documentWorkspace.submit")}</button></div> : null}
+        </div> : null}
         {task.status === "plan_review" ? <div className="document-workspace__plan"><span className="document-workspace__eyebrow">{t("documentWorkspace.planReview")}</span><h2>{t("documentWorkspace.planTitle")}</h2><pre>{task.plan?.markdown || t("documentWorkspace.planFallback")}</pre><button type="button" onClick={() => void run(onApprovePlan)} disabled={!onApprovePlan || busy}>{t("documentWorkspace.continue")}</button></div> : null}
         {task.status === "failed" ? <div><h2>{t("documentWorkspace.failedTitle")}</h2><p role="alert">{task.error || t("documentWorkspace.failedFallback")}</p><button type="button" onClick={() => void run(onRetry)} disabled={!onRetry || busy}>{t("documentWorkspace.retry")}</button></div> : null}
         {task.status === "cancelled" ? <div><h2>{t("documentWorkspace.cancelledTitle")}</h2><p>{t("documentWorkspace.cancelledBody")}</p><button type="button" onClick={() => void run(onRetry)} disabled={!onRetry || busy}>{t("documentWorkspace.retry")}</button>{onContinue ? <button type="button" onClick={() => void run(onContinue)} disabled={busy}>{t("documentWorkspace.continue")}</button> : null}</div> : null}

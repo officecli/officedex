@@ -78,21 +78,15 @@
 .spreadsheet-agent-panel__stages li::before { position: absolute; top: 7px; left: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--od-border-hover); content: ""; }
 .spreadsheet-agent-panel__stages li[data-status="active"]::before { background: var(--od-guidance); }
 .spreadsheet-agent-panel__stages li[data-status="completed"]::before { background: var(--n-success); }
-.spreadsheet-agent-panel__question { display: grid; gap: 12px; margin-top: 12px; border: 1px solid color-mix(in srgb, var(--od-guidance) 32%, var(--od-border-subtle)); border-radius: 8px; background: color-mix(in srgb, var(--od-guidance) 5%, var(--od-surface)); padding: 12px; }
-.spreadsheet-agent-panel__question-nav { display: grid; grid-template-columns: 28px minmax(0, 1fr) 28px; align-items: center; gap: 6px; color: var(--od-ink-muted); font-size: 12px; text-align: center; }
-.spreadsheet-agent-panel__question-nav .ui-button { min-width: 28px; padding-inline: 4px; }
-.spreadsheet-agent-panel__question-title { color: var(--od-ink); font-size: 13px; font-weight: 500; line-height: 1.5; }
-.spreadsheet-agent-panel__question-options { display: grid; gap: 8px; }
-.spreadsheet-agent-panel__question-options .ui-button { justify-content: flex-start; height: auto; min-height: 34px; text-align: left; white-space: normal; }
-.spreadsheet-agent-panel__question-options .ui-button__label { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px; }
-.spreadsheet-agent-panel__recommended { flex: 0 0 auto; border-radius: 999px; background: color-mix(in srgb, currentColor 10%, transparent); padding: 1px 6px; font-size: 10px; font-weight: 400; }
-.spreadsheet-agent-panel__freeform { display: grid; gap: 8px; }
-.spreadsheet-agent-panel__freeform .ui-textarea { resize: none; }
-.spreadsheet-agent-panel__freeform .ui-button { justify-self: end; }
+.spreadsheet-agent-panel__question { margin-top: 12px; }
 .spreadsheet-agent-panel__error { margin-top: 12px; border-radius: 6px; background: color-mix(in srgb, var(--od-danger) 8%, transparent); color: var(--od-danger); padding: 10px 12px; font-size: 12px; }
 .spreadsheet-agent-panel__composer { display: grid; gap: 8px; border-top: 1px solid var(--od-border-subtle); padding-top: 12px; }
 .spreadsheet-agent-panel__composer .ui-textarea { resize: none; }
 .spreadsheet-agent-panel__composer-actions { display: flex; justify-content: flex-end; gap: 8px; }
+/* During a question gate the composer is the custom-answer field: shorter, and
+   its action row carries the keyboard hint plus a quiet cancel. */
+.spreadsheet-agent-panel__composer--answer .ui-textarea { min-height: 56px; }
+.spreadsheet-agent-panel__composer-hint { min-width: 0; margin-right: auto; align-self: center; overflow: hidden; color: var(--od-ink-disabled); font-size: 11px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
 .is-spinning { animation: spreadsheet-spin 900ms linear infinite; }
 
 .spreadsheet-unsaved { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; background: rgb(0 0 0 / 32%); padding: 24px; }

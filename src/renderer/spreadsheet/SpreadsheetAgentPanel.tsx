@@ -1,13 +1,17 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, LoaderCircle, Send, Square } from "lucide-react";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { AlertCircle, CheckCircle2, LoaderCircle, Send, Square } from "lucide-react";
 import type { DesktopAPI, DesktopTask, GenerateInput, ModifyInput, TaskQuestionAnswer } from "../../shared/types";
 import { Button, TextArea } from "../ui";
 import { useT } from "../i18n";
+import { QuickReplyQuestion } from "../components/QuickReplyQuestion";
 
 type QuestionDraft = { optionId?: string; answer: string; freeform: string };
 export type SpreadsheetAgentTool = string;
 
 const spreadsheetQuestionDrafts = new Map<string, Record<string, QuestionDraft>>();
+
+/** Options stay keyboard-addressable (1–n) only while the set is short enough to scan. */
+const MAX_NUMBERED_OPTIONS = 4;
 
 function questionDraftKey(task: DesktopTask) {
   const questionSetKey = task.question?.questions?.map((item) => item.id || item.question).join("|") || task.question?.id || "question";
@@ -66,6 +70,9 @@ export function SpreadsheetAgentPanel({ workspaceId, artifactPath, conversationI
   const currentQuestion = questionSet[viewedQuestionIndex];
   const currentDraft = currentQuestion ? questionDrafts[currentQuestion.id] : undefined;
   const viewingActiveQuestion = viewedQuestionIndex === activeQuestionIndex;
+  // The one footer composer doubles as the custom-answer field during a question gate.
+  const answeringFreeform = needsInput && Boolean(currentQuestion) && currentQuestion?.allowFreeform !== false && viewingActiveQuestion;
+  const numberedOptions = Boolean(needsInput && viewingActiveQuestion && currentQuestion && currentQuestion.options.length > 0 && currentQuestion.options.length <= MAX_NUMBERED_OPTIONS);
 
   useEffect(() => {
     if (!task?.question) return;
@@ -160,13 +167,22 @@ export function SpreadsheetAgentPanel({ workspaceId, artifactPath, conversationI
     }
   };
 
-  const submitFreeform = (event: FormEvent<HTMLFormElement>) => {
+  const submitFreeform = () => void answerQuestion(undefined, freeformValue);
+
+  // Number keys answer from anywhere in the panel except the text fields, so a
+  // user reading the question never has to reach for the mouse.
+  const handlePanelKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.defaultPrevented || !numberedOptions || !currentQuestion || responding) return;
+    const tag = (event.target as HTMLElement | null)?.tagName;
+    if (tag === "TEXTAREA" || tag === "INPUT") return;
+    const index = Number.parseInt(event.key, 10);
+    if (!Number.isInteger(index) || index < 1 || index > currentQuestion.options.length) return;
     event.preventDefault();
-    void answerQuestion(undefined, freeformValue);
+    void answerQuestion(currentQuestion.options[index - 1].id);
   };
 
   return (
-    <div className="spreadsheet-agent-panel">
+    <div className="spreadsheet-agent-panel" onKeyDown={handlePanelKeyDown}>
       <div className="spreadsheet-agent-panel__timeline" aria-live="polite">
         {!task ? (
           <div className="spreadsheet-agent-panel__welcome">
@@ -183,75 +199,27 @@ export function SpreadsheetAgentPanel({ workspaceId, artifactPath, conversationI
           </div>
         )}
         {needsInput && currentQuestion ? (
-          <section className="spreadsheet-agent-panel__question" aria-label={t("spreadsheet.agent.questionTitle")}>
-            {questionSet.length > 1 ? (
-              <div className="spreadsheet-agent-panel__question-nav">
-                <Button
-                  size="small"
-                  variant="ghost-normal"
-                  ariaLabel={t("spreadsheet.agent.previousQuestion")}
-                  icon={<ChevronLeft />}
-                  disabled={viewedQuestionIndex === 0 || responding}
-                  onClick={() => setViewedQuestionIndex((index) => Math.max(0, index - 1))}
-                />
-                <span>{t("spreadsheet.agent.questionProgress", { current: viewedQuestionIndex + 1, total: questionSet.length })}</span>
-                <Button
-                  size="small"
-                  variant="ghost-normal"
-                  ariaLabel={t("spreadsheet.agent.nextQuestion")}
-                  icon={<ChevronRight />}
-                  disabled={viewedQuestionIndex >= activeQuestionIndex || responding}
-                  onClick={() => setViewedQuestionIndex((index) => Math.min(activeQuestionIndex, index + 1))}
-                />
-              </div>
-            ) : null}
-            <strong className="spreadsheet-agent-panel__question-title">{currentQuestion.question}</strong>
-            <div className="spreadsheet-agent-panel__question-options">
-              {currentQuestion.options.map((option) => (
-                <Button
-                  key={option.id}
-                  block
-                  size="smallPlus"
-                  variant={currentDraft?.optionId === option.id ? "primary" : "secondary"}
-                  disabled={responding || !viewingActiveQuestion}
-                  onClick={() => void answerQuestion(option.id)}
-                >
-                  {option.label}{option.recommended ? <span className="spreadsheet-agent-panel__recommended">{t("spreadsheet.agent.recommended")}</span> : null}
-                </Button>
-              ))}
-            </div>
-            {currentQuestion.allowFreeform !== false ? (
-              <form className="spreadsheet-agent-panel__freeform" onSubmit={submitFreeform}>
-                <TextArea
-                  aria-label={t("spreadsheet.agent.customAnswerAria")}
-                  value={freeformValue}
-                  rows={2}
-                  placeholder={t("spreadsheet.agent.customAnswerPlaceholder")}
-                  disabled={responding || !viewingActiveQuestion}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setFreeformValue(value);
-                    saveQuestionDraft(currentQuestion.id, { answer: value.trim(), freeform: value });
-                  }}
-                />
-                <Button
-                  size="small"
-                  variant="primary"
-                  icon={<Send />}
-                  loading={responding}
-                  disabled={!freeformValue.trim() || !viewingActiveQuestion}
-                  htmlType="submit"
-                >
-                  {t("spreadsheet.agent.submitAnswer")}
-                </Button>
-              </form>
-            ) : null}
-            {onCancel && task?.id ? (
-              <Button size="small" variant="secondary" icon={<Square />} disabled={responding} onClick={() => void onCancel(task.id)}>
-                {t("spreadsheet.agent.cancel")}
-              </Button>
-            ) : null}
-          </section>
+          <QuickReplyQuestion
+            key={currentQuestion.id}
+            className="spreadsheet-agent-panel__question"
+            question={currentQuestion.question}
+            options={currentQuestion.options}
+            selectedOptionId={currentDraft?.optionId}
+            freeformDraft={viewingActiveQuestion ? freeformValue : ""}
+            allowFreeform={currentQuestion.allowFreeform !== false}
+            responding={responding}
+            readOnly={!viewingActiveQuestion}
+            navigation={questionSet.length > 1 ? {
+              progress: t("spreadsheet.agent.questionProgress", { current: viewedQuestionIndex + 1, total: questionSet.length }),
+              previousLabel: t("spreadsheet.agent.previousQuestion"),
+              nextLabel: t("spreadsheet.agent.nextQuestion"),
+              previousDisabled: viewedQuestionIndex === 0 || responding,
+              nextDisabled: viewedQuestionIndex >= activeQuestionIndex || responding,
+              onPrevious: () => setViewedQuestionIndex((index) => Math.max(0, index - 1)),
+              onNext: () => setViewedQuestionIndex((index) => Math.min(activeQuestionIndex, index + 1)),
+            } : undefined}
+            onSelect={(optionId) => void answerQuestion(optionId)}
+          />
         ) : task?.stages?.length ? (
           <ol className="spreadsheet-agent-panel__stages">
             {task.stages.map((stage) => <li key={stage.id} data-status={stage.status}>{stage.label}</li>)}
@@ -259,27 +227,54 @@ export function SpreadsheetAgentPanel({ workspaceId, artifactPath, conversationI
         ) : null}
         {failure ? <div className="spreadsheet-agent-panel__error" role="alert">{failure}</div> : null}
       </div>
-      {!needsInput ? <div className="spreadsheet-agent-panel__composer">
-        <TextArea
-          aria-label={artifactPath ? t("spreadsheet.agent.modifyAria") : t("spreadsheet.agent.generateAria")}
-          value={prompt}
-          rows={4}
-          placeholder={artifactPath ? t("spreadsheet.agent.modifyPlaceholder") : t("spreadsheet.agent.generatePlaceholder")}
-          onChange={(event) => setPrompt(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-              event.preventDefault();
-              void submit();
-            }
-          }}
-        />
+      <div className={["spreadsheet-agent-panel__composer", needsInput ? "spreadsheet-agent-panel__composer--answer" : ""].filter(Boolean).join(" ")}>
+        {needsInput ? (
+          <TextArea
+            aria-label={t("spreadsheet.agent.customAnswerAria")}
+            value={freeformValue}
+            rows={2}
+            placeholder={answeringFreeform ? t("spreadsheet.agent.customAnswerPlaceholder") : t("spreadsheet.agent.pickOptionPlaceholder")}
+            disabled={!answeringFreeform || responding}
+            onChange={(event) => {
+              const value = event.target.value;
+              setFreeformValue(value);
+              if (currentQuestion) saveQuestionDraft(currentQuestion.id, { answer: value.trim(), freeform: value });
+            }}
+            onSubmit={submitFreeform}
+          />
+        ) : (
+          <TextArea
+            aria-label={artifactPath ? t("spreadsheet.agent.modifyAria") : t("spreadsheet.agent.generateAria")}
+            value={prompt}
+            rows={4}
+            placeholder={artifactPath ? t("spreadsheet.agent.modifyPlaceholder") : t("spreadsheet.agent.generatePlaceholder")}
+            onChange={(event) => setPrompt(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                event.preventDefault();
+                void submit();
+              }
+            }}
+          />
+        )}
         <div className="spreadsheet-agent-panel__composer-actions">
-          {working && task?.id && onCancel ? <Button size="small" variant="secondary" icon={<Square />} onClick={() => void onCancel(task.id)}>{t("spreadsheet.agent.cancel")}</Button> : null}
-          <Button size="small" variant="primary" icon={<Send />} loading={submitting} disabled={!prompt.trim() || busy} onClick={() => void submit()}>
-            {artifactPath ? t("spreadsheet.agent.modify") : t("spreadsheet.agent.generate")}
-          </Button>
+          {numberedOptions && currentQuestion ? <span className="spreadsheet-agent-panel__composer-hint">{t(answeringFreeform ? "spreadsheet.agent.answerHint" : "spreadsheet.agent.answerHintKeysOnly", { n: currentQuestion.options.length })}</span> : null}
+          {(working || needsInput) && task?.id && onCancel ? (
+            <Button size="small" variant={needsInput ? "ghost-normal" : "secondary"} icon={needsInput ? undefined : <Square />} disabled={responding} onClick={() => void onCancel(task.id)}>
+              {t("spreadsheet.agent.cancel")}
+            </Button>
+          ) : null}
+          {needsInput ? (
+            <Button size="small" variant="primary" icon={<Send />} loading={responding} disabled={!answeringFreeform || !freeformValue.trim()} onClick={submitFreeform}>
+              {t("spreadsheet.agent.submitAnswer")}
+            </Button>
+          ) : (
+            <Button size="small" variant="primary" icon={<Send />} loading={submitting} disabled={!prompt.trim() || busy} onClick={() => void submit()}>
+              {artifactPath ? t("spreadsheet.agent.modify") : t("spreadsheet.agent.generate")}
+            </Button>
+          )}
         </div>
-      </div> : null}
+      </div>
     </div>
   );
 }

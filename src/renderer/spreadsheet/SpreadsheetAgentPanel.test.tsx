@@ -157,4 +157,85 @@ describe("SpreadsheetAgentPanel", () => {
       answer: "Include a cash flow sheet",
     }));
   });
+
+  it("turns the footer composer into the custom-answer field during a question gate", async () => {
+    const onRespond = vi.fn(async () => undefined);
+    const onCancel = vi.fn(async () => undefined);
+    const task: DesktopTask = {
+      id: "xlsx-gate",
+      conversationId: "xlsx-gate",
+      status: "question",
+      events: [],
+      question: {
+        id: "q-detail",
+        question: "How detailed should the sheet be?",
+        options: [
+          { id: "detailed", label: "Detailed comparison", description: "One row per region." },
+          { id: "summary", label: "Summary table" },
+        ],
+        allowFreeform: true,
+      },
+    };
+    render(<SpreadsheetAgentPanel task={task} onGenerate={vi.fn()} onModify={vi.fn()} onRespond={onRespond} onCancel={onCancel} />);
+
+    expect(screen.getByText("AI · Question")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Spreadsheet generation request" })).toBeNull();
+    expect(screen.getByText("1–2 to choose · Enter to send")).toBeInTheDocument();
+
+    fireEvent.mouseEnter(screen.getByRole("button", { name: "Detailed comparison" }));
+    expect(screen.getByText("One row per region.")).toBeInTheDocument();
+
+    const composer = screen.getByRole("textbox", { name: "Custom answer" });
+    fireEvent.change(composer, { target: { value: "Split by month" } });
+    fireEvent.keyDown(composer, { key: "Enter" });
+    await waitFor(() => expect(onRespond).toHaveBeenCalledWith({ taskId: "xlsx-gate", questionId: "q-detail", answer: "Split by month" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onCancel).toHaveBeenCalledWith("xlsx-gate");
+  });
+
+  it("answers with a number key from anywhere in the panel except the composer", async () => {
+    const onRespond = vi.fn(async () => undefined);
+    const task: DesktopTask = {
+      id: "xlsx-keys",
+      conversationId: "xlsx-keys",
+      status: "question",
+      events: [],
+      question: {
+        id: "q-detail",
+        question: "How detailed should the sheet be?",
+        options: [{ id: "detailed", label: "Detailed comparison" }, { id: "summary", label: "Summary table" }],
+        allowFreeform: true,
+      },
+    };
+    render(<SpreadsheetAgentPanel task={task} onGenerate={vi.fn()} onModify={vi.fn()} onRespond={onRespond} />);
+
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Custom answer" }), { key: "2" });
+    expect(onRespond).not.toHaveBeenCalled();
+    fireEvent.keyDown(screen.getByText("How detailed should the sheet be?"), { key: "2" });
+    await waitFor(() => expect(onRespond).toHaveBeenCalledWith(expect.objectContaining({ optionId: "summary", answer: "Summary table" })));
+  });
+
+  it("locks the composer when the question does not accept a freeform answer", () => {
+    const task: DesktopTask = {
+      id: "xlsx-no-freeform",
+      conversationId: "xlsx-no-freeform",
+      status: "question",
+      events: [],
+      question: {
+        id: "q-pick",
+        question: "Pick a layout",
+        options: [{ id: "a", label: "Layout A" }, { id: "b", label: "Layout B" }],
+        allowFreeform: false,
+      },
+    };
+    render(<SpreadsheetAgentPanel task={task} onGenerate={vi.fn()} onModify={vi.fn()} onRespond={vi.fn()} />);
+
+    const composer = screen.getByRole("textbox", { name: "Custom answer" });
+    expect(composer).toBeDisabled();
+    expect(composer).toHaveAttribute("placeholder", "Choose an option above to continue");
+    expect(screen.getByRole("button", { name: "Submit" })).toBeDisabled();
+    // Nothing to explain and nothing to type: the note line stays out of the way.
+    expect(screen.queryByText("Pick one, or type your own answer below.")).toBeNull();
+  });
 });

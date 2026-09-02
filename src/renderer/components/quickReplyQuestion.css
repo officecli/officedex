@@ -1,0 +1,71 @@
+/* Quick-reply clarification: an assistant bubble, a stack of answer chips, and
+   one shared note line. Chip rules are written as `.quick-reply .quick-reply__chip`
+   on purpose — hosts such as DocumentWorkspace style bare `button` elements, and
+   the extra class keeps this component's look ahead of those generic rules. */
+.quick-reply { display: grid; gap: 10px; color: var(--od-ink-secondary); font-family: var(--od-font-ui); }
+
+.quick-reply__nav { display: grid; grid-template-columns: 28px minmax(0, 1fr) 28px; align-items: center; gap: 6px; color: var(--od-ink-secondary); font-size: 12px; text-align: center; }
+.quick-reply__nav .ui-button { min-width: 28px; padding-inline: 4px; }
+
+.quick-reply__bubble {
+  max-width: 100%;
+  border: 1px solid var(--od-border-subtle);
+  border-radius: 12px 12px 12px 4px;
+  background: var(--od-surface-subtle);
+  padding: 10px 12px;
+}
+.quick-reply__who { display: block; margin-bottom: 3px; color: var(--od-ink-secondary); font-size: 11px; letter-spacing: .02em; }
+.quick-reply__question { margin: 0; color: var(--od-ink); font-size: 13px; font-weight: 500; line-height: 19px; white-space: pre-wrap; }
+
+.quick-reply__chips { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding-left: 4px; }
+
+.quick-reply .quick-reply__chip {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid color-mix(in srgb, var(--od-guidance) 45%, transparent);
+  border-radius: 999px;
+  background: var(--od-surface);
+  padding: 7px 13px;
+  color: var(--od-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, opacity 120ms ease, transform 100ms ease;
+}
+.quick-reply .quick-reply__chip:hover:not(:disabled) { border-color: var(--od-guidance); background: color-mix(in srgb, var(--od-guidance) 10%, var(--od-surface)); }
+.quick-reply .quick-reply__chip:active:not(:disabled) { transform: scale(.98); }
+.quick-reply .quick-reply__chip:focus-visible { outline: 2px solid var(--od-guidance); outline-offset: 2px; }
+/* Selected follows the primary button: ink fill, surface text. */
+.quick-reply .quick-reply__chip[aria-pressed="true"] { border-color: var(--od-ink); background: var(--od-ink); color: var(--od-surface); }
+.quick-reply .quick-reply__chip[aria-pressed="true"]:hover:not(:disabled) { border-color: color-mix(in srgb, var(--od-ink) 88%, white); background: color-mix(in srgb, var(--od-ink) 88%, white); }
+.quick-reply .quick-reply__chip:disabled { opacity: 1; cursor: default; }
+.quick-reply .quick-reply__chip:disabled:not([aria-pressed="true"]) { opacity: .45; }
+
+.quick-reply__key { flex: 0 0 auto; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; opacity: .55; }
+.quick-reply__label { min-width: 0; white-space: normal; }
+.quick-reply__recommended { flex: 0 0 auto; border-radius: 999px; background: color-mix(in srgb, currentColor 12%, transparent); padding: 1px 6px; font-size: 10px; font-weight: 400; }
+.quick-reply__spinner { width: 13px; height: 13px; flex: 0 0 auto; animation: quick-reply-spin 900ms linear infinite; }
+
+.quick-reply__note {
+  margin: 0 0 0 6px;
+  min-height: 18px;
+  border-left: 2px solid color-mix(in srgb, var(--od-guidance) 40%, transparent);
+  padding: 1px 10px;
+  color: var(--od-ink-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+.quick-reply__note[data-kind="hint"],
+.quick-reply__note[data-kind="answered"] { color: var(--od-ink-disabled); }
+.quick-reply__note[data-kind="description"] { color: var(--od-ink-medium); }
+
+@keyframes quick-reply-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .quick-reply .quick-reply__chip { transition: none; }
+  .quick-reply__spinner { animation: none; }
+}
