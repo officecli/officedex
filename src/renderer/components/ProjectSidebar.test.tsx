@@ -85,13 +85,11 @@ describe("ProjectSidebar", () => {
     expect(screen.getByLabelText(/2 failed tasks/).className).toContain("project-sidebar__badge--failed");
   });
 
-  it("shows credit and the signed-in account in the footer", () => {
+  it("shows the signed-in account without a credit meter in the footer", () => {
     renderSidebar({
-      credit: { displayMode: "quota", used: 3, total: 10, planLabel: "Credits" },
       account: { mode: "logged_in", email: "luyang@example.com" },
     });
-    expect(screen.getByRole("status")).toHaveTextContent("Credits");
-    expect(screen.getByRole("status")).toHaveTextContent("7 / 10");
+    expect(screen.queryByRole("status")).toBeNull();
     expect(screen.getByRole("button", { name: "luyang@example.com" })).toBeTruthy();
   });
 
@@ -114,6 +112,8 @@ describe("ProjectSidebar", () => {
     });
     const documentButton = screen.getByRole("button", { name: /Quarterly report\.docx/i });
     expect(documentButton).toHaveAttribute("data-active", "true");
+    expect(documentButton.querySelector(".doc-type-icon.doc-type--docx")).toBeTruthy();
+    expect(documentButton.querySelector(".project-sidebar__document-type")).toBeNull();
     fireEvent.click(documentButton);
     expect(onOpenDocument).toHaveBeenCalledWith(expect.objectContaining({ id: "run-doc", documentType: "docx" }));
     expect(screen.queryByText(/No chats|Legacy task history/i)).toBeNull();
@@ -153,7 +153,7 @@ describe("ProjectSidebar", () => {
 
     expect(container.querySelector(".project-sidebar")).toHaveAttribute("data-compact", "true");
     expect(screen.getByRole("button", { name: "Client A" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Expand project sidebar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
     expect(onCompactChange).toHaveBeenCalledWith(false);
   });
 });

@@ -31,8 +31,6 @@ interface ShellProps {
   activeNav: NavKey;
   children: React.ReactNode;
   inspector?: React.ReactNode;
-  credit?: CreditInfo;
-  hasCustomProvider?: boolean;
   signal?: SidebarSignal;
   account?: SidebarAccount;
   update?: SidebarUpdateRowProps;
@@ -52,7 +50,7 @@ interface ShellProps {
   onRemoveWorkspace: (workspaceId: string) => void;
 }
 
-export function Shell({ activeNav, children, inspector, credit, hasCustomProvider, signal, account, update, workspaces, documents, activeDocumentId, activeWorkspaceId, activeWorkspaceName, onNavChange, onSelectWorkspace, onOpenDocument, onDeleteDocument, onSelectAllFiles, onAddWorkspace, onRenameWorkspace, onRevealWorkspace, onRemoveWorkspace }: ShellProps) {
+export function Shell({ activeNav, children, inspector, signal, account, update, workspaces, documents, activeDocumentId, activeWorkspaceId, activeWorkspaceName, onNavChange, onSelectWorkspace, onOpenDocument, onDeleteDocument, onSelectAllFiles, onAddWorkspace, onRenameWorkspace, onRevealWorkspace, onRemoveWorkspace }: ShellProps) {
   const [spreadsheetCompact, setSpreadsheetCompact] = useState(true);
   const [defaultCompact, setDefaultCompact] = useState(() => {
     try { return localStorage.getItem(SIDEBAR_COMPACT_KEY) === "1"; } catch { return false; }
@@ -96,8 +94,6 @@ export function Shell({ activeNav, children, inspector, credit, hasCustomProvide
         onOpenSettings={() => onNavChange("settings")}
         onOpenAccount={() => onNavChange("login")}
         signal={signal}
-        credit={credit}
-        hasCustomProvider={hasCustomProvider}
         account={account}
         updateRow={updateRow}
         compact={compact}

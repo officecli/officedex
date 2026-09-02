@@ -8,6 +8,8 @@
  * builds return `null` when unset.
  */
 export const LEARNOF_PPTX_URL_STORAGE_KEY = "officedex.learnofPptxUrl";
+/** Base path used by packaged builds for the editor staged under public/pptx. */
+export const EMBEDDED_LEARNOF_PPTX_PATH = "/pptx/";
 
 export function resolveLearnofPptxBaseUrl(): string | null {
   const fromEnv = typeof import.meta.env.VITE_LEARNOF_PPTX_URL === "string" ? import.meta.env.VITE_LEARNOF_PPTX_URL.trim() : "";
@@ -19,6 +21,6 @@ export function resolveLearnofPptxBaseUrl(): string | null {
       fromStorage = "";
     }
   }
-  const candidate = fromStorage || fromEnv || (!import.meta.env.DEV ? "http://127.0.0.1:4178/" : "");
+  const candidate = fromStorage || fromEnv || (!import.meta.env.DEV ? EMBEDDED_LEARNOF_PPTX_PATH : "");
   return candidate || null;
 }

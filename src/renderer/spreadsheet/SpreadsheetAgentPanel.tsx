@@ -40,21 +40,24 @@ export interface SpreadsheetAgentPanelProps {
   onGenerate: (input: GenerateInput) => Promise<unknown>;
   onModify: (input: ModifyInput) => Promise<unknown>;
   onRespond: DesktopAPI["respond"];
+  onApprovePlan?: (task: DesktopTask) => Promise<unknown>;
   onCancel?: (taskId: string) => Promise<unknown>;
 }
 
-export function SpreadsheetAgentPanel({ workspaceId, artifactPath, conversationId, sourceTaskId, task, error, onGenerate, onModify, onRespond, onCancel }: SpreadsheetAgentPanelProps) {
+export function SpreadsheetAgentPanel({ workspaceId, artifactPath, conversationId, sourceTaskId, task, error, onGenerate, onModify, onRespond, onApprovePlan, onCancel }: SpreadsheetAgentPanelProps) {
   const t = useT();
   const [prompt, setPrompt] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [responding, setResponding] = useState(false);
+  const [approving, setApproving] = useState(false);
   const [responseError, setResponseError] = useState<string>();
   const [viewedQuestionIndex, setViewedQuestionIndex] = useState(0);
   const [freeformValue, setFreeformValue] = useState("");
   const [questionDrafts, setQuestionDrafts] = useState<Record<string, QuestionDraft>>({});
   const working = task?.status === "starting" || task?.status === "running";
   const needsInput = task?.status === "question";
-  const busy = submitting || responding || working || needsInput;
+  const planReview = task?.status === "plan_review";
+  const busy = submitting || responding || approving || working || needsInput || planReview;
   const failure = responseError || error || task?.error;
   const questionSet = useMemo(() => {
     if (!task?.question) return [];
@@ -165,6 +168,19 @@ export function SpreadsheetAgentPanel({ workspaceId, artifactPath, conversationI
     void answerQuestion(undefined, freeformValue);
   };
 
+  const approvePlan = async () => {
+    if (!task || !onApprovePlan || approving) return;
+    setApproving(true);
+    setResponseError(undefined);
+    try {
+      await onApprovePlan(task);
+    } catch (err) {
+      setResponseError(t("spreadsheet.agent.planApprovalFailed", { error: err instanceof Error ? err.message : String(err) }));
+    } finally {
+      setApproving(false);
+    }
+  };
+
   return (
     <div className="spreadsheet-agent-panel">
       <div className="spreadsheet-agent-panel__timeline" aria-live="polite">
@@ -178,7 +194,7 @@ export function SpreadsheetAgentPanel({ workspaceId, artifactPath, conversationI
             {working ? <LoaderCircle className="is-spinning" aria-hidden="true" /> : task.status === "completed" ? <CheckCircle2 aria-hidden="true" /> : <AlertCircle aria-hidden="true" />}
             <div>
               <strong>{task.topic || t("spreadsheet.agent.taskTitle")}</strong>
-              <span>{task.status === "completed" ? t("spreadsheet.agent.ready") : task.status === "failed" ? t("spreadsheet.agent.failed") : needsInput ? t("spreadsheet.agent.needsInput") : t("spreadsheet.agent.running")}</span>
+              <span>{task.status === "completed" ? t("spreadsheet.agent.ready") : task.status === "failed" ? t("spreadsheet.agent.failed") : needsInput ? t("spreadsheet.agent.needsInput") : planReview ? t("spreadsheet.agent.planReview") : t("spreadsheet.agent.running")}</span>
             </div>
           </div>
         )}
@@ -252,6 +268,22 @@ export function SpreadsheetAgentPanel({ workspaceId, artifactPath, conversationI
               </Button>
             ) : null}
           </section>
+        ) : planReview ? (
+          <section className="spreadsheet-agent-panel__plan" aria-label={t("spreadsheet.agent.planReview")}>
+            <span>{t("spreadsheet.agent.planReview")}</span>
+            <strong>{t("spreadsheet.agent.planTitle")}</strong>
+            <pre>{task?.plan?.markdown || t("spreadsheet.agent.planFallback")}</pre>
+            <div className="spreadsheet-agent-panel__plan-actions">
+              {onCancel && task?.id ? (
+                <Button size="small" variant="secondary" icon={<Square />} disabled={approving} onClick={() => void onCancel(task.id)}>
+                  {t("spreadsheet.agent.cancel")}
+                </Button>
+              ) : null}
+              <Button size="small" variant="primary" loading={approving} disabled={!onApprovePlan} onClick={() => void approvePlan()}>
+                {t("spreadsheet.agent.approvePlan")}
+              </Button>
+            </div>
+          </section>
         ) : task?.stages?.length ? (
           <ol className="spreadsheet-agent-panel__stages">
             {task.stages.map((stage) => <li key={stage.id} data-status={stage.status}>{stage.label}</li>)}
@@ -259,7 +291,7 @@ export function SpreadsheetAgentPanel({ workspaceId, artifactPath, conversationI
         ) : null}
         {failure ? <div className="spreadsheet-agent-panel__error" role="alert">{failure}</div> : null}
       </div>
-      {!needsInput ? <div className="spreadsheet-agent-panel__composer">
+      {!needsInput && !planReview ? <div className="spreadsheet-agent-panel__composer">
         <TextArea
           aria-label={artifactPath ? t("spreadsheet.agent.modifyAria") : t("spreadsheet.agent.generateAria")}
           value={prompt}

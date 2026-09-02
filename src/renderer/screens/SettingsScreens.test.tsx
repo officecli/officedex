@@ -85,6 +85,7 @@ function makeSettings(overrides: Partial<UserSettings> = {}): UserSettings {
     onboardingCompletedAt: overrides.onboardingCompletedAt ?? "2026-05-22T00:00:00Z",
     proxy: overrides.proxy ?? DEFAULT_PROXY,
     imageWatermark: overrides.imageWatermark ?? { showWatermark: true, preferenceSource: "system" },
+    waiting2048Enabled: overrides.waiting2048Enabled ?? false,
   };
 }
 

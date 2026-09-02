@@ -37,6 +37,7 @@ import {
   type VibeReplayFeed,
   type VibeReplayStatus,
 } from "../../../presentation/vibeReplay";
+import { imageProgressFromOps } from "../../../presentation/pptxProgress";
 import type {
   PresentationEditorController,
   PresentationScriptResult,
@@ -164,6 +165,10 @@ export default function LearnofPptxWorkbench({
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [replayStatus, setReplayStatus] = useState<VibeReplayStatus>();
+  const imageProgress = useMemo(
+    () => (live ? imageProgressFromOps(live.ops) : undefined),
+    [live],
+  );
   const busyRef = useRef(false);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const dirtyRef = useRef(false);
@@ -814,6 +819,9 @@ export default function LearnofPptxWorkbench({
             >
               Live drawing: {replayStatus.state}
               {replayStatus.slide ? ` · slide ${replayStatus.slide}` : ""}
+              {imageProgress && imageProgress.total > 0
+                ? ` · images ${replayStatus.images?.placed ?? imageProgress.placed}/${imageProgress.total}${replayStatus.images?.pending ? ` (${replayStatus.images.pending} generating)` : ""}${replayStatus.images?.failed ? ` (${replayStatus.images.failed} failed)` : ""}`
+                : ""}
               {replayStatus.error ? ` · ${replayStatus.error}` : ""}
             </div>
           ) : null}

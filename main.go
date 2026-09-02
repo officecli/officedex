@@ -99,6 +99,10 @@ func startBundledLearnof() (*exec.Cmd, error) {
 }
 
 func newWailsAppOptions(app *App) *options.App {
+	var mopHandler http.Handler
+	if app != nil {
+		mopHandler = app.mopHTTPHandler
+	}
 	return &options.App{
 		Title:     "OfficeDex",
 		Width:     1320,
@@ -106,7 +110,8 @@ func newWailsAppOptions(app *App) *options.App {
 		MinWidth:  1040,
 		MinHeight: 720,
 		AssetServer: &assetserver.Options{
-			Assets: assets,
+			Assets:  assets,
+			Handler: mopHandler,
 		},
 		DragAndDrop: &options.DragAndDrop{
 			EnableFileDrop:     true,

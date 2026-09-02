@@ -4,6 +4,7 @@ import type { DesktopTask, TaskQuestionAnswer } from "../../shared/types";
 import { PptxProductionStage, type PptxProductionStageProps } from "./PptxProductionStage";
 import { PresentationEditorFrame, type PresentationEditorFrameProps } from "./PresentationEditorFrame";
 import { useT } from "../i18n";
+import { imageProgressFromOps } from "./pptxProgress";
 import "./progressivePptxStage.css";
 
 export type ProgressivePptxPhase = "brief" | "outline" | "draft" | "drawing" | "ready" | "failed" | "cancelled";
@@ -128,7 +129,7 @@ function outlineItems(task: DesktopTask): OutlineItem[] {
 function phaseFor(task: DesktopTask, draftReady: boolean): ProgressivePptxPhase {
   if (task.status === "failed") return "failed";
   if (task.status === "cancelled") return "cancelled";
-  if (task.status === "completed") return "ready";
+  if (task.status === "completed" && imageProgressFromOps(task.vibeOps ?? []).pending === 0) return "ready";
   if (task.vibeSlides?.some(Boolean) || (task as DesktopTask & { vibeOps?: unknown[] }).vibeOps?.length) return "drawing";
   if (draftReady) return "draft";
   if (task.plan || task.vibeTree || (task as DesktopTask & { vibeOutline?: unknown }).vibeOutline) return "outline";
@@ -162,6 +163,9 @@ export function ProgressivePptxStage({ task, draftReady = false, editor, onBrief
   const [selectedOptionId, setSelectedOptionId] = useState<string>();
   const [hasMoreBelow, setHasMoreBelow] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
+  const autoScrolledOutlineRef = useRef<string | undefined>(undefined);
+  const followOutlineRef = useRef(true);
+  const outlineSessionRef = useRef<string | undefined>(undefined);
   const phase = phaseFor(task, draftReady);
   const items = useMemo(() => outlineItems(task), [task.id, task.plan?.revision, task.plan?.markdown, task.vibeTree, task.vibeOutline]);
   const [outlineDraft, setOutlineDraft] = useState<OutlineItem[]>(items);
@@ -169,6 +173,15 @@ export function ProgressivePptxStage({ task, draftReady = false, editor, onBrief
   useEffect(() => setOutlineDraft(items), [items]);
   const olderOutlineItems = outlineDraft.length > 1 ? outlineDraft.slice(0, -1) : [];
   const latestOutlineItem = outlineDraft.length > 0 ? outlineDraft[outlineDraft.length - 1] : undefined;
+  const outlineSignature = items.map((item) => `${item.id}\u001f${item.title}\u001f${item.detail ?? ""}\u001f${item.estimatedSlides ?? ""}`).join("\u001e");
+  const outlineReviewGate = phase === "outline" && (task.status === "plan_review" || task.status === "question");
+  useEffect(() => {
+    const session = `${task.id}:${task.plan?.id ?? ""}:${task.plan?.revision ?? ""}`;
+    if (outlineSessionRef.current === session) return;
+    outlineSessionRef.current = session;
+    followOutlineRef.current = true;
+    autoScrolledOutlineRef.current = undefined;
+  }, [task.id, task.plan?.id, task.plan?.revision]);
   const ops = opStream(task);
   const brief = field(task, "prompt") ?? task.topic ?? t("pptx.stage.briefMissing");
   const question = task.status === "question" && phase === "brief" ? task.question : undefined;
@@ -226,16 +239,78 @@ export function ProgressivePptxStage({ task, draftReady = false, editor, onBrief
   useEffect(() => {
     const content = contentRef.current;
     if (!content) return;
-    const updateScrollCue = () => setHasMoreBelow(content.scrollHeight - content.scrollTop - content.clientHeight > 24);
+    const stopFollowing = () => { followOutlineRef.current = false; };
+    const stopFollowingFromKey = (event: KeyboardEvent) => {
+      if (["ArrowUp", "PageUp", "Home"].includes(event.key)) stopFollowing();
+    };
+    content.addEventListener("wheel", stopFollowing, { passive: true });
+    content.addEventListener("touchstart", stopFollowing, { passive: true });
+    content.addEventListener("pointerdown", stopFollowing, { passive: true });
+    content.addEventListener("keydown", stopFollowingFromKey);
+    return () => {
+      content.removeEventListener("wheel", stopFollowing);
+      content.removeEventListener("touchstart", stopFollowing);
+      content.removeEventListener("pointerdown", stopFollowing);
+      content.removeEventListener("keydown", stopFollowingFromKey);
+    };
+  }, []);
+  useEffect(() => {
+    const content = contentRef.current;
+    if (!content) return;
+    let previousScrollHeight = content.scrollHeight;
+    const updateScrollCue = () => {
+      const nextScrollHeight = content.scrollHeight;
+      setHasMoreBelow(nextScrollHeight - content.scrollTop - content.clientHeight > 24);
+      if (outlineReviewGate && followOutlineRef.current && nextScrollHeight > previousScrollHeight) {
+        content.scrollTo({ top: nextScrollHeight, behavior: "smooth" });
+      }
+      previousScrollHeight = nextScrollHeight;
+    };
     updateScrollCue();
     content.addEventListener("scroll", updateScrollCue, { passive: true });
     const observer = new ResizeObserver(updateScrollCue);
     observer.observe(content);
+    if (content.firstElementChild) observer.observe(content.firstElementChild);
     return () => {
       content.removeEventListener("scroll", updateScrollCue);
       observer.disconnect();
     };
-  }, [phase, items.length, ops.length, draftReady]);
+  }, [draftReady, items.length, ops.length, outlineReviewGate, phase]);
+  useEffect(() => {
+    // Outline content can arrive in several events after the task enters its
+    // review gate. Follow the newest section while it is being assembled;
+    // once the user scrolls intentionally, leave their position alone.
+    if (!outlineReviewGate || items.length === 0 || !followOutlineRef.current) return;
+    const planKey = `${task.id}:${task.plan?.revision ?? ""}:${outlineSignature}`;
+    if (autoScrolledOutlineRef.current === planKey) return;
+    autoScrolledOutlineRef.current = planKey;
+    let secondFrame: number | undefined;
+    const scrollToLatest = () => {
+      const content = contentRef.current;
+      if (!content || !followOutlineRef.current) return;
+      content.scrollTo({ top: content.scrollHeight, behavior: "smooth" });
+    };
+    const frame = window.requestAnimationFrame(() => {
+      const content = contentRef.current;
+      const initialScrollHeight = content?.scrollHeight;
+      scrollToLatest();
+      // A second frame covers late layout changes from streamed content,
+      // fonts, and the sticky action footer.
+      secondFrame = window.requestAnimationFrame(() => {
+        if (content && content.scrollHeight !== initialScrollHeight) scrollToLatest();
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (secondFrame !== undefined) window.cancelAnimationFrame(secondFrame);
+    };
+  }, [items.length, outlineReviewGate, outlineSignature, phase, task.id, task.plan?.revision]);
+  const scrollToLatest = () => {
+    followOutlineRef.current = true;
+    const content = contentRef.current;
+    if (!content) return;
+    content.scrollTo({ top: content.scrollHeight, behavior: "smooth" });
+  };
   return <section className="progressive-pptx-stage" data-testid="progressive-pptx-stage" data-phase={phase}>
     <header className="progressive-pptx-stage__header">
       <div><span className="progressive-pptx-stage__eyebrow"><Presentation size={14} /> {t("pptx.stage.eyebrow")}</span><h2>{heading}</h2><p>{description}</p></div>
@@ -249,7 +324,7 @@ export function ProgressivePptxStage({ task, draftReady = false, editor, onBrief
         })}
       </nav>
       <div className="progressive-pptx-stage__content">
-      {hasMoreBelow ? <button type="button" className="progressive-pptx-stage__scroll-cue" aria-label={t("pptx.stage.scrollLatest")} title={t("pptx.stage.scrollLatest")} onClick={() => contentRef.current?.scrollTo({ top: contentRef.current.scrollHeight, behavior: "smooth" })}><ArrowDown size={18} /><span>{t("pptx.stage.viewLatest")}</span></button> : null}
+      {hasMoreBelow ? <button type="button" className="progressive-pptx-stage__scroll-cue" aria-label={t("pptx.stage.scrollLatest")} title={t("pptx.stage.scrollLatest")} onClick={scrollToLatest}><ArrowDown size={18} /><span>{t("pptx.stage.viewLatest")}</span></button> : null}
       <div className="progressive-pptx-stage__content-scroll" ref={contentRef}>
     {(phase === "brief" || phase === "outline") ? <div className="progressive-pptx-stage__disclosure" data-testid="progressive-disclosure">
       <div className="progressive-pptx-stage__card"><div className="progressive-pptx-stage__card-title"><SquarePen size={16} /> {t("pptx.stage.stepLabel.brief")} <span>{processing ? t("pptx.stage.briefProcessing") : editableBrief ? t("pptx.stage.briefEditable") : t("pptx.stage.briefOverview")}</span></div><textarea aria-label={t("pptx.stage.briefAria")} value={brief} disabled={!editableBrief} onChange={(event) => onBriefChange?.(event.target.value)} /></div>

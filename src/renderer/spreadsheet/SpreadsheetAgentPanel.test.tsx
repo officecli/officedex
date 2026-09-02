@@ -64,6 +64,64 @@ describe("SpreadsheetAgentPanel", () => {
     expect(screen.queryByRole("textbox", { name: "Spreadsheet generation request" })).toBeNull();
   });
 
+  it("renders and approves an XLSX execution plan without showing export progress", async () => {
+    const onApprovePlan = vi.fn(async () => undefined);
+    const task: DesktopTask = {
+      id: "xlsx-plan-review",
+      conversationId: "xlsx-plan-review",
+      status: "plan_review",
+      topic: "Compare regional Q3 results",
+      events: [],
+      stages: [{ id: "plan-review", label: "Waiting for plan approval", status: "active" }],
+      plan: {
+        id: "plan-1",
+        markdown: "# Execution plan\n\n- Build a regional comparison sheet",
+        revision: 1,
+      },
+    };
+
+    render(
+      <SpreadsheetAgentPanel
+        task={task}
+        onGenerate={vi.fn()}
+        onModify={vi.fn()}
+        onRespond={vi.fn()}
+        onApprovePlan={onApprovePlan}
+      />,
+    );
+
+    expect(screen.getAllByText("Review the plan before continuing")).toHaveLength(2);
+    expect(screen.getByText(/Build a regional comparison sheet/)).toBeTruthy();
+    expect(screen.queryByText("Formatting & export")).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Spreadsheet generation request" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Approve and continue" }));
+    await waitFor(() => expect(onApprovePlan).toHaveBeenCalledWith(task));
+  });
+
+  it("keeps a failed XLSX plan approval actionable", async () => {
+    const task: DesktopTask = {
+      id: "xlsx-plan-failure",
+      conversationId: "xlsx-plan-failure",
+      status: "plan_review",
+      events: [],
+      plan: { id: "plan-1", markdown: "# Plan", revision: 1 },
+    };
+    render(
+      <SpreadsheetAgentPanel
+        task={task}
+        onGenerate={vi.fn()}
+        onModify={vi.fn()}
+        onRespond={vi.fn()}
+        onApprovePlan={vi.fn(async () => { throw new Error("bridge unavailable"); })}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Approve and continue" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not approve the plan: bridge unavailable");
+    expect(screen.getByRole("button", { name: "Approve and continue" })).toBeEnabled();
+  });
+
   it("responds to multi-step XLSX questions with ordered accumulated answers", async () => {
     const onRespond = vi.fn(async () => undefined);
     const question = {

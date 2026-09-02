@@ -28,6 +28,8 @@ describe("DiagnosticsPanel", () => {
     render(<DiagnosticsPanel />);
     expect(screen.getByText("Diagnostics")).toBeTruthy();
     expect(screen.getByText("Export diagnostic logs")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Test provider" })).toBeTruthy();
+    expect(screen.queryByText("diagnostics.providerTest.button")).toBeNull();
     expect(screen.getByText(/report an issue/i)).toBeTruthy();
   });
 

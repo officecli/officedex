@@ -642,10 +642,45 @@ const DEFAULT_STAGE_DEFS: ReadonlyArray<{ id: string; label: string }> = [
   { id: "format", label: "Formatting & export" },
 ];
 
+function semanticStageForProgress(payload: Record<string, unknown>): { id: string; label: string } | undefined {
+  const step = stringValue(payload.step).trim();
+  if (!step) return undefined;
+  switch (step) {
+    case "license":
+      return { id: "access", label: "Checking access" };
+    case "plan_prepare":
+      return { id: "plan", label: "Preparing execution plan" };
+    case "question":
+      return { id: "clarify", label: "Clarifying requirements" };
+    case "plan_confirm":
+      return { id: "plan-review", label: "Waiting for plan approval" };
+    case "generate":
+      return { id: "generate", label: "Generating document" };
+    case "generate_llm":
+      return { id: "generate-content", label: "Generating document content" };
+    case "assemble":
+      return { id: "assemble", label: "Assembling document" };
+    case "write_file":
+      return { id: "write", label: "Writing local file" };
+    case "finalize":
+      return { id: "finalize", label: "Finalizing document" };
+    default:
+      return { id: `step:${step}`, label: stringValue(payload.content).trim() || "Processing request" };
+  }
+}
+
+function stageStatusForProgress(payload: Record<string, unknown>): StageState["status"] {
+  const status = stringValue(payload.status);
+  if (status === "completed") return "completed";
+  if (status === "failed") return "failed";
+  return "active";
+}
+
 export function reduceStages(events: BridgeEvent[]): { stages: StageState[]; activeStageId?: string } {
   const stageMap = new Map<string, StageState>();
   const order: string[] = [];
   let nativeMode = false;
+  let semanticMode = false;
   let activeId: string | undefined;
   let derivedIndex = -1;
 
@@ -708,7 +743,22 @@ export function reduceStages(events: BridgeEvent[]): { stages: StageState[]; act
       continue;
     }
 
-    if (nativeMode) {
+    const semanticStage = event.type === "task.progress" ? semanticStageForProgress(payload) : undefined;
+    if (!nativeMode && semanticStage) {
+      semanticMode = true;
+      const status = stageStatusForProgress(payload);
+      for (const id of order) {
+        const stage = stageMap.get(id);
+        if (stage && id !== semanticStage.id && stage.status === "active") {
+          upsert(id, stage.label, "completed", ts);
+        }
+      }
+      upsert(semanticStage.id, semanticStage.label, status, ts);
+      activeId = status === "active" ? semanticStage.id : undefined;
+      continue;
+    }
+
+    if (nativeMode || semanticMode) {
       if (event.type === "task.completed") {
         for (const id of order) {
           const stage = stageMap.get(id);

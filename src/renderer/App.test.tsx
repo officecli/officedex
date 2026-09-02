@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import type { DesktopTask } from "../shared/types";
-import { findModifySourceTask, hydrateTaskHistory, readStoredAppRoute, sortSidebarDocuments, writeStoredAppRoute } from "./App";
+import type { DesktopTask, TaskHistoryEntry } from "../shared/types";
+import { findModifySourceTask, findRecoverableTaskHistoryEntry, hydrateTaskHistory, readStoredAppRoute, sortSidebarDocuments, writeStoredAppRoute } from "./App";
 import { createInitialTaskState } from "./taskState";
 
 describe("OfficeDex document routing", () => {
@@ -59,6 +59,19 @@ describe("OfficeDex document routing", () => {
     expect(source).toContain("<DocumentWorkspace");
   });
 
+  it("routes XLSX artifacts to the editable spreadsheet workspace", () => {
+    const source = readFileSync("src/renderer/App.tsx", "utf8");
+    const branchStart = source.indexOf("if (isXlsxArtifact(artifact))");
+    const legacyPreviewStart = source.indexOf("if (previewGrant) {\n      await officecli.revokePreviewToken", branchStart);
+
+    expect(branchStart).toBeGreaterThanOrEqual(0);
+    expect(legacyPreviewStart).toBeGreaterThan(branchStart);
+    const spreadsheetBranch = source.slice(branchStart, legacyPreviewStart);
+    expect(spreadsheetBranch).toContain('setSpreadsheetEntry({');
+    expect(spreadsheetBranch).toContain('setActiveNav("spreadsheet")');
+    expect(spreadsheetBranch).toContain("runSpreadsheetAction");
+  });
+
   it("uses the latest completed artifact as a document edit source", () => {
     const tasks: DesktopTask[] = [
       {
@@ -80,5 +93,53 @@ describe("OfficeDex document routing", () => {
       },
     ];
     expect(findModifySourceTask(tasks, "docx")?.id).toBe("run-original");
+  });
+
+  it("recovers a workbook PPT task when the generate RPC loses its response", () => {
+    const entries: TaskHistoryEntry[] = [{
+      taskId: "ppt-recovered",
+      createdAt: "2026-09-01T12:00:01.000Z",
+      conversationId: "ppt-recovered",
+      parentTaskId: "workbook-task",
+      events: [{
+        task_id: "ppt-recovered",
+        type: "task.started",
+        payload: { document_type: "pptx", source_file: "/tmp/workbook.xlsx" },
+      }],
+    }];
+
+    expect(findRecoverableTaskHistoryEntry(entries, {
+      documentType: "pptx",
+      sourceFile: "/tmp/workbook.xlsx",
+      parentTaskId: "workbook-task",
+      createdAfter: Date.parse("2026-09-01T11:59:00.000Z"),
+    })?.taskId).toBe("ppt-recovered");
+  });
+
+  it("retries bridge initialization after a stopped bridge emits bridge.exited", () => {
+    const source = readFileSync("src/renderer/App.tsx", "utf8");
+    const branchStart = source.indexOf('if (event.type === "bridge.exited")');
+    const branchEnd = source.indexOf("// Native OfficeCLI Runtime tasks survive", branchStart);
+
+    expect(branchStart).toBeGreaterThanOrEqual(0);
+    expect(branchEnd).toBeGreaterThan(branchStart);
+    const branch = source.slice(branchStart, branchEnd);
+    expect(branch).toContain("bridgeRecoveryPendingRef");
+    expect(branch).toContain("setConnectAttempt");
+  });
+
+  it("does not recover an unrelated task from the same history page", () => {
+    const entries: TaskHistoryEntry[] = [{
+      taskId: "other-task",
+      createdAt: "2026-09-01T12:00:01.000Z",
+      parentTaskId: "other-parent",
+      events: [{ task_id: "other-task", type: "task.started", payload: { document_type: "pptx", source_file: "/tmp/other.xlsx" } }],
+    }];
+    expect(findRecoverableTaskHistoryEntry(entries, {
+      documentType: "pptx",
+      sourceFile: "/tmp/workbook.xlsx",
+      parentTaskId: "workbook-task",
+      createdAfter: Date.parse("2026-09-01T11:59:00.000Z"),
+    })).toBeUndefined();
   });
 });

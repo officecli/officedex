@@ -30,6 +30,25 @@ describe("UI feedback services", () => {
     expect(screen.getByRole("status")).toHaveTextContent("File is missing");
   });
 
+  it("keeps toast actions and close controls compact", () => {
+    const action = vi.fn();
+    render(<ToastHost />);
+
+    act(() => {
+      toast.info({
+        content: "Saved",
+        description: "Your changes are ready.",
+        action: { label: "Open", onClick: action },
+      });
+    });
+
+    const toastNode = document.querySelector<HTMLElement>(".ui-toast");
+    expect(toastNode).not.toBeNull();
+    expect(toastNode!.querySelector(".ui-toast__content")).toHaveTextContent("Saved");
+    expect(toastNode!.querySelector(".ui-toast__action")).toHaveTextContent("Open");
+    expect(toastNode!.querySelector(".ui-toast__close")).toBeInTheDocument();
+  });
+
   it("renders popover content in a portal and closes on Escape", () => {
     const onOpenChange = vi.fn();
     render(

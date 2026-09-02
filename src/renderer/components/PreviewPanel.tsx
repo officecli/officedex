@@ -75,13 +75,15 @@ export function PreviewPanel({
     }, PREVIEW_PANEL_SLIDE_MS);
   }, [closing, onClose]);
 
-  const flushAndClose = useCallback(async () => {
-    try {
-      await pptxFlushRef.current?.();
+  const flushAndClose = useCallback(() => {
+    const flush = pptxFlushRef.current;
+    if (!flush) {
       beginClose();
-    } catch {
-      // Keep the preview open when the final save fails.
+      return;
     }
+    void flush().then(beginClose).catch(() => {
+      // Keep the preview open when the final save fails.
+    });
   }, [beginClose]);
 
   const requestClose = useCallback(() => {
@@ -99,7 +101,7 @@ export function PreviewPanel({
       });
       return;
     }
-    void flushAndClose();
+    flushAndClose();
   }, [beginClose, closing, documentDirty, flushAndClose, t]);
 
   const viewer = (() => {
