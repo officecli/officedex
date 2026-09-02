@@ -1,0 +1,810 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OfficeDex Settings — Home Style Demo</title>
+  <style>
+    :root {
+      --od-ink: #41464b;
+      --od-ink-medium: #41464bcc;
+      --od-ink-secondary: #41464b99;
+      --od-ink-tertiary: #41464b66;
+      --od-guidance: #5da4e3;
+      --od-guidance-soft: #eef6fd;
+      --od-danger: #e86666;
+      --od-success: #4b9b6a;
+      --od-surface: #ffffff;
+      --od-surface-subtle: #f9f9f9;
+      --od-surface-muted: #f7f7f7;
+      --od-border-subtle: #41464b1a;
+      --od-border-hover: #41464b33;
+      --od-shadow-card: 0 20px 50px rgb(15 23 42 / 8%), 0 2px 8px rgb(15 23 42 / 5%);
+      --od-font-ui: "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body { height: 100%; }
+
+    body {
+      min-width: 1080px;
+      margin: 0;
+      overflow: hidden;
+      background: #0b0b0c;
+      color: var(--od-ink);
+      font-family: var(--od-font-ui);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button,
+    input,
+    select { font: inherit; }
+
+    button { color: inherit; }
+
+    svg {
+      width: 18px;
+      height: 18px;
+      fill: none;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 1.8;
+    }
+
+    .window {
+      display: grid;
+      width: calc(100vw - 28px);
+      height: calc(100vh - 28px);
+      min-height: 680px;
+      grid-template-rows: 44px minmax(0, 1fr);
+      overflow: hidden;
+      margin: 14px;
+      border: 1px solid #2b2b2e;
+      border-radius: 20px;
+      background: var(--od-surface);
+      box-shadow: 0 24px 90px rgb(0 0 0 / 48%);
+    }
+
+    .window-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #202023;
+      padding: 0 14px;
+      color: #a8a8ad;
+      user-select: none;
+    }
+
+    .traffic { width: 12px; height: 12px; border-radius: 50%; }
+    .traffic.red { background: #ff5f57; }
+    .traffic.yellow { background: #febc2e; }
+    .traffic.green { background: #444448; }
+    .window-title { margin-left: 4px; font-size: 13px; font-weight: 600; }
+
+    .app-shell {
+      display: grid;
+      min-width: 0;
+      min-height: 0;
+      grid-template-columns: 232px minmax(0, 1fr);
+    }
+
+    .project-sidebar {
+      display: flex;
+      min-height: 0;
+      flex-direction: column;
+      border-right: 1px solid var(--od-border-subtle);
+      background: var(--od-surface-subtle);
+      padding: 16px 12px;
+    }
+
+    .brand {
+      display: flex;
+      height: 40px;
+      align-items: center;
+      gap: 10px;
+      padding: 0 8px;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .brand-mark {
+      position: relative;
+      width: 32px;
+      height: 32px;
+      overflow: hidden;
+      border-radius: 8px;
+      background: linear-gradient(145deg, #4b4c50, #17181a);
+      box-shadow: inset 0 0 0 1px rgb(255 255 255 / 16%);
+    }
+
+    .brand-mark::before {
+      content: "";
+      position: absolute;
+      width: 14px;
+      height: 12px;
+      top: 9px;
+      left: 8px;
+      border-radius: 3px;
+      background: #fff;
+    }
+
+    .brand-mark::after {
+      content: "";
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      top: 9px;
+      right: 7px;
+      border-radius: 50%;
+      background: #c8c9cc;
+    }
+
+    .sidebar-nav,
+    .sidebar-footer { display: grid; gap: 2px; }
+    .sidebar-nav { margin-top: 16px; }
+
+    .sidebar-button,
+    .workspace-button {
+      display: flex;
+      width: 100%;
+      height: 32px;
+      align-items: center;
+      gap: 8px;
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
+      padding: 0 8px;
+      font-size: 13px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .sidebar-button:hover,
+    .workspace-button:hover { background: rgb(65 70 75 / 6%); }
+
+    .sidebar-button svg,
+    .workspace-button svg { color: var(--od-ink-secondary); }
+
+    .sidebar-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 20px 8px 6px;
+      color: var(--od-ink-secondary);
+      font-size: 12px;
+    }
+
+    .sidebar-heading button {
+      display: grid;
+      width: 24px;
+      height: 24px;
+      place-items: center;
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    .sidebar-heading button:hover { background: rgb(65 70 75 / 6%); }
+    .workspace-button.is-active { background: var(--od-surface); font-weight: 500; }
+
+    .file-list {
+      display: grid;
+      min-height: 0;
+      gap: 2px;
+      overflow: hidden;
+      margin: 10px 0 0 18px;
+    }
+
+    .file-item {
+      display: grid;
+      height: 30px;
+      grid-template-columns: 20px minmax(0, 1fr) 8px;
+      align-items: center;
+      gap: 7px;
+      border-radius: 4px;
+      color: var(--od-ink-secondary);
+      padding: 0 7px;
+      font-size: 12px;
+    }
+
+    .file-type {
+      display: grid;
+      width: 18px;
+      height: 18px;
+      place-items: center;
+      border-radius: 4px;
+      background: rgb(65 70 75 / 8%);
+      font-size: 9px;
+      font-weight: 700;
+    }
+
+    .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-dot { width: 6px; height: 6px; border-radius: 50%; background: #d1734a; }
+    .project-spacer { flex: 1; }
+
+    .credit {
+      display: flex;
+      height: 32px;
+      align-items: center;
+      gap: 8px;
+      color: var(--od-ink-secondary);
+      padding: 0 8px;
+      font-size: 12px;
+    }
+
+    .credit svg { color: var(--od-guidance); }
+    .credit strong { margin-left: auto; color: var(--od-ink); font-weight: 500; }
+
+    .sidebar-footer {
+      border-top: 1px solid var(--od-border-subtle);
+      padding-top: 8px;
+    }
+
+    .sidebar-button.is-active { background: var(--od-surface); font-weight: 500; }
+    .sidebar-button.is-active svg { color: var(--od-ink); }
+
+    .app-main {
+      display: grid;
+      min-width: 0;
+      min-height: 0;
+      grid-template-rows: 52px minmax(0, 1fr);
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--od-border-subtle);
+      background: rgb(255 255 255 / 90%);
+      padding: 0 20px;
+      backdrop-filter: blur(14px);
+    }
+
+    .breadcrumb { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+    .breadcrumb span { color: var(--od-ink-secondary); }
+    .breadcrumb strong { font-weight: 600; }
+    .official { display: flex; align-items: center; gap: 7px; color: var(--od-ink-secondary); font-size: 12px; }
+
+    .settings-stage {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      overflow: auto;
+      background-color: color-mix(in srgb, var(--od-surface-muted) 72%, white);
+      background-image:
+        radial-gradient(circle at 1px 1px, rgb(65 70 75 / 10%) 1px, transparent 1.2px),
+        linear-gradient(180deg, rgb(255 255 255 / 72%), transparent 520px);
+      background-size: 28px 28px, 100% 100%;
+    }
+
+    .pointer-glow {
+      position: fixed;
+      z-index: 0;
+      width: 460px;
+      height: 460px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background: radial-gradient(circle, rgb(93 164 227 / 10%) 0%, transparent 68%);
+      pointer-events: none;
+      transition: opacity 180ms ease;
+    }
+
+    .settings-page {
+      position: relative;
+      z-index: 1;
+      width: min(1180px, 100%);
+      margin: 0 auto;
+      padding: 42px clamp(24px, 4vw, 64px) 64px;
+    }
+
+    .settings-hero {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      margin: 0 0 24px;
+    }
+
+    .eyebrow {
+      margin: 0 0 5px;
+      color: var(--od-guidance);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .02em;
+    }
+
+    .settings-hero h1 {
+      margin: 0;
+      color: var(--od-ink);
+      font-size: clamp(24px, 2.2vw, 30px);
+      line-height: 1.25;
+      font-weight: 650;
+      letter-spacing: -.025em;
+    }
+
+    .settings-hero p:last-child {
+      max-width: 620px;
+      margin: 7px 0 0;
+      color: var(--od-ink-secondary);
+      font-size: 13px;
+      line-height: 21px;
+    }
+
+    .save-status {
+      display: inline-flex;
+      height: 30px;
+      align-items: center;
+      gap: 7px;
+      flex: 0 0 auto;
+      border: 1px solid rgb(75 155 106 / 18%);
+      border-radius: 999px;
+      background: rgb(75 155 106 / 9%);
+      color: var(--od-success);
+      padding: 0 11px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .save-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+    .settings-layout {
+      display: grid;
+      grid-template-columns: 214px minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .settings-nav {
+      position: sticky;
+      top: 24px;
+      display: grid;
+      gap: 3px;
+      border: 1px solid rgb(65 70 75 / 12%);
+      border-radius: 18px;
+      background: rgb(255 255 255 / 82%);
+      padding: 9px;
+      box-shadow: 0 8px 24px rgb(15 23 42 / 5%);
+      backdrop-filter: blur(16px);
+    }
+
+    .settings-nav button {
+      display: flex;
+      width: 100%;
+      min-height: 38px;
+      align-items: center;
+      gap: 9px;
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--od-ink-secondary);
+      padding: 0 10px;
+      font-size: 13px;
+      text-align: left;
+      cursor: pointer;
+      transition: background-color 140ms ease, color 140ms ease, transform 140ms ease;
+    }
+
+    .settings-nav button:hover { background: var(--od-surface-muted); color: var(--od-ink); }
+    .settings-nav button:active { transform: scale(.985); }
+    .settings-nav button[aria-selected="true"] {
+      background: var(--od-guidance-soft);
+      color: #3f7fb9;
+      font-weight: 600;
+    }
+
+    .settings-nav button[aria-selected="true"] svg { color: var(--od-guidance); }
+    .settings-nav .nav-separator { height: 1px; margin: 5px 8px; background: var(--od-border-subtle); }
+
+    .settings-content { min-width: 0; }
+
+    .settings-card {
+      overflow: hidden;
+      border: 1px solid color-mix(in srgb, var(--od-border-hover) 62%, transparent);
+      border-radius: 24px;
+      background: rgb(255 255 255 / 92%);
+      box-shadow: var(--od-shadow-card);
+      backdrop-filter: blur(16px);
+    }
+
+    .card-heading {
+      display: flex;
+      min-height: 76px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      border-bottom: 1px solid var(--od-border-subtle);
+      padding: 18px 22px;
+    }
+
+    .card-heading h2 { margin: 0; font-size: 17px; line-height: 24px; font-weight: 650; letter-spacing: -.015em; }
+    .card-heading p { margin: 3px 0 0; color: var(--od-ink-secondary); font-size: 12px; line-height: 18px; }
+
+    .document-chips { display: flex; gap: 5px; }
+
+    .document-chip {
+      display: grid;
+      width: 28px;
+      height: 28px;
+      place-items: center;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      box-shadow: inset 0 0 0 1px rgb(255 255 255 / 26%);
+    }
+
+    .document-chip.ppt { background: #d1734a; }
+    .document-chip.doc { background: #5b8def; }
+    .document-chip.xls { background: #4bb07a; }
+
+    .setting-row {
+      display: grid;
+      min-height: 82px;
+      grid-template-columns: minmax(180px, .82fr) minmax(260px, 1.18fr);
+      align-items: center;
+      gap: 24px;
+      padding: 17px 22px;
+    }
+
+    .setting-row + .setting-row { border-top: 1px solid var(--od-border-subtle); }
+    .setting-copy h3 { margin: 0; font-size: 13.5px; line-height: 20px; font-weight: 600; }
+    .setting-copy p { max-width: 430px; margin: 4px 0 0; color: var(--od-ink-secondary); font-size: 12px; line-height: 19px; }
+    .setting-control { display: flex; align-items: center; justify-content: flex-end; gap: 9px; }
+
+    .select-wrap { position: relative; min-width: 238px; }
+    .select-wrap svg { position: absolute; top: 50%; right: 11px; width: 14px; height: 14px; transform: translateY(-50%); color: var(--od-ink-secondary); pointer-events: none; }
+
+    select,
+    .field {
+      width: 100%;
+      height: 38px;
+      appearance: none;
+      border: 1px solid var(--od-border-subtle);
+      border-radius: 10px;
+      outline: 0;
+      background: var(--od-surface);
+      color: var(--od-ink);
+      padding: 0 34px 0 12px;
+      font-size: 13px;
+      transition: border-color 140ms ease, box-shadow 140ms ease;
+    }
+
+    select:focus,
+    .field:focus { border-color: rgb(93 164 227 / 56%); box-shadow: 0 0 0 3px rgb(93 164 227 / 10%); }
+
+    .switch {
+      position: relative;
+      width: 38px;
+      height: 22px;
+      flex: 0 0 auto;
+      border: 0;
+      border-radius: 999px;
+      background: #d7dade;
+      padding: 0;
+      cursor: pointer;
+      transition: background-color 160ms ease;
+    }
+
+    .switch::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 3px rgb(15 23 42 / 22%);
+      transition: transform 160ms ease;
+    }
+
+    .switch[aria-checked="true"] { background: var(--od-guidance); }
+    .switch[aria-checked="true"]::after { transform: translateX(16px); }
+
+    .switch-label { color: var(--od-ink-secondary); font-size: 12px; }
+
+    .template-control {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .template-count { width: 100%; color: var(--od-ink-secondary); font-size: 11px; text-align: right; }
+
+    .soft-button,
+    .primary-button {
+      display: inline-flex;
+      height: 34px;
+      align-items: center;
+      gap: 7px;
+      border-radius: 999px;
+      padding: 0 12px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+    }
+
+    .soft-button {
+      border: 1px solid var(--od-border-subtle);
+      background: var(--od-surface-muted);
+    }
+
+    .soft-button:hover { background: var(--od-surface); border-color: var(--od-border-hover); }
+    .primary-button { border: 0; background: var(--od-ink); color: #fff; }
+    .primary-button:hover { box-shadow: 0 6px 14px rgb(15 23 42 / 18%); }
+    .soft-button:active,
+    .primary-button:active { transform: scale(.98); }
+
+    .soft-button svg,
+    .primary-button svg { width: 14px; height: 14px; }
+
+    .tip-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-top: 14px;
+      border: 1px solid rgb(93 164 227 / 18%);
+      border-radius: 16px;
+      background: rgb(238 246 253 / 78%);
+      padding: 13px 15px;
+      color: #4779a4;
+      font-size: 12px;
+      line-height: 19px;
+      backdrop-filter: blur(12px);
+    }
+
+    .tip-card svg { flex: 0 0 auto; margin-top: 1px; }
+
+    .demo-panel { display: none; }
+    .demo-panel.is-active { display: block; animation: panel-in 180ms ease both; }
+
+    .placeholder-card {
+      display: grid;
+      min-height: 430px;
+      place-items: center;
+      border: 1px solid color-mix(in srgb, var(--od-border-hover) 62%, transparent);
+      border-radius: 24px;
+      background: rgb(255 255 255 / 90%);
+      box-shadow: var(--od-shadow-card);
+      text-align: center;
+      backdrop-filter: blur(16px);
+    }
+
+    .placeholder-card svg { width: 30px; height: 30px; margin-bottom: 9px; color: var(--od-guidance); }
+    .placeholder-card h2 { margin: 0; font-size: 17px; }
+    .placeholder-card p { max-width: 380px; margin: 6px 0 0; color: var(--od-ink-secondary); font-size: 12px; line-height: 20px; }
+
+    .toast {
+      position: fixed;
+      z-index: 20;
+      top: 80px;
+      left: 50%;
+      display: flex;
+      min-height: 40px;
+      align-items: center;
+      gap: 8px;
+      transform: translate(-50%, -18px);
+      border: 1px solid var(--od-border-subtle);
+      border-radius: 999px;
+      background: rgb(255 255 255 / 94%);
+      box-shadow: 0 12px 30px rgb(15 23 42 / 13%);
+      padding: 0 15px;
+      font-size: 12px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 180ms ease, transform 180ms ease;
+      backdrop-filter: blur(16px);
+    }
+
+    .toast.is-visible { transform: translate(-50%, 0); opacity: 1; }
+    .toast svg { width: 15px; height: 15px; color: var(--od-success); }
+
+    @keyframes panel-in {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 1180px) {
+      .settings-page { padding-inline: 30px; }
+      .settings-layout { grid-template-columns: 190px minmax(0, 1fr); }
+      .setting-row { grid-template-columns: minmax(170px, .75fr) minmax(250px, 1.25fr); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+      .pointer-glow { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <svg width="0" height="0" aria-hidden="true" style="position:absolute">
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 11 9-8 9 8"/><path d="M5 10v10h14V10M9 20v-6h6v6"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6.5h7l2 2h9v10.5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M3 9h18"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 9 19.37a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.63 15 1.7 1.7 0 0 0 3.08 14H3v-4h.08A1.7 1.7 0 0 0 4.63 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.63 1.7 1.7 0 0 0 10 3.08V3h4v.08A1.7 1.7 0 0 0 15 4.63a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.37 9 1.7 1.7 0 0 0 20.92 10H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24"><path d="m13 2-8 12h7l-1 8 8-12h-7Z"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 3 1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6Z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8Z"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></symbol>
+    <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3a9 9 0 0 0 0 18h1.5a1.5 1.5 0 0 0 0-3H12a2 2 0 0 1 0-4h2.5A6.5 6.5 0 0 0 21 7.5 4.5 4.5 0 0 0 16.5 3Z"/><circle cx="7.5" cy="10" r=".7"/><circle cx="10" cy="6.8" r=".7"/><circle cx="14" cy="6.5" r=".7"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h3M11 12h9M4 18h8M16 18h4"/><circle cx="16" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="14" cy="18" r="2"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 20 6v5c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6Z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
+    <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 15v5h16v-5"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18h11a4 4 0 0 0 .6-8A7 7 0 0 0 5.3 8.4 5 5 0 0 0 7 18Z"/></symbol>
+  </svg>
+
+  <div class="window">
+    <div class="window-bar">
+      <span class="traffic red"></span><span class="traffic yellow"></span><span class="traffic green"></span>
+      <span class="window-title">OfficeDex</span>
+    </div>
+
+    <div class="app-shell">
+      <aside class="project-sidebar">
+        <div class="brand"><span class="brand-mark"></span><span>OfficeDex</span></div>
+        <div class="sidebar-nav">
+          <button class="sidebar-button"><svg><use href="#i-home"/></svg><span>首页</span></button>
+        </div>
+        <div class="sidebar-heading"><span>工作区</span><button aria-label="添加工作区"><svg><use href="#i-plus"/></svg></button></div>
+        <button class="workspace-button is-active"><svg><use href="#i-folder"/></svg><span>yirentk</span></button>
+        <div class="file-list" aria-hidden="true">
+          <div class="file-item"><span class="file-type">P</span><span class="file-name">做一个 ppt，介绍品牌...</span><span class="file-dot"></span></div>
+          <div class="file-item"><span class="file-type">P</span><span class="file-name">数字经济与人工智能</span><span></span></div>
+          <div class="file-item"><span class="file-type">P</span><span class="file-name">Create a brand campaign</span><span class="file-dot"></span></div>
+          <div class="file-item"><span class="file-type">P</span><span class="file-name">Operations and finance</span><span></span></div>
+          <div class="file-item"><span class="file-type">P</span><span class="file-name">Create a team execution</span><span class="file-dot"></span></div>
+          <div class="file-item"><span class="file-type">P</span><span class="file-name">Hotel Marketing Strategy</span><span></span></div>
+        </div>
+        <div class="project-spacer"></div>
+        <div class="credit"><svg><use href="#i-bolt"/></svg><span>hosted</span><strong>0 / 0</strong></div>
+        <div class="sidebar-footer">
+          <button class="sidebar-button"><svg><use href="#i-user"/></svg><span>luyang950@gmail.com</span></button>
+          <button class="sidebar-button is-active"><svg><use href="#i-settings"/></svg><span>设置</span></button>
+        </div>
+      </aside>
+
+      <main class="app-main">
+        <header class="topbar">
+          <div class="breadcrumb"><span>OfficeDex</span><span>/</span><strong>yirentk</strong></div>
+          <div class="official"><svg><use href="#i-cloud"/></svg><span>Official</span></div>
+        </header>
+
+        <section class="settings-stage" id="stage">
+          <div class="pointer-glow" id="pointerGlow"></div>
+          <div class="settings-page">
+            <header class="settings-hero">
+              <div>
+                <p class="eyebrow">OFFICEDEX SETTINGS</p>
+                <h1>设置</h1>
+                <p>管理生成偏好、通知、工作区和服务连接。更改会自动保存到当前设备。</p>
+              </div>
+              <div class="save-status"><span class="save-dot"></span><span>已自动保存</span></div>
+            </header>
+
+            <div class="settings-layout">
+              <nav class="settings-nav" aria-label="设置分类">
+                <button data-panel="generation" aria-selected="true"><svg><use href="#i-spark"/></svg><span>生成</span></button>
+                <button data-panel="notifications" aria-selected="false"><svg><use href="#i-bell"/></svg><span>通知</span></button>
+                <button data-panel="appearance" aria-selected="false"><svg><use href="#i-palette"/></svg><span>外观</span></button>
+                <button data-panel="workspace" aria-selected="false"><svg><use href="#i-folder"/></svg><span>工作区</span></button>
+                <button data-panel="connection" aria-selected="false"><svg><use href="#i-sliders"/></svg><span>连接</span></button>
+                <button data-panel="subscription" aria-selected="false"><svg><use href="#i-shield"/></svg><span>订阅</span></button>
+                <div class="nav-separator"></div>
+                <button data-panel="activity" aria-selected="false"><svg><use href="#i-clock"/></svg><span>活动</span></button>
+                <button data-panel="diagnostics" aria-selected="false"><svg><use href="#i-chart"/></svg><span>诊断</span></button>
+                <button data-panel="reset" aria-selected="false"><svg><use href="#i-rotate"/></svg><span>重置</span></button>
+                <button data-panel="about" aria-selected="false"><svg><use href="#i-grid"/></svg><span>关于</span></button>
+              </nav>
+
+              <div class="settings-content">
+                <div class="demo-panel is-active" data-panel-content="generation">
+                  <section class="settings-card">
+                    <header class="card-heading">
+                      <div><h2>生成偏好</h2><p>为新任务设置默认输出；每次生成时仍可单独调整。</p></div>
+                      <div class="document-chips" aria-hidden="true"><span class="document-chip ppt">P</span><span class="document-chip doc">W</span><span class="document-chip xls">S</span></div>
+                    </header>
+                    <div class="setting-row">
+                      <div class="setting-copy"><h3>默认文档类型</h3><p>从首页开始新任务时预先选择的文档格式。</p></div>
+                      <div class="setting-control"><label class="select-wrap"><select><option>演示文稿（PPTX）</option><option>文档（DOCX）</option><option>电子表格（XLSX）</option><option>图片</option></select><svg><use href="#i-chevron"/></svg></label></div>
+                    </div>
+                    <div class="setting-row">
+                      <div class="setting-copy"><h3>自动生成配图</h3><p>在合适的页面中生成并插入匹配主题的图片。</p></div>
+                      <div class="setting-control"><span class="switch-label">已开启</span><button class="switch" role="switch" aria-checked="true" aria-label="自动生成配图"></button></div>
+                    </div>
+                    <div class="setting-row">
+                      <div class="setting-copy"><h3>等待高清图片</h3><p>等待 2048px 图片完成后再结束任务，生成会稍慢。</p></div>
+                      <div class="setting-control"><span class="switch-label">已关闭</span><button class="switch" role="switch" aria-checked="false" aria-label="等待高清图片"></button></div>
+                    </div>
+                    <div class="setting-row">
+                      <div class="setting-copy"><h3>图片水印</h3><p>付费方案可以关闭 OfficeDex 生成图片的品牌水印。</p></div>
+                      <div class="setting-control"><span class="switch-label">显示水印</span><button class="switch" role="switch" aria-checked="true" aria-label="显示水印"></button></div>
+                    </div>
+                    <div class="setting-row">
+                      <div class="setting-copy"><h3>本地图片模板</h3><p>导入团队共享的 JSON 模板，或导出当前设备上的模板。</p></div>
+                      <div class="template-control"><span class="template-count">当前设备共 12 个模板</span><button class="soft-button" data-demo-action="导入入口已打开"><svg><use href="#i-upload"/></svg>导入</button><button class="soft-button" data-demo-action="模板 JSON 已复制"><svg><use href="#i-copy"/></svg>复制 JSON</button><button class="primary-button" data-demo-action="模板已导出"><svg><use href="#i-upload"/></svg>导出</button></div>
+                    </div>
+                  </section>
+                  <div class="tip-card"><svg><use href="#i-info"/></svg><span>设计说明：设置分类与内容画布是同级两列；内容采用首页同款的点阵背景、居中宽度、半透明白色卡片和轻量蓝色引导状态。</span></div>
+                </div>
+
+                <div class="demo-panel" data-panel-content="notifications"><div class="placeholder-card"><div><svg><use href="#i-bell"/></svg><h2>通知</h2><p>桌面通知与测试通知会沿用相同的设置卡片结构。</p></div></div></div>
+                <div class="demo-panel" data-panel-content="appearance"><div class="placeholder-card"><div><svg><use href="#i-palette"/></svg><h2>外观</h2><p>语言、主题等低频选项使用紧凑的表单行，不制造多余层级。</p></div></div></div>
+                <div class="demo-panel" data-panel-content="workspace"><div class="placeholder-card"><div><svg><use href="#i-folder"/></svg><h2>工作区</h2><p>默认输出目录和本地数据位置会显示为可扫描的信息卡片。</p></div></div></div>
+                <div class="demo-panel" data-panel-content="connection"><div class="placeholder-card"><div><svg><use href="#i-sliders"/></svg><h2>连接</h2><p>模型服务、代理、Jira 与 Liquipedia 将按独立连接卡片展示状态。</p></div></div></div>
+                <div class="demo-panel" data-panel-content="subscription"><div class="placeholder-card"><div><svg><use href="#i-shield"/></svg><h2>订阅</h2><p>Credit、兑换码和邀请信息将优先突出当前状态与可执行动作。</p></div></div></div>
+                <div class="demo-panel" data-panel-content="activity"><div class="placeholder-card"><div><svg><use href="#i-clock"/></svg><h2>活动</h2><p>最近任务和运行记录按时间组织，保持与首页最近文件一致的节奏。</p></div></div></div>
+                <div class="demo-panel" data-panel-content="diagnostics"><div class="placeholder-card"><div><svg><use href="#i-chart"/></svg><h2>诊断</h2><p>运行状态、连接延迟和错误信息会使用可折叠的诊断分组。</p></div></div></div>
+                <div class="demo-panel" data-panel-content="reset"><div class="placeholder-card"><div><svg><use href="#i-rotate"/></svg><h2>重置</h2><p>危险操作与普通设置隔离，并在执行前提供清晰的影响说明。</p></div></div></div>
+                <div class="demo-panel" data-panel-content="about"><div class="placeholder-card"><div><svg><use href="#i-grid"/></svg><h2>关于 OfficeDex</h2><p>版本、更新、文档和开源信息集中在一个简洁的产品卡片中。</p></div></div></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"><svg><use href="#i-check"/></svg><span id="toastText">已保存</span></div>
+
+  <script>
+    const stage = document.querySelector('#stage');
+    const glow = document.querySelector('#pointerGlow');
+    const navButtons = [...document.querySelectorAll('.settings-nav button[data-panel]')];
+    const panels = [...document.querySelectorAll('[data-panel-content]')];
+    const toast = document.querySelector('#toast');
+    const toastText = document.querySelector('#toastText');
+    let toastTimer;
+
+    function showToast(text) {
+      toastText.textContent = text;
+      toast.classList.add('is-visible');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('is-visible'), 1600);
+    }
+
+    stage.addEventListener('pointermove', (event) => {
+      glow.style.left = `${event.clientX}px`;
+      glow.style.top = `${event.clientY}px`;
+      glow.style.opacity = '1';
+    });
+
+    stage.addEventListener('pointerleave', () => { glow.style.opacity = '0'; });
+
+    navButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const key = button.dataset.panel;
+        navButtons.forEach((item) => item.setAttribute('aria-selected', String(item === button)));
+        panels.forEach((panel) => panel.classList.toggle('is-active', panel.dataset.panelContent === key));
+      });
+    });
+
+    document.querySelectorAll('.switch').forEach((control) => {
+      control.addEventListener('click', () => {
+        const next = control.getAttribute('aria-checked') !== 'true';
+        control.setAttribute('aria-checked', String(next));
+        const label = control.previousElementSibling;
+        if (label) label.textContent = next ? (control.ariaLabel === '显示水印' ? '显示水印' : '已开启') : (control.ariaLabel === '显示水印' ? '隐藏水印' : '已关闭');
+        showToast('设置已自动保存');
+      });
+    });
+
+    document.querySelector('select').addEventListener('change', () => showToast('默认文档类型已更新'));
+    document.querySelectorAll('[data-demo-action]').forEach((button) => button.addEventListener('click', () => showToast(button.dataset.demoAction)));
+  </script>
+</body>
+</html>

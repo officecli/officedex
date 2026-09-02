@@ -44,7 +44,7 @@ func defaultProcessTransport(opts Options) (Transport, error) {
 	if binary == "" {
 		binary = "officecli"
 	}
-	cmd := subprocess.Command(binary, "agent-bridge")
+	cmd := subprocess.Command(binary, agentBridgeCommandArgs(opts)...)
 	if opts.Cwd != "" {
 		cmd.Dir = opts.Cwd
 	}
@@ -66,6 +66,20 @@ func defaultProcessTransport(opts Options) (Transport, error) {
 		return nil, fmt.Errorf("bridge: spawn officecli (%s): %w", binary, err)
 	}
 	return &processTransport{cmd: cmd, stdin: stdin, stdout: stdout, stderr: stderr}, nil
+}
+
+func agentBridgeCommandArgs(opts Options) []string {
+	args := []string{"agent-bridge"}
+	if opts.ClientID != "" {
+		args = append(args, "--client-id", opts.ClientID)
+	}
+	if opts.BridgeInstanceID != "" {
+		args = append(args, "--bridge-instance-id", opts.BridgeInstanceID)
+	}
+	if opts.RuntimeRoot != "" {
+		args = append(args, "--runtime-root", opts.RuntimeRoot)
+	}
+	return args
 }
 
 func (p *processTransport) Stdin() io.Writer  { return p.stdin }

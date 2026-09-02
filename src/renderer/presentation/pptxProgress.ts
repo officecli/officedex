@@ -1,4 +1,4 @@
-import type { BridgeEvent } from "../../shared/types";
+import type { BridgeEvent, VibeOp } from "../../shared/types";
 
 /** The user-visible phases before and during progressive PPTX production. */
 export type PptxProgressPhase =
@@ -18,6 +18,13 @@ export interface PptxPageProgress {
   opCount: number;
 }
 
+export interface PptxImageProgress {
+  total: number;
+  placed: number;
+  pending: number;
+  failed: number;
+}
+
 export interface PptxProgressState {
   phase: PptxProgressPhase;
   message?: string;
@@ -31,6 +38,8 @@ export interface PptxProgressState {
   lastEventType?: string;
   lastEventAt?: string;
   opCount: number;
+  images: PptxImageProgress;
+  imageOps: VibeOp[];
 }
 
 const TERMINAL_PHASES = new Set<PptxProgressPhase>(["completed", "failed", "cancelled"]);
@@ -43,6 +52,8 @@ export function createInitialPptxProgress(): PptxProgressState {
     appliedEventIds: [],
     appliedEventCount: 0,
     opCount: 0,
+    images: { total: 0, placed: 0, pending: 0, failed: 0 },
+    imageOps: [],
   };
 }
 
@@ -114,6 +125,10 @@ export function reducePptxProgress(
       const ops = payload.ops ?? payload.primitives;
       const count = Array.isArray(ops) ? ops.length : numberValue(payload, ["op_count", "primitive_count"]);
       if (count !== undefined) next.opCount += count;
+      if (Array.isArray(ops)) {
+        next.imageOps = [...previous.imageOps, ...(ops as VibeOp[])];
+        next.images = imageProgressFromOps(next.imageOps);
+      }
       setTotal(next, payload);
       const slide = slideNumber(payload);
       if (slide !== undefined) {
@@ -145,6 +160,38 @@ export function reducePptxProgress(
   next.completedSlides = next.pages.filter((page) => page.status === "completed").length;
   return next;
 }
+
+/** Derive image placement from the same ordered op stream the live editor uses. */
+export function imageProgressFromOps(ops: readonly VibeOp[]): PptxImageProgress {
+  const slots = new Map<string, "pending" | "placed">();
+  const pendingBySlide = new Map<number, string[]>();
+  const slotKey = (op: VibeOp, ref: Record<string, unknown>) => (
+    `${op.slide ?? 0}:${String(ref.kind ?? "primary")}:${String(ref.visualIndex ?? 0)}`
+  );
+  for (const op of ops) {
+    if (op.op === "shape.add" && op.shape?.kind === "picture" && op.shape.imageRef) {
+      const ref = op.shape.imageRef as Record<string, unknown>;
+      const key = slotKey(op, ref);
+      if (ref.digest) slots.set(key, "placed");
+      else {
+        slots.set(key, "pending");
+        const slide = op.slide ?? 0;
+        pendingBySlide.set(slide, [...(pendingBySlide.get(slide) ?? []), key]);
+      }
+    }
+    if (op.op === "shape.update" && op.fill?.imageRef?.digest) {
+      const ref = op.fill.imageRef as Record<string, unknown>;
+      const exact = slotKey(op, ref);
+      const fallback = pendingBySlide.get(op.slide ?? 0)?.find((key) => slots.get(key) === "pending");
+      const key = slots.has(exact) ? exact : fallback;
+      if (key) slots.set(key, "placed");
+    }
+  }
+  const total = slots.size;
+  const placed = [...slots.values()].filter((state) => state === "placed").length;
+  return { total, placed, pending: total - placed, failed: 0 };
+}
+
 
 export function reducePptxProgressEvents(
   events: readonly BridgeEvent[],

@@ -11,13 +11,12 @@ import {
   MoreOutlined,
   PlusOutlined,
   SettingOutlined,
-  ThunderboltOutlined,
   UserOutlined,
 } from "../ui/icons";
 import { useT } from "../i18n";
 import type { SidebarSignal } from "../taskSignals";
 import { dragHasFiles, setHomeDropZone } from "../homeDropZone";
-import type { CreditInfo } from "./Shell";
+import { DocTypeIcon } from "./DocTypeIcon";
 
 export interface SidebarAccount {
   mode: WhoAmIMode;
@@ -51,20 +50,13 @@ export interface ProjectSidebarProps {
   onOpenSettings: () => void;
   onOpenAccount: () => void;
   signal?: SidebarSignal;
-  credit?: CreditInfo;
-  hasCustomProvider?: boolean;
   account?: SidebarAccount;
   updateRow?: ReactNode;
   compact?: boolean;
   onCompactChange?: (compact: boolean) => void;
 }
 
-function creditValue(credit: CreditInfo): string {
-  if (credit.displayMode === "balance") return String(Math.max(0, credit.total));
-  return `${Math.max(0, credit.total - credit.used)} / ${credit.total}`;
-}
-
-export function ProjectSidebar({ workspaces, documents = [], activeWorkspaceId, activeDocumentId, onSelectAll, onSelectWorkspace, onOpenDocument, onDeleteDocument, onAddWorkspace, onRenameWorkspace, onRevealWorkspace, onRemoveWorkspace, onOpenSettings, onOpenAccount, signal, credit, hasCustomProvider, account, updateRow, compact = false, onCompactChange }: ProjectSidebarProps) {
+export function ProjectSidebar({ workspaces, documents = [], activeWorkspaceId, activeDocumentId, onSelectAll, onSelectWorkspace, onOpenDocument, onDeleteDocument, onAddWorkspace, onRenameWorkspace, onRevealWorkspace, onRemoveWorkspace, onOpenSettings, onOpenAccount, signal, account, updateRow, compact = false, onCompactChange }: ProjectSidebarProps) {
   const t = useT();
   const [renamingId, setRenamingId] = useState<string>();
   const [renameValue, setRenameValue] = useState("");
@@ -141,7 +133,7 @@ export function ProjectSidebar({ workspaces, documents = [], activeWorkspaceId, 
         title={document.title}
         onClick={() => onOpenDocument?.(document)}
       >
-        <span className={`project-sidebar__document-type project-sidebar__document-type--${document.documentType.toLowerCase()}`}>{document.documentType.slice(0, 1).toUpperCase()}</span>
+        <DocTypeIcon type={document.documentType} />
         <span>{document.title}</span>
         {document.status && document.status !== "completed" ? <em data-status={document.status} aria-label={document.status} /> : null}
       </button>
@@ -168,7 +160,7 @@ export function ProjectSidebar({ workspaces, documents = [], activeWorkspaceId, 
           <button
             type="button"
             className="project-sidebar__compact-toggle"
-            aria-label={compact ? t("spreadsheet.sidebar.expand") : t("spreadsheet.sidebar.collapse")}
+            aria-label={compact ? t("shell.sidebar.expand") : t("shell.sidebar.collapse")}
             onClick={() => onCompactChange(!compact)}
           >
             {compact ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
@@ -178,7 +170,7 @@ export function ProjectSidebar({ workspaces, documents = [], activeWorkspaceId, 
       <nav className="project-sidebar__primary" aria-label={t("projectSidebar.navigation")}>
         {/* Home is the inbox now, so it carries the signal: there is no separate
             tasks page to route people to. */}
-        <button type="button" className={!activeWorkspaceId ? "is-active" : ""} onClick={onSelectAll}>
+        <button type="button" className={!activeWorkspaceId ? "is-active" : ""} aria-label={t("projectSidebar.home")} onClick={onSelectAll}>
           <HomeOutlined aria-hidden /><span>{t("projectSidebar.home")}</span>
           {signal ? (
             <Tooltip title={t(`projectSidebar.signal.${signal.kind}`, { count: signal.count })} placement="right">
@@ -249,18 +241,11 @@ export function ProjectSidebar({ workspaces, documents = [], activeWorkspaceId, 
       </section>
       <nav className="project-sidebar__footer" aria-label={t("projectSidebar.utilities")}>
         {updateRow}
-        {credit ? (
-          <div className="project-sidebar__credit" role="status">
-            <ThunderboltOutlined aria-hidden />
-            <span>{hasCustomProvider ? t("shell.creditMeter.freeLabel") : credit.planLabel || t("shell.creditMeter.label")}</span>
-            {!hasCustomProvider ? <strong>{creditValue(credit)}</strong> : null}
-          </div>
-        ) : null}
-        <button type="button" onClick={onOpenAccount} title={account?.email}>
+        <button type="button" aria-label={account?.email ?? t("projectSidebar.account")} onClick={onOpenAccount} title={account?.email}>
           <UserOutlined aria-hidden />
           <span>{account?.email ?? t("projectSidebar.account")}</span>
         </button>
-        <button type="button" onClick={onOpenSettings}><SettingOutlined aria-hidden /><span>{t("projectSidebar.settings")}</span></button>
+        <button type="button" aria-label={t("projectSidebar.settings")} onClick={onOpenSettings}><SettingOutlined aria-hidden /><span>{t("projectSidebar.settings")}</span></button>
       </nav>
     </aside>
   );

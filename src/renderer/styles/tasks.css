@@ -1,5 +1,7 @@
 .page-stack {
+  box-sizing: border-box;
   width: min(1040px, 100%);
+  max-width: 100%;
   margin: 0 auto;
   padding: 32px;
   color: var(--od-ink);
@@ -12,6 +14,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
+  min-width: 0;
   margin: 0 0 24px;
   border: 0;
   padding: 0;
@@ -47,6 +50,7 @@
 .empty-card { min-height: 240px; display: grid; place-items: center; border: 1px solid var(--od-border-subtle); border-radius: 6px; background: var(--od-surface); }
 .runtime-runs { display: grid; gap: 12px; margin-top: 32px; }
 .runtime-runs__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.runtime-runs__header > * { min-width: 0; }
 .runtime-runs__header h3, .runtime-runs__header .ui-typography { margin: 0; color: var(--od-ink); font: 500 16px/24px var(--od-font-ui); }
 .runtime-runs__header p { margin: 2px 0 0; color: var(--od-ink-secondary); font-size: 12px; line-height: 18px; }
 .runtime-runs__header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }

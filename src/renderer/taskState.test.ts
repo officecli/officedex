@@ -202,6 +202,27 @@ describe("taskState", () => {
     });
   });
 
+  it("maps native runtime steps by meaning instead of progress event count", () => {
+    let state = createInitialTaskState();
+    const taskId = "xlsx-semantic-stages";
+    const progress = [
+      { event_id: "license-running", task_id: taskId, type: "task.progress", payload: { step: "license", status: "running" } },
+      { event_id: "license-completed", task_id: taskId, type: "task.progress", payload: { step: "license", status: "completed" } },
+      { event_id: "plan-running", task_id: taskId, type: "task.progress", payload: { step: "plan_prepare", status: "running" } },
+      { event_id: "plan-completed", task_id: taskId, type: "task.progress", payload: { step: "plan_prepare", status: "completed" } },
+      { event_id: "confirm-paused", task_id: taskId, type: "task.progress", payload: { step: "plan_confirm", status: "paused" } },
+    ] as const;
+    for (const event of progress) state = applyTaskEvent(state, event);
+
+    expect(state.tasks[taskId].stages).toEqual([
+      expect.objectContaining({ id: "access", label: "Checking access", status: "completed" }),
+      expect.objectContaining({ id: "plan", label: "Preparing execution plan", status: "completed" }),
+      expect.objectContaining({ id: "plan-review", label: "Waiting for plan approval", status: "active" }),
+    ]);
+    expect(state.tasks[taskId].activeStageId).toBe("plan-review");
+    expect(state.tasks[taskId].stages?.some((stage) => stage.label === "Formatting & export")).toBe(false);
+  });
+
   it("moves an accepted plan response into running state before bridge events arrive", () => {
     const waiting = applyTaskEvent(createInitialTaskState(), {
       event_id: "event-plan",

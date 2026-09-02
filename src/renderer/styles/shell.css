@@ -565,7 +565,7 @@
   position: relative;
   z-index: 40;
   display: grid;
-  grid-template-columns: auto minmax(220px, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   height: 56px;
@@ -630,10 +630,14 @@
 }
 
 .breadcrumb {
+  min-width: 0;
+  overflow: hidden;
   color: var(--n-steel);
   font-size: 13px;
   white-space: nowrap;
 }
+
+.breadcrumb > * { overflow: hidden; text-overflow: ellipsis; }
 
 .breadcrumb strong {
   color: var(--n-charcoal);

@@ -21,9 +21,10 @@ import {
   SafetyCertificateOutlined,
   StarOutlined,
   SyncOutlined,
+  ThunderboltOutlined,
 } from "../ui/icons";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MaterialSymbol } from "../components/Shell";
+import { MaterialSymbol, type CreditInfo } from "../components/Shell";
 import type { ReactNode } from "react";
 import { DiagnosticsPanel } from "../components/DiagnosticsPanel";
 import { RuntimeRunsPanel } from "../components/RuntimeRunsPanel";
@@ -742,7 +743,7 @@ function formatLastChecked(timestamp: string | null, t: (key: string, vars?: Rec
   return new Date(then).toLocaleString();
 }
 
-export function LoginScreen({ onReturn, onAuthenticated }: { onReturn?: () => void; onAuthenticated?: () => void } = {}) {
+export function LoginScreen({ onReturn, onAuthenticated, credit, hasCustomProvider }: { onReturn?: () => void; onAuthenticated?: () => void; credit?: CreditInfo; hasCustomProvider?: boolean } = {}) {
   const [phase, setPhase] = useState<LoginPhase>("loading");
   const [whoami, setWhoami] = useState<WhoAmIResult | null>(null);
   const [loginUrl, setLoginUrl] = useState<string | null>(null);
@@ -873,6 +874,14 @@ export function LoginScreen({ onReturn, onAuthenticated }: { onReturn?: () => vo
         <h1>{titleFor(phase, t)}</h1>
         <p>{subtitleFor(phase, whoami, t)}</p>
 
+        {credit ? (
+          <div className="login-credit" role="status">
+            <ThunderboltOutlined aria-hidden />
+            <span>{hasCustomProvider ? t("shell.creditMeter.freeLabel") : credit.planLabel || t("shell.creditMeter.label")}</span>
+            {!hasCustomProvider ? <strong>{formatCreditValue(credit)}</strong> : null}
+          </div>
+        ) : null}
+
         {phase === "loading" ? (
           <div className="login-status loading">
             <Loading3QuartersOutlined spin />
@@ -931,10 +940,21 @@ export function LoginScreen({ onReturn, onAuthenticated }: { onReturn?: () => vo
           </Space>
         ) : null}
 
+        {onReturn && phase !== "success" ? (
+          <Button className="login-return" block type="text" icon={<LeftOutlined />} onClick={onReturn}>
+            {t("login.button.return")}
+          </Button>
+        ) : null}
+
         <span className="copyright">{t("login.copyright")}</span>
       </div>
     </div>
   );
+}
+
+function formatCreditValue(credit: CreditInfo): string {
+  if (credit.displayMode === "balance") return String(Math.max(0, credit.total));
+  return `${Math.max(0, credit.total - credit.used)} / ${credit.total}`;
 }
 
 function RedeemCodeCard({ onCreditRefresh }: { onCreditRefresh?: () => void }) {

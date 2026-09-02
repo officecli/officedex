@@ -27,9 +27,9 @@
 .app-builder__identity > div:last-child,
 .published-workbook-app > header > div { align-items: flex-start; flex-direction: column; gap: 1px; }
 .app-builder__identity strong,
-.published-workbook-app > header strong { font-size: 13px; font-weight: 600; }
+.published-workbook-app > header strong { max-width: 100%; overflow: hidden; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .app-builder__identity span,
-.published-workbook-app > header span { color: var(--od-ink-secondary); font-size: 11px; }
+.published-workbook-app > header span { max-width: 100%; overflow: hidden; color: var(--od-ink-secondary); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .app-builder__mark { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 7px; background: var(--od-guidance); color: white !important; }
 .app-builder__mark svg { width: 15px; height: 15px; }
 .app-builder__connection { display: inline-flex; align-items: center; gap: 6px; color: var(--n-success); font-size: 11px; }
@@ -37,7 +37,7 @@
 .workbook-app-preview__live i { width: 7px; height: 7px; border-radius: 50%; background: var(--n-success); box-shadow: 0 0 0 4px color-mix(in srgb, var(--n-success) 14%, transparent); }
 
 .app-builder__steps { display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid var(--od-border-subtle); background: var(--od-surface); padding: 0 16px; }
-.app-builder__steps button { position: relative; border: 0; background: transparent; color: var(--od-ink-secondary); font: inherit; font-size: 12px; cursor: pointer; }
+.app-builder__steps button { position: relative; min-width: 0; overflow: hidden; border: 0; background: transparent; color: var(--od-ink-secondary); font: inherit; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .app-builder__steps button span { display: inline-grid; width: 19px; height: 19px; margin-right: 7px; place-items: center; border: 1px solid var(--od-border-hover); border-radius: 50%; font-size: 10px; }
 .app-builder__steps button[data-active="true"] { color: var(--od-guidance); font-weight: 600; }
 .app-builder__steps button[data-active="true"]::after { position: absolute; right: 24%; bottom: -1px; left: 24%; height: 2px; background: var(--od-guidance); content: ""; }
@@ -123,7 +123,7 @@
 
 .app-builder__publish { display: grid; min-width: 0; min-height: 0; grid-template-columns: minmax(0, 1fr) 330px; }
 .app-builder__publish > main { overflow: auto; padding: 32px; }
-.app-builder__publish-card { display: grid; max-width: 590px; gap: 16px; margin: 0 auto; border: 1px solid var(--od-border-subtle); border-radius: 10px; background: var(--od-surface); padding: 24px; box-shadow: var(--od-shadow-floating); }
+.app-builder__publish-card { display: grid; box-sizing: border-box; width: 100%; max-width: 590px; gap: 16px; margin: 0 auto; border: 1px solid var(--od-border-subtle); border-radius: 10px; background: var(--od-surface); padding: 24px; box-shadow: var(--od-shadow-floating); }
 .app-builder__publish-card > svg { width: 34px; height: 34px; color: var(--od-guidance); }
 .app-builder__url { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; border: 1px solid var(--od-border-default); border-radius: 6px; overflow: hidden; }
 .app-builder__url > span { color: var(--od-ink-secondary); padding-left: 10px; font-size: 12px; font-weight: 400; }
@@ -132,6 +132,13 @@
 .app-builder__publish > aside > label { display: flex; align-items: flex-start; gap: 9px; margin-top: 11px; border: 1px solid var(--od-border-subtle); border-radius: 7px; padding: 11px; }
 .app-builder__publish > aside > label span { display: flex; color: var(--od-ink-secondary); flex-direction: column; gap: 3px; font-size: 11px; }
 .app-builder__publish > aside > label strong { color: var(--od-ink); font-size: 12px; font-weight: 600; }
+
+@media (max-width: 600px) {
+  .app-builder { grid-template-rows: auto auto minmax(0, 1fr); }
+  .app-builder__topbar { align-items: flex-start; padding-block: 10px; }
+  .app-builder__steps { overflow-x: auto; grid-template-columns: repeat(3, minmax(120px, 1fr)); padding-inline: 8px; }
+  .app-builder__steps button { min-height: 42px; }
+}
 
 .published-workbook-app { grid-template-rows: 52px minmax(0, 1fr); }
 .published-workbook-app > main { min-height: 0; overflow: auto; padding: 22px; }

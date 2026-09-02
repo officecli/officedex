@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -40,9 +41,11 @@ import (
 	"officedex/internal/bridge"
 	"officedex/internal/demoflow"
 	"officedex/internal/diagnostics"
+	"officedex/internal/instance"
 	"officedex/internal/localstore"
 	"officedex/internal/login"
 	"officedex/internal/mask"
+	"officedex/internal/mophttp"
 	"officedex/internal/netproxy"
 	"officedex/internal/office2modoc"
 	"officedex/internal/pptxeditor"
@@ -193,8 +196,10 @@ func (wailsDesktopNotificationRuntime) SendNotification(ctx context.Context, opt
 type App struct {
 	ctx context.Context
 
-	userDataDir  string
-	workspaceDir string
+	userDataDir       string
+	workspaceDir      string
+	runtimeRoot       string
+	desktopInstanceID string
 
 	settingsStore *settings.Store
 	localStore    *localstore.Store
@@ -226,6 +231,7 @@ type App struct {
 	proxyPool              *netproxy.Pool
 	xlsxEditorService      xlsxEditorService
 	pptxEditorService      pptxEditorService
+	mopHTTPHandler         http.Handler
 	timelineStore          *timeline.Store
 
 	// resolver cache. binresolver.Resolve stats the filesystem on every call;
@@ -281,6 +287,10 @@ func NewApp() (*App, error) {
 	}
 
 	localStore := localstore.New(filepath.Join(userDataDir, "officedex.sqlite"))
+	identity, err := instance.LoadOrCreate(userDataDir)
+	if err != nil {
+		return nil, fmt.Errorf("load instance identity: %w", err)
+	}
 
 	proxyPool := netproxy.NewPool()
 	if cached.Proxy != nil && cached.Proxy.Enabled && cached.Proxy.URL != "" {
@@ -293,13 +303,15 @@ func NewApp() (*App, error) {
 	login.SetProxyEnvSupplier(proxyPool.SubprocessEnv)
 
 	app := &App{
-		userDataDir:    userDataDir,
-		workspaceDir:   workspaceDir,
-		settingsStore:  settingsStore,
-		localStore:     localStore,
-		previewReg:     previewReg,
-		cachedSettings: cached,
-		proxyPool:      proxyPool,
+		userDataDir:       userDataDir,
+		workspaceDir:      workspaceDir,
+		runtimeRoot:       filepath.Join(userDataDir, "runtime"),
+		desktopInstanceID: identity.DesktopInstanceID,
+		settingsStore:     settingsStore,
+		localStore:        localStore,
+		previewReg:        previewReg,
+		cachedSettings:    cached,
+		proxyPool:         proxyPool,
 	}
 	repoRoot, err := os.Getwd()
 	if err != nil {
@@ -308,6 +320,32 @@ func NewApp() (*App, error) {
 	app.xlsxEditorService = xlsxeditor.NewService(previewReg, office2modoc.New(repoRoot), os.TempDir())
 	app.pptxEditorService = pptxeditor.NewService(previewReg, pptxeditor.NewCLIConverter(repoRoot), os.TempDir())
 	app.timelineStore = timeline.New(filepath.Join(workspaceDir, "timeline"), pptxeditor.NewCLIConverter(repoRoot))
+	blankTemplatePath := filepath.Join(userDataDir, "blank-presentation.pptx")
+	if _, statErr := os.Stat(blankTemplatePath); os.IsNotExist(statErr) {
+		if err := os.WriteFile(blankTemplatePath, blankPptxDraft, 0o644); err != nil {
+			return nil, fmt.Errorf("write blank presentation template: %w", err)
+		}
+	} else if statErr != nil {
+		return nil, fmt.Errorf("stat blank presentation template: %w", statErr)
+	}
+	presentationRoot := resolvePresentationRuntimeRoot(repoRoot)
+	converterPath := ""
+	if presentationRoot != "" {
+		converterPath = filepath.Join(presentationRoot, "tools", "bin", "mop-convert")
+	}
+	if converterPath == "" || !isExecutableFile(converterPath) {
+		converterPath = resolveMopConvertFromEnvironment()
+	}
+	mopHandler := mophttp.New(mophttp.Options{
+		Root:              filepath.Join(workspaceDir, "mop-packages"),
+		Converter:         mophttp.NewCLIConverter(converterPath),
+		BlankTemplatePath: blankTemplatePath,
+		Capabilities:      mophttp.Capabilities{ProtocolVersion: mophttp.DefaultProtocolVersion, SchemaVersion: mophttp.DefaultSchemaVersion},
+		Logger: func(format string, args ...any) {
+			log.Printf("mophttp: "+format, args...)
+		},
+	})
+	app.mopHTTPHandler = mopHandler
 	app.demoFlow = demoflow.New(demoflow.Options{Recorder: app})
 
 	manifestURL := os.Getenv("OFFICEDEX_UPDATE_MANIFEST_URL")
@@ -350,6 +388,9 @@ func NewApp() (*App, error) {
 // retained so binding methods can dispatch events and open OS dialogs.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	if err := a.writeProcessIdentity(); err != nil {
+		wailsruntime.LogWarningf(ctx, "write process identity: %v", err)
+	}
 	if a.xlsxEditorService != nil {
 		if err := a.xlsxEditorService.CleanupStale(); err != nil {
 			wailsruntime.LogWarningf(ctx, "cleanup stale XLSX sessions: %v", err)
@@ -366,6 +407,9 @@ func (a *App) startup(ctx context.Context) {
 	if err := a.ensureLocalStoreOpen(ctx); err != nil {
 		wailsruntime.LogErrorf(ctx, "open local store: %v", err)
 	} else {
+		if err := a.prepareLegacyRuntimeMigration(ctx); err != nil {
+			wailsruntime.LogWarningf(ctx, "prepare legacy runtime migration: %v", err)
+		}
 		if err := a.failInterruptedTasks(ctx); err != nil {
 			wailsruntime.LogWarningf(ctx, "fail interrupted tasks: %v", err)
 		}
@@ -426,6 +470,7 @@ func (a *App) failInterruptedTasks(ctx context.Context) error {
 // shutdown is called by Wails when the window is about to close. It stops
 // long-running children so we don't leak processes.
 func (a *App) shutdown(ctx context.Context) {
+	a.removeProcessIdentity()
 	a.mu.Lock()
 	bridgeClients := a.takeBridgeClientsLocked()
 	loginUnsub := a.loginUnsub
@@ -4789,6 +4834,8 @@ func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
 		BinaryPath:     resolved.Path,
 		Env:            env,
 		Cwd:            cwd,
+		ClientID:       a.desktopInstanceID,
+		RuntimeRoot:    a.runtimeRoot,
 		LogDir:         filepath.Join(a.userDataDir, "logs"),
 		RequestTimeout: 30 * time.Second,
 	})
@@ -4831,6 +4878,17 @@ func presentationRuntimeEnv(cwd string) []string {
 		return env
 	}
 	candidates := make([]string, 0, 5)
+	// A packaged macOS app may be launched from a shell whose PWD points at a
+	// developer checkout. Prefer the embedded, signed presentation runtime in
+	// that case; otherwise the app can pair its signed x64 Node runtime with an
+	// unsigned source-tree Rollup native addon and macOS rejects dlopen().
+	if executable, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(executable)
+		candidates = append(candidates,
+			filepath.Join(exeDir, "..", "Resources", "presentation"),
+			filepath.Join(exeDir, "presentation"),
+		)
+	}
 	if strings.TrimSpace(cwd) != "" {
 		candidates = append(candidates,
 			filepath.Join(cwd, "pptx"),
@@ -4851,13 +4909,6 @@ func presentationRuntimeEnv(cwd string) []string {
 			filepath.Join(envPWD, "..", "pptx"),
 		)
 	}
-	if executable, err := os.Executable(); err == nil {
-		exeDir := filepath.Dir(executable)
-		candidates = append(candidates,
-			filepath.Join(exeDir, "..", "Resources", "presentation"),
-			filepath.Join(exeDir, "presentation"),
-		)
-	}
 	for _, candidate := range candidates {
 		root, err := filepath.Abs(candidate)
 		if err != nil {
@@ -4874,6 +4925,48 @@ func presentationRuntimeEnv(cwd string) []string {
 		return nil
 	}
 	return env
+}
+
+func resolvePresentationRuntimeRoot(repoRoot string) string {
+	candidates := make([]string, 0, 6)
+	if executable, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(executable)
+		candidates = append(candidates,
+			filepath.Join(exeDir, "..", "Resources", "presentation"),
+			filepath.Join(exeDir, "presentation"),
+		)
+	}
+	if strings.TrimSpace(repoRoot) != "" {
+		candidates = append(candidates,
+			filepath.Join(repoRoot, "pptx"),
+			filepath.Join(repoRoot, "..", "pptx"),
+		)
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		candidates = append(candidates, filepath.Join(cwd, "pptx"), filepath.Join(cwd, "..", "pptx"))
+	}
+	for _, candidate := range candidates {
+		root, err := filepath.Abs(candidate)
+		if err == nil && presentationRuntimeRootValid(root) {
+			return root
+		}
+	}
+	return ""
+}
+
+func isExecutableFile(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.Mode().IsRegular() && (runtime.GOOS == "windows" || info.Mode().Perm()&0o111 != 0)
+}
+
+func resolveMopConvertFromEnvironment() string {
+	for _, key := range []string{"OFFICEDEX_MOP_CONVERT_BIN", "MOP_CONVERT_BIN"} {
+		candidate := strings.TrimSpace(os.Getenv(key))
+		if isExecutableFile(candidate) {
+			return candidate
+		}
+	}
+	return ""
 }
 
 func presentationNodeExecutable() string {

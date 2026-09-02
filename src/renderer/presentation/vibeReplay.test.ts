@@ -88,6 +88,31 @@ function pictureStream(digest = PICTURE_DIGEST): VibeOp[] {
   ];
 }
 
+function smartArtStream(slides = 3): VibeOp[] {
+  const ops: VibeOp[] = [{ seq: 1, op: "deck.begin", slides, fonts: { latin: "Aptos", cjk: "Noto Sans CJK SC" } }];
+  let seq = 1;
+  for (let slide = 1; slide <= slides; slide += 1) {
+    ops.push({ seq: ++seq, op: "slide.begin", slide, composition: "smartart", background: "#FFFFFF" });
+    ops.push({
+      seq: ++seq,
+      op: "diagram.add",
+      slide,
+      diagram: {
+        layoutId: "urn:microsoft.com/office/officeart/2005/8/layout/hProcess10",
+        nodes: [
+          { id: `s${slide}-1`, text: "准备", level: 0 },
+          { id: `s${slide}-2`, text: "执行", level: 0 },
+          { id: `s${slide}-3`, text: "复盘", level: 0 },
+        ],
+      },
+    });
+    ops.push({ seq: ++seq, op: "shape.add", slide, shape: { kind: "text", role: "caption", left: 40, top: 60, width: 500, height: 40, text: `第 ${slide} 页` } });
+    ops.push({ seq: ++seq, op: "slide.end", slide });
+  }
+  ops.push({ seq: ++seq, op: "deck.end", slides });
+  return ops;
+}
+
 function fakePowerPoint({ attention = true, refuseVeils = false }: { attention?: boolean; refuseVeils?: boolean } = {}) {
   let rejectNextSync: string | null = null;
   const deck: Array<{ id: string; background?: string; shapes: FakeShape[] }> = [];
@@ -210,9 +235,9 @@ async function runChunkScript(source: string, powerPoint: ReturnType<typeof fake
   }
 }
 
-function fakeController(options: { session?: boolean } = {}) {
+function fakeController(options: { session?: boolean; powerPoint?: ReturnType<typeof fakePowerPoint> } = {}) {
   const executed: string[] = [];
-  const powerPoint = fakePowerPoint();
+  const powerPoint = options.powerPoint ?? fakePowerPoint();
   const saved = vi.fn(async () => ({ filePath: "/tmp/live.pptx", revision: 1 }));
   const controller: PresentationEditorController = {
     executeScript: vi.fn(async (source: string) => {
@@ -252,19 +277,52 @@ describe("buildOpsChunkScript", () => {
     expect(source).toContain("Noto Sans CJK SC");
   });
 
-  it("replays a native SmartArt operation through the diagram surface", async () => {
+  it("replays native SmartArt operations through the diagram surface", async () => {
     const ops: VibeOp[] = [
       { seq: 1, op: "slide.begin", slide: 1, composition: "smartart", background: "#FFFFFF" },
-      { seq: 2, op: "diagram.add", slide: 1, diagram: { layoutId: "urn:microsoft.com/office/officeart/2005/8/layout/target1", nodes: ["产品", "设计", "工程"] } },
+      { seq: 2, op: "diagram.add", slide: 1, diagram: { layoutId: "urn:microsoft.com/office/officeart/2005/8/layout/hProcess10", nodes: ["准备", "执行", "复盘"] } },
       { seq: 3, op: "slide.end", slide: 1 },
     ];
+    const source = buildOpsChunkScript(ops, { fontLatin: "Aptos", fontCJK: "Noto Sans CJK SC" }, 0);
+    const powerPoint = fakePowerPoint();
+    const result = await runChunkScript(source, powerPoint) as { executed: number };
+    expect(result.executed).toBe(1);
+    expect(powerPoint.deck[0].shapes[0]).toMatchObject({ kind: "diagram", layoutId: "urn:microsoft.com/office/officeart/2005/8/layout/hProcess10" });
+  });
+
+  it("counts diagrams and preserves their order when mixed with ordinary shapes", async () => {
     const powerPoint = fakePowerPoint();
     const outcome = await runChunkScript(
-      buildOpsChunkScript(ops, { fontLatin: "Aptos", fontCJK: "Noto Sans CJK SC" }, 0),
+      buildOpsChunkScript(smartArtStream(3), { fontLatin: "Aptos", fontCJK: "Noto Sans CJK SC" }, 0),
       powerPoint,
     ) as { executed: number; skipped: number };
-    expect(outcome).toMatchObject({ executed: 1, skipped: 0 });
-    expect(powerPoint.deck[0].shapes[0]).toMatchObject({ kind: "diagram", layoutId: "urn:microsoft.com/office/officeart/2005/8/layout/target1" });
+
+    expect(outcome).toMatchObject({ executed: 6, skipped: 0 });
+    expect(powerPoint.deck).toHaveLength(3);
+    expect(powerPoint.deck.map((slide) => slide.shapes.map((shape) => shape.kind))).toEqual([
+      ["diagram", "text"],
+      ["diagram", "text"],
+      ["diagram", "text"],
+    ]);
+    expect(powerPoint.deck.map((slide) => slide.shapes[0].layoutId)).toEqual([
+      "urn:microsoft.com/office/officeart/2005/8/layout/hProcess10",
+      "urn:microsoft.com/office/officeart/2005/8/layout/hProcess10",
+      "urn:microsoft.com/office/officeart/2005/8/layout/hProcess10",
+    ]);
+  });
+
+  it("accounts for a diagram with no supported layout instead of claiming it was drawn", async () => {
+    const powerPoint = fakePowerPoint();
+    const outcome = await runChunkScript(
+      buildOpsChunkScript([
+        { seq: 1, op: "slide.begin", slide: 1 },
+        { seq: 2, op: "diagram.add", slide: 1, diagram: { nodes: ["孤立节点"] } },
+      ], { fontLatin: "Aptos", fontCJK: "Noto Sans CJK SC" }, 0),
+      powerPoint,
+    ) as { executed: number; skipped: number };
+
+    expect(outcome).toMatchObject({ executed: 0, skipped: 1 });
+    expect(powerPoint.deck[0].shapes).toHaveLength(0);
   });
 
   it("is plain JavaScript, whatever the file it is written in allows", () => {
@@ -541,6 +599,16 @@ describe("buildOpsChunkScript", () => {
     ]);
   });
 
+  it("keeps the attention overlay through deck.end while the feed is still open", () => {
+    const script = buildOpsChunkScript(
+      [{ seq: 1, op: "deck.end", slides: 1 }],
+      { fontLatin: "Aptos", fontCJK: "Noto Sans CJK SC", keepAttention: true },
+      0,
+    );
+    expect(script).toContain('"keepAttention":true');
+    expect(script).toContain('if (data.ops.some((entry) => entry.op === "deck.end") && !data.keepAttention)');
+  });
+
   it("accounts for every shape.add, including the ones it declines to draw", async () => {
     const powerPoint = fakePowerPoint();
     const outcome = await runChunkScript(
@@ -594,6 +662,59 @@ describe("VibeReplaySequencer", () => {
     expect(saved).toHaveBeenCalledTimes(1);
     expect(statuses.at(-1)).toBe("done");
     expect(statuses).toContain("saving");
+  });
+
+  it("replays three native diagrams mixed with text and saves exactly once", async () => {
+    const powerPoint = fakePowerPoint();
+    const { controller, saved } = fakeController({ powerPoint });
+    const statuses: string[] = [];
+    const sequencer = makeSequencer({ controller, paceMs: 0, onStatus: (status) => statuses.push(status.state) });
+
+    sequencer.update({ taskId: "t-smartart", ops: smartArtStream(3), completed: true });
+    for (let tick = 0; tick < 8; tick += 1) await flush();
+
+    expect(statuses.at(-1)).toBe("done");
+    expect(saved).toHaveBeenCalledTimes(1);
+    expect(powerPoint.deck).toHaveLength(3);
+    expect(powerPoint.deck.map((slide) => slide.shapes.filter((shape) => shape.kind === "diagram").length)).toEqual([1, 1, 1]);
+    expect(powerPoint.deck.flatMap((slide) => slide.shapes).filter((shape) => shape.kind === "diagram")).toHaveLength(3);
+  });
+
+  it("fails and does not save when the native diagram host rejects insertion", async () => {
+    const powerPoint = fakePowerPoint();
+    const { controller, saved } = fakeController({ powerPoint });
+    const execute = controller.executeScript as ReturnType<typeof vi.fn>;
+    execute.mockImplementation(async (source: string) => {
+      if (!source.includes("PowerPoint.run")) return { result: true } as never;
+      if (source.includes("addDiagram")) throw new Error("ShapeCollection.addDiagram is not implemented by the MOP host");
+      return { result: await runChunkScript(source, powerPoint) } as never;
+    });
+    const statuses: Array<{ state: string; error?: string }> = [];
+    const sequencer = makeSequencer({ controller, paceMs: 0, onStatus: (status) => statuses.push(status) });
+
+    sequencer.update({ taskId: "t-smartart-fail", ops: smartArtStream(1), completed: true });
+    for (let tick = 0; tick < 4; tick += 1) await flush();
+
+    expect(statuses.at(-1)?.state).toBe("failed");
+    expect(statuses.at(-1)?.error).toContain("addDiagram");
+    expect(saved).not.toHaveBeenCalled();
+  });
+
+  it("clears the attention overlay before saving the completed deck", async () => {
+    const powerPoint = fakePowerPoint();
+    const { controller, saved } = fakeController({ powerPoint });
+    const sequencer = makeSequencer({ controller, paceMs: 0 });
+
+    sequencer.update({ taskId: "t-smartart-overlay", ops: smartArtStream(1), completed: true });
+    for (let tick = 0; tick < 5; tick += 1) await flush();
+
+    expect(saved).toHaveBeenCalledTimes(1);
+    expect(powerPoint.timeline.at(-1)).toBe("focus@none");
+    const scriptIndexes = (controller.executeScript as ReturnType<typeof vi.fn>).mock.calls.map((call) => String(call[0]));
+    const clearIndex = scriptIndexes.findIndex((source) => source.includes("focusAttention(null)"));
+    const saveFlushIndex = scriptIndexes.findIndex((source, index) => index > clearIndex && source === "return true;");
+    expect(clearIndex).toBeGreaterThanOrEqual(0);
+    expect(saveFlushIndex).toBeGreaterThan(clearIndex);
   });
 
   it("resumes from what the draft already holds instead of drawing it again", async () => {
@@ -683,12 +804,12 @@ describe("VibeReplaySequencer", () => {
 
   it("does not save when nothing was drawn", async () => {
     const { controller, saved } = fakeController();
-    const statuses: string[] = [];
-    const sequencer = makeSequencer({ controller, paceMs: 0, onStatus: (s) => statuses.push(s.state) });
+    const statuses: Array<{ state: string; images?: { total: number; placed: number; pending: number; failed: number } }> = [];
+    const sequencer = makeSequencer({ controller, paceMs: 0, onStatus: (s) => statuses.push(s) });
     sequencer.update({ taskId: "t1", ops: [], completed: true });
     await flush();
     expect(saved).not.toHaveBeenCalled();
-    expect(statuses.at(-1)).toBe("done");
+    expect(statuses.at(-1)?.state).toBe("done");
   });
 });
 
@@ -754,8 +875,8 @@ describe("picture ops", () => {
   it("keeps the placeholder panel when the bytes cannot be resolved", async () => {
     readDrawingAsset.mockRejectedValueOnce(new Error("pool is gone"));
     const { controller, powerPoint } = fakeController();
-    const statuses: string[] = [];
-    const sequencer = makeSequencer({ controller, paceMs: 0, onStatus: (s) => statuses.push(s.state) });
+    const statuses: Array<{ state: string; images?: { total: number; placed: number; pending: number; failed: number } }> = [];
+    const sequencer = makeSequencer({ controller, paceMs: 0, onStatus: (s) => statuses.push(s) });
     sequencer.update({ taskId: "t1", ops: pictureStream(), completed: true });
     for (let tick = 0; tick < 6; tick += 1) await flush();
 
@@ -764,7 +885,8 @@ describe("picture ops", () => {
     const shapes = powerPoint.deck[0].shapes;
     expect(shapes.map((shape) => shape.fillColor)).toEqual(["#EDF1F7", "#EDF1F7"]);
     expect(readDrawingAsset).toHaveBeenCalledTimes(1);
-    expect(statuses.at(-1)).toBe("done");
+    expect(statuses.at(-1)?.state).toBe("done");
+    expect(statuses.at(-1)?.images).toEqual({ total: 2, placed: 2, pending: 0, failed: 1 });
   });
 
   it("does not reach for the pool when a deck has no pictures", async () => {
@@ -802,7 +924,9 @@ describe("performance", () => {
     sequencer.update({ taskId: "t1", ops: opStream(2), completed: true });
     for (let tick = 0; tick < 8; tick += 1) await flush();
 
-    const paces = executed.filter((source) => source.includes("PowerPoint.run")).map(paceOf);
+    const paces = executed
+      .filter((source) => source.includes("PowerPoint.run") && source.includes("const PACE_MS"))
+      .map(paceOf);
     expect(new Set(paces)).toEqual(new Set([90]));
   });
 
@@ -814,7 +938,9 @@ describe("performance", () => {
     sequencer.update({ taskId: "t1", ops: opStream(2), completed: true });
     for (let tick = 0; tick < 8; tick += 1) await flush();
 
-    const paces = executed.filter((source) => source.includes("PowerPoint.run")).map(paceOf);
+    const paces = executed
+      .filter((source) => source.includes("PowerPoint.run") && source.includes("const PACE_MS"))
+      .map(paceOf);
     expect(new Set(paces)).toEqual(new Set([0]));
     // Still draws the whole deck, just without the pauses.
     expect(powerPoint.deck).toHaveLength(2);
@@ -983,6 +1109,37 @@ describe("buildReplayFeed", () => {
     expect(buildReplayFeed({ draft, performing: false, trace: false, task: finished })).toMatchObject({
       completed: true,
       perform: undefined,
+    });
+  });
+
+  it("keeps a completed task live while image placeholders await late patches", () => {
+    const pendingImageOps: VibeOp[] = [
+      { seq: 1, op: "deck.begin", slides: 1 },
+      {
+        seq: 2,
+        op: "slide.begin",
+        slide: 1,
+      },
+      {
+        seq: 3,
+        op: "shape.add",
+        slide: 1,
+        shape: {
+          kind: "picture",
+          left: 10,
+          top: 10,
+          width: 100,
+          height: 100,
+          imageRef: { kind: "primary", visualIndex: 0 },
+        },
+      },
+      { seq: 4, op: "slide.end", slide: 1 },
+      { seq: 5, op: "deck.end", slides: 1 },
+    ];
+    const task = { status: "completed", vibeOps: pendingImageOps };
+    expect(buildReplayFeed({ draft, performing: true, trace: false, task })).toMatchObject({
+      completed: false,
+      ops: pendingImageOps,
     });
   });
 

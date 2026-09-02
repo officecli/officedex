@@ -9,10 +9,13 @@
   justify-content: center;
   z-index: 1000;
   padding: 24px;
+  overflow: auto;
 }
 
 .onboarding-card {
+  box-sizing: border-box;
   width: min(640px, 100%);
+  max-width: 100%;
   max-height: calc(100vh - 48px);
   overflow: auto;
   background: var(--n-canvas, #ffffff);
@@ -45,12 +48,14 @@
 
 .onboarding-title-row {
   display: flex;
+  min-width: 0;
   align-items: baseline;
   justify-content: space-between;
   gap: 16px;
 }
 
 .onboarding-title-row .onboarding-title {
+  min-width: 0;
   margin: 0;
 }
 
@@ -119,6 +124,8 @@
   justify-content: space-between;
   align-items: center;
   margin-top: 28px;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .onboarding-actions > .ui-button[data-variant="ghost-normal"] {
@@ -137,10 +144,13 @@
   justify-content: center;
   z-index: 1000;
   padding: 24px;
+  overflow: auto;
 }
 
 .runtime-card {
+  box-sizing: border-box;
   width: min(540px, 100%);
+  max-width: 100%;
   max-height: calc(100vh - 48px);
   overflow: auto;
   background: #ffffff;
@@ -185,18 +195,24 @@
 
 .runtime-settings-card .runtime-info-row {
   display: flex;
+  min-width: 0;
   justify-content: space-between;
   padding: 6px 0;
   font-size: 14px;
 }
 
 .runtime-settings-card .runtime-info-label {
+  min-width: 0;
   color: #74777c;
 }
 
 .runtime-settings-card .runtime-info-value {
+  min-width: 0;
+  max-width: 100%;
   color: #1a2530;
   font-weight: 500;
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 
 .runtime-settings-card code {
@@ -214,6 +230,7 @@
   display: flex;
   align-items: center;
   gap: 16px;
+  min-width: 0;
   padding: 12px 20px;
   background: linear-gradient(135deg, var(--n-primary, #05101a) 0%, var(--n-primary-pressed, #1a2530) 100%);
   color: #ffffff;
@@ -233,6 +250,7 @@
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.16);
   font-size: 18px;
+  flex: 0 0 auto;
 }
 
 .update-banner--stacked .update-banner-icon {
@@ -245,6 +263,7 @@
 }
 
 .update-banner-title {
+  overflow-wrap: anywhere;
   font-family: var(--font-body, 'Plus Jakarta Sans', system-ui, sans-serif);
   font-size: 16px;
   font-weight: 700;
@@ -256,6 +275,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
   margin-top: 6px;
 }
 
@@ -282,6 +302,8 @@
   align-items: center;
   align-self: center;
   gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .update-banner--stacked .update-banner-actions {
@@ -326,11 +348,14 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
+  overflow: auto;
   backdrop-filter: blur(6px);
 }
 
 .force-update-card {
+  box-sizing: border-box;
   width: min(480px, 100%);
+  max-width: 100%;
   background: #fafaf9;
   border: 1px solid #e5e3df;
   border-radius: 12px;
@@ -385,6 +410,7 @@
   font-size: 13px;
   color: #787671;
   margin: 0 0 20px;
+  overflow-wrap: anywhere;
 }
 
 .force-update-action {
@@ -407,4 +433,24 @@
   margin-top: 12px;
   font-size: 13px;
   color: #e03131;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  .onboarding-overlay,
+  .runtime-overlay,
+  .force-update-overlay { align-items: flex-start; padding: 16px; }
+  .onboarding-card { padding: 22px 18px; }
+  .runtime-card { padding: 24px 18px; }
+  .force-update-card { padding: 24px 18px; }
+  .onboarding-title-row { align-items: flex-start; flex-direction: column; gap: 6px; }
+  .onboarding-actions { align-items: stretch; flex-direction: column-reverse; }
+  .onboarding-actions > .ui-button { width: 100%; }
+  .runtime-settings-card .runtime-info-row { align-items: flex-start; flex-direction: column; gap: 2px; }
+  .runtime-settings-card .runtime-info-value { text-align: left; }
+  .update-banner { align-items: flex-start; flex-wrap: wrap; padding: 12px 16px; }
+  .update-banner-body { flex: 1 1 calc(100% - 52px); }
+  .update-banner-actions { width: 100%; justify-content: flex-end; }
+  .update-banner-progress { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .update-banner-progress .ui-progress { width: 100%; }
 }

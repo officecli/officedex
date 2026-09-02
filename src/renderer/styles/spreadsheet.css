@@ -79,6 +79,11 @@
 .spreadsheet-agent-panel__stages li[data-status="active"]::before { background: var(--od-guidance); }
 .spreadsheet-agent-panel__stages li[data-status="completed"]::before { background: var(--n-success); }
 .spreadsheet-agent-panel__question { margin-top: 12px; }
+.spreadsheet-agent-panel__plan { display: grid; gap: 10px; margin-top: 12px; border: 1px solid color-mix(in srgb, var(--od-guidance) 32%, var(--od-border-subtle)); border-radius: 8px; background: color-mix(in srgb, var(--od-guidance) 5%, var(--od-surface)); padding: 12px; }
+.spreadsheet-agent-panel__plan > span { color: var(--od-guidance); font-size: 11px; font-weight: 500; }
+.spreadsheet-agent-panel__plan > strong { color: var(--od-ink); font-size: 13px; font-weight: 500; }
+.spreadsheet-agent-panel__plan pre { max-height: 320px; margin: 0; overflow: auto; border-radius: 6px; background: var(--od-surface); color: var(--od-ink-secondary); padding: 10px; font: inherit; font-size: 12px; line-height: 1.55; white-space: pre-wrap; }
+.spreadsheet-agent-panel__plan-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .spreadsheet-agent-panel__error { margin-top: 12px; border-radius: 6px; background: color-mix(in srgb, var(--od-danger) 8%, transparent); color: var(--od-danger); padding: 10px 12px; font-size: 12px; }
 .spreadsheet-agent-panel__composer { display: grid; gap: 8px; border-top: 1px solid var(--od-border-subtle); padding-top: 12px; }
 .spreadsheet-agent-panel__composer .ui-textarea { resize: none; }
@@ -90,7 +95,7 @@
 .is-spinning { animation: spreadsheet-spin 900ms linear infinite; }
 
 .spreadsheet-unsaved { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; background: rgb(0 0 0 / 32%); padding: 24px; }
-.spreadsheet-unsaved__dialog { width: min(440px, 100%); border: 1px solid var(--od-border-subtle); border-radius: 8px; background: var(--od-surface); padding: 20px; box-shadow: 0 16px 48px rgb(0 0 0 / 18%); }
+.spreadsheet-unsaved__dialog { box-sizing: border-box; width: min(440px, 100%); max-width: 100%; max-height: calc(100dvh - 48px); overflow: auto; border: 1px solid var(--od-border-subtle); border-radius: 8px; background: var(--od-surface); padding: 20px; box-shadow: 0 16px 48px rgb(0 0 0 / 18%); }
 .spreadsheet-unsaved__dialog h2 { margin: 0; color: var(--od-ink); font-size: 16px; line-height: 24px; font-weight: 500; }
 .spreadsheet-unsaved__dialog p { margin: 8px 0 20px; color: var(--od-ink-secondary); font-size: 13px; line-height: 20px; }
 .spreadsheet-unsaved__actions { display: flex; justify-content: flex-end; gap: 8px; }

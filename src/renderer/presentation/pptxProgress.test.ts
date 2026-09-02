@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createInitialPptxProgress, reducePptxProgress, reducePptxProgressEvents } from "./pptxProgress";
+import { createInitialPptxProgress, imageProgressFromOps, reducePptxProgress, reducePptxProgressEvents } from "./pptxProgress";
 
 describe("pptx progressive progress reducer", () => {
   it("reveals brief, outline, draft, and drawing as events arrive", () => {
@@ -59,5 +59,14 @@ describe("pptx progressive progress reducer", () => {
       { type: "task.cancelled", payload: {} },
     ]);
     expect(cancelled.phase).toBe("cancelled");
+  });
+
+  it("tracks pending image placeholders until later shape updates place the assets", () => {
+    const images = imageProgressFromOps([
+      { seq: 1, op: "shape.add", slide: 1, shape: { kind: "picture", imageRef: { kind: "primary", mimeType: "image/png", pending: true } } },
+      { seq: 2, op: "shape.add", slide: 2, shape: { kind: "picture", imageRef: { kind: "primary", mimeType: "image/png", pending: true } } },
+      { seq: 3, op: "shape.update", slide: 1, fill: { imageRef: { kind: "primary", mimeType: "image/png", digest: "a".repeat(64) } } },
+    ]);
+    expect(images).toEqual({ total: 2, placed: 1, pending: 1, failed: 0 });
   });
 });

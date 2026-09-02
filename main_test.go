@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"net/http"
+	"testing"
+)
 
 func TestWailsAppOptionsEnableFileDrop(t *testing.T) {
 	opts := newWailsAppOptions(nil)
@@ -12,5 +15,13 @@ func TestWailsAppOptionsEnableFileDrop(t *testing.T) {
 	}
 	if !opts.DragAndDrop.DisableWebViewDrop {
 		t.Fatal("DisableWebViewDrop is false")
+	}
+}
+
+func TestWailsAppOptionsMountLocalMopHandler(t *testing.T) {
+	app := &App{mopHTTPHandler: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})}
+	opts := newWailsAppOptions(app)
+	if opts.AssetServer == nil || opts.AssetServer.Handler == nil {
+		t.Fatal("local MOP handler is not mounted on the Wails asset server")
 	}
 }

@@ -20,7 +20,9 @@
   --settings-shadow: 0 18px 42px rgb(15 23 42 / 7%), 0 2px 7px rgb(15 23 42 / 4%);
   position: relative;
   z-index: 1;
+  box-sizing: border-box;
   width: min(1180px, 100%);
+  max-width: 100%;
   margin: 0 auto;
   padding: 42px clamp(24px, 4vw, 64px) 64px;
   color: var(--od-ink);
@@ -78,6 +80,7 @@
 
 .settings-layout {
   display: grid;
+  min-width: 0;
   grid-template-columns: 214px minmax(0, 1fr);
   gap: 18px;
   align-items: start;
@@ -88,6 +91,7 @@
   top: 24px;
   align-self: start;
   overflow: auto;
+  min-width: 0;
   border: 1px solid var(--settings-border);
   border-radius: var(--settings-nav-radius);
   background: var(--settings-surface-soft);
@@ -154,12 +158,13 @@
   align-items: center;
   gap: 24px;
   padding: 17px 22px;
+  min-width: 0;
 }
 
 .setting-row + .setting-row { border-top: 1px solid var(--od-border-subtle); }
 .setting-copy { min-width: 0; }
 .setting-row h3 { margin: 0; color: var(--od-ink); font: 600 13.5px/20px var(--od-font-ui); }
-.setting-row p { max-width: 410px; margin: 4px 0 0; color: var(--od-ink-secondary); font-size: 12px; line-height: 19px; }
+.setting-row p { max-width: 410px; margin: 4px 0 0; color: var(--od-ink-secondary); font-size: 12px; line-height: 19px; overflow-wrap: anywhere; }
 
 .setting-control { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 9px; flex-wrap: wrap; }
 .setting-row[data-variant="form"] { grid-template-columns: minmax(0, 1fr); align-items: start; gap: 14px; }
@@ -168,10 +173,10 @@
 .setting-row[data-variant="actions"] { grid-template-columns: minmax(180px, .64fr) minmax(410px, 1.36fr); }
 
 .settings-toggle-control { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
-.settings-toggle-control > span { color: var(--od-ink-secondary); font-size: 12px; white-space: nowrap; }
+.settings-toggle-control > span { min-width: 0; color: var(--od-ink-secondary); font-size: 12px; white-space: normal; overflow-wrap: anywhere; }
 .settings-toggle-stack { display: grid; gap: 8px; justify-items: end; }
 
-.settings-note { grid-column: 1 / -1; color: var(--od-ink-secondary); font-size: 12px; line-height: 1.45; }
+.settings-note { grid-column: 1 / -1; min-width: 0; color: var(--od-ink-secondary); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
 
 .settings-stage .settings-section-body .ui-button {
   min-height: 34px;
@@ -268,6 +273,9 @@
 .settings-stage .jira-connection-card > label .ui-input,
 .settings-stage .jira-connection-card > label .ui-password-input,
 .settings-stage .jira-connection-card > label .ui-select { width: 100%; }
+.settings-stage .jira-connection-card > label .ui-input,
+.settings-stage .jira-connection-card > label .ui-password-input,
+.settings-stage .jira-connection-card > label .ui-select { box-sizing: border-box; min-width: 0; max-width: 100%; }
 .settings-stage .jira-connection-card__help,
 .settings-stage .jira-connection-card__status,
 .settings-stage .jira-connection-card__probe,
@@ -275,6 +283,10 @@
 .settings-stage .jira-connection-card__actions,
 .settings-stage .jira-connection-card > .settings-note { grid-column: 1 / -1; }
 .settings-stage .jira-connection-card__help { display: grid; gap: 7px; border: 1px solid var(--od-border-subtle); border-radius: 12px; background: var(--od-surface); padding: 12px 14px; color: var(--od-ink-secondary); font-size: 12px; line-height: 18px; }
+.settings-stage .jira-connection-card__help,
+.settings-stage .jira-connection-card__status,
+.settings-stage .jira-connection-card__probe,
+.settings-stage .jira-connection-card__error { min-width: 0; box-sizing: border-box; overflow-wrap: anywhere; }
 .settings-stage .jira-connection-card__help strong { color: var(--od-ink); font-size: 12px; }
 .settings-stage .jira-connection-card__help ol { display: grid; gap: 3px; margin: 0; padding-left: 20px; }
 .settings-stage .jira-connection-card__documentation-link { display: inline-flex; width: fit-content; align-items: center; gap: 6px; color: var(--od-guidance); text-decoration: none; }
@@ -329,13 +341,17 @@
 
 .login-page {
   display: grid;
+  box-sizing: border-box;
   min-height: 100%;
+  padding: 24px;
   place-items: center;
   background: var(--od-bg);
 }
 
 .login-card {
-  width: 380px;
+  box-sizing: border-box;
+  width: min(380px, 100%);
+  max-width: 100%;
   border: 1px solid var(--od-hairline);
   border-radius: var(--od-radius-dialog);
   background: var(--od-panel);
@@ -359,6 +375,10 @@
 .login-card .ui-form {
   margin-top: 24px;
   text-align: left;
+}
+
+.login-return {
+  margin-top: 12px;
 }
 
 .login-status {
@@ -390,6 +410,26 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+.login-credit {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  border: 1px solid var(--od-hairline);
+  border-radius: var(--od-radius-ctl);
+  background: var(--od-surface-subtle);
+  color: var(--od-ink-secondary);
+  padding: 0 12px;
+  font-size: 13px;
+  line-height: 20px;
+  text-align: left;
+}
+
+.login-credit svg { width: 15px; height: 15px; flex: 0 0 auto; color: var(--od-guidance); }
+.login-credit span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.login-credit strong { margin-left: auto; color: var(--od-ink); font-weight: 600; white-space: nowrap; }
 
 .login-url-box {
   display: flex;
@@ -544,19 +584,24 @@
   gap: 12px;
   padding: 4px 0;
   font-size: 13px;
+  min-width: 0;
 }
 
 .effective-label {
+  min-width: 0;
   color: var(--od-ink-secondary);
   flex-shrink: 0;
 }
 
 .effective-value {
+  min-width: 0;
+  max-width: 100%;
   color: var(--od-ink);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   text-align: right;
-  word-break: break-all;
+  overflow-wrap: anywhere;
+  word-break: normal;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -653,6 +698,34 @@
   .setting-row[data-variant="actions"] { grid-template-columns: minmax(0, 1fr); }
 }
 
+@media (max-width: 1100px) and (min-width: 901px) {
+  .settings-layout { grid-template-columns: 180px minmax(0, 1fr); }
+  .setting-row,
+  .setting-row[data-variant="actions"] { grid-template-columns: minmax(0, 1fr); align-items: start; }
+  .setting-control { width: 100%; justify-content: flex-start; }
+  .settings-stage .ui-select.settings-select,
+  .settings-stage .setting-row[data-variant="form"] .ui-select { width: 100%; min-width: 0 !important; }
+  .settings-stage .jira-connection-card { grid-template-columns: minmax(0, 1fr); }
+  .settings-toggle-control,
+  .settings-toggle-stack { justify-content: flex-start; justify-items: start; }
+}
+
+@media (max-width: 900px) and (min-width: 761px) {
+  .settings-layout { grid-template-columns: 180px minmax(0, 1fr); }
+  .setting-row,
+  .setting-row[data-variant="actions"] { grid-template-columns: minmax(0, 1fr); align-items: start; }
+  .setting-control { justify-content: flex-start; }
+  .setting-control { width: 100%; }
+  .settings-stage .ui-select.settings-select,
+  .settings-stage .setting-row[data-variant="form"] .ui-select {
+    width: 100%;
+    min-width: 0 !important;
+  }
+  .settings-stage .jira-connection-card { grid-template-columns: minmax(0, 1fr); }
+  .settings-toggle-control,
+  .settings-toggle-stack { justify-content: flex-start; justify-items: start; }
+}
+
 @media (max-width: 760px) {
   .settings-page { padding: 28px 18px 48px; }
   .settings-hero { align-items: flex-start; flex-direction: column; gap: 12px; }
@@ -685,7 +758,13 @@
     padding: 16px;
   }
   .setting-row[data-variant="actions"] { grid-template-columns: 1fr; }
-  .setting-control { justify-content: flex-start; }
+  .setting-control { justify-content: flex-start; width: 100%; }
+  .settings-stage .ui-select.settings-select,
+  .settings-stage .setting-row[data-variant="form"] .ui-select {
+    width: 100%;
+    min-width: 0 !important;
+  }
+  .settings-stage .jira-connection-card { grid-template-columns: minmax(0, 1fr); }
   .settings-toggle-control,
   .settings-toggle-stack { justify-content: flex-start; justify-items: start; }
   .about-card {
@@ -700,4 +779,8 @@
   .about-actions .ui-button {
     flex: 1 1 180px;
   }
+  .login-page { padding: 16px; }
+  .login-card { padding: 24px 20px; }
+  .effective-row { align-items: flex-start; flex-direction: column; gap: 2px; }
+  .effective-value { width: 100%; text-align: left; }
 }

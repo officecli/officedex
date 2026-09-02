@@ -114,7 +114,7 @@ export default defineConfig({
     environment: "jsdom",
     globals: false,
     setupFiles: ["src/renderer/test/setup.ts"],
-    include: ["src/**/*.test.{ts,tsx}", "scripts/verify-wails-app.test.mjs"],
+    include: ["src/**/*.test.{ts,tsx}", "presentation-component/src/**/*.test.ts", "scripts/verify-wails-app.test.mjs"],
     exclude: ["e2e/**", "node_modules/**", "dist/**", "build/**"],
     testTimeout: 15000,
     hookTimeout: 15000,

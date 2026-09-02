@@ -3,7 +3,7 @@
 // bundle's Contents/Resources/ so that the binresolver can discover it at
 // runtime (bundled path takes priority).
 
-import { chmod, copyFile, mkdir } from "node:fs/promises";
+import { chmod, copyFile, cp, mkdir, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -30,6 +30,16 @@ async function copy(src, destDir, destName) {
   console.log(`[bundle-runtime] ${src} → ${dest}`);
 }
 
+async function copyTreeRequired(src, dest, label) {
+  if (!existsSync(src)) {
+    throw new Error(`${label} not found: ${src}`);
+  }
+  await rm(dest, { recursive: true, force: true });
+  await mkdir(path.dirname(dest), { recursive: true });
+  await cp(src, dest, { recursive: true, force: true, dereference: true });
+  console.log(`[bundle-runtime] ${src} → ${dest}`);
+}
+
 async function main() {
   if (!existsSync(APP_PATH)) {
     console.log("[bundle-runtime] no .app found, skipping");
@@ -41,19 +51,16 @@ async function main() {
   const officecliDest = path.join(RESOURCES, "officecli");
   await copy(officecliSrc, officecliDest, BINARY_NAME);
 
-  // MOP authoring uses the embedded Node runtime directly. Keep it separate
-  // from any retired presentation runtime and fail release packaging when it is
-  // missing, otherwise the app would ship a generation path that only works
-  // on developers' machines.
+  // MOP authoring uses both an embedded Node runtime and a Vite SSR source
+  // root. Fail packaging when either is absent, otherwise generation would
+  // work only on a developer machine that happens to have the source checkout.
   const mopRuntimeSrc = path.join(REPO_ROOT, "build", "mop-runtime");
   const mopRuntimeDest = path.join(RESOURCES, "mop-runtime");
-  if (!existsSync(mopRuntimeSrc)) {
-    throw new Error(`MOP runtime not found: ${mopRuntimeSrc}; stage Node before packaging`);
-  }
-  await mkdir(mopRuntimeDest, { recursive: true });
-  const { cp } = await import("node:fs/promises");
-  await cp(mopRuntimeSrc, mopRuntimeDest, { recursive: true, force: true });
-  console.log(`[bundle-runtime] ${mopRuntimeSrc} → ${mopRuntimeDest}`);
+  await copyTreeRequired(mopRuntimeSrc, mopRuntimeDest, "MOP runtime");
+
+  const presentationSrc = path.join(REPO_ROOT, "build", "presentation");
+  const presentationDest = path.join(RESOURCES, "presentation");
+  await copyTreeRequired(presentationSrc, presentationDest, "MOP presentation runtime");
 }
 
 main().catch((err) => {

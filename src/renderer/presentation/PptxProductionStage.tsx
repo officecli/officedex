@@ -2,6 +2,7 @@ import { CheckCircle2, CircleAlert, LoaderCircle, Pause, Play, RotateCcw, X } fr
 import type { DesktopTask } from "../../shared/types";
 import "./pptxProductionStage.css";
 import { LiveSteeringBar } from "./LiveSteeringBar";
+import { imageProgressFromOps } from "./pptxProgress";
 
 export type PptxProductionStageStatus =
   | "starting"
@@ -38,6 +39,8 @@ const STATUS_COPY: Record<PptxProductionStageStatus, StatusCopy> = {
 
 function statusForTask(task: DesktopTask): PptxProductionStageStatus {
   const extendedTask = task as DesktopTask & { vibeOutline?: unknown };
+  const images = imageProgressFromOps(task.vibeOps ?? []);
+  if (task.status === "completed" && images.pending > 0) return "drawing";
   if (task.status === "completed" || task.status === "failed" || task.status === "cancelled") return task.status;
   if (task.status === "starting") return "starting";
   if (task.vibeSlides?.some(Boolean)) return "drawing";
@@ -74,7 +77,10 @@ function slideProgress(task: DesktopTask): { completed: number; total?: number; 
 
 export function PptxProductionStage({ task, onCancel, onRetry, onPause, onResume, onOpenEditor, onSteer, onContinueFromNode }: PptxProductionStageProps) {
   const status = statusForTask(task);
-  const copy = STATUS_COPY[status];
+  const images = imageProgressFromOps(task.vibeOps ?? []);
+  const copy = images.pending > 0
+    ? { ...STATUS_COPY[status], detail: `Pages are ready while ${images.pending} image${images.pending === 1 ? " is" : "s are"} still generating…` }
+    : STATUS_COPY[status];
   const progress = slideProgress(task);
   const active = status === "starting" || status === "outlining" || status === "drawing";
   const paused = task.status === "question" || task.status === "plan_review";
@@ -112,6 +118,7 @@ export function PptxProductionStage({ task, onCancel, onRetry, onPause, onResume
           <strong>{progress.completed}{progress.total ? ` / ${progress.total}` : ""}</strong>
           <span>slides ready</span>
           {progress.current ? <span>Drawing slide {progress.current}</span> : null}
+          {images.total > 0 ? <span data-testid="pptx-image-progress">{images.placed} / {images.total} images ready{images.pending > 0 ? ` · ${images.pending} generating` : ""}</span> : null}
         </aside>
       </div>
 

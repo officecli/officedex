@@ -83,8 +83,8 @@ export function ToastHost() {
             <strong>{item.content}</strong>
             {item.description ? <span>{item.description}</span> : null}
           </div>
-          {item.action ? <button type="button" onClick={item.action.onClick}>{item.action.label}</button> : null}
-          <button type="button" aria-label="Close" onClick={() => dismissToast(item.id)}>×</button>
+          {item.action ? <button className="ui-toast__action" type="button" onClick={item.action.onClick}>{item.action.label}</button> : null}
+          <button className="ui-toast__close" type="button" aria-label="Close" onClick={() => dismissToast(item.id)}>×</button>
         </div>
       ))}
     </div>,

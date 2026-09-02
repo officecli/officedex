@@ -21,7 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"officedex/internal/demoflow"
 	"officedex/internal/settings"
 	"officedex/internal/types"
 )
@@ -94,8 +93,8 @@ func TestRealOfficeDexClientBridgeHost(t *testing.T) {
 	<-ctx.Done()
 	// Stop accepting work before closing App resources. EventSource clients keep
 	// HTTP/1.1 connections open indefinitely; without an explicit disconnect,
-	// httptest.Server.Close blocks and devctl eventually has to SIGKILL a host
-	// that may already be partially torn down.
+	// httptest.Server.Close blocks while the host may already be partially torn
+	// down.
 	server.CloseClientConnections()
 	server.Close()
 	app.shutdown(context.Background())
@@ -195,7 +194,6 @@ func (h *realClientE2EHost) routes() http.Handler {
 	mux.HandleFunc("/control/preview-tokens", h.handlePreviewTokens)
 	mux.HandleFunc("/control/artifacts/latest", h.handleLatestArtifactControl)
 	mux.HandleFunc("/control/auth-event", h.handleAuthEvent)
-	mux.HandleFunc("/control/demo/session", h.handleDemoSessionControl)
 	mux.HandleFunc("/control/seed/failed-task", h.handleSeedFailedTask)
 	mux.HandleFunc("/control/seed/completed-pptx-artifact", h.handleSeedCompletedPptxArtifact)
 	mux.HandleFunc("/control/task/", h.handleTaskControl)
@@ -422,7 +420,7 @@ func (h *realClientE2EHost) call(method string, raw json.RawMessage) (any, error
 		}
 		// The browser dev bridge normally behaves like the app rather than an
 		// auth fixture. Keep the deterministic loopback URL for isolated E2E
-		// tests, but allow devctl's non-demo browser instance to start the
+		// tests, but allow an explicitly configured browser run to start the
 		// user's real OfficeCLI login flow.
 		if os.Getenv("OFFICEDEX_DEV_BROWSER_REAL_LOGIN") == "1" {
 			return h.app.Login(input)
@@ -646,34 +644,6 @@ func (h *realClientE2EHost) handleRecordControl(w http.ResponseWriter, r *http.R
 	h.records = append(h.records, record)
 	h.mu.Unlock()
 	writeRealClientJSON(w, map[string]any{"ok": true})
-}
-
-func (h *realClientE2EHost) handleDemoSessionControl(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		whoami, credit, session, ok := demoflow.SessionOverride()
-		if !ok {
-			writeRealClientError(w, http.StatusNotFound, "demo session is not enabled")
-			return
-		}
-		writeRealClientJSON(w, map[string]any{"session": session, "whoami": whoami, "credit": credit})
-	case http.MethodPost:
-		var input demoflow.DemoSession
-		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-			writeRealClientError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		session, err := demoflow.UpdateSession(input.Auth, input.Credits)
-		if err != nil {
-			writeRealClientError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		whoami, credit, _, _ := demoflow.SessionOverride()
-		h.broadcast("auth", types.AuthEvent{Type: types.AuthEventSuccess})
-		writeRealClientJSON(w, map[string]any{"session": session, "whoami": whoami, "credit": credit})
-	default:
-		writeRealClientError(w, http.StatusMethodNotAllowed, "method not allowed")
-	}
 }
 
 func (h *realClientE2EHost) handleReport(w http.ResponseWriter, r *http.Request) {

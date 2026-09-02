@@ -13,6 +13,9 @@ build/officecli/
 build/cache/
 build/canvas-render-smoke/
 build/packaged-canvas-smoke/
+build/presentation/
+# Built learnof/pptx embed component (npm run build:presentation).
+public/presentation/
 officecli-bin/
 
 # Wails / Go build artifacts.

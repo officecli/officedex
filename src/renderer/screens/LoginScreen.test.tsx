@@ -149,11 +149,30 @@ describe("LoginScreen", () => {
     await waitFor(() => expect(onAuthenticated).toHaveBeenCalledTimes(1));
   });
 
-  it("shows a button to return from the signed-in page", async () => {
-    whoamiSpy.mockResolvedValueOnce({ mode: "logged_in", userId: "user-123" });
+  it("shows a button to return from the signed-in page", async () => {    whoamiSpy.mockResolvedValueOnce({ mode: "logged_in", userId: "user-123" });
     const onReturn = vi.fn();
     const { LoginScreen } = await import("./SettingsScreens");
     render(<LoginScreen onReturn={onReturn} />);
+    await screen.findByRole("button", { name: /sign out/i });
+    fireEvent.click(await screen.findByRole("button", { name: /back to officedex/i }));
+    expect(onReturn).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows credit only on the signed-in user information page", async () => {
+    whoamiSpy.mockResolvedValueOnce({ mode: "logged_in", userId: "user-123" });
+    const { LoginScreen } = await import("./SettingsScreens");
+    render(<LoginScreen credit={{ displayMode: "quota", used: 3, total: 10, planLabel: "Credits" }} />);
+
+    await screen.findByRole("button", { name: /sign out/i });
+    expect(screen.getByRole("status")).toHaveTextContent("Credits");
+    expect(screen.getByRole("status")).toHaveTextContent("7 / 10");
+  });
+
+  it("shows a button to return while signed out", async () => {
+    const onReturn = vi.fn();
+    const { LoginScreen } = await import("./SettingsScreens");
+    render(<LoginScreen onReturn={onReturn} />);
+    await screen.findByRole("button", { name: /sign in via browser/i });
     fireEvent.click(await screen.findByRole("button", { name: /back to officedex/i }));
     expect(onReturn).toHaveBeenCalledTimes(1);
   });

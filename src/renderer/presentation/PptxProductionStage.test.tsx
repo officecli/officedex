@@ -40,6 +40,21 @@ describe("PptxProductionStage", () => {
     expect(onOpenEditor).toHaveBeenCalledOnce();
   });
 
+  it("shows image progress while visual assets are still pending", () => {
+    const onOpenEditor = vi.fn();
+    render(<PptxProductionStage task={task({
+      status: "completed",
+      vibeOps: [
+        { seq: 1, op: "shape.add", slide: 1, shape: { kind: "picture", imageRef: { kind: "primary", pending: true } } },
+        { seq: 2, op: "shape.add", slide: 2, shape: { kind: "picture", imageRef: { kind: "primary", pending: true } } },
+        { seq: 3, op: "shape.update", slide: 1, fill: { imageRef: { kind: "primary", digest: "b".repeat(64) } } },
+      ],
+    })} onOpenEditor={onOpenEditor} />);
+    expect(screen.getByTestId("pptx-production-status")).toHaveTextContent("Drawing slides");
+    expect(screen.getByTestId("pptx-image-progress")).toHaveTextContent("1 / 2 images ready · 1 generating");
+    expect(screen.queryByRole("button", { name: /Open editor/i })).toBeNull();
+  });
+
   it("exposes a stage command bar and routes steering/resume controls", async () => {
     const onSteer = vi.fn(async () => undefined);
     const onResume = vi.fn(async () => undefined);

@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"officedex/internal/types"
 )
 
@@ -59,6 +60,10 @@ const (
 // to find the officecli executable. Tests supply CreateTransport directly to
 // avoid spawning processes.
 type Options struct {
+	ClientID              string
+	BridgeInstanceID      string
+	RuntimeRoot           string
+	NewBridgeInstanceID   func() string
 	BinaryPath            string
 	ResolveBinary         func() string
 	Cwd                   string
@@ -82,7 +87,8 @@ type EventListener func(types.BridgeEvent)
 // Client is a high-level wrapper around the agent-bridge child process. Safe
 // for concurrent use; all exported methods take the internal mutex.
 type Client struct {
-	options Options
+	options          Options
+	bridgeInstanceID string
 
 	mu               sync.Mutex
 	transport        Transport
@@ -141,6 +147,9 @@ func New(opts Options) *Client {
 	}
 	if opts.BaseReconnectDelay == 0 {
 		opts.BaseReconnectDelay = DefaultBaseReconnectDelay
+	}
+	if opts.NewBridgeInstanceID == nil {
+		opts.NewBridgeInstanceID = uuid.NewString
 	}
 	return &Client{
 		options:     opts,
@@ -278,6 +287,10 @@ func (c *Client) Start(ctx context.Context) error {
 	if factory == nil {
 		factory = defaultProcessTransport
 	}
+	if c.options.NewBridgeInstanceID != nil {
+		c.options.BridgeInstanceID = c.options.NewBridgeInstanceID()
+	}
+	c.bridgeInstanceID = c.options.BridgeInstanceID
 	transport, err := factory(c.options)
 	if err != nil {
 		c.mu.Unlock()
@@ -300,6 +313,13 @@ func (c *Client) Start(ctx context.Context) error {
 	go c.readStderr(transport)
 	go c.waitExit(transport)
 	return nil
+}
+
+// BridgeInstanceID identifies the currently running child process.
+func (c *Client) BridgeInstanceID() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.bridgeInstanceID
 }
 
 // Stop kills the child process (if any), rejects all pending requests, and

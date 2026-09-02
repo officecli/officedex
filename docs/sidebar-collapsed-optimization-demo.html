@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OfficeDex · Collapsed sidebar demo</title>
+  <style>
+    :root { color-scheme: light; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #20242a; background: #eef0f3; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 28px; }
+    .demo { width: min(1180px, 100%); display: grid; gap: 16px; }
+    .demo-head { display: flex; align-items: end; justify-content: space-between; gap: 20px; }
+    .demo-head h1 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
+    .demo-head p { margin: 6px 0 0; color: #727984; font-size: 13px; }
+    .demo-head button { border: 1px solid #d8dce1; border-radius: 999px; background: #fff; padding: 9px 14px; color: #30363d; cursor: pointer; }
+    .window { min-height: 680px; display: grid; grid-template-columns: 72px 1fr; overflow: hidden; border: 1px solid #dfe2e6; border-radius: 18px; background: #fafbfc; box-shadow: 0 22px 60px rgb(32 36 42 / 14%); transition: grid-template-columns .2s ease; }
+    .window.expanded { grid-template-columns: 232px 1fr; }
+    .sidebar { display: flex; min-width: 0; flex-direction: column; gap: 16px; border-right: 1px solid #e1e4e8; background: #f8f9fa; padding: 16px 10px 12px; }
+    .brand { display: grid; grid-template-columns: 36px 1fr 28px; align-items: center; gap: 10px; min-height: 40px; padding: 0 4px; }
+    .logo { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 10px; background: #262a2f; color: white; font-weight: 700; }
+    .brand strong { overflow: hidden; font-size: 16px; white-space: nowrap; }
+    .icon-btn, .nav-btn, .group-toggle { border: 0; background: transparent; color: #747b84; cursor: pointer; }
+    .icon-btn { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 7px; font-size: 17px; }
+    .icon-btn:hover, .nav-btn:hover, .group-toggle:hover { background: #edf0f3; color: #20242a; }
+    .nav { display: grid; gap: 5px; }
+    .nav-btn { position: relative; display: grid; grid-template-columns: 24px 1fr auto; align-items: center; gap: 10px; min-height: 42px; border-radius: 9px; padding: 0 10px; text-align: left; font-size: 13px; }
+    .nav-btn.active { background: #e9eef5; color: #2f78c8; }
+    .nav-btn .glyph { font-size: 18px; text-align: center; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: #d14b42; }
+    .workspace { display: grid; min-height: 0; flex: 1; gap: 8px; }
+    .section-label { display: flex; align-items: center; justify-content: space-between; padding: 0 8px; color: #838a93; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; }
+    .workspace-card { display: grid; grid-template-columns: 24px 1fr; align-items: center; gap: 10px; min-height: 38px; border-radius: 8px; padding: 0 10px; color: #353b42; font-size: 13px; }
+    .workspace-card.active { background: #edf0f3; font-weight: 600; }
+    .file-list { min-height: 0; overflow: auto; padding-right: 2px; }
+    .unassigned { display: grid; gap: 4px; margin-top: 10px; border-top: 1px solid #e1e4e8; padding-top: 8px; }
+    .group-toggle { display: grid; grid-template-columns: 16px 1fr auto; align-items: center; gap: 5px; min-height: 28px; border-radius: 7px; padding: 0 8px; text-align: left; font-size: 11px; font-weight: 600; }
+    .group-toggle .chevron { color: #9aa1a9; font-size: 12px; }
+    .file { display: grid; grid-template-columns: 24px 1fr 8px; align-items: center; gap: 8px; min-height: 34px; border-radius: 7px; padding: 0 8px; color: #717983; font-size: 12px; }
+    .file:hover { background: #fff; color: #20242a; }
+    .file .type { display: grid; width: 22px; height: 22px; place-items: center; border: 1px solid #e07c49; border-radius: 5px; color: #d56d3a; font-size: 10px; font-weight: 700; }
+    .file span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .footer { display: grid; gap: 4px; border-top: 1px solid #e1e4e8; padding-top: 10px; }
+    .content { display: grid; place-items: center; background: radial-gradient(circle at 1px 1px, #dfe4e9 1px, transparent 1.2px); background-size: 28px 28px; }
+    .content-card { width: min(640px, calc(100% - 72px)); border: 1px solid #e1e4e8; border-radius: 16px; background: rgb(255 255 255 / 88%); padding: 34px; box-shadow: 0 18px 42px rgb(34 39 46 / 8%); }
+    .content-card h2 { margin: 0 0 8px; font-size: 22px; }
+    .content-card p { margin: 0; color: #737b85; line-height: 1.6; font-size: 14px; }
+    .window:not(.expanded) .brand { grid-template-columns: 1fr; justify-items: center; }
+    .window:not(.expanded) .brand strong, .window:not(.expanded) .brand .icon-btn span, .window:not(.expanded) .nav-btn span:not(.glyph), .window:not(.expanded) .section-label, .window:not(.expanded) .workspace-card span, .window:not(.expanded) .group-toggle span:not(.chevron), .window:not(.expanded) .file span:nth-child(2), .window:not(.expanded) .footer span { display: none; }
+    .window:not(.expanded) .brand .icon-btn { grid-row: 2; }
+    .window:not(.expanded) .nav-btn, .window:not(.expanded) .workspace-card, .window:not(.expanded) .group-toggle, .window:not(.expanded) .file { grid-template-columns: 1fr; justify-items: center; padding-inline: 0; }
+    .window:not(.expanded) .nav-btn { min-height: 44px; }
+    .window:not(.expanded) .workspace-card { min-height: 42px; }
+    .window:not(.expanded) .unassigned { margin-top: 8px; }
+    .window:not(.expanded) .group-toggle { min-height: 34px; }
+    .window:not(.expanded) .file { min-height: 40px; }
+    .window:not(.expanded) .file .type { width: 24px; height: 24px; }
+    .window:not(.expanded) .dot { position: absolute; top: 7px; right: 7px; }
+    .window:not(.expanded) .footer { justify-items: center; }
+    [data-tooltip] { position: relative; }
+    .window:not(.expanded) [data-tooltip]:hover::after { content: attr(data-tooltip); position: absolute; z-index: 5; left: calc(100% + 10px); top: 50%; transform: translateY(-50%); border-radius: 6px; background: #20242a; color: #fff; padding: 6px 8px; font-size: 11px; white-space: nowrap; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <main class="demo">
+    <div class="demo-head"><div><h1>Collapsed sidebar optimization</h1><p>Stable icon slots, compact Unassigned group, and tooltip-based discovery.</p></div><button id="mode" type="button">Expand sidebar</button></div>
+    <div class="window" id="window">
+      <aside class="sidebar">
+        <div class="brand"><div class="logo">O</div><strong>OfficeDex</strong><button class="icon-btn" id="collapse" data-tooltip="Expand sidebar" aria-label="Expand sidebar"><span>‹</span></button></div>
+        <nav class="nav" aria-label="Primary navigation"><button class="nav-btn active" data-tooltip="Home"><span class="glyph">⌂</span><span>Home</span><span class="dot"></span></button></nav>
+        <section class="workspace"><div class="section-label"><span>Workspaces</span><span>＋</span></div><div class="workspace-card active" data-tooltip="yirentk"><span class="glyph">▱</span><span>yirentk</span></div><div class="file-list"><div class="unassigned"><button class="group-toggle" id="unassigned" aria-expanded="true"><span class="chevron">▾</span><span>Unassigned</span><span>8</span></button><div id="files"><div class="file" data-tooltip="Create a brand launch"><span class="type">P</span><span>Create a brand launch</span><span class="dot"></span></div><div class="file" data-tooltip="Operations and finance"><span class="type">P</span><span>Operations and finance</span><span></span></div><div class="file" data-tooltip="Quarterly review"><span class="type">P</span><span>Quarterly review</span><span></span></div><div class="file" data-tooltip="Marketing plan"><span class="type">P</span><span>Marketing plan</span><span class="dot"></span></div></div></div></div></section>
+        <nav class="footer" aria-label="Utilities"><button class="nav-btn" data-tooltip="Account"><span class="glyph">♙</span><span>Account</span></button><button class="nav-btn" data-tooltip="Settings"><span class="glyph">⚙</span><span>Settings</span></button></nav>
+      </aside>
+      <section class="content"><div class="content-card"><h2>Workspace stays readable</h2><p>The collapsed rail keeps navigation discoverable while giving the document canvas the space it needs. Hover any icon for its label, and click Unassigned to hide its file list.</p></div></section>
+    </div>
+  </main>
+  <script>
+    const windowEl = document.getElementById('window');
+    const mode = document.getElementById('mode');
+    const collapse = document.getElementById('collapse');
+    const unassigned = document.getElementById('unassigned');
+    const files = document.getElementById('files');
+    function setExpanded(expanded) { windowEl.classList.toggle('expanded', expanded); mode.textContent = expanded ? 'Collapse sidebar' : 'Expand sidebar'; collapse.dataset.tooltip = expanded ? 'Collapse sidebar' : 'Expand sidebar'; collapse.setAttribute('aria-label', collapse.dataset.tooltip); }
+    mode.addEventListener('click', () => setExpanded(!windowEl.classList.contains('expanded')));
+    collapse.addEventListener('click', () => setExpanded(!windowEl.classList.contains('expanded')));
+    unassigned.addEventListener('click', () => { const expanded = unassigned.getAttribute('aria-expanded') === 'true'; unassigned.setAttribute('aria-expanded', String(!expanded)); unassigned.querySelector('.chevron').textContent = expanded ? '▸' : '▾'; files.hidden = expanded; });
+  </script>
+</body>
+</html>

@@ -1,6 +1,7 @@
 import type { VibeOp, VibeOutline } from "../../shared/types";
 import type { PresentationEditorController } from "./PresentationEditorFrame";
 import { officecli } from "../bridge";
+import { imageProgressFromOps, type PptxImageProgress } from "./pptxProgress";
 
 // This module's exports live inside long-lived closures — the running
 // sequencer, the console demo hook — so a hot swap leaves the app executing the
@@ -30,6 +31,7 @@ export interface VibeReplayStatus {
   slide?: number;
   total?: number;
   error?: string;
+  images?: PptxImageProgress;
 }
 
 /**
@@ -208,7 +210,16 @@ export function buildReplayFeed(input: {
     };
   }
   if (!input.task) return undefined;
-  const completed = ["completed", "failed", "cancelled"].includes(input.task.status);
+  const ops = [...(input.task.vibeOps ?? [])];
+  // OfficeCLI can publish task.completed before the asynchronous image
+  // workers have emitted their shape.update operations. Keep the live draft
+  // open in that interval so the sequencer can consume the late patches and
+  // the UI continues to say "drawing" rather than handing over a partial
+  // deck as if it were finished.
+  const images = imageProgressFromOps(ops);
+  const completed = input.task.status === "completed"
+    ? images.pending === 0
+    : ["failed", "cancelled"].includes(input.task.status);
   // The outline gate: the run is paused on its one confirmation stop, and
   // the pending question is how the confirmed (or edited) outline goes back.
   const gate = !completed && input.task.question?.kind === "pptx_outline_gate" && input.task.question.id
@@ -217,7 +228,7 @@ export function buildReplayFeed(input: {
   return {
     taskId: draft.taskId,
     filePath: draft.filePath,
-    ops: [...(input.task.vibeOps ?? [])],
+    ops,
     completed,
     perform: input.performing || undefined,
     trace: input.trace,
@@ -247,6 +258,30 @@ interface ChunkContext {
    * drawing stops paying a round trip to be told the same thing again.
    */
   veilsUnsupported?: boolean;
+  /** Keep the last claimed area visible while the backend still has work. */
+  keepAttention?: boolean;
+}
+
+interface AttentionRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+function attentionRectFromOps(ops: readonly VibeOp[]): AttentionRect | undefined {
+  const shapes = ops
+    .map((op) => op.shape)
+    .filter((shape): shape is Record<string, unknown> => Boolean(shape && typeof shape === "object"))
+    .filter((shape) => ["left", "top", "width", "height"].every((key) => typeof shape[key] === "number"));
+  const shape = shapes.at(-1);
+  if (!shape) return undefined;
+  return {
+    left: Number(shape.left),
+    top: Number(shape.top),
+    width: Math.max(1, Number(shape.width)),
+    height: Math.max(1, Number(shape.height)),
+  };
 }
 
 /**
@@ -288,6 +323,7 @@ export function buildOpsChunkScript(
     images: context.images ?? {},
     capture: context.capture === true,
     captureAnchors,
+    keepAttention: context.keepAttention === true,
     veilsUnsupported: context.veilsUnsupported === true,
     ops,
   });
@@ -751,8 +787,10 @@ return await PowerPoint.run(async (context) => {
       if (SETTLE_MS > 0) await sleep(beat(SETTLE_MS, entry.shape, entry.seq + 7));
     } else if (entry.op === "slide.end") {
       await flush();
-      // The page is done: drop the outline and let it stand on its own.
-      await focusOn(null);
+      // A completed page normally releases the outline, but an open feed keeps
+      // the last claimed area visible while late work (most often images) is
+      // still arriving.
+      if (!data.keepAttention) await focusOn(null);
       if (SLIDE_MS > 0) await sleep(beat(SLIDE_MS, null, entry.seq + 3));
     } else if (entry.op === "slide.delete") {
       // A shrunk deck: the leftover page goes away entirely. Ships last-page
@@ -810,7 +848,7 @@ return await PowerPoint.run(async (context) => {
   // the outline on its way out would blink it off between shapes. It is
   // released when the deck is finished — and by the editor's own idle timeout
   // if a replay dies before that.
-  if (data.ops.some((entry) => entry.op === "deck.end")) await focusOn(null);
+  if (data.ops.some((entry) => entry.op === "deck.end") && !data.keepAttention) await focusOn(null);
   // typed counts the extra passes text made on its way to being complete;
   // zero means the streaming never happened, which is invisible otherwise.
   return { executed, skipped, typed, veilsUnsupported, captures, tripMs: Math.round(tripMs), encodeMs: Math.round(encodeMs) };
@@ -906,6 +944,7 @@ export class VibeReplaySequencer {
   // deck reuses the same image across slides, and a replay re-runs the stream.
   private assetsDir = "";
   private readonly images = new Map<string, string | null>();
+  private readonly imageFailures = new Set<string>();
   // Timeline capture is best-effort: a deck that fails to record its history
   // is still a deck, so a failing capture is remembered and dropped rather
   // than allowed to interrupt the drawing.
@@ -913,6 +952,8 @@ export class VibeReplaySequencer {
   private running = false;
   private disposed = false;
   private finished = false;
+  private attentionKeepAliveTimer?: ReturnType<typeof setTimeout>;
+  private lastAttentionRect?: AttentionRect;
 
   constructor(options: VibeReplaySequencerOptions) {
     this.controller = options.controller;
@@ -924,6 +965,10 @@ export class VibeReplaySequencer {
 
   dispose() {
     this.disposed = true;
+    if (this.attentionKeepAliveTimer !== undefined) {
+      clearTimeout(this.attentionKeepAliveTimer);
+      this.attentionKeepAliveTimer = undefined;
+    }
   }
 
   update(feed: VibeReplayFeed) {
@@ -973,7 +1018,37 @@ export class VibeReplaySequencer {
   }
 
   private emit(status: VibeReplayStatus) {
-    if (!this.disposed) this.onStatus?.({ total: this.total, ...status });
+    if (!this.disposed) {
+      const imageProgress = imageProgressFromOps(this.ops);
+      this.onStatus?.({
+        total: this.total,
+        images: imageProgress.total > 0
+          ? { ...imageProgress, failed: this.imageFailures.size, pending: Math.max(0, imageProgress.pending - this.imageFailures.size) }
+          : imageProgress,
+        ...status,
+      });
+    }
+  }
+
+  private scheduleAttentionKeepAlive() {
+    const pendingImages = imageProgressFromOps(this.ops).pending > 0;
+    if (this.disposed || (this.completed && !pendingImages) || !this.lastAttentionRect || this.attentionKeepAliveTimer !== undefined) return;
+    this.attentionKeepAliveTimer = setTimeout(() => {
+      this.attentionKeepAliveTimer = undefined;
+      if (this.disposed || (this.completed && imageProgressFromOps(this.ops).pending === 0) || !this.lastAttentionRect) return;
+      if (this.running) {
+        this.scheduleAttentionKeepAlive();
+        return;
+      }
+      const rect = this.lastAttentionRect;
+      void this.controller.executeScript(
+        `return await PowerPoint.run(async (context) => { context.presentation.focusAttention(${JSON.stringify(rect)}); await context.sync(); return true; });`,
+        { awaitSnapshotMs: 0, timeoutMs: 30_000 },
+      ).catch(() => {
+        // View-only keepalive is best effort; drawing and saving must not fail
+        // because an older editor declined the optional attention API.
+      }).finally(() => this.scheduleAttentionKeepAlive());
+    }, 5_000);
   }
 
   /**
@@ -1032,6 +1107,7 @@ export class VibeReplaySequencer {
           this.images.set(digest, asset.base64 || null);
         } catch {
           this.images.set(digest, null);
+          this.imageFailures.add(digest);
         }
       }
       const bytes = this.images.get(digest);
@@ -1128,6 +1204,7 @@ export class VibeReplaySequencer {
         const drawable = chunk.some((op) => op.op === "shape.add" || op.op === "diagram.add" || op.op === "slide.begin" || op.op === "slide.replace" || op.op === "slide.delete" || op.op === "shape.update");
         let chunkCaptures: Array<{ seq: number; content: string; shape?: string }> = [];
         if (drawable) {
+          this.lastAttentionRect = attentionRectFromOps(chunk) ?? this.lastAttentionRect;
           // The script spends most of its time waiting on purpose, so the
           // budget has to grow with the pace or a slower performance would
           // look like a hung editor.
@@ -1146,7 +1223,17 @@ export class VibeReplaySequencer {
           // Recording follows the drawing, not the source of the ops: the draft
           // was reset to blank before this started, so whatever draws it — a
           // live generation or a replay of one — is what its history is.
-          const context = { ...this.fonts, images, capture: this.capturing };
+          const imageProgress = imageProgressFromOps(this.ops);
+          const context = {
+            ...this.fonts,
+            images,
+            capture: this.capturing,
+            // Keep the current attention area claimed until the backend has
+            // delivered every image patch. This is especially important when
+            // task.completed races the image workers: the deck is visibly
+            // usable, but it is not yet the final artifact.
+            keepAttention: !this.completed || imageProgress.pending > 0,
+          };
           const outcome = await this.controller.executeScript(buildOpsChunkScript(chunk, context, paceMs, this.tripHintMs), {
             awaitSnapshotMs: 0,
             timeoutMs: budgetMs,
@@ -1206,12 +1293,25 @@ export class VibeReplaySequencer {
         // Everything received is on the page and the backend has not finished:
         // say so, instead of letting "drawing slide N" sit over a still canvas
         // while images generate or a retry runs.
+        this.scheduleAttentionKeepAlive();
         this.emit({ state: "starved", slide: this.currentSlide ?? undefined });
       }
       if (this.completed && this.cursor >= this.ops.length) {
         this.finished = true;
+        if (this.attentionKeepAliveTimer !== undefined) {
+          clearTimeout(this.attentionKeepAliveTimer);
+          this.attentionKeepAliveTimer = undefined;
+        }
         if (this.drawnSlides.size > 0) {
           this.emit({ state: "saving" });
+          // A stream can become complete after its final chunk (for example,
+          // when late image patches arrive in a later event). Clear the
+          // view-only attention overlay explicitly before saving so a stale
+          // colored frame never survives into the next editor state.
+          await this.controller.executeScript(
+            "return await PowerPoint.run(async (context) => { context.presentation.focusAttention(null); await context.sync(); return true; });",
+            { awaitSnapshotMs: 0, timeoutMs: 30_000 },
+          );
           // The local editor session journals edits and persists only on an
           // explicit save; the host bridge dispatches that flush when a script
           // runs with the default snapshot wait. Drawing scripts skip it for

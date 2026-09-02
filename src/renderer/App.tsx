@@ -100,6 +100,47 @@ type PendingGenerate = {
   parentTaskId?: string;
 };
 
+export interface RecoverableTaskExpectation {
+  documentType: string;
+  sourceFile?: string;
+  parentTaskId?: string;
+  createdAfter?: number;
+}
+
+/**
+ * Find a task that the runtime accepted even though the initial generate RPC
+ * did not return a usable task id. Parent lineage is the strongest signal;
+ * source file + document type is the fallback used by older runtimes that did
+ * not persist parentTaskId on the history envelope.
+ */
+export function findRecoverableTaskHistoryEntry(
+  entries: TaskHistoryEntry[],
+  expectation: RecoverableTaskExpectation,
+): TaskHistoryEntry | undefined {
+  const expectedType = expectation.documentType.toLowerCase();
+  const expectedSource = expectation.sourceFile;
+  const createdAfter = expectation.createdAfter ?? 0;
+  return [...entries]
+    .sort((a, b) => {
+      const aTime = a.createdAt ? Date.parse(a.createdAt) : Number.NEGATIVE_INFINITY;
+      const bTime = b.createdAt ? Date.parse(b.createdAt) : Number.NEGATIVE_INFINITY;
+      return (Number.isFinite(bTime) ? bTime : Number.NEGATIVE_INFINITY) - (Number.isFinite(aTime) ? aTime : Number.NEGATIVE_INFINITY);
+    })
+    .find((entry) => {
+      if (!entry.taskId || (entry.createdAt && Date.parse(entry.createdAt) < createdAfter)) return false;
+      if (!entry.events.some((event) => {
+        const type = typeof event.payload?.document_type === "string" ? event.payload.document_type.toLowerCase() : "";
+        return type === expectedType || type === "";
+      })) return false;
+      if (expectation.parentTaskId && (
+        entry.parentTaskId === expectation.parentTaskId
+        || entry.events.some((event) => event.payload?.parent_task_id === expectation.parentTaskId)
+      )) return true;
+      if (!expectedSource) return false;
+      return entry.events.some((event) => event.payload?.source_file === expectedSource);
+    });
+}
+
 const RECENT_FILES_TIMEOUT_MS = 8_000;
 
 export function hydrateTaskHistory(state: TaskState, entries: TaskHistoryEntry[]): TaskState {
@@ -186,6 +227,7 @@ function OfficeDexApp() {
   const [lastError, setLastError] = useState<string>();
   const [errorKind, setErrorKind] = useState<FailureKind>("connection");
   const [bridgeInterruptionKey, setBridgeInterruptionKey] = useState(0);
+  const bridgeRecoveryPendingRef = useRef(false);
   const [errorDetails, setErrorDetails] = useState<string>();
   const [connectAttempt, setConnectAttempt] = useState(0);
   const [previewGrant, setPreviewGrant] = useState<PreviewGrant | null>(null);
@@ -357,6 +399,7 @@ function OfficeDexApp() {
         return;
       }
       if (event.type === "bridge.reconnected") {
+        bridgeRecoveryPendingRef.current = false;
         setCapabilityStatus("Connected to officecli agent-bridge");
         clearError();
         refreshProjectLists();
@@ -364,6 +407,7 @@ function OfficeDexApp() {
         return;
       }
       if (event.type === "bridge.unconfigured") {
+        bridgeRecoveryPendingRef.current = false;
         const message = String(event.payload?.message || "OfficeCLI binary is not configured");
         const stderr = stringOrUndef(event.payload?.stderr);
         setCapabilityStatus(message);
@@ -371,6 +415,7 @@ function OfficeDexApp() {
         return;
       }
       if (event.type === "bridge.reconnect_exhausted") {
+        bridgeRecoveryPendingRef.current = false;
         const message = String(event.payload?.message || "Bridge reconnection failed. Please retry manually.");
         const stderr = stringOrUndef(event.payload?.stderr);
         setCapabilityStatus(message);
@@ -384,6 +429,14 @@ function OfficeDexApp() {
         setRecentFilesLoading(false);
         setRecentFilesError(t("home.bridgeUnavailable"));
         setBridgeInterruptionKey((current) => current + 1);
+        // A manually stopped bridge disables the Go client's reconnect timer.
+        // Trigger the normal Initialize path once so the App can recreate the
+        // child process. The guard prevents several client exits in the same
+        // interruption window from starting duplicate bridge instances.
+        if (!bridgeRecoveryPendingRef.current) {
+          bridgeRecoveryPendingRef.current = true;
+          setConnectAttempt((current) => current + 1);
+        }
         // Native OfficeCLI Runtime tasks survive the stdio bridge process and
         // are reattached after reconnect. Treat this as a transport outage,
         // not a task failure; authoritative task/status or later task events
@@ -649,7 +702,7 @@ function OfficeDexApp() {
       })
       .catch((error) => recordError(errorMessage(error), "other"));
   }, [recordError, refreshProjectLists, refreshRecentFiles, spreadsheet.openArtifact, spreadsheet.session.artifact?.filePath, spreadsheet.session.workspaceId, spreadsheetTask]);
-  async function submit(values: GenerateInput) {
+  async function submit(values: GenerateInput, options: { preserveWorkbookContext?: boolean } = {}) {
     if (forceUpdate) {
       recordError("Update required before continuing", "setup");
       return;
@@ -675,6 +728,7 @@ function OfficeDexApp() {
         imageRatio: submittedValues.imageRatio,
         fps: submittedValues.fps,
       },
+      parentTaskId: values.parentTaskId,
     };
     pendingGenerateRef.current.set(localTaskId, pending);
     stageFirstTaskRef.current = localTaskId;
@@ -711,6 +765,38 @@ function OfficeDexApp() {
       }
     } catch (error) {
       if (!pendingGenerateRef.current.delete(localTaskId)) return;
+      if (options.preserveWorkbookContext && values.documentType === "pptx") {
+        let recovered: TaskHistoryEntry | undefined;
+        for (let attempt = 0; attempt < 6 && !recovered; attempt += 1) {
+          const entries = await officecli.getTaskHistory(50).catch(() => [] as TaskHistoryEntry[]);
+          recovered = findRecoverableTaskHistoryEntry(entries, {
+            documentType: values.documentType,
+            sourceFile: values.sourceFile,
+            parentTaskId: values.parentTaskId,
+            createdAfter: Date.now() - 120_000,
+          });
+          if (!recovered && attempt < 5) await delay(500);
+        }
+        if (recovered) {
+          setState((current) => {
+            let next = deleteTask(current, localTaskId);
+            for (const event of recovered.events) next = applyTaskEvent(next, event);
+            return attachTaskContext(next, recovered.taskId, {
+              createdAt: recovered.createdAt,
+              conversationId: recovered.conversationId,
+              parentTaskId: recovered.parentTaskId,
+              workspaceId: recovered.workspaceId,
+              workspacePath: recovered.workspacePath,
+            });
+          });
+          setSelectedTaskID({ kind: "task", id: recovered.taskId });
+          stageFirstTaskRef.current = recovered.taskId;
+          setStageFirstTaskId(recovered.taskId);
+          setActiveNav("document");
+          clearError();
+          return;
+        }
+      }
       if (stageFirstTaskRef.current === localTaskId) {
         stageFirstTaskRef.current = undefined;
         setStageFirstTaskId(undefined);
@@ -718,8 +804,13 @@ function OfficeDexApp() {
       setState((current) => deleteTask(current, localTaskId));
       const text = errorMessage(error);
       recordError(text, classifyError(text), extractStderr(text));
-      setSelectedTaskID({ kind: "none" });
-      setActiveNav("home");
+      if (options.preserveWorkbookContext) {
+        setSelectedTaskID({ kind: "none" });
+        setActiveNav("spreadsheet");
+      } else {
+        setSelectedTaskID({ kind: "none" });
+        setActiveNav("home");
+      }
     } finally {
       setBusy(false);
       nudgeForTaskTransition();
@@ -1157,6 +1248,33 @@ function OfficeDexApp() {
   const [deckPanelDismissedId, setDeckPanelDismissedId] = useState<string | null>(null);
 
   const openInlinePreview = useCallback(async (artifact: Artifact) => {
+    // XLSX artifacts have a dedicated editable workspace with the Sheet SDK,
+    // Agent conversation and workbook-to-PPT actions. Keep the legacy preview
+    // overlay for formats that do not have a workspace adapter, but never send
+    // spreadsheets through the read-only sheet_to_html viewer.
+    if (isXlsxArtifact(artifact)) {
+      await runSpreadsheetAction(async () => {
+        if (previewGrant) {
+          await officecli.revokePreviewToken(previewGrant.token).catch(() => {});
+        }
+        const grant = await officecli.issuePreviewToken(artifact);
+        const sourceTask = artifact.taskId ? tasks.find((task) => task.id === artifact.taskId) : undefined;
+        setSpreadsheetPreferredTool("assistant");
+        setCatalogAutoScanFile(undefined);
+        setSpreadsheetEntry({
+          kind: "artifact",
+          artifact,
+          grant,
+          ...(sourceTask?.workspaceId ? { workspaceId: sourceTask.workspaceId } : {}),
+          ...(sourceTask?.conversationId ? { conversationId: sourceTask.conversationId } : {}),
+        });
+        setPreviewGrant(null);
+        setPreviewArtifact(null);
+        setActiveNav("spreadsheet");
+        clearError();
+      });
+      return;
+    }
     if (previewGrant) {
       await officecli.revokePreviewToken(previewGrant.token).catch(() => {});
     }
@@ -1168,7 +1286,7 @@ function OfficeDexApp() {
       const text = error instanceof Error ? error.message : String(error);
       message.error(`Preview unavailable: ${text}`);
     }
-  }, [previewGrant]);
+  }, [clearError, previewGrant, runSpreadsheetAction, tasks]);
 
   // The live draft behind the deck currently on screen, if that deck is one.
   // Registered synchronously when the draft is created, so it is already true
@@ -1591,7 +1709,7 @@ function OfficeDexApp() {
       ...(workspaceId ? { workspaceId } : { noProject: true }),
       enableImages: persistedSettings.defaults.enableImages,
       imageQuality: persistedSettings.defaults.imageQuality,
-    });
+    }, { preserveWorkbookContext: true });
   }, [persistedSettings.defaults.enableImages, persistedSettings.defaults.imageQuality, spreadsheet.session.artifact?.taskId, spreadsheet.session.taskId, spreadsheet.session.workspaceId, t]);
 
   const startSpreadsheetModify = useCallback(async (input: ModifyInput) => {
@@ -1962,7 +2080,12 @@ function OfficeDexApp() {
       <>
         <DialogHost />
         <ToastHost />
-        <LoginScreen onReturn={returnFromLogin} onAuthenticated={returnFromLogin} />
+        <LoginScreen
+          onReturn={returnFromLogin}
+          onAuthenticated={returnFromLogin}
+          credit={credit}
+          hasCustomProvider={persistedSettings.llmProvider !== null}
+        />
       </>
     );
   }
@@ -1976,8 +2099,6 @@ function OfficeDexApp() {
         <Shell
         activeNav={activeNav}
         inspector={sidePanel}
-        credit={credit}
-        hasCustomProvider={persistedSettings.llmProvider !== null}
         signal={sidebarTaskSignal}
         account={account}
         update={sidebarUpdate}
@@ -2115,6 +2236,7 @@ function OfficeDexApp() {
                 onGenerate={startSpreadsheetGeneration}
                 onModify={startSpreadsheetModify}
                 onRespond={(input) => officecli.respond(input)}
+                onApprovePlan={(task) => resumePptxTask(task)}
                 onCancel={(taskId) => officecli.cancel(taskId)}
                 preferredTool={spreadsheetPreferredTool}
                 catalogPanel={spreadsheet.session.artifact ? (

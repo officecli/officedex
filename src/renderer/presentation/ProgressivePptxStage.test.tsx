@@ -35,7 +35,7 @@ describe("ProgressivePptxStage", () => {
           { id: "s3", headline: "Launch milestones" },
         ],
       },
-    } as Partial<DesktopTask> & { vibeOutline: unknown });
+    } as unknown as Partial<DesktopTask> & { vibeOutline: unknown });
 
     render(<ProgressivePptxStage task={taskWithVibeOutline} />);
 
@@ -44,6 +44,22 @@ describe("ProgressivePptxStage", () => {
     expect(screen.getByRole("textbox", { name: "Section 3 title" })).toHaveValue("Launch milestones");
     expect(screen.getByText("Set the stage")).toBeInTheDocument();
     expect(screen.getByText("Show the value")).toBeInTheDocument();
+  });
+  it("submits stable source slide numbers after outline edits", () => {
+    const onStartDrawing = vi.fn();
+    const taskWithVibeOutline = task({
+      status: "plan_review",
+      plan: { id: "p", markdown: "outline", revision: 1 },
+      vibeOutline: { slides: [{ id: "s1", headline: "第一页" }, { id: "s2", headline: "第二页" }] },
+    } as Partial<DesktopTask> & { vibeOutline: unknown });
+    render(<ProgressivePptxStage task={taskWithVibeOutline} onStartDrawing={onStartDrawing} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Section 1 title" }), { target: { value: "修改第一页" } });
+    fireEvent.click(screen.getByRole("button", { name: /确认大纲并开始绘制|Confirm outline and start drawing/i }));
+    expect(onStartDrawing).toHaveBeenCalledOnce();
+    expect(onStartDrawing.mock.calls[0][0]).toEqual([
+      expect.objectContaining({ id: "s1", title: "修改第一页", slide: 1 }),
+      expect.objectContaining({ id: "s2", title: "第二页", slide: 2 }),
+    ]);
   });
   it("replaces a same-length outline when a newer runtime event arrives", () => {
     const first = task({
@@ -62,6 +78,84 @@ describe("ProgressivePptxStage", () => {
     expect(screen.getByDisplayValue("Confirmed context")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Confirmed plan")).toBeInTheDocument();
     expect(screen.queryByDisplayValue("Draft context")).toBeNull();
+  });
+  it("scrolls to the latest outline section once review becomes available", async () => {
+    const first = task({
+      status: "running",
+      plan: { id: "p", markdown: "outline", revision: 1 },
+      vibeOutline: { slides: [{ id: "s1", headline: "Context" }, { id: "s2", headline: "Plan" }] },
+    });
+    const { container, rerender } = render(<ProgressivePptxStage task={first} />);
+    const content = container.querySelector<HTMLDivElement>(".progressive-pptx-stage__content-scroll");
+    if (!content) throw new Error("outline content scroller not found");
+    Object.defineProperty(content, "scrollHeight", { configurable: true, value: 1200 });
+    Object.defineProperty(content, "clientHeight", { configurable: true, value: 480 });
+    const scrollTo = vi.fn();
+    content.scrollTo = scrollTo;
+
+    rerender(<ProgressivePptxStage task={{ ...first, status: "plan_review" }} />);
+    await waitFor(() => expect(scrollTo).toHaveBeenCalledWith({ top: 1200, behavior: "smooth" }));
+
+    rerender(<ProgressivePptxStage task={{ ...first, status: "plan_review" }} />);
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+  });
+  it("keeps following outline items appended after the review gate", async () => {
+    const first = task({
+      status: "plan_review",
+      plan: { id: "p", markdown: "outline", revision: 1 },
+      vibeOutline: { slides: [{ id: "s1", headline: "Context" }] },
+    });
+    const { container, rerender } = render(<ProgressivePptxStage task={first} />);
+    const content = container.querySelector<HTMLDivElement>(".progressive-pptx-stage__content-scroll");
+    if (!content) throw new Error("outline content scroller not found");
+    Object.defineProperty(content, "scrollHeight", { configurable: true, value: 1200 });
+    const scrollTo = vi.fn();
+    content.scrollTo = scrollTo;
+    await waitFor(() => expect(scrollTo).toHaveBeenCalledTimes(1));
+
+    rerender(<ProgressivePptxStage task={{ ...first, vibeOutline: { slides: [
+      { id: "s1", headline: "Context" },
+      { id: "s2", headline: "Plan" },
+    ] } } as DesktopTask & { vibeOutline: unknown } } />);
+    await waitFor(() => expect(scrollTo).toHaveBeenCalledTimes(2));
+  });
+  it("follows an outline gate delivered as a question", async () => {
+    const taskWithGate = task({
+      status: "question",
+      plan: { id: "p", markdown: "outline", revision: 1 },
+      question: { id: "pptx-outline-gate", question: "Review the outline", options: [], allowFreeform: false },
+      vibeOutline: { slides: [{ id: "s1", headline: "Context" }, { id: "s2", headline: "Plan" }] },
+    } as Partial<DesktopTask> & { vibeOutline: unknown });
+    (taskWithGate.question as DesktopTask["question"] & { kind: string }).kind = "pptx_outline_gate";
+    const { container } = render(<ProgressivePptxStage task={taskWithGate} />);
+    const content = container.querySelector<HTMLDivElement>(".progressive-pptx-stage__content-scroll");
+    if (!content) throw new Error("outline content scroller not found");
+    Object.defineProperty(content, "scrollHeight", { configurable: true, value: 1200 });
+    const scrollTo = vi.fn();
+    content.scrollTo = scrollTo;
+    await waitFor(() => expect(scrollTo).toHaveBeenCalledWith({ top: 1200, behavior: "smooth" }));
+  });
+  it("stops following when the user scrolls up", async () => {
+    const first = task({
+      status: "plan_review",
+      plan: { id: "p", markdown: "outline", revision: 1 },
+      vibeOutline: { slides: [{ id: "s1", headline: "Context" }] },
+    });
+    const { container, rerender } = render(<ProgressivePptxStage task={first} />);
+    const content = container.querySelector<HTMLDivElement>(".progressive-pptx-stage__content-scroll");
+    if (!content) throw new Error("outline content scroller not found");
+    Object.defineProperty(content, "scrollHeight", { configurable: true, value: 1200 });
+    const scrollTo = vi.fn();
+    content.scrollTo = scrollTo;
+    await waitFor(() => expect(scrollTo).toHaveBeenCalledTimes(1));
+    fireEvent.wheel(content, { deltaY: -100 });
+
+    rerender(<ProgressivePptxStage task={{ ...first, vibeOutline: { slides: [
+      { id: "s1", headline: "Context" },
+      { id: "s2", headline: "Plan" },
+    ] } } as DesktopTask & { vibeOutline: unknown } } />);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(scrollTo).toHaveBeenCalledTimes(1);
   });
   it("shows chapter sections instead of flattening every slide", () => {
     render(<ProgressivePptxStage task={task({ status: "plan_review", plan: { id: "p", markdown: "outline", revision: 1 }, vibeTree: { stage: "outline_ready", tree: { id: "t", rootId: "r", title: "Deck", nodes: [

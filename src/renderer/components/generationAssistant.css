@@ -1,0 +1,168 @@
+/* The panel is a fixed three-row shell: header, scrolling timeline, pinned
+   composer. Only the timeline scrolls, so the composer can never be clipped by
+   a taller conversation the way an auto-height footer would be. */
+.generation-assistant-panel {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: var(--od-surface);
+  font-family: var(--od-font-ui);
+}
+
+.generation-assistant-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  border-bottom: 1px solid var(--od-border-subtle);
+  padding: 0 16px;
+  color: var(--od-ink);
+  font-size: 13px;
+  font-weight: 500;
+}
+.generation-assistant-panel__header > span { color: var(--od-guidance); font-size: 15px; }
+
+.generation-assistant-panel__timeline {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  padding: 16px;
+  color: var(--od-ink-secondary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.generation-assistant-panel__welcome { padding: 4px 0 0; }
+.generation-assistant-panel__welcome strong { display: block; color: var(--od-ink); font-size: 14px; font-weight: 500; }
+.generation-assistant-panel__welcome p { margin: 6px 0 0; }
+
+/* The task card is the run's identity line. It stays quiet — no fill, no
+   shadow — so the question and plan gates below are the only cards that draw
+   the eye when they appear. */
+.generation-assistant-panel__task {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: var(--od-radius-dialog);
+  background: var(--od-surface-subtle);
+  padding: 12px;
+}
+.generation-assistant-panel__task > svg { width: 16px; height: 16px; flex: 0 0 auto; margin-top: 2px; color: var(--od-guidance); }
+.generation-assistant-panel__task > div { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.generation-assistant-panel__task strong { color: var(--od-ink); font-size: 13px; font-weight: 500; line-height: 19px; }
+.generation-assistant-panel__task span { color: var(--od-ink-secondary); font-size: 12px; }
+
+/* Progress carries only the hint line: the running status is already named in
+   the task card above, and repeating it as a heading read as a duplicate. */
+.generation-assistant-panel__progress { color: var(--od-ink-secondary); font-size: 12px; line-height: 18px; }
+.generation-assistant-panel__progress h2 { margin: 0 0 4px; color: var(--od-ink); font-size: 13px; font-weight: 500; }
+.generation-assistant-panel__progress p { margin: 0; }
+
+.generation-assistant-panel__stages { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.generation-assistant-panel__stages li { position: relative; padding-left: 18px; color: var(--od-ink-secondary); font-size: 12px; line-height: 18px; }
+.generation-assistant-panel__stages li::before { position: absolute; top: 6px; left: 3px; width: 6px; height: 6px; border-radius: 50%; background: var(--od-border-hover); content: ""; }
+.generation-assistant-panel__stages li[data-status="active"]::before { background: var(--od-guidance); box-shadow: 0 0 0 3px color-mix(in srgb, var(--od-guidance) 18%, transparent); }
+.generation-assistant-panel__stages li[data-status="active"] { color: var(--od-ink); }
+.generation-assistant-panel__stages li[data-status="completed"]::before { background: var(--od-ink-disabled); }
+.generation-assistant-panel__stages li[data-status="failed"]::before { background: var(--od-danger); }
+
+/* Gates (question, plan) are the only raised surfaces. They are what the user
+   must act on, so they get the border and the tint; everything else stays flat. */
+.generation-assistant-panel__question,
+.generation-assistant-panel__plan {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  border: 1px solid color-mix(in srgb, var(--od-guidance) 28%, var(--od-border-subtle));
+  border-radius: var(--od-radius-dialog);
+  background: var(--od-surface);
+  padding: 14px;
+}
+
+.generation-assistant-panel__question-nav { display: grid; grid-template-columns: 24px minmax(0, 1fr) 24px; align-items: center; gap: 6px; color: var(--od-ink-secondary); font-size: 12px; text-align: center; }
+.generation-assistant-panel__question-heading { display: grid; gap: 5px; }
+.generation-assistant-panel__kicker { color: var(--od-guidance); font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.generation-assistant-panel__question-title { color: var(--od-ink); font-size: 13px; font-weight: 500; line-height: 19px; }
+.generation-assistant-panel__question-options { display: grid; gap: 6px; }
+.generation-assistant-panel__question-options .ui-button {
+  height: auto;
+  min-height: 38px;
+  justify-content: flex-start;
+  gap: 9px;
+  border-radius: var(--od-radius-popover);
+  padding: 8px 10px;
+  text-align: left;
+  white-space: normal;
+}
+.generation-assistant-panel__question-options .ui-button__label { display: flex; width: 100%; align-items: center; gap: 8px; text-align: left; }
+.generation-assistant-panel__option-number { display: grid; width: 20px; height: 20px; flex: 0 0 auto; place-items: center; border-radius: var(--od-radius-control); background: color-mix(in srgb, var(--od-ink) 6%, transparent); color: var(--od-ink-secondary); font-size: 11px; font-weight: 600; }
+.generation-assistant-panel__question-options .ui-button[data-variant="primary"] .generation-assistant-panel__option-number { background: color-mix(in srgb, #fff 24%, transparent); color: inherit; }
+.generation-assistant-panel__option-label { min-width: 0; }
+.generation-assistant-panel__recommended { flex: 0 0 auto; border-radius: var(--od-radius-control); background: color-mix(in srgb, currentColor 10%, transparent); padding: 1px 5px; font-size: 10px; }
+.generation-assistant-panel__option-description { display: block; color: var(--od-ink-secondary); font-size: 12px; }
+
+.generation-assistant-panel__plan strong { color: var(--od-ink); font-size: 13px; font-weight: 500; }
+.generation-assistant-panel__plan pre {
+  max-height: 320px;
+  margin: 0;
+  overflow: auto;
+  border-radius: var(--od-radius-popover);
+  background: var(--od-surface-subtle);
+  padding: 10px 12px;
+  color: var(--od-ink-secondary);
+  font: 400 12px/19px var(--od-font-ui);
+  white-space: pre-wrap;
+}
+
+.generation-assistant-panel__error {
+  border-radius: var(--od-radius-popover);
+  background: color-mix(in srgb, var(--od-danger) 8%, transparent);
+  padding: 9px 11px;
+  color: var(--od-danger);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* Pinned footer. It sits outside the scroll area and is separated by a hairline
+   rather than a raised card, so the input never looks like it is floating over
+   the conversation. */
+.generation-assistant-panel__footer {
+  border-top: 1px solid var(--od-border-subtle);
+  background: var(--od-surface);
+  padding: 12px;
+}
+
+.generation-assistant-panel__composer { position: relative; display: block; }
+.generation-assistant-panel__composer .ui-textarea {
+  width: 100%;
+  min-height: 88px;
+  max-height: 180px;
+  box-sizing: border-box;
+  border: 1px solid var(--od-border-subtle);
+  border-radius: var(--od-radius-dialog);
+  background: var(--od-surface-subtle);
+  padding: 11px 12px 44px;
+  font-size: 13px;
+  line-height: 19px;
+  resize: none;
+}
+.generation-assistant-panel__composer .ui-textarea:focus-visible { border-color: var(--od-guidance); background: var(--od-surface); outline: none; }
+
+/* Send and stop are one button in two states, anchored to the same corner so
+   the control never moves when a run starts or ends. */
+.generation-assistant-panel__composer .generation-assistant-panel__send {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+}
+.generation-assistant-panel__composer .generation-assistant-panel__send .ui-button__icon svg { width: 15px; height: 15px; }
+.generation-assistant-panel__send[data-mode="stop"] { background: var(--od-ink); }
+.generation-assistant-panel__send[data-mode="stop"]:hover:not(:disabled) { background: color-mix(in srgb, var(--od-ink) 82%, #000); }
+.generation-assistant-panel__send[data-mode="stop"] .ui-button__icon svg { width: 11px; height: 11px; }

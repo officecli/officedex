@@ -19,6 +19,9 @@
 }
 
 .ui-button {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
   min-height: var(--od-control-md);
   display: inline-flex;
   align-items: center;
@@ -30,6 +33,12 @@
   background: var(--od-surface-muted);
   color: var(--od-ink);
   cursor: pointer;
+}
+
+.ui-button__label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: center;
 }
 
 .ui-button[data-variant="primary"] {
@@ -391,11 +400,15 @@
   display: grid;
   place-items: center;
   padding: 24px;
+  overflow: auto;
   background: #00000059;
 }
 
 .ui-dialog {
+  box-sizing: border-box;
   width: min(480px, 100%);
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
   padding: 24px;
   border: 1px solid var(--od-border-subtle);
   border-radius: var(--od-radius-dialog);
@@ -417,6 +430,7 @@
 
 .ui-dialog__footer {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
   margin-top: 24px;
@@ -424,45 +438,128 @@
 
 .ui-toast-host {
   position: fixed;
-  top: 20px;
+  top: max(16px, env(safe-area-inset-top));
   left: 50%;
   z-index: 1100;
   display: flex;
-  width: min(420px, calc(100vw - 32px));
+  width: min(440px, calc(100vw - 32px));
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  pointer-events: none;
   transform: translateX(-50%);
 }
 
 .ui-toast {
-  display: flex;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  grid-template-areas: "content close" "action close";
   align-items: center;
-  gap: 12px;
-  min-height: 40px;
-  padding: 8px 12px;
-  border: 1px solid var(--od-border-subtle);
-  border-radius: var(--od-radius-popover);
+  column-gap: 14px;
+  row-gap: 2px;
+  min-height: 56px;
+  overflow: hidden;
+  padding: 11px 10px 11px 16px;
+  border: 1px solid color-mix(in srgb, var(--od-border-subtle) 90%, var(--od-ink));
+  border-radius: 14px;
   background: var(--od-surface);
   color: var(--od-ink);
   box-shadow: var(--od-shadow-floating);
   font: 400 13px/20px var(--od-font-ui);
+  pointer-events: auto;
+  animation: ui-toast-enter 180ms ease-out both;
+}
+
+.ui-toast::before {
+  position: absolute;
+  inset: 10px auto 10px 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--od-guidance);
+  content: "";
+}
+
+.ui-toast[data-tone="success"]::before { background: var(--od-success); }
+.ui-toast[data-tone="warning"]::before { background: var(--od-warning); }
+.ui-toast[data-tone="error"]::before { background: var(--od-danger); }
+.ui-toast[data-tone="loading"]::before { background: var(--od-guidance); }
+
+@keyframes ui-toast-enter {
+  from { opacity: 0; transform: translateY(-6px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-toast { animation: none; }
 }
 
 .ui-toast__content {
+  grid-area: content;
   display: flex;
   min-width: 0;
   flex: 1;
   flex-direction: column;
+  gap: 2px;
 }
 
 .ui-toast__content strong {
-  font-weight: 500;
+  color: var(--od-ink);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.ui-toast__content span {
+  color: var(--od-ink-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.ui-toast__action {
+  grid-area: action;
+  justify-self: start;
+  min-height: 24px;
+  border: 0;
+  background: transparent;
+  color: var(--od-guidance);
+  padding: 0;
+  cursor: pointer;
+  font: 600 12px/18px var(--od-font-ui);
+}
+
+.ui-toast__action:hover { color: var(--od-ink); }
+
+.ui-toast__close {
+  grid-area: close;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--od-ink-secondary);
+  padding: 0;
+  cursor: pointer;
+  font: 400 20px/24px var(--od-font-ui);
+}
+
+.ui-toast__close:hover {
+  background: var(--od-surface-muted);
+  color: var(--od-ink);
 }
 
 .ui-popover {
   position: fixed;
   z-index: 1050;
-  min-width: 160px;
+  box-sizing: border-box;
+  min-width: min(160px, calc(100vw - 16px));
+  width: max-content;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - 16px);
+  overflow: auto;
+  overflow-wrap: anywhere;
   padding: 6px;
   /* Hairline plus a two-stop shadow: the panel needs to read as floating above
      the surface, which a single hard border cannot do on its own. */
@@ -486,12 +583,15 @@
   z-index: 1200;
   width: max-content;
   max-width: 280px;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
   padding: 4px 8px;
   border-radius: 4px;
   background: #2f3337;
   color: white;
   font: 400 12px/18px var(--od-font-ui);
   transform: translateX(-50%);
+  white-space: normal;
 }
 
 .ui-tooltip[data-placement="bottom"] { top: calc(100% + 6px); bottom: auto; }
