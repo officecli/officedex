@@ -145,6 +145,7 @@ function fakePowerPoint({ attention = true, refuseVeils = false }: { attention?:
     shapes: {
       addTextBox: (text: string, options: Record<string, unknown>) => addShape(index, { kind: "text", text, ...options }),
       addGeometricShape: (preset: string, options: Record<string, unknown>) => addShape(index, { kind: preset, ...options }),
+      addDiagram: (layoutId: string, options: Record<string, unknown>) => addShape(index, { kind: "diagram", layoutId, ...options }),
       // slide.replace enumerates and deletes: expose the stored shapes as
       // deletable items, the way the editor host does.
       load: () => {},
@@ -237,6 +238,7 @@ describe("buildOpsChunkScript", () => {
     expect(source).toContain("setSelectedSlides");
     expect(source).toContain("addTextBox");
     expect(source).toContain("addGeometricShape");
+    expect(source).toContain("addDiagram");
     // Pictures have no bytes on this channel: they must render as placeholders,
     // never attempt an image API.
     const withPicture = buildOpsChunkScript(
@@ -248,6 +250,21 @@ describe("buildOpsChunkScript", () => {
     expect(withPicture).not.toContain("base64");
     // The CJK/Latin font split from the deck design system rides along.
     expect(source).toContain("Noto Sans CJK SC");
+  });
+
+  it("replays a native SmartArt operation through the diagram surface", async () => {
+    const ops: VibeOp[] = [
+      { seq: 1, op: "slide.begin", slide: 1, composition: "smartart", background: "#FFFFFF" },
+      { seq: 2, op: "diagram.add", slide: 1, diagram: { layoutId: "urn:microsoft.com/office/officeart/2005/8/layout/target1", nodes: ["产品", "设计", "工程"] } },
+      { seq: 3, op: "slide.end", slide: 1 },
+    ];
+    const powerPoint = fakePowerPoint();
+    const outcome = await runChunkScript(
+      buildOpsChunkScript(ops, { fontLatin: "Aptos", fontCJK: "Noto Sans CJK SC" }, 0),
+      powerPoint,
+    ) as { executed: number; skipped: number };
+    expect(outcome).toMatchObject({ executed: 1, skipped: 0 });
+    expect(powerPoint.deck[0].shapes[0]).toMatchObject({ kind: "diagram", layoutId: "urn:microsoft.com/office/officeart/2005/8/layout/target1" });
   });
 
   it("is plain JavaScript, whatever the file it is written in allows", () => {
