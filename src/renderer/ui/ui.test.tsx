@@ -3,6 +3,18 @@ import { describe, expect, it } from "vitest";
 import { Button, Input, Loading, RadioGroup, Select, Switch } from "./index";
 
 describe("single UI facade", () => {
+  it("exposes explicit variants for visible button states", () => {
+    render(
+      <>
+        <Button variant="secondary">Cancel</Button>
+        <Button variant="danger">Delete</Button>
+      </>,
+    );
+
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveAttribute("data-variant", "secondary");
+    expect(screen.getByRole("button", { name: "Delete" })).toHaveAttribute("data-variant", "danger");
+  });
+
   it("exports the WebOffice controls used by business code", () => {
     render(
       <>

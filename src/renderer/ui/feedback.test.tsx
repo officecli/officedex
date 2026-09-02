@@ -11,10 +11,13 @@ describe("UI feedback services", () => {
         title: "Remove project?",
         content: "Files stay on disk.",
         okText: "Remove",
+        tone: "danger",
         onOk,
       });
     });
 
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveAttribute("data-variant", "secondary");
+    expect(screen.getByRole("button", { name: "Remove" })).toHaveAttribute("data-variant", "danger");
     fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     expect(onOk).toHaveBeenCalledOnce();
     await waitFor(() => expect(screen.queryByText("Remove project?")).toBeNull());
