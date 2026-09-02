@@ -16,14 +16,14 @@ export interface ProgressivePptxStageProps {
   editor?: Omit<PresentationEditorFrameProps, "previewToken" | "fileName"> & { previewToken: string; fileName: string };
   onBriefChange?: (value: string) => void;
   onOutlineChange?: (value: string) => void;
-  onContinue?: (outline?: Array<{ id: string; title: string; detail?: string; estimatedSlides?: number }>) => void | Promise<void>;
-  onStartDrawing?: (outline?: Array<{ id: string; title: string; detail?: string; estimatedSlides?: number }>) => void | Promise<void>;
+  onContinue?: (outline?: Array<{ id: string; title: string; detail?: string; estimatedSlides?: number; slide?: number }>) => void | Promise<void>;
+  onStartDrawing?: (outline?: Array<{ id: string; title: string; detail?: string; estimatedSlides?: number; slide?: number }>) => void | Promise<void>;
   onQuestionAnswer?: (answer: TaskQuestionAnswer) => void | Promise<void>;
   onDeleteTask?: () => void | Promise<void>;
   productionProps?: Omit<PptxProductionStageProps, "task">;
 }
 
-type OutlineItem = { id: string; title: string; detail?: string; estimatedSlides?: number };
+type OutlineItem = { id: string; title: string; detail?: string; estimatedSlides?: number; slide?: number };
 
 function asOutlineItem(value: unknown, index: number): OutlineItem | null {
   if (typeof value === "string" && value.trim()) return { id: `outline-${index + 1}`, title: value.trim() };
@@ -37,7 +37,13 @@ function asOutlineItem(value: unknown, index: number): OutlineItem | null {
   const estimatedSlides = typeof item.estimatedSlides === "number" && Number.isFinite(item.estimatedSlides)
     ? Math.max(0, Math.round(item.estimatedSlides))
     : undefined;
-  return { id: typeof item.id === "string" && item.id.trim() ? item.id : `outline-${index + 1}`, title: title.trim(), detail: detail?.trim(), estimatedSlides };
+  const explicitSlide = [item.slide, item.slideNumber, item.slide_number]
+    .find((candidate): candidate is number => typeof candidate === "number" && Number.isInteger(candidate) && candidate > 0);
+  const id = typeof item.id === "string" && item.id.trim() ? item.id : `outline-${index + 1}`;
+  const idSlide = explicitSlide === undefined && /(?:^|[-_])(?:slide|s|outline)[-_]?(\d+)$/i.test(id)
+    ? Number(id.match(/(\d+)$/)?.[1])
+    : undefined;
+  return { id, title: title.trim(), detail: detail?.trim(), estimatedSlides, slide: explicitSlide ?? idSlide ?? index + 1 };
 }
 
 function groupedSlideItems(slides: unknown[]): OutlineItem[] {

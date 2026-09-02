@@ -679,6 +679,25 @@ return await PowerPoint.run(async (context) => {
     executed += 1;
     pendingSync += 1;
   };
+  const drawDiagram = async (entry) => {
+    if (!slide) throw new Error("vibe replay: diagram.add has no slide to draw on");
+    const diagram = entry.diagram || {};
+    const layoutId = String(diagram.layoutId || "").trim();
+    if (!layoutId) {
+      skipped += 1;
+      return;
+    }
+    const nodes = Array.isArray(diagram.nodes)
+      ? diagram.nodes.map((node, index) => typeof node === "object" && node !== null
+        ? { id: String(node.id || "node-" + (index + 1)), text: String(node.text || ""), level: Number.isInteger(node.level) ? node.level : 0 }
+        : { id: "node-" + (index + 1), text: String(node), level: 0 })
+      : [];
+    const shape = slide.shapes.addDiagram(layoutId, { nodes });
+    shape.name = "smartart-live-" + entry.seq;
+    executed += 1;
+    pendingSync += 1;
+    await flush();
+  };
   for (let cursor = 0; cursor < data.ops.length; cursor += 1) {
     const entry = data.ops[cursor];
     if (entry.op === "slide.begin" || entry.op === "slide.replace") {
@@ -701,6 +720,9 @@ return await PowerPoint.run(async (context) => {
       }
       // Arriving at a blank page: hold before the first mark goes down.
       if (SLIDE_MS > 0) await sleep(beat(SLIDE_MS, null, entry.seq));
+    } else if (entry.op === "diagram.add") {
+      await useSlide(entry.slide || slideNumber || 1);
+      await drawDiagram(entry);
     } else if (entry.op === "shape.add") {
       const target = entry.slide || slideNumber || 1;
       // Gather the shapes that start together: consecutive additions to the
@@ -1103,9 +1125,10 @@ export class VibeReplaySequencer {
           this.onOp?.(op);
         }
         if (this.currentSlide) this.emit({ state: "drawing", slide: this.currentSlide });
-        const drawable = chunk.some((op) => op.op === "shape.add" || op.op === "slide.begin" || op.op === "slide.replace" || op.op === "slide.delete" || op.op === "shape.update");
+        const drawable = chunk.some((op) => op.op === "shape.add" || op.op === "diagram.add" || op.op === "slide.begin" || op.op === "slide.replace" || op.op === "slide.delete" || op.op === "shape.update");
         let chunkCaptures: Array<{ seq: number; content: string; shape?: string }> = [];
         if (drawable) {
+          this.lastAttentionRect = attentionRectFromOps(chunk) ?? this.lastAttentionRect;
           // The script spends most of its time waiting on purpose, so the
           // budget has to grow with the pace or a slower performance would
           // look like a hung editor.
@@ -1152,7 +1175,7 @@ export class VibeReplaySequencer {
               `${elapsedMs}ms`,
             );
           }
-          const requested = chunk.filter((op) => op.op === "shape.add").length;
+          const requested = chunk.filter((op) => op.op === "shape.add" || op.op === "diagram.add").length;
           // An editor that cannot draw translucent fills says so once; asking
           // again on every group would cost a wasted round trip each time.
           if ((outcome as { result?: { veilsUnsupported?: boolean } } | undefined)?.result?.veilsUnsupported) {

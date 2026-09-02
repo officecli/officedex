@@ -1213,7 +1213,7 @@ function OfficeDexApp() {
     await continueModify("pptx", instruction);
   }, [continueModify]);
 
-  const resumePptxTask = useCallback(async (task: DesktopTask, outline?: Array<{ id: string; title: string; detail?: string; estimatedSlides?: number }>, questionAnswer?: TaskQuestionAnswer) => {
+  const resumePptxTask = useCallback(async (task: DesktopTask, outline?: Array<{ id: string; title: string; detail?: string; estimatedSlides?: number; slide?: number }>, questionAnswer?: TaskQuestionAnswer) => {
     // Send the plan decision through the typed option channel.  Using a
     // freeform "approve" answer is ambiguous to older OfficeCLI runtimes and
     // can be interpreted as a revision/continuation, which reopens the plan
@@ -1226,7 +1226,7 @@ function OfficeDexApp() {
     try {
       if (task.status === "plan_review") {
         const answer = outline && outline.length > 0
-          ? JSON.stringify({ sections: outline.map(({ id, title, detail, estimatedSlides }) => ({ id, title, purpose: detail, estimatedSlides })) })
+          ? JSON.stringify({ sections: outline.map(({ id, title, detail, estimatedSlides, slide }, index) => ({ id, slide: slide ?? index + 1, title, purpose: detail, estimatedSlides })) })
           : "";
         await respondToPlanReview(officecli, task, "approve", answer);
         setState((current) => finishTaskContinuing(current, task.id));
