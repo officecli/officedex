@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 )
 
 // Converter translates between PowerPoint files and the editable MOP package
@@ -44,12 +45,28 @@ func (c *CLIConverter) ExportPptx(ctx context.Context, mopDirectory, outputPath 
 
 func (c *CLIConverter) Close() error { return nil }
 
+// converterTimeout bounds one mop-convert run. The context handed in is the
+// application's, which only ends when the app does, so a converter that hangs
+// used to hold the editor's service lock for the rest of the session and every
+// other document froze behind it. mophttp already bounds its own runs the same
+// way, at the dev server's CONVERTER_TIMEOUT_MS.
+const converterTimeout = 180 * time.Second
+
 func (c *CLIConverter) run(ctx context.Context, args ...string) error {
-	command := exec.CommandContext(ctx, c.binary, args...)
+	runCtx, cancel := context.WithTimeout(ctx, converterTimeout)
+	defer cancel()
+	command := exec.CommandContext(runCtx, c.binary, args...)
 	command.Env = os.Environ()
+	// Kill the whole group: mop-convert spawns helpers, and killing only the
+	// parent leaves them holding the session directory open.
+	command.SysProcAttr = converterProcAttr()
+	command.WaitDelay = 5 * time.Second
 	output, err := command.CombinedOutput()
 	if err == nil {
 		return nil
+	}
+	if runCtx.Err() == context.DeadlineExceeded {
+		return fmt.Errorf("mop-convert %s timed out after %s", args[0], converterTimeout)
 	}
 	detail := strings.TrimSpace(string(output))
 	if detail == "" {

@@ -201,6 +201,12 @@ type App struct {
 
 	settingsStore *settings.Store
 	localStore    *localstore.Store
+	// eventWrites serialises task-event persistence off the bridge's stdout
+	// reader. Recording used to happen inline on that goroutine, so every
+	// frame waited on a SQLite transaction holding the store's single lock,
+	// and a dense op stream backed up into the child process's stdout pipe.
+	eventWrites   chan func()
+	eventWritesWG sync.WaitGroup
 	previewReg    *preview.Registry
 	demoFlow      *demoflow.Engine
 
@@ -316,6 +322,7 @@ func NewApp() (*App, error) {
 	}
 	app.xlsxEditorService = xlsxeditor.NewService(previewReg, office2modoc.New(repoRoot), os.TempDir())
 	app.pptxEditorService = pptxeditor.NewService(previewReg, pptxeditor.NewCLIConverter(repoRoot), os.TempDir())
+	app.startEventWriter()
 	app.timelineStore = timeline.New(filepath.Join(workspaceDir, "timeline"), pptxeditor.NewCLIConverter(repoRoot))
 	blankTemplatePath := filepath.Join(userDataDir, "blank-presentation.pptx")
 	if _, statErr := os.Stat(blankTemplatePath); os.IsNotExist(statErr) {
@@ -466,6 +473,59 @@ func (a *App) failInterruptedTasks(ctx context.Context) error {
 
 // shutdown is called by Wails when the window is about to close. It stops
 // long-running children so we don't leak processes.
+// startEventWriter runs the single goroutine that owns task-event persistence.
+// One worker keeps events in the order the bridge produced them, which the
+// recovery path depends on when it replays a task's history.
+// recordTaskEventBestEffort persists an event whose loss does not fail the
+// caller, but says so when it fails. These rows are what the recovery path
+// replays: a dropped task.user_input is a task that can no longer be resumed,
+// and the write used to be discarded with `_ =`, so the first sign of trouble
+// was recovery reporting a missing original input.
+func (a *App) recordTaskEventBestEffort(event types.BridgeEvent) {
+	if a.localStore == nil {
+		return
+	}
+	if err := a.localStore.RecordEvent(event); err != nil {
+		ctx := a.ctx
+		if ctx == nil {
+			return
+		}
+		wailsruntime.LogWarningf(ctx, "record %s for task %s: %v; this task may not be recoverable", event.Type, event.TaskID, err)
+	}
+}
+
+func (a *App) startEventWriter() {
+	a.eventWrites = make(chan func(), 256)
+	a.eventWritesWG.Add(1)
+	go func() {
+		defer a.eventWritesWG.Done()
+		for write := range a.eventWrites {
+			write()
+		}
+	}()
+}
+
+// queueEventWrite hands persistence to the writer goroutine. A full queue
+// blocks rather than dropping: recovery reads these rows back, so losing one
+// loses the input a task needs to resume.
+func (a *App) queueEventWrite(write func()) {
+	if a.eventWrites == nil {
+		write()
+		return
+	}
+	a.eventWrites <- write
+}
+
+// drainEventWrites stops the writer and waits for queued rows to land.
+func (a *App) drainEventWrites() {
+	if a.eventWrites == nil {
+		return
+	}
+	close(a.eventWrites)
+	a.eventWritesWG.Wait()
+	a.eventWrites = nil
+}
+
 func (a *App) shutdown(ctx context.Context) {
 	a.removeProcessIdentity()
 	a.mu.Lock()
@@ -484,6 +544,7 @@ func (a *App) shutdown(ctx context.Context) {
 	if loginUnsub != nil {
 		loginUnsub()
 	}
+	a.drainEventWrites()
 	if a.localStore != nil {
 		_ = a.localStore.Close()
 	}
@@ -672,7 +733,7 @@ func (a *App) Generate(input types.GenerateInput) (GenerateResult, error) {
 		if err := a.recordTaskWorkspaceContext(result.TaskID, resolved.WorkspaceID, resolved.ConversationID, resolved.ParentTaskID, resolved.Topic, resolved.NoProject); err != nil {
 			return GenerateResult{}, err
 		}
-		_ = a.localStore.RecordEvent(types.BridgeEvent{
+		a.recordTaskEventBestEffort(types.BridgeEvent{
 			TaskID: result.TaskID,
 			Type:   "task.user_input",
 			Payload: generateInputEventPayload(resolved, localstore.TaskContext{
@@ -727,7 +788,7 @@ func (a *App) Modify(input types.ModifyInput) (GenerateResult, error) {
 		if err := a.recordTaskWorkspaceContext(result.TaskID, resolved.WorkspaceID, resolved.ConversationID, resolved.ParentTaskID, resolved.Prompt, resolved.NoProject); err != nil {
 			return GenerateResult{}, err
 		}
-		_ = a.localStore.RecordEvent(types.BridgeEvent{
+		a.recordTaskEventBestEffort(types.BridgeEvent{
 			TaskID: result.TaskID,
 			Type:   "task.user_input",
 			Payload: map[string]any{
@@ -766,7 +827,7 @@ func (a *App) ArtifactStageEdit(input types.ArtifactStageEditInput) (GenerateRes
 		if err := a.recordTaskWorkspaceContext(result.TaskID, input.WorkspaceID, input.ConversationID, input.ParentTaskID, input.ArtifactStage.Instruction, input.NoProject); err != nil {
 			return GenerateResult{}, err
 		}
-		_ = a.localStore.RecordEvent(types.BridgeEvent{TaskID: result.TaskID, Type: "task.user_input", Payload: map[string]any{"prompt": input.ArtifactStage.Instruction, "source_file": input.ArtifactStage.Target.ArtifactPath, "artifact_stage_scope": input.ArtifactStage.Scope.Kind}})
+		a.recordTaskEventBestEffort(types.BridgeEvent{TaskID: result.TaskID, Type: "task.user_input", Payload: map[string]any{"prompt": input.ArtifactStage.Instruction, "source_file": input.ArtifactStage.Target.ArtifactPath, "artifact_stage_scope": input.ArtifactStage.Scope.Kind}})
 	}
 	return GenerateResult{TaskID: result.TaskID, SessionID: result.SessionID, Status: result.Status}, nil
 }
@@ -980,7 +1041,7 @@ func (a *App) recoverStaleInteractiveRespond(input RespondInput, originalErr err
 		TS:      time.Now().UTC().Format(time.RFC3339Nano),
 		Payload: generateInputEventPayload(generateInput, taskCtx),
 	}
-	_ = a.localStore.RecordEvent(recoveredInputEvent)
+	a.recordTaskEventBestEffort(recoveredInputEvent)
 	if canEmitWailsEvent(ctx) {
 		emit(ctx, bridgeEventChannel, recoveredInputEvent)
 	}
@@ -1398,7 +1459,7 @@ func (a *App) recordLocalTaskCancelled(taskID, message string) {
 	if strings.TrimSpace(message) == "" {
 		message = "Task cancelled"
 	}
-	_ = a.localStore.RecordEvent(types.BridgeEvent{
+	a.recordTaskEventBestEffort(types.BridgeEvent{
 		EventID: "local-cancel-" + uuid.NewString(),
 		TaskID:  strings.TrimSpace(taskID),
 		Type:    "task.cancelled",
@@ -4108,9 +4169,15 @@ func (a *App) bridgeEventListener(client *bridge.Client) bridge.EventListener {
 				}
 			}
 		}
-		if err := a.RecordAndEmitTaskEvent(ctx, event); err != nil {
-			wailsruntime.LogWarningf(ctx, "record task event: %v", err)
-		}
+		// The renderer sees the event immediately; persistence goes to the
+		// writer goroutine so this reader can get back to the pipe.
+		emit(ctx, bridgeEventChannel, event)
+		persisted := event
+		a.queueEventWrite(func() {
+			if err := a.recordTaskEvent(persisted); err != nil {
+				wailsruntime.LogWarningf(ctx, "record task event: %v", err)
+			}
+		})
 		if event.Type == "task.completed" || event.Type == "task.failed" {
 			if a.localStore != nil && event.Payload != nil {
 				if c, ok := event.Payload["credits_charged"].(float64); ok {
@@ -4891,7 +4958,9 @@ func (a *App) recordTaskWorkspaceContext(taskID, workspaceID, conversationID, pa
 	})
 }
 
-func (a *App) RecordAndEmitTaskEvent(ctx context.Context, event types.BridgeEvent) error {
+// recordTaskEvent persists one event and whatever the event implies. It runs on
+// the writer goroutine, never on a bridge reader.
+func (a *App) recordTaskEvent(event types.BridgeEvent) error {
 	completedArtifact := (*types.Artifact)(nil)
 	if event.Type == "task.completed" {
 		completedArtifact = artifactFromCompletedEvent(event)
@@ -4908,6 +4977,16 @@ func (a *App) RecordAndEmitTaskEvent(ctx context.Context, event types.BridgeEven
 		if err := a.RecordArtifact(*completedArtifact); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// RecordAndEmitTaskEvent persists an event and forwards it to the renderer.
+// Callers outside the bridge reader still use it; the reader queues the write
+// and emits on its own so it does not block on SQLite.
+func (a *App) RecordAndEmitTaskEvent(ctx context.Context, event types.BridgeEvent) error {
+	if err := a.recordTaskEvent(event); err != nil {
+		return err
 	}
 	emit(ctx, bridgeEventChannel, event)
 	return nil
