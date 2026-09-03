@@ -5,6 +5,7 @@ package demoflow
 import (
 	"context"
 	"errors"
+	"officedex/internal/config"
 	"os"
 	"path/filepath"
 	"strings"
@@ -62,7 +63,7 @@ func newImplementation(options Options) implementation {
 		recorder:        options.Recorder,
 		delay:           delay,
 		newID:           newID,
-		acceptAnyPrompt: os.Getenv("OFFICEDEX_DEMO_ACCEPT_ANY_PROMPT") == "1" && os.Getenv("OFFICEDEX_E2E_HOST") == "1",
+		acceptAnyPrompt: config.Enabled(config.DemoAcceptAnyPromptEnv) && config.Enabled(config.E2EHostEnv),
 		tasks:           map[string]*demoTask{},
 	}
 }

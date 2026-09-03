@@ -2,6 +2,7 @@ package office2modoc
 
 import (
 	"fmt"
+	"officedex/internal/config"
 	"os"
 	"path/filepath"
 )
@@ -9,7 +10,7 @@ import (
 // ResolveLibraryPath returns the configured FFI library path, or the
 // repository-local default when no override is set.
 func ResolveLibraryPath(repoRoot string) (string, error) {
-	if override := os.Getenv("OFFICE2MODOC_FFI_PATH"); override != "" {
+	if override := os.Getenv(config.Office2ModocFFIEnv); override != "" {
 		if !filepath.IsAbs(override) {
 			return "", fmt.Errorf("OFFICE2MODOC_FFI_PATH must be an absolute path: %q", override)
 		}
