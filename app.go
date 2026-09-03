@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"officedex/internal/config"
 	"officedex/internal/providerprobe"
+	"officedex/internal/runtimeenv"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -313,7 +314,7 @@ func NewApp() (*App, error) {
 	} else if statErr != nil {
 		return nil, fmt.Errorf("stat blank presentation template: %w", statErr)
 	}
-	presentationRoot := resolvePresentationRuntimeRoot(repoRoot)
+	presentationRoot := runtimeenv.Root(repoRoot)
 	converterPath := ""
 	if presentationRoot != "" {
 		converterPath = config.ExecutableFile(filepath.Join(presentationRoot, "tools", "bin", "mop-convert"))
@@ -4042,7 +4043,7 @@ func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
 	// relying on the bridge's (often different) working directory. Packaged
 	// builds can place the same runtime under Resources/presentation; an
 	// explicit user env still wins and is never overwritten.
-	env = append(env, presentationRuntimeEnv(cwd)...)
+	env = append(env, runtimeenv.BridgeEnv(cwd)...)
 
 	a.binary.store(resolved.Path, env)
 	// Another call may have started this cwd's client while the binary was
@@ -4073,177 +4074,12 @@ func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
 	return winner, nil
 }
 
-func presentationRuntimeEnv(cwd string) []string {
-	rootExplicit := config.IsSet(config.PresentationRootEnv) || config.IsSet(config.PresentationSourceDirEnv)
-	nodeExplicit := config.IsSet(config.SkillNodeEnv)
-	env := make([]string, 0, 3)
-	if !nodeExplicit {
-		if node := presentationNodeExecutable(); node != "" {
-			env = append(env, "OFFICECLI_MOP_SKILL_NODE="+node)
-		}
-	}
-	if rootExplicit {
-		if len(env) == 0 {
-			return nil
-		}
-		return env
-	}
-	candidates := make([]string, 0, 5)
-	// A packaged macOS app may be launched from a shell whose PWD points at a
-	// developer checkout. Prefer the embedded, signed presentation runtime in
-	// that case; otherwise the app can pair its signed x64 Node runtime with an
-	// unsigned source-tree Rollup native addon and macOS rejects dlopen().
-	if executable, err := os.Executable(); err == nil {
-		exeDir := filepath.Dir(executable)
-		candidates = append(candidates,
-			filepath.Join(exeDir, "..", "Resources", "presentation"),
-			filepath.Join(exeDir, "presentation"),
-		)
-	}
-	if strings.TrimSpace(cwd) != "" {
-		candidates = append(candidates,
-			filepath.Join(cwd, "presentation"),
-			filepath.Join(cwd, "..", "presentation"),
-		)
-	}
-	if processCwd, err := os.Getwd(); err == nil && processCwd != cwd {
-		candidates = append(candidates,
-			filepath.Join(processCwd, "presentation"),
-			filepath.Join(processCwd, "..", "presentation"),
-		)
-	}
-	// GUI-launched macOS apps often have `/` as their real cwd but retain the
-	// launch shell's PWD. Include it as a local-development discovery hint.
-	if envPWD := strings.TrimSpace(os.Getenv("PWD")); envPWD != "" && envPWD != cwd {
-		candidates = append(candidates,
-			filepath.Join(envPWD, "presentation"),
-			filepath.Join(envPWD, "..", "presentation"),
-		)
-	}
-	for _, candidate := range candidates {
-		root, err := filepath.Abs(candidate)
-		if err != nil {
-			continue
-		}
-		if presentationRuntimeRootValid(root) {
-			return append(env,
-				"PRESENTATION_SOURCE_DIR="+root,
-				"OFFICECLI_MOP_PRESENTATION_ROOT="+root,
-			)
-		}
-	}
-	if len(env) == 0 {
-		return nil
-	}
-	return env
-}
-
-func resolvePresentationRuntimeRoot(repoRoot string) string {
-	candidates := make([]string, 0, 6)
-	if executable, err := os.Executable(); err == nil {
-		exeDir := filepath.Dir(executable)
-		candidates = append(candidates,
-			filepath.Join(exeDir, "..", "Resources", "presentation"),
-			filepath.Join(exeDir, "presentation"),
-		)
-	}
-	if strings.TrimSpace(repoRoot) != "" {
-		candidates = append(candidates,
-			filepath.Join(repoRoot, "presentation"),
-			filepath.Join(repoRoot, "..", "presentation"),
-		)
-	}
-	if cwd, err := os.Getwd(); err == nil {
-		candidates = append(candidates, filepath.Join(cwd, "presentation"), filepath.Join(cwd, "..", "presentation"))
-	}
-	for _, candidate := range candidates {
-		root, err := filepath.Abs(candidate)
-		if err == nil && presentationRuntimeRootValid(root) {
-			return root
-		}
-	}
-	return ""
-}
-
 func resolveMopConvertFromEnvironment() string {
 	// This used to keep the value exactly as written, while the pptxeditor
 	// package resolved the same two variables to an absolute path. A relative
 	// path is not usable from a packaged app, whose working directory is not
 	// the shell's.
 	return config.FirstExecutablePath(config.MOPConvertBinaryEnvKeys...)
-}
-
-func presentationNodeExecutable() string {
-	if executable, err := os.Executable(); err == nil {
-		exeDir := filepath.Dir(executable)
-		for _, candidate := range []string{
-			filepath.Join(exeDir, "..", "Resources", "mop-runtime", "bin", nodeExecutableName()),
-			filepath.Join(exeDir, "mop-runtime", "bin", nodeExecutableName()),
-		} {
-			if resolved := validPresentationNodeExecutable(candidate); resolved != "" {
-				return resolved
-			}
-		}
-	}
-	if node, err := exec.LookPath("node"); err == nil {
-		if resolved := validPresentationNodeExecutable(node); resolved != "" {
-			return resolved
-		}
-	}
-	// Finder-launched macOS apps typically do not inherit the user's Homebrew
-	// PATH. Check the standard package-manager locations so a local development
-	// build can still launch the MOP worker without requiring a shell wrapper.
-	for _, candidate := range []string{
-		"/opt/homebrew/bin/node",
-		"/usr/local/bin/node",
-		"/usr/bin/node",
-	} {
-		if resolved := validPresentationNodeExecutable(candidate); resolved != "" {
-			return resolved
-		}
-	}
-	return ""
-}
-
-func nodeExecutableName() string {
-	if runtime.GOOS == "windows" {
-		return "node.exe"
-	}
-	return "node"
-}
-
-func validPresentationNodeExecutable(candidate string) string {
-	candidate = strings.TrimSpace(candidate)
-	if candidate == "" {
-		return ""
-	}
-	resolved, err := filepath.Abs(candidate)
-	if err != nil {
-		return ""
-	}
-	info, err := os.Stat(resolved)
-	if err != nil || !info.Mode().IsRegular() {
-		return ""
-	}
-	if runtime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0 {
-		return ""
-	}
-	return resolved
-}
-
-func presentationRuntimeRootValid(root string) bool {
-	for _, relative := range []string{
-		"package.json",
-		filepath.Join("node_modules", "vite", "dist", "node", "index.js"),
-		filepath.Join("bos", "dist", "mop-wasm", "pkg", "mop_wasm_bg.wasm"),
-		filepath.Join("tools", "fixtures", "blank-presentation", "content.json"),
-	} {
-		info, err := os.Stat(filepath.Join(root, relative))
-		if err != nil || info.IsDir() {
-			return false
-		}
-	}
-	return true
 }
 
 func (a *App) ensureLoginManagerLocked() *login.Manager {

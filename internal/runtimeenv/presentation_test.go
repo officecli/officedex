@@ -1,4 +1,4 @@
-package main
+package runtimeenv
 
 import (
 	"os"
@@ -26,9 +26,9 @@ func TestPresentationRuntimeEnvFindsSiblingCheckout(t *testing.T) {
 	t.Setenv("OFFICECLI_MOP_PRESENTATION_ROOT", "")
 	t.Setenv("PRESENTATION_SOURCE_DIR", "")
 	t.Setenv("OFFICECLI_MOP_SKILL_NODE", "/explicit/node")
-	env := presentationRuntimeEnv(root)
+	env := BridgeEnv(root)
 	if len(env) != 2 || env[0] != "PRESENTATION_SOURCE_DIR="+source || env[1] != "OFFICECLI_MOP_PRESENTATION_ROOT="+source {
-		t.Fatalf("presentationRuntimeEnv(%q) = %#v", root, env)
+		t.Fatalf("BridgeEnv(%q) = %#v", root, env)
 	}
 }
 
@@ -36,7 +36,7 @@ func TestPresentationRuntimeEnvPreservesExplicitRoot(t *testing.T) {
 	t.Setenv("OFFICECLI_MOP_PRESENTATION_ROOT", "/explicit/presentation")
 	t.Setenv("PRESENTATION_SOURCE_DIR", "")
 	t.Setenv("OFFICECLI_MOP_SKILL_NODE", "/explicit/node")
-	if env := presentationRuntimeEnv("/does/not/exist"); env != nil {
+	if env := BridgeEnv("/does/not/exist"); env != nil {
 		t.Fatalf("presentationRuntimeEnv returned %v with explicit root", env)
 	}
 }
@@ -51,7 +51,7 @@ func TestPresentationRuntimeEnvInjectsNodeForExplicitRoot(t *testing.T) {
 	t.Setenv("OFFICECLI_MOP_PRESENTATION_ROOT", "/explicit/presentation")
 	t.Setenv("PRESENTATION_SOURCE_DIR", "")
 	t.Setenv("OFFICECLI_MOP_SKILL_NODE", "")
-	if env := presentationRuntimeEnv("/does/not/exist"); len(env) != 1 || env[0] != "OFFICECLI_MOP_SKILL_NODE="+node {
+	if env := BridgeEnv("/does/not/exist"); len(env) != 1 || env[0] != "OFFICECLI_MOP_SKILL_NODE="+node {
 		t.Fatalf("presentationRuntimeEnv did not inject the resolved node executable: %#v", env)
 	}
 }
