@@ -91,10 +91,6 @@ vi.mock("./components/PreviewPanel", () => ({
   PreviewPanel: () => <div>Preview</div>,
 }));
 
-vi.mock("./components/UpdateBanner", () => ({
-  UpdateBanner: () => null,
-}));
-
 vi.mock("./components/ForceUpdateOverlay", () => ({
   ForceUpdateOverlay: () => null,
 }));

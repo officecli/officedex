@@ -77,7 +77,6 @@ vi.mock("./screens/SettingsScreens", () => ({
 }));
 vi.mock("./screens/OnboardingScreen", () => ({ OnboardingScreen: () => <div>Onboarding</div> }));
 vi.mock("./components/PreviewPanel", () => ({ PreviewPanel: () => <div>Preview</div> }));
-vi.mock("./components/UpdateBanner", () => ({ UpdateBanner: () => null }));
 vi.mock("./components/ForceUpdateOverlay", () => ({ ForceUpdateOverlay: () => null }));
 
 /** Types a prompt into the home intake and submits it with Enter. */
