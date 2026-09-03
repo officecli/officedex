@@ -9,8 +9,15 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DesktopTask } from "../../shared/types";
 import { LocaleProvider } from "../i18n";
+import { en } from "../i18n/en";
 import { SpreadsheetMarketingPanel } from "./SpreadsheetMarketingPanel";
 import type { MarketingBatchDraft } from "./marketingWorkflow";
+
+// The status the panel writes into the sheet is localised, and these tests
+// render under LocaleProvider value="en". Resolving the key through the same
+// dictionary the panel uses keeps the assertion about which status was
+// written, not about how it happens to be worded.
+const statusText = (key: string): string => en[`spreadsheet.marketing.status.${key}`];
 
 const bridgeMocks = vi.hoisted(() => ({
   planShopifyCatalogCampaign: vi.fn(
@@ -534,7 +541,7 @@ describe("SpreadsheetMarketingPanel", () => {
       ),
     );
     await waitFor(() =>
-      expect(onSetStatus).toHaveBeenCalledWith(confirmedBatch, 1, "已完成"),
+      expect(onSetStatus).toHaveBeenCalledWith(confirmedBatch, 1, statusText("completed")),
     );
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
   });
@@ -628,7 +635,7 @@ describe("SpreadsheetMarketingPanel", () => {
       ),
     );
     await waitFor(() =>
-      expect(onSetStatus).toHaveBeenCalledWith(confirmedBatch, 1, "已完成"),
+      expect(onSetStatus).toHaveBeenCalledWith(confirmedBatch, 1, statusText("completed")),
     );
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
   });
@@ -674,7 +681,7 @@ describe("SpreadsheetMarketingPanel", () => {
 
     const confirmedBatch = onPrepare.mock.calls[0][0] as MarketingBatchDraft;
     await waitFor(() =>
-      expect(onSetStatus).toHaveBeenCalledWith(confirmedBatch, 1, "生成失败"),
+      expect(onSetStatus).toHaveBeenCalledWith(confirmedBatch, 1, statusText("failed")),
     );
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect(
@@ -694,7 +701,7 @@ describe("SpreadsheetMarketingPanel", () => {
         _rowIndex: number,
         status: string,
       ) => {
-        if (status === "已完成") {
+        if (status === statusText("completed")) {
           await new Promise<void>((resolve) => {
             completeStatusWritten = resolve;
           });
@@ -750,9 +757,9 @@ describe("SpreadsheetMarketingPanel", () => {
     );
     expect(onGenerate).not.toHaveBeenCalled();
     await waitFor(() =>
-      expect(onSetStatus).toHaveBeenCalledWith(confirmedBatch, 1, "已完成"),
+      expect(onSetStatus).toHaveBeenCalledWith(confirmedBatch, 1, statusText("completed")),
     );
-    expect(onSetStatus).toHaveBeenCalledWith(confirmedBatch, 1, "生成中");
+    expect(onSetStatus).toHaveBeenCalledWith(confirmedBatch, 1, statusText("running"));
     expect(onSave).not.toHaveBeenCalled();
     completeStatusWritten?.();
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));

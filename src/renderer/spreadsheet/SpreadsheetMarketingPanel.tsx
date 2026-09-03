@@ -203,17 +203,17 @@ export function SpreadsheetMarketingPanel({
             item.status === "running",
         )
       )
-        return "生成中";
+        return t("spreadsheet.marketing.status.running");
       const hasCompleted =
         terminalStatus === "completed" ||
         siblings.some((item) => item.status === "completed");
       const hasFailed =
         terminalStatus === "failed" ||
         siblings.some((item) => item.status === "failed");
-      if (hasCompleted && hasFailed) return "部分失败";
-      return hasFailed ? "生成失败" : "已完成";
+      if (hasCompleted && hasFailed) return t("spreadsheet.marketing.status.partialFailure");
+      return hasFailed ? t("spreadsheet.marketing.status.failed") : t("spreadsheet.marketing.status.completed");
     },
-    [jobs],
+    [jobs, t],
   );
   const recoverable = useMemo(
     () =>
@@ -422,7 +422,7 @@ export function SpreadsheetMarketingPanel({
           }));
       setJobs(nextJobs);
       for (const row of batch.rows)
-        void onSetStatus(batch, row.rowIndex, "排队中").catch(() => undefined);
+        void onSetStatus(batch, row.rowIndex, t("spreadsheet.marketing.status.queued")).catch(() => undefined);
     } catch (startError) {
       setError(
         startError instanceof Error ? startError.message : String(startError),
@@ -433,7 +433,7 @@ export function SpreadsheetMarketingPanel({
   const processPostprocess = useCallback(async (job: MarketingJob, sourceFilePath: string, existingRunId?: string) => {
     if (!batch) return;
     try {
-      if (job.channel) await onSetStatus(batch, job.row.rowIndex, "本地合成中");
+      if (job.channel) await onSetStatus(batch, job.row.rowIndex, t("spreadsheet.marketing.status.composing"));
       const run = await runMarketingPostprocess({
         jobId: job.id,
         sheetId: batch.sheetId,
@@ -462,7 +462,7 @@ export function SpreadsheetMarketingPanel({
     } catch (postprocessError) {
       const message = postprocessError instanceof Error ? postprocessError.message : String(postprocessError);
       const runtimeRunId = postprocessError instanceof MarketingRuntimeError ? postprocessError.runId : existingRunId;
-      await onSetStatus(batch, job.row.rowIndex, message.toLowerCase().includes("campaign image") ? "本地合成失败" : "回写失败").catch(() => undefined);
+      await onSetStatus(batch, job.row.rowIndex, message.toLowerCase().includes("campaign image") ? t("spreadsheet.marketing.status.composeFailed") : t("spreadsheet.marketing.status.writebackFailed")).catch(() => undefined);
       setJobs((current) => current.map((item) => item.id === job.id ? {
         ...item,
         status: "failed",
@@ -508,7 +508,7 @@ export function SpreadsheetMarketingPanel({
         })),
       );
       for (const { row } of recoverable)
-        void onSetStatus(batch, row.rowIndex, "生成中").catch(() => undefined);
+        void onSetStatus(batch, row.rowIndex, t("spreadsheet.marketing.status.running")).catch(() => undefined);
       for (const { row, file } of recoverable) {
         void processPostprocess({ id: `recover:${batch.sheetId}:${row.rowIndex}`, row, status: "submitting" }, file.filePath);
       }
@@ -547,7 +547,7 @@ export function SpreadsheetMarketingPanel({
           item.id === job.id ? { ...item, status: "submitting" } : item,
         ),
       );
-      void onSetStatus(batch, job.row.rowIndex, "正在提交").catch(
+      void onSetStatus(batch, job.row.rowIndex, t("spreadsheet.marketing.status.submitting")).catch(
         () => undefined,
       );
       void onGenerate(job.row, job.row.ratio ?? ratio)
@@ -559,7 +559,7 @@ export function SpreadsheetMarketingPanel({
                 : item,
             ),
           );
-          void onSetStatus(batch, job.row.rowIndex, "生成中").catch(
+          void onSetStatus(batch, job.row.rowIndex, t("spreadsheet.marketing.status.running")).catch(
             () => undefined,
           );
         })
@@ -568,7 +568,7 @@ export function SpreadsheetMarketingPanel({
             launchError instanceof Error
               ? launchError.message
               : String(launchError);
-          void onSetStatus(batch, job.row.rowIndex, "生成失败")
+          void onSetStatus(batch, job.row.rowIndex, t("spreadsheet.marketing.status.failed"))
             .then(autoSave)
             .catch(reportAutoSaveError)
             .finally(() => {
@@ -623,7 +623,7 @@ export function SpreadsheetMarketingPanel({
           batch,
           job.row.rowIndex,
           task.status === "cancelled"
-            ? "已取消"
+            ? t("spreadsheet.marketing.status.cancelled")
             : rowStatusAfter(job, "failed"),
         )
           .then(autoSave)
@@ -670,7 +670,7 @@ export function SpreadsheetMarketingPanel({
     launchingJobsRef.current.clear();
     for (const job of interrupted) {
       if (job.taskId) handledTasksRef.current.add(job.taskId);
-      void onSetStatus(batch, job.row.rowIndex, "生成失败")
+      void onSetStatus(batch, job.row.rowIndex, t("spreadsheet.marketing.status.failed"))
         .then(autoSave)
         .catch(reportAutoSaveError);
     }
