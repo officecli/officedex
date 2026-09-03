@@ -1,0 +1,23 @@
+{
+  "comment": "Font families permitted in a packaged build. A family that appears in neither 'families' nor 'unresolved' fails verify-bundled-fonts.mjs. Commercial faces (the HanYi hy-* set, Microsoft DengXian) reached the bundle once through the presentation runtime; this gate exists so that cannot happen quietly again.",
+  "families": {
+    "katex": {
+      "license": "OFL-1.1",
+      "source": "https://github.com/KaTeX/KaTeX",
+      "verifiedFrom": "upstream project licence"
+    },
+    "inter": {
+      "license": "OFL-1.1",
+      "source": "https://github.com/rsms/inter",
+      "verifiedFrom": "upstream project licence"
+    }
+  },
+  "unresolved": {
+    "lucide": "Shipped by presentation-assets as a woff2 subset with no licence file in that package. Lucide upstream is ISC, but the subset's provenance is not recorded here; record it and move this entry into families.",
+    "remix": "Shipped by presentation-assets as a woff2 subset with no licence file in that package. Remix Icon upstream is Apache-2.0, but the subset's provenance is not recorded here; record it and move this entry into families."
+  },
+  "denied": {
+    "hy-": "HanYi commercial typefaces; redistribution requires a licence this project does not hold",
+    "dengxian": "Microsoft DengXian; ships with Windows and Office and is not redistributable"
+  }
+}
