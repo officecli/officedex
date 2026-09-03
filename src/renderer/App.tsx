@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentRun, Artifact, BridgeEvent, ConfiguredJiraSyncResult, ConfiguredLiquipediaSyncResult, DesktopTask, GenerateInput, JiraSyncResult, LiquipediaSyncResult, ModifyInput, PreviewGrant, RecentFile, TaskHistoryEntry, TaskQuestionAnswer, WorkspaceSummary } from "../shared/types";
 import { AgentClientToolHost } from "./AgentClientToolHost";
 import { useAgentClientTools } from "./useAgentClientTools";
+import { useVerticalPanels } from "./spreadsheet/useVerticalPanels";
 import { executeActiveEditorClientTool, waitForActiveEditorSurface, type ActiveEditorSurface } from "./activeEditorClientTools";
 import { applyTaskEvent, attachTaskContext, attachUserInput, createInitialTaskState, deleteTask, finishTaskContinuing, getRunLineage, markTaskContinuing, restoreTaskInteractiveGate, type TaskContextPatch, type TaskState } from "./taskState";
 import { officecli } from "./bridge";
@@ -25,10 +26,6 @@ import { DocumentWorkspace } from "./document";
 import { ProgressivePptxStage } from "./presentation/ProgressivePptxStage";
 import { SpreadsheetWorkspace, type SpreadsheetWorkspaceHandle } from "./spreadsheet/SpreadsheetWorkspace";
 import { SpreadsheetAgentPanel, type SpreadsheetAgentTool } from "./spreadsheet/SpreadsheetAgentPanel";
-import { SpreadsheetMarketingPanel } from "./spreadsheet/SpreadsheetMarketingPanel";
-import { SpreadsheetJiraPanel } from "./spreadsheet/SpreadsheetJiraPanel";
-import { SpreadsheetLiquipediaPanel } from "./spreadsheet/SpreadsheetLiquipediaPanel";
-import { SpreadsheetCatalogCleanupPanel } from "./spreadsheet/SpreadsheetCatalogCleanupPanel";
 import type { MarketingBatchDraft, MarketingSheetRow } from "./spreadsheet/marketingWorkflow";
 import type { CatalogCleanupBatch } from "./spreadsheet/catalogCleanupWorkflow";
 import { loadPublishedWorkbookApps, savePublishedWorkbookApp } from "./appBuilder/appStore";
@@ -1757,6 +1754,20 @@ function OfficeDexApp() {
     });
   }, [closeInlinePreview, previewGrant, runSpreadsheetAction]);
 
+  const verticalPanels = useVerticalPanels({
+    spreadsheet,
+    spreadsheetWorkspaceRef,
+    spreadsheetPreferredTool,
+    catalogAutoScanFile,
+    tasks: state.tasks,
+    recentFiles,
+    creditStatus,
+    bridgeInterruptionKey,
+    refreshRecentFiles,
+    setActiveNav,
+    startSpreadsheetMarketingImage,
+  });
+
   const agentClientTools = useAgentClientTools({
     spreadsheet,
     previewArtifact,
@@ -1992,114 +2003,7 @@ function OfficeDexApp() {
                 onApprovePlan={(task) => resumePptxTask(task)}
                 onCancel={(taskId) => officecli.cancel(taskId)}
                 preferredTool={spreadsheetPreferredTool}
-                catalogPanel={spreadsheet.session.artifact ? (
-                  <SpreadsheetCatalogCleanupPanel
-                    fileName={spreadsheet.session.artifact.fileName}
-                    filePath={spreadsheet.session.artifact.filePath}
-                    workspaceId={spreadsheet.session.workspaceId}
-                    autoScan={spreadsheetPreferredTool === "catalog"
-                      && catalogAutoScanFile === spreadsheet.session.artifact.filePath
-                      && (spreadsheet.session.phase === "ready" || spreadsheet.session.phase === "dirty")}
-                    onInspect={() => {
-                      if (!spreadsheetWorkspaceRef.current) throw new Error(t("tasks.runtime.workbookLoading"));
-                      return spreadsheetWorkspaceRef.current.inspectCatalogSheets();
-                    }}
-                    onPreview={(batch) => spreadsheetWorkspaceRef.current?.previewCatalogCleanup(batch)}
-                    onApply={(batch) => {
-                      if (!spreadsheetWorkspaceRef.current) return Promise.reject(new Error(t("tasks.runtime.workbookClosed")));
-                      return spreadsheetWorkspaceRef.current.applyCatalogCleanup(batch);
-                    }}
-                    onSave={() => spreadsheetWorkspaceRef.current?.save() ?? Promise.resolve(false)}
-                  />
-                ) : undefined}
-                jiraPanel={(
-                  <SpreadsheetJiraPanel
-                    workbookReady={Boolean(spreadsheet.session.artifact)}
-                    workbookPath={spreadsheet.session.artifact?.filePath}
-                    workspaceId={spreadsheet.session.workspaceId}
-                    onOpenSettings={() => setActiveNav("settings")}
-                    onCreateWorkbook={async (result) => {
-                      const artifact = await officecli.createWorkbookFromSheet({
-                        fileName: "Jira Issues.xlsx",
-                        sheetName: result.sheetName,
-                        headers: result.headers,
-                        rows: result.rows,
-                        workspaceId: spreadsheet.session.workspaceId,
-                      });
-                      await spreadsheet.openArtifact(artifact);
-                      void refreshRecentFiles(spreadsheet.session.workspaceId);
-                    }}
-                    onWriteSheet={(result) => {
-                      if (!spreadsheetWorkspaceRef.current) return Promise.reject(new Error(t("tasks.runtime.workbookClosed")));
-                      return spreadsheetWorkspaceRef.current.replaceManagedSheet({ ...result, keyColumn: "Issue Key", preserveColumns: ["OfficeDex Notes"] });
-                    }}
-                    onSave={() => spreadsheetWorkspaceRef.current?.save() ?? Promise.resolve(false)}
-                  />
-                )}
-                liquipediaPanel={(
-                  <SpreadsheetLiquipediaPanel
-                    workbookReady={Boolean(spreadsheet.session.artifact)}
-                    workbookPath={spreadsheet.session.artifact?.filePath}
-                    workspaceId={spreadsheet.session.workspaceId}
-                    onOpenSettings={() => setActiveNav("settings")}
-                    onCreateWorkbook={async (result) => {
-                      const artifact = await officecli.createWorkbookFromSheet({
-                        fileName: result.sheetName === "Liquipedia Updates" ? "Liquipedia Updates.xlsx" : "Liquipedia Tournaments.xlsx",
-                        sheetName: result.sheetName,
-                        headers: result.headers,
-                        rows: result.rows,
-                        workspaceId: spreadsheet.session.workspaceId,
-                      });
-                      await spreadsheet.openArtifact(artifact);
-                      void refreshRecentFiles(spreadsheet.session.workspaceId);
-                    }}
-                    onWriteSheet={(result) => {
-                      if (!spreadsheetWorkspaceRef.current) return Promise.reject(new Error(t("tasks.runtime.workbookClosed")));
-                      return spreadsheetWorkspaceRef.current.replaceManagedSheet({ ...result, keyColumn: "Source URL" });
-                    }}
-                    onSave={() => spreadsheetWorkspaceRef.current?.save() ?? Promise.resolve(false)}
-                  />
-                )}
-                marketingPanel={(
-                  <SpreadsheetMarketingPanel
-                    tasks={state.tasks}
-                    workbookPath={spreadsheet.session.artifact?.filePath}
-                    workspaceId={spreadsheet.session.workspaceId}
-                    creditBalance={creditStatus?.mode === "api_key"
-                      ? creditStatus.paidKeyRemaining
-                      : creditStatus?.mode !== "anonymous"
-                        ? creditStatus?.hostedCreditBalance ?? null
-                        : creditStatus?.anonymousCreditAvailable ?? null}
-                    bridgeInterruptionKey={bridgeInterruptionKey}
-                    existingImages={recentFiles}
-                    onInspect={(assetKind) => {
-                      if (!spreadsheetWorkspaceRef.current) throw new Error(t("tasks.runtime.workbookLoading"));
-                      return spreadsheetWorkspaceRef.current.inspectMarketingSelection(assetKind);
-                    }}
-                    onAnalyze={(batch) => officecli.planSpreadsheetFields({
-                      ...(spreadsheet.session.workspaceId
-                        ? { workspaceId: spreadsheet.session.workspaceId }
-                        : { noProject: true }),
-                      sheetName: batch.sheetName,
-                      headerRowIndex: batch.headerRowIndex,
-                      headers: batch.source.headers,
-                      sampleRows: batch.source.rows.slice(0, 5),
-                    })}
-                    onMappingChange={(mapping) => spreadsheetWorkspaceRef.current?.setMarketingMapping(mapping)}
-                    mappingStorageKey={spreadsheet.session.artifact?.filePath}
-                    onPrepare={(batch) => spreadsheetWorkspaceRef.current?.prepareMarketingBatch(batch)}
-                    onSetStatus={(batch, rowIndex, status) => {
-                      if (!spreadsheetWorkspaceRef.current) return Promise.reject(new Error(t("tasks.runtime.workbookClosed")));
-                      return spreadsheetWorkspaceRef.current.setMarketingStatus(batch, rowIndex, status);
-                    }}
-                    onInsertImage={(batch, rowIndex, filePath) => {
-                      if (!spreadsheetWorkspaceRef.current) return Promise.reject(new Error(t("tasks.runtime.workbookClosed")));
-                      return spreadsheetWorkspaceRef.current.insertMarketingImage(batch, rowIndex, filePath);
-                    }}
-                    onGenerate={startSpreadsheetMarketingImage}
-                    onSave={() => spreadsheetWorkspaceRef.current?.save() ?? Promise.resolve(false)}
-                  />
-                )}
+                {...verticalPanels}
               />
             )}
           />
