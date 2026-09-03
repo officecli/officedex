@@ -823,3 +823,54 @@ export function reduceStages(events: BridgeEvent[]): { stages: StageState[]; act
   const stages = order.map((id) => stageMap.get(id)).filter((s): s is StageState => Boolean(s));
   return { stages, activeStageId: activeId };
 }
+
+/**
+ * A task the user just started exists in this window before the bridge knows
+ * about it. These three functions are its whole life.
+ *
+ * startLocal puts a placeholder in the list under an id this window invented,
+ * so the card appears the moment the user clicks rather than after a round
+ * trip. promoteLocal replaces it once the bridge answers with the real id --
+ * a replacement, not a rename, because every event from here on carries the
+ * bridge's id. discardLocal removes it when the call failed.
+ *
+ * Each flow that starts a task -- generate, modify, and generate-from-an-open
+ * document -- used to compose applyTaskEvent, attachUserInput and deleteTask
+ * inline to do this, three times over. Missing the promote or the discard
+ * strands a task that no event will ever advance: a card that spins forever.
+ */
+export function startLocalTask(
+  state: TaskState,
+  localTaskId: string,
+  input: TaskUserInput,
+  summary: { documentType: string; topic: string },
+  parentTaskId?: string,
+  context?: TaskContextPatch,
+): TaskState {
+  const started = applyTaskEvent(state, {
+    task_id: localTaskId,
+    type: "task.started",
+    ts: new Date().toISOString(),
+    payload: {
+      document_type: summary.documentType,
+      topic: summary.topic,
+      message: "Task submitted",
+    },
+  } as BridgeEvent);
+  return attachUserInput(started, localTaskId, input, parentTaskId, context);
+}
+
+export function promoteLocalTask(
+  state: TaskState,
+  localTaskId: string,
+  taskId: string,
+  input: TaskUserInput,
+  parentTaskId?: string,
+  context?: TaskContextPatch,
+): TaskState {
+  return attachUserInput(deleteTask(state, localTaskId), taskId, input, parentTaskId, context);
+}
+
+export function discardLocalTask(state: TaskState, localTaskId: string): TaskState {
+  return deleteTask(state, localTaskId);
+}

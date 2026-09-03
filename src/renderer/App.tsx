@@ -5,7 +5,7 @@ import { AgentClientToolHost } from "./AgentClientToolHost";
 import { useAgentClientTools } from "./useAgentClientTools";
 import { useVerticalPanels } from "./spreadsheet/useVerticalPanels";
 import { executeActiveEditorClientTool, waitForActiveEditorSurface, type ActiveEditorSurface } from "./activeEditorClientTools";
-import { applyTaskEvent, attachTaskContext, attachUserInput, createInitialTaskState, deleteTask, finishTaskContinuing, getRunLineage, markTaskContinuing, restoreTaskInteractiveGate, type TaskContextPatch, type TaskState } from "./taskState";
+import { applyTaskEvent, attachTaskContext, createInitialTaskState, deleteTask, discardLocalTask, finishTaskContinuing, getRunLineage, markTaskContinuing, promoteLocalTask, restoreTaskInteractiveGate, startLocalTask, type TaskContextPatch, type TaskState } from "./taskState";
 import { officecli } from "./bridge";
 import { useRecentFiles } from "./useRecentFiles";
 import { defaultGenerateInput, type NavKey } from "./defaults";
@@ -706,16 +706,7 @@ function OfficeDexApp() {
     stageFirstTaskRef.current = localTaskId;
     setStageFirstTaskId(localTaskId);
     const pendingInput = pending.input;
-    setState((current) => attachUserInput(applyTaskEvent(current, {
-      task_id: localTaskId,
-      type: "task.started",
-      ts: new Date().toISOString(),
-      payload: {
-        document_type: values.documentType,
-        topic,
-        message: "Task submitted",
-      },
-    }), localTaskId, pendingInput, undefined, context));
+    setState((current) => startLocalTask(current, localTaskId, pendingInput, { documentType: values.documentType, topic }, undefined, context));
     setSelectedTaskID({ kind: "task", id: localTaskId });
     setActiveNav("document");
     setBusy(false);
@@ -726,7 +717,7 @@ function OfficeDexApp() {
       const result = await officecli.generate(generateInput);
       if (pendingGenerateRef.current.delete(localTaskId) && result.taskId) {
         const actualContext = { ...pending.context, conversationId: result.taskId };
-        setState((current) => attachUserInput(deleteTask(current, localTaskId), result.taskId, pending.input, undefined, actualContext));
+        setState((current) => promoteLocalTask(current, localTaskId, result.taskId, pending.input, undefined, actualContext));
         setSelectedTaskID({ kind: "task", id: result.taskId });
         if (stageFirstTaskRef.current === localTaskId) {
           stageFirstTaskRef.current = result.taskId;
@@ -773,7 +764,7 @@ function OfficeDexApp() {
         stageFirstTaskRef.current = undefined;
         setStageFirstTaskId(undefined);
       }
-      setState((current) => deleteTask(current, localTaskId));
+      setState((current) => discardLocalTask(current, localTaskId));
       const text = errorMessage(error);
       recordError(text, classifyError(text), extractStderr(text));
       if (options.preserveWorkbookContext) {
@@ -1084,16 +1075,7 @@ function OfficeDexApp() {
     };
     pendingGenerateRef.current.set(localTaskId, pending);
     const pendingInput = pending.input;
-    setState((current) => attachUserInput(applyTaskEvent(current, {
-      task_id: localTaskId,
-      type: "task.started",
-      ts: new Date().toISOString(),
-      payload: {
-        document_type: documentType,
-        topic,
-        message: "Task submitted",
-      },
-    }), localTaskId, pendingInput, parentTaskId, context));
+    setState((current) => startLocalTask(current, localTaskId, pendingInput, { documentType, topic }, parentTaskId, context));
     setSelectedTaskID({ kind: "task", id: localTaskId });
     setActiveNav("document");
     setBusy(false);
@@ -1114,14 +1096,14 @@ function OfficeDexApp() {
         fps,
       });
       if (pendingGenerateRef.current.delete(localTaskId) && result.taskId) {
-        setState((current) => attachUserInput(deleteTask(current, localTaskId), result.taskId, pending.input, parentTaskId, pending.context));
+        setState((current) => promoteLocalTask(current, localTaskId, result.taskId, pending.input, parentTaskId, pending.context));
         setSelectedTaskID({ kind: "task", id: result.taskId });
         setActiveNav("document");
         refreshProjectLists();
       }
     } catch (error) {
       if (!pendingGenerateRef.current.delete(localTaskId)) return;
-      setState((current) => deleteTask(current, localTaskId));
+      setState((current) => discardLocalTask(current, localTaskId));
       const text = errorMessage(error);
       recordError(text, classifyError(text), extractStderr(text));
     } finally {
@@ -1162,16 +1144,7 @@ function OfficeDexApp() {
     };
     pendingGenerateRef.current.set(localTaskId, pending);
     const pendingInput = pending.input;
-    setState((current) => attachUserInput(applyTaskEvent(current, {
-      task_id: localTaskId,
-      type: "task.started",
-      ts: new Date().toISOString(),
-      payload: {
-        document_type: documentType,
-        topic,
-        message: "Task submitted",
-      },
-    }), localTaskId, pendingInput, parentTaskId, context));
+    setState((current) => startLocalTask(current, localTaskId, pendingInput, { documentType, topic }, parentTaskId, context));
     setSelectedTaskID({ kind: "task", id: localTaskId });
     setActiveNav("document");
     setBusy(false);
@@ -1186,14 +1159,14 @@ function OfficeDexApp() {
         prompt,
       });
       if (pendingGenerateRef.current.delete(localTaskId) && result.taskId) {
-        setState((current) => attachUserInput(deleteTask(current, localTaskId), result.taskId, pending.input, parentTaskId, pending.context));
+        setState((current) => promoteLocalTask(current, localTaskId, result.taskId, pending.input, parentTaskId, pending.context));
         setSelectedTaskID({ kind: "task", id: result.taskId });
         setActiveNav("document");
         refreshProjectLists();
       }
     } catch (error) {
       if (!pendingGenerateRef.current.delete(localTaskId)) return;
-      setState((current) => deleteTask(current, localTaskId));
+      setState((current) => discardLocalTask(current, localTaskId));
       const text = errorMessage(error);
       recordError(text, classifyError(text), extractStderr(text));
     } finally {
