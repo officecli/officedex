@@ -4750,11 +4750,6 @@ func (a *App) takeRetiredBridge(client *bridge.Client) bool {
 // bridgeForMetadata returns a client for calls that only read bridge-side state
 // (capabilities, image templates, the PPTist planner) and do not care about the
 // child process working directory. Reusing whichever client is already
-// connected keeps these calls from swapping the bridge out from under a task
-// that is still running.
-// bridgeForMetadata returns a client for calls that only read bridge-side state
-// (capabilities, image templates, the PPTist planner) and do not care about the
-// child process working directory. Reusing whichever client is already
 // connected keeps these calls from starting a process just to ask a question.
 func (a *App) bridgeForMetadata() (*bridge.Client, error) {
 	a.mu.Lock()
@@ -5650,9 +5645,6 @@ func llmProviderEnv(s types.UserSettings) []string {
 func validateCustomProvider(s types.UserSettings) error {
 	if s.LlmProvider == nil {
 		return nil
-	}
-	if s.LlmProvider == nil {
-		return errors.New("generate.custom_provider_missing")
 	}
 	if strings.TrimSpace(s.LlmProvider.BaseURL) == "" ||
 		strings.TrimSpace(s.LlmProvider.APIKey) == "" ||
