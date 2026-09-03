@@ -179,6 +179,7 @@ export function createPresentationPptxChannel(): string {
 
 /**
  * Builds the iframe URL for the editor: `<base>?officedexEmbed=1&channel=<nonce>&sessionMode=browser-local`.
+ * Passing `preview` mounts the Presentation application in its embedded read-only mode.
  * Relative bases (for example the packaged `/presentation/` asset route) are resolved
  * against the current Wails/web document; absolute bases must be HTTP(S).
  * Returns `null` when no editor base URL is configured or the URL is invalid.
@@ -186,6 +187,7 @@ export function createPresentationPptxChannel(): string {
 export function buildPresentationPptxEmbedUrl(
   baseUrl: string | undefined | null,
   channel: string,
+  mode?: "preview",
 ): string | null {
   const trimmed = (baseUrl ?? "").trim();
   if (!trimmed) return null;
@@ -211,5 +213,6 @@ export function buildPresentationPptxEmbedUrl(
   url.searchParams.set(PRESENTATION_PPTX_EMBED_QUERY.embed, "1");
   url.searchParams.set(PRESENTATION_PPTX_EMBED_QUERY.channel, channel);
   url.searchParams.set(PRESENTATION_PPTX_EMBED_QUERY.sessionMode, "browser-local");
+  if (mode === "preview") url.searchParams.set("mode", "preview");
   return url.toString();
 }
