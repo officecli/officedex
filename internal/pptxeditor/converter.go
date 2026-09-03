@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"officedex/internal/config"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -76,13 +77,11 @@ func (c *CLIConverter) run(ctx context.Context, args ...string) error {
 }
 
 func resolveMopConvertBinary(repoRoot string) string {
-	for _, key := range []string{"OFFICEDEX_MOP_CONVERT_BIN", "MOP_CONVERT_BIN"} {
-		if candidate := validExecutable(os.Getenv(key)); candidate != "" {
-			return candidate
-		}
+	if candidate := config.FirstExecutablePath(config.MOPConvertBinaryEnvKeys...); candidate != "" {
+		return candidate
 	}
-	if sourceRoot := strings.TrimSpace(os.Getenv("PRESENTATION_SOURCE_DIR")); sourceRoot != "" {
-		if candidate := validExecutable(filepath.Join(sourceRoot, "tools", "bin", executableName("mop-convert"))); candidate != "" {
+	if sourceRoot := config.Trimmed(config.PresentationSourceDirEnv); sourceRoot != "" {
+		if candidate := config.ExecutableFile(filepath.Join(sourceRoot, "tools", "bin", executableName("mop-convert"))); candidate != "" {
 			return candidate
 		}
 	}
@@ -91,7 +90,7 @@ func resolveMopConvertBinary(repoRoot string) string {
 			filepath.Join("third_party", "presentation", "tools", "bin", executableName("mop-convert")),
 			filepath.Join("build", "presentation", "bin", executableName("mop-convert")),
 		} {
-			if candidate := validExecutable(filepath.Join(repoRoot, relative)); candidate != "" {
+			if candidate := config.ExecutableFile(filepath.Join(repoRoot, relative)); candidate != "" {
 				return candidate
 			}
 		}
@@ -107,23 +106,4 @@ func executableName(name string) string {
 		return name + ".exe"
 	}
 	return name
-}
-
-func validExecutable(candidate string) string {
-	candidate = strings.TrimSpace(candidate)
-	if candidate == "" {
-		return ""
-	}
-	abs, err := filepath.Abs(candidate)
-	if err != nil {
-		return ""
-	}
-	info, err := os.Stat(abs)
-	if err != nil || !info.Mode().IsRegular() {
-		return ""
-	}
-	if runtime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0 {
-		return ""
-	}
-	return abs
 }

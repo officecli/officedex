@@ -22,6 +22,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"officedex/internal/config"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -315,9 +316,9 @@ func NewApp() (*App, error) {
 	presentationRoot := resolvePresentationRuntimeRoot(repoRoot)
 	converterPath := ""
 	if presentationRoot != "" {
-		converterPath = filepath.Join(presentationRoot, "tools", "bin", "mop-convert")
+		converterPath = config.ExecutableFile(filepath.Join(presentationRoot, "tools", "bin", "mop-convert"))
 	}
-	if converterPath == "" || !isExecutableFile(converterPath) {
+	if converterPath == "" {
 		converterPath = resolveMopConvertFromEnvironment()
 	}
 	mopHandler := mophttp.New(mophttp.Options{
@@ -332,7 +333,7 @@ func NewApp() (*App, error) {
 	app.mopHTTPHandler = mopHandler
 	app.demoFlow = demoflow.New(demoflow.Options{Recorder: app})
 
-	manifestURL := os.Getenv("OFFICEDEX_UPDATE_MANIFEST_URL")
+	manifestURL := os.Getenv(config.UpdateManifestURLEnv)
 	if strings.TrimSpace(manifestURL) == "" {
 		manifestURL = defaultUpdateManifestURL
 	}
@@ -4305,9 +4306,8 @@ func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
 }
 
 func presentationRuntimeEnv(cwd string) []string {
-	rootExplicit := strings.TrimSpace(os.Getenv("OFFICECLI_MOP_PRESENTATION_ROOT")) != "" ||
-		strings.TrimSpace(os.Getenv("PRESENTATION_SOURCE_DIR")) != ""
-	nodeExplicit := strings.TrimSpace(os.Getenv("OFFICECLI_MOP_SKILL_NODE")) != ""
+	rootExplicit := config.IsSet(config.PresentationRootEnv) || config.IsSet(config.PresentationSourceDirEnv)
+	nodeExplicit := config.IsSet(config.SkillNodeEnv)
 	env := make([]string, 0, 3)
 	if !nodeExplicit {
 		if node := presentationNodeExecutable(); node != "" {
@@ -4397,19 +4397,12 @@ func resolvePresentationRuntimeRoot(repoRoot string) string {
 	return ""
 }
 
-func isExecutableFile(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && info.Mode().IsRegular() && (runtime.GOOS == "windows" || info.Mode().Perm()&0o111 != 0)
-}
-
 func resolveMopConvertFromEnvironment() string {
-	for _, key := range []string{"OFFICEDEX_MOP_CONVERT_BIN", "MOP_CONVERT_BIN"} {
-		candidate := strings.TrimSpace(os.Getenv(key))
-		if isExecutableFile(candidate) {
-			return candidate
-		}
-	}
-	return ""
+	// This used to keep the value exactly as written, while the pptxeditor
+	// package resolved the same two variables to an absolute path. A relative
+	// path is not usable from a packaged app, whose working directory is not
+	// the shell's.
+	return config.FirstExecutablePath(config.MOPConvertBinaryEnvKeys...)
 }
 
 func presentationNodeExecutable() string {
@@ -4564,7 +4557,7 @@ func (a *App) resolverOptions(s types.UserSettings) binresolver.Options {
 	if bundled != "" {
 		bundledPtr = &bundled
 	}
-	env := os.Getenv("OFFICECLI_DESKTOP_BINARY")
+	env := os.Getenv(config.DesktopBinaryEnv)
 	var envPtr *string
 	if env != "" {
 		envPtr = &env
@@ -5305,7 +5298,7 @@ func hasImageWatermarkEntitlement(credit types.CreditStatus, creditErr error) bo
 
 // resolveUserDataDir mirrors what Electron's app.getPath("userData") returns.
 func resolveUserDataDir(appName string) (string, error) {
-	if override := strings.TrimSpace(os.Getenv("OFFICEDEX_DEV_USER_DATA_DIR")); override != "" {
+	if override := config.Trimmed(config.DevUserDataDirEnv); override != "" {
 		if !filepath.IsAbs(override) {
 			return "", fmt.Errorf("OFFICEDEX_DEV_USER_DATA_DIR must be an absolute path: %q", override)
 		}
@@ -5326,7 +5319,7 @@ func resolveUserDataDir(appName string) (string, error) {
 }
 
 func developmentOfficeCLIEnv() []string {
-	home := strings.TrimSpace(os.Getenv("OFFICEDEX_DEV_OFFICECLI_HOME"))
+	home := config.Trimmed(config.DevOfficeCLIHomeEnv)
 	if home == "" || !filepath.IsAbs(home) {
 		return nil
 	}
