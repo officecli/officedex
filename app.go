@@ -218,21 +218,19 @@ type App struct {
 	// first task — an answer, a cancel — swapped it back, starting a third
 	// process that had never heard of the task. Tasks live inside their
 	// process, so the process has to outlive the call that is not about it.
-	bridges                bridgePool
-	pptxJSPlanner          pptxJSPlanner
-	loginManager           *login.Manager
-	loginUnsub             func()
-	pendingLoginURL        string
-	previewModeWidthBefore int
-	previewModeXBefore     int
-	previewModeXShifted    bool
-	appUpdateMgr           *appupdate.Manager
-	runtimeMgr             *runtimemgr.Manager
-	proxyPool              *netproxy.Pool
-	xlsxEditorService      xlsxEditorService
-	pptxEditorService      pptxEditorService
-	mopHTTPHandler         http.Handler
-	timelineStore          *timeline.Store
+	bridges           bridgePool
+	pptxJSPlanner     pptxJSPlanner
+	loginManager      *login.Manager
+	loginUnsub        func()
+	pendingLoginURL   string
+	preview           previewRestore
+	appUpdateMgr      *appupdate.Manager
+	runtimeMgr        *runtimemgr.Manager
+	proxyPool         *netproxy.Pool
+	xlsxEditorService xlsxEditorService
+	pptxEditorService pptxEditorService
+	mopHTTPHandler    http.Handler
+	timelineStore     *timeline.Store
 
 	binary binaryCache
 
@@ -1674,16 +1672,14 @@ func (a *App) SetPreviewMode(active bool) error {
 		return errors.New("app: not started")
 	}
 	w, h := wailsruntime.WindowGetSize(a.ctx)
-	a.mu.Lock()
-	defer a.mu.Unlock()
 	if active {
-		if a.previewModeWidthBefore > 0 {
+		if !a.preview.enter(w) {
 			return nil
 		}
-		a.previewModeWidthBefore = w
-
 		targetW := w + previewExtraWidth
+		a.mu.Lock()
 		screenW := a.currentScreenWidthLocked()
+		a.mu.Unlock()
 		if screenW > 0 && targetW > screenW {
 			targetW = screenW
 		}
@@ -1694,23 +1690,21 @@ func (a *App) SetPreviewMode(active bool) error {
 			if newX < 0 {
 				newX = 0
 			}
-			a.previewModeXBefore = x
-			a.previewModeXShifted = true
+			a.preview.shift(x)
 			wailsruntime.WindowSetPosition(a.ctx, newX, y)
 		}
 
 		wailsruntime.WindowSetSize(a.ctx, targetW, h)
 		return nil
 	}
-	if a.previewModeWidthBefore > 0 {
-		wailsruntime.WindowSetSize(a.ctx, a.previewModeWidthBefore, h)
-		a.previewModeWidthBefore = 0
-		if a.previewModeXShifted {
-			_, y := wailsruntime.WindowGetPosition(a.ctx)
-			wailsruntime.WindowSetPosition(a.ctx, a.previewModeXBefore, y)
-			a.previewModeXShifted = false
-			a.previewModeXBefore = 0
-		}
+	width, x, moved, ok := a.preview.take()
+	if !ok {
+		return nil
+	}
+	wailsruntime.WindowSetSize(a.ctx, width, h)
+	if moved {
+		_, y := wailsruntime.WindowGetPosition(a.ctx)
+		wailsruntime.WindowSetPosition(a.ctx, x, y)
 	}
 	return nil
 }
