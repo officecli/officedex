@@ -50,11 +50,10 @@ func newRetireApp(t *testing.T) (*App, *bridge.Client, *authResetBridgeTransport
 	})
 	workspaceDir := t.TempDir()
 	app := &App{
-		userDataDir:     t.TempDir(),
-		workspaceDir:    workspaceDir,
-		bridgeClients:   map[string]*bridge.Client{workspaceDir: client},
-		bridgeRecentCwd: workspaceDir,
+		userDataDir:  t.TempDir(),
+		workspaceDir: workspaceDir,
 	}
+	app.bridges.seed(workspaceDir, map[string]*bridge.Client{workspaceDir: client})
 	client.OnEvent(app.bridgeEventListener(client))
 	if err := client.Start(context.Background()); err != nil {
 		t.Fatalf("start bridge client: %v", err)

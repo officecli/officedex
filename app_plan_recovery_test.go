@@ -90,13 +90,12 @@ func TestRespondRecoversStalePlanQuestionTask(t *testing.T) {
 	t.Cleanup(client.Stop)
 
 	app := &App{
-		ctx:             ctx,
-		userDataDir:     t.TempDir(),
-		workspaceDir:    workspaceDir,
-		localStore:      store,
-		bridgeClients:   map[string]*bridge.Client{workspaceDir: client},
-		bridgeRecentCwd: workspaceDir,
+		ctx:          ctx,
+		userDataDir:  t.TempDir(),
+		workspaceDir: workspaceDir,
+		localStore:   store,
 	}
+	app.bridges.seed(workspaceDir, map[string]*bridge.Client{workspaceDir: client})
 
 	done := make(chan struct {
 		raw []byte
@@ -344,13 +343,12 @@ func TestRespondRecoveryUsesLivePendingQuestionID(t *testing.T) {
 	t.Cleanup(client.Stop)
 
 	app := &App{
-		ctx:             ctx,
-		userDataDir:     t.TempDir(),
-		workspaceDir:    workspaceDir,
-		localStore:      store,
-		bridgeClients:   map[string]*bridge.Client{workspaceDir: client},
-		bridgeRecentCwd: workspaceDir,
+		ctx:          ctx,
+		userDataDir:  t.TempDir(),
+		workspaceDir: workspaceDir,
+		localStore:   store,
 	}
+	app.bridges.seed(workspaceDir, map[string]*bridge.Client{workspaceDir: client})
 
 	done := make(chan struct {
 		raw []byte
@@ -565,13 +563,12 @@ func TestRespondRecoveryReplaysFullAnswerHistory(t *testing.T) {
 	t.Cleanup(client.Stop)
 
 	app := &App{
-		ctx:             ctx,
-		userDataDir:     t.TempDir(),
-		workspaceDir:    workspaceDir,
-		localStore:      store,
-		bridgeClients:   map[string]*bridge.Client{workspaceDir: client},
-		bridgeRecentCwd: workspaceDir,
+		ctx:          ctx,
+		userDataDir:  t.TempDir(),
+		workspaceDir: workspaceDir,
+		localStore:   store,
 	}
+	app.bridges.seed(workspaceDir, map[string]*bridge.Client{workspaceDir: client})
 
 	done := make(chan struct {
 		raw []byte
@@ -732,13 +729,12 @@ func TestRespondRecoverySkipsStalePerNodeFeedback(t *testing.T) {
 	t.Cleanup(client.Stop)
 
 	app := &App{
-		ctx:             ctx,
-		userDataDir:     t.TempDir(),
-		workspaceDir:    workspaceDir,
-		localStore:      store,
-		bridgeClients:   map[string]*bridge.Client{workspaceDir: client},
-		bridgeRecentCwd: workspaceDir,
+		ctx:          ctx,
+		userDataDir:  t.TempDir(),
+		workspaceDir: workspaceDir,
+		localStore:   store,
 	}
+	app.bridges.seed(workspaceDir, map[string]*bridge.Client{workspaceDir: client})
 
 	done := make(chan struct {
 		raw []byte
