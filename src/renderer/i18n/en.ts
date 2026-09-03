@@ -944,13 +944,7 @@ export const en: Record<string, string> = {
     "The deck is generated. Preparing the editor for follow-up edits...",
   "vibe.pptx.edit.placeholder": "Ask to modify this PPT...",
   "vibe.pptx.edit.send": "Send edit request",
-  "vibe.pptx.edit.preparing": "Reading the current PPTist deck...",
-  "vibe.pptx.edit.thinking":
-    "Planning edits from the current PPTist content...",
-  "vibe.pptx.edit.applying": "Applying edits in PPTist...",
   "vibe.pptx.edit.applied": "Edits applied. Saving locally...",
-  "vibe.pptx.edit.failed": "Edit failed. The current PPTist deck was kept.",
-  "vibe.pptx.edit.applyingStep": "Applying edit {current} in PPTist...",
   "vibe.pptx.edit.appliedStep": "Applied edit {current}.",
   "vibe.pptx.edit.confirmHint":
     "Review and confirm this edit before applying it.",

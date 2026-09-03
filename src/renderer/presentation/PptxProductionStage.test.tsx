@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DesktopTask } from "../../shared/types";
-import type { PptistSlide } from "../../shared/pptistProtocol";
+import type { PptistSlide } from "../../shared/pptxWire";
 import { PptxProductionStage } from "./PptxProductionStage";
 
 const slide = (id: string): PptistSlide => ({ id, elements: [] });

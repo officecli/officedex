@@ -15,19 +15,11 @@ export async function bundleLicenses({ rootDir, target }) {
     ["LICENSE", "OfficeDex-GPL-3.0.txt"],
     ["NOTICE", "OfficeDex-NOTICE.txt"],
     ["THIRD_PARTY_NOTICES.md", "THIRD_PARTY_NOTICES.md"],
-    [path.join("third_party", "pptist", "LICENSE"), "PPTist-AGPL-3.0.txt"],
-    [path.join("third_party", "pptist", "OFFICEDEX_CHANGES.md"), "PPTist-OFFICEDEX_CHANGES.md"],
     [path.join("third_party", "officecli", "LICENSE"), "OfficeCLI-MIT.txt"],
   ];
   for (const [source, name] of files) {
     await cp(path.join(rootDir, source), path.join(destination, name));
   }
-
-  const fontSource = path.join(rootDir, "third_party", "pptist", "src", "assets", "fonts");
-  const fontDestination = path.join(destination, "PPTist-font-licenses");
-  await mkdir(fontDestination, { recursive: true });
-  await cp(path.join(fontSource, "LICENSES.json"), path.join(fontDestination, "LICENSES.json"));
-  await cp(path.join(fontSource, "licenses"), path.join(fontDestination, "licenses"), { recursive: true });
 
   return destination;
 }

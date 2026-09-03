@@ -6,11 +6,9 @@ import (
 	"archive/zip"
 	"context"
 	"io"
-	"math"
 	"os"
 	"path/filepath"
 	"reflect"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -497,144 +495,6 @@ func countSlideXML(reader *zip.Reader) int {
 		}
 	}
 	return count
-}
-
-func TestDemoTimelineEditRequiresExactPromptAndSlideSix(t *testing.T) {
-	engine := New(Options{Recorder: newMemoryRecorder(t)})
-	timelineSlide := demoTimelineSnapshotSlideForTest()
-	snapshot := PptistDeckSnapshot{
-		SlideIndex: 5,
-		Slides: []PptistSlide{
-			{ID: "s1"}, {ID: "s2"}, {ID: "s3"}, {ID: "s4"}, {ID: "s5"}, timelineSlide, {ID: "s7"}, {ID: "s8"}, {ID: "s9"},
-		},
-	}
-	result, ok, err := engine.TryModifyPptistDeck(context.Background(), ModifyPptistDeckInput{Prompt: "Turn this launch timeline into a vertical roadmap.", Snapshot: snapshot})
-	if err != nil || !ok {
-		t.Fatalf("TryModifyPptistDeck ok=%v err=%v", ok, err)
-	}
-	if !result.RequiresConfirmation || len(result.Ops) != 1 {
-		t.Fatalf("result = %#v, want confirmation with one source-preserving slide update", result)
-	}
-	op := result.Ops[0]
-	if op["type"] != "slide:update" || op["slideId"] != "demo-slide-06" || op["slideIndex"] != 5 {
-		t.Fatalf("op = %#v, want one update against the live imported slide 6", op)
-	}
-	if op["type"] == "slide:replace" {
-		t.Fatalf("timeline edit must preserve the imported slide instead of replacing it: %#v", op)
-	}
-
-	wrongPrompt, ok, err := engine.TryModifyPptistDeck(context.Background(), ModifyPptistDeckInput{Prompt: "Make this launch timeline more visual.", Snapshot: snapshot})
-	if err != nil || !ok {
-		t.Fatalf("wrong prompt ok=%v err=%v", ok, err)
-	}
-	if wrongPrompt.Summary != "Demo mode supports the prepared timeline edit." {
-		t.Fatalf("wrong prompt summary = %q", wrongPrompt.Summary)
-	}
-
-	snapshot.SlideIndex = 4
-	if _, ok, err := engine.TryModifyPptistDeck(context.Background(), ModifyPptistDeckInput{Prompt: timelineEditPrompt, Snapshot: snapshot}); !ok || err == nil || !strings.Contains(err.Error(), "slide 6") {
-		t.Fatalf("wrong slide ok=%v err=%v, want slide 6 error", ok, err)
-	}
-}
-
-func TestDemoTimelineEditBuildsAlignedVerticalRoadmap(t *testing.T) {
-	target := demoTimelineSnapshotSlideForTest()
-	ops, err := demoTimelineEditOps(target, 5)
-	if err != nil {
-		t.Fatalf("demoTimelineEditOps: %v", err)
-	}
-	if len(ops) != 1 {
-		t.Fatalf("len(ops) = %d, want one source-preserving update", len(ops))
-	}
-	op := ops[0]
-	if op["type"] != "slide:update" {
-		t.Fatalf("op = %#v, want slide:update", op)
-	}
-	props, _ := op["props"].(map[string]any)
-	elements, _ := props["elements"].([]map[string]any)
-	if len(elements) != len(target.Elements)+6 {
-		t.Fatalf("len(elements) = %d, want all %d imported elements plus 3 vertical segments and 3 rings", len(elements), len(target.Elements))
-	}
-	byID := map[string]map[string]any{}
-	for _, element := range elements {
-		id, _ := element["id"].(string)
-		byID[id] = element
-	}
-	for _, id := range []string{"eyebrow", "hero-title", "footer", "page"} {
-		if !reflect.DeepEqual(byID[id], timelineElementByID(target.Elements, id)) {
-			t.Fatalf("non-timeline element %q changed: before=%#v after=%#v", id, timelineElementByID(target.Elements, id), byID[id])
-		}
-	}
-	copyText := byID["hero-copy"]["text"].(map[string]any)["content"].(string)
-	if !strings.Contains(copyText, "Validate demand. Build proof. Scale what converts.") {
-		t.Fatalf("subtitle content = %q, want audience-facing copy", copyText)
-	}
-
-	axis := byID["timeline-axis"]
-	if axis["left"] != 203.0 || axis["top"] != 331.0 || axis["width"] != 4.0 || axis["height"] != 220.0 {
-		t.Fatalf("vertical axis bounds = %#v, want x=203 y=331 w=4 h=220", axis)
-	}
-	for i := 0; i < 3; i++ {
-		segment := byID["demo-timeline-segment-"+strconv.Itoa(i+1)]
-		if segment["left"] != 203.0 || segment["width"] != 4.0 {
-			t.Fatalf("segment %d bounds = %#v, want exact vertical alignment with the axis", i+1, segment)
-		}
-		ring := byID["demo-timeline-ring-"+strconv.Itoa(i+1)]
-		node := byID["timeline-node-"+strconv.Itoa(i+1)]
-		if ring["left"] != node["left"].(float64)-6 || ring["top"] != node["top"].(float64)-6 || ring["width"] != node["width"].(float64)+12 || ring["height"] != node["height"].(float64)+12 {
-			t.Fatalf("ring %d bounds = %#v, want a centered 6px halo around node %#v", i+1, ring, node)
-		}
-		day := byID["timeline-day-"+strconv.Itoa(i+1)]
-		nodeCenterX := node["left"].(float64) + node["width"].(float64)/2
-		dayCenterX := day["left"].(float64) + day["width"].(float64)/2
-		if nodeCenterX != 205.0 || math.Abs(dayCenterX-nodeCenterX) > 0.01 {
-			t.Fatalf("row %d node/day centers = %.2f/%.2f, want aligned on vertical axis x=205", i+1, nodeCenterX, dayCenterX)
-		}
-		title := byID["timeline-title-"+strconv.Itoa(i+1)]
-		body := byID["timeline-copy-"+strconv.Itoa(i+1)]
-		if title["left"] != 270.0 || body["left"] != 270.0 || body["top"].(float64)-title["top"].(float64) != 36 {
-			t.Fatalf("row %d text bounds title=%#v body=%#v, want a stacked right-hand text column", i+1, title, body)
-		}
-	}
-	if byID["timeline-node-2"]["top"].(float64)-byID["timeline-node-1"]["top"].(float64) != 110 || byID["timeline-node-3"]["top"].(float64)-byID["timeline-node-2"]["top"].(float64) != 110 {
-		t.Fatalf("vertical milestone rows are not evenly spaced: %#v %#v %#v", byID["timeline-node-1"], byID["timeline-node-2"], byID["timeline-node-3"])
-	}
-}
-
-func demoTimelineSnapshotSlideForTest() PptistSlide {
-	return PptistSlide{
-		ID:         "demo-slide-06",
-		Background: map[string]any{"type": "solid", "color": "#05101A"},
-		Elements: []map[string]any{
-			{"id": "eyebrow", "type": "shape", "left": 72.0, "top": 48.0, "width": 420.0, "height": 24.0, "text": map[string]any{"content": "<p>90-DAY LAUNCH TIMELINE</p>"}},
-			{"id": "hero-title", "type": "shape", "left": 72.0, "top": 82.0, "width": 790.0, "height": 108.0, "text": map[string]any{"content": "<p>Turn launch proof into a repeatable funnel</p>"}},
-			{"id": "hero-copy", "type": "shape", "left": 74.0, "top": 192.0, "width": 720.0, "height": 54.0, "text": map[string]any{"content": "<p>This slide is intentionally visual so the demo can show a precise timeline edit.</p>"}},
-			{"id": "timeline-axis", "type": "shape", "left": 150.0, "top": 416.0, "width": 980.0, "height": 4.0, "path": "axis-path", "viewBox": []any{200.0, 200.0}, "fill": "#315D62", "fixedRatio": false},
-			{"id": "timeline-node-1", "type": "shape", "left": 174.0, "top": 386.0, "width": 62.0, "height": 62.0, "path": "circle-path", "viewBox": []any{200.0, 200.0}, "fill": "#1AAE39", "fixedRatio": false},
-			{"id": "timeline-day-1", "type": "shape", "left": 178.0, "top": 404.0, "width": 54.0, "height": 22.0, "text": map[string]any{"content": "<p style=\"text-align: center;\">0–30</p>"}},
-			{"id": "timeline-title-1", "type": "shape", "left": 140.0, "top": 476.0, "width": 130.0, "height": 34.0, "text": map[string]any{"content": "<p style=\"text-align: center;\">Proof</p>"}},
-			{"id": "timeline-copy-1", "type": "shape", "left": 92.0, "top": 518.0, "width": 226.0, "height": 54.0, "text": map[string]any{"content": "<p style=\"text-align: center;\">Website, video, download funnel</p>"}},
-			{"id": "timeline-node-2", "type": "shape", "left": 524.0, "top": 386.0, "width": 62.0, "height": 62.0, "path": "circle-path", "viewBox": []any{200.0, 200.0}, "fill": "#006876", "fixedRatio": false},
-			{"id": "timeline-day-2", "type": "shape", "left": 518.0, "top": 405.0, "width": 74.0, "height": 22.0, "text": map[string]any{"content": "<p style=\"text-align: center;\">31–60</p>"}},
-			{"id": "timeline-title-2", "type": "shape", "left": 490.0, "top": 476.0, "width": 130.0, "height": 34.0, "text": map[string]any{"content": "<p style=\"text-align: center;\">Signal</p>"}},
-			{"id": "timeline-copy-2", "type": "shape", "left": 442.0, "top": 518.0, "width": 226.0, "height": 54.0, "text": map[string]any{"content": "<p style=\"text-align: center;\">X thread, community examples, onboarding data</p>"}},
-			{"id": "timeline-node-3", "type": "shape", "left": 874.0, "top": 386.0, "width": 62.0, "height": 62.0, "path": "circle-path", "viewBox": []any{200.0, 200.0}, "fill": "#7B3FF2", "fixedRatio": false},
-			{"id": "timeline-day-3", "type": "shape", "left": 874.0, "top": 406.0, "width": 62.0, "height": 16.0, "text": map[string]any{"content": "<p style=\"text-align: center;\">61–90</p>"}},
-			{"id": "timeline-title-3", "type": "shape", "left": 840.0, "top": 476.0, "width": 130.0, "height": 34.0, "text": map[string]any{"content": "<p style=\"text-align: center;\">Scale</p>"}},
-			{"id": "timeline-copy-3", "type": "shape", "left": 792.0, "top": 518.0, "width": 226.0, "height": 54.0, "text": map[string]any{"content": "<p style=\"text-align: center;\">Templates, partner content, paid conversion tests</p>"}},
-			{"id": "footer", "type": "shape", "left": 72.0, "top": 668.0, "width": 280.0, "height": 22.0, "text": map[string]any{"content": "<p>OfficeDex launch demo</p>"}},
-			{"id": "page", "type": "shape", "left": 1130.0, "top": 668.0, "width": 80.0, "height": 22.0, "text": map[string]any{"content": "<p>06/09</p>"}},
-		},
-	}
-}
-
-func timelineElementByID(elements []map[string]any, id string) map[string]any {
-	for _, element := range elements {
-		if element["id"] == id {
-			return element
-		}
-	}
-	return nil
 }
 
 func assertLocalArtifactReadable(t *testing.T, path string, documentType types.DocumentType) {

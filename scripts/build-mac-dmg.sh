@@ -291,9 +291,6 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
     echo "[${LOG}] WARNING: it may lack the worker cacheDir fix" >&2
   fi
 
-  echo "[${LOG}] building embedded PPTist bundle"
-  npm run build:pptist
-
   # main.go embeds dist/ verbatim (`//go:embed all:dist`), so every font byte in
   # the frontend build becomes a byte of the shipped binary. The desktop
   # presentation build drops the ~66MB Office CJK webfont payload because the

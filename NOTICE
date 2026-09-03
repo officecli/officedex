@@ -9,8 +9,4 @@ It bundles a separately licensed copy of the `officecli` binary at build
 time. That binary is fetched from https://github.com/officecli/officecli-dist
 and is licensed under the MIT License.
 
-It also embeds a modified copy of PPTist, licensed under the GNU Affero
-General Public License, Version 3. The corresponding source used by OfficeDex
-is available in third_party/pptist in the OfficeDex source repository.
-
 Additional third-party and font notices are listed in THIRD_PARTY_NOTICES.md.

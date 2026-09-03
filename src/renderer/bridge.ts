@@ -25,7 +25,6 @@ import type {
   LlmProvider,
   LocalTextDocument,
   LoginInput,
-  ModifyPptistDeckResult,
   PlanPptxJSResult,
   ModifyInput,
   PeekReportContextResult,
@@ -191,9 +190,6 @@ function createBrowserPreviewAPI(): DesktopAPI {
     },
     saveDocx: async () => {
       throw new Error("Saving DOCX requires desktop file access.");
-    },
-    modifyPptistDeck: async () => {
-      throw new Error("Editing PPTist decks with AI requires the desktop app.");
     },
     planPptxJS: async () => {
       throw new Error("Editing presentations with AI requires the OfficeDex desktop bridge.");
@@ -754,11 +750,6 @@ function createWailsAPI(): DesktopAPI {
         saveAsCopy: options.saveAsCopy,
       }));
     },
-    modifyPptistDeck: async (input) => {
-      const fn = optionalWailsFunction<(arg: never) => Promise<ModifyPptistDeckResult>>("ModifyPptistDeck");
-      if (!fn) throw new Error("ModifyPptistDeck bridge binding is unavailable.");
-      return fn(toWails(input));
-    },
     planPptxJS: async (input) => {
       const fn = optionalWailsFunction<(arg: never) => Promise<PlanPptxJSResult>>("PlanPptxJS");
       if (!fn) throw new Error("PlanPptxJS bridge binding is unavailable.");
@@ -1068,7 +1059,6 @@ export function createRealE2EAPI(endpoint: string): DesktopAPI {
         expectedSHA256: options.expectedSHA256,
         saveAsCopy: options.saveAsCopy,
       }),
-    modifyPptistDeck: (input) => rpc("ModifyPptistDeck", input),
     planPptxJS: (input) => rpc<PlanPptxJSResult>("PlanPptxJS", input),
     previewArtifact: (artifact: Artifact) => rpc<void>("PreviewArtifact", artifact),
     issuePreviewToken: (artifact: Artifact) => rpc<PreviewGrant>("IssuePreviewToken", artifact),

@@ -538,7 +538,7 @@ describe("taskState", () => {
     expect(state.tasks["task-2"].conversationId).toBe("task-1");
   });
 
-  it("replays demo staged PPTX events into a completed PPTist-reviewable task", () => {
+  it("replays demo staged PPTX events into a completed reviewable task", () => {
     let state = createInitialTaskState();
     const taskId = "demo-task";
     const events = [

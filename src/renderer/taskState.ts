@@ -1,5 +1,5 @@
 import type { Artifact, BridgeEvent, DesktopTask, GenerationMode, ImageRatio, ProviderSnapshot, StageState, TaskPlan, TaskQuestion, TaskQuestionAnswer, TaskRuntimeSnapshot, TaskUserInput, VibeOp, VibeProjectTreeNode, VibeTreeAction, VibeTreeConfirmation, VibeTreeSnapshot, VibeTreeStage, VibeVisualAsset } from "../shared/types";
-import type { PptistSlide } from "../shared/pptistProtocol";
+import type { PptistSlide } from "../shared/pptxWire";
 
 export interface TaskState {
   tasks: Record<string, DesktopTask>;

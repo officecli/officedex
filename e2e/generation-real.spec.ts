@@ -4,7 +4,6 @@ import {
   assertNoResponseContractError,
   attachHostReport,
   dismissOnboarding,
-  expectPptistText,
   fixturePath,
   hostRPC,
   preparePage,
@@ -85,25 +84,13 @@ test.describe("OfficeDex real client generation and artifact flows", () => {
       const durationMs = Date.now() - startedAt;
       if (item.documentType === "pptx") {
         const editor = page.locator(".living-tree-cockpit[data-vibe-stage='completed'] .living-tree-pptx-edit-panel.is-review-mode").first();
-        if (await editor.isVisible().catch(() => false)) {
-          const verifiedTitle = "OfficeDex v0.6.0 Verified";
-          const editInput = page.getByPlaceholder(/Ask to modify this PPT/i);
-          await editInput.fill(`将第一页的标题改为“${verifiedTitle}”`);
-          await page.getByRole("button", { name: /Send edit request/i }).click();
-          await expect(page.getByText(/Saved locally\./i).last()).toBeVisible({ timeout: 180_000 });
-          await expectPptistText(page, verifiedTitle);
 
-          await page.reload();
-          await dismissOnboarding(page);
-          await expectPptistText(page, verifiedTitle);
-        } else {
           // Some hosted Web environments intentionally ship without an
           // embedded editor. Generation is still valid when the real artifact
           // preview is rendered and exposes the expected slide count/actions.
           await expect(page.getByText(/AI editor unavailable/i)).toBeVisible();
           await expect(page.locator("iframe.pptx-embed-frame").first()).toBeVisible();
           await expect(page.getByRole("button", { name: /Open in app|Show in folder/i }).first()).toBeVisible();
-        }
       } else {
         await expect(page.getByText(artifact.artifactPath.split(/[\\/]/).pop() ?? artifact.artifactPath).first()).toBeVisible();
       }

@@ -37,7 +37,7 @@ func TestPlanPptxJSForwardsContextAndHistoryToBridgePlanner(t *testing.T) {
 	result, err := app.PlanPptxJS(PlanPptxJSInput{
 		Prompt:  "  把选中的标题改为 OfficeDex 演示，但字体、颜色和位置不变  ",
 		Context: editorContext,
-		History: []PptistEditTurn{{Role: "user", Content: "先看看"}, {Role: "assistant", Content: "  "}},
+		History: []PlanPptxJSTurn{{Role: "user", Content: "先看看"}, {Role: "assistant", Content: "  "}},
 	})
 	if err != nil {
 		t.Fatalf("PlanPptxJS: %v", err)
