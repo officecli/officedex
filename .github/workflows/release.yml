@@ -97,10 +97,130 @@ jobs:
       - name: Go tests (demo build)
         run: go test -tags officedex_demo ./... -count=1
 
-      - name: Prefetch officecli binary
-        run: npm run prefetch:officecli
+      - name: Prefetch pinned officecli release binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(node -p 'require("./package.json").officecliVersion')"
+          test -n "$expected"
+          echo "Pinned OfficeCLI version: $expected"
+          OFFICECLI_VERSION="$expected" npm run prefetch:officecli
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify staged officecli matches package pin
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(node -p 'require("./package.json").officecliVersion')"
+          actual="$(node -p 'require("./build/officecli/version.json").version')"
+          echo "staged officecli version: $actual"
+          test "$actual" = "$expected"
+
+      - name: Fetch private presentation checkout (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          PRESENTATION_REPOSITORY: ${{ secrets.PRESENTATION_REPOSITORY }}
+          PRESENTATION_REF: ${{ secrets.PRESENTATION_REF }}
+          PRESENTATION_TOKEN: ${{ secrets.PRESENTATION_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${PRESENTATION_REPOSITORY:-}" || { echo "::error::PRESENTATION_REPOSITORY secret is required"; exit 1; }
+          test -n "${PRESENTATION_REF:-}" || { echo "::error::PRESENTATION_REF secret is required"; exit 1; }
+          test -n "${PRESENTATION_TOKEN:-}" || { echo "::error::PRESENTATION_TOKEN secret is required"; exit 1; }
+          git -c http.extraheader="Authorization: Bearer ${PRESENTATION_TOKEN}" \
+            clone --depth 1 --branch "${PRESENTATION_REF}" "${PRESENTATION_REPOSITORY}" \
+            "$RUNNER_TEMP/presentation"
+          echo "PRESENTATION_SOURCE_DIR=$RUNNER_TEMP/presentation" >> "$GITHUB_ENV"
+
+      - name: Install presentation runtime dependencies (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PRESENTATION_SOURCE_DIR"
+          if [[ -f pnpm-lock.yaml ]]; then
+            corepack enable
+            pnpm install --frozen-lockfile --ignore-scripts
+          elif [[ -f package-lock.json ]]; then
+            npm ci --ignore-scripts
+          else
+            echo "::error::presentation checkout has neither pnpm-lock.yaml nor package-lock.json"
+            exit 1
+          fi
+
+      - name: Stage MOP Node runtime (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="24.18.0"
+          cache="$GITHUB_WORKSPACE/build/cache/pptxgenjs-runtime"
+          work="$RUNNER_TEMP/node-runtime"
+          mkdir -p "$cache" "$work"
+          curl --fail --location --retry 3 --connect-timeout 20 \
+            "https://nodejs.org/dist/v${version}/SHASUMS256.txt" \
+            --output "$cache/node-v${version}-SHASUMS256.txt"
+          for arch in arm64 x64; do
+            tarball="node-v${version}-darwin-${arch}.tar.gz"
+            curl --fail --location --retry 3 --connect-timeout 20 \
+              "https://nodejs.org/dist/v${version}/${tarball}" \
+              --output "$cache/$tarball"
+            expected="$(awk -v f="$tarball" '$2 == f || $2 == "*"f {print $1}' "$cache/node-v${version}-SHASUMS256.txt")"
+            actual="$(shasum -a 256 "$cache/$tarball" | awk '{print $1}')"
+            test -n "$expected" && test "$expected" = "$actual"
+            mkdir -p "$work/$arch"
+            tar -xzf "$cache/$tarball" -C "$work/$arch" --strip-components=1
+          done
+          runtime="$RUNNER_TEMP/node-runtime-universal"
+          rm -rf "$runtime"
+          mkdir -p "$runtime/bin"
+          lipo -create \
+            "$work/arm64/bin/node" \
+            "$work/x64/bin/node" \
+            -output "$runtime/bin/node"
+          chmod 755 "$runtime/bin/node"
+          archs="$(lipo -archs "$runtime/bin/node")"
+          echo "staged MOP Node archs: $archs"
+          for required in x86_64 arm64; do
+            echo "$archs" | grep -qw "$required" || {
+              echo "::error::staged MOP Node is missing the $required slice (got: $archs)"
+              exit 1
+            }
+          done
+          echo "MOP_RUNTIME_SOURCE=$runtime" >> "$GITHUB_ENV"
+
+      - name: Stage MOP presentation runtime (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          MOP_RUNTIME_SOURCE="$MOP_RUNTIME_SOURCE" npm run stage:mop-runtime
+          case "$(uname -m)" in
+            arm64) target_arch=arm64; target_macho=arm64 ;;
+            x86_64) target_arch=x64; target_macho=x86_64 ;;
+            *) echo "::error::unsupported macOS runner architecture: $(uname -m)"; exit 1 ;;
+          esac
+          converter="${MOP_CONVERT_BIN:-$PRESENTATION_SOURCE_DIR/tools/bin/mop-convert}"
+          test -x "$converter" || {
+            echo "::error::presentation mop-convert is missing or not executable: $converter"
+            echo "::error::provide a target-architecture converter in the presentation checkout or via MOP_CONVERT_BIN"
+            exit 1
+          }
+          converter_archs="$(lipo -archs "$converter" 2>/dev/null || echo unknown)"
+          echo "presentation mop-convert archs: $converter_archs"
+          echo "$converter_archs" | grep -qw "$target_macho" || {
+            echo "::error::presentation mop-convert is missing $target_macho (got: $converter_archs)"
+            exit 1
+          }
+          MOP_CONVERT_BIN="$converter" \
+          PRESENTATION_TARGET_ARCH="$target_arch" \
+            PRESENTATION_TARGET_PLATFORM=darwin \
+            npm run stage:presentation
+
+      - name: Verify OfficeCLI Canvas Vibe contract
+        run: node scripts/verify-officecli-canvas-contract.mjs
 
       - name: Fetch private Office2Modoc runtime
         shell: bash
@@ -126,14 +246,69 @@ jobs:
           fi
           node scripts/stage-office2modoc-ffi.mjs
 
-      - name: Verify officecli Canvas Vibe contract
-        run: npm run verify:officecli:canvas
-
       - name: Wails build
         shell: bash
         run: |
           version="${GITHUB_REF_NAME#v}"
-          wails build -platform ${{ matrix.platform }} -trimpath -ldflags "-X main.appVersion=${version}"
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            npm run build:frontend:desktop
+            wails build -platform ${{ matrix.platform }} -trimpath -s -ldflags "-X main.appVersion=${version}"
+          else
+            wails build -platform ${{ matrix.platform }} -trimpath -ldflags "-X main.appVersion=${version}"
+          fi
+
+      - name: Verify Wails app bundle (macOS)
+        if: runner.os == 'macOS'
+        run: node scripts/verify-wails-app.mjs build/bin/OfficeDex.app
+
+      - name: Bundle MOP runtimes (macOS)
+        if: runner.os == 'macOS'
+        run: node scripts/bundle-runtime.mjs
+
+      - name: Verify packaged presentation runtime (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime="build/bin/OfficeDex.app/Contents/Resources/presentation"
+          test -d "$runtime"
+          test -x "$runtime/tools/bin/mop-convert"
+          test -f "$runtime/runtime.json"
+          test -d "build/bin/OfficeDex.app/Contents/Resources/mop-runtime"
+          echo "packaged presentation runtime: $runtime"
+
+      - name: Verify packaged MOP native architecture (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$(uname -m)" in
+            arm64) required=arm64 ;;
+            x86_64) required=x86_64 ;;
+            *) echo "::error::unsupported macOS runner architecture: $(uname -m)"; exit 1 ;;
+          esac
+          for bin in \
+            build/bin/OfficeDex.app/Contents/Resources/presentation/tools/bin/mop-convert \
+            build/bin/OfficeDex.app/Contents/Resources/mop-runtime/bin/node; do
+            archs="$(lipo -archs "$bin" 2>/dev/null || echo unknown)"
+            echo "$(basename "$bin") archs: $archs"
+            echo "$archs" | grep -qw "$required" || {
+              echo "::error::$bin is missing $required (got: $archs)"
+              exit 1
+            }
+          done
+
+      - name: Verify packaged officecli Canvas contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            binary="build/bin/OfficeDex.app/Contents/Resources/officecli/officecli"
+          else
+            binary="build/bin/officecli/officecli.exe"
+          fi
+          node scripts/verify-officecli-canvas-contract.mjs --binary "$binary" \
+            --expected "$(node -p 'require("./package.json").officecliVersion')"
 
       - name: Bundle release licenses (macOS)
         if: runner.os == 'macOS'
@@ -253,6 +428,15 @@ jobs:
           archive="OfficeDex-${tag}-darwin-universal.zip"
           (cd build/bin && ditto -c -k --sequesterRsrc --keepParent OfficeDex.app "../../dist-artifacts/${archive}")
           ls -la dist-artifacts/
+
+      - name: Verify archived presentation runtime (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="dist-artifacts/OfficeDex-${GITHUB_REF_NAME}-darwin-universal.zip"
+          unzip -l "$archive" | grep -Eq 'OfficeDex\.app/Contents/Resources/presentation(/|$)'
+          echo "archive contains OfficeDex.app/Contents/Resources/presentation"
 
       - name: Install create-dmg (macOS)
         if: runner.os == 'macOS'
