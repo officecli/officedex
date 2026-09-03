@@ -444,7 +444,7 @@ body.preview-overlay-active .living-tree-popover-overlay {
   background: #ffffff;
 }
 
-/* ─── PPTX deck: embedded PPTist viewer ─── */
+/* ─── PPTX deck: embedded presentation viewer ─── */
 .pptx-deck-layout {
   flex: 1;
   min-height: 0;
@@ -453,7 +453,7 @@ body.preview-overlay-active .living-tree-popover-overlay {
   background: #f0f1f3;
 }
 
-/* ─── PPTX embedded (PPTist) viewer ─── */
+/* ─── PPTX embedded viewer ─── */
 .pptx-embed-stage {
   flex: 1;
   min-width: 0;
@@ -491,6 +491,10 @@ body.preview-overlay-active .living-tree-popover-overlay {
   min-width: 0;
   display: flex;
   background: #f0f1f3;
+}
+
+.pptx-workbench-readonly .pptx-workbench-editor {
+  width: 100%;
 }
 
 .pptx-workbench-editor {

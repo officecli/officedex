@@ -131,11 +131,15 @@ describe("PptxViewer", () => {
     await expect(save).resolves.toMatchObject({ saved: true, file_path: "/tmp/deck.pptx" });
   });
 
-  it("falls back to the read-only PPTist preview without an AI entry point when no editor URL is configured", () => {
+  it("falls back to the read-only Presentation preview without an AI entry point when no editor URL is configured", async () => {
     render(<PptxViewer previewToken="preview-token" fileName="deck.pptx" documentType="pptx" editorBaseUrl={null} />);
 
-    expect(document.querySelector(".pptx-embed-frame")?.getAttribute("src")).toContain("mode=embed");
-    expect(document.querySelector(".pptx-workbench")).toBeNull();
+    await waitFor(() => expect(document.querySelector(".pptx-workbench-frame")).toBeTruthy());
+    const src = document.querySelector(".pptx-workbench-frame")?.getAttribute("src") ?? "";
+    expect(src).toContain("/presentation/");
+    expect(new URL(src).searchParams.get("mode")).toBe("preview");
+    expect(src).not.toContain("/pptist");
+    expect(document.querySelector(".pptx-workbench-readonly")).toBeTruthy();
     expect(document.querySelector(".pptx-workbench-panel")).toBeNull();
     expect(document.querySelector(".pptx-readonly-notice")?.textContent).toContain("AI editor unavailable");
   });
@@ -320,7 +324,8 @@ describe("PptxViewer", () => {
     // A failed editor start offers the read-only fallback and never the AI composer.
     expect((screen.getByRole("textbox") as HTMLTextAreaElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Show read-only preview" }));
-    await waitFor(() => expect(document.querySelector(".pptx-embed-frame")).toBeTruthy());
-    expect(document.querySelector(".pptx-workbench")).toBeNull();
+    await waitFor(() => expect(document.querySelector(".pptx-workbench-readonly")).toBeTruthy());
+    expect(document.querySelector(".pptx-workbench-panel")).toBeNull();
+    expect(document.querySelector(".pptx-workbench-frame")?.getAttribute("src")).toContain("mode=preview");
   });
 });

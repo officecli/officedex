@@ -48,6 +48,8 @@ export interface PresentationPptxWorkbenchProps {
   editorBaseUrl: string;
   previewToken: string;
   fileName: string;
+  /** Mount the Presentation editor in its embedded read-only preview mode. */
+  readOnly?: boolean;
   /** Absolute path of the artifact; edits are saved back here. */
   filePath?: string;
   /** Live generation feed executed inside this editor through PowerPoint.run. */
@@ -137,6 +139,7 @@ export default function PresentationPptxWorkbench({
   editorBaseUrl,
   previewToken,
   fileName,
+  readOnly = false,
   filePath,
   live,
   onEditorUnavailable,
@@ -148,8 +151,8 @@ export default function PresentationPptxWorkbench({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const channel = useMemo(() => createPresentationPptxChannel(), []);
   const embedUrl = useMemo(
-    () => buildPresentationPptxEmbedUrl(editorBaseUrl, channel),
-    [editorBaseUrl, channel],
+    () => buildPresentationPptxEmbedUrl(editorBaseUrl, channel, readOnly ? "preview" : undefined),
+    [editorBaseUrl, channel, readOnly],
   );
   const clientRef = useRef<PresentationPptxEmbedClient | null>(null);
   const replayRef = useRef<VibeReplaySequencer | null>(null);
@@ -324,8 +327,10 @@ export default function PresentationPptxWorkbench({
       if (cancelled) return;
       dirtyRef.current = dirty;
       dirtyVersionRef.current += 1;
-      onDirtyChange?.(dirty);
-      if (dirty) requestSave();
+      if (!readOnly) {
+        onDirtyChange?.(dirty);
+        if (dirty) requestSave();
+      }
     });
     setEditorStatus({ kind: "fetching" });
     setSelectionContext(null);
@@ -351,22 +356,21 @@ export default function PresentationPptxWorkbench({
       setEditorStatus({ kind: "ready", fileId });
       dirtyRef.current = false;
       dirtyVersionRef.current = 0;
-      onDirtyChangeRef.current?.(false);
+      if (!readOnly) onDirtyChangeRef.current?.(false);
       unregisterClientToolsRef.current?.();
-      unregisterClientToolsRef.current = registerActiveEditorClientTools(
-        "pptx-editor",
-        {
-          "pptx.editor.save": async () => {
-            await enqueueSave(true);
-            return {
-              saved: true,
-              file_path: filePathRef.current ?? fileNameRef.current,
-              revision: client.getState().revision ?? 0,
-            };
-          },
-        },
-      );
-      onFlushReadyRef.current?.(flushPendingSave);
+      unregisterClientToolsRef.current = readOnly
+        ? null
+        : registerActiveEditorClientTools("pptx-editor", {
+            "pptx.editor.save": async () => {
+              await enqueueSave(true);
+              return {
+                saved: true,
+                file_path: filePathRef.current ?? fileNameRef.current,
+                revision: client.getState().revision ?? 0,
+              };
+            },
+          });
+      onFlushReadyRef.current?.(readOnly ? null : flushPendingSave);
       try {
         setSelectionContext(await client.inspect());
       } catch {
@@ -393,11 +397,12 @@ export default function PresentationPptxWorkbench({
     };
     // `t` is stable per locale; a locale switch must not restart the editor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [embedUrl, channel, previewToken, fileName, reloadToken, createClient]);
+  }, [embedUrl, channel, previewToken, fileName, reloadToken, createClient, readOnly]);
 
   useEffect(() => {
     const client = clientRef.current;
     if (
+      readOnly ||
       !live ||
       !client ||
       editorStatus.kind !== "ready" ||
@@ -464,7 +469,7 @@ export default function PresentationPptxWorkbench({
       });
     }
     replayRef.current.update(live);
-  }, [editorStatus, fileName, filePath, live, previewToken]);
+  }, [editorStatus, fileName, filePath, live, previewToken, readOnly]);
 
   useEffect(
     () => () => {
@@ -717,7 +722,10 @@ export default function PresentationPptxWorkbench({
   };
 
   return (
-    <div className="pptx-workbench" data-editor-status={editorStatus.kind}>
+    <div
+      className={`pptx-workbench${readOnly ? " pptx-workbench-readonly" : ""}`}
+      data-editor-status={editorStatus.kind}
+    >
       <div className="pptx-workbench-editor">
         {editorStatus.kind !== "ready" &&
           editorStatus.kind !== "detached" &&
@@ -784,7 +792,7 @@ export default function PresentationPptxWorkbench({
           />
         )}
       </div>
-      <aside
+      {!readOnly && <aside
         className="pptx-workbench-panel"
         aria-label={t("pptx.agent.panelTitle")}
       >
@@ -1006,7 +1014,7 @@ export default function PresentationPptxWorkbench({
             </Button>
           </div>
         </form>
-      </aside>
+      </aside>}
     </div>
   );
 }
