@@ -21,7 +21,7 @@
 
 - `officedex/` —— Wails (Go + React) 主体，当前分支 `develop/1.0`
 - `officecli-internal/` —— `officecli` Go 源码（内嵌 MOP worker）
-- `pptx/` —— presentation/learnof 源码 checkout（约 2.1 G），worker 需要它做 Vite SSR
+- `presentation/` —— fegit presentation 源码 checkout，worker 需要它做 Vite SSR
 
 ## 证书与凭据
 

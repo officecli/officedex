@@ -13,7 +13,7 @@ import (
 	"officedex/internal/types"
 )
 
-// blankPptxDraft is a minimal one-slide deck exported from the learnof/pptx
+// blankPptxDraft is a minimal one-slide deck exported from the presentation
 // blank-presentation fixture through mop-convert. It seeds the live drawing
 // preview: the presentation editor opens it instantly while a generation task
 // is still running, and the vibe replay driver then draws the deck into it

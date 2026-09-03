@@ -8,7 +8,7 @@ import (
 
 func TestPresentationRuntimeEnvFindsSiblingCheckout(t *testing.T) {
 	root := t.TempDir()
-	source := filepath.Join(root, "pptx")
+	source := filepath.Join(root, "presentation")
 	for _, relative := range []string{
 		"package.json",
 		filepath.Join("node_modules", "vite", "dist", "node", "index.js"),
@@ -33,7 +33,7 @@ func TestPresentationRuntimeEnvFindsSiblingCheckout(t *testing.T) {
 }
 
 func TestPresentationRuntimeEnvPreservesExplicitRoot(t *testing.T) {
-	t.Setenv("OFFICECLI_MOP_PRESENTATION_ROOT", "/explicit/pptx")
+	t.Setenv("OFFICECLI_MOP_PRESENTATION_ROOT", "/explicit/presentation")
 	t.Setenv("PRESENTATION_SOURCE_DIR", "")
 	t.Setenv("OFFICECLI_MOP_SKILL_NODE", "/explicit/node")
 	if env := presentationRuntimeEnv("/does/not/exist"); env != nil {
@@ -48,7 +48,7 @@ func TestPresentationRuntimeEnvInjectsNodeForExplicitRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir)
-	t.Setenv("OFFICECLI_MOP_PRESENTATION_ROOT", "/explicit/pptx")
+	t.Setenv("OFFICECLI_MOP_PRESENTATION_ROOT", "/explicit/presentation")
 	t.Setenv("PRESENTATION_SOURCE_DIR", "")
 	t.Setenv("OFFICECLI_MOP_SKILL_NODE", "")
 	if env := presentationRuntimeEnv("/does/not/exist"); len(env) != 1 || env[0] != "OFFICECLI_MOP_SKILL_NODE="+node {

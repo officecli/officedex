@@ -9,7 +9,7 @@ OFFICECLI_DIR="${REPO_ROOT}/officecli-internal"
 OFFICECLI_SOURCE_BIN="${OFFICECLI_DIR}/officecli"
 OFFICECLI_STAGE_BIN="${OFFICEDEX_DIR}/build/officecli/officecli"
 APP_PATH="${OFFICEDEX_DIR}/build/bin/OfficeDex.app"
-LEARNOF_DIR="${REPO_ROOT}/pptx"
+PRESENTATION_DIR="${REPO_ROOT}/presentation"
 
 app_is_running() {
   pgrep -x "OfficeDex" >/dev/null 2>&1 || pgrep -x "officedex" >/dev/null 2>&1
@@ -19,8 +19,8 @@ if [[ ! -d "${OFFICECLI_DIR}" ]]; then
   echo "[build-local-latest] missing officecli-internal at ${OFFICECLI_DIR}" >&2
   exit 1
 fi
-if [[ ! -f "${LEARNOF_DIR}/package.json" ]]; then
-  echo "[build-local-latest] missing learnof/pptx at ${LEARNOF_DIR}" >&2
+if [[ ! -f "${PRESENTATION_DIR}/package.json" ]]; then
+  echo "[build-local-latest] missing presentation checkout at ${PRESENTATION_DIR}" >&2
   exit 1
 fi
 
@@ -49,7 +49,7 @@ build_officecli "${OFFICECLI_STAGE_BIN}"
 echo "[build-local-latest] building OfficeDex.app"
 cd "${OFFICEDEX_DIR}"
 APP_VERSION="$(node -p 'require("./package.json").version')"
-env -u GOROOT wails build -ldflags "-X main.appVersion=${APP_VERSION} -X main.learnofSourceRoot=${LEARNOF_DIR}"
+PRESENTATION_SOURCE_DIR="${PRESENTATION_DIR}" env -u GOROOT wails build -ldflags "-X main.appVersion=${APP_VERSION}"
 npm run stage:office2modoc
 node scripts/bundle-office2modoc.mjs \
   --app build/bin/OfficeDex.app \

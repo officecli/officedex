@@ -7,7 +7,7 @@ package mophttp
 // rather than degrading gracefully.
 //
 // capabilities_test.go pins these against the real mop-wasm binary whenever a
-// learnof/pptx checkout is available, so a runtime upgrade cannot land without
+// the presentation checkout is available, so a runtime upgrade cannot land without
 // updating them.
 const (
 	DefaultProtocolVersion = 1

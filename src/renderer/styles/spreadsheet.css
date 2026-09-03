@@ -37,12 +37,13 @@
   min-width: 0;
   min-height: 0;
   grid-template-columns: minmax(0, 1fr) 336px;
-  gap: 1px;
-  background: var(--od-border-subtle);
+  gap: 12px;
+  padding: 12px;
+  background: var(--od-surface-muted);
   isolation: isolate;
 }
 
-.spreadsheet-workspace[data-agent-open="false"] .spreadsheet-workspace__body { grid-template-columns: minmax(0, 1fr); }
+.spreadsheet-workspace[data-agent-open="false"] .spreadsheet-workspace__body { grid-template-columns: minmax(0, 1fr); padding: 0; }
 .spreadsheet-workspace__canvas { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--od-surface); }
 .spreadsheet-canvas { position: relative; width: 100%; height: 100%; min-height: 0; }
 .spreadsheet-canvas__editor { width: 100%; height: 100%; outline: none; }
@@ -59,11 +60,12 @@
 .spreadsheet-workspace__empty strong { color: var(--od-ink); font-size: 15px; font-weight: 500; }
 .spreadsheet-workspace__empty span { max-width: 360px; font-size: 12px; line-height: 20px; }
 
-.spreadsheet-agent { display: grid; min-width: 0; min-height: 0; grid-template-rows: 48px minmax(0, 1fr); background: var(--od-surface); }
+.spreadsheet-agent { display: grid; min-width: 0; min-height: 0; overflow: hidden; grid-template-rows: 48px minmax(0, 1fr); border: 1px solid var(--od-border-subtle); border-radius: 12px; background: var(--od-surface); box-shadow: var(--od-shadow-floating); }
 .spreadsheet-agent__header { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--od-border-subtle); padding: 0 16px; font-size: 13px; }
 .spreadsheet-agent__header svg { width: 16px; height: 16px; color: var(--od-guidance); }
-.spreadsheet-agent__content { min-height: 0; overflow: auto; padding: 16px; color: var(--od-ink-secondary); font-size: 13px; line-height: 20px; }
-.spreadsheet-agent-panel { display: grid; height: 100%; min-height: 0; grid-template-rows: minmax(0, 1fr) auto; }
+/* Keep the panel shell fixed so the composer stays visible; only the timeline scrolls. */
+.spreadsheet-agent__content { display: grid; box-sizing: border-box; min-width: 0; min-height: 0; overflow: hidden; padding: 16px; color: var(--od-ink-secondary); font-size: 13px; line-height: 20px; }
+.spreadsheet-agent-panel { display: grid; width: 100%; height: 100%; min-width: 0; min-height: 0; box-sizing: border-box; grid-template-rows: minmax(0, 1fr) auto; }
 .spreadsheet-agent-panel__timeline { min-height: 0; overflow: auto; }
 .spreadsheet-agent-panel__welcome { padding: 8px 0 20px; }
 .spreadsheet-agent-panel__welcome strong { color: var(--od-ink); font-size: 14px; font-weight: 500; }
@@ -85,7 +87,7 @@
 .spreadsheet-agent-panel__plan pre { max-height: 320px; margin: 0; overflow: auto; border-radius: 6px; background: var(--od-surface); color: var(--od-ink-secondary); padding: 10px; font: inherit; font-size: 12px; line-height: 1.55; white-space: pre-wrap; }
 .spreadsheet-agent-panel__plan-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .spreadsheet-agent-panel__error { margin-top: 12px; border-radius: 6px; background: color-mix(in srgb, var(--od-danger) 8%, transparent); color: var(--od-danger); padding: 10px 12px; font-size: 12px; }
-.spreadsheet-agent-panel__composer { display: grid; gap: 8px; border-top: 1px solid var(--od-border-subtle); padding-top: 12px; }
+.spreadsheet-agent-panel__composer { display: grid; min-width: 0; gap: 8px; border-top: 1px solid var(--od-border-subtle); padding-top: 12px; }
 .spreadsheet-agent-panel__composer .ui-textarea { resize: none; }
 .spreadsheet-agent-panel__composer-actions { display: flex; justify-content: flex-end; gap: 8px; }
 /* During a question gate the composer is the custom-answer field: shorter, and
@@ -107,8 +109,8 @@
 }
 
 @media (max-width: 760px) {
-  .spreadsheet-workspace__body { grid-template-columns: minmax(0, 1fr); }
-  .spreadsheet-agent { position: absolute; z-index: 10; top: 48px; right: 0; bottom: 0; width: min(336px, 88vw); border-left: 1px solid var(--od-border-subtle); box-shadow: var(--od-shadow-floating); }
+  .spreadsheet-workspace__body { grid-template-columns: minmax(0, 1fr); gap: 0; padding: 0; }
+  .spreadsheet-agent { position: absolute; z-index: 10; top: 48px; right: 0; bottom: 0; width: min(336px, 88vw); border-left: 1px solid var(--od-border-subtle); border-radius: 0; box-shadow: var(--od-shadow-floating); }
   .spreadsheet-topbar__document span,
   .spreadsheet-topbar__save-state { display: none; }
 }

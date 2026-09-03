@@ -1,42 +1,42 @@
 import {
-  LEARNOF_PPTX_PROTOCOL,
-  isLearnofPptxEditorContext,
-  isLearnofPptxEditorMessage,
-  type LearnofPptxEditorContext,
-  type LearnofPptxEditorMessage,
-  type LearnofPptxHostMessage,
-  type LearnofPptxHostPayload,
-} from "../../../../shared/learnofPptxProtocol";
+  PRESENTATION_PPTX_PROTOCOL,
+  isPresentationPptxEditorContext,
+  isPresentationPptxEditorMessage,
+  type PresentationPptxEditorContext,
+  type PresentationPptxEditorMessage,
+  type PresentationPptxHostMessage,
+  type PresentationPptxHostPayload,
+} from "../../../../shared/presentationPptxProtocol";
 
-export type LearnofPptxEmbedPhase =
+export type PresentationPptxEmbedPhase =
   | "booting" // iframe created, waiting for `officedex:pptx-ready`
   | "ready" // editor shell answered, PPTX can be loaded
   | "loading" // PPTX bytes sent, waiting for import + editor mount
   | "editor-ready" // MOP editor mounted, inspect/execute/export are available
   | "detached"; // editor unmounted (route change / dispose)
 
-export interface LearnofPptxEmbedState {
-  phase: LearnofPptxEmbedPhase;
+export interface PresentationPptxEmbedState {
+  phase: PresentationPptxEmbedPhase;
   fileId: string | null;
   lastError: string | null;
   dirty: boolean;
   revision: number | null;
 }
 
-export interface LearnofPptxExportResult {
+export interface PresentationPptxExportResult {
   buffer: ArrayBuffer;
   fileName: string;
   revision: number | null;
 }
 
 interface PendingRequest {
-  resolve: (message: LearnofPptxEditorMessage) => void;
+  resolve: (message: PresentationPptxEditorMessage) => void;
   reject: (error: Error) => void;
   timer: number;
-  type: LearnofPptxEditorMessage["type"];
+  type: PresentationPptxEditorMessage["type"];
 }
 
-export interface LearnofPptxEmbedClientOptions {
+export interface PresentationPptxEmbedClientOptions {
   channel: string;
   /** Returns the iframe's window; messages from any other source are ignored. */
   getTargetWindow: () => Window | null;
@@ -62,19 +62,19 @@ const DEFAULT_TIMEOUTS = {
 };
 
 /**
- * Host-side driver for the embedded learnof/pptx editor. Every request carries
+ * Host-side driver for the embedded presentation compatibility protocol. Every request carries
  * the session channel nonce and a request id; replies from any other window,
  * protocol, or channel are dropped. Nothing here evaluates JavaScript — the
  * `executeJs` source is shipped to the editor, which runs it in its own Worker.
  */
-export class LearnofPptxEmbedClient {
+export class PresentationPptxEmbedClient {
   readonly channel: string;
   private readonly getTargetWindow: () => Window | null;
   private readonly hostWindow: Window;
   private readonly timeouts: typeof DEFAULT_TIMEOUTS;
   private readonly pending = new Map<string, PendingRequest>();
   private readonly stateListeners = new Set<
-    (state: LearnofPptxEmbedState) => void
+    (state: PresentationPptxEmbedState) => void
   >();
   private readonly dirtyListeners = new Set<
     (dirty: boolean, revision: number | null) => void
@@ -89,7 +89,7 @@ export class LearnofPptxEmbedClient {
     reject: (error: Error) => void;
     timer: number;
   }> = [];
-  private state: LearnofPptxEmbedState = {
+  private state: PresentationPptxEmbedState = {
     phase: "booting",
     fileId: null,
     lastError: null,
@@ -99,19 +99,20 @@ export class LearnofPptxEmbedClient {
   private sequence = 0;
   private detachListener: (() => void) | null = null;
   private disposed = false;
+  private editorBootstrapError: Error | null = null;
 
-  constructor(options: LearnofPptxEmbedClientOptions) {
+  constructor(options: PresentationPptxEmbedClientOptions) {
     this.channel = options.channel;
     this.getTargetWindow = options.getTargetWindow;
     this.hostWindow = options.hostWindow ?? window;
     this.timeouts = { ...DEFAULT_TIMEOUTS, ...options.timeouts };
   }
 
-  getState(): LearnofPptxEmbedState {
+  getState(): PresentationPptxEmbedState {
     return this.state;
   }
 
-  subscribe(listener: (state: LearnofPptxEmbedState) => void): () => void {
+  subscribe(listener: (state: PresentationPptxEmbedState) => void): () => void {
     this.stateListeners.add(listener);
     return () => this.stateListeners.delete(listener);
   }
@@ -180,6 +181,8 @@ export class LearnofPptxEmbedClient {
   waitForEditorReady(timeoutMs = this.timeouts.editorReady): Promise<string> {
     if (this.state.phase === "editor-ready" && this.state.fileId)
       return Promise.resolve(this.state.fileId);
+    if (this.editorBootstrapError)
+      return Promise.reject(this.editorBootstrapError);
     return new Promise((resolve, reject) => {
       const timer = this.hostWindow.setTimeout(() => {
         this.editorReadyWaiters = this.editorReadyWaiters.filter(
@@ -207,6 +210,7 @@ export class LearnofPptxEmbedClient {
       dirty: false,
       revision: null,
     });
+    this.editorBootstrapError = null;
     const reply = await this.request(
       { type: "officedex:pptx-load", buffer, fileName },
       "officedex:pptx-loaded",
@@ -223,7 +227,7 @@ export class LearnofPptxEmbedClient {
     return { fileId: reply.fileId, fileName: reply.fileName };
   }
 
-  async inspect(): Promise<LearnofPptxEditorContext> {
+  async inspect(): Promise<PresentationPptxEditorContext> {
     this.assertEditorReady();
     const reply = await this.request(
       { type: "officedex:pptx-inspect" },
@@ -233,7 +237,7 @@ export class LearnofPptxEmbedClient {
     if (reply.type !== "officedex:pptx-inspect-result")
       throw new Error("Unexpected editor reply.");
     if (reply.error) throw new Error(reply.error);
-    if (!isLearnofPptxEditorContext(reply.context))
+    if (!isPresentationPptxEditorContext(reply.context))
       throw new Error("The editor returned an invalid slide context.");
     return reply.context;
   }
@@ -253,7 +257,7 @@ export class LearnofPptxEmbedClient {
     return reply.result;
   }
 
-  async export(): Promise<LearnofPptxExportResult> {
+  async export(): Promise<PresentationPptxExportResult> {
     this.assertEditorReady();
     const reply = await this.request(
       { type: "officedex:pptx-export" },
@@ -284,18 +288,18 @@ export class LearnofPptxEmbedClient {
       throw new Error("The presentation editor is not ready.");
   }
 
-  private setState(next: LearnofPptxEmbedState): void {
+  private setState(next: PresentationPptxEmbedState): void {
     this.state = next;
     for (const listener of this.stateListeners) listener(next);
   }
 
   private request(
-    payload: LearnofPptxHostPayload,
-    replyType: LearnofPptxEditorMessage["type"],
+    payload: PresentationPptxHostPayload,
+    replyType: PresentationPptxEditorMessage["type"],
     timeoutMs: number,
     transfer: Transferable[] = [],
-    errorType?: LearnofPptxEditorMessage["type"],
-  ): Promise<LearnofPptxEditorMessage> {
+    errorType?: PresentationPptxEditorMessage["type"],
+  ): Promise<PresentationPptxEditorMessage> {
     if (this.disposed)
       return Promise.reject(new Error("The presentation editor was closed."));
     const target = this.getTargetWindow();
@@ -323,12 +327,12 @@ export class LearnofPptxEmbedClient {
           type: errorType,
         });
       }
-      const message: LearnofPptxHostMessage = {
+      const message: PresentationPptxHostMessage = {
         ...payload,
-        protocol: LEARNOF_PPTX_PROTOCOL,
+        protocol: PRESENTATION_PPTX_PROTOCOL,
         channel: this.channel,
         requestId,
-      } as LearnofPptxHostMessage;
+      } as PresentationPptxHostMessage;
       try {
         target.postMessage(message, "*", transfer);
       } catch (error) {
@@ -342,7 +346,7 @@ export class LearnofPptxEmbedClient {
 
   private settle(
     requestId: string,
-    message: LearnofPptxEditorMessage,
+    message: PresentationPptxEditorMessage,
   ): boolean {
     const direct = this.pending.get(requestId);
     const viaError = this.pending.get(`${requestId}:error`);
@@ -367,7 +371,7 @@ export class LearnofPptxEmbedClient {
     // Cross-origin WindowProxy identity is not stable in WKWebView. The
     // cryptographically random channel and protocol are the authentication
     // boundary; requiring object identity here drops legitimate editor events.
-    if (!isLearnofPptxEditorMessage(event.data, this.channel)) return;
+    if (!isPresentationPptxEditorMessage(event.data, this.channel)) return;
     const message = event.data;
     switch (message.type) {
       case "officedex:pptx-ready": {
@@ -382,6 +386,7 @@ export class LearnofPptxEmbedClient {
         return;
       }
       case "officedex:pptx-editor-ready": {
+        this.editorBootstrapError = null;
         this.setState({
           phase: "editor-ready",
           fileId: message.fileId,
@@ -394,6 +399,23 @@ export class LearnofPptxEmbedClient {
         for (const waiter of waiters) {
           this.hostWindow.clearTimeout(waiter.timer);
           waiter.resolve(message.fileId);
+        }
+        return;
+      }
+      case "officedex:pptx-editor-error": {
+        const error = new Error(
+          message.error || "The presentation editor failed to initialize.",
+        );
+        this.editorBootstrapError = error;
+        this.setState({
+          ...this.state,
+          lastError: error.message,
+        });
+        const waiters = this.editorReadyWaiters;
+        this.editorReadyWaiters = [];
+        for (const waiter of waiters) {
+          this.hostWindow.clearTimeout(waiter.timer);
+          waiter.reject(error);
         }
         return;
       }

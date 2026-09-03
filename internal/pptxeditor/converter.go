@@ -12,7 +12,8 @@ import (
 )
 
 // Converter translates between PowerPoint files and the editable MOP package
-// consumed by learnof/pptx. Implementations must be safe for sequential reuse.
+// consumed by the presentation editor. Implementations must be safe for
+// sequential reuse.
 type Converter interface {
 	ImportPptx(context.Context, string, string) error
 	ExportPptx(context.Context, string, string) error

@@ -816,7 +816,7 @@ export const en: Record<string, string> = {
   "vibe.task.commandBarHint":
     "Select a node in the current stage, confirm in the right Inspector; after all confirmed, generate the next level in the task card on the right.",
 
-  // PPTX AI sidebar (learnof/pptx editor)
+  // PPTX AI sidebar (presentation editor)
   "pptx.agent.lockedByHistory": "Viewing an earlier state — return to the latest deck to edit…",
   "pptx.agent.lockedByReplay": "Drawing the generated deck — editing unlocks when it finishes…",
   "pptx.timeline.editLabel": "Your edit",

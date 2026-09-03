@@ -1,5 +1,5 @@
 // Package mophttp serves the `/api/osuite/mop/*` HTTP API that the embedded
-// learnof/pptx editor talks to.
+// presentation editor talks to.
 //
 // During development that API is provided by the pptx repo's Vite dev-server
 // middleware (tools/lib/upstream-handler.mjs). A packaged OfficeDex embeds the

@@ -19,7 +19,8 @@ export async function syncPresentationComponent({ distDir, publicDir, sourceRevi
   await writeFile(
     path.join(publicDir, "officedex-component.json"),
     `${JSON.stringify({
-      name: "learnof/pptx",
+      name: "presentation",
+      sourceRepository: "fegit.shimo.im/presentation/presentation",
       protocolVersion: PROTOCOL_VERSION,
       sourceRevision: sourceRevision || "unknown",
     }, null, 2)}\n`,

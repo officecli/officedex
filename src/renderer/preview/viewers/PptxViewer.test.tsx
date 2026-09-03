@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import PptxViewer from "./PptxViewer";
-import { LEARNOF_PPTX_PROTOCOL, isLearnofPptxEditorContext } from "../../../shared/learnofPptxProtocol";
+import { PRESENTATION_PPTX_PROTOCOL, isPresentationPptxEditorContext } from "../../../shared/presentationPptxProtocol";
 import type { PlanPptxJSResult } from "../../../shared/types";
 import { executeActiveEditorClientTool } from "../../activeEditorClientTools";
 
@@ -30,7 +30,7 @@ interface HostMessage {
 }
 
 /**
- * Simulates the learnof/pptx iframe: captures the host's postMessage calls and
+ * Simulates the presentation compatibility iframe: captures host postMessage calls and
  * lets the test answer them as the editor would.
  */
 function installFakeEditorFrame() {
@@ -47,7 +47,7 @@ function installFakeEditorFrame() {
   Object.defineProperty(frame, "contentWindow", { value: fakeWindow, configurable: true });
   const reply = (payload: Record<string, unknown>) => {
     const event = new MessageEvent("message", {
-      data: { ...payload, protocol: LEARNOF_PPTX_PROTOCOL, channel },
+      data: { ...payload, protocol: PRESENTATION_PPTX_PROTOCOL, channel },
       source: fakeWindow as unknown as MessageEventSource,
     });
     window.dispatchEvent(event);
@@ -140,7 +140,7 @@ describe("PptxViewer", () => {
     expect(document.querySelector(".pptx-readonly-notice")?.textContent).toContain("AI editor unavailable");
   });
 
-  it("opens the learnof/pptx workbench, plans with editor context, executes in the editor and saves back to the file", async () => {
+  it("opens the presentation workbench, plans with editor context, executes in the editor and saves back to the file", async () => {
     const { editor } = await bootWorkbench();
 
     planPptxJS.mockResolvedValue({
@@ -166,7 +166,7 @@ describe("PptxViewer", () => {
     await waitFor(() => expect(planPptxJS).toHaveBeenCalledTimes(1));
     const plannerInput = planPptxJS.mock.calls[0][0];
     expect(plannerInput.prompt).toBe("把选中的标题改为 OfficeDex 演示，但字体、颜色和位置不变");
-    expect(isLearnofPptxEditorContext(plannerInput.context)).toBe(true);
+    expect(isPresentationPptxEditorContext(plannerInput.context)).toBe(true);
     expect((plannerInput.context as typeof CONTEXT).selectedShapes[0].id).toBe("title");
 
     // High-confidence plan executes without confirmation; the source travels to the editor verbatim.
@@ -304,7 +304,7 @@ describe("PptxViewer", () => {
     act(() => {
       window.dispatchEvent(
         new MessageEvent("message", {
-          data: { protocol: LEARNOF_PPTX_PROTOCOL, channel: "other", type: "officedex:pptx-ready" },
+          data: { protocol: PRESENTATION_PPTX_PROTOCOL, channel: "other", type: "officedex:pptx-ready" },
           source: editor.fakeWindow as unknown as MessageEventSource,
         }),
       );

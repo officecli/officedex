@@ -1,5 +1,5 @@
 const PROTOCOL_VERSION = 1;
-// This must match the pinned learnof/pptx runtime and mop-convert revision in
+// This must match the pinned fegit presentation runtime and mop-convert revision in
 // officedex-component.json. The runtime treats a missing header as schema 0.
 const MOP_SCHEMA_VERSION = 975;
 const PPTX_CONTENT_TYPE =

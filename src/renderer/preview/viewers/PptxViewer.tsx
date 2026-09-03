@@ -12,11 +12,11 @@ import { LoadingState } from "../components/LoadingState";
 import { ErrorState } from "../components/ErrorState";
 import { officecli } from "../../bridge";
 import { useT } from "../../i18n";
-import { resolveLearnofPptxBaseUrl } from "./learnof/learnofPptxUrl";
+import { resolvePresentationEditorBaseUrl } from "./presentation/presentationPptxUrl";
 import type { VibeReplayFeed } from "../../presentation/vibeReplay";
 
-const LearnofPptxWorkbench = lazy(
-  () => import("./learnof/LearnofPptxWorkbench"),
+const PresentationPptxWorkbench = lazy(
+  () => import("./presentation/PresentationPptxWorkbench"),
 );
 
 interface PptxViewerProps {
@@ -25,9 +25,9 @@ interface PptxViewerProps {
   documentType?: string;
   /** Absolute path of the artifact. When present, AI edits are saved back to it. */
   filePath?: string;
-  /** Overrides the learnof/pptx editor URL (tests); `null` forces the read-only fallback. */
+  /** Overrides the presentation editor URL (tests); `null` forces the read-only fallback. */
   editorBaseUrl?: string | null;
-  /** Ordered generation ops to draw live in the same learnof editor. */
+  /** Ordered generation ops to draw live in the same presentation editor. */
   live?: VibeReplayFeed;
   onDirtyChange?: (dirty: boolean) => void;
   onFlushReady?: (flush: (() => Promise<void>) | null) => void;
@@ -43,7 +43,7 @@ const MSG_PREVIEW_READY = "pptist:embed-ready"; // PPTist → host: container bo
 const MSG_LOAD_PPTX = "pptist:load-pptx"; // host → PPTist: here is the .pptx ArrayBuffer
 
 /**
- * PPTX viewer. When a learnof/pptx editor URL is configured the deck opens in
+ * PPTX viewer. When the fegit presentation editor URL is configured the deck opens in
  * the editable MOP workbench with the AI conversation panel; otherwise (or when
  * the editor fails to start) it falls back to the read-only PPTist preview and
  * says so explicitly — no AI entry point is shown in that case.
@@ -61,7 +61,7 @@ export default function PptxViewer({
   const t = useT();
   const resolvedEditorUrl = useMemo(
     () =>
-      editorBaseUrl === undefined ? resolveLearnofPptxBaseUrl() : editorBaseUrl,
+      editorBaseUrl === undefined ? resolvePresentationEditorBaseUrl() : editorBaseUrl,
     [editorBaseUrl],
   );
   const [fallbackReason, setFallbackReason] = useState<string | null>(null);
@@ -83,7 +83,7 @@ export default function PptxViewer({
       {showWorkbench && resolvedEditorUrl ? (
         <div className="pptx-deck-layout pptx-deck-layout-workbench">
           <Suspense fallback={<LoadingState fileName={fileName} />}>
-            <LearnofPptxWorkbench
+            <PresentationPptxWorkbench
               key={`${previewToken}:${fileName}`}
               editorBaseUrl={resolvedEditorUrl}
               previewToken={previewToken}

@@ -23,15 +23,15 @@ import type {
   PlanPptxJSTurn,
 } from "../../../../shared/types";
 import {
-  buildLearnofPptxEmbedUrl,
-  createLearnofPptxChannel,
-  LEARNOF_PPTX_PROTOCOL,
-  type LearnofPptxEditorContext,
-} from "../../../../shared/learnofPptxProtocol";
+  buildPresentationPptxEmbedUrl,
+  createPresentationPptxChannel,
+  PRESENTATION_PPTX_PROTOCOL,
+  type PresentationPptxEditorContext,
+} from "../../../../shared/presentationPptxProtocol";
 import {
-  LearnofPptxEmbedClient,
-  type LearnofPptxEmbedState,
-} from "./LearnofPptxEmbedClient";
+  PresentationPptxEmbedClient,
+  type PresentationPptxEmbedState,
+} from "./PresentationPptxEmbedClient";
 import {
   VibeReplaySequencer,
   type VibeReplayFeed,
@@ -44,7 +44,7 @@ import type {
 } from "../../../presentation/PresentationEditorFrame";
 import { registerActiveEditorClientTools } from "../../../activeEditorClientTools";
 
-export interface LearnofPptxWorkbenchProps {
+export interface PresentationPptxWorkbenchProps {
   editorBaseUrl: string;
   previewToken: string;
   fileName: string;
@@ -60,7 +60,7 @@ export interface LearnofPptxWorkbenchProps {
   createClient?: (options: {
     channel: string;
     getTargetWindow: () => Window | null;
-  }) => LearnofPptxEmbedClient;
+  }) => PresentationPptxEmbedClient;
 }
 
 type EditorStatus =
@@ -87,7 +87,7 @@ interface ConversationTurn {
   prompt: string;
   stage: TurnStage;
   plan?: PlanPptxJSResult;
-  context?: LearnofPptxEditorContext;
+  context?: PresentationPptxEditorContext;
   error?: string;
   /** Stage in which the failure happened; drives what "retry" means. */
   failedStage?: Exclude<TurnStage, "done" | "failed" | "cancelled">;
@@ -97,7 +97,7 @@ interface ConversationTurn {
 const MAX_HISTORY_TURNS = 6;
 
 function describeSelection(
-  context: LearnofPptxEditorContext | null,
+  context: PresentationPptxEditorContext | null,
   t: (key: string, vars?: Record<string, string | number>) => string,
 ): string {
   if (!context) return t("pptx.agent.selectionUnknown");
@@ -133,7 +133,7 @@ function describeSelection(
   return t("pptx.agent.selectionNone");
 }
 
-export default function LearnofPptxWorkbench({
+export default function PresentationPptxWorkbench({
   editorBaseUrl,
   previewToken,
   fileName,
@@ -143,15 +143,15 @@ export default function LearnofPptxWorkbench({
   onDirtyChange,
   onFlushReady,
   createClient,
-}: LearnofPptxWorkbenchProps) {
+}: PresentationPptxWorkbenchProps) {
   const t = useT();
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const channel = useMemo(() => createLearnofPptxChannel(), []);
+  const channel = useMemo(() => createPresentationPptxChannel(), []);
   const embedUrl = useMemo(
-    () => buildLearnofPptxEmbedUrl(editorBaseUrl, channel),
+    () => buildPresentationPptxEmbedUrl(editorBaseUrl, channel),
     [editorBaseUrl, channel],
   );
-  const clientRef = useRef<LearnofPptxEmbedClient | null>(null);
+  const clientRef = useRef<PresentationPptxEmbedClient | null>(null);
   const replayRef = useRef<VibeReplaySequencer | null>(null);
   // Which (task, document, editor session) the live sequencer was built for.
   const replayIdentityRef = useRef<string | undefined>(undefined);
@@ -160,7 +160,7 @@ export default function LearnofPptxWorkbench({
     kind: "fetching",
   });
   const [selectionContext, setSelectionContext] =
-    useState<LearnofPptxEditorContext | null>(null);
+    useState<PresentationPptxEditorContext | null>(null);
   const [turns, setTurns] = useState<ConversationTurn[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -227,7 +227,7 @@ export default function LearnofPptxWorkbench({
     const recordLog = officecli.recordRendererLog;
     if (typeof recordLog === "function") {
       void recordLog({
-        source: "learnof-pptx-autosave",
+        source: "presentation-pptx-autosave",
         event: "saved",
         details: { filePath: savedPath, revision: exported.revision ?? 0 },
       }).catch(() => {});
@@ -248,7 +248,7 @@ export default function LearnofPptxWorkbench({
               const recordLog = officecli.recordRendererLog;
               if (typeof recordLog === "function") {
                 void recordLog({
-                  source: "learnof-pptx-autosave",
+                  source: "presentation-pptx-autosave",
                   event: "failed",
                   details: {
                     error:
@@ -295,7 +295,7 @@ export default function LearnofPptxWorkbench({
     const factory =
       createClient ??
       ((options: { channel: string; getTargetWindow: () => Window | null }) =>
-        new LearnofPptxEmbedClient(options));
+        new PresentationPptxEmbedClient(options));
     const client = factory({
       channel,
       getTargetWindow: () => iframeRef.current?.contentWindow ?? null,
@@ -305,7 +305,7 @@ export default function LearnofPptxWorkbench({
     const announceHost = () =>
       iframeRef.current?.contentWindow?.postMessage(
         {
-          protocol: LEARNOF_PPTX_PROTOCOL,
+      protocol: PRESENTATION_PPTX_PROTOCOL,
           channel,
           type: "officedex:pptx-host-ready",
         },
@@ -313,7 +313,7 @@ export default function LearnofPptxWorkbench({
       );
     const hostReadyTimer = window.setInterval(announceHost, 500);
     announceHost();
-    const unsubscribe = client.subscribe((state: LearnofPptxEmbedState) => {
+    const unsubscribe = client.subscribe((state: PresentationPptxEmbedState) => {
       if (cancelled) return;
       if (state.phase === "editor-ready" && state.fileId)
         setEditorStatus({ kind: "ready", fileId: state.fileId });
@@ -440,7 +440,7 @@ export default function LearnofPptxWorkbench({
         },
         async swapDocument() {
           throw new Error(
-            "Document swapping is not available in the learnof live editor.",
+            "Document swapping is not available in the presentation live editor.",
           );
         },
       };
@@ -450,7 +450,7 @@ export default function LearnofPptxWorkbench({
           setReplayStatus(status);
           void officecli
             .recordRendererLog({
-              source: "learnof-live-replay",
+              source: "presentation-live-replay",
               event: status.state,
               details: {
                 taskId: live.taskId,
@@ -774,7 +774,7 @@ export default function LearnofPptxWorkbench({
             onLoad={() =>
               iframeRef.current?.contentWindow?.postMessage(
                 {
-                  protocol: LEARNOF_PPTX_PROTOCOL,
+                  protocol: PRESENTATION_PPTX_PROTOCOL,
                   channel,
                   type: "officedex:pptx-host-ready",
                 },

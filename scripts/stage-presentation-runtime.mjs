@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Stage the MOP authoring runtime (the learnof/pptx checkout) into
+// Stage the MOP authoring runtime (the fegit presentation checkout) into
 // build/presentation/ so bundle-runtime.mjs can copy it into the packaged app.
 //
 // The MOP worker does not merely shell out to mop-convert: it boots a Vite SSR
@@ -68,8 +68,8 @@ export const PRESENTATION_NODE_MODULES = Object.freeze([
   { from: "vite", closure: true, required: true },
   // Bare specifiers imported by the engine/office-js sources.
   { from: "lodash-es", required: true },
-  { from: "@learnof/ink", required: true },
-  { from: "@learnof/scientific-formula", required: true },
+  { from: "@learnof/ink", sourceFallback: "packages/deps/ink", required: true },
+  { from: "@learnof/scientific-formula", sourceFallback: "packages/deps/scientific-formula", required: true },
 ]);
 
 function converterName() {
@@ -126,7 +126,7 @@ export function resolvePresentationSource(explicit = process.env.PRESENTATION_SO
   const candidates = [];
   const configured = String(explicit || "").trim();
   if (configured) candidates.push(configured);
-  else candidates.push(path.join(ROOT, "..", "pptx"), path.join(ROOT, "pptx"));
+  else candidates.push(path.join(ROOT, "..", "presentation"), path.join(ROOT, "presentation"));
   for (const candidate of candidates) {
     const resolved = path.resolve(candidate);
     // Same four markers officecli's validMOPPresentationRoot() checks, so a
@@ -141,7 +141,7 @@ export function resolvePresentationSource(explicit = process.env.PRESENTATION_SO
   }
   throw new Error(
     `presentation checkout not found${configured ? ` at ${configured}` : ""}; ` +
-      "set PRESENTATION_SOURCE_DIR to a prepared learnof/pptx checkout",
+    "set PRESENTATION_SOURCE_DIR to a prepared presentation checkout",
   );
 }
 
@@ -176,6 +176,22 @@ export async function findNativeModules(dir) {
 
 export async function stagePresentationRuntime({ source, dest = DEST } = {}) {
   const root = source || resolvePresentationSource();
+  let sourceRevision = "unknown";
+  let sourceDirty = false;
+  try {
+    sourceRevision = execSync("git rev-parse HEAD", {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    sourceDirty = execSync("git status --porcelain --untracked-files=normal", {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim().length > 0;
+  } catch {
+    // Source archives may not contain Git metadata; runtime.json remains explicit.
+  }
   await rm(dest, { recursive: true, force: true });
   await mkdir(dest, { recursive: true });
 
@@ -202,7 +218,12 @@ export async function stagePresentationRuntime({ source, dest = DEST } = {}) {
       await cp(path.dirname(real), modules, { recursive: true, force: true, dereference: true });
       continue;
     }
-    await copyEntry(root, path.join("node_modules", entry.from), path.join(modules, entry.from));
+    const installed = path.join("node_modules", entry.from);
+    const source = existsSync(path.join(root, installed)) ? installed : entry.sourceFallback;
+    if (!source || !existsSync(path.join(root, source))) {
+      throw new Error(`presentation dependency ${entry.from} is missing from ${root}`);
+    }
+    await copyEntry(root, source, path.join(modules, entry.from));
   }
   // Cross-arch staging: an Intel package built on an Apple Silicon machine (or
   // the reverse) needs the *target's* esbuild/rollup natives, not the build
@@ -272,6 +293,9 @@ export async function stagePresentationRuntime({ source, dest = DEST } = {}) {
         platform: process.platform,
         arch: os.arch(),
         source: root,
+        sourceRepository: "fegit.shimo.im/presentation/presentation",
+        sourceRevision,
+        sourceDirty,
         converter: path.relative(dest, converterDest),
         nativeModules: natives.map((native) => path.relative(dest, native)).sort(),
       },

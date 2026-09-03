@@ -1,7 +1,7 @@
 /**
  * Office.js source that snapshots the open presentation for the AI planner:
  * every slide with its shapes (geometry + trimmed text) plus the current
- * selection. It runs inside the embedded learnof/pptx editor via
+ * selection. It runs inside the embedded presentation editor via
  * `presentation:execute-script`; the result shape is `PresentationEditorContext`.
  */
 export const PRESENTATION_INSPECT_SOURCE = `
@@ -76,4 +76,3 @@ export interface PresentationEditorContext {
   selectedSlideIds: string[];
   selectedShapes: Array<{ id: string; name: string; type: string }>;
 }
-

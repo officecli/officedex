@@ -5,11 +5,12 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GIT_COMMON_DIR="$(git -C "${ROOT}" rev-parse --path-format=absolute --git-common-dir)"
 OFFICEDEX_MAIN_DIR="$(cd "$(dirname "${GIT_COMMON_DIR}")" && pwd)"
-DEFAULT_PRESENTATION_SOURCE="$(cd "${OFFICEDEX_MAIN_DIR}/.." && pwd)/pptx"
+DEFAULT_PRESENTATION_SOURCE="$(cd "${OFFICEDEX_MAIN_DIR}/.." && pwd)/presentation"
 SOURCE="${PRESENTATION_SOURCE_DIR:-${DEFAULT_PRESENTATION_SOURCE}}"
 
-# learnof/pptx 上游 033209d 把包管理器迁到了 pnpm 11：package-lock.json 已被
-# pnpm-lock.yaml 取代。两种都接受，以便在 pptx 回退到 npm 时脚本仍能工作。
+# The fegit presentation repository uses pnpm 11. Keep the npm fallback for
+# prepared source archives, but never infer a source from the legacy `pptx`
+# directory name.
 if [[ -f "${SOURCE}/pnpm-lock.yaml" ]]; then
   SOURCE_PACKAGE_MANAGER="pnpm"
 elif [[ -f "${SOURCE}/package-lock.json" ]]; then
@@ -19,35 +20,34 @@ else
 fi
 
 if [[ -z "${SOURCE_PACKAGE_MANAGER}" || ! -f "${SOURCE}/packages/presentation-app/src/main.ts" ]]; then
-  echo "[build-embedded-presentation] learnof/pptx source not found at ${SOURCE}" >&2
-  echo "Set PRESENTATION_SOURCE_DIR to a local learnof/pptx checkout." >&2
+  echo "[build-embedded-presentation] fegit presentation source not found at ${SOURCE}" >&2
+  echo "Set PRESENTATION_SOURCE_DIR to a local presentation checkout." >&2
   exit 1
 fi
 
 if [[ ! -f "${SOURCE}/mop/runtime/index.js" || ! -f "${SOURCE}/bos/dist/mop-wasm/pkg/mop_wasm.js" ]]; then
   echo "[build-embedded-presentation] local MOP/BOS runtime sources are incomplete at ${SOURCE}" >&2
-  echo "Expected mop/runtime and bos/dist/mop-wasm/pkg as documented by learnof/pptx." >&2
+  echo "Expected mop/runtime and bos/dist/mop-wasm/pkg from the presentation checkout." >&2
   exit 1
 fi
 
 VITE_BIN="${SOURCE}/node_modules/vite/bin/vite.js"
-CONVERTER_BIN="${SOURCE}/tools/bin/mop-convert"
 DIST_DIRECTORY="${ROOT}/build/presentation/dist"
-if [[ "$(uname -s)" == "MINGW"* || "$(uname -s)" == "MSYS"* || "$(uname -s)" == "CYGWIN"* ]]; then
-  CONVERTER_BIN="${CONVERTER_BIN}.exe"
-fi
 
 if [[ -n "${PRESENTATION_SOURCE_REVISION:-}" ]]; then
   REVISION="${PRESENTATION_SOURCE_REVISION}"
 elif git -C "${SOURCE}" rev-parse HEAD >/dev/null 2>&1; then
   REVISION="$(git -C "${SOURCE}" rev-parse HEAD)"
+  if [[ -n "$(git -C "${SOURCE}" status --porcelain --untracked-files=normal)" ]]; then
+    REVISION="${REVISION}-dirty"
+  fi
 else
   echo "[build-embedded-presentation] source revision is unavailable" >&2
   echo "Set PRESENTATION_SOURCE_REVISION when building from a source archive." >&2
   exit 1
 fi
 
-echo "[build-embedded-presentation] installing learnof/pptx public runtime dependencies (${SOURCE_PACKAGE_MANAGER})"
+echo "[build-embedded-presentation] installing fegit presentation dependencies (${SOURCE_PACKAGE_MANAGER})"
 (
   cd "${SOURCE}"
   if [[ "${SOURCE_PACKAGE_MANAGER}" == "pnpm" ]]; then
@@ -78,12 +78,5 @@ node "${ROOT}/scripts/sync-presentation-component.mjs" \
   --dist "${DIST_DIRECTORY}" \
   --public "${ROOT}/public/presentation" \
   --source-revision "${REVISION}"
-
-if [[ ! -x "${CONVERTER_BIN}" ]]; then
-  echo "[build-embedded-presentation] mop-convert not found at ${CONVERTER_BIN}" >&2
-  exit 1
-fi
-mkdir -p "${ROOT}/build/presentation/bin"
-install -m 0755 "${CONVERTER_BIN}" "${ROOT}/build/presentation/bin/$(basename "${CONVERTER_BIN}")"
 
 echo "[build-embedded-presentation] synchronized public/presentation at ${REVISION}"

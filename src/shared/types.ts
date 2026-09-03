@@ -891,7 +891,7 @@ export interface PlanPptxJSTurn {
   content: string;
 }
 
-/** Request for the learnof/pptx AI planner (`PlanPptxJS`). */
+/** Request for the presentation editor AI planner (`PlanPptxJS`). */
 export interface PlanPptxJSInput {
   prompt: string;
   /** Inspect result from the embedded editor: slides, selectedSlideIds, selectedShapes. */

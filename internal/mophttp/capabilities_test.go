@@ -17,7 +17,7 @@ import (
 func TestDefaultCapabilitiesMatchBundledWasm(t *testing.T) {
 	presentationRoot := locatePresentationRoot(t)
 	if presentationRoot == "" {
-		t.Skip("no learnof/pptx checkout with a built mop-wasm is available")
+		t.Skip("no presentation checkout with a built mop-wasm is available")
 	}
 	node, err := exec.LookPath("node")
 	if err != nil {

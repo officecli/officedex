@@ -470,7 +470,7 @@ body.preview-overlay-active .living-tree-popover-overlay {
   background: #1f1f1f;
 }
 
-/* ─── PPTX workbench: learnof/pptx editor + AI conversation ─── */
+/* ─── PPTX workbench: presentation editor + AI conversation ─── */
 .pptx-deck-layout-workbench {
   position: relative;
   flex-direction: column;

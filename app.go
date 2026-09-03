@@ -4810,11 +4810,11 @@ func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
 
 	env := llmProviderEnv(settingsValue)
 	// The progressive PPTX worker is a subprocess of the OfficeCLI bridge. In
-	// local development the learnof/pptx checkout lives beside the OfficeDex
-	// checkout, so pass its absolute root explicitly instead of relying on the
-	// bridge's (often different) working directory. Packaged builds can place
-	// the same runtime under Resources/presentation; an explicit user env still
-	// wins and is never overwritten.
+	// local development the fegit presentation checkout lives beside the
+	// OfficeDex checkout, so pass its absolute root explicitly instead of
+	// relying on the bridge's (often different) working directory. Packaged
+	// builds can place the same runtime under Resources/presentation; an
+	// explicit user env still wins and is never overwritten.
 	env = append(env, presentationRuntimeEnv(cwd)...)
 
 	a.mu.Lock()
@@ -4891,22 +4891,22 @@ func presentationRuntimeEnv(cwd string) []string {
 	}
 	if strings.TrimSpace(cwd) != "" {
 		candidates = append(candidates,
-			filepath.Join(cwd, "pptx"),
-			filepath.Join(cwd, "..", "pptx"),
+			filepath.Join(cwd, "presentation"),
+			filepath.Join(cwd, "..", "presentation"),
 		)
 	}
 	if processCwd, err := os.Getwd(); err == nil && processCwd != cwd {
 		candidates = append(candidates,
-			filepath.Join(processCwd, "pptx"),
-			filepath.Join(processCwd, "..", "pptx"),
+			filepath.Join(processCwd, "presentation"),
+			filepath.Join(processCwd, "..", "presentation"),
 		)
 	}
 	// GUI-launched macOS apps often have `/` as their real cwd but retain the
 	// launch shell's PWD. Include it as a local-development discovery hint.
 	if envPWD := strings.TrimSpace(os.Getenv("PWD")); envPWD != "" && envPWD != cwd {
 		candidates = append(candidates,
-			filepath.Join(envPWD, "pptx"),
-			filepath.Join(envPWD, "..", "pptx"),
+			filepath.Join(envPWD, "presentation"),
+			filepath.Join(envPWD, "..", "presentation"),
 		)
 	}
 	for _, candidate := range candidates {
@@ -4938,12 +4938,12 @@ func resolvePresentationRuntimeRoot(repoRoot string) string {
 	}
 	if strings.TrimSpace(repoRoot) != "" {
 		candidates = append(candidates,
-			filepath.Join(repoRoot, "pptx"),
-			filepath.Join(repoRoot, "..", "pptx"),
+			filepath.Join(repoRoot, "presentation"),
+			filepath.Join(repoRoot, "..", "presentation"),
 		)
 	}
 	if cwd, err := os.Getwd(); err == nil {
-		candidates = append(candidates, filepath.Join(cwd, "pptx"), filepath.Join(cwd, "..", "pptx"))
+		candidates = append(candidates, filepath.Join(cwd, "presentation"), filepath.Join(cwd, "..", "presentation"))
 	}
 	for _, candidate := range candidates {
 		root, err := filepath.Abs(candidate)

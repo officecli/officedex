@@ -27,7 +27,8 @@ test("syncPresentationComponent copies the build and writes the host manifest", 
     await readFile(path.join(publicDir, "officedex-component.json"), "utf8"),
   );
   assert.deepEqual(manifest, {
-    name: "learnof/pptx",
+    name: "presentation",
+    sourceRepository: "fegit.shimo.im/presentation/presentation",
     protocolVersion: 1,
     sourceRevision: "a10c147",
   });

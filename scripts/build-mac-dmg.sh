@@ -295,12 +295,10 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
   npm run build:pptist
 
   # main.go embeds dist/ verbatim (`//go:embed all:dist`), so every font byte in
-  # the frontend build becomes a byte of the shipped binary. wails.json's
-  # frontend:build points at build-frontend-with-learnof.sh, which keeps the
-  # ~66MB of Office CJK webfonts a browser on an arbitrary machine needs. A
-  # desktop host already provides those families, so build the frontend
-  # explicitly through the desktop variant (PRESENTATION_BUNDLE_WEB_FONTS=0)
-  # and pass -s so wails does not rebuild it through the default script.
+  # the frontend build becomes a byte of the shipped binary. The desktop
+  # presentation build drops the ~66MB Office CJK webfont payload because the
+  # host OS already provides those families. Pass -s so wails does not rebuild
+  # the frontend through its default script.
   echo "[${LOG}] building desktop frontend (host fonts, no bundled CJK)"
   npm run build:frontend:desktop
 

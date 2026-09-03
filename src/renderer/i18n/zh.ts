@@ -770,7 +770,7 @@ export const zh: Record<string, string> = {
   "vibe.task.commandBarHint":
     "选择当前阶段节点，在右侧 Inspector 逐个确认；全部确认后在右侧当前任务卡生成下一层。",
 
-  // PPTX AI 侧边栏（learnof/pptx 编辑器）
+  // PPTX AI 侧边栏（presentation 编辑器）
   "pptx.agent.lockedByHistory": "正在查看历史状态，回到最新后可编辑…",
   "pptx.agent.lockedByReplay": "正在绘制生成内容，完成后即可编辑…",
   "pptx.timeline.editLabel": "你的编辑",

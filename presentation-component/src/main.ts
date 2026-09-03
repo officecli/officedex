@@ -1,7 +1,15 @@
 import { installOfficeDexPresentationBridge } from "./officedex-host-bridge";
+import { usesPresentationCompatibilityProtocol } from "./protocol-mode";
 
 async function start() {
-  await installOfficeDexPresentationBridge();
+  // The normal OfficeDex stage uses the presentation:* host bridge. The
+  // existing rich PPTX workbench uses the source repository's
+  // officedex:pptx-* compatibility protocol. Both modes run from this same
+  // fegit presentation bundle; selecting one here prevents two bridges from
+  // competing for the same document boot.
+  if (!usesPresentationCompatibilityProtocol(window.location.search)) {
+    await installOfficeDexPresentationBridge();
+  }
   await import("@presentation/source-local-runtime-bootstrap");
   const runtimeEnvironment = ((window as unknown as {
     __RUNTIME_ENV__?: Record<string, unknown>;

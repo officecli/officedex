@@ -1,24 +1,25 @@
-// postMessage protocol between OfficeDex and the embedded learnof/pptx editor.
+// Compatibility postMessage protocol between OfficeDex and the embedded
+// presentation editor. The protocol name is retained for wire compatibility.
 //
 // This mirrors `packages/presentation-app/src/bootstrap/officedex-embed-protocol.ts`
-// in the learnof/pptx repository. The two files are kept in sync by hand on
-// purpose: OfficeDex must not import learnof/pptx sources across repositories.
+// in the presentation repository. The two files are kept in sync by hand on
+// purpose: OfficeDex must not import presentation sources across repositories.
 
-export const LEARNOF_PPTX_PROTOCOL = "officedex-pptx-embed/1" as const;
+export const PRESENTATION_PPTX_PROTOCOL = "officedex-pptx-embed/1" as const;
 
-export const LEARNOF_PPTX_EMBED_QUERY = Object.freeze({
+export const PRESENTATION_PPTX_EMBED_QUERY = Object.freeze({
   embed: "officedexEmbed",
   channel: "channel",
   sessionMode: "sessionMode",
 } as const);
 
-interface LearnofPptxMessageBase {
-  readonly protocol: typeof LEARNOF_PPTX_PROTOCOL;
+interface PresentationPptxMessageBase {
+  readonly protocol: typeof PRESENTATION_PPTX_PROTOCOL;
   readonly channel: string;
 }
 
 /** Messages OfficeDex (the host) sends to the editor iframe. */
-export type LearnofPptxHostMessage = LearnofPptxMessageBase &
+export type PresentationPptxHostMessage = PresentationPptxMessageBase &
   (
     | {
         readonly type: "officedex:pptx-load";
@@ -36,7 +37,7 @@ export type LearnofPptxHostMessage = LearnofPptxMessageBase &
   );
 
 /** Messages the editor iframe sends back to OfficeDex. */
-export type LearnofPptxEditorMessage = LearnofPptxMessageBase &
+export type PresentationPptxEditorMessage = PresentationPptxMessageBase &
   (
     | { readonly type: "officedex:pptx-ready" }
     | {
@@ -51,6 +52,13 @@ export type LearnofPptxEditorMessage = LearnofPptxMessageBase &
         readonly error: string;
       }
     | { readonly type: "officedex:pptx-editor-ready"; readonly fileId: string }
+    | {
+        /** Fatal editor bootstrap failure; sent before editor-ready can be emitted. */
+        readonly type: "officedex:pptx-editor-error";
+        readonly fileId?: string;
+        readonly phase?: "import" | "open" | "mount" | "snapshot" | "unknown";
+        readonly error: string;
+      }
     | {
         readonly type: "officedex:pptx-editor-detached";
         readonly fileId: string;
@@ -83,7 +91,7 @@ export type LearnofPptxEditorMessage = LearnofPptxMessageBase &
       }
   );
 
-export type LearnofPptxEditorMessageType = LearnofPptxEditorMessage["type"];
+export type PresentationPptxEditorMessageType = PresentationPptxEditorMessage["type"];
 
 /** `Omit` distributed over a union (plain `Omit` collapses discriminated unions). */
 export type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
@@ -91,17 +99,18 @@ export type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
   : never;
 
 /** A host message minus the envelope fields the client adds itself. */
-export type LearnofPptxHostPayload = DistributiveOmit<
-  LearnofPptxHostMessage,
+export type PresentationPptxHostPayload = DistributiveOmit<
+  PresentationPptxHostMessage,
   "protocol" | "channel" | "requestId"
 >;
 
 const EDITOR_MESSAGE_TYPES: ReadonlySet<string> =
-  new Set<LearnofPptxEditorMessageType>([
+  new Set<PresentationPptxEditorMessageType>([
     "officedex:pptx-ready",
     "officedex:pptx-loaded",
     "officedex:pptx-load-error",
     "officedex:pptx-editor-ready",
+    "officedex:pptx-editor-error",
     "officedex:pptx-editor-detached",
     "officedex:pptx-dirty-changed",
     "officedex:pptx-inspect-result",
@@ -109,13 +118,13 @@ const EDITOR_MESSAGE_TYPES: ReadonlySet<string> =
     "officedex:pptx-export-result",
   ]);
 
-export function isLearnofPptxEditorMessage(
+export function isPresentationPptxEditorMessage(
   value: unknown,
   channel: string,
-): value is LearnofPptxEditorMessage {
+): value is PresentationPptxEditorMessage {
   if (!value || typeof value !== "object") return false;
   const record = value as Record<string, unknown>;
-  if (record.protocol !== LEARNOF_PPTX_PROTOCOL) return false;
+  if (record.protocol !== PRESENTATION_PPTX_PROTOCOL) return false;
   if (!channel || record.channel !== channel) return false;
   return (
     typeof record.type === "string" && EDITOR_MESSAGE_TYPES.has(record.type)
@@ -123,7 +132,7 @@ export function isLearnofPptxEditorMessage(
 }
 
 /** Shape summary reported by the editor's inspect step. */
-export interface LearnofPptxShapeContext {
+export interface PresentationPptxShapeContext {
   id: string;
   name: string;
   type: string;
@@ -134,22 +143,22 @@ export interface LearnofPptxShapeContext {
   text?: string;
 }
 
-export interface LearnofPptxSlideContext {
+export interface PresentationPptxSlideContext {
   id: string;
   index: number;
-  shapes: LearnofPptxShapeContext[];
+  shapes: PresentationPptxShapeContext[];
 }
 
 /** Editor context handed to the AI planner. */
-export interface LearnofPptxEditorContext {
-  slides: LearnofPptxSlideContext[];
+export interface PresentationPptxEditorContext {
+  slides: PresentationPptxSlideContext[];
   selectedSlideIds: string[];
-  selectedShapes: Array<Pick<LearnofPptxShapeContext, "id" | "name" | "type">>;
+  selectedShapes: Array<Pick<PresentationPptxShapeContext, "id" | "name" | "type">>;
 }
 
-export function isLearnofPptxEditorContext(
+export function isPresentationPptxEditorContext(
   value: unknown,
-): value is LearnofPptxEditorContext {
+): value is PresentationPptxEditorContext {
   if (!value || typeof value !== "object") return false;
   const record = value as Record<string, unknown>;
   return (
@@ -160,7 +169,7 @@ export function isLearnofPptxEditorContext(
 }
 
 /** Cryptographically random channel nonce for one editor session. */
-export function createLearnofPptxChannel(): string {
+export function createPresentationPptxChannel(): string {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
@@ -170,11 +179,11 @@ export function createLearnofPptxChannel(): string {
 
 /**
  * Builds the iframe URL for the editor: `<base>?officedexEmbed=1&channel=<nonce>&sessionMode=browser-local`.
- * Relative bases (for example the packaged `/pptx/` asset route) are resolved
+ * Relative bases (for example the packaged `/presentation/` asset route) are resolved
  * against the current Wails/web document; absolute bases must be HTTP(S).
  * Returns `null` when no editor base URL is configured or the URL is invalid.
  */
-export function buildLearnofPptxEmbedUrl(
+export function buildPresentationPptxEmbedUrl(
   baseUrl: string | undefined | null,
   channel: string,
 ): string | null {
@@ -199,8 +208,8 @@ export function buildLearnofPptxEmbedUrl(
     url.protocol !== "wails:"
   )
     return null;
-  url.searchParams.set(LEARNOF_PPTX_EMBED_QUERY.embed, "1");
-  url.searchParams.set(LEARNOF_PPTX_EMBED_QUERY.channel, channel);
-  url.searchParams.set(LEARNOF_PPTX_EMBED_QUERY.sessionMode, "browser-local");
+  url.searchParams.set(PRESENTATION_PPTX_EMBED_QUERY.embed, "1");
+  url.searchParams.set(PRESENTATION_PPTX_EMBED_QUERY.channel, channel);
+  url.searchParams.set(PRESENTATION_PPTX_EMBED_QUERY.sessionMode, "browser-local");
   return url.toString();
 }

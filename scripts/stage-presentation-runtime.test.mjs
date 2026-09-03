@@ -44,11 +44,8 @@ async function fakeCheckout(root, { hoistNatives = false, converterMode = 0o755 
   await write("tools/bin/mop-convert", "#!/bin/sh\n");
   await chmod(path.join(root, "tools/bin/mop-convert"), converterMode);
   await write("node_modules/lodash-es/package.json", JSON.stringify({ name: "lodash-es" }));
-  await write("node_modules/@learnof/ink/package.json", JSON.stringify({ name: "@learnof/ink" }));
-  await write(
-    "node_modules/@learnof/scientific-formula/package.json",
-    JSON.stringify({ name: "@learnof/scientific-formula" }),
-  );
+  await write("packages/deps/ink/index.ts", "export const ink = 1;");
+  await write("packages/deps/scientific-formula/index.ts", "export const formula = 1;");
 
   // pnpm store: vite lives beside its own dependency closure, and node_modules/
   // vite is a symlink into it.
@@ -83,7 +80,7 @@ async function fakeCheckout(root, { hoistNatives = false, converterMode = 0o755 
 async function stageInto(t, options) {
   const tmp = await mkdtemp(path.join(os.tmpdir(), "officedex-presentation-"));
   t.after(() => rm(tmp, { recursive: true, force: true }));
-  const source = path.join(tmp, "pptx");
+  const source = path.join(tmp, "presentation");
   const dest = path.join(tmp, "build", "presentation");
   await mkdir(source, { recursive: true });
   await fakeCheckout(source, options);
@@ -98,6 +95,9 @@ test("stages the sources, converter and vite closure the MOP worker needs", asyn
   const manifest = JSON.parse(await readFile(path.join(dest, "runtime.json"), "utf8"));
   assert.equal(manifest.converter, path.join("tools", "bin", "mop-convert"));
   assert.equal(manifest.source, source);
+  assert.equal(manifest.sourceRepository, "fegit.shimo.im/presentation/presentation");
+  assert.equal(typeof manifest.sourceRevision, "string");
+  assert.equal(typeof manifest.sourceDirty, "boolean");
 
   // The four markers officecli's validMOPPresentationRoot() requires, so a
   // staged tree is a tree the packaged runtime will accept.
