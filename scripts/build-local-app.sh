@@ -75,12 +75,6 @@ mkdir -p "$(dirname "${OFFICECLI_STAGE_BIN}")"
   env -u GOROOT go build -o "${OFFICECLI_STAGE_BIN}" ./cmd/officecli
 )
 
-echo "[build-local-app] building embedded PPTist bundle"
-(
-  cd "${OFFICEDEX_DIR}"
-  npm run build:pptist
-)
-
 echo "[build-local-app] building OfficeDex.app"
 (
   cd "${OFFICEDEX_DIR}"

@@ -22,10 +22,6 @@ func (disabledImplementation) TryRespond(context.Context, RespondInput) ([]byte,
 	return nil, false, nil
 }
 
-func (disabledImplementation) TryModifyPptistDeck(context.Context, ModifyPptistDeckInput) (ModifyPptistDeckResult, bool, error) {
-	return ModifyPptistDeckResult{}, false, nil
-}
-
 func (disabledImplementation) Shutdown() {}
 
 func MagicPromptForTests() string {

@@ -102,12 +102,6 @@ export async function dismissOnboarding(page: Page): Promise<void> {
   await expect(welcome).toBeHidden();
 }
 
-export async function expectPptistText(page: Page, text: string, timeout = 120_000): Promise<void> {
-  const iframe = page.locator("iframe[title='PPTist Embed']").first();
-  await expect(iframe).toBeVisible({ timeout });
-  await expect(page.frameLocator("iframe[title='PPTist Embed']").getByText(text).first()).toBeVisible({ timeout });
-}
-
 export async function queueFileDialog(paths: string | string[]): Promise<void> {
   await hostControl("/control/file-dialog", {
     method: "POST",

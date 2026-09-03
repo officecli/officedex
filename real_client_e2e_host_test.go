@@ -336,12 +336,6 @@ func (h *realClientE2EHost) call(method string, raw json.RawMessage) (any, error
 			return nil, err
 		}
 		return h.app.CreateLivePptxDraft(value)
-	case "ModifyPptistDeck":
-		var input ModifyPptistDeckInput
-		if err := decodeRealClientInput(raw, &input); err != nil {
-			return nil, err
-		}
-		return h.app.ModifyPptistDeck(input)
 	case "PlanPptxJS":
 		var input PlanPptxJSInput
 		if err := decodeRealClientInput(raw, &input); err != nil {

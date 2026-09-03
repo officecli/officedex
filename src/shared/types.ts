@@ -4,7 +4,7 @@
  *   - src/renderer/generated/wailsjs/go/models.ts (Wails auto-generated)
  * Adding/removing fields requires updating all three.
  */
-import type { PptistDeckSnapshot, PptistEditOp, PptistSlide } from "./pptistProtocol";
+import type { PptistSlide } from "./pptxWire";
 
 export interface ArtifactStageRuntimeInput {
   artifact_stage: {
@@ -862,30 +862,6 @@ export interface SaveDocxResult {
   sha256: string;
 }
 
-export interface ModifyPptistDeckInput {
-  prompt: string;
-  snapshot: PptistDeckSnapshot;
-  selectedSlideId?: string;
-  selectedElementIds?: string[];
-  history?: Array<{ role: "user" | "assistant"; content: string }>;
-  pptxDataBase64?: string;
-}
-
-export interface ModifyPptistDeckResult {
-  summary: string;
-  ops: PptistEditOp[];
-  confidence?: "high" | "medium" | "low";
-  requiresConfirmation?: boolean;
-  confirmation?: {
-    title?: string;
-    message?: string;
-    target?: string;
-    changes?: string[];
-    preserved?: string[];
-  };
-  warnings?: string[];
-}
-
 export interface PlanPptxJSTurn {
   role: "user" | "assistant";
   content: string;
@@ -956,7 +932,6 @@ export interface DesktopAPI {
   savePastedImage(data: Uint8Array, ext: string): Promise<string>;
   savePptx(data: Uint8Array, fileName: string, options?: SavePptxOptions): Promise<string>;
   saveDocx(data: Uint8Array, fileName: string, options: SaveDocxOptions): Promise<SaveDocxResult>;
-  modifyPptistDeck(input: ModifyPptistDeckInput): Promise<ModifyPptistDeckResult>;
   planPptxJS(input: PlanPptxJSInput): Promise<PlanPptxJSResult>;
   previewArtifact(artifact: Artifact): Promise<void>;
   issuePreviewToken(artifact: Artifact): Promise<PreviewGrant>;

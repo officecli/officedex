@@ -2018,7 +2018,7 @@ function OfficeDexApp() {
     void message.error(error.message);
   }, []);
 
-  // The Living Tree Cockpit already embeds a PPTist preview at the slides_ready/completed
+  // The Living Tree Cockpit already embeds a presentation preview at the slides_ready/completed
   // stages, so auto-opening the full-window PreviewPanel is no longer needed for vibe tasks.
 
   const sidePanel = previewGrant

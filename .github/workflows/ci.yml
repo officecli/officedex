@@ -37,12 +37,6 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
-      - name: Build embedded PPTist from committed source
-        run: npm run build:pptist
-
-      - name: Verify embedded PPTist bundle is reproducible
-        run: git diff --exit-code -- public/pptist
-
       - name: Stub dist/ so `wails generate module` can compile main.go
         # Mirrors release.yml: main.go has `//go:embed all:dist`; the
         # renderer build that fills dist/ depends on the very bindings
