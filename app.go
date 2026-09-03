@@ -236,12 +236,7 @@ type App struct {
 
 	binary binaryCache
 
-	// recoveredTaskIDs maps an interrupted task id (the one the renderer keeps
-	// using after an app restart) to the live replacement task created during
-	// stale-respond recovery. Subsequent answers for the old id are routed to
-	// the live task so recovery runs once instead of re-running generation from
-	// the idea gate on every step.
-	recoveredTaskIDs map[string]string
+	recovery recoveryRoutes
 
 	notificationMu                   sync.Mutex
 	notificationAuthorizationGranted bool
@@ -836,38 +831,15 @@ type RespondAnswerInput struct {
 	QuestionIndex   int    `json:"questionIndex,omitempty"`
 }
 
-// liveTaskID follows the recovered-task chain so answers for an interrupted
-// task id reach the live replacement created by a prior recovery. Returns the
-// input id unchanged when no mapping exists.
+// liveTaskID returns the task an answer for taskID should reach: the live
+// replacement created by recovery, or taskID itself when it was never replaced.
 func (a *App) liveTaskID(taskID string) string {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	// Follow the chain (an old id may have been recovered more than once),
-	// guarding against accidental cycles.
-	for hops := 0; hops < 16; hops++ {
-		next, ok := a.recoveredTaskIDs[taskID]
-		if !ok || next == "" || next == taskID {
-			break
-		}
-		taskID = next
-	}
-	return taskID
+	return a.recovery.follow(taskID)
 }
 
-// registerRecoveredTask records that oldID was replaced by a live newID during
-// recovery so future answers for oldID are routed to newID.
+// registerRecoveredTask routes future answers for oldID to the live newID.
 func (a *App) registerRecoveredTask(oldID, newID string) {
-	oldID = strings.TrimSpace(oldID)
-	newID = strings.TrimSpace(newID)
-	if oldID == "" || newID == "" || oldID == newID {
-		return
-	}
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.recoveredTaskIDs == nil {
-		a.recoveredTaskIDs = make(map[string]string)
-	}
-	a.recoveredTaskIDs[oldID] = newID
+	a.recovery.record(oldID, newID)
 }
 
 // Respond forwards a user answer back to the running task.
