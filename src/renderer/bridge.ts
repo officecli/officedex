@@ -28,6 +28,17 @@ import type {
   PlanPptxJSResult,
   ModifyInput,
   PeekReportContextResult,
+  CreateWorkbookFromSheetInput,
+  DrawingAsset,
+  CaptureTimelineNodeInput,
+  TimelineCapturedNode,
+  PreparePptxEditorResult,
+  SavePptxEditorSnapshotInput,
+  SavePptxEditorAssetInput,
+  ExportPptxEditorInput,
+  ClosePptxEditorInput,
+  PptxEditorSaveResult,
+  PptxEditorSaveAssetResult,
   PrepareXlsxEditorResult,
   PreviewGrant,
   ProviderTestInput,
@@ -212,6 +223,28 @@ function createBrowserPreviewAPI(): DesktopAPI {
     createLivePptxDraft: async () => {
       throw new Error("Live PPTX drawing requires the desktop app.");
     },
+    createWorkbookFromSheet: async () => {
+      throw new Error("Creating a workbook requires the desktop app.");
+    },
+    readDrawingAsset: async () => {
+      throw new Error("Drawing assets require the desktop app.");
+    },
+    captureTimelineNode: async () => {
+      throw new Error("Timeline capture requires the desktop app.");
+    },
+    preparePptxEditor: async () => {
+      throw new Error("PPTX editor is unavailable in browser preview.");
+    },
+    savePptxEditorSnapshot: async () => {
+      throw new Error("PPTX editor is unavailable in browser preview.");
+    },
+    savePptxEditorAsset: async () => {
+      throw new Error("PPTX editor is unavailable in browser preview.");
+    },
+    exportPptxEditor: async () => {
+      throw new Error("PPTX editor is unavailable in browser preview.");
+    },
+    closePptxEditor: async () => undefined,
     prepareXlsxEditor: async () => {
       throw new Error("XLSX editor is unavailable in browser preview.");
     },
@@ -414,6 +447,25 @@ function decodeArtifactBytes(raw: unknown): Uint8Array {
   }
   if (Array.isArray(raw)) return new Uint8Array(raw as number[]);
   return new Uint8Array();
+}
+
+function serializeSavePptxEditorSnapshotInput(input: SavePptxEditorSnapshotInput) {
+  const { content, ...rest } = input;
+  return { ...rest, contentBase64: uint8ArrayToBase64(content) };
+}
+
+function serializeSavePptxEditorAssetInput(input: SavePptxEditorAssetInput) {
+  const { data, contentType, ...rest } = input;
+  return { ...rest, contentType: contentType ?? "", dataBase64: uint8ArrayToBase64(data) };
+}
+
+/** Go sends []byte as base64; hand the renderer real bytes instead. */
+function decodePreparePptxEditorResult(raw: PreparePptxEditorResult): PreparePptxEditorResult {
+  return {
+    ...raw,
+    content: decodeArtifactBytes(raw.content),
+    assets: (raw.assets ?? []).map((asset) => ({ ...asset, data: decodeArtifactBytes(asset.data) })),
+  };
 }
 
 function uint8ArrayToBase64(data: Uint8Array): string {
@@ -766,6 +818,46 @@ function createWailsAPI(): DesktopAPI {
       if (!fn) throw new Error("Live PPTX drawing requires a newer OfficeDex runtime.");
       return fn(taskId);
     },
+    readDrawingAsset: async (assetsDir: string, digest: string): Promise<DrawingAsset> => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<DrawingAsset>>("ReadDrawingAsset");
+      if (!fn) throw new Error("Drawing assets require a newer OfficeDex runtime.");
+      return fn(toWails({ assetsDir, digest }));
+    },
+    captureTimelineNode: async (input: CaptureTimelineNodeInput): Promise<TimelineCapturedNode> => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<TimelineCapturedNode>>("CaptureTimelineNode");
+      if (!fn) throw new Error("Timeline capture requires a newer OfficeDex runtime.");
+      return fn(toWails(input));
+    },
+    createWorkbookFromSheet: async (input: CreateWorkbookFromSheetInput): Promise<Artifact> => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<Artifact>>("CreateWorkbookFromSheet");
+      if (!fn) throw new Error("Creating a workbook requires a newer OfficeDex runtime.");
+      return fn(toWails(input));
+    },
+    preparePptxEditor: async (previewToken: string): Promise<PreparePptxEditorResult> => {
+      const fn = optionalWailsFunction<(token: string) => Promise<PreparePptxEditorResult>>("PreparePptxEditor");
+      if (!fn) throw new Error("PPTX editing requires a newer OfficeDex runtime.");
+      return decodePreparePptxEditorResult(await fn(previewToken));
+    },
+    savePptxEditorSnapshot: async (input: SavePptxEditorSnapshotInput): Promise<PptxEditorSaveResult> => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<PptxEditorSaveResult>>("SavePptxEditorSnapshot");
+      if (!fn) throw new Error("PPTX editing requires a newer OfficeDex runtime.");
+      return fn(toWails(serializeSavePptxEditorSnapshotInput(input)));
+    },
+    savePptxEditorAsset: async (input: SavePptxEditorAssetInput): Promise<PptxEditorSaveAssetResult> => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<PptxEditorSaveAssetResult>>("SavePptxEditorAsset");
+      if (!fn) throw new Error("PPTX editing requires a newer OfficeDex runtime.");
+      return fn(toWails(serializeSavePptxEditorAssetInput(input)));
+    },
+    exportPptxEditor: async (input: ExportPptxEditorInput): Promise<PptxEditorSaveResult> => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<PptxEditorSaveResult>>("ExportPptxEditor");
+      if (!fn) throw new Error("PPTX editing requires a newer OfficeDex runtime.");
+      return fn(toWails(input));
+    },
+    closePptxEditor: async (input: ClosePptxEditorInput): Promise<void> => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<void>>("ClosePptxEditor");
+      if (!fn) throw new Error("PPTX editing requires a newer OfficeDex runtime.");
+      await fn(toWails(input));
+    },
     prepareXlsxEditor: async (previewToken: string): Promise<PrepareXlsxEditorResult> => {
       const fn = optionalWailsFunction<(token: string) => Promise<PrepareXlsxEditorResult>>("PrepareXlsxEditor");
       if (!fn) throw new Error("XLSX editing requires a newer OfficeDex runtime.");
@@ -1064,6 +1156,22 @@ export function createRealE2EAPI(endpoint: string): DesktopAPI {
     issuePreviewToken: (artifact: Artifact) => rpc<PreviewGrant>("IssuePreviewToken", artifact),
     revokePreviewToken: (token: string) => rpc<void>("RevokePreviewToken", token),
     createLivePptxDraft: (taskId: string) => rpc<{ filePath: string; fileName: string }>("CreateLivePptxDraft", taskId),
+    readDrawingAsset: (assetsDir: string, digest: string) =>
+      rpc<DrawingAsset>("ReadDrawingAsset", { assetsDir, digest }),
+    captureTimelineNode: (input: CaptureTimelineNodeInput) =>
+      rpc<TimelineCapturedNode>("CaptureTimelineNode", input),
+    createWorkbookFromSheet: (input: CreateWorkbookFromSheetInput) =>
+      rpc<Artifact>("CreateWorkbookFromSheet", input),
+    preparePptxEditor: async (previewToken: string) =>
+      decodePreparePptxEditorResult(await rpc<PreparePptxEditorResult>("PreparePptxEditor", previewToken)),
+    savePptxEditorSnapshot: (input: SavePptxEditorSnapshotInput) =>
+      rpc<PptxEditorSaveResult>("SavePptxEditorSnapshot", serializeSavePptxEditorSnapshotInput(input)),
+    savePptxEditorAsset: (input: SavePptxEditorAssetInput) =>
+      rpc<PptxEditorSaveAssetResult>("SavePptxEditorAsset", serializeSavePptxEditorAssetInput(input)),
+    exportPptxEditor: (input: ExportPptxEditorInput) =>
+      rpc<PptxEditorSaveResult>("ExportPptxEditor", input),
+    closePptxEditor: (input: ClosePptxEditorInput) =>
+      rpc<void>("ClosePptxEditor", input),
     prepareXlsxEditor: (previewToken: string) =>
       rpc<PrepareXlsxEditorResult>("PrepareXlsxEditor", previewToken),
     saveXlsxEditor: (input: SaveXlsxEditorInput) =>
