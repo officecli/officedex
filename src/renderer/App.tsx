@@ -5,6 +5,7 @@ import { AgentClientToolDeferredError, AgentClientToolHost, type AgentClientTool
 import { executeActiveEditorClientTool, waitForActiveEditorSurface, type ActiveEditorSurface } from "./activeEditorClientTools";
 import { applyTaskEvent, attachTaskContext, attachUserInput, createInitialTaskState, deleteTask, finishTaskContinuing, getRunLineage, markTaskContinuing, restoreTaskInteractiveGate, type TaskContextPatch, type TaskState } from "./taskState";
 import { officecli } from "./bridge";
+import { useRecentFiles } from "./useRecentFiles";
 import { defaultGenerateInput, type NavKey } from "./defaults";
 import { getHomeDropZone, setHomeDropZone } from "./homeDropZone";
 import type { SidebarAccount, SidebarDocument } from "./components/ProjectSidebar";
@@ -141,7 +142,6 @@ export function findRecoverableTaskHistoryEntry(
     });
 }
 
-const RECENT_FILES_TIMEOUT_MS = 8_000;
 
 export function hydrateTaskHistory(state: TaskState, entries: TaskHistoryEntry[]): TaskState {
   let next = state;
@@ -215,9 +215,6 @@ function OfficeDexApp() {
   const initialRoute = useMemo(() => readStoredAppRoute(), []);
   const [state, setState] = useState<TaskState>(() => createInitialTaskState());
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
-  const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
-  const [recentFilesLoading, setRecentFilesLoading] = useState(true);
-  const [recentFilesError, setRecentFilesError] = useState<string>();
   const [homeWorkspaceId, setHomeWorkspaceId] = useState<string>();
   const [selectedTaskID, setSelectedTaskID] = useState<SelectedTask>(() => initialRoute.taskId ? { kind: "task", id: initialRoute.taskId } : { kind: "auto" });
   const [activeNav, setActiveNav] = useState<NavKey>(initialRoute.nav);
@@ -240,7 +237,6 @@ function OfficeDexApp() {
   const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false);
   const [unsavedDialogSaving, setUnsavedDialogSaving] = useState(false);
   const pendingSpreadsheetActionRef = useRef<{ action: () => Promise<void>; resolve: (continued: boolean) => void } | null>(null);
-  const recentFilesRequestRef = useRef(0);
   const activeNavRef = useRef(activeNav);
   activeNavRef.current = activeNav;
   /**
@@ -352,28 +348,9 @@ function OfficeDexApp() {
       .catch(() => undefined);
   }, []);
 
-  const refreshRecentFiles = useCallback(async (workspaceId?: string) => {
-    const requestId = recentFilesRequestRef.current + 1;
-    recentFilesRequestRef.current = requestId;
-    setRecentFilesLoading(true);
-    setRecentFilesError(undefined);
-    try {
-      const files = await promiseWithTimeout(
-        officecli.listRecentFiles(workspaceId),
-        RECENT_FILES_TIMEOUT_MS,
-        t("home.loadTimeout"),
-      );
-      if (recentFilesRequestRef.current !== requestId) return;
-      setRecentFiles(files);
-    } catch (error) {
-      if (recentFilesRequestRef.current !== requestId) return;
-      setRecentFilesError(errorMessage(error));
-    } finally {
-      if (recentFilesRequestRef.current === requestId) {
-        setRecentFilesLoading(false);
-      }
-    }
-  }, [t]);
+  const recent = useRecentFiles(t("home.loadTimeout"));
+  const { files: recentFiles, loading: recentFilesLoading, error: recentFilesError } = recent;
+  const refreshRecentFiles = recent.refresh;
 
   useEffect(() => {
     refreshProjectLists();
@@ -425,9 +402,7 @@ function OfficeDexApp() {
       if (event.type === "bridge.exited") {
         const message = String(event.payload?.message || "officecli agent-bridge exited");
         setCapabilityStatus(`${message} — reconnecting…`);
-        recentFilesRequestRef.current += 1;
-        setRecentFilesLoading(false);
-        setRecentFilesError(t("home.bridgeUnavailable"));
+        recent.abandon(t("home.bridgeUnavailable"));
         setBridgeInterruptionKey((current) => current + 1);
         // A manually stopped bridge disables the Go client's reconnect timer.
         // Trigger the normal Initialize path once so the App can recreate the
@@ -1005,12 +980,11 @@ function OfficeDexApp() {
 
   const removeRecentFile = useCallback(async (filePath: string) => {
     try {
-      await officecli.removeRecentFile(filePath);
-      setRecentFiles((current) => current.filter((file) => file.filePath !== filePath));
+      await recent.remove(filePath);
     } catch (error) {
       void message.error(errorMessage(error));
     }
-  }, []);
+  }, [recent]);
 
   const selectTask = useCallback((taskId: string) => {
     const taskWorkspaceId = state.tasks[taskId]?.workspaceId;
@@ -1489,11 +1463,11 @@ function OfficeDexApp() {
         await officecli.deleteDocument(task.id);
         const lineageIds = new Set(lineage.map((candidate) => candidate.id));
         setState((current) => lineage.reduce((next, candidate) => deleteTask(next, candidate.id), current));
-        setRecentFiles((current) => current.filter((file) =>
-          !lineageIds.has(file.taskId || "") &&
-          (!conversationId || file.conversationId !== conversationId) &&
-          (!document.filePath || file.filePath !== document.filePath),
-        ));
+        recent.forgetWhere((file) =>
+          lineageIds.has(file.taskId || "") ||
+          (!!conversationId && file.conversationId === conversationId) ||
+          (!!document.filePath && file.filePath === document.filePath),
+        );
         if (selectedTaskID.kind === "task" && lineageIds.has(selectedTaskID.id)) {
           setSelectedTaskID({ kind: "none" });
           setActiveNav("home");
@@ -2439,22 +2413,6 @@ function documentTypeFromTask(task: DesktopTask): GenerateInput["documentType"] 
 
 function isGenerateDocumentType(value: unknown): value is GenerateInput["documentType"] {
   return value === "pptx" || value === "docx" || value === "xlsx" || value === "report" || value === "img" || value === "gif";
-}
-
-function promiseWithTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timeout = window.setTimeout(() => reject(new Error(message)), timeoutMs);
-    promise.then(
-      (value) => {
-        window.clearTimeout(timeout);
-        resolve(value);
-      },
-      (error) => {
-        window.clearTimeout(timeout);
-        reject(error);
-      },
-    );
-  });
 }
 
 function stringOrUndef(value: unknown): string | undefined {
