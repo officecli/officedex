@@ -1144,6 +1144,12 @@ export const en: Record<string, string> = {
   "spreadsheet.marketing.status.completed": "Completed",
   "spreadsheet.marketing.recover": "Insert recent images ({count})",
   "spreadsheet.marketing.status.failed": "Failed",
+  "spreadsheet.marketing.status.queued": "Queued",
+  "spreadsheet.marketing.status.submitting": "Submitting",
+  "spreadsheet.marketing.status.partialFailure": "Partly failed",
+  "spreadsheet.marketing.status.composing": "Composing locally",
+  "spreadsheet.marketing.status.composeFailed": "Local compose failed",
+  "spreadsheet.marketing.status.writebackFailed": "Write-back failed",
   "spreadsheet.marketing.status.cancelled": "Cancelled",
   "task.interrupted.bridge":
     "The Bridge connection was interrupted and the task stopped. Please retry.",
