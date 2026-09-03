@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
 	"syscall"
 
@@ -87,10 +86,7 @@ func (p *processTransport) Stdout() io.Reader { return p.stdout }
 func (p *processTransport) Stderr() io.Reader { return p.stderr }
 
 func (p *processTransport) Kill() error {
-	if p.cmd.Process == nil {
-		return nil
-	}
-	if err := p.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+	if err := killProcessTree(p.cmd.Process); err != nil {
 		return fmt.Errorf("bridge: kill: %w", err)
 	}
 	return nil
