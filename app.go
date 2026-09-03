@@ -218,10 +218,7 @@ type App struct {
 	// first task — an answer, a cancel — swapped it back, starting a third
 	// process that had never heard of the task. Tasks live inside their
 	// process, so the process has to outlive the call that is not about it.
-	bridgeClients map[string]*bridge.Client
-	// bridgeRecentCwd is the cwd of the most recently used client, for calls
-	// that only read bridge-side state and do not care which one answers.
-	bridgeRecentCwd        string
+	bridges                bridgePool
 	pptxJSPlanner          pptxJSPlanner
 	loginManager           *login.Manager
 	loginUnsub             func()
@@ -243,11 +240,6 @@ type App struct {
 	resolvedBinaryPath string
 	resolvedBinaryEnv  []string
 	binaryResolvedAt   time.Time
-
-	// retiredBridges holds bridge clients that were replaced while they still
-	// had tasks in flight. They keep their event listeners so the tasks can
-	// finish and report normally; reapRetiredBridge closes them once idle.
-	retiredBridges []*bridge.Client
 
 	// recoveredTaskIDs maps an interrupted task id (the one the renderer keeps
 	// using after an app restart) to the live replacement task created during
@@ -3112,11 +3104,8 @@ func (a *App) ExportLogs(input ExportLogsInput) (ExportLogsResult, error) {
 
 	a.mu.Lock()
 	currentSettings := a.cachedSettings
-	bridgeClients := make([]*bridge.Client, 0, len(a.bridgeClients))
-	for _, client := range a.bridgeClients {
-		bridgeClients = append(bridgeClients, client)
-	}
 	a.mu.Unlock()
+	bridgeClients := a.bridges.all()
 
 	var droppedBytes int64
 	for _, client := range bridgeClients {
@@ -3838,8 +3827,8 @@ func (a *App) SubmitReport(input SubmitReportInput) (SubmitReportResult, error) 
 func (a *App) detectReportCapability() report.ReportCapability {
 	a.mu.Lock()
 	s := a.cachedSettings
-	client := a.bridgeClients[a.bridgeRecentCwd]
 	a.mu.Unlock()
+	client := a.bridges.mostRecentlyUsed()
 
 	endpoint := ""
 	if s.SupportReportEndpoint != nil {
@@ -4226,13 +4215,7 @@ func (a *App) ensureBridgeForTask(taskID string) (*bridge.Client, error) {
 // it, for the callers that invalidate every child process at once (shutdown, a
 // binary/provider change, a runtime update). Callers already hold a.mu.
 func (a *App) takeBridgeClientsLocked() []*bridge.Client {
-	clients := make([]*bridge.Client, 0, len(a.bridgeClients))
-	for _, client := range a.bridgeClients {
-		clients = append(clients, client)
-	}
-	a.bridgeClients = nil
-	a.bridgeRecentCwd = ""
-	return clients
+	return a.bridges.takeAll()
 }
 
 // retiredBridgeGrace bounds how long a replaced-but-busy child process may
@@ -4255,9 +4238,7 @@ func (a *App) retireBridge(client *bridge.Client) {
 		client.Close()
 		return
 	}
-	a.mu.Lock()
-	a.retiredBridges = append(a.retiredBridges, client)
-	a.mu.Unlock()
+	a.bridges.park(client)
 	time.AfterFunc(retiredBridgeGrace, func() { a.forceCloseRetiredBridge(client) })
 	// The client may have gone idle between the check and the append.
 	a.reapRetiredBridge(client)
@@ -4286,15 +4267,7 @@ func (a *App) forceCloseRetiredBridge(client *bridge.Client) {
 // takeRetiredBridge removes client from the parking lot, reporting whether this
 // call is the one that owns closing it.
 func (a *App) takeRetiredBridge(client *bridge.Client) bool {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	for i, parked := range a.retiredBridges {
-		if parked == client {
-			a.retiredBridges = append(a.retiredBridges[:i], a.retiredBridges[i+1:]...)
-			return true
-		}
-	}
-	return false
+	return a.bridges.unpark(client)
 }
 
 // bridgeForMetadata returns a client for calls that only read bridge-side state
@@ -4302,19 +4275,7 @@ func (a *App) takeRetiredBridge(client *bridge.Client) bool {
 // child process working directory. Reusing whichever client is already
 // connected keeps these calls from starting a process just to ask a question.
 func (a *App) bridgeForMetadata() (*bridge.Client, error) {
-	a.mu.Lock()
-	client := a.bridgeClients[a.bridgeRecentCwd]
-	if client == nil || !client.Connected() {
-		client = nil
-		for _, candidate := range a.bridgeClients {
-			if candidate.Connected() {
-				client = candidate
-				break
-			}
-		}
-	}
-	a.mu.Unlock()
-	if client != nil {
+	if client := a.bridges.anyConnected(); client != nil {
 		return client, nil
 	}
 	return a.ensureBridge()
@@ -4326,10 +4287,7 @@ func (a *App) bridgeForMetadata() (*bridge.Client, error) {
 // process to serve an unrelated call stranded the task inside a child nobody
 // could reach anymore.
 func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
-	a.mu.Lock()
-	if client := a.bridgeClients[cwd]; client != nil {
-		a.bridgeRecentCwd = cwd
-		a.mu.Unlock()
+	if client := a.bridges.get(cwd); client != nil {
 		if !client.Connected() {
 			if err := client.Start(a.ctx); err != nil {
 				return nil, err
@@ -4338,6 +4296,7 @@ func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
 		return client, nil
 	}
 
+	a.mu.Lock()
 	settingsValue := a.cachedSettings
 	a.mu.Unlock()
 
@@ -4366,14 +4325,12 @@ func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
 	a.resolvedBinaryPath = resolved.Path
 	a.resolvedBinaryEnv = env
 	a.binaryResolvedAt = time.Now()
+	a.mu.Unlock()
 	// Another call may have started this cwd's client while the binary was
 	// being resolved; one process per cwd, so that one wins.
-	if existing := a.bridgeClients[cwd]; existing != nil {
-		a.bridgeRecentCwd = cwd
-		a.mu.Unlock()
+	if existing := a.bridges.get(cwd); existing != nil {
 		return existing, nil
 	}
-	a.mu.Unlock()
 
 	client := bridge.New(bridge.Options{
 		BinaryPath:     resolved.Path,
@@ -4390,20 +4347,11 @@ func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
 		return nil, err
 	}
 
-	a.mu.Lock()
-	if existing := a.bridgeClients[cwd]; existing != nil {
-		a.bridgeRecentCwd = cwd
-		a.mu.Unlock()
+	winner, stored := a.bridges.putIfAbsent(cwd, client)
+	if !stored {
 		client.Close()
-		return existing, nil
 	}
-	if a.bridgeClients == nil {
-		a.bridgeClients = make(map[string]*bridge.Client)
-	}
-	a.bridgeClients[cwd] = client
-	a.bridgeRecentCwd = cwd
-	a.mu.Unlock()
-	return client, nil
+	return winner, nil
 }
 
 func presentationRuntimeEnv(cwd string) []string {
