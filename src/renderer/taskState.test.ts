@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { applyTaskEvent, attachUserInput, createInitialTaskState, finishTaskContinuing, markTaskContinuing, restoreTaskInteractiveGate } from "./taskState";
+import type { TaskUserInput } from "../shared/types";
+import { applyTaskEvent, attachUserInput, createInitialTaskState, discardLocalTask, finishTaskContinuing, markTaskContinuing, promoteLocalTask, restoreTaskInteractiveGate, startLocalTask } from "./taskState";
 
 describe("taskState", () => {
   it("records task lifecycle events and stores completed artifacts", () => {
@@ -565,5 +566,61 @@ describe("taskState", () => {
     expect(state.tasks["outline-task"].vibeOutline).toEqual({
       sections: [{ id: "s1", title: "背景与问题", purpose: "说明现状" }],
     });
+  });
+});
+
+describe("local task lifecycle", () => {
+  const input = { prompt: "make a deck" } as TaskUserInput;
+
+  // The card has to appear the moment the user clicks, before any round trip.
+  it("shows a placeholder under the id this window invented", () => {
+    const state = startLocalTask(createInitialTaskState(), "local-1", input, {
+      documentType: "pptx",
+      topic: "Quarterly review",
+    });
+
+    expect(state.taskOrder).toEqual(["local-1"]);
+    expect(state.tasks["local-1"].status).toBe("running");
+    expect(state.tasks["local-1"].userInput).toEqual(input);
+  });
+
+  // Promotion is a replacement, not a rename: every event from here on carries
+  // the bridge's id, so a placeholder left behind would never advance again.
+  it("replaces the placeholder with the bridge's task", () => {
+    let state = startLocalTask(createInitialTaskState(), "local-1", input, {
+      documentType: "pptx",
+      topic: "Quarterly review",
+    });
+    state = promoteLocalTask(state, "local-1", "task-9", input);
+
+    expect(state.tasks["local-1"]).toBeUndefined();
+    expect(state.taskOrder).toEqual(["task-9"]);
+    expect(state.tasks["task-9"].userInput).toEqual(input);
+  });
+
+  it("removes the placeholder when the call failed", () => {
+    let state = startLocalTask(createInitialTaskState(), "local-1", input, {
+      documentType: "pptx",
+      topic: "Quarterly review",
+    });
+    state = discardLocalTask(state, "local-1");
+
+    expect(state.tasks["local-1"]).toBeUndefined();
+    expect(state.taskOrder).toEqual([]);
+  });
+
+  // A promotion must not disturb a task that was already running, and the list
+  // stays newest-first.
+  it("leaves other tasks alone", () => {
+    let state = startLocalTask(createInitialTaskState(), "local-1", input, {
+      documentType: "pptx",
+      topic: "First",
+    });
+    state = promoteLocalTask(state, "local-1", "task-1", input);
+    state = startLocalTask(state, "local-2", input, { documentType: "docx", topic: "Second" });
+    state = promoteLocalTask(state, "local-2", "task-2", input);
+
+    expect(state.taskOrder).toEqual(["task-2", "task-1"]);
+    expect(Object.keys(state.tasks).sort()).toEqual(["task-1", "task-2"]);
   });
 });
