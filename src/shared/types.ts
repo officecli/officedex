@@ -893,8 +893,107 @@ export interface PlanPptxJSResult {
   warnings?: string[];
 }
 
+/** One resource embedded in a deck opened by the presentation editor. */
+export interface PptxEditorAsset {
+  path: string;
+  contentType: string;
+  data: Uint8Array;
+}
+
+export interface PreparePptxEditorResult {
+  sessionId: string;
+  fileId: string;
+  title: string;
+  sourceFileName: string;
+  /** Decoded at the bridge boundary; the Go side sends base64. */
+  content: Uint8Array;
+  documentRevision: number;
+  assets?: PptxEditorAsset[];
+}
+
+export interface SavePptxEditorSnapshotInput {
+  previewToken: string;
+  sessionId: string;
+  content: Uint8Array;
+  baseRevision: number;
+  revision: number;
+}
+
+export interface SavePptxEditorAssetInput {
+  previewToken: string;
+  sessionId: string;
+  relativePath: string;
+  contentType?: string;
+  data: Uint8Array;
+}
+
+export interface ExportPptxEditorInput {
+  previewToken: string;
+  sessionId: string;
+  revision: number;
+}
+
+export interface ClosePptxEditorInput {
+  previewToken: string;
+  sessionId: string;
+}
+
+export interface PptxEditorSaveResult {
+  filePath: string;
+  revision: number;
+}
+
+export interface PptxEditorSaveAssetResult {
+  resourceUri: string;
+  digest: string;
+  resourceSize: number;
+  contentType: string;
+  extension: string;
+}
+
+export interface DrawingAsset {
+  digest: string;
+  contentType: string;
+  base64: string;
+}
+
+export interface CaptureTimelineNodeInput {
+  taskId: string;
+  previewToken: string;
+  sessionId: string;
+  kind: string;
+  seq: number;
+  slide: number;
+  slides: number;
+  label: string;
+  shape?: string;
+  /** Base64 document the editor encoded itself; empty reads the session snapshot. */
+  content?: string;
+  withAssets?: boolean;
+  artifactPath?: string;
+}
+
+export interface TimelineCapturedNode {
+  id: string;
+  parentId?: string;
+  kind: string;
+  seq?: number;
+  shape?: string;
+  slide?: number;
+  slides?: number;
+  label: string;
+  createdAt: string;
+}
+
+export interface CreateWorkbookFromSheetInput {
+  fileName: string;
+  sheetName: string;
+  headers: string[];
+  rows: string[][];
+  workspaceId?: string;
+}
+
 export interface DesktopAPI {
-  [key: string]: any;
   initialize(): Promise<unknown>;
   getCapabilities(): Promise<unknown>;
   listImageTemplates(): Promise<ImagePromptTemplate[]>;
@@ -937,6 +1036,14 @@ export interface DesktopAPI {
   issuePreviewToken(artifact: Artifact): Promise<PreviewGrant>;
   revokePreviewToken(token: string): Promise<void>;
   createLivePptxDraft(taskId: string): Promise<{ filePath: string; fileName: string }>;
+  readDrawingAsset(assetsDir: string, digest: string): Promise<DrawingAsset>;
+  captureTimelineNode(input: CaptureTimelineNodeInput): Promise<TimelineCapturedNode>;
+  createWorkbookFromSheet(input: CreateWorkbookFromSheetInput): Promise<Artifact>;
+  preparePptxEditor(previewToken: string): Promise<PreparePptxEditorResult>;
+  savePptxEditorSnapshot(input: SavePptxEditorSnapshotInput): Promise<PptxEditorSaveResult>;
+  savePptxEditorAsset(input: SavePptxEditorAssetInput): Promise<PptxEditorSaveAssetResult>;
+  exportPptxEditor(input: ExportPptxEditorInput): Promise<PptxEditorSaveResult>;
+  closePptxEditor(input: ClosePptxEditorInput): Promise<void>;
   prepareXlsxEditor(previewToken: string): Promise<PrepareXlsxEditorResult>;
   saveXlsxEditor(input: SaveXlsxEditorInput): Promise<SaveXlsxEditorResult>;
   stageXlsxEditorImage(input: StageXlsxEditorImageInput): Promise<{ url: string }>;

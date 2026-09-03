@@ -1818,11 +1818,186 @@ func (a *App) CloseXlsxEditor(input CloseXlsxEditorInput) error {
 	return a.xlsxEditorService.Close(input.PreviewToken, input.SessionID)
 }
 
+// SavePptxEditorSnapshotInput carries an in-progress deck from the embedded
+// presentation editor. Binary content travels as base64 because the packaged
+// webview drops Blob bodies; only plain values survive the bridge.
+type SavePptxEditorSnapshotInput struct {
+	PreviewToken  string `json:"previewToken"`
+	SessionID     string `json:"sessionId"`
+	ContentBase64 string `json:"contentBase64"`
+	BaseRevision  int    `json:"baseRevision"`
+	Revision      int    `json:"revision"`
+}
+
+// SavePptxEditorAssetInput carries one embedded resource (an image, a font)
+// that the editor added to the deck.
+type SavePptxEditorAssetInput struct {
+	PreviewToken string `json:"previewToken"`
+	SessionID    string `json:"sessionId"`
+	RelativePath string `json:"relativePath"`
+	ContentType  string `json:"contentType"`
+	DataBase64   string `json:"dataBase64"`
+}
+
+// ExportPptxEditorInput asks the session to write the deck back to its file.
+type ExportPptxEditorInput struct {
+	PreviewToken string `json:"previewToken"`
+	SessionID    string `json:"sessionId"`
+	Revision     int    `json:"revision"`
+}
+
+// ClosePptxEditorInput releases one editor session.
+type ClosePptxEditorInput struct {
+	PreviewToken string `json:"previewToken"`
+	SessionID    string `json:"sessionId"`
+}
+
+// PreparePptxEditor opens an editing session for a granted preview token and
+// returns the deck the embedded editor should load.
+func (a *App) PreparePptxEditor(previewToken string) (pptxeditor.PrepareResult, error) {
+	if a.pptxEditorService == nil {
+		return pptxeditor.PrepareResult{}, errPptxEditorUnavailable
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return a.pptxEditorService.Prepare(ctx, previewToken)
+}
+
+// SavePptxEditorSnapshot persists the editor's current document revision.
+func (a *App) SavePptxEditorSnapshot(input SavePptxEditorSnapshotInput) (pptxeditor.SaveResult, error) {
+	if a.pptxEditorService == nil {
+		return pptxeditor.SaveResult{}, errPptxEditorUnavailable
+	}
+	content, err := base64.StdEncoding.DecodeString(input.ContentBase64)
+	if err != nil {
+		return pptxeditor.SaveResult{}, fmt.Errorf("decode PPTX editor snapshot: %w", err)
+	}
+	return a.pptxEditorService.SaveSnapshot(input.PreviewToken, input.SessionID, content, input.BaseRevision, input.Revision)
+}
+
+// SavePptxEditorAsset stores one resource the editor added to the deck.
+func (a *App) SavePptxEditorAsset(input SavePptxEditorAssetInput) (pptxeditor.SaveAssetResult, error) {
+	if a.pptxEditorService == nil {
+		return pptxeditor.SaveAssetResult{}, errPptxEditorUnavailable
+	}
+	data, err := base64.StdEncoding.DecodeString(input.DataBase64)
+	if err != nil {
+		return pptxeditor.SaveAssetResult{}, fmt.Errorf("decode PPTX editor asset: %w", err)
+	}
+	return a.pptxEditorService.SaveAsset(input.PreviewToken, input.SessionID, input.RelativePath, input.ContentType, data)
+}
+
+// ExportPptxEditor writes the edited deck back to the file the preview token
+// granted access to.
+func (a *App) ExportPptxEditor(input ExportPptxEditorInput) (pptxeditor.SaveResult, error) {
+	if a.pptxEditorService == nil {
+		return pptxeditor.SaveResult{}, errPptxEditorUnavailable
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return a.pptxEditorService.Export(ctx, input.PreviewToken, input.SessionID, input.Revision)
+}
+
+// ClosePptxEditor releases one editing session.
+func (a *App) ClosePptxEditor(input ClosePptxEditorInput) error {
+	if a.pptxEditorService == nil {
+		return errPptxEditorUnavailable
+	}
+	return a.pptxEditorService.Close(input.PreviewToken, input.SessionID)
+}
+
+// CreateWorkbookFromSheetInput turns connector-fetched rows into a new
+// workbook inside the workspace the caller is working in.
+type CreateWorkbookFromSheetInput struct {
+	FileName    string     `json:"fileName"`
+	SheetName   string     `json:"sheetName"`
+	Headers     []string   `json:"headers"`
+	Rows        [][]string `json:"rows"`
+	WorkspaceID string     `json:"workspaceId"`
+}
+
+// CreateWorkbookFromSheet writes a new .xlsx into the workspace and returns it
+// as an artifact the spreadsheet stage can open. Jira and Liquipedia syncs use
+// this on their first run, when there is no workbook to merge into yet.
+func (a *App) CreateWorkbookFromSheet(input CreateWorkbookFromSheetInput) (types.Artifact, error) {
+	fileName := strings.TrimSpace(input.FileName)
+	if fileName == "" {
+		return types.Artifact{}, errors.New("create workbook: file name is required")
+	}
+	if fileName != filepath.Base(fileName) {
+		return types.Artifact{}, errors.New("create workbook: file name must not contain a path")
+	}
+	if !strings.EqualFold(filepath.Ext(fileName), ".xlsx") {
+		return types.Artifact{}, errors.New("create workbook: file name must end in .xlsx")
+	}
+	sheetName := strings.TrimSpace(input.SheetName)
+	if sheetName == "" {
+		return types.Artifact{}, errors.New("create workbook: sheet name is required")
+	}
+	if len(input.Headers) == 0 {
+		return types.Artifact{}, errors.New("create workbook: headers are required")
+	}
+
+	settings, err := a.settingsStore.Load()
+	if err != nil {
+		return types.Artifact{}, fmt.Errorf("create workbook: load settings: %w", err)
+	}
+	dir, err := a.effectiveWorkspaceDirForInput(input.WorkspaceID, false, settings)
+	if err != nil {
+		return types.Artifact{}, fmt.Errorf("create workbook: resolve workspace: %w", err)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return types.Artifact{}, fmt.Errorf("create workbook: mkdir workspace: %w", err)
+	}
+
+	dest := uniqueWorkbookPath(dir, fileName)
+	rows := make([][]string, 0, len(input.Rows)+1)
+	rows = append(rows, input.Headers)
+	rows = append(rows, input.Rows...)
+	if err := xlsxeditor.CreateWorkbook(dest, xlsxeditor.ManagedSheet{SheetName: sheetName, Rows: rows}); err != nil {
+		return types.Artifact{}, fmt.Errorf("create workbook: %w", err)
+	}
+
+	artifact := types.Artifact{FilePath: dest, FileName: filepath.Base(dest), DocumentType: "xlsx"}
+	if a.previewReg != nil {
+		if err := a.previewReg.AllowArtifact(artifact); err != nil {
+			return types.Artifact{}, fmt.Errorf("create workbook: grant preview: %w", err)
+		}
+	}
+	return artifact, nil
+}
+
+// uniqueWorkbookPath keeps a second sync from overwriting the first run's file.
+func uniqueWorkbookPath(dir, fileName string) string {
+	dest := filepath.Join(dir, fileName)
+	if _, err := os.Stat(dest); err != nil {
+		return dest
+	}
+	extension := filepath.Ext(fileName)
+	base := strings.TrimSuffix(fileName, extension)
+	for suffix := 2; suffix < 1000; suffix++ {
+		candidate := filepath.Join(dir, fmt.Sprintf("%s (%d)%s", base, suffix, extension))
+		if _, err := os.Stat(candidate); err != nil {
+			return candidate
+		}
+	}
+	return filepath.Join(dir, fmt.Sprintf("%s (%d)%s", base, time.Now().UnixNano(), extension))
+}
+
 // RevokePreviewToken invalidates a token. No-op if unknown.
 func (a *App) RevokePreviewToken(token string) {
 	if a.xlsxEditorService != nil {
 		if err := a.xlsxEditorService.CloseByToken(token); err != nil && a.ctx != nil {
 			wailsruntime.LogWarningf(a.ctx, "close XLSX sessions for revoked preview token: %v", err)
+		}
+	}
+	if a.pptxEditorService != nil {
+		if err := a.pptxEditorService.CloseByToken(token); err != nil && a.ctx != nil {
+			wailsruntime.LogWarningf(a.ctx, "close PPTX sessions for revoked preview token: %v", err)
 		}
 	}
 	a.previewReg.RevokeToken(token)
