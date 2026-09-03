@@ -533,6 +533,7 @@ func TestTestProviderWithInputOfficialPaidProbeRunsOfficeCLICommand(t *testing.T
 			},
 		},
 	}
+	a.binary.seed(writeWhoamiFakeOfficeCLI(t, "logged_in"), nil, time.Now())
 
 	result, err := a.TestProviderWithInput(types.ProviderTestInput{
 		UseProviderOverride:    true,
@@ -622,8 +623,7 @@ func TestTestProviderWithInputUsesOverridesWithoutMutatingCachedSettings(t *test
 
 	appProxy := netproxy.NewPool()
 	a := &App{
-		proxyPool:          appProxy,
-		resolvedBinaryPath: writeWhoamiFakeOfficeCLI(t, "logged_in"),
+		proxyPool: appProxy,
 		cachedSettings: types.UserSettings{
 			LlmProvider: &types.LlmProvider{
 				Type:    types.LlmCustom,

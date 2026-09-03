@@ -234,12 +234,7 @@ type App struct {
 	mopHTTPHandler         http.Handler
 	timelineStore          *timeline.Store
 
-	// resolver cache. binresolver.Resolve stats the filesystem on every call;
-	// runCommandOptions / ensureBridge run on every RPC. We cache the resolved
-	// path + env until UpdateSettings flips touchesBridge=true.
-	resolvedBinaryPath string
-	resolvedBinaryEnv  []string
-	binaryResolvedAt   time.Time
+	binary binaryCache
 
 	// recoveredTaskIDs maps an interrupted task id (the one the renderer keeps
 	// using after an app restart) to the live replacement task created during
@@ -2503,9 +2498,7 @@ func (a *App) UpdateSettings(patch settings.Patch) (types.UserSettings, error) {
 	var retiredClients []*bridge.Client
 	if touchesBridge {
 		retiredClients = a.takeBridgeClientsLocked()
-		a.resolvedBinaryPath = ""
-		a.resolvedBinaryEnv = nil
-		a.binaryResolvedAt = time.Time{}
+		a.binary.invalidate()
 	}
 	if patch.BridgeBinaryPath != nil || proxyChanged {
 		a.loginManager = nil
@@ -2977,9 +2970,7 @@ func (a *App) DownloadRuntimeUpdate() (types.RuntimeStatus, error) {
 		return status, err
 	}
 	a.mu.Lock()
-	a.resolvedBinaryPath = ""
-	a.resolvedBinaryEnv = nil
-	a.binaryResolvedAt = time.Time{}
+	a.binary.invalidate()
 	clients := a.takeBridgeClientsLocked()
 	a.mu.Unlock()
 	// The binary every child was started from has been replaced.
@@ -3159,10 +3150,8 @@ func (a *App) GetBridgeRuntimeSnapshot() (types.BridgeRuntimeSnapshot, error) {
 	} else {
 		mode = types.RuntimeCustom
 	}
-	path := a.resolvedBinaryPath
-	env := append([]string(nil), a.resolvedBinaryEnv...)
-	at := a.binaryResolvedAt
 	a.mu.Unlock()
+	path, env, at := a.binary.load()
 
 	snap := types.BridgeRuntimeSnapshot{
 		RuntimeMode: mode,
@@ -4134,9 +4123,8 @@ func (a *App) bridgeEventListener(client *bridge.Client) bridge.EventListener {
 		if event.Type == "task.started" {
 			a.mu.Lock()
 			mode := a.currentRuntimeModeLocked()
-			env := append([]string(nil), a.resolvedBinaryEnv...)
-			at := a.binaryResolvedAt
 			a.mu.Unlock()
+			_, env, at := a.binary.load()
 			if mode != "" {
 				if event.Payload == nil {
 					event.Payload = map[string]any{}
@@ -4321,11 +4309,7 @@ func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
 	// explicit user env still wins and is never overwritten.
 	env = append(env, presentationRuntimeEnv(cwd)...)
 
-	a.mu.Lock()
-	a.resolvedBinaryPath = resolved.Path
-	a.resolvedBinaryEnv = env
-	a.binaryResolvedAt = time.Now()
-	a.mu.Unlock()
+	a.binary.store(resolved.Path, env)
 	// Another call may have started this cwd's client while the binary was
 	// being resolved; one process per cwd, so that one wins.
 	if existing := a.bridges.get(cwd); existing != nil {
@@ -4574,9 +4558,7 @@ func (a *App) ensureLoginManagerLocked() *login.Manager {
 func (a *App) resetBridgeRuntime() {
 	a.mu.Lock()
 	clients := a.takeBridgeClientsLocked()
-	a.resolvedBinaryPath = ""
-	a.resolvedBinaryEnv = nil
-	a.binaryResolvedAt = time.Time{}
+	a.binary.invalidate()
 	a.mu.Unlock()
 
 	for _, client := range clients {
@@ -4596,17 +4578,14 @@ func (a *App) runCommandOptions() login.ManagerOptions {
 
 // resolvedBinaryLocked returns the cached binary path + provider env, running
 // binresolver / llmProviderEnv at most once per settings change. Caller must
-// hold a.mu. The cache is invalidated by UpdateSettings when touchesBridge=true.
+// hold a.mu, which is what makes reading cachedSettings here safe; the cache
+// itself is invalidated by UpdateSettings when touchesBridge=true.
 func (a *App) resolvedBinaryLocked() (string, []string) {
-	if a.resolvedBinaryPath != "" {
-		return a.resolvedBinaryPath, a.resolvedBinaryEnv
-	}
-	path := binresolver.ResolvePath(a.resolverOptions(a.cachedSettings))
-	env := toEnvSlice(llmProviderEnv(a.cachedSettings))
-	a.resolvedBinaryPath = path
-	a.resolvedBinaryEnv = env
-	a.binaryResolvedAt = time.Now()
-	return path, env
+	settings := a.cachedSettings
+	return a.binary.ensure(func() (string, []string) {
+		return binresolver.ResolvePath(a.resolverOptions(settings)),
+			toEnvSlice(llmProviderEnv(settings))
+	})
 }
 
 func (a *App) resolverOptions(s types.UserSettings) binresolver.Options {

@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"officedex/internal/netproxy"
 	"officedex/internal/settings"
@@ -125,15 +126,15 @@ func newCustomProviderLoginTestApp(t *testing.T, whoamiMode string, initial type
 		t.Fatalf("load seeded settings: %v", err)
 	}
 	binary := writeWhoamiFakeOfficeCLI(t, whoamiMode)
-	return &App{
-		userDataDir:        dir,
-		workspaceDir:       filepath.Join(dir, "workspace"),
-		settingsStore:      store,
-		cachedSettings:     cached,
-		proxyPool:          netproxy.NewPool(),
-		resolvedBinaryPath: binary,
-		resolvedBinaryEnv:  []string{},
+	app := &App{
+		userDataDir:    dir,
+		workspaceDir:   filepath.Join(dir, "workspace"),
+		settingsStore:  store,
+		cachedSettings: cached,
+		proxyPool:      netproxy.NewPool(),
 	}
+	app.binary.seed(binary, []string{}, time.Now())
+	return app
 }
 
 func customProviderForLoginTest() *types.LlmProvider {

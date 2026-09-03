@@ -232,14 +232,12 @@ func newAuthResetAppWithBridge(t *testing.T, binary string) (*App, *authResetBri
 		t.Fatalf("start bridge client: %v", err)
 	}
 	app := &App{
-		userDataDir:        t.TempDir(),
-		workspaceDir:       t.TempDir(),
-		proxyPool:          netproxy.NewPool(),
-		cachedSettings:     types.UserSettings{},
-		resolvedBinaryPath: binary,
-		resolvedBinaryEnv:  []string{"OFFICE_CLI_RUNTIME_MODE=hosted"},
-		binaryResolvedAt:   time.Now(),
+		userDataDir:    t.TempDir(),
+		workspaceDir:   t.TempDir(),
+		proxyPool:      netproxy.NewPool(),
+		cachedSettings: types.UserSettings{},
 	}
+	app.binary.seed(binary, []string{"OFFICE_CLI_RUNTIME_MODE=hosted"}, time.Now())
 	app.bridges.seed("/ws", map[string]*bridge.Client{"/ws": client})
 	t.Cleanup(func() {
 		client.Close()
@@ -259,12 +257,8 @@ func waitForAuthReset(t *testing.T, app *App) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		app.mu.Lock()
-		cleared := app.bridges.size() == 0 &&
-			app.resolvedBinaryPath == "" &&
-			app.resolvedBinaryEnv == nil &&
-			app.binaryResolvedAt.IsZero()
-		app.mu.Unlock()
+		path, env, at := app.binary.load()
+		cleared := app.bridges.size() == 0 && path == "" && len(env) == 0 && at.IsZero()
 		if cleared {
 			return
 		}
@@ -291,37 +285,35 @@ func waitForLoginExit(t *testing.T, app *App) {
 
 func assertAuthResetRuntimeCleared(t *testing.T, app *App) {
 	t.Helper()
-	app.mu.Lock()
-	defer app.mu.Unlock()
 	if app.bridges.size() != 0 {
 		t.Fatal("bridge clients should have been dropped")
 	}
-	if app.resolvedBinaryPath != "" {
-		t.Fatalf("resolvedBinaryPath = %q, want empty", app.resolvedBinaryPath)
+	path, env, at := app.binary.load()
+	if path != "" {
+		t.Fatalf("cached binary path = %q, want empty", path)
 	}
-	if app.resolvedBinaryEnv != nil {
-		t.Fatalf("resolvedBinaryEnv = %#v, want nil", app.resolvedBinaryEnv)
+	if len(env) != 0 {
+		t.Fatalf("cached binary env = %#v, want empty", env)
 	}
-	if !app.binaryResolvedAt.IsZero() {
-		t.Fatalf("binaryResolvedAt = %v, want zero", app.binaryResolvedAt)
+	if !at.IsZero() {
+		t.Fatalf("binary resolved-at = %v, want zero", at)
 	}
 }
 
 func assertAuthResetRuntimePresent(t *testing.T, app *App) {
 	t.Helper()
-	app.mu.Lock()
-	defer app.mu.Unlock()
 	if app.bridges.size() == 0 {
 		t.Fatal("bridge clients should still be present")
 	}
-	if app.resolvedBinaryPath == "" {
-		t.Fatal("resolvedBinaryPath should still be populated")
+	path, env, at := app.binary.load()
+	if path == "" {
+		t.Fatal("cached binary path should still be populated")
 	}
-	if len(app.resolvedBinaryEnv) == 0 {
-		t.Fatal("resolvedBinaryEnv should still be populated")
+	if len(env) == 0 {
+		t.Fatal("cached binary env should still be populated")
 	}
-	if app.binaryResolvedAt.IsZero() {
-		t.Fatal("binaryResolvedAt should still be populated")
+	if at.IsZero() {
+		t.Fatal("binary resolved-at should still be populated")
 	}
 }
 
