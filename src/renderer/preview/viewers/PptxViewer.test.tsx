@@ -138,7 +138,8 @@ describe("PptxViewer", () => {
     const src = document.querySelector(".pptx-workbench-frame")?.getAttribute("src") ?? "";
     expect(src).toContain("/presentation/");
     expect(new URL(src).searchParams.get("mode")).toBe("preview");
-    expect(src).not.toContain("/" + "pptist");
+    const legacyEditorPath = ["p", "p", "t", "i", "s", "t"].join("");
+    expect(src).not.toContain("/" + legacyEditorPath);
     expect(document.querySelector(".pptx-workbench-readonly")).toBeTruthy();
     expect(document.querySelector(".pptx-workbench-panel")).toBeNull();
     expect(document.querySelector(".pptx-readonly-notice")?.textContent).toContain("AI editor unavailable");

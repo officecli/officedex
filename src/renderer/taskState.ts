@@ -1,5 +1,5 @@
 import type { Artifact, BridgeEvent, DesktopTask, GenerationMode, ImageRatio, ProviderSnapshot, StageState, TaskPlan, TaskQuestion, TaskQuestionAnswer, TaskRuntimeSnapshot, TaskUserInput, VibeOp, VibeProjectTreeNode, VibeTreeAction, VibeTreeConfirmation, VibeTreeSnapshot, VibeTreeStage, VibeVisualAsset } from "../shared/types";
-import type { PptistSlide } from "../shared/pptxWire";
+import type { SlidePreview } from "../shared/slidePreviewWire";
 
 export interface TaskState {
   tasks: Record<string, DesktopTask>;
@@ -305,14 +305,14 @@ function advancesPastInteractiveGate(event: BridgeEvent): boolean {
   return status === "running" || status === "completed";
 }
 
-function vibeSlideFromPayload(payload: BridgeEvent["payload"]): { index: number; slide: PptistSlide } | undefined {
+function vibeSlideFromPayload(payload: BridgeEvent["payload"]): { index: number; slide: SlidePreview } | undefined {
   if (!payload) return undefined;
   const index = typeof payload.index === "number" ? payload.index : -1;
   const slide = payload.slide;
   if (index < 0 || !slide || typeof slide !== "object") return undefined;
   const record = slide as Record<string, unknown>;
   if (typeof record.id !== "string" || !Array.isArray(record.elements)) return undefined;
-  return { index, slide: slide as PptistSlide };
+  return { index, slide: slide as SlidePreview };
 }
 
 function vibeTreeFromPayload(payload: BridgeEvent["payload"]): VibeTreeSnapshot | undefined {

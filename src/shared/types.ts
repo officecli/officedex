@@ -4,7 +4,7 @@
  *   - src/renderer/generated/wailsjs/go/models.ts (Wails auto-generated)
  * Adding/removing fields requires updating all three.
  */
-import type { PptistSlide } from "./pptxWire";
+import type { SlidePreview } from "./slidePreviewWire";
 
 export interface ArtifactStageRuntimeInput {
   artifact_stage: {
@@ -562,8 +562,8 @@ export interface DesktopTask {
   question?: TaskQuestion;
   plan?: TaskPlan;
   vibeTree?: VibeTreeSnapshot;
-  /** Per-slide PptistSlide data streamed from the backend (vibe flow), ordered by index. */
-  vibeSlides?: PptistSlide[];
+  /** Per-slide SlidePreview data streamed from the backend (vibe flow), ordered by index. */
+  vibeSlides?: SlidePreview[];
   artifact?: Artifact;
   error?: string;
   stages?: StageState[];
