@@ -439,9 +439,19 @@ func (c *Client) requestWithTimeout(ctx context.Context, method string, params a
 	}
 }
 
-// Initialize calls the "initialize" RPC.
+// Initialize calls the "initialize" RPC and refuses a bridge whose protocol is
+// older than this app can talk to. Failing here, before any work is queued,
+// is the point: the alternative is a "method not found" partway through a
+// generation the user has already waited on.
 func (c *Client) Initialize(ctx context.Context) ([]byte, error) {
-	return c.Request(ctx, "initialize", nil)
+	raw, err := c.Request(ctx, "initialize", nil)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkProtocolVersion(raw); err != nil {
+		return nil, err
+	}
+	return raw, nil
 }
 
 // GetCapabilities calls "capabilities/get".
