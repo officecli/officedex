@@ -103,16 +103,14 @@ func TestGetBridgeRuntimeSnapshot(t *testing.T) {
 					Type: types.LlmAnthropic,
 				},
 			},
-			resolvedBinaryPath: "/tmp/officecli",
-			resolvedBinaryEnv: []string{
-				"OFFICE_CLI_RUNTIME_MODE=custom",
-				"OFFICECLI_LLM_PROVIDER=anthropic",
-				"OFFICECLI_LLM_BASE_URL=https://api.anthropic.com",
-				"OFFICECLI_LLM_API_KEY=sk-ant-livekey-1234567890abcdef",
-				"OFFICECLI_LLM_MODEL=claude-sonnet-4-6",
-			},
-			binaryResolvedAt: now,
 		}
+		a.binary.seed("/tmp/officecli", []string{
+			"OFFICE_CLI_RUNTIME_MODE=custom",
+			"OFFICECLI_LLM_PROVIDER=anthropic",
+			"OFFICECLI_LLM_BASE_URL=https://api.anthropic.com",
+			"OFFICECLI_LLM_API_KEY=sk-ant-livekey-1234567890abcdef",
+			"OFFICECLI_LLM_MODEL=claude-sonnet-4-6",
+		}, now)
 		snap, err := a.GetBridgeRuntimeSnapshot()
 		if err != nil {
 			t.Fatalf("GetBridgeRuntimeSnapshot: %v", err)
@@ -143,10 +141,8 @@ func TestGetBridgeRuntimeSnapshot(t *testing.T) {
 			cachedSettings: types.UserSettings{
 				// No LlmProvider → official (hosted) mode
 			},
-			resolvedBinaryPath: "/tmp/officecli",
-			resolvedBinaryEnv:  []string{"OFFICE_CLI_RUNTIME_MODE=hosted"},
-			binaryResolvedAt:   time.Now(),
 		}
+		a.binary.seed("/tmp/officecli", []string{"OFFICE_CLI_RUNTIME_MODE=hosted"}, time.Now())
 		snap, err := a.GetBridgeRuntimeSnapshot()
 		if err != nil {
 			t.Fatalf("GetBridgeRuntimeSnapshot: %v", err)
