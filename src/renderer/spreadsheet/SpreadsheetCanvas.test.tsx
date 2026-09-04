@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createRef, StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getS18n } from "@shimo/simple-i18n";
 import type { Artifact, PreviewGrant } from "../../shared/types";
 import type { SpreadsheetCanvasHandle } from "./SpreadsheetCanvas";
 import { styledCellData } from "./SpreadsheetCanvas";
@@ -134,7 +135,10 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock("../bridge", () => ({ officecli: mocks.officecli }));
-vi.mock("./sheetSdk", () => ({
+vi.mock("./sheetSdk", async (importOriginal) => ({
+  // cellsLoadingMessages reads the SDK's i18n bundle and nothing else, so the
+  // retry tests exercise the real one; only the editor factory is stubbed.
+  cellsLoadingMessages: (await importOriginal<typeof import("./sheetSdk")>()).cellsLoadingMessages,
   createOfflineSheetEditor: mocks.createOfflineSheetEditor,
   registerOfflineImage: mocks.registerOfflineImage,
 }));
@@ -144,6 +148,16 @@ import {
   retryWhenSheetCellsReady,
   SpreadsheetCanvas,
 } from "./SpreadsheetCanvas";
+
+// The SDK's locale script does exactly this when it loads: register the bundle
+// under the sheet-sdk namespace and set the locale. In the app that happens
+// inside createOfflineSheetEditor, which is mocked out here, so do it once at
+// module scope — the retry path reads these the way it reads the real bundle.
+getS18n("sheet-sdk").addLocaleResource("zh-CN", {
+  "cells.loading.please.do.it": "单元格加载中，请加载完成后再编辑",
+  "cells.loading.please.do.it.v3": "单元格加载中，请加载完成后插入行",
+});
+getS18n("sheet-sdk").setLocale("zh-CN");
 
 class ResizeObserverStub {
   observe = vi.fn();
@@ -1088,7 +1102,7 @@ describe("retryWhenSheetCellsReady", () => {
   it("waits for the Sheet SDK cell model before retrying a row insertion", async () => {
     vi.useFakeTimers();
     const insertRows = vi.fn()
-      .mockImplementationOnce(() => { throw new Error("单元格加载中，请加载完成后插入行"); })
+      .mockImplementationOnce(() => { throw new Error(getS18n("sheet-sdk")("cells.loading.please.do.it.v3")); })
       .mockImplementationOnce(() => undefined);
 
     const result = retryWhenSheetCellsReady(() => {
@@ -1100,6 +1114,31 @@ describe("retryWhenSheetCellsReady", () => {
     await expect(result).resolves.toBe("written");
     expect(insertRows).toHaveBeenCalledTimes(2);
     vi.useRealTimers();
+  });
+
+  it("recognises a loading message in a locale nobody wrote a pattern for", async () => {
+    // The point of reading the SDK's bundle rather than matching prose: the two
+    // locales the old regex knew were the two a developer happened to have seen.
+    const s18n = getS18n("sheet-sdk");
+    s18n.addLocaleResource("ru-RU", {
+      "cells.loading.please.do.it.v3": "Идёт загрузка ячейки. Перед вставкой строк дождитесь завершения загрузки.",
+    });
+    s18n.setLocale("ru-RU");
+    vi.useFakeTimers();
+    const insertRows = vi.fn()
+      .mockImplementationOnce(() => { throw new Error(s18n("cells.loading.please.do.it.v3")); })
+      .mockImplementationOnce(() => undefined);
+
+    const result = retryWhenSheetCellsReady(() => {
+      insertRows();
+      return "ok";
+    });
+    await vi.advanceTimersByTimeAsync(50);
+
+    await expect(result).resolves.toBe("ok");
+    expect(insertRows).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+    s18n.setLocale("zh-CN");
   });
 
   it("does not retry unrelated sheet errors", async () => {

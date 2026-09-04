@@ -272,6 +272,51 @@ function loadScriptOnce(src: string): Promise<void> {
   return loading;
 }
 
+/**
+ * The namespace the sheet SDK's own locale bundle registers under, and the keys
+ * it uses for "this cell range is still loading" — one per mutation the SDK
+ * refuses while a range is in flight (edit, resize, insert/delete row/column,
+ * insert/delete cells).
+ */
+const SHEET_SDK_I18N_NAMESPACE = "sheet-sdk";
+const CELLS_LOADING_KEYS = [
+  "cells.loading.please.do.it",
+  "cells.loading.please.do.it.v2",
+  "cells.loading.please.do.it.v3",
+  "cells.loading.please.do.it.v4",
+  "cells.loading.please.do.it.v5",
+  "cells.loading.please.do.it.v6",
+  "cells.loading.please.do.it.v7",
+  "cells.loading.please.do.it.v8",
+] as const;
+
+/**
+ * The messages the SDK throws when a range is still loading, resolved through
+ * the SDK's own locale bundle.
+ *
+ * The SDK attaches no error code to these — the thrown value carries only the
+ * translated sentence. Matching that sentence with a hand-written regex is what
+ * this replaces: the regex listed two Chinese phrases and two English ones, so
+ * it silently stopped recognising the condition in any of the other twelve
+ * locales the SDK ships, and would have stopped recognising it in these two the
+ * next time upstream reworded them. Asking the same i18n instance the SDK asked
+ * means the comparison is against whatever the SDK will actually throw.
+ *
+ * Returns an empty array when the locale bundle has not loaded, which reads as
+ * "no message is a loading message" — the caller then rethrows rather than
+ * retrying blind.
+ */
+export function cellsLoadingMessages(): string[] {
+  try {
+    const s18n = getS18n(SHEET_SDK_I18N_NAMESPACE);
+    const messages = CELLS_LOADING_KEYS.map((key) => s18n(key)).filter((text) => text && text !== "");
+    // An unloaded bundle echoes the key back; those are not messages.
+    return messages.filter((text) => !CELLS_LOADING_KEYS.includes(text as (typeof CELLS_LOADING_KEYS)[number]));
+  } catch {
+    return [];
+  }
+}
+
 export async function createOfflineSheetEditor(
   container: HTMLElement,
   modocContent: string,
