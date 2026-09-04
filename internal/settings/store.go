@@ -8,7 +8,7 @@
 //   - Sanitize parses a tolerant rawSettings struct first, then projects to the
 //     canonical UserSettings shape so missing fields fall back to defaults and
 //     unknown enum values get clamped rather than corrupting the cache.
-//   - Atomic writes go through a sibling .tmp file + os.Rename.
+//   - Atomic writes go through internal/atomicfile (unique temp + fsync + rename).
 package settings
 
 import (
@@ -18,6 +18,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	"officedex/internal/atomicfile"
 	"slices"
 	"strings"
 	"sync"
@@ -140,13 +142,11 @@ func (s *Store) writeAtomic(settings types.UserSettings) error {
 		return fmt.Errorf("settings: marshal: %w", err)
 	}
 	body = append(body, '\n')
-	tmpPath := s.filePath + ".tmp"
-	if err := os.WriteFile(tmpPath, body, 0o644); err != nil {
-		return fmt.Errorf("settings: write tmp: %w", err)
-	}
-	if err := os.Rename(tmpPath, s.filePath); err != nil {
-		_ = os.Remove(tmpPath)
-		return fmt.Errorf("settings: rename: %w", err)
+	// atomicfile stages under a unique temp name and fsyncs; the fixed
+	// settings.json.tmp it replaces let two processes writing at once clobber
+	// each other's staging file.
+	if err := atomicfile.WriteFile(s.filePath, body, 0o644); err != nil {
+		return fmt.Errorf("settings: write: %w", err)
 	}
 	return nil
 }

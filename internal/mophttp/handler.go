@@ -991,6 +991,16 @@ func (h *Handler) storePreparedExport(fileName string, output []byte, revision i
 		revision: revision,
 		expires:  h.now().Add(preparedExportTTL),
 	}
+	// Eviction used to run only when the next export or download came in, so
+	// an export nobody fetched pinned its bytes until the next call. Drop it
+	// when its TTL passes even if the handler stays idle.
+	time.AfterFunc(preparedExportTTL, func() {
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		if prepared, ok := h.prepared[token]; ok && !h.now().Before(prepared.expires) {
+			delete(h.prepared, token)
+		}
+	})
 	return token
 }
 
