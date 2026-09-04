@@ -116,6 +116,16 @@ func (p *bridgePool) park(client *bridge.Client) {
 	p.retired = append(p.retired, client)
 }
 
+// takeRetired empties the parked list and returns it, for shutdown: those
+// clients still belong to the app and must not outlive it.
+func (p *bridgePool) takeRetired() []*bridge.Client {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	retired := p.retired
+	p.retired = nil
+	return retired
+}
+
 // unpark removes a parked client, reporting whether this call is the one that
 // owns closing it. Both the idle-reaper and the grace-period timer race for it.
 func (p *bridgePool) unpark(client *bridge.Client) bool {

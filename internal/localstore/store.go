@@ -1764,6 +1764,10 @@ func (s *Store) RecordEvent(event types.BridgeEvent) error {
 		return nil
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
+	// Order events by when they happened, not by when the writer goroutine
+	// got to them: recovery reads a task's history back ORDER BY created_at
+	// and treats the last row as the current state.
+	recordedAt := eventRecordedAt(event, now)
 	status := statusFromEvent(event.Type)
 	documentType := nullableString(stringPayload(event, "document_type"))
 	topic := nullableString(stringPayload(event, "topic"))
@@ -1790,11 +1794,11 @@ func (s *Store) RecordEvent(event types.BridgeEvent) error {
 		_ = tx.Rollback()
 		return fmt.Errorf("localstore: marshal payload: %w", err)
 	}
-	eventID := storedEventID(event, now)
+	eventID := storedEventID(event, recordedAt)
 	if _, err := tx.Exec(
 		`INSERT OR REPLACE INTO task_events(event_id, task_id, type, payload_json, created_at, request_id)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
-		eventID, event.TaskID, event.Type, string(payloadJSON), now, event.RequestID,
+		eventID, event.TaskID, event.Type, string(payloadJSON), recordedAt, event.RequestID,
 	); err != nil {
 		_ = tx.Rollback()
 		return fmt.Errorf("localstore: insert event: %w", err)
@@ -2502,6 +2506,22 @@ func nullableString(v string) any {
 		return nil
 	}
 	return v
+}
+
+// eventRecordedAt is the event's own timestamp when it carries a parseable
+// one, otherwise the write time.
+func eventRecordedAt(event types.BridgeEvent, fallback string) string {
+	ts := strings.TrimSpace(event.TS)
+	if ts == "" {
+		return fallback
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, ts)
+	if err != nil {
+		if parsed, err = time.Parse(time.RFC3339, ts); err != nil {
+			return fallback
+		}
+	}
+	return parsed.UTC().Format(time.RFC3339Nano)
 }
 
 func storedEventID(event types.BridgeEvent, now string) string {
