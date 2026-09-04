@@ -44,8 +44,8 @@ import { useLocale, useT } from "./i18n";
 import { maybeNotify } from "./notifications";
 import { computeTaskSignals, failedTaskIds, readSeenFailures, sidebarSignal, taskNotificationBody, writeSeenFailures } from "./taskSignals";
 import { pollTaskHistoryUntilTerminal } from "./taskHistoryPoll";
-import { respondToPlanReview } from "./presentation/planReviewResponse";
-import { responseForPptxQuestion } from "./presentation/pptxQuestionResponse";
+import { resolveFollowUpTarget, runFollowUpTask, type FollowUpDeps, type PendingGenerate } from "./flows/followUpTask";
+import { resumeInteractiveTask, type OutlineSection } from "./flows/resumeTask";
 import { errorMessage, recordValue, trimmedStringValue as stringValue } from "./utils/values";
 import { classifyError, classifyStatusEvent, extractStderr, stripFailureTag, type FailureKind } from "./failureKind";
 import { fileExtension, fileNameFromPath } from "./utils/path";
@@ -85,21 +85,6 @@ export function writeStoredAppRoute(route: StoredAppRoute, storage?: Pick<Storag
     // Route persistence is best-effort; in-memory navigation remains usable.
   }
 }
-
-
-type PendingGenerate = {
-  localTaskId: string;
-  context?: TaskContextPatch;
-  input: {
-    prompt: string;
-    generationMode?: GenerateInput["generationMode"];
-    sourceFile?: string;
-    referenceImages?: string[];
-    imageRatio?: GenerateInput["imageRatio"];
-    fps?: number;
-  };
-  parentTaskId?: string;
-};
 
 export interface RecoverableTaskExpectation {
   documentType: string;
@@ -1020,76 +1005,52 @@ function OfficeDexApp() {
     }
   }, [clearError, refreshProjectLists, recordError]);
 
+  const followUpDeps = useMemo<FollowUpDeps>(() => ({
+    pending: pendingGenerateRef.current,
+    setState,
+    showTask: (taskId) => {
+      setSelectedTaskID({ kind: "task", id: taskId });
+      setActiveNav("document");
+    },
+    setBusy,
+    recordError,
+    refreshProjectLists,
+    onSettled: nudgeForTaskTransition,
+  }), [recordError, refreshProjectLists, nudgeForTaskTransition]);
+
   const continueGeneration = useCallback(async (documentType: string, prompt: string, referenceImages?: string[], imageRatio?: GenerateInput["imageRatio"], fps?: number) => {
     if (forceUpdate) {
       recordError("Update required before continuing", "setup");
       return;
     }
     const parentTaskId = conversationTasks.at(-1)?.id;
-    const parentTask = parentTaskId ? state.tasks[parentTaskId] : undefined;
-    const targetWorkspace = parentTask?.workspaceId
-      ? workspaces.find((workspace) => workspace.id === parentTask.workspaceId)
-      : (!parentTask ? activeWorkspace : undefined);
-    const noProject = Boolean(parentTask && !parentTask.workspaceId);
+    const target = resolveFollowUpTarget(parentTaskId ? state.tasks[parentTaskId] : undefined, workspaces, activeWorkspace, conversationId);
     clearError();
     const topic = summarizePrompt(prompt);
-    const localTaskId = createLocalTaskId();
     const generationMode = generationModeForDocumentType(documentType);
-    const context: TaskContextPatch = {
+    const input: PendingGenerate["input"] = {
+      prompt,
+      ...(generationMode ? { generationMode } : {}),
+      referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
+      imageRatio,
+      fps,
+    };
+    await runFollowUpTask(followUpDeps, { localTaskId: createLocalTaskId(), documentType, topic, input, target }, () => officecli.generate({
+      documentType: documentType as GenerateInput["documentType"],
+      workspaceId: target.targetWorkspace?.id,
+      noProject: target.noProject,
       conversationId,
-      parentTaskId,
-      ...(targetWorkspace ? { workspaceId: targetWorkspace.id, workspacePath: targetWorkspace.path } : {}),
-    };
-    const pending: PendingGenerate = {
-      localTaskId,
-      context,
-      input: {
-        prompt,
-        ...(generationMode ? { generationMode } : {}),
-        referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
-        imageRatio,
-        fps,
-      },
-      parentTaskId,
-    };
-    pendingGenerateRef.current.set(localTaskId, pending);
-    const pendingInput = pending.input;
-    setState((current) => startLocalTask(current, localTaskId, pendingInput, { documentType, topic }, parentTaskId, context));
-    setSelectedTaskID({ kind: "task", id: localTaskId });
-    setActiveNav("document");
-    setBusy(false);
-    try {
-      const result = await officecli.generate({
-        documentType: documentType as GenerateInput["documentType"],
-        workspaceId: targetWorkspace?.id,
-        noProject,
-        conversationId,
-        parentTaskId,
-        topic,
-        prompt,
-        ...(generationMode ? { generationMode } : {}),
-        enableImages: persistedSettings.defaults.enableImages,
-        imageQuality: persistedSettings.defaults.imageQuality,
-        referenceImages,
-        imageRatio,
-        fps,
-      });
-      if (pendingGenerateRef.current.delete(localTaskId) && result.taskId) {
-        setState((current) => promoteLocalTask(current, localTaskId, result.taskId, pending.input, parentTaskId, pending.context));
-        setSelectedTaskID({ kind: "task", id: result.taskId });
-        setActiveNav("document");
-        refreshProjectLists();
-      }
-    } catch (error) {
-      if (!pendingGenerateRef.current.delete(localTaskId)) return;
-      setState((current) => discardLocalTask(current, localTaskId));
-      const text = errorMessage(error);
-      recordError(text, classifyError(text), extractStderr(text));
-    } finally {
-      setBusy(false);
-      nudgeForTaskTransition();
-    }
-  }, [forceUpdate, recordError, clearError, persistedSettings.defaults, nudgeForTaskTransition, conversationTasks, conversationId, state.tasks, workspaces, activeWorkspace, refreshProjectLists]);
+      parentTaskId: target.parentTaskId,
+      topic,
+      prompt,
+      ...(generationMode ? { generationMode } : {}),
+      enableImages: persistedSettings.defaults.enableImages,
+      imageQuality: persistedSettings.defaults.imageQuality,
+      referenceImages,
+      imageRatio,
+      fps,
+    }));
+  }, [forceUpdate, recordError, clearError, persistedSettings.defaults, followUpDeps, conversationTasks, conversationId, state.tasks, workspaces, activeWorkspace]);
 
   const continueModify = useCallback(async (documentType: string, prompt: string) => {
     if (forceUpdate) {
@@ -1102,57 +1063,19 @@ function OfficeDexApp() {
       recordError("No source document to modify", "other");
       return;
     }
-    const parentTaskId = parent?.id;
-    const targetWorkspace = parent?.workspaceId
-      ? workspaces.find((workspace) => workspace.id === parent.workspaceId)
-      : (!parent ? activeWorkspace : undefined);
-    const noProject = Boolean(parent && !parent.workspaceId);
+    const target = resolveFollowUpTarget(parent, workspaces, activeWorkspace, conversationId);
     clearError();
     const topic = summarizePrompt(prompt);
-    const localTaskId = createLocalTaskId();
-    const context: TaskContextPatch = {
+    await runFollowUpTask(followUpDeps, { localTaskId: createLocalTaskId(), documentType, topic, input: { prompt, sourceFile }, target }, () => officecli.modify({
+      documentType: documentType as ModifyInput["documentType"],
+      workspaceId: target.targetWorkspace?.id,
+      noProject: target.noProject,
       conversationId,
-      parentTaskId,
-      ...(targetWorkspace ? { workspaceId: targetWorkspace.id, workspacePath: targetWorkspace.path } : {}),
-    };
-    const pending: PendingGenerate = {
-      localTaskId,
-      context,
-      input: { prompt, sourceFile },
-      parentTaskId,
-    };
-    pendingGenerateRef.current.set(localTaskId, pending);
-    const pendingInput = pending.input;
-    setState((current) => startLocalTask(current, localTaskId, pendingInput, { documentType, topic }, parentTaskId, context));
-    setSelectedTaskID({ kind: "task", id: localTaskId });
-    setActiveNav("document");
-    setBusy(false);
-    try {
-      const result = await officecli.modify({
-        documentType: documentType as ModifyInput["documentType"],
-        workspaceId: targetWorkspace?.id,
-        noProject,
-        conversationId,
-        parentTaskId,
-        sourceFile,
-        prompt,
-      });
-      if (pendingGenerateRef.current.delete(localTaskId) && result.taskId) {
-        setState((current) => promoteLocalTask(current, localTaskId, result.taskId, pending.input, parentTaskId, pending.context));
-        setSelectedTaskID({ kind: "task", id: result.taskId });
-        setActiveNav("document");
-        refreshProjectLists();
-      }
-    } catch (error) {
-      if (!pendingGenerateRef.current.delete(localTaskId)) return;
-      setState((current) => discardLocalTask(current, localTaskId));
-      const text = errorMessage(error);
-      recordError(text, classifyError(text), extractStderr(text));
-    } finally {
-      setBusy(false);
-      nudgeForTaskTransition();
-    }
-  }, [forceUpdate, recordError, clearError, nudgeForTaskTransition, conversationTasks, conversationId, workspaces, activeWorkspace, refreshProjectLists]);
+      parentTaskId: target.parentTaskId,
+      sourceFile,
+      prompt,
+    }));
+  }, [forceUpdate, recordError, clearError, followUpDeps, conversationTasks, conversationId, workspaces, activeWorkspace]);
 
   const retry = useCallback(() => {
     clearError();
@@ -1253,62 +1176,8 @@ function OfficeDexApp() {
     await continueModify("pptx", instruction);
   }, [continueModify]);
 
-  const resumePptxTask = useCallback(async (task: DesktopTask, outline?: Array<{ id: string; title: string; detail?: string; estimatedSlides?: number; slide?: number }>, questionAnswer?: TaskQuestionAnswer) => {
-    // Send the plan decision through the typed option channel.  Using a
-    // freeform "approve" answer is ambiguous to older OfficeCLI runtimes and
-    // can be interpreted as a revision/continuation, which reopens the plan
-    // gate indefinitely.  Non-plan questions still use the existing
-    // continuation answer.
-    const eventQuestion = [...(task.events ?? [])].reverse().find((event) => event.type === "task.question");
-    const eventQuestionId = eventQuestion?.payload && typeof eventQuestion.payload.id === "string" ? eventQuestion.payload.id : undefined;
-    const waitingStatus = task.status === "plan_review" ? "plan_review" : "question";
-    setState((current) => markTaskContinuing(current, task.id));
-    try {
-      if (task.status === "plan_review") {
-        const answer = outline && outline.length > 0
-          ? JSON.stringify({ sections: outline.map(({ id, title, detail, estimatedSlides, slide }, index) => ({ id, slide: slide ?? index + 1, title, purpose: detail, estimatedSlides })) })
-          : "";
-        await respondToPlanReview(officecli, task, "approve", answer);
-        setState((current) => finishTaskContinuing(current, task.id));
-        void pollTaskHistoryUntilTerminal(task.id, () => officecli.getTaskHistory(50), (entry) => {
-          setState((current) => entry.events.reduce((next, event) => applyTaskEvent(next, event), current));
-        }, { intervalMs: 1_000, maxAttempts: 30 });
-        return;
-      }
-      await officecli.respond(questionAnswer ? {
-        taskId: task.id,
-        questionId: questionAnswer.questionId || eventQuestionId,
-        answer: questionAnswer.answer,
-        ...(questionAnswer.optionId ? { optionId: questionAnswer.optionId } : {}),
-      } : responseForPptxQuestion(task, eventQuestionId));
-      setState((current) => finishTaskContinuing(current, task.id));
-      void pollTaskHistoryUntilTerminal(task.id, () => officecli.getTaskHistory(50), (entry) => {
-        setState((current) => entry.events.reduce((next, event) => applyTaskEvent(next, event), current));
-      }, { intervalMs: 1_000, maxAttempts: 30 });
-    } catch (error) {
-      // The browser bridge can briefly retain a stale task snapshot after the
-      // runtime has already consumed its gate. Reconciliation will apply the
-      // resulting events; do not surface a false actionable error to users.
-      const message = error instanceof Error ? error.message : String(error);
-      if (/no pending (runtime )?input/i.test(message)) {
-        setState((current) => finishTaskContinuing(current, task.id));
-        // The bridge may have consumed the gate just before the UI click. Pull
-        // the durable event history immediately so the stage leaves the stale
-        // plan_review snapshot instead of looking frozen.
-        try {
-          const entries = await officecli.getTaskHistory(50);
-          const entry = entries.find((candidate) => candidate.taskId === task.id);
-          if (entry) {
-            setState((current) => entry.events.reduce((next, event) => applyTaskEvent(next, event), current));
-          }
-        } catch {
-          // The normal reconciliation loop remains the fallback.
-        }
-        return;
-      }
-      setState((current) => restoreTaskInteractiveGate(current, task.id, waitingStatus));
-      throw error;
-    }
+  const resumePptxTask = useCallback(async (task: DesktopTask, outline?: OutlineSection[], questionAnswer?: TaskQuestionAnswer) => {
+    await resumeInteractiveTask({ task, outline, questionAnswer }, { api: officecli, setState });
   }, []);
 
   const answerDocumentQuestion = useCallback(async (task: DesktopTask, answer: TaskQuestionAnswer) => {
@@ -1836,20 +1705,6 @@ function OfficeDexApp() {
           <HomeScreen
             files={recentFiles}
             attentionTasks={tasks}
-            onRetryTask={retryTaskGeneration}
-            onSteerTask={steerPptxTask}
-            onResumeTask={resumePptxTask}
-            onAnswerTask={(task, answer) => resumePptxTask(task, undefined, answer)}
-            onCancelTask={async (task) => {
-              await officecli.cancel(task.id);
-              setState((current) => applyTaskEvent(current, {
-                event_id: `local-cancel-${task.id}-${Date.now()}`,
-                task_id: task.id,
-                type: "task.cancelled",
-                ts: new Date().toISOString(),
-                payload: { message: t("tasks.cancelled") },
-              }));
-            }}
             onStartTask={startTaskFromHome}
             productionTaskId={stageFirstTaskId}
             productionEditor={previewGrant && previewArtifact?.taskId === stageFirstTaskId ? {
@@ -1863,16 +1718,27 @@ function OfficeDexApp() {
             workspaces={workspaces}
             onOpenFile={openRecentFile}
             onRemoveFile={removeRecentFile}
-            onPickTaskFile={pickHomeTaskFile}
-            onPickTaskDirectory={pickHomeTaskDirectory}
-            onPickReferenceImages={pickHomeReferenceImages}
-            onPickReferenceTextFiles={pickHomeReferenceTextFiles}
             droppedTaskPaths={droppedTaskPaths}
-            onSelectWorkspace={selectHomeWorkspace}
-            onSelectAllWorkspaces={selectAllHomeFiles}
-            onAddWorkspace={addWorkspace}
-            onOpenTask={openTaskFromHome}
             onRetryRecentFiles={() => void refreshRecentFiles(homeWorkspaceId)}
+            pickers={{ taskFile: pickHomeTaskFile, taskDirectory: pickHomeTaskDirectory, referenceImages: pickHomeReferenceImages, referenceTextFiles: pickHomeReferenceTextFiles }}
+            workspaceActions={{ select: selectHomeWorkspace, selectAll: selectAllHomeFiles, add: addWorkspace }}
+            taskActions={{
+              open: openTaskFromHome,
+              retry: retryTaskGeneration,
+              steer: steerPptxTask,
+              resume: resumePptxTask,
+              answer: (task, answer) => resumePptxTask(task, undefined, answer),
+              cancel: async (task) => {
+                await officecli.cancel(task.id);
+                setState((current) => applyTaskEvent(current, {
+                  event_id: `local-cancel-${task.id}-${Date.now()}`,
+                  task_id: task.id,
+                  type: "task.cancelled",
+                  ts: new Date().toISOString(),
+                  payload: { message: t("tasks.cancelled") },
+                }));
+              },
+            }}
           />
         ) : null}
         {activeNav === "document" && documentTask ? (

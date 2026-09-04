@@ -27,6 +27,31 @@ import "../styles/home.css";
 
 type HomeDocumentType = Extract<DocumentType, "pptx" | "img" | "gif" | "docx" | "xlsx">;
 
+/** What the intake form may ask the desktop to browse for. */
+export interface HomePickers {
+  taskFile?: () => Promise<string | undefined>;
+  taskDirectory?: () => Promise<string | undefined>;
+  referenceImages?: () => Promise<string[]>;
+  referenceTextFiles?: () => Promise<string[]>;
+}
+
+/** Everything a listed task can be asked to do. */
+export interface HomeTaskActions {
+  open?: (taskId: string) => void;
+  retry?: (task: DesktopTask) => void;
+  steer?: (task: DesktopTask, instruction: string) => void | Promise<void>;
+  resume?: (task: DesktopTask, outline?: Array<{ id: string; title: string; detail?: string; estimatedSlides?: number }>) => void | Promise<void>;
+  answer?: (task: DesktopTask, answer: TaskQuestionAnswer) => void | Promise<void>;
+  cancel?: (task: DesktopTask) => void | Promise<void>;
+  delete?: (task: DesktopTask) => void | Promise<void>;
+}
+
+export interface HomeWorkspaceActions {
+  select?: (workspaceId: string) => void | Promise<void>;
+  selectAll?: () => void;
+  add?: () => void;
+}
+
 export interface HomeScreenProps {
   files: RecentFile[];
   attentionTasks?: DesktopTask[];
@@ -38,25 +63,14 @@ export interface HomeScreenProps {
   /** Retained as an optional embedding hook; Home intake is the primary creation path. */
   onCreate?: (documentType: HomeDocumentType) => void | Promise<void>;
   onRemoveFile: (filePath: string) => void;
-  onPickTaskFile?: () => Promise<string | undefined>;
-  onPickTaskDirectory?: () => Promise<string | undefined>;
-  onPickReferenceImages?: () => Promise<string[]>;
-  onPickReferenceTextFiles?: () => Promise<string[]>;
+  onRetryRecentFiles?: () => void;
+  pickers?: HomePickers;
   droppedTaskPaths?: { paths: string[]; seq: number };
-  onSelectWorkspace?: (workspaceId: string) => void | Promise<void>;
-  onSelectAllWorkspaces?: () => void;
-  onAddWorkspace?: () => void;
+  workspaceActions?: HomeWorkspaceActions;
   onStartTask?: (input: HomeTaskIntake) => void | Promise<void>;
-  onOpenTask?: (taskId: string) => void;
-  onRetryTask?: (task: DesktopTask) => void;
-  onSteerTask?: (task: DesktopTask, instruction: string) => void | Promise<void>;
-  onResumeTask?: (task: DesktopTask, outline?: Array<{ id: string; title: string; detail?: string; estimatedSlides?: number }>) => void | Promise<void>;
-  onAnswerTask?: (task: DesktopTask, answer: TaskQuestionAnswer) => void | Promise<void>;
-  onCancelTask?: (task: DesktopTask) => void | Promise<void>;
-  onDeleteTask?: (task: DesktopTask) => void | Promise<void>;
+  taskActions?: HomeTaskActions;
   productionTaskId?: string;
   productionEditor?: Omit<PresentationEditorFrameProps, "previewToken" | "fileName"> & { previewToken: string; fileName: string };
-  onRetryRecentFiles?: () => void;
 }
 
 interface HomeCategory {
@@ -105,7 +119,10 @@ const HOME_TEMPLATES: HomeTemplate[] = [
   { id: "budget", type: "xlsx", icon: "account_balance_wallet", minutes: 2 },
 ];
 
-export function HomeScreen({ files, attentionTasks = [], loading, error, activeWorkspaceId, workspaces = [], onOpenFile, onRemoveFile, onPickTaskFile, onPickTaskDirectory, onPickReferenceImages, onPickReferenceTextFiles, droppedTaskPaths, onSelectWorkspace, onSelectAllWorkspaces, onAddWorkspace, onStartTask, onOpenTask, onRetryTask, onSteerTask, onResumeTask, onAnswerTask, onCancelTask, onDeleteTask, productionTaskId, productionEditor, onRetryRecentFiles }: HomeScreenProps) {
+export function HomeScreen({ files, attentionTasks = [], loading, error, activeWorkspaceId, workspaces = [], onOpenFile, onRemoveFile, pickers = {}, droppedTaskPaths, workspaceActions = {}, onStartTask, taskActions = {}, productionTaskId, productionEditor, onRetryRecentFiles }: HomeScreenProps) {
+  const { taskFile: onPickTaskFile, taskDirectory: onPickTaskDirectory, referenceImages: onPickReferenceImages, referenceTextFiles: onPickReferenceTextFiles } = pickers;
+  const { select: onSelectWorkspace, selectAll: onSelectAllWorkspaces, add: onAddWorkspace } = workspaceActions;
+  const { open: onOpenTask, retry: onRetryTask, steer: onSteerTask, resume: onResumeTask, answer: onAnswerTask, cancel: onCancelTask, delete: onDeleteTask } = taskActions;
   const t = useT();
   const [prompt, setPrompt] = useState("");
   const [animatedPlaceholder, setAnimatedPlaceholder] = useState("");

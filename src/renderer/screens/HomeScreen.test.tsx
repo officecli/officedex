@@ -28,12 +28,9 @@ function renderHome(overrides: Partial<React.ComponentProps<typeof HomeScreen>> 
     onCreate: vi.fn(),
     onOpenFile: vi.fn(),
     onRemoveFile: vi.fn(),
-    onPickTaskFile: vi.fn(),
-    onPickTaskDirectory: vi.fn(),
-    onPickReferenceImages: vi.fn(async () => []),
+    pickers: { taskFile: vi.fn(), taskDirectory: vi.fn(), referenceImages: vi.fn(async () => []) },
     onStartTask: vi.fn(),
-    onOpenTask: vi.fn(),
-    onRetryTask: vi.fn(),
+    taskActions: { open: vi.fn(), retry: vi.fn() },
     ...overrides,
   };
   render(<LocaleProvider value={locale}><HomeScreen {...props} /></LocaleProvider>);
@@ -82,7 +79,7 @@ describe("HomeScreen", () => {
 
   it("keeps image and GIF controls in Home instead of opening a chat form", async () => {
     const onPickReferenceImages = vi.fn(async () => ["/tmp/product.png"]);
-    const props = renderHome({ onPickReferenceImages });
+    const props = renderHome({ pickers: { referenceImages: onPickReferenceImages } });
     fireEvent.click(screen.getByRole("button", { name: "Image" }));
     fireEvent.click(screen.getByRole("button", { name: /Add reference|Add source or reference/ }));
     fireEvent.click(await screen.findByRole("menuitem", { name: /^Reference images/ }));
@@ -152,7 +149,7 @@ describe("HomeScreen", () => {
   it("binds an added file to the task instead of opening it", async () => {
     const onPickTaskFile = vi.fn(async () => "/tmp/supplier.xlsx");
     const props = renderHome({
-      onPickTaskFile,
+      pickers: { taskFile: onPickTaskFile },
     });
     fireEvent.click(screen.getByRole("button", { name: "Add reference" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: /^Reference file/ }));
@@ -176,7 +173,7 @@ describe("HomeScreen", () => {
   });
 
   it("shows file picker failures inside the task intake", async () => {
-    renderHome({ onPickTaskFile: vi.fn(async () => { throw new Error("File picker timed out"); }) });
+    renderHome({ pickers: { taskFile: vi.fn(async () => { throw new Error("File picker timed out"); }) } });
     fireEvent.click(screen.getByRole("button", { name: "Add reference" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: /^Reference file/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent("File picker timed out");
@@ -208,7 +205,7 @@ describe("HomeScreen", () => {
     expect(screen.getByRole("button", { name: "Open task Running task" })).toBeTruthy();
 
     fireEvent.click(within(attention).getByRole("button", { name: /Client proposal/i }));
-    expect(props.onOpenTask).toHaveBeenCalledWith("task-review");
+    expect(props.taskActions?.open).toHaveBeenCalledWith("task-review");
   });
 
   it("offers retry and dismiss on a failed task card", () => {
@@ -222,7 +219,7 @@ describe("HomeScreen", () => {
     expect(screen.getByText("render failed: layout validation")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-    expect(props.onRetryTask).toHaveBeenCalledWith(expect.objectContaining({ id: "task-failed" }));
+    expect(props.taskActions?.retry).toHaveBeenCalledWith(expect.objectContaining({ id: "task-failed" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Dismiss Broken deck" }));
     expect(document.querySelector(".home-task-row--failed")).toBeNull();
