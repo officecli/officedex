@@ -6,6 +6,7 @@ import { useAgentClientTools } from "./useAgentClientTools";
 import { useVerticalPanels } from "./spreadsheet/useVerticalPanels";
 import { executeActiveEditorClientTool, waitForActiveEditorSurface, type ActiveEditorSurface } from "./activeEditorClientTools";
 import { applyTaskEvent, attachTaskContext, createInitialTaskState, deleteTask, discardLocalTask, finishTaskContinuing, getRunLineage, markTaskContinuing, promoteLocalTask, restoreTaskInteractiveGate, startLocalTask, type TaskContextPatch, type TaskState } from "./taskState";
+import { STALL_POLL_INTERVAL_MS, markStalledTasks } from "./stallDetector";
 import { officecli } from "./bridge";
 import { useRecentFiles } from "./useRecentFiles";
 import { defaultGenerateInput, type NavKey } from "./defaults";
@@ -538,25 +539,9 @@ function OfficeDexApp() {
   }, [firstTaskID, selectedTaskID.kind]);
 
   useEffect(() => {
-    const STALL_THRESHOLD = 300_000;
     const interval = setInterval(() => {
-      setState((current) => {
-        let changed = false;
-        const now = Date.now();
-        const updatedTasks = { ...current.tasks };
-        for (const id of current.taskOrder) {
-          const task = updatedTasks[id];
-          if (!task || task.status !== "running") continue;
-          const lastActivity = task.lastProgressAt ?? (task.events[0]?.ts ? Date.parse(task.events[0].ts) : undefined);
-          if (lastActivity === undefined) continue;
-          if (now - lastActivity > STALL_THRESHOLD && !task.stalledSince) {
-            updatedTasks[id] = { ...task, stalledSince: now };
-            changed = true;
-          }
-        }
-        return changed ? { ...current, tasks: updatedTasks } : current;
-      });
-    }, 30_000);
+      setState((current) => markStalledTasks(current, Date.now()));
+    }, STALL_POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, []);
 
