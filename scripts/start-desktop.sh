@@ -4,8 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OFFICEDEX_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-APP_PATH="${OFFICEDEX_APP_PATH:-${OFFICEDEX_DIR}/build/bin/OfficeDex.app}"
-APP_EXECUTABLE="${APP_PATH}/Contents/MacOS/officedex"
+BUILT_APP_EXECUTABLE="${OFFICEDEX_DIR}/build/bin/OfficeDex.app/Contents/MacOS/officedex"
 USER_DATA_DIR="${OFFICEDEX_DEV_USER_DATA_DIR:-${HOME}/Library/Application Support/OfficeDex-Test}"
 PLATFORM_BASE_URL="${OFFICECLI_DEV_PLATFORM_BASE_URL:-https://officecli.shimodev.com}"
 PROFILE="${OFFICE_CLI_PROFILE:-dev}"
@@ -16,10 +15,11 @@ usage() {
   cat <<'EOF'
 Usage: scripts/start-desktop.sh [--dry-run]
 
-Starts this checkout's build/bin/OfficeDex.app with an isolated test profile.
+Starts the current source in Wails desktop development mode with an isolated
+test profile. The renderer still runs inside the native desktop WebView, so
+font and platform behavior match the desktop client rather than a browser tab.
 
 Environment overrides:
-  OFFICEDEX_APP_PATH                 Path to OfficeDex.app
   OFFICEDEX_DEV_USER_DATA_DIR        Test user-data directory
   OFFICE_CLI_PROFILE                 OfficeCLI profile (default: dev)
   OFFICECLI_DEV_PLATFORM_BASE_URL    Development platform URL
@@ -38,12 +38,6 @@ done
 
 if [[ "${OSTYPE}" != darwin* ]]; then
   echo "[start-desktop] this launcher currently supports macOS only" >&2
-  exit 1
-fi
-
-if [[ ! -x "${APP_EXECUTABLE}" ]]; then
-  echo "[start-desktop] local app is missing: ${APP_PATH}" >&2
-  echo "[start-desktop] build it first with: npm run build:local:latest" >&2
   exit 1
 fi
 
@@ -80,27 +74,29 @@ if [[ -z "${MOP_CONVERT_BIN}" ]]; then
   echo "[start-desktop] set OFFICEDEX_MOP_CONVERT_BIN to enable it" >&2
 fi
 
-if [[ "${DRY_RUN}" != true ]] && pgrep -f "^${APP_EXECUTABLE}$" >/dev/null 2>&1; then
-  echo "[start-desktop] this checkout is already running: ${APP_EXECUTABLE}"
-  exit 0
+if [[ "${DRY_RUN}" != true ]] && pgrep -f "^${BUILT_APP_EXECUTABLE}$" >/dev/null 2>&1; then
+  echo "[start-desktop] the packaged local App is still running" >&2
+  echo "[start-desktop] quit OfficeDex before starting desktop dev mode" >&2
+  exit 1
 fi
 
 command=(
-  open -n -F
-  --env "OFFICE_CLI_PROFILE=${PROFILE}"
-  --env "OFFICECLI_DEV_PLATFORM_BASE_URL=${PLATFORM_BASE_URL}"
-  --env "OFFICEDEX_DEV_USER_DATA_DIR=${USER_DATA_DIR}"
+  env
+  "OFFICE_CLI_PROFILE=${PROFILE}"
+  "OFFICECLI_DEV_PLATFORM_BASE_URL=${PLATFORM_BASE_URL}"
+  "OFFICEDEX_DEV_USER_DATA_DIR=${USER_DATA_DIR}"
 )
 
 if [[ -d "${PRESENTATION_SOURCE}" ]]; then
-  command+=(--env "PRESENTATION_SOURCE_DIR=${PRESENTATION_SOURCE}")
+  command+=("PRESENTATION_SOURCE_DIR=${PRESENTATION_SOURCE}")
 fi
 if [[ -n "${MOP_CONVERT_BIN}" ]]; then
-  command+=(--env "OFFICEDEX_MOP_CONVERT_BIN=${MOP_CONVERT_BIN}")
+  command+=("OFFICEDEX_MOP_CONVERT_BIN=${MOP_CONVERT_BIN}")
 fi
-command+=("${APP_PATH}")
+command+=(npm run dev)
 
-echo "[start-desktop] app: ${APP_PATH}"
+echo "[start-desktop] mode: Wails desktop dev"
+echo "[start-desktop] source: ${OFFICEDEX_DIR}"
 echo "[start-desktop] user data: ${USER_DATA_DIR}"
 if [[ -n "${MOP_CONVERT_BIN}" ]]; then
   echo "[start-desktop] mop-convert: ${MOP_CONVERT_BIN}"
@@ -113,5 +109,5 @@ if [[ "${DRY_RUN}" == true ]]; then
   exit 0
 fi
 
+cd "${OFFICEDEX_DIR}"
 "${command[@]}"
-echo "[start-desktop] started"
