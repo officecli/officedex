@@ -30,6 +30,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -209,11 +210,19 @@ type App struct {
 	// and a dense op stream backed up into the child process's stdout pipe.
 	eventWrites   chan func()
 	eventWritesWG sync.WaitGroup
-	previewReg    *preview.Registry
-	demoFlow      *demoflow.Engine
+	// eventWritesMu guards the queue's lifecycle: queueEventWrite holds it
+	// for reading while it enqueues, drainEventWrites takes it for writing to
+	// close. Without it a task event arriving from a retired bridge during
+	// shutdown could send on the closed channel and panic the app on exit.
+	eventWritesMu     sync.RWMutex
+	eventWritesClosed bool
+	previewReg        *preview.Registry
+	demoFlow          *demoflow.Engine
 
 	mu             sync.Mutex
 	cachedSettings types.UserSettings
+	// runtimeMode mirrors cachedSettings' provider choice for lock-free readers.
+	runtimeMode atomic.Value
 	// bridgeClients holds one live child process per working directory, keyed
 	// by that cwd. A single slot meant starting a task in a second workspace
 	// swapped the first workspace's process out, and every later call for the
@@ -304,6 +313,7 @@ func NewApp() (*App, error) {
 	}
 	app.xlsxEditorService = xlsxeditor.NewService(previewReg, office2modoc.New(repoRoot), os.TempDir())
 	app.pptxEditorService = pptxeditor.NewService(previewReg, pptxeditor.NewCLIConverter(repoRoot), os.TempDir())
+	app.storeRuntimeModeSnapshot(cached)
 	app.startEventWriter()
 	app.timelineStore = timeline.New(filepath.Join(workspaceDir, "timeline"), pptxeditor.NewCLIConverter(repoRoot))
 	blankTemplatePath := filepath.Join(userDataDir, "blank-presentation.pptx")
@@ -467,45 +477,70 @@ func (a *App) recordTaskEventBestEffort(event types.BridgeEvent) {
 	if a.localStore == nil {
 		return
 	}
-	if err := a.localStore.RecordEvent(event); err != nil {
-		ctx := a.ctx
-		if ctx == nil {
-			return
-		}
-		wailsruntime.LogWarningf(ctx, "record %s for task %s: %v; this task may not be recoverable", event.Type, event.TaskID, err)
+	if strings.TrimSpace(event.TS) == "" {
+		// Stamp locally synthesised events when they are created, not when the
+		// writer gets to them, so their order relative to bridge events is the
+		// order things happened in.
+		event.TS = time.Now().UTC().Format(time.RFC3339Nano)
 	}
+	ctx := a.ctx
+	// Same queue as the bridge's events: two write paths meant a locally
+	// written task.cancelled could land before the queued task.question that
+	// preceded it, and recovery ordered by write time saw the wrong last state.
+	a.queueEventWrite(func() {
+		if err := a.localStore.RecordEvent(event); err != nil && ctx != nil {
+			wailsruntime.LogWarningf(ctx, "record %s for task %s: %v; this task may not be recoverable", event.Type, event.TaskID, err)
+		}
+	})
 }
 
 func (a *App) startEventWriter() {
+	a.eventWritesMu.Lock()
+	defer a.eventWritesMu.Unlock()
 	a.eventWrites = make(chan func(), 256)
+	a.eventWritesClosed = false
 	a.eventWritesWG.Add(1)
-	go func() {
+	go func(queue chan func()) {
 		defer a.eventWritesWG.Done()
-		for write := range a.eventWrites {
+		for write := range queue {
 			write()
 		}
-	}()
+	}(a.eventWrites)
 }
 
 // queueEventWrite hands persistence to the writer goroutine. A full queue
 // blocks rather than dropping: recovery reads these rows back, so losing one
-// loses the input a task needs to resume.
+// loses the input a task needs to resume. Once the writer has been drained
+// (or was never started) the write runs inline instead, so a late event from
+// a child that outlived shutdown is still persisted rather than panicking on
+// a closed channel.
 func (a *App) queueEventWrite(write func()) {
-	if a.eventWrites == nil {
+	a.eventWritesMu.RLock()
+	queue := a.eventWrites
+	if queue == nil || a.eventWritesClosed {
+		a.eventWritesMu.RUnlock()
 		write()
 		return
 	}
-	a.eventWrites <- write
+	// Holding the read lock while blocked on a full queue is safe: the writer
+	// goroutine drains the queue without taking the lock, and drain waits for
+	// every in-flight enqueue before it closes the channel.
+	queue <- write
+	a.eventWritesMu.RUnlock()
 }
 
 // drainEventWrites stops the writer and waits for queued rows to land.
 func (a *App) drainEventWrites() {
-	if a.eventWrites == nil {
+	a.eventWritesMu.Lock()
+	queue := a.eventWrites
+	if queue == nil || a.eventWritesClosed {
+		a.eventWritesMu.Unlock()
 		return
 	}
-	close(a.eventWrites)
+	a.eventWritesClosed = true
+	close(queue)
+	a.eventWritesMu.Unlock()
 	a.eventWritesWG.Wait()
-	a.eventWrites = nil
 }
 
 func (a *App) shutdown(ctx context.Context) {
@@ -519,6 +554,12 @@ func (a *App) shutdown(ctx context.Context) {
 
 	for _, client := range bridgeClients {
 		client.Stop()
+	}
+	// Retired clients were replaced while they still had work in flight and
+	// are not in the pool proper. They used to survive shutdown as orphaned
+	// processes whose listeners kept firing into a closing app.
+	for _, client := range a.bridges.takeRetired() {
+		client.Close()
 	}
 	if demoFlow != nil {
 		demoFlow.Shutdown()
@@ -2452,6 +2493,7 @@ func (a *App) UpdateSettings(patch settings.Patch) (types.UserSettings, error) {
 	}
 	a.mu.Lock()
 	a.cachedSettings = merged
+	a.storeRuntimeModeSnapshot(merged)
 	workspaceChanged := patch.WorkspaceDir != nil || patch.OutputDir != nil
 	if workspaceChanged {
 		if _, err := a.effectiveWorkspaceDir(merged); err != nil {
@@ -3589,10 +3631,30 @@ func (a *App) currentRuntimeMode() types.RuntimeMode {
 // a.mu; bridge event callbacks use this to avoid blocking the stdout reader by
 // trying to acquire the same mutex twice.
 func (a *App) currentRuntimeModeLocked() types.RuntimeMode {
-	if a.cachedSettings.LlmProvider == nil {
+	return runtimeModeFor(a.cachedSettings)
+}
+
+func runtimeModeFor(s types.UserSettings) types.RuntimeMode {
+	if s.LlmProvider == nil {
 		return types.RuntimeHosted
 	}
 	return types.RuntimeCustom
+}
+
+// storeRuntimeModeSnapshot publishes the runtime mode for readers that must not
+// take a.mu (the bridge's stdout listener). Call it wherever cachedSettings
+// changes.
+func (a *App) storeRuntimeModeSnapshot(s types.UserSettings) {
+	a.runtimeMode.Store(string(runtimeModeFor(s)))
+}
+
+// runtimeModeSnapshot returns the last published runtime mode, or "" before
+// settings have loaded.
+func (a *App) runtimeModeSnapshot() types.RuntimeMode {
+	if v, ok := a.runtimeMode.Load().(string); ok {
+		return types.RuntimeMode(v)
+	}
+	return ""
 }
 
 // latestFailedEvent walks the event slice in reverse and returns the most
@@ -3857,9 +3919,10 @@ func (a *App) bridgeEventListener(client *bridge.Client) bridge.EventListener {
 			return
 		}
 		if event.Type == "task.started" {
-			a.mu.Lock()
-			mode := a.currentRuntimeModeLocked()
-			a.mu.Unlock()
+			// Read the snapshot, not App's mutex: this runs on the bridge's
+			// stdout reader, and a settings write holding a.mu while it
+			// resolves binaries used to stall the whole op stream.
+			mode := a.runtimeModeSnapshot()
 			_, env, at := a.binary.load()
 			if mode != "" {
 				if event.Payload == nil {
@@ -3882,6 +3945,17 @@ func (a *App) bridgeEventListener(client *bridge.Client) bridge.EventListener {
 				}
 			}
 		}
+		// The renderer acts on task.completed the moment it arrives, usually
+		// by asking for a preview token of the finished artifact. Grant that
+		// before emitting (an in-memory registry write) so the request cannot
+		// race the writer goroutine and fail with "artifact is not registered".
+		if event.Type == "task.completed" {
+			if artifact := artifactFromCompletedEvent(event); artifact != nil {
+				if err := a.AllowArtifact(*artifact); err != nil {
+					wailsruntime.LogWarningf(ctx, "grant completed artifact: %v", err)
+				}
+			}
+		}
 		// The renderer sees the event immediately; persistence goes to the
 		// writer goroutine so this reader can get back to the pipe.
 		emit(ctx, bridgeEventChannel, event)
@@ -3890,18 +3964,21 @@ func (a *App) bridgeEventListener(client *bridge.Client) bridge.EventListener {
 			if err := a.recordTaskEvent(persisted); err != nil {
 				wailsruntime.LogWarningf(ctx, "record task event: %v", err)
 			}
-		})
-		if event.Type == "task.completed" || event.Type == "task.failed" {
-			if a.localStore != nil && event.Payload != nil {
-				if c, ok := event.Payload["credits_charged"].(float64); ok {
-					charged := int(c)
-					mode, _ := event.Payload["credit_mode"].(string)
-					if err := a.localStore.RecordTaskCredit(event.TaskID, &charged, mode); err != nil {
-						wailsruntime.LogWarningf(ctx, "record task credit: %v", err)
+			// Credit bookkeeping is a SQLite write too; it used to run on the
+			// reader inline, right after the queue was introduced to keep
+			// SQLite off the reader.
+			if persisted.Type == "task.completed" || persisted.Type == "task.failed" {
+				if a.localStore != nil && persisted.Payload != nil {
+					if c, ok := persisted.Payload["credits_charged"].(float64); ok {
+						charged := int(c)
+						mode, _ := persisted.Payload["credit_mode"].(string)
+						if err := a.localStore.RecordTaskCredit(persisted.TaskID, &charged, mode); err != nil {
+							wailsruntime.LogWarningf(ctx, "record task credit: %v", err)
+						}
 					}
 				}
 			}
-		}
+		})
 		a.reapRetiredBridge(client)
 	}
 }

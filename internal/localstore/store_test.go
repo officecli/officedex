@@ -732,7 +732,10 @@ func TestV7ProjectionEventIdentityAndDuplicateWritesAreStable(t *testing.T) {
 	if err := store.RecordTaskContext(ctx, "stable-task", TaskContext{ConversationID: "stable-conversation"}); err != nil {
 		t.Fatal(err)
 	}
-	event := types.BridgeEvent{TaskID: "stable-task", Type: "task.progress", TS: "2026-08-27T00:00:01Z", Payload: map[string]any{"stage": "one"}}
+	// No TS on purpose: an event without its own timestamp is ordered by write
+	// time, which is what lets the replace below move it after the named event
+	// (an event carrying a TS keeps its place; see TestRecordEventOrdersByEventTimestamp).
+	event := types.BridgeEvent{TaskID: "stable-task", Type: "task.progress", Payload: map[string]any{"stage": "one"}}
 	if err := store.RecordEvent(event); err != nil {
 		t.Fatal(err)
 	}
@@ -1673,5 +1676,58 @@ func TestExistingRowsSurviveNewSchema(t *testing.T) {
 	}
 	if events[0].Payload["topic"] != "old" {
 		t.Error("old payload not preserved")
+	}
+}
+
+// The bridge's events are persisted by a writer goroutine and locally
+// synthesised events used to be written inline, so write order and event order
+// diverged. Recovery reads a task's history ORDER BY created_at and trusts the
+// last row, so created_at has to be the moment the event happened.
+func TestRecordEventOrdersByEventTimestamp(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+	later := types.BridgeEvent{EventID: "cancelled", TaskID: "ts-task", Type: "task.cancelled", TS: "2026-09-04T10:00:05Z"}
+	earlier := types.BridgeEvent{EventID: "question", TaskID: "ts-task", Type: "task.question", TS: "2026-09-04T10:00:01Z", Payload: map[string]any{"prompt": "which style?"}}
+	// Written in the wrong order, as a queued bridge event landing after an
+	// inline local one would have been.
+	if err := store.RecordEvent(later); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordEvent(earlier); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := store.db.QueryContext(ctx, `SELECT type, created_at FROM task_events WHERE task_id = 'ts-task' ORDER BY created_at ASC`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var got []string
+	for rows.Next() {
+		var typ, createdAt string
+		if err := rows.Scan(&typ, &createdAt); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, typ+"@"+createdAt)
+	}
+	want := []string{"task.question@2026-09-04T10:00:01Z", "task.cancelled@2026-09-04T10:00:05Z"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("events ordered by created_at = %v, want %v (event TS, not write time)", got, want)
+	}
+
+	// Re-recording an event with a TS must not move it.
+	if err := store.RecordEvent(earlier); err != nil {
+		t.Fatal(err)
+	}
+	var createdAt string
+	if err := store.db.QueryRowContext(ctx, `SELECT created_at FROM task_events WHERE task_id = 'ts-task' AND type = 'task.question'`).Scan(&createdAt); err != nil {
+		t.Fatal(err)
+	}
+	if createdAt != "2026-09-04T10:00:01Z" {
+		t.Fatalf("re-recording moved the event to %s", createdAt)
+	}
+
+	// An unparseable TS falls back to write time rather than failing the write.
+	if err := store.RecordEvent(types.BridgeEvent{EventID: "odd", TaskID: "ts-task", Type: "task.progress", TS: "yesterday-ish"}); err != nil {
+		t.Fatalf("unparseable TS must not fail the write: %v", err)
 	}
 }

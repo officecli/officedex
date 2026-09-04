@@ -111,12 +111,16 @@ func NewService(resolver PreviewResolver, converter Converter, tempRoot string) 
 }
 
 func (s *Service) Prepare(ctx context.Context, previewToken string) (PrepareResult, error) {
+	// Only the session table needs the lock. The import below shells out to
+	// mop-convert for up to converterTimeout; holding s.mu across it froze
+	// every other document's save and close behind one slow conversion.
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
+	closed, configured := s.closed, s.resolver != nil && s.converter != nil
+	s.mu.Unlock()
+	if closed {
 		return PrepareResult{}, ErrServiceClosed
 	}
-	if s.resolver == nil || s.converter == nil {
+	if !configured {
 		return PrepareResult{}, errors.New("pptx editor: service is not configured")
 	}
 	entry, err := s.resolver.ResolveToken(previewToken)
@@ -131,12 +135,6 @@ func (s *Service) Prepare(ctx context.Context, previewToken string) (PrepareResu
 	if err != nil {
 		return PrepareResult{}, fmt.Errorf("pptx editor: fingerprint source: %w", err)
 	}
-	// A reloaded page leaves its session behind — nothing tells the host the
-	// tab is gone — and if the file was replaced underneath it, that session
-	// can no longer save anything: it just fails on every attempt. Retire
-	// those. A session whose source still matches is somebody's open document
-	// (two panels, or a strict-mode double mount) and is left alone.
-	s.retireUnusableSessionsLocked(filePath)
 	if err := os.MkdirAll(s.tempRoot, 0o700); err != nil {
 		return PrepareResult{}, fmt.Errorf("pptx editor: create temp root: %w", err)
 	}
@@ -173,6 +171,19 @@ func (s *Service) Prepare(ctx context.Context, previewToken string) (PrepareResu
 	if err != nil || !current.equal(baseline) {
 		return PrepareResult{}, ErrSourceChanged
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		// Closed while the conversion ran; the deferred cleanup removes the
+		// directory we just filled.
+		return PrepareResult{}, ErrServiceClosed
+	}
+	// A reloaded page leaves its session behind — nothing tells the host the
+	// tab is gone — and if the file was replaced underneath it, that session
+	// can no longer save anything: it just fails on every attempt. Retire
+	// those. A session whose source still matches is somebody's open document
+	// (two panels, or a strict-mode double mount) and is left alone.
+	s.retireUnusableSessionsLocked(filePath)
 	sessionID := s.newSessionID()
 	s.sessions[sessionID] = &editSession{
 		previewToken: previewToken, filePath: filePath, directory: directory,

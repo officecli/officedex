@@ -3,9 +3,17 @@
 package atomicfile
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"syscall"
 )
+
+// Some filesystems (and Windows directory handles) do not support fsync on a
+// directory; the rename itself already happened, so treat that as success.
+func isDirSyncUnsupported(err error) bool {
+	return errors.Is(err, syscall.EINVAL) || errors.Is(err, syscall.ENOTSUP) || errors.Is(err, syscall.EBADF)
+}
 
 // WriteFile writes data to path atomically: the bytes are staged in a hidden
 // temp file beside path, fsync'd, chmod'd to perm, then renamed over path.
@@ -41,5 +49,19 @@ func WriteFile(path string, data []byte, perm os.FileMode) error {
 		return err
 	}
 	committed = true
+	// The rename is durable only once the directory entry is flushed; without
+	// this a crash right after the rename can bring back the old file.
+	return syncDir(filepath.Dir(path))
+}
+
+func syncDir(dir string) error {
+	handle, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer handle.Close()
+	if err := handle.Sync(); err != nil && !isDirSyncUnsupported(err) {
+		return err
+	}
 	return nil
 }

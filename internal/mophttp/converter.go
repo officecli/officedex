@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"officedex/internal/subprocess"
 )
 
 // converterTimeout matches the dev server's CONVERTER_TIMEOUT_MS. Large decks
@@ -74,7 +76,9 @@ func (c *CLIConverter) run(ctx context.Context, operation conversionOperation, a
 	runCtx, cancel := context.WithTimeout(ctx, converterTimeout)
 	defer cancel()
 
-	command := exec.CommandContext(runCtx, c.binary, args...)
+	// Own process group + tree kill on timeout, otherwise a stuck mop-convert
+	// leaves its helpers behind after the deadline fires.
+	command := subprocess.CommandContext(runCtx, c.binary, args...)
 	command.Env = os.Environ()
 	output, err := command.CombinedOutput()
 	if err == nil {

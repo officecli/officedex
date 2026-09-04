@@ -584,16 +584,32 @@ func extractOfficecliFromTarGz(archivePath, outPath, platform string) error {
 		if filepath.Base(hdr.Name) != binaryName {
 			continue
 		}
-		out, err := os.OpenFile(outPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
+		// Stage beside the target and rename: the previous binary may be
+		// running as a bridge child right now, and truncating it in place
+		// (the old O_TRUNC write) corrupts the mapped executable underneath
+		// that process.
+		out, err := os.CreateTemp(filepath.Dir(outPath), "."+filepath.Base(outPath)+".tmp-*")
 		if err != nil {
 			return fmt.Errorf("create binary: %w", err)
 		}
+		tmpPath := out.Name()
 		if _, err := io.Copy(out, tr); err != nil {
 			out.Close()
+			_ = os.Remove(tmpPath)
 			return fmt.Errorf("write binary: %w", err)
 		}
+		if err := out.Chmod(0o755); err != nil {
+			out.Close()
+			_ = os.Remove(tmpPath)
+			return fmt.Errorf("chmod binary: %w", err)
+		}
 		if err := out.Close(); err != nil {
+			_ = os.Remove(tmpPath)
 			return fmt.Errorf("close binary: %w", err)
+		}
+		if err := os.Rename(tmpPath, outPath); err != nil {
+			_ = os.Remove(tmpPath)
+			return fmt.Errorf("install binary: %w", err)
 		}
 		return nil
 	}

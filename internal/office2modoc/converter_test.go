@@ -328,3 +328,36 @@ func (n *fakeNative) Close() error {
 	n.closeCalls++
 	return nil
 }
+
+// The native import cannot be interrupted, so a wedged conversion used to hold
+// the caller (and the editor lock it sat behind) until the app exited. The
+// converter now returns when the context ends and lets the call finish in the
+// background.
+func TestImportXlsxReturnsWhenContextEndsDuringNativeCall(t *testing.T) {
+	inputOfficePath := filepath.Join(t.TempDir(), "input.xlsx")
+	if err := os.WriteFile(inputOfficePath, []byte("xlsx"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	native := &fakeNative{importFn: func(ImportParams) (uint8, error) {
+		<-release
+		return 0, nil
+	}}
+	converter := NewConverter(t.TempDir(), func(string) (Native, error) { return native, nil })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		done <- converter.ImportXlsx(ctx, inputOfficePath, filepath.Join(t.TempDir(), "out.modoc"), t.TempDir())
+	}()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("ImportXlsx = %v, want context.DeadlineExceeded", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("ImportXlsx did not return when its context expired")
+	}
+}

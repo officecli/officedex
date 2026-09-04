@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"officedex/internal/config"
+	"officedex/internal/subprocess"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -56,12 +57,11 @@ const converterTimeout = 180 * time.Second
 func (c *CLIConverter) run(ctx context.Context, args ...string) error {
 	runCtx, cancel := context.WithTimeout(ctx, converterTimeout)
 	defer cancel()
-	command := exec.CommandContext(runCtx, c.binary, args...)
+	// subprocess.CommandContext puts mop-convert in its own process group and
+	// kills the whole group on timeout: mop-convert spawns helpers, and killing
+	// only the parent left them holding the session directory open.
+	command := subprocess.CommandContext(runCtx, c.binary, args...)
 	command.Env = os.Environ()
-	// Kill the whole group: mop-convert spawns helpers, and killing only the
-	// parent leaves them holding the session directory open.
-	command.SysProcAttr = converterProcAttr()
-	command.WaitDelay = 5 * time.Second
 	output, err := command.CombinedOutput()
 	if err == nil {
 		return nil
