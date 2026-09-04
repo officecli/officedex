@@ -10,7 +10,7 @@ import (
 // ResolveLibraryPath returns the configured FFI library path, or the
 // repository-local default when no override is set.
 func ResolveLibraryPath(repoRoot string) (string, error) {
-	if override := os.Getenv(config.Office2ModocFFIEnv); override != "" {
+	if override := config.Trimmed(config.Office2ModocFFIEnv); override != "" {
 		if !filepath.IsAbs(override) {
 			return "", fmt.Errorf("OFFICE2MODOC_FFI_PATH must be an absolute path: %q", override)
 		}

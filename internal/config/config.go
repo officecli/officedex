@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 )
 
 // Variables naming where something lives.
@@ -38,6 +39,31 @@ const (
 	// UpdateManifestURLEnv overrides where update checks look.
 	UpdateManifestURLEnv = "OFFICEDEX_UPDATE_MANIFEST_URL"
 )
+
+// LauncherPWDEnv is the shell's working directory as the launcher saw it. A
+// GUI-launched macOS app often has "/" as its real cwd but keeps PWD; it is
+// consulted only as a local-development discovery hint.
+const LauncherPWDEnv = "PWD"
+
+// LauncherPWD returns the launcher shell's working directory, if any.
+func LauncherPWD() string { return Trimmed(LauncherPWDEnv) }
+
+// ProcessCwd is the one place the app asks for its working directory. Every
+// caller uses it to find a source checkout next to the process during
+// development; a packaged app launched from Finder gets "/" here, which is why
+// callers treat the result as a hint and never as a base for user data.
+func ProcessCwd() (string, bool) {
+	cwd, err := os.Getwd()
+	if err != nil || strings.TrimSpace(cwd) == "" {
+		return "", false
+	}
+	return cwd, true
+}
+
+// MopConvertTimeout bounds one mop-convert run. Large decks genuinely take
+// tens of seconds, so a shorter limit turns slow imports into failures. Both
+// converters (the editor's and the MOP HTTP service's) read this one value.
+const MopConvertTimeout = 180 * time.Second
 
 // Development and test-only variables. These exist so a developer can run the
 // app against a scratch profile or drive it from an end-to-end test.

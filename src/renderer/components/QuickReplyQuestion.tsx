@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, LoaderCircle } from "lucide-react";
 import { Button } from "../ui";
 import { useT } from "../i18n";
 import "./quickReplyQuestion.css";
+import { MAX_NUMBERED_OPTIONS } from "../constants/limits";
 
 export interface QuickReplyOption {
   id: string;
@@ -40,7 +41,6 @@ export interface QuickReplyQuestionProps {
 }
 
 /** Chips carry a number key only while the set is short enough to memorise at a glance. */
-const MAX_NUMBERED_OPTIONS = 4;
 
 /**
  * Quick-reply rendering of a clarification question: the question reads as an

@@ -7,6 +7,7 @@ import { officecli } from "../../bridge";
 import { DocxEditor } from "../../word/DocxEditor";
 import "../../word/wordEditor.css";
 import { useT } from "../../i18n";
+import { DOCUMENT_ZOOM, zoomIn as stepZoomIn, zoomOut as stepZoomOut } from "./zoom";
 
 interface DocxViewerProps {
   previewToken: string;
@@ -15,9 +16,6 @@ interface DocxViewerProps {
   onDirtyChange?: (dirty: boolean) => void;
 }
 
-const ZOOM_STEP = 0.15;
-const ZOOM_MIN = 0.25;
-const ZOOM_MAX = 3;
 
 type DocxMode = "edit" | "preview";
 
@@ -98,8 +96,8 @@ function DocxLayoutPreview({ previewToken, fileName }: Pick<DocxViewerProps, "pr
     doc.body.style.zoom = `${zoom}`;
   }, [zoom]);
 
-  const zoomIn = () => setZoom((z) => Math.min(z + ZOOM_STEP, ZOOM_MAX));
-  const zoomOut = () => setZoom((z) => Math.max(z - ZOOM_STEP, ZOOM_MIN));
+  const zoomIn = () => setZoom((z) => stepZoomIn(z, DOCUMENT_ZOOM));
+  const zoomOut = () => setZoom((z) => stepZoomOut(z, DOCUMENT_ZOOM));
   const zoomReset = () => setZoom(fitZoomRef.current);
 
   if (error) return <ErrorState message={error} fileName={fileName} onRetry={loadDocx} />;

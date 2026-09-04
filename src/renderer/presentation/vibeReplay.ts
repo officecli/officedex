@@ -2,6 +2,7 @@ import type { VibeOp, VibeOutline } from "../../shared/types";
 import type { PresentationEditorController } from "./PresentationEditorFrame";
 import { officecli } from "../bridge";
 import { imageProgressFromOps, type PptxImageProgress } from "./pptxProgress";
+import { EDITOR_PROBE_TIMEOUT_MS } from "../constants/timing";
 
 // This module's exports live inside long-lived closures — the running
 // sequencer, the console demo hook — so a hot swap leaves the app executing the
@@ -1043,7 +1044,7 @@ export class VibeReplaySequencer {
       const rect = this.lastAttentionRect;
       void this.controller.executeScript(
         `return await PowerPoint.run(async (context) => { context.presentation.focusAttention(${JSON.stringify(rect)}); await context.sync(); return true; });`,
-        { awaitSnapshotMs: 0, timeoutMs: 30_000 },
+        { awaitSnapshotMs: 0, timeoutMs: EDITOR_PROBE_TIMEOUT_MS },
       ).catch(() => {
         // View-only keepalive is best effort; drawing and saving must not fail
         // because an older editor declined the optional attention API.
@@ -1175,7 +1176,7 @@ export class VibeReplaySequencer {
     const session = this.controller.session?.();
     if (!session?.sessionId) return;
     try {
-      await this.controller.executeScript("return true;", { timeoutMs: 30_000 });
+      await this.controller.executeScript("return true;", { timeoutMs: EDITOR_PROBE_TIMEOUT_MS });
       await officecli.captureTimelineNode({
         taskId: this.taskId,
         previewToken: session.previewToken,
@@ -1217,7 +1218,7 @@ export class VibeReplaySequencer {
           // a budget that runs out reads to the user as a hung editor.
           const typingMs = MAX_TEXT_STEPS * (pace.charMs * 2.6 + TRIP_ALLOWANCE_MS);
           const perOpMs = 4_000 + typingMs + TRIP_ALLOWANCE_MS + pace.leadMs + pace.settleMs + pace.slideMs;
-          const budgetMs = 30_000 + chunk.length * perOpMs;
+          const budgetMs = EDITOR_PROBE_TIMEOUT_MS + chunk.length * perOpMs;
           const startedAt = performance.now();
           const images = await this.resolveImages(chunk);
           // Recording follows the drawing, not the source of the ops: the draft
@@ -1310,14 +1311,14 @@ export class VibeReplaySequencer {
           // colored frame never survives into the next editor state.
           await this.controller.executeScript(
             "return await PowerPoint.run(async (context) => { context.presentation.focusAttention(null); await context.sync(); return true; });",
-            { awaitSnapshotMs: 0, timeoutMs: 30_000 },
+            { awaitSnapshotMs: 0, timeoutMs: EDITOR_PROBE_TIMEOUT_MS },
           );
           // The local editor session journals edits and persists only on an
           // explicit save; the host bridge dispatches that flush when a script
           // runs with the default snapshot wait. Drawing scripts skip it for
           // speed (awaitSnapshotMs: 0), so flush once before exporting or the
           // export ships the blank deck.
-          await this.controller.executeScript("return true;", { timeoutMs: 30_000 });
+          await this.controller.executeScript("return true;", { timeoutMs: EDITOR_PROBE_TIMEOUT_MS });
           await this.controller.save();
           // Only now is the drawing part of the file. A viewer that opens this
           // draft again re-imports these objects, so the stream that produced

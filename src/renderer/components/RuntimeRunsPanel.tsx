@@ -4,11 +4,11 @@ import type { AgentRun } from "../../shared/types";
 import { officecli } from "../bridge";
 import { useT } from "../i18n";
 import { isExternalAgentRuntimeRun, isHistoricalRuntimeRun, runtimeStatusColor } from "../runtimeRuns";
+import { AGENT_RUN_FETCH_LIMIT } from "../constants/limits";
 
 // Historical (legacy.*) runs are the oldest entries in the append-only store, so
 // a small fetch window silently pushes them out of reach. Keep it wide enough
 // that history stays reachable instead of being quietly truncated away.
-const AGENT_RUN_FETCH_LIMIT = 500;
 
 /**
  * Diagnostics view of workflow runs: observe, cancel, retry. Deliberately does

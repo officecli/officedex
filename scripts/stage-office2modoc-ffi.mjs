@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import process from "node:process";
 
-const version = "0.1.34";
+const version = (await readFile(new URL("../office2modoc.version", import.meta.url), "utf8")).trim();
 const target = process.env.OFFICE2MODOC_TARGET || (process.platform === "darwin" ? "aarch64-apple-darwin" : process.platform === "win32" ? "x86_64-pc-windows-msvc" : `${process.arch}-unknown-linux-gnu`);
 const sourceRoot = path.resolve(process.env.OFFICE2MODOC_SOURCE_ROOT || path.join(process.cwd(), "..", "officecli-internal"));
 const assetRoot = path.join(sourceRoot, "third_party", "office2modoc-ffi", version, target);

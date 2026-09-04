@@ -14,6 +14,15 @@ func TestCurrentBridgeProtocolIsAccepted(t *testing.T) {
 	if err := checkProtocolVersionValue("2099-01-01", "9.9.9"); err != nil {
 		t.Fatalf("a newer bridge must be accepted: %v", err)
 	}
+	// The check has to be able to say no, or the two passes above prove
+	// nothing: the day before the minimum is refused, and so is a bridge that
+	// announces no protocol at all.
+	if err := checkProtocolVersionValue("2026-09-03", "0.2.120"); err == nil {
+		t.Fatal("a bridge older than MinProtocolVersion was accepted")
+	}
+	if err := checkProtocolVersionValue("", "0.1.0"); err == nil {
+		t.Fatal("a bridge announcing no protocol version was accepted")
+	}
 }
 
 // Before this gate an older bridge was accepted and then failed later, from
