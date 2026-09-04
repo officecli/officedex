@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { Artifact, DesktopTask, TaskQuestionAnswer } from "../../shared/types";
+import { getCapability } from "../../shared/types";
 import { useT } from "../i18n";
 import { QuickReplyQuestion } from "../components/QuickReplyQuestion";
 import "./documentWorkspace.css";
@@ -29,9 +30,20 @@ function documentTitle(task: DesktopTask, artifact: Artifact | null | undefined,
   return artifact?.fileName || task.topic?.trim() || task.userInput?.prompt?.trim() || t("documentWorkspace.untitled");
 }
 
+// i18n key per document type; anything unknown reads as a document (docx),
+// which is what the chain of ternaries this replaces fell through to.
+const TYPE_LABEL_KEYS: Record<string, string> = {
+  pptx: "documentWorkspace.type.pptx",
+  xlsx: "documentWorkspace.type.xlsx",
+  img: "documentWorkspace.type.img",
+  image: "documentWorkspace.type.img",
+  docx: "documentWorkspace.type.docx",
+};
+
 function typeLabel(type: string | undefined, t: Translator): string {
-  const value = type?.toLowerCase();
-  return value === "pptx" ? t("documentWorkspace.type.pptx") : value === "xlsx" ? t("documentWorkspace.type.xlsx") : value === "gif" ? "GIF" : value === "image" || value === "img" ? t("documentWorkspace.type.img") : t("documentWorkspace.type.docx");
+  const value = type?.toLowerCase() ?? "";
+  if (value === "gif") return getCapability("gif").label;
+  return t(TYPE_LABEL_KEYS[value] ?? TYPE_LABEL_KEYS.docx);
 }
 
 export function DocumentWorkspace({ task, artifact = task.artifact, preview, pptxStage, onAnswer, onApprovePlan, onCancel, onRetry, onContinue, onArtifactAction, onContinueEditing, className }: DocumentWorkspaceProps) {

@@ -162,6 +162,35 @@ type xlsxEditorService interface {
 
 var errXlsxEditorUnavailable = errors.New("XLSX editor is unavailable")
 
+// editorSessionLifecycle is what every editor service shares: the app opens
+// none of the sessions itself, but it retires stale ones at startup, closes
+// them all at shutdown and closes the ones behind a revoked preview token.
+// The three lifecycle sites used to spell out each service by name, so a new
+// editor meant editing all three.
+type editorSessionLifecycle interface {
+	CleanupStale() error
+	CloseAll() error
+	CloseByToken(string) error
+}
+
+type editorSession struct {
+	label   string
+	service editorSessionLifecycle
+}
+
+// editorSessions lists the editor services that are configured, with the
+// document type each serves.
+func (a *App) editorSessions() []editorSession {
+	var out []editorSession
+	if a.xlsxEditorService != nil {
+		out = append(out, editorSession{label: string(types.DocXLSX), service: a.xlsxEditorService})
+	}
+	if a.pptxEditorService != nil {
+		out = append(out, editorSession{label: string(types.DocPPTX), service: a.pptxEditorService})
+	}
+	return out
+}
+
 type pptxEditorService interface {
 	Prepare(context.Context, string) (pptxeditor.PrepareResult, error)
 	SaveSnapshot(string, string, []byte, int, int) (pptxeditor.SaveResult, error)
@@ -389,14 +418,9 @@ func (a *App) startup(ctx context.Context) {
 	if err := a.writeProcessIdentity(); err != nil {
 		wailsruntime.LogWarningf(ctx, "write process identity: %v", err)
 	}
-	if a.xlsxEditorService != nil {
-		if err := a.xlsxEditorService.CleanupStale(); err != nil {
-			wailsruntime.LogWarningf(ctx, "cleanup stale XLSX sessions: %v", err)
-		}
-	}
-	if a.pptxEditorService != nil {
-		if err := a.pptxEditorService.CleanupStale(); err != nil {
-			wailsruntime.LogWarningf(ctx, "cleanup stale PPTX sessions: %v", err)
+	for _, editor := range a.editorSessions() {
+		if err := editor.service.CleanupStale(); err != nil {
+			wailsruntime.LogWarningf(ctx, "cleanup stale %s sessions: %v", editor.label, err)
 		}
 	}
 	if err := wailsruntime.InitializeNotifications(ctx); err != nil {
@@ -575,14 +599,9 @@ func (a *App) shutdown(ctx context.Context) {
 	if a.runtimeMgr != nil {
 		a.runtimeMgr.CancelDownload()
 	}
-	if a.xlsxEditorService != nil {
-		if err := a.xlsxEditorService.CloseAll(); err != nil && ctx != nil {
-			wailsruntime.LogWarningf(ctx, "close XLSX editor sessions: %v", err)
-		}
-	}
-	if a.pptxEditorService != nil {
-		if err := a.pptxEditorService.CloseAll(); err != nil && ctx != nil {
-			wailsruntime.LogWarningf(ctx, "close PPTX editor sessions: %v", err)
+	for _, editor := range a.editorSessions() {
+		if err := editor.service.CloseAll(); err != nil && ctx != nil {
+			wailsruntime.LogWarningf(ctx, "close %s editor sessions: %v", editor.label, err)
 		}
 	}
 	if ctx != nil {
@@ -726,7 +745,7 @@ func (a *App) Generate(input types.GenerateInput) (GenerateResult, error) {
 			return GenerateResult{TaskID: result.TaskID, SessionID: result.SessionID, Status: result.Status}, nil
 		}
 	}
-	if input.DocumentType == types.DocIMG {
+	if types.Capability(input.DocumentType).Watermark {
 		var watermark *types.ImageWatermarkGenerateOptions
 		settings, watermark = a.refreshImageWatermarkSettingsForGenerate(settings)
 		input.ImageWatermark = watermark
@@ -2025,14 +2044,9 @@ func uniqueWorkbookPath(dir, fileName string) string {
 
 // RevokePreviewToken invalidates a token. No-op if unknown.
 func (a *App) RevokePreviewToken(token string) {
-	if a.xlsxEditorService != nil {
-		if err := a.xlsxEditorService.CloseByToken(token); err != nil && a.ctx != nil {
-			wailsruntime.LogWarningf(a.ctx, "close XLSX sessions for revoked preview token: %v", err)
-		}
-	}
-	if a.pptxEditorService != nil {
-		if err := a.pptxEditorService.CloseByToken(token); err != nil && a.ctx != nil {
-			wailsruntime.LogWarningf(a.ctx, "close PPTX sessions for revoked preview token: %v", err)
+	for _, editor := range a.editorSessions() {
+		if err := editor.service.CloseByToken(token); err != nil && a.ctx != nil {
+			wailsruntime.LogWarningf(a.ctx, "close %s sessions for revoked preview token: %v", editor.label, err)
 		}
 	}
 	a.previewReg.RevokeToken(token)
@@ -2672,13 +2686,10 @@ func (a *App) OpenRecentFile(file types.RecentFile) (types.Artifact, error) {
 	return artifact, nil
 }
 
+// isSupportedRecentPreviewType reads the capability table's preview
+// extensions; it used to be a second hand-written copy of the registry's list.
 func isSupportedRecentPreviewType(documentType string) bool {
-	switch strings.ToLower(strings.TrimSpace(documentType)) {
-	case "docx", "xlsx", "pptx", "pdf", "html", "htm", "png", "jpg", "jpeg", "gif", "webp", "svg", "bmp":
-		return true
-	default:
-		return false
-	}
+	return types.IsPreviewable(documentType)
 }
 
 func (a *App) AddWorkspace(workspacePath string) (types.WorkspaceSummary, error) {

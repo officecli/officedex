@@ -146,21 +146,38 @@ export interface AttachmentSpec {
   description: string;
 }
 
+// Mirrors Go types.DocumentTypeCapability field for field (the drift checker
+// holds the two together). Every per-type decision in the renderer reads
+// this row; adding a document type is adding a row here and a viewer.
 export interface DocumentTypeCapability {
   type: DocumentType;
   label: string;
   icon: string;
   attachments: AttachmentSpec[];
+  /** Goes through the office generation modes rather than the image pipeline. */
+  office: boolean;
+  /** Sent as pptx_backend when the caller leaves it unset. */
+  defaultPptxBackend?: string;
+  imageRatio: boolean;
+  frameRate: boolean;
+  watermark: boolean;
+  /** Extensions (lowercase, no dot) a file of this type carries in the preview. */
+  previewExtensions: string[];
 }
 
 export const DOCUMENT_TYPE_CAPABILITIES: Record<DocumentType, DocumentTypeCapability> = {
-  pptx: { type: "pptx", label: "PPTX", icon: "slideshow", attachments: [] },
-  docx: { type: "docx", label: "DOCX", icon: "description", attachments: [] },
-  xlsx: { type: "xlsx", label: "XLSX", icon: "table", attachments: [] },
+  pptx: { type: "pptx", label: "PPTX", icon: "slideshow", office: true, defaultPptxBackend: "mop-skill", imageRatio: false, frameRate: false, watermark: false, previewExtensions: ["pptx"], attachments: [] },
+  docx: { type: "docx", label: "DOCX", icon: "description", office: true, imageRatio: false, frameRate: false, watermark: false, previewExtensions: ["docx"], attachments: [] },
+  xlsx: { type: "xlsx", label: "XLSX", icon: "table", office: true, imageRatio: false, frameRate: false, watermark: false, previewExtensions: ["xlsx"], attachments: [] },
   report: {
     type: "report",
     label: "Report",
     icon: "article",
+    office: true,
+    imageRatio: false,
+    frameRate: false,
+    watermark: false,
+    previewExtensions: [],
     attachments: [
       {
         slot: "sourceWorkbook",
@@ -178,6 +195,11 @@ export const DOCUMENT_TYPE_CAPABILITIES: Record<DocumentType, DocumentTypeCapabi
     type: "img",
     label: "Image",
     icon: "image",
+    office: false,
+    imageRatio: true,
+    frameRate: false,
+    watermark: true,
+    previewExtensions: ["png", "jpg", "jpeg", "webp", "svg", "bmp"],
     attachments: [
       {
         slot: "referenceImages",
@@ -195,6 +217,11 @@ export const DOCUMENT_TYPE_CAPABILITIES: Record<DocumentType, DocumentTypeCapabi
     type: "gif",
     label: "GIF",
     icon: "gif",
+    office: false,
+    imageRatio: false,
+    frameRate: true,
+    watermark: false,
+    previewExtensions: ["gif"],
     attachments: [
       {
         slot: "referenceImages",
@@ -214,6 +241,20 @@ export const DOCUMENT_TYPES: DocumentType[] = ["pptx", "docx", "xlsx", "report",
 
 export function getCapability(type: DocumentType): DocumentTypeCapability {
   return DOCUMENT_TYPE_CAPABILITIES[type];
+}
+
+/** True for the six generated document types; narrows an unknown string. */
+export function isDocumentType(value: unknown): value is DocumentType {
+  return typeof value === "string" && Object.prototype.hasOwnProperty.call(DOCUMENT_TYPE_CAPABILITIES, value);
+}
+
+/** Every extension the preview can show: each type's own plus pdf/html. Mirrors Go types.PreviewExtensions. */
+export const GENERIC_PREVIEW_EXTENSIONS = ["pdf", "html", "htm"] as const;
+export function previewExtensions(): string[] {
+  const out = new Set<string>();
+  for (const type of DOCUMENT_TYPES) for (const ext of DOCUMENT_TYPE_CAPABILITIES[type].previewExtensions) out.add(ext);
+  for (const ext of GENERIC_PREVIEW_EXTENSIONS) out.add(ext);
+  return [...out];
 }
 
 export function getAttachmentSpec(type: DocumentType, slot: AttachmentSlot): AttachmentSpec | undefined {

@@ -695,12 +695,8 @@ func (c *Client) InvokeGenerate(ctx context.Context, input types.GenerateInput) 
 	}
 	if strings.TrimSpace(input.PPTXBackend) != "" {
 		args["pptx_backend"] = input.PPTXBackend
-	} else if input.DocumentType == types.DocPPTX {
-		// OfficeDex's primary PPTX path is op-driven MOP authoring: the
-		// OfficeCLI worker emits ordered vibe_ops while PowerPoint.run authors
-		// the editable deck. Keep officegen available only as an explicit
-		// compatibility choice.
-		args["pptx_backend"] = "mop-skill"
+	} else if backend := types.Capability(input.DocumentType).DefaultPPTXBackend; backend != "" {
+		args["pptx_backend"] = backend
 	}
 	if officeMode != "" {
 		args["mode"] = officeMode
@@ -750,17 +746,12 @@ func officeGenerateModeArgs(input types.GenerateInput) (string, bool, error) {
 }
 
 func isOfficeDocumentType(documentType types.DocumentType) bool {
-	switch documentType {
-	case types.DocPPTX, types.DocDOCX, types.DocXLSX, types.DocReport:
-		return true
-	default:
-		return false
-	}
+	return types.Capability(documentType).Office
 }
 
 func imageRatioArg(input types.GenerateInput) (string, error) {
 	ratio := strings.ToLower(strings.TrimSpace(input.ImageRatio))
-	if ratio == "" || input.DocumentType != types.DocIMG {
+	if ratio == "" || !types.Capability(input.DocumentType).ImageRatio {
 		return "", nil
 	}
 	switch ratio {
@@ -772,7 +763,7 @@ func imageRatioArg(input types.GenerateInput) (string, error) {
 }
 
 func gifFPSArg(input types.GenerateInput) (int, error) {
-	if input.DocumentType != types.DocGIF || input.FPS == 0 {
+	if !types.Capability(input.DocumentType).FrameRate || input.FPS == 0 {
 		return 0, nil
 	}
 	if input.FPS < 4 || input.FPS > 24 {
@@ -782,7 +773,7 @@ func gifFPSArg(input types.GenerateInput) (int, error) {
 }
 
 func (c *Client) imageWatermarkArg(ctx context.Context, input types.GenerateInput) map[string]any {
-	if input.DocumentType != types.DocIMG || input.ImageWatermark == nil {
+	if !types.Capability(input.DocumentType).Watermark || input.ImageWatermark == nil {
 		return nil
 	}
 	if !c.supportsImageWatermark(ctx) {

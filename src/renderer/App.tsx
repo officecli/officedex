@@ -1,6 +1,7 @@
 import { DialogHost, ToastHost, toast as message } from "./ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentRun, Artifact, BridgeEvent, ConfiguredJiraSyncResult, ConfiguredLiquipediaSyncResult, DesktopTask, GenerateInput, JiraSyncResult, LiquipediaSyncResult, ModifyInput, PreviewGrant, RecentFile, TaskHistoryEntry, TaskQuestionAnswer, WorkspaceSummary } from "../shared/types";
+import { getCapability, isDocumentType } from "../shared/types";
 import { AgentClientToolHost } from "./AgentClientToolHost";
 import { useAgentClientTools } from "./useAgentClientTools";
 import { useVerticalPanels } from "./spreadsheet/useVerticalPanels";
@@ -174,7 +175,7 @@ export function sortSidebarDocuments(documents: SidebarDocument[]): SidebarDocum
 }
 
 function generationModeForDocumentType(documentType: string | undefined): GenerateInput["generationMode"] | undefined {
-  return documentType === "pptx" || documentType === "docx" || documentType === "xlsx" || documentType === "report" ? "fast" : undefined;
+  return isDocumentType(documentType) && getCapability(documentType).office ? "fast" : undefined;
 }
 
 function normalizeGenerationMode(_value: unknown): GenerateInput["generationMode"] {
@@ -2045,7 +2046,7 @@ function documentTypeFromTask(task: DesktopTask): GenerateInput["documentType"] 
 }
 
 function isGenerateDocumentType(value: unknown): value is GenerateInput["documentType"] {
-  return value === "pptx" || value === "docx" || value === "xlsx" || value === "report" || value === "img" || value === "gif";
+  return isDocumentType(value);
 }
 
 function stringOrUndef(value: unknown): string | undefined {
