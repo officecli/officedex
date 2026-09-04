@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"officedex/internal/bridge"
-	"officedex/internal/types"
 )
 
 // The protocol check used to run only when the renderer called Initialize at
@@ -119,18 +118,5 @@ func TestBridgeTaskNotFoundIsDecidedByErrorData(t *testing.T) {
 	}
 	if isBridgeTaskNotFoundError(errors.New("file not found")) {
 		t.Fatal("an unrelated 'not found' error was classified as a missing task")
-	}
-}
-
-// Recovery recognises its own cancellations by a machine-readable reason, not
-// by the English sentence it once wrote.
-func TestRecoverySourceTaskIsDecidedByReason(t *testing.T) {
-	withReason := []types.BridgeEvent{{Type: types.EventTaskCancelled, Payload: map[string]any{"message": "anything", "reason": types.CancelReasonRecoveredAfterRestart}}}
-	if !wasRecoverySourceTask(withReason) {
-		t.Fatal("reason marker not recognised")
-	}
-	textOnly := []types.BridgeEvent{{Type: types.EventTaskCancelled, Payload: map[string]any{"message": "Task was recovered after the application restarted"}}}
-	if wasRecoverySourceTask(textOnly) {
-		t.Fatal("the message text alone must not decide recovery provenance")
 	}
 }

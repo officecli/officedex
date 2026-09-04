@@ -23,8 +23,10 @@ import (
 	"net/http"
 	"officedex/internal/atomicfile"
 	"officedex/internal/config"
+	"officedex/internal/payloadfield"
 	"officedex/internal/providerprobe"
 	"officedex/internal/runtimeenv"
+	"officedex/internal/taskrecovery"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -736,7 +738,7 @@ func (a *App) Generate(input types.GenerateInput) (GenerateResult, error) {
 	if err != nil {
 		return GenerateResult{}, fmt.Errorf("load settings: %w", err)
 	}
-	input = normalizeGenerateInputText(input)
+	input = taskrecovery.NormalizeText(input)
 	if a.demoFlow != nil {
 		if result, ok, err := a.demoFlow.TryGenerate(a.ctx, input); ok || err != nil {
 			if err != nil {
@@ -779,7 +781,7 @@ func (a *App) Generate(input types.GenerateInput) (GenerateResult, error) {
 		a.recordTaskEventBestEffort(types.BridgeEvent{
 			TaskID: result.TaskID,
 			Type:   types.EventLocalUserInput,
-			Payload: generateInputEventPayload(resolved, localstore.TaskContext{
+			Payload: taskrecovery.EncodeGenerateInput(resolved, localstore.TaskContext{
 				WorkspaceID:    resolved.WorkspaceID,
 				ConversationID: resolved.ConversationID,
 				ParentTaskID:   resolved.ParentTaskID,
@@ -1026,7 +1028,7 @@ func (a *App) recoverStaleInteractiveRespond(input RespondInput, originalErr err
 	if err != nil {
 		return nil, err
 	}
-	if !latestTaskStateRecoverable(events) {
+	if !taskrecovery.LatestStateRecoverable(events) {
 		return nil, fmt.Errorf("task was interrupted and cannot be resumed; please restart this plan")
 	}
 	taskCtx, ok, err := a.localStore.TaskContext(ctx, input.TaskID)
@@ -1036,7 +1038,7 @@ func (a *App) recoverStaleInteractiveRespond(input RespondInput, originalErr err
 	if !ok {
 		return nil, fmt.Errorf("task was interrupted and cannot be resumed; missing task context")
 	}
-	generateInput, err := recoverGenerateInputFromEvents(events, taskCtx)
+	generateInput, err := taskrecovery.DecodeGenerateInput(events, taskCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -1059,7 +1061,7 @@ func (a *App) recoverStaleInteractiveRespond(input RespondInput, originalErr err
 		TaskID:  result.TaskID,
 		Type:    types.EventLocalUserInput,
 		TS:      time.Now().UTC().Format(time.RFC3339Nano),
-		Payload: generateInputEventPayload(generateInput, taskCtx),
+		Payload: taskrecovery.EncodeGenerateInput(generateInput, taskCtx),
 	}
 	a.recordTaskEventBestEffort(recoveredInputEvent)
 	if canEmitWailsEvent(ctx) {
@@ -1088,7 +1090,7 @@ func (a *App) recoverStaleInteractiveRespond(input RespondInput, originalErr err
 	// empty answer body) would be delivered to the idea gate and rejected with
 	// "idea confirmation is required". Replay the full saved-answer history in
 	// order so the re-created task fast-forwards to the user's real position.
-	groups, skippedRevisions := buildRecoveryReplayGroups(answers, input)
+	groups, skippedRevisions := taskrecovery.BuildReplayGroups(answers, taskrecovery.LiveAnswer{OptionID: input.OptionID, Answer: input.Answer})
 	if len(groups) == 0 && !skippedRevisions {
 		return nil, fmt.Errorf("task was interrupted and cannot be resumed; missing saved answers")
 	}
@@ -1137,7 +1139,7 @@ func (a *App) recoverStaleInteractiveRespond(input RespondInput, originalErr err
 
 func (a *App) inheritRecoveredMultiQuestionAnswers(ctx context.Context, taskCtx localstore.TaskContext, events []types.BridgeEvent, current []localstore.TaskAnswer) ([]localstore.TaskAnswer, error) {
 	parentTaskID := strings.TrimSpace(taskCtx.ParentTaskID)
-	questionIDs := latestMultiQuestionIDs(events)
+	questionIDs := taskrecovery.LatestMultiQuestionIDs(events)
 	if parentTaskID == "" || len(questionIDs) == 0 {
 		return current, nil
 	}
@@ -1145,7 +1147,7 @@ func (a *App) inheritRecoveredMultiQuestionAnswers(ctx context.Context, taskCtx 
 	if err != nil {
 		return nil, err
 	}
-	if !wasRecoverySourceTask(parentEvents) {
+	if !taskrecovery.WasRecoverySourceTask(parentEvents) {
 		return current, nil
 	}
 	parentAnswers, err := a.localStore.QueryTaskAnswers(ctx, parentTaskID)
@@ -1180,221 +1182,6 @@ func (a *App) inheritRecoveredMultiQuestionAnswers(ctx context.Context, taskCtx 
 		return current, nil
 	}
 	return merged, nil
-}
-
-func latestMultiQuestionIDs(events []types.BridgeEvent) map[string]struct{} {
-	for index := len(events) - 1; index >= 0; index-- {
-		event := events[index]
-		if event.Type != types.EventTaskQuestion || event.Payload == nil {
-			continue
-		}
-		rawQuestions, ok := event.Payload["questions"].([]any)
-		if !ok {
-			// In-process events may retain their concrete slice type.
-			if typed, typedOK := event.Payload["questions"].([]map[string]any); typedOK {
-				rawQuestions = make([]any, len(typed))
-				for i := range typed {
-					rawQuestions[i] = typed[i]
-				}
-			}
-		}
-		ids := make(map[string]struct{})
-		for _, raw := range rawQuestions {
-			question, ok := raw.(map[string]any)
-			if !ok {
-				continue
-			}
-			id := strings.TrimSpace(fmt.Sprint(question["id"]))
-			if id != "" {
-				ids[id] = struct{}{}
-			}
-		}
-		return ids
-	}
-	return nil
-}
-
-func wasRecoverySourceTask(events []types.BridgeEvent) bool {
-	for index := len(events) - 1; index >= 0; index-- {
-		event := events[index]
-		if event.Type != types.EventTaskCancelled || event.Payload == nil {
-			continue
-		}
-		reason, _ := event.Payload["reason"].(string)
-		return reason == types.CancelReasonRecoveredAfterRestart
-	}
-	return false
-}
-
-// recoveryReplayGroup is one answer to replay against one pending question of a
-// recovered task. A multi-question group (shared question_group_id) collapses
-// into a single respond carrying every sub-answer; a standalone answer is its
-// own group.
-type recoveryReplayGroup struct {
-	OptionID string
-	Answer   string
-	Answers  []bridge.RespondAnswer
-}
-
-// isUnreplayableVibeRevision reports whether a saved answer is a per-node vibe
-// revision (feedback on a specific node, or an undo) that cannot be safely
-// replayed against a recovered task. Recovery re-runs generation from scratch,
-// producing a fresh tree with new node IDs, so these answers reference nodes
-// that no longer exist — RewriteNode would error and fail the whole task. They
-// only ever trigger a same-stage re-ask (never a stage advance), so dropping
-// them during replay preserves stage alignment while losing only fine-grained
-// edits that the regenerated tree wouldn't have reproduced anyway.
-func isUnreplayableVibeRevision(answer string) bool {
-	trimmed := strings.TrimSpace(answer)
-	if !strings.HasPrefix(trimmed, "{") {
-		return false
-	}
-	var probe struct {
-		Kind string `json:"kind"`
-	}
-	if err := json.Unmarshal([]byte(trimmed), &probe); err != nil {
-		return false
-	}
-	switch probe.Kind {
-	case "vibe_node_feedback", "vibe_undo_last_revision":
-		return true
-	}
-	return false
-}
-
-// buildRecoveryReplayGroups turns the chronological saved answers into the
-// ordered sequence of responds needed to fast-forward a recovered task to the
-// user's current position. Answers sharing a non-empty question_group_id are
-// merged into one group (preserving first-seen order); answers without a group
-// id each become their own group. The final group represents the in-flight
-// answer, so its representative option/answer is taken from the live input
-// (matching the non-recovery respond payload) when present.
-//
-// skipped reports whether any per-node revision was dropped (see
-// isUnreplayableVibeRevision); the caller uses it to distinguish "nothing to
-// replay because nothing was answered" from "all answers were unreplayable
-// revisions, leaving the task correctly at its current gate".
-func buildRecoveryReplayGroups(answers []localstore.TaskAnswer, input RespondInput) (groups []recoveryReplayGroup, skipped bool) {
-	groups = make([]recoveryReplayGroup, 0, len(answers))
-	indexByGroupID := make(map[string]int)
-	for _, item := range answers {
-		if isUnreplayableVibeRevision(item.Answer) {
-			skipped = true
-			continue
-		}
-		groupID := strings.TrimSpace(item.QuestionGroupID)
-		sub := bridge.RespondAnswer{
-			QuestionID: strings.TrimSpace(item.QuestionID),
-			OptionID:   strings.TrimSpace(item.OptionID),
-			Answer:     strings.TrimSpace(item.Answer),
-		}
-		if groupID != "" {
-			if idx, ok := indexByGroupID[groupID]; ok {
-				groups[idx].Answers = append(groups[idx].Answers, sub)
-				// Track the latest sub-answer as the representative; the final
-				// group is overridden by the live input below.
-				groups[idx].OptionID = sub.OptionID
-				groups[idx].Answer = sub.Answer
-				continue
-			}
-			indexByGroupID[groupID] = len(groups)
-		}
-		groups = append(groups, recoveryReplayGroup{
-			OptionID: sub.OptionID,
-			Answer:   sub.Answer,
-			Answers:  []bridge.RespondAnswer{sub},
-		})
-	}
-	// Prefer the live input's representative option/answer for the final group
-	// (or as a standalone group when nothing replayable was persisted) so the
-	// replayed payload matches what a normal respond would have sent — but never
-	// when the live input is itself an unreplayable revision.
-	inputHasContent := strings.TrimSpace(input.OptionID) != "" || strings.TrimSpace(input.Answer) != ""
-	inputReplayable := inputHasContent && !isUnreplayableVibeRevision(input.Answer)
-	if len(groups) == 0 {
-		if inputReplayable {
-			return []recoveryReplayGroup{{OptionID: input.OptionID, Answer: input.Answer}}, skipped
-		}
-		return nil, skipped
-	}
-	if inputReplayable {
-		last := &groups[len(groups)-1]
-		last.OptionID = input.OptionID
-		last.Answer = input.Answer
-	}
-	return groups, skipped
-}
-
-func latestTaskStateRecoverable(events []types.BridgeEvent) bool {
-	state := ""
-	for _, event := range events {
-		switch event.Type {
-		case types.EventTaskQuestion, types.EventTaskPlan, types.EventTaskCompleted, types.EventTaskFailed, types.EventTaskCancelled:
-			state = event.Type
-		}
-	}
-	return state == types.EventTaskQuestion || state == types.EventTaskPlan
-}
-
-func recoverGenerateInputFromEvents(events []types.BridgeEvent, taskCtx localstore.TaskContext) (types.GenerateInput, error) {
-	var userInput map[string]any
-	var started map[string]any
-	for _, event := range events {
-		if event.Type == types.EventTaskStarted {
-			started = event.Payload
-		}
-		if event.Type == types.EventLocalUserInput {
-			userInput = event.Payload
-		}
-	}
-	if userInput == nil {
-		return types.GenerateInput{}, fmt.Errorf("task was interrupted and cannot be resumed; missing original input")
-	}
-	documentType := stringField(userInput, "document_type", "documentType")
-	if documentType == "" {
-		documentType = stringField(started, "document_type", "documentType")
-	}
-	prompt := recoverPromptFromPayload(userInput)
-	if prompt == "" {
-		prompt = stringField(started, "prompt")
-	}
-	topic := recoverTopicFromPayload(userInput)
-	if topic == "" {
-		topic = stringField(started, "topic")
-	}
-	if topic == "" {
-		topic = prompt
-	}
-	if prompt == "" {
-		prompt = topic
-	}
-	if documentType == "" || prompt == "" {
-		return types.GenerateInput{}, fmt.Errorf("task was interrupted and cannot be resumed; missing original prompt")
-	}
-	input := types.GenerateInput{
-		DocumentType:     types.DocumentType(documentType),
-		Topic:            topic,
-		Prompt:           prompt,
-		WorkspaceID:      taskCtx.WorkspaceID,
-		NoProject:        strings.TrimSpace(taskCtx.WorkspaceID) == "",
-		ConversationID:   taskCtx.ConversationID,
-		ParentTaskID:     taskCtx.ParentTaskID,
-		RuntimeMode:      stringField(userInput, "runtime_mode", "runtimeMode"),
-		GenerationMode:   stringField(userInput, "generation_mode", "generationMode"),
-		PromptTemplateID: stringField(userInput, "prompt_template_id", "promptTemplateId"),
-		SourceFile:       stringField(userInput, "source_file", "sourceFile"),
-		ReferenceImages:  stringSliceField(userInput, "reference_images", "referenceImages"),
-		ImageRatio:       stringField(userInput, "image_ratio", "imageRatio"),
-		FPS:              intField(userInput, "fps"),
-		OutputDir:        stringField(userInput, "output_dir", "outputDir"),
-		Publish:          boolField(userInput, "publish"),
-		ImageQuality:     stringField(userInput, "image_quality", "imageQuality"),
-		LocalPreview:     boolField(userInput, "local_preview", "localPreview"),
-	}
-	if v, ok := optionalBoolField(userInput, "enable_images", "enableImages"); ok {
-		input.EnableImages = &v
-	}
-	return input, nil
 }
 
 // recoveryPendingInputTimeout bounds how long each replayed stage may take to
@@ -3663,8 +3450,8 @@ func latestFailedEvent(events []types.BridgeEvent) *types.BridgeEvent {
 // over time. Falls back to ("unknown", message) when no explicit code field
 // is present.
 func extractErrorFields(ev *types.BridgeEvent) (string, string) {
-	code := stringField(ev.Payload, "error_code", "errorCode", "code")
-	message := stringField(ev.Payload, "error_message", "errorMessage", "message", "error")
+	code := payloadfield.String(ev.Payload, "error_code", "errorCode", "code")
+	message := payloadfield.String(ev.Payload, "error_message", "errorMessage", "message", "error")
 	if code == "" {
 		code = "unknown"
 	}
@@ -3672,226 +3459,6 @@ func extractErrorFields(ev *types.BridgeEvent) (string, string) {
 		message = message[:reportErrorMessageCap]
 	}
 	return code, message
-}
-
-func stringField(payload map[string]any, keys ...string) string {
-	if payload == nil {
-		return ""
-	}
-	for _, k := range keys {
-		if v, ok := payload[k]; ok {
-			if s, ok := v.(string); ok && s != "" {
-				return s
-			}
-		}
-	}
-	return ""
-}
-
-func mapField(payload map[string]any, keys ...string) map[string]any {
-	if payload == nil {
-		return nil
-	}
-	for _, k := range keys {
-		v, ok := payload[k]
-		if !ok {
-			continue
-		}
-		if item, ok := v.(map[string]any); ok {
-			return item
-		}
-	}
-	return nil
-}
-
-func nestedStringField(payload map[string]any, fieldKeys []string, containerKeys ...string) string {
-	if v := stringField(payload, fieldKeys...); v != "" {
-		return v
-	}
-	for _, key := range containerKeys {
-		if v := stringField(mapField(payload, key), fieldKeys...); v != "" {
-			return v
-		}
-	}
-	return ""
-}
-
-func recoverPromptFromPayload(payload map[string]any) string {
-	return nestedStringField(payload, []string{"prompt"}, "text_input", "textInput", "content_input", "contentInput")
-}
-
-func recoverTopicFromPayload(payload map[string]any) string {
-	return nestedStringField(payload, []string{"topic"}, "text_input", "textInput", "content_input", "contentInput")
-}
-
-func normalizeGenerateInputText(input types.GenerateInput) types.GenerateInput {
-	out := input
-	if strings.TrimSpace(out.Topic) == "" {
-		out.Topic = strings.TrimSpace(out.Prompt)
-	}
-	if strings.TrimSpace(out.Prompt) == "" {
-		out.Prompt = strings.TrimSpace(out.Topic)
-	}
-	return out
-}
-
-func intField(payload map[string]any, keys ...string) int {
-	if payload == nil {
-		return 0
-	}
-	for _, k := range keys {
-		v, ok := payload[k]
-		if !ok {
-			continue
-		}
-		switch n := v.(type) {
-		case int:
-			return n
-		case int64:
-			return int(n)
-		case float64:
-			return int(n)
-		case json.Number:
-			if i, err := n.Int64(); err == nil {
-				return int(i)
-			}
-		}
-	}
-	return 0
-}
-
-func boolField(payload map[string]any, keys ...string) bool {
-	v, _ := optionalBoolField(payload, keys...)
-	return v
-}
-
-func optionalBoolField(payload map[string]any, keys ...string) (bool, bool) {
-	if payload == nil {
-		return false, false
-	}
-	for _, k := range keys {
-		v, ok := payload[k]
-		if !ok {
-			continue
-		}
-		switch b := v.(type) {
-		case bool:
-			return b, true
-		case string:
-			if strings.EqualFold(b, "true") {
-				return true, true
-			}
-			if strings.EqualFold(b, "false") {
-				return false, true
-			}
-		}
-	}
-	return false, false
-}
-
-func stringSliceField(payload map[string]any, keys ...string) []string {
-	if payload == nil {
-		return nil
-	}
-	for _, k := range keys {
-		v, ok := payload[k]
-		if !ok {
-			continue
-		}
-		switch items := v.(type) {
-		case []string:
-			return append([]string(nil), items...)
-		case []any:
-			out := make([]string, 0, len(items))
-			for _, item := range items {
-				if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
-					out = append(out, s)
-				}
-			}
-			return out
-		}
-	}
-	return nil
-}
-
-func generateInputEventPayload(input types.GenerateInput, taskCtx localstore.TaskContext) map[string]any {
-	input = normalizeGenerateInputText(input)
-	payload := map[string]any{
-		"document_type": string(input.DocumentType),
-		"documentType":  string(input.DocumentType),
-		"topic":         input.Topic,
-		"prompt":        input.Prompt,
-		"noProject":     input.NoProject,
-		"local_preview": input.LocalPreview,
-		"localPreview":  input.LocalPreview,
-	}
-	if taskCtx.ConversationID != "" {
-		payload["conversation_id"] = taskCtx.ConversationID
-		payload["conversationId"] = taskCtx.ConversationID
-	}
-	if taskCtx.ParentTaskID != "" {
-		payload["parent_task_id"] = taskCtx.ParentTaskID
-		payload["parentTaskId"] = taskCtx.ParentTaskID
-	}
-	if taskCtx.WorkspaceID != "" {
-		payload["workspace_id"] = taskCtx.WorkspaceID
-		payload["workspaceId"] = taskCtx.WorkspaceID
-	}
-	if input.WorkspaceID != "" {
-		payload["workspace_id"] = input.WorkspaceID
-		payload["workspaceId"] = input.WorkspaceID
-	}
-	if input.ConversationID != "" && taskCtx.ConversationID == "" {
-		payload["conversation_id"] = input.ConversationID
-		payload["conversationId"] = input.ConversationID
-	}
-	if input.ParentTaskID != "" && taskCtx.ParentTaskID == "" {
-		payload["parent_task_id"] = input.ParentTaskID
-		payload["parentTaskId"] = input.ParentTaskID
-	}
-	if input.RuntimeMode != "" {
-		payload["runtime_mode"] = input.RuntimeMode
-		payload["runtimeMode"] = input.RuntimeMode
-	}
-	if input.GenerationMode != "" {
-		payload["generation_mode"] = input.GenerationMode
-		payload["generationMode"] = input.GenerationMode
-	}
-	if input.PromptTemplateID != "" {
-		payload["prompt_template_id"] = input.PromptTemplateID
-		payload["promptTemplateId"] = input.PromptTemplateID
-	}
-	if input.SourceFile != "" {
-		payload["source_file"] = input.SourceFile
-		payload["sourceFile"] = input.SourceFile
-	}
-	if len(input.ReferenceImages) > 0 {
-		payload["reference_images"] = input.ReferenceImages
-		payload["referenceImages"] = input.ReferenceImages
-	}
-	if strings.TrimSpace(input.ImageRatio) != "" {
-		payload["image_ratio"] = strings.TrimSpace(input.ImageRatio)
-		payload["imageRatio"] = strings.TrimSpace(input.ImageRatio)
-	}
-	if input.FPS > 0 {
-		payload["fps"] = input.FPS
-	}
-	if input.OutputDir != "" {
-		payload["output_dir"] = input.OutputDir
-		payload["outputDir"] = input.OutputDir
-	}
-	if input.Publish {
-		payload["publish"] = true
-	}
-	if input.EnableImages != nil {
-		payload["enable_images"] = *input.EnableImages
-		payload["enableImages"] = *input.EnableImages
-	}
-	if input.ImageQuality != "" {
-		payload["image_quality"] = input.ImageQuality
-		payload["imageQuality"] = input.ImageQuality
-	}
-	return payload
 }
 
 // ─── Internals ──────────────────────────────────────────────────────────────
