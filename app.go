@@ -27,6 +27,7 @@ import (
 	"officedex/internal/providerprobe"
 	"officedex/internal/runtimeenv"
 	"officedex/internal/taskrecovery"
+	"officedex/internal/workspace"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -306,7 +307,7 @@ func NewApp() (*App, error) {
 	}
 
 	previewReg, err := preview.New(preview.RegistryOptions{
-		TrustedRoots: previewTrustedRoots(workspaceDir, cached),
+		TrustedRoots: workspace.TrustedRoots(workspaceDir, cached),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("preview registry: %w", err)
@@ -2480,14 +2481,14 @@ func isSupportedRecentPreviewType(documentType string) bool {
 }
 
 func (a *App) AddWorkspace(workspacePath string) (types.WorkspaceSummary, error) {
-	cleaned, err := cleanExistingWorkspaceDir(workspacePath)
+	cleaned, err := workspace.CleanExistingDir(workspacePath)
 	if err != nil {
 		return types.WorkspaceSummary{}, err
 	}
 	if a.localStore == nil {
 		return types.WorkspaceSummary{}, errors.New("workspace store is unavailable")
 	}
-	if sameCleanPath(cleaned, a.workspaceDir) {
+	if workspace.SamePath(cleaned, a.workspaceDir) {
 		return types.WorkspaceSummary{}, errors.New("default app workspace is reserved for app-managed documents")
 	}
 	ctx := a.ctx
@@ -2561,7 +2562,7 @@ func (a *App) SelectWorkspace(workspaceID string) (types.WorkspaceSummary, error
 	if err != nil {
 		return types.WorkspaceSummary{}, err
 	}
-	cleaned, err := cleanExistingWorkspaceDir(ws.Path)
+	cleaned, err := workspace.CleanExistingDir(ws.Path)
 	if err != nil {
 		return types.WorkspaceSummary{}, err
 	}
@@ -3561,7 +3562,7 @@ func (a *App) ensureBridgeForTask(taskID string) (*bridge.Client, error) {
 	if !ok || strings.TrimSpace(workspacePath) == "" {
 		return a.ensureBridge()
 	}
-	cwd, err := cleanExistingWorkspaceDir(workspacePath)
+	cwd, err := workspace.CleanExistingDir(workspacePath)
 	if err != nil {
 		return nil, err
 	}
@@ -3882,7 +3883,7 @@ func (a *App) resolveGenerateInput(input types.GenerateInput, s types.UserSettin
 	// "continue editing" path uses to reuse a prior task's directory so
 	// follow-up edits land alongside the original artifact.
 	if strings.TrimSpace(input.OutputDir) != "" {
-		outputDir, err := cleanGenerateOutputDir(input.OutputDir)
+		outputDir, err := workspace.CleanOutputDir(input.OutputDir)
 		if err != nil {
 			return types.GenerateInput{}, err
 		}
@@ -3894,50 +3895,13 @@ func (a *App) resolveGenerateInput(input types.GenerateInput, s types.UserSettin
 	if err != nil {
 		return types.GenerateInput{}, err
 	}
-	taskDir := filepath.Join(base, buildTaskDirName(input.Topic, string(input.DocumentType)))
+	taskDir := filepath.Join(base, workspace.TaskDirName(input.Topic, string(input.DocumentType)))
 	if err := os.MkdirAll(taskDir, 0o755); err != nil {
 		return types.GenerateInput{}, fmt.Errorf("mkdir task output dir: %w", err)
 	}
 	out := input
 	out.OutputDir = taskDir
 	return out, nil
-}
-
-func cleanGenerateOutputDir(outputDir string) (string, error) {
-	cleaned := strings.TrimSpace(outputDir)
-	if strings.ContainsRune(cleaned, 0) {
-		return "", errors.New("generate output dir is invalid")
-	}
-	if !filepath.IsAbs(cleaned) {
-		return "", errors.New("generate output dir must be absolute")
-	}
-	return cleaned, nil
-}
-
-func cleanWorkspaceDir(workspaceDir string) (string, error) {
-	cleaned := strings.TrimSpace(workspaceDir)
-	if strings.ContainsRune(cleaned, 0) {
-		return "", errors.New("workspace dir is invalid")
-	}
-	if !filepath.IsAbs(cleaned) {
-		return "", errors.New("workspace dir must be absolute")
-	}
-	return cleaned, nil
-}
-
-func cleanExistingWorkspaceDir(workspaceDir string) (string, error) {
-	cleaned, err := cleanWorkspaceDir(workspaceDir)
-	if err != nil {
-		return "", err
-	}
-	info, err := os.Stat(cleaned)
-	if err != nil {
-		return "", fmt.Errorf("workspace dir is unavailable: %w", err)
-	}
-	if !info.IsDir() {
-		return "", errors.New("workspace dir must be a directory")
-	}
-	return cleaned, nil
 }
 
 func (a *App) effectiveWorkspaceDirForInput(workspaceID string, noProject bool, s types.UserSettings) (string, error) {
@@ -3954,7 +3918,7 @@ func (a *App) effectiveWorkspaceDirForInput(workspaceID string, noProject bool, 
 			if err != nil {
 				return "", err
 			}
-			cleaned, err := cleanExistingWorkspaceDir(ws.Path)
+			cleaned, err := workspace.CleanExistingDir(ws.Path)
 			if err != nil {
 				return "", err
 			}
@@ -3964,7 +3928,7 @@ func (a *App) effectiveWorkspaceDirForInput(workspaceID string, noProject bool, 
 			return cleaned, nil
 		}
 		if ws, err := a.localStore.ActiveWorkspace(ctx); err == nil {
-			return cleanExistingWorkspaceDir(ws.Path)
+			return workspace.CleanExistingDir(ws.Path)
 		}
 	}
 	return a.effectiveWorkspaceDir(s)
@@ -3977,14 +3941,14 @@ func (a *App) effectiveWorkspaceDir(s types.UserSettings) (string, error) {
 			ctx = context.Background()
 		}
 		if ws, err := a.localStore.ActiveWorkspace(ctx); err == nil {
-			return cleanExistingWorkspaceDir(ws.Path)
+			return workspace.CleanExistingDir(ws.Path)
 		}
 	}
 	if s.WorkspaceDir != nil && strings.TrimSpace(*s.WorkspaceDir) != "" {
-		return cleanWorkspaceDir(*s.WorkspaceDir)
+		return workspace.CleanDir(*s.WorkspaceDir)
 	}
 	if s.OutputDir != nil && strings.TrimSpace(*s.OutputDir) != "" {
-		return cleanWorkspaceDir(*s.OutputDir)
+		return workspace.CleanDir(*s.OutputDir)
 	}
 	return a.workspaceDir, nil
 }
@@ -4005,9 +3969,9 @@ func (a *App) initializeWorkspaces(ctx context.Context) error {
 		return err
 	}
 	activePath := a.workspaceDir
-	if legacy, ok := validSettingsWorkspaceDir(a.cachedSettings); ok {
-		if cleaned, err := cleanExistingWorkspaceDir(legacy); err == nil {
-			if sameCleanPath(cleaned, a.workspaceDir) {
+	if legacy, ok := workspace.SettingsDir(a.cachedSettings); ok {
+		if cleaned, err := workspace.CleanExistingDir(legacy); err == nil {
+			if workspace.SamePath(cleaned, a.workspaceDir) {
 				activePath = a.workspaceDir
 			} else if ws, err := a.localStore.EnsureWorkspace(ctx, cleaned); err == nil {
 				if _, activeErr := a.localStore.ActiveWorkspace(ctx); activeErr != nil {
@@ -4033,15 +3997,8 @@ func (a *App) removeDefaultWorkspaceProject(ctx context.Context) error {
 	return nil
 }
 
-func sameCleanPath(aPath, bPath string) bool {
-	if strings.TrimSpace(aPath) == "" || strings.TrimSpace(bPath) == "" {
-		return false
-	}
-	return filepath.Clean(aPath) == filepath.Clean(bPath)
-}
-
 func (a *App) applyActiveWorkspace(workspacePath string) error {
-	workspacePath, err := cleanExistingWorkspaceDir(workspacePath)
+	workspacePath, err := workspace.CleanExistingDir(workspacePath)
 	if err != nil {
 		return err
 	}
@@ -4071,7 +4028,7 @@ func (a *App) recordTaskWorkspaceContext(taskID, workspaceID, conversationID, pa
 		if err != nil {
 			return err
 		}
-		if _, err := cleanExistingWorkspaceDir(ws.Path); err != nil {
+		if _, err := workspace.CleanExistingDir(ws.Path); err != nil {
 			return err
 		}
 		if _, err := a.localStore.ActivateWorkspace(ctx, ws.ID); err != nil {
@@ -4209,8 +4166,8 @@ func (a *App) refreshPreviewTrustedRoots(s types.UserSettings) error {
 }
 
 func (a *App) previewTrustedRoots(ctx context.Context, activeWorkspace string, s types.UserSettings) []string {
-	roots := previewTrustedRoots(a.workspaceDir, s)
-	if cleaned, err := cleanExistingWorkspaceDir(activeWorkspace); err == nil {
+	roots := workspace.TrustedRoots(a.workspaceDir, s)
+	if cleaned, err := workspace.CleanExistingDir(activeWorkspace); err == nil {
 		roots = append(roots, cleaned)
 	}
 	if a.localStore == nil {
@@ -4221,7 +4178,7 @@ func (a *App) previewTrustedRoots(ctx context.Context, activeWorkspace string, s
 		return roots
 	}
 	for _, summary := range summaries {
-		if cleaned, err := cleanExistingWorkspaceDir(summary.Path); err == nil {
+		if cleaned, err := workspace.CleanExistingDir(summary.Path); err == nil {
 			roots = append(roots, cleaned)
 		}
 	}
@@ -4229,93 +4186,10 @@ func (a *App) previewTrustedRoots(ctx context.Context, activeWorkspace string, s
 }
 
 func (a *App) previewTrustedRootsForUpdate(ctx context.Context, activeWorkspace string, s types.UserSettings) ([]string, bool) {
-	if hasInvalidWorkspaceDir(s) {
+	if workspace.HasInvalidSettingsDir(s) {
 		return nil, false
 	}
 	return a.previewTrustedRoots(ctx, activeWorkspace, s), true
-}
-
-func previewTrustedRoots(workspaceDir string, s types.UserSettings) []string {
-	roots := []string{workspaceDir}
-	if custom, ok := validSettingsWorkspaceDir(s); ok {
-		return append(roots, custom)
-	}
-	return roots
-}
-
-func previewTrustedRootsForUpdate(workspaceDir string, s types.UserSettings) ([]string, bool) {
-	if hasInvalidWorkspaceDir(s) {
-		return nil, false
-	}
-	return previewTrustedRoots(workspaceDir, s), true
-}
-
-func validSettingsWorkspaceDir(s types.UserSettings) (string, bool) {
-	if s.WorkspaceDir != nil && strings.TrimSpace(*s.WorkspaceDir) != "" {
-		workspaceDir, err := cleanWorkspaceDir(*s.WorkspaceDir)
-		return workspaceDir, err == nil
-	}
-	if s.OutputDir != nil && strings.TrimSpace(*s.OutputDir) != "" {
-		workspaceDir, err := cleanWorkspaceDir(*s.OutputDir)
-		return workspaceDir, err == nil
-	}
-	return "", false
-}
-
-func hasInvalidWorkspaceDir(s types.UserSettings) bool {
-	if s.WorkspaceDir != nil && strings.TrimSpace(*s.WorkspaceDir) != "" {
-		_, err := cleanWorkspaceDir(*s.WorkspaceDir)
-		return err != nil
-	}
-	if s.OutputDir != nil && strings.TrimSpace(*s.OutputDir) != "" {
-		_, err := cleanWorkspaceDir(*s.OutputDir)
-		return err != nil
-	}
-	return false
-}
-
-// buildTaskDirName returns a unique, filesystem-safe folder name for a single
-// generation task. The format is `<yyyymmdd-HHMMSS>-<slug>-<shortid>` so the
-// directories sort chronologically and remain readable when browsed.
-func buildTaskDirName(topic, docType string) string {
-	slug := slugify(topic)
-	if slug == "" {
-		slug = slugify(docType)
-	}
-	if slug == "" {
-		slug = "task"
-	}
-	short := strings.ReplaceAll(uuid.New().String(), "-", "")
-	if len(short) > 8 {
-		short = short[:8]
-	}
-	return fmt.Sprintf("%s-%s-%s", time.Now().Format("20060102-150405"), slug, short)
-}
-
-// slugify maps an arbitrary topic/document-type label to an ASCII, lowercase,
-// hyphen-separated slug capped at 40 characters. Non-ASCII characters
-// (e.g. CJK) are dropped entirely; if the result would be empty the caller
-// falls back to a sensible default.
-func slugify(input string) string {
-	var b strings.Builder
-	b.Grow(len(input))
-	lastDash := true
-	for _, r := range strings.ToLower(strings.TrimSpace(input)) {
-		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
-			b.WriteRune(r)
-			lastDash = false
-		default:
-			if !lastDash {
-				b.WriteByte('-')
-				lastDash = true
-			}
-		}
-		if b.Len() >= 40 {
-			break
-		}
-	}
-	return strings.Trim(b.String(), "-")
 }
 
 func llmProviderEnv(s types.UserSettings) []string {
