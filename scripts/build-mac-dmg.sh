@@ -25,6 +25,7 @@
 #   or a notarytool keychain profile in NOTARIZE_PROFILE.
 
 set -euo pipefail
+OFFICE2MODOC_VERSION="$(tr -d '[:space:]' < "$(dirname "$0")/../office2modoc.version")"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OFFICEDEX_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -310,7 +311,7 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
   # `npm run bundle:office2modoc:mac` defaults to the darwin-universal FFI,
   # which only the CI release job produces. This script targets a single arch,
   # so bundle that slice explicitly and assert it really is single-arch.
-  OFFICE2MODOC_DYLIB="${OFFICEDEX_DIR}/build/cache/office2modoc/0.1.34/darwin-${TARGET_ARCH}/liboffice2modoc_ffi.dylib"
+  OFFICE2MODOC_DYLIB="${OFFICEDEX_DIR}/build/cache/office2modoc/${OFFICE2MODOC_VERSION}/darwin-${TARGET_ARCH}/liboffice2modoc_ffi.dylib"
   if [[ ! -f "${OFFICE2MODOC_DYLIB}" ]]; then
     echo "[${LOG}] missing office2modoc FFI: ${OFFICE2MODOC_DYLIB}" >&2
     echo "[${LOG}] stage it first, e.g.:" >&2

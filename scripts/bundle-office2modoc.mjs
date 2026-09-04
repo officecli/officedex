@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -5,7 +6,15 @@ import process from "node:process";
 import { access, chmod, copyFile, mkdir, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-export const OFFICE2MODOC_VERSION = "0.1.34";
+// The one place the office2modoc release is pinned is office2modoc.version at
+// the repository root; scripts, the release workflow and the Go side all read
+// it (Go through a test that compares its constant against the file).
+export const OFFICE2MODOC_VERSION = readOffice2modocVersion();
+
+function readOffice2modocVersion() {
+  const file = new URL("../office2modoc.version", import.meta.url);
+  return readFileSync(file, "utf8").trim();
+}
 export const DEFAULT_OFFICE2MODOC_SOURCE = path.join(
   "build", "cache", "office2modoc", OFFICE2MODOC_VERSION, "darwin-universal", "liboffice2modoc_ffi.dylib",
 );

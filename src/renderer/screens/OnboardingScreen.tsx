@@ -333,7 +333,7 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
                   />
                 ) : null}
                 {proxyValidationError ? (
-                  <div role="alert" style={{ color: "var(--n-red, #d92d20)" }}>
+                  <div role="alert" style={{ color: "var(--od-danger)" }}>
                     {proxyValidationError}
                   </div>
                 ) : null}

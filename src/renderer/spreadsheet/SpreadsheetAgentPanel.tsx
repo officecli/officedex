@@ -4,6 +4,7 @@ import type { DesktopAPI, DesktopTask, GenerateInput, ModifyInput, TaskQuestionA
 import { Button, TextArea } from "../ui";
 import { useT } from "../i18n";
 import { QuickReplyQuestion } from "../components/QuickReplyQuestion";
+import { MAX_NUMBERED_OPTIONS } from "../constants/limits";
 
 type QuestionDraft = { optionId?: string; answer: string; freeform: string };
 export type SpreadsheetAgentTool = string;
@@ -11,7 +12,6 @@ export type SpreadsheetAgentTool = string;
 const spreadsheetQuestionDrafts = new Map<string, Record<string, QuestionDraft>>();
 
 /** Options stay keyboard-addressable (1–n) only while the set is short enough to scan. */
-const MAX_NUMBERED_OPTIONS = 4;
 
 function questionDraftKey(task: DesktopTask) {
   const questionSetKey = task.question?.questions?.map((item) => item.id || item.question).join("|") || task.question?.id || "question";

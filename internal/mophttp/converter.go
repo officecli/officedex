@@ -5,20 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"officedex/internal/config"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
 	"officedex/internal/subprocess"
 )
-
-// converterTimeout matches the dev server's CONVERTER_TIMEOUT_MS. Large decks
-// genuinely take tens of seconds to convert, so a shorter limit would turn
-// slow imports into failures.
-const converterTimeout = 180 * time.Second
 
 // Converter runs the mop-convert CLI. It is an interface so tests can exercise
 // the HTTP layer's error mapping without a real converter binary.
@@ -73,7 +68,7 @@ func (c *CLIConverter) run(ctx context.Context, operation conversionOperation, a
 		}
 	}
 
-	runCtx, cancel := context.WithTimeout(ctx, converterTimeout)
+	runCtx, cancel := context.WithTimeout(ctx, config.MopConvertTimeout)
 	defer cancel()
 
 	// Own process group + tree kill on timeout, otherwise a stuck mop-convert

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"officedex/internal/atomicfile"
 	"officedex/internal/config"
 	"officedex/internal/providerprobe"
 	"officedex/internal/runtimeenv"
@@ -307,9 +308,9 @@ func NewApp() (*App, error) {
 		cachedSettings:    cached,
 		proxyPool:         proxyPool,
 	}
-	repoRoot, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("resolve XLSX editor repo root: %w", err)
+	repoRoot, ok := config.ProcessCwd()
+	if !ok {
+		return nil, errors.New("resolve XLSX editor repo root: working directory unavailable")
 	}
 	app.xlsxEditorService = xlsxeditor.NewService(previewReg, office2modoc.New(repoRoot), os.TempDir())
 	app.pptxEditorService = pptxeditor.NewService(previewReg, pptxeditor.NewCLIConverter(repoRoot), os.TempDir())
@@ -344,8 +345,8 @@ func NewApp() (*App, error) {
 	app.mopHTTPHandler = mopHandler
 	app.demoFlow = demoflow.New(demoflow.Options{Recorder: app})
 
-	manifestURL := os.Getenv(config.UpdateManifestURLEnv)
-	if strings.TrimSpace(manifestURL) == "" {
+	manifestURL := config.Trimmed(config.UpdateManifestURLEnv)
+	if manifestURL == "" {
 		manifestURL = defaultUpdateManifestURL
 	}
 	updateMgr, err := appupdate.New(appupdate.Options{
@@ -383,6 +384,7 @@ func NewApp() (*App, error) {
 // startup is called by Wails after the renderer is ready. The context is
 // retained so binding methods can dispatch events and open OS dialogs.
 func (a *App) startup(ctx context.Context) {
+	wailsEventsArmed.Store(true)
 	a.ctx = ctx
 	if err := a.writeProcessIdentity(); err != nil {
 		wailsruntime.LogWarningf(ctx, "write process identity: %v", err)
@@ -463,8 +465,6 @@ func (a *App) failInterruptedTasks(ctx context.Context) error {
 	return nil
 }
 
-// shutdown is called by Wails when the window is about to close. It stops
-// long-running children so we don't leak processes.
 // startEventWriter runs the single goroutine that owns task-event persistence.
 // One worker keeps events in the order the bridge produced them, which the
 // recovery path depends on when it replays a task's history.
@@ -544,6 +544,7 @@ func (a *App) drainEventWrites() {
 }
 
 func (a *App) shutdown(ctx context.Context) {
+	wailsEventsArmed.Store(false)
 	a.removeProcessIdentity()
 	a.mu.Lock()
 	bridgeClients := a.takeBridgeClientsLocked()
@@ -1615,7 +1616,7 @@ func (a *App) SavePptx(input SavePptxInput) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := writeFileAtomic(dest, data, 0o644); err != nil {
+	if err := atomicfile.WriteFile(dest, data, 0o644); err != nil {
 		return "", fmt.Errorf("write pptx: %w", err)
 	}
 	if a.previewReg != nil {
@@ -1658,36 +1659,6 @@ func (a *App) resolveSavePptxDestination(input SavePptxInput) (string, error) {
 		dest = filepath.Join(dir, fmt.Sprintf("%s-%d.pptx", base, time.Now().UnixNano()))
 	}
 	return dest, nil
-}
-
-func writeFileAtomic(dest string, data []byte, perm os.FileMode) error {
-	tmp, err := os.CreateTemp(filepath.Dir(dest), "."+filepath.Base(dest)+".tmp-*")
-	if err != nil {
-		return err
-	}
-	tmpPath := tmp.Name()
-	cleanup := true
-	defer func() {
-		if cleanup {
-			_ = os.Remove(tmpPath)
-		}
-	}()
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(perm); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(tmpPath, dest); err != nil {
-		return err
-	}
-	cleanup = false
-	return nil
 }
 
 // normalizePptxFileName strips any path separators and guarantees a .pptx suffix.
@@ -2127,7 +2098,7 @@ func (a *App) SaveDocx(input SaveDocxInput) (SaveDocxResult, error) {
 			return SaveDocxResult{}, errors.New("save docx: source file changed outside OfficeDex; reopen it before saving")
 		}
 	}
-	if err := writeFileAtomic(dest, data, 0o644); err != nil {
+	if err := atomicfile.WriteFile(dest, data, 0o644); err != nil {
 		return SaveDocxResult{}, fmt.Errorf("save docx: write: %w", err)
 	}
 	if a.previewReg != nil {
@@ -3148,7 +3119,7 @@ func (a *App) currentBridgeEnv() []string {
 	a.mu.Lock()
 	s := a.cachedSettings
 	a.mu.Unlock()
-	return toEnvSlice(llmProviderEnv(s))
+	return llmProviderEnv(s)
 }
 
 // GetBridgeRuntimeSnapshot returns the renderer-facing description of the
@@ -4253,7 +4224,7 @@ func (a *App) resolvedBinaryLocked() (string, []string) {
 	settings := a.cachedSettings
 	return a.binary.ensure(func() (string, []string) {
 		return binresolver.ResolvePath(a.resolverOptions(settings)),
-			toEnvSlice(llmProviderEnv(settings))
+			llmProviderEnv(settings)
 	})
 }
 
@@ -4267,7 +4238,7 @@ func (a *App) resolverOptions(s types.UserSettings) binresolver.Options {
 	if bundled != "" {
 		bundledPtr = &bundled
 	}
-	env := os.Getenv(config.DesktopBinaryEnv)
+	env := config.Trimmed(config.DesktopBinaryEnv)
 	var envPtr *string
 	if env != "" {
 		envPtr = &env
@@ -4293,10 +4264,7 @@ func (a *App) bundledBinaryPath() string {
 	if resolvedExe, err := os.Executable(); err == nil {
 		exe = resolvedExe
 	}
-	cwd := ""
-	if resolvedCwd, err := os.Getwd(); err == nil {
-		cwd = resolvedCwd
-	}
+	cwd, _ := config.ProcessCwd()
 	return findBundledBinaryPath(runtime.GOOS, exe, cwd, func(candidate string) bool {
 		_, err := os.Stat(candidate)
 		return err == nil
@@ -4838,12 +4806,6 @@ func (a *App) requireLoggedInForProvider(provider *types.LlmProvider) error {
 	return nil
 }
 
-// toEnvSlice keeps callers symmetric: many of them already pass []string-shaped
-// env so this is a no-op pass-through for now.
-func toEnvSlice(env []string) []string {
-	return env
-}
-
 func dialogFilters(options *FileDialogOptions) []wailsruntime.FileFilter {
 	if options == nil || len(options.Filters) == 0 {
 		return []wailsruntime.FileFilter{
@@ -4903,16 +4865,16 @@ func emit(ctx context.Context, channel string, payload any) {
 	wailsruntime.EventsEmit(ctx, channel, payload)
 }
 
+// wailsEventsArmed is set for the window's lifetime (startup..shutdown).
+// Tests that build an App by hand never arm it, so emit stays a no-op there.
+var wailsEventsArmed atomic.Bool
+
+// canEmitWailsEvent reports whether Wails is up and events reach a window.
+// It used to decide by the context's dynamic type name ("context.backgroundCtx"
+// meant "not Wails"), which is a private detail of the standard library;
+// startup and shutdown now say so explicitly.
 func canEmitWailsEvent(ctx context.Context) bool {
-	if ctx == nil {
-		return false
-	}
-	switch fmt.Sprintf("%T", ctx) {
-	case "context.backgroundCtx", "context.todoCtx":
-		return false
-	default:
-		return true
-	}
+	return ctx != nil && wailsEventsArmed.Load()
 }
 
 func artifactFromCompletedEvent(event types.BridgeEvent) *types.Artifact {

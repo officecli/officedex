@@ -3,6 +3,7 @@ package main
 import (
 	"sync"
 	"testing"
+	"time"
 )
 
 // A task recovered twice leaves two routes; an answer for the first id has to
@@ -51,10 +52,17 @@ func TestRecoveryRoutesTerminateOnACycle(t *testing.T) {
 	r.record("task-1", "task-2")
 	r.record("task-2", "task-1")
 
-	// A cycle would spin forever without the hop bound; the test's own timeout
-	// is what catches that, so a plain call is the honest check.
-	if got := r.follow("task-1"); got != "task-1" && got != "task-2" {
-		t.Fatalf("follow left the cycle: %q", got)
+	// A cycle would spin forever without the hop bound. Bound the call
+	// ourselves so the failure is this test's own, not the package timeout.
+	done := make(chan string, 1)
+	go func() { done <- r.follow("task-1") }()
+	select {
+	case got := <-done:
+		if got != "task-1" && got != "task-2" {
+			t.Fatalf("follow left the cycle: %q", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("follow did not terminate on a two-node cycle")
 	}
 }
 

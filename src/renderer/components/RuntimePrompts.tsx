@@ -7,8 +7,8 @@ import { agentClientId } from "../agentClientIdentity";
 import { useT } from "../i18n";
 import { isWaitingOnUser } from "../runtimeRuns";
 import { recordValue, trimmedStringValue as stringValue } from "../utils/values";
+import { AGENT_RUN_FETCH_LIMIT } from "../constants/limits";
 
-const AGENT_RUN_FETCH_LIMIT = 500;
 
 interface PendingRuntimeAction { requestId: string }
 interface PendingRuntimeInput extends PendingRuntimeAction { question: string; defaultValue: string; options: string[] }

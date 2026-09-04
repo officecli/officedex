@@ -3,6 +3,7 @@ import { PreviewToolbar } from "../components/PreviewToolbar";
 import { LoadingState } from "../components/LoadingState";
 import { ErrorState } from "../components/ErrorState";
 import { officecli } from "../../bridge";
+import { DOCUMENT_ZOOM, zoomIn as stepZoomIn, zoomOut as stepZoomOut } from "./zoom";
 
 interface HtmlViewerProps {
   previewToken: string;
@@ -10,9 +11,6 @@ interface HtmlViewerProps {
   documentType?: string;
 }
 
-const ZOOM_STEP = 0.15;
-const ZOOM_MIN = 0.25;
-const ZOOM_MAX = 3;
 
 export default function HtmlViewer({ previewToken, fileName, documentType }: HtmlViewerProps) {
   const [html, setHtml] = useState<string | null>(null);
@@ -47,8 +45,8 @@ export default function HtmlViewer({ previewToken, fileName, documentType }: Htm
     doc.body.style.zoom = `${zoom}`;
   }, [zoom, html]);
 
-  const zoomIn = () => setZoom((z) => Math.min(z + ZOOM_STEP, ZOOM_MAX));
-  const zoomOut = () => setZoom((z) => Math.max(z - ZOOM_STEP, ZOOM_MIN));
+  const zoomIn = () => setZoom((z) => stepZoomIn(z, DOCUMENT_ZOOM));
+  const zoomOut = () => setZoom((z) => stepZoomOut(z, DOCUMENT_ZOOM));
   const zoomReset = () => setZoom(1);
 
   const openExternal = () => {

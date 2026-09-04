@@ -2,8 +2,13 @@ package office2modoc
 
 import "errors"
 
+// Version is the office2modoc release this build expects. The repository
+// root's office2modoc.version file is the source of truth for the scripts and
+// the release workflow; TestVersionMatchesRepositoryPin keeps this in step.
+const Version = "0.1.34"
+
 const (
-	DefaultRelativeLibraryPath       = "build/cache/office2modoc/0.1.34/darwin-universal/liboffice2modoc_ffi.dylib"
+	DefaultRelativeLibraryPath       = "build/cache/office2modoc/" + Version + "/darwin-universal/liboffice2modoc_ffi.dylib"
 	BundledRelativeLibraryPath       = "../Resources/office2modoc/liboffice2modoc_ffi.dylib"
 	ImportLimitJSON                  = `{"slideSize":10000,"wordCharCount":100000000,"excelSingleSheetCell":2000000,"excelAllSheetCell":5000000}`
 	MaxOfficeBytes             int64 = 100 << 20

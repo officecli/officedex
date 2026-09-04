@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"officedex/internal/atomicfile"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -161,36 +162,13 @@ func writeRevisionAt(packageRoot string, revision int64, content []byte, now tim
 	return writeFileAtomically(filepath.Join(packageRoot, revisionFileName), append(payload, '\n'))
 }
 
-// writeFileAtomically writes through a temporary file in the destination
-// directory and renames it into place, so a reader never observes a partial
-// package file.
+// writeFileAtomically creates the directory and writes through
+// internal/atomicfile (unique temp, fsync, rename, directory fsync).
 func writeFileAtomically(path string, data []byte) error {
-	directory := filepath.Dir(path)
-	if err := os.MkdirAll(directory, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	temporary, err := os.CreateTemp(directory, "."+filepath.Base(path)+".*.tmp")
-	if err != nil {
-		return err
-	}
-	temporaryPath := temporary.Name()
-	defer os.Remove(temporaryPath)
-
-	if _, err := temporary.Write(data); err != nil {
-		temporary.Close()
-		return err
-	}
-	if err := temporary.Sync(); err != nil {
-		temporary.Close()
-		return err
-	}
-	if err := temporary.Close(); err != nil {
-		return err
-	}
-	if err := os.Chmod(temporaryPath, 0o644); err != nil {
-		return err
-	}
-	return os.Rename(temporaryPath, path)
+	return atomicfile.WriteFile(path, data, 0o644)
 }
 
 func readFileIfExists(path string) ([]byte, error) {

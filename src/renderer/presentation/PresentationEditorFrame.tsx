@@ -14,6 +14,7 @@ import {
   type PresentationEditorContext,
 } from "../../shared/presentationInspect";
 import { errorMessage } from "../utils/values";
+import { EDITOR_SCRIPT_TIMEOUT_MS, EDITOR_SWAP_TIMEOUT_MS } from "../constants/timing";
 
 const DEFAULT_PRESENTATION_URL = "/presentation/index.html?mode=embed";
 const PRESENTATION_MANIFEST_URL = "/presentation/officedex-component.json";
@@ -76,9 +77,9 @@ export interface PresentationEditorFrameProps {
   onSaved?: (result: { filePath: string; revision: number }) => void;
 }
 
-const SCRIPT_TIMEOUT_MS = 120_000;
+const SCRIPT_TIMEOUT_MS = EDITOR_SCRIPT_TIMEOUT_MS;
 /** A document swap re-attaches an already-running editor; it is not a boot. */
-const SWAP_TIMEOUT_MS = 30_000;
+const SWAP_TIMEOUT_MS = EDITOR_SWAP_TIMEOUT_MS;
 
 function toTransferableBuffer(data: ArrayBuffer | Uint8Array): ArrayBuffer {
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);

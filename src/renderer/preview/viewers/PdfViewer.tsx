@@ -6,6 +6,7 @@ import { PreviewToolbar } from "../components/PreviewToolbar";
 import { LoadingState } from "../components/LoadingState";
 import { ErrorState } from "../components/ErrorState";
 import { officecli } from "../../bridge";
+import { PDF_ZOOM, zoomIn as stepZoomIn, zoomOut as stepZoomOut } from "./zoom";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.js",
@@ -18,9 +19,6 @@ interface PdfViewerProps {
   documentType?: string;
 }
 
-const ZOOM_STEP = 0.25;
-const ZOOM_MIN = 0.5;
-const ZOOM_MAX = 4;
 const DEFAULT_SCALE = 1.5;
 
 export default function PdfViewer({ previewToken, fileName, documentType }: PdfViewerProps) {
@@ -86,8 +84,8 @@ export default function PdfViewer({ previewToken, fileName, documentType }: PdfV
     };
   }, [pdfDoc, currentPage, scale]);
 
-  const zoomIn = () => setScale((s) => Math.min(s + ZOOM_STEP, ZOOM_MAX));
-  const zoomOut = () => setScale((s) => Math.max(s - ZOOM_STEP, ZOOM_MIN));
+  const zoomIn = () => setScale((s) => stepZoomIn(s, PDF_ZOOM));
+  const zoomOut = () => setScale((s) => stepZoomOut(s, PDF_ZOOM));
   const zoomReset = () => setScale(DEFAULT_SCALE);
   const prevPage = () => setCurrentPage((p) => Math.max(p - 1, 1));
   const nextPage = () => setCurrentPage((p) => Math.min(p + 1, totalPages));

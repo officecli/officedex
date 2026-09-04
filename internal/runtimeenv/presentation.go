@@ -58,7 +58,7 @@ func BridgeEnv(cwd string) []string {
 			filepath.Join(cwd, "..", "presentation"),
 		)
 	}
-	if processCwd, err := os.Getwd(); err == nil && processCwd != cwd {
+	if processCwd, ok := config.ProcessCwd(); ok && processCwd != cwd {
 		candidates = append(candidates,
 			filepath.Join(processCwd, "presentation"),
 			filepath.Join(processCwd, "..", "presentation"),
@@ -66,7 +66,7 @@ func BridgeEnv(cwd string) []string {
 	}
 	// GUI-launched macOS apps often have `/` as their real cwd but retain the
 	// launch shell's PWD. Include it as a local-development discovery hint.
-	if envPWD := strings.TrimSpace(os.Getenv("PWD")); envPWD != "" && envPWD != cwd {
+	if envPWD := config.LauncherPWD(); envPWD != "" && envPWD != cwd {
 		candidates = append(candidates,
 			filepath.Join(envPWD, "presentation"),
 			filepath.Join(envPWD, "..", "presentation"),
@@ -105,7 +105,7 @@ func Root(repoRoot string) string {
 			filepath.Join(repoRoot, "..", "presentation"),
 		)
 	}
-	if cwd, err := os.Getwd(); err == nil {
+	if cwd, ok := config.ProcessCwd(); ok {
 		candidates = append(candidates, filepath.Join(cwd, "presentation"), filepath.Join(cwd, "..", "presentation"))
 	}
 	for _, candidate := range candidates {
@@ -156,24 +156,8 @@ func nodeExecutableName() string {
 	return "node"
 }
 
-func validNodeExecutable(candidate string) string {
-	candidate = strings.TrimSpace(candidate)
-	if candidate == "" {
-		return ""
-	}
-	resolved, err := filepath.Abs(candidate)
-	if err != nil {
-		return ""
-	}
-	info, err := os.Stat(resolved)
-	if err != nil || !info.Mode().IsRegular() {
-		return ""
-	}
-	if runtime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0 {
-		return ""
-	}
-	return resolved
-}
+// validNodeExecutable is config.ExecutableFile under the name the callers use.
+func validNodeExecutable(candidate string) string { return config.ExecutableFile(candidate) }
 
 func IsRoot(root string) bool {
 	for _, relative := range []string{

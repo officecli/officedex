@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 set -euo pipefail
+OFFICE2MODOC_VERSION="$(tr -d '[:space:]' < "$(dirname "$0")/../office2modoc.version")"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OFFICEDEX_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -53,7 +54,7 @@ PRESENTATION_SOURCE_DIR="${PRESENTATION_DIR}" env -u GOROOT wails build -ldflags
 npm run stage:office2modoc
 node scripts/bundle-office2modoc.mjs \
   --app build/bin/OfficeDex.app \
-  --source build/cache/office2modoc/0.1.34/darwin-arm64/liboffice2modoc_ffi.dylib \
+  --source build/cache/office2modoc/${OFFICE2MODOC_VERSION}/darwin-arm64/liboffice2modoc_ffi.dylib \
   --expected-arch arm64
 npm run bundle:licenses:mac
 npm run bundle:officecli:mac
