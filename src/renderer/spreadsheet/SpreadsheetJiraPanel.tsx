@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { CheckCircle2, DatabaseZap, Send, Settings } from "lucide-react";
-import type { ConfiguredJiraSyncResult, JiraConnectionSummary, JiraSyncResult } from "../../shared/types";
+import type { ConfiguredJiraSyncResult, JiraConnectionSummary, JiraSyncResult } from "../../shared/verticals";
 import { confirmAgentApproval, restorePendingAgentInput, unwrapAgentRunResult, waitForAgentRun } from "../agentRuntime";
 import { officecli } from "../bridge";
 import { Button, TextArea } from "../ui";

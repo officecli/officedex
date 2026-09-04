@@ -1,15 +1,7 @@
 import { useCallback, useMemo, useRef } from "react";
 import type { RefObject } from "react";
-import type {
-  AgentRun,
-  Artifact,
-  ConfiguredJiraSyncResult,
-  ConfiguredLiquipediaSyncResult,
-  JiraSyncResult,
-  LiquipediaSyncResult,
-  PreviewGrant,
-  RecentFile,
-} from "../shared/types";
+import type { AgentRun, Artifact, PreviewGrant, RecentFile } from "../shared/types";
+import type { ConfiguredJiraSyncResult, ConfiguredLiquipediaSyncResult, JiraSyncResult, LiquipediaSyncResult } from "../shared/verticals";
 import { AgentClientToolDeferredError, type AgentClientToolSurfaces } from "./AgentClientToolHost";
 import {
   executeActiveEditorClientTool,

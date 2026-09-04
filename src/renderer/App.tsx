@@ -1,6 +1,7 @@
 import { DialogHost, ToastHost, toast as message } from "./ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AgentRun, Artifact, BridgeEvent, ConfiguredJiraSyncResult, ConfiguredLiquipediaSyncResult, DesktopTask, GenerateInput, JiraSyncResult, LiquipediaSyncResult, ModifyInput, PreviewGrant, RecentFile, TaskHistoryEntry, TaskQuestionAnswer, WorkspaceSummary } from "../shared/types";
+import type { AgentRun, Artifact, BridgeEvent, DesktopTask, GenerateInput, ModifyInput, PreviewGrant, RecentFile, TaskHistoryEntry, TaskQuestionAnswer, WorkspaceSummary } from "../shared/types";
+import type { ConfiguredJiraSyncResult, ConfiguredLiquipediaSyncResult, JiraSyncResult, LiquipediaSyncResult } from "../shared/verticals";
 import { getCapability, isDocumentType } from "../shared/types";
 import { AgentClientToolHost } from "./AgentClientToolHost";
 import { useAgentClientTools } from "./useAgentClientTools";

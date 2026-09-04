@@ -35,7 +35,8 @@ import { formatTestResult, ProviderForm } from "../components/ProviderForm";
 import { useT, useLocale, useSetLocale, type Locale } from "../i18n";
 import { defaultProxySettings, isValidProxyUrl } from "../defaults";
 import { readNotificationsEnabled, setNotificationsEnabled as persistNotificationsEnabled } from "../notifications";
-import type { AuthEvent, CreditStatus, DocumentType, GenerateDefaults, InviteInfo, JiraAuthType, JiraConnectionSummary, JiraProbeResult, LiquipediaConnectionSummary, LiquipediaProbeResult, LlmProvider, ProviderTestResult, ProxySettings, WhoAmIResult } from "../../shared/types";
+import type { AuthEvent, CreditStatus, DocumentType, GenerateDefaults, InviteInfo, LlmProvider, ProviderTestResult, ProxySettings, WhoAmIResult } from "../../shared/types";
+import type { JiraAuthType, JiraConnectionSummary, JiraProbeResult, LiquipediaConnectionSummary, LiquipediaProbeResult } from "../../shared/verticals";
 import { ImeInput, ImeTextArea } from "../components/ImeInput";
 import { errorMessage } from "../utils/values";
 
