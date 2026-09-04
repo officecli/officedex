@@ -135,13 +135,21 @@ func NewService(resolver PreviewResolver, converter Converter, tempRoot string) 
 	}
 }
 
+// importTimeout bounds one office2modoc import. The FFI call cannot be
+// interrupted, but the caller gets its answer and the service lock is never
+// held while it runs, so a wedged conversion no longer freezes every other
+// workbook.
+const importTimeout = 180 * time.Second
+
 func (s *Service) Prepare(ctx context.Context, previewToken string) (PrepareResult, error) {
+	// Only the session table needs the lock; the conversion runs outside it.
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
+	closed, configured := s.closed, s.resolver != nil && s.converter != nil
+	s.mu.Unlock()
+	if closed {
 		return PrepareResult{}, ErrServiceClosed
 	}
-	if s.resolver == nil || s.converter == nil {
+	if !configured {
 		return PrepareResult{}, errors.New("xlsx editor: service is not configured")
 	}
 
@@ -181,7 +189,10 @@ func (s *Service) Prepare(ctx context.Context, previewToken string) (PrepareResu
 	}
 	defer cleanupImport()
 	modocPath := filepath.Join(directory, "workbook.modoc")
-	if err := s.converter.ImportXlsx(ctx, importPath, modocPath, directory); err != nil {
+	importCtx, cancelImport := context.WithTimeout(ctx, importTimeout)
+	err = s.converter.ImportXlsx(importCtx, importPath, modocPath, directory)
+	cancelImport()
+	if err != nil {
 		return PrepareResult{}, fmt.Errorf("xlsx editor: import XLSX: %w", err)
 	}
 	modocContentPath, err := resolveModocContentPath(modocPath)
@@ -201,6 +212,11 @@ func (s *Service) Prepare(ctx context.Context, previewToken string) (PrepareResu
 		return PrepareResult{}, fmt.Errorf("xlsx editor: read MODoc image assets: %w", err)
 	}
 
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return PrepareResult{}, ErrServiceClosed
+	}
 	sessionID := s.newSessionID()
 	s.sessions[sessionID] = &editSession{
 		previewToken:     previewToken,

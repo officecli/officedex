@@ -53,17 +53,35 @@ func (c *Converter) ImportXlsx(ctx context.Context, inputOfficePath, shimoPath, 
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	status, err := native.Import(ImportParams{
-		RequestID:       uuid.NewString(),
-		InputOfficePath: inputOfficePath,
-		ShimoPath:       shimoPath,
-		TempPath:        tempPath,
-		Lang:            "zh-CN",
+	return runNative(ctx, func() error {
+		status, err := native.Import(ImportParams{
+			RequestID:       uuid.NewString(),
+			InputOfficePath: inputOfficePath,
+			ShimoPath:       shimoPath,
+			TempPath:        tempPath,
+			Lang:            "zh-CN",
+		})
+		if err != nil {
+			return err
+		}
+		return StatusError("import", status)
 	})
-	if err != nil {
+}
+
+// runNative runs a blocking FFI call and returns when it finishes or when the
+// context ends, whichever comes first. The native call itself cannot be
+// interrupted; on a deadline the goroutine finishes in the background and its
+// result is discarded, but the caller stops waiting and the editor lock it
+// was queued behind is released.
+func runNative(ctx context.Context, call func() error) error {
+	done := make(chan error, 1)
+	go func() { done <- call() }()
+	select {
+	case err := <-done:
 		return err
+	case <-ctx.Done():
+		return ctx.Err()
 	}
-	return StatusError("import", status)
 }
 
 func (c *Converter) ExportXlsx(ctx context.Context, outputOfficePath, shimoPath, tempPath string) error {
@@ -86,17 +104,19 @@ func (c *Converter) ExportXlsx(ctx context.Context, outputOfficePath, shimoPath,
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	status, err := native.Export(ExportParams{
-		RequestID:        uuid.NewString(),
-		OutputOfficePath: outputOfficePath,
-		ShimoPath:        shimoPath,
-		TempPath:         tempPath,
-		Lang:             "zh-CN",
+	return runNative(ctx, func() error {
+		status, err := native.Export(ExportParams{
+			RequestID:        uuid.NewString(),
+			OutputOfficePath: outputOfficePath,
+			ShimoPath:        shimoPath,
+			TempPath:         tempPath,
+			Lang:             "zh-CN",
+		})
+		if err != nil {
+			return err
+		}
+		return StatusError("export", status)
 	})
-	if err != nil {
-		return err
-	}
-	return StatusError("export", status)
 }
 
 func (c *Converter) Close() error {
