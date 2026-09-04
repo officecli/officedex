@@ -571,7 +571,7 @@ func backfillV7(ctx context.Context, tx *sql.Tx) error {
 			// event in the additive activity projection rather than dropping it.
 			event.conversationID = event.taskID
 		}
-		if ok && event.eventType == "task.user_input" && task.sourceFile == "" {
+		if ok && event.eventType == types.EventLocalUserInput && task.sourceFile == "" {
 			var payload map[string]any
 			if json.Unmarshal([]byte(event.payload), &payload) == nil {
 				task.sourceFile = firstPayloadString(payload, "source_file", "sourceFile")
@@ -779,7 +779,7 @@ func backfillV7(ctx context.Context, tx *sql.Tx) error {
 		}
 		taskEventIndex[event.taskID]++
 		kind := "event"
-		if event.eventType == "task.user_input" {
+		if event.eventType == types.EventLocalUserInput {
 			kind = "user_input"
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO activities(id, activity_stream_id, source_conversation_id, task_id, ordinal, kind, event_id, event_type, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?) ON CONFLICT(id) DO UPDATE SET activity_stream_id=excluded.activity_stream_id, source_conversation_id=excluded.source_conversation_id, task_id=excluded.task_id, ordinal=excluded.ordinal, kind=excluded.kind, event_id=excluded.event_id, event_type=excluded.event_type, payload_json=excluded.payload_json, created_at=excluded.created_at`, activityID, streamID, event.conversationID, event.taskID, ordinal, kind, originalID, event.eventType, event.payload, event.createdAt); err != nil {
@@ -1144,7 +1144,7 @@ func projectTaskTx(ctx context.Context, tx *sql.Tx, taskID string) error {
 		}
 		taskEventIndex[event.taskID]++
 		kind := "event"
-		if event.eventType == "task.user_input" {
+		if event.eventType == types.EventLocalUserInput {
 			kind = "user_input"
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO activities(id, activity_stream_id, source_conversation_id, task_id, ordinal, kind, event_id, event_type, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?) ON CONFLICT(id) DO UPDATE SET activity_stream_id=excluded.activity_stream_id, source_conversation_id=excluded.source_conversation_id, task_id=excluded.task_id, ordinal=excluded.ordinal, kind=excluded.kind, event_id=excluded.event_id, event_type=excluded.event_type, payload_json=excluded.payload_json, created_at=excluded.created_at`, activityID, "activity:"+seed.conversationID, seed.conversationID, event.taskID, ordinal, kind, originalID, event.eventType, event.payload, event.createdAt); err != nil {
@@ -2452,15 +2452,15 @@ func (s *Store) GetCreditFeatureSince(ctx context.Context) (string, error) {
 
 func statusFromEvent(eventType string) string {
 	switch eventType {
-	case "task.completed":
+	case types.EventTaskCompleted:
 		return "completed"
-	case "task.failed":
+	case types.EventTaskFailed:
 		return "failed"
-	case "task.cancelled":
+	case types.EventTaskCancelled:
 		return "cancelled"
-	case "task.question":
+	case types.EventTaskQuestion:
 		return "question"
-	case "task.plan":
+	case types.EventTaskPlan:
 		return "plan_review"
 	default:
 		return "running"
@@ -2486,7 +2486,7 @@ func taskAnswersEvent(taskID string, answers []TaskAnswer) types.BridgeEvent {
 	return types.BridgeEvent{
 		EventID: "local-answers-" + taskID,
 		TaskID:  taskID,
-		Type:    "task.answers",
+		Type:    types.EventLocalAnswers,
 		Payload: map[string]any{"answers": raw},
 	}
 }

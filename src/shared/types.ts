@@ -224,6 +224,51 @@ export function supportsAttachment(type: DocumentType, slot: AttachmentSlot): bo
   return getAttachmentSpec(type, slot) !== undefined;
 }
 
+/** Events the officecli bridge emits about a task (mirrors Go types.EventTask*). */
+export type TaskBridgeEventType =
+  | "task.started"
+  | "task.progress"
+  | "task.question"
+  | "task.plan"
+  | "task.vibe_tree"
+  | "task.vibe_ops"
+  | "task.vibe_slide"
+  | "task.vibe_outline"
+  | "task.reslide_tail"
+  | "task.output"
+  | "task.completed"
+  | "task.failed"
+  | "task.cancelled";
+
+/** Events the desktop writes into the same history itself; the bridge never sends them. */
+export type LocalBridgeEventType = "task.user_input" | "task.answers";
+
+/** Connection-state events the Go bridge client raises about the process. */
+export type BridgeStatusEventType =
+  | "bridge.reconnecting"
+  | "bridge.reconnected"
+  | "bridge.unconfigured"
+  | "bridge.reconnect_exhausted"
+  | "bridge.exited";
+
+/** Agent-runtime events relayed by the bridge (run.*, step.*, client-tool.*, ...). */
+export type RuntimeBridgeEventType =
+  | "run.created" | "run.started" | "run.retrying" | "run.completed" | "run.failed" | "run.cancelled" | "run.review_ready"
+  | "step.started" | "step.progress" | "step.completed" | "step.failed"
+  | "input.requested" | "input.submitted"
+  | "approval.requested" | "approval.resolved"
+  | "client-tool.requested" | "client-tool.completed" | "client-tool.failed" | "client-tool.reassigned"
+  | "artifact.created" | "usage.recorded";
+
+export type KnownBridgeEventType = TaskBridgeEventType | LocalBridgeEventType | BridgeStatusEventType | RuntimeBridgeEventType;
+
+/**
+ * The known names get completion and exhaustiveness checks; the bridge also
+ * announces its event_types at runtime, so an unknown name still decodes
+ * instead of being rejected at the type level.
+ */
+export type BridgeEventType = KnownBridgeEventType | (string & Record<never, never>);
+
 export interface BridgeEvent {
   event_id?: string;
   session_id?: string;
@@ -231,7 +276,7 @@ export interface BridgeEvent {
   task_id?: string;
   run_id?: string;
   step_id?: string;
-  type: string;
+  type: BridgeEventType;
   ts?: string;
   payload?: Record<string, unknown>;
 }
@@ -284,6 +329,9 @@ export interface RecentFile {
   lastOpenedAt: string;
 }
 
+/** Which runtime a task ran on; mirrors Go types.RuntimeMode. */
+export type RuntimeMode = "custom" | "hosted";
+
 export interface GenerateInput {
   documentType: DocumentType;
   generationMode?: GenerationMode;
@@ -304,6 +352,10 @@ export interface GenerateInput {
   enableImages?: boolean;
   imageQuality?: "standard" | "premium";
   localPreview?: boolean;
+  /** Which runtime ran the task ("custom" / "hosted"); Go fills it in for history. */
+  runtimeMode?: RuntimeMode;
+  /** Which PPTX backend to use; the desktop leaves it unset and Go selects mop-skill. */
+  pptxBackend?: string;
 }
 
 // ModifyInput drives the "继续修改" (office.modify) flow: an LLM-driven in-place
@@ -580,11 +632,37 @@ export interface DesktopTask {
   vibeOutline?: VibeOutline;
 }
 
-export type VibeOpShape = Record<string, any>;
-export interface VibeOp { [key: string]: any; op: string; seq: number; slide?: number; shape?: VibeOpShape; }
-export interface VibeOutline { [key: string]: any; }
+// Live-drawing ops stream from the bridge as JSON and are replayed into the
+// presentation engine unchanged. The renderer reads a handful of fields; the
+// rest passes through, typed unknown rather than any so nothing downstream
+// can dereference a field the bridge never promised.
+export interface VibeImageRef { digest?: string; [key: string]: unknown }
+export interface VibeOpShape { kind?: string; imageRef?: VibeImageRef; [key: string]: unknown }
+export interface VibeOpFill { imageRef?: VibeImageRef; [key: string]: unknown }
+export interface VibeOp {
+  op: string;
+  seq: number;
+  slide?: number;
+  shape?: VibeOpShape;
+  fill?: VibeOpFill;
+  /** deck.begin: fonts the deck was authored with. */
+  fonts?: { latin?: string; cjk?: string };
+  /** deck.begin: total slide count. */
+  slides?: number;
+  /** deck.begin: where the worker staged pictures. */
+  assetsDir?: string;
+  [key: string]: unknown;
+}
+export interface VibeOutlineSlide { slide?: number; headline?: string; form?: string; composition?: string; [key: string]: unknown }
+export interface VibeOutline { slides?: VibeOutlineSlide[]; [key: string]: unknown }
 export interface TimelineDeck { nodeId: string; filePath: string; fileName: string; }
-export interface TimelineNode { [key: string]: any; id: string; }
+export interface TimelineNode {
+  id: string;
+  kind?: string;
+  level?: number;
+  text?: string;
+  [key: string]: unknown;
+}
 
 export interface TaskPlan {
   id: string;
@@ -736,6 +814,10 @@ export interface UserSettings {
   proxy: ProxySettings | null;
   imageWatermark: ImageWatermarkSettings;
   waiting2048Enabled: boolean;
+  /** Explicit officecli binary; null uses the bundled one. */
+  bridgeBinaryPath?: string | null;
+  supportReportEndpoint?: string | null;
+  supportReportToken?: string | null;
 }
 
 export interface AppUpdateAsset {
@@ -824,12 +906,14 @@ export interface SubmitReportResult {
   requestId?: string;
   uploaded: boolean;
   fallbackReason?: string;
+  viewUrl?: string;
 }
 
 export interface PeekReportContextResult {
   requestId: string;
   errorCode: string;
   errorMessage: string;
+  runtimeMode?: RuntimeMode;
 }
 
 export interface LoginInput {

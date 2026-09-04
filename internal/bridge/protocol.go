@@ -18,7 +18,9 @@ import (
 //
 // Raise this when the app starts depending on a method or field an older
 // bridge does not have.
-const MinProtocolVersion = "2026-04-03"
+// 2026-09-04: the bridge attaches error.data.code (task_not_found, ...) and
+// the desktop stopped recognising those answers by message text.
+const MinProtocolVersion = "2026-09-04"
 
 // protocolVersionPattern matches the dated versions the bridge announces.
 // Same-length dates compare correctly as strings, which is why the shape is

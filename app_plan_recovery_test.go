@@ -232,6 +232,7 @@ func TestRecoveryInheritsMultiQuestionAnswersFromRecoveredParent(t *testing.T) {
 		Type:   "task.cancelled",
 		Payload: map[string]any{
 			"message": "Task was recovered after the application restarted",
+			"reason":  types.CancelReasonRecoveredAfterRestart,
 		},
 	}); err != nil {
 		t.Fatalf("RecordEvent parent cancellation: %v", err)

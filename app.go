@@ -449,7 +449,7 @@ func (a *App) failInterruptedTasks(ctx context.Context) error {
 		if err := a.localStore.RecordEvent(types.BridgeEvent{
 			EventID: "local-interrupted-" + uuid.NewString(),
 			TaskID:  taskID,
-			Type:    "task.failed",
+			Type:    types.EventTaskFailed,
 			TS:      time.Now().UTC().Format(time.RFC3339Nano),
 			Payload: map[string]any{
 				"message":  interruptedTaskMessage,
@@ -758,7 +758,7 @@ func (a *App) Generate(input types.GenerateInput) (GenerateResult, error) {
 		}
 		a.recordTaskEventBestEffort(types.BridgeEvent{
 			TaskID: result.TaskID,
-			Type:   "task.user_input",
+			Type:   types.EventLocalUserInput,
 			Payload: generateInputEventPayload(resolved, localstore.TaskContext{
 				WorkspaceID:    resolved.WorkspaceID,
 				ConversationID: resolved.ConversationID,
@@ -813,7 +813,7 @@ func (a *App) Modify(input types.ModifyInput) (GenerateResult, error) {
 		}
 		a.recordTaskEventBestEffort(types.BridgeEvent{
 			TaskID: result.TaskID,
-			Type:   "task.user_input",
+			Type:   types.EventLocalUserInput,
 			Payload: map[string]any{
 				"prompt":      resolved.Prompt,
 				"source_file": resolved.SourceFile,
@@ -850,7 +850,7 @@ func (a *App) ArtifactStageEdit(input types.ArtifactStageEditInput) (GenerateRes
 		if err := a.recordTaskWorkspaceContext(result.TaskID, input.WorkspaceID, input.ConversationID, input.ParentTaskID, input.ArtifactStage.Instruction, input.NoProject); err != nil {
 			return GenerateResult{}, err
 		}
-		a.recordTaskEventBestEffort(types.BridgeEvent{TaskID: result.TaskID, Type: "task.user_input", Payload: map[string]any{"prompt": input.ArtifactStage.Instruction, "source_file": input.ArtifactStage.Target.ArtifactPath, "artifact_stage_scope": input.ArtifactStage.Scope.Kind}})
+		a.recordTaskEventBestEffort(types.BridgeEvent{TaskID: result.TaskID, Type: types.EventLocalUserInput, Payload: map[string]any{"prompt": input.ArtifactStage.Instruction, "source_file": input.ArtifactStage.Target.ArtifactPath, "artifact_stage_scope": input.ArtifactStage.Scope.Kind}})
 	}
 	return GenerateResult{TaskID: result.TaskID, SessionID: result.SessionID, Status: result.Status}, nil
 }
@@ -1037,7 +1037,7 @@ func (a *App) recoverStaleInteractiveRespond(input RespondInput, originalErr err
 	recoveredInputEvent := types.BridgeEvent{
 		EventID: "local-recovered-input-" + uuid.NewString(),
 		TaskID:  result.TaskID,
-		Type:    "task.user_input",
+		Type:    types.EventLocalUserInput,
 		TS:      time.Now().UTC().Format(time.RFC3339Nano),
 		Payload: generateInputEventPayload(generateInput, taskCtx),
 	}
@@ -1102,7 +1102,7 @@ func (a *App) recoverStaleInteractiveRespond(input RespondInput, originalErr err
 	// renderer (which keeps using the original id) no longer re-triggers a
 	// from-scratch recovery on every subsequent step.
 	a.registerRecoveredTask(input.TaskID, result.TaskID)
-	a.recordLocalTaskCancelled(input.TaskID, "Task was recovered after the application restarted")
+	a.recordLocalTaskCancelled(input.TaskID, "Task was recovered after the application restarted", types.CancelReasonRecoveredAfterRestart)
 	payload, err := json.Marshal(map[string]any{
 		"accepted":      true,
 		"task_id":       result.TaskID,
@@ -1165,7 +1165,7 @@ func (a *App) inheritRecoveredMultiQuestionAnswers(ctx context.Context, taskCtx 
 func latestMultiQuestionIDs(events []types.BridgeEvent) map[string]struct{} {
 	for index := len(events) - 1; index >= 0; index-- {
 		event := events[index]
-		if event.Type != "task.question" || event.Payload == nil {
+		if event.Type != types.EventTaskQuestion || event.Payload == nil {
 			continue
 		}
 		rawQuestions, ok := event.Payload["questions"].([]any)
@@ -1197,10 +1197,11 @@ func latestMultiQuestionIDs(events []types.BridgeEvent) map[string]struct{} {
 func wasRecoverySourceTask(events []types.BridgeEvent) bool {
 	for index := len(events) - 1; index >= 0; index-- {
 		event := events[index]
-		if event.Type != "task.cancelled" || event.Payload == nil {
+		if event.Type != types.EventTaskCancelled || event.Payload == nil {
 			continue
 		}
-		return strings.TrimSpace(fmt.Sprint(event.Payload["message"])) == "Task was recovered after the application restarted"
+		reason, _ := event.Payload["reason"].(string)
+		return reason == types.CancelReasonRecoveredAfterRestart
 	}
 	return false
 }
@@ -1308,21 +1309,21 @@ func latestTaskStateRecoverable(events []types.BridgeEvent) bool {
 	state := ""
 	for _, event := range events {
 		switch event.Type {
-		case "task.question", "task.plan", "task.completed", "task.failed", "task.cancelled":
+		case types.EventTaskQuestion, types.EventTaskPlan, types.EventTaskCompleted, types.EventTaskFailed, types.EventTaskCancelled:
 			state = event.Type
 		}
 	}
-	return state == "task.question" || state == "task.plan"
+	return state == types.EventTaskQuestion || state == types.EventTaskPlan
 }
 
 func recoverGenerateInputFromEvents(events []types.BridgeEvent, taskCtx localstore.TaskContext) (types.GenerateInput, error) {
 	var userInput map[string]any
 	var started map[string]any
 	for _, event := range events {
-		if event.Type == "task.started" {
+		if event.Type == types.EventTaskStarted {
 			started = event.Payload
 		}
-		if event.Type == "task.user_input" {
+		if event.Type == types.EventLocalUserInput {
 			userInput = event.Payload
 		}
 	}
@@ -1452,28 +1453,34 @@ func (a *App) Cancel(taskID string) ([]byte, error) {
 	return raw, nil
 }
 
-func (a *App) recordLocalTaskCancelled(taskID, message string) {
+// recordLocalTaskCancelled writes a task.cancelled the desktop decided on
+// itself. reason, when given, is a machine-readable marker (see
+// types.CancelReason*) so later code does not have to recognise the message.
+func (a *App) recordLocalTaskCancelled(taskID, message string, reason ...string) {
 	if a.localStore == nil || strings.TrimSpace(taskID) == "" {
 		return
 	}
 	if strings.TrimSpace(message) == "" {
 		message = "Task cancelled"
 	}
+	payload := map[string]any{"message": message}
+	if len(reason) > 0 && strings.TrimSpace(reason[0]) != "" {
+		payload["reason"] = reason[0]
+	}
 	a.recordTaskEventBestEffort(types.BridgeEvent{
 		EventID: "local-cancel-" + uuid.NewString(),
 		TaskID:  strings.TrimSpace(taskID),
-		Type:    "task.cancelled",
+		Type:    types.EventTaskCancelled,
 		TS:      time.Now().UTC().Format(time.RFC3339Nano),
-		Payload: map[string]any{"message": message},
+		Payload: payload,
 	})
 }
 
+// isBridgeTaskNotFoundError reports the bridge's structured "task not found"
+// answer. It used to match "not found" in the message text, which also caught
+// unrelated errors (a missing file, an unknown method).
 func isBridgeTaskNotFoundError(err error) bool {
-	if err == nil {
-		return false
-	}
-	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "not found") || strings.Contains(message, "not_found")
+	return bridge.IsTaskNotFound(err)
 }
 
 // ─── Shell / dialog bindings ────────────────────────────────────────────────
@@ -2857,7 +2864,7 @@ func (a *App) GetTaskHistory(limit int) ([]types.TaskHistoryEntry, error) {
 		// `IssuePreviewToken` rejects historical artifacts with "artifact is not
 		// registered" and the preview button appears to do nothing.
 		for _, ev := range entry.Events {
-			if ev.Type != "task.completed" {
+			if ev.Type != types.EventTaskCompleted {
 				continue
 			}
 			if artifact := artifactFromCompletedEvent(ev); artifact != nil {
@@ -3661,7 +3668,7 @@ func (a *App) runtimeModeSnapshot() types.RuntimeMode {
 // recent task.failed entry, or nil when none exists.
 func latestFailedEvent(events []types.BridgeEvent) *types.BridgeEvent {
 	for i := len(events) - 1; i >= 0; i-- {
-		if events[i].Type == "task.failed" {
+		if events[i].Type == types.EventTaskFailed {
 			ev := events[i]
 			return &ev
 		}
@@ -3918,7 +3925,7 @@ func (a *App) bridgeEventListener(client *bridge.Client) bridge.EventListener {
 			emit(ctx, bridgeEventChannel, event)
 			return
 		}
-		if event.Type == "task.started" {
+		if event.Type == types.EventTaskStarted {
 			// Read the snapshot, not App's mutex: this runs on the bridge's
 			// stdout reader, and a settings write holding a.mu while it
 			// resolves binaries used to stall the whole op stream.
@@ -3949,7 +3956,7 @@ func (a *App) bridgeEventListener(client *bridge.Client) bridge.EventListener {
 		// by asking for a preview token of the finished artifact. Grant that
 		// before emitting (an in-memory registry write) so the request cannot
 		// race the writer goroutine and fail with "artifact is not registered".
-		if event.Type == "task.completed" {
+		if event.Type == types.EventTaskCompleted {
 			if artifact := artifactFromCompletedEvent(event); artifact != nil {
 				if err := a.AllowArtifact(*artifact); err != nil {
 					wailsruntime.LogWarningf(ctx, "grant completed artifact: %v", err)
@@ -3967,7 +3974,7 @@ func (a *App) bridgeEventListener(client *bridge.Client) bridge.EventListener {
 			// Credit bookkeeping is a SQLite write too; it used to run on the
 			// reader inline, right after the queue was introduced to keep
 			// SQLite off the reader.
-			if persisted.Type == "task.completed" || persisted.Type == "task.failed" {
+			if persisted.Type == types.EventTaskCompleted || persisted.Type == types.EventTaskFailed {
 				if a.localStore != nil && persisted.Payload != nil {
 					if c, ok := persisted.Payload["credits_charged"].(float64); ok {
 						charged := int(c)
@@ -4087,10 +4094,32 @@ func (a *App) bridgeForMetadata() (*bridge.Client, error) {
 // swapped: a task belongs to the process that started it, and replacing that
 // process to serve an unrelated call stranded the task inside a child nobody
 // could reach anymore.
+// startBridge starts a bridge process and completes the protocol handshake
+// before anyone sends it work. The version check used to run only when the
+// renderer called Initialize at startup, so a process started for a task in a
+// second workspace, or restarted after it exited, was never checked and an
+// old officecli failed partway through a generation with "method not found".
+func (a *App) startBridge(client *bridge.Client) error {
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := client.Start(ctx); err != nil {
+		return err
+	}
+	if _, err := client.Initialize(ctx); err != nil {
+		// Not usable: take the process down rather than leaving it pooled
+		// and connected for the next call to trip over.
+		client.Stop()
+		return err
+	}
+	return nil
+}
+
 func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
 	if client := a.bridges.get(cwd); client != nil {
 		if !client.Connected() {
-			if err := client.Start(a.ctx); err != nil {
+			if err := a.startBridge(client); err != nil {
 				return nil, err
 			}
 		}
@@ -4107,10 +4136,10 @@ func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
 		if a.ctx != nil {
 			emit(a.ctx, bridgeEventChannel, types.BridgeEvent{
 				Type:    "bridge.unconfigured",
-				Payload: map[string]any{"message": message},
+				Payload: map[string]any{"message": message, "kind": string(types.FailureSetup)},
 			})
 		}
-		return nil, errors.New(message)
+		return nil, errors.New(types.TagFailure(types.FailureSetup, message))
 	}
 
 	env := llmProviderEnv(settingsValue)
@@ -4140,7 +4169,7 @@ func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
 	})
 	client.OnEvent(a.bridgeEventListener(client))
 
-	if err := client.Start(a.ctx); err != nil {
+	if err := a.startBridge(client); err != nil {
 		return nil, err
 	}
 
@@ -4529,7 +4558,7 @@ func (a *App) recordTaskWorkspaceContext(taskID, workspaceID, conversationID, pa
 // the writer goroutine, never on a bridge reader.
 func (a *App) recordTaskEvent(event types.BridgeEvent) error {
 	completedArtifact := (*types.Artifact)(nil)
-	if event.Type == "task.completed" {
+	if event.Type == types.EventTaskCompleted {
 		completedArtifact = artifactFromCompletedEvent(event)
 	}
 	if a.localStore != nil {
@@ -4537,7 +4566,7 @@ func (a *App) recordTaskEvent(event types.BridgeEvent) error {
 			return err
 		}
 	}
-	if event.Type == "task.completed" && completedArtifact != nil {
+	if event.Type == types.EventTaskCompleted && completedArtifact != nil {
 		if err := a.AllowArtifact(*completedArtifact); err != nil {
 			return err
 		}
@@ -4778,7 +4807,7 @@ func validateCustomProvider(s types.UserSettings) error {
 	if strings.TrimSpace(s.LlmProvider.BaseURL) == "" ||
 		strings.TrimSpace(s.LlmProvider.APIKey) == "" ||
 		strings.TrimSpace(s.LlmProvider.Model) == "" {
-		return errors.New("generate.custom_provider_incomplete")
+		return errors.New(types.TagFailure(types.FailureSetup, "generate.custom_provider_incomplete"))
 	}
 	return nil
 }
@@ -4804,7 +4833,7 @@ func (a *App) requireLoggedInForProvider(provider *types.LlmProvider) error {
 		return fmt.Errorf("custom_provider.login_required: %w", err)
 	}
 	if whoami.Mode != types.WhoAmILoggedIn {
-		return errors.New("custom_provider.login_required")
+		return errors.New(types.TagFailure(types.FailureAuth, "custom_provider.login_required"))
 	}
 	return nil
 }
@@ -4887,7 +4916,7 @@ func canEmitWailsEvent(ctx context.Context) bool {
 }
 
 func artifactFromCompletedEvent(event types.BridgeEvent) *types.Artifact {
-	if event.Type != "task.completed" {
+	if event.Type != types.EventTaskCompleted {
 		return nil
 	}
 	var raw map[string]any

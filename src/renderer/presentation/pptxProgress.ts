@@ -117,9 +117,8 @@ export function reducePptxProgress(
       }
       break;
     }
-    case "task.vibe_primitives":
-    case "task.vibe_ops":
-    case "task.vibe_op": {
+    case "task.reslide_tail":
+    case "task.vibe_ops": {
       next.phase = "drawing";
       next.message = stringValue(payload, ["message", "content", "summary"]);
       const ops = payload.ops ?? payload.primitives;

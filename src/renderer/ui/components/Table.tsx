@@ -4,7 +4,9 @@ export interface TableColumn<Row> {
   readonly key?: string;
   readonly title: ReactNode;
   readonly dataIndex?: keyof Row;
-  readonly render?: (value: any, row: Row, index: number) => ReactNode;
+  // Method syntax on purpose: callers annotate `value` with the column's own
+  // type (a status, a name), which is only assignable under bivariance.
+  render?(value: Row[keyof Row], row: Row, index: number): ReactNode;
   readonly width?: number | string;
 }
 

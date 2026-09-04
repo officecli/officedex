@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { TaskUserInput } from "../shared/types";
+import type { BridgeEvent, TaskUserInput } from "../shared/types";
 import { applyTaskEvent, attachUserInput, createInitialTaskState, discardLocalTask, finishTaskContinuing, markTaskContinuing, promoteLocalTask, restoreTaskInteractiveGate, startLocalTask } from "./taskState";
 
 describe("taskState", () => {
@@ -622,5 +622,35 @@ describe("local task lifecycle", () => {
 
     expect(state.taskOrder).toEqual(["task-2", "task-1"]);
     expect(Object.keys(state.tasks).sort()).toEqual(["task-1", "task-2"]);
+  });
+});
+
+describe("task.reslide_tail", () => {
+  it("replaces the previously drawn tail from firstSeq onwards", () => {
+    let state = applyTaskEvent(createInitialTaskState(), {
+      task_id: "t1",
+      type: "task.vibe_ops",
+      payload: { ops: [{ op: "a", seq: 1 }, { op: "b", seq: 2 }, { op: "c", seq: 3 }, { op: "d", seq: 4 }] },
+    } as BridgeEvent);
+    state = applyTaskEvent(state, {
+      task_id: "t1",
+      type: "task.reslide_tail",
+      payload: { firstSeq: 3, lastSeq: 4, fromSlide: 2, ops: [{ op: "c2", seq: 3 }, { op: "d2", seq: 4 }] },
+    } as BridgeEvent);
+    expect((state.tasks.t1.vibeOps ?? []).map((op) => op.op)).toEqual(["a", "b", "c2", "d2"]);
+  });
+
+  it("drops stale ops past the new tail even when the redo is shorter", () => {
+    let state = applyTaskEvent(createInitialTaskState(), {
+      task_id: "t1",
+      type: "task.vibe_ops",
+      payload: { ops: [{ op: "a", seq: 1 }, { op: "b", seq: 2 }, { op: "c", seq: 3 }, { op: "d", seq: 4 }] },
+    } as BridgeEvent);
+    state = applyTaskEvent(state, {
+      task_id: "t1",
+      type: "task.reslide_tail",
+      payload: { firstSeq: 3, lastSeq: 3, ops: [{ op: "c2", seq: 3 }] },
+    } as BridgeEvent);
+    expect((state.tasks.t1.vibeOps ?? []).map((op) => op.op)).toEqual(["a", "b", "c2"]);
   });
 });

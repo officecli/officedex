@@ -142,13 +142,19 @@ func SupportsAttachment(t DocumentType, slot AttachmentSlot) bool {
 }
 
 type BridgeEvent struct {
-	EventID   string         `json:"event_id,omitempty"`
-	SessionID string         `json:"session_id,omitempty"`
-	RequestID string         `json:"request_id,omitempty"`
-	TaskID    string         `json:"task_id,omitempty"`
-	Type      string         `json:"type"`
-	TS        string         `json:"ts,omitempty"`
-	Payload   map[string]any `json:"payload,omitempty"`
+	EventID   string `json:"event_id,omitempty"`
+	SessionID string `json:"session_id,omitempty"`
+	RequestID string `json:"request_id,omitempty"`
+	TaskID    string `json:"task_id,omitempty"`
+	// RunID and StepID identify the agent-runtime run behind run.*, step.*
+	// and client-tool.* notifications. The bridge sends them on the envelope;
+	// this struct used to drop them on decode, so the renderer's
+	// event.run_id was always empty and client-tool resumption never fired.
+	RunID   string         `json:"run_id,omitempty"`
+	StepID  string         `json:"step_id,omitempty"`
+	Type    string         `json:"type"`
+	TS      string         `json:"ts,omitempty"`
+	Payload map[string]any `json:"payload,omitempty"`
 }
 
 type Artifact struct {

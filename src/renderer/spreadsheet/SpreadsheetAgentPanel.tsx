@@ -32,7 +32,6 @@ function draftsFromAnswers(answers?: TaskQuestionAnswer[]) {
 }
 
 export interface SpreadsheetAgentPanelProps {
-  [key: string]: any;
   preferredTool?: SpreadsheetAgentTool;
   catalogPanel?: React.ReactNode;
   workspaceId?: string;

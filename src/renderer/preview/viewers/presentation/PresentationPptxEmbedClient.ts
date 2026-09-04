@@ -1,3 +1,4 @@
+import { PendingRequests } from "../../../../shared/embedRequests";
 import {
   PRESENTATION_PPTX_PROTOCOL,
   isPresentationPptxEditorContext,
@@ -29,12 +30,6 @@ export interface PresentationPptxExportResult {
   revision: number | null;
 }
 
-interface PendingRequest {
-  resolve: (message: PresentationPptxEditorMessage) => void;
-  reject: (error: Error) => void;
-  timer: number;
-  type: PresentationPptxEditorMessage["type"];
-}
 
 export interface PresentationPptxEmbedClientOptions {
   channel: string;
@@ -72,7 +67,9 @@ export class PresentationPptxEmbedClient {
   private readonly getTargetWindow: () => Window | null;
   private readonly hostWindow: Window;
   private readonly timeouts: typeof DEFAULT_TIMEOUTS;
-  private readonly pending = new Map<string, PendingRequest>();
+  private readonly pending: PendingRequests;
+  /** Which reply (and optional error reply) type settles each open request. */
+  private readonly expected = new Map<string, { reply: PresentationPptxEditorMessage["type"]; error?: PresentationPptxEditorMessage["type"] }>();
   private readonly stateListeners = new Set<
     (state: PresentationPptxEmbedState) => void
   >();
@@ -96,7 +93,6 @@ export class PresentationPptxEmbedClient {
     dirty: false,
     revision: null,
   };
-  private sequence = 0;
   private detachListener: (() => void) | null = null;
   private disposed = false;
   private editorBootstrapError: Error | null = null;
@@ -106,6 +102,7 @@ export class PresentationPptxEmbedClient {
     this.getTargetWindow = options.getTargetWindow;
     this.hostWindow = options.hostWindow ?? window;
     this.timeouts = { ...DEFAULT_TIMEOUTS, ...options.timeouts };
+    this.pending = new PendingRequests({ idPrefix: "officedex", timers: this.hostWindow });
   }
 
   getState(): PresentationPptxEmbedState {
@@ -140,11 +137,8 @@ export class PresentationPptxEmbedClient {
     this.disposed = true;
     this.detachListener?.();
     const error = new Error("The presentation editor was closed.");
-    for (const pending of this.pending.values()) {
-      this.hostWindow.clearTimeout(pending.timer);
-      pending.reject(error);
-    }
-    this.pending.clear();
+    this.pending.rejectAll(new Error("The presentation editor was closed."));
+    this.expected.clear();
     for (const waiter of this.readyWaiters) {
       this.hostWindow.clearTimeout(waiter.timer);
       waiter.reject(error);
@@ -307,61 +301,37 @@ export class PresentationPptxEmbedClient {
       return Promise.reject(
         new Error("The presentation editor frame is not available."),
       );
-    const requestId = `officedex-${Date.now().toString(36)}-${++this.sequence}`;
-    return new Promise((resolve, reject) => {
-      const timer = this.hostWindow.setTimeout(() => {
-        this.pending.delete(requestId);
-        reject(
-          new Error(
-            `The presentation editor did not respond to ${payload.type} within ${Math.round(timeoutMs / 1000)}s.`,
-          ),
-        );
-      }, timeoutMs);
-      this.pending.set(requestId, { resolve, reject, timer, type: replyType });
-      if (errorType) {
-        // The load request has a dedicated error reply type; register it under the same id.
-        this.pending.set(`${requestId}:error`, {
-          resolve,
-          reject,
-          timer,
-          type: errorType,
-        });
-      }
-      const message: PresentationPptxHostMessage = {
-        ...payload,
-        protocol: PRESENTATION_PPTX_PROTOCOL,
-        channel: this.channel,
-        requestId,
-      } as PresentationPptxHostMessage;
-      try {
-        target.postMessage(message, "*", transfer);
-      } catch (error) {
-        this.hostWindow.clearTimeout(timer);
-        this.pending.delete(requestId);
-        this.pending.delete(`${requestId}:error`);
-        reject(error instanceof Error ? error : new Error(String(error)));
-      }
-    });
+    const requestId = this.pending.nextId();
+    this.expected.set(requestId, { reply: replyType, error: errorType });
+    const settled = this.pending.open<PresentationPptxEditorMessage>(
+      requestId,
+      timeoutMs,
+      `The presentation editor did not respond to ${payload.type} within ${Math.round(timeoutMs / 1000)}s.`,
+    );
+    settled.catch(() => this.expected.delete(requestId));
+    const message: PresentationPptxHostMessage = {
+      ...payload,
+      protocol: PRESENTATION_PPTX_PROTOCOL,
+      channel: this.channel,
+      requestId,
+    } as PresentationPptxHostMessage;
+    try {
+      target.postMessage(message, "*", transfer);
+    } catch (error) {
+      this.pending.reject(requestId, error instanceof Error ? error : new Error(String(error)));
+    }
+    return settled;
   }
 
   private settle(
     requestId: string,
     message: PresentationPptxEditorMessage,
   ): boolean {
-    const direct = this.pending.get(requestId);
-    const viaError = this.pending.get(`${requestId}:error`);
-    const match =
-      direct && direct.type === message.type
-        ? direct
-        : viaError && viaError.type === message.type
-          ? viaError
-          : null;
-    if (!match) return false;
-    this.hostWindow.clearTimeout(match.timer);
-    this.pending.delete(requestId);
-    this.pending.delete(`${requestId}:error`);
-    match.resolve(message);
-    return true;
+    const expected = this.expected.get(requestId);
+    if (!expected) return false;
+    if (message.type !== expected.reply && message.type !== expected.error) return false;
+    this.expected.delete(requestId);
+    return this.pending.resolve(requestId, message);
   }
 
   private handleMessage(event: MessageEvent): void {
