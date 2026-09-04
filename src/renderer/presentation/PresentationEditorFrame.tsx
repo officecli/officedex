@@ -1,4 +1,6 @@
+import type { PptxEditorAsset } from "../../shared/types";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { PendingRequests } from "../../shared/embedRequests";
 import {
   isPresentationEmbedEvent,
   PRESENTATION_EMBED_PROTOCOL_VERSION,
@@ -117,13 +119,9 @@ export function PresentationEditorFrame({
   const disposedRef = useRef(false);
   const unavailableRef = useRef(false);
   const callbacksRef = useRef({ onDirtyChange, onUnavailable, onReady, onController, onSaved });
-  const scriptRequestsRef = useRef(
-    new Map<string, { resolve(value: PresentationScriptResult): void; reject(error: Error): void; timeout: number }>(),
-  );
-  const swapRequestsRef = useRef(
-    new Map<string, { resolve(value: number): void; reject(error: Error): void; timeout: number }>(),
-  );
-  const scriptSequenceRef = useRef(0);
+  // One ledger for every request/reply pair with the frame (scripts, swaps);
+  // see shared/embedRequests.ts.
+  const requestsRef = useRef(new PendingRequests({ idPrefix: "presentation" }));
   const [componentURL, setComponentURL] = useState<string>();
 
   callbacksRef.current = { onDirtyChange, onUnavailable, onReady, onController, onSaved };
@@ -162,12 +160,10 @@ export function PresentationEditorFrame({
           reject(new Error("The presentation editor is not mounted."));
           return;
         }
-        const requestId = `presentation-script-${Date.now()}-${++scriptSequenceRef.current}`;
-        const timeout = window.setTimeout(() => {
-          scriptRequestsRef.current.delete(requestId);
-          reject(new Error("The presentation script timed out."));
-        }, Math.max(options.timeoutMs ?? SCRIPT_TIMEOUT_MS, 1_000));
-        scriptRequestsRef.current.set(requestId, { resolve, reject, timeout });
+        const requestId = requestsRef.current.nextId();
+        requestsRef.current
+          .open<PresentationScriptResult>(requestId, Math.max(options.timeoutMs ?? SCRIPT_TIMEOUT_MS, 1_000), "The presentation script timed out.")
+          .then(resolve, reject);
         post({
           type: "presentation:execute-script",
           requestId,
@@ -192,12 +188,10 @@ export function PresentationEditorFrame({
           reject(new Error("The presentation editor is not mounted."));
           return;
         }
-        const requestId = `presentation-swap-${Date.now()}-${++scriptSequenceRef.current}`;
-        const timeout = window.setTimeout(() => {
-          swapRequestsRef.current.delete(requestId);
-          reject(new Error("Swapping the presentation document timed out."));
-        }, SWAP_TIMEOUT_MS);
-        swapRequestsRef.current.set(requestId, { resolve, reject, timeout });
+        const requestId = requestsRef.current.nextId();
+        requestsRef.current
+          .open<number>(requestId, SWAP_TIMEOUT_MS, "Swapping the presentation document timed out.")
+          .then(resolve, reject);
         post(
           {
             type: "presentation:swap-document",
@@ -274,7 +268,7 @@ export function PresentationEditorFrame({
               },
             });
             const content = toTransferableBuffer(prepared.content);
-            const assets = (prepared.assets ?? []).map((asset: any) => ({
+            const assets = (prepared.assets ?? []).map((asset: PptxEditorAsset) => ({
               path: asset.path,
               contentType: asset.contentType,
               data: toTransferableBuffer(asset.data),
@@ -310,24 +304,16 @@ export function PresentationEditorFrame({
           return;
         }
         case "presentation:script-result": {
-          const pending = scriptRequestsRef.current.get(event.requestId);
-          if (!pending) return;
-          scriptRequestsRef.current.delete(event.requestId);
-          window.clearTimeout(pending.timeout);
-          if (event.ok) pending.resolve({ result: event.result, snapshotSaved: event.snapshotSaved });
-          else pending.reject(new Error(event.error || "The presentation script failed."));
+          if (event.ok) requestsRef.current.resolve(event.requestId, { result: event.result, snapshotSaved: event.snapshotSaved });
+          else requestsRef.current.reject(event.requestId, new Error(event.error || "The presentation script failed."));
           return;
         }
         case "presentation:swap-result": {
-          const pending = swapRequestsRef.current.get(event.requestId);
-          if (!pending) return;
-          swapRequestsRef.current.delete(event.requestId);
-          window.clearTimeout(pending.timeout);
           if (event.ok) {
             revisionRef.current = event.documentRevision ?? revisionRef.current;
-            pending.resolve(revisionRef.current);
+            requestsRef.current.resolve(event.requestId, revisionRef.current);
           } else {
-            pending.reject(new Error(event.error || "Swapping the presentation document failed."));
+            requestsRef.current.reject(event.requestId, new Error(event.error || "Swapping the presentation document failed."));
           }
           return;
         }
@@ -406,11 +392,8 @@ export function PresentationEditorFrame({
       unregisterClientToolsRef.current?.();
       unregisterClientToolsRef.current = undefined;
       callbacksRef.current.onController?.(null);
-      for (const pending of scriptRequestsRef.current.values()) {
-        window.clearTimeout(pending.timeout);
-        pending.reject(new Error("The presentation editor was closed."));
-      }
-      scriptRequestsRef.current.clear();
+      // Swap requests used to be left dangling here; both kinds now settle.
+      requestsRef.current.rejectAll(new Error("The presentation editor was closed."));
       if (sessionId) {
         void officecli
           .closePptxEditor({ previewToken, sessionId })

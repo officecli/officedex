@@ -24,7 +24,7 @@ describe("pptx progressive progress reducer", () => {
       event_id: "out", type: "task.output", payload: { slide: 1, total_slides: 2 },
     });
     state = reducePptxProgress(state, {
-      event_id: "ops", type: "task.vibe_primitives", payload: { slide: 2, primitives: [{ op: "text.add" }, { op: "shape.add" }] },
+      event_id: "ops", type: "task.vibe_ops", payload: { slide: 2, ops: [{ op: "text.add", seq: 1 }, { op: "shape.add", seq: 2 }] },
     });
     expect(state.phase).toBe("drawing");
     expect(state.completedSlides).toBe(1);

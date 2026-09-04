@@ -87,12 +87,14 @@ export function getRunLineage(state: TaskState, lineageId: string): DesktopTask[
     .reverse(); // taskOrder is newest-first.
 }
 
-function vibeOpsFromPayload(payload: Record<string, any>): VibeOp[] {
+function vibeOpsFromPayload(payload: Record<string, unknown>): VibeOp[] {
   const raw = payload.ops ?? payload.vibe_ops ?? payload.primitives;
   if (!Array.isArray(raw)) return [];
-  return raw.filter((value): value is VibeOp => (
-    value && typeof value === "object" && typeof value.op === "string" && Number.isSafeInteger(value.seq)
-  ));
+  return raw.filter((value): value is VibeOp => {
+    if (!value || typeof value !== "object") return false;
+    const candidate = value as { op?: unknown; seq?: unknown };
+    return typeof candidate.op === "string" && Number.isSafeInteger(candidate.seq);
+  });
 }
 
 export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState {
@@ -189,10 +191,24 @@ export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState 
       nextTask.vibeOutline = outline as DesktopTask["vibeOutline"];
     }
   }
-  if (event.type === "task.vibe_ops" || event.type === "task.vibe_op" || event.type === "task.vibe_primitives") {
+  if (event.type === "task.vibe_ops") {
     const incoming = vibeOpsFromPayload(event.payload ?? {});
     if (incoming.length > 0) {
       const bySeq = new Map<number, VibeOp>((previous.vibeOps ?? []).map((op) => [op.seq, op]));
+      for (const op of incoming) bySeq.set(op.seq, op);
+      nextTask.vibeOps = [...bySeq.values()].sort((a, b) => a.seq - b.seq);
+    }
+  }
+  if (event.type === "task.reslide_tail") {
+    // A tail redo re-authors every slide from `fromSlide` on. Its ops replace
+    // the old tail: drop what the previous pass drew from firstSeq onwards,
+    // then splice the new ops in. The bridge has emitted this event since the
+    // tail redo shipped; the desktop never consumed it and kept the stale tail.
+    const incoming = vibeOpsFromPayload(event.payload ?? {});
+    const firstSeq = numberField(event.payload, "firstSeq", "first_seq") ?? incoming[0]?.seq;
+    if (incoming.length > 0 && firstSeq !== undefined) {
+      const kept = (previous.vibeOps ?? []).filter((op) => op.seq < firstSeq);
+      const bySeq = new Map<number, VibeOp>(kept.map((op) => [op.seq, op]));
       for (const op of incoming) bySeq.set(op.seq, op);
       nextTask.vibeOps = [...bySeq.values()].sort((a, b) => a.seq - b.seq);
     }
@@ -873,4 +889,13 @@ export function promoteLocalTask(
 
 export function discardLocalTask(state: TaskState, localTaskId: string): TaskState {
   return deleteTask(state, localTaskId);
+}
+
+function numberField(payload: Record<string, unknown> | undefined, ...keys: string[]): number | undefined {
+  if (!payload) return undefined;
+  for (const key of keys) {
+    const value = payload[key];
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+  }
+  return undefined;
 }

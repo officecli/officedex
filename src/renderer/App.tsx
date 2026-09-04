@@ -46,6 +46,7 @@ import { pollTaskHistoryUntilTerminal } from "./taskHistoryPoll";
 import { respondToPlanReview } from "./presentation/planReviewResponse";
 import { responseForPptxQuestion } from "./presentation/pptxQuestionResponse";
 import { errorMessage, recordValue, trimmedStringValue as stringValue } from "./utils/values";
+import { classifyError, classifyStatusEvent, extractStderr, stripFailureTag, type FailureKind } from "./failureKind";
 import { fileExtension, fileNameFromPath } from "./utils/path";
 import { delay } from "./utils/timing";
 
@@ -84,7 +85,6 @@ export function writeStoredAppRoute(route: StoredAppRoute, storage?: Pick<Storag
   }
 }
 
-type FailureKind = "connection" | "auth" | "task" | "setup" | "other";
 
 type PendingGenerate = {
   localTaskId: string;
@@ -219,7 +219,6 @@ function OfficeDexApp() {
   const [activeNav, setActiveNav] = useState<NavKey>(initialRoute.nav);
   const loginReturnNavRef = useRef<NavKey>("home");
   const [busy, setBusy] = useState(false);
-  const [capabilityStatus, setCapabilityStatus] = useState("Not connected");
   const [lastError, setLastError] = useState<string>();
   const [errorKind, setErrorKind] = useState<FailureKind>("connection");
   const [bridgeInterruptionKey, setBridgeInterruptionKey] = useState(0);
@@ -264,7 +263,7 @@ function OfficeDexApp() {
   const forceUpdate = appUpdate.status.mandatory && Boolean(appUpdate.release);
 
   const recordError = useCallback((text: string, kind: FailureKind, details?: string) => {
-    setLastError(text);
+    setLastError(stripFailureTag(text));
     setErrorKind(kind);
     setErrorDetails(details);
   }, []);
@@ -365,17 +364,15 @@ function OfficeDexApp() {
 
   useEffect(() => {
     if (forceUpdate) {
-      setCapabilityStatus("Update required to continue");
+      // An update gate keeps the bridge idle; nothing to connect until it clears.
       return;
     }
     const off = officecli.onBridgeEvent((event: BridgeEvent) => {
       if (event.type === "bridge.reconnecting") {
-        setCapabilityStatus(String(event.payload?.message || "Reconnecting..."));
         return;
       }
       if (event.type === "bridge.reconnected") {
         bridgeRecoveryPendingRef.current = false;
-        setCapabilityStatus("Connected to officecli agent-bridge");
         clearError();
         refreshProjectLists();
         void refreshRecentFiles(homeWorkspaceId);
@@ -385,7 +382,6 @@ function OfficeDexApp() {
         bridgeRecoveryPendingRef.current = false;
         const message = String(event.payload?.message || "OfficeCLI binary is not configured");
         const stderr = stringOrUndef(event.payload?.stderr);
-        setCapabilityStatus(message);
         recordError(message, "setup", stderr);
         return;
       }
@@ -393,13 +389,11 @@ function OfficeDexApp() {
         bridgeRecoveryPendingRef.current = false;
         const message = String(event.payload?.message || "Bridge reconnection failed. Please retry manually.");
         const stderr = stringOrUndef(event.payload?.stderr);
-        setCapabilityStatus(message);
-        recordError(message, classifyError(message, stderr), stderr);
+        recordError(message, classifyStatusEvent(event.payload?.kind, message, stderr), stderr);
         return;
       }
       if (event.type === "bridge.exited") {
         const message = String(event.payload?.message || "officecli agent-bridge exited");
-        setCapabilityStatus(`${message} — reconnecting…`);
         recent.abandon(t("home.bridgeUnavailable"));
         setBridgeInterruptionKey((current) => current + 1);
         // A manually stopped bridge disables the Go client's reconnect timer.
@@ -445,16 +439,15 @@ function OfficeDexApp() {
     if (settingsLoading) {
       return off;
     }
+    // The handshake result used to be written into a state nobody rendered,
+    // so an officecli too old for this app failed silently here and loudly
+    // later. Surface it through the same error banner as everything else.
     officecli
       .initialize()
       .then(() => officecli.getCapabilities())
-      .then((capabilities) => {
-        const preview = typeof capabilities === "object" && capabilities !== null && "browserPreview" in capabilities;
-        setCapabilityStatus(preview ? "Browser preview; bridge IPC requires Electron" : "Connected to officecli agent-bridge");
-      })
       .catch((error) => {
         const text = errorMessage(error);
-        setCapabilityStatus(text);
+        recordError(text, classifyError(text), extractStderr(text));
       });
     return off;
   }, [connectAttempt, clearError, homeWorkspaceId, recordError, refreshRecentFiles, settingsLoading, forceUpdate, nudgeForTaskTransition, refreshProjectLists, t]);
@@ -1162,7 +1155,6 @@ function OfficeDexApp() {
 
   const retry = useCallback(() => {
     clearError();
-    setCapabilityStatus("Reconnecting...");
     setConnectAttempt((current) => current + 1);
   }, [clearError]);
 
@@ -1447,9 +1439,9 @@ function OfficeDexApp() {
   }, [clearError, closeInlinePreview, previewArtifact, removeRecentFile, selectedTaskID, state.tasks, tasks]);
 
   // ---- MOP live drawing --------------------------------------------------
-  // First task.vibe_primitives for a task opens the presentation editor on a
+  // The first task.vibe_ops for a task opens the presentation editor on a
   // blank draft and the replay sequencer inside PptxViewer draws the deck as
-  // the primitives stream in. One draft per task; never steal an open preview.
+  // the ops stream in. One draft per task; never steal an open preview.
   const timelineTaskId = previewLiveDraft?.taskId ?? previewArtifact?.taskId ?? undefined;
 
   const openTimelineNode = useCallback(async (deck: TimelineDeck, node: TimelineNode) => {
@@ -2060,51 +2052,3 @@ function stringOrUndef(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
-function extractStderr(text: string): string | undefined {
-  const marker = "stderr:\n";
-  const idx = text.indexOf(marker);
-  return idx >= 0 ? text.slice(idx + marker.length).trim() : undefined;
-}
-
-function classifyError(text: string, stderr?: string): FailureKind {
-  const haystack = `${text}\n${stderr || ""}`.toLowerCase();
-  if (
-    haystack.includes("login") ||
-    haystack.includes("sign in") ||
-    haystack.includes("setup is incomplete") ||
-    haystack.includes("license_check_failed") ||
-    haystack.includes("auth_error") ||
-    haystack.includes("api key") ||
-    haystack.includes("unauthorized")
-  ) {
-    return "auth";
-  }
-  if (
-    haystack.includes("enoent") ||
-    haystack.includes("not configured") ||
-    haystack.includes("binary not found")
-  ) {
-    return "setup";
-  }
-  if (
-    haystack.includes("agent-bridge is not running") ||
-    haystack.includes("agent-bridge exited") ||
-    haystack.includes("agent-bridge stopped") ||
-    haystack.includes("request timed out") ||
-    haystack.includes("reconnection failed") ||
-    haystack.includes("spawn")
-  ) {
-    return "connection";
-  }
-  if (
-    haystack.includes("llm_request_failed") ||
-    haystack.includes("status=429") ||
-    haystack.includes("rate limit") ||
-    haystack.includes("saturated") ||
-    haystack.includes("饱和") ||
-    haystack.includes("generation failed")
-  ) {
-    return "task";
-  }
-  return "other";
-}

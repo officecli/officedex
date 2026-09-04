@@ -62,7 +62,7 @@ export function RuntimeRunsPanel() {
       render: (workflow, run) => (
         <span className="task-title-button">
           <span className="runtime-run-workflow">
-            <Tooltip title={run.id}><strong>{workflow}</strong></Tooltip>
+            <Tooltip title={run.id}><strong>{String(workflow)}</strong></Tooltip>
             {isHistoricalRuntimeRun(run) ? (
               <Tooltip title={t("tasks.runtime.historical.tooltip")}><Tag color="gray">{t("tasks.runtime.historical.label")}</Tag></Tooltip>
             ) : null}
@@ -78,7 +78,7 @@ export function RuntimeRunsPanel() {
       dataIndex: "status",
       render: (status: AgentRun["status"]) => <Tag color={runtimeStatusColor(status)}>{status}</Tag>,
     },
-    { title: t("tasks.runtime.column.step"), dataIndex: "current_step", render: (step) => step || "—" },
+    { title: t("tasks.runtime.column.step"), dataIndex: "current_step", render: (step) => (typeof step === "string" && step) || "—" },
     {
       title: t("tasks.runtime.column.actions"),
       dataIndex: "id",
