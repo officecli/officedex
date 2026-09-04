@@ -3,13 +3,7 @@ import type { ReactNode, ErrorInfo } from "react";
 import { Button, DialogHost, Result } from "../ui";
 import { LoadingState } from "./components/LoadingState";
 import { UnsupportedViewer } from "./viewers/UnsupportedViewer";
-import {
-  PptxViewer,
-  DocxViewer,
-  XlsxViewer,
-  PdfViewer,
-  HtmlViewer,
-} from "./viewers/previewViewers";
+import { previewViewerFor } from "./viewers/previewViewers";
 import { officecli } from "../bridge";
 import "./PreviewApp.css";
 
@@ -66,29 +60,16 @@ export default function PreviewApp() {
     officecli.openPath(fileName).catch(() => {});
   };
 
-  const viewer = (() => {
-    switch (documentType) {
-      case "pptx":
-        return <PptxViewer previewToken={previewToken} fileName={fileName} />;
-      case "docx":
-        return <DocxViewer previewToken={previewToken} fileName={fileName} />;
-      case "xlsx":
-        return <XlsxViewer previewToken={previewToken} fileName={fileName} />;
-      case "pdf":
-        return <PdfViewer previewToken={previewToken} fileName={fileName} />;
-      case "html":
-      case "htm":
-        return <HtmlViewer previewToken={previewToken} fileName={fileName} documentType={documentType} />;
-      default:
-        return (
-          <UnsupportedViewer
-            fileName={fileName}
-            documentType={documentType}
-            onOpenExternal={openExternal}
-          />
-        );
-    }
-  })();
+  const Viewer = previewViewerFor(documentType);
+  const viewer = Viewer ? (
+    <Viewer previewToken={previewToken} fileName={fileName} documentType={documentType} />
+  ) : (
+    <UnsupportedViewer
+      fileName={fileName}
+      documentType={documentType}
+      onOpenExternal={openExternal}
+    />
+  );
 
   return (
     <>

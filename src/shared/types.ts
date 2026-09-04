@@ -4,6 +4,7 @@
  *   - src/renderer/generated/wailsjs/go/models.ts (Wails auto-generated)
  * Adding/removing fields requires updating all three.
  */
+import type { DesktopVerticalAPI } from "./verticals";
 import type { SlidePreview } from "./slidePreviewWire";
 
 export interface ArtifactStageRuntimeInput {
@@ -20,62 +21,6 @@ export interface ArtifactStageRuntimeInput {
 export type DocumentType = "pptx" | "docx" | "xlsx" | "report" | "img" | "gif";
 export type GenerationMode = "fast" | "plan";
 export type ImageRatio = "square" | "landscape" | "portrait";
-
-// Spreadsheet connector contracts. These are deliberately renderer-facing
-// shapes: secrets never cross this boundary, while provider responses retain
-// their source metadata for an auditable Sheet writeback.
-export type JiraAuthType = "token" | "basic" | "";
-export interface JiraConnectionSummary {
-  configured: boolean;
-  baseUrl: string;
-  authType: JiraAuthType;
-  username?: string;
-}
-export interface JiraProbeResult {
-  server: { baseUrl: string; version: string; deploymentType?: string; serverTitle?: string };
-  user: { name?: string; displayName?: string };
-}
-export interface JiraSyncResult {
-  sheetName: string;
-  headers: string[];
-  rows: string[][];
-  jql: string;
-  total: number;
-  fetched: number;
-  truncated: boolean;
-  syncedAt: string;
-  querySummary?: string;
-}
-export type ConfiguredJiraSyncResult =
-  | { status: "completed"; result: JiraSyncResult; message?: string }
-  | { status: "unsupported" | "failed"; result?: undefined; message?: string };
-
-export interface LiquipediaConnectionSummary {
-  configured: boolean;
-  baseUrl: string;
-  contact?: string;
-}
-export interface LiquipediaProbeResult {
-  siteName: string;
-  generator: string;
-  language?: string;
-  apiUrl: string;
-  userAgent: string;
-}
-export interface LiquipediaSyncResult {
-  sheetName: string;
-  headers: string[];
-  rows: string[][];
-  total: number;
-  fetched: number;
-  truncated: boolean;
-  syncedAt: string;
-  querySummary?: string;
-  attribution: string;
-}
-export type ConfiguredLiquipediaSyncResult =
-  | { status: "completed"; result: LiquipediaSyncResult; message?: string }
-  | { status: "unsupported" | "failed"; result?: undefined; message?: string };
 
 export type SpreadsheetFieldRole =
   | "ignored" | "sku" | "productName" | "sellingPoints" | "description"
@@ -103,34 +48,6 @@ export interface SpreadsheetPlanFieldsResult {
   warnings: string[];
   columns: SpreadsheetPlannedColumn[];
 }
-export interface MarketingCampaignPlanInput {
-  sheetId: string; sheetName: string; headers: string[];
-  rows: Array<{ rowIndex: number; productName: string; basePrompt: string; referenceImages?: string[] }>;
-  campaign: Record<string, unknown> & { selectedChannelIds: string[] };
-}
-export interface MarketingCampaignPlanResult {
-  ruleVersion?: string; channels: string[]; missingChannels: string[];
-  jobs: Array<{ rowIndex: number; productName?: string; referenceImages?: string[]; channelId: string; outputTemplateId?: string; ratio?: ImageRatio; outputColumn?: number; prompt: string }>;
-}
-export interface CampaignImageInput { sourcePath: string; channelId: string; outputTemplateId?: string; campaignName?: string; productName?: string; offer?: string; cta?: string; }
-export interface CampaignImageResult { filePath: string; width: number; height: number; }
-
-export interface ShopifyCatalogCleanupInput {
-  sheetId: string; sheetName: string; rows: string[][]; selectionStartRow: number;
-  intent?: "create" | "update" | "mixed";
-  confirmedMapping?: Array<{ column: number; header: string; role: string; confidence: number; reason: string }>;
-}
-export interface ShopifyCatalogCleanupResult {
-  sheetId: string; sheetName: string; headerRowIndex: number; firstRowIndex: number;
-  existingColumnCount: number; headers: string[]; sourceRows: string[][];
-  intent: "create" | "update" | "mixed"; creditEstimate: number;
-  mapping: Array<{ column: number; header: string; role: string; confidence: number; reason: string }>;
-  rows: Array<{ rowIndex: number; status: string; issues: string[]; findings: Array<{ code: string; severity: string; message: string }>; cleanupActions: Array<{ code: string; field: string; before: string; after: string; safety: string; message: string }>; values: Record<string, string> }>;
-  batchFindings: Array<{ code: string; severity: string; message: string }>;
-  resultColumns: Record<string, number>; ruleVersion: string; taxonomyVersion: string;
-  shopifyCsv: string; findingsCsv: string;
-}
-
 export type AttachmentSlot = "sourceWorkbook" | "referenceImages";
 
 export type AttachmentBridgeArgKey = "file_path" | "reference_images";
@@ -146,21 +63,38 @@ export interface AttachmentSpec {
   description: string;
 }
 
+// Mirrors Go types.DocumentTypeCapability field for field (the drift checker
+// holds the two together). Every per-type decision in the renderer reads
+// this row; adding a document type is adding a row here and a viewer.
 export interface DocumentTypeCapability {
   type: DocumentType;
   label: string;
   icon: string;
   attachments: AttachmentSpec[];
+  /** Goes through the office generation modes rather than the image pipeline. */
+  office: boolean;
+  /** Sent as pptx_backend when the caller leaves it unset. */
+  defaultPptxBackend?: string;
+  imageRatio: boolean;
+  frameRate: boolean;
+  watermark: boolean;
+  /** Extensions (lowercase, no dot) a file of this type carries in the preview. */
+  previewExtensions: string[];
 }
 
 export const DOCUMENT_TYPE_CAPABILITIES: Record<DocumentType, DocumentTypeCapability> = {
-  pptx: { type: "pptx", label: "PPTX", icon: "slideshow", attachments: [] },
-  docx: { type: "docx", label: "DOCX", icon: "description", attachments: [] },
-  xlsx: { type: "xlsx", label: "XLSX", icon: "table", attachments: [] },
+  pptx: { type: "pptx", label: "PPTX", icon: "slideshow", office: true, defaultPptxBackend: "mop-skill", imageRatio: false, frameRate: false, watermark: false, previewExtensions: ["pptx"], attachments: [] },
+  docx: { type: "docx", label: "DOCX", icon: "description", office: true, imageRatio: false, frameRate: false, watermark: false, previewExtensions: ["docx"], attachments: [] },
+  xlsx: { type: "xlsx", label: "XLSX", icon: "table", office: true, imageRatio: false, frameRate: false, watermark: false, previewExtensions: ["xlsx"], attachments: [] },
   report: {
     type: "report",
     label: "Report",
     icon: "article",
+    office: true,
+    imageRatio: false,
+    frameRate: false,
+    watermark: false,
+    previewExtensions: [],
     attachments: [
       {
         slot: "sourceWorkbook",
@@ -178,6 +112,11 @@ export const DOCUMENT_TYPE_CAPABILITIES: Record<DocumentType, DocumentTypeCapabi
     type: "img",
     label: "Image",
     icon: "image",
+    office: false,
+    imageRatio: true,
+    frameRate: false,
+    watermark: true,
+    previewExtensions: ["png", "jpg", "jpeg", "webp", "svg", "bmp"],
     attachments: [
       {
         slot: "referenceImages",
@@ -195,6 +134,11 @@ export const DOCUMENT_TYPE_CAPABILITIES: Record<DocumentType, DocumentTypeCapabi
     type: "gif",
     label: "GIF",
     icon: "gif",
+    office: false,
+    imageRatio: false,
+    frameRate: true,
+    watermark: false,
+    previewExtensions: ["gif"],
     attachments: [
       {
         slot: "referenceImages",
@@ -214,6 +158,20 @@ export const DOCUMENT_TYPES: DocumentType[] = ["pptx", "docx", "xlsx", "report",
 
 export function getCapability(type: DocumentType): DocumentTypeCapability {
   return DOCUMENT_TYPE_CAPABILITIES[type];
+}
+
+/** True for the six generated document types; narrows an unknown string. */
+export function isDocumentType(value: unknown): value is DocumentType {
+  return typeof value === "string" && Object.prototype.hasOwnProperty.call(DOCUMENT_TYPE_CAPABILITIES, value);
+}
+
+/** Every extension the preview can show: each type's own plus pdf/html. Mirrors Go types.PreviewExtensions. */
+export const GENERIC_PREVIEW_EXTENSIONS = ["pdf", "html", "htm"] as const;
+export function previewExtensions(): string[] {
+  const out = new Set<string>();
+  for (const type of DOCUMENT_TYPES) for (const ext of DOCUMENT_TYPE_CAPABILITIES[type].previewExtensions) out.add(ext);
+  for (const ext of GENERIC_PREVIEW_EXTENSIONS) out.add(ext);
+  return [...out];
 }
 
 export function getAttachmentSpec(type: DocumentType, slot: AttachmentSlot): AttachmentSpec | undefined {
@@ -1077,22 +1035,14 @@ export interface CreateWorkbookFromSheetInput {
   workspaceId?: string;
 }
 
-export interface DesktopAPI {
+export interface DesktopAPI extends DesktopVerticalAPI {
   initialize(): Promise<unknown>;
   getCapabilities(): Promise<unknown>;
   listImageTemplates(): Promise<ImagePromptTemplate[]>;
   createImageTemplate(input: CreateUserImageTemplateInput): Promise<ImagePromptTemplate>;
   createImageTemplatePublishRequest(input: CreateImageTemplatePublishRequestInput): Promise<ImageTemplatePublishRequest>;
   generate(input: GenerateInput): Promise<{ taskId: string; sessionId: string; status: string }>;
-  getJiraConnection(): Promise<JiraConnectionSummary>;
-  saveJiraConnection(input: { baseUrl: string; auth: { type: JiraAuthType; username?: string; secret: string } }): Promise<JiraProbeResult>;
-  clearJiraConnection(): Promise<void>;
-  getLiquipediaConnection(): Promise<LiquipediaConnectionSummary>;
-  saveLiquipediaConnection(input: { baseUrl: string; contact: string }): Promise<LiquipediaProbeResult>;
-  clearLiquipediaConnection(): Promise<void>;
   planSpreadsheetFields(input: SpreadsheetPlanFieldsInput & { headerRowIndex: number }): Promise<SpreadsheetPlanFieldsResult>;
-  planShopifyCatalogCampaign(input: MarketingCampaignPlanInput): Promise<MarketingCampaignPlanResult>;
-  composeCampaignImage(input: CampaignImageInput): Promise<CampaignImageResult>;
   modify(input: ModifyInput): Promise<{ taskId: string; sessionId: string; status: string }>;
   artifactStageEdit?(input: ArtifactStageRuntimeInput): Promise<{ taskId: string; sessionId: string; status: string }>;
   startAgentRun(input: AgentRunStartInput): Promise<AgentRun>;

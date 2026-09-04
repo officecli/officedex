@@ -1111,47 +1111,176 @@ func projectTaskTx(ctx context.Context, tx *sql.Tx, taskID string) error {
 		}
 	}
 
-	// Recompute ordinals only within the affected stream. Ordering includes the
-	// legacy task-local event id, making missing bridge IDs deterministic.
-	if _, err := tx.ExecContext(ctx, `DELETE FROM activities WHERE activity_stream_id = ?`, "activity:"+seed.conversationID); err != nil {
-		return fmt.Errorf("reset stream activities projection: %w", err)
-	}
-	var events []liveProjectionEvent
-	rows, err = tx.QueryContext(ctx, `SELECT e.event_id, e.task_id, e.type, e.payload_json, e.created_at FROM task_events e JOIN tasks t ON t.id = e.task_id WHERE COALESCE(NULLIF(t.conversation_id, ''), t.id) = ? ORDER BY e.created_at ASC, e.task_id ASC, e.event_id ASC`, seed.conversationID)
+	return projectStreamActivitiesTx(ctx, tx, seed.conversationID)
+}
+
+// projectStreamActivitiesTx brings the activities projection back in step with
+// task_events for one conversation.
+//
+// Rebuilding the stream is O(events in the conversation), and it used to run on
+// every single write — so persisting an n-event conversation cost O(n^2), and a
+// long agent run got measurably slower the longer it talked. The overwhelmingly
+// common write is an append: the event that just arrived sorts after everything
+// already projected. That case is detected and costs one insert; anything else
+// (a late event, a replaced event, a backfill) still rebuilds, because ordinals
+// and the task-local fallback IDs are positional and would otherwise drift.
+func projectStreamActivitiesTx(ctx context.Context, tx *sql.Tx, conversationID string) error {
+	appended, err := appendStreamActivitiesTx(ctx, tx, conversationID)
 	if err != nil {
 		return err
 	}
-	for rows.Next() {
-		var event liveProjectionEvent
-		if err := rows.Scan(&event.storedID, &event.taskID, &event.eventType, &event.payload, &event.createdAt); err != nil {
-			rows.Close()
-			return err
-		}
-		event.conversationID = seed.conversationID
-		events = append(events, event)
+	if appended {
+		return nil
 	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
+	return rebuildStreamActivitiesTx(ctx, tx, conversationID)
+}
+
+// appendStreamActivitiesTx projects only the events that sort after everything
+// already in the stream, and reports whether it was able to. It refuses — and
+// leaves the projection untouched — unless the tail it found accounts for every
+// unprojected event, so a stream that changed in the middle always falls
+// through to the full rebuild rather than being patched into an inconsistent
+// state.
+func appendStreamActivitiesTx(ctx context.Context, tx *sql.Tx, conversationID string) (bool, error) {
+	streamID := "activity:" + conversationID
+
+	// Activities are ordered by (created_at, task_id, event_id), so the row with
+	// the highest ordinal is the frontier. Its stored columns carry the first two
+	// components; a tie on those is treated as "not strictly after" and sends us
+	// to the rebuild, which is the conservative direction.
+	var frontier liveProjectionEvent
+	var frontierOrdinal int
+	err := tx.QueryRowContext(ctx, `SELECT created_at, task_id, ordinal FROM activities WHERE activity_stream_id = ? ORDER BY ordinal DESC LIMIT 1`, streamID).
+		Scan(&frontier.createdAt, &frontier.taskID, &frontierOrdinal)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	var projected, total int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM activities WHERE activity_stream_id = ?`, streamID).Scan(&projected); err != nil {
+		return false, err
+	}
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM task_events e JOIN tasks t ON t.id = e.task_id WHERE COALESCE(NULLIF(t.conversation_id, ''), t.id) = ?`, conversationID).Scan(&total); err != nil {
+		return false, err
+	}
+	if total < projected {
+		// Events were removed; positions shifted.
+		return false, nil
+	}
+
+	tail, err := streamEventsAfter(ctx, tx, conversationID, frontier.createdAt, frontier.taskID)
+	if err != nil {
+		return false, err
+	}
+	if projected+len(tail) != total {
+		// Something landed at or before the frontier: the tail alone does not
+		// explain the difference, so the positions have to be recomputed.
+		return false, nil
+	}
+	if len(tail) == 0 {
+		return true, nil
+	}
+
+	// The task-local index feeds the fallback activity ID for events the bridge
+	// gave no ID. Continuing it from what is already projected is what makes the
+	// appended IDs identical to the ones a rebuild would produce.
+	taskEventIndex, err := projectedTaskEventCounts(ctx, tx, streamID)
+	if err != nil {
+		return false, err
+	}
+	for offset, event := range tail {
+		if err := insertStreamActivityTx(ctx, tx, conversationID, event, frontierOrdinal+1+offset, taskEventIndex); err != nil {
+			return false, err
+		}
+	}
+	return true, nil
+}
+
+// rebuildStreamActivitiesTx recomputes ordinals across the whole stream.
+// Ordering includes the legacy task-local event id, making missing bridge IDs
+// deterministic.
+func rebuildStreamActivitiesTx(ctx context.Context, tx *sql.Tx, conversationID string) error {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM activities WHERE activity_stream_id = ?`, "activity:"+conversationID); err != nil {
+		return fmt.Errorf("reset stream activities projection: %w", err)
+	}
+	events, err := streamEventsAfter(ctx, tx, conversationID, "", "")
+	if err != nil {
 		return err
 	}
-	rows.Close()
 	taskEventIndex := map[string]int{}
 	for ordinal, event := range events {
-		originalID := migratedOriginalEventID(event.taskID, event.storedID, event.eventType)
-		activityID := event.taskID + ":" + originalID
-		if originalID == "" {
-			activityID = fmt.Sprintf("%s:event:%d:%s", event.taskID, taskEventIndex[event.taskID], event.eventType)
-		}
-		taskEventIndex[event.taskID]++
-		kind := "event"
-		if event.eventType == types.EventLocalUserInput {
-			kind = "user_input"
-		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO activities(id, activity_stream_id, source_conversation_id, task_id, ordinal, kind, event_id, event_type, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?) ON CONFLICT(id) DO UPDATE SET activity_stream_id=excluded.activity_stream_id, source_conversation_id=excluded.source_conversation_id, task_id=excluded.task_id, ordinal=excluded.ordinal, kind=excluded.kind, event_id=excluded.event_id, event_type=excluded.event_type, payload_json=excluded.payload_json, created_at=excluded.created_at`, activityID, "activity:"+seed.conversationID, seed.conversationID, event.taskID, ordinal, kind, originalID, event.eventType, event.payload, event.createdAt); err != nil {
+		if err := insertStreamActivityTx(ctx, tx, conversationID, event, ordinal, taskEventIndex); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// streamEventsAfter reads a conversation's events in projection order. An empty
+// createdAt reads the whole stream; otherwise only the events strictly after the
+// given (created_at, task_id) frontier.
+func streamEventsAfter(ctx context.Context, tx *sql.Tx, conversationID, createdAt, taskID string) ([]liveProjectionEvent, error) {
+	query := `SELECT e.event_id, e.task_id, e.type, e.payload_json, e.created_at FROM task_events e JOIN tasks t ON t.id = e.task_id WHERE COALESCE(NULLIF(t.conversation_id, ''), t.id) = ?`
+	args := []any{conversationID}
+	if createdAt != "" {
+		query += ` AND (e.created_at > ? OR (e.created_at = ? AND e.task_id > ?))`
+		args = append(args, createdAt, createdAt, taskID)
+	}
+	query += ` ORDER BY e.created_at ASC, e.task_id ASC, e.event_id ASC`
+
+	rows, err := tx.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var events []liveProjectionEvent
+	for rows.Next() {
+		var event liveProjectionEvent
+		if err := rows.Scan(&event.storedID, &event.taskID, &event.eventType, &event.payload, &event.createdAt); err != nil {
+			return nil, err
+		}
+		event.conversationID = conversationID
+		events = append(events, event)
+	}
+	return events, rows.Err()
+}
+
+func projectedTaskEventCounts(ctx context.Context, tx *sql.Tx, streamID string) (map[string]int, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT task_id, COUNT(*) FROM activities WHERE activity_stream_id = ? GROUP BY task_id`, streamID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	counts := map[string]int{}
+	for rows.Next() {
+		var taskID string
+		var count int
+		if err := rows.Scan(&taskID, &count); err != nil {
+			return nil, err
+		}
+		counts[taskID] = count
+	}
+	return counts, rows.Err()
+}
+
+// insertStreamActivityTx writes one projected activity and advances the caller's
+// task-local index, so the append and rebuild paths derive identical IDs.
+func insertStreamActivityTx(ctx context.Context, tx *sql.Tx, conversationID string, event liveProjectionEvent, ordinal int, taskEventIndex map[string]int) error {
+	originalID := migratedOriginalEventID(event.taskID, event.storedID, event.eventType)
+	activityID := event.taskID + ":" + originalID
+	if originalID == "" {
+		activityID = fmt.Sprintf("%s:event:%d:%s", event.taskID, taskEventIndex[event.taskID], event.eventType)
+	}
+	taskEventIndex[event.taskID]++
+	kind := "event"
+	if event.eventType == types.EventLocalUserInput {
+		kind = "user_input"
+	}
+	_, err := tx.ExecContext(ctx, `INSERT INTO activities(id, activity_stream_id, source_conversation_id, task_id, ordinal, kind, event_id, event_type, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?) ON CONFLICT(id) DO UPDATE SET activity_stream_id=excluded.activity_stream_id, source_conversation_id=excluded.source_conversation_id, task_id=excluded.task_id, ordinal=excluded.ordinal, kind=excluded.kind, event_id=excluded.event_id, event_type=excluded.event_type, payload_json=excluded.payload_json, created_at=excluded.created_at`, activityID, "activity:"+conversationID, conversationID, event.taskID, ordinal, kind, originalID, event.eventType, event.payload, event.createdAt)
+	return err
 }
 
 // Close releases the underlying database handle.

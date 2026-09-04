@@ -302,22 +302,38 @@ func TestCancelIsNoopWhenNotRunning(t *testing.T) {
 }
 
 func TestParseWhoAmIAnonymousOnNonZeroExit(t *testing.T) {
-	result := ParseWhoAmI("anything here", 1)
+	result, err := ParseWhoAmI(`{"mode":"logged_in","user_id":"usr-1"}`, 1)
+	if err != nil {
+		t.Fatalf("non-zero exit should not be an error: %v", err)
+	}
+	// A non-zero exit means the CLI could not answer, so whatever it managed to
+	// print is not an answer either.
 	if result.Mode != types.WhoAmIAnonymous {
 		t.Fatalf("expected anonymous, got %q", result.Mode)
+	}
+	if result.UserID != "" {
+		t.Fatalf("expected no user id from a failed call, got %q", result.UserID)
 	}
 }
 
 func TestParseWhoAmIDetectsAPIKey(t *testing.T) {
-	result := ParseWhoAmI("Authenticated via API key for service\n", 0)
+	// `whoami --json` on an API key answers with the quota report, which shares
+	// the `mode` field and carries no user record.
+	result, err := ParseWhoAmI(`{"mode":"api_key","access_mode":"api-key"}`, 0)
+	if err != nil {
+		t.Fatalf("ParseWhoAmI: %v", err)
+	}
 	if result.Mode != types.WhoAmIAPIKey {
 		t.Fatalf("expected api_key, got %q", result.Mode)
 	}
 }
 
 func TestParseWhoAmILoggedInWithFields(t *testing.T) {
-	stdout := "Logged in as the following user.\nUser ID: usr-123\nEmail: user@example.com\nSession: sess-abc\nExpires at: 2030-01-01T00:00:00Z\n"
-	result := ParseWhoAmI(stdout, 0)
+	stdout := `{"mode":"logged_in","user_id":"usr-123","email":"user@example.com","session":"sess-abc","expires_at":"2030-01-01T00:00:00Z"}`
+	result, err := ParseWhoAmI(stdout, 0)
+	if err != nil {
+		t.Fatalf("ParseWhoAmI: %v", err)
+	}
 	if result.Mode != types.WhoAmILoggedIn {
 		t.Fatalf("expected logged_in, got %q", result.Mode)
 	}
@@ -335,23 +351,33 @@ func TestParseWhoAmILoggedInWithFields(t *testing.T) {
 	}
 }
 
-func TestParseWhoAmIAnonymousWhenNothingMatches(t *testing.T) {
-	result := ParseWhoAmI("nothing relevant here\n", 0)
-	if result.Mode != types.WhoAmIAnonymous {
-		t.Fatalf("expected anonymous, got %q", result.Mode)
+func TestParseWhoAmIUnknownModeReadsAsAnonymous(t *testing.T) {
+	// A CLI that grows a fourth mode must not accidentally unlock anything here.
+	result, err := ParseWhoAmI(`{"mode":"enterprise_sso","user_id":"usr-9"}`, 0)
+	if err != nil {
+		t.Fatalf("ParseWhoAmI: %v", err)
 	}
-	if result.UserID != "" || result.Session != "" || result.ExpiresAt != "" {
-		t.Fatalf("expected empty fields, got %+v", result)
+	if result.Mode != types.WhoAmIAnonymous {
+		t.Fatalf("expected anonymous for an unknown mode, got %q", result.Mode)
 	}
 }
 
-func TestParseWhoAmIDetectsLoggedInViaSessionLine(t *testing.T) {
-	result := ParseWhoAmI("Session: only-session\n", 0)
-	if result.Mode != types.WhoAmILoggedIn {
-		t.Fatalf("expected logged_in via session marker, got %q", result.Mode)
+func TestParseWhoAmIReportsMalformedOutput(t *testing.T) {
+	// The prose parser silently returned anonymous here, which is how a reworded
+	// CLI line went unnoticed for a week. Output that is not the contract is an
+	// error now, and the caller still gets the least-privileged mode with it.
+	result, err := ParseWhoAmI("Logged in as the following user.\nUser ID: usr-123\n", 0)
+	if err == nil {
+		t.Fatalf("expected an error for non-JSON output, got %+v", result)
 	}
-	if result.Session != "only-session" {
-		t.Fatalf("Session: %q", result.Session)
+	if result.Mode != types.WhoAmIAnonymous {
+		t.Fatalf("expected anonymous alongside the error, got %q", result.Mode)
+	}
+}
+
+func TestParseWhoAmIReportsEmptyOutput(t *testing.T) {
+	if _, err := ParseWhoAmI("   \n", 0); err == nil {
+		t.Fatal("expected an error when a successful call printed nothing")
 	}
 }
 

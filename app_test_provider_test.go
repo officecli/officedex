@@ -335,6 +335,11 @@ func TestTestProviderWithInputUsesOverridesWithoutMutatingCachedSettings(t *test
 			},
 		},
 	}
+	// A custom provider is gated on being signed in, so this reaches for a
+	// binary. Seed the fake: without one it resolves whatever officecli happens
+	// to be built into ./build on the developer's machine, and the test starts
+	// depending on that binary's age.
+	a.binary.seed(writeWhoamiFakeOfficeCLI(t, "logged_in"), nil, time.Now())
 
 	result, err := a.TestProviderWithInput(types.ProviderTestInput{
 		UseProviderOverride: true,

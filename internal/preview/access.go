@@ -25,24 +25,6 @@ import (
 	"officedex/internal/types"
 )
 
-// supportedPreviewExtensions mirrors SUPPORTED_PREVIEW_EXTENSIONS from the TS
-// source. Keys are stored lowercase without the leading dot.
-var supportedPreviewExtensions = map[string]struct{}{
-	"docx": {},
-	"xlsx": {},
-	"pptx": {},
-	"pdf":  {},
-	"html": {},
-	"htm":  {},
-	"png":  {},
-	"jpg":  {},
-	"jpeg": {},
-	"gif":  {},
-	"webp": {},
-	"svg":  {},
-	"bmp":  {},
-}
-
 // ArtifactEntry is the canonical, trusted-root-validated form of an Artifact
 // that the registry hands back to preview handlers.
 type ArtifactEntry struct {
@@ -101,7 +83,7 @@ func (r *Registry) AllowSelectedArtifact(artifact types.Artifact) error {
 		return errors.New("preview: selected file is unavailable")
 	}
 	extension := previewExtension(canonical)
-	if _, ok := supportedPreviewExtensions[extension]; !ok {
+	if !types.IsPreviewable(extension) {
 		return errors.New("preview: unsupported preview file type")
 	}
 	entry := ArtifactEntry{
@@ -193,7 +175,7 @@ func (r *Registry) entryFromArtifact(artifact types.Artifact) (ArtifactEntry, er
 		return ArtifactEntry{}, err
 	}
 	extension := previewExtension(canonical)
-	if _, ok := supportedPreviewExtensions[extension]; !ok {
+	if !types.IsPreviewable(extension) {
 		return ArtifactEntry{}, errors.New("preview: unsupported preview file type")
 	}
 	if !r.withinTrustedRoots(canonical) && !r.isAllowedFile(canonical) {

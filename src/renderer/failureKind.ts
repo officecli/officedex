@@ -9,6 +9,22 @@ export type FailureKind = "connection" | "auth" | "task" | "setup" | "other";
 
 const FAILURE_KINDS: readonly FailureKind[] = ["connection", "auth", "task", "setup", "other"];
 const FAILURE_TAG = /\[kind:(auth|setup|connection|task|other)\]\s*/;
+// Go also tags the bridge's error.data.code (`[code:task_not_found]`), so a
+// decision that used to match the sentence ("not found", "no pending input")
+// reads the code instead.
+const CODE_TAG = /\[code:([a-z_]+)\]\s*/;
+
+/** Machine-readable bridge error codes the renderer acts on. */
+export const BRIDGE_ERROR_CODES = {
+  taskNotFound: "task_not_found",
+  sessionNotFound: "session_not_found",
+  noPendingInput: "no_pending_input",
+} as const;
+
+/** The bridge error code an error message carries, or undefined. */
+export function errorCode(text: string): string | undefined {
+  return CODE_TAG.exec(text)?.[1];
+}
 
 export function isFailureKind(value: unknown): value is FailureKind {
   return typeof value === "string" && (FAILURE_KINDS as readonly string[]).includes(value);
@@ -27,7 +43,7 @@ export function classifyStatusEvent(payloadKind: unknown, message: string, stder
 
 /** Removes the kind tag so it never shows up in the banner. */
 export function stripFailureTag(text: string): string {
-  return text.replace(new RegExp(FAILURE_TAG.source, "g"), "").trim();
+  return text.replace(new RegExp(FAILURE_TAG.source, "g"), "").replace(new RegExp(CODE_TAG.source, "g"), "").trim();
 }
 
 export function extractStderr(text: string): string | undefined {

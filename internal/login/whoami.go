@@ -2,9 +2,9 @@ package login
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
-	"regexp"
 	"strings"
 	"syscall"
 
@@ -12,22 +12,30 @@ import (
 	"officedex/internal/types"
 )
 
-var (
-	userIDLine    = regexp.MustCompile(`(?i)user id:\s*(\S+)`)
-	emailLine     = regexp.MustCompile(`(?i)email:\s*(\S+)`)
-	sessionLine   = regexp.MustCompile(`(?i)session:\s*(\S+)`)
-	expiresAtLine = regexp.MustCompile(`(?i)expires at:\s*(\S+)`)
-)
+// whoamiJSON is the shape `officecli whoami --json` prints, mirroring the CLI's
+// whoamiReport. It replaced four regexes over the CLI's prose; see
+// credit_status.go for why that arrangement had to go.
+//
+// An API key has no user record behind it, so the CLI answers that case with
+// the quota report instead. Both shapes carry `mode`, which is the only field
+// this function needs from it.
+type whoamiJSON struct {
+	Mode      string `json:"mode"`
+	UserID    string `json:"user_id"`
+	Email     string `json:"email"`
+	Session   string `json:"session"`
+	ExpiresAt string `json:"expires_at"`
+}
 
-// GetWhoAmI spawns `officecli whoami`, waits for exit, and parses the result.
-// Errors from spawning or unexpected I/O are returned; an unauthenticated
-// state surfaces as a successful result with Mode=anonymous.
+// GetWhoAmI spawns `officecli whoami --json`, waits for exit, and parses the
+// result. Errors from spawning or unexpected I/O are returned; an
+// unauthenticated state surfaces as a successful result with Mode=anonymous.
 func GetWhoAmI(ctx context.Context, opts ManagerOptions) (types.WhoAmIResult, error) {
-	stdout, _, code, err := runOnce(ctx, opts, []string{"whoami"})
+	stdout, _, code, err := runOnce(ctx, opts, []string{"whoami", "--json"})
 	if err != nil {
 		return types.WhoAmIResult{}, err
 	}
-	return ParseWhoAmI(stdout, code), nil
+	return ParseWhoAmI(stdout, code)
 }
 
 // Logout spawns `officecli logout` and reports a non-zero exit as an error
@@ -48,44 +56,36 @@ func Logout(ctx context.Context, opts ManagerOptions) error {
 	return nil
 }
 
-// ParseWhoAmI mirrors the TS parseWhoAmI: classify mode, then pull the three
-// optional identity fields out of stdout.
-func ParseWhoAmI(stdout string, exitCode int) types.WhoAmIResult {
+// ParseWhoAmI decodes what `officecli whoami --json` printed. A non-zero exit
+// means the CLI could not answer, which reads as anonymous.
+func ParseWhoAmI(stdout string, exitCode int) (types.WhoAmIResult, error) {
 	if exitCode != 0 {
-		return types.WhoAmIResult{Mode: types.WhoAmIAnonymous}
+		return types.WhoAmIResult{Mode: types.WhoAmIAnonymous}, nil
 	}
-	lowered := strings.ToLower(stdout)
-	mode := types.WhoAmIAnonymous
-	switch {
-	case strings.Contains(lowered, "api key"):
-		mode = types.WhoAmIAPIKey
-	case strings.Contains(lowered, "logged in"),
-		strings.Contains(lowered, "user id:"),
-		strings.Contains(lowered, "session:"):
-		mode = types.WhoAmILoggedIn
+	trimmed := strings.TrimSpace(stdout)
+	if trimmed == "" {
+		return types.WhoAmIResult{Mode: types.WhoAmIAnonymous}, fmt.Errorf("officecli whoami --json printed nothing")
 	}
-	result := types.WhoAmIResult{Mode: mode}
-	if v := firstSubmatch(userIDLine, stdout); v != "" {
-		result.UserID = v
+	var report whoamiJSON
+	if err := json.Unmarshal([]byte(trimmed), &report); err != nil {
+		return types.WhoAmIResult{Mode: types.WhoAmIAnonymous}, outdatedCLIError("whoami", err)
 	}
-	if v := firstSubmatch(emailLine, stdout); v != "" {
-		result.Email = v
-	}
-	if v := firstSubmatch(sessionLine, stdout); v != "" {
-		result.Session = v
-	}
-	if v := firstSubmatch(expiresAtLine, stdout); v != "" {
-		result.ExpiresAt = v
-	}
-	return result
+	return types.WhoAmIResult{
+		Mode:      creditStatusMode(report.Mode),
+		UserID:    strings.TrimSpace(report.UserID),
+		Email:     strings.TrimSpace(report.Email),
+		Session:   strings.TrimSpace(report.Session),
+		ExpiresAt: strings.TrimSpace(report.ExpiresAt),
+	}, nil
 }
 
-func firstSubmatch(re *regexp.Regexp, text string) string {
-	match := re.FindStringSubmatch(text)
-	if len(match) < 2 {
-		return ""
-	}
-	return match[1]
+// outdatedCLIError names the likely cause of unparseable output on a successful
+// exit. An officecli from before these commands learned --json ignores the flag
+// and prints its usual prose, which is not a malformed answer so much as an
+// answer in the old format — and "invalid character 'M'" tells a user nothing
+// about what to do next.
+func outdatedCLIError(command string, err error) error {
+	return fmt.Errorf("officecli %s --json did not print JSON (the binary is probably older than this app expects; update or rebuild it): %w", command, err)
 }
 
 // runOnce drives a single short-lived officecli subprocess to completion and

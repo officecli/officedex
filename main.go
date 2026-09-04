@@ -2,24 +2,31 @@ package main
 
 import (
 	"embed"
-	"log"
 	"net/http"
+	"os"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+
+	"officedex/internal/applog"
 )
 
 //go:embed all:dist
 var assets embed.FS
 
 func main() {
+	// Both of these run before startup installs the Wails forwarder, so they
+	// reach stderr — which is the only place they could go anyway, there being
+	// no window to log into yet.
 	app, err := NewApp()
 	if err != nil {
-		log.Fatalf("init: %v", err)
+		applog.Logger().Error("init", applog.Err(err))
+		os.Exit(1)
 	}
 	if err := wails.Run(newWailsAppOptions(app)); err != nil {
-		log.Fatalf("wails run: %v", err)
+		applog.Logger().Error("wails run", applog.Err(err))
+		os.Exit(1)
 	}
 }
 

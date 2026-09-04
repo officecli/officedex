@@ -1,4 +1,4 @@
-import type { ShopifyCatalogCleanupInput, ShopifyCatalogCleanupResult } from "../../shared/types";
+import type { ShopifyCatalogCleanupInput, ShopifyCatalogCleanupResult } from "../../shared/verticals";
 
 export type CatalogFieldRole =
   | "ignored" | "handle" | "sku" | "title" | "description" | "vendor" | "productCategory" | "productType" | "tags"

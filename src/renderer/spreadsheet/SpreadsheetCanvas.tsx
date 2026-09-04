@@ -13,7 +13,7 @@ import {
   type MarketingBatchDraft,
   type MarketingFieldMapping,
 } from "./marketingWorkflow";
-import { createOfflineSheetEditor, registerOfflineImage } from "./sheetSdk";
+import { createOfflineSheetEditor, cellsLoadingMessages, registerOfflineImage } from "./sheetSdk";
 import type { CatalogCleanupBatch, CatalogInspection, CatalogSelection } from "./catalogCleanupWorkflow";
 import type {
   WorkbookAddChartRequest,
@@ -186,7 +186,11 @@ async function waitForChangeVersionQuiet(
   }
 }
 
-const sheetCellsLoadingPattern = /单元格加载中|加载完成后插入行|cells? (?:are )?loading|wait for cells?/i;
+function isCellsLoadingError(error: unknown): boolean {
+  const message = errorMessage(error).trim();
+  if (!message) return false;
+  return cellsLoadingMessages().some((loading) => message.includes(loading));
+}
 
 export async function retryWhenSheetCellsReady<T>(action: () => T, timeoutMs = 5000): Promise<T> {
   const deadline = Date.now() + timeoutMs;
@@ -194,7 +198,7 @@ export async function retryWhenSheetCellsReady<T>(action: () => T, timeoutMs = 5
     try {
       return action();
     } catch (error) {
-      if (!sheetCellsLoadingPattern.test(errorMessage(error)) || Date.now() >= deadline) throw error;
+      if (!isCellsLoadingError(error) || Date.now() >= deadline) throw error;
       await delay(50);
     }
   }

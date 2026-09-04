@@ -8,6 +8,8 @@ import { useT } from "../i18n";
 import { isWaitingOnUser } from "../runtimeRuns";
 import { recordValue, trimmedStringValue as stringValue } from "../utils/values";
 import { AGENT_RUN_FETCH_LIMIT } from "../constants/limits";
+import { PROMPTS_POLL_INTERVAL_MS } from "../constants/timing";
+import { usePolling } from "../utils/usePolling";
 
 
 interface PendingRuntimeAction { requestId: string }
@@ -68,11 +70,7 @@ export function RuntimePrompts({ onCountChange }: { onCountChange?: (count: numb
     }
   }, []);
 
-  useEffect(() => {
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 4_000);
-    return () => window.clearInterval(timer);
-  }, [refresh]);
+  usePolling(refresh, PROMPTS_POLL_INTERVAL_MS);
 
   const waiting = runs.filter(isWaitingOnUser);
   useEffect(() => { onCountChange?.(waiting.length); }, [waiting.length, onCountChange]);

@@ -9,55 +9,6 @@ import (
 	"officedex/internal/types"
 )
 
-func TestProviderSnapshotFromEnv(t *testing.T) {
-	t.Run("hosted-mode-env-has-no-provider-keys", func(t *testing.T) {
-		got := providerSnapshotFromEnv([]string{"OFFICE_CLI_RUNTIME_MODE=hosted"})
-		if got != nil {
-			t.Fatalf("expected nil for env without OFFICECLI_LLM_*, got %+v", got)
-		}
-	})
-
-	t.Run("full-custom-env", func(t *testing.T) {
-		env := []string{
-			"OFFICE_CLI_RUNTIME_MODE=custom",
-			"OFFICECLI_LLM_PROVIDER=openai",
-			"OFFICECLI_LLM_BASE_URL=https://api.openai.com/v1",
-			"OFFICECLI_LLM_API_KEY=sk-abcdefghijklmnopqrstuvwxyz0123456789ABCD",
-			"OFFICECLI_LLM_MODEL=gpt-4o-mini",
-		}
-		got := providerSnapshotFromEnv(env)
-		if got == nil {
-			t.Fatal("expected non-nil snapshot")
-		}
-		if got.Type != types.LlmOpenAI {
-			t.Errorf("Type = %q, want openai", got.Type)
-		}
-		if got.BaseURLHost != "https://api.openai.com" {
-			t.Errorf("BaseURLHost = %q, want https://api.openai.com", got.BaseURLHost)
-		}
-		if got.Model != "gpt-4o-mini" {
-			t.Errorf("Model = %q, want gpt-4o-mini", got.Model)
-		}
-		if got.APIKeyMasked == "sk-abcdefghijklmnopqrstuvwxyz0123456789ABCD" {
-			t.Errorf("APIKeyMasked leaked raw value")
-		}
-		if got.APIKeyLength != 43 {
-			t.Errorf("APIKeyLength = %d, want 43", got.APIKeyLength)
-		}
-	})
-
-	t.Run("partial-env-still-returns-snapshot", func(t *testing.T) {
-		env := []string{"OFFICECLI_LLM_PROVIDER=anthropic"}
-		got := providerSnapshotFromEnv(env)
-		if got == nil || got.Type != types.LlmAnthropic {
-			t.Fatalf("expected anthropic snapshot, got %+v", got)
-		}
-		if got.Model != "" || got.APIKeyMasked != "" || got.BaseURLHost != "" {
-			t.Errorf("unset fields should be empty, got %+v", got)
-		}
-	})
-}
-
 func TestFindBundledBinaryPathFindsWindowsSiblingRuntime(t *testing.T) {
 	exePath := filepath.Join("C:", "Users", "test", "AppData", "Local", "Programs", "OfficeDex", "OfficeDex.exe")
 	want := filepath.Join("C:", "Users", "test", "AppData", "Local", "Programs", "OfficeDex", "officecli", "officecli.exe")

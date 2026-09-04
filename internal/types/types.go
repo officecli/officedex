@@ -1,5 +1,7 @@
 package types
 
+import "strings"
+
 type DocumentType string
 
 type InviteInfo struct {
@@ -51,15 +53,32 @@ type AttachmentSpec struct {
 	Description  string                 `json:"description"`
 }
 
+// DocumentTypeCapability is what the app knows about a document type. Every
+// per-type decision reads this table; there is no other switch on the type.
+// Adding a document type is adding a row here (and a viewer in the renderer).
 type DocumentTypeCapability struct {
 	Type        DocumentType     `json:"type"`
 	Label       string           `json:"label"`
 	Icon        string           `json:"icon"`
 	Attachments []AttachmentSpec `json:"attachments"`
+	// Office marks the document formats that go through the office generation
+	// modes (best/plan) rather than the image pipeline.
+	Office bool `json:"office"`
+	// DefaultPPTXBackend is sent as pptx_backend when the caller leaves it
+	// unset; empty for types that have no backend choice.
+	DefaultPPTXBackend string `json:"defaultPptxBackend,omitempty"`
+	// ImageRatio, FrameRate and Watermark say which of the image-pipeline
+	// arguments apply to this type.
+	ImageRatio bool `json:"imageRatio"`
+	FrameRate  bool `json:"frameRate"`
+	Watermark  bool `json:"watermark"`
+	// PreviewExtensions are the file extensions (lowercase, no dot) a file of
+	// this type carries when it is opened in the preview.
+	PreviewExtensions []string `json:"previewExtensions"`
 }
 
 var DocumentTypeCapabilities = map[DocumentType]DocumentTypeCapability{
-	DocPPTX: {Type: DocPPTX, Label: "PPTX", Icon: "slideshow", Attachments: []AttachmentSpec{{
+	DocPPTX: {Type: DocPPTX, Label: "PPTX", Icon: "slideshow", Office: true, DefaultPPTXBackend: PPTXBackendMOPSkill, PreviewExtensions: []string{"pptx"}, Attachments: []AttachmentSpec{{
 		Slot:         SlotSourceWorkbook,
 		Required:     false,
 		Multiple:     false,
@@ -69,12 +88,13 @@ var DocumentTypeCapabilities = map[DocumentType]DocumentTypeCapability{
 		Label:        "Source workbook",
 		Description:  "Optional Excel workbook whose figures ground the deck.",
 	}}},
-	DocDOCX: {Type: DocDOCX, Label: "DOCX", Icon: "description", Attachments: []AttachmentSpec{}},
-	DocXLSX: {Type: DocXLSX, Label: "XLSX", Icon: "table", Attachments: []AttachmentSpec{}},
+	DocDOCX: {Type: DocDOCX, Label: "DOCX", Icon: "description", Office: true, PreviewExtensions: []string{"docx"}, Attachments: []AttachmentSpec{}},
+	DocXLSX: {Type: DocXLSX, Label: "XLSX", Icon: "table", Office: true, PreviewExtensions: []string{"xlsx"}, Attachments: []AttachmentSpec{}},
 	DocReport: {
-		Type:  DocReport,
-		Label: "Report",
-		Icon:  "article",
+		Type:   DocReport,
+		Label:  "Report",
+		Icon:   "article",
+		Office: true,
 		Attachments: []AttachmentSpec{{
 			Slot:         SlotSourceWorkbook,
 			Required:     true,
@@ -87,9 +107,12 @@ var DocumentTypeCapabilities = map[DocumentType]DocumentTypeCapability{
 		}},
 	},
 	DocIMG: {
-		Type:  DocIMG,
-		Label: "Image",
-		Icon:  "image",
+		Type:              DocIMG,
+		Label:             "Image",
+		Icon:              "image",
+		ImageRatio:        true,
+		Watermark:         true,
+		PreviewExtensions: []string{"png", "jpg", "jpeg", "webp", "svg", "bmp"},
 		Attachments: []AttachmentSpec{{
 			Slot:         SlotReferenceImages,
 			Required:     false,
@@ -102,9 +125,11 @@ var DocumentTypeCapabilities = map[DocumentType]DocumentTypeCapability{
 		}},
 	},
 	DocGIF: {
-		Type:  DocGIF,
-		Label: "GIF",
-		Icon:  "gif",
+		Type:              DocGIF,
+		Label:             "GIF",
+		Icon:              "gif",
+		FrameRate:         true,
+		PreviewExtensions: []string{"gif"},
 		Attachments: []AttachmentSpec{{
 			Slot:         SlotReferenceImages,
 			Required:     false,
@@ -121,6 +146,62 @@ var DocumentTypeCapabilities = map[DocumentType]DocumentTypeCapability{
 func GetCapability(t DocumentType) (DocumentTypeCapability, bool) {
 	c, ok := DocumentTypeCapabilities[t]
 	return c, ok
+}
+
+// Capability returns the row for t, or the zero row (no flags set) for an
+// unknown type, so callers can read flags without a second lookup.
+func Capability(t DocumentType) DocumentTypeCapability {
+	c, _ := DocumentTypeCapabilities[t]
+	return c
+}
+
+// PPTXBackendMOPSkill is the desktop's PPTX backend: op-driven MOP authoring
+// where the OfficeCLI worker emits ordered vibe_ops. officegen stays available
+// only as an explicit compatibility choice.
+const PPTXBackendMOPSkill = "mop-skill"
+
+// GenericPreviewExtensions can be opened in the preview without belonging to
+// a generated document type.
+var GenericPreviewExtensions = []string{"pdf", "html", "htm"}
+
+// PreviewExtensions is every extension the preview accepts: each document
+// type's own plus the generic ones. The preview registry and the recent-files
+// gate both read this; they used to keep two hand-written copies of the list.
+func PreviewExtensions() []string {
+	seen := map[string]struct{}{}
+	var out []string
+	add := func(ext string) {
+		ext = strings.ToLower(strings.TrimSpace(ext))
+		if ext == "" {
+			return
+		}
+		if _, ok := seen[ext]; ok {
+			return
+		}
+		seen[ext] = struct{}{}
+		out = append(out, ext)
+	}
+	for _, t := range DocumentTypes {
+		for _, ext := range DocumentTypeCapabilities[t].PreviewExtensions {
+			add(ext)
+		}
+	}
+	for _, ext := range GenericPreviewExtensions {
+		add(ext)
+	}
+	return out
+}
+
+// IsPreviewable reports whether a file extension (with or without the dot,
+// any case) can be shown in the preview.
+func IsPreviewable(extension string) bool {
+	extension = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(extension), "."))
+	for _, ext := range PreviewExtensions() {
+		if ext == extension {
+			return true
+		}
+	}
+	return false
 }
 
 func GetAttachmentSpec(t DocumentType, slot AttachmentSlot) (AttachmentSpec, bool) {
