@@ -23,10 +23,11 @@ import (
 	"net/http"
 	"officedex/internal/atomicfile"
 	"officedex/internal/config"
-	"officedex/internal/payloadfield"
+	"officedex/internal/providerenv"
 	"officedex/internal/providerprobe"
 	"officedex/internal/runtimeenv"
 	"officedex/internal/taskrecovery"
+	"officedex/internal/watermark"
 	"officedex/internal/workspace"
 	"os"
 	"os/exec"
@@ -2918,7 +2919,7 @@ func (a *App) currentBridgeEnv() []string {
 	a.mu.Lock()
 	s := a.cachedSettings
 	a.mu.Unlock()
-	return llmProviderEnv(s)
+	return providerenv.Env(s)
 }
 
 // GetBridgeRuntimeSnapshot returns the renderer-facing description of the
@@ -2954,52 +2955,10 @@ func (a *App) GetBridgeRuntimeSnapshot() (types.BridgeRuntimeSnapshot, error) {
 		}
 	}
 	if snap.EnvApplied && mode == types.RuntimeCustom {
-		snap.Provider = providerSnapshotFromEnv(env)
+		snap.Provider = providerenv.Snapshot(env)
 	}
 	return snap, nil
 }
-
-// providerSnapshotFromEnv parses the OFFICECLI_LLM_* lines emitted by
-// llmProviderEnv and returns a renderer-safe view. Returns nil when none of
-// the provider keys are present (e.g. hosted mode subprocess).
-func providerSnapshotFromEnv(env []string) *types.ProviderSnapshot {
-	const (
-		keyType    = "OFFICECLI_LLM_PROVIDER="
-		keyBaseURL = "OFFICECLI_LLM_BASE_URL="
-		keyKey     = "OFFICECLI_LLM_API_KEY="
-		keyModel   = "OFFICECLI_LLM_MODEL="
-	)
-	var providerType, baseURL, apiKey, model string
-	var found bool
-	for _, kv := range env {
-		switch {
-		case strings.HasPrefix(kv, keyType):
-			providerType = kv[len(keyType):]
-			found = true
-		case strings.HasPrefix(kv, keyBaseURL):
-			baseURL = kv[len(keyBaseURL):]
-			found = true
-		case strings.HasPrefix(kv, keyKey):
-			apiKey = kv[len(keyKey):]
-			found = true
-		case strings.HasPrefix(kv, keyModel):
-			model = kv[len(keyModel):]
-			found = true
-		}
-	}
-	if !found {
-		return nil
-	}
-	return &types.ProviderSnapshot{
-		Type:         types.LlmProviderType(providerType),
-		BaseURLHost:  mask.Host(baseURL),
-		Model:        model,
-		APIKeyMasked: mask.APIKey(apiKey),
-		APIKeyLength: len([]rune(strings.TrimSpace(apiKey))),
-	}
-}
-
-const officialProviderTestUnavailable = "official provider connection test is not available; run a generation task to verify the hosted provider"
 
 // TestProvider issues a probe against the configured provider. For custom
 // providers (OpenAI/Azure/Anthropic/Custom) it sends a real "hi" chat
@@ -3043,7 +3002,7 @@ func (a *App) testProviderWithSettings(s types.UserSettings, pool *netproxy.Pool
 		if allowPaidOfficialProbe {
 			return a.runOfficialPaidProviderProbe(s, pool)
 		}
-		return testOfficialProvider()
+		return providerprobe.Unavailable(), nil
 	}
 	if err := a.requireLoggedInForCustomProvider(s); err != nil {
 		return types.ProviderTestResult{}, err
@@ -3058,164 +3017,17 @@ func (a *App) testProviderWithSettings(s types.UserSettings, pool *netproxy.Pool
 	return providerprobe.Run(ctx, pool, probe), nil
 }
 
-// testOfficialProvider deliberately does not call bridge initialize. That RPC is
-// a local stdio handshake and can return in 0ms even when no hosted LLM request
-// would succeed, so reporting it as a provider connection test is misleading.
-func testOfficialProvider() (types.ProviderTestResult, error) {
-	return types.ProviderTestResult{
-		URL:         "official",
-		Error:       officialProviderTestUnavailable,
-		Unavailable: true,
-	}, nil
-}
-
 func (a *App) runOfficialPaidProviderProbe(s types.UserSettings, pool *netproxy.Pool) (types.ProviderTestResult, error) {
 	probeCtx := a.ctx
 	if probeCtx == nil {
 		probeCtx = context.Background()
 	}
-	ctx, cancel := context.WithTimeout(probeCtx, 2*time.Minute)
+	ctx, cancel := context.WithTimeout(probeCtx, providerprobe.OfficialPaidTimeout)
 	defer cancel()
-
-	outDir, err := os.MkdirTemp("", "officedex-provider-test-*")
-	if err != nil {
-		return types.ProviderTestResult{}, fmt.Errorf("official provider test temp dir: %w", err)
-	}
-	defer os.RemoveAll(outDir)
-
-	binary := binresolver.ResolvePath(a.resolverOptions(s))
-	if strings.TrimSpace(binary) == "" {
-		binary = "officecli"
-	}
-	args := []string{
-		"new",
-		"docx",
-		"OfficeDex Provider Connection Test",
-		"--prompt",
-		"Write exactly: OfficeDex provider connection test OK.",
-		"--mode",
-		"fast",
-		"--out",
-		outDir,
-		"--no-publish",
-		"--json",
-	}
-	cmd := subprocess.CommandContext(ctx, binary, args...)
-	cmd.Env = buildOfficialProbeEnv(llmProviderEnv(types.UserSettings{}), pool)
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	start := time.Now()
-	err = cmd.Run()
-	latency := time.Since(start).Milliseconds()
-	if ctx.Err() != nil {
-		return types.ProviderTestResult{
-			URL:       "official",
-			LatencyMs: latency,
-			Error:     "official provider paid probe timed out",
-			ProbeType: "officialPaid",
-		}, nil
-	}
-	if err != nil {
-		exitCode := -1
-		if cmd.ProcessState != nil {
-			exitCode = cmd.ProcessState.ExitCode()
-		}
-		return types.ProviderTestResult{
-			URL:       "official",
-			LatencyMs: latency,
-			Error:     officialProbeFailureSummary(exitCode, stdout.String(), stderr.String(), err),
-			ProbeType: "officialPaid",
-		}, nil
-	}
-	return types.ProviderTestResult{
-		OK:        true,
-		URL:       "official",
-		LatencyMs: latency,
-		ProbeType: "officialPaid",
-	}, nil
-}
-
-func buildOfficialProbeEnv(extra []string, pool *netproxy.Pool) []string {
-	env := stripProxyEnv(append([]string{}, os.Environ()...))
-	env = appendKVForCommand(env, "OFFICECLI_SKIP_SKILL_PREFLIGHT", "1")
-	env = appendKVForCommand(env, "OFFICECLI_SKIP_PUBLISH_SETUP", "1")
-	env = appendKVForCommand(env, "OFFICECLI_SKIP_UPDATE_CHECK", "1")
-	if pool != nil {
-		for _, kv := range pool.SubprocessEnv() {
-			key, _, ok := strings.Cut(kv, "=")
-			if ok {
-				env = setKVForCommand(env, key, kv)
-			}
-		}
-	}
-	for _, kv := range extra {
-		key, _, ok := strings.Cut(kv, "=")
-		if ok {
-			env = setKVForCommand(env, key, kv)
-		}
-	}
-	return env
-}
-
-func stripProxyEnv(env []string) []string {
-	filtered := env[:0]
-	for _, kv := range env {
-		key, _, ok := strings.Cut(kv, "=")
-		if !ok {
-			filtered = append(filtered, kv)
-			continue
-		}
-		switch strings.ToUpper(key) {
-		case "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY":
-			continue
-		default:
-			filtered = append(filtered, kv)
-		}
-	}
-	return filtered
-}
-
-func appendKVForCommand(env []string, key, value string) []string {
-	return setKVForCommand(env, key, key+"="+value)
-}
-
-func setKVForCommand(env []string, key, kv string) []string {
-	prefix := key + "="
-	for i, current := range env {
-		if strings.HasPrefix(current, prefix) {
-			env[i] = kv
-			return env
-		}
-	}
-	return append(env, kv)
-}
-
-func officialProbeFailureSummary(exitCode int, stdout string, stderr string, runErr error) string {
-	parts := []string{fmt.Sprintf("official provider paid probe exited with exit code %d", exitCode)}
-	if trimmed := limitProbeOutput(stderr); trimmed != "" {
-		parts = append(parts, "stderr: "+trimmed)
-	}
-	if trimmed := limitProbeOutput(stdout); trimmed != "" {
-		parts = append(parts, "stdout: "+trimmed)
-	}
-	if len(parts) == 1 && runErr != nil {
-		parts = append(parts, runErr.Error())
-	}
-	return strings.Join(parts, "\n")
-}
-
-func limitProbeOutput(value string) string {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return ""
-	}
-	const max = 2000
-	if len(trimmed) > max {
-		return trimmed[:max] + "...(truncated)"
-	}
-	return trimmed
+	return providerprobe.RunOfficialPaid(ctx, providerprobe.OfficialPaidOptions{
+		Binary: binresolver.ResolvePath(a.resolverOptions(s)),
+		Env:    providerprobe.OfficialEnv(os.Environ(), providerenv.Env(types.UserSettings{}), pool),
+	})
 }
 
 // ─── Issue report bindings ──────────────────────────────────────────────────
@@ -3254,10 +3066,7 @@ type PeekReportContextResult struct {
 	RuntimeMode  string `json:"runtimeMode"`
 }
 
-const (
-	reportDescriptionMinLen = 10
-	reportErrorMessageCap   = 500
-)
+const reportDescriptionMinLen = 10
 
 // GetReportCapability returns a renderer-friendly snapshot of whether report
 // submission is available.
@@ -3288,8 +3097,8 @@ func (a *App) PeekReportContext(taskID string) (PeekReportContextResult, error) 
 	if err != nil {
 		return out, fmt.Errorf("peek report context: query events: %w", err)
 	}
-	if failure := latestFailedEvent(events); failure != nil {
-		out.ErrorCode, out.ErrorMessage = extractErrorFields(failure)
+	if failure := report.LatestFailedEvent(events); failure != nil {
+		out.ErrorCode, out.ErrorMessage = report.ErrorFields(failure)
 	}
 	out.RuntimeMode = string(a.currentRuntimeMode())
 	return out, nil
@@ -3325,8 +3134,8 @@ func (a *App) SubmitReport(input SubmitReportInput) (SubmitReportResult, error) 
 			payload.RequestID = requestID
 		}
 		if events, err := a.localStore.QueryEventsByTask(ctx, payload.TaskID); err == nil {
-			if failure := latestFailedEvent(events); failure != nil {
-				payload.ErrorCode, payload.ErrorMessage = extractErrorFields(failure)
+			if failure := report.LatestFailedEvent(events); failure != nil {
+				payload.ErrorCode, payload.ErrorMessage = report.ErrorFields(failure)
 			}
 		}
 	}
@@ -3434,34 +3243,6 @@ func (a *App) runtimeModeSnapshot() types.RuntimeMode {
 	return ""
 }
 
-// latestFailedEvent walks the event slice in reverse and returns the most
-// recent task.failed entry, or nil when none exists.
-func latestFailedEvent(events []types.BridgeEvent) *types.BridgeEvent {
-	for i := len(events) - 1; i >= 0; i-- {
-		if events[i].Type == types.EventTaskFailed {
-			ev := events[i]
-			return &ev
-		}
-	}
-	return nil
-}
-
-// extractErrorFields pulls error_code + error_message from a task.failed
-// payload, handling both snake_case and camelCase keys the bridge has used
-// over time. Falls back to ("unknown", message) when no explicit code field
-// is present.
-func extractErrorFields(ev *types.BridgeEvent) (string, string) {
-	code := payloadfield.String(ev.Payload, "error_code", "errorCode", "code")
-	message := payloadfield.String(ev.Payload, "error_message", "errorMessage", "message", "error")
-	if code == "" {
-		code = "unknown"
-	}
-	if len(message) > reportErrorMessageCap {
-		message = message[:reportErrorMessageCap]
-	}
-	return code, message
-}
-
 // ─── Internals ──────────────────────────────────────────────────────────────
 
 // bridgeEventListener builds the event callback for a bridge client: it stamps
@@ -3487,7 +3268,7 @@ func (a *App) bridgeEventListener(client *bridge.Client) bridge.EventListener {
 				}
 				event.Payload["runtime_mode"] = string(mode)
 				if mode == types.RuntimeCustom {
-					if p := providerSnapshotFromEnv(env); p != nil {
+					if p := providerenv.Snapshot(env); p != nil {
 						event.Payload["runtime_provider"] = map[string]any{
 							"type":           string(p.Type),
 							"base_url_host":  p.BaseURLHost,
@@ -3692,7 +3473,7 @@ func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
 		return nil, errors.New(types.TagFailure(types.FailureSetup, message))
 	}
 
-	env := llmProviderEnv(settingsValue)
+	env := providerenv.Env(settingsValue)
 	// The progressive PPTX worker is a subprocess of the OfficeCLI bridge. In
 	// local development the fegit presentation checkout lives beside the
 	// OfficeDex checkout, so pass its absolute root explicitly instead of
@@ -3803,7 +3584,7 @@ func (a *App) resolvedBinaryLocked() (string, []string) {
 	settings := a.cachedSettings
 	return a.binary.ensure(func() (string, []string) {
 		return binresolver.ResolvePath(a.resolverOptions(settings)),
-			llmProviderEnv(settings)
+			providerenv.Env(settings)
 	})
 }
 
@@ -4192,28 +3973,6 @@ func (a *App) previewTrustedRootsForUpdate(ctx context.Context, activeWorkspace 
 	return a.previewTrustedRoots(ctx, activeWorkspace, s), true
 }
 
-func llmProviderEnv(s types.UserSettings) []string {
-	out := []string{}
-	if s.LlmProvider == nil {
-		out = append(out, "OFFICE_CLI_RUNTIME_MODE=hosted")
-		return out
-	}
-	out = append(out, "OFFICE_CLI_RUNTIME_MODE=custom")
-	if s.LlmProvider.Type != "" {
-		out = append(out, "OFFICECLI_LLM_PROVIDER="+string(s.LlmProvider.Type))
-	}
-	if s.LlmProvider.BaseURL != "" {
-		out = append(out, "OFFICECLI_LLM_BASE_URL="+s.LlmProvider.BaseURL)
-	}
-	if s.LlmProvider.APIKey != "" {
-		out = append(out, "OFFICECLI_LLM_API_KEY="+s.LlmProvider.APIKey)
-	}
-	if s.LlmProvider.Model != "" {
-		out = append(out, "OFFICECLI_LLM_MODEL="+s.LlmProvider.Model)
-	}
-	return out
-}
-
 // validateCustomProvider rejects Generate calls that would silently fall
 // through to officecli's built-in default endpoint. When the user selects
 // custom mode without supplying BaseURL/APIKey/Model, the subprocess
@@ -4357,67 +4116,18 @@ func artifactFromCompletedEvent(event types.BridgeEvent) *types.Artifact {
 
 func (a *App) refreshImageWatermarkSettingsForGenerate(current types.UserSettings) (types.UserSettings, *types.ImageWatermarkGenerateOptions) {
 	credit, creditErr := a.GetCreditStatus()
-	next, changed := syncImageWatermarkSettingsForCredit(current, credit, creditErr)
+	next, changed := watermark.SyncSettingsForCredit(current, credit, creditErr)
 	if !changed {
-		return next, imageWatermarkGenerateOptions(next, credit, creditErr)
+		return next, watermark.GenerateOptions(next, credit, creditErr)
 	}
 	updated, err := a.settingsStore.Update(settings.Patch{ImageWatermark: &next.ImageWatermark})
 	if err != nil {
 		if a.ctx != nil {
 			wailsruntime.LogWarningf(a.ctx, "image watermark sync settings: %v", err)
 		}
-		return next, imageWatermarkGenerateOptions(next, credit, creditErr)
+		return next, watermark.GenerateOptions(next, credit, creditErr)
 	}
-	return updated, imageWatermarkGenerateOptions(updated, credit, creditErr)
-}
-
-func syncImageWatermarkSettingsForCredit(s types.UserSettings, credit types.CreditStatus, creditErr error) (types.UserSettings, bool) {
-	next := s
-	source := strings.ToLower(strings.TrimSpace(next.ImageWatermark.PreferenceSource))
-	if source != "user" {
-		source = "system"
-	}
-	next.ImageWatermark.PreferenceSource = source
-
-	if source == "user" {
-		return next, next.ImageWatermark.PreferenceSource != s.ImageWatermark.PreferenceSource
-	}
-
-	wantShow := true
-	if hasImageWatermarkEntitlement(credit, creditErr) {
-		wantShow = false
-	}
-	if next.ImageWatermark.ShowWatermark != wantShow {
-		next.ImageWatermark.ShowWatermark = wantShow
-		return next, true
-	}
-	return next, next.ImageWatermark.PreferenceSource != s.ImageWatermark.PreferenceSource
-}
-
-func imageWatermarkGenerateOptions(s types.UserSettings, credit types.CreditStatus, creditErr error) *types.ImageWatermarkGenerateOptions {
-	paid := hasImageWatermarkEntitlement(credit, creditErr)
-	return &types.ImageWatermarkGenerateOptions{
-		Apply:           shouldRequestImageWatermark(s, credit, creditErr),
-		PaidEntitlement: paid,
-		CanDisable:      paid,
-	}
-}
-
-func shouldRequestImageWatermark(s types.UserSettings, credit types.CreditStatus, creditErr error) bool {
-	if s.ImageWatermark.ShowWatermark {
-		return true
-	}
-	if creditErr != nil {
-		return true
-	}
-	return !hasImageWatermarkEntitlement(credit, creditErr)
-}
-
-func hasImageWatermarkEntitlement(credit types.CreditStatus, creditErr error) bool {
-	if creditErr != nil {
-		return false
-	}
-	return credit.PaidEntitlement
+	return updated, watermark.GenerateOptions(updated, credit, creditErr)
 }
 
 // resolveUserDataDir mirrors what Electron's app.getPath("userData") returns.

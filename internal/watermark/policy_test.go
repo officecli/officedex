@@ -1,4 +1,4 @@
-package main
+package watermark
 
 import (
 	"errors"
@@ -45,7 +45,7 @@ func TestShouldApplyImageWatermarkPolicy(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := shouldRequestImageWatermark(tc.settings, tc.credit, tc.creditErr)
+			got := ShouldApply(tc.settings, tc.credit, tc.creditErr)
 			if got != tc.want {
 				t.Fatalf("shouldRequestImageWatermark = %v, want %v", got, tc.want)
 			}
@@ -108,7 +108,7 @@ func TestSyncImageWatermarkSettingsForCredit(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, changed := syncImageWatermarkSettingsForCredit(tc.settings, tc.credit, tc.err)
+			got, changed := SyncSettingsForCredit(tc.settings, tc.credit, tc.err)
 			if changed != tc.changed {
 				t.Fatalf("changed = %v, want %v", changed, tc.changed)
 			}
@@ -123,7 +123,7 @@ func intPtr(v int) *int { return &v }
 
 func TestImageWatermarkGenerateOptions(t *testing.T) {
 	settings := types.UserSettings{ImageWatermark: types.ImageWatermarkSettings{ShowWatermark: true, PreferenceSource: "user"}}
-	got := imageWatermarkGenerateOptions(settings, types.CreditStatus{PaidEntitlement: true}, nil)
+	got := GenerateOptions(settings, types.CreditStatus{PaidEntitlement: true}, nil)
 	if got == nil {
 		t.Fatal("options = nil, want image watermark options")
 	}
@@ -131,17 +131,17 @@ func TestImageWatermarkGenerateOptions(t *testing.T) {
 		t.Fatalf("options = %+v, want apply with paid entitlement", *got)
 	}
 
-	unpaid := imageWatermarkGenerateOptions(types.UserSettings{}, types.CreditStatus{PaidEntitlement: false}, nil)
+	unpaid := GenerateOptions(types.UserSettings{}, types.CreditStatus{PaidEntitlement: false}, nil)
 	if unpaid == nil || !unpaid.Apply || unpaid.PaidEntitlement || unpaid.CanDisable {
 		t.Fatalf("unpaid options = %+v, want apply unpaid cannot disable", unpaid)
 	}
 
-	hostedCreditsOnly := imageWatermarkGenerateOptions(types.UserSettings{}, types.CreditStatus{Mode: types.WhoAmILoggedIn, HostedCreditBalance: intPtr(1097930)}, nil)
+	hostedCreditsOnly := GenerateOptions(types.UserSettings{}, types.CreditStatus{Mode: types.WhoAmILoggedIn, HostedCreditBalance: intPtr(1097930)}, nil)
 	if hostedCreditsOnly == nil || !hostedCreditsOnly.Apply || hostedCreditsOnly.PaidEntitlement || hostedCreditsOnly.CanDisable {
 		t.Fatalf("hosted credits only options = %+v, want apply unpaid cannot disable", hostedCreditsOnly)
 	}
 
-	paidOptOut := imageWatermarkGenerateOptions(types.UserSettings{}, types.CreditStatus{PaidEntitlement: true}, nil)
+	paidOptOut := GenerateOptions(types.UserSettings{}, types.CreditStatus{PaidEntitlement: true}, nil)
 	if paidOptOut == nil || paidOptOut.Apply || !paidOptOut.PaidEntitlement || !paidOptOut.CanDisable {
 		t.Fatalf("paid opt-out options = %+v, want no apply paid can disable", paidOptOut)
 	}
