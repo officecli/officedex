@@ -146,6 +146,9 @@ func (t *cancelPersistTransport) writeError(tester *testing.T, id json.RawMessag
 		"error": map[string]any{
 			"code":    -32004,
 			"message": message,
+			// The real bridge attaches a structured code for a missing task;
+			// the desktop decides by it, not by the message text.
+			"data": bridgeErrorData(message),
 		},
 	})
 	if err != nil {
@@ -366,4 +369,13 @@ func TestCancelPersistsLocalCancellationEventWhenBridgeTaskIsGone(t *testing.T) 
 	if got := events[len(events)-1].Type; got != "task.cancelled" {
 		t.Fatalf("last persisted event = %q, want task.cancelled", got)
 	}
+}
+
+// bridgeErrorData mirrors officecli's writeHandlerError: a "task not found"
+// answer carries error.data.code = task_not_found.
+func bridgeErrorData(message string) map[string]any {
+	if strings.HasPrefix(message, "task not found") {
+		return map[string]any{"code": bridge.ErrorCodeTaskNotFound}
+	}
+	return nil
 }

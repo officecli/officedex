@@ -104,7 +104,7 @@ func (d *demoImplementation) TryGenerate(ctx context.Context, input types.Genera
 		startedPayload["stage_id"] = demoStages[0].ID
 		startedPayload["stage_label"] = demoStages[0].Label
 	}
-	if err := d.emit(ctx, taskID, "task.started", startedPayload); err != nil {
+	if err := d.emit(ctx, taskID, types.EventTaskStarted, startedPayload); err != nil {
 		return GenerateResult{}, true, err
 	}
 
@@ -140,7 +140,7 @@ func (d *demoImplementation) TryRespond(ctx context.Context, input RespondInput)
 	task.LastRaw = raw
 	d.mu.Unlock()
 
-	if err := d.emit(ctx, input.TaskID, "task.answers", map[string]any{
+	if err := d.emit(ctx, input.TaskID, types.EventLocalAnswers, map[string]any{
 		"answers": []map[string]any{{
 			"questionId": input.QuestionID,
 			"answer":     "Approve",
@@ -157,7 +157,7 @@ func (d *demoImplementation) Shutdown() {}
 
 func (d *demoImplementation) advanceToQuestion(ctx context.Context, taskID string) {
 	<-d.delay(ctx)
-	_ = d.emit(ctx, taskID, "task.vibe_tree", demoTreePayload(0))
+	_ = d.emit(ctx, taskID, types.EventTaskVibeTree, demoTreePayload(0))
 	d.emitQuestion(ctx, taskID, 0)
 }
 
@@ -165,20 +165,20 @@ func (d *demoImplementation) advanceAfterConfirmation(ctx context.Context, taskI
 	next := answeredIdx + 1
 	if next < len(demoQuestions) {
 		<-d.delay(ctx)
-		_ = d.emit(ctx, taskID, "task.vibe_tree", demoTreePayload(next))
+		_ = d.emit(ctx, taskID, types.EventTaskVibeTree, demoTreePayload(next))
 		d.emitQuestion(ctx, taskID, next)
 		return
 	}
 	<-d.delay(ctx)
-	_ = d.emit(ctx, taskID, "task.vibe_slide", map[string]any{"index": 0, "slide": demoSlides[0]})
-	_ = d.emit(ctx, taskID, "task.vibe_tree", demoTreePayload(len(demoStages)-1))
+	_ = d.emit(ctx, taskID, types.EventTaskVibeSlide, map[string]any{"index": 0, "slide": demoSlides[0]})
+	_ = d.emit(ctx, taskID, types.EventTaskVibeTree, demoTreePayload(len(demoStages)-1))
 	_ = d.completeTask(ctx, taskID)
 }
 
 func (d *demoImplementation) emitQuestion(ctx context.Context, taskID string, idx int) {
 	<-d.delay(ctx)
 	q := demoQuestions[idx]
-	_ = d.emit(ctx, taskID, "task.question", map[string]any{
+	_ = d.emit(ctx, taskID, types.EventTaskQuestion, map[string]any{
 		"id":          q.ID,
 		"question":    q.Question,
 		"stage_id":    q.StageID,
@@ -212,7 +212,7 @@ func (d *demoImplementation) completeLocalTask(ctx context.Context, taskID strin
 	}
 	path, err := d.writeLocalDemoArtifact(taskID, task.DocumentType, task.Prompt)
 	if err != nil {
-		_ = d.emit(ctx, taskID, "task.failed", map[string]any{
+		_ = d.emit(ctx, taskID, types.EventTaskFailed, map[string]any{
 			"message":         "Demo Mode: failed to write local artifact: " + err.Error(),
 			"credit_mode":     "local_demo",
 			"credits_charged": 0,
@@ -226,11 +226,11 @@ func (d *demoImplementation) completeLocalTask(ctx context.Context, taskID strin
 		DocumentType: string(task.DocumentType),
 	}
 	if err := d.recorder.AllowArtifact(artifact); err != nil {
-		_ = d.emit(ctx, taskID, "task.failed", map[string]any{"message": err.Error(), "credit_mode": "local_demo", "credits_charged": 0})
+		_ = d.emit(ctx, taskID, types.EventTaskFailed, map[string]any{"message": err.Error(), "credit_mode": "local_demo", "credits_charged": 0})
 		return
 	}
 	if err := d.recorder.RecordArtifact(artifact); err != nil {
-		_ = d.emit(ctx, taskID, "task.failed", map[string]any{"message": err.Error(), "credit_mode": "local_demo", "credits_charged": 0})
+		_ = d.emit(ctx, taskID, types.EventTaskFailed, map[string]any{"message": err.Error(), "credit_mode": "local_demo", "credits_charged": 0})
 		return
 	}
 	d.mu.Lock()
@@ -238,7 +238,7 @@ func (d *demoImplementation) completeLocalTask(ctx context.Context, taskID strin
 		current.Done = true
 	}
 	d.mu.Unlock()
-	_ = d.emit(ctx, taskID, "task.completed", map[string]any{
+	_ = d.emit(ctx, taskID, types.EventTaskCompleted, map[string]any{
 		"status":          "completed",
 		"credit_mode":     "local_demo",
 		"credits_charged": 0,
@@ -275,7 +275,7 @@ func (d *demoImplementation) completeTask(ctx context.Context, taskID string) er
 	}
 	path, err := d.writeDemoPptx(taskID, task.Prompt)
 	if err != nil {
-		_ = d.emit(ctx, taskID, "task.failed", map[string]any{"message": "Demo Mode: failed to write deterministic PPTX: " + err.Error()})
+		_ = d.emit(ctx, taskID, types.EventTaskFailed, map[string]any{"message": "Demo Mode: failed to write deterministic PPTX: " + err.Error()})
 		return err
 	}
 	artifact := types.Artifact{
@@ -295,7 +295,7 @@ func (d *demoImplementation) completeTask(ctx context.Context, taskID string) er
 		task.Done = true
 	}
 	d.mu.Unlock()
-	return d.emit(ctx, taskID, "task.completed", map[string]any{
+	return d.emit(ctx, taskID, types.EventTaskCompleted, map[string]any{
 		"stage_id":    "review",
 		"stage_label": "Review",
 		"result": map[string]any{

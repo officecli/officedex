@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"officedex/internal/types"
 	"os/exec"
 	"syscall"
 
@@ -62,7 +64,12 @@ func defaultProcessTransport(opts Options) (Transport, error) {
 		return nil, fmt.Errorf("bridge: stderr pipe: %w", err)
 	}
 	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("bridge: spawn officecli (%s): %w", binary, err)
+		kind := types.FailureConnection
+		if errors.Is(err, exec.ErrNotFound) || errors.Is(err, fs.ErrNotExist) || errors.Is(err, fs.ErrPermission) {
+			// The binary itself is the problem, not the process.
+			kind = types.FailureSetup
+		}
+		return nil, fmt.Errorf("%s: %w", types.TagFailure(kind, fmt.Sprintf("bridge: spawn officecli (%s)", binary)), err)
 	}
 	return &processTransport{cmd: cmd, stdin: stdin, stdout: stdout, stderr: stderr}, nil
 }

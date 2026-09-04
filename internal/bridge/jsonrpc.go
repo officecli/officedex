@@ -30,8 +30,9 @@ type jsonrpcMessage struct {
 }
 
 type jsonrpcError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
+	Code    int             `json:"code"`
+	Message string          `json:"message"`
+	Data    json.RawMessage `json:"data,omitempty"`
 }
 
 func (m *jsonrpcMessage) hasID() bool {

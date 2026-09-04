@@ -18,7 +18,7 @@ func TestCustomProviderRequiresLoggedInForSettings(t *testing.T) {
 		app := newCustomProviderLoginTestApp(t, "anonymous", types.UserSettings{})
 
 		_, err := app.UpdateSettings(settings.Patch{LlmProvider: customProviderForLoginTest()})
-		if err == nil || err.Error() != "custom_provider.login_required" {
+		if err == nil || types.StripFailureTag(err.Error()) != "custom_provider.login_required" {
 			t.Fatalf("UpdateSettings err = %v, want custom_provider.login_required", err)
 		}
 
@@ -35,7 +35,7 @@ func TestCustomProviderRequiresLoggedInForSettings(t *testing.T) {
 		app := newCustomProviderLoginTestApp(t, "api_key", types.UserSettings{})
 
 		_, err := app.UpdateSettings(settings.Patch{LlmProvider: customProviderForLoginTest()})
-		if err == nil || err.Error() != "custom_provider.login_required" {
+		if err == nil || types.StripFailureTag(err.Error()) != "custom_provider.login_required" {
 			t.Fatalf("UpdateSettings err = %v, want custom_provider.login_required", err)
 		}
 	})
@@ -77,7 +77,7 @@ func TestCustomProviderRequiresLoggedInForGenerateBeforeBridgeStart(t *testing.T
 		Topic:        "login gate",
 		Prompt:       "make a deck",
 	})
-	if err == nil || err.Error() != "custom_provider.login_required" {
+	if err == nil || types.StripFailureTag(err.Error()) != "custom_provider.login_required" {
 		t.Fatalf("Generate err = %v, want custom_provider.login_required", err)
 	}
 }
@@ -90,7 +90,7 @@ func TestCustomProviderRequiresLoggedInForProviderTest(t *testing.T) {
 			UseProviderOverride: true,
 			LlmProvider:         customProviderForLoginTest(),
 		})
-		if err == nil || err.Error() != "custom_provider.login_required" {
+		if err == nil || types.StripFailureTag(err.Error()) != "custom_provider.login_required" {
 			t.Fatalf("TestProviderWithInput err = %v, want custom_provider.login_required", err)
 		}
 	})

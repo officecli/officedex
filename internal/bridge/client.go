@@ -47,7 +47,7 @@ const (
 const StrandedTaskCode = "BRIDGE_PROCESS_GONE"
 
 // taskInvokeMethod is the JSON-RPC method that starts a task.
-const taskInvokeMethod = "task/invoke"
+const taskInvokeMethod = MethodTaskInvoke
 
 const (
 	strandedStoppedMessage = "OfficeCLI agent-bridge was stopped before this task finished. Please run it again."
@@ -213,7 +213,7 @@ func (c *Client) failStrandedTasks(taskIDs []string, message string) {
 	for _, taskID := range taskIDs {
 		c.emitEvent(types.BridgeEvent{
 			TaskID: taskID,
-			Type:   "task.failed",
+			Type:   types.EventTaskFailed,
 			TS:     time.Now().UTC().Format(time.RFC3339Nano),
 			Payload: map[string]any{
 				"message":  message,
@@ -233,7 +233,7 @@ func (c *Client) trackTaskEvent(event types.BridgeEvent) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	switch event.Type {
-	case "task.completed", "task.failed", "task.cancelled", "task.question", "task.plan":
+	case types.EventTaskCompleted, types.EventTaskFailed, types.EventTaskCancelled, types.EventTaskQuestion, types.EventTaskPlan:
 		delete(c.activeTasks, taskID)
 	default:
 		c.activeTasks[taskID] = struct{}{}
@@ -342,7 +342,7 @@ func (c *Client) Stop() {
 	for _, req := range pending {
 		req.timer.Stop()
 		select {
-		case req.result <- rpcResponse{err: errors.New("bridge: officecli agent-bridge stopped")}:
+		case req.result <- rpcResponse{err: errors.New(types.TagFailure(types.FailureConnection, "bridge: officecli agent-bridge stopped"))}:
 		default:
 		}
 	}
@@ -398,7 +398,7 @@ func (c *Client) requestWithTimeout(ctx context.Context, method string, params a
 		if tail != "" {
 			suffix = "\nstderr:\n" + tail
 		}
-		return nil, fmt.Errorf("bridge: officecli agent-bridge is not running%s", suffix)
+		return nil, errors.New(types.TagFailure(types.FailureConnection, fmt.Sprintf("bridge: officecli agent-bridge is not running%s", suffix)))
 	}
 	id := c.nextID
 	c.nextID++
@@ -413,7 +413,7 @@ func (c *Client) requestWithTimeout(ctx context.Context, method string, params a
 		}
 		c.mu.Unlock()
 		if ok {
-			pending.result <- rpcResponse{err: fmt.Errorf("bridge: officecli bridge request timed out: %s", method)}
+			pending.result <- rpcResponse{err: errors.New(types.TagFailure(types.FailureConnection, "bridge: officecli bridge request timed out: "+method))}
 		}
 	})
 	c.pending[key] = &pendingRequest{timer: timer, result: respChan, method: method}
@@ -439,12 +439,12 @@ func (c *Client) requestWithTimeout(ctx context.Context, method string, params a
 	}
 }
 
-// Initialize calls the "initialize" RPC and refuses a bridge whose protocol is
+// Initialize calls the MethodInitialize RPC and refuses a bridge whose protocol is
 // older than this app can talk to. Failing here, before any work is queued,
 // is the point: the alternative is a "method not found" partway through a
 // generation the user has already waited on.
 func (c *Client) Initialize(ctx context.Context) ([]byte, error) {
-	raw, err := c.Request(ctx, "initialize", nil)
+	raw, err := c.Request(ctx, MethodInitialize, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -454,9 +454,9 @@ func (c *Client) Initialize(ctx context.Context) ([]byte, error) {
 	return raw, nil
 }
 
-// GetCapabilities calls "capabilities/get".
+// GetCapabilities calls MethodCapabilitiesGet.
 func (c *Client) GetCapabilities(ctx context.Context) ([]byte, error) {
-	raw, err := c.Request(ctx, "capabilities/get", nil)
+	raw, err := c.Request(ctx, MethodCapabilitiesGet, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -500,10 +500,10 @@ type bridgeImageTemplatePublishRequest struct {
 	UpdatedAt         string `json:"updated_at"`
 }
 
-// ListImageTemplates calls "image_templates/list" and maps bridge snake_case
+// ListImageTemplates calls MethodImageTemplatesList and maps bridge snake_case
 // fields to the renderer-facing camelCase shape.
 func (c *Client) ListImageTemplates(ctx context.Context) ([]types.ImagePromptTemplate, error) {
-	raw, err := c.Request(ctx, "image_templates/list", nil)
+	raw, err := c.Request(ctx, MethodImageTemplatesList, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -571,7 +571,7 @@ func (c *Client) CreateImageTemplate(ctx context.Context, input types.CreateUser
 		}
 		params["slots"] = slots
 	}
-	raw, err := c.Request(ctx, "image_templates/create", params)
+	raw, err := c.Request(ctx, MethodImageTemplatesCreate, params)
 	if err != nil {
 		return nil, err
 	}
@@ -602,7 +602,7 @@ func (c *Client) CreateImageTemplatePublishRequest(ctx context.Context, input ty
 		"request_id":          input.RequestID,
 		"submitter_note":      input.SubmitterNote,
 	}
-	raw, err := c.Request(ctx, "image_template_publish_requests/create", params)
+	raw, err := c.Request(ctx, MethodImageTemplatePublishRequestsCreate, params)
 	if err != nil {
 		return nil, err
 	}
@@ -624,9 +624,9 @@ func (c *Client) CreateImageTemplatePublishRequest(ctx context.Context, input ty
 	return &mapped, nil
 }
 
-// OpenSession calls "session/open" and caches the returned session id.
+// OpenSession calls MethodSessionOpen and caches the returned session id.
 func (c *Client) OpenSession(ctx context.Context) (string, error) {
-	raw, err := c.Request(ctx, "session/open", nil)
+	raw, err := c.Request(ctx, MethodSessionOpen, nil)
 	if err != nil {
 		return "", err
 	}
@@ -648,7 +648,7 @@ func (c *Client) SessionID() string {
 	return c.sessionID
 }
 
-// InvokeGenerate calls "task/invoke" with the office.generate tool args
+// InvokeGenerate calls MethodTaskInvoke with the office.generate tool args
 // projected from the GenerateInput.
 func (c *Client) InvokeGenerate(ctx context.Context, input types.GenerateInput) (TaskInvokeResult, error) {
 	ratio, err := imageRatioArg(input)
@@ -847,7 +847,7 @@ func nestedBool(root map[string]any, want bool, path ...string) bool {
 	return ok && got == want
 }
 
-// InvokeModify calls "task/invoke" with the office.modify tool args projected
+// InvokeModify calls MethodTaskInvoke with the office.modify tool args projected
 // from a ModifyInput. This is the "继续修改" path: an LLM-driven in-place edit
 // of an existing pptx/docx/xlsx artifact. officecli writes the result as
 // <base>.modified.<ext> next to the source (or under `out` when provided).
@@ -920,9 +920,9 @@ func (c *Client) InvokeArtifactStageEdit(ctx context.Context, input types.Artifa
 	return result, nil
 }
 
-// RespondTask calls "task/respond".
+// RespondTask calls MethodTaskRespond.
 func (c *Client) RespondTask(ctx context.Context, params RespondParams) ([]byte, error) {
-	return c.Request(ctx, "task/respond", map[string]any{
+	return c.Request(ctx, MethodTaskRespond, map[string]any{
 		"task_id":     params.TaskID,
 		"question_id": params.QuestionID,
 		"option_id":   params.OptionID,
@@ -932,7 +932,7 @@ func (c *Client) RespondTask(ctx context.Context, params RespondParams) ([]byte,
 }
 
 func (c *Client) TaskStatus(ctx context.Context, taskID string) (TaskStatusResult, error) {
-	raw, err := c.Request(ctx, "task/status", map[string]any{"task_id": taskID})
+	raw, err := c.Request(ctx, MethodTaskStatus, map[string]any{"task_id": taskID})
 	if err != nil {
 		return TaskStatusResult{}, err
 	}
@@ -943,9 +943,9 @@ func (c *Client) TaskStatus(ctx context.Context, taskID string) (TaskStatusResul
 	return result, nil
 }
 
-// CancelTask calls "task/cancel".
+// CancelTask calls MethodTaskCancel.
 func (c *Client) CancelTask(ctx context.Context, taskID string) ([]byte, error) {
-	return c.Request(ctx, "task/cancel", map[string]any{"task_id": taskID})
+	return c.Request(ctx, MethodTaskCancel, map[string]any{"task_id": taskID})
 }
 
 type PlanPptxJSTurn struct {
@@ -984,7 +984,7 @@ func (c *Client) PlanPptxJS(ctx context.Context, input PlanPptxJSInput) (PlanPpt
 	if params["prompt"] == "" {
 		return PlanPptxJSResult{}, errors.New("bridge: pptx planner prompt is empty")
 	}
-	raw, err := c.requestWithTimeout(ctx, "pptx/plan-js", params, c.options.PptxJSPlanTimeout)
+	raw, err := c.requestWithTimeout(ctx, MethodPptxPlanJS, params, c.options.PptxJSPlanTimeout)
 	if err != nil {
 		return PlanPptxJSResult{}, err
 	}
@@ -1152,11 +1152,8 @@ func (c *Client) handleMessageBody(body []byte) {
 		}
 		pending.timer.Stop()
 		if msg.Error != nil {
-			message := msg.Error.Message
-			if message == "" {
-				message = "officecli bridge request failed"
-			}
-			pending.result <- rpcResponse{err: fmt.Errorf("bridge: %s", message)}
+			// Keep code and data: callers decide by them, not by the message.
+			pending.result <- rpcResponse{err: &RPCError{Method: pending.method, Code: msg.Error.Code, Message: msg.Error.Message, Data: msg.Error.Data}}
 			return
 		}
 		pending.result <- rpcResponse{result: msg.Result}
@@ -1174,7 +1171,7 @@ func (c *Client) scheduleReconnect() {
 	if isBinaryMissing(stderr) {
 		c.reconnectAttempt = 0
 		c.mu.Unlock()
-		extra := map[string]any{}
+		extra := map[string]any{"kind": string(types.FailureSetup)}
 		if stderr != "" {
 			extra["stderr"] = stderr
 		}
@@ -1184,7 +1181,7 @@ func (c *Client) scheduleReconnect() {
 	if c.reconnectAttempt >= c.options.MaxReconnectAttempts {
 		c.reconnectAttempt = 0
 		c.mu.Unlock()
-		extra := map[string]any{}
+		extra := map[string]any{"kind": string(types.FailureConnection)}
 		if stderr != "" {
 			extra["stderr"] = stderr
 		}
@@ -1272,6 +1269,7 @@ func (c *Client) emitExitEvent(code *int, signal string, stderr string) {
 	if stderr != "" {
 		payload["stderr"] = stderr
 	}
+	payload["kind"] = string(types.FailureConnection)
 	c.emitEvent(types.BridgeEvent{Type: "bridge.exited", Payload: payload})
 }
 

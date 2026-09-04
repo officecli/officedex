@@ -262,7 +262,7 @@ func TestValidateCustomProvider(t *testing.T) {
 				}
 				return
 			}
-			if err == nil || err.Error() != tc.wantErr {
+			if err == nil || types.StripFailureTag(err.Error()) != tc.wantErr {
 				t.Fatalf("err = %v, want %q", err, tc.wantErr)
 			}
 		})
