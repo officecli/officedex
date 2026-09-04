@@ -40,10 +40,11 @@ describe("planApprovalAnswer", () => {
 });
 
 describe("isGateAlreadyConsumed", () => {
-  it("matches both bridge spellings and nothing else", () => {
-    expect(isGateAlreadyConsumed("task has no pending input")).toBe(true);
-    expect(isGateAlreadyConsumed("No pending runtime input for task-1")).toBe(true);
-    expect(isGateAlreadyConsumed("question mismatch")).toBe(false);
+  it("decides by the bridge's code, never by the sentence", () => {
+    expect(isGateAlreadyConsumed("[code:no_pending_input] task t-1: has no pending input")).toBe(true);
+    expect(isGateAlreadyConsumed("[kind:task] [code:no_pending_input] anything")).toBe(true);
+    expect(isGateAlreadyConsumed("task has no pending input")).toBe(false);
+    expect(isGateAlreadyConsumed("[code:task_not_found] task not found")).toBe(false);
   });
 });
 
@@ -78,7 +79,7 @@ describe("resumeInteractiveTask", () => {
   });
 
   it("treats a consumed gate as success and pulls the durable history once", async () => {
-    const respond = vi.fn(async () => { throw new Error("task-q has no pending input"); });
+    const respond = vi.fn(async () => { throw new Error("[code:no_pending_input] task task-q: has no pending input"); });
     const completed = { event_id: "e9", task_id: "task-q", type: "task.completed", ts: "", payload: {} };
     const getTaskHistory = vi.fn(async (): Promise<TaskHistoryEntry[]> => [{ taskId: "task-q", events: [completed] } as TaskHistoryEntry]);
     const poll = vi.fn(async () => true);

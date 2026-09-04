@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { CREDIT_POLL_INTERVAL_MS } from "./constants/timing";
+import { usePolling } from "./utils/usePolling";
 import type { CreditStatus } from "../shared/types";
 import type { CreditInfo } from "./components/Shell";
 import { officecli } from "./bridge";
 
-const POLL_INTERVAL_MS = 60_000;
 const NUDGE_DELAY_MS = 800;
 
 // deriveCreditInfo maps the raw CLI quota snapshot onto the sidebar meter's
@@ -108,18 +109,12 @@ export function useCreditStatus(): UseCreditStatusResult {
   useEffect(() => {
     mountedRef.current = true;
     refresh();
-    const interval = window.setInterval(refresh, POLL_INTERVAL_MS);
-    const onVisible = () => {
-      if (document.visibilityState === "visible") refresh();
-    };
-    document.addEventListener("visibilitychange", onVisible);
     return () => {
       mountedRef.current = false;
       generationRef.current = -1;
-      window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [refresh]);
+  usePolling(refresh, CREDIT_POLL_INTERVAL_MS, { immediate: false, refreshOnVisible: true });
 
   return { credit, status, refresh, nudgeForTaskTransition };
 }

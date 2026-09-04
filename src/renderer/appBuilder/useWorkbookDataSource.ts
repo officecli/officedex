@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { WORKBOOK_POLL_INTERVAL_MS } from "../constants/timing";
+import { usePolling } from "../utils/usePolling";
 import { officecli } from "../bridge";
 import { parseWorkbookSnapshot } from "./workbookData";
 import type { WorkbookDataSnapshot } from "./types";
@@ -38,9 +40,8 @@ export function useWorkbookDataSource(previewToken: string | undefined, sourceRe
       return;
     }
     void refresh(true);
-    const timer = window.setInterval(() => void refresh(false), 1500);
-    return () => window.clearInterval(timer);
   }, [previewToken, refresh]);
+  usePolling(() => refresh(false), WORKBOOK_POLL_INTERVAL_MS, { immediate: false, enabled: Boolean(previewToken) });
 
   useEffect(() => {
     if (previewToken && sourceRevision > 0) void refresh(false);

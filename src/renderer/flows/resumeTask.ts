@@ -5,6 +5,7 @@
 // pure and are exported for their own tests.
 
 import type { DesktopAPI, DesktopTask, TaskHistoryEntry, TaskQuestionAnswer } from "../../shared/types";
+import { BRIDGE_ERROR_CODES, errorCode } from "../failureKind";
 import { respondToPlanReview } from "../presentation/planReviewResponse";
 import { responseForPptxQuestion } from "../presentation/pptxQuestionResponse";
 import { pollTaskHistoryUntilTerminal } from "../taskHistoryPoll";
@@ -41,11 +42,11 @@ export function planApprovalAnswer(outline: OutlineSection[] | undefined): strin
 
 /**
  * The browser bridge can briefly retain a stale task snapshot after the
- * runtime already consumed its gate. Answering that gate then fails with a
- * "no pending input" error that is not actionable for the user.
+ * runtime already consumed its gate. Answering that gate then fails with the
+ * bridge's no_pending_input code, which is not actionable for the user.
  */
 export function isGateAlreadyConsumed(message: string): boolean {
-  return /no pending (runtime )?input/i.test(message);
+  return errorCode(message) === BRIDGE_ERROR_CODES.noPendingInput;
 }
 
 /** The id of the most recent task.question event, which older bridges expect as questionId. */

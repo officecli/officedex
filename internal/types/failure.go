@@ -46,3 +46,30 @@ func FailureKindOf(text string) FailureKind {
 func StripFailureTag(text string) string {
 	return strings.TrimSpace(failureTagPattern.ReplaceAllString(text, ""))
 }
+
+// codeTagPattern is the wire form of a bridge error code inside an error
+// message, next to the kind tag: `[code:no_pending_input]`. The renderer
+// decides by code what it used to decide by matching the sentence.
+var codeTagPattern = regexp.MustCompile(`\[code:([a-z_]+)\]\s*`)
+
+// TagCode prefixes message with a machine-readable code tag. An empty code
+// or a message that already carries one is returned unchanged.
+func TagCode(code, message string) string {
+	if code == "" || codeTagPattern.MatchString(message) {
+		return message
+	}
+	return "[code:" + code + "] " + message
+}
+
+// ErrorCodeOf returns the code tagged in text, or "".
+func ErrorCodeOf(text string) string {
+	if match := codeTagPattern.FindStringSubmatch(text); match != nil {
+		return match[1]
+	}
+	return ""
+}
+
+// StripTags removes both the kind and the code tag for display.
+func StripTags(text string) string {
+	return strings.TrimSpace(codeTagPattern.ReplaceAllString(failureTagPattern.ReplaceAllString(text, ""), ""))
+}

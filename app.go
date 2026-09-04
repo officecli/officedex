@@ -937,7 +937,20 @@ func (a *App) Respond(input RespondInput) ([]byte, error) {
 	if err != nil && isBridgeTaskNotFoundError(err) {
 		return a.recoverStaleInteractiveRespond(input, err)
 	}
-	return raw, err
+	return raw, withBridgeErrorCode(err)
+}
+
+// withBridgeErrorCode carries the bridge's error.data.code into the message
+// Wails hands the renderer, which otherwise sees only error.Error().
+func withBridgeErrorCode(err error) error {
+	if err == nil {
+		return nil
+	}
+	var rpc *bridge.RPCError
+	if !errors.As(err, &rpc) || rpc.DataCode() == "" {
+		return err
+	}
+	return fmt.Errorf("%s%w", types.TagCode(rpc.DataCode(), ""), err)
 }
 
 // recoveryPendingInputTimeout bounds how long each replayed stage may take to
@@ -955,7 +968,7 @@ func (a *App) Cancel(taskID string) ([]byte, error) {
 		if isBridgeTaskNotFoundError(err) {
 			a.recordLocalTaskCancelled(taskID, "Task was already gone when cancellation was requested")
 		}
-		return raw, err
+		return raw, withBridgeErrorCode(err)
 	}
 	a.recordLocalTaskCancelled(taskID, "Task cancelled by user")
 	return raw, nil

@@ -44,10 +44,12 @@ import { useLocale, useT } from "./i18n";
 import { maybeNotify } from "./notifications";
 import { computeTaskSignals, failedTaskIds, readSeenFailures, sidebarSignal, taskNotificationBody, writeSeenFailures } from "./taskSignals";
 import { pollTaskHistoryUntilTerminal } from "./taskHistoryPoll";
+import { usePolling } from "./utils/usePolling";
+import { TASK_HISTORY_RECONCILE_INTERVAL_MS } from "./constants/timing";
 import { resolveFollowUpTarget, runFollowUpTask, type FollowUpDeps, type PendingGenerate } from "./flows/followUpTask";
 import { resumeInteractiveTask, type OutlineSection } from "./flows/resumeTask";
 import { errorMessage, recordValue, trimmedStringValue as stringValue } from "./utils/values";
-import { classifyError, classifyStatusEvent, extractStderr, stripFailureTag, type FailureKind } from "./failureKind";
+import { BRIDGE_ERROR_CODES, classifyError, classifyStatusEvent, errorCode, extractStderr, stripFailureTag, type FailureKind } from "./failureKind";
 import { fileExtension, fileNameFromPath } from "./utils/path";
 import { delay } from "./utils/timing";
 
@@ -461,17 +463,10 @@ function OfficeDexApp() {
     })
     .join("|");
 
-  useEffect(() => {
-    if (!activeTaskHistoryKey) return;
-    let cancelled = false;
-    let syncing = false;
-
-    const reconcileActiveTaskHistory = async () => {
-      if (cancelled || syncing) return;
-      syncing = true;
+  const reconcileActiveTaskHistory = useCallback(async () => {
       try {
         const entries = await officecli.getTaskHistory(50);
-        if (cancelled || entries.length === 0) return;
+        if (entries.length === 0) return;
         setState((current) => {
           let next = current;
           for (const entry of entries) {
@@ -495,20 +490,10 @@ function OfficeDexApp() {
         });
       } catch {
         // Live events remain the fast path. The next reconciliation tick retries.
-      } finally {
-        syncing = false;
       }
-    };
+  }, []);
 
-    void reconcileActiveTaskHistory();
-    const interval = window.setInterval(() => {
-      void reconcileActiveTaskHistory();
-    }, 1_500);
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, [activeTaskHistoryKey]);
+  usePolling(reconcileActiveTaskHistory, TASK_HISTORY_RECONCILE_INTERVAL_MS, { enabled: Boolean(activeTaskHistoryKey) });
 
   const firstTaskID = state.taskOrder[0];
   useEffect(() => {
@@ -517,12 +502,7 @@ function OfficeDexApp() {
     }
   }, [firstTaskID, selectedTaskID.kind]);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setState((current) => markStalledTasks(current, Date.now()));
-    }, STALL_POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
-  }, []);
+  usePolling(() => setState((current) => markStalledTasks(current, Date.now())), STALL_POLL_INTERVAL_MS, { immediate: false });
 
   const conversationId = useMemo(() => {
     if (selectedTaskID.kind === "task") {
@@ -1272,7 +1252,7 @@ function OfficeDexApp() {
           try {
             await officecli.cancel(candidate.id);
           } catch (error) {
-            if (!/not[ _-]?found/i.test(errorMessage(error))) throw error;
+            if (errorCode(errorMessage(error)) !== BRIDGE_ERROR_CODES.taskNotFound) throw error;
           }
         }
       }

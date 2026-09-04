@@ -77,6 +77,9 @@ const (
 	ErrorCodeTaskNotFound    = "task_not_found"
 	ErrorCodeSessionNotFound = "session_not_found"
 	ErrorCodeMethodNotFound  = "method_not_found"
+	// ErrorCodeNoPendingInput: the task is not waiting on the user, so the
+	// answer has nothing to land on. The renderer treats it as already done.
+	ErrorCodeNoPendingInput = "no_pending_input"
 )
 
 // jsonrpcMethodNotFound is the JSON-RPC 2.0 code for an unknown method.
@@ -93,4 +96,11 @@ func IsTaskNotFound(err error) bool {
 func IsMethodNotFound(err error) bool {
 	var rpc *RPCError
 	return errors.As(err, &rpc) && (rpc.Code == jsonrpcMethodNotFound || rpc.DataCode() == ErrorCodeMethodNotFound)
+}
+
+// IsNoPendingInput reports whether the bridge rejected an answer because the
+// task has no open question or plan gate.
+func IsNoPendingInput(err error) bool {
+	var rpc *RPCError
+	return errors.As(err, &rpc) && rpc.DataCode() == ErrorCodeNoPendingInput
 }

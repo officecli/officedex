@@ -5,6 +5,8 @@ import { officecli } from "../bridge";
 import { useT } from "../i18n";
 import { isExternalAgentRuntimeRun, isHistoricalRuntimeRun, runtimeStatusColor } from "../runtimeRuns";
 import { AGENT_RUN_FETCH_LIMIT } from "../constants/limits";
+import { RUNS_POLL_INTERVAL_MS } from "../constants/timing";
+import { usePolling } from "../utils/usePolling";
 
 // Historical (legacy.*) runs are the oldest entries in the append-only store, so
 // a small fetch window silently pushes them out of reach. Keep it wide enough
@@ -32,11 +34,7 @@ export function RuntimeRunsPanel() {
     }
   }, []);
 
-  useEffect(() => {
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 5_000);
-    return () => window.clearInterval(timer);
-  }, [refresh]);
+  usePolling(refresh, RUNS_POLL_INTERVAL_MS);
 
   const actOnRun = async (run: AgentRun, action: "cancel" | "retry") => {
     setBusyRun(run.id);
