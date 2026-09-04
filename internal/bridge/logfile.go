@@ -3,12 +3,15 @@ package bridge
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"officedex/internal/applog"
 )
 
 // Logfile is a non-blocking async writer for bridge stdout/stderr chunks.
@@ -148,8 +151,8 @@ func (l *Logfile) run() {
 		path := filepath.Join(l.dir, fmt.Sprintf("bridge-%s.log", day))
 		f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 		if err != nil {
-			// Surface to stderr but keep draining the channel so writers don't pile up.
-			fmt.Fprintf(os.Stderr, "bridge logfile: open %s: %v\n", path, err)
+			// Surface but keep draining the channel so writers don't pile up.
+			applog.Logger().Warn("bridge logfile: open", slog.String("path", path), applog.Err(err))
 			return
 		}
 		file = f

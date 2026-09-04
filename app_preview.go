@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
 	"officedex/internal/atomicfile"
 	"os"
 	"os/exec"
@@ -16,8 +17,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
-
+	"officedex/internal/applog"
 	"officedex/internal/pptxeditor"
 	"officedex/internal/types"
 	"officedex/internal/xlsxeditor"
@@ -298,7 +298,8 @@ func uniqueWorkbookPath(dir, fileName string) string {
 func (a *App) RevokePreviewToken(token string) {
 	for _, editor := range a.editorSessions() {
 		if err := editor.service.CloseByToken(token); err != nil && a.ctx != nil {
-			wailsruntime.LogWarningf(a.ctx, "close %s sessions for revoked preview token: %v", editor.label, err)
+			applog.Logger().Warn("close sessions for revoked preview token",
+				slog.String("editor", editor.label), applog.Err(err))
 		}
 	}
 	a.previewReg.RevokeToken(token)

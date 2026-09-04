@@ -10,8 +10,7 @@ import (
 	"strings"
 	"time"
 
-	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
-
+	"officedex/internal/applog"
 	"officedex/internal/bridge"
 	"officedex/internal/login"
 	"officedex/internal/settings"
@@ -415,7 +414,8 @@ func (a *App) GetTaskHistory(limit int) ([]types.TaskHistoryEntry, error) {
 			}
 			if artifact := artifactFromCompletedEvent(ev); artifact != nil {
 				if err := a.previewReg.AllowArtifact(*artifact); err != nil {
-					wailsruntime.LogWarningf(ctx, "preview register (history): %v", err)
+					applog.Logger().Warn("preview register (history)",
+						applog.Task(ev.TaskID), applog.Request(ev.RequestID), applog.Err(err))
 				}
 			}
 		}

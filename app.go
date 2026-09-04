@@ -16,7 +16,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"officedex/internal/config"
 	"officedex/internal/runtimeenv"
@@ -34,6 +34,7 @@ import (
 	"github.com/google/uuid"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"officedex/internal/applog"
 	"officedex/internal/appupdate"
 	"officedex/internal/bridge"
 	"officedex/internal/demoflow"
@@ -266,6 +267,8 @@ type App struct {
 
 	binary binaryCache
 
+	creditStatus creditStatusCache
+
 	recovery recoveryRoutes
 
 	notificationMu                   sync.Mutex
@@ -353,13 +356,16 @@ func NewApp() (*App, error) {
 	if converterPath == "" {
 		converterPath = resolveMopConvertFromEnvironment()
 	}
+	// The MOP handler takes a printf-style callback, so its lines arrive
+	// pre-formatted; the component attribute is what keeps them findable.
+	mopLog := applog.With(slog.String("component", "mophttp"))
 	mopHandler := mophttp.New(mophttp.Options{
 		Root:              filepath.Join(workspaceDir, "mop-packages"),
 		Converter:         mophttp.NewCLIConverter(converterPath),
 		BlankTemplatePath: blankTemplatePath,
 		Capabilities:      mophttp.Capabilities{ProtocolVersion: mophttp.DefaultProtocolVersion, SchemaVersion: mophttp.DefaultSchemaVersion},
 		Logger: func(format string, args ...any) {
-			log.Printf("mophttp: "+format, args...)
+			mopLog.Warn(fmt.Sprintf(format, args...))
 		},
 	})
 	app.mopHTTPHandler = mopHandler
@@ -406,28 +412,41 @@ func NewApp() (*App, error) {
 func (a *App) startup(ctx context.Context) {
 	wailsEventsArmed.Store(true)
 	a.ctx = ctx
+	// From here on every package's logging reaches the Wails logger, including
+	// the ones that cannot import it. Before startup and after shutdown the same
+	// calls go to stderr, so nothing is silently dropped at either end.
+	applog.SetForwarder(func(level slog.Level, line string) {
+		switch {
+		case level >= slog.LevelError:
+			wailsruntime.LogError(ctx, line)
+		case level >= slog.LevelWarn:
+			wailsruntime.LogWarning(ctx, line)
+		default:
+			wailsruntime.LogInfo(ctx, line)
+		}
+	})
 	if err := a.writeProcessIdentity(); err != nil {
-		wailsruntime.LogWarningf(ctx, "write process identity: %v", err)
+		applog.Logger().Warn("write process identity", applog.Err(err))
 	}
 	for _, editor := range a.editorSessions() {
 		if err := editor.service.CleanupStale(); err != nil {
-			wailsruntime.LogWarningf(ctx, "cleanup stale %s sessions: %v", editor.label, err)
+			applog.Logger().Warn("cleanup stale editor sessions", slog.String("editor", editor.label), applog.Err(err))
 		}
 	}
 	if err := wailsruntime.InitializeNotifications(ctx); err != nil {
-		wailsruntime.LogWarningf(ctx, "init notifications: %v", err)
+		applog.Logger().Warn("init notifications", applog.Err(err))
 	}
 	if err := a.ensureLocalStoreOpen(ctx); err != nil {
-		wailsruntime.LogErrorf(ctx, "open local store: %v", err)
+		applog.Logger().Error("open local store", applog.Err(err))
 	} else {
 		if err := a.prepareLegacyRuntimeMigration(ctx); err != nil {
-			wailsruntime.LogWarningf(ctx, "prepare legacy runtime migration: %v", err)
+			applog.Logger().Warn("prepare legacy runtime migration", applog.Err(err))
 		}
 		if err := a.failInterruptedTasks(ctx); err != nil {
-			wailsruntime.LogWarningf(ctx, "fail interrupted tasks: %v", err)
+			applog.Logger().Warn("fail interrupted tasks", applog.Err(err))
 		}
 		if err := a.initializeWorkspaces(ctx); err != nil {
-			wailsruntime.LogErrorf(ctx, "init workspace: %v", err)
+			applog.Logger().Error("init workspace", applog.Err(err))
 		}
 	}
 }
@@ -504,7 +523,11 @@ func (a *App) recordTaskEventBestEffort(event types.BridgeEvent) {
 	// preceded it, and recovery ordered by write time saw the wrong last state.
 	a.queueEventWrite(func() {
 		if err := a.localStore.RecordEvent(event); err != nil && ctx != nil {
-			wailsruntime.LogWarningf(ctx, "record %s for task %s: %v; this task may not be recoverable", event.Type, event.TaskID, err)
+			applog.Logger().Warn("record task event; this task may not be recoverable",
+				slog.String("event_type", event.Type),
+				applog.Task(event.TaskID),
+				applog.Request(event.RequestID),
+				applog.Err(err))
 		}
 	})
 }
@@ -560,6 +583,9 @@ func (a *App) drainEventWrites() {
 
 func (a *App) shutdown(ctx context.Context) {
 	wailsEventsArmed.Store(false)
+	// The Wails logger stops accepting records around here; send the rest of
+	// shutdown's logging to stderr rather than into a closing runtime.
+	applog.SetForwarder(nil)
 	a.removeProcessIdentity()
 	a.mu.Lock()
 	bridgeClients := a.takeBridgeClientsLocked()
@@ -592,7 +618,7 @@ func (a *App) shutdown(ctx context.Context) {
 	}
 	for _, editor := range a.editorSessions() {
 		if err := editor.service.CloseAll(); err != nil && ctx != nil {
-			wailsruntime.LogWarningf(ctx, "close %s editor sessions: %v", editor.label, err)
+			applog.Logger().Warn("close editor sessions", slog.String("editor", editor.label), applog.Err(err))
 		}
 	}
 	if ctx != nil {
@@ -1112,7 +1138,12 @@ func artifactFromCompletedEvent(event types.BridgeEvent) *types.Artifact {
 }
 
 func (a *App) refreshImageWatermarkSettingsForGenerate(current types.UserSettings) (types.UserSettings, *types.ImageWatermarkGenerateOptions) {
-	credit, creditErr := a.GetCreditStatus()
+	// Through the cache, not GetCreditStatus: this runs on every Generate and
+	// only asks whether the plan may turn the watermark off, so it does not need
+	// a fresh subprocess each time the way the renderer's balance display does.
+	credit, creditErr := a.creditStatus.get(func() (types.CreditStatus, error) {
+		return login.GetCreditStatus(a.ctx, a.runCommandOptions())
+	})
 	next, changed := watermark.SyncSettingsForCredit(current, credit, creditErr)
 	if !changed {
 		return next, watermark.GenerateOptions(next, credit, creditErr)
@@ -1120,7 +1151,7 @@ func (a *App) refreshImageWatermarkSettingsForGenerate(current types.UserSetting
 	updated, err := a.settingsStore.Update(settings.Patch{ImageWatermark: &next.ImageWatermark})
 	if err != nil {
 		if a.ctx != nil {
-			wailsruntime.LogWarningf(a.ctx, "image watermark sync settings: %v", err)
+			applog.Logger().Warn("image watermark sync settings", applog.Err(err))
 		}
 		return next, watermark.GenerateOptions(next, credit, creditErr)
 	}

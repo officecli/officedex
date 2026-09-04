@@ -22,12 +22,12 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"os"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"officedex/internal/applog"
 	"officedex/internal/types"
 )
 
@@ -302,7 +302,7 @@ func (c *Client) Start(ctx context.Context) error {
 	if c.logfile == nil && c.options.LogDir != "" {
 		lf, lfErr := NewLogfile(c.options.LogDir, nil)
 		if lfErr != nil {
-			fmt.Fprintf(os.Stderr, "bridge: open logfile: %v\n", lfErr)
+			applog.Logger().Warn("bridge: open logfile", applog.Err(lfErr))
 		} else {
 			c.logfile = lf
 		}

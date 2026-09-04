@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"officedex/internal/config"
 	"officedex/internal/providerenv"
 	"officedex/internal/runtimeenv"
@@ -13,8 +14,7 @@ import (
 	"strings"
 	"time"
 
-	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
-
+	"officedex/internal/applog"
 	"officedex/internal/binresolver"
 	"officedex/internal/bridge"
 	"officedex/internal/login"
@@ -68,7 +68,8 @@ func (a *App) bridgeEventListener(client *bridge.Client) bridge.EventListener {
 		if event.Type == types.EventTaskCompleted {
 			if artifact := artifactFromCompletedEvent(event); artifact != nil {
 				if err := a.AllowArtifact(*artifact); err != nil {
-					wailsruntime.LogWarningf(ctx, "grant completed artifact: %v", err)
+					applog.Logger().Warn("grant completed artifact",
+						applog.Task(event.TaskID), applog.Request(event.RequestID), applog.Err(err))
 				}
 			}
 		}
@@ -78,7 +79,9 @@ func (a *App) bridgeEventListener(client *bridge.Client) bridge.EventListener {
 		persisted := event
 		a.queueEventWrite(func() {
 			if err := a.recordTaskEvent(persisted); err != nil {
-				wailsruntime.LogWarningf(ctx, "record task event: %v", err)
+				applog.Logger().Warn("record task event",
+					slog.String("event_type", persisted.Type),
+					applog.Task(persisted.TaskID), applog.Request(persisted.RequestID), applog.Err(err))
 			}
 			// Credit bookkeeping is a SQLite write too; it used to run on the
 			// reader inline, right after the queue was introduced to keep
@@ -89,7 +92,8 @@ func (a *App) bridgeEventListener(client *bridge.Client) bridge.EventListener {
 						charged := int(c)
 						mode, _ := persisted.Payload["credit_mode"].(string)
 						if err := a.localStore.RecordTaskCredit(persisted.TaskID, &charged, mode); err != nil {
-							wailsruntime.LogWarningf(ctx, "record task credit: %v", err)
+							applog.Logger().Warn("record task credit",
+								applog.Task(persisted.TaskID), applog.Request(persisted.RequestID), applog.Err(err))
 						}
 					}
 				}
@@ -332,6 +336,13 @@ func (a *App) resetBridgeRuntime() {
 	clients := a.takeBridgeClientsLocked()
 	a.binary.invalidate()
 	a.mu.Unlock()
+
+	// Every caller of this — login, logout, redeem, a workspace move — either
+	// changes which account the CLI answers as or is cheap enough not to care.
+	// Hanging the invalidation here rather than at each auth call site means a
+	// future one cannot forget it and leave a Generate deciding the watermark
+	// from the previous account's entitlement.
+	a.creditStatus.invalidate()
 
 	for _, client := range clients {
 		client.Close()
