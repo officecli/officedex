@@ -146,6 +146,10 @@ func customProviderForLoginTest() *types.LlmProvider {
 	}
 }
 
+// writeWhoamiFakeOfficeCLI stands in for the real binary on the `whoami` path.
+// It prints what `officecli whoami --json` prints, because that is what the
+// desktop app parses now; the prose it used to print was read back with regexes
+// and one reworded line was enough to lose a field silently.
 func writeWhoamiFakeOfficeCLI(t *testing.T, mode string) string {
 	t.Helper()
 	if runtime.GOOS == "windows" {
@@ -154,10 +158,12 @@ func writeWhoamiFakeOfficeCLI(t *testing.T, mode string) string {
 	var body string
 	switch mode {
 	case "logged_in":
-		body = "printf 'Mode: logged in\\nUser ID: user-test\\nSession: sess-test\\n'\nsleep 0.05\nexit 0\n"
+		body = "printf '{\"mode\":\"logged_in\",\"user_id\":\"user-test\",\"session\":\"sess-test\"}\\n'\nsleep 0.05\nexit 0\n"
 	case "api_key":
-		body = "printf 'API key configured: true\\n'\nsleep 0.05\nexit 0\n"
+		body = "printf '{\"mode\":\"api_key\",\"access_mode\":\"api-key\"}\\n'\nsleep 0.05\nexit 0\n"
 	case "anonymous":
+		// The real CLI exits non-zero when it cannot answer, and prints nothing
+		// machine-readable; that path must still read as anonymous, not as an error.
 		body = "printf 'Not logged in\\n'\nsleep 0.05\nexit 1\n"
 	default:
 		t.Fatalf("unknown whoami mode %q", mode)
@@ -178,9 +184,9 @@ func writeWindowsWhoamiFakeOfficeCLI(t *testing.T, mode string) string {
 	var body string
 	switch mode {
 	case "logged_in":
-		body = "echo Mode: logged in\r\necho User ID: user-test\r\necho Session: sess-test\r\nexit /b 0\r\n"
+		body = "echo {\"mode\":\"logged_in\",\"user_id\":\"user-test\",\"session\":\"sess-test\"}\r\nexit /b 0\r\n"
 	case "api_key":
-		body = "echo API key configured: true\r\nexit /b 0\r\n"
+		body = "echo {\"mode\":\"api_key\",\"access_mode\":\"api-key\"}\r\nexit /b 0\r\n"
 	case "anonymous":
 		body = "echo Not logged in\r\nexit /b 1\r\n"
 	default:
