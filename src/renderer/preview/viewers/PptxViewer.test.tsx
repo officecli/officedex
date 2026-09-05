@@ -329,4 +329,26 @@ describe("PptxViewer", () => {
     expect(document.querySelector(".pptx-workbench-panel")).toBeNull();
     expect(document.querySelector(".pptx-workbench-frame")?.getAttribute("src")).toContain("mode=preview");
   });
+
+  it("clears the unavailable banner after an editor reload succeeds", async () => {
+    render(<PptxViewer previewToken="preview-token" fileName="deck.pptx" documentType="pptx" filePath="/tmp/deck.pptx" editorBaseUrl={EDITOR_URL} />);
+    await waitFor(() => expect(document.querySelector(".pptx-workbench-frame")).toBeTruthy());
+    const failedEditor = installFakeEditorFrame();
+
+    act(() => failedEditor.reply({ type: "officedex:pptx-ready" }));
+    const failedLoad = await failedEditor.waitForHostMessage("officedex:pptx-load");
+    act(() => failedEditor.reply({ type: "officedex:pptx-load-error", requestId: failedLoad.requestId, error: "route failed" }));
+    await waitFor(() => expect(document.querySelector(".pptx-workbench-fallback-bar")).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("button", { name: "Reload editor" }));
+    await waitFor(() => expect(document.querySelector(".pptx-workbench")?.getAttribute("data-editor-status")).toBe("fetching"));
+    const recoveredEditor = installFakeEditorFrame();
+    act(() => recoveredEditor.reply({ type: "officedex:pptx-ready" }));
+    const recoveredLoad = await recoveredEditor.waitForHostMessage("officedex:pptx-load");
+    act(() => recoveredEditor.reply({ type: "officedex:pptx-loaded", requestId: recoveredLoad.requestId, fileId: "mop-2", fileName: "deck.pptx" }));
+    act(() => recoveredEditor.reply({ type: "officedex:pptx-editor-ready", fileId: "mop-2" }));
+
+    await waitFor(() => expect(document.querySelector(".pptx-workbench")?.getAttribute("data-editor-status")).toBe("ready"));
+    expect(document.querySelector(".pptx-workbench-fallback-bar")).toBeNull();
+  });
 });
