@@ -168,7 +168,7 @@ describe("HomeScreen", () => {
   it("opens a local file directly from the top of the reference menu", async () => {
     const props = renderHome();
     fireEvent.click(screen.getByRole("button", { name: "Add reference" }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: /^Open referenced file/ }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /^Open file/ }));
     expect(props.onOpenLocalFile).toHaveBeenCalledTimes(1);
     expect(props.pickers?.taskFile).not.toHaveBeenCalled();
   });
