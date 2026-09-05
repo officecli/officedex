@@ -96,6 +96,9 @@ command=(
 if [[ -d "${PRESENTATION_SOURCE}" ]]; then
   command+=("PRESENTATION_SOURCE_DIR=${PRESENTATION_SOURCE}")
 fi
+if [[ -d "${PPT2MOP_SOURCE}" ]]; then
+  command+=("PPT2MOP_SOURCE_DIR=${PPT2MOP_SOURCE}")
+fi
 if [[ -n "${MOP_CONVERT_BIN}" ]]; then
   command+=("OFFICEDEX_MOP_CONVERT_BIN=${MOP_CONVERT_BIN}")
 fi
@@ -119,5 +122,14 @@ cd "${OFFICEDEX_DIR}"
 if [[ ! -x "${OFFICECLI_EXECUTABLE}" ]]; then
   echo "[start-desktop] OfficeCLI is missing; downloading it once"
   npm run prefetch:officecli
+fi
+if [[ -d "${PRESENTATION_SOURCE}" ]]; then
+  echo "[start-desktop] rebuilding the desktop Presentation bundle"
+  presentation_build=(env "PRESENTATION_SOURCE_DIR=${PRESENTATION_SOURCE}")
+  if [[ -d "${PPT2MOP_SOURCE}" ]]; then
+    presentation_build+=("PPT2MOP_SOURCE_DIR=${PPT2MOP_SOURCE}")
+  fi
+  presentation_build+=(npm run build:presentation:desktop)
+  "${presentation_build[@]}"
 fi
 "${command[@]}"

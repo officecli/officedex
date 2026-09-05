@@ -1,6 +1,7 @@
 import { installOfficeDexPresentationBridge } from "./officedex-host-bridge";
 import { installPptxImportTransport } from "./pptx-import-transport";
 import { usesPresentationCompatibilityProtocol } from "./protocol-mode";
+import { configureEmbeddedPresentationRuntime } from "./embedded-runtime";
 
 async function start() {
   // The normal OfficeDex stage uses the presentation:* host bridge. The
@@ -17,8 +18,7 @@ async function start() {
   const runtimeEnvironment = ((window as unknown as {
     __RUNTIME_ENV__?: Record<string, unknown>;
   }).__RUNTIME_ENV__ ??= {});
-  runtimeEnvironment.CDN_HOST = `${window.location.origin}/presentation/assets`;
-  runtimeEnvironment.STATIC_ASSETS_PREFIX = `${window.location.origin}/presentation`;
+  configureEmbeddedPresentationRuntime(runtimeEnvironment, window.location.origin);
   await import("@presentation/source-main");
 }
 

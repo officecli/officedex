@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import { resolveMopRuntimeEntry } from "./src/mop-runtime-source";
 
 const componentRoot = fileURLToPath(new URL(".", import.meta.url));
 const gitCommonDirectory = execFileSync(
@@ -15,10 +16,22 @@ const defaultSourceRoot = path.resolve(path.dirname(gitCommonDirectory), "..", "
 const sourceRoot = path.resolve(
   process.env.PRESENTATION_SOURCE_DIR || defaultSourceRoot,
 );
+const explicitMopSourceRoot = process.env.PPT2MOP_SOURCE_DIR?.trim();
+const defaultMopSourceRoot = path.resolve(
+  path.dirname(gitCommonDirectory),
+  "..",
+  "ppt2mop",
+);
+const mopSourceRoot = path.resolve(explicitMopSourceRoot || defaultMopSourceRoot);
 const distDirectory = path.resolve(
   process.env.PRESENTATION_DIST_DIR || path.join(sourceRoot, "dist-officedex"),
 );
 const fromSource = (...segments: string[]) => path.join(sourceRoot, ...segments);
+const mopRuntimeEntry = resolveMopRuntimeEntry({
+  fallbackEntry: fromSource("mop", "runtime", "index.js"),
+  preferredRoot: mopSourceRoot,
+  requirePreferred: Boolean(explicitMopSourceRoot),
+});
 const sourceDependency = (name: string, ...fallbacks: string[]) => {
   const candidates = [
     fromSource("node_modules", name),
@@ -82,7 +95,7 @@ export default defineConfig({
       "@learnof/shape": fromSource("packages", "deps", "shape", "src"),
       "@learnof/smartart": fromSource("packages", "deps", "smartart", "src"),
       "@learnof/symbol": fromSource("packages", "deps", "symbol", "src"),
-      "@mop/runtime": fromSource("mop", "runtime", "index.js"),
+      "@mop/runtime": mopRuntimeEntry,
       "@presentation/source-main": fromSource(
         "packages",
         "presentation-app",
