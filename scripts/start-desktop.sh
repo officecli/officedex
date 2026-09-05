@@ -10,6 +10,7 @@ USER_DATA_DIR="${OFFICEDEX_DEV_USER_DATA_DIR:-${HOME}/Library/Application Suppor
 PLATFORM_BASE_URL="${OFFICECLI_DEV_PLATFORM_BASE_URL:-https://officecli.shimodev.com}"
 PROFILE="${OFFICE_CLI_PROFILE:-dev}"
 PRESENTATION_SOURCE="${PRESENTATION_SOURCE_DIR:-${OFFICEDEX_DIR}/../presentation}"
+PPT2MOP_SOURCE="${PPT2MOP_SOURCE_DIR:-${OFFICEDEX_DIR}/../ppt2mop}"
 DRY_RUN=false
 
 usage() {
@@ -26,6 +27,7 @@ Environment overrides:
   OFFICECLI_DEV_PLATFORM_BASE_URL    Development platform URL
   OFFICEDEX_MOP_CONVERT_BIN          Explicit mop-convert executable
   PRESENTATION_SOURCE_DIR            Presentation checkout
+  PPT2MOP_SOURCE_DIR                 Local ppt2mop checkout
 EOF
 }
 
@@ -55,9 +57,11 @@ resolve_mop_convert() {
   for candidate in \
     "${OFFICEDEX_MOP_CONVERT_BIN:-}" \
     "${MOP_CONVERT_BIN:-}" \
+    "${PPT2MOP_SOURCE}/target/release/pptx2mop" \
+    "${PPT2MOP_SOURCE}/target/${rust_arch}-apple-darwin/release/pptx2mop" \
+    "${PPT2MOP_SOURCE}/target/${rust_arch}-apple-darwin/release/mop-convert" \
     "${OFFICEDEX_DIR}/build/presentation/tools/bin/mop-convert" \
     "${PRESENTATION_SOURCE}/tools/bin/mop-convert" \
-    "${OFFICEDEX_DIR}/../ppt2mop/target/${rust_arch}-apple-darwin/release/mop-convert" \
     "${HOME}/code/my/github/learnof/pptx/tools/bin/mop-convert" \
     "${HOME}/code/my/github/learnof/presentation/mop/target/release/mop-convert"
   do
