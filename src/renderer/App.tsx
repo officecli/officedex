@@ -1218,6 +1218,28 @@ function OfficeDexApp() {
     }
   }, [clearError, homeWorkspaceId, openInlinePreview, refreshRecentFiles, removeRecentFile, runSpreadsheetAction, selectTask, t, tasks]);
 
+  const openHomeLocalFile = useCallback(async () => {
+    try {
+      const selected = await officecli.openFileDialog({
+        filters: [{
+          name: "Office files",
+          extensions: ["pptx", "docx", "xlsx", "pdf", "html", "htm", "png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"],
+        }],
+      });
+      if (!selected) return;
+      await openRecentFile({
+        filePath: selected,
+        fileName: fileNameFromPath(selected),
+        documentType: fileExtension(selected),
+        source: "local",
+        ...(homeWorkspaceId ? { workspaceId: homeWorkspaceId } : {}),
+        lastOpenedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      void message.error(errorMessage(error));
+    }
+  }, [homeWorkspaceId, openRecentFile]);
+
   const openSidebarDocument = useCallback((document: SidebarDocument) => {
     if (state.tasks[document.id]) {
       openTaskFromHome(document.id);
@@ -1698,6 +1720,7 @@ function OfficeDexApp() {
             activeWorkspaceId={homeWorkspaceId}
             workspaces={workspaces}
             onOpenFile={openRecentFile}
+            onOpenLocalFile={openHomeLocalFile}
             onRemoveFile={removeRecentFile}
             droppedTaskPaths={droppedTaskPaths}
             onRetryRecentFiles={() => void refreshRecentFiles(homeWorkspaceId)}
@@ -1899,4 +1922,3 @@ function isGenerateDocumentType(value: unknown): value is GenerateInput["documen
 function stringOrUndef(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
-

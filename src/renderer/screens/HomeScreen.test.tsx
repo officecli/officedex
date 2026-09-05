@@ -27,6 +27,7 @@ function renderHome(overrides: Partial<React.ComponentProps<typeof HomeScreen>> 
     loading: false,
     onCreate: vi.fn(),
     onOpenFile: vi.fn(),
+    onOpenLocalFile: vi.fn(),
     onRemoveFile: vi.fn(),
     pickers: { taskFile: vi.fn(), taskDirectory: vi.fn(), referenceImages: vi.fn(async () => []) },
     onStartTask: vi.fn(),
@@ -162,6 +163,14 @@ describe("HomeScreen", () => {
       sourceFile: "/tmp/supplier.xlsx",
       documentType: "xlsx",
     }));
+  });
+
+  it("opens a local file directly from the top of the reference menu", async () => {
+    const props = renderHome();
+    fireEvent.click(screen.getByRole("button", { name: "Add reference" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /^Open referenced file/ }));
+    expect(props.onOpenLocalFile).toHaveBeenCalledTimes(1);
+    expect(props.pickers?.taskFile).not.toHaveBeenCalled();
   });
 
   it("keeps the intake in place when analysis needs more input", async () => {

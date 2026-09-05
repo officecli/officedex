@@ -60,6 +60,7 @@ export interface HomeScreenProps {
   activeWorkspaceId?: string;
   workspaces?: WorkspaceSummary[];
   onOpenFile: (file: RecentFile) => void;
+  onOpenLocalFile?: () => void | Promise<void>;
   /** Retained as an optional embedding hook; Home intake is the primary creation path. */
   onCreate?: (documentType: HomeDocumentType) => void | Promise<void>;
   onRemoveFile: (filePath: string) => void;
@@ -119,7 +120,7 @@ const HOME_TEMPLATES: HomeTemplate[] = [
   { id: "budget", type: "xlsx", icon: "account_balance_wallet", minutes: 2 },
 ];
 
-export function HomeScreen({ files, attentionTasks = [], loading, error, activeWorkspaceId, workspaces = [], onOpenFile, onRemoveFile, pickers = {}, droppedTaskPaths, workspaceActions = {}, onStartTask, taskActions = {}, productionTaskId, productionEditor, onRetryRecentFiles }: HomeScreenProps) {
+export function HomeScreen({ files, attentionTasks = [], loading, error, activeWorkspaceId, workspaces = [], onOpenFile, onOpenLocalFile, onRemoveFile, pickers = {}, droppedTaskPaths, workspaceActions = {}, onStartTask, taskActions = {}, productionTaskId, productionEditor, onRetryRecentFiles }: HomeScreenProps) {
   const { taskFile: onPickTaskFile, taskDirectory: onPickTaskDirectory, referenceImages: onPickReferenceImages, referenceTextFiles: onPickReferenceTextFiles } = pickers;
   const { select: onSelectWorkspace, selectAll: onSelectAllWorkspaces, add: onAddWorkspace } = workspaceActions;
   const { open: onOpenTask, retry: onRetryTask, steer: onSteerTask, resume: onResumeTask, answer: onAnswerTask, cancel: onCancelTask, delete: onDeleteTask } = taskActions;
@@ -357,12 +358,15 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
 
   const referenceMenu: MenuProps = {
     items: [
+      { key: "open", label: t("home.openReferencedFile"), description: t("home.openReferencedFile.hint"), icon: <FolderOpenOutlined aria-hidden /> },
+      { type: "divider" as const },
       { key: "file", label: t("home.referenceFile"), description: t("home.referenceFile.hint"), icon: <FileTextOutlined aria-hidden /> },
       { key: "texts", label: t("home.referenceTexts"), description: t("home.referenceTexts.hint"), icon: <FileTextOutlined aria-hidden /> },
       { key: "directory", label: t("home.referenceDirectory"), description: t("home.referenceDirectory.hint"), icon: <FolderOpenOutlined aria-hidden /> },
       { key: "images", label: t("home.referenceImages"), description: t("home.referenceImages.hint"), icon: <FileTextOutlined aria-hidden /> },
     ],
     onClick: ({ key }) => {
+      if (key === "open") void onOpenLocalFile?.();
       if (key === "file") void pickTaskFile();
       if (key === "texts") void pickReferenceTextFiles();
       if (key === "directory") void pickTaskDirectory();
