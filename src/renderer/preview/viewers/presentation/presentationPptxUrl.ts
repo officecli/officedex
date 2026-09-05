@@ -7,8 +7,12 @@
  * the editor staged under `/presentation/`.
  */
 export const PRESENTATION_EDITOR_URL_STORAGE_KEY = "officedex.presentationEditorUrl";
-/** Base path used by packaged builds for the editor staged under public/presentation. */
-export const EMBEDDED_PRESENTATION_PATH = "/presentation/";
+/**
+ * Explicit editor entry staged under public/presentation. Vite treats a bare
+ * `/presentation/` request as an SPA navigation and serves OfficeDex's root
+ * index during desktop dev, recursively booting the host app inside the iframe.
+ */
+export const EMBEDDED_PRESENTATION_PATH = "/presentation/index.html";
 
 export function resolvePresentationEditorBaseUrl(): string | null {
   const fromEnv = typeof import.meta.env.VITE_PRESENTATION_EDITOR_URL === "string" ? import.meta.env.VITE_PRESENTATION_EDITOR_URL.trim() : "";

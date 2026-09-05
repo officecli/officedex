@@ -1,4 +1,5 @@
 import { installOfficeDexPresentationBridge } from "./officedex-host-bridge";
+import { installPptxImportTransport } from "./pptx-import-transport";
 import { usesPresentationCompatibilityProtocol } from "./protocol-mode";
 
 async function start() {
@@ -7,7 +8,9 @@ async function start() {
   // officedex:pptx-* compatibility protocol. Both modes run from this same
   // fegit presentation bundle; selecting one here prevents two bridges from
   // competing for the same document boot.
-  if (!usesPresentationCompatibilityProtocol(window.location.search)) {
+  if (usesPresentationCompatibilityProtocol(window.location.search)) {
+    installPptxImportTransport();
+  } else {
     await installOfficeDexPresentationBridge();
   }
   await import("@presentation/source-local-runtime-bootstrap");
