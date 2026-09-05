@@ -5,6 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OFFICEDEX_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BUILT_APP_EXECUTABLE="${OFFICEDEX_DIR}/build/bin/OfficeDex.app/Contents/MacOS/officedex"
+OFFICECLI_EXECUTABLE="${OFFICEDEX_DIR}/build/officecli/officecli"
 USER_DATA_DIR="${OFFICEDEX_DEV_USER_DATA_DIR:-${HOME}/Library/Application Support/OfficeDex-Test}"
 PLATFORM_BASE_URL="${OFFICECLI_DEV_PLATFORM_BASE_URL:-https://officecli.shimodev.com}"
 PROFILE="${OFFICE_CLI_PROFILE:-dev}"
@@ -82,6 +83,7 @@ fi
 
 command=(
   env
+  -u GOROOT
   "OFFICE_CLI_PROFILE=${PROFILE}"
   "OFFICECLI_DEV_PLATFORM_BASE_URL=${PLATFORM_BASE_URL}"
   "OFFICEDEX_DEV_USER_DATA_DIR=${USER_DATA_DIR}"
@@ -93,7 +95,7 @@ fi
 if [[ -n "${MOP_CONVERT_BIN}" ]]; then
   command+=("OFFICEDEX_MOP_CONVERT_BIN=${MOP_CONVERT_BIN}")
 fi
-command+=(npm run dev)
+command+=(wails dev)
 
 echo "[start-desktop] mode: Wails desktop dev"
 echo "[start-desktop] source: ${OFFICEDEX_DIR}"
@@ -110,4 +112,8 @@ if [[ "${DRY_RUN}" == true ]]; then
 fi
 
 cd "${OFFICEDEX_DIR}"
+if [[ ! -x "${OFFICECLI_EXECUTABLE}" ]]; then
+  echo "[start-desktop] OfficeCLI is missing; downloading it once"
+  npm run prefetch:officecli
+fi
 "${command[@]}"

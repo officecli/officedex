@@ -27,27 +27,23 @@ const sourceDependency = (name: string, ...fallbacks: string[]) => {
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
 };
 
-// Mirrors the PRESENTATION_BUNDLE_WEB_FONTS switch in the source tree's own
-// packages/presentation-app/vite.config.ts.
-//
-// The desktop app runs one embedded presentation frontend. The source-side
-// Vite config provides a desktop alias that removes Office CJK webfonts; keep
-// the same alias here because this component is built from the source tree
-// with a separate Vite config.
 const bundleWebFonts = process.env.PRESENTATION_BUNDLE_WEB_FONTS !== "0";
-const officeCjkRegistrationsAlias = bundleWebFonts
-  ? {}
-  : {
-      // Matched against the literal specifier in
-      // presentation-host-browser/src/fonts/web-font-service.ts.
-      "./office-cjk-registrations": fromSource(
-        "packages",
-        "presentation-host-browser",
-        "src",
-        "fonts",
-        "office-cjk-registrations.desktop.ts",
-      ),
-    };
+const desktopFontService = path.join(
+  componentRoot,
+  "src",
+  "web-font-service.desktop.ts",
+);
+const desktopFontServicePlugin = {
+  name: "officedex-desktop-font-service",
+  enforce: "pre" as const,
+  resolveId(source: string, importer?: string) {
+    if (bundleWebFonts || source !== "./fonts/web-font-service") return null;
+    if (!importer?.replaceAll("\\", "/").endsWith(
+      "/packages/presentation-host-browser/src/create-browser-host.ts",
+    )) return null;
+    return desktopFontService;
+  },
+};
 
 export default defineConfig({
   root: componentRoot,
@@ -59,9 +55,6 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      // Must stay first: alias keys are matched in insertion order and this one
-      // is more specific than the package-level entries below.
-      ...officeCjkRegistrationsAlias,
       "react/jsx-runtime": fromSource("node_modules", "react", "jsx-runtime.js"),
       "react/jsx-dev-runtime": fromSource(
         "packages",
@@ -126,7 +119,7 @@ export default defineConfig({
       "@presentation/vendor": fromSource("packages", "presentation-vendor", "src"),
     },
   },
-  plugins: [react()],
+  plugins: [desktopFontServicePlugin, react()],
   build: {
     outDir: distDirectory,
     emptyOutDir: true,
