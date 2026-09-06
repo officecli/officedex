@@ -22,6 +22,7 @@ import type {
   WorkbookWriteCellsRequest,
 } from "./workbookClientTools";
 import { delay } from "../utils/timing";
+import { workbookFingerprint } from "./workbookFingerprint";
 
 export interface SpreadsheetWorkspaceHandle {
   save(): Promise<boolean>;
@@ -56,6 +57,7 @@ export interface SpreadsheetWorkspaceProps {
   onCanvasSaveError?: (error?: string) => void;
   onCanvasSessionClosed?: (previewToken: string) => void;
   onCreateDeck?: (sourceFilePath: string) => Promise<void>;
+  onWorkbookSaved?: (input: { filePath: string; sourceRevision: number; fingerprint: string }) => void;
   agentPanel?: React.ReactNode;
 }
 
@@ -69,7 +71,7 @@ function saveStateFor(session: SpreadsheetSessionState): SpreadsheetSaveState {
 }
 
 export const SpreadsheetWorkspace = forwardRef<SpreadsheetWorkspaceHandle, SpreadsheetWorkspaceProps>(
-  function SpreadsheetWorkspace({ session, workspaceName, onBack, onDirtyChange, onCanvasStateChange, onCanvasError, onCanvasSaveError, onCanvasSessionClosed, onCreateDeck, agentPanel }, ref) {
+  function SpreadsheetWorkspace({ session, workspaceName, onBack, onDirtyChange, onCanvasStateChange, onCanvasError, onCanvasSaveError, onCanvasSessionClosed, onCreateDeck, onWorkbookSaved, agentPanel }, ref) {
     const canvasRef = useRef<SpreadsheetCanvasHandle>(null);
     const t = useT();
     const [agentOpen, setAgentOpen] = useState(true);
@@ -106,8 +108,24 @@ export const SpreadsheetWorkspace = forwardRef<SpreadsheetWorkspaceHandle, Sprea
     const save = useCallback(async () => {
       if (!session.artifact || !session.grant) return false;
       const canvas = await ensureEditorReady();
-      return canvas.save();
-    }, [ensureEditorReady, session.artifact, session.grant]);
+      const saved = await canvas.save();
+      if (saved && session.artifact) {
+        let fingerprint = "";
+        try {
+          const snapshot = await canvas.snapshot({ maxRows: 500, maxColumns: 100 });
+          if (snapshot?.sheets) fingerprint = workbookFingerprint(snapshot);
+        } catch {
+          // Saving the workbook remains successful when an older editor does
+          // not expose snapshot data; refresh lineage can be populated later.
+        }
+        setSourceRevision((revision) => {
+          const next = revision + 1;
+          onWorkbookSaved?.({ filePath: session.artifact?.filePath ?? "", sourceRevision: next, fingerprint });
+          return next;
+        });
+      }
+      return saved;
+    }, [ensureEditorReady, onWorkbookSaved, session.artifact, session.grant]);
     useImperativeHandle(ref, () => ({
       save,
       focus: () => canvasRef.current?.focus(),

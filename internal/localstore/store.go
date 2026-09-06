@@ -214,6 +214,152 @@ WHERE created_at = '';
 CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at DESC, id ASC);
 `
 
+// schemaV10 stores the shared OfficeDex product graph. Legacy tasks and
+// artifacts remain authoritative for compatibility; these tables add durable
+// project/data-lineage/output relationships for the multi-output workflow.
+const schemaV10 = `
+CREATE TABLE IF NOT EXISTS office_projects (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS workbook_sources (
+  id TEXT PRIMARY KEY,
+  workbook_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  location TEXT NOT NULL DEFAULT '',
+  last_imported_at TEXT NOT NULL DEFAULT '',
+  last_error TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_workbook_sources_workbook ON workbook_sources(workbook_id, updated_at DESC);
+CREATE TABLE IF NOT EXISTS workbook_views (
+  id TEXT PRIMARY KEY,
+  workbook_id TEXT NOT NULL,
+  sheet_name TEXT NOT NULL,
+  layer TEXT NOT NULL,
+  range_ref TEXT NOT NULL DEFAULT '',
+  fingerprint TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_workbook_views_workbook ON workbook_views(workbook_id, updated_at DESC);
+CREATE TABLE IF NOT EXISTS office_outputs (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  output_type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  file_path TEXT NOT NULL DEFAULT '',
+  version INTEGER NOT NULL DEFAULT 1,
+  status TEXT NOT NULL,
+  workbook_id TEXT NOT NULL DEFAULT '',
+  view_ids_json TEXT NOT NULL DEFAULT '[]',
+  source_ids_json TEXT NOT NULL DEFAULT '[]',
+  workbook_fingerprint TEXT NOT NULL DEFAULT '',
+  lineage_captured_at TEXT NOT NULL DEFAULT '',
+  manually_edited INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_office_outputs_project ON office_outputs(project_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_office_outputs_workbook ON office_outputs(workbook_id, updated_at DESC);
+CREATE TABLE IF NOT EXISTS office_refresh_plans (
+  id TEXT PRIMARY KEY,
+  output_id TEXT NOT NULL,
+  strategy TEXT NOT NULL,
+  status TEXT NOT NULL,
+  changed_views_json TEXT NOT NULL DEFAULT '[]',
+  preserve_manual_edits INTEGER NOT NULL DEFAULT 0,
+  requires_approval INTEGER NOT NULL DEFAULT 0,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  error TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_office_refresh_plans_output ON office_refresh_plans(output_id, updated_at DESC);
+`
+
+// timestampColumns lists every stored timestamp, so the V9 normalization and
+// its test cover the whole schema rather than the columns that happened to
+// surface a bug. Rows are addressed by rowid; all of these are ordinary rowid
+// tables.
+var timestampColumns = []struct {
+	table   string
+	columns []string
+}{
+	{"tasks", []string{"updated_at", "created_at"}},
+	{"task_events", []string{"created_at"}},
+	{"artifacts", []string{"synced_at"}},
+	{"schema_migrations", []string{"applied_at"}},
+	{"task_credit_records", []string{"recorded_at"}},
+	{"workspaces", []string{"created_at", "updated_at", "last_active_at"}},
+	{"conversations", []string{"created_at", "updated_at"}},
+	{"task_answers", []string{"updated_at"}},
+	{"recent_files", []string{"last_opened_at"}},
+	{"documents", []string{"created_at", "updated_at"}},
+	{"runs", []string{"created_at", "updated_at"}},
+	{"activity_streams", []string{"created_at", "updated_at"}},
+	{"activities", []string{"created_at"}},
+	{"legacy_migrations", []string{"applied_at"}},
+}
+
+// normalizeStoredTimestamps rewrites existing rows into the fixed-width
+// timestampLayout.
+//
+// Old builds wrote time.RFC3339Nano, which drops trailing zeros from the
+// fractional second. Leaving those rows in place would be worse than the
+// original bug: a short legacy stamp and a padded new one for the same instant
+// no longer compare equal, so the keyset cursors in QueryDocuments and
+// streamEventsAfter -- which test `updated_at = ?` to break ties -- could skip
+// or repeat a row at the page boundary. Normalizing is a one-way rewrite of
+// data this app owns; no other process reads this database.
+//
+// Empty strings are left alone: last_active_at and the V8 created_at backfill
+// both use ” as a real "unset" sentinel that queries test for.
+func normalizeStoredTimestamps(ctx context.Context, tx *sql.Tx) error {
+	for _, spec := range timestampColumns {
+		for _, column := range spec.columns {
+			rows, err := tx.QueryContext(ctx,
+				fmt.Sprintf(`SELECT rowid, %s FROM %s WHERE %s != ''`, column, spec.table, column))
+			if err != nil {
+				return fmt.Errorf("read %s.%s: %w", spec.table, column, err)
+			}
+			type pending struct {
+				rowid int64
+				value string
+			}
+			var updates []pending
+			for rows.Next() {
+				var row pending
+				if err := rows.Scan(&row.rowid, &row.value); err != nil {
+					rows.Close()
+					return fmt.Errorf("scan %s.%s: %w", spec.table, column, err)
+				}
+				// An unparseable stamp keeps its stored text rather than being
+				// replaced by a synthetic "now" that would claim the row is
+				// newer than it is.
+				normalized := normalizeTimestamp(row.value, row.value)
+				if normalized != row.value {
+					updates = append(updates, pending{rowid: row.rowid, value: normalized})
+				}
+			}
+			if err := rows.Err(); err != nil {
+				rows.Close()
+				return fmt.Errorf("iterate %s.%s: %w", spec.table, column, err)
+			}
+			rows.Close()
+			for _, update := range updates {
+				if _, err := tx.ExecContext(ctx,
+					fmt.Sprintf(`UPDATE %s SET %s = ? WHERE rowid = ?`, spec.table, column),
+					update.value, update.rowid,
+				); err != nil {
+					return fmt.Errorf("update %s.%s: %w", spec.table, column, err)
+				}
+			}
+		}
+	}
+	return nil
+}
+
 // Store wraps a SQLite database used to persist bridge events and artifacts.
 // Safe for concurrent use.
 type Store struct {
@@ -243,6 +389,36 @@ type TaskAnswer struct {
 	OptionID        string
 	Answer          string
 	QuestionIndex   int
+}
+
+type OfficeProject struct {
+	ID        string
+	Name      string
+	CreatedAt string
+	UpdatedAt string
+}
+
+type WorkbookSource struct {
+	ID, WorkbookID, Name, Kind, Location, LastImportedAt, LastError string
+}
+
+type WorkbookView struct {
+	ID, WorkbookID, SheetName, Layer, RangeRef, Fingerprint, UpdatedAt string
+}
+
+type OfficeOutput struct {
+	ID, ProjectID, OutputType, Title, FilePath, Status, WorkbookID, WorkbookFingerprint, LineageCapturedAt, UpdatedAt string
+	Version                                                                                                           int
+	ViewIDs                                                                                                           []string
+	SourceIDs                                                                                                         []string
+	ManuallyEdited                                                                                                    bool
+}
+
+type OfficeRefreshPlan struct {
+	ID, OutputID, Strategy, Status, Error, UpdatedAt string
+	ChangedViews                                     []string
+	PreserveManualEdits, RequiresApproval            bool
+	Attempts                                         int
 }
 
 // New creates a Store bound to dbPath. The database file is not opened until
@@ -281,6 +457,11 @@ func (s *Store) Open(ctx context.Context) error {
 // applyMigrations advances the database to the latest schema_version. Each
 // migration is wrapped in its own transaction so a partial failure leaves the
 // previous schema intact. Re-running Open is idempotent.
+// latestSchemaVersion is the user_version an opened database ends up at. Tests
+// assert against this rather than a literal so adding a migration does not mean
+// hunting down every hardcoded number.
+const latestSchemaVersion = 10
+
 func applyMigrations(ctx context.Context, db *sql.DB) error {
 	var current int
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&current); err != nil {
@@ -297,7 +478,7 @@ func applyMigrations(ctx context.Context, db *sql.DB) error {
 		}
 		if _, err := tx.ExecContext(ctx,
 			`INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (1, ?)`,
-			time.Now().UTC().Format(time.RFC3339Nano),
+			nowTimestamp(),
 		); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("v1 stamp: %w", err)
@@ -321,7 +502,7 @@ func applyMigrations(ctx context.Context, db *sql.DB) error {
 		}
 		if _, err := tx.ExecContext(ctx,
 			`INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (2, ?)`,
-			time.Now().UTC().Format(time.RFC3339Nano),
+			nowTimestamp(),
 		); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("v2 stamp: %w", err)
@@ -345,7 +526,7 @@ func applyMigrations(ctx context.Context, db *sql.DB) error {
 		}
 		if _, err := tx.ExecContext(ctx,
 			`INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (3, ?)`,
-			time.Now().UTC().Format(time.RFC3339Nano),
+			nowTimestamp(),
 		); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("v3 stamp: %w", err)
@@ -369,7 +550,7 @@ func applyMigrations(ctx context.Context, db *sql.DB) error {
 		}
 		if _, err := tx.ExecContext(ctx,
 			`INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (4, ?)`,
-			time.Now().UTC().Format(time.RFC3339Nano),
+			nowTimestamp(),
 		); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("v4 stamp: %w", err)
@@ -393,7 +574,7 @@ func applyMigrations(ctx context.Context, db *sql.DB) error {
 		}
 		if _, err := tx.ExecContext(ctx,
 			`INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (5, ?)`,
-			time.Now().UTC().Format(time.RFC3339Nano),
+			nowTimestamp(),
 		); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("v5 stamp: %w", err)
@@ -417,7 +598,7 @@ func applyMigrations(ctx context.Context, db *sql.DB) error {
 		}
 		if _, err := tx.ExecContext(ctx,
 			`INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (6, ?)`,
-			time.Now().UTC().Format(time.RFC3339Nano),
+			nowTimestamp(),
 		); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("v6 stamp: %w", err)
@@ -449,7 +630,7 @@ func applyMigrations(ctx context.Context, db *sql.DB) error {
 		}
 		if _, err := tx.ExecContext(ctx,
 			`INSERT OR IGNORE INTO legacy_migrations(marker, applied_at) VALUES ('documents-v1', ?)`,
-			time.Now().UTC().Format(time.RFC3339Nano),
+			nowTimestamp(),
 		); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("v7 stamp: %w", err)
@@ -493,7 +674,7 @@ func applyMigrations(ctx context.Context, db *sql.DB) error {
 		}
 		if _, err := tx.ExecContext(ctx,
 			`INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (8, ?)`,
-			time.Now().UTC().Format(time.RFC3339Nano),
+			nowTimestamp(),
 		); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("v8 stamp: %w", err)
@@ -504,6 +685,36 @@ func applyMigrations(ctx context.Context, db *sql.DB) error {
 		}
 		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("v8 commit: %w", err)
+		}
+	}
+	if current < latestSchemaVersion {
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("begin v9: %w", err)
+		}
+		if current < 9 {
+			if err := normalizeStoredTimestamps(ctx, tx); err != nil {
+				_ = tx.Rollback()
+				return fmt.Errorf("v9 normalize timestamps: %w", err)
+			}
+		}
+		if _, err := tx.ExecContext(ctx, schemaV10); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("v10 ddl: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)`,
+			latestSchemaVersion, nowTimestamp(),
+		); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("v10 stamp: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", latestSchemaVersion)); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("v10 set user_version: %w", err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("v10 commit: %w", err)
 		}
 	}
 	return nil
@@ -893,7 +1104,7 @@ func ensureConversationTx(ctx context.Context, tx *sql.Tx, workspaceID, conversa
 	if title == "" {
 		title = conversationID
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	now := nowTimestamp()
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO conversations(id, workspace_id, title, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?)
@@ -1313,7 +1524,7 @@ func (s *Store) EnsureWorkspace(ctx context.Context, workspacePath string) (Work
 	if strings.TrimSpace(name) == "" || name == string(filepath.Separator) {
 		name = "Workspace"
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	now := nowTimestamp()
 	if _, err := s.db.ExecContext(ctx,
 		`INSERT INTO workspaces(id, path, name, created_at, updated_at, last_active_at)
 		 VALUES (?, ?, ?, ?, ?, ?)
@@ -1342,7 +1553,7 @@ func (s *Store) RenameWorkspace(ctx context.Context, workspaceID, name string) (
 	if name == "" {
 		return Workspace{}, fmt.Errorf("localstore: workspace name is empty")
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	now := nowTimestamp()
 	result, err := s.db.ExecContext(ctx,
 		`UPDATE workspaces SET name = ?, updated_at = ? WHERE id = ?`, name, now, workspaceID,
 	)
@@ -1377,10 +1588,10 @@ func (s *Store) UpsertRecentFile(ctx context.Context, file types.RecentFile) err
 	if source != "generated" && source != "local" {
 		return fmt.Errorf("localstore: recent file source must be generated or local")
 	}
-	lastOpenedAt := strings.TrimSpace(file.LastOpenedAt)
-	if lastOpenedAt == "" {
-		lastOpenedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	}
+	// Callers supply their own stamp, so normalize it here rather than trusting
+	// every call site to use the sortable layout -- recent_files is read back
+	// with ORDER BY last_opened_at DESC.
+	lastOpenedAt := normalizeTimestamp(file.LastOpenedAt, nowTimestamp())
 	if _, err := s.db.ExecContext(ctx,
 		`INSERT INTO recent_files(file_path, file_name, document_type, source, workspace_id, task_id, conversation_id, last_opened_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -1653,7 +1864,7 @@ func (s *Store) ActivateWorkspace(ctx context.Context, workspaceID string) (Work
 	if s.db == nil {
 		return Workspace{}, fmt.Errorf("localstore: not open")
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	now := nowTimestamp()
 	res, err := s.db.ExecContext(ctx,
 		`UPDATE workspaces SET last_active_at = ?, updated_at = ? WHERE id = ?`,
 		now, now, workspaceID,
@@ -1684,7 +1895,7 @@ func (s *Store) ActiveWorkspace(ctx context.Context) (Workspace, error) {
 	}
 	var id string
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id FROM workspaces WHERE last_active_at != '' ORDER BY last_active_at DESC, updated_at DESC LIMIT 1`,
+		`SELECT id FROM workspaces WHERE last_active_at != '' ORDER BY last_active_at DESC, updated_at DESC, id ASC LIMIT 1`,
 	).Scan(&id)
 	if err != nil {
 		return Workspace{}, err
@@ -1711,7 +1922,7 @@ func (s *Store) RecordTaskContext(ctx context.Context, taskID string, taskCtx Ta
 	if conversationID == "" {
 		conversationID = taskID
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	now := nowTimestamp()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("localstore: begin record task context: %w", err)
@@ -1811,7 +2022,7 @@ func (s *Store) RecordTaskAnswers(ctx context.Context, taskID string, answers []
 	if taskID == "" || len(answers) == 0 {
 		return nil
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	now := nowTimestamp()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("localstore: begin record task answers: %w", err)
@@ -1892,7 +2103,7 @@ func (s *Store) RecordEvent(event types.BridgeEvent) error {
 	if s.db == nil || event.TaskID == "" {
 		return nil
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	now := nowTimestamp()
 	// Order events by when they happened, not by when the writer goroutine
 	// got to them: recovery reads a task's history back ORDER BY created_at
 	// and treats the last row as the current state.
@@ -1943,7 +2154,8 @@ func (s *Store) RecordEvent(event types.BridgeEvent) error {
 }
 
 // QueryEventsByTask returns all BridgeEvent rows for the given task, ordered
-// by created_at ascending.
+// by created_at ascending, then by event_id so events recorded within the same
+// instant have a stable order rather than SQLite's arbitrary one.
 func (s *Store) QueryEventsByTask(ctx context.Context, taskID string) ([]types.BridgeEvent, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1952,7 +2164,7 @@ func (s *Store) QueryEventsByTask(ctx context.Context, taskID string) ([]types.B
 	}
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT event_id, task_id, type, payload_json, created_at, request_id
-		 FROM task_events WHERE task_id = ? ORDER BY created_at ASC`, taskID)
+		 FROM task_events WHERE task_id = ? ORDER BY created_at ASC, event_id ASC`, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("localstore: query events by task: %w", err)
 	}
@@ -1969,7 +2181,7 @@ func (s *Store) QueryTaskIDsByStatus(ctx context.Context, status string) ([]stri
 		return nil, fmt.Errorf("localstore: not open")
 	}
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id FROM tasks WHERE status = ? ORDER BY updated_at ASC`, status)
+		`SELECT id FROM tasks WHERE status = ? ORDER BY updated_at ASC, id ASC`, status)
 	if err != nil {
 		return nil, fmt.Errorf("localstore: query tasks by status: %w", err)
 	}
@@ -2002,10 +2214,13 @@ func (s *Store) QueryRecentTaskIDs(ctx context.Context, limit int) ([]string, er
 		return nil, nil
 	}
 	rows, err := s.db.QueryContext(ctx,
+		// The inner LIMIT makes the tiebreaker decide membership, not just
+		// order: without it two tasks sharing an updated_at leave the cutoff
+		// arbitrary, so the same call can return different task sets.
 		`SELECT id FROM (
 		   SELECT id, updated_at FROM tasks
-		   ORDER BY updated_at DESC LIMIT ?
-		 ) ORDER BY updated_at ASC`, limit)
+		   ORDER BY updated_at DESC, id ASC LIMIT ?
+		 ) ORDER BY updated_at ASC, id ASC`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("localstore: query recent task ids: %w", err)
 	}
@@ -2288,10 +2503,10 @@ func (s *Store) QueryWorkspaceSummaries(ctx context.Context, _ int) ([]types.Wor
 		return nil, fmt.Errorf("localstore: not open")
 	}
 	activeID := ""
-	_ = s.db.QueryRowContext(ctx, `SELECT id FROM workspaces WHERE last_active_at != '' ORDER BY last_active_at DESC, updated_at DESC LIMIT 1`).Scan(&activeID)
+	_ = s.db.QueryRowContext(ctx, `SELECT id FROM workspaces WHERE last_active_at != '' ORDER BY last_active_at DESC, updated_at DESC, id ASC LIMIT 1`).Scan(&activeID)
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, path, name, updated_at, last_active_at
-		 FROM workspaces ORDER BY last_active_at DESC, updated_at DESC, name ASC`)
+		 FROM workspaces ORDER BY last_active_at DESC, updated_at DESC, name ASC, id ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("localstore: query workspaces: %w", err)
 	}
@@ -2318,7 +2533,7 @@ func (s *Store) QueryRecentEvents(ctx context.Context, limit int) ([]types.Bridg
 	}
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT event_id, task_id, type, payload_json, created_at, request_id
-		 FROM task_events ORDER BY created_at DESC LIMIT ?`, limit)
+		 FROM task_events ORDER BY created_at DESC, event_id DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("localstore: query recent events: %w", err)
 	}
@@ -2382,7 +2597,7 @@ func (s *Store) removeWorkspaceLocked(ctx context.Context, workspaceID string, r
 	if err != nil {
 		return fmt.Errorf("localstore: begin remove workspace: %w", err)
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	now := nowTimestamp()
 	for _, stmt := range []string{
 		`UPDATE conversations SET workspace_id = '', updated_at = ? WHERE workspace_id = ?`,
 		`UPDATE tasks SET workspace_id = '', updated_at = ? WHERE workspace_id = ?`,
@@ -2418,7 +2633,7 @@ func (s *Store) ensureConversationLocked(ctx context.Context, workspaceID, conve
 	if title == "" {
 		title = conversationID
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	now := nowTimestamp()
 	if _, err := s.db.ExecContext(ctx,
 		`INSERT INTO conversations(id, workspace_id, title, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?)
@@ -2443,7 +2658,7 @@ func (s *Store) ensureConversationLocked(ctx context.Context, workspaceID, conve
 func (s *Store) queryEventsByTaskLocked(ctx context.Context, taskID string) ([]types.BridgeEvent, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT event_id, task_id, type, payload_json, created_at, request_id
-		 FROM task_events WHERE task_id = ? ORDER BY created_at ASC`, taskID)
+		 FROM task_events WHERE task_id = ? ORDER BY created_at ASC, event_id ASC`, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("localstore: query events by task: %w", err)
 	}
@@ -2491,7 +2706,7 @@ func (s *Store) RecordArtifact(artifact types.Artifact) error {
 	if s.db == nil {
 		return nil
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	now := nowTimestamp()
 	tx, err := s.db.BeginTx(context.Background(), nil)
 	if err != nil {
 		return fmt.Errorf("localstore: begin record artifact: %w", err)
@@ -2531,6 +2746,192 @@ func (s *Store) RecordArtifact(artifact types.Artifact) error {
 	return nil
 }
 
+func (s *Store) UpsertOfficeProject(project OfficeProject) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil || strings.TrimSpace(project.ID) == "" {
+		return nil
+	}
+	now := nowTimestamp()
+	if project.CreatedAt == "" {
+		project.CreatedAt = now
+	}
+	project.UpdatedAt = now
+	_, err := s.db.Exec(`INSERT INTO office_projects(id,name,created_at,updated_at) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,updated_at=excluded.updated_at`, project.ID, project.Name, project.CreatedAt, project.UpdatedAt)
+	if err != nil {
+		return fmt.Errorf("localstore: upsert office project: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) UpsertWorkbookSource(source WorkbookSource) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil || strings.TrimSpace(source.ID) == "" {
+		return nil
+	}
+	_, err := s.db.Exec(`INSERT INTO workbook_sources(id,workbook_id,name,kind,location,last_imported_at,last_error,updated_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET workbook_id=excluded.workbook_id,name=excluded.name,kind=excluded.kind,location=excluded.location,last_imported_at=excluded.last_imported_at,last_error=excluded.last_error,updated_at=excluded.updated_at`, source.ID, source.WorkbookID, source.Name, source.Kind, source.Location, source.LastImportedAt, source.LastError, nowTimestamp())
+	if err != nil {
+		return fmt.Errorf("localstore: upsert workbook source: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) UpsertWorkbookView(view WorkbookView) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil || strings.TrimSpace(view.ID) == "" {
+		return nil
+	}
+	view.UpdatedAt = nowTimestamp()
+	_, err := s.db.Exec(`INSERT INTO workbook_views(id,workbook_id,sheet_name,layer,range_ref,fingerprint,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET workbook_id=excluded.workbook_id,sheet_name=excluded.sheet_name,layer=excluded.layer,range_ref=excluded.range_ref,fingerprint=excluded.fingerprint,updated_at=excluded.updated_at`, view.ID, view.WorkbookID, view.SheetName, view.Layer, view.RangeRef, view.Fingerprint, view.UpdatedAt)
+	if err != nil {
+		return fmt.Errorf("localstore: upsert workbook view: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) UpsertOfficeOutput(output OfficeOutput) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil || strings.TrimSpace(output.ID) == "" {
+		return nil
+	}
+	views, _ := json.Marshal(output.ViewIDs)
+	sources, _ := json.Marshal(output.SourceIDs)
+	output.UpdatedAt = nowTimestamp()
+	manual := 0
+	if output.ManuallyEdited {
+		manual = 1
+	}
+	_, err := s.db.Exec(`INSERT INTO office_outputs(id,project_id,output_type,title,file_path,version,status,workbook_id,view_ids_json,source_ids_json,workbook_fingerprint,lineage_captured_at,manually_edited,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET project_id=excluded.project_id,output_type=excluded.output_type,title=excluded.title,file_path=excluded.file_path,version=excluded.version,status=excluded.status,workbook_id=excluded.workbook_id,view_ids_json=excluded.view_ids_json,source_ids_json=excluded.source_ids_json,workbook_fingerprint=excluded.workbook_fingerprint,lineage_captured_at=excluded.lineage_captured_at,manually_edited=excluded.manually_edited,updated_at=excluded.updated_at`, output.ID, output.ProjectID, output.OutputType, output.Title, output.FilePath, output.Version, output.Status, output.WorkbookID, string(views), string(sources), output.WorkbookFingerprint, output.LineageCapturedAt, manual, output.UpdatedAt)
+	if err != nil {
+		return fmt.Errorf("localstore: upsert office output: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) QueryOfficeOutputs(ctx context.Context, projectID, workbookID string) ([]OfficeOutput, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return nil, fmt.Errorf("localstore: not open")
+	}
+	query := `SELECT id,project_id,output_type,title,file_path,version,status,workbook_id,view_ids_json,source_ids_json,workbook_fingerprint,lineage_captured_at,manually_edited,updated_at FROM office_outputs WHERE (?='' OR project_id=?) AND (?='' OR workbook_id=?) ORDER BY updated_at DESC`
+	rows, err := s.db.QueryContext(ctx, query, projectID, projectID, workbookID, workbookID)
+	if err != nil {
+		return nil, fmt.Errorf("localstore: query office outputs: %w", err)
+	}
+	defer rows.Close()
+	var result []OfficeOutput
+	for rows.Next() {
+		var o OfficeOutput
+		var views, sources string
+		var manual int
+		if err := rows.Scan(&o.ID, &o.ProjectID, &o.OutputType, &o.Title, &o.FilePath, &o.Version, &o.Status, &o.WorkbookID, &views, &sources, &o.WorkbookFingerprint, &o.LineageCapturedAt, &manual, &o.UpdatedAt); err != nil {
+			return nil, err
+		}
+		_ = json.Unmarshal([]byte(views), &o.ViewIDs)
+		_ = json.Unmarshal([]byte(sources), &o.SourceIDs)
+		o.ManuallyEdited = manual != 0
+		result = append(result, o)
+	}
+	return result, rows.Err()
+}
+
+func (s *Store) QueryWorkbookSources(ctx context.Context, workbookID string) ([]WorkbookSource, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return nil, fmt.Errorf("localstore: not open")
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT id,workbook_id,name,kind,location,last_imported_at,last_error FROM workbook_sources WHERE (?='' OR workbook_id=?) ORDER BY updated_at DESC`, workbookID, workbookID)
+	if err != nil {
+		return nil, fmt.Errorf("localstore: query workbook sources: %w", err)
+	}
+	defer rows.Close()
+	var result []WorkbookSource
+	for rows.Next() {
+		var source WorkbookSource
+		if err := rows.Scan(&source.ID, &source.WorkbookID, &source.Name, &source.Kind, &source.Location, &source.LastImportedAt, &source.LastError); err != nil {
+			return nil, err
+		}
+		result = append(result, source)
+	}
+	return result, rows.Err()
+}
+
+func (s *Store) QueryWorkbookViews(ctx context.Context, workbookID string) ([]WorkbookView, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return nil, fmt.Errorf("localstore: not open")
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT id,workbook_id,sheet_name,layer,range_ref,fingerprint,updated_at FROM workbook_views WHERE (?='' OR workbook_id=?) ORDER BY updated_at DESC`, workbookID, workbookID)
+	if err != nil {
+		return nil, fmt.Errorf("localstore: query workbook views: %w", err)
+	}
+	defer rows.Close()
+	var result []WorkbookView
+	for rows.Next() {
+		var view WorkbookView
+		if err := rows.Scan(&view.ID, &view.WorkbookID, &view.SheetName, &view.Layer, &view.RangeRef, &view.Fingerprint, &view.UpdatedAt); err != nil {
+			return nil, err
+		}
+		result = append(result, view)
+	}
+	return result, rows.Err()
+}
+
+func (s *Store) UpsertOfficeRefreshPlan(plan OfficeRefreshPlan) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil || strings.TrimSpace(plan.ID) == "" {
+		return nil
+	}
+	views, _ := json.Marshal(plan.ChangedViews)
+	manual, approval := 0, 0
+	if plan.PreserveManualEdits {
+		manual = 1
+	}
+	if plan.RequiresApproval {
+		approval = 1
+	}
+	plan.UpdatedAt = nowTimestamp()
+	_, err := s.db.Exec(`INSERT INTO office_refresh_plans(id,output_id,strategy,status,changed_views_json,preserve_manual_edits,requires_approval,attempts,error,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET output_id=excluded.output_id,strategy=excluded.strategy,status=excluded.status,changed_views_json=excluded.changed_views_json,preserve_manual_edits=excluded.preserve_manual_edits,requires_approval=excluded.requires_approval,attempts=excluded.attempts,error=excluded.error,updated_at=excluded.updated_at`, plan.ID, plan.OutputID, plan.Strategy, plan.Status, string(views), manual, approval, plan.Attempts, plan.Error, plan.UpdatedAt)
+	if err != nil {
+		return fmt.Errorf("localstore: upsert office refresh plan: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) QueryOfficeRefreshPlans(ctx context.Context, outputID string) ([]OfficeRefreshPlan, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return nil, fmt.Errorf("localstore: not open")
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT id,output_id,strategy,status,changed_views_json,preserve_manual_edits,requires_approval,attempts,error,updated_at FROM office_refresh_plans WHERE (?='' OR output_id=?) ORDER BY updated_at DESC`, outputID, outputID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var result []OfficeRefreshPlan
+	for rows.Next() {
+		var p OfficeRefreshPlan
+		var views string
+		var manual, approval int
+		if err := rows.Scan(&p.ID, &p.OutputID, &p.Strategy, &p.Status, &views, &manual, &approval, &p.Attempts, &p.Error, &p.UpdatedAt); err != nil {
+			return nil, err
+		}
+		_ = json.Unmarshal([]byte(views), &p.ChangedViews)
+		p.PreserveManualEdits = manual != 0
+		p.RequiresApproval = approval != 0
+		result = append(result, p)
+	}
+	return result, rows.Err()
+}
+
 // RecordTaskCredit persists the per-task credit charge reported by the agent
 // bridge on task.completed / task.failed. INSERT OR IGNORE keeps the first
 // observation per task immutable — server-side settled credits are
@@ -2542,7 +2943,7 @@ func (s *Store) RecordTaskCredit(taskID string, charged *int, mode string) error
 	if s.db == nil || taskID == "" {
 		return nil
 	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	now := nowTimestamp()
 	var chargedArg any
 	if charged != nil {
 		chargedArg = *charged
@@ -2644,13 +3045,54 @@ func eventRecordedAt(event types.BridgeEvent, fallback string) string {
 	if ts == "" {
 		return fallback
 	}
-	parsed, err := time.Parse(time.RFC3339Nano, ts)
+	return normalizeTimestamp(ts, fallback)
+}
+
+// timestampLayout is the on-disk format for every timestamp column.
+//
+// It must be fixed-width, because SQLite compares TEXT lexically and this
+// schema leans on that everywhere: ORDER BY created_at, keyset cursors
+// (`updated_at < ?`), MIN/MAX aggregates, and `CASE WHEN updated_at < ?`
+// guards. time.RFC3339Nano is *not* fixed-width -- it strips trailing zeros
+// from the fractional second, so ".0654Z" and ".065401Z" have different
+// lengths and 'Z' (0x5A) sorts after '4' (0x34). The earlier instant then
+// compares as the larger string. Measured on this schema, consecutive
+// time.Now() calls produced that inversion for ~0.4% of pairs, which is what
+// made task history come back out of order.
+//
+// Nine fixed decimals keep full nanosecond resolution and make lexical order
+// equal chronological order for every UTC instant this app records.
+const timestampLayout = "2006-01-02T15:04:05.000000000Z07:00"
+
+// formatTimestamp renders an instant in the sortable on-disk format. Every
+// column written by this package goes through here so no caller can
+// reintroduce a variable-width stamp.
+func formatTimestamp(at time.Time) string {
+	return at.UTC().Format(timestampLayout)
+}
+
+// nowTimestamp is the write-time stamp used across the store.
+func nowTimestamp() string {
+	return formatTimestamp(time.Now())
+}
+
+// normalizeTimestamp re-renders an externally supplied timestamp into the
+// sortable format, falling back when it cannot be parsed. Timestamps reach the
+// store from the agent bridge and from rows written by older builds, so
+// accepting only the canonical layout here would silently drop them into the
+// fallback and lose their real ordering.
+func normalizeTimestamp(ts, fallback string) string {
+	trimmed := strings.TrimSpace(ts)
+	if trimmed == "" {
+		return fallback
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, trimmed)
 	if err != nil {
-		if parsed, err = time.Parse(time.RFC3339, ts); err != nil {
+		if parsed, err = time.Parse(time.RFC3339, trimmed); err != nil {
 			return fallback
 		}
 	}
-	return parsed.UTC().Format(time.RFC3339Nano)
+	return formatTimestamp(parsed)
 }
 
 func storedEventID(event types.BridgeEvent, now string) string {

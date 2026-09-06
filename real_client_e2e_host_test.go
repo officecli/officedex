@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"officedex/internal/atomicfile"
 	"officedex/internal/settings"
 	"officedex/internal/types"
 )
@@ -752,7 +753,7 @@ func (h *realClientE2EHost) handleSeedCompletedPptxArtifact(w http.ResponseWrite
 		writeRealClientError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if err := writeFileAtomic(dest, data, 0o644); err != nil {
+	if err := atomicfile.WriteFile(dest, data, 0o644); err != nil {
 		writeRealClientError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

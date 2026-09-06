@@ -71,7 +71,7 @@ export function Shell({ activeNav, children, inspector, signal, account, update,
   const updateRow = update ? <SidebarUpdateRow {...update} /> : null;
 
   return (
-    <div className={`home-shell home-shell--${activeNav} ${spreadsheetMode ? "home-shell--spreadsheet" : ""}`}>
+    <div className={`home-shell home-shell--${activeNav} ${spreadsheetMode ? "home-shell--spreadsheet" : ""} ${compact ? "sidebar-collapsed" : ""}`}>
       <ProjectSidebar
         workspaces={workspaces}
         documents={documents}

@@ -21,11 +21,10 @@ test("the bundled runtime enters PPTX Canvas Node mode", async ({ page }) => {
     prompt: OFFICECLI_MAGIC_VIBE_PROMPT,
   });
 
-  const canvas = page.locator(".living-tree-cockpit").first();
+  const artifact = await answerPlanUntilCompleted(page, "pptx");
+  const canvas = page.locator(".living-tree-cockpit, [data-testid='progressive-editor'], [data-testid='pptx-production-canvas']").first();
   await expect(canvas).toBeVisible({ timeout: 60_000 });
   await assertNoResponseContractError(page);
-
-  const artifact = await answerPlanUntilCompleted(page, "pptx");
   expect(artifact.fileSize).toBeGreaterThan(0);
   expect(artifact.artifactPath.toLowerCase()).toContain(".pptx");
   await assertNoResponseContractError(page);

@@ -1,6 +1,8 @@
 import { DialogHost, ToastHost, toast as message } from "./ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentRun, Artifact, BridgeEvent, DesktopTask, GenerateInput, ModifyInput, PreviewGrant, RecentFile, TaskHistoryEntry, TaskQuestionAnswer, WorkspaceSummary } from "../shared/types";
+import type { OfficeOutputRef } from "../shared/officeProduct";
+import { decodeOfficeOutputs } from "./productRegistryCodec";
 import type { ConfiguredJiraSyncResult, ConfiguredLiquipediaSyncResult, JiraSyncResult, LiquipediaSyncResult } from "../shared/verticals";
 import { getCapability, isDocumentType } from "../shared/types";
 import { AgentClientToolHost } from "./AgentClientToolHost";
@@ -203,6 +205,7 @@ function OfficeDexApp() {
   const initialRoute = useMemo(() => readStoredAppRoute(), []);
   const [state, setState] = useState<TaskState>(() => createInitialTaskState());
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
+  const [productOutputs, setProductOutputs] = useState<OfficeOutputRef[]>([]);
   const [homeWorkspaceId, setHomeWorkspaceId] = useState<string>();
   const [selectedTaskID, setSelectedTaskID] = useState<SelectedTask>(() => initialRoute.taskId ? { kind: "task", id: initialRoute.taskId } : { kind: "auto" });
   const [activeNav, setActiveNav] = useState<NavKey>(initialRoute.nav);
@@ -332,7 +335,10 @@ function OfficeDexApp() {
         setWorkspaces(workspaceItems);
       })
       .catch(() => undefined);
-  }, []);
+    if (officecli.listOfficeProductOutputs) {
+      officecli.listOfficeProductOutputs(homeWorkspaceId || "", "").then((items) => setProductOutputs(decodeOfficeOutputs(items))).catch(() => undefined);
+    }
+  }, [homeWorkspaceId]);
 
   const recent = useRecentFiles(t("home.loadTimeout"));
   const { files: recentFiles, loading: recentFilesLoading, error: recentFilesError } = recent;
@@ -1685,6 +1691,7 @@ function OfficeDexApp() {
         {activeNav === "home" ? (
           <HomeScreen
             files={recentFiles}
+            productOutputs={productOutputs}
             attentionTasks={tasks}
             onStartTask={startTaskFromHome}
             productionTaskId={stageFirstTaskId}
@@ -1787,6 +1794,17 @@ function OfficeDexApp() {
               void officecli.revokePreviewToken(previewToken).catch(() => undefined);
             }}
             onCreateDeck={createDeckFromWorkbook}
+            onWorkbookSaved={({ filePath, fingerprint }) => {
+              if (!officecli.saveOfficeProductView || !filePath || !fingerprint) return;
+              const workbookId = `workbook:${filePath}`;
+              void officecli.saveOfficeProductView({
+                id: `${workbookId}:view:active`,
+                workbookId,
+                sheetName: "active",
+                layer: "view",
+                fingerprint,
+              }).catch(() => undefined);
+            }}
             agentPanel={(
               <SpreadsheetAgentPanel
                 workspaceId={spreadsheet.session.workspaceId}
@@ -1899,4 +1917,3 @@ function isGenerateDocumentType(value: unknown): value is GenerateInput["documen
 function stringOrUndef(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
-

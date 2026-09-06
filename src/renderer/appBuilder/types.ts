@@ -1,5 +1,10 @@
 export type AppBuilderAccess = "private" | "workspace" | "organization";
 
+/** Product-facing name for the workbook-backed app. The legacy aliases below
+ * remain source-compatible while the UI migrates from “app builder” wording
+ * to HTML data applications. */
+export type WorkbookOutputKind = "html-app";
+
 export interface WorkbookAppField {
   id: string;
   label: string;
@@ -33,6 +38,8 @@ export interface WorkbookAppConfig {
   access: AppBuilderAccess;
   allowCreate: boolean;
   allowUpdate: boolean;
+  outputKind?: WorkbookOutputKind;
+  refreshMode?: "snapshot" | "live";
 }
 
 export interface PublishedWorkbookApp {
@@ -40,5 +47,15 @@ export interface PublishedWorkbookApp {
   sourceFileName: string;
   config: WorkbookAppConfig;
   publishedAt: string;
+  outputKind?: WorkbookOutputKind;
+  htmlSpec?: {
+    kind: "html-app";
+    slug: string;
+    title: string;
+    refreshMode: "live";
+    source: { fingerprint: string; sheetName: string; fieldIds: string[] };
+    components: Array<{ type: "table" | "kpi"; id: string; columns?: string[]; fieldId?: string }>;
+  };
+  materializedFiles?: string[];
+  version?: number;
 }
-

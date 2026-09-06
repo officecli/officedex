@@ -5,6 +5,9 @@ import { Button, Input, TextArea } from "../ui";
 import { useT } from "../i18n";
 import { savePublishedWorkbookApp, slugifyAppName } from "./appStore";
 import type { PublishedWorkbookApp, WorkbookAppConfig } from "./types";
+import { buildHtmlAppSpec } from "./htmlAppModel";
+import { buildHtmlAppFiles, htmlAppFilesAsBytes } from "./htmlAppRuntime";
+import { officecli } from "../bridge";
 import { defaultSelectedFieldIds } from "./workbookData";
 import { useWorkbookDataSource } from "./useWorkbookDataSource";
 import { WorkbookAppPreview } from "./WorkbookAppPreview";
@@ -51,16 +54,44 @@ export function WorkbookAppBuilder({ artifact, grant, sourceRevision = 0, onClos
     access,
     allowCreate,
     allowUpdate,
+    outputKind: "html-app",
+    refreshMode: "live",
   }), [access, allowCreate, allowUpdate, appName, fieldIds, prompt, sheet?.name, sheetName, slug, t]);
 
-  const publish = () => {
+  const publish = async () => {
+    const htmlSpec = snapshot ? buildHtmlAppSpec(snapshot, sheet?.name, config.name) : undefined;
+    let materializedFiles: string[] | undefined;
+    if (snapshot && htmlSpec && officecli.writeHtmlAppFiles && artifact.filePath) {
+      const files = buildHtmlAppFiles(htmlSpec, snapshot);
+      materializedFiles = await officecli.writeHtmlAppFiles({ root: `${artifact.filePath}.html-app`, files: htmlAppFilesAsBytes(files) });
+    }
     const app: PublishedWorkbookApp = {
       id: published?.id ?? `workbook-app-${Date.now().toString(36)}`,
       sourceFileName: artifact.fileName,
       config,
       publishedAt: new Date().toISOString(),
+      outputKind: "html-app",
+      htmlSpec,
+      materializedFiles,
+      version: (published?.version ?? 0) + 1,
     };
     savePublishedWorkbookApp(app);
+    if (officecli.saveOfficeProductOutput && artifact.filePath) {
+      await officecli.saveOfficeProductOutput({
+        id: app.id,
+        projectId: artifact.filePath,
+        outputType: "html-app",
+        title: config.name,
+        filePath: materializedFiles?.[0],
+        version: (published?.version ?? 0) + 1,
+        status: "succeeded",
+        workbookId: `workbook:${artifact.filePath}`,
+        viewIds: htmlSpec ? [`${artifact.filePath}:view:${config.sheetName}`] : [],
+        workbookFingerprint: htmlSpec?.source.fingerprint,
+        lineageCapturedAt: new Date().toISOString(),
+        manuallyEdited: false,
+      });
+    }
     setPublished(app);
   };
 
@@ -81,7 +112,7 @@ export function WorkbookAppBuilder({ artifact, grant, sourceRevision = 0, onClos
       </header>
       <nav className="app-builder__steps" aria-label={t("appBuilder.steps.aria")}>
         {(["configure", "preview", "publish"] as BuilderStep[]).map((item, index) => (
-          <button key={item} type="button" data-active={step === item} onClick={() => setStep(item)}><span>{index + 1}</span>{t(`appBuilder.steps.${item}`)}</button>
+          <button key={item} type="button" disabled={item !== "configure" && !snapshot} data-active={step === item} onClick={() => { if (item === "configure" || snapshot) setStep(item); }}><span>{index + 1}</span>{t(`appBuilder.steps.${item}`)}</button>
         ))}
       </nav>
 

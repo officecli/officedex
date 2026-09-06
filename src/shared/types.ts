@@ -1036,6 +1036,16 @@ export interface CreateWorkbookFromSheetInput {
 }
 
 export interface DesktopAPI extends DesktopVerticalAPI {
+  saveOfficeProductProject?(input: { id: string; name: string; createdAt?: string; updatedAt?: string }): Promise<void>;
+  saveOfficeProductSource?(input: { id: string; workbookId: string; name: string; kind: string; location?: string; lastImportedAt?: string; lastError?: string }): Promise<void>;
+  saveOfficeProductView?(input: { id: string; workbookId: string; sheetName: string; layer: string; range?: string; fingerprint: string; updatedAt?: string }): Promise<void>;
+  saveOfficeProductOutput?(input: { id: string; projectId: string; outputType: string; title: string; filePath?: string; version: number; status: string; workbookId?: string; viewIds?: string[]; sourceIds?: string[]; workbookFingerprint?: string; lineageCapturedAt?: string; manuallyEdited?: boolean; updatedAt?: string }): Promise<void>;
+  listOfficeProductOutputs?(projectId?: string, workbookId?: string): Promise<Array<{ id: string; projectId: string; outputType: string; title: string; filePath?: string; version: number; status: string; workbookId?: string; viewIds?: string[]; sourceIds?: string[]; workbookFingerprint?: string; lineageCapturedAt?: string; manuallyEdited: boolean; updatedAt: string }>>;
+  listOfficeProductSources?(workbookId?: string): Promise<Array<{ id: string; workbookId: string; name: string; kind: string; location?: string; lastImportedAt?: string; lastError?: string }>>;
+  listOfficeProductViews?(workbookId?: string): Promise<Array<{ id: string; workbookId: string; sheetName: string; layer: string; range?: string; fingerprint: string; updatedAt: string }>>;
+  saveOfficeProductRefreshPlan?(input: { id: string; outputId: string; strategy: string; status: string; changedViews?: string[]; preserveManualEdits: boolean; requiresApproval: boolean; attempts: number; error?: string; updatedAt?: string }): Promise<void>;
+  listOfficeProductRefreshPlans?(outputId?: string): Promise<Array<{ id: string; outputId: string; strategy: string; status: string; changedViews?: string[]; preserveManualEdits: boolean; requiresApproval: boolean; attempts: number; error?: string; updatedAt: string }>>;
+  writeHtmlAppFiles?(input: { root: string; files: Record<string, Uint8Array> }): Promise<string[]>;
   initialize(): Promise<unknown>;
   getCapabilities(): Promise<unknown>;
   listImageTemplates(): Promise<ImagePromptTemplate[]>;

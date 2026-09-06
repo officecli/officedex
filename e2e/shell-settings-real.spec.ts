@@ -20,21 +20,19 @@ test.describe("OfficeDex real client shell, account, settings, diagnostics, and 
     const expandSidebar = page.getByRole("button", { name: /Expand sidebar/i });
     if (await collapseSidebar.isVisible().catch(() => false)) {
       await collapseSidebar.click();
-      await expect(page.locator(".app-shell.sidebar-collapsed")).toBeVisible();
+      await expect(page.locator(".project-sidebar[data-compact='true']")).toBeVisible();
     } else {
       await expect(expandSidebar).toBeVisible();
     }
     await page.getByRole("button", { name: /Expand sidebar/i }).click();
-    await expect(page.locator(".app-shell.sidebar-collapsed")).toHaveCount(0);
+    await expect(page.locator(".project-sidebar[data-compact='true']")).toHaveCount(0);
 
-    await page.getByRole("button", { name: /Tasks/i }).click();
-    await expect(page.getByRole("heading", { name: /Recent Tasks/i })).toBeVisible();
     await page.getByRole("button", { name: /Settings/i }).click();
     await expect(page.getByRole("heading", { name: /App Settings/i }).first()).toBeVisible();
 
     await page.getByRole("navigation", { name: /Settings sections/i }).getByRole("button", { name: /Generation/i }).click();
-    await page.getByRole("combobox").first().click();
-    await page.locator(".ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option-content").filter({ hasText: /^Word \(\.docx\)$/ }).click();
+    await page.getByRole("button", { name: /PowerPoint \(\.pptx\)/i }).click();
+    await page.getByRole("menuitemradio", { name: /Word \(\.docx\)/i }).click();
     await expect(page.getByText(/Settings saved and applied/i)).toBeVisible({ timeout: 15_000 });
 
     await page.getByRole("navigation", { name: /Settings sections/i }).getByRole("button", { name: /Notification/i }).click();
@@ -45,8 +43,8 @@ test.describe("OfficeDex real client shell, account, settings, diagnostics, and 
     await page.getByRole("button", { name: /Test desktop notification/i }).click();
 
     await page.getByRole("navigation", { name: /Settings sections/i }).getByRole("button", { name: /Appearance/i }).click();
-    await page.getByRole("combobox").click();
-    await page.locator(".ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option-content").filter({ hasText: /^English$/ }).click();
+    await page.getByRole("button", { name: /中文|English/i }).click();
+    await page.getByRole("menuitemradio", { name: /^English$/i }).click();
 
     await page.getByRole("navigation", { name: /Settings sections/i }).getByRole("button", { name: /Connection/i }).click();
     await page.getByRole("button", { name: /Test/i }).click();
@@ -54,7 +52,7 @@ test.describe("OfficeDex real client shell, account, settings, diagnostics, and 
     await expect(providerTestDialog).toBeVisible();
     await providerTestDialog.getByRole("button", { name: /Run test/i }).click();
     const providerRow = page.locator(".setting-row").filter({ hasText: /LLM Provider/i });
-    await expect(providerRow.locator(".ant-tag").filter({ hasText: /Official generation probe (passed|failed)|OK|HTTP|Unavailable|Network error/i }).first()).toBeVisible({ timeout: 90_000 });
+    await expect(providerRow.getByText(/Official generation probe (passed|failed)|OK|HTTP|Unavailable|Network error/i).first()).toBeVisible({ timeout: 90_000 });
 
     await page.getByRole("navigation", { name: /Settings sections/i }).getByRole("button", { name: /Diagnostics/i }).click();
     await page.getByRole("button", { name: /Export diagnostic logs/i }).click();

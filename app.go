@@ -50,6 +50,8 @@ import (
 	"officedex/internal/settings"
 	"officedex/internal/timeline"
 	"officedex/internal/types"
+	"officedex/internal/word2mowhttp"
+	"officedex/internal/writerfonts"
 	"officedex/internal/xlsxeditor"
 )
 
@@ -263,7 +265,12 @@ type App struct {
 	xlsxEditorService xlsxEditorService
 	pptxEditorService pptxEditorService
 	mopHTTPHandler    http.Handler
-	timelineStore     *timeline.Store
+	// word2mowHTTPHandler and writerFontsHandler serve the embedded Writer
+	// editor: DOCX ⇄ MOW conversion and the default-font closure. main.go
+	// dispatches to them by path prefix alongside mopHTTPHandler.
+	word2mowHTTPHandler http.Handler
+	writerFontsHandler  http.Handler
+	timelineStore       *timeline.Store
 
 	binary binaryCache
 
@@ -369,6 +376,32 @@ func NewApp() (*App, error) {
 		},
 	})
 	app.mopHTTPHandler = mopHandler
+
+	// The Writer editor talks to these two over the same asset server. Both
+	// tolerate a missing resource -- a build that did not stage the converter or
+	// the fonts reports it per request, which is far easier to diagnose than a
+	// refusal to start.
+	convertPath := resolveWord2MowConvert()
+	word2mowLog := applog.With(slog.String("component", "word2mowhttp"))
+	app.word2mowHTTPHandler = word2mowhttp.New(word2mowhttp.Options{
+		Converter: word2mowhttp.NewCLIConverter(convertPath),
+		TempDir:   os.TempDir(),
+		Logger: func(format string, args ...any) {
+			word2mowLog.Warn(fmt.Sprintf(format, args...))
+		},
+	})
+	fontsRoot := resolveWriterFontsRoot()
+	if fontsRoot == "" {
+		applog.Logger().Warn("writer default-font closure not found; DOCX layout will be missing metrics")
+	}
+	fontsLog := applog.With(slog.String("component", "writerfonts"))
+	app.writerFontsHandler = writerfonts.New(writerfonts.Options{
+		Root: fontsRoot,
+		Logger: func(format string, args ...any) {
+			fontsLog.Warn(fmt.Sprintf(format, args...))
+		},
+	})
+
 	app.demoFlow = demoflow.New(demoflow.Options{Recorder: app})
 
 	manifestURL := config.Trimmed(config.UpdateManifestURLEnv)
@@ -1072,7 +1105,7 @@ func (a *App) RecordArtifact(artifact types.Artifact) error {
 	if fileName == "" {
 		fileName = filepath.Base(artifact.FilePath)
 	}
-	return a.localStore.UpsertRecentFile(ctx, types.RecentFile{
+	if err := a.localStore.UpsertRecentFile(ctx, types.RecentFile{
 		FilePath:       artifact.FilePath,
 		FileName:       fileName,
 		DocumentType:   artifact.DocumentType,
@@ -1081,7 +1114,30 @@ func (a *App) RecordArtifact(artifact types.Artifact) error {
 		TaskID:         artifact.TaskID,
 		ConversationID: taskContext.ConversationID,
 		LastOpenedAt:   time.Now().UTC().Format(time.RFC3339Nano),
-	})
+	}); err != nil {
+		return err
+	}
+	outputType := strings.TrimSpace(artifact.DocumentType)
+	switch outputType {
+	case "pptx":
+		outputType = "presentation"
+	case "docx":
+		outputType = "document"
+	case "xlsx":
+		outputType = "spreadsheet"
+	case "img":
+		outputType = "image"
+	}
+	if outputType == "presentation" || outputType == "document" || outputType == "spreadsheet" || outputType == "image" {
+		projectID := taskContext.WorkspaceID
+		if projectID == "" {
+			projectID = "default"
+		}
+		if err := a.localStore.UpsertOfficeOutput(localstore.OfficeOutput{ID: "artifact:" + artifact.FilePath, ProjectID: projectID, OutputType: outputType, Title: fileName, FilePath: artifact.FilePath, Version: 1, Status: "succeeded", UpdatedAt: time.Now().UTC().Format(time.RFC3339Nano)}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (a *App) UserDataDir() string {

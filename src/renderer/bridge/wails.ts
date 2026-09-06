@@ -27,6 +27,56 @@ function optionalWailsFunction<T extends (...args: never[]) => unknown>(name: st
 
 export function createWailsAPI(): DesktopAPI {
   return {
+    saveOfficeProductProject: async (input) => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<void>>("SaveOfficeProductProject");
+      if (!fn) throw new Error("Office product graph requires a newer OfficeDex runtime.");
+      await fn(toWails(input));
+    },
+    saveOfficeProductSource: async (input) => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<void>>("SaveOfficeProductSource");
+      if (!fn) throw new Error("Office product graph requires a newer OfficeDex runtime.");
+      await fn(toWails(input));
+    },
+    saveOfficeProductView: async (input) => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<void>>("SaveOfficeProductView");
+      if (!fn) throw new Error("Office product graph requires a newer OfficeDex runtime.");
+      await fn(toWails(input));
+    },
+    saveOfficeProductOutput: async (input) => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<void>>("SaveOfficeProductOutput");
+      if (!fn) throw new Error("Office product graph requires a newer OfficeDex runtime.");
+      await fn(toWails(input));
+    },
+    listOfficeProductOutputs: async (projectID = "", workbookID = "") => {
+      const fn = optionalWailsFunction<(arg1: never, arg2: never) => Promise<unknown>>("ListOfficeProductOutputs");
+      if (!fn) throw new Error("Office product graph requires a newer OfficeDex runtime.");
+      return await fn(toWails(projectID), toWails(workbookID)) as Awaited<ReturnType<NonNullable<DesktopAPI["listOfficeProductOutputs"]>>>;
+    },
+    listOfficeProductSources: async (workbookID = "") => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<unknown>>("ListOfficeProductSources");
+      if (!fn) throw new Error("Office product graph requires a newer OfficeDex runtime.");
+      return await fn(toWails(workbookID)) as Awaited<ReturnType<NonNullable<DesktopAPI["listOfficeProductSources"]>>>;
+    },
+    listOfficeProductViews: async (workbookID = "") => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<unknown>>("ListOfficeProductViews");
+      if (!fn) throw new Error("Office product graph requires a newer OfficeDex runtime.");
+      return await fn(toWails(workbookID)) as Awaited<ReturnType<NonNullable<DesktopAPI["listOfficeProductViews"]>>>;
+    },
+    saveOfficeProductRefreshPlan: async (input) => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<void>>("SaveOfficeProductRefreshPlan");
+      if (!fn) throw new Error("Office product refresh persistence requires a newer OfficeDex runtime.");
+      await fn(toWails(input));
+    },
+    listOfficeProductRefreshPlans: async (outputID = "") => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<unknown>>("ListOfficeProductRefreshPlans");
+      if (!fn) throw new Error("Office product refresh persistence requires a newer OfficeDex runtime.");
+      return await fn(toWails(outputID)) as Awaited<ReturnType<NonNullable<DesktopAPI["listOfficeProductRefreshPlans"]>>>;
+    },
+    writeHtmlAppFiles: async (input) => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<string[]>>("WriteHtmlAppFiles");
+      if (!fn) throw new Error("HTML App file output requires a newer OfficeDex runtime.");
+      return fn(toWails(input));
+    },
     initialize: async () => decodeRawBytes(await WailsApp.Initialize()),
     getCapabilities: async () => decodeRawBytes(await WailsApp.GetCapabilities()),
     startAgentRun: async (input: AgentRunStartInput): Promise<AgentRun> => {

@@ -12,6 +12,7 @@ import type { MarketingSheetRow } from "./marketingWorkflow";
 import type { SpreadsheetAgentTool } from "./SpreadsheetAgentPanel";
 import type { SpreadsheetWorkspaceHandle } from "./SpreadsheetWorkspace";
 import type { useSpreadsheetSession } from "./useSpreadsheetSession";
+import { makeWorkbookSource } from "./workbookSource";
 
 type SpreadsheetSession = ReturnType<typeof useSpreadsheetSession>;
 
@@ -101,6 +102,8 @@ export function useVerticalPanels({
               workspaceId: spreadsheet.session.workspaceId,
             });
             await spreadsheet.openArtifact(artifact);
+            const saveSource = officecli.saveOfficeProductSource;
+            if (saveSource) await saveSource(makeWorkbookSource({ workbookId: `workbook:${artifact.filePath}`, kind: "jira", name: result.sheetName, location: "jira://issues", importedAt: new Date().toISOString() }));
             void refreshRecentFiles(spreadsheet.session.workspaceId);
           }}
           onWriteSheet={(result) => {
@@ -125,6 +128,8 @@ export function useVerticalPanels({
               workspaceId: spreadsheet.session.workspaceId,
             });
             await spreadsheet.openArtifact(artifact);
+            const saveSource = officecli.saveOfficeProductSource;
+            if (saveSource) await saveSource(makeWorkbookSource({ workbookId: `workbook:${artifact.filePath}`, kind: "other", name: result.sheetName, location: "liquipedia://updates", importedAt: new Date().toISOString() }));
             void refreshRecentFiles(spreadsheet.session.workspaceId);
           }}
           onWriteSheet={(result) => {

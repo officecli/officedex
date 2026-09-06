@@ -238,6 +238,8 @@ function completedArtifactSurface(page: Page) {
   return page.locator([
     ".living-tree-cockpit[data-vibe-stage='completed'] .living-tree-artifact-actions",
     ".living-tree-cockpit[data-vibe-stage='completed'] .living-tree-pptx-edit-panel.is-review-mode",
+    "[data-testid='progressive-editor']",
+    "[data-testid='pptx-production-stage'][data-status='completed']",
   ].join(", ")).first();
 }
 

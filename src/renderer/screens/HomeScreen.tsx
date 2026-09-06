@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type FormEvent, type ReactNode } from "react";
 import type { DesktopTask, DocumentType, RecentFile, TaskQuestionAnswer, WorkspaceSummary } from "../../shared/types";
+import type { OfficeOutputRef } from "../../shared/officeProduct";
+import { OfficeProductOutputsPanel } from "../components/OfficeProductOutputsPanel";
 import { Button, Dropdown, Empty, Loading, TextArea, toast, type MenuProps } from "../ui";
 import { dragHasFiles, setHomeDropZone } from "../homeDropZone";
 import type { HomeTaskAnalysis, HomeTaskIntake } from "../homeIntake";
@@ -25,7 +27,7 @@ import { DocTypeIcon, docTypeFromPath } from "../components/DocTypeIcon";
 import { RuntimePrompts } from "../components/RuntimePrompts";
 import "../styles/home.css";
 
-type HomeDocumentType = Extract<DocumentType, "pptx" | "img" | "gif" | "docx" | "xlsx">;
+type HomeDocumentType = Extract<DocumentType, "pptx" | "img" | "docx" | "xlsx">;
 
 /** What the intake form may ask the desktop to browse for. */
 export interface HomePickers {
@@ -71,6 +73,7 @@ export interface HomeScreenProps {
   taskActions?: HomeTaskActions;
   productionTaskId?: string;
   productionEditor?: Omit<PresentationEditorFrameProps, "previewToken" | "fileName"> & { previewToken: string; fileName: string };
+  productOutputs?: OfficeOutputRef[];
 }
 
 interface HomeCategory {
@@ -89,7 +92,6 @@ interface HomeTemplate {
 const HOME_CATEGORIES: HomeCategory[] = [
   { type: "pptx" },
   { type: "img" },
-  { type: "gif" },
   { type: "docx" },
   { type: "xlsx" },
 ];
@@ -119,7 +121,7 @@ const HOME_TEMPLATES: HomeTemplate[] = [
   { id: "budget", type: "xlsx", icon: "account_balance_wallet", minutes: 2 },
 ];
 
-export function HomeScreen({ files, attentionTasks = [], loading, error, activeWorkspaceId, workspaces = [], onOpenFile, onRemoveFile, pickers = {}, droppedTaskPaths, workspaceActions = {}, onStartTask, taskActions = {}, productionTaskId, productionEditor, onRetryRecentFiles }: HomeScreenProps) {
+export function HomeScreen({ files, attentionTasks = [], loading, error, activeWorkspaceId, workspaces = [], onOpenFile, onRemoveFile, pickers = {}, droppedTaskPaths, workspaceActions = {}, onStartTask, taskActions = {}, productionTaskId, productionEditor, onRetryRecentFiles, productOutputs = [] }: HomeScreenProps) {
   const { taskFile: onPickTaskFile, taskDirectory: onPickTaskDirectory, referenceImages: onPickReferenceImages, referenceTextFiles: onPickReferenceTextFiles } = pickers;
   const { select: onSelectWorkspace, selectAll: onSelectAllWorkspaces, add: onAddWorkspace } = workspaceActions;
   const { open: onOpenTask, retry: onRetryTask, steer: onSteerTask, resume: onResumeTask, answer: onAnswerTask, cancel: onCancelTask, delete: onDeleteTask } = taskActions;
@@ -132,7 +134,6 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
   const [referenceTextFiles, setReferenceTextFiles] = useState<string[]>([]);
   const [imageRatio, setImageRatio] = useState<"square" | "landscape" | "portrait">("square");
-  const [gifFps, setGifFps] = useState(16);
   const [intakeError, setIntakeError] = useState<string>();
   const [starting, setStarting] = useState(false);
   const [startingPrompt, setStartingPrompt] = useState<string>();
@@ -289,9 +290,8 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
         referenceDirectory,
         documentType,
         ...(referenceTextFiles.length > 0 ? { referenceTextFiles } : {}),
-        ...((documentType === "img" || documentType === "gif") && referenceImages.length > 0 ? { referenceImages } : {}),
+        ...(documentType === "img" && referenceImages.length > 0 ? { referenceImages } : {}),
         ...(documentType === "img" ? { imageRatio } : {}),
-        ...(documentType === "gif" ? { fps: gifFps } : {}),
       });
     } catch (error) {
       setIntakeError(error instanceof Error ? error.message : String(error));
@@ -510,12 +510,6 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
             ))}
           </div>
         ) : null}
-        {selectedDocumentType === "gif" ? (
-          <div className="home-intake__type-options" role="group" aria-label={t("home.gifFps")}>
-            <span>{t("home.gifFps")}</span>
-            {[8, 12, 16, 24].map((fps) => <button type="button" aria-pressed={gifFps === fps} key={fps} onClick={() => setGifFps(fps)}>{fps} FPS</button>)}
-          </div>
-        ) : null}
         {intakeError ? <div className="home-intake__error" role="alert">{intakeError}</div> : null}
         <div className="home-intake__footer">
           <div className="home-intake__footer-left">
@@ -684,6 +678,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
           </div>
         ) : null}
       </section>
+      {productOutputs.length > 0 ? <section className="home-recents" aria-labelledby="home-outputs-title"><h2 id="home-outputs-title">Project outputs</h2><OfficeProductOutputsPanel outputs={productOutputs} /></section> : null}
 
     </section>
   );
