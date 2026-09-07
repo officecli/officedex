@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
-import { resolveMopRuntimeEntry } from "./src/mop-runtime-source";
+import { resolveMopRuntimeEntry, resolveMopWasmEntry } from "./src/mop-runtime-source";
 
 const componentRoot = fileURLToPath(new URL(".", import.meta.url));
 const gitCommonDirectory = execFileSync(
@@ -96,6 +96,7 @@ export default defineConfig({
       "@learnof/smartart": fromSource("packages", "deps", "smartart", "src"),
       "@learnof/symbol": fromSource("packages", "deps", "symbol", "src"),
       "@mop/runtime": mopRuntimeEntry,
+      "mop-wasm": resolveMopWasmEntry(sourceRoot),
       "@presentation/source-main": fromSource(
         "packages",
         "presentation-app",

@@ -1,6 +1,6 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { resolveMopRuntimeEntry } from "./mop-runtime-source";
+import { resolveMopRuntimeEntry, resolveMopWasmEntry } from "./mop-runtime-source";
 
 describe("resolveMopRuntimeEntry", () => {
   it("prefers the runtime shipped with the selected Rust converter checkout", () => {
@@ -57,5 +57,15 @@ describe("resolveMopRuntimeEntry", () => {
         exists: () => false,
       }),
     ).toThrow("PPT2MOP_SOURCE_DIR is incomplete");
+  });
+});
+
+describe("resolveMopWasmEntry", () => {
+  it("uses the built BOS runtime even when the older workspace snapshot is installed", () => {
+    const sourceRoot = path.resolve("work", "presentation");
+    const built = path.join(sourceRoot, "bos", "dist", "mop-wasm", "pkg", "mop_wasm.js");
+    const snapshot = path.join(sourceRoot, "packages", "mop-wasm", "mop_wasm.js");
+    expect(resolveMopWasmEntry(sourceRoot, (entry) => entry === built || entry === snapshot)).toBe(built);
+    expect(resolveMopWasmEntry(sourceRoot, (entry) => entry === snapshot)).toBe(snapshot);
   });
 });

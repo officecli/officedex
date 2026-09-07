@@ -29,3 +29,13 @@ export function resolveMopRuntimeEntry({
   }
   return fallbackEntry;
 }
+
+/** Prefer the locally built BOS runtime to the older workspace snapshot. */
+export function resolveMopWasmEntry(
+  sourceRoot: string,
+  exists: (candidate: string) => boolean = existsSync,
+): string {
+  const builtEntry = path.join(sourceRoot, "bos", "dist", "mop-wasm", "pkg", "mop_wasm.js");
+  if (exists(builtEntry)) return builtEntry;
+  return path.join(sourceRoot, "packages", "mop-wasm", "mop_wasm.js");
+}
