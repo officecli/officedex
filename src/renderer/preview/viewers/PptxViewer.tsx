@@ -81,6 +81,7 @@ export default function PptxViewer({
               live={live}
               onDirtyChange={onDirtyChange}
               onFlushReady={onFlushReady}
+              onEditorReady={() => setFallbackReason(null)}
               onEditorUnavailable={(reason) => setFallbackReason(reason)}
             />
           </Suspense>

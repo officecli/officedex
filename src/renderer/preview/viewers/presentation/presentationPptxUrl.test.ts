@@ -13,6 +13,7 @@ describe("resolvePresentationEditorBaseUrl", () => {
     // A packaged build has no sibling Vite server: pointing at 127.0.0.1:4178 by
     // default made the workbench wait 30s and fall back to the read-only preview.
     expect(resolvePresentationEditorBaseUrl()).toBe(EMBEDDED_PRESENTATION_PATH);
+    expect(EMBEDDED_PRESENTATION_PATH).toBe("/presentation/index.html");
   });
 
   it("prefers an explicitly configured editor URL", () => {

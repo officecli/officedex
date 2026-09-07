@@ -56,6 +56,8 @@ export interface PresentationPptxWorkbenchProps {
   live?: VibeReplayFeed;
   /** Called when the editor cannot be started; the parent may fall back to a read-only preview. */
   onEditorUnavailable?: (reason: string) => void;
+  /** Clears any parent-level failure state after a retry opens the editor. */
+  onEditorReady?: () => void;
   onDirtyChange?: (dirty: boolean) => void;
   onFlushReady?: (flush: (() => Promise<void>) | null) => void;
   /** Injected for tests. */
@@ -143,6 +145,7 @@ export default function PresentationPptxWorkbench({
   filePath,
   live,
   onEditorUnavailable,
+  onEditorReady,
   onDirtyChange,
   onFlushReady,
   createClient,
@@ -184,11 +187,13 @@ export default function PresentationPptxWorkbench({
   const fileNameRef = useRef(fileName);
   const editorStatusRef = useRef(editorStatus);
   const onDirtyChangeRef = useRef(onDirtyChange);
+  const onEditorReadyRef = useRef(onEditorReady);
   const onFlushReadyRef = useRef(onFlushReady);
   filePathRef.current = filePath;
   fileNameRef.current = fileName;
   editorStatusRef.current = editorStatus;
   onDirtyChangeRef.current = onDirtyChange;
+  onEditorReadyRef.current = onEditorReady;
   onFlushReadyRef.current = onFlushReady;
 
   const targetLabel = filePath
@@ -354,6 +359,7 @@ export default function PresentationPptxWorkbench({
       const fileId = await client.waitForEditorReady();
       if (cancelled) return;
       setEditorStatus({ kind: "ready", fileId });
+      onEditorReadyRef.current?.();
       dirtyRef.current = false;
       dirtyVersionRef.current = 0;
       if (!readOnly) onDirtyChangeRef.current?.(false);

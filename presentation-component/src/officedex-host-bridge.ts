@@ -1,3 +1,5 @@
+import { embeddedPresentationDocumentPath } from "./embedded-runtime";
+
 const PROTOCOL_VERSION = 1;
 // This must match the pinned fegit presentation runtime and mop-convert revision in
 // officedex-component.json. The runtime treats a missing header as schema 0.
@@ -358,7 +360,11 @@ function waitForPresentation(): Promise<LoadedPresentation> {
         assets,
         assetUriRestore: restore,
       };
-      window.history.replaceState({}, "", `/p/${encodeURIComponent(message.fileId)}?officedexEmbed=1`);
+      window.history.replaceState(
+        {},
+        "",
+        `${embeddedPresentationDocumentPath(message.fileId)}?officedexEmbed=1`,
+      );
       resolve(loaded);
     };
     window.addEventListener("message", onMessage);
