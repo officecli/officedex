@@ -283,6 +283,27 @@ describe("taskState", () => {
     expect(state.tasks["task-1"].interactiveResponseAccepted).toBeUndefined();
   });
 
+  it("shows a new follow-up question after an accepted answer", () => {
+    let state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-question-1",
+      task_id: "task-questions",
+      type: "task.question",
+      payload: { id: "question-1", question: "Who is the audience?", options: [{ id: "beginner", label: "Beginner" }] },
+    });
+    state = markTaskContinuing(state, "task-questions");
+    state = finishTaskContinuing(state, "task-questions");
+
+    state = applyTaskEvent(state, {
+      event_id: "event-question-2",
+      task_id: "task-questions",
+      type: "task.question",
+      payload: { id: "question-2", question: "How dense should the deck be?", options: [{ id: "light", label: "Light" }] },
+    });
+
+    expect(state.tasks["task-questions"].status).toBe("question");
+    expect(state.tasks["task-questions"].question?.id).toBe("question-2");
+  });
+
   it("restores the original gate when responding fails", () => {
     let state = applyTaskEvent(createInitialTaskState(), {
       event_id: "event-plan",
