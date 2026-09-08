@@ -168,7 +168,17 @@ export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState 
   }
   if (event.type === "task.question") {
     nextTask.question = questionFromPayload(event.payload);
-    nextTask.status = "question";
+    // During stale-task recovery the bridge may replay the gate that was just
+    // answered. Hide that exact question while its accepted response is being
+    // replayed, but surface a newly minted question: multi-step hosted
+    // generation legitimately asks a second question after the first answer.
+    const incomingQuestionID = nextTask.question?.id;
+    const replayingSameQuestion = Boolean(
+      previous.interactiveResponsePending
+      && incomingQuestionID
+      && incomingQuestionID === previous.question?.id,
+    );
+    nextTask.status = replayingSameQuestion ? "running" : "question";
   }
   if (event.type === "task.answers" && nextTask.question) {
     nextTask.question = {
@@ -242,12 +252,19 @@ export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState 
   if (event.type === "task.cancelled") {
     nextTask.stalledSince = undefined;
   }
-  if (previous.interactiveResponsePending && (event.type === "task.question" || event.type === "task.plan")) {
+  const replayingInteractiveGate = event.type === "task.plan"
+    || (event.type === "task.question" && (!nextTask.question?.id || nextTask.question.id === previous.question?.id));
+  if (previous.interactiveResponsePending && replayingInteractiveGate) {
     // Stale-task recovery recreates historical input gates while it fast-
     // forwards the replacement run. Do not expose those replay-only gates.
     nextTask.status = "running";
     nextTask.interactiveResponsePending = true;
     nextTask.interactiveResponseAccepted = previous.interactiveResponseAccepted;
+  } else if (previous.interactiveResponsePending && event.type === "task.question") {
+    // A different question is real forward progress in a multi-question
+    // workflow. It replaces the answered gate and must be actionable now.
+    nextTask.interactiveResponsePending = undefined;
+    nextTask.interactiveResponseAccepted = undefined;
   }
   if (previous.interactiveResponsePending && previous.interactiveResponseAccepted && advancesPastInteractiveGate(event)) {
     nextTask.interactiveResponsePending = undefined;
