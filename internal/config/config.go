@@ -12,6 +12,7 @@ package config
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -36,6 +37,14 @@ const (
 	DesktopBinaryEnv = "OFFICECLI_DESKTOP_BINARY"
 	// Office2ModocFFIEnv points at the office2modoc shared library.
 	Office2ModocFFIEnv = "OFFICE2MODOC_FFI_PATH"
+	// Word2MowConvertBinEnv points at word2mow's `convert` executable, which
+	// turns .docx into the MOW packages the Writer editor reads. A packaged app
+	// carries it under Contents/Resources/word2mow; this overrides that.
+	Word2MowConvertBinEnv = "OFFICEDEX_WORD2MOW_CONVERT_BIN"
+	// WriterFontsDirEnv points at the Writer default-font closure. It is served
+	// from Contents/Resources/writer-fonts rather than embedded, because the
+	// closure is hundreds of megabytes and dist/ is compiled into the binary.
+	WriterFontsDirEnv = "OFFICEDEX_WRITER_FONTS_DIR"
 	// UpdateManifestURLEnv overrides where update checks look.
 	UpdateManifestURLEnv = "OFFICEDEX_UPDATE_MANIFEST_URL"
 )
@@ -134,6 +143,59 @@ func FirstExecutablePath(names ...string) string {
 		if path := ExecutablePath(name); path != "" {
 			return path
 		}
+	}
+	return ""
+}
+
+// ExecutableName appends the platform's executable suffix. A path built from a
+// bare tool name is not runnable on Windows, and a lookup that omits the suffix
+// fails silently -- the caller just sees "not found".
+func ExecutableName(name string) string {
+	if runtime.GOOS == "windows" {
+		return name + ".exe"
+	}
+	return name
+}
+
+// MopConvertBinary resolves the mop-convert executable, or "" when no build
+// staged one.
+//
+// Both users of the converter -- the MOP HTTP service and the PPTX editor --
+// call this. They used to resolve it separately: one consulted only its own
+// bundled runtime plus the two variables, the other also searched a source
+// checkout and PATH but not the bundled runtime, and only one of them appended
+// ".exe". A binary that one could find and the other could not is the whole
+// reason this lives here.
+//
+// presentationRoot is the runtime directory a packaged app carries; repoRoot is
+// a development checkout. Either may be empty.
+func MopConvertBinary(presentationRoot, repoRoot string) string {
+	binary := ExecutableName("mop-convert")
+	// An explicit variable wins: it is how a developer points the app at a
+	// converter build that is not the bundled one.
+	if candidate := FirstExecutablePath(MOPConvertBinaryEnvKeys...); candidate != "" {
+		return candidate
+	}
+	for _, root := range []string{presentationRoot, Trimmed(PresentationSourceDirEnv)} {
+		if strings.TrimSpace(root) == "" {
+			continue
+		}
+		if candidate := ExecutableFile(filepath.Join(root, "tools", "bin", binary)); candidate != "" {
+			return candidate
+		}
+	}
+	if strings.TrimSpace(repoRoot) != "" {
+		for _, relative := range []string{
+			filepath.Join("third_party", "presentation", "tools", "bin", binary),
+			filepath.Join("build", "presentation", "bin", binary),
+		} {
+			if candidate := ExecutableFile(filepath.Join(repoRoot, relative)); candidate != "" {
+				return candidate
+			}
+		}
+	}
+	if candidate, err := exec.LookPath(binary); err == nil {
+		return ExecutableFile(candidate)
 	}
 	return ""
 }

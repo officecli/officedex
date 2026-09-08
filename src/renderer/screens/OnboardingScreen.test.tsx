@@ -38,7 +38,7 @@ async function confirmationButton(kind: "cancel" | "ok") {
   return waitFor(() => {
     const dialogs = screen.getAllByRole("dialog");
     const confirmation = dialogs.at(-1);
-    if (!confirmation || !confirmation.classList.contains("ui-dialog")) throw new Error("Confirmation dialog not rendered yet");
+    if (!confirmation || !confirmation.classList.contains("od-dialog")) throw new Error("Confirmation dialog not rendered yet");
     const buttons = within(confirmation).getAllByRole("button");
     if (buttons.length < 2) throw new Error("Confirmation buttons not rendered yet");
     return buttons[kind === "cancel" ? 0 : buttons.length - 1] as HTMLButtonElement;
@@ -227,7 +227,7 @@ describe("OnboardingScreen", () => {
     const cancelButton = await confirmationButton("cancel");
     fireEvent.click(cancelButton);
 
-    await waitFor(() => expect(document.querySelector(".ui-dialog")).toBeNull());
+    await waitFor(() => expect(document.querySelector(".od-dialog")).toBeNull());
     expect(testProviderSpy).not.toHaveBeenCalled();
     expect(updateSettingsSpy).not.toHaveBeenCalled();
     expect(onComplete).not.toHaveBeenCalled();

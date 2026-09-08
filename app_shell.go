@@ -149,9 +149,17 @@ func (a *App) SavePptx(input SavePptxInput) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// Writing back over the deck the user opened, so make sure it still holds
+	// what this app last read or wrote. Without this a deck edited in
+	// PowerPoint alongside OfficeDex lost those edits at the next autosave --
+	// which fires on every change, so "alongside" is a matter of seconds.
+	if err := a.sourceDigests.assertUnchanged(dest); err != nil {
+		return "", fmt.Errorf("save pptx: %w", err)
+	}
 	if err := atomicfile.WriteFile(dest, data, 0o644); err != nil {
 		return "", fmt.Errorf("write pptx: %w", err)
 	}
+	a.sourceDigests.remember(dest, sha256Hex(data))
 	if a.previewReg != nil {
 		_ = a.previewReg.AllowArtifact(types.Artifact{FilePath: dest, FileName: filepath.Base(dest), DocumentType: "pptx"})
 	}

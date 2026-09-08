@@ -296,13 +296,9 @@ export function SpreadsheetAgentPanel({ workspaceId, artifactPath, conversationI
             </Button>
           ) : null}
           {needsInput ? (
-            <Button size="small" variant="primary" icon={<Send />} loading={responding} disabled={!answeringFreeform || !freeformValue.trim()} onClick={submitFreeform}>
-              {t("spreadsheet.agent.submitAnswer")}
-            </Button>
+            <Button className="od-button--icon-submit" size="small" variant="primary" ariaLabel={t("spreadsheet.agent.submitAnswer")} title={t("spreadsheet.agent.submitAnswer")} icon={<Send />} loading={responding} disabled={!answeringFreeform || !freeformValue.trim()} onClick={submitFreeform} />
           ) : (
-            <Button size="small" variant="primary" icon={<Send />} loading={submitting} disabled={!prompt.trim() || busy} onClick={() => void submit()}>
-              {artifactPath ? t("spreadsheet.agent.modify") : t("spreadsheet.agent.generate")}
-            </Button>
+            <Button className="od-button--icon-submit" size="small" variant="primary" ariaLabel={artifactPath ? t("spreadsheet.agent.modify") : t("spreadsheet.agent.generate")} title={artifactPath ? t("spreadsheet.agent.modify") : t("spreadsheet.agent.generate")} icon={<Send />} loading={submitting} disabled={!prompt.trim() || busy} onClick={() => void submit()} />
           )}
         </div>
       </div> : null}

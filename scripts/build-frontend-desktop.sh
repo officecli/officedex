@@ -19,7 +19,16 @@ cd "${OFFICEDEX_DIR}"
 
 bash -c 'rm -rf -- "dist/pptx"'
 bash "${SCRIPT_DIR}/build-embedded-presentation-desktop.sh"
+bash "${SCRIPT_DIR}/build-embedded-writer.sh"
 npx vite build
+
+# The Writer default-font closure is hundreds of megabytes and main.go embeds
+# dist/ verbatim. build-embedded-writer.sh keeps it out of public/writer; catch
+# a regression here rather than in a 400MB binary.
+if [[ -e "${OFFICEDEX_DIR}/dist/writer/writer-next-default-fonts" ]]; then
+  echo "[build-frontend-desktop] writer font closure leaked into dist/; it belongs in build/writer-fonts" >&2
+  exit 1
+fi
 
 if [[ -e "${OFFICEDEX_DIR}/dist/pptx" ]]; then
   echo "[build-frontend-desktop] legacy dist/pptx exists; refusing to package two PPT editors" >&2

@@ -178,7 +178,7 @@
 
 .settings-note { grid-column: 1 / -1; min-width: 0; color: var(--od-ink-secondary); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
 
-.settings-stage .settings-section-body .ui-button {
+.settings-stage .settings-section-body .od-button {
   min-height: 34px;
   border: 1px solid var(--od-border-subtle);
   border-radius: 999px;
@@ -188,15 +188,15 @@
   box-shadow: none;
   font: 500 12px/18px var(--od-font-ui);
 }
-.settings-stage .settings-section-body .ui-button:hover:not(:disabled) { border-color: var(--od-border-hover); background: var(--od-surface); box-shadow: 0 5px 14px rgb(15 23 42 / 7%); filter: none; }
-.settings-stage .ui-button[data-variant="primary"] { border-color: var(--od-ink); background: var(--od-ink); color: #fff; }
-.settings-stage .ui-button[data-variant="danger"] { border-color: color-mix(in srgb, var(--od-danger) 24%, transparent); background: color-mix(in srgb, var(--od-danger) 8%, var(--od-surface)); color: var(--od-danger); }
-.settings-stage .settings-section-body .ui-button[data-variant="primary"]:hover:not(:disabled) { border-color: var(--od-ink); background: color-mix(in srgb, var(--od-ink) 88%, white); color: #fff; }
-.settings-stage .settings-section-body .ui-button[data-variant="danger"]:hover:not(:disabled) { border-color: color-mix(in srgb, var(--od-danger) 36%, transparent); background: color-mix(in srgb, var(--od-danger) 12%, var(--od-surface)); color: var(--od-danger); }
+.settings-stage .settings-section-body .od-button:hover:not(:disabled) { border-color: var(--od-border-hover); background: var(--od-surface); box-shadow: 0 5px 14px rgb(15 23 42 / 7%); filter: none; }
+.settings-stage .od-button[data-variant="primary"] { border-color: var(--od-button-primary-bg); background: var(--od-button-primary-bg); color: var(--od-button-primary-ink); }
+.settings-stage .od-button[data-variant="danger"] { border-color: color-mix(in srgb, var(--od-danger) 24%, transparent); background: color-mix(in srgb, var(--od-danger) 8%, var(--od-surface)); color: var(--od-danger); }
+.settings-stage .settings-section-body .od-button[data-variant="primary"]:hover:not(:disabled) { border-color: var(--od-ink); background: color-mix(in srgb, var(--od-ink) 88%, white); color: #fff; }
+.settings-stage .settings-section-body .od-button[data-variant="danger"]:hover:not(:disabled) { border-color: color-mix(in srgb, var(--od-danger) 36%, transparent); background: color-mix(in srgb, var(--od-danger) 12%, var(--od-surface)); color: var(--od-danger); }
 
-.settings-stage .settings-section-body .ui-input,
-.settings-stage .settings-section-body .ui-password-input,
-.settings-stage .settings-section-body .ui-input-number {
+.settings-stage .settings-section-body .od-input,
+.settings-stage .settings-section-body .od-password-input,
+.settings-stage .settings-section-body .od-input-number {
   min-height: var(--settings-control-height);
   border: 1px solid var(--od-border-subtle);
   border-radius: var(--settings-control-radius);
@@ -204,11 +204,11 @@
   color: var(--od-ink);
   font: 400 13px/20px var(--od-font-ui);
 }
-.settings-stage .settings-section-body .ui-input:focus,
-.settings-stage .settings-section-body .ui-password-input:focus-within { border-color: color-mix(in srgb, var(--od-guidance) 56%, var(--od-border-hover)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--od-guidance) 10%, transparent); outline: 0; }
-.settings-stage .settings-section-body .ui-tag { border-radius: 999px; }
+.settings-stage .settings-section-body .od-input:focus,
+.settings-stage .settings-section-body .od-password-input:focus-within { border-color: color-mix(in srgb, var(--od-guidance) 56%, var(--od-border-hover)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--od-guidance) 10%, transparent); outline: 0; }
+.settings-stage .settings-section-body .od-tag { border-radius: 999px; }
 
-.settings-stage .ui-switch {
+.settings-stage .od-switch {
   width: 38px;
   min-width: 38px;
   height: 22px;
@@ -217,12 +217,12 @@
   border-radius: 999px;
   background: #d7dade;
 }
-.settings-stage .ui-switch[aria-checked="true"] { background: var(--od-guidance); }
-.settings-stage .ui-switch__thumb { width: 16px; height: 16px; background: #fff; box-shadow: 0 1px 3px rgb(15 23 42 / 22%); }
-.settings-stage .ui-switch[aria-checked="true"] .ui-switch__thumb { transform: translateX(16px); }
-.settings-stage .ui-switch:focus-visible { outline: 2px solid var(--od-guidance); outline-offset: 2px; }
+.settings-stage .od-switch[aria-checked="true"] { background: var(--od-guidance); }
+.settings-stage .od-switch__thumb { width: 16px; height: 16px; background: #fff; box-shadow: 0 1px 3px rgb(15 23 42 / 22%); }
+.settings-stage .od-switch[aria-checked="true"] .od-switch__thumb { transform: translateX(16px); }
+.settings-stage .od-switch:focus-visible { outline: 2px solid var(--od-guidance); outline-offset: 2px; }
 
-.settings-stage .ui-select.settings-select {
+.settings-stage .od-select.settings-select {
   position: relative;
   display: inline-flex;
   width: min(100%, 280px);
@@ -238,10 +238,10 @@
   font: 500 13px/20px var(--od-font-ui);
   text-align: left;
 }
-.settings-stage .ui-select.settings-select::after { content: ""; position: absolute; top: 50%; right: 13px; width: 6px; height: 6px; transform: translateY(-65%) rotate(45deg); border-right: 1.5px solid var(--od-ink-secondary); border-bottom: 1.5px solid var(--od-ink-secondary); }
-.settings-stage .ui-select.settings-select:focus-visible { border-color: color-mix(in srgb, var(--od-guidance) 56%, var(--od-border-hover)); outline: 3px solid color-mix(in srgb, var(--od-guidance) 10%, transparent); }
+.settings-stage .od-select.settings-select::after { content: ""; position: absolute; top: 50%; right: 13px; width: 6px; height: 6px; transform: translateY(-65%) rotate(45deg); border-right: 1.5px solid var(--od-ink-secondary); border-bottom: 1.5px solid var(--od-ink-secondary); }
+.settings-stage .od-select.settings-select:focus-visible { border-color: color-mix(in srgb, var(--od-guidance) 56%, var(--od-border-hover)); outline: 3px solid color-mix(in srgb, var(--od-guidance) 10%, transparent); }
 
-.settings-stage .setting-row[data-variant="form"] .ui-select {
+.settings-stage .setting-row[data-variant="form"] .od-select {
   position: relative;
   display: inline-flex;
   width: 100%;
@@ -256,10 +256,10 @@
   font: 500 13px/20px var(--od-font-ui);
   text-align: left;
 }
-.settings-stage .setting-row[data-variant="form"] .ui-select::after { content: ""; position: absolute; top: 50%; right: 13px; width: 6px; height: 6px; transform: translateY(-65%) rotate(45deg); border-right: 1.5px solid var(--od-ink-secondary); border-bottom: 1.5px solid var(--od-ink-secondary); }
+.settings-stage .setting-row[data-variant="form"] .od-select::after { content: ""; position: absolute; top: 50%; right: 13px; width: 6px; height: 6px; transform: translateY(-65%) rotate(45deg); border-right: 1.5px solid var(--od-ink-secondary); border-bottom: 1.5px solid var(--od-ink-secondary); }
 
-.settings-stage .setting-row[data-variant="form"] .ui-space[data-direction="vertical"] { width: 100%; }
-.settings-stage .setting-row[data-variant="form"] .ui-space[data-direction="vertical"] > .ui-button { min-width: 140px; align-self: flex-end; }
+.settings-stage .setting-row[data-variant="form"] .od-space[data-direction="vertical"] { width: 100%; }
+.settings-stage .setting-row[data-variant="form"] .od-space[data-direction="vertical"] > .od-button { min-width: 140px; align-self: flex-end; }
 .settings-stage .setting-row[data-variant="form"] .provider-hint { color: var(--od-ink-secondary); font-size: 12px; line-height: 18px; }
 
 .settings-stage .jira-connection-card {
@@ -270,12 +270,12 @@
 }
 .settings-stage .jira-connection-card > label { display: grid; min-width: 0; gap: 6px; }
 .settings-stage .jira-connection-card > label > span { color: var(--od-ink-secondary); font: 500 12px/18px var(--od-font-ui); }
-.settings-stage .jira-connection-card > label .ui-input,
-.settings-stage .jira-connection-card > label .ui-password-input,
-.settings-stage .jira-connection-card > label .ui-select { width: 100%; }
-.settings-stage .jira-connection-card > label .ui-input,
-.settings-stage .jira-connection-card > label .ui-password-input,
-.settings-stage .jira-connection-card > label .ui-select { box-sizing: border-box; min-width: 0; max-width: 100%; }
+.settings-stage .jira-connection-card > label .od-input,
+.settings-stage .jira-connection-card > label .od-password-input,
+.settings-stage .jira-connection-card > label .od-select { width: 100%; }
+.settings-stage .jira-connection-card > label .od-input,
+.settings-stage .jira-connection-card > label .od-password-input,
+.settings-stage .jira-connection-card > label .od-select { box-sizing: border-box; min-width: 0; max-width: 100%; }
 .settings-stage .jira-connection-card__help,
 .settings-stage .jira-connection-card__status,
 .settings-stage .jira-connection-card__probe,
@@ -297,7 +297,7 @@
 .settings-stage .jira-connection-card__error { border-radius: 10px; background: color-mix(in srgb, var(--od-danger) 8%, var(--od-surface)); color: var(--od-danger); padding: 9px 11px; font-size: 12px; }
 .settings-stage .jira-connection-card__actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 
-.settings-stage .settings-section-body .ui-button__icon svg { width: 14px; height: 14px; }
+.settings-stage .settings-section-body .od-button__icon svg { width: 14px; height: 14px; }
 
 .runtime-choice {
   display: flex;
@@ -372,7 +372,7 @@
   font-size: 24px;
 }
 
-.login-card .ui-form {
+.login-card .od-form {
   margin-top: 24px;
   text-align: left;
 }
@@ -527,7 +527,7 @@
   margin-top: 2px;
 }
 
-.about-links .ui-button {
+.about-links .od-button {
   color: var(--od-ink-secondary);
   font-weight: 500;
 }
@@ -626,7 +626,7 @@
   gap: 12px;
 }
 
-.about-progress .ui-progress {
+.about-progress .od-progress {
   flex: 1 1 auto;
   margin: 0;
 }
@@ -703,8 +703,8 @@
   .setting-row,
   .setting-row[data-variant="actions"] { grid-template-columns: minmax(0, 1fr); align-items: start; }
   .setting-control { width: 100%; justify-content: flex-start; }
-  .settings-stage .ui-select.settings-select,
-  .settings-stage .setting-row[data-variant="form"] .ui-select { width: 100%; min-width: 0 !important; }
+  .settings-stage .od-select.settings-select,
+  .settings-stage .setting-row[data-variant="form"] .od-select { width: 100%; min-width: 0 !important; }
   .settings-stage .jira-connection-card { grid-template-columns: minmax(0, 1fr); }
   .settings-toggle-control,
   .settings-toggle-stack { justify-content: flex-start; justify-items: start; }
@@ -716,8 +716,8 @@
   .setting-row[data-variant="actions"] { grid-template-columns: minmax(0, 1fr); align-items: start; }
   .setting-control { justify-content: flex-start; }
   .setting-control { width: 100%; }
-  .settings-stage .ui-select.settings-select,
-  .settings-stage .setting-row[data-variant="form"] .ui-select {
+  .settings-stage .od-select.settings-select,
+  .settings-stage .setting-row[data-variant="form"] .od-select {
     width: 100%;
     min-width: 0 !important;
   }
@@ -759,8 +759,8 @@
   }
   .setting-row[data-variant="actions"] { grid-template-columns: 1fr; }
   .setting-control { justify-content: flex-start; width: 100%; }
-  .settings-stage .ui-select.settings-select,
-  .settings-stage .setting-row[data-variant="form"] .ui-select {
+  .settings-stage .od-select.settings-select,
+  .settings-stage .setting-row[data-variant="form"] .od-select {
     width: 100%;
     min-width: 0 !important;
   }
@@ -776,7 +776,7 @@
   .about-description {
     font-size: 15px;
   }
-  .about-actions .ui-button {
+  .about-actions .od-button {
     flex: 1 1 180px;
   }
   .login-page { padding: 16px; }

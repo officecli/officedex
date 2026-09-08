@@ -7,9 +7,6 @@ import (
 	"officedex/internal/config"
 	"officedex/internal/subprocess"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"runtime"
 	"strings"
 )
 
@@ -69,33 +66,7 @@ func (c *CLIConverter) run(ctx context.Context, args ...string) error {
 }
 
 func resolveMopConvertBinary(repoRoot string) string {
-	if candidate := config.FirstExecutablePath(config.MOPConvertBinaryEnvKeys...); candidate != "" {
-		return candidate
-	}
-	if sourceRoot := config.Trimmed(config.PresentationSourceDirEnv); sourceRoot != "" {
-		if candidate := config.ExecutableFile(filepath.Join(sourceRoot, "tools", "bin", executableName("mop-convert"))); candidate != "" {
-			return candidate
-		}
-	}
-	if repoRoot != "" {
-		for _, relative := range []string{
-			filepath.Join("third_party", "presentation", "tools", "bin", executableName("mop-convert")),
-			filepath.Join("build", "presentation", "bin", executableName("mop-convert")),
-		} {
-			if candidate := config.ExecutableFile(filepath.Join(repoRoot, relative)); candidate != "" {
-				return candidate
-			}
-		}
-	}
-	if candidate, err := exec.LookPath(executableName("mop-convert")); err == nil {
-		return candidate
-	}
-	return ""
-}
-
-func executableName(name string) string {
-	if runtime.GOOS == "windows" {
-		return name + ".exe"
-	}
-	return name
+	// The MOP HTTP service resolves the same binary through the same helper;
+	// see config.MopConvertBinary for why that is not duplicated here.
+	return config.MopConvertBinary("", repoRoot)
 }

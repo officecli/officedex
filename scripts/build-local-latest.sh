@@ -59,6 +59,13 @@ node scripts/bundle-office2modoc.mjs \
 npm run bundle:licenses:mac
 npm run bundle:officecli:mac
 
+# The packaging flow gates on scripts/verify-packaged-runtime.mjs, which checks
+# a staged Contents/Resources tree. A local build stages nothing there and falls
+# back to the presentation checkout, so that gate would ask the wrong question.
+# Ask the binary instead: it runs the same resolvers the app runs at startup.
+echo "[build-local-latest] verifying runtime dependencies"
+"${APP_PATH}/Contents/MacOS/officedex" --verify-runtime
+
 echo "[build-local-latest] OfficeCLI build metadata"
 go version -m "${OFFICECLI_SOURCE_BIN}" | sed -n '1,5p'
 echo "[build-local-latest] built ${APP_PATH}"

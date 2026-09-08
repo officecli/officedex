@@ -22,7 +22,7 @@ function TextAreaRoot({ autoSize, showCount, onChange, onSubmit, onCompositionSt
     <textarea
       {...props}
       ref={ref}
-      className={["ui-textarea", className].filter(Boolean).join(" ")}
+      className={["od-textarea", className].filter(Boolean).join(" ")}
       defaultValue={defaultValue}
       maxLength={maxLength}
       rows={typeof autoSize === "object" ? autoSize.minRows : props.rows}
@@ -50,9 +50,9 @@ function TextAreaRoot({ autoSize, showCount, onChange, onSubmit, onCompositionSt
   if (!showCount) return textarea;
   const count = String(value ?? defaultValue ?? "").length;
   return (
-    <span className="ui-textarea-shell">
+    <span className="od-textarea-shell">
       {textarea}
-      <span className="ui-textarea__count" aria-hidden="true">{count}{maxLength ? ` / ${maxLength}` : ""}</span>
+      <span className="od-textarea__count" aria-hidden="true">{count}{maxLength ? ` / ${maxLength}` : ""}</span>
     </span>
   );
 }

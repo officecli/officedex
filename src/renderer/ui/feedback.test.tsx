@@ -45,11 +45,11 @@ describe("UI feedback services", () => {
       });
     });
 
-    const toastNode = document.querySelector<HTMLElement>(".ui-toast");
+    const toastNode = document.querySelector<HTMLElement>(".od-toast");
     expect(toastNode).not.toBeNull();
-    expect(toastNode!.querySelector(".ui-toast__content")).toHaveTextContent("Saved");
-    expect(toastNode!.querySelector(".ui-toast__action")).toHaveTextContent("Open");
-    expect(toastNode!.querySelector(".ui-toast__close")).toBeInTheDocument();
+    expect(toastNode!.querySelector(".od-toast__content")).toHaveTextContent("Saved");
+    expect(toastNode!.querySelector(".od-toast__action")).toHaveTextContent("Open");
+    expect(toastNode!.querySelector(".od-toast__close")).toBeInTheDocument();
   });
 
   it("renders popover content in a portal and closes on Escape", () => {

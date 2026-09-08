@@ -276,7 +276,6 @@ export function SettingsScreen({
                     { value: "xlsx", label: t("settings.option.docType.xlsx") },
                     { value: "report", label: t("settings.option.docType.report") },
                     { value: "img", label: t("settings.option.docType.img") },
-                    { value: "gif", label: t("settings.option.docType.gif") },
                   ]}
                   style={{ minWidth: 220 }}
                 />

@@ -8,9 +8,8 @@ interface Props {
 
 /**
  * TaskRuntimePanel renders the provider snapshot that was captured at task
- * start time. Per-task, frozen — distinct from the live RuntimeChip in the
- * topbar. Renders nothing when the task has no snapshot (legacy tasks
- * persisted before this field was introduced).
+ * start time. Per-task, frozen. Renders nothing when the task has no snapshot
+ * (legacy tasks persisted before this field was introduced).
  */
 export function TaskRuntimePanel({ task }: Props) {
   const t = useT();

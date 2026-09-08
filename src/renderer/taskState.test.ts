@@ -86,14 +86,20 @@ describe("taskState", () => {
     });
   });
 
-  it("clears a stranded bridge error when recovered task progress resumes", () => {
+  it("clears a stranded bridge error when a recovered task announces it restarted", () => {
     const failed = applyTaskEvent(createInitialTaskState(), {
       event_id: "event-failed",
       task_id: "task-recovered",
       type: "task.failed",
       payload: { code: "BRIDGE_PROCESS_GONE", message: "OfficeCLI agent-bridge was stopped before this task finished." },
     });
-    const resumed = applyTaskEvent(failed, {
+    const restarted = applyTaskEvent(failed, {
+      event_id: "event-started",
+      task_id: "task-recovered",
+      type: "task.started",
+      payload: { run_id: "run-1", resumed: true },
+    });
+    const resumed = applyTaskEvent(restarted, {
       event_id: "event-progress",
       task_id: "task-recovered",
       type: "task.progress",
@@ -102,6 +108,46 @@ describe("taskState", () => {
 
     expect(resumed.tasks["task-recovered"].status).toBe("running");
     expect(resumed.tasks["task-recovered"].error).toBeUndefined();
+  });
+
+  // Progress with no restart in front of it is the signature of a run that was
+  // relaunched behind the app's back: the task was failed on purpose, and
+  // replayed steps must not put it back into a state it will never leave.
+  it("keeps a failed task failed when late progress arrives without a restart", () => {
+    const failed = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-failed",
+      task_id: "task-zombie",
+      type: "task.failed",
+      payload: { code: "BRIDGE_PROCESS_GONE", message: "OfficeCLI agent-bridge was stopped before this task finished." },
+    });
+    const late = applyTaskEvent(failed, {
+      event_id: "event-progress",
+      task_id: "task-zombie",
+      type: "task.progress",
+      payload: { step: "generate", status: "running", content: "Checking access status" },
+    });
+
+    expect(late.tasks["task-zombie"].status).toBe("failed");
+    expect(late.tasks["task-zombie"].error).toBeDefined();
+  });
+
+  // A cancel landing after a failure is still the better account of how the
+  // task ended, so terminal states may correct one another.
+  it("lets one terminal state correct another", () => {
+    const failed = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-failed",
+      task_id: "task-terminal",
+      type: "task.failed",
+      payload: { message: "interrupted" },
+    });
+    const cancelled = applyTaskEvent(failed, {
+      event_id: "event-cancelled",
+      task_id: "task-terminal",
+      type: "task.cancelled",
+      payload: { message: "Task cancelled because its document was deleted" },
+    });
+
+    expect(cancelled.tasks["task-terminal"].status).toBe("cancelled");
   });
 
   it("accumulates ordered PPTX drawing ops from streamed bridge events", () => {

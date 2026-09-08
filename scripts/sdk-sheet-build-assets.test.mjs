@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { access, mkdtemp, rm, stat } from "node:fs/promises";
+import { access, mkdtemp, rm, stat, readFile, readdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { isolateSheetSdkChunk } from "./sdk-sheet-chunks.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const viteBin = path.join(repoRoot, "node_modules", "vite", "bin", "vite.js");
@@ -31,5 +32,13 @@ test("production build includes Sheet SDK chunks and Chinese locale resources", 
     const assetPath = path.join(outputDir, relativePath);
     await access(assetPath);
     assert.equal((await stat(assetPath)).isFile(), true, `${relativePath} must be a file`);
+  }
+  const sourceDir = path.join(repoRoot, "node_modules/@shimo/sdk-sheet/lib");
+  for (const name of (await readdir(sourceDir)).filter((name) => name.endsWith(".chunk.js"))) {
+    assert.equal(
+      await readFile(path.join(outputDir, "sdk-sheet", name), "utf8"),
+      isolateSheetSdkChunk(name, await readFile(path.join(sourceDir, name), "utf8")),
+      `${name} must have the same isolated scope in desktop builds as in development`,
+    );
   }
 });

@@ -42,15 +42,15 @@ export function Dropdown({ menu, children, placement = "bottom" }: DropdownProps
       placement={placement === "bottomRight" ? "bottom" : placement}
       trigger={[]}
       content={
-        <div className={`ui-menu${hasIcons ? " ui-menu--with-icons" : ""}`} role="menu">
+        <div className={`od-menu${hasIcons ? " od-menu--with-icons" : ""}`} role="menu">
           {(menu.items ?? []).map((item, index) => {
-            if (item.type === "divider") return <div className="ui-menu__divider" key={`divider-${index}`} role="separator" />;
-            if (item.type === "section") return <div className="ui-menu__section" key={`section-${index}`} role="presentation">{item.label}</div>;
+            if (item.type === "divider") return <div className="od-menu__divider" key={`divider-${index}`} role="separator" />;
+            if (item.type === "section") return <div className="od-menu__section" key={`section-${index}`} role="presentation">{item.label}</div>;
             const choice = item.selected !== undefined;
             return (
               <button
                 type="button"
-                className="ui-menu__item"
+                className="od-menu__item"
                 aria-checked={choice ? item.selected : undefined}
                 aria-disabled={item.disabled ? "true" : undefined}
                 data-danger={item.danger ? "true" : undefined}
@@ -63,12 +63,12 @@ export function Dropdown({ menu, children, placement = "bottom" }: DropdownProps
                   if (!event.defaultPrevented) setOpen(false);
                 }}
               >
-                {hasIcons ? <span className="ui-menu__icon">{item.icon}</span> : null}
-                <span className="ui-menu__body">
-                  <span className="ui-menu__label">{item.label}</span>
-                  {item.description ? <small className="ui-menu__description">{item.description}</small> : null}
+                {hasIcons ? <span className="od-menu__icon">{item.icon}</span> : null}
+                <span className="od-menu__body">
+                  <span className="od-menu__label">{item.label}</span>
+                  {item.description ? <small className="od-menu__description">{item.description}</small> : null}
                 </span>
-                {item.selected ? <CheckOutlined className="ui-menu__check" aria-hidden /> : null}
+                {item.selected ? <CheckOutlined className="od-menu__check" aria-hidden /> : null}
               </button>
             );
           })}
@@ -76,7 +76,7 @@ export function Dropdown({ menu, children, placement = "bottom" }: DropdownProps
       }
     >
       <span
-        className="ui-dropdown-trigger"
+        className="od-dropdown-trigger"
         onClickCapture={() => setOpen((current) => !current)}
       >
         {child}

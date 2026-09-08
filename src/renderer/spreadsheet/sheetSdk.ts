@@ -2,9 +2,9 @@ import "@shimo/sdk-sheet/lib/index.css";
 import type {
   AbstractedEditorFileUploader,
   AbstractedSheetSDK,
+  EditorAssetsOptions,
   EditorUploadStartOptions,
   EditorUploadTaskInfo,
-  HTTPProxy,
   HTTPRequestConfig,
   HTTPResponse,
   SheetSDKOptions,
@@ -12,6 +12,10 @@ import type {
 import { getS18n } from "@shimo/simple-i18n";
 
 const loadedScripts = new Map<string, Promise<void>>();
+
+// The SDK's assets proxy type (AssetsHTTPProxy) is declared but not exported,
+// so it is reached through the options object that carries it.
+type SheetAssetsProxy = NonNullable<EditorAssetsOptions["proxy"]>;
 
 interface OfflineImageRegistration {
   assetUrl: string;
@@ -130,13 +134,18 @@ class OfflineModocAssets {
     return this.displayUrls.get(modocAssetBaseUrl(url)) ?? url;
   }
 
-  readonly proxy: HTTPProxy = {
+  readonly proxy: SheetAssetsProxy = {
     interceptors: {
       request: {
         intercept: <D,>(config: HTTPRequestConfig<D>): HTTPRequestConfig<D> => ({
           ...config,
           url: this.resolve(config.url),
         }),
+        // Upstream uses strip to undo the query parameters its own runtime
+        // injects (accessToken and friends). This offline proxy injects none —
+        // intercept only swaps a modoc-assets URL for the local Data URL — so
+        // the original config is already the stripped one.
+        strip: <D,>(config: HTTPRequestConfig<D>): HTTPRequestConfig<D> => config,
       },
     },
     request: async <D, T>(config: HTTPRequestConfig<D>): Promise<HTTPResponse<T>> => {

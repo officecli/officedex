@@ -1068,3 +1068,92 @@ func TestImportRejectionIsLogged(t *testing.T) {
 		t.Errorf("log = %q, want the reason", logged[0])
 	}
 }
+
+// ageDirectory backdates an entry so the sweep sees it as abandoned.
+func ageDirectory(t *testing.T, path string, when time.Time) {
+	t.Helper()
+	if err := os.Chtimes(path, when, when); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Every deck opened in the embedded editor imports a package that nothing ever
+// deletes: the editor's own dispose() only drops in-memory state, and a DELETE
+// arrives solely when a user removes a presentation inside the editor's own UI,
+// which the OfficeDex embed never shows. A workspace here had accumulated 29 of
+// them, the oldest from five days earlier.
+func TestCleanupStaleRemovesAbandonedPackages(t *testing.T) {
+	harness := newHarness(t)
+	stale := harness.importDeck(t, "last-week.pptx")
+	fresh := harness.importDeck(t, "just-now.pptx")
+	// The age gate compares the injected clock against a real filesystem
+	// mtime, so a test that fakes one must fake the other.
+	ageDirectory(t, filepath.Join(harness.root, stale), harness.clock.Add(-48*time.Hour))
+	ageDirectory(t, filepath.Join(harness.root, fresh), harness.clock)
+
+	removed, err := harness.handler.CleanupStale()
+	if err != nil {
+		t.Fatalf("CleanupStale: %v", err)
+	}
+	if removed != 1 {
+		t.Fatalf("removed %d packages, want 1", removed)
+	}
+	if _, err := os.Stat(filepath.Join(harness.root, stale)); !os.IsNotExist(err) {
+		t.Fatalf("stale package survived: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(harness.root, fresh)); err != nil {
+		t.Fatalf("fresh package was removed: %v", err)
+	}
+}
+
+// A crash between staging and rename leaves `.<id>.creating` behind. It is not
+// a valid file ID, so the package sweep would skip it forever.
+func TestCleanupStaleRemovesOrphanedStagingDirectories(t *testing.T) {
+	harness := newHarness(t)
+	staging := filepath.Join(harness.root, ".local-abandoned.creating")
+	if err := os.MkdirAll(staging, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ageDirectory(t, staging, harness.clock.Add(-48*time.Hour))
+
+	removed, err := harness.handler.CleanupStale()
+	if err != nil {
+		t.Fatalf("CleanupStale: %v", err)
+	}
+	if removed != 1 {
+		t.Fatalf("removed %d entries, want 1", removed)
+	}
+	if _, err := os.Stat(staging); !os.IsNotExist(err) {
+		t.Fatalf("staging directory survived: %v", err)
+	}
+}
+
+// The sweep must not follow a symlink out of the store: what it points at is
+// not ours to delete.
+func TestCleanupStaleLeavesSymlinksAlone(t *testing.T) {
+	harness := newHarness(t)
+	outside := t.TempDir()
+	keep := filepath.Join(outside, "keep.txt")
+	if err := os.WriteFile(keep, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(harness.root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(harness.root, "local-linked")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	ageDirectory(t, outside, harness.clock.Add(-48*time.Hour))
+
+	removed, err := harness.handler.CleanupStale()
+	if err != nil {
+		t.Fatalf("CleanupStale: %v", err)
+	}
+	if removed != 0 {
+		t.Fatalf("removed %d entries, want 0", removed)
+	}
+	if _, err := os.Stat(keep); err != nil {
+		t.Fatalf("symlink target was touched: %v", err)
+	}
+}

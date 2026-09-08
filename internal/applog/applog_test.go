@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"errors"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // captureFallback redirects the pre-startup destination for one test.
@@ -153,4 +156,97 @@ func TestDebugRecordsAreDropped(t *testing.T) {
 	if buf.Len() != 0 {
 		t.Fatalf("expected debug records to be dropped, got %q", buf.String())
 	}
+}
+
+// The app's own records used to reach only the Wails logger (stdout) or stderr.
+// A Finder-launched macOS app has neither, so a user machine kept no evidence of
+// what the app reported at startup -- which is exactly where a broken install
+// announces itself.
+func TestSetLogFileKeepsACopyOfEveryRecord(t *testing.T) {
+	dir := t.TempDir()
+	t.Cleanup(CloseLogFile)
+	if err := SetLogFile(dir); err != nil {
+		t.Fatalf("SetLogFile: %v", err)
+	}
+
+	Logger().Warn("mop-convert not found", slog.String("presentationRoot", "/nowhere"))
+
+	contents := readTodaysLog(t, dir)
+	if !strings.Contains(contents, "WARN mop-convert not found") {
+		t.Fatalf("record missing from the log file:\n%s", contents)
+	}
+	if !strings.Contains(contents, "presentationRoot=/nowhere") {
+		t.Fatalf("attributes were dropped:\n%s", contents)
+	}
+}
+
+// The file is a copy, not an alternative: a developer watching the live console
+// must not lose lines because a file exists, and vice versa.
+func TestSetLogFileWritesAlongsideTheForwarder(t *testing.T) {
+	dir := t.TempDir()
+	t.Cleanup(CloseLogFile)
+	if err := SetLogFile(dir); err != nil {
+		t.Fatalf("SetLogFile: %v", err)
+	}
+	var forwarded []string
+	SetForwarder(func(_ slog.Level, line string) { forwarded = append(forwarded, line) })
+	t.Cleanup(func() { SetForwarder(nil) })
+
+	Logger().Info("both destinations")
+
+	if len(forwarded) != 1 || !strings.Contains(forwarded[0], "both destinations") {
+		t.Fatalf("forwarder did not receive the record: %v", forwarded)
+	}
+	if !strings.Contains(readTodaysLog(t, dir), "both destinations") {
+		t.Fatal("file did not receive the record")
+	}
+}
+
+// An app left running overnight must not keep appending to yesterday's file.
+func TestLogFileRollsOverAtMidnight(t *testing.T) {
+	dir := t.TempDir()
+	t.Cleanup(CloseLogFile)
+	clock := time.Date(2026, 9, 7, 23, 59, 0, 0, time.UTC)
+	fileNow = func() time.Time { return clock }
+	t.Cleanup(func() { fileNow = time.Now })
+
+	if err := SetLogFile(dir); err != nil {
+		t.Fatalf("SetLogFile: %v", err)
+	}
+	Logger().Info("before midnight")
+	clock = clock.Add(2 * time.Minute)
+	Logger().Info("after midnight")
+
+	yesterday := readLog(t, filepath.Join(dir, "app-20260907.log"))
+	today := readLog(t, filepath.Join(dir, "app-20260908.log"))
+	if !strings.Contains(yesterday, "before midnight") || strings.Contains(yesterday, "after midnight") {
+		t.Fatalf("yesterday's file holds the wrong records:\n%s", yesterday)
+	}
+	if !strings.Contains(today, "after midnight") {
+		t.Fatalf("today's file is missing its record:\n%s", today)
+	}
+}
+
+// Logging must never be able to stop the app.
+func TestLogFileFailureDoesNotPanic(t *testing.T) {
+	t.Cleanup(CloseLogFile)
+	if err := SetLogFile(filepath.Join(t.TempDir(), "logs")); err != nil {
+		t.Fatalf("SetLogFile: %v", err)
+	}
+	CloseLogFile()
+	Logger().Error("after the sink is gone")
+}
+
+func readTodaysLog(t *testing.T, dir string) string {
+	t.Helper()
+	return readLog(t, filepath.Join(dir, "app-"+fileNow().Format("20060102")+".log"))
+}
+
+func readLog(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return string(data)
 }

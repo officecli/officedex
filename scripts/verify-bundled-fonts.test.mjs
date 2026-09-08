@@ -48,6 +48,35 @@ test("licensed families pass and unresolved ones are reported, not failed", asyn
   assert.deepEqual(result.pending, ["lucide"]);
 });
 
+test("the reviewed watermark face ships, and is reported rather than silent", async () => {
+  // writer rasters CJK VML ArtText watermarks from 汉仪中黑KW specifically, so
+  // this one file is exempt from the 'hy' denial. It is surfaced every run.
+  const root = await bundleWith("hyzhongheikw.woff");
+  const result = await verifyBundledFonts([root]);
+  assert.deepEqual(result.exempted, ["hyzhongheikw.woff"]);
+  assert.deepEqual(result.pending, []);
+});
+
+test("the exemption covers one file, not the rest of the foundry", async () => {
+  // The names writer ships have no hyphen, so the marker has to match them too.
+  const root = await bundleWith("hyzhongheikw.woff", "hyshusongerkw.woff");
+  await assert.rejects(verifyBundledFonts([root]), /HanYi commercial typefaces/);
+});
+
+test("the OFL faces writer bundles are all covered", async () => {
+  const root = await bundleWith(
+    "SourceHanSansCN-Regular.woff",
+    "SourceHanSerifCN-Bold.woff",
+    "NotoSansJP-Regular.woff",
+    "NotoSerifJP-Regular.woff",
+    "Amiri-BoldItalic.woff",
+    "SourceCodePro.woff",
+  );
+  const result = await verifyBundledFonts([root]);
+  assert.equal(result.checked, 6);
+  assert.deepEqual(result.pending, []);
+});
+
 test("family detection strips the build hash and the weight suffix", () => {
   assert.equal(fontFamilyOf("inter-latin-600-BvOeHRLc.woff2"), "inter");
   assert.equal(fontFamilyOf("KaTeX_Main-Regular-B22Nviop.woff2"), "katex");

@@ -29,6 +29,8 @@ interface PptxViewerProps {
   /** Ordered generation ops to draw live in the same presentation editor. */
   live?: VibeReplayFeed;
   onDirtyChange?: (dirty: boolean) => void;
+  /** Forwarded to the workbench's autosave idle window; tests only. */
+  autosaveIdleMs?: number;
   onFlushReady?: (flush: (() => Promise<void>) | null) => void;
 }
 
@@ -45,6 +47,7 @@ export default function PptxViewer({
   editorBaseUrl,
   live,
   onDirtyChange,
+  autosaveIdleMs,
   onFlushReady,
 }: PptxViewerProps) {
   const t = useT();
@@ -80,6 +83,7 @@ export default function PptxViewer({
               filePath={filePath}
               live={live}
               onDirtyChange={onDirtyChange}
+              autosaveIdleMs={autosaveIdleMs}
               onFlushReady={onFlushReady}
               onEditorReady={() => setFallbackReason(null)}
               onEditorUnavailable={(reason) => setFallbackReason(reason)}

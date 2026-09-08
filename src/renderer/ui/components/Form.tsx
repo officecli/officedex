@@ -177,7 +177,7 @@ function FormRoot<T extends FormValues>({ form, initialValues, onFinish, onValue
       <form
         {...props}
         ref={formRef}
-        className={["ui-form", className].filter(Boolean).join(" ")}
+        className={["od-form", className].filter(Boolean).join(" ")}
         data-layout={layout}
         onSubmit={(event: FormEvent<HTMLFormElement>) => {
           event.preventDefault();
@@ -229,11 +229,11 @@ function FormItem({ name, label, rules = [], hidden, noStyle, extra, required, v
   } as Record<string, unknown>) : child;
 
   return (
-    <div ref={wrapperRef} className={noStyle ? "ui-form-item ui-form-item--no-style" : "ui-form-item"} hidden={hidden}>
-      {label && !noStyle ? <label className="ui-form-item__label" htmlFor={name ? ((child.props as { id?: string }).id ?? id) : undefined}>{label}{required ? <span aria-hidden="true"> *</span> : null}</label> : null}
+    <div ref={wrapperRef} className={noStyle ? "od-form-item od-form-item--no-style" : "od-form-item"} hidden={hidden}>
+      {label && !noStyle ? <label className="od-form-item__label" htmlFor={name ? ((child.props as { id?: string }).id ?? id) : undefined}>{label}{required ? <span aria-hidden="true"> *</span> : null}</label> : null}
       {control}
-      {extra ? <div className="ui-form-item__extra">{extra}</div> : null}
-      {error || help ? <div className="ui-form-item__error" data-status={validateStatus} id={id} role="alert">{error ?? help}</div> : null}
+      {extra ? <div className="od-form-item__extra">{extra}</div> : null}
+      {error || help ? <div className="od-form-item__error" data-status={validateStatus} id={id} role="alert">{error ?? help}</div> : null}
     </div>
   );
 }

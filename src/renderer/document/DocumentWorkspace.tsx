@@ -3,6 +3,7 @@ import type { Artifact, DesktopTask, TaskQuestionAnswer } from "../../shared/typ
 import { getCapability } from "../../shared/types";
 import { useT } from "../i18n";
 import { QuickReplyQuestion } from "../components/QuickReplyQuestion";
+import { ArrowUpOutlined } from "../ui/icons";
 import "./documentWorkspace.css";
 
 export type DocumentWorkspaceArtifactAction = "open" | "copy" | "locate";
@@ -90,7 +91,7 @@ export function DocumentWorkspace({ task, artifact = task.artifact, preview, ppt
       </div> : null}
     </section>
     {!showPptx && visibleArtifact && onArtifactAction ? <nav className="document-workspace__artifact-actions" aria-label={t("documentWorkspace.artifactActions")}>{(["open", "copy", "locate"] as const).map((action) => <button type="button" key={action} onClick={() => void run(() => onArtifactAction(action, visibleArtifact))} disabled={busy}>{t(`documentWorkspace.action.${action}`)}</button>)}</nav> : null}
-    {onContinueEditing ? <form className="document-workspace__edit" onSubmit={(event) => { event.preventDefault(); const input = new FormData(event.currentTarget).get("instruction"); if (typeof input === "string" && input.trim()) { void run(() => onContinueEditing(input.trim())); event.currentTarget.reset(); } }}><input name="instruction" aria-label={t("documentWorkspace.continueEditing")} placeholder={t("documentWorkspace.editPlaceholder")} /><button type="submit" disabled={busy}>{t("documentWorkspace.apply")}</button></form> : null}
+    {onContinueEditing ? <form className="document-workspace__edit" onSubmit={(event) => { event.preventDefault(); const input = new FormData(event.currentTarget).get("instruction"); if (typeof input === "string" && input.trim()) { void run(() => onContinueEditing(input.trim())); event.currentTarget.reset(); } }}><input name="instruction" aria-label={t("documentWorkspace.continueEditing")} placeholder={t("documentWorkspace.editPlaceholder")} /><button className="od-button--icon-submit" type="submit" aria-label={t("documentWorkspace.apply")} title={t("documentWorkspace.apply")} disabled={busy}><ArrowUpOutlined aria-hidden="true" /></button></form> : null}
   </main>;
 }
 

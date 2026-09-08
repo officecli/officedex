@@ -87,3 +87,65 @@ func TestEnabledAcceptsTheUsualWordsForTrue(t *testing.T) {
 		}
 	}
 }
+
+// stageMopConvert writes a runnable mop-convert under dir/relative, named the
+// way this platform names an executable.
+func stageMopConvert(t *testing.T, dir string, relative ...string) string {
+	t.Helper()
+	target := filepath.Join(append([]string{dir}, relative...)...)
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return writeExecutable(t, target, ExecutableName("mop-convert"))
+}
+
+func clearMopConvertEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv(MOPConvertBinEnv, "")
+	t.Setenv(MOPConvertBinFallbackEnv, "")
+	t.Setenv(PresentationSourceDirEnv, "")
+}
+
+// A packaged Windows build stages mop-convert.exe, but the MOP HTTP service
+// looked for a suffix-less "mop-convert" and reported the converter as
+// unavailable for every import and export. Both callers now build the name the
+// same way.
+func TestMopConvertBinaryUsesThePlatformExecutableName(t *testing.T) {
+	clearMopConvertEnv(t)
+	root := t.TempDir()
+	binary := stageMopConvert(t, root, "tools", "bin")
+	if got := MopConvertBinary(root, ""); got != binary {
+		t.Fatalf("MopConvertBinary = %q, want %q", got, binary)
+	}
+}
+
+// The PPTX editor searched a development checkout's build/presentation/bin and
+// the MOP HTTP service did not, so a converter one of them could run was
+// invisible to the other.
+func TestMopConvertBinaryFindsTheDevelopmentCheckout(t *testing.T) {
+	clearMopConvertEnv(t)
+	repoRoot := t.TempDir()
+	binary := stageMopConvert(t, repoRoot, "build", "presentation", "bin")
+	if got := MopConvertBinary("", repoRoot); got != binary {
+		t.Fatalf("MopConvertBinary = %q, want %q", got, binary)
+	}
+}
+
+func TestMopConvertBinaryPrefersAnExplicitVariable(t *testing.T) {
+	clearMopConvertEnv(t)
+	bundled := t.TempDir()
+	stageMopConvert(t, bundled, "tools", "bin")
+	override := writeExecutable(t, t.TempDir(), ExecutableName("mop-convert"))
+	t.Setenv(MOPConvertBinEnv, override)
+	if got := MopConvertBinary(bundled, ""); got != override {
+		t.Fatalf("MopConvertBinary = %q, want the override %q", got, override)
+	}
+}
+
+func TestMopConvertBinaryReportsNothingWhenNoBuildStagedIt(t *testing.T) {
+	clearMopConvertEnv(t)
+	t.Setenv("PATH", t.TempDir())
+	if got := MopConvertBinary(t.TempDir(), t.TempDir()); got != "" {
+		t.Fatalf("MopConvertBinary = %q, want \"\"", got)
+	}
+}

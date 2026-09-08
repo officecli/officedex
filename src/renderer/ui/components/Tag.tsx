@@ -12,8 +12,8 @@ export function Tag({ color, tone, icon, closable, onClose, children, className,
   const resolvedTone = tone ?? ({ green: "success", success: "success", red: "danger", error: "danger", warning: "warning", gold: "warning", processing: "brand", purple: "brand" }[color ?? ""] ?? "neutral");
   const label = typeof children === "string" || typeof children === "number" ? String(children) : "tag";
   return (
-    <span {...props} className={["ui-tag", className].filter(Boolean).join(" ")} data-tone={resolvedTone}>
-      {icon ? <span className="ui-tag__icon">{icon}</span> : null}
+    <span {...props} className={["od-tag", className].filter(Boolean).join(" ")} data-tone={resolvedTone}>
+      {icon ? <span className="od-tag__icon">{icon}</span> : null}
       {children}
       {closable ? <button type="button" aria-label={`Remove ${label}`} onClick={onClose}>×</button> : null}
     </span>

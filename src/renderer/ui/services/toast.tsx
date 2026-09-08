@@ -76,15 +76,15 @@ export function ToastHost() {
   if (items.length === 0) return null;
 
   return createPortal(
-    <div className="ui-toast-host" aria-live="polite">
+    <div className="od-toast-host" aria-live="polite">
       {items.map((item) => (
-        <div className="ui-toast" data-tone={item.tone} key={item.id} role="status">
-          <div className="ui-toast__content">
+        <div className="od-toast" data-tone={item.tone} key={item.id} role="status">
+          <div className="od-toast__content">
             <strong>{item.content}</strong>
             {item.description ? <span>{item.description}</span> : null}
           </div>
-          {item.action ? <button className="ui-toast__action" type="button" onClick={item.action.onClick}>{item.action.label}</button> : null}
-          <button className="ui-toast__close" type="button" aria-label="Close" onClick={() => dismissToast(item.id)}>×</button>
+          {item.action ? <button className="od-toast__action" type="button" onClick={item.action.onClick}>{item.action.label}</button> : null}
+          <button className="od-toast__close" type="button" aria-label="Close" onClick={() => dismissToast(item.id)}>×</button>
         </div>
       ))}
     </div>,

@@ -11,7 +11,7 @@ function InputNumberRoot({ value, precision, onChange, className, ...props }: In
   return (
     <input
       {...props}
-      className={["ui-input", "ui-input-number", className].filter(Boolean).join(" ")}
+      className={["od-input", "od-input-number", className].filter(Boolean).join(" ")}
       step={precision === 0 ? 1 : props.step}
       type="number"
       value={value ?? ""}

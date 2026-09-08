@@ -14,6 +14,7 @@ import {
   Check,
   Loader2,
   RefreshCw,
+  Send,
   User,
 } from "lucide-react";
 import { officecli } from "../../../bridge";
@@ -25,11 +26,13 @@ import type {
 import {
   buildPresentationPptxEmbedUrl,
   createPresentationPptxChannel,
+  PPTX_CONVERSION_GAP_CODE,
   PRESENTATION_PPTX_PROTOCOL,
   type PresentationPptxEditorContext,
 } from "../../../../shared/presentationPptxProtocol";
 import {
   PresentationPptxEmbedClient,
+  PresentationPptxEmbedError,
   type PresentationPptxEmbedState,
 } from "./PresentationPptxEmbedClient";
 import {
@@ -56,6 +59,8 @@ export interface PresentationPptxWorkbenchProps {
   live?: VibeReplayFeed;
   /** Called when the editor cannot be started; the parent may fall back to a read-only preview. */
   onEditorUnavailable?: (reason: string) => void;
+  /** Overrides AUTOSAVE_IDLE_MS. Tests use it; production leaves it unset. */
+  autosaveIdleMs?: number;
   /** Clears any parent-level failure state after a retry opens the editor. */
   onEditorReady?: () => void;
   onDirtyChange?: (dirty: boolean) => void;
@@ -73,7 +78,28 @@ type EditorStatus =
   | { kind: "importing" }
   | { kind: "ready"; fileId: string }
   | { kind: "detached" }
+  // `gap` is a valid deck the converter cannot fully represent yet. It is not
+  // an error in the file, and reloading will not change the outcome, so it
+  // reads differently and offers a different way out.
+  | { kind: "gap"; message: string }
   | { kind: "error"; message: string };
+
+/**
+ * A save that did not land. `conflict` means the file on disk is no longer the
+ * one this editor opened -- the host refuses to overwrite it, and no retry will
+ * change that -- so it reads differently and offers a different way out.
+ */
+type SaveFailure = { message: string; conflict: boolean };
+
+// The stable part of the host's conflict message. Wails delivers an error as
+// text and nothing else; the Go side pins this substring in
+// TestSourceChangedErrorKeepsItsMarker (see SourceChangedMarker).
+const SOURCE_CHANGED_MARKER = "changed outside OfficeDex";
+
+// How long editing has to pause before a save runs. Every save exports the deck
+// through mop-convert and rewrites the whole file, so saving on each change made
+// a large deck queue conversions behind every keystroke.
+const AUTOSAVE_IDLE_MS = 1_500;
 
 type TurnStage =
   | "inspecting"
@@ -145,6 +171,7 @@ export default function PresentationPptxWorkbench({
   filePath,
   live,
   onEditorUnavailable,
+  autosaveIdleMs,
   onEditorReady,
   onDirtyChange,
   onFlushReady,
@@ -181,6 +208,13 @@ export default function PresentationPptxWorkbench({
   const saveInFlightRef = useRef(false);
   const savePendingRef = useRef(false);
   const savePromiseRef = useRef<Promise<void> | null>(null);
+  const saveTimerRef = useRef<number | null>(null);
+  // A conflict does not resolve itself, so retrying on every keystroke only
+  // burns a mop-convert run per character. Autosave stays parked until the
+  // document is reopened, which is what clears this state by remounting.
+  const conflictRef = useRef(false);
+  const [saveFailure, setSaveFailure] = useState<SaveFailure | null>(null);
+  const [savingCopy, setSavingCopy] = useState(false);
   const dirtyVersionRef = useRef(0);
   const unregisterClientToolsRef = useRef<(() => void) | null>(null);
   const filePathRef = useRef(filePath);
@@ -214,12 +248,20 @@ export default function PresentationPptxWorkbench({
     setBusy(value);
   }, []);
 
-  const saveCurrentToDisk = useCallback(async (allowCopy = false) => {
+  /**
+   * `allowMissingPath` lets a deck that has no local file go to Downloads;
+   * `asCopy` sends it there even when it does have one, which is how a
+   * conflicted deck keeps its edits without overwriting the changed original.
+   */
+  const saveCurrentToDisk = useCallback(async ({
+    allowMissingPath = false,
+    asCopy = false,
+  }: { allowMissingPath?: boolean; asCopy?: boolean } = {}) => {
     const client = clientRef.current;
     if (!client || editorStatusRef.current.kind !== "ready")
       throw new Error("The presentation editor is not ready.");
-    const targetPath = filePathRef.current;
-    if (!targetPath && !allowCopy)
+    const targetPath = asCopy ? undefined : filePathRef.current;
+    if (!targetPath && !allowMissingPath && !asCopy)
       throw new Error("The presentation has no local target path.");
     const version = dirtyVersionRef.current;
     const exported = await client.export();
@@ -228,10 +270,13 @@ export default function PresentationPptxWorkbench({
       fileNameRef.current,
       targetPath ? { targetFilePath: targetPath } : {},
     );
-    if (version === dirtyVersionRef.current) {
+    // A copy leaves the original untouched, so the document is still unsaved
+    // with respect to the file it was opened from.
+    if (!asCopy && version === dirtyVersionRef.current) {
       dirtyRef.current = false;
       onDirtyChangeRef.current?.(false);
     }
+    if (!asCopy) setSaveFailure(null);
     const recordLog = officecli.recordRendererLog;
     if (typeof recordLog === "function") {
       void recordLog({
@@ -243,7 +288,7 @@ export default function PresentationPptxWorkbench({
   }, []);
 
   const enqueueSave = useCallback(
-    (allowCopy = false): Promise<void> => {
+    (allowMissingPath = false): Promise<void> => {
       savePendingRef.current = true;
       if (!saveInFlightRef.current) {
         saveInFlightRef.current = true;
@@ -251,17 +296,23 @@ export default function PresentationPptxWorkbench({
           do {
             savePendingRef.current = false;
             try {
-              await saveCurrentToDisk(allowCopy);
+              await saveCurrentToDisk({ allowMissingPath });
             } catch (error) {
+              const message =
+                error instanceof Error ? error.message : String(error);
+              const conflict = message.includes(SOURCE_CHANGED_MARKER);
+              // A failed save used to leave nothing on screen: the document
+              // simply stayed dirty until the close prompt mentioned it. With
+              // the host refusing conflicting writes that silence became a
+              // deck that never saves and never says why.
+              if (conflict) conflictRef.current = true;
+              setSaveFailure({ message, conflict });
               const recordLog = officecli.recordRendererLog;
               if (typeof recordLog === "function") {
                 void recordLog({
                   source: "presentation-pptx-autosave",
                   event: "failed",
-                  details: {
-                    error:
-                      error instanceof Error ? error.message : String(error),
-                  },
+                  details: { error: message, conflict },
                 }).catch(() => {});
               }
               throw error;
@@ -277,17 +328,64 @@ export default function PresentationPptxWorkbench({
     [saveCurrentToDisk],
   );
 
+  const cancelScheduledSave = useCallback(() => {
+    if (saveTimerRef.current === null) return;
+    window.clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = null;
+  }, []);
+
   const requestSave = useCallback(() => {
+    cancelScheduledSave();
     if (!filePathRef.current) return;
     void enqueueSave().catch(() => {
-      // Keep the document dirty; the next edit or explicit Agent save retries.
+      // Keep the document dirty; the failure bar explains why, and the next
+      // edit or an explicit Agent save retries.
     });
-  }, [enqueueSave]);
+  }, [cancelScheduledSave, enqueueSave]);
 
+  /** Saves once editing pauses, so a burst of changes costs one export. */
+  const scheduleSave = useCallback(() => {
+    if (!filePathRef.current || conflictRef.current) return;
+    cancelScheduledSave();
+    saveTimerRef.current = window.setTimeout(() => {
+      saveTimerRef.current = null;
+      requestSave();
+    }, autosaveIdleMs ?? AUTOSAVE_IDLE_MS);
+  }, [autosaveIdleMs, cancelScheduledSave, requestSave]);
+
+  // Closing or handing over must not wait out the idle window: save what is
+  // pending now, then wait for it.
   const flushPendingSave = useCallback(async () => {
-    if (savePendingRef.current && !saveInFlightRef.current) requestSave();
+    const scheduled = saveTimerRef.current !== null;
+    cancelScheduledSave();
+    if (conflictRef.current) return;
+    if (
+      (scheduled || dirtyRef.current || savePendingRef.current) &&
+      !saveInFlightRef.current
+    )
+      requestSave();
     await savePromiseRef.current;
-  }, [requestSave]);
+  }, [cancelScheduledSave, requestSave]);
+
+  /**
+   * Writes the current deck to Downloads. It is the way out of a conflict: the
+   * edits survive without overwriting whatever now sits at the original path.
+   */
+  const saveAsCopy = useCallback(async () => {
+    setSavingCopy(true);
+    try {
+      await saveCurrentToDisk({ asCopy: true });
+      conflictRef.current = false;
+      setSaveFailure(null);
+    } catch (error) {
+      setSaveFailure({
+        message: error instanceof Error ? error.message : String(error),
+        conflict: conflictRef.current,
+      });
+    } finally {
+      setSavingCopy(false);
+    }
+  }, [saveCurrentToDisk]);
 
   // Boot: create the client, fetch the bytes, wait for the editor shell, load, wait for the editor.
   useLayoutEffect(() => {
@@ -334,7 +432,7 @@ export default function PresentationPptxWorkbench({
       dirtyVersionRef.current += 1;
       if (!readOnly) {
         onDirtyChange?.(dirty);
-        if (dirty) requestSave();
+        if (dirty) scheduleSave();
       }
     });
     setEditorStatus({ kind: "fetching" });
@@ -385,12 +483,16 @@ export default function PresentationPptxWorkbench({
     })().catch((error: unknown) => {
       if (cancelled) return;
       const message = error instanceof Error ? error.message : String(error);
-      setEditorStatus({ kind: "error", message });
-      onEditorUnavailable?.(message);
+      const isGap =
+        error instanceof PresentationPptxEmbedError &&
+        error.code === PPTX_CONVERSION_GAP_CODE;
+      setEditorStatus({ kind: isGap ? "gap" : "error", message });
+      onEditorUnavailable?.(isGap ? "conversion-gap" : message);
     });
 
     return () => {
       cancelled = true;
+      cancelScheduledSave();
       unsubscribe();
       unsubscribeDirty();
       unregisterClientToolsRef.current?.();
@@ -735,6 +837,7 @@ export default function PresentationPptxWorkbench({
       <div className="pptx-workbench-editor">
         {editorStatus.kind !== "ready" &&
           editorStatus.kind !== "detached" &&
+          editorStatus.kind !== "gap" &&
           editorStatus.kind !== "error" && (
             <div className="pptx-workbench-overlay" role="status">
               <Loader2 className="pptx-workbench-spinner" size={22} />
@@ -757,6 +860,15 @@ export default function PresentationPptxWorkbench({
             </Button>
           </div>
         )}
+        {editorStatus.kind === "gap" && (
+          <div className="pptx-workbench-overlay" role="note">
+            <AlertCircle size={22} />
+            <strong>{t("pptx.agent.editorGapTitle")}</strong>
+            <span>
+              {t("pptx.agent.editorGapBody", { msg: editorStatus.message })}
+            </span>
+          </div>
+        )}
         {editorStatus.kind === "error" && (
           <div
             className="pptx-workbench-overlay pptx-workbench-overlay-error"
@@ -775,6 +887,24 @@ export default function PresentationPptxWorkbench({
             >
               {t("pptx.agent.reload")}
             </Button>
+          </div>
+        )}
+        {saveFailure && (
+          <div
+            className={`pptx-workbench-save-failure${saveFailure.conflict ? " is-conflict" : ""}`}
+            role="alert"
+          >
+            <AlertCircle size={16} />
+            <span>
+              {saveFailure.conflict
+                ? t("pptx.agent.saveConflict")
+                : t("pptx.agent.saveFailedBar", { msg: saveFailure.message })}
+            </span>
+            {saveFailure.conflict && (
+              <Button size="small" loading={savingCopy} onClick={() => void saveAsCopy()}>
+                {t("pptx.agent.saveConflictCopy")}
+              </Button>
+            )}
           </div>
         )}
         {embedUrl && (
@@ -1011,13 +1141,15 @@ export default function PresentationPptxWorkbench({
               </span>
             )}
             <Button
+              className="od-button--icon-submit"
               type="primary"
               size="small"
               htmlType="submit"
+              aria-label={t("pptx.agent.send")}
+              title={t("pptx.agent.send")}
+              icon={<Send />}
               disabled={!canSend}
-            >
-              {t("pptx.agent.send")}
-            </Button>
+            />
           </div>
         </form>
       </aside>}

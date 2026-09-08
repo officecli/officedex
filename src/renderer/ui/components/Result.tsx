@@ -10,11 +10,11 @@ export interface ResultProps extends Omit<HTMLAttributes<HTMLDivElement>, "title
 
 export function Result({ status = "info", title, subTitle, icon, extra, className, ...props }: ResultProps) {
   return (
-    <div {...props} className={["ui-result", className].filter(Boolean).join(" ")} data-status={status}>
-      {icon ? <div className="ui-result__icon">{icon}</div> : null}
+    <div {...props} className={["od-result", className].filter(Boolean).join(" ")} data-status={status}>
+      {icon ? <div className="od-result__icon">{icon}</div> : null}
       {title ? <h2>{title}</h2> : null}
       {subTitle ? <p>{subTitle}</p> : null}
-      {extra ? <div className="ui-result__extra">{extra}</div> : null}
+      {extra ? <div className="od-result__extra">{extra}</div> : null}
     </div>
   );
 }

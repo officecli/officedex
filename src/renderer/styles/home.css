@@ -1,40 +1,97 @@
+:root {
+  /* Height the page must keep clear for window controls it does not own. Zero
+     everywhere except the macOS desktop window, which hides its title bar. */
+  --od-window-chrome-inset: 0px;
+  /* Width to keep clear at the window's left edge, for anything that reaches
+     the top-left corner rather than sitting below the band. */
+  --od-window-chrome-inset-x: 0px;
+  /* Vertical axis the window controls sit on. Anything parked in the top-left
+     corner centres on this rather than guessing its own offset. */
+  --od-window-controls-center: 22px;
+}
+
+html[data-window-chrome="overlay"] {
+  /* macOS draws the traffic lights in the top 28px with a hidden title bar;
+     32px clears them without leaving the sidebar looking top-heavy. */
+  --od-window-chrome-inset: 32px;
+  --od-window-chrome-inset-x: 78px;
+  /* macOS centres the traffic lights in a 28px title bar. */
+  --od-window-controls-center: 14px;
+}
+
 .home-shell {
   display: grid;
   width: 100%;
   height: 100vh;
   min-width: 0;
-  grid-template-columns: 232px minmax(0, 1fr);
+  /* The rail column sizes to the rail itself, so sliding the rail out on a
+     negative margin shrinks the track with it. Transitioning the track list
+     directly would be the obvious alternative, but grid-template-columns
+     interpolation is not something every engine agrees on, and a track that
+     snapped while the rail slid would jump the content sideways. */
+  position: relative;
+  grid-template-columns: auto minmax(0, 1fr);
   overflow: hidden;
   background: var(--od-surface);
-  transition: grid-template-columns 160ms ease;
 }
 
-.home-shell--spreadsheet,
-.home-shell:has(.project-sidebar[data-compact="true"]) {
-  grid-template-columns: 64px minmax(0, 1fr);
-}
-
-.home-shell--spreadsheet:has(.project-sidebar[data-compact="false"]) {
-  grid-template-columns: 232px minmax(0, 1fr);
+/* Collapsed hides the rail outright, the way Claude's desktop app does: one
+   column, and the way back rides in the top-left corner of the content. */
+.home-shell--railless {
+  grid-template-columns: minmax(0, 1fr);
+  /* Corner the content must keep clear: the window controls, then the
+     expand button that replaces the rail's own toggle. */
+  --od-topleft-reserve: calc(var(--od-window-chrome-inset-x) + 44px);
 }
 
 .home-shell__main {
+  position: relative;
   display: grid;
   min-width: 0;
   min-height: 0;
-  grid-template-rows: 52px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
 }
 
-.home-shell__main--spreadsheet { grid-template-rows: minmax(0, 1fr); }
-
-.home-shell__topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--od-border-subtle);
-  padding: 0 20px;
-  background: var(--od-surface);
+.home-shell__drag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--od-topleft-reserve, 0px);
+  height: 38px;
+  z-index: 55;
+  -webkit-app-region: drag;
+  --wails-draggable: drag;
 }
+
+.home-shell__expand {
+  position: absolute;
+  /* Half the 28px button, so its centre lands on the controls' axis. */
+  top: calc(var(--od-window-controls-center) - 14px);
+  left: calc(var(--od-window-chrome-inset-x) + 8px);
+  z-index: 60;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--od-ink-secondary);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  --wails-draggable: no-drag;
+}
+
+.home-shell__expand { animation: rail-control-in 160ms ease both; }
+@keyframes rail-control-in { from { opacity: 0; } to { opacity: 1; } }
+.home-shell__expand:hover { background: color-mix(in srgb, var(--od-ink) 6%, transparent); color: var(--od-ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  .project-sidebar { transition: none; }
+  .home-shell__expand { animation: none; }
+}
+.home-shell__expand:focus-visible { outline: 2px solid var(--od-accent); outline-offset: 1px; }
+.home-shell__expand svg { width: 18px; height: 18px; }
 
 .home-shell__content {
   display: grid;
@@ -83,8 +140,8 @@
 .home-hero p { margin: 0; color: var(--od-ink-secondary); font-size: 14px; line-height: 24px; }
 .home-hero .home-eyebrow { color: var(--od-guidance); font-size: 12px; line-height: 20px; font-weight: 500; }
 .home-intake { margin-top: 32px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--od-border-hover) 72%, transparent); border-radius: 24px; background: var(--od-surface); box-shadow: 0 12px 30px rgba(31, 41, 51, 0.08), 0 2px 6px rgba(31, 41, 51, 0.04); }
-.home-intake .ui-textarea { display: block; width: 100%; min-height: 96px; box-sizing: border-box; border: 0; border-radius: 0; padding: 16px; resize: none; font-size: 14px; line-height: 24px; outline: none; }
-.home-intake .ui-textarea:focus { box-shadow: inset 0 0 0 1px var(--od-border-strong); }
+.home-intake .od-textarea { display: block; width: 100%; min-height: 96px; box-sizing: border-box; border: 0; border-radius: 0; padding: 16px; resize: none; font-size: 14px; line-height: 24px; outline: none; }
+.home-intake .od-textarea:focus { box-shadow: inset 0 0 0 1px var(--od-border-strong); }
 .home-intake__attachment { display: flex; min-height: 36px; align-items: center; gap: 8px; border-top: 1px solid var(--od-border-subtle); padding: 0 8px 0 16px; color: var(--od-ink-secondary); font-size: 12px; line-height: 20px; }
 .home-intake__attachment > svg { width: 16px; height: 16px; flex: 0 0 auto; }
 .home-intake__attachment > span { min-width: 0; flex: 1; overflow: hidden; color: var(--od-ink); text-overflow: ellipsis; white-space: nowrap; }
@@ -121,12 +178,12 @@
 .home-template-card__copy small { margin-top: 2px; color: var(--od-ink-secondary); font-size: 11px; line-height: 18px; }
 .home-shortcuts { position: relative; z-index: 2; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-top: 8px; color: var(--od-ink-secondary); pointer-events: auto; }
 .home-shortcuts > span { margin-right: 4px; font-size: 12px; line-height: 20px; }
-.home-shortcuts .ui-button { min-height: 28px; padding-inline: 10px; pointer-events: auto; transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease; }
-.home-shortcuts .ui-button[data-variant="secondary"] { background: var(--od-surface-muted); border-color: var(--od-border-subtle); }
-.home-shortcuts .ui-button[data-variant="secondary"]:hover { background: var(--od-surface); border-color: var(--od-border-hover); }
-.home-shortcuts .ui-button[data-variant="secondary"]:active { background: var(--od-surface-muted); border-color: var(--od-border-strong); }
-.home-shortcuts .ui-button:focus-visible { outline: 2px solid var(--od-guidance); outline-offset: 2px; }
-.home-shortcuts .ui-button svg { width: 14px; height: 14px; }
+.home-shortcuts .od-button { min-height: 28px; padding-inline: 10px; pointer-events: auto; transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease; }
+.home-shortcuts .od-button[data-variant="secondary"] { background: var(--od-surface-muted); border-color: var(--od-border-subtle); }
+.home-shortcuts .od-button[data-variant="secondary"]:hover { background: var(--od-surface); border-color: var(--od-border-hover); }
+.home-shortcuts .od-button[data-variant="secondary"]:active { background: var(--od-surface-muted); border-color: var(--od-border-strong); }
+.home-shortcuts .od-button:focus-visible { outline: 2px solid var(--od-guidance); outline-offset: 2px; }
+.home-shortcuts .od-button svg { width: 14px; height: 14px; }
 .home-attention,
 .home-recents { margin-top: 32px; border-top: 1px solid var(--od-border-subtle); padding-top: 24px; }
 .home-section-header h2 { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 16px; line-height: 24px; font-weight: 500; }
@@ -142,7 +199,7 @@
 .home-attention-actions { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
 .home-recents-state { display: flex; min-height: 160px; align-items: center; justify-content: center; gap: 8px; color: var(--od-ink-secondary); }
 .home-recents-state--error { color: var(--od-danger); }
-.home-recents-state--error .ui-button { margin-left: 4px; color: var(--od-ink); }
+.home-recents-state--error .od-button { margin-left: 4px; color: var(--od-ink); }
 .home-recent-row { display: grid; min-height: 48px; grid-template-columns: minmax(0, 1fr) 32px; align-items: center; border-bottom: 1px solid var(--od-border-subtle); }
 .home-recent-row:hover { background: var(--od-surface-subtle); }
 .home-recent-open { display: flex; min-width: 0; height: 48px; align-items: center; gap: 8px; overflow: hidden; border: 0; background: transparent; color: var(--od-ink); padding: 0 4px; text-align: left; cursor: pointer; }
@@ -156,8 +213,26 @@
 .home-file-remove:focus-visible { opacity: 1; }
 .home-file-remove:hover { color: var(--od-danger); }
 
-.project-sidebar { display: flex; box-sizing: border-box; width: 232px; min-height: 0; flex-direction: column; border-right: 1px solid var(--od-border-subtle); background: var(--od-surface-subtle); padding: 16px 12px; color: var(--od-ink); font-family: var(--od-font-ui); transition: width 160ms ease, padding 160ms ease; }
-.project-sidebar__brand { display: flex; height: 40px; align-items: center; gap: 10px; padding: 0 8px; font-size: 16px; font-weight: 500; }
+.project-sidebar { display: flex; box-sizing: border-box; width: 232px; min-height: 0; flex-direction: column; border-right: 1px solid var(--od-border-subtle); background: var(--od-surface-subtle); padding: 16px 12px; color: var(--od-ink); font-family: var(--od-font-ui); transition: margin-left 160ms ease; }
+/* Slides out at full width rather than squeezing to nothing — a shrinking rail
+   would rewrap every label on the way. */
+.home-shell--rail-shut .project-sidebar { margin-left: -232px; }
+
+/* Peeked open on hover: it floats over the content instead of taking a track,
+   so passing the pointer across the corner control never reflows the page. */
+.home-shell--rail-peek .project-sidebar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 58;
+  box-shadow: 0 10px 30px rgba(31, 41, 51, 0.16);
+}
+/* The band replaces the sidebar's own top padding so the traffic lights sit
+   centred in it rather than 16px lower than macOS puts them. */
+html[data-window-chrome="overlay"] .project-sidebar { padding-top: 0; }
+.project-sidebar__window-drag { height: var(--od-window-chrome-inset); flex: 0 0 auto; -webkit-app-region: drag; --wails-draggable: drag; }
+.project-sidebar__brand { display: flex; height: 40px; align-items: center; gap: 10px; padding: 0 8px; font-size: 16px; font-weight: 500; -webkit-app-region: drag; --wails-draggable: drag; }
 .project-sidebar__brand img { width: 32px; height: 32px; border-radius: 6px; object-fit: contain; }
 .project-sidebar button { font-family: inherit; }
 .project-sidebar__primary { display: flex; flex-direction: column; gap: 2px; margin-top: 16px; }
@@ -185,7 +260,6 @@
 .project-sidebar__badge--failed { background: var(--od-danger); }
 @keyframes sidebar-signal-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .project-sidebar__badge--running { animation: none; } }
-.project-sidebar[data-compact="true"] .project-sidebar__badge { position: absolute; top: 3px; right: 3px; min-width: 8px; height: 8px; padding: 0; font-size: 0; }
 .project-sidebar__primary button.is-active,
 .project-sidebar__workspace[data-active="true"] { background: var(--od-surface); }
 .project-sidebar__primary button.is-active { font-weight: 500; }
@@ -198,8 +272,6 @@
 .project-sidebar__empty:hover { border-color: var(--od-border-hover); background: color-mix(in srgb, var(--od-ink) 4%, transparent); color: var(--od-ink); }
 .project-sidebar__empty svg { width: 16px; height: 16px; }
 .project-sidebar__empty em { color: var(--od-guidance); font-size: 12px; font-style: normal; font-weight: 500; }
-.project-sidebar[data-compact="true"] .project-sidebar__empty,
-.project-sidebar[data-compact="true"] .project-sidebar__drop-hint { display: none; }
 .project-sidebar__section-header { min-height: 28px; padding: 0 4px 4px 8px; }
 .project-sidebar__section-header h2 { margin: 0; color: var(--od-ink-secondary); font-size: 12px; line-height: 20px; font-weight: 500; }
 .project-sidebar__list { min-height: 0; flex: 1 1 auto; overflow-y: auto; }
@@ -229,7 +301,7 @@
 .project-sidebar__workspace:focus-within .project-sidebar__workspace-actions { opacity: 1; visibility: visible; }
 .project-sidebar__workspace-actions button { display: grid; width: 24px; height: 24px; place-items: center; border: 0; border-radius: 4px; background: transparent; color: var(--od-ink-secondary); cursor: pointer; }
 .project-sidebar__workspace-actions button:hover { background: var(--od-surface); color: var(--od-ink); }
-.project-sidebar__workspace .ui-input { margin: 2px 4px; }
+.project-sidebar__workspace .od-input { margin: 2px 4px; }
 .project-sidebar__footer { position: relative; z-index: 1; display: flex; flex: 0 0 auto; flex-direction: column; gap: 2px; border-top: 1px solid var(--od-border-subtle); background: var(--od-surface-subtle); padding-top: 8px; }
 .sidebar-update { position: relative; display: flex; min-width: 0; align-items: center; margin-bottom: 2px; border-radius: 6px; background: color-mix(in srgb, var(--od-guidance) 8%, transparent); }
 .sidebar-update__main { display: flex; min-width: 0; height: 32px; flex: 1; align-items: center; gap: 8px; border: 0; border-radius: 6px; background: transparent; color: var(--od-ink-medium); padding: 0 8px; font: 500 12px/18px var(--od-font-ui); text-align: left; cursor: pointer; transition: background-color 120ms ease, color 120ms ease; }
@@ -246,33 +318,9 @@
 .sidebar-update--ready .sidebar-update__main { color: var(--od-guidance); }
 .sidebar-update--error { background: color-mix(in srgb, var(--od-danger) 8%, transparent); }
 .sidebar-update--error .sidebar-update__main svg { color: var(--od-danger); }
-.project-sidebar[data-compact="true"] .sidebar-update__copy,
-.project-sidebar[data-compact="true"] .sidebar-update__dismiss { display: none; }
-.project-sidebar[data-compact="true"] .sidebar-update__main { justify-content: center; padding: 0; }
 .project-sidebar__footer > button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.project-sidebar__compact-toggle { display: grid; width: 28px; height: 28px; margin-left: auto; place-items: center; border: 0; border-radius: 4px; background: transparent; color: var(--od-ink-secondary); cursor: pointer; }
-.project-sidebar__compact-toggle:hover { background: color-mix(in srgb, var(--od-ink) 6%, transparent); color: var(--od-ink); }
-.project-sidebar[data-compact="true"] { width: 64px; padding-inline: 8px; }
-.project-sidebar[data-compact="true"] .project-sidebar__brand { height: auto; align-items: center; flex-direction: column; gap: 8px; padding: 0; }
-.project-sidebar[data-compact="true"] .project-sidebar__brand-name,
-.project-sidebar[data-compact="true"] .project-sidebar__section-header h2,
-.project-sidebar[data-compact="true"] .project-sidebar__primary span,
-.project-sidebar[data-compact="true"] .project-sidebar__workspace-select span,
-.project-sidebar[data-compact="true"] .project-sidebar__workspace-actions,
-.project-sidebar[data-compact="true"] .project-sidebar__document-open > span:nth-child(2),
-.project-sidebar[data-compact="true"] .project-sidebar__document-open em,
-.project-sidebar[data-compact="true"] .project-sidebar__document-delete,
-.project-sidebar[data-compact="true"] .project-sidebar__footer span { display: none; }
-.project-sidebar[data-compact="true"] .project-sidebar__brand img { width: 28px; height: 28px; }
-.project-sidebar[data-compact="true"] .project-sidebar__compact-toggle { margin: 0; }
-.project-sidebar[data-compact="true"] .project-sidebar__primary { margin-top: 16px; }
-.project-sidebar[data-compact="true"] .project-sidebar__primary button,
-.project-sidebar[data-compact="true"] .project-sidebar__footer > button,
-.project-sidebar[data-compact="true"] .project-sidebar__workspace-select { justify-content: center; padding: 0; }
-.project-sidebar[data-compact="true"] .project-sidebar__section-header { display: none; }
-.project-sidebar[data-compact="true"] .project-sidebar__workspace { display: block; }
-.project-sidebar[data-compact="true"] .project-sidebar__document { display: block; margin-left: 0; }
-.project-sidebar[data-compact="true"] .project-sidebar__document-open { grid-template-columns: 1fr; justify-items: center; padding: 0; }
+.project-sidebar__collapse { display: grid; width: 28px; height: 28px; margin-left: auto; place-items: center; border: 0; border-radius: 4px; background: transparent; color: var(--od-ink-secondary); cursor: pointer; -webkit-app-region: no-drag; --wails-draggable: no-drag; }
+.project-sidebar__collapse:hover { background: color-mix(in srgb, var(--od-ink) 6%, transparent); color: var(--od-ink); }
 
 @media (max-width: 980px) {
   .home-template-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -283,12 +331,12 @@
   /* Keep the navigation usable without sacrificing the content canvas on
      phone-sized windows. The sidebar remains icon-only and the main area gets
      the remaining width instead of being squeezed into a 143px column. */
-  .home-shell,
-  .home-shell--spreadsheet,
-  .home-shell:has(.project-sidebar[data-compact="false"]),
-  .home-shell--spreadsheet:has(.project-sidebar[data-compact="false"]) {
+  .home-shell {
     grid-template-columns: 64px minmax(0, 1fr);
   }
+  /* Collapsed still means no rail at all, phone-sized window or not — this
+     block shrinks the rail, it does not resurrect one. */
+  .home-shell--railless { grid-template-columns: minmax(0, 1fr); }
   .project-sidebar { width: 64px; padding-inline: 8px; }
   .project-sidebar__brand { height: auto; align-items: center; flex-direction: column; gap: 8px; padding: 0; }
   .project-sidebar__brand-name,
@@ -310,7 +358,7 @@
   .project-sidebar__workspace { display: block; }
   .project-sidebar__document { display: block; margin-left: 0; }
   .project-sidebar__document-open { grid-template-columns: 1fr; justify-items: center; padding: 0; }
-  .project-sidebar__compact-toggle { margin: 0; }
+  .project-sidebar__collapse { margin: 0; }
   .home-screen { padding: 24px 20px 40px; }
   .home-hero { align-items: flex-start; flex-direction: column; }
   .home-template-grid { grid-template-columns: minmax(0, 1fr); }
@@ -391,7 +439,7 @@
   backdrop-filter: blur(16px);
 }
 
-.home-intake .ui-textarea {
+.home-intake .od-textarea {
   min-height: 132px;
   padding: 22px 24px 16px;
   background: transparent;
@@ -399,21 +447,73 @@
   line-height: 24px;
 }
 
-.home-intake .ui-textarea::placeholder {
+.home-intake .od-textarea::placeholder {
   color: color-mix(in srgb, var(--od-ink-secondary) 58%, transparent);
   opacity: 1;
 }
 
-.home-intake .ui-textarea:focus { box-shadow: none; }
+.home-intake .od-textarea:focus { box-shadow: none; }
 .home-intake:focus-within { border-color: color-mix(in srgb, var(--od-guidance) 46%, var(--od-border-hover)); box-shadow: 0 20px 50px rgb(15 23 42 / 8%), 0 0 0 3px color-mix(in srgb, var(--od-guidance) 9%, transparent); }
 .home-intake { --wails-drop-target: drop; }
 .home-intake.is-drop-active { border-color: color-mix(in srgb, var(--od-guidance) 60%, var(--od-border-hover)); box-shadow: 0 20px 50px rgb(15 23 42 / 8%), 0 0 0 3px color-mix(in srgb, var(--od-guidance) 18%, transparent); }
 /* The toolbar sizes to its tallest control; a taller floor only shows up as
    dead space under the type labels. */
-.home-intake__footer { min-height: 56px; border-top-color: color-mix(in srgb, var(--od-border-subtle) 78%, transparent); background: transparent; padding: 8px 12px; }
+.home-intake__footer { display: grid; min-height: 56px; grid-template-columns: minmax(0, 1fr) minmax(0, auto) auto; border-top-color: color-mix(in srgb, var(--od-border-subtle) 78%, transparent); background: transparent; padding: 8px 12px; }
 .home-intake__footer-left { display: flex; min-width: 0; align-items: center; flex: 1; gap: 6px; }
-.home-intake__footer-left .ui-button { flex: 0 1 auto; white-space: normal; }
+.home-intake__footer-left .od-button { flex: 0 1 auto; white-space: normal; }
 .home-intake__footer-left > span { overflow: hidden; color: var(--od-ink-secondary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+/* Keep the shell CTA independent of the embedded Sheet SDK's .od-button
+   rules, which are also present in the desktop stylesheet. */
+.home-intake__footer > .od-button--circular-submit {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: max-content;
+  width: 40px;
+  min-width: 40px;
+  max-width: 100%;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  gap: 8px;
+  border: 1px solid var(--od-button-primary-bg);
+  border-radius: 12px;
+  background: var(--od-button-primary-bg);
+  color: var(--od-button-primary-ink);
+  font: 500 13px/20px var(--od-font-ui);
+  white-space: nowrap;
+}
+.home-intake__footer > .od-button--circular-submit .od-button__label {
+  display: none;
+}
+
+.od-button--icon-submit {
+  box-sizing: border-box;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border-radius: 50%;
+}
+.od-button--icon-submit .od-button__label { display: none; }
+.od-button--icon-submit .od-button__icon { flex: 0 0 18px; width: 18px; height: 18px; }
+.od-button--icon-submit .od-button__icon svg { width: 18px; height: 18px; }
+.home-intake__footer > .od-button--circular-submit.od-button--icon-submit { width: 40px; min-width: 40px; height: 40px; min-height: 40px; border-radius: 50%; }
+.home-intake__footer > .od-button--circular-submit .od-button__icon {
+  display: inline-flex;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  color: inherit;
+}
+.home-intake__footer > .od-button--circular-submit .od-button__icon svg { width: 18px; height: 18px; }
+.home-intake__footer > .od-button--circular-submit:disabled {
+  border-color: var(--od-border-default);
+  background: var(--od-surface-muted);
+  color: var(--od-ink-secondary);
+  opacity: 1;
+}
 .home-intake__add-trigger {
   display: grid;
   width: 40px;
@@ -561,7 +661,7 @@
 @media (max-width: 720px) {
   .home-screen { padding: 28px 18px 48px; }
   .home-hero__copy { margin-top: 0; }
-  .home-intake .ui-textarea { min-height: 116px; padding: 18px; }
+  .home-intake .od-textarea { min-height: 116px; padding: 18px; }
   .home-intake__footer { flex-wrap: wrap; }
   .home-intake__footer-left { flex-basis: calc(100% - 56px); }
   .home-intake__workdir { max-width: 180px; }
@@ -569,6 +669,11 @@
   .home-section-header { align-items: flex-start; flex-direction: column; gap: 4px; }
   .home-template-grid { grid-auto-columns: minmax(220px, 82vw); }
   .home-recent-list { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 900px) and (min-width: 721px) {
+  .home-intake__footer { grid-template-columns: minmax(0, 1fr) auto; }
+  .home-intake__types { grid-column: 1 / -1; grid-row: 2; justify-self: end; }
 }
 
 @media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) {
@@ -681,10 +786,16 @@
 .office-product-output__actions > span { color: var(--od-guidance); }
 
 @media (max-width: 760px) {
-  .project-sidebar[data-compact="true"] .project-sidebar__document-open,
-  .project-sidebar[data-compact="true"] .project-sidebar__workspace-select { position: relative; }
-  .project-sidebar[data-compact="true"] .project-sidebar__document-open:hover::after,
-  .project-sidebar[data-compact="true"] .project-sidebar__document-open:focus-visible::after,
-  .project-sidebar[data-compact="true"] .project-sidebar__workspace-select:hover::after,
-  .project-sidebar[data-compact="true"] .project-sidebar__workspace-select:focus-visible::after { position: absolute; z-index: 20; top: 0; left: calc(100% + 8px); width: max-content; max-width: 240px; border: 1px solid var(--od-border-subtle); border-radius: 6px; background: var(--od-surface); box-shadow: var(--od-shadow-floating); color: var(--od-ink); content: attr(title); padding: 7px 9px; white-space: normal; }
+}
+
+@media (max-width: 720px) {
+  .home-intake__footer { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .home-intake__footer-left { grid-column: 1 / -1; grid-row: 1; }
+  .home-intake__types { grid-column: 1; grid-row: 2; }
+  .home-intake__footer > .od-button--circular-submit { grid-column: 2; grid-row: 2; }
+}
+@media (max-width: 400px) {
+  .home-intake__footer { grid-template-columns: minmax(0, 1fr); }
+  .home-intake__types { grid-column: 1; grid-row: 2; width: 100%; }
+  .home-intake__footer > .od-button--circular-submit { grid-column: 1; grid-row: 3; justify-self: end; }
 }

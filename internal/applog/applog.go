@@ -23,8 +23,10 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Forwarder receives a formatted line and its level. The app installs one at
@@ -37,6 +39,94 @@ var (
 	forwarder Forwarder
 	fallback  io.Writer = os.Stderr
 )
+
+// The persistent copy of every record, and the clock that names it.
+//
+// The forwarder alone was not enough to diagnose anything on a user's machine:
+// it hands lines to the Wails logger, which writes stdout, and a Finder-launched
+// macOS app has no stdout. Records emitted before the forwarder is installed --
+// which is where the app resolves its runtime dependencies, so exactly where a
+// broken install announces itself -- went to stderr, with the same result. Both
+// now also land in a file beside the renderer and bridge logs.
+var (
+	fileMu   sync.Mutex
+	file     *os.File
+	fileDay  string
+	fileDir  string
+	fileNow  = time.Now
+	fileFail bool
+)
+
+// SetLogFile starts writing every record to `<dir>/app-YYYYMMDD.log`, in
+// addition to wherever the forwarder sends it. Called once, as early in startup
+// as the user data directory is known.
+func SetLogFile(dir string) error {
+	fileMu.Lock()
+	defer fileMu.Unlock()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("applog: create log directory: %w", err)
+	}
+	fileDir = dir
+	fileFail = false
+	return openLogFileLocked()
+}
+
+// CloseLogFile releases the handle. Tests use it; the process exiting is the
+// normal end of a log file.
+func CloseLogFile() {
+	fileMu.Lock()
+	defer fileMu.Unlock()
+	if file != nil {
+		_ = file.Close()
+		file = nil
+	}
+	fileDir, fileDay = "", ""
+}
+
+func openLogFileLocked() error {
+	if fileDir == "" {
+		return nil
+	}
+	day := fileNow().Format("20060102")
+	if file != nil && day == fileDay {
+		return nil
+	}
+	if file != nil {
+		_ = file.Close()
+		file = nil
+	}
+	opened, err := os.OpenFile(filepath.Join(fileDir, "app-"+day+".log"),
+		os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return fmt.Errorf("applog: open log file: %w", err)
+	}
+	file, fileDay = opened, day
+	return nil
+}
+
+// writeToFile appends one record. A failure is reported once and then ignored:
+// logging must not be able to stop the app, and repeating the same disk error
+// for every subsequent line would bury the records that still work.
+func writeToFile(level slog.Level, line string) {
+	fileMu.Lock()
+	defer fileMu.Unlock()
+	if fileDir == "" || fileFail {
+		return
+	}
+	// A long-running app must not keep writing yesterday's file.
+	if err := openLogFileLocked(); err != nil || file == nil {
+		if err != nil {
+			fileFail = true
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+		}
+		return
+	}
+	now := fileNow().Format("2006-01-02T15:04:05.000Z07:00")
+	if _, err := fmt.Fprintf(file, "%s %s %s\n", now, levelLabel(level), line); err != nil {
+		fileFail = true
+		fmt.Fprintf(os.Stderr, "applog: write log file: %v\n", err)
+	}
+}
 
 // SetForwarder installs the destination for every subsequent record, replacing
 // stderr. Passing nil restores stderr, which is what shutdown does: the Wails
@@ -155,6 +245,9 @@ func appendAttr(b *strings.Builder, attr slog.Attr) {
 }
 
 func emit(level slog.Level, line string) {
+	// The file is a copy, not an alternative: the forwarder is what a developer
+	// watches live, and the file is what a user can send back.
+	writeToFile(level, line)
 	sinkMu.RLock()
 	fn, w := forwarder, fallback
 	sinkMu.RUnlock()

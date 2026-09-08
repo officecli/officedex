@@ -130,7 +130,7 @@ export type ImePlainTextAreaProps = Omit<TextareaHTMLAttributes<HTMLTextAreaElem
 
 export function ImePlainTextArea({ value, onChange, onValueChange, onCompositionStart, onCompositionEnd, className, ...props }: ImePlainTextAreaProps) {
   const ime = useImeValue<HTMLTextAreaElement>({ value, onChange, onValueChange });
-  const mergedClassName = ["ui-textarea", className].filter(Boolean).join(" ");
+  const mergedClassName = ["od-textarea", className].filter(Boolean).join(" ");
   return (
     <textarea
       {...props}

@@ -50,6 +50,13 @@ export type PresentationPptxEditorMessage = PresentationPptxMessageBase &
         readonly type: "officedex:pptx-load-error";
         readonly requestId: string;
         readonly error: string;
+        /**
+         * The MOP API's error code when the failure carried one. Only
+         * PPTX_CONVERSION_GAP is acted on: it means the deck is fine and the
+         * converter cannot represent part of it yet, which is a different thing
+         * to tell the user than "this file could not be read".
+         */
+        readonly errorCode?: string;
       }
     | { readonly type: "officedex:pptx-editor-ready"; readonly fileId: string }
     | {
@@ -88,6 +95,7 @@ export type PresentationPptxEditorMessage = PresentationPptxMessageBase &
         readonly fileName?: string;
         readonly revision?: number;
         readonly error?: string;
+        readonly errorCode?: string;
       }
   );
 
@@ -216,3 +224,6 @@ export function buildPresentationPptxEmbedUrl(
   if (mode === "preview") url.searchParams.set("mode", "preview");
   return url.toString();
 }
+
+/** The MOP API's code for "valid file, unsupported feature". */
+export const PPTX_CONVERSION_GAP_CODE = "PPTX_CONVERSION_GAP";

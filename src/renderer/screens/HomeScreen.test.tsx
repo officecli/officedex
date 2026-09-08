@@ -46,7 +46,7 @@ describe("HomeScreen", () => {
     expect(screen.getByRole("group", { name: "Output type" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Select working directory" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Technology Product Launch" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Start creating" })).toHaveClass("ui-button--circular-submit");
+    expect(screen.getByRole("button", { name: "Start creating" })).toHaveClass("od-button--circular-submit");
     expect(document.querySelectorAll(".doc-type-chip")).toHaveLength(2);
     expect(document.querySelector(".doc-type-chip.doc-type--pptx")).toBeTruthy();
     expect(document.querySelector(".doc-type-chip.doc-type--xlsx")).toBeTruthy();
@@ -78,7 +78,7 @@ describe("HomeScreen", () => {
     expect(props.onStartTask).not.toHaveBeenCalled();
   });
 
-  it("keeps image and GIF controls in Home instead of opening a chat form", async () => {
+  it("keeps image controls in Home and removes GIF output", async () => {
     const onPickReferenceImages = vi.fn(async () => ["/tmp/product.png"]);
     const props = renderHome({ pickers: { referenceImages: onPickReferenceImages } });
     fireEvent.click(screen.getByRole("button", { name: "Image" }));
@@ -92,13 +92,7 @@ describe("HomeScreen", () => {
       documentType: "img", referenceImages: ["/tmp/product.png"], imageRatio: "landscape",
     })));
 
-    cleanup();
-    const gifProps = renderHome();
-    fireEvent.click(screen.getByRole("button", { name: "GIF" }));
-    fireEvent.click(screen.getByRole("button", { name: "24 FPS" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Describe the result you want" }), { target: { value: "Create an animated GIF" } });
-    fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
-    await waitFor(() => expect(gifProps.onStartTask).toHaveBeenCalledWith(expect.objectContaining({ documentType: "gif", fps: 24 })));
+    expect(screen.queryByRole("button", { name: "GIF" })).toBeNull();
   });
 
   it("starts directly and leaves progressive review to the production stage", async () => {

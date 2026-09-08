@@ -192,6 +192,25 @@ describe("createOfflineSheetEditor", () => {
     appendChild.mockRestore();
   });
 
+  it("returns asset requests unchanged from the proxy's strip hook", async () => {
+    const appendChild = vi.spyOn(document.head, "appendChild").mockImplementation((node) => {
+      const script = node as HTMLScriptElement;
+      queueMicrotask(() => script.onload?.(new Event("load")));
+      return node;
+    });
+    await createOfflineSheetEditor(document.createElement("div"), "serialized-modoc");
+    const options = (mocks.createSheetSDK.mock.calls.at(-1) as unknown[] | undefined)?.[0] as
+      | SheetSDKOptions
+      | undefined;
+    // strip exists to undo the query parameters the hosted runtime injects
+    // (accessToken and friends). This offline proxy injects none, so the config
+    // it is handed is already the stripped one.
+    const strip = options?.assets?.proxy?.interceptors?.request?.strip;
+    const config = { url: "modoc-assets:/media/result.png?sm_xform=style/thumbnail_s", method: "GET" as const };
+    expect(strip?.(config)).toEqual(config);
+    appendChild.mockRestore();
+  });
+
   it("stages an unregistered clipboard image and persists its MODoc asset URL", async () => {
     const stageImage = vi.fn(async () => ({ assetUrl: "modoc-assets:/media/clipboard.png" }));
     const uploader = new OfflineImageUploader(undefined, stageImage);

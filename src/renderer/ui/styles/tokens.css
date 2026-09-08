@@ -5,6 +5,10 @@
   --od-ink-disabled: #41464b4d;
   --od-guidance: #5da4e3;
   --od-danger: #e86666;
+  /* Primary CTAs sit on their own token rather than reusing --od-ink, which is
+     also the body text colour. Darkening the button must not darken the text. */
+  --od-button-primary-bg: #000000;
+  --od-button-primary-ink: #ffffff;
   --od-surface: #ffffff;
   --od-surface-subtle: #f9f9f9;
   --od-surface-muted: #f7f7f7;

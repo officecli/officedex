@@ -13,7 +13,7 @@ function InputRoot({ size = "medium", status, prefix, suffix, onPressEnter, onKe
   const input = (
     <input
       {...props}
-      className={["ui-input", className].filter(Boolean).join(" ")}
+      className={["od-input", className].filter(Boolean).join(" ")}
       data-size={size}
       data-status={status}
       onKeyDown={(event) => {
@@ -24,10 +24,10 @@ function InputRoot({ size = "medium", status, prefix, suffix, onPressEnter, onKe
   );
   if (!prefix && !suffix) return input;
   return (
-    <span className="ui-input-shell">
-      {prefix ? <span className="ui-input-shell__prefix">{prefix}</span> : null}
+    <span className="od-input-shell">
+      {prefix ? <span className="od-input-shell__prefix">{prefix}</span> : null}
       {input}
-      {suffix ? <span className="ui-input-shell__suffix">{suffix}</span> : null}
+      {suffix ? <span className="od-input-shell__suffix">{suffix}</span> : null}
     </span>
   );
 }

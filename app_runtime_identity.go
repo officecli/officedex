@@ -18,7 +18,11 @@ type processIdentity struct {
 	StartedAt         string `json:"started_at"`
 }
 
-type legacyRuntimeMigrationManifest struct {
+// resumableTaskManifestName is the file the bridge reads to learn which tasks
+// this app still expects to resume. The name predates that use.
+const resumableTaskManifestName = "legacy-migration.json"
+
+type resumableTaskManifest struct {
 	ClientID string   `json:"client_id"`
 	TaskIDs  []string `json:"task_ids"`
 }
@@ -52,9 +56,17 @@ func (a *App) removeProcessIdentity() {
 	_ = os.Remove(path)
 }
 
-// prepareLegacyRuntimeMigration publishes the resumable tasks from the
-// previous desktop runtime. Terminal tasks are intentionally excluded.
-func (a *App) prepareLegacyRuntimeMigration(ctx context.Context) error {
+// publishResumableTaskManifest tells the bridge which tasks this app still
+// expects to resume, so a run whose task is gone can be cancelled instead of
+// replayed. Call it after failInterruptedTasks: whatever survives that pass is
+// what "resumable" means, and deriving the list from the store afterwards
+// keeps that policy in one place.
+//
+// The file name is historical -- it was added for a runtime migration and
+// never read by anything -- but the manifest it holds is now the contract that
+// stops abandoned runs from resurrecting their desktop tasks. See
+// agent_bridge_desktop_reconcile.go on the officecli side.
+func (a *App) publishResumableTaskManifest(ctx context.Context) error {
 	if a.localStore == nil || a.runtimeRoot == "" {
 		return nil
 	}
@@ -62,7 +74,7 @@ func (a *App) prepareLegacyRuntimeMigration(ctx context.Context) error {
 		return err
 	}
 	ids := make([]string, 0)
-	for _, status := range []string{"running", "question", "plan_review"} {
+	for _, status := range []string{"starting", "running", "question", "plan_review"} {
 		part, err := a.localStore.QueryTaskIDsByStatus(ctx, status)
 		if err != nil {
 			return err
@@ -70,10 +82,10 @@ func (a *App) prepareLegacyRuntimeMigration(ctx context.Context) error {
 		ids = append(ids, part...)
 	}
 	sort.Strings(ids)
-	manifest, err := json.MarshalIndent(legacyRuntimeMigrationManifest{ClientID: a.desktopInstanceID, TaskIDs: ids}, "", "  ")
+	manifest, err := json.MarshalIndent(resumableTaskManifest{ClientID: a.desktopInstanceID, TaskIDs: ids}, "", "  ")
 	if err != nil {
 		return err
 	}
 	manifest = append(manifest, '\n')
-	return atomicfile.WriteFile(filepath.Join(a.runtimeRoot, "legacy-migration.json"), manifest, 0o600)
+	return atomicfile.WriteFile(filepath.Join(a.runtimeRoot, resumableTaskManifestName), manifest, 0o600)
 }

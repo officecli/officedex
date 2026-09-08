@@ -23,7 +23,7 @@ export interface RadioGroupItemProps extends Omit<ButtonHTMLAttributes<HTMLButto
 function RadioGroupRoot({ value, onValueChange, ariaLabel, disabled, children, className, ...props }: RadioGroupProps) {
   return (
     <RadioGroupContext.Provider value={{ value, disabled, onValueChange }}>
-      <div {...props} aria-label={ariaLabel} className={["ui-radio-group", className].filter(Boolean).join(" ")} role="radiogroup">
+      <div {...props} aria-label={ariaLabel} className={["od-radio-group", className].filter(Boolean).join(" ")} role="radiogroup">
         {children}
       </div>
     </RadioGroupContext.Provider>
@@ -37,7 +37,7 @@ function RadioGroupItem({ value, children, disabled, className, onClick, ...prop
     <button
       {...props}
       aria-checked={checked}
-      className={["ui-radio-group__item", className].filter(Boolean).join(" ")}
+      className={["od-radio-group__item", className].filter(Boolean).join(" ")}
       data-selected={checked ? "true" : "false"}
       disabled={disabled || group.disabled}
       role="radio"

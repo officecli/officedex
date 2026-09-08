@@ -40,8 +40,11 @@ const STATUS_COPY: Record<PptxProductionStageStatus, StatusCopy> = {
 function statusForTask(task: DesktopTask): PptxProductionStageStatus {
   const extendedTask = task as DesktopTask & { vibeOutline?: unknown };
   const images = imageProgressFromOps(task.vibeOps ?? []);
-  if (task.status === "completed" && images.pending > 0) return "drawing";
-  if (task.status === "completed" || task.status === "failed" || task.status === "cancelled") return task.status;
+  if (task.status === "completed") {
+    const hasDeckEnd = (task.vibeOps ?? []).some((entry) => entry.op === "deck.end");
+    return images.pending > 0 && !hasDeckEnd ? "drawing" : "completed";
+  }
+  if (task.status === "failed" || task.status === "cancelled") return task.status;
   if (task.status === "starting") return "starting";
   if (task.vibeSlides?.some(Boolean)) return "drawing";
   if (task.plan || task.vibeTree || extendedTask.vibeOutline) return "outlining";

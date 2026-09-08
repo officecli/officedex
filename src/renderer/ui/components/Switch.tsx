@@ -16,7 +16,7 @@ function SwitchRoot({ ariaLabel, checked = false, onCheckedChange, onChange, siz
       {...props}
       aria-checked={checked}
       aria-label={resolvedAriaLabel}
-      className={["ui-switch", className].filter(Boolean).join(" ")}
+      className={["od-switch", className].filter(Boolean).join(" ")}
       data-size={size}
       role="switch"
       type="button"
@@ -28,7 +28,7 @@ function SwitchRoot({ ariaLabel, checked = false, onCheckedChange, onChange, siz
         }
       }}
     >
-      <span className="ui-switch__thumb" aria-hidden="true" />
+      <span className="od-switch__thumb" aria-hidden="true" />
     </button>
   );
 }

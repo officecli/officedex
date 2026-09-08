@@ -7,7 +7,7 @@ export interface TitleProps extends HTMLAttributes<HTMLHeadingElement> {
 }
 
 function Title({ level = 1, ellipsis, className, ...props }: TitleProps) {
-  return createElement(`h${level}`, { ...props, className: ["ui-typography-title", ellipsis ? "ui-typography--ellipsis" : "", className].filter(Boolean).join(" ") });
+  return createElement(`h${level}`, { ...props, className: ["od-typography-title", ellipsis ? "od-typography--ellipsis" : "", className].filter(Boolean).join(" ") });
 }
 
 export const Typography = { Title };

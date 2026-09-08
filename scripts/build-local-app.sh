@@ -102,6 +102,12 @@ echo "[build-local-app] bundling local officecli into app"
 )
 verify_app_executable
 
+echo "[build-local-app] verifying runtime dependencies"
+(
+  cd "${OFFICEDEX_DIR}"
+  "${APP_PATH}/Contents/MacOS/officedex" --verify-runtime
+)
+
 echo "[build-local-app] verifying codesign"
 codesign --verify --deep --strict --verbose=4 "${APP_PATH}"
 verify_app_executable

@@ -5,7 +5,7 @@
 .quick-reply { display: grid; gap: 10px; color: var(--od-ink-secondary); font-family: var(--od-font-ui); }
 
 .quick-reply__nav { display: grid; grid-template-columns: 28px minmax(0, 1fr) 28px; align-items: center; gap: 6px; color: var(--od-ink-secondary); font-size: 12px; text-align: center; }
-.quick-reply__nav .ui-button { min-width: 28px; padding-inline: 4px; }
+.quick-reply__nav .od-button { min-width: 28px; padding-inline: 4px; }
 
 .quick-reply__bubble {
   max-width: 100%;

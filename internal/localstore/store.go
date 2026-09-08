@@ -2108,13 +2108,20 @@ func (s *Store) RecordEvent(event types.BridgeEvent) error {
 	// got to them: recovery reads a task's history back ORDER BY created_at
 	// and treats the last row as the current state.
 	recordedAt := eventRecordedAt(event, now)
-	status := statusFromEvent(event.Type)
 	documentType := nullableString(stringPayload(event, "document_type"))
 	topic := nullableString(stringPayload(event, "topic"))
 	tx, err := s.db.BeginTx(context.Background(), nil)
 	if err != nil {
 		return fmt.Errorf("localstore: begin record event: %w", err)
 	}
+	// The new status depends on the current one: a task that already finished
+	// stays finished unless this event starts a fresh attempt.
+	var previousStatus string
+	if err := tx.QueryRow(`SELECT status FROM tasks WHERE id = ?`, event.TaskID).Scan(&previousStatus); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		_ = tx.Rollback()
+		return fmt.Errorf("localstore: read task status: %w", err)
+	}
+	status := statusTransition(previousStatus, event.Type)
 	if _, err := tx.Exec(
 		`INSERT INTO tasks(id, status, document_type, topic, updated_at, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?)
@@ -2196,6 +2203,45 @@ func (s *Store) QueryTaskIDsByStatus(ctx context.Context, status string) ([]stri
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("localstore: iterate tasks by status: %w", err)
+	}
+	return ids, nil
+}
+
+// QueryUnfinishedDocumentTasks returns the ids of tasks in the document
+// lineage containing taskID that have not reached a terminal state, oldest
+// first. Deleting a document has to settle these first: RemoveDocumentByTaskID
+// refuses to run while any of them is still open.
+func (s *Store) QueryUnfinishedDocumentTasks(ctx context.Context, taskID string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return nil, fmt.Errorf("localstore: not open")
+	}
+	taskID = strings.TrimSpace(taskID)
+	if taskID == "" {
+		return nil, fmt.Errorf("localstore: task id is empty")
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id FROM tasks
+		 WHERE COALESCE(NULLIF(conversation_id, ''), id) = (
+		   SELECT COALESCE(NULLIF(conversation_id, ''), id) FROM tasks WHERE id = ?
+		 )
+		 AND status IN ('starting', 'running', 'question', 'plan_review')
+		 ORDER BY updated_at ASC, id ASC`, taskID)
+	if err != nil {
+		return nil, fmt.Errorf("localstore: query unfinished document tasks: %w", err)
+	}
+	defer rows.Close()
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("localstore: scan unfinished document task: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("localstore: iterate unfinished document tasks: %w", err)
 	}
 	return ids, nil
 }
@@ -2995,6 +3041,43 @@ func statusFromEvent(eventType string) string {
 	default:
 		return "running"
 	}
+}
+
+// terminalTaskStatus reports the states a task does not leave on its own.
+func terminalTaskStatus(status string) bool {
+	switch status {
+	case "completed", "failed", "cancelled":
+		return true
+	default:
+		return false
+	}
+}
+
+// statusTransition returns the status a task should hold after an event, given
+// what it held before. A finished task is only revived by an explicit new
+// attempt -- task.started, which the bridge emits for a retry -- so a late
+// event from an execution that was already given up on cannot resurrect it.
+//
+// Progress arriving after a terminal event is not hypothetical: a Runtime run
+// left non-terminal used to be relaunched on every app start, and its replayed
+// progress flipped the task the app had just failed straight back to
+// `running`. That is what made a document impossible to delete. The resume
+// ceiling and the manifest reconciliation stop those relaunches; this keeps a
+// single stray event from doing the same damage.
+func statusTransition(previous, eventType string) string {
+	next := statusFromEvent(eventType)
+	if previous == "" || !terminalTaskStatus(previous) {
+		return next
+	}
+	if eventType == types.EventTaskStarted {
+		return next
+	}
+	if terminalTaskStatus(next) {
+		// One terminal state may correct another: a cancel that lands after a
+		// failure is still the more accurate account of how the task ended.
+		return next
+	}
+	return previous
 }
 
 func taskAnswersEvent(taskID string, answers []TaskAnswer) types.BridgeEvent {

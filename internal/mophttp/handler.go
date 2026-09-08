@@ -107,6 +107,13 @@ func New(options Options) *Handler {
 // it imported through this API.
 func (h *Handler) Store() *Store { return h.store }
 
+// CleanupStale drops packages left behind by earlier runs. The app calls it at
+// startup, alongside the editor services' own sweep; see Store.CleanupStale for
+// why startup is the only safe moment.
+func (h *Handler) CleanupStale() (int, error) {
+	return h.store.CleanupStale(h.now(), stalePackageAge)
+}
+
 func (h *Handler) logf(format string, args ...any) {
 	if h.logger == nil {
 		return

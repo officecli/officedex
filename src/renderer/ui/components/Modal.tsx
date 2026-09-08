@@ -27,12 +27,12 @@ function ModalRoot({ open, title, footer, okText = "OK", cancelText = "Cancel", 
     try { await onOk?.(); } finally { setSubmitting(false); }
   };
   return createPortal(
-    <div className="ui-dialog-mask" role="presentation">
-      <section {...props} aria-modal="true" className={["ui-dialog", className].filter(Boolean).join(" ")} role="dialog" style={{ width }}>
-        {title ? <header className="ui-dialog__header"><h2>{title}</h2></header> : null}
-        <div className="ui-dialog__content" style={styles?.body}>{children}</div>
+    <div className="od-dialog-mask" role="presentation">
+      <section {...props} aria-modal="true" className={["od-dialog", className].filter(Boolean).join(" ")} role="dialog" style={{ width }}>
+        {title ? <header className="od-dialog__header"><h2>{title}</h2></header> : null}
+        <div className="od-dialog__content" style={styles?.body}>{children}</div>
         {footer === null ? null : footer ?? (
-          <footer className="ui-dialog__footer">
+          <footer className="od-dialog__footer">
             <Button {...cancelButtonProps} onClick={onCancel}>{cancelText}</Button>
             <Button {...okButtonProps} type="primary" loading={submitting || okButtonProps?.loading} onClick={() => void confirm()}>{okText}</Button>
           </footer>

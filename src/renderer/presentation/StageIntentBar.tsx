@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ArrowUpOutlined } from "../ui/icons";
 import { Button, Input } from "../ui";
 
 export interface StageIntentBarProps {
@@ -27,7 +28,7 @@ export function StageIntentBar({ disabled = false, placeholder = "Describe the n
   };
   return <div className="stage-intent-bar" aria-label="Stage command bar">
     <Input aria-label="Stage instruction" value={value} placeholder={placeholder} disabled={disabled || busy} onChange={(event) => setValue(event.target.value)} onPressEnter={() => void submit()} />
-    <Button type="primary" size="small" loading={busy} disabled={disabled || !value.trim()} onClick={() => void submit()}>Apply</Button>
+    <Button className="od-button--icon-submit" type="primary" size="small" ariaLabel="Apply" title="Apply" icon={<ArrowUpOutlined />} loading={busy} disabled={disabled || !value.trim()} onClick={() => void submit()} />
     {onPause ? <Button type="text" size="small" disabled={disabled || busy} onClick={() => void action(onPause)}>Pause</Button> : null}
     {onResume ? <Button type="text" size="small" disabled={disabled || busy} onClick={() => void action(onResume)}>Resume</Button> : null}
     {onRetry ? <Button type="text" size="small" disabled={disabled || busy} onClick={() => void action(onRetry)}>Retry</Button> : null}

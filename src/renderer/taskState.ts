@@ -114,7 +114,7 @@ export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState 
   const nextTask: DesktopTask = {
     ...previous,
     createdAt: previous.createdAt || event.ts,
-    status: statusFromEvent(event.type, previous.status),
+    status: statusTransition(previous.status, event.type),
     workspaceId: stringPayload(event, "workspace_id") || previous.workspaceId,
     workspacePath: stringPayload(event, "workspace_path") || previous.workspacePath,
     conversationId: stringPayload(event, "conversation_id") || previous.conversationId,
@@ -128,8 +128,11 @@ export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState 
   // A recovered native runtime can emit fresh started/progress events after
   // the previous desktop process recorded BRIDGE_PROCESS_GONE. Once durable
   // progress resumes, that interruption error is historical and must not stay
-  // attached to the live task UI.
-  if (event.type === "task.started" || event.type === "task.progress" || event.type === "task.question" || event.type === "task.plan") {
+  // attached to the live task UI. Only clear it when the task is actually
+  // running again: on a task that stayed terminal, wiping the error leaves a
+  // failed card with no explanation of why it failed.
+  if (!isTerminalStatus(nextTask.status)
+    && (event.type === "task.started" || event.type === "task.progress" || event.type === "task.question" || event.type === "task.plan")) {
     nextTask.error = undefined;
   }
   if (event.type === "task.progress" && (previous.status === "plan_review" || previous.status === "question")) {
@@ -426,6 +429,12 @@ function visualAssetsFromUnknown(raw: unknown): VibeVisualAsset[] | undefined {
   return assets.length > 0 ? assets : undefined;
 }
 
+const TERMINAL_TASK_STATUSES: readonly DesktopTask["status"][] = ["completed", "failed", "cancelled"];
+
+function isTerminalStatus(status: DesktopTask["status"]): boolean {
+  return TERMINAL_TASK_STATUSES.includes(status);
+}
+
 function statusFromEvent(type: string, fallback: DesktopTask["status"]): DesktopTask["status"] {
   switch (type) {
     case "task.started":
@@ -445,6 +454,19 @@ function statusFromEvent(type: string, fallback: DesktopTask["status"]): Desktop
     default:
       return fallback;
   }
+}
+
+// statusTransition mirrors the store's rule: a task that has finished is only
+// revived by an explicit new attempt (task.started, which the bridge emits for
+// a retry). Without it, a stray progress event from an execution that was
+// already given up on puts the card back into a running state the task will
+// never leave. One terminal state may still correct another.
+function statusTransition(previous: DesktopTask["status"], type: string): DesktopTask["status"] {
+  const next = statusFromEvent(type, previous);
+  if (!isTerminalStatus(previous) || type === "task.started" || isTerminalStatus(next)) {
+    return next;
+  }
+  return previous;
 }
 
 function answersFromPayload(payload: BridgeEvent["payload"]): TaskQuestionAnswer[] {

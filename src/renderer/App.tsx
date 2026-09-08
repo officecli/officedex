@@ -1699,7 +1699,6 @@ function OfficeDexApp() {
         documents={sidebarDocuments}
         activeDocumentId={documentTask?.id}
         activeWorkspaceId={activeNav === "home" ? homeWorkspaceId : activeNav === "spreadsheet" ? spreadsheet.session.workspaceId : activeWorkspace?.id}
-        activeWorkspaceName={activeNav === "home" ? workspaces.find((workspace) => workspace.id === homeWorkspaceId)?.name : activeNav === "spreadsheet" ? workspaces.find((workspace) => workspace.id === spreadsheet.session.workspaceId)?.name : activeWorkspace?.name}
         onNavChange={changeNavigation}
         onSelectWorkspace={activeNav === "home" ? selectHomeWorkspace : selectWorkspace}
         onOpenDocument={openSidebarDocument}

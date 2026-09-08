@@ -82,11 +82,11 @@ export function DialogHost() {
   };
 
   return createPortal(
-    <div className="ui-dialog-mask" role="presentation">
-      <section aria-modal="true" className="ui-dialog" role="dialog">
-        <header className="ui-dialog__header"><h2>{active.title}</h2></header>
-        {active.content ? <div className="ui-dialog__content">{active.content}</div> : null}
-        <footer className="ui-dialog__footer">
+    <div className="od-dialog-mask" role="presentation">
+      <section aria-modal="true" className="od-dialog" role="dialog">
+        <header className="od-dialog__header"><h2>{active.title}</h2></header>
+        {active.content ? <div className="od-dialog__content">{active.content}</div> : null}
+        <footer className="od-dialog__footer">
           {active.kind !== "info" ? <Button onClick={cancel}>{active.cancelText ?? "Cancel"}</Button> : null}
           <Button variant={active.tone === "danger" ? "danger" : "primary"} loading={submitting} onClick={() => void confirm()}>
             {active.okText ?? "OK"}

@@ -7,6 +7,9 @@
   overflow: hidden;
 }
 
+.preview-image { display: grid; min-height: 0; flex: 1; place-items: center; overflow: auto; padding: 24px; }
+.preview-image img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; box-shadow: 0 8px 32px #0002; }
+
 /* ─── Toolbar ─── */
 .preview-toolbar {
   display: flex;
@@ -160,6 +163,10 @@ body.preview-overlay-active .living-tree-popover-overlay {
   -webkit-app-region: drag;
   --wails-draggable: drag;
 }
+
+/* This bar covers the whole window, so with the title bar hidden the traffic
+   lights float over its left end. Start the back button clear of them. */
+html[data-window-chrome="overlay"] .preview-panel-header { padding-left: var(--od-window-chrome-inset-x); }
 
 .preview-panel-back,
 .preview-panel-close {
@@ -569,6 +576,42 @@ body.preview-overlay-active .living-tree-popover-overlay {
   cursor: pointer;
 }
 
+/* A save that did not land, reported over the editor rather than replacing it:
+   the deck is still there and still editable, and a conflict in particular is
+   something the user resolves by acting, not by waiting. */
+.pptx-workbench-save-failure {
+  position: absolute;
+  z-index: 3;
+  left: 12px;
+  right: 12px;
+  top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #7a1f1f;
+  background: #fdecec;
+  border: 1px solid #f3c2c2;
+  box-shadow: 0 2px 8px rgba(5, 16, 26, 0.08);
+}
+
+.pptx-workbench-save-failure.is-conflict {
+  color: #7a4d00;
+  background: #fff7e0;
+  border-color: #f5d75e;
+}
+
+.pptx-workbench-save-failure svg {
+  flex-shrink: 0;
+}
+
+.pptx-workbench-save-failure span {
+  flex: 1;
+}
+
 .pptx-workbench-panel {
   width: 340px;
   flex-shrink: 0;
@@ -865,91 +908,24 @@ body.preview-overlay-active .living-tree-popover-overlay {
   min-height: 0;
   flex: 1;
   position: relative;
-}
-
-.docx-mode-pane {
-  position: absolute;
-  inset: 0;
-  display: none;
-  min-height: 0;
-}
-
-.docx-mode-pane.is-active {
-  display: block;
-}
-
-.docx-mode-switch {
-  display: inline-flex;
-  padding: 2px;
-  border-radius: 7px;
-  background: #eef1f5;
-}
-
-.docx-mode-switch button {
-  min-width: 76px;
-  padding: 5px 12px;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: #5f6b7a;
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.docx-mode-switch button.is-active {
-  background: #fff;
-  color: #185abc;
-  box-shadow: 0 1px 3px rgba(24, 35, 52, .14);
-  font-weight: 600;
-}
-
-.docx-preview-floating-zoom {
-  position: absolute;
-  right: 18px;
-  bottom: 18px;
   display: flex;
-  overflow: hidden;
-  border: 1px solid #d5dae2;
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 2px 8px rgba(24, 35, 52, .14);
 }
 
-.docx-preview-floating-zoom button {
-  min-width: 34px;
-  height: 30px;
-  padding: 0 8px;
-  border: 0;
-  border-right: 1px solid #e4e7ec;
-  background: #fff;
-  color: #465366;
-  cursor: pointer;
-}
-
-.docx-preview-floating-zoom button:last-child { border-right: 0; }
-
-.preview-docx-container {
-  position: relative;
-  box-sizing: border-box;
+/* The Writer editor runs in its own document; it owns everything inside. */
+.writer-embed-frame {
+  width: 100%;
   height: 100%;
-  flex: 1;
-  overflow: auto;
-  background: #e8e9eb;
-  padding: 24px 0;
+  border: 0;
+  background: #fcfaf2;
 }
 
-.preview-docx-content {
-  margin: 0 auto;
-}
-
-.preview-docx-content .docx-wrapper {
-  background: #e8e9eb;
-  padding: 0;
-}
-
-.preview-docx-content .docx-wrapper > section.docx {
-  margin: 0 auto 24px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+.docx-editor-unavailable {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: #7a4d00;
+  background: #fff7e0;
+  border-bottom: 1px solid #f5d75e;
 }
 
 /* ─── XLSX Viewer ─── */

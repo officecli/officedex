@@ -27,11 +27,11 @@ class PreviewErrorBoundary extends Component<
         <div className="preview-error">
           <Result
             status="error"
-            title="Preview Render Failed"
+            title="Preview could not be rendered"
             subTitle={this.state.error}
             extra={
               <Button onClick={() => this.setState({ error: null })}>
-                Retry
+                Try again
               </Button>
             }
           />

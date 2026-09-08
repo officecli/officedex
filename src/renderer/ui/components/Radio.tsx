@@ -15,12 +15,12 @@ function GroupRoot({ value, defaultValue, options, optionType: _optionType, onCh
   const [uncontrolledValue, setUncontrolledValue] = useState(defaultValue);
   const current = value ?? uncontrolledValue;
   return (
-    <div {...props} className={["ui-radio-group", className].filter(Boolean).join(" ")} role="radiogroup">
+    <div {...props} className={["od-radio-group", className].filter(Boolean).join(" ")} role="radiogroup">
       {options.map((option, index) => {
         const optionId = `${generatedId}-${index}`;
         const selected = current === option.value;
         return (
-          <label className="ui-radio-group__item" data-selected={selected ? "true" : "false"} htmlFor={optionId} key={option.value}>
+          <label className="od-radio-group__item" data-selected={selected ? "true" : "false"} htmlFor={optionId} key={option.value}>
             <input
               checked={selected}
               disabled={option.disabled}

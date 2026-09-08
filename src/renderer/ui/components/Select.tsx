@@ -33,8 +33,8 @@ function SelectRoot<T extends SelectValue>({ ariaLabel, options, value, defaultV
     setOpen(false);
   };
   return (
-    <Popover open={open} onOpenChange={setOpen} trigger="click" content={<div className="ui-menu" role="menu">{options.map((option) => <button key={String(option.value)} type="button" role="menuitemradio" aria-checked={String(option.value) === String(selected)} disabled={option.disabled} onClick={() => choose(option)}>{option.label}</button>)}</div>}>
-      <button {...props as SelectHTMLAttributes<HTMLButtonElement>} type="button" aria-label={resolvedAriaLabel} className={["ui-select", className].filter(Boolean).join(" ")} data-size={size}>{selectedOption?.label ?? ""}</button>
+    <Popover open={open} onOpenChange={setOpen} trigger="click" content={<div className="od-menu" role="menu">{options.map((option) => <button key={String(option.value)} type="button" role="menuitemradio" aria-checked={String(option.value) === String(selected)} disabled={option.disabled} onClick={() => choose(option)}>{option.label}</button>)}</div>}>
+      <button {...props as SelectHTMLAttributes<HTMLButtonElement>} type="button" aria-label={resolvedAriaLabel} className={["od-select", className].filter(Boolean).join(" ")} data-size={size}>{selectedOption?.label ?? ""}</button>
     </Popover>
   );
 }

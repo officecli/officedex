@@ -158,7 +158,7 @@ export function SpreadsheetJiraPanel({ workbookReady = true, workbookPath, works
           <strong>{t("settings.connector.autoCreateWorkbook", { name: "Jira" })}</strong>
           <span>{t("settings.connector.workbookCreated", { name: "Jira Issues" })}</span>
         </div> : null}
-        <Button size="small" variant="primary" icon={<Send />} loading={syncing} disabled={!prompt.trim()} onClick={() => void sync()}>{workbookReady ? t("settings.connector.fetchAndWrite") : t("settings.connector.fetchAndCreate")}</Button>
+        <Button className="od-button--icon-submit" size="small" variant="primary" ariaLabel={workbookReady ? t("settings.connector.fetchAndWrite") : t("settings.connector.fetchAndCreate")} title={workbookReady ? t("settings.connector.fetchAndWrite") : t("settings.connector.fetchAndCreate")} icon={<Send />} loading={syncing} disabled={!prompt.trim()} onClick={() => void sync()} />
       </> : null}
 
       {loading ? <small>{t("settings.connector.loading", { name: "Jira" })}</small> : null}

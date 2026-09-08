@@ -20,6 +20,12 @@ build/node-runtime-x64/
 build/notarized-backup/
 # Built fegit presentation embed component (npm run build:presentation).
 public/presentation/
+# Built Writer embed component and its out-of-bundle payloads
+# (npm run build:writer / stage:writer-fonts / prefetch:word2mow).
+public/writer/
+build/writer/
+build/writer-fonts/
+build/writer-convert/
 officecli-bin/
 
 # Wails / Go build artifacts.

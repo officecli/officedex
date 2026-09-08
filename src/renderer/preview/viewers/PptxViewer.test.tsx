@@ -73,8 +73,13 @@ const CONTEXT = {
   selectedShapes: [{ id: "title", name: "Title 1", type: "Placeholder" }],
 };
 
-async function bootWorkbench(filePath = "/tmp/deck.pptx", extraProps: { onDirtyChange?: (dirty: boolean) => void } = {}) {
-  render(<PptxViewer previewToken="preview-token" fileName="deck.pptx" documentType="pptx" filePath={filePath} editorBaseUrl={EDITOR_URL} {...extraProps} />);
+async function bootWorkbench(
+  filePath = "/tmp/deck.pptx",
+  // The real idle window is 1.5s. Tests shorten it rather than disable it, so
+  // the debounce is still on the path they exercise.
+  extraProps: { onDirtyChange?: (dirty: boolean) => void; autosaveIdleMs?: number } = {},
+) {
+  render(<PptxViewer previewToken="preview-token" fileName="deck.pptx" documentType="pptx" filePath={filePath} editorBaseUrl={EDITOR_URL} autosaveIdleMs={5} {...extraProps} />);
   const frame = await waitFor(() => {
     const node = document.querySelector<HTMLIFrameElement>(".pptx-workbench-frame");
     expect(node).toBeTruthy();
@@ -121,6 +126,61 @@ describe("PptxViewer", () => {
     act(() => editor.reply({ type: "officedex:pptx-export-result", requestId: exportMessage.requestId, buffer: new Uint8Array([0x50, 0x4b, 3, 4]).buffer, fileName: "deck.pptx", revision: 1 }));
     await waitFor(() => expect(savePptx).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(dirtyChanges).toContain(false));
+  });
+
+  // Every save exports the deck through mop-convert and rewrites the whole
+  // file. Saving on each dirty transition meant a burst of edits queued one
+  // conversion per change; only the last of them is worth running.
+  it("coalesces a burst of edits into one save", async () => {
+    const { editor } = await bootWorkbench("/tmp/deck.pptx", { autosaveIdleMs: 40 });
+    for (let index = 0; index < 4; index += 1) {
+      act(() => editor.reply({ type: "officedex:pptx-dirty-changed", fileId: "mop-1", dirty: true, revision: index + 1 }));
+    }
+    const exportMessage = await editor.waitForHostMessage("officedex:pptx-export");
+    act(() => editor.reply({ type: "officedex:pptx-export-result", requestId: exportMessage.requestId, buffer: new Uint8Array([0x50, 0x4b, 3, 4]).buffer, fileName: "deck.pptx", revision: 4 }));
+    await waitFor(() => expect(savePptx).toHaveBeenCalledTimes(1));
+    // Give the idle window another chance to fire a second time.
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    expect(savePptx).toHaveBeenCalledTimes(1);
+    expect(editor.received.filter((item) => item.type === "officedex:pptx-export").length).toBe(1);
+  });
+
+  // The host refuses to overwrite a deck that changed on disk. That refusal used
+  // to be invisible: the document stayed dirty, autosave retried on the next
+  // keystroke, and the user learned about it from the close prompt.
+  it("surfaces a save conflict and stops retrying until it is resolved", async () => {
+    savePptx.mockRejectedValueOnce(new Error("save pptx: source file changed outside OfficeDex; reopen it before saving"));
+    const { editor } = await bootWorkbench("/tmp/deck.pptx", { autosaveIdleMs: 5 });
+
+    act(() => editor.reply({ type: "officedex:pptx-dirty-changed", fileId: "mop-1", dirty: true, revision: 1 }));
+    const first = await editor.waitForHostMessage("officedex:pptx-export");
+    act(() => editor.reply({ type: "officedex:pptx-export-result", requestId: first.requestId, buffer: new Uint8Array([0x50, 0x4b, 3, 4]).buffer, fileName: "deck.pptx", revision: 1 }));
+
+    const bar = await waitFor(() => {
+      const node = document.querySelector(".pptx-workbench-save-failure");
+      expect(node).toBeTruthy();
+      return node as HTMLElement;
+    });
+    expect(bar.className).toContain("is-conflict");
+    expect(bar.textContent).toContain("changed outside OfficeDex");
+
+    // Further edits must not queue another doomed conversion.
+    act(() => editor.reply({ type: "officedex:pptx-dirty-changed", fileId: "mop-1", dirty: true, revision: 2 }));
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(editor.received.filter((item) => item.type === "officedex:pptx-export").length).toBe(1);
+
+    // The way out keeps the edits: a copy, which never touches the changed file.
+    fireEvent.click(screen.getByRole("button", { name: "Save a copy" }));
+    const copyExport = await waitFor(() => {
+      const list = editor.received.filter((item) => item.type === "officedex:pptx-export");
+      expect(list.length).toBe(2);
+      return list[1];
+    });
+    act(() => editor.reply({ type: "officedex:pptx-export-result", requestId: copyExport.requestId, buffer: new Uint8Array([0x50, 0x4b, 3, 4]).buffer, fileName: "deck.pptx", revision: 2 }));
+    await waitFor(() => expect(savePptx).toHaveBeenCalledTimes(2));
+    // A copy goes to Downloads: no target path, so the changed original stands.
+    expect(savePptx.mock.calls[1][2]).toEqual({});
+    await waitFor(() => expect(document.querySelector(".pptx-workbench-save-failure")).toBeNull());
   });
 
   it("registers the active PPTX editor save surface for Agent calls", async () => {
@@ -328,6 +388,38 @@ describe("PptxViewer", () => {
     await waitFor(() => expect(document.querySelector(".pptx-workbench-readonly")).toBeTruthy());
     expect(document.querySelector(".pptx-workbench-panel")).toBeNull();
     expect(document.querySelector(".pptx-workbench-frame")?.getAttribute("src")).toContain("mode=preview");
+  });
+
+  // A conversion gap means the deck is valid and the converter cannot represent
+  // part of it yet. The backend has always classified it separately (422
+  // PPTX_CONVERSION_GAP); it used to reach the user as the same red "could not
+  // open" box as a corrupt file.
+  it("tells a conversion gap apart from a file it could not read", async () => {
+    render(<PptxViewer previewToken="preview-token" fileName="deck.pptx" documentType="pptx" filePath="/tmp/deck.pptx" editorBaseUrl={EDITOR_URL} />);
+    await waitFor(() => expect(document.querySelector(".pptx-workbench-frame")).toBeTruthy());
+    const editor = installFakeEditorFrame();
+
+    act(() => editor.reply({ type: "officedex:pptx-ready" }));
+    const load = await editor.waitForHostMessage("officedex:pptx-load");
+    act(() =>
+      editor.reply({
+        type: "officedex:pptx-load-error",
+        requestId: load.requestId,
+        error: "structured gap(s): SmartArt",
+        errorCode: "PPTX_CONVERSION_GAP",
+      }),
+    );
+
+    await waitFor(() => expect(document.querySelector(".pptx-workbench")?.getAttribute("data-editor-status")).toBe("gap"));
+    // Reported as a note, not an alert, and it does not offer a reload that
+    // would produce the same outcome.
+    expect(document.querySelector("[role=\"alert\"]")).toBeNull();
+    // The fallback bar is a note too, so scope this to the overlay.
+    expect(document.querySelector(".pptx-workbench-overlay")?.textContent).toContain("Some features are not supported yet");
+    expect(screen.queryByRole("button", { name: "Reload editor" })).toBeNull();
+    // The read-only fallback is still the way out.
+    fireEvent.click(screen.getByRole("button", { name: "Show read-only preview" }));
+    await waitFor(() => expect(document.querySelector(".pptx-workbench-readonly")).toBeTruthy());
   });
 
   it("clears the unavailable banner after an editor reload succeeds", async () => {

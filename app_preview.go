@@ -296,6 +296,14 @@ func uniqueWorkbookPath(dir, fileName string) string {
 
 // RevokePreviewToken invalidates a token. No-op if unknown.
 func (a *App) RevokePreviewToken(token string) {
+	// The overwrite baseline belongs to an open document; once the token is
+	// gone nothing is editing that file, and a later save should adopt whatever
+	// is on disk rather than compare against a stale reading.
+	if a.previewReg != nil {
+		if entry, err := a.previewReg.ResolveToken(token); err == nil {
+			a.sourceDigests.forget(entry.FilePath)
+		}
+	}
 	for _, editor := range a.editorSessions() {
 		if err := editor.service.CloseByToken(token); err != nil && a.ctx != nil {
 			applog.Logger().Warn("close sessions for revoked preview token",
@@ -321,7 +329,11 @@ func (a *App) ReadArtifactFile(previewToken string) (ArtifactFile, error) {
 	if err != nil {
 		return ArtifactFile{}, fmt.Errorf("read artifact: %w", err)
 	}
-	return ArtifactFile{Data: data, SHA256: sha256Hex(data)}, nil
+	digest := sha256Hex(data)
+	// These are the bytes the editor is about to work from, so they are the
+	// baseline a later save compares against.
+	a.sourceDigests.remember(entry.FilePath, digest)
+	return ArtifactFile{Data: data, SHA256: digest}, nil
 }
 
 // SaveDocxInput carries a locally exported DOCX. Overwriting is only allowed
@@ -368,6 +380,7 @@ func (a *App) SaveDocx(input SaveDocxInput) (SaveDocxResult, error) {
 	if err := atomicfile.WriteFile(dest, data, 0o644); err != nil {
 		return SaveDocxResult{}, fmt.Errorf("save docx: write: %w", err)
 	}
+	a.sourceDigests.remember(dest, sha256Hex(data))
 	if a.previewReg != nil {
 		_ = a.previewReg.AllowArtifact(types.Artifact{FilePath: dest, FileName: filepath.Base(dest), DocumentType: "docx"})
 	}

@@ -6,6 +6,7 @@ export const DocxViewer = lazy(() => import("./DocxViewer"));
 export const XlsxViewer = lazy(() => import("./XlsxViewer"));
 export const PdfViewer = lazy(() => import("./PdfViewer"));
 export const HtmlViewer = lazy(() => import("./HtmlViewer"));
+export const ImageViewer = lazy(() => import("./ImageViewer"));
 
 export interface PreviewViewerProps {
   previewToken: string;
@@ -25,6 +26,10 @@ export const PREVIEW_VIEWERS: Readonly<Record<string, PreviewViewer>> = {
   pdf: PdfViewer as PreviewViewer,
   html: HtmlViewer as PreviewViewer,
   htm: HtmlViewer as PreviewViewer,
+  png: ImageViewer as PreviewViewer,
+  jpg: ImageViewer as PreviewViewer,
+  jpeg: ImageViewer as PreviewViewer,
+  webp: ImageViewer as PreviewViewer,
 };
 
 export function previewViewerFor(documentType: string | undefined): PreviewViewer | undefined {

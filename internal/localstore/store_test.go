@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -336,8 +338,8 @@ func TestMigrateV5ToV6PreservesTasks(t *testing.T) {
 	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'recent_files'`).Scan(&recentTableCount); err != nil {
 		t.Fatal(err)
 	}
-	if version != 8 || taskCount != 1 || recentTableCount != 1 {
-		t.Fatalf("version=%d taskCount=%d recentTableCount=%d, want 8/1/1", version, taskCount, recentTableCount)
+	if version != latestSchemaVersion || taskCount != 1 || recentTableCount != 1 {
+		t.Fatalf("version=%d taskCount=%d recentTableCount=%d, want %d/1/1", version, taskCount, recentTableCount, latestSchemaVersion)
 	}
 }
 
@@ -841,8 +843,8 @@ func TestSchemaMigrationFromV1DB(t *testing.T) {
 	if err := store.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 8 {
-		t.Errorf("user_version = %d, want 8", version)
+	if version != latestSchemaVersion {
+		t.Errorf("user_version = %d, want %d", version, latestSchemaVersion)
 	}
 
 	events, err := store.QueryEventsByTask(ctx, "legacy-task")
@@ -988,13 +990,16 @@ func assertV7Backfill(t *testing.T, store *Store) {
 	if err := store.db.QueryRowContext(ctx, `SELECT created_at, updated_at FROM activity_streams WHERE id = 'activity:conv-b'`).Scan(&streamCreated, &streamUpdated); err != nil {
 		t.Fatal(err)
 	}
-	if streamCreated != "2026-01-02T00:00:00Z" || streamUpdated != "2026-01-02T00:00:02Z" {
+	// The seeded rows are written in the legacy variable-width layout; the V9
+	// migration normalizes them, so the expectations here are those same
+	// instants in the fixed-width on-disk layout.
+	if streamCreated != "2026-01-02T00:00:00.000000000Z" || streamUpdated != "2026-01-02T00:00:02.000000000Z" {
 		t.Fatalf("conv-b stream times = %q, %q", streamCreated, streamUpdated)
 	}
 	if err := store.db.QueryRowContext(ctx, `SELECT updated_at FROM documents WHERE id = 'document:%2Ftmp%2Fshared.pptx'`).Scan(&documentUpdated); err != nil {
 		t.Fatal(err)
 	}
-	if documentUpdated != "2026-01-02T00:00:01Z" {
+	if documentUpdated != "2026-01-02T00:00:01.000000000Z" {
 		t.Fatalf("document latest run time = %q, want source-only task-c time", documentUpdated)
 	}
 	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM tasks WHERE id = 'task-d'`).Scan(&count); err != nil {
@@ -1499,8 +1504,8 @@ func TestSchemaV1MigrationFromLegacyDB(t *testing.T) {
 	if err := store.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 8 {
-		t.Errorf("user_version = %d, want 8", version)
+	if version != latestSchemaVersion {
+		t.Errorf("user_version = %d, want %d", version, latestSchemaVersion)
 	}
 	if err := store.Close(); err != nil {
 		t.Fatal(err)
@@ -1709,7 +1714,12 @@ func TestRecordEventOrdersByEventTimestamp(t *testing.T) {
 		}
 		got = append(got, typ+"@"+createdAt)
 	}
-	want := []string{"task.question@2026-09-04T10:00:01Z", "task.cancelled@2026-09-04T10:00:05Z"}
+	// Stored stamps are normalized to the fixed-width sortable layout, so the
+	// expectation is the event's instant rendered that way, not the input text.
+	want := []string{
+		"task.question@2026-09-04T10:00:01.000000000Z",
+		"task.cancelled@2026-09-04T10:00:05.000000000Z",
+	}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("events ordered by created_at = %v, want %v (event TS, not write time)", got, want)
 	}
@@ -1722,7 +1732,7 @@ func TestRecordEventOrdersByEventTimestamp(t *testing.T) {
 	if err := store.db.QueryRowContext(ctx, `SELECT created_at FROM task_events WHERE task_id = 'ts-task' AND type = 'task.question'`).Scan(&createdAt); err != nil {
 		t.Fatal(err)
 	}
-	if createdAt != "2026-09-04T10:00:01Z" {
+	if createdAt != "2026-09-04T10:00:01.000000000Z" {
 		t.Fatalf("re-recording moved the event to %s", createdAt)
 	}
 
@@ -1730,4 +1740,361 @@ func TestRecordEventOrdersByEventTimestamp(t *testing.T) {
 	if err := store.RecordEvent(types.BridgeEvent{EventID: "odd", TaskID: "ts-task", Type: "task.progress", TS: "yesterday-ish"}); err != nil {
 		t.Fatalf("unparseable TS must not fail the write: %v", err)
 	}
+}
+
+// The instant pair at the heart of the ordering bug: 100ms is
+// .100000000 padded but ".1" under RFC3339Nano, while 100000001ns keeps all
+// nine digits. Chronologically the first precedes the second; lexically
+// ".1Z" sorts after ".100000001Z" because 'Z' (0x5A) > '0' (0x30). Any
+// variable-width layout inverts this pair every single time, so tests built
+// on it fail deterministically instead of waiting for a -count=N collision.
+var (
+	trailingZeroInstant = time.Date(2026, 9, 4, 10, 0, 0, 100000000, time.UTC)
+	fullWidthInstant    = time.Date(2026, 9, 4, 10, 0, 0, 100000001, time.UTC)
+)
+
+func TestFormatTimestampIsFixedWidthAndSortsChronologically(t *testing.T) {
+	earlier := formatTimestamp(trailingZeroInstant)
+	later := formatTimestamp(fullWidthInstant)
+
+	if len(earlier) != len(later) {
+		t.Fatalf("timestamps are not fixed width: %q (%d) vs %q (%d)", earlier, len(earlier), later, len(later))
+	}
+	if !(earlier < later) {
+		t.Fatalf("lexical order disagrees with chronological order: %q >= %q", earlier, later)
+	}
+	// The regression this guards: the old layout inverted exactly this pair.
+	if legacy, legacyLater := trailingZeroInstant.Format(time.RFC3339Nano), fullWidthInstant.Format(time.RFC3339Nano); legacy < legacyLater {
+		t.Fatalf("fixture no longer reproduces the RFC3339Nano inversion (%q < %q); pick another pair", legacy, legacyLater)
+	}
+}
+
+func TestQueryEventsByTaskOrdersAdjacentInstantsChronologically(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+
+	// Recorded later-first so a query that ignored created_at entirely (or
+	// fell back to insertion order) would also fail.
+	for _, event := range []types.BridgeEvent{
+		{EventID: "e2", TaskID: "task-1", Type: "task.progress", TS: fullWidthInstant.Format(time.RFC3339Nano)},
+		{EventID: "e1", TaskID: "task-1", Type: "task.started", TS: trailingZeroInstant.Format(time.RFC3339Nano)},
+	} {
+		if err := store.RecordEvent(event); err != nil {
+			t.Fatalf("RecordEvent(%s): %v", event.EventID, err)
+		}
+	}
+
+	got, err := store.QueryEventsByTask(ctx, "task-1")
+	if err != nil {
+		t.Fatalf("QueryEventsByTask: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d events, want 2", len(got))
+	}
+	if got[0].EventID != "e1" || got[1].EventID != "e2" {
+		t.Fatalf("events = [%s %s], want [e1 e2]", got[0].EventID, got[1].EventID)
+	}
+}
+
+func TestRecordedTimestampsAreAllFixedWidth(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+
+	if err := store.RecordEvent(types.BridgeEvent{EventID: "e1", TaskID: "task-1", Type: "task.started"}); err != nil {
+		t.Fatalf("RecordEvent: %v", err)
+	}
+	if err := store.RecordArtifact(types.Artifact{
+		FilePath: "/tmp/deck.pptx", FileName: "deck.pptx", DocumentType: "pptx", TaskID: "task-1",
+	}); err != nil {
+		t.Fatalf("RecordArtifact: %v", err)
+	}
+	if _, err := store.EnsureWorkspace(ctx, t.TempDir()); err != nil {
+		t.Fatalf("EnsureWorkspace: %v", err)
+	}
+	if err := store.UpsertRecentFile(ctx, types.RecentFile{
+		FilePath: "/tmp/deck.pptx", FileName: "deck.pptx", DocumentType: "pptx", Source: "generated",
+	}); err != nil {
+		t.Fatalf("UpsertRecentFile: %v", err)
+	}
+
+	width := len(formatTimestamp(time.Now()))
+	for _, spec := range timestampColumns {
+		for _, column := range spec.columns {
+			rows, err := store.db.QueryContext(ctx,
+				fmt.Sprintf(`SELECT %s FROM %s WHERE %s != ''`, column, spec.table, column))
+			if err != nil {
+				t.Fatalf("read %s.%s: %v", spec.table, column, err)
+			}
+			for rows.Next() {
+				var value string
+				if err := rows.Scan(&value); err != nil {
+					t.Fatalf("scan %s.%s: %v", spec.table, column, err)
+				}
+				if len(value) != width {
+					t.Errorf("%s.%s = %q (%d chars), want %d-char fixed-width stamp",
+						spec.table, column, value, len(value), width)
+				}
+			}
+			rows.Close()
+		}
+	}
+}
+
+// A database written by an older build carries variable-width stamps. Opening
+// it must rewrite them, or the keyset cursors that test `updated_at = ?` stop
+// matching their own rows.
+func TestMigrationNormalizesLegacyTimestamps(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "officedex.db")
+
+	store := New(path)
+	if err := store.Open(ctx); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	// Write legacy-format rows directly, then rewind user_version so the next
+	// Open re-runs the normalization over them.
+	if _, err := store.db.ExecContext(ctx,
+		`INSERT INTO task_events(event_id, task_id, type, payload_json, created_at) VALUES
+		   ('task-1:e1', 'task-1', 'task.started', '{}', ?),
+		   ('task-1:e2', 'task-1', 'task.progress', '{}', ?)`,
+		trailingZeroInstant.Format(time.RFC3339Nano),
+		fullWidthInstant.Format(time.RFC3339Nano),
+	); err != nil {
+		t.Fatalf("seed legacy events: %v", err)
+	}
+	if _, err := store.db.ExecContext(ctx,
+		`INSERT INTO tasks(id, status, updated_at, created_at) VALUES ('task-1', 'running', ?, ?)`,
+		trailingZeroInstant.Format(time.RFC3339Nano),
+		trailingZeroInstant.Format(time.RFC3339Nano),
+	); err != nil {
+		t.Fatalf("seed legacy task: %v", err)
+	}
+	// An unparseable stamp must survive untouched rather than being replaced
+	// by a synthetic "now" that would claim the row is newer than it is.
+	if _, err := store.db.ExecContext(ctx,
+		`INSERT INTO task_events(event_id, task_id, type, payload_json, created_at)
+		 VALUES ('task-1:odd', 'task-1', 'task.progress', '{}', 'yesterday-ish')`,
+	); err != nil {
+		t.Fatalf("seed unparseable stamp: %v", err)
+	}
+	if _, err := store.db.ExecContext(ctx, "PRAGMA user_version = 8"); err != nil {
+		t.Fatalf("rewind user_version: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	reopened := New(path)
+	if err := reopened.Open(ctx); err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	t.Cleanup(func() { _ = reopened.Close() })
+
+	var stamps []string
+	rows, err := reopened.db.QueryContext(ctx,
+		`SELECT created_at FROM task_events WHERE event_id IN ('task-1:e1', 'task-1:e2') ORDER BY event_id ASC`)
+	if err != nil {
+		t.Fatalf("read normalized: %v", err)
+	}
+	for rows.Next() {
+		var value string
+		if err := rows.Scan(&value); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		stamps = append(stamps, value)
+	}
+	rows.Close()
+	want := []string{formatTimestamp(trailingZeroInstant), formatTimestamp(fullWidthInstant)}
+	if strings.Join(stamps, ",") != strings.Join(want, ",") {
+		t.Fatalf("normalized stamps = %v, want %v", stamps, want)
+	}
+
+	var odd string
+	if err := reopened.db.QueryRowContext(ctx,
+		`SELECT created_at FROM task_events WHERE event_id = 'task-1:odd'`).Scan(&odd); err != nil {
+		t.Fatalf("read unparseable: %v", err)
+	}
+	if odd != "yesterday-ish" {
+		t.Errorf("unparseable stamp was rewritten to %q; it must be left as-is", odd)
+	}
+
+	// The whole point: after normalization the rows come back in real order.
+	got, err := reopened.QueryEventsByTask(ctx, "task-1")
+	if err != nil {
+		t.Fatalf("QueryEventsByTask: %v", err)
+	}
+	var ordered []string
+	for _, event := range got {
+		if event.EventID != "odd" {
+			ordered = append(ordered, event.EventID)
+		}
+	}
+	if strings.Join(ordered, ",") != "e1,e2" {
+		t.Fatalf("post-migration order = %v, want [e1 e2]", ordered)
+	}
+}
+
+func TestQueryUnfinishedDocumentTasksSpansTheLineageAndSkipsTerminalTasks(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+	for taskID, events := range map[string][]string{
+		"task-open":      {"task.started"},
+		"task-parked":    {"task.started", "task.question"},
+		"task-completed": {"task.started", "task.completed"},
+		"task-failed":    {"task.started", "task.failed"},
+	} {
+		if err := store.RecordTaskContext(ctx, taskID, TaskContext{ConversationID: "document-a"}); err != nil {
+			t.Fatal(err)
+		}
+		for _, eventType := range events {
+			if err := store.RecordEvent(types.BridgeEvent{TaskID: taskID, Type: eventType}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	// A task in a different document must not be swept in by the lineage query.
+	if err := store.RecordTaskContext(ctx, "task-elsewhere", TaskContext{ConversationID: "document-b"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordEvent(types.BridgeEvent{TaskID: "task-elsewhere", Type: "task.started"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Any member of the lineage resolves to the same answer, including one
+	// that is itself already finished.
+	for _, seed := range []string{"task-open", "task-completed"} {
+		unfinished, err := store.QueryUnfinishedDocumentTasks(ctx, seed)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := append([]string(nil), unfinished...)
+		sort.Strings(got)
+		want := []string{"task-open", "task-parked"}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("unfinished from %q = %#v, want %#v", seed, got, want)
+		}
+	}
+}
+
+// Deleting a document is meant to cancel its running work, not to be refused
+// because of it. The store still guards the invariant; the caller is expected
+// to settle the lineage first, and this pins that the guard lifts once it has.
+func TestRemoveDocumentByTaskIDSucceedsOnceTheLineageIsSettled(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+	if err := store.RecordTaskContext(ctx, "task-open", TaskContext{ConversationID: "document-a"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordEvent(types.BridgeEvent{TaskID: "task-open", Type: "task.started"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RemoveDocumentByTaskID(ctx, "task-open"); err == nil {
+		t.Fatal("expected the delete to be refused while the task is open")
+	}
+	if err := store.RecordEvent(types.BridgeEvent{TaskID: "task-open", Type: "task.cancelled"}); err != nil {
+		t.Fatal(err)
+	}
+	unfinished, err := store.QueryUnfinishedDocumentTasks(ctx, "task-open")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(unfinished) != 0 {
+		t.Fatalf("unfinished after cancellation = %#v, want none", unfinished)
+	}
+	if err := store.RemoveDocumentByTaskID(ctx, "task-open"); err != nil {
+		t.Fatalf("delete after settling the lineage: %v", err)
+	}
+}
+
+// A run left non-terminal used to be relaunched on every app start, and its
+// replayed progress flipped the task the app had just failed back to
+// `running` -- which is what made a document impossible to delete. A finished
+// task must only be revived by an explicit new attempt.
+func TestRecordEventKeepsFinishedTasksFinishedUnlessRestarted(t *testing.T) {
+	ctx := context.Background()
+	statusOf := func(t *testing.T, store *Store, taskID string) string {
+		t.Helper()
+		for _, status := range []string{"starting", "running", "question", "plan_review", "completed", "failed", "cancelled"} {
+			ids, err := store.QueryTaskIDsByStatus(ctx, status)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, id := range ids {
+				if id == taskID {
+					return status
+				}
+			}
+		}
+		t.Fatalf("task %q has no status", taskID)
+		return ""
+	}
+
+	t.Run("late progress does not resurrect a failed task", func(t *testing.T) {
+		store := newTempStore(t)
+		for _, event := range []types.BridgeEvent{
+			{TaskID: "task-zombie", Type: "task.started"},
+			{TaskID: "task-zombie", Type: "task.failed"},
+			{TaskID: "task-zombie", Type: "task.progress"},
+		} {
+			if err := store.RecordEvent(event); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if status := statusOf(t, store, "task-zombie"); status != "failed" {
+			t.Fatalf("status = %q, want the task to stay failed", status)
+		}
+		// It must also stay deletable, which is the behaviour users see.
+		if err := store.RemoveDocumentByTaskID(ctx, "task-zombie"); err != nil {
+			t.Fatalf("delete after late progress: %v", err)
+		}
+	})
+
+	t.Run("a late question does not park a cancelled task", func(t *testing.T) {
+		store := newTempStore(t)
+		for _, event := range []types.BridgeEvent{
+			{TaskID: "task-cancelled", Type: "task.started"},
+			{TaskID: "task-cancelled", Type: "task.cancelled"},
+			{TaskID: "task-cancelled", Type: "task.question"},
+		} {
+			if err := store.RecordEvent(event); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if status := statusOf(t, store, "task-cancelled"); status != "cancelled" {
+			t.Fatalf("status = %q, want the task to stay cancelled", status)
+		}
+	})
+
+	t.Run("an explicit restart does revive it", func(t *testing.T) {
+		store := newTempStore(t)
+		for _, event := range []types.BridgeEvent{
+			{TaskID: "task-retried", Type: "task.started"},
+			{TaskID: "task-retried", Type: "task.failed"},
+			{TaskID: "task-retried", Type: "task.started"},
+			{TaskID: "task-retried", Type: "task.progress"},
+		} {
+			if err := store.RecordEvent(event); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if status := statusOf(t, store, "task-retried"); status != "running" {
+			t.Fatalf("status = %q, want a retried task to run again", status)
+		}
+	})
+
+	t.Run("one terminal state corrects another", func(t *testing.T) {
+		store := newTempStore(t)
+		for _, event := range []types.BridgeEvent{
+			{TaskID: "task-terminal", Type: "task.started"},
+			{TaskID: "task-terminal", Type: "task.failed"},
+			{TaskID: "task-terminal", Type: "task.cancelled"},
+		} {
+			if err := store.RecordEvent(event); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if status := statusOf(t, store, "task-terminal"); status != "cancelled" {
+			t.Fatalf("status = %q, want the later terminal state", status)
+		}
+	})
 }

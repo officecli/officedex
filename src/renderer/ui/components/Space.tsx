@@ -16,11 +16,11 @@ function sizeValue(size: SpaceSize): number {
 
 function SpaceRoot({ direction = "horizontal", size = 8, align, wrap, className, style, ...props }: SpaceProps) {
   const [columnGap, rowGap] = Array.isArray(size) ? size.map(sizeValue) : [sizeValue(size), sizeValue(size)];
-  return <div {...props} className={["ui-space", className].filter(Boolean).join(" ")} data-direction={direction} style={{ columnGap, rowGap, alignItems: align, flexWrap: wrap ? "wrap" : undefined, ...style }} />;
+  return <div {...props} className={["od-space", className].filter(Boolean).join(" ")} data-direction={direction} style={{ columnGap, rowGap, alignItems: align, flexWrap: wrap ? "wrap" : undefined, ...style }} />;
 }
 
 function Compact({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div {...props} className={["ui-space-compact", className].filter(Boolean).join(" ")} />;
+  return <div {...props} className={["od-space-compact", className].filter(Boolean).join(" ")} />;
 }
 
 export const Space = Object.assign(SpaceRoot, { Compact });

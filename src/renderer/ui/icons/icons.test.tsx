@@ -13,6 +13,6 @@ describe("project icon boundary", () => {
       </>,
     );
     expect(screen.getByLabelText("Add")).toBeTruthy();
-    expect(screen.getByLabelText("Loading")).toHaveClass("ui-icon--spin");
+    expect(screen.getByLabelText("Loading")).toHaveClass("od-icon--spin");
   });
 });

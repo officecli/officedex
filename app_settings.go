@@ -142,6 +142,13 @@ func (a *App) RemoveRecentFile(filePath string) error {
 
 // DeleteDocument removes a generated document's local task/history metadata
 // while deliberately leaving every file on disk untouched.
+//
+// It settles the lineage first. The confirmation dialog promises that "running
+// work will be cancelled", and the store refuses to delete a document whose
+// lineage still has an open task -- so anything left open here is the
+// difference between the promise and an error message. The renderer attempts
+// the same cancellation, but it can only reach tasks it has hydrated, and a
+// cancel that fails there is swallowed; doing it here covers the rest.
 func (a *App) DeleteDocument(taskID string) error {
 	if a.localStore == nil {
 		return errors.New("workspace store is unavailable")
@@ -154,7 +161,44 @@ func (a *App) DeleteDocument(taskID string) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	a.settleDocumentLineage(ctx, taskID)
 	return a.localStore.RemoveDocumentByTaskID(ctx, taskID)
+}
+
+// settleDocumentLineage drives every unfinished task in taskID's lineage to a
+// terminal state. It asks a live bridge to cancel first so a running
+// generation actually stops, then records the cancellation locally regardless
+// of what the bridge said: a task whose bridge process is gone -- the common
+// case for a document the user is deleting -- can never be cancelled
+// remotely, and it is exactly that task that would otherwise block the delete
+// forever.
+//
+// Only an already-connected bridge is asked. Starting one, or waiting out a
+// request timeout against one that is not answering, would make deleting a
+// document hang on a process the user is trying to get rid of.
+func (a *App) settleDocumentLineage(ctx context.Context, taskID string) {
+	unfinished, err := a.localStore.QueryUnfinishedDocumentTasks(ctx, taskID)
+	if err != nil {
+		applog.Logger().Warn("query unfinished document tasks", applog.Task(taskID), applog.Err(err))
+		return
+	}
+	if len(unfinished) == 0 {
+		return
+	}
+	client := a.bridges.anyConnected()
+	for _, id := range unfinished {
+		if client != nil {
+			if _, err := client.CancelTask(ctx, id); err != nil {
+				applog.Logger().Info("cancel task for document deletion",
+					applog.Task(id), applog.Err(err))
+			}
+		}
+		a.recordLocalTaskCancelled(id, "Task cancelled because its document was deleted")
+	}
+	// recordLocalTaskCancelled goes through the shared event queue, so the
+	// rows are not in SQLite yet. Deleting before they land would still see
+	// the tasks as open.
+	a.flushEventWrites()
 }
 
 func (a *App) RenameWorkspace(workspaceID, name string) (types.WorkspaceSummary, error) {

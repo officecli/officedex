@@ -1,7 +1,17 @@
 #!/usr/bin/env node
-// Copies the officecli Go binary from build/ into the Wails-packaged .app
-// bundle's Contents/Resources/ so that the binresolver can discover it at
-// runtime (bundled path takes priority).
+// Stages the runtime payloads Wails does not place itself -- the officecli and
+// word2mow binaries, the MOP Node runtime, the presentation SSR source root and
+// Writer's default-font closure -- into the packaged application.
+//
+// The two platforms have different bundle shapes, and the Go side already knows
+// both (see findBundledBinaryPath in app_bridge_lifecycle.go and
+// writerResourceCandidates in app_writer.go):
+//
+//   macOS:   build/bin/OfficeDex.app/Contents/Resources/<resource>
+//   Windows: build/bin/<resource>, sitting beside officedex.exe
+//
+// Everything below is expressed once against a resolved destination root so the
+// two layouts cannot drift apart.
 
 import { chmod, copyFile, cp, mkdir, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -10,11 +20,37 @@ import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "..");
-const APP_PATH = path.join(REPO_ROOT, "build", "bin", "OfficeDex.app");
-const RESOURCES = path.join(APP_PATH, "Contents", "Resources");
+const BIN = path.join(REPO_ROOT, "build", "bin");
+const APP_PATH = path.join(BIN, "OfficeDex.app");
 
 const IS_WINDOWS = process.platform === "win32";
 const BINARY_NAME = IS_WINDOWS ? "officecli.exe" : "officecli";
+const CONVERT_BINARY_NAME = IS_WINDOWS ? "convert.exe" : "convert";
+
+/**
+ * Where staged resources go, and whether there is a package to stage into.
+ *
+ * The .app is checked first on every platform: a cross-compiled Windows build
+ * produced on a Mac still leaves the host's .app in build/bin, and picking the
+ * loose-file layout there would scatter resources beside it.
+ */
+export function resolveBundleTarget({
+  platform = process.platform,
+  bin = BIN,
+  exists = existsSync,
+} = {}) {
+  const app = path.join(bin, "OfficeDex.app");
+  if (exists(app)) {
+    return { kind: "macos-app", root: path.join(app, "Contents", "Resources"), package: app };
+  }
+  // Windows keeps resources beside officedex.exe; `Archive (Windows)` zips
+  // build\bin\* wholesale, so anything written here ships.
+  const executable = path.join(bin, platform === "win32" ? "officedex.exe" : "officedex");
+  if (exists(executable)) {
+    return { kind: "windows-dir", root: bin, package: executable };
+  }
+  return null;
+}
 
 async function copy(src, destDir, destName) {
   if (!existsSync(src)) {
@@ -41,29 +77,52 @@ async function copyTreeRequired(src, dest, label) {
 }
 
 async function main() {
-  if (!existsSync(APP_PATH)) {
-    console.log("[bundle-runtime] no .app found, skipping");
+  const target = resolveBundleTarget();
+  if (target === null) {
+    console.log("[bundle-runtime] no packaged application found in build/bin, skipping");
     return;
   }
+  const resources = target.root;
+  console.log(`[bundle-runtime] staging into ${resources} (${target.kind})`);
 
   // officecli
   const officecliSrc = path.join(REPO_ROOT, "build", "officecli", BINARY_NAME);
-  const officecliDest = path.join(RESOURCES, "officecli");
-  await copy(officecliSrc, officecliDest, BINARY_NAME);
+  await copy(officecliSrc, path.join(resources, "officecli"), BINARY_NAME);
 
   // MOP authoring uses both an embedded Node runtime and a Vite SSR source
   // root. Fail packaging when either is absent, otherwise generation would
   // work only on a developer machine that happens to have the source checkout.
-  const mopRuntimeSrc = path.join(REPO_ROOT, "build", "mop-runtime");
-  const mopRuntimeDest = path.join(RESOURCES, "mop-runtime");
-  await copyTreeRequired(mopRuntimeSrc, mopRuntimeDest, "MOP runtime");
+  await copyTreeRequired(
+    path.join(REPO_ROOT, "build", "mop-runtime"),
+    path.join(resources, "mop-runtime"),
+    "MOP runtime",
+  );
+  await copyTreeRequired(
+    path.join(REPO_ROOT, "build", "presentation"),
+    path.join(resources, "presentation"),
+    "MOP presentation runtime",
+  );
 
-  const presentationSrc = path.join(REPO_ROOT, "build", "presentation");
-  const presentationDest = path.join(RESOURCES, "presentation");
-  await copyTreeRequired(presentationSrc, presentationDest, "MOP presentation runtime");
+  // Writer's default-font closure. It stays out of dist/ (and therefore out of
+  // `//go:embed all:dist`); internal/writerfonts serves it from here.
+  await copyTreeRequired(
+    path.join(REPO_ROOT, "build", "writer-fonts"),
+    path.join(resources, "writer-fonts"),
+    "Writer default-font closure",
+  );
+
+  // word2mow's DOCX <-> MOW converter, driven by internal/word2mowhttp.
+  const convertSrc = path.join(REPO_ROOT, "build", "writer-convert", CONVERT_BINARY_NAME);
+  if (!existsSync(convertSrc)) {
+    throw new Error(`word2mow convert binary not found: ${convertSrc}`);
+  }
+  await copy(convertSrc, path.join(resources, "word2mow"), CONVERT_BINARY_NAME);
 }
 
-main().catch((err) => {
-  console.error(`[bundle-runtime] error: ${err.message}`);
-  process.exit(1);
-});
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain) {
+  main().catch((err) => {
+    console.error(`[bundle-runtime] error: ${err.message}`);
+    process.exit(1);
+  });
+}

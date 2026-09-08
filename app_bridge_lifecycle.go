@@ -287,14 +287,6 @@ func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
 	return winner, nil
 }
 
-func resolveMopConvertFromEnvironment() string {
-	// This used to keep the value exactly as written, while the pptxeditor
-	// package resolved the same two variables to an absolute path. A relative
-	// path is not usable from a packaged app, whose working directory is not
-	// the shell's.
-	return config.FirstExecutablePath(config.MOPConvertBinaryEnvKeys...)
-}
-
 func (a *App) ensureLoginManagerLocked() *login.Manager {
 	if a.loginManager != nil {
 		return a.loginManager

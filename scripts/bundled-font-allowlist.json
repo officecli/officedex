@@ -1,5 +1,5 @@
 {
-  "comment": "Font families permitted in a packaged build. A family that appears in neither 'families' nor 'unresolved' fails verify-bundled-fonts.mjs. Commercial faces (the HanYi hy-* set, Microsoft DengXian) reached the bundle once through the presentation runtime; this gate exists so that cannot happen quietly again.",
+  "comment": "Font families permitted in a packaged build. A family that appears in neither 'families' nor 'unresolved' fails verify-bundled-fonts.mjs. Commercial faces (the HanYi hy* set, Microsoft DengXian) reached the bundle once through the presentation runtime; this gate exists so that cannot happen quietly again.",
   "families": {
     "katex": {
       "license": "OFL-1.1",
@@ -10,14 +10,48 @@
       "license": "OFL-1.1",
       "source": "https://github.com/rsms/inter",
       "verifiedFrom": "upstream project licence"
+    },
+    "sourcehansanscn": {
+      "license": "OFL-1.1",
+      "source": "adobe-fonts/source-han-sans 2.005R, SubsetOTF/CN",
+      "verifiedFrom": "writer/assets/fonts/licenses/README.md and source-han-sans-OFL.txt"
+    },
+    "sourcehanserifcn": {
+      "license": "OFL-1.1",
+      "source": "adobe-fonts/source-han-serif 2.003R, SubsetOTF/CN",
+      "verifiedFrom": "writer/assets/fonts/licenses/README.md and source-han-serif-OFL.txt"
+    },
+    "notosansjp": {
+      "license": "OFL-1.1",
+      "source": "google/fonts@295d98a7a0c17c68f1341eaeea354e7960ea70d3, ofl/notosansjp, instantiated at weight 400",
+      "verifiedFrom": "writer/assets/fonts/licenses/README.md and noto-sans-jp-OFL.txt"
+    },
+    "notoserifjp": {
+      "license": "OFL-1.1",
+      "source": "google/fonts@8a7c74854f766ae441c7584925cc0ec626fc5aa6, ofl/notoserifjp, instantiated at weight 400",
+      "verifiedFrom": "writer/assets/fonts/licenses/README.md and noto-serif-jp-OFL.txt"
+    },
+    "amiri": {
+      "license": "OFL-1.1",
+      "source": "google/fonts@39d11bc313031c9f68e21a297ce5e4a15cc5365e, ofl/amiri",
+      "verifiedFrom": "writer/assets/fonts/licenses/README.md and amiri-OFL.txt"
+    },
+    "sourcecodepro": {
+      "license": "OFL-1.1",
+      "source": "adobe-fonts/source-code-pro@d3f1a5962cde503f9409c21e58527611d4a19ef1",
+      "verifiedFrom": "writer/assets/fonts/licenses/README.md and source-code-pro-OFL.md"
     }
   },
   "unresolved": {
     "lucide": "Shipped by presentation-assets as a woff2 subset with no licence file in that package. Lucide upstream is ISC, but the subset's provenance is not recorded here; record it and move this entry into families.",
-    "remix": "Shipped by presentation-assets as a woff2 subset with no licence file in that package. Remix Icon upstream is Apache-2.0, but the subset's provenance is not recorded here; record it and move this entry into families."
+    "remix": "Shipped by presentation-assets as a woff2 subset with no licence file in that package. Remix Icon upstream is Apache-2.0, but the subset's provenance is not recorded here; record it and move this entry into families.",
+    "trebuchet ms": "Writer delivers `Trebuchet MS-Regular.ttf.0.bin`, a single face extracted from the Microsoft font, because it sits in the catalog's renderFamilyAllowlist and has to stay drawable. Monotype/Microsoft do not grant redistribution; either obtain one, drop it from the allowlist, or replace it with a metric-compatible libre face."
   },
   "denied": {
-    "hy-": "HanYi commercial typefaces; redistribution requires a licence this project does not hold",
+    "hy": "HanYi commercial typefaces; redistribution requires a licence this project does not hold",
     "dengxian": "Microsoft DengXian; ships with Windows and Office and is not redistributable"
+  },
+  "exempt": {
+    "hyzhongheikw.woff": "TODO(font-licence): HanYi ZhongHei, kept against the 'hy' denial for one reason only. writer's layout/decorations/watermark-font.ts resolveVmlArtTextResourceFamily() hardcodes 汉仪中黑KW for CJK VML ArtText watermarks, and that raster needs real glyph bytes -- the deterministic profile may not fall back to a system-local face (07b 7b.5). Removing it silently distorts those watermarks. Resolve by licensing the face or by teaching writer to raster the watermark from an OFL face."
   }
 }

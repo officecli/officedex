@@ -24,8 +24,8 @@ export function Table<Row>({ rowKey, columns, dataSource, emptyText = "No data",
   const rows = dataSource.slice(0, pageSize);
   const keyFor = (row: Row) => String(typeof rowKey === "function" ? rowKey(row) : row[rowKey]);
   return (
-    <div {...props} className={["ui-table-wrap", className].filter(Boolean).join(" ")}>
-      <table className="ui-table">
+    <div {...props} className={["od-table-wrap", className].filter(Boolean).join(" ")}>
+      <table className="od-table">
         <thead><tr>{columns.map((column, index) => <th key={column.key ?? String(column.dataIndex ?? index)} style={{ width: column.width as CSSProperties["width"] }}>{column.title}</th>)}</tr></thead>
         <tbody>
           {rows.length ? rows.map((row, rowIndex) => (
@@ -35,7 +35,7 @@ export function Table<Row>({ rowKey, columns, dataSource, emptyText = "No data",
                 return <td key={column.key ?? String(column.dataIndex ?? columnIndex)}>{column.render ? column.render(value as Row[keyof Row], row, rowIndex) : value as ReactNode}</td>;
               })}
             </tr>
-          )) : <tr><td colSpan={Math.max(1, columns.length)}><div className="ui-table__empty">{emptyText}</div></td></tr>}
+          )) : <tr><td colSpan={Math.max(1, columns.length)}><div className="od-table__empty">{emptyText}</div></td></tr>}
         </tbody>
       </table>
     </div>

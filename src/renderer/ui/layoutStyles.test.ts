@@ -21,9 +21,13 @@ describe("Chinese layout safeguards", () => {
     expect(updates).toContain(".update-banner-actions { width: 100%; justify-content: flex-end; }");
   });
 
-  it("keeps compact document icons centered in the full sidebar row", () => {
+  it("keeps document icons centered when the rail shrinks on a narrow window", () => {
     const home = readFileSync(`${process.cwd()}/src/renderer/styles/home.css`, "utf8");
     expect(home).toContain(".project-sidebar__document-open { display: grid; width: 100%;");
-    expect(home).toContain(".project-sidebar[data-compact=\"true\"] .project-sidebar__document-open { grid-template-columns: 1fr; justify-items: center; padding: 0; }");
+    // The icon-only rail survives only as the narrow-viewport treatment; the
+    // collapsed rail is unmounted outright, so it has no styling of its own.
+    expect(home).toContain("@media (max-width: 720px)");
+    expect(home).toContain(".project-sidebar__document-open { grid-template-columns: 1fr; justify-items: center; padding: 0; }");
+    expect(home).not.toContain("data-compact");
   });
 });

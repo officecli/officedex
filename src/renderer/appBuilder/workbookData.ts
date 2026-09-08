@@ -85,7 +85,9 @@ function normalizeValue(value: unknown): string | number | boolean {
 }
 
 export function defaultSelectedFieldIds(sheet: WorkbookSheetData | undefined): string[] {
-  return sheet?.fields.slice(0, 8).map((field) => field.id) ?? [];
+  if (!sheet) return [];
+  const meaningful = sheet.fields.filter((field) => !/^column\s*\d+$/i.test(field.label) && !/说明|备注|描述/i.test(field.label));
+  return (meaningful.length ? meaningful : sheet.fields).slice(0, 8).map((field) => field.id);
 }
 
 export function findSemanticField(sheet: WorkbookSheetData, kind: "title" | "status" | "owner" | "date"): WorkbookAppField | undefined {
@@ -97,4 +99,3 @@ export function findSemanticField(sheet: WorkbookSheetData, kind: "title" | "sta
   };
   return sheet.fields.find((field) => patterns[kind].test(field.label));
 }
-

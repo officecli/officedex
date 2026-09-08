@@ -4,6 +4,7 @@ import "@xyflow/react/dist/style.css";
 import { App } from "./App";
 import { LocaleProvider } from "./i18n";
 import { mountTheme } from "./ui/theme";
+import { mountWindowChrome } from "./windowChrome";
 import "./ui/design-tokens.css";
 import "./styles/beautiful.css";
 import "./styles/tokens.css";
@@ -16,6 +17,7 @@ import "./styles/tasks.css";
 import "./styles/onboarding-update.css";
 
 mountTheme();
+mountWindowChrome();
 
 const PreviewApp = lazy(() => import("./preview/PreviewApp"));
 

@@ -1,6 +1,7 @@
 package pptxeditor
 
 import (
+	"officedex/internal/config"
 	"os"
 	"path/filepath"
 	"testing"
@@ -8,7 +9,7 @@ import (
 
 func TestResolveMopConvertBinaryFromPresentationSource(t *testing.T) {
 	root := t.TempDir()
-	binary := filepath.Join(root, "tools", "bin", executableName("mop-convert"))
+	binary := filepath.Join(root, "tools", "bin", config.ExecutableName("mop-convert"))
 	if err := os.MkdirAll(filepath.Dir(binary), 0o700); err != nil {
 		t.Fatal(err)
 	}

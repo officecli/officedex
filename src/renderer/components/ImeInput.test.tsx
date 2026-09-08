@@ -74,8 +74,8 @@ describe("IME-safe inputs", () => {
     const textarea = screen.getByLabelText("follow up") as HTMLTextAreaElement;
 
     expect(textarea.tagName).toBe("TEXTAREA");
-    expect(textarea.classList.contains("ui-textarea")).toBe(true);
-    expect(textarea).toHaveClass("ui-textarea");
+    expect(textarea.classList.contains("od-textarea")).toBe(true);
+    expect(textarea).toHaveClass("od-textarea");
 
     fireEvent.compositionStart(textarea);
     fireEvent.change(textarea, { target: { value: "zhong wen" } });

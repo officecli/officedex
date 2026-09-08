@@ -93,8 +93,8 @@
   gap: 8px;
 }
 
-.artifact-stage-intent__input-row > .ui-input,
-.artifact-stage-intent__input-row > .ui-input-shell {
+.artifact-stage-intent__input-row > .od-input,
+.artifact-stage-intent__input-row > .od-input-shell {
   flex: 1;
   min-width: 0;
 }
@@ -116,5 +116,5 @@
   gap: 8px;
   min-width: 0;
 }
-.stage-intent-bar > .ui-input,
-.stage-intent-bar > .ui-input-shell { flex: 1; min-width: 0; }
+.stage-intent-bar > .od-input,
+.stage-intent-bar > .od-input-shell { flex: 1; min-width: 0; }

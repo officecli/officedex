@@ -20,7 +20,7 @@ export function UnsavedChangesDialog({ open, saving, onSave, onDiscard, onCancel
         <p>{t("spreadsheet.unsaved.body")}</p>
         <div className="spreadsheet-unsaved__actions">
           <Button variant="secondary" disabled={saving} onClick={onCancel}>{t("spreadsheet.unsaved.cancel")}</Button>
-          <Button variant="danger" disabled={saving} onClick={onDiscard}>{t("spreadsheet.unsaved.discard")}</Button>
+          <Button variant="ghost-danger" disabled={saving} onClick={onDiscard}>{t("spreadsheet.unsaved.discard")}</Button>
           <Button variant="primary" loading={saving} onClick={() => void onSave()}>{t("spreadsheet.unsaved.save")}</Button>
         </div>
       </div>

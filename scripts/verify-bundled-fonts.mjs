@@ -47,15 +47,31 @@ export async function verifyBundledFonts(roots) {
   // rather than forgotten. Anything outside both sets is new and fails.
   const unresolved = new Set(Object.keys(allowlist.unresolved ?? {}).map((name) => name.toLowerCase()));
   const denied = Object.entries(allowlist.denied ?? {});
+  // Individually reviewed files that a `denied` marker would otherwise catch.
+  // Keyed by exact file name, so a marker still covers every other member of
+  // the same foundry: an exemption is one file someone signed off on, never a
+  // family-wide hole.
+  const exempt = new Map(
+    Object.entries(allowlist.exempt ?? {}).map(([name, reason]) => [name.toLowerCase(), reason]),
+  );
 
   const problems = [];
   const pending = new Set();
+  const exempted = new Set();
   let checked = 0;
   for (const root of roots) {
     for (const file of await collectFonts(root)) {
       checked += 1;
       const name = path.basename(file).toLowerCase();
-      const deniedMatch = denied.find(([marker]) => name.includes(marker.toLowerCase()));
+      if (exempt.has(name)) {
+        exempted.add(name);
+        continue;
+      }
+      // A denial marker matches the start of the file name, not any substring:
+      // a Vite content hash routinely contains a two-letter foundry prefix
+      // (`dengxian-light-BHyCyYhc.woff` embeds "hy"), and matching that would
+      // report the wrong foundry for a face the next marker denies correctly.
+      const deniedMatch = denied.find(([marker]) => name.startsWith(marker.toLowerCase()));
       if (deniedMatch) {
         problems.push(`${file}: ${deniedMatch[1]}`);
         continue;
@@ -72,7 +88,7 @@ export async function verifyBundledFonts(roots) {
   if (problems.length > 0) {
     throw new Error(`Fonts without a redistribution licence are in the bundle:\n  ${problems.join("\n  ")}`);
   }
-  return { checked, pending: [...pending].sort() };
+  return { checked, pending: [...pending].sort(), exempted: [...exempted].sort() };
 }
 
 const invokedDirectly = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
@@ -88,9 +104,12 @@ if (invokedDirectly) {
       // A root that was never built is not a licence problem.
     }
   }
-  const { checked, pending } = await verifyBundledFonts(existing);
+  const { checked, pending, exempted } = await verifyBundledFonts(existing);
   console.log(`verify-bundled-fonts: ${checked} font file(s) cleared across ${existing.length} root(s)`);
   if (pending.length > 0) {
     console.log(`verify-bundled-fonts: provenance still unrecorded for ${pending.join(", ")}`);
+  }
+  if (exempted.length > 0) {
+    console.log(`verify-bundled-fonts: shipping under a reviewed exemption: ${exempted.join(", ")}`);
   }
 }

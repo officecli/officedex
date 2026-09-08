@@ -241,7 +241,10 @@ type App struct {
 	eventWritesMu     sync.RWMutex
 	eventWritesClosed bool
 	previewReg        *preview.Registry
-	demoFlow          *demoflow.Engine
+	// sourceDigests is the overwrite guard for saves that write back to a file
+	// the user opened; see app_source_digest.go.
+	sourceDigests *sourceDigests
+	demoFlow      *demoflow.Engine
 
 	mu             sync.Mutex
 	cachedSettings types.UserSettings
@@ -293,6 +296,13 @@ func NewApp() (*App, error) {
 	if err := os.MkdirAll(userDataDir, 0o755); err != nil {
 		return nil, fmt.Errorf("mkdir user data dir: %w", err)
 	}
+	// Before anything that can fail: everything NewApp reports about a broken
+	// install -- a missing converter, an unstaged runtime -- is emitted here,
+	// which is before startup installs the Wails forwarder. Without a file those
+	// records reach only stderr, and a Finder-launched app has none.
+	if err := applog.SetLogFile(filepath.Join(userDataDir, "logs")); err != nil {
+		applog.Logger().Warn("app log file unavailable", applog.Err(err))
+	}
 	workspaceDir := filepath.Join(userDataDir, "workspace")
 	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		return nil, fmt.Errorf("mkdir workspace: %w", err)
@@ -335,6 +345,7 @@ func NewApp() (*App, error) {
 		settingsStore:     settingsStore,
 		localStore:        localStore,
 		previewReg:        previewReg,
+		sourceDigests:     newSourceDigests(),
 		cachedSettings:    cached,
 		proxyPool:         proxyPool,
 	}
@@ -356,12 +367,13 @@ func NewApp() (*App, error) {
 		return nil, fmt.Errorf("stat blank presentation template: %w", statErr)
 	}
 	presentationRoot := runtimeenv.Root(repoRoot)
-	converterPath := ""
-	if presentationRoot != "" {
-		converterPath = config.ExecutableFile(filepath.Join(presentationRoot, "tools", "bin", "mop-convert"))
-	}
+	converterPath := config.MopConvertBinary(presentationRoot, repoRoot)
 	if converterPath == "" {
-		converterPath = resolveMopConvertFromEnvironment()
+		// Without it every PPTX import and export reports the converter as
+		// unavailable, and the only evidence is a dialog the user has to relay.
+		// The Writer font closure below warns for the same reason.
+		applog.Logger().Warn("mop-convert not found; PPTX import and export will be unavailable",
+			slog.String("presentationRoot", presentationRoot))
 	}
 	// The MOP handler takes a printf-style callback, so its lines arrive
 	// pre-formatted; the component attribute is what keeps them findable.
@@ -466,17 +478,35 @@ func (a *App) startup(ctx context.Context) {
 			applog.Logger().Warn("cleanup stale editor sessions", slog.String("editor", editor.label), applog.Err(err))
 		}
 	}
+	// The MOP packages are not editor sessions -- they have no preview token to
+	// close and no session to retire -- but they leak the same way: the embedded
+	// editor imports one per opened deck and never deletes it.
+	// The field is an http.Handler so tests can install a bare HandlerFunc, so
+	// ask for the capability rather than the concrete type.
+	if cleaner, ok := a.mopHTTPHandler.(interface{ CleanupStale() (int, error) }); ok {
+		removed, err := cleaner.CleanupStale()
+		if err != nil {
+			applog.Logger().Warn("cleanup stale MOP packages", applog.Err(err))
+		}
+		if removed > 0 {
+			applog.Logger().Info("removed abandoned MOP packages", slog.Int("count", removed))
+		}
+	}
 	if err := wailsruntime.InitializeNotifications(ctx); err != nil {
 		applog.Logger().Warn("init notifications", applog.Err(err))
 	}
 	if err := a.ensureLocalStoreOpen(ctx); err != nil {
 		applog.Logger().Error("open local store", applog.Err(err))
 	} else {
-		if err := a.prepareLegacyRuntimeMigration(ctx); err != nil {
-			applog.Logger().Warn("prepare legacy runtime migration", applog.Err(err))
-		}
 		if err := a.failInterruptedTasks(ctx); err != nil {
 			applog.Logger().Warn("fail interrupted tasks", applog.Err(err))
+		}
+		// After the fail pass, not before: the manifest has to describe what
+		// survived it. Publishing first advertised the very tasks this app was
+		// about to declare dead, and the bridge resumed them right back into
+		// `running`.
+		if err := a.publishResumableTaskManifest(ctx); err != nil {
+			applog.Logger().Warn("publish resumable task manifest", applog.Err(err))
 		}
 		if err := a.initializeWorkspaces(ctx); err != nil {
 			applog.Logger().Error("init workspace", applog.Err(err))
@@ -600,6 +630,16 @@ func (a *App) queueEventWrite(write func()) {
 	a.eventWritesMu.RUnlock()
 }
 
+// flushEventWrites blocks until everything queued before the call has been
+// written, leaving the writer running. Callers that must read their own writes
+// back out of SQLite need this; drainEventWrites would also wait, but it shuts
+// the queue down for the rest of the process.
+func (a *App) flushEventWrites() {
+	done := make(chan struct{})
+	a.queueEventWrite(func() { close(done) })
+	<-done
+}
+
 // drainEventWrites stops the writer and waits for queued rows to land.
 func (a *App) drainEventWrites() {
 	a.eventWritesMu.Lock()
@@ -643,6 +683,13 @@ func (a *App) shutdown(ctx context.Context) {
 		loginUnsub()
 	}
 	a.drainEventWrites()
+	// Republish once the queued rows have landed, so the manifest names the
+	// tasks that were genuinely still open at exit rather than the snapshot
+	// taken at startup. Stopping the bridge clients above already recorded the
+	// stranded ones as failed; those must not be advertised as resumable.
+	if err := a.publishResumableTaskManifest(context.Background()); err != nil {
+		applog.Logger().Warn("publish resumable task manifest on shutdown", applog.Err(err))
+	}
 	if a.localStore != nil {
 		_ = a.localStore.Close()
 	}

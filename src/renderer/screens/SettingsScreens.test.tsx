@@ -251,7 +251,7 @@ describe("SettingsScreen", () => {
     expect(container.querySelector(".settings-nav-group-start")).not.toBeNull();
     expect(container.querySelector(".settings-section-header")).toBeNull();
     expect(container.querySelector(".settings-document-chips")).toBeNull();
-    expect(screen.getByRole("heading", { level: 2, name: "Generation" })).toHaveClass("ui-sr-only");
+    expect(screen.getByRole("heading", { level: 2, name: "Generation" })).toHaveClass("od-sr-only");
     expect(container.querySelector(".settings-section-body > .setting-row")).not.toBeNull();
     expect(container.querySelector(".settings-toggle-control")?.textContent).toContain("On");
   });

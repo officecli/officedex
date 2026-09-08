@@ -1,42 +1,63 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("docx-preview", () => ({ renderAsync: vi.fn(async () => undefined) }));
 vi.mock("../../bridge", () => ({
   officecli: {
-    readArtifactFile: vi.fn(async () => ({ data: new Uint8Array([80, 75, 3, 4]) })),
+    readArtifactFile: vi.fn(async () => ({ data: new Uint8Array([80, 75, 3, 4]), sha256: "abc" })),
     openPath: vi.fn(async () => undefined),
   },
 }));
-vi.mock("../../word/DocxEditor", async () => {
-  const React = await import("react");
-  return {
-    DocxEditor: ({ onDirtyChange }: { onDirtyChange?: (dirty: boolean) => void }) => {
-      const [value, setValue] = React.useState("draft");
-      return (
-        <div>
-          <input aria-label="mock document" value={value} onChange={(event) => { setValue(event.target.value); onDirtyChange?.(true); }} />
-        </div>
-      );
-    },
-  };
-});
 
 import DocxViewer from "./DocxViewer";
 import { LocaleProvider } from "../../i18n";
+import { WRITER_EMBED_PROTOCOL_VERSION } from "../../../shared/writerProtocol";
+
+function mockManifest(body: unknown | null) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      body === null
+        ? ({ ok: false, json: async () => ({}) } as Response)
+        : ({ ok: true, json: async () => body } as Response),
+    ),
+  );
+}
+
+function renderViewer() {
+  return render(
+    <LocaleProvider value="zh">
+      <DocxViewer previewToken="token" fileName="report.docx" documentType="docx" />
+    </LocaleProvider>,
+  );
+}
 
 describe("DocxViewer", () => {
-  it("keeps editor state and dirty status while checking the layout preview", () => {
-    const onDirtyChange = vi.fn();
-    render(<LocaleProvider value="zh"><DocxViewer previewToken="token" fileName="report.docx" documentType="docx" onDirtyChange={onDirtyChange} /></LocaleProvider>);
+  it("mounts the Writer editor when the component manifest matches", async () => {
+    mockManifest({ name: "writer", protocolVersion: WRITER_EMBED_PROTOCOL_VERSION });
 
-    fireEvent.change(screen.getByRole("textbox", { name: "mock document" }), { target: { value: "edited draft" } });
-    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+    const { container } = renderViewer();
 
-    fireEvent.click(screen.getByRole("button", { name: "版式预览" }));
-    fireEvent.click(screen.getByRole("button", { name: "编辑" }));
+    await waitFor(() => {
+      expect(container.querySelector("iframe.writer-embed-frame")).not.toBeNull();
+    });
+    expect(screen.queryByRole("note")).toBeNull();
+  });
 
-    expect(screen.getByRole("textbox", { name: "mock document" })).toHaveValue("edited draft");
-    expect(onDirtyChange).not.toHaveBeenCalledWith(false);
+  it("explains the fallback when the Writer component is not installed", async () => {
+    mockManifest(null);
+
+    const { container } = renderViewer();
+
+    expect(await screen.findByRole("note")).toBeInTheDocument();
+    expect(container.querySelector("iframe.writer-embed-frame")).toBeNull();
+  });
+
+  it("refuses a Writer build that speaks a different protocol version", async () => {
+    mockManifest({ name: "writer", protocolVersion: WRITER_EMBED_PROTOCOL_VERSION + 1 });
+
+    const { container } = renderViewer();
+
+    expect(await screen.findByRole("note")).toBeInTheDocument();
+    expect(container.querySelector("iframe.writer-embed-frame")).toBeNull();
   });
 });

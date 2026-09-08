@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button, Input } from "../ui";
+import { ArrowUpOutlined } from "../ui/icons";
 import { ArtifactStageStatusBanner, type ArtifactStageStatus } from "./StageStatus";
 import "./artifactStage.css";
 
@@ -248,7 +249,7 @@ export function ArtifactStageShell<TSelection extends ArtifactStageSelection>({
             onPressEnter={submit}
           />
           <span className="artifact-stage-intent__billing" data-cost={cost} role="status">{billingMessage}</span>
-          <Button type="primary" size="small" disabled={!canSubmitWithBilling} loading={busy || mutationBusy || mutationRef.current} onClick={submit}>Apply</Button>
+          <Button className="od-button--icon-submit" type="primary" size="small" ariaLabel="Apply" title="Apply" icon={<ArrowUpOutlined />} disabled={!canSubmitWithBilling} loading={busy || mutationBusy || mutationRef.current} onClick={submit} />
         </div>
         {anonymousBlocked ? <div className="artifact-stage-shell__billing-error" role="alert">Anonymous credits are used up. Sign in to continue.</div> : null}
           </>

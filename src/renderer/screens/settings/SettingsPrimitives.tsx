@@ -19,7 +19,7 @@ export function SettingsSection({
   const titleId = `${id}-title`;
   return (
     <section className="setting-group" id={id} data-variant={variant} aria-labelledby={titleId}>
-      <h2 className="ui-sr-only" id={titleId}>{title}</h2>
+      <h2 className="od-sr-only" id={titleId}>{title}</h2>
       <div className="settings-section-body">{children}</div>
     </section>
   );

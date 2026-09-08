@@ -22,6 +22,15 @@
   padding: 0 12px;
 }
 
+/* With the rail hidden this bar owns the window's top-left corner, so it has to
+   clear both the window controls and the expand button parked there. Dragging
+   the window by the bar's empty stretch comes with it. */
+.home-shell--railless .spreadsheet-topbar { padding-left: var(--od-topleft-reserve); }
+.spreadsheet-topbar { -webkit-app-region: drag; --wails-draggable: drag; }
+.spreadsheet-topbar button,
+.spreadsheet-topbar .od-button,
+.spreadsheet-topbar input { -webkit-app-region: no-drag; --wails-draggable: no-drag; }
+
 .spreadsheet-topbar__leading,
 .spreadsheet-topbar__actions { display: flex; min-width: 0; align-items: center; gap: 8px; }
 .spreadsheet-topbar__document { display: flex; min-width: 0; align-items: center; gap: 8px; font-size: 12px; }
@@ -88,11 +97,11 @@
 .spreadsheet-agent-panel__plan-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .spreadsheet-agent-panel__error { margin-top: 12px; border-radius: 6px; background: color-mix(in srgb, var(--od-danger) 8%, transparent); color: var(--od-danger); padding: 10px 12px; font-size: 12px; }
 .spreadsheet-agent-panel__composer { display: grid; min-width: 0; gap: 8px; border-top: 1px solid var(--od-border-subtle); padding-top: 12px; }
-.spreadsheet-agent-panel__composer .ui-textarea { resize: none; }
+.spreadsheet-agent-panel__composer .od-textarea { resize: none; }
 .spreadsheet-agent-panel__composer-actions { display: flex; justify-content: flex-end; gap: 8px; }
 /* During a question gate the composer is the custom-answer field: shorter, and
    its action row carries the keyboard hint plus a quiet cancel. */
-.spreadsheet-agent-panel__composer--answer .ui-textarea { min-height: 56px; }
+.spreadsheet-agent-panel__composer--answer .od-textarea { min-height: 56px; }
 .spreadsheet-agent-panel__composer-hint { min-width: 0; margin-right: auto; align-self: center; overflow: hidden; color: var(--od-ink-disabled); font-size: 11px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
 .is-spinning { animation: spreadsheet-spin 900ms linear infinite; }
 
@@ -101,6 +110,13 @@
 .spreadsheet-unsaved__dialog h2 { margin: 0; color: var(--od-ink); font-size: 16px; line-height: 24px; font-weight: 500; }
 .spreadsheet-unsaved__dialog p { margin: 8px 0 20px; color: var(--od-ink-secondary); font-size: 13px; line-height: 20px; }
 .spreadsheet-unsaved__actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+@media (max-width: 520px) {
+  .spreadsheet-unsaved { padding: 12px; }
+  .spreadsheet-unsaved__dialog { width: 100%; padding: 18px; }
+  .spreadsheet-unsaved__actions { flex-direction: column-reverse; align-items: stretch; }
+  .spreadsheet-unsaved__actions .od-button { width: 100%; min-height: 40px; }
+}
 
 @keyframes spreadsheet-spin { to { transform: rotate(360deg); } }
 

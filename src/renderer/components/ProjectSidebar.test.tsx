@@ -133,13 +133,12 @@ describe("ProjectSidebar", () => {
     expect(onDeleteDocument).toHaveBeenCalledWith(expect.objectContaining({ id: "run-doc" }));
   });
 
-  it("supports compact project navigation while keeping every action labelled", () => {
-    const onCompactChange = vi.fn();
+  it("labels every project action and reports a collapse request", () => {
+    const onCollapse = vi.fn();
     const props: React.ComponentProps<typeof ProjectSidebar> = {
       workspaces,
       activeWorkspaceId: "ws-a",
-      compact: true,
-      onCompactChange,
+      onCollapse,
       onSelectAll: vi.fn(),
       onSelectWorkspace: vi.fn(),
       onAddWorkspace: vi.fn(),
@@ -151,9 +150,11 @@ describe("ProjectSidebar", () => {
     };
     const { container } = render(<LocaleProvider value="en"><ProjectSidebar {...props} /></LocaleProvider>);
 
-    expect(container.querySelector(".project-sidebar")).toHaveAttribute("data-compact", "true");
+    // The rail only ever renders expanded now — collapsing unmounts it, and
+    // Shell owns the control that brings it back.
+    expect(container.querySelector(".project-sidebar")).not.toBeNull();
     expect(screen.getByRole("button", { name: "Client A" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
-    expect(onCompactChange).toHaveBeenCalledWith(false);
+    fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+    expect(onCollapse).toHaveBeenCalled();
   });
 });

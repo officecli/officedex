@@ -97,7 +97,7 @@ export function Popover({ content, children, open, placement = "bottom", onOpenC
       {triggerElement}
       {mounted ? createPortal(
         <div
-          className={["ui-popover", overlayClassName].filter(Boolean).join(" ")}
+          className={["od-popover", overlayClassName].filter(Boolean).join(" ")}
           data-open={visible ? "true" : "false"}
           ref={panelRef}
           role="dialog"

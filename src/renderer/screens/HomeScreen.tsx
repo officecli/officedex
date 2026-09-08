@@ -547,7 +547,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
               </button>
             ))}
           </div>
-          <Button className="ui-button--circular-submit" ariaLabel={t("home.startTask")} htmlType="submit" variant="primary" icon={<ArrowUpOutlined />} loading={starting} disabled={!prompt.trim()}>{t("home.startTask")}</Button>
+          <Button className="od-button--circular-submit od-button--icon-submit" ariaLabel={t("home.startTask")} title={t("home.startTask")} htmlType="submit" variant="primary" icon={<ArrowUpOutlined />} loading={starting} disabled={!prompt.trim()} />
         </div>
       </form>
 

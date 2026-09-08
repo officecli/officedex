@@ -1,5 +1,5 @@
-import { Space } from "../ui";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { PanelLeftOpen } from "lucide-react";
 import {
   AppstoreOutlined, AudioOutlined, BgColorsOutlined, ClockCircleOutlined,
   CloseOutlined, CloudOutlined, CodeOutlined, ControlOutlined, DesktopOutlined,
@@ -11,14 +11,16 @@ import {
 } from "../ui/icons";
 import type { NavKey } from "../defaults";
 import type { WorkspaceSummary } from "../../shared/types";
-import { useT } from "../i18n";
-import { RuntimeChip } from "./RuntimeChip";
 import { ProjectSidebar, type SidebarAccount, type SidebarDocument } from "./ProjectSidebar";
 import { SidebarUpdateRow, type SidebarUpdateRowProps } from "./SidebarUpdateRow";
 import type { SidebarSignal } from "../taskSignals";
+import { useT } from "../i18n";
 import { usePointerDotField } from "../usePointerDotField";
 
 const SIDEBAR_COMPACT_KEY = "officedex.homeSidebarCompact";
+/** Matches the rail transition in home.css; the rail outlives the collapse by
+ *  this much so it has something to animate out with before it unmounts. */
+const RAIL_ANIM_MS = 160;
 
 export interface CreditInfo {
   displayMode: "quota" | "balance";
@@ -38,7 +40,6 @@ interface ShellProps {
   documents?: SidebarDocument[];
   activeDocumentId?: string;
   activeWorkspaceId: string | undefined;
-  activeWorkspaceName: string | undefined;
   onNavChange: (key: NavKey) => void;
   onSelectWorkspace: (workspaceId: string) => void;
   onOpenDocument?: (document: SidebarDocument) => void;
@@ -50,12 +51,12 @@ interface ShellProps {
   onRemoveWorkspace: (workspaceId: string) => void;
 }
 
-export function Shell({ activeNav, children, inspector, signal, account, update, workspaces, documents, activeDocumentId, activeWorkspaceId, activeWorkspaceName, onNavChange, onSelectWorkspace, onOpenDocument, onDeleteDocument, onSelectAllFiles, onAddWorkspace, onRenameWorkspace, onRevealWorkspace, onRemoveWorkspace }: ShellProps) {
+export function Shell({ activeNav, children, inspector, signal, account, update, workspaces, documents, activeDocumentId, activeWorkspaceId, onNavChange, onSelectWorkspace, onOpenDocument, onDeleteDocument, onSelectAllFiles, onAddWorkspace, onRenameWorkspace, onRevealWorkspace, onRemoveWorkspace }: ShellProps) {
+  const t = useT();
   const [spreadsheetCompact, setSpreadsheetCompact] = useState(true);
   const [defaultCompact, setDefaultCompact] = useState(() => {
     try { return localStorage.getItem(SIDEBAR_COMPACT_KEY) === "1"; } catch { return false; }
   });
-  const t = useT();
   const spreadsheetMode = activeNav === "spreadsheet";
   const texturedStage = activeNav === "home" || activeNav === "settings";
   const pointerDotField = usePointerDotField<HTMLElement>(texturedStage);
@@ -68,11 +69,80 @@ export function Shell({ activeNav, children, inspector, signal, account, update,
     setDefaultCompact(next);
     try { localStorage.setItem(SIDEBAR_COMPACT_KEY, next ? "1" : "0"); } catch { /* best effort */ }
   };
+
+  // The rail unmounts when collapsed, and an unmounted element cannot animate.
+  // `shut` drives the geometry (column width, slide-out) and `closing` keeps the
+  // rail mounted long enough to play that geometry before it goes.
+  const [shut, setShut] = useState(compact);
+  const [closing, setClosing] = useState(false);
+  // Hovering the corner control peeks the rail open without committing to it.
+  const [peeking, setPeeking] = useState(false);
+  const closeTimer = useRef<number | undefined>(undefined);
+  const peekTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => {
+    window.clearTimeout(closeTimer.current);
+    window.clearTimeout(peekTimer.current);
+  }, []);
+
+  const openRail = () => {
+    setShut(true);
+    // Mount shut, then open on the next painted frame so the rail has two
+    // distinct positions to transition between.
+    requestAnimationFrame(() => requestAnimationFrame(() => setShut(false)));
+  };
+
+  const collapseRail = () => {
+    setShut(true);
+    setClosing(true);
+    closeTimer.current = window.setTimeout(() => {
+      setCompact(true);
+      setClosing(false);
+    }, RAIL_ANIM_MS);
+  };
+
+  // Pins the peeked rail: it is already on screen, so it only has to stop
+  // floating over the content and take a grid track instead.
+  const expandRail = () => {
+    window.clearTimeout(closeTimer.current);
+    window.clearTimeout(peekTimer.current);
+    setClosing(false);
+    setCompact(false);
+    if (peeking) {
+      setPeeking(false);
+      return;
+    }
+    openRail();
+  };
+
+  const openPeek = () => {
+    if (!compact) return;
+    window.clearTimeout(peekTimer.current);
+    if (peeking) return;
+    setPeeking(true);
+    openRail();
+  };
+
+  // A grace period so the pointer can cross the gap from the control into the
+  // rail without the rail sliding away underneath it.
+  const closePeek = () => {
+    window.clearTimeout(peekTimer.current);
+    peekTimer.current = window.setTimeout(() => {
+      setShut(true);
+      peekTimer.current = window.setTimeout(() => setPeeking(false), RAIL_ANIM_MS);
+    }, 120);
+  };
+
+  const railDocked = !compact || closing;
+  const railPeeking = compact && !closing && peeking;
+  const railMounted = railDocked || railPeeking;
   const updateRow = update ? <SidebarUpdateRow {...update} /> : null;
 
   return (
-    <div className={`home-shell home-shell--${activeNav} ${spreadsheetMode ? "home-shell--spreadsheet" : ""} ${compact ? "sidebar-collapsed" : ""}`}>
+    <div className={`home-shell home-shell--${activeNav} ${spreadsheetMode ? "home-shell--spreadsheet" : ""} ${railDocked ? "" : "home-shell--railless"} ${railPeeking ? "home-shell--rail-peek" : ""} ${shut ? "home-shell--rail-shut" : ""}`}>
+      {railMounted ? (
       <ProjectSidebar
+        onPointerEnter={railPeeking ? openPeek : undefined}
+        onPointerLeave={railPeeking ? closePeek : undefined}
         workspaces={workspaces}
         documents={documents}
         activeDocumentId={activeDocumentId}
@@ -96,19 +166,28 @@ export function Shell({ activeNav, children, inspector, signal, account, update,
         signal={signal}
         account={account}
         updateRow={updateRow}
-        compact={compact}
-        onCompactChange={setCompact}
+        onCollapse={collapseRail}
       />
-      <main className={`home-shell__main ${spreadsheetMode ? "home-shell__main--spreadsheet" : ""}`}>
-        {!spreadsheetMode ? (
-          <header className="home-shell__topbar">
-            <Space size={12} className="breadcrumb">
-              <span>{t("shell.brand")}</span><span className="crumb-separator">/</span>
-              <strong>{activeWorkspaceName || t("shell.scope.allContent")}</strong>
-            </Space>
-            <RuntimeChip onClick={() => onNavChange("settings")} />
-          </header>
-        ) : null}
+      ) : null}
+      <main className="home-shell__main">
+        {railDocked ? null : (
+          <>
+            {/* Nothing else reaches this corner once the rail is hidden, so it
+                is free to drag the window. */}
+            <div className="home-shell__drag" aria-hidden="true" />
+            <button
+              type="button"
+              className="home-shell__expand"
+              aria-label={t("shell.sidebar.expand")}
+              title={t("shell.sidebar.expand")}
+              onClick={expandRail}
+              onPointerEnter={openPeek}
+              onPointerLeave={closePeek}
+            >
+              <PanelLeftOpen aria-hidden="true" />
+            </button>
+          </>
+        )}
         {spreadsheetMode ? children : (
           <div className={`home-shell__content ${inspector ? "with-preview" : ""}`}>
             <section

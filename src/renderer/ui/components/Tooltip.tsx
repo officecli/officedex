@@ -20,9 +20,9 @@ export function Tooltip({ title, children, placement = "top", open, onOpenChange
   if (!isValidElement(child) || !title) return child;
   const props = child.props as Record<string, unknown>;
   return (
-    <span className="ui-tooltip-anchor" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)} onFocus={() => setOpen(true)} onBlur={() => setOpen(false)}>
+    <span className="od-tooltip-anchor" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)} onFocus={() => setOpen(true)} onBlur={() => setOpen(false)}>
       {cloneElement(child, props)}
-      {visible ? <span className="ui-tooltip" data-placement={placement} role="tooltip">{title}</span> : null}
+      {visible ? <span className="od-tooltip" data-placement={placement} role="tooltip">{title}</span> : null}
     </span>
   );
 }

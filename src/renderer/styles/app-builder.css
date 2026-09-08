@@ -94,7 +94,7 @@
 .app-builder__message li { display: flex; align-items: center; gap: 6px; }
 .app-builder__message li svg { width: 13px; height: 13px; color: var(--n-success); }
 .app-builder__chat-compose { display: grid; gap: 8px; border-top: 1px solid var(--od-border-subtle); padding-top: 12px; }
-.app-builder__chat-compose .ui-button { justify-self: end; }
+.app-builder__chat-compose .od-button { justify-self: end; }
 .app-builder__preview-shell { min-width: 0; min-height: 0; overflow: auto; background: var(--od-surface-muted); padding: 14px; }
 .app-builder__preview-toolbar { display: flex; height: 36px; align-items: center; justify-content: space-between; border: 1px solid var(--od-border-subtle); border-radius: 8px 8px 0 0; background: var(--od-surface); color: var(--od-ink-secondary); padding: 0 11px; font-size: 11px; }
 
@@ -105,7 +105,7 @@
 .workbook-app-preview h1 { margin: 4px 0 3px; font-size: 22px; font-weight: 650; }
 .workbook-app-preview p { margin: 0; color: var(--od-ink-secondary); font-size: 12px; }
 .workbook-app-preview__header-actions { display: flex; align-items: center; gap: 13px; }
-.workbook-app-preview__header-actions .ui-input-shell { width: 200px; }
+.workbook-app-preview__header-actions .od-input-shell { width: 200px; }
 .workbook-app-preview__live { display: inline-flex; align-items: center; gap: 7px; color: var(--n-success); font-size: 11px; white-space: nowrap; }
 .workbook-app-preview__metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
 .workbook-app-preview__metrics article { border: 1px solid var(--od-border-subtle); border-radius: 8px; background: var(--od-surface); padding: 13px; }
@@ -127,7 +127,7 @@
 .app-builder__publish-card > svg { width: 34px; height: 34px; color: var(--od-guidance); }
 .app-builder__url { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; border: 1px solid var(--od-border-default); border-radius: 6px; overflow: hidden; }
 .app-builder__url > span { color: var(--od-ink-secondary); padding-left: 10px; font-size: 12px; font-weight: 400; }
-.app-builder__url .ui-input { border: 0; }
+.app-builder__url .od-input { border: 0; }
 .app-builder__publish > aside { overflow: auto; border-left: 1px solid var(--od-border-subtle); background: var(--od-surface); padding: 22px; }
 .app-builder__publish > aside > label { display: flex; align-items: flex-start; gap: 9px; margin-top: 11px; border: 1px solid var(--od-border-subtle); border-radius: 7px; padding: 11px; }
 .app-builder__publish > aside > label span { display: flex; color: var(--od-ink-secondary); flex-direction: column; gap: 3px; font-size: 11px; }

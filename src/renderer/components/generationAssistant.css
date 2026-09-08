@@ -87,7 +87,7 @@
 .generation-assistant-panel__kicker { color: var(--od-guidance); font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
 .generation-assistant-panel__question-title { color: var(--od-ink); font-size: 13px; font-weight: 500; line-height: 19px; }
 .generation-assistant-panel__question-options { display: grid; gap: 6px; }
-.generation-assistant-panel__question-options .ui-button {
+.generation-assistant-panel__question-options .od-button {
   height: auto;
   min-height: 38px;
   justify-content: flex-start;
@@ -97,9 +97,9 @@
   text-align: left;
   white-space: normal;
 }
-.generation-assistant-panel__question-options .ui-button__label { display: flex; width: 100%; align-items: center; gap: 8px; text-align: left; }
+.generation-assistant-panel__question-options .od-button__label { display: flex; width: 100%; align-items: center; gap: 8px; text-align: left; }
 .generation-assistant-panel__option-number { display: grid; width: 20px; height: 20px; flex: 0 0 auto; place-items: center; border-radius: var(--od-radius-control); background: color-mix(in srgb, var(--od-ink) 6%, transparent); color: var(--od-ink-secondary); font-size: 11px; font-weight: 600; }
-.generation-assistant-panel__question-options .ui-button[data-variant="primary"] .generation-assistant-panel__option-number { background: color-mix(in srgb, #fff 24%, transparent); color: inherit; }
+.generation-assistant-panel__question-options .od-button[data-variant="primary"] .generation-assistant-panel__option-number { background: color-mix(in srgb, #fff 24%, transparent); color: inherit; }
 .generation-assistant-panel__option-label { min-width: 0; }
 .generation-assistant-panel__recommended { flex: 0 0 auto; border-radius: var(--od-radius-control); background: color-mix(in srgb, currentColor 10%, transparent); padding: 1px 5px; font-size: 10px; }
 .generation-assistant-panel__option-description { display: block; color: var(--od-ink-secondary); font-size: 12px; }
@@ -136,7 +136,7 @@
 }
 
 .generation-assistant-panel__composer { position: relative; display: block; }
-.generation-assistant-panel__composer .ui-textarea {
+.generation-assistant-panel__composer .od-textarea {
   width: 100%;
   min-height: 88px;
   max-height: 180px;
@@ -149,7 +149,7 @@
   line-height: 19px;
   resize: none;
 }
-.generation-assistant-panel__composer .ui-textarea:focus-visible { border-color: var(--od-guidance); background: var(--od-surface); outline: none; }
+.generation-assistant-panel__composer .od-textarea:focus-visible { border-color: var(--od-guidance); background: var(--od-surface); outline: none; }
 
 /* Send and stop are one button in two states, anchored to the same corner so
    the control never moves when a run starts or ends. */
@@ -162,7 +162,7 @@
   height: 30px;
   min-height: 30px;
 }
-.generation-assistant-panel__composer .generation-assistant-panel__send .ui-button__icon svg { width: 15px; height: 15px; }
+.generation-assistant-panel__composer .generation-assistant-panel__send .od-button__icon svg { width: 15px; height: 15px; }
 .generation-assistant-panel__send[data-mode="stop"] { background: var(--od-ink); }
 .generation-assistant-panel__send[data-mode="stop"]:hover:not(:disabled) { background: color-mix(in srgb, var(--od-ink) 82%, #000); }
-.generation-assistant-panel__send[data-mode="stop"] .ui-button__icon svg { width: 11px; height: 11px; }
+.generation-assistant-panel__send[data-mode="stop"] .od-button__icon svg { width: 11px; height: 11px; }

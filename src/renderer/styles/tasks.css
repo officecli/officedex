@@ -21,7 +21,7 @@
 }
 
 .page-stack > .page-header h2,
-.page-stack > .page-header .ui-typography {
+.page-stack > .page-header .od-typography {
   margin: 0;
   color: var(--od-ink);
   font: 500 20px/28px var(--od-font-ui);
@@ -46,12 +46,12 @@
 .task-title-button strong { color: var(--od-ink); font-weight: 500; }
 .task-title-button:hover strong { color: var(--od-guidance); }
 .task-credit-inline { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
-.task-credit-mode.ui-tag { margin: 0; font-size: 11px; line-height: 18px; }
+.task-credit-mode.od-tag { margin: 0; font-size: 11px; line-height: 18px; }
 .empty-card { min-height: 240px; display: grid; place-items: center; border: 1px solid var(--od-border-subtle); border-radius: 6px; background: var(--od-surface); }
 .runtime-runs { display: grid; gap: 12px; margin-top: 32px; }
 .runtime-runs__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
 .runtime-runs__header > * { min-width: 0; }
-.runtime-runs__header h3, .runtime-runs__header .ui-typography { margin: 0; color: var(--od-ink); font: 500 16px/24px var(--od-font-ui); }
+.runtime-runs__header h3, .runtime-runs__header .od-typography { margin: 0; color: var(--od-ink); font: 500 16px/24px var(--od-font-ui); }
 .runtime-runs__header p { margin: 2px 0 0; color: var(--od-ink-secondary); font-size: 12px; line-height: 18px; }
 .runtime-runs__header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .runtime-run-actions { display: flex; gap: 8px; }

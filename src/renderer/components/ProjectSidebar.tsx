@@ -1,5 +1,5 @@
 import { useState, type DragEvent, type ReactNode } from "react";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { PanelLeftClose } from "lucide-react";
 import type { WhoAmIMode, WorkspaceSummary } from "../../shared/types";
 import { Button, Dropdown, Input, Tooltip, dialog, type MenuProps } from "../ui";
 import {
@@ -52,11 +52,14 @@ export interface ProjectSidebarProps {
   signal?: SidebarSignal;
   account?: SidebarAccount;
   updateRow?: ReactNode;
-  compact?: boolean;
-  onCompactChange?: (compact: boolean) => void;
+  /** Hides the rail. There is no compact rail any more: it is shown or it is gone. */
+  onCollapse?: () => void;
+  /** Set while the rail is only peeked open, so hovering it keeps it there. */
+  onPointerEnter?: () => void;
+  onPointerLeave?: () => void;
 }
 
-export function ProjectSidebar({ workspaces, documents = [], activeWorkspaceId, activeDocumentId, onSelectAll, onSelectWorkspace, onOpenDocument, onDeleteDocument, onAddWorkspace, onRenameWorkspace, onRevealWorkspace, onRemoveWorkspace, onOpenSettings, onOpenAccount, signal, account, updateRow, compact = false, onCompactChange }: ProjectSidebarProps) {
+export function ProjectSidebar({ workspaces, documents = [], activeWorkspaceId, activeDocumentId, onSelectAll, onSelectWorkspace, onOpenDocument, onDeleteDocument, onAddWorkspace, onRenameWorkspace, onRevealWorkspace, onRemoveWorkspace, onOpenSettings, onOpenAccount, signal, account, updateRow, onCollapse, onPointerEnter, onPointerLeave }: ProjectSidebarProps) {
   const t = useT();
   const [renamingId, setRenamingId] = useState<string>();
   const [renameValue, setRenameValue] = useState("");
@@ -135,7 +138,7 @@ export function ProjectSidebar({ workspaces, documents = [], activeWorkspaceId, 
       >
         <DocTypeIcon type={document.documentType} />
         <span>{document.title}</span>
-        {document.status && document.status !== "completed" ? <em data-status={document.status} aria-label={document.status} /> : null}
+        {document.status && document.status !== "completed" ? <em data-status={document.status} aria-label={t(`tasks.status.${document.status}`)} title={t(`tasks.status.${document.status}`)} /> : null}
       </button>
       {onDeleteDocument ? (
         <button
@@ -152,18 +155,21 @@ export function ProjectSidebar({ workspaces, documents = [], activeWorkspaceId, 
   );
 
   return (
-    <aside className="project-sidebar" aria-label={t("projectSidebar.label")} data-compact={compact ? "true" : "false"}>
+    <aside className="project-sidebar" aria-label={t("projectSidebar.label")} onPointerEnter={onPointerEnter} onPointerLeave={onPointerLeave}>
+      {/* Collapses to zero height unless the desktop window hid its title bar,
+          in which case it holds the traffic lights and drags the window. */}
+      <div className="project-sidebar__window-drag" aria-hidden="true" />
       <div className="project-sidebar__brand">
         <img src="./officedex-logo.png" alt="OfficeDex" />
         <span className="project-sidebar__brand-name">OfficeDex</span>
-        {onCompactChange ? (
+        {onCollapse ? (
           <button
             type="button"
-            className="project-sidebar__compact-toggle"
-            aria-label={compact ? t("shell.sidebar.expand") : t("shell.sidebar.collapse")}
-            onClick={() => onCompactChange(!compact)}
+            className="project-sidebar__collapse"
+            aria-label={t("shell.sidebar.collapse")}
+            onClick={onCollapse}
           >
-            {compact ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
+            <PanelLeftClose aria-hidden="true" />
           </button>
         ) : null}
       </div>

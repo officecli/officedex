@@ -62,6 +62,21 @@ const DEFAULT_TIMEOUTS = {
  * protocol, or channel are dropped. Nothing here evaluates JavaScript — the
  * `executeJs` source is shipped to the editor, which runs it in its own Worker.
  */
+/**
+ * An editor failure that carried the MOP API's error code. The workbench uses
+ * the code to separate "this deck uses a feature we cannot convert yet" from
+ * "this deck could not be read", which read identically as plain messages.
+ */
+export class PresentationPptxEmbedError extends Error {
+  readonly code?: string;
+
+  constructor(message: string, code?: string) {
+    super(message);
+    this.name = "PresentationPptxEmbedError";
+    this.code = code;
+  }
+}
+
 export class PresentationPptxEmbedClient {
   readonly channel: string;
   private readonly getTargetWindow: () => Window | null;
@@ -214,7 +229,10 @@ export class PresentationPptxEmbedClient {
     );
     if (reply.type === "officedex:pptx-load-error") {
       this.setState({ ...this.state, lastError: reply.error });
-      throw new Error(reply.error || "The presentation could not be imported.");
+      throw new PresentationPptxEmbedError(
+        reply.error || "The presentation could not be imported.",
+        reply.errorCode,
+      );
     }
     if (reply.type !== "officedex:pptx-loaded")
       throw new Error("Unexpected editor reply.");
@@ -260,7 +278,7 @@ export class PresentationPptxEmbedClient {
     );
     if (reply.type !== "officedex:pptx-export-result")
       throw new Error("Unexpected editor reply.");
-    if (reply.error) throw new Error(reply.error);
+    if (reply.error) throw new PresentationPptxEmbedError(reply.error, reply.errorCode);
     const buffer = reply.buffer;
     if (!(buffer instanceof ArrayBuffer) || buffer.byteLength < 4) {
       throw new Error("The editor returned an empty PowerPoint export.");

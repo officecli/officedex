@@ -55,6 +55,9 @@ export const PRESENTATION_SOURCES = Object.freeze([
 // of captured PowerPoint reference material used by the differential audit
 // tooling; none of it is read at authoring time.
 export const PRESENTATION_PRUNE = Object.freeze([
+  // Ships in the public installer otherwise: it documents the compatibility
+  // surface, the RPC protocol name and the host bridge interfaces.
+  "packages/presentation-office-js/README.md",
   "packages/presentation-office-js/reference-cache",
   "packages/presentation-office-js/differential",
   "packages/presentation-office-js/scripts",

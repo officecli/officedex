@@ -363,3 +363,53 @@ func drainAndClose(reader io.ReadCloser) {
 	_, _ = io.Copy(io.Discard, reader)
 	_ = reader.Close()
 }
+
+// stalePackageAge is how long an abandoned package is kept. Nothing persists a
+// file ID across runs -- the editor imports a fresh package every time a deck is
+// opened -- so anything still here at startup is from a previous run and is
+// already unreachable. The age gate is not for that: it is for a second
+// instance that started while this one was working.
+const stalePackageAge = 24 * time.Hour
+
+// CleanupStale removes packages abandoned by earlier runs and reports how many
+// went. It mirrors the editor services' CleanupStale, which the app calls at
+// startup for the same reason: a package is only deleted when the editor asks,
+// and the embedded editor never asks, so every deck ever opened stayed on disk.
+//
+// Only startup may call this. It cannot tell a package in use from an abandoned
+// one, and at startup no session exists to be in use.
+func (s *Store) CleanupStale(now time.Time, maxAge time.Duration) (int, error) {
+	entries, err := os.ReadDir(s.root)
+	if errors.Is(err, os.ErrNotExist) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	removed := 0
+	var failures []error
+	for _, entry := range entries {
+		// A symlink is not a package this store wrote; following one would
+		// delete whatever it points at.
+		if entry.Type()&os.ModeSymlink != 0 {
+			continue
+		}
+		name := entry.Name()
+		// Staging directories are named `.<id>.creating` and are orphaned by a
+		// crash mid-import, so they are swept on the same terms.
+		staging := strings.HasPrefix(name, ".") && strings.HasSuffix(name, ".creating")
+		if !staging && !validFileID(name) {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil || !info.IsDir() || now.Sub(info.ModTime()) <= maxAge {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(s.root, name)); err != nil {
+			failures = append(failures, err)
+			continue
+		}
+		removed++
+	}
+	return removed, errors.Join(failures...)
+}

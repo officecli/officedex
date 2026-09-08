@@ -13,7 +13,7 @@ export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement
 }
 
 export function Button({ ariaLabel, type, htmlType, variant, size = "medium", icon, loading, danger, block, children, disabled, className, style, ...props }: ButtonProps) {
-  const classes = ["ui-button", className].filter(Boolean).join(" ");
+  const classes = ["od-button", className].filter(Boolean).join(" ");
   const resolvedVariant = variant ?? (danger ? "danger" : type === "primary" ? "primary" : type === "text" || type === "link" ? "ghost-normal" : "secondary");
   const resolvedAriaLabel = ariaLabel ?? (props as Record<string, unknown>)["aria-label"] as string | undefined;
   return (
@@ -27,8 +27,8 @@ export function Button({ ariaLabel, type, htmlType, variant, size = "medium", ic
       style={{ width: block ? "100%" : undefined, ...style }}
       type={htmlType ?? "button"}
     >
-      {loading ? <span className="ui-button__spinner" aria-hidden="true" /> : icon ? <span className="ui-button__icon">{icon}</span> : null}
-      {children ? <span className="ui-button__label">{children}</span> : null}
+      {loading ? <span className="od-button__spinner" aria-hidden="true" /> : icon ? <span className="od-button__icon">{icon}</span> : null}
+      {children ? <span className="od-button__label">{children}</span> : null}
     </button>
   );
 }

@@ -1,3 +1,4 @@
+import type { FormatCategory } from "@shimo/sdk-sheet";
 import { base64ToUint8Array } from "../utils/bytes";
 
 export interface WorkbookSnapshotRequest {
@@ -119,10 +120,14 @@ const MAX_FORMAT_RANGES = 64;
 const WORKBOOK_ALIGNS = ["left", "center", "right", "justify"] as const;
 const WORKBOOK_VERTICALS = ["top", "middle", "bottom"] as const;
 const WORKBOOK_WRAPS = ["text-wrap", "text-no-wrap", "text-linebreak-overflow", "text-clip"] as const;
+// The Sheet SDK declares these as a string enum but ships no runtime export for
+// it, so the tool contract keeps the plain strings and `satisfies` pins them to
+// the enum's values — a renamed or dropped category fails the typecheck here
+// instead of silently reaching the SDK.
 const WORKBOOK_FORMAT_CATEGORIES = [
   "auto", "text", "number", "percent", "currency", "accounting",
   "date", "time", "fraction", "scientific", "special",
-] as const;
+] as const satisfies readonly `${Exclude<FormatCategory, FormatCategory.Custom>}`[];
 
 // Mirrors the Sheet SDK's SheetChartType union. Charts the agent asks for are
 // validated against this list so an unsupported name fails with a readable
@@ -152,7 +157,10 @@ const WORKBOOK_LINE_STYLES: Record<string, number> = {
 export type WorkbookAlign = (typeof WORKBOOK_ALIGNS)[number];
 export type WorkbookVertical = (typeof WORKBOOK_VERTICALS)[number];
 export type WorkbookWrap = (typeof WORKBOOK_WRAPS)[number];
-export type WorkbookFormatCategory = (typeof WORKBOOK_FORMAT_CATEGORIES)[number];
+// The SDK's enum, not the string union above: a string enum is nominal in
+// TypeScript, so a plain "percent" is not assignable to FormatCategory.Percent
+// even though they are the same value at runtime.
+export type WorkbookFormatCategory = Exclude<FormatCategory, FormatCategory.Custom>;
 export type WorkbookChartType = (typeof WORKBOOK_CHART_TYPES)[number];
 export type WorkbookChartSeriesOrientation = (typeof WORKBOOK_CHART_ORIENTATIONS)[number];
 export type WorkbookChartFirstAs = (typeof WORKBOOK_CHART_FIRST_AS)[number];
@@ -251,7 +259,14 @@ function parseCellStyle(raw: unknown): WorkbookCellStyle {
   assignDefined(style, "align", optionalEnum(source.align, WORKBOOK_ALIGNS, "style.align"));
   assignDefined(style, "vertical", optionalEnum(source.vertical, WORKBOOK_VERTICALS, "style.vertical"));
   assignDefined(style, "wrap", optionalEnum(source.wrap, WORKBOOK_WRAPS, "style.wrap"));
-  assignDefined(style, "formatCategory", optionalEnum(source.number_format, WORKBOOK_FORMAT_CATEGORIES, "style.number_format"));
+  // The cast is what the `satisfies` on WORKBOOK_FORMAT_CATEGORIES pays for:
+  // the strings are checked against the enum's values there, and a string enum
+  // member is not assignable from its own literal without it.
+  assignDefined(
+    style,
+    "formatCategory",
+    optionalEnum(source.number_format, WORKBOOK_FORMAT_CATEGORIES, "style.number_format") as WorkbookFormatCategory | undefined,
+  );
   if (source.font_size !== undefined && source.font_size !== null) {
     style.fontSize = boundedInteger(source.font_size, undefined, 1, 409, "style.font_size");
   }

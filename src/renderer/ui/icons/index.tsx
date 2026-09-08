@@ -11,7 +11,7 @@ export interface ProjectIconProps extends LucideProps { readonly spin?: boolean 
 
 function projectIcon(Icon: LucideIcon) {
   return function ProjectIcon({ spin, className, ...props }: ProjectIconProps) {
-    return <Icon {...props} className={[spin ? "ui-icon--spin" : "", className].filter(Boolean).join(" ")} />;
+    return <Icon {...props} className={[spin ? "od-icon--spin" : "", className].filter(Boolean).join(" ")} />;
   };
 }
 

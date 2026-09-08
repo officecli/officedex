@@ -31,9 +31,10 @@ test.describe("OfficeDex real client shell, account, settings, diagnostics, and 
     await expect(page.getByRole("heading", { name: /App Settings/i }).first()).toBeVisible();
 
     await page.getByRole("navigation", { name: /Settings sections/i }).getByRole("button", { name: /Generation/i }).click();
-    await page.getByRole("button", { name: /PowerPoint \(\.pptx\)/i }).click();
-    await page.getByRole("menuitemradio", { name: /Word \(\.docx\)/i }).click();
-    await expect(page.getByText(/Settings saved and applied/i)).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: /Word \(\.docx\)|PowerPoint \(\.pptx\)/i }).click();
+    await page.getByRole("menuitemradio", { name: /PowerPoint \(\.pptx\)/i }).click();
+    await expect(page.getByRole("button", { name: /PowerPoint \(\.pptx\)/i })).toBeVisible();
+    await expect(page.getByText(/Auto-saved/i)).toBeVisible();
 
     await page.getByRole("navigation", { name: /Settings sections/i }).getByRole("button", { name: /Notification/i }).click();
     const notificationsSwitch = page.getByRole("switch", { name: /Desktop notifications/i });
@@ -46,11 +47,11 @@ test.describe("OfficeDex real client shell, account, settings, diagnostics, and 
     await page.getByRole("button", { name: /中文|English/i }).click();
     await page.getByRole("menuitemradio", { name: /^English$/i }).click();
 
-    await page.getByRole("navigation", { name: /Settings sections/i }).getByRole("button", { name: /Connection/i }).click();
-    await page.getByRole("button", { name: /Test/i }).click();
-    const providerTestDialog = page.getByRole("dialog", { name: /Run official provider test/i });
-    await expect(providerTestDialog).toBeVisible();
-    await providerTestDialog.getByRole("button", { name: /Run test/i }).click();
+    await page.getByRole("navigation", { name: /Settings sections/i }).getByRole("button", { name: /Advanced/i }).click();
+    const providerCard = page.locator(".setting-row").filter({ hasText: /LLM Provider/i });
+    await providerCard.getByRole("button", { name: /Test connection/i }).click();
+    await expect(page.getByText(/Run official provider test/i)).toBeVisible();
+    await page.getByText(/^Run test$/i).click();
     const providerRow = page.locator(".setting-row").filter({ hasText: /LLM Provider/i });
     await expect(providerRow.getByText(/Official generation probe (passed|failed)|OK|HTTP|Unavailable|Network error/i).first()).toBeVisible({ timeout: 90_000 });
 
