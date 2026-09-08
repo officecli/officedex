@@ -224,6 +224,17 @@ func (a *App) startBridge(client *bridge.Client) error {
 }
 
 func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
+	applog.Logger().Info("ensure bridge", slog.String("cwd", cwd))
+	if client := a.bridges.get(cwd); client != nil && client.Connected() {
+		return client, nil
+	}
+
+	// Starting a process and completing initialize happens before the client is
+	// published in the pool. Serialize that slow path so concurrent metadata or
+	// task calls cannot each start a bridge for the same empty slot.
+	a.bridges.lifecycleMu.Lock()
+	defer a.bridges.lifecycleMu.Unlock()
+
 	if client := a.bridges.get(cwd); client != nil {
 		if !client.Connected() {
 			if err := a.startBridge(client); err != nil {
@@ -265,7 +276,7 @@ func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
 		return existing, nil
 	}
 
-	client := bridge.New(bridge.Options{
+	options := bridge.Options{
 		BinaryPath:     resolved.Path,
 		Env:            env,
 		Cwd:            cwd,
@@ -273,7 +284,11 @@ func (a *App) ensureBridgeForCwd(cwd string) (*bridge.Client, error) {
 		RuntimeRoot:    a.runtimeRoot,
 		LogDir:         filepath.Join(a.userDataDir, "logs"),
 		RequestTimeout: 30 * time.Second,
-	})
+	}
+	client := bridge.New(options)
+	if a.bridgeClientFactory != nil {
+		client = a.bridgeClientFactory(options)
+	}
 	client.OnEvent(a.bridgeEventListener(client))
 
 	if err := a.startBridge(client); err != nil {
@@ -324,6 +339,7 @@ func (a *App) ensureLoginManagerLocked() *login.Manager {
 }
 
 func (a *App) resetBridgeRuntime() {
+	applog.Logger().Info("bridge runtime reset")
 	a.mu.Lock()
 	clients := a.takeBridgeClientsLocked()
 	a.binary.invalidate()

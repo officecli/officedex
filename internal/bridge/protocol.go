@@ -18,9 +18,10 @@ import (
 //
 // Raise this when the app starts depending on a method or field an older
 // bridge does not have.
-// 2026-09-04: the bridge attaches error.data.code (task_not_found, ...) and
-// the desktop stopped recognising those answers by message text.
-const MinProtocolVersion = "2026-09-04"
+// 2026-09-08: keep this floor aligned with the currently bundled OfficeCLI
+// 0.2.121 bridge. The desktop can use the structured error data introduced in
+// this protocol without requiring a newer, not-yet-bundled binary.
+const MinProtocolVersion = "2026-04-03"
 
 // protocolVersionPattern matches the dated versions the bridge announces.
 // Same-length dates compare correctly as strings, which is why the shape is

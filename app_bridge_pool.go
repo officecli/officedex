@@ -18,7 +18,14 @@ import (
 // The zero value is ready to use, so an App built without a constructor — the
 // tests do this constantly — has a working, empty pool rather than a nil map.
 type bridgePool struct {
-	mu sync.Mutex
+	// lifecycleMu serializes the slow path that starts and publishes a client.
+	// Renderer startup can ask for initialize/capabilities concurrently (and
+	// React StrictMode deliberately replays effects in development). Without a
+	// reservation around that gap, both callers see an empty pool, start a
+	// child, then the loser closes its fully started client. That intentional
+	// close still emits bridge.exited and the renderer reports a false outage.
+	lifecycleMu sync.Mutex
+	mu          sync.Mutex
 	// clients is keyed by working directory.
 	clients map[string]*bridge.Client
 	// recentCwd is the last directory served, so calls that only read

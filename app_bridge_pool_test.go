@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"officedex/internal/bridge"
+	"officedex/internal/types"
 )
 
 // poolTestClient builds a bridge client over a fake transport, the way the
@@ -71,6 +73,81 @@ func TestBridgePoolKeepsOneClientPerWorkspace(t *testing.T) {
 	if kills := secondTransport.kills.Load(); kills != 0 {
 		t.Fatalf("returning to the first workspace killed the second (kills = %d)", kills)
 	}
+}
+
+// Renderer startup requests bridge metadata from more than one effect. Those
+// calls used to race between the empty-pool check and putIfAbsent, starting two
+// children for the same cwd. Closing the loser emitted bridge.exited and made
+// the home screen claim the connection was interrupted even though the winner
+// was healthy.
+func TestEnsureBridgeForCwdStartsOneClientWhenCalledConcurrently(t *testing.T) {
+	workspaceDir := t.TempDir()
+	binaryPath := "/bin/true"
+	app := &App{
+		userDataDir:    t.TempDir(),
+		workspaceDir:   workspaceDir,
+		cachedSettings: types.UserSettings{BridgeBinaryPath: &binaryPath},
+	}
+	app.startEventWriter()
+
+	var created atomic.Int32
+	var transportsMu sync.Mutex
+	var transports []*handshakeFakeTransport
+	app.bridgeClientFactory = func(options bridge.Options) *bridge.Client {
+		created.Add(1)
+		transport := newHandshakeFakeTransport()
+		transportsMu.Lock()
+		transports = append(transports, transport)
+		transportsMu.Unlock()
+		options.CreateTransport = func(bridge.Options) (bridge.Transport, error) { return transport, nil }
+		options.DisableAutoReconnect = true
+		options.RequestTimeout = 2 * time.Second
+		client := bridge.New(options)
+		go answerInitializeWithProtocol(t, transport, bridge.MinProtocolVersion, "test")
+		return client
+	}
+
+	const callers = 8
+	results := make(chan *bridge.Client, callers)
+	errs := make(chan error, callers)
+	var wg sync.WaitGroup
+	for i := 0; i < callers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			client, err := app.ensureBridgeForCwd(workspaceDir)
+			results <- client
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(results)
+	close(errs)
+
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("ensureBridgeForCwd: %v", err)
+		}
+	}
+	var first *bridge.Client
+	for client := range results {
+		if first == nil {
+			first = client
+		} else if client != first {
+			t.Fatal("concurrent callers received different bridge clients")
+		}
+	}
+	if got := created.Load(); got != 1 {
+		t.Fatalf("created %d bridge clients, want 1", got)
+	}
+
+	transportsMu.Lock()
+	started := append([]*handshakeFakeTransport(nil), transports...)
+	transportsMu.Unlock()
+	for _, transport := range started {
+		_ = transport.Kill()
+	}
+	app.drainEventWrites()
 }
 
 // A settings change that invalidates every child (binary, provider, proxy)
