@@ -24,6 +24,12 @@ async function fakeCheckout(root, { hoistNatives = false, converterMode = 0o755 
   await write("packages/presentation-engine/index.ts", "export const engine = 1;");
   await write("packages/presentation-office-js/index.ts", "export const host = 1;");
   await write("packages/deps/smartart/src/index.ts", "export const smartart = 1;");
+  // The minified authoring runtime the worker prefers over the sources.
+  await write("dist-ssr/manifest.json", JSON.stringify({ schemaVersion: 1 }));
+  await write("dist-ssr/engine.js", "export const engine = 1;");
+  // Authored TypeScript is pruned once dist-ssr ships in its place.
+  await write("packages/presentation-engine/src/index.ts", "export const authored = 1;");
+  await write("packages/presentation-office-js/src/index.ts", "export const authored = 1;");
   for (const kind of ["lo", "qs", "cs"]) {
     await write(
       `packages/presentation-app/public/presentation-assets/diagram/${kind}/sample.json`,
@@ -34,6 +40,7 @@ async function fakeCheckout(root, { hoistNatives = false, converterMode = 0o755 
     "quality/deps-golden/lib/node-presentation-host.mjs",
     "export const createDepsGoldenPresentationHost = () => ({});",
   );
+  await write("packages/presentation-office-js/README.md", "# ships publicly otherwise");
   await write("packages/presentation-office-js/reference-cache/huge.bin", "dev only");
   await write("packages/presentation-office-js/differential/a.mjs", "dev only");
   await write("packages/presentation-office-js/scripts/b.mjs", "dev only");
@@ -106,7 +113,9 @@ test("stages the sources, converter and vite closure the MOP worker needs", asyn
     path.join("node_modules", "vite", "dist", "node", "index.js"),
     path.join("bos", "dist", "mop-wasm", "pkg", "mop_wasm_bg.wasm"),
     path.join("tools", "fixtures", "blank-presentation", "content.json"),
-    path.join("packages", "deps", "smartart", "src", "index.ts"),
+    // The minified runtime replaces the authored sources below.
+    path.join("dist-ssr", "manifest.json"),
+    path.join("dist-ssr", "engine.js"),
     path.join(
       "packages",
       "presentation-app",
@@ -125,6 +134,16 @@ test("stages the sources, converter and vite closure the MOP worker needs", asyn
   for (const native of nativePackages()) {
     await stat(path.join(dest, "node_modules", native.host, "package.json"));
     await stat(path.join(dest, "node_modules", native.name, "binding.node"));
+  }
+  // Authored TypeScript must not ship: the installer is public and the worker
+  // loads dist-ssr instead.
+  for (const pruned of [
+    path.join("packages", "presentation-engine", "src"),
+    path.join("packages", "presentation-office-js", "src"),
+    path.join("packages", "deps", "smartart", "src"),
+    path.join("packages", "presentation-office-js", "README.md"),
+  ]) {
+    await assert.rejects(stat(path.join(dest, pruned)), { code: "ENOENT" }, pruned);
   }
   // An explicit source is honoured and validated against the same markers.
   assert.equal(resolvePresentationSource(source), source);

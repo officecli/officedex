@@ -29,6 +29,10 @@ export const PRESENTATION_SOURCES = Object.freeze([
   { from: "package.json", required: true },
   { from: "tsconfig.json", required: true },
   // The authored engine and the office-js host the worker loads.
+  // Minified authoring runtime; built by presentation/scripts/build-ssr-runtime.mjs.
+  // The worker prefers it over the TypeScript sources, which keeps the engine
+  // out of the public installer in readable form.
+  { from: "dist-ssr", required: true },
   { from: "packages/presentation-engine", required: true },
   { from: "packages/presentation-office-js", required: true },
   // SmartArt is loaded by an absolute Vite SSR URL, so the nested workspace
@@ -55,6 +59,11 @@ export const PRESENTATION_SOURCES = Object.freeze([
 // of captured PowerPoint reference material used by the differential audit
 // tooling; none of it is read at authoring time.
 export const PRESENTATION_PRUNE = Object.freeze([
+  // Authored TypeScript: the worker loads dist-ssr instead, so shipping the
+  // sources would only publish a readable copy of the engine.
+  "packages/presentation-engine/src",
+  "packages/presentation-office-js/src",
+  "packages/deps/smartart/src",
   // Ships in the public installer otherwise: it documents the compatibility
   // surface, the RPC protocol name and the host bridge interfaces.
   "packages/presentation-office-js/README.md",
