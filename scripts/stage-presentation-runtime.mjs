@@ -218,6 +218,8 @@ export async function stagePresentationRuntime({ source, dest = DEST } = {}) {
     await rm(path.join(dest, pruned), { recursive: true, force: true });
   }
 
+  await assertObfuscatedRuntime(path.join(dest, "dist-ssr"));
+
   const modules = path.join(dest, "node_modules");
   await mkdir(modules, { recursive: true });
   for (const entry of PRESENTATION_NODE_MODULES) {
@@ -327,4 +329,29 @@ if (isMain) {
       console.error(`[stage-presentation-runtime] ${error.message}`);
       process.exit(1);
     });
+}
+
+/**
+ * The authored sources are pruned above, so dist-ssr is the only copy of the
+ * engine that ships. Refuse to package a plain build: without obfuscation the
+ * installer would still carry readable logic, which is the thing pruning the
+ * sources was meant to prevent. javascript-obfuscator emits hexadecimal
+ * identifiers, so their absence means the release step did not run.
+ */
+async function assertObfuscatedRuntime(runtimeDir) {
+  const entries = await readdir(runtimeDir, { withFileTypes: true });
+  const scripts = entries.filter(
+    (entry) => entry.isFile() && entry.name.endsWith(".js"),
+  );
+  if (scripts.length === 0) {
+    throw new Error(`no JavaScript found in ${runtimeDir}`);
+  }
+  for (const script of scripts) {
+    const source = await readFile(path.join(runtimeDir, script.name), "utf8");
+    if (!source.includes("_0x")) {
+      throw new Error(
+        `${script.name} is not obfuscated; build it with "pnpm run build:ssr-runtime:release" in the presentation checkout`,
+      );
+    }
+  }
 }

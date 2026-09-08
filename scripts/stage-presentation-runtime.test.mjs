@@ -26,7 +26,8 @@ async function fakeCheckout(root, { hoistNatives = false, converterMode = 0o755 
   await write("packages/deps/smartart/src/index.ts", "export const smartart = 1;");
   // The minified authoring runtime the worker prefers over the sources.
   await write("dist-ssr/manifest.json", JSON.stringify({ schemaVersion: 1 }));
-  await write("dist-ssr/engine.js", "export const engine = 1;");
+  // Obfuscated shape: staging refuses a plain build.
+  await write("dist-ssr/engine.js", "const _0x1a2b=1;export const engine=_0x1a2b;");
   // Authored TypeScript is pruned once dist-ssr ships in its place.
   await write("packages/presentation-engine/src/index.ts", "export const authored = 1;");
   await write("packages/presentation-office-js/src/index.ts", "export const authored = 1;");
@@ -135,6 +136,22 @@ test("stages the sources, converter and vite closure the MOP worker needs", asyn
     await stat(path.join(dest, "node_modules", native.host, "package.json"));
     await stat(path.join(dest, "node_modules", native.name, "binding.node"));
   }
+  // A plain (unobfuscated) runtime must not be packageable: the sources are
+  // pruned, so dist-ssr is the only copy of the engine that ships.
+  {
+    const plain = await mkdtemp(path.join(os.tmpdir(), "officedex-plain-"));
+    t.after(() => rm(plain, { recursive: true, force: true }));
+    await fakeCheckout(plain);
+    await writeFile(
+      path.join(plain, "dist-ssr", "engine.js"),
+      "export const engine = 1;",
+    );
+    await assert.rejects(
+      stagePresentationRuntime({ source: plain, dest: path.join(plain, "out") }),
+      /is not obfuscated/u,
+    );
+  }
+
   // Authored TypeScript must not ship: the installer is public and the worker
   // loads dist-ssr instead.
   for (const pruned of [
