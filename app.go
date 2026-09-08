@@ -251,19 +251,22 @@ type App struct {
 	// first task — an answer, a cancel — swapped it back, starting a third
 	// process that had never heard of the task. Tasks live inside their
 	// process, so the process has to outlive the call that is not about it.
-	bridges           bridgePool
-	pptxJSPlanner     pptxJSPlanner
-	loginManager      *login.Manager
-	loginUnsub        func()
-	pendingLoginURL   string
-	preview           previewRestore
-	appUpdateMgr      *appupdate.Manager
-	runtimeMgr        *runtimemgr.Manager
-	proxyPool         *netproxy.Pool
-	xlsxEditorService xlsxEditorService
-	pptxEditorService pptxEditorService
-	mopHTTPHandler    http.Handler
-	timelineStore     *timeline.Store
+	bridges bridgePool
+	// bridgeClientFactory is a test seam for concurrent lifecycle coverage.
+	// Production leaves it nil and uses bridge.New.
+	bridgeClientFactory func(bridge.Options) *bridge.Client
+	pptxJSPlanner       pptxJSPlanner
+	loginManager        *login.Manager
+	loginUnsub          func()
+	pendingLoginURL     string
+	preview             previewRestore
+	appUpdateMgr        *appupdate.Manager
+	runtimeMgr          *runtimemgr.Manager
+	proxyPool           *netproxy.Pool
+	xlsxEditorService   xlsxEditorService
+	pptxEditorService   pptxEditorService
+	mopHTTPHandler      http.Handler
+	timelineStore       *timeline.Store
 
 	binary binaryCache
 

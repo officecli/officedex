@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"strings"
 	"sync"
@@ -1071,6 +1072,12 @@ func (c *Client) waitExit(transport Transport) {
 	}
 	stopped := c.stoppedManually
 	c.mu.Unlock()
+	applog.Logger().Info("bridge child exited",
+		slog.String("bridge_instance_id", c.BridgeInstanceID()),
+		slog.String("code", formatCode(code)),
+		slog.String("signal", formatSignal(signal)),
+		slog.Bool("stopped_manually", stopped),
+	)
 
 	suffix := ""
 	if stderr != "" {
