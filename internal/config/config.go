@@ -49,6 +49,26 @@ const (
 	UpdateManifestURLEnv = "OFFICEDEX_UPDATE_MANIFEST_URL"
 )
 
+// PPTXJSSDKDesignEnv switches the aippt-jssdk-design PPTX backend off, putting
+// the desktop back on mop-skill without a rebuild. It is a path switch rather
+// than a preference: the two backends differ in what a finished deck can do
+// (images, live drawing, reslide/tail), so this is the one control that
+// decides which of them the app is running on.
+//
+// Unset means on, so the switch only ever has to be reached for to go back.
+const PPTXJSSDKDesignEnv = "OFFICEDEX_PPTX_JSSDK_DESIGN"
+
+// PPTXJSSDKDesignEnabled reports whether the JSSDK backend is on. Anything
+// that reads as false ("0", "false", "off", "no") turns it off; every other
+// value, including unset, leaves it on.
+func PPTXJSSDKDesignEnabled() bool {
+	switch strings.ToLower(Trimmed(PPTXJSSDKDesignEnv)) {
+	case "0", "false", "off", "no":
+		return false
+	}
+	return true
+}
+
 // LauncherPWDEnv is the shell's working directory as the launcher saw it. A
 // GUI-launched macOS app often has "/" as its real cwd but keeps PWD; it is
 // consulted only as a local-development discovery hint.

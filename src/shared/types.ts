@@ -83,7 +83,7 @@ export interface DocumentTypeCapability {
 }
 
 export const DOCUMENT_TYPE_CAPABILITIES: Record<DocumentType, DocumentTypeCapability> = {
-  pptx: { type: "pptx", label: "PPTX", icon: "slideshow", office: true, defaultPptxBackend: "mop-skill", imageRatio: false, frameRate: false, watermark: false, previewExtensions: ["pptx"], attachments: [] },
+  pptx: { type: "pptx", label: "PPTX", icon: "slideshow", office: true, defaultPptxBackend: "aippt-jssdk-design", imageRatio: false, frameRate: false, watermark: false, previewExtensions: ["pptx"], attachments: [] },
   docx: { type: "docx", label: "DOCX", icon: "description", office: true, imageRatio: false, frameRate: false, watermark: false, previewExtensions: ["docx"], attachments: [] },
   xlsx: { type: "xlsx", label: "XLSX", icon: "table", office: true, imageRatio: false, frameRate: false, watermark: false, previewExtensions: ["xlsx"], attachments: [] },
   report: {
@@ -312,7 +312,7 @@ export interface GenerateInput {
   localPreview?: boolean;
   /** Which runtime ran the task ("custom" / "hosted"); Go fills it in for history. */
   runtimeMode?: RuntimeMode;
-  /** Which PPTX backend to use; the desktop leaves it unset and Go selects mop-skill. */
+  /** Which PPTX backend to use; the desktop leaves it unset and Go selects aippt-jssdk-design. */
   pptxBackend?: string;
 }
 

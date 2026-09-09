@@ -29,6 +29,7 @@ import (
 
 	"github.com/google/uuid"
 	"officedex/internal/applog"
+	"officedex/internal/config"
 	"officedex/internal/types"
 )
 
@@ -651,6 +652,19 @@ func (c *Client) SessionID() string {
 
 // InvokeGenerate calls MethodTaskInvoke with the office.generate tool args
 // projected from the GenerateInput.
+// defaultPPTXBackendFor is the backend the desktop asks for when the caller
+// named none. The capability table states the intended default and is mirrored
+// into the renderer's own rows, so the kill switch is applied here, where the
+// default is actually spent, rather than by rewriting the row underneath the
+// mirror.
+func defaultPPTXBackendFor(documentType types.DocumentType) string {
+	backend := types.Capability(documentType).DefaultPPTXBackend
+	if backend == types.PPTXBackendJSSDKDesign && !config.PPTXJSSDKDesignEnabled() {
+		return types.PPTXBackendMOPSkill
+	}
+	return backend
+}
+
 func (c *Client) InvokeGenerate(ctx context.Context, input types.GenerateInput) (TaskInvokeResult, error) {
 	ratio, err := imageRatioArg(input)
 	if err != nil {
@@ -696,7 +710,7 @@ func (c *Client) InvokeGenerate(ctx context.Context, input types.GenerateInput) 
 	}
 	if strings.TrimSpace(input.PPTXBackend) != "" {
 		args["pptx_backend"] = input.PPTXBackend
-	} else if backend := types.Capability(input.DocumentType).DefaultPPTXBackend; backend != "" {
+	} else if backend := defaultPPTXBackendFor(input.DocumentType); backend != "" {
 		args["pptx_backend"] = backend
 	}
 	if officeMode != "" {

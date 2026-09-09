@@ -6,11 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"officedex/internal/config"
 	"officedex/internal/types"
 )
 
@@ -496,8 +498,8 @@ func TestInvokeGenerateOpensSessionFirst(t *testing.T) {
 	if args["local_preview"] != true {
 		t.Errorf("local_preview = %v, want true", args["local_preview"])
 	}
-	if args["pptx_backend"] != "mop-skill" {
-		t.Errorf("pptx_backend = %v, want mop-skill for OfficeDex PPTX generation", args["pptx_backend"])
+	if args["pptx_backend"] != "aippt-jssdk-design" {
+		t.Errorf("pptx_backend = %v, want aippt-jssdk-design for OfficeDex PPTX generation", args["pptx_backend"])
 	}
 	fake.writeResponse(t, second.idString(), map[string]any{
 		"task_id":    "task-x",
@@ -1699,5 +1701,44 @@ func TestPlanPptxJSRejectsEmptySource(t *testing.T) {
 	fake.writeResponse(t, req.idString(), map[string]any{"summary": "nothing", "source": "  "}, nil)
 	if err := <-done; err == nil || !strings.Contains(err.Error(), "empty source") {
 		t.Fatalf("PlanPptxJS error = %v, want empty source", err)
+	}
+}
+
+// The kill switch decides which of two materially different backends the
+// desktop runs on, so both of its branches are pinned here: a switch nobody
+// exercises is how the "off" path rots.
+func TestDefaultPPTXBackendFollowsTheKillSwitch(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		value string
+		want  string
+	}{
+		{name: "unset", value: "", want: types.PPTXBackendJSSDKDesign},
+		{name: "zero", value: "0", want: types.PPTXBackendMOPSkill},
+		{name: "off", value: "off", want: types.PPTXBackendMOPSkill},
+		{name: "false", value: "FALSE", want: types.PPTXBackendMOPSkill},
+		{name: "on", value: "1", want: types.PPTXBackendJSSDKDesign},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.value == "" {
+				os.Unsetenv(config.PPTXJSSDKDesignEnv)
+			} else {
+				t.Setenv(config.PPTXJSSDKDesignEnv, tc.value)
+			}
+			if got := defaultPPTXBackendFor(types.DocPPTX); got != tc.want {
+				t.Errorf("defaultPPTXBackendFor(pptx) with %q = %q, want %q", tc.value, got, tc.want)
+			}
+		})
+	}
+}
+
+// Only PPTX chooses a backend; the switch must not start naming one for the
+// document types that never had a choice.
+func TestDefaultPPTXBackendIsEmptyForOtherTypes(t *testing.T) {
+	t.Setenv(config.PPTXJSSDKDesignEnv, "0")
+	for _, documentType := range []types.DocumentType{types.DocDOCX, types.DocXLSX, types.DocReport} {
+		if got := defaultPPTXBackendFor(documentType); got != "" {
+			t.Errorf("defaultPPTXBackendFor(%s) = %q, want empty", documentType, got)
+		}
 	}
 }

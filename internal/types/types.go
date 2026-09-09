@@ -78,7 +78,7 @@ type DocumentTypeCapability struct {
 }
 
 var DocumentTypeCapabilities = map[DocumentType]DocumentTypeCapability{
-	DocPPTX: {Type: DocPPTX, Label: "PPTX", Icon: "slideshow", Office: true, DefaultPPTXBackend: PPTXBackendMOPSkill, PreviewExtensions: []string{"pptx"}, Attachments: []AttachmentSpec{{
+	DocPPTX: {Type: DocPPTX, Label: "PPTX", Icon: "slideshow", Office: true, DefaultPPTXBackend: PPTXBackendJSSDKDesign, PreviewExtensions: []string{"pptx"}, Attachments: []AttachmentSpec{{
 		Slot:         SlotSourceWorkbook,
 		Required:     false,
 		Multiple:     false,
@@ -155,10 +155,20 @@ func Capability(t DocumentType) DocumentTypeCapability {
 	return c
 }
 
-// PPTXBackendMOPSkill is the desktop's PPTX backend: op-driven MOP authoring
-// where the OfficeCLI worker emits ordered vibe_ops. officegen stays available
-// only as an explicit compatibility choice.
+// PPTXBackendMOPSkill is op-driven MOP authoring, where the OfficeCLI worker
+// emits ordered vibe_ops. It is what the live drawing, the progressive outline
+// and reslide/tail are built on, and it is where the desktop falls back when
+// the JSSDK backend is switched off. officegen stays available only as an
+// explicit compatibility choice.
 const PPTXBackendMOPSkill = "mop-skill"
+
+// PPTXBackendJSSDKDesign is the desktop's PPTX backend: the model writes a
+// JSSDK program that the presentation Host executes from an empty document.
+// It authors native text and shapes only, so decks made this way carry no
+// generated images, stream no drawing ops (nothing is drawn live), and cannot
+// be re-rendered through reslide/tail. Set config.PPTXJSSDKDesignEnv to "0" to
+// put the desktop back on PPTXBackendMOPSkill without a rebuild.
+const PPTXBackendJSSDKDesign = "aippt-jssdk-design"
 
 // GenericPreviewExtensions can be opened in the preview without belonging to
 // a generated document type.
