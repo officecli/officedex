@@ -3,7 +3,20 @@ package bridge
 import (
 	"strings"
 	"testing"
+	"time"
 )
+
+// dayBeforeMinProtocolVersion is the newest version the gate must still
+// refuse. Deriving it keeps the refusal case attached to the floor wherever
+// the floor is moved to.
+func dayBeforeMinProtocolVersion(t *testing.T) string {
+	t.Helper()
+	parsed, err := time.Parse("2006-01-02", MinProtocolVersion)
+	if err != nil {
+		t.Fatalf("MinProtocolVersion %q is not a date the gate can compare: %v", MinProtocolVersion, err)
+	}
+	return parsed.AddDate(0, 0, -1).Format("2006-01-02")
+}
 
 // The version the officecli in this workspace announces has to pass, or the
 // gate would refuse the very bridge it ships against.
@@ -17,8 +30,21 @@ func TestCurrentBridgeProtocolIsAccepted(t *testing.T) {
 	// The check has to be able to say no, or the two passes above prove
 	// nothing: the day before the minimum is refused, and so is a bridge that
 	// announces no protocol at all.
-	if err := checkProtocolVersionValue("2026-09-03", "0.2.120"); err == nil {
-		t.Fatal("a bridge older than MinProtocolVersion was accepted")
+	//
+	// The day before is derived rather than written out. As a literal it was
+	// pinned to whatever the floor happened to be the day it was typed, and
+	// when the floor moved down to meet the bundled bridge the literal
+	// silently became a version *newer* than the minimum -- so the assertion
+	// that the gate can refuse was itself asserting nothing.
+	dayBefore := dayBeforeMinProtocolVersion(t)
+	switch err := checkProtocolVersionValue(dayBefore, "0.2.120"); {
+	case err == nil:
+		t.Fatalf("a bridge announcing %s, the day before MinProtocolVersion (%s), was accepted", dayBefore, MinProtocolVersion)
+	case !strings.Contains(err.Error(), "speaks protocol"):
+		// A refusal is not enough: a malformed date is refused too, for being
+		// the wrong shape rather than for being old, and that would let this
+		// case pass while proving nothing about the comparison.
+		t.Fatalf("%s should be refused for being older than the minimum, not for its shape; got: %v", dayBefore, err)
 	}
 	if err := checkProtocolVersionValue("", "0.1.0"); err == nil {
 		t.Fatal("a bridge announcing no protocol version was accepted")
