@@ -100,6 +100,37 @@ func TestPrepareSaveAndExportPptxSession(t *testing.T) {
 	}
 }
 
+func TestSaveVideoWritesRevisionCheckedArtifactToDownloads(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("HOME", root)
+	sourcePath := filepath.Join(root, "deck.pptx")
+	writeTestPptx(t, sourcePath)
+	service := NewService(&fakeResolver{entries: map[string]preview.ArtifactEntry{
+		"token": {FilePath: sourcePath, DocumentType: "pptx"},
+	}}, fakeConverter{}, filepath.Join(root, "sessions"))
+	prepared, err := service.Prepare(context.Background(), "token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.SaveVideo("token", prepared.SessionID, 1, "deck.mp4", []byte("mp4")); err == nil {
+		t.Fatal("SaveVideo accepted a stale revision")
+	}
+	result, err := service.SaveVideo("token", prepared.SessionID, 0, "deck.mp4", []byte("mp4"))
+	if err != nil {
+		t.Fatalf("SaveVideo: %v", err)
+	}
+	if result.FileName != "deck.mp4" || result.FilePath != filepath.Join(root, "Downloads", "deck.mp4") {
+		t.Fatalf("SaveVideo result = %+v", result)
+	}
+	data, err := os.ReadFile(result.FilePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "mp4" {
+		t.Fatalf("saved video = %q", data)
+	}
+}
+
 func TestPptxSessionRejectsExternallyChangedSource(t *testing.T) {
 	root := t.TempDir()
 	sourcePath := filepath.Join(root, "deck.pptx")

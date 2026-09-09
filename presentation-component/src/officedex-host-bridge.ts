@@ -536,6 +536,37 @@ function installDocumentSwapBridge() {
   });
 }
 
+/** Exposes the narrow desktop video sink consumed by the presentation app. */
+function installDesktopHostBridge() {
+  const host = {
+    sessionMode: "desktop-local" as const,
+    saveVideo: async (request: {
+      content: ArrayBuffer;
+      contentType: "video/mp4";
+      fileName: string;
+    }) => {
+      const state = loaded;
+      if (!state) throw new Error("No presentation is loaded.");
+      const content = request.content.slice(0);
+      return requestHost<{ fileName: string; path?: string }>(
+        "presentation:save-video",
+        {
+          sessionId: state.sessionId,
+          revision: state.documentRevision,
+          fileName: request.fileName,
+          contentType: request.contentType,
+          content,
+        },
+        [content],
+      );
+    },
+  };
+  Object.defineProperty(window, "__PRESENTATION_DESKTOP_HOST__", {
+    configurable: true,
+    value: host,
+  });
+}
+
 function installScriptBridge() {
   window.addEventListener("message", (event: MessageEvent) => {
     if (event.source !== window.parent) return;
@@ -565,4 +596,5 @@ export async function installOfficeDexPresentationBridge(): Promise<void> {
   installScriptBridge();
   installDocumentSwapBridge();
   await waitForPresentation();
+  installDesktopHostBridge();
 }

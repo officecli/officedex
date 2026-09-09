@@ -3,11 +3,13 @@
   "ignoreTypes": [
     "SavePptxEditorAssetInput",
     "SavePptxEditorSnapshotInput",
+    "SavePptxEditorVideoInput",
     "StageXlsxEditorImageInput"
   ],
   "reasons": {
     "SavePptxEditorAssetInput": "renderer carries bytes as `data: Uint8Array`; bridge.ts encodes them into Go's `dataBase64` before the call",
     "SavePptxEditorSnapshotInput": "renderer `content: Uint8Array` becomes Go `contentBase64` in bridge.ts",
+    "SavePptxEditorVideoInput": "renderer `content: Uint8Array` becomes Go `contentBase64` in bridge.ts",
     "StageXlsxEditorImageInput": "renderer `data: Uint8Array` becomes Go `dataBase64` in bridge.ts"
   }
 }

@@ -89,6 +89,15 @@ export type PresentationEmbedEvent =
       data: ArrayBuffer;
     }
   | {
+      type: "presentation:save-video";
+      requestId: string;
+      sessionId: string;
+      revision: number;
+      fileName: string;
+      content: ArrayBuffer;
+      contentType: "video/mp4";
+    }
+  | {
       type: "presentation:export-pptx";
       requestId: string;
       sessionId: string;
@@ -119,4 +128,3 @@ export function isPresentationEmbedEvent(
   const type = (value as { type?: unknown }).type;
   return typeof type === "string" && type.startsWith("presentation:");
 }
-

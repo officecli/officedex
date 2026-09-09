@@ -4,6 +4,7 @@ import type { AppUpdateCheckResult, AppUpdateEvent, AppUpdateStatus, Artifact, A
 import type { JiraConnectionSummary, JiraProbeResult, LiquipediaConnectionSummary, LiquipediaProbeResult, MarketingCampaignPlanInput, MarketingCampaignPlanResult, CampaignImageInput, CampaignImageResult } from "../../shared/verticals";
 import { defaultProxySettings } from "../defaults";
 import { agentClientId } from "../agentClientIdentity";
+import type { SavePptxEditorVideoInput, PptxEditorVideoSaveResult } from "../../shared/types";
 
 // The Wails-generated bindings live alongside the renderer; tsconfig must
 // include them. Imports are static so the build picks them up; calls only
@@ -149,6 +150,13 @@ export function createRealE2EAPI(endpoint: string): DesktopAPI {
       rpc<PptxEditorSaveResult>("SavePptxEditorSnapshot", serializeSavePptxEditorSnapshotInput(input)),
     savePptxEditorAsset: (input: SavePptxEditorAssetInput) =>
       rpc<PptxEditorSaveAssetResult>("SavePptxEditorAsset", serializeSavePptxEditorAssetInput(input)),
+    savePptxEditorVideo: (input: SavePptxEditorVideoInput) => {
+      const { content, ...rest } = input;
+      return rpc<PptxEditorVideoSaveResult>("SavePptxEditorVideo", {
+        ...rest,
+        contentBase64: uint8ArrayToBase64(content),
+      });
+    },
     exportPptxEditor: (input: ExportPptxEditorInput) =>
       rpc<PptxEditorSaveResult>("ExportPptxEditor", input),
     closePptxEditor: (input: ClosePptxEditorInput) =>

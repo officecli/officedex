@@ -4,6 +4,7 @@ import type { AppUpdateCheckResult, AppUpdateEvent, AppUpdateStatus, Artifact, A
 import type { JiraConnectionSummary, JiraProbeResult, LiquipediaConnectionSummary, LiquipediaProbeResult, MarketingCampaignPlanInput, MarketingCampaignPlanResult, CampaignImageInput, CampaignImageResult } from "../../shared/verticals";
 import { defaultProxySettings } from "../defaults";
 import { agentClientId } from "../agentClientIdentity";
+import type { SavePptxEditorVideoInput } from "../../shared/types";
 
 // The Wails-generated bindings live alongside the renderer; tsconfig must
 // include them. Imports are static so the build picks them up; calls only
@@ -143,6 +144,9 @@ export function createBrowserPreviewAPI(): DesktopAPI {
       throw new Error("PPTX editor is unavailable in browser preview.");
     },
     savePptxEditorAsset: async () => {
+      throw new Error("PPTX editor is unavailable in browser preview.");
+    },
+    savePptxEditorVideo: async (_input: SavePptxEditorVideoInput) => {
       throw new Error("PPTX editor is unavailable in browser preview.");
     },
     exportPptxEditor: async () => {

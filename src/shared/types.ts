@@ -969,6 +969,14 @@ export interface SavePptxEditorAssetInput {
   data: Uint8Array;
 }
 
+export interface SavePptxEditorVideoInput {
+  previewToken: string;
+  sessionId: string;
+  revision: number;
+  fileName: string;
+  content: Uint8Array;
+}
+
 export interface ExportPptxEditorInput {
   previewToken: string;
   sessionId: string;
@@ -991,6 +999,11 @@ export interface PptxEditorSaveAssetResult {
   resourceSize: number;
   contentType: string;
   extension: string;
+}
+
+export interface PptxEditorVideoSaveResult {
+  filePath: string;
+  fileName: string;
 }
 
 export interface DrawingAsset {
@@ -1086,6 +1099,7 @@ export interface DesktopAPI extends DesktopVerticalAPI {
   preparePptxEditor(previewToken: string): Promise<PreparePptxEditorResult>;
   savePptxEditorSnapshot(input: SavePptxEditorSnapshotInput): Promise<PptxEditorSaveResult>;
   savePptxEditorAsset(input: SavePptxEditorAssetInput): Promise<PptxEditorSaveAssetResult>;
+  savePptxEditorVideo(input: SavePptxEditorVideoInput): Promise<PptxEditorVideoSaveResult>;
   exportPptxEditor(input: ExportPptxEditorInput): Promise<PptxEditorSaveResult>;
   closePptxEditor(input: ClosePptxEditorInput): Promise<void>;
   prepareXlsxEditor(previewToken: string): Promise<PrepareXlsxEditorResult>;

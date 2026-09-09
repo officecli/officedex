@@ -35,6 +35,13 @@ type fakePptxEditorService struct {
 	assetData    []byte
 	assetResult  pptxeditor.SaveAssetResult
 
+	videoToken   string
+	videoSession string
+	videoRev     int
+	videoName    string
+	videoData    []byte
+	videoResult  pptxeditor.VideoSaveResult
+
 	exportToken   string
 	exportSession string
 	exportRev     int
@@ -63,6 +70,11 @@ func (s *fakePptxEditorService) SaveSnapshot(token, session string, content []by
 func (s *fakePptxEditorService) SaveAsset(token, session, relativePath, contentType string, data []byte) (pptxeditor.SaveAssetResult, error) {
 	s.assetToken, s.assetSession, s.assetPath, s.assetType, s.assetData = token, session, relativePath, contentType, data
 	return s.assetResult, nil
+}
+
+func (s *fakePptxEditorService) SaveVideo(token, session string, rev int, name string, data []byte) (pptxeditor.VideoSaveResult, error) {
+	s.videoToken, s.videoSession, s.videoRev, s.videoName, s.videoData = token, session, rev, name, data
+	return s.videoResult, nil
 }
 
 func (s *fakePptxEditorService) Export(_ context.Context, token, session string, rev int) (pptxeditor.SaveResult, error) {
@@ -181,6 +193,35 @@ func TestSavePptxEditorAssetRejectsInvalidBase64(t *testing.T) {
 	}
 }
 
+func TestSavePptxEditorVideoDecodesBase64AndPassesRevision(t *testing.T) {
+	service := &fakePptxEditorService{videoResult: pptxeditor.VideoSaveResult{FilePath: "/tmp/deck.mp4", FileName: "deck.mp4"}}
+	app := &App{pptxEditorService: service}
+
+	got, err := app.SavePptxEditorVideo(SavePptxEditorVideoInput{
+		PreviewToken:  "token-1",
+		SessionID:     "session-1",
+		Revision:      8,
+		FileName:      "deck.mp4",
+		ContentBase64: base64.StdEncoding.EncodeToString([]byte("mp4")),
+	})
+	if err != nil {
+		t.Fatalf("SavePptxEditorVideo: %v", err)
+	}
+	if got.FilePath != "/tmp/deck.mp4" || got.FileName != "deck.mp4" {
+		t.Fatalf("SavePptxEditorVideo result = %+v", got)
+	}
+	if service.videoToken != "token-1" || service.videoSession != "session-1" || service.videoRev != 8 || service.videoName != "deck.mp4" || string(service.videoData) != "mp4" {
+		t.Fatalf("video service call = token %q session %q revision %d name %q data %q", service.videoToken, service.videoSession, service.videoRev, service.videoName, service.videoData)
+	}
+}
+
+func TestSavePptxEditorVideoRejectsInvalidBase64(t *testing.T) {
+	app := &App{pptxEditorService: &fakePptxEditorService{}}
+	if _, err := app.SavePptxEditorVideo(SavePptxEditorVideoInput{ContentBase64: "%%not-base64%%"}); err == nil {
+		t.Fatal("SavePptxEditorVideo accepted invalid base64")
+	}
+}
+
 func TestExportAndClosePptxEditorDelegateSession(t *testing.T) {
 	service := &fakePptxEditorService{exportResult: pptxeditor.SaveResult{FilePath: "/tmp/deck.pptx", Revision: 7}}
 	app := &App{pptxEditorService: service}
@@ -210,6 +251,9 @@ func TestPptxEditorBindingsReportUnavailableServiceConsistently(t *testing.T) {
 	}
 	if _, err := app.SavePptxEditorAsset(SavePptxEditorAssetInput{}); !errors.Is(err, errPptxEditorUnavailable) {
 		t.Fatalf("SavePptxEditorAsset error = %v", err)
+	}
+	if _, err := app.SavePptxEditorVideo(SavePptxEditorVideoInput{}); !errors.Is(err, errPptxEditorUnavailable) {
+		t.Fatalf("SavePptxEditorVideo error = %v", err)
 	}
 	if _, err := app.ExportPptxEditor(ExportPptxEditorInput{}); !errors.Is(err, errPptxEditorUnavailable) {
 		t.Fatalf("ExportPptxEditor error = %v", err)

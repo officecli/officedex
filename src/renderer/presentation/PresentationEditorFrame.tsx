@@ -353,6 +353,23 @@ export function PresentationEditorFrame({
             respond(event.requestId, undefined, error);
           }
           return;
+        case "presentation:save-video":
+          try {
+            const result = await officecli.savePptxEditorVideo({
+              previewToken,
+              sessionId: event.sessionId,
+              revision: event.revision,
+              fileName: event.fileName,
+              content: new Uint8Array(event.content),
+            });
+            respond(event.requestId, {
+              fileName: result.fileName,
+              path: result.filePath,
+            });
+          } catch (error) {
+            respond(event.requestId, undefined, error);
+          }
+          return;
         case "presentation:export-pptx":
           try {
             const result = await officecli.exportPptxEditor({
