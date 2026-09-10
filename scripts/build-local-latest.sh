@@ -84,10 +84,29 @@ npm run bundle:officecli:mac
 
 # The packaging flow gates on scripts/verify-packaged-runtime.mjs, which checks
 # a complete staged Contents/Resources tree. A local build stages Skills and
-# OfficeCLI but uses the presentation checkout, so that gate asks the wrong question.
-# Ask the binary instead: it runs the same resolvers the app runs at startup.
+# OfficeCLI but uses the presentation checkout, so that gate asks the wrong
+# question: ask the binary instead, because it runs the same resolvers the app
+# runs at startup.
+#
+# wails build leaves Contents/Resources alone, so payloads a previous DMG build
+# staged there outlive it. A local build stages no Node runtime, so any
+# mop-runtime in this bundle came from an earlier build -- carried unnoticed into
+# every local build for four days and, since the app prefers the runtime beside
+# its executable, the one the worker actually ran. What this build ships is this
+# build's decision, not build history's.
+rm -rf "${APP_PATH}/Contents/Resources/mop-runtime"
+
 echo "[build-local-latest] verifying runtime dependencies"
 "${APP_PATH}/Contents/MacOS/officedex" --verify-runtime
+
+# Then ask the packaging gate what it can answer here. A local build stages no
+# Node runtime, so mop-runtime is allowed to be absent -- but not allowed to be
+# present and broken. It was exactly that: a stale build/mop-runtime holding a
+# symlink to Homebrew's node got bundled into every local build for four days,
+# and because the app prefers the runtime beside its executable over the one on
+# PATH, it was also the one the worker ran, straight into a dyld abort.
+echo "[build-local-latest] verifying packaged runtime payloads"
+node scripts/verify-packaged-runtime.mjs build/bin --may-be-absent=mop-runtime
 
 echo "[build-local-latest] OfficeCLI build metadata"
 go version -m "${OFFICECLI_SOURCE_BIN}" | sed -n '1,5p'

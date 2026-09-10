@@ -59,12 +59,20 @@ async function packageTree({ platform = "win32", omit = [] } = {}) {
   return { root, bin };
 }
 
+/**
+ * These tests are about which payloads a package carries. Whether a runtime
+ * actually starts is relocatable-runtime.test.mjs's subject, so it is stubbed
+ * here -- a fixture cannot ship a real 120MB Node, and a fixture that could
+ * would be testing Node rather than this gate.
+ */
+const runtimeStarts = async () => ({ version: "v24.18.0" });
+
 test("the Windows package that was shipping silently broken now fails", async () => {
   // Nothing copied the staged resources beside officedex.exe, so writer-fonts,
   // mop-runtime and presentation were all absent -- and the licence gate went
   // green because it found no fonts to object to.
   const { root, bin } = await packageTree({ omit: ["writer-fonts", "mop-runtime", "presentation", "word2mow"] });
-  await assert.rejects(verifyPackagedRuntime(bin, { platform: "win32" }), (error) => {
+  await assert.rejects(verifyPackagedRuntime(bin, { platform: "win32", verifyRuntime: runtimeStarts }), (error) => {
     assert.match(error.message, /incomplete/);
     assert.match(error.message, /Writer default-font closure/);
     assert.match(error.message, /MOP Node runtime/);
@@ -76,7 +84,7 @@ test("the Windows package that was shipping silently broken now fails", async ()
 
 test("a complete Windows package passes", async () => {
   const { root, bin } = await packageTree();
-  const result = await verifyPackagedRuntime(bin, { platform: "win32" });
+  const result = await verifyPackagedRuntime(bin, { platform: "win32", verifyRuntime: runtimeStarts });
   assert.equal(result.kind, "windows-dir");
   assert.equal(result.degraded.length, 0);
   await rm(root, { recursive: true, force: true });
@@ -86,7 +94,7 @@ test("a Windows package without the converter ships, but says so", async () => {
   // No Windows build of word2mow exists yet. That is a declared gap: the
   // package is still usable, just without DOCX editing.
   const { root, bin } = await packageTree({ omit: ["word2mow"] });
-  const result = await verifyPackagedRuntime(bin, { platform: "win32" });
+  const result = await verifyPackagedRuntime(bin, { platform: "win32", verifyRuntime: runtimeStarts });
   assert.equal(result.degraded.length, 1);
   assert.match(result.degraded[0], /word2mow converter/);
   await rm(root, { recursive: true, force: true });
@@ -97,7 +105,7 @@ test("a presentation runtime without mop-convert is rejected", async () => {
   // staged bundle that shipped this way looked fine to every gate, and the
   // first sign of trouble was a dialog when a user opened a deck.
   const { root, bin } = await packageTree({ omit: ["mop-convert"] });
-  await assert.rejects(verifyPackagedRuntime(bin, { platform: "win32" }), (error) => {
+  await assert.rejects(verifyPackagedRuntime(bin, { platform: "win32", verifyRuntime: runtimeStarts }), (error) => {
     assert.match(error.message, /mop-convert/);
     return true;
   });
@@ -108,14 +116,14 @@ test("an empty resource directory is as broken as a missing one", async () => {
   const { root, bin } = await packageTree();
   await rm(path.join(bin, "writer-fonts", "files"), { recursive: true, force: true });
   await rm(path.join(bin, "writer-fonts", "prebuilt"), { recursive: true, force: true });
-  await assert.rejects(verifyPackagedRuntime(bin, { platform: "win32" }), /empty directory|missing prebuilt/);
+  await assert.rejects(verifyPackagedRuntime(bin, { platform: "win32", verifyRuntime: runtimeStarts }), /empty directory|missing prebuilt/);
   await rm(root, { recursive: true, force: true });
 });
 
 test("a font closure without its metrics is rejected", async () => {
   const { root, bin } = await packageTree();
   await rm(path.join(bin, "writer-fonts", "prebuilt"), { recursive: true, force: true });
-  await assert.rejects(verifyPackagedRuntime(bin, { platform: "win32" }), /missing prebuilt/);
+  await assert.rejects(verifyPackagedRuntime(bin, { platform: "win32", verifyRuntime: runtimeStarts }), /missing prebuilt/);
   await rm(root, { recursive: true, force: true });
 });
 
@@ -123,7 +131,7 @@ test("the macOS bundle layout is resolved and verified too", async () => {
   const { root, bin } = await packageTree({ platform: "darwin" });
   const target = await resolveResourceRoot(bin);
   assert.equal(target.kind, "macos-app");
-  const result = await verifyPackagedRuntime(bin, { platform: "darwin" });
+  const result = await verifyPackagedRuntime(bin, { platform: "darwin", verifyRuntime: runtimeStarts });
   assert.equal(result.degraded.length, 0);
   await rm(root, { recursive: true, force: true });
 });
@@ -139,4 +147,55 @@ test("missing animation Skill fails packaged runtime validation", async()=>{
   const {root,bin}=await packageTree({omit:["animation-skill"]});
   try { await assert.rejects(verifyPackagedRuntime(bin,{platform:"win32"}), /Native animation PPT Skill/); }
   finally {await rm(root,{recursive:true,force:true});}
+});
+
+test("a runtime that is present but cannot start fails the package", async () => {
+  // The shape of the four-day failure: the directory was there, so the gate
+  // said the payload was present, and the abort surfaced instead inside a
+  // user's generation.
+  const { root, bin } = await packageTree({ platform: "darwin" });
+  const runtimeAborts = async () => {
+    throw new Error("Library not loaded: @rpath/libnode.147.dylib");
+  };
+  await assert.rejects(
+    verifyPackagedRuntime(bin, { platform: "darwin", verifyRuntime: runtimeAborts }),
+    (error) => {
+      assert.match(error.message, /MOP Node runtime/);
+      assert.match(error.message, /libnode/);
+      return true;
+    },
+  );
+  await rm(root, { recursive: true, force: true });
+});
+
+test("a local build may ship without the runtime, and says so", async () => {
+  // A local build stages no Node; the app falls back to the developer's own.
+  const { root, bin } = await packageTree({ platform: "darwin", omit: ["mop-runtime"] });
+  const result = await verifyPackagedRuntime(bin, {
+    platform: "darwin",
+    mayBeAbsent: ["mop-runtime"],
+    verifyRuntime: runtimeStarts,
+  });
+  assert.equal(result.degraded.length, 1);
+  assert.match(result.degraded[0], /MOP Node runtime: absent/);
+  await rm(root, { recursive: true, force: true });
+});
+
+test("being allowed to be absent does not excuse being broken", async () => {
+  // The tolerance is for builds that ship no runtime, not for builds that ship
+  // a dead one: the app prefers the runtime beside its executable over PATH,
+  // so a broken copy is worse than none at all.
+  const { root, bin } = await packageTree({ platform: "darwin" });
+  const runtimeAborts = async () => {
+    throw new Error("Library not loaded: @rpath/libnode.147.dylib");
+  };
+  await assert.rejects(
+    verifyPackagedRuntime(bin, {
+      platform: "darwin",
+      mayBeAbsent: ["mop-runtime"],
+      verifyRuntime: runtimeAborts,
+    }),
+    /MOP Node runtime/,
+  );
+  await rm(root, { recursive: true, force: true });
 });

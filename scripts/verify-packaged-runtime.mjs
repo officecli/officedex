@@ -10,11 +10,18 @@
 //
 // Presence is checked here and licensing in verify-bundled-fonts.mjs; keeping
 // them apart means neither can mask the other.
+//
+// For payloads that are executables, presence turned out to be its own version
+// of the same lie: a mop-runtime directory holding a Node that aborts in dyld
+// satisfied "the directory is there" for four days of builds. Those payloads
+// are checked by running them -- see relocatable-runtime.mjs.
 
 import { access, readdir, stat } from "node:fs/promises";
 import { constants } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { verifyRelocatableRuntime } from "./relocatable-runtime.mjs";
 
 /**
  * What a shippable package must contain, expressed against the resource root.
@@ -43,7 +50,10 @@ export const REQUIRED_RESOURCES = Object.freeze([
     why: "internal/writerfonts serves it; without it every font request 404s and DOCX layout has no metrics",
   }),
   Object.freeze({
-    kind: "directory",
+    // Checked as a runtime, not as a directory: a directory holding a Node
+    // that cannot start passed this gate for four days, and the failure
+    // surfaced instead at the MOP worker, minutes into a user's generation.
+    kind: "runtime",
     at: "mop-runtime",
     label: "MOP Node runtime",
     why: "the MOP worker needs its own Node; the host's is not used",
@@ -103,18 +113,33 @@ function resourcePath(root, entry, platform) {
   return path.join(root, directory, platform === "win32" ? `${binary}.exe` : binary);
 }
 
-export async function verifyPackagedRuntime(binDirectory, { platform = process.platform } = {}) {
+/**
+ * `mayBeAbsent` names payloads this build is allowed to ship without, by their
+ * `at`. A local build stages no Node runtime and the app falls back to the
+ * developer's own -- but if one *is* there it still has to work, because the
+ * app prefers the runtime next to its executable over anything on PATH. So the
+ * question this gate asks is not "required or not" but "absent, or valid".
+ */
+export async function verifyPackagedRuntime(
+  binDirectory,
+  { platform = process.platform, mayBeAbsent = [], verifyRuntime = verifyRelocatableRuntime } = {},
+) {
   const target = await resolveResourceRoot(binDirectory);
   if (target === null) {
     throw new Error(`no packaged application found in ${binDirectory}`);
   }
+  const tolerated = new Set(mayBeAbsent);
 
   const missing = [];
   const degraded = [];
   const present = [];
   for (const entry of REQUIRED_RESOURCES) {
     const at = resourcePath(target.root, entry, platform);
-    const problem = await inspect(at, entry);
+    if (typeof entry.at === "string" && tolerated.has(entry.at) && !(await exists(at))) {
+      degraded.push(`${entry.label}: absent at ${at}\n      ${entry.why}`);
+      continue;
+    }
+    const problem = await inspect(at, entry, platform, verifyRuntime);
     if (problem === null) {
       present.push(entry.label);
       continue;
@@ -130,12 +155,22 @@ export async function verifyPackagedRuntime(binDirectory, { platform = process.p
   return { ...target, present, degraded };
 }
 
-async function inspect(at, entry) {
+async function inspect(at, entry, platform, verifyRuntime) {
   if (!(await exists(at))) return `missing at ${at}`;
   if (entry.kind === "binary") {
     const info = await stat(at);
     if (!info.isFile()) return `not a file: ${at}`;
     return null;
+  }
+  if (entry.kind === "runtime") {
+    // Run it where it sits: this copy is at its destination, which is exactly
+    // where the app will start it from.
+    try {
+      await verifyRuntime(at, { platform });
+      return null;
+    } catch (error) {
+      return error.message;
+    }
   }
   const info = await stat(at);
   if (!info.isDirectory()) return `not a directory: ${at}`;
@@ -150,9 +185,15 @@ async function inspect(at, entry) {
 const invokedDirectly =
   process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
 if (invokedDirectly) {
-  const binDirectory = process.argv[2] ?? path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "build", "bin");
+  const args = process.argv.slice(2);
+  const mayBeAbsent = args
+    .filter((arg) => arg.startsWith("--may-be-absent="))
+    .flatMap((arg) => arg.slice("--may-be-absent=".length).split(",").filter(Boolean));
+  const binDirectory =
+    args.find((arg) => !arg.startsWith("--")) ??
+    path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "build", "bin");
   try {
-    const { kind, root, present, degraded } = await verifyPackagedRuntime(binDirectory);
+    const { kind, root, present, degraded } = await verifyPackagedRuntime(binDirectory, { mayBeAbsent });
     console.log(`verify-packaged-runtime: ${present.length} runtime payload(s) present (${kind}, ${root})`);
     for (const entry of degraded) {
       console.log(`verify-packaged-runtime: shipping without ${entry.split("\n")[0]}`);

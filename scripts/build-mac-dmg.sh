@@ -191,28 +191,13 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
   npm run prefetch:officecli
 
   # Homebrew's node links against ~20 Cellar dylibs and cannot be redistributed.
-  # The official darwin tarball is self-contained, so extract that instead
-  # and point MOP_RUNTIME_SOURCE at it. This is the runtime that ships inside
+  # stage-mop-runtime owns obtaining the pinned self-contained tarball, checking
+  # it against the published sums, and proving the staged copy still runs once
+  # relocated; the version lives there too, so this build and a local build
+  # cannot drift onto different runtimes. This is the runtime that ships inside
   # the app, so it must match the TARGET arch, not the build host's.
   echo "[${LOG}] staging MOP Node runtime (darwin-${NODE_ARCH})"
-  NODE_TARBALL="${OFFICEDEX_DIR}/build/cache/pptxgenjs-runtime/node-v24.18.0-darwin-${NODE_ARCH}.tar.gz"
-  NODE_RUNTIME_DIR="${OFFICEDEX_DIR}/build/node-runtime-${TARGET_ARCH}"
-  if [[ ! -f "${NODE_TARBALL}" ]]; then
-    echo "[${LOG}] missing Node tarball: ${NODE_TARBALL}" >&2
-    echo "[${LOG}] fetch the darwin-${NODE_ARCH} tarball into build/cache/pptxgenjs-runtime/ first" >&2
-    exit 1
-  fi
-  SHASUMS="${OFFICEDEX_DIR}/build/cache/pptxgenjs-runtime/node-v24.18.0-SHASUMS256.txt"
-  expected="$(awk -v f="node-v24.18.0-darwin-${NODE_ARCH}.tar.gz" '$2 == f || $2 == "*"f {print $1}' "${SHASUMS}")"
-  actual="$(shasum -a 256 "${NODE_TARBALL}" | awk '{print $1}')"
-  if [[ -z "${expected}" || "${expected}" != "${actual}" ]]; then
-    echo "[${LOG}] Node tarball checksum mismatch" >&2
-    exit 1
-  fi
-  rm -rf "${NODE_RUNTIME_DIR}"
-  mkdir -p "${NODE_RUNTIME_DIR}"
-  tar -xzf "${NODE_TARBALL}" -C "${NODE_RUNTIME_DIR}" --strip-components=1
-  MOP_RUNTIME_SOURCE="${NODE_RUNTIME_DIR}" npm run stage:mop-runtime
+  MOP_RUNTIME_ARCH="${NODE_ARCH}" npm run stage:mop-runtime
 
   # The MOP presentation runtime (Vite SSR root + mop-convert). Without this
   # the packaged app has nothing at Resources/presentation and every PPTX

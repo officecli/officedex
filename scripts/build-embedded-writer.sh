@@ -10,6 +10,10 @@
 #
 # The default-font closure inside that dist stays out of public/writer; it is
 # staged separately by `npm run stage:writer-fonts`.
+#
+# The build is cached: scripts/writer-embed-cache.mjs fingerprints the writer
+# checkout and the officedex-side build scripts, and the synced public/writer.
+# When nothing changed the expensive writer build and sync are skipped.
 
 set -euo pipefail
 
@@ -27,6 +31,8 @@ fi
 
 EMBED_DIST="${SOURCE}/apps/officedex-embed/dist"
 DIST_DIRECTORY="${ROOT}/build/writer/dist"
+PUBLIC_DIRECTORY="${ROOT}/public/writer"
+CACHE_RECORD="${ROOT}/build/writer/.officedex-writer-embed-cache.json"
 
 if [[ -n "${WRITER_SOURCE_REVISION:-}" ]]; then
   REVISION="${WRITER_SOURCE_REVISION}"
@@ -40,6 +46,23 @@ else
   echo "Set WRITER_SOURCE_REVISION when building from a source archive." >&2
   exit 1
 fi
+
+# The Writer embed build is the slowest part of a local build (~160s: seven
+# packages rebuilt with two full tsc passes each, plus a ~52s default-font asset
+# check). It only changes when the writer checkout or the officedex-side build
+# scripts change, so reuse the synced public/writer when its fingerprint still
+# matches. Any cache failure is a miss, never a build failure.
+cache_status="$(node "${ROOT}/scripts/writer-embed-cache.mjs" check \
+  --source "${SOURCE}" \
+  --public "${PUBLIC_DIRECTORY}" \
+  --dist "${DIST_DIRECTORY}" \
+  --record "${CACHE_RECORD}" 2>/dev/null || echo "miss:error")"
+if [[ "${cache_status}" == "hit" ]]; then
+  echo "[build-embedded-writer] writer embed cache hit; reusing ${PUBLIC_DIRECTORY}"
+  echo "[build-embedded-writer] synchronized public/writer at ${REVISION} (cached)"
+  exit 0
+fi
+echo "[build-embedded-writer] writer embed cache ${cache_status}; rebuilding"
 
 if [[ "${WRITER_SKIP_INSTALL:-0}" != "1" ]]; then
   echo "[build-embedded-writer] installing writer dependencies (pnpm)"
@@ -104,5 +127,11 @@ if [[ -d "${FONT_CLOSURE}" ]]; then
   fi
   echo "[build-embedded-writer] font closure $(( closure_kb / 1024 ))MB, no unlicensed glyphs"
 fi
+
+node "${ROOT}/scripts/writer-embed-cache.mjs" write \
+  --source "${SOURCE}" \
+  --public "${PUBLIC_DIRECTORY}" \
+  --record "${CACHE_RECORD}" >/dev/null \
+  || echo "[build-embedded-writer] WARNING: could not write writer embed cache" >&2
 
 echo "[build-embedded-writer] synchronized public/writer at ${REVISION}"

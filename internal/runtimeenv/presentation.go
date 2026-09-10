@@ -16,11 +16,14 @@
 package runtimeenv
 
 import (
+	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"officedex/internal/config"
 )
@@ -188,6 +191,54 @@ func NodeExecutable() string {
 	}
 	return ""
 }
+
+// EffectiveNode is the Node the MOP worker will actually run.
+//
+// BridgeEnv hands OFFICECLI_MOP_SKILL_NODE to the bridge only when the user has
+// not set it, because officecli reads that variable before doing any resolution
+// of its own. So the node in force is the override when it names something
+// runnable, and NodeExecutable's choice otherwise -- and anything reporting on
+// the runtime has to say the same, or it names a Node nobody will start.
+func EffectiveNode() string {
+	if explicit := config.ExecutablePath(config.SkillNodeEnv); explicit != "" {
+		return explicit
+	}
+	return NodeExecutable()
+}
+
+// NodeVersion runs the resolved Node and returns what it reports.
+//
+// Resolution stops at "a regular file with the executable bit", which is all
+// the app can afford to check on every bridge start -- and is exactly what let
+// a staged Homebrew node win: it was a real, executable file, and it aborted
+// in dyld the moment the worker started it, because the twenty-seven dylibs it
+// loads had stayed behind in the Cellar.
+//
+// Resolution deliberately does not call this. A packaged app that carries a
+// broken runtime has a packaging defect, and silently falling through to some
+// other Node would hide it behind a machine that happens to have one. So the
+// preference order stays honest and this is offered to the diagnostics, which
+// can afford to run the thing and say what happened.
+func NodeVersion(node string) (string, error) {
+	if strings.TrimSpace(node) == "" {
+		return "", errors.New("no Node executable was resolved")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), nodeProbeTimeout)
+	defer cancel()
+	output, err := exec.CommandContext(ctx, node, "--version").CombinedOutput()
+	if err != nil {
+		detail := strings.TrimSpace(string(output))
+		if detail == "" {
+			detail = err.Error()
+		}
+		return "", errors.New(detail)
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+// nodeProbeTimeout bounds the probe: a runtime that has not answered by now is
+// not one the worker could have used either.
+const nodeProbeTimeout = 10 * time.Second
 
 func nodeExecutableName() string {
 	if runtime.GOOS == "windows" {
