@@ -39,7 +39,7 @@ describe("ProjectSidebar", () => {
   it("keeps the OfficeDex icon and returns to the unfiltered home", () => {
     const props = renderSidebar();
     expect(screen.getByRole("img", { name: "OfficeDex" })).toHaveAttribute("src", "./officedex-logo.png");
-    fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    fireEvent.click(screen.getByRole("button", { name: "New" }));
     fireEvent.click(screen.getByRole("button", { name: "Client A" }));
     expect(props.onSelectAll).toHaveBeenCalledOnce();
     expect(props.onSelectWorkspace).toHaveBeenCalledWith("ws-a");
@@ -66,23 +66,10 @@ describe("ProjectSidebar", () => {
     expect(props.onRemoveWorkspace).toHaveBeenCalledWith("ws-a");
   });
 
-  it("shows an attention badge on tasks and an empty-state hint without workspaces", () => {
-    const props = renderSidebar({ workspaces: [], signal: { kind: "attention", count: 2 } });
-    expect(screen.getByLabelText(/2 items need you/)).toHaveTextContent("2");
-    fireEvent.click(screen.getByRole("button", { name: /Folders you work in become workspaces/ }));
-    expect(props.onAddWorkspace).toHaveBeenCalledOnce();
-  });
-
-  it("shows running and failed as dots, without a count the user cannot act on", () => {
-    cleanup();
-    renderSidebar({ workspaces: [], signal: { kind: "running", count: 3 } });
-    const running = screen.getByLabelText(/3 tasks running/);
-    expect(running).toHaveTextContent("");
-    expect(running.className).toContain("project-sidebar__badge--running");
-
-    cleanup();
-    renderSidebar({ workspaces: [], signal: { kind: "failed", count: 2 } });
-    expect(screen.getByLabelText(/2 failed tasks/).className).toContain("project-sidebar__badge--failed");
+  it("keeps the New action free of task signal bubbles", () => {
+    renderSidebar({ workspaces: [], signal: { kind: "attention", count: 2 } });
+    expect(screen.getByRole("button", { name: "New" })).toBeInTheDocument();
+    expect(document.querySelector(".project-sidebar__badge")).toBeNull();
   });
 
   it("shows the signed-in account without a credit meter in the footer", () => {
@@ -95,7 +82,7 @@ describe("ProjectSidebar", () => {
 
   it("keeps home, settings, and account keyboard-accessible", () => {
     const props = renderSidebar();
-    fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    fireEvent.click(screen.getByRole("button", { name: "New" }));
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     fireEvent.click(screen.getByRole("button", { name: "Account" }));
     expect(props.onSelectAll).toHaveBeenCalled();
@@ -133,12 +120,10 @@ describe("ProjectSidebar", () => {
     expect(onDeleteDocument).toHaveBeenCalledWith(expect.objectContaining({ id: "run-doc" }));
   });
 
-  it("labels every project action and reports a collapse request", () => {
-    const onCollapse = vi.fn();
+  it("labels every project action and leaves the rail toggle to Shell", () => {
     const props: React.ComponentProps<typeof ProjectSidebar> = {
       workspaces,
       activeWorkspaceId: "ws-a",
-      onCollapse,
       onSelectAll: vi.fn(),
       onSelectWorkspace: vi.fn(),
       onAddWorkspace: vi.fn(),
@@ -151,10 +136,11 @@ describe("ProjectSidebar", () => {
     const { container } = render(<LocaleProvider value="en"><ProjectSidebar {...props} /></LocaleProvider>);
 
     // The rail only ever renders expanded now — collapsing unmounts it, and
-    // Shell owns the control that brings it back.
+    // Shell owns the single control that hides it and brings it back, parked in
+    // the band above the brand rather than inside the rail.
     expect(container.querySelector(".project-sidebar")).not.toBeNull();
     expect(screen.getByRole("button", { name: "Client A" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
-    expect(onCollapse).toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Collapse sidebar" })).toBeNull();
+    expect(container.querySelector(".project-sidebar__window-drag")).not.toBeNull();
   });
 });

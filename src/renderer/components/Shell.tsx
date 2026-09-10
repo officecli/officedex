@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { PanelLeftOpen } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import {
   AppstoreOutlined, AudioOutlined, BgColorsOutlined, ClockCircleOutlined,
   CloseOutlined, CloudOutlined, CodeOutlined, ControlOutlined, DesktopOutlined,
@@ -139,6 +139,21 @@ export function Shell({ activeNav, children, inspector, signal, account, update,
 
   return (
     <div className={`home-shell home-shell--${activeNav} ${spreadsheetMode ? "home-shell--spreadsheet" : ""} ${railDocked ? "" : "home-shell--railless"} ${railPeeking ? "home-shell--rail-peek" : ""} ${shut ? "home-shell--rail-shut" : ""}`}>
+      {/* The one control for the rail, in the band at the window's top-left
+          whichever way it points — the rail itself carries no collapse button,
+          so the button never moves out from under the pointer that hid it. */}
+      <button
+        type="button"
+        className="home-shell__rail-toggle"
+        aria-label={railDocked ? t("shell.sidebar.collapse") : t("shell.sidebar.expand")}
+        title={railDocked ? t("shell.sidebar.collapse") : t("shell.sidebar.expand")}
+        aria-expanded={railDocked}
+        onClick={railDocked ? collapseRail : expandRail}
+        onPointerEnter={railDocked ? undefined : openPeek}
+        onPointerLeave={railDocked ? undefined : closePeek}
+      >
+        {railDocked ? <PanelLeftClose aria-hidden="true" /> : <PanelLeftOpen aria-hidden="true" />}
+      </button>
       {railMounted ? (
       <ProjectSidebar
         onPointerEnter={railPeeking ? openPeek : undefined}
@@ -166,27 +181,13 @@ export function Shell({ activeNav, children, inspector, signal, account, update,
         signal={signal}
         account={account}
         updateRow={updateRow}
-        onCollapse={collapseRail}
       />
       ) : null}
       <main className="home-shell__main">
         {railDocked ? null : (
-          <>
-            {/* Nothing else reaches this corner once the rail is hidden, so it
-                is free to drag the window. */}
-            <div className="home-shell__drag" aria-hidden="true" />
-            <button
-              type="button"
-              className="home-shell__expand"
-              aria-label={t("shell.sidebar.expand")}
-              title={t("shell.sidebar.expand")}
-              onClick={expandRail}
-              onPointerEnter={openPeek}
-              onPointerLeave={closePeek}
-            >
-              <PanelLeftOpen aria-hidden="true" />
-            </button>
-          </>
+          /* With the rail gone the corner belongs to the window again: nothing
+             but the toggle reaches it, so the rest of it drags the window. */
+          <div className="home-shell__drag" aria-hidden="true" />
         )}
         {spreadsheetMode ? children : (
           <div className={`home-shell__content ${inspector ? "with-preview" : ""}`}>
@@ -197,6 +198,9 @@ export function Shell({ activeNav, children, inspector, signal, account, update,
               onPointerMove={pointerDotField.movePointer}
               onPointerLeave={pointerDotField.hidePointer}
             >
+              {/* The rail's traffic-light band stops at its own right edge, so
+                  the stage carries the rest of the title-bar strip. */}
+              <div className="home-shell__stage-drag" aria-hidden="true" />
               {texturedStage ? <canvas className="home-shell__pointer-field" ref={pointerDotField.canvasRef} aria-hidden="true" /> : null}
               {children}
             </section>

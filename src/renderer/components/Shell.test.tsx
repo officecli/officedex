@@ -1,4 +1,6 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { LocaleProvider } from "../i18n";
 import { Shell } from "./Shell";
@@ -54,10 +56,71 @@ describe("Shell", () => {
     expect(Boolean(container.querySelector(".home-shell__pointer-field"))).toBe(textured);
   });
 
+  it.each(["home", "document", "settings"] as const)("drags the window from the %s stage's top strip", (activeNav) => {
+    const { container } = renderShell(activeNav);
+    const band = container.querySelector(".home-shell__stage > .home-shell__stage-drag");
+
+    expect(band).not.toBeNull();
+    // The rail's own band covers the traffic lights; this one covers the rest
+    // of the window's top edge, which otherwise drags nothing.
+    const css = readFileSync("src/renderer/styles/home.css", "utf8");
+    expect(css).toMatch(
+      /\.home-shell__stage > \.home-shell__stage-drag \{[^}]*position:\s*absolute[^}]*height:\s*var\(--od-window-chrome-inset[^}]*--wails-draggable:\s*drag/s,
+    );
+  });
+
+  it("centres the rail toggle on the traffic lights, not on a guessed axis", () => {
+    const css = readFileSync("src/renderer/styles/home.css", "utf8");
+
+    // AppKit parks the three 14x14 buttons at y 9..23 with the title bar
+    // hidden, so their axis is 16px down. 14px (half of a 28px title bar) puts
+    // the control two pixels high, which is visible right next to the lights.
+    expect(css).toMatch(/:root\s*\{[^}]*--od-window-controls-center:\s*16px/s);
+    // 14px is half the control's own 28px box, so this reads "centre on the axis".
+    expect(css).toMatch(
+      /\.home-shell__rail-toggle\s*\{[^}]*top:\s*calc\(var\(--od-window-controls-center\) - 14px\)[^}]*height:\s*28px/s,
+    );
+  });
+
+  it("keeps one rail toggle in the band, in both directions", () => {
+    const { container } = renderShell("home");
+
+    // Docked: the rail carries no control of its own, the band above it does.
+    const collapse = screen.getByRole("button", { name: "Collapse sidebar" });
+    expect(collapse).toHaveClass("home-shell__rail-toggle");
+    expect(collapse.closest(".project-sidebar")).toBeNull();
+    expect(collapse).toHaveAttribute("aria-expanded", "true");
+    expect(container.querySelectorAll(".home-shell__rail-toggle")).toHaveLength(1);
+  });
+
+  it("makes every window-drag region unselectable", () => {
+    // A press that drags the window is still a press that starts a text
+    // selection, so without this the whole page flashes blue for the length of
+    // the drag. Checked over every stylesheet so a new drag region cannot
+    // reintroduce it.
+    const walk = (dir: string): string[] => readdirSync(dir, { withFileTypes: true })
+      .flatMap((entry) => (entry.isDirectory()
+        ? walk(join(dir, entry.name))
+        : entry.name.endsWith(".css") ? [join(dir, entry.name)] : []));
+
+    const offenders: string[] = [];
+    for (const file of walk("src/renderer")) {
+      const css = readFileSync(file, "utf8");
+      for (const [block] of css.matchAll(/\{[^{}]*\}/g)) {
+        if (!/--wails-draggable:\s*drag/.test(block)) continue;
+        if (!/user-select:\s*none/.test(block)) offenders.push(`${file}: ${block.slice(0, 60)}…`);
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
   it("lets SpreadsheetWorkspace own the document topbar", () => {
     const { container } = renderShell("spreadsheet");
     expect(screen.getByText("Workspace content")).toBeInTheDocument();
     expect(container.querySelector(".home-shell__stage")).toBeNull();
+    // The spreadsheet topbar is its own drag region, so no band is layered over it.
+    expect(container.querySelector(".home-shell__stage-drag")).toBeNull();
   });
 
   it.each(["home", "document", "spreadsheet", "settings"] as const)("renders no shell topbar for %s", (activeNav) => {
@@ -129,7 +192,9 @@ describe("Shell", () => {
       // it — on any platform, not only where window controls need dodging.
       expect(container.querySelector(".project-sidebar")).toBeNull();
       const expand = screen.getByRole("button", { name: "Expand sidebar" });
-      expect(expand).toHaveClass("home-shell__expand");
+      // Same control, same spot in the band — only its direction changed.
+      expect(expand).toHaveClass("home-shell__rail-toggle");
+      expect(expand).toHaveAttribute("aria-expanded", "false");
 
       fireEvent.click(expand);
       expect(container.querySelector(".project-sidebar")).not.toBeNull();

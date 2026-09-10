@@ -5,18 +5,21 @@
   /* Width to keep clear at the window's left edge, for anything that reaches
      the top-left corner rather than sitting below the band. */
   --od-window-chrome-inset-x: 0px;
-  /* Vertical axis the window controls sit on. Anything parked in the top-left
-     corner centres on this rather than guessing its own offset. */
-  --od-window-controls-center: 22px;
+  /* The strip across the top of the rail. It holds the rail toggle, and on the
+     macOS desktop window the traffic lights land in it too. */
+  --od-rail-band: 32px;
+  /* Vertical axis anything parked in that strip centres on. 16px is both the
+     middle of the band and — measured, not guessed — the axis AppKit parks its
+     14x14 window buttons on (y 9..23, x 9..23 / 32..46 / 55..69), so the rail
+     toggle lines up with the traffic lights instead of floating 2px above them. */
+  --od-window-controls-center: 16px;
 }
 
 html[data-window-chrome="overlay"] {
-  /* macOS draws the traffic lights in the top 28px with a hidden title bar;
-     32px clears them without leaving the sidebar looking top-heavy. */
+  /* The traffic lights sit in the top 23px with the title bar hidden, so the
+     32px band clears them with 9px to spare on either side. */
   --od-window-chrome-inset: 32px;
   --od-window-chrome-inset-x: 78px;
-  /* macOS centres the traffic lights in a 28px title bar. */
-  --od-window-controls-center: 14px;
 }
 
 .home-shell {
@@ -61,9 +64,15 @@ html[data-window-chrome="overlay"] {
   z-index: 55;
   -webkit-app-region: drag;
   --wails-draggable: drag;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
-.home-shell__expand {
+/* One control for both directions, parked in the band rather than inside the
+   rail: it keeps the same spot whether the rail is open or gone, so hiding the
+   rail never moves the button you just pressed. Anchored to the shell, not the
+   main column, because the band runs across the rail when the rail is docked. */
+.home-shell__rail-toggle {
   position: absolute;
   /* Half the 28px button, so its centre lands on the controls' axis. */
   top: calc(var(--od-window-controls-center) - 14px);
@@ -82,16 +91,13 @@ html[data-window-chrome="overlay"] {
   --wails-draggable: no-drag;
 }
 
-.home-shell__expand { animation: rail-control-in 160ms ease both; }
-@keyframes rail-control-in { from { opacity: 0; } to { opacity: 1; } }
-.home-shell__expand:hover { background: color-mix(in srgb, var(--od-ink) 6%, transparent); color: var(--od-ink); }
+.home-shell__rail-toggle:hover { background: color-mix(in srgb, var(--od-ink) 6%, transparent); color: var(--od-ink); }
 
 @media (prefers-reduced-motion: reduce) {
   .project-sidebar { transition: none; }
-  .home-shell__expand { animation: none; }
 }
-.home-shell__expand:focus-visible { outline: 2px solid var(--od-accent); outline-offset: 1px; }
-.home-shell__expand svg { width: 18px; height: 18px; }
+.home-shell__rail-toggle:focus-visible { outline: 2px solid var(--od-accent); outline-offset: 1px; }
+.home-shell__rail-toggle svg { width: 18px; height: 18px; }
 
 .home-shell__content {
   display: grid;
@@ -213,7 +219,7 @@ html[data-window-chrome="overlay"] {
 .home-file-remove:focus-visible { opacity: 1; }
 .home-file-remove:hover { color: var(--od-danger); }
 
-.project-sidebar { display: flex; box-sizing: border-box; width: 232px; min-height: 0; flex-direction: column; border-right: 1px solid var(--od-border-subtle); background: var(--od-surface-subtle); padding: 16px 12px; color: var(--od-ink); font-family: var(--od-font-ui); transition: margin-left 160ms ease; }
+.project-sidebar { display: flex; box-sizing: border-box; width: 232px; min-height: 0; flex-direction: column; border-right: 1px solid var(--od-border-subtle); background: var(--od-surface-subtle); padding: 0 12px 16px; color: var(--od-ink); font-family: var(--od-font-ui); transition: margin-left 160ms ease; }
 /* Slides out at full width rather than squeezing to nothing — a shrinking rail
    would rewrap every label on the way. */
 .home-shell--rail-shut .project-sidebar { margin-left: -232px; }
@@ -228,11 +234,10 @@ html[data-window-chrome="overlay"] {
   z-index: 58;
   box-shadow: 0 10px 30px rgba(31, 41, 51, 0.16);
 }
-/* The band replaces the sidebar's own top padding so the traffic lights sit
-   centred in it rather than 16px lower than macOS puts them. */
-html[data-window-chrome="overlay"] .project-sidebar { padding-top: 0; }
-.project-sidebar__window-drag { height: var(--od-window-chrome-inset); flex: 0 0 auto; -webkit-app-region: drag; --wails-draggable: drag; }
-.project-sidebar__brand { display: flex; height: 40px; align-items: center; gap: 10px; padding: 0 8px; font-size: 16px; font-weight: 500; -webkit-app-region: drag; --wails-draggable: drag; }
+/* The band stands in for the rail's top padding: it holds the rail toggle, and
+   on the macOS desktop window the traffic lights sit centred in it too. */
+.project-sidebar__window-drag { height: var(--od-rail-band); flex: 0 0 auto; -webkit-app-region: drag; --wails-draggable: drag; -webkit-user-select: none; user-select: none; }
+.project-sidebar__brand { display: flex; height: 40px; align-items: center; gap: 10px; padding: 0 8px; font-size: 16px; font-weight: 500; -webkit-app-region: drag; --wails-draggable: drag; -webkit-user-select: none; user-select: none; }
 .project-sidebar__brand img { width: 32px; height: 32px; border-radius: 6px; object-fit: contain; }
 .project-sidebar button { font-family: inherit; }
 .project-sidebar__primary { display: flex; flex-direction: column; gap: 2px; margin-top: 16px; }
@@ -251,15 +256,10 @@ html[data-window-chrome="overlay"] .project-sidebar { padding-top: 0; }
 .project-sidebar__workspace:hover .project-sidebar__workspace-select svg,
 .project-sidebar__primary button.is-active svg,
 .project-sidebar__workspace[data-active="true"] .project-sidebar__workspace-select svg { color: var(--od-ink); }
-.project-sidebar__badge { display: inline-grid; min-width: 18px; height: 18px; margin-left: auto; place-items: center; border-radius: 999px; background: var(--od-guidance); color: #ffffff; padding: 0 5px; font-size: 11px; font-style: normal; font-weight: 600; line-height: 18px; }
-/* Running and failed are states, not counts: a dot carries them without adding
-   a number the user cannot act on. Only "needs you" is worth counting. */
-.project-sidebar__badge--running,
-.project-sidebar__badge--failed { min-width: 8px; width: 8px; height: 8px; padding: 0; font-size: 0; }
-.project-sidebar__badge--running { background: var(--od-guidance); animation: sidebar-signal-pulse 1.6s ease-in-out infinite; }
-.project-sidebar__badge--failed { background: var(--od-danger); }
-@keyframes sidebar-signal-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
-@media (prefers-reduced-motion: reduce) { .project-sidebar__badge--running { animation: none; } }
+.project-sidebar__new { position: relative; display: flex; width: 100%; height: 32px; align-items: center; gap: 8px; margin: 0; border: 0; border-radius: 4px; background: transparent; color: var(--od-ink); padding: 0 8px; font-size: 13px; line-height: 20px; text-align: left; cursor: pointer; transition: background-color 120ms ease, color 120ms ease; }
+.project-sidebar__new:hover, .project-sidebar__new.is-active { background: color-mix(in srgb, var(--od-ink) 6%, transparent); }
+.project-sidebar__new-icon { width: 16px; height: 16px; color: var(--od-ink-secondary); }
+.project-sidebar__new:hover .project-sidebar__new-icon, .project-sidebar__new.is-active .project-sidebar__new-icon { color: var(--od-ink); }
 .project-sidebar__primary button.is-active,
 .project-sidebar__workspace[data-active="true"] { background: var(--od-surface); }
 .project-sidebar__primary button.is-active { font-weight: 500; }
@@ -319,8 +319,6 @@ html[data-window-chrome="overlay"] .project-sidebar { padding-top: 0; }
 .sidebar-update--error { background: color-mix(in srgb, var(--od-danger) 8%, transparent); }
 .sidebar-update--error .sidebar-update__main svg { color: var(--od-danger); }
 .project-sidebar__footer > button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.project-sidebar__collapse { display: grid; width: 28px; height: 28px; margin-left: auto; place-items: center; border: 0; border-radius: 4px; background: transparent; color: var(--od-ink-secondary); cursor: pointer; -webkit-app-region: no-drag; --wails-draggable: no-drag; }
-.project-sidebar__collapse:hover { background: color-mix(in srgb, var(--od-ink) 6%, transparent); color: var(--od-ink); }
 
 @media (max-width: 980px) {
   .home-template-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -358,7 +356,6 @@ html[data-window-chrome="overlay"] .project-sidebar { padding-top: 0; }
   .project-sidebar__workspace { display: block; }
   .project-sidebar__document { display: block; margin-left: 0; }
   .project-sidebar__document-open { grid-template-columns: 1fr; justify-items: center; padding: 0; }
-  .project-sidebar__collapse { margin: 0; }
   .home-screen { padding: 24px 20px 40px; }
   .home-hero { align-items: flex-start; flex-direction: column; }
   .home-template-grid { grid-template-columns: minmax(0, 1fr); }
@@ -412,6 +409,27 @@ html[data-window-chrome="overlay"] .project-sidebar { padding-top: 0; }
 .home-shell__stage > :not(.home-shell__pointer-field) {
   position: relative;
   z-index: 1;
+}
+
+/* macOS hides the title bar, so the strip beside the rail has to drag the
+   window itself — the rail's own band stops at its right edge. It sits inside
+   the stage's scroll box rather than over it: an absolutely positioned child of
+   a scroller scrolls with the content, so the band only covers the stage's top
+   padding and a card that scrolls up to the top edge stays clickable. Height
+   collapses to 0 off the desktop shell, where the window has a real title bar. */
+.home-shell__stage > .home-shell__stage-drag {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 3;
+  height: var(--od-window-chrome-inset, 0px);
+  -webkit-app-region: drag;
+  --wails-draggable: drag;
+  /* A press that moves the window is still a press that starts a text
+     selection, and the page flashes blue for the length of the drag. */
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .home-hero {
@@ -803,3 +821,6 @@ html[data-window-chrome="overlay"] .project-sidebar { padding-top: 0; }
 /* A single shared element connects the submitted brief to its task. */
 .home-entry-morph { position: fixed; z-index: 1000; pointer-events: none; overflow: hidden; box-sizing: border-box; padding: 14px 18px; border: 1px solid; border-radius: 14px; transform-origin: top left; font-size: 14px !important; line-height: 1.7 !important; white-space: pre-wrap; overflow-wrap: anywhere; }
 .home-entry-morph__label { font-size: 12px; margin-bottom: 5px; opacity: .7; }
+.home-intake__advanced-mode { display:inline-flex; align-items:center; gap:7px; margin-left:10px; color:var(--od-color-text-secondary, #666a71); font-size:13px; cursor:pointer; white-space:nowrap; }
+.home-intake__advanced-mode input { accent-color:var(--od-color-primary, #4b9bea); }
+.home-intake__advanced-mode small { color:var(--od-color-text-tertiary, #999da4); }

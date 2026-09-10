@@ -67,6 +67,10 @@ type StoredAppRoute = { nav: NavKey; taskId?: string };
 
 const APP_ROUTE_STORAGE_KEY = "officedex.appRoute";
 
+// "Open file" edits documents in place, so only the formats OfficeDex can edit
+// are offered.
+const OPEN_LOCAL_FILE_TYPES = ["docx", "xlsx", "pptx"];
+
 export function readStoredAppRoute(storage?: Pick<Storage, "getItem">): StoredAppRoute {
   try {
     const target = storage ?? (typeof sessionStorage !== "undefined" ? sessionStorage : undefined);
@@ -170,8 +174,8 @@ function generationModeForDocumentType(documentType: string | undefined): Genera
   return isDocumentType(documentType) && getCapability(documentType).office ? "fast" : undefined;
 }
 
-function normalizeGenerationMode(_value: unknown): GenerateInput["generationMode"] {
-  return "fast";
+function normalizeGenerationMode(value: unknown): GenerateInput["generationMode"] {
+  return value === "plan" ? "plan" : "fast";
 }
 
 function normalizeGenerateInputForGeneration(values: GenerateInput): GenerateInput {
@@ -861,7 +865,7 @@ function OfficeDexApp() {
       try {
         await spreadsheet.startGeneration({
           documentType: "xlsx",
-          generationMode: generationModeForDocumentType("xlsx"),
+          generationMode: input.advancedMode ? "plan" : "fast",
           topic: summarizePrompt(input.prompt),
           prompt: taskPrompt,
           sourceFile: route.sourceFile,
@@ -885,7 +889,7 @@ function OfficeDexApp() {
     await submit({
       documentType: route.documentType,
       ...(route.documentType === "pptx" ? { pptxWorkflow: input.pptxWorkflow } : {}),
-      generationMode: generationModeForDocumentType(route.documentType),
+      generationMode: input.advancedMode ? "plan" : generationModeForDocumentType(route.documentType),
       topic: route.documentType === "pptx" ? "New slides" : summarizePrompt(input.prompt),
       prompt: taskPrompt,
       sourceFile: route.sourceFile,
@@ -1237,14 +1241,21 @@ function OfficeDexApp() {
       const selected = await officecli.openFileDialog({
         filters: [{
           name: "Office files",
-          extensions: ["pptx", "docx", "xlsx", "pdf", "html", "htm", "png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"],
+          extensions: [...OPEN_LOCAL_FILE_TYPES],
         }],
       });
       if (!selected) return;
+      // The dialog filters already narrow the list, but a typed path can still
+      // slip through, so keep the office-only rule on this side too.
+      const documentType = fileExtension(selected);
+      if (!OPEN_LOCAL_FILE_TYPES.includes(documentType)) {
+        void message.error(t("home.openReferencedFile.unsupported"));
+        return;
+      }
       await openRecentFile({
         filePath: selected,
         fileName: fileNameFromPath(selected),
-        documentType: fileExtension(selected),
+        documentType,
         source: "local",
         ...(homeWorkspaceId ? { workspaceId: homeWorkspaceId } : {}),
         lastOpenedAt: new Date().toISOString(),
@@ -1252,7 +1263,7 @@ function OfficeDexApp() {
     } catch (error) {
       void message.error(errorMessage(error));
     }
-  }, [homeWorkspaceId, openRecentFile]);
+  }, [homeWorkspaceId, openRecentFile, t]);
 
   const openSidebarDocument = useCallback((document: SidebarDocument) => {
     if (state.tasks[document.id]) {

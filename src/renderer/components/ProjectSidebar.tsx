@@ -1,5 +1,4 @@
 import { useState, type DragEvent, type ReactNode } from "react";
-import { PanelLeftClose } from "lucide-react";
 import type { WhoAmIMode, WorkspaceSummary } from "../../shared/types";
 import { Button, Dropdown, Input, Tooltip, dialog, type MenuProps } from "../ui";
 import {
@@ -52,14 +51,12 @@ export interface ProjectSidebarProps {
   signal?: SidebarSignal;
   account?: SidebarAccount;
   updateRow?: ReactNode;
-  /** Hides the rail. There is no compact rail any more: it is shown or it is gone. */
-  onCollapse?: () => void;
   /** Set while the rail is only peeked open, so hovering it keeps it there. */
   onPointerEnter?: () => void;
   onPointerLeave?: () => void;
 }
 
-export function ProjectSidebar({ workspaces, documents = [], activeWorkspaceId, activeDocumentId, onSelectAll, onSelectWorkspace, onOpenDocument, onDeleteDocument, onAddWorkspace, onRenameWorkspace, onRevealWorkspace, onRemoveWorkspace, onOpenSettings, onOpenAccount, signal, account, updateRow, onCollapse, onPointerEnter, onPointerLeave }: ProjectSidebarProps) {
+export function ProjectSidebar({ workspaces, documents = [], activeWorkspaceId, activeDocumentId, onSelectAll, onSelectWorkspace, onOpenDocument, onDeleteDocument, onAddWorkspace, onRenameWorkspace, onRevealWorkspace, onRemoveWorkspace, onOpenSettings, onOpenAccount, signal, account, updateRow, onPointerEnter, onPointerLeave }: ProjectSidebarProps) {
   const t = useT();
   const [renamingId, setRenamingId] = useState<string>();
   const [renameValue, setRenameValue] = useState("");
@@ -156,38 +153,17 @@ export function ProjectSidebar({ workspaces, documents = [], activeWorkspaceId, 
 
   return (
     <aside className="project-sidebar" aria-label={t("projectSidebar.label")} onPointerEnter={onPointerEnter} onPointerLeave={onPointerLeave}>
-      {/* Collapses to zero height unless the desktop window hid its title bar,
-          in which case it holds the traffic lights and drags the window. */}
+      {/* Holds the rail toggle Shell parks over it, and on the desktop window
+          the traffic lights as well — which is why it also drags the window. */}
       <div className="project-sidebar__window-drag" aria-hidden="true" />
       <div className="project-sidebar__brand">
         <img src="./officedex-logo.png" alt="OfficeDex" />
         <span className="project-sidebar__brand-name">OfficeDex</span>
-        {onCollapse ? (
-          <button
-            type="button"
-            className="project-sidebar__collapse"
-            aria-label={t("shell.sidebar.collapse")}
-            onClick={onCollapse}
-          >
-            <PanelLeftClose aria-hidden="true" />
-          </button>
-        ) : null}
       </div>
       <nav className="project-sidebar__primary" aria-label={t("projectSidebar.navigation")}>
-        {/* Home is the inbox now, so it carries the signal: there is no separate
-            tasks page to route people to. */}
-        <button type="button" className={!activeWorkspaceId ? "is-active" : ""} aria-label={t("projectSidebar.home")} onClick={onSelectAll}>
-          <HomeOutlined aria-hidden /><span>{t("projectSidebar.home")}</span>
-          {signal ? (
-            <Tooltip title={t(`projectSidebar.signal.${signal.kind}`, { count: signal.count })} placement="right">
-              <em
-                className={`project-sidebar__badge project-sidebar__badge--${signal.kind}`}
-                aria-label={t(`projectSidebar.signal.${signal.kind}`, { count: signal.count })}
-              >
-                {signal.kind === "attention" ? signal.count : null}
-              </em>
-            </Tooltip>
-          ) : null}
+        <button type="button" className={`project-sidebar__new ${!activeWorkspaceId ? "is-active" : ""}`} aria-label="New" onClick={onSelectAll}>
+          <PlusOutlined className="project-sidebar__new-icon" aria-hidden="true" />
+          <span>New</span>
         </button>
       </nav>
       <section

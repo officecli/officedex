@@ -11,6 +11,8 @@ export interface HomeTaskIntake {
   imageRatio?: ImageRatio;
   fps?: number;
   documentType?: DocumentType;
+  /** When enabled, pause for an AI plan and user decisions before generation. */
+  advancedMode?: boolean;
 }
 
 export interface HomeTaskAnalysis extends HomeTaskIntake {

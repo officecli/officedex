@@ -132,6 +132,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
   const [animatedPlaceholder, setAnimatedPlaceholder] = useState("");
   const [selectedDocumentType, setSelectedDocumentType] = useState<HomeDocumentType>("pptx");
   const [pptxWorkflow, setPptxWorkflow] = useState<"design" | "animation" | undefined>();
+  const [advancedMode, setAdvancedMode] = useState(false);
   const [sourceFile, setSourceFile] = useState<string>();
   const [referenceDirectory, setReferenceDirectory] = useState<string>();
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
@@ -293,6 +294,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
         referenceDirectory,
         documentType,
         ...(documentType === "pptx" ? { pptxWorkflow } : {}),
+        ...(advancedMode ? { advancedMode: true } : {}),
         ...(referenceTextFiles.length > 0 ? { referenceTextFiles } : {}),
         ...(documentType === "img" && referenceImages.length > 0 ? { referenceImages } : {}),
         ...(documentType === "img" ? { imageRatio } : {}),
@@ -540,6 +542,11 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
               </button>
             </Dropdown>
           </div>
+          <label className="home-intake__advanced-mode" title="开启后先确认 AI 生成计划">
+            <input type="checkbox" checked={advancedMode} onChange={(event) => setAdvancedMode(event.target.checked)} />
+            <span>高级模式</span>
+            <small>{advancedMode ? "先确认计划" : "直接生成"}</small>
+          </label>
           <div className="home-intake__types" role="group" aria-label={t("home.outputTypes")}>
             {HOME_CATEGORIES.map((category) => (
               <button

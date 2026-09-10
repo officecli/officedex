@@ -39,4 +39,41 @@ export function applyWindowChrome(root: HTMLElement, env: WindowChromeEnvironmen
 export function mountWindowChrome(): void {
   if (typeof document === "undefined") return;
   applyWindowChrome(document.documentElement, readWindowChromeEnvironment());
+  mountDragRegionGuard(document);
+}
+
+/** The property Wails reads to decide whether a press drags the window. */
+const DRAG_PROPERTY = "--wails-draggable";
+const DRAG_VALUE = "drag";
+
+/** True for presses Wails will turn into a window drag — the same test its own
+ *  runtime makes, so this cannot disagree with it about where the bands are. */
+function pressStartsWindowDrag(event: MouseEvent): boolean {
+  if (event.button !== 0) return false;
+  const target = event.target;
+  if (!(target instanceof Element)) return false;
+  const value = getComputedStyle(target).getPropertyValue(DRAG_PROPERTY).trim();
+  return value === DRAG_VALUE;
+}
+
+/** Stops a window drag from painting the page blue on its way.
+ *
+ *  Wails defers the drag to the first mousemove and never cancels the press's
+ *  default action, so WebKit anchors a text selection at the same time and the
+ *  whole page stays highlighted until the button comes up. `user-select: none`
+ *  on the band is not enough: the band has no text of its own, so WebKit
+ *  anchors at the nearest selectable position instead and selects everything
+ *  the drag sweeps over. Cancelling the press (and the selection it would
+ *  start) is what actually stops it. Wails' own listener never looks at
+ *  defaultPrevented, so the drag still happens. */
+export function mountDragRegionGuard(root: Document): void {
+  let dragging = false;
+  root.addEventListener("mousedown", (event) => {
+    dragging = pressStartsWindowDrag(event);
+    if (dragging) event.preventDefault();
+  });
+  root.addEventListener("selectstart", (event) => {
+    if (dragging) event.preventDefault();
+  });
+  root.addEventListener("mouseup", () => { dragging = false; });
 }
