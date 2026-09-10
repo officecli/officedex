@@ -29,6 +29,11 @@ func BridgeEnv(cwd string) []string {
 	rootExplicit := config.IsSet(config.PresentationRootEnv) || config.IsSet(config.PresentationSourceDirEnv)
 	nodeExplicit := config.IsSet(config.SkillNodeEnv)
 	env := make([]string, 0, 3)
+	if !config.IsSet(config.SkillDirEnv) {
+		if skills := bundledSkillsDir(); skills != "" {
+			env = append(env, config.SkillDirEnv+"="+skills)
+		}
+	}
 	if !nodeExplicit {
 		if node := NodeExecutable(); node != "" {
 			env = append(env, "OFFICECLI_MOP_SKILL_NODE="+node)
@@ -88,6 +93,33 @@ func BridgeEnv(cwd string) []string {
 		return nil
 	}
 	return env
+}
+
+// bundledSkillsDir finds Skills shipped with a packaged desktop app. A source
+// checkout is handled separately by the OfficeCLI development environment;
+// this probe is intentionally limited to the app bundle and its working tree.
+func bundledSkillsDir() string {
+	candidates := make([]string, 0, 4)
+	if executable, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(executable)
+		candidates = append(candidates,
+			filepath.Join(exeDir, "..", "Resources", "skills"),
+			filepath.Join(exeDir, "skills"),
+		)
+	}
+	if cwd, ok := config.ProcessCwd(); ok {
+		candidates = append(candidates, filepath.Join(cwd, "skills"))
+	}
+	for _, candidate := range candidates {
+		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+			if _, err := os.Stat(filepath.Join(candidate, "aippt-jssdk-video", "SKILL.md")); err == nil {
+				if abs, err := filepath.Abs(candidate); err == nil {
+					return abs
+				}
+			}
+		}
+	}
+	return ""
 }
 
 func Root(repoRoot string) string {

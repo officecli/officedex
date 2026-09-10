@@ -61,3 +61,4 @@ id_rsa*
 .netrc
 credentials*
 secrets*
+output

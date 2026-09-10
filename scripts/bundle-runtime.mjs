@@ -85,6 +85,15 @@ async function main() {
   const resources = target.root;
   console.log(`[bundle-runtime] staging into ${resources} (${target.kind})`);
 
+  // AI generation Skills used by the desktop Planner. Keep these as readable
+  // resources so the packaged client and OfficeCLI can discover the same
+  // authoring rules as the development checkout.
+  await copyTreeRequired(
+    path.resolve(REPO_ROOT, "..", "officecli-internal", "skills"),
+    path.join(resources, "skills"),
+    "OfficeDex Skills",
+  );
+
   // officecli
   const officecliSrc = path.join(REPO_ROOT, "build", "officecli", BINARY_NAME);
   await copy(officecliSrc, path.join(resources, "officecli"), BINARY_NAME);

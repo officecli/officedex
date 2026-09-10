@@ -33,6 +33,7 @@ const (
 	// user set them so it knows not to override them.
 	PresentationRootEnv = "OFFICECLI_MOP_PRESENTATION_ROOT"
 	SkillNodeEnv        = "OFFICECLI_MOP_SKILL_NODE"
+	SkillDirEnv         = "OFFICECLI_MOP_SKILL_DIR"
 	// DesktopBinaryEnv points at the officecli binary to run.
 	DesktopBinaryEnv = "OFFICECLI_DESKTOP_BINARY"
 	// Office2ModocFFIEnv points at the office2modoc shared library.
