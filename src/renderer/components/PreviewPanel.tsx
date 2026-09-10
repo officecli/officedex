@@ -1,5 +1,4 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, X } from "lucide-react";
 import type {
   Artifact,
   PreviewGrant,
@@ -120,6 +119,7 @@ export function PreviewPanel({
             onFlushReady={(flush) => {
               pptxFlushRef.current = flush;
             }}
+            onRequestClose={requestClose}
           />
         );
       case "docx":
@@ -128,7 +128,9 @@ export function PreviewPanel({
             previewToken={token}
             fileName={fileName}
             documentType={documentType}
+            filePath={artifact?.filePath}
             onDirtyChange={setDocumentDirty}
+            onRequestClose={requestClose}
           />
         );
       case "xlsx":
@@ -137,6 +139,10 @@ export function PreviewPanel({
             previewToken={token}
             fileName={fileName}
             documentType={documentType}
+            artifact={artifact}
+            grant={grant}
+            onDirtyChange={setDocumentDirty}
+            onRequestClose={requestClose}
           />
         );
       case "pdf":
@@ -145,6 +151,7 @@ export function PreviewPanel({
             previewToken={token}
             fileName={fileName}
             documentType={documentType}
+            onRequestClose={requestClose}
           />
         );
       case "html":
@@ -154,6 +161,7 @@ export function PreviewPanel({
             previewToken={token}
             fileName={fileName}
             documentType={documentType}
+            onRequestClose={requestClose}
           />
         );
       default:
@@ -171,27 +179,6 @@ export function PreviewPanel({
 
   return (
     <div className={`preview-panel-root${closing ? " is-closing" : ""}`}>
-      {grant ? (
-        <header className="preview-panel-header">
-          <button
-            type="button"
-            className="preview-panel-back"
-            onClick={requestClose}
-          >
-            <ArrowLeft size={16} strokeWidth={1.8} />
-            <span>{t("preview.back")}</span>
-          </button>
-          <button
-            type="button"
-            className="preview-panel-close"
-            onClick={requestClose}
-            title={t("preview.close")}
-            aria-label={t("preview.close")}
-          >
-            <X size={16} strokeWidth={1.8} />
-          </button>
-        </header>
-      ) : null}
       <div className="preview-panel-body">
         <Suspense fallback={<LoadingState fileName={fallbackName} />}>
           {viewer}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { PreviewToolbar } from "../components/PreviewToolbar";
+import { OfficeWorkbenchLayout } from "../../workbench/OfficeWorkbenchLayout";
+import { useT } from "../../i18n";
 import { LoadingState } from "../components/LoadingState";
 import { ErrorState } from "../components/ErrorState";
 import { officecli } from "../../bridge";
@@ -9,10 +10,12 @@ interface HtmlViewerProps {
   previewToken: string;
   fileName: string;
   documentType?: string;
+  onRequestClose?: () => void;
 }
 
 
-export default function HtmlViewer({ previewToken, fileName, documentType }: HtmlViewerProps) {
+export default function HtmlViewer({ previewToken, fileName, documentType, onRequestClose }: HtmlViewerProps) {
+  const t = useT();
   const [html, setHtml] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,16 +60,14 @@ export default function HtmlViewer({ previewToken, fileName, documentType }: Htm
   if (error) return <ErrorState message={error} fileName={fileName} onRetry={loadHtml} onOpenExternal={openExternal} />;
 
   return (
-    <>
-      <PreviewToolbar
-        fileName={fileName}
-        documentType={documentType}
-        zoom={zoom}
-        onZoomIn={zoomIn}
-        onZoomOut={zoomOut}
-        onZoomReset={zoomReset}
-        onOpenExternal={openExternal}
-      />
+    <OfficeWorkbenchLayout
+      documentType={documentType === "htm" ? "htm" : "html"}
+      fileName={fileName}
+      onBack={onRequestClose}
+      backLabel={t("workbench.closePreview")}
+      onOpenExternal={openExternal}
+      zoom={{ value: zoom, onZoomIn: zoomIn, onZoomOut: zoomOut, onReset: zoomReset }}
+    >
       <div className="preview-html-container">
         <iframe
           ref={iframeRef}
@@ -82,6 +83,6 @@ export default function HtmlViewer({ previewToken, fileName, documentType }: Htm
           }}
         />
       </div>
-    </>
+    </OfficeWorkbenchLayout>
   );
 }

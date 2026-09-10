@@ -5,6 +5,7 @@ import {
   WRITER_EMBED_PROTOCOL_VERSION,
   type WriterEmbedEvent,
   type WriterHostCommand,
+  type WriterSelectionSummary,
 } from "../../shared/writerProtocol";
 import { officecli } from "../bridge";
 import { registerActiveEditorClientTools } from "../activeEditorClientTools";
@@ -19,12 +20,20 @@ const WRITER_MANIFEST_URL = "/writer/officedex-component.json";
  */
 const SAVE_TIMEOUT_MS = 150_000;
 
+/** Selection round-trips are a postMessage hop; a slow one means a wedged embed. */
+const SELECTION_TIMEOUT_MS = 5_000;
+
+/** What the host assumes before the embed has reported anything. */
+const UNKNOWN_SELECTION: WriterSelectionSummary = { empty: true, collapsed: true };
+
 export interface WriterEditorFrameProps {
   previewToken: string;
   fileName: string;
   /** Opens the document without a save path; Writer hides its save action. */
   readOnly?: boolean;
   onDirtyChange?: (dirty: boolean) => void;
+  /** Where the caret is, so the host can scope an instruction to it. */
+  onSelectionChange?: (selection: WriterSelectionSummary) => void;
   /** The Writer component is missing or spoke an unsupported protocol. */
   onUnavailable: (error?: string) => void;
   onReady?: () => void;
@@ -70,6 +79,7 @@ export function WriterEditorFrame({
   fileName,
   readOnly = false,
   onDirtyChange,
+  onSelectionChange,
   onUnavailable,
   onReady,
   onSaved,
@@ -79,13 +89,16 @@ export function WriterEditorFrame({
   const unregisterClientToolsRef = useRef<(() => void) | undefined>(undefined);
   const disposedRef = useRef(false);
   const unavailableRef = useRef(false);
-  const callbacksRef = useRef({ onDirtyChange, onUnavailable, onReady, onSaved });
+  const callbacksRef = useRef({ onDirtyChange, onSelectionChange, onUnavailable, onReady, onSaved });
+  // The agent's read_selection tool answers from here rather than a round trip:
+  // the embed pushes every change already, so a pull would only add latency.
+  const selectionRef = useRef<WriterSelectionSummary>(UNKNOWN_SELECTION);
   // Host-initiated saves (the docx.editor.save agent tool) wait here until the
   // embed has exported and the host has written the file.
   const requestsRef = useRef(new PendingRequests({ idPrefix: "writer" }));
   const [componentURL, setComponentURL] = useState<string>();
 
-  callbacksRef.current = { onDirtyChange, onUnavailable, onReady, onSaved };
+  callbacksRef.current = { onDirtyChange, onSelectionChange, onUnavailable, onReady, onSaved };
 
   const markUnavailable = useCallback((error?: string) => {
     if (unavailableRef.current) return;
@@ -135,6 +148,48 @@ export function WriterEditorFrame({
     [post],
   );
 
+  /** Pulls the selection from the embed rather than trusting the last push. */
+  const requestSelection = useCallback(
+    () =>
+      new Promise<WriterSelectionSummary>((resolve, reject) => {
+        if (!frameRef.current?.contentWindow) {
+          reject(new Error("The Writer editor is not mounted."));
+          return;
+        }
+        const requestId = requestsRef.current.nextId();
+        requestsRef.current
+          .open<WriterSelectionSummary>(
+            requestId,
+            SELECTION_TIMEOUT_MS,
+            "Reading the selection timed out.",
+          )
+          .then(resolve, reject);
+        post({ type: "writer:read-selection", requestId });
+      }),
+    [post],
+  );
+
+  /** Runs a find-and-replace inside the embed and reports how many it changed. */
+  const requestReplaceText = useCallback(
+    (query: string, replacement: string, scope: "selection" | "document") =>
+      new Promise<{ replaced: number }>((resolve, reject) => {
+        if (!frameRef.current?.contentWindow) {
+          reject(new Error("The Writer editor is not mounted."));
+          return;
+        }
+        const requestId = requestsRef.current.nextId();
+        requestsRef.current
+          .open<{ replaced?: number }>(
+            requestId,
+            SAVE_TIMEOUT_MS,
+            "The replacement timed out.",
+          )
+          .then((result) => resolve({ replaced: result?.replaced ?? 0 }), reject);
+        post({ type: "writer:replace-text", requestId, query, replacement, scope });
+      }),
+    [post],
+  );
+
   useEffect(() => {
     const respond = (requestId: string, result?: unknown, error?: unknown) => {
       post({
@@ -162,6 +217,23 @@ export function WriterEditorFrame({
               "docx.editor.save": async (arguments_) => {
                 const result = await requestSave(arguments_.save_as_copy === true);
                 return { file_path: result.filePath, sha256: result.sha256, saved: true };
+              },
+              "docx.editor.read_selection": async () => {
+                const selection = await requestSelection();
+                return {
+                  empty: selection.empty,
+                  collapsed: selection.collapsed,
+                  paragraphs: selection.paragraphs ?? null,
+                };
+              },
+              "docx.editor.replace_text": async (arguments_) => {
+                const query = typeof arguments_.query === "string" ? arguments_.query : "";
+                const replacement =
+                  typeof arguments_.replacement === "string" ? arguments_.replacement : "";
+                if (!query) throw new Error("docx.editor.replace_text needs a non-empty query.");
+                const scope = arguments_.scope === "selection" ? "selection" : "document";
+                const result = await requestReplaceText(query, replacement, scope);
+                return { replaced: result.replaced, scope };
               },
             });
             const content = toTransferableBuffer(artifact.data);
@@ -191,6 +263,10 @@ export function WriterEditorFrame({
         case "writer:dirty-changed":
           callbacksRef.current.onDirtyChange?.(event.dirty);
           return;
+        case "writer:selection-changed":
+          selectionRef.current = event.selection;
+          callbacksRef.current.onSelectionChange?.(event.selection);
+          return;
         case "writer:save": {
           const saveAsCopy = event.saveAsCopy === true;
           try {
@@ -215,6 +291,17 @@ export function WriterEditorFrame({
           }
           return;
         }
+        // Selection reads and replacements answer here; saves have their own
+        // event because they carry document bytes.
+        case "writer:response":
+          if (event.ok) requestsRef.current.resolve(event.requestId, event.result);
+          else {
+            requestsRef.current.reject(
+              event.requestId,
+              new Error(event.error || "The Writer editor rejected the request."),
+            );
+          }
+          return;
         case "writer:save-failed":
           requestsRef.current.reject(
             event.requestId,
@@ -230,11 +317,12 @@ export function WriterEditorFrame({
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [fileName, markUnavailable, post, previewToken, readOnly, requestSave]);
+  }, [fileName, markUnavailable, post, previewToken, readOnly, requestReplaceText, requestSave, requestSelection]);
 
   useEffect(
     () => () => {
       fingerprintRef.current = undefined;
+      selectionRef.current = UNKNOWN_SELECTION;
       unregisterClientToolsRef.current?.();
       unregisterClientToolsRef.current = undefined;
       requestsRef.current.rejectAll(new Error("The Writer editor was closed."));

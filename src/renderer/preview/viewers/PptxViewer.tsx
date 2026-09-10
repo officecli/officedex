@@ -1,10 +1,4 @@
-import {
-  useState,
-  useMemo,
-  lazy,
-  Suspense,
-} from "react";
-import { PreviewToolbar } from "../components/PreviewToolbar";
+import { useState, useMemo, lazy, Suspense } from "react";
 import { LoadingState } from "../components/LoadingState";
 import { officecli } from "../../bridge";
 import { useT } from "../../i18n";
@@ -32,6 +26,7 @@ interface PptxViewerProps {
   /** Forwarded to the workbench's autosave idle window; tests only. */
   autosaveIdleMs?: number;
   onFlushReady?: (flush: (() => Promise<void>) | null) => void;
+  onRequestClose?: () => void;
 }
 
 /**
@@ -42,13 +37,13 @@ interface PptxViewerProps {
 export default function PptxViewer({
   previewToken,
   fileName,
-  documentType,
   filePath,
   editorBaseUrl,
   live,
   onDirtyChange,
   autosaveIdleMs,
   onFlushReady,
+  onRequestClose,
 }: PptxViewerProps) {
   const t = useT();
   const resolvedEditorUrl = useMemo(
@@ -65,73 +60,55 @@ export default function PptxViewer({
 
   const showWorkbench = Boolean(resolvedEditorUrl) && !useReadOnly;
 
+  if (showWorkbench && resolvedEditorUrl) {
+    return (
+      <Suspense fallback={<LoadingState fileName={fileName} />}>
+        <PresentationPptxWorkbench
+          key={`${previewToken}:${fileName}`}
+          editorBaseUrl={resolvedEditorUrl}
+          previewToken={previewToken}
+          fileName={fileName}
+          filePath={filePath}
+          live={live}
+          onDirtyChange={onDirtyChange}
+          autosaveIdleMs={autosaveIdleMs}
+          onFlushReady={onFlushReady}
+          onRequestClose={onRequestClose}
+          onOpenExternal={openExternal}
+          onEditorReady={() => setFallbackReason(null)}
+          onEditorUnavailable={(reason) => setFallbackReason(reason)}
+          notice={
+            fallbackReason ? (
+              <div className="wb-notice pptx-workbench-fallback-bar" role="note">
+                <span>{t("pptx.agent.editorUnavailableTitle")}</span>
+                <span className="wb-notice__spacer" />
+                <button type="button" onClick={() => setUseReadOnly(true)}>
+                  {t("pptx.agent.readOnlyFallback")}
+                </button>
+              </div>
+            ) : undefined
+          }
+        />
+      </Suspense>
+    );
+  }
+
   return (
-    <>
-      <PreviewToolbar
+    <Suspense fallback={<LoadingState fileName={fileName} />}>
+      <PresentationPptxWorkbench
+        editorBaseUrl={EMBEDDED_PRESENTATION_PATH}
+        previewToken={previewToken}
         fileName={fileName}
-        documentType={documentType}
+        readOnly
+        onRequestClose={onRequestClose}
         onOpenExternal={openExternal}
-      />
-      {showWorkbench && resolvedEditorUrl ? (
-        <div className="pptx-deck-layout pptx-deck-layout-workbench">
-          <Suspense fallback={<LoadingState fileName={fileName} />}>
-            <PresentationPptxWorkbench
-              key={`${previewToken}:${fileName}`}
-              editorBaseUrl={resolvedEditorUrl}
-              previewToken={previewToken}
-              fileName={fileName}
-              filePath={filePath}
-              live={live}
-              onDirtyChange={onDirtyChange}
-              autosaveIdleMs={autosaveIdleMs}
-              onFlushReady={onFlushReady}
-              onEditorReady={() => setFallbackReason(null)}
-              onEditorUnavailable={(reason) => setFallbackReason(reason)}
-            />
-          </Suspense>
-          {fallbackReason && (
-            <div className="pptx-workbench-fallback-bar" role="note">
-              <span>{t("pptx.agent.editorUnavailableTitle")}</span>
-              <button type="button" onClick={() => setUseReadOnly(true)}>
-                {t("pptx.agent.readOnlyFallback")}
-              </button>
-            </div>
-          )}
-        </div>
-      ) : (
-        <>
-          <div className="pptx-readonly-notice" role="note">
+        notice={
+          <div className="wb-notice pptx-readonly-notice" role="note">
             {t("pptx.agent.editorUnavailableTitle")} —{" "}
             {t("pptx.agent.editorUnavailableNotConfigured")}
           </div>
-          <PresentationReadOnlyViewer
-            previewToken={previewToken}
-            fileName={fileName}
-          />
-        </>
-      )}
-    </>
-  );
-}
-
-function PresentationReadOnlyViewer({
-  previewToken,
-  fileName,
-}: {
-  previewToken: string;
-  fileName: string;
-}) {
-  const editorBaseUrl = EMBEDDED_PRESENTATION_PATH;
-  return (
-    <div className="pptx-deck-layout pptx-deck-layout-workbench">
-      <Suspense fallback={<LoadingState fileName={fileName} />}>
-        <PresentationPptxWorkbench
-          editorBaseUrl={editorBaseUrl}
-          previewToken={previewToken}
-          fileName={fileName}
-          readOnly
-        />
-      </Suspense>
-    </div>
+        }
+      />
+    </Suspense>
   );
 }

@@ -73,6 +73,24 @@ const CONTEXT = {
   selectedShapes: [{ id: "title", name: "Title 1", type: "Placeholder" }],
 };
 
+/**
+ * Answers the inspect the workbench runs after a script to find out which slide
+ * the edit landed on. Returns the message, so a caller can assert on it.
+ */
+async function answerFocusInspect(
+  editor: { received: HostMessage[]; reply: (payload: Record<string, unknown>) => void },
+  ordinal: number,
+  context: unknown = CONTEXT,
+) {
+  const inspect = await waitFor(() => {
+    const list = editor.received.filter((item) => item.type === "officedex:pptx-inspect");
+    expect(list.length).toBe(ordinal);
+    return list[ordinal - 1];
+  });
+  act(() => editor.reply({ type: "officedex:pptx-inspect-result", requestId: inspect.requestId, context }));
+  return inspect;
+}
+
 async function bootWorkbench(
   filePath = "/tmp/deck.pptx",
   // The real idle window is 1.5s. Tests shorten it rather than disable it, so
@@ -201,7 +219,7 @@ describe("PptxViewer", () => {
     const legacyEditorPath = ["p", "p", "t", "i", "s", "t"].join("");
     expect(src).not.toContain("/" + legacyEditorPath);
     expect(document.querySelector(".pptx-workbench-readonly")).toBeTruthy();
-    expect(document.querySelector(".pptx-workbench-panel")).toBeNull();
+    expect(document.querySelector(".wb-panel")).toBeNull();
     expect(document.querySelector(".pptx-readonly-notice")?.textContent).toContain("AI editor unavailable");
   });
 
@@ -240,6 +258,9 @@ describe("PptxViewer", () => {
     expect(document.querySelector(".pptx-workbench-confirm")).toBeNull();
     act(() => editor.reply({ type: "officedex:pptx-execute-result", requestId: execute.requestId, result: { changed: 1 } }));
 
+    // The deck came back unchanged, so the workbench does not move the view.
+    await answerFocusInspect(editor, 3);
+
     const exportMessage = await editor.waitForHostMessage("officedex:pptx-export");
     const exported = new Uint8Array([0x50, 0x4b, 3, 4, 9, 9]).buffer;
     act(() =>
@@ -266,6 +287,58 @@ describe("PptxViewer", () => {
     expect(details?.querySelector("pre")?.textContent).toContain("PowerPoint.run");
   });
 
+
+  it("follows an edit that landed on a slide the reader was not looking at", async () => {
+    const { editor } = await bootWorkbench();
+
+    // Three slides, reader parked on the third; the prompt names the second.
+    const shape = (id: string, text: string) => ({ id, name: "Title 1", type: "Placeholder", left: 1, top: 2, width: 3, height: 4, text });
+    const deck = (secondTitle: string) => ({
+      slides: [
+        { id: "slide-1", index: 0, shapes: [shape("t1", "2026 Q3 overview")] },
+        { id: "slide-2", index: 1, shapes: [shape("t2", secondTitle)] },
+        { id: "slide-3", index: 2, shapes: [shape("t3", "East leads, West to fix")] },
+      ],
+      selectedSlideIds: ["slide-3"],
+      selectedShapes: [],
+    });
+
+    planPptxJS.mockResolvedValue({
+      summary: "Retitled the second slide.",
+      source: "return await PowerPoint.run(async (context) => { await context.sync(); });",
+      confidence: "high",
+      requires_confirmation: false,
+    });
+
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "把第二页的标题改为“最重要的三组数据”" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await answerFocusInspect(editor, 2, deck("Three things in this report"));
+
+    const execute = await editor.waitForHostMessage("officedex:pptx-execute-js");
+    act(() => editor.reply({ type: "officedex:pptx-execute-result", requestId: execute.requestId, result: null }));
+
+    // The post-edit deck differs on slide 2 only, so that is where the view goes.
+    await answerFocusInspect(editor, 3, deck("最重要的三组数据"));
+    const scripts = await waitFor(() => {
+      const list = editor.received.filter((item) => item.type === "officedex:pptx-execute-js");
+      expect(list.length).toBe(2);
+      return list;
+    });
+    expect(scripts[1].source).toContain("setSelectedSlides");
+    expect(scripts[1].source).toContain('"slide-2"');
+    act(() => editor.reply({ type: "officedex:pptx-execute-result", requestId: scripts[1].requestId, result: { selectedSlideId: "slide-2" } }));
+
+    const exportMessage = await editor.waitForHostMessage("officedex:pptx-export");
+    act(() =>
+      editor.reply({
+        type: "officedex:pptx-export-result",
+        requestId: exportMessage.requestId,
+        buffer: new Uint8Array([0x50, 0x4b, 1, 2]).buffer,
+        fileName: "deck.pptx",
+      }),
+    );
+    await waitFor(() => expect(savePptx).toHaveBeenCalledTimes(1));
+  });
 
   it("requires confirmation for flagged plans and does not execute until confirmed; cancel leaves the deck untouched", async () => {
     const { editor } = await bootWorkbench();
@@ -327,6 +400,7 @@ describe("PptxViewer", () => {
 
     const execute = await editor.waitForHostMessage("officedex:pptx-execute-js");
     act(() => editor.reply({ type: "officedex:pptx-execute-result", requestId: execute.requestId, result: null }));
+    await answerFocusInspect(editor, 3);
     const exportMessage = await editor.waitForHostMessage("officedex:pptx-export");
     act(() =>
       editor.reply({
@@ -386,7 +460,7 @@ describe("PptxViewer", () => {
     expect((screen.getByRole("textbox") as HTMLTextAreaElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Show read-only preview" }));
     await waitFor(() => expect(document.querySelector(".pptx-workbench-readonly")).toBeTruthy());
-    expect(document.querySelector(".pptx-workbench-panel")).toBeNull();
+    expect(document.querySelector(".wb-panel")).toBeNull();
     expect(document.querySelector(".pptx-workbench-frame")?.getAttribute("src")).toContain("mode=preview");
   });
 

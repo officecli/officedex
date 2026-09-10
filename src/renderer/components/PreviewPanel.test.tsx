@@ -67,13 +67,10 @@ describe("PreviewPanel", () => {
     expect(css).toMatch(/transform:\s*translateX\(0\)/);
   });
 
-  it("keeps the back and close controls outside the Wails window drag region", () => {
+  it("does not render the removed preview header chrome", () => {
     const css = readFileSync("src/renderer/preview/PreviewApp.css", "utf8");
 
-    expect(css).toMatch(/\.preview-panel-header\s*\{[^}]*--wails-draggable:\s*drag/s);
-    expect(css).toMatch(
-      /\.preview-panel-back,\s*\.preview-panel-close\s*\{[^}]*-webkit-app-region:\s*no-drag[^}]*--wails-draggable:\s*no-drag/s,
-    );
+    expect(css).not.toMatch(/\.preview-panel-header\s*\{/);
   });
 
   it("uses the in-app dialog instead of window.confirm for unsaved changes", () => {
@@ -97,7 +94,7 @@ describe("PreviewPanel", () => {
 
     render(<PreviewPanel grant={grant} artifact={artifact} onClose={vi.fn()} />);
 
-    expect(screen.getByRole("button", { name: "Back to workspace" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Back to workspace" })).toBeNull();
     expect(screen.queryByText("Document preview")).toBeNull();
     expect(document.querySelector(".preview-panel-footer")).toBeNull();
     expect(screen.getByRole("button", { name: "Show in folder" })).toBeTruthy();
@@ -105,32 +102,5 @@ describe("PreviewPanel", () => {
     expect(screen.queryByRole("button", { name: "Replay generation" })).toBeNull();
   });
 
-  it.each([
-    ["back", "Back to workspace"],
-    ["close", "Close preview"],
-  ])("slides the full preview overlay out to the left before closing from %s", async (_control, accessibleName) => {
-    vi.useFakeTimers();
-    const grant: PreviewGrant = {
-      token: "preview-token-close",
-      fileName: "deck.pptx",
-      documentType: "pptx",
-    };
-    const onClose = vi.fn();
-    render(<PreviewPanel grant={grant} onClose={onClose} />);
 
-    fireEvent.click(screen.getByRole("button", { name: accessibleName }));
-
-    expect(document.querySelector(".preview-panel-root.is-closing")).toBeTruthy();
-    expect(onClose).not.toHaveBeenCalled();
-
-    await act(async () => {
-      vi.advanceTimersByTime(419);
-    });
-    expect(onClose).not.toHaveBeenCalled();
-
-    await act(async () => {
-      vi.advanceTimersByTime(1);
-    });
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
 });

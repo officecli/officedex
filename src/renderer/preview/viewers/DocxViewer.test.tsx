@@ -1,5 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { WriterSelectionSummary } from "../../../shared/writerProtocol";
 
 vi.mock("../../bridge", () => ({
   officecli: {
@@ -25,11 +26,34 @@ function mockManifest(body: unknown | null) {
 
 function renderViewer() {
   return render(
-    <LocaleProvider value="zh">
+    <LocaleProvider value="en">
       <DocxViewer previewToken="token" fileName="report.docx" documentType="docx" />
     </LocaleProvider>,
   );
 }
+
+/** Impersonates the embed pushing a selection over postMessage. */
+function pushSelection(frame: HTMLIFrameElement, selection: WriterSelectionSummary) {
+  act(() => {
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        source: frame.contentWindow,
+        data: { type: "writer:selection-changed", selection },
+      }),
+    );
+  });
+}
+
+async function mountedFrame(container: HTMLElement) {
+  await waitFor(() => {
+    expect(container.querySelector("iframe.writer-embed-frame")).not.toBeNull();
+  });
+  return container.querySelector<HTMLIFrameElement>("iframe.writer-embed-frame")!;
+}
+
+// These cases query by role across the whole document, so a leaked render from
+// the previous case would match twice.
+afterEach(() => cleanup());
 
 describe("DocxViewer", () => {
   it("mounts the Writer editor when the component manifest matches", async () => {
@@ -50,6 +74,56 @@ describe("DocxViewer", () => {
 
     expect(await screen.findByRole("note")).toBeInTheDocument();
     expect(container.querySelector("iframe.writer-embed-frame")).toBeNull();
+  });
+
+  it("scopes the assistant to the whole document until Writer reports a selection", async () => {
+    mockManifest({ name: "writer", protocolVersion: WRITER_EMBED_PROTOCOL_VERSION });
+
+    const { container } = renderViewer();
+    await mountedFrame(container);
+
+    const panel = screen.getByRole("complementary", { name: "Edit with AI" });
+    expect(panel).toHaveTextContent("No selection");
+    expect(panel).toHaveTextContent("Edits are saved to report.docx");
+  });
+
+  it("narrows the scope to the paragraphs Writer says are selected", async () => {
+    mockManifest({ name: "writer", protocolVersion: WRITER_EMBED_PROTOCOL_VERSION });
+
+    const { container } = renderViewer();
+    const frame = await mountedFrame(container);
+
+    pushSelection(frame, { empty: false, collapsed: false, paragraphs: 3 });
+    expect(screen.getByRole("complementary", { name: "Edit with AI" })).toHaveTextContent(
+      "Selected: 3 paragraph(s)",
+    );
+
+    // A caret is not a selection: the scope goes back to the whole document.
+    pushSelection(frame, { empty: false, collapsed: true, paragraphs: 1 });
+    expect(screen.getByRole("complementary", { name: "Edit with AI" })).toHaveTextContent(
+      "No selection",
+    );
+  });
+
+  it("says the selection is a range even before Writer resolves the paragraph count", async () => {
+    mockManifest({ name: "writer", protocolVersion: WRITER_EMBED_PROTOCOL_VERSION });
+
+    const { container } = renderViewer();
+    const frame = await mountedFrame(container);
+
+    pushSelection(frame, { empty: false, collapsed: false });
+    expect(screen.getByRole("complementary", { name: "Edit with AI" })).toHaveTextContent(
+      "Selected: part of the document",
+    );
+  });
+
+  it("offers no assistant panel when the editor itself is unavailable", async () => {
+    mockManifest(null);
+
+    renderViewer();
+
+    expect(await screen.findByRole("note")).toBeInTheDocument();
+    expect(screen.queryByRole("complementary")).toBeNull();
   });
 
   it("refuses a Writer build that speaks a different protocol version", async () => {

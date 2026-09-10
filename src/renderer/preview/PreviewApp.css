@@ -3,305 +3,17 @@
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #f0f1f3;
+  background: var(--n-surface);
   overflow: hidden;
 }
 
 .preview-image { display: grid; min-height: 0; flex: 1; place-items: center; overflow: auto; padding: 24px; }
-.preview-image img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; box-shadow: 0 8px 32px #0002; }
-
-/* ─── Toolbar ─── */
-.preview-toolbar {
-  display: flex;
-  align-items: center;
-  height: 44px;
-  padding: 0 44px 0 12px;
-  background: #ffffff;
-  border-bottom: 1px solid #ebebeb;
-  flex-shrink: 0;
-  gap: 8px;
-  flex-wrap: nowrap;
-  overflow: hidden;
-}
-
-.preview-root .preview-toolbar {
-  -webkit-app-region: drag;
-}
-
-.preview-toolbar button,
-.preview-toolbar span {
-  -webkit-app-region: no-drag;
-}
-
-.preview-toolbar-left {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-}
-
-.preview-toolbar-type-icon {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  color: #5f6673;
-}
-
-.preview-toolbar-filename {
-  font-size: 13px;
-  font-weight: 500;
-  color: #1a1c1c;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.preview-toolbar-type-badge {
-  display: inline-flex;
-  align-items: center;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: 3px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: #ffffff;
-  flex-shrink: 0;
-}
-
-.preview-toolbar-center {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.preview-toolbar-right {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-/* ─── Zoom group ─── */
-.preview-toolbar-zoom-group {
-  display: flex;
-  align-items: center;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  overflow: hidden;
-  height: 28px;
-}
-
-.preview-toolbar-zoom-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 100%;
-  border: 0;
-  background: transparent;
-  color: #5f6673;
-  cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
-}
-
-.preview-toolbar-zoom-btn:hover {
-  background: #f5f5f5;
-  color: #1a1c1c;
-}
-
-.preview-toolbar-zoom-pct {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 42px;
-  height: 100%;
-  border: 0;
-  border-left: 1px solid #e0e0e0;
-  border-right: 1px solid #e0e0e0;
-  background: transparent;
-  color: #424752;
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  padding: 0 4px;
-  transition: background 120ms ease;
-}
-
-.preview-toolbar-zoom-pct:hover {
-  background: #f5f5f5;
-}
-
-/* ─── Divider & Close ─── */
-.preview-toolbar-divider {
-  width: 1px;
-  height: 18px;
-  background: #e5e5e5;
-  flex-shrink: 0;
-  margin: 0 2px;
-}
+.preview-image img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; box-shadow: var(--shadow-elevated); }
 
 /* While the full-screen preview overlay is up, hide the cockpit's body-portaled
    node-confirmation popover so it can't float on top of the preview. */
 body.preview-overlay-active .living-tree-popover-overlay {
   display: none !important;
-}
-
-/* ─── Full-screen preview chrome (header + footer) ─── */
-.preview-panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 48px;
-  padding: 0 12px;
-  background: #ffffff;
-  border-bottom: 1px solid #ebebeb;
-  flex-shrink: 0;
-  gap: 8px;
-  -webkit-app-region: drag;
-  --wails-draggable: drag;
-}
-
-/* This bar covers the whole window, so with the title bar hidden the traffic
-   lights float over its left end. Start the back button clear of them. */
-html[data-window-chrome="overlay"] .preview-panel-header { padding-left: var(--od-window-chrome-inset-x); }
-
-.preview-panel-back,
-.preview-panel-close {
-  position: relative;
-  z-index: 1;
-  pointer-events: auto;
-  -webkit-app-region: no-drag;
-  --wails-draggable: no-drag;
-}
-
-.preview-panel-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px 0 8px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: #37352f;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 120ms ease;
-}
-
-.preview-panel-back:hover {
-  background: #f0eeec;
-}
-
-.preview-panel-title-tag {
-  padding: 2px 10px;
-  border-radius: 6px;
-  background: #e6e0f5;
-  color: #391c57;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.preview-panel-close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: #787671;
-  cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
-}
-
-.preview-panel-close:hover {
-  background: #f0eeec;
-  color: #37352f;
-}
-
-.preview-panel-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 56px;
-  padding: 0 16px;
-  background: #ffffff;
-  border-top: 1px solid #ebebeb;
-  flex-shrink: 0;
-  gap: 12px;
-}
-
-.preview-panel-footer-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  font-size: 13px;
-  color: #787671;
-}
-
-.preview-panel-footer-status > svg {
-  color: #1aae39;
-  flex-shrink: 0;
-}
-
-.preview-footer-filename {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: #37352f;
-}
-
-.preview-panel-footer-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.preview-action-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 14px;
-  border: 1px solid #c8c4be;
-  border-radius: 8px;
-  background: transparent;
-  color: #1a1a1a;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease;
-}
-
-.preview-action-btn:hover {
-  background: #f6f5f4;
-}
-
-.preview-toolbar-close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: #8a9099;
-  cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
-}
-
-.preview-toolbar-close:hover {
-  background: #f0f0f0;
-  color: #424752;
 }
 
 /* ─── Loading ─── */
@@ -315,11 +27,11 @@ html[data-window-chrome="overlay"] .preview-panel-header { padding-left: var(--o
 }
 
 .preview-loading-icon {
-  color: #bfc3cc;
+  color: var(--n-stone);
 }
 
 .preview-loading-text {
-  color: #5f6673;
+  color: var(--n-slate);
   font-size: 13px;
   margin: 0;
 }
@@ -328,7 +40,7 @@ html[data-window-chrome="overlay"] .preview-panel-header { padding-left: var(--o
   width: 180px;
   height: 3px;
   border-radius: 3px;
-  background: #f0f0f0;
+  background: var(--n-surface);
   overflow: hidden;
 }
 
@@ -336,7 +48,7 @@ html[data-window-chrome="overlay"] .preview-panel-header { padding-left: var(--o
   width: 40%;
   height: 100%;
   border-radius: 3px;
-  background: linear-gradient(90deg, #d4d8e0, #a8b0bc, #d4d8e0);
+  background: linear-gradient(90deg, var(--n-hairline-strong), var(--n-stone), var(--n-hairline-strong));
   background-size: 200% 100%;
   animation: preview-shimmer 1.4s ease-in-out infinite;
 }
@@ -370,20 +82,20 @@ html[data-window-chrome="overlay"] .preview-panel-header { padding-left: var(--o
   width: 48px;
   height: 48px;
   border-radius: 12px;
-  background: #fff1f0;
-  color: #dc3545;
+  background: var(--n-tint-rose);
+  color: var(--n-error);
 }
 
 .preview-error-title {
   font-size: 15px;
   font-weight: 600;
-  color: #1a1c1c;
+  color: var(--n-charcoal);
   margin: 0;
 }
 
 .preview-error-msg {
   font-size: 13px;
-  color: #667085;
+  color: var(--n-steel);
   margin: 0;
   line-height: 1.5;
   word-break: break-word;
@@ -419,85 +131,74 @@ html[data-window-chrome="overlay"] .preview-panel-header { padding-left: var(--o
   width: 48px;
   height: 48px;
   border-radius: 12px;
-  background: #fff8e6;
-  color: #b7791f;
+  background: var(--n-tint-yellow);
+  color: var(--n-warning);
 }
 
 .preview-unsupported-title {
   font-size: 15px;
   font-weight: 600;
-  color: #1a1c1c;
+  color: var(--n-charcoal);
   margin: 0;
 }
 
 .preview-unsupported-msg {
   font-size: 13px;
-  color: #667085;
+  color: var(--n-steel);
   margin: 0;
   line-height: 1.5;
 }
 
 /* ─── Office HTML Viewer ─── */
-.preview-office-container {
-  flex: 1;
-  overflow: hidden;
-  position: relative;
-}
 
 .preview-office-iframe {
   width: 100%;
   height: 100%;
   border: none;
-  background: #ffffff;
+  background: var(--n-canvas);
 }
 
 /* ─── PPTX deck: embedded presentation viewer ─── */
-.pptx-deck-layout {
-  flex: 1;
-  min-height: 0;
-  min-width: 0;
-  display: flex;
-  background: #f0f1f3;
-}
 
 /* ─── PPTX embedded viewer ─── */
-.pptx-embed-stage {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  position: relative;
-  display: flex;
-  background: #1f1f1f;
-}
 
 .pptx-embed-frame {
   width: 100%;
   height: 100%;
   border: 0;
+  /* Slides and PDF pages carry their own paper, so the surround stays dark on
+     purpose: a warm ground here would read as part of the document. */
   background: #1f1f1f;
 }
 
 /* ─── PPTX workbench: presentation editor + AI conversation ─── */
-.pptx-deck-layout-workbench {
-  position: relative;
-  flex-direction: column;
-}
 
-.pptx-readonly-notice {
-  flex-shrink: 0;
-  padding: 6px 12px;
-  font-size: 12px;
-  color: #7a4d00;
-  background: #fff7e0;
-  border-bottom: 1px solid #f5d75e;
-}
-
+/* The stage's only child: the presentation editor and its overlays. The AI
+   panel next to it belongs to the workbench frame now. */
 .pptx-workbench {
   flex: 1;
-  min-height: 0;
   min-width: 0;
+  min-height: 0;
   display: flex;
-  background: #f0f1f3;
+  background: var(--n-surface);
+}
+
+/* Transcript over composer, filling the frame's panel slot. */
+.pptx-workbench-conversation {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+/* Live-drawing progress, rendered as an extra row of the panel header. */
+.pptx-workbench-replay {
+  overflow: hidden;
+  color: var(--n-steel);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pptx-workbench-readonly .pptx-workbench-editor {
@@ -510,14 +211,14 @@ html[data-window-chrome="overlay"] .preview-panel-header { padding-left: var(--o
   min-height: 0;
   position: relative;
   display: flex;
-  background: #ffffff;
+  background: var(--n-canvas);
 }
 
 .pptx-workbench-frame {
   width: 100%;
   height: 100%;
   border: 0;
-  background: #ffffff;
+  background: var(--n-canvas);
 }
 
 .pptx-workbench-overlay {
@@ -532,16 +233,16 @@ html[data-window-chrome="overlay"] .preview-panel-header { padding-left: var(--o
   padding: 24px;
   text-align: center;
   font-size: 13px;
-  color: #5f6673;
+  color: var(--n-slate);
   background: rgba(246, 245, 244, 0.92);
 }
 
 .pptx-workbench-overlay-error {
-  color: #7a1f1f;
+  color: var(--n-error);
 }
 
 .pptx-workbench-overlay-error strong {
-  color: #1a1c1c;
+  color: var(--n-charcoal);
 }
 
 .pptx-workbench-spinner {
@@ -554,23 +255,11 @@ html[data-window-chrome="overlay"] .preview-panel-header { padding-left: var(--o
   }
 }
 
-.pptx-workbench-fallback-bar {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 6px 12px;
-  font-size: 12px;
-  color: #7a4d00;
-  background: #fff7e0;
-  border-top: 1px solid #f5d75e;
-}
 
 .pptx-workbench-fallback-bar button {
   border: 1px solid var(--n-hairline);
-  border-radius: 6px;
-  background: #ffffff;
+  border-radius: var(--radius-sm);
+  background: var(--n-canvas);
   padding: 2px 10px;
   font-size: 12px;
   cursor: pointer;
@@ -592,16 +281,16 @@ html[data-window-chrome="overlay"] .preview-panel-header { padding-left: var(--o
   border-radius: 8px;
   font-size: 12px;
   line-height: 1.5;
-  color: #7a1f1f;
-  background: #fdecec;
-  border: 1px solid #f3c2c2;
+  color: var(--n-error);
+  background: var(--n-tint-rose);
+  border: 1px solid var(--n-tint-rose);
   box-shadow: 0 2px 8px rgba(5, 16, 26, 0.08);
 }
 
 .pptx-workbench-save-failure.is-conflict {
-  color: #7a4d00;
-  background: #fff7e0;
-  border-color: #f5d75e;
+  color: var(--n-warning);
+  background: var(--n-tint-yellow);
+  border-color: var(--n-tint-yellow-bold);
 }
 
 .pptx-workbench-save-failure svg {
@@ -612,76 +301,7 @@ html[data-window-chrome="overlay"] .preview-panel-header { padding-left: var(--o
   flex: 1;
 }
 
-.pptx-workbench-panel {
-  width: 340px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  background: #ffffff;
-  border-left: 1px solid var(--n-hairline);
-}
-
-.pptx-workbench-panel-header {
-  flex-shrink: 0;
-  padding: 12px 14px 10px;
-  border-bottom: 1px solid var(--n-hairline);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.pptx-workbench-panel-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #1a1c1c;
-}
-
-.pptx-workbench-panel-target,
-.pptx-workbench-panel-selection {
-  font-size: 12px;
-  color: #5d5b54;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pptx-workbench-panel-selection {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.pptx-workbench-panel-selection > span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pptx-workbench-icon-button {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border: 1px solid var(--n-hairline);
-  border-radius: 6px;
-  background: #ffffff;
-  color: #5d5b54;
-  cursor: pointer;
-}
-
-.pptx-workbench-icon-button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
 .pptx-workbench-transcript {
-  flex: 1;
   min-height: 0;
   overflow-y: auto;
   padding: 12px 14px;
@@ -694,7 +314,7 @@ html[data-window-chrome="overlay"] .preview-panel-header { padding-left: var(--o
   margin: 0;
   font-size: 12px;
   line-height: 1.6;
-  color: #787671;
+  color: var(--n-steel);
 }
 
 .pptx-workbench-turn {
@@ -717,13 +337,13 @@ html[data-window-chrome="overlay"] .preview-panel-header { padding-left: var(--o
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #e3f1f2;
+  background: var(--n-secondary-container);
   color: var(--n-secondary);
 }
 
 .pptx-workbench-message-user .pptx-workbench-message-avatar {
-  background: #f0eeec;
-  color: #37352f;
+  background: var(--n-surface);
+  color: var(--n-charcoal);
 }
 
 .pptx-workbench-message-body {
@@ -737,26 +357,26 @@ html[data-window-chrome="overlay"] .preview-panel-header { padding-left: var(--o
 .pptx-workbench-message-author {
   font-size: 11px;
   font-weight: 600;
-  color: #787671;
+  color: var(--n-steel);
 }
 
 .pptx-workbench-message-text {
   font-size: 13px;
   line-height: 1.55;
-  color: #1a1c1c;
+  color: var(--n-charcoal);
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .pptx-workbench-confidence {
   font-size: 11px;
-  color: #787671;
+  color: var(--n-steel);
 }
 
 .pptx-workbench-warnings {
   font-size: 12px;
-  color: #7a4d00;
-  background: #fff7e0;
+  color: var(--n-warning);
+  background: var(--n-tint-yellow);
   border-radius: 6px;
   padding: 6px 8px;
 }
@@ -769,7 +389,7 @@ html[data-window-chrome="overlay"] .preview-panel-header { padding-left: var(--o
 
 .pptx-workbench-confirm {
   font-size: 12px;
-  color: #37352f;
+  color: var(--n-charcoal);
   background: var(--n-surface-soft);
   border: 1px solid var(--n-hairline);
   border-radius: 8px;
@@ -785,7 +405,7 @@ html[data-window-chrome="overlay"] .preview-panel-header { padding-left: var(--o
 
 .pptx-workbench-confirm-title {
   font-weight: 600;
-  color: #1a1c1c;
+  color: var(--n-charcoal);
 }
 
 .pptx-workbench-confirm-actions,
@@ -800,20 +420,20 @@ html[data-window-chrome="overlay"] .preview-panel-header { padding-left: var(--o
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #5d5b54;
+  color: var(--n-slate);
 }
 
 .pptx-workbench-status-done {
-  color: #1aae39;
+  color: var(--n-success);
 }
 
 .pptx-workbench-status-error {
-  color: #e03131;
+  color: var(--n-error);
 }
 
 .pptx-workbench-debug {
   font-size: 11px;
-  color: #787671;
+  color: var(--n-steel);
 }
 
 .pptx-workbench-debug pre {
@@ -847,8 +467,8 @@ html[data-window-chrome="overlay"] .preview-panel-header { padding-left: var(--o
   font: inherit;
   font-size: 13px;
   line-height: 1.5;
-  color: #1a1c1c;
-  background: #ffffff;
+  color: var(--n-charcoal);
+  background: var(--n-canvas);
   outline: none;
 }
 
@@ -859,7 +479,7 @@ html[data-window-chrome="overlay"] .preview-panel-header { padding-left: var(--o
 
 .pptx-workbench-input:disabled {
   background: var(--n-surface-soft);
-  color: #a4a097;
+  color: var(--n-stone);
 }
 
 .pptx-workbench-composer-actions {
@@ -871,7 +491,7 @@ html[data-window-chrome="overlay"] .preview-panel-header { padding-left: var(--o
 
 .pptx-workbench-composer-hint {
   font-size: 11px;
-  color: #787671;
+  color: var(--n-steel);
 }
 
 /* ─── HTML Viewer ─── */
@@ -879,7 +499,7 @@ html[data-window-chrome="overlay"] .preview-panel-header { padding-left: var(--o
   flex: 1;
   overflow: hidden;
   position: relative;
-  background: #ffffff;
+  background: var(--n-canvas);
 }
 
 /* ─── PDF Viewer ─── */
@@ -889,6 +509,7 @@ html[data-window-chrome="overlay"] .preview-panel-header { padding-left: var(--o
   display: flex;
   justify-content: center;
   padding: 24px;
+  /* Deliberately dark, like the frame backdrop above. */
   background: #525659;
 }
 
@@ -897,69 +518,14 @@ html[data-window-chrome="overlay"] .preview-panel-header { padding-left: var(--o
 }
 
 /* ─── DOCX Viewer ─── */
-.docx-workspace {
-  display: flex;
-  min-height: 0;
-  height: 100%;
-  flex-direction: column;
-}
-
-.docx-workspace-body {
-  min-height: 0;
-  flex: 1;
-  position: relative;
-  display: flex;
-}
 
 /* The Writer editor runs in its own document; it owns everything inside. */
 .writer-embed-frame {
   width: 100%;
   height: 100%;
   border: 0;
-  background: #fcfaf2;
-}
-
-.docx-editor-unavailable {
-  flex-shrink: 0;
-  padding: 6px 12px;
-  font-size: 12px;
-  color: #7a4d00;
-  background: #fff7e0;
-  border-bottom: 1px solid #f5d75e;
+  background: var(--n-surface-soft);
 }
 
 /* ─── XLSX Viewer ─── */
-.preview-xlsx-container {
-  flex: 1;
-  overflow: auto;
-  background: #ffffff;
-  padding: 16px;
-}
 
-.preview-xlsx-content table {
-  border-collapse: collapse;
-  font-size: 13px;
-  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
-}
-
-.preview-xlsx-content th,
-.preview-xlsx-content td {
-  border: 1px solid #d9d9d9;
-  padding: 4px 8px;
-  white-space: nowrap;
-  max-width: 300px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.preview-xlsx-content th {
-  background: #fafafa;
-  font-weight: 500;
-  text-align: center;
-}
-
-.preview-xlsx-content tr:first-child td,
-.preview-xlsx-content tr:first-child th {
-  background: #f0f0f0;
-  font-weight: 600;
-}

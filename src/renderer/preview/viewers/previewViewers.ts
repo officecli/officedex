@@ -12,6 +12,8 @@ export interface PreviewViewerProps {
   previewToken: string;
   fileName: string;
   documentType?: string;
+  /** Closes the preview overlay from the workbench title bar. */
+  onRequestClose?: () => void;
 }
 
 type PreviewViewer = LazyExoticComponent<ComponentType<PreviewViewerProps>>;

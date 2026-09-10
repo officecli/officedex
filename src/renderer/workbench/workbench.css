@@ -1,0 +1,381 @@
+/* ─── OfficeWorkbenchLayout — the frame shared by every Office surface ─── */
+
+.wb {
+  --wb-titlebar-h: 44px;
+  --wb-statusbar-h: 28px;
+  --wb-panel-w: 340px;
+
+  position: relative;
+  /* A column, not a row template: the notice strip is optional, and fixed rows
+     would hand its track to whatever slot came next. */
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--n-surface-soft);
+  color: var(--n-charcoal);
+  font-family: var(--font-body);
+}
+
+/* ─── Title bar ─── */
+
+.wb-titlebar {
+  display: grid;
+  flex: 0 0 var(--wb-titlebar-h);
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding-right: 10px;
+  border-bottom: 1px solid var(--n-hairline);
+  background: var(--n-canvas);
+  /* Dragging the window by the bar's empty stretch, without the press also
+     starting a text selection that flashes the whole bar blue. */
+  -webkit-app-region: drag;
+  --wails-draggable: drag;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.wb-titlebar button,
+.wb-titlebar .od-button {
+  -webkit-app-region: no-drag;
+  --wails-draggable: no-drag;
+}
+
+/* The corner the native window controls own. Zero when the rail is docked,
+   because the rail already clears them. */
+.wb-titlebar__reserve {
+  width: var(--od-topleft-reserve, 0px);
+  height: 100%;
+}
+
+.wb-titlebar__quick,
+.wb-titlebar__actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.wb-titlebar__doc {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.wb-doc__icon {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+}
+
+.wb-doc__context {
+  flex: 0 0 auto;
+  color: var(--n-steel);
+  font-size: 12px;
+}
+
+.wb-doc__context::after {
+  margin-left: 7px;
+  color: var(--n-stone);
+  content: "/";
+}
+
+.wb-doc__name {
+  overflow: hidden;
+  max-width: 420px;
+  color: var(--n-primary);
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wb-doc__badge {
+  flex: 0 0 auto;
+  border-radius: var(--radius-xs);
+  color: var(--n-white);
+  padding: 2px 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+.wb-doc__state {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  color: var(--n-steel);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.wb-doc__state::before {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--n-secondary);
+  content: "";
+}
+
+.wb-doc__state[data-state="dirty"] {
+  color: var(--n-warning);
+}
+
+.wb-doc__state[data-state="dirty"]::before {
+  background: var(--n-warning);
+}
+
+.wb-doc__state[data-state="error"] {
+  color: var(--n-error);
+}
+
+.wb-doc__state[data-state="error"]::before {
+  background: var(--n-error);
+}
+
+.wb-doc__state[data-state="unopened"]::before,
+.wb-doc__state[data-state="saving"]::before {
+  background: var(--n-stone);
+}
+
+/* ─── Body: editor stage + AI panel ─── */
+
+/* The sheet SDK plants its own stacking contexts inside the stage; isolating
+   here keeps them under .wb-overlay instead of punching through it. */
+.wb-body {
+  position: relative;
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr) var(--wb-panel-w);
+  min-width: 0;
+  min-height: 0;
+  background: var(--n-surface);
+  isolation: isolate;
+}
+
+.wb[data-panel="closed"] .wb-body {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* The embedded editor owns everything inside this box — its own ribbon,
+   thumbnail rail, sheet tabs and status line. The host only sizes it. */
+.wb-stage {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--n-canvas);
+}
+
+.wb-overlay {
+  position: absolute;
+  z-index: 40;
+  inset: 0;
+  min-width: 0;
+  min-height: 0;
+  background: var(--n-surface);
+}
+
+/* ─── AI panel ─── */
+
+.wb-panel {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  border-left: 1px solid var(--n-hairline);
+  background: var(--n-canvas);
+}
+
+.wb-panel__header {
+  display: grid;
+  gap: 6px;
+  border-bottom: 1px solid var(--n-hairline);
+  padding: 10px 10px 10px 14px;
+}
+
+.wb-panel__titlerow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wb-panel__title {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  color: var(--n-primary);
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.wb-panel__title svg {
+  flex: 0 0 auto;
+  color: var(--n-secondary);
+}
+
+.wb-panel__target {
+  overflow: hidden;
+  color: var(--n-steel);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wb-panel__scope {
+  display: inline-flex;
+  align-items: center;
+  /* The header is a grid; without this the chip stretches the whole width and
+     stops reading as a chip. */
+  justify-self: start;
+  gap: 6px;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--n-secondary-container);
+  color: #00464f;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wb-panel__content {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+}
+
+/* ─── Status bar ─── */
+
+.wb-statusbar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 14px;
+  min-height: var(--wb-statusbar-h);
+  border-top: 1px solid var(--n-hairline);
+  background: var(--n-canvas);
+  padding: 0 10px;
+  color: var(--n-steel);
+  font-size: 11px;
+}
+
+.wb-statusbar__spacer {
+  flex: 1;
+}
+
+.wb-status__item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.wb-zoom {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.wb-zoom__step,
+.wb-zoom__pct {
+  display: grid;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--n-slate);
+  cursor: pointer;
+  place-items: center;
+}
+
+.wb-zoom__step {
+  width: 20px;
+}
+
+.wb-zoom__pct {
+  min-width: 40px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.wb-zoom__step:hover,
+.wb-zoom__pct:hover:not(:disabled) {
+  background: var(--n-surface);
+  color: var(--n-primary);
+}
+
+.wb-zoom__pct:disabled {
+  cursor: default;
+}
+
+/* ─── Notice strip: degraded modes, fallbacks ─── */
+
+.wb-notice {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--n-hairline);
+  background: var(--n-tint-yellow);
+  padding: 6px 14px;
+  color: var(--n-warning);
+  font-size: 12px;
+}
+
+.wb-notice--danger {
+  background: var(--n-tint-rose);
+  color: var(--n-error);
+}
+
+.wb-notice__spacer {
+  flex: 1;
+}
+
+/* ─── Narrow windows ─── */
+
+@media (max-width: 1024px) {
+  .wb {
+    --wb-panel-w: 300px;
+  }
+}
+
+@media (max-width: 760px) {
+  /* Too narrow to split the width three ways, so the panel floats over the
+     editor rather than squeezing it down to a column of broken words. */
+  .wb-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .wb-panel {
+    position: absolute;
+    z-index: 10;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(var(--wb-panel-w), 88vw);
+    box-shadow: var(--shadow-card);
+  }
+
+  .wb-doc__context,
+  .wb-doc__state {
+    display: none;
+  }
+}

@@ -1228,4 +1228,40 @@ export const zh: Record<string, string> = {
   "waiting2048.gameOver": "游戏结束",
   "waiting2048.won": "你赢了",
   "waiting2048.emptyCell": "空白格",
+
+  // Office 工作台（共用外框）
+  "workbench.back": "返回",
+  "workbench.closePreview": "关闭预览",
+  "workbench.save": "保存",
+  "workbench.openExternal": "用系统应用打开",
+  "workbench.showPanel": "显示 AI 助手",
+  "workbench.hidePanel": "隐藏 AI 助手",
+  "workbench.panelClose": "收起面板",
+  "workbench.state.unopened": "未打开",
+  "workbench.state.saved": "已保存",
+  "workbench.state.dirty": "有未保存的改动",
+  "workbench.state.saving": "保存中…",
+  "workbench.state.error": "保存失败",
+  "workbench.zoomOut": "缩小",
+  "workbench.zoomIn": "放大",
+  "workbench.zoom": "缩放",
+  "workbench.status.pages": "第 {current} 页 / 共 {total} 页",
+  "workbench.status.slides": "第 {current} 页 / 共 {total} 页",
+  "workbench.status.sheets": "{count} 个工作表",
+  "workbench.status.ready": "就绪",
+
+  // XLSX 预览
+  "xlsx.viewer.noWorkbook": "这个工作簿没有对应的文件，因此无法在这里编辑。",
+
+  // DOCX 助手面板
+  "workbench.refreshScope": "刷新选区",
+  "docx.agent.panelTitle": "用 AI 编辑",
+  "docx.agent.target": "改动将保存到 {file}",
+  "docx.agent.scopeWholeDocument": "未选中内容 —— 改动作用于整篇",
+  "docx.agent.scopeParagraphs": "已选中 {count} 段",
+  "docx.agent.scopeText": "已选中文档的一部分",
+  "docx.agent.pendingTitle": "指令编辑尚未接通",
+  "docx.agent.pendingBody": "编辑器已经把 read_selection、replace_text、save 交给 agent 运行时，光标位置也会实时上报。等 docx 编辑 workflow 调用它们，这个面板就能回话。",
+  "docx.agent.placeholder": "描述你想要的改动…",
+  "docx.agent.send": "发送",
 };

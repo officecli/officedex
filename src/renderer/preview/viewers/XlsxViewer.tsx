@@ -1,104 +1,100 @@
-import { useState, useEffect, useCallback } from "react";
-import { Button } from "../../ui";
-import * as XLSX from "xlsx";
-import { PreviewToolbar } from "../components/PreviewToolbar";
-import { LoadingState } from "../components/LoadingState";
-import { ErrorState } from "../components/ErrorState";
+import { useCallback, useRef, useState } from "react";
+import type { Artifact, PreviewGrant } from "../../../shared/types";
 import { officecli } from "../../bridge";
-import { DOCUMENT_ZOOM, zoomIn as stepZoomIn, zoomOut as stepZoomOut } from "./zoom";
+import { useT } from "../../i18n";
+import {
+  SpreadsheetCanvas,
+  type SpreadsheetCanvasHandle,
+  type SpreadsheetCanvasState,
+} from "../../spreadsheet/SpreadsheetCanvas";
+import { OfficeWorkbenchLayout, type WorkbenchSaveState } from "../../workbench/OfficeWorkbenchLayout";
+import { ErrorState } from "../components/ErrorState";
 
 interface XlsxViewerProps {
   previewToken: string;
   fileName: string;
   documentType?: string;
+  /** The artifact behind the grant. Without it there is nothing to edit. */
+  artifact?: Artifact | null;
+  grant?: PreviewGrant | null;
+  onDirtyChange?: (dirty: boolean) => void;
+  onRequestClose?: () => void;
 }
 
+const CANVAS_SAVE_STATE: Record<SpreadsheetCanvasState, WorkbenchSaveState> = {
+  loading: "unopened",
+  clean: "saved",
+  saved: "saved",
+  dirty: "dirty",
+  saving: "saving",
+  error: "error",
+};
 
-export default function XlsxViewer({ previewToken, fileName, documentType }: XlsxViewerProps) {
-  const [sheetNames, setSheetNames] = useState<string[]>([]);
-  const [activeSheet, setActiveSheet] = useState(0);
-  const [htmlContent, setHtmlContent] = useState<string>("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(1);
-  const [workbook, setWorkbook] = useState<XLSX.WorkBook | null>(null);
+/**
+ * XLSX viewer. The workbook opens in the same sheet editor the spreadsheet
+ * workspace uses, so the preview is editable rather than a rendered snapshot —
+ * one editor, one set of save semantics, whichever way the file was opened.
+ */
+export default function XlsxViewer({
+  fileName,
+  artifact,
+  grant,
+  onDirtyChange,
+  onRequestClose,
+}: XlsxViewerProps) {
+  const t = useT();
+  const canvasRef = useRef<SpreadsheetCanvasHandle>(null);
+  const [canvasState, setCanvasState] = useState<SpreadsheetCanvasState>("loading");
+  const [error, setError] = useState<string | undefined>(undefined);
 
-  const loadXlsx = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { data } = await officecli.readArtifactFile(previewToken);
-      const wb = XLSX.read(data, { type: "array" });
-      setWorkbook(wb);
-      setSheetNames(wb.SheetNames);
-      setActiveSheet(0);
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      setHtmlContent(XLSX.utils.sheet_to_html(sheet, { id: "xlsx-table" }));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [previewToken]);
+  const openExternal = useCallback(() => {
+    officecli.openPath(artifact?.filePath ?? fileName).catch(() => {});
+  }, [artifact?.filePath, fileName]);
 
-  useEffect(() => {
-    loadXlsx();
-  }, [loadXlsx]);
+  const save = useCallback(() => {
+    void canvasRef.current?.save();
+  }, []);
 
-  useEffect(() => {
-    if (!workbook || sheetNames.length === 0) return;
-    const sheet = workbook.Sheets[sheetNames[activeSheet]];
-    if (sheet) {
-      setHtmlContent(XLSX.utils.sheet_to_html(sheet, { id: "xlsx-table" }));
-    }
-  }, [workbook, activeSheet, sheetNames]);
+  // A grant with no artifact behind it (a bare token, or an artifact the
+  // caller could not resolve) has no file path to save back to, so the editor
+  // cannot be mounted at all.
+  if (!artifact || !grant) {
+    return (
+      <ErrorState
+        message={t("xlsx.viewer.noWorkbook")}
+        fileName={fileName}
+        onOpenExternal={openExternal}
+      />
+    );
+  }
 
-  const zoomIn = () => setZoom((z) => stepZoomIn(z, DOCUMENT_ZOOM));
-  const zoomOut = () => setZoom((z) => stepZoomOut(z, DOCUMENT_ZOOM));
-  const zoomReset = () => setZoom(1);
-
-  const openExternal = () => {
-    officecli.openPath(fileName).catch(() => {});
-  };
-
-  if (loading) return <LoadingState fileName={fileName} />;
-  if (error) return <ErrorState message={error} fileName={fileName} onRetry={loadXlsx} onOpenExternal={openExternal} />;
+  const saveState = CANVAS_SAVE_STATE[canvasState];
 
   return (
-    <>
-      <PreviewToolbar
-        fileName={fileName}
-        documentType={documentType}
-        zoom={zoom}
-        onZoomIn={zoomIn}
-        onZoomOut={zoomOut}
-        onZoomReset={zoomReset}
-        onOpenExternal={openExternal}
-        center={
-          sheetNames.length > 1 ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              {sheetNames.map((name, idx) => (
-                <Button
-                  key={name}
-                  size="small"
-                  type={idx === activeSheet ? "primary" : "default"}
-                  onClick={() => setActiveSheet(idx)}
-                  style={{ maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                >
-                  {name}
-                </Button>
-              ))}
-            </div>
-          ) : undefined
-        }
+    <OfficeWorkbenchLayout
+      documentType="xlsx"
+      fileName={fileName}
+      saveState={saveState}
+      onBack={onRequestClose}
+      backLabel={t("workbench.closePreview")}
+      onSave={save}
+      canSave={canvasState === "dirty"}
+      onOpenExternal={openExternal}
+      status={
+        <span className="wb-status__item">
+          {error ?? t(`workbench.state.${saveState}`)}
+        </span>
+      }
+    >
+      <SpreadsheetCanvas
+        ref={canvasRef}
+        artifact={artifact}
+        grant={grant}
+        onDirtyChange={onDirtyChange}
+        onStateChange={setCanvasState}
+        onError={setError}
+        onSaveError={setError}
       />
-      <div className="preview-xlsx-container">
-        <div
-          className="preview-xlsx-content"
-          style={{ transform: `scale(${zoom})`, transformOrigin: "top left" }}
-          dangerouslySetInnerHTML={{ __html: htmlContent }}
-        />
-      </div>
-    </>
+    </OfficeWorkbenchLayout>
   );
 }

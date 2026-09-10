@@ -1,4 +1,4 @@
-import type { WriterEmbedEvent, WriterHostCommand } from "../../shared/writerProtocol";
+import type { WriterEmbedEvent, WriterHostCommand, WriterSelectionSummary } from "../../shared/writerProtocol";
 
 export const WRITER_API_PROTOCOL_VERSION = 1;
 
@@ -27,7 +27,7 @@ export class WriterApi {
   constructor(private readonly transport: WriterApiTransport) {}
 
   capabilities(): WriterCapabilities {
-    return { open: true, readContent: false, readSelection: false, insertText: false,
+    return { open: true, readContent: false, readSelection: true, insertText: false,
       replaceSelection: false, replaceText: true, save: true, exportDocx: true, exportPdf: false };
   }
 
@@ -41,6 +41,20 @@ export class WriterApi {
         if (event.type === "writer:save-failed" && event.requestId === requestId) { off(); reject(this.error("WRITER_REJECTED", event.error)); }
       });
       this.transport.post({ type: "writer:save-request", requestId, saveAsCopy });
+    });
+  }
+
+  /** Coarse caret/selection summary. Writer does not expose the selected text. */
+  readSelection(): Promise<WriterSelectionSummary> {
+    const requestId = `writer-selection-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    return new Promise((resolve, reject) => {
+      const off = this.transport.onEvent((event) => {
+        if (event.type !== "writer:response" || event.requestId !== requestId) return;
+        off();
+        if (event.ok) resolve(event.result as WriterSelectionSummary);
+        else reject(this.error("WRITER_REJECTED", event.error || "Writer rejected the selection read."));
+      });
+      this.transport.post({ type: "writer:read-selection", requestId });
     });
   }
 

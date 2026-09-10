@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type ReactNode,
 } from "react";
 import { Button } from "@vo-ui/backend";
 import {
@@ -13,7 +14,6 @@ import {
   Bot,
   Check,
   Loader2,
-  RefreshCw,
   Send,
   User,
 } from "lucide-react";
@@ -41,11 +41,16 @@ import {
   type VibeReplayStatus,
 } from "../../../presentation/vibeReplay";
 import { imageProgressFromOps } from "../../../presentation/pptxProgress";
+import {
+  buildSelectSlideScript,
+  focusSlideAfterEdit,
+} from "../../../presentation/pptxEditFocus";
 import type {
   PresentationEditorController,
   PresentationScriptResult,
 } from "../../../presentation/PresentationEditorFrame";
 import { registerActiveEditorClientTools } from "../../../activeEditorClientTools";
+import { OfficeWorkbenchLayout } from "../../../workbench/OfficeWorkbenchLayout";
 
 export interface PresentationPptxWorkbenchProps {
   editorBaseUrl: string;
@@ -65,6 +70,11 @@ export interface PresentationPptxWorkbenchProps {
   onEditorReady?: () => void;
   onDirtyChange?: (dirty: boolean) => void;
   onFlushReady?: (flush: (() => Promise<void>) | null) => void;
+  /** Closes the surface this workbench is embedded in. */
+  onRequestClose?: () => void;
+  onOpenExternal?: () => void;
+  /** Degraded-mode strip the parent owns, rendered under the title bar. */
+  notice?: ReactNode;
   /** Injected for tests. */
   createClient?: (options: {
     channel: string;
@@ -175,6 +185,9 @@ export default function PresentationPptxWorkbench({
   onEditorReady,
   onDirtyChange,
   onFlushReady,
+  onRequestClose,
+  onOpenExternal,
+  notice,
   createClient,
 }: PresentationPptxWorkbenchProps) {
   const t = useT();
@@ -205,6 +218,9 @@ export default function PresentationPptxWorkbench({
   const busyRef = useRef(false);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const dirtyRef = useRef(false);
+  // The ref drives the save queue (it has to read the latest value inside
+  // callbacks); this mirrors it for the title bar's save indicator.
+  const [dirty, setDirty] = useState(false);
   const saveInFlightRef = useRef(false);
   const savePendingRef = useRef(false);
   const savePromiseRef = useRef<Promise<void> | null>(null);
@@ -274,6 +290,7 @@ export default function PresentationPptxWorkbench({
     // with respect to the file it was opened from.
     if (!asCopy && version === dirtyVersionRef.current) {
       dirtyRef.current = false;
+      setDirty(false);
       onDirtyChangeRef.current?.(false);
     }
     if (!asCopy) setSaveFailure(null);
@@ -429,6 +446,7 @@ export default function PresentationPptxWorkbench({
     const unsubscribeDirty = client.subscribeDirty((dirty) => {
       if (cancelled) return;
       dirtyRef.current = dirty;
+      setDirty(dirty);
       dirtyVersionRef.current += 1;
       if (!readOnly) {
         onDirtyChange?.(dirty);
@@ -459,6 +477,7 @@ export default function PresentationPptxWorkbench({
       setEditorStatus({ kind: "ready", fileId });
       onEditorReadyRef.current?.();
       dirtyRef.current = false;
+      setDirty(false);
       dirtyVersionRef.current = 0;
       if (!readOnly) onDirtyChangeRef.current?.(false);
       unregisterClientToolsRef.current?.();
@@ -621,12 +640,56 @@ export default function PresentationPptxWorkbench({
     [turns],
   );
 
-  /** Execute → export → save. `plan` must already be confirmed or auto-approved. */
+  /**
+   * Moves the editor to the slide the edit actually changed and reports whether
+   * the selection state on screen was re-read.
+   *
+   * An agent edit is usually aimed somewhere other than the slide on screen --
+   * "change the second slide's title" while the reader sits on the third. The
+   * plan does not say where it landed, so the deck is inspected again and
+   * compared with the shot taken before the script ran. Without this the edit
+   * happens off-screen and reads as if nothing happened at all.
+   */
+  const focusEditedSlide = useCallback(
+    async (
+      client: PresentationPptxEmbedClient,
+      before: PresentationPptxEditorContext | null | undefined,
+    ): Promise<boolean> => {
+      let after: PresentationPptxEditorContext;
+      try {
+        after = await client.inspect();
+      } catch {
+        // The edit itself landed; only the follow-the-edit courtesy is lost.
+        return false;
+      }
+      setSelectionContext(after);
+      const target = focusSlideAfterEdit(before, after);
+      if (!target) return true;
+      try {
+        await client.executeJs(buildSelectSlideScript(target));
+        setSelectionContext({
+          ...after,
+          selectedSlideIds: [target],
+          selectedShapes: [],
+        });
+      } catch {
+        // Same: a deck that will not navigate is not a failed edit.
+      }
+      return true;
+    },
+    [],
+  );
+
+  /** Execute → focus → export → save. `plan` must already be confirmed or auto-approved. */
   const applyPlan = useCallback(
     async (
       turnId: string,
       plan: PlanPptxJSResult,
-      options: { skipExecute?: boolean } = {},
+      options: {
+        skipExecute?: boolean;
+        /** The deck as it stood before the script ran; used to find the edit. */
+        before?: PresentationPptxEditorContext | null;
+      } = {},
     ) => {
       const client = clientRef.current;
       if (!client) {
@@ -638,10 +701,12 @@ export default function PresentationPptxWorkbench({
         return;
       }
       setBusyState(true);
+      let refreshed = false;
       try {
         if (!options.skipExecute) {
           updateTurn(turnId, { stage: "executing", error: undefined });
           await client.executeJs(plan.source);
+          refreshed = await focusEditedSlide(client, options.before);
         }
         updateTurn(turnId, { stage: "exporting", error: undefined });
         updateTurn(turnId, { stage: "saving" });
@@ -670,10 +735,18 @@ export default function PresentationPptxWorkbench({
         });
       } finally {
         setBusyState(false);
-        void refreshSelection();
+        if (!refreshed) void refreshSelection();
       }
     },
-    [fileName, filePath, refreshSelection, setBusyState, t, updateTurn],
+    [
+      fileName,
+      filePath,
+      focusEditedSlide,
+      refreshSelection,
+      setBusyState,
+      t,
+      updateTurn,
+    ],
   );
 
   /** Inspect → plan; then either wait for confirmation or apply immediately. */
@@ -690,9 +763,12 @@ export default function PresentationPptxWorkbench({
       }
       setBusyState(true);
       let plan: PlanPptxJSResult;
+      // Kept out of the try so the plan can be applied against the deck as it
+      // stood when the planner saw it.
+      let context: PresentationPptxEditorContext;
       try {
         updateTurn(turnId, { stage: "inspecting", error: undefined });
-        const context = await client.inspect();
+        context = await client.inspect();
         setSelectionContext(context);
         updateTurn(turnId, { stage: "planning", context });
         plan = await officecli.planPptxJS({
@@ -722,7 +798,7 @@ export default function PresentationPptxWorkbench({
         return;
       }
       setBusyState(false);
-      await applyPlan(turnId, plan);
+      await applyPlan(turnId, plan, { before: context });
     },
     [applyPlan, buildHistory, editorStatus.kind, setBusyState, updateTurn],
   );
@@ -744,7 +820,7 @@ export default function PresentationPptxWorkbench({
   const confirmTurn = useCallback(
     (turn: ConversationTurn) => {
       if (!turn.plan || busyRef.current) return;
-      void applyPlan(turn.id, turn.plan);
+      void applyPlan(turn.id, turn.plan, { before: turn.context });
     },
     [applyPlan],
   );
@@ -768,7 +844,7 @@ export default function PresentationPptxWorkbench({
         return;
       }
       if (turn.failedStage === "executing" && turn.plan) {
-        void applyPlan(turn.id, turn.plan);
+        void applyPlan(turn.id, turn.plan, { before: turn.context });
         return;
       }
       void planTurn(turn.id, turn.prompt);
@@ -829,136 +905,208 @@ export default function PresentationPptxWorkbench({
     }
   };
 
-  return (
-    <div
-      className={`pptx-workbench${readOnly ? " pptx-workbench-readonly" : ""}`}
-      data-editor-status={editorStatus.kind}
-    >
-      <div className="pptx-workbench-editor">
-        {editorStatus.kind !== "ready" &&
-          editorStatus.kind !== "detached" &&
-          editorStatus.kind !== "gap" &&
-          editorStatus.kind !== "error" && (
-            <div className="pptx-workbench-overlay" role="status">
-              <Loader2 className="pptx-workbench-spinner" size={22} />
-              <span>
-                {editorStatus.kind === "importing"
-                  ? t("pptx.agent.editorImporting", { file: fileName })
-                  : t("pptx.agent.editorLoading")}
+  const conversation = (
+    <>
+      <div className="pptx-workbench-transcript" ref={transcriptRef}>
+        {turns.length === 0 && (
+          <p className="pptx-workbench-empty">{t("pptx.agent.emptyHint")}</p>
+        )}
+        {turns.map((turn) => (
+          <div
+            key={turn.id}
+            className="pptx-workbench-turn"
+            data-stage={turn.stage}
+          >
+            <div className="pptx-workbench-message pptx-workbench-message-user">
+              <span className="pptx-workbench-message-avatar">
+                <User size={13} />
               </span>
+              <div className="pptx-workbench-message-body">
+                <div className="pptx-workbench-message-author">
+                  {t("pptx.agent.you")}
+                </div>
+                <div className="pptx-workbench-message-text">
+                  {turn.prompt}
+                </div>
+              </div>
             </div>
-          )}
-        {editorStatus.kind === "detached" && (
-          <div className="pptx-workbench-overlay" role="status">
-            <AlertCircle size={22} />
-            <span>{t("pptx.agent.editorDetached")}</span>
-            <Button
-              size="small"
-              onClick={() => setReloadToken((value) => value + 1)}
-            >
-              {t("pptx.agent.reload")}
-            </Button>
+            <div className="pptx-workbench-message pptx-workbench-message-assistant">
+              <span className="pptx-workbench-message-avatar">
+                <Bot size={13} />
+              </span>
+              <div className="pptx-workbench-message-body">
+                <div className="pptx-workbench-message-author">
+                  {t("pptx.agent.assistant")}
+                </div>
+                {turn.plan?.summary && (
+                  <div className="pptx-workbench-message-text">
+                    {turn.plan.summary}
+                  </div>
+                )}
+                {turn.plan?.confidence && (
+                  <div className="pptx-workbench-confidence">
+                    {t("pptx.agent.confidence", {
+                      level: turn.plan.confidence,
+                    })}
+                  </div>
+                )}
+                {turn.plan?.warnings && turn.plan.warnings.length > 0 && (
+                  <div className="pptx-workbench-warnings">
+                    <strong>{t("pptx.agent.warnings")}</strong>
+                    <ul>
+                      {turn.plan.warnings.map((warning, index) => (
+                        <li key={index}>{warning}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {turn.stage === "awaiting-confirmation" && turn.plan && (
+                  <div
+                    className="pptx-workbench-confirm"
+                    role="group"
+                    aria-label={t("pptx.agent.confirmTitle")}
+                  >
+                    <div className="pptx-workbench-confirm-title">
+                      {turn.plan.confirmation?.title ||
+                        t("pptx.agent.confirmTitle")}
+                    </div>
+                    {turn.plan.confirmation?.message && (
+                      <p>{turn.plan.confirmation.message}</p>
+                    )}
+                    {turn.plan.confirmation?.target && (
+                      <p>
+                        {t("pptx.agent.confirmTarget", {
+                          target: turn.plan.confirmation.target,
+                        })}
+                      </p>
+                    )}
+                    {turn.plan.confirmation?.changes &&
+                      turn.plan.confirmation.changes.length > 0 && (
+                        <div>
+                          <strong>{t("pptx.agent.confirmChanges")}</strong>
+                          <ul>
+                            {turn.plan.confirmation.changes.map(
+                              (item, index) => (
+                                <li key={index}>{item}</li>
+                              ),
+                            )}
+                          </ul>
+                        </div>
+                      )}
+                    {turn.plan.confirmation?.preserved &&
+                      turn.plan.confirmation.preserved.length > 0 && (
+                        <div>
+                          <strong>{t("pptx.agent.confirmPreserved")}</strong>
+                          <ul>
+                            {turn.plan.confirmation.preserved.map(
+                              (item, index) => (
+                                <li key={index}>{item}</li>
+                              ),
+                            )}
+                          </ul>
+                        </div>
+                      )}
+                    <div className="pptx-workbench-confirm-actions">
+                      <Button
+                        size="small"
+                        onClick={() => cancelTurn(turn)}
+                        disabled={busy}
+                      >
+                        {t("pptx.agent.cancel")}
+                      </Button>
+                      <Button
+                        size="small"
+                        type="primary"
+                        onClick={() => confirmTurn(turn)}
+                        disabled={busy}
+                      >
+                        {t("pptx.agent.apply")}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {renderStage(turn)}
+                {turn.stage === "failed" && (
+                  <div className="pptx-workbench-turn-actions">
+                    <Button
+                      size="small"
+                      onClick={() => retryTurn(turn)}
+                      disabled={busy}
+                    >
+                      {turn.failedStage === "exporting" ||
+                      turn.failedStage === "saving"
+                        ? t("pptx.agent.retrySave")
+                        : t("pptx.agent.retry")}
+                    </Button>
+                  </div>
+                )}
+                {turn.plan?.source && (
+                  <details className="pptx-workbench-debug">
+                    <summary>{t("pptx.agent.debugSource")}</summary>
+                    <pre>{turn.plan.source}</pre>
+                  </details>
+                )}
+              </div>
+            </div>
           </div>
-        )}
-        {editorStatus.kind === "gap" && (
-          <div className="pptx-workbench-overlay" role="note">
-            <AlertCircle size={22} />
-            <strong>{t("pptx.agent.editorGapTitle")}</strong>
-            <span>
-              {t("pptx.agent.editorGapBody", { msg: editorStatus.message })}
-            </span>
-          </div>
-        )}
-        {editorStatus.kind === "error" && (
-          <div
-            className="pptx-workbench-overlay pptx-workbench-overlay-error"
-            role="alert"
-          >
-            <AlertCircle size={22} />
-            <strong>{t("pptx.agent.editorUnavailableTitle")}</strong>
-            <span>
-              {t("pptx.agent.editorUnavailableFailed", {
-                msg: editorStatus.message,
-              })}
-            </span>
-            <Button
-              size="small"
-              onClick={() => setReloadToken((value) => value + 1)}
-            >
-              {t("pptx.agent.reload")}
-            </Button>
-          </div>
-        )}
-        {saveFailure && (
-          <div
-            className={`pptx-workbench-save-failure${saveFailure.conflict ? " is-conflict" : ""}`}
-            role="alert"
-          >
-            <AlertCircle size={16} />
-            <span>
-              {saveFailure.conflict
-                ? t("pptx.agent.saveConflict")
-                : t("pptx.agent.saveFailedBar", { msg: saveFailure.message })}
-            </span>
-            {saveFailure.conflict && (
-              <Button size="small" loading={savingCopy} onClick={() => void saveAsCopy()}>
-                {t("pptx.agent.saveConflictCopy")}
-              </Button>
-            )}
-          </div>
-        )}
-        {embedUrl && (
-          <iframe
-            key={`${embedUrl}#${reloadToken}`}
-            ref={iframeRef}
-            src={embedUrl}
-            className="pptx-workbench-frame"
-            title={fileName}
-            allow="clipboard-read; clipboard-write"
-            onLoad={() =>
-              iframeRef.current?.contentWindow?.postMessage(
-                {
-                  protocol: PRESENTATION_PPTX_PROTOCOL,
-                  channel,
-                  type: "officedex:pptx-host-ready",
-                },
-                "*",
-              )
-            }
-          />
-        )}
+        ))}
       </div>
-      {!readOnly && <aside
-        className="pptx-workbench-panel"
-        aria-label={t("pptx.agent.panelTitle")}
-      >
-        <header className="pptx-workbench-panel-header">
-          <div className="pptx-workbench-panel-title">
-            <Bot size={16} />
-            <span>{t("pptx.agent.panelTitle")}</span>
-          </div>
-          <div
-            className="pptx-workbench-panel-target"
-            title={filePath ?? fileName}
-          >
-            {targetLabel}
-          </div>
-          <div className="pptx-workbench-panel-selection">
-            <span>{describeSelection(selectionContext, t)}</span>
-            <button
-              type="button"
-              className="pptx-workbench-icon-button"
-              onClick={() => void refreshSelection()}
-              disabled={editorStatus.kind !== "ready" || busy}
-              aria-label={t("pptx.agent.selectionRefresh")}
-              title={t("pptx.agent.selectionRefresh")}
-            >
-              <RefreshCw size={13} />
-            </button>
-          </div>
-          {live && replayStatus ? (
+      <form className="pptx-workbench-composer" onSubmit={submit}>
+        <textarea
+          className="pptx-workbench-input"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (
+              event.key === "Enter" &&
+              !event.shiftKey &&
+              !event.nativeEvent.isComposing
+            ) {
+              event.preventDefault();
+              submit();
+            }
+          }}
+          placeholder={t("pptx.agent.placeholder")}
+          rows={3}
+          disabled={editorStatus.kind !== "ready"}
+          aria-label={t("pptx.agent.placeholder")}
+        />
+        <div className="pptx-workbench-composer-actions">
+          {busy && (
+            <span className="pptx-workbench-composer-hint">
+              {t("pptx.agent.busy")}
+            </span>
+          )}
+          <Button
+            className="od-button--icon-submit"
+            type="primary"
+            size="small"
+            htmlType="submit"
+            aria-label={t("pptx.agent.send")}
+            title={t("pptx.agent.send")}
+            icon={<Send />}
+            disabled={!canSend}
+          />
+        </div>
+      </form>
+    </>
+  );
+
+  // The panel's chrome (title, target, selection chip, close) belongs to the
+  // workbench frame; only the conversation itself is presentation-specific.
+  const panel = readOnly
+    ? undefined
+    : {
+        title: t("pptx.agent.panelTitle"),
+        target: targetLabel,
+        targetTitle: filePath ?? fileName,
+        scope: describeSelection(selectionContext, t),
+        onRefreshScope: () => void refreshSelection(),
+        refreshDisabled: editorStatus.kind !== "ready" || busy,
+        headerExtra:
+          live && replayStatus ? (
             <div
-              className="pptx-workbench-panel-target"
+              className="pptx-workbench-replay"
               role={replayStatus.state === "failed" ? "alert" : "status"}
             >
               Live drawing: {replayStatus.state}
@@ -968,192 +1116,124 @@ export default function PresentationPptxWorkbench({
                 : ""}
               {replayStatus.error ? ` · ${replayStatus.error}` : ""}
             </div>
-          ) : null}
-        </header>
-        <div className="pptx-workbench-transcript" ref={transcriptRef}>
-          {turns.length === 0 && (
-            <p className="pptx-workbench-empty">{t("pptx.agent.emptyHint")}</p>
-          )}
-          {turns.map((turn) => (
-            <div
-              key={turn.id}
-              className="pptx-workbench-turn"
-              data-stage={turn.stage}
-            >
-              <div className="pptx-workbench-message pptx-workbench-message-user">
-                <span className="pptx-workbench-message-avatar">
-                  <User size={13} />
-                </span>
-                <div className="pptx-workbench-message-body">
-                  <div className="pptx-workbench-message-author">
-                    {t("pptx.agent.you")}
-                  </div>
-                  <div className="pptx-workbench-message-text">
-                    {turn.prompt}
-                  </div>
-                </div>
-              </div>
-              <div className="pptx-workbench-message pptx-workbench-message-assistant">
-                <span className="pptx-workbench-message-avatar">
-                  <Bot size={13} />
-                </span>
-                <div className="pptx-workbench-message-body">
-                  <div className="pptx-workbench-message-author">
-                    {t("pptx.agent.assistant")}
-                  </div>
-                  {turn.plan?.summary && (
-                    <div className="pptx-workbench-message-text">
-                      {turn.plan.summary}
-                    </div>
-                  )}
-                  {turn.plan?.confidence && (
-                    <div className="pptx-workbench-confidence">
-                      {t("pptx.agent.confidence", {
-                        level: turn.plan.confidence,
-                      })}
-                    </div>
-                  )}
-                  {turn.plan?.warnings && turn.plan.warnings.length > 0 && (
-                    <div className="pptx-workbench-warnings">
-                      <strong>{t("pptx.agent.warnings")}</strong>
-                      <ul>
-                        {turn.plan.warnings.map((warning, index) => (
-                          <li key={index}>{warning}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {turn.stage === "awaiting-confirmation" && turn.plan && (
-                    <div
-                      className="pptx-workbench-confirm"
-                      role="group"
-                      aria-label={t("pptx.agent.confirmTitle")}
-                    >
-                      <div className="pptx-workbench-confirm-title">
-                        {turn.plan.confirmation?.title ||
-                          t("pptx.agent.confirmTitle")}
-                      </div>
-                      {turn.plan.confirmation?.message && (
-                        <p>{turn.plan.confirmation.message}</p>
-                      )}
-                      {turn.plan.confirmation?.target && (
-                        <p>
-                          {t("pptx.agent.confirmTarget", {
-                            target: turn.plan.confirmation.target,
-                          })}
-                        </p>
-                      )}
-                      {turn.plan.confirmation?.changes &&
-                        turn.plan.confirmation.changes.length > 0 && (
-                          <div>
-                            <strong>{t("pptx.agent.confirmChanges")}</strong>
-                            <ul>
-                              {turn.plan.confirmation.changes.map(
-                                (item, index) => (
-                                  <li key={index}>{item}</li>
-                                ),
-                              )}
-                            </ul>
-                          </div>
-                        )}
-                      {turn.plan.confirmation?.preserved &&
-                        turn.plan.confirmation.preserved.length > 0 && (
-                          <div>
-                            <strong>{t("pptx.agent.confirmPreserved")}</strong>
-                            <ul>
-                              {turn.plan.confirmation.preserved.map(
-                                (item, index) => (
-                                  <li key={index}>{item}</li>
-                                ),
-                              )}
-                            </ul>
-                          </div>
-                        )}
-                      <div className="pptx-workbench-confirm-actions">
-                        <Button
-                          size="small"
-                          onClick={() => cancelTurn(turn)}
-                          disabled={busy}
-                        >
-                          {t("pptx.agent.cancel")}
-                        </Button>
-                        <Button
-                          size="small"
-                          type="primary"
-                          onClick={() => confirmTurn(turn)}
-                          disabled={busy}
-                        >
-                          {t("pptx.agent.apply")}
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                  {renderStage(turn)}
-                  {turn.stage === "failed" && (
-                    <div className="pptx-workbench-turn-actions">
-                      <Button
-                        size="small"
-                        onClick={() => retryTurn(turn)}
-                        disabled={busy}
-                      >
-                        {turn.failedStage === "exporting" ||
-                        turn.failedStage === "saving"
-                          ? t("pptx.agent.retrySave")
-                          : t("pptx.agent.retry")}
-                      </Button>
-                    </div>
-                  )}
-                  {turn.plan?.source && (
-                    <details className="pptx-workbench-debug">
-                      <summary>{t("pptx.agent.debugSource")}</summary>
-                      <pre>{turn.plan.source}</pre>
-                    </details>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-        <form className="pptx-workbench-composer" onSubmit={submit}>
-          <textarea
-            className="pptx-workbench-input"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (
-                event.key === "Enter" &&
-                !event.shiftKey &&
-                !event.nativeEvent.isComposing
-              ) {
-                event.preventDefault();
-                submit();
-              }
-            }}
-            placeholder={t("pptx.agent.placeholder")}
-            rows={3}
-            disabled={editorStatus.kind !== "ready"}
-            aria-label={t("pptx.agent.placeholder")}
-          />
-          <div className="pptx-workbench-composer-actions">
-            {busy && (
-              <span className="pptx-workbench-composer-hint">
-                {t("pptx.agent.busy")}
-              </span>
-            )}
-            <Button
-              className="od-button--icon-submit"
-              type="primary"
-              size="small"
-              htmlType="submit"
-              aria-label={t("pptx.agent.send")}
-              title={t("pptx.agent.send")}
-              icon={<Send />}
-              disabled={!canSend}
-            />
+          ) : null,
+        children: (
+          <div className="pptx-workbench-conversation">
+            {conversation}
           </div>
-        </form>
-      </aside>}
-    </div>
+        ),
+      };
+
+  return (
+    <OfficeWorkbenchLayout
+      documentType="pptx"
+      fileName={fileName}
+      saveState={readOnly ? undefined : saveFailure ? "error" : dirty ? "dirty" : "saved"}
+      onBack={onRequestClose}
+      onOpenExternal={onOpenExternal}
+      notice={notice}
+      panel={panel}
+    >
+      <div
+        className={`pptx-workbench${readOnly ? " pptx-workbench-readonly" : ""}`}
+        data-editor-status={editorStatus.kind}
+      >
+        <div className="pptx-workbench-editor">
+          {editorStatus.kind !== "ready" &&
+            editorStatus.kind !== "detached" &&
+            editorStatus.kind !== "gap" &&
+            editorStatus.kind !== "error" && (
+              <div className="pptx-workbench-overlay" role="status">
+                <Loader2 className="pptx-workbench-spinner" size={22} />
+                <span>
+                  {editorStatus.kind === "importing"
+                    ? t("pptx.agent.editorImporting", { file: fileName })
+                    : t("pptx.agent.editorLoading")}
+                </span>
+              </div>
+            )}
+          {editorStatus.kind === "detached" && (
+            <div className="pptx-workbench-overlay" role="status">
+              <AlertCircle size={22} />
+              <span>{t("pptx.agent.editorDetached")}</span>
+              <Button
+                size="small"
+                onClick={() => setReloadToken((value) => value + 1)}
+              >
+                {t("pptx.agent.reload")}
+              </Button>
+            </div>
+          )}
+          {editorStatus.kind === "gap" && (
+            <div className="pptx-workbench-overlay" role="note">
+              <AlertCircle size={22} />
+              <strong>{t("pptx.agent.editorGapTitle")}</strong>
+              <span>
+                {t("pptx.agent.editorGapBody", { msg: editorStatus.message })}
+              </span>
+            </div>
+          )}
+          {editorStatus.kind === "error" && (
+            <div
+              className="pptx-workbench-overlay pptx-workbench-overlay-error"
+              role="alert"
+            >
+              <AlertCircle size={22} />
+              <strong>{t("pptx.agent.editorUnavailableTitle")}</strong>
+              <span>
+                {t("pptx.agent.editorUnavailableFailed", {
+                  msg: editorStatus.message,
+                })}
+              </span>
+              <Button
+                size="small"
+                onClick={() => setReloadToken((value) => value + 1)}
+              >
+                {t("pptx.agent.reload")}
+              </Button>
+            </div>
+          )}
+          {saveFailure && (
+            <div
+              className={`pptx-workbench-save-failure${saveFailure.conflict ? " is-conflict" : ""}`}
+              role="alert"
+            >
+              <AlertCircle size={16} />
+              <span>
+                {saveFailure.conflict
+                  ? t("pptx.agent.saveConflict")
+                  : t("pptx.agent.saveFailedBar", { msg: saveFailure.message })}
+              </span>
+              {saveFailure.conflict && (
+                <Button size="small" loading={savingCopy} onClick={() => void saveAsCopy()}>
+                  {t("pptx.agent.saveConflictCopy")}
+                </Button>
+              )}
+            </div>
+          )}
+          {embedUrl && (
+            <iframe
+              key={`${embedUrl}#${reloadToken}`}
+              ref={iframeRef}
+              src={embedUrl}
+              className="pptx-workbench-frame"
+              title={fileName}
+              allow="clipboard-read; clipboard-write"
+              onLoad={() =>
+                iframeRef.current?.contentWindow?.postMessage(
+                  {
+                    protocol: PRESENTATION_PPTX_PROTOCOL,
+                    channel,
+                    type: "officedex:pptx-host-ready",
+                  },
+                  "*",
+                )
+              }
+            />
+          )}
+        </div>
+      </div>
+    </OfficeWorkbenchLayout>
   );
 }
 

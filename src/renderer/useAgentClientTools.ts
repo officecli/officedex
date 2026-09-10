@@ -302,6 +302,8 @@ const agentClientToolSurfaces = useMemo<AgentClientToolSurfaces>(() => {
     },
     "docx-editor": {
       "docx.editor.save": (request) => executeActiveEditorClientTool("docx-editor", request.tool, request.arguments),
+      "docx.editor.read_selection": (request) => executeActiveEditorClientTool("docx-editor", request.tool, request.arguments),
+      "docx.editor.replace_text": (request) => executeActiveEditorClientTool("docx-editor", request.tool, request.arguments),
     },
   };
 }, [refreshRecentFiles, spreadsheet.openArtifact, spreadsheet.session.artifact, spreadsheet.session.workspaceId, t]);

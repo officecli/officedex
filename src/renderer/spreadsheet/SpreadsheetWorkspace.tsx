@@ -1,8 +1,9 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { FileSpreadsheet, Sparkles } from "lucide-react";
+import { AppWindow, FileSpreadsheet, MonitorPlay } from "lucide-react";
+import { Button } from "../ui";
+import { OfficeWorkbenchLayout, type WorkbenchSaveState } from "../workbench/OfficeWorkbenchLayout";
 import { officecli } from "../bridge";
 import { SpreadsheetCanvas, type SpreadsheetCanvasHandle, type SpreadsheetCanvasState } from "./SpreadsheetCanvas";
-import { SpreadsheetTopbar, type SpreadsheetSaveState } from "./SpreadsheetTopbar";
 import type { SpreadsheetSessionState } from "./types";
 import { useT } from "../i18n";
 import { WorkbookAppBuilder } from "../appBuilder/WorkbookAppBuilder";
@@ -61,7 +62,7 @@ export interface SpreadsheetWorkspaceProps {
   agentPanel?: React.ReactNode;
 }
 
-function saveStateFor(session: SpreadsheetSessionState): SpreadsheetSaveState {
+function saveStateFor(session: SpreadsheetSessionState): WorkbenchSaveState {
   if (!session.artifact) return "unopened";
   if (session.phase === "saving") return "saving";
   if (session.saveError) return "error";
@@ -171,76 +172,64 @@ export const SpreadsheetWorkspace = forwardRef<SpreadsheetWorkspaceHandle, Sprea
     }), [ensureEditorReady, save]);
 
     return (
-      <section className="spreadsheet-workspace" data-agent-open={agentOpen ? "true" : "false"}>
-        <SpreadsheetTopbar
-          fileName={fileName}
-          workspaceName={workspaceName}
-          saveState={saveState}
-          canSave={Boolean(session.artifact && session.grant && session.dirty)}
-          agentOpen={agentOpen}
-          onBack={onBack}
-          onSave={() => void save()}
-          onOpenExternal={session.artifact ? () => void officecli.openPath(session.artifact!.filePath) : undefined}
-          onOpenAppBuilder={session.artifact && session.grant ? () => setAppBuilderOpen(true) : undefined}
-          onCreateDeck={session.artifact && onCreateDeck ? () => {
-            const artifact = session.artifact;
-            if (!artifact || creatingDeck) return;
-            setCreatingDeck(true);
-            // The deck is built from the file on disk, so pending edits — the
-            // charts included — have to be flushed before handing off the path.
-            void (async () => {
-              try {
-                if (session.dirty && !await save()) return;
-                await onCreateDeck(artifact.filePath);
-              } finally {
-                setCreatingDeck(false);
-              }
-            })();
-          } : undefined}
-          creatingDeck={creatingDeck}
-          onToggleAgent={() => setAgentOpen((open) => !open)}
-        />
-        <div className="spreadsheet-workspace__body">
-          <main className="spreadsheet-workspace__canvas" role="region" aria-label={session.artifact ? t("spreadsheet.workbook.aria", { file: fileName }) : t("spreadsheet.workbook.untitledAria")}>
-            {session.artifact && session.grant ? (
-              <SpreadsheetCanvas
-                ref={canvasRef}
-                artifact={session.artifact}
-                grant={session.grant}
-                onDirtyChange={onDirtyChange}
-                onStateChange={(state) => {
-                  editorStateRef.current = state;
-                  onCanvasStateChange?.(state);
-                  if (state === "saved") setSourceRevision((current) => current + 1);
+      <OfficeWorkbenchLayout
+        documentType="xlsx"
+        fileName={fileName}
+        context={workspaceName}
+        saveState={saveState}
+        onBack={onBack}
+        backLabel={t("spreadsheet.topbar.back")}
+        onSave={() => void save()}
+        canSave={Boolean(session.artifact && session.grant && session.dirty)}
+        onOpenExternal={session.artifact ? () => void officecli.openPath(session.artifact!.filePath) : undefined}
+        panelOpen={agentOpen}
+        onPanelOpenChange={setAgentOpen}
+        panel={{
+          title: t("spreadsheet.agent.title"),
+          children: agentPanel ?? <p>{t("spreadsheet.agent.empty")}</p>,
+        }}
+        actions={
+          <>
+            {session.artifact && onCreateDeck ? (
+              <Button
+                variant="secondary"
+                size="small"
+                icon={<MonitorPlay />}
+                disabled={creatingDeck}
+                loading={creatingDeck}
+                onClick={() => {
+                  const artifact = session.artifact;
+                  if (!artifact || creatingDeck) return;
+                  setCreatingDeck(true);
+                  // The deck is built from the file on disk, so pending edits — the
+                  // charts included — have to be flushed before handing off the path.
+                  void (async () => {
+                    try {
+                      if (session.dirty && !await save()) return;
+                      await onCreateDeck(artifact.filePath);
+                    } finally {
+                      setCreatingDeck(false);
+                    }
+                  })();
                 }}
-                onError={onCanvasError}
-                onSaveError={onCanvasSaveError}
-                onSessionClosed={onCanvasSessionClosed}
-              />
-            ) : (
-              <div className="spreadsheet-workspace__empty">
-                <FileSpreadsheet aria-hidden="true" />
-                <strong>{t("spreadsheet.workbook.emptyTitle")}</strong>
-                <span>{t("spreadsheet.workbook.emptyBody")}</span>
-              </div>
-            )}
-          </main>
-          {agentOpen ? (
-            <aside className="spreadsheet-agent" aria-label={t("spreadsheet.agent.title")}>
-              <header className="spreadsheet-agent__header"><Sparkles aria-hidden="true" /><strong>{t("spreadsheet.agent.title")}</strong></header>
-              <div className="spreadsheet-agent__content">{agentPanel ?? <p>{t("spreadsheet.agent.empty")}</p>}</div>
-            </aside>
-          ) : null}
-        </div>
-        {publishedApp && session.grant ? (
-          <div className="spreadsheet-workspace__app-layer">
+              >
+                {t("spreadsheet.topbar.createDeck")}
+              </Button>
+            ) : null}
+            {session.artifact && session.grant ? (
+              <Button variant="secondary" size="small" icon={<AppWindow />} onClick={() => setAppBuilderOpen(true)}>
+                {t("spreadsheet.topbar.appBuilder")}
+              </Button>
+            ) : null}
+          </>
+        }
+        overlay={
+          publishedApp && session.grant ? (
             <PublishedWorkbookAppPage app={publishedApp} grant={session.grant} sourceRevision={sourceRevision} onBack={() => {
               setPublishedApp(undefined);
               setAppBuilderOpen(true);
             }} />
-          </div>
-        ) : appBuilderOpen && session.artifact && session.grant ? (
-          <div className="spreadsheet-workspace__app-layer">
+          ) : appBuilderOpen && session.artifact && session.grant ? (
             <WorkbookAppBuilder
               artifact={session.artifact}
               grant={session.grant}
@@ -251,9 +240,34 @@ export const SpreadsheetWorkspace = forwardRef<SpreadsheetWorkspaceHandle, Sprea
                 setAppBuilderOpen(false);
               }}
             />
-          </div>
-        ) : null}
-      </section>
+          ) : undefined
+        }
+      >
+        <main className="spreadsheet-workspace__canvas" role="region" aria-label={session.artifact ? t("spreadsheet.workbook.aria", { file: fileName }) : t("spreadsheet.workbook.untitledAria")}>
+          {session.artifact && session.grant ? (
+            <SpreadsheetCanvas
+              ref={canvasRef}
+              artifact={session.artifact}
+              grant={session.grant}
+              onDirtyChange={onDirtyChange}
+              onStateChange={(state) => {
+                editorStateRef.current = state;
+                onCanvasStateChange?.(state);
+                if (state === "saved") setSourceRevision((current) => current + 1);
+              }}
+              onError={onCanvasError}
+              onSaveError={onCanvasSaveError}
+              onSessionClosed={onCanvasSessionClosed}
+            />
+          ) : (
+            <div className="spreadsheet-workspace__empty">
+              <FileSpreadsheet aria-hidden="true" />
+              <strong>{t("spreadsheet.workbook.emptyTitle")}</strong>
+              <span>{t("spreadsheet.workbook.emptyBody")}</span>
+            </div>
+          )}
+        </main>
+      </OfficeWorkbenchLayout>
     );
   },
 );

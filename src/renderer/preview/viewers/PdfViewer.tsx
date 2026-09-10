@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "../../ui";
 import * as pdfjsLib from "pdfjs-dist";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
-import { PreviewToolbar } from "../components/PreviewToolbar";
+import { OfficeWorkbenchLayout } from "../../workbench/OfficeWorkbenchLayout";
+import { useT } from "../../i18n";
 import { LoadingState } from "../components/LoadingState";
 import { ErrorState } from "../components/ErrorState";
 import { officecli } from "../../bridge";
@@ -17,11 +18,13 @@ interface PdfViewerProps {
   previewToken: string;
   fileName: string;
   documentType?: string;
+  onRequestClose?: () => void;
 }
 
 const DEFAULT_SCALE = 1.5;
 
-export default function PdfViewer({ previewToken, fileName, documentType }: PdfViewerProps) {
+export default function PdfViewer({ previewToken, fileName, onRequestClose }: PdfViewerProps) {
+  const t = useT();
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
@@ -98,32 +101,35 @@ export default function PdfViewer({ previewToken, fileName, documentType }: PdfV
   if (error) return <ErrorState message={error} fileName={fileName} onRetry={loadPdf} onOpenExternal={openExternal} />;
 
   return (
-    <>
-      <PreviewToolbar
-        fileName={fileName}
-        documentType={documentType}
-        zoom={scale / DEFAULT_SCALE}
-        onZoomIn={zoomIn}
-        onZoomOut={zoomOut}
-        onZoomReset={zoomReset}
-        onOpenExternal={openExternal}
-        center={
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Button size="small" disabled={currentPage <= 1} onClick={prevPage}>
-              Previous
-            </Button>
-            <span style={{ fontSize: 13, whiteSpace: "nowrap" }}>
-              {currentPage} / {totalPages}
-            </span>
-            <Button size="small" disabled={currentPage >= totalPages} onClick={nextPage}>
-              Next
-            </Button>
-          </div>
-        }
-      />
+    <OfficeWorkbenchLayout
+      documentType="pdf"
+      fileName={fileName}
+      onBack={onRequestClose}
+      backLabel={t("workbench.closePreview")}
+      onOpenExternal={openExternal}
+      status={
+        <>
+          <span className="wb-status__item">
+            {t("workbench.status.pages", { current: currentPage, total: totalPages })}
+          </span>
+          <Button size="small" disabled={currentPage <= 1} onClick={prevPage}>
+            Previous
+          </Button>
+          <Button size="small" disabled={currentPage >= totalPages} onClick={nextPage}>
+            Next
+          </Button>
+        </>
+      }
+      zoom={{
+        value: scale / DEFAULT_SCALE,
+        onZoomIn: zoomIn,
+        onZoomOut: zoomOut,
+        onReset: zoomReset,
+      }}
+    >
       <div className="preview-pdf-container">
         <canvas ref={canvasRef} className="preview-pdf-canvas" />
       </div>
-    </>
+    </OfficeWorkbenchLayout>
   );
 }

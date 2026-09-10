@@ -1,0 +1,68 @@
+/* ─── DOCX assistant panel ─── */
+
+.docx-agent {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+.docx-agent__body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px;
+}
+
+.docx-agent__pending {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  border: 1px solid var(--n-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--n-surface-soft);
+  padding: 14px;
+}
+
+.docx-agent__pending svg {
+  color: var(--n-secondary);
+}
+
+.docx-agent__pending strong {
+  color: var(--n-primary);
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.docx-agent__pending span {
+  color: var(--n-slate);
+  font-size: 12px;
+  line-height: 19px;
+}
+
+.docx-agent__composer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--n-hairline);
+  padding: 12px 14px 14px;
+}
+
+.docx-agent__input {
+  width: 100%;
+  box-sizing: border-box;
+  resize: none;
+  border: 1px solid var(--n-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--n-canvas);
+  padding: 10px 12px;
+  color: var(--n-charcoal);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 19px;
+}
+
+.docx-agent__input:disabled {
+  background: var(--n-surface-soft);
+  color: var(--n-stone);
+  cursor: not-allowed;
+}

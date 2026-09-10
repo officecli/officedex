@@ -1,0 +1,801 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OfficeWorkbenchLayout — 三件套统一布局</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" />
+<style>
+/* ═══ Paper & Ink tokens — 与 src/renderer/styles/tokens.css 一致 ═══ */
+:root {
+  --n-primary: #05101a;
+  --n-secondary: #006876;
+  --n-secondary-container: #9fecfc;
+  --n-canvas: #ffffff;
+  --n-surface: #f0eee6;
+  --n-surface-soft: #fcfaf2;
+  --n-hairline: #e6e4d8;
+  --n-hairline-soft: #eae8e0;
+  --n-ink: #1a2530;
+  --n-charcoal: #1b1c17;
+  --n-slate: #44474b;
+  --n-steel: #74777c;
+  --n-stone: #c4c6cc;
+  --n-warning: #dd5b00;
+  --font-body: 'Inter', -apple-system, system-ui, 'PingFang SC', sans-serif;
+  --font-heading: 'Plus Jakarta Sans', -apple-system, system-ui, 'PingFang SC', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Menlo, monospace;
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --shadow-subtle: rgba(26,37,48,.04) 0 1px 3px 0;
+  --shadow-card: rgba(26,37,48,.08) 0 4px 12px 0;
+
+  /* 布局常量 —— 这套值就是要落进 workbench.css 的 */
+  --wb-titlebar-h: 44px;
+  --wb-statusbar-h: 28px;
+  --wb-panel-w: 340px;
+  --wb-rail-w: 196px;
+  --wb-topleft-reserve: 92px;
+  --wb-doc-pptx: #d1734a;
+  --wb-doc-docx: #5b8def;
+  --wb-doc-xlsx: #4bb07a;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: #dedbd0;
+  color: var(--n-charcoal);
+  font-family: var(--font-body);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ═══ demo 控制条（不属于设计） ═══ */
+.demo-bar {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 14px;
+  padding: 8px 16px;
+  background: var(--n-primary); color: #fff;
+  font-size: 12px;
+}
+.demo-bar__tag {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em;
+  padding: 2px 6px; border-radius: var(--radius-xs);
+  background: rgba(255,255,255,.14); color: var(--n-secondary-container);
+}
+.demo-seg { display: flex; gap: 2px; padding: 2px; border-radius: var(--radius-md); background: rgba(255,255,255,.1); }
+.demo-seg button {
+  border: 0; background: transparent; color: rgba(255,255,255,.72);
+  padding: 4px 12px; border-radius: var(--radius-sm); cursor: pointer; font-size: 12px;
+}
+.demo-seg button[aria-pressed="true"] { background: #fff; color: var(--n-primary); font-weight: 600; }
+.demo-bar label { display: flex; align-items: center; gap: 6px; cursor: pointer; color: rgba(255,255,255,.8); }
+.demo-bar .spacer { flex: 1; }
+
+/* ═══ 宿主外框 ═══ */
+.wb {
+  flex: 1; min-height: 0;
+  display: grid;
+  grid-template-rows: var(--wb-titlebar-h) minmax(0, 1fr) var(--wb-statusbar-h);
+  background: var(--n-surface-soft);
+  color: var(--n-charcoal);
+  overflow: hidden;
+}
+
+/* ── 1. 标题栏（宿主）：取代现在的 PreviewToolbar ── */
+.wb-titlebar {
+  display: grid;
+  grid-template-columns: var(--wb-topleft-reserve) auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding-right: 12px;
+  border-bottom: 1px solid var(--n-hairline);
+  background: var(--n-canvas);
+  -webkit-user-select: none; user-select: none;
+}
+.wb-lights { display: flex; gap: 8px; padding-left: 20px; }
+.wb-lights i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+.wb-lights i:nth-child(1) { background: #ff5f57; }
+.wb-lights i:nth-child(2) { background: #febc2e; }
+.wb-lights i:nth-child(3) { background: #28c840; }
+
+.wb-quick { display: flex; align-items: center; gap: 2px; }
+.wb-iconbtn {
+  width: 28px; height: 28px; display: grid; place-items: center;
+  border: 0; border-radius: var(--radius-sm); background: transparent;
+  color: var(--n-slate); cursor: pointer;
+}
+.wb-iconbtn:hover { background: var(--n-surface); color: var(--n-primary); }
+.wb-iconbtn[aria-pressed="true"] { background: var(--n-secondary-container); color: var(--n-secondary); }
+.wb-iconbtn svg { width: 16px; height: 16px; }
+
+.wb-doc { display: flex; align-items: center; justify-content: center; gap: 8px; min-width: 0; }
+.wb-doc__badge {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 500; letter-spacing: .04em;
+  color: #fff; padding: 2px 6px; border-radius: var(--radius-xs);
+}
+.wb[data-type="pptx"] .wb-doc__badge { background: var(--wb-doc-pptx); }
+.wb[data-type="docx"] .wb-doc__badge { background: var(--wb-doc-docx); }
+.wb[data-type="xlsx"] .wb-doc__badge { background: var(--wb-doc-xlsx); }
+.wb-doc__name {
+  font-family: var(--font-heading); font-weight: 600; font-size: 13px; color: var(--n-primary);
+  max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.wb-doc__state { display: flex; align-items: center; gap: 5px; color: var(--n-steel); font-size: 12px; }
+.wb-doc__state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--n-secondary); }
+.wb[data-dirty="true"] .wb-doc__state::before { background: var(--n-warning); }
+
+.wb-actions { display: flex; align-items: center; gap: 6px; }
+.wb-btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px;
+  border: 1px solid var(--n-hairline); border-radius: var(--radius-md);
+  background: var(--n-canvas); color: var(--n-primary); font-size: 12px; font-weight: 500; cursor: pointer;
+}
+.wb-btn:hover { background: var(--n-surface-soft); }
+.wb-btn--accent { border-color: transparent; background: var(--n-secondary); color: #fff; }
+.wb-btn--accent:hover { background: #005865; }
+.wb-btn svg { width: 14px; height: 14px; }
+
+/* ── 2. 主体：舞台 + 侧栏 ── */
+.wb-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--wb-panel-w);
+  min-height: 0;
+  background: var(--n-surface);
+}
+.wb[data-panel="closed"] .wb-body { grid-template-columns: minmax(0, 1fr); }
+.wb[data-panel="closed"] .wb-panel { display: none; }
+
+/* 舞台 = 嵌入式编辑器的插槽。宿主只给盒子，不画里面。 */
+.wb-stage { position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--n-canvas); }
+.wb-stage__variant { display: none; flex: 1; min-height: 0; flex-direction: column; }
+.wb[data-type="pptx"] .wb-stage__variant[data-stage="pptx"],
+.wb[data-type="docx"] .wb-stage__variant[data-stage="docx"],
+.wb[data-type="xlsx"] .wb-stage__variant[data-stage="xlsx"] { display: flex; }
+
+/* ── 3. AI 侧栏（宿主，三件套共用外壳） ── */
+.wb-panel {
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 0; min-height: 0;
+  border-left: 1px solid var(--n-hairline);
+  background: var(--n-canvas);
+}
+.wb-panel__header { padding: 12px 14px 10px; border-bottom: 1px solid var(--n-hairline); display: grid; gap: 6px; }
+.wb-panel__titlerow { display: flex; align-items: center; gap: 8px; }
+.wb-panel__title {
+  flex: 1; display: flex; align-items: center; gap: 7px;
+  font-family: var(--font-heading); font-size: 13px; font-weight: 600; color: var(--n-primary);
+}
+.wb-panel__title svg { width: 16px; height: 16px; color: var(--n-secondary); }
+.wb-panel__target { font-size: 12px; color: var(--n-steel); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-panel__scope {
+  display: inline-flex; align-items: center; gap: 6px; align-self: start;
+  padding: 3px 8px; border-radius: var(--radius-full, 9999px);
+  background: var(--n-secondary-container); color: #00464f; font-size: 11px; font-weight: 500;
+}
+.wb-panel__scope svg { width: 12px; height: 12px; }
+
+.wb-panel__transcript { min-height: 0; overflow-y: auto; padding: 14px; display: grid; gap: 14px; align-content: start; }
+.wb-msg { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 9px; }
+.wb-msg__avatar {
+  width: 24px; height: 24px; border-radius: var(--radius-sm); display: grid; place-items: center;
+  background: var(--n-surface); color: var(--n-slate); font-size: 11px; font-weight: 600;
+}
+.wb-msg--ai .wb-msg__avatar { background: var(--n-primary); color: #fff; }
+.wb-msg__body { min-width: 0; display: grid; gap: 4px; }
+.wb-msg__author { font-size: 11px; font-weight: 600; color: var(--n-slate); }
+.wb-msg__text { font-size: 13px; line-height: 20px; color: var(--n-charcoal); }
+.wb-msg__card {
+  margin-top: 4px; border: 1px solid var(--n-hairline); border-radius: var(--radius-lg);
+  background: var(--n-surface-soft); padding: 10px 12px; display: grid; gap: 6px;
+}
+.wb-msg__card strong { font-size: 12px; font-weight: 600; color: var(--n-primary); }
+.wb-msg__card ul { margin: 0; padding-left: 16px; font-size: 12px; line-height: 19px; color: var(--n-slate); }
+.wb-msg__actions { display: flex; gap: 8px; margin-top: 2px; }
+.wb-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 9px; border-radius: var(--radius-sm);
+  background: var(--n-surface); color: var(--n-slate); font-size: 11px;
+}
+.wb-chip svg { width: 12px; height: 12px; color: var(--n-secondary); }
+
+.wb-panel__composer { padding: 12px 14px 14px; border-top: 1px solid var(--n-hairline); display: grid; gap: 8px; }
+.wb-composer {
+  border: 1px solid var(--n-hairline); border-radius: var(--radius-lg);
+  background: var(--n-canvas); box-shadow: var(--shadow-subtle);
+  display: grid; gap: 6px; padding: 10px 10px 8px;
+}
+.wb-composer:focus-within { border-color: var(--n-secondary); box-shadow: 0 0 0 3px rgba(0,104,118,.1); }
+.wb-composer textarea {
+  border: 0; outline: 0; resize: none; background: transparent;
+  font-family: inherit; font-size: 13px; line-height: 19px; color: var(--n-charcoal); min-height: 46px;
+}
+.wb-composer__row { display: flex; align-items: center; justify-content: space-between; }
+.wb-composer__hint { font-size: 11px; color: var(--n-stone); }
+.wb-send {
+  width: 28px; height: 28px; border: 0; border-radius: var(--radius-md);
+  background: var(--n-secondary); color: #fff; display: grid; place-items: center; cursor: pointer;
+}
+.wb-send svg { width: 15px; height: 15px; }
+
+/* ── 4. 状态栏（宿主，左侧内容按类型换） ── */
+.wb-statusbar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 0 12px;
+  border-top: 1px solid var(--n-hairline);
+  background: var(--n-canvas);
+  color: var(--n-steel); font-size: 11px;
+}
+.wb-statusbar .spacer { flex: 1; }
+.wb-status__item { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.wb-zoom { display: flex; align-items: center; gap: 8px; }
+.wb-zoom input { width: 88px; accent-color: var(--n-secondary); }
+.wb-zoom__pct { font-family: var(--font-mono); font-size: 11px; color: var(--n-slate); min-width: 34px; text-align: right; }
+
+/* ═══════════ 以下都是「编辑器自绘」区，demo 里模拟 ═══════════ */
+.ed-ribbon { flex: 0 0 auto; border-bottom: 1px solid var(--n-hairline); background: var(--n-canvas); }
+.ed-tabs { display: flex; gap: 2px; padding: 0 10px; border-bottom: 1px solid var(--n-hairline-soft); }
+.ed-tabs button {
+  border: 0; background: transparent; cursor: pointer;
+  padding: 9px 11px 8px; font-size: 12px; color: var(--n-slate);
+  border-bottom: 2px solid transparent;
+}
+.ed-tabs button[aria-selected="true"] { color: var(--n-secondary); border-bottom-color: var(--n-secondary); font-weight: 600; }
+.ed-groups { display: flex; align-items: stretch; gap: 0; padding: 6px 8px 4px; overflow-x: auto; }
+.ed-group { display: grid; grid-template-rows: 1fr auto; gap: 3px; padding: 0 10px; border-right: 1px solid var(--n-hairline-soft); }
+.ed-group:last-child { border-right: 0; }
+.ed-group__row { display: flex; align-items: center; gap: 3px; }
+.ed-group__label { text-align: center; font-size: 10px; color: var(--n-stone); }
+.ed-cmd {
+  min-width: 26px; height: 26px; padding: 0 6px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  border: 0; border-radius: var(--radius-sm); background: transparent;
+  color: var(--n-slate); font-size: 12px; cursor: pointer;
+}
+.ed-cmd:hover { background: var(--n-surface); color: var(--n-primary); }
+.ed-cmd--tall { height: 52px; flex-direction: column; gap: 3px; font-size: 10px; min-width: 46px; }
+.ed-cmd--tall .ed-glyph { font-size: 17px; }
+.ed-cmd--wide { min-width: 70px; justify-content: flex-start; }
+.ed-glyph { font-size: 14px; line-height: 1; }
+.ed-field {
+  height: 26px; border: 1px solid var(--n-hairline); border-radius: var(--radius-sm);
+  background: var(--n-canvas); font-size: 12px; color: var(--n-slate); padding: 0 8px;
+  display: inline-flex; align-items: center; min-width: 110px;
+}
+.ed-field--sm { min-width: 52px; }
+
+.ed-work { flex: 1; min-height: 0; display: grid; grid-template-columns: var(--wb-rail-w) minmax(0, 1fr); background: var(--n-surface); }
+.ed-work--norail { grid-template-columns: minmax(0, 1fr); }
+.ed-rail { min-height: 0; overflow-y: auto; border-right: 1px solid var(--n-hairline); background: var(--n-canvas); padding: 10px; display: grid; gap: 8px; align-content: start; }
+.ed-thumb { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 7px; align-items: start; }
+.ed-thumb__no { font-family: var(--font-mono); font-size: 10px; color: var(--n-stone); padding-top: 3px; text-align: right; }
+.ed-thumb__frame {
+  aspect-ratio: 16 / 9; border: 1px solid var(--n-hairline); border-radius: var(--radius-sm);
+  background: var(--n-surface-soft); padding: 7px; overflow: hidden;
+}
+.ed-thumb[aria-current="true"] .ed-thumb__frame { border-color: var(--n-secondary); box-shadow: 0 0 0 2px rgba(0,104,118,.18); }
+.ed-thumb[aria-current="true"] .ed-thumb__no { color: var(--n-secondary); font-weight: 600; }
+.ed-thumb__title { font-family: var(--font-heading); font-size: 6px; font-weight: 700; color: var(--n-primary); line-height: 1.3; }
+.ed-thumb__line { height: 2px; border-radius: 1px; background: var(--n-hairline); margin-top: 3px; }
+.ed-thumb__line--short { width: 55%; }
+.ed-thumb__page { aspect-ratio: 1 / 1.414; }
+
+.ed-canvas { min-width: 0; min-height: 0; overflow: auto; display: grid; place-items: center; padding: 22px; background: var(--n-surface); }
+.ed-slide {
+  width: min(100%, 660px); aspect-ratio: 16 / 9;
+  background: var(--n-surface-soft); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card); padding: 34px 40px; overflow: hidden;
+}
+.ed-slide__kicker { font-size: 9px; font-weight: 600; color: var(--n-secondary); letter-spacing: .04em; }
+.ed-slide__title { font-family: var(--font-heading); font-size: 25px; font-weight: 700; color: var(--n-primary); margin: 7px 0 0; line-height: 1.25; }
+.ed-slide__rule { width: 68px; height: 3px; border-radius: 2px; background: var(--n-secondary); margin: 12px 0 14px; }
+.ed-slide__lead { font-size: 12px; color: var(--n-slate); margin: 0 0 14px; }
+.ed-slide__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 22px; }
+.ed-slide__item strong { display: block; font-size: 11px; color: var(--n-primary); }
+.ed-slide__item span { display: block; font-size: 10px; color: var(--n-steel); margin-top: 2px; line-height: 1.5; }
+.ed-slide__item i { color: var(--n-secondary); font-style: normal; }
+
+.ed-notes { flex: 0 0 auto; border-top: 1px solid var(--n-hairline); background: var(--n-canvas); padding: 9px 16px; font-size: 12px; color: var(--n-stone); }
+
+.ed-page {
+  width: min(100%, 560px); min-height: 100%; background: var(--n-canvas);
+  box-shadow: var(--shadow-card); border-radius: var(--radius-xs); padding: 54px 60px;
+}
+.ed-page h1 { font-family: var(--font-heading); font-size: 21px; color: var(--n-primary); margin: 0 0 4px; }
+.ed-page .ed-page__meta { font-size: 11px; color: var(--n-stone); margin: 0 0 20px; }
+.ed-page h2 { font-family: var(--font-heading); font-size: 14px; color: var(--n-primary); margin: 20px 0 6px; }
+.ed-page p { font-size: 12.5px; line-height: 22px; color: var(--n-slate); margin: 0 0 10px; }
+.ed-page mark { background: rgba(0,104,118,.14); color: inherit; border-radius: 2px; }
+
+.ed-formula { display: flex; align-items: center; gap: 8px; padding: 5px 10px; border-bottom: 1px solid var(--n-hairline); background: var(--n-canvas); }
+.ed-formula__ref { font-family: var(--font-mono); font-size: 11px; color: var(--n-slate); border: 1px solid var(--n-hairline); border-radius: var(--radius-xs); padding: 3px 8px; min-width: 62px; }
+.ed-formula__fx { font-family: var(--font-mono); font-size: 11px; color: var(--n-stone); }
+.ed-formula__input { flex: 1; font-family: var(--font-mono); font-size: 11px; color: var(--n-charcoal); }
+.ed-gridwrap { min-height: 0; overflow: auto; background: var(--n-canvas); }
+table.ed-grid { border-collapse: collapse; font-size: 11.5px; width: 100%; }
+table.ed-grid th, table.ed-grid td { border: 1px solid var(--n-hairline); padding: 4px 9px; text-align: left; white-space: nowrap; }
+table.ed-grid thead th { background: var(--n-surface); color: var(--n-steel); font-weight: 500; font-family: var(--font-mono); font-size: 10px; text-align: center; }
+table.ed-grid tbody th { background: var(--n-surface); color: var(--n-steel); font-weight: 500; font-family: var(--font-mono); font-size: 10px; text-align: center; width: 34px; }
+table.ed-grid td.num { text-align: right; font-family: var(--font-mono); }
+table.ed-grid td.sel { outline: 2px solid var(--n-secondary); outline-offset: -2px; background: rgba(0,104,118,.05); }
+.ed-sheettabs { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; padding: 5px 10px; border-top: 1px solid var(--n-hairline); background: var(--n-canvas); }
+.ed-sheettab { border: 0; background: transparent; padding: 4px 11px; border-radius: var(--radius-sm); font-size: 12px; color: var(--n-slate); cursor: pointer; }
+.ed-sheettab[aria-selected="true"] { background: var(--n-surface); color: var(--n-primary); font-weight: 600; box-shadow: inset 0 -2px 0 var(--n-secondary); }
+
+/* ═══ 归属标注 ═══ */
+.wb[data-annotate="true"] .wb-titlebar,
+.wb[data-annotate="true"] .wb-panel,
+.wb[data-annotate="true"] .wb-statusbar { outline: 2px dashed var(--n-secondary); outline-offset: -2px; }
+.wb[data-annotate="true"] .wb-stage { outline: 2px dashed var(--wb-doc-pptx); outline-offset: -2px; }
+.wb-note { display: none; position: absolute; z-index: 5; font-family: var(--font-mono); font-size: 10px; padding: 2px 7px; border-radius: var(--radius-xs); color: #fff; pointer-events: none; }
+.wb[data-annotate="true"] .wb-note { display: block; }
+.wb-note--host { background: var(--n-secondary); }
+.wb-note--editor { background: var(--wb-doc-pptx); }
+.wb-titlebar, .wb-panel, .wb-statusbar, .wb-stage { position: relative; }
+/* 标注模式让出一点空间，标签不压住真实控件 */
+.wb[data-annotate="true"] { --wb-titlebar-h: 64px; }
+.wb[data-annotate="true"] .wb-panel__header { padding-top: 30px; }
+.wb[data-annotate="true"] .wb-stage__variant { padding-top: 20px; }
+.wb-titlebar .wb-note { top: 4px; left: 50%; transform: translateX(-50%); }
+.wb-panel .wb-note { top: 5px; left: 14px; }
+.wb-statusbar .wb-note { top: 3px; left: 50%; transform: translateX(-50%); }
+.wb-stage .wb-note { top: 2px; left: 10px; }
+</style>
+</head>
+<body>
+
+<div class="demo-bar">
+  <span class="demo-bar__tag">DEMO</span>
+  <span>OfficeWorkbenchLayout</span>
+  <div class="demo-seg" role="group" aria-label="文档类型">
+    <button type="button" data-set="pptx" aria-pressed="true">演示 PPTX</button>
+    <button type="button" data-set="docx" aria-pressed="false">文档 DOCX</button>
+    <button type="button" data-set="xlsx" aria-pressed="false">表格 XLSX</button>
+  </div>
+  <span class="spacer"></span>
+  <label><input type="checkbox" id="annotate" /> 标注归属（宿主 / 编辑器）</label>
+  <label><input type="checkbox" id="paneltoggle" checked /> AI 侧栏</label>
+</div>
+
+<div class="wb" id="wb" data-type="pptx" data-panel="open" data-dirty="false" data-annotate="false">
+
+  <!-- ═══ 1. 标题栏（宿主） ═══ -->
+  <header class="wb-titlebar">
+    <span class="wb-note wb-note--host">host · titlebar</span>
+    <div class="wb-lights" aria-hidden="true"><i></i><i></i><i></i></div>
+
+    <div class="wb-quick">
+      <button class="wb-iconbtn" title="返回"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <button class="wb-iconbtn" title="保存"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button>
+      <button class="wb-iconbtn" title="撤销"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.7L3 8"/></svg></button>
+      <button class="wb-iconbtn" title="重做"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M21 13a9 9 0 1 1-3-7.7L21 8"/></svg></button>
+    </div>
+
+    <div class="wb-doc">
+      <span class="wb-doc__badge" id="docBadge">PPT</span>
+      <span class="wb-doc__name" id="docName">石墨文档：让团队协作从"传文件"变成"共同完成".pptx</span>
+      <span class="wb-doc__state" id="docState">已保存</span>
+    </div>
+
+    <div class="wb-actions">
+      <button class="wb-iconbtn" title="用系统应用打开"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14L21 3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg></button>
+      <button class="wb-iconbtn" id="panelBtn" aria-pressed="true" title="AI 侧栏"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg></button>
+      <button class="wb-btn wb-btn--accent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v14"/></svg>分享</button>
+    </div>
+  </header>
+
+  <!-- ═══ 2. 主体 ═══ -->
+  <div class="wb-body">
+
+    <!-- 舞台：嵌入式编辑器的插槽 -->
+    <div class="wb-stage">
+      <span class="wb-note wb-note--editor">embedded editor · 自绘 ribbon / rail / status</span>
+
+      <!-- ── PPTX ── -->
+      <section class="wb-stage__variant" data-stage="pptx">
+        <div class="ed-ribbon">
+          <div class="ed-tabs" role="tablist">
+            <button role="tab" aria-selected="true">开始</button>
+            <button role="tab" aria-selected="false">插入</button>
+            <button role="tab" aria-selected="false">设计</button>
+            <button role="tab" aria-selected="false">切换</button>
+            <button role="tab" aria-selected="false">动画</button>
+            <button role="tab" aria-selected="false">放映</button>
+            <button role="tab" aria-selected="false">审阅</button>
+            <button role="tab" aria-selected="false">视图</button>
+          </div>
+          <div class="ed-groups">
+            <div class="ed-group">
+              <div class="ed-group__row"><button class="ed-cmd ed-cmd--tall"><span class="ed-glyph">📋</span>粘贴</button></div>
+              <div class="ed-group__label">剪贴板</div>
+            </div>
+            <div class="ed-group">
+              <div class="ed-group__row">
+                <button class="ed-cmd ed-cmd--tall"><span class="ed-glyph">🗂</span>新建幻灯片</button>
+                <div style="display:grid;gap:2px">
+                  <button class="ed-cmd ed-cmd--wide"><span class="ed-glyph">▦</span>版式</button>
+                  <button class="ed-cmd ed-cmd--wide"><span class="ed-glyph">↺</span>重置</button>
+                </div>
+              </div>
+              <div class="ed-group__label">幻灯片</div>
+            </div>
+            <div class="ed-group">
+              <div class="ed-group__row">
+                <span class="ed-field">Plus Jakarta Sans</span>
+                <span class="ed-field ed-field--sm">25</span>
+                <button class="ed-cmd">A⁺</button><button class="ed-cmd">A⁻</button>
+              </div>
+              <div class="ed-group__row">
+                <button class="ed-cmd"><b>B</b></button><button class="ed-cmd"><i>I</i></button>
+                <button class="ed-cmd"><u>U</u></button><button class="ed-cmd">S</button>
+                <button class="ed-cmd"><span class="ed-glyph">🖍</span></button>
+                <button class="ed-cmd"><span class="ed-glyph">🎨</span></button>
+              </div>
+              <div class="ed-group__label">字体</div>
+            </div>
+            <div class="ed-group">
+              <div class="ed-group__row">
+                <button class="ed-cmd"><span class="ed-glyph">☰</span></button>
+                <button class="ed-cmd"><span class="ed-glyph">⋮≡</span></button>
+                <button class="ed-cmd"><span class="ed-glyph">⇥</span></button>
+                <button class="ed-cmd"><span class="ed-glyph">↕</span></button>
+              </div>
+              <div class="ed-group__label">段落</div>
+            </div>
+            <div class="ed-group">
+              <div class="ed-group__row">
+                <button class="ed-cmd ed-cmd--tall"><span class="ed-glyph">🖼</span>图片</button>
+                <button class="ed-cmd ed-cmd--tall"><span class="ed-glyph">⬡</span>形状</button>
+                <button class="ed-cmd ed-cmd--tall"><span class="ed-glyph">⊞</span>排列</button>
+              </div>
+              <div class="ed-group__label">绘图</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="ed-work">
+          <div class="ed-rail">
+            <div class="ed-thumb"><span class="ed-thumb__no">1</span><div class="ed-thumb__frame"><div class="ed-thumb__title">石墨文档</div><div class="ed-thumb__line ed-thumb__line--short"></div></div></div>
+            <div class="ed-thumb" aria-current="true"><span class="ed-thumb__no">2</span><div class="ed-thumb__frame"><div class="ed-thumb__title">今天，我们从四个问题认识石墨文档</div><div class="ed-thumb__line"></div><div class="ed-thumb__line ed-thumb__line--short"></div><div class="ed-thumb__line"></div></div></div>
+            <div class="ed-thumb"><span class="ed-thumb__no">3</span><div class="ed-thumb__frame"><div class="ed-thumb__title">从在线文档起步，成长为企业协作平台</div><div class="ed-thumb__line"></div><div class="ed-thumb__line ed-thumb__line--short"></div></div></div>
+            <div class="ed-thumb"><span class="ed-thumb__no">4</span><div class="ed-thumb__frame"><div class="ed-thumb__title">一套云端 Office，覆盖日常协作</div><div class="ed-thumb__line"></div><div class="ed-thumb__line ed-thumb__line--short"></div></div></div>
+            <div class="ed-thumb"><span class="ed-thumb__no">5</span><div class="ed-thumb__frame"><div class="ed-thumb__title">从"文件传输"到"实时协同"</div><div class="ed-thumb__line"></div></div></div>
+            <div class="ed-thumb"><span class="ed-thumb__no">6</span><div class="ed-thumb__frame"><div class="ed-thumb__title">四层能力，支撑企业协作</div><div class="ed-thumb__line"></div><div class="ed-thumb__line ed-thumb__line--short"></div></div></div>
+          </div>
+
+          <div class="ed-canvas">
+            <div class="ed-slide">
+              <div class="ed-slide__kicker">石墨文档：让团队协作从"传文件"变成"共同完成"</div>
+              <h2 class="ed-slide__title">今天，我们从四个问题认识石墨文档</h2>
+              <div class="ed-slide__rule"></div>
+              <p class="ed-slide__lead">石墨文档的价值不止是在线编辑，而是把协作、管理与知识沉淀连接起来。</p>
+              <div class="ed-slide__grid">
+                <div class="ed-slide__item"><strong><i>▤</i> 它从哪里来</strong><span>从 2014 年成立、2015 年推出产品，到服务全球企业团队。</span></div>
+                <div class="ed-slide__item"><strong><i>◈</i> 它能做什么</strong><span>覆盖文档、表格、幻灯片、表单、团队空间等 9 大产品套件。</span></div>
+                <div class="ed-slide__item"><strong><i>⚡</i> 它如何提升效率</strong><span>通过多人实时协作、版本回溯、权限管理和系统集成减少沟通损耗。</span></div>
+                <div class="ed-slide__item"><strong><i>◎</i> 它适合哪些团队</strong><span>适合需要跨部门共创、统一资料和沉淀知识的职场组织。</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="ed-notes">单击此处添加备注</div>
+      </section>
+
+      <!-- ── DOCX ── -->
+      <section class="wb-stage__variant" data-stage="docx">
+        <div class="ed-ribbon">
+          <div class="ed-tabs" role="tablist">
+            <button role="tab" aria-selected="true">开始</button>
+            <button role="tab" aria-selected="false">插入</button>
+            <button role="tab" aria-selected="false">布局</button>
+            <button role="tab" aria-selected="false">引用</button>
+            <button role="tab" aria-selected="false">审阅</button>
+            <button role="tab" aria-selected="false">视图</button>
+          </div>
+          <div class="ed-groups">
+            <div class="ed-group">
+              <div class="ed-group__row"><button class="ed-cmd ed-cmd--tall"><span class="ed-glyph">📋</span>粘贴</button></div>
+              <div class="ed-group__label">剪贴板</div>
+            </div>
+            <div class="ed-group">
+              <div class="ed-group__row">
+                <span class="ed-field">Inter</span><span class="ed-field ed-field--sm">12</span>
+                <button class="ed-cmd">A⁺</button><button class="ed-cmd">A⁻</button>
+              </div>
+              <div class="ed-group__row">
+                <button class="ed-cmd"><b>B</b></button><button class="ed-cmd"><i>I</i></button>
+                <button class="ed-cmd"><u>U</u></button><button class="ed-cmd"><span class="ed-glyph">🖍</span></button>
+              </div>
+              <div class="ed-group__label">字体</div>
+            </div>
+            <div class="ed-group">
+              <div class="ed-group__row">
+                <button class="ed-cmd"><span class="ed-glyph">≔</span></button><button class="ed-cmd"><span class="ed-glyph">⋮≡</span></button>
+                <button class="ed-cmd"><span class="ed-glyph">☰</span></button><button class="ed-cmd"><span class="ed-glyph">↕</span></button>
+              </div>
+              <div class="ed-group__label">段落</div>
+            </div>
+            <div class="ed-group">
+              <div class="ed-group__row">
+                <button class="ed-cmd ed-cmd--tall"><span class="ed-glyph">¶</span>正文</button>
+                <button class="ed-cmd ed-cmd--tall"><span class="ed-glyph">H1</span>标题 1</button>
+                <button class="ed-cmd ed-cmd--tall"><span class="ed-glyph">H2</span>标题 2</button>
+              </div>
+              <div class="ed-group__label">样式</div>
+            </div>
+            <div class="ed-group">
+              <div class="ed-group__row"><button class="ed-cmd ed-cmd--tall"><span class="ed-glyph">🔍</span>查找替换</button></div>
+              <div class="ed-group__label">编辑</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="ed-work">
+          <div class="ed-rail">
+            <div class="ed-thumb" aria-current="true"><span class="ed-thumb__no">1</span><div class="ed-thumb__frame ed-thumb__page"><div class="ed-thumb__title">石墨文档产品说明</div><div class="ed-thumb__line"></div><div class="ed-thumb__line"></div><div class="ed-thumb__line ed-thumb__line--short"></div><div class="ed-thumb__line"></div></div></div>
+            <div class="ed-thumb"><span class="ed-thumb__no">2</span><div class="ed-thumb__frame ed-thumb__page"><div class="ed-thumb__line"></div><div class="ed-thumb__line"></div><div class="ed-thumb__line ed-thumb__line--short"></div></div></div>
+            <div class="ed-thumb"><span class="ed-thumb__no">3</span><div class="ed-thumb__frame ed-thumb__page"><div class="ed-thumb__line"></div><div class="ed-thumb__line ed-thumb__line--short"></div></div></div>
+          </div>
+          <div class="ed-canvas">
+            <div class="ed-page">
+              <h1>石墨文档产品说明</h1>
+              <p class="ed-page__meta">修订于 2026-09-10 · 协作者 4 人</p>
+              <h2>一、产品定位</h2>
+              <p>石墨文档的价值不止是在线编辑，而是把<mark>协作、管理与知识沉淀</mark>连接起来。团队不再互相传文件，而是在同一份内容上共同完成工作。</p>
+              <h2>二、能力范围</h2>
+              <p>覆盖文档、表格、幻灯片、表单、团队空间等 9 大产品套件，并通过权限体系与系统集成接入企业既有流程。</p>
+              <p>多人实时协作与版本回溯让每一次修改都可追溯，减少沟通损耗与信息错位。</p>
+              <h2>三、适用团队</h2>
+              <p>适合需要跨部门共创、统一资料口径并沉淀知识的职场组织。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── XLSX ── -->
+      <section class="wb-stage__variant" data-stage="xlsx">
+        <div class="ed-ribbon">
+          <div class="ed-tabs" role="tablist">
+            <button role="tab" aria-selected="true">开始</button>
+            <button role="tab" aria-selected="false">插入</button>
+            <button role="tab" aria-selected="false">公式</button>
+            <button role="tab" aria-selected="false">数据</button>
+            <button role="tab" aria-selected="false">审阅</button>
+            <button role="tab" aria-selected="false">视图</button>
+          </div>
+          <div class="ed-groups">
+            <div class="ed-group">
+              <div class="ed-group__row"><button class="ed-cmd ed-cmd--tall"><span class="ed-glyph">📋</span>粘贴</button></div>
+              <div class="ed-group__label">剪贴板</div>
+            </div>
+            <div class="ed-group">
+              <div class="ed-group__row">
+                <span class="ed-field">Inter</span><span class="ed-field ed-field--sm">11</span>
+                <button class="ed-cmd"><b>B</b></button><button class="ed-cmd"><i>I</i></button>
+              </div>
+              <div class="ed-group__label">字体</div>
+            </div>
+            <div class="ed-group">
+              <div class="ed-group__row">
+                <button class="ed-cmd"><span class="ed-glyph">¥</span></button><button class="ed-cmd"><span class="ed-glyph">%</span></button>
+                <button class="ed-cmd"><span class="ed-glyph">.00</span></button>
+              </div>
+              <div class="ed-group__label">数字</div>
+            </div>
+            <div class="ed-group">
+              <div class="ed-group__row">
+                <button class="ed-cmd ed-cmd--tall"><span class="ed-glyph">⊞</span>条件格式</button>
+                <button class="ed-cmd ed-cmd--tall"><span class="ed-glyph">📊</span>图表</button>
+                <button class="ed-cmd ed-cmd--tall"><span class="ed-glyph">Σ</span>求和</button>
+              </div>
+              <div class="ed-group__label">分析</div>
+            </div>
+            <div class="ed-group">
+              <div class="ed-group__row"><button class="ed-cmd ed-cmd--tall"><span class="ed-glyph">⇅</span>排序筛选</button></div>
+              <div class="ed-group__label">编辑</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="ed-formula">
+          <span class="ed-formula__ref">C4</span>
+          <span class="ed-formula__fx">fx</span>
+          <span class="ed-formula__input">=SUM(C2:C3)*1.06</span>
+        </div>
+
+        <div class="ed-work ed-work--norail">
+          <div class="ed-gridwrap">
+            <table class="ed-grid">
+              <thead><tr><th></th><th>A</th><th>B</th><th>C</th><th>D</th><th>E</th></tr></thead>
+              <tbody>
+                <tr><th>1</th><td>产品线</td><td>负责团队</td><td class="num">Q3 营收</td><td class="num">环比</td><td>状态</td></tr>
+                <tr><th>2</th><td>文档</td><td>协作组</td><td class="num">4,820</td><td class="num">+12%</td><td>达成</td></tr>
+                <tr><th>3</th><td>表格</td><td>数据组</td><td class="num">3,140</td><td class="num">+7%</td><td>达成</td></tr>
+                <tr><th>4</th><td>幻灯片</td><td>演示组</td><td class="num sel">8,439</td><td class="num">+21%</td><td>超额</td></tr>
+                <tr><th>5</th><td>表单</td><td>增长组</td><td class="num">1,260</td><td class="num">−3%</td><td>关注</td></tr>
+                <tr><th>6</th><td>团队空间</td><td>平台组</td><td class="num">2,905</td><td class="num">+9%</td><td>达成</td></tr>
+                <tr><th>7</th><td></td><td></td><td class="num"></td><td class="num"></td><td></td></tr>
+                <tr><th>8</th><td></td><td></td><td class="num"></td><td class="num"></td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="ed-sheettabs">
+          <button class="ed-sheettab" aria-selected="true">Q3 汇总</button>
+          <button class="ed-sheettab" aria-selected="false">明细</button>
+          <button class="ed-sheettab" aria-selected="false">口径说明</button>
+          <button class="ed-sheettab" aria-selected="false">＋</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- AI 侧栏（宿主，三件套同一个外壳） -->
+    <aside class="wb-panel" aria-label="AI 编辑">
+      <span class="wb-note wb-note--host">host · agent panel</span>
+
+      <div class="wb-panel__header">
+        <div class="wb-panel__titlerow">
+          <span class="wb-panel__title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 16l.9 2.1L22 19l-2.1.9L19 22l-.9-2.1L16 19l2.1-.9z"/></svg>
+            用 AI 编辑
+          </span>
+          <button class="wb-iconbtn" title="刷新选区"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg></button>
+          <button class="wb-iconbtn" title="收起"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+        </div>
+        <div class="wb-panel__target" id="panelTarget">改动将保存到 石墨文档：让团队协作从"传文件"…pptx</div>
+        <span class="wb-panel__scope" id="panelScope">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          已选中第 2 页
+        </span>
+      </div>
+
+      <div class="wb-panel__transcript">
+        <div class="wb-msg">
+          <span class="wb-msg__avatar">你</span>
+          <div class="wb-msg__body">
+            <span class="wb-msg__author">你</span>
+            <div class="wb-msg__text" id="msgUser">把这一页的四个小标题改成更口语的说法，正文保持不动。</div>
+          </div>
+        </div>
+        <div class="wb-msg wb-msg--ai">
+          <span class="wb-msg__avatar">AI</span>
+          <div class="wb-msg__body">
+            <span class="wb-msg__author">OfficeDex</span>
+            <div class="wb-msg__text" id="msgAi">已改写四个小标题，正文与版式没有动。</div>
+            <div class="wb-msg__card" id="msgCard">
+              <strong>本次改动</strong>
+              <ul>
+                <li>它从哪里来 → 它是怎么来的</li>
+                <li>它能做什么 → 它到底能干什么</li>
+                <li>它如何提升效率 → 它怎么帮团队省时间</li>
+                <li>它适合哪些团队 → 谁最该用它</li>
+              </ul>
+            </div>
+            <div class="wb-msg__actions">
+              <span class="wb-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>已自动保存</span>
+              <span class="wb-chip">撤销</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="wb-panel__composer">
+        <div class="wb-composer">
+          <textarea placeholder="描述你想要的改动，例如「把第 3 页的标题加粗」…" rows="2"></textarea>
+          <div class="wb-composer__row">
+            <span class="wb-composer__hint">⏎ 发送 · ⇧⏎ 换行</span>
+            <button class="wb-send" title="发送"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ═══ 3. 状态栏（宿主） ═══ -->
+  <footer class="wb-statusbar">
+    <span class="wb-note wb-note--host">host · statusbar</span>
+    <span class="wb-status__item" id="statusPrimary">第 2 页 / 共 7 页</span>
+    <span class="wb-status__item" id="statusSecondary">中文（中国）</span>
+    <span class="spacer"></span>
+    <span class="wb-status__item" id="statusExtra">备注</span>
+    <div class="wb-zoom">
+      <button class="wb-iconbtn" title="缩小"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+      <input type="range" min="30" max="200" value="90" id="zoom" aria-label="缩放" />
+      <button class="wb-iconbtn" title="放大"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+      <span class="wb-zoom__pct" id="zoomPct">90%</span>
+    </div>
+  </footer>
+</div>
+
+<script>
+const wb = document.getElementById('wb');
+
+const PRESETS = {
+  pptx: {
+    badge: 'PPT',
+    name: '石墨文档：让团队协作从"传文件"变成"共同完成".pptx',
+    target: '改动将保存到 石墨文档：让团队协作从"传文件"…pptx',
+    scope: '已选中第 2 页',
+    primary: '第 2 页 / 共 7 页',
+    secondary: '中文（中国）',
+    extra: '备注',
+    user: '把这一页的四个小标题改成更口语的说法，正文保持不动。',
+    ai: '已改写四个小标题，正文与版式没有动。',
+    card: ['它从哪里来 → 它是怎么来的', '它能做什么 → 它到底能干什么', '它如何提升效率 → 它怎么帮团队省时间', '它适合哪些团队 → 谁最该用它'],
+  },
+  docx: {
+    badge: 'DOC',
+    name: '石墨文档产品说明.docx',
+    target: '改动将保存到 石墨文档产品说明.docx',
+    scope: '已选中 1 段（二、能力范围）',
+    primary: '第 1 页 / 共 3 页',
+    secondary: '1,204 字',
+    extra: '修订 2 处',
+    user: '把"二、能力范围"这一节压缩到 80 字以内，语气再正式一点。',
+    ai: '已压缩为 76 字，保留了 9 大套件与权限体系两个要点。',
+    card: ['删除重复表述 1 处', '合并第 2、3 段', '"减少沟通损耗" → "降低协同成本"'],
+  },
+  xlsx: {
+    badge: 'XLS',
+    name: 'Q3 产品线营收.xlsx',
+    target: '改动将保存到 Q3 产品线营收.xlsx',
+    scope: '已选中 C4（Q3 汇总）',
+    primary: '就绪',
+    secondary: '求和 20,564 · 平均 3,427',
+    extra: '3 个工作表',
+    user: '给营收列加条件格式，环比为负的整行标出来。',
+    ai: '已对 C2:C6 应用色阶，并把环比为负的第 5 行标为关注色。',
+    card: ['C2:C6 色阶（低→高）', '第 5 行填充 提示色', '新增命名区域 Q3_营收'],
+  },
+};
+
+function apply(type) {
+  const p = PRESETS[type];
+  wb.dataset.type = type;
+  document.getElementById('docBadge').textContent = p.badge;
+  document.getElementById('docName').textContent = p.name;
+  document.getElementById('panelTarget').textContent = p.target;
+  document.getElementById('panelScope').lastChild.textContent = ' ' + p.scope;
+  document.getElementById('statusPrimary').textContent = p.primary;
+  document.getElementById('statusSecondary').textContent = p.secondary;
+  document.getElementById('statusExtra').textContent = p.extra;
+  document.getElementById('msgUser').textContent = p.user;
+  document.getElementById('msgAi').textContent = p.ai;
+  document.getElementById('msgCard').querySelector('ul').innerHTML =
+    p.card.map((line) => '<li>' + line + '</li>').join('');
+  document.querySelectorAll('.demo-seg button').forEach((btn) => {
+    btn.setAttribute('aria-pressed', String(btn.dataset.set === type));
+  });
+}
+
+document.querySelectorAll('.demo-seg button').forEach((btn) => {
+  btn.addEventListener('click', () => apply(btn.dataset.set));
+});
+
+document.getElementById('annotate').addEventListener('change', (event) => {
+  wb.dataset.annotate = String(event.target.checked);
+});
+
+function setPanel(open) {
+  wb.dataset.panel = open ? 'open' : 'closed';
+  document.getElementById('panelBtn').setAttribute('aria-pressed', String(open));
+  document.getElementById('paneltoggle').checked = open;
+}
+document.getElementById('paneltoggle').addEventListener('change', (e) => setPanel(e.target.checked));
+document.getElementById('panelBtn').addEventListener('click', () => setPanel(wb.dataset.panel === 'closed'));
+document.querySelector('.wb-panel__titlerow .wb-iconbtn:last-child').addEventListener('click', () => setPanel(false));
+
+const zoom = document.getElementById('zoom');
+zoom.addEventListener('input', () => { document.getElementById('zoomPct').textContent = zoom.value + '%'; });
+
+apply('pptx');
+</script>
+</body>
+</html>

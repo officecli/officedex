@@ -1295,4 +1295,40 @@ export const en: Record<string, string> = {
   "waiting2048.gameOver": "Game over",
   "waiting2048.won": "You won",
   "waiting2048.emptyCell": "Empty cell",
+
+  // Office workbench (shared chrome)
+  "workbench.back": "Back",
+  "workbench.closePreview": "Close preview",
+  "workbench.save": "Save",
+  "workbench.openExternal": "Open in System App",
+  "workbench.showPanel": "Show AI assistant",
+  "workbench.hidePanel": "Hide AI assistant",
+  "workbench.panelClose": "Close panel",
+  "workbench.state.unopened": "Not opened",
+  "workbench.state.saved": "Saved",
+  "workbench.state.dirty": "Unsaved changes",
+  "workbench.state.saving": "Saving…",
+  "workbench.state.error": "Save failed",
+  "workbench.zoomOut": "Zoom out",
+  "workbench.zoomIn": "Zoom in",
+  "workbench.zoom": "Zoom",
+  "workbench.status.pages": "Page {current} of {total}",
+  "workbench.status.slides": "Slide {current} of {total}",
+  "workbench.status.sheets": "{count} sheet(s)",
+  "workbench.status.ready": "Ready",
+
+  // XLSX preview
+  "xlsx.viewer.noWorkbook": "This workbook was opened without a file behind it, so it cannot be edited here.",
+
+  // DOCX assistant panel
+  "workbench.refreshScope": "Refresh selection",
+  "docx.agent.panelTitle": "Edit with AI",
+  "docx.agent.target": "Edits are saved to {file}",
+  "docx.agent.scopeWholeDocument": "No selection — edits apply to the whole document",
+  "docx.agent.scopeParagraphs": "Selected: {count} paragraph(s)",
+  "docx.agent.scopeText": "Selected: part of the document",
+  "docx.agent.pendingTitle": "Instruction editing is not connected yet",
+  "docx.agent.pendingBody": "The editor already offers the agent runtime read_selection, replace_text and save, and reports the caret above. The panel starts answering once a docx editing workflow calls them.",
+  "docx.agent.placeholder": "Describe the change to make…",
+  "docx.agent.send": "Send",
 };
