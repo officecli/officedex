@@ -1,4 +1,5 @@
 export const en: Record<string, string> = {
+  "pptx.stage.refreshMissing": "Task history is not available yet. Please try again.",
   // Home
   "home.eyebrow": "Good morning",
   "home.title": "What would you like to finish today?",

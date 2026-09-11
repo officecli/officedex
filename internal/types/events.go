@@ -6,6 +6,7 @@ package types
 // is a compile error and the cross-repo contract test has one place to read.
 const (
 	EventTaskStarted     = "task.started"
+	EventTaskTitle       = "task.title"
 	EventTaskProgress    = "task.progress"
 	EventTaskQuestion    = "task.question"
 	EventTaskPlan        = "task.plan"

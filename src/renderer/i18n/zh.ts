@@ -1,4 +1,5 @@
 export const zh: Record<string, string> = {
+  "pptx.stage.refreshMissing": "暂时未找到任务记录，请稍后重试。",
   // 首页
   "home.eyebrow": "早上好",
   "home.title": "今天想完成什么？",

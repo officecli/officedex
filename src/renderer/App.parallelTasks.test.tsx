@@ -155,8 +155,15 @@ describe("parallel task submissions", () => {
     const byId = new Map(mocks.documents.map((doc) => [doc.id, doc]));
     // Both runs survive as their own task, each keeping the prompt it was
     // submitted with. Adoption renamed A to B's prompt and deleted B outright.
-    expect(byId.get("real-a")?.title).toBe("deck about otters");
-    expect(byId.get("real-b")?.title).toBe("deck about penguins");
+    expect(byId.get("real-a")?.title).toBe("New slides");
+    expect(byId.get("real-b")?.title).toBe("New slides");
+    // Naming can finish out of order without touching either brief.
+    act(() => {
+      mocks.listener({ type: "task.title", task_id: "real-b", payload: { topic: "Penguin Life" } });
+      mocks.listener({ type: "task.title", task_id: "real-a", payload: { topic: "Otter Life" } });
+    });
+    expect(mocks.documents.find(doc => doc.id === "real-a")?.title).toBe("Otter Life");
+    expect(mocks.documents.find(doc => doc.id === "real-b")?.title).toBe("Penguin Life");
     // Two submissions are two conversations, not one merged lineage.
     expect(byId.get("real-a")?.conversationId).not.toBe(byId.get("real-b")?.conversationId);
   });
@@ -190,7 +197,7 @@ describe("parallel task submissions", () => {
 
     const titles = mocks.documents.map((doc) => doc.title);
     expect(mocks.documents.map((doc) => doc.id)).toContain("real-a");
-    expect(titles).toContain("deck about otters");
+    expect(titles).toContain("New slides");
     // The optimistic placeholder must not survive alongside the real task.
     expect(mocks.documents).toHaveLength(1);
   });

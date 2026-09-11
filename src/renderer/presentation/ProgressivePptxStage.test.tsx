@@ -1,13 +1,32 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DesktopTask } from "../../shared/types";
 import { LocaleProvider } from "../i18n";
+import { startLocalTask, promoteLocalTask } from "../taskState";
 import { ProgressivePptxStage } from "./ProgressivePptxStage";
 
 function task(overrides: Partial<DesktopTask> = {}): DesktopTask { return { id: "task-1", conversationId: "c-1", status: "starting", events: [], ...overrides }; }
 
 describe("ProgressivePptxStage", () => {
-  afterEach(cleanup);
+  afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
+  it("preserves animated DOM when the optimistic task receives its server ID", () => {
+    const input = { prompt: "Brand launch" };
+    const local = startLocalTask({ tasks: {}, taskOrder: [], artifacts: [] }, "local-test", input, { documentType: "pptx", topic: "New slides" });
+    const view = render(<ProgressivePptxStage task={local.tasks["local-test"]} />);
+    const brief = view.container.querySelector(".pptx-flow-request");
+    const lower = view.container.querySelector(".pptx-flow-lower");
+    const promoted = promoteLocalTask(local, "local-test", "server-test", input);
+    view.rerender(<ProgressivePptxStage task={promoted.tasks["server-test"]} />);
+    expect(view.container.querySelector(".pptx-flow-request")).toBe(brief);
+    expect(view.container.querySelector(".pptx-flow-lower")).toBe(lower);
+  });
+  it("describes recent activity with a relative time", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-11T08:00:19Z"));
+    render(<LocaleProvider value="en"><ProgressivePptxStage task={task({ status: "running", createdAt: "2026-09-11T08:00:00Z", events: [{ type: "task.progress", task_id: "task-1", ts: "2026-09-11T08:00:00Z", payload: { step: "research", content: "Researching the subject" } }] })} /></LocaleProvider>);
+    expect(screen.getByText("Last activity")).toHaveTextContent("19s ago");
+    expect(screen.queryByText("Since last update")).toBeNull();
+  });
   it("reveals an editable brief before any op arrives", () => {
     const onBriefChange = vi.fn();
     render(<ProgressivePptxStage task={task({ status: "question", topic: "运营汇报", userInput: { prompt: "制作一份 6 页运营汇报" } })} onBriefChange={onBriefChange} />);
@@ -91,10 +110,11 @@ describe("ProgressivePptxStage", () => {
     Object.defineProperty(content, "scrollHeight", { configurable: true, value: 1200 });
     Object.defineProperty(content, "clientHeight", { configurable: true, value: 480 });
     const scrollTo = vi.fn();
-    content.scrollTo = scrollTo;
+    const latest = container.querySelector<HTMLElement>(".pptx-flow-latest")!;
+    latest.scrollIntoView = scrollTo;
 
     rerender(<ProgressivePptxStage task={{ ...first, status: "plan_review" }} />);
-    await waitFor(() => expect(scrollTo).toHaveBeenCalledWith({ top: 1200, behavior: "smooth" }));
+    await waitFor(() => expect(scrollTo).toHaveBeenCalledWith({ block: "nearest", behavior: "smooth" }));
 
     rerender(<ProgressivePptxStage task={{ ...first, status: "plan_review" }} />);
     expect(scrollTo).toHaveBeenCalledTimes(1);
@@ -110,7 +130,8 @@ describe("ProgressivePptxStage", () => {
     if (!content) throw new Error("outline content scroller not found");
     Object.defineProperty(content, "scrollHeight", { configurable: true, value: 1200 });
     const scrollTo = vi.fn();
-    content.scrollTo = scrollTo;
+    const latest = container.querySelector<HTMLElement>(".pptx-flow-latest")!;
+    latest.scrollIntoView = scrollTo;
     await waitFor(() => expect(scrollTo).toHaveBeenCalledTimes(1));
 
     rerender(<ProgressivePptxStage task={{ ...first, vibeOutline: { slides: [
@@ -132,8 +153,9 @@ describe("ProgressivePptxStage", () => {
     if (!content) throw new Error("outline content scroller not found");
     Object.defineProperty(content, "scrollHeight", { configurable: true, value: 1200 });
     const scrollTo = vi.fn();
-    content.scrollTo = scrollTo;
-    await waitFor(() => expect(scrollTo).toHaveBeenCalledWith({ top: 1200, behavior: "smooth" }));
+    const latest = container.querySelector<HTMLElement>(".pptx-flow-latest")!;
+    latest.scrollIntoView = scrollTo;
+    await waitFor(() => expect(scrollTo).toHaveBeenCalledWith({ block: "nearest", behavior: "smooth" }));
   });
   it("stops following when the user scrolls up", async () => {
     const first = task({
@@ -146,7 +168,8 @@ describe("ProgressivePptxStage", () => {
     if (!content) throw new Error("outline content scroller not found");
     Object.defineProperty(content, "scrollHeight", { configurable: true, value: 1200 });
     const scrollTo = vi.fn();
-    content.scrollTo = scrollTo;
+    const latest = container.querySelector<HTMLElement>(".pptx-flow-latest")!;
+    latest.scrollIntoView = scrollTo;
     await waitFor(() => expect(scrollTo).toHaveBeenCalledTimes(1));
     fireEvent.wheel(content, { deltaY: -100 });
 
@@ -291,5 +314,104 @@ describe("ProgressivePptxStage", () => {
     expect(screen.getByTestId("op-stream")).toHaveTextContent("shape.add");
     expect(screen.getByTestId("op-stream")).toHaveTextContent(/第 1 页|Slide 1/);
     expect(screen.getByTestId("op-stream")).toHaveTextContent("#5");
+  });
+});
+
+describe("vertical PPT creation flow", () => {
+  afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
+  it("retains the outline while slides arrive without another outline snapshot", () => {
+    const first = task({ status: "plan_review", vibeOutline: { slides: [{ id: "s1", headline: "Launch story" }] } });
+    const { rerender } = render(<ProgressivePptxStage task={first} />);
+    rerender(<ProgressivePptxStage task={task({ status: "running", vibeSlides: [{ id: "s1", elements: [{ content: "<p>Launch story</p>" }] }] })} />);
+    expect(screen.getByRole("textbox", { name: "Section 1 title" })).toHaveValue("Launch story");
+    expect(screen.getByRole("textbox", { name: "Section 1 title" })).toHaveAttribute("readonly");
+    expect(screen.getByTestId("pptx-flow-page-1")).toHaveTextContent("Launch story");
+    expect(screen.queryByRole("navigation")).toBeNull();
+  });
+  it("stops current-stage animation on pause, failure and cancellation", () => {
+    const first = task({ status: "running", vibeOutline: { slides: [{ headline: "Story" }] } });
+    const { container, rerender } = render(<ProgressivePptxStage task={first} />);
+    expect(container.querySelectorAll(".pptx-flow-step.is-active")).toHaveLength(1);
+    for (const status of ["plan_review", "failed", "cancelled"] as const) {
+      rerender(<ProgressivePptxStage task={{ ...first, status }} />);
+      expect(container.querySelectorAll(".pptx-flow-step.is-active")).toHaveLength(0);
+    }
+  });
+  it("preserves failed slides and routes retry to the live task", () => {
+    const retry = vi.fn();
+    render(<ProgressivePptxStage task={task({ status: "failed", error: "Provider unavailable", vibeSlides: [{ id: "s1", elements: [] }] })} productionProps={{ onRetry: retry }} />);
+    expect(screen.getByTestId("pptx-flow-page-1")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("Provider unavailable");
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(retry).toHaveBeenCalledOnce();
+  });
+  it("uses plain text for streamed markup and never mounts runtime HTML", () => {
+    const { container } = render(<ProgressivePptxStage task={task({ status: "running", vibeSlides: [{ id: "s1", elements: [{ content: '<p>Safe title</p><img src="x" onerror="alert(1)">' }] }] })} />);
+    expect(screen.getByRole("heading", { name: "Safe title" })).toBeInTheDocument();
+    expect(container.querySelector(".pptx-flow-page img")).toBeNull();
+  });
+  it("keeps progress indeterminate if the runtime has not supplied a total", () => {
+    render(<ProgressivePptxStage task={task({ status: "running", vibeSlides: [{ id: "s1", elements: [] }] })} />);
+    expect(screen.queryByRole("progressbar")).toBeNull();
+  });
+  it("runs Debug from zero, can replay and never calls live actions", async () => {
+    vi.useFakeTimers();
+    const action = vi.fn();
+    const { container } = render(<ProgressivePptxStage task={task({ status: "plan_review", topic: "Live task", vibeOutline: { slides: [{ headline: "Live outline" }] } })} onContinue={action} onStartDrawing={action} productionProps={{ onCancel: action, onRetry: action }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Debug: replay from zero" }));
+    expect(container.querySelector('[data-demo="true"]')).toHaveAttribute("data-phase", "brief");
+    for (let step = 0; step < 17; step++) await act(async () => { await vi.advanceTimersByTimeAsync(step < 9 ? 650 : 1300); });
+    expect(container.querySelector('[data-demo="true"]')).toHaveAttribute("data-phase", "ready");
+    expect(container.querySelectorAll('[data-demo="true"] .pptx-flow-page')).toHaveLength(6);
+    expect(action).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Debug: replay from zero" }));
+    expect(container.querySelectorAll('[data-demo="true"] .pptx-flow-page')).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: "Return to live task" }));
+    expect(container.querySelector('[data-demo="true"]')).toBeNull();
+    expect(screen.getByRole("textbox", { name: "Section 1 title" })).toHaveValue("Live outline");
+    expect(action).not.toHaveBeenCalled();
+  });
+  it("cleans up the demo clock on unmount", () => {
+    vi.useFakeTimers();
+    const { unmount } = render(<ProgressivePptxStage task={task()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Debug: replay from zero" }));
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it("does not retain the previous task's story or demo when switching tasks", () => {
+    const { container, rerender } = render(<ProgressivePptxStage task={task({ vibeOutline: { slides: [{ headline: "Previous outline" }] } })} />);
+    fireEvent.click(screen.getByRole("button", { name: "Debug: replay from zero" }));
+    rerender(<ProgressivePptxStage task={task({ id: "new-task", topic: "New task" })} />);
+    expect(container.querySelector('[data-demo="true"]')).toBeNull();
+    expect(screen.queryByDisplayValue("Previous outline")).toBeNull();
+  });
+});
+
+describe("MOP runtime progress before slide previews", () => {
+  afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
+  it("shows image-provider progress rather than understanding the brief", () => {
+    render(<ProgressivePptxStage task={task({ status: "running", events: [{ type: "task.progress", ts: new Date().toISOString(), payload: { step: "assemble", content: "Still waiting on image provider (asset 2/2, elapsed 50s)", elapsed_ms: 50000 } }] })} />);
+    expect(screen.getByTestId("progressive-pptx-stage")).toHaveAttribute("data-phase", "drawing");
+    expect(screen.getByRole("heading", { name: "Creating presentation images" })).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Still waiting on image provider");
+    expect(screen.queryByRole("heading", { name: "Understanding your direction" })).toBeNull();
+    expect(screen.queryByTestId("pptx-flow-outline")).toBeNull();
+    expect(screen.queryByRole("progressbar")).toBeNull();
+  });
+  it("offers a read-only status refresh after a quiet period, and surfaces failure", async () => {
+    const refresh = vi.fn().mockRejectedValue(new Error("Bridge unavailable"));
+    render(<ProgressivePptxStage task={task({ status: "running", events: [{ type: "task.progress", ts: new Date(Date.now() - 130000).toISOString(), payload: { step: "assemble", content: "Generating image asset (1/2)" } }] })} onRefresh={refresh} />);
+    expect(screen.getByRole("status")).toHaveTextContent("No new progress for a while");
+    expect(screen.getByTestId("progressive-pptx-stage")).toHaveAttribute("data-delayed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Refresh status" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Bridge unavailable"));
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+  it("clears delayed feedback when a new provider heartbeat arrives", () => {
+    const first = task({ status: "running", events: [{ type: "task.progress" as const, ts: new Date(Date.now() - 130000).toISOString(), payload: { step: "assemble", content: "Generating image asset (1/2)" } }] });
+    const { rerender } = render(<ProgressivePptxStage task={first} />);
+    rerender(<ProgressivePptxStage task={{ ...first, events: [...first.events, { type: "task.progress", ts: new Date().toISOString(), payload: { step: "assemble", content: "Image asset ready" } }] }} />);
+    expect(screen.getByTestId("progressive-pptx-stage")).not.toHaveAttribute("data-delayed");
+    expect(screen.getByRole("status")).toHaveTextContent("Image asset ready");
   });
 });

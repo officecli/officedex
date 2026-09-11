@@ -184,6 +184,7 @@ export function supportsAttachment(type: DocumentType, slot: AttachmentSlot): bo
 
 /** Events the officecli bridge emits about a task (mirrors Go types.EventTask*). */
 export type TaskBridgeEventType =
+  | "task.title"
   | "task.started"
   | "task.progress"
   | "task.question"
@@ -553,6 +554,8 @@ export interface ImageTemplatePublishRequest {
 }
 
 export interface DesktopTask {
+  /** Stable renderer identity while an optimistic task receives its server ID. */
+  clientTaskId?: string;
   id: string;
   createdAt?: string;
   workspaceId?: string;

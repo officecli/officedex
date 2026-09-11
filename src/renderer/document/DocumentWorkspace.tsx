@@ -1,14 +1,17 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { Artifact, DesktopTask, TaskQuestionAnswer } from "../../shared/types";
 import { getCapability } from "../../shared/types";
 import { useT } from "../i18n";
 import { QuickReplyQuestion } from "../components/QuickReplyQuestion";
 import { ArrowUpOutlined } from "../ui/icons";
 import "./documentWorkspace.css";
+import { taskTitle } from "../taskTitle";
+import { playHomeEntryTransition, type HomeEntryTransition } from "../homeEntryTransition";
 
 export type DocumentWorkspaceArtifactAction = "open" | "copy" | "locate";
 
 export interface DocumentWorkspaceProps {
+  readonly entryTransition?: HomeEntryTransition;
   readonly task: DesktopTask;
   readonly artifact?: Artifact | null;
   /** Optional preview/editor supplied by a document-type adapter. */
@@ -28,7 +31,7 @@ export interface DocumentWorkspaceProps {
 type Translator = (key: string, vars?: Record<string, string | number>) => string;
 
 function documentTitle(task: DesktopTask, artifact: Artifact | null | undefined, t: Translator): string {
-  return artifact?.fileName || task.topic?.trim() || task.userInput?.prompt?.trim() || t("documentWorkspace.untitled");
+  return taskTitle(task, t("documentWorkspace.untitled"), artifact?.fileName);
 }
 
 // i18n key per document type; anything unknown reads as a document (docx),
@@ -47,8 +50,18 @@ function typeLabel(type: string | undefined, t: Translator): string {
   return t(TYPE_LABEL_KEYS[value] ?? TYPE_LABEL_KEYS.docx);
 }
 
-export function DocumentWorkspace({ task, artifact = task.artifact, preview, pptxStage, onAnswer, onApprovePlan, onCancel, onRetry, onContinue, onArtifactAction, onContinueEditing, className }: DocumentWorkspaceProps) {
+export function DocumentWorkspace({ task, artifact = task.artifact, preview, pptxStage, onAnswer, onApprovePlan, onCancel, onRetry, onContinue, onArtifactAction, onContinueEditing, className, entryTransition }: DocumentWorkspaceProps) {
   const t = useT();
+  const hostRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    let stop: (() => void) | undefined;
+    const host = hostRef.current;
+    if (host && entryTransition && !entryTransition.consumed) host.dataset.homeEntryTransition = "pending";
+    const frame = requestAnimationFrame(() => {
+      if (hostRef.current) stop = playHomeEntryTransition(hostRef.current, entryTransition);
+    });
+    return () => { cancelAnimationFrame(frame); stop?.(); if (host) delete host.dataset.homeEntryTransition; };
+  }, [entryTransition]);
   const [freeform, setFreeform] = useState("");
   const [busy, setBusy] = useState(false);
   const [selectedOptionId, setSelectedOptionId] = useState<string>();
@@ -71,7 +84,7 @@ export function DocumentWorkspace({ task, artifact = task.artifact, preview, ppt
   const visibleArtifact = artifact || task.artifact;
   const statusCopy = t(`documentWorkspace.status.${task.status}`);
 
-  return <main className={["document-workspace", showPptx ? "document-workspace--pptx" : "", className].filter(Boolean).join(" ")} aria-label="Document workspace">
+  return <main ref={hostRef} className={["document-workspace", showPptx ? "document-workspace--pptx" : "", className].filter(Boolean).join(" ")} aria-label="Document workspace">
     <header className="document-workspace__header">
       <div><span className="document-workspace__type">{typeLabel(task.documentType, t)}</span><h1>{documentTitle(task, visibleArtifact, t)}</h1></div>
       <span className={`document-workspace__status document-workspace__status--${task.status}`} role="status">{statusCopy}</span>

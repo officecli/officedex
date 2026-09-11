@@ -111,6 +111,8 @@ export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState 
   }
   const events = [...previous.events, event];
   const { stages, activeStageId } = reduceStages(events);
+  const namedEvent = [...events].reverse().find(item => item.type === "task.title");
+  const generatedTitle = namedEvent ? stringPayload(namedEvent, "topic") : undefined;
   const nextTask: DesktopTask = {
     ...previous,
     createdAt: previous.createdAt || event.ts,
@@ -120,7 +122,7 @@ export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState 
     conversationId: stringPayload(event, "conversation_id") || previous.conversationId,
     parentTaskId: stringPayload(event, "parent_task_id") || previous.parentTaskId,
     documentType: stringPayload(event, "document_type") || previous.documentType,
-    topic: stringPayload(event, "topic") || previous.topic,
+    topic: generatedTitle || stringPayload(event, "topic") || previous.topic,
     events,
     stages,
     activeStageId,
@@ -912,6 +914,7 @@ export function startLocalTask(
       message: "Task submitted",
     },
   } as BridgeEvent);
+  started.tasks[localTaskId].clientTaskId = localTaskId;
   return attachUserInput(started, localTaskId, input, parentTaskId, context);
 }
 
@@ -923,7 +926,20 @@ export function promoteLocalTask(
   parentTaskId?: string,
   context?: TaskContextPatch,
 ): TaskState {
-  return attachUserInput(deleteTask(state, localTaskId), taskId, input, parentTaskId, context);
+  const optimistic = state.tasks[localTaskId];
+  const promoted = attachUserInput(deleteTask(state, localTaskId), taskId, input, parentTaskId, context);
+  const actual = promoted.tasks[taskId];
+  if (!optimistic || !actual) return promoted;
+  // The invoke can resolve before task.started. Keep the provisional name and
+  // type until real metadata arrives, without overwriting an early LLM title.
+  return { ...promoted, tasks: { ...promoted.tasks, [taskId]: {
+    ...actual,
+    clientTaskId: optimistic.clientTaskId || localTaskId,
+    topic: actual.topic || optimistic.topic,
+    documentType: actual.documentType || optimistic.documentType,
+    createdAt: actual.createdAt || optimistic.createdAt,
+  } } };
+
 }
 
 export function discardLocalTask(state: TaskState, localTaskId: string): TaskState {

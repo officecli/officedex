@@ -799,3 +799,7 @@ html[data-window-chrome="overlay"] .project-sidebar { padding-top: 0; }
   .home-intake__types { grid-column: 1; grid-row: 2; width: 100%; }
   .home-intake__footer > .od-button--circular-submit { grid-column: 1; grid-row: 3; justify-self: end; }
 }
+
+/* A single shared element connects the submitted brief to its task. */
+.home-entry-morph { position: fixed; z-index: 1000; pointer-events: none; overflow: hidden; box-sizing: border-box; padding: 14px 18px; border: 1px solid; border-radius: 14px; transform-origin: top left; font-size: 14px !important; line-height: 1.7 !important; white-space: pre-wrap; overflow-wrap: anywhere; }
+.home-entry-morph__label { font-size: 12px; margin-bottom: 5px; opacity: .7; }

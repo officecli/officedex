@@ -28,6 +28,8 @@ import { HomeScreen } from "./screens/HomeScreen";
 import { buildReferenceTextPrompt } from "./referenceTextPrompt";
 import { inferHomeTaskRoute, type HomeTaskIntake } from "./homeIntake";
 import { DocumentWorkspace } from "./document";
+import { taskTitle } from "./taskTitle";
+import { captureHomeEntryTransition, type HomeEntryTransition } from "./homeEntryTransition";
 import { ProgressivePptxStage } from "./presentation/ProgressivePptxStage";
 import { SpreadsheetWorkspace, type SpreadsheetWorkspaceHandle } from "./spreadsheet/SpreadsheetWorkspace";
 import { SpreadsheetAgentPanel, type SpreadsheetAgentTool } from "./spreadsheet/SpreadsheetAgentPanel";
@@ -207,6 +209,7 @@ function OfficeDexApp() {
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
   const [productOutputs, setProductOutputs] = useState<OfficeOutputRef[]>([]);
   const [homeWorkspaceId, setHomeWorkspaceId] = useState<string>();
+  const [homeEntryTransition, setHomeEntryTransition] = useState<HomeEntryTransition>();
   const [selectedTaskID, setSelectedTaskID] = useState<SelectedTask>(() => initialRoute.taskId ? { kind: "task", id: initialRoute.taskId } : { kind: "auto" });
   const [activeNav, setActiveNav] = useState<NavKey>(initialRoute.nav);
   const loginReturnNavRef = useRef<NavKey>("home");
@@ -566,7 +569,7 @@ function OfficeDexApp() {
       const item: SidebarDocument = {
         id: task.id,
         createdAt: task.createdAt || task.events.map((event) => event.ts).find((ts): ts is string => Boolean(ts)),
-        title: task.artifact?.fileName || task.topic || task.userInput?.prompt || t("tasks.untitled"),
+        title: taskTitle(task, t("tasks.untitled")),
         documentType: documentTypeFromTask(task),
         filePath: task.artifact?.filePath,
         conversationId: task.conversationId,
@@ -625,7 +628,7 @@ function OfficeDexApp() {
       })
       .catch((error) => recordError(errorMessage(error), "other"));
   }, [recordError, refreshProjectLists, refreshRecentFiles, spreadsheet.openArtifact, spreadsheet.session.artifact?.filePath, spreadsheet.session.workspaceId, spreadsheetTask]);
-  async function submit(values: GenerateInput, options: { preserveWorkbookContext?: boolean } = {}) {
+  async function submit(values: GenerateInput, options: { preserveWorkbookContext?: boolean; fromHome?: boolean } = {}) {
     if (forceUpdate) {
       recordError("Update required before continuing", "setup");
       return;
@@ -633,6 +636,7 @@ function OfficeDexApp() {
     clearError();
     const topic = values.topic || summarizePrompt(values.prompt);
     const localTaskId = createLocalTaskId();
+    setHomeEntryTransition(options.fromHome && values.documentType === "pptx" ? captureHomeEntryTransition(values.prompt || "") : undefined);
     const submittedValues = normalizeGenerateInputForGeneration(values);
     const noProject = values.noProject === true || !values.workspaceId;
     const targetWorkspace = noProject ? undefined : workspaces.find((workspace) => workspace.id === values.workspaceId);
@@ -878,7 +882,7 @@ function OfficeDexApp() {
     await submit({
       documentType: route.documentType,
       generationMode: generationModeForDocumentType(route.documentType),
-      topic: summarizePrompt(input.prompt),
+      topic: route.documentType === "pptx" ? "New slides" : summarizePrompt(input.prompt),
       prompt: taskPrompt,
       sourceFile: route.sourceFile,
       ...((route.documentType === "img" || route.documentType === "gif") && input.referenceImages?.length ? { referenceImages: input.referenceImages } : {}),
@@ -887,7 +891,7 @@ function OfficeDexApp() {
       ...(homeWorkspaceId ? { workspaceId: homeWorkspaceId } : { noProject: true }),
       enableImages: persistedSettings.defaults.enableImages,
       imageQuality: persistedSettings.defaults.imageQuality,
-    });
+    }, { fromHome: true });
   }
 
   const selectHomeWorkspace = useCallback(async (workspaceId: string) => {
@@ -1753,11 +1757,18 @@ function OfficeDexApp() {
         ) : null}
         {activeNav === "document" && documentTask ? (
           <DocumentWorkspace
+            entryTransition={homeEntryTransition}
             task={documentTask}
             artifact={documentTask.artifact}
             pptxStage={documentTask.documentType === "pptx" ? (
               <ProgressivePptxStage
                 task={documentTask}
+                onRefresh={async () => {
+                  const entries = await officecli.getTaskHistory(50);
+                  const entry = entries.find(entry => entry.taskId === documentTask.id);
+                  if (!entry) throw new Error(t("pptx.stage.refreshMissing"));
+                  setState(current => entry.events.reduce(applyTaskEvent, current));
+                }}
                 draftReady={Boolean(previewGrant && previewArtifact?.taskId === documentTask.id)}
                 editor={previewGrant && previewArtifact?.taskId === documentTask.id ? {
                   previewToken: previewGrant.token,

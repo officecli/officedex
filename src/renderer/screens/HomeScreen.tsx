@@ -26,6 +26,7 @@ import { MaterialSymbol } from "../components/Shell";
 import { DocTypeIcon, docTypeFromPath } from "../components/DocTypeIcon";
 import { RuntimePrompts } from "../components/RuntimePrompts";
 import "../styles/home.css";
+import { taskTitle } from "../taskTitle";
 
 type HomeDocumentType = Extract<DocumentType, "pptx" | "img" | "docx" | "xlsx">;
 
@@ -398,7 +399,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
   };
 
   if (productionTask) {
-    const title = productionTask.topic || productionTask.userInput?.prompt || t("tasks.untitled");
+    const title = taskTitle(productionTask, t("tasks.untitled"));
     return (
       <section className="home-screen home-screen--production" aria-labelledby="home-production-title">
         <header className="home-production-header">

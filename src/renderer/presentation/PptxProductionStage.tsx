@@ -14,6 +14,8 @@ export type PptxProductionStageStatus =
 
 export interface PptxProductionStageProps {
   task: DesktopTask;
+  /** Controls-only presentation inside the vertical creation flow. */
+  compact?: boolean;
   onCancel?: () => void;
   onRetry?: () => void;
   onPause?: () => void;
@@ -78,7 +80,7 @@ function slideProgress(task: DesktopTask): { completed: number; total?: number; 
   return { completed, total, current: current === undefined ? undefined : current + (current === 0 ? 1 : 0) };
 }
 
-export function PptxProductionStage({ task, onCancel, onRetry, onPause, onResume, onOpenEditor, onSteer, onContinueFromNode }: PptxProductionStageProps) {
+export function PptxProductionStage({ task, compact = false, onCancel, onRetry, onPause, onResume, onOpenEditor, onSteer, onContinueFromNode }: PptxProductionStageProps) {
   const status = statusForTask(task);
   const images = imageProgressFromOps(task.vibeOps ?? []);
   const copy = images.pending > 0
@@ -90,8 +92,8 @@ export function PptxProductionStage({ task, onCancel, onRetry, onPause, onResume
   const error = task.error?.trim();
 
   return (
-    <section className={`pptx-production-stage pptx-production-stage--${status}`} data-testid="pptx-production-stage" aria-label="PPTX production stage">
-      <header className="pptx-production-stage__header">
+    <section className={`pptx-production-stage pptx-production-stage--${status} ${compact ? "pptx-production-stage--compact" : ""}`} data-testid="pptx-production-stage" aria-label="PPTX production stage">
+      {!compact ? <header className="pptx-production-stage__header">
         <div className="pptx-production-stage__heading">
           <span className="pptx-production-stage__eyebrow">PPTX production</span>
           <h2>{copy.label}</h2>
@@ -101,9 +103,9 @@ export function PptxProductionStage({ task, onCancel, onRetry, onPause, onResume
           {active ? <LoaderCircle className="pptx-production-stage__spin" size={16} aria-hidden="true" /> : status === "completed" ? <CheckCircle2 size={16} aria-hidden="true" /> : <CircleAlert size={16} aria-hidden="true" />}
           {copy.label}
         </span>
-      </header>
+      </header> : null}
 
-      <div className="pptx-production-stage__body">
+      {!compact ? <div className="pptx-production-stage__body">
         <div className="pptx-production-stage__canvas" data-testid="pptx-production-canvas">
           {progress.completed > 0 ? (
             <div className="pptx-production-stage__slides" aria-label="Generated slides">
@@ -123,7 +125,7 @@ export function PptxProductionStage({ task, onCancel, onRetry, onPause, onResume
           {progress.current ? <span>Drawing slide {progress.current}</span> : null}
           {images.total > 0 ? <span data-testid="pptx-image-progress">{images.placed} / {images.total} images ready{images.pending > 0 ? ` · ${images.pending} generating` : ""}</span> : null}
         </aside>
-      </div>
+      </div> : null}
 
       {error ? <div className="pptx-production-stage__error" role="alert">{error}</div> : null}
 
