@@ -1,0 +1,107 @@
+{
+  "id": "comparison-balanced-pair-29",
+  "family": "comparison",
+  "source": "sampleall/shape/对比1-2项/对比1-2项.pptx",
+  "page": 29,
+  "program": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__对比1-2项__对比1-2项/slides/slide-0029.mjs",
+  "verification": "artifacts/aippt/full-distillation/font-metrics-v3/source-0a0ee3dadc01f47d2f26/verification.json",
+  "observed_items": 2,
+  "mechanism": "balanced-pair",
+  "source_fact": "同一水平承托面上并排两个等大圆形，外部标签对应两个对象",
+  "transfer_hypothesis": "仅用于两对象在共享维度上的比较；保留对称同级关系，不以圆面积或承托面暗示没有依据的数值权重。",
+  "visual_review": "source_preview_inspected",
+  "state": "source_fact",
+  "ssim": 0.9766970313243213,
+  "exact_reference": false,
+  "program_sha256": "8a2466be862e13d8e37c021f25f340906318a324c6c1b7e02a0dc928840462f3",
+  "verification_sha256": "2c6346d111890b651534b7b576b4a4f33b704d3c43dff579929a8bb05a2f3cdd",
+  "preview": "sampleall/shape/对比1-2项/对比1-2项_PPTX_TO_PNG_WPS/幻灯片29.png",
+  "checks": {
+    "jssdk_executed": true,
+    "native_objects": {
+      "count": 6,
+      "types": [
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape"
+      ]
+    },
+    "text_overflow": 0,
+    "render_errors": 0,
+    "pptx_export": "passed",
+    "strict_reimport": "passed",
+    "text_coverage_version": 2,
+    "text_measurement": "font_metrics"
+  },
+  "canvas_pt": [
+    960.0,
+    540.0
+  ],
+  "objects": [
+    {
+      "id": "s3",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.25278,
+        "top": 0.38376,
+        "width": 0.11693,
+        "height": 0.09424
+      },
+      "text_characters": 5,
+      "font_pt": [
+        18.0
+      ],
+      "colors": [
+        "#000000"
+      ]
+    },
+    {
+      "id": "s5",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.60434,
+        "top": 0.38376,
+        "width": 0.11693,
+        "height": 0.09424
+      },
+      "text_characters": 5,
+      "font_pt": [
+        18.0
+      ],
+      "colors": [
+        "#000000"
+      ]
+    },
+    {
+      "id": "s6",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.1462,
+        "top": 0.08009,
+        "width": 0.70918,
+        "height": 0.10387
+      },
+      "text_characters": 17,
+      "font_pt": [
+        28.0
+      ],
+      "colors": [
+        "#79614B"
+      ]
+    }
+  ],
+  "extraction_scope": "literal object geometry; group transforms and custom paths require source inspection",
+  "source_admission": "high_similarity_verified",
+  "revalidation": {
+    "state": "source_verified",
+    "reasons": [],
+    "complete_group_text_coverage_required": true,
+    "font_metrics_required": true
+  }
+}

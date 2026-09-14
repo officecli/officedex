@@ -1,0 +1,859 @@
+{
+  "id": "parallel-ribbon-ticket-grid-73",
+  "family": "parallel",
+  "source": "samplev2/并列4项1.pptx",
+  "page": 73,
+  "program": "samplev2/jssdk/并列4项1/compilations/v085/slides/slide-0073.mjs",
+  "verification": "artifacts/aippt/full-distillation/font-metrics-v3/source-a3bbf99e0ad3f4db79ac/verification.json",
+  "observed_items": 4,
+  "mechanism": "ribbon-ticket-grid",
+  "source_fact": "两行两列票签面板，锯齿上沿与左侧黄色编号旗相叠",
+  "transfer_hypothesis": "保留锯齿上沿、旗形侧签和小圆编号；四项保持等权，文字不能覆盖旗形附件。",
+  "visual_review": "source_preview_inspected",
+  "review_artifact": "artifacts/aippt/full-distillation/new-verified-contact.png",
+  "state": "source_fact",
+  "ssim": 0.9808342371739548,
+  "exact_reference": false,
+  "program_sha256": "0a01e0c8b1cb9f59153f5b0a1f3b0090e6e8e73e25b7466ec648e674e975f291",
+  "verification_sha256": "9a59c35f920fb5a5109262afe6b126da4cd91dac782517efc36a087b2d629bed",
+  "preview": "/Users/agent/askuy/code/vibeofficing/samplev2/并列4项1/幻灯片73.png",
+  "checks": {
+    "jssdk_executed": true,
+    "native_objects": {
+      "count": 5,
+      "types": [
+        "shape",
+        "group",
+        "group",
+        "group",
+        "group"
+      ]
+    },
+    "text_overflow": 0,
+    "render_errors": 0,
+    "pptx_export": "passed",
+    "strict_reimport": "passed",
+    "text_coverage_version": 2,
+    "text_measurement": "font_metrics"
+  },
+  "canvas_pt": [
+    960.0,
+    540.0
+  ],
+  "objects": [
+    {
+      "id": "s1",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.293763,
+        "top": 0.0983,
+        "width": 0.412474,
+        "height": 0.112323
+      },
+      "slide_bounds_pt": {
+        "left": 282.0122834645669,
+        "top": 53.08212598425197,
+        "width": 395.97543307086613,
+        "height": 60.654409448818896
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        24.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s2",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "g2",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.128037,
+        "top": 0.706854,
+        "width": 0.128213,
+        "height": 0.133886
+      },
+      "slide_bounds_pt": {
+        "left": 197.49840840539662,
+        "top": 169.9943307086614,
+        "width": 214.0074971064144,
+        "height": 125.7059842519685
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        18.0
+      ],
+      "geometry_sha256": "dedb10f6528b5e90f1e3e6bc32d600a5cba0ae0ce68d805206debb66619971b1"
+    },
+    {
+      "id": "s3",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "g1",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.0625,
+        "top": 0.255556,
+        "width": 0.082639,
+        "height": 0.079012
+      },
+      "slide_bounds_pt": null,
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "9fabd744c927973b7f528b3243c1c15a4a7354ca7d2c763bd15bd6997a2167ad"
+    },
+    {
+      "id": "s4",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "parent": "g1",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.069965,
+        "top": 0.263272,
+        "width": 0.035764,
+        "height": 0.06358
+      },
+      "slide_bounds_pt": null,
+      "has_text_slot": true,
+      "font_pt": [
+        12.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s5",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "g4",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.128037,
+        "top": 0.706854,
+        "width": 0.128213,
+        "height": 0.133886
+      },
+      "slide_bounds_pt": {
+        "left": 619.6353375392548,
+        "top": 169.9943307086614,
+        "width": 214.0074971064144,
+        "height": 125.7059842519685
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        18.0
+      ],
+      "geometry_sha256": "dedb10f6528b5e90f1e3e6bc32d600a5cba0ae0ce68d805206debb66619971b1"
+    },
+    {
+      "id": "s6",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "g3",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.0625,
+        "top": 0.255556,
+        "width": 0.082639,
+        "height": 0.079012
+      },
+      "slide_bounds_pt": null,
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "9fabd744c927973b7f528b3243c1c15a4a7354ca7d2c763bd15bd6997a2167ad"
+    },
+    {
+      "id": "s7",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "parent": "g3",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.069965,
+        "top": 0.263272,
+        "width": 0.035764,
+        "height": 0.06358
+      },
+      "slide_bounds_pt": null,
+      "has_text_slot": true,
+      "font_pt": [
+        12.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s8",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "g6",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.128037,
+        "top": 0.706854,
+        "width": 0.128213,
+        "height": 0.133886
+      },
+      "slide_bounds_pt": {
+        "left": 197.49840840539662,
+        "top": 335.29425196850394,
+        "width": 214.0074971064144,
+        "height": 125.7059842519685
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        18.0
+      ],
+      "geometry_sha256": "dedb10f6528b5e90f1e3e6bc32d600a5cba0ae0ce68d805206debb66619971b1"
+    },
+    {
+      "id": "s9",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "g5",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.0625,
+        "top": 0.255556,
+        "width": 0.082639,
+        "height": 0.079012
+      },
+      "slide_bounds_pt": null,
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "9fabd744c927973b7f528b3243c1c15a4a7354ca7d2c763bd15bd6997a2167ad"
+    },
+    {
+      "id": "s10",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "parent": "g5",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.069965,
+        "top": 0.263272,
+        "width": 0.035764,
+        "height": 0.06358
+      },
+      "slide_bounds_pt": null,
+      "has_text_slot": true,
+      "font_pt": [
+        12.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s11",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "g8",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.128037,
+        "top": 0.706854,
+        "width": 0.128213,
+        "height": 0.133886
+      },
+      "slide_bounds_pt": {
+        "left": 619.6353375392548,
+        "top": 335.29425196850394,
+        "width": 214.0074971064144,
+        "height": 125.7059842519685
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        18.0
+      ],
+      "geometry_sha256": "dedb10f6528b5e90f1e3e6bc32d600a5cba0ae0ce68d805206debb66619971b1"
+    },
+    {
+      "id": "s12",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "g7",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.0625,
+        "top": 0.255556,
+        "width": 0.082639,
+        "height": 0.079012
+      },
+      "slide_bounds_pt": null,
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "9fabd744c927973b7f528b3243c1c15a4a7354ca7d2c763bd15bd6997a2167ad"
+    },
+    {
+      "id": "s13",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "parent": "g7",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.069965,
+        "top": 0.263272,
+        "width": 0.035764,
+        "height": 0.06358
+      },
+      "slide_bounds_pt": null,
+      "has_text_slot": true,
+      "font_pt": [
+        12.0
+      ],
+      "geometry_sha256": null
+    }
+  ],
+  "groups": [
+    {
+      "id": "g1",
+      "parent": "g2",
+      "api": "addGroup",
+      "kind": "Group",
+      "role": "native_group",
+      "members": [
+        "s3",
+        "s4"
+      ],
+      "bounds_pt": {
+        "left": 81.99968503937008,
+        "top": 390.6662992125984,
+        "width": 40.906535433070864,
+        "height": 22.00015748031496
+      },
+      "child_coordinates_pt": {
+        "left": 60,
+        "top": 138,
+        "width": 79.33338582677165,
+        "height": 42.66669291338582
+      },
+      "rotation": 0,
+      "flipped": true,
+      "bounds_fraction": {
+        "left": 0.085416,
+        "top": 0.723456,
+        "width": 0.042611,
+        "height": 0.040741
+      },
+      "slide_bounds_pt": {
+        "left": 126.3571653543307,
+        "top": 185.5816422059682,
+        "width": 71.12454049705735,
+        "height": 38.251848920288374
+      }
+    },
+    {
+      "id": "g2",
+      "parent": "slide",
+      "api": "addGroup",
+      "kind": "Group",
+      "role": "native_group",
+      "members": [
+        "s2",
+        "g1"
+      ],
+      "bounds_pt": {
+        "left": 126.3571653543307,
+        "top": 169.9943307086614,
+        "width": 285.1487401574803,
+        "height": 125.7059842519685
+      },
+      "child_coordinates_pt": {
+        "left": 81.99968503937008,
+        "top": 381.70141732283463,
+        "width": 164.0003149606299,
+        "height": 72.29850393700788
+      },
+      "rotation": 0,
+      "flipped": false,
+      "bounds_fraction": {
+        "left": 0.131622,
+        "top": 0.314804,
+        "width": 0.29703,
+        "height": 0.232789
+      },
+      "slide_bounds_pt": {
+        "left": 126.3571653543307,
+        "top": 169.9943307086614,
+        "width": 285.1487401574803,
+        "height": 125.7059842519685
+      }
+    },
+    {
+      "id": "g3",
+      "parent": "g4",
+      "api": "addGroup",
+      "kind": "Group",
+      "role": "native_group",
+      "members": [
+        "s6",
+        "s7"
+      ],
+      "bounds_pt": {
+        "left": 81.99968503937008,
+        "top": 390.6662992125984,
+        "width": 40.906535433070864,
+        "height": 22.00015748031496
+      },
+      "child_coordinates_pt": {
+        "left": 60,
+        "top": 138,
+        "width": 79.33338582677165,
+        "height": 42.66669291338582
+      },
+      "rotation": 0,
+      "flipped": true,
+      "bounds_fraction": {
+        "left": 0.085416,
+        "top": 0.723456,
+        "width": 0.042611,
+        "height": 0.040741
+      },
+      "slide_bounds_pt": {
+        "left": 548.4940944881889,
+        "top": 185.5816422059682,
+        "width": 71.12454049705735,
+        "height": 38.251848920288374
+      }
+    },
+    {
+      "id": "g4",
+      "parent": "slide",
+      "api": "addGroup",
+      "kind": "Group",
+      "role": "native_group",
+      "members": [
+        "s5",
+        "g3"
+      ],
+      "bounds_pt": {
+        "left": 548.4940944881889,
+        "top": 169.9943307086614,
+        "width": 285.1487401574803,
+        "height": 125.7059842519685
+      },
+      "child_coordinates_pt": {
+        "left": 81.99968503937008,
+        "top": 381.70141732283463,
+        "width": 164.0003149606299,
+        "height": 72.29850393700788
+      },
+      "rotation": 0,
+      "flipped": false,
+      "bounds_fraction": {
+        "left": 0.571348,
+        "top": 0.314804,
+        "width": 0.29703,
+        "height": 0.232789
+      },
+      "slide_bounds_pt": {
+        "left": 548.4940944881889,
+        "top": 169.9943307086614,
+        "width": 285.1487401574803,
+        "height": 125.7059842519685
+      }
+    },
+    {
+      "id": "g5",
+      "parent": "g6",
+      "api": "addGroup",
+      "kind": "Group",
+      "role": "native_group",
+      "members": [
+        "s9",
+        "s10"
+      ],
+      "bounds_pt": {
+        "left": 81.99968503937008,
+        "top": 390.6662992125984,
+        "width": 40.906535433070864,
+        "height": 22.00015748031496
+      },
+      "child_coordinates_pt": {
+        "left": 60,
+        "top": 138,
+        "width": 79.33338582677165,
+        "height": 42.66669291338582
+      },
+      "rotation": 0,
+      "flipped": true,
+      "bounds_fraction": {
+        "left": 0.085416,
+        "top": 0.723456,
+        "width": 0.042611,
+        "height": 0.040741
+      },
+      "slide_bounds_pt": {
+        "left": 126.3571653543307,
+        "top": 350.8815634658107,
+        "width": 71.12454049705735,
+        "height": 38.251848920288374
+      }
+    },
+    {
+      "id": "g6",
+      "parent": "slide",
+      "api": "addGroup",
+      "kind": "Group",
+      "role": "native_group",
+      "members": [
+        "s8",
+        "g5"
+      ],
+      "bounds_pt": {
+        "left": 126.3571653543307,
+        "top": 335.29425196850394,
+        "width": 285.1487401574803,
+        "height": 125.7059842519685
+      },
+      "child_coordinates_pt": {
+        "left": 81.99968503937008,
+        "top": 381.70141732283463,
+        "width": 164.0003149606299,
+        "height": 72.29850393700788
+      },
+      "rotation": 0,
+      "flipped": false,
+      "bounds_fraction": {
+        "left": 0.131622,
+        "top": 0.620915,
+        "width": 0.29703,
+        "height": 0.232789
+      },
+      "slide_bounds_pt": {
+        "left": 126.3571653543307,
+        "top": 335.29425196850394,
+        "width": 285.1487401574803,
+        "height": 125.7059842519685
+      }
+    },
+    {
+      "id": "g7",
+      "parent": "g8",
+      "api": "addGroup",
+      "kind": "Group",
+      "role": "native_group",
+      "members": [
+        "s12",
+        "s13"
+      ],
+      "bounds_pt": {
+        "left": 81.99968503937008,
+        "top": 390.6662992125984,
+        "width": 40.906535433070864,
+        "height": 22.00015748031496
+      },
+      "child_coordinates_pt": {
+        "left": 60,
+        "top": 138,
+        "width": 79.33338582677165,
+        "height": 42.66669291338582
+      },
+      "rotation": 0,
+      "flipped": true,
+      "bounds_fraction": {
+        "left": 0.085416,
+        "top": 0.723456,
+        "width": 0.042611,
+        "height": 0.040741
+      },
+      "slide_bounds_pt": {
+        "left": 548.4940944881889,
+        "top": 350.8815634658107,
+        "width": 71.12454049705735,
+        "height": 38.251848920288374
+      }
+    },
+    {
+      "id": "g8",
+      "parent": "slide",
+      "api": "addGroup",
+      "kind": "Group",
+      "role": "native_group",
+      "members": [
+        "s11",
+        "g7"
+      ],
+      "bounds_pt": {
+        "left": 548.4940944881889,
+        "top": 335.29425196850394,
+        "width": 285.1487401574803,
+        "height": 125.7059842519685
+      },
+      "child_coordinates_pt": {
+        "left": 81.99968503937008,
+        "top": 381.70141732283463,
+        "width": 164.0003149606299,
+        "height": 72.29850393700788
+      },
+      "rotation": 0,
+      "flipped": false,
+      "bounds_fraction": {
+        "left": 0.571348,
+        "top": 0.620915,
+        "width": 0.29703,
+        "height": 0.232789
+      },
+      "slide_bounds_pt": {
+        "left": 548.4940944881889,
+        "top": 335.29425196850394,
+        "width": 285.1487401574803,
+        "height": 125.7059842519685
+      }
+    }
+  ],
+  "structural_parameters": {
+    "components": [
+      {
+        "signature": "969dada4c3a5c48c6ab4a549505ad36639362e918b0c8548805925cb0219fc7f",
+        "observed_instances": [
+          "s1"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addTextBox",
+          "kind": "addTextBox",
+          "geometry": null,
+          "aspect": 6.528,
+          "text_slot": true
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "acbfbaa7bfd800f9b00b34dbea95fc279b64468374134263d4cb4090a64d7b9a",
+        "observed_instances": [
+          "g2",
+          "g4",
+          "g6",
+          "g8"
+        ],
+        "observed_count": 4,
+        "structure": {
+          "api": "addGroup",
+          "kind": "Group",
+          "geometry": null,
+          "aspect": 2.268,
+          "text_slot": false,
+          "children": [
+            {
+              "api": "addCustomGeometry",
+              "kind": "addCustomGeometry",
+              "geometry": "dedb10f6528b5e90f1e3e6bc32d600a5cba0ae0ce68d805206debb66619971b1",
+              "aspect": 1.702,
+              "text_slot": true,
+              "relative_box": {
+                "left": 0.2495,
+                "top": 0.0,
+                "width": 0.7505,
+                "height": 1.0
+              }
+            },
+            {
+              "api": "addGroup",
+              "kind": "Group",
+              "geometry": null,
+              "aspect": 1.859,
+              "text_slot": false,
+              "children": [
+                {
+                  "api": "addCustomGeometry",
+                  "kind": "addCustomGeometry",
+                  "geometry": "9fabd744c927973b7f528b3243c1c15a4a7354ca7d2c763bd15bd6997a2167ad",
+                  "aspect": 1.859,
+                  "text_slot": false,
+                  "relative_box": {
+                    "left": 0.0,
+                    "top": 0.0,
+                    "width": 1.0,
+                    "height": 1.0
+                  }
+                },
+                {
+                  "api": "addGeometricShape",
+                  "kind": "Ellipse",
+                  "geometry": null,
+                  "aspect": 1.0,
+                  "text_slot": true,
+                  "relative_box": {
+                    "left": 0.0903,
+                    "top": 0.0977,
+                    "width": 0.4328,
+                    "height": 0.8047
+                  }
+                }
+              ],
+              "relative_box": {
+                "left": 0.0,
+                "top": 0.124,
+                "width": 0.2494,
+                "height": 0.3043
+              }
+            }
+          ]
+        },
+        "repeat_axis": "two_dimensional",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      }
+    ],
+    "text_parameters": [
+      {
+        "object": "s1",
+        "container": "slide",
+        "source_text": "LOREM IPSUM DOLOR ",
+        "source_characters": 18,
+        "font_pt": [
+          24.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 381.57543307086615,
+          "height": 53.45440944881889
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s2",
+        "container": "g2",
+        "source_text": "LOREM",
+        "source_characters": 5,
+        "font_pt": [
+          18.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 108.68417322834645,
+          "height": 54.52527559055118
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s4",
+        "container": "g1",
+        "source_text": "A",
+        "source_characters": 1,
+        "font_pt": [
+          12.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 19.933307086614178,
+          "height": 27.133307086614174
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s5",
+        "container": "g4",
+        "source_text": "LOREM",
+        "source_characters": 5,
+        "font_pt": [
+          18.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 108.68417322834645,
+          "height": 54.52527559055118
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s7",
+        "container": "g3",
+        "source_text": "B",
+        "source_characters": 1,
+        "font_pt": [
+          12.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 19.933307086614178,
+          "height": 27.133307086614174
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s8",
+        "container": "g6",
+        "source_text": "LOREM",
+        "source_characters": 5,
+        "font_pt": [
+          18.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 108.68417322834645,
+          "height": 54.52527559055118
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s10",
+        "container": "g5",
+        "source_text": "C",
+        "source_characters": 1,
+        "font_pt": [
+          12.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 19.933307086614178,
+          "height": 27.133307086614174
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s11",
+        "container": "g8",
+        "source_text": "LOREM",
+        "source_characters": 5,
+        "font_pt": [
+          18.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 108.68417322834645,
+          "height": 54.52527559055118
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s13",
+        "container": "g7",
+        "source_text": "D",
+        "source_characters": 1,
+        "font_pt": [
+          12.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 19.933307086614178,
+          "height": 27.133307086614174
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      }
+    ],
+    "parameterization": {
+      "component_tree": "Keep each selected native component and its children together; resize through its group coordinate system.",
+      "repetition": "Solve positions from available region, component extents and gaps. Observed instance count is evidence, not permission to add/remove items.",
+      "text": "Bind complete user text to reviewed roles; recompute inner boxes and reject failed measurements. Preserve text-bearing geometric shapes.",
+      "style": "Map source colors to explicit theme roles and retain shape/fill/line relationships; preserve native paths via the verified source.",
+      "semantics": "Geometric equality does not imply semantic equivalence. Review relation, reading order and role bindings before admission."
+    }
+  },
+  "unseen_content_validation": "not_run",
+  "capacity_status": "observed_source_only",
+  "source_admission": "high_similarity_verified",
+  "revalidation": {
+    "state": "source_verified",
+    "reasons": [],
+    "complete_group_text_coverage_required": true,
+    "font_metrics_required": true
+  }
+}

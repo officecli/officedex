@@ -1,0 +1,13 @@
+{
+  "contract": "jssdk-progressive/v2",
+  "source_acceptance": {
+    "metric": "rawSsim",
+    "operator": ">",
+    "threshold": 0.95,
+    "classification": "high_similarity_verified",
+    "require_exact_reference": false
+  },
+  "require_program_and_verification_sha256": true,
+  "legacy_fallback": "forbidden",
+  "unverified_or_missing_variant": "block_generation"
+}

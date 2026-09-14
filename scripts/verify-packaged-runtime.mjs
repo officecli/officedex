@@ -24,6 +24,18 @@ import { fileURLToPath } from "node:url";
  */
 export const REQUIRED_RESOURCES = Object.freeze([
   Object.freeze({
+    kind: "directory", at: "skills/aippt-jssdk-animation", label: "Native animation PPT Skill",
+    contains: ["SKILL.md", "registry.json", "snapshot.json", "scripts/validate-animation.mjs"],
+    why: "Animation tasks require the matching Skill and native playback validator",
+  }),
+  Object.freeze({
+    kind: "directory",
+    at: "skills/aippt-jssdk-design",
+    label: "Verified JSSDK progressive Skill",
+    contains: ["SKILL.md", "policy.json", "registry.json", "snapshot.json", "availability.json"],
+    why: "PPT generation requires the portable progressive Skill with source programs and verification evidence",
+  }),
+  Object.freeze({
     kind: "directory",
     at: "writer-fonts",
     label: "Writer default-font closure",
@@ -130,7 +142,7 @@ async function inspect(at, entry) {
   const entries = new Set(await readdir(at));
   if (entries.size === 0) return `empty directory: ${at}`;
   for (const required of entry.contains ?? []) {
-    if (!entries.has(required)) return `missing ${required}/ inside ${at}`;
+    if (!(await exists(path.join(at, required)))) return `missing ${required}/ inside ${at}`;
   }
   return null;
 }

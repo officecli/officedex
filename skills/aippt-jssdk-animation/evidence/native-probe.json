@@ -1,0 +1,150 @@
+{
+  "contract": "jssdk-animation/v1",
+  "status": "passed",
+  "scope": "native API and recipe timing; static layout source selection is independently enforced",
+  "probeSha256": "4768e70c99c4fa95870417a674dbe42b198b58dcbeb49cd811043bc259f292d9",
+  "pptxSha256": "f12947da8a12a28a9540b68f7a416bf845a65a898f218b72689ff064de96d24d",
+  "report": {
+    "contract": "jssdk-animation/v1",
+    "status": "passed",
+    "durationMs": 10000,
+    "slides": [
+      {
+        "slideIndex": 1,
+        "firstFrame": 0,
+        "frameCount": 5,
+        "entries": [
+          {
+            "targetName": "content-0-0",
+            "effectKey": "Entrance_FadeIn",
+            "startMode": "withPrevious",
+            "delayMs": 300,
+            "durationMs": 600,
+            "repeat": 1,
+            "rewind": false,
+            "motionPath": null,
+            "motionAutoRotate": false,
+            "optionId": null
+          }
+        ]
+      },
+      {
+        "slideIndex": 2,
+        "firstFrame": 5,
+        "frameCount": 11,
+        "entries": [
+          {
+            "targetName": "content-1-0",
+            "effectKey": "Entrance_FadeIn",
+            "startMode": "withPrevious",
+            "delayMs": 300,
+            "durationMs": 450,
+            "repeat": 1,
+            "rewind": false,
+            "motionPath": null,
+            "motionAutoRotate": false,
+            "optionId": null
+          },
+          {
+            "targetName": "content-1-1",
+            "effectKey": "Entrance_FadeIn",
+            "startMode": "withPrevious",
+            "delayMs": 800,
+            "durationMs": 450,
+            "repeat": 1,
+            "rewind": false,
+            "motionPath": null,
+            "motionAutoRotate": false,
+            "optionId": null
+          },
+          {
+            "targetName": "content-1-2",
+            "effectKey": "Entrance_FadeIn",
+            "startMode": "withPrevious",
+            "delayMs": 1300,
+            "durationMs": 450,
+            "repeat": 1,
+            "rewind": false,
+            "motionPath": null,
+            "motionAutoRotate": false,
+            "optionId": null
+          }
+        ]
+      }
+    ],
+    "frameCount": 16,
+    "frames": [
+      {
+        "slideIndex": 1,
+        "timestampMs": 0
+      },
+      {
+        "slideIndex": 1,
+        "timestampMs": 299
+      },
+      {
+        "slideIndex": 1,
+        "timestampMs": 600
+      },
+      {
+        "slideIndex": 1,
+        "timestampMs": 930
+      },
+      {
+        "slideIndex": 1,
+        "timestampMs": 4999
+      },
+      {
+        "slideIndex": 2,
+        "timestampMs": 0
+      },
+      {
+        "slideIndex": 2,
+        "timestampMs": 299
+      },
+      {
+        "slideIndex": 2,
+        "timestampMs": 525
+      },
+      {
+        "slideIndex": 2,
+        "timestampMs": 780
+      },
+      {
+        "slideIndex": 2,
+        "timestampMs": 799
+      },
+      {
+        "slideIndex": 2,
+        "timestampMs": 1025
+      },
+      {
+        "slideIndex": 2,
+        "timestampMs": 1280
+      },
+      {
+        "slideIndex": 2,
+        "timestampMs": 1299
+      },
+      {
+        "slideIndex": 2,
+        "timestampMs": 1525
+      },
+      {
+        "slideIndex": 2,
+        "timestampMs": 1780
+      },
+      {
+        "slideIndex": 2,
+        "timestampMs": 4999
+      }
+    ],
+    "pptxExport": "passed",
+    "strictReimport": "passed",
+    "nativeTimingEquivalent": true,
+    "renderErrors": [],
+    "textOverflows": 0,
+    "officeDesktopVerified": false
+  },
+  "limits": "Project native playback only; PowerPoint desktop not yet tested"
+}

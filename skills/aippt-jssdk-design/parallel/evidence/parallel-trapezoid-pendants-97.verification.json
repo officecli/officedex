@@ -1,0 +1,255 @@
+{
+  "schemaVersion": 1,
+  "program": "/Users/agent/askuy/code/vibeofficing/samplev2/jssdk/并列4项1/compilations/v085/slides/slide-0097.mjs",
+  "reference": "/Users/agent/askuy/code/vibeofficing/samplev2/并列4项1/幻灯片97.png",
+  "creationEntrypoint": "independent JSSDK build(PowerPoint) from an empty presentation",
+  "host": "MopEditorPowerPointHost",
+  "slides": 1,
+  "nativeObjects": {
+    "count": 5,
+    "types": [
+      "shape",
+      "group",
+      "group",
+      "group",
+      "group"
+    ]
+  },
+  "render": {
+    "outputs": [
+      {
+        "index": 1,
+        "slideId": "slide-1",
+        "renderWidth": 1920,
+        "nativeTextElements": 13,
+        "nativeImages": 0,
+        "textLayout": [
+          {
+            "id": "slide-1-officejs-9dc6348c",
+            "content": "LOREM IPSUM DOLOR",
+            "box": {
+              "left": 533.2204724409448,
+              "top": 214.07826771653544,
+              "right": 1356.2166929133857,
+              "bottom": 334.6014173228346
+            },
+            "text": {
+              "left": 684.86962890625,
+              "top": 249.2598419189453,
+              "right": 1204.57275390625,
+              "bottom": 316.2598571777344
+            },
+            "overflow": false
+          },
+          {
+            "id": "slide-1-officejs-4a98b492",
+            "content": "A",
+            "box": {
+              "left": 238.58499762780224,
+              "top": 728.0081562531956,
+              "right": 325.7627189076308,
+              "bottom": 836.1289763779528
+            },
+            "text": {
+              "left": 266.0931396484375,
+              "top": 756.3485717773438,
+              "right": 298.2493896484375,
+              "bottom": 809.3485717773438
+            },
+            "overflow": false
+          },
+          {
+            "id": "slide-1-officejs-8b450c77",
+            "content": "Lorem ipsum dolor sit amet",
+            "box": {
+              "left": 70.60094488188976,
+              "top": 503.11685039370076,
+              "right": 493.7467716535433,
+              "bottom": 693.8352420085641
+            },
+            "text": {
+              "left": 128.10745239257812,
+              "top": 554.5853271484375,
+              "right": 436.2480773925781,
+              "bottom": 660.3853759765625
+            },
+            "overflow": false
+          },
+          {
+            "id": "slide-1-officejs-3c352c83",
+            "content": "B",
+            "box": {
+              "left": 690.4692495963061,
+              "top": 728.0081562531956,
+              "right": 777.6469708761347,
+              "bottom": 836.1289763779528
+            },
+            "text": {
+              "left": 718.047607421875,
+              "top": 756.3485717773438,
+              "right": 750.0632934570312,
+              "bottom": 809.3485717773438
+            },
+            "overflow": false
+          },
+          {
+            "id": "slide-1-officejs-9a85e6e2",
+            "content": "Lorem ipsum dolor sit amet",
+            "box": {
+              "left": 522.4851968503935,
+              "top": 503.11685039370076,
+              "right": 945.6310236220472,
+              "bottom": 693.8352420085641
+            },
+            "text": {
+              "left": 579.99169921875,
+              "top": 554.5853271484375,
+              "right": 888.1322631835938,
+              "bottom": 660.3853759765625
+            },
+            "overflow": false
+          },
+          {
+            "id": "slide-1-officejs-4b6d5328",
+            "content": "C",
+            "box": {
+              "left": 1142.3535015648101,
+              "top": 728.0081562531956,
+              "right": 1229.5312228446387,
+              "bottom": 836.1289763779528
+            },
+            "text": {
+              "left": 1168.6090087890625,
+              "top": 756.3485717773438,
+              "right": 1203.2808837890625,
+              "bottom": 809.3485717773438
+            },
+            "overflow": false
+          },
+          {
+            "id": "slide-1-officejs-8dbc5499",
+            "content": "Lorem ipsum dolor sit amet",
+            "box": {
+              "left": 974.3694488188976,
+              "top": 503.11685039370076,
+              "right": 1397.515275590551,
+              "bottom": 693.8352420085641
+            },
+            "text": {
+              "left": 1031.8759765625,
+              "top": 554.5853271484375,
+              "right": 1340.0164794921875,
+              "bottom": 660.3853759765625
+            },
+            "overflow": false
+          },
+          {
+            "id": "slide-1-officejs-51242aa5",
+            "content": "D",
+            "box": {
+              "left": 1594.2374385726841,
+              "top": 728.0081562531956,
+              "right": 1681.415159852513,
+              "bottom": 836.1289763779528
+            },
+            "text": {
+              "left": 1620.4930419921875,
+              "top": 756.3485717773438,
+              "right": 1655.1649169921875,
+              "bottom": 809.3485717773438
+            },
+            "overflow": false
+          },
+          {
+            "id": "slide-1-officejs-a4a9d0d0",
+            "content": "Lorem ipsum dolor sit amet",
+            "box": {
+              "left": 1426.2533858267716,
+              "top": 503.11685039370076,
+              "right": 1849.399212598425,
+              "bottom": 693.8352420085641
+            },
+            "text": {
+              "left": 1483.7598876953125,
+              "top": 554.5853271484375,
+              "right": 1791.9005126953125,
+              "bottom": 660.3853759765625
+            },
+            "overflow": false
+          }
+        ],
+        "textLayoutCoverage": {
+          "version": 2,
+          "measurement": "font_metrics",
+          "coordinateSpace": "scene_world_axis_aligned_bounds",
+          "textBodies": 9,
+          "checked": 9,
+          "skipped": []
+        },
+        "directFontUsability": [
+          {
+            "family": "苹方-简",
+            "weight": 400,
+            "italic": false,
+            "usable": true
+          },
+          {
+            "family": "Arial",
+            "weight": 400,
+            "italic": false,
+            "usable": true
+          },
+          {
+            "family": "黑体",
+            "weight": 400,
+            "italic": false,
+            "usable": false
+          }
+        ],
+        "renderedFontStacks": [
+          "Arial, \"PingFang SC\", Arial, \"Microsoft YaHei\", \"WenQuanYi Micro Hei\"",
+          "苹方-简, \"PingFang SC\", Arial, \"Microsoft YaHei\", \"WenQuanYi Micro Hei\""
+        ],
+        "fonts": {
+          "Arial": true,
+          "微软雅黑": false
+        }
+      }
+    ],
+    "browser": "151.0.7922.34",
+    "errors": [],
+    "provenance": {
+      "wasmEntry": "/Users/agent/askuy/code/vibeofficing/presentation/packages/mop-wasm/mop_wasm.js",
+      "wasmJsSha256": "cfce6ddbd5f86c41a8900a32d34448a8fafa344ba4f6555001a49b0bf0be109c",
+      "wasmSha256": "8264153b300f773b87c4eb7482524cee3fa2da0114b614c8c323a589b9b36866",
+      "node": "v26.0.0",
+      "platform": "darwin",
+      "sdk": {
+        "index": "286355728778e6f57dc08c0abc319db624a2758f487187375d85cbfc2d099ef2",
+        "objects": "1cc9d25b5a6094c07ab7514e1e6a2fcd1f088e39362b4979e36a210afc3a248d",
+        "text-format": "30b04222f824006896be65c187606d846807e14fdc2a2a92a7bdd5b3ef9eaa49",
+        "line-format": "fb67638f323015a566e92c35b8b350c58c12bfd79cf556cab642717958cbb521",
+        "fill-format": "c67966b24f3ce0c3e70b0496827d00749049a000741af3cd2a9a85a00352bdfd",
+        "effect-format": "6e87e91c4d9c5b6dd1253832016ab15e83387fa5dd3217ec4bd1bb23787f6244",
+        "transform-format": "07f9d5e09a66b386540f125b3b41b50e94397206073983e1510b85f345581b3f",
+        "mop-editor-host": "70417d11bc085db8ace3ca611a8c75d7a83bda53965206976f960b8b6daa3ca4"
+      },
+      "layout": {
+        "pipeline": "cdb04a4672fd1dbfbac2067745ea837a3529e08abd487a34e86f4786a80dca4f",
+        "authoredAutofit": "68bfaa228a4ad984eaa4748802c3ce2f1d861d72824a2f9bf89ed3ba311bdfdb"
+      },
+      "nativeBrowserSha256": "d3110a3c1b8cb98c07b05592a36244cbfc243d154181a4b3ba8e673304f62092"
+    }
+  },
+  "textOverflow": [],
+  "comparison": {
+    "rawSsim": 0.9793927060577451,
+    "targetRawSsim": 0.999,
+    "passed": false,
+    "sizeMismatch": false
+  },
+  "pptxExport": "passed",
+  "strictReimport": "passed",
+  "exactSolution": false,
+  "note": "Page-level execution evidence. Exact acceptance still requires the configured visual, structural and Office checks."
+}

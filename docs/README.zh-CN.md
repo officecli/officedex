@@ -441,6 +441,9 @@ OfficeCLI runtime 也支持手动指定本地路径，无需联网下载。
 
 - [`../DESIGN.md`](../DESIGN.md) — 完整设计规范
 - [`../CLAUDE.md`](../CLAUDE.md) — 项目约定 & 协作准则
+- [`aippt-jssdk-design-method.md`](aippt-jssdk-design-method.md) — AI PPT 的模板 JSSDK 学习、自由构图与排版验收方法
+- [`aippt-jssdk-visual-gap-report.md`](aippt-jssdk-visual-gap-report.md) — 对照 Cheso 样例的视觉差距、根因与下一版路线图
+- [`aippt-chart-authoring-plan.md`](aippt-chart-authoring-plan.md) — 图表作者能力、JSSDK 接入与回归验收计划
 
 ---
 

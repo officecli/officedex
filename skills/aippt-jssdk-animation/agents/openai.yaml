@@ -1,0 +1,4 @@
+interface:
+  display_name: "动画 PPT"
+  short_description: "使用原生 JSSDK 创建可编辑动画 PPT 并验证播放"
+  default_prompt: "使用动画 PPT Skill 生成可编辑的演示文稿，验证原生动画与导出回导。"

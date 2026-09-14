@@ -1,0 +1,250 @@
+{
+  "id": "timeline-16-7",
+  "family": "timeline",
+  "source": "sampleall/shape/时间轴3项/时间轴3项.pptx",
+  "page": 16,
+  "program": "artifacts/aippt/full-distillation/source-repairs/timeline-vertical/repair-01.mjs",
+  "verification": "artifacts/aippt/full-distillation/source-repairs/timeline-vertical/verification-02/verification.json",
+  "observed_items": 3,
+  "mechanism": "vertical-axis",
+  "source_fact": "中心竖轴三个事件，年份和说明左右交错；日期、节点、说明形成对齐组。",
+  "transfer_hypothesis": "事件有真实年份；时间顺序按年份，不能按源码对象创建顺序读取。",
+  "visual_review": "source_preview_inspected",
+  "state": "source_fact",
+  "ssim": 0.9965577709216198,
+  "exact_reference": false,
+  "program_sha256": "1fbd83a01a19d2cacd8f7272b1112060b4f79ecb0f83af20d43bfc34c63bb372",
+  "verification_sha256": "90daf72180706206235de5a834efbe1c450be912b89d19afe43456a341cc5981",
+  "preview": "sampleall/shape/时间轴3项/时间轴3项/幻灯片16.png",
+  "checks": {
+    "jssdk_executed": true,
+    "native_objects": {
+      "count": 5,
+      "types": [
+        "connector",
+        "group",
+        "group",
+        "group",
+        "shape"
+      ]
+    },
+    "text_overflow": 0,
+    "render_errors": 0,
+    "pptx_export": "passed",
+    "strict_reimport": "passed",
+    "text_coverage_version": 2,
+    "text_measurement": "font_metrics"
+  },
+  "canvas_pt": [
+    960.0,
+    540.0
+  ],
+  "objects": [
+    {
+      "id": "s1",
+      "api": "addLine",
+      "kind": "Line",
+      "bounds_fraction": {
+        "left": 0.5,
+        "top": 0.23681,
+        "width": 0.0,
+        "height": 0.46296
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#09BCED"
+      ]
+    },
+    {
+      "id": "s2",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.36877,
+        "top": 0.23498,
+        "width": 0.01246,
+        "height": 0.02218
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#09BCED",
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s3",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.38678,
+        "top": 0.20664,
+        "width": 0.0808,
+        "height": 0.07886
+      },
+      "text_characters": 4,
+      "font_pt": [
+        18.0
+      ],
+      "colors": [
+        "#09BCED"
+      ]
+    },
+    {
+      "id": "s4",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.07187,
+        "top": 0.16157,
+        "width": 0.22884,
+        "height": 0.16898
+      },
+      "text_characters": 57,
+      "font_pt": [
+        18.0
+      ],
+      "colors": [
+        "#000000"
+      ]
+    },
+    {
+      "id": "s6",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.36877,
+        "top": 0.67862,
+        "width": 0.01246,
+        "height": 0.02215
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#09BCED",
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s7",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.38678,
+        "top": 0.65033,
+        "width": 0.0808,
+        "height": 0.07875
+      },
+      "text_characters": 4,
+      "font_pt": [
+        18.0
+      ],
+      "colors": [
+        "#09BCED"
+      ]
+    },
+    {
+      "id": "s8",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.07187,
+        "top": 0.60532,
+        "width": 0.22884,
+        "height": 0.16875
+      },
+      "text_characters": 57,
+      "font_pt": [
+        18.0
+      ],
+      "colors": [
+        "#000000"
+      ]
+    },
+    {
+      "id": "s10",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.36875,
+        "top": 0.45687,
+        "width": 0.01246,
+        "height": 0.02215
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#09BCED",
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s11",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.28047,
+        "top": 0.42857,
+        "width": 0.0808,
+        "height": 0.07875
+      },
+      "text_characters": 4,
+      "font_pt": [
+        18.0
+      ],
+      "colors": [
+        "#09BCED"
+      ]
+    },
+    {
+      "id": "s12",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.44447,
+        "top": 0.38356,
+        "width": 0.24303,
+        "height": 0.16875
+      },
+      "text_characters": 57,
+      "font_pt": [
+        18.0
+      ],
+      "colors": [
+        "#000000"
+      ]
+    },
+    {
+      "id": "s14",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.2526,
+        "top": 0.78681,
+        "width": 0.49479,
+        "height": 0.05833
+      },
+      "text_characters": 17,
+      "font_pt": [
+        20.0
+      ],
+      "colors": [
+        "#09BCED"
+      ]
+    }
+  ],
+  "extraction_scope": "literal object geometry; group transforms and custom paths require source inspection",
+  "source_admission": "high_similarity_verified",
+  "revalidation": {
+    "state": "source_verified",
+    "reasons": [],
+    "complete_group_text_coverage_required": true,
+    "font_metrics_required": true
+  },
+  "source_repair": {
+    "original_program": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__时间轴3项__时间轴3项/slides/slide-0016.mjs",
+    "original_program_sha256": "11f7c30ed1dd728ec74bb21a50288fd4c44334f879dcd961d99ed5015bfb4812",
+    "record": "artifacts/aippt/full-distillation/source-repairs/timeline-vertical/repair.json"
+  }
+}

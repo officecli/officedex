@@ -19,6 +19,16 @@ async function packageTree({ platform = "win32", omit = [] } = {}) {
   }
 
   const skip = new Set(omit);
+  if (!skip.has("skills")) {
+    const skill = path.join(resources, "skills/aippt-jssdk-design");
+    await mkdir(skill, {recursive: true});
+    for (const file of ["SKILL.md", "policy.json", "registry.json", "snapshot.json", "availability.json"]) await writeFile(path.join(skill, file), "{}");
+  }
+  if (!skip.has("animation-skill")) {
+    const skill=path.join(resources,"skills/aippt-jssdk-animation");
+    await mkdir(path.join(skill,"scripts"),{recursive:true});
+    for(const file of ["SKILL.md","registry.json","snapshot.json","scripts/validate-animation.mjs"]) await writeFile(path.join(skill,file),"{}");
+  }
   if (!skip.has("writer-fonts")) {
     await mkdir(path.join(resources, "writer-fonts", "prebuilt"), { recursive: true });
     await mkdir(path.join(resources, "writer-fonts", "files"), { recursive: true });
@@ -122,4 +132,11 @@ test("a directory with no package at all is an error, not a pass", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "pkg-empty-"));
   await assert.rejects(verifyPackagedRuntime(root), /no packaged application/);
   await rm(root, { recursive: true, force: true });
+});
+
+
+test("missing animation Skill fails packaged runtime validation", async()=>{
+  const {root,bin}=await packageTree({omit:["animation-skill"]});
+  try { await assert.rejects(verifyPackagedRuntime(bin,{platform:"win32"}), /Native animation PPT Skill/); }
+  finally {await rm(root,{recursive:true,force:true});}
 });

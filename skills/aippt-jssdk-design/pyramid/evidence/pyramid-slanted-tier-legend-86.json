@@ -1,0 +1,1762 @@
+{
+  "id": "pyramid-slanted-tier-legend-86",
+  "family": "pyramid",
+  "source": "sampleall/shape/并列4项2/并列4项2.pptx",
+  "page": 86,
+  "program": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__并列4项2__并列4项2/slides/slide-0086.mjs",
+  "verification": "artifacts/aippt/full-distillation/font-metrics-v3/source-aee7d4d6ca02ae965893/verification.json",
+  "observed_items": 4,
+  "mechanism": "slanted-tier-legend",
+  "source_fact": "右侧四层倾斜带组成逐层扩大的塔形，左侧四行解释对应各层",
+  "transfer_hypothesis": "仅用于明确的四层层级；保留塔形分层和左侧逐层说明，不根据带面积推断比例。",
+  "visual_review": "source_preview_inspected",
+  "review_artifact": "artifacts/aippt/full-distillation/new-verified-contact.png",
+  "state": "source_fact",
+  "ssim": 0.9711999755114327,
+  "exact_reference": false,
+  "program_sha256": "1ffaecfa77d995cac037a13cec0cbc9baa7e8bddd7d002ed3e72260279d8db49",
+  "verification_sha256": "bd786bef19fa8336cde4ad8bc9666f958584ab6a9050317bdca1c25ec818f6a9",
+  "preview": "/Users/agent/askuy/code/vibeofficing/sampleall/shape/并列4项2/并列4项2/幻灯片86.png",
+  "checks": {
+    "jssdk_executed": true,
+    "native_objects": {
+      "count": 40,
+      "types": [
+        "connector",
+        "connector",
+        "shape",
+        "connector",
+        "shape",
+        "connector",
+        "connector",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "connector",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape"
+      ]
+    },
+    "text_overflow": 0,
+    "render_errors": 0,
+    "pptx_export": "passed",
+    "strict_reimport": "passed",
+    "text_coverage_version": 2,
+    "text_measurement": "font_metrics"
+  },
+  "canvas_pt": [
+    960.0,
+    540.0
+  ],
+  "objects": [
+    {
+      "id": "s1",
+      "api": "addLine",
+      "kind": "Line",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.786328,
+        "top": 0.855324,
+        "width": 0.0,
+        "height": 0.0
+      },
+      "slide_bounds_pt": {
+        "left": 754.8750393700788,
+        "top": 461.87503937007875,
+        "width": 0,
+        "height": 0
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s2",
+      "api": "addLine",
+      "kind": "Line",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.781771,
+        "top": 0.755093,
+        "width": 0.0,
+        "height": 0.0
+      },
+      "slide_bounds_pt": {
+        "left": 750.5,
+        "top": 407.75,
+        "width": 0,
+        "height": 0
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s3",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.697526,
+        "top": 0.319907,
+        "width": 0.050651,
+        "height": 0.100926
+      },
+      "slide_bounds_pt": {
+        "left": 669.6250393700788,
+        "top": 172.75,
+        "width": 48.62496062992126,
+        "height": 54.5
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "040feeb15be55841977740b6326021f5f7fd8643675221aa70ca380494b22bcb"
+    },
+    {
+      "id": "s4",
+      "api": "addLine",
+      "kind": "Line",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.722917,
+        "top": 0.303009,
+        "width": 0.0,
+        "height": 0.0
+      },
+      "slide_bounds_pt": {
+        "left": 694,
+        "top": 163.62503937007875,
+        "width": 0,
+        "height": 0
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s5",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.722917,
+        "top": 0.215741,
+        "width": 0.276823,
+        "height": 0.322454
+      },
+      "slide_bounds_pt": {
+        "left": 694,
+        "top": 116.5,
+        "width": 265.75,
+        "height": 174.12503937007875
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "af587b3bafa360de6f4179638760199bb8c6ab967b40939cd4dc24d26524a3b7"
+    },
+    {
+      "id": "s6",
+      "api": "addLine",
+      "kind": "Line",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.750446,
+        "top": 0.411905,
+        "width": 0.002232,
+        "height": 0.000265
+      },
+      "slide_bounds_pt": {
+        "left": 720.4285826771653,
+        "top": 222.42858267716537,
+        "width": 2.1428346456692915,
+        "height": 0.14283464566929133
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s7",
+      "api": "addLine",
+      "kind": "Line",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.751563,
+        "top": 0.412037,
+        "width": 0.0,
+        "height": 0.0
+      },
+      "slide_bounds_pt": {
+        "left": 721.5,
+        "top": 222.5,
+        "width": 0,
+        "height": 0
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s8",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.668359,
+        "top": 0.412037,
+        "width": 0.054557,
+        "height": 0.126157
+      },
+      "slide_bounds_pt": {
+        "left": 641.6250393700788,
+        "top": 222.5,
+        "width": 52.37496062992126,
+        "height": 68.12503937007874
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "7c0a22ed7b6996cd63fa64ecbaa6d28998d62647c95d71e1825d651da26406e1"
+    },
+    {
+      "id": "s9",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.722917,
+        "top": 0.319907,
+        "width": 0.02526,
+        "height": 0.100926
+      },
+      "slide_bounds_pt": {
+        "left": 694,
+        "top": 172.75,
+        "width": 24.25,
+        "height": 54.5
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "ce011597d94d1dd4e5cc60c612a10012727f6dcc0e7da8b51d50e86d7596d7d1"
+    },
+    {
+      "id": "s10",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.722917,
+        "top": 0.3375,
+        "width": 0.276823,
+        "height": 0.322222
+      },
+      "slide_bounds_pt": {
+        "left": 694,
+        "top": 182.25,
+        "width": 265.75,
+        "height": 174
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "6e94cc7ff795d21fabdbc9731518c4a00e26938dedf898563fe803b70fc5b00e"
+    },
+    {
+      "id": "s11",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.638151,
+        "top": 0.509491,
+        "width": 0.084766,
+        "height": 0.150232
+      },
+      "slide_bounds_pt": {
+        "left": 612.6250393700788,
+        "top": 275.12503937007875,
+        "width": 81.37496062992126,
+        "height": 81.12503937007874
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "fa07dca4896affcf0170346d0e6312deeb9f5c9cdfb6efb7b8a660f2449e2c2d"
+    },
+    {
+      "id": "s12",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.638151,
+        "top": 0.509491,
+        "width": 0.084766,
+        "height": 0.150232
+      },
+      "slide_bounds_pt": {
+        "left": 612.6250393700788,
+        "top": 275.12503937007875,
+        "width": 81.37496062992126,
+        "height": 81.12503937007874
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "54d44d5b6c620240f527039eea3d946bb4af5df478ea8f4c7bab3eb608fcf0ca"
+    },
+    {
+      "id": "s13",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.722917,
+        "top": 0.458102,
+        "width": 0.276823,
+        "height": 0.322685
+      },
+      "slide_bounds_pt": {
+        "left": 694,
+        "top": 247.37503937007875,
+        "width": 265.75,
+        "height": 174.25
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "0ba9c98f67c10a5b40f90ee6e801dd62fb964c3bef6dfd0b0ec06da3b95776d2"
+    },
+    {
+      "id": "s14",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.722917,
+        "top": 0.580787,
+        "width": 0.276823,
+        "height": 0.322917
+      },
+      "slide_bounds_pt": {
+        "left": 694,
+        "top": 313.62503937007875,
+        "width": 265.75,
+        "height": 174.37503937007875
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "2d1bb39e9db756ce200360285b8377eb80de12eaf1af5bce87f23584bd54160d"
+    },
+    {
+      "id": "s15",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.722917,
+        "top": 0.509491,
+        "width": 0.085286,
+        "height": 0.150232
+      },
+      "slide_bounds_pt": {
+        "left": 694,
+        "top": 275.12503937007875,
+        "width": 81.87496062992126,
+        "height": 81.12503937007874
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "122bef44e7b641c1ec281aad497562cf3b4e61ccc87652a762489ba2c73cdc4c"
+    },
+    {
+      "id": "s16",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.607943,
+        "top": 0.606019,
+        "width": 0.114974,
+        "height": 0.174769
+      },
+      "slide_bounds_pt": {
+        "left": 583.6250393700788,
+        "top": 327.25,
+        "width": 110.37496062992126,
+        "height": 94.37503937007874
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "2fc0551ac1025a6bbedaa020b38710373a02fd1b5d3805307ee3a0e659879e37"
+    },
+    {
+      "id": "s17",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.607943,
+        "top": 0.606019,
+        "width": 0.114974,
+        "height": 0.174769
+      },
+      "slide_bounds_pt": {
+        "left": 583.6250393700788,
+        "top": 327.25,
+        "width": 110.37496062992126,
+        "height": 94.37503937007874
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "2a08eec5207be968dcd7cfc0c439f6658da25130dc3441c5925808e1ad4416f7"
+    },
+    {
+      "id": "s18",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.576693,
+        "top": 0.704167,
+        "width": 0.146224,
+        "height": 0.199537
+      },
+      "slide_bounds_pt": {
+        "left": 553.6250393700788,
+        "top": 380.25,
+        "width": 140.37496062992125,
+        "height": 107.75
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "22445679e85a86412bea5b060385b92e99f04aef7f0e66dd7cb3a5cd2f3f1100"
+    },
+    {
+      "id": "s19",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.576693,
+        "top": 0.704167,
+        "width": 0.146224,
+        "height": 0.199537
+      },
+      "slide_bounds_pt": {
+        "left": 553.6250393700788,
+        "top": 380.25,
+        "width": 140.37496062992125,
+        "height": 107.75
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "68881bd9a55d7355a14639974a1a7225c52be32ae9f3e9ca84e9aa12e9ea1c3d"
+    },
+    {
+      "id": "s20",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.722917,
+        "top": 0.606481,
+        "width": 0.115495,
+        "height": 0.174306
+      },
+      "slide_bounds_pt": {
+        "left": 694,
+        "top": 327.5,
+        "width": 110.87496062992126,
+        "height": 94.12503937007874
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "d7438b3969c5a8cfef8b0eeb372b6e1d10667b476e7f6972d3ea6e5165cbae59"
+    },
+    {
+      "id": "s21",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.722917,
+        "top": 0.704167,
+        "width": 0.147266,
+        "height": 0.199537
+      },
+      "slide_bounds_pt": {
+        "left": 694,
+        "top": 380.25,
+        "width": 141.37496062992125,
+        "height": 107.75
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "373ce87697204df82cf5b30c8809b8d8a1d1f159d99ff576294c55790aadb395"
+    },
+    {
+      "id": "s22",
+      "api": "addLine",
+      "kind": "Line",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.715125,
+        "top": 0.310854,
+        "width": 0.0,
+        "height": 0.0
+      },
+      "slide_bounds_pt": {
+        "left": 686.5198425196851,
+        "top": 167.86102362204724,
+        "width": 0,
+        "height": 0
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s23",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.68321,
+        "top": 0.452139,
+        "width": 0.02635,
+        "height": 0.035133
+      },
+      "slide_bounds_pt": {
+        "left": 655.8820472440945,
+        "top": 244.15496062992125,
+        "width": 25.296062992125986,
+        "height": 18.972047244094487
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "6cf4e307345f8b38ff840e6edf0bb439568532aa92ee50d30cd7c99de3a8cdaa"
+    },
+    {
+      "id": "s24",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.666701,
+        "top": 0.536941,
+        "width": 0.027666,
+        "height": 0.070599
+      },
+      "slide_bounds_pt": {
+        "left": 640.0327559055119,
+        "top": 289.948031496063,
+        "width": 26.55944881889764,
+        "height": 38.1236220472441
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "6de7c2d2cc4c294bc458818981f5a9ee3fb09d3486e224fd20b735cf1b762d98"
+    },
+    {
+      "id": "s25",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.642883,
+        "top": 0.655455,
+        "width": 0.044833,
+        "height": 0.044501
+      },
+      "slide_bounds_pt": {
+        "left": 617.1673228346457,
+        "top": 353.945905511811,
+        "width": 43.03968503937008,
+        "height": 24.03047244094488
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "d25a5ceb7eebe7c82906470b99d8423d5864699d2e67500911a7ed5d72500f86"
+    },
+    {
+      "id": "s26",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.628364,
+        "top": 0.763463,
+        "width": 0.042882,
+        "height": 0.053999
+      },
+      "slide_bounds_pt": {
+        "left": 603.2293700787402,
+        "top": 412.27,
+        "width": 41.166299212598425,
+        "height": 29.159527559055118
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "bda5f6fbe8bbeef2d20d365d7f890d035c30cb3da4b1427a3653f32ef843339e"
+    },
+    {
+      "id": "s27",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.080756,
+        "top": 0.340615,
+        "width": 0.461952,
+        "height": 0.093737
+      },
+      "slide_bounds_pt": {
+        "left": 77.52574803149606,
+        "top": 183.93212598425197,
+        "width": 443.47425196850395,
+        "height": 50.61803149606299
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        18.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s28",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.080756,
+        "top": 0.271531,
+        "width": 0.461953,
+        "height": 0.066654
+      },
+      "slide_bounds_pt": {
+        "left": 77.5255905511811,
+        "top": 146.62700787401576,
+        "width": 443.4744094488189,
+        "height": 35.99330708661417
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        20.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s29",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.080756,
+        "top": 0.505865,
+        "width": 0.461952,
+        "height": 0.093737
+      },
+      "slide_bounds_pt": {
+        "left": 77.52574803149606,
+        "top": 273.16708661417323,
+        "width": 443.47425196850395,
+        "height": 50.61803149606299
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        18.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s30",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.080756,
+        "top": 0.436781,
+        "width": 0.461953,
+        "height": 0.066654
+      },
+      "slide_bounds_pt": {
+        "left": 77.5255905511811,
+        "top": 235.86196850393702,
+        "width": 443.4744094488189,
+        "height": 35.99330708661417
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        20.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s31",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.080756,
+        "top": 0.671115,
+        "width": 0.461952,
+        "height": 0.093737
+      },
+      "slide_bounds_pt": {
+        "left": 77.52574803149606,
+        "top": 362.4020472440945,
+        "width": 443.47425196850395,
+        "height": 50.61803149606299
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        18.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s32",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.080756,
+        "top": 0.602031,
+        "width": 0.461953,
+        "height": 0.066654
+      },
+      "slide_bounds_pt": {
+        "left": 77.5255905511811,
+        "top": 325.0969291338583,
+        "width": 443.4744094488189,
+        "height": 35.99330708661417
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        20.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s33",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.080756,
+        "top": 0.834513,
+        "width": 0.461952,
+        "height": 0.093737
+      },
+      "slide_bounds_pt": {
+        "left": 77.52574803149606,
+        "top": 450.6368503937008,
+        "width": 443.47425196850395,
+        "height": 50.61803149606299
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        18.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s34",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.080756,
+        "top": 0.767281,
+        "width": 0.461953,
+        "height": 0.066654
+      },
+      "slide_bounds_pt": {
+        "left": 77.5255905511811,
+        "top": 414.33188976377954,
+        "width": 443.4744094488189,
+        "height": 35.99330708661417
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        20.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s35",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.051191,
+        "top": 0.07737,
+        "width": 0.715476,
+        "height": 0.145029
+      },
+      "slide_bounds_pt": {
+        "left": 49.14291338582677,
+        "top": 41.779606299212595,
+        "width": 686.8571653543307,
+        "height": 78.31574803149606
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        36.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s36",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.723134,
+        "top": 0.345915,
+        "width": 0.235296,
+        "height": 0.095613
+      },
+      "slide_bounds_pt": {
+        "left": 694.2082677165355,
+        "top": 186.79385826771653,
+        "width": 225.88370078740158,
+        "height": 51.6307874015748
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        18.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s37",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.722765,
+        "top": 0.468305,
+        "width": 0.235296,
+        "height": 0.092394
+      },
+      "slide_bounds_pt": {
+        "left": 693.8547244094489,
+        "top": 252.8847244094488,
+        "width": 225.88370078740158,
+        "height": 49.89299212598425
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        18.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s38",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.722984,
+        "top": 0.588942,
+        "width": 0.235296,
+        "height": 0.094309
+      },
+      "slide_bounds_pt": {
+        "left": 694.0650393700787,
+        "top": 318.0288188976378,
+        "width": 225.88370078740158,
+        "height": 50.926929133858266
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        18.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s39",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.722698,
+        "top": 0.712417,
+        "width": 0.235296,
+        "height": 0.091805
+      },
+      "slide_bounds_pt": {
+        "left": 693.79,
+        "top": 384.70535433070864,
+        "width": 225.88370078740158,
+        "height": 49.57456692913386
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        18.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s40",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.707504,
+        "top": 0.371803,
+        "width": 0.012418,
+        "height": 0.019732
+      },
+      "slide_bounds_pt": {
+        "left": 679.2035433070866,
+        "top": 200.77370078740157,
+        "width": 11.921496062992126,
+        "height": 10.655511811023622
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "591ee8bfb4f150fc1ad017888e98bd6f982fe6436076d82bb411869607ec802d"
+    }
+  ],
+  "groups": [],
+  "structural_parameters": {
+    "components": [
+      {
+        "signature": "2a5950116c8de3a5f1afbb5a538a14ff779250e4178979ee4a11ac6b283b8ec9",
+        "observed_instances": [
+          "s1",
+          "s2",
+          "s4",
+          "s7",
+          "s22"
+        ],
+        "observed_count": 5,
+        "structure": {
+          "api": "addLine",
+          "kind": "Line",
+          "geometry": null,
+          "aspect": null,
+          "text_slot": false
+        },
+        "repeat_axis": "two_dimensional",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "105288e88fad705ce6f4723b88dcc5a7c952ac2fc2c44a43ef8634a61ea8a58e",
+        "observed_instances": [
+          "s3"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addCustomGeometry",
+          "kind": "addCustomGeometry",
+          "geometry": "040feeb15be55841977740b6326021f5f7fd8643675221aa70ca380494b22bcb",
+          "aspect": 0.892,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "66d98319794314b4e8dc2685a2efe00c9bc2d07f4c0c9678e539fcd26458a7cf",
+        "observed_instances": [
+          "s5"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addCustomGeometry",
+          "kind": "addCustomGeometry",
+          "geometry": "af587b3bafa360de6f4179638760199bb8c6ab967b40939cd4dc24d26524a3b7",
+          "aspect": 1.526,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "7f0d2f6aaea1324d5ccab729229a62d55d397d19cba3fd9c14132e83865fef11",
+        "observed_instances": [
+          "s6"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addLine",
+          "kind": "Line",
+          "geometry": null,
+          "aspect": 15.002,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "bb44473780d9225f9d04934bc35bfc15721502c797dfd99e5ab4e455e44a4443",
+        "observed_instances": [
+          "s8"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addCustomGeometry",
+          "kind": "addCustomGeometry",
+          "geometry": "7c0a22ed7b6996cd63fa64ecbaa6d28998d62647c95d71e1825d651da26406e1",
+          "aspect": 0.769,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "930bdbe6ceb66877f218fb5e41390762a9a5ab67307f355f4c71768d1efef37d",
+        "observed_instances": [
+          "s9"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addCustomGeometry",
+          "kind": "addCustomGeometry",
+          "geometry": "ce011597d94d1dd4e5cc60c612a10012727f6dcc0e7da8b51d50e86d7596d7d1",
+          "aspect": 0.445,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "e75eb00b4820d4265c91efea24b3e0f6dd7be476d29bca075f49a46ab2e5f6a3",
+        "observed_instances": [
+          "s10"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addCustomGeometry",
+          "kind": "addCustomGeometry",
+          "geometry": "6e94cc7ff795d21fabdbc9731518c4a00e26938dedf898563fe803b70fc5b00e",
+          "aspect": 1.527,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "6eb45dbf546db9c68da5d53fd8d5683e8ffd357244c3ff5b7e144c4f58b6dbcf",
+        "observed_instances": [
+          "s11"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addCustomGeometry",
+          "kind": "addCustomGeometry",
+          "geometry": "fa07dca4896affcf0170346d0e6312deeb9f5c9cdfb6efb7b8a660f2449e2c2d",
+          "aspect": 1.003,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "f82eaa5813eb88333282926e8c4df13098c7252a986485a94188026cceed56a8",
+        "observed_instances": [
+          "s12"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addCustomGeometry",
+          "kind": "addCustomGeometry",
+          "geometry": "54d44d5b6c620240f527039eea3d946bb4af5df478ea8f4c7bab3eb608fcf0ca",
+          "aspect": 1.003,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "e350c002bedcdf58fafbab01e13c82bb2941c94454b0437519053215dc04c113",
+        "observed_instances": [
+          "s13"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addCustomGeometry",
+          "kind": "addCustomGeometry",
+          "geometry": "0ba9c98f67c10a5b40f90ee6e801dd62fb964c3bef6dfd0b0ec06da3b95776d2",
+          "aspect": 1.525,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "d088939b5623c4ff5fe1dc639fc9a92d3a6da069c973671a0b1b80926af9a25c",
+        "observed_instances": [
+          "s14"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addCustomGeometry",
+          "kind": "addCustomGeometry",
+          "geometry": "2d1bb39e9db756ce200360285b8377eb80de12eaf1af5bce87f23584bd54160d",
+          "aspect": 1.524,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "badbc712cd05adaffcf562ec4ec502112bd046d2a765128828d50f8f6d461e33",
+        "observed_instances": [
+          "s15"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addCustomGeometry",
+          "kind": "addCustomGeometry",
+          "geometry": "122bef44e7b641c1ec281aad497562cf3b4e61ccc87652a762489ba2c73cdc4c",
+          "aspect": 1.009,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "bc51979c470b9c63852bba916a06a8acdbb41774a20f63718c8ebf7c8105eaf1",
+        "observed_instances": [
+          "s16"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addCustomGeometry",
+          "kind": "addCustomGeometry",
+          "geometry": "2fc0551ac1025a6bbedaa020b38710373a02fd1b5d3805307ee3a0e659879e37",
+          "aspect": 1.17,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "63d7de15c6edde22ec296f4e9a57f06bdd43189b7837ebab8511e3fb7621b232",
+        "observed_instances": [
+          "s17"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addCustomGeometry",
+          "kind": "addCustomGeometry",
+          "geometry": "2a08eec5207be968dcd7cfc0c439f6658da25130dc3441c5925808e1ad4416f7",
+          "aspect": 1.17,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "f15341bc2c9daae9189ae84439e6c634265ea1f26de78f389a3c0a37ab38d49f",
+        "observed_instances": [
+          "s18"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addCustomGeometry",
+          "kind": "addCustomGeometry",
+          "geometry": "22445679e85a86412bea5b060385b92e99f04aef7f0e66dd7cb3a5cd2f3f1100",
+          "aspect": 1.303,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "98d2ae17d106c3da9c4ddc215cf7a66f06774cf484bb0c3f719ca18116d287b6",
+        "observed_instances": [
+          "s19"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addCustomGeometry",
+          "kind": "addCustomGeometry",
+          "geometry": "68881bd9a55d7355a14639974a1a7225c52be32ae9f3e9ca84e9aa12e9ea1c3d",
+          "aspect": 1.303,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "7b5941c37afe8a384537752d511c482570347f60b49c0d98bdb01734f86dded5",
+        "observed_instances": [
+          "s20"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addCustomGeometry",
+          "kind": "addCustomGeometry",
+          "geometry": "d7438b3969c5a8cfef8b0eeb372b6e1d10667b476e7f6972d3ea6e5165cbae59",
+          "aspect": 1.178,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "ffa1502f79a37c0e10acfaddbd2a2578e1896f93016efe0ff171359ab1454016",
+        "observed_instances": [
+          "s21"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addCustomGeometry",
+          "kind": "addCustomGeometry",
+          "geometry": "373ce87697204df82cf5b30c8809b8d8a1d1f159d99ff576294c55790aadb395",
+          "aspect": 1.312,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "f35dbed09f5987c2784275f0d26c87d8032eb1a02c77e09f24626102380afb1e",
+        "observed_instances": [
+          "s23"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addCustomGeometry",
+          "kind": "addCustomGeometry",
+          "geometry": "6cf4e307345f8b38ff840e6edf0bb439568532aa92ee50d30cd7c99de3a8cdaa",
+          "aspect": 1.333,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "9c7d32e200452780cae7f443ff0d454cfb1311f76e9c0b257eac6796fa240eb1",
+        "observed_instances": [
+          "s24"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addCustomGeometry",
+          "kind": "addCustomGeometry",
+          "geometry": "6de7c2d2cc4c294bc458818981f5a9ee3fb09d3486e224fd20b735cf1b762d98",
+          "aspect": 0.697,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "0d09441a0cccf7f1cf82407fd80b72f7d82852dd86d360ddee425ead523941f7",
+        "observed_instances": [
+          "s25"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addCustomGeometry",
+          "kind": "addCustomGeometry",
+          "geometry": "d25a5ceb7eebe7c82906470b99d8423d5864699d2e67500911a7ed5d72500f86",
+          "aspect": 1.791,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "d713677681b402c4b124b6ad6e8ad7383296b83cbebcb8c01373ee24d80ae7c8",
+        "observed_instances": [
+          "s26"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addCustomGeometry",
+          "kind": "addCustomGeometry",
+          "geometry": "bda5f6fbe8bbeef2d20d365d7f890d035c30cb3da4b1427a3653f32ef843339e",
+          "aspect": 1.412,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "9336694c5af1c108617d7bba643edffab9d959e364e7621589b7e0891e6dfb4a",
+        "observed_instances": [
+          "s27",
+          "s29",
+          "s31",
+          "s33"
+        ],
+        "observed_count": 4,
+        "structure": {
+          "api": "addTextBox",
+          "kind": "addTextBox",
+          "geometry": null,
+          "aspect": 8.761,
+          "text_slot": true
+        },
+        "repeat_axis": "vertical",
+        "observed_gaps_pt": [
+          38.617,
+          38.617,
+          37.617
+        ],
+        "equal_gap_observed": true,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "e4db8a8ed3f5fc714ef290e7743f0ba8611690f9639f22b5d5b73821d16c51a0",
+        "observed_instances": [
+          "s28",
+          "s30",
+          "s32",
+          "s34"
+        ],
+        "observed_count": 4,
+        "structure": {
+          "api": "addTextBox",
+          "kind": "addTextBox",
+          "geometry": null,
+          "aspect": 12.321,
+          "text_slot": true
+        },
+        "repeat_axis": "vertical",
+        "observed_gaps_pt": [
+          53.242,
+          53.242,
+          53.242
+        ],
+        "equal_gap_observed": true,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "7bfe5599982590091f25038826b4fe4c4f3cd476a1fb00e5ef215e5e24fc0b0a",
+        "observed_instances": [
+          "s35"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addTextBox",
+          "kind": "addTextBox",
+          "geometry": null,
+          "aspect": 8.77,
+          "text_slot": true
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "9c0517ec92b03a3843d3ecd6950728ed5ebd8036541cc6438dc0fca728ee7dff",
+        "observed_instances": [
+          "s36"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addTextBox",
+          "kind": "addTextBox",
+          "geometry": null,
+          "aspect": 4.375,
+          "text_slot": true
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "24788e11d685d8cba20fb8b430112cb3736049bb4ca758f9ed3beac8cf997228",
+        "observed_instances": [
+          "s37"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addTextBox",
+          "kind": "addTextBox",
+          "geometry": null,
+          "aspect": 4.527,
+          "text_slot": true
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "971a4e5570181429d630f65d405ab561a6238c4a71856b5ad723543156f193d6",
+        "observed_instances": [
+          "s38"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addTextBox",
+          "kind": "addTextBox",
+          "geometry": null,
+          "aspect": 4.435,
+          "text_slot": true
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "0cf0a678e2a6fbf8a384d9594fdbb71b4d6a1218df40a628825fb9dd0fad5e94",
+        "observed_instances": [
+          "s39"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addTextBox",
+          "kind": "addTextBox",
+          "geometry": null,
+          "aspect": 4.556,
+          "text_slot": true
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "84016d2d12482ac51d4dda148057e67ce9026588a390abd983a2d18e6a688ff2",
+        "observed_instances": [
+          "s40"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addCustomGeometry",
+          "kind": "addCustomGeometry",
+          "geometry": "591ee8bfb4f150fc1ad017888e98bd6f982fe6436076d82bb411869607ec802d",
+          "aspect": 1.119,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      }
+    ],
+    "text_parameters": [
+      {
+        "object": "s27",
+        "container": "slide",
+        "source_text": "Lorem ipsum dolor sit amet, consectetur adipisicing",
+        "source_characters": 51,
+        "font_pt": [
+          18.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 429.074251968504,
+          "height": 43.41803149606299
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s28",
+        "container": "slide",
+        "source_text": "LOREM IPSUM DOLOR",
+        "source_characters": 17,
+        "font_pt": [
+          20.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 429.0744094488189,
+          "height": 28.79330708661417
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s29",
+        "container": "slide",
+        "source_text": "Lorem ipsum dolor sit amet, consectetur adipisicing",
+        "source_characters": 51,
+        "font_pt": [
+          18.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 429.074251968504,
+          "height": 43.41803149606299
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s30",
+        "container": "slide",
+        "source_text": "LOREM IPSUM DOLOR",
+        "source_characters": 17,
+        "font_pt": [
+          20.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 429.0744094488189,
+          "height": 28.79330708661417
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s31",
+        "container": "slide",
+        "source_text": "Lorem ipsum dolor sit amet, consectetur adipisicing",
+        "source_characters": 51,
+        "font_pt": [
+          18.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 429.074251968504,
+          "height": 43.41803149606299
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s32",
+        "container": "slide",
+        "source_text": "LOREM IPSUM DOLOR",
+        "source_characters": 17,
+        "font_pt": [
+          20.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 429.0744094488189,
+          "height": 28.79330708661417
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s33",
+        "container": "slide",
+        "source_text": "Lorem ipsum dolor sit amet, consectetur adipisicing",
+        "source_characters": 51,
+        "font_pt": [
+          18.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 429.074251968504,
+          "height": 43.41803149606299
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s34",
+        "container": "slide",
+        "source_text": "LOREM IPSUM DOLOR",
+        "source_characters": 17,
+        "font_pt": [
+          20.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 429.0744094488189,
+          "height": 28.79330708661417
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s35",
+        "container": "slide",
+        "source_text": "LOREM IPSUM DOLOR",
+        "source_characters": 17,
+        "font_pt": [
+          36.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 672.4571653543306,
+          "height": 71.11574803149607
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s36",
+        "container": "slide",
+        "source_text": "LOREM IPSUM DOLOR",
+        "source_characters": 17,
+        "font_pt": [
+          18.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 211.71047244094487,
+          "height": 44.26070866141732
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s37",
+        "container": "slide",
+        "source_text": "LOREM IPSUM DOLOR",
+        "source_characters": 17,
+        "font_pt": [
+          18.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 211.71047244094487,
+          "height": 42.52291338582677
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s38",
+        "container": "slide",
+        "source_text": "LOREM IPSUM DOLOR",
+        "source_characters": 17,
+        "font_pt": [
+          18.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 211.71047244094487,
+          "height": 43.556850393700785
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s39",
+        "container": "slide",
+        "source_text": "LOREM IPSUM DOLOR",
+        "source_characters": 17,
+        "font_pt": [
+          18.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 211.71047244094487,
+          "height": 42.20448818897638
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      }
+    ],
+    "parameterization": {
+      "component_tree": "Keep each selected native component and its children together; resize through its group coordinate system.",
+      "repetition": "Solve positions from available region, component extents and gaps. Observed instance count is evidence, not permission to add/remove items.",
+      "text": "Bind complete user text to reviewed roles; recompute inner boxes and reject failed measurements. Preserve text-bearing geometric shapes.",
+      "style": "Map source colors to explicit theme roles and retain shape/fill/line relationships; preserve native paths via the verified source.",
+      "semantics": "Geometric equality does not imply semantic equivalence. Review relation, reading order and role bindings before admission."
+    }
+  },
+  "unseen_content_validation": "not_run",
+  "capacity_status": "observed_source_only",
+  "source_admission": "high_similarity_verified",
+  "revalidation": {
+    "state": "source_verified",
+    "reasons": [],
+    "complete_group_text_coverage_required": true,
+    "font_metrics_required": true
+  }
+}

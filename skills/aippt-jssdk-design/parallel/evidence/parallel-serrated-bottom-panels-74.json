@@ -1,0 +1,966 @@
+{
+  "id": "parallel-serrated-bottom-panels-74",
+  "family": "parallel",
+  "source": "samplev2/并列4项1.pptx",
+  "page": 74,
+  "program": "samplev2/jssdk/并列4项1/compilations/v085/slides/slide-0074.mjs",
+  "verification": "artifacts/aippt/full-distillation/font-metrics-v3/source-8dce075513008f933275/verification.json",
+  "observed_items": 4,
+  "mechanism": "serrated-bottom-panels",
+  "source_fact": "四个等大色块以锯齿底沿和浅色底片收边",
+  "transfer_hypothesis": "保留锯齿轮廓、浅色底片与居中文字；说明超出短文容量时重新选版。",
+  "visual_review": "source_preview_inspected",
+  "review_artifact": "artifacts/aippt/full-distillation/new-verified-contact.png",
+  "state": "source_fact",
+  "ssim": 0.9767201095522714,
+  "exact_reference": false,
+  "program_sha256": "08c22d0ce5cd3ea91c8a41fe59a316fd4b41fb6d515972391a866675cf391b0e",
+  "verification_sha256": "3b93a798905a01e3b66c6dc99c748145edc6c9631b20fb27981c7a799fc812e6",
+  "preview": "/Users/agent/askuy/code/vibeofficing/samplev2/并列4项1/幻灯片74.png",
+  "checks": {
+    "jssdk_executed": true,
+    "native_objects": {
+      "count": 9,
+      "types": [
+        "group",
+        "group",
+        "group",
+        "group",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape"
+      ]
+    },
+    "text_overflow": 0,
+    "render_errors": 0,
+    "pptx_export": "passed",
+    "strict_reimport": "passed",
+    "text_coverage_version": 2,
+    "text_measurement": "font_metrics"
+  },
+  "canvas_pt": [
+    960.0,
+    540.0
+  ],
+  "objects": [
+    {
+      "id": "s1",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "parent": "g1",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.065625,
+        "top": 0.083619,
+        "width": 0.160938,
+        "height": 0.285607
+      },
+      "slide_bounds_pt": {
+        "left": 94.87503937007874,
+        "top": 239.40425196850393,
+        "width": 154.5,
+        "height": 154.22803149606298
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s2",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "g1",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.065625,
+        "top": 0.355861,
+        "width": 0.160938,
+        "height": 0.051676
+      },
+      "slide_bounds_pt": {
+        "left": 94.87503937007874,
+        "top": 386.4148031496063,
+        "width": 154.5,
+        "height": 27.90503937007874
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        18.0
+      ],
+      "geometry_sha256": "3e1e35ea9be7a41b9e104fbb9e09802d704df843cf4b41646be13a5b73b5e243"
+    },
+    {
+      "id": "s3",
+      "api": "addLine",
+      "kind": "Line",
+      "parent": "g1",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.162309,
+        "top": 0.381699,
+        "width": 0.064254,
+        "height": 0.0
+      },
+      "slide_bounds_pt": {
+        "left": 187.6915748031496,
+        "top": 400.3673228346457,
+        "width": 61.68346456692913,
+        "height": 0.0
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s4",
+      "api": "addLine",
+      "kind": "Line",
+      "parent": "g1",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.065625,
+        "top": 0.381699,
+        "width": 0.064254,
+        "height": 0.0
+      },
+      "slide_bounds_pt": {
+        "left": 94.87503937007874,
+        "top": 400.3673228346457,
+        "width": 61.68346456692913,
+        "height": 0.0
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s5",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "parent": "g2",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.065625,
+        "top": 0.083619,
+        "width": 0.160938,
+        "height": 0.285607
+      },
+      "slide_bounds_pt": {
+        "left": 300.12503937007875,
+        "top": 239.40425196850393,
+        "width": 154.5,
+        "height": 154.22803149606298
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s6",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "g2",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.065625,
+        "top": 0.355861,
+        "width": 0.160938,
+        "height": 0.051676
+      },
+      "slide_bounds_pt": {
+        "left": 300.12503937007875,
+        "top": 386.4148031496063,
+        "width": 154.5,
+        "height": 27.90503937007874
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        18.0
+      ],
+      "geometry_sha256": "3e1e35ea9be7a41b9e104fbb9e09802d704df843cf4b41646be13a5b73b5e243"
+    },
+    {
+      "id": "s7",
+      "api": "addLine",
+      "kind": "Line",
+      "parent": "g2",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.162309,
+        "top": 0.381699,
+        "width": 0.064254,
+        "height": 0.0
+      },
+      "slide_bounds_pt": {
+        "left": 392.9415748031496,
+        "top": 400.3673228346457,
+        "width": 61.68346456692913,
+        "height": 0.0
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s8",
+      "api": "addLine",
+      "kind": "Line",
+      "parent": "g2",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.065625,
+        "top": 0.381699,
+        "width": 0.064254,
+        "height": 0.0
+      },
+      "slide_bounds_pt": {
+        "left": 300.12503937007875,
+        "top": 400.3673228346457,
+        "width": 61.68346456692913,
+        "height": 0.0
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s9",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "parent": "g3",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.065625,
+        "top": 0.083619,
+        "width": 0.160938,
+        "height": 0.285607
+      },
+      "slide_bounds_pt": {
+        "left": 505.37503937007875,
+        "top": 239.40425196850393,
+        "width": 154.5,
+        "height": 154.22803149606298
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s10",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "g3",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.065625,
+        "top": 0.355861,
+        "width": 0.160938,
+        "height": 0.051676
+      },
+      "slide_bounds_pt": {
+        "left": 505.37503937007875,
+        "top": 386.4148031496063,
+        "width": 154.5,
+        "height": 27.90503937007874
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        18.0
+      ],
+      "geometry_sha256": "3e1e35ea9be7a41b9e104fbb9e09802d704df843cf4b41646be13a5b73b5e243"
+    },
+    {
+      "id": "s11",
+      "api": "addLine",
+      "kind": "Line",
+      "parent": "g3",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.162309,
+        "top": 0.381699,
+        "width": 0.064254,
+        "height": 0.0
+      },
+      "slide_bounds_pt": {
+        "left": 598.1915748031496,
+        "top": 400.3673228346457,
+        "width": 61.68346456692913,
+        "height": 0.0
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s12",
+      "api": "addLine",
+      "kind": "Line",
+      "parent": "g3",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.065625,
+        "top": 0.381699,
+        "width": 0.064254,
+        "height": 0.0
+      },
+      "slide_bounds_pt": {
+        "left": 505.37503937007875,
+        "top": 400.3673228346457,
+        "width": 61.68346456692913,
+        "height": 0.0
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s13",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "parent": "g4",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.065625,
+        "top": 0.083619,
+        "width": 0.160938,
+        "height": 0.285607
+      },
+      "slide_bounds_pt": {
+        "left": 710.6250393700788,
+        "top": 239.40425196850393,
+        "width": 154.5,
+        "height": 154.22803149606298
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s14",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "g4",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.065625,
+        "top": 0.355861,
+        "width": 0.160938,
+        "height": 0.051676
+      },
+      "slide_bounds_pt": {
+        "left": 710.6250393700788,
+        "top": 386.4148031496063,
+        "width": 154.5,
+        "height": 27.90503937007874
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        18.0
+      ],
+      "geometry_sha256": "3e1e35ea9be7a41b9e104fbb9e09802d704df843cf4b41646be13a5b73b5e243"
+    },
+    {
+      "id": "s15",
+      "api": "addLine",
+      "kind": "Line",
+      "parent": "g4",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.162309,
+        "top": 0.381699,
+        "width": 0.064254,
+        "height": 0.0
+      },
+      "slide_bounds_pt": {
+        "left": 803.4415748031496,
+        "top": 400.3673228346457,
+        "width": 61.68346456692913,
+        "height": 0.0
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s16",
+      "api": "addLine",
+      "kind": "Line",
+      "parent": "g4",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.065625,
+        "top": 0.381699,
+        "width": 0.064254,
+        "height": 0.0
+      },
+      "slide_bounds_pt": {
+        "left": 710.6250393700788,
+        "top": 400.3673228346457,
+        "width": 61.68346456692913,
+        "height": 0.0
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s17",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.099635,
+        "top": 0.538981,
+        "width": 0.158125,
+        "height": 0.156852
+      },
+      "slide_bounds_pt": {
+        "left": 95.65,
+        "top": 291.05,
+        "width": 151.8,
+        "height": 84.7
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        14.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s18",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.313437,
+        "top": 0.538981,
+        "width": 0.158125,
+        "height": 0.156852
+      },
+      "slide_bounds_pt": {
+        "left": 300.9,
+        "top": 291.05,
+        "width": 151.8,
+        "height": 84.7
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        14.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s19",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.52724,
+        "top": 0.538981,
+        "width": 0.158125,
+        "height": 0.156852
+      },
+      "slide_bounds_pt": {
+        "left": 506.15,
+        "top": 291.05,
+        "width": 151.8,
+        "height": 84.7
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        14.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s20",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.741042,
+        "top": 0.538981,
+        "width": 0.158125,
+        "height": 0.156852
+      },
+      "slide_bounds_pt": {
+        "left": 711.4,
+        "top": 291.05,
+        "width": 151.8,
+        "height": 84.7
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        14.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s21",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.208914,
+        "top": 0.136291,
+        "width": 0.582171,
+        "height": 0.094245
+      },
+      "slide_bounds_pt": {
+        "left": 200.55771653543306,
+        "top": 73.59732283464567,
+        "width": 558.8845669291338,
+        "height": 50.892204724409446
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        20.0
+      ],
+      "geometry_sha256": null
+    }
+  ],
+  "groups": [
+    {
+      "id": "g1",
+      "parent": "slide",
+      "api": "addGroup",
+      "kind": "Group",
+      "role": "native_group",
+      "members": [
+        "s1",
+        "s2",
+        "s3",
+        "s4"
+      ],
+      "bounds_pt": {
+        "left": 94.87503937007874,
+        "top": 239.40425196850393,
+        "width": 154.5,
+        "height": 174.9155905511811
+      },
+      "child_coordinates_pt": {
+        "left": 63,
+        "top": 45.154251968503935,
+        "width": 154.5,
+        "height": 174.9155905511811
+      },
+      "rotation": 0,
+      "flipped": false,
+      "bounds_fraction": {
+        "left": 0.098828,
+        "top": 0.443341,
+        "width": 0.160938,
+        "height": 0.323918
+      },
+      "slide_bounds_pt": {
+        "left": 94.87503937007874,
+        "top": 239.40425196850393,
+        "width": 154.5,
+        "height": 174.9155905511811
+      }
+    },
+    {
+      "id": "g2",
+      "parent": "slide",
+      "api": "addGroup",
+      "kind": "Group",
+      "role": "native_group",
+      "members": [
+        "s5",
+        "s6",
+        "s7",
+        "s8"
+      ],
+      "bounds_pt": {
+        "left": 300.12503937007875,
+        "top": 239.40425196850393,
+        "width": 154.5,
+        "height": 174.9155905511811
+      },
+      "child_coordinates_pt": {
+        "left": 63,
+        "top": 45.154251968503935,
+        "width": 154.5,
+        "height": 174.9155905511811
+      },
+      "rotation": 0,
+      "flipped": false,
+      "bounds_fraction": {
+        "left": 0.31263,
+        "top": 0.443341,
+        "width": 0.160938,
+        "height": 0.323918
+      },
+      "slide_bounds_pt": {
+        "left": 300.12503937007875,
+        "top": 239.40425196850393,
+        "width": 154.5,
+        "height": 174.9155905511811
+      }
+    },
+    {
+      "id": "g3",
+      "parent": "slide",
+      "api": "addGroup",
+      "kind": "Group",
+      "role": "native_group",
+      "members": [
+        "s9",
+        "s10",
+        "s11",
+        "s12"
+      ],
+      "bounds_pt": {
+        "left": 505.37503937007875,
+        "top": 239.40425196850393,
+        "width": 154.5,
+        "height": 174.9155905511811
+      },
+      "child_coordinates_pt": {
+        "left": 63,
+        "top": 45.154251968503935,
+        "width": 154.5,
+        "height": 174.9155905511811
+      },
+      "rotation": 0,
+      "flipped": false,
+      "bounds_fraction": {
+        "left": 0.526432,
+        "top": 0.443341,
+        "width": 0.160938,
+        "height": 0.323918
+      },
+      "slide_bounds_pt": {
+        "left": 505.37503937007875,
+        "top": 239.40425196850393,
+        "width": 154.5,
+        "height": 174.9155905511811
+      }
+    },
+    {
+      "id": "g4",
+      "parent": "slide",
+      "api": "addGroup",
+      "kind": "Group",
+      "role": "native_group",
+      "members": [
+        "s13",
+        "s14",
+        "s15",
+        "s16"
+      ],
+      "bounds_pt": {
+        "left": 710.6250393700788,
+        "top": 239.40425196850393,
+        "width": 154.5,
+        "height": 174.9155905511811
+      },
+      "child_coordinates_pt": {
+        "left": 63,
+        "top": 45.154251968503935,
+        "width": 154.5,
+        "height": 174.9155905511811
+      },
+      "rotation": 0,
+      "flipped": false,
+      "bounds_fraction": {
+        "left": 0.740234,
+        "top": 0.443341,
+        "width": 0.160938,
+        "height": 0.323918
+      },
+      "slide_bounds_pt": {
+        "left": 710.6250393700788,
+        "top": 239.40425196850393,
+        "width": 154.5,
+        "height": 174.9155905511811
+      }
+    }
+  ],
+  "structural_parameters": {
+    "components": [
+      {
+        "signature": "ec1a1cc65947591ad660a5a1b0fb82eff2d8b8259c097dc4518d228dd786e13e",
+        "observed_instances": [
+          "s17",
+          "s18",
+          "s19",
+          "s20"
+        ],
+        "observed_count": 4,
+        "structure": {
+          "api": "addTextBox",
+          "kind": "addTextBox",
+          "geometry": null,
+          "aspect": 1.792,
+          "text_slot": true
+        },
+        "repeat_axis": "horizontal",
+        "observed_gaps_pt": [
+          53.45,
+          53.45,
+          53.45
+        ],
+        "equal_gap_observed": true,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "1fb698fde80378626b39cc08575ce5df6eab635d11243f1eec98a50b0f96a911",
+        "observed_instances": [
+          "s21"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addTextBox",
+          "kind": "addTextBox",
+          "geometry": null,
+          "aspect": 10.982,
+          "text_slot": true
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "d0e7337d6f6c72ff7d502ac5b7b04711e9f19acea5b4a9666add211bc372d941",
+        "observed_instances": [
+          "g1",
+          "g2",
+          "g3",
+          "g4"
+        ],
+        "observed_count": 4,
+        "structure": {
+          "api": "addGroup",
+          "kind": "Group",
+          "geometry": null,
+          "aspect": 0.883,
+          "text_slot": false,
+          "children": [
+            {
+              "api": "addGeometricShape",
+              "kind": "Rectangle",
+              "geometry": null,
+              "aspect": 1.002,
+              "text_slot": false,
+              "relative_box": {
+                "left": 0.0,
+                "top": 0.0,
+                "width": 1.0,
+                "height": 0.8817
+              }
+            },
+            {
+              "api": "addCustomGeometry",
+              "kind": "addCustomGeometry",
+              "geometry": "3e1e35ea9be7a41b9e104fbb9e09802d704df843cf4b41646be13a5b73b5e243",
+              "aspect": 5.537,
+              "text_slot": true,
+              "relative_box": {
+                "left": 0.0,
+                "top": 0.8405,
+                "width": 1.0,
+                "height": 0.1595
+              }
+            },
+            {
+              "api": "addLine",
+              "kind": "Line",
+              "geometry": null,
+              "aspect": null,
+              "text_slot": false,
+              "relative_box": {
+                "left": 0.6008,
+                "top": 0.9202,
+                "width": 0.3992,
+                "height": 0.0
+              }
+            },
+            {
+              "api": "addLine",
+              "kind": "Line",
+              "geometry": null,
+              "aspect": null,
+              "text_slot": false,
+              "relative_box": {
+                "left": 0.0,
+                "top": 0.9202,
+                "width": 0.3992,
+                "height": 0.0
+              }
+            }
+          ]
+        },
+        "repeat_axis": "horizontal",
+        "observed_gaps_pt": [
+          50.75,
+          50.75,
+          50.75
+        ],
+        "equal_gap_observed": true,
+        "cardinality_transfer": "not_validated"
+      }
+    ],
+    "text_parameters": [
+      {
+        "object": "s2",
+        "container": "g1",
+        "source_text": "A",
+        "source_characters": 1,
+        "font_pt": [
+          18.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 140.10000000000002,
+          "height": 20.705039370078737
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s6",
+        "container": "g2",
+        "source_text": "B",
+        "source_characters": 1,
+        "font_pt": [
+          18.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 140.10000000000002,
+          "height": 20.705039370078737
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s10",
+        "container": "g3",
+        "source_text": "C",
+        "source_characters": 1,
+        "font_pt": [
+          18.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 140.10000000000002,
+          "height": 20.705039370078737
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s14",
+        "container": "g4",
+        "source_text": "D",
+        "source_characters": 1,
+        "font_pt": [
+          18.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 140.10000000000002,
+          "height": 20.705039370078737
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s17",
+        "container": "slide",
+        "source_text": "单击此处添加\n文本具体内容",
+        "source_characters": 13,
+        "font_pt": [
+          14.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 137.40000000000003,
+          "height": 77.50000000000001
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s18",
+        "container": "slide",
+        "source_text": "单击此处添加\n文本具体内容",
+        "source_characters": 13,
+        "font_pt": [
+          14.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 137.40000000000003,
+          "height": 77.50000000000001
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s19",
+        "container": "slide",
+        "source_text": "单击此处添加\n文本具体内容",
+        "source_characters": 13,
+        "font_pt": [
+          14.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 137.40000000000003,
+          "height": 77.50000000000001
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s20",
+        "container": "slide",
+        "source_text": "单击此处添加\n文本具体内容",
+        "source_characters": 13,
+        "font_pt": [
+          14.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 137.40000000000003,
+          "height": 77.50000000000001
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s21",
+        "container": "slide",
+        "source_text": "单击此处添加标题",
+        "source_characters": 8,
+        "font_pt": [
+          20.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 544.4845669291337,
+          "height": 43.69220472440944
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      }
+    ],
+    "parameterization": {
+      "component_tree": "Keep each selected native component and its children together; resize through its group coordinate system.",
+      "repetition": "Solve positions from available region, component extents and gaps. Observed instance count is evidence, not permission to add/remove items.",
+      "text": "Bind complete user text to reviewed roles; recompute inner boxes and reject failed measurements. Preserve text-bearing geometric shapes.",
+      "style": "Map source colors to explicit theme roles and retain shape/fill/line relationships; preserve native paths via the verified source.",
+      "semantics": "Geometric equality does not imply semantic equivalence. Review relation, reading order and role bindings before admission."
+    }
+  },
+  "unseen_content_validation": "not_run",
+  "capacity_status": "observed_source_only",
+  "source_admission": "high_similarity_verified",
+  "revalidation": {
+    "state": "source_verified",
+    "reasons": [],
+    "complete_group_text_coverage_required": true,
+    "font_metrics_required": true
+  }
+}

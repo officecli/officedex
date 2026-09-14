@@ -251,3 +251,16 @@ describe("HomeScreen", () => {
     expect(retry).toHaveBeenCalledOnce();
   });
 });
+
+
+it("submits the animation workflow explicitly and drops it for other document types", async () => {
+  const props = renderHome();
+  fireEvent.click(screen.getByRole("button", { name: "Animated PPT" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Describe the result you want" }), {target:{value:"Introduce three benefits"}});
+  fireEvent.click(screen.getByRole("button", {name:"Start creating"}));
+  await waitFor(()=>expect(props.onStartTask).toHaveBeenCalledWith(expect.objectContaining({documentType:"pptx",pptxWorkflow:"animation"})));
+  fireEvent.click(screen.getByRole("button", {name:"Image"}));
+  fireEvent.click(screen.getByRole("button", {name:"Start creating"}));
+  await waitFor(()=>expect(props.onStartTask).toHaveBeenCalledTimes(2));
+  expect(vi.mocked(props.onStartTask!).mock.calls[1][0]).not.toHaveProperty("pptxWorkflow");
+});

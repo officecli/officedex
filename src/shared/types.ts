@@ -315,6 +315,7 @@ export interface GenerateInput {
   runtimeMode?: RuntimeMode;
   /** Which PPTX backend to use; the desktop leaves it unset and Go selects aippt-jssdk-design. */
   pptxBackend?: string;
+  pptxWorkflow?: "design" | "animation";
 }
 
 // ModifyInput drives the "继续修改" (office.modify) flow: an LLM-driven in-place
@@ -381,11 +382,47 @@ export interface VibeMetric {
   note?: string;
 }
 
+export type VibeChartType =
+  | "column"
+  | "bar"
+  | "line"
+  | "area"
+  | "pie"
+  | "donut"
+  | "radar"
+  | "scatter"
+  | "combo"
+  | string;
+
+export interface VibeChartSeries {
+  name: string;
+  values: number[];
+  color?: string;
+  axis?: "primary" | "secondary";
+  chartType?: Exclude<VibeChartType, "combo">;
+}
+
+export interface VibeChartOptions {
+  legendVisible?: boolean;
+  legendPosition?: "top" | "bottom" | "left" | "right";
+  showValueLabels?: boolean;
+  stacked?: boolean;
+  yAxisLabel?: string;
+  secondaryAxisLabel?: string;
+}
+
 export interface VibeChart {
-  type?: "bar" | "pie" | "line" | string;
+  type?: VibeChartType;
   title?: string;
+  /** Legacy single-series form; keep it readable while migrating to `series`. */
   categories?: string[];
   values?: number[];
+  series?: VibeChartSeries[];
+  options?: VibeChartOptions;
+  source?: {
+    kind: "attached_file" | "table" | "manual" | "illustrative" | string;
+    ref?: string;
+  };
   /** When true the values are representative, not sourced, and are labelled as illustrative. */
   illustrative?: boolean;
 }
@@ -488,6 +525,7 @@ export interface AgentClientToolResultInput { run_id: string; call_id: string; s
 export interface AgentClientToolReassignInput { run_id: string; call_id: string; to_client_id?: string; reason?: string }
 
 export interface TaskUserInput {
+  pptxWorkflow?: "design" | "animation";
   prompt: string;
   generationMode?: GenerationMode;
   promptTemplateId?: string;

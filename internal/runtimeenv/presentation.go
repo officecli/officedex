@@ -29,9 +29,12 @@ func BridgeEnv(cwd string) []string {
 	rootExplicit := config.IsSet(config.PresentationRootEnv) || config.IsSet(config.PresentationSourceDirEnv)
 	nodeExplicit := config.IsSet(config.SkillNodeEnv)
 	env := make([]string, 0, 3)
-	if !config.IsSet(config.SkillDirEnv) {
-		if skills := bundledSkillsDir(); skills != "" {
+	if skills := bundledSkillsDir(cwd); skills != "" {
+		if !config.IsSet(config.SkillDirEnv) {
 			env = append(env, config.SkillDirEnv+"="+skills)
+		}
+		if !config.IsSet(config.JSSDKDesignSkillDirEnv) {
+			env = append(env, config.JSSDKDesignSkillDirEnv+"="+filepath.Join(skills, "aippt-jssdk-design"))
 		}
 	}
 	if !nodeExplicit {
@@ -98,7 +101,7 @@ func BridgeEnv(cwd string) []string {
 // bundledSkillsDir finds Skills shipped with a packaged desktop app. A source
 // checkout is handled separately by the OfficeCLI development environment;
 // this probe is intentionally limited to the app bundle and its working tree.
-func bundledSkillsDir() string {
+func bundledSkillsDir(cwd string) string {
 	candidates := make([]string, 0, 4)
 	if executable, err := os.Executable(); err == nil {
 		exeDir := filepath.Dir(executable)
@@ -107,12 +110,17 @@ func bundledSkillsDir() string {
 			filepath.Join(exeDir, "skills"),
 		)
 	}
-	if cwd, ok := config.ProcessCwd(); ok {
-		candidates = append(candidates, filepath.Join(cwd, "skills"))
+	for _, base := range []string{cwd, config.LauncherPWD()} {
+		if strings.TrimSpace(base) != "" {
+			candidates = append(candidates, filepath.Join(base, "skills"), filepath.Join(base, "officedex", "skills"), filepath.Join(base, "..", "officedex", "skills"))
+		}
+	}
+	if processCwd, ok := config.ProcessCwd(); ok {
+		candidates = append(candidates, filepath.Join(processCwd, "skills"))
 	}
 	for _, candidate := range candidates {
 		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
-			if _, err := os.Stat(filepath.Join(candidate, "aippt-jssdk-video", "SKILL.md")); err == nil {
+			if _, err := os.Stat(filepath.Join(candidate, "aippt-jssdk-design", "policy.json")); err == nil {
 				if abs, err := filepath.Abs(candidate); err == nil {
 					return abs
 				}

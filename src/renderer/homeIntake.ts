@@ -2,6 +2,7 @@ import type { DocumentType, ImageRatio } from "../shared/types";
 import { fileExtension } from "./utils/path";
 
 export interface HomeTaskIntake {
+  pptxWorkflow?: "design" | "animation";
   prompt: string;
   sourceFile?: string;
   referenceDirectory?: string;

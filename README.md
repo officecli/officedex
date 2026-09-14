@@ -432,6 +432,9 @@ Copy the generated markdown and paste it into a GitHub Issue.
 - [`DESIGN.md`](DESIGN.md) — Full design spec
 - [`CLAUDE.md`](CLAUDE.md) — Project conventions & collaboration guidelines
 - [`docs/README.zh-CN.md`](docs/README.zh-CN.md) — 简体中文版
+- [`docs/aippt-jssdk-design-method.md`](docs/aippt-jssdk-design-method.md) — AI PPT JSSDK design, free composition, and layout acceptance method
+- [`docs/aippt-jssdk-visual-gap-report.md`](docs/aippt-jssdk-visual-gap-report.md) — Visual gap analysis against Cheso examples and next-step roadmap
+- [`docs/aippt-chart-authoring-plan.md`](docs/aippt-chart-authoring-plan.md) — Chart authoring API, OfficeDex data contract, and regression plan
 
 ---
 

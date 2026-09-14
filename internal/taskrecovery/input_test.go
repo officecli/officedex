@@ -17,6 +17,20 @@ func userInputEvent(payload map[string]any) []types.BridgeEvent {
 	}
 }
 
+func TestAnimationWorkflowSurvivesTaskRecovery(t *testing.T) {
+	input := types.GenerateInput{DocumentType: types.DocPPTX, Prompt: "依次出现", PPTXWorkflow: "animation"}
+	payload := EncodeGenerateInput(input, localstore.TaskContext{})
+	if payload["pptx_workflow"] != "animation" {
+		t.Fatal(payload)
+	}
+	for _, key := range []string{"pptx_workflow", "pptxWorkflow"} {
+		got, err := DecodeGenerateInput(userInputEvent(map[string]any{"document_type": "pptx", "prompt": "依次出现", key: "animation"}), localstore.TaskContext{})
+		if err != nil || got.PPTXWorkflow != "animation" {
+			t.Fatalf("workflow lost: %+v %v", got, err)
+		}
+	}
+}
+
 // The payload has exactly one spelling per field. Rows written before this
 // schema carried camelCase duplicates; new rows must not.
 func TestEncodeGenerateInputEmitsSnakeCaseOnly(t *testing.T) {

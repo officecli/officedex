@@ -1,0 +1,160 @@
+{
+  "id": "organization-branch-left-3",
+  "family": "organization",
+  "source": "sampleall/shape/组织架构3项/组织架构3项.pptx",
+  "page": 3,
+  "program": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__组织架构3项__组织架构3项/slides/slide-0003.mjs",
+  "verification": "artifacts/aippt/full-distillation/font-metrics-v3/source-aca3f0c319c63b7c77e8/verification.json",
+  "observed_items": 3,
+  "mechanism": "branch-left",
+  "source_fact": "左侧父节点向右侧子节点分叉，节点间以线相连",
+  "transfer_hypothesis": "只用于真实父子或归属关系；items 包括父节点；保留父子框与分叉线。",
+  "visual_review": "source_preview_inspected",
+  "state": "source_fact",
+  "ssim": 0.9962694954560929,
+  "exact_reference": false,
+  "program_sha256": "27af62990600798d2e16a5d16423eead734250914e5967e92c425379116f2347",
+  "verification_sha256": "8c2d949173891333f2e10fae8f7b1c909a4eb32bd807e5e137e1dc3c7beb682c",
+  "preview": "sampleall/shape/组织架构3项/组织架构3项/幻灯片3.png",
+  "checks": {
+    "jssdk_executed": true,
+    "native_objects": {
+      "count": 8,
+      "types": [
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape"
+      ]
+    },
+    "text_overflow": 0,
+    "render_errors": 0,
+    "pptx_export": "passed",
+    "strict_reimport": "passed",
+    "text_coverage_version": 2,
+    "text_measurement": "font_metrics"
+  },
+  "canvas_pt": [
+    960.0,
+    540.0
+  ],
+  "objects": [
+    {
+      "id": "s1",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.33551,
+        "top": 0.44989,
+        "width": 0.13086,
+        "height": 0.11632
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#175782",
+        "#1F74AD"
+      ]
+    },
+    {
+      "id": "s3",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.53314,
+        "top": 0.30726,
+        "width": 0.13086,
+        "height": 0.11632
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#1F74AD",
+        "#3498DB"
+      ]
+    },
+    {
+      "id": "s5",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.53314,
+        "top": 0.5763,
+        "width": 0.13086,
+        "height": 0.11632
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#1F74AD",
+        "#3498DB"
+      ]
+    },
+    {
+      "id": "s6",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.34525,
+        "top": 0.46298,
+        "width": 0.1114,
+        "height": 0.09014
+      },
+      "text_characters": 4,
+      "font_pt": [
+        14.0
+      ],
+      "colors": [
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s7",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.54287,
+        "top": 0.32035,
+        "width": 0.1114,
+        "height": 0.09014
+      },
+      "text_characters": 4,
+      "font_pt": [
+        14.0
+      ],
+      "colors": [
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s8",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.54287,
+        "top": 0.58939,
+        "width": 0.1114,
+        "height": 0.09014
+      },
+      "text_characters": 4,
+      "font_pt": [
+        14.0
+      ],
+      "colors": [
+        "#FFFFFF"
+      ]
+    }
+  ],
+  "extraction_scope": "literal object geometry; group transforms and custom paths require source inspection",
+  "source_admission": "high_similarity_verified",
+  "revalidation": {
+    "state": "source_verified",
+    "reasons": [],
+    "complete_group_text_coverage_required": true,
+    "font_metrics_required": true
+  }
+}

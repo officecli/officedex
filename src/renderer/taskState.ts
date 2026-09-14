@@ -635,7 +635,9 @@ function userInputFromPayload(payload: BridgeEvent["payload"]): TaskUserInput | 
   const imageRatio = normalizeImageRatio(payload.image_ratio) ?? normalizeImageRatio(payload.imageRatio);
   const fps = normalizeGIFFPS(payload.fps);
   const generationMode = normalizeGenerationMode(payload.generation_mode) ?? normalizeGenerationMode(payload.generationMode);
-  return { prompt, generationMode, sourceFile, referenceImages, imageRatio, fps };
+  const workflow = payload.pptx_workflow ?? payload.pptxWorkflow;
+  const pptxWorkflow = workflow === "animation" || workflow === "design" ? workflow : undefined;
+  return { prompt, generationMode, sourceFile, referenceImages, imageRatio, fps, ...(pptxWorkflow ? { pptxWorkflow } : {}) };
 }
 
 function normalizeGenerationMode(value: unknown): GenerationMode | undefined {

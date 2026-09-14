@@ -1,0 +1,1456 @@
+{
+  "id": "list-arrow-icon-rows-16",
+  "family": "list",
+  "source": "samplev2/并列4项1.pptx",
+  "page": 16,
+  "program": "samplev2/jssdk/并列4项1/compilations/v085/slides/slide-0016.mjs",
+  "verification": "artifacts/aippt/full-distillation/font-metrics-v3/source-7d854f8d780938e4c27d/verification.json",
+  "observed_items": 4,
+  "mechanism": "arrow-icon-rows",
+  "source_fact": "四行箭头标签带圆形图标和编号，右侧留出独立说明栏",
+  "transfer_hypothesis": "保留箭头标签、圆章与编号的层叠关系；各行是条目，不把装饰箭头解释为流程。",
+  "visual_review": "source_preview_inspected",
+  "review_artifact": "artifacts/aippt/full-distillation/new-verified-contact.png",
+  "state": "source_fact",
+  "ssim": 0.9731284799626261,
+  "exact_reference": false,
+  "program_sha256": "49e000209afc2d8de8f1486e9c1cce7789b4c8768ead9a4a823abd9b9767102b",
+  "verification_sha256": "000ba60f6eefe09694edb0bbb8e763c2be85e93e1c34a5df69a6244c8de94554",
+  "preview": "/Users/agent/askuy/code/vibeofficing/samplev2/并列4项1/幻灯片16.png",
+  "checks": {
+    "jssdk_executed": true,
+    "native_objects": {
+      "count": 35,
+      "types": [
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "picture",
+        "picture",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "picture",
+        "picture",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "picture",
+        "picture",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "picture",
+        "picture",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape"
+      ]
+    },
+    "text_overflow": 0,
+    "render_errors": 0,
+    "pptx_export": "passed",
+    "strict_reimport": "passed",
+    "text_coverage_version": 2,
+    "text_measurement": "font_metrics"
+  },
+  "canvas_pt": [
+    960.0,
+    540.0
+  ],
+  "objects": [
+    {
+      "id": "s1",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.148958,
+        "top": 0.271852,
+        "width": 0.094688,
+        "height": 0.083796
+      },
+      "slide_bounds_pt": {
+        "left": 143,
+        "top": 146.8,
+        "width": 90.9,
+        "height": 45.25
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "8974730cc5f2a50dd4e62c6ca93c2f1710c076558acb7cfcd6fe96e49c738258"
+    },
+    {
+      "id": "s2",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.299687,
+        "top": 0.271852,
+        "width": 0.177083,
+        "height": 0.083796
+      },
+      "slide_bounds_pt": {
+        "left": 287.7,
+        "top": 146.8,
+        "width": 170,
+        "height": 45.25
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "112565c577c42613dd6813718ab877c26d82d96efe3cb76cffd6efca0938f852"
+    },
+    {
+      "id": "s3",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.243646,
+        "top": 0.3025,
+        "width": 0.056042,
+        "height": 0.022407
+      },
+      "slide_bounds_pt": {
+        "left": 233.9,
+        "top": 163.35,
+        "width": 53.8,
+        "height": 12.1
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "0f34abd9810a6abd2b37ceaa3ed365ab296aedd1a831bcd465b9b417c650c4bd"
+    },
+    {
+      "id": "s4",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.242969,
+        "top": 0.262685,
+        "width": 0.057448,
+        "height": 0.102037
+      },
+      "slide_bounds_pt": {
+        "left": 233.25,
+        "top": 141.85,
+        "width": 55.15,
+        "height": 55.1
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s5",
+      "api": "addImage",
+      "kind": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9InllcyI/PjxzdmcgaWQ9IuWbvuWxgl8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB2ZXJzaW9uPSIxLjIiIGJhc2VQcm9maWxlPSJ0aW55IiB4PSIwIiB5PSIwIiB3aWR0aD0iNTk1IiBoZWlnaHQ9Ijg0MiIgdmlld0JveD0iMCAwIDU5NS4yOCA4NDEuODkiPjxkZWZzLz48ZGVmcy8+PGRlZnMvPjxwYXRoIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMSIgZD0iTSAzODQuMjYgMzE4LjI2IEwgMzkyLjg3IDM0MC4xNyBMIDM4NC4yNiAzNjQgTCA0MDMuMjYgMzM5Ljk0IEMgNDAzLjI2IDMzOS45NCAzODQuMjYgMzE3LjA5IDM4NC4yNiAzMTguMjYgWiIvPjwvc3ZnPgo=",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.309427,
+        "top": 0.280463,
+        "width": 0.023229,
+        "height": 0.066574
+      },
+      "slide_bounds_pt": {
+        "left": 297.05,
+        "top": 151.45,
+        "width": 22.3,
+        "height": 35.95
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s6",
+      "api": "addImage",
+      "kind": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9InllcyI/PjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgdmVyc2lvbj0iMS4yIiBiYXNlUHJvZmlsZT0idGlueSIgeD0iMCIgeT0iMCIgd2lkdGg9IjI1NiIgaGVpZ2h0PSIyNTYiIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGcgdHJhbnNmb3JtPSJtYXRyaXgoMC4zMzMzMzMsMCwwLDAuMzMzMzMzLC00Mi42NjY3LC00Mi42NjY3KSI+PGcgaWQ9IlBhZ2UtMSIgZmlsbD0ibm9uZSIgZmlsbC1ydWxlPSJldmVub2RkIiBzdHJva2U9Im5vbmUiIHN0cm9rZS13aWR0aD0iMSI+PGcgaWQ9IumhtemdoiIvPjxwYXRoIGlkPSLlkIjlubblvaLnirYiIGZpbGw9IiMyMTY5ZDMiIGZpbGwtb3BhY2l0eT0iMSIgZD0iTSA1MTIgODk2IEMgMjk5LjkyMyA4OTYgMTI4IDcyNC4wNzcgMTI4IDUxMiBDIDEyOCAyOTkuOTIzIDI5OS45MjMgMTI4IDUxMiAxMjggQyA3MjQuMDc3IDEyOCA4OTYgMjk5LjkyMyA4OTYgNTEyIEMgODk2IDcyNC4wNzcgNzI0LjA3NyA4OTYgNTEyIDg5NiBNIDY4OC42MjcgNzA0IEMgNjk2Ljk1MiA3MDQgNzA0LjIwOSA2OTYuMTEgNzAzLjk5NSA2ODcuNzk1IEwgNzAzLjk5NSA0NTEuNTQxIEMgNzAzLjk5NSA0MjguOTM5IDY4Ni40OTMgNDI0LjY3MyA2NzAuOTExIDQ0My4wMTEgTCA1NTUuNDM1IDU4Ni4zMDEgQyA1NTAuMzEzIDU5Mi45MDkgNTM3LjA3OCA1ODMuMzE1IDUzMC42NzYgNTc3Ljc3IEwgNDg0LjM1OCA1MzYuMTkxIEMgNDc3Ljk1MyA1MzAuNjQ4IDQ2OC41NjEgNTQwLjAyOSA0NjMuMjI2IDU0Ni42MzkgTCA0MDkuMjI0IDYxNC4wMTkgQyA0MDMuODg2IDYyMC42MyAzOTQuNDk2IDYxMi45NTMgMzg4LjA5MiA2MDcuNDA4IEwgMzQxLjEzMyA1NjkuMjQxIEMgMzMyLjgwOSA1NjAuOTI0IDMyNC42OTcgNTY5LjY2OCAzMjQuNjk3IDU4Ni4wODcgTCAzMjQuNjk3IDY4Ny41ODIgQyAzMjQuNjk3IDY5Ni4xMSAzMzIuMzgxIDcwNCAzNDAuNzA1IDcwNCBMIDY4OC42MjcgNzA0IE0gNTUzLjMwMSA1MjguMDg4IEwgNjk1LjI0NCAzNDAuMDI0IEMgNzA1LjkxNyAzMjUuNzM4IDcwMC41NzkgMzE3LjIwOCA2ODMuNTA1IDMyMC44MzMgTCA1ODQuODkyIDM0Mi4zNjggQyA1NjcuODE2IDM0Ni4yMDggNTY0LjgyNyAzNTguNTc1IDU3OC4yNzQgMzcwLjA4OSBMIDU5Ny4yNzEgMzg2LjI5NCBMIDUyOS4xODIgNDc0LjM1NSBMIDQ3Ni40NTkgNDI4LjcyNiBDIDQ3MS4xMjIgNDI0LjI0OCA0NjQuMjkzIDQyMS45MDIgNDU3LjI0OSA0MjIuNzU2IEMgNDUwLjQxOCA0MjMuNjA4IDQ0NC4wMTYgNDI3LjIzMyA0MzkuNzQ1IDQzMi45OSBMIDM4Ny4wMjUgNTA0LjYzNCBMIDM2MS42MjUgNDgzLjMxMSBDIDM1MC43MzggNDczLjkzIDMzNC43MjkgNDc1LjYzNSAzMjUuNzY0IDQ4Ni45MzcgQyAzMTYuNzk5IDQ5OC4yMzcgMzE4LjUwNyA1MTQuODY4IDMyOS4zOTMgNTI0LjAzNyBMIDM3NS4yODQgNTYyLjYzMSBDIDM3OS45OCA1NjYuNDcgMzg1Ljc0MyA1NjguNjAxIDM5MS41MDggNTY4LjYwMSBDIDM5Mi41NzQgNTY4LjYwMSAzOTMuNDI3IDU2OC42MDEgMzk0LjQ5NiA1NjguMzg5IEMgNDAxLjMyNiA1NjcuNTM2IDQwNy41MTYgNTYzLjkxIDQxMS43ODQgNTU4LjE1MyBMIDQ2NC4yOTMgNDg2LjcyMyBMIDUxNi41ODcgNTMyLjE0MSBDIDUyMS45MjUgNTM2LjYxOCA1MjguOTY4IDUzOC45NjMgNTM1Ljc5NyA1MzguMTExIEMgNTQyLjYyOSA1MzcuMjU3IDU0OS4wMzMgNTMzLjYzMyA1NTMuMzAxIDUyOC4wODgiLz48L2c+PC9nPjwvc3ZnPgo=",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.251042,
+        "top": 0.276944,
+        "width": 0.041354,
+        "height": 0.073519
+      },
+      "slide_bounds_pt": {
+        "left": 241,
+        "top": 149.55,
+        "width": 39.7,
+        "height": 39.7
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s7",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.338438,
+        "top": 0.286296,
+        "width": 0.115,
+        "height": 0.054815
+      },
+      "slide_bounds_pt": {
+        "left": 324.9,
+        "top": 154.6,
+        "width": 110.4,
+        "height": 29.6
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        25.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s8",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.503021,
+        "top": 0.288611,
+        "width": 0.348021,
+        "height": 0.050278
+      },
+      "slide_bounds_pt": {
+        "left": 482.9,
+        "top": 155.85,
+        "width": 334.1,
+        "height": 27.15
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        12.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s9",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.184792,
+        "top": 0.280556,
+        "width": 0.042448,
+        "height": 0.066296
+      },
+      "slide_bounds_pt": {
+        "left": 177.4,
+        "top": 151.5,
+        "width": 40.75,
+        "height": 35.8
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        22.2
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s10",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.299687,
+        "top": 0.446111,
+        "width": 0.177083,
+        "height": 0.083796
+      },
+      "slide_bounds_pt": {
+        "left": 287.7,
+        "top": 240.9,
+        "width": 170,
+        "height": 45.25
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "112565c577c42613dd6813718ab877c26d82d96efe3cb76cffd6efca0938f852"
+    },
+    {
+      "id": "s11",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.243646,
+        "top": 0.476759,
+        "width": 0.056042,
+        "height": 0.022407
+      },
+      "slide_bounds_pt": {
+        "left": 233.9,
+        "top": 257.45,
+        "width": 53.8,
+        "height": 12.1
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "0f34abd9810a6abd2b37ceaa3ed365ab296aedd1a831bcd465b9b417c650c4bd"
+    },
+    {
+      "id": "s12",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.242969,
+        "top": 0.436944,
+        "width": 0.057448,
+        "height": 0.102037
+      },
+      "slide_bounds_pt": {
+        "left": 233.25,
+        "top": 235.95,
+        "width": 55.15,
+        "height": 55.1
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s13",
+      "api": "addImage",
+      "kind": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9InllcyI/PjxzdmcgaWQ9IuWbvuWxgl8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB2ZXJzaW9uPSIxLjIiIGJhc2VQcm9maWxlPSJ0aW55IiB4PSIwIiB5PSIwIiB3aWR0aD0iNTk1IiBoZWlnaHQ9Ijg0MiIgdmlld0JveD0iMCAwIDU5NS4yOCA4NDEuODkiPjxkZWZzLz48ZGVmcy8+PGRlZnMvPjxwYXRoIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMSIgZD0iTSAzODQuMjYgMzE4LjI2IEwgMzkyLjg3IDM0MC4xNyBMIDM4NC4yNiAzNjQgTCA0MDMuMjYgMzM5Ljk0IEMgNDAzLjI2IDMzOS45NCAzODQuMjYgMzE3LjA5IDM4NC4yNiAzMTguMjYgWiIvPjwvc3ZnPgo=",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.309427,
+        "top": 0.454722,
+        "width": 0.023229,
+        "height": 0.066574
+      },
+      "slide_bounds_pt": {
+        "left": 297.05,
+        "top": 245.55,
+        "width": 22.3,
+        "height": 35.95
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s14",
+      "api": "addImage",
+      "kind": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9InllcyI/PjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgdmVyc2lvbj0iMS4yIiBiYXNlUHJvZmlsZT0idGlueSIgeD0iMCIgeT0iMCIgd2lkdGg9IjI1NiIgaGVpZ2h0PSIyNTYiIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGcgdHJhbnNmb3JtPSJtYXRyaXgoMC4zMzMzMzMsMCwwLDAuMzMzMzMzLC00Mi42NjY3LC00Mi42NjY3KSI+PGcgaWQ9IlBhZ2UtMSIgZmlsbD0ibm9uZSIgZmlsbC1ydWxlPSJldmVub2RkIiBzdHJva2U9Im5vbmUiIHN0cm9rZS13aWR0aD0iMSI+PGcgaWQ9IumhtemdoiIvPjxwYXRoIGlkPSLlkIjlubblvaLnirYiIGZpbGw9IiMyMDk0Y2UiIGZpbGwtb3BhY2l0eT0iMSIgZD0iTSA1MTIgODk2IEMgMjk5LjkyMyA4OTYgMTI4IDcyNC4wNzcgMTI4IDUxMiBDIDEyOCAyOTkuOTIzIDI5OS45MjMgMTI4IDUxMiAxMjggQyA3MjQuMDc3IDEyOCA4OTYgMjk5LjkyMyA4OTYgNTEyIEMgODk2IDcyNC4wNzcgNzI0LjA3NyA4OTYgNTEyIDg5NiBNIDUxOC42MjQgNDE2IEMgNTYyLjgwNyA0MTYgNTk4LjYyNCAzODAuMTgzIDU5OC42MjQgMzM2IEMgNTk4LjYyNCAyOTEuODE3IDU2Mi44MDcgMjU2IDUxOC42MjQgMjU2IEMgNDc0LjQ0MiAyNTYgNDM4LjYyNCAyOTEuODE3IDQzOC42MjQgMzM2IEMgNDM4LjYyNCAzODAuMTgzIDQ3NC40NDIgNDE2IDUxOC42MjQgNDE2IE0gNjI1LjE0MyA0OTMuMzkgQyA2MzguNzk2IDUzNS40MSA2ODMuOTI4IDU1OC40MDYgNzI1Ljk0OSA1NDQuNzUzIEMgNzY3Ljk2OSA1MzEuMSA3OTAuOTY1IDQ4NS45NjggNzc3LjMxMiA0NDMuOTQ3IEMgNzYzLjY1OSA0MDEuOTI3IDcxOC41MjYgMzc4LjkzMSA2NzYuNTA2IDM5Mi41ODQgQyA2MzQuNDg2IDQwNi4yMzcgNjExLjQ5IDQ1MS4zNyA2MjUuMTQzIDQ5My4zOSBNIDU4NC40NTYgNjE4LjYxIEMgNTQ4LjcxMiA2NDQuNTggNTQwLjc4OCA2OTQuNjA5IDU2Ni43NTggNzMwLjM1NCBDIDU5Mi43MjggNzY2LjA5OSA2NDIuNzU3IDc3NC4wMjMgNjc4LjUwMiA3NDguMDUzIEMgNzE0LjI0NyA3MjIuMDgzIDcyMi4xNzEgNjcyLjA1MyA2OTYuMjAxIDYzNi4zMDggQyA2NzAuMjMxIDYwMC41NjQgNjIwLjIwMSA1OTIuNjQgNTg0LjQ1NiA2MTguNjEgTSA0NTIuNzkzIDYxOC42MSBDIDQxNy4wNDggNTkyLjY0IDM2Ny4wMTggNjAwLjU2NCAzNDEuMDQ4IDYzNi4zMDggQyAzMTUuMDc4IDY3Mi4wNTMgMzIzLjAwMiA3MjIuMDgzIDM1OC43NDcgNzQ4LjA1MyBDIDM5NC40OTEgNzc0LjAyMyA0NDQuNTIxIDc2Ni4wOTkgNDcwLjQ5MSA3MzAuMzU0IEMgNDk2LjQ2MSA2OTQuNjA5IDQ4OC41MzcgNjQ0LjU4IDQ1Mi43OTMgNjE4LjYxIE0gNDEyLjEwNiA0OTMuMzkgQyA0MjUuNzU5IDQ1MS4zNyA0MDIuNzYzIDQwNi4yMzcgMzYwLjc0MyAzOTIuNTg0IEMgMzE4LjcyMyAzNzguOTMxIDI3My41OSA0MDEuOTI3IDI1OS45MzcgNDQzLjk0NyBDIDI0Ni4yODQgNDg1Ljk2OCAyNjkuMjggNTMxLjEgMzExLjMgNTQ0Ljc1MyBDIDM1My4zMjEgNTU4LjQwNiAzOTguNDUzIDUzNS40MSA0MTIuMTA2IDQ5My4zOSIvPjwvZz48L2c+PC9zdmc+Cg==",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.25099,
+        "top": 0.451204,
+        "width": 0.041354,
+        "height": 0.073519
+      },
+      "slide_bounds_pt": {
+        "left": 240.95,
+        "top": 243.65,
+        "width": 39.7,
+        "height": 39.7
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s15",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.338438,
+        "top": 0.460556,
+        "width": 0.115,
+        "height": 0.054815
+      },
+      "slide_bounds_pt": {
+        "left": 324.9,
+        "top": 248.7,
+        "width": 110.4,
+        "height": 29.6
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        25.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s16",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.503021,
+        "top": 0.46287,
+        "width": 0.348021,
+        "height": 0.050278
+      },
+      "slide_bounds_pt": {
+        "left": 482.9,
+        "top": 249.95,
+        "width": 334.1,
+        "height": 27.15
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        12.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s17",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.148958,
+        "top": 0.446111,
+        "width": 0.094688,
+        "height": 0.083796
+      },
+      "slide_bounds_pt": {
+        "left": 143,
+        "top": 240.9,
+        "width": 90.9,
+        "height": 45.25
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "8974730cc5f2a50dd4e62c6ca93c2f1710c076558acb7cfcd6fe96e49c738258"
+    },
+    {
+      "id": "s18",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.18151,
+        "top": 0.454815,
+        "width": 0.045729,
+        "height": 0.066296
+      },
+      "slide_bounds_pt": {
+        "left": 174.25,
+        "top": 245.6,
+        "width": 43.9,
+        "height": 35.8
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        22.2
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s19",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.299687,
+        "top": 0.62037,
+        "width": 0.177083,
+        "height": 0.083796
+      },
+      "slide_bounds_pt": {
+        "left": 287.7,
+        "top": 335,
+        "width": 170,
+        "height": 45.25
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "2dcc171e694274e1759da73ffff6b53f0383649fb6e655e07ddc092e4502ec3c"
+    },
+    {
+      "id": "s20",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.242969,
+        "top": 0.611204,
+        "width": 0.057448,
+        "height": 0.102037
+      },
+      "slide_bounds_pt": {
+        "left": 233.25,
+        "top": 330.05,
+        "width": 55.15,
+        "height": 55.1
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s21",
+      "api": "addImage",
+      "kind": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9InllcyI/PjxzdmcgaWQ9IuWbvuWxgl8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB2ZXJzaW9uPSIxLjIiIGJhc2VQcm9maWxlPSJ0aW55IiB4PSIwIiB5PSIwIiB3aWR0aD0iNTk1IiBoZWlnaHQ9Ijg0MiIgdmlld0JveD0iMCAwIDU5NS4yOCA4NDEuODkiPjxkZWZzLz48ZGVmcy8+PGRlZnMvPjxwYXRoIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMSIgZD0iTSAzODQuMjYgMzE4LjI2IEwgMzkyLjg3IDM0MC4xNyBMIDM4NC4yNiAzNjQgTCA0MDMuMjYgMzM5Ljk0IEMgNDAzLjI2IDMzOS45NCAzODQuMjYgMzE3LjA5IDM4NC4yNiAzMTguMjYgWiIvPjwvc3ZnPgo=",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.309427,
+        "top": 0.628981,
+        "width": 0.023229,
+        "height": 0.066574
+      },
+      "slide_bounds_pt": {
+        "left": 297.05,
+        "top": 339.65,
+        "width": 22.3,
+        "height": 35.95
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s22",
+      "api": "addImage",
+      "kind": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9InllcyI/PjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgdmVyc2lvbj0iMS4yIiBiYXNlUHJvZmlsZT0idGlueSIgeD0iMCIgeT0iMCIgd2lkdGg9IjI1NiIgaGVpZ2h0PSIyNTYiIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGcgdHJhbnNmb3JtPSJtYXRyaXgoMC4zMzMzMzMsMCwwLDAuMzMzMzMzLC00Mi42NjY3LC00Mi42NjY3KSI+PGcgaWQ9IlBhZ2UtMSIgZmlsbD0ibm9uZSIgZmlsbC1ydWxlPSJldmVub2RkIiBzdHJva2U9Im5vbmUiIHN0cm9rZS13aWR0aD0iMSI+PGcgaWQ9IumhtemdoiIvPjxwYXRoIGlkPSLlkIjlubblvaLnirYiIGZpbGw9IiMzNGE0NzEiIGZpbGwtb3BhY2l0eT0iMSIgZD0iTSA1MTIgODk2IEMgMjk5LjkyMyA4OTYgMTI4IDcyNC4wNzcgMTI4IDUxMiBDIDEyOCAyOTkuOTIzIDI5OS45MjMgMTI4IDUxMiAxMjggQyA3MjQuMDc3IDEyOCA4OTYgMjk5LjkyMyA4OTYgNTEyIEMgODk2IDcyNC4wNzcgNzI0LjA3NyA4OTYgNTEyIDg5NiBNIDM5MS41MjQgMzA0LjM3MSBDIDM0MS4zNDMgMzA4LjczNSAzMDQgMzUyLjg5MyAzMDQgNDAzLjE4MSBMIDMwNCA0MDQuOTkzIEMgMzA0IDQ1NS4zNzQgMzQ0LjY5MyA0OTYuMDA0IDM5NC44NzMgNDk2LjAwNCBMIDQ4MC44NjIgNDk2LjAwNCBDIDQ4NC45NTcgNDk2LjAwNCA0ODguODYzIDQ5NC4zNzggNDkxLjc0NyA0OTEuNDk5IEMgNDk0LjYzIDQ4OC42MTkgNDk2LjI1NiA0ODQuNzE5IDQ5Ni4yNTYgNDgwLjYzNCBMIDQ5Ni4yNTYgNDAwLjAyMyBDIDQ5Ni4zMDQgMzQ0LjE2NCA0NDguNDk0IDI5OS40NDggMzkxLjUyNCAzMDQuMzcxIE0gNjIzLjg2OSAzMDQuMDkyIEMgNTcwLjc2IDMwNC4wOTIgNTI3Ljc0MSAzNDcuMDg4IDUyNy43NDEgNDAwLjA3MSBMIDUyNy43NDEgNDgwLjY3OSBDIDUyNy43NDEgNDg0Ljc2NSA1MjkuMzcgNDg4LjY2NyA1MzIuMjUzIDQ5MS41NDQgQyA1MzUuMTM3IDQ5NC40MjMgNTM5LjA0MyA0OTYuMDQ5IDU0My4xMzUgNDk2LjA0OSBMIDYyMy44NjkgNDk2LjA0OSBDIDY3Ni45ODIgNDk2LjA0OSA3MjAgNDUzLjA1MiA3MjAgNDAwLjA3MSBDIDcyMC4wNDUgMzQ3LjA0MyA2NzYuOTgyIDMwNC4wOTIgNjIzLjg2OSAzMDQuMDkyIE0gMzA0IDYyNC4wNjcgQyAzMDQgNjc3LjA0OSAzNDcuMDE4IDcyMCA0MDAuMDgzIDcyMCBDIDQ1My42NTggNzIwIDQ5Ni4yNTYgNjc0LjYzNCA0OTYuMjU2IDYyMS4xNDIgTCA0OTYuMjU2IDU1MS40NDUgQyA0OTYuMjU2IDUzNC45MTUgNDg5LjM3NCA1MjguMDQzIDQ4MC44NjIgNTI4LjA0MyBMIDQwMy4wMTIgNTI4LjA0MyBDIDM0OS40MzcgNTI4LjA0MyAzMDMuOTU1IDU3MC41NzQgMzA0IDYyNC4wNjcgTSA2MjAuNjE1IDUyNy41MyBMIDU0My4wODkgNTI3LjUzIEMgNTM4Ljk5NSA1MjcuNTMgNTM1LjA5IDUyOS4xNTYgNTMyLjIwNiA1MzIuMDM1IEMgNTI5LjMyNCA1MzQuOTE1IDUyNy42OTYgNTM4LjgxNSA1MjcuNjk2IDU0Mi45IEwgNTI3LjY5NiA2MjMuNTExIEMgNTI3LjY5NiA2NzYuNTM4IDU3MC43NiA3MTkuNDkgNjIzLjgyNCA3MTkuNDkgQyA2NzcuNTM4IDcxOS40OSA3MjAuOTI4IDY3NS41MTYgNzE5Ljk1MiA2MjEuNjk5IEMgNzE4Ljk3NiA1NjguOTAzIDY3My41ODcgNTI3LjUzIDYyMC42MTUgNTI3LjUzIi8+PC9nPjwvZz48L3N2Zz4K",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.25099,
+        "top": 0.625463,
+        "width": 0.041354,
+        "height": 0.073519
+      },
+      "slide_bounds_pt": {
+        "left": 240.95,
+        "top": 337.75,
+        "width": 39.7,
+        "height": 39.7
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s23",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.503021,
+        "top": 0.63713,
+        "width": 0.348021,
+        "height": 0.050278
+      },
+      "slide_bounds_pt": {
+        "left": 482.9,
+        "top": 344.05,
+        "width": 334.1,
+        "height": 27.15
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        12.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s24",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.148958,
+        "top": 0.62037,
+        "width": 0.094688,
+        "height": 0.083796
+      },
+      "slide_bounds_pt": {
+        "left": 143,
+        "top": 335,
+        "width": 90.9,
+        "height": 45.25
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "e6cf2ab40efb2d88ab3cab43ee7044b61685307b49ee120f9bc06edb1de369a4"
+    },
+    {
+      "id": "s25",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.181354,
+        "top": 0.629074,
+        "width": 0.045885,
+        "height": 0.066296
+      },
+      "slide_bounds_pt": {
+        "left": 174.1,
+        "top": 339.7,
+        "width": 44.05,
+        "height": 35.8
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        22.2
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s26",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.338438,
+        "top": 0.634815,
+        "width": 0.115,
+        "height": 0.054815
+      },
+      "slide_bounds_pt": {
+        "left": 324.9,
+        "top": 342.8,
+        "width": 110.4,
+        "height": 29.6
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        25.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s27",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.299687,
+        "top": 0.79463,
+        "width": 0.177083,
+        "height": 0.083796
+      },
+      "slide_bounds_pt": {
+        "left": 287.7,
+        "top": 429.1,
+        "width": 170,
+        "height": 45.25
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "2dcc171e694274e1759da73ffff6b53f0383649fb6e655e07ddc092e4502ec3c"
+    },
+    {
+      "id": "s28",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.242969,
+        "top": 0.785463,
+        "width": 0.057448,
+        "height": 0.102037
+      },
+      "slide_bounds_pt": {
+        "left": 233.25,
+        "top": 424.15,
+        "width": 55.15,
+        "height": 55.1
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s29",
+      "api": "addImage",
+      "kind": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9InllcyI/PjxzdmcgaWQ9IuWbvuWxgl8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB2ZXJzaW9uPSIxLjIiIGJhc2VQcm9maWxlPSJ0aW55IiB4PSIwIiB5PSIwIiB3aWR0aD0iNTk1IiBoZWlnaHQ9Ijg0MiIgdmlld0JveD0iMCAwIDU5NS4yOCA4NDEuODkiPjxkZWZzLz48ZGVmcy8+PGRlZnMvPjxwYXRoIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMSIgZD0iTSAzODQuMjYgMzE4LjI2IEwgMzkyLjg3IDM0MC4xNyBMIDM4NC4yNiAzNjQgTCA0MDMuMjYgMzM5Ljk0IEMgNDAzLjI2IDMzOS45NCAzODQuMjYgMzE3LjA5IDM4NC4yNiAzMTguMjYgWiIvPjwvc3ZnPgo=",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.309427,
+        "top": 0.803241,
+        "width": 0.023229,
+        "height": 0.066574
+      },
+      "slide_bounds_pt": {
+        "left": 297.05,
+        "top": 433.75,
+        "width": 22.3,
+        "height": 35.95
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s30",
+      "api": "addImage",
+      "kind": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9InllcyI/PjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgdmVyc2lvbj0iMS4yIiBiYXNlUHJvZmlsZT0idGlueSIgeD0iMCIgeT0iMCIgd2lkdGg9IjI1NiIgaGVpZ2h0PSIyNTYiIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGcgdHJhbnNmb3JtPSJtYXRyaXgoMC4zMzMzMzMsMCwwLDAuMzMzMzMzLC00Mi42NjY3LC00Mi42NjY3KSI+PGcgaWQ9IlBhZ2UtMSIgZmlsbD0ibm9uZSIgZmlsbC1ydWxlPSJldmVub2RkIiBzdHJva2U9Im5vbmUiIHN0cm9rZS13aWR0aD0iMSI+PGcgaWQ9IumhtemdoiIvPjxwYXRoIGlkPSLlkIjlubblvaLnirYiIGZpbGw9IiNmZjk4MDAiIGZpbGwtb3BhY2l0eT0iMSIgZD0iTSA1MTIgODk2IEMgMjk5LjkyMyA4OTYgMTI4IDcyNC4wNzcgMTI4IDUxMiBDIDEyOCAyOTkuOTIzIDI5OS45MjMgMTI4IDUxMiAxMjggQyA3MjQuMDc3IDEyOCA4OTYgMjk5LjkyMyA4OTYgNTEyIEMgODk2IDcyNC4wNzcgNzI0LjA3NyA4OTYgNTEyIDg5NiBNIDU5NS42MzIgNjU2Ljg3OSBDIDY3OC4xNTggNjg1LjE2MyA3NDMuNTcxIDY4Ni45MzEgNzYxLjQxNSA2NTYuMDI0IEMgNzc5LjI2IDYyNS4xMTYgNzQ1LjAyMiA1NjkuMzUxIDY3OS4yNjQgNTEyLjAyNCBDIDc0NS4wMjIgNDU0LjY5NyA3NzkuMjYgMzk4LjkzMSA3NjEuNDE1IDM2OC4wMjQgQyA3NDMuNTcxIDMzNy4xMTYgNjc4LjE1OCAzMzguODg0IDU5NS42MzIgMzY3LjE2OSBDIDU3OC44NjUgMjgxLjU1NyA1NDcuNjg5IDIyNC4wMjQgNTEyIDIyNC4wMjQgQyA0NzYuMzExIDIyNC4wMjQgNDQ1LjEzNSAyODEuNTU3IDQyOC4zNjggMzY3LjE2OSBDIDM0NS44NDIgMzM4Ljg4NCAyODAuNDI5IDMzNy4xMTYgMjYyLjU4NSAzNjguMDI0IEMgMjQ0Ljc0IDM5OC45MzEgMjc4Ljk3OCA0NTQuNjk3IDM0NC43MzYgNTEyLjAyNCBDIDI3OC45NzggNTY5LjM1MSAyNDQuNzQgNjI1LjExNiAyNjIuNTg1IDY1Ni4wMjQgQyAyODAuNDI5IDY4Ni45MzEgMzQ1Ljg0MiA2ODUuMTYzIDQyOC4zNjggNjU2Ljg3OSBDIDQ0NS4xMzUgNzQyLjQ5IDQ3Ni4zMTEgODAwLjAyNCA1MTIgODAwLjAyNCBDIDU0Ny42ODkgODAwLjAyNCA1NzguODY1IDc0Mi40OSA1OTUuNjMyIDY1Ni44NzkgTSA2MDIuMTE5IDYxNi45NTkgQyA2MDQuMjI5IDYwMC45MTIgNjA1Ljg2OSA1ODQuMTY1IDYwNi45ODkgNTY2Ljg2NiBDIDYyMS40MSA1NTcuMjQ2IDYzNS4wOTQgNTQ3LjQ1MiA2NDcuOTM2IDUzNy42MDEgQyA2OTYuNjA3IDU3Ny4xNzYgNzIzLjQ1OSA2MTIuMDkzIDcxMy45MjUgNjI4LjYwNSBDIDcwNC4zOTIgNjQ1LjExOCA2NjAuNzI3IDYzOS4zMjIgNjAyLjExOSA2MTYuOTU5IE0gNDIxLjg4IDQwNy4wOTUgQyA0MTkuNzcxIDQyMy4xNCA0MTguMTMxIDQzOS44ODUgNDE3LjAxMSA0NTcuMTgyIEMgNDAyLjU5MiA0NjYuOCAzODguOTEgNDc2LjU5MyAzNzYuMDY5IDQ4Ni40NDIgQyAzMjcuNDE3IDQ0Ni44NzcgMzAwLjU3OCA0MTEuOTcyIDMxMC4xMSAzOTUuNDYyIEMgMzE5LjY0MiAzNzguOTUzIDM2My4yOSAzODQuNzQzIDQyMS44OCA0MDcuMDk1IE0gNDE3LjAxMSA1NjYuODY2IEMgNDE4LjEzMSA1ODQuMTY1IDQxOS43NzEgNjAwLjkxMiA0MjEuODgxIDYxNi45NTkgQyAzNjMuMjczIDYzOS4zMjIgMzE5LjYwOCA2NDUuMTE4IDMxMC4wNzUgNjI4LjYwNSBDIDMwMC41NDEgNjEyLjA5MyAzMjcuMzkzIDU3Ny4xNzYgMzc2LjA2NCA1MzcuNjAxIEMgMzg4LjkwNiA1NDcuNDUyIDQwMi41OSA1NTcuMjQ2IDQxNy4wMTEgNTY2Ljg2NiBNIDYwNi45ODkgNDU3LjE4MiBDIDYwNS44NjkgNDM5Ljg4NSA2MDQuMjI5IDQyMy4xNCA2MDIuMTIgNDA3LjA5NSBDIDY2MC43MSAzODQuNzQzIDcwNC4zNTggMzc4Ljk1MyA3MTMuODkgMzk1LjQ2MiBDIDcyMy40MjIgNDExLjk3MiA2OTYuNTgzIDQ0Ni44NzcgNjQ3LjkzMSA0ODYuNDQyIEMgNjM1LjA5IDQ3Ni41OTMgNjIxLjQwOCA0NjYuOCA2MDYuOTg5IDQ1Ny4xODIgTSA1NTcuODE3IDY0Mi41MzYgQyA1NDcuODggNzA0LjQ3NCA1MzEuMDY3IDc0NS4xODcgNTEyIDc0NS4xODcgQyA0OTIuOTMzIDc0NS4xODcgNDc2LjEyIDcwNC40NzQgNDY2LjE4MyA2NDIuNTM2IEMgNDgxLjEzNSA2MzYuMzQgNDk2LjQ1OSA2MjkuMzg3IDUxMiA2MjEuNzA4IEMgNTI3LjU0MSA2MjkuMzg3IDU0Mi44NjUgNjM2LjM0IDU1Ny44MTcgNjQyLjUzNiBNIDQ1Ny4yMjMgNTQzLjY0OCBDIDQ1Ni44OTEgNTMzLjMxMyA0NTYuNzE5IDUyMi43NjMgNDU2LjcxOSA1MTIuMDQ0IEMgNDU2LjcxOSA1MDEuMzEgNDU2Ljg5MSA0OTAuNzQ2IDQ1Ny4yMjQgNDgwLjM5NyBDIDQ2Ni4wMDkgNDc0Ljk0MiA0NzUuMDU5IDQ2OS41MTkgNDg0LjM0MiA0NjQuMTU5IEMgNDkzLjYzNyA0NTguNzkzIDUwMi44NzIgNDUzLjY2IDUxMiA0NDguNzc0IEMgNTIxLjEyOCA0NTMuNjYgNTMwLjM2MyA0NTguNzkzIDUzOS42NTggNDY0LjE1OSBDIDU0OC45NDEgNDY5LjUxOSA1NTcuOTkxIDQ3NC45NDIgNTY2Ljc3NiA0ODAuMzk3IEMgNTY3LjEwOSA0OTAuNzQ2IDU2Ny4yODEgNTAxLjMxIDU2Ny4yODEgNTEyLjA0NCBDIDU2Ny4yODEgNTIyLjc2MyA1NjcuMTA5IDUzMy4zMTMgNTY2Ljc3NyA1NDMuNjQ4IEMgNTU3Ljk4MSA1NDkuMTEgNTQ4LjkxOCA1NTQuNTQxIDUzOS42MjMgNTU5LjkwOCBDIDUzMC4zMzkgNTY1LjI2OCA1MjEuMTE3IDU3MC4zOTUgNTEyIDU3NS4yNzUgQyA1MDIuODgzIDU3MC4zOTUgNDkzLjY2MSA1NjUuMjY4IDQ4NC4zNzcgNTU5LjkwOCBDIDQ3NS4wODIgNTU0LjU0MSA0NjYuMDE5IDU0OS4xMSA0NTcuMjIzIDU0My42NDggTSA0NjYuMTg5IDM4MS41MTQgQyA0NzYuMTI3IDMxOS41OTcgNDkyLjkzNyAyNzguOTAxIDUxMiAyNzguOTAxIEMgNTMxLjA2MyAyNzguOTAxIDU0Ny44NzMgMzE5LjU5NyA1NTcuODExIDM4MS41MTQgQyA1NDIuODYxIDM4Ny43MDkgNTI3LjUzOSAzOTQuNjYxIDUxMiA0MDIuMzQgQyA0OTYuNDYxIDM5NC42NjEgNDgxLjEzOSAzODcuNzA5IDQ2Ni4xODkgMzgxLjUxNCIvPjwvZz48L2c+PC9zdmc+Cg==",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.25099,
+        "top": 0.799722,
+        "width": 0.041354,
+        "height": 0.073519
+      },
+      "slide_bounds_pt": {
+        "left": 240.95,
+        "top": 431.85,
+        "width": 39.7,
+        "height": 39.7
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s31",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.503021,
+        "top": 0.811389,
+        "width": 0.348021,
+        "height": 0.050278
+      },
+      "slide_bounds_pt": {
+        "left": 482.9,
+        "top": 438.15,
+        "width": 334.1,
+        "height": 27.15
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        12.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s32",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.148958,
+        "top": 0.79463,
+        "width": 0.094688,
+        "height": 0.083796
+      },
+      "slide_bounds_pt": {
+        "left": 143,
+        "top": 429.1,
+        "width": 90.9,
+        "height": 45.25
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "e6cf2ab40efb2d88ab3cab43ee7044b61685307b49ee120f9bc06edb1de369a4"
+    },
+    {
+      "id": "s33",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.180833,
+        "top": 0.803333,
+        "width": 0.046406,
+        "height": 0.066296
+      },
+      "slide_bounds_pt": {
+        "left": 173.6,
+        "top": 433.8,
+        "width": 44.55,
+        "height": 35.8
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        22.2
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s34",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.338438,
+        "top": 0.809074,
+        "width": 0.115,
+        "height": 0.054815
+      },
+      "slide_bounds_pt": {
+        "left": 324.9,
+        "top": 436.9,
+        "width": 110.4,
+        "height": 29.6
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        25.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s35",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.290729,
+        "top": 0.048796,
+        "width": 0.418594,
+        "height": 0.085556
+      },
+      "slide_bounds_pt": {
+        "left": 279.1,
+        "top": 26.35,
+        "width": 401.85,
+        "height": 46.2
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        32.0
+      ],
+      "geometry_sha256": null
+    }
+  ],
+  "groups": [],
+  "structural_parameters": {
+    "components": [
+      {
+        "signature": "6b8c867620c8b8d6d3c66badd11ff3727a2787f19e6a1ee88da2ee36dfb2b22e",
+        "observed_instances": [
+          "s1",
+          "s17"
+        ],
+        "observed_count": 2,
+        "structure": {
+          "api": "addCustomGeometry",
+          "kind": "addCustomGeometry",
+          "geometry": "8974730cc5f2a50dd4e62c6ca93c2f1710c076558acb7cfcd6fe96e49c738258",
+          "aspect": 2.009,
+          "text_slot": false
+        },
+        "repeat_axis": "vertical",
+        "observed_gaps_pt": [
+          48.85
+        ],
+        "equal_gap_observed": true,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "ea855023b8225663386d5053cf2481b3c6875b497183fe92a176398b5552a198",
+        "observed_instances": [
+          "s2",
+          "s10"
+        ],
+        "observed_count": 2,
+        "structure": {
+          "api": "addCustomGeometry",
+          "kind": "addCustomGeometry",
+          "geometry": "112565c577c42613dd6813718ab877c26d82d96efe3cb76cffd6efca0938f852",
+          "aspect": 3.757,
+          "text_slot": false
+        },
+        "repeat_axis": "vertical",
+        "observed_gaps_pt": [
+          48.85
+        ],
+        "equal_gap_observed": true,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "dac50a098e2be1ff817d9b9e55d91e7a4596e824337bd4c81dfbae5df5822c02",
+        "observed_instances": [
+          "s3",
+          "s11"
+        ],
+        "observed_count": 2,
+        "structure": {
+          "api": "addCustomGeometry",
+          "kind": "addCustomGeometry",
+          "geometry": "0f34abd9810a6abd2b37ceaa3ed365ab296aedd1a831bcd465b9b417c650c4bd",
+          "aspect": 4.446,
+          "text_slot": false
+        },
+        "repeat_axis": "vertical",
+        "observed_gaps_pt": [
+          82.0
+        ],
+        "equal_gap_observed": true,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "d525f1b487e97c2ca749dc12da41fe997497ee64ad3a170b86dc10da67f02bda",
+        "observed_instances": [
+          "s4",
+          "s12",
+          "s20",
+          "s28"
+        ],
+        "observed_count": 4,
+        "structure": {
+          "api": "addGeometricShape",
+          "kind": "Ellipse",
+          "geometry": null,
+          "aspect": 1.001,
+          "text_slot": false
+        },
+        "repeat_axis": "vertical",
+        "observed_gaps_pt": [
+          39.0,
+          39.0,
+          39.0
+        ],
+        "equal_gap_observed": true,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "e8a73c97689795f74209c87e689b8a1aade1f53dda7f64e3499bb4b685915343",
+        "observed_instances": [
+          "s5",
+          "s13",
+          "s21",
+          "s29"
+        ],
+        "observed_count": 4,
+        "structure": {
+          "api": "addImage",
+          "kind": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9InllcyI/PjxzdmcgaWQ9IuWbvuWxgl8xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB2ZXJzaW9uPSIxLjIiIGJhc2VQcm9maWxlPSJ0aW55IiB4PSIwIiB5PSIwIiB3aWR0aD0iNTk1IiBoZWlnaHQ9Ijg0MiIgdmlld0JveD0iMCAwIDU5NS4yOCA4NDEuODkiPjxkZWZzLz48ZGVmcy8+PGRlZnMvPjxwYXRoIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMSIgZD0iTSAzODQuMjYgMzE4LjI2IEwgMzkyLjg3IDM0MC4xNyBMIDM4NC4yNiAzNjQgTCA0MDMuMjYgMzM5Ljk0IEMgNDAzLjI2IDMzOS45NCAzODQuMjYgMzE3LjA5IDM4NC4yNiAzMTguMjYgWiIvPjwvc3ZnPgo=",
+          "geometry": null,
+          "aspect": 0.62,
+          "text_slot": false
+        },
+        "repeat_axis": "vertical",
+        "observed_gaps_pt": [
+          58.15,
+          58.15,
+          58.15
+        ],
+        "equal_gap_observed": true,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "44e7508b4c1da6555ed9df3bd5b40cde52484a28594122ec7eda81c9a019b3bd",
+        "observed_instances": [
+          "s6"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addImage",
+          "kind": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9InllcyI/PjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgdmVyc2lvbj0iMS4yIiBiYXNlUHJvZmlsZT0idGlueSIgeD0iMCIgeT0iMCIgd2lkdGg9IjI1NiIgaGVpZ2h0PSIyNTYiIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGcgdHJhbnNmb3JtPSJtYXRyaXgoMC4zMzMzMzMsMCwwLDAuMzMzMzMzLC00Mi42NjY3LC00Mi42NjY3KSI+PGcgaWQ9IlBhZ2UtMSIgZmlsbD0ibm9uZSIgZmlsbC1ydWxlPSJldmVub2RkIiBzdHJva2U9Im5vbmUiIHN0cm9rZS13aWR0aD0iMSI+PGcgaWQ9IumhtemdoiIvPjxwYXRoIGlkPSLlkIjlubblvaLnirYiIGZpbGw9IiMyMTY5ZDMiIGZpbGwtb3BhY2l0eT0iMSIgZD0iTSA1MTIgODk2IEMgMjk5LjkyMyA4OTYgMTI4IDcyNC4wNzcgMTI4IDUxMiBDIDEyOCAyOTkuOTIzIDI5OS45MjMgMTI4IDUxMiAxMjggQyA3MjQuMDc3IDEyOCA4OTYgMjk5LjkyMyA4OTYgNTEyIEMgODk2IDcyNC4wNzcgNzI0LjA3NyA4OTYgNTEyIDg5NiBNIDY4OC42MjcgNzA0IEMgNjk2Ljk1MiA3MDQgNzA0LjIwOSA2OTYuMTEgNzAzLjk5NSA2ODcuNzk1IEwgNzAzLjk5NSA0NTEuNTQxIEMgNzAzLjk5NSA0MjguOTM5IDY4Ni40OTMgNDI0LjY3MyA2NzAuOTExIDQ0My4wMTEgTCA1NTUuNDM1IDU4Ni4zMDEgQyA1NTAuMzEzIDU5Mi45MDkgNTM3LjA3OCA1ODMuMzE1IDUzMC42NzYgNTc3Ljc3IEwgNDg0LjM1OCA1MzYuMTkxIEMgNDc3Ljk1MyA1MzAuNjQ4IDQ2OC41NjEgNTQwLjAyOSA0NjMuMjI2IDU0Ni42MzkgTCA0MDkuMjI0IDYxNC4wMTkgQyA0MDMuODg2IDYyMC42MyAzOTQuNDk2IDYxMi45NTMgMzg4LjA5MiA2MDcuNDA4IEwgMzQxLjEzMyA1NjkuMjQxIEMgMzMyLjgwOSA1NjAuOTI0IDMyNC42OTcgNTY5LjY2OCAzMjQuNjk3IDU4Ni4wODcgTCAzMjQuNjk3IDY4Ny41ODIgQyAzMjQuNjk3IDY5Ni4xMSAzMzIuMzgxIDcwNCAzNDAuNzA1IDcwNCBMIDY4OC42MjcgNzA0IE0gNTUzLjMwMSA1MjguMDg4IEwgNjk1LjI0NCAzNDAuMDI0IEMgNzA1LjkxNyAzMjUuNzM4IDcwMC41NzkgMzE3LjIwOCA2ODMuNTA1IDMyMC44MzMgTCA1ODQuODkyIDM0Mi4zNjggQyA1NjcuODE2IDM0Ni4yMDggNTY0LjgyNyAzNTguNTc1IDU3OC4yNzQgMzcwLjA4OSBMIDU5Ny4yNzEgMzg2LjI5NCBMIDUyOS4xODIgNDc0LjM1NSBMIDQ3Ni40NTkgNDI4LjcyNiBDIDQ3MS4xMjIgNDI0LjI0OCA0NjQuMjkzIDQyMS45MDIgNDU3LjI0OSA0MjIuNzU2IEMgNDUwLjQxOCA0MjMuNjA4IDQ0NC4wMTYgNDI3LjIzMyA0MzkuNzQ1IDQzMi45OSBMIDM4Ny4wMjUgNTA0LjYzNCBMIDM2MS42MjUgNDgzLjMxMSBDIDM1MC43MzggNDczLjkzIDMzNC43MjkgNDc1LjYzNSAzMjUuNzY0IDQ4Ni45MzcgQyAzMTYuNzk5IDQ5OC4yMzcgMzE4LjUwNyA1MTQuODY4IDMyOS4zOTMgNTI0LjAzNyBMIDM3NS4yODQgNTYyLjYzMSBDIDM3OS45OCA1NjYuNDcgMzg1Ljc0MyA1NjguNjAxIDM5MS41MDggNTY4LjYwMSBDIDM5Mi41NzQgNTY4LjYwMSAzOTMuNDI3IDU2OC42MDEgMzk0LjQ5NiA1NjguMzg5IEMgNDAxLjMyNiA1NjcuNTM2IDQwNy41MTYgNTYzLjkxIDQxMS43ODQgNTU4LjE1MyBMIDQ2NC4yOTMgNDg2LjcyMyBMIDUxNi41ODcgNTMyLjE0MSBDIDUyMS45MjUgNTM2LjYxOCA1MjguOTY4IDUzOC45NjMgNTM1Ljc5NyA1MzguMTExIEMgNTQyLjYyOSA1MzcuMjU3IDU0OS4wMzMgNTMzLjYzMyA1NTMuMzAxIDUyOC4wODgiLz48L2c+PC9nPjwvc3ZnPgo=",
+          "geometry": null,
+          "aspect": 1.0,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "9136f124a3fb1882c000778b9142aed6c68ab3b0f35520f9691a7675ac46c612",
+        "observed_instances": [
+          "s7",
+          "s15",
+          "s26",
+          "s34"
+        ],
+        "observed_count": 4,
+        "structure": {
+          "api": "addTextBox",
+          "kind": "addTextBox",
+          "geometry": null,
+          "aspect": 3.73,
+          "text_slot": true
+        },
+        "repeat_axis": "vertical",
+        "observed_gaps_pt": [
+          64.5,
+          64.5,
+          64.5
+        ],
+        "equal_gap_observed": true,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "8a9a5d6fa1b2cfa8295f511dd9ad9709b835ca9f7bd8f38a5ca4b4f82632b5ac",
+        "observed_instances": [
+          "s8",
+          "s16",
+          "s23",
+          "s31"
+        ],
+        "observed_count": 4,
+        "structure": {
+          "api": "addTextBox",
+          "kind": "addTextBox",
+          "geometry": null,
+          "aspect": 12.306,
+          "text_slot": true
+        },
+        "repeat_axis": "vertical",
+        "observed_gaps_pt": [
+          66.95,
+          66.95,
+          66.95
+        ],
+        "equal_gap_observed": true,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "103f01ade6564109510484b26a26c44992d1cc335dd7b6b7eaf5b3fd61285a46",
+        "observed_instances": [
+          "s9"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addTextBox",
+          "kind": "addTextBox",
+          "geometry": null,
+          "aspect": 1.138,
+          "text_slot": true
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "97a19f5e7cd6ec0bc38efdfeffbddaf2cb1ddd7c2bda0e03716a71fff63ade0e",
+        "observed_instances": [
+          "s14"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addImage",
+          "kind": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9InllcyI/PjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgdmVyc2lvbj0iMS4yIiBiYXNlUHJvZmlsZT0idGlueSIgeD0iMCIgeT0iMCIgd2lkdGg9IjI1NiIgaGVpZ2h0PSIyNTYiIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGcgdHJhbnNmb3JtPSJtYXRyaXgoMC4zMzMzMzMsMCwwLDAuMzMzMzMzLC00Mi42NjY3LC00Mi42NjY3KSI+PGcgaWQ9IlBhZ2UtMSIgZmlsbD0ibm9uZSIgZmlsbC1ydWxlPSJldmVub2RkIiBzdHJva2U9Im5vbmUiIHN0cm9rZS13aWR0aD0iMSI+PGcgaWQ9IumhtemdoiIvPjxwYXRoIGlkPSLlkIjlubblvaLnirYiIGZpbGw9IiMyMDk0Y2UiIGZpbGwtb3BhY2l0eT0iMSIgZD0iTSA1MTIgODk2IEMgMjk5LjkyMyA4OTYgMTI4IDcyNC4wNzcgMTI4IDUxMiBDIDEyOCAyOTkuOTIzIDI5OS45MjMgMTI4IDUxMiAxMjggQyA3MjQuMDc3IDEyOCA4OTYgMjk5LjkyMyA4OTYgNTEyIEMgODk2IDcyNC4wNzcgNzI0LjA3NyA4OTYgNTEyIDg5NiBNIDUxOC42MjQgNDE2IEMgNTYyLjgwNyA0MTYgNTk4LjYyNCAzODAuMTgzIDU5OC42MjQgMzM2IEMgNTk4LjYyNCAyOTEuODE3IDU2Mi44MDcgMjU2IDUxOC42MjQgMjU2IEMgNDc0LjQ0MiAyNTYgNDM4LjYyNCAyOTEuODE3IDQzOC42MjQgMzM2IEMgNDM4LjYyNCAzODAuMTgzIDQ3NC40NDIgNDE2IDUxOC42MjQgNDE2IE0gNjI1LjE0MyA0OTMuMzkgQyA2MzguNzk2IDUzNS40MSA2ODMuOTI4IDU1OC40MDYgNzI1Ljk0OSA1NDQuNzUzIEMgNzY3Ljk2OSA1MzEuMSA3OTAuOTY1IDQ4NS45NjggNzc3LjMxMiA0NDMuOTQ3IEMgNzYzLjY1OSA0MDEuOTI3IDcxOC41MjYgMzc4LjkzMSA2NzYuNTA2IDM5Mi41ODQgQyA2MzQuNDg2IDQwNi4yMzcgNjExLjQ5IDQ1MS4zNyA2MjUuMTQzIDQ5My4zOSBNIDU4NC40NTYgNjE4LjYxIEMgNTQ4LjcxMiA2NDQuNTggNTQwLjc4OCA2OTQuNjA5IDU2Ni43NTggNzMwLjM1NCBDIDU5Mi43MjggNzY2LjA5OSA2NDIuNzU3IDc3NC4wMjMgNjc4LjUwMiA3NDguMDUzIEMgNzE0LjI0NyA3MjIuMDgzIDcyMi4xNzEgNjcyLjA1MyA2OTYuMjAxIDYzNi4zMDggQyA2NzAuMjMxIDYwMC41NjQgNjIwLjIwMSA1OTIuNjQgNTg0LjQ1NiA2MTguNjEgTSA0NTIuNzkzIDYxOC42MSBDIDQxNy4wNDggNTkyLjY0IDM2Ny4wMTggNjAwLjU2NCAzNDEuMDQ4IDYzNi4zMDggQyAzMTUuMDc4IDY3Mi4wNTMgMzIzLjAwMiA3MjIuMDgzIDM1OC43NDcgNzQ4LjA1MyBDIDM5NC40OTEgNzc0LjAyMyA0NDQuNTIxIDc2Ni4wOTkgNDcwLjQ5MSA3MzAuMzU0IEMgNDk2LjQ2MSA2OTQuNjA5IDQ4OC41MzcgNjQ0LjU4IDQ1Mi43OTMgNjE4LjYxIE0gNDEyLjEwNiA0OTMuMzkgQyA0MjUuNzU5IDQ1MS4zNyA0MDIuNzYzIDQwNi4yMzcgMzYwLjc0MyAzOTIuNTg0IEMgMzE4LjcyMyAzNzguOTMxIDI3My41OSA0MDEuOTI3IDI1OS45MzcgNDQzLjk0NyBDIDI0Ni4yODQgNDg1Ljk2OCAyNjkuMjggNTMxLjEgMzExLjMgNTQ0Ljc1MyBDIDM1My4zMjEgNTU4LjQwNiAzOTguNDUzIDUzNS40MSA0MTIuMTA2IDQ5My4zOSIvPjwvZz48L2c+PC9zdmc+Cg==",
+          "geometry": null,
+          "aspect": 1.0,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "9b2f9f3c31ba6466f4d44e73efa281c6f66e014b5475216075c365f066ac8c47",
+        "observed_instances": [
+          "s18"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addTextBox",
+          "kind": "addTextBox",
+          "geometry": null,
+          "aspect": 1.226,
+          "text_slot": true
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "8495936e8abc7d3aab123b38ece1d2e9c198029707400159481d894af44da8a7",
+        "observed_instances": [
+          "s19",
+          "s27"
+        ],
+        "observed_count": 2,
+        "structure": {
+          "api": "addCustomGeometry",
+          "kind": "addCustomGeometry",
+          "geometry": "2dcc171e694274e1759da73ffff6b53f0383649fb6e655e07ddc092e4502ec3c",
+          "aspect": 3.757,
+          "text_slot": false
+        },
+        "repeat_axis": "vertical",
+        "observed_gaps_pt": [
+          48.85
+        ],
+        "equal_gap_observed": true,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "f67eaee92b36ee0a9c5a842dbc0a5c3c0f3fdbb828a6b648803fa1b73fcfc9e4",
+        "observed_instances": [
+          "s22"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addImage",
+          "kind": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9InllcyI/PjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgdmVyc2lvbj0iMS4yIiBiYXNlUHJvZmlsZT0idGlueSIgeD0iMCIgeT0iMCIgd2lkdGg9IjI1NiIgaGVpZ2h0PSIyNTYiIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGcgdHJhbnNmb3JtPSJtYXRyaXgoMC4zMzMzMzMsMCwwLDAuMzMzMzMzLC00Mi42NjY3LC00Mi42NjY3KSI+PGcgaWQ9IlBhZ2UtMSIgZmlsbD0ibm9uZSIgZmlsbC1ydWxlPSJldmVub2RkIiBzdHJva2U9Im5vbmUiIHN0cm9rZS13aWR0aD0iMSI+PGcgaWQ9IumhtemdoiIvPjxwYXRoIGlkPSLlkIjlubblvaLnirYiIGZpbGw9IiMzNGE0NzEiIGZpbGwtb3BhY2l0eT0iMSIgZD0iTSA1MTIgODk2IEMgMjk5LjkyMyA4OTYgMTI4IDcyNC4wNzcgMTI4IDUxMiBDIDEyOCAyOTkuOTIzIDI5OS45MjMgMTI4IDUxMiAxMjggQyA3MjQuMDc3IDEyOCA4OTYgMjk5LjkyMyA4OTYgNTEyIEMgODk2IDcyNC4wNzcgNzI0LjA3NyA4OTYgNTEyIDg5NiBNIDM5MS41MjQgMzA0LjM3MSBDIDM0MS4zNDMgMzA4LjczNSAzMDQgMzUyLjg5MyAzMDQgNDAzLjE4MSBMIDMwNCA0MDQuOTkzIEMgMzA0IDQ1NS4zNzQgMzQ0LjY5MyA0OTYuMDA0IDM5NC44NzMgNDk2LjAwNCBMIDQ4MC44NjIgNDk2LjAwNCBDIDQ4NC45NTcgNDk2LjAwNCA0ODguODYzIDQ5NC4zNzggNDkxLjc0NyA0OTEuNDk5IEMgNDk0LjYzIDQ4OC42MTkgNDk2LjI1NiA0ODQuNzE5IDQ5Ni4yNTYgNDgwLjYzNCBMIDQ5Ni4yNTYgNDAwLjAyMyBDIDQ5Ni4zMDQgMzQ0LjE2NCA0NDguNDk0IDI5OS40NDggMzkxLjUyNCAzMDQuMzcxIE0gNjIzLjg2OSAzMDQuMDkyIEMgNTcwLjc2IDMwNC4wOTIgNTI3Ljc0MSAzNDcuMDg4IDUyNy43NDEgNDAwLjA3MSBMIDUyNy43NDEgNDgwLjY3OSBDIDUyNy43NDEgNDg0Ljc2NSA1MjkuMzcgNDg4LjY2NyA1MzIuMjUzIDQ5MS41NDQgQyA1MzUuMTM3IDQ5NC40MjMgNTM5LjA0MyA0OTYuMDQ5IDU0My4xMzUgNDk2LjA0OSBMIDYyMy44NjkgNDk2LjA0OSBDIDY3Ni45ODIgNDk2LjA0OSA3MjAgNDUzLjA1MiA3MjAgNDAwLjA3MSBDIDcyMC4wNDUgMzQ3LjA0MyA2NzYuOTgyIDMwNC4wOTIgNjIzLjg2OSAzMDQuMDkyIE0gMzA0IDYyNC4wNjcgQyAzMDQgNjc3LjA0OSAzNDcuMDE4IDcyMCA0MDAuMDgzIDcyMCBDIDQ1My42NTggNzIwIDQ5Ni4yNTYgNjc0LjYzNCA0OTYuMjU2IDYyMS4xNDIgTCA0OTYuMjU2IDU1MS40NDUgQyA0OTYuMjU2IDUzNC45MTUgNDg5LjM3NCA1MjguMDQzIDQ4MC44NjIgNTI4LjA0MyBMIDQwMy4wMTIgNTI4LjA0MyBDIDM0OS40MzcgNTI4LjA0MyAzMDMuOTU1IDU3MC41NzQgMzA0IDYyNC4wNjcgTSA2MjAuNjE1IDUyNy41MyBMIDU0My4wODkgNTI3LjUzIEMgNTM4Ljk5NSA1MjcuNTMgNTM1LjA5IDUyOS4xNTYgNTMyLjIwNiA1MzIuMDM1IEMgNTI5LjMyNCA1MzQuOTE1IDUyNy42OTYgNTM4LjgxNSA1MjcuNjk2IDU0Mi45IEwgNTI3LjY5NiA2MjMuNTExIEMgNTI3LjY5NiA2NzYuNTM4IDU3MC43NiA3MTkuNDkgNjIzLjgyNCA3MTkuNDkgQyA2NzcuNTM4IDcxOS40OSA3MjAuOTI4IDY3NS41MTYgNzE5Ljk1MiA2MjEuNjk5IEMgNzE4Ljk3NiA1NjguOTAzIDY3My41ODcgNTI3LjUzIDYyMC42MTUgNTI3LjUzIi8+PC9nPjwvZz48L3N2Zz4K",
+          "geometry": null,
+          "aspect": 1.0,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "fa9cf7159106a30a338375f0b8105737f6c7119ba060a75191e668f643001ce4",
+        "observed_instances": [
+          "s24",
+          "s32"
+        ],
+        "observed_count": 2,
+        "structure": {
+          "api": "addCustomGeometry",
+          "kind": "addCustomGeometry",
+          "geometry": "e6cf2ab40efb2d88ab3cab43ee7044b61685307b49ee120f9bc06edb1de369a4",
+          "aspect": 2.009,
+          "text_slot": false
+        },
+        "repeat_axis": "vertical",
+        "observed_gaps_pt": [
+          48.85
+        ],
+        "equal_gap_observed": true,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "4fd08323f562ecf3d9317bd5b5028ff95c139d85a9aa41cd749d75595704838c",
+        "observed_instances": [
+          "s25"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addTextBox",
+          "kind": "addTextBox",
+          "geometry": null,
+          "aspect": 1.23,
+          "text_slot": true
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "b557d9e0fa5c385fe4cf698187a688362bcf8762b0b138a29e3ba20ce68db1ad",
+        "observed_instances": [
+          "s30"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addImage",
+          "kind": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9InllcyI/PjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgdmVyc2lvbj0iMS4yIiBiYXNlUHJvZmlsZT0idGlueSIgeD0iMCIgeT0iMCIgd2lkdGg9IjI1NiIgaGVpZ2h0PSIyNTYiIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGcgdHJhbnNmb3JtPSJtYXRyaXgoMC4zMzMzMzMsMCwwLDAuMzMzMzMzLC00Mi42NjY3LC00Mi42NjY3KSI+PGcgaWQ9IlBhZ2UtMSIgZmlsbD0ibm9uZSIgZmlsbC1ydWxlPSJldmVub2RkIiBzdHJva2U9Im5vbmUiIHN0cm9rZS13aWR0aD0iMSI+PGcgaWQ9IumhtemdoiIvPjxwYXRoIGlkPSLlkIjlubblvaLnirYiIGZpbGw9IiNmZjk4MDAiIGZpbGwtb3BhY2l0eT0iMSIgZD0iTSA1MTIgODk2IEMgMjk5LjkyMyA4OTYgMTI4IDcyNC4wNzcgMTI4IDUxMiBDIDEyOCAyOTkuOTIzIDI5OS45MjMgMTI4IDUxMiAxMjggQyA3MjQuMDc3IDEyOCA4OTYgMjk5LjkyMyA4OTYgNTEyIEMgODk2IDcyNC4wNzcgNzI0LjA3NyA4OTYgNTEyIDg5NiBNIDU5NS42MzIgNjU2Ljg3OSBDIDY3OC4xNTggNjg1LjE2MyA3NDMuNTcxIDY4Ni45MzEgNzYxLjQxNSA2NTYuMDI0IEMgNzc5LjI2IDYyNS4xMTYgNzQ1LjAyMiA1NjkuMzUxIDY3OS4yNjQgNTEyLjAyNCBDIDc0NS4wMjIgNDU0LjY5NyA3NzkuMjYgMzk4LjkzMSA3NjEuNDE1IDM2OC4wMjQgQyA3NDMuNTcxIDMzNy4xMTYgNjc4LjE1OCAzMzguODg0IDU5NS42MzIgMzY3LjE2OSBDIDU3OC44NjUgMjgxLjU1NyA1NDcuNjg5IDIyNC4wMjQgNTEyIDIyNC4wMjQgQyA0NzYuMzExIDIyNC4wMjQgNDQ1LjEzNSAyODEuNTU3IDQyOC4zNjggMzY3LjE2OSBDIDM0NS44NDIgMzM4Ljg4NCAyODAuNDI5IDMzNy4xMTYgMjYyLjU4NSAzNjguMDI0IEMgMjQ0Ljc0IDM5OC45MzEgMjc4Ljk3OCA0NTQuNjk3IDM0NC43MzYgNTEyLjAyNCBDIDI3OC45NzggNTY5LjM1MSAyNDQuNzQgNjI1LjExNiAyNjIuNTg1IDY1Ni4wMjQgQyAyODAuNDI5IDY4Ni45MzEgMzQ1Ljg0MiA2ODUuMTYzIDQyOC4zNjggNjU2Ljg3OSBDIDQ0NS4xMzUgNzQyLjQ5IDQ3Ni4zMTEgODAwLjAyNCA1MTIgODAwLjAyNCBDIDU0Ny42ODkgODAwLjAyNCA1NzguODY1IDc0Mi40OSA1OTUuNjMyIDY1Ni44NzkgTSA2MDIuMTE5IDYxNi45NTkgQyA2MDQuMjI5IDYwMC45MTIgNjA1Ljg2OSA1ODQuMTY1IDYwNi45ODkgNTY2Ljg2NiBDIDYyMS40MSA1NTcuMjQ2IDYzNS4wOTQgNTQ3LjQ1MiA2NDcuOTM2IDUzNy42MDEgQyA2OTYuNjA3IDU3Ny4xNzYgNzIzLjQ1OSA2MTIuMDkzIDcxMy45MjUgNjI4LjYwNSBDIDcwNC4zOTIgNjQ1LjExOCA2NjAuNzI3IDYzOS4zMjIgNjAyLjExOSA2MTYuOTU5IE0gNDIxLjg4IDQwNy4wOTUgQyA0MTkuNzcxIDQyMy4xNCA0MTguMTMxIDQzOS44ODUgNDE3LjAxMSA0NTcuMTgyIEMgNDAyLjU5MiA0NjYuOCAzODguOTEgNDc2LjU5MyAzNzYuMDY5IDQ4Ni40NDIgQyAzMjcuNDE3IDQ0Ni44NzcgMzAwLjU3OCA0MTEuOTcyIDMxMC4xMSAzOTUuNDYyIEMgMzE5LjY0MiAzNzguOTUzIDM2My4yOSAzODQuNzQzIDQyMS44OCA0MDcuMDk1IE0gNDE3LjAxMSA1NjYuODY2IEMgNDE4LjEzMSA1ODQuMTY1IDQxOS43NzEgNjAwLjkxMiA0MjEuODgxIDYxNi45NTkgQyAzNjMuMjczIDYzOS4zMjIgMzE5LjYwOCA2NDUuMTE4IDMxMC4wNzUgNjI4LjYwNSBDIDMwMC41NDEgNjEyLjA5MyAzMjcuMzkzIDU3Ny4xNzYgMzc2LjA2NCA1MzcuNjAxIEMgMzg4LjkwNiA1NDcuNDUyIDQwMi41OSA1NTcuMjQ2IDQxNy4wMTEgNTY2Ljg2NiBNIDYwNi45ODkgNDU3LjE4MiBDIDYwNS44NjkgNDM5Ljg4NSA2MDQuMjI5IDQyMy4xNCA2MDIuMTIgNDA3LjA5NSBDIDY2MC43MSAzODQuNzQzIDcwNC4zNTggMzc4Ljk1MyA3MTMuODkgMzk1LjQ2MiBDIDcyMy40MjIgNDExLjk3MiA2OTYuNTgzIDQ0Ni44NzcgNjQ3LjkzMSA0ODYuNDQyIEMgNjM1LjA5IDQ3Ni41OTMgNjIxLjQwOCA0NjYuOCA2MDYuOTg5IDQ1Ny4xODIgTSA1NTcuODE3IDY0Mi41MzYgQyA1NDcuODggNzA0LjQ3NCA1MzEuMDY3IDc0NS4xODcgNTEyIDc0NS4xODcgQyA0OTIuOTMzIDc0NS4xODcgNDc2LjEyIDcwNC40NzQgNDY2LjE4MyA2NDIuNTM2IEMgNDgxLjEzNSA2MzYuMzQgNDk2LjQ1OSA2MjkuMzg3IDUxMiA2MjEuNzA4IEMgNTI3LjU0MSA2MjkuMzg3IDU0Mi44NjUgNjM2LjM0IDU1Ny44MTcgNjQyLjUzNiBNIDQ1Ny4yMjMgNTQzLjY0OCBDIDQ1Ni44OTEgNTMzLjMxMyA0NTYuNzE5IDUyMi43NjMgNDU2LjcxOSA1MTIuMDQ0IEMgNDU2LjcxOSA1MDEuMzEgNDU2Ljg5MSA0OTAuNzQ2IDQ1Ny4yMjQgNDgwLjM5NyBDIDQ2Ni4wMDkgNDc0Ljk0MiA0NzUuMDU5IDQ2OS41MTkgNDg0LjM0MiA0NjQuMTU5IEMgNDkzLjYzNyA0NTguNzkzIDUwMi44NzIgNDUzLjY2IDUxMiA0NDguNzc0IEMgNTIxLjEyOCA0NTMuNjYgNTMwLjM2MyA0NTguNzkzIDUzOS42NTggNDY0LjE1OSBDIDU0OC45NDEgNDY5LjUxOSA1NTcuOTkxIDQ3NC45NDIgNTY2Ljc3NiA0ODAuMzk3IEMgNTY3LjEwOSA0OTAuNzQ2IDU2Ny4yODEgNTAxLjMxIDU2Ny4yODEgNTEyLjA0NCBDIDU2Ny4yODEgNTIyLjc2MyA1NjcuMTA5IDUzMy4zMTMgNTY2Ljc3NyA1NDMuNjQ4IEMgNTU3Ljk4MSA1NDkuMTEgNTQ4LjkxOCA1NTQuNTQxIDUzOS42MjMgNTU5LjkwOCBDIDUzMC4zMzkgNTY1LjI2OCA1MjEuMTE3IDU3MC4zOTUgNTEyIDU3NS4yNzUgQyA1MDIuODgzIDU3MC4zOTUgNDkzLjY2MSA1NjUuMjY4IDQ4NC4zNzcgNTU5LjkwOCBDIDQ3NS4wODIgNTU0LjU0MSA0NjYuMDE5IDU0OS4xMSA0NTcuMjIzIDU0My42NDggTSA0NjYuMTg5IDM4MS41MTQgQyA0NzYuMTI3IDMxOS41OTcgNDkyLjkzNyAyNzguOTAxIDUxMiAyNzguOTAxIEMgNTMxLjA2MyAyNzguOTAxIDU0Ny44NzMgMzE5LjU5NyA1NTcuODExIDM4MS41MTQgQyA1NDIuODYxIDM4Ny43MDkgNTI3LjUzOSAzOTQuNjYxIDUxMiA0MDIuMzQgQyA0OTYuNDYxIDM5NC42NjEgNDgxLjEzOSAzODcuNzA5IDQ2Ni4xODkgMzgxLjUxNCIvPjwvZz48L2c+PC9zdmc+Cg==",
+          "geometry": null,
+          "aspect": 1.0,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "f165a61aeb679afd787e6bb6ec199f3a2d6883d93100d0e8b35d6079bd589c3a",
+        "observed_instances": [
+          "s33"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addTextBox",
+          "kind": "addTextBox",
+          "geometry": null,
+          "aspect": 1.244,
+          "text_slot": true
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "886a8e5c894c55aee45110f97b5ea5bc5c91ed96a04bcee9577c67427f8b6a23",
+        "observed_instances": [
+          "s35"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addTextBox",
+          "kind": "addTextBox",
+          "geometry": null,
+          "aspect": 8.698,
+          "text_slot": true
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      }
+    ],
+    "text_parameters": [
+      {
+        "object": "s7",
+        "container": "slide",
+        "source_text": "添加标题",
+        "source_characters": 4,
+        "font_pt": [
+          25.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 96.0,
+          "height": 26.0
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s8",
+        "container": "slide",
+        "source_text": "单击此处输入你的正文，文字是您思想的提炼。",
+        "source_characters": 21,
+        "font_pt": [
+          12.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 319.70000000000005,
+          "height": 19.949999999999996
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s9",
+        "container": "slide",
+        "source_text": "01",
+        "source_characters": 2,
+        "font_pt": [
+          22.2
+        ],
+        "source_inner_bounds_pt": {
+          "width": 26.349999999999998,
+          "height": 28.599999999999994
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s15",
+        "container": "slide",
+        "source_text": "添加标题",
+        "source_characters": 4,
+        "font_pt": [
+          25.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 96.0,
+          "height": 26.0
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s16",
+        "container": "slide",
+        "source_text": "单击此处输入你的正文，文字是您思想的提炼。",
+        "source_characters": 21,
+        "font_pt": [
+          12.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 319.70000000000005,
+          "height": 19.949999999999996
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s18",
+        "container": "slide",
+        "source_text": "02",
+        "source_characters": 2,
+        "font_pt": [
+          22.2
+        ],
+        "source_inner_bounds_pt": {
+          "width": 29.499999999999996,
+          "height": 28.599999999999994
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s23",
+        "container": "slide",
+        "source_text": "单击此处输入你的正文，文字是您思想的提炼。",
+        "source_characters": 21,
+        "font_pt": [
+          12.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 319.70000000000005,
+          "height": 19.949999999999996
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s25",
+        "container": "slide",
+        "source_text": "03",
+        "source_characters": 2,
+        "font_pt": [
+          22.2
+        ],
+        "source_inner_bounds_pt": {
+          "width": 29.649999999999995,
+          "height": 28.599999999999994
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s26",
+        "container": "slide",
+        "source_text": "添加标题",
+        "source_characters": 4,
+        "font_pt": [
+          25.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 96.0,
+          "height": 26.0
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s31",
+        "container": "slide",
+        "source_text": "单击此处输入你的正文，文字是您思想的提炼。",
+        "source_characters": 21,
+        "font_pt": [
+          12.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 319.70000000000005,
+          "height": 19.949999999999996
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s33",
+        "container": "slide",
+        "source_text": "04",
+        "source_characters": 2,
+        "font_pt": [
+          22.2
+        ],
+        "source_inner_bounds_pt": {
+          "width": 30.149999999999995,
+          "height": 28.599999999999994
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s34",
+        "container": "slide",
+        "source_text": "添加标题",
+        "source_characters": 4,
+        "font_pt": [
+          25.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 96.0,
+          "height": 26.0
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s35",
+        "container": "slide",
+        "source_text": "单击此处添加大标题内容",
+        "source_characters": 11,
+        "font_pt": [
+          32.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 387.45000000000005,
+          "height": 42.6
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      }
+    ],
+    "parameterization": {
+      "component_tree": "Keep each selected native component and its children together; resize through its group coordinate system.",
+      "repetition": "Solve positions from available region, component extents and gaps. Observed instance count is evidence, not permission to add/remove items.",
+      "text": "Bind complete user text to reviewed roles; recompute inner boxes and reject failed measurements. Preserve text-bearing geometric shapes.",
+      "style": "Map source colors to explicit theme roles and retain shape/fill/line relationships; preserve native paths via the verified source.",
+      "semantics": "Geometric equality does not imply semantic equivalence. Review relation, reading order and role bindings before admission."
+    }
+  },
+  "unseen_content_validation": "not_run",
+  "capacity_status": "observed_source_only",
+  "source_admission": "high_similarity_verified",
+  "revalidation": {
+    "state": "source_verified",
+    "reasons": [],
+    "complete_group_text_coverage_required": true,
+    "font_metrics_required": true
+  }
+}

@@ -1,0 +1,582 @@
+{
+  "schema_version": 2,
+  "family": "parallel",
+  "capacity": {
+    "canvas_reference_pt": [
+      960,
+      540
+    ],
+    "outer_margin_fraction": [
+      0.05,
+      0.08
+    ],
+    "body_pt": [
+      16,
+      20
+    ],
+    "heading_pt": [
+      22,
+      28
+    ],
+    "page_title_pt": [
+      30,
+      40
+    ],
+    "measure_actual_textbox": true,
+    "overflow_action": "reflow_or_split_preserving_relation",
+    "parameter_status": "design_hypothesis_until_tested"
+  },
+  "variants": [
+    {
+      "id": "ring-labels",
+      "items": [
+        2,
+        3,
+        4
+      ],
+      "densities": [
+        "short"
+      ],
+      "orientation": "horizontal",
+      "mechanism": "等大环形+外部标签；长说明另选变体",
+      "source_evidence": [
+        "parallel-18-1"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "ring-labels",
+      "visual_tags": [
+        "horizontal"
+      ],
+      "preserve": "等大环形+外部标签；长说明另选变体；保留来源的构图与组件轮廓，不统一改成文本框加圆点。",
+      "generation_ready": true
+    },
+    {
+      "id": "marker-columns",
+      "items": [
+        2,
+        3
+      ],
+      "densities": [
+        "short",
+        "medium"
+      ],
+      "orientation": "horizontal",
+      "mechanism": "同基线标记+开放式标题正文列",
+      "source_evidence": [
+        "parallel-133-2"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "marker-columns",
+      "visual_tags": [
+        "horizontal"
+      ],
+      "preserve": "同基线标记+开放式标题正文列；保留来源的构图与组件轮廓，不统一改成文本框加圆点。",
+      "generation_ready": true
+    },
+    {
+      "id": "editorial-grid",
+      "items": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "densities": [
+        "short",
+        "medium",
+        "long"
+      ],
+      "orientation": "grid",
+      "mechanism": "等宽分区，标记贴近标题，正文扩展到区域余量",
+      "source_evidence": [
+        "parallel-6-3"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "editorial-grid",
+      "visual_tags": [
+        "grid"
+      ],
+      "preserve": "等宽分区，标记贴近标题，正文扩展到区域余量；保留来源的构图与组件轮廓，不统一改成文本框加圆点。",
+      "required_geometry": {
+        "parallel-6-3": [
+          "s1",
+          "s2"
+        ]
+      },
+      "generation_ready": true
+    },
+    {
+      "id": "ticket-panels",
+      "items": [
+        2,
+        3,
+        4
+      ],
+      "densities": [
+        "short",
+        "medium"
+      ],
+      "orientation": "horizontal",
+      "mechanism": "票签式面板：锯齿上沿、露出的倾斜标签、面板底部双线",
+      "source_evidence": [
+        "parallel-ticket-panels-85"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "ticket-panels",
+      "visual_tags": [
+        "overview",
+        "summary",
+        "cards"
+      ],
+      "preserve": "保留票签轮廓和层叠标签；正文进入面板，不能降级为圆点三栏。",
+      "required_geometry": {
+        "parallel-ticket-panels-85": [
+          "s1",
+          "s2"
+        ]
+      },
+      "generation_ready": true
+    },
+    {
+      "id": "icon-blocks",
+      "items": [
+        2,
+        3,
+        4
+      ],
+      "densities": [
+        "short",
+        "medium"
+      ],
+      "orientation": "horizontal",
+      "mechanism": "等大的圆角色块承载图标，标题与正文位于色块下方",
+      "source_evidence": [
+        "parallel-icon-blocks-72"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "icon-blocks",
+      "visual_tags": [
+        "overview",
+        "icons",
+        "modules"
+      ],
+      "preserve": "源页实际三个色块；按条目扩展等宽模块，图标应表达内容；保留块与外部文字的关系。",
+      "required_geometry": {
+        "parallel-icon-blocks-72": [
+          "s3"
+        ]
+      },
+      "generation_ready": true
+    },
+    {
+      "id": "open-ring-callouts",
+      "items": [
+        3,
+        4,
+        5,
+        6
+      ],
+      "densities": [
+        "short",
+        "medium"
+      ],
+      "orientation": "grid",
+      "mechanism": "带开口的细线圆环、折线引出标题、两行等权排列",
+      "source_evidence": [
+        "parallel-open-ring-callouts-136"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "open-ring-callouts",
+      "visual_tags": [
+        "diagram",
+        "overview",
+        "rings"
+      ],
+      "preserve": "保留开口圆环和折线标签的组合；长正文放环下，不能把环变成没有主体的圆点。",
+      "required_geometry": {
+        "parallel-open-ring-callouts-136": [
+          "s5"
+        ]
+      },
+      "generation_ready": true
+    },
+    {
+      "id": "medal-panels",
+      "items": [
+        4
+      ],
+      "densities": [
+        "short"
+      ],
+      "orientation": "horizontal",
+      "mechanism": "四块等大面板下方通过双线悬挂小奖章",
+      "source_evidence": [
+        "parallel-medal-panels-68"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "medal-panels",
+      "visual_tags": [
+        "overview",
+        "badges",
+        "cards"
+      ],
+      "preserve": "保留面板、双线和底部小圆章；奖章作为同级标识，不虚构排名或获奖结论。",
+      "capacity_status": "observed_source_only",
+      "unseen_content_validation": "not_run",
+      "required_geometry": {
+        "parallel-medal-panels-68": [
+          "s2",
+          "s3"
+        ]
+      },
+      "generation_ready": true
+    },
+    {
+      "id": "wave-bottom-panels",
+      "items": [
+        4
+      ],
+      "densities": [
+        "short"
+      ],
+      "orientation": "horizontal",
+      "mechanism": "四张竖向面板带顶部半圆编号，底部多色波浪叠层",
+      "source_evidence": [
+        "parallel-wave-bottom-panels-67"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "wave-bottom-panels",
+      "visual_tags": [
+        "overview",
+        "cards",
+        "waves"
+      ],
+      "preserve": "保留顶部半圆和波浪叠层；文字位于中央净空，不覆盖底部波形。",
+      "capacity_status": "observed_source_only",
+      "unseen_content_validation": "not_run",
+      "required_geometry": {
+        "parallel-wave-bottom-panels-67": [
+          "s1",
+          "s2",
+          "s4",
+          "s5"
+        ]
+      },
+      "generation_ready": true
+    },
+    {
+      "id": "arched-label-panels",
+      "items": [
+        4
+      ],
+      "densities": [
+        "short"
+      ],
+      "orientation": "horizontal",
+      "mechanism": "四个圆角上沿面板，弧形内界面把顶部编号和中央说明分开",
+      "source_evidence": [
+        "parallel-arched-label-panels-70"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "arched-label-panels",
+      "visual_tags": [
+        "summary",
+        "cards",
+        "arches"
+      ],
+      "preserve": "保留弧形内边缘、顶部编号和底部细线，不降级为普通圆角矩形。",
+      "capacity_status": "observed_source_only",
+      "unseen_content_validation": "not_run",
+      "required_geometry": {
+        "parallel-arched-label-panels-70": [
+          "s1",
+          "s2"
+        ]
+      },
+      "generation_ready": true
+    },
+    {
+      "id": "serrated-bottom-panels",
+      "items": [
+        4
+      ],
+      "densities": [
+        "short"
+      ],
+      "orientation": "horizontal",
+      "mechanism": "四个等大色块以锯齿底沿和浅色底片收边",
+      "source_evidence": [
+        "parallel-serrated-bottom-panels-74"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "serrated-bottom-panels",
+      "visual_tags": [
+        "summary",
+        "cards",
+        "tickets"
+      ],
+      "preserve": "保留锯齿轮廓、浅色底片与居中文字；说明超出短文容量时重新选版。",
+      "capacity_status": "observed_source_only",
+      "unseen_content_validation": "not_run",
+      "required_geometry": {
+        "parallel-serrated-bottom-panels-74": [
+          "s2"
+        ]
+      },
+      "generation_ready": true
+    },
+    {
+      "id": "ribbon-ticket-grid",
+      "items": [
+        4
+      ],
+      "densities": [
+        "short"
+      ],
+      "orientation": "grid",
+      "mechanism": "两行两列票签面板，锯齿上沿与左侧黄色编号旗相叠",
+      "source_evidence": [
+        "parallel-ribbon-ticket-grid-73"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "ribbon-ticket-grid",
+      "visual_tags": [
+        "overview",
+        "grid",
+        "tickets"
+      ],
+      "preserve": "保留锯齿上沿、旗形侧签和小圆编号；四项保持等权，文字不能覆盖旗形附件。",
+      "capacity_status": "observed_source_only",
+      "unseen_content_validation": "not_run",
+      "required_geometry": {
+        "parallel-ribbon-ticket-grid-73": [
+          "s2",
+          "s3"
+        ]
+      },
+      "generation_ready": true
+    },
+    {
+      "id": "balloon-rings",
+      "items": [
+        4
+      ],
+      "densities": [
+        "short"
+      ],
+      "orientation": "horizontal",
+      "mechanism": "四个空心圆环向下收束，连接底部圆形字母标签",
+      "source_evidence": [
+        "parallel-balloon-rings-83"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "balloon-rings",
+      "visual_tags": [
+        "overview",
+        "rings",
+        "badges"
+      ],
+      "preserve": "保留空心圆环、收束颈部和底部小圆；文字位于环内，圆大小相同不表达数据。",
+      "capacity_status": "observed_source_only",
+      "unseen_content_validation": "not_run",
+      "required_geometry": {
+        "parallel-balloon-rings-83": [
+          "s1",
+          "s2"
+        ]
+      },
+      "generation_ready": true
+    },
+    {
+      "id": "hanging-discs",
+      "items": [
+        4
+      ],
+      "densities": [
+        "short"
+      ],
+      "orientation": "horizontal",
+      "mechanism": "四个圆盘从短横梁和细颈悬挂，横梁下方放编号",
+      "source_evidence": [
+        "parallel-hanging-discs-84"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "hanging-discs",
+      "visual_tags": [
+        "summary",
+        "circles",
+        "diagram"
+      ],
+      "preserve": "保留短横梁、细颈、圆盘内外轮廓；各盘等大，不能当权重气泡图。",
+      "capacity_status": "observed_source_only",
+      "unseen_content_validation": "not_run",
+      "required_geometry": {
+        "parallel-hanging-discs-84": [
+          "s2"
+        ]
+      },
+      "generation_ready": true
+    },
+    {
+      "id": "ribbon-circle-grid",
+      "items": [
+        4
+      ],
+      "densities": [
+        "short"
+      ],
+      "orientation": "grid",
+      "mechanism": "两行两列细线圆与底部折叠缎带相交，字母位于缎带中央",
+      "source_evidence": [
+        "parallel-ribbon-circle-grid-90"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "ribbon-circle-grid",
+      "visual_tags": [
+        "overview",
+        "grid",
+        "ribbons"
+      ],
+      "preserve": "保留圆与缎带交叠关系以及缎带折线；短说明放圆内，编号放带内。",
+      "capacity_status": "observed_source_only",
+      "unseen_content_validation": "not_run",
+      "required_geometry": {
+        "parallel-ribbon-circle-grid-90": [
+          "s1",
+          "s2"
+        ]
+      },
+      "generation_ready": true
+    },
+    {
+      "id": "trapezoid-pendants",
+      "items": [
+        4
+      ],
+      "densities": [
+        "short"
+      ],
+      "orientation": "horizontal",
+      "mechanism": "四个上宽下窄梯形承载短文，下方悬挂六边形字母",
+      "source_evidence": [
+        "parallel-trapezoid-pendants-97"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "trapezoid-pendants",
+      "visual_tags": [
+        "overview",
+        "cards",
+        "badges"
+      ],
+      "preserve": "保留梯形斜边、上下描边和六边形悬牌；四块同级，不把梯形解释成漏斗。",
+      "capacity_status": "observed_source_only",
+      "unseen_content_validation": "not_run",
+      "required_geometry": {
+        "parallel-trapezoid-pendants-97": [
+          "s2",
+          "s3",
+          "s4"
+        ]
+      },
+      "generation_ready": true
+    },
+    {
+      "id": "double-diamonds",
+      "items": [
+        4
+      ],
+      "densities": [
+        "short"
+      ],
+      "orientation": "horizontal",
+      "mechanism": "四个菱形通过错位双线构成层叠边界，上角放字母、中央放短文",
+      "source_evidence": [
+        "parallel-double-diamonds-98"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "double-diamonds",
+      "visual_tags": [
+        "overview",
+        "diamonds",
+        "diagram"
+      ],
+      "preserve": "保留双层菱形轮廓和上角编号；保证正文位于菱形实际内区，不能按外接矩形估计文字容量。",
+      "capacity_status": "observed_source_only",
+      "unseen_content_validation": "not_run",
+      "required_geometry": {
+        "parallel-double-diamonds-98": [
+          "s2",
+          "s3",
+          "s4"
+        ]
+      },
+      "generation_ready": true
+    },
+    {
+      "id": "folded-corner-notes",
+      "items": [
+        4
+      ],
+      "densities": [
+        "short"
+      ],
+      "orientation": "horizontal",
+      "mechanism": "四张便签带右上折角、底部浅色编号栏和投影细线",
+      "source_evidence": [
+        "parallel-folded-corner-notes-100"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "folded-corner-notes",
+      "visual_tags": [
+        "summary",
+        "cards",
+        "notes"
+      ],
+      "preserve": "保留折角、正文面板与底部编号栏分区；文字避开折角，不把各便签合并成普通列。",
+      "capacity_status": "observed_source_only",
+      "unseen_content_validation": "not_run",
+      "required_geometry": {
+        "parallel-folded-corner-notes-100": [
+          "s2"
+        ]
+      },
+      "generation_ready": true
+    },
+    {
+      "id": "hanger-panels",
+      "items": [
+        4
+      ],
+      "densities": [
+        "short"
+      ],
+      "orientation": "horizontal",
+      "mechanism": "四块面板由衣架形轮廓悬挂，字母位于衣架三角形内",
+      "source_evidence": [
+        "parallel-hanger-panels-99"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "hanger-panels",
+      "visual_tags": [
+        "overview",
+        "cards",
+        "hangers"
+      ],
+      "preserve": "保留挂钩、衣架和下方矩形面板；适合模块概览，不暗示流程或级别。",
+      "capacity_status": "observed_source_only",
+      "unseen_content_validation": "not_run",
+      "required_geometry": {
+        "parallel-hanger-panels-99": [
+          "s1"
+        ]
+      },
+      "generation_ready": true
+    }
+  ],
+  "fallbacks": [
+    "try_same_family_variant",
+    "split_same_relation",
+    "report_page_limit_conflict"
+  ]
+}

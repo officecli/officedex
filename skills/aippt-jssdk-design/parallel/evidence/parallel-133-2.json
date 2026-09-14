@@ -1,0 +1,174 @@
+{
+  "id": "parallel-133-2",
+  "family": "parallel",
+  "source": "sampleall/shape/并列3项/并列3项.pptx",
+  "page": 133,
+  "program": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__并列3项__并列3项/slides/slide-0133.mjs",
+  "verification": "artifacts/aippt/full-distillation/font-metrics-v3/source-fb8d41ee30efbff41aa0/verification.json",
+  "observed_items": 3,
+  "mechanism": "marker-columns",
+  "source_fact": "三个圆形标记与标签同基线，无卡片底；标题和条目区留有大块空白。",
+  "transfer_hypothesis": "可扩展出标记+标题+正文列，但正文容量属于待测假设。",
+  "visual_review": "source_preview_inspected",
+  "state": "source_fact",
+  "ssim": 0.9955907970684779,
+  "exact_reference": false,
+  "program_sha256": "2f98363bfebf66b8419fb094912b374c74c25ba0f31b850f7f7608554e74c732",
+  "verification_sha256": "56aacad1242088f14f91ce64e321f40c1082c84d1f1085ffc593227481514f55",
+  "preview": "sampleall/shape/并列3项/并列3项/幻灯片133.png",
+  "checks": {
+    "jssdk_executed": true,
+    "native_objects": {
+      "count": 7,
+      "types": [
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape"
+      ]
+    },
+    "text_overflow": 0,
+    "render_errors": 0,
+    "pptx_export": "passed",
+    "strict_reimport": "passed",
+    "text_coverage_version": 2,
+    "text_measurement": "font_metrics"
+  },
+  "canvas_pt": [
+    960.0,
+    540.0
+  ],
+  "objects": [
+    {
+      "id": "s1",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.16221,
+        "top": 0.21742,
+        "width": 0.69855,
+        "height": 0.1122
+      },
+      "text_characters": 8,
+      "font_pt": [
+        44.0
+      ],
+      "colors": [
+        "#04918B"
+      ]
+    },
+    {
+      "id": "s2",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.66873,
+        "top": 0.5174,
+        "width": 0.04345,
+        "height": 0.07725
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#4472C4"
+      ]
+    },
+    {
+      "id": "s3",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.71916,
+        "top": 0.51573,
+        "width": 0.19935,
+        "height": 0.08121
+      },
+      "text_characters": 12,
+      "font_pt": [
+        20.0
+      ],
+      "colors": [
+        "#808080"
+      ]
+    },
+    {
+      "id": "s4",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.37511,
+        "top": 0.5174,
+        "width": 0.04345,
+        "height": 0.07725
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#E2268F"
+      ]
+    },
+    {
+      "id": "s5",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.42554,
+        "top": 0.51573,
+        "width": 0.19935,
+        "height": 0.08121
+      },
+      "text_characters": 12,
+      "font_pt": [
+        20.0
+      ],
+      "colors": [
+        "#808080"
+      ]
+    },
+    {
+      "id": "s6",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.08148,
+        "top": 0.5174,
+        "width": 0.04345,
+        "height": 0.07725
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#04918B"
+      ]
+    },
+    {
+      "id": "s7",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.13191,
+        "top": 0.51573,
+        "width": 0.19935,
+        "height": 0.08121
+      },
+      "text_characters": 12,
+      "font_pt": [
+        20.0
+      ],
+      "colors": [
+        "#808080"
+      ]
+    }
+  ],
+  "extraction_scope": "literal object geometry; group transforms and custom paths require source inspection",
+  "source_admission": "high_similarity_verified",
+  "revalidation": {
+    "state": "source_verified",
+    "reasons": [],
+    "complete_group_text_coverage_required": true,
+    "font_metrics_required": true
+  }
+}

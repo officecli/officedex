@@ -1,0 +1,107 @@
+{
+  "schema_version": 2,
+  "family": "pyramid",
+  "variants": [
+    {
+      "id": "separated-tiers",
+      "items": [
+        3,
+        4
+      ],
+      "densities": [
+        "short",
+        "medium"
+      ],
+      "orientation": "vertical",
+      "mechanism": "分离的立体金字塔层，向右引出同层说明",
+      "source_evidence": [
+        "pyramid-separated-tiers-24"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "separated-tiers",
+      "visual_tags": [
+        "hierarchy",
+        "diagram",
+        "layers"
+      ],
+      "preserve": "保留分离层、明暗侧面及引出说明；仅表达层次，不从面积推断数值。",
+      "generation_ready": true
+    },
+    {
+      "id": "filled-tiers",
+      "items": [
+        3,
+        4,
+        5
+      ],
+      "densities": [
+        "short",
+        "medium"
+      ],
+      "orientation": "vertical",
+      "mechanism": "连续三角形分层填色，白色虚线划分层级",
+      "source_evidence": [
+        "pyramid-filled-tiers-16"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "filled-tiers",
+      "visual_tags": [
+        "hierarchy",
+        "diagram",
+        "layers"
+      ],
+      "preserve": "保留连续金字塔外形和分层边界；长正文移至侧面并引线对应，层级由内容决定。",
+      "generation_ready": true
+    },
+    {
+      "id": "slanted-tier-legend",
+      "items": [
+        4
+      ],
+      "densities": [
+        "short"
+      ],
+      "orientation": "vertical",
+      "mechanism": "右侧四层倾斜带组成逐层扩大的塔形，左侧四行解释对应各层",
+      "source_evidence": [
+        "pyramid-slanted-tier-legend-86"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "slanted-tier-legend",
+      "visual_tags": [
+        "hierarchy",
+        "layers",
+        "legend"
+      ],
+      "preserve": "仅用于明确的四层层级；保留塔形分层和左侧逐层说明，不根据带面积推断比例。",
+      "capacity_status": "observed_source_only",
+      "unseen_content_validation": "not_run",
+      "required_geometry": {
+        "pyramid-slanted-tier-legend-86": [
+          "s3",
+          "s5",
+          "s8",
+          "s9",
+          "s10",
+          "s11",
+          "s12",
+          "s13",
+          "s14",
+          "s15",
+          "s16",
+          "s17",
+          "s18",
+          "s19",
+          "s20",
+          "s21",
+          "s23",
+          "s24",
+          "s25",
+          "s26",
+          "s40"
+        ]
+      },
+      "generation_ready": true
+    }
+  ]
+}

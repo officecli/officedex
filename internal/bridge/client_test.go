@@ -182,6 +182,7 @@ func newClientWithFake(t *testing.T) (*Client, *fakeTransport) {
 	if err := client.Start(context.Background()); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
+	client.capabilities.progressiveJSSDKSupported = true // fake models the current bridge
 	return client, fake
 }
 
@@ -1704,19 +1705,17 @@ func TestPlanPptxJSRejectsEmptySource(t *testing.T) {
 	}
 }
 
-// The kill switch decides which of two materially different backends the
-// desktop runs on, so both of its branches are pinned here: a switch nobody
-// exercises is how the "off" path rots.
-func TestDefaultPPTXBackendFollowsTheKillSwitch(t *testing.T) {
+// Stale shell settings must never restore retired PPT authoring paths.
+func TestDefaultPPTXBackendIgnoresRetiredKillSwitch(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		value string
 		want  string
 	}{
 		{name: "unset", value: "", want: types.PPTXBackendJSSDKDesign},
-		{name: "zero", value: "0", want: types.PPTXBackendMOPSkill},
-		{name: "off", value: "off", want: types.PPTXBackendMOPSkill},
-		{name: "false", value: "FALSE", want: types.PPTXBackendMOPSkill},
+		{name: "zero", value: "0", want: types.PPTXBackendJSSDKDesign},
+		{name: "off", value: "off", want: types.PPTXBackendJSSDKDesign},
+		{name: "false", value: "FALSE", want: types.PPTXBackendJSSDKDesign},
 		{name: "on", value: "1", want: types.PPTXBackendJSSDKDesign},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1740,5 +1739,31 @@ func TestDefaultPPTXBackendIsEmptyForOtherTypes(t *testing.T) {
 		if got := defaultPPTXBackendFor(documentType); got != "" {
 			t.Errorf("defaultPPTXBackendFor(%s) = %q, want empty", documentType, got)
 		}
+	}
+}
+
+func TestInvokeGenerateRejectsRetiredPPTXBackendBeforeStartingTask(t *testing.T) {
+	for _, backend := range []string{"mop-skill", "presentation-pptx-quality", "aippt-list4-layout"} {
+		client := New(Options{})
+		if _, err := client.InvokeGenerate(context.Background(), types.GenerateInput{DocumentType: types.DocPPTX, PPTXBackend: backend}); err == nil || !strings.Contains(err.Error(), "已停用") {
+			t.Fatalf("backend %s: %v", backend, err)
+		}
+	}
+}
+func TestInvokeGenerateRejectsOldBridgeBeforeStartingTask(t *testing.T) {
+	client := New(Options{})
+	client.rememberCapabilities([]byte(`{"document_generation":{"pptx":{}}}`))
+	if _, err := client.InvokeGenerate(context.Background(), types.GenerateInput{DocumentType: types.DocPPTX}); err == nil || !strings.Contains(err.Error(), "当前 OfficeCLI") {
+		t.Fatalf("old bridge accepted: %v", err)
+	}
+}
+func TestBridgeRecognizesExactJSSDKContract(t *testing.T) {
+	for _, raw := range []string{`{}`, `{"pptx_jssdk_progressive":{"v2":false}}`, `{"pptx_jssdk_progressive":{"v2":"true"}}`} {
+		if bridgeCapabilitiesFromPayload([]byte(raw)).progressiveJSSDKSupported {
+			t.Fatalf("accepted %s", raw)
+		}
+	}
+	if !bridgeCapabilitiesFromPayload([]byte(`{"pptx_jssdk_progressive":{"v2":true}}`)).progressiveJSSDKSupported {
+		t.Fatal("missing current contract")
 	}
 }

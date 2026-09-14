@@ -131,6 +131,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
   const [prompt, setPrompt] = useState("");
   const [animatedPlaceholder, setAnimatedPlaceholder] = useState("");
   const [selectedDocumentType, setSelectedDocumentType] = useState<HomeDocumentType>("pptx");
+  const [pptxWorkflow, setPptxWorkflow] = useState<"design" | "animation" | undefined>();
   const [sourceFile, setSourceFile] = useState<string>();
   const [referenceDirectory, setReferenceDirectory] = useState<string>();
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
@@ -291,6 +292,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
         sourceFile,
         referenceDirectory,
         documentType,
+        ...(documentType === "pptx" ? { pptxWorkflow } : {}),
         ...(referenceTextFiles.length > 0 ? { referenceTextFiles } : {}),
         ...(documentType === "img" && referenceImages.length > 0 ? { referenceImages } : {}),
         ...(documentType === "img" ? { imageRatio } : {}),
@@ -504,6 +506,13 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
                 <span title={path}>{fileNameFromPath(path)}</span>
                 <Button variant="ghost-normal" size="small" ariaLabel={t("home.removeAttachedFile")} icon={<CloseOutlined />} onClick={() => setReferenceImages((current) => current.filter((item) => item !== path))} />
               </div>
+            ))}
+          </div>
+        ) : null}
+        {selectedDocumentType === "pptx" ? (
+          <div className="home-intake__type-options" role="group" aria-label={t("home.pptxWorkflow")}>
+            {([undefined, "design", "animation"] as const).map((workflow) => (
+              <button type="button" key={workflow ?? "auto"} aria-pressed={pptxWorkflow === workflow} onClick={() => setPptxWorkflow(workflow)}>{t(`home.pptxWorkflow.${workflow ?? "auto"}`)}</button>
             ))}
           </div>
         ) : null}

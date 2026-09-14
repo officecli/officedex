@@ -1,0 +1,288 @@
+{
+  "id": "pyramid-filled-tiers-16",
+  "family": "pyramid",
+  "source": "sampleall/shape/金字塔4项/金字塔4项.pptx",
+  "page": 16,
+  "program": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__金字塔4项__金字塔4项/slides/slide-0016.mjs",
+  "verification": "artifacts/aippt/full-distillation/font-metrics-v3/source-6ef349190547570db179/verification.json",
+  "observed_items": 4,
+  "mechanism": "filled-tiers",
+  "source_fact": "连续三角形分层填色，白色虚线划分层级",
+  "transfer_hypothesis": "保留连续金字塔外形和分层边界；长正文移至侧面并引线对应，层级由内容决定。",
+  "visual_review": "source_preview_inspected",
+  "state": "source_fact",
+  "ssim": 0.9755805089389948,
+  "exact_reference": false,
+  "program_sha256": "3db6697015baa7f69c98e8d1cc7ac9d0bf1b9c57d84a0fca26df835082fd092a",
+  "verification_sha256": "b1e05ec5512210583fc917cfe06dc08b4352690db7af1dcaec04bd64c3631755",
+  "preview": "sampleall/shape/金字塔4项/金字塔4项_PPTX_TO_PNG_WPS/幻灯片16.png",
+  "checks": {
+    "jssdk_executed": true,
+    "native_objects": {
+      "count": 17,
+      "types": [
+        "group",
+        "group",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape"
+      ]
+    },
+    "text_overflow": 0,
+    "render_errors": 0,
+    "pptx_export": "passed",
+    "strict_reimport": "passed",
+    "text_coverage_version": 2,
+    "text_measurement": "font_metrics"
+  },
+  "canvas_pt": [
+    960.0,
+    540.0
+  ],
+  "objects": [
+    {
+      "id": "s34",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.79767,
+        "top": 0.66325,
+        "width": 0.00346,
+        "height": 0.01274
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#59402B"
+      ]
+    },
+    {
+      "id": "s35",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.77485,
+        "top": 0.66325,
+        "width": 0.00346,
+        "height": 0.01274
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#59402B"
+      ]
+    },
+    {
+      "id": "s43",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.79349,
+        "top": 0.75924,
+        "width": 0.00323,
+        "height": 0.00531
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#575757"
+      ]
+    },
+    {
+      "id": "s44",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.79349,
+        "top": 0.77559,
+        "width": 0.00323,
+        "height": 0.00531
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#575757"
+      ]
+    },
+    {
+      "id": "s45",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.79349,
+        "top": 0.79195,
+        "width": 0.00323,
+        "height": 0.0051
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#575757"
+      ]
+    },
+    {
+      "id": "s61",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.34262,
+        "top": 0.7588,
+        "width": 0.31477,
+        "height": 0.06972
+      },
+      "text_characters": 12,
+      "font_pt": [
+        21.0
+      ],
+      "colors": [
+        "#17406D"
+      ]
+    },
+    {
+      "id": "s69",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.37407,
+        "top": 0.65617,
+        "width": 0.25231,
+        "height": 0.06565
+      },
+      "text_characters": 48,
+      "font_pt": [
+        9.0
+      ],
+      "colors": [
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s70",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.45507,
+        "top": 0.61707,
+        "width": 0.09031,
+        "height": 0.04019
+      },
+      "text_characters": 6,
+      "font_pt": [
+        12.0
+      ],
+      "colors": [
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s71",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.40336,
+        "top": 0.51128,
+        "width": 0.19264,
+        "height": 0.06565
+      },
+      "text_characters": 34,
+      "font_pt": [
+        9.0
+      ],
+      "colors": [
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s72",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.45507,
+        "top": 0.47078,
+        "width": 0.09031,
+        "height": 0.04019
+      },
+      "text_characters": 6,
+      "font_pt": [
+        12.0
+      ],
+      "colors": [
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s73",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.43333,
+        "top": 0.36555,
+        "width": 0.13066,
+        "height": 0.06565
+      },
+      "text_characters": 24,
+      "font_pt": [
+        9.0
+      ],
+      "colors": [
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s74",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.45351,
+        "top": 0.32718,
+        "width": 0.09031,
+        "height": 0.04019
+      },
+      "text_characters": 6,
+      "font_pt": [
+        12.0
+      ],
+      "colors": [
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s75",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.46814,
+        "top": 0.24197,
+        "width": 0.06521,
+        "height": 0.04019
+      },
+      "text_characters": 4,
+      "font_pt": [
+        12.0
+      ],
+      "colors": [
+        "#FFFFFF"
+      ]
+    }
+  ],
+  "extraction_scope": "literal object geometry; group transforms and custom paths require source inspection",
+  "source_admission": "high_similarity_verified",
+  "revalidation": {
+    "state": "source_verified",
+    "reasons": [],
+    "complete_group_text_coverage_required": true,
+    "font_metrics_required": true
+  }
+}

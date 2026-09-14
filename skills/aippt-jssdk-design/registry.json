@@ -1,0 +1,854 @@
+{
+  "schema_version": 2,
+  "generated_on": "2026-09-11",
+  "evidence": {
+    "snapshot": "2026-09-10T16:51:26+08:00",
+    "candidate_records": 6156,
+    "eligible_records": 4993,
+    "ssim_threshold": 0.95,
+    "ssim_threshold_semantics": "raw SSIM must be strictly greater than 0.95; candidate-pool legacy counts do not grant admission",
+    "exact_flags_in_pool": 55,
+    "exact_flags_with_page": 0,
+    "selected_page_reports": 38,
+    "selected_exact_references": 0,
+    "scope_note": "候选池含 page=null 的整份进度片段；不以记录数或片段 exact 标志宣称逐页精确验收。",
+    "selected_admitted_sources": 38,
+    "full_distillation_complete": false,
+    "text_coverage_version": 2
+  },
+  "families": [
+    {
+      "id": "parallel",
+      "relations": [
+        "parallel"
+      ],
+      "items": {
+        "min": 2,
+        "max": 6
+      },
+      "status": "experimental_recipe",
+      "recipe": "parallel/recipe.md",
+      "variants": "parallel/variants.json",
+      "fallbacks": [
+        "try_same_family_variant",
+        "split_same_relation"
+      ],
+      "evidence": "parallel/evidence/",
+      "generation_ready": true,
+      "visual_catalog": [
+        {
+          "id": "ring-labels",
+          "items": [
+            2,
+            3,
+            4
+          ],
+          "densities": [
+            "short"
+          ],
+          "orientation": "horizontal",
+          "mechanism": "等大环形+外部标签；长说明另选变体",
+          "visual_tags": [
+            "horizontal"
+          ]
+        },
+        {
+          "id": "marker-columns",
+          "items": [
+            2,
+            3
+          ],
+          "densities": [
+            "short",
+            "medium"
+          ],
+          "orientation": "horizontal",
+          "mechanism": "同基线标记+开放式标题正文列",
+          "visual_tags": [
+            "horizontal"
+          ]
+        },
+        {
+          "id": "editorial-grid",
+          "items": [
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "densities": [
+            "short",
+            "medium",
+            "long"
+          ],
+          "orientation": "grid",
+          "mechanism": "等宽分区，标记贴近标题，正文扩展到区域余量",
+          "visual_tags": [
+            "grid"
+          ]
+        },
+        {
+          "id": "ticket-panels",
+          "items": [
+            2,
+            3,
+            4
+          ],
+          "densities": [
+            "short",
+            "medium"
+          ],
+          "orientation": "horizontal",
+          "mechanism": "票签式面板：锯齿上沿、露出的倾斜标签、面板底部双线",
+          "visual_tags": [
+            "overview",
+            "summary",
+            "cards"
+          ]
+        },
+        {
+          "id": "icon-blocks",
+          "items": [
+            2,
+            3,
+            4
+          ],
+          "densities": [
+            "short",
+            "medium"
+          ],
+          "orientation": "horizontal",
+          "mechanism": "等大的圆角色块承载图标，标题与正文位于色块下方",
+          "visual_tags": [
+            "overview",
+            "icons",
+            "modules"
+          ]
+        },
+        {
+          "id": "open-ring-callouts",
+          "items": [
+            3,
+            4,
+            5,
+            6
+          ],
+          "densities": [
+            "short",
+            "medium"
+          ],
+          "orientation": "grid",
+          "mechanism": "带开口的细线圆环、折线引出标题、两行等权排列",
+          "visual_tags": [
+            "diagram",
+            "overview",
+            "rings"
+          ]
+        },
+        {
+          "id": "medal-panels",
+          "items": [
+            4
+          ],
+          "densities": [
+            "short"
+          ],
+          "orientation": "horizontal",
+          "mechanism": "四块等大面板下方通过双线悬挂小奖章",
+          "visual_tags": [
+            "overview",
+            "badges",
+            "cards"
+          ]
+        },
+        {
+          "id": "wave-bottom-panels",
+          "items": [
+            4
+          ],
+          "densities": [
+            "short"
+          ],
+          "orientation": "horizontal",
+          "mechanism": "四张竖向面板带顶部半圆编号，底部多色波浪叠层",
+          "visual_tags": [
+            "overview",
+            "cards",
+            "waves"
+          ]
+        },
+        {
+          "id": "arched-label-panels",
+          "items": [
+            4
+          ],
+          "densities": [
+            "short"
+          ],
+          "orientation": "horizontal",
+          "mechanism": "四个圆角上沿面板，弧形内界面把顶部编号和中央说明分开",
+          "visual_tags": [
+            "summary",
+            "cards",
+            "arches"
+          ]
+        },
+        {
+          "id": "serrated-bottom-panels",
+          "items": [
+            4
+          ],
+          "densities": [
+            "short"
+          ],
+          "orientation": "horizontal",
+          "mechanism": "四个等大色块以锯齿底沿和浅色底片收边",
+          "visual_tags": [
+            "summary",
+            "cards",
+            "tickets"
+          ]
+        },
+        {
+          "id": "ribbon-ticket-grid",
+          "items": [
+            4
+          ],
+          "densities": [
+            "short"
+          ],
+          "orientation": "grid",
+          "mechanism": "两行两列票签面板，锯齿上沿与左侧黄色编号旗相叠",
+          "visual_tags": [
+            "overview",
+            "grid",
+            "tickets"
+          ]
+        },
+        {
+          "id": "balloon-rings",
+          "items": [
+            4
+          ],
+          "densities": [
+            "short"
+          ],
+          "orientation": "horizontal",
+          "mechanism": "四个空心圆环向下收束，连接底部圆形字母标签",
+          "visual_tags": [
+            "overview",
+            "rings",
+            "badges"
+          ]
+        },
+        {
+          "id": "hanging-discs",
+          "items": [
+            4
+          ],
+          "densities": [
+            "short"
+          ],
+          "orientation": "horizontal",
+          "mechanism": "四个圆盘从短横梁和细颈悬挂，横梁下方放编号",
+          "visual_tags": [
+            "summary",
+            "circles",
+            "diagram"
+          ]
+        },
+        {
+          "id": "ribbon-circle-grid",
+          "items": [
+            4
+          ],
+          "densities": [
+            "short"
+          ],
+          "orientation": "grid",
+          "mechanism": "两行两列细线圆与底部折叠缎带相交，字母位于缎带中央",
+          "visual_tags": [
+            "overview",
+            "grid",
+            "ribbons"
+          ]
+        },
+        {
+          "id": "trapezoid-pendants",
+          "items": [
+            4
+          ],
+          "densities": [
+            "short"
+          ],
+          "orientation": "horizontal",
+          "mechanism": "四个上宽下窄梯形承载短文，下方悬挂六边形字母",
+          "visual_tags": [
+            "overview",
+            "cards",
+            "badges"
+          ]
+        },
+        {
+          "id": "double-diamonds",
+          "items": [
+            4
+          ],
+          "densities": [
+            "short"
+          ],
+          "orientation": "horizontal",
+          "mechanism": "四个菱形通过错位双线构成层叠边界，上角放字母、中央放短文",
+          "visual_tags": [
+            "overview",
+            "diamonds",
+            "diagram"
+          ]
+        },
+        {
+          "id": "folded-corner-notes",
+          "items": [
+            4
+          ],
+          "densities": [
+            "short"
+          ],
+          "orientation": "horizontal",
+          "mechanism": "四张便签带右上折角、底部浅色编号栏和投影细线",
+          "visual_tags": [
+            "summary",
+            "cards",
+            "notes"
+          ]
+        },
+        {
+          "id": "hanger-panels",
+          "items": [
+            4
+          ],
+          "densities": [
+            "short"
+          ],
+          "orientation": "horizontal",
+          "mechanism": "四块面板由衣架形轮廓悬挂，字母位于衣架三角形内",
+          "visual_tags": [
+            "overview",
+            "cards",
+            "hangers"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "list",
+      "relations": [
+        "list"
+      ],
+      "items": {
+        "min": 3,
+        "max": 8
+      },
+      "status": "experimental_recipe",
+      "recipe": "list/recipe.md",
+      "variants": "list/variants.json",
+      "fallbacks": [
+        "try_same_family_variant",
+        "split_same_relation"
+      ],
+      "evidence": "list/evidence/",
+      "generation_ready": true,
+      "visual_catalog": [
+        {
+          "id": "label-columns",
+          "items": [
+            3,
+            4
+          ],
+          "densities": [
+            "short"
+          ],
+          "orientation": "horizontal",
+          "mechanism": "编号横排、短说明同基线",
+          "visual_tags": [
+            "horizontal"
+          ]
+        },
+        {
+          "id": "numbered-rows",
+          "items": [
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "densities": [
+            "short",
+            "medium",
+            "long"
+          ],
+          "orientation": "vertical",
+          "mechanism": "固定编号列+连续说明列；最长文本决定行高",
+          "visual_tags": [
+            "vertical"
+          ]
+        },
+        {
+          "id": "rail-callouts",
+          "items": [
+            3,
+            4
+          ],
+          "densities": [
+            "short",
+            "medium"
+          ],
+          "orientation": "vertical",
+          "mechanism": "图形占左区，说明占右区，一一水平映射",
+          "visual_tags": [
+            "vertical"
+          ]
+        },
+        {
+          "id": "hexagon-columns",
+          "items": [
+            3,
+            4
+          ],
+          "densities": [
+            "short",
+            "medium"
+          ],
+          "orientation": "horizontal",
+          "mechanism": "六边形编号块与其下方文字一一对应",
+          "visual_tags": [
+            "checklist",
+            "modules",
+            "icons"
+          ]
+        },
+        {
+          "id": "dial-badges",
+          "items": [
+            3,
+            4
+          ],
+          "densities": [
+            "short",
+            "medium"
+          ],
+          "orientation": "horizontal",
+          "mechanism": "带放射刻度的编号圆章，内部标题，外部正文",
+          "visual_tags": [
+            "overview",
+            "badges",
+            "summary"
+          ]
+        },
+        {
+          "id": "hub-callout-rows",
+          "items": [
+            4
+          ],
+          "densities": [
+            "short"
+          ],
+          "orientation": "vertical",
+          "mechanism": "四行彩色标签与右侧说明一一对应，左侧主题图标用虚线连接各行",
+          "visual_tags": [
+            "checklist",
+            "callouts",
+            "diagram"
+          ]
+        },
+        {
+          "id": "arrow-icon-rows",
+          "items": [
+            4
+          ],
+          "densities": [
+            "short"
+          ],
+          "orientation": "vertical",
+          "mechanism": "四行箭头标签带圆形图标和编号，右侧留出独立说明栏",
+          "visual_tags": [
+            "checklist",
+            "icons",
+            "rows"
+          ]
+        },
+        {
+          "id": "diamond-label-grid",
+          "items": [
+            4
+          ],
+          "densities": [
+            "short"
+          ],
+          "orientation": "grid",
+          "mechanism": "两行两列标题说明条，左端菱形图标与长矩形相接",
+          "visual_tags": [
+            "modules",
+            "icons",
+            "grid"
+          ]
+        },
+        {
+          "id": "slanted-label-legend",
+          "items": [
+            4
+          ],
+          "densities": [
+            "short"
+          ],
+          "orientation": "horizontal",
+          "mechanism": "左侧四张倾斜标签与右侧四行编号说明相对应",
+          "visual_tags": [
+            "checklist",
+            "diagram",
+            "legend"
+          ]
+        },
+        {
+          "id": "orbital-pill-grid",
+          "items": [
+            4
+          ],
+          "densities": [
+            "short"
+          ],
+          "orientation": "grid",
+          "mechanism": "两行两列绿色胶囊说明条，左端圆形编号外有小圆轨道装饰",
+          "visual_tags": [
+            "checklist",
+            "grid",
+            "badges"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "process",
+      "relations": [
+        "process"
+      ],
+      "items": {
+        "min": 3,
+        "max": 6
+      },
+      "status": "experimental_recipe",
+      "recipe": "process/recipe.md",
+      "fallbacks": [
+        "try_same_family_variant",
+        "split_same_relation"
+      ],
+      "evidence": "process/evidence/",
+      "variants": "process/variants.json",
+      "generation_ready": true,
+      "visual_catalog": [
+        {
+          "id": "linked-stages",
+          "items": [
+            3,
+            4,
+            5,
+            6
+          ],
+          "densities": [
+            "short",
+            "medium"
+          ],
+          "orientation": "horizontal",
+          "mechanism": "编号节点沿连续弯折连线从左到右排列，说明上下交错",
+          "visual_tags": [
+            "sequence",
+            "diagram",
+            "stages"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "timeline",
+      "relations": [
+        "timeline"
+      ],
+      "items": {
+        "min": 2,
+        "max": 6
+      },
+      "status": "experimental_recipe",
+      "recipe": "timeline/recipe.md",
+      "variants": "timeline/variants.json",
+      "fallbacks": [
+        "try_same_family_variant",
+        "split_same_relation"
+      ],
+      "evidence": "timeline/evidence/",
+      "generation_ready": true,
+      "visual_catalog": [
+        {
+          "id": "horizontal-axis",
+          "items": [
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "densities": [
+            "short"
+          ],
+          "orientation": "horizontal",
+          "mechanism": "共用横轴，节点、日期、说明共享中心线",
+          "visual_tags": [
+            "horizontal"
+          ]
+        },
+        {
+          "id": "alternating-axis",
+          "items": [
+            3,
+            4,
+            5,
+            6
+          ],
+          "densities": [
+            "medium"
+          ],
+          "orientation": "horizontal",
+          "mechanism": "横轴上下交错，让同侧段落间距等于两倍节点节距",
+          "visual_tags": [
+            "horizontal"
+          ]
+        },
+        {
+          "id": "vertical-axis",
+          "items": [
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "densities": [
+            "medium",
+            "long"
+          ],
+          "orientation": "vertical",
+          "mechanism": "纵轴+日期列+宽正文区；长正文由列宽承载",
+          "visual_tags": [
+            "vertical"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "comparison",
+      "relations": [
+        "comparison"
+      ],
+      "items": {
+        "min": 2,
+        "max": 6
+      },
+      "status": "experimental_recipe",
+      "recipe": "comparison/recipe.md",
+      "fallbacks": [
+        "try_same_family_variant",
+        "split_same_relation"
+      ],
+      "evidence": "comparison/evidence/",
+      "variants": "comparison/variants.json",
+      "generation_ready": true,
+      "visual_catalog": [
+        {
+          "id": "balanced-pair",
+          "items": [
+            2
+          ],
+          "densities": [
+            "short",
+            "medium"
+          ],
+          "orientation": "horizontal",
+          "mechanism": "同一水平承托面上并排两个等大圆形，外部标签对应两个对象",
+          "visual_tags": [
+            "comparison",
+            "diagram",
+            "pair"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "matrix",
+      "relations": [
+        "matrix"
+      ],
+      "items": {
+        "min": 4,
+        "max": 9
+      },
+      "status": "candidate_case",
+      "recipe": "matrix/recipe.md",
+      "fallbacks": [
+        "try_same_family_variant",
+        "split_same_relation"
+      ],
+      "evidence": null,
+      "variants": null,
+      "generation_ready": false
+    },
+    {
+      "id": "organization",
+      "relations": [
+        "organization",
+        "hierarchy"
+      ],
+      "items": {
+        "min": 2,
+        "max": 6
+      },
+      "status": "experimental_recipe",
+      "recipe": "organization/recipe.md",
+      "fallbacks": [
+        "try_same_family_variant",
+        "split_same_relation"
+      ],
+      "evidence": "organization/evidence/",
+      "variants": "organization/variants.json",
+      "generation_ready": true,
+      "visual_catalog": [
+        {
+          "id": "branch-left",
+          "items": [
+            3,
+            4
+          ],
+          "densities": [
+            "short",
+            "medium"
+          ],
+          "orientation": "horizontal",
+          "mechanism": "左侧父节点向右侧子节点分叉，节点间以线相连",
+          "visual_tags": [
+            "hierarchy",
+            "diagram"
+          ]
+        },
+        {
+          "id": "branch-left-four",
+          "items": [
+            4,
+            5,
+            6
+          ],
+          "densities": [
+            "short",
+            "medium"
+          ],
+          "orientation": "horizontal",
+          "mechanism": "一个左侧父节点向右侧三行子节点分叉",
+          "visual_tags": [
+            "hierarchy",
+            "diagram"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pyramid",
+      "relations": [
+        "pyramid",
+        "part_to_whole"
+      ],
+      "items": {
+        "min": 3,
+        "max": 6
+      },
+      "status": "experimental_recipe",
+      "recipe": "pyramid/recipe.md",
+      "fallbacks": [
+        "try_same_family_variant",
+        "split_same_relation"
+      ],
+      "evidence": "pyramid/evidence/",
+      "variants": "pyramid/variants.json",
+      "generation_ready": true,
+      "visual_catalog": [
+        {
+          "id": "separated-tiers",
+          "items": [
+            3,
+            4
+          ],
+          "densities": [
+            "short",
+            "medium"
+          ],
+          "orientation": "vertical",
+          "mechanism": "分离的立体金字塔层，向右引出同层说明",
+          "visual_tags": [
+            "hierarchy",
+            "diagram",
+            "layers"
+          ]
+        },
+        {
+          "id": "filled-tiers",
+          "items": [
+            3,
+            4,
+            5
+          ],
+          "densities": [
+            "short",
+            "medium"
+          ],
+          "orientation": "vertical",
+          "mechanism": "连续三角形分层填色，白色虚线划分层级",
+          "visual_tags": [
+            "hierarchy",
+            "diagram",
+            "layers"
+          ]
+        },
+        {
+          "id": "slanted-tier-legend",
+          "items": [
+            4
+          ],
+          "densities": [
+            "short"
+          ],
+          "orientation": "vertical",
+          "mechanism": "右侧四层倾斜带组成逐层扩大的塔形，左侧四行解释对应各层",
+          "visual_tags": [
+            "hierarchy",
+            "layers",
+            "legend"
+          ]
+        }
+      ]
+    }
+  ],
+  "blocked": [
+    "chart",
+    "formula",
+    "animation"
+  ],
+  "blocked_note": "旧能力清单用于提示需要查证；命中后检查当前公开 JSSDK，不将 2026-09-10 的记录当成永久 API 限制。",
+  "source_policy": {
+    "contract": "jssdk-progressive/v2",
+    "raw_ssim_min_exclusive": 0.95,
+    "exact_reference_required": false
+  },
+  "selection_policy": {
+    "name": "content_then_deck_diversity",
+    "version": 1,
+    "note": "先满足语义、容量与证据，之后比较视觉意图、全稿使用次数和相邻重复；不改变关系来凑版式。"
+  }
+}

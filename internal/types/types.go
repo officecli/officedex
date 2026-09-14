@@ -292,6 +292,7 @@ type GenerateInput struct {
 	ImageQuality     string                         `json:"imageQuality,omitempty"`
 	LocalPreview     bool                           `json:"localPreview,omitempty"`
 	PPTXBackend      string                         `json:"pptxBackend,omitempty"`
+	PPTXWorkflow     string                         `json:"pptxWorkflow,omitempty"`
 }
 
 // ModifyInput is the renderer payload for the office.modify ("继续修改") flow:

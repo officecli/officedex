@@ -11,6 +11,14 @@ OFFICECLI_SOURCE_BIN="${OFFICECLI_DIR}/officecli"
 OFFICECLI_STAGE_BIN="${OFFICEDEX_DIR}/build/officecli/officecli"
 APP_PATH="${OFFICEDEX_DIR}/build/bin/OfficeDex.app"
 PRESENTATION_DIR="${REPO_ROOT}/presentation"
+WAILS_BIN="$(command -v wails || true)"
+if [[ -z "${WAILS_BIN}" ]]; then
+  WAILS_BIN="$(env -u GOROOT go env GOPATH)/bin/wails"
+fi
+if [[ ! -x "${WAILS_BIN}" ]]; then
+  echo "[build-local-latest] wails is unavailable in PATH or GOPATH/bin" >&2
+  exit 1
+fi
 
 app_is_running() {
   pgrep -x "OfficeDex" >/dev/null 2>&1 || pgrep -x "officedex" >/dev/null 2>&1
@@ -44,13 +52,16 @@ build_officecli() {
 
 echo "[build-local-latest] building OfficeCLI from ${OFFICECLI_DIR}"
 cd "${OFFICECLI_DIR}"
+node scripts/sync-jssdk-design-skill.mjs
+node scripts/sync-jssdk-animation-skill.mjs
 build_officecli "${OFFICECLI_SOURCE_BIN}"
 build_officecli "${OFFICECLI_STAGE_BIN}"
 
 echo "[build-local-latest] building OfficeDex.app"
 cd "${OFFICEDEX_DIR}"
 APP_VERSION="$(node -p 'require("./package.json").version')"
-PRESENTATION_SOURCE_DIR="${PRESENTATION_DIR}" env -u GOROOT wails build -ldflags "-X main.appVersion=${APP_VERSION}"
+PRESENTATION_SOURCE_DIR="${PRESENTATION_DIR}" env -u GOROOT "${WAILS_BIN}" build -ldflags "-X main.appVersion=${APP_VERSION}"
+node --input-type=module -e 'import { stageDesktopSkills } from "./scripts/bundle-runtime.mjs"; await stageDesktopSkills("build/bin/OfficeDex.app/Contents/Resources");'
 npm run stage:office2modoc
 node scripts/bundle-office2modoc.mjs \
   --app build/bin/OfficeDex.app \
@@ -60,8 +71,8 @@ npm run bundle:licenses:mac
 npm run bundle:officecli:mac
 
 # The packaging flow gates on scripts/verify-packaged-runtime.mjs, which checks
-# a staged Contents/Resources tree. A local build stages nothing there and falls
-# back to the presentation checkout, so that gate would ask the wrong question.
+# a complete staged Contents/Resources tree. A local build stages Skills and
+# OfficeCLI but uses the presentation checkout, so that gate asks the wrong question.
 # Ask the binary instead: it runs the same resolvers the app runs at startup.
 echo "[build-local-latest] verifying runtime dependencies"
 "${APP_PATH}/Contents/MacOS/officedex" --verify-runtime

@@ -1,0 +1,325 @@
+{
+  "schema_version": 2,
+  "family": "list",
+  "capacity": {
+    "canvas_reference_pt": [
+      960,
+      540
+    ],
+    "outer_margin_fraction": [
+      0.05,
+      0.08
+    ],
+    "body_pt": [
+      16,
+      20
+    ],
+    "heading_pt": [
+      22,
+      28
+    ],
+    "page_title_pt": [
+      30,
+      40
+    ],
+    "measure_actual_textbox": true,
+    "overflow_action": "reflow_or_split_preserving_relation",
+    "parameter_status": "design_hypothesis_until_tested"
+  },
+  "variants": [
+    {
+      "id": "label-columns",
+      "items": [
+        3,
+        4
+      ],
+      "densities": [
+        "short"
+      ],
+      "orientation": "horizontal",
+      "mechanism": "编号横排、短说明同基线",
+      "source_evidence": [
+        "list-588-5"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "label-columns",
+      "visual_tags": [
+        "horizontal"
+      ],
+      "preserve": "编号横排、短说明同基线；保留来源的构图与组件轮廓，不统一改成文本框加圆点。",
+      "generation_ready": true
+    },
+    {
+      "id": "numbered-rows",
+      "items": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "densities": [
+        "short",
+        "medium",
+        "long"
+      ],
+      "orientation": "vertical",
+      "mechanism": "固定编号列+连续说明列；最长文本决定行高",
+      "source_evidence": [
+        "list-330-4"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "numbered-rows",
+      "visual_tags": [
+        "vertical"
+      ],
+      "preserve": "固定编号列+连续说明列；最长文本决定行高；保留来源的构图与组件轮廓，不统一改成文本框加圆点。",
+      "generation_ready": true
+    },
+    {
+      "id": "rail-callouts",
+      "items": [
+        3,
+        4
+      ],
+      "densities": [
+        "short",
+        "medium"
+      ],
+      "orientation": "vertical",
+      "mechanism": "图形占左区，说明占右区，一一水平映射",
+      "source_evidence": [
+        "list-168-6"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "rail-callouts",
+      "visual_tags": [
+        "vertical"
+      ],
+      "preserve": "图形占左区，说明占右区，一一水平映射；保留来源的构图与组件轮廓，不统一改成文本框加圆点。",
+      "required_geometry": {
+        "list-168-6": [
+          "s13",
+          "s15",
+          "s3"
+        ]
+      },
+      "generation_ready": true
+    },
+    {
+      "id": "hexagon-columns",
+      "items": [
+        3,
+        4
+      ],
+      "densities": [
+        "short",
+        "medium"
+      ],
+      "orientation": "horizontal",
+      "mechanism": "六边形编号块与其下方文字一一对应",
+      "source_evidence": [
+        "list-hexagon-columns-564"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "hexagon-columns",
+      "visual_tags": [
+        "checklist",
+        "modules",
+        "icons"
+      ],
+      "preserve": "保留六边形编号和文字的垂直对应；正文置于宽列内，不把它换成普通编号行。",
+      "generation_ready": true
+    },
+    {
+      "id": "dial-badges",
+      "items": [
+        3,
+        4
+      ],
+      "densities": [
+        "short",
+        "medium"
+      ],
+      "orientation": "horizontal",
+      "mechanism": "带放射刻度的编号圆章，内部标题，外部正文",
+      "source_evidence": [
+        "list-dial-badges-214"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "dial-badges",
+      "visual_tags": [
+        "overview",
+        "badges",
+        "summary"
+      ],
+      "preserve": "刻度是装饰而非数据；保留圆章、顶部编号带和标题，正文放章下。",
+      "required_geometry": {
+        "list-dial-badges-214": [
+          "s5",
+          "s6",
+          "s7"
+        ]
+      },
+      "generation_ready": true
+    },
+    {
+      "id": "hub-callout-rows",
+      "items": [
+        4
+      ],
+      "densities": [
+        "short"
+      ],
+      "orientation": "vertical",
+      "mechanism": "四行彩色标签与右侧说明一一对应，左侧主题图标用虚线连接各行",
+      "source_evidence": [
+        "list-hub-callout-rows-14"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "hub-callout-rows",
+      "visual_tags": [
+        "checklist",
+        "callouts",
+        "diagram"
+      ],
+      "preserve": "保留弧形主题标记、行节点、胶囊标签和虚线；主题标记应完整置于画布内，不用连接线暗示先后依赖。",
+      "capacity_status": "observed_source_only",
+      "unseen_content_validation": "not_run",
+      "required_geometry": {
+        "list-hub-callout-rows-14": [
+          "s2"
+        ]
+      },
+      "generation_ready": true
+    },
+    {
+      "id": "arrow-icon-rows",
+      "items": [
+        4
+      ],
+      "densities": [
+        "short"
+      ],
+      "orientation": "vertical",
+      "mechanism": "四行箭头标签带圆形图标和编号，右侧留出独立说明栏",
+      "source_evidence": [
+        "list-arrow-icon-rows-16"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "arrow-icon-rows",
+      "visual_tags": [
+        "checklist",
+        "icons",
+        "rows"
+      ],
+      "preserve": "保留箭头标签、圆章与编号的层叠关系；各行是条目，不把装饰箭头解释为流程。",
+      "capacity_status": "observed_source_only",
+      "unseen_content_validation": "not_run",
+      "required_geometry": {
+        "list-arrow-icon-rows-16": [
+          "s1",
+          "s2",
+          "s3",
+          "s19",
+          "s24"
+        ]
+      },
+      "generation_ready": true
+    },
+    {
+      "id": "diamond-label-grid",
+      "items": [
+        4
+      ],
+      "densities": [
+        "short"
+      ],
+      "orientation": "grid",
+      "mechanism": "两行两列标题说明条，左端菱形图标与长矩形相接",
+      "source_evidence": [
+        "list-diamond-label-grid-66"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "diamond-label-grid",
+      "visual_tags": [
+        "modules",
+        "icons",
+        "grid"
+      ],
+      "preserve": "保留菱形与色条衔接，标题正文在同一条内对齐；不得把四项误判为两个维度的矩阵。",
+      "capacity_status": "observed_source_only",
+      "unseen_content_validation": "not_run",
+      "required_geometry": {
+        "list-diamond-label-grid-66": [
+          "s2"
+        ]
+      },
+      "generation_ready": true
+    },
+    {
+      "id": "slanted-label-legend",
+      "items": [
+        4
+      ],
+      "densities": [
+        "short"
+      ],
+      "orientation": "horizontal",
+      "mechanism": "左侧四张倾斜标签与右侧四行编号说明相对应",
+      "source_evidence": [
+        "list-slanted-label-legend-81"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "slanted-label-legend",
+      "visual_tags": [
+        "checklist",
+        "diagram",
+        "legend"
+      ],
+      "preserve": "保留倾斜标签与外置说明的对应关系；标签不是漏斗，不虚构逐步转化。",
+      "capacity_status": "observed_source_only",
+      "unseen_content_validation": "not_run",
+      "required_geometry": {
+        "list-slanted-label-legend-81": [
+          "s9",
+          "s10",
+          "s11"
+        ]
+      },
+      "generation_ready": true
+    },
+    {
+      "id": "orbital-pill-grid",
+      "items": [
+        4
+      ],
+      "densities": [
+        "short"
+      ],
+      "orientation": "grid",
+      "mechanism": "两行两列绿色胶囊说明条，左端圆形编号外有小圆轨道装饰",
+      "source_evidence": [
+        "list-orbital-pill-grid-92"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "orbital-pill-grid",
+      "visual_tags": [
+        "checklist",
+        "grid",
+        "badges"
+      ],
+      "preserve": "保留胶囊条、左端编号圆与环绕小圆；四项是条目，不从二维排列推导矩阵语义。",
+      "capacity_status": "observed_source_only",
+      "unseen_content_validation": "not_run",
+      "required_geometry": {},
+      "generation_ready": true
+    }
+  ],
+  "fallbacks": [
+    "try_same_family_variant",
+    "split_same_relation",
+    "report_page_limit_conflict"
+  ]
+}

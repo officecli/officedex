@@ -52,6 +52,20 @@ export function resolveBundleTarget({
   return null;
 }
 
+// The desktop ships one PPT authoring Skill and the separate video workflow.
+// Never copy the CLI's whole skills directory: it contains retired PPT authors.
+export async function stageDesktopSkills(resources, source = path.join(REPO_ROOT, "skills")) {
+  for (const name of ["aippt-jssdk-design/policy.json", "aippt-jssdk-design/registry.json", "aippt-jssdk-design/snapshot.json", "aippt-jssdk-video/SKILL.md", "aippt-jssdk-animation/SKILL.md", "aippt-jssdk-animation/registry.json", "aippt-jssdk-animation/snapshot.json", "aippt-jssdk-animation/scripts/validate-animation.mjs"]) {
+    if (!existsSync(path.join(source, name))) throw new Error(`OfficeDex Skill is missing: ${name}`);
+  }
+  const destination = path.join(resources, "skills");
+  await rm(destination, { recursive: true, force: true });
+  for (const name of ["aippt-jssdk-design", "aippt-jssdk-video", "aippt-jssdk-animation"]) {
+    await mkdir(destination, { recursive: true });
+    await cp(path.join(source, name), path.join(destination, name), { recursive: true });
+  }
+}
+
 async function copy(src, destDir, destName) {
   if (!existsSync(src)) {
     console.warn(`[bundle-runtime] source not found: ${src}`);
@@ -88,11 +102,7 @@ async function main() {
   // AI generation Skills used by the desktop Planner. Keep these as readable
   // resources so the packaged client and OfficeCLI can discover the same
   // authoring rules as the development checkout.
-  await copyTreeRequired(
-    path.resolve(REPO_ROOT, "..", "officecli-internal", "skills"),
-    path.join(resources, "skills"),
-    "OfficeDex Skills",
-  );
+  await stageDesktopSkills(resources);
 
   // officecli
   const officecliSrc = path.join(REPO_ROOT, "build", "officecli", BINARY_NAME);

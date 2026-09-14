@@ -176,6 +176,7 @@ function normalizeGenerationMode(_value: unknown): GenerateInput["generationMode
 
 function normalizeGenerateInputForGeneration(values: GenerateInput): GenerateInput {
   const next: GenerateInput = { ...values };
+  if (next.documentType !== "pptx") delete next.pptxWorkflow;
   const generationMode = generationModeForDocumentType(next.documentType);
   if (generationMode) {
     next.generationMode = normalizeGenerationMode(next.generationMode);
@@ -649,6 +650,7 @@ function OfficeDexApp() {
       context,
       input: {
         prompt: submittedValues.prompt,
+        pptxWorkflow: submittedValues.pptxWorkflow,
         ...(submittedValues.generationMode ? { generationMode: submittedValues.generationMode } : {}),
         sourceFile: submittedValues.sourceFile,
         referenceImages: submittedValues.referenceImages,
@@ -743,6 +745,7 @@ function OfficeDexApp() {
       documentType,
       topic: task.topic || summarizePrompt(input.prompt),
       prompt: input.prompt,
+      pptxWorkflow: input.pptxWorkflow,
       ...(generationModeForDocumentType(documentType) ? { generationMode: normalizeGenerationMode(input.generationMode) } : {}),
       enableImages: persistedSettings.defaults.enableImages,
       imageQuality: persistedSettings.defaults.imageQuality,
@@ -881,6 +884,7 @@ function OfficeDexApp() {
     setCatalogAutoScanFile(undefined);
     await submit({
       documentType: route.documentType,
+      ...(route.documentType === "pptx" ? { pptxWorkflow: input.pptxWorkflow } : {}),
       generationMode: generationModeForDocumentType(route.documentType),
       topic: route.documentType === "pptx" ? "New slides" : summarizePrompt(input.prompt),
       prompt: taskPrompt,

@@ -15,6 +15,7 @@ export interface PendingGenerate {
   input: {
     prompt: string;
     generationMode?: GenerateInput["generationMode"];
+    pptxWorkflow?: GenerateInput["pptxWorkflow"];
     sourceFile?: string;
     referenceImages?: string[];
     imageRatio?: GenerateInput["imageRatio"];

@@ -31,9 +31,10 @@ const (
 	// PresentationRootEnv and SkillNodeEnv are passed through to the OfficeCLI
 	// bridge, which does its own resolution; the app only checks whether the
 	// user set them so it knows not to override them.
-	PresentationRootEnv = "OFFICECLI_MOP_PRESENTATION_ROOT"
-	SkillNodeEnv        = "OFFICECLI_MOP_SKILL_NODE"
-	SkillDirEnv         = "OFFICECLI_MOP_SKILL_DIR"
+	PresentationRootEnv    = "OFFICECLI_MOP_PRESENTATION_ROOT"
+	SkillNodeEnv           = "OFFICECLI_MOP_SKILL_NODE"
+	SkillDirEnv            = "OFFICECLI_MOP_SKILL_DIR"
+	JSSDKDesignSkillDirEnv = "OFFICECLI_JSSDK_DESIGN_SKILL_DIR"
 	// DesktopBinaryEnv points at the officecli binary to run.
 	DesktopBinaryEnv = "OFFICECLI_DESKTOP_BINARY"
 	// Office2ModocFFIEnv points at the office2modoc shared library.
@@ -50,25 +51,9 @@ const (
 	UpdateManifestURLEnv = "OFFICEDEX_UPDATE_MANIFEST_URL"
 )
 
-// PPTXJSSDKDesignEnv switches the aippt-jssdk-design PPTX backend off, putting
-// the desktop back on mop-skill without a rebuild. It is a path switch rather
-// than a preference: the two backends differ in what a finished deck can do
-// (images, live drawing, reslide/tail), so this is the one control that
-// decides which of them the app is running on.
-//
-// Unset means on, so the switch only ever has to be reached for to go back.
+// PPTXJSSDKDesignEnv is a retired switch, retained only for migration tests.
+// Its value no longer affects PPTX routing.
 const PPTXJSSDKDesignEnv = "OFFICEDEX_PPTX_JSSDK_DESIGN"
-
-// PPTXJSSDKDesignEnabled reports whether the JSSDK backend is on. Anything
-// that reads as false ("0", "false", "off", "no") turns it off; every other
-// value, including unset, leaves it on.
-func PPTXJSSDKDesignEnabled() bool {
-	switch strings.ToLower(Trimmed(PPTXJSSDKDesignEnv)) {
-	case "0", "false", "off", "no":
-		return false
-	}
-	return true
-}
 
 // LauncherPWDEnv is the shell's working directory as the launcher saw it. A
 // GUI-launched macOS app often has "/" as its real cwd but keeps PWD; it is

@@ -1,4 +1,8 @@
 export const homeEn: Record<string, string> = {
+  "home.pptxWorkflow": "Presentation style",
+  "home.pptxWorkflow.auto": "Auto",
+  "home.pptxWorkflow.design": "Static PPT",
+  "home.pptxWorkflow.animation": "Animated PPT",
   "home.eyebrow": "Good morning",
   "home.title": "What would you like to finish today?",
   "home.subtitle": "Start with a sentence, a source file, or a strong example to make slides, images, documents, or spreadsheets.",
@@ -125,6 +129,10 @@ export const homeEn: Record<string, string> = {
 };
 
 export const homeZh: Record<string, string> = {
+  "home.pptxWorkflow": "演示方式",
+  "home.pptxWorkflow.auto": "自动识别",
+  "home.pptxWorkflow.design": "静态 PPT",
+  "home.pptxWorkflow.animation": "动画 PPT",
   "home.eyebrow": "早上好",
   "home.title": "今天想完成什么？",
   "home.subtitle": "用一句话、一份资料或一个优秀案例，开始制作幻灯片、图片、文档或表格。",

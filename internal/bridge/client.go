@@ -29,7 +29,6 @@ import (
 
 	"github.com/google/uuid"
 	"officedex/internal/applog"
-	"officedex/internal/config"
 	"officedex/internal/types"
 )
 
@@ -118,8 +117,10 @@ type Client struct {
 }
 
 type bridgeCapabilities struct {
-	loaded                  bool
-	imageWatermarkSupported bool
+	loaded                    bool
+	imageWatermarkSupported   bool
+	progressiveJSSDKSupported bool
+	animationJSSDKSupported   bool
 }
 
 type listenerEntry struct {
@@ -652,20 +653,42 @@ func (c *Client) SessionID() string {
 
 // InvokeGenerate calls MethodTaskInvoke with the office.generate tool args
 // projected from the GenerateInput.
-// defaultPPTXBackendFor is the backend the desktop asks for when the caller
-// named none. The capability table states the intended default and is mirrored
-// into the renderer's own rows, so the kill switch is applied here, where the
-// default is actually spent, rather than by rewriting the row underneath the
-// mirror.
+// OfficeDex has one PPTX authoring path. Retired environment switches cannot
+// route a new request through an older Skill or compiler.
 func defaultPPTXBackendFor(documentType types.DocumentType) string {
-	backend := types.Capability(documentType).DefaultPPTXBackend
-	if backend == types.PPTXBackendJSSDKDesign && !config.PPTXJSSDKDesignEnabled() {
-		return types.PPTXBackendMOPSkill
-	}
-	return backend
+	return types.Capability(documentType).DefaultPPTXBackend
 }
 
 func (c *Client) InvokeGenerate(ctx context.Context, input types.GenerateInput) (TaskInvokeResult, error) {
+	workflow, workflowErr := resolvePPTXWorkflow(input)
+	if workflowErr != nil {
+		return TaskInvokeResult{}, workflowErr
+	}
+	input.PPTXWorkflow = workflow
+	if input.DocumentType == types.DocPPTX {
+		backend := strings.TrimSpace(input.PPTXBackend)
+		if backend != "" && backend != types.PPTXBackendJSSDKDesign {
+			return TaskInvokeResult{}, fmt.Errorf("旧 PPT Skill 后端 %q 已停用；OfficeDex 仅允许有来源验证的 JSSDK 渐进式 Skill", backend)
+		}
+		input.PPTXBackend = types.PPTXBackendJSSDKDesign
+		c.mu.Lock()
+		caps := c.capabilities
+		c.mu.Unlock()
+		if !caps.loaded && !caps.progressiveJSSDKSupported {
+			if _, err := c.GetCapabilities(ctx); err != nil {
+				return TaskInvokeResult{}, fmt.Errorf("无法确认有来源验证的 JSSDK 生成能力: %w", err)
+			}
+			c.mu.Lock()
+			caps = c.capabilities
+			c.mu.Unlock()
+		}
+		if workflow == "animation" && !caps.animationJSSDKSupported {
+			return TaskInvokeResult{}, fmt.Errorf("当前 OfficeCLI 未提供动画 PPT Skill；请更新匹配的桌面客户端与 OfficeCLI")
+		}
+		if !caps.progressiveJSSDKSupported {
+			return TaskInvokeResult{}, fmt.Errorf("当前 OfficeCLI 未提供有来源验证的 JSSDK 渐进式生成合同；请重建或更新 OfficeCLI，禁止使用旧 PPT Skill")
+		}
+	}
 	ratio, err := imageRatioArg(input)
 	if err != nil {
 		return TaskInvokeResult{}, err
@@ -704,6 +727,9 @@ func (c *Client) InvokeGenerate(ctx context.Context, input types.GenerateInput) 
 		// on. Renderer code that needs to opt out should be revisited as part
 		// of the Wails binding rewrite.
 		"local_preview": true,
+	}
+	if input.PPTXWorkflow != "" {
+		args["pptx_workflow"] = input.PPTXWorkflow
 	}
 	if input.RuntimeMode != "" {
 		args["runtime_mode"] = input.RuntimeMode
@@ -832,8 +858,10 @@ func bridgeCapabilitiesFromPayload(raw []byte) bridgeCapabilities {
 		return bridgeCapabilities{loaded: true}
 	}
 	return bridgeCapabilities{
-		loaded:                  true,
-		imageWatermarkSupported: nestedBool(payload, true, "image_generation", "watermark", "supported") || nestedBool(payload, true, "document_generation", "img", "image_generation", "watermark", "supported"),
+		loaded:                    true,
+		progressiveJSSDKSupported: nestedBool(payload, true, "pptx_jssdk_progressive", "v2"),
+		animationJSSDKSupported:   nestedBool(payload, true, "pptx_jssdk_animation", "v1"),
+		imageWatermarkSupported:   nestedBool(payload, true, "image_generation", "watermark", "supported") || nestedBool(payload, true, "document_generation", "img", "image_generation", "watermark", "supported"),
 	}
 }
 
