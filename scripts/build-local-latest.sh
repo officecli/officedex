@@ -52,7 +52,19 @@ build_officecli() {
 
 echo "[build-local-latest] building OfficeCLI from ${OFFICECLI_DIR}"
 cd "${OFFICECLI_DIR}"
-node scripts/sync-jssdk-design-skill.mjs
+# The design Skill is distilled in the plan repo and synced into both OfficeCLI
+# and OfficeDex. That distilled catalog is working data outside git, so a
+# checkout that does not have it still builds: what it would generate is already
+# committed in both repositories, and the sync exists to refresh that snapshot.
+JSSDK_DESIGN_CATALOG="${REPO_ROOT}/plans/aippt-jssdk-skill-strategy/distilled-skills"
+if [[ ! -f "${JSSDK_DESIGN_CATALOG}/scripts/evidence-policy.mjs" ]]; then
+  JSSDK_DESIGN_CATALOG="${REPO_ROOT}/plan/aippt-jssdk-skill-strategy/distilled-skills"
+fi
+if [[ -f "${JSSDK_DESIGN_CATALOG}/scripts/evidence-policy.mjs" && -d "${JSSDK_DESIGN_CATALOG}/design-skill" ]]; then
+  node scripts/sync-jssdk-design-skill.mjs "${JSSDK_DESIGN_CATALOG}/design-skill" "${JSSDK_DESIGN_CATALOG}"
+else
+  echo "[build-local-latest] skipping design Skill sync: no distilled catalog at ${REPO_ROOT}/{plans,plan}/aippt-jssdk-skill-strategy/distilled-skills; keeping the snapshot committed in OfficeCLI"
+fi
 node scripts/sync-jssdk-animation-skill.mjs
 build_officecli "${OFFICECLI_SOURCE_BIN}"
 build_officecli "${OFFICECLI_STAGE_BIN}"
