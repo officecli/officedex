@@ -38,12 +38,32 @@ html[data-window-chrome="overlay"] {
   background: var(--od-surface);
 }
 
+/* With the rail docked it owns the window's top-left corner — the traffic
+   lights land in its own band — so nothing in the main column has to dodge
+   anything. Stated rather than left to each reader's `, 0px` fallback: the
+   preview overlay fills that column with a workbench that has its own title
+   bar, and it has to be told the corner is taken care of. */
+.home-shell {
+  --od-topleft-reserve: 0px;
+}
+
 /* Collapsed hides the rail outright, the way Claude's desktop app does: one
    column, and the way back rides in the top-left corner of the content. */
 .home-shell--railless {
   grid-template-columns: minmax(0, 1fr);
-  /* Corner the content must keep clear: the window controls, then the
-     expand button that replaces the rail's own toggle. */
+}
+
+/* Corner the content must keep clear: the window controls, then the expand
+   button that replaces the rail's own toggle. Held for the whole slide rather
+   than only once it settles: mid-collapse the main column still starts where
+   the outgoing rail is, and a moment later it starts at the window's edge with
+   the expand button sitting on it — so releasing the reserve early walks the
+   workbench's title-bar cluster straight through that button. `rail-moving`
+   covers the expand too, where the content is still at the edge while the rail
+   travels back in. */
+.home-shell--railless,
+.home-shell--rail-shut,
+.home-shell--rail-moving {
   --od-topleft-reserve: calc(var(--od-window-chrome-inset-x) + 44px);
 }
 
@@ -77,7 +97,13 @@ html[data-window-chrome="overlay"] {
   /* Half the 28px button, so its centre lands on the controls' axis. */
   top: calc(var(--od-window-controls-center) - 14px);
   left: calc(var(--od-window-chrome-inset-x) + 8px);
-  z-index: 60;
+  /* Above the peeked rail (102) and .preview-panel (100): with the rail
+     collapsed, the preview overlay spans the same corner and, at a lower
+     z-index, buried the only control that brings the rail back. It also has to
+     outrank the rail it opens, or the band it sits in would swallow it. Still
+     below the real modal tier (1000) so an open dialog keeps blocking it, as it
+     should. */
+  z-index: 103;
   display: grid;
   width: 28px;
   height: 28px;
@@ -225,13 +251,18 @@ html[data-window-chrome="overlay"] {
 .home-shell--rail-shut .project-sidebar { margin-left: -232px; }
 
 /* Peeked open on hover: it floats over the content instead of taking a track,
-   so passing the pointer across the corner control never reflows the page. */
+   so passing the pointer across the corner control never reflows the page.
+   It clears .preview-panel (100) for the same reason the toggle does: with a
+   document open, the preview overlay fills this column, and a rail that peeked
+   underneath it made the one control that reveals the file list look dead.
+   Below the toggle (103), which sits in the rail's own band and must stay
+   clickable while the rail is out. */
 .home-shell--rail-peek .project-sidebar {
   position: absolute;
   top: 0;
   bottom: 0;
   left: 0;
-  z-index: 58;
+  z-index: 102;
   box-shadow: 0 10px 30px rgba(31, 41, 51, 0.16);
 }
 /* The band stands in for the rail's top padding: it holds the rail toggle, and
@@ -279,14 +310,22 @@ html[data-window-chrome="overlay"] {
 .project-sidebar__workspace { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; min-height: 32px; align-items: center; border-radius: 4px; }
 .project-sidebar__document { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; min-height: 30px; margin-left: 18px; border-radius: 4px; background: transparent; color: var(--od-ink-secondary); }
 .project-sidebar__document:hover, .project-sidebar__document[data-active="true"] { background: var(--od-surface); color: var(--od-ink); }
-.project-sidebar__document-open { display: grid; width: 100%; min-width: 0; grid-template-columns: 20px minmax(0, 1fr) 8px; align-items: center; gap: 7px; min-height: 30px; padding: 0 7px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.project-sidebar__document-open { display: grid; width: 100%; min-width: 0; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 7px; min-height: 30px; padding: 0 7px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .project-sidebar__document-open > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-sidebar__document-open .doc-type-icon { width: 18px; height: 18px; }
-.project-sidebar__document-open em { width: 7px; height: 7px; border-radius: 999px; background: var(--od-ink-tertiary); }
-.project-sidebar__document em[data-status="starting"], .project-sidebar__document em[data-status="running"] { background: #2f7dd1; }
-.project-sidebar__document em[data-status="question"], .project-sidebar__document em[data-status="plan_review"] { background: #d98524; }
-.project-sidebar__document em[data-status="failed"] { background: #c63f36; }
-.project-sidebar__document em[data-status="question"], .project-sidebar__document em[data-status="plan_review"] { box-shadow: 0 0 0 3px color-mix(in srgb, #d98524 18%, transparent); }
+/* A dot says "something"; the word says what. Only states that are not simply
+   finished get a badge, so a settled list stays quiet. */
+.project-sidebar__document-open .project-sidebar__document-status { display: inline-flex; align-items: center; gap: 4px; max-width: 11ch; padding: 1px 6px; border-radius: 999px; font-size: 10px; font-style: normal; line-height: 15px; white-space: nowrap; overflow: hidden; background: color-mix(in srgb, var(--od-ink-tertiary) 14%, transparent); color: var(--od-ink-secondary); }
+.project-sidebar__document-status i { box-sizing: border-box; flex: 0 0 auto; width: 8px; height: 8px; background: transparent; border: 1.5px solid color-mix(in srgb, #2f7dd1 24%, transparent); border-top-color: #2f7dd1; border-right-color: #2f7dd1; border-radius: 50%; animation: home-task-spin 800ms linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .project-sidebar__document-status i { animation: none; }
+}
+.project-sidebar__document-status[data-status="question"], .project-sidebar__document-status[data-status="plan_review"] { background: #fdf0df; color: #8a5511; }
+.project-sidebar__document-status[data-status="failed"] { background: #fdecea; color: #a4382d; }
+.project-sidebar__document-status[data-status="cancelled"] { background: color-mix(in srgb, var(--od-ink-tertiary) 14%, transparent); color: var(--od-ink-tertiary); }
+.project-sidebar__search { padding: 6px 10px 8px; }
+.project-sidebar__group-label { margin: 8px 0 2px; padding: 0 7px; color: var(--od-ink-tertiary); font-size: 10px; letter-spacing: .04em; text-transform: uppercase; }
+.project-sidebar__no-matches { margin: 10px 7px; color: var(--od-ink-tertiary); font-size: 12px; }
 .project-sidebar__document-delete { display: grid; width: 26px; height: 26px; margin-right: 2px; place-items: center; border: 0; border-radius: 4px; background: transparent; color: var(--od-ink-secondary); cursor: pointer; opacity: 0; transition: opacity 120ms ease, background-color 120ms ease, color 120ms ease; }
 .project-sidebar__document:hover .project-sidebar__document-delete,
 .project-sidebar__document:focus-within .project-sidebar__document-delete { opacity: 1; }
@@ -295,6 +334,16 @@ html[data-window-chrome="overlay"] {
 .project-sidebar__unscoped-header { display: flex; align-items: center; gap: 5px; min-height: 20px; padding: 0 7px; color: var(--od-ink-secondary); font-size: 11px; font-weight: 500; }
 .project-sidebar__unscoped-count { color: var(--od-ink-tertiary); font-variant-numeric: tabular-nums; }
 .project-sidebar__unscoped-documents .project-sidebar__document { margin-left: 0; }
+/* Same-titled rows fold behind a count: eight rows all called "Untitled task"
+   are eight rows nobody can choose between. */
+.project-sidebar__fold { margin-left: 18px; }
+.project-sidebar__fold-toggle { display: grid; width: 100%; min-width: 0; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 7px; min-height: 30px; padding: 0 7px; border: 0; border-radius: 4px; background: transparent; color: var(--od-ink-secondary); font: inherit; text-align: left; cursor: pointer; }
+.project-sidebar__fold-toggle:hover { background: var(--od-surface); color: var(--od-ink); }
+.project-sidebar__fold-toggle > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-sidebar__fold-toggle .doc-type-icon { width: 18px; height: 18px; }
+.project-sidebar__fold-toggle em { font-style: normal; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--od-ink-tertiary); }
+.project-sidebar__fold-body .project-sidebar__document { margin-left: 18px; }
+.project-sidebar__unscoped-documents .project-sidebar__fold { margin-left: 0; }
 .project-sidebar__workspace-select span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-sidebar__workspace-actions { display: flex; align-items: center; padding-right: 2px; opacity: 0; visibility: hidden; transition: opacity 120ms ease, visibility 120ms ease; }
 .project-sidebar__workspace:hover .project-sidebar__workspace-actions,
@@ -343,7 +392,11 @@ html[data-window-chrome="overlay"] {
   .project-sidebar__workspace-select span,
   .project-sidebar__workspace-actions,
   .project-sidebar__document-open > span:nth-child(2),
-  .project-sidebar__document-open em,
+  .project-sidebar__document-status,
+  .project-sidebar__search,
+  .project-sidebar__group-label,
+  .project-sidebar__fold-toggle > span,
+  .project-sidebar__fold-toggle em,
   .project-sidebar__document-delete,
   .project-sidebar__footer span { display: none; }
   .project-sidebar__brand img { width: 28px; height: 28px; }
@@ -393,7 +446,7 @@ html[data-window-chrome="overlay"] {
   position: relative;
   isolation: isolate;
   width: min(1460px, 100%);
-  padding: 54px clamp(28px, 4.5vw, 72px) 72px;
+  padding: 16px clamp(28px, 4.5vw, 72px) 56px;
 }
 
 .home-shell__pointer-field {
@@ -444,22 +497,23 @@ html[data-window-chrome="overlay"] {
 
 .home-hero__copy { margin-top: 0; }
 .home-hero .home-eyebrow { color: var(--od-guidance); font-size: 12px; font-weight: 600; letter-spacing: .02em; }
-.home-hero h1 { margin: 4px 0 6px; font-size: clamp(23px, 2.4vw, 30px); line-height: 1.25; font-weight: 600; letter-spacing: -.025em; }
+.home-hero h1 { margin: 4px 0 6px; font-size: clamp(24px, 2vw, 28px); line-height: 1.25; font-weight: 600; letter-spacing: -.025em; }
 .home-hero p { max-width: 720px; font-size: 14px; line-height: 22px; }
 
 .home-intake {
+  container-type: inline-size;
   max-width: 980px;
-  margin: 24px auto 0;
+  margin: 18px auto 0;
   border-color: color-mix(in srgb, var(--od-border-hover) 68%, transparent);
-  border-radius: 28px;
+  border-radius: var(--od-composer-radius, 28px);
   background: color-mix(in srgb, var(--od-surface) 94%, transparent);
   box-shadow: 0 20px 50px rgb(15 23 42 / 8%), 0 2px 8px rgb(15 23 42 / 5%);
   backdrop-filter: blur(16px);
 }
 
 .home-intake .od-textarea {
-  min-height: 132px;
-  padding: 22px 24px 16px;
+  min-height: 108px;
+  padding: 18px 24px;
   background: transparent;
   font-size: 15px;
   line-height: 24px;
@@ -476,13 +530,15 @@ html[data-window-chrome="overlay"] {
 .home-intake.is-drop-active { border-color: color-mix(in srgb, var(--od-guidance) 60%, var(--od-border-hover)); box-shadow: 0 20px 50px rgb(15 23 42 / 8%), 0 0 0 3px color-mix(in srgb, var(--od-guidance) 18%, transparent); }
 /* The toolbar sizes to its tallest control; a taller floor only shows up as
    dead space under the type labels. */
-.home-intake__footer { display: grid; min-height: 56px; grid-template-columns: minmax(0, 1fr) minmax(0, auto) auto; border-top-color: color-mix(in srgb, var(--od-border-subtle) 78%, transparent); background: transparent; padding: 8px 12px; }
-.home-intake__footer-left { display: flex; min-width: 0; align-items: center; flex: 1; gap: 6px; }
+.home-intake__footer { display: grid; min-height: 56px; grid-template-columns: minmax(0, 1fr) auto minmax(0, auto) 40px; grid-template-areas: "directory mode types submit"; align-items: center; border-top-color: color-mix(in srgb, var(--od-border-subtle) 78%, transparent); background: transparent; padding: 8px 12px; }
+.home-intake__footer-left { grid-area: directory; display: flex; min-width: 0; align-items: center; flex: 1; gap: 6px; }
 .home-intake__footer-left .od-button { flex: 0 1 auto; white-space: normal; }
 .home-intake__footer-left > span { overflow: hidden; color: var(--od-ink-secondary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 /* Keep the shell CTA independent of the embedded Sheet SDK's .od-button
    rules, which are also present in the desktop stylesheet. */
 .home-intake__footer > .od-button--circular-submit {
+  grid-area: submit;
+  justify-self: end;
   box-sizing: border-box;
   display: inline-flex;
   flex: 0 0 auto;
@@ -572,7 +628,7 @@ html[data-window-chrome="overlay"] {
 .home-intake__workdir > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .home-intake__workdir svg { width: 15px; height: 15px; flex: 0 0 auto; }
 .home-intake__workdir svg:last-child { width: 13px; height: 13px; }
-.home-intake__types { display: inline-flex; min-width: 0; align-items: center; gap: 4px; flex: 0 1 auto; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.home-intake__types { grid-area: types; display: inline-flex; min-width: 0; align-items: center; gap: 4px; flex: 0 1 auto; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
 .home-intake__types::-webkit-scrollbar { display: none; }
 .home-intake__types button { display: inline-flex; height: 32px; flex: 0 0 auto; align-items: center; gap: 6px; border: 0; border-radius: 999px; background: transparent; color: var(--od-ink-secondary); padding: 0 14px; font: 500 12.5px/20px var(--od-font-ui); white-space: nowrap; cursor: pointer; transition: background-color 140ms ease, color 140ms ease; }
 .home-intake__types button:hover { background: var(--od-surface-muted); color: var(--od-ink); }
@@ -582,9 +638,38 @@ html[data-window-chrome="overlay"] {
    not as a row of swatches. */
 .home-intake__types button.is-selected { background: color-mix(in srgb, var(--doc-color, var(--od-ink)) 14%, transparent); color: var(--od-ink); font-weight: 600; }
 .home-intake__types button:focus-visible { outline: 2px solid var(--od-guidance); outline-offset: 2px; }
-.home-intake__types button .doc-type-icon { margin-left: -2px; }
+.home-intake__type-icon {
+  display: inline-flex;
+  width: 0;
+  overflow: hidden;
+  margin-right: -6px;
+  opacity: 0;
+  transform: scale(.85);
+  transition: width 180ms ease, margin-right 180ms ease, opacity 180ms ease, transform 180ms ease;
+}
+.home-intake__type-icon .doc-type-icon { flex-shrink: 0; }
+.home-intake__types button.is-selected .home-intake__type-icon {
+  width: 17px;
+  margin-right: 0;
+  opacity: 1;
+  transform: scale(1);
+}
 .home-intake__references { display: flex; flex-wrap: wrap; gap: 8px; border-top: 1px solid var(--od-border-subtle); padding: 10px 12px; }
-.home-intake__type-options { display: flex; align-items: center; gap: 6px; padding: 0 16px 10px; color: var(--od-ink-secondary); font-size: 12px; }
+.home-intake__type-options { display: flex; box-sizing: border-box; height: 38px; align-items: center; gap: 6px; padding: 0 16px 10px; overflow-x: auto; color: var(--od-ink-secondary); font-size: 12px; }
+/* Keep the row's space while it fades; inert disables controls immediately. */
+.home-intake__type-options {
+  opacity: 1;
+  transform: translateY(0);
+  visibility: visible;
+  transition: opacity 180ms ease, transform 180ms ease, visibility 0s;
+}
+.home-intake__type-options[aria-hidden="true"] {
+  opacity: 0;
+  transform: translateY(4px);
+  visibility: hidden;
+  transition: opacity 180ms ease, transform 180ms ease, visibility 0s linear 180ms;
+}
+.home-intake__type-options > * { flex: 0 0 auto; white-space: nowrap; }
 .home-intake__type-options > span { margin-right: 4px; }
 .home-intake__type-options button { min-height: 28px; padding: 0 10px; border: 1px solid var(--od-hairline); border-radius: 6px; background: var(--od-canvas); color: inherit; cursor: pointer; }
 .home-intake__type-options button[aria-pressed="true"] { border-color: var(--od-ink); background: var(--od-ink); color: #fff; }
@@ -645,14 +730,51 @@ html[data-window-chrome="overlay"] {
 .home-template-card {
   scroll-snap-align: start;
   border-color: color-mix(in srgb, var(--od-border-hover) 60%, transparent);
-  border-radius: 16px;
+  border-radius: var(--od-card-radius, 16px);
   background: color-mix(in srgb, var(--od-surface) 92%, transparent);
   box-shadow: 0 1px 2px rgb(15 23 42 / 4%);
 }
 .home-template-card:hover { box-shadow: 0 14px 32px rgb(15 23 42 / 9%); transform: translateY(-2px); }
+.home-template-card { animation: home-template-enter 220ms ease-out backwards; }
+@keyframes home-template-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-intake__types button,
+  .home-intake__type-icon,
+  .home-intake__type-options,
+  .home-intake__type-options[aria-hidden="true"] { transition: none; }
+  .home-template-card { animation: none; }
+}
 .home-template-card__preview { border-bottom-color: color-mix(in srgb, var(--od-border-subtle) 80%, transparent); }
 .home-template-card__copy { padding: 11px 13px 13px; }
 .home-template-card__copy strong { font-size: 13.5px; line-height: 20px; }
+
+/* The bundled NexaEdge recording is an example like any other, so it rides in
+   the same rail as the static cases. The play glyph and accent border say it
+   draws a deck live instead of prefilling a prompt. */
+.home-template-card--demo { border-color: color-mix(in srgb, var(--od-guidance) 42%, var(--od-border-subtle)); }
+.home-template-card--demo .home-template-card__preview {
+  border-bottom-color: color-mix(in srgb, var(--od-guidance) 26%, var(--od-border-subtle));
+  background: linear-gradient(145deg, color-mix(in srgb, var(--od-guidance) 12%, var(--od-surface)), var(--od-surface));
+}
+.home-template-card__demo-play {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--od-surface);
+  color: var(--od-guidance);
+  box-shadow: 0 8px 18px rgb(15 23 42 / 14%);
+  transition: transform 140ms ease;
+}
+.home-template-card__demo-play svg { width: 24px; height: 24px; }
+.home-template-card--demo:hover .home-template-card__demo-play { transform: scale(1.05); }
+.home-template-card--demo:disabled { cursor: default; opacity: .74; }
+.home-template-card--demo:disabled:hover { box-shadow: 0 1px 2px rgb(15 23 42 / 4%); transform: none; }
+.home-template-card--demo:disabled:hover .home-template-card__demo-play { transform: none; }
 
 .home-attention,
 .home-recents { margin-top: 46px; border-top: 0; padding-top: 0; }
@@ -677,84 +799,28 @@ html[data-window-chrome="overlay"] {
 .home-file-remove:focus-visible { opacity: 1; }
 
 @media (max-width: 720px) {
-  .home-screen { padding: 28px 18px 48px; }
+  .home-screen { padding: 12px 18px 40px; }
   .home-hero__copy { margin-top: 0; }
-  .home-intake .od-textarea { min-height: 116px; padding: 18px; }
+  .home-intake .od-textarea { min-height: 108px; padding: 18px; }
   .home-intake__footer { flex-wrap: wrap; }
   .home-intake__footer-left { flex-basis: calc(100% - 56px); }
   .home-intake__workdir { max-width: 180px; }
-  .home-intake__types { order: 3; overflow-x: auto; max-width: 100%; }
+  .home-intake__types { overflow-x: auto; max-width: 100%; }
   .home-section-header { align-items: flex-start; flex-direction: column; gap: 4px; }
   .home-template-grid { grid-auto-columns: minmax(220px, 82vw); }
   .home-recent-list { grid-template-columns: minmax(0, 1fr); }
 }
 
-@media (max-width: 900px) and (min-width: 721px) {
-  .home-intake__footer { grid-template-columns: minmax(0, 1fr) auto; }
-  .home-intake__types { grid-column: 1 / -1; grid-row: 2; justify-self: end; }
-}
 
 @media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) {
   .home-shell__pointer-field { display: none; }
 }
 
-/* In-flight work sits in Recent: a running task shows its stage and progress,
-   a failed one offers retry, and both give way to the file card once settled. */
-.home-task-row--running { border-color: color-mix(in srgb, var(--od-guidance) 32%, transparent); background: color-mix(in srgb, var(--od-guidance) 4%, var(--od-surface)); }
-.home-task-row--failed { border-color: color-mix(in srgb, var(--od-danger) 30%, transparent); background: color-mix(in srgb, var(--od-danger) 4%, var(--od-surface)); }
-.home-task-icon { position: relative; display: grid; flex: 0 0 auto; place-items: center; }
-.home-task-icon__spinner { position: absolute; inset: -3px; border: 2px solid transparent; border-top-color: var(--od-guidance); border-radius: 12px; animation: home-task-spin 900ms linear infinite; }
-@keyframes home-task-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .home-task-icon__spinner { animation: none; opacity: .5; } }
-.home-task-progress { display: block; height: 3px; margin-top: 6px; overflow: hidden; border-radius: 999px; background: color-mix(in srgb, var(--od-guidance) 18%, transparent); }
-.home-task-progress i { display: block; height: 100%; border-radius: 999px; background: var(--od-guidance); transition: width 240ms ease; }
-.home-task-actions { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; padding-right: 8px; }
-.home-task-row .home-file-remove { position: static; transform: none; }
 .home-screen--production {
   min-height: 100%;
   padding: 24px 32px 40px;
 }
 
-/* Homepage hierarchy: status is a compact, optional control; task detail is
-   progressively disclosed instead of competing with creation and examples. */
-.home-status-overview {
-  display: grid;
-  gap: 8px;
-  max-width: 980px;
-  margin: 18px auto 0;
-}
-.home-status-summary {
-  display: flex;
-  width: 100%;
-  min-height: 48px;
-  align-items: center;
-  gap: 10px;
-  border: 1px solid var(--od-border-subtle);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--od-surface) 92%, transparent);
-  color: var(--od-ink);
-  padding: 8px 14px;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 120ms ease, background-color 120ms ease;
-}
-.home-status-summary:hover { border-color: var(--od-border-hover); background: var(--od-surface); }
-.home-status-summary:focus-visible { outline: 2px solid var(--od-guidance); outline-offset: 2px; }
-.home-status-summary--attention { border-color: color-mix(in srgb, var(--od-guidance) 28%, var(--od-border-subtle)); }
-.home-status-summary--production { cursor: pointer; }
-.home-status-summary__dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 999px; background: var(--od-guidance); }
-.home-status-summary--attention .home-status-summary__dot { background: var(--od-danger, #d95050); }
-.home-status-summary > span:nth-child(2) { display: flex; min-width: 0; flex-direction: column; gap: 1px; }
-.home-status-summary strong { font-size: 13px; line-height: 19px; font-weight: 600; }
-.home-status-summary small { color: var(--od-ink-secondary); font-size: 12px; line-height: 17px; }
-.home-status-summary__action { margin-left: auto; color: var(--od-ink-secondary); font-size: 12px; white-space: nowrap; }
-.home-production-summary { border: 0; }
-.home-production-summary > summary { list-style: none; }
-.home-production-summary > summary::-webkit-details-marker { display: none; }
-.home-production-summary[open] > summary { border-bottom-right-radius: 6px; border-bottom-left-radius: 6px; }
-.home-production-summary__details { display: grid; gap: 10px; margin-top: 8px; padding: 0 4px 4px; }
-.home-production-summary__details .home-task-row { margin: 0; }
 .home-attention--compact { margin-top: 12px; }
 .home-attention--compact .home-attention-list { margin-top: 8px; border-radius: 12px; }
 .home-attention--compact .home-attention-row { min-height: 46px; padding: 0 14px; }
@@ -806,21 +872,37 @@ html[data-window-chrome="overlay"] {
 @media (max-width: 760px) {
 }
 
-@media (max-width: 720px) {
-  .home-intake__footer { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
-  .home-intake__footer-left { grid-column: 1 / -1; grid-row: 1; }
-  .home-intake__types { grid-column: 1; grid-row: 2; }
-  .home-intake__footer > .od-button--circular-submit { grid-column: 2; grid-row: 2; }
+/* Respond to the composer width, including space taken by the sidebar. */
+@container (max-width: 760px) {
+  .home-intake__footer {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "directory mode" "types submit";
+  }
 }
-@media (max-width: 400px) {
-  .home-intake__footer { grid-template-columns: minmax(0, 1fr); }
-  .home-intake__types { grid-column: 1; grid-row: 2; width: 100%; }
-  .home-intake__footer > .od-button--circular-submit { grid-column: 1; grid-row: 3; justify-self: end; }
+
+@container (max-width: 440px) {
+  .home-intake__footer {
+    grid-template-areas: "directory directory" "mode mode" "types submit";
+  }
 }
+
+.home-intake__advanced-mode { grid-area: mode; display:inline-flex; align-items:center; gap:7px; margin-left:0; color:var(--od-color-text-secondary, #666a71); font-size:13px; cursor:pointer; white-space:nowrap; }
+.home-intake__advanced-mode input { accent-color:var(--od-color-primary, #4b9bea); }
+.home-intake__advanced-mode small { color:var(--od-color-text-tertiary, #999da4); }
+
+/* The homepage reserves a bounded notification band above its heading. */
+.home-notification-space {
+  height: 72px;
+  max-width: 980px;
+  margin: 0 auto 8px;
+}
+
+.home-shell__rail-toggle {
+  border-radius: 7px;
+  color: var(--od-ink-secondary);
+}
+.home-shell__rail-toggle svg { width: 16px; height: 16px; stroke-width: 1.7; }
 
 /* A single shared element connects the submitted brief to its task. */
 .home-entry-morph { position: fixed; z-index: 1000; pointer-events: none; overflow: hidden; box-sizing: border-box; padding: 14px 18px; border: 1px solid; border-radius: 14px; transform-origin: top left; font-size: 14px !important; line-height: 1.7 !important; white-space: pre-wrap; overflow-wrap: anywhere; }
 .home-entry-morph__label { font-size: 12px; margin-bottom: 5px; opacity: .7; }
-.home-intake__advanced-mode { display:inline-flex; align-items:center; gap:7px; margin-left:10px; color:var(--od-color-text-secondary, #666a71); font-size:13px; cursor:pointer; white-space:nowrap; }
-.home-intake__advanced-mode input { accent-color:var(--od-color-primary, #4b9bea); }
-.home-intake__advanced-mode small { color:var(--od-color-text-tertiary, #999da4); }

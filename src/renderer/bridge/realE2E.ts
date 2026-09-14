@@ -248,6 +248,11 @@ export function createRealE2EAPI(endpoint: string): DesktopAPI {
       rpc<ReportCapabilityResult>("GetReportCapability"),
     peekReportContext: (taskId: string) =>
       rpc<PeekReportContextResult>("PeekReportContext", taskId),
+    getPptxTaskStatus: (taskId) => rpc("GetPptxTaskStatus", taskId),
+    skipPptxResearch: async (taskId) => { await rpc("SkipPptxResearch", taskId); },
+    intervenePptx: async (taskId, text) => (await rpc<{ effectiveFrom?: number }>("IntervenePptx", { taskId, text })) ?? {},
+    pausePptx: async (taskId) => { await rpc("PausePptx", taskId); },
+    resumePptxLive: async (taskId) => { await rpc("ResumePptx", taskId); },
     getTaskHistory: async (limit?: number): Promise<TaskHistoryEntry[]> =>
       normaliseTaskHistory(await rpc<unknown>("GetTaskHistory", limit ?? 50)),
     getBridgeRuntimeSnapshot: async () =>

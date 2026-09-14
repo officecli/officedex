@@ -1,3 +1,4 @@
+import { translate as t, getCurrentLocale, type Locale } from "../i18n";
 import "@shimo/sdk-sheet/lib/index.css";
 import type {
   AbstractedEditorFileUploader,
@@ -10,6 +11,8 @@ import type {
   SheetSDKOptions,
 } from "@shimo/sdk-sheet";
 import { getS18n } from "@shimo/simple-i18n";
+
+const localeNamespaces = new Set<string>();
 
 const loadedScripts = new Map<string, Promise<void>>();
 
@@ -124,8 +127,8 @@ class OfflineModocAssets {
   }
 
   register(assetUrl: string, displayUrl: string): void {
-    if (!assetUrl.startsWith("modoc-assets:")) throw new Error("无效的 MODoc 图片地址。");
-    if (!displayUrl.startsWith("data:image/")) throw new Error("无效的本地图片显示地址。");
+    if (!assetUrl.startsWith("modoc-assets:")) throw new Error(t("spreadsheet.error.invalidAsset"));
+    if (!displayUrl.startsWith("data:image/")) throw new Error(t("spreadsheet.error.invalidDisplay"));
     this.displayUrls.set(modocAssetBaseUrl(assetUrl), displayUrl);
   }
 
@@ -175,20 +178,20 @@ class OfflineModocAssets {
 }
 
 async function localImageDataUrl(file: File): Promise<string> {
-  if (!file.type.startsWith("image/")) throw new Error("离线上传器仅支持图片文件。");
+  if (!file.type.startsWith("image/")) throw new Error(t("spreadsheet.error.imageOnly"));
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => typeof reader.result === "string"
       ? resolve(reader.result)
-      : reject(new Error("无法读取剪贴板图片。"));
-    reader.onerror = () => reject(reader.error ?? new Error("无法读取剪贴板图片。"));
+      : reject(new Error(t("spreadsheet.error.clipboardImage")));
+    reader.onerror = () => reject(reader.error ?? new Error(t("spreadsheet.error.clipboardImage")));
     reader.readAsDataURL(file);
   });
 }
 
 export function registerOfflineImage(file: File, assetUrl: string, displayUrl: string): File {
-  if (!assetUrl.startsWith("modoc-assets:")) throw new Error("无效的 MODoc 图片地址。");
-  if (!displayUrl.startsWith("data:image/")) throw new Error("无效的本地图片显示地址。");
+  if (!assetUrl.startsWith("modoc-assets:")) throw new Error(t("spreadsheet.error.invalidAsset"));
+  if (!displayUrl.startsWith("data:image/")) throw new Error(t("spreadsheet.error.invalidDisplay"));
   offlineImages.set(file, { assetUrl, displayUrl });
   return file;
 }
@@ -219,7 +222,7 @@ export class OfflineImageUploader implements AbstractedEditorFileUploader {
 
     void Promise.all(tasks.map(async (task) => {
       try {
-        if (!(task.fileInfo.raw instanceof File)) throw new Error("离线图片上传器未收到本地图片数据。");
+        if (!(task.fileInfo.raw instanceof File)) throw new Error(t("spreadsheet.error.imageDataMissing"));
         const registered = offlineImages.get(task.fileInfo.raw);
         if (registered) {
           this.modocAssets.register(registered.assetUrl, registered.displayUrl);
@@ -238,7 +241,7 @@ export class OfflineImageUploader implements AbstractedEditorFileUploader {
           };
         }
         const dataUrl = await localImageDataUrl(task.fileInfo.raw);
-        if (!this.stageImage) throw new Error("当前表格会话不支持暂存剪贴板图片。");
+        if (!this.stageImage) throw new Error(t("spreadsheet.error.stagingUnsupported"));
         const staged = await this.stageImage(task.fileInfo.raw);
         this.modocAssets.register(staged.assetUrl, dataUrl);
         return {
@@ -331,14 +334,21 @@ export async function createOfflineSheetEditor(
   modocContent: string,
   imageAssets: Array<{ url: string; dataUrl: string }> = [],
   stageImage?: OfflineImageStager,
+  locale: Locale = getCurrentLocale(),
 ): Promise<AbstractedSheetSDK> {
   const sheetLocaleGlobal = globalThis as typeof globalThis & {
     s18n?: { getS18n: typeof getS18n };
   };
-  sheetLocaleGlobal.s18n = { getS18n };
+  sheetLocaleGlobal.s18n = { getS18n: (namespace) => {
+    localeNamespaces.add(namespace);
+    return getS18n(namespace);
+  } };
 
-  await loadScriptOnce("/sdk-sheet-locales/fe-common/zh-CN.js");
-  await loadScriptOnce("/sdk-sheet-locales/lizard-service-sheet-sdk/zh-CN.js");
+  const sdkLocale = locale === "zh" ? "zh-CN" : "en-US";
+  await loadScriptOnce(`/sdk-sheet-locales/fe-common/${sdkLocale}.js`);
+  await loadScriptOnce(`/sdk-sheet-locales/lizard-service-sheet-sdk/${sdkLocale}.js`);
+  // Cached bundles do not run again when a later editor switches back.
+  for (const namespace of localeNamespaces) getS18n(namespace).setLocale(sdkLocale);
 
   const { createSheetSDK } = await import("@shimo/sdk-sheet");
   const modocAssets = new OfflineModocAssets(imageAssets);

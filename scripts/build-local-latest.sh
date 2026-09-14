@@ -20,10 +20,6 @@ if [[ ! -x "${WAILS_BIN}" ]]; then
   exit 1
 fi
 
-app_is_running() {
-  pgrep -x "OfficeDex" >/dev/null 2>&1 || pgrep -x "officedex" >/dev/null 2>&1
-}
-
 if [[ ! -d "${OFFICECLI_DIR}" ]]; then
   echo "[build-local-latest] missing officecli-internal at ${OFFICECLI_DIR}" >&2
   exit 1
@@ -33,9 +29,8 @@ if [[ ! -f "${PRESENTATION_DIR}/package.json" ]]; then
   exit 1
 fi
 
-if [[ "${OSTYPE}" == darwin* ]] && app_is_running; then
-  echo "[build-local-latest] OfficeDex is running. Finish or cancel active tasks, quit the app, then run this command again." >&2
-  exit 1
+if [[ "${OSTYPE}" == darwin* ]]; then
+  /usr/bin/osascript -l JavaScript "${SCRIPT_DIR}/quit-officedex-app.js"
 fi
 
 build_officecli() {

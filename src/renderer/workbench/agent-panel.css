@@ -1,0 +1,48 @@
+/* Shared DOCX/XLSX Agent surfaces, matching the presentation workbench. */
+.agent-panel:is(.spreadsheet-agent-panel, .docx-agent) {
+  display: grid; grid-template-rows: minmax(0, 1fr) auto;
+  height: 100%; min-height: 0; min-width: 0; padding: 0;
+  overflow: hidden; isolation: isolate;
+}
+.agent-panel::before {
+  content: ""; grid-area: 1 / 1; min-height: 0; pointer-events: none;
+  background: radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--od-ink) 10%, transparent) 1px, transparent 1.2px) 0 0 / 28px 28px;
+  mask-image: linear-gradient(to bottom, transparent, #000 64px, #000 calc(100% - 80px), transparent);
+  opacity: .5; transition: opacity 180ms ease;
+}
+.agent-panel[data-has-messages="true"]::before { opacity: .2; }
+.agent-panel .agent-panel__body { grid-area: 1 / 1; z-index: 1; overflow-y: auto; min-height: 0; padding: 18px 14px; }
+.agent-panel :is(.spreadsheet-agent-panel__task, .spreadsheet-agent-panel__plan, .docx-agent__pending) {
+  border: 1px solid color-mix(in srgb, var(--ai-accent) 18%, var(--od-border-subtle));
+  border-radius: var(--od-card-radius, 16px); background: var(--od-surface); padding: 14px 16px;
+}
+.agent-panel :is(.spreadsheet-agent-panel__task, .docx-agent__pending) > svg { color: var(--ai-accent); width: 18px; height: 18px; }
+.agent-panel .spreadsheet-agent-panel__plan > span { color: var(--ai-accent); }
+.agent-panel .agent-compose-box {
+  grid-area: 2 / 1; display: block; min-width: 0; margin: 12px; padding: 0;
+  border: 1px solid var(--od-border-default); border-radius: var(--od-composer-radius, 28px);
+  overflow: hidden; background: var(--od-surface);
+}
+.agent-panel .agent-compose-box textarea {
+  display: block; width: 100%; box-sizing: border-box; min-height: 108px; max-height: 180px;
+  resize: none; border: 0; border-radius: 0; background: transparent; padding: 18px;
+  color: var(--od-ink); font: 400 15px/24px var(--od-font-ui); outline: none; box-shadow: none;
+}
+.agent-panel .agent-compose-box textarea::placeholder { color: color-mix(in srgb, var(--od-ink-secondary) 58%, transparent); opacity: 1; }
+.agent-panel .agent-compose-box textarea:disabled { color: var(--od-ink-secondary); cursor: not-allowed; }
+.agent-panel .agent-composer-actions {
+  display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+  min-height: 56px; padding: 8px 12px 8px 18px;
+  border-top: 1px solid color-mix(in srgb, var(--od-border-subtle) 78%, transparent);
+}
+.agent-panel__scope { display: flex; flex: 1; min-width: 0; align-items: center; gap: 6px; font-size: 12px; color: var(--od-ink-secondary); }
+.agent-panel__scope > svg { flex-shrink: 0; color: var(--ai-accent); }
+.agent-panel__scope > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-panel .agent-composer-actions .od-button--icon-submit {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 40px; width: 40px; min-width: 40px; height: 40px; padding: 0; border-radius: 50%;
+}
+.agent-panel .agent-composer-actions .od-button--icon-submit:disabled { border: 1px solid var(--od-border-default); background: var(--od-surface-muted); color: var(--od-ink-secondary); opacity: 1; }
+.agent-panel .agent-composer-actions .od-button--icon-submit svg { width: 18px; height: 18px; }
+.agent-panel .agent-composer-actions .od-button--icon-submit .od-button__label { display: none; }
+@media (prefers-reduced-motion: reduce) { .agent-panel::before { transition: none; } }

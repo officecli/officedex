@@ -1,0 +1,41 @@
+/* Muted document accents with sufficient contrast for white button icons. */
+.wb, .home-intake { --ai-accent: #626b79; }
+:is(.wb, .home-intake)[data-type="pptx"] { --ai-accent: #b85c25; }
+:is(.wb, .home-intake)[data-type="docx"] { --ai-accent: #356cba; }
+:is(.wb, .home-intake)[data-type="xlsx"] { --ai-accent: #287b57; }
+:is(.wb, .home-intake)[data-type="img"], :is(.wb, .home-intake)[data-type="image"] { --ai-accent: #8455b1; }
+:is(.wb, .home-intake)[data-type="pdf"] { --ai-accent: #b74e51; }
+
+/* Shared visual treatment for creating and editing with AI. */
+.home-intake.home-intake,
+:is(.pptx-workbench-compose-box, .agent-compose-box):is(.pptx-workbench-compose-box, .agent-compose-box) {
+  border-color: var(--od-border-default);
+  background: linear-gradient(180deg, var(--od-surface), var(--od-surface-muted));
+  box-shadow: 0 6px 20px rgb(40 48 66 / 3%);
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+.home-intake.home-intake:focus-within,
+:is(.pptx-workbench-compose-box, .agent-compose-box):is(.pptx-workbench-compose-box, .agent-compose-box):focus-within {
+  border-color: color-mix(in srgb, var(--ai-accent) 48%, var(--od-border-hover));
+  box-shadow: 0 6px 20px rgb(40 48 66 / 3%), 0 0 0 3px color-mix(in srgb, var(--ai-accent) 9%, transparent);
+}
+.home-intake__footer > .od-button--circular-submit.od-button--icon-submit,
+:is(.pptx-workbench-composer-actions, .agent-composer-actions) > .od-button--icon-submit {
+  transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;
+}
+.home-intake__footer > .od-button--circular-submit.od-button--icon-submit:not(:disabled),
+:is(.pptx-workbench-composer-actions, .agent-composer-actions) > .od-button--icon-submit:not(:disabled) {
+  border-color: var(--ai-accent);
+  background: var(--ai-accent);
+  color: #fff;
+  box-shadow: 0 3px 8px color-mix(in srgb, var(--ai-accent) 18%, transparent);
+}
+.home-intake__footer > .od-button--circular-submit.od-button--icon-submit:hover:not(:disabled),
+:is(.pptx-workbench-composer-actions, .agent-composer-actions) > .od-button--icon-submit:hover:not(:disabled) { filter: brightness(1.08); box-shadow: 0 4px 12px color-mix(in srgb, var(--ai-accent) 24%, transparent); }
+.home-intake__footer > .od-button--circular-submit.od-button--icon-submit:active:not(:disabled),
+:is(.pptx-workbench-composer-actions, .agent-composer-actions) > .od-button--icon-submit:active:not(:disabled) { transform: scale(.95); }
+@media (prefers-reduced-motion: reduce) {
+  .home-intake.home-intake, :is(.pptx-workbench-compose-box, .agent-compose-box):is(.pptx-workbench-compose-box, .agent-compose-box),
+  .home-intake__footer > .od-button--circular-submit.od-button--icon-submit,
+  :is(.pptx-workbench-composer-actions, .agent-composer-actions) > .od-button--icon-submit { transition: none; transform: none; }
+}

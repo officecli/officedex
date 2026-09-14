@@ -1,0 +1,95 @@
+/* ─── PreviewRail — the file rail for a document opened on its own ─── */
+
+.preview-rail {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 12px 8px;
+}
+
+.preview-rail__heading {
+  margin: 0;
+  padding: 0 8px 4px;
+  color: var(--n-primary);
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.preview-rail__section {
+  margin: 0;
+  padding: 4px 8px 2px;
+  color: var(--n-stone);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+/* Same 8px-radius rectangle language as the buttons; never a pill. */
+.preview-rail__item {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--radius-xs);
+  padding: 6px 8px;
+  color: var(--n-charcoal);
+  font-size: 13px;
+}
+
+.preview-rail__item.is-current {
+  background: var(--n-secondary-container, #dbe6e8);
+}
+
+.preview-rail__icon {
+  flex: 0 0 auto;
+  color: var(--n-secondary);
+}
+
+.preview-rail__name {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-rail__path {
+  margin: 0;
+  padding: 0 8px 6px;
+  overflow: hidden;
+  color: var(--n-steel);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+.preview-rail__back {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  border: 0;
+  border-top: 1px solid var(--n-hairline);
+  border-radius: 0;
+  background: transparent;
+  padding: 10px 8px 6px;
+  color: var(--n-slate);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+}
+
+.preview-rail__back:hover {
+  color: var(--n-primary);
+}
+
+.preview-rail__back:focus-visible {
+  outline: 2px solid var(--n-secondary);
+  outline-offset: -2px;
+}

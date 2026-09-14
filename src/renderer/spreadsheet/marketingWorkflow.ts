@@ -1,3 +1,4 @@
+import { translate, type useT } from "../i18n";
 import type {
   ImageRatio,
   SpreadsheetFieldRole,
@@ -276,10 +277,9 @@ export const MARKETING_FIELD_ROLE_OPTIONS: Array<{
   { value: "generationStatus", label: "OfficeDex 状态" },
 ];
 
-export function marketingFieldRoleLabel(role: SpreadsheetFieldRole): string {
+export function marketingFieldRoleLabel(role: SpreadsheetFieldRole, t: ReturnType<typeof useT> = translate): string {
   return (
-    MARKETING_FIELD_ROLE_OPTIONS.find((option) => option.value === role)
-      ?.label ?? role
+    t(`marketing.field.${role}`)
   );
 }
 
@@ -452,11 +452,11 @@ export function parseMarketingSelection(
       : findColumn(input.headers, HEADER_ALIASES.status);
   if (outputColumn < 0) {
     throw new Error(
-      `模板缺少“${OUTPUT_TITLES[input.assetKind]}”图片结果列。请先在模板现有列中预留图片位置。`,
+      translate("marketing.copy.outputMissing", { column: OUTPUT_TITLES[input.assetKind] }),
     );
   }
   if (statusColumn < 0) {
-    throw new Error("模板缺少“状态”列。OfficeDex 不会自动新增状态列。");
+    throw new Error(translate("marketing.copy.statusMissing"));
   }
 
   const rows = input.rows.flatMap((row, offset): MarketingSheetRow[] => {
@@ -503,7 +503,7 @@ export function parseMarketingSelection(
     ),
     source: input.mappingSource ?? "rules",
     confirmed: input.mappingConfirmed ?? false,
-    summary: input.mappingSummary ?? "OfficeDex 已根据表头生成字段映射建议。",
+    summary: input.mappingSummary ?? translate("marketing.copy.mappingSummary"),
     confidence: input.mappingConfidence ?? "medium",
     warnings: input.mappingWarnings ?? [],
     columns: plannedColumns.map((column) => ({
@@ -604,8 +604,8 @@ function buildRuleBasedColumns(headers: string[]): SpreadsheetPlannedColumn[] {
     role: roles.get(column) ?? "ignored",
     confidence: roles.has(column) ? 0.82 : 0,
     reason: roles.has(column)
-      ? `根据表头“${header}”匹配`
-      : "未参与当前生图工作流",
+      ? translate("marketing.copy.mappingReason", { header })
+      : translate("marketing.copy.ignored"),
   }));
 }
 

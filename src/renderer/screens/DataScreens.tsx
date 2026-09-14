@@ -7,6 +7,7 @@ import { DocTypeIcon } from "../components/DocTypeIcon";
 import { isClientToolForThisHost, pendingAgentClientToolEvents, resumeAgentClientTools } from "../AgentClientToolHost";
 import { agentClientId } from "../agentClientIdentity";
 import { useT } from "../i18n";
+import { taskTitle } from "../taskTitle";
 import { isExternalAgentRuntimeRun, isHistoricalRuntimeRun } from "../runtimeRuns";
 
 export { isExternalAgentRuntimeRun, isHistoricalRuntimeRun } from "../runtimeRuns";
@@ -153,7 +154,8 @@ function taskToRow(task: DesktopTask, t: Translator): TaskRow {
   return {
     id: task.id,
     // Raw task ids are meaningless to people — fall back to a label instead.
-    title: task.topic || task.artifact?.fileName || t("tasks.untitled"),
+    // Named through taskTitle so the unnamed-presentation sentinel never shows.
+    title: taskTitle(task, t("tasks.untitled")),
     type: task.documentType || task.artifact?.documentType || "",
     status: task.status,
     updatedAt: label,

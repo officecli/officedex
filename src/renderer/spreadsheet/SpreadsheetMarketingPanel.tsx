@@ -743,7 +743,7 @@ export function SpreadsheetMarketingPanel({
               size="small"
               value={campaign.name}
               disabled={working}
-              placeholder="Summer Sale 2026"
+              placeholder={t("marketing.placeholder.campaign")}
               onChange={(event) =>
                 setCampaign((current) => ({
                   ...current,
@@ -786,7 +786,7 @@ export function SpreadsheetMarketingPanel({
               size="small"
               value={campaign.offer}
               disabled={working}
-              placeholder="Up to 30% off"
+              placeholder={t("marketing.placeholder.offer")}
               onChange={(event) =>
                 setCampaign((current) => ({
                   ...current,
@@ -951,7 +951,7 @@ export function SpreadsheetMarketingPanel({
                     size="small"
                     value={column.role}
                     disabled={working || batch.mapping.confirmed}
-                    options={MARKETING_FIELD_ROLE_OPTIONS}
+                    options={MARKETING_FIELD_ROLE_OPTIONS.map((option) => ({ ...option, label: t(`marketing.field.${option.value}`) }))}
                     onChange={(value) =>
                       changeColumnRole(
                         column.column,
@@ -1030,7 +1030,7 @@ export function SpreadsheetMarketingPanel({
                   <small>{t(campaignChannelKey(job.channel))}</small>
                 ) : null}
                 {job.creditCharged ? (
-                  <small>{job.creditCharged} Credits</small>
+                  <small>{t("marketing.credits", { count: job.creditCharged })}</small>
                 ) : null}
               </li>
             ))}

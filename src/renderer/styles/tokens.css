@@ -1,6 +1,8 @@
 /* ─── Paper & Ink Design System for OfficeDex ─── */
 
 :root {
+  --od-card-radius: 16px;
+  --od-composer-radius: 28px;
   --n-primary: #05101a;
   --n-primary-pressed: #1a2530;
   --n-primary-deep: #05101a;

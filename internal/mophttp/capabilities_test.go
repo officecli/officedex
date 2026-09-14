@@ -26,7 +26,7 @@ func TestDefaultCapabilitiesMatchBundledWasm(t *testing.T) {
 
 	scriptDirectory := t.TempDir()
 	scriptPath := filepath.Join(scriptDirectory, "capabilities.mjs")
-	packageDirectory := filepath.Join(presentationRoot, "bos", "dist", "mop-wasm", "pkg")
+	packageDirectory := wasmPackageDirectory(presentationRoot)
 	script := `
 import { readFileSync } from "node:fs";
 import { initSync, MopEngine } from ` + jsStringLiteral(filepath.Join(packageDirectory, "mop_wasm.js")) + `;
@@ -47,7 +47,7 @@ try {
 
 	output, err := exec.Command(node, scriptPath).Output()
 	if err != nil {
-		t.Skipf("could not run the MOP engine: %v", err)
+		t.Fatalf("could not run the MOP engine: %v", err)
 	}
 	var capabilities struct {
 		ProtocolVersion int `json:"protocolVersion"`
@@ -77,14 +77,14 @@ func locatePresentationRoot(t *testing.T) string {
 	}
 	if workingDirectory, err := os.Getwd(); err == nil {
 		// internal/mophttp -> officedex -> workspace root.
-		candidates = append(candidates, filepath.Join(workingDirectory, "..", "..", "..", "pptx"))
+		candidates = append(candidates, filepath.Join(workingDirectory, "..", "..", "..", "presentation"))
 	}
 	for _, candidate := range candidates {
 		root, err := filepath.Abs(candidate)
 		if err != nil {
 			continue
 		}
-		probe := filepath.Join(root, "bos", "dist", "mop-wasm", "pkg", "mop_wasm_bg.wasm")
+		probe := filepath.Join(wasmPackageDirectory(root), "mop_wasm_bg.wasm")
 		if info, err := os.Stat(probe); err == nil && !info.IsDir() {
 			return root
 		}
@@ -98,4 +98,14 @@ func jsStringLiteral(value string) string {
 		return `""`
 	}
 	return string(encoded)
+}
+
+// Match presentation-component/src/mop-runtime-source.ts: the versioned package
+// takes precedence over potentially stale local BOS build output.
+func wasmPackageDirectory(root string) string {
+	directory := filepath.Join(root, "packages", "mop-wasm")
+	if info, err := os.Stat(filepath.Join(directory, "mop_wasm.js")); err == nil && !info.IsDir() {
+		return directory
+	}
+	return filepath.Join(root, "bos", "dist", "mop-wasm", "pkg")
 }

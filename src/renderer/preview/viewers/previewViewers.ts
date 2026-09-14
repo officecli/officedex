@@ -32,6 +32,8 @@ export const PREVIEW_VIEWERS: Readonly<Record<string, PreviewViewer>> = {
   jpg: ImageViewer as PreviewViewer,
   jpeg: ImageViewer as PreviewViewer,
   webp: ImageViewer as PreviewViewer,
+  bmp: ImageViewer as PreviewViewer,
+  svg: ImageViewer as PreviewViewer,
 };
 
 export function previewViewerFor(documentType: string | undefined): PreviewViewer | undefined {

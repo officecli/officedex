@@ -220,6 +220,7 @@ describe("SpreadsheetCanvas", () => {
       "prepared-modoc",
       [],
       expect.any(Function),
+      "en",
     );
   });
 
@@ -709,9 +710,9 @@ describe("SpreadsheetCanvas", () => {
   it("wraps image bytes as a local File for the offline SDK uploader", () => {
     expect(imageBytesToFile(new Uint8Array([137, 80, 78, 71]), "image/png", "result.png"))
       .toEqual(expect.objectContaining({ name: "result.png", type: "image/png", size: 4 }));
-    expect(() => imageBytesToFile(new Uint8Array(), "image/png", "empty.png")).toThrow("图片文件为空");
+    expect(() => imageBytesToFile(new Uint8Array(), "image/png", "empty.png")).toThrow("The generated image is empty");
     expect(() => imageBytesToFile(new Uint8Array([1]), "application/octet-stream", "bad.bin"))
-      .toThrow("不是受支持的图片格式");
+      .toThrow("Unsupported generated image format");
   });
 
   it("serializes concurrent marketing mutations so change events cannot satisfy the wrong write", async () => {
@@ -1094,7 +1095,7 @@ describe("SpreadsheetCanvas", () => {
     await expect(ref.current!.formatCells({
       ranges: [{ startRow: 40, startColumn: 0, rowCount: 2, columnCount: 2 }],
       style: { bold: true },
-    })).rejects.toThrow("超出了工作表范围");
+    })).rejects.toThrow("outside the sheet");
   });
 });
 

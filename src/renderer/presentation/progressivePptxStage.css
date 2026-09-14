@@ -35,10 +35,19 @@
 .pptx-flow-request > span { color: var(--pptx-muted); font-size: 12px; }
 .pptx-flow-request textarea { width: 100%; margin-top: 5px; border: 0; background: transparent; padding: 0; color: var(--pptx-ink); font: inherit; font-size: 14px; line-height: 1.7; resize: vertical; box-shadow: none; }
 .pptx-flow-request textarea[readonly] { cursor: default; }
-.pptx-flow-step { position: relative; margin-left: 13px; padding: 0 0 32px 33px; border-left: 1px solid var(--pptx-line); min-width: 0; }
+/* The step's own left padding, named because the active step's header becomes a
+   containing block once it sticks — the node has to un-inset by exactly this. */
+.pptx-flow-step { --pptx-step-pad: 33px; position: relative; margin-left: 13px; padding: 0 0 32px var(--pptx-step-pad); border-left: 1px solid var(--pptx-line); min-width: 0; }
 .pptx-flow-step:last-of-type { border-left-color: transparent; padding-bottom: 10px; }
 .pptx-flow-step.is-active { border-left-color: var(--pptx-accent); }
-.pptx-flow-step__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; min-height: 25px; }
+/* Every header carries the same box. Padding that only the active step had made
+   the page jump upward by 12px every time the step changed. */
+.pptx-flow-step__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; margin-bottom: 10px; min-height: 25px; }
+/* Keep the step you are in on screen while its pages scroll past. */
+.is-active > .pptx-flow-step__header { position: sticky; top: 0; z-index: 2; background: color-mix(in srgb, var(--pptx-surface) 86%, transparent); backdrop-filter: blur(10px); }
+/* Sticky makes the header the containing block for the node it carries, which
+   would pull the node right by the step's padding. Cancel that exactly. */
+.is-active > .pptx-flow-step__header .pptx-flow-node { left: calc(-13px - var(--pptx-step-pad)); }
 .pptx-flow-step__header h2 { font-size: 17px; line-height: 1.5; margin: 0; font-weight: 600; }
 .pptx-flow-status { font-size: 12px; color: var(--pptx-muted); text-align: right; }
 .pptx-flow-node { position: absolute; left: -13px; top: 0; display: grid; place-items: center; width: 25px; height: 25px; background: var(--pptx-tint); color: var(--pptx-strong); border-radius: 50%; box-shadow: 0 0 0 5px var(--pptx-surface); font-size: 11px; }
@@ -51,6 +60,8 @@
 .pptx-flow-working > div { flex: 1; min-width: 0; }
 .pptx-flow-working strong { display: block; font-size: 13px; font-weight: 550; }
 .pptx-flow-working span:not(.pptx-flow-dots) { display: block; margin-top: 5px; font-size: 12px; color: var(--pptx-muted); }
+/* Engine text: kept, but never the loudest line on a translated screen. */
+.pptx-flow-working .pptx-flow-runtime-detail { font-size: 11px; color: var(--pptx-muted); overflow-wrap: anywhere; }
 .pptx-flow-working::after, .is-active .pptx-flow-status::after, .is-active .pptx-flow-progress > span::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(100deg, transparent, color-mix(in srgb, var(--pptx-accent) 14%, transparent), transparent); animation: pptx-flow-scan 2.5s ease-in-out infinite; }
 .pptx-flow-dots { display: flex; gap: 4px; padding: 6px 0; }
 .pptx-flow-dots i { width: 4px; height: 4px; border-radius: 50%; background: var(--pptx-accent); animation: pptx-flow-dots 1.2s ease-in-out infinite; }
@@ -64,6 +75,10 @@
 .pptx-flow-index { width: 22px; color: var(--pptx-strong); font-size: 11px; flex-shrink: 0; }
 .pptx-flow-host .pptx-flow-outline input { width: 100%; border: 0; background: transparent; border-radius: 3px; padding: 3px 0; height: auto; color: var(--pptx-ink); box-shadow: none; font-size: 14px; }
 .pptx-flow-outline small { display: block; color: var(--pptx-muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+/* The status slot is always present and always the same height: a page's status
+   word arriving used to make its row taller, which shoved everything the reader
+   was looking at up the screen. */
+.pptx-flow-outline__state { min-height: 1.6em; }
 .pptx-flow-outline li.is-writing { background: linear-gradient(90deg, var(--pptx-tint), transparent); }
 .pptx-flow-outline li.is-writing::after { content: ""; width: 2px; height: 16px; background: var(--pptx-accent); animation: pptx-flow-caret 1s infinite; }
 .pptx-flow-reorder { display: flex; gap: 3px; }
@@ -106,6 +121,14 @@
 .pptx-flow-complete { display: flex; align-items: center; gap: 8px; background: var(--pptx-tint); color: var(--pptx-strong); border-radius: 9px; padding: 15px; font-size: 13px; }
 .pptx-flow-details { margin-top: 15px; font-size: 12px; color: var(--pptx-muted); }.pptx-flow-details summary { cursor: pointer; }.pptx-flow-details ol { padding-left: 22px; line-height: 1.8; }
 .pptx-flow-host .pptx-flow-follow { position: sticky; bottom: 16px; display: flex; margin: 14px 0 0 auto; box-shadow: 0 4px 14px var(--pptx-shadow); color: var(--pptx-strong); }
+/* The main CTA travels with the reader instead of sitting below the last page
+   card. The follow pill floats above it rather than inside it. */
+/* The action bar is sticky across the whole scroller because it is rendered as a
+   sibling of the disclosure, not inside the generation step. */
+.progressive-pptx-stage[data-generation="true"] .pptx-flow-actions { position: sticky; bottom: 0; z-index: 3; padding: 12px 0 10px; background: color-mix(in srgb, var(--pptx-surface) 92%, transparent); backdrop-filter: blur(10px); border-top: 1px solid var(--pptx-line); }
+.progressive-pptx-stage[data-generation="true"] .pptx-flow-actions .pptx-production-stage--compact { display: block; padding: 0; border: 0; background: transparent; box-shadow: none; margin-top: 0; }
+/* Ride above the measured action bar instead of a guessed 84px. */
+.progressive-pptx-stage[data-generation="true"] .pptx-flow-follow { bottom: calc(16px + var(--pptx-actions-h, 0px)); }
 .progressive-pptx-stage__error { padding: 12px; border-radius: 8px; background: color-mix(in srgb, var(--od-danger) 10%, var(--pptx-surface)); color: var(--od-danger); }
 @keyframes pptx-flow-enter { from { opacity: 0; transform: translateY(16px) scale(.985); } to { opacity: 1; transform: none; } }
 @keyframes pptx-flow-pulse { 0%,100% { box-shadow: 0 0 0 5px var(--pptx-surface), 0 0 0 7px var(--pptx-shadow); } 50% { box-shadow: 0 0 0 5px var(--pptx-surface), 0 0 0 12px var(--pptx-shadow); } }
@@ -113,7 +136,7 @@
 @keyframes pptx-flow-caret { 0%,40%,100% { opacity: 1; } 60%,80% { opacity: .1; } }
 @keyframes pptx-flow-dots { 0%,70%,100% { transform: none; opacity: .4; } 35% { transform: translateY(-3px); opacity: 1; } }
 @keyframes pptx-flow-glow { 0%,100% { box-shadow: 0 4px 12px var(--pptx-shadow); } 50% { box-shadow: 0 8px 26px var(--pptx-shadow); } }
-@media (max-width: 760px) { .progressive-pptx-stage { padding: 24px 16px; }.pptx-flow-step { padding-left: 23px; }.pptx-flow-request { margin-left: 20px; }.pptx-flow-step__header { align-items: flex-start; }.pptx-flow-status { max-width: 42%; }.pptx-flow-reorder { flex-direction: column; }.pptx-flow-page__canvas { padding: 22px; }.document-workspace--pptx .document-workspace__header { padding: 18px; }.document-workspace--pptx .document-workspace__header h1 { font-size: 17px; }.document-workspace--pptx .document-workspace__status { font-size: 11px; } }
+@media (max-width: 760px) { .progressive-pptx-stage { padding: 24px 16px; }.pptx-flow-step { --pptx-step-pad: 23px; }.pptx-flow-request { margin-left: 20px; }.pptx-flow-step__header { align-items: flex-start; }.pptx-flow-status { max-width: 42%; }.pptx-flow-reorder { flex-direction: column; }.pptx-flow-page__canvas { padding: 22px; }.document-workspace--pptx .document-workspace__header { padding: 18px; }.document-workspace--pptx .document-workspace__header h1 { font-size: 17px; }.document-workspace--pptx .document-workspace__status { font-size: 11px; } }
 @media (max-width: 480px) { .pptx-flow-styles { grid-template-columns: 1fr; }.pptx-flow-style__sample { aspect-ratio: 3; }.pptx-flow-page.is-demo .pptx-flow-page__canvas { min-height: 210px; aspect-ratio: auto; }.pptx-flow-page.is-demo .pptx-flow-page__canvas h3 { font-size: 24px; }.pptx-flow-step__header { flex-wrap: wrap; gap: 4px; }.pptx-flow-status { max-width: 100%; }.progressive-pptx-stage__main-actions { width: 100%; }.pptx-flow-page footer { flex-wrap: wrap; } }
 @media (prefers-reduced-motion: reduce) { .pptx-flow-host *, .pptx-flow-host *::before, .pptx-flow-host *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 .pptx-flow-request textarea { min-height: 0; }
@@ -139,7 +162,8 @@
 .pptx-flow-workspace .pptx-flow-skeleton i:last-child { animation-delay: .3s; }
 .pptx-flow-timing { display: flex; gap: 20px; flex-wrap: wrap; font-size: 11px; color: var(--pptx-muted); margin: 24px 0 0 29px; }
 .pptx-flow-timing b { font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; margin-left: 5px; color: var(--pptx-ink); }
-.pptx-flow-runtime-label { display: block; font-size: 11px; color: var(--pptx-muted); margin: 14px 0 0 29px; }
+/* Demoted on purpose: a failed status probe is a footnote, not an alarm. */
+.pptx-flow-status-note { margin: 14px 0 0 29px; font-size: 11px; color: var(--pptx-muted); }
 .pptx-flow-refresh { margin: 18px 0 0 29px; display: flex; gap: 9px; align-items: center; font-size: 12px; }
 .pptx-flow-waiting-preview { min-width: 0; padding: 18px 12px; text-align: center; background: radial-gradient(ellipse at 50% 42%, var(--pptx-tint), transparent 68%); }
 .pptx-flow-preview-art { height: 158px; position: relative; display: grid; place-items: center; isolation: isolate; }
@@ -148,8 +172,15 @@
 .pptx-flow-preview-sheet > i { height: 5px; border-radius: 3px; width: 70%; background: color-mix(in srgb, var(--pptx-accent) 24%, var(--pptx-surface)); }.pptx-flow-preview-sheet > i:nth-of-type(2) { width: 45%; }
 .pptx-flow-preview-sheet > div { display: flex; gap: 7px; margin-top: 6px; }.pptx-flow-preview-sheet b { height: 24px; flex: 1; border-radius: 4px; background: var(--pptx-tint); }
 .pptx-flow-preview-orbit { z-index: -1; position: absolute; width: 135px; height: 135px; border-radius: 50%; border: 15px solid color-mix(in srgb, var(--pptx-accent) 16%, var(--pptx-surface)); right: 2%; top: 15px; }
-.pptx-flow-waiting-preview > strong { font-size: 13px; font-weight: 550; }.pptx-flow-waiting-preview > p { font-size: 11px; color: var(--pptx-muted); line-height: 1.7; margin: 6px auto 15px; max-width: 270px; }
-.pptx-flow-next { display: flex; align-items: center; justify-content: center; gap: 7px; color: var(--pptx-muted); font-size: 10px; }.pptx-flow-next span + span::before { content: "›"; margin-right: 7px; color: var(--pptx-accent); }
+.pptx-flow-waiting-preview > strong { font-size: 13px; font-weight: 550; }
+/* Position, not prose: three dots with one name under them. */
+.pptx-flow-rail { display: flex; align-items: center; justify-content: center; margin-top: 15px; color: var(--pptx-muted); font-size: 11px; }
+.pptx-flow-rail > span { display: flex; align-items: center; gap: 6px; }
+.pptx-flow-rail > span + span::before { content: ""; width: 20px; height: 1px; margin: 0 8px; background: color-mix(in srgb, var(--pptx-accent) 22%, var(--pptx-surface)); }
+.pptx-flow-rail i { width: 6px; height: 6px; border-radius: 50%; background: color-mix(in srgb, var(--pptx-accent) 28%, var(--pptx-surface)); transition: background .3s ease, box-shadow .3s ease; }
+.pptx-flow-rail .is-done i { background: var(--pptx-accent); }
+.pptx-flow-rail .is-current { color: var(--pptx-strong); }
+.pptx-flow-rail .is-current i { background: var(--pptx-accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--pptx-accent) 16%, transparent); }
 .pptx-flow-workspace.is-delayed .pptx-flow-preview-sheet, .pptx-flow-workspace.is-delayed .pptx-flow-skeleton i, [data-delayed="true"] .pptx-flow-node, [data-delayed="true"] .pptx-flow-status::after { animation: none; }
 @keyframes pptx-wait-line { 0%,100% { transform: scaleX(.85); opacity: .5; } 50% { transform: scaleX(1); opacity: 1; } }
 @keyframes pptx-wait-float { 0%,100% { transform: translateY(0) rotate(-5deg); } 50% { transform: translateY(-7px) rotate(-3deg); } }

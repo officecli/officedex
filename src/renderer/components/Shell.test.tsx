@@ -13,11 +13,13 @@ afterEach(() => {
   try { localStorage.clear(); } catch { /* not every environment has it */ }
 });
 
-function renderShell(activeNav: "home" | "document" | "spreadsheet" | "settings" = "document") {
-  return render(
+function shellUi(activeNav: "home" | "document" | "spreadsheet" | "settings" = "document", editingDocument = false, documentOpenRevision = 0) {
+  return (
     <LocaleProvider value="en">
       <Shell
         activeNav={activeNav}
+        editingDocument={editingDocument}
+        documentOpenRevision={documentOpenRevision}
         workspaces={[]}
         activeWorkspaceId={undefined}
         onNavChange={vi.fn()}
@@ -30,11 +32,105 @@ function renderShell(activeNav: "home" | "document" | "spreadsheet" | "settings"
       >
         <div>Workspace content</div>
       </Shell>
-    </LocaleProvider>,
+    </LocaleProvider>
   );
 }
 
+function renderShell(activeNav: "home" | "document" | "spreadsheet" | "settings" = "document", editingDocument = false) {
+  return render(shellUi(activeNav, editingDocument));
+}
+
+/** Declaration blocks of every rule whose selector list names exactly `selector`. */
+function cssRules(selector: string): string[] {
+  // Comments go first: they sit between the previous rule and this one's
+  // selector, and would otherwise be read as part of it.
+  const css = readFileSync("src/renderer/styles/home.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .filter(([, selectors]) => selectors.split(",").some((part) => part.trim() === selector))
+    .map(([, , body]) => body);
+}
+
 describe("Shell", () => {
+  it.each(["document", "spreadsheet"] as const)("closes the homepage sidebar after %s opens and restores it on return", (nav) => {
+    vi.useFakeTimers();
+    try {
+    const { container, rerender } = render(shellUi("home", false, 0));
+    expect(container.querySelector(".project-sidebar")).not.toBeNull();
+    rerender(shellUi(nav, true, 0));
+    expect(container.querySelector(".home-shell--railless")).toBeNull();
+    // Opening succeeds asynchronously, after navigation has already changed.
+    rerender(shellUi(nav, true, 1));
+    expect(container.querySelector(".home-shell--rail-shut")).not.toBeNull();
+    expect(container.querySelector(".project-sidebar")).not.toBeNull();
+    act(() => { vi.advanceTimersByTime(200); });
+    expect(container.querySelector(".project-sidebar")).toBeNull();
+    rerender(shellUi("home", false, 1));
+    expect(container.querySelector(".project-sidebar")).not.toBeNull();
+    expect(container.querySelector(".home-shell--rail-shut")).toBeNull();
+    } finally { vi.useRealTimers(); }
+  });
+
+  // The generation step does not change the route: the deck is drawn into an
+  // overlay that opens over New. It is still the document step, and the task
+  // rail goes away with it — for pptx, docx and xlsx alike.
+  it("hides the rail when a workbench overlay opens over New and restores it on close", () => {
+    vi.useFakeTimers();
+    try {
+      const { container, rerender } = render(shellUi("home", false, 0));
+      expect(container.querySelector(".project-sidebar")).not.toBeNull();
+      rerender(shellUi("home", true, 0));
+      expect(container.querySelector(".home-shell--railless")).toBeNull();
+      // The grant lands one commit after editor mode; the rail follows it out.
+      rerender(shellUi("home", true, 1));
+      act(() => { vi.advanceTimersByTime(200); });
+      expect(container.querySelector(".project-sidebar")).toBeNull();
+      // Closing the overlay puts the file list back on New.
+      rerender(shellUi("home", false, 1));
+      act(() => { vi.advanceTimersByTime(200); });
+      expect(container.querySelector(".project-sidebar")).not.toBeNull();
+      expect(container.querySelector(".home-shell--rail-shut")).toBeNull();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("cancels automatic collapse when returning home during the transition", () => {
+    vi.useFakeTimers();
+    try {
+      const { container, rerender } = render(shellUi("home", false, 0));
+      rerender(shellUi("document", true, 1));
+      expect(container.querySelector(".home-shell--rail-shut")).not.toBeNull();
+      rerender(shellUi("home", false, 1));
+      act(() => { vi.advanceTimersByTime(300); });
+      expect(container.querySelector(".project-sidebar")).not.toBeNull();
+      expect(container.querySelector(".home-shell--rail-shut")).toBeNull();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it.each(["pinned", "peek"] as const)("closes %s navigation only after a successful document open", (mode) => {
+    vi.useFakeTimers();
+    try {
+      const { container, rerender } = render(shellUi("spreadsheet", true, 0));
+      const toggle = screen.getByRole("button", { name: "Expand sidebar" });
+      if (mode === "pinned") fireEvent.click(toggle);
+      else fireEvent.pointerEnter(toggle);
+      act(() => { vi.advanceTimersByTime(200); });
+      expect(container.querySelector(".project-sidebar")).not.toBeNull();
+      // A pending/cancelled/failed open has no success revision.
+      rerender(shellUi("spreadsheet", true, 0));
+      expect(container.querySelector(".project-sidebar")).not.toBeNull();
+      rerender(shellUi("document", true, 1));
+      act(() => { vi.advanceTimersByTime(200); });
+      expect(container.querySelector(".project-sidebar")).toBeNull();
+      expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeDefined();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("starts document editing with the file navigation collapsed", () => {
+    const { container } = renderShell("document", true);
+    expect(container.querySelector(".home-shell")).toHaveClass("home-shell--railless");
+    expect(screen.queryByRole("complementary", { name: /content sidebar/i })).toBeNull();
+    expect(screen.getByText("Workspace content")).toBeInTheDocument();
+  });
+
   it.each(["home", "document", "settings"] as const)("uses ProjectSidebar for %s", (activeNav) => {
     renderShell(activeNav);
     expect(screen.getByRole("complementary", { name: /content sidebar/i })).toBeInTheDocument();
@@ -201,5 +297,69 @@ describe("Shell", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("holds the corner reserve for the whole slide, in both directions", () => {
+    vi.useFakeTimers();
+    try {
+      const { container } = renderShell("home");
+      const shell = container.querySelector(".home-shell");
+
+      // Docked and settled: the rail owns the corner, so the content has
+      // nothing to dodge and the reserve must not be published.
+      expect(shell?.classList.contains("home-shell--rail-moving")).toBe(false);
+
+      fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+
+      // Sliding out: the main column is mid-resize, and its left edge is on its
+      // way to the window's edge — where the expand button already is. The
+      // reserve has to be up before the content arrives, not after.
+      expect(shell?.classList.contains("home-shell--rail-moving")).toBe(true);
+      expect(shell?.classList.contains("home-shell--rail-shut")).toBe(true);
+
+      act(() => { vi.advanceTimersByTime(200); });
+
+      // Settled collapsed: still reserved, because the expand button is the
+      // thing now sitting in that corner.
+      expect(shell?.classList.contains("home-shell--rail-moving")).toBe(false);
+      expect(shell?.classList.contains("home-shell--railless")).toBe(true);
+
+      // And the same on the way back in: the reserve may not drop while the
+      // content is still at the window's edge.
+      fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
+      expect(shell?.classList.contains("home-shell--rail-moving")).toBe(true);
+
+      act(() => { vi.advanceTimersByTime(200); });
+      expect(shell?.classList.contains("home-shell--rail-moving")).toBe(false);
+      expect(shell?.classList.contains("home-shell--railless")).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("publishes that reserve in every state where the corner is not the rail's", () => {
+    // The three states a workbench can be sitting under while the rail is not
+    // docked and still: collapsed, sliding out, sliding back in.
+    for (const state of ["home-shell--railless", "home-shell--rail-shut", "home-shell--rail-moving"]) {
+      const bodies = cssRules(`.${state}`);
+      expect(
+        bodies.some((body) => /--od-topleft-reserve:\s*calc\(var\(--od-window-chrome-inset-x\) \+ 44px\)/.test(body)),
+        `${state} must publish --od-topleft-reserve`,
+      ).toBe(true);
+    }
+  });
+
+  it("keeps the peeked rail above the preview overlay, and the toggle above the rail", () => {
+    const peekedZ = Number(/z-index:\s*(\d+)/.exec(cssRules(".home-shell--rail-peek .project-sidebar").join(" "))?.[1]);
+    const toggleZ = Number(/z-index:\s*(\d+)/.exec(cssRules(".home-shell__rail-toggle").join(" "))?.[1]);
+
+    // .preview-panel is 100. A peek underneath it is a control that looks
+    // broken: hovering the corner toggle with a document open shows nothing.
+    expect(peekedZ).toBeGreaterThan(100);
+    // The toggle sits in the rail's own band, so it has to outrank the rail it
+    // reveals — otherwise the thing you are hovering swallows it.
+    expect(toggleZ).toBeGreaterThan(peekedZ);
+    // Both stay under the modal tier, so an open dialog still blocks them.
+    expect(toggleZ).toBeLessThan(1000);
   });
 });

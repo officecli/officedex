@@ -17,8 +17,10 @@ import {
   XlsxViewer,
   PdfViewer,
   HtmlViewer,
+  ImageViewer,
 } from "../preview/viewers/previewViewers";
 import "../preview/PreviewApp.css";
+import { isImagePreview } from "../preview/viewers/imageViewport";
 
 interface PreviewPanelProps {
   grant: PreviewGrant | null;
@@ -26,6 +28,11 @@ interface PreviewPanelProps {
   /** The artifact behind the grant — drives the footer reveal action. */
   artifact?: Artifact | null;
   live?: VibeReplayFeed;
+  /**
+   * Debug: replay the deck's generation from a blank draft. The host supplies
+   * it only when the task on screen still has its op stream in this session.
+   */
+  onReplayDemo?: () => void;
   timelineTaskId?: string;
   timelineNodeId?: string | null;
   onOpenTimelineNode?: (
@@ -38,13 +45,16 @@ interface PreviewPanelProps {
   catalogPanel?: React.ReactNode;
 }
 
-const PREVIEW_PANEL_SLIDE_MS = 420;
+// Kept in step with the overlay's close animation in shell.css: the panel
+// unmounts when the fade has finished, not before.
+const PREVIEW_PANEL_FADE_MS = 180;
 
 export function PreviewPanel({
   grant,
   onClose,
   artifact,
   live,
+  onReplayDemo,
 }: PreviewPanelProps) {
   const t = useT();
   const [closing, setClosing] = useState(false);
@@ -71,7 +81,7 @@ export function PreviewPanel({
     closeTimerRef.current = window.setTimeout(() => {
       closeTimerRef.current = null;
       onClose();
-    }, PREVIEW_PANEL_SLIDE_MS);
+    }, PREVIEW_PANEL_FADE_MS);
   }, [closing, onClose]);
 
   const flushAndClose = useCallback(() => {
@@ -106,6 +116,7 @@ export function PreviewPanel({
   const viewer = (() => {
     if (!grant) return null;
     const { token, fileName, documentType } = grant;
+    if (isImagePreview(documentType)) return <ImageViewer previewToken={token} fileName={fileName} documentType={documentType} artifact={artifact ?? undefined} onRequestClose={requestClose} />;
     switch (documentType) {
       case "pptx":
         return (
@@ -115,6 +126,7 @@ export function PreviewPanel({
             documentType={documentType}
             filePath={artifact?.filePath}
             live={live}
+            onReplayDemo={onReplayDemo}
             onDirtyChange={setDocumentDirty}
             onFlushReady={(flush) => {
               pptxFlushRef.current = flush;
@@ -184,7 +196,7 @@ export function PreviewPanel({
           {viewer}
         </Suspense>
       </div>
-      {grant && artifact ? (
+      {grant && artifact && grant.documentType !== "pptx" && grant.documentType !== "docx" && !isImagePreview(grant.documentType) ? (
         <PreviewReadyNotice grant={grant} artifact={artifact} />
       ) : null}
     </div>

@@ -1,3 +1,4 @@
+import { translate as t } from "./i18n";
 import type { AgentRunApproveInput } from "../shared/types";
 import { dialog } from "./ui";
 import { trimmedStringValue as stringValue } from "./utils/values";
@@ -26,7 +27,7 @@ function showNextApproval() {
   const pending = approvalQueue.shift();
   if (!pending) return;
   approvalActive = true;
-  const tool = stringValue(pending.request.payload.tool) || "OfficeDex operation";
+  const tool = stringValue(pending.request.payload.tool) || t("ui.text.OfficeDexoperation");
   const risk = stringValue(pending.request.payload.risk);
   const resource = stringValue(pending.request.payload.resource_ref);
   const settle = (approved: boolean) => {
@@ -35,20 +36,20 @@ function showNextApproval() {
     window.setTimeout(showNextApproval, 0);
   };
   dialog.confirm({
-    title: `Approve ${tool}?`,
+    title: t("ui.text.Approvetool", { tool }),
     content: (
       <div className="agent-approval-center" data-run-id={pending.request.run_id}>
-        <p>This operation is waiting for your review before OfficeDex continues the Run.</p>
+        <p>{t("ui.text.ThisoperationiswaitingforyourreviewbeforeOfficeDexcontinuestheRun")}</p>
         <dl>
-          <div><dt>Tool</dt><dd>{tool}</dd></div>
-          {risk ? <div><dt>Risk</dt><dd>{risk}</dd></div> : null}
-          {resource ? <div><dt>Resource</dt><dd>{resource}</dd></div> : null}
-          <div><dt>Run</dt><dd>{pending.request.run_id}</dd></div>
+          <div><dt>{t("ui.text.Tool")}</dt><dd>{tool}</dd></div>
+          {risk ? <div><dt>{t("ui.text.Risk")}</dt><dd>{risk}</dd></div> : null}
+          {resource ? <div><dt>{t("ui.text.Resource")}</dt><dd>{resource}</dd></div> : null}
+          <div><dt>{t("ui.text.Run")}</dt><dd>{pending.request.run_id}</dd></div>
         </dl>
       </div>
     ),
-    okText: "Approve",
-    cancelText: "Reject",
+    okText: t("ui.text.Approve"),
+    cancelText: t("ui.text.Reject"),
     tone: risk === "publish" ? "danger" : "default",
     onOk: () => settle(true),
     onCancel: () => settle(false),

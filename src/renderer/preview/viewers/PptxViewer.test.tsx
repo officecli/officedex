@@ -95,7 +95,7 @@ async function bootWorkbench(
   filePath = "/tmp/deck.pptx",
   // The real idle window is 1.5s. Tests shorten it rather than disable it, so
   // the debounce is still on the path they exercise.
-  extraProps: { onDirtyChange?: (dirty: boolean) => void; autosaveIdleMs?: number } = {},
+  extraProps: { onDirtyChange?: (dirty: boolean) => void; autosaveIdleMs?: number; onReplayDemo?: () => void } = {},
 ) {
   render(<PptxViewer previewToken="preview-token" fileName="deck.pptx" documentType="pptx" filePath={filePath} editorBaseUrl={EDITOR_URL} autosaveIdleMs={5} {...extraProps} />);
   const frame = await waitFor(() => {
@@ -124,6 +124,7 @@ async function bootWorkbench(
 }
 
 beforeEach(() => {
+  localStorage.clear();
   planPptxJS.mockReset();
   savePptx.mockReset();
   savePptx.mockResolvedValue("/tmp/deck.pptx");
@@ -134,6 +135,16 @@ afterEach(() => {
 });
 
 describe("PptxViewer", () => {
+  it("fills and focuses the composer from a suggestion without starting generation", async () => {
+    await bootWorkbench();
+    fireEvent.click(screen.getByRole("button", { name: "Simplify text" }));
+    const input = screen.getByRole("textbox") as HTMLTextAreaElement;
+    expect(input.value).toBe("Simplify the text on the selected slide while preserving its key information.");
+    expect(document.activeElement).toBe(input);
+    expect(planPptxJS).not.toHaveBeenCalled();
+    expect(document.querySelector(".wb-panel__target")).toBeNull();
+  });
+
   it("autosaves a manual editor change reported through the embed protocol", async () => {
     const dirtyChanges: boolean[] = [];
     const { editor } = await bootWorkbench("/tmp/deck.pptx", {
@@ -207,6 +218,18 @@ describe("PptxViewer", () => {
     const exportMessage = await editor.waitForHostMessage("officedex:pptx-export");
     act(() => editor.reply({ type: "officedex:pptx-export-result", requestId: exportMessage.requestId, buffer: new Uint8Array([0x50, 0x4b, 3, 4]).buffer, fileName: "deck.pptx", revision: 2 }));
     await expect(save).resolves.toMatchObject({ saved: true, file_path: "/tmp/deck.pptx" });
+  });
+
+  it("offers the debug replay only when the host can replay this deck, and hands the click back", async () => {
+    const onReplayDemo = vi.fn();
+    await bootWorkbench("/tmp/deck.pptx", { onReplayDemo });
+    fireEvent.click(screen.getByRole("button", { name: "Replay drawing" }));
+    expect(onReplayDemo).toHaveBeenCalledTimes(1);
+
+    // Nothing to replay — no button at all, rather than one that does nothing.
+    cleanup();
+    await bootWorkbench("/tmp/deck.pptx");
+    expect(screen.queryByRole("button", { name: "Replay drawing" })).toBeNull();
   });
 
   it("falls back to the read-only Presentation preview without an AI entry point when no editor URL is configured", async () => {
@@ -285,6 +308,16 @@ describe("PptxViewer", () => {
     const details = document.querySelector<HTMLDetailsElement>(".pptx-workbench-debug");
     expect(details?.open).toBe(false);
     expect(details?.querySelector("pre")?.textContent).toContain("PowerPoint.run");
+    cleanup();
+    const reopened = await bootWorkbench();
+    expect(screen.getByText("Changed the selected title to OfficeDex demo.")).toBeTruthy();
+    expect(screen.getByText("把选中的标题改为 OfficeDex 演示，但字体、颜色和位置不变")).toBeTruthy();
+    expect(reopened.editor.received.some((item) => item.type === "officedex:pptx-execute-js")).toBe(false);
+    expect(planPptxJS).toHaveBeenCalledTimes(1);
+    cleanup();
+    await bootWorkbench("/other/deck.pptx");
+    expect(screen.queryByText("Changed the selected title to OfficeDex demo.")).toBeNull();
+
   });
 
 
@@ -517,4 +550,18 @@ describe("PptxViewer", () => {
     await waitFor(() => expect(document.querySelector(".pptx-workbench")?.getAttribute("data-editor-status")).toBe("ready"));
     expect(document.querySelector(".pptx-workbench-fallback-bar")).toBeNull();
   });
+});
+
+it("restores an unfinished PPT edit as history without exposing stale execution actions", async () => {
+  localStorage.setItem("officedex.agent-history.v1:pptx:/tmp/deck.pptx", JSON.stringify([
+    { id: "pending", prompt: "Delete the old slide", stage: "awaiting-confirmation", plan: { summary: "Delete slide 2", source: "dangerous old script" } },
+    { id: "failed", prompt: "Save edits", stage: "failed", failedStage: "saving", error: "disk full" },
+  ]));
+  const { editor } = await bootWorkbench();
+  expect(screen.getByText("Delete slide 2")).toBeTruthy();
+  expect(screen.getByText(/This edit was interrupted/)).toBeTruthy();
+  expect(document.querySelector(".pptx-workbench-confirm")).toBeNull();
+  expect(document.querySelector(".pptx-workbench-turn-actions")).toBeNull();
+  expect(editor.received.some((item) => item.type === "officedex:pptx-execute-js")).toBe(false);
+  expect(planPptxJS).not.toHaveBeenCalled();
 });

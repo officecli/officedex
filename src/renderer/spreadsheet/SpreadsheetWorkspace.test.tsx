@@ -86,7 +86,9 @@ describe("SpreadsheetWorkspace", () => {
     expect(screen.getByRole("region", { name: "forecast.xlsx workbook" })).toBeInTheDocument();
     expect(screen.getByText("Client A")).toBeInTheDocument();
     expect(screen.getAllByText("forecast.xlsx")).toHaveLength(2);
-    expect(screen.getByRole("complementary", { name: "AI Assistant" })).toBeInTheDocument();
+    // The assistant panel is the shared workbench's, so its accessible name is
+    // the panel title it is handed -- not the retired topbar's own label.
+    expect(screen.getByRole("complementary", { name: "OfficeDex Agent" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Create App" })).toBeInTheDocument();
     expect(screen.queryByText("What should we work on?")).toBeNull();
     expect(screen.queryByRole("button", { name: /New chat/i })).toBeNull();
@@ -97,7 +99,7 @@ describe("SpreadsheetWorkspace", () => {
     render(<SpreadsheetWorkspace session={readySession} onBack={vi.fn()} agentPanel={<div>Assistant</div>} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Hide AI assistant" }));
-    expect(screen.queryByRole("complementary", { name: "AI Assistant" })).toBeNull();
+    expect(screen.queryByRole("complementary", { name: "OfficeDex Agent" })).toBeNull();
     expect(screen.getByRole("button", { name: "Show AI assistant" })).toBeInTheDocument();
   });
 

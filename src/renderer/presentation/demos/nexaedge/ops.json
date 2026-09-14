@@ -1,0 +1,2487 @@
+[
+  {
+    "assetsDir": "builtin-nexaedge",
+    "fonts": {
+      "cjk": "Microsoft YaHei",
+      "latin": "Aptos"
+    },
+    "op": "deck.begin",
+    "seq": 1,
+    "slides": 8
+  },
+  {
+    "background": "#F8FAFC",
+    "candidateId": "slide-1-baseline-default-level-0-534d5f3e",
+    "composition": "cover",
+    "level": 0,
+    "op": "slide.begin",
+    "selectionReason": "baseline-compatible",
+    "semanticCompatibilityScore": 1,
+    "seq": 2,
+    "slide": 1
+  },
+  {
+    "candidateId": "slide-1-baseline-default-level-0-534d5f3e",
+    "op": "shape.add",
+    "seq": 3,
+    "shape": {
+      "align": "center",
+      "bold": true,
+      "color": "#667085",
+      "height": 16,
+      "kind": "text",
+      "left": 115.19999999999999,
+      "role": "kicker",
+      "size": 11,
+      "text": "NexaEdge AI Fabric Product Launch",
+      "top": 138.368,
+      "width": 729.6
+    },
+    "slide": 1
+  },
+  {
+    "candidateId": "slide-1-baseline-default-level-0-534d5f3e",
+    "op": "shape.add",
+    "seq": 4,
+    "shape": {
+      "fill": "#2563EB",
+      "height": 5,
+      "kind": "rect",
+      "left": 450,
+      "role": "accent",
+      "top": 158.368,
+      "width": 60
+    },
+    "slide": 1
+  },
+  {
+    "candidateId": "slide-1-baseline-default-level-0-534d5f3e",
+    "op": "shape.add",
+    "seq": 5,
+    "shape": {
+      "align": "center",
+      "bold": true,
+      "color": "#020617",
+      "height": 84,
+      "kind": "text",
+      "left": 115.19999999999999,
+      "role": "title",
+      "size": 60,
+      "text": "NexaEdge AI Fabric",
+      "top": 172.368,
+      "width": 729.6
+    },
+    "slide": 1
+  },
+  {
+    "candidateId": "slide-1-baseline-default-level-0-534d5f3e",
+    "op": "shape.add",
+    "seq": 6,
+    "shape": {
+      "align": "center",
+      "color": "#0F172A",
+      "height": 61.599999999999994,
+      "kind": "text",
+      "left": 115.19999999999999,
+      "role": "subtitle",
+      "size": 22,
+      "text": "Enterprise teams can move from fragmented data to real-time decisions with one deployable intelligence layer",
+      "top": 276.368,
+      "width": 729.6
+    },
+    "slide": 1
+  },
+  {
+    "candidateId": "slide-1-baseline-default-level-0-534d5f3e",
+    "op": "shape.add",
+    "seq": 7,
+    "shape": {
+      "fill": "#0F172A",
+      "height": 6,
+      "itemGroupId": "item-0",
+      "itemIndex": 0,
+      "kind": "rect",
+      "left": 132,
+      "role": "accent",
+      "top": 361.96799999999996,
+      "width": 6
+    },
+    "slide": 1
+  },
+  {
+    "candidateId": "slide-1-baseline-default-level-0-534d5f3e",
+    "op": "shape.add",
+    "seq": 8,
+    "shape": {
+      "color": "#0F172A",
+      "height": 19.599999999999998,
+      "itemGroupId": "item-0",
+      "itemIndex": 0,
+      "kind": "text",
+      "left": 144,
+      "role": "label",
+      "size": 14,
+      "text": "Launch theme",
+      "top": 356.96799999999996,
+      "width": 208
+    },
+    "slide": 1
+  },
+  {
+    "candidateId": "slide-1-baseline-default-level-0-534d5f3e",
+    "op": "shape.add",
+    "seq": 9,
+    "shape": {
+      "fill": "#0F172A",
+      "height": 6,
+      "itemGroupId": "item-1",
+      "itemIndex": 1,
+      "kind": "rect",
+      "left": 370,
+      "role": "accent",
+      "top": 361.96799999999996,
+      "width": 6
+    },
+    "slide": 1
+  },
+  {
+    "candidateId": "slide-1-baseline-default-level-0-534d5f3e",
+    "op": "shape.add",
+    "seq": 10,
+    "shape": {
+      "color": "#0F172A",
+      "height": 19.599999999999998,
+      "itemGroupId": "item-1",
+      "itemIndex": 1,
+      "kind": "text",
+      "left": 382,
+      "role": "label",
+      "size": 14,
+      "text": "Primary promise",
+      "top": 356.96799999999996,
+      "width": 208
+    },
+    "slide": 1
+  },
+  {
+    "candidateId": "slide-1-baseline-default-level-0-534d5f3e",
+    "op": "shape.add",
+    "seq": 11,
+    "shape": {
+      "fill": "#0F172A",
+      "height": 6,
+      "itemGroupId": "item-2",
+      "itemIndex": 2,
+      "kind": "rect",
+      "left": 608,
+      "role": "accent",
+      "top": 361.96799999999996,
+      "width": 6
+    },
+    "slide": 1
+  },
+  {
+    "candidateId": "slide-1-baseline-default-level-0-534d5f3e",
+    "op": "shape.add",
+    "seq": 12,
+    "shape": {
+      "color": "#0F172A",
+      "height": 19.599999999999998,
+      "itemGroupId": "item-2",
+      "itemIndex": 2,
+      "kind": "text",
+      "left": 620,
+      "role": "label",
+      "size": 14,
+      "text": "Target market",
+      "top": 356.96799999999996,
+      "width": 208
+    },
+    "slide": 1
+  },
+  {
+    "op": "slide.end",
+    "seq": 13,
+    "slide": 1
+  },
+  {
+    "background": "#F8FAFC",
+    "candidateId": "slide-2-baseline-default-level-1-24bc86ab",
+    "composition": "grid",
+    "level": 1,
+    "op": "slide.begin",
+    "selectionReason": "baseline-compatible",
+    "semanticCompatibilityScore": 1,
+    "seq": 14,
+    "slide": 2
+  },
+  {
+    "candidateId": "slide-2-baseline-default-level-1-24bc86ab",
+    "op": "shape.add",
+    "seq": 15,
+    "shape": {
+      "align": "left",
+      "bold": true,
+      "color": "#667085",
+      "height": 16,
+      "kind": "text",
+      "left": 64.224,
+      "role": "kicker",
+      "size": 10,
+      "text": "NexaEdge AI Fabric Product Launch",
+      "top": 59.486000000000004,
+      "width": 813.216
+    },
+    "slide": 2
+  },
+  {
+    "candidateId": "slide-2-baseline-default-level-1-24bc86ab",
+    "op": "shape.add",
+    "seq": 16,
+    "shape": {
+      "align": "left",
+      "bold": true,
+      "color": "#020617",
+      "height": 59.4,
+      "kind": "text",
+      "left": 64.224,
+      "role": "title",
+      "size": 36,
+      "text": "From technical edge to business impact",
+      "top": 81.486,
+      "width": 813.216
+    },
+    "slide": 2
+  },
+  {
+    "candidateId": "slide-2-baseline-default-level-1-24bc86ab",
+    "op": "shape.add",
+    "seq": 17,
+    "shape": {
+      "fill": "#2563EB",
+      "height": 4,
+      "itemGroupId": "item-0",
+      "itemIndex": 0,
+      "kind": "rect",
+      "left": 64.224,
+      "role": "accent",
+      "top": 150.886,
+      "width": 48
+    },
+    "slide": 2
+  },
+  {
+    "candidateId": "slide-2-baseline-default-level-1-24bc86ab",
+    "op": "shape.add",
+    "seq": 18,
+    "shape": {
+      "align": "left",
+      "color": "#0F172A",
+      "height": 50.4,
+      "kind": "text",
+      "left": 64.224,
+      "role": "subtitle",
+      "size": 18,
+      "text": "The launch story connects a differentiated architecture to measurable operational outcomes",
+      "top": 164.886,
+      "width": 813.216
+    },
+    "slide": 2
+  },
+  {
+    "candidateId": "slide-2-baseline-default-level-1-24bc86ab",
+    "op": "shape.add",
+    "seq": 19,
+    "shape": {
+      "fill": "#FFFFFF",
+      "height": 108.55699999999999,
+      "itemGroupId": "item-0",
+      "itemIndex": 0,
+      "kind": "rect",
+      "left": 64.224,
+      "line": "#BCBEC3",
+      "role": "card",
+      "rounded": true,
+      "top": 231.286,
+      "weight": 1,
+      "width": 260.4053333333333
+    },
+    "slide": 2
+  },
+  {
+    "candidateId": "slide-2-baseline-default-level-1-24bc86ab",
+    "op": "shape.add",
+    "seq": 20,
+    "shape": {
+      "bold": true,
+      "color": "#020617",
+      "height": 19.599999999999998,
+      "itemGroupId": "item-0",
+      "itemIndex": 0,
+      "kind": "text",
+      "left": 74.224,
+      "role": "body",
+      "size": 14,
+      "text": "01 / Why now",
+      "top": 241.286,
+      "width": 240.40533333333332
+    },
+    "slide": 2
+  },
+  {
+    "candidateId": "slide-2-baseline-default-level-1-24bc86ab",
+    "op": "shape.add",
+    "seq": 21,
+    "shape": {
+      "color": "#667085",
+      "height": 46.199999999999996,
+      "itemGroupId": "item-0",
+      "itemIndex": 0,
+      "kind": "text",
+      "left": 74.224,
+      "role": "detail",
+      "size": 11,
+      "text": "The operating environment is becoming too fast and distributed for batch analytics",
+      "top": 266.886,
+      "width": 240.40533333333332
+    },
+    "slide": 2
+  },
+  {
+    "candidateId": "slide-2-baseline-default-level-1-24bc86ab",
+    "op": "shape.add",
+    "seq": 22,
+    "shape": {
+      "fill": "#FFFFFF",
+      "height": 108.55699999999999,
+      "itemGroupId": "item-1",
+      "itemIndex": 1,
+      "kind": "rect",
+      "left": 340.6293333333333,
+      "line": "#BCBEC3",
+      "role": "card",
+      "rounded": true,
+      "top": 231.286,
+      "weight": 1,
+      "width": 260.4053333333333
+    },
+    "slide": 2
+  },
+  {
+    "candidateId": "slide-2-baseline-default-level-1-24bc86ab",
+    "op": "shape.add",
+    "seq": 23,
+    "shape": {
+      "bold": true,
+      "color": "#020617",
+      "height": 19.599999999999998,
+      "itemGroupId": "item-1",
+      "itemIndex": 1,
+      "kind": "text",
+      "left": 350.6293333333333,
+      "role": "body",
+      "size": 14,
+      "text": "02 / Core innovation",
+      "top": 241.286,
+      "width": 240.40533333333332
+    },
+    "slide": 2
+  },
+  {
+    "candidateId": "slide-2-baseline-default-level-1-24bc86ab",
+    "op": "shape.add",
+    "seq": 24,
+    "shape": {
+      "color": "#667085",
+      "height": 46.199999999999996,
+      "itemGroupId": "item-1",
+      "itemIndex": 1,
+      "kind": "text",
+      "left": 350.6293333333333,
+      "role": "detail",
+      "size": 11,
+      "text": "A policy-aware AI fabric that runs close to the data and coordinates models across environments",
+      "top": 266.886,
+      "width": 240.40533333333332
+    },
+    "slide": 2
+  },
+  {
+    "candidateId": "slide-2-baseline-default-level-1-24bc86ab",
+    "op": "shape.add",
+    "seq": 25,
+    "shape": {
+      "fill": "#FFFFFF",
+      "height": 108.55699999999999,
+      "itemGroupId": "item-2",
+      "itemIndex": 2,
+      "kind": "rect",
+      "left": 617.0346666666667,
+      "line": "#BCBEC3",
+      "role": "card",
+      "rounded": true,
+      "top": 231.286,
+      "weight": 1,
+      "width": 260.4053333333333
+    },
+    "slide": 2
+  },
+  {
+    "candidateId": "slide-2-baseline-default-level-1-24bc86ab",
+    "op": "shape.add",
+    "seq": 26,
+    "shape": {
+      "bold": true,
+      "color": "#020617",
+      "height": 19.599999999999998,
+      "itemGroupId": "item-2",
+      "itemIndex": 2,
+      "kind": "text",
+      "left": 627.0346666666667,
+      "role": "body",
+      "size": 14,
+      "text": "03 / Product capabilities",
+      "top": 241.286,
+      "width": 240.40533333333332
+    },
+    "slide": 2
+  },
+  {
+    "candidateId": "slide-2-baseline-default-level-1-24bc86ab",
+    "op": "shape.add",
+    "seq": 27,
+    "shape": {
+      "color": "#667085",
+      "height": 46.199999999999996,
+      "itemGroupId": "item-2",
+      "itemIndex": 2,
+      "kind": "text",
+      "left": 627.0346666666667,
+      "role": "detail",
+      "size": 11,
+      "text": "Unified ingestion, model orchestration, governance, observability, and developer access",
+      "top": 266.886,
+      "width": 240.40533333333332
+    },
+    "slide": 2
+  },
+  {
+    "candidateId": "slide-2-baseline-default-level-1-24bc86ab",
+    "op": "shape.add",
+    "seq": 28,
+    "shape": {
+      "fill": "#FFFFFF",
+      "height": 108.55699999999999,
+      "itemGroupId": "item-3",
+      "itemIndex": 3,
+      "kind": "rect",
+      "left": 202.42666666666668,
+      "line": "#BCBEC3",
+      "role": "card",
+      "rounded": true,
+      "top": 355.84299999999996,
+      "weight": 1,
+      "width": 260.4053333333333
+    },
+    "slide": 2
+  },
+  {
+    "candidateId": "slide-2-baseline-default-level-1-24bc86ab",
+    "op": "shape.add",
+    "seq": 29,
+    "shape": {
+      "bold": true,
+      "color": "#020617",
+      "height": 19.599999999999998,
+      "itemGroupId": "item-3",
+      "itemIndex": 3,
+      "kind": "text",
+      "left": 212.42666666666668,
+      "role": "body",
+      "size": 14,
+      "text": "04 / Use cases",
+      "top": 365.84299999999996,
+      "width": 240.40533333333332
+    },
+    "slide": 2
+  },
+  {
+    "candidateId": "slide-2-baseline-default-level-1-24bc86ab",
+    "op": "shape.add",
+    "seq": 30,
+    "shape": {
+      "color": "#667085",
+      "height": 46.199999999999996,
+      "itemGroupId": "item-3",
+      "itemIndex": 3,
+      "kind": "text",
+      "left": 212.42666666666668,
+      "role": "detail",
+      "size": 11,
+      "text": "Specific workflows where seconds of response time translate into measurable savings or revenue",
+      "top": 391.443,
+      "width": 240.40533333333332
+    },
+    "slide": 2
+  },
+  {
+    "candidateId": "slide-2-baseline-default-level-1-24bc86ab",
+    "op": "shape.add",
+    "seq": 31,
+    "shape": {
+      "fill": "#FFFFFF",
+      "height": 108.55699999999999,
+      "itemGroupId": "item-4",
+      "itemIndex": 4,
+      "kind": "rect",
+      "left": 478.832,
+      "line": "#BCBEC3",
+      "role": "card",
+      "rounded": true,
+      "top": 355.84299999999996,
+      "weight": 1,
+      "width": 260.4053333333333
+    },
+    "slide": 2
+  },
+  {
+    "candidateId": "slide-2-baseline-default-level-1-24bc86ab",
+    "op": "shape.add",
+    "seq": 32,
+    "shape": {
+      "bold": true,
+      "color": "#020617",
+      "height": 19.599999999999998,
+      "itemGroupId": "item-4",
+      "itemIndex": 4,
+      "kind": "text",
+      "left": 488.832,
+      "role": "body",
+      "size": 14,
+      "text": "05 / Launch milestones",
+      "top": 365.84299999999996,
+      "width": 240.40533333333332
+    },
+    "slide": 2
+  },
+  {
+    "candidateId": "slide-2-baseline-default-level-1-24bc86ab",
+    "op": "shape.add",
+    "seq": 33,
+    "shape": {
+      "color": "#667085",
+      "height": 46.199999999999996,
+      "itemGroupId": "item-4",
+      "itemIndex": 4,
+      "kind": "text",
+      "left": 488.832,
+      "role": "detail",
+      "size": 11,
+      "text": "A staged release plan that moves from lighthouse validation to scaled commercial availability",
+      "top": 391.443,
+      "width": 240.40533333333332
+    },
+    "slide": 2
+  },
+  {
+    "op": "slide.end",
+    "seq": 34,
+    "slide": 2
+  },
+  {
+    "background": "#F8FAFC",
+    "candidateId": "slide-3-baseline-default-level-1-224594fc",
+    "composition": "data-visualization",
+    "level": 1,
+    "op": "slide.begin",
+    "selectionReason": "baseline-compatible",
+    "semanticCompatibilityScore": 1,
+    "seq": 35,
+    "slide": 3
+  },
+  {
+    "candidateId": "slide-3-baseline-default-level-1-224594fc",
+    "op": "shape.add",
+    "seq": 36,
+    "shape": {
+      "align": "left",
+      "bold": true,
+      "color": "#667085",
+      "height": 16,
+      "kind": "text",
+      "left": 71.52,
+      "role": "kicker",
+      "size": 10,
+      "text": "NexaEdge AI Fabric Product Launch",
+      "top": 28.976,
+      "width": 794.1120000000001
+    },
+    "slide": 3
+  },
+  {
+    "candidateId": "slide-3-baseline-default-level-1-224594fc",
+    "op": "shape.add",
+    "seq": 37,
+    "shape": {
+      "align": "left",
+      "bold": true,
+      "color": "#020617",
+      "height": 40.92,
+      "kind": "text",
+      "left": 71.52,
+      "role": "title",
+      "size": 24.8,
+      "text": "The launch case is built on four measurable advantages",
+      "top": 50.976,
+      "width": 794.1120000000001
+    },
+    "slide": 3
+  },
+  {
+    "candidateId": "slide-3-baseline-default-level-1-224594fc",
+    "op": "shape.add",
+    "seq": 38,
+    "shape": {
+      "fill": "#2563EB",
+      "height": 4,
+      "kind": "rect",
+      "left": 71.52,
+      "role": "accent",
+      "top": 101.896,
+      "width": 48
+    },
+    "slide": 3
+  },
+  {
+    "candidateId": "slide-3-baseline-default-level-1-224594fc",
+    "op": "shape.add",
+    "seq": 39,
+    "shape": {
+      "align": "left",
+      "color": "#0F172A",
+      "height": 50.4,
+      "kind": "text",
+      "left": 71.52,
+      "role": "subtitle",
+      "size": 18,
+      "text": "NexaEdge wins when customers need immediate action, strict control, and predictable economics at scale",
+      "top": 115.896,
+      "width": 794.1120000000001
+    },
+    "slide": 3
+  },
+  {
+    "candidateId": "slide-3-baseline-default-level-1-224594fc",
+    "op": "shape.add",
+    "seq": 40,
+    "shape": {
+      "fill": "#FFFFFF",
+      "height": 222,
+      "itemGroupId": "item-0",
+      "itemIndex": 0,
+      "kind": "rect",
+      "left": 71.52,
+      "line": "#BCBEC3",
+      "role": "card",
+      "rounded": true,
+      "top": 182.296,
+      "weight": 1,
+      "width": 254.03733333333335
+    },
+    "slide": 3
+  },
+  {
+    "candidateId": "slide-3-baseline-default-level-1-224594fc",
+    "op": "shape.add",
+    "seq": 41,
+    "shape": {
+      "bold": true,
+      "color": "#020617",
+      "height": 28,
+      "itemGroupId": "item-0",
+      "itemIndex": 0,
+      "kind": "text",
+      "left": 89.52,
+      "role": "body",
+      "size": 20,
+      "text": "Operational fit",
+      "top": 200.296,
+      "width": 218.03733333333335
+    },
+    "slide": 3
+  },
+  {
+    "candidateId": "slide-3-baseline-default-level-1-224594fc",
+    "op": "shape.add",
+    "seq": 42,
+    "shape": {
+      "color": "#667085",
+      "height": 112,
+      "itemGroupId": "item-0",
+      "itemIndex": 0,
+      "kind": "text",
+      "left": 89.52,
+      "role": "detail",
+      "size": 16,
+      "text": "Designed for environments where data arrives continuously and actions cannot wait for a nightly pipeline",
+      "top": 234.296,
+      "width": 218.03733333333335
+    },
+    "slide": 3
+  },
+  {
+    "candidateId": "slide-3-baseline-default-level-1-224594fc",
+    "op": "shape.add",
+    "seq": 43,
+    "shape": {
+      "fill": "#FFFFFF",
+      "height": 222,
+      "itemGroupId": "item-1",
+      "itemIndex": 1,
+      "kind": "rect",
+      "left": 341.5573333333333,
+      "line": "#BCBEC3",
+      "role": "card",
+      "rounded": true,
+      "top": 182.296,
+      "weight": 1,
+      "width": 254.03733333333335
+    },
+    "slide": 3
+  },
+  {
+    "candidateId": "slide-3-baseline-default-level-1-224594fc",
+    "op": "shape.add",
+    "seq": 44,
+    "shape": {
+      "bold": true,
+      "color": "#020617",
+      "height": 56,
+      "itemGroupId": "item-1",
+      "itemIndex": 1,
+      "kind": "text",
+      "left": 359.5573333333333,
+      "role": "body",
+      "size": 20,
+      "text": "Enterprise control",
+      "top": 200.296,
+      "width": 218.03733333333335
+    },
+    "slide": 3
+  },
+  {
+    "candidateId": "slide-3-baseline-default-level-1-224594fc",
+    "op": "shape.add",
+    "seq": 45,
+    "shape": {
+      "color": "#667085",
+      "height": 89.6,
+      "itemGroupId": "item-1",
+      "itemIndex": 1,
+      "kind": "text",
+      "left": 359.5573333333333,
+      "role": "detail",
+      "size": 16,
+      "text": "Policies, audit trails, and model approvals remain visible to security and compliance teams",
+      "top": 262.296,
+      "width": 218.03733333333335
+    },
+    "slide": 3
+  },
+  {
+    "candidateId": "slide-3-baseline-default-level-1-224594fc",
+    "op": "shape.add",
+    "seq": 46,
+    "shape": {
+      "fill": "#FFFFFF",
+      "height": 222,
+      "itemGroupId": "item-2",
+      "itemIndex": 2,
+      "kind": "rect",
+      "left": 611.5946666666666,
+      "line": "#BCBEC3",
+      "role": "card",
+      "rounded": true,
+      "top": 182.296,
+      "weight": 1,
+      "width": 254.03733333333335
+    },
+    "slide": 3
+  },
+  {
+    "candidateId": "slide-3-baseline-default-level-1-224594fc",
+    "op": "shape.add",
+    "seq": 47,
+    "shape": {
+      "bold": true,
+      "color": "#020617",
+      "height": 56,
+      "itemGroupId": "item-2",
+      "itemIndex": 2,
+      "kind": "text",
+      "left": 629.5946666666666,
+      "role": "body",
+      "size": 20,
+      "text": "Commercial leverage",
+      "top": 200.296,
+      "width": 218.03733333333335
+    },
+    "slide": 3
+  },
+  {
+    "candidateId": "slide-3-baseline-default-level-1-224594fc",
+    "op": "shape.add",
+    "seq": 48,
+    "shape": {
+      "color": "#667085",
+      "height": 112,
+      "itemGroupId": "item-2",
+      "itemIndex": 2,
+      "kind": "text",
+      "left": 629.5946666666666,
+      "role": "detail",
+      "size": 16,
+      "text": "One platform supports multiple workflows, creating expansion paths after the first production deployment",
+      "top": 262.296,
+      "width": 218.03733333333335
+    },
+    "slide": 3
+  },
+  {
+    "candidateId": "slide-3-baseline-default-level-1-224594fc",
+    "op": "shape.add",
+    "seq": 49,
+    "shape": {
+      "color": "#667085",
+      "height": 13,
+      "kind": "text",
+      "left": 71.52,
+      "role": "detail",
+      "size": 10,
+      "text": "Illustrative launch assumptions based on target pilot benchmarks, 2026",
+      "top": 470.4,
+      "width": 794.1120000000001
+    },
+    "slide": 3
+  },
+  {
+    "op": "slide.end",
+    "seq": 50,
+    "slide": 3
+  },
+  {
+    "background": "#F8FAFC",
+    "candidateId": "slide-4-baseline-default-level-1-c2633095",
+    "composition": "text-left-image-right",
+    "level": 1,
+    "op": "slide.begin",
+    "selectionReason": "baseline-compatible",
+    "semanticCompatibilityScore": 1,
+    "seq": 51,
+    "slide": 4
+  },
+  {
+    "candidateId": "slide-4-baseline-default-level-1-c2633095",
+    "op": "shape.add",
+    "seq": 52,
+    "shape": {
+      "height": 192,
+      "imageRef": {
+        "digest": "1293cd0a730dd66e96e13e2d26eed4938226f3b9e5088f7c57b177289dade608",
+        "kind": "visual",
+        "mimeType": "image/png",
+        "visualIndex": 1
+      },
+      "kind": "picture",
+      "left": 556.8,
+      "role": "image",
+      "top": 48.438,
+      "width": 288
+    },
+    "slide": 4
+  },
+  {
+    "candidateId": "slide-4-baseline-default-level-1-c2633095",
+    "op": "shape.add",
+    "seq": 53,
+    "shape": {
+      "fill": "#2563EB",
+      "height": 115.19999999999999,
+      "kind": "rect",
+      "left": 550.8,
+      "role": "accent",
+      "top": 86.83800000000001,
+      "width": 6
+    },
+    "slide": 4
+  },
+  {
+    "candidateId": "slide-4-baseline-default-level-1-c2633095",
+    "op": "shape.add",
+    "seq": 54,
+    "shape": {
+      "align": "left",
+      "bold": true,
+      "color": "#667085",
+      "height": 16,
+      "kind": "text",
+      "left": 81.696,
+      "role": "kicker",
+      "size": 10,
+      "text": "NexaEdge AI Fabric Product Launch",
+      "top": 48.2,
+      "width": 447.10400000000004
+    },
+    "slide": 4
+  },
+  {
+    "candidateId": "slide-4-baseline-default-level-1-c2633095",
+    "op": "shape.add",
+    "seq": 55,
+    "shape": {
+      "align": "left",
+      "bold": true,
+      "color": "#020617",
+      "height": 78.08,
+      "kind": "text",
+      "left": 81.696,
+      "role": "title",
+      "size": 25.6,
+      "text": "Core innovation: intelligence follows the event",
+      "top": 70.2,
+      "width": 447.10400000000004
+    },
+    "slide": 4
+  },
+  {
+    "candidateId": "slide-4-baseline-default-level-1-c2633095",
+    "op": "shape.add",
+    "seq": 56,
+    "shape": {
+      "fill": "#2563EB",
+      "height": 4,
+      "itemGroupId": "item-0",
+      "itemIndex": 0,
+      "kind": "rect",
+      "left": 81.696,
+      "role": "accent",
+      "top": 158.28,
+      "width": 48
+    },
+    "slide": 4
+  },
+  {
+    "candidateId": "slide-4-baseline-default-level-1-c2633095",
+    "op": "shape.add",
+    "seq": 57,
+    "shape": {
+      "align": "left",
+      "color": "#0F172A",
+      "height": 75.6,
+      "kind": "text",
+      "left": 81.696,
+      "role": "subtitle",
+      "size": 18,
+      "text": "Instead of sending every signal to a central system, NexaEdge routes computation to the point where action is most valuable",
+      "top": 172.28,
+      "width": 447.10400000000004
+    },
+    "slide": 4
+  },
+  {
+    "candidateId": "slide-4-baseline-default-level-1-c2633095",
+    "op": "shape.add",
+    "seq": 58,
+    "shape": {
+      "fill": "#FFFFFF",
+      "height": 92.25999999999999,
+      "itemGroupId": "item-0",
+      "itemIndex": 0,
+      "kind": "rect",
+      "left": 81.696,
+      "line": "#BCBEC3",
+      "role": "card",
+      "rounded": true,
+      "top": 263.88,
+      "weight": 1,
+      "width": 215.55200000000002
+    },
+    "slide": 4
+  },
+  {
+    "candidateId": "slide-4-baseline-default-level-1-c2633095",
+    "op": "shape.add",
+    "seq": 59,
+    "shape": {
+      "bold": true,
+      "color": "#020617",
+      "height": 19.599999999999998,
+      "itemGroupId": "item-0",
+      "itemIndex": 0,
+      "kind": "text",
+      "left": 91.696,
+      "role": "body",
+      "size": 14,
+      "text": "Event-native fabric",
+      "top": 273.88,
+      "width": 195.55200000000002
+    },
+    "slide": 4
+  },
+  {
+    "candidateId": "slide-4-baseline-default-level-1-c2633095",
+    "op": "shape.add",
+    "seq": 60,
+    "shape": {
+      "color": "#667085",
+      "height": 61.599999999999994,
+      "itemGroupId": "item-0",
+      "itemIndex": 0,
+      "kind": "text",
+      "left": 91.696,
+      "role": "detail",
+      "size": 11,
+      "text": "Streams telemetry, transactions, and workflow events through one low-latency routing laye…",
+      "top": 299.48,
+      "width": 195.55200000000002
+    },
+    "slide": 4
+  },
+  {
+    "candidateId": "slide-4-baseline-default-level-1-c2633095",
+    "op": "shape.add",
+    "seq": 61,
+    "shape": {
+      "fill": "#FFFFFF",
+      "height": 92.25999999999999,
+      "itemGroupId": "item-1",
+      "itemIndex": 1,
+      "kind": "rect",
+      "left": 313.24800000000005,
+      "line": "#BCBEC3",
+      "role": "card",
+      "rounded": true,
+      "top": 263.88,
+      "weight": 1,
+      "width": 215.55200000000002
+    },
+    "slide": 4
+  },
+  {
+    "candidateId": "slide-4-baseline-default-level-1-c2633095",
+    "op": "shape.add",
+    "seq": 62,
+    "shape": {
+      "bold": true,
+      "color": "#020617",
+      "height": 19.599999999999998,
+      "itemGroupId": "item-1",
+      "itemIndex": 1,
+      "kind": "text",
+      "left": 323.24800000000005,
+      "role": "body",
+      "size": 14,
+      "text": "Distributed model mesh",
+      "top": 273.88,
+      "width": 195.55200000000002
+    },
+    "slide": 4
+  },
+  {
+    "candidateId": "slide-4-baseline-default-level-1-c2633095",
+    "op": "shape.add",
+    "seq": 63,
+    "shape": {
+      "color": "#667085",
+      "height": 61.599999999999994,
+      "itemGroupId": "item-1",
+      "itemIndex": 1,
+      "kind": "text",
+      "left": 323.24800000000005,
+      "role": "detail",
+      "size": 11,
+      "text": "Runs the right model at the edge, in a private cloud, or centrally based on latency and sens…",
+      "top": 299.48,
+      "width": 195.55200000000002
+    },
+    "slide": 4
+  },
+  {
+    "candidateId": "slide-4-baseline-default-level-1-c2633095",
+    "op": "shape.add",
+    "seq": 64,
+    "shape": {
+      "fill": "#FFFFFF",
+      "height": 92.25999999999999,
+      "itemGroupId": "item-2",
+      "itemIndex": 2,
+      "kind": "rect",
+      "left": 197.472,
+      "line": "#BCBEC3",
+      "role": "card",
+      "rounded": true,
+      "top": 372.14,
+      "weight": 1,
+      "width": 215.55200000000002
+    },
+    "slide": 4
+  },
+  {
+    "candidateId": "slide-4-baseline-default-level-1-c2633095",
+    "op": "shape.add",
+    "seq": 65,
+    "shape": {
+      "bold": true,
+      "color": "#020617",
+      "height": 19.599999999999998,
+      "itemGroupId": "item-2",
+      "itemIndex": 2,
+      "kind": "text",
+      "left": 207.472,
+      "role": "body",
+      "size": 14,
+      "text": "Policy-aware execution",
+      "top": 382.14,
+      "width": 195.55200000000002
+    },
+    "slide": 4
+  },
+  {
+    "candidateId": "slide-4-baseline-default-level-1-c2633095",
+    "op": "shape.add",
+    "seq": 66,
+    "shape": {
+      "color": "#667085",
+      "height": 61.599999999999994,
+      "itemGroupId": "item-2",
+      "itemIndex": 2,
+      "kind": "text",
+      "left": 207.472,
+      "role": "detail",
+      "size": 11,
+      "text": "Enforces data residency, access, retention, and approval rules before any model produces a…",
+      "top": 407.74,
+      "width": 195.55200000000002
+    },
+    "slide": 4
+  },
+  {
+    "op": "slide.end",
+    "seq": 67,
+    "slide": 4
+  },
+  {
+    "background": "#F8FAFC",
+    "candidateId": "slide-5-baseline-default-level-1-4a90fcd5",
+    "composition": "grid",
+    "level": 1,
+    "op": "slide.begin",
+    "selectionReason": "baseline-compatible",
+    "semanticCompatibilityScore": 1,
+    "seq": 68,
+    "slide": 5
+  },
+  {
+    "candidateId": "slide-5-baseline-default-level-1-4a90fcd5",
+    "op": "shape.add",
+    "seq": 69,
+    "shape": {
+      "align": "left",
+      "bold": true,
+      "color": "#667085",
+      "height": 16,
+      "kind": "text",
+      "left": 64.224,
+      "role": "kicker",
+      "size": 10,
+      "text": "NexaEdge AI Fabric Product Launch",
+      "top": 59.486000000000004,
+      "width": 813.216
+    },
+    "slide": 5
+  },
+  {
+    "candidateId": "slide-5-baseline-default-level-1-4a90fcd5",
+    "op": "shape.add",
+    "seq": 70,
+    "shape": {
+      "align": "left",
+      "bold": true,
+      "color": "#020617",
+      "height": 78.08,
+      "kind": "text",
+      "left": 64.224,
+      "role": "title",
+      "size": 25.6,
+      "text": "One control plane replaces five disconnected operating layers",
+      "top": 81.486,
+      "width": 813.216
+    },
+    "slide": 5
+  },
+  {
+    "candidateId": "slide-5-baseline-default-level-1-4a90fcd5",
+    "op": "shape.add",
+    "seq": 71,
+    "shape": {
+      "fill": "#2563EB",
+      "height": 4,
+      "itemGroupId": "item-0",
+      "itemIndex": 0,
+      "kind": "rect",
+      "left": 64.224,
+      "role": "accent",
+      "top": 169.566,
+      "width": 48
+    },
+    "slide": 5
+  },
+  {
+    "candidateId": "slide-5-baseline-default-level-1-4a90fcd5",
+    "op": "shape.add",
+    "seq": 72,
+    "shape": {
+      "align": "left",
+      "color": "#0F172A",
+      "height": 50.4,
+      "kind": "text",
+      "left": 64.224,
+      "role": "subtitle",
+      "size": 18,
+      "text": "The product advantage is not another model; it is the coordination layer that makes existing data and models operationally usable",
+      "top": 183.566,
+      "width": 813.216
+    },
+    "slide": 5
+  },
+  {
+    "candidateId": "slide-5-baseline-default-level-1-4a90fcd5",
+    "op": "shape.add",
+    "seq": 73,
+    "shape": {
+      "fill": "#FFFFFF",
+      "height": 99.21699999999998,
+      "itemGroupId": "item-0",
+      "itemIndex": 0,
+      "kind": "rect",
+      "left": 64.224,
+      "line": "#BCBEC3",
+      "role": "card",
+      "rounded": true,
+      "top": 249.966,
+      "weight": 1,
+      "width": 260.4053333333333
+    },
+    "slide": 5
+  },
+  {
+    "candidateId": "slide-5-baseline-default-level-1-4a90fcd5",
+    "op": "shape.add",
+    "seq": 74,
+    "shape": {
+      "bold": true,
+      "color": "#020617",
+      "height": 19.599999999999998,
+      "itemGroupId": "item-0",
+      "itemIndex": 0,
+      "kind": "text",
+      "left": 74.224,
+      "role": "body",
+      "size": 14,
+      "text": "Connect once",
+      "top": 259.966,
+      "width": 240.40533333333332
+    },
+    "slide": 5
+  },
+  {
+    "candidateId": "slide-5-baseline-default-level-1-4a90fcd5",
+    "op": "shape.add",
+    "seq": 75,
+    "shape": {
+      "color": "#667085",
+      "height": 61.599999999999994,
+      "itemGroupId": "item-0",
+      "itemIndex": 0,
+      "kind": "text",
+      "left": 74.224,
+      "role": "detail",
+      "size": 11,
+      "text": "Ingest APIs, MQTT, Kafka, ERP events, and files through 100+ prebuilt connectors instead of custom point int…",
+      "top": 285.56600000000003,
+      "width": 240.40533333333332
+    },
+    "slide": 5
+  },
+  {
+    "candidateId": "slide-5-baseline-default-level-1-4a90fcd5",
+    "op": "shape.add",
+    "seq": 76,
+    "shape": {
+      "fill": "#FFFFFF",
+      "height": 99.21699999999998,
+      "itemGroupId": "item-1",
+      "itemIndex": 1,
+      "kind": "rect",
+      "left": 340.6293333333333,
+      "line": "#BCBEC3",
+      "role": "card",
+      "rounded": true,
+      "top": 249.966,
+      "weight": 1,
+      "width": 260.4053333333333
+    },
+    "slide": 5
+  },
+  {
+    "candidateId": "slide-5-baseline-default-level-1-4a90fcd5",
+    "op": "shape.add",
+    "seq": 77,
+    "shape": {
+      "bold": true,
+      "color": "#020617",
+      "height": 19.599999999999998,
+      "itemGroupId": "item-1",
+      "itemIndex": 1,
+      "kind": "text",
+      "left": 350.6293333333333,
+      "role": "body",
+      "size": 14,
+      "text": "Decide centrally",
+      "top": 259.966,
+      "width": 240.40533333333332
+    },
+    "slide": 5
+  },
+  {
+    "candidateId": "slide-5-baseline-default-level-1-4a90fcd5",
+    "op": "shape.add",
+    "seq": 78,
+    "shape": {
+      "color": "#667085",
+      "height": 46.199999999999996,
+      "itemGroupId": "item-1",
+      "itemIndex": 1,
+      "kind": "text",
+      "left": 350.6293333333333,
+      "role": "detail",
+      "size": 11,
+      "text": "Manage model routing, confidence thresholds, human approvals, and escalation rules from one policy console",
+      "top": 285.56600000000003,
+      "width": 240.40533333333332
+    },
+    "slide": 5
+  },
+  {
+    "candidateId": "slide-5-baseline-default-level-1-4a90fcd5",
+    "op": "shape.add",
+    "seq": 79,
+    "shape": {
+      "fill": "#FFFFFF",
+      "height": 99.21699999999998,
+      "itemGroupId": "item-2",
+      "itemIndex": 2,
+      "kind": "rect",
+      "left": 617.0346666666667,
+      "line": "#BCBEC3",
+      "role": "card",
+      "rounded": true,
+      "top": 249.966,
+      "weight": 1,
+      "width": 260.4053333333333
+    },
+    "slide": 5
+  },
+  {
+    "candidateId": "slide-5-baseline-default-level-1-4a90fcd5",
+    "op": "shape.add",
+    "seq": 80,
+    "shape": {
+      "bold": true,
+      "color": "#020617",
+      "height": 19.599999999999998,
+      "itemGroupId": "item-2",
+      "itemIndex": 2,
+      "kind": "text",
+      "left": 627.0346666666667,
+      "role": "body",
+      "size": 14,
+      "text": "Prove continuously",
+      "top": 259.966,
+      "width": 240.40533333333332
+    },
+    "slide": 5
+  },
+  {
+    "candidateId": "slide-5-baseline-default-level-1-4a90fcd5",
+    "op": "shape.add",
+    "seq": 81,
+    "shape": {
+      "color": "#667085",
+      "height": 46.199999999999996,
+      "itemGroupId": "item-2",
+      "itemIndex": 2,
+      "kind": "text",
+      "left": 627.0346666666667,
+      "role": "detail",
+      "size": 11,
+      "text": "Track latency, drift, cost, and business outcomes with end-to-end observability across every deployment mode",
+      "top": 285.56600000000003,
+      "width": 240.40533333333332
+    },
+    "slide": 5
+  },
+  {
+    "candidateId": "slide-5-baseline-default-level-1-4a90fcd5",
+    "op": "shape.add",
+    "seq": 82,
+    "shape": {
+      "fill": "#FFFFFF",
+      "height": 99.21699999999998,
+      "itemGroupId": "item-3",
+      "itemIndex": 3,
+      "kind": "rect",
+      "left": 202.42666666666668,
+      "line": "#BCBEC3",
+      "role": "card",
+      "rounded": true,
+      "top": 365.183,
+      "weight": 1,
+      "width": 260.4053333333333
+    },
+    "slide": 5
+  },
+  {
+    "candidateId": "slide-5-baseline-default-level-1-4a90fcd5",
+    "op": "shape.add",
+    "seq": 83,
+    "shape": {
+      "bold": true,
+      "color": "#020617",
+      "height": 19.599999999999998,
+      "itemGroupId": "item-3",
+      "itemIndex": 3,
+      "kind": "text",
+      "left": 212.42666666666668,
+      "role": "body",
+      "size": 14,
+      "text": "Before",
+      "top": 375.183,
+      "width": 240.40533333333332
+    },
+    "slide": 5
+  },
+  {
+    "candidateId": "slide-5-baseline-default-level-1-4a90fcd5",
+    "op": "shape.add",
+    "seq": 84,
+    "shape": {
+      "color": "#667085",
+      "height": 46.199999999999996,
+      "itemGroupId": "item-3",
+      "itemIndex": 3,
+      "kind": "text",
+      "left": 212.42666666666668,
+      "role": "detail",
+      "size": 11,
+      "text": "Batch pipelines, separate model endpoints, manual handoffs, and limited visibility into production behavior",
+      "top": 400.783,
+      "width": 240.40533333333332
+    },
+    "slide": 5
+  },
+  {
+    "candidateId": "slide-5-baseline-default-level-1-4a90fcd5",
+    "op": "shape.add",
+    "seq": 85,
+    "shape": {
+      "fill": "#FFFFFF",
+      "height": 99.21699999999998,
+      "itemGroupId": "item-4",
+      "itemIndex": 4,
+      "kind": "rect",
+      "left": 478.832,
+      "line": "#BCBEC3",
+      "role": "card",
+      "rounded": true,
+      "top": 365.183,
+      "weight": 1,
+      "width": 260.4053333333333
+    },
+    "slide": 5
+  },
+  {
+    "candidateId": "slide-5-baseline-default-level-1-4a90fcd5",
+    "op": "shape.add",
+    "seq": 86,
+    "shape": {
+      "bold": true,
+      "color": "#020617",
+      "height": 19.599999999999998,
+      "itemGroupId": "item-4",
+      "itemIndex": 4,
+      "kind": "text",
+      "left": 488.832,
+      "role": "body",
+      "size": 14,
+      "text": "After",
+      "top": 375.183,
+      "width": 240.40533333333332
+    },
+    "slide": 5
+  },
+  {
+    "candidateId": "slide-5-baseline-default-level-1-4a90fcd5",
+    "op": "shape.add",
+    "seq": 87,
+    "shape": {
+      "color": "#667085",
+      "height": 46.199999999999996,
+      "itemGroupId": "item-4",
+      "itemIndex": 4,
+      "kind": "text",
+      "left": 488.832,
+      "role": "detail",
+      "size": 11,
+      "text": "A single event-to-action path with automated routing and measurable service-level objectives",
+      "top": 400.783,
+      "width": 240.40533333333332
+    },
+    "slide": 5
+  },
+  {
+    "op": "slide.end",
+    "seq": 88,
+    "slide": 5
+  },
+  {
+    "background": "#F8FAFC",
+    "candidateId": "slide-6-baseline-default-level-1-5fd0b746",
+    "composition": "grid",
+    "level": 1,
+    "op": "slide.begin",
+    "selectionReason": "baseline-compatible",
+    "semanticCompatibilityScore": 1,
+    "seq": 89,
+    "slide": 6
+  },
+  {
+    "candidateId": "slide-6-baseline-default-level-1-5fd0b746",
+    "op": "shape.add",
+    "seq": 90,
+    "shape": {
+      "align": "left",
+      "bold": true,
+      "color": "#667085",
+      "height": 16,
+      "kind": "text",
+      "left": 64.224,
+      "role": "kicker",
+      "size": 10,
+      "text": "NexaEdge AI Fabric Product Launch",
+      "top": 48.2,
+      "width": 813.216
+    },
+    "slide": 6
+  },
+  {
+    "candidateId": "slide-6-baseline-default-level-1-5fd0b746",
+    "op": "shape.add",
+    "seq": 91,
+    "shape": {
+      "align": "left",
+      "bold": true,
+      "color": "#020617",
+      "height": 49.5,
+      "kind": "text",
+      "left": 64.224,
+      "role": "title",
+      "size": 30,
+      "text": "Four launch use cases make the value tangible",
+      "top": 70.2,
+      "width": 813.216
+    },
+    "slide": 6
+  },
+  {
+    "candidateId": "slide-6-baseline-default-level-1-5fd0b746",
+    "op": "shape.add",
+    "seq": 92,
+    "shape": {
+      "fill": "#2563EB",
+      "height": 4,
+      "kind": "rect",
+      "left": 64.224,
+      "role": "accent",
+      "top": 129.7,
+      "width": 48
+    },
+    "slide": 6
+  },
+  {
+    "candidateId": "slide-6-baseline-default-level-1-5fd0b746",
+    "op": "shape.add",
+    "seq": 93,
+    "shape": {
+      "align": "left",
+      "color": "#0F172A",
+      "height": 50.4,
+      "kind": "text",
+      "left": 64.224,
+      "role": "subtitle",
+      "size": 18,
+      "text": "The strongest entry point is a workflow with frequent events, costly delays, and a clear owner for the decision",
+      "top": 143.7,
+      "width": 813.216
+    },
+    "slide": 6
+  },
+  {
+    "candidateId": "slide-6-baseline-default-level-1-5fd0b746",
+    "op": "shape.add",
+    "seq": 94,
+    "shape": {
+      "color": "#020617",
+      "height": 34,
+      "itemGroupId": "item-0",
+      "itemIndex": 0,
+      "kind": "text",
+      "left": 64.224,
+      "role": "icon",
+      "size": 26,
+      "text": "🏭",
+      "top": 226.32999999999998,
+      "width": 44
+    },
+    "slide": 6
+  },
+  {
+    "candidateId": "slide-6-baseline-default-level-1-5fd0b746",
+    "op": "shape.add",
+    "seq": 95,
+    "shape": {
+      "bold": true,
+      "color": "#020617",
+      "height": 44.8,
+      "itemGroupId": "item-0",
+      "itemIndex": 0,
+      "kind": "text",
+      "left": 64.224,
+      "role": "body",
+      "size": 16,
+      "text": "Predictive maintenance",
+      "top": 268.33,
+      "width": 170.904
+    },
+    "slide": 6
+  },
+  {
+    "candidateId": "slide-6-baseline-default-level-1-5fd0b746",
+    "op": "shape.add",
+    "seq": 96,
+    "shape": {
+      "color": "#667085",
+      "height": 100.8,
+      "itemGroupId": "item-0",
+      "itemIndex": 0,
+      "kind": "text",
+      "left": 64.224,
+      "role": "detail",
+      "size": 12,
+      "text": "Combine vibration, temperature, and service data to flag failure risk up to 14 days earlier and reduce unplanned downtime by 18%",
+      "top": 319.13,
+      "width": 170.904
+    },
+    "slide": 6
+  },
+  {
+    "candidateId": "slide-6-baseline-default-level-1-5fd0b746",
+    "op": "shape.add",
+    "seq": 97,
+    "shape": {
+      "color": "#020617",
+      "height": 34,
+      "itemGroupId": "item-1",
+      "itemIndex": 1,
+      "kind": "text",
+      "left": 278.328,
+      "role": "icon",
+      "size": 26,
+      "text": "🚚",
+      "top": 226.32999999999998,
+      "width": 44
+    },
+    "slide": 6
+  },
+  {
+    "candidateId": "slide-6-baseline-default-level-1-5fd0b746",
+    "op": "shape.add",
+    "seq": 98,
+    "shape": {
+      "bold": true,
+      "color": "#020617",
+      "height": 22.4,
+      "itemGroupId": "item-1",
+      "itemIndex": 1,
+      "kind": "text",
+      "left": 278.328,
+      "role": "body",
+      "size": 16,
+      "text": "Dynamic logistics",
+      "top": 268.33,
+      "width": 170.904
+    },
+    "slide": 6
+  },
+  {
+    "candidateId": "slide-6-baseline-default-level-1-5fd0b746",
+    "op": "shape.add",
+    "seq": 99,
+    "shape": {
+      "color": "#667085",
+      "height": 100.8,
+      "itemGroupId": "item-1",
+      "itemIndex": 1,
+      "kind": "text",
+      "left": 278.328,
+      "role": "detail",
+      "size": 12,
+      "text": "Re-score routes every 30 seconds using traffic, weather, and capacity signals to improve on-time delivery by 9 percentage points",
+      "top": 296.72999999999996,
+      "width": 170.904
+    },
+    "slide": 6
+  },
+  {
+    "candidateId": "slide-6-baseline-default-level-1-5fd0b746",
+    "op": "shape.add",
+    "seq": 100,
+    "shape": {
+      "color": "#020617",
+      "height": 34,
+      "itemGroupId": "item-2",
+      "itemIndex": 2,
+      "kind": "text",
+      "left": 492.43199999999996,
+      "role": "icon",
+      "size": 26,
+      "text": "🛒",
+      "top": 226.32999999999998,
+      "width": 44
+    },
+    "slide": 6
+  },
+  {
+    "candidateId": "slide-6-baseline-default-level-1-5fd0b746",
+    "op": "shape.add",
+    "seq": 101,
+    "shape": {
+      "bold": true,
+      "color": "#020617",
+      "height": 22.4,
+      "itemGroupId": "item-2",
+      "itemIndex": 2,
+      "kind": "text",
+      "left": 492.43199999999996,
+      "role": "body",
+      "size": 16,
+      "text": "Retail operations",
+      "top": 268.33,
+      "width": 170.904
+    },
+    "slide": 6
+  },
+  {
+    "candidateId": "slide-6-baseline-default-level-1-5fd0b746",
+    "op": "shape.add",
+    "seq": 102,
+    "shape": {
+      "color": "#667085",
+      "height": 84,
+      "itemGroupId": "item-2",
+      "itemIndex": 2,
+      "kind": "text",
+      "left": 492.43199999999996,
+      "role": "detail",
+      "size": 12,
+      "text": "Detect stockout risk from POS and shelf signals, triggering replenishment recommendations within 2 minutes",
+      "top": 296.72999999999996,
+      "width": 170.904
+    },
+    "slide": 6
+  },
+  {
+    "candidateId": "slide-6-baseline-default-level-1-5fd0b746",
+    "op": "shape.add",
+    "seq": 103,
+    "shape": {
+      "color": "#020617",
+      "height": 34,
+      "itemGroupId": "item-3",
+      "itemIndex": 3,
+      "kind": "text",
+      "left": 706.536,
+      "role": "icon",
+      "size": 26,
+      "text": "💳",
+      "top": 226.32999999999998,
+      "width": 44
+    },
+    "slide": 6
+  },
+  {
+    "candidateId": "slide-6-baseline-default-level-1-5fd0b746",
+    "op": "shape.add",
+    "seq": 104,
+    "shape": {
+      "bold": true,
+      "color": "#020617",
+      "height": 22.4,
+      "itemGroupId": "item-3",
+      "itemIndex": 3,
+      "kind": "text",
+      "left": 706.536,
+      "role": "body",
+      "size": 16,
+      "text": "Fraud response",
+      "top": 268.33,
+      "width": 170.904
+    },
+    "slide": 6
+  },
+  {
+    "candidateId": "slide-6-baseline-default-level-1-5fd0b746",
+    "op": "shape.add",
+    "seq": 105,
+    "shape": {
+      "color": "#667085",
+      "height": 100.8,
+      "itemGroupId": "item-3",
+      "itemIndex": 3,
+      "kind": "text",
+      "left": 706.536,
+      "role": "detail",
+      "size": 12,
+      "text": "Evaluate transaction context locally and escalate suspicious activity in under 500 milliseconds without exporting raw customer data",
+      "top": 296.72999999999996,
+      "width": 170.904
+    },
+    "slide": 6
+  },
+  {
+    "op": "slide.end",
+    "seq": 106,
+    "slide": 6
+  },
+  {
+    "background": "#F8FAFC",
+    "candidateId": "slide-7-baseline-default-level-1-db48fb57",
+    "composition": "process",
+    "level": 1,
+    "op": "slide.begin",
+    "selectionReason": "baseline-compatible",
+    "semanticCompatibilityScore": 1,
+    "seq": 107,
+    "slide": 7
+  },
+  {
+    "candidateId": "slide-7-baseline-default-level-1-db48fb57",
+    "op": "shape.add",
+    "seq": 108,
+    "shape": {
+      "align": "center",
+      "bold": true,
+      "color": "#667085",
+      "height": 16,
+      "kind": "text",
+      "left": 72.28800000000001,
+      "role": "kicker",
+      "size": 10,
+      "text": "NexaEdge AI Fabric Product Launch",
+      "top": 42.367999999999995,
+      "width": 797.664
+    },
+    "slide": 7
+  },
+  {
+    "candidateId": "slide-7-baseline-default-level-1-db48fb57",
+    "op": "shape.add",
+    "seq": 109,
+    "shape": {
+      "align": "center",
+      "bold": true,
+      "color": "#020617",
+      "height": 78.08,
+      "kind": "text",
+      "left": 72.28800000000001,
+      "role": "title",
+      "size": 25.6,
+      "text": "Launch milestones de-risk adoption in three controlled waves",
+      "top": 64.368,
+      "width": 797.664
+    },
+    "slide": 7
+  },
+  {
+    "candidateId": "slide-7-baseline-default-level-1-db48fb57",
+    "op": "shape.add",
+    "seq": 110,
+    "shape": {
+      "fill": "#0F172A",
+      "height": 3,
+      "kind": "rect",
+      "left": 72.28800000000001,
+      "role": "divider",
+      "top": 152.44799999999998,
+      "width": 797.664
+    },
+    "slide": 7
+  },
+  {
+    "candidateId": "slide-7-baseline-default-level-1-db48fb57",
+    "op": "shape.add",
+    "seq": 111,
+    "shape": {
+      "align": "center",
+      "color": "#0F172A",
+      "height": 50.4,
+      "kind": "text",
+      "left": 72.28800000000001,
+      "role": "subtitle",
+      "size": 18,
+      "text": "The release plan prioritizes proof of operational value before expanding the platform footprint",
+      "top": 166.44799999999998,
+      "width": 797.664
+    },
+    "slide": 7
+  },
+  {
+    "candidateId": "slide-7-baseline-default-level-1-db48fb57",
+    "op": "shape.add",
+    "seq": 112,
+    "shape": {
+      "fill": "#BCBEC3",
+      "height": 3,
+      "kind": "rect",
+      "left": 200.56533333333334,
+      "role": "rail",
+      "top": 268.84799999999996,
+      "width": 541.1093333333333
+    },
+    "slide": 7
+  },
+  {
+    "candidateId": "slide-7-baseline-default-level-1-db48fb57",
+    "op": "shape.add",
+    "seq": 113,
+    "shape": {
+      "fill": "#0F172A",
+      "height": 24,
+      "itemGroupId": "item-0",
+      "itemIndex": 0,
+      "kind": "ellipse",
+      "left": 188.56533333333334,
+      "line": "#0F172A",
+      "role": "node",
+      "top": 258.84799999999996,
+      "weight": 2,
+      "width": 24
+    },
+    "slide": 7
+  },
+  {
+    "candidateId": "slide-7-baseline-default-level-1-db48fb57",
+    "op": "shape.add",
+    "seq": 114,
+    "shape": {
+      "align": "center",
+      "bold": true,
+      "color": "#2563EB",
+      "height": 20,
+      "itemGroupId": "item-0",
+      "itemIndex": 0,
+      "kind": "text",
+      "left": 72.28800000000001,
+      "role": "marker",
+      "size": 14,
+      "text": "01",
+      "top": 294.84799999999996,
+      "width": 256.55466666666666
+    },
+    "slide": 7
+  },
+  {
+    "candidateId": "slide-7-baseline-default-level-1-db48fb57",
+    "op": "shape.add",
+    "seq": 115,
+    "shape": {
+      "align": "center",
+      "bold": true,
+      "color": "#020617",
+      "height": 50.4,
+      "itemGroupId": "item-0",
+      "itemIndex": 0,
+      "kind": "text",
+      "left": 72.28800000000001,
+      "role": "body",
+      "size": 18,
+      "text": "Wave 1 / Lighthouse pilots",
+      "top": 320.84799999999996,
+      "width": 256.55466666666666
+    },
+    "slide": 7
+  },
+  {
+    "candidateId": "slide-7-baseline-default-level-1-db48fb57",
+    "op": "shape.add",
+    "seq": 116,
+    "shape": {
+      "align": "center",
+      "color": "#667085",
+      "height": 87.15200000000004,
+      "itemGroupId": "item-0",
+      "itemIndex": 0,
+      "kind": "text",
+      "left": 72.28800000000001,
+      "role": "detail",
+      "size": 14,
+      "text": "Q2 2026 · Product and solutions engineering own 6 pilots across manufacturing and logistics; acceptance requires <2-second response time and one verified business KPI",
+      "top": 377.24799999999993,
+      "width": 256.55466666666666
+    },
+    "slide": 7
+  },
+  {
+    "candidateId": "slide-7-baseline-default-level-1-db48fb57",
+    "op": "shape.add",
+    "seq": 117,
+    "shape": {
+      "fill": "#FFFFFF",
+      "height": 24,
+      "itemGroupId": "item-1",
+      "itemIndex": 1,
+      "kind": "ellipse",
+      "left": 459.12,
+      "line": "#0F172A",
+      "role": "node",
+      "top": 258.84799999999996,
+      "weight": 2,
+      "width": 24
+    },
+    "slide": 7
+  },
+  {
+    "candidateId": "slide-7-baseline-default-level-1-db48fb57",
+    "op": "shape.add",
+    "seq": 118,
+    "shape": {
+      "align": "center",
+      "bold": true,
+      "color": "#2563EB",
+      "height": 20,
+      "itemGroupId": "item-1",
+      "itemIndex": 1,
+      "kind": "text",
+      "left": 342.8426666666667,
+      "role": "marker",
+      "size": 14,
+      "text": "02",
+      "top": 294.84799999999996,
+      "width": 256.55466666666666
+    },
+    "slide": 7
+  },
+  {
+    "candidateId": "slide-7-baseline-default-level-1-db48fb57",
+    "op": "shape.add",
+    "seq": 119,
+    "shape": {
+      "align": "center",
+      "bold": true,
+      "color": "#020617",
+      "height": 50.4,
+      "itemGroupId": "item-1",
+      "itemIndex": 1,
+      "kind": "text",
+      "left": 342.8426666666667,
+      "role": "body",
+      "size": 18,
+      "text": "Wave 2 / General availability",
+      "top": 320.84799999999996,
+      "width": 256.55466666666666
+    },
+    "slide": 7
+  },
+  {
+    "candidateId": "slide-7-baseline-default-level-1-db48fb57",
+    "op": "shape.add",
+    "seq": 120,
+    "shape": {
+      "align": "center",
+      "color": "#667085",
+      "height": 87.15200000000004,
+      "itemGroupId": "item-1",
+      "itemIndex": 1,
+      "kind": "text",
+      "left": 342.8426666666667,
+      "role": "detail",
+      "size": 14,
+      "text": "Q3 2026 · Security, support, and product marketing own release readiness; acceptance requires 99.9% platform availability, audit logging, and partner enablement",
+      "top": 377.24799999999993,
+      "width": 256.55466666666666
+    },
+    "slide": 7
+  },
+  {
+    "candidateId": "slide-7-baseline-default-level-1-db48fb57",
+    "op": "shape.add",
+    "seq": 121,
+    "shape": {
+      "fill": "#FFFFFF",
+      "height": 24,
+      "itemGroupId": "item-2",
+      "itemIndex": 2,
+      "kind": "ellipse",
+      "left": 729.6746666666667,
+      "line": "#0F172A",
+      "role": "node",
+      "top": 258.84799999999996,
+      "weight": 2,
+      "width": 24
+    },
+    "slide": 7
+  },
+  {
+    "candidateId": "slide-7-baseline-default-level-1-db48fb57",
+    "op": "shape.add",
+    "seq": 122,
+    "shape": {
+      "align": "center",
+      "bold": true,
+      "color": "#2563EB",
+      "height": 20,
+      "itemGroupId": "item-2",
+      "itemIndex": 2,
+      "kind": "text",
+      "left": 613.3973333333333,
+      "role": "marker",
+      "size": 14,
+      "text": "03",
+      "top": 294.84799999999996,
+      "width": 256.55466666666666
+    },
+    "slide": 7
+  },
+  {
+    "candidateId": "slide-7-baseline-default-level-1-db48fb57",
+    "op": "shape.add",
+    "seq": 123,
+    "shape": {
+      "align": "center",
+      "bold": true,
+      "color": "#020617",
+      "height": 25.2,
+      "itemGroupId": "item-2",
+      "itemIndex": 2,
+      "kind": "text",
+      "left": 613.3973333333333,
+      "role": "body",
+      "size": 18,
+      "text": "Wave 3 / Scale expansion",
+      "top": 320.84799999999996,
+      "width": 256.55466666666666
+    },
+    "slide": 7
+  },
+  {
+    "candidateId": "slide-7-baseline-default-level-1-db48fb57",
+    "op": "shape.add",
+    "seq": 124,
+    "shape": {
+      "align": "center",
+      "color": "#667085",
+      "height": 112.35200000000003,
+      "itemGroupId": "item-2",
+      "itemIndex": 2,
+      "kind": "text",
+      "left": 613.3973333333333,
+      "role": "detail",
+      "size": 14,
+      "text": "Q4 2026 · Sales and customer success own regional rollout; acceptance requires 25 production customers, 3 certified solution templates, and a repeatable 6-month payback case",
+      "top": 352.04799999999994,
+      "width": 256.55466666666666
+    },
+    "slide": 7
+  },
+  {
+    "op": "slide.end",
+    "seq": 125,
+    "slide": 7
+  },
+  {
+    "background": "#F8FAFC",
+    "candidateId": "slide-8-baseline-default-level-2-95bc7823",
+    "composition": "grid",
+    "level": 2,
+    "op": "slide.begin",
+    "selectionReason": "baseline-compatible",
+    "semanticCompatibilityScore": 1,
+    "seq": 126,
+    "slide": 8
+  },
+  {
+    "candidateId": "slide-8-baseline-default-level-2-95bc7823",
+    "op": "shape.add",
+    "seq": 127,
+    "shape": {
+      "align": "left",
+      "bold": true,
+      "color": "#667085",
+      "height": 16,
+      "kind": "text",
+      "left": 64.224,
+      "role": "kicker",
+      "size": 10,
+      "text": "NexaEdge AI Fabric Product Launch",
+      "top": 48.2,
+      "width": 813.216
+    },
+    "slide": 8
+  },
+  {
+    "candidateId": "slide-8-baseline-default-level-2-95bc7823",
+    "op": "shape.add",
+    "seq": 128,
+    "shape": {
+      "align": "left",
+      "bold": true,
+      "color": "#020617",
+      "height": 52.8,
+      "kind": "text",
+      "left": 64.224,
+      "role": "title",
+      "size": 32,
+      "text": "Decision ask: fund the lighthouse launch now",
+      "top": 70.2,
+      "width": 813.216
+    },
+    "slide": 8
+  },
+  {
+    "candidateId": "slide-8-baseline-default-level-2-95bc7823",
+    "op": "shape.add",
+    "seq": 129,
+    "shape": {
+      "fill": "#0F172A",
+      "height": 3,
+      "kind": "rect",
+      "left": 64.224,
+      "role": "divider",
+      "top": 133,
+      "width": 120
+    },
+    "slide": 8
+  },
+  {
+    "candidateId": "slide-8-baseline-default-level-2-95bc7823",
+    "op": "shape.add",
+    "seq": 130,
+    "shape": {
+      "align": "left",
+      "color": "#0F172A",
+      "height": 50.4,
+      "kind": "text",
+      "left": 64.224,
+      "role": "subtitle",
+      "size": 18,
+      "text": "A focused launch can validate the platform category, create reference customers, and establish a repeatable path to expansion by Q4 2026",
+      "top": 147,
+      "width": 813.216
+    },
+    "slide": 8
+  },
+  {
+    "candidateId": "slide-8-baseline-default-level-2-95bc7823",
+    "op": "shape.add",
+    "seq": 131,
+    "shape": {
+      "color": "#020617",
+      "height": 34,
+      "itemGroupId": "item-0",
+      "itemIndex": 0,
+      "kind": "text",
+      "left": 105.00959999999999,
+      "role": "icon",
+      "size": 26,
+      "text": "🎯",
+      "top": 213.4,
+      "width": 44
+    },
+    "slide": 8
+  },
+  {
+    "candidateId": "slide-8-baseline-default-level-2-95bc7823",
+    "op": "shape.add",
+    "seq": 132,
+    "shape": {
+      "bold": true,
+      "color": "#020617",
+      "height": 28,
+      "itemGroupId": "item-0",
+      "itemIndex": 0,
+      "kind": "text",
+      "left": 105.00959999999999,
+      "role": "body",
+      "size": 20,
+      "text": "Approve",
+      "top": 255.4,
+      "width": 200.36160000000004
+    },
+    "slide": 8
+  },
+  {
+    "candidateId": "slide-8-baseline-default-level-2-95bc7823",
+    "op": "shape.add",
+    "seq": 133,
+    "shape": {
+      "color": "#667085",
+      "height": 112,
+      "itemGroupId": "item-0",
+      "itemIndex": 0,
+      "kind": "text",
+      "left": 105.00959999999999,
+      "role": "detail",
+      "size": 16,
+      "text": "Authorize a 6-pilot lighthouse program with a dedicated solutions engineering pod and a Q2 2026 start",
+      "top": 289.4,
+      "width": 200.36160000000004
+    },
+    "slide": 8
+  },
+  {
+    "candidateId": "slide-8-baseline-default-level-2-95bc7823",
+    "op": "shape.add",
+    "seq": 134,
+    "shape": {
+      "color": "#020617",
+      "height": 34,
+      "itemGroupId": "item-1",
+      "itemIndex": 1,
+      "kind": "text",
+      "left": 370.6512,
+      "role": "icon",
+      "size": 26,
+      "text": "🤝",
+      "top": 213.4,
+      "width": 44
+    },
+    "slide": 8
+  },
+  {
+    "candidateId": "slide-8-baseline-default-level-2-95bc7823",
+    "op": "shape.add",
+    "seq": 135,
+    "shape": {
+      "bold": true,
+      "color": "#020617",
+      "height": 28,
+      "itemGroupId": "item-1",
+      "itemIndex": 1,
+      "kind": "text",
+      "left": 370.6512,
+      "role": "body",
+      "size": 20,
+      "text": "Align",
+      "top": 255.4,
+      "width": 200.36160000000004
+    },
+    "slide": 8
+  },
+  {
+    "candidateId": "slide-8-baseline-default-level-2-95bc7823",
+    "op": "shape.add",
+    "seq": 136,
+    "shape": {
+      "color": "#667085",
+      "height": 134.39999999999998,
+      "itemGroupId": "item-1",
+      "itemIndex": 1,
+      "kind": "text",
+      "left": 370.6512,
+      "role": "detail",
+      "size": 16,
+      "text": "Name one executive sponsor per pilot and lock the measurable success KPI before technical deployment begins",
+      "top": 289.4,
+      "width": 200.36160000000004
+    },
+    "slide": 8
+  },
+  {
+    "candidateId": "slide-8-baseline-default-level-2-95bc7823",
+    "op": "shape.add",
+    "seq": 137,
+    "shape": {
+      "color": "#020617",
+      "height": 34,
+      "itemGroupId": "item-2",
+      "itemIndex": 2,
+      "kind": "text",
+      "left": 636.2928,
+      "role": "icon",
+      "size": 26,
+      "text": "🚀",
+      "top": 213.4,
+      "width": 44
+    },
+    "slide": 8
+  },
+  {
+    "candidateId": "slide-8-baseline-default-level-2-95bc7823",
+    "op": "shape.add",
+    "seq": 138,
+    "shape": {
+      "bold": true,
+      "color": "#020617",
+      "height": 28,
+      "itemGroupId": "item-2",
+      "itemIndex": 2,
+      "kind": "text",
+      "left": 636.2928,
+      "role": "body",
+      "size": 20,
+      "text": "Scale",
+      "top": 255.4,
+      "width": 200.36160000000004
+    },
+    "slide": 8
+  },
+  {
+    "candidateId": "slide-8-baseline-default-level-2-95bc7823",
+    "op": "shape.add",
+    "seq": 139,
+    "shape": {
+      "color": "#667085",
+      "height": 134.39999999999998,
+      "itemGroupId": "item-2",
+      "itemIndex": 2,
+      "kind": "text",
+      "left": 636.2928,
+      "role": "detail",
+      "size": 16,
+      "text": "Use validated templates and quantified outcomes to support general availability and 25 production customers by Q4 2026",
+      "top": 289.4,
+      "width": 200.36160000000004
+    },
+    "slide": 8
+  },
+  {
+    "op": "slide.end",
+    "seq": 140,
+    "slide": 8
+  },
+  {
+    "op": "deck.end",
+    "seq": 141,
+    "slides": 8
+  }
+]

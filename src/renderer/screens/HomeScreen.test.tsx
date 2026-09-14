@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DesktopTask, RecentFile } from "../../shared/types";
 import { LocaleProvider } from "../i18n";
+import { toast } from "../ui";
 import { HomeScreen } from "./HomeScreen";
 
 const files: RecentFile[] = [
@@ -39,6 +40,54 @@ function renderHome(overrides: Partial<React.ComponentProps<typeof HomeScreen>> 
 }
 
 describe("HomeScreen", () => {
+  it.each([0, 1, 2])("submits advanced mode only while enabled (%i toggles)", async (toggles) => {
+    const info = vi.spyOn(toast, "info").mockReturnValue("mode-toast");
+    try {
+      const props = renderHome();
+      const checkbox = screen.getByRole("checkbox", { name: "Advanced mode" });
+      expect(checkbox).not.toBeChecked();
+      for (let index = 0; index < toggles; index++) fireEvent.click(checkbox);
+      fireEvent.change(screen.getByRole("textbox", { name: "Describe the result you want" }), { target: { value: "Make a launch deck" } });
+      fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
+      await waitFor(() => expect(props.onStartTask).toHaveBeenCalledWith({
+        prompt: "Make a launch deck", documentType: "pptx", ...(toggles === 1 ? { advancedMode: true } : {}),
+      }));
+    } finally { info.mockRestore(); }
+  });
+
+  it("updates mode text after switching language without resetting the selected mode", () => {
+    const info = vi.spyOn(toast, "info").mockReturnValue("mode-toast");
+    const home = <HomeScreen files={[]} loading={false} onOpenFile={vi.fn()} onCreate={vi.fn()} onRemoveFile={vi.fn()} />;
+    const view = render(<LocaleProvider value="en">{home}</LocaleProvider>);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Advanced mode" }));
+    view.rerender(<LocaleProvider value="zh">{home}</LocaleProvider>);
+    const checkbox = screen.getByRole("checkbox", { name: "高级模式" });
+    expect(checkbox).toBeChecked();
+    fireEvent.click(checkbox);
+    expect(info).toHaveBeenLastCalledWith({ key: "home-mode", content: "高级模式已关闭 · 直接生成" });
+    info.mockRestore();
+  });
+
+  it.each(["en", "zh"] as const)("localizes the mode control and switch notifications in %s", (locale) => {
+    const info = vi.spyOn(toast, "info").mockReturnValue("mode-toast");
+    renderHome({}, locale);
+    const label = locale === "en" ? "Advanced mode" : "高级模式";
+    const checkbox = screen.getByRole("checkbox", { name: label });
+    expect(info).not.toHaveBeenCalled();
+    expect(document.querySelector(".home-intake__advanced-mode small")).toBeNull();
+    fireEvent.click(checkbox);
+    expect(checkbox).toBeChecked();
+    expect(info).toHaveBeenLastCalledWith({ key: "home-mode", content: locale === "en"
+      ? "Advanced mode on · Review plan first"
+      : "高级模式已开启 · 先确认计划" });
+    fireEvent.click(checkbox);
+    expect(checkbox).not.toBeChecked();
+    expect(info).toHaveBeenLastCalledWith({ key: "home-mode", content: locale === "en"
+      ? "Advanced mode off · Generate directly"
+      : "高级模式已关闭 · 直接生成" });
+    info.mockRestore();
+  });
+
   it("keeps the brand in the sidebar only and renders the intake controls, gallery, and recent rows", () => {
     renderHome();
 
@@ -54,7 +103,7 @@ describe("HomeScreen", () => {
 
   it("uses 从范例开始 wording for the Chinese homepage case section", () => {
     renderHome({}, "zh");
-    expect(screen.getByText("用一句话、一份资料或一个优秀案例，开始制作幻灯片、图片、文档或表格。")).toBeTruthy();
+    expect(screen.getByText("描述想法、添加文件，或从范例开始。")).toBeTruthy();
     expect(screen.getByRole("region", { name: "从范例开始" })).toBeTruthy();
   });
 
@@ -76,6 +125,33 @@ describe("HomeScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: "Brand Product Launch" }));
     expect(screen.getByRole("textbox", { name: "Describe the result you want" })).toHaveValue("Create a brand product launch covering the product story, key benefits, visual direction, and go-to-market plan.");
     expect(props.onStartTask).not.toHaveBeenCalled();
+  });
+
+  it("leads the PPTX examples with the NexaEdge replay and drops the sample download", () => {
+    const onReplayPptxDemo = vi.fn();
+    renderHome({ onReplayPptxDemo });
+
+    const firstCard = document.querySelector(".home-template-grid .home-template-card");
+    expect(firstCard).toHaveClass("home-template-card--demo");
+    expect(screen.queryByText("Download sample PPT")).toBeNull();
+    expect(document.querySelector(".home-pptx-demo")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Watch PPT generation" }));
+    expect(onReplayPptxDemo).toHaveBeenCalledTimes(1);
+    // It is a PPTX example, so it leaves with the PPTX rail.
+    fireEvent.click(screen.getByRole("button", { name: "Image" }));
+    expect(screen.queryByRole("button", { name: "Watch PPT generation" })).toBeNull();
+  });
+
+  it("holds the NexaEdge replay card while its recording loads", () => {
+    const onReplayPptxDemo = vi.fn();
+    renderHome({ onReplayPptxDemo, replayPptxDemoLoading: true });
+
+    const card = screen.getByRole("button", { name: "Watch PPT generation" });
+    expect(card).toBeDisabled();
+    expect(within(card).getByText("Preparing the drawing…")).toBeTruthy();
+    fireEvent.click(card);
+    expect(onReplayPptxDemo).not.toHaveBeenCalled();
   });
 
   it("keeps image controls in Home and removes GIF output", async () => {
@@ -196,48 +272,16 @@ describe("HomeScreen", () => {
     expect(props.onRemoveFile).toHaveBeenCalledWith("/tmp/generated.pptx");
   });
 
-  it("keeps the attention list to decisions and shows running work as a live card", () => {
+  it("keeps the attention list to decisions", () => {
     const runningTask: DesktopTask = { ...attentionTasks[0], id: "task-running", conversationId: "task-running", status: "running", topic: "Running task", plan: undefined };
     const props = renderHome({ attentionTasks: [...attentionTasks, runningTask] });
     const attention = screen.getByRole("region", { name: /Needs your attention/i });
     expect(within(attention).getByText("Client proposal")).toBeTruthy();
-    // Running work is not a decision, so it stays out of the attention list —
-    // it rides in Recent instead, where its result will land.
+    // Running work is not a decision, so it stays out of the attention list.
     expect(within(attention).queryByText("Running task")).toBeNull();
-    expect(document.querySelector(".home-task-row--running")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Open task Running task" })).toBeTruthy();
 
     fireEvent.click(within(attention).getByRole("button", { name: /Client proposal/i }));
     expect(props.taskActions?.open).toHaveBeenCalledWith("task-review");
-  });
-
-  it("offers retry and dismiss on a failed task card", () => {
-    const failedTask: DesktopTask = {
-      id: "task-failed", conversationId: "task-failed", status: "failed", documentType: "pptx",
-      topic: "Broken deck", error: "render failed: layout validation",
-      events: [{ event_id: "e1", task_id: "task-failed", type: "task.failed", ts: new Date().toISOString(), payload: {} }],
-    };
-    const props = renderHome({ attentionTasks: [failedTask] });
-    expect(document.querySelector(".home-task-row--failed")).toBeTruthy();
-    expect(screen.getByText("render failed: layout validation")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-    expect(props.taskActions?.retry).toHaveBeenCalledWith(expect.objectContaining({ id: "task-failed" }));
-
-    fireEvent.click(screen.getByRole("button", { name: "Dismiss Broken deck" }));
-    expect(document.querySelector(".home-task-row--failed")).toBeNull();
-  });
-
-  it("ages stale failures off the home page", () => {
-    const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
-    renderHome({ attentionTasks: [{
-      id: "task-old", conversationId: "task-old", status: "failed", documentType: "pptx",
-      topic: "Ancient failure", error: "boom",
-      events: [{ event_id: "e0", task_id: "task-old", type: "task.failed", ts: eightDaysAgo, payload: {} }],
-    }] });
-    // Still listed on the tasks page, but the front door stays clean.
-    expect(document.querySelector(".home-task-row--failed")).toBeNull();
-    expect(screen.queryByText("Ancient failure")).toBeNull();
   });
 
   it("keeps loading and errors local to the recent-file section", () => {

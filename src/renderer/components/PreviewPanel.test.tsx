@@ -56,15 +56,17 @@ describe("PreviewPanel", () => {
     expect(screen.getByText(/Rendering deck\.pptx/i)).toBeTruthy();
   });
 
-  it("slides the full preview overlay in from the left", () => {
+  it("fades the preview overlay in where it stands, never sliding it in from off-column", () => {
     const css = readFileSync("src/renderer/styles/shell.css", "utf8");
 
-    expect(css).toMatch(/animation:\s*preview-overlay-slide-in\s+420ms\s+cubic-bezier\(0\.22,\s*1,\s*0\.36,\s*1\)/);
-    expect(css).toMatch(/@keyframes\s+preview-overlay-slide-in/);
-    expect(css).toMatch(/@keyframes\s+preview-overlay-slide-out/);
+    expect(css).toMatch(/animation:\s*preview-overlay-fade-in\s+180ms\s+ease/);
+    expect(css).toMatch(/animation:\s*preview-overlay-fade-out\s+180ms\s+ease\s+forwards/);
+    expect(css).toMatch(/@keyframes\s+preview-overlay-fade-in/);
+    expect(css).toMatch(/@keyframes\s+preview-overlay-fade-out/);
     expect(css).toMatch(/\.preview-panel-root\.is-closing\s*\{/);
-    expect(css).toMatch(/transform:\s*translateX\(-100%\)/);
-    expect(css).toMatch(/transform:\s*translateX\(0\)/);
+    // The assistant is the overlay's left edge now. A translate would carry its
+    // heading and prompt off the window and read as a broken layout, not motion.
+    expect(css).not.toMatch(/preview-overlay[^{]*\{[^}]*translateX/s);
   });
 
   it("does not render the removed preview header chrome", () => {
@@ -80,16 +82,16 @@ describe("PreviewPanel", () => {
     expect(source).not.toContain("window.confirm(");
   });
 
-  it("keeps the folder action without showing an external-open action", () => {
+  it.each(["pptx", "docx"])("does not add a duplicate ready notice below the %s workbench", (documentType) => {
     const grant: PreviewGrant = {
       token: "preview-token-footer",
-      fileName: "deck.pptx",
-      documentType: "pptx",
+      fileName: `document.${documentType}`,
+      documentType,
     };
     const artifact = {
-      filePath: "/tmp/deck.pptx",
-      fileName: "deck.pptx",
-      documentType: "pptx",
+      filePath: `/tmp/document.${documentType}`,
+      fileName: `document.${documentType}`,
+      documentType,
     };
 
     render(<PreviewPanel grant={grant} artifact={artifact} onClose={vi.fn()} />);
@@ -97,7 +99,7 @@ describe("PreviewPanel", () => {
     expect(screen.queryByRole("button", { name: "Back to workspace" })).toBeNull();
     expect(screen.queryByText("Document preview")).toBeNull();
     expect(document.querySelector(".preview-panel-footer")).toBeNull();
-    expect(screen.getByRole("button", { name: "Show in folder" })).toBeTruthy();
+    expect(document.querySelector(".preview-ready-notice")).toBeNull();
     expect(screen.queryByRole("button", { name: "Open externally" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Replay generation" })).toBeNull();
   });

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DesktopTask } from "../../shared/types";
 import { SpreadsheetAgentPanel } from "./SpreadsheetAgentPanel";
 
-afterEach(() => cleanup());
+afterEach(() => { cleanup(); localStorage.clear(); });
 
 describe("SpreadsheetAgentPanel", () => {
   it("submits an XLSX-only generation request without legacy document controls", async () => {
@@ -296,4 +296,21 @@ describe("SpreadsheetAgentPanel", () => {
     // Nothing to explain and nothing to type: the note line stays out of the way.
     expect(screen.queryByText("Pick one, or type your own answer below.")).toBeNull();
   });
+});
+
+it("keeps multiple spreadsheet turns across reopen and carries history to the output file", () => {
+  const callbacks = { onGenerate: vi.fn(), onModify: vi.fn(), onRespond: vi.fn() };
+  const first: DesktopTask = { id: "first", conversationId: "conv", status: "completed", topic: "First request", events: [] };
+  const second: DesktopTask = { ...first, id: "second", topic: "Second request", userInput: { prompt: "The complete second instruction" }, artifact: { filePath: "/tmp/output.xlsx" } as DesktopTask["artifact"] };
+  const view = render(<SpreadsheetAgentPanel {...callbacks} artifactPath="/tmp/history.xlsx" task={first} />);
+  view.rerender(<SpreadsheetAgentPanel {...callbacks} artifactPath="/tmp/history.xlsx" task={second} />);
+  expect(screen.getByText("First request")).toBeTruthy();
+  expect(screen.getAllByText("The complete second instruction")).toHaveLength(1);
+  cleanup();
+  const reopened = render(<SpreadsheetAgentPanel {...callbacks} artifactPath="/tmp/output.xlsx" />);
+  expect(screen.getByText("First request")).toBeTruthy();
+  expect(screen.getByText("The complete second instruction")).toBeTruthy();
+  expect(callbacks.onModify).not.toHaveBeenCalled();
+  reopened.rerender(<SpreadsheetAgentPanel {...callbacks} artifactPath="/other/output.xlsx" />);
+  expect(screen.queryByText("First request")).toBeNull();
 });

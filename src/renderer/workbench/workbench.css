@@ -3,7 +3,12 @@
 .wb {
   --wb-titlebar-h: 44px;
   --wb-statusbar-h: 28px;
+  /* A bounded assistant leaves the document as the main editing surface. */
+  --wb-panel-track: clamp(320px, 26vw, 360px);
   --wb-panel-w: 340px;
+  /* The rail is a list of names, not a place where long prose is read or
+     written, so it keeps its fixed width. */
+  --wb-rail-w: 260px;
 
   position: relative;
   /* A column, not a row template: the notice strip is optional, and fixed rows
@@ -13,13 +18,35 @@
   min-width: 0;
   min-height: 0;
   height: 100%;
+  /* Clip, never scroll. `overflow: hidden` was not enough: it is still a scroll
+     container, so the moment any descendant sticks out — a live-drawing row, an
+     embed that refuses to shrink — the browser can scroll the frame to bring a
+     focused element into view, and every child slides sideways inside it. The
+     assistant is the leftmost child, so its heading, its file line and its first
+     title-bar control are what leave the box, and the frame's own background
+     shows up as a dead strip on the right. Nothing here is meant to be reachable
+     by scrolling: the stage and the conversation have their own scrollers. The
+     declaration is repeated with `clip` because that is the one that does not
+     create a scroll container at all; `hidden` stays first for engines without
+     it. */
   overflow: hidden;
+  overflow: clip;
   background: var(--n-surface-soft);
   color: var(--n-charcoal);
   font-family: var(--font-body);
 }
 
 /* ─── Title bar ─── */
+
+/* Match the native window controls and the shell rail toggle on macOS. */
+html[data-window-chrome="overlay"] .wb {
+  --wb-titlebar-h: var(--od-rail-band, 32px);
+}
+
+html[data-window-chrome="overlay"] .wb-titlebar {
+  /* Balance the bottom border so controls centre on the 16px chrome axis. */
+  padding-top: 1px;
+}
 
 .wb-titlebar {
   display: grid;
@@ -44,10 +71,17 @@
   --wails-draggable: no-drag;
 }
 
-/* The corner the native window controls own. Zero when the rail is docked,
-   because the rail already clears them. */
+/* The corner this title bar must keep clear. The host answers first: the home
+   shell publishes --od-topleft-reserve for whatever fills its main column — 0
+   while the rail is docked and owns the corner itself, and the traffic lights
+   *plus* its own expand button once the rail is gone. Without that the two
+   disagreed: the shell parked its expand button at 86px and the workbench put
+   its first button at exactly 86px under it, so collapsing the rail buried the
+   assistant's toggle. Mounted on its own — the `?offlinePreview=1` route is its
+   own root — there is no shell to ask, and the window's chrome inset stands in:
+   78px for the traffic lights on macOS, zero everywhere else. */
 .wb-titlebar__reserve {
-  width: var(--od-topleft-reserve, 0px);
+  width: var(--od-topleft-reserve, var(--od-window-chrome-inset-x, 0px));
   height: 100%;
 }
 
@@ -59,18 +93,36 @@
   gap: 4px;
 }
 
+/* Breathing room from the window edge, and on macOS the remainder of the
+   traffic-light band (78px reserve + 8px = 86px, the axis the home shell's rail
+   toggle already sits on, so the button does not move between the two). */
+.wb-titlebar__quick {
+  padding-inline-start: 8px;
+}
+
+.wb-titlebar__actions {
+  padding-inline-end: 8px;
+}
+
+/* The assistant's switch is a toggle, not a one-shot, and its glyph says the
+   same thing in both states — so the tint has to carry which one it is in. */
+.wb[data-panel="open"] .wb-titlebar__ai {
+  background: color-mix(in srgb, var(--ai-accent, var(--od-ink)) 8%, var(--od-surface));
+  color: var(--ai-accent, var(--od-ink));
+}
+
 .wb-titlebar__doc {
+  /* Keep native text selection separate from the surrounding window drag area. */
+  -webkit-app-region: no-drag;
+  --wails-draggable: no-drag;
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
   display: flex;
   min-width: 0;
   align-items: center;
   justify-content: center;
   gap: 7px;
-}
-
-.wb-doc__icon {
-  display: inline-grid;
-  flex: 0 0 auto;
-  place-items: center;
 }
 
 .wb-doc__context {
@@ -94,17 +146,6 @@
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.wb-doc__badge {
-  flex: 0 0 auto;
-  border-radius: var(--radius-xs);
-  color: var(--n-white);
-  padding: 2px 6px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
 }
 
 .wb-doc__state {
@@ -146,7 +187,7 @@
   background: var(--n-stone);
 }
 
-/* ─── Body: editor stage + AI panel ─── */
+/* ─── Body: file rail + AI panel + editor stage ─── */
 
 /* The sheet SDK plants its own stacking contexts inside the stage; isolating
    here keeps them under .wb-overlay instead of punching through it. */
@@ -154,15 +195,29 @@
   position: relative;
   display: grid;
   flex: 1;
-  grid-template-columns: minmax(0, 1fr) var(--wb-panel-w);
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   background: var(--n-surface);
   isolation: isolate;
 }
 
-.wb[data-panel="closed"] .wb-body {
-  grid-template-columns: minmax(0, 1fr);
+/* Which slots are occupied is carried on .wb as data attributes, so the track
+   list can be written out per combination instead of relying on :has() to guess
+   it from the markup. Both drawers open at once is a controlled-caller case the
+   host does not choose for itself, but the track list still has to hold. The
+   stage track is minmax(0, …) so a wide embed shrinks rather than pushing the
+   panel off the window. */
+.wb[data-rail="open"][data-panel="open"] .wb-body {
+  grid-template-columns: var(--wb-rail-w) var(--wb-panel-track) minmax(0, 1fr);
+}
+
+.wb[data-rail="open"][data-panel="closed"] .wb-body {
+  grid-template-columns: var(--wb-rail-w) minmax(0, 1fr);
+}
+
+.wb[data-rail="closed"][data-panel="open"] .wb-body {
+  grid-template-columns: var(--wb-panel-track) minmax(0, 1fr);
 }
 
 /* The embedded editor owns everything inside this box — its own ribbon,
@@ -177,6 +232,21 @@
   background: var(--n-canvas);
 }
 
+/* ─── File rail (left) ─── */
+
+/* Under the title bar, not beside it: the top-left strip belongs to the window
+   controls, and on macOS the traffic lights float over it. Starting the rail
+   below the bar is what keeps the two from ever arguing about that corner. */
+.wb-rail {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  align-content: start;
+  overflow: hidden auto;
+  border-right: 1px solid var(--n-hairline);
+  background: var(--n-canvas);
+}
+
 .wb-overlay {
   position: absolute;
   z-index: 40;
@@ -186,14 +256,21 @@
   background: var(--n-surface);
 }
 
-/* ─── AI panel ─── */
+/* ─── AI panel (left, between the rail and the stage) ─── */
 
 .wb-panel {
+  /* Half a window of width does not make a line of chat easier to read — past
+     roughly this measure the eye loses the line it is on coming back. So the
+     panel keeps the whole track (header, chips and composer all breathe) while
+     the prose inside settles on a column. Content opts in by using the token;
+     nothing is forced onto a panel that is not a conversation. */
+  --wb-panel-measure: 760px;
+
   display: grid;
   min-width: 0;
   min-height: 0;
   grid-template-rows: auto minmax(0, 1fr);
-  border-left: 1px solid var(--n-hairline);
+  border-right: 1px solid var(--n-hairline);
   background: var(--n-canvas);
 }
 
@@ -245,8 +322,8 @@
   max-width: 100%;
   overflow: hidden;
   border-radius: var(--radius-full);
-  background: var(--n-secondary-container);
-  color: #00464f;
+  background: color-mix(in srgb, var(--ai-accent, var(--od-ink)) 8%, var(--od-surface));
+  color: var(--ai-accent, var(--od-ink));
   padding: 3px 9px;
   font-size: 11px;
   font-weight: 500;
@@ -353,29 +430,217 @@
 
 @media (max-width: 1024px) {
   .wb {
-    --wb-panel-w: 300px;
+    --wb-panel-w: 340px;
+    --wb-rail-w: 232px;
   }
 }
 
 @media (max-width: 760px) {
-  /* Too narrow to split the width three ways, so the panel floats over the
-     editor rather than squeezing it down to a column of broken words. */
-  .wb-body {
+  /* Too narrow to split the width three ways, so both drawers float over the
+     editor rather than squeezing it down to a column of broken words. The
+     stage stays a real track underneath them. */
+  .wb-body,
+  .wb[data-rail="open"] .wb-body,
+  .wb[data-panel="open"] .wb-body,
+  .wb[data-rail="closed"][data-panel="open"] .wb-body,
+  .wb[data-rail="open"][data-panel="closed"] .wb-body,
+  .wb[data-rail="open"][data-panel="open"] .wb-body {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* Both float from the same edge they take a track on when there is room. */
+  .wb-rail,
   .wb-panel {
     position: absolute;
     z-index: 10;
     top: 0;
-    right: 0;
     bottom: 0;
-    width: min(var(--wb-panel-w), 88vw);
+    left: 0;
     box-shadow: var(--shadow-card);
+  }
+
+  .wb-rail {
+    width: min(var(--wb-rail-w), 88vw);
+    border-right: 1px solid var(--n-hairline);
+  }
+
+  .wb-panel {
+    width: min(var(--wb-panel-w), 88vw);
   }
 
   .wb-doc__context,
   .wb-doc__state {
     display: none;
   }
+}
+
+/* Shared chrome: one icon scale, restrained selection, neutral separators. */
+.wb { --n-hairline: var(--od-border-subtle); }
+.wb-panel__header { padding: 10px 12px; }
+.wb-panel__title { font-size: 14px; }
+.wb-panel__title svg { width: 16px; height: 16px; }
+.wb-titlebar button, .wb-panel__titlerow button { border-radius: 6px; }
+.wb-titlebar button svg, .wb-panel__titlerow button svg { width: 16px; height: 16px; }
+.wb-doc__name { font-weight: 500; }
+.wb-doc__state { font-size: 12px; }
+.wb-doc__state::before { width: 4px; height: 4px; }
+.wb-panel__scope { background: var(--od-surface-muted); color: var(--od-ink-secondary); border-radius: 6px; }
+.wb-titlebar button:focus-visible, .wb-panel__titlerow button:focus-visible { outline: 2px solid var(--od-guidance); outline-offset: 2px; }
+
+/* Quiet, consistent titlebar controls; the panel heading is not a button. */
+.wb .wb-titlebar__ai, .wb .wb-titlebar__external {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; min-width: 28px; height: 28px; min-height: 28px;
+  padding: 0; border: 0; border-radius: 8px; box-shadow: none;
+  color: var(--od-ink-secondary);
+  transition: background-color 160ms ease, color 160ms ease;
+}
+.wb .wb-titlebar__external { background: transparent; }
+.wb[data-panel="open"] .wb-titlebar__ai { color: var(--ai-accent, var(--od-ink)); }
+.wb .wb-titlebar__ai:hover:not(:disabled), .wb .wb-titlebar__external:hover:not(:disabled) {
+  background: var(--od-surface-muted); color: var(--od-ink);
+}
+.wb .wb-titlebar__ai svg, .wb .wb-titlebar__external svg, .wb .wb-panel__title > svg {
+  width: 16px; height: 16px; stroke-width: 1.75;
+}
+.wb .wb-panel__title > svg {
+  box-sizing: border-box; padding: 0; border-radius: 0;
+  background: transparent; color: var(--ai-accent, var(--od-ink-secondary));
+}
+@media (prefers-reduced-motion: reduce) {
+  .wb .wb-titlebar__ai, .wb .wb-titlebar__external { transition: none; }
+}
+
+/* Normalize facade and backend icon buttons in the same action group. */
+.wb .wb-titlebar__actions button {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 5px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--od-ink-secondary);
+  box-shadow: none;
+  line-height: 1;
+  vertical-align: middle;
+}
+.wb .wb-titlebar__actions button:hover:not(:disabled) {
+  background: var(--od-surface-muted);
+  color: var(--od-ink);
+}
+.wb .wb-titlebar__actions button > .od-button__icon,
+.wb .wb-titlebar__actions button > .ant-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  line-height: 0;
+  color: inherit;
+}
+.wb .wb-titlebar__actions button:is(.od-button, .ant-btn, .wb-titlebar__external) svg {
+  display: block;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  stroke-width: 2;
+  color: inherit;
+}
+
+/* Compact neutral controls: one silhouette throughout the app titlebar. */
+.wb .wb-titlebar__quick, .wb .wb-titlebar__actions { gap: 6px; }
+.wb .wb-titlebar button:is(.od-button, .ant-btn) {
+  box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center;
+  height: 26px; min-height: 26px; min-width: 26px; padding: 5px;
+  border: 1px solid transparent; border-radius: 7px;
+  background: transparent;
+  color: var(--od-ink-secondary); box-shadow: none; line-height: 1;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+.wb .wb-titlebar button:is(.od-button, .ant-btn) > :is(.od-button__icon, .ant-btn-icon) {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; margin: 0; line-height: 0;
+}
+.wb .wb-titlebar button:is(.od-button, .ant-btn) svg {
+  display: block; width: 16px; height: 16px; stroke-width: 1.7; color: inherit;
+}
+.wb .wb-titlebar button:is(.od-button, .ant-btn):hover:not(:disabled) {
+  background: color-mix(in srgb, var(--od-ink) 7%, var(--od-surface));
+  border-color: var(--od-border-subtle); color: var(--od-ink);
+}
+.wb[data-panel="open"] .wb-titlebar button.wb-titlebar__ai {
+  color: var(--ai-accent, var(--od-ink));
+  border-color: transparent;
+  background: transparent;
+}
+.wb .wb-titlebar button:is(.od-button, .ant-btn):disabled { opacity: .4; cursor: default; }
+@media (prefers-reduced-motion: reduce) { .wb .wb-titlebar button:is(.od-button, .ant-btn) { transition: none; } }
+.wb .wb-titlebar button:is(.wb-titlebar__ai, .wb-titlebar__external) { width: 26px; }
+
+/* Outline brand mark selected for AI chrome. */
+.wb .wb-ai-brand { display: block; width: 20px; height: 20px; flex: 0 0 20px; object-fit: contain; border-radius: 5px; }
+.wb .wb-titlebar button.wb-titlebar__ai { padding: 2px; }
+.wb .wb-titlebar button.wb-titlebar__ai > .od-button__icon { width: 20px; height: 20px; }
+
+.wb .wb-titlebar button.wb-titlebar__ai svg.wb-ai-brand,
+.wb .wb-panel__title > svg.wb-ai-brand {
+  width: 20px; height: 20px; flex: 0 0 20px; padding: 0;
+  border-radius: 0; background: transparent; fill: none;
+  stroke-width: 1.5; color: inherit;
+}
+
+/* A single robot toggle; state is conveyed by color and accessible hints. */
+.wb .wb-titlebar button.wb-titlebar__ai {
+  width: 28px; min-width: 28px; height: 28px; min-height: 28px; padding: 4px; gap: 0;
+  border: 1px solid transparent; background: transparent;
+}
+.wb .wb-titlebar button.wb-titlebar__ai > .od-button__icon { width: 18px; height: 18px; }
+.wb .wb-titlebar__ai .od-button__label { display: inline-flex; align-items: center; gap: 7px; line-height: 18px; }
+.wb .wb-agent-label { font-size: 12px; font-weight: 500; }
+.wb .wb-agent-action { color: var(--od-ink-secondary); font-size: 11px; font-weight: 400; }
+.wb .wb-titlebar button.wb-titlebar__ai .od-button__label > svg { width: 14px; height: 14px; }
+.wb .wb-titlebar button.wb-titlebar__ai svg.wb-agent-icon,
+.wb .wb-panel__title > svg.wb-agent-icon { width: 18px; height: 18px; padding: 0; background: transparent; stroke-width: 1.65; }
+.wb[data-panel="open"] .wb-titlebar button.wb-titlebar__ai { border-color: transparent; }
+
+/* Center the compact robot in the same icon box as adjacent controls. */
+.wb .wb-titlebar button.wb-titlebar__ai > .od-button__icon {
+  display: flex; align-items: center; justify-content: center; flex: 0 0 18px; line-height: 0;
+}
+.wb .wb-titlebar button.wb-titlebar__ai svg.wb-agent-icon { display: block; transform: none; }
+
+/* Keep the Agent mounted for reversible transitions and draft/scroll retention. */
+.wb .wb-panel {
+  opacity: 1; visibility: visible; clip-path: inset(0);
+  transition: opacity 180ms ease, clip-path 240ms cubic-bezier(.2,.8,.2,1), visibility 0s;
+}
+.wb[data-panel="closed"] .wb-panel {
+  opacity: 0; visibility: hidden; pointer-events: none; clip-path: inset(0 100% 0 0);
+  transition: opacity 150ms ease, clip-path 240ms cubic-bezier(.2,.8,.2,1), visibility 0s 240ms;
+}
+@media (min-width: 761px) {
+  .wb .wb-body {
+    --agent-track: 0px; --rail-track: 0px;
+    grid-template-columns: var(--rail-track) var(--agent-track) minmax(0, 1fr);
+    transition: grid-template-columns 240ms cubic-bezier(.2,.8,.2,1);
+  }
+  .wb[data-panel="open"] .wb-body { --agent-track: var(--wb-panel-track); }
+  .wb[data-rail="open"] .wb-body { --rail-track: var(--wb-rail-w); }
+  .wb[data-rail][data-panel] .wb-body { grid-template-columns: var(--rail-track) var(--agent-track) minmax(0, 1fr); }
+  .wb .wb-rail { grid-column: 1; grid-row: 1; }
+  .wb .wb-panel { grid-column: 2; grid-row: 1; width: var(--wb-panel-track); overflow: hidden; }
+  .wb .wb-stage { grid-column: 3; grid-row: 1; }
+}
+@media (max-width: 760px) {
+  .wb .wb-panel { transform: translateX(0); transition: transform 240ms cubic-bezier(.2,.8,.2,1), opacity 180ms ease, visibility 0s; }
+  .wb[data-panel="closed"] .wb-panel { transform: translateX(-100%); clip-path: none; transition: transform 240ms cubic-bezier(.2,.8,.2,1), opacity 150ms ease, visibility 0s 240ms; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wb .wb-body, .wb .wb-panel, .wb[data-panel="closed"] .wb-panel { transition: none; }
 }

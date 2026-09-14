@@ -450,56 +450,74 @@
   left: 50%;
   z-index: 1100;
   display: flex;
-  width: min(440px, calc(100vw - 32px));
+  width: min(460px, calc(100vw - 32px));
   flex-direction: column;
-  gap: 10px;
   pointer-events: none;
   transform: translateX(-50%);
 }
 
+.od-toast-slot {
+  display: grid;
+  grid-template-rows: 1fr;
+  margin-bottom: 8px;
+  opacity: 1;
+  transform: translateY(0);
+  filter: drop-shadow(0 4px 12px rgb(15 23 42 / 10%));
+  animation: od-toast-enter 260ms cubic-bezier(.2, .8, .2, 1);
+  transition: grid-template-rows 220ms ease, margin-bottom 220ms ease, opacity 180ms ease, transform 220ms ease;
+}
+.od-toast-slot[data-exiting="true"] {
+  grid-template-rows: 0fr;
+  margin-bottom: 0;
+  opacity: 0;
+  transform: translateY(-6px) scale(.98);
+  animation: none;
+  pointer-events: none;
+}
+.od-toast-clip { min-height: 0; overflow: hidden; border-radius: 12px; }
+
 .od-toast {
+  --toast-accent: var(--od-guidance);
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: auto auto;
-  grid-template-areas: "content close" "action close";
-  align-items: center;
-  column-gap: 14px;
-  row-gap: 2px;
-  min-height: 56px;
+  grid-template-columns: 18px minmax(0, 1fr) 26px;
+  grid-template-areas: "icon content close" ". action .";
+  align-items: start;
+  column-gap: 10px;
+  min-height: 48px;
   overflow: hidden;
-  padding: 11px 10px 11px 16px;
-  border: 1px solid color-mix(in srgb, var(--od-border-subtle) 90%, var(--od-ink));
-  border-radius: 14px;
+  padding: 12px 12px 13px;
+  border: 1px solid var(--od-border-subtle);
+  border-radius: 12px;
   background: var(--od-surface);
   color: var(--od-ink);
-  box-shadow: var(--od-shadow-floating);
   font: 400 13px/20px var(--od-font-ui);
   pointer-events: auto;
-  animation: od-toast-enter 180ms ease-out both;
 }
-
-.od-toast::before {
-  position: absolute;
-  inset: 10px auto 10px 0;
-  width: 3px;
-  border-radius: 0 3px 3px 0;
-  background: var(--od-guidance);
-  content: "";
+.od-toast[data-tone="success"] { --toast-accent: var(--od-success); }
+.od-toast[data-tone="warning"] { --toast-accent: var(--od-warning); }
+.od-toast[data-tone="error"] { --toast-accent: var(--od-danger); }
+.od-toast__icon { grid-area: icon; margin-top: 1px; color: var(--toast-accent); }
+.od-toast[data-tone="loading"] .od-toast__icon { animation: od-toast-spin 1s linear infinite; }
+.od-toast__progress { position: absolute; inset: auto 0 0; height: 2px; background: color-mix(in srgb, var(--toast-accent) 12%, transparent); }
+.od-toast__progress > span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: color-mix(in srgb, var(--toast-accent) 70%, transparent);
+  transform-origin: left;
+  animation: od-toast-countdown linear forwards;
 }
-
-.od-toast[data-tone="success"]::before { background: var(--od-success); }
-.od-toast[data-tone="warning"]::before { background: var(--od-warning); }
-.od-toast[data-tone="error"]::before { background: var(--od-danger); }
-.od-toast[data-tone="loading"]::before { background: var(--od-guidance); }
-
+@keyframes od-toast-countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@keyframes od-toast-spin { to { transform: rotate(360deg); } }
 @keyframes od-toast-enter {
-  from { opacity: 0; transform: translateY(-6px) scale(.98); }
+  from { opacity: 0; transform: translateY(-10px) scale(.97); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
-
 @media (prefers-reduced-motion: reduce) {
-  .od-toast { animation: none; }
+  .od-toast-slot { animation: none; transition: none; }
+  .od-toast[data-tone="loading"] .od-toast__icon { animation: none; }
+  .od-toast__progress > span { animation-timing-function: steps(6, end); }
 }
 
 .od-toast__content {
@@ -512,13 +530,15 @@
 }
 
 .od-toast__content strong {
+  overflow-wrap: anywhere;
   color: var(--od-ink);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 20px;
 }
 
 .od-toast__content span {
+  overflow-wrap: anywhere;
   color: var(--od-ink-secondary);
   font-size: 12px;
   line-height: 18px;
@@ -541,8 +561,9 @@
 .od-toast__close {
   grid-area: close;
   display: grid;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
+  margin-top: -3px;
   place-items: center;
   border: 0;
   border-radius: 8px;
@@ -731,3 +752,18 @@
   margin: 0;
   overflow-wrap: anywhere;
 }
+
+/* Confine homepage notifications to their reserved band, even when queued. */
+.od-toast-host--anchored {
+  position: relative;
+  top: auto;
+  left: auto;
+  width: min(460px, 100%);
+  max-height: 72px;
+  margin: 0 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  pointer-events: auto;
+  transform: none;
+}
+.od-toast-host--anchored .od-toast-slot:last-child { margin-bottom: 0; }

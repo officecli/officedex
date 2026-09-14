@@ -86,6 +86,51 @@ describe("taskState", () => {
     });
   });
 
+  it("reads the stage, the retained pages and the resume point off a structured failure", () => {
+    const failed = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-failed",
+      task_id: "task-render",
+      type: "task.failed",
+      payload: {
+        message: "PPTX rendering is incomplete; drawn pages retained: worker exited 1",
+        failure: {
+          stage: "render",
+          reason: "worker_died",
+          retryable: true,
+          resume_stage: "expansion",
+          resume_checkpoint: "/tmp/officecli-expansion-1/expansion-state.json",
+          retained: { ready_pages: 8, total_pages: 12, failed_pages: [9, 10, 11, 12] },
+        },
+      },
+    });
+    const task = failed.tasks["task-render"];
+    expect(task.failure).toEqual({
+      stage: "render",
+      reason: "worker_died",
+      retryable: true,
+      resume_stage: "expansion",
+      resume_checkpoint: "/tmp/officecli-expansion-1/expansion-state.json",
+      retained: { ready_pages: 8, total_pages: 12, failed_pages: [9, 10, 11, 12] },
+    });
+    expect(task.partial).toEqual({ readyPages: 8, totalPages: 12, failedPages: [9, 10, 11, 12] });
+    // The render stage's own error must not be reported as a content failure:
+    // the stage is data now, not something read out of this sentence.
+    expect(task.error).toContain("rendering is incomplete");
+  });
+
+  it("ignores a failure payload it cannot trust", () => {
+    const failed = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-failed",
+      task_id: "task-legacy",
+      type: "task.failed",
+      payload: { message: "provider unavailable", failure: { stage: "invented", reason: "x" } },
+    });
+    const task = failed.tasks["task-legacy"];
+    expect(task.failure).toBeUndefined();
+    expect(task.partial).toBeUndefined();
+    expect(task.error).toBe("provider unavailable");
+  });
+
   it("clears a stranded bridge error when a recovered task announces it restarted", () => {
     const failed = applyTaskEvent(createInitialTaskState(), {
       event_id: "event-failed",

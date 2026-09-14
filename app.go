@@ -262,6 +262,7 @@ type App struct {
 	// Production leaves it nil and uses bridge.New.
 	bridgeClientFactory func(bridge.Options) *bridge.Client
 	pptxJSPlanner       pptxJSPlanner
+	agentRuntimeClient  agentRuntimeRequester
 	loginManager        *login.Manager
 	loginUnsub          func()
 	pendingLoginURL     string
@@ -1293,4 +1294,47 @@ func developmentOfficeCLIEnv() []string {
 		return nil
 	}
 	return []string{"HOME=" + filepath.Clean(home), "XDG_CONFIG_HOME=" + filepath.Join(filepath.Clean(home), ".config")}
+}
+
+// SkipPptxResearch cancels only the current research request.
+func (a *App) SkipPptxResearch(taskID string) ([]byte, error) {
+	client, err := a.ensureBridgeForTask(taskID)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := client.SkipPptxResearch(a.ctx, taskID)
+	return raw, withBridgeErrorCode(err)
+}
+
+// IntervenePptx hands a steering instruction to the run that is drawing now, so
+// the deck absorbs it at its next page boundary rather than starting over as a
+// fresh modify task.
+func (a *App) IntervenePptx(taskID, text string) ([]byte, error) {
+	client, err := a.ensureBridgeForTask(taskID)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := client.IntervenePptx(a.ctx, taskID, text)
+	return raw, withBridgeErrorCode(err)
+}
+
+// PausePptx holds a drawing run at its next page boundary.
+func (a *App) PausePptx(taskID string) ([]byte, error) {
+	client, err := a.ensureBridgeForTask(taskID)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := client.PausePptx(a.ctx, taskID)
+	return raw, withBridgeErrorCode(err)
+}
+
+// ResumePptx releases a held drawing run. It is not the same operation as
+// answering an interactive gate, which is what task/respond does.
+func (a *App) ResumePptx(taskID string) ([]byte, error) {
+	client, err := a.ensureBridgeForTask(taskID)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := client.ResumePptx(a.ctx, taskID)
+	return raw, withBridgeErrorCode(err)
 }

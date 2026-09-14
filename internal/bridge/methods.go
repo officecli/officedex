@@ -5,6 +5,13 @@ package bridge
 // silently stops matching; officecli's registry test compares against these
 // through the cross-repo contract test.
 const (
+	MethodTaskSkipResearch                   = "task/skip_research"
+	// The live-gear trio: officecli absorbs an intervention and holds the run at
+	// the next page boundary, which is what the desktop's steering bar and pause
+	// button promise the user.
+	MethodTaskIntervene                      = "task/intervene"
+	MethodTaskPause                          = "task/pause"
+	MethodTaskResumeLive                     = "task/resume"
 	MethodInitialize                         = "initialize"
 	MethodCapabilitiesGet                    = "capabilities/get"
 	MethodSessionOpen                        = "session/open"

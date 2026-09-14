@@ -16,12 +16,21 @@ describe("StageIntentBar", () => {
     await waitFor(() => expect(input).toHaveValue(""));
   });
 
-  it("routes lifecycle controls and exposes the live steering label", async () => {
+  it("routes lifecycle controls", async () => {
     const onSteer = vi.fn(async () => undefined);
     const onPause = vi.fn(async () => undefined);
     render(<LiveSteeringBar onSteer={onSteer} onPause={onPause} />);
-    expect(screen.getByPlaceholderText("Tell OfficeDex what to change from the next slide")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Pause" }));
     await waitFor(() => expect(onPause).toHaveBeenCalledOnce());
+  });
+
+  it("keeps the bar's promise neutral until the host says the run is live", () => {
+    // The same bar serves a live run and a finished deck, and the two do
+    // different things with the text, so the wording comes from the host.
+    const { unmount } = render(<LiveSteeringBar onSteer={vi.fn()} />);
+    expect(screen.getByPlaceholderText("Describe the next change")).toBeTruthy();
+    unmount();
+    render(<StageIntentBar onSubmit={vi.fn()} placeholder="Tell OfficeDex what to change from the next slide" />);
+    expect(screen.getByPlaceholderText("Tell OfficeDex what to change from the next slide")).toBeTruthy();
   });
 });

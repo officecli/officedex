@@ -321,7 +321,7 @@ export function FlatArtifactStage({
         onPointerCancel={handlePointerCancel}
       >
         {previewSrc ? <img className="flat-artifact-stage__preview" src={previewSrc} alt={alt} draggable={false} /> : <div className="flat-artifact-stage__preview-placeholder" aria-label={alt}>{alt}</div>}
-        {regionStyle ? <div className={["flat-artifact-stage__region", draftRegion ? "flat-artifact-stage__region--draft" : ""].filter(Boolean).join(" ")} style={regionStyle} aria-label="Selected artifact region" /> : null}
+        {regionStyle ? <div className={["flat-artifact-stage__region", draftRegion ? "flat-artifact-stage__region--draft" : ""].filter(Boolean).join(" ")} style={regionStyle} aria-label={t("ui.copy.Selectedartifactregion")} /> : null}
       </div>
       <div className="flat-artifact-stage__controls">
         <button type="button" className="flat-artifact-stage__clear" onClick={clearRegion} disabled={!region} aria-label={t("flatStage.clear")}>{t("flatStage.clear")}</button>
@@ -341,7 +341,7 @@ export function FlatArtifactStage({
           </fieldset>
         ) : null}
         {onEditRequest ? (
-          <div className="flat-artifact-stage__intent" aria-label="Artifact edit request">
+          <div className="flat-artifact-stage__intent" aria-label={t("ui.copy.Artifacteditrequest")}>
             <label htmlFor={`${artifact.artifactId}-instruction`}>{t("flatStage.instruction")}</label>
             <input id={`${artifact.artifactId}-instruction`} value={instruction} disabled={submitting} onChange={(event) => setInstruction(event.target.value)} placeholder={t("flatStage.placeholder")} />
             <button type="button" onClick={() => void submitEdit()} disabled={!canSubmit}>{submitting ? t("flatStage.checking") : t("flatStage.request")}</button>

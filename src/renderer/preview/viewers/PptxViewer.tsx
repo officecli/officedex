@@ -22,6 +22,8 @@ interface PptxViewerProps {
   editorBaseUrl?: string | null;
   /** Ordered generation ops to draw live in the same presentation editor. */
   live?: VibeReplayFeed;
+  /** Debug: redraw the deck from a blank draft. Absent when there is nothing to replay. */
+  onReplayDemo?: () => void;
   onDirtyChange?: (dirty: boolean) => void;
   /** Forwarded to the workbench's autosave idle window; tests only. */
   autosaveIdleMs?: number;
@@ -40,6 +42,7 @@ export default function PptxViewer({
   filePath,
   editorBaseUrl,
   live,
+  onReplayDemo,
   onDirtyChange,
   autosaveIdleMs,
   onFlushReady,
@@ -70,6 +73,7 @@ export default function PptxViewer({
           fileName={fileName}
           filePath={filePath}
           live={live}
+          onReplayDemo={onReplayDemo}
           onDirtyChange={onDirtyChange}
           autosaveIdleMs={autosaveIdleMs}
           onFlushReady={onFlushReady}
@@ -100,6 +104,7 @@ export default function PptxViewer({
         previewToken={previewToken}
         fileName={fileName}
         readOnly
+        onReplayDemo={onReplayDemo}
         onRequestClose={onRequestClose}
         onOpenExternal={openExternal}
         notice={

@@ -96,6 +96,7 @@ export type PresentationPptxEditorMessage = PresentationPptxMessageBase &
         readonly revision?: number;
         readonly error?: string;
         readonly errorCode?: string;
+        readonly errorDetail?: string;
       }
   );
 

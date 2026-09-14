@@ -1,0 +1,24 @@
+.image-workbench { width:100%;height:100%;min-width:0;min-height:0; }
+.image-workbench .wb-stage { position:relative; }
+.image-tools { display:flex;align-items:center;gap:2px; }
+.image-more { position:relative; --wails-draggable:no-drag; -webkit-app-region:no-drag; }
+.image-more summary { list-style:none;cursor:pointer;padding:4px 10px;border-radius:6px;font-weight:600; }
+.image-more summary::-webkit-details-marker { display:none; }
+.image-more__menu { position:absolute;right:0;top:100%;display:flex;padding:6px;background:var(--od-surface,#fff);border:1px solid var(--od-border-default,#ddd);border-radius:8px;box-shadow:0 8px 24px #0002;z-index:10; }
+.image-canvas { position:relative;width:100%;height:100%;min-height:0;overflow:hidden;background:var(--od-surface-muted,#f3f4f6);touch-action:none;cursor:grab;outline-offset:-3px; }
+.image-canvas:active { cursor:grabbing; }
+.image-canvas[data-background="1"] { background:#fff; }
+.image-canvas[data-background="2"] { background:#28292d; }
+.image-canvas__image { position:absolute;left:50%;top:50%;max-width:none;max-height:none;transform-origin:center;pointer-events:none;user-select:none;box-shadow:0 3px 22px #0000000d;background-color:#fff;background-image:conic-gradient(#e5e6e9 25%,transparent 0 50%,#e5e6e9 0 75%,transparent 0);background-size:16px 16px; }
+.image-canvas .preview-loading,.image-canvas .preview-error { position:absolute;inset:0; }
+.image-info { position:absolute;right:12px;top:12px;padding:16px;width:min(270px,90%);max-height:90%;overflow:auto;border:1px solid var(--od-border-default,#ddd);border-radius:10px;background:var(--od-surface,#fff);box-shadow:0 8px 24px #0002;z-index:2; }
+.image-info strong { display:block;overflow-wrap:anywhere;margin:12px 0; }
+.image-info dl { display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px; }
+.image-info dd { margin:0; }
+.image-info dt { color:var(--od-ink-secondary); }
+.image-agent.agent-panel { display:grid;grid-template-rows:minmax(0,1fr) auto;height:100%;min-height:0;overflow:hidden; }
+.image-agent__welcome { padding:16px 4px;line-height:1.8; }
+.image-agent__welcome strong { display:block;margin:12px 0 6px; }
+.image-agent__welcome p { color:var(--od-ink-secondary);font-size:14px; }
+.image-agent [role="alert"] { color:var(--od-error,#b42318);overflow-wrap:anywhere; }
+@media(max-width:720px) { .image-tools { gap:0; } .image-tools>.od-button { padding:3px;min-width:24px; } .image-workbench .wb-titlebar { gap:3px; } }

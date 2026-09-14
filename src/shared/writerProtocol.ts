@@ -29,6 +29,8 @@ export interface WriterSelectionSummary {
 }
 
 export type WriterHostCommand =
+  | { type: "writer:capture-edit"; requestId: string; scope: "selection" | "document" }
+  | { type: "writer:apply-edit"; requestId: string; id: string; edits: { query: string; replacement: string }[] }
   | {
       type: "writer:load";
       protocolVersion: number;

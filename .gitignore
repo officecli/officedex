@@ -41,6 +41,11 @@ src/renderer/generated/
 .omx/
 .playwright-mcp/
 
+# Local agent tooling state, and the screenshots/artifacts that
+# `scripts/dev-real.mjs` writes into its run directory.
+.dsh-project-memory/
+build/dev-real/
+
 # Misc local marker files.
 package.json.md5
 

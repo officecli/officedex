@@ -8,7 +8,11 @@ import { word2mowDevConverter, writerFontsDevAssets } from "./writer-component/d
 import { isolateSheetSdkChunk } from "./scripts/sdk-sheet-chunks.mjs";
 
 const realE2EEndpoint = process.env.VITE_OFFICEDEX_REAL_E2E_ENDPOINT?.trim();
-const realE2E = Boolean(realE2EEndpoint);
+// The bridge endpoint used to imply "this is a test run, so no HMR". That
+// coupled two unrelated things: every real-bridge dev session (scripts/dev-real.mjs)
+// also lost hot updates, which is exactly when you want them most. The official
+// suite sets this explicitly instead, so long-lived sessions keep HMR.
+const realE2ENoHMR = process.env.OFFICEDEX_E2E_NO_HMR === "1";
 const alias = [{ find: "@vo-ui/backend", replacement: fileURLToPath(new URL("./src/renderer/ui/backend.ts", import.meta.url)) }];
 
 const sdkSheetAssetRoutes = [
@@ -114,8 +118,8 @@ export default defineConfig({
     alias,
     dedupe: ["react", "react-dom"],
   },
-  server: realE2E && realE2EEndpoint ? {
-    hmr: false,
+  server: realE2EEndpoint ? {
+    ...(realE2ENoHMR ? { hmr: false } : {}),
     proxy: {
       "/__officedex_bridge": {
         target: realE2EEndpoint,

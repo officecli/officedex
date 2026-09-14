@@ -1,3 +1,4 @@
+import { useT } from "../../i18n";
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
@@ -43,6 +44,7 @@ export const dialog = {
 };
 
 export function DialogHost() {
+  const t = useT();
   const [active, setActive] = useState<DialogRequest | null>(() => request);
   const [submitting, setSubmitting] = useState(false);
 
@@ -87,9 +89,9 @@ export function DialogHost() {
         <header className="od-dialog__header"><h2>{active.title}</h2></header>
         {active.content ? <div className="od-dialog__content">{active.content}</div> : null}
         <footer className="od-dialog__footer">
-          {active.kind !== "info" ? <Button onClick={cancel}>{active.cancelText ?? "Cancel"}</Button> : null}
+          {active.kind !== "info" ? <Button onClick={cancel}>{active.cancelText ?? t("ui.text.Cancel")}</Button> : null}
           <Button variant={active.tone === "danger" ? "danger" : "primary"} loading={submitting} onClick={() => void confirm()}>
-            {active.okText ?? "OK"}
+            {active.okText ?? t("ui.text.OK")}
           </Button>
         </footer>
       </section>

@@ -1,3 +1,4 @@
+import { useT, translate as t } from "../i18n";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button, Input } from "../ui";
 import { ArrowUpOutlined } from "../ui/icons";
@@ -139,8 +140,9 @@ export function ArtifactStageShell<TSelection extends ArtifactStageSelection>({
   onContinue,
   billing,
   className,
-  "aria-label": ariaLabel = "Artifact workspace",
+  "aria-label": ariaLabel = t("ui.text.Artifactworkspace"),
 }: ArtifactStageShellProps<TSelection>) {
+  const t = useT();
   const scopes = useMemo(() => adapter.getScopes(selection), [adapter, selection]);
   const [scopeId, setScopeId] = useState<string | null>(null);
   const [instruction, setInstruction] = useState("");
@@ -179,7 +181,7 @@ export function ArtifactStageShell<TSelection extends ArtifactStageSelection>({
     : "free";
   const placeholder = adapter.getPlaceholder?.(selectedScope, selection)
     ?? adapter.placeholder?.(selectedScope, selection)
-    ?? "Describe what you want to change";
+    ?? t("ui.text.Describewhatyouwanttochange");
   const canSubmit = Boolean(instruction.trim()) && Boolean(selectedScope) && !selectedScope?.disabled && !busy && !mutationBusy && !mutationRef.current;
   const anonymousBlocked = billing?.mode === "anonymous" && billing.anonymousExhausted === true;
   const canSubmitWithBilling = canSubmit && !anonymousBlocked;
@@ -208,7 +210,7 @@ export function ArtifactStageShell<TSelection extends ArtifactStageSelection>({
 
   const slotContext: ArtifactStageSlotContext<TSelection> = { selection, scope: selectedScope, busy: busy || mutationBusy || mutationRef.current };
   const tier = resolveTier(adapter);
-  const billingMessage = billingMessageFor(billing);
+  const billingMessage = billingMessageFor(billing, t);
 
   return (
     <section className={["artifact-stage-shell", className].filter(Boolean).join(" ")} aria-label={ariaLabel} data-tier={tier}>
@@ -218,7 +220,7 @@ export function ArtifactStageShell<TSelection extends ArtifactStageSelection>({
       {!hideIntent ? <div className="artifact-stage-shell__intent" data-slot="intent">
         {intent ? renderSlot(intent, slotContext) : (
           <>
-        <div className="artifact-stage-intent__scopes" role="radiogroup" aria-label="Intent scope">
+        <div className="artifact-stage-intent__scopes" role="radiogroup" aria-label={t("ui.copy.Intentscope")}>
           {scopes.map((scope) => {
             const scopeCost = adapter.getCost?.(scope, selection) ?? scope.cost ?? "free";
             return (
@@ -243,15 +245,15 @@ export function ArtifactStageShell<TSelection extends ArtifactStageSelection>({
           <Input
             value={instruction}
             placeholder={placeholder}
-            aria-label="Artifact intent"
+            aria-label={t("ui.copy.Artifactintent")}
             disabled={busy || mutationBusy || mutationRef.current || anonymousBlocked}
             onChange={(event) => setInstruction(event.target.value)}
             onPressEnter={submit}
           />
           <span className="artifact-stage-intent__billing" data-cost={cost} role="status">{billingMessage}</span>
-          <Button className="od-button--icon-submit" type="primary" size="small" ariaLabel="Apply" title="Apply" icon={<ArrowUpOutlined />} disabled={!canSubmitWithBilling} loading={busy || mutationBusy || mutationRef.current} onClick={submit} />
+          <Button className="od-button--icon-submit" type="primary" size="small" ariaLabel={t("ui.copy.Apply")} title={t("ui.copy.Apply")} icon={<ArrowUpOutlined />} disabled={!canSubmitWithBilling} loading={busy || mutationBusy || mutationRef.current} onClick={submit} />
         </div>
-        {anonymousBlocked ? <div className="artifact-stage-shell__billing-error" role="alert">Anonymous credits are used up. Sign in to continue.</div> : null}
+        {anonymousBlocked ? <div className="artifact-stage-shell__billing-error" role="alert">{t("ui.text.AnonymouscreditsareusedupSignintocontinue")}</div> : null}
           </>
         )}
         {actionError ? <div className="artifact-stage-shell__error" role="alert">{actionError}</div> : null}
@@ -260,27 +262,27 @@ export function ArtifactStageShell<TSelection extends ArtifactStageSelection>({
   );
 }
 
-function billingMessageFor(billing?: ArtifactStageBillingState): string {
+function billingMessageFor(billing: ArtifactStageBillingState | undefined, t: ReturnType<typeof useT>): string {
   if (billing?.mode === "anonymous" && billing.anonymousExhausted) {
-    return "Sign in required";
+    return t("ui.text.Signinrequired");
   }
   if (billing?.settlement === "pending") {
-    return "Settling actual usage…";
+    return t("ui.text.Settlingactualusage");
   }
   if (billing?.settlement === "settled" && billing.settledCredits != null) {
     const balance = billing.balance != null
-      ? ` · ${billing.balance < 0 ? `outstanding ${Math.abs(billing.balance)} credits` : `balance ${billing.balance} credits`}`
+      ? ` · ${billing.balance < 0 ? t("billing.copy.outstanding", { count: Math.abs(billing.balance) }) : t("billing.copy.balance", { count: billing.balance })}`
       : "";
-    return `Used ${billing.settledCredits} credits${balance}`;
+    return t("billing.copy.used", { count: billing.settledCredits, balance });
   }
   if (billing?.settlement === "failed") {
-    return "Usage settlement unavailable · task result kept";
+    return t("ui.text.Usagesettlementunavailabletaskresultkept");
   }
   if (billing?.mode === "external") {
-    return "Free · your provider bills separately";
+    return t("ui.text.Freeyourproviderbillsseparately");
   }
   if (billing?.balance != null && billing.balance < 0) {
-    return `Outstanding ${Math.abs(billing.balance)} credits · billed after completion`;
+    return t("billing.copy.due", { count: Math.abs(billing.balance) });
   }
-  return "Billed after completion · actual usage";
+  return t("ui.text.Billedaftercompletionactualusage");
 }

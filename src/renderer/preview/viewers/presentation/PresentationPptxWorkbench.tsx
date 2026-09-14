@@ -1,3 +1,5 @@
+import { agentHistoryKey, useAgentHistory, type HistoryCodec } from "../../../workbench/useAgentHistory";
+import { AgentMessage } from "../../../workbench/AgentMessage";
 import {
   useCallback,
   useEffect,
@@ -8,15 +10,20 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { Button } from "@vo-ui/backend";
+import { Button, Tooltip } from "@vo-ui/backend";
 import {
   AlertCircle,
-  Bot,
   Check,
   Loader2,
-  Send,
-  User,
+  History,
+  ArrowUp,
+  FolderClosed,
+  AlignLeft,
+  LayoutTemplate,
+  Palette,
+  Presentation,
 } from "lucide-react";
+import { toast } from "../../../ui";
 import { officecli } from "../../../bridge";
 import { useT } from "../../../i18n";
 import type {
@@ -70,6 +77,13 @@ export interface PresentationPptxWorkbenchProps {
   onEditorReady?: () => void;
   onDirtyChange?: (dirty: boolean) => void;
   onFlushReady?: (flush: (() => Promise<void>) | null) => void;
+  /**
+   * Debug affordance: replay this deck's generation from a blank draft. The
+   * host owns it because restarting a replay means a new live draft and a new
+   * preview grant, which live above this workbench. Omitted when the deck on
+   * screen has no op stream to replay.
+   */
+  onReplayDemo?: () => void;
   /** Closes the surface this workbench is embedded in. */
   onRequestClose?: () => void;
   onOpenExternal?: () => void;
@@ -99,7 +113,12 @@ type EditorStatus =
  * one this editor opened -- the host refuses to overwrite it, and no retry will
  * change that -- so it reads differently and offers a different way out.
  */
-type SaveFailure = { message: string; conflict: boolean };
+type SaveFailure = { message: string; conflict: boolean; detail?: string };
+
+function saveErrorDetail(error: unknown): string | undefined {
+  const detail = (error as { detail?: unknown } | null)?.detail;
+  return typeof detail === "string" ? detail : undefined;
+}
 
 // The stable part of the host's conflict message. Wails delivers an error as
 // text and nothing else; the Go side pins this substring in
@@ -120,9 +139,11 @@ type TurnStage =
   | "saving"
   | "done"
   | "failed"
-  | "cancelled";
+  | "cancelled"
+  | "interrupted";
 
 interface ConversationTurn {
+  archived?: boolean;
   id: string;
   prompt: string;
   stage: TurnStage;
@@ -130,9 +151,22 @@ interface ConversationTurn {
   context?: PresentationPptxEditorContext;
   error?: string;
   /** Stage in which the failure happened; drives what "retry" means. */
-  failedStage?: Exclude<TurnStage, "done" | "failed" | "cancelled">;
+  failedStage?: Exclude<TurnStage, "done" | "failed" | "cancelled" | "interrupted">;
   savedPath?: string;
 }
+
+const turnHistoryCodec: HistoryCodec<ConversationTurn> = {
+  read: (value) => Array.isArray(value) ? value.filter((turn) => turn && typeof turn.id === "string" && typeof turn.prompt === "string").map((turn) => ({
+    id: turn.id, prompt: turn.prompt, archived: true,
+    stage: ["done", "failed", "cancelled"].includes(turn.stage) ? turn.stage : "interrupted",
+    error: typeof turn.error === "string" ? turn.error : undefined,
+    savedPath: typeof turn.savedPath === "string" ? turn.savedPath : undefined,
+    plan: turn.plan && typeof turn.plan.summary === "string" ? { summary: turn.plan.summary, source: "", warnings: [], requires_confirmation: false } : undefined,
+  })) : [],
+  write: (turns) => turns.map(({ id, prompt, stage, plan, error, savedPath }) => ({
+    id, prompt, stage, error, savedPath, ...(plan ? { plan: { summary: plan.summary } } : {}),
+  })),
+};
 
 const MAX_HISTORY_TURNS = 6;
 
@@ -185,6 +219,7 @@ export default function PresentationPptxWorkbench({
   onEditorReady,
   onDirtyChange,
   onFlushReady,
+  onReplayDemo,
   onRequestClose,
   onOpenExternal,
   notice,
@@ -192,6 +227,7 @@ export default function PresentationPptxWorkbench({
 }: PresentationPptxWorkbenchProps) {
   const t = useT();
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const channel = useMemo(() => createPresentationPptxChannel(), []);
   const embedUrl = useMemo(
     () => buildPresentationPptxEmbedUrl(editorBaseUrl, channel, readOnly ? "preview" : undefined),
@@ -207,7 +243,7 @@ export default function PresentationPptxWorkbench({
   });
   const [selectionContext, setSelectionContext] =
     useState<PresentationPptxEditorContext | null>(null);
-  const [turns, setTurns] = useState<ConversationTurn[]>([]);
+  const [turns, setTurns] = useAgentHistory(agentHistoryKey("pptx", filePath), turnHistoryCodec);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [replayStatus, setReplayStatus] = useState<VibeReplayStatus>();
@@ -246,17 +282,13 @@ export default function PresentationPptxWorkbench({
   onEditorReadyRef.current = onEditorReady;
   onFlushReadyRef.current = onFlushReady;
 
-  const targetLabel = filePath
-    ? t("pptx.agent.target", { file: fileName })
-    : t("pptx.agent.targetDownloads");
-
   const updateTurn = useCallback(
     (id: string, patch: Partial<ConversationTurn>) => {
       setTurns((prev) =>
         prev.map((turn) => (turn.id === id ? { ...turn, ...patch } : turn)),
       );
     },
-    [],
+    [setTurns],
   );
 
   const setBusyState = useCallback((value: boolean) => {
@@ -323,13 +355,13 @@ export default function PresentationPptxWorkbench({
               // the host refusing conflicting writes that silence became a
               // deck that never saves and never says why.
               if (conflict) conflictRef.current = true;
-              setSaveFailure({ message, conflict });
+              setSaveFailure({ message, conflict, detail: saveErrorDetail(error) });
               const recordLog = officecli.recordRendererLog;
               if (typeof recordLog === "function") {
                 void recordLog({
                   source: "presentation-pptx-autosave",
                   event: "failed",
-                  details: { error: message, conflict },
+                  details: { error: message, conflict, detail: saveErrorDetail(error) },
                 }).catch(() => {});
               }
               throw error;
@@ -398,6 +430,7 @@ export default function PresentationPptxWorkbench({
       setSaveFailure({
         message: error instanceof Error ? error.message : String(error),
         conflict: conflictRef.current,
+        detail: saveErrorDetail(error),
       });
     } finally {
       setSavingCopy(false);
@@ -814,7 +847,7 @@ export default function PresentationPptxWorkbench({
       setDraft("");
       void planTurn(id, prompt);
     },
-    [draft, editorStatus.kind, planTurn, turns],
+    [draft, editorStatus.kind, planTurn, turns, setTurns],
   );
 
   const confirmTurn = useCallback(
@@ -898,6 +931,8 @@ export default function PresentationPptxWorkbench({
             text={t("pptx.agent.status.failed", { msg: turn.error ?? "" })}
           />
         );
+      case "interrupted":
+        return <StatusLine text={t("pptx.agent.status.interrupted")} />;
       case "cancelled":
         return <StatusLine text={t("pptx.agent.status.cancelled")} />;
       default:
@@ -909,7 +944,17 @@ export default function PresentationPptxWorkbench({
     <>
       <div className="pptx-workbench-transcript" ref={transcriptRef}>
         {turns.length === 0 && (
-          <p className="pptx-workbench-empty">{t("pptx.agent.emptyHint")}</p>
+          <div className="pptx-workbench-empty">
+            <p>{t("pptx.agent.emptyTitle")}</p>
+            <div className="pptx-workbench-suggestions">
+              {(["simplify", "layout", "style"] as const).map((suggestion) => (
+                <button key={suggestion} data-suggestion={suggestion} type="button" disabled={editorStatus.kind !== "ready" || busy} onClick={() => {
+                  setDraft(t(`pptx.agent.suggestion.${suggestion}.prompt`));
+                  inputRef.current?.focus();
+                }}><span className="pptx-workbench-suggestion-icon" aria-hidden="true">{suggestion === "simplify" ? <AlignLeft /> : suggestion === "layout" ? <LayoutTemplate /> : <Palette />}</span><span className="pptx-workbench-suggestion-label">{t(`pptx.agent.suggestion.${suggestion}`)}</span><span aria-hidden="true">↗</span></button>
+              ))}
+            </div>
+          </div>
         )}
         {turns.map((turn) => (
           <div
@@ -917,27 +962,8 @@ export default function PresentationPptxWorkbench({
             className="pptx-workbench-turn"
             data-stage={turn.stage}
           >
-            <div className="pptx-workbench-message pptx-workbench-message-user">
-              <span className="pptx-workbench-message-avatar">
-                <User size={13} />
-              </span>
-              <div className="pptx-workbench-message-body">
-                <div className="pptx-workbench-message-author">
-                  {t("pptx.agent.you")}
-                </div>
-                <div className="pptx-workbench-message-text">
-                  {turn.prompt}
-                </div>
-              </div>
-            </div>
-            <div className="pptx-workbench-message pptx-workbench-message-assistant">
-              <span className="pptx-workbench-message-avatar">
-                <Bot size={13} />
-              </span>
-              <div className="pptx-workbench-message-body">
-                <div className="pptx-workbench-message-author">
-                  {t("pptx.agent.assistant")}
-                </div>
+            <AgentMessage role="user">{turn.prompt}</AgentMessage>
+            <AgentMessage role="assistant">
                 {turn.plan?.summary && (
                   <div className="pptx-workbench-message-text">
                     {turn.plan.summary}
@@ -1026,7 +1052,7 @@ export default function PresentationPptxWorkbench({
                   </div>
                 )}
                 {renderStage(turn)}
-                {turn.stage === "failed" && (
+                {turn.stage === "failed" && !turn.archived && (
                   <div className="pptx-workbench-turn-actions">
                     <Button
                       size="small"
@@ -1046,13 +1072,14 @@ export default function PresentationPptxWorkbench({
                     <pre>{turn.plan.source}</pre>
                   </details>
                 )}
-              </div>
-            </div>
+            </AgentMessage>
           </div>
         ))}
       </div>
       <form className="pptx-workbench-composer" onSubmit={submit}>
+        <div className="pptx-workbench-compose-box">
         <textarea
+          ref={inputRef}
           className="pptx-workbench-input"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
@@ -1072,6 +1099,7 @@ export default function PresentationPptxWorkbench({
           aria-label={t("pptx.agent.placeholder")}
         />
         <div className="pptx-workbench-composer-actions">
+        <div className="pptx-workbench-selection" title={describeSelection(selectionContext, t)}><Presentation size={14} aria-hidden="true" /><span>{describeSelection(selectionContext, t)}</span></div>
           {busy && (
             <span className="pptx-workbench-composer-hint">
               {t("pptx.agent.busy")}
@@ -1084,9 +1112,10 @@ export default function PresentationPptxWorkbench({
             htmlType="submit"
             aria-label={t("pptx.agent.send")}
             title={t("pptx.agent.send")}
-            icon={<Send />}
+            icon={<ArrowUp />}
             disabled={!canSend}
           />
+        </div>
         </div>
       </form>
     </>
@@ -1098,9 +1127,6 @@ export default function PresentationPptxWorkbench({
     ? undefined
     : {
         title: t("pptx.agent.panelTitle"),
-        target: targetLabel,
-        targetTitle: filePath ?? fileName,
-        scope: describeSelection(selectionContext, t),
         onRefreshScope: () => void refreshSelection(),
         refreshDisabled: editorStatus.kind !== "ready" || busy,
         headerExtra:
@@ -1109,16 +1135,16 @@ export default function PresentationPptxWorkbench({
               className="pptx-workbench-replay"
               role={replayStatus.state === "failed" ? "alert" : "status"}
             >
-              Live drawing: {replayStatus.state}
-              {replayStatus.slide ? ` · slide ${replayStatus.slide}` : ""}
+              {t("pptx.replay.status", { state: t(`pptx.replay.state.${replayStatus.state}`) })}
+              {replayStatus.slide ? t("pptx.replay.slide", { count: replayStatus.slide }) : ""}
               {imageProgress && imageProgress.total > 0
-                ? ` · images ${replayStatus.images?.placed ?? imageProgress.placed}/${imageProgress.total}${replayStatus.images?.pending ? ` (${replayStatus.images.pending} generating)` : ""}${replayStatus.images?.failed ? ` (${replayStatus.images.failed} failed)` : ""}`
+                ? t("pptx.replay.images", { placed: replayStatus.images?.placed ?? imageProgress.placed, total: imageProgress.total, pending: replayStatus.images?.pending ?? 0, failed: replayStatus.images?.failed ?? 0 })
                 : ""}
               {replayStatus.error ? ` · ${replayStatus.error}` : ""}
             </div>
           ) : null,
         children: (
-          <div className="pptx-workbench-conversation">
+          <div className="pptx-workbench-conversation" data-has-messages={turns.length > 0}>
             {conversation}
           </div>
         ),
@@ -1131,6 +1157,24 @@ export default function PresentationPptxWorkbench({
       saveState={readOnly ? undefined : saveFailure ? "error" : dirty ? "dirty" : "saved"}
       onBack={onRequestClose}
       onOpenExternal={onOpenExternal}
+      actions={
+        <>
+        {filePath && <Tooltip title={t("preview.showInFolder")}><Button type="text" size="small" aria-label={t("preview.showInFolder")} icon={<FolderClosed size={16} />} onClick={() => {
+          void officecli.showItemInFolder(filePath).catch((error) => toast.error(t("preview.showInFolderFailed", { error: error instanceof Error ? error.message : String(error) })));
+        }} /></Tooltip>}
+        {onReplayDemo ? (
+          <Tooltip title={t("pptx.agent.replayDemoHint")}>
+            <Button
+              type="text"
+              size="small"
+              icon={<History size={16} />}
+              aria-label={t("pptx.agent.replayDemo")}
+              onClick={onReplayDemo}
+            />
+          </Tooltip>
+        ) : null}
+        </>
+      }
       notice={notice}
       panel={panel}
     >
@@ -1204,6 +1248,12 @@ export default function PresentationPptxWorkbench({
                   ? t("pptx.agent.saveConflict")
                   : t("pptx.agent.saveFailedBar", { msg: saveFailure.message })}
               </span>
+              {saveFailure.detail && (
+                <details className="pptx-workbench-save-error-details">
+                  <summary>{t("pptx.agent.saveErrorDetails")}</summary>
+                  <pre>{saveFailure.detail}</pre>
+                </details>
+              )}
               {saveFailure.conflict && (
                 <Button size="small" loading={savingCopy} onClick={() => void saveAsCopy()}>
                   {t("pptx.agent.saveConflictCopy")}

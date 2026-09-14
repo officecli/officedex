@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -82,6 +84,40 @@ func TestRealConverterRoundTrip(t *testing.T) {
 	if got := contentResponse.Header().Get("X-MOP-Protocol-Version"); got != "1" {
 		t.Errorf("protocol version header = %q", got)
 	}
+	if got := contentResponse.Header().Get("X-MOP-Schema-Version"); got != strconv.Itoa(DefaultSchemaVersion) {
+		t.Fatalf("schema version header = %q, want %d", got, DefaultSchemaVersion)
+	}
+	// Exercise the consumer as well as the converter: version headers and the
+	// actual snapshot must both be accepted by the WASM selected by the editor.
+	presentationRoot := locatePresentationRoot(t)
+	if presentationRoot == "" {
+		t.Fatal("presentation runtime is required for the real round trip")
+	}
+	packageDirectory := wasmPackageDirectory(presentationRoot)
+	snapshotPath := filepath.Join(t.TempDir(), "content.json")
+	if err := os.WriteFile(snapshotPath, contentResponse.Body.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	script := `
+import { readFileSync } from "node:fs";
+import { initSync, MopEngine, WireFormat } from ` + jsStringLiteral(filepath.Join(packageDirectory, "mop_wasm.js")) + `;
+initSync({ module: readFileSync(` + jsStringLiteral(filepath.Join(packageDirectory, "mop_wasm_bg.wasm")) + `) });
+const engine = new MopEngine();
+try {
+ if (String(engine.capabilities.schemaVersion) !== ` + jsStringLiteral(contentResponse.Header().Get("X-MOP-Schema-Version")) + `) throw new Error("schema header does not match editor runtime");
+ const snapshot = engine.decodeSnapshot(readFileSync(` + jsStringLiteral(snapshotPath) + `), WireFormat.Json);
+ engine.validateSnapshot(snapshot);
+ engine.decodeSnapshot(engine.encodeSnapshot(snapshot, WireFormat.Binary), WireFormat.Binary);
+} finally { engine.free(); }
+`
+	scriptPath := filepath.Join(t.TempDir(), "verify-editor.mjs")
+	if err := os.WriteFile(scriptPath, []byte(script), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if output, err := exec.Command("node", scriptPath).CombinedOutput(); err != nil {
+		t.Fatalf("editor rejected imported snapshot: %v\n%s", err, output)
+	}
+
 	slideCount, err := snapshotSlideCount(contentResponse.Body.Bytes())
 	if err != nil {
 		t.Fatalf("converted package is not a readable snapshot: %v", err)
@@ -110,7 +146,7 @@ func locateRealConverter(t *testing.T) string {
 	if workingDirectory, err := os.Getwd(); err == nil {
 		workspace := filepath.Join(workingDirectory, "..", "..", "..")
 		candidates = append(candidates,
-			filepath.Join(workspace, "pptx", "tools", "bin", "mop-convert"),
+			filepath.Join(workspace, "presentation", "tools", "bin", "mop-convert"),
 			filepath.Join(workingDirectory, "..", "..", "build", "bin", "OfficeDex.app",
 				"Contents", "Resources", "presentation", "tools", "bin", "mop-convert"),
 		)

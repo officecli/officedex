@@ -61,11 +61,21 @@ describe("resolveMopRuntimeEntry", () => {
 });
 
 describe("resolveMopWasmEntry", () => {
-  it("uses the built BOS runtime even when the older workspace snapshot is installed", () => {
+  it("uses the versioned package even when stale local BOS output exists", () => {
     const sourceRoot = path.resolve("work", "presentation");
     const built = path.join(sourceRoot, "bos", "dist", "mop-wasm", "pkg", "mop_wasm.js");
     const snapshot = path.join(sourceRoot, "packages", "mop-wasm", "mop_wasm.js");
-    expect(resolveMopWasmEntry(sourceRoot, (entry) => entry === built || entry === snapshot)).toBe(built);
+    expect(resolveMopWasmEntry(sourceRoot, (entry) => entry === built || entry === snapshot)).toBe(snapshot);
     expect(resolveMopWasmEntry(sourceRoot, (entry) => entry === snapshot)).toBe(snapshot);
+  });
+
+  it("supports older source archives containing only the BOS distribution", () => {
+    const sourceRoot = path.resolve("release", "presentation");
+    const built = path.join(sourceRoot, "bos", "dist", "mop-wasm", "pkg", "mop_wasm.js");
+    expect(resolveMopWasmEntry(sourceRoot, (entry) => entry === built)).toBe(built);
+  });
+
+  it("rejects a source tree with neither WASM package", () => {
+    expect(() => resolveMopWasmEntry("missing", () => false)).toThrow("MOP WASM runtime is missing");
   });
 });

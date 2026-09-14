@@ -308,6 +308,7 @@ export interface GenerateInput {
   imageWatermark?: ImageWatermarkGenerateOptions;
   outputDir?: string;
   publish?: boolean;
+  resumeCheckpoint?: string;
   enableImages?: boolean;
   imageQuality?: "standard" | "premium";
   localPreview?: boolean;
@@ -591,6 +592,43 @@ export interface ImageTemplatePublishRequest {
   updatedAt?: string;
 }
 
+/**
+ * The stage a generation failure happened in. The backend reports it from the
+ * stage that failed; the renderer must never infer it from message text, which
+ * is how a drawing failure used to be presented as a content failure.
+ */
+export type TaskFailureStage = "plan" | "content" | "render" | "export" | "transport";
+
+/** What a failed run left behind, as counts rather than prose. */
+export interface TaskRetainedWork {
+  ready_pages: number;
+  total_pages?: number;
+  failed_pages?: number[];
+}
+
+export interface TaskFailure {
+  stage: TaskFailureStage;
+  /** Machine-readable reason, e.g. `worker_died`. */
+  reason: string;
+  retryable: boolean;
+  /**
+   * The re-entry point a retry may use, when one exists. Empty means nothing
+   * can be resumed: offer the retained work and a restart instead of a
+   * "continue" action that cannot work.
+   */
+  resume_stage?: string;
+  resume_checkpoint?: string;
+  retained?: TaskRetainedWork;
+}
+
+/** Where the deck a failed run already drew lives, plus its content facts. */
+export interface TaskPartialWork {
+  drawnPages?: number;
+  readyPages?: number;
+  totalPages?: number;
+  failedPages?: number[];
+}
+
 export interface DesktopTask {
   /** Stable renderer identity while an optimistic task receives its server ID. */
   clientTaskId?: string;
@@ -616,6 +654,24 @@ export interface DesktopTask {
   /** Per-slide SlidePreview data streamed from the backend (vibe flow), ordered by index. */
   vibeSlides?: SlidePreview[];
   artifact?: Artifact;
+  /**
+   * The deck a failed run already drew and saved. It is a task outcome, not a
+   * preview: `artifact` means "the finished document", `partialArtifact` means
+   * "what exists because the run stopped early". They are separate so no
+   * consumer can mistake one for the other, and so opening, exporting and
+   * modifying a stopped run all work off the model instead of off whichever
+   * preview happened to be on screen.
+   */
+  partialArtifact?: Artifact;
+  /** Structured facts about what a failed run left behind. Never parsed from `error`. */
+  failure?: TaskFailure;
+  /**
+   * Consolidated page facts for the failed-state UI: content readiness from
+   * `failure.retained` plus how much actually reached the user's document. Kept
+   * on the task so the failed panel reads one object instead of recombining
+   * three sources at render time.
+   */
+  partial?: TaskPartialWork;
   error?: string;
   stages?: StageState[];
   activeStageId?: string;
@@ -623,6 +679,7 @@ export interface DesktopTask {
   creditCharged?: number | null;
   creditMode?: string;
   imageWatermark?: ImageWatermarkTaskMetadata;
+  lastStatusCheckAt?: number;
   lastProgressAt?: number;
   stalledSince?: number;
   assembleProgress?: { step: string; status: string; content: string };
@@ -1089,7 +1146,20 @@ export interface CreateWorkbookFromSheetInput {
   workspaceId?: string;
 }
 
+export interface PptxTaskStatus { task_id: string; status: string; updated_at?: string; last_error?: string; }
+
 export interface DesktopAPI extends DesktopVerticalAPI {
+  getPptxTaskStatus?: (taskId: string) => Promise<PptxTaskStatus>;
+  skipPptxResearch?: (taskId: string) => Promise<void>;
+  /**
+   * Steering a run that is drawing right now. Distinct from modify(): the
+   * instruction lands at the deck's next page boundary instead of starting a
+   * second task against the finished file. All three stay optional so an older
+   * desktop runtime degrades to the modify path rather than failing outright.
+   */
+  intervenePptx?: (taskId: string, text: string) => Promise<{ effectiveFrom?: number }>;
+  pausePptx?: (taskId: string) => Promise<void>;
+  resumePptxLive?: (taskId: string) => Promise<void>;
   saveOfficeProductProject?(input: { id: string; name: string; createdAt?: string; updatedAt?: string }): Promise<void>;
   saveOfficeProductSource?(input: { id: string; workbookId: string; name: string; kind: string; location?: string; lastImportedAt?: string; lastError?: string }): Promise<void>;
   saveOfficeProductView?(input: { id: string; workbookId: string; sheetName: string; layer: string; range?: string; fingerprint: string; updatedAt?: string }): Promise<void>;

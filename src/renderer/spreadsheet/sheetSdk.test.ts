@@ -86,7 +86,7 @@ describe("createOfflineSheetEditor", () => {
     expect(coreSheet.isValid(4, 31, "16:9")).toBe(false);
   });
 
-  it("loads Chinese resources before initializing and mounting the editor", async () => {
+  it.each(["en", "zh"] as const)("loads %s resources before initializing and mounting the editor", async (locale) => {
     const loadedScripts: string[] = [];
     const appendChild = vi.spyOn(document.head, "appendChild").mockImplementation((node) => {
       const script = node as HTMLScriptElement;
@@ -96,14 +96,14 @@ describe("createOfflineSheetEditor", () => {
     });
     const container = document.createElement("div");
 
-    const editor = await createOfflineSheetEditor(container, "serialized-modoc");
+    const editor = await createOfflineSheetEditor(container, "serialized-modoc", [], undefined, locale);
 
     expect(editor).toBe(mocks.editor);
     expect(loadedScripts).toEqual([
-      "/sdk-sheet-locales/fe-common/zh-CN.js",
-      "/sdk-sheet-locales/lizard-service-sheet-sdk/zh-CN.js",
+      `/sdk-sheet-locales/fe-common/${locale === "zh" ? "zh-CN" : "en-US"}.js`,
+      `/sdk-sheet-locales/lizard-service-sheet-sdk/${locale === "zh" ? "zh-CN" : "en-US"}.js`,
     ]);
-    expect((globalThis as typeof globalThis & { s18n?: unknown }).s18n).toEqual({ getS18n: mocks.getS18n });
+    expect((globalThis as typeof globalThis & { s18n?: unknown }).s18n).toEqual({ getS18n: expect.any(Function) });
     expect(mocks.createSheetSDK).toHaveBeenCalledTimes(1);
     expect(mocks.createSheetSDK).toHaveBeenCalledWith(expect.objectContaining({
       mode: { type: "standard", role: "editor" },

@@ -718,6 +718,7 @@ func (c *Client) InvokeGenerate(ctx context.Context, input types.GenerateInput) 
 		"prompt_template_id": input.PromptTemplateID,
 		"out":                input.OutputDir,
 		"publish":            input.Publish,
+		"resume_checkpoint":  input.ResumeCheckpoint,
 		"enable_images":      input.EnableImages,
 		"image_quality":      input.ImageQuality,
 		// LocalPreview is forced to true to match the TS origin's
@@ -779,7 +780,11 @@ func officeGenerateModeArgs(input types.GenerateInput) (string, bool, error) {
 		return "", false, nil
 	}
 	switch strings.ToLower(strings.TrimSpace(input.GenerationMode)) {
-	case "", "fast", "plan":
+	case "", "fast":
+		// Normal mode generates directly. Never turn the absence of the
+		// advanced-mode opt-in into an interactive runtime request.
+		return "fast", false, nil
+	case "plan":
 		return "best", true, nil
 	default:
 		return "", false, fmt.Errorf("bridge: unsupported generation mode: %s", input.GenerationMode)
@@ -1055,6 +1060,8 @@ type RespondAnswer struct {
 }
 
 type TaskStatusResult struct {
+	LastError       string          `json:"last_error,omitempty"`
+	UpdatedAt       string          `json:"updated_at,omitempty"`
 	TaskID          string          `json:"task_id"`
 	SessionID       string          `json:"session_id"`
 	Status          string          `json:"status"`
@@ -1336,4 +1343,35 @@ func isBinaryMissing(stderr string) bool {
 type rpcResponse struct {
 	result []byte
 	err    error
+}
+
+func (c *Client) SkipPptxResearch(ctx context.Context, taskID string) ([]byte, error) {
+	return c.Request(ctx, MethodTaskSkipResearch, map[string]any{"task_id": taskID})
+}
+
+// Intervene absorbs an instruction into a running deck and reports the first
+// page it will affect.
+func (c *Client) IntervenePptx(ctx context.Context, taskID, text string) ([]byte, error) {
+	return c.Request(ctx, MethodTaskIntervene, map[string]any{"task_id": taskID, "text": text})
+}
+
+// PausePptx holds the run at the next page boundary; ResumePptx releases it.
+func (c *Client) PausePptx(ctx context.Context, taskID string) ([]byte, error) {
+	return c.Request(ctx, MethodTaskPause, map[string]any{"task_id": taskID})
+}
+
+func (c *Client) ResumePptx(ctx context.Context, taskID string) ([]byte, error) {
+	return c.Request(ctx, MethodTaskResumeLive, map[string]any{"task_id": taskID})
+}
+
+func (c *Client) CompactTaskStatus(ctx context.Context, taskID string) (TaskStatusResult, error) {
+	raw, err := c.Request(ctx, MethodTaskStatus, map[string]any{"task_id": taskID, "compact": true})
+	if err != nil {
+		return TaskStatusResult{}, err
+	}
+	var result TaskStatusResult
+	if err = decodeJSON(raw, &result); err != nil {
+		return TaskStatusResult{}, err
+	}
+	return result, nil
 }

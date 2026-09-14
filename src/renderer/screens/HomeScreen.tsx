@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent as Re
 import type { DesktopTask, DocumentType, RecentFile, TaskQuestionAnswer, WorkspaceSummary } from "../../shared/types";
 import type { OfficeOutputRef } from "../../shared/officeProduct";
 import { OfficeProductOutputsPanel } from "../components/OfficeProductOutputsPanel";
-import { Button, Dropdown, Empty, Loading, TextArea, toast, type MenuProps } from "../ui";
+import { Button, Dropdown, Empty, Loading, TextArea, ToastViewport, toast, type MenuProps } from "../ui";
 import { dragHasFiles, setHomeDropZone } from "../homeDropZone";
 import type { HomeTaskAnalysis, HomeTaskIntake } from "../homeIntake";
 import {
@@ -14,12 +14,12 @@ import {
   FolderUnsetOutlined,
   FolderOpenOutlined,
   LeftOutlined,
+  PlayCircleOutlined,
   PlusOutlined,
   RightOutlined,
 } from "../ui/icons";
 import { useT } from "../i18n";
 import { ProgressivePptxStage } from "../presentation/ProgressivePptxStage";
-import { PptxProductionStage } from "../presentation/PptxProductionStage";
 import type { PresentationEditorFrameProps } from "../presentation/PresentationEditorFrame";
 import { fileExtension, fileNameFromPath } from "../utils/path";
 import { MaterialSymbol } from "../components/Shell";
@@ -40,6 +40,9 @@ export interface HomePickers {
 
 /** Everything a listed task can be asked to do. */
 export interface HomeTaskActions {
+  checkStatus?: (task: DesktopTask) => Promise<void>;
+  retryFailed?: (task: DesktopTask, checkpoint: string) => Promise<void>;
+  skipResearch?: (task: DesktopTask) => Promise<void>;
   open?: (taskId: string) => void;
   retry?: (task: DesktopTask) => void;
   steer?: (task: DesktopTask, instruction: string) => void | Promise<void>;
@@ -64,6 +67,8 @@ export interface HomeScreenProps {
   workspaces?: WorkspaceSummary[];
   onOpenFile: (file: RecentFile) => void;
   onOpenLocalFile?: () => void | Promise<void>;
+  onReplayPptxDemo?: () => void | Promise<void>;
+  replayPptxDemoLoading?: boolean;
   /** Retained as an optional embedding hook; Home intake is the primary creation path. */
   onCreate?: (documentType: HomeDocumentType) => void | Promise<void>;
   onRemoveFile: (filePath: string) => void;
@@ -123,7 +128,7 @@ const HOME_TEMPLATES: HomeTemplate[] = [
   { id: "budget", type: "xlsx", icon: "account_balance_wallet", minutes: 2 },
 ];
 
-export function HomeScreen({ files, attentionTasks = [], loading, error, activeWorkspaceId, workspaces = [], onOpenFile, onOpenLocalFile, onRemoveFile, pickers = {}, droppedTaskPaths, workspaceActions = {}, onStartTask, taskActions = {}, productionTaskId, productionEditor, onRetryRecentFiles, productOutputs = [] }: HomeScreenProps) {
+export function HomeScreen({ files, attentionTasks = [], loading, error, activeWorkspaceId, workspaces = [], onOpenFile, onOpenLocalFile, onReplayPptxDemo, replayPptxDemoLoading, onRemoveFile, pickers = {}, droppedTaskPaths, workspaceActions = {}, onStartTask, taskActions = {}, productionTaskId, productionEditor, onRetryRecentFiles, productOutputs = [] }: HomeScreenProps) {
   const { taskFile: onPickTaskFile, taskDirectory: onPickTaskDirectory, referenceImages: onPickReferenceImages, referenceTextFiles: onPickReferenceTextFiles } = pickers;
   const { select: onSelectWorkspace, selectAll: onSelectAllWorkspaces, add: onAddWorkspace } = workspaceActions;
   const { open: onOpenTask, retry: onRetryTask, steer: onSteerTask, resume: onResumeTask, answer: onAnswerTask, cancel: onCancelTask, delete: onDeleteTask } = taskActions;
@@ -154,11 +159,9 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
   // must not truncate: there is no "view all" page to overflow into.
   const actionableTasks = useMemo(() => attentionTasks
     .filter((task) => task.status === "question" || task.status === "plan_review"), [attentionTasks]);
-  // Work in flight belongs where its result will land: running and failed tasks
-  // ride at the top of Recent and turn into (or give way to) the file card when
-  // they settle, so the user never has to leave home to see how it is going.
-  // Failures age out: a week-old failure is history for the tasks page, not
-  // something to greet the user with every time they open the app.
+  // The dedicated production view looks its task up in this set, so the task has
+  // to stay live while it runs (and after a recent failure) even though home no
+  // longer renders a running-task list.
   const liveTasks = useMemo(() => attentionTasks
     .filter((task) => task.status === "starting" || task.status === "running"
       || task.status === "question" || task.status === "plan_review"
@@ -167,8 +170,6 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
     .filter((task) => !dismissedTaskIds.includes(task.id))
     .slice(0, 4), [attentionTasks, activeWorkspaceId, dismissedTaskIds]);
   const productionTask = productionTaskId ? liveTasks.find((task) => task.id === productionTaskId && task.documentType === "pptx") : undefined;
-  const productionTasks = useMemo(() => liveTasks
-    .filter((task) => task.status === "starting" || task.status === "running" || task.status === "failed"), [liveTasks]);
 
   useEffect(() => {
     if (prompt) {
@@ -417,6 +418,9 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
         </header>
         <ProgressivePptxStage
           task={productionTask}
+          onCheckStatus={taskActions.checkStatus ? () => taskActions.checkStatus!(productionTask) : undefined}
+          onRetryFailed={taskActions.retryFailed ? path => taskActions.retryFailed!(productionTask, path) : undefined}
+          onSkipResearch={taskActions.skipResearch ? () => taskActions.skipResearch!(productionTask) : undefined}
           draftReady={Boolean(productionEditor)}
           editor={productionEditor}
           onContinue={productionTask.status === "question" || productionTask.status === "plan_review"
@@ -444,6 +448,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
       className="home-screen"
       aria-labelledby="home-title"
     >
+      <ToastViewport className="home-notification-space" />
       <header className="home-hero">
         <div className="home-hero__copy">
           <h1 id="home-title">{t("home.title")}</h1>
@@ -453,6 +458,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
 
       <form
         className={`home-intake ${dropActive ? "is-drop-active" : ""}`}
+        data-type={selectedDocumentType}
         aria-label={t("home.promptLabel")}
         onSubmit={submitTask}
         onDragOver={intakeDragOver}
@@ -542,10 +548,13 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
               </button>
             </Dropdown>
           </div>
-          <label className="home-intake__advanced-mode" title="开启后先确认 AI 生成计划">
-            <input type="checkbox" checked={advancedMode} onChange={(event) => setAdvancedMode(event.target.checked)} />
-            <span>高级模式</span>
-            <small>{advancedMode ? "先确认计划" : "直接生成"}</small>
+          <label className="home-intake__advanced-mode" title={t("home.advancedMode.hint")}>
+            <input type="checkbox" checked={advancedMode} onChange={(event) => {
+              const enabled = event.target.checked;
+              setAdvancedMode(enabled);
+              toast.info({ key: "home-mode", content: t(enabled ? "home.advancedMode.enabled" : "home.advancedMode.disabled") });
+            }} />
+            <span>{t("home.advancedMode.label")}</span>
           </label>
           <div className="home-intake__types" role="group" aria-label={t("home.outputTypes")}>
             {HOME_CATEGORIES.map((category) => (
@@ -559,7 +568,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
                   setIntakeError(undefined);
                 }}
               >
-                {selectedDocumentType === category.type ? <DocTypeIcon type={category.type} /> : null}
+                <span className="home-intake__type-icon" aria-hidden="true"><DocTypeIcon type={category.type} /></span>
                 <span>{t(`home.type.${category.type}`)}</span>
               </button>
             ))}
@@ -576,33 +585,6 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
         </div>
       ) : null}
 
-      {productionTasks.length > 0 ? (
-        <section className="home-status-overview" aria-label={t("home.statusOverview")}>
-          {productionTasks.length > 0 ? (
-            <details className="home-production-summary">
-              <summary className="home-status-summary home-status-summary--production">
-                <span className="home-status-summary__dot" aria-hidden="true" />
-                <span><strong>{t("home.liveStageTitle")}</strong><small>{productionTasks.length} {t("home.statusInProgress")}</small></span>
-                <span className="home-status-summary__action">{t("home.viewAll")} ↓</span>
-              </summary>
-              <div className="home-production-summary__details">
-                {productionTasks.map((task) => (
-                  <HomeTaskCard
-                    key={task.id}
-                    task={task}
-                    onOpen={() => onOpenTask?.(task.id)}
-                    onRetry={onRetryTask ? () => onRetryTask(task) : undefined}
-                    onSteer={onSteerTask ? (instruction) => onSteerTask(task, instruction) : undefined}
-                    onResume={onResumeTask ? () => onResumeTask(task) : undefined}
-                    onDismiss={() => setDismissedTaskIds((current) => [...current, task.id])}
-                  />
-                ))}
-              </div>
-            </details>
-          ) : null}
-        </section>
-      ) : null}
-
       {actionableTasks.length > 0 ? (
         <section className="home-attention home-attention--compact" aria-labelledby="home-attention-title">
           <div className="home-section-header">
@@ -613,7 +595,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
             {actionableTasks.map((task) => (
               <button className="home-attention-row" type="button" key={task.id} onClick={() => onOpenTask?.(task.id)}>
                 <span className="home-attention-dot" aria-hidden="true" />
-                <strong>{task.topic || task.artifact?.fileName || t("home.untitledTask")}</strong>
+                <strong>{taskTitle(task, t("home.untitledTask"))}</strong>
                 <span>{task.question?.question || t(task.status === "plan_review" ? "home.planReview" : "home.answerRequired")}</span>
                 <em>{t(task.status === "plan_review" ? "home.review" : "home.respond")}</em>
               </button>
@@ -627,6 +609,26 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
           <h2 id="home-templates-title">{t("home.templates")}</h2>
         </div>
         <TemplateRail dependencies={[selectedDocumentType, visibleTemplates.length]}>
+          {onReplayPptxDemo && selectedDocumentType === "pptx" ? (
+            <button
+              type="button"
+              className="home-template-card home-template-card--demo"
+              aria-label={t("home.template.nexaedgeDemo.title")}
+              title={t("home.template.nexaedgeDemo.description")}
+              disabled={replayPptxDemoLoading}
+              onClick={() => void onReplayPptxDemo()}
+            >
+              <span className="home-template-card__preview" aria-hidden="true">
+                <span className="home-template-card__demo-play">
+                  {replayPptxDemoLoading ? <Loading /> : <PlayCircleOutlined aria-hidden />}
+                </span>
+              </span>
+              <span className="home-template-card__copy">
+                <strong>{t("home.template.nexaedgeDemo.title")}</strong>
+                <small>{replayPptxDemoLoading ? t("home.template.nexaedgeDemo.loading") : t("home.template.nexaedgeDemo.meta")}</small>
+              </span>
+            </button>
+          ) : null}
           {visibleTemplates.map((template) => {
             const title = t(`home.template.${template.id}.title`);
             const description = t(`home.template.${template.id}.description`);
@@ -699,7 +701,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
           </div>
         ) : null}
       </section>
-      {productOutputs.length > 0 ? <section className="home-recents" aria-labelledby="home-outputs-title"><h2 id="home-outputs-title">Project outputs</h2><OfficeProductOutputsPanel outputs={productOutputs} /></section> : null}
+      {productOutputs.length > 0 ? <section className="home-recents" aria-labelledby="home-outputs-title"><h2 id="home-outputs-title">{t("ui.copy.Projectoutputs")}</h2><OfficeProductOutputsPanel outputs={productOutputs} /></section> : null}
 
     </section>
   );
@@ -778,81 +780,15 @@ function TemplateRail({ children, dependencies }: { children: ReactNode; depende
 
 const RECENT_FAILURE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
-// A failure is worth interrupting home for only while it is still actionable.
-// Undated failures are treated as old: better to under-surface on home (the
-// tasks page still lists them) than to pin ancient errors to the front door.
+// A failed task stays reachable from its production view only while the failure
+// is still actionable. Undated failures are treated as old: the tasks page still
+// lists them, but they should not be restored to the production view.
 function isRecentFailure(task: DesktopTask): boolean {
   const ts = task.events.at(-1)?.ts;
   if (!ts) return false;
   const at = new Date(ts).getTime();
   if (Number.isNaN(at)) return false;
   return Date.now() - at < RECENT_FAILURE_WINDOW_MS;
-}
-
-function HomeTaskCard({ task, onOpen, onRetry, onSteer, onResume, onDismiss }: {
-  task: DesktopTask;
-  onOpen: () => void;
-  onRetry?: () => void;
-  onSteer?: (instruction: string) => void | Promise<void>;
-  onResume?: () => void | Promise<void>;
-  onDismiss: () => void;
-}) {
-  const t = useT();
-  const failed = task.status === "failed";
-  const stages = task.stages ?? [];
-  const done = stages.filter((stage) => stage.status === "completed").length;
-  const activeStage = stages.find((stage) => stage.id === task.activeStageId);
-  const percent = stages.length > 0 ? Math.round((done / stages.length) * 100) : undefined;
-  const title = task.topic || task.artifact?.fileName || task.userInput?.prompt || t("tasks.untitled");
-  const meta = failed
-    ? (task.error || t("home.task.failed"))
-    : (activeStage?.label || t("home.task.running")) + (stages.length > 0 ? ` · ${done}/${stages.length}` : "");
-
-  if (task.documentType === "pptx") {
-    return (
-      <div className={`home-pptx-task-stage home-task-row ${failed ? "home-task-row--failed" : "home-task-row--running"}`}>
-        <button type="button" className="home-pptx-task-stage__open" aria-label={t("home.openTask", { name: title })} onClick={onOpen}>
-          {title}
-        </button>
-        <PptxProductionStage
-          task={task}
-          onRetry={onRetry}
-          onSteer={onSteer}
-          onResume={onResume}
-          onOpenEditor={onOpen}
-        />
-        {failed ? (
-          <Button className="home-file-remove" variant="ghost-normal" size="small" ariaLabel={t("home.task.dismiss", { name: title })} icon={<CloseOutlined />} onClick={onDismiss} />
-        ) : null}
-      </div>
-    );
-  }
-
-  return (
-    <div className={`home-recent-row home-task-row ${failed ? "home-task-row--failed" : "home-task-row--running"}`}>
-      <button type="button" className="home-recent-open" aria-label={t("home.openTask", { name: title })} onClick={onOpen}>
-        <span className="home-task-icon" aria-hidden="true">
-          <DocTypeIcon type={task.documentType || task.artifact?.documentType} chip />
-          {!failed ? <span className="home-task-icon__spinner" /> : null}
-        </span>
-        <span className="home-recent-copy">
-          <strong>{title}</strong>
-          <small title={failed ? task.error : undefined}>{meta}</small>
-          {!failed && percent !== undefined ? (
-            <span className="home-task-progress" aria-hidden="true"><i style={{ width: `${percent}%` }} /></span>
-          ) : null}
-        </span>
-      </button>
-      <div className="home-task-actions">
-        {failed && onRetry ? (
-          <Button variant="ghost-guidance" size="small" onClick={onRetry}>{t("home.task.retry")}</Button>
-        ) : null}
-        {failed ? (
-          <Button className="home-file-remove" variant="ghost-normal" size="small" ariaLabel={t("home.task.dismiss", { name: title })} icon={<CloseOutlined />} onClick={onDismiss} />
-        ) : null}
-      </div>
-    </div>
-  );
 }
 
 function formatOpenedAt(value: string): string {

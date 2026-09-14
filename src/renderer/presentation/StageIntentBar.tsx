@@ -1,3 +1,4 @@
+import { useT } from "../i18n";
 import { useState } from "react";
 import { ArrowUpOutlined } from "../ui/icons";
 import { Button, Input } from "../ui";
@@ -8,11 +9,15 @@ export interface StageIntentBarProps {
   readonly onSubmit: (instruction: string) => void | Promise<void>;
   readonly onPause?: () => void | Promise<void>;
   readonly onResume?: () => void | Promise<void>;
-  readonly onRetry?: () => void | Promise<void>;
-  readonly onContinueFromNode?: () => void | Promise<void>;
 }
 
-export function StageIntentBar({ disabled = false, placeholder = "Describe the next change", onSubmit, onPause, onResume, onRetry, onContinueFromNode }: StageIntentBarProps) {
+// Retry is deliberately not a control here. It is a terminal action owned by
+// the failure panel, which knows what a retry would discard; parked next to a
+// text input it read as "resend this instruction" and competed with the real
+// one, so a stopped run showed two buttons named Retry and neither of them
+// resumed anything.
+export function StageIntentBar({ disabled = false, placeholder, onSubmit, onPause, onResume }: StageIntentBarProps) {
+  const t = useT();
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   const submit = async () => {
@@ -26,12 +31,10 @@ export function StageIntentBar({ disabled = false, placeholder = "Describe the n
     setBusy(true);
     try { await callback(); } finally { setBusy(false); }
   };
-  return <div className="stage-intent-bar" aria-label="Stage command bar">
-    <Input aria-label="Stage instruction" value={value} placeholder={placeholder} disabled={disabled || busy} onChange={(event) => setValue(event.target.value)} onPressEnter={() => void submit()} />
-    <Button className="od-button--icon-submit" type="primary" size="small" ariaLabel="Apply" title="Apply" icon={<ArrowUpOutlined />} loading={busy} disabled={disabled || !value.trim()} onClick={() => void submit()} />
-    {onPause ? <Button type="text" size="small" disabled={disabled || busy} onClick={() => void action(onPause)}>Pause</Button> : null}
-    {onResume ? <Button type="text" size="small" disabled={disabled || busy} onClick={() => void action(onResume)}>Resume</Button> : null}
-    {onRetry ? <Button type="text" size="small" disabled={disabled || busy} onClick={() => void action(onRetry)}>Retry</Button> : null}
-    {onContinueFromNode ? <Button type="text" size="small" disabled={disabled || busy} onClick={() => void action(onContinueFromNode)}>Continue from node</Button> : null}
+  return <div className="stage-intent-bar" aria-label={t("ui.copy.Stagecommandbar")}>
+    <Input aria-label={t("ui.copy.Stageinstruction")} value={value} placeholder={placeholder ?? t("ui.copy.Describethenextchange")} disabled={disabled || busy} onChange={(event) => setValue(event.target.value)} onPressEnter={() => void submit()} />
+    <Button className="od-button--icon-submit" type="primary" size="small" ariaLabel={t("ui.copy.Apply")} title={t("ui.copy.Apply")} icon={<ArrowUpOutlined />} loading={busy} disabled={disabled || !value.trim()} onClick={() => void submit()} />
+    {onPause ? <Button type="text" size="small" disabled={disabled || busy} onClick={() => void action(onPause)}>{t("ui.copy.Pause")}</Button> : null}
+    {onResume ? <Button type="text" size="small" disabled={disabled || busy} onClick={() => void action(onResume)}>{t("ui.copy.Resume")}</Button> : null}
   </div>;
 }

@@ -1,0 +1,64 @@
+/* The stopped-run panel: one card, one primary action, facts stated as facts. */
+.pptx-failure {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 16px 18px;
+  border: 1px solid var(--od-danger-border, color-mix(in srgb, var(--od-danger, #b42318) 32%, transparent));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--od-danger, #b42318) 6%, var(--pptx-surface, #fff));
+  color: var(--pptx-ink, var(--od-ink, #202124));
+}
+.pptx-failure__head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.pptx-failure__head > svg { color: var(--od-danger, #b42318); flex-shrink: 0; }
+.pptx-failure__head h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.pptx-failure__kept {
+  margin-left: auto;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--od-danger, #b42318) 12%, transparent);
+  color: var(--od-danger, #b42318);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pptx-failure__body { margin: 0; font-size: 13px; line-height: 1.7; color: var(--pptx-muted, var(--od-ink-medium, #686868)); }
+.pptx-failure__pages { margin: 0; font-size: 12px; color: var(--od-danger, #b42318); }
+.pptx-failure__hint { margin: 0; font-size: 12px; line-height: 1.6; color: var(--pptx-muted, var(--od-ink-medium, #686868)); }
+.pptx-failure__actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.pptx-failure__details { font-size: 12px; color: var(--pptx-muted, var(--od-ink-medium, #686868)); }
+.pptx-failure__details summary { cursor: pointer; }
+.pptx-failure__details pre {
+  margin: 10px 0;
+  padding: 10px 12px;
+  max-height: 180px;
+  overflow: auto;
+  border-radius: 8px;
+  background: var(--od-surface-subtle, #f7f7f4);
+  color: var(--pptx-ink, var(--od-ink, #202124));
+  font-family: var(--od-font-mono, "JetBrains Mono", ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* A stopped run is terminal: nothing is animating and nothing is drawn in
+   progress colours, so the timeline stops looking like work in flight. */
+.progressive-pptx-stage[data-phase="failed"] .pptx-flow-node,
+.progressive-pptx-stage[data-phase="cancelled"] .pptx-flow-node {
+  background: color-mix(in srgb, var(--od-danger, #b42318) 14%, transparent);
+  color: var(--od-danger, #b42318);
+  animation: none;
+}
+.progressive-pptx-stage[data-phase="failed"] .pptx-flow-step__header h2,
+.progressive-pptx-stage[data-phase="cancelled"] .pptx-flow-step__header h2 { color: var(--od-danger, #b42318); }
+.progressive-pptx-stage[data-phase="failed"] .pptx-flow-progress > span,
+.progressive-pptx-stage[data-phase="cancelled"] .pptx-flow-progress > span {
+  background: color-mix(in srgb, var(--od-danger, #b42318) 55%, transparent);
+}
+.progressive-pptx-stage[data-phase="failed"] .pptx-flow-status,
+.progressive-pptx-stage[data-phase="cancelled"] .pptx-flow-status { color: var(--od-danger, #b42318); }
+.progressive-pptx-stage[data-phase="failed"] .pptx-flow-working::after,
+.progressive-pptx-stage[data-phase="cancelled"] .pptx-flow-working::after { display: none; }
+.progressive-pptx-stage[data-phase="failed"] .pptx-flow-dots,
+.progressive-pptx-stage[data-phase="cancelled"] .pptx-flow-dots { display: none; }

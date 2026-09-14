@@ -1,38 +1,134 @@
-import { FileText } from "lucide-react";
+import { agentHistoryKey, messageHistoryCodec, useAgentHistory } from "../workbench/useAgentHistory";
+import { AgentMessage } from "../workbench/AgentMessage";
+import { useEffect, useRef, useState } from "react";
+import { ArrowUp, FileText, Square } from "lucide-react";
+import { officecli } from "../bridge";
+import { waitForAgentRun, unwrapAgentRunResult } from "../agentRuntime";
+import { agentClientId } from "../agentClientIdentity";
+import type { WriterAgentEditor } from "./WriterEditorFrame";
+import { errorMessage } from "../utils/values";
 import type { WriterSelectionSummary } from "../../shared/writerProtocol";
-import { useT } from "../i18n";
+import { Button } from "../ui";
+import "../workbench/agent-panel.css";
+import { useLocale, useT } from "../i18n";
 import "./docxAgent.css";
 
 
 
-/**
- * Says what an instruction would apply to, and what is still missing before one
- * can be sent. The editor already hands the agent runtime read_selection,
- * replace_text and save; what has no home yet is the workflow that calls them,
- * which lives in officecli rather than here. Until it ships the composer stays
- * disabled instead of accepting text nothing will act on.
- */
-export function DocxAgentPanel() {
+export function DocxAgentPanel({ scope, editor, selection, filePath }: {
+  scope?: string; editor?: WriterAgentEditor | null; selection?: WriterSelectionSummary; filePath?: string;
+}) {
   const t = useT();
+  const locale = useLocale();
+  const [prompt, setPrompt] = useState("");
+  const [phase, setPhase] = useState<"idle" | "planning" | "applying" | "saving">("idle");
+  const [messages, setMessages] = useAgentHistory(agentHistoryKey("docx", filePath), messageHistoryCodec);
+  const [error, setError] = useState("");
+  const operation = useRef<{ cancelled: boolean; runId?: string } | null>(null);
+  useEffect(() => {
+    setPhase("idle");
+    setError("");
+    setPrompt("");
+    return () => {
+      const active = operation.current;
+      if (active) {
+        operation.current = null;
+        active.cancelled = true;
+        if (active.runId) void officecli.cancelAgentRun(active.runId).catch(() => {});
+      }
+    };
+  }, [editor, filePath]);
+
+  const submit = async () => {
+    const value = prompt.trim();
+    if (!value || !editor || operation.current) return;
+    const active = { cancelled: false, runId: undefined as string | undefined };
+    operation.current = active;
+    setError("");
+    setPhase("planning");
+    setMessages((previous) => [...previous, { role: "user", text: value }]);
+    let applied = false;
+    try {
+      const captured = await editor.capture(selection && !selection.empty && !selection.collapsed ? "selection" : "document");
+      if (active.cancelled) return;
+      const run = await officecli.startAgentRun({
+        workflow: "office.docx.edit.v1",
+        input: { parameters: { prompt: value, text: captured.text, scope: captured.scope, ui_locale: locale } },
+        metadata: { surface: "docx-editor", origin_client_id: agentClientId(), ...(filePath ? { source_path: filePath } : {}) },
+      });
+      active.runId = run.id;
+      if (active.cancelled) { await officecli.cancelAgentRun(run.id); return; }
+      const outcome = await waitForAgentRun(run.id, { timeoutMs: 180_000, pollMs: 250 });
+      if (active.cancelled) return;
+      if (outcome.kind !== "completed") throw new Error(outcome.question);
+      const plan = unwrapAgentRunResult<{ summary: string; edits: { query: string; replacement: string }[] }>(outcome.run);
+      if (!plan || !Array.isArray(plan.edits) || typeof plan.summary !== "string") throw new Error(t("docx.agent.invalidPlan"));
+      if (plan.edits.length) {
+        setPhase("applying");
+        await editor.apply(captured.id, plan.edits);
+        applied = true;
+        if (active.cancelled) return;
+        setPhase("saving");
+        await editor.save();
+      }
+      if (!active.cancelled) {
+        setPrompt("");
+        setMessages((previous) => [...previous, { role: "assistant", text: plan.summary + (applied ? `\n${t("docx.agent.saved")}` : "") }]);
+      }
+    } catch (reason) {
+      if (!active.cancelled) {
+        const text = (applied ? `${t("docx.agent.saveFailed")} ` : "") + errorMessage(reason);
+        setError(text);
+        setMessages((previous) => [...previous, { role: "assistant", text }]);
+      }
+    } finally {
+      if (operation.current === active) operation.current = null;
+      if (!active.cancelled) setPhase("idle");
+    }
+  };
+  const cancel = async () => {
+    const active = operation.current;
+    if (!active || phase !== "planning") return;
+    active.cancelled = true;
+    try {
+      if (active.runId) await officecli.cancelAgentRun(active.runId);
+      setMessages((previous) => [...previous, { role: "assistant", text: t("docx.agent.cancelled") }]);
+    } catch (reason) { setError(errorMessage(reason)); }
+    finally { if (operation.current === active) operation.current = null; setPhase("idle"); }
+  };
 
   return (
-    <div className="docx-agent">
-      <div className="docx-agent__body">
-        <div className="docx-agent__pending">
+    <div className="docx-agent agent-panel" data-has-messages={messages.length > 0}>
+      <div className="docx-agent__body agent-panel__body" aria-live="polite">
+        {!messages.length ? <div className="docx-agent__pending">
           <FileText size={22} aria-hidden="true" />
-          <strong>{t("docx.agent.pendingTitle")}</strong>
-          <span>{t("docx.agent.pendingBody")}</span>
-        </div>
+          <strong>{t("docx.agent.readyTitle")}</strong>
+          <span>{t("docx.agent.readyBody")}</span>
+        </div> : messages.map((message, index) => <AgentMessage key={index} role={message.role}>{message.text}</AgentMessage>)}
+        {phase !== "idle" ? <p role="status">{t(`docx.agent.${phase}`)}</p> : null}
+        {error ? <p role="alert">{error}</p> : null}
       </div>
 
-      <form className="docx-agent__composer" onSubmit={(event) => event.preventDefault()}>
+      <form className="docx-agent__composer agent-compose-box" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
         <textarea
           className="docx-agent__input"
           rows={3}
-          disabled
+          value={prompt}
+          onChange={(event) => setPrompt(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+            event.preventDefault();
+            void submit();
+          }}
+          disabled={!editor || phase !== "idle"}
           placeholder={t("docx.agent.placeholder")}
           aria-label={t("docx.agent.placeholder")}
         />
+        <div className="agent-composer-actions">
+          <span className="agent-panel__scope" title={scope}><FileText size={14} aria-hidden="true" /><span>{scope ?? t("docx.agent.scopeWholeDocument")}</span></span>
+          {phase === "planning" ? <Button ariaLabel={t("docx.agent.cancel")} icon={<Square />} onClick={() => void cancel()} /> :
+          <Button className="od-button--icon-submit" type="primary" htmlType="submit" ariaLabel={t("pptx.agent.send")} icon={<ArrowUp />} disabled={!editor || !prompt.trim() || phase !== "idle"} />}
+        </div>
       </form>
     </div>
   );

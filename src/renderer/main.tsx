@@ -10,6 +10,7 @@ import "./styles/beautiful.css";
 import "./styles/tokens.css";
 import "./styles/shell.css";
 import "./styles/home.css";
+import "./styles/ai-composer.css";
 import "./styles/spreadsheet.css";
 import "./styles/app-builder.css";
 import "./styles/settings.css";

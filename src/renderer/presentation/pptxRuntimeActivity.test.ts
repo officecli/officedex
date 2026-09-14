@@ -20,3 +20,13 @@ describe("PPTX runtime activity", () => {
     expect(pptxRuntimeActivity(task([{ type: "task.progress", ts: "invalid", payload: { step: "assemble" } }])).timestamp).toBeUndefined();
   });
 });
+
+it("separates heartbeat from real progress", () => {
+  const result = pptxRuntimeActivity(task([
+    { type: "task.progress", ts: "2026-09-11T04:05:00Z", payload: { step: "plan.research", content: "Searching" } },
+    { type: "task.progress", ts: "2026-09-11T04:06:00Z", payload: { step: "plan.research", heartbeat: true, content: "Still waiting" } },
+  ]));
+  expect(result.message).toBe("Searching");
+  expect(result.timestamp).toBe(Date.parse("2026-09-11T04:05:00Z"));
+  expect(result.heartbeatAt).toBe(Date.parse("2026-09-11T04:06:00Z"));
+});

@@ -1,4 +1,4 @@
-import type { Artifact, BridgeEvent, DesktopTask, GenerationMode, ImageRatio, ProviderSnapshot, StageState, TaskPlan, TaskQuestion, TaskQuestionAnswer, TaskRuntimeSnapshot, TaskUserInput, VibeOp, VibeProjectTreeNode, VibeTreeAction, VibeTreeConfirmation, VibeTreeSnapshot, VibeTreeStage, VibeVisualAsset } from "../shared/types";
+import type { Artifact, BridgeEvent, DesktopTask, GenerationMode, ImageRatio, ProviderSnapshot, StageState, TaskFailure, TaskFailureStage, TaskPartialWork, TaskPlan, TaskQuestion, TaskQuestionAnswer, TaskRuntimeSnapshot, TaskUserInput, VibeOp, VibeProjectTreeNode, VibeTreeAction, VibeTreeConfirmation, VibeTreeSnapshot, VibeTreeStage, VibeVisualAsset } from "../shared/types";
 import type { SlidePreview } from "../shared/slidePreviewWire";
 
 export interface TaskState {
@@ -248,6 +248,14 @@ export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState 
   }
   if (event.type === "task.failed") {
     nextTask.error = stringPayload(event, "message") || stringPayload(event, "error") || "Task failed";
+    // The stage that failed says what broke, which stage it was, and what it
+    // left behind. This is read as data; matching the message text for the
+    // same answers is what put "expansion is incomplete" on drawing failures.
+    const failure = failureFromPayload(event.payload);
+    if (failure) {
+      nextTask.failure = failure;
+      nextTask.partial = partialFromFailure(failure);
+    }
     nextTask.stalledSince = undefined;
     applyCreditPayload(nextTask, event.payload);
   }
@@ -282,6 +290,24 @@ export function applyTaskEvent(state: TaskState, event: BridgeEvent): TaskState 
   const artifact = nextTask.artifact;
   const artifacts = artifact && !state.artifacts.some((item) => item.filePath === artifact.filePath) ? [artifact, ...state.artifacts] : state.artifacts;
   return { tasks, taskOrder, artifacts };
+}
+
+/**
+ * Commits the deck a stopped run already drew into the task model.
+ *
+ * The drawing happens in a live editor session, so the file it wrote is known
+ * to the preview machinery first and to the task only if we put it there. It
+ * has to be the task: opening, exporting, retrying and modifying a stopped run
+ * all read the model, and while this lived only in preview state every one of
+ * them saw a task with no output.
+ */
+export function attachPartialWork(state: TaskState, taskID: string, patch: { partialArtifact?: Artifact; partial?: TaskPartialWork }): TaskState {
+  const task = state.tasks[taskID];
+  if (!task) return state;
+  const partialArtifact = patch.partialArtifact?.filePath ? patch.partialArtifact : task.partialArtifact;
+  const partial = patch.partial ? { ...task.partial, ...patch.partial } : task.partial;
+  if (partialArtifact === task.partialArtifact && partial === task.partial) return state;
+  return { ...state, tasks: { ...state.tasks, [taskID]: { ...task, ...(partialArtifact ? { partialArtifact } : {}), ...(partial ? { partial } : {}) } } };
 }
 
 /** Move an accepted interactive response out of its stale visible gate while
@@ -581,6 +607,55 @@ function questionFromPayload(payload: BridgeEvent["payload"]): TaskQuestion | un
   return question;
 }
 
+const FAILURE_STAGES: readonly TaskFailureStage[] = ["plan", "content", "render", "export", "transport"];
+
+/**
+ * Reads the structured failure the backend reports on `task.failed`.
+ *
+ * Absent (older bridge, or an error thrown outside a generation stage) means
+ * the renderer keeps its previous behaviour, so this is a widening of the
+ * contract rather than a replacement that would break mixed versions.
+ */
+function failureFromPayload(payload: BridgeEvent["payload"]): TaskFailure | undefined {
+  const raw = payload?.failure;
+  if (!raw || typeof raw !== "object") return undefined;
+  const record = raw as Record<string, unknown>;
+  const stage = typeof record.stage === "string" && (FAILURE_STAGES as readonly string[]).includes(record.stage)
+    ? (record.stage as TaskFailureStage)
+    : undefined;
+  if (!stage) return undefined;
+  const retained = record.retained && typeof record.retained === "object" ? record.retained as Record<string, unknown> : undefined;
+  const failedPages = Array.isArray(retained?.failed_pages)
+    ? retained!.failed_pages.filter((page): page is number => typeof page === "number" && Number.isInteger(page) && page > 0)
+    : undefined;
+  return {
+    stage,
+    reason: typeof record.reason === "string" && record.reason.trim() ? record.reason.trim() : "generation_failed",
+    retryable: record.retryable === true,
+    ...(typeof record.resume_stage === "string" && record.resume_stage.trim() ? { resume_stage: record.resume_stage.trim() } : {}),
+    ...(typeof record.resume_checkpoint === "string" && record.resume_checkpoint.trim() ? { resume_checkpoint: record.resume_checkpoint.trim() } : {}),
+    ...(retained ? {
+      retained: {
+        ready_pages: typeof retained.ready_pages === "number" ? retained.ready_pages : 0,
+        ...(typeof retained.total_pages === "number" ? { total_pages: retained.total_pages } : {}),
+        ...(failedPages?.length ? { failed_pages: failedPages } : {}),
+      },
+    } : {}),
+  };
+}
+
+/** Seeds the consolidated page facts from the content-side counts. */
+function partialFromFailure(failure: TaskFailure): TaskPartialWork {
+  const retained = failure.retained;
+  return {
+    ...(retained ? {
+      readyPages: retained.ready_pages,
+      ...(retained.total_pages === undefined ? {} : { totalPages: retained.total_pages }),
+      ...(retained.failed_pages?.length ? { failedPages: retained.failed_pages } : {}),
+    } : {}),
+  };
+}
+
 function artifactFromPayload(taskID: string, payload: BridgeEvent["payload"]): Artifact | undefined {
   const result = payload?.result && typeof payload.result === "object" ? (payload.result as Record<string, unknown>) : payload;
   if (!result) {
@@ -802,6 +877,7 @@ export function reduceStages(events: BridgeEvent[]): { stages: StageState[]; act
       continue;
     }
 
+    if (event.payload?.heartbeat === true) continue;
     const semanticStage = event.type === "task.progress" ? semanticStageForProgress(payload) : undefined;
     if (!nativeMode && semanticStage) {
       semanticMode = true;

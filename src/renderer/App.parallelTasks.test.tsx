@@ -8,6 +8,9 @@ const mocks = vi.hoisted(() => ({
   // The document list App derives from task state, captured on every render:
   // one entry per task, titled by that task's own topic.
   documents: [] as Array<{ id: string; title: string; conversationId?: string }>,
+  // The rail's revision, captured on every render: Shell collapses the task
+  // sidebar when App reports that a document workbench opened.
+  railRevision: 0,
 }));
 
 const settings: UserSettings = {
@@ -35,6 +38,11 @@ vi.mock("./bridge", () => ({
     getTaskHistory: vi.fn(async () => []),
     listWorkspaces: vi.fn(async () => []),
     listRecentFiles: vi.fn(async () => []),
+    openFileDialog: vi.fn(),
+    openRecentFile: vi.fn(async (file) => ({ taskId: file.taskId ?? "", filePath: file.filePath, fileName: file.fileName, documentType: file.documentType })),
+    issuePreviewToken: vi.fn(async (artifact) => ({ token: "preview-test", documentType: artifact.documentType, fileName: artifact.fileName })),
+    revokePreviewToken: vi.fn(async () => undefined),
+    createLivePptxDraft: vi.fn(async (taskId: string) => ({ filePath: `/tmp/live-${taskId}-1.pptx`, fileName: `live-${taskId}-1.pptx` })),
     addWorkspace: vi.fn(),
     selectWorkspace: vi.fn(),
     removeWorkspace: vi.fn(),
@@ -59,11 +67,14 @@ vi.mock("./useAppUpdate", () => ({
 // here: navigating back to Home, which is how a second task is submitted while
 // the first is running.
 vi.mock("./components/Shell", () => ({
-  Shell: ({ children, onNavChange, documents }: { children: React.ReactNode; onNavChange: (key: string) => void; documents?: Array<{ id: string; title: string; conversationId?: string }> }) => {
+  Shell: ({ children, inspector, onNavChange, documents, onOpenDocument, documentOpenRevision }: { children: React.ReactNode; inspector?: React.ReactNode; onNavChange: (key: string) => void; documents?: Array<{ id: string; title: string; conversationId?: string }>; onOpenDocument: (document: { id: string; title: string }) => void; documentOpenRevision?: number }) => {
     mocks.documents = documents ?? [];
+    mocks.railRevision = documentOpenRevision ?? 0;
     return (
       <div>
         <button type="button" onClick={() => onNavChange("home")}>go-home</button>
+        {documents?.map(document => <button key={document.id} onClick={() => onOpenDocument(document)}>open-{document.id}</button>)}
+        {inspector}
         {children}
       </div>
     );
@@ -76,7 +87,11 @@ vi.mock("./screens/SettingsScreens", () => ({
   SettingsScreen: () => <div>Settings</div>,
 }));
 vi.mock("./screens/OnboardingScreen", () => ({ OnboardingScreen: () => <div>Onboarding</div> }));
-vi.mock("./components/PreviewPanel", () => ({ PreviewPanel: () => <div>Preview</div> }));
+vi.mock("./components/PreviewPanel", () => ({ PreviewPanel: ({ onClose }: { onClose: () => void }) => <button onClick={onClose}>editor-back</button> }));
+vi.mock("./spreadsheet/SpreadsheetWorkspace", async () => {
+  const { forwardRef } = await import("react");
+  return { SpreadsheetWorkspace: forwardRef((_props: { onBack: () => void }, _ref) => <button onClick={_props.onBack}>editor-back</button>) };
+});
 vi.mock("./components/ForceUpdateOverlay", () => ({ ForceUpdateOverlay: () => null }));
 
 /** Types a prompt into the home intake and submits it with Enter. */
@@ -92,6 +107,7 @@ describe("parallel task submissions", () => {
     mocks.listener = () => undefined;
     mocks.generate.mockReset();
     mocks.documents = [];
+    mocks.railRevision = 0;
     // App persists its route in sessionStorage; without clearing it each test
     // boots into the previous test's document view instead of Home.
     window.sessionStorage.clear();
@@ -100,6 +116,88 @@ describe("parallel task submissions", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+  });
+
+  it.each(["docx", "pptx", "xlsx"])("keeps a locally opened %s in a full sidebar and reopens it", async (documentType) => {
+    const { officecli } = await import("./bridge");
+    const file = {
+      filePath: `/tmp/local.${documentType}`,
+      fileName: `local.${documentType}`,
+      documentType,
+      source: "local" as const,
+      lastOpenedAt: "2026-09-11T12:00:00Z",
+    };
+    vi.mocked(officecli.getTaskHistory).mockResolvedValueOnce(Array.from({ length: 40 }, (_, index) => ({
+      taskId: `old-${index}`,
+      createdAt: "2026-09-01T00:00:00Z",
+      events: [{
+        task_id: `old-${index}`,
+        type: "task.completed",
+        payload: {
+          document_type: "docx",
+          result: { file_path: `/tmp/old-${index}.docx`, file_name: `old-${index}.docx`, document_type: "docx" },
+        },
+      }],
+    })));
+    vi.mocked(officecli.openFileDialog).mockResolvedValueOnce(file.filePath);
+
+    const { App } = await import("./App");
+    render(<App />);
+    await waitFor(() => expect(mocks.documents).toHaveLength(40));
+    vi.mocked(officecli.listRecentFiles).mockResolvedValueOnce([file]).mockResolvedValueOnce([file]);
+    fireEvent.click(screen.getByRole("button", { name: "Add reference" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /^Open file/ }));
+    await waitFor(() => expect(mocks.documents[0]).toMatchObject({ id: `file:${file.filePath}`, title: file.fileName }));
+    expect(mocks.documents).toHaveLength(40);
+    fireEvent.click(await screen.findByText("editor-back"));
+    fireEvent.click(screen.getByText(`open-file:${file.filePath}`));
+    await waitFor(() => expect(officecli.openRecentFile).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("editor-back")).toBeInTheDocument();
+    // Opening the workbench is the document step in every suite, and the step
+    // owns the window: the task rail is told to collapse for all three.
+    await waitFor(() => expect(mocks.railRevision).toBeGreaterThan(0));
+  });
+
+  // A running pptx task opens its own draft in the workbench, with no click on
+  // a file: the deck is drawn into an editor the runtime put there. That is the
+  // generation step, and it used to be the one way in that left the task rail
+  // docked over the deck for the whole run.
+  it("hides the task rail when a running task's live draft opens the workbench", async () => {
+    const { officecli } = await import("./bridge");
+
+    const { App } = await import("./App");
+    render(<App />);
+    await waitFor(() => expect(mocks.listener).not.toBe(undefined));
+    expect(mocks.railRevision).toBe(0);
+
+    await act(async () => {
+      mocks.listener({ type: "task.started", task_id: "live-1", payload: { document_type: "pptx" } });
+      mocks.listener({ type: "task.vibe_ops", task_id: "live-1", payload: { ops: [{ op: "shape.add", seq: 1 }] } });
+    });
+
+    await waitFor(() => expect(officecli.createLivePptxDraft).toHaveBeenCalledWith("live-1"));
+    expect(await screen.findByText("editor-back")).toBeInTheDocument();
+    await waitFor(() => expect(mocks.railRevision).toBeGreaterThan(0));
+  });
+
+  it.each(["docx", "pptx", "xlsx", "img", "gif"])("returns the %s editor to New without a completed-result page", async (documentType) => {
+    const { App, writeStoredAppRoute, readStoredAppRoute } = await import("./App");
+    writeStoredAppRoute({ nav: "document", taskId: "finished" });
+    render(<App />);
+    await act(async () => {
+      mocks.listener({ type: "task.completed", task_id: "finished", payload: {
+        document_type: documentType,
+        result: { file_path: `/tmp/result.${documentType}`, file_name: `result.${documentType}`, document_type: documentType },
+      } });
+    });
+    await waitFor(() => expect(readStoredAppRoute()).toEqual({ nav: "home" }));
+    expect(screen.queryByText("Document ready")).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByText("open-finished"));
+    fireEvent.click(await screen.findByText("editor-back"));
+    await waitFor(() => expect(screen.queryByText("editor-back")).not.toBeInTheDocument());
+    expect(readStoredAppRoute()).toEqual({ nav: "home" });
+    expect(screen.getAllByLabelText(PROMPT_LABEL).some(node => node.tagName === "TEXTAREA")).toBe(true);
+    expect(screen.queryByText("Document ready")).not.toBeInTheDocument();
   });
 
   // Regression: a task event was treated as proof that the newest optimistic
@@ -155,8 +253,8 @@ describe("parallel task submissions", () => {
     const byId = new Map(mocks.documents.map((doc) => [doc.id, doc]));
     // Both runs survive as their own task, each keeping the prompt it was
     // submitted with. Adoption renamed A to B's prompt and deleted B outright.
-    expect(byId.get("real-a")?.title).toBe("New slides");
-    expect(byId.get("real-b")?.title).toBe("New slides");
+    expect(byId.get("real-a")?.title).toBe("Untitled task");
+    expect(byId.get("real-b")?.title).toBe("Untitled task");
     // Naming can finish out of order without touching either brief.
     act(() => {
       mocks.listener({ type: "task.title", task_id: "real-b", payload: { topic: "Penguin Life" } });
@@ -197,7 +295,7 @@ describe("parallel task submissions", () => {
 
     const titles = mocks.documents.map((doc) => doc.title);
     expect(mocks.documents.map((doc) => doc.id)).toContain("real-a");
-    expect(titles).toContain("New slides");
+    expect(titles).toContain("Untitled task");
     // The optimistic placeholder must not survive alongside the real task.
     expect(mocks.documents).toHaveLength(1);
   });

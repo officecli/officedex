@@ -134,7 +134,7 @@ export function SpreadsheetJiraPanel({ workbookReady = true, workbookPath, works
   return (
     <section className="spreadsheet-jira-panel" aria-label={t("settings.connector.jira.aria")}>
       <div className="spreadsheet-jira-panel__heading">
-        <div><DatabaseZap aria-hidden="true" /><strong>Jira Connector</strong></div>
+        <div><DatabaseZap aria-hidden="true" /><strong>{t("connector.jira.title")}</strong></div>
         <span>Server / Data Center</span>
       </div>
       <p>{t("settings.row.jira.desc")}</p>

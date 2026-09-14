@@ -66,4 +66,27 @@ describe("PptxProductionStage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Resume" }));
     await waitFor(() => expect(onResume).toHaveBeenCalledOnce());
   });
+
+  it("holds and releases a drawing run through the live controls", async () => {
+    const onPause = vi.fn(async () => undefined);
+    const onResumeLive = vi.fn(async () => undefined);
+    const drawing = task({ status: "running", plan: { id: "p", markdown: "outline", revision: 1 }, vibeSlides: [slide("one")] });
+    const view = render(<PptxProductionStage task={drawing} onPause={onPause} onResumeLive={onResumeLive} />);
+    fireEvent.click(screen.getByRole("button", { name: /Pause/i }));
+    await waitFor(() => expect(onPause).toHaveBeenCalledOnce());
+    view.rerender(<PptxProductionStage task={drawing} onPause={onPause} onResumeLive={onResumeLive} livePaused />);
+    // Held: the status says so, and the only way forward is Continue.
+    expect(screen.getByTestId("pptx-production-status")).toHaveTextContent("Paused");
+    expect(screen.queryByRole("button", { name: /^Pause$/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Continue/i }));
+    await waitFor(() => expect(onResumeLive).toHaveBeenCalledOnce());
+  });
+
+  it("promises live steering only while there is a live run to steer", () => {
+    const drawing = task({ status: "running", plan: { id: "p", markdown: "outline", revision: 1 }, vibeSlides: [slide("one")] });
+    const view = render(<PptxProductionStage task={drawing} onSteer={vi.fn()} />);
+    expect(screen.getByPlaceholderText("Tell OfficeDex what to change from the next slide")).toBeTruthy();
+    view.rerender(<PptxProductionStage task={task({ status: "completed", vibeSlides: [slide("one")] })} onSteer={vi.fn()} />);
+    expect(screen.getByPlaceholderText("Describe the next change")).toBeTruthy();
+  });
 });

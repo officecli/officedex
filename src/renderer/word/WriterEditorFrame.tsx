@@ -27,6 +27,7 @@ const SELECTION_TIMEOUT_MS = 5_000;
 const UNKNOWN_SELECTION: WriterSelectionSummary = { empty: true, collapsed: true };
 
 export interface WriterEditorFrameProps {
+  onAgentReady?: (editor: WriterAgentEditor | null) => void;
   previewToken: string;
   fileName: string;
   /** Opens the document without a save path; Writer hides its save action. */
@@ -39,6 +40,12 @@ export interface WriterEditorFrameProps {
   onReady?: () => void;
   /** Fired after the host writes the document back to disk. */
   onSaved?: (result: { filePath: string; sha256: string; saveAsCopy: boolean }) => void;
+}
+
+export interface WriterAgentEditor {
+  capture(scope: "selection" | "document"): Promise<{ id: string; text: string; scope: "selection" | "document" }>;
+  apply(id: string, edits: { query: string; replacement: string }[]): Promise<{ replaced: number }>;
+  save(): Promise<unknown>;
 }
 
 function toTransferableBuffer(data: ArrayBuffer | Uint8Array): ArrayBuffer {
@@ -83,13 +90,14 @@ export function WriterEditorFrame({
   onUnavailable,
   onReady,
   onSaved,
+  onAgentReady,
 }: WriterEditorFrameProps) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const fingerprintRef = useRef<string | undefined>(undefined);
   const unregisterClientToolsRef = useRef<(() => void) | undefined>(undefined);
   const disposedRef = useRef(false);
   const unavailableRef = useRef(false);
-  const callbacksRef = useRef({ onDirtyChange, onSelectionChange, onUnavailable, onReady, onSaved });
+  const callbacksRef = useRef({ onDirtyChange, onSelectionChange, onUnavailable, onReady, onSaved, onAgentReady });
   // The agent's read_selection tool answers from here rather than a round trip:
   // the embed pushes every change already, so a pull would only add latency.
   const selectionRef = useRef<WriterSelectionSummary>(UNKNOWN_SELECTION);
@@ -98,11 +106,12 @@ export function WriterEditorFrame({
   const requestsRef = useRef(new PendingRequests({ idPrefix: "writer" }));
   const [componentURL, setComponentURL] = useState<string>();
 
-  callbacksRef.current = { onDirtyChange, onSelectionChange, onUnavailable, onReady, onSaved };
+  callbacksRef.current = { onDirtyChange, onSelectionChange, onUnavailable, onReady, onSaved, onAgentReady };
 
   const markUnavailable = useCallback((error?: string) => {
     if (unavailableRef.current) return;
     unavailableRef.current = true;
+    callbacksRef.current.onAgentReady?.(null);
     callbacksRef.current.onUnavailable(error);
   }, []);
 
@@ -254,6 +263,22 @@ export function WriterEditorFrame({
           return;
         }
         case "writer:document-loaded":
+          callbacksRef.current.onAgentReady?.({
+            capture: (scope) => {
+              const requestId = requestsRef.current.nextId();
+              const result = requestsRef.current.open<{ id: string; text: string; scope: "selection" | "document" }>(requestId, 15_000, "Reading document content timed out. Update the Writer component and retry.");
+              post({ type: "writer:capture-edit", requestId, scope });
+              return result;
+            },
+            apply: (id, edits) => {
+              if (readOnly) return Promise.reject(new Error("This document is read-only."));
+              const requestId = requestsRef.current.nextId();
+              const result = requestsRef.current.open<{ replaced: number }>(requestId, 30_000, "Applying document edits timed out.");
+              post({ type: "writer:apply-edit", requestId, id, edits });
+              return result;
+            },
+            save: () => requestSave(false),
+          });
           callbacksRef.current.onDirtyChange?.(false);
           callbacksRef.current.onReady?.();
           return;
@@ -322,6 +347,7 @@ export function WriterEditorFrame({
   useEffect(
     () => () => {
       fingerprintRef.current = undefined;
+      callbacksRef.current.onAgentReady?.(null);
       selectionRef.current = UNKNOWN_SELECTION;
       unregisterClientToolsRef.current?.();
       unregisterClientToolsRef.current = undefined;

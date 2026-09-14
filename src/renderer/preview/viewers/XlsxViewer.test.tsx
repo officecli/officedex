@@ -58,7 +58,7 @@ afterEach(() => {
 
 describe("XlsxViewer", () => {
   it("opens the workbook in the sheet editor rather than a rendered snapshot", () => {
-    render(
+    const { container } = render(
       <XlsxViewer
         previewToken={grant.token}
         fileName={artifact.fileName}
@@ -71,7 +71,8 @@ describe("XlsxViewer", () => {
     const canvas = screen.getByTestId("spreadsheet-canvas");
     expect(canvas).toBeInTheDocument();
     expect(canvas.getAttribute("data-token")).toBe("preview-1");
-    expect(screen.getByText("XLS")).toBeInTheDocument();
+    // The format rides in the title bar as the shared DocTypeIcon.
+    expect(container.querySelector(".wb-titlebar__doc .doc-type--xlsx")).not.toBeNull();
   });
 
   it("saves through the editor once it reports unsaved changes", () => {

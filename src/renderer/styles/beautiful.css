@@ -103,7 +103,29 @@
 .od-button-icon { display: inline-flex; align-items: center; }
 .od-button-loading { pointer-events: none; }
 
-.od-tooltip[data-tooltip] { position: relative; display: inline-flex; }
+/* The anchor, not the bubble. `.od-tooltip` (ui/styles/components.css) styles
+   the bubble itself, and this wrapper wears the same class plus `data-tooltip`.
+   Overriding only position and display left it wearing the rest of the bubble —
+   dark fill, white text, padding, `left: 50%` and `bottom: calc(100% + 6px)` —
+   so anything wrapped in the backend `Tooltip` was displaced out of its slot and
+   repainted as a dark blob. That is what buried the presentation workbench's
+   replay button inside its own title bar. */
+.od-tooltip[data-tooltip] {
+  position: relative;
+  display: inline-flex;
+  bottom: auto;
+  left: auto;
+  z-index: auto;
+  width: auto;
+  max-width: none;
+  overflow-wrap: normal;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  transform: none;
+}
 .od-tooltip[data-tooltip]::after { position: absolute; z-index: 30; bottom: calc(100% + 8px); left: 50%; max-width: 240px; padding: 6px 8px; border: 1px solid oklch(35.6% .007 264.474); border-radius: 6px; background: oklch(27.2% .008 264.435); box-shadow: var(--beautiful-shadow); color: oklch(97.6% .002 247.839); content: attr(data-tooltip); font-size: 11.5px; line-height: 17.25px; opacity: 0; pointer-events: none; transform: translate(-50%, 4px); transition: 120ms ease; white-space: nowrap; }
 .od-tooltip[data-tooltip]:hover::after { opacity: 1; transform: translate(-50%, 0); }
 .od-tooltip-content { position: absolute; z-index: 35; bottom: calc(100% + 8px); left: 50%; max-width: 280px; border: 1px solid oklch(35.6% .007 264.474); border-radius: 6px; background: oklch(27.2% .008 264.435); box-shadow: var(--beautiful-shadow); color: oklch(97.6% .002 247.839); padding: 6px 8px; font-size: 11.5px; line-height: 17.25px; transform: translateX(-50%); white-space: nowrap; }
@@ -138,7 +160,9 @@
 .od-radio { padding: 7px 10px; border-radius: var(--beautiful-pill); }
 .od-radio.is-checked, .od-radio:hover { background: var(--beautiful-panel-hover); color: var(--beautiful-ink); }
 
-.od-dialog-backdrop { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, 0.54); padding: 20px; }
+/* Same tier as .spreadsheet-unsaved: a modal backs onto document.body, so it
+   competes on raw z-index with the preview overlay (100) and must win. */
+.od-dialog-backdrop { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, 0.54); padding: 20px; }
 .od-dialog { width: min(520px, 100%); max-height: min(720px, calc(100vh - 40px)); overflow: auto; border: 1px solid var(--beautiful-line); border-radius: var(--beautiful-radius); background: var(--beautiful-panel); box-shadow: var(--beautiful-shadow); color: var(--beautiful-ink); }
 .od-dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px 12px; }
 .od-dialog-close { border: 0; background: transparent; color: var(--beautiful-muted); cursor: pointer; font-size: 22px; }

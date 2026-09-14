@@ -68,7 +68,7 @@ describe("parseMarketingSelection", () => {
         headerRowIndex: 0,
         assetKind: "marketplace-main",
       }),
-    ).toThrow("图片结果列");
+    ).toThrow("image output column");
   });
 
   it("recognizes existing image and status columns without reserving new columns", () => {

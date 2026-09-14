@@ -1,10 +1,13 @@
 import { useCallback, useState } from "react";
+import { FolderClosed } from "lucide-react";
 import type { WriterSelectionSummary } from "../../../shared/writerProtocol";
 import { officecli } from "../../bridge";
-import { WriterEditorFrame } from "../../word/WriterEditorFrame";
+import { WriterEditorFrame, type WriterAgentEditor } from "../../word/WriterEditorFrame";
 import { DocxAgentPanel, describeDocxSelection } from "../../word/DocxAgentPanel";
 import { OfficeWorkbenchLayout } from "../../workbench/OfficeWorkbenchLayout";
+import { PreviewRail } from "../PreviewRail";
 import { useT } from "../../i18n";
+import { Button, Tooltip, toast } from "../../ui";
 
 interface DocxViewerProps {
   previewToken: string;
@@ -14,6 +17,13 @@ interface DocxViewerProps {
   filePath?: string;
   onDirtyChange?: (dirty: boolean) => void;
   onRequestClose?: () => void;
+  /**
+   * This viewer is the whole window (`?offlinePreview=1`) rather than an overlay
+   * on top of the cockpit. Only then does it own a file rail: under the shell
+   * the rail is already there behind the overlay, and a second one inside the
+   * workbench would be two drawers with the same contents.
+   */
+  standalone?: boolean;
 }
 
 /** Before Writer reports anything, an instruction would apply to the whole file. */
@@ -31,10 +41,12 @@ export default function DocxViewer({
   filePath,
   onDirtyChange,
   onRequestClose,
+  standalone = false,
 }: DocxViewerProps) {
   const t = useT();
   const [unavailable, setUnavailable] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [agentEditor, setAgentEditor] = useState<WriterAgentEditor | null>(null);
   const [selection, setSelection] = useState<WriterSelectionSummary>(NO_SELECTION);
 
   const openExternal = useCallback(() => {
@@ -46,9 +58,43 @@ export default function DocxViewer({
       documentType="docx"
       fileName={fileName}
       saveState={dirty ? "dirty" : "saved"}
+      // The rail carries the way out to the file list when this window has one,
+      // and the title bar drops its own back button to match (the layout keeps
+      // exactly one control per trip). Viewers without a rail keep the button.
       onBack={onRequestClose}
       backLabel={t("workbench.closePreview")}
+      rail={
+        standalone && onRequestClose
+          ? {
+              label: t("workbench.railTitle"),
+              children: (
+                <PreviewRail
+                  fileName={fileName}
+                  filePath={filePath}
+                  onBackToFiles={onRequestClose}
+                />
+              ),
+            }
+          : undefined
+      }
       onOpenExternal={openExternal}
+      actions={filePath ? (
+        <Tooltip title={t("preview.showInFolder")}>
+          <Button
+            type="text"
+            size="small"
+            ariaLabel={t("preview.showInFolder")}
+            icon={<FolderClosed size={16} />}
+            onClick={() => {
+              void officecli.showItemInFolder(filePath).catch((error) => {
+                toast.error(t("preview.showInFolderFailed", {
+                  error: error instanceof Error ? error.message : String(error),
+                }));
+              });
+            }}
+          />
+        </Tooltip>
+      ) : undefined}
       notice={
         unavailable !== null ? (
           <div className="wb-notice" role="note">
@@ -62,15 +108,14 @@ export default function DocxViewer({
         unavailable === null
           ? {
               title: t("docx.agent.panelTitle"),
-              target: t("docx.agent.target", { file: fileName }),
-              targetTitle: filePath ?? fileName,
-              scope: describeDocxSelection(selection, t),
-              children: <DocxAgentPanel />,
+              children: <DocxAgentPanel key={previewToken} editor={agentEditor} filePath={filePath} selection={selection} scope={describeDocxSelection(selection, t)} />,
             }
           : undefined
       }
     >
       <WriterEditorFrame
+        key={previewToken}
+        onAgentReady={setAgentEditor}
         previewToken={previewToken}
         fileName={fileName}
         onDirtyChange={(next) => {

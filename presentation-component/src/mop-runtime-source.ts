@@ -30,12 +30,15 @@ export function resolveMopRuntimeEntry({
   return fallbackEntry;
 }
 
-/** Prefer the locally built BOS runtime to the older workspace snapshot. */
+/** Use the versioned Presentation package; local BOS output may be stale. */
 export function resolveMopWasmEntry(
   sourceRoot: string,
   exists: (candidate: string) => boolean = existsSync,
 ): string {
+  const packageEntry = path.join(sourceRoot, "packages", "mop-wasm", "mop_wasm.js");
+  if (exists(packageEntry)) return packageEntry;
+  // Older prepared source archives only carry the BOS distribution.
   const builtEntry = path.join(sourceRoot, "bos", "dist", "mop-wasm", "pkg", "mop_wasm.js");
   if (exists(builtEntry)) return builtEntry;
-  return path.join(sourceRoot, "packages", "mop-wasm", "mop_wasm.js");
+  throw new Error(`MOP WASM runtime is missing from ${sourceRoot}.`);
 }

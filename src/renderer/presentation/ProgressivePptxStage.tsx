@@ -1,14 +1,17 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ArrowDown, ArrowUp, Bug, Check, Palette, Play, Sparkles } from "lucide-react";
 import type { DesktopTask, TaskQuestionAnswer } from "../../shared/types";
 import { PptxProductionStage, type PptxProductionStageProps } from "./PptxProductionStage";
 import { PresentationEditorFrame, type PresentationEditorFrameProps } from "./PresentationEditorFrame";
 import { useT } from "../i18n";
 import { imageProgressFromOps } from "./pptxProgress";
+import { pptxDeckStillDrawing } from "./pptxDeckState";
 import { Button, Input, TextArea } from "../ui";
-import { pptxRuntimeActivity } from "./pptxRuntimeActivity";
+import { pptxContentPreviews, pptxPageStates, pptxRuntimeActivity } from "./pptxRuntimeActivity";
 import { usePptxFlowCopy } from "./pptxFlowCopy";
 import { usePptxFlowDemo } from "./usePptxFlowDemo";
+import { usePptxBottomFollow } from "./usePptxBottomFollow";
+import { PptxFailurePanel } from "./PptxFailurePanel";
 import "./progressivePptxStage.css";
 
 export type ProgressivePptxPhase = "brief" | "outline" | "draft" | "drawing" | "ready" | "failed" | "cancelled";
@@ -24,12 +27,29 @@ export interface ProgressivePptxStageProps {
   onContinue?: (outline?: Array<{ id: string; title: string; detail?: string; estimatedSlides?: number; slide?: number }>) => void | Promise<void>;
   onStartDrawing?: (outline?: Array<{ id: string; title: string; detail?: string; estimatedSlides?: number; slide?: number }>) => void | Promise<void>;
   onQuestionAnswer?: (answer: TaskQuestionAnswer) => void | Promise<void>;
+  onRetryFailed?: (checkpoint: string) => Promise<void>;
+  onSkipResearch?: () => Promise<void>;
+  onCheckStatus?: () => Promise<void>;
   onRefresh?: () => void | Promise<void>;
   onDeleteTask?: () => void | Promise<void>;
   productionProps?: Omit<PptxProductionStageProps, "task">;
 }
 
 type OutlineItem = { id: string; title: string; detail?: string; estimatedSlides?: number; slide?: number };
+
+/**
+ * The elapsed/last-activity pair is noise before the run is old enough for the
+ * numbers to mean anything: at six seconds both read "0:06" and "just now",
+ * which is two more things to read on a screen whose only news is one line.
+ */
+const TIMING_VISIBLE_MS = 30_000;
+
+/**
+ * One failed probe is not news. The status lookup shares a bridge process with
+ * the run it is asking about, so a single miss during startup is expected; only
+ * a repeated failure is worth telling the user about.
+ */
+const STATUS_CHECK_FAILURES_BEFORE_NOTICE = 2;
 
 function asOutlineItem(value: unknown, index: number): OutlineItem | null {
   if (typeof value === "string" && value.trim()) return { id: `outline-${index + 1}`, title: value.trim() };
@@ -133,8 +153,7 @@ function outlineItems(task: DesktopTask): OutlineItem[] {
 
 function phaseFor(task: DesktopTask, draftReady: boolean): ProgressivePptxPhase {
   if (task.status === "failed" || task.status === "cancelled") return task.status;
-  const images = imageProgressFromOps(task.vibeOps ?? []);
-  if (task.status === "completed") return images.pending > 0 && !task.vibeOps?.some(op => op.op === "deck.end") ? "drawing" : "ready";
+  if (task.status === "completed") return pptxDeckStillDrawing(task) ? "drawing" : "ready";
   if (task.vibeSlides?.some(Boolean) || task.vibeOps?.length) return "drawing";
   const runtime = pptxRuntimeActivity(task);
   if (runtime.phase) return runtime.phase;
@@ -158,6 +177,24 @@ function previewText(value: unknown): string {
   return new DOMParser().parseFromString(value, "text/html").body.textContent?.trim() ?? "";
 }
 
+/**
+ * The runtime reports what it is actually doing through `step`; the card used to
+ * take its title from the view's own phase instead, so a deck being
+ * access-checked was announced as "understanding your direction". These buckets
+ * follow the pipeline's real stages so the title and the progress line under it
+ * agree with each other.
+ */
+function stepHeadingKey(step: string | undefined): string | undefined {
+  if (!step) return undefined;
+  if (step === "plan.research") return "pptx.stage.stepHeading.research";
+  if (step.startsWith("plan.outline") || step === "plan.style") return "pptx.stage.stepHeading.structure";
+  if (step === "plan.expand" || step === "generate" || step === "generate_llm") return "pptx.stage.stepHeading.write";
+  if (step.startsWith("skill.") || step === "assemble" || step === "render") return "pptx.stage.stepHeading.draw";
+  if (step === "export" || step === "write_file" || step === "publish" || step === "finalize") return "pptx.stage.stepHeading.export";
+  if (step === "license" || step === "plan_prepare") return "pptx.stage.stepHeading.prepare";
+  return undefined;
+}
+
 export function ProgressivePptxStage(props: ProgressivePptxStageProps) {
   const copy = usePptxFlowCopy();
   const demo = usePptxFlowDemo(props.task.id);
@@ -173,23 +210,27 @@ export function ProgressivePptxStage(props: ProgressivePptxStageProps) {
   </div>;
 }
 
-function PptxFlowContent({ task, draftReady = false, editor, onBriefChange, onOutlineChange, onContinue, onStartDrawing, onQuestionAnswer, onDeleteTask, onRefresh, productionProps, demoTick }: ProgressivePptxStageProps & { demoTick?: number }) {
+function PptxFlowContent({ task, draftReady = false, editor, onBriefChange, onOutlineChange, onContinue, onStartDrawing, onQuestionAnswer, onDeleteTask, onRefresh, onCheckStatus, onSkipResearch, onRetryFailed, productionProps, demoTick }: ProgressivePptxStageProps & { demoTick?: number }) {
   const t = useT();
   const copy = usePptxFlowCopy();
   const phase = phaseFor(task, draftReady);
   const runtime = pptxRuntimeActivity(task);
+  const contentPreviews = pptxContentPreviews(task);
+  const pageStates = pptxPageStates(task);
+  const recoveryPath = [...task.events].reverse().find(event => typeof event.payload?.resume_checkpoint === "string" && event.payload.resume_checkpoint)?.payload?.resume_checkpoint as string | undefined;
   const [now, setNow] = useState(Date.now);
   const mountedAt = useRef(Date.now());
   const [checked, setChecked] = useState(false);
   const isDemo = demoTick !== undefined;
   const waiting = task.status === "question" || task.status === "plan_review";
-  const processing = !waiting && (task.status === "starting" || task.status === "running" || phase === "drawing");
+  const processing = !waiting && (task.status === "starting" || task.status === "running");
   useEffect(() => {
     if (!processing || isDemo) return;
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [processing, isDemo]);
   const quietMs = Math.max(0, now - (runtime.timestamp ?? runtime.started ?? mountedAt.current));
+  const backendAlive = runtime.heartbeatAt !== undefined && now - runtime.heartbeatAt < 15_000;
   const delayed = processing && !isDemo && quietMs >= 120_000;
   const formatDuration = (ms: number) => `${Math.floor(Math.max(0, ms) / 60_000)}:${String(Math.floor(Math.max(0, ms) / 1000) % 60).padStart(2, "0")}`;
   const elapsedMs = runtime.started !== undefined ? now - runtime.started : runtime.elapsed > 0 ? runtime.elapsed + quietMs : now - mountedAt.current;
@@ -204,13 +245,42 @@ function PptxFlowContent({ task, draftReady = false, editor, onBriefChange, onOu
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
   const [error, setError] = useState<string>();
+  const [statusCheckFailed, setStatusCheckFailed] = useState(false);
+  const statusCheckFailures = useRef(0);
+  const refreshRef = useRef(onCheckStatus ?? onRefresh);
+  refreshRef.current = onCheckStatus ?? onRefresh;
+  const activityRef = useRef(runtime);
+  activityRef.current = runtime;
+  // A task that still carries its own client id has not been promoted yet: the
+  // bridge has never heard of that id, so a status lookup can only fail. Asking
+  // anyway painted "unable to confirm background status" over the first seconds
+  // of every run — the one moment the user has least reason to doubt the app.
+  const awaitingServerId = Boolean(task.clientTaskId && task.id === task.clientTaskId);
+  useEffect(() => {
+    if (!processing || isDemo || awaitingServerId || (!onCheckStatus && !onRefresh)) return;
+    let pending = false;
+    const timer = window.setInterval(async () => {
+      const activity = activityRef.current;
+      const lastSeen = Math.max(activity.heartbeatAt ?? 0, activity.timestamp ?? 0, activity.started ?? mountedAt.current);
+      if ((!onCheckStatus && Date.now() - lastSeen < 30_000) || pending || inFlight.current) return;
+      pending = true;
+      try {
+        await refreshRef.current?.();
+        statusCheckFailures.current = 0;
+        setStatusCheckFailed(false);
+      } catch {
+        statusCheckFailures.current += 1;
+        if (statusCheckFailures.current >= STATUS_CHECK_FAILURES_BEFORE_NOTICE) setStatusCheckFailed(true);
+      }
+      finally { pending = false; }
+    }, onCheckStatus ? 3000 : 30_000);
+    return () => window.clearInterval(timer);
+  }, [processing, isDemo, awaitingServerId, task.id, Boolean(onRefresh), Boolean(onCheckStatus)]);
   const [answer, setAnswer] = useState("");
   const [selected, setSelected] = useState<string>();
   const [dragged, setDragged] = useState<number | null>(null);
-  const [following, setFollowing] = useState(true);
-  const followRef = useRef(true);
   const contentRef = useRef<HTMLDivElement>(null);
-  const latestRef = useRef<HTMLDivElement>(null);
+  const actionsRef = useRef<HTMLDivElement>(null);
   const question = task.status === "question" && phase === "brief" ? task.question : undefined;
   const defaultOption = question?.options.find(option => option.recommended) ?? question?.options[0];
   useEffect(() => { setAnswer(""); setSelected(defaultOption?.id); }, [question?.id, defaultOption?.id]);
@@ -232,44 +302,37 @@ function PptxFlowContent({ task, draftReady = false, editor, onBriefChange, onOu
   const slides = task.vibeSlides ?? [];
   const readySlides = slides.flatMap((slide, index) => slide ? [{ slide, index }] : []);
   const showGeneration = draftReady || ["drawing", "ready", "failed", "cancelled"].includes(phase);
+  // A stopped run is over: nothing more will arrive, so the stage drops the
+  // follow-latest affordance and hands the screen to the failure panel instead
+  // of leaving controls that only made sense while work was in flight.
+  const terminal = phase === "failed" || phase === "cancelled";
   const showOutline = phase === "outline" || outlineDraft.length > 0;
   const showDirection = Boolean(direction) || (isDemo && demoTick >= 8);
   const activeStep = !processing ? undefined : phase === "brief" ? "brief" : isDemo && demoTick >= 8 && demoTick < 11 ? "style" : showGeneration ? "drawing" : "outline";
   const images = imageProgressFromOps(task.vibeOps ?? []);
   const total = task.vibeOutline?.slides?.length;
   const progress = total && readySlides.length <= total ? readySlides.length / total : undefined;
-  const heading = phase === "brief" ? t("pptx.stage.processingBrief") : phase === "outline" ? t("pptx.stage.processingOutline") : phase === "ready" ? t("pptx.stage.ready") : phase === "failed" ? t("pptx.stage.failed") : phase === "cancelled" ? t("pptx.stage.cancelled") : runtime.image ? copy("imageWorking") : runtime.phase === "drawing" ? copy("runtimeWorking") : copy("generate");
+  const stepHeading = stepHeadingKey(runtime.step);
+  const heading = phase === "ready" ? t("pptx.stage.ready") : phase === "failed" ? t("pptx.stage.failed") : phase === "cancelled" ? t("pptx.stage.cancelled") : runtime.image ? copy("imageWorking") : stepHeading ? t(stepHeading) : phase === "brief" ? t("pptx.stage.processingBrief") : phase === "outline" ? t("pptx.stage.processingOutline") : runtime.phase === "drawing" ? copy("runtimeWorking") : copy("generate");
 
-  const setFollow = (value: boolean) => { followRef.current = value; setFollowing(value); };
-  const scrollLatest = () => {
-    const content = contentRef.current;
-    if (!content || content.closest("[hidden], [data-home-entry-transition]")) return;
-    const behavior = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
-    // The document workspace owns scrolling. There is no nested stage scroller.
-    latestRef.current?.scrollIntoView?.({ block: "nearest", behavior });
-  };
-  const signature = `${phase}:${task.status}:${outlineDraft.map(item => `${item.id}:${item.title}`).join("|")}:${readySlides.length}:${direction ?? ""}:${demoTick ?? ""}`;
+  const signature = `${phase}:${task.status}:${outlineDraft.map(item => `${item.id}:${item.title}`).join("|")}:${readySlides.length}:${direction ?? ""}:${demoTick ?? ""}:${runtime.timestamp ?? ""}:${runtime.message ?? ""}:${task.vibeOps?.length ?? 0}`;
+  const { following, setFollow, scrollLatest } = usePptxBottomFollow(contentRef, signature);
+
+  /**
+   * The action bar is sticky at the bottom of the scroller, so anything that has
+   * to clear it needs its real height. Guessing that number is what put the
+   * follow pill in the middle of the reading column.
+   */
+  const [actionsHeight, setActionsHeight] = useState(0);
   useEffect(() => {
-    if (!followRef.current) return;
-    const frame = requestAnimationFrame(scrollLatest);
-    return () => cancelAnimationFrame(frame);
-  }, [signature]);
-  useEffect(() => {
-    const content = contentRef.current;
-    if (!content) return;
-    const wheel = (event: WheelEvent) => { if (event.deltaY < 0) setFollow(false); };
-    const touch = () => setFollow(false);
-    const key = (event: KeyboardEvent) => { if (["ArrowUp", "PageUp", "Home"].includes(event.key)) setFollow(false); };
-    const scroller = content.closest(".document-workspace")?.parentElement ?? content;
-    scroller.addEventListener("wheel", wheel as EventListener, { passive: true });
-    scroller.addEventListener("touchstart", touch, { passive: true });
-    scroller.addEventListener("keydown", key as EventListener);
-    return () => {
-      scroller.removeEventListener("wheel", wheel as EventListener);
-      scroller.removeEventListener("touchstart", touch);
-      scroller.removeEventListener("keydown", key as EventListener);
-    };
-  }, []);
+    const element = actionsRef.current;
+    if (!element) return;
+    const measure = () => setActionsHeight(Math.round(element.getBoundingClientRect().height));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [showGeneration, isDemo]);
 
   const updateOutline = (next: OutlineItem[]) => { setOutlineDraft(next); onOutlineChange?.(JSON.stringify(next)); };
   const move = (from: number, to: number) => {
@@ -298,48 +361,68 @@ function PptxFlowContent({ task, draftReady = false, editor, onBriefChange, onOu
     </div>
   </div> : null;
   const refreshStatus = async () => {
-    if (!onRefresh || inFlight.current) return;
+    if ((!onRefresh && !onCheckStatus) || inFlight.current) return;
     inFlight.current = true; setBusy(true); setError(undefined); setChecked(false);
-    try { await onRefresh(); setChecked(true); } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+    try { await onCheckStatus?.(); await onRefresh?.(); setStatusCheckFailed(false); setChecked(true); } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
     finally { inFlight.current = false; setBusy(false); }
   };
+  // Every action the stopped-run panel offers goes through the same guard, so a
+  // double click cannot start two runs and a rejected action surfaces in the
+  // stage instead of vanishing.
+  const runTerminalAction = (run: () => void | Promise<void>) => {
+    if (inFlight.current) return;
+    inFlight.current = true; setBusy(true); setError(undefined);
+    void Promise.resolve(run()).catch(reason => setError(reason instanceof Error ? reason.message : String(reason))).finally(() => { inFlight.current = false; setBusy(false); });
+  };
+  // The three-stage roadmap is a position, not a paragraph: one dot per stage
+  // with only the current one named, instead of three labels and two carets
+  // competing with the status line right next to them.
+  const railLabels = [copy("outlineNext"), copy("designNext"), copy("readyNext")];
+  // The rail only exists while the deck is being produced: the completed state
+  // replaces this whole block, so the last stage is never the current one here.
+  const railIndex = showGeneration ? 1 : 0;
   const waitingPreview = <div className="pptx-flow-waiting-preview" aria-label={copy("previewPending")}>
     <div className="pptx-flow-preview-art" aria-hidden="true"><div className="pptx-flow-preview-sheet"><span /><i /><i /><div><b /><b /><b /></div></div><div className="pptx-flow-preview-orbit" /></div>
-    <strong>{copy("previewPending")}</strong><p>{copy("previewHint")}</p>
-    <div className="pptx-flow-next"><span>{copy("outlineNext")}</span><span>{copy("designNext")}</span><span>{copy("readyNext")}</span></div>
+    <strong>{copy("previewPending")}</strong>
+    <div className="pptx-flow-rail" data-testid="pptx-flow-rail" data-stage={railIndex}>{railLabels.map((label, index) => <span key={label} className={index < railIndex ? "is-done" : index === railIndex ? "is-current" : ""}><i aria-hidden="true" />{index === railIndex ? label : ""}</span>)}</div>
   </div>;
+  // The primary line is ours and always localized; the runtime's own sentence —
+  // engine text, English regardless of locale — sits underneath it as detail.
+  // Rendering the sentence on top made the loudest line on a Chinese screen
+  // English, and duplicated the step heading whenever no sentence had arrived.
   const work = (label: string) => <div className={`pptx-flow-workspace ${delayed ? "is-delayed" : ""} ${readySlides.length === 0 && !editor ? "has-preview" : ""}`}>
     <div className="pptx-flow-workspace__status">
-      <div className="pptx-flow-working" role="status" aria-live="polite"><Sparkles size={17} aria-hidden="true" /><div><strong>{delayed ? copy("delayed") : runtime.message || label}</strong><span>{delayed ? copy("delayedHint") : t("pptx.stage.autoUpdateHint")}</span><div className="pptx-flow-skeleton" aria-hidden="true"><i /><i /></div></div>{!delayed ? <span className="pptx-flow-dots" aria-hidden="true"><i /><i /><i /></span> : null}</div>
-      {!isDemo ? <div className="pptx-flow-timing"><span>{copy("elapsed")} <b>{formatDuration(elapsedMs)}</b></span><span>{copy("lastUpdate")} <b>{quietMs < 1000 ? copy("justNow") : quietMs < 60_000 ? `${Math.floor(quietMs / 1000)}${copy("secondsAgo")}` : `${Math.floor(quietMs / 60_000)}${copy("minutesAgo")}`}</b></span></div> : null}
-      {runtime.message ? <small className="pptx-flow-runtime-label">{copy("activity")}</small> : null}
-      {onRefresh ? <div className="pptx-flow-refresh"><Button disabled={busy} onClick={() => void refreshStatus()}>{copy("refresh")}</Button>{checked ? <span role="status">{copy("refreshed")}</span> : null}</div> : null}
+      <div className="pptx-flow-working" role="status" aria-live="polite"><Sparkles size={17} aria-hidden="true" /><div><strong>{delayed ? copy("delayed") : label}</strong>{delayed ? <span>{backendAlive ? copy("stillProcessing") : copy("delayedHint")}</span> : runtime.message ? <span className="pptx-flow-runtime-detail">{runtime.message}</span> : null}<div className="pptx-flow-skeleton" aria-hidden="true"><i /><i /></div></div>{!delayed ? <span className="pptx-flow-dots" aria-hidden="true"><i /><i /><i /></span> : null}</div>
+      {!isDemo && elapsedMs >= TIMING_VISIBLE_MS ? <div className="pptx-flow-timing"><span>{copy("elapsed")} <b>{formatDuration(elapsedMs)}</b></span><span>{copy("lastUpdate")} <b>{quietMs < 1000 ? copy("justNow") : quietMs < 60_000 ? `${Math.floor(quietMs / 1000)}${copy("secondsAgo")}` : `${Math.floor(quietMs / 60_000)}${copy("minutesAgo")}`}</b></span></div> : null}
+      {processing && runtime.step === "plan.research" && onSkipResearch ? <Button disabled={busy} onClick={() => { if (inFlight.current) return; inFlight.current = true; setBusy(true); void onSkipResearch().catch(reason => setError(String(reason))).finally(() => { inFlight.current = false; setBusy(false); }); }}>{copy("skipResearch")}</Button> : null}
+      {statusCheckFailed ? <p className="pptx-flow-status-note" data-testid="pptx-status-check-note">{copy("statusUnavailable")}</p> : null}
+      {(onRefresh || onCheckStatus) ? <div className="pptx-flow-refresh"><Button disabled={busy} onClick={() => void refreshStatus()}>{copy("refresh")}</Button>{checked ? <span role="status">{copy("refreshed")}</span> : null}</div> : null}
     </div>
     {readySlides.length === 0 && !editor ? waitingPreview : null}
   </div>;
   const stepHeader = (number: number, title: string, status: string, done: boolean) => <header className="pptx-flow-step__header"><span className={`pptx-flow-node ${done ? "is-done" : ""}`} aria-hidden="true">{done ? <Check size={13} /> : number}</span><h2>{title}</h2><span className="pptx-flow-status">{status}</span></header>;
 
-  return <section className="progressive-pptx-stage" data-testid="progressive-pptx-stage" data-phase={phase} data-demo={isDemo || undefined} data-demo-style={demoStyle} data-delayed={delayed || undefined}>
+  return <section className="progressive-pptx-stage" data-testid="progressive-pptx-stage" data-phase={phase} data-demo={isDemo || undefined} data-demo-style={demoStyle} data-delayed={delayed || undefined} data-generation={showGeneration ? "true" : undefined} style={{ "--pptx-actions-h": `${actionsHeight}px` } as CSSProperties}>
     <div className="progressive-pptx-stage__content-scroll" ref={contentRef}>
       <div className="progressive-pptx-stage__disclosure" data-testid="progressive-disclosure">
         <div className="pptx-flow-request"><span>{copy("request")}</span><TextArea aria-label={t("pptx.stage.briefAria")} value={brief} readOnly={!canEdit || !onBriefChange} onChange={event => onBriefChange?.(event.target.value)} rows={2} onFocus={() => setFollow(false)} /></div>
         <div className="pptx-flow-lower">
         {phase === "brief" ? <section className={`pptx-flow-step ${activeStep === "brief" ? "is-active" : ""}`} aria-busy={activeStep === "brief"}>
-          {stepHeader(1, processing ? heading : t("pptx.stage.brief"), processing ? t("pptx.stage.briefProcessing") : copy("waiting"), false)}
+          {stepHeader(1, processing ? heading : t("pptx.stage.brief"), processing ? "" : copy("waiting"), false)}
           {question && onQuestionAnswer ? <div className="progressive-pptx-stage__question" data-testid="progressive-question"><p>{question.question}</p>
             {question.options.length > 1 ? <div className="progressive-pptx-stage__question-options">{question.options.map(option => <Button key={option.id} className={selected === option.id ? "is-selected" : ""} aria-pressed={selected === option.id} disabled={busy} onClick={() => { setSelected(option.id); setAnswer(""); }}><strong>{option.label}</strong>{option.description ? <small>{option.description}</small> : null}</Button>)}</div> : null}
             {question.allowFreeform ? <Input aria-label={t("documentWorkspace.customAnswer")} placeholder={t("documentWorkspace.customAnswerPlaceholder")} value={answer} disabled={busy} onChange={event => setAnswer(event.target.value)} onFocus={() => setFollow(false)} onPressEnter={event => { if (!event.nativeEvent.isComposing) void runAction(); }} /> : null}
           </div> : null}
-          {processing ? work(heading) : actions}
+          {processing ? work(t("pptx.stage.processingBriefDesc")) : actions}
           {processing && productionProps?.onCancel ? <Button className="pptx-flow-cancel" onClick={productionProps.onCancel}>{t("pptx.stage.cancel")}</Button> : null}
         </section> : null}
         {showOutline ? <section className={`pptx-flow-step ${activeStep === "outline" ? "is-active" : ""}`} aria-busy={activeStep === "outline"} data-testid="pptx-flow-outline">
           {stepHeader(1, copy("outline"), activeStep === "outline" ? t("pptx.stage.processingOutline") : outlineDraft.length ? copy("outlineReady") : t("pptx.stage.outlineWaiting"), outlineDraft.length > 0 && (phase !== "outline" || waiting))}
           {outlineDraft.length ? <ol className="pptx-flow-outline" aria-label={t("pptx.stage.outlineAria")}>{outlineDraft.map((item, index) => <li key={item.id} className={activeStep === "outline" && index === outlineDraft.length - 1 ? "is-writing" : ""} draggable={canEditOutline} onDragStart={() => setDragged(index)} onDragEnd={() => setDragged(null)} onDragOver={event => { if (canEditOutline) event.preventDefault(); }} onDrop={() => { if (dragged !== null) move(dragged, index); setDragged(null); }}>
-            <span className="pptx-flow-index">{String(index + 1).padStart(2, "0")}</span><div><Input aria-label={t("pptx.stage.sectionTitleAria", { section: index + 1 })} value={item.title} readOnly={!canEditOutline} onFocus={() => setFollow(false)} onChange={event => updateOutline(outlineDraft.map((old, i) => i === index ? { ...old, title: event.target.value } : old))} />{item.detail ? <small>{item.detail}</small> : null}</div>
+            <span className="pptx-flow-index">{String(index + 1).padStart(2, "0")}</span><div><Input aria-label={t("pptx.stage.sectionTitleAria", { section: index + 1 })} value={item.title} readOnly={!canEditOutline} onFocus={() => setFollow(false)} onChange={event => updateOutline(outlineDraft.map((old, i) => i === index ? { ...old, title: event.target.value } : old))} />{item.detail ? <small>{item.detail}</small> : null}{/* Always rendered, so a page's status word arriving does not make the row taller and shove everything below it up the screen. */}<small className="pptx-flow-outline__state" data-state={pageStates.get(item.slide ?? index + 1) ?? "none"}>{pageStates.has(item.slide ?? index + 1) ? copy(pageStates.get(item.slide ?? index + 1)!) : ""}</small></div>
             {canEditOutline ? <div className="pptx-flow-reorder"><Button size="small" ariaLabel={copy("moveUp")} disabled={index === 0} onClick={() => move(index, index - 1)} icon={<ArrowUp size={12} />} /><Button size="small" ariaLabel={copy("moveDown")} disabled={index === outlineDraft.length - 1} onClick={() => move(index, index + 1)} icon={<ArrowDown size={12} />} /></div> : null}
           </li>)}</ol> : <p>{t("pptx.stage.outlineWaiting")}</p>}
-          {activeStep === "outline" ? work(t("pptx.stage.processingOutline")) : null}
+          {activeStep === "outline" ? work(t("pptx.stage.processingOutlineDesc")) : null}
           {phase === "outline" ? actions : null}
           {activeStep === "outline" && productionProps?.onCancel ? <Button className="pptx-flow-cancel" onClick={productionProps.onCancel}>{t("pptx.stage.cancel")}</Button> : null}
         </section> : null}
@@ -352,20 +435,41 @@ function PptxFlowContent({ task, draftReady = false, editor, onBriefChange, onOu
           {stepHeader(3, heading, readySlides.length ? `${readySlides.length}${total ? ` / ${total}` : ""} ${t("ui.text.slidesready")}` : "", phase === "ready")}
           {progress !== undefined ? <div className="pptx-flow-progress" role="progressbar" aria-label={t("ui.text.Slideprogress")} aria-valuemin={0} aria-valuemax={total} aria-valuenow={readySlides.length}><span style={{ width: `${progress * 100}%` }} /></div> : null}
           {phase === "draft" ? <div data-testid="draft-ready">{work(t("pptx.stage.draftOpening"))}</div> : null}
+          {terminal ? (
+            <PptxFailurePanel
+              task={task}
+              busy={busy}
+              resumeCheckpoint={task.failure?.resume_checkpoint ?? recoveryPath}
+              onResume={onRetryFailed ? (checkpoint) => runTerminalAction(() => onRetryFailed(checkpoint)) : undefined}
+              onOpenPartial={productionProps?.onOpenEditor ? () => runTerminalAction(() => productionProps.onOpenEditor!()) : undefined}
+              onRestart={productionProps?.onRetry ? () => runTerminalAction(() => productionProps.onRetry!()) : undefined}
+            />
+          ) : null}
+          {contentPreviews.length ? <div data-testid="pptx-content-previews"><p>{copy("contentReady")} {contentPreviews.length}{total ? ` / ${total}` : ""}</p><div className="pptx-flow-pages">{contentPreviews.filter(page => !slides[page.slide - 1]).map(page => <article className="pptx-flow-page" key={page.slide} data-testid={`pptx-content-page-${page.slide}`}><div className="pptx-flow-page__canvas"><small>{t("pptx.stage.slideNumber", { slide: page.slide })}</small><h3>{page.headline}</h3><p>{page.takeaway}</p><details><summary>{copy("viewContent")}</summary>{page.details.map((text, index) => <p key={index}>{text}</p>)}</details></div><footer>{copy("contentPreview")}</footer></article>)}</div></div> : null}
           <div className="pptx-flow-pages">{readySlides.map(({ slide, index }) => {
             const texts = slide.elements.flatMap(element => { const record = element && typeof element === "object" ? element as Record<string, unknown> : {}; const text = previewText(record.content ?? record.text); return text ? [text] : []; });
             return <article className={`pptx-flow-page ${isDemo ? "is-demo" : ""}`} key={`${index}-${slide.id}`} data-testid={`pptx-flow-page-${index + 1}`}><div className="pptx-flow-page__canvas"><small>{isDemo ? "OfficeDex" : t("pptx.stage.slideNumber", { slide: index + 1 })}</small><h3>{texts[0] || outlineDraft[index]?.title || copy("contentPending")}</h3>{texts.slice(1, 5).map((text, i) => <p key={i}>{text}</p>)}</div><footer><span>{String(index + 1).padStart(2, "0")}</span><span>{isDemo ? copy("demo") : copy("contentPreview")}</span></footer></article>;
           })}</div>
           {activeStep === "drawing" && phase !== "draft" ? work(images.pending > 0 ? t("ui.text.Pagesarereadywhilecountimagesarestillgenerating", { count: images.pending }) : copy("preparing")) : null}
           {editor ? <div className="progressive-pptx-stage__editor" data-testid="progressive-editor"><PresentationEditorFrame {...editor} /></div> : null}
-          {!isDemo ? <PptxProductionStage task={task} {...productionProps} compact /> : phase === "ready" ? <p className="pptx-flow-complete"><Check size={16} />{copy("demoDone")}</p> : null}
+          {isDemo && phase === "ready" ? <p className="pptx-flow-complete"><Check size={16} />{copy("demoDone")}</p> : null}
           {import.meta.env.DEV && task.vibeOps?.length ? <details className="pptx-flow-details"><summary>{copy("details")}</summary><ol data-testid="op-stream">{task.vibeOps.slice(-10).map((op, index) => <li key={`${op.seq}-${index}`}>{op.op}{op.slide ? ` · ${t("pptx.stage.slideNumber", { slide: op.slide })}` : ""} {op.seq ? `#${op.seq}` : ""}</li>)}</ol></details> : null}
         </section> : null}
         {error ? <div role="alert" className="progressive-pptx-stage__error">{error}</div> : null}
-        <div ref={latestRef} className="pptx-flow-latest" />
+        <div className="pptx-flow-latest" />
         </div>
       </div>
+      {/* The action bar lives outside the step, one level below the disclosure.
+          Sticky is bounded by the containing block, so inside the generation step
+          it could only pin while that one screen was in view — reading an earlier
+          step made the main actions disappear. Out here its containing block is
+          the whole scroller, which is what "always at the bottom" requires. */}
+      {!isDemo && showGeneration ? (
+        <div className="pptx-flow-actions" data-testid="pptx-flow-actions" ref={actionsRef}>
+          <PptxProductionStage task={task} {...productionProps} compact />
+        </div>
+      ) : null}
     </div>
-    {showGeneration && (readySlides.length > 0 || editor) ? <Button className="pptx-flow-follow" size="small" aria-pressed={following} onClick={() => { setFollow(!following); if (!following) scrollLatest(); }} icon={<ArrowDown size={14} />}>{copy(following ? "following" : "follow")}</Button> : null}
+    {!terminal && (showGeneration || !following) ? <Button className="pptx-flow-follow" size="small" aria-pressed={following} onClick={() => { setFollow(!following); if (!following) scrollLatest(); }} icon={<ArrowDown size={14} />}>{copy(following ? "following" : "follow")}</Button> : null}
   </section>;
 }

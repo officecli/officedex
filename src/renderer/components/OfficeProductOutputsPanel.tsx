@@ -1,3 +1,4 @@
+import { useT } from "../i18n";
 import { Button, Empty, Tag } from "../ui";
 import type { OfficeOutputRef } from "../../shared/officeProduct";
 import type { RefreshQueueItem } from "../refreshQueue";
@@ -15,17 +16,18 @@ function label(type: OfficeOutputRef["type"]): string {
 }
 
 export function OfficeProductOutputsPanel({ outputs, queue = [], onOpen, onRefresh, onApprove }: OfficeProductOutputsPanelProps) {
-  if (outputs.length === 0) return <Empty description="No generated outputs yet" />;
-  return <section aria-label="Project outputs" className="office-product-outputs">
+  const t = useT();
+  if (outputs.length === 0) return <Empty description={t("ui.copy.Nogeneratedoutputsyet")} />;
+  return <section aria-label={t("ui.copy.Projectoutputs")} className="office-product-outputs">
     {outputs.map((output) => {
       const item = queue.find((entry) => entry.plan.outputId === output.id);
       const awaiting = item?.status === "awaiting_confirmation";
       return <article key={output.id} className="office-product-output" data-status={item?.status ?? output.status}>
-        <div><Tag>{label(output.type)}</Tag><strong>{output.title}</strong><small>v{output.version}{output.lineage?.workbookFingerprint ? ` · ${output.lineage.workbookFingerprint}` : ""}</small></div>
+        <div><Tag>{output.type === "image" ? t("home.type.img") : label(output.type)}</Tag><strong>{output.title}</strong><small>v{output.version}{output.lineage?.workbookFingerprint ? ` · ${output.lineage.workbookFingerprint}` : ""}</small></div>
         <div className="office-product-output__actions">
-          {output.manuallyEdited ? <span title="Manual edits are protected">Protected</span> : null}
-          {awaiting ? <Button size="small" onClick={() => onApprove?.(output)}>Approve refresh</Button> : <Button size="small" onClick={() => onRefresh?.(output)}>Refresh</Button>}
-          {onOpen ? <Button size="small" variant="ghost-normal" onClick={() => onOpen(output)}>Open</Button> : null}
+          {output.manuallyEdited ? <span title={t("ui.copy.Manualeditsareprotected")}>{t("ui.copy.Protected")}</span> : null}
+          {awaiting ? <Button size="small" onClick={() => onApprove?.(output)}>{t("ui.copy.Approverefresh")}</Button> : <Button size="small" onClick={() => onRefresh?.(output)}>{t("ui.copy.Refresh")}</Button>}
+          {onOpen ? <Button size="small" variant="ghost-normal" onClick={() => onOpen(output)}>{t("ui.copy.Open")}</Button> : null}
         </div>
       </article>;
     })}

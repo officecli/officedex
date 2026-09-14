@@ -1,3 +1,4 @@
+import { reconcilePptxTaskStatus } from "./presentation/pptxStatusReconciliation";
 import { DialogHost, ToastHost, toast as message } from "./ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentRun, Artifact, BridgeEvent, DesktopTask, GenerateInput, ModifyInput, PreviewGrant, RecentFile, TaskHistoryEntry, TaskQuestionAnswer, WorkspaceSummary } from "../shared/types";
@@ -9,7 +10,7 @@ import { AgentClientToolHost } from "./AgentClientToolHost";
 import { useAgentClientTools } from "./useAgentClientTools";
 import { useVerticalPanels } from "./spreadsheet/useVerticalPanels";
 import { executeActiveEditorClientTool, waitForActiveEditorSurface, type ActiveEditorSurface } from "./activeEditorClientTools";
-import { applyTaskEvent, attachTaskContext, createInitialTaskState, deleteTask, discardLocalTask, finishTaskContinuing, getRunLineage, markTaskContinuing, promoteLocalTask, restoreTaskInteractiveGate, startLocalTask, type TaskContextPatch, type TaskState } from "./taskState";
+import { applyTaskEvent, attachPartialWork, attachTaskContext, createInitialTaskState, deleteTask, discardLocalTask, finishTaskContinuing, getRunLineage, markTaskContinuing, promoteLocalTask, restoreTaskInteractiveGate, startLocalTask, type TaskContextPatch, type TaskState } from "./taskState";
 import { STALL_POLL_INTERVAL_MS, markStalledTasks } from "./stallDetector";
 import { officecli } from "./bridge";
 import { useRecentFiles } from "./useRecentFiles";
@@ -18,7 +19,8 @@ import { getHomeDropZone, setHomeDropZone } from "./homeDropZone";
 import type { SidebarAccount, SidebarDocument } from "./components/ProjectSidebar";
 import { Shell } from "./components/Shell";
 import { PreviewPanel } from "./components/PreviewPanel";
-import { buildReplayFeed, liveDraftFor, registerLiveDraft } from "./presentation/vibeReplay";
+import { buildReplayFeed, hasPptxDrawingContent, liveDraftFor, registerLiveDraft } from "./presentation/vibeReplay";
+import { loadNexaEdgeOps, NEXAEDGE_DEMO_ID } from "./presentation/bundledPptxDemo";
 import type { TimelineDeck, TimelineNode, VibeOp } from "../shared/types";
 import type { SidebarUpdateRowProps } from "./components/SidebarUpdateRow";
 import { ForceUpdateOverlay } from "./components/ForceUpdateOverlay";
@@ -28,9 +30,10 @@ import { HomeScreen } from "./screens/HomeScreen";
 import { buildReferenceTextPrompt } from "./referenceTextPrompt";
 import { inferHomeTaskRoute, type HomeTaskIntake } from "./homeIntake";
 import { DocumentWorkspace } from "./document";
-import { taskTitle } from "./taskTitle";
+import { PRESENTATION_PLACEHOLDER_TOPIC, taskTitle } from "./taskTitle";
 import { captureHomeEntryTransition, type HomeEntryTransition } from "./homeEntryTransition";
 import { ProgressivePptxStage } from "./presentation/ProgressivePptxStage";
+import { pptxPartialWork } from "./presentation/pptxRuntimeActivity";
 import { SpreadsheetWorkspace, type SpreadsheetWorkspaceHandle } from "./spreadsheet/SpreadsheetWorkspace";
 import { SpreadsheetAgentPanel, type SpreadsheetAgentTool } from "./spreadsheet/SpreadsheetAgentPanel";
 import type { MarketingBatchDraft, MarketingSheetRow } from "./spreadsheet/marketingWorkflow";
@@ -190,16 +193,36 @@ function normalizeGenerateInputForGeneration(values: GenerateInput): GenerateInp
   return next;
 }
 
-export function findModifySourceTask(tasks: DesktopTask[], documentType: string): DesktopTask | undefined {
+/**
+ * The file a follow-up modification may edit: the finished document when there
+ * is one, otherwise the deck a stopped run already drew and saved.
+ *
+ * Keeping this in one place is the point. The partial deck used to live only in
+ * preview state, so every consumer that asked the task model "what did this run
+ * produce?" got nothing — which is why a failed run could not be opened, and
+ * why a modification instruction silently landed on an older deck in the same
+ * conversation instead of the one on screen.
+ */
+export function sourceArtifactFor(task: DesktopTask | undefined): Artifact | undefined {
+  return task?.artifact ?? task?.partialArtifact;
+}
+
+export function findModifySourceTask(tasks: DesktopTask[], documentType: string, preferredTaskId?: string): DesktopTask | undefined {
   const targetType = documentType.trim().toLowerCase();
+  const matches = (task: DesktopTask): boolean => {
+    const artifact = sourceArtifactFor(task);
+    if (!artifact?.filePath) return false;
+    return (artifact.documentType || task.documentType || "").toLowerCase() === targetType;
+  };
+  // The run the user is looking at wins. Falling through to "newest artifact in
+  // the conversation" is what sent an instruction meant for the stopped deck to
+  // whichever earlier deck happened to have completed.
+  if (preferredTaskId) {
+    const preferred = tasks.find((task) => task.id === preferredTaskId);
+    if (preferred && matches(preferred)) return preferred;
+  }
   for (let i = tasks.length - 1; i >= 0; i--) {
-    const task = tasks[i];
-    const artifact = task.artifact;
-    if (!artifact?.filePath) continue;
-    const artifactType = (artifact.documentType || task.documentType || "").toLowerCase();
-    if (artifactType === targetType) {
-      return task;
-    }
+    if (matches(tasks[i])) return tasks[i];
   }
   return undefined;
 }
@@ -226,6 +249,7 @@ function OfficeDexApp() {
   const [errorDetails, setErrorDetails] = useState<string>();
   const [connectAttempt, setConnectAttempt] = useState(0);
   const [previewGrant, setPreviewGrant] = useState<PreviewGrant | null>(null);
+  const [documentOpenRevision, setDocumentOpenRevision] = useState(0);
   const [previewArtifact, setPreviewArtifact] = useState<Artifact | null>(null);
   const [spreadsheetEntry, setSpreadsheetEntry] = useState<SpreadsheetEntry | null>(null);
   const [spreadsheetPreferredTool, setSpreadsheetPreferredTool] = useState<SpreadsheetAgentTool>("assistant");
@@ -535,6 +559,13 @@ function OfficeDexApp() {
   }, [state, conversationId]);
   const documentTask = conversationTasks.at(-1)
     ?? (selectedTaskID.kind === "task" ? state.tasks[selectedTaskID.id] : undefined);
+  const completedDocumentRoute = activeNav === "document" && documentTask?.status === "completed";
+
+  // Completed artifacts open in their suite editor. New/Home is the surface
+  // underneath it, including when restoring an old completed document route.
+  useEffect(() => {
+    if (completedDocumentRoute) setActiveNav("home");
+  }, [completedDocumentRoute]);
 
   useEffect(() => {
     writeStoredAppRoute({
@@ -561,6 +592,9 @@ function OfficeDexApp() {
     for (const file of recentFiles) {
       byPath.set(file.filePath, {
         id: file.taskId || `file:${file.filePath}`,
+        // Local files have no task creation time. Use their persisted open
+        // time so newly opened files survive the sidebar's 40-item limit.
+        createdAt: file.lastOpenedAt,
         title: file.fileName,
         documentType: file.documentType,
         filePath: file.filePath,
@@ -741,7 +775,13 @@ function OfficeDexApp() {
     }
   }
 
-  function retryTaskGeneration(task: DesktopTask) {
+  async function checkPptxTaskStatus(taskId: string) {
+    if (!officecli.getPptxTaskStatus) return;
+    const snapshot = await officecli.getPptxTaskStatus(taskId);
+    setState(current => reconcilePptxTaskStatus(current, taskId, snapshot));
+  }
+
+  async function retryTaskGeneration(task: DesktopTask, resumeCheckpoint?: string) {
     const input = task.userInput;
     if (!input?.prompt.trim()) return;
     const documentType = documentTypeFromTask(task);
@@ -751,7 +791,8 @@ function OfficeDexApp() {
       prompt: input.prompt,
       pptxWorkflow: input.pptxWorkflow,
       ...(generationModeForDocumentType(documentType) ? { generationMode: normalizeGenerationMode(input.generationMode) } : {}),
-      enableImages: persistedSettings.defaults.enableImages,
+      resumeCheckpoint,
+      enableImages: resumeCheckpoint ? ([...task.events].reverse().find(event => typeof event.payload?.resume_images === "boolean")?.payload?.resume_images as boolean | undefined) ?? persistedSettings.defaults.enableImages : persistedSettings.defaults.enableImages,
       imageQuality: persistedSettings.defaults.imageQuality,
       sourceFile: input.sourceFile,
     };
@@ -767,7 +808,7 @@ function OfficeDexApp() {
     } else {
       values.noProject = true;
     }
-    void submit(values);
+    await submit(values);
   }
 
   const selectWorkspace = useCallback(async (workspaceId: string) => {
@@ -890,7 +931,7 @@ function OfficeDexApp() {
       documentType: route.documentType,
       ...(route.documentType === "pptx" ? { pptxWorkflow: input.pptxWorkflow } : {}),
       generationMode: input.advancedMode ? "plan" : generationModeForDocumentType(route.documentType),
-      topic: route.documentType === "pptx" ? "New slides" : summarizePrompt(input.prompt),
+      topic: route.documentType === "pptx" ? PRESENTATION_PLACEHOLDER_TOPIC : summarizePrompt(input.prompt),
       prompt: taskPrompt,
       sourceFile: route.sourceFile,
       ...((route.documentType === "img" || route.documentType === "gif") && input.referenceImages?.length ? { referenceImages: input.referenceImages } : {}),
@@ -1051,15 +1092,15 @@ function OfficeDexApp() {
     }));
   }, [forceUpdate, recordError, clearError, persistedSettings.defaults, followUpDeps, conversationTasks, conversationId, state.tasks, workspaces, activeWorkspace]);
 
-  const continueModify = useCallback(async (documentType: string, prompt: string) => {
+  const continueModify = useCallback(async (documentType: string, prompt: string, sourceTaskId?: string) => {
     if (forceUpdate) {
       recordError("Update required before continuing", "setup");
       return;
     }
-    const parent = findModifySourceTask(conversationTasks, documentType);
-    const sourceFile = parent?.artifact?.filePath;
+    const parent = findModifySourceTask(conversationTasks, documentType, sourceTaskId);
+    const sourceFile = sourceArtifactFor(parent)?.filePath;
     if (!sourceFile) {
-      recordError("No source document to modify", "other");
+      recordError(t("ui.copy.Nosourcedocumenttomodify"), "other");
       return;
     }
     const target = resolveFollowUpTarget(parent, workspaces, activeWorkspace, conversationId);
@@ -1074,7 +1115,7 @@ function OfficeDexApp() {
       sourceFile,
       prompt,
     }));
-  }, [forceUpdate, recordError, clearError, followUpDeps, conversationTasks, conversationId, workspaces, activeWorkspace]);
+  }, [forceUpdate, recordError, clearError, followUpDeps, conversationTasks, conversationId, workspaces, activeWorkspace, t]);
 
   const retry = useCallback(() => {
     clearError();
@@ -1090,6 +1131,10 @@ function OfficeDexApp() {
     setActiveNav(loginReturnNavRef.current === "login" ? "home" : loginReturnNavRef.current);
   }, []);
   const [deckPanelDismissedId, setDeckPanelDismissedId] = useState<string | null>(null);
+  // Tasks the user has held at a page boundary. The runtime blocks rather than
+  // reporting a paused state, so the acknowledgement of the pause call is the
+  // only evidence the UI has — and it is enough to show the right control.
+  const [livePausedTaskIds, setLivePausedTaskIds] = useState<string[]>([]);
 
   const openInlinePreview = useCallback(async (artifact: Artifact) => {
     // XLSX artifacts have a dedicated editable workspace with the Sheet SDK,
@@ -1115,6 +1160,9 @@ function OfficeDexApp() {
         setPreviewGrant(null);
         setPreviewArtifact(null);
         setActiveNav("spreadsheet");
+        // A workbook never lands in `previewGrant`, so the workbench rule below
+        // cannot see this one: report it here instead.
+        setDocumentOpenRevision((revision) => revision + 1);
         clearError();
       });
       return;
@@ -1131,6 +1179,17 @@ function OfficeDexApp() {
       message.error(`Preview unavailable: ${text}`);
     }
   }, [clearError, previewGrant, runSpreadsheetAction, tasks]);
+
+  // Entering the document workbench hides the task rail, for every suite and
+  // every way in: the step is the document, not the file list. One rule, stated
+  // once, because the paths in are many — opening a finished artifact, a file
+  // from the sidebar, a history node, and the live-generation draft the runtime
+  // opens by itself while the deck is still being drawn. That last one used to
+  // be the exception that left the rail docked for the whole generation.
+  useEffect(() => {
+    if (!previewGrant) return;
+    setDocumentOpenRevision((revision) => revision + 1);
+  }, [previewGrant]);
 
   // The live draft behind the deck currently on screen, if that deck is one.
   // Registered synchronously when the draft is created, so it is already true
@@ -1171,9 +1230,34 @@ function OfficeDexApp() {
     selectTask(taskId);
   }, [openInlinePreview, selectTask, state.tasks]);
 
-  const steerPptxTask = useCallback(async (_task: DesktopTask, instruction: string) => {
-    await continueModify("pptx", instruction);
+  const steerPptxTask = useCallback(async (task: DesktopTask, instruction: string) => {
+    // While the deck is still being drawn there is a live run to steer, so the
+    // instruction lands at its next page boundary — which is what the bar tells
+    // the user it does. Once the run is over nothing can absorb it, and the
+    // instruction becomes an ordinary follow-up modification — of the deck this
+    // task produced, including a deck it only got part-way through.
+    const steeringLive = ["starting", "running"].includes(task.status) && officecli.intervenePptx;
+    if (steeringLive) {
+      await officecli.intervenePptx!(task.id, instruction);
+      return;
+    }
+    await continueModify("pptx", instruction, task.id);
   }, [continueModify]);
+
+  // Live gears: hold the run at its next page boundary and release it. This is
+  // not the interactive gate — answering a question or a plan review goes
+  // through resumePptxTask instead.
+  const pausePptxTask = useCallback(async (task: DesktopTask) => {
+    if (!officecli.pausePptx) return;
+    await officecli.pausePptx(task.id);
+    setLivePausedTaskIds((current) => current.includes(task.id) ? current : [...current, task.id]);
+  }, []);
+
+  const resumePptxLiveTask = useCallback(async (task: DesktopTask) => {
+    if (!officecli.resumePptxLive) return;
+    await officecli.resumePptxLive(task.id);
+    setLivePausedTaskIds((current) => current.filter((id) => id !== task.id));
+  }, []);
 
   const resumePptxTask = useCallback(async (task: DesktopTask, outline?: OutlineSection[], questionAnswer?: TaskQuestionAnswer) => {
     await resumeInteractiveTask({ task, outline, questionAnswer }, { api: officecli, setState });
@@ -1204,6 +1288,7 @@ function OfficeDexApp() {
             ...(file.conversationId ? { conversationId: file.conversationId } : {}),
           });
           setActiveNav("spreadsheet");
+          setDocumentOpenRevision((revision) => revision + 1);
           clearError();
           void refreshRecentFiles(homeWorkspaceId);
         });
@@ -1359,6 +1444,8 @@ function OfficeDexApp() {
     setTimelineNodeId(null);
   }, [openInlinePreview, state.tasks, timelineTaskId]);
 
+  const liveTaskStateRef = useRef(state);
+  liveTaskStateRef.current = state;
   const liveDraftAttemptsRef = useRef<Set<string>>(new Set());
   const liveDraftOpenRef = useRef(false);
   liveDraftOpenRef.current = Boolean(previewGrant);
@@ -1372,7 +1459,7 @@ function OfficeDexApp() {
       // must still review and confirm it. The first actual drawing op is the
       // boundary between planning and authoring, and is the only automatic
       // trigger for the live canvas.
-      if (task && (task.vibeOps?.length ?? 0) > 0 && ["starting", "running"].includes(task.status)) {
+      if (task && hasPptxDrawingContent(task.vibeOps) && ["starting", "running"].includes(task.status)) {
         return taskID;
       }
     }
@@ -1392,6 +1479,8 @@ function OfficeDexApp() {
           fileName: draft.fileName,
           documentType: "pptx",
         } as Artifact);
+        const latestTask = liveTaskStateRef.current.tasks[liveCandidateTaskId];
+        if (!latestTask || !["starting", "running"].includes(latestTask.status) || liveDraftOpenRef.current) return;
         setPreviewGrant(grant);
         setPreviewArtifact({
           taskId: liveCandidateTaskId,
@@ -1407,6 +1496,22 @@ function OfficeDexApp() {
       }
     })();
   }, [liveCandidateTaskId, recordError]);
+  // A run that stops mid-draw leaves a real file behind: the editor session
+  // saved every page it had drawn before the failure terminal fired. Commit it
+  // to the task model as the partial artifact, so the failed state can offer
+  // "open what was generated" and "modify this deck" instead of pretending the
+  // run produced nothing.
+  useEffect(() => {
+    const source = previewArtifact;
+    if (!source?.filePath || !source.taskId) return;
+    const task = state.tasks[source.taskId];
+    if (!task || !["failed", "cancelled"].includes(task.status)) return;
+    if (task.partialArtifact?.filePath === source.filePath) return;
+    setState((current) => attachPartialWork(current, source.taskId!, {
+      partialArtifact: source,
+      partial: pptxPartialWork(task),
+    }));
+  }, [previewArtifact, state.tasks]);
   // Debug helper: `__officedexReplayDemo()` in the console replays the latest
   // (or a given) task's drawing from a fresh blank draft — the live-generation
   // experience on demand, no model calls, no credits. It bypasses the
@@ -1424,6 +1529,9 @@ function OfficeDexApp() {
       console.info("[vibeReplayDemo]", message);
       return message;
     };
+    if (source === NEXAEDGE_DEMO_ID || source === "nexaedge") {
+      return startReplay(NEXAEDGE_DEMO_ID, await loadNexaEdgeOps());
+    }
     const loaded =
       typeof source === "string" && /^(https?:)?\//.test(source)
         ? ((await (await fetch(source)).json()) as VibeOp[])
@@ -1467,6 +1575,39 @@ function OfficeDexApp() {
       delete host.__officedexReplayDemo;
     };
   }, []);
+
+  // The same replay behind a button in the preview's PPTX title bar. It always
+  // shows — a debug affordance nobody can find is worse than one that reports
+  // an empty session — and it replays the deck on screen and nothing else: the
+  // console command's "any task that has ops" fallback would quietly draw a
+  // different deck than the one that was clicked. Ops come back with the task
+  // history hydrated at startup, so a deck generated in an earlier run replays
+  // too; a file that no task drew has none, and the click says so.
+  const previewReplayTaskId = previewArtifact?.taskId;
+  const previewReplayTask = previewReplayTaskId ? state.tasks[previewReplayTaskId] : undefined;
+  const previewReplayOps = previewReplayTask?.vibeOps?.length ?? 0;
+  const [bundledDemoLoading, setBundledDemoLoading] = useState(false);
+  const replayBundledDemo = useCallback(async () => {
+    setBundledDemoLoading(true);
+    try {
+      await replayDemoRef.current(NEXAEDGE_DEMO_ID);
+    } catch (error) {
+      message.error(errorMessage(error));
+    } finally {
+      setBundledDemoLoading(false);
+    }
+  }, []);
+  const replayPreviewDemo = useCallback(() => {
+    if (previewReplayTaskId === NEXAEDGE_DEMO_ID) {
+      void replayBundledDemo();
+      return;
+    }
+    if (!previewReplayTaskId || previewReplayOps === 0) {
+      message.warning(t("pptx.agent.replayDemoNoOps"));
+      return;
+    }
+    void replayDemoRef.current(previewReplayTaskId).then((result) => message.info(result));
+  }, [previewReplayOps, previewReplayTaskId, replayBundledDemo, t]);
 
   // The live feed belongs to the document on screen, not to the app. Anything
   // else opened — a finished artifact, a recent file, another task's output —
@@ -1555,7 +1696,7 @@ function OfficeDexApp() {
       const workspaceId = spreadsheet.session.workspaceId;
       const result = await officecli.generate({
         documentType: "img",
-        topic: `营销图 · ${row.productName}${row.campaignChannel ? ` · ${row.campaignChannel}` : ""}`,
+        topic: t("marketing.taskTitle", { product: row.productName, channel: row.campaignChannel ? ` · ${row.campaignChannel}` : "" }),
         prompt: row.prompt,
         ...(workspaceId ? { workspaceId } : { noProject: true }),
         ...(row.referenceImages.length > 0 ? { referenceImages: row.referenceImages } : {}),
@@ -1637,9 +1778,10 @@ function OfficeDexApp() {
     ? (
         <PreviewPanel
           grant={previewGrant}
-          onClose={closeInlinePreview}
+          onClose={() => changeNavigation("home")}
           artifact={previewArtifact}
           live={liveReplayFeed}
+          onReplayDemo={replayPreviewDemo}
           timelineTaskId={timelineTaskId}
           timelineNodeId={timelineNodeId}
           onOpenTimelineNode={openTimelineNode}
@@ -1711,6 +1853,8 @@ function OfficeDexApp() {
         <Shell
         activeNav={activeNav}
         inspector={sidePanel}
+        editingDocument={Boolean(previewGrant) || activeNav === "document"}
+        documentOpenRevision={documentOpenRevision}
         signal={sidebarTaskSignal}
         account={account}
         update={sidebarUpdate}
@@ -1728,7 +1872,7 @@ function OfficeDexApp() {
         onRevealWorkspace={revealWorkspace}
         onRemoveWorkspace={removeWorkspace}
       >
-        {activeNav === "home" ? (
+        {activeNav === "home" || completedDocumentRoute ? (
           <HomeScreen
             files={recentFiles}
             productOutputs={productOutputs}
@@ -1745,6 +1889,8 @@ function OfficeDexApp() {
             activeWorkspaceId={homeWorkspaceId}
             workspaces={workspaces}
             onOpenFile={openRecentFile}
+            onReplayPptxDemo={replayBundledDemo}
+            replayPptxDemoLoading={bundledDemoLoading}
             onOpenLocalFile={openHomeLocalFile}
             onRemoveFile={removeRecentFile}
             droppedTaskPaths={droppedTaskPaths}
@@ -1754,6 +1900,9 @@ function OfficeDexApp() {
             taskActions={{
               open: openTaskFromHome,
               retry: retryTaskGeneration,
+              retryFailed: retryTaskGeneration,
+              checkStatus: officecli.getPptxTaskStatus ? task => checkPptxTaskStatus(task.id) : undefined,
+              skipResearch: officecli.skipPptxResearch ? (task) => officecli.skipPptxResearch!(task.id) : undefined,
               steer: steerPptxTask,
               resume: resumePptxTask,
               answer: (task, answer) => resumePptxTask(task, undefined, answer),
@@ -1770,7 +1919,7 @@ function OfficeDexApp() {
             }}
           />
         ) : null}
-        {activeNav === "document" && documentTask ? (
+        {activeNav === "document" && documentTask && !completedDocumentRoute ? (
           <DocumentWorkspace
             entryTransition={homeEntryTransition}
             task={documentTask}
@@ -1778,6 +1927,9 @@ function OfficeDexApp() {
             pptxStage={documentTask.documentType === "pptx" ? (
               <ProgressivePptxStage
                 task={documentTask}
+                onCheckStatus={officecli.getPptxTaskStatus ? () => checkPptxTaskStatus(documentTask.id) : undefined}
+                onRetryFailed={(path) => retryTaskGeneration(documentTask, path)}
+                onSkipResearch={officecli.skipPptxResearch ? () => officecli.skipPptxResearch!(documentTask.id) : undefined}
                 onRefresh={async () => {
                   const entries = await officecli.getTaskHistory(50);
                   const entry = entries.find(entry => entry.taskId === documentTask.id);
@@ -1800,9 +1952,14 @@ function OfficeDexApp() {
                 productionProps={{
                   onCancel: () => void officecli.cancel(documentTask.id),
                   onRetry: () => retryTaskGeneration(documentTask),
-                  onSteer: (instruction) => continueModify("pptx", instruction),
+                  // Steers the run when it is still drawing, and becomes a
+                  // follow-up modification once it is not — see steerPptxTask.
+                  onSteer: (instruction) => steerPptxTask(documentTask, instruction),
+                  onPause: officecli.pausePptx ? () => pausePptxTask(documentTask) : undefined,
+                  livePaused: livePausedTaskIds.includes(documentTask.id),
+                  onResumeLive: officecli.resumePptxLive ? () => resumePptxLiveTask(documentTask) : undefined,
                   onResume: () => resumePptxTask(documentTask),
-                  onOpenEditor: documentTask.artifact ? () => openInlinePreview(documentTask.artifact!) : undefined,
+                  onOpenEditor: sourceArtifactFor(documentTask) ? () => openInlinePreview(sourceArtifactFor(documentTask)!) : undefined,
                 }}
               />
             ) : undefined}
@@ -1816,13 +1973,14 @@ function OfficeDexApp() {
               if (action === "locate") return officecli.showItemInFolder(artifact.filePath);
               return navigator.clipboard.writeText(artifact.filePath);
             }}
-            onContinueEditing={documentTask.artifact
+            onContinueEditing={sourceArtifactFor(documentTask)
               ? (instruction) => {
                   const documentType = documentTypeFromTask(documentTask);
+                  const sourceFile = sourceArtifactFor(documentTask)!.filePath;
                   if (documentType === "img" || documentType === "gif") {
-                    return continueGeneration(documentType, instruction, [documentTask.artifact!.filePath], documentTask.userInput?.imageRatio, documentTask.userInput?.fps);
+                    return continueGeneration(documentType, instruction, [sourceFile], documentTask.userInput?.imageRatio, documentTask.userInput?.fps);
                   }
-                  return continueModify(documentType, instruction);
+                  return continueModify(documentType, instruction, documentTask.id);
                 }
               : undefined}
           />

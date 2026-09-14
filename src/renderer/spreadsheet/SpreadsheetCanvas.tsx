@@ -3,7 +3,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffec
 import { AlertCircle, FileSpreadsheet } from "lucide-react";
 import type { Artifact, PreviewGrant } from "../../shared/types";
 import { officecli } from "../bridge";
-import { useT } from "../i18n";
+import { useT, useLocale, translate as t } from "../i18n";
 import { Button } from "../ui";
 import {
   findMarketingHeaderRow,
@@ -81,7 +81,7 @@ async function waitForChartPlugin(editor: AbstractedSheetSDK, timeoutMs = CHART_
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     if (typeof editor.charts?.addChartFromSelection === "function") return;
-    if (Date.now() >= deadline) throw new Error("表格图表引擎尚未加载完成。");
+    if (Date.now() >= deadline) throw new Error(t("spreadsheet.error.chartLoading"));
     await delay(CHART_PLUGIN_POLL_MS);
   }
 }
@@ -130,16 +130,16 @@ interface CatalogRangeTarget {
 }
 
 export function imageBytesToFile(data: Uint8Array, mime: string, fileName: string): File {
-  if (data.byteLength === 0) throw new Error("生成图片文件为空，无法回写表格。");
-  if (!mime.startsWith("image/")) throw new Error(`生成结果不是受支持的图片格式：${mime || "unknown"}`);
+  if (data.byteLength === 0) throw new Error(t("spreadsheet.error.emptyImage"));
+  if (!mime.startsWith("image/")) throw new Error(t("spreadsheet.error.imageFormat", { format: mime || "unknown" }));
   const copied = new Uint8Array(data.byteLength);
   copied.set(data);
   return new File([copied.buffer], fileName, { type: mime });
 }
 
 function imageBytesToDataUrl(data: Uint8Array, mime: string): string {
-  if (data.byteLength === 0) throw new Error("生成图片文件为空，无法回写表格。");
-  if (!mime.startsWith("image/")) throw new Error(`生成结果不是受支持的图片格式：${mime || "unknown"}`);
+  if (data.byteLength === 0) throw new Error(t("spreadsheet.error.emptyImage"));
+  if (!mime.startsWith("image/")) throw new Error(t("spreadsheet.error.imageFormat", { format: mime || "unknown" }));
   return `data:${mime};base64,${uint8ArrayToBase64(data)}`;
 }
 
@@ -148,8 +148,8 @@ async function imageFileToBytes(file: File): Promise<Uint8Array> {
     const reader = new FileReader();
     reader.onload = () => reader.result instanceof ArrayBuffer
       ? resolve(new Uint8Array(reader.result))
-      : reject(new Error("无法读取剪贴板图片。"));
-    reader.onerror = () => reject(reader.error ?? new Error("无法读取剪贴板图片。"));
+      : reject(new Error(t("spreadsheet.error.clipboardImage")));
+    reader.onerror = () => reject(reader.error ?? new Error(t("spreadsheet.error.clipboardImage")));
     reader.readAsArrayBuffer(file);
   });
 }
@@ -243,6 +243,7 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
   function SpreadsheetCanvas({ artifact, grant, onDirtyChange, onStateChange, onError, onSaveError, onSessionClosed }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const t = useT();
+    const locale = useLocale();
     const editorRef = useRef<AbstractedSheetSDK | null>(null);
     const sessionIdRef = useRef("");
     const focusedRef = useRef(false);
@@ -310,7 +311,7 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
             top: bounds.top - containerBounds.top,
             width: bounds.width,
             height: bounds.height,
-            label: marketingFieldRoleLabel(column.role),
+            label: marketingFieldRoleLabel(column.role, t),
             status: column.status,
             confidence: column.confidence,
             reason: column.reason,
@@ -452,6 +453,7 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
               });
               return { assetUrl: staged.url };
             },
+            locale,
           );
           if (disposed) {
             await teardown();
@@ -600,11 +602,11 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
       },
       async snapshot(request) {
         const editor = editorRef.current;
-        if (!editor) throw new Error("表格仍在加载，请稍后重试。");
+        if (!editor) throw new Error(t("spreadsheet.error.loading"));
         const worksheets = request.sheetId
           ? [editor.workbook.getWorksheetById(request.sheetId)].filter(Boolean)
           : editor.workbook.getWorksheets().filter((worksheet) => worksheet.visible);
-        if (worksheets.length === 0) throw new Error(request.sheetId ? `找不到工作表 ${request.sheetId}。` : "当前工作簿没有可读取的工作表。");
+        if (worksheets.length === 0) throw new Error(request.sheetId ? t("spreadsheet.error.sheetMissing", { sheetId: request.sheetId }) : t("spreadsheet.error.noSheets"));
         const originalSheetId = editor.activeSheet.id;
         const sheets = [];
         for (const worksheet of worksheets) {
@@ -636,19 +638,19 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
       },
       readSelection() {
         const editor = editorRef.current;
-        if (!editor) throw new Error("表格仍在加载，请稍后重试。");
+        if (!editor) throw new Error(t("spreadsheet.error.loading"));
         const worksheet = editor.activeSheet;
         const selection = editor.selections?.[0]?.getRange();
         if (!selection || (selection.type !== "cells" && selection.type !== "rows")) {
-          throw new Error("当前表格没有可读取的单元格选区。");
+          throw new Error(t("spreadsheet.error.noSelection"));
         }
         const column = selection.type === "rows" ? 0 : selection.column;
         const columnCount = selection.type === "rows" ? worksheet.columnCount : selection.columnCount;
         if (selection.rowCount * columnCount > 10_000) {
-          throw new Error("当前选区超过 10000 个单元格，请缩小选区后重试。");
+          throw new Error(t("spreadsheet.error.selectionTooLarge"));
         }
         const range = worksheet.getRange({ type: "cells", row: selection.row, rowCount: selection.rowCount, column, columnCount });
-        if (!range) throw new Error("无法读取当前单元格选区。");
+        if (!range) throw new Error(t("spreadsheet.error.selectionUnreadable"));
         return {
           sheetId: worksheet.id,
           sheetName: worksheet.name,
@@ -658,11 +660,11 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
       },
       readSelectionAddress() {
         const editor = editorRef.current;
-        if (!editor) throw new Error("表格仍在加载，请稍后重试。");
+        if (!editor) throw new Error(t("spreadsheet.error.loading"));
         const worksheet = editor.activeSheet;
         const selection = editor.selections?.[0]?.getRange();
         if (!selection || (selection.type !== "cells" && selection.type !== "rows")) {
-          throw new Error("当前表格没有可读取的单元格选区。");
+          throw new Error(t("spreadsheet.error.noSelection"));
         }
         const column = selection.type === "rows" ? 0 : selection.column;
         const columnCount = selection.type === "rows" ? worksheet.columnCount : selection.columnCount;
@@ -675,13 +677,13 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
       writeCells(request) {
         return enqueueMarketingMutation(async () => {
           const editor = editorRef.current;
-          if (!editor) throw new Error("表格编辑器已关闭。");
+          if (!editor) throw new Error(t("spreadsheet.error.closed"));
           const worksheet = request.sheetId
             ? editor.workbook.getWorksheetById(request.sheetId)
             : request.sheetName
               ? editor.workbook.getWorksheets().find((sheet) => sheet.name === request.sheetName)
               : editor.activeSheet;
-          if (!worksheet) throw new Error("workbook.write_cells 指定的工作表不存在。");
+          if (!worksheet) throw new Error(t("spreadsheet.error.writeSheetMissing"));
           const requiredRows = request.startRow + request.values.length;
           const requiredColumns = request.startColumn + request.values[0].length;
           const versionBeforeMutation = changeVersionRef.current;
@@ -713,13 +715,13 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
       formatCells(request) {
         return enqueueMarketingMutation(async () => {
           const editor = editorRef.current;
-          if (!editor) throw new Error("表格编辑器已关闭。");
+          if (!editor) throw new Error(t("spreadsheet.error.closed"));
           const worksheet = request.sheetId
             ? editor.workbook.getWorksheetById(request.sheetId)
             : request.sheetName
               ? editor.workbook.getWorksheets().find((sheet) => sheet.name === request.sheetName)
               : editor.activeSheet;
-          if (!worksheet) throw new Error("workbook.format_cells 指定的工作表不存在。");
+          if (!worksheet) throw new Error(t("spreadsheet.error.formatSheetMissing"));
           const versionBeforeMutation = changeVersionRef.current;
           editor.workbook.setActiveWorksheet(worksheet.id);
           let formatted = 0;
@@ -733,7 +735,7 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
               if (rowCount <= 0 || columnCount <= 0) continue;
               await retryWhenSheetCellsReady(() => {
                 const range = worksheet.getRange({ type: "cells", row: target.startRow, rowCount, column: target.startColumn, columnCount });
-                if (!range) throw new Error("workbook.format_cells 无法定位目标区域。");
+                if (!range) throw new Error(t("spreadsheet.error.formatRangeMissing"));
                 const existing = range.getData();
                 range.setData(Array.from({ length: rowCount }, (_, row) => (
                   Array.from({ length: columnCount }, (_, column) => styledCellData(existing[row]?.[column], request.style))
@@ -742,7 +744,7 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
               formatted += rowCount * columnCount;
             }
           });
-          if (formatted === 0) throw new Error("workbook.format_cells 的目标区域超出了工作表范围。");
+          if (formatted === 0) throw new Error(t("spreadsheet.error.formatRangeOutside"));
           await waitForChangeVersionQuiet(changeVersionRef);
           if (changeVersionRef.current === versionBeforeMutation) {
             changeVersionRef.current += 1;
@@ -757,17 +759,17 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
       stageMedia(request) {
         return enqueueMarketingMutation(async () => {
           const editor = editorRef.current;
-          if (!editor) throw new Error("表格编辑器已关闭。");
+          if (!editor) throw new Error(t("spreadsheet.error.closed"));
           const sessionId = sessionIdRef.current;
-          if (!sessionId) throw new Error("表格编辑会话已关闭。");
+          if (!sessionId) throw new Error(t("spreadsheet.error.sessionClosed"));
           const worksheet = request.sheetId
             ? editor.workbook.getWorksheetById(request.sheetId)
             : request.sheetName
               ? editor.workbook.getWorksheets().find((sheet) => sheet.name === request.sheetName)
               : editor.activeSheet;
-          if (!worksheet) throw new Error("workbook.stage_media 指定的工作表不存在。");
+          if (!worksheet) throw new Error(t("spreadsheet.error.mediaSheetMissing"));
           if (request.row >= worksheet.rowCount || request.column >= worksheet.columnCount) {
-            throw new Error("workbook.stage_media 的目标单元格超出当前工作表范围。");
+            throw new Error(t("spreadsheet.error.mediaRangeOutside"));
           }
           const staged = await officecli.stageXlsxEditorImage({
             previewToken: grant.token,
@@ -792,11 +794,11 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
       },
       inspectMarketingSelection(assetKind) {
         const editor = editorRef.current;
-        if (!editor) throw new Error("表格仍在加载，请稍后重试。");
+        if (!editor) throw new Error(t("spreadsheet.error.loading"));
         const worksheet = editor.activeSheet;
         const selection = editor.selections?.[0]?.getRange();
         if (!selection || (selection.type !== "cells" && selection.type !== "rows")) {
-          throw new Error("请先选中包含商品的单元格或整行。");
+          throw new Error(t("spreadsheet.error.selectProducts"));
         }
         // The Sheet SDK reports a merged A1 title cell as one row spanning
         // multiple columns. Treat only a multi-row range as an explicit
@@ -818,7 +820,7 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
         const headerCandidates = headerScanRange?.getText("matrix") ?? [];
         const headerRowIndex = findMarketingHeaderRow(headerCandidates, assetKind);
         if (headerRowIndex < 0) {
-          throw new Error("找不到商品表头。请确保表格包含“商品名称”以及对应的生图提示词列。");
+          throw new Error(t("spreadsheet.error.productHeadersMissing"));
         }
         const firstRowIndex = hasAdvancedSelection
           ? Math.max(selection.row, headerRowIndex + 1)
@@ -827,11 +829,11 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
           ? selection.row + selection.rowCount
           : Math.min(worksheet.rowCount, firstRowIndex + 50);
         const rowCount = selectionEndRow - firstRowIndex;
-        if (rowCount <= 0) throw new Error("请选择表头下方至少一行商品数据。");
-        if (rowCount > 50) throw new Error("单次最多生成 50 行，请缩小选区后重试。");
+        if (rowCount <= 0) throw new Error(t("spreadsheet.error.selectProductRow"));
+        if (rowCount > 50) throw new Error(t("spreadsheet.error.tooManyProducts"));
 
         const dataRange = worksheet.getRange({ type: "cells", row: firstRowIndex, rowCount, column: 0, columnCount });
-        if (!dataRange) throw new Error("无法读取当前商品选区。");
+        if (!dataRange) throw new Error(t("spreadsheet.error.productsUnreadable"));
         const headers = headerCandidates[headerRowIndex] ?? [];
         const rows = dataRange.getText("matrix");
         const batch = parseMarketingSelection({
@@ -845,28 +847,28 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
           assetKind,
         });
         if (batch.rows.length === 0) {
-          throw new Error("选区中没有可生成的商品。请至少提供商品名称或生图提示词。");
+          throw new Error(t("spreadsheet.error.noProducts"));
         }
         return batch;
       },
       prepareMarketingBatch(batch) {
         const editor = editorRef.current;
-        if (!editor) throw new Error("表格仍在加载，请稍后重试。");
+        if (!editor) throw new Error(t("spreadsheet.error.loading"));
         const worksheet = editor.workbook.getWorksheetById(batch.sheetId);
-        if (!worksheet) throw new Error("生成任务对应的工作表已不存在。");
-        if (!worksheet.getCell(batch.headerRowIndex, batch.outputColumn)) throw new Error("模板图片位置不存在。");
-        if (!worksheet.getCell(batch.headerRowIndex, batch.statusColumn)) throw new Error("模板状态列不存在。");
+        if (!worksheet) throw new Error(t("spreadsheet.error.productSheetMissing"));
+        if (!worksheet.getCell(batch.headerRowIndex, batch.outputColumn)) throw new Error(t("spreadsheet.error.imageCellMissing"));
+        if (!worksheet.getCell(batch.headerRowIndex, batch.statusColumn)) throw new Error(t("spreadsheet.error.statusColumnMissing"));
       },
       setMarketingStatus(batch, rowIndex, status) {
         return enqueueMarketingMutation(async () => {
           const editor = editorRef.current;
-          if (!editor) throw new Error("表格编辑器已关闭。");
+          if (!editor) throw new Error(t("spreadsheet.error.closed"));
           const cell = editor.workbook.getWorksheetById(batch.sheetId)?.getCell(rowIndex, batch.statusColumn);
-          if (!cell) throw new Error("找不到营销图状态单元格。");
+          if (!cell) throw new Error(t("spreadsheet.error.statusCellMissing"));
           const versionBeforeStatus = changeVersionRef.current;
           cell.setCellText(status);
           if (cell.getCellText() !== status) {
-            throw new Error(`状态“${status}”不符合当前单元格规则，无法写入。`);
+            throw new Error(t("spreadsheet.error.invalidStatus", { status }));
           }
           await Promise.resolve();
           if (changeVersionRef.current === versionBeforeStatus) {
@@ -881,12 +883,12 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
       insertMarketingImage(batch, rowIndex, filePath) {
         return enqueueMarketingMutation(async () => {
           const editor = editorRef.current;
-          if (!editor) throw new Error("表格编辑器已关闭。");
+          if (!editor) throw new Error(t("spreadsheet.error.closed"));
           const sessionId = sessionIdRef.current;
-          if (!sessionId) throw new Error("表格编辑会话已关闭。");
+          if (!sessionId) throw new Error(t("spreadsheet.error.sessionClosed"));
           const worksheet = editor.workbook.getWorksheetById(batch.sheetId);
           const cell = worksheet?.getCell(rowIndex, batch.outputColumn);
-          if (!worksheet || !cell) throw new Error("找不到营销图回写单元格。");
+          if (!worksheet || !cell) throw new Error(t("spreadsheet.error.outputCellMissing"));
           const { data, mime } = await officecli.readLocalImage(filePath);
           const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
           const versionBeforeInsert = changeVersionRef.current;
@@ -940,7 +942,7 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
       },
       async inspectCatalogSheets() {
         const editor = editorRef.current;
-        if (!editor) throw new Error("表格仍在加载，请稍后重试。");
+        if (!editor) throw new Error(t("spreadsheet.error.loading"));
         const originalSheet = editor.activeSheet;
         const selection = editor.selections?.[0]?.getRange();
         const hasAdvancedSelection = Boolean(
@@ -1023,7 +1025,7 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
       applyCatalogCleanup(batch) {
         return enqueueMarketingMutation(async () => {
           const editor = editorRef.current;
-          if (!editor) throw new Error("表格编辑器已关闭。");
+          if (!editor) throw new Error(t("spreadsheet.error.closed"));
           const worksheet = editor.workbook.getWorksheetById(batch.sheetId)
             ?? editor.workbook.getWorksheets().find((sheet) => sheet.name === batch.sheetName);
           if (!worksheet) {
@@ -1069,17 +1071,17 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
       replaceManagedSheet(input) {
         return enqueueMarketingMutation(async () => {
           const editor = editorRef.current;
-          if (!editor) throw new Error("表格编辑器已关闭。");
+          if (!editor) throw new Error(t("spreadsheet.error.closed"));
           const sheetName = input.sheetName.trim();
-          if (!sheetName) throw new Error("托管工作表名称不能为空。");
-          if (input.headers.length === 0) throw new Error("托管工作表必须至少包含一列。");
+          if (!sheetName) throw new Error(t("spreadsheet.error.sheetNameRequired"));
+          if (input.headers.length === 0) throw new Error(t("spreadsheet.error.headersRequired"));
           const workbook = editor.workbook;
           let worksheet = workbook.getWorksheets().find((sheet) => sheet.name === sheetName);
           if (!worksheet) {
             workbook.addWorksheet(sheetName);
             worksheet = workbook.getWorksheets().find((sheet) => sheet.name === sheetName);
           }
-          if (!worksheet) throw new Error(`无法创建工作表“${sheetName}”。`);
+          if (!worksheet) throw new Error(t("spreadsheet.error.createSheet", { name: sheetName }));
           // Sheet SDK lazily hydrates cell models for inactive worksheets. Make
           // the managed sheet visible before reading or mutating ranges; retrying
           // writes alone cannot make an inactive sheet finish loading.
@@ -1162,14 +1164,14 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
       addChart(request) {
         return enqueueMarketingMutation(async () => {
           const editor = editorRef.current;
-          if (!editor) throw new Error("表格编辑器已关闭。");
+          if (!editor) throw new Error(t("spreadsheet.error.closed"));
           await waitForChartPlugin(editor);
           const worksheet = request.sheetId
             ? editor.workbook.getWorksheetById(request.sheetId)
             : request.sheetName
               ? editor.workbook.getWorksheets().find((sheet) => sheet.name === request.sheetName)
               : editor.activeSheet;
-          if (!worksheet) throw new Error("workbook.add_chart 指定的工作表不存在。");
+          if (!worksheet) throw new Error(t("spreadsheet.error.chartSheetMissing"));
           // addChartFromSelection reads the active sheet, so the requested sheet
           // has to be active before the chart is created.
           if (!worksheet.isActive) editor.workbook.setActiveWorksheet(worksheet.id);
@@ -1191,7 +1193,7 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
             },
             recommendation: { mode: "external", chartType: request.chartType },
           });
-          if (!created) throw new Error("表格编辑器未能为该区域创建图表。");
+          if (!created) throw new Error(t("spreadsheet.error.chartFailed"));
 
           await waitForChangeVersionQuiet(changeVersionRef);
           if (changeVersionRef.current === versionBeforeMutation) {
@@ -1209,7 +1211,7 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
           };
         });
       },
-    }), [enqueueMarketingMutation, publishDirty, publishState, save, scheduleHeaderMarkerLayout]);
+    }), [enqueueMarketingMutation, publishDirty, publishState, save, scheduleHeaderMarkerLayout, t]);
 
     useEffect(() => {
       const handlePointerDown = (event: PointerEvent) => {
@@ -1289,7 +1291,7 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
             aria-hidden="true"
             style={{ left: catalogRange.left, top: catalogRange.top, width: catalogRange.width, height: catalogRange.height }}
           >
-            <span>OfficeDex detected · {catalogRange.rowCount} product rows</span>
+            <span>{t("catalog.detectedRows", { count: catalogRange.rowCount })}</span>
           </div>
         ) : null}
         {state === "loading" ? (

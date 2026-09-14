@@ -29,7 +29,7 @@ beforeEach(() => {
   }));
 });
 import type { VibeOp, VibeOpShape } from "../../shared/types";
-import { VibeReplaySequencer, applyReslideOps, buildOpsChunkScript, buildReplayFeed, registerLiveDraft, releaseLiveDraft } from "./vibeReplay";
+import { VibeReplaySequencer, applyReslideOps, hasPptxDrawingContent, buildOpsChunkScript, buildReplayFeed, registerLiveDraft, releaseLiveDraft } from "./vibeReplay";
 import type { PresentationEditorController } from "./PresentationEditorFrame";
 
 const liveSequencers = new Set<VibeReplaySequencer>();
@@ -117,6 +117,7 @@ function fakePowerPoint({ attention = true, refuseVeils = false }: { attention?:
   let rejectNextSync: string | null = null;
   const deck: Array<{ id: string; background?: string; shapes: FakeShape[] }> = [];
   const selected: string[] = [];
+  const selectionOptions: unknown[] = [];
   /** Interleaved record of outlines and shapes, in the order they happened. */
   const timeline: string[] = [];
   const addShape = (slideIndex: number, shape: FakeShape) => {
@@ -191,7 +192,7 @@ function fakePowerPoint({ attention = true, refuseVeils = false }: { attention?:
         add: () => deck.push({ id: `s${deck.length + 1}`, shapes: [] }),
         getItemAt: (index: number) => slideAt(index),
       },
-      setSelectedSlides: (ids: string[]) => selected.push(...ids),
+      setSelectedSlides: (ids: string[], options?: unknown) => {selected.push(...ids);selectionOptions.push(options);},
       ...(attention
         ? {
             focusAttention: (rect: { left: number; top: number } | null) =>
@@ -209,6 +210,7 @@ function fakePowerPoint({ attention = true, refuseVeils = false }: { attention?:
   return {
     deck,
     selected,
+    selectionOptions,
     timeline,
     runtime: { run: (callback: (ctx: typeof context) => unknown) => callback(context) },
   };
@@ -376,20 +378,21 @@ describe("buildOpsChunkScript", () => {
     const timeline = powerPoint.timeline.filter((entry) => !entry.startsWith("type@"));
     expect(timeline).toEqual([
       // Slide 1: both shapes start together, so the outline marks the area they
-      // share before either exists, and is released when the page is done.
+      // share before either exists, and expands to the page boundary when the page is done.
       // Unpaced typing lands in one write, so no mid-word re-assert is needed.
       "focus@40,60",
       "shape@40,120",
       "shape@40,60",
-      "focus@none",
+      "focus@9,9",
       // Slide 2, same rhythm.
       "focus@40,60",
       "shape@40,120",
       "shape@40,60",
-      "focus@none",
+      "focus@9,9",
       // And the deck ends with nothing outlined.
       "focus@none",
     ]);
+    expect(powerPoint.selectionOptions).toEqual([{preserveAttention:true},{preserveAttention:true}]);
   });
 
   it("types text in growing slices instead of pasting it whole", async () => {
@@ -630,6 +633,18 @@ describe("buildOpsChunkScript", () => {
 });
 
 describe("VibeReplaySequencer", () => {
+  it("executes an isolated slide.end chunk and keeps its full-page target", async () => {
+    const {controller,powerPoint}=fakeController();
+    const sequencer=makeSequencer({controller,paceMs:0});
+    const ops=opStream(1);
+    sequencer.update({taskId:"page-end",ops:ops.slice(0,4),completed:false});
+    await flush();await flush();
+    sequencer.update({taskId:"page-end",ops:ops.slice(0,5),completed:false});
+    await flush();await flush();
+    expect(powerPoint.timeline.at(-1)).toBe("focus@9,9");
+    expect((sequencer as unknown as {lastAttentionRect:unknown}).lastAttentionRect).toMatchObject({wholeSlide:true});
+  });
+
   it("executes streamed ops in seq order exactly once, then saves on completion", async () => {
     const { controller, executed, saved, powerPoint } = fakeController();
     const statuses: string[] = [];
@@ -858,6 +873,29 @@ describe("trace mode", () => {
 });
 
 describe("picture ops", () => {
+  it("replays the bundled NexaEdge recording with its packaged image and no workspace access", async () => {
+    const { default: recording } = await import("./demos/nexaedge/ops.json");
+    const ops = recording as VibeOp[];
+    expect(ops.map((op) => op.seq)).toEqual(Array.from({ length: 141 }, (_, index) => index + 1));
+    expect(JSON.stringify(ops)).not.toContain("/Users/");
+    const fetchImage = vi.fn(async () => ({ ok: true, arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer }));
+    vi.stubGlobal("fetch", fetchImage);
+    try {
+      const { controller, powerPoint } = fakeController();
+      const statuses: Array<{ state: string }> = [];
+      const sequencer = makeSequencer({ controller, paceMs: 0, onStatus: (status) => statuses.push(status) });
+      sequencer.update({ taskId: "builtin-nexaedge", ops, completed: true });
+      for (let tick = 0; tick < 60 && statuses.at(-1)?.state !== "done"; tick += 1) await flush();
+      expect(statuses.at(-1)?.state).toBe("done");
+      expect(powerPoint.deck).toHaveLength(8);
+      expect(powerPoint.deck[3].shapes.some((shape) => shape.image === "AQID")).toBe(true);
+      expect(fetchImage).toHaveBeenCalledTimes(1);
+      expect(readDrawingAsset).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("paints the real image when the pool resolves its digest", async () => {
     const { controller, powerPoint } = fakeController();
     const sequencer = makeSequencer({ controller, paceMs: 0 });
@@ -1202,4 +1240,45 @@ describe("chunk accounting", () => {
     expect(statuses.at(-1)?.state).toBe("failed");
     expect(statuses.at(-1)?.error).toContain("of 2 shapes");
   });
+});
+
+describe("generation outcome", () => {
+  it.each(["failed", "cancelled"])("preserves %s after deck setup only", async status => {
+    const { controller } = fakeController();
+    const statuses: Array<{ state: string; error?: string }> = [];
+    const sequencer = makeSequencer({ controller, paceMs: 0, onStatus: s => statuses.push(s) });
+    sequencer.update(buildReplayFeed({ draft: { taskId: "failure", filePath: "/failure.pptx", drawnSeq: 0 }, performing: false, trace: false,
+      task: { status, error: "2/8 ready; budget exhausted", vibeOps: opStream(8).slice(0, 1) } })!);
+    await flush();
+    expect(statuses.at(-1)).toMatchObject({ state: status === "failed" ? "failed" : "canceled", error: "2/8 ready; budget exhausted" });
+    expect(statuses.some(s => s.state === "done")).toBe(false);
+    expect(controller.save).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { outcome: "failed" as const, pages: 1, total: 2, expected: "failed", saveError: false },
+    { outcome: "succeeded" as const, pages: 0, total: 2, expected: "failed", saveError: false },
+    { outcome: "succeeded" as const, pages: 1, total: 2, expected: "failed", saveError: false },
+    { outcome: "succeeded" as const, pages: 2, total: 2, expected: "done", saveError: false },
+    { outcome: "succeeded" as const, pages: 2, total: 2, expected: "failed", saveError: true },
+  ])("validates generation, page count and save: $outcome/$pages/$saveError", async ({ outcome, pages, total, expected, saveError }) => {
+    const { controller } = fakeController();
+    if (saveError) vi.mocked(controller.save).mockRejectedValueOnce(new Error("disk full"));
+    const statuses: string[] = [];
+    const sequencer = makeSequencer({ controller, paceMs: 0, onStatus: s => statuses.push(s.state) });
+    const ops = pages ? opStream(pages) : opStream(total).slice(0, 1);
+    ops[0] = { ...ops[0], slides: total };
+    sequencer.update({ taskId: "outcome", ops, completed: true, outcome });
+    for (let i = 0; i < 10; i++) await flush();
+    expect(statuses.at(-1)).toBe(expected);
+    if (expected !== "done") expect(statuses).not.toContain("done");
+    if (pages) expect(controller.save).toHaveBeenCalledOnce();
+  });
+});
+
+
+it("opens the automatic live canvas only for actual drawing content", () => {
+  expect(hasPptxDrawingContent()).toBe(false);
+  expect(hasPptxDrawingContent(opStream(1).slice(0, 2))).toBe(false);
+  expect(hasPptxDrawingContent(opStream(1))).toBe(true);
 });

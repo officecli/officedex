@@ -1,9 +1,14 @@
+import "./editor-polish.css";
 import { installOfficeDexPresentationBridge } from "./officedex-host-bridge";
 import { installPptxImportTransport } from "./pptx-import-transport";
 import { usesPresentationCompatibilityProtocol } from "./protocol-mode";
 import { configureEmbeddedPresentationRuntime } from "./embedded-runtime";
 
 async function start() {
+  document.documentElement.dataset.officedexEditor = "true";
+  let language = navigator.language;
+  try { language = localStorage.getItem("officedex.locale") || language; } catch { /* browser preference remains available */ }
+  document.documentElement.lang = language.toLowerCase().startsWith("zh") ? "zh-CN" : "en";
   // The normal OfficeDex stage uses the presentation:* host bridge. The
   // existing rich PPTX workbench uses the source repository's
   // officedex:pptx-* compatibility protocol. Both modes run from this same

@@ -95,6 +95,33 @@ describe("OfficeDex document routing", () => {
     expect(findModifySourceTask(tasks, "docx")?.id).toBe("run-original");
   });
 
+  it("modifies the stopped run's own partial deck instead of a newer finished one", () => {
+    const tasks: DesktopTask[] = [
+      {
+        id: "run-stopped",
+        conversationId: "internal-lineage",
+        status: "failed",
+        documentType: "pptx",
+        events: [],
+        // A run that stopped mid-draw has a real file; it is a partial artifact
+        // rather than an artifact, and it is still the thing this task produced.
+        partialArtifact: { taskId: "run-stopped", filePath: "/tmp/draft.pptx", fileName: "draft.pptx", documentType: "pptx" },
+      },
+      {
+        id: "run-newer",
+        conversationId: "internal-lineage",
+        status: "completed",
+        documentType: "pptx",
+        events: [],
+        artifact: { taskId: "run-newer", filePath: "/tmp/newer.pptx", fileName: "newer.pptx", documentType: "pptx" },
+      },
+    ];
+    // Newest-first alone hands the instruction to a deck the user is not
+    // looking at -- the failure this preference exists to prevent.
+    expect(findModifySourceTask(tasks, "pptx")?.id).toBe("run-newer");
+    expect(findModifySourceTask(tasks, "pptx", "run-stopped")?.id).toBe("run-stopped");
+  });
+
   it("recovers a workbook PPT task when the generate RPC loses its response", () => {
     const entries: TaskHistoryEntry[] = [{
       taskId: "ppt-recovered",

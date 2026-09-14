@@ -28,5 +28,5 @@ export { Timeline, type TimelineItem, type TimelineProps } from "./components/Ti
 export { Tooltip, type TooltipProps } from "./components/Tooltip";
 export { Typography, type TitleProps } from "./components/Typography";
 export { DialogHost, dialog, type DialogRequest } from "./services/dialog";
-export { ToastHost, toast, type ToastOptions, type ToastTone } from "./services/toast";
+export { ToastHost, ToastViewport, toast, type ToastOptions, type ToastTone } from "./services/toast";
 export * from "./types";

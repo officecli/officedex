@@ -22,4 +22,11 @@ describe("DocumentWorkspace", () => {
     expect(screen.queryByRole("button", { name: /summary/i })).toBeNull();
     expect(screen.queryByPlaceholderText("Add a custom answer")).toBeNull();
   });
+  it("names an unnamed document by its own type instead of a generic label", () => {
+    const { unmount } = render(<DocumentWorkspace task={{ ...task("running"), documentType: "pptx", topic: "New slides" }} />);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Untitled presentation");
+    unmount();
+    render(<DocumentWorkspace task={{ ...task("running"), documentType: "xlsx", topic: "" }} />);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Untitled workbook");
+  });
 });

@@ -31,8 +31,19 @@ export interface DocumentWorkspaceProps {
 type Translator = (key: string, vars?: Record<string, string | number>) => string;
 
 function documentTitle(task: DesktopTask, artifact: Artifact | null | undefined, t: Translator): string {
-  return taskTitle(task, t("documentWorkspace.untitled"), artifact?.fileName);
+  // "Untitled presentation" beats "Untitled document" for a deck: the generic
+  // label made the header read as the wrong kind of file.
+  const type = (artifact?.documentType || task.documentType || "").toLowerCase();
+  const key = type === "report" ? "docx" : type === "gif" ? "img" : type;
+  return taskTitle(task, t(UNTITLED_KEYS[key] ?? "documentWorkspace.untitled"), artifact?.fileName);
 }
+
+const UNTITLED_KEYS: Record<string, string> = {
+  pptx: "documentWorkspace.untitled.pptx",
+  xlsx: "documentWorkspace.untitled.xlsx",
+  docx: "documentWorkspace.untitled.docx",
+  img: "documentWorkspace.untitled.img",
+};
 
 // i18n key per document type; anything unknown reads as a document (docx),
 // which is what the chain of ternaries this replaces fell through to.
@@ -84,7 +95,7 @@ export function DocumentWorkspace({ task, artifact = task.artifact, preview, ppt
   const visibleArtifact = artifact || task.artifact;
   const statusCopy = t(`documentWorkspace.status.${task.status}`);
 
-  return <main ref={hostRef} className={["document-workspace", showPptx ? "document-workspace--pptx" : "", className].filter(Boolean).join(" ")} aria-label="Document workspace">
+  return <main ref={hostRef} className={["document-workspace", showPptx ? "document-workspace--pptx" : "", className].filter(Boolean).join(" ")} aria-label={t("ui.copy.Documentworkspace")}>
     <header className="document-workspace__header">
       <div><span className="document-workspace__type">{typeLabel(task.documentType, t)}</span><h1>{documentTitle(task, visibleArtifact, t)}</h1></div>
       <span className={`document-workspace__status document-workspace__status--${task.status}`} role="status">{statusCopy}</span>

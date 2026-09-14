@@ -1,0 +1,28 @@
+/* Embedded-only polish: keep editor controls consistent with the host shell. */
+html[data-officedex-editor] .ppt-toolbar-kit .toolbar-section__title {
+  font-size: 10px;
+  font-weight: 400;
+  color: #858a91;
+}
+html[data-officedex-editor] .ppt-toolbar-kit .ui-toolbar-button {
+  border-radius: 6px;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+html[data-officedex-editor] .ppt-toolbar-kit .ui-toolbar-button:focus-visible {
+  outline: 2px solid #5da4e3;
+  outline-offset: 1px;
+}
+html[data-officedex-editor] [data-component="slide-thumbnail-item"] > :first-child {
+  border-radius: 4px;
+  border-width: 1px;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+html[data-officedex-editor] [data-component="slide-thumbnail-item"][data-selected="true"] > :first-child {
+  border-color: #5da4e3;
+  box-shadow: 0 0 0 1px #5da4e3;
+}
+html[data-officedex-editor] [data-mop-speaker-notes] { color: #5d626a; font-size: 13px; }
+@media (prefers-reduced-motion: reduce) {
+  html[data-officedex-editor] .ppt-toolbar-kit .ui-toolbar-button,
+  html[data-officedex-editor] [data-component="slide-thumbnail-item"] > :first-child { transition: none; }
+}

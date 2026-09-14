@@ -66,16 +66,19 @@ export function useSetLocale(): (next: Locale) => void {
   return useContext(LocaleContext).setLocale;
 }
 
+export function getCurrentLocale(): Locale {
+  return readStoredLocale() ?? detectLocale();
+}
+
+export function translate(key: string, vars?: Record<string, string | number>, locale: Locale = getCurrentLocale()): string {
+  const raw = dictionaries[locale][key] ?? dictionaries.en[key] ?? key;
+  if (!vars) return raw;
+  return Object.entries(vars).reduce((acc, [name, value]) => acc.replaceAll(`{${name}}`, String(value)), raw);
+}
+
 export function useT(): (key: string, vars?: Record<string, string | number>) => string {
   const locale = useLocale();
-  return useMemo(() => {
-    const dict = dictionaries[locale] ?? en;
-    return (key: string, vars?: Record<string, string | number>) => {
-      const raw = dict[key] ?? en[key] ?? key;
-      if (!vars) return raw;
-      return Object.entries(vars).reduce((acc, [k, v]) => acc.replaceAll(`{${k}}`, String(v)), raw);
-    };
-  }, [locale]);
+  return useMemo(() => (key: string, vars?: Record<string, string | number>) => translate(key, vars, locale), [locale]);
 }
 
 export { en, zh };

@@ -17,10 +17,14 @@ describe('asynchronous presentation naming', () => {
     expect(state.tasks.one.status).toBe('completed');
     expect(state.tasks.one.userInput?.prompt).toBe('Create a presentation about a new brand.');
     expect(taskTitle(state.tasks.one, 'Untitled', 'New slides.pptx')).toBe('Brand Launch');
-    expect(taskTitle(state.tasks.two, 'Untitled')).toBe('New slides');
+    expect(taskTitle(state.tasks.two, 'Untitled')).toBe('Untitled');
   });
   it('never uses the full brief when the presentation has no name yet', () => {
     const task: DesktopTask = { id: 'a', conversationId: 'a', status: 'starting', documentType: 'pptx', events: [], userInput: { prompt: 'Create a long presentation about all of our products.' } };
-    expect(taskTitle(task, 'Untitled')).toBe('New slides');
+    // The submission topic is a protocol value the runtime keys its naming call
+    // off; showing it would put a meaningless label on every unnamed deck, so
+    // the caller's own fallback wins instead.
+    expect(taskTitle(task, 'Untitled')).toBe('Untitled');
+    expect(taskTitle({ ...task, topic: 'New slides' }, 'Untitled')).toBe('Untitled');
   });
 });

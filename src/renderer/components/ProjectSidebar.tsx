@@ -56,11 +56,33 @@ export interface ProjectSidebarProps {
   onPointerLeave?: () => void;
 }
 
+/** Rows that share a title are indistinguishable in a list, so they fold. */
+function groupByTitle(documents: SidebarDocument[]): Array<{ title: string; documents: SidebarDocument[] }> {
+  const groups: Array<{ title: string; documents: SidebarDocument[] }> = [];
+  const indexByTitle = new Map<string, number>();
+  for (const document of documents) {
+    const at = indexByTitle.get(document.title);
+    if (at === undefined) {
+      indexByTitle.set(document.title, groups.length);
+      groups.push({ title: document.title, documents: [document] });
+    } else {
+      groups[at].documents.push(document);
+    }
+  }
+  return groups;
+}
+
+/** Waiting on a person, versus merely still working. */
+const ATTENTION_STATUSES = new Set(["question", "plan_review"]);
+const RUNNING_STATUSES = new Set(["starting", "running"]);
+
 export function ProjectSidebar({ workspaces, documents = [], activeWorkspaceId, activeDocumentId, onSelectAll, onSelectWorkspace, onOpenDocument, onDeleteDocument, onAddWorkspace, onRenameWorkspace, onRevealWorkspace, onRemoveWorkspace, onOpenSettings, onOpenAccount, signal, account, updateRow, onPointerEnter, onPointerLeave }: ProjectSidebarProps) {
   const t = useT();
   const [renamingId, setRenamingId] = useState<string>();
   const [renameValue, setRenameValue] = useState("");
   const [dropActive, setDropActive] = useState(false);
+  const [unfolded, setUnfolded] = useState<string[]>([]);
+  const [search, setSearch] = useState("");
 
   const submitRename = async (workspaceId: string) => {
     const name = renameValue.trim();
@@ -135,7 +157,12 @@ export function ProjectSidebar({ workspaces, documents = [], activeWorkspaceId, 
       >
         <DocTypeIcon type={document.documentType} />
         <span>{document.title}</span>
-        {document.status && document.status !== "completed" ? <em data-status={document.status} aria-label={t(`tasks.status.${document.status}`)} title={t(`tasks.status.${document.status}`)} /> : null}
+        {document.status && document.status !== "completed" ? (
+          <em className="project-sidebar__document-status" data-status={document.status} aria-label={t(`tasks.status.${document.status}`)} title={t(`tasks.status.${document.status}`)}>
+            {RUNNING_STATUSES.has(document.status) ? <i aria-hidden="true" /> : null}
+            {t(`tasks.status.${document.status}`)}
+          </em>
+        ) : null}
       </button>
       {onDeleteDocument ? (
         <button
@@ -151,6 +178,66 @@ export function ProjectSidebar({ workspaces, documents = [], activeWorkspaceId, 
     </div>
   );
 
+  const renderFolded = (group: SidebarDocument[], key: string) => {
+    const open = unfolded.includes(key);
+    return (
+      <div className="project-sidebar__fold" key={key}>
+        <button
+          type="button"
+          className="project-sidebar__fold-toggle"
+          aria-expanded={open}
+          aria-label={t("projectSidebar.foldedDocumentsAria", { count: String(group.length), name: group[0].title })}
+          title={group[0].title}
+          onClick={() => setUnfolded((current) => open ? current.filter((item) => item !== key) : [...current, key])}
+        >
+          <DocTypeIcon type={group[0].documentType} />
+          <span>{group[0].title}</span>
+          <em aria-hidden="true">×{group.length}</em>
+        </button>
+        {open ? <div className="project-sidebar__fold-body">{group.map(renderDocument)}</div> : null}
+      </div>
+    );
+  };
+
+  /**
+   * The document on screen always keeps its own row, so the user can see and
+   * act on it; only the same-titled ones behind it fold under a count.
+   */
+  const renderDocuments = (documents: SidebarDocument[], groupKey: string) => groupByTitle(documents).flatMap((group) => {
+    const onScreen = group.documents.filter((document) => document.id === activeDocumentId);
+    const rest = group.documents.filter((document) => document.id !== activeDocumentId);
+    if (rest.length <= 1) return [...onScreen, ...rest].map(renderDocument);
+    return [...onScreen.map(renderDocument), renderFolded(rest, `${groupKey}\u001f${group.title}`)];
+  });
+
+  /**
+   * A flat list makes the reader find the two rows that need them among thirty
+   * that do not. Status sections are only labelled when a workspace actually
+   * holds more than one kind, so the common single-kind workspace keeps its
+   * previous, unlabelled look.
+   */
+  const renderStatusSections = (documents: SidebarDocument[], groupKey: string) => {
+    const sections = [
+      { key: "attention", documents: documents.filter((document) => ATTENTION_STATUSES.has(document.status ?? "")) },
+      { key: "running", documents: documents.filter((document) => RUNNING_STATUSES.has(document.status ?? "")) },
+      { key: "recent", documents: documents.filter((document) => !ATTENTION_STATUSES.has(document.status ?? "") && !RUNNING_STATUSES.has(document.status ?? "")) },
+    ].filter((section) => section.documents.length > 0);
+    const labelled = sections.length > 1;
+    return sections.flatMap((section) => [
+      ...(labelled ? [<p className="project-sidebar__group-label" key={`${groupKey}-${section.key}-label`}>{t(`projectSidebar.group.${section.key}`)}</p>] : []),
+      ...renderDocuments(section.documents, `${groupKey}\u001f${section.key}`),
+    ]);
+  };
+
+  const query = search.trim().toLowerCase();
+  const searching = query.length > 0;
+  // Matching a workspace name keeps that workspace's documents, so searching for
+  // "Client A" is a way to narrow the list, not a way to empty it.
+  const matchedWorkspaceIds = new Set(workspaces.filter((workspace) => !query || workspace.name.toLowerCase().includes(query)).map((workspace) => workspace.id));
+  const visibleDocuments = documents.filter((document) => (
+    !query || document.title.toLowerCase().includes(query) || (document.workspaceId ? matchedWorkspaceIds.has(document.workspaceId) : false)
+  ));
+
   return (
     <aside className="project-sidebar" aria-label={t("projectSidebar.label")} onPointerEnter={onPointerEnter} onPointerLeave={onPointerLeave}>
       {/* Holds the rail toggle Shell parks over it, and on the desktop window
@@ -161,9 +248,9 @@ export function ProjectSidebar({ workspaces, documents = [], activeWorkspaceId, 
         <span className="project-sidebar__brand-name">OfficeDex</span>
       </div>
       <nav className="project-sidebar__primary" aria-label={t("projectSidebar.navigation")}>
-        <button type="button" className={`project-sidebar__new ${!activeWorkspaceId ? "is-active" : ""}`} aria-label="New" onClick={onSelectAll}>
+        <button type="button" className={`project-sidebar__new ${!activeWorkspaceId ? "is-active" : ""}`} aria-label={t("preview.copy.new")} onClick={onSelectAll}>
           <PlusOutlined className="project-sidebar__new-icon" aria-hidden="true" />
-          <span>New</span>
+          <span>{t("preview.copy.new")}</span>
         </button>
       </nav>
       <section
@@ -177,7 +264,20 @@ export function ProjectSidebar({ workspaces, documents = [], activeWorkspaceId, 
           <h2 id="project-sidebar-title">{t("projectSidebar.projects")}</h2>
           <Button variant="ghost-normal" size="small" ariaLabel={t("projectSidebar.add")} icon={<PlusOutlined />} onClick={onAddWorkspace} />
         </div>
+        {documents.length > 0 ? (
+          <div className="project-sidebar__search">
+            <Input
+              aria-label={t("projectSidebar.search")}
+              placeholder={t("projectSidebar.searchPlaceholder")}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
+        ) : null}
         <div className="project-sidebar__list">
+          {searching && visibleDocuments.length === 0 ? (
+            <p className="project-sidebar__no-matches">{t("projectSidebar.searchEmpty")}</p>
+          ) : null}
           {workspaces.length === 0 ? (
             <button type="button" className="project-sidebar__empty" onClick={onAddWorkspace}>
               <FolderAddOutlined aria-hidden />
@@ -210,15 +310,15 @@ export function ProjectSidebar({ workspaces, documents = [], activeWorkspaceId, 
                 </Dropdown>
               </div>
             </div>
-            {documents.filter((document) => document.workspaceId === workspace.id).map(renderDocument)}
+            {renderStatusSections(visibleDocuments.filter((document) => document.workspaceId === workspace.id), workspace.id)}
             </div>
           ))}
+          {visibleDocuments.some((document) => !document.workspaceId) ? (
+            <div className="project-sidebar__unscoped-documents">
+              {renderStatusSections(visibleDocuments.filter((document) => !document.workspaceId), "unscoped")}
+            </div>
+          ) : null}
         </div>
-        {documents.some((document) => !document.workspaceId) ? (
-          <div className="project-sidebar__unscoped-documents">
-            {documents.filter((document) => !document.workspaceId).map(renderDocument)}
-          </div>
-        ) : null}
         {dropActive ? <div className="project-sidebar__drop-hint" aria-hidden="true">{t("projectSidebar.dropHint")}</div> : null}
       </section>
       <nav className="project-sidebar__footer" aria-label={t("projectSidebar.utilities")}>

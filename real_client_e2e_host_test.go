@@ -520,6 +520,29 @@ func (h *realClientE2EHost) call(method string, raw json.RawMessage) (any, error
 			return nil, err
 		}
 		return h.app.PeekReportContext(value)
+	case "GetPptxTaskStatus", "SkipPptxResearch", "PausePptx", "ResumePptx":
+		var taskID string
+		if err := json.Unmarshal(raw, &taskID); err != nil {
+			return nil, err
+		}
+		switch method {
+		case "GetPptxTaskStatus":
+			return h.app.GetPptxTaskStatus(taskID)
+		case "PausePptx":
+			return h.app.PausePptx(taskID)
+		case "ResumePptx":
+			return h.app.ResumePptx(taskID)
+		}
+		return h.app.SkipPptxResearch(taskID)
+	case "IntervenePptx":
+		var input struct {
+			TaskID string `json:"taskId"`
+			Text   string `json:"text"`
+		}
+		if err := json.Unmarshal(raw, &input); err != nil {
+			return nil, err
+		}
+		return h.app.IntervenePptx(input.TaskID, input.Text)
 	case "GetTaskHistory":
 		var limit int
 		if len(raw) > 0 && string(raw) != "null" {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { PanelLeft } from "lucide-react";
 import {
   AppstoreOutlined, AudioOutlined, BgColorsOutlined, ClockCircleOutlined,
   CloseOutlined, CloudOutlined, CodeOutlined, ControlOutlined, DesktopOutlined,
@@ -33,6 +33,9 @@ interface ShellProps {
   activeNav: NavKey;
   children: React.ReactNode;
   inspector?: React.ReactNode;
+  editingDocument?: boolean;
+  /** Changes only after a file has been successfully opened. */
+  documentOpenRevision?: number;
   signal?: SidebarSignal;
   account?: SidebarAccount;
   update?: SidebarUpdateRowProps;
@@ -51,18 +54,22 @@ interface ShellProps {
   onRemoveWorkspace: (workspaceId: string) => void;
 }
 
-export function Shell({ activeNav, children, inspector, signal, account, update, workspaces, documents, activeDocumentId, activeWorkspaceId, onNavChange, onSelectWorkspace, onOpenDocument, onDeleteDocument, onSelectAllFiles, onAddWorkspace, onRenameWorkspace, onRevealWorkspace, onRemoveWorkspace }: ShellProps) {
+export function Shell({ activeNav, children, inspector, editingDocument = false, documentOpenRevision = 0, signal, account, update, workspaces, documents, activeDocumentId, activeWorkspaceId, onNavChange, onSelectWorkspace, onOpenDocument, onDeleteDocument, onSelectAllFiles, onAddWorkspace, onRenameWorkspace, onRevealWorkspace, onRemoveWorkspace }: ShellProps) {
   const t = useT();
   const [spreadsheetCompact, setSpreadsheetCompact] = useState(true);
   const [defaultCompact, setDefaultCompact] = useState(() => {
     try { return localStorage.getItem(SIDEBAR_COMPACT_KEY) === "1"; } catch { return false; }
   });
   const spreadsheetMode = activeNav === "spreadsheet";
+  const editorMode = spreadsheetMode || editingDocument;
   const texturedStage = activeNav === "home" || activeNav === "settings";
   const pointerDotField = usePointerDotField<HTMLElement>(texturedStage);
-  const compact = spreadsheetMode ? spreadsheetCompact : defaultCompact;
+  const previousEditorMode = useRef(editorMode);
+  const enteringEditor = editorMode && !previousEditorMode.current;
+  // Carry the homepage navigation state into the editor without a collapsed frame.
+  const compact = editorMode ? (enteringEditor ? defaultCompact : spreadsheetCompact) : defaultCompact;
   const setCompact = (next: boolean) => {
-    if (spreadsheetMode) {
+    if (editorMode) {
       setSpreadsheetCompact(next);
       return;
     }
@@ -79,12 +86,44 @@ export function Shell({ activeNav, children, inspector, signal, account, update,
   const [peeking, setPeeking] = useState(false);
   const closeTimer = useRef<number | undefined>(undefined);
   const peekTimer = useRef<number | undefined>(undefined);
+  // The slide is a layout animation: for as long as it runs, the main column —
+  // and every workbench inside it — is mid-resize. `shut` cannot describe that
+  // window, because it flips the moment the geometry is handed to CSS and it is
+  // already false while an expand is still travelling. The slide therefore gets
+  // its own flag, so the corner reserve can be held for its whole duration.
+  const [railMoving, setRailMoving] = useState(false);
+  const movingTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => {
     window.clearTimeout(closeTimer.current);
     window.clearTimeout(peekTimer.current);
+    window.clearTimeout(movingTimer.current);
   }, []);
 
+  // Keep navigation visible while opening; the success revision below closes
+  // it. Returning home restores the file list.
+  useEffect(() => {
+    const returningHome = previousEditorMode.current && !editorMode && activeNav === "home";
+    if (editorMode && !previousEditorMode.current) setSpreadsheetCompact(defaultCompact);
+    previousEditorMode.current = editorMode;
+    if (returningHome) {
+      setDefaultCompact(false);
+      try { localStorage.setItem(SIDEBAR_COMPACT_KEY, "0"); } catch { /* best effort */ }
+    }
+    window.clearTimeout(closeTimer.current);
+    window.clearTimeout(peekTimer.current);
+    setClosing(false);
+    setPeeking(false);
+    setShut(returningHome ? false : compact);
+  }, [editorMode]);
+
+  const markRailMoving = () => {
+    window.clearTimeout(movingTimer.current);
+    setRailMoving(true);
+    movingTimer.current = window.setTimeout(() => setRailMoving(false), RAIL_ANIM_MS);
+  };
+
   const openRail = () => {
+    markRailMoving();
     setShut(true);
     // Mount shut, then open on the next painted frame so the rail has two
     // distinct positions to transition between.
@@ -92,10 +131,14 @@ export function Shell({ activeNav, children, inspector, signal, account, update,
   };
 
   const collapseRail = () => {
+    window.clearTimeout(closeTimer.current);
+    window.clearTimeout(peekTimer.current);
+    markRailMoving();
     setShut(true);
     setClosing(true);
     closeTimer.current = window.setTimeout(() => {
       setCompact(true);
+      setPeeking(false);
       setClosing(false);
     }, RAIL_ANIM_MS);
   };
@@ -132,13 +175,22 @@ export function Shell({ activeNav, children, inspector, signal, account, update,
     }, 120);
   };
 
+  const lastOpenedRevision = useRef(documentOpenRevision);
+  useEffect(() => {
+    if (lastOpenedRevision.current === documentOpenRevision) return;
+    lastOpenedRevision.current = documentOpenRevision;
+    if (editorMode && (!compact || peeking)) {
+      collapseRail();
+    }
+  }, [documentOpenRevision, editorMode]);
+
   const railDocked = !compact || closing;
   const railPeeking = compact && !closing && peeking;
   const railMounted = railDocked || railPeeking;
   const updateRow = update ? <SidebarUpdateRow {...update} /> : null;
 
   return (
-    <div className={`home-shell home-shell--${activeNav} ${spreadsheetMode ? "home-shell--spreadsheet" : ""} ${railDocked ? "" : "home-shell--railless"} ${railPeeking ? "home-shell--rail-peek" : ""} ${shut ? "home-shell--rail-shut" : ""}`}>
+    <div className={`home-shell home-shell--${activeNav} ${spreadsheetMode ? "home-shell--spreadsheet" : ""} ${railDocked ? "" : "home-shell--railless"} ${railPeeking ? "home-shell--rail-peek" : ""} ${shut ? "home-shell--rail-shut" : ""} ${railMoving ? "home-shell--rail-moving" : ""}`}>
       {/* The one control for the rail, in the band at the window's top-left
           whichever way it points — the rail itself carries no collapse button,
           so the button never moves out from under the pointer that hid it. */}
@@ -152,7 +204,7 @@ export function Shell({ activeNav, children, inspector, signal, account, update,
         onPointerEnter={railDocked ? undefined : openPeek}
         onPointerLeave={railDocked ? undefined : closePeek}
       >
-        {railDocked ? <PanelLeftClose aria-hidden="true" /> : <PanelLeftOpen aria-hidden="true" />}
+        <PanelLeft aria-hidden="true" />
       </button>
       {railMounted ? (
       <ProjectSidebar

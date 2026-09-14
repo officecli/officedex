@@ -112,12 +112,8 @@ export default function PdfViewer({ previewToken, fileName, onRequestClose }: Pd
           <span className="wb-status__item">
             {t("workbench.status.pages", { current: currentPage, total: totalPages })}
           </span>
-          <Button size="small" disabled={currentPage <= 1} onClick={prevPage}>
-            Previous
-          </Button>
-          <Button size="small" disabled={currentPage >= totalPages} onClick={nextPage}>
-            Next
-          </Button>
+          <Button size="small" disabled={currentPage <= 1} onClick={prevPage}>{t("preview.copy.previous")}</Button>
+          <Button size="small" disabled={currentPage >= totalPages} onClick={nextPage}>{t("preview.copy.next")}</Button>
         </>
       }
       zoom={{

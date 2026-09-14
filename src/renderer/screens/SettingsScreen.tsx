@@ -222,7 +222,7 @@ export function SettingsScreen({
       <div className="settings-page">
         <div className="settings-hero page-header">
           <div>
-            <p className="settings-eyebrow">OFFICEDEX SETTINGS</p>
+            <p className="settings-eyebrow">{t("ui.copy.OFFICEDEXSETTINGS")}</p>
             <h1>{t("settings.page.title")}</h1>
             <p>{t("settings.page.subtitle")}</p>
           </div>

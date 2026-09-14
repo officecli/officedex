@@ -82,9 +82,12 @@ describe("DocxViewer", () => {
     const { container } = renderViewer();
     await mountedFrame(container);
 
-    const panel = screen.getByRole("complementary", { name: "Edit with AI" });
+    const panel = screen.getByRole("complementary", { name: "OfficeDex Agent" });
     expect(panel).toHaveTextContent("No selection");
-    expect(panel).toHaveTextContent("Edits are saved to report.docx");
+    expect(panel.querySelector(".agent-panel__scope")).toHaveTextContent("No selection");
+    expect(panel.querySelector("textarea")).toBeDisabled();
+    expect(panel.querySelector(".agent-composer-actions button")).toBeDisabled();
+    expect(panel).not.toHaveTextContent("Edits are saved to report.docx");
   });
 
   it("narrows the scope to the paragraphs Writer says are selected", async () => {
@@ -94,13 +97,13 @@ describe("DocxViewer", () => {
     const frame = await mountedFrame(container);
 
     pushSelection(frame, { empty: false, collapsed: false, paragraphs: 3 });
-    expect(screen.getByRole("complementary", { name: "Edit with AI" })).toHaveTextContent(
+    expect(screen.getByRole("complementary", { name: "OfficeDex Agent" })).toHaveTextContent(
       "Selected: 3 paragraph(s)",
     );
 
     // A caret is not a selection: the scope goes back to the whole document.
     pushSelection(frame, { empty: false, collapsed: true, paragraphs: 1 });
-    expect(screen.getByRole("complementary", { name: "Edit with AI" })).toHaveTextContent(
+    expect(screen.getByRole("complementary", { name: "OfficeDex Agent" })).toHaveTextContent(
       "No selection",
     );
   });
@@ -112,7 +115,7 @@ describe("DocxViewer", () => {
     const frame = await mountedFrame(container);
 
     pushSelection(frame, { empty: false, collapsed: false });
-    expect(screen.getByRole("complementary", { name: "Edit with AI" })).toHaveTextContent(
+    expect(screen.getByRole("complementary", { name: "OfficeDex Agent" })).toHaveTextContent(
       "Selected: part of the document",
     );
   });

@@ -185,11 +185,32 @@ body.preview-overlay-active .living-tree-popover-overlay {
 
 /* Transcript over composer, filling the frame's panel slot. */
 .pptx-workbench-conversation {
+  isolation: isolate;
   display: grid;
   min-width: 0;
   min-height: 0;
   grid-template-rows: minmax(0, 1fr) auto;
   overflow: hidden;
+}
+
+/* Same dot geometry as the home canvas, softened behind the conversation.
+   Sharing the transcript's grid cell keeps decoration out of the composer. */
+.pptx-workbench-conversation::before {
+  content: "";
+  grid-area: 1 / 1;
+  min-height: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--od-ink) 10%, transparent) 1px, transparent 1.2px);
+  background-size: 28px 28px;
+  opacity: .5;
+  mask-image: linear-gradient(to bottom, transparent, #000 64px, #000 calc(100% - 80px), transparent);
+  transition: opacity 180ms ease;
+}
+.pptx-workbench-conversation[data-has-messages="true"]::before { opacity: .2; }
+.pptx-workbench-conversation > .pptx-workbench-transcript { grid-area: 1 / 1; z-index: 1; }
+.pptx-workbench-conversation > .pptx-workbench-composer { grid-area: 2 / 1; }
+@media (prefers-reduced-motion: reduce) {
+  .pptx-workbench-conversation::before { transition: none; }
 }
 
 /* Live-drawing progress, rendered as an extra row of the panel header. */
@@ -287,6 +308,27 @@ body.preview-overlay-active .living-tree-popover-overlay {
   box-shadow: 0 2px 8px rgba(5, 16, 26, 0.08);
 }
 
+.pptx-workbench-save-failure:has(.pptx-workbench-save-error-details[open]) {
+  flex-wrap: wrap;
+}
+
+.pptx-workbench-save-error-details[open] {
+  flex-basis: 100%;
+  min-width: 0;
+}
+
+.pptx-workbench-save-error-details summary {
+  cursor: pointer;
+}
+
+.pptx-workbench-save-error-details pre {
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
 .pptx-workbench-save-failure.is-conflict {
   color: var(--n-warning);
   background: var(--n-tint-yellow);
@@ -310,6 +352,15 @@ body.preview-overlay-active .living-tree-popover-overlay {
   gap: 14px;
 }
 
+/* The panel is as wide as the deck beside it, so the turns stop at a readable
+   measure and sit centred in it rather than running the full track. */
+.pptx-workbench-transcript > *,
+.pptx-workbench-composer > * {
+  width: 100%;
+  max-width: var(--wb-panel-measure, 760px);
+  margin-inline: auto;
+}
+
 .pptx-workbench-empty {
   margin: 0;
   font-size: 12px;
@@ -321,43 +372,6 @@ body.preview-overlay-active .living-tree-popover-overlay {
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-.pptx-workbench-message {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-}
-
-.pptx-workbench-message-avatar {
-  flex-shrink: 0;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--n-secondary-container);
-  color: var(--n-secondary);
-}
-
-.pptx-workbench-message-user .pptx-workbench-message-avatar {
-  background: var(--n-surface);
-  color: var(--n-charcoal);
-}
-
-.pptx-workbench-message-body {
-  min-width: 0;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.pptx-workbench-message-author {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--n-steel);
 }
 
 .pptx-workbench-message-text {
@@ -392,7 +406,7 @@ body.preview-overlay-active .living-tree-popover-overlay {
   color: var(--n-charcoal);
   background: var(--n-surface-soft);
   border: 1px solid var(--n-hairline);
-  border-radius: 8px;
+  border-radius: var(--od-card-radius, 16px);
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
@@ -529,3 +543,61 @@ body.preview-overlay-active .living-tree-popover-overlay {
 
 /* ─── XLSX Viewer ─── */
 
+
+/* AI editing: quiet context, actionable empty state, and one composer surface. */
+.pptx-workbench-empty { padding-top: 18px; }
+.pptx-workbench-empty > p { margin: 0 0 14px; color: var(--od-ink); font-size: 14px; font-weight: 500; line-height: 1.5; }
+.pptx-workbench-suggestions { display: grid; gap: 8px; }
+.pptx-workbench-suggestions button {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; min-height: 36px; padding: 8px 10px;
+  border: 1px solid var(--od-border-subtle); border-radius: 12px;
+  background: var(--od-surface); color: var(--od-ink-secondary);
+  font: 400 13px/20px var(--od-font-ui); text-align: left; cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+.pptx-workbench-suggestions button:hover:not(:disabled) { background: var(--od-surface-muted); color: var(--od-ink); border-color: var(--od-border-hover); }
+.pptx-workbench-suggestions button:disabled { opacity: .45; cursor: default; }
+.pptx-workbench-suggestions button:focus-visible { outline: 2px solid var(--od-guidance); outline-offset: 2px; }
+.pptx-workbench-composer { border-top: 0; padding: 12px; gap: 8px; }
+/* Match the home intake surface and controls, with padding suited to the panel. */
+.pptx-workbench-selection { flex: 1; min-width: 0; color: var(--od-ink-secondary); font-size: 12px; line-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pptx-workbench-compose-box {
+  border: 1px solid color-mix(in srgb, var(--od-border-hover) 68%, transparent);
+  border-radius: var(--od-composer-radius, 28px);
+  background: color-mix(in srgb, var(--od-surface) 94%, transparent);
+  box-shadow: 0 20px 50px rgb(15 23 42 / 8%), 0 2px 8px rgb(15 23 42 / 5%);
+  backdrop-filter: blur(16px);
+  overflow: hidden;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.pptx-workbench-compose-box:focus-within {
+  border-color: color-mix(in srgb, var(--od-guidance) 46%, var(--od-border-hover));
+  box-shadow: 0 20px 50px rgb(15 23 42 / 8%), 0 0 0 3px color-mix(in srgb, var(--od-guidance) 9%, transparent);
+}
+.pptx-workbench-input { display: block; box-sizing: border-box; min-height: 108px; max-height: 180px; padding: 18px; border: 0; border-radius: 0; background: transparent; color: var(--od-ink); font: 400 15px/24px var(--od-font-ui); }
+.pptx-workbench-input:focus { box-shadow: none; }
+.pptx-workbench-input::placeholder { color: color-mix(in srgb, var(--od-ink-secondary) 58%, transparent); opacity: 1; }
+.pptx-workbench-input:disabled { background: transparent; }
+.pptx-workbench-composer-actions { box-sizing: border-box; padding: 8px 12px 8px 18px; min-height: 56px; border-top: 1px solid color-mix(in srgb, var(--od-border-subtle) 78%, transparent); background: transparent; }
+.pptx-workbench-composer-actions .od-button--icon-submit {
+  display: inline-flex; align-items: center; justify-content: center; flex: 0 0 40px;
+  width: 40px; min-width: 40px; height: 40px; min-height: 40px; padding: 0;
+  border: 1px solid var(--od-button-primary-bg); border-radius: 50%;
+  background: var(--od-button-primary-bg); color: var(--od-button-primary-ink);
+}
+.pptx-workbench-composer-actions .od-button--icon-submit:disabled { border-color: var(--od-border-default); background: var(--od-surface-muted); color: var(--od-ink-secondary); opacity: 1; }
+.pptx-workbench-composer-actions .od-button--icon-submit .od-button__icon,
+.pptx-workbench-composer-actions .od-button--icon-submit svg { width: 18px; height: 18px; }
+.pptx-workbench-composer-actions .od-button--icon-submit .od-button__label { display: none; }
+@media (prefers-reduced-motion: reduce) { .pptx-workbench-suggestions button, .pptx-workbench-compose-box { transition: none; } }
+
+.pptx-workbench-suggestions button { --suggestion-color: var(--ai-accent); gap: 10px; padding: 10px 16px; border-radius: var(--od-card-radius, 16px); border-color: color-mix(in srgb, var(--ai-accent) 18%, var(--od-border-subtle)); background: var(--od-surface); color: var(--od-ink); }
+.pptx-workbench-suggestions button:hover:not(:disabled) { background: color-mix(in srgb, var(--suggestion-color) 9%, var(--od-surface)); border-color: color-mix(in srgb, var(--suggestion-color) 28%, var(--od-border-subtle)); }
+.pptx-workbench-suggestion-icon { display: grid; flex: 0 0 28px; height: 28px; place-items: center; border-radius: 8px; background: transparent; color: var(--suggestion-color); }
+.pptx-workbench-suggestion-icon svg { width: 16px; height: 16px; }
+.pptx-workbench-suggestion-label { flex: 1; }
+.pptx-workbench-selection { display: flex; align-items: center; gap: 6px; }
+.pptx-workbench-selection > svg { flex-shrink: 0; color: var(--ai-accent); }
+.pptx-workbench-selection > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-panel__title > svg { box-sizing: content-box; padding: 5px; border-radius: 8px; background: var(--od-surface-muted); color: var(--ai-accent); }

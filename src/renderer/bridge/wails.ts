@@ -27,6 +27,32 @@ function optionalWailsFunction<T extends (...args: never[]) => unknown>(name: st
 
 export function createWailsAPI(): DesktopAPI {
   return {
+    getPptxTaskStatus: async (taskId) => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<unknown>>("GetPptxTaskStatus");
+      if (!fn) throw new Error("Task status checking requires a newer OfficeDex runtime.");
+      return await fn(toWails(taskId)) as Awaited<ReturnType<NonNullable<DesktopAPI["getPptxTaskStatus"]>>>;
+    },
+    skipPptxResearch: async (taskId) => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<unknown>>("SkipPptxResearch");
+      if (!fn) throw new Error("Skipping research requires a newer OfficeDex runtime.");
+      await fn(toWails(taskId));
+    },
+    intervenePptx: async (taskId, text) => {
+      const fn = optionalWailsFunction<(arg: never, text: never) => Promise<unknown>>("IntervenePptx");
+      if (!fn) throw new Error("Live steering requires a newer OfficeDex runtime.");
+      const result = await fn(toWails(taskId), toWails(text));
+      return result ?? {};
+    },
+    pausePptx: async (taskId) => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<unknown>>("PausePptx");
+      if (!fn) throw new Error("Pausing a generation requires a newer OfficeDex runtime.");
+      await fn(toWails(taskId));
+    },
+    resumePptxLive: async (taskId) => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<unknown>>("ResumePptx");
+      if (!fn) throw new Error("Resuming a generation requires a newer OfficeDex runtime.");
+      await fn(toWails(taskId));
+    },
     saveOfficeProductProject: async (input) => {
       const fn = optionalWailsFunction<(arg: never) => Promise<void>>("SaveOfficeProductProject");
       if (!fn) throw new Error("Office product graph requires a newer OfficeDex runtime.");

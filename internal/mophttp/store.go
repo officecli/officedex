@@ -322,6 +322,10 @@ func (s *Store) copyInto(fileID, exportRoot string, includedResources map[string
 	// behind after a chart edit. Strip them on the way out rather than failing
 	// the export.
 	exportContent = normalizeExportContent(exportContent)
+	exportContent, err = materializeImageResources(exportContent, exportRoot)
+	if err != nil {
+		return nil, err
+	}
 	if err := writeFileAtomically(filepath.Join(exportRoot, contentFileName), exportContent); err != nil {
 		return nil, err
 	}

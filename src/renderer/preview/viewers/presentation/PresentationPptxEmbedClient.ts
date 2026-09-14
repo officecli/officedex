@@ -70,10 +70,13 @@ const DEFAULT_TIMEOUTS = {
 export class PresentationPptxEmbedError extends Error {
   readonly code?: string;
 
-  constructor(message: string, code?: string) {
+  readonly detail?: string;
+
+  constructor(message: string, code?: string, detail?: string) {
     super(message);
     this.name = "PresentationPptxEmbedError";
     this.code = code;
+    this.detail = detail;
   }
 }
 
@@ -278,7 +281,7 @@ export class PresentationPptxEmbedClient {
     );
     if (reply.type !== "officedex:pptx-export-result")
       throw new Error("Unexpected editor reply.");
-    if (reply.error) throw new PresentationPptxEmbedError(reply.error, reply.errorCode);
+    if (reply.error) throw new PresentationPptxEmbedError(reply.error, reply.errorCode, reply.errorDetail);
     const buffer = reply.buffer;
     if (!(buffer instanceof ArrayBuffer) || buffer.byteLength < 4) {
       throw new Error("The editor returned an empty PowerPoint export.");

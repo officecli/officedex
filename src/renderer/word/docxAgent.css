@@ -1,5 +1,7 @@
 /* ─── DOCX assistant panel ─── */
 
+.docx-agent [role="alert"] { color: var(--color-error, #c9372c); overflow-wrap: anywhere; }
+
 .docx-agent {
   display: grid;
   min-width: 0;

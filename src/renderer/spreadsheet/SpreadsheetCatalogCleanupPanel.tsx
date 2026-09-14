@@ -1,3 +1,4 @@
+import { useT } from "../i18n";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, ChevronDown, Download, ScanSearch, TableProperties, TriangleAlert } from "lucide-react";
 import { Button, Select } from "../ui";
@@ -60,6 +61,7 @@ async function runCatalogCleanup(parameters: Record<string, unknown>, metadata: 
 }
 
 export function SpreadsheetCatalogCleanupPanel({ fileName, filePath, workspaceId, onInspect, onPreview, onApply, onSave, onCompleted, autoScan = false }: SpreadsheetCatalogCleanupPanelProps) {
+  const t = useT();
   const [intent, setIntent] = useState<CatalogImportIntent>("create");
   const [batches, setBatches] = useState<CatalogCleanupBatch[]>([]);
   const [skippedSheets, setSkippedSheets] = useState<Array<{ sheetName: string; reason: string }>>([]);
@@ -91,9 +93,9 @@ export function SpreadsheetCatalogCleanupPanel({ fileName, filePath, workspaceId
   }), [batch]);
   const uncertainMappings = useMemo(() => batch?.mapping.filter((column) => column.role === "ignored" || column.confidence < 0.8) ?? [], [batch]);
   const missingRequiredFields = useMemo(() => [
-    ["title", "product title"],
-    ...(intent === "create" ? [] : [["handle", "URL handle"]]),
-  ].flatMap(([role, label]) => batch && !batch.mapping.some((column) => column.role === role) ? [label] : []), [batch, intent]);
+    ["title", t("catalog.ui.producttitle")],
+    ...(intent === "create" ? [] : [["handle", t("catalog.ui.URLhandle")]]),
+  ].flatMap(([role, label]) => batch && !batch.mapping.some((column) => column.role === role) ? [label] : []), [batch, intent, t]);
 
   const scan = useCallback(async () => {
     setError(undefined);
@@ -116,7 +118,7 @@ export function SpreadsheetCatalogCleanupPanel({ fileName, filePath, workspaceId
       }));
       const nextBatches = results.flatMap((result) => result.batch ? [result.batch] : []);
       const nextSkipped = results.flatMap((result) => result.skipped ? [result.skipped] : []);
-      if (nextBatches.length === 0) throw new Error(nextSkipped[0]?.reason || "No Shopify product catalog was found in this workbook.");
+      if (nextBatches.length === 0) throw new Error(nextSkipped[0]?.reason || t("catalog.ui.NoShopifyproductcatalogwasfoundinthisworkbook"));
       setBatches(nextBatches);
       setSkippedSheets(nextSkipped);
       setActiveSheetId(nextBatches[0].sheetId);
@@ -124,7 +126,7 @@ export function SpreadsheetCatalogCleanupPanel({ fileName, filePath, workspaceId
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally { setWorking(false); }
-  }, [intent, onInspect, onPreview, runtimeMetadata]);
+  }, [intent, onInspect, onPreview, runtimeMetadata, t]);
 
   useEffect(() => {
     autoScanAttempted.current = false;
@@ -180,12 +182,12 @@ export function SpreadsheetCatalogCleanupPanel({ fileName, filePath, workspaceId
           clientTools: {
             "workbook.catalog_cleanup.apply": async (request) => {
               const currentBatch = request.arguments.batch as CatalogCleanupBatch | undefined;
-              if (!currentBatch) throw new Error("Catalog cleanup Runtime did not provide a batch for writeback.");
+              if (!currentBatch) throw new Error(t("catalog.ui.CatalogcleanupRuntimedidnotprovideabatchforwriteback"));
               await onApply(currentBatch);
               return { applied: true, sheet_id: currentBatch.sheetId };
             },
             "workbook.save": async () => {
-              if (!await onSave()) throw new Error("Cleaned results were written, but the workbook could not be saved.");
+              if (!await onSave()) throw new Error(t("catalog.ui.Cleanedresultswerewrittenbuttheworkbookcouldnotbesaved"));
               return { saved: true };
             },
           },
@@ -202,41 +204,41 @@ export function SpreadsheetCatalogCleanupPanel({ fileName, filePath, workspaceId
   };
 
   return (
-    <section className="spreadsheet-catalog-panel" aria-label="Supplier Catalog Cleanup & Import">
-      <div className="spreadsheet-catalog-panel__heading"><div><TableProperties aria-hidden="true" /><strong>Supplier Catalog Cleanup</strong></div><span>Shopify import</span></div>
-      <p>OfficeDex scans every visible sheet and cleans each detected supplier catalog. Manually select multiple cells or rows first only when you need an advanced single-sheet override.</p>
-      <label className="spreadsheet-catalog-panel__intent"><span>Import intent</span><Select size="small" ariaLabel="Shopify import intent" value={intent} options={[
-        { value: "create", label: "Create new products" },
-        { value: "update", label: "Update existing products" },
-        { value: "mixed", label: "Mixed create and update" },
+    <section className="spreadsheet-catalog-panel" aria-label={t("catalog.ui.SupplierCatalogCleanupImport")}>
+      <div className="spreadsheet-catalog-panel__heading"><div><TableProperties aria-hidden="true" /><strong>{t("catalog.ui.SupplierCatalogCleanup")}</strong></div><span>{t("catalog.ui.Shopifyimport")}</span></div>
+      <p>{t("catalog.ui.OfficeDexscanseveryvisiblesheetandcleanseachdetectedsuppliercatalogManuallyselectmultiplec")}</p>
+      <label className="spreadsheet-catalog-panel__intent"><span>{t("catalog.ui.Importintent")}</span><Select size="small" ariaLabel={t("catalog.ui.Shopifyimportintent")} value={intent} options={[
+        { value: "create", label: t("catalog.ui.Createnewproducts") },
+        { value: "update", label: t("catalog.ui.Updateexistingproducts") },
+        { value: "mixed", label: t("catalog.ui.Mixedcreateandupdate") },
       ]} onChange={changeIntent} /></label>
-      <Button size="small" variant="secondary" icon={<ScanSearch />} loading={working} onClick={() => void scan()}>Detect product catalog</Button>
+      <Button size="small" variant="secondary" icon={<ScanSearch />} loading={working} onClick={() => void scan()}>{t("catalog.ui.Detectproductcatalog")}</Button>
       {batch ? <>
-        <label className="spreadsheet-catalog-panel__intent"><span>Detected sheet</span><Select size="small" ariaLabel="Detected Shopify sheet" value={batch.sheetId} options={batches.map((item) => ({ value: item.sheetId, label: `${item.sheetName} · ${item.rows.length} rows` }))} onChange={(sheetId) => { setActiveSheetId(sheetId); onPreview?.(batches.find((item) => item.sheetId === sheetId)); }} /></label>
-        <small>{batches.length} catalog sheets detected{skippedSheets.length ? ` · ${skippedSheets.length} non-catalog sheets skipped` : ""} · {batches.reduce((sum, item) => sum + item.rows.length, 0)} total rows</small>
-        <Button size="small" variant="primary" loading={working} disabled={batches.some((item) => item.rows.length === 0 || item.batchFindings.some((finding) => finding.severity === "error") || !item.mapping.some((column) => column.role === "title") || (intent !== "create" && !item.mapping.some((column) => column.role === "handle")))} onClick={() => void apply()}>{applied ? "Validate and write all sheets again" : `Validate ${batches.reduce((sum, item) => sum + item.rows.length, 0)} rows across ${batches.length} sheets`}</Button>
+        <label className="spreadsheet-catalog-panel__intent"><span>{t("catalog.ui.Detectedsheet")}</span><Select size="small" ariaLabel={t("catalog.ui.DetectedShopifysheet")} value={batch.sheetId} options={batches.map((item) => ({ value: item.sheetId, label: t("catalog.ui.namecountrows", { name: item.sheetName, count: item.rows.length }) }))} onChange={(sheetId) => { setActiveSheetId(sheetId); onPreview?.(batches.find((item) => item.sheetId === sheetId)); }} /></label>
+        <small>{t("catalog.ui.sheetscatalogsheetsdetectedskippednoncatalogsheetsskippedrowstotalrows", { sheets: batches.length, skipped: skippedSheets.length, rows: batches.reduce((sum, item) => sum + item.rows.length, 0) })}</small>
+        <Button size="small" variant="primary" loading={working} disabled={batches.some((item) => item.rows.length === 0 || item.batchFindings.some((finding) => finding.severity === "error") || !item.mapping.some((column) => column.role === "title") || (intent !== "create" && !item.mapping.some((column) => column.role === "handle")))} onClick={() => void apply()}>{applied ? t("catalog.ui.Validateandwriteallsheetsagain") : t("catalog.ui.Validaterowsrowsacrosssheetssheets", { rows: batches.reduce((sum, item) => sum + item.rows.length, 0), sheets: batches.length })}</Button>
         <div className="spreadsheet-catalog-panel__summary">
-          <strong>{batch.rows.length} products found</strong>
+          <strong>{t("catalog.ui.countproductsfound", { count: batch.rows.length })}</strong>
           <div className="spreadsheet-catalog-panel__outcomes">
-            <span data-status="ready"><b>{summary.ready}</b>Ready to import</span>
-            <span data-status="attention"><b>{summary.attention}</b>Needs attention</span>
-            <span data-status="blocked"><b>{summary.blocked}</b>Can't import</span>
+            <span data-status="ready"><b>{summary.ready}</b>{t("catalog.ui.Readytoimport")}</span>
+            <span data-status="attention"><b>{summary.attention}</b>{t("catalog.ui.Needsattention")}</span>
+            <span data-status="blocked"><b>{summary.blocked}</b>{t("catalog.ui.Cantimport")}</span>
           </div>
-          <p>{findingSummary.errors} blocking errors · {findingSummary.warnings} warnings · {findingSummary.suggestions} suggestions. Checks include Shopify identity fields, numeric formats, option dependencies, duplicate variant combinations, SKU ambiguity, image URL format and standard product taxonomy.</p>
-          <p>{cleanupSummary.actions} safe cleanup actions across {cleanupSummary.rows} rows{cleanupSummary.defaults ? ` · ${cleanupSummary.defaults} conservative defaults for new products` : ""}. Supplier columns remain unchanged.</p>
-          <small>No estimate or balance check · preview is free · actual usage is billed after apply completes</small>
+          <p>{t("catalog.ui.errorsblockingerrorswarningswarningssuggestionssuggestionsChecksincludeShopifyidentityfiel", { ...findingSummary })}</p>
+          <p>{t("catalog.ui.actionssafecleanupactionsacrossrowsrowsdefaultsconservativedefaultsfornewproductsSupplierc", { ...cleanupSummary })}</p>
+          <small>{t("catalog.ui.Noestimateorbalancecheckpreviewisfreeactualusageisbilledafterapplycompletes")}</small>
         </div>
-        {missingRequiredFields.length > 0 ? <div className="spreadsheet-catalog-panel__required" role="alert"><TriangleAlert aria-hidden="true" /><div><strong>Required field not recognized</strong><span>Choose the column for {missingRequiredFields.join(", ")} before cleaning.</span></div></div> : null}
-        {batch.batchFindings.some((item) => item.severity === "error") ? <div className="spreadsheet-catalog-panel__required" role="alert"><TriangleAlert aria-hidden="true" /><div><strong>File structure needs attention</strong><span>{batch.batchFindings.filter((item) => item.severity === "error").map((item) => item.message).join("; ")}</span></div></div> : null}
+        {missingRequiredFields.length > 0 ? <div className="spreadsheet-catalog-panel__required" role="alert"><TriangleAlert aria-hidden="true" /><div><strong>{t("catalog.ui.Requiredfieldnotrecognized")}</strong><span>{t("catalog.ui.Choosethecolumnforfieldsbeforecleaning", { fields: missingRequiredFields.join(", ") })}</span></div></div> : null}
+        {batch.batchFindings.some((item) => item.severity === "error") ? <div className="spreadsheet-catalog-panel__required" role="alert"><TriangleAlert aria-hidden="true" /><div><strong>{t("catalog.ui.Filestructureneedsattention")}</strong><span>{batch.batchFindings.filter((item) => item.severity === "error").map((item) => item.message).join("; ")}</span></div></div> : null}
         {uncertainMappings.length > 0 ? <div className="spreadsheet-catalog-panel__mapping">
-          <strong>{uncertainMappings.length} {uncertainMappings.length === 1 ? "column needs" : "columns need"} your confirmation</strong>
-          <span>Tell OfficeDex what these supplier columns mean, or leave unrelated columns as Ignore.</span>
-          <div>{uncertainMappings.map((column) => <label key={column.column}><span>{column.header || `Column ${column.column + 1}`}</span><Select size="small" ariaLabel={`Map ${column.header}`} value={column.role as CatalogFieldRole} options={CATALOG_FIELD_ROLE_OPTIONS} onChange={(value) => changeRole(column.column, value)} /></label>)}</div>
-        </div> : <div className="spreadsheet-catalog-panel__recognized"><CheckCircle2 aria-hidden="true" /><span>Required fields recognized automatically</span></div>}
-        <button type="button" className="spreadsheet-catalog-panel__mapping-toggle" aria-expanded={showAllMappings} onClick={() => setShowAllMappings((shown) => !shown)}>Review recognized fields <ChevronDown className={showAllMappings ? "is-open" : ""} aria-hidden="true" /></button>
-        {showAllMappings ? <div className="spreadsheet-catalog-panel__mapping spreadsheet-catalog-panel__mapping--all"><div>{batch.mapping.map((column) => <label key={column.column}><span>{column.header || `Column ${column.column + 1}`}</span><Select size="small" ariaLabel={`Map ${column.header}`} value={column.role as CatalogFieldRole} options={CATALOG_FIELD_ROLE_OPTIONS} onChange={(value) => changeRole(column.column, value)} /></label>)}</div></div> : null}
-        <div className="spreadsheet-catalog-panel__scope"><TriangleAlert aria-hidden="true" /><span>{intent === "create" ? "New products receive conservative Shopify defaults and remain draft/unpublished." : "Update exports include only mapped fields, so missing supplier columns are not exported as blank overwrites."} Rules run in the proprietary OfficeCLI channel engine ({batch.ruleVersion}); taxonomy {batch.taxonomyVersion}. Local preflight still cannot check store handles, image reachability, locations, or product-reference metafields.</span></div>
-        {applied ? <><div className="spreadsheet-catalog-panel__done"><CheckCircle2 aria-hidden="true" />Validation results were saved in six new columns. Original supplier data was not changed.</div><Button size="small" variant="secondary" icon={<Download />} disabled={summary.blocked === batch.rows.length} onClick={() => downloadCsv(batch, fileName)}>Download Shopify draft CSV</Button><Button size="small" variant="secondary" icon={<Download />} onClick={() => downloadFindingsCsv(batch, fileName)}>Download findings report</Button></> : null}
+          <strong>{t("catalog.ui.countcolumnsneedyourconfirmation", { count: uncertainMappings.length })}</strong>
+          <span>{t("catalog.ui.TellOfficeDexwhatthesesuppliercolumnsmeanorleaveunrelatedcolumnsasIgnore")}</span>
+          <div>{uncertainMappings.map((column) => <label key={column.column}><span>{column.header || t("catalog.ui.Columncount", { count: column.column + 1 })}</span><Select size="small" ariaLabel={t("catalog.ui.Mapheader", { header: column.header })} value={column.role as CatalogFieldRole} options={CATALOG_FIELD_ROLE_OPTIONS.map((option) => ({ ...option, label: t(`catalog.field.${option.value}`) }))} onChange={(value) => changeRole(column.column, value)} /></label>)}</div>
+        </div> : <div className="spreadsheet-catalog-panel__recognized"><CheckCircle2 aria-hidden="true" /><span>{t("catalog.ui.Requiredfieldsrecognizedautomatically")}</span></div>}
+        <button type="button" className="spreadsheet-catalog-panel__mapping-toggle" aria-expanded={showAllMappings} onClick={() => setShowAllMappings((shown) => !shown)}>{t("catalog.ui.Reviewrecognizedfields")} <ChevronDown className={showAllMappings ? "is-open" : ""} aria-hidden="true" /></button>
+        {showAllMappings ? <div className="spreadsheet-catalog-panel__mapping spreadsheet-catalog-panel__mapping--all"><div>{batch.mapping.map((column) => <label key={column.column}><span>{column.header || t("catalog.ui.Columncount", { count: column.column + 1 })}</span><Select size="small" ariaLabel={t("catalog.ui.Mapheader", { header: column.header })} value={column.role as CatalogFieldRole} options={CATALOG_FIELD_ROLE_OPTIONS.map((option) => ({ ...option, label: t(`catalog.field.${option.value}`) }))} onChange={(value) => changeRole(column.column, value)} /></label>)}</div></div> : null}
+        <div className="spreadsheet-catalog-panel__scope"><TriangleAlert aria-hidden="true" /><span>{intent === "create" ? t("catalog.ui.NewproductsreceiveconservativeShopifydefaultsandremaindraftunpublished") : t("catalog.ui.Updateexportsincludeonlymappedfieldssomissingsuppliercolumnsarenotexportedasblankoverwrite")}{t("catalog.ui.RulesversionrulestaxonomytaxonomyLocalchecksdonotcoverstorehandlesimagereachabilitylocatio", { rules: batch.ruleVersion, taxonomy: batch.taxonomyVersion })}</span></div>
+        {applied ? <><div className="spreadsheet-catalog-panel__done"><CheckCircle2 aria-hidden="true" />{t("catalog.ui.ValidationresultsweresavedinsixnewcolumnsOriginalsupplierdatawasnotchanged")}</div><Button size="small" variant="secondary" icon={<Download />} disabled={summary.blocked === batch.rows.length} onClick={() => downloadCsv(batch, fileName)}>{t("catalog.ui.DownloadShopifydraftCSV")}</Button><Button size="small" variant="secondary" icon={<Download />} onClick={() => downloadFindingsCsv(batch, fileName)}>{t("catalog.ui.Downloadfindingsreport")}</Button></> : null}
       </> : null}
       {error ? <div className="spreadsheet-catalog-panel__error" role="alert">{error}</div> : null}
     </section>

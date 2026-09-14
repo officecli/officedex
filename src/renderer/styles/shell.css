@@ -602,25 +602,40 @@
   z-index: 100;
   display: flex;
   flex-direction: column;
+  /* Clip, don't scroll — same reason as the workbench frame it hosts: an
+     `overflow: hidden` box is still a scroll container, and WebKit will happily
+     scroll one under a trackpad gesture, sliding the whole workspace (assistant
+     included) out of the window's left edge. */
   overflow: hidden;
+  overflow: clip;
   background: transparent;
 }
 
-@keyframes preview-overlay-slide-in {
+/* This used to travel the full width of the column: translateX(-100%) → 0 over
+   420ms. That was readable motion while the overlay's left edge was the editor
+   canvas, but the assistant lives there now, and every frame short of the last
+   one sliced its heading, its file line and its prompt off at the window edge —
+   a layout that looks broken rather than one that looks like it is arriving.
+   The long tail of an ease-out made the worst of it linger, and a webview busy
+   booting a document editor can stall the frame there outright.
+
+   So it arrives in place. Nothing is ever drawn outside the column, and the
+   150–200ms in DESIGN.md is the budget for a plain fade. */
+@keyframes preview-overlay-fade-in {
   from {
-    transform: translateX(-100%);
+    opacity: 0;
   }
   to {
-    transform: translateX(0);
+    opacity: 1;
   }
 }
 
-@keyframes preview-overlay-slide-out {
+@keyframes preview-overlay-fade-out {
   from {
-    transform: translateX(0);
+    opacity: 1;
   }
   to {
-    transform: translateX(-100%);
+    opacity: 0;
   }
 }
 
@@ -631,11 +646,11 @@
   flex-direction: column;
   overflow: hidden;
   background: var(--n-canvas);
-  animation: preview-overlay-slide-in 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: preview-overlay-fade-in 180ms ease;
 }
 
 .preview-panel-root.is-closing {
-  animation: preview-overlay-slide-out 420ms cubic-bezier(0.64, 0, 0.78, 0) forwards;
+  animation: preview-overlay-fade-out 180ms ease forwards;
 }
 
 .preview-panel-body {

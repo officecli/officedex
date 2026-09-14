@@ -106,6 +106,83 @@ describe("ProjectSidebar", () => {
     expect(screen.queryByText(/No chats|Legacy task history/i)).toBeNull();
   });
 
+  it("folds same-titled rows behind a count instead of listing them all", () => {
+    const onOpenDocument = vi.fn();
+    renderSidebar({
+      documents: [
+        { id: "a", title: "Untitled task", documentType: "pptx", workspaceId: "ws-a" },
+        { id: "b", title: "Untitled task", documentType: "pptx", workspaceId: "ws-a" },
+        { id: "c", title: "Untitled task", documentType: "pptx", workspaceId: "ws-a" },
+        { id: "d", title: "Otter Life", documentType: "pptx", workspaceId: "ws-a" },
+      ],
+      onOpenDocument,
+    });
+    expect(screen.queryByRole("button", { name: /^Untitled task$/i })).toBeNull();
+    const toggle = screen.getByRole("button", { name: "3 more documents named Untitled task" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle).toHaveTextContent("×3");
+    fireEvent.click(toggle);
+    expect(screen.getAllByRole("button", { name: /^Untitled task$/i })).toHaveLength(3);
+    fireEvent.click(screen.getAllByRole("button", { name: /^Untitled task$/i })[1]);
+    expect(onOpenDocument).toHaveBeenCalledWith(expect.objectContaining({ id: "b" }));
+    // A differently named row is untouched by the fold.
+    expect(screen.getByRole("button", { name: /Otter Life/i })).toBeInTheDocument();
+  });
+
+  it("names a row's status instead of leaving it to a coloured dot", () => {
+    renderSidebar({
+      documents: [{ id: "q", title: "Needs me", documentType: "pptx", workspaceId: "ws-a", status: "question" }],
+    });
+    const badge = screen.getByText("Awaiting Confirmation");
+    expect(badge).toHaveAttribute("data-status", "question");
+    expect(badge).toHaveAttribute("title", "Awaiting Confirmation");
+    // A settled row carries no badge at all, so the list stays quiet.
+    cleanup();
+    renderSidebar({ documents: [{ id: "c", title: "Done", documentType: "pptx", workspaceId: "ws-a", status: "completed" }] });
+    expect(screen.queryByText("Completed")).toBeNull();
+  });
+
+  it("labels status sections only when a workspace holds more than one kind", () => {
+    const running = { id: "a", title: "Alpha", documentType: "pptx", workspaceId: "ws-a", status: "running" as const };
+    const done = { id: "b", title: "Beta", documentType: "pptx", workspaceId: "ws-a", status: "completed" as const };
+    renderSidebar({ documents: [running, done] });
+    expect(screen.getByText("In progress")).toBeInTheDocument();
+    expect(screen.getByText("Recent")).toBeInTheDocument();
+    // One kind of row needs no heading to explain it.
+    cleanup();
+    renderSidebar({ documents: [done] });
+    expect(screen.queryByText("Recent")).toBeNull();
+  });
+
+  it("filters rows by name and says when nothing is left", () => {
+    renderSidebar({
+      documents: [
+        { id: "a", title: "Otter Life", documentType: "pptx", workspaceId: "ws-a" },
+        { id: "b", title: "Penguin Life", documentType: "pptx", workspaceId: "ws-a" },
+      ],
+    });
+    const search = screen.getByRole("textbox", { name: "Search documents" });
+    fireEvent.change(search, { target: { value: "penguin" } });
+    expect(screen.queryByRole("button", { name: /Otter Life/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /Penguin Life/i })).toBeInTheDocument();
+    fireEvent.change(search, { target: { value: "nothing matches this" } });
+    expect(screen.getByText("No matching documents")).toBeInTheDocument();
+  });
+
+  it("keeps the document on screen out of the fold so it stays actionable", () => {
+    renderSidebar({
+      documents: [
+        { id: "a", title: "Untitled task", documentType: "pptx", workspaceId: "ws-a" },
+        { id: "b", title: "Untitled task", documentType: "pptx", workspaceId: "ws-a" },
+        { id: "c", title: "Untitled task", documentType: "pptx", workspaceId: "ws-a" },
+      ],
+      activeDocumentId: "b",
+    });
+    const open = screen.getByRole("button", { name: /^Untitled task$/i });
+    expect(open).toHaveAttribute("data-active", "true");
+    expect(screen.getByRole("button", { name: "2 more documents named Untitled task" })).toHaveTextContent("×2");
+  });
+
   it("deletes a sidebar document after confirmation without implying the file is deleted", async () => {
     const onDeleteDocument = vi.fn(async () => undefined);
     renderSidebar({

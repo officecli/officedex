@@ -97,14 +97,14 @@ export const SpreadsheetWorkspace = forwardRef<SpreadsheetWorkspaceHandle, Sprea
       const deadline = Date.now() + 30_000;
       while (Date.now() < deadline) {
         if (editorStateRef.current === "error") {
-          throw new Error("表格编辑器加载失败，请重试。");
+          throw new Error(t("spreadsheet.error.loadFailed"));
         }
         if (canvasRef.current && editorStateRef.current !== "closed" && editorStateRef.current !== "loading") {
           return canvasRef.current;
         }
         await delay(50);
       }
-      throw new Error("表格编辑器加载超时，请重试。");
+      throw new Error(t("spreadsheet.error.loadTimeout"));
     }, []);
     const save = useCallback(async () => {
       if (!session.artifact || !session.grant) return false;
@@ -142,7 +142,7 @@ export const SpreadsheetWorkspace = forwardRef<SpreadsheetWorkspaceHandle, Sprea
       formatCells: async (request) => (await ensureEditorReady()).formatCells(request),
       stageMedia: async (request) => (await ensureEditorReady()).stageMedia(request),
       inspectMarketingSelection: (assetKind) => {
-        if (!canvasRef.current) throw new Error("表格仍在加载，请稍后重试。");
+        if (!canvasRef.current) throw new Error(t("spreadsheet.error.loading"));
         return canvasRef.current.inspectMarketingSelection(assetKind);
       },
       prepareMarketingBatch: (batch) => canvasRef.current?.prepareMarketingBatch(batch),

@@ -1,7 +1,9 @@
 import type { VibeOp, VibeOutline } from "../../shared/types";
 import type { PresentationEditorController } from "./PresentationEditorFrame";
 import { officecli } from "../bridge";
+import { NEXAEDGE_DEMO_ID, readNexaEdgeImage } from "./bundledPptxDemo";
 import { imageProgressFromOps, type PptxImageProgress } from "./pptxProgress";
+import { pptxOpStreamDrained } from "./pptxDeckState";
 import { EDITOR_PROBE_TIMEOUT_MS } from "../constants/timing";
 
 // This module's exports live inside long-lived closures — the running
@@ -28,7 +30,7 @@ export interface VibeReplayStatus {
    * images. Without it the pill keeps saying "drawing slide N" while nothing
    * moves, which reads as a hang.
    */
-  state: "waiting" | "drawing" | "starved" | "saving" | "done" | "failed";
+  state: "waiting" | "drawing" | "starved" | "saving" | "done" | "failed" | "canceled";
   slide?: number;
   total?: number;
   error?: string;
@@ -191,12 +193,16 @@ export function releaseLiveDraft(filePath: string) {
  * user opened inherited the last drawing's op stream and replayed it into a
  * document that already had those objects on the page.
  */
+export function hasPptxDrawingContent(ops: readonly VibeOp[] = []): boolean {
+  return ops.some(op => op.op === "shape.add" || op.op === "diagram.add");
+}
+
 export function buildReplayFeed(input: {
   readonly draft: LiveDraft;
   readonly ops?: readonly VibeOp[];
   readonly performing: boolean;
   readonly trace: boolean;
-  readonly task?: { readonly status: string; readonly vibeOps?: readonly VibeOp[]; readonly vibeOutline?: VibeOutline; readonly question?: { readonly id: string; readonly kind?: string } };
+  readonly task?: { readonly status: string; readonly error?: string; readonly vibeOps?: readonly VibeOp[]; readonly vibeOutline?: VibeOutline; readonly question?: { readonly id: string; readonly kind?: string } };
 }): VibeReplayFeed | undefined {
   const { draft } = input;
   if (input.ops) {
@@ -206,21 +212,18 @@ export function buildReplayFeed(input: {
       filePath: draft.filePath,
       ops: [...input.ops],
       completed: true,
+      outcome: "succeeded",
       perform: true,
       trace: input.trace,
     };
   }
   if (!input.task) return undefined;
   const ops = [...(input.task.vibeOps ?? [])];
-  // OfficeCLI can publish task.completed before the asynchronous image
-  // workers have emitted their shape.update operations. Keep the live draft
-  // open in that interval so the sequencer can consume the late patches and
-  // the UI continues to say "drawing" rather than handing over a partial
-  // deck as if it were finished.
-  const images = imageProgressFromOps(ops);
-  const completed = input.task.status === "completed"
-    ? images.pending === 0
-    : ["failed", "cancelled"].includes(input.task.status);
+  // Deliberately not the same rule as the stage's "finished on screen": the
+  // sequencer latches `finished` once this says true and then ignores every
+  // later update(), so a stream that is still owed late shape.update patches has
+  // to stay open — deck.end notwithstanding. See pptxDeckState.ts.
+  const completed = pptxOpStreamDrained(input.task);
   // The outline gate: the run is paused on its one confirmation stop, and
   // the pending question is how the confirmed (or edited) outline goes back.
   const gate = !completed && input.task.question?.kind === "pptx_outline_gate" && input.task.question.id
@@ -231,6 +234,8 @@ export function buildReplayFeed(input: {
     filePath: draft.filePath,
     ops,
     completed,
+    outcome: input.task.status === "failed" ? "failed" : input.task.status === "cancelled" ? "canceled" : completed ? "succeeded" : "running",
+    error: input.task.error,
     perform: input.performing || undefined,
     trace: input.trace,
     outline: input.task.vibeOutline,
@@ -264,6 +269,7 @@ interface ChunkContext {
 }
 
 interface AttentionRect {
+  wholeSlide?: boolean;
   left: number;
   top: number;
   width: number;
@@ -271,6 +277,8 @@ interface AttentionRect {
 }
 
 function attentionRectFromOps(ops: readonly VibeOp[]): AttentionRect | undefined {
+  const lastFocusOp = ops.filter((op) => op.op === "shape.add" || op.op === "diagram.add" || op.op === "slide.end").at(-1);
+  if (lastFocusOp?.op === "slide.end") return { left: 9, top: 9, width: 942, height: 522, wholeSlide: true };
   const shapes = ops
     .map((op) => op.shape)
     .filter((shape): shape is Record<string, unknown> => Boolean(shape && typeof shape === "object"))
@@ -465,7 +473,7 @@ return await PowerPoint.run(async (context) => {
     slideNumber = target;
     slide.load("id");
     await context.sync();
-    context.presentation.setSelectedSlides([slide.id]);
+    context.presentation.setSelectedSlides([slide.id], { preserveAttention: true });
     await context.sync();
   };
   // Outlines where the next shape will land. Purely visual, and unsupported by
@@ -787,12 +795,21 @@ return await PowerPoint.run(async (context) => {
       for (const member of group) await captureAfter(member.seq, member.shape);
       if (SETTLE_MS > 0) await sleep(beat(SETTLE_MS, entry.shape, entry.seq + 7));
     } else if (entry.op === "slide.end") {
+      if (entry.slide) await useSlide(entry.slide);
       await flush();
-      // A completed page normally releases the outline, but an open feed keeps
-      // the last claimed area visible while late work (most often images) is
-      // still arriving.
-      if (!data.keepAttention) await focusOn(null);
-      if (SLIDE_MS > 0) await sleep(beat(SLIDE_MS, null, entry.seq + 3));
+      // Expand before activating the next page. The editor carries this
+      // full-page frame across the explicit replay selection only, keeping
+      // the same light phase until the next shape target contracts it.
+      if (attentionSupported) {
+        try {
+          context.presentation.focusAttention({ left: 9, top: 9, width: 942, height: 522, wholeSlide: true });
+          await context.sync();
+          if (PACE_MS > 0) await sleep(620);
+        } catch (error) {
+          attentionSupported = false;
+          console.warn("[vibeReplay] page attention disabled:", error);
+        }
+      }
     } else if (entry.op === "slide.delete") {
       // A shrunk deck: the leftover page goes away entirely. Ships last-page
       // first, so the editor indexes the applier navigates stay stable.
@@ -872,6 +889,9 @@ export interface VibeReplayFeed {
   ops: VibeOp[];
   /** True once the generation task reached a terminal state. */
   completed: boolean;
+  /** Separate backend outcome from whether more operations can arrive. */
+  outcome?: "running" | "succeeded" | "failed" | "canceled";
+  error?: string;
   /**
    * Draw at performance pace even though the stream is already complete —
    * a recording replayed for someone to watch.
@@ -935,6 +955,8 @@ export class VibeReplaySequencer {
   private taskId = "";
   private filePath = "";
   private completed = false;
+  private outcome?: VibeReplayFeed["outcome"];
+  private generationError?: string;
   /** Measured editor round-trip, seeded into each chunk's typing budget. */
   private tripHintMs = 60;
   private total?: number;
@@ -1008,6 +1030,8 @@ export class VibeReplaySequencer {
       this.performing = feed.perform ?? !feed.completed;
     }
     if (feed.completed) this.completed = true;
+    if (feed.outcome) this.outcome = feed.outcome;
+    if (feed.error) this.generationError = feed.error;
     if (feed.trace) this.trace = true;
     void this.pump();
   }
@@ -1104,7 +1128,9 @@ export class VibeReplaySequencer {
     for (const digest of digests) {
       if (!this.images.has(digest)) {
         try {
-          const asset = await officecli.readDrawingAsset(this.assetsDir, digest);
+          const asset = this.assetsDir === NEXAEDGE_DEMO_ID
+            ? { base64: await readNexaEdgeImage(digest) }
+            : await officecli.readDrawingAsset(this.assetsDir, digest);
           this.images.set(digest, asset.base64 || null);
         } catch {
           this.images.set(digest, null);
@@ -1202,7 +1228,7 @@ export class VibeReplaySequencer {
           this.onOp?.(op);
         }
         if (this.currentSlide) this.emit({ state: "drawing", slide: this.currentSlide });
-        const drawable = chunk.some((op) => op.op === "shape.add" || op.op === "diagram.add" || op.op === "slide.begin" || op.op === "slide.replace" || op.op === "slide.delete" || op.op === "shape.update");
+        const drawable = chunk.some((op) => op.op === "slide.end" || op.op === "shape.add" || op.op === "diagram.add" || op.op === "slide.begin" || op.op === "slide.replace" || op.op === "slide.delete" || op.op === "shape.update");
         let chunkCaptures: Array<{ seq: number; content: string; shape?: string }> = [];
         if (drawable) {
           this.lastAttentionRect = attentionRectFromOps(chunk) ?? this.lastAttentionRect;
@@ -1325,7 +1351,18 @@ export class VibeReplaySequencer {
           // them must not run a second time.
           if (this.filePath) recordLiveDraftProgress(this.filePath, this.executedSeq);
         }
-        this.emit({ state: "done", slide: this.drawnSlides.size });
+        if (this.outcome === "failed" || this.outcome === "canceled") {
+          this.emit({ state: this.outcome, slide: this.drawnSlides.size, error: this.generationError });
+        } else {
+          // A drained stream may contain only deck.begin, or stop mid-page.
+          // Explicit backend success still requires every promised page end.
+          const ended = new Set(this.ops.filter(op => op.op === "slide.end").map(op => op.slide));
+          const missingPage = this.total !== undefined && (ended.size !== this.total || Array.from({ length: this.total }, (_, index) => index + 1).some(page => !ended.has(page)));
+          if (this.outcome === "succeeded" && (!hasPptxDrawingContent(this.ops) || ended.size === 0 || missingPage)) {
+            throw new Error("Generation ended without all expected pages being drawn.");
+          }
+          this.emit({ state: "done", slide: this.drawnSlides.size });
+        }
       }
     } catch (error) {
       this.finished = true;

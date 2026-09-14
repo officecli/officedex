@@ -9,7 +9,7 @@ vi.mock("../bridge", () => ({
   },
 }));
 
-import { WriterEditorFrame } from "./WriterEditorFrame";
+import { WriterEditorFrame, type WriterAgentEditor } from "./WriterEditorFrame";
 import { executeActiveEditorClientTool } from "../activeEditorClientTools";
 
 function mockManifest() {
@@ -41,6 +41,26 @@ afterEach(() => {
 });
 
 describe("WriterEditorFrame agent tools", () => {
+  it("exposes captured editing only after load and rejects pending edits on close", async () => {
+    mockManifest();
+    let editor: WriterAgentEditor | null = null;
+    const { container, unmount } = render(<WriterEditorFrame previewToken="token" fileName="report.docx" onUnavailable={vi.fn()} onAgentReady={(value) => { editor = value; }} />);
+    await waitFor(() => expect(container.querySelector("iframe")).not.toBeNull());
+    const { posted, fromEmbed } = captureFrame(container);
+    expect(editor).toBeNull();
+    fromEmbed({ type: "writer:document-loaded", fileName: "report.docx" });
+    const handle = editor as unknown as WriterAgentEditor;
+    const pending = handle.capture("selection");
+    const request = posted.at(-1)!;
+    expect(request.type).toBe("writer:capture-edit");
+    fromEmbed({ type: "writer:response", requestId: (request as { requestId: string }).requestId, ok: true, result: { id: "capture", text: "Hello", scope: "selection" } });
+    await expect(pending).resolves.toMatchObject({ id: "capture", text: "Hello" });
+    const applying = handle.apply("capture", [{ query: "Hello", replacement: "Hi" }]);
+    const rejected = expect(applying).rejects.toThrow("closed");
+    unmount();
+    await rejected;
+    expect(editor).toBeNull();
+  });
   async function mount() {
     mockManifest();
     const { container } = render(

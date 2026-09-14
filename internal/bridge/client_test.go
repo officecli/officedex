@@ -490,11 +490,11 @@ func TestInvokeGenerateOpensSessionFirst(t *testing.T) {
 	if args["document_type"] != "pptx" {
 		t.Errorf("document_type = %v, want pptx", args["document_type"])
 	}
-	if args["mode"] != "best" {
-		t.Errorf("mode = %v, want best for default office generation", args["mode"])
+	if args["mode"] != "fast" {
+		t.Errorf("mode = %v, want fast for default office generation", args["mode"])
 	}
-	if params["interactive"] != true {
-		t.Errorf("interactive = %v, want true for default office generation", params["interactive"])
+	if params["interactive"] != false {
+		t.Errorf("interactive = %v, want false for default office generation", params["interactive"])
 	}
 	if args["local_preview"] != true {
 		t.Errorf("local_preview = %v, want true", args["local_preview"])
@@ -552,7 +552,7 @@ func TestInvokeGenerateSendsPromptTemplateID(t *testing.T) {
 	}
 }
 
-func TestInvokeGenerateNormalizesLegacyFastGenerationModeToBestInteractiveRequest(t *testing.T) {
+func TestInvokeGenerateKeepsFastGenerationNonInteractive(t *testing.T) {
 	client, fake := newClientWithFake(t)
 	defer client.Stop()
 
@@ -576,14 +576,14 @@ func TestInvokeGenerateNormalizesLegacyFastGenerationModeToBestInteractiveReques
 		t.Fatalf("decode params: %v", err)
 	}
 	args, _ := params["args"].(map[string]any)
-	if args["mode"] != "best" {
-		t.Fatalf("mode = %v, want best", args["mode"])
+	if args["mode"] != "fast" {
+		t.Fatalf("mode = %v, want fast", args["mode"])
 	}
 	if _, ok := args["generation_mode"]; ok {
 		t.Fatalf("generation_mode should not be sent for legacy fast generation: %#v", args["generation_mode"])
 	}
-	if params["interactive"] != true {
-		t.Fatalf("interactive = %v, want true for legacy fast generation", params["interactive"])
+	if params["interactive"] != false {
+		t.Fatalf("interactive = %v, want false for fast generation", params["interactive"])
 	}
 	if _, ok := args["runtime_mode"]; ok {
 		t.Fatalf("runtime_mode should not carry generation mode: %#v", args["runtime_mode"])
@@ -1765,5 +1765,68 @@ func TestBridgeRecognizesExactJSSDKContract(t *testing.T) {
 	}
 	if !bridgeCapabilitiesFromPayload([]byte(`{"pptx_jssdk_progressive":{"v2":true}}`)).progressiveJSSDKSupported {
 		t.Fatal("missing current contract")
+	}
+}
+
+func TestOfficeGenerateModeRespectsAdvancedOptIn(t *testing.T) {
+	for _, documentType := range []types.DocumentType{types.DocPPTX, types.DocDOCX, types.DocXLSX} {
+		for _, tc := range []struct {
+			input       string
+			mode        string
+			interactive bool
+		}{
+			{"", "fast", false},
+			{"fast", "fast", false},
+			{" FAST ", "fast", false},
+			{"plan", "best", true},
+			{" PLAN ", "best", true},
+		} {
+			t.Run(string(documentType)+"/"+tc.input, func(t *testing.T) {
+				mode, interactive, err := officeGenerateModeArgs(types.GenerateInput{DocumentType: documentType, GenerationMode: tc.input})
+				if err != nil || mode != tc.mode || interactive != tc.interactive {
+					t.Fatalf("got (%q, %v, %v), want (%q, %v, nil)", mode, interactive, err, tc.mode, tc.interactive)
+				}
+			})
+		}
+	}
+}
+
+func TestInvokeGenerateSendsResumeCheckpoint(t *testing.T) {
+	client, fake := newClientWithFake(t)
+	defer client.Stop()
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := client.InvokeGenerate(context.Background(), types.GenerateInput{
+			DocumentType:     types.DocIMG,
+			Topic:            "Poster",
+			Prompt:           "red bicycle",
+			ResumeCheckpoint: "/tmp/officecli-expansion-1/expansion-state.json",
+		})
+		done <- err
+	}()
+
+	first := fake.readRequest(t)
+	fake.writeResponse(t, first.idString(), map[string]any{"id": "sess-1"}, nil)
+
+	second := fake.readRequest(t)
+	var params map[string]any
+	if err := json.Unmarshal(second.Params, &params); err != nil {
+		t.Fatalf("decode params: %v", err)
+	}
+	args, _ := params["args"].(map[string]any)
+	if args["resume_checkpoint"] != "/tmp/officecli-expansion-1/expansion-state.json" {
+		t.Fatalf("resume_checkpoint missing: %v", args["resume_checkpoint"])
+	}
+	if _, ok := args["mode"]; ok {
+		t.Fatalf("mode should not be sent for image generation: %#v", args["mode"])
+	}
+	fake.writeResponse(t, second.idString(), map[string]any{
+		"task_id":    "task-img",
+		"session_id": "sess-1",
+		"status":     "starting",
+	}, nil)
+	if err := <-done; err != nil {
+		t.Errorf("InvokeGenerate: %v", err)
 	}
 }

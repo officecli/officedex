@@ -102,6 +102,10 @@ try {
     env: {
       ...process.env,
       VITE_OFFICEDEX_REAL_E2E_ENDPOINT: bridgeEndpoint,
+      // The suite drives the page itself; a hot update landing mid-assertion
+      // only adds flake. Interactive sessions (scripts/dev-real.mjs) leave this
+      // unset and keep HMR.
+      OFFICEDEX_E2E_NO_HMR: "1",
     },
     logFile: path.join(logDir, "vite.log"),
     prefix: "[real-e2e:vite]",

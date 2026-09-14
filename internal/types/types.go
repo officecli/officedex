@@ -271,6 +271,7 @@ type RecentFile struct {
 }
 
 type GenerateInput struct {
+	ResumeCheckpoint string                         `json:"resumeCheckpoint,omitempty"`
 	DocumentType     DocumentType                   `json:"documentType"`
 	Topic            string                         `json:"topic"`
 	Prompt           string                         `json:"prompt"`

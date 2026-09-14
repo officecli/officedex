@@ -860,6 +860,10 @@ func validateImportedPackage(packageRoot string) ([]byte, error) {
 
 func (h *Handler) sendConversionError(w http.ResponseWriter, r *http.Request, err error, fallbackCode string) {
 	h.logf("%s %s failed: %v", r.Method, r.URL.Path, err)
+	var diagnostic *apiError
+	if errors.As(err, &diagnostic) && diagnostic.detail != "" {
+		h.logf("%s %s converter detail: %s", r.Method, r.URL.Path, diagnostic.detail)
+	}
 	sendConversionError(w, r, err, fallbackCode)
 }
 
