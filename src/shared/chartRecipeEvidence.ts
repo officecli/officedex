@@ -64,9 +64,14 @@ const EVIDENCE: Record<ExperimentalChartRecipeId, ChartRecipeEvidenceRecord> = {
       "sha256:deb25cb67ff43e7473ee2ff81902ed0ffd9f47a3a6d094ef3a8e2612b09a8576",
       "sha256:2c2d87ee1a42f068685a76e2f8dff655a78c4da86ff816b6ae7d5ab87853ced8",
     ],
-    missing: ["facts.json", "verification report", "rawSsim > 0.95", "visual review"],
+    reconstructionProgram:
+      "skills/aippt-jssdk-design/chart/evidence/clustered-column-source-reconstruction.mjs",
+    verificationReport:
+      "skills/aippt-jssdk-design/chart/evidence/clustered-column-source-reconstruction.verification.json",
+    candidateRawSsim: 0.9569992909247667,
+    missing: ["visual review"],
     reason:
-      "Training clustered-column assets are indexed, but no admitted JSSDK source evidence has been attached.",
+      "Native reconstruction rawSsim=0.9570 exceeds 0.95; visual review is still required because source bars use gradient fills.",
   },
   "share-donut-with-callouts": {
     recipeId: "share-donut-with-callouts",
