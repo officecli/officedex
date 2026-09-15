@@ -1,0 +1,9 @@
+{
+  "id": "share-donut-with-callouts",
+  "family": "chart",
+  "program": "chart/experimental/share-donut-with-callouts.mjs",
+  "mechanism": "share-donut-with-callouts",
+  "source_fact": "中心原生环图，右侧三条外部证据引线。",
+  "visual_review": "preview",
+  "state": "native_chart_preview"
+}

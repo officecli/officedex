@@ -602,6 +602,43 @@ describe("taskState", () => {
     expect(state.tasks["task-plan"].userInput).not.toHaveProperty("runtimeMode");
   });
 
+  it("keeps a normalized chart on project tree nodes", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "ev-chart",
+      task_id: "task-chart",
+      type: "task.vibe_tree",
+      payload: {
+        stage: "slides_ready",
+        tree: {
+          id: "tree-chart",
+          rootId: "root",
+          title: "增长分析",
+          nodes: [
+            {
+              id: "slide-1",
+              kind: "slide",
+              title: "趋势",
+              relation: "trend",
+              chart: {
+                type: "line",
+                categories: ["一月", "二月"],
+                values: [10, 18],
+                source: { kind: "table", ref: "sheet1!A1:C2" },
+              },
+            },
+          ],
+        },
+      },
+    });
+
+    expect(state.tasks["task-chart"].vibeTree?.tree.nodes[0]?.chart).toMatchObject({
+      type: "line",
+      series: [{ name: "系列 1", values: [10, 18] }],
+      source: { kind: "table", ref: "sheet1!A1:C2" },
+    });
+    expect(state.tasks["task-chart"].vibeTree?.tree.nodes[0]?.relation).toBe("trend");
+  });
+
   it("stores Vibe tree confirmation metadata from bridge events", () => {
     const state = applyTaskEvent(createInitialTaskState(), {
       event_id: "ev-vibe",

@@ -833,10 +833,64 @@
           ]
         }
       ]
+    },
+    {
+      "id": "chart",
+      "relations": [
+        "chart",
+        "trend",
+        "distribution"
+      ],
+      "items": {
+        "min": 3,
+        "max": 6
+      },
+      "status": "native_chart_preview",
+      "recipe": "chart/recipe.md",
+      "variants": "chart/variants.json",
+      "fallbacks": [
+        "try_same_family_variant",
+        "split_same_relation"
+      ],
+      "evidence": "chart/evidence/",
+      "generation_ready": true,
+      "visual_catalog": [
+        {
+          "id": "trend-line-with-takeaway",
+          "items": [3, 4, 5, 6],
+          "densities": ["short", "medium"],
+          "orientation": "horizontal",
+          "mechanism": "左侧原生折线图，右侧单一 takeaway",
+          "visual_tags": ["trend", "chart"]
+        },
+        {
+          "id": "kpi-plus-column",
+          "items": [3, 4, 5, 6],
+          "densities": ["short", "medium"],
+          "orientation": "horizontal",
+          "mechanism": "左侧 KPI，右侧原生簇状柱图",
+          "visual_tags": ["comparison", "chart"]
+        },
+        {
+          "id": "share-donut-with-callouts",
+          "items": [3, 4, 5, 6],
+          "densities": ["short", "medium"],
+          "orientation": "horizontal",
+          "mechanism": "中心原生环图，右侧外部引线",
+          "visual_tags": ["distribution", "chart"]
+        },
+        {
+          "id": "dual-panel-chart-analysis",
+          "items": [4, 5, 6],
+          "densities": ["medium", "long"],
+          "orientation": "horizontal",
+          "mechanism": "左右两张原生图加一条共用结论",
+          "visual_tags": ["analysis", "chart"]
+        }
+      ]
     }
   ],
   "blocked": [
-    "chart",
     "formula",
     "animation"
   ],

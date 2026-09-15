@@ -1,0 +1,9 @@
+{
+  "id": "dual-panel-chart-analysis",
+  "family": "chart",
+  "program": "chart/experimental/dual-panel-chart-analysis.mjs",
+  "mechanism": "dual-panel-chart-analysis",
+  "source_fact": "深色页面左右两张原生图，底部一条共用结论。",
+  "visual_review": "preview",
+  "state": "native_chart_preview"
+}

@@ -48,11 +48,11 @@
 - `presentation/quality/pptx-gate/fixtures/corpus` 中有 44 组 `chart-*` fixture，覆盖普通/堆积柱条、折线、面积、饼/环、雷达、散点、组合图和部分股票/三维图表。
 - [`@learnof/chart`](../../presentation/packages/deps/chart/README.md) 公共包已经拥有图表数据模型、SVG 布局、绘制、序列化和编辑会话，基础类型包括 `column`、`bar`、`line`、`area`、`pie`、`donut`、`radar`、`scatter`。
 - [`ChartController`](../../presentation/packages/presentation-engine/src/capabilities/chart/chart-controller.ts) 已有 `insertChart`、`setChartData`、标题、图例、坐标轴、数据标签和样式控制能力。
-- [`ShapeCollection`](../../presentation/packages/presentation-office-js/src/objects.ts) 已补上受控的 `addChart` 入口，MOP Host 会写入 `graphicFrame -> chartSpace`；当前生成器仍不能把它当成已验收配方，因为导出、严格回读、renderer 和视觉抽查尚未完成。
-- OfficeDex 的 [`VibeChart`](../src/shared/types.ts) 已扩展为多 series、来源、图例/坐标轴选项，并保留旧 `categories + values` 兼容；组合图、堆积、双轴和数据标签仍需继续补齐。
+- [`ShapeCollection`](../../presentation/packages/presentation-office-js/src/objects.ts) 已补上受控的 `addChart` 入口，MOP Host 会写入 `graphicFrame -> chartSpace`；基础 column 图表现在已有导出、严格回读和 renderer smoke 自动化证据，视觉代表页仍待抽查。
+- OfficeDex 的 [`VibeChart`](../src/shared/types.ts) 已扩展为多 series、来源、图例/数据标签/坐标轴选项，并由 [`normalizeVibeChart`](../src/shared/chartModel.ts) 兼容旧 `categories + values` 输入；组合图、堆积和双轴仍需继续补齐。
 - Skill 的 [`registry.json`](../skills/aippt-jssdk-design/registry.json) 仍把 `chart` 放在 `blocked`，命中后按 [`progressive-loading.md`](../skills/aippt-jssdk-design/references/progressive-loading.md) 进入 `needs_capability_review`；这是一份旧能力快照，不代表当前渲染内核不存在图表能力，但它会让生成路由主动避开图表。
 
-因此，“训练集中有图表，但生成模板里没有图表”的剩余根因是两段链路尚未完成：**Skill 路由仍被 blocked 快照拦截，图表作者 API 还没有导出/回读/视觉证据**；语义模型和最小 JSSDK 写入路径已经开始修复。现在用原生矩形和线条手绘一个“像图表”的页面，最多是视觉占位，不等同于可编辑、可读数、可复用的原生图表。
+因此，“训练集中有图表，但生成模板里没有图表”的剩余根因现在收敛为两段：**Skill 路由仍被 blocked 快照拦截，且还没有图表代表页的视觉配方和人工验收**；语义模型、最小 JSSDK 写入、PPTX 导出、严格回读和 renderer smoke 已经接通。现在用原生矩形和线条手绘一个“像图表”的页面，仍然最多是视觉占位，不等同于可编辑、可读数、可复用的原生图表。
 
 ## 3. 差距矩阵
 
@@ -210,7 +210,7 @@
 
 - 把 `visual_role`、`asset_plan`、`focal_point`、`content_budget` 加入 generation plan 和证据 schema。
 - 先实现四个页面家族的 drawer：封面/编辑型、数据看板、图表分析、流程/关系图。
-- 将 `VibeChart`/表格数据接入 `addChart`，补齐组合/堆积/双轴等语义，并完成原生 `chartSpace` 的写入、导出、严格回读和渲染验收。
+- 将规范化后的 `VibeChart`/表格数据接入 `addChart`，补齐组合/堆积/双轴等语义，并完成 4 张代表页的原生 `chartSpace` 视觉验收。
 - 建立至少一套可编辑条形图、折线图、环形图、KPI 卡和图例 primitive。
 - 用 44 组既有 chart fixture 先做图表作者能力的回归，不要重新手写一套与公共图表包平行的 SVG 图表引擎。
 - 只有在作者 API、回读、渲染和视觉抽查通过后，才从 `blocked` 移除 `chart`，注册 `data_dashboard`/`chart_analysis` 配方；解除 blocked 不能先于证据。

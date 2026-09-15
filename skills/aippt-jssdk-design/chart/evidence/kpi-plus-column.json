@@ -1,0 +1,9 @@
+{
+  "id": "kpi-plus-column",
+  "family": "chart",
+  "program": "chart/experimental/kpi-plus-column.mjs",
+  "mechanism": "kpi-plus-column",
+  "source_fact": "浅色页面左侧 KPI 锚点，右侧原生簇状柱图。",
+  "visual_review": "preview",
+  "state": "native_chart_preview"
+}

@@ -1,0 +1,10 @@
+{
+  "id": "trend-line-with-takeaway",
+  "family": "chart",
+  "program": "chart/experimental/trend-line-with-takeaway.mjs",
+  "mechanism": "trend-line-with-takeaway",
+  "source_fact": "白底 16:9 页面左侧放置原生折线图，右侧单一 takeaway。",
+  "visual_review": "preview",
+  "state": "native_chart_preview",
+  "ssim": 0.9589008277587888
+}

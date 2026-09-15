@@ -408,6 +408,10 @@ export interface VibeChartOptions {
   legendPosition?: "top" | "bottom" | "left" | "right";
   showValueLabels?: boolean;
   stacked?: boolean;
+  markers?: boolean;
+  smooth?: boolean;
+  legend?: "none" | "top" | "bottom" | "left" | "right";
+  dataLabels?: "none" | "value" | "percent";
   yAxisLabel?: string;
   secondaryAxisLabel?: string;
 }
@@ -426,6 +430,48 @@ export interface VibeChart {
   };
   /** When true the values are representative, not sourced, and are labelled as illustrative. */
   illustrative?: boolean;
+}
+
+export type VibeChartVisualRole =
+  | "chart"
+  | "chart_supporting"
+  | "metric_only";
+
+export interface VibeChartGenerationSpec {
+  visualRole: VibeChartVisualRole;
+  chartType: VibeChartType;
+  dataSource: {
+    kind: string;
+    ref?: string;
+  };
+  focalPoint: {
+    kind: "chart";
+    area: "left" | "center" | "right" | "full";
+    weight: number;
+  };
+  contentBudget: {
+    titleChars: number;
+    categories: number;
+    series: number;
+    annotationLines: number;
+  };
+  illustrative: boolean;
+}
+
+export type VibeChartRelation =
+  | "trend"
+  | "comparison"
+  | "distribution"
+  | "correlation"
+  | "other";
+
+export interface VibeChartGenerationPlanItem {
+  nodeId: string;
+  title: string;
+  relation: VibeChartRelation;
+  visualRole: VibeChartVisualRole;
+  chartSpec: VibeChartGenerationSpec;
+  chartMatrix: Array<Array<string | number>>;
 }
 
 export type VibeSlideLayout =
@@ -449,6 +495,7 @@ export interface VibeProjectTreeNode {
   summary?: string;
   status?: string;
   intent?: string;
+  relation?: VibeChartRelation;
   materials?: string[];
   slideRange?: string;
   slideNumber?: number;
