@@ -101,14 +101,21 @@ const EVIDENCE: Record<ExperimentalChartRecipeId, ChartRecipeEvidenceRecord> = {
     sourcePaths: [
       `${TRAINING_FIXTURE_ROOT}/簇状柱形图&折线图 /簇状柱形图&折线图.pptx`,
       `${TRAINING_FIXTURE_ROOT}/簇状柱形图&次坐标轴上的折线图/簇状柱形图&次坐标轴上的折线图.pptx`,
+      `${TRAINING_FIXTURE_ROOT}/簇状柱形图&次坐标轴上的折线图/簇状柱形图&次坐标轴上的折线图/幻灯片2.png`,
     ],
     sourceDigests: [
       "sha256:2e3339a6d49606f3bd9b5a50629615de97578c05c948fce09b6ff938cef5eb52",
       "sha256:e31e33df55715e68a4b2911754052bc4a90ab6121be840bf3cd7429d1fbd0947",
+      "sha256:4c4bf9627e7e2c7f05b363e9f22ef47bc487839e00e6fc16dbb87fa9c991f1da",
     ],
-    missing: ["facts.json", "verification report", "rawSsim > 0.95", "visual review"],
+    reconstructionProgram:
+      "skills/aippt-jssdk-design/chart/evidence/combo-source-reconstruction.mjs",
+    verificationReport:
+      "skills/aippt-jssdk-design/chart/evidence/combo-source-reconstruction.verification.json",
+    candidateRawSsim: 0.9553334810489724,
+    missing: ["visual review"],
     reason:
-      "Training combo-chart assets are indexed, but no admitted JSSDK source evidence has been attached.",
+      "Native reconstruction rawSsim=0.9553 exceeds 0.95; visual review is still required because source columns use 3D/gradient contours rather than solid fills.",
   },
 };
 
