@@ -6,7 +6,7 @@
 
 本文是 OfficeDex AI PPT 设计方法的产品侧记录，解决三个长期问题：加强模板 JSSDK 学习、增强自由构图、提高模板排版准确性。可执行约束位于 [`aippt-jssdk-design` Skill](../skills/aippt-jssdk-design/SKILL.md)，本文负责解释方法、责任边界和验收口径。
 
-当前视觉基准、与外部 AI PPT 样例的差距及下一版路线图见 [`aippt-jssdk-visual-gap-report.md`](aippt-jssdk-visual-gap-report.md)。
+当前视觉基准、与外部 AI PPT 样例的差距及下一版路线图见 [`aippt-jssdk-visual-gap-report.md`](aippt-jssdk-visual-gap-report.md)。一份已跑通的自由构图 + 原生图表示例见 [`aippt-jssdk-free-composition-tiktok.md`](aippt-jssdk-free-composition-tiktok.md)。
 
 ## 核心结论
 

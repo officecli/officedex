@@ -160,17 +160,19 @@ export function paintSlide(slide, data = {}) {
       { left: 64, top: 498, width: 360, height: 16 },
       { name: "source_caption", size: 8, color: "#8FA8A2" },
     );
-    addText(
-      slide,
-      "CHART RECIPE",
-      { left: 704, top: 498, width: 194, height: 16 },
-      {
-        name: "experimental-status",
-        size: 7,
-        color: "#8FA8A2",
-        bold: true,
-      },
-    );
+    if (data.recipeStamp !== false) {
+      addText(
+        slide,
+        "CHART RECIPE",
+        { left: 704, top: 498, width: 194, height: 16 },
+        {
+          name: "experimental-status",
+          size: 7,
+          color: "#8FA8A2",
+          bold: true,
+        },
+      );
+    }
 }
 
 export async function build(PowerPoint, data = {}) {

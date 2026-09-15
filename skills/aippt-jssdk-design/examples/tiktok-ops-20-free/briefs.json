@@ -1,0 +1,122 @@
+[
+  {
+    "relation": "parallel",
+    "items": 3,
+    "density": "medium",
+    "visual_intent": "horizontal cover"
+  },
+  {
+    "relation": "parallel",
+    "items": 3,
+    "density": "medium",
+    "visual_intent": "grid"
+  },
+  {
+    "relation": "list",
+    "items": 4,
+    "density": "medium",
+    "visual_intent": "vertical"
+  },
+  {
+    "relation": "parallel",
+    "items": 3,
+    "density": "short",
+    "visual_intent": "horizontal ring"
+  },
+  {
+    "relation": "process",
+    "items": 4,
+    "density": "medium",
+    "visual_intent": "sequence stages"
+  },
+  {
+    "relation": "list",
+    "items": 4,
+    "density": "short",
+    "visual_intent": "horizontal"
+  },
+  {
+    "relation": "timeline",
+    "items": 4,
+    "density": "short",
+    "visual_intent": "horizontal"
+  },
+  {
+    "relation": "trend",
+    "items": 4,
+    "density": "medium",
+    "visual_intent": "trend chart takeaway"
+  },
+  {
+    "relation": "chart",
+    "items": 4,
+    "density": "medium",
+    "visual_intent": "comparison chart kpi"
+  },
+  {
+    "relation": "distribution",
+    "items": 4,
+    "density": "medium",
+    "visual_intent": "distribution chart callout"
+  },
+  {
+    "relation": "chart",
+    "items": 4,
+    "density": "medium",
+    "visual_intent": "analysis chart"
+  },
+  {
+    "relation": "organization",
+    "items": 4,
+    "density": "medium",
+    "visual_intent": "hierarchy diagram"
+  },
+  {
+    "relation": "pyramid",
+    "items": 4,
+    "density": "medium",
+    "visual_intent": "hierarchy layers"
+  },
+  {
+    "relation": "parallel",
+    "items": 3,
+    "density": "medium",
+    "visual_intent": "callout"
+  },
+  {
+    "relation": "list",
+    "items": 4,
+    "density": "medium",
+    "visual_intent": "vertical"
+  },
+  {
+    "relation": "list",
+    "items": 4,
+    "density": "medium",
+    "visual_intent": "grid"
+  },
+  {
+    "relation": "timeline",
+    "items": 4,
+    "density": "short",
+    "visual_intent": "horizontal"
+  },
+  {
+    "relation": "process",
+    "items": 4,
+    "density": "medium",
+    "visual_intent": "sequence stages"
+  },
+  {
+    "relation": "parallel",
+    "items": 3,
+    "density": "medium",
+    "visual_intent": "horizontal"
+  },
+  {
+    "relation": "parallel",
+    "items": 3,
+    "density": "medium",
+    "visual_intent": "grid"
+  }
+]

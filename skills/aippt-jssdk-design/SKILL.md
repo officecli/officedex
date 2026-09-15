@@ -182,3 +182,5 @@ node scripts/select-family.mjs \
 执行新 MJS 并打开 PNG 检查视觉。检查文字完整性、溢出、遮挡、画布边界和原生结构；导出和回导文本另行检查。修复后再次执行。高 SSIM、导出成功、原生形状存在各有范围，不能等同审美或 Office 真机编辑验收。
 
 交付 `generated.mjs`、`generation-plan.json`、`jssdk-evidence.json`、`render-validation.json`；PNG、PPTX 和回导结果为派生产物。记录 family、variant、参数、来源证据、输入摘要及实际回退。未经新内容与视觉评测的配方保持实验状态；不将单次成稿自动升级为通用规则，不声称完成模型训练。
+
+一份可执行的自由构图示例在 [`examples/tiktok-ops-20-free`](examples/tiktok-ops-20-free)：20 页 TikTok 运营稿，含 4 页原生图表。从 OfficeDex 运行 `npm run generate:aippt:tiktok-ops`。方法说明见 [`docs/aippt-jssdk-free-composition-tiktok.md`](../../docs/aippt-jssdk-free-composition-tiktok.md)。

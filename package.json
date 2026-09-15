@@ -49,6 +49,7 @@
     "verify:officecli:canvas": "node scripts/verify-officecli-canvas-contract.mjs",
     "test:go": "env -u GOROOT go test ./... -count=1 && env -u GOROOT go test -tags officedex_demo ./... -count=1",
     "verify:chart:experimental": "node skills/aippt-jssdk-design/chart/verify-experimental-recipes.mjs",
+    "generate:aippt:tiktok-ops": "node skills/aippt-jssdk-design/scripts/generate-free-deck.mjs",
     "test:all": "npm run lint && npm run test:scripts && npx vitest run && npm run test:go && npm run test:e2e",
     "test:e2e": "node scripts/run-real-e2e.mjs",
     "test:e2e:real": "node scripts/run-real-e2e.mjs",
