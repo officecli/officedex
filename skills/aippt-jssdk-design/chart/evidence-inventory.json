@@ -52,7 +52,10 @@
         "sha256:93b1f6b7c6548ddb0ae8a442318d86f6ece68561172da982afd1398ce2857a50",
         "sha256:1696483e1c4bcd74e9c23c12fe4a78ea823ad4c8d39df09ffdc72c2e19368b29"
       ],
-      "missing": ["facts.json", "verification report", "rawSsim > 0.95", "visual review"]
+      "reconstruction_program": "skills/aippt-jssdk-design/chart/evidence/donut-source-reconstruction.mjs",
+      "verification_report": "skills/aippt-jssdk-design/chart/evidence/donut-source-reconstruction.verification.json",
+      "candidate_raw_ssim": 0.9740458406794126,
+      "missing": ["visual review"]
     },
     {
       "recipe_id": "dual-panel-chart-analysis",

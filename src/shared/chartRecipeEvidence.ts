@@ -85,9 +85,14 @@ const EVIDENCE: Record<ExperimentalChartRecipeId, ChartRecipeEvidenceRecord> = {
       "sha256:93b1f6b7c6548ddb0ae8a442318d86f6ece68561172da982afd1398ce2857a50",
       "sha256:1696483e1c4bcd74e9c23c12fe4a78ea823ad4c8d39df09ffdc72c2e19368b29",
     ],
-    missing: ["facts.json", "verification report", "rawSsim > 0.95", "visual review"],
+    reconstructionProgram:
+      "skills/aippt-jssdk-design/chart/evidence/donut-source-reconstruction.mjs",
+    verificationReport:
+      "skills/aippt-jssdk-design/chart/evidence/donut-source-reconstruction.verification.json",
+    candidateRawSsim: 0.9740458406794126,
+    missing: ["visual review"],
     reason:
-      "Training donut assets are indexed, but no admitted JSSDK source evidence has been attached.",
+      "Native reconstruction rawSsim=0.9740 exceeds 0.95; visual review is still required because labels sit on light slices and the source inner hole ring is a plotArea blipFill.",
   },
   "dual-panel-chart-analysis": {
     recipeId: "dual-panel-chart-analysis",

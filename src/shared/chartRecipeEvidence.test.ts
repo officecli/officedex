@@ -56,8 +56,14 @@ describe("chartRecipeEvidence", () => {
     expect(chartRecipeEvidenceSummary("share-donut-with-callouts")).toMatchObject({
       status: "needs_source_evidence",
       source_kind: "training_fixture",
-      missing: expect.arrayContaining(["facts.json", "visual review"]),
+      reconstruction_program:
+        "skills/aippt-jssdk-design/chart/evidence/donut-source-reconstruction.mjs",
+      candidate_raw_ssim: 0.9740458406794126,
+      missing: expect.arrayContaining(["visual review"]),
     });
+    expect(chartRecipeEvidenceSummary("share-donut-with-callouts").missing).toEqual(
+      ["visual review"],
+    );
   });
 
   it("allows Skill preview generation while source SSIM is still a candidate", () => {
