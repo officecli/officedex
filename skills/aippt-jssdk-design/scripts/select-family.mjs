@@ -66,33 +66,12 @@ export function selectFamily(brief, root = defaultRoot) {
   };
   const evidence = variant.source_evidence.map(id => ({ id, facts: checkedPath(`${family.id}/evidence/${id}.json`) }));
   let evidenceError = evidence.length ? null : 'No source evidence declared';
-  const previewAdmission = variant.admission === 'native_chart_preview';
   for (const entry of evidence) {
     try {
       const fact = read(entry.facts);
       const stem = entry.facts.slice(0, -5);
       const workspace = path.resolve(root, '../../..');
-      const localProgram = stem + '.mjs';
-      const skillProgram = fact.program ? path.resolve(root, fact.program) : '';
-      entry.program = fs.existsSync(localProgram)
-        ? localProgram
-        : fs.existsSync(skillProgram)
-          ? skillProgram
-          : path.resolve(workspace, fact.program ?? '');
-      if (previewAdmission) {
-        const programText = fs.existsSync(entry.program)
-          ? fs.readFileSync(entry.program, 'utf8')
-          : '';
-        if (!programText.includes('export') || !programText.includes('build')) {
-          throw new Error(`${entry.id}: native chart preview requires a standalone JSSDK build program`);
-        }
-        Object.assign(entry, {
-          accepted: true,
-          evidence_class: 'native_chart_preview',
-          raw_ssim: Number.isFinite(fact.ssim) ? fact.ssim : null,
-        });
-        continue;
-      }
+      entry.program = fs.existsSync(stem + '.mjs') ? stem + '.mjs' : path.resolve(workspace, fact.program);
       entry.verification = fs.existsSync(stem + '.verification.json') ? stem + '.verification.json' : path.resolve(workspace, fact.verification);
       Object.assign(entry, acceptEvidence({fact, program: fs.readFileSync(entry.program), reportBytes: fs.readFileSync(entry.verification), policy, id: entry.id, family: family.id}));
     } catch (error) { evidenceError = error.message; break; }
