@@ -18,6 +18,13 @@ import { usePptxLiveDraft } from "./controllers/usePptxLiveDraft";
 import { useDesktopApi } from "./services/desktopApi";
 import { useRecentFiles } from "./useRecentFiles";
 import { defaultGenerateInput, type NavKey } from "./defaults";
+import { useAppRouting, type SelectedTask } from "./controllers/useAppRouting";
+// Re-exported because the route codec moved with the controller that owns it.
+export { readStoredAppRoute, writeStoredAppRoute } from "./controllers/useAppRouting";
+
+// "Open file" edits documents in place, so only the formats OfficeDex can
+// edit are offered.
+const OPEN_LOCAL_FILE_TYPES = ["docx", "xlsx", "pptx"];
 import type { SidebarAccount, SidebarDocument } from "./components/ProjectSidebar";
 import { Shell } from "./components/Shell";
 import { PreviewPanel } from "./components/PreviewPanel";
@@ -58,45 +65,6 @@ import { errorMessage, recordValue, trimmedStringValue as stringValue } from "./
 import { BRIDGE_ERROR_CODES, classifyError, classifyStatusEvent, errorCode, extractStderr, stripFailureTag, type FailureKind } from "./failureKind";
 import { fileExtension, fileNameFromPath } from "./utils/path";
 import { delay } from "./utils/timing";
-
-type SelectedTask =
-  | { kind: "auto" }
-  | { kind: "none" }
-  | { kind: "task"; id: string };
-
-type StoredAppRoute = { nav: NavKey; taskId?: string };
-
-const APP_ROUTE_STORAGE_KEY = "officedex.appRoute";
-
-// "Open file" edits documents in place, so only the formats OfficeDex can edit
-// are offered.
-const OPEN_LOCAL_FILE_TYPES = ["docx", "xlsx", "pptx"];
-
-export function readStoredAppRoute(storage?: Pick<Storage, "getItem">): StoredAppRoute {
-  try {
-    const target = storage ?? (typeof sessionStorage !== "undefined" ? sessionStorage : undefined);
-    const raw = target?.getItem(APP_ROUTE_STORAGE_KEY);
-    if (!raw) return { nav: initialNavFromLocation() };
-    const parsed = JSON.parse(raw) as Partial<StoredAppRoute>;
-    const nav = parsed.nav;
-    if (nav !== "home" && nav !== "document" && nav !== "spreadsheet" && nav !== "settings" && nav !== "login") {
-      return { nav: initialNavFromLocation() };
-    }
-    const taskId = typeof parsed.taskId === "string" && parsed.taskId.trim() ? parsed.taskId.trim() : undefined;
-    return { nav, ...(nav === "document" && taskId ? { taskId } : {}) };
-  } catch {
-    return { nav: initialNavFromLocation() };
-  }
-}
-
-export function writeStoredAppRoute(route: StoredAppRoute, storage?: Pick<Storage, "setItem">): void {
-  try {
-    const target = storage ?? (typeof sessionStorage !== "undefined" ? sessionStorage : undefined);
-    target?.setItem(APP_ROUTE_STORAGE_KEY, JSON.stringify(route));
-  } catch {
-    // Route persistence is best-effort; in-memory navigation remains usable.
-  }
-}
 
 export interface RecoverableTaskExpectation {
   documentType: string;
@@ -225,12 +193,8 @@ export function App() {
 
 function OfficeDexApp() {
   const api = useDesktopApi();
-  const initialRoute = useMemo(() => readStoredAppRoute(), []);
   const { state, update: setState } = useTaskStore();
   const [homeEntryTransition, setHomeEntryTransition] = useState<HomeEntryTransition>();
-  const [selectedTaskID, setSelectedTaskID] = useState<SelectedTask>(() => initialRoute.taskId ? { kind: "task", id: initialRoute.taskId } : { kind: "auto" });
-  const [activeNav, setActiveNav] = useState<NavKey>(initialRoute.nav);
-  const loginReturnNavRef = useRef<NavKey>("home");
   const [busy, setBusy] = useState(false);
   const [lastError, setLastError] = useState<string>();
   const [errorKind, setErrorKind] = useState<FailureKind>("connection");
@@ -238,13 +202,17 @@ function OfficeDexApp() {
   const [spreadsheetEntry, setSpreadsheetEntry] = useState<SpreadsheetEntry | null>(null);
   const [spreadsheetPreferredTool, setSpreadsheetPreferredTool] = useState<SpreadsheetAgentTool>("assistant");
   const [catalogAutoScanFile, setCatalogAutoScanFile] = useState<string>();
+  const routingRef = useRef<ReturnType<typeof useAppRouting> | null>(null);
+  // Closing the document drops the timeline selection with it. The live-draft
+  // controller is built from the session, so it cannot be a dependency of the
+  // session; the ref is the one direction left.
+  const clearTimelineRef = useRef<() => void>(() => {});
+  const workspaceRef = useRef<ReturnType<typeof useWorkspaces> | null>(null);
   const spreadsheet = useSpreadsheetSession(spreadsheetEntry);
   const spreadsheetWorkspaceRef = useRef<SpreadsheetWorkspaceHandle>(null);
   const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false);
   const [unsavedDialogSaving, setUnsavedDialogSaving] = useState(false);
   const pendingSpreadsheetActionRef = useRef<{ action: () => Promise<void>; resolve: (continued: boolean) => void } | null>(null);
-  const activeNavRef = useRef(activeNav);
-  activeNavRef.current = activeNav;
   /**
    * The optimistic tasks this page has submitted but whose real ids have not
    * come back yet, keyed by the local placeholder id.
@@ -259,8 +227,6 @@ function OfficeDexApp() {
   // A newly submitted task is shown in the Home stage shell first. Once its
   // artifact is available, the existing PreviewPanel becomes the focused
   // artifact stage. The ref scopes auto-opening to this submission only.
-  const stageFirstTaskRef = useRef<string | undefined>(undefined);
-  const [stageFirstTaskId, setStageFirstTaskId] = useState<string>();
   const { settings: persistedSettings, loading: settingsLoading } = useSettings();
   const appUpdate = useAppUpdate();
   const { credit, status: creditStatus, refresh: refreshCredit, nudgeForTaskTransition } = useCreditStatus();
@@ -283,7 +249,7 @@ function OfficeDexApp() {
 
 
   const runSpreadsheetAction = useCallback((action: () => Promise<void>): Promise<boolean> => {
-    if (activeNavRef.current !== "spreadsheet" || !spreadsheet.session.dirty) {
+    if (routingRef.current?.activeNav !== "spreadsheet" || !spreadsheet.session.dirty) {
       return action().then(() => true);
     }
     return new Promise<boolean>((resolve) => {
@@ -348,6 +314,72 @@ function OfficeDexApp() {
   const { files: recentFiles, loading: recentFilesLoading, error: recentFilesError } = recent;
   const refreshRecentFiles = recent.refresh;
 
+  useEffect(() => {
+    void refreshRecentFiles();
+  }, [refreshRecentFiles]);
+
+  useEffect(() => {
+    if (settingsLoading) return;
+    refreshCredit();
+  }, [persistedSettings.llmProvider, settingsLoading, refreshCredit]);
+
+
+
+  useTaskRuns();
+
+  const tasks = useMemo(() => state.taskOrder.map((taskID) => state.tasks[taskID]).filter(Boolean), [state]);
+
+  const openWorkbook = useCallback((artifact: Artifact) => {
+    return runSpreadsheetAction(async () => {
+      const grant = await api.issuePreviewToken(artifact);
+      const sourceTask = artifact.taskId ? tasks.find((task) => task.id === artifact.taskId) : undefined;
+      setSpreadsheetPreferredTool("assistant");
+      setCatalogAutoScanFile(undefined);
+      setSpreadsheetEntry({
+        kind: "artifact",
+        artifact,
+        grant,
+        ...(sourceTask?.workspaceId ? { workspaceId: sourceTask.workspaceId } : {}),
+        ...(sourceTask?.conversationId ? { conversationId: sourceTask.conversationId } : {}),
+      });
+      routingRef.current?.setNav("spreadsheet");
+      clearError();
+    });
+  }, [api, clearError, runSpreadsheetAction, tasks]);
+
+  const documentSession = useDocumentSession({
+    onWorkbook: openWorkbook,
+    onClosed: useCallback(() => clearTimelineRef.current(), []),
+  });
+  const previewGrant = documentSession.grant;
+  const previewArtifact = documentSession.artifact;
+  const documentOpenRevision = documentSession.openRevision;
+  const openInlinePreview = documentSession.open;
+  const closeInlinePreview = documentSession.close;
+
+  const routing = useAppRouting({
+    guardNavigation: runSpreadsheetAction,
+    hasOpenDocument: Boolean(documentSession.grant),
+    closeDocument: documentSession.close,
+    selectWorkspace: useCallback((workspaceId: string) => workspaceRef.current?.select(workspaceId), []),
+    getActiveWorkspaceId: useCallback(() => workspaceRef.current?.activeWorkspace?.id, []),
+    onSelectTask: clearError,
+  });
+  routingRef.current = routing;
+  const activeNav = routing.activeNav;
+  const selectedTaskID = routing.selectedTaskID;
+  const setActiveNav = routing.setNav;
+  const setSelectedTaskID = routing.setSelectedTask;
+  const changeNavigation = routing.navigate;
+  const selectTask = routing.selectTask;
+  const openLogin = routing.openLogin;
+  const returnFromLogin = routing.returnFromLogin;
+  const conversationId = routing.conversationId;
+  const conversationTasks = routing.conversationTasks;
+  const documentTask = routing.documentTask;
+  const completedDocumentRoute = routing.completedDocumentRoute;
+  const stageFirstTaskId = routing.stageTaskId;
+
   const onIntakeDrop = useCallback((paths: string[]) => {
     setDroppedTaskPaths((previous) => ({ paths, seq: (previous?.seq ?? 0) + 1 }));
   }, []);
@@ -374,24 +406,17 @@ function OfficeDexApp() {
   // the transient stage pick is this component's business, not the workspace
   // controller's, so it wraps rather than lives inside it (R-B-08).
   const selectAllHomeFiles = useCallback(() => {
-    stageFirstTaskRef.current = undefined;
-    setStageFirstTaskId(undefined);
+    routingRef.current?.clearStage();
     workspaceController.selectAll();
   }, [workspaceController]);
 
-  useEffect(() => {
-    void refreshRecentFiles();
-  }, [refreshRecentFiles]);
-
-  useEffect(() => {
-    if (settingsLoading) return;
-    refreshCredit();
-  }, [persistedSettings.llmProvider, settingsLoading, refreshCredit]);
+  workspaceRef.current = workspaceController;
 
   const onReconnected = useCallback(() => {
     refreshProjectLists();
     void refreshRecentFiles(homeWorkspaceId);
   }, [homeWorkspaceId, refreshProjectLists, refreshRecentFiles]);
+
 
   const onTransportLost = useCallback(() => {
     recent.abandon(t("home.bridgeUnavailable"));
@@ -420,59 +445,7 @@ function OfficeDexApp() {
   });
   const bridgeInterruptionKey = bridge.interruptionKey;
 
-  useTaskRuns();
 
-  const firstTaskID = state.taskOrder[0];
-  useEffect(() => {
-    if (firstTaskID && selectedTaskID.kind === "auto") {
-      setSelectedTaskID({ kind: "task", id: firstTaskID });
-    }
-  }, [firstTaskID, selectedTaskID.kind]);
-
-  const conversationId = useMemo(() => {
-    if (selectedTaskID.kind === "task") {
-      return state.tasks[selectedTaskID.id]?.conversationId;
-    }
-    if (selectedTaskID.kind === "auto" && firstTaskID) {
-      return state.tasks[firstTaskID]?.conversationId;
-    }
-    return undefined;
-  }, [selectedTaskID, state.tasks, firstTaskID]);
-
-  const conversationTasks = useMemo(() => {
-    if (!conversationId) return [];
-    return getRunLineage(state, conversationId);
-  }, [state, conversationId]);
-  const documentTask = conversationTasks.at(-1)
-    ?? (selectedTaskID.kind === "task" ? state.tasks[selectedTaskID.id] : undefined);
-  const completedDocumentRoute = activeNav === "document" && documentTask?.status === "completed";
-
-  // Completed artifacts open in their suite editor. New/Home is the surface
-  // underneath it, including when restoring an old completed document route.
-  useEffect(() => {
-    if (completedDocumentRoute) setActiveNav("home");
-  }, [completedDocumentRoute]);
-
-  useEffect(() => {
-    writeStoredAppRoute({
-      nav: activeNav,
-      ...(activeNav === "document" && selectedTaskID.kind === "task" ? { taskId: selectedTaskID.id } : {}),
-    });
-  }, [activeNav, selectedTaskID]);
-
-  useEffect(() => {
-    if (activeNav !== "document" || documentTask || state.taskOrder.length === 0) return;
-    const fallback = state.taskOrder
-      .map((taskId) => state.tasks[taskId])
-      .find((task) => task && ["starting", "running", "question", "plan_review"].includes(task.status))
-      ?? state.tasks[state.taskOrder[0]];
-    if (fallback) setSelectedTaskID({ kind: "task", id: fallback.id });
-  }, [activeNav, documentTask, state.taskOrder, state.tasks]);
-  const activeVibeTask = useMemo(
-    () => conversationTasks.find((task) => task.documentType === "pptx" && task.vibeTree),
-    [conversationTasks],
-  );
-  const tasks = useMemo(() => state.taskOrder.map((taskID) => state.tasks[taskID]).filter(Boolean), [state]);
   const sidebarDocuments = useMemo<SidebarDocument[]>(() => {
     const byPath = new Map<string, SidebarDocument>();
     for (const file of recentFiles) {
@@ -587,8 +560,7 @@ function OfficeDexApp() {
       parentTaskId: values.parentTaskId,
     };
     pendingGenerateRef.current.set(localTaskId, pending);
-    stageFirstTaskRef.current = localTaskId;
-    setStageFirstTaskId(localTaskId);
+    routing.beginStage(localTaskId);
     const pendingInput = pending.input;
     setState((current) => startLocalTask(current, localTaskId, pendingInput, { documentType: values.documentType, topic }, undefined, context));
     setSelectedTaskID({ kind: "task", id: localTaskId });
@@ -603,10 +575,7 @@ function OfficeDexApp() {
         const actualContext = { ...pending.context, conversationId: result.taskId };
         setState((current) => promoteLocalTask(current, localTaskId, result.taskId, pending.input, undefined, actualContext));
         setSelectedTaskID({ kind: "task", id: result.taskId });
-        if (stageFirstTaskRef.current === localTaskId) {
-          stageFirstTaskRef.current = result.taskId;
-          setStageFirstTaskId(result.taskId);
-        }
+        routing.promoteStage(localTaskId, result.taskId);
         setActiveNav("document");
         refreshProjectLists();
       }
@@ -637,17 +606,13 @@ function OfficeDexApp() {
             });
           });
           setSelectedTaskID({ kind: "task", id: recovered.taskId });
-          stageFirstTaskRef.current = recovered.taskId;
-          setStageFirstTaskId(recovered.taskId);
+          routing.beginStage(recovered.taskId);
           setActiveNav("document");
           clearError();
           return;
         }
       }
-      if (stageFirstTaskRef.current === localTaskId) {
-        stageFirstTaskRef.current = undefined;
-        setStageFirstTaskId(undefined);
-      }
+      routing.clearStage(localTaskId);
       setState((current) => discardLocalTask(current, localTaskId));
       const text = errorMessage(error);
       recordError(text, classifyError(text), extractStderr(text));
@@ -845,16 +810,6 @@ function OfficeDexApp() {
     }
   }, [recent]);
 
-  const selectTask = useCallback((taskId: string) => {
-    const taskWorkspaceId = state.tasks[taskId]?.workspaceId;
-    if (taskWorkspaceId && taskWorkspaceId !== activeWorkspace?.id) {
-      void selectWorkspace(taskWorkspaceId);
-    }
-    setSelectedTaskID({ kind: "task", id: taskId });
-    setLastError(undefined);
-    setActiveNav("document");
-  }, [state.tasks, activeWorkspace?.id, selectWorkspace]);
-
   const followUpDeps = useMemo<FollowUpDeps>(() => ({
     pending: pendingGenerateRef.current,
     setState,
@@ -927,65 +882,22 @@ function OfficeDexApp() {
     }));
   }, [forceUpdate, recordError, clearError, followUpDeps, conversationTasks, conversationId, workspaces, activeWorkspace, t]);
 
-  const openLogin = useCallback(() => {
-    if (activeNavRef.current !== "login") loginReturnNavRef.current = activeNavRef.current;
-    setActiveNav("login");
-  }, []);
-
-  const returnFromLogin = useCallback(() => {
-    setActiveNav(loginReturnNavRef.current === "login" ? "home" : loginReturnNavRef.current);
-  }, []);
-  const [deckPanelDismissedId, setDeckPanelDismissedId] = useState<string | null>(null);
   // Tasks the user has held at a page boundary. The runtime blocks rather than
   // reporting a paused state, so the acknowledgement of the pause call is the
   // only evidence the UI has — and it is enough to show the right control.
 
-  const openWorkbook = useCallback((artifact: Artifact) => {
-    return runSpreadsheetAction(async () => {
-      const grant = await api.issuePreviewToken(artifact);
-      const sourceTask = artifact.taskId ? tasks.find((task) => task.id === artifact.taskId) : undefined;
-      setSpreadsheetPreferredTool("assistant");
-      setCatalogAutoScanFile(undefined);
-      setSpreadsheetEntry({
-        kind: "artifact",
-        artifact,
-        grant,
-        ...(sourceTask?.workspaceId ? { workspaceId: sourceTask.workspaceId } : {}),
-        ...(sourceTask?.conversationId ? { conversationId: sourceTask.conversationId } : {}),
-      });
-      setActiveNav("spreadsheet");
-      clearError();
-    });
-  }, [api, clearError, runSpreadsheetAction, tasks]);
-
-  const activeVibeTaskIdRef = useRef<string | null>(null);
-  const documentSession = useDocumentSession({
-    onWorkbook: openWorkbook,
-    // Closing the deck remembers which panel the user dismissed, so reopening
-    // the same run does not put it straight back.
-    onClosed: useCallback(() => {
-      setTimelineNodeId(null);
-      setDeckPanelDismissedId(activeVibeTaskIdRef.current);
-    }, []),
-  });
-  const previewGrant = documentSession.grant;
-  const previewArtifact = documentSession.artifact;
-  const documentOpenRevision = documentSession.openRevision;
-  const openInlinePreview = documentSession.open;
-  const closeInlinePreview = documentSession.close;
 
   // The live draft behind the deck currently on screen, if that deck is one.
   // Registered synchronously when the draft is created, so it is already true
   // by the time the preview artifact naming that file is committed.
 
   useEffect(() => {
-    const taskId = stageFirstTaskRef.current;
+    const taskId = routing.stageTaskId;
     if (!taskId) return;
     const task = state.tasks[taskId];
     if (!task) return;
     if (task.status === "completed") {
-      stageFirstTaskRef.current = undefined;
-      setStageFirstTaskId(undefined);
+      routing.clearStage();
       // Completion must not replace the op-authored editor with a second
       // artifact import: the deck on screen is this task's own live draft and
       // the sequencer already saved it.
@@ -997,8 +909,7 @@ function OfficeDexApp() {
       return;
     }
     if (task.status === "failed" || task.status === "cancelled") {
-      stageFirstTaskRef.current = undefined;
-      setStageFirstTaskId(undefined);
+      routing.clearStage();
     }
   }, [openInlinePreview, previewArtifact, state.tasks]);
 
@@ -1178,6 +1089,7 @@ function OfficeDexApp() {
   const pptxLive = usePptxLiveDraft({ session: documentSession, recordError, t });
   const timelineNodeId = pptxLive.timelineNodeId;
   const setTimelineNodeId = pptxLive.setTimelineNodeId;
+  clearTimelineRef.current = () => pptxLive.setTimelineNodeId(null);
   const timelineTaskId = pptxLive.timelineTaskId;
   const openTimelineNode = pptxLive.openTimelineNode;
   const returnToLatestDeck = pptxLive.returnToLatestDeck;
@@ -1284,17 +1196,6 @@ function OfficeDexApp() {
     }
   }, [clearError, forceUpdate, nudgeForTaskTransition, persistedSettings.defaults.imageQuality, recordError, refreshProjectLists, spreadsheet.session.workspaceId]);
 
-  const changeNavigation = useCallback((key: NavKey) => {
-    if (key === "home") {
-      stageFirstTaskRef.current = undefined;
-      setStageFirstTaskId(undefined);
-    }
-    if (key === activeNavRef.current && !previewGrant) return;
-    void runSpreadsheetAction(async () => {
-      if (previewGrant) await closeInlinePreview();
-      setActiveNav(key);
-    });
-  }, [closeInlinePreview, previewGrant, runSpreadsheetAction]);
 
   const verticalPanels = useVerticalPanels({
     spreadsheet,
