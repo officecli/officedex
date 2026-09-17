@@ -10,7 +10,8 @@ import { AgentClientToolHost } from "./AgentClientToolHost";
 import { useAgentClientTools } from "./useAgentClientTools";
 import { useVerticalPanels } from "./spreadsheet/useVerticalPanels";
 import { executeActiveEditorClientTool, waitForActiveEditorSurface, type ActiveEditorSurface } from "./activeEditorClientTools";
-import { applyTaskEvent, attachPartialWork, attachTaskContext, createInitialTaskState, deleteTask, discardLocalTask, finishTaskContinuing, getRunLineage, markTaskContinuing, promoteLocalTask, restoreTaskInteractiveGate, startLocalTask, type TaskContextPatch, type TaskState } from "./taskState";
+import { applyTaskEvent, attachPartialWork, attachTaskContext, deleteTask, discardLocalTask, finishTaskContinuing, getRunLineage, markTaskContinuing, promoteLocalTask, restoreTaskInteractiveGate, startLocalTask, type TaskContextPatch, type TaskState } from "./taskState";
+import { TaskStoreProvider, useTaskStore } from "./store/taskStore";
 import { STALL_POLL_INTERVAL_MS, markStalledTasks } from "./stallDetector";
 import { useDesktopApi } from "./services/desktopApi";
 import { useRecentFiles } from "./useRecentFiles";
@@ -233,13 +234,17 @@ export function findModifySourceTask(tasks: DesktopTask[], documentType: string,
 }
 
 export function App() {
-  return <OfficeDexApp />;
+  return (
+    <TaskStoreProvider>
+      <OfficeDexApp />
+    </TaskStoreProvider>
+  );
 }
 
 function OfficeDexApp() {
   const api = useDesktopApi();
   const initialRoute = useMemo(() => readStoredAppRoute(), []);
-  const [state, setState] = useState<TaskState>(() => createInitialTaskState());
+  const { state, update: setState } = useTaskStore();
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
   const [productOutputs, setProductOutputs] = useState<OfficeOutputRef[]>([]);
   const [homeWorkspaceId, setHomeWorkspaceId] = useState<string>();
