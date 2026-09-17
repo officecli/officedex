@@ -2,7 +2,7 @@ import type { AbstractedSheetSDK, SheetCellData, SheetWritableCellData } from "@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import { AlertCircle, FileSpreadsheet } from "lucide-react";
 import type { Artifact, PreviewGrant } from "../../shared/types";
-import { officecli } from "../bridge";
+import { useDesktopApi } from "../services/desktopApi";
 import { useT, useLocale, translate as t } from "../i18n";
 import { Button } from "../ui";
 import {
@@ -241,6 +241,7 @@ export function styledCellData(existing: SheetCellData | undefined, style: Workb
 
 export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, SpreadsheetCanvasProps>(
   function SpreadsheetCanvas({ artifact, grant, onDirtyChange, onStateChange, onError, onSaveError, onSessionClosed }, ref) {
+  const api = useDesktopApi();
     const containerRef = useRef<HTMLDivElement>(null);
     const t = useT();
     const locale = useLocale();
@@ -354,7 +355,7 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
     }, []);
 
     const openExternal = useCallback(() => {
-      void officecli.openPath(artifact.filePath).catch(() => undefined);
+      void api.openPath(artifact.filePath).catch(() => undefined);
     }, [artifact.filePath]);
 
     useLayoutEffect(() => {
@@ -401,7 +402,7 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
         }
         if (sessionId && !backendSessionClosed) {
           backendSessionClosed = true;
-          await officecli.closeXlsxEditor({ previewToken: grant.token, sessionId }).catch(() => undefined);
+          await api.closeXlsxEditor({ previewToken: grant.token, sessionId }).catch(() => undefined);
           notifySessionClosed();
         } else if (disposed && prepareSettled && !sessionId) {
           notifySessionClosed();
@@ -428,7 +429,7 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
 
       void (async () => {
         try {
-          const prepared = await officecli.prepareXlsxEditor(grant.token);
+          const prepared = await api.prepareXlsxEditor(grant.token);
           prepareSettled = true;
           sessionId = prepared.sessionId;
           if (disposed) {
@@ -441,7 +442,7 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
             prepared.imageAssets ?? [],
             async (file) => {
               const currentSessionId = sessionId || prepared.sessionId;
-              const staged = await officecli.stageXlsxEditorImage({
+              const staged = await api.stageXlsxEditorImage({
                 previewToken: grant.token,
                 sessionId: currentSessionId,
                 data: await imageFileToBytes(file),
@@ -555,7 +556,7 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
           const modocContent = hadStagedImageAtSaveStart
             ? ""
             : (await editor.content.getContent()).stringify();
-          await officecli.saveXlsxEditor({
+          await api.saveXlsxEditor({
             previewToken: grant.token,
             sessionId,
             modocContent,
@@ -771,7 +772,7 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
           if (request.row >= worksheet.rowCount || request.column >= worksheet.columnCount) {
             throw new Error(t("spreadsheet.error.mediaRangeOutside"));
           }
-          const staged = await officecli.stageXlsxEditorImage({
+          const staged = await api.stageXlsxEditorImage({
             previewToken: grant.token,
             sessionId,
             filePath: request.filePath,
@@ -889,11 +890,11 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
           const worksheet = editor.workbook.getWorksheetById(batch.sheetId);
           const cell = worksheet?.getCell(rowIndex, batch.outputColumn);
           if (!worksheet || !cell) throw new Error(t("spreadsheet.error.outputCellMissing"));
-          const { data, mime } = await officecli.readLocalImage(filePath);
+          const { data, mime } = await api.readLocalImage(filePath);
           const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
           const versionBeforeInsert = changeVersionRef.current;
           const fileName = filePath.split(/[\\/]/).pop() || "officedex-marketing-image";
-          const staged = await officecli.stageXlsxEditorImage({
+          const staged = await api.stageXlsxEditorImage({
             previewToken: grant.token,
             sessionId,
             filePath,

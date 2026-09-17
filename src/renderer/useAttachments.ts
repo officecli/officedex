@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { officecli } from "./bridge";
+import { useDesktopApi } from "./services/desktopApi";
 import { getAttachmentSpec } from "../shared/types";
 import type { AttachmentSpec, DocumentType } from "../shared/types";
 
@@ -32,6 +32,7 @@ export interface UseAttachmentsResult {
 }
 
 export function useAttachments(documentType: DocumentType, options: UseAttachmentsOptions = {}): UseAttachmentsResult {
+  const api = useDesktopApi();
   const sourceWorkbookSpec = getAttachmentSpec(documentType, "sourceWorkbook");
   const referenceImagesSpec = getAttachmentSpec(documentType, "referenceImages");
   const sourceFileControlled = options.sourceFile !== undefined;
@@ -83,7 +84,7 @@ export function useAttachments(documentType: DocumentType, options: UseAttachmen
 
   const pickSourceFile = useCallback(async () => {
     if (!sourceWorkbookSpec) return;
-    const picked = await officecli.openFileDialog({
+    const picked = await api.openFileDialog({
       filters: [{ name: sourceWorkbookSpec.label, extensions: sourceWorkbookSpec.extensions }],
     });
     if (picked) {
@@ -97,7 +98,7 @@ export function useAttachments(documentType: DocumentType, options: UseAttachmen
 
   const pickReferenceImages = useCallback(async () => {
     if (!referenceImagesSpec) return;
-    const picked = await officecli.openMultiFileDialog({
+    const picked = await api.openMultiFileDialog({
       filters: [{ name: referenceImagesSpec.label, extensions: referenceImagesSpec.extensions }],
     });
     if (!picked || picked.length === 0) return;
@@ -137,7 +138,7 @@ export function useAttachments(documentType: DocumentType, options: UseAttachmen
         const ext = inferImageExtension(file, allowedExtensions);
         if (!ext) continue;
         const buffer = await readFileAsArrayBuffer(file);
-        const path = await officecli.savePastedImage(new Uint8Array(buffer), ext);
+        const path = await api.savePastedImage(new Uint8Array(buffer), ext);
         if (path && !referenceImagesRef.current.includes(path) && !savedPaths.includes(path)) {
           savedPaths.push(path);
         }

@@ -4,7 +4,7 @@ import type {
   AppUpdateRelease,
   AppUpdateStatus,
 } from "../shared/types";
-import { officecli } from "./bridge";
+import { useDesktopApi } from "./services/desktopApi";
 
 const FIRST_CHECK_DELAY_MS = 4_000;
 const POLL_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
@@ -45,6 +45,7 @@ const INITIAL_STATUS: AppUpdateStatus = {
 };
 
 export function useAppUpdate(): UseAppUpdateValue {
+  const api = useDesktopApi();
   const [status, setStatus] = useState<AppUpdateStatus>(INITIAL_STATUS);
   const [release, setRelease] = useState<AppUpdateRelease | null>(null);
   const [phase, setPhase] = useState<UpdatePhase>("idle");
@@ -57,7 +58,7 @@ export function useAppUpdate(): UseAppUpdateValue {
   const check = useCallback(async () => {
     setPhase((current) => (current === "downloading" ? current : "checking"));
     try {
-      const result = await officecli.checkAppUpdate();
+      const result = await api.checkAppUpdate();
       lastCheckedAtRef.current = Date.now();
       setStatus(result.status);
       setRelease(result.release);
@@ -82,7 +83,7 @@ export function useAppUpdate(): UseAppUpdateValue {
     setPhase("downloading");
     setError(null);
     try {
-      await officecli.downloadAppUpdate();
+      await api.downloadAppUpdate();
       // downloaded path arrives via event; phase transition happens there
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -94,7 +95,7 @@ export function useAppUpdate(): UseAppUpdateValue {
   const install = useCallback(async () => {
     setPhase("installing");
     try {
-      await officecli.installAppUpdate();
+      await api.installAppUpdate();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
@@ -103,7 +104,7 @@ export function useAppUpdate(): UseAppUpdateValue {
   }, []);
 
   const cancel = useCallback(async () => {
-    await officecli.cancelAppUpdate().catch(() => undefined);
+    await api.cancelAppUpdate().catch(() => undefined);
     setPhase((current) => (current === "downloading" ? "available" : current));
   }, []);
 
@@ -122,7 +123,7 @@ export function useAppUpdate(): UseAppUpdateValue {
 
   // Event subscription.
   useEffect(() => {
-    const off = officecli.onAppUpdateEvent((event: AppUpdateEvent) => {
+    const off = api.onAppUpdateEvent((event: AppUpdateEvent) => {
       switch (event.type) {
         case "status":
           if (event.status) setStatus(event.status);

@@ -2,7 +2,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useSta
 import { AppWindow, FileSpreadsheet, MonitorPlay } from "lucide-react";
 import { Button } from "../ui";
 import { OfficeWorkbenchLayout, type WorkbenchSaveState } from "../workbench/OfficeWorkbenchLayout";
-import { officecli } from "../bridge";
+import { useDesktopApi } from "../services/desktopApi";
 import { SpreadsheetCanvas, type SpreadsheetCanvasHandle, type SpreadsheetCanvasState } from "./SpreadsheetCanvas";
 import type { SpreadsheetSessionState } from "./types";
 import { useT } from "../i18n";
@@ -73,6 +73,7 @@ function saveStateFor(session: SpreadsheetSessionState): WorkbenchSaveState {
 
 export const SpreadsheetWorkspace = forwardRef<SpreadsheetWorkspaceHandle, SpreadsheetWorkspaceProps>(
   function SpreadsheetWorkspace({ session, workspaceName, onBack, onDirtyChange, onCanvasStateChange, onCanvasError, onCanvasSaveError, onCanvasSessionClosed, onCreateDeck, onWorkbookSaved, agentPanel }, ref) {
+  const api = useDesktopApi();
     const canvasRef = useRef<SpreadsheetCanvasHandle>(null);
     const t = useT();
     const [agentOpen, setAgentOpen] = useState(true);
@@ -181,7 +182,7 @@ export const SpreadsheetWorkspace = forwardRef<SpreadsheetWorkspaceHandle, Sprea
         backLabel={t("spreadsheet.topbar.back")}
         onSave={() => void save()}
         canSave={Boolean(session.artifact && session.grant && session.dirty)}
-        onOpenExternal={session.artifact ? () => void officecli.openPath(session.artifact!.filePath) : undefined}
+        onOpenExternal={session.artifact ? () => void api.openPath(session.artifact!.filePath) : undefined}
         panelOpen={agentOpen}
         onPanelOpenChange={setAgentOpen}
         panel={{

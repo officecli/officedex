@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { RecentFile } from "../shared/types";
-import { officecli } from "./bridge";
+import { useDesktopApi } from "./services/desktopApi";
 import { errorMessage } from "./utils/values";
 
 const RECENT_FILES_TIMEOUT_MS = 8_000;
@@ -63,6 +63,7 @@ export interface RecentFilesState {
  * because the message is localised and this hook has no locale of its own.
  */
 export function useRecentFiles(timeoutMessage: string): RecentFilesState {
+  const api = useDesktopApi();
   const [files, setFiles] = useState<RecentFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
@@ -75,7 +76,7 @@ export function useRecentFiles(timeoutMessage: string): RecentFilesState {
     setError(undefined);
     try {
       const next = await withTimeout(
-        officecli.listRecentFiles(workspaceId),
+        api.listRecentFiles(workspaceId),
         RECENT_FILES_TIMEOUT_MS,
         timeoutMessage,
       );
@@ -90,7 +91,7 @@ export function useRecentFiles(timeoutMessage: string): RecentFilesState {
   }, [timeoutMessage]);
 
   const remove = useCallback(async (filePath: string) => {
-    await officecli.removeRecentFile(filePath);
+    await api.removeRecentFile(filePath);
     setFiles((current) => current.filter((file) => file.filePath !== filePath));
   }, []);
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { officecli } from "./bridge";
+import { useDesktopApi } from "./services/desktopApi";
 import type { UserSettings } from "../shared/types";
 import { defaultProxySettings } from "./defaults";
 
@@ -44,6 +44,7 @@ export interface UseSettingsResult {
 }
 
 export function useSettings(): UseSettingsResult {
+  const api = useDesktopApi();
   const [settings, setSettings] = useState<UserSettings>(FALLBACK);
   const [defaultWorkspaceDir, setDefaultWorkspaceDir] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -53,7 +54,7 @@ export function useSettings(): UseSettingsResult {
 
   useEffect(() => {
     mountedRef.current = true;
-    Promise.all([officecli.getSettings(), officecli.getDefaultWorkspaceDir()])
+    Promise.all([api.getSettings(), api.getDefaultWorkspaceDir()])
       .then(([result, workspace]) => {
         if (!mountedRef.current) return;
         setSettings(result);
@@ -83,7 +84,7 @@ export function useSettings(): UseSettingsResult {
   const update = useCallback(async (patch: Partial<UserSettings>): Promise<UserSettings> => {
     setSaving(true);
     try {
-      const next = await officecli.updateSettings(patch);
+      const next = await api.updateSettings(patch);
       if (mountedRef.current) {
         setSettings(next);
         setError(undefined);

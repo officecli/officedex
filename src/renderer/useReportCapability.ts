@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import type { ReportCapabilityResult } from "../shared/types";
-import { officecli } from "./bridge";
+import { useDesktopApi } from "./services/desktopApi";
 
 let cachedResult: ReportCapabilityResult | null = null;
 
 export function useReportCapability(): ReportCapabilityResult | null {
+  const api = useDesktopApi();
   const [result, setResult] = useState<ReportCapabilityResult | null>(cachedResult);
 
   useEffect(() => {
@@ -12,7 +13,7 @@ export function useReportCapability(): ReportCapabilityResult | null {
     let cancelled = false;
     let promise: Promise<ReportCapabilityResult>;
     try {
-      promise = officecli.getReportCapability();
+      promise = api.getReportCapability();
     } catch {
       const fallback: ReportCapabilityResult = { enabled: false, reason: "probe-failed" };
       cachedResult = fallback;

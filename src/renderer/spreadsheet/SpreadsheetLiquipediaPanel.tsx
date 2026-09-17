@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { CheckCircle2, Globe2, Send, Settings } from "lucide-react";
 import type { ConfiguredLiquipediaSyncResult, LiquipediaConnectionSummary, LiquipediaSyncResult } from "../../shared/verticals";
 import { confirmAgentApproval, restorePendingAgentInput, unwrapAgentRunResult, waitForAgentRun } from "../agentRuntime";
-import { officecli } from "../bridge";
+import { useDesktopApi } from "../services/desktopApi";
 import { Button, TextArea } from "../ui";
 import { useT } from "../i18n";
 
@@ -17,6 +17,7 @@ export interface SpreadsheetLiquipediaPanelProps {
 }
 
 export function SpreadsheetLiquipediaPanel({ workbookReady = true, workbookPath, workspaceId, onWriteSheet, onSave, onCreateWorkbook, onOpenSettings }: SpreadsheetLiquipediaPanelProps) {
+  const api = useDesktopApi();
   const t = useT();
   const [connection, setConnection] = useState<LiquipediaConnectionSummary>();
   const [prompt, setPrompt] = useState("");
@@ -29,7 +30,7 @@ export function SpreadsheetLiquipediaPanel({ workbookReady = true, workbookPath,
 
   const loadConnection = async () => {
     setLoading(true); setError(undefined);
-    try { setConnection(await officecli.getLiquipediaConnection()); }
+    try { setConnection(await api.getLiquipediaConnection()); }
     catch (err) { setError(err instanceof Error ? err.message : String(err)); }
     finally { setLoading(false); }
   };
@@ -57,10 +58,10 @@ export function SpreadsheetLiquipediaPanel({ workbookReady = true, workbookPath,
       const userMessage = prompt.trim();
       let runId = pendingRun?.runId;
       if (pendingRun) {
-        await officecli.respondAgentRun({ run_id: pendingRun.runId, request_id: pendingRun.requestId, value: userMessage });
+        await api.respondAgentRun({ run_id: pendingRun.runId, request_id: pendingRun.requestId, value: userMessage });
         setPendingRun(undefined);
       } else {
-        const run = await officecli.startAgentRun({ workflow: "liquipedia.sync.v1", metadata: {
+        const run = await api.startAgentRun({ workflow: "liquipedia.sync.v1", metadata: {
           surface: "spreadsheet.liquipedia",
           ...(workbookPath ? { workbook_path: workbookPath } : {}),
           ...(workspaceId ? { workspace_id: workspaceId } : {}),

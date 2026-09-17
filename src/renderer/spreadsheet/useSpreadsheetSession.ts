@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useReducer } from "react";
 import type { Artifact, GenerateInput, ModifyInput } from "../../shared/types";
-import { officecli } from "../bridge";
+import { useDesktopApi } from "../services/desktopApi";
 import { createSpreadsheetSession, spreadsheetSessionReducer } from "./sessionState";
 import type { SpreadsheetEntry } from "./types";
 
 const emptyEntry: SpreadsheetEntry = { kind: "new" };
 
 export function useSpreadsheetSession(entry: SpreadsheetEntry | null) {
+  const api = useDesktopApi();
   const [session, dispatch] = useReducer(spreadsheetSessionReducer, entry ?? emptyEntry, createSpreadsheetSession);
 
   useEffect(() => {
@@ -14,7 +15,7 @@ export function useSpreadsheetSession(entry: SpreadsheetEntry | null) {
   }, [entry?.kind, entry?.workspaceId, entry?.kind === "artifact" ? entry.artifact.filePath : undefined, entry?.kind === "artifact" ? entry.grant?.token : undefined, entry?.kind === "artifact" ? entry.conversationId : undefined]);
 
   const openArtifact = useCallback(async (artifact: Artifact, conversationId?: string) => {
-    const grant = await officecli.issuePreviewToken(artifact);
+    const grant = await api.issuePreviewToken(artifact);
     dispatch({ type: "reset", entry: {
       kind: "artifact",
       artifact,
@@ -22,19 +23,19 @@ export function useSpreadsheetSession(entry: SpreadsheetEntry | null) {
       ...(session.workspaceId ? { workspaceId: session.workspaceId } : {}),
       ...(conversationId ? { conversationId } : {}),
     } });
-  }, [session.workspaceId]);
+  }, [api, session.workspaceId]);
 
   const startGeneration = useCallback(async (input: GenerateInput) => {
-    const result = await officecli.generate(input);
+    const result = await api.generate(input);
     dispatch({ type: "generation.started", taskId: result.taskId, conversationId: result.taskId });
     return result;
-  }, []);
+  }, [api]);
 
   const startModify = useCallback(async (input: ModifyInput) => {
-    const result = await officecli.modify(input);
+    const result = await api.modify(input);
     dispatch({ type: "generation.started", taskId: result.taskId, conversationId: input.conversationId });
     return result;
-  }, []);
+  }, [api]);
 
   return {
     session,

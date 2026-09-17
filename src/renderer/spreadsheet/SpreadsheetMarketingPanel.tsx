@@ -14,7 +14,7 @@ import type {
   SpreadsheetFieldRole,
   SpreadsheetPlanFieldsResult,
 } from "../../shared/types";
-import { officecli } from "../bridge";
+import { useDesktopApi } from "../services/desktopApi";
 import { useT } from "../i18n";
 import { Button, Input, Select } from "../ui";
 import {
@@ -154,6 +154,7 @@ export function SpreadsheetMarketingPanel({
   mappingStorageKey = "",
   creditBalance = null,
 }: SpreadsheetMarketingPanelProps) {
+  const api = useDesktopApi();
   const t = useT();
   const [assetKind, setAssetKind] =
     useState<MarketingAssetKind>("marketplace-main");
@@ -364,7 +365,7 @@ export function SpreadsheetMarketingPanel({
       if (campaignMode && campaign.channels.length === 0)
         throw new Error(t("spreadsheet.marketing.campaign.channelRequired"));
       const plan = campaignMode
-        ? await officecli.planShopifyCatalogCampaign({
+        ? await api.planShopifyCatalogCampaign({
             sheetId: batch.sheetId,
             sheetName: batch.sheetName,
             headers: batch.source.headers,

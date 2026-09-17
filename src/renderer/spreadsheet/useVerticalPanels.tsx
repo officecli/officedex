@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { ReactNode } from "react";
 import type { CreditStatus, DesktopTask, GenerateInput, RecentFile } from "../../shared/types";
-import { officecli } from "../bridge";
+import { useDesktopApi } from "../services/desktopApi";
 import { useT } from "../i18n";
 import type { NavKey } from "../defaults";
 import { SpreadsheetCatalogCleanupPanel } from "./SpreadsheetCatalogCleanupPanel";
@@ -64,6 +64,7 @@ export function useVerticalPanels({
   setActiveNav,
   startSpreadsheetMarketingImage,
 }: VerticalPanelsDeps): VerticalPanels {
+  const api = useDesktopApi();
   const t = useT();
   return useMemo(
     () => ({
@@ -94,7 +95,7 @@ export function useVerticalPanels({
           workspaceId={spreadsheet.session.workspaceId}
           onOpenSettings={() => setActiveNav("settings")}
           onCreateWorkbook={async (result) => {
-            const artifact = await officecli.createWorkbookFromSheet({
+            const artifact = await api.createWorkbookFromSheet({
               fileName: "Jira Issues.xlsx",
               sheetName: result.sheetName,
               headers: result.headers,
@@ -102,7 +103,7 @@ export function useVerticalPanels({
               workspaceId: spreadsheet.session.workspaceId,
             });
             await spreadsheet.openArtifact(artifact);
-            const saveSource = officecli.saveOfficeProductSource;
+            const saveSource = api.saveOfficeProductSource;
             if (saveSource) await saveSource(makeWorkbookSource({ workbookId: `workbook:${artifact.filePath}`, kind: "jira", name: result.sheetName, location: "jira://issues", importedAt: new Date().toISOString() }));
             void refreshRecentFiles(spreadsheet.session.workspaceId);
           }}
@@ -120,7 +121,7 @@ export function useVerticalPanels({
           workspaceId={spreadsheet.session.workspaceId}
           onOpenSettings={() => setActiveNav("settings")}
           onCreateWorkbook={async (result) => {
-            const artifact = await officecli.createWorkbookFromSheet({
+            const artifact = await api.createWorkbookFromSheet({
               fileName: result.sheetName === "Liquipedia Updates" ? "Liquipedia Updates.xlsx" : "Liquipedia Tournaments.xlsx",
               sheetName: result.sheetName,
               headers: result.headers,
@@ -128,7 +129,7 @@ export function useVerticalPanels({
               workspaceId: spreadsheet.session.workspaceId,
             });
             await spreadsheet.openArtifact(artifact);
-            const saveSource = officecli.saveOfficeProductSource;
+            const saveSource = api.saveOfficeProductSource;
             if (saveSource) await saveSource(makeWorkbookSource({ workbookId: `workbook:${artifact.filePath}`, kind: "other", name: result.sheetName, location: "liquipedia://updates", importedAt: new Date().toISOString() }));
             void refreshRecentFiles(spreadsheet.session.workspaceId);
           }}
@@ -155,7 +156,7 @@ export function useVerticalPanels({
             if (!spreadsheetWorkspaceRef.current) throw new Error(t("tasks.runtime.workbookLoading"));
             return spreadsheetWorkspaceRef.current.inspectMarketingSelection(assetKind);
           }}
-          onAnalyze={(batch) => officecli.planSpreadsheetFields({
+          onAnalyze={(batch) => api.planSpreadsheetFields({
             ...(spreadsheet.session.workspaceId
               ? { workspaceId: spreadsheet.session.workspaceId }
               : { noProject: true }),
@@ -192,6 +193,7 @@ export function useVerticalPanels({
       refreshRecentFiles,
       setActiveNav,
       startSpreadsheetMarketingImage,
+      api,
       t,
     ],
   );

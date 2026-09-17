@@ -10,7 +10,7 @@ import {
 } from "./activeEditorClientTools";
 import { loadPublishedWorkbookApps, savePublishedWorkbookApp } from "./appBuilder/appStore";
 import type { PublishedWorkbookApp } from "./appBuilder/types";
-import { officecli } from "./bridge";
+import { useDesktopApi } from "./services/desktopApi";
 import { useT } from "./i18n";
 import type { NavKey } from "./defaults";
 import type { CatalogCleanupBatch } from "./spreadsheet/catalogCleanupWorkflow";
@@ -75,6 +75,7 @@ export function useAgentClientTools({
   setCatalogAutoScanFile,
   setActiveNav,
 }: AgentClientToolsDeps) {
+  const api = useDesktopApi();
   const t = useT();
   const agentClientToolReportedErrorsRef = useRef(new Set<string>());
 
@@ -111,8 +112,8 @@ const routeAgentClientToolSurface = useCallback(async (surface: string, run: Age
         source: "local",
         lastOpenedAt: new Date().toISOString(),
       };
-      const artifact = await officecli.openRecentFile(file);
-      const grant = await officecli.issuePreviewToken(artifact);
+      const artifact = await api.openRecentFile(file);
+      const grant = await api.issuePreviewToken(artifact);
       setPreviewArtifact(artifact);
       setPreviewGrant(grant);
     } else if (!sourcePath && !previewArtifact) {
@@ -145,7 +146,7 @@ const routeAgentClientToolSurface = useCallback(async (surface: string, run: Age
     if (spreadsheet.session.dirty) {
       throw new AgentClientToolDeferredError(t("tasks.runtime.otherWorkbookDirty"));
     }
-    const artifact = await officecli.openRecentFile({
+    const artifact = await api.openRecentFile({
       filePath: workbookPath,
       fileName: fileNameFromPath(workbookPath),
       documentType: "xlsx",
@@ -153,7 +154,7 @@ const routeAgentClientToolSurface = useCallback(async (surface: string, run: Age
       ...(run.metadata?.workspace_id ? { workspaceId: run.metadata.workspace_id } : {}),
       lastOpenedAt: new Date().toISOString(),
     });
-    const grant = await officecli.issuePreviewToken(artifact);
+    const grant = await api.issuePreviewToken(artifact);
     const previousToken = spreadsheet.session.grant?.token;
     setSpreadsheetEntry({
       kind: "artifact",
@@ -162,7 +163,7 @@ const routeAgentClientToolSurface = useCallback(async (surface: string, run: Age
       ...(run.metadata?.workspace_id ? { workspaceId: run.metadata.workspace_id } : {}),
     });
     if (previousToken && previousToken !== grant.token) {
-      void officecli.revokePreviewToken(previousToken).catch(() => undefined);
+      void api.revokePreviewToken(previousToken).catch(() => undefined);
     }
   } else if (!workbookPath && !currentPath && requiresExistingWorkbook) {
     throw new AgentClientToolDeferredError(t("tasks.runtime.workbookPathMissing", { runId: run.id }));
@@ -209,7 +210,7 @@ const agentClientToolSurfaces = useMemo<AgentClientToolSurfaces>(() => {
     if (spreadsheet.session.artifact) {
       await workspace().replaceManagedSheet({ ...result, keyColumn: "Issue Key", preserveColumns: ["OfficeDex Notes"] });
     } else {
-      const artifact = await officecli.createWorkbookFromSheet({
+      const artifact = await api.createWorkbookFromSheet({
         fileName: "Jira Issues.xlsx", sheetName: result.sheetName, headers: result.headers, rows: result.rows,
         workspaceId: spreadsheet.session.workspaceId,
       });
@@ -224,7 +225,7 @@ const agentClientToolSurfaces = useMemo<AgentClientToolSurfaces>(() => {
     if (spreadsheet.session.artifact) {
       await workspace().replaceManagedSheet({ ...result, keyColumn: "Source URL" });
     } else {
-      const artifact = await officecli.createWorkbookFromSheet({
+      const artifact = await api.createWorkbookFromSheet({
         fileName: result.sheetName === "Liquipedia Updates" ? "Liquipedia Updates.xlsx" : "Liquipedia Tournaments.xlsx",
         sheetName: result.sheetName, headers: result.headers, rows: result.rows,
         workspaceId: spreadsheet.session.workspaceId,
