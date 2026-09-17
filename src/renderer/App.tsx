@@ -12,7 +12,7 @@ import { useVerticalPanels } from "./spreadsheet/useVerticalPanels";
 import { executeActiveEditorClientTool, waitForActiveEditorSurface, type ActiveEditorSurface } from "./activeEditorClientTools";
 import { applyTaskEvent, attachPartialWork, attachTaskContext, createInitialTaskState, deleteTask, discardLocalTask, finishTaskContinuing, getRunLineage, markTaskContinuing, promoteLocalTask, restoreTaskInteractiveGate, startLocalTask, type TaskContextPatch, type TaskState } from "./taskState";
 import { STALL_POLL_INTERVAL_MS, markStalledTasks } from "./stallDetector";
-import { officecli } from "./bridge";
+import { useDesktopApi } from "./services/desktopApi";
 import { useRecentFiles } from "./useRecentFiles";
 import { defaultGenerateInput, type NavKey } from "./defaults";
 import { getHomeDropZone, setHomeDropZone } from "./homeDropZone";
@@ -237,6 +237,7 @@ export function App() {
 }
 
 function OfficeDexApp() {
+  const api = useDesktopApi();
   const initialRoute = useMemo(() => readStoredAppRoute(), []);
   const [state, setState] = useState<TaskState>(() => createInitialTaskState());
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
@@ -367,13 +368,13 @@ function OfficeDexApp() {
   }, []);
 
   const refreshProjectLists = useCallback(() => {
-    officecli.listWorkspaces()
+    api.listWorkspaces()
       .then((workspaceItems) => {
         setWorkspaces(workspaceItems);
       })
       .catch(() => undefined);
-    if (officecli.listOfficeProductOutputs) {
-      officecli.listOfficeProductOutputs(homeWorkspaceId || "", "").then((items) => setProductOutputs(decodeOfficeOutputs(items))).catch(() => undefined);
+    if (api.listOfficeProductOutputs) {
+      api.listOfficeProductOutputs(homeWorkspaceId || "", "").then((items) => setProductOutputs(decodeOfficeOutputs(items))).catch(() => undefined);
     }
   }, [homeWorkspaceId]);
 
@@ -399,7 +400,7 @@ function OfficeDexApp() {
       // An update gate keeps the bridge idle; nothing to connect until it clears.
       return;
     }
-    const off = officecli.onBridgeEvent((event: BridgeEvent) => {
+    const off = api.onBridgeEvent((event: BridgeEvent) => {
       if (event.type === "bridge.reconnecting") {
         return;
       }
@@ -474,9 +475,9 @@ function OfficeDexApp() {
     // The handshake result used to be written into a state nobody rendered,
     // so an officecli too old for this app failed silently here and loudly
     // later. Surface it through the same error banner as everything else.
-    officecli
+    api
       .initialize()
-      .then(() => officecli.getCapabilities())
+      .then(() => api.getCapabilities())
       .catch((error) => {
         const text = errorMessage(error);
         recordError(text, classifyError(text), extractStderr(text));
@@ -486,7 +487,7 @@ function OfficeDexApp() {
 
   useEffect(() => {
     let cancelled = false;
-    officecli
+    api
       .getTaskHistory(50)
       .then((entries) => {
         if (cancelled || entries.length === 0) return;
@@ -509,7 +510,7 @@ function OfficeDexApp() {
 
   const reconcileActiveTaskHistory = useCallback(async () => {
       try {
-        const entries = await officecli.getTaskHistory(50);
+        const entries = await api.getTaskHistory(50);
         if (entries.length === 0) return;
         setState((current) => {
           let next = current;
@@ -645,7 +646,7 @@ function OfficeDexApp() {
 
   useEffect(() => {
     let cancelled = false;
-    officecli.whoami()
+    api.whoami()
       .then((result) => {
         if (!cancelled) setAccount({ mode: result.mode, email: result.email });
       })
@@ -717,7 +718,7 @@ function OfficeDexApp() {
         const generateInput: GenerateInput = noProject
         ? { ...submittedValues, topic, noProject: true, workspaceId: undefined }
         : { ...submittedValues, topic, workspaceId: targetWorkspace?.id };
-      const result = await officecli.generate(generateInput);
+      const result = await api.generate(generateInput);
       if (pendingGenerateRef.current.delete(localTaskId) && result.taskId) {
         const actualContext = { ...pending.context, conversationId: result.taskId };
         setState((current) => promoteLocalTask(current, localTaskId, result.taskId, pending.input, undefined, actualContext));
@@ -734,7 +735,7 @@ function OfficeDexApp() {
       if (options.preserveWorkbookContext && values.documentType === "pptx") {
         let recovered: TaskHistoryEntry | undefined;
         for (let attempt = 0; attempt < 6 && !recovered; attempt += 1) {
-          const entries = await officecli.getTaskHistory(50).catch(() => [] as TaskHistoryEntry[]);
+          const entries = await api.getTaskHistory(50).catch(() => [] as TaskHistoryEntry[]);
           recovered = findRecoverableTaskHistoryEntry(entries, {
             documentType: values.documentType,
             sourceFile: values.sourceFile,
@@ -784,8 +785,8 @@ function OfficeDexApp() {
   }
 
   async function checkPptxTaskStatus(taskId: string) {
-    if (!officecli.getPptxTaskStatus) return;
-    const snapshot = await officecli.getPptxTaskStatus(taskId);
+    if (!api.getPptxTaskStatus) return;
+    const snapshot = await api.getPptxTaskStatus(taskId);
     setState(current => reconcilePptxTaskStatus(current, taskId, snapshot));
   }
 
@@ -824,7 +825,7 @@ function OfficeDexApp() {
 
   const selectWorkspace = useCallback(async (workspaceId: string) => {
     try {
-      const selected = await officecli.selectWorkspace(workspaceId);
+      const selected = await api.selectWorkspace(workspaceId);
       setWorkspaces((current) => current.map((workspace) => ({ ...workspace, active: workspace.id === selected.id })));
       clearError();
     } catch (error) {
@@ -834,7 +835,7 @@ function OfficeDexApp() {
   }, [clearError, recordError]);
 
   const pickHomeTaskFile = useCallback(async () => {
-    const selected = await officecli.openFileDialog({
+    const selected = await api.openFileDialog({
       filters: [{
         name: "Work files",
         extensions: ["xlsx", "csv", "pptx", "docx", "pdf", "txt", "md", "png", "jpg", "jpeg", "webp"],
@@ -844,30 +845,30 @@ function OfficeDexApp() {
   }, []);
 
   const pickHomeTaskDirectory = useCallback(async () => {
-    const selected = await officecli.openDirectoryDialog();
+    const selected = await api.openDirectoryDialog();
     return selected || undefined;
   }, []);
 
   const pickHomeReferenceImages = useCallback(async () => {
-    const selected = await officecli.openMultiFileDialog({
+    const selected = await api.openMultiFileDialog({
       filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "gif"] }],
     });
     return selected ?? [];
   }, []);
 
   const pickHomeReferenceTextFiles = useCallback(async () => {
-    const selected = await officecli.openMultiFileDialog({
+    const selected = await api.openMultiFileDialog({
       filters: [{ name: "Text files", extensions: ["txt", "md", "markdown", "csv", "tsv", "log", "json"] }],
     });
     return selected ?? [];
   }, []);
 
   const importHomePptxTemplate = useCallback(async () => {
-    const selected = await officecli.openFileDialog({
+    const selected = await api.openFileDialog({
       filters: [{ name: "PowerPoint templates", extensions: ["pptx"] }],
     });
-    if (!selected || !officecli.importPptxTemplate) return undefined;
-    const imported = await officecli.importPptxTemplate({ sourcePath: selected });
+    if (!selected || !api.importPptxTemplate) return undefined;
+    const imported = await api.importPptxTemplate({ sourcePath: selected });
     return {
       ...imported,
       supportedPageTypes: [],
@@ -887,7 +888,7 @@ function OfficeDexApp() {
     // separate process that cannot open the user's files itself.
     let groundedPrompt = input.prompt;
     if (input.referenceTextFiles?.length) {
-      const documents = await officecli.readLocalTextDocuments(input.referenceTextFiles);
+      const documents = await api.readLocalTextDocuments(input.referenceTextFiles);
       groundedPrompt = buildReferenceTextPrompt(input.prompt, documents);
     }
     const taskPrompt = input.referenceDirectory
@@ -906,8 +907,8 @@ function OfficeDexApp() {
         lastOpenedAt: new Date().toISOString(),
       };
       await runSpreadsheetAction(async () => {
-        const artifact = await officecli.openRecentFile(file);
-        const grant = await officecli.issuePreviewToken(artifact);
+        const artifact = await api.openRecentFile(file);
+        const grant = await api.issuePreviewToken(artifact);
         setSpreadsheetPreferredTool("catalog");
         setCatalogAutoScanFile(artifact.filePath);
         setSpreadsheetEntry({
@@ -991,7 +992,7 @@ function OfficeDexApp() {
 
   const renameWorkspace = useCallback(async (workspaceId: string, name: string) => {
     try {
-      const renamed = await officecli.renameWorkspace(workspaceId, name);
+      const renamed = await api.renameWorkspace(workspaceId, name);
       setWorkspaces((current) => current.map((workspace) => workspace.id === renamed.id ? renamed : workspace));
       clearError();
     } catch (error) {
@@ -1020,9 +1021,9 @@ function OfficeDexApp() {
 
   const addWorkspace = useCallback(async () => {
     try {
-      const picked = await officecli.openDirectoryDialog();
+      const picked = await api.openDirectoryDialog();
       if (!picked) return;
-      await officecli.addWorkspace(picked);
+      await api.addWorkspace(picked);
       refreshProjectLists();
     } catch (error) {
       const text = errorMessage(error);
@@ -1032,7 +1033,7 @@ function OfficeDexApp() {
 
   const addWorkspaceFromPath = useCallback(async (path: string) => {
     try {
-      await officecli.addWorkspace(path);
+      await api.addWorkspace(path);
       refreshProjectLists();
     } catch (error) {
       const text = errorMessage(error);
@@ -1045,7 +1046,7 @@ function OfficeDexApp() {
   // home intake. It is intentionally active only on Home.
   useEffect(() => {
     if (activeNav !== "home") return undefined;
-    return officecli.onFileDrop((paths) => {
+    return api.onFileDrop((paths) => {
       if (paths.length === 0) return;
       const zone = getHomeDropZone();
       setHomeDropZone(null);
@@ -1060,12 +1061,12 @@ function OfficeDexApp() {
   }, [activeNav, addWorkspaceFromPath]);
 
   const revealWorkspace = useCallback((workspacePath: string) => {
-    void officecli.showItemInFolder(workspacePath).catch(() => officecli.openPath(workspacePath));
+    void api.showItemInFolder(workspacePath).catch(() => api.openPath(workspacePath));
   }, []);
 
   const removeWorkspace = useCallback(async (workspaceId: string) => {
     try {
-      await officecli.removeWorkspace(workspaceId);
+      await api.removeWorkspace(workspaceId);
       setWorkspaces((current) => current.filter((workspace) => workspace.id !== workspaceId));
       await refreshProjectLists();
       clearError();
@@ -1105,7 +1106,7 @@ function OfficeDexApp() {
       imageRatio,
       fps,
     };
-    await runFollowUpTask(followUpDeps, { localTaskId: createLocalTaskId(), documentType, topic, input, target }, () => officecli.generate({
+    await runFollowUpTask(followUpDeps, { localTaskId: createLocalTaskId(), documentType, topic, input, target }, () => api.generate({
       documentType: documentType as GenerateInput["documentType"],
       workspaceId: target.targetWorkspace?.id,
       noProject: target.noProject,
@@ -1136,7 +1137,7 @@ function OfficeDexApp() {
     const target = resolveFollowUpTarget(parent, workspaces, activeWorkspace, conversationId);
     clearError();
     const topic = summarizePrompt(prompt);
-    await runFollowUpTask(followUpDeps, { localTaskId: createLocalTaskId(), documentType, topic, input: { prompt, sourceFile }, target }, () => officecli.modify({
+    await runFollowUpTask(followUpDeps, { localTaskId: createLocalTaskId(), documentType, topic, input: { prompt, sourceFile }, target }, () => api.modify({
       documentType: documentType as ModifyInput["documentType"],
       workspaceId: target.targetWorkspace?.id,
       noProject: target.noProject,
@@ -1174,9 +1175,9 @@ function OfficeDexApp() {
     if (isXlsxArtifact(artifact)) {
       await runSpreadsheetAction(async () => {
         if (previewGrant) {
-          await officecli.revokePreviewToken(previewGrant.token).catch(() => {});
+          await api.revokePreviewToken(previewGrant.token).catch(() => {});
         }
-        const grant = await officecli.issuePreviewToken(artifact);
+        const grant = await api.issuePreviewToken(artifact);
         const sourceTask = artifact.taskId ? tasks.find((task) => task.id === artifact.taskId) : undefined;
         setSpreadsheetPreferredTool("assistant");
         setCatalogAutoScanFile(undefined);
@@ -1198,10 +1199,10 @@ function OfficeDexApp() {
       return;
     }
     if (previewGrant) {
-      await officecli.revokePreviewToken(previewGrant.token).catch(() => {});
+      await api.revokePreviewToken(previewGrant.token).catch(() => {});
     }
     try {
-      const grant = await officecli.issuePreviewToken(artifact);
+      const grant = await api.issuePreviewToken(artifact);
       setPreviewGrant(grant);
       setPreviewArtifact(artifact);
     } catch (error) {
@@ -1266,9 +1267,9 @@ function OfficeDexApp() {
     // the user it does. Once the run is over nothing can absorb it, and the
     // instruction becomes an ordinary follow-up modification — of the deck this
     // task produced, including a deck it only got part-way through.
-    const steeringLive = ["starting", "running"].includes(task.status) && officecli.intervenePptx;
+    const steeringLive = ["starting", "running"].includes(task.status) && api.intervenePptx;
     if (steeringLive) {
-      await officecli.intervenePptx!(task.id, instruction);
+      await api.intervenePptx!(task.id, instruction);
       return;
     }
     await continueModify("pptx", instruction, task.id);
@@ -1278,23 +1279,23 @@ function OfficeDexApp() {
   // not the interactive gate — answering a question or a plan review goes
   // through resumePptxTask instead.
   const pausePptxTask = useCallback(async (task: DesktopTask) => {
-    if (!officecli.pausePptx) return;
-    await officecli.pausePptx(task.id);
+    if (!api.pausePptx) return;
+    await api.pausePptx(task.id);
     setLivePausedTaskIds((current) => current.includes(task.id) ? current : [...current, task.id]);
   }, []);
 
   const resumePptxLiveTask = useCallback(async (task: DesktopTask) => {
-    if (!officecli.resumePptxLive) return;
-    await officecli.resumePptxLive(task.id);
+    if (!api.resumePptxLive) return;
+    await api.resumePptxLive(task.id);
     setLivePausedTaskIds((current) => current.filter((id) => id !== task.id));
   }, []);
 
   const resumePptxTask = useCallback(async (task: DesktopTask, outline?: OutlineSection[], questionAnswer?: TaskQuestionAnswer) => {
-    await resumeInteractiveTask({ task, outline, questionAnswer }, { api: officecli, setState });
-  }, []);
+    await resumeInteractiveTask({ task, outline, questionAnswer }, { api, setState });
+  }, [api]);
 
   const answerDocumentQuestion = useCallback(async (task: DesktopTask, answer: TaskQuestionAnswer) => {
-    await officecli.respond({
+    await api.respond({
       taskId: task.id,
       answer: answer.answer,
       ...(answer.optionId ? { optionId: answer.optionId } : {}),
@@ -1306,8 +1307,8 @@ function OfficeDexApp() {
     try {
       if (isXlsxFile(file)) {
         await runSpreadsheetAction(async () => {
-          const artifact = await officecli.openRecentFile(file);
-          const grant = await officecli.issuePreviewToken(artifact);
+          const artifact = await api.openRecentFile(file);
+          const grant = await api.issuePreviewToken(artifact);
           setSpreadsheetPreferredTool("assistant");
           setCatalogAutoScanFile(undefined);
           setSpreadsheetEntry({
@@ -1324,7 +1325,7 @@ function OfficeDexApp() {
         });
         return;
       }
-      const artifact = await officecli.openRecentFile(file);
+      const artifact = await api.openRecentFile(file);
       if (file.source === "generated") {
         const matchingTask = tasks.find((task) =>
           (file.taskId && task.id === file.taskId) ||
@@ -1337,7 +1338,7 @@ function OfficeDexApp() {
       const text = errorMessage(error);
       if (isUnsupportedRecentFileError(text)) {
         void message.info(t("home.systemOpenFallback"));
-        await officecli.openPath(file.filePath);
+        await api.openPath(file.filePath);
         return;
       }
       if (isMissingRecentFileError(text)) {
@@ -1353,7 +1354,7 @@ function OfficeDexApp() {
 
   const openHomeLocalFile = useCallback(async () => {
     try {
-      const selected = await officecli.openFileDialog({
+      const selected = await api.openFileDialog({
         filters: [{
           name: "Office files",
           extensions: [...OPEN_LOCAL_FILE_TYPES],
@@ -1395,7 +1396,7 @@ function OfficeDexApp() {
   const [timelineNodeId, setTimelineNodeId] = useState<string | null>(null);
   const closeInlinePreview = useCallback(async () => {
     if (previewGrant) {
-      await officecli.revokePreviewToken(previewGrant.token).catch(() => {});
+      await api.revokePreviewToken(previewGrant.token).catch(() => {});
     }
     setPreviewGrant(null);
     setPreviewArtifact(null);
@@ -1413,14 +1414,14 @@ function OfficeDexApp() {
       for (const candidate of lineage) {
         if (["starting", "running", "question", "plan_review"].includes(candidate.status)) {
           try {
-            await officecli.cancel(candidate.id);
+            await api.cancel(candidate.id);
           } catch (error) {
             if (errorCode(errorMessage(error)) !== BRIDGE_ERROR_CODES.taskNotFound) throw error;
           }
         }
       }
       if (task) {
-        await officecli.deleteDocument(task.id);
+        await api.deleteDocument(task.id);
         const lineageIds = new Set(lineage.map((candidate) => candidate.id));
         setState((current) => lineage.reduce((next, candidate) => deleteTask(next, candidate.id), current));
         recent.forgetWhere((file) =>
@@ -1516,9 +1517,9 @@ function OfficeDexApp() {
     liveDraftAttemptsRef.current.add(liveCandidateTaskId);
     void (async () => {
       try {
-        const draft = await officecli.createLivePptxDraft(liveCandidateTaskId);
+        const draft = await api.createLivePptxDraft(liveCandidateTaskId);
         registerLiveDraft(draft.filePath, liveCandidateTaskId);
-        const grant = await officecli.issuePreviewToken({
+        const grant = await api.issuePreviewToken({
           taskId: liveCandidateTaskId,
           filePath: draft.filePath,
           fileName: draft.fileName,
@@ -1601,11 +1602,11 @@ function OfficeDexApp() {
       return message;
     };
     liveDraftAttemptsRef.current.delete(target);
-    if (previewGrant) await officecli.revokePreviewToken(previewGrant.token).catch(() => {});
-    const draft = await officecli.createLivePptxDraft(target);
+    if (previewGrant) await api.revokePreviewToken(previewGrant.token).catch(() => {});
+    const draft = await api.createLivePptxDraft(target);
     registerLiveDraft(draft.filePath, target);
     const artifact = { taskId: target, filePath: draft.filePath, fileName: draft.fileName, documentType: "pptx" } as Artifact;
-    const grant = await officecli.issuePreviewToken(artifact);
+    const grant = await api.issuePreviewToken(artifact);
     setPreviewGrant(grant);
     setPreviewArtifact(artifact);
     setReplayOps(ops);
@@ -1739,7 +1740,7 @@ function OfficeDexApp() {
     clearError();
     try {
       const workspaceId = spreadsheet.session.workspaceId;
-      const result = await officecli.generate({
+      const result = await api.generate({
         documentType: "img",
         topic: t("marketing.taskTitle", { product: row.productName, channel: row.campaignChannel ? ` · ${row.campaignChannel}` : "" }),
         prompt: row.prompt,
@@ -1751,7 +1752,7 @@ function OfficeDexApp() {
       });
       void pollTaskHistoryUntilTerminal(
         result.taskId,
-        () => officecli.getTaskHistory(50),
+        () => api.getTaskHistory(50),
         (entry) => {
           setState((current) => {
             let next = current;
@@ -1941,19 +1942,19 @@ function OfficeDexApp() {
             onRemoveFile={removeRecentFile}
             droppedTaskPaths={droppedTaskPaths}
             onRetryRecentFiles={() => void refreshRecentFiles(homeWorkspaceId)}
-            pickers={{ taskFile: pickHomeTaskFile, taskDirectory: pickHomeTaskDirectory, referenceImages: pickHomeReferenceImages, referenceTextFiles: pickHomeReferenceTextFiles, importPptxTemplate: importHomePptxTemplate, subscribePptxTemplateProgress: officecli.onPptxTemplateProgress, deletePptxTemplate: officecli.deletePptxTemplate }}
+            pickers={{ taskFile: pickHomeTaskFile, taskDirectory: pickHomeTaskDirectory, referenceImages: pickHomeReferenceImages, referenceTextFiles: pickHomeReferenceTextFiles, importPptxTemplate: importHomePptxTemplate, subscribePptxTemplateProgress: api.onPptxTemplateProgress, deletePptxTemplate: api.deletePptxTemplate }}
             workspaceActions={{ select: selectHomeWorkspace, selectAll: selectAllHomeFiles, add: addWorkspace }}
             taskActions={{
               open: openTaskFromHome,
               retry: retryTaskGeneration,
               retryFailed: retryTaskGeneration,
-              checkStatus: officecli.getPptxTaskStatus ? task => checkPptxTaskStatus(task.id) : undefined,
-              skipResearch: officecli.skipPptxResearch ? (task) => officecli.skipPptxResearch!(task.id) : undefined,
+              checkStatus: api.getPptxTaskStatus ? task => checkPptxTaskStatus(task.id) : undefined,
+              skipResearch: api.skipPptxResearch ? (task) => api.skipPptxResearch!(task.id) : undefined,
               steer: steerPptxTask,
               resume: resumePptxTask,
               answer: (task, answer) => resumePptxTask(task, undefined, answer),
               cancel: async (task) => {
-                await officecli.cancel(task.id);
+                await api.cancel(task.id);
                 setState((current) => applyTaskEvent(current, {
                   event_id: `local-cancel-${task.id}-${Date.now()}`,
                   task_id: task.id,
@@ -1973,11 +1974,11 @@ function OfficeDexApp() {
             pptxStage={documentTask.documentType === "pptx" ? (
               <ProgressivePptxStage
                 task={documentTask}
-                onCheckStatus={officecli.getPptxTaskStatus ? () => checkPptxTaskStatus(documentTask.id) : undefined}
+                onCheckStatus={api.getPptxTaskStatus ? () => checkPptxTaskStatus(documentTask.id) : undefined}
                 onRetryFailed={(path) => retryTaskGeneration(documentTask, path)}
-                onSkipResearch={officecli.skipPptxResearch ? () => officecli.skipPptxResearch!(documentTask.id) : undefined}
+                onSkipResearch={api.skipPptxResearch ? () => api.skipPptxResearch!(documentTask.id) : undefined}
                 onRefresh={async () => {
-                  const entries = await officecli.getTaskHistory(50);
+                  const entries = await api.getTaskHistory(50);
                   const entry = entries.find(entry => entry.taskId === documentTask.id);
                   if (!entry) throw new Error(t("pptx.stage.refreshMissing"));
                   setState(current => entry.events.reduce(applyTaskEvent, current));
@@ -1996,14 +1997,14 @@ function OfficeDexApp() {
                   : undefined}
                 onQuestionAnswer={(answer) => resumePptxTask(documentTask, undefined, answer)}
                 productionProps={{
-                  onCancel: () => void officecli.cancel(documentTask.id),
+                  onCancel: () => void api.cancel(documentTask.id),
                   onRetry: () => retryTaskGeneration(documentTask),
                   // Steers the run when it is still drawing, and becomes a
                   // follow-up modification once it is not — see steerPptxTask.
                   onSteer: (instruction) => steerPptxTask(documentTask, instruction),
-                  onPause: officecli.pausePptx ? () => pausePptxTask(documentTask) : undefined,
+                  onPause: api.pausePptx ? () => pausePptxTask(documentTask) : undefined,
                   livePaused: livePausedTaskIds.includes(documentTask.id),
-                  onResumeLive: officecli.resumePptxLive ? () => resumePptxLiveTask(documentTask) : undefined,
+                  onResumeLive: api.resumePptxLive ? () => resumePptxLiveTask(documentTask) : undefined,
                   onResume: () => resumePptxTask(documentTask),
                   onOpenEditor: sourceArtifactFor(documentTask) ? () => openInlinePreview(sourceArtifactFor(documentTask)!) : undefined,
                 }}
@@ -2011,12 +2012,12 @@ function OfficeDexApp() {
             ) : undefined}
             onAnswer={documentTask.documentType === "pptx" ? undefined : (answer) => answerDocumentQuestion(documentTask, answer)}
             onApprovePlan={documentTask.documentType === "pptx" ? undefined : () => resumePptxTask(documentTask)}
-            onCancel={async () => { await officecli.cancel(documentTask.id); }}
+            onCancel={async () => { await api.cancel(documentTask.id); }}
             onRetry={() => retryTaskGeneration(documentTask)}
             onContinue={documentTask.documentType !== "pptx" && (documentTask.status === "question" || documentTask.status === "plan_review") ? () => resumePptxTask(documentTask) : undefined}
             onArtifactAction={(action, artifact) => {
               if (action === "open") return openInlinePreview(artifact);
-              if (action === "locate") return officecli.showItemInFolder(artifact.filePath);
+              if (action === "locate") return api.showItemInFolder(artifact.filePath);
               return navigator.clipboard.writeText(artifact.filePath);
             }}
             onContinueEditing={sourceArtifactFor(documentTask)
@@ -2043,13 +2044,13 @@ function OfficeDexApp() {
             onCanvasSaveError={spreadsheet.setSaveError}
             onCanvasSessionClosed={(previewToken) => {
               setSpreadsheetEntry((current) => clearSpreadsheetEntryGrant(current, previewToken));
-              void officecli.revokePreviewToken(previewToken).catch(() => undefined);
+              void api.revokePreviewToken(previewToken).catch(() => undefined);
             }}
             onCreateDeck={createDeckFromWorkbook}
             onWorkbookSaved={({ filePath, fingerprint }) => {
-              if (!officecli.saveOfficeProductView || !filePath || !fingerprint) return;
+              if (!api.saveOfficeProductView || !filePath || !fingerprint) return;
               const workbookId = `workbook:${filePath}`;
-              void officecli.saveOfficeProductView({
+              void api.saveOfficeProductView({
                 id: `${workbookId}:view:active`,
                 workbookId,
                 sheetName: "active",
@@ -2067,9 +2068,9 @@ function OfficeDexApp() {
                 error={activeNav === "spreadsheet" ? lastError : undefined}
                 onGenerate={startSpreadsheetGeneration}
                 onModify={startSpreadsheetModify}
-                onRespond={(input) => officecli.respond(input)}
+                onRespond={(input) => api.respond(input)}
                 onApprovePlan={(task) => resumePptxTask(task)}
-                onCancel={(taskId) => officecli.cancel(taskId)}
+                onCancel={(taskId) => api.cancel(taskId)}
                 preferredTool={spreadsheetPreferredTool}
                 {...verticalPanels}
               />
