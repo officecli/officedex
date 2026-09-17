@@ -1,7 +1,6 @@
-import { reconcilePptxTaskStatus } from "./presentation/pptxStatusReconciliation";
 import { DialogHost, ToastHost, toast as message } from "./ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AgentRun, Artifact, BridgeEvent, DesktopTask, GenerateInput, ModifyInput, PreviewGrant, RecentFile, TaskHistoryEntry, TaskQuestionAnswer } from "../shared/types";
+import type { AgentRun, Artifact, BridgeEvent, DesktopTask, GenerateInput, ModifyInput, PreviewGrant, RecentFile, TaskHistoryEntry } from "../shared/types";
 import type { ConfiguredJiraSyncResult, ConfiguredLiquipediaSyncResult, JiraSyncResult, LiquipediaSyncResult } from "../shared/verticals";
 import { getCapability, isDocumentType } from "../shared/types";
 import { AgentClientToolHost } from "./AgentClientToolHost";
@@ -14,6 +13,7 @@ import { useTaskRuns } from "./controllers/useTaskRuns";
 import { useWorkspaces } from "./controllers/useWorkspaces";
 import { useBridgeLifecycle } from "./controllers/useBridgeLifecycle";
 import { useDocumentSession } from "./controllers/useDocumentSession";
+import { usePptxRunControls } from "./controllers/usePptxRunControls";
 import { useDesktopApi } from "./services/desktopApi";
 import { useRecentFiles } from "./useRecentFiles";
 import { defaultGenerateInput, type NavKey } from "./defaults";
@@ -56,7 +56,6 @@ import { pollTaskHistoryUntilTerminal } from "./taskHistoryPoll";
 import { usePolling } from "./utils/usePolling";
 import { TASK_HISTORY_RECONCILE_INTERVAL_MS } from "./constants/timing";
 import { resolveFollowUpTarget, runFollowUpTask, type FollowUpDeps, type PendingGenerate } from "./flows/followUpTask";
-import { resumeInteractiveTask, type OutlineSection } from "./flows/resumeTask";
 import { errorMessage, recordValue, trimmedStringValue as stringValue } from "./utils/values";
 import { BRIDGE_ERROR_CODES, classifyError, classifyStatusEvent, errorCode, extractStderr, stripFailureTag, type FailureKind } from "./failureKind";
 import { fileExtension, fileNameFromPath } from "./utils/path";
@@ -667,12 +666,6 @@ function OfficeDexApp() {
     }
   }
 
-  async function checkPptxTaskStatus(taskId: string) {
-    if (!api.getPptxTaskStatus) return;
-    const snapshot = await api.getPptxTaskStatus(taskId);
-    setState(current => reconcilePptxTaskStatus(current, taskId, snapshot));
-  }
-
   async function retryTaskGeneration(task: DesktopTask, resumeCheckpoint?: string) {
     const input = task.userInput;
     if (!input?.prompt.trim()) return;
@@ -948,7 +941,6 @@ function OfficeDexApp() {
   // Tasks the user has held at a page boundary. The runtime blocks rather than
   // reporting a paused state, so the acknowledgement of the pause call is the
   // only evidence the UI has — and it is enough to show the right control.
-  const [livePausedTaskIds, setLivePausedTaskIds] = useState<string[]>([]);
 
   const openWorkbook = useCallback((artifact: Artifact) => {
     return runSpreadsheetAction(async () => {
@@ -1023,47 +1015,16 @@ function OfficeDexApp() {
     selectTask(taskId);
   }, [openInlinePreview, selectTask, state.tasks]);
 
-  const steerPptxTask = useCallback(async (task: DesktopTask, instruction: string) => {
-    // While the deck is still being drawn there is a live run to steer, so the
-    // instruction lands at its next page boundary — which is what the bar tells
-    // the user it does. Once the run is over nothing can absorb it, and the
-    // instruction becomes an ordinary follow-up modification — of the deck this
-    // task produced, including a deck it only got part-way through.
-    const steeringLive = ["starting", "running"].includes(task.status) && api.intervenePptx;
-    if (steeringLive) {
-      await api.intervenePptx!(task.id, instruction);
-      return;
-    }
-    await continueModify("pptx", instruction, task.id);
-  }, [continueModify]);
-
-  // Live gears: hold the run at its next page boundary and release it. This is
-  // not the interactive gate — answering a question or a plan review goes
-  // through resumePptxTask instead.
-  const pausePptxTask = useCallback(async (task: DesktopTask) => {
-    if (!api.pausePptx) return;
-    await api.pausePptx(task.id);
-    setLivePausedTaskIds((current) => current.includes(task.id) ? current : [...current, task.id]);
-  }, []);
-
-  const resumePptxLiveTask = useCallback(async (task: DesktopTask) => {
-    if (!api.resumePptxLive) return;
-    await api.resumePptxLive(task.id);
-    setLivePausedTaskIds((current) => current.filter((id) => id !== task.id));
-  }, []);
-
-  const resumePptxTask = useCallback(async (task: DesktopTask, outline?: OutlineSection[], questionAnswer?: TaskQuestionAnswer) => {
-    await resumeInteractiveTask({ task, outline, questionAnswer }, { api, setState });
-  }, [api]);
-
-  const answerDocumentQuestion = useCallback(async (task: DesktopTask, answer: TaskQuestionAnswer) => {
-    await api.respond({
-      taskId: task.id,
-      answer: answer.answer,
-      ...(answer.optionId ? { optionId: answer.optionId } : {}),
-      ...(answer.questionId ? { questionId: answer.questionId } : {}),
-    });
-  }, []);
+  const pptxRun = usePptxRunControls({
+    modifyDeck: useCallback((instruction: string, sourceTaskId: string) => continueModify("pptx", instruction, sourceTaskId), [continueModify]),
+  });
+  const livePausedTaskIds = pptxRun.livePausedTaskIds;
+  const steerPptxTask = pptxRun.steer;
+  const pausePptxTask = pptxRun.pause;
+  const resumePptxLiveTask = pptxRun.resumeLive;
+  const resumePptxTask = pptxRun.resume;
+  const answerDocumentQuestion = pptxRun.answer;
+  const checkPptxTaskStatus = pptxRun.checkStatus;
 
   const openRecentFile = useCallback(async (file: RecentFile) => {
     try {
