@@ -1,9 +1,7 @@
 import { reconcilePptxTaskStatus } from "./presentation/pptxStatusReconciliation";
 import { DialogHost, ToastHost, toast as message } from "./ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AgentRun, Artifact, BridgeEvent, DesktopTask, GenerateInput, ModifyInput, PreviewGrant, RecentFile, TaskHistoryEntry, TaskQuestionAnswer, WorkspaceSummary } from "../shared/types";
-import type { OfficeOutputRef } from "../shared/officeProduct";
-import { decodeOfficeOutputs } from "./productRegistryCodec";
+import type { AgentRun, Artifact, BridgeEvent, DesktopTask, GenerateInput, ModifyInput, PreviewGrant, RecentFile, TaskHistoryEntry, TaskQuestionAnswer } from "../shared/types";
 import type { ConfiguredJiraSyncResult, ConfiguredLiquipediaSyncResult, JiraSyncResult, LiquipediaSyncResult } from "../shared/verticals";
 import { getCapability, isDocumentType } from "../shared/types";
 import { AgentClientToolHost } from "./AgentClientToolHost";
@@ -13,10 +11,10 @@ import { executeActiveEditorClientTool, waitForActiveEditorSurface, type ActiveE
 import { applyTaskEvent, attachPartialWork, attachTaskContext, deleteTask, discardLocalTask, finishTaskContinuing, getRunLineage, markTaskContinuing, promoteLocalTask, restoreTaskInteractiveGate, startLocalTask, type TaskContextPatch, type TaskState } from "./taskState";
 import { TaskStoreProvider, useTaskStore } from "./store/taskStore";
 import { useTaskRuns } from "./controllers/useTaskRuns";
+import { useWorkspaces } from "./controllers/useWorkspaces";
 import { useDesktopApi } from "./services/desktopApi";
 import { useRecentFiles } from "./useRecentFiles";
 import { defaultGenerateInput, type NavKey } from "./defaults";
-import { getHomeDropZone, setHomeDropZone } from "./homeDropZone";
 import type { SidebarAccount, SidebarDocument } from "./components/ProjectSidebar";
 import { Shell } from "./components/Shell";
 import { PreviewPanel } from "./components/PreviewPanel";
@@ -230,9 +228,6 @@ function OfficeDexApp() {
   const api = useDesktopApi();
   const initialRoute = useMemo(() => readStoredAppRoute(), []);
   const { state, update: setState } = useTaskStore();
-  const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
-  const [productOutputs, setProductOutputs] = useState<OfficeOutputRef[]>([]);
-  const [homeWorkspaceId, setHomeWorkspaceId] = useState<string>();
   const [homeEntryTransition, setHomeEntryTransition] = useState<HomeEntryTransition>();
   const [selectedTaskID, setSelectedTaskID] = useState<SelectedTask>(() => initialRoute.taskId ? { kind: "task", id: initialRoute.taskId } : { kind: "auto" });
   const [activeNav, setActiveNav] = useState<NavKey>(initialRoute.nav);
@@ -293,7 +288,6 @@ function OfficeDexApp() {
     setErrorDetails(undefined);
   }, []);
 
-  const activeWorkspace = useMemo(() => workspaces.find((workspace) => workspace.active), [workspaces]);
 
   const runSpreadsheetAction = useCallback((action: () => Promise<void>): Promise<boolean> => {
     if (activeNavRef.current !== "spreadsheet" || !spreadsheet.session.dirty) {
@@ -357,24 +351,40 @@ function OfficeDexApp() {
     setUnsavedDialogOpen(false);
   }, []);
 
-  const refreshProjectLists = useCallback(() => {
-    api.listWorkspaces()
-      .then((workspaceItems) => {
-        setWorkspaces(workspaceItems);
-      })
-      .catch(() => undefined);
-    if (api.listOfficeProductOutputs) {
-      api.listOfficeProductOutputs(homeWorkspaceId || "", "").then((items) => setProductOutputs(decodeOfficeOutputs(items))).catch(() => undefined);
-    }
-  }, [homeWorkspaceId]);
-
   const recent = useRecentFiles(t("home.loadTimeout"));
   const { files: recentFiles, loading: recentFilesLoading, error: recentFilesError } = recent;
   const refreshRecentFiles = recent.refresh;
 
-  useEffect(() => {
-    refreshProjectLists();
-  }, [refreshProjectLists]);
+  const onIntakeDrop = useCallback((paths: string[]) => {
+    setDroppedTaskPaths((previous) => ({ paths, seq: (previous?.seq ?? 0) + 1 }));
+  }, []);
+
+  const workspaceController = useWorkspaces({
+    recordError,
+    clearError,
+    refreshRecentFiles,
+    // Drops are only accepted on Home (R-H-04); which surface that is stays
+    // this component's knowledge.
+    dropEnabled: activeNav === "home",
+    onIntakeDrop,
+  });
+  const { workspaces, activeWorkspace, homeWorkspaceId, productOutputs } = workspaceController;
+  const refreshProjectLists = workspaceController.refresh;
+  const selectWorkspace = workspaceController.select;
+  const selectHomeWorkspace = workspaceController.selectForHome;
+  const addWorkspace = workspaceController.add;
+  const renameWorkspace = workspaceController.rename;
+  const revealWorkspace = workspaceController.reveal;
+  const removeWorkspace = workspaceController.remove;
+
+  // Home is the inbox, not the currently selected production stage. Clearing
+  // the transient stage pick is this component's business, not the workspace
+  // controller's, so it wraps rather than lives inside it (R-B-08).
+  const selectAllHomeFiles = useCallback(() => {
+    stageFirstTaskRef.current = undefined;
+    setStageFirstTaskId(undefined);
+    workspaceController.selectAll();
+  }, [workspaceController]);
 
   useEffect(() => {
     void refreshRecentFiles();
@@ -758,17 +768,6 @@ function OfficeDexApp() {
     await submit(values);
   }
 
-  const selectWorkspace = useCallback(async (workspaceId: string) => {
-    try {
-      const selected = await api.selectWorkspace(workspaceId);
-      setWorkspaces((current) => current.map((workspace) => ({ ...workspace, active: workspace.id === selected.id })));
-      clearError();
-    } catch (error) {
-      const text = errorMessage(error);
-      recordError(text, classifyError(text), extractStderr(text));
-    }
-  }, [clearError, recordError]);
-
   const pickHomeTaskFile = useCallback(async () => {
     const selected = await api.openFileDialog({
       filters: [{
@@ -909,33 +908,6 @@ function OfficeDexApp() {
     }, { fromHome: true });
   }
 
-  const selectHomeWorkspace = useCallback(async (workspaceId: string) => {
-    await selectWorkspace(workspaceId);
-    setHomeWorkspaceId(workspaceId);
-    await refreshRecentFiles(workspaceId);
-  }, [refreshRecentFiles, selectWorkspace]);
-
-  const selectAllHomeFiles = useCallback(() => {
-    // Home is the inbox, not the currently selected production stage. Clear
-    // the transient stage selection so clicking Home always returns to the
-    // actual home surface, even when Home is already the active nav item.
-    stageFirstTaskRef.current = undefined;
-    setStageFirstTaskId(undefined);
-    setHomeWorkspaceId(undefined);
-    void refreshRecentFiles();
-  }, [refreshRecentFiles]);
-
-  const renameWorkspace = useCallback(async (workspaceId: string, name: string) => {
-    try {
-      const renamed = await api.renameWorkspace(workspaceId, name);
-      setWorkspaces((current) => current.map((workspace) => workspace.id === renamed.id ? renamed : workspace));
-      clearError();
-    } catch (error) {
-      const text = errorMessage(error);
-      void message.error(text);
-    }
-  }, [clearError]);
-
   const removeRecentFile = useCallback(async (filePath: string) => {
     try {
       await recent.remove(filePath);
@@ -953,63 +925,6 @@ function OfficeDexApp() {
     setLastError(undefined);
     setActiveNav("document");
   }, [state.tasks, activeWorkspace?.id, selectWorkspace]);
-
-  const addWorkspace = useCallback(async () => {
-    try {
-      const picked = await api.openDirectoryDialog();
-      if (!picked) return;
-      await api.addWorkspace(picked);
-      refreshProjectLists();
-    } catch (error) {
-      const text = errorMessage(error);
-      recordError(text, classifyError(text), extractStderr(text));
-    }
-  }, [refreshProjectLists, recordError]);
-
-  const addWorkspaceFromPath = useCallback(async (path: string) => {
-    try {
-      await api.addWorkspace(path);
-      refreshProjectLists();
-    } catch (error) {
-      const text = errorMessage(error);
-      recordError(text, classifyError(text), extractStderr(text));
-    }
-  }, [refreshProjectLists, recordError]);
-
-  // Native drops carry no coordinates, so the hovered zone recorded during
-  // dragover decides where the paths go: the sidebar's workspace list or the
-  // home intake. It is intentionally active only on Home.
-  useEffect(() => {
-    if (activeNav !== "home") return undefined;
-    return api.onFileDrop((paths) => {
-      if (paths.length === 0) return;
-      const zone = getHomeDropZone();
-      setHomeDropZone(null);
-      if (zone === "workspaces") {
-        for (const path of paths) void addWorkspaceFromPath(path);
-        return;
-      }
-      if (zone === "intake") {
-        setDroppedTaskPaths((previous) => ({ paths, seq: (previous?.seq ?? 0) + 1 }));
-      }
-    });
-  }, [activeNav, addWorkspaceFromPath]);
-
-  const revealWorkspace = useCallback((workspacePath: string) => {
-    void api.showItemInFolder(workspacePath).catch(() => api.openPath(workspacePath));
-  }, []);
-
-  const removeWorkspace = useCallback(async (workspaceId: string) => {
-    try {
-      await api.removeWorkspace(workspaceId);
-      setWorkspaces((current) => current.filter((workspace) => workspace.id !== workspaceId));
-      await refreshProjectLists();
-      clearError();
-    } catch (error) {
-      const text = errorMessage(error);
-      recordError(text, classifyError(text), extractStderr(text));
-    }
-  }, [clearError, refreshProjectLists, recordError]);
 
   const followUpDeps = useMemo<FollowUpDeps>(() => ({
     pending: pendingGenerateRef.current,
