@@ -40,8 +40,8 @@ export interface AgentClientToolsDeps {
   spreadsheetWorkspaceRef: RefObject<SpreadsheetWorkspaceHandle | null>;
   refreshRecentFiles: (workspaceId?: string) => Promise<void>;
   setSpreadsheetEntry: (entry: SpreadsheetEntry | null) => void;
-  setPreviewArtifact: (artifact: Artifact | null) => void;
-  setPreviewGrant: (grant: PreviewGrant | null) => void;
+  /** Installs a preview session this hook opened itself. */
+  adoptDocument: (grant: PreviewGrant, artifact: Artifact) => void;
   setSpreadsheetPreferredTool: (tool: SpreadsheetAgentTool) => void;
   setCatalogAutoScanFile: (filePath: string | undefined) => void;
   setActiveNav: (nav: NavKey) => void;
@@ -69,8 +69,7 @@ export function useAgentClientTools({
   spreadsheetWorkspaceRef,
   refreshRecentFiles,
   setSpreadsheetEntry,
-  setPreviewArtifact,
-  setPreviewGrant,
+  adoptDocument,
   setSpreadsheetPreferredTool,
   setCatalogAutoScanFile,
   setActiveNav,
@@ -114,8 +113,7 @@ const routeAgentClientToolSurface = useCallback(async (surface: string, run: Age
       };
       const artifact = await api.openRecentFile(file);
       const grant = await api.issuePreviewToken(artifact);
-      setPreviewArtifact(artifact);
-      setPreviewGrant(grant);
+      adoptDocument(grant, artifact);
     } else if (!sourcePath && !previewArtifact) {
       throw new AgentClientToolDeferredError(t("tasks.runtime.sourcePathMissing", { runId: run.id }));
     }

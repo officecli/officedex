@@ -163,7 +163,14 @@ vi.mock("./../components/PreviewPanel", () => ({
 
 vi.mock("./../spreadsheet/SpreadsheetWorkspace", async () => {
   const { forwardRef } = await import("react");
-  return { SpreadsheetWorkspace: forwardRef((props: { onBack: () => void }, _ref) => <button onClick={props.onBack}>sheet-back</button>) };
+  return {
+    SpreadsheetWorkspace: forwardRef((props: { onBack: () => void; onDirtyChange: (dirty: boolean) => void }, _ref) => (
+      <div>
+        <button onClick={props.onBack}>sheet-back</button>
+        <button onClick={() => props.onDirtyChange(true)}>sheet-make-dirty</button>
+      </div>
+    )),
+  };
 });
 vi.mock("./../components/ForceUpdateOverlay", () => ({ ForceUpdateOverlay: () => null }));
 vi.mock("./../screens/SettingsScreens", () => ({
@@ -478,8 +485,7 @@ describe("R-D · opening artifacts", () => {
   // Deleting one row deletes the conversation behind it: a follow-up edit is a
   // second task against the same document, and leaving it listed would resurrect
   // a document the user just removed.
-  it("R-D-09: deleting a document cancels and removes its whole lineage", async () => {
-    const { officecli } = await import("./../bridge");
+  it("R-D-09: deleting a document cancels and removes its whole lineage", async () => {    const { officecli } = await import("./../bridge");
     await renderApp();
     await emit(
       { type: "task.started", task_id: "run-1", payload: { document_type: "pptx" } },
@@ -497,5 +503,34 @@ describe("R-D · opening artifacts", () => {
 
     await waitFor(() => expect(officecli.deleteDocument).toHaveBeenCalledWith("run-1"));
     await waitFor(() => expect(mocks.shell.documents.some((document) => document.id === "run-1")).toBe(false));
+  });
+});
+
+describe("R-G · unsaved workbook gate", () => {
+  // Navigating away from a dirty workbook goes through the gate rather than
+  // dropping the edits. Note what is *not* covered: opening a non-workbook
+  // document does not pass through it today — only navigation and workbook
+  // opens do (App.tsx call sites of runSpreadsheetAction).
+  it("R-G-01: navigating away from a dirty workbook asks first", async () => {
+    const { officecli } = await import("./../bridge");
+    const workbook = {
+      filePath: "/tmp/book.xlsx",
+      fileName: "book.xlsx",
+      documentType: "xlsx",
+      source: "local" as const,
+      lastOpenedAt: "2026-09-11T12:00:00Z",
+    };
+    vi.mocked(officecli.listRecentFiles).mockResolvedValue([workbook]);
+
+    await renderApp();
+    fireEvent.click(await screen.findByText(`open-file:${workbook.filePath}`));
+    await waitFor(() => expect(mocks.shell.activeNav).toBe("spreadsheet"));
+
+    fireEvent.click(screen.getByText("sheet-make-dirty"));
+    fireEvent.click(screen.getByText("go-home"));
+
+    // The gate is up and the navigation has not happened behind it.
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(mocks.shell.activeNav).toBe("spreadsheet");
   });
 });

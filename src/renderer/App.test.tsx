@@ -60,25 +60,6 @@ describe("OfficeDex document routing", () => {
     expect(source).toContain("<DocumentWorkspace");
   });
 
-  // A source assertion, and it reads App.tsx by shape: it broke the moment the
-  // bridge became an injected `api` rather than the `officecli` singleton, even
-  // though the behaviour it is about did not change. The behavioural half now
-  // lives in test/interactionRules.test.tsx (R-D-01); what is still only here is
-  // that the workbook branch goes through runSpreadsheetAction, i.e. that it
-  // cannot bypass the unsaved-changes gate (R-G-01).
-  it("routes XLSX artifacts to the editable spreadsheet workspace", () => {
-    const source = readFileSync("src/renderer/App.tsx", "utf8");
-    const branchStart = source.indexOf("if (isXlsxArtifact(artifact))");
-    const legacyPreviewStart = source.indexOf("if (previewGrant) {\n      await api.revokePreviewToken", branchStart);
-
-    expect(branchStart).toBeGreaterThanOrEqual(0);
-    expect(legacyPreviewStart).toBeGreaterThan(branchStart);
-    const spreadsheetBranch = source.slice(branchStart, legacyPreviewStart);
-    expect(spreadsheetBranch).toContain('setSpreadsheetEntry({');
-    expect(spreadsheetBranch).toContain('setActiveNav("spreadsheet")');
-    expect(spreadsheetBranch).toContain("runSpreadsheetAction");
-  });
-
   it("uses the latest completed artifact as a document edit source", () => {
     const tasks: DesktopTask[] = [
       {

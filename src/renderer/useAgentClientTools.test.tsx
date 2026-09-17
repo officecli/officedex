@@ -36,8 +36,7 @@ function mount(overrides: Partial<AgentClientToolsDeps> = {}, session: Record<st
     spreadsheetWorkspaceRef: { current: null },
     refreshRecentFiles: vi.fn(async () => undefined),
     setSpreadsheetEntry: vi.fn(),
-    setPreviewArtifact: vi.fn(),
-    setPreviewGrant: vi.fn(),
+    adoptDocument: vi.fn(),
     setSpreadsheetPreferredTool: vi.fn(),
     setCatalogAutoScanFile: vi.fn(),
     setActiveNav: vi.fn(),
@@ -60,8 +59,7 @@ describe("useAgentClientTools", () => {
     const { tools, deps } = mount();
     await tools.routeToSurface("pptx-editor", run({ source_path: "/docs/deck.pptx" }));
     expect(officecli.openRecentFile).toHaveBeenCalledWith(expect.objectContaining({ filePath: "/docs/deck.pptx", documentType: "pptx" }));
-    expect(deps.setPreviewArtifact).toHaveBeenCalledWith(expect.objectContaining({ filePath: "/docs/deck.pptx" }));
-    expect(deps.setPreviewGrant).toHaveBeenCalledWith({ token: "grant-2" });
+    expect(deps.adoptDocument).toHaveBeenCalledWith({ token: "grant-2" }, expect.objectContaining({ filePath: "/docs/deck.pptx" }));
     expect(waitForActiveEditorSurface).toHaveBeenCalledWith("pptx-editor");
 
     const other = mount({ previewArtifact: { ...pptx, filePath: "/docs/other.pptx" } });

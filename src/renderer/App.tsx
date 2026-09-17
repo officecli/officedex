@@ -13,6 +13,7 @@ import { TaskStoreProvider, useTaskStore } from "./store/taskStore";
 import { useTaskRuns } from "./controllers/useTaskRuns";
 import { useWorkspaces } from "./controllers/useWorkspaces";
 import { useBridgeLifecycle } from "./controllers/useBridgeLifecycle";
+import { useDocumentSession } from "./controllers/useDocumentSession";
 import { useDesktopApi } from "./services/desktopApi";
 import { useRecentFiles } from "./useRecentFiles";
 import { defaultGenerateInput, type NavKey } from "./defaults";
@@ -237,9 +238,6 @@ function OfficeDexApp() {
   const [lastError, setLastError] = useState<string>();
   const [errorKind, setErrorKind] = useState<FailureKind>("connection");
   const [errorDetails, setErrorDetails] = useState<string>();
-  const [previewGrant, setPreviewGrant] = useState<PreviewGrant | null>(null);
-  const [documentOpenRevision, setDocumentOpenRevision] = useState(0);
-  const [previewArtifact, setPreviewArtifact] = useState<Artifact | null>(null);
   const [spreadsheetEntry, setSpreadsheetEntry] = useState<SpreadsheetEntry | null>(null);
   const [spreadsheetPreferredTool, setSpreadsheetPreferredTool] = useState<SpreadsheetAgentTool>("assistant");
   const [catalogAutoScanFile, setCatalogAutoScanFile] = useState<string>();
@@ -952,60 +950,39 @@ function OfficeDexApp() {
   // only evidence the UI has — and it is enough to show the right control.
   const [livePausedTaskIds, setLivePausedTaskIds] = useState<string[]>([]);
 
-  const openInlinePreview = useCallback(async (artifact: Artifact) => {
-    // XLSX artifacts have a dedicated editable workspace with the Sheet SDK,
-    // Agent conversation and workbook-to-PPT actions. Keep the legacy preview
-    // overlay for formats that do not have a workspace adapter, but never send
-    // spreadsheets through the read-only sheet_to_html viewer.
-    if (isXlsxArtifact(artifact)) {
-      await runSpreadsheetAction(async () => {
-        if (previewGrant) {
-          await api.revokePreviewToken(previewGrant.token).catch(() => {});
-        }
-        const grant = await api.issuePreviewToken(artifact);
-        const sourceTask = artifact.taskId ? tasks.find((task) => task.id === artifact.taskId) : undefined;
-        setSpreadsheetPreferredTool("assistant");
-        setCatalogAutoScanFile(undefined);
-        setSpreadsheetEntry({
-          kind: "artifact",
-          artifact,
-          grant,
-          ...(sourceTask?.workspaceId ? { workspaceId: sourceTask.workspaceId } : {}),
-          ...(sourceTask?.conversationId ? { conversationId: sourceTask.conversationId } : {}),
-        });
-        setPreviewGrant(null);
-        setPreviewArtifact(null);
-        setActiveNav("spreadsheet");
-        // A workbook never lands in `previewGrant`, so the workbench rule below
-        // cannot see this one: report it here instead.
-        setDocumentOpenRevision((revision) => revision + 1);
-        clearError();
-      });
-      return;
-    }
-    if (previewGrant) {
-      await api.revokePreviewToken(previewGrant.token).catch(() => {});
-    }
-    try {
+  const openWorkbook = useCallback((artifact: Artifact) => {
+    return runSpreadsheetAction(async () => {
       const grant = await api.issuePreviewToken(artifact);
-      setPreviewGrant(grant);
-      setPreviewArtifact(artifact);
-    } catch (error) {
-      const text = error instanceof Error ? error.message : String(error);
-      message.error(`Preview unavailable: ${text}`);
-    }
-  }, [clearError, previewGrant, runSpreadsheetAction, tasks]);
+      const sourceTask = artifact.taskId ? tasks.find((task) => task.id === artifact.taskId) : undefined;
+      setSpreadsheetPreferredTool("assistant");
+      setCatalogAutoScanFile(undefined);
+      setSpreadsheetEntry({
+        kind: "artifact",
+        artifact,
+        grant,
+        ...(sourceTask?.workspaceId ? { workspaceId: sourceTask.workspaceId } : {}),
+        ...(sourceTask?.conversationId ? { conversationId: sourceTask.conversationId } : {}),
+      });
+      setActiveNav("spreadsheet");
+      clearError();
+    });
+  }, [api, clearError, runSpreadsheetAction, tasks]);
 
-  // Entering the document workbench hides the task rail, for every suite and
-  // every way in: the step is the document, not the file list. One rule, stated
-  // once, because the paths in are many — opening a finished artifact, a file
-  // from the sidebar, a history node, and the live-generation draft the runtime
-  // opens by itself while the deck is still being drawn. That last one used to
-  // be the exception that left the rail docked for the whole generation.
-  useEffect(() => {
-    if (!previewGrant) return;
-    setDocumentOpenRevision((revision) => revision + 1);
-  }, [previewGrant]);
+  const activeVibeTaskIdRef = useRef<string | null>(null);
+  const documentSession = useDocumentSession({
+    onWorkbook: openWorkbook,
+    // Closing the deck remembers which panel the user dismissed, so reopening
+    // the same run does not put it straight back.
+    onClosed: useCallback(() => {
+      setTimelineNodeId(null);
+      setDeckPanelDismissedId(activeVibeTaskIdRef.current);
+    }, []),
+  });
+  const previewGrant = documentSession.grant;
+  const previewArtifact = documentSession.artifact;
+  const documentOpenRevision = documentSession.openRevision;
+  const openInlinePreview = documentSession.open;
+  const closeInlinePreview = documentSession.close;
 
   // The live draft behind the deck currently on screen, if that deck is one.
   // Registered synchronously when the draft is created, so it is already true
@@ -1104,7 +1081,7 @@ function OfficeDexApp() {
             ...(file.conversationId ? { conversationId: file.conversationId } : {}),
           });
           setActiveNav("spreadsheet");
-          setDocumentOpenRevision((revision) => revision + 1);
+          documentSession.reportOpened();
           clearError();
           void refreshRecentFiles(homeWorkspaceId);
         });
@@ -1179,16 +1156,6 @@ function OfficeDexApp() {
   // Which recorded node of a deck's timeline is on screen. Null means the
   // newest deck — the one the task produced, or the one being drawn.
   const [timelineNodeId, setTimelineNodeId] = useState<string | null>(null);
-  const closeInlinePreview = useCallback(async () => {
-    if (previewGrant) {
-      await api.revokePreviewToken(previewGrant.token).catch(() => {});
-    }
-    setPreviewGrant(null);
-    setPreviewArtifact(null);
-    setTimelineNodeId(null);
-    setDeckPanelDismissedId(activeVibeTask?.id ?? null);
-  }, [previewGrant, activeVibeTask?.id]);
-
   const deleteSidebarDocument = useCallback(async (document: SidebarDocument) => {
     const task = state.tasks[document.id];
     const conversationId = document.conversationId || task?.conversationId;
@@ -1312,8 +1279,7 @@ function OfficeDexApp() {
         } as Artifact);
         const latestTask = liveTaskStateRef.current.tasks[liveCandidateTaskId];
         if (!latestTask || !["starting", "running"].includes(latestTask.status) || liveDraftOpenRef.current) return;
-        setPreviewGrant(grant);
-        setPreviewArtifact({
+        documentSession.adopt(grant, {
           taskId: liveCandidateTaskId,
           filePath: draft.filePath,
           fileName: draft.fileName,
@@ -1392,8 +1358,7 @@ function OfficeDexApp() {
     registerLiveDraft(draft.filePath, target);
     const artifact = { taskId: target, filePath: draft.filePath, fileName: draft.fileName, documentType: "pptx" } as Artifact;
     const grant = await api.issuePreviewToken(artifact);
-    setPreviewGrant(grant);
-    setPreviewArtifact(artifact);
+    documentSession.adopt(grant, artifact);
     setReplayOps(ops);
     setLiveTrace(true);
     const from = ops ? "a recording" : `task ${target}`;
@@ -1595,8 +1560,7 @@ function OfficeDexApp() {
     spreadsheetWorkspaceRef,
     refreshRecentFiles,
     setSpreadsheetEntry,
-    setPreviewArtifact,
-    setPreviewGrant,
+    adoptDocument: documentSession.adopt,
     setSpreadsheetPreferredTool,
     setCatalogAutoScanFile,
     setActiveNav,
