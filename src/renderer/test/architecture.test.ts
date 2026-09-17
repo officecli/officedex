@@ -86,4 +86,25 @@ describe("architecture", () => {
 
     expect(consumers.length).toBeGreaterThan(0);
   });
+
+  // Two files define `--od-*` custom properties: ui/styles/tokens.css with
+  // literal values, and ui/design-tokens.css by mapping onto the `--ui-*` theme
+  // bridge that the Sheet SDK also reads. Where they overlap, which one wins
+  // depends on CSS import order — and the literal ones do not follow the theme,
+  // so `--od-ink` and `--od-surface` are wrong in dark mode whenever the
+  // literal file lands last.
+  //
+  // This is not fixed here on purpose: the visual layer is being redesigned,
+  // and picking a winner now is deciding for something about to be deleted. The
+  // list is a ratchet — a new collision fails, and so does fixing one without
+  // updating this, which is the prompt to delete the whole assertion.
+  it("the --od-* token collision does not grow", () => {
+    const declared = (path: string) =>
+      new Set((read(path).match(/^\s+--od-[a-z0-9-]+/gm) ?? []).map((line) => line.trim()));
+    const literals = declared(join(RENDERER, "ui", "styles", "tokens.css"));
+    const mapped = declared(join(RENDERER, "ui", "design-tokens.css"));
+    const collisions = [...literals].filter((token) => mapped.has(token)).sort();
+
+    expect(collisions).toEqual(["--od-danger", "--od-ink", "--od-radius-dialog", "--od-surface"]);
+  });
 });
