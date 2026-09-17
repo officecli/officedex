@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { RecentFile } from "../../shared/types";
-import type { SidebarDocument } from "../components/ProjectSidebar";
 import { useDesktopApi } from "../services/desktopApi";
 import { useTaskStore } from "../store/taskStore";
 import { deleteTask } from "../taskState";
@@ -14,6 +13,22 @@ import { fileExtension, fileNameFromPath } from "../utils/path";
 import type { useRecentFiles } from "../useRecentFiles";
 import type { DocumentSessionController } from "./useDocumentSession";
 import type { AppRoutingController } from "./useAppRouting";
+
+/**
+ * One row of the document list: a recent file, or a run that has not produced
+ * one yet. Defined here rather than on the component that renders it — the view
+ * is going to be replaced and this shape is not.
+ */
+export interface SidebarDocument {
+  id: string;
+  createdAt?: string;
+  title: string;
+  documentType: string;
+  filePath?: string;
+  conversationId?: string;
+  workspaceId?: string;
+  status?: "starting" | "running" | "question" | "plan_review" | "completed" | "failed" | "cancelled";
+}
 
 /** How many rows the sidebar keeps. */
 const SIDEBAR_LIMIT = 40;

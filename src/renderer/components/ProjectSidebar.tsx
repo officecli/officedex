@@ -1,3 +1,4 @@
+import type { SidebarDocument } from "../controllers/useDocumentLibrary";
 import { useState, type DragEvent, type ReactNode } from "react";
 import type { WhoAmIMode, WorkspaceSummary } from "../../shared/types";
 import { Button, Dropdown, Input, Tooltip, dialog, type MenuProps } from "../ui";
@@ -22,16 +23,9 @@ export interface SidebarAccount {
   email?: string;
 }
 
-export interface SidebarDocument {
-  id: string;
-  createdAt?: string;
-  title: string;
-  documentType: string;
-  filePath?: string;
-  conversationId?: string;
-  workspaceId?: string;
-  status?: "starting" | "running" | "question" | "plan_review" | "completed" | "failed" | "cancelled";
-}
+// The type belongs to the document library, which is what produces these
+// rows; re-exported so existing importers keep working.
+export type { SidebarDocument };
 
 export interface ProjectSidebarProps {
   workspaces: WorkspaceSummary[];

@@ -42,9 +42,10 @@ const UNWIRED: Record<string, string> = {
   saveOfficeProductRefreshPlan: "Go side implemented; refresh plans are never persisted from the UI",
   listOfficeProductRefreshPlans: "Go side implemented; no UI reads refresh plans",
 
-  // The runtime entry point of ArtifactStageShell, which has no production
-  // consumer either. The two are unreachable together; see the P4 cleanup.
-  artifactStageEdit: "Go side implemented; its only caller would be ArtifactStageShell, which nothing mounts",
+  // Its only caller would have been ArtifactStageShell, which nothing ever
+  // mounted and which has now been deleted. The RPC is implemented on the Go
+  // side and has no caller at all.
+  artifactStageEdit: "Go side implemented; the shell that would have called it has been deleted",
 
   // Server-side image prompt templates. The renderer has a localStorage
   // implementation of the same idea in localImageTemplates.ts — which is itself
