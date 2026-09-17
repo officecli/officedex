@@ -19,8 +19,12 @@ import { useDesktopApi } from "./services/desktopApi";
 import { useRecentFiles } from "./useRecentFiles";
 import { defaultGenerateInput, type NavKey } from "./defaults";
 import { useAppRouting, type SelectedTask } from "./controllers/useAppRouting";
+import { documentTypeFromTask, generationModeForDocumentType, sourceArtifactFor, useGeneration } from "./controllers/useGeneration";
 // Re-exported because the route codec moved with the controller that owns it.
 export { readStoredAppRoute, writeStoredAppRoute } from "./controllers/useAppRouting";
+// Re-exported for callers that still import them from here; they moved with
+// the generation controller that owns them.
+export { findModifySourceTask, findRecoverableTaskHistoryEntry, sourceArtifactFor } from "./controllers/useGeneration";
 
 // "Open file" edits documents in place, so only the formats OfficeDex can
 // edit are offered.
@@ -66,49 +70,6 @@ import { BRIDGE_ERROR_CODES, classifyError, classifyStatusEvent, errorCode, extr
 import { fileExtension, fileNameFromPath } from "./utils/path";
 import { delay } from "./utils/timing";
 
-export interface RecoverableTaskExpectation {
-  documentType: string;
-  sourceFile?: string;
-  parentTaskId?: string;
-  createdAfter?: number;
-}
-
-/**
- * Find a task that the runtime accepted even though the initial generate RPC
- * did not return a usable task id. Parent lineage is the strongest signal;
- * source file + document type is the fallback used by older runtimes that did
- * not persist parentTaskId on the history envelope.
- */
-export function findRecoverableTaskHistoryEntry(
-  entries: TaskHistoryEntry[],
-  expectation: RecoverableTaskExpectation,
-): TaskHistoryEntry | undefined {
-  const expectedType = expectation.documentType.toLowerCase();
-  const expectedSource = expectation.sourceFile;
-  const createdAfter = expectation.createdAfter ?? 0;
-  return [...entries]
-    .sort((a, b) => {
-      const aTime = a.createdAt ? Date.parse(a.createdAt) : Number.NEGATIVE_INFINITY;
-      const bTime = b.createdAt ? Date.parse(b.createdAt) : Number.NEGATIVE_INFINITY;
-      return (Number.isFinite(bTime) ? bTime : Number.NEGATIVE_INFINITY) - (Number.isFinite(aTime) ? aTime : Number.NEGATIVE_INFINITY);
-    })
-    .find((entry) => {
-      if (!entry.taskId || (entry.createdAt && Date.parse(entry.createdAt) < createdAfter)) return false;
-      if (!entry.events.some((event) => {
-        const type = typeof event.payload?.document_type === "string" ? event.payload.document_type.toLowerCase() : "";
-        return type === expectedType || type === "";
-      })) return false;
-      if (expectation.parentTaskId && (
-        entry.parentTaskId === expectation.parentTaskId
-        || entry.events.some((event) => event.payload?.parent_task_id === expectation.parentTaskId)
-      )) return true;
-      if (!expectedSource) return false;
-      return entry.events.some((event) => event.payload?.source_file === expectedSource);
-    });
-}
-
-
-
 function taskCreatedTimestamp(document: SidebarDocument): number {
   if (!document.createdAt) return Number.NEGATIVE_INFINITY;
   const parsed = Date.parse(document.createdAt);
@@ -122,65 +83,6 @@ export function sortSidebarDocuments(documents: SidebarDocument[]): SidebarDocum
     if (aTime !== bTime) return bTime - aTime;
     return a.id.localeCompare(b.id);
   });
-}
-
-function generationModeForDocumentType(documentType: string | undefined): GenerateInput["generationMode"] | undefined {
-  return isDocumentType(documentType) && getCapability(documentType).office ? "fast" : undefined;
-}
-
-function normalizeGenerationMode(value: unknown): GenerateInput["generationMode"] {
-  return value === "plan" ? "plan" : "fast";
-}
-
-function normalizeGenerateInputForGeneration(values: GenerateInput): GenerateInput {
-  const next: GenerateInput = { ...values };
-  if (next.documentType !== "pptx") {
-    delete next.pptxWorkflow;
-    delete next.templateId;
-    delete next.templateVersion;
-    delete next.templateAssetDir;
-  }
-  const generationMode = generationModeForDocumentType(next.documentType);
-  if (generationMode) {
-    next.generationMode = normalizeGenerationMode(next.generationMode);
-  } else {
-    delete next.generationMode;
-  }
-  return next;
-}
-
-/**
- * The file a follow-up modification may edit: the finished document when there
- * is one, otherwise the deck a stopped run already drew and saved.
- *
- * Keeping this in one place is the point. The partial deck used to live only in
- * preview state, so every consumer that asked the task model "what did this run
- * produce?" got nothing — which is why a failed run could not be opened, and
- * why a modification instruction silently landed on an older deck in the same
- * conversation instead of the one on screen.
- */
-export function sourceArtifactFor(task: DesktopTask | undefined): Artifact | undefined {
-  return task?.artifact ?? task?.partialArtifact;
-}
-
-export function findModifySourceTask(tasks: DesktopTask[], documentType: string, preferredTaskId?: string): DesktopTask | undefined {
-  const targetType = documentType.trim().toLowerCase();
-  const matches = (task: DesktopTask): boolean => {
-    const artifact = sourceArtifactFor(task);
-    if (!artifact?.filePath) return false;
-    return (artifact.documentType || task.documentType || "").toLowerCase() === targetType;
-  };
-  // The run the user is looking at wins. Falling through to "newest artifact in
-  // the conversation" is what sent an instruction meant for the stopped deck to
-  // whichever earlier deck happened to have completed.
-  if (preferredTaskId) {
-    const preferred = tasks.find((task) => task.id === preferredTaskId);
-    if (preferred && matches(preferred)) return preferred;
-  }
-  for (let i = tasks.length - 1; i >= 0; i--) {
-    if (matches(tasks[i])) return tasks[i];
-  }
-  return undefined;
 }
 
 export function App() {
@@ -412,6 +314,121 @@ function OfficeDexApp() {
 
   workspaceRef.current = workspaceController;
 
+  // Home can route a request into the spreadsheet workspace instead of a
+  // generation. What that workspace needs to mount is this component's
+  // business, so the generation controller calls back rather than knowing.
+  const onCatalogCleanup = useCallback(async (sourceFile: string) => {
+    const file: RecentFile = {
+      filePath: sourceFile,
+      fileName: fileNameFromPath(sourceFile),
+      documentType: "xlsx",
+      source: "local",
+      ...(homeWorkspaceId ? { workspaceId: homeWorkspaceId } : {}),
+      lastOpenedAt: new Date().toISOString(),
+    };
+    await runSpreadsheetAction(async () => {
+      const artifact = await api.openRecentFile(file);
+      const grant = await api.issuePreviewToken(artifact);
+      setSpreadsheetPreferredTool("catalog");
+      setCatalogAutoScanFile(artifact.filePath);
+      setSpreadsheetEntry({
+        kind: "artifact",
+        artifact,
+        grant,
+        ...(homeWorkspaceId ? { workspaceId: homeWorkspaceId } : {}),
+      });
+      clearError();
+      routingRef.current?.setNav("spreadsheet");
+      void refreshRecentFiles(homeWorkspaceId);
+    });
+  }, [api, clearError, homeWorkspaceId, refreshRecentFiles, runSpreadsheetAction]);
+
+  const onWorkbookGeneration = useCallback(async (input: GenerateInput) => {
+    setSpreadsheetPreferredTool("assistant");
+    setCatalogAutoScanFile(undefined);
+    setSpreadsheetEntry({ kind: "new", ...(homeWorkspaceId ? { workspaceId: homeWorkspaceId } : {}) });
+    routingRef.current?.setNav("spreadsheet");
+    clearError();
+    try {
+      await spreadsheet.startGeneration(input);
+      refreshProjectLists();
+    } catch (error) {
+      const text = errorMessage(error);
+      recordError(text, classifyError(text), extractStderr(text));
+      routingRef.current?.setNav("home");
+      throw error;
+    } finally {
+      nudgeForTaskTransition();
+    }
+  }, [clearError, homeWorkspaceId, nudgeForTaskTransition, recordError, refreshProjectLists, spreadsheet]);
+
+  const generation = useGeneration({
+    routing,
+    workspaces,
+    homeWorkspaceId,
+    activeWorkspace,
+    refreshWorkspaces: refreshProjectLists,
+    defaults: persistedSettings.defaults,
+    blocked: forceUpdate,
+    recordError,
+    clearError,
+    onSettled: nudgeForTaskTransition,
+    onHomeEntryTransition: setHomeEntryTransition,
+    onCatalogCleanup,
+    onWorkbookGeneration,
+    t,
+  });
+  const submit = generation.submit;
+  const retryTaskGeneration = generation.retry;
+  const startTaskFromHome = generation.startFromHome;
+  const continueGeneration = generation.continueGeneration;
+  const continueModify = generation.continueModify;
+
+  // The submission that owns the production stage hands over to the editor when
+  // it finishes (R-D-03).
+  useEffect(() => {
+    const taskId = routing.stageTaskId;
+    if (!taskId) return;
+    const task = state.tasks[taskId];
+    if (!task) return;
+    if (task.status === "completed") {
+      routing.clearStage();
+      // Completion must not replace the op-authored editor with a second
+      // artifact import: the deck on screen is this task's own live draft and
+      // the sequencer already saved it.
+      const onScreenDraft = previewArtifact?.filePath ? liveDraftFor(previewArtifact.filePath) : undefined;
+      if (onScreenDraft?.taskId !== taskId && task.artifact?.filePath) {
+        void openInlinePreview(task.artifact);
+      }
+      return;
+    }
+    if (task.status === "failed" || task.status === "cancelled") {
+      routing.clearStage();
+    }
+  }, [openInlinePreview, previewArtifact, routing, state.tasks]);
+
+  const openTaskFromHome = useCallback((taskId: string) => {
+    const task = state.tasks[taskId];
+    if (task?.status === "completed" && task.artifact?.filePath) {
+      routing.setSelectedTask({ kind: "task", id: taskId });
+      routing.setNav("document");
+      void openInlinePreview(task.artifact);
+      return;
+    }
+    routing.selectTask(taskId);
+  }, [openInlinePreview, routing, state.tasks]);
+
+  const pptxRun = usePptxRunControls({
+    modifyDeck: useCallback((instruction: string, sourceTaskId: string) => continueModify("pptx", instruction, sourceTaskId), [continueModify]),
+  });
+  const livePausedTaskIds = pptxRun.livePausedTaskIds;
+  const steerPptxTask = pptxRun.steer;
+  const pausePptxTask = pptxRun.pause;
+  const resumePptxLiveTask = pptxRun.resumeLive;
+  const resumePptxTask = pptxRun.resume;
+  const answerDocumentQuestion = pptxRun.answer;
+  const checkPptxTaskStatus = pptxRun.checkStatus;
+
   const onReconnected = useCallback(() => {
     refreshProjectLists();
     void refreshRecentFiles(homeWorkspaceId);
@@ -526,142 +543,6 @@ function OfficeDexApp() {
       })
       .catch((error) => recordError(errorMessage(error), "other"));
   }, [recordError, refreshProjectLists, refreshRecentFiles, spreadsheet.openArtifact, spreadsheet.session.artifact?.filePath, spreadsheet.session.workspaceId, spreadsheetTask]);
-  async function submit(values: GenerateInput, options: { preserveWorkbookContext?: boolean; fromHome?: boolean } = {}) {
-    if (forceUpdate) {
-      recordError("Update required before continuing", "setup");
-      return;
-    }
-    clearError();
-    const topic = values.topic || summarizePrompt(values.prompt);
-    const localTaskId = createLocalTaskId();
-    setHomeEntryTransition(options.fromHome && values.documentType === "pptx" ? captureHomeEntryTransition(values.prompt || "") : undefined);
-    const submittedValues = normalizeGenerateInputForGeneration(values);
-    const noProject = values.noProject === true || !values.workspaceId;
-    const targetWorkspace = noProject ? undefined : workspaces.find((workspace) => workspace.id === values.workspaceId);
-    const context: TaskContextPatch = {
-      conversationId: localTaskId,
-      ...(targetWorkspace ? { workspaceId: targetWorkspace.id, workspacePath: targetWorkspace.path } : {}),
-    };
-    const pending: PendingGenerate = {
-      localTaskId,
-      context,
-      input: {
-        prompt: submittedValues.prompt,
-        pptxWorkflow: submittedValues.pptxWorkflow,
-        ...(submittedValues.generationMode ? { generationMode: submittedValues.generationMode } : {}),
-        sourceFile: submittedValues.sourceFile,
-        referenceImages: submittedValues.referenceImages,
-        imageRatio: submittedValues.imageRatio,
-        fps: submittedValues.fps,
-        templateId: submittedValues.templateId,
-        templateVersion: submittedValues.templateVersion,
-        templateAssetDir: submittedValues.templateAssetDir,
-      },
-      parentTaskId: values.parentTaskId,
-    };
-    pendingGenerateRef.current.set(localTaskId, pending);
-    routing.beginStage(localTaskId);
-    const pendingInput = pending.input;
-    setState((current) => startLocalTask(current, localTaskId, pendingInput, { documentType: values.documentType, topic }, undefined, context));
-    setSelectedTaskID({ kind: "task", id: localTaskId });
-    setActiveNav("document");
-    setBusy(false);
-    try {
-        const generateInput: GenerateInput = noProject
-        ? { ...submittedValues, topic, noProject: true, workspaceId: undefined }
-        : { ...submittedValues, topic, workspaceId: targetWorkspace?.id };
-      const result = await api.generate(generateInput);
-      if (pendingGenerateRef.current.delete(localTaskId) && result.taskId) {
-        const actualContext = { ...pending.context, conversationId: result.taskId };
-        setState((current) => promoteLocalTask(current, localTaskId, result.taskId, pending.input, undefined, actualContext));
-        setSelectedTaskID({ kind: "task", id: result.taskId });
-        routing.promoteStage(localTaskId, result.taskId);
-        setActiveNav("document");
-        refreshProjectLists();
-      }
-    } catch (error) {
-      if (!pendingGenerateRef.current.delete(localTaskId)) return;
-      if (options.preserveWorkbookContext && values.documentType === "pptx") {
-        let recovered: TaskHistoryEntry | undefined;
-        for (let attempt = 0; attempt < 6 && !recovered; attempt += 1) {
-          const entries = await api.getTaskHistory(50).catch(() => [] as TaskHistoryEntry[]);
-          recovered = findRecoverableTaskHistoryEntry(entries, {
-            documentType: values.documentType,
-            sourceFile: values.sourceFile,
-            parentTaskId: values.parentTaskId,
-            createdAfter: Date.now() - 120_000,
-          });
-          if (!recovered && attempt < 5) await delay(500);
-        }
-        if (recovered) {
-          setState((current) => {
-            let next = deleteTask(current, localTaskId);
-            for (const event of recovered.events) next = applyTaskEvent(next, event);
-            return attachTaskContext(next, recovered.taskId, {
-              createdAt: recovered.createdAt,
-              conversationId: recovered.conversationId,
-              parentTaskId: recovered.parentTaskId,
-              workspaceId: recovered.workspaceId,
-              workspacePath: recovered.workspacePath,
-            });
-          });
-          setSelectedTaskID({ kind: "task", id: recovered.taskId });
-          routing.beginStage(recovered.taskId);
-          setActiveNav("document");
-          clearError();
-          return;
-        }
-      }
-      routing.clearStage(localTaskId);
-      setState((current) => discardLocalTask(current, localTaskId));
-      const text = errorMessage(error);
-      recordError(text, classifyError(text), extractStderr(text));
-      if (options.preserveWorkbookContext) {
-        setSelectedTaskID({ kind: "none" });
-        setActiveNav("spreadsheet");
-      } else {
-        setSelectedTaskID({ kind: "none" });
-        setActiveNav("home");
-      }
-    } finally {
-      setBusy(false);
-      nudgeForTaskTransition();
-    }
-  }
-
-  async function retryTaskGeneration(task: DesktopTask, resumeCheckpoint?: string) {
-    const input = task.userInput;
-    if (!input?.prompt.trim()) return;
-    const documentType = documentTypeFromTask(task);
-    const values: GenerateInput = {
-      documentType,
-      topic: task.topic || summarizePrompt(input.prompt),
-      prompt: input.prompt,
-      pptxWorkflow: input.pptxWorkflow,
-      ...(generationModeForDocumentType(documentType) ? { generationMode: normalizeGenerationMode(input.generationMode) } : {}),
-      resumeCheckpoint,
-      enableImages: resumeCheckpoint ? ([...task.events].reverse().find(event => typeof event.payload?.resume_images === "boolean")?.payload?.resume_images as boolean | undefined) ?? persistedSettings.defaults.enableImages : persistedSettings.defaults.enableImages,
-      imageQuality: persistedSettings.defaults.imageQuality,
-      sourceFile: input.sourceFile,
-      templateId: input.templateId,
-      templateVersion: input.templateVersion,
-      templateAssetDir: input.templateAssetDir,
-    };
-    if (documentType === "img") {
-      values.referenceImages = input.referenceImages;
-      values.imageRatio = input.imageRatio;
-    } else if (documentType === "gif") {
-      values.referenceImages = input.referenceImages;
-      values.fps = input.fps;
-    }
-    if (task.workspaceId) {
-      values.workspaceId = task.workspaceId;
-    } else {
-      values.noProject = true;
-    }
-    await submit(values);
-  }
-
   const pickHomeTaskFile = useCallback(async () => {
     const selected = await api.openFileDialog({
       filters: [{
@@ -705,103 +586,6 @@ function OfficeDexApp() {
     };
   }, []);
 
-  async function startTaskFromHome(input: HomeTaskIntake) {
-    const fallback = isGenerateDocumentType(input.documentType)
-      ? input.documentType
-      : isGenerateDocumentType(persistedSettings.defaults.documentType)
-        ? persistedSettings.defaults.documentType
-        : "pptx";
-    const route = inferHomeTaskRoute(input, fallback);
-    // Attached text is read here and inlined, because the runtime runs in a
-    // separate process that cannot open the user's files itself.
-    let groundedPrompt = input.prompt;
-    if (input.referenceTextFiles?.length) {
-      const documents = await api.readLocalTextDocuments(input.referenceTextFiles);
-      groundedPrompt = buildReferenceTextPrompt(input.prompt, documents);
-    }
-    const taskPrompt = input.referenceDirectory
-      ? `${groundedPrompt.trim()}\n\nReference directory: ${input.referenceDirectory}`
-      : groundedPrompt;
-    if (route.kind === "needs_source") {
-      throw new Error(t("home.catalogSourceRequired"));
-    }
-    if (route.kind === "catalog_cleanup") {
-      const file: RecentFile = {
-        filePath: route.sourceFile,
-        fileName: fileNameFromPath(route.sourceFile),
-        documentType: "xlsx",
-        source: "local",
-        ...(homeWorkspaceId ? { workspaceId: homeWorkspaceId } : {}),
-        lastOpenedAt: new Date().toISOString(),
-      };
-      await runSpreadsheetAction(async () => {
-        const artifact = await api.openRecentFile(file);
-        const grant = await api.issuePreviewToken(artifact);
-        setSpreadsheetPreferredTool("catalog");
-        setCatalogAutoScanFile(artifact.filePath);
-        setSpreadsheetEntry({
-          kind: "artifact",
-          artifact,
-          grant,
-          ...(homeWorkspaceId ? { workspaceId: homeWorkspaceId } : {}),
-        });
-        clearError();
-        setActiveNav("spreadsheet");
-        void refreshRecentFiles(homeWorkspaceId);
-      });
-      return;
-    }
-    if (route.documentType === "xlsx") {
-      setSpreadsheetPreferredTool("assistant");
-      setCatalogAutoScanFile(undefined);
-      setSpreadsheetEntry({ kind: "new", ...(homeWorkspaceId ? { workspaceId: homeWorkspaceId } : {}) });
-      setActiveNav("spreadsheet");
-      clearError();
-      try {
-        await spreadsheet.startGeneration({
-          documentType: "xlsx",
-          generationMode: input.advancedMode ? "plan" : "fast",
-          topic: summarizePrompt(input.prompt),
-          prompt: taskPrompt,
-          sourceFile: route.sourceFile,
-          ...(homeWorkspaceId ? { workspaceId: homeWorkspaceId } : { noProject: true }),
-          enableImages: persistedSettings.defaults.enableImages,
-          imageQuality: persistedSettings.defaults.imageQuality,
-        });
-        refreshProjectLists();
-      } catch (error) {
-        const text = errorMessage(error);
-        recordError(text, classifyError(text), extractStderr(text));
-        setActiveNav("home");
-        throw error;
-      } finally {
-        nudgeForTaskTransition();
-      }
-      return;
-    }
-    setSpreadsheetPreferredTool("assistant");
-    setCatalogAutoScanFile(undefined);
-    await submit({
-      documentType: route.documentType,
-      ...(route.documentType === "pptx" ? { pptxWorkflow: input.pptxWorkflow } : {}),
-      ...(route.documentType === "pptx" && input.templateId ? {
-        templateId: input.templateId,
-        templateVersion: input.templateVersion,
-        templateAssetDir: input.templateAssetDir,
-      } : {}),
-      generationMode: input.advancedMode ? "plan" : generationModeForDocumentType(route.documentType),
-      topic: route.documentType === "pptx" ? PRESENTATION_PLACEHOLDER_TOPIC : summarizePrompt(input.prompt),
-      prompt: taskPrompt,
-      sourceFile: route.sourceFile,
-      ...((route.documentType === "img" || route.documentType === "gif") && input.referenceImages?.length ? { referenceImages: input.referenceImages } : {}),
-      ...(route.documentType === "img" && input.imageRatio ? { imageRatio: input.imageRatio } : {}),
-      ...(route.documentType === "gif" && input.fps ? { fps: input.fps } : {}),
-      ...(homeWorkspaceId ? { workspaceId: homeWorkspaceId } : { noProject: true }),
-      enableImages: persistedSettings.defaults.enableImages,
-      imageQuality: persistedSettings.defaults.imageQuality,
-    }, { fromHome: true });
-  }
-
   const removeRecentFile = useCallback(async (filePath: string) => {
     try {
       await recent.remove(filePath);
@@ -809,131 +593,6 @@ function OfficeDexApp() {
       void message.error(errorMessage(error));
     }
   }, [recent]);
-
-  const followUpDeps = useMemo<FollowUpDeps>(() => ({
-    pending: pendingGenerateRef.current,
-    setState,
-    showTask: (taskId) => {
-      setSelectedTaskID({ kind: "task", id: taskId });
-      setActiveNav("document");
-    },
-    setBusy,
-    recordError,
-    refreshProjectLists,
-    onSettled: nudgeForTaskTransition,
-  }), [recordError, refreshProjectLists, nudgeForTaskTransition]);
-
-  const continueGeneration = useCallback(async (documentType: string, prompt: string, referenceImages?: string[], imageRatio?: GenerateInput["imageRatio"], fps?: number) => {
-    if (forceUpdate) {
-      recordError("Update required before continuing", "setup");
-      return;
-    }
-    const parentTaskId = conversationTasks.at(-1)?.id;
-    const target = resolveFollowUpTarget(parentTaskId ? state.tasks[parentTaskId] : undefined, workspaces, activeWorkspace, conversationId);
-    clearError();
-    const topic = summarizePrompt(prompt);
-    const generationMode = generationModeForDocumentType(documentType);
-    const input: PendingGenerate["input"] = {
-      prompt,
-      ...(generationMode ? { generationMode } : {}),
-      referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
-      imageRatio,
-      fps,
-    };
-    await runFollowUpTask(followUpDeps, { localTaskId: createLocalTaskId(), documentType, topic, input, target }, () => api.generate({
-      documentType: documentType as GenerateInput["documentType"],
-      workspaceId: target.targetWorkspace?.id,
-      noProject: target.noProject,
-      conversationId,
-      parentTaskId: target.parentTaskId,
-      topic,
-      prompt,
-      ...(generationMode ? { generationMode } : {}),
-      enableImages: persistedSettings.defaults.enableImages,
-      imageQuality: persistedSettings.defaults.imageQuality,
-      referenceImages,
-      imageRatio,
-      fps,
-    }));
-  }, [forceUpdate, recordError, clearError, persistedSettings.defaults, followUpDeps, conversationTasks, conversationId, state.tasks, workspaces, activeWorkspace]);
-
-  const continueModify = useCallback(async (documentType: string, prompt: string, sourceTaskId?: string) => {
-    if (forceUpdate) {
-      recordError("Update required before continuing", "setup");
-      return;
-    }
-    const parent = findModifySourceTask(conversationTasks, documentType, sourceTaskId);
-    const sourceFile = sourceArtifactFor(parent)?.filePath;
-    if (!sourceFile) {
-      recordError(t("ui.copy.Nosourcedocumenttomodify"), "other");
-      return;
-    }
-    const target = resolveFollowUpTarget(parent, workspaces, activeWorkspace, conversationId);
-    clearError();
-    const topic = summarizePrompt(prompt);
-    await runFollowUpTask(followUpDeps, { localTaskId: createLocalTaskId(), documentType, topic, input: { prompt, sourceFile }, target }, () => api.modify({
-      documentType: documentType as ModifyInput["documentType"],
-      workspaceId: target.targetWorkspace?.id,
-      noProject: target.noProject,
-      conversationId,
-      parentTaskId: target.parentTaskId,
-      sourceFile,
-      prompt,
-    }));
-  }, [forceUpdate, recordError, clearError, followUpDeps, conversationTasks, conversationId, workspaces, activeWorkspace, t]);
-
-  // Tasks the user has held at a page boundary. The runtime blocks rather than
-  // reporting a paused state, so the acknowledgement of the pause call is the
-  // only evidence the UI has — and it is enough to show the right control.
-
-
-  // The live draft behind the deck currently on screen, if that deck is one.
-  // Registered synchronously when the draft is created, so it is already true
-  // by the time the preview artifact naming that file is committed.
-
-  useEffect(() => {
-    const taskId = routing.stageTaskId;
-    if (!taskId) return;
-    const task = state.tasks[taskId];
-    if (!task) return;
-    if (task.status === "completed") {
-      routing.clearStage();
-      // Completion must not replace the op-authored editor with a second
-      // artifact import: the deck on screen is this task's own live draft and
-      // the sequencer already saved it.
-      const onScreenDraft = previewArtifact?.filePath ? liveDraftFor(previewArtifact.filePath) : undefined;
-      const keepLivePreview = onScreenDraft?.taskId === taskId;
-      if (!keepLivePreview && task.artifact?.filePath) {
-        void openInlinePreview(task.artifact);
-      }
-      return;
-    }
-    if (task.status === "failed" || task.status === "cancelled") {
-      routing.clearStage();
-    }
-  }, [openInlinePreview, previewArtifact, state.tasks]);
-
-  const openTaskFromHome = useCallback((taskId: string) => {
-    const task = state.tasks[taskId];
-    if (task?.status === "completed" && task.artifact?.filePath) {
-      setSelectedTaskID({ kind: "task", id: taskId });
-      setActiveNav("document");
-      void openInlinePreview(task.artifact);
-      return;
-    }
-    selectTask(taskId);
-  }, [openInlinePreview, selectTask, state.tasks]);
-
-  const pptxRun = usePptxRunControls({
-    modifyDeck: useCallback((instruction: string, sourceTaskId: string) => continueModify("pptx", instruction, sourceTaskId), [continueModify]),
-  });
-  const livePausedTaskIds = pptxRun.livePausedTaskIds;
-  const steerPptxTask = pptxRun.steer;
-  const pausePptxTask = pptxRun.pause;
-  const resumePptxLiveTask = pptxRun.resumeLive;
-  const resumePptxTask = pptxRun.resume;
-  const answerDocumentQuestion = pptxRun.answer;
-  const checkPptxTaskStatus = pptxRun.checkStatus;
 
   const openRecentFile = useCallback(async (file: RecentFile) => {
     try {
@@ -1521,24 +1180,6 @@ function OfficeDexApp() {
   );
 }
 
-function summarizePrompt(prompt: string) {
-  const normalized = prompt.trim().replace(/\s+/g, " ");
-  // Keep enough context for the production header to remain recognizable.
-  // The surrounding UI already applies its own layout-aware ellipsis where
-  // space is constrained, so truncating at 24 characters here is needlessly
-  // aggressive (for example, it turns "Create a technology product launch"
-  // into "Create a technology prod...").
-  return normalized.length > 64 ? `${normalized.slice(0, 64)}…` : normalized || "Untitled generation";
-}
-
-function initialNavFromLocation(): NavKey {
-  return "home";
-}
-
-function numberValue(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : -1;
-}
-
 function isXlsxArtifact(artifact: Artifact): boolean {
   return artifact.documentType.toLowerCase() === "xlsx" || artifact.fileName.toLowerCase().endsWith(".xlsx");
 }
@@ -1561,19 +1202,3 @@ function isPermissionRecentFileError(message: string): boolean {
   return normalized.includes("permission") || normalized.includes("access denied");
 }
 
-function createLocalTaskId(): string {
-  return `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function documentTypeFromTask(task: DesktopTask): GenerateInput["documentType"] {
-  const value = task.documentType || task.artifact?.documentType;
-  return isGenerateDocumentType(value) ? value : defaultGenerateInput.documentType ?? "pptx";
-}
-
-function isGenerateDocumentType(value: unknown): value is GenerateInput["documentType"] {
-  return isDocumentType(value);
-}
-
-function stringOrUndef(value: unknown): string | undefined {
-  return typeof value === "string" && value.length > 0 ? value : undefined;
-}
