@@ -141,6 +141,13 @@ export interface LiveDraft {
 }
 
 /** The desktop bridge takes binary as base64; the editor encodes to text. */
+function uint8ArrayToBase64(data: Uint8Array): string {
+  let binary = "";
+  const CHUNK = 0x8000;
+  for (let index = 0; index < data.length; index += CHUNK) binary += String.fromCharCode(...data.subarray(index, index + CHUNK));
+  return btoa(binary);
+}
+
 function base64FromText(text: string): string {
   const bytes = new TextEncoder().encode(text);
   let binary = "";
@@ -266,6 +273,9 @@ interface ChunkContext {
   veilsUnsupported?: boolean;
   /** Keep the last claimed area visible while the backend still has work. */
   keepAttention?: boolean;
+  /** Base64 encoded local template for insertSlidesFromBase64. */
+  templateBase64?: string;
+  templateInserted?: boolean;
 }
 
 interface AttentionRect {
@@ -326,15 +336,20 @@ export function buildOpsChunkScript(
       captureAnchors.push(ops[index - 1].seq);
     }
   }
+  const templateBinding = ops.find((op) => op.op === "slide.begin" && op.template);
   const data = JSON.stringify({
     fontLatin: context.fontLatin || "Aptos",
     fontCJK: context.fontCJK || "Microsoft YaHei",
     images: context.images ?? {},
+    templateLayoutId: templateBinding?.template?.layoutId || "",
+    templateAssetRoles: templateBinding?.template?.assetRoles || [],
     capture: context.capture === true,
     captureAnchors,
     keepAttention: context.keepAttention === true,
     veilsUnsupported: context.veilsUnsupported === true,
     ops,
+    templateBase64: context.templateBase64,
+    templateInserted: context.templateInserted === true,
   });
   return `
 const data = ${data};
@@ -392,6 +407,20 @@ const typeBeat = (slice, seed) => {
 };
 return await PowerPoint.run(async (context) => {
   const slides = context.presentation.slides;
+  let templateInserted = data.templateInserted === true;
+  if (!templateInserted && data.templateBase64 && typeof context.presentation.insertSlidesFromBase64 === "function") {
+    await context.presentation.insertSlidesFromBase64(data.templateBase64);
+    await context.sync();
+    slides.load("items/id");
+    await context.sync();
+    // The editor opens a blank draft before replay. Remove only that initial
+    // page after importing the template so the imported master/theme survives.
+    if (slides.items.length > 1) {
+      try { slides.items[0].delete(); } catch { /* keep fallback page */ }
+      await context.sync();
+    }
+    templateInserted = true;
+  }
   let executed = 0;
   let pendingSync = 0;
   // Typing's hot-loop sync, measured: each one refines the trip average that
@@ -599,9 +628,31 @@ return await PowerPoint.run(async (context) => {
           skipped += 1;
           continue;
         }
-        const shape = slide.shapes.addTextBox(PACE_MS === 0 ? text : text.slice(0, 1), {
-          left: item.left, top: item.top, width: item.width, height: item.height,
-        });
+        let shape;
+        if (data.templateInserted && data.templateAssetRoles.includes(item.role || "body")) {
+          try {
+            slide.shapes.load("items/type,name,left,top,width,height");
+            await context.sync();
+            const candidates = (slide.shapes.items || []).filter((candidate) => {
+              const type = String(candidate.type || "").toLowerCase();
+              return type.includes("text") || type.includes("placeholder");
+            });
+            // The template index records semantic roles; when the host does
+            // not expose names, the first compatible text shape is the safest
+            // replacement target. If none exists, use the normal fallback.
+            shape = candidates[0];
+            if (shape) {
+              shape.textFrame.textRange.text = PACE_MS === 0 ? text : text.slice(0, 1);
+            }
+          } catch {
+            shape = undefined;
+          }
+        }
+        if (!shape) {
+          shape = slide.shapes.addTextBox(PACE_MS === 0 ? text : text.slice(0, 1), {
+            left: item.left, top: item.top, width: item.width, height: item.height,
+          });
+        }
         shape.name = shapeNameFor(item, entry.seq);
         shape.fill.clear();
         shape.lineFormat.visible = false;
@@ -615,7 +666,7 @@ return await PowerPoint.run(async (context) => {
         executed += 1;
         typing.push({ shape, item, text, seed: entry.seq, written: PACE_MS === 0 ? text.length : 1 });
       } else {
-        const shape = drawShape(item, entry.seq);
+        const shape = await drawShape(item, entry.seq);
         if (shape && (item.transparency || 0) > 0) veils.push({ shape, item });
       }
     }
@@ -674,7 +725,7 @@ return await PowerPoint.run(async (context) => {
       console.warn("[vibeReplay] this editor cannot draw translucent fills:", error && error.message ? error.message : error);
     }
   };
-  const drawShape = (item, seq) => {
+  const drawShape = async (item, seq) => {
     if (!slide) throw new Error("vibe replay: shape.add has no slide to draw on");
     if (!item) {
       skipped += 1;
@@ -704,9 +755,24 @@ return await PowerPoint.run(async (context) => {
       // fill, so the drawn deck and the exported artifact agree object for
       // object. Without bytes it stays a quiet panel holding the composition.
       const bytes = item.imageRef && item.imageRef.digest ? data.images[item.imageRef.digest] : undefined;
-      const shape = slide.shapes.addGeometricShape("Rectangle", {
-        left: item.left, top: item.top, width: item.width, height: item.height,
-      });
+      let shape;
+      if (data.templateInserted && data.templateAssetRoles.includes(item.role || "image")) {
+        try {
+          slide.shapes.load("items/type,name,left,top,width,height");
+          await context.sync();
+          shape = (slide.shapes.items || []).find((candidate) => {
+            const type = String(candidate.type || "").toLowerCase();
+            return type.includes("picture") || type.includes("image");
+          });
+        } catch {
+          shape = undefined;
+        }
+      }
+      if (!shape) {
+        shape = slide.shapes.addGeometricShape("Rectangle", {
+          left: item.left, top: item.top, width: item.width, height: item.height,
+        });
+      }
       // A byteless picture with an imageRef is a patchable slot: name it by
       // its (slide, kind, visualIndex) address so a later shape.update op can
       // find the panel and fill the real picture in.
@@ -869,7 +935,7 @@ return await PowerPoint.run(async (context) => {
   if (data.ops.some((entry) => entry.op === "deck.end") && !data.keepAttention) await focusOn(null);
   // typed counts the extra passes text made on its way to being complete;
   // zero means the streaming never happened, which is invisible otherwise.
-  return { executed, skipped, typed, veilsUnsupported, captures, tripMs: Math.round(tripMs), encodeMs: Math.round(encodeMs) };
+  return { executed, skipped, typed, veilsUnsupported, templateInserted, captures, tripMs: Math.round(tripMs), encodeMs: Math.round(encodeMs) };
 });
 `;
 }
@@ -966,6 +1032,9 @@ export class VibeReplaySequencer {
   // picture op names its bytes by digest. Resolved bytes are cached because a
   // deck reuses the same image across slides, and a replay re-runs the stream.
   private assetsDir = "";
+  private templateAssetDir = "";
+  private templateBase64 = "";
+  private templateInserted = false;
   private readonly images = new Map<string, string | null>();
   private readonly imageFailures = new Set<string>();
   // Timeline capture is best-effort: a deck that fails to record its history
@@ -1103,6 +1172,10 @@ export class VibeReplaySequencer {
       if (op.fonts?.latin) this.fonts.fontLatin = op.fonts.latin;
       if (op.fonts?.cjk) this.fonts.fontCJK = op.fonts.cjk;
       if (op.assetsDir) this.assetsDir = op.assetsDir;
+    }
+    const template = op.template;
+    if (op.op === "slide.begin" && template?.assetDir && !this.templateAssetDir) {
+      this.templateAssetDir = String(template.assetDir);
     }
     if ((op.op === "slide.begin" || op.op === "slide.replace") && typeof op.slide === "number") {
       this.currentSlide = op.slide;
@@ -1247,6 +1320,14 @@ export class VibeReplaySequencer {
           const budgetMs = EDITOR_PROBE_TIMEOUT_MS + chunk.length * perOpMs;
           const startedAt = performance.now();
           const images = await this.resolveImages(chunk);
+          if (!this.templateBase64 && this.templateAssetDir && officecli.readPptxTemplateSource) {
+            try {
+              const template = await officecli.readPptxTemplateSource(this.templateAssetDir);
+              this.templateBase64 = uint8ArrayToBase64(template.data);
+            } catch (error) {
+              console.warn("[vibeReplay] template source could not be loaded; using generated layout", error);
+            }
+          }
           // Recording follows the drawing, not the source of the ops: the draft
           // was reset to blank before this started, so whatever draws it — a
           // live generation or a replay of one — is what its history is.
@@ -1260,6 +1341,8 @@ export class VibeReplaySequencer {
             // task.completed races the image workers: the deck is visibly
             // usable, but it is not yet the final artifact.
             keepAttention: !this.completed || imageProgress.pending > 0,
+            templateBase64: this.templateBase64,
+            templateInserted: this.templateInserted,
           };
           const outcome = await this.controller.executeScript(buildOpsChunkScript(chunk, context, paceMs, this.tripHintMs), {
             awaitSnapshotMs: 0,
@@ -1268,6 +1351,8 @@ export class VibeReplaySequencer {
           // Every shape.add must be accounted for. Chunk scripts used to drop
           // shapes they could not place without a word, which reads as a
           // successful replay onto an empty deck; refuse to continue instead.
+          const scriptResult = (outcome as { result?: Record<string, unknown> } | undefined)?.result;
+          if (scriptResult?.templateInserted === true) this.templateInserted = true;
           const elapsedMs = Math.round(performance.now() - startedAt);
           if (this.trace) {
             // The op trace says what was asked for; this says what the editor

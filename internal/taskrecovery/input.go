@@ -70,6 +70,11 @@ func EncodeGenerateInput(input types.GenerateInput, taskCtx localstore.TaskConte
 	set("runtime_mode", input.RuntimeMode)
 	set("generation_mode", input.GenerationMode)
 	set("pptx_workflow", input.PPTXWorkflow)
+	set("template_id", input.TemplateID)
+	set("template_asset_dir", input.TemplateAssetDir)
+	if input.TemplateVersion > 0 {
+		payload["template_version"] = input.TemplateVersion
+	}
 	set("prompt_template_id", input.PromptTemplateID)
 	set("source_file", input.SourceFile)
 	set("image_ratio", strings.TrimSpace(input.ImageRatio))
@@ -138,6 +143,9 @@ func DecodeGenerateInput(events []types.BridgeEvent, taskCtx localstore.TaskCont
 		ParentTaskID:     taskCtx.ParentTaskID,
 		RuntimeMode:      payloadfield.String(userInput, "runtime_mode", "runtimeMode"),
 		PPTXWorkflow:     payloadfield.String(userInput, "pptx_workflow", "pptxWorkflow"),
+		TemplateID:       payloadfield.String(userInput, "template_id", "templateId"),
+		TemplateVersion:  payloadfield.Int(userInput, "template_version", "templateVersion"),
+		TemplateAssetDir: payloadfield.String(userInput, "template_asset_dir", "templateAssetDir"),
 		GenerationMode:   payloadfield.String(userInput, "generation_mode", "generationMode"),
 		PromptTemplateID: payloadfield.String(userInput, "prompt_template_id", "promptTemplateId"),
 		SourceFile:       payloadfield.String(userInput, "source_file", "sourceFile"),

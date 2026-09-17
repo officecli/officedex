@@ -1282,3 +1282,15 @@ it("opens the automatic live canvas only for actual drawing content", () => {
   expect(hasPptxDrawingContent(opStream(1).slice(0, 2))).toBe(false);
   expect(hasPptxDrawingContent(opStream(1))).toBe(true);
 });
+
+describe("template replay", () => {
+  it("imports the template and prefers existing text shapes", () => {
+    const source = buildOpsChunkScript([
+      { seq: 1, op: "slide.begin", slide: 1, template: { layoutId: "text-summary", assetDir: "/tmp/template", assetRoles: ["title", "body"] } } as any,
+      { seq: 2, op: "shape.add", slide: 1, shape: { kind: "text", role: "title", text: "New title", left: 10, top: 10, width: 200, height: 50 } } as any,
+    ], { fontLatin: "Aptos", fontCJK: "Microsoft YaHei", templateBase64: "UEsDBA==", templateInserted: false }, 0);
+    expect(source).toContain("insertSlidesFromBase64");
+    expect(source).toContain("templateAssetRoles");
+    expect(source).toContain("textFrame.textRange.text");
+  });
+});

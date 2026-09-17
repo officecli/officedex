@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type FormEvent, type ReactNode } from "react";
-import type { DesktopTask, DocumentType, RecentFile, TaskQuestionAnswer, WorkspaceSummary } from "../../shared/types";
+import type { DesktopTask, DocumentType, PptxTemplateProgress, RecentFile, TaskQuestionAnswer, WorkspaceSummary } from "../../shared/types";
 import type { OfficeOutputRef } from "../../shared/officeProduct";
 import { OfficeProductOutputsPanel } from "../components/OfficeProductOutputsPanel";
-import { Button, Dropdown, Empty, Loading, TextArea, ToastViewport, toast, type MenuProps } from "../ui";
+import { Button, Dropdown, Empty, Loading, TextArea, ToastViewport, dialog, toast, type MenuProps } from "../ui";
 import { dragHasFiles, setHomeDropZone } from "../homeDropZone";
 import type { HomeTaskAnalysis, HomeTaskIntake } from "../homeIntake";
 import {
   ArrowUpOutlined,
+  CheckOutlined,
   CloseOutlined,
+  DeleteOutlined,
   FileTextOutlined,
   DownOutlined,
   FolderAddOutlined,
@@ -27,6 +29,7 @@ import { DocTypeIcon, docTypeFromPath } from "../components/DocTypeIcon";
 import { RuntimePrompts } from "../components/RuntimePrompts";
 import "../styles/home.css";
 import { taskTitle } from "../taskTitle";
+import { readPptxTemplateCatalog, removePptxTemplate, upsertPptxTemplate, writePptxTemplateCatalog, type PptxTemplateAssetSummary } from "../presentation/pptxTemplateAssets";
 
 type HomeDocumentType = Extract<DocumentType, "pptx" | "img" | "docx" | "xlsx">;
 
@@ -36,6 +39,9 @@ export interface HomePickers {
   taskDirectory?: () => Promise<string | undefined>;
   referenceImages?: () => Promise<string[]>;
   referenceTextFiles?: () => Promise<string[]>;
+  importPptxTemplate?: () => Promise<PptxTemplateAssetSummary | undefined>;
+  subscribePptxTemplateProgress?: (callback: (event: PptxTemplateProgress) => void) => () => void;
+  deletePptxTemplate?: (assetDir: string) => Promise<void>;
 }
 
 /** Everything a listed task can be asked to do. */
@@ -129,7 +135,7 @@ const HOME_TEMPLATES: HomeTemplate[] = [
 ];
 
 export function HomeScreen({ files, attentionTasks = [], loading, error, activeWorkspaceId, workspaces = [], onOpenFile, onOpenLocalFile, onReplayPptxDemo, replayPptxDemoLoading, onRemoveFile, pickers = {}, droppedTaskPaths, workspaceActions = {}, onStartTask, taskActions = {}, productionTaskId, productionEditor, onRetryRecentFiles, productOutputs = [] }: HomeScreenProps) {
-  const { taskFile: onPickTaskFile, taskDirectory: onPickTaskDirectory, referenceImages: onPickReferenceImages, referenceTextFiles: onPickReferenceTextFiles } = pickers;
+  const { taskFile: onPickTaskFile, taskDirectory: onPickTaskDirectory, referenceImages: onPickReferenceImages, referenceTextFiles: onPickReferenceTextFiles, importPptxTemplate, subscribePptxTemplateProgress, deletePptxTemplate } = pickers;
   const { select: onSelectWorkspace, selectAll: onSelectAllWorkspaces, add: onAddWorkspace } = workspaceActions;
   const { open: onOpenTask, retry: onRetryTask, steer: onSteerTask, resume: onResumeTask, answer: onAnswerTask, cancel: onCancelTask, delete: onDeleteTask } = taskActions;
   const t = useT();
@@ -149,6 +155,10 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
   const [dropActive, setDropActive] = useState(false);
   const [dismissedTaskIds, setDismissedTaskIds] = useState<string[]>([]);
   const [runtimePromptCount, setRuntimePromptCount] = useState(0);
+  const [localTemplates, setLocalTemplates] = useState<PptxTemplateAssetSummary[]>(() => readPptxTemplateCatalog().templates);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>();
+  const [importingTemplate, setImportingTemplate] = useState(false);
+  const [importingTemplates, setImportingTemplates] = useState<Record<string, PptxTemplateProgress>>({});
   const lastDropSeq = useRef(0);
   const visibleTemplates = useMemo(() => HOME_TEMPLATES.filter((template) => template.type === selectedDocumentType), [selectedDocumentType]);
   const visibleFiles = useMemo(() => [...files]
@@ -170,6 +180,74 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
     .filter((task) => !dismissedTaskIds.includes(task.id))
     .slice(0, 4), [attentionTasks, activeWorkspaceId, dismissedTaskIds]);
   const productionTask = productionTaskId ? liveTasks.find((task) => task.id === productionTaskId && task.documentType === "pptx") : undefined;
+  const selectedTemplate = useMemo(
+    () => localTemplates.find((item) => item.id === selectedTemplateId),
+    [localTemplates, selectedTemplateId],
+  );
+  const importJobs = useMemo(() => Object.values(importingTemplates), [importingTemplates]);
+
+  const toggleLocalTemplate = useCallback((templateId: string) => {
+    const next = selectedTemplateId === templateId ? undefined : templateId;
+    setSelectedTemplateId(next);
+    if (next) setSelectedDocumentType("pptx");
+    setIntakeError(undefined);
+  }, [selectedTemplateId]);
+
+  const deleteLocalTemplate = useCallback((template: PptxTemplateAssetSummary) => {
+    if (!deletePptxTemplate || importingTemplates[template.id]) return;
+    dialog.confirm({
+      title: t("home.deleteTemplateTitle", { name: template.name }),
+      content: t("home.deleteTemplateBody"),
+      okText: t("home.deleteTemplateConfirm"),
+      cancelText: t("ui.text.Cancel"),
+      tone: "danger",
+      onOk: async () => {
+        try {
+          await deletePptxTemplate(template.localAssetDir);
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : String(error));
+          throw error;
+        }
+        const next = removePptxTemplate(readPptxTemplateCatalog(), template.id);
+        writePptxTemplateCatalog(next);
+        setLocalTemplates(next.templates);
+        setSelectedTemplateId((current) => current === template.id ? undefined : current);
+        setImportingTemplates((current) => {
+          const { [template.id]: _removed, ...rest } = current;
+          return rest;
+        });
+      },
+    });
+  }, [deletePptxTemplate, importingTemplates, t]);
+
+  const importLocalTemplate = useCallback(async () => {
+    if (!importPptxTemplate || importingTemplate) return;
+    setImportingTemplate(true);
+    try {
+      const imported = await importPptxTemplate();
+      if (!imported) return;
+      const next = upsertPptxTemplate(readPptxTemplateCatalog(), imported);
+      writePptxTemplateCatalog(next);
+      setLocalTemplates(next.templates);
+      setSelectedTemplateId(imported.id);
+      setSelectedDocumentType("pptx");
+      setImportingTemplates((current) => {
+        const { [imported.id]: _done, ...rest } = current;
+        return rest;
+      });
+    } catch (error) {
+      setIntakeError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setImportingTemplate(false);
+    }
+  }, [importPptxTemplate, importingTemplate]);
+
+  useEffect(() => {
+    if (!subscribePptxTemplateProgress) return undefined;
+    return subscribePptxTemplateProgress((event) => {
+      setImportingTemplates((current) => ({ ...current, [event.id]: event }));
+    });
+  }, [subscribePptxTemplateProgress]);
 
   useEffect(() => {
     if (prompt) {
@@ -295,6 +373,11 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
         referenceDirectory,
         documentType,
         ...(documentType === "pptx" ? { pptxWorkflow } : {}),
+        ...(documentType === "pptx" && selectedTemplate ? {
+          templateId: selectedTemplate.id,
+          templateVersion: selectedTemplate.version,
+          templateAssetDir: selectedTemplate.localAssetDir,
+        } : {}),
         ...(advancedMode ? { advancedMode: true } : {}),
         ...(referenceTextFiles.length > 0 ? { referenceTextFiles } : {}),
         ...(documentType === "img" && referenceImages.length > 0 ? { referenceImages } : {}),
@@ -479,8 +562,18 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
           }}
           onSubmit={() => void startTask()}
         />
-        {sourceFile || referenceDirectory || referenceImages.length > 0 || referenceTextFiles.length > 0 ? (
+        {sourceFile || referenceDirectory || referenceImages.length > 0 || referenceTextFiles.length > 0 || selectedTemplate ? (
           <div className="home-intake__references" aria-label={t("home.references")}>
+            {selectedTemplate ? (
+              <div className="home-intake__attachment home-intake__attachment--template" aria-label={t("home.usingTemplate")}>
+                <CheckOutlined aria-hidden />
+                <span title={selectedTemplate.name}>{t("home.usingTemplate")} · {selectedTemplate.name}</span>
+                <Button variant="ghost-normal" size="small" ariaLabel={t("home.removeSelectedTemplate")} icon={<CloseOutlined />} onClick={() => {
+                  setSelectedTemplateId(undefined);
+                  setIntakeError(undefined);
+                }} />
+              </div>
+            ) : null}
             {sourceFile ? (
               <div className="home-intake__attachment" aria-label={t("home.attachedFile")}>
                 <DocTypeIcon type={docTypeFromPath(sourceFile)} />
@@ -663,6 +756,79 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
         </TemplateRail>
       </section>
 
+      <section className="home-templates" aria-labelledby="home-local-templates-title">
+        <div className="home-section-header">
+          <h2 id="home-local-templates-title">{t("home.localTemplates")}</h2>
+          {importPptxTemplate ? <Button size="small" loading={importingTemplate} onClick={() => void importLocalTemplate()}>{t("home.importPptxTemplate")}</Button> : null}
+        </div>
+        {importJobs.length > 0 ? importJobs.map((job) => (
+          <div className="home-template-progress" key={job.id} role="status" aria-live="polite" data-testid="pptx-template-progress" data-stage={job.stage}>
+            <Loading />
+            <div className="home-template-progress__copy">
+              <strong>{t("home.templateProgress.title")}</strong>
+              <span>{job.name} · {templateProgressLabel(job.stage, t)} · {job.step}/{job.steps || 5}</span>
+            </div>
+            <div className="home-template-progress__bar" aria-hidden="true">
+              <span style={{ width: `${Math.max(8, Math.min(100, (job.step / (job.steps || 5)) * 100))}%` }} />
+            </div>
+          </div>
+        )) : null}
+        <TemplateRail dependencies={[localTemplates.length, importJobs.length, importingTemplate]}>
+          {localTemplates.length === 0 && importJobs.length === 0 ? <span className="home-template-empty">{t("home.localTemplatesEmpty")}</span> : (
+            <>
+              {importJobs.filter((job) => !localTemplates.some((template) => template.id === job.id)).map((job) => (
+                <div className="home-template-card is-busy" key={job.id} aria-busy="true" aria-label={job.name}>
+                  <span className="home-template-card__preview" aria-hidden="true">
+                    <span className="home-template-card__sheet doc-type--pptx"><span /><span /><span /><MaterialSymbol name="slideshow" /></span>
+                  </span>
+                  <span className="home-template-card__copy">
+                    <strong>{job.name}</strong>
+                    <small>{templateProgressLabel(job.stage, t)}</small>
+                  </span>
+                  <span className="home-template-card__progress" aria-hidden="true"><span style={{ width: `${Math.max(8, Math.min(100, (job.step / (job.steps || 5)) * 100))}%` }} /></span>
+                </div>
+              ))}
+              {localTemplates.map((template) => {
+                const selected = selectedTemplateId === template.id;
+                const job = importingTemplates[template.id];
+                return (
+                  <div className="home-template-card-wrap" key={template.id}>
+                    <button
+                      className={`home-template-card ${selected ? "is-selected" : ""}${job ? " is-busy" : ""}`}
+                      type="button"
+                      aria-label={template.name}
+                      aria-pressed={selected}
+                      aria-busy={Boolean(job)}
+                      onClick={() => toggleLocalTemplate(template.id)}
+                    >
+                      <span className="home-template-card__preview" aria-hidden="true">
+                        {template.previewPath ? <img src={template.previewPath} alt="" loading="lazy" /> : <span className="home-template-card__sheet doc-type--pptx"><span /><span /><span /><MaterialSymbol name="slideshow" /></span>}
+                        {selected ? <span className="home-template-card__selected-mark"><CheckOutlined aria-hidden /></span> : null}
+                      </span>
+                      <span className="home-template-card__copy">
+                        <strong>{template.name}</strong>
+                        <small>{job ? templateProgressLabel(job.stage, t) : selected ? t("home.templateSelected") : localTemplateStatusLabel(template, t)}</small>
+                      </span>
+                      {job ? <span className="home-template-card__progress" aria-hidden="true"><span style={{ width: `${Math.max(8, Math.min(100, (job.step / (job.steps || 5)) * 100))}%` }} /></span> : null}
+                    </button>
+                    {deletePptxTemplate && !job ? (
+                      <Button
+                        className="home-template-card__delete"
+                        variant="ghost-normal"
+                        size="small"
+                        ariaLabel={t("home.deleteTemplate", { name: template.name })}
+                        icon={<DeleteOutlined />}
+                        onClick={() => deleteLocalTemplate(template)}
+                      />
+                    ) : null}
+                  </div>
+                );
+              })}
+            </>
+          )}
+        </TemplateRail>
+      </section>
+
       {runtimePromptCount > 0 ? (
         <section className="home-attention" aria-labelledby="home-runtime-attention-title">
           <div className="home-section-header">
@@ -789,6 +955,24 @@ function isRecentFailure(task: DesktopTask): boolean {
   const at = new Date(ts).getTime();
   if (Number.isNaN(at)) return false;
   return Date.now() - at < RECENT_FAILURE_WINDOW_MS;
+}
+
+function localTemplateStatusLabel(template: PptxTemplateAssetSummary, t: (key: string) => string): string {
+  if (template.status === "imported") return t("home.templateImported");
+  if (template.status === "assets_extracted") {
+    return `${t("home.templateAssetsExtracted")} · ${template.pageCount ?? 0} ${t("home.templatePages")}`;
+  }
+  if (template.status === "analyzing") return t("home.templateProgress.analyze");
+  if (template.status === "ready") {
+    return `${t("home.templateReady")} · ${template.pageCount ?? 0} ${t("home.templatePages")}`;
+  }
+  return template.status;
+}
+
+function templateProgressLabel(stage: PptxTemplateProgress["stage"], t: (key: string) => string): string {
+  const key = `home.templateProgress.${stage}`;
+  const label = t(key);
+  return label === key ? t("home.templateProgress.convert") : label;
 }
 
 function formatOpenedAt(value: string): string {

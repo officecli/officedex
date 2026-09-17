@@ -10,8 +10,10 @@ import (
 	"officedex/internal/config"
 )
 
-// stagePresentationRuntime writes the four files runtimeenv.IsRoot requires,
-// plus the converter, so a temporary directory reads as a real runtime root.
+// stagePresentationRuntime writes the files a presentation checkout carries --
+// the four runtimeenv.IsRoot requires plus the JSSDK host runner -- and
+// optionally the converter, so a temporary directory reads as the checkout a
+// development build runs against.
 func stagePresentationRuntime(t *testing.T, root string, withConverter bool) {
 	t.Helper()
 	for _, relative := range []string{
@@ -19,6 +21,7 @@ func stagePresentationRuntime(t *testing.T, root string, withConverter bool) {
 		filepath.Join("node_modules", "vite", "dist", "node", "index.js"),
 		filepath.Join("bos", "dist", "mop-wasm", "pkg", "mop_wasm_bg.wasm"),
 		filepath.Join("tools", "fixtures", "blank-presentation", "content.json"),
+		filepath.Join("tools", "execute-jssdk.mjs"),
 	} {
 		path := filepath.Join(root, relative)
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

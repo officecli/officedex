@@ -317,6 +317,9 @@ export interface GenerateInput {
   /** Which PPTX backend to use; the desktop leaves it unset and Go selects aippt-jssdk-design. */
   pptxBackend?: string;
   pptxWorkflow?: "design" | "animation";
+  templateId?: string;
+  templateVersion?: number;
+  templateAssetDir?: string;
 }
 
 // ModifyInput drives the "继续修改" (office.modify) flow: an LLM-driven in-place
@@ -527,6 +530,9 @@ export interface AgentClientToolReassignInput { run_id: string; call_id: string;
 
 export interface TaskUserInput {
   pptxWorkflow?: "design" | "animation";
+  templateId?: string;
+  templateVersion?: number;
+  templateAssetDir?: string;
   prompt: string;
   generationMode?: GenerationMode;
   promptTemplateId?: string;
@@ -695,6 +701,7 @@ export interface DesktopTask {
 export interface VibeImageRef { digest?: string; [key: string]: unknown }
 export interface VibeOpShape { kind?: string; imageRef?: VibeImageRef; [key: string]: unknown }
 export interface VibeOpFill { imageRef?: VibeImageRef; [key: string]: unknown }
+export interface VibeTemplateBinding { assetDir?: string; layoutId?: string; assetRoles?: string[]; [key: string]: unknown }
 export interface VibeOp {
   op: string;
   seq: number;
@@ -707,6 +714,8 @@ export interface VibeOp {
   slides?: number;
   /** deck.begin: where the worker staged pictures. */
   assetsDir?: string;
+  /** slide.begin: local template clone binding. */
+  template?: VibeTemplateBinding;
   [key: string]: unknown;
 }
 export interface VibeOutlineSlide { slide?: number; headline?: string; form?: string; composition?: string; [key: string]: unknown }
@@ -1148,6 +1157,18 @@ export interface CreateWorkbookFromSheetInput {
 
 export interface PptxTaskStatus { task_id: string; status: string; updated_at?: string; last_error?: string; }
 
+export interface PptxTemplateProgress {
+  id: string;
+  name: string;
+  sourceFileName: string;
+  localAssetDir: string;
+  status: "uploaded" | "imported" | "assets_extracted" | "analyzing" | "ready" | "failed";
+  stage: "copy" | "convert" | "extract" | "analyze" | "skill" | "ready" | "imported" | "failed";
+  step: number;
+  steps: number;
+  error?: string;
+}
+
 export interface DesktopAPI extends DesktopVerticalAPI {
   getPptxTaskStatus?: (taskId: string) => Promise<PptxTaskStatus>;
   skipPptxResearch?: (taskId: string) => Promise<void>;
@@ -1196,6 +1217,23 @@ export interface DesktopAPI extends DesktopVerticalAPI {
   openFileDialog(options?: { filters?: Array<{ name: string; extensions: string[] }> }): Promise<string | null>;
   openDirectoryDialog(): Promise<string | null>;
   openMultiFileDialog(options?: { filters?: Array<{ name: string; extensions: string[] }> }): Promise<string[] | null>;
+  readPptxTemplateSource?(assetDir: string): Promise<{ data: Uint8Array; sha256: string }>;
+  deletePptxTemplate?(assetDir: string): Promise<void>;
+  onPptxTemplateProgress?(callback: (event: PptxTemplateProgress) => void): () => void;
+  importPptxTemplate?(input: { sourcePath: string; name?: string }): Promise<{
+    id: string;
+    name: string;
+    sourceFileName: string;
+    sourceSha256: string;
+    localAssetDir: string;
+    status: "imported" | "assets_extracted" | "ready";
+    version: number;
+    createdAt: string;
+    updatedAt: string;
+    pageCount: number;
+    assetCounts: { logo: number; icons: number; images: number; decorative: number };
+    warnings: string[];
+  }>;
   savePastedImage(data: Uint8Array, ext: string): Promise<string>;
   savePptx(data: Uint8Array, fileName: string, options?: SavePptxOptions): Promise<string>;
   saveDocx(data: Uint8Array, fileName: string, options: SaveDocxOptions): Promise<SaveDocxResult>;

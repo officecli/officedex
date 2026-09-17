@@ -17,6 +17,27 @@ func userInputEvent(payload map[string]any) []types.BridgeEvent {
 	}
 }
 
+func TestTemplateBindingSurvivesTaskRecovery(t *testing.T) {
+	input := types.GenerateInput{
+		DocumentType:     types.DocPPTX,
+		Prompt:           "brand launch",
+		TemplateID:       "tpl-company",
+		TemplateVersion:  2,
+		TemplateAssetDir: "/local/ppt-templates/tpl-company",
+	}
+	payload := EncodeGenerateInput(input, localstore.TaskContext{})
+	if payload["template_id"] != "tpl-company" || payload["template_version"] != 2 || payload["template_asset_dir"] != "/local/ppt-templates/tpl-company" {
+		t.Fatalf("template binding lost in encode: %#v", payload)
+	}
+	got, err := DecodeGenerateInput(userInputEvent(payload), localstore.TaskContext{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.TemplateID != "tpl-company" || got.TemplateVersion != 2 || got.TemplateAssetDir != "/local/ppt-templates/tpl-company" {
+		t.Fatalf("template binding lost in decode: %+v", got)
+	}
+}
+
 func TestAnimationWorkflowSurvivesTaskRecovery(t *testing.T) {
 	input := types.GenerateInput{DocumentType: types.DocPPTX, Prompt: "依次出现", PPTXWorkflow: "animation"}
 	payload := EncodeGenerateInput(input, localstore.TaskContext{})

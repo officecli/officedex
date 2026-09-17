@@ -1,25 +1,22 @@
 package pptxeditor
 
 import (
-	"officedex/internal/config"
-	"os"
-	"path/filepath"
+	"context"
+	"strings"
 	"testing"
 )
 
-func TestResolveMopConvertBinaryFromPresentationSource(t *testing.T) {
-	root := t.TempDir()
-	binary := filepath.Join(root, "tools", "bin", config.ExecutableName("mop-convert"))
-	if err := os.MkdirAll(filepath.Dir(binary), 0o700); err != nil {
-		t.Fatal(err)
+// A build without a converter must report that per call rather than refuse to
+// start, so the editor can say the converter is unavailable and everything else
+// keeps working.
+func TestCLIConverterWithoutBinaryReportsUnavailable(t *testing.T) {
+	converter := NewCLIConverter("")
+	if err := converter.ImportPptx(context.Background(), "deck.pptx", t.TempDir()); err == nil ||
+		!strings.Contains(err.Error(), "mop-convert is unavailable") {
+		t.Fatalf("ImportPptx error = %v, want unavailable converter", err)
 	}
-	if err := os.WriteFile(binary, []byte("test"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("OFFICEDEX_MOP_CONVERT_BIN", "")
-	t.Setenv("MOP_CONVERT_BIN", "")
-	t.Setenv("PRESENTATION_SOURCE_DIR", root)
-	if got := resolveMopConvertBinary(""); got != binary {
-		t.Fatalf("resolveMopConvertBinary = %q, want %q", got, binary)
+	if err := converter.ExportPptx(context.Background(), t.TempDir(), "deck.pptx"); err == nil ||
+		!strings.Contains(err.Error(), "mop-convert is unavailable") {
+		t.Fatalf("ExportPptx error = %v, want unavailable converter", err)
 	}
 }

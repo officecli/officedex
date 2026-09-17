@@ -62,6 +62,9 @@ func (s *fakePptxEditorService) Prepare(_ context.Context, token string) (pptxed
 	return s.prepareResult, s.prepareErr
 }
 
+func (s *fakePptxEditorService) ImportTemplate(_ context.Context, _, _ string) error { return nil }
+func (s *fakePptxEditorService) TemplateAssets(_ string) ([]pptxeditor.Asset, error) { return nil, nil }
+
 func (s *fakePptxEditorService) SaveSnapshot(token, session string, content []byte, base, rev int) (pptxeditor.SaveResult, error) {
 	s.snapshotToken, s.snapshotSession, s.snapshotContent, s.snapshotBase, s.snapshotRev = token, session, content, base, rev
 	return s.snapshotResult, nil

@@ -45,6 +45,7 @@ import (
 	"officedex/internal/netproxy"
 	"officedex/internal/office2modoc"
 	"officedex/internal/pptxeditor"
+	"officedex/internal/pptxtemplate"
 	"officedex/internal/preview"
 	runtimemgr "officedex/internal/runtime"
 	"officedex/internal/settings"
@@ -187,6 +188,8 @@ func (a *App) editorSessions() []editorSession {
 
 type pptxEditorService interface {
 	Prepare(context.Context, string) (pptxeditor.PrepareResult, error)
+	ImportTemplate(context.Context, string, string) error
+	TemplateAssets(string) ([]pptxeditor.Asset, error)
 	SaveSnapshot(string, string, []byte, int, int) (pptxeditor.SaveResult, error)
 	SaveAsset(string, string, string, string, []byte) (pptxeditor.SaveAssetResult, error)
 	SaveVideo(string, string, int, string, []byte) (pptxeditor.VideoSaveResult, error)
@@ -272,6 +275,11 @@ type App struct {
 	proxyPool           *netproxy.Pool
 	xlsxEditorService   xlsxEditorService
 	pptxEditorService   pptxEditorService
+	// pptxTemplateProgress is a test seam for import-stage events. Production
+	// leaves it nil and relies on Wails EventsEmit.
+	pptxTemplateProgress func(PptxTemplateProgress)
+	// analyzePptxTemplate is a test seam for import-time LLM distillation.
+	analyzePptxTemplate func(context.Context, pptxtemplate.Facts) (json.RawMessage, error)
 	mopHTTPHandler      http.Handler
 	// word2mowHTTPHandler and writerFontsHandler serve the embedded Writer
 	// editor: DOCX ⇄ MOW conversion and the default-font closure. main.go
@@ -358,19 +366,11 @@ func NewApp() (*App, error) {
 	if !ok {
 		return nil, errors.New("resolve XLSX editor repo root: working directory unavailable")
 	}
-	app.xlsxEditorService = xlsxeditor.NewService(previewReg, office2modoc.New(repoRoot), os.TempDir())
-	app.pptxEditorService = pptxeditor.NewService(previewReg, pptxeditor.NewCLIConverter(repoRoot), os.TempDir())
-	app.storeRuntimeModeSnapshot(cached)
-	app.startEventWriter()
-	app.timelineStore = timeline.New(filepath.Join(workspaceDir, "timeline"), pptxeditor.NewCLIConverter(repoRoot))
-	blankTemplatePath := filepath.Join(userDataDir, "blank-presentation.pptx")
-	if _, statErr := os.Stat(blankTemplatePath); os.IsNotExist(statErr) {
-		if err := os.WriteFile(blankTemplatePath, blankPptxDraft, 0o644); err != nil {
-			return nil, fmt.Errorf("write blank presentation template: %w", err)
-		}
-	} else if statErr != nil {
-		return nil, fmt.Errorf("stat blank presentation template: %w", statErr)
-	}
+	// One resolution for all three users of the converter -- the PPTX editor
+	// service, the deck timeline and the MOP HTTP service -- and it has to happen
+	// before the services are built. It cannot lean on repoRoot alone: a build
+	// opened by a launcher has "/" as its working directory, so runtimeenv also
+	// looks beside the executable. See runtimeenv.Root.
 	presentationRoot := runtimeenv.Root(repoRoot)
 	converterPath := config.MopConvertBinary(presentationRoot, repoRoot)
 	if converterPath == "" {
@@ -379,6 +379,19 @@ func NewApp() (*App, error) {
 		// The Writer font closure below warns for the same reason.
 		applog.Logger().Warn("mop-convert not found; PPTX import and export will be unavailable",
 			slog.String("presentationRoot", presentationRoot))
+	}
+	app.xlsxEditorService = xlsxeditor.NewService(previewReg, office2modoc.New(repoRoot), os.TempDir())
+	app.pptxEditorService = pptxeditor.NewService(previewReg, pptxeditor.NewCLIConverter(converterPath), os.TempDir())
+	app.storeRuntimeModeSnapshot(cached)
+	app.startEventWriter()
+	app.timelineStore = timeline.New(filepath.Join(workspaceDir, "timeline"), pptxeditor.NewCLIConverter(converterPath))
+	blankTemplatePath := filepath.Join(userDataDir, "blank-presentation.pptx")
+	if _, statErr := os.Stat(blankTemplatePath); os.IsNotExist(statErr) {
+		if err := os.WriteFile(blankTemplatePath, blankPptxDraft, 0o644); err != nil {
+			return nil, fmt.Errorf("write blank presentation template: %w", err)
+		}
+	} else if statErr != nil {
+		return nil, fmt.Errorf("stat blank presentation template: %w", statErr)
 	}
 	// The MOP handler takes a printf-style callback, so its lines arrive
 	// pre-formatted; the component attribute is what keeps them findable.

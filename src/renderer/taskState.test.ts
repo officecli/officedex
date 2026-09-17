@@ -602,6 +602,26 @@ describe("taskState", () => {
     expect(state.tasks["task-plan"].userInput).not.toHaveProperty("runtimeMode");
   });
 
+  it("restores a local PPT template binding from task.user_input", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "ev-user-input",
+      task_id: "task-tpl",
+      type: "task.user_input",
+      payload: {
+        prompt: "Brand launch",
+        template_id: "tpl-company",
+        template_version: 2,
+        template_asset_dir: "/local/ppt-templates/tpl-company",
+      },
+    });
+    expect(state.tasks["task-tpl"].userInput).toMatchObject({
+      prompt: "Brand launch",
+      templateId: "tpl-company",
+      templateVersion: 2,
+      templateAssetDir: "/local/ppt-templates/tpl-company",
+    });
+  });
+
   it("stores Vibe tree confirmation metadata from bridge events", () => {
     const state = applyTaskEvent(createInitialTaskState(), {
       event_id: "ev-vibe",

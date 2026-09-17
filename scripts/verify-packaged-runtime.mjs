@@ -113,6 +113,29 @@ function resourcePath(root, entry, platform) {
   return path.join(root, directory, platform === "win32" ? `${binary}.exe` : binary);
 }
 
+/** The resource-root-relative path an entry occupies, binary or not. */
+function entryKey(entry) {
+  return typeof entry.at === "string" ? entry.at : path.join(...entry.at);
+}
+
+/**
+ * A payload is tolerated when it is named in `mayBeAbsent`, or when the tree it
+ * lives in is named there and that tree is itself absent. mop-convert sits
+ * under `presentation/`, so a build that ships no presentation runtime ships no
+ * converter either -- they are missing for the same reason. A presentation tree
+ * that *is* there still owes its converter: the stale bundled copy that broke
+ * PPTX generation was present and passed every marker check, and inheriting the
+ * tolerance would have let it keep doing so.
+ */
+async function toleratedAbsence(root, tolerated, entry) {
+  const key = entryKey(entry);
+  for (const name of tolerated) {
+    if (key === name) return true;
+    if (key.startsWith(name + path.sep) && !(await exists(path.join(root, name)))) return true;
+  }
+  return false;
+}
+
 /**
  * `mayBeAbsent` names payloads this build is allowed to ship without, by their
  * `at`. A local build stages no Node runtime and the app falls back to the
@@ -135,7 +158,7 @@ export async function verifyPackagedRuntime(
   const present = [];
   for (const entry of REQUIRED_RESOURCES) {
     const at = resourcePath(target.root, entry, platform);
-    if (typeof entry.at === "string" && tolerated.has(entry.at) && !(await exists(at))) {
+    if ((await toleratedAbsence(target.root, tolerated, entry)) && !(await exists(at))) {
       degraded.push(`${entry.label}: absent at ${at}\n      ${entry.why}`);
       continue;
     }

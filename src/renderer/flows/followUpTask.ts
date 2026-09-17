@@ -20,6 +20,9 @@ export interface PendingGenerate {
     referenceImages?: string[];
     imageRatio?: GenerateInput["imageRatio"];
     fps?: number;
+    templateId?: string;
+    templateVersion?: number;
+    templateAssetDir?: string;
   };
   parentTaskId?: string;
 }

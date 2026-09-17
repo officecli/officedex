@@ -197,7 +197,7 @@ html[data-window-chrome="overlay"] {
 .home-template-card { display: grid; min-width: 0; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; border: 1px solid var(--od-border-subtle); border-radius: 16px; background: var(--od-surface); color: var(--od-ink); padding: 0; font-family: inherit; text-align: left; cursor: pointer; transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease; }
 .home-template-card:hover { border-color: var(--od-border-hover); box-shadow: 0 8px 22px rgba(31, 41, 51, 0.08); transform: translateY(-1px); }
 .home-template-card:focus-visible { outline: 2px solid var(--od-guidance); outline-offset: 2px; }
-.home-template-card__preview { display: grid; width: 100%; aspect-ratio: 16 / 9; place-items: center; overflow: hidden; border-bottom: 1px solid var(--od-border-subtle); background: linear-gradient(145deg, var(--od-surface-muted), var(--od-surface)); }
+.home-template-card__preview { position: relative; display: grid; width: 100%; aspect-ratio: 16 / 9; place-items: center; overflow: hidden; border-bottom: 1px solid var(--od-border-subtle); background: linear-gradient(145deg, var(--od-surface-muted), var(--od-surface)); }
 .home-template-card__preview > img { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform 180ms ease; }
 .home-template-card:hover .home-template-card__preview > img { transform: scale(1.015); }
 .home-template-card__sheet { position: relative; display: grid; width: 112px; height: 72px; align-content: start; gap: 7px; box-sizing: border-box; border: 1px solid var(--od-border-hover); border-radius: 10px; background: var(--od-surface); padding: 14px; box-shadow: 0 7px 16px rgba(31, 41, 51, 0.08); }
@@ -308,7 +308,11 @@ html[data-window-chrome="overlay"] {
 .project-sidebar__list { min-height: 0; flex: 1 1 auto; overflow-y: auto; }
 .project-sidebar__workspace-group { display: grid; gap: 2px; }
 .project-sidebar__workspace { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; min-height: 32px; align-items: center; border-radius: 4px; }
-.project-sidebar__document { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; min-height: 30px; margin-left: 18px; border-radius: 4px; background: transparent; color: var(--od-ink-secondary); }
+.project-sidebar__workspace > .od-dropdown-trigger,
+.project-sidebar__workspace-group > .od-dropdown-trigger,
+.project-sidebar__fold-body > .od-dropdown-trigger,
+.project-sidebar__fold > .od-dropdown-trigger { display: flex; width: 100%; min-width: 0; }
+.project-sidebar__document { display: grid; width: 100%; grid-template-columns: minmax(0, 1fr) auto; align-items: center; min-height: 30px; margin-left: 18px; border-radius: 4px; background: transparent; color: var(--od-ink-secondary); }
 .project-sidebar__document:hover, .project-sidebar__document[data-active="true"] { background: var(--od-surface); color: var(--od-ink); }
 .project-sidebar__document-open { display: grid; width: 100%; min-width: 0; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 7px; min-height: 30px; padding: 0 7px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .project-sidebar__document-open > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -674,6 +678,12 @@ html[data-window-chrome="overlay"] {
 .home-intake__type-options button { min-height: 28px; padding: 0 10px; border: 1px solid var(--od-hairline); border-radius: 6px; background: var(--od-canvas); color: inherit; cursor: pointer; }
 .home-intake__type-options button[aria-pressed="true"] { border-color: var(--od-ink); background: var(--od-ink); color: #fff; }
 .home-intake__attachment { width: fit-content; max-width: min(360px, 100%); border: 1px solid var(--od-border-subtle); border-radius: 999px; background: var(--od-surface-muted); padding-left: 12px; }
+.home-intake__attachment--template {
+  border-color: color-mix(in srgb, var(--n-secondary, #006876) 42%, var(--od-border-subtle));
+  background: color-mix(in srgb, var(--n-secondary, #006876) 10%, var(--od-surface));
+  color: var(--n-primary, #05101a);
+}
+.home-intake__attachment--template > svg { color: var(--n-secondary, #006876); }
 
 .home-analysis {
   max-width: 980px;
@@ -746,10 +756,102 @@ html[data-window-chrome="overlay"] {
   .home-intake__type-options,
   .home-intake__type-options[aria-hidden="true"] { transition: none; }
   .home-template-card { animation: none; }
+  .home-template-card.is-selected { transform: none; }
 }
 .home-template-card__preview { border-bottom-color: color-mix(in srgb, var(--od-border-subtle) 80%, transparent); }
 .home-template-card__copy { padding: 11px 13px 13px; }
 .home-template-card__copy strong { font-size: 13.5px; line-height: 20px; }
+.home-template-progress {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px 12px;
+  margin-top: 12px;
+  border: 1px solid color-mix(in srgb, var(--od-guidance) 32%, transparent);
+  border-radius: 12px;
+  background: var(--od-surface);
+  padding: 12px 14px;
+  color: var(--od-ink);
+}
+.home-template-progress__copy { display: grid; min-width: 0; gap: 2px; }
+.home-template-progress__copy strong { font-size: 13px; line-height: 20px; font-weight: 600; }
+.home-template-progress__copy span { overflow: hidden; color: var(--od-ink-secondary); font-size: 12px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
+.home-template-progress__bar {
+  grid-column: 1 / -1;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--od-border-subtle);
+}
+.home-template-progress__bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--od-guidance);
+  transition: width 180ms ease;
+}
+.home-template-card.is-busy { cursor: progress; }
+.home-template-card.is-busy:hover { transform: none; }
+.home-template-card__progress {
+  display: block;
+  height: 3px;
+  background: var(--od-border-subtle);
+}
+.home-template-card__progress > span {
+  display: block;
+  height: 100%;
+  background: var(--od-guidance);
+  transition: width 180ms ease;
+}
+.home-template-card.is-selected {
+  border-color: var(--n-secondary, #006876);
+  background: color-mix(in srgb, var(--n-secondary, #006876) 8%, var(--od-surface));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--n-secondary, #006876) 28%, transparent), 0 10px 24px rgb(15 23 42 / 10%);
+  transform: translateY(-2px);
+}
+.home-template-card.is-selected:hover {
+  border-color: var(--n-secondary, #006876);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--n-secondary, #006876) 38%, transparent), 0 14px 32px rgb(15 23 42 / 12%);
+}
+.home-template-card.is-selected .home-template-card__preview {
+  border-bottom-color: color-mix(in srgb, var(--n-secondary, #006876) 28%, var(--od-border-subtle));
+}
+.home-template-card.is-selected .home-template-card__copy small {
+  color: var(--n-secondary, #006876);
+  font-weight: 600;
+}
+.home-template-card-wrap { position: relative; display: grid; min-width: 0; }
+.home-template-card__delete {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  opacity: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--od-surface) 88%, transparent);
+  color: var(--od-ink-secondary);
+  box-shadow: 0 1px 4px rgb(15 23 42 / 10%);
+}
+.home-template-card-wrap:hover .home-template-card__delete,
+.home-template-card__delete:focus-visible { opacity: 1; }
+.home-template-card__delete:hover { color: var(--od-danger, #c0392b); }
+.home-template-card__selected-mark {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--n-secondary, #006876);
+  color: #fff;
+  box-shadow: 0 4px 10px rgb(0 104 118 / 28%);
+}
+.home-template-card__selected-mark svg { width: 14px; height: 14px; }
 
 /* The bundled NexaEdge recording is an example like any other, so it rides in
    the same rail as the static cases. The play glyph and accent border say it

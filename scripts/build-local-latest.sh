@@ -91,6 +91,16 @@ npm run bundle:officecli:mac
 # build's decision, not build history's.
 rm -rf "${APP_PATH}/Contents/Resources/mop-runtime"
 
+# Same carry-over, same preference order, different payload: a local build stages
+# no presentation runtime, but a DMG build's staged copy survives in the bundle
+# and both runtimeenv.BridgeEnv and officecli's resolver prefer
+# Contents/Resources/presentation over the checkout. That copy is whatever the
+# staging list contained the day the DMG was built -- it carries the four markers
+# the resolvers check, so it wins, and then the JSSDK Host runner it never staged
+# (tools/execute-jssdk.mjs) is missing and PPTX generation fails. Drop it so this
+# build runs against ${PRESENTATION_DIR}, which is the checkout it was built from.
+rm -rf "${APP_PATH}/Contents/Resources/presentation"
+
 echo "[build-local-latest] verifying runtime dependencies"
 "${APP_PATH}/Contents/MacOS/officedex" --verify-runtime
 
@@ -101,7 +111,7 @@ echo "[build-local-latest] verifying runtime dependencies"
 # and because the app prefers the runtime beside its executable over the one on
 # PATH, it was also the one the worker ran, straight into a dyld abort.
 echo "[build-local-latest] verifying packaged runtime payloads"
-node scripts/verify-packaged-runtime.mjs build/bin --may-be-absent=mop-runtime
+node scripts/verify-packaged-runtime.mjs build/bin --may-be-absent=mop-runtime,presentation
 
 echo "[build-local-latest] OfficeCLI build metadata"
 go version -m "${OFFICECLI_SOURCE_BIN}" | sed -n '1,5p'

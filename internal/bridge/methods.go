@@ -5,7 +5,7 @@ package bridge
 // silently stops matching; officecli's registry test compares against these
 // through the cross-repo contract test.
 const (
-	MethodTaskSkipResearch                   = "task/skip_research"
+	MethodTaskSkipResearch = "task/skip_research"
 	// The live-gear trio: officecli absorbs an intervention and holds the run at
 	// the next page boundary, which is what the desktop's steering bar and pause
 	// button promise the user.
@@ -20,6 +20,7 @@ const (
 	MethodTaskStatus                         = "task/status"
 	MethodTaskCancel                         = "task/cancel"
 	MethodPptxPlanJS                         = "pptx/plan-js"
+	MethodPptxAnalyzeTemplate                = "pptx/analyze-template"
 	MethodImageTemplatesList                 = "image_templates/list"
 	MethodImageTemplatesCreate               = "image_templates/create"
 	MethodImageTemplatePublishRequestsCreate = "image_template_publish_requests/create"

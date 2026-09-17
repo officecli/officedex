@@ -183,7 +183,12 @@ function normalizeGenerationMode(value: unknown): GenerateInput["generationMode"
 
 function normalizeGenerateInputForGeneration(values: GenerateInput): GenerateInput {
   const next: GenerateInput = { ...values };
-  if (next.documentType !== "pptx") delete next.pptxWorkflow;
+  if (next.documentType !== "pptx") {
+    delete next.pptxWorkflow;
+    delete next.templateId;
+    delete next.templateVersion;
+    delete next.templateAssetDir;
+  }
   const generationMode = generationModeForDocumentType(next.documentType);
   if (generationMode) {
     next.generationMode = normalizeGenerationMode(next.generationMode);
@@ -694,6 +699,9 @@ function OfficeDexApp() {
         referenceImages: submittedValues.referenceImages,
         imageRatio: submittedValues.imageRatio,
         fps: submittedValues.fps,
+        templateId: submittedValues.templateId,
+        templateVersion: submittedValues.templateVersion,
+        templateAssetDir: submittedValues.templateAssetDir,
       },
       parentTaskId: values.parentTaskId,
     };
@@ -706,7 +714,7 @@ function OfficeDexApp() {
     setActiveNav("document");
     setBusy(false);
     try {
-      const generateInput: GenerateInput = noProject
+        const generateInput: GenerateInput = noProject
         ? { ...submittedValues, topic, noProject: true, workspaceId: undefined }
         : { ...submittedValues, topic, workspaceId: targetWorkspace?.id };
       const result = await officecli.generate(generateInput);
@@ -795,6 +803,9 @@ function OfficeDexApp() {
       enableImages: resumeCheckpoint ? ([...task.events].reverse().find(event => typeof event.payload?.resume_images === "boolean")?.payload?.resume_images as boolean | undefined) ?? persistedSettings.defaults.enableImages : persistedSettings.defaults.enableImages,
       imageQuality: persistedSettings.defaults.imageQuality,
       sourceFile: input.sourceFile,
+      templateId: input.templateId,
+      templateVersion: input.templateVersion,
+      templateAssetDir: input.templateAssetDir,
     };
     if (documentType === "img") {
       values.referenceImages = input.referenceImages;
@@ -849,6 +860,20 @@ function OfficeDexApp() {
       filters: [{ name: "Text files", extensions: ["txt", "md", "markdown", "csv", "tsv", "log", "json"] }],
     });
     return selected ?? [];
+  }, []);
+
+  const importHomePptxTemplate = useCallback(async () => {
+    const selected = await officecli.openFileDialog({
+      filters: [{ name: "PowerPoint templates", extensions: ["pptx"] }],
+    });
+    if (!selected || !officecli.importPptxTemplate) return undefined;
+    const imported = await officecli.importPptxTemplate({ sourcePath: selected });
+    return {
+      ...imported,
+      supportedPageTypes: [],
+      assetCounts: { logo: 0, icons: 0, images: 0, decorative: 0 },
+      warnings: [],
+    };
   }, []);
 
   async function startTaskFromHome(input: HomeTaskIntake) {
@@ -930,6 +955,11 @@ function OfficeDexApp() {
     await submit({
       documentType: route.documentType,
       ...(route.documentType === "pptx" ? { pptxWorkflow: input.pptxWorkflow } : {}),
+      ...(route.documentType === "pptx" && input.templateId ? {
+        templateId: input.templateId,
+        templateVersion: input.templateVersion,
+        templateAssetDir: input.templateAssetDir,
+      } : {}),
       generationMode: input.advancedMode ? "plan" : generationModeForDocumentType(route.documentType),
       topic: route.documentType === "pptx" ? PRESENTATION_PLACEHOLDER_TOPIC : summarizePrompt(input.prompt),
       prompt: taskPrompt,
@@ -1421,6 +1451,21 @@ function OfficeDexApp() {
     }
   }, [clearError, closeInlinePreview, previewArtifact, removeRecentFile, selectedTaskID, state.tasks, tasks]);
 
+  const deleteSidebarDocuments = useCallback(async (documentsToDelete: SidebarDocument[]) => {
+    // Reuse the single-document cleanup path while serializing state changes
+    // for a folded group, so active previews and recent files stay consistent.
+    const handledConversations = new Set<string>();
+    for (const document of documentsToDelete) {
+      // A conversation can have several task rows (for example, retries or
+      // edits). The single-row delete already removes that whole lineage, so
+      // avoid issuing duplicate bridge deletes for the remaining rows.
+      const key = document.conversationId || document.id;
+      if (handledConversations.has(key)) continue;
+      handledConversations.add(key);
+      await deleteSidebarDocument(document);
+    }
+  }, [deleteSidebarDocument]);
+
   // ---- MOP live drawing --------------------------------------------------
   // The first task.vibe_ops for a task opens the presentation editor on a
   // blank draft and the replay sequencer inside PptxViewer draws the deck as
@@ -1866,6 +1911,7 @@ function OfficeDexApp() {
         onSelectWorkspace={activeNav === "home" ? selectHomeWorkspace : selectWorkspace}
         onOpenDocument={openSidebarDocument}
         onDeleteDocument={deleteSidebarDocument}
+        onDeleteDocuments={deleteSidebarDocuments}
         onSelectAllFiles={selectAllHomeFiles}
         onAddWorkspace={addWorkspace}
         onRenameWorkspace={renameWorkspace}
@@ -1895,7 +1941,7 @@ function OfficeDexApp() {
             onRemoveFile={removeRecentFile}
             droppedTaskPaths={droppedTaskPaths}
             onRetryRecentFiles={() => void refreshRecentFiles(homeWorkspaceId)}
-            pickers={{ taskFile: pickHomeTaskFile, taskDirectory: pickHomeTaskDirectory, referenceImages: pickHomeReferenceImages, referenceTextFiles: pickHomeReferenceTextFiles }}
+            pickers={{ taskFile: pickHomeTaskFile, taskDirectory: pickHomeTaskDirectory, referenceImages: pickHomeReferenceImages, referenceTextFiles: pickHomeReferenceTextFiles, importPptxTemplate: importHomePptxTemplate, subscribePptxTemplateProgress: officecli.onPptxTemplateProgress, deletePptxTemplate: officecli.deletePptxTemplate }}
             workspaceActions={{ select: selectHomeWorkspace, selectAll: selectAllHomeFiles, add: addWorkspace }}
             taskActions={{
               open: openTaskFromHome,

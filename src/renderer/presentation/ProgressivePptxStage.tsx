@@ -44,13 +44,6 @@ type OutlineItem = { id: string; title: string; detail?: string; estimatedSlides
  */
 const TIMING_VISIBLE_MS = 30_000;
 
-/**
- * One failed probe is not news. The status lookup shares a bridge process with
- * the run it is asking about, so a single miss during startup is expected; only
- * a repeated failure is worth telling the user about.
- */
-const STATUS_CHECK_FAILURES_BEFORE_NOTICE = 2;
-
 function asOutlineItem(value: unknown, index: number): OutlineItem | null {
   if (typeof value === "string" && value.trim()) return { id: `outline-${index + 1}`, title: value.trim() };
   if (!value || typeof value !== "object") return null;
@@ -220,7 +213,6 @@ function PptxFlowContent({ task, draftReady = false, editor, onBriefChange, onOu
   const recoveryPath = [...task.events].reverse().find(event => typeof event.payload?.resume_checkpoint === "string" && event.payload.resume_checkpoint)?.payload?.resume_checkpoint as string | undefined;
   const [now, setNow] = useState(Date.now);
   const mountedAt = useRef(Date.now());
-  const [checked, setChecked] = useState(false);
   const isDemo = demoTick !== undefined;
   const waiting = task.status === "question" || task.status === "plan_review";
   const processing = !waiting && (task.status === "starting" || task.status === "running");
@@ -245,8 +237,6 @@ function PptxFlowContent({ task, draftReady = false, editor, onBriefChange, onOu
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
   const [error, setError] = useState<string>();
-  const [statusCheckFailed, setStatusCheckFailed] = useState(false);
-  const statusCheckFailures = useRef(0);
   const refreshRef = useRef(onCheckStatus ?? onRefresh);
   refreshRef.current = onCheckStatus ?? onRefresh;
   const activityRef = useRef(runtime);
@@ -266,11 +256,8 @@ function PptxFlowContent({ task, draftReady = false, editor, onBriefChange, onOu
       pending = true;
       try {
         await refreshRef.current?.();
-        statusCheckFailures.current = 0;
-        setStatusCheckFailed(false);
       } catch {
-        statusCheckFailures.current += 1;
-        if (statusCheckFailures.current >= STATUS_CHECK_FAILURES_BEFORE_NOTICE) setStatusCheckFailed(true);
+        // A missed probe is not news: the next tick asks again.
       }
       finally { pending = false; }
     }, onCheckStatus ? 3000 : 30_000);
@@ -360,12 +347,6 @@ function PptxFlowContent({ task, draftReady = false, editor, onBriefChange, onOu
       {(primary || (question && onQuestionAnswer)) && (phase !== "outline" || outlineDraft.length > 0) ? <Button className="is-primary" disabled={busy} onClick={() => void runAction()} icon={<Play size={14} />}>{busy ? t("pptx.stage.processing") : t(phase === "outline" ? "pptx.stage.confirmOutline" : "pptx.stage.confirmBrief")}</Button> : null}
     </div>
   </div> : null;
-  const refreshStatus = async () => {
-    if ((!onRefresh && !onCheckStatus) || inFlight.current) return;
-    inFlight.current = true; setBusy(true); setError(undefined); setChecked(false);
-    try { await onCheckStatus?.(); await onRefresh?.(); setStatusCheckFailed(false); setChecked(true); } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
-    finally { inFlight.current = false; setBusy(false); }
-  };
   // Every action the stopped-run panel offers goes through the same guard, so a
   // double click cannot start two runs and a rejected action surfaces in the
   // stage instead of vanishing.
@@ -395,8 +376,6 @@ function PptxFlowContent({ task, draftReady = false, editor, onBriefChange, onOu
       <div className="pptx-flow-working" role="status" aria-live="polite"><Sparkles size={17} aria-hidden="true" /><div><strong>{delayed ? copy("delayed") : label}</strong>{delayed ? <span>{backendAlive ? copy("stillProcessing") : copy("delayedHint")}</span> : runtime.message ? <span className="pptx-flow-runtime-detail">{runtime.message}</span> : null}<div className="pptx-flow-skeleton" aria-hidden="true"><i /><i /></div></div>{!delayed ? <span className="pptx-flow-dots" aria-hidden="true"><i /><i /><i /></span> : null}</div>
       {!isDemo && elapsedMs >= TIMING_VISIBLE_MS ? <div className="pptx-flow-timing"><span>{copy("elapsed")} <b>{formatDuration(elapsedMs)}</b></span><span>{copy("lastUpdate")} <b>{quietMs < 1000 ? copy("justNow") : quietMs < 60_000 ? `${Math.floor(quietMs / 1000)}${copy("secondsAgo")}` : `${Math.floor(quietMs / 60_000)}${copy("minutesAgo")}`}</b></span></div> : null}
       {processing && runtime.step === "plan.research" && onSkipResearch ? <Button disabled={busy} onClick={() => { if (inFlight.current) return; inFlight.current = true; setBusy(true); void onSkipResearch().catch(reason => setError(String(reason))).finally(() => { inFlight.current = false; setBusy(false); }); }}>{copy("skipResearch")}</Button> : null}
-      {statusCheckFailed ? <p className="pptx-flow-status-note" data-testid="pptx-status-check-note">{copy("statusUnavailable")}</p> : null}
-      {(onRefresh || onCheckStatus) ? <div className="pptx-flow-refresh"><Button disabled={busy} onClick={() => void refreshStatus()}>{copy("refresh")}</Button>{checked ? <span role="status">{copy("refreshed")}</span> : null}</div> : null}
     </div>
     {readySlides.length === 0 && !editor ? waitingPreview : null}
   </div>;

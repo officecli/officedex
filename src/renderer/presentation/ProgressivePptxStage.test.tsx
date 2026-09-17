@@ -488,14 +488,12 @@ describe("MOP runtime progress before slide previews", () => {
     expect(screen.queryByTestId("pptx-flow-outline")).toBeNull();
     expect(screen.queryByRole("progressbar")).toBeNull();
   });
-  it("offers a read-only status refresh after a quiet period, and surfaces failure", async () => {
+  it("marks a quiet run as delayed without offering a manual status check", () => {
     const refresh = vi.fn().mockRejectedValue(new Error("Bridge unavailable"));
     render(<ProgressivePptxStage task={task({ status: "running", events: [{ type: "task.progress", ts: new Date(Date.now() - 130000).toISOString(), payload: { step: "assemble", content: "Generating image asset (1/2)" } }] })} onRefresh={refresh} />);
     expect(screen.getByRole("status")).toHaveTextContent("No new progress for a while");
     expect(screen.getByTestId("progressive-pptx-stage")).toHaveAttribute("data-delayed", "true");
-    fireEvent.click(screen.getByRole("button", { name: "Refresh status" }));
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Bridge unavailable"));
-    expect(refresh).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("button", { name: "Refresh status" })).toBeNull();
   });
   it("clears delayed feedback when a new provider heartbeat arrives", () => {
     const first = task({ status: "running", events: [{ type: "task.progress" as const, ts: new Date(Date.now() - 130000).toISOString(), payload: { step: "assemble", content: "Generating image asset (1/2)" } }] });
@@ -612,15 +610,5 @@ describe("compact runtime polling", () => {
   view.rerender(<ProgressivePptxStage task={promoted.tasks["server-1"]} onCheckStatus={check}/>);
   await act(async()=>{await vi.advanceTimersByTimeAsync(3000)});
   expect(check).toHaveBeenCalledTimes(1);
- });
- it("reports a sustained status failure, not a single miss", async () => {
-  vi.useFakeTimers();vi.setSystemTime(new Date("2026-09-11T08:00:00Z"));
-  const check=vi.fn(async()=>{throw new Error("task not found")});
-  const current=task({status:"running",createdAt:"2026-09-11T08:00:00Z"});
-  render(<LocaleProvider value="en"><ProgressivePptxStage task={current} onCheckStatus={check}/></LocaleProvider>);
-  await act(async()=>{await vi.advanceTimersByTimeAsync(3000)});
-  expect(screen.queryByTestId("pptx-status-check-note")).toBeNull();
-  await act(async()=>{await vi.advanceTimersByTimeAsync(3000)});
-  expect(screen.getByTestId("pptx-status-check-note")).toHaveTextContent("Status check unavailable");
  });
 });

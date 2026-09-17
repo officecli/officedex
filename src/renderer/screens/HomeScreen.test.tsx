@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DesktopTask, RecentFile } from "../../shared/types";
 import { LocaleProvider } from "../i18n";
+import { PPTX_TEMPLATE_CATALOG_KEY, type PptxTemplateAssetSummary } from "../presentation/pptxTemplateAssets";
 import { toast } from "../ui";
 import { HomeScreen } from "./HomeScreen";
 
@@ -20,7 +21,29 @@ const attentionTasks: DesktopTask[] = [{
   plan: { id: "plan-a", markdown: "# Plan", revision: 1 },
 }];
 
-afterEach(cleanup);
+const localTemplate: PptxTemplateAssetSummary = {
+  id: "tpl-company",
+  name: "Company brand",
+  sourceFileName: "brand.pptx",
+  localAssetDir: "/local/ppt-templates/tpl-company",
+  status: "ready",
+  version: 2,
+  pageCount: 12,
+  supportedPageTypes: [],
+  assetCounts: { logo: 0, icons: 0, images: 0, decorative: 0 },
+  warnings: [],
+  createdAt: "2026-09-14T00:00:00.000Z",
+  updatedAt: "2026-09-14T00:00:00.000Z",
+};
+
+function seedLocalTemplates(templates: PptxTemplateAssetSummary[] = [localTemplate]) {
+  localStorage.setItem(PPTX_TEMPLATE_CATALOG_KEY, JSON.stringify({ version: 1, templates }));
+}
+
+afterEach(() => {
+  cleanup();
+  localStorage.removeItem(PPTX_TEMPLATE_CATALOG_KEY);
+});
 
 function renderHome(overrides: Partial<React.ComponentProps<typeof HomeScreen>> = {}, locale: "en" | "zh" = "en") {
   const props: React.ComponentProps<typeof HomeScreen> = {
@@ -293,6 +316,123 @@ describe("HomeScreen", () => {
     expect(screen.getByText("Offline")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(retry).toHaveBeenCalledOnce();
+  });
+
+  it("selects a local PPT template, marks the card, and submits the binding", async () => {
+    seedLocalTemplates();
+    const props = renderHome();
+    const card = screen.getByRole("button", { name: "Company brand" });
+    expect(card).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(card);
+    expect(card).toHaveAttribute("aria-pressed", "true");
+    expect(card).toHaveClass("is-selected");
+    expect(within(card).getByText("Selected")).toBeTruthy();
+    expect(screen.getByLabelText("Using template")).toHaveTextContent("Company brand");
+    fireEvent.change(screen.getByRole("textbox", { name: "Describe the result you want" }), { target: { value: "Make a brand launch deck" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
+    await waitFor(() => expect(props.onStartTask).toHaveBeenCalledWith({
+      prompt: "Make a brand launch deck",
+      documentType: "pptx",
+      templateId: "tpl-company",
+      templateVersion: 2,
+      templateAssetDir: "/local/ppt-templates/tpl-company",
+    }));
+  });
+
+  it("deselects a local PPT template and omits the binding on submit", async () => {
+    seedLocalTemplates();
+    const props = renderHome();
+    fireEvent.click(screen.getByRole("button", { name: "Company brand" }));
+    fireEvent.click(screen.getByRole("button", { name: "Company brand" }));
+    expect(screen.getByRole("button", { name: "Company brand" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByLabelText("Using template")).toBeNull();
+    fireEvent.change(screen.getByRole("textbox", { name: "Describe the result you want" }), { target: { value: "Make a brand launch deck" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
+    await waitFor(() => expect(props.onStartTask).toHaveBeenCalledWith({
+      prompt: "Make a brand launch deck",
+      documentType: "pptx",
+    }));
+  });
+
+  it("deletes a local PPT template after confirmation", async () => {
+    seedLocalTemplates();
+    const deletePptxTemplate = vi.fn(async () => undefined);
+    renderHome({ pickers: { deletePptxTemplate } });
+    fireEvent.click(screen.getByRole("button", { name: "Company brand" }));
+    expect(screen.getByLabelText("Using template")).toHaveTextContent("Company brand");
+    fireEvent.click(screen.getByRole("button", { name: "Delete template Company brand" }));
+    expect(screen.getByRole("dialog")).toHaveTextContent("Delete “Company brand”?");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(deletePptxTemplate).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Company brand" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Delete template Company brand" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(deletePptxTemplate).toHaveBeenCalledWith("/local/ppt-templates/tpl-company"));
+    expect(screen.queryByRole("button", { name: "Company brand" })).toBeNull();
+    expect(screen.queryByLabelText("Using template")).toBeNull();
+    expect(JSON.parse(localStorage.getItem(PPTX_TEMPLATE_CATALOG_KEY) ?? "{}").templates).toEqual([]);
+  });
+
+  it("switches the output type to PPTX when a local template is selected", () => {
+    seedLocalTemplates();
+    renderHome();
+    fireEvent.click(screen.getByRole("button", { name: "Image" }));
+    expect(screen.getByRole("button", { name: "Image" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Company brand" }));
+    expect(screen.getByRole("button", { name: "PPTX" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Company brand" })).toHaveClass("is-selected");
+  });
+
+  it("shows conversion and skill distillation progress while a template imports", async () => {
+    let emit: ((event: import("../../shared/types").PptxTemplateProgress) => void) | undefined;
+    let finish: ((value: PptxTemplateAssetSummary) => void) | undefined;
+    const imported: PptxTemplateAssetSummary = { ...localTemplate, id: "tpl-progress", name: "Brand kit" };
+    const importPptxTemplate = vi.fn(() => new Promise<PptxTemplateAssetSummary>((resolve) => { finish = resolve; }));
+    renderHome({
+      pickers: {
+        importPptxTemplate,
+        subscribePptxTemplateProgress: (callback) => {
+          emit = callback;
+          return () => undefined;
+        },
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Import PPT template" }));
+    await waitFor(() => expect(emit).toBeTypeOf("function"));
+    emit!({
+      id: "tpl-progress", name: "Brand kit", sourceFileName: "brand.pptx",
+      localAssetDir: "/tmp/tpl-progress", status: "imported", stage: "convert", step: 2, steps: 5,
+    });
+    const progress = await screen.findByTestId("pptx-template-progress");
+    expect(progress).toHaveAttribute("data-stage", "convert");
+    expect(progress).toHaveTextContent("Converting to an editable structure");
+    emit!({
+      id: "tpl-progress", name: "Brand kit", sourceFileName: "brand.pptx",
+      localAssetDir: "/tmp/tpl-progress", status: "analyzing", stage: "skill", step: 5, steps: 5,
+    });
+    await waitFor(() => expect(screen.getByTestId("pptx-template-progress")).toHaveAttribute("data-stage", "skill"));
+    expect(screen.getByTestId("pptx-template-progress")).toHaveTextContent("Distilling the template skill");
+    finish!(imported);
+    await waitFor(() => expect(screen.queryByTestId("pptx-template-progress")).toBeNull());
+    expect(screen.getByRole("button", { name: "Brand kit" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("imports a local PPT template and selects it for the next generation", async () => {
+    const imported: PptxTemplateAssetSummary = { ...localTemplate, id: "tpl-imported", name: "Imported brand" };
+    const importPptxTemplate = vi.fn(async () => imported);
+    const props = renderHome({ pickers: { importPptxTemplate } });
+    fireEvent.click(screen.getByRole("button", { name: "Import PPT template" }));
+    const card = await screen.findByRole("button", { name: "Imported brand" });
+    expect(card).toHaveAttribute("aria-pressed", "true");
+    expect(card).toHaveClass("is-selected");
+    fireEvent.change(screen.getByRole("textbox", { name: "Describe the result you want" }), { target: { value: "Follow this template" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
+    await waitFor(() => expect(props.onStartTask).toHaveBeenCalledWith(expect.objectContaining({
+      documentType: "pptx",
+      templateId: "tpl-imported",
+      templateVersion: 2,
+      templateAssetDir: "/local/ppt-templates/tpl-company",
+    })));
   });
 });
 

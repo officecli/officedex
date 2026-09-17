@@ -294,6 +294,9 @@ type GenerateInput struct {
 	LocalPreview     bool                           `json:"localPreview,omitempty"`
 	PPTXBackend      string                         `json:"pptxBackend,omitempty"`
 	PPTXWorkflow     string                         `json:"pptxWorkflow,omitempty"`
+	TemplateID       string                         `json:"templateId,omitempty"`
+	TemplateVersion  int                            `json:"templateVersion,omitempty"`
+	TemplateAssetDir string                         `json:"templateAssetDir,omitempty"`
 }
 
 // ModifyInput is the renderer payload for the office.modify ("继续修改") flow:

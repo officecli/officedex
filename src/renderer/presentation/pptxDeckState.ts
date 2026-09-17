@@ -50,3 +50,32 @@ export function pptxOpStreamDrained(task: PptxDeckRunInput): boolean {
   if (task.status !== "completed") return false;
   return imageProgressFromOps(task.vibeOps ?? []).pending === 0;
 }
+
+export interface PptxTemplateBindingIssue {
+  slide: number;
+  code: "missing-layout" | "missing-asset-dir" | "unsupported-role";
+  message: string;
+}
+
+/** Validate clone metadata before a replay reaches the JS-SDK. */
+export function validatePptxTemplateBindings(ops: readonly VibeOp[] = []): PptxTemplateBindingIssue[] {
+  const issues: PptxTemplateBindingIssue[] = [];
+  for (const op of ops) {
+    if (op.op !== "slide.begin") continue;
+    const template = (op as VibeOp & { template?: { layoutId?: unknown; assetDir?: unknown; assetRoles?: unknown[] } }).template;
+    if (!template) continue;
+    const slide = Number(op.slide ?? 0);
+    if (typeof template.layoutId !== "string" || !template.layoutId.trim()) {
+      issues.push({ slide, code: "missing-layout", message: "Template slide has no layout binding" });
+    }
+    if (typeof template.assetDir !== "string" || !template.assetDir.trim()) {
+      issues.push({ slide, code: "missing-asset-dir", message: "Template slide has no local asset directory" });
+    }
+    for (const role of Array.isArray(template.assetRoles) ? template.assetRoles : []) {
+      if (!["title", "body", "image", "chart", "callout", "repeated-block", "logo"].includes(String(role))) {
+        issues.push({ slide, code: "unsupported-role", message: `Unsupported template asset role: ${String(role)}` });
+      }
+    }
+  }
+  return issues;
+}

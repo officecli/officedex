@@ -47,6 +47,7 @@ interface ShellProps {
   onSelectWorkspace: (workspaceId: string) => void;
   onOpenDocument?: (document: SidebarDocument) => void;
   onDeleteDocument?: (document: SidebarDocument) => void | Promise<void>;
+  onDeleteDocuments?: (documents: SidebarDocument[]) => void | Promise<void>;
   onSelectAllFiles: () => void;
   onAddWorkspace: () => void;
   onRenameWorkspace: (workspaceId: string, name: string) => void | Promise<void>;
@@ -54,7 +55,7 @@ interface ShellProps {
   onRemoveWorkspace: (workspaceId: string) => void;
 }
 
-export function Shell({ activeNav, children, inspector, editingDocument = false, documentOpenRevision = 0, signal, account, update, workspaces, documents, activeDocumentId, activeWorkspaceId, onNavChange, onSelectWorkspace, onOpenDocument, onDeleteDocument, onSelectAllFiles, onAddWorkspace, onRenameWorkspace, onRevealWorkspace, onRemoveWorkspace }: ShellProps) {
+export function Shell({ activeNav, children, inspector, editingDocument = false, documentOpenRevision = 0, signal, account, update, workspaces, documents, activeDocumentId, activeWorkspaceId, onNavChange, onSelectWorkspace, onOpenDocument, onDeleteDocument, onDeleteDocuments, onSelectAllFiles, onAddWorkspace, onRenameWorkspace, onRevealWorkspace, onRemoveWorkspace }: ShellProps) {
   const t = useT();
   const [spreadsheetCompact, setSpreadsheetCompact] = useState(true);
   const [defaultCompact, setDefaultCompact] = useState(() => {
@@ -224,6 +225,7 @@ export function Shell({ activeNav, children, inspector, editingDocument = false,
         }}
         onOpenDocument={onOpenDocument}
         onDeleteDocument={onDeleteDocument}
+        onDeleteDocuments={onDeleteDocuments}
         onAddWorkspace={onAddWorkspace}
         onRenameWorkspace={onRenameWorkspace}
         onRevealWorkspace={onRevealWorkspace}

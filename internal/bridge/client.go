@@ -34,13 +34,14 @@ import (
 
 // Defaults mirror the TypeScript constructor defaults.
 const (
-	DefaultRequestTimeout       = 30 * time.Second
-	DefaultTaskInvokeTimeout    = 30 * time.Minute
-	DefaultPptxJSPlanTimeout    = 45 * time.Second
-	DefaultMaxReconnectAttempts = 8
-	DefaultBaseReconnectDelay   = 1 * time.Second
-	maxReconnectDelay           = 30 * time.Second
-	stderrTailBytes             = 8192
+	DefaultRequestTimeout             = 30 * time.Second
+	DefaultTaskInvokeTimeout          = 30 * time.Minute
+	DefaultPptxJSPlanTimeout          = 45 * time.Second
+	DefaultPptxTemplateAnalyzeTimeout = 2 * time.Minute
+	DefaultMaxReconnectAttempts       = 8
+	DefaultBaseReconnectDelay         = 1 * time.Second
+	maxReconnectDelay                 = 30 * time.Second
+	stderrTailBytes                   = 8192
 )
 
 // StrandedTaskCode tags the synthetic task.failed events emitted when the child
@@ -61,21 +62,22 @@ const (
 // to find the officecli executable. Tests supply CreateTransport directly to
 // avoid spawning processes.
 type Options struct {
-	ClientID             string
-	BridgeInstanceID     string
-	RuntimeRoot          string
-	NewBridgeInstanceID  func() string
-	BinaryPath           string
-	ResolveBinary        func() string
-	Cwd                  string
-	Env                  []string
-	CreateTransport      TransportFactory
-	RequestTimeout       time.Duration
-	TaskInvokeTimeout    time.Duration
-	PptxJSPlanTimeout    time.Duration
-	DisableAutoReconnect bool
-	MaxReconnectAttempts int
-	BaseReconnectDelay   time.Duration
+	ClientID                   string
+	BridgeInstanceID           string
+	RuntimeRoot                string
+	NewBridgeInstanceID        func() string
+	BinaryPath                 string
+	ResolveBinary              func() string
+	Cwd                        string
+	Env                        []string
+	CreateTransport            TransportFactory
+	RequestTimeout             time.Duration
+	TaskInvokeTimeout          time.Duration
+	PptxJSPlanTimeout          time.Duration
+	PptxTemplateAnalyzeTimeout time.Duration
+	DisableAutoReconnect       bool
+	MaxReconnectAttempts       int
+	BaseReconnectDelay         time.Duration
 	// LogDir, when non-empty, enables async tee of stdout/stderr chunks to
 	// rotating per-day files under that directory (`bridge-YYYYMMDD.log`).
 	// Writes are non-blocking; see Logfile.
@@ -716,6 +718,9 @@ func (c *Client) InvokeGenerate(ctx context.Context, input types.GenerateInput) 
 		"topic":              input.Topic,
 		"prompt":             input.Prompt,
 		"prompt_template_id": input.PromptTemplateID,
+		"template_id":        input.TemplateID,
+		"template_version":   input.TemplateVersion,
+		"template_asset_dir": input.TemplateAssetDir,
 		"out":                input.OutputDir,
 		"publish":            input.Publish,
 		"resume_checkpoint":  input.ResumeCheckpoint,
@@ -1035,6 +1040,21 @@ func (c *Client) PlanPptxJS(ctx context.Context, input PlanPptxJSInput) (PlanPpt
 		return PlanPptxJSResult{}, errors.New("bridge: pptx planner returned empty source")
 	}
 	return result, nil
+}
+
+func (c *Client) AnalyzePptxTemplate(ctx context.Context, facts json.RawMessage) (json.RawMessage, error) {
+	if len(facts) == 0 || !json.Valid(facts) {
+		return nil, errors.New("bridge: template facts JSON is required")
+	}
+	timeout := c.options.PptxTemplateAnalyzeTimeout
+	if timeout <= 0 {
+		timeout = DefaultPptxTemplateAnalyzeTimeout
+	}
+	raw, err := c.requestWithTimeout(ctx, MethodPptxAnalyzeTemplate, map[string]any{"facts": json.RawMessage(facts)}, timeout)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(strings.TrimSpace(string(raw))), nil
 }
 
 // TaskInvokeResult is the shape returned by InvokeGenerate.

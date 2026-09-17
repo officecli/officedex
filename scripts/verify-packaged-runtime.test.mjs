@@ -181,6 +181,42 @@ test("a local build may ship without the runtime, and says so", async () => {
   await rm(root, { recursive: true, force: true });
 });
 
+test("a local build may ship without the presentation tree, converter included", async () => {
+  // A local build runs against the presentation checkout, so it stages no
+  // runtime at all. mop-convert lives inside that tree: tolerating the tree
+  // without tolerating what it contains would fail every local build on a
+  // converter that was never supposed to be there.
+  const { root, bin } = await packageTree({
+    platform: "darwin",
+    omit: ["presentation", "mop-convert"],
+  });
+  const result = await verifyPackagedRuntime(bin, {
+    platform: "darwin",
+    mayBeAbsent: ["presentation"],
+    verifyRuntime: runtimeStarts,
+  });
+  assert.deepEqual(result.degraded.map((entry) => entry.split(":")[0]).sort(), [
+    "MOP presentation runtime",
+    "mop-convert",
+  ]);
+  await rm(root, { recursive: true, force: true });
+});
+
+test("tolerating the presentation tree does not excuse one that is there and gutted", async () => {
+  // The stale bundled copy that broke PPTX generation was present and passed
+  // every marker check; only the payloads it never staged were missing.
+  const { root, bin } = await packageTree({ platform: "darwin", omit: ["mop-convert"] });
+  await assert.rejects(
+    verifyPackagedRuntime(bin, {
+      platform: "darwin",
+      mayBeAbsent: ["presentation"],
+      verifyRuntime: runtimeStarts,
+    }),
+    /mop-convert/,
+  );
+  await rm(root, { recursive: true, force: true });
+});
+
 test("being allowed to be absent does not excuse being broken", async () => {
   // The tolerance is for builds that ship no runtime, not for builds that ship
   // a dead one: the app prefers the runtime beside its executable over PATH,

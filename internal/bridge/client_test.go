@@ -552,6 +552,51 @@ func TestInvokeGenerateSendsPromptTemplateID(t *testing.T) {
 	}
 }
 
+func TestInvokeGenerateSendsTemplateBinding(t *testing.T) {
+	client, fake := newClientWithFake(t)
+	defer client.Stop()
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := client.InvokeGenerate(context.Background(), types.GenerateInput{
+			DocumentType:     types.DocPPTX,
+			Topic:            "Brand launch",
+			Prompt:           "Make a brand launch deck",
+			TemplateID:       "tpl-company",
+			TemplateVersion:  2,
+			TemplateAssetDir: "/local/ppt-templates/tpl-company",
+		})
+		done <- err
+	}()
+
+	first := fake.readRequest(t)
+	fake.writeResponse(t, first.idString(), map[string]any{"id": "sess-1"}, nil)
+
+	second := fake.readRequest(t)
+	var params map[string]any
+	if err := json.Unmarshal(second.Params, &params); err != nil {
+		t.Fatalf("decode params: %v", err)
+	}
+	args, _ := params["args"].(map[string]any)
+	if args["template_id"] != "tpl-company" {
+		t.Fatalf("template_id = %v, want tpl-company", args["template_id"])
+	}
+	if args["template_version"] != float64(2) {
+		t.Fatalf("template_version = %v, want 2", args["template_version"])
+	}
+	if args["template_asset_dir"] != "/local/ppt-templates/tpl-company" {
+		t.Fatalf("template_asset_dir = %v", args["template_asset_dir"])
+	}
+	fake.writeResponse(t, second.idString(), map[string]any{
+		"task_id":    "task-pptx",
+		"session_id": "sess-1",
+		"status":     "starting",
+	}, nil)
+	if err := <-done; err != nil {
+		t.Errorf("InvokeGenerate: %v", err)
+	}
+}
+
 func TestInvokeGenerateKeepsFastGenerationNonInteractive(t *testing.T) {
 	client, fake := newClientWithFake(t)
 	defer client.Stop()

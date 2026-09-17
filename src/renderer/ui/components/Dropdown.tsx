@@ -24,11 +24,11 @@ export interface MenuProps { readonly items?: readonly MenuItem[]; readonly onCl
 export interface DropdownProps {
   readonly menu: MenuProps;
   readonly children: ReactElement;
-  readonly trigger?: readonly ("click" | "hover")[];
+  readonly trigger?: readonly ("click" | "hover" | "contextMenu")[];
   readonly placement?: "top" | "right" | "bottom" | "left" | "bottomRight";
 }
 
-export function Dropdown({ menu, children, placement = "bottom" }: DropdownProps) {
+export function Dropdown({ menu, children, trigger = ["click"], placement = "bottom" }: DropdownProps) {
   const [open, setOpen] = useState(false);
   const child = Children.only(children);
   if (!isValidElement(child)) return null;
@@ -77,7 +77,14 @@ export function Dropdown({ menu, children, placement = "bottom" }: DropdownProps
     >
       <span
         className="od-dropdown-trigger"
-        onClickCapture={() => setOpen((current) => !current)}
+        onClickCapture={() => {
+          if (trigger.includes("click")) setOpen((current) => !current);
+        }}
+        onContextMenu={(event) => {
+          if (!trigger.includes("contextMenu")) return;
+          event.preventDefault();
+          setOpen(true);
+        }}
       >
         {child}
       </span>

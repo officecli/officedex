@@ -42,6 +42,8 @@ export interface ProjectSidebarProps {
   onSelectWorkspace: (workspaceId: string) => void;
   onOpenDocument?: (document: SidebarDocument) => void;
   onDeleteDocument?: (document: SidebarDocument) => void | Promise<void>;
+  /** Deletes a folded group in one operation after the sidebar confirms it. */
+  onDeleteDocuments?: (documents: SidebarDocument[]) => void | Promise<void>;
   onAddWorkspace: () => void;
   onRenameWorkspace: (workspaceId: string, name: string) => void | Promise<void>;
   onRevealWorkspace: (workspacePath: string) => void;
@@ -76,7 +78,7 @@ function groupByTitle(documents: SidebarDocument[]): Array<{ title: string; docu
 const ATTENTION_STATUSES = new Set(["question", "plan_review"]);
 const RUNNING_STATUSES = new Set(["starting", "running"]);
 
-export function ProjectSidebar({ workspaces, documents = [], activeWorkspaceId, activeDocumentId, onSelectAll, onSelectWorkspace, onOpenDocument, onDeleteDocument, onAddWorkspace, onRenameWorkspace, onRevealWorkspace, onRemoveWorkspace, onOpenSettings, onOpenAccount, signal, account, updateRow, onPointerEnter, onPointerLeave }: ProjectSidebarProps) {
+export function ProjectSidebar({ workspaces, documents = [], activeWorkspaceId, activeDocumentId, onSelectAll, onSelectWorkspace, onOpenDocument, onDeleteDocument, onDeleteDocuments, onAddWorkspace, onRenameWorkspace, onRevealWorkspace, onRemoveWorkspace, onOpenSettings, onOpenAccount, signal, account, updateRow, onPointerEnter, onPointerLeave }: ProjectSidebarProps) {
   const t = useT();
   const [renamingId, setRenamingId] = useState<string>();
   const [renameValue, setRenameValue] = useState("");
@@ -142,58 +144,95 @@ export function ProjectSidebar({ workspaces, documents = [], activeWorkspaceId, 
     });
   };
 
+  const confirmDeleteDocuments = (group: SidebarDocument[]) => {
+    if (group.length === 0) return;
+    dialog.confirm({
+      title: t("projectSidebar.deleteDocumentsTitle", { count: String(group.length), name: group[0].title }),
+      content: t("projectSidebar.deleteDocumentsBody", { count: String(group.length) }),
+      okText: t("projectSidebar.deleteDocuments", { count: String(group.length) }),
+      cancelText: t("projectSidebar.cancel"),
+      tone: "danger",
+      onOk: () => onDeleteDocuments
+        ? onDeleteDocuments(group)
+        : Promise.all(group.map((document) => onDeleteDocument?.(document))),
+    });
+  };
+
+  const documentMenu = (document: SidebarDocument): MenuProps => ({
+    items: [
+      { key: "open", label: t("projectSidebar.openDocument") },
+      ...(onDeleteDocument ? [{ key: "delete", label: t("projectSidebar.deleteDocument"), icon: <DeleteOutlined aria-hidden />, danger: true }] : []),
+    ],
+    onClick: ({ key }) => {
+      if (key === "open") onOpenDocument?.(document);
+      if (key === "delete") confirmDeleteDocument(document);
+    },
+  });
+
   const renderDocument = (document: SidebarDocument) => (
-    <div
-      className="project-sidebar__document"
-      data-active={document.id === activeDocumentId ? "true" : undefined}
-      key={document.id}
-    >
-      <button
-        type="button"
-        className="project-sidebar__document-open"
+    <Dropdown menu={documentMenu(document)} trigger={["contextMenu"]} placement="right" key={document.id}>
+      <div
+        className="project-sidebar__document"
         data-active={document.id === activeDocumentId ? "true" : undefined}
-        title={document.title}
-        onClick={() => onOpenDocument?.(document)}
       >
-        <DocTypeIcon type={document.documentType} />
-        <span>{document.title}</span>
-        {document.status && document.status !== "completed" ? (
-          <em className="project-sidebar__document-status" data-status={document.status} aria-label={t(`tasks.status.${document.status}`)} title={t(`tasks.status.${document.status}`)}>
-            {RUNNING_STATUSES.has(document.status) ? <i aria-hidden="true" /> : null}
-            {t(`tasks.status.${document.status}`)}
-          </em>
-        ) : null}
-      </button>
-      {onDeleteDocument ? (
         <button
           type="button"
-          className="project-sidebar__document-delete"
-          aria-label={t("projectSidebar.deleteDocumentAria", { name: document.title })}
-          title={t("projectSidebar.deleteDocument")}
-          onClick={() => confirmDeleteDocument(document)}
+          className="project-sidebar__document-open"
+          data-active={document.id === activeDocumentId ? "true" : undefined}
+          title={document.title}
+          onClick={() => onOpenDocument?.(document)}
         >
-          <DeleteOutlined aria-hidden />
+          <DocTypeIcon type={document.documentType} />
+          <span>{document.title}</span>
+          {document.status && document.status !== "completed" ? (
+            <em className="project-sidebar__document-status" data-status={document.status} aria-label={t(`tasks.status.${document.status}`)} title={t(`tasks.status.${document.status}`)}>
+              {RUNNING_STATUSES.has(document.status) ? <i aria-hidden="true" /> : null}
+              {t(`tasks.status.${document.status}`)}
+            </em>
+          ) : null}
         </button>
-      ) : null}
-    </div>
+        {onDeleteDocument ? (
+          <button
+            type="button"
+            className="project-sidebar__document-delete"
+            aria-label={t("projectSidebar.deleteDocumentAria", { name: document.title })}
+            title={t("projectSidebar.deleteDocument")}
+            onClick={() => confirmDeleteDocument(document)}
+          >
+            <DeleteOutlined aria-hidden />
+          </button>
+        ) : null}
+      </div>
+    </Dropdown>
   );
 
   const renderFolded = (group: SidebarDocument[], key: string) => {
     const open = unfolded.includes(key);
     return (
       <div className="project-sidebar__fold" key={key}>
-        <button
-          type="button"
-          className="project-sidebar__fold-toggle"
-          aria-expanded={open}
-          aria-label={t("projectSidebar.foldedDocumentsAria", { count: String(group.length), name: group[0].title })}
-          title={group[0].title}
-          onClick={() => setUnfolded((current) => open ? current.filter((item) => item !== key) : [...current, key])}
+        <Dropdown
+          menu={{
+            items: onDeleteDocument || onDeleteDocuments
+              ? [{ key: "delete-all", label: t("projectSidebar.deleteDocuments", { count: String(group.length) }), icon: <DeleteOutlined aria-hidden />, danger: true }]
+              : [],
+            onClick: ({ key }) => { if (key === "delete-all") confirmDeleteDocuments(group); },
+          }}
+          trigger={["contextMenu"]}
+          placement="right"
         >
-          <DocTypeIcon type={group[0].documentType} />
-          <span>{group[0].title}</span>
-          <em aria-hidden="true">×{group.length}</em>
-        </button>
+          <button
+            type="button"
+            className="project-sidebar__fold-toggle"
+            aria-expanded={open}
+            aria-label={t("projectSidebar.foldedDocumentsAria", { count: String(group.length), name: group[0].title })}
+            title={group[0].title}
+            onClick={() => setUnfolded((current) => open ? current.filter((item) => item !== key) : [...current, key])}
+          >
+            <DocTypeIcon type={group[0].documentType} />
+            <span>{group[0].title}</span>
+            <em aria-hidden="true">×{group.length}</em>
+          </button>
+        </Dropdown>
         {open ? <div className="project-sidebar__fold-body">{group.map(renderDocument)}</div> : null}
       </div>
     );
@@ -300,9 +339,11 @@ export function ProjectSidebar({ workspaces, documents = [], activeWorkspaceId, 
                   }}
                 />
               ) : (
-                <button type="button" className="project-sidebar__workspace-select" aria-label={workspace.name} title={workspace.name} onClick={() => onSelectWorkspace(workspace.id)}>
-                  <FolderOpenOutlined aria-hidden /><span>{workspace.name}</span>
-                </button>
+                <Dropdown menu={workspaceMenu(workspace)} trigger={["contextMenu"]} placement="right">
+                  <button type="button" className="project-sidebar__workspace-select" aria-label={workspace.name} title={workspace.name} onClick={() => onSelectWorkspace(workspace.id)}>
+                    <FolderOpenOutlined aria-hidden /><span>{workspace.name}</span>
+                  </button>
+                </Dropdown>
               )}
               <div className="project-sidebar__workspace-actions">
                 <Dropdown menu={workspaceMenu(workspace)} trigger={["click"]} placement="bottom">

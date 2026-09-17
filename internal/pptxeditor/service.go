@@ -116,6 +116,43 @@ func NewService(resolver PreviewResolver, converter Converter, tempRoot string) 
 	}
 }
 
+// ImportTemplate writes a persistent MOP package without creating an editor
+// session. Template packages are local read-only sources for later JS-SDK
+// generation, so they must not be registered in the session table.
+func (s *Service) ImportTemplate(ctx context.Context, sourcePath, mopDirectory string) error {
+	s.mu.Lock()
+	closed, configured := s.closed, s.converter != nil
+	s.mu.Unlock()
+	if closed {
+		return ErrServiceClosed
+	}
+	if !configured {
+		return errors.New("pptx editor: service is not configured")
+	}
+	if strings.TrimSpace(sourcePath) == "" || strings.TrimSpace(mopDirectory) == "" {
+		return errors.New("pptx editor: template source and MOP directory are required")
+	}
+	if err := os.MkdirAll(filepath.Dir(mopDirectory), 0o700); err != nil {
+		return fmt.Errorf("pptx editor: create template parent: %w", err)
+	}
+	if err := s.converter.ImportPptx(ctx, sourcePath, mopDirectory); err != nil {
+		return fmt.Errorf("pptx editor: import template PPTX: %w", err)
+	}
+	if _, err := resolveMopContentPath(mopDirectory); err != nil {
+		return fmt.Errorf("pptx editor: imported template has no readable MOP content: %w", err)
+	}
+	return nil
+}
+
+// TemplateAssets returns the embedded media and embedding files from a
+// persistent MOP package without opening an editor session.
+func (s *Service) TemplateAssets(mopDirectory string) ([]Asset, error) {
+	if strings.TrimSpace(mopDirectory) == "" {
+		return nil, errors.New("pptx editor: template MOP directory is required")
+	}
+	return collectAssets(mopDirectory)
+}
+
 func (s *Service) Prepare(ctx context.Context, previewToken string) (PrepareResult, error) {
 	// Only the session table needs the lock. The import below shells out to
 	// mop-convert for up to converterTimeout; holding s.mu across it froze

@@ -712,7 +712,24 @@ function userInputFromPayload(payload: BridgeEvent["payload"]): TaskUserInput | 
   const generationMode = normalizeGenerationMode(payload.generation_mode) ?? normalizeGenerationMode(payload.generationMode);
   const workflow = payload.pptx_workflow ?? payload.pptxWorkflow;
   const pptxWorkflow = workflow === "animation" || workflow === "design" ? workflow : undefined;
-  return { prompt, generationMode, sourceFile, referenceImages, imageRatio, fps, ...(pptxWorkflow ? { pptxWorkflow } : {}) };
+  const templateId = stringValue(payload.template_id) || stringValue(payload.templateId) || undefined;
+  const templateAssetDir = stringValue(payload.template_asset_dir) || stringValue(payload.templateAssetDir) || undefined;
+  const templateVersionRaw = payload.template_version ?? payload.templateVersion;
+  const templateVersion = typeof templateVersionRaw === "number" && Number.isInteger(templateVersionRaw) && templateVersionRaw > 0
+    ? templateVersionRaw
+    : undefined;
+  return {
+    prompt,
+    generationMode,
+    sourceFile,
+    referenceImages,
+    imageRatio,
+    fps,
+    ...(pptxWorkflow ? { pptxWorkflow } : {}),
+    ...(templateId ? { templateId } : {}),
+    ...(templateVersion ? { templateVersion } : {}),
+    ...(templateAssetDir ? { templateAssetDir } : {}),
+  };
 }
 
 function normalizeGenerationMode(value: unknown): GenerationMode | undefined {

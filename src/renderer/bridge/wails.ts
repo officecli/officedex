@@ -1,5 +1,5 @@
 // The production transport: the Wails-generated bindings over the Go App.
-import type { AppUpdateEvent, Artifact, AgentClientToolReassignInput, AgentClientToolResultInput, AgentRun, AgentRunApproveInput, AgentRunRespondInput, AgentRunStartInput, ArtifactStageRuntimeInput, AuthEvent, BinaryFileData, BridgeEvent, BridgeRuntimeSnapshot, CreditStatus, CreateImageTemplatePublishRequestInput, CreateUserImageTemplateInput, DesktopAPI, GenerateInput, ImageTemplatePublishRequest, ImagePromptTemplate, InviteInfo, LoginInput, PlanPptxJSResult, ModifyInput, PeekReportContextResult, CreateWorkbookFromSheetInput, DrawingAsset, CaptureTimelineNodeInput, TimelineCapturedNode, PreparePptxEditorResult, SavePptxEditorSnapshotInput, SavePptxEditorAssetInput, SavePptxEditorVideoInput, ExportPptxEditorInput, ClosePptxEditorInput, PptxEditorSaveResult, PptxEditorSaveAssetResult, PptxEditorVideoSaveResult, PrepareXlsxEditorResult, PreviewGrant, ProviderTestInput, ProviderTestResult, RedeemResult, RecentFile, ReportCapabilityResult, RendererLogInput, CloseXlsxEditorInput, SpreadsheetPlanFieldsResult, SaveDocxResult, SaveXlsxEditorInput, StageXlsxEditorImageInput, SaveXlsxEditorResult, SubmitReportInput, SubmitReportResult, TaskHistoryEntry, UserSettings, WhoAmIResult } from "../../shared/types";
+import type { AppUpdateEvent, Artifact, AgentClientToolReassignInput, AgentClientToolResultInput, AgentRun, AgentRunApproveInput, AgentRunRespondInput, AgentRunStartInput, ArtifactStageRuntimeInput, AuthEvent, BinaryFileData, BridgeEvent, BridgeRuntimeSnapshot, CreditStatus, CreateImageTemplatePublishRequestInput, CreateUserImageTemplateInput, DesktopAPI, GenerateInput, ImageTemplatePublishRequest, ImagePromptTemplate, InviteInfo, LoginInput, PlanPptxJSResult, ModifyInput, PeekReportContextResult, CreateWorkbookFromSheetInput, DrawingAsset, CaptureTimelineNodeInput, TimelineCapturedNode, PreparePptxEditorResult, PptxTemplateProgress, SavePptxEditorSnapshotInput, SavePptxEditorAssetInput, SavePptxEditorVideoInput, ExportPptxEditorInput, ClosePptxEditorInput, PptxEditorSaveResult, PptxEditorSaveAssetResult, PptxEditorVideoSaveResult, PrepareXlsxEditorResult, PreviewGrant, ProviderTestInput, ProviderTestResult, RedeemResult, RecentFile, ReportCapabilityResult, RendererLogInput, CloseXlsxEditorInput, SpreadsheetPlanFieldsResult, SaveDocxResult, SaveXlsxEditorInput, StageXlsxEditorImageInput, SaveXlsxEditorResult, SubmitReportInput, SubmitReportResult, TaskHistoryEntry, UserSettings, WhoAmIResult } from "../../shared/types";
 import type { JiraConnectionSummary, JiraProbeResult, LiquipediaConnectionSummary, LiquipediaProbeResult, MarketingCampaignPlanResult, CampaignImageResult } from "../../shared/verticals";
 // The Wails-generated bindings live alongside the renderer; tsconfig must
 // include them. Imports are static so the build picks them up; calls only
@@ -239,6 +239,24 @@ export function createWailsAPI(): DesktopAPI {
     openMultiFileDialog: async (options) => {
       const result = await WailsApp.OpenMultiFileDialog(toWails(options ?? { filters: [] }));
       return result && result.length > 0 ? result : null;
+    },
+    deletePptxTemplate: async (assetDir: string) => {
+      const fn = optionalWailsFunction<(path: string) => Promise<void>>("DeletePptxTemplate");
+      if (!fn) throw new Error("Template deletion requires a newer OfficeDex runtime.");
+      await fn(toWails(assetDir));
+    },
+    readPptxTemplateSource: async (assetDir: string) => {
+      const fn = optionalWailsFunction<(path: string) => Promise<{ data?: unknown; sha256?: unknown }>>("ReadPptxTemplateSource");
+      if (!fn) throw new Error("Template cloning requires a newer OfficeDex runtime.");
+      const result = await fn(toWails(assetDir));
+      return { data: decodeArtifactBytes(result.data), sha256: String(result.sha256 || "") };
+    },
+    onPptxTemplateProgress: (callback) =>
+      EventsOn("pptx-template:progress", (payload: unknown) => callback(payload as PptxTemplateProgress)),
+    importPptxTemplate: async (input) => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<unknown>>("ImportPptxTemplate");
+      if (!fn) throw new Error("Local PPTX template import requires a newer OfficeDex runtime.");
+      return await fn(toWails(input)) as Awaited<ReturnType<NonNullable<DesktopAPI["importPptxTemplate"]>>>;
     },
     savePastedImage: async (data: Uint8Array, ext: string) => {
       return WailsApp.SavePastedImage(toWails({

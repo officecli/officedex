@@ -239,6 +239,7 @@ export function createRealE2EAPI(endpoint: string): DesktopAPI {
     installAppUpdate: () => rpc<void>("InstallAppUpdate"),
     cancelAppUpdate: () => rpc<void>("CancelAppUpdate"),
     onAppUpdateEvent: (callback: (event: AppUpdateEvent) => void) => subscribe<AppUpdateEvent>("appupdate", callback),
+    onPptxTemplateProgress: (callback) => subscribe("pptx-template:progress", callback),
     exportLogs: (input?: import("../../shared/types").ExportLogsInput) =>
       rpc<{ path: string; manifest: import("../../shared/types").BundleManifest }>("ExportLogs", input ?? {}),
     recordRendererLog: (input: RendererLogInput) => rpc<void>("RecordRendererLog", input),

@@ -13,6 +13,9 @@ export interface HomeTaskIntake {
   documentType?: DocumentType;
   /** When enabled, pause for an AI plan and user decisions before generation. */
   advancedMode?: boolean;
+  templateId?: string;
+  templateVersion?: number;
+  templateAssetDir?: string;
 }
 
 export interface HomeTaskAnalysis extends HomeTaskIntake {
@@ -38,11 +41,26 @@ export function inferHomeTaskRoute(input: HomeTaskIntake, fallback: DocumentType
   const prompt = input.prompt.trim();
   const sourceFile = input.sourceFile?.trim() || undefined;
   const extension = fileExtension(sourceFile);
+  const hasPptxTemplate = Boolean(input.templateId || input.templateAssetDir);
+
+  // A local PPT template is an explicit slide request. Prompt words such as
+  // 「方案」or "proposal" otherwise match the Word heuristic and would drop
+  // the template binding on the way to generate.
+  if (hasPptxTemplate) {
+    return { kind: "generate", documentType: "pptx", sourceFile };
+  }
 
   if (isCatalogCleanupIntent(prompt)) {
     if (!sourceFile) return { kind: "needs_source", documentType: "xlsx" };
     if (extension === "xlsx") return { kind: "catalog_cleanup", documentType: "xlsx", sourceFile };
     return { kind: "generate", documentType: "xlsx", sourceFile };
+  }
+
+  // The home output-type picker is the user's choice. Keyword matching only
+  // fills in when they did not pick one — otherwise 「方案」turns a selected
+  // PPT into a Word document.
+  if (input.documentType) {
+    return { kind: "generate", documentType: input.documentType, sourceFile };
   }
 
   if (/(gif|动图|动画图)/i.test(prompt)) return { kind: "generate", documentType: "gif", sourceFile };

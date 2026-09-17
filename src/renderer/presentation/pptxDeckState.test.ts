@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DesktopTask } from "../../shared/types";
-import { pptxDeckStillDrawing, pptxHasDeckEnd, pptxOpStreamDrained } from "./pptxDeckState";
+import { pptxDeckStillDrawing, pptxHasDeckEnd, pptxOpStreamDrained, validatePptxTemplateBindings } from "./pptxDeckState";
 
 const picture = (seq: number, slide: number, digest?: string) => digest
   ? { seq, op: "shape.add", slide, shape: { kind: "picture", imageRef: { kind: "primary", digest } } }
@@ -52,4 +52,11 @@ describe("pptxDeckState", () => {
     expect(pptxOpStreamDrained(task({ status: "running" }))).toBe(false);
     expect(pptxOpStreamDrained(task({ status: "question" }))).toBe(false);
   });
+});
+
+it("validates template clone metadata", () => {
+  const issues = validatePptxTemplateBindings([
+    { op: "slide.begin", slide: 1, template: { layoutId: "text-summary", assetDir: "/tmp/template", assetRoles: ["title", "unknown"] } } as any,
+  ]);
+  expect(issues.map((issue) => issue.code)).toEqual(["unsupported-role"]);
 });

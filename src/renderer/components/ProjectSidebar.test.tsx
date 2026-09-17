@@ -197,6 +197,29 @@ describe("ProjectSidebar", () => {
     expect(onDeleteDocument).toHaveBeenCalledWith(expect.objectContaining({ id: "run-doc" }));
   });
 
+  it("opens a context menu from a sidebar row", async () => {
+    renderSidebar({ documents: [{ id: "ctx", title: "Context task", documentType: "pptx", workspaceId: "ws-a" }] });
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Context task" }));
+    expect(await screen.findByRole("menuitem", { name: "Open" })).toBeInTheDocument();
+  });
+
+  it("confirms before deleting every document in a folded group", async () => {
+    const onDeleteDocuments = vi.fn(async () => undefined);
+    renderSidebar({
+      documents: [
+        { id: "a", title: "Untitled task", documentType: "pptx", workspaceId: "ws-a" },
+        { id: "b", title: "Untitled task", documentType: "pptx", workspaceId: "ws-a" },
+        { id: "c", title: "Untitled task", documentType: "pptx", workspaceId: "ws-a" },
+      ],
+      onDeleteDocuments,
+    });
+    fireEvent.contextMenu(screen.getByRole("button", { name: "3 more documents named Untitled task" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete 3 tasks" }));
+    expect(await screen.findByText(/Delete 3 tasks named/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Delete 3 tasks" }));
+    expect(onDeleteDocuments).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ id: "a" }), expect.objectContaining({ id: "b" }), expect.objectContaining({ id: "c" })]));
+  });
+
   it("labels every project action and leaves the rail toggle to Shell", () => {
     const props: React.ComponentProps<typeof ProjectSidebar> = {
       workspaces,

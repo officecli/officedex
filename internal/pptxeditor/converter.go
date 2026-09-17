@@ -23,8 +23,15 @@ type CLIConverter struct {
 	binary string
 }
 
-func NewCLIConverter(repoRoot string) *CLIConverter {
-	return &CLIConverter{binary: resolveMopConvertBinary(repoRoot)}
+// NewCLIConverter takes the already-resolved mop-convert executable.
+//
+// Resolution belongs to config.MopConvertBinary, which the app calls once and
+// hands to both this converter and the MOP HTTP service. The two used to
+// resolve the binary separately and could disagree; see that function's
+// comment. An empty path is allowed and means every call reports the converter
+// as unavailable.
+func NewCLIConverter(binary string) *CLIConverter {
+	return &CLIConverter{binary: binary}
 }
 
 func (c *CLIConverter) ImportPptx(ctx context.Context, sourcePath, mopDirectory string) error {
@@ -63,10 +70,4 @@ func (c *CLIConverter) run(ctx context.Context, args ...string) error {
 		detail = err.Error()
 	}
 	return fmt.Errorf("mop-convert %s: %s", args[0], detail)
-}
-
-func resolveMopConvertBinary(repoRoot string) string {
-	// The MOP HTTP service resolves the same binary through the same helper;
-	// see config.MopConvertBinary for why that is not duplicated here.
-	return config.MopConvertBinary("", repoRoot)
 }
