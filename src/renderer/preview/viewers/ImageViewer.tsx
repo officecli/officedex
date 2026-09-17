@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Contrast, FolderClosed, Info, Maximize, Minus, Plus, RotateCw, Scan } from 'lucide-react';
 import type { Artifact, PreviewGrant } from '../../../shared/types';
 import { useT } from '../../i18n';
-import { officecli } from '../../bridge';
+import { useDesktopApi } from "../../services/desktopApi";
 import { Button, Tooltip, toast } from '../../ui';
 import { OfficeWorkbenchLayout } from '../../workbench/OfficeWorkbenchLayout';
 import { LoadingState } from '../components/LoadingState';
@@ -15,6 +15,7 @@ import './imageViewer.css';
 export interface ImageViewerProps extends PreviewViewerProps { filePath?: string; artifact?: Artifact }
 export default function ImageViewer(props: ImageViewerProps) { return <ImageWorkbench key={props.previewToken} {...props} />; }
 function ImageWorkbench({ previewToken, fileName, documentType, onRequestClose, filePath, artifact }: ImageViewerProps) {
+  const api = useDesktopApi();
   const t = useT();
   const [current, setCurrent] = useState({ token: previewToken, fileName, documentType, filePath: artifact?.filePath ?? filePath, taskId: artifact?.taskId });
   const [src, setSrc] = useState('');
@@ -34,13 +35,13 @@ function ImageWorkbench({ previewToken, fileName, documentType, onRequestClose, 
   const ownedTokens = useRef<string[]>([]);
   const mounted = useRef(true);
   const extension = (current.documentType || current.fileName.split('.').pop() || '').toLowerCase().replace(/^\./, '');
-  useEffect(() => { mounted.current = true; return () => { mounted.current = false; ownedTokens.current.forEach(token => { void officecli.revokePreviewToken(token).catch(() => {}); }); }; }, []);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; ownedTokens.current.forEach(token => { void api.revokePreviewToken(token).catch(() => {}); }); }; }, []);
   useEffect(() => {
     let cancelled = false;
     let url = '';
     setSrc(''); setError(''); setLoading(true); setSize({ width: 0, height: 0, bytes: 0 }); setRotation(0); fitMode.current = true;
     setView({ scale: 1, x: 0, y: 0 });
-    void officecli.readArtifactFile(current.token).then(({ data }) => {
+    void api.readArtifactFile(current.token).then(({ data }) => {
       if (cancelled) return;
       const bytes = new Uint8Array(data instanceof ArrayBuffer ? data : new Uint8Array(data));
       const blob = new Blob([bytes], { type: IMAGE_MIME_TYPES[extension] || 'application/octet-stream' });
@@ -73,11 +74,11 @@ function ImageWorkbench({ previewToken, fileName, documentType, onRequestClose, 
     return () => canvas.removeEventListener('wheel', wheel);
   }, [loading, error]);
   const report = (reason: unknown) => toast.error(reason instanceof Error ? reason.message : String(reason));
-  const openExternal = current.filePath ? () => { void officecli.openPath(current.filePath!).catch(report); } : undefined;
+  const openExternal = current.filePath ? () => { void api.openPath(current.filePath!).catch(report); } : undefined;
   const generated = async (next: Artifact) => {
     if (!isImagePreview(next.documentType)) throw new Error(t('image.unsupportedOutput'));
-    const grant: PreviewGrant = await officecli.issuePreviewToken(next);
-    if (!mounted.current) { await officecli.revokePreviewToken(grant.token); return; }
+    const grant: PreviewGrant = await api.issuePreviewToken(next);
+    if (!mounted.current) { await api.revokePreviewToken(grant.token); return; }
     ownedTokens.current.push(grant.token);
     setCurrent({ ...grant, filePath: next.filePath, taskId: next.taskId });
   };
@@ -104,7 +105,7 @@ function ImageWorkbench({ previewToken, fileName, documentType, onRequestClose, 
           {tool(t('image.background'), <Contrast size={16} />, () => setBackground(value => (value + 1) % 3))}
           {tool(t('image.info'), <Info size={16} />, () => setInfo(value => !value))}
           {tool(t('image.fullscreen'), <Maximize size={16} />, () => { if (document.fullscreenElement) void document.exitFullscreen().catch(report); else if (frame.current?.requestFullscreen) void frame.current.requestFullscreen().catch(report); })}
-          {current.filePath && tool(t('preview.showInFolder'), <FolderClosed size={16} />, () => { void officecli.showItemInFolder(current.filePath!).catch(report); })}
+          {current.filePath && tool(t('preview.showInFolder'), <FolderClosed size={16} />, () => { void api.showItemInFolder(current.filePath!).catch(report); })}
         </div></details>
       </div>}>
       <div className="image-canvas" data-background={background} ref={stage} tabIndex={0} aria-label={t('image.canvas')}

@@ -6,7 +6,7 @@ import { OfficeWorkbenchLayout } from "../../workbench/OfficeWorkbenchLayout";
 import { useT } from "../../i18n";
 import { LoadingState } from "../components/LoadingState";
 import { ErrorState } from "../components/ErrorState";
-import { officecli } from "../../bridge";
+import { useDesktopApi } from "../../services/desktopApi";
 import { PDF_ZOOM, zoomIn as stepZoomIn, zoomOut as stepZoomOut } from "./zoom";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -24,6 +24,7 @@ interface PdfViewerProps {
 const DEFAULT_SCALE = 1.5;
 
 export default function PdfViewer({ previewToken, fileName, onRequestClose }: PdfViewerProps) {
+  const api = useDesktopApi();
   const t = useT();
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -38,7 +39,7 @@ export default function PdfViewer({ previewToken, fileName, onRequestClose }: Pd
     setLoading(true);
     setError(null);
     try {
-      const { data } = await officecli.readArtifactFile(previewToken);
+      const { data } = await api.readArtifactFile(previewToken);
       const doc = await pdfjsLib.getDocument({ data }).promise;
       setPdfDoc(doc);
       setTotalPages(doc.numPages);
@@ -94,7 +95,7 @@ export default function PdfViewer({ previewToken, fileName, onRequestClose }: Pd
   const nextPage = () => setCurrentPage((p) => Math.min(p + 1, totalPages));
 
   const openExternal = () => {
-    officecli.openPath(fileName).catch(() => {});
+    api.openPath(fileName).catch(() => {});
   };
 
   if (loading) return <LoadingState fileName={fileName} />;

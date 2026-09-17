@@ -24,7 +24,7 @@ import {
   Presentation,
 } from "lucide-react";
 import { toast } from "../../../ui";
-import { officecli } from "../../../bridge";
+import { useDesktopApi } from "../../../services/desktopApi";
 import { useT } from "../../../i18n";
 import type {
   PlanPptxJSResult,
@@ -225,6 +225,7 @@ export default function PresentationPptxWorkbench({
   notice,
   createClient,
 }: PresentationPptxWorkbenchProps) {
+  const api = useDesktopApi();
   const t = useT();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -313,7 +314,7 @@ export default function PresentationPptxWorkbench({
       throw new Error("The presentation has no local target path.");
     const version = dirtyVersionRef.current;
     const exported = await client.export();
-    const savedPath = await officecli.savePptx(
+    const savedPath = await api.savePptx(
       new Uint8Array(exported.buffer),
       fileNameRef.current,
       targetPath ? { targetFilePath: targetPath } : {},
@@ -326,7 +327,7 @@ export default function PresentationPptxWorkbench({
       onDirtyChangeRef.current?.(false);
     }
     if (!asCopy) setSaveFailure(null);
-    const recordLog = officecli.recordRendererLog;
+    const recordLog = api.recordRendererLog;
     if (typeof recordLog === "function") {
       void recordLog({
         source: "presentation-pptx-autosave",
@@ -356,7 +357,7 @@ export default function PresentationPptxWorkbench({
               // deck that never saves and never says why.
               if (conflict) conflictRef.current = true;
               setSaveFailure({ message, conflict, detail: saveErrorDetail(error) });
-              const recordLog = officecli.recordRendererLog;
+              const recordLog = api.recordRendererLog;
               if (typeof recordLog === "function") {
                 void recordLog({
                   source: "presentation-pptx-autosave",
@@ -490,7 +491,7 @@ export default function PresentationPptxWorkbench({
     setSelectionContext(null);
 
     (async () => {
-      const result = await officecli.readArtifactFile(previewToken);
+      const result = await api.readArtifactFile(previewToken);
       const data = result?.data;
       if (!data || data.byteLength === 0)
         throw new Error("The presentation file is empty.");
@@ -593,7 +594,7 @@ export default function PresentationPptxWorkbench({
         },
         async save() {
           const exported = await client.export();
-          const savedPath = await officecli.savePptx(
+          const savedPath = await api.savePptx(
             new Uint8Array(exported.buffer),
             fileName,
             filePath ? { targetFilePath: filePath } : {},
@@ -613,7 +614,7 @@ export default function PresentationPptxWorkbench({
         controller,
         onStatus: (status) => {
           setReplayStatus(status);
-          void officecli
+          void api
             .recordRendererLog({
               source: "presentation-live-replay",
               event: status.state,
@@ -804,7 +805,7 @@ export default function PresentationPptxWorkbench({
         context = await client.inspect();
         setSelectionContext(context);
         updateTurn(turnId, { stage: "planning", context });
-        plan = await officecli.planPptxJS({
+        plan = await api.planPptxJS({
           prompt,
           context,
           history: buildHistory(turnId),
@@ -1160,7 +1161,7 @@ export default function PresentationPptxWorkbench({
       actions={
         <>
         {filePath && <Tooltip title={t("preview.showInFolder")}><Button type="text" size="small" aria-label={t("preview.showInFolder")} icon={<FolderClosed size={16} />} onClick={() => {
-          void officecli.showItemInFolder(filePath).catch((error) => toast.error(t("preview.showInFolderFailed", { error: error instanceof Error ? error.message : String(error) })));
+          void api.showItemInFolder(filePath).catch((error) => toast.error(t("preview.showInFolderFailed", { error: error instanceof Error ? error.message : String(error) })));
         }} /></Tooltip>}
         {onReplayDemo ? (
           <Tooltip title={t("pptx.agent.replayDemoHint")}>

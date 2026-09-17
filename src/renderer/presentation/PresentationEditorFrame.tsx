@@ -7,7 +7,7 @@ import {
   type PresentationEmbedEvent,
   type PresentationHostCommand,
 } from "../../shared/presentationProtocol";
-import { officecli } from "../bridge";
+import { useDesktopApi } from "../services/desktopApi";
 import { registerActiveEditorClientTools } from "../activeEditorClientTools";
 import {
   PRESENTATION_INSPECT_SOURCE,
@@ -113,6 +113,7 @@ export function PresentationEditorFrame({
   onController,
   onSaved,
 }: PresentationEditorFrameProps) {
+  const api = useDesktopApi();
   const frameRef = useRef<HTMLIFrameElement>(null);
   const sessionIdRef = useRef("");
   const revisionRef = useRef(0);
@@ -216,7 +217,7 @@ export function PresentationEditorFrame({
   const saveToDisk = useCallback(async () => {
     const sessionId = sessionIdRef.current;
     if (!sessionId) throw new Error("PPTX editor session is not ready.");
-    const result = await officecli.exportPptxEditor({
+    const result = await api.exportPptxEditor({
       previewToken,
       sessionId,
       revision: revisionRef.current,
@@ -257,7 +258,7 @@ export function PresentationEditorFrame({
             return;
           }
           try {
-            const prepared = await officecli.preparePptxEditor(previewToken);
+            const prepared = await api.preparePptxEditor(previewToken);
             if (disposedRef.current) return;
             sessionIdRef.current = prepared.sessionId;
             revisionRef.current = prepared.documentRevision;
@@ -326,7 +327,7 @@ export function PresentationEditorFrame({
           return;
         case "presentation:save-snapshot":
           try {
-            const result = await officecli.savePptxEditorSnapshot({
+            const result = await api.savePptxEditorSnapshot({
               previewToken,
               sessionId: event.sessionId,
               content: new Uint8Array(event.content),
@@ -341,7 +342,7 @@ export function PresentationEditorFrame({
           return;
         case "presentation:save-asset":
           try {
-            const result = await officecli.savePptxEditorAsset({
+            const result = await api.savePptxEditorAsset({
               previewToken,
               sessionId: event.sessionId,
               relativePath: event.relativePath,
@@ -355,7 +356,7 @@ export function PresentationEditorFrame({
           return;
         case "presentation:save-video":
           try {
-            const result = await officecli.savePptxEditorVideo({
+            const result = await api.savePptxEditorVideo({
               previewToken,
               sessionId: event.sessionId,
               revision: event.revision,
@@ -372,13 +373,13 @@ export function PresentationEditorFrame({
           return;
         case "presentation:export-pptx":
           try {
-            const result = await officecli.exportPptxEditor({
+            const result = await api.exportPptxEditor({
               previewToken,
               sessionId: event.sessionId,
               revision: event.revision,
             });
             revisionRef.current = result.revision;
-            const artifact = await officecli.readArtifactFile(previewToken);
+            const artifact = await api.readArtifactFile(previewToken);
             const data = toTransferableBuffer(artifact.data);
             callbacksRef.current.onDirtyChange?.(false);
             respond(
@@ -413,7 +414,7 @@ export function PresentationEditorFrame({
       // Swap requests used to be left dangling here; both kinds now settle.
       requestsRef.current.rejectAll(new Error("The presentation editor was closed."));
       if (sessionId) {
-        void officecli
+        void api
           .closePptxEditor({ previewToken, sessionId })
           .catch(() => undefined);
       }

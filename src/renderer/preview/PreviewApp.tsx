@@ -6,7 +6,7 @@ import { LoadingState } from "./components/LoadingState";
 import { UnsupportedViewer } from "./viewers/UnsupportedViewer";
 import { previewViewerFor } from "./viewers/previewViewers";
 import type { PreviewViewerProps } from "./viewers/previewViewers";
-import { officecli } from "../bridge";
+import { useDesktopApi } from "../services/desktopApi";
 import "./PreviewApp.css";
 
 class PreviewErrorBoundary extends Component<
@@ -54,10 +54,11 @@ function usePreviewParams() {
 }
 
 export default function PreviewApp() {
+  const api = useDesktopApi();
   const { previewToken, fileName, documentType } = usePreviewParams();
 
   const openExternal = () => {
-    officecli.openPath(fileName).catch(() => {});
+    api.openPath(fileName).catch(() => {});
   };
 
   // This route is mounted with one artifact grant and no workspace data, so it

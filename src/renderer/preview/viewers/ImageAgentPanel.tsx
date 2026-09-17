@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUp, Image, Square } from 'lucide-react';
 import type { Artifact, BridgeEvent } from '../../../shared/types';
-import { officecli } from '../../bridge';
+import { useDesktopApi } from "../../services/desktopApi";
 import { useT } from '../../i18n';
 import { Button } from '../../ui';
 import { AgentMessage } from '../../workbench/AgentMessage';
@@ -13,6 +13,7 @@ export function ImageAgentPanel({ filePath, fileName, historyPath, parentTaskId,
   filePath?: string; fileName: string; historyPath?: string; parentTaskId?: string; ready: boolean;
   onGenerated: (artifact: Artifact) => Promise<void>;
 }) {
+  const api = useDesktopApi();
   const t = useT();
   const [messages, setMessages] = useAgentHistory(agentHistoryKey('img', historyPath), messageHistoryCodec);
   const [prompt, setPrompt] = useState('');
@@ -58,11 +59,11 @@ export function ImageAgentPanel({ filePath, fileName, historyPath, parentTaskId,
     }
   };
   useEffect(() => {
-    const unsubscribe = officecli.onBridgeEvent(event => handler.current(event));
+    const unsubscribe = api.onBridgeEvent(event => handler.current(event));
     return () => {
       unsubscribe();
       const op = active.current;
-      if (op) { op.cancelled = true; if (op.id && !op.finishing) void officecli.cancel(op.id).catch(() => {}); }
+      if (op) { op.cancelled = true; if (op.id && !op.finishing) void api.cancel(op.id).catch(() => {}); }
       active.current = null;
     };
   }, []);
@@ -74,22 +75,22 @@ export function ImageAgentPanel({ filePath, fileName, historyPath, parentTaskId,
     if (active.current && phase === 'question') {
       const op = active.current;
       setPhase('running');
-      try { await officecli.respond({ taskId: op.id!, questionId: op.questionId, answer: text }); }
+      try { await api.respond({ taskId: op.id!, questionId: op.questionId, answer: text }); }
       catch (reason) { if (!op.cancelled) { setError(String(reason)); setPhase('question'); setPrompt(text); } }
       return;
     }
     const op: Operation = { cancelled: false, buffered: [] };
     active.current = op; setPhase('running');
     try {
-      const result = await officecli.generate({ documentType: 'img', generationMode: 'fast', topic: fileName, prompt: text, referenceImages: [filePath], parentTaskId, noProject: true });
+      const result = await api.generate({ documentType: 'img', generationMode: 'fast', topic: fileName, prompt: text, referenceImages: [filePath], parentTaskId, noProject: true });
       op.id = result.taskId;
-      if (op.cancelled) { if (op.id) await officecli.cancel(op.id); return; }
+      if (op.cancelled) { if (op.id) await api.cancel(op.id); return; }
       if (!op.id) throw new Error(t('image.agent.failed'));
       for (const event of op.buffered.splice(0)) handler.current(event);
       // A fast task can finish before the listener receives its replay. Recover
       // only this task, and let the normal completion handler deduplicate it.
       if (active.current === op && !op.finishing) {
-        const history = await officecli.getTaskHistory(50).catch(() => []);
+        const history = await api.getTaskHistory(50).catch(() => []);
         if (!op.cancelled && active.current === op) history.find(item => item.taskId === op.id)?.events.forEach(event => handler.current(event));
       }
     } catch (reason) {
@@ -101,11 +102,11 @@ export function ImageAgentPanel({ filePath, fileName, historyPath, parentTaskId,
     if (!op || op.finishing) return;
     op.cancelled = true;
     try {
-      if (op.id) await officecli.cancel(op.id);
+      if (op.id) await api.cancel(op.id);
       if (active.current === op) { active.current = null; setPhase('idle'); reply(t('image.agent.cancelled')); }
     } catch (reason) {
       op.cancelled = false; setError(String(reason));
-      const history = await officecli.getTaskHistory(50).catch(() => []);
+      const history = await api.getTaskHistory(50).catch(() => []);
       if (active.current === op) history.find(item => item.taskId === op.id)?.events.forEach(event => handler.current(event));
     }
   };

@@ -3,7 +3,7 @@ import { OfficeWorkbenchLayout } from "../../workbench/OfficeWorkbenchLayout";
 import { useT } from "../../i18n";
 import { LoadingState } from "../components/LoadingState";
 import { ErrorState } from "../components/ErrorState";
-import { officecli } from "../../bridge";
+import { useDesktopApi } from "../../services/desktopApi";
 import { DOCUMENT_ZOOM, zoomIn as stepZoomIn, zoomOut as stepZoomOut } from "./zoom";
 
 interface HtmlViewerProps {
@@ -15,6 +15,7 @@ interface HtmlViewerProps {
 
 
 export default function HtmlViewer({ previewToken, fileName, documentType, onRequestClose }: HtmlViewerProps) {
+  const api = useDesktopApi();
   const t = useT();
   const [html, setHtml] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -26,7 +27,7 @@ export default function HtmlViewer({ previewToken, fileName, documentType, onReq
     setLoading(true);
     setError(null);
     try {
-      const { data } = await officecli.readArtifactFile(previewToken);
+      const { data } = await api.readArtifactFile(previewToken);
       const arrayBuf = data instanceof ArrayBuffer ? data : new Uint8Array(data as Uint8Array).buffer;
       const bytes = new Uint8Array(arrayBuf as ArrayBuffer);
       const decoder = new TextDecoder("utf-8");
@@ -53,7 +54,7 @@ export default function HtmlViewer({ previewToken, fileName, documentType, onReq
   const zoomReset = () => setZoom(1);
 
   const openExternal = () => {
-    officecli.openPath(fileName).catch(() => {});
+    api.openPath(fileName).catch(() => {});
   };
 
   if (loading) return <LoadingState fileName={fileName} />;

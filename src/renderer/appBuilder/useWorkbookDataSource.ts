@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { WORKBOOK_POLL_INTERVAL_MS } from "../constants/timing";
 import { usePolling } from "../utils/usePolling";
-import { officecli } from "../bridge";
+import { useDesktopApi } from "../services/desktopApi";
 import { parseWorkbookSnapshot } from "./workbookData";
 import type { WorkbookDataSnapshot } from "./types";
 
 export function useWorkbookDataSource(previewToken: string | undefined, sourceRevision = 0) {
+  const api = useDesktopApi();
   const [snapshot, setSnapshot] = useState<WorkbookDataSnapshot>();
   const [loading, setLoading] = useState(Boolean(previewToken));
   const [error, setError] = useState<string>();
@@ -15,7 +16,7 @@ export function useWorkbookDataSource(previewToken: string | undefined, sourceRe
     if (!previewToken) return;
     if (showLoading) setLoading(true);
     try {
-      const { data } = await officecli.readArtifactFile(previewToken);
+      const { data } = await api.readArtifactFile(previewToken);
       const next = parseWorkbookSnapshot(data);
       if (next.fingerprint !== fingerprintRef.current) {
         fingerprintRef.current = next.fingerprint;

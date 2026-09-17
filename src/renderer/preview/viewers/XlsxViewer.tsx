@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import type { Artifact, PreviewGrant } from "../../../shared/types";
-import { officecli } from "../../bridge";
+import { useDesktopApi } from "../../services/desktopApi";
 import { useT } from "../../i18n";
 import {
   SpreadsheetCanvas,
@@ -42,13 +42,14 @@ export default function XlsxViewer({
   onDirtyChange,
   onRequestClose,
 }: XlsxViewerProps) {
+  const api = useDesktopApi();
   const t = useT();
   const canvasRef = useRef<SpreadsheetCanvasHandle>(null);
   const [canvasState, setCanvasState] = useState<SpreadsheetCanvasState>("loading");
   const [error, setError] = useState<string | undefined>(undefined);
 
   const openExternal = useCallback(() => {
-    officecli.openPath(artifact?.filePath ?? fileName).catch(() => {});
+    api.openPath(artifact?.filePath ?? fileName).catch(() => {});
   }, [artifact?.filePath, fileName]);
 
   const save = useCallback(() => {

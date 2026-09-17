@@ -1,6 +1,6 @@
 import { useState, useMemo, lazy, Suspense } from "react";
 import { LoadingState } from "../components/LoadingState";
-import { officecli } from "../../bridge";
+import { useDesktopApi } from "../../services/desktopApi";
 import { useT } from "../../i18n";
 import {
   EMBEDDED_PRESENTATION_PATH,
@@ -48,6 +48,7 @@ export default function PptxViewer({
   onFlushReady,
   onRequestClose,
 }: PptxViewerProps) {
+  const api = useDesktopApi();
   const t = useT();
   const resolvedEditorUrl = useMemo(
     () =>
@@ -58,7 +59,7 @@ export default function PptxViewer({
   const [useReadOnly, setUseReadOnly] = useState(false);
 
   const openExternal = () => {
-    officecli.openPath(filePath || fileName).catch(() => {});
+    api.openPath(filePath || fileName).catch(() => {});
   };
 
   const showWorkbench = Boolean(resolvedEditorUrl) && !useReadOnly;

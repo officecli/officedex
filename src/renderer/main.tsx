@@ -3,6 +3,7 @@ import { Suspense, StrictMode, lazy } from "react";
 import "@xyflow/react/dist/style.css";
 import { App } from "./App";
 import { LocaleProvider } from "./i18n";
+import { DesktopApiProvider } from "./services/desktopApi";
 import { mountTheme } from "./ui/theme";
 import { mountWindowChrome } from "./windowChrome";
 import "./ui/design-tokens.css";
@@ -28,14 +29,16 @@ function isOfflinePreviewRoute() {
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <LocaleProvider>
-      {isOfflinePreviewRoute() ? (
-        <Suspense>
-          <PreviewApp />
-        </Suspense>
-      ) : (
-        <App />
-      )}
-    </LocaleProvider>
+    <DesktopApiProvider>
+      <LocaleProvider>
+        {isOfflinePreviewRoute() ? (
+          <Suspense>
+            <PreviewApp />
+          </Suspense>
+        ) : (
+          <App />
+        )}
+      </LocaleProvider>
+    </DesktopApiProvider>
   </StrictMode>,
 );

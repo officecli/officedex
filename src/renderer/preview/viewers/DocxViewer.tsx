@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { FolderClosed } from "lucide-react";
 import type { WriterSelectionSummary } from "../../../shared/writerProtocol";
-import { officecli } from "../../bridge";
+import { useDesktopApi } from "../../services/desktopApi";
 import { WriterEditorFrame, type WriterAgentEditor } from "../../word/WriterEditorFrame";
 import { DocxAgentPanel, describeDocxSelection } from "../../word/DocxAgentPanel";
 import { OfficeWorkbenchLayout } from "../../workbench/OfficeWorkbenchLayout";
@@ -43,6 +43,7 @@ export default function DocxViewer({
   onRequestClose,
   standalone = false,
 }: DocxViewerProps) {
+  const api = useDesktopApi();
   const t = useT();
   const [unavailable, setUnavailable] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -50,7 +51,7 @@ export default function DocxViewer({
   const [selection, setSelection] = useState<WriterSelectionSummary>(NO_SELECTION);
 
   const openExternal = useCallback(() => {
-    officecli.openPath(filePath || fileName).catch(() => {});
+    api.openPath(filePath || fileName).catch(() => {});
   }, [filePath, fileName]);
 
   return (
@@ -86,7 +87,7 @@ export default function DocxViewer({
             ariaLabel={t("preview.showInFolder")}
             icon={<FolderClosed size={16} />}
             onClick={() => {
-              void officecli.showItemInFolder(filePath).catch((error) => {
+              void api.showItemInFolder(filePath).catch((error) => {
                 toast.error(t("preview.showInFolderFailed", {
                   error: error instanceof Error ? error.message : String(error),
                 }));

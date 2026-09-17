@@ -7,7 +7,7 @@ import { savePublishedWorkbookApp, slugifyAppName } from "./appStore";
 import type { PublishedWorkbookApp, WorkbookAppConfig } from "./types";
 import { buildHtmlAppSpec } from "./htmlAppModel";
 import { buildHtmlAppFiles, htmlAppFilesAsBytes } from "./htmlAppRuntime";
-import { officecli } from "../bridge";
+import { useDesktopApi } from "../services/desktopApi";
 import { defaultSelectedFieldIds } from "./workbookData";
 import { useWorkbookDataSource } from "./useWorkbookDataSource";
 import { WorkbookAppPreview } from "./WorkbookAppPreview";
@@ -23,6 +23,7 @@ export interface WorkbookAppBuilderProps {
 }
 
 export function WorkbookAppBuilder({ artifact, grant, sourceRevision = 0, onClose, onOpenPublished }: WorkbookAppBuilderProps) {
+  const api = useDesktopApi();
   const t = useT();
   const { snapshot, loading, error, refresh } = useWorkbookDataSource(grant.token, sourceRevision);
   const [step, setStep] = useState<BuilderStep>("configure");
@@ -61,9 +62,9 @@ export function WorkbookAppBuilder({ artifact, grant, sourceRevision = 0, onClos
   const publish = async () => {
     const htmlSpec = snapshot ? buildHtmlAppSpec(snapshot, sheet?.name, config.name) : undefined;
     let materializedFiles: string[] | undefined;
-    if (snapshot && htmlSpec && officecli.writeHtmlAppFiles && artifact.filePath) {
+    if (snapshot && htmlSpec && api.writeHtmlAppFiles && artifact.filePath) {
       const files = buildHtmlAppFiles(htmlSpec, snapshot);
-      materializedFiles = await officecli.writeHtmlAppFiles({ root: `${artifact.filePath}.html-app`, files: htmlAppFilesAsBytes(files) });
+      materializedFiles = await api.writeHtmlAppFiles({ root: `${artifact.filePath}.html-app`, files: htmlAppFilesAsBytes(files) });
     }
     const app: PublishedWorkbookApp = {
       id: published?.id ?? `workbook-app-${Date.now().toString(36)}`,
@@ -76,8 +77,8 @@ export function WorkbookAppBuilder({ artifact, grant, sourceRevision = 0, onClos
       version: (published?.version ?? 0) + 1,
     };
     savePublishedWorkbookApp(app);
-    if (officecli.saveOfficeProductOutput && artifact.filePath) {
-      await officecli.saveOfficeProductOutput({
+    if (api.saveOfficeProductOutput && artifact.filePath) {
+      await api.saveOfficeProductOutput({
         id: app.id,
         projectId: artifact.filePath,
         outputType: "html-app",
