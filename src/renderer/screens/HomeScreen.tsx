@@ -134,6 +134,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
   const { open: onOpenTask, retry: onRetryTask, steer: onSteerTask, resume: onResumeTask, answer: onAnswerTask, cancel: onCancelTask, delete: onDeleteTask } = taskActions;
   const t = useT();
   const [prompt, setPrompt] = useState("");
+  const promptRef = useRef<HTMLTextAreaElement>(null);
   const [animatedPlaceholder, setAnimatedPlaceholder] = useState("");
   const [selectedDocumentType, setSelectedDocumentType] = useState<HomeDocumentType>("pptx");
   const [pptxWorkflow, setPptxWorkflow] = useState<"design" | "animation" | undefined>();
@@ -280,10 +281,14 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
     setDropActive(false);
   };
 
-  const startTask = async () => {
+  const startTask = async (override?: string) => {
     if (!onStartTask || starting) return;
-    const value = prompt.trim();
+    const value = (override ?? promptRef.current?.value ?? prompt).trim();
     if (!value) return;
+    setPrompt(value);
+    if (promptRef.current && promptRef.current.value !== value) {
+      promptRef.current.value = value;
+    }
     setIntakeError(undefined);
     setStartingPrompt(value);
     setStarting(true);
@@ -308,10 +313,11 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
     }
   };
 
-  const submitTask = (event: FormEvent) => {
+  const submitTask = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setIntakeError(undefined);
-    void startTask();
+    const textarea = event.currentTarget.querySelector("textarea");
+    void startTask(textarea?.value);
   };
 
   const pickTaskFile = async () => {
@@ -469,15 +475,15 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
         }}
       >
         <TextArea
+          ref={promptRef}
           aria-label={t("home.promptLabel")}
           autoSize={{ minRows: 3, maxRows: 6 }}
           placeholder={animatedPlaceholder}
-          value={prompt}
           onChange={(event) => {
             setPrompt(event.target.value);
             setIntakeError(undefined);
           }}
-          onSubmit={() => void startTask()}
+          onSubmit={(value) => void startTask(value)}
         />
         {sourceFile || referenceDirectory || referenceImages.length > 0 || referenceTextFiles.length > 0 ? (
           <div className="home-intake__references" aria-label={t("home.references")}>
@@ -573,7 +579,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
               </button>
             ))}
           </div>
-          <Button className="od-button--circular-submit od-button--icon-submit" ariaLabel={t("home.startTask")} title={t("home.startTask")} htmlType="submit" variant="primary" icon={<ArrowUpOutlined />} loading={starting} disabled={!prompt.trim()} />
+          <Button className="od-button--circular-submit od-button--icon-submit" ariaLabel={t("home.startTask")} title={t("home.startTask")} htmlType="submit" variant="primary" icon={<ArrowUpOutlined />} loading={starting} disabled={starting} />
         </div>
       </form>
 
@@ -641,6 +647,7 @@ export function HomeScreen({ files, attentionTasks = [], loading, error, activeW
                 title={description}
                 onClick={() => {
                   setPrompt(description);
+                  if (promptRef.current) promptRef.current.value = description;
                 }}
               >
                 <span className="home-template-card__preview" aria-hidden="true">

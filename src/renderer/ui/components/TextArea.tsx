@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type KeyboardEvent, type TextareaHTMLAttributes } from "react";
+import { forwardRef, useLayoutEffect, useRef, type KeyboardEvent, type MutableRefObject, type Ref, type TextareaHTMLAttributes } from "react";
 import { formValueEvent } from "../formControl";
 
 export interface TextAreaProps extends Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "onSubmit"> {
@@ -7,12 +7,21 @@ export interface TextAreaProps extends Omit<TextareaHTMLAttributes<HTMLTextAreaE
   readonly onSubmit?: (value: string) => void;
 }
 
-function TextAreaRoot({ autoSize, showCount, onChange, onSubmit, onCompositionStart, onCompositionEnd, onKeyDown, className, value, defaultValue, maxLength, ...props }: TextAreaProps) {
-  const ref = useRef<HTMLTextAreaElement | null>(null);
+function mergeRefs<T>(...refs: Array<Ref<T> | undefined>) {
+  return (node: T | null) => {
+    for (const ref of refs) {
+      if (typeof ref === "function") ref(node);
+      else if (ref) (ref as MutableRefObject<T | null>).current = node;
+    }
+  };
+}
+
+const TextAreaRoot = forwardRef<HTMLTextAreaElement, TextAreaProps>(function TextAreaRoot({ autoSize, showCount, onChange, onSubmit, onCompositionStart, onCompositionEnd, onKeyDown, className, value, defaultValue, maxLength, ...props }, forwarded) {
+  const inner = useRef<HTMLTextAreaElement | null>(null);
   const composing = useRef(false);
 
   useLayoutEffect(() => {
-    const element = ref.current;
+    const element = inner.current;
     if (!element || !autoSize) return;
     element.style.height = "auto";
     element.style.height = `${element.scrollHeight}px`;
@@ -21,7 +30,7 @@ function TextAreaRoot({ autoSize, showCount, onChange, onSubmit, onCompositionSt
   const textarea = (
     <textarea
       {...props}
-      ref={ref}
+      ref={mergeRefs(inner, forwarded)}
       className={["od-textarea", className].filter(Boolean).join(" ")}
       defaultValue={defaultValue}
       maxLength={maxLength}
@@ -55,6 +64,6 @@ function TextAreaRoot({ autoSize, showCount, onChange, onSubmit, onCompositionSt
       <span className="od-textarea__count" aria-hidden="true">{count}{maxLength ? ` / ${maxLength}` : ""}</span>
     </span>
   );
-}
+});
 
 export const TextArea = Object.assign(TextAreaRoot, { [formValueEvent]: "onChange" as const });
