@@ -9,10 +9,10 @@
 // must prefer its own embedded runtime -- pairing a signed x64 Node with an
 // unsigned source-tree native addon makes macOS refuse the dlopen.
 //
-// Two functions here search for the same directory from slightly different
-// starting points: BridgeEnv from the bridge's working directory, Root from a
-// repository root. IsRoot is what they agree on -- a directory is the runtime
-// only if the four files the worker actually opens are all present.
+// BridgeEnv and Root share the same search: bundled runtime first, then a
+// sibling checkout reachable from the executable, then cwd / PWD. IsRoot is
+// what they agree on -- a directory is the runtime only if the four files the
+// worker actually opens are all present.
 package runtimeenv
 
 import (
@@ -51,49 +51,12 @@ func BridgeEnv(cwd string) []string {
 		}
 		return env
 	}
-	candidates := make([]string, 0, 5)
-	// A packaged macOS app may be launched from a shell whose PWD points at a
-	// developer checkout. Prefer the embedded, signed presentation runtime in
-	// that case; otherwise the app can pair its signed x64 Node runtime with an
-	// unsigned source-tree Rollup native addon and macOS rejects dlopen().
-	if executable, err := os.Executable(); err == nil {
-		exeDir := filepath.Dir(executable)
-		candidates = append(candidates,
-			filepath.Join(exeDir, "..", "Resources", "presentation"),
-			filepath.Join(exeDir, "presentation"),
+	processCwd, _ := config.ProcessCwd()
+	if root := firstPresentationRoot(currentExecutable(), cwd, processCwd, config.LauncherPWD()); root != "" {
+		return append(env,
+			"PRESENTATION_SOURCE_DIR="+root,
+			"OFFICECLI_MOP_PRESENTATION_ROOT="+root,
 		)
-	}
-	if strings.TrimSpace(cwd) != "" {
-		candidates = append(candidates,
-			filepath.Join(cwd, "presentation"),
-			filepath.Join(cwd, "..", "presentation"),
-		)
-	}
-	if processCwd, ok := config.ProcessCwd(); ok && processCwd != cwd {
-		candidates = append(candidates,
-			filepath.Join(processCwd, "presentation"),
-			filepath.Join(processCwd, "..", "presentation"),
-		)
-	}
-	// GUI-launched macOS apps often have `/` as their real cwd but retain the
-	// launch shell's PWD. Include it as a local-development discovery hint.
-	if envPWD := config.LauncherPWD(); envPWD != "" && envPWD != cwd {
-		candidates = append(candidates,
-			filepath.Join(envPWD, "presentation"),
-			filepath.Join(envPWD, "..", "presentation"),
-		)
-	}
-	for _, candidate := range candidates {
-		root, err := filepath.Abs(candidate)
-		if err != nil {
-			continue
-		}
-		if IsRoot(root) {
-			return append(env,
-				"PRESENTATION_SOURCE_DIR="+root,
-				"OFFICECLI_MOP_PRESENTATION_ROOT="+root,
-			)
-		}
 	}
 	if len(env) == 0 {
 		return nil
@@ -134,30 +97,87 @@ func bundledSkillsDir(cwd string) string {
 }
 
 func Root(repoRoot string) string {
-	candidates := make([]string, 0, 6)
-	if executable, err := os.Executable(); err == nil {
-		exeDir := filepath.Dir(executable)
-		candidates = append(candidates,
-			filepath.Join(exeDir, "..", "Resources", "presentation"),
-			filepath.Join(exeDir, "presentation"),
-		)
+	cwd, _ := config.ProcessCwd()
+	return firstPresentationRoot(currentExecutable(), repoRoot, cwd, config.LauncherPWD())
+}
+
+func currentExecutable() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
 	}
-	if strings.TrimSpace(repoRoot) != "" {
-		candidates = append(candidates,
-			filepath.Join(repoRoot, "presentation"),
-			filepath.Join(repoRoot, "..", "presentation"),
-		)
-	}
-	if cwd, ok := config.ProcessCwd(); ok {
-		candidates = append(candidates, filepath.Join(cwd, "presentation"), filepath.Join(cwd, "..", "presentation"))
-	}
-	for _, candidate := range candidates {
-		root, err := filepath.Abs(candidate)
-		if err == nil && IsRoot(root) {
-			return root
+	return exe
+}
+
+// ancestorSearchDepth bounds how far a local .app may sit under the checkout.
+// officedex/build/bin/OfficeDex.app/Contents/MacOS is 6 steps above the repo;
+// a few extra covers linked worktrees without walking the whole volume.
+const ancestorSearchDepth = 12
+
+// firstPresentationRoot is the shared search Root and BridgeEnv use.
+//
+// A packaged app must prefer Contents/Resources/presentation: launching from a
+// developer shell whose PWD points at the checkout would otherwise pair the
+// signed Node runtime with an unsigned source-tree native addon, and macOS
+// refuses the dlopen. A local build stages no runtime, and `open` / Finder
+// start the process with cwd "/", so the fallback walks from the executable
+// up to the sibling presentation checkout.
+func firstPresentationRoot(exe string, searchRoots ...string) string {
+	for _, candidate := range presentationSearchRoots(exe, searchRoots...) {
+		if IsRoot(candidate) {
+			return candidate
 		}
 	}
 	return ""
+}
+
+func presentationSearchRoots(exe string, searchRoots ...string) []string {
+	candidates := make([]string, 0, 16)
+	seen := make(map[string]struct{})
+	add := func(path string) {
+		if strings.TrimSpace(path) == "" {
+			return
+		}
+		abs, err := filepath.Abs(path)
+		if err != nil {
+			return
+		}
+		if _, exists := seen[abs]; exists {
+			return
+		}
+		seen[abs] = struct{}{}
+		candidates = append(candidates, abs)
+	}
+
+	if strings.TrimSpace(exe) != "" {
+		exeDir := filepath.Dir(exe)
+		add(filepath.Join(exeDir, "..", "Resources", "presentation"))
+		add(filepath.Join(exeDir, "presentation"))
+		// A local `wails build` lands at build/bin/OfficeDex.app/Contents/MacOS.
+		// Only walk from that layout: a test binary in the Go cache would
+		// otherwise keep discovering the developer's real checkout.
+		contents := filepath.Dir(exeDir)
+		app := filepath.Dir(contents)
+		if filepath.Base(exeDir) == "MacOS" && filepath.Base(contents) == "Contents" && strings.HasSuffix(app, ".app") {
+			dir := filepath.Dir(app)
+			for i := 0; i < ancestorSearchDepth; i++ {
+				parent := filepath.Dir(dir)
+				if parent == dir {
+					break
+				}
+				add(filepath.Join(parent, "presentation"))
+				dir = parent
+			}
+		}
+	}
+	for _, root := range searchRoots {
+		if strings.TrimSpace(root) == "" {
+			continue
+		}
+		add(filepath.Join(root, "presentation"))
+		add(filepath.Join(root, "..", "presentation"))
+	}
+	return candidates
 }
 
 func NodeExecutable() string {

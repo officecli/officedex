@@ -53,10 +53,12 @@ process.on("SIGTERM", () => {
 });
 
 try {
-  const prefetchStatus = run("npm", ["run", "prefetch:officecli"]);
-  if (prefetchStatus !== 0) {
-    failure = "prefetch:officecli failed";
-    throw new ExitError(prefetchStatus);
+  if (!process.env.OFFICEDEX_E2E_SKIP_PREFETCH) {
+    const prefetchStatus = run("npm", ["run", "prefetch:officecli"]);
+    if (prefetchStatus !== 0) {
+      failure = "prefetch:officecli failed";
+      throw new ExitError(prefetchStatus);
+    }
   }
 
   const baseEnv = {

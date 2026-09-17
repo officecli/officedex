@@ -67,6 +67,10 @@ build_officecli "${OFFICECLI_STAGE_BIN}"
 echo "[build-local-latest] building OfficeDex.app"
 cd "${OFFICEDEX_DIR}"
 APP_VERSION="$(node -p 'require("./package.json").version')"
+# Writer is a sibling checkout this machine often does not have. The desktop
+# host already falls back when public/writer is missing; a local latest build
+# should still produce an app.
+export WRITER_OPTIONAL=1
 PRESENTATION_SOURCE_DIR="${PRESENTATION_DIR}" env -u GOROOT "${WAILS_BIN}" build -ldflags "-X main.appVersion=${APP_VERSION}"
 node --input-type=module -e 'import { stageDesktopSkills } from "./scripts/bundle-runtime.mjs"; await stageDesktopSkills("build/bin/OfficeDex.app/Contents/Resources");'
 npm run stage:office2modoc
@@ -92,7 +96,9 @@ npm run bundle:officecli:mac
 rm -rf "${APP_PATH}/Contents/Resources/mop-runtime"
 
 echo "[build-local-latest] verifying runtime dependencies"
-"${APP_PATH}/Contents/MacOS/officedex" --verify-runtime
+# Finder and `open` start the process with cwd /. Running this from the repo
+# would hide a missing converter behind a checkout the GUI app cannot see.
+( cd / && "${APP_PATH}/Contents/MacOS/officedex" --verify-runtime )
 
 # Then ask the packaging gate what it can answer here. A local build stages no
 # Node runtime, so mop-runtime is allowed to be absent -- but not allowed to be
@@ -100,8 +106,13 @@ echo "[build-local-latest] verifying runtime dependencies"
 # symlink to Homebrew's node got bundled into every local build for four days,
 # and because the app prefers the runtime beside its executable over the one on
 # PATH, it was also the one the worker ran, straight into a dyld abort.
+#
+# Writer fonts and the MOP presentation tree are the same class of payload:
+# packaging stages them, a local build uses the checkout beside the repo (and
+# may have no writer checkout at all). If a leftover copy is in the bundle it
+# still has to be valid; if it is missing, that is this build's decision.
 echo "[build-local-latest] verifying packaged runtime payloads"
-node scripts/verify-packaged-runtime.mjs build/bin --may-be-absent=mop-runtime
+node scripts/verify-packaged-runtime.mjs build/bin --may-be-absent=mop-runtime,writer-fonts,presentation
 
 echo "[build-local-latest] OfficeCLI build metadata"
 go version -m "${OFFICECLI_SOURCE_BIN}" | sed -n '1,5p'

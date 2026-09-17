@@ -114,6 +114,22 @@ function resourcePath(root, entry, platform) {
 }
 
 /**
+ * Names `--may-be-absent` can use for this payload: the resource path, and for
+ * binaries also the file name and the top-level resource directory they live
+ * under. Tolerating `presentation` therefore also covers mop-convert inside it.
+ */
+export function resourceAbsenceKeys(entry) {
+  if (typeof entry.at === "string") return [entry.at];
+  const [directory, binary] = entry.at;
+  const top = directory.split(/[\\/]/).find(Boolean);
+  return [...new Set([binary, directory, top].filter(Boolean))];
+}
+
+function isToleratedAbsent(entry, tolerated) {
+  return resourceAbsenceKeys(entry).some((key) => tolerated.has(key));
+}
+
+/**
  * `mayBeAbsent` names payloads this build is allowed to ship without, by their
  * `at`. A local build stages no Node runtime and the app falls back to the
  * developer's own -- but if one *is* there it still has to work, because the
@@ -135,7 +151,7 @@ export async function verifyPackagedRuntime(
   const present = [];
   for (const entry of REQUIRED_RESOURCES) {
     const at = resourcePath(target.root, entry, platform);
-    if (typeof entry.at === "string" && tolerated.has(entry.at) && !(await exists(at))) {
+    if (isToleratedAbsent(entry, tolerated) && !(await exists(at))) {
       degraded.push(`${entry.label}: absent at ${at}\n      ${entry.why}`);
       continue;
     }

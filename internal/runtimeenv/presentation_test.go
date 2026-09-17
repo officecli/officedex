@@ -6,9 +6,8 @@ import (
 	"testing"
 )
 
-func TestPresentationRuntimeEnvFindsSiblingCheckout(t *testing.T) {
-	root := t.TempDir()
-	source := filepath.Join(root, "presentation")
+func writePresentationRoot(t *testing.T, source string) {
+	t.Helper()
 	for _, relative := range []string{
 		"package.json",
 		filepath.Join("node_modules", "vite", "dist", "node", "index.js"),
@@ -23,6 +22,12 @@ func TestPresentationRuntimeEnvFindsSiblingCheckout(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+}
+
+func TestPresentationRuntimeEnvFindsSiblingCheckout(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "presentation")
+	writePresentationRoot(t, source)
 	t.Setenv("PWD", "")
 	t.Setenv("OFFICECLI_MOP_PRESENTATION_ROOT", "")
 	t.Setenv("PRESENTATION_SOURCE_DIR", "")
@@ -80,5 +85,53 @@ func TestBridgeEnvPassesPortableProgressiveSkill(t *testing.T) {
 	t.Setenv("OFFICECLI_JSSDK_DESIGN_SKILL_DIR", "/explicit/skill")
 	if env := BridgeEnv(root); len(env) != 1 {
 		t.Fatalf("overrode explicit skill: %v", env)
+	}
+}
+
+func localAppExecutable(t *testing.T, workspace string) string {
+	t.Helper()
+	exe := filepath.Join(workspace, "officedex", "build", "bin", "OfficeDex.app", "Contents", "MacOS", "officedex")
+	if err := os.MkdirAll(filepath.Dir(exe), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(exe, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return exe
+}
+
+func TestFirstPresentationRootFindsCheckoutFromLocalApp(t *testing.T) {
+	// `open` / Finder start OfficeDex.app with cwd "/". A local build stages
+	// no Contents/Resources/presentation, so the converter is the sibling
+	// checkout reached by walking up from the executable.
+	workspace := t.TempDir()
+	source := filepath.Join(workspace, "presentation")
+	writePresentationRoot(t, source)
+	exe := localAppExecutable(t, workspace)
+
+	got := firstPresentationRoot(exe, "/", "")
+	want, err := filepath.Abs(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("firstPresentationRoot = %q, want the sibling checkout %q", got, want)
+	}
+}
+
+func TestFirstPresentationRootPrefersBundledRuntime(t *testing.T) {
+	workspace := t.TempDir()
+	writePresentationRoot(t, filepath.Join(workspace, "presentation"))
+	exe := localAppExecutable(t, workspace)
+	bundled := filepath.Join(workspace, "officedex", "build", "bin", "OfficeDex.app", "Contents", "Resources", "presentation")
+	writePresentationRoot(t, bundled)
+
+	got := firstPresentationRoot(exe, "/", "")
+	want, err := filepath.Abs(bundled)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("firstPresentationRoot = %q, want the bundled runtime %q", got, want)
 	}
 }

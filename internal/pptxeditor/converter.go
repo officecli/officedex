@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"officedex/internal/config"
+	"officedex/internal/runtimeenv"
 	"officedex/internal/subprocess"
 	"os"
 	"strings"
@@ -68,5 +69,5 @@ func (c *CLIConverter) run(ctx context.Context, args ...string) error {
 func resolveMopConvertBinary(repoRoot string) string {
 	// The MOP HTTP service resolves the same binary through the same helper;
 	// see config.MopConvertBinary for why that is not duplicated here.
-	return config.MopConvertBinary("", repoRoot)
+	return config.MopConvertBinary(runtimeenv.Root(repoRoot), repoRoot)
 }
