@@ -20,15 +20,14 @@ import { useRecentFiles } from "./useRecentFiles";
 import { defaultGenerateInput, type NavKey } from "./defaults";
 import { useAppRouting, type SelectedTask } from "./controllers/useAppRouting";
 import { documentTypeFromTask, generationModeForDocumentType, sourceArtifactFor, useGeneration } from "./controllers/useGeneration";
+import { OPEN_LOCAL_FILE_TYPES, useDocumentLibrary } from "./controllers/useDocumentLibrary";
 // Re-exported because the route codec moved with the controller that owns it.
 export { readStoredAppRoute, writeStoredAppRoute } from "./controllers/useAppRouting";
 // Re-exported for callers that still import them from here; they moved with
 // the generation controller that owns them.
 export { findModifySourceTask, findRecoverableTaskHistoryEntry, sourceArtifactFor } from "./controllers/useGeneration";
+export { sortSidebarDocuments } from "./controllers/useDocumentLibrary";
 
-// "Open file" edits documents in place, so only the formats OfficeDex can
-// edit are offered.
-const OPEN_LOCAL_FILE_TYPES = ["docx", "xlsx", "pptx"];
 import type { SidebarAccount, SidebarDocument } from "./components/ProjectSidebar";
 import { Shell } from "./components/Shell";
 import { PreviewPanel } from "./components/PreviewPanel";
@@ -69,21 +68,6 @@ import { errorMessage, recordValue, trimmedStringValue as stringValue } from "./
 import { BRIDGE_ERROR_CODES, classifyError, classifyStatusEvent, errorCode, extractStderr, stripFailureTag, type FailureKind } from "./failureKind";
 import { fileExtension, fileNameFromPath } from "./utils/path";
 import { delay } from "./utils/timing";
-
-function taskCreatedTimestamp(document: SidebarDocument): number {
-  if (!document.createdAt) return Number.NEGATIVE_INFINITY;
-  const parsed = Date.parse(document.createdAt);
-  return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
-}
-
-export function sortSidebarDocuments(documents: SidebarDocument[]): SidebarDocument[] {
-  return [...documents].sort((a, b) => {
-    const aTime = taskCreatedTimestamp(a);
-    const bTime = taskCreatedTimestamp(b);
-    if (aTime !== bTime) return bTime - aTime;
-    return a.id.localeCompare(b.id);
-  });
-}
 
 export function App() {
   return (
@@ -407,16 +391,55 @@ function OfficeDexApp() {
     }
   }, [openInlinePreview, previewArtifact, routing, state.tasks]);
 
+
+  const openWorkbookFile = useCallback((file: RecentFile) => runSpreadsheetAction(async () => {
+    const artifact = await api.openRecentFile(file);
+    const grant = await api.issuePreviewToken(artifact);
+    setSpreadsheetPreferredTool("assistant");
+    setCatalogAutoScanFile(undefined);
+    setSpreadsheetEntry({
+      kind: "artifact",
+      artifact,
+      grant,
+      ...(file.workspaceId ? { workspaceId: file.workspaceId } : homeWorkspaceId ? { workspaceId: homeWorkspaceId } : {}),
+      ...(file.conversationId ? { conversationId: file.conversationId } : {}),
+    });
+    routingRef.current?.setNav("spreadsheet");
+    documentSession.reportOpened();
+    clearError();
+    void refreshRecentFiles(homeWorkspaceId);
+  }), [api, clearError, documentSession, homeWorkspaceId, refreshRecentFiles, runSpreadsheetAction]);
+
+  const library = useDocumentLibrary({
+    recent,
+    session: documentSession,
+    routing,
+    homeWorkspaceId,
+    openWorkbookFile,
+    clearError,
+    t,
+  });
+  const sidebarDocuments = library.documents;
+  const sidebarTaskSignal = library.signal;
+  const openSidebarDocument = library.openDocument;
+  const deleteSidebarDocument = library.deleteDocument;
+  const deleteSidebarDocuments = library.deleteDocuments;
+  const openRecentFile = library.openRecentFile;
+  const openHomeLocalFile = library.openLocalFile;
+  const removeRecentFile = library.removeRecentFile;
+  // A completed run opens its artifact; anything else just selects the run.
+  // Kept separate from library.openDocument, which additionally falls back to
+  // the recent-file list for ids that name no task (R-D-04, R-D-05).
   const openTaskFromHome = useCallback((taskId: string) => {
     const task = state.tasks[taskId];
     if (task?.status === "completed" && task.artifact?.filePath) {
       routing.setSelectedTask({ kind: "task", id: taskId });
       routing.setNav("document");
-      void openInlinePreview(task.artifact);
+      void documentSession.open(task.artifact);
       return;
     }
     routing.selectTask(taskId);
-  }, [openInlinePreview, routing, state.tasks]);
+  }, [documentSession, routing, state.tasks]);
 
   const pptxRun = usePptxRunControls({
     modifyDeck: useCallback((instruction: string, sourceTaskId: string) => continueModify("pptx", instruction, sourceTaskId), [continueModify]),
@@ -462,57 +485,6 @@ function OfficeDexApp() {
   });
   const bridgeInterruptionKey = bridge.interruptionKey;
 
-
-  const sidebarDocuments = useMemo<SidebarDocument[]>(() => {
-    const byPath = new Map<string, SidebarDocument>();
-    for (const file of recentFiles) {
-      byPath.set(file.filePath, {
-        id: file.taskId || `file:${file.filePath}`,
-        // Local files have no task creation time. Use their persisted open
-        // time so newly opened files survive the sidebar's 40-item limit.
-        createdAt: file.lastOpenedAt,
-        title: file.fileName,
-        documentType: file.documentType,
-        filePath: file.filePath,
-        conversationId: file.conversationId,
-        workspaceId: file.workspaceId,
-        status: "completed",
-      });
-    }
-    const pending: SidebarDocument[] = [];
-    for (const task of tasks) {
-      const item: SidebarDocument = {
-        id: task.id,
-        createdAt: task.createdAt || task.events.map((event) => event.ts).find((ts): ts is string => Boolean(ts)),
-        title: taskTitle(task, t("tasks.untitled")),
-        documentType: documentTypeFromTask(task),
-        filePath: task.artifact?.filePath,
-        conversationId: task.conversationId,
-        workspaceId: task.workspaceId,
-        status: task.status,
-      };
-      if (task.artifact?.filePath) byPath.set(task.artifact.filePath, item);
-      else if (["starting", "running", "question", "plan_review", "failed"].includes(task.status)) pending.push(item);
-    }
-    return sortSidebarDocuments([...pending, ...byPath.values()]).slice(0, 40);
-  }, [recentFiles, t, tasks]);
-  // One sidebar signal, highest urgency first: needs-you > running > unseen
-  // failures. Failures count as seen once the user opens the tasks page, so a
-  // stale red dot cannot outlive the visit that acknowledged it.
-  const [seenFailures, setSeenFailures] = useState<string[]>(() => readSeenFailures());
-  const taskSignals = useMemo(() => computeTaskSignals(tasks, seenFailures), [tasks, seenFailures]);
-  const sidebarTaskSignal = useMemo(() => sidebarSignal(taskSignals), [taskSignals]);
-  const [activityVisible, setActivityVisible] = useState(false);
-  useEffect(() => {
-    // Acknowledge only while the activity list is actually on screen.
-    if (!activityVisible) return;
-    const ids = failedTaskIds(tasks);
-    setSeenFailures((current) => {
-      if (ids.length === current.length && ids.every((id) => current.includes(id))) return current;
-      writeSeenFailures(ids);
-      return ids;
-    });
-  }, [activityVisible, tasks]);
 
   useEffect(() => {
     let cancelled = false;
@@ -585,165 +557,6 @@ function OfficeDexApp() {
       warnings: [],
     };
   }, []);
-
-  const removeRecentFile = useCallback(async (filePath: string) => {
-    try {
-      await recent.remove(filePath);
-    } catch (error) {
-      void message.error(errorMessage(error));
-    }
-  }, [recent]);
-
-  const openRecentFile = useCallback(async (file: RecentFile) => {
-    try {
-      if (isXlsxFile(file)) {
-        await runSpreadsheetAction(async () => {
-          const artifact = await api.openRecentFile(file);
-          const grant = await api.issuePreviewToken(artifact);
-          setSpreadsheetPreferredTool("assistant");
-          setCatalogAutoScanFile(undefined);
-          setSpreadsheetEntry({
-            kind: "artifact",
-            artifact,
-            grant,
-            ...(file.workspaceId ? { workspaceId: file.workspaceId } : homeWorkspaceId ? { workspaceId: homeWorkspaceId } : {}),
-            ...(file.conversationId ? { conversationId: file.conversationId } : {}),
-          });
-          setActiveNav("spreadsheet");
-          documentSession.reportOpened();
-          clearError();
-          void refreshRecentFiles(homeWorkspaceId);
-        });
-        return;
-      }
-      const artifact = await api.openRecentFile(file);
-      if (file.source === "generated") {
-        const matchingTask = tasks.find((task) =>
-          (file.taskId && task.id === file.taskId) ||
-          (file.conversationId && task.conversationId === file.conversationId));
-        if (matchingTask) selectTask(matchingTask.id);
-      }
-      await openInlinePreview(artifact);
-      void refreshRecentFiles(homeWorkspaceId);
-    } catch (error) {
-      const text = errorMessage(error);
-      if (isUnsupportedRecentFileError(text)) {
-        void message.info(t("home.systemOpenFallback"));
-        await api.openPath(file.filePath);
-        return;
-      }
-      if (isMissingRecentFileError(text)) {
-        void message.error({
-          content: t("home.missingFile"),
-          action: { label: t("home.removeRecentAction"), onClick: () => void removeRecentFile(file.filePath) },
-        });
-        return;
-      }
-      void message.error(isPermissionRecentFileError(text) ? t("home.permissionError") : text);
-    }
-  }, [clearError, homeWorkspaceId, openInlinePreview, refreshRecentFiles, removeRecentFile, runSpreadsheetAction, selectTask, t, tasks]);
-
-  const openHomeLocalFile = useCallback(async () => {
-    try {
-      const selected = await api.openFileDialog({
-        filters: [{
-          name: "Office files",
-          extensions: [...OPEN_LOCAL_FILE_TYPES],
-        }],
-      });
-      if (!selected) return;
-      // The dialog filters already narrow the list, but a typed path can still
-      // slip through, so keep the office-only rule on this side too.
-      const documentType = fileExtension(selected);
-      if (!OPEN_LOCAL_FILE_TYPES.includes(documentType)) {
-        void message.error(t("home.openReferencedFile.unsupported"));
-        return;
-      }
-      await openRecentFile({
-        filePath: selected,
-        fileName: fileNameFromPath(selected),
-        documentType,
-        source: "local",
-        ...(homeWorkspaceId ? { workspaceId: homeWorkspaceId } : {}),
-        lastOpenedAt: new Date().toISOString(),
-      });
-    } catch (error) {
-      void message.error(errorMessage(error));
-    }
-  }, [homeWorkspaceId, openRecentFile, t]);
-
-  const openSidebarDocument = useCallback((document: SidebarDocument) => {
-    if (state.tasks[document.id]) {
-      openTaskFromHome(document.id);
-      return;
-    }
-    const filePath = document.id.startsWith("file:") ? document.id.slice("file:".length) : undefined;
-    const file = recentFiles.find((candidate) => candidate.filePath === filePath || candidate.taskId === document.id);
-    if (file) void openRecentFile(file);
-  }, [openRecentFile, openTaskFromHome, recentFiles, state.tasks]);
-
-  const deleteSidebarDocument = useCallback(async (document: SidebarDocument) => {
-    const task = state.tasks[document.id];
-    const conversationId = document.conversationId || task?.conversationId;
-    const lineage = task
-      ? tasks.filter((candidate) => candidate.conversationId === conversationId)
-      : [];
-    try {
-      for (const candidate of lineage) {
-        if (["starting", "running", "question", "plan_review"].includes(candidate.status)) {
-          try {
-            await api.cancel(candidate.id);
-          } catch (error) {
-            if (errorCode(errorMessage(error)) !== BRIDGE_ERROR_CODES.taskNotFound) throw error;
-          }
-        }
-      }
-      if (task) {
-        await api.deleteDocument(task.id);
-        const lineageIds = new Set(lineage.map((candidate) => candidate.id));
-        setState((current) => lineage.reduce((next, candidate) => deleteTask(next, candidate.id), current));
-        recent.forgetWhere((file) =>
-          lineageIds.has(file.taskId || "") ||
-          (!!conversationId && file.conversationId === conversationId) ||
-          (!!document.filePath && file.filePath === document.filePath),
-        );
-        if (selectedTaskID.kind === "task" && lineageIds.has(selectedTaskID.id)) {
-          setSelectedTaskID({ kind: "none" });
-          setActiveNav("home");
-        }
-        if (
-          (previewArtifact?.taskId && lineageIds.has(previewArtifact.taskId)) ||
-          (document.filePath && previewArtifact?.filePath === document.filePath)
-        ) {
-          await closeInlinePreview();
-        }
-      } else if (document.filePath) {
-        await removeRecentFile(document.filePath);
-        if (previewArtifact?.filePath === document.filePath) {
-          await closeInlinePreview();
-          setActiveNav("home");
-        }
-      }
-      clearError();
-    } catch (error) {
-      void message.error(errorMessage(error));
-    }
-  }, [clearError, closeInlinePreview, previewArtifact, removeRecentFile, selectedTaskID, state.tasks, tasks]);
-
-  const deleteSidebarDocuments = useCallback(async (documentsToDelete: SidebarDocument[]) => {
-    // Reuse the single-document cleanup path while serializing state changes
-    // for a folded group, so active previews and recent files stay consistent.
-    const handledConversations = new Set<string>();
-    for (const document of documentsToDelete) {
-      // A conversation can have several task rows (for example, retries or
-      // edits). The single-row delete already removes that whole lineage, so
-      // avoid issuing duplicate bridge deletes for the remaining rows.
-      const key = document.conversationId || document.id;
-      if (handledConversations.has(key)) continue;
-      handledConversations.add(key);
-      await deleteSidebarDocument(document);
-    }
-  }, [deleteSidebarDocument]);
 
   const pptxLive = usePptxLiveDraft({ session: documentSession, recordError, t });
   const timelineNodeId = pptxLive.timelineNodeId;
@@ -1151,7 +964,7 @@ function OfficeDexApp() {
             <ActivityPanel
               tasks={tasks}
               onSelectTask={selectTask}
-              onViewed={setActivityVisible}
+              onViewed={library.setActivityVisible}
               onOpenArtifact={(artifact) => void openRecentFile({
                 filePath: artifact.filePath,
                 fileName: artifact.fileName,
