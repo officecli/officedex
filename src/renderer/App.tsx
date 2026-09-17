@@ -461,10 +461,10 @@ function OfficeDexApp() {
         // hunt for which one, which is the trip to the tasks page we are
         // trying to remove.
         if (event.type === "task.completed") {
-          maybeNotify({ title: t("notification.title"), body: taskNotificationBody(settledTask, t("notification.taskCompleted")) });
+          maybeNotify(api, { title: t("notification.title"), body: taskNotificationBody(settledTask, t("notification.taskCompleted")) });
         }
         if (event.type === "task.failed") {
-          maybeNotify({ title: t("notification.title"), body: taskNotificationBody(settledTask, t("notification.taskFailed")) });
+          maybeNotify(api, { title: t("notification.title"), body: taskNotificationBody(settledTask, t("notification.taskFailed")) });
         }
         nudgeForTaskTransition();
       }

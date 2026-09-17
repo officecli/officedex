@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { DesktopAPI } from "../shared/types";
 import {
   NOTIFICATIONS_STORAGE_KEY,
   maybeNotify,
@@ -10,11 +11,7 @@ const mocks = vi.hoisted(() => ({
   sendDesktopNotification: vi.fn(async () => undefined),
 }));
 
-vi.mock("./bridge", () => ({
-  officecli: {
-    sendDesktopNotification: mocks.sendDesktopNotification,
-  },
-}));
+const api = { sendDesktopNotification: mocks.sendDesktopNotification } as unknown as DesktopAPI;
 
 function setDocumentHidden(hidden: boolean) {
   Object.defineProperty(document, "hidden", {
@@ -77,7 +74,7 @@ describe("desktop notifications", () => {
   });
 
   it("notifies through the desktop bridge when enabled and the document is hidden", async () => {
-    maybeNotify({ title: "OfficeDex", body: "Generation finished" });
+    maybeNotify(api, { title: "OfficeDex", body: "Generation finished" });
 
     await vi.waitFor(() =>
       expect(mocks.sendDesktopNotification).toHaveBeenCalledWith({
@@ -91,7 +88,7 @@ describe("desktop notifications", () => {
     setDocumentHidden(false);
     setDocumentFocused(true);
 
-    maybeNotify({ title: "OfficeDex", body: "Generation finished" });
+    maybeNotify(api, { title: "OfficeDex", body: "Generation finished" });
 
     await vi.waitFor(() =>
       expect(mocks.sendDesktopNotification).toHaveBeenCalledWith({
@@ -105,7 +102,7 @@ describe("desktop notifications", () => {
     setDocumentHidden(false);
     setDocumentFocused(false);
 
-    maybeNotify({ title: "OfficeDex", body: "Generation finished" });
+    maybeNotify(api, { title: "OfficeDex", body: "Generation finished" });
 
     await vi.waitFor(() =>
       expect(mocks.sendDesktopNotification).toHaveBeenCalledWith({
@@ -118,7 +115,7 @@ describe("desktop notifications", () => {
   it("does not notify when notifications are disabled", () => {
     setNotificationsEnabled(false);
 
-    maybeNotify({ title: "OfficeDex", body: "Generation finished" });
+    maybeNotify(api, { title: "OfficeDex", body: "Generation finished" });
 
     expect(mocks.sendDesktopNotification).not.toHaveBeenCalled();
   });
@@ -126,7 +123,7 @@ describe("desktop notifications", () => {
   it("ignores desktop bridge failures", async () => {
     mocks.sendDesktopNotification.mockRejectedValueOnce(new Error("permission denied"));
 
-    maybeNotify({ title: "OfficeDex", body: "Generation finished" });
+    maybeNotify(api, { title: "OfficeDex", body: "Generation finished" });
 
     await vi.waitFor(() => expect(mocks.sendDesktopNotification).toHaveBeenCalledTimes(1));
   });

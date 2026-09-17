@@ -1,3 +1,4 @@
+import type { DesktopAPI } from "../../shared/types";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const readDrawingAsset = vi.fn(async (_assetsDir: string, digest: string) => ({
@@ -11,12 +12,10 @@ const captureTimelineNode = vi.fn(async (input: { slide: number }) => ({
   label: `第 ${input.slide} 页完成`,
   createdAt: "2026-08-20T12:00:00Z",
 }));
-vi.mock("../bridge", () => ({
-  officecli: {
-    readDrawingAsset: (...args: [string, string]) => readDrawingAsset(...args),
-    captureTimelineNode: (input: { slide: number }) => captureTimelineNode(input),
-  },
-}));
+const replayApi = {
+  readDrawingAsset: (...args: [string, string]) => readDrawingAsset(...args),
+  captureTimelineNode: (input: { slide: number }) => captureTimelineNode(input),
+} as unknown as DesktopAPI;
 
 beforeEach(() => {
   readDrawingAsset.mockClear();
@@ -34,8 +33,8 @@ import type { PresentationEditorController } from "./PresentationEditorFrame";
 
 const liveSequencers = new Set<VibeReplaySequencer>();
 
-function makeSequencer(options: ConstructorParameters<typeof VibeReplaySequencer>[0]) {
-  const sequencer = new VibeReplaySequencer(options);
+function makeSequencer(options: Omit<ConstructorParameters<typeof VibeReplaySequencer>[0], "api"> & { api?: DesktopAPI }) {
+  const sequencer = new VibeReplaySequencer({ api: replayApi, ...options });
   liveSequencers.add(sequencer);
   return sequencer;
 }
@@ -1070,7 +1069,7 @@ describe("slide.replace", () => {
       { seq: 104, op: "slide.end", slide: 2, branchId: "main" } as VibeOp,
       { seq: 105, op: "deck.end", branchId: "main" } as VibeOp,
     ];
-    const done = applyReslideOps(controller as unknown as PresentationEditorController, { taskId: "t1", ops: replaceOps });
+    const done = applyReslideOps(replayApi, controller as unknown as PresentationEditorController, { taskId: "t1", ops: replaceOps });
     for (let tick = 0; tick < 30; tick += 1) await flush();
     await done;
     // Slide 2 holds exactly the new composition's shape; slide 1 untouched.
@@ -1096,7 +1095,7 @@ describe("slide.delete", () => {
       { seq: 204, op: "slide.delete", slide: 3, branchId: "main" } as VibeOp,
       { seq: 205, op: "deck.end", branchId: "main" } as VibeOp,
     ];
-    const done = applyReslideOps(controller as unknown as PresentationEditorController, { taskId: "t1", ops });
+    const done = applyReslideOps(replayApi, controller as unknown as PresentationEditorController, { taskId: "t1", ops });
     for (let tick = 0; tick < 40; tick += 1) await flush();
     await done;
     expect(powerPoint.deck.length).toBe(2);

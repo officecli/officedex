@@ -1,6 +1,5 @@
 import type { AgentRun, DesktopAPI } from "../../shared/types";
 import { confirmAgentApproval, waitForAgentRun } from "../agentRuntime";
-import { officecli } from "../bridge";
 import type { CampaignChannel, MarketingBatchDraft, MarketingCampaignSettings } from "./marketingWorkflow";
 import { recordValue, stringValue } from "../utils/values";
 export interface MarketingPostprocessInput {
@@ -49,8 +48,8 @@ export async function runMarketingPostprocess(
     cta: input.campaign.cta,
   } : { filePath: input.sourceFilePath };
   const run = existingRunId
-    ? await officecli.retryAgentRun(existingRunId)
-    : await officecli.startAgentRun({
+    ? await api.retryAgentRun(existingRunId)
+    : await api.startAgentRun({
       workflow,
       input: {
         parameters,

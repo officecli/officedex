@@ -611,6 +611,7 @@ export default function PresentationPptxWorkbench({
         },
       };
       replayRef.current = new VibeReplaySequencer({
+        api,
         controller,
         onStatus: (status) => {
           setReplayStatus(status);

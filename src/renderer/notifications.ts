@@ -1,4 +1,4 @@
-import { officecli } from "./bridge";
+import type { DesktopAPI } from "../shared/types";
 
 export const NOTIFICATIONS_STORAGE_KEY = "officedex.notifications.enabled";
 
@@ -25,11 +25,11 @@ export function setNotificationsEnabled(enabled: boolean): void {
   }
 }
 
-export function maybeNotify({ title, body }: NotificationInput): void {
+export function maybeNotify(api: DesktopAPI, { title, body }: NotificationInput): void {
   try {
     if (!readNotificationsEnabled()) return;
 
-    void officecli.sendDesktopNotification?.({ title, body }).catch(() => undefined);
+    void api.sendDesktopNotification?.({ title, body }).catch(() => undefined);
   } catch {
     // Notifications are best-effort and must never break task event handling.
   }

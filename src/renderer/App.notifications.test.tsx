@@ -120,11 +120,11 @@ describe("App desktop notification wiring", () => {
     });
 
     expect(mocks.maybeNotify).toHaveBeenCalledTimes(2);
-    expect(mocks.maybeNotify).toHaveBeenNthCalledWith(1, {
+    expect(mocks.maybeNotify).toHaveBeenNthCalledWith(1, expect.anything(), {
       title: "OfficeDex",
       body: "Generation finished",
     });
-    expect(mocks.maybeNotify).toHaveBeenNthCalledWith(2, {
+    expect(mocks.maybeNotify).toHaveBeenNthCalledWith(2, expect.anything(), {
       title: "OfficeDex",
       body: "Generation failed",
     });

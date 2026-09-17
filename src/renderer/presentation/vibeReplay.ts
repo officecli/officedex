@@ -1,6 +1,6 @@
+import type { DesktopAPI } from "../../shared/types";
 import type { VibeOp, VibeOutline } from "../../shared/types";
 import type { PresentationEditorController } from "./PresentationEditorFrame";
-import { officecli } from "../bridge";
 import { NEXAEDGE_DEMO_ID, readNexaEdgeImage } from "./bundledPptxDemo";
 import { imageProgressFromOps, type PptxImageProgress } from "./pptxProgress";
 import { pptxOpStreamDrained } from "./pptxDeckState";
@@ -983,6 +983,9 @@ export interface VibeReplayFeed {
 }
 
 export interface VibeReplaySequencerOptions {
+  /** The desktop handle drawing assets are read through. Explicit because the
+   *  sequencer runs outside React and outlives the component that starts it. */
+  api: DesktopAPI;
   controller: PresentationEditorController;
   onStatus?: (status: VibeReplayStatus) => void;
   paceMs?: number;
@@ -998,6 +1001,7 @@ export interface VibeReplaySequencerOptions {
  * React strict-mode double effects are safe.
  */
 export class VibeReplaySequencer {
+  private readonly api: DesktopAPI;
   private readonly controller: PresentationEditorController;
   private readonly onStatus?: (status: VibeReplayStatus) => void;
   private readonly paceMs?: number;
@@ -1048,6 +1052,7 @@ export class VibeReplaySequencer {
   private lastAttentionRect?: AttentionRect;
 
   constructor(options: VibeReplaySequencerOptions) {
+    this.api = options.api;
     this.controller = options.controller;
     this.onStatus = options.onStatus;
     this.paceMs = options.paceMs;
@@ -1203,7 +1208,7 @@ export class VibeReplaySequencer {
         try {
           const asset = this.assetsDir === NEXAEDGE_DEMO_ID
             ? { base64: await readNexaEdgeImage(digest) }
-            : await officecli.readDrawingAsset(this.assetsDir, digest);
+            : await this.api.readDrawingAsset(this.assetsDir, digest);
           this.images.set(digest, asset.base64 || null);
         } catch {
           this.images.set(digest, null);
@@ -1242,7 +1247,7 @@ export class VibeReplaySequencer {
       const op = bySeq.get(capture.seq);
       const slide = op?.slide ?? this.currentSlide ?? 1;
       try {
-        await officecli.captureTimelineNode({
+        await this.api.captureTimelineNode({
           taskId: this.taskId,
           previewToken: session.previewToken,
           sessionId: session.sessionId,
@@ -1276,7 +1281,7 @@ export class VibeReplaySequencer {
     if (!session?.sessionId) return;
     try {
       await this.controller.executeScript("return true;", { timeoutMs: EDITOR_PROBE_TIMEOUT_MS });
-      await officecli.captureTimelineNode({
+      await this.api.captureTimelineNode({
         taskId: this.taskId,
         previewToken: session.previewToken,
         sessionId: session.sessionId,
@@ -1320,9 +1325,9 @@ export class VibeReplaySequencer {
           const budgetMs = EDITOR_PROBE_TIMEOUT_MS + chunk.length * perOpMs;
           const startedAt = performance.now();
           const images = await this.resolveImages(chunk);
-          if (!this.templateBase64 && this.templateAssetDir && officecli.readPptxTemplateSource) {
+          if (!this.templateBase64 && this.templateAssetDir && this.api.readPptxTemplateSource) {
             try {
-              const template = await officecli.readPptxTemplateSource(this.templateAssetDir);
+              const template = await this.api.readPptxTemplateSource(this.templateAssetDir);
               this.templateBase64 = uint8ArrayToBase64(template.data);
             } catch (error) {
               console.warn("[vibeReplay] template source could not be loaded; using generated layout", error);
@@ -1481,6 +1486,7 @@ export class VibeReplaySequencer {
  * mistakes a reslide for the original generation.
  */
 export function applyReslideOps(
+  api: DesktopAPI,
   controller: PresentationEditorController,
   input: { taskId: string; ops: VibeOp[]; assetsDir?: string },
   onStatus?: (status: VibeReplayStatus) => void,
@@ -1494,6 +1500,7 @@ export function applyReslideOps(
   }));
   return new Promise((resolve, reject) => {
     const sequencer = new VibeReplaySequencer({
+      api,
       controller,
       onStatus: (status) => {
         onStatus?.(status);
