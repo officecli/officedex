@@ -19,16 +19,28 @@ func Env(s types.UserSettings) []string {
 	}
 	out = append(out, "OFFICE_CLI_RUNTIME_MODE=custom")
 	if s.LlmProvider.Type != "" {
-		out = append(out, "OFFICECLI_LLM_PROVIDER="+string(s.LlmProvider.Type))
+		out = append(out,
+			"OFFICE_CLI_LLM_PROVIDER="+string(s.LlmProvider.Type),
+			"OFFICECLI_LLM_PROVIDER="+string(s.LlmProvider.Type),
+		)
 	}
 	if s.LlmProvider.BaseURL != "" {
-		out = append(out, "OFFICECLI_LLM_BASE_URL="+s.LlmProvider.BaseURL)
+		out = append(out,
+			"OFFICE_CLI_LLM_BASE_URL="+s.LlmProvider.BaseURL,
+			"OFFICECLI_LLM_BASE_URL="+s.LlmProvider.BaseURL,
+		)
 	}
 	if s.LlmProvider.APIKey != "" {
-		out = append(out, "OFFICECLI_LLM_API_KEY="+s.LlmProvider.APIKey)
+		out = append(out,
+			"OFFICE_CLI_LLM_API_KEY="+s.LlmProvider.APIKey,
+			"OFFICECLI_LLM_API_KEY="+s.LlmProvider.APIKey,
+		)
 	}
 	if s.LlmProvider.Model != "" {
-		out = append(out, "OFFICECLI_LLM_MODEL="+s.LlmProvider.Model)
+		out = append(out,
+			"OFFICE_CLI_LLM_MODEL="+s.LlmProvider.Model,
+			"OFFICECLI_LLM_MODEL="+s.LlmProvider.Model,
+		)
 	}
 	return out
 }
@@ -44,6 +56,10 @@ func Snapshot(env []string) *types.ProviderSnapshot {
 		keyBaseURL = "OFFICECLI_LLM_BASE_URL="
 		keyKey     = "OFFICECLI_LLM_API_KEY="
 		keyModel   = "OFFICECLI_LLM_MODEL="
+		keyTypeAlt    = "OFFICE_CLI_LLM_PROVIDER="
+		keyBaseURLAlt = "OFFICE_CLI_LLM_BASE_URL="
+		keyKeyAlt     = "OFFICE_CLI_LLM_API_KEY="
+		keyModelAlt   = "OFFICE_CLI_LLM_MODEL="
 	)
 	var providerType, baseURL, apiKey, model string
 	var found bool
@@ -52,14 +68,26 @@ func Snapshot(env []string) *types.ProviderSnapshot {
 		case strings.HasPrefix(kv, keyType):
 			providerType = kv[len(keyType):]
 			found = true
+		case strings.HasPrefix(kv, keyTypeAlt):
+			providerType = kv[len(keyTypeAlt):]
+			found = true
 		case strings.HasPrefix(kv, keyBaseURL):
 			baseURL = kv[len(keyBaseURL):]
+			found = true
+		case strings.HasPrefix(kv, keyBaseURLAlt):
+			baseURL = kv[len(keyBaseURLAlt):]
 			found = true
 		case strings.HasPrefix(kv, keyKey):
 			apiKey = kv[len(keyKey):]
 			found = true
+		case strings.HasPrefix(kv, keyKeyAlt):
+			apiKey = kv[len(keyKeyAlt):]
+			found = true
 		case strings.HasPrefix(kv, keyModel):
 			model = kv[len(keyModel):]
+			found = true
+		case strings.HasPrefix(kv, keyModelAlt):
+			model = kv[len(keyModelAlt):]
 			found = true
 		}
 	}

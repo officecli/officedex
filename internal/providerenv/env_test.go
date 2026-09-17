@@ -72,7 +72,12 @@ func TestEnvAndSnapshotRoundTrip(t *testing.T) {
 	if env[0] != "OFFICE_CLI_RUNTIME_MODE=custom" {
 		t.Fatalf("custom provider must run in custom mode: %v", env)
 	}
-	for _, want := range []string{"OFFICECLI_LLM_PROVIDER=openai", "OFFICECLI_LLM_BASE_URL=https://api.example.com/v1", "OFFICECLI_LLM_API_KEY=sk-1234567890abcdef", "OFFICECLI_LLM_MODEL=gpt-x"} {
+	for _, want := range []string{
+		"OFFICE_CLI_LLM_PROVIDER=openai", "OFFICECLI_LLM_PROVIDER=openai",
+		"OFFICE_CLI_LLM_BASE_URL=https://api.example.com/v1", "OFFICECLI_LLM_BASE_URL=https://api.example.com/v1",
+		"OFFICE_CLI_LLM_API_KEY=sk-1234567890abcdef", "OFFICECLI_LLM_API_KEY=sk-1234567890abcdef",
+		"OFFICE_CLI_LLM_MODEL=gpt-x", "OFFICECLI_LLM_MODEL=gpt-x",
+	} {
 		found := false
 		for _, kv := range env {
 			found = found || kv == want
