@@ -2,6 +2,9 @@ import { cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentRun } from "../shared/types";
 import { AgentClientToolHost, dispatchAgentClientToolEvent, pendingAgentClientToolEvents, resumeAgentClientTools } from "./AgentClientToolHost";
+// The module-level helpers now take the desktop handle explicitly; the host
+// component reads the same instance from the provider default, so spying on the
+// singleton still observes both.
 import { officecli } from "./bridge";
 
 const now = new Date().toISOString();
@@ -38,7 +41,7 @@ describe("AgentClientToolHost", () => {
       "spreadsheet.catalog-cleanup": { "workbook.save": save },
     }} />);
 
-    await expect(resumeAgentClientTools(waitingRun())).resolves.toBe(true);
+    await expect(resumeAgentClientTools(officecli, waitingRun())).resolves.toBe(true);
     expect(route).toHaveBeenCalledWith("spreadsheet.catalog-cleanup", expect.objectContaining({ id: "run-host-1" }));
     expect(save).toHaveBeenCalledOnce();
     expect(complete).toHaveBeenCalledWith({ run_id: "run-host-1", call_id: "call-1", status: "completed", result: { saved: true } });
@@ -48,7 +51,7 @@ describe("AgentClientToolHost", () => {
     const complete = vi.spyOn(officecli, "completeAgentClientTool").mockResolvedValue();
     render(<AgentClientToolHost pollMs={60_000} surfaces={{}} />);
 
-    await expect(resumeAgentClientTools(waitingRun("workbook.unknown"))).resolves.toBe(false);
+    await expect(resumeAgentClientTools(officecli, waitingRun("workbook.unknown"))).resolves.toBe(false);
     expect(complete).not.toHaveBeenCalled();
   });
 
@@ -59,9 +62,9 @@ describe("AgentClientToolHost", () => {
     const complete = vi.spyOn(officecli, "completeAgentClientTool").mockResolvedValue();
     const run = waitingRun();
     const event = run.events![0];
-    const first = dispatchAgentClientToolEvent(run, event, { "workbook.save": save });
+    const first = dispatchAgentClientToolEvent(officecli, run, event, { "workbook.save": save });
     await Promise.resolve();
-    await expect(dispatchAgentClientToolEvent(run, event, { "workbook.save": save })).resolves.toBe("in_flight");
+    await expect(dispatchAgentClientToolEvent(officecli, run, event, { "workbook.save": save })).resolves.toBe("in_flight");
     release();
     await expect(first).resolves.toBe("completed");
     expect(save).toHaveBeenCalledOnce();

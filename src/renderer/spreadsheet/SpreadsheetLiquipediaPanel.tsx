@@ -42,7 +42,7 @@ export function SpreadsheetLiquipediaPanel({ workbookReady = true, workbookPath,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 	useEffect(() => {
-		void restorePendingAgentInput("liquipedia.sync.v1", "spreadsheet.liquipedia")
+		void restorePendingAgentInput(api, "liquipedia.sync.v1", "spreadsheet.liquipedia")
 			.then((pending) => {
 				if (!pending) return;
 				setPendingRun({ runId: pending.runId, requestId: pending.requestId });
@@ -76,7 +76,7 @@ export function SpreadsheetLiquipediaPanel({ workbookReady = true, workbookPath,
       }
       if (!runId) throw new Error("Liquipedia Runtime did not return a run ID.");
       let writtenResult: LiquipediaSyncResult | undefined;
-      const outcome = await waitForAgentRun(runId, { approve: confirmAgentApproval, clientTools: {
+      const outcome = await waitForAgentRun(runId, { api, approve: confirmAgentApproval, clientTools: {
         "workbook.write_managed_sheet": async (request) => {
           const response = request.arguments.workflow_result as ConfiguredLiquipediaSyncResult | undefined;
           if (response?.status !== "completed" || !response.result) throw new Error(response?.message || "Liquipedia Runtime did not return Sheet data.");

@@ -104,7 +104,7 @@ export function RuntimePrompts({ onCountChange }: { onCountChange?: (count: numb
         await api.reassignAgentClientTool({ run_id: run.id, call_id: callId, to_client_id: agentClientId(), reason: "Taken over from the home inbox" });
       }
       const refreshed = await api.getAgentRun(run.id);
-      if (!await resumeAgentClientTools(refreshed)) setError(t("tasks.runtime.clientTool.deferred"));
+      if (!await resumeAgentClientTools(api, refreshed)) setError(t("tasks.runtime.clientTool.deferred"));
       await refresh();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -117,7 +117,7 @@ export function RuntimePrompts({ onCountChange }: { onCountChange?: (count: numb
     setBusyRun(run.id);
     setError(undefined);
     try {
-      if (!await resumeAgentClientTools(run)) setError(t("tasks.runtime.clientTool.deferred"));
+      if (!await resumeAgentClientTools(api, run)) setError(t("tasks.runtime.clientTool.deferred"));
       await refresh();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));

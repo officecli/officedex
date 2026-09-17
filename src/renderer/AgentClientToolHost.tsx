@@ -1,7 +1,7 @@
 import { useEffect, useRef, type MutableRefObject } from "react";
-import type { AgentRun, BridgeEvent } from "../shared/types";
+import type { AgentRun, BridgeEvent, DesktopAPI } from "../shared/types";
 import { agentClientId } from "./agentClientIdentity";
-import { officecli } from "./bridge";
+import { useDesktopApi } from "./services/desktopApi";
 import { recordValue, trimmedStringValue as stringValue } from "./utils/values";
 
 export interface AgentClientToolRequest {
@@ -67,6 +67,7 @@ export function isClientToolForThisHost(run: AgentRun, callId: string): boolean 
 const RECONCILE_POLL_MS = 5_000;
 
 export function AgentClientToolHost({ surfaces, routeToSurface, onError, pollMs = RECONCILE_POLL_MS }: AgentClientToolHostProps) {
+  const api = useDesktopApi();
   const configRef = useRef<AgentClientToolHostConfig>({ surfaces, routeToSurface, onError });
   configRef.current = { surfaces, routeToSurface, onError };
 
@@ -83,16 +84,16 @@ export function AgentClientToolHost({ surfaces, routeToSurface, onError, pollMs 
   // claim a call before its owner saw it.
   useEffect(() => {
     let disposed = false;
-    const unsubscribe = officecli.onBridgeEvent((event) => {
+    const unsubscribe = api.onBridgeEvent((event) => {
       if (disposed) return;
       if (event.type !== "client-tool.requested" && event.type !== "client-tool.reassigned") return;
       const runId = typeof event.run_id === "string" ? event.run_id.trim() : "";
       if (!runId) return;
       void (async () => {
         try {
-          const run = await officecli.getAgentRun(runId);
+          const run = await api.getAgentRun(runId);
           if (disposed || run.status !== "waiting_client_tool") return;
-          await resumeAgentClientTools(run);
+          await resumeAgentClientTools(api, run);
         } catch (reason) {
           configRef.current.onError?.(asError(reason), { id: runId } as AgentRun);
         }
@@ -109,11 +110,11 @@ export function AgentClientToolHost({ surfaces, routeToSurface, onError, pollMs 
     let timer: number | undefined;
     const poll = async () => {
       try {
-        const runs = await officecli.listAgentRuns(100);
+        const runs = await api.listAgentRuns(100);
         for (const run of runs) {
           if (disposed || run.status !== "waiting_client_tool") continue;
           try {
-            await resumeAgentClientTools(run);
+            await resumeAgentClientTools(api, run);
           } catch (reason) {
             configRef.current.onError?.(asError(reason), run);
           }
@@ -135,18 +136,19 @@ export function AgentClientToolHost({ surfaces, routeToSurface, onError, pollMs 
   return null;
 }
 
-export async function resumeAgentClientTools(runOrID: AgentRun | string): Promise<boolean> {
-  const run = typeof runOrID === "string" ? await officecli.getAgentRun(runOrID) : runOrID;
+export async function resumeAgentClientTools(api: DesktopAPI, runOrID: AgentRun | string): Promise<boolean> {
+  const run = typeof runOrID === "string" ? await api.getAgentRun(runOrID) : runOrID;
   const pending = pendingAgentClientToolEvents(run);
   if (pending.length === 0) return true;
   for (const event of pending) {
-    const result = await dispatchAgentClientToolEvent(run, event);
+    const result = await dispatchAgentClientToolEvent(api, run, event);
     if (result === "deferred") return false;
   }
   return true;
 }
 
 export async function dispatchAgentClientToolEvent(
+  api: DesktopAPI,
   run: AgentRun,
   event: BridgeEvent,
   overrides?: AgentClientToolHandlers,
@@ -185,7 +187,7 @@ export async function dispatchAgentClientToolEvent(
       const error = new Error(
         `This page has ${openDocument} open, but the Run targets ${expectedDocument}. Refusing to run ${tool} against the wrong document.`,
       );
-      await officecli.completeAgentClientTool({ run_id: run.id, call_id: callId, status: "failed", error: error.message });
+      await api.completeAgentClientTool({ run_id: run.id, call_id: callId, status: "failed", error: error.message });
       throw error;
     }
     try {
@@ -196,7 +198,7 @@ export async function dispatchAgentClientToolEvent(
         risk: stringValue(payload.risk) || undefined,
         arguments: recordValue(payload.arguments),
       });
-      await officecli.completeAgentClientTool({
+      await api.completeAgentClientTool({
         run_id: run.id,
         call_id: callId,
         status: "completed",
@@ -206,7 +208,7 @@ export async function dispatchAgentClientToolEvent(
     } catch (reason) {
       if (reason instanceof AgentClientToolDeferredError) return "deferred";
       const error = asError(reason);
-      await officecli.completeAgentClientTool({
+      await api.completeAgentClientTool({
         run_id: run.id,
         call_id: callId,
         status: "failed",

@@ -3,7 +3,7 @@ import { CREDIT_POLL_INTERVAL_MS } from "./constants/timing";
 import { usePolling } from "./utils/usePolling";
 import type { CreditStatus } from "../shared/types";
 import type { CreditInfo } from "./components/Shell";
-import { officecli } from "./bridge";
+import { useDesktopApi } from "./services/desktopApi";
 
 const NUDGE_DELAY_MS = 800;
 
@@ -62,6 +62,7 @@ export interface UseCreditStatusResult {
 }
 
 export function useCreditStatus(): UseCreditStatusResult {
+  const api = useDesktopApi();
   const [status, setStatus] = useState<CreditStatus | undefined>();
   const [credit, setCredit] = useState<CreditInfo | undefined>();
   const inflightRef = useRef(false);
@@ -74,7 +75,7 @@ export function useCreditStatus(): UseCreditStatusResult {
     inflightRef.current = true;
     generationRef.current += 1;
     const token = generationRef.current;
-    officecli
+    api
       .getCreditStatus()
       .then((next) => {
         if (generationRef.current !== token || !mountedRef.current) return;

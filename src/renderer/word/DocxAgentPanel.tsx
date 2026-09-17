@@ -59,7 +59,7 @@ export function DocxAgentPanel({ scope, editor, selection, filePath }: {
       });
       active.runId = run.id;
       if (active.cancelled) { await api.cancelAgentRun(run.id); return; }
-      const outcome = await waitForAgentRun(run.id, { timeoutMs: 180_000, pollMs: 250 });
+      const outcome = await waitForAgentRun(run.id, { api, timeoutMs: 180_000, pollMs: 250 });
       if (active.cancelled) return;
       if (outcome.kind !== "completed") throw new Error(outcome.question);
       const plan = unwrapAgentRunResult<{ summary: string; edits: { query: string; replacement: string }[] }>(outcome.run);

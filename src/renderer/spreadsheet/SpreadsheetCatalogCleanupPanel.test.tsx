@@ -51,7 +51,7 @@ describe("SpreadsheetCatalogCleanupPanel", () => {
     mockRuntime(async () => batch());
     render(<SpreadsheetCatalogCleanupPanel autoScan fileName="supplier.xlsx" onInspect={() => inspection} onApply={vi.fn()} onSave={vi.fn()} />);
     expect(await screen.findByText("1 products found")).toBeTruthy();
-    expect(executeAgentWorkflowMock).toHaveBeenCalledWith("catalog.cleanup.v1", { parameters: { ...selection, intent: "create" } }, {}, expect.objectContaining({ operation: "scan" }));
+    expect(executeAgentWorkflowMock).toHaveBeenCalledWith("catalog.cleanup.v1", { parameters: { ...selection, intent: "create" } }, { api: expect.any(Object) }, expect.objectContaining({ operation: "scan" }));
   });
 
   it("uses the proprietary channel engine and shows its rule versions", async () => {
@@ -59,7 +59,7 @@ describe("SpreadsheetCatalogCleanupPanel", () => {
     render(<SpreadsheetCatalogCleanupPanel onInspect={() => inspection} onApply={vi.fn()} onSave={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Detect product catalog" }));
     expect(await screen.findByText("1 products found")).toBeTruthy();
-    expect(executeAgentWorkflowMock).toHaveBeenCalledWith("catalog.cleanup.v1", { parameters: { ...selection, intent: "create" } }, {}, expect.any(Object));
+    expect(executeAgentWorkflowMock).toHaveBeenCalledWith("catalog.cleanup.v1", { parameters: { ...selection, intent: "create" } }, { api: expect.any(Object) }, expect.any(Object));
     expect(screen.getByText(/proprietary OfficeCLI channel engine/)).toBeTruthy();
     expect(screen.getByText(/taxonomy 2026-05/)).toBeTruthy();
   });
@@ -79,7 +79,7 @@ describe("SpreadsheetCatalogCleanupPanel", () => {
     await screen.findByText("1 products found");
     fireEvent.click(screen.getByRole("button", { name: "Shopify import intent" }));
     fireEvent.click(screen.getByRole("menuitemradio", { name: /Update existing products/i }));
-    await waitFor(() => expect(executeAgentWorkflowMock).toHaveBeenLastCalledWith("catalog.cleanup.v1", { parameters: expect.objectContaining({ intent: "update", confirmedMapping: expect.any(Array) }) }, {}, expect.any(Object)));
+    await waitFor(() => expect(executeAgentWorkflowMock).toHaveBeenLastCalledWith("catalog.cleanup.v1", { parameters: expect.objectContaining({ intent: "update", confirmedMapping: expect.any(Array) }) }, { api: expect.any(Object) }, expect.any(Object)));
   });
 
   it("scans all sheets, skips non-catalog sheets, and writes every detected catalog", async () => {

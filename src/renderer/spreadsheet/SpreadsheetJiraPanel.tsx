@@ -54,7 +54,7 @@ export function SpreadsheetJiraPanel({ workbookReady = true, workbookPath, works
   }, []);
 
 	useEffect(() => {
-		void restorePendingAgentInput("jira.sync.v1", "spreadsheet.jira")
+		void restorePendingAgentInput(api, "jira.sync.v1", "spreadsheet.jira")
 			.then((pending) => {
 				if (!pending) return;
 				setPendingRun({ runId: pending.runId, requestId: pending.requestId });
@@ -94,6 +94,7 @@ export function SpreadsheetJiraPanel({ workbookReady = true, workbookPath, works
 	  if (!runId) throw new Error("Jira Runtime did not return a run ID.");
 	  let writtenResult: JiraSyncResult | undefined;
 	  const outcome = await waitForAgentRun(runId, {
+		api,
 		approve: confirmAgentApproval,
 		clientTools: {
 		  "workbook.write_managed_sheet": async (request) => {

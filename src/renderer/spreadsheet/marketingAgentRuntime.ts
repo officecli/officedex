@@ -1,4 +1,4 @@
-import type { AgentRun } from "../../shared/types";
+import type { AgentRun, DesktopAPI } from "../../shared/types";
 import { confirmAgentApproval, waitForAgentRun } from "../agentRuntime";
 import { officecli } from "../bridge";
 import type { CampaignChannel, MarketingBatchDraft, MarketingCampaignSettings } from "./marketingWorkflow";
@@ -33,6 +33,7 @@ export class MarketingRuntimeError extends Error {
 }
 
 export async function runMarketingPostprocess(
+  api: DesktopAPI,
   input: MarketingPostprocessInput,
   handlers: MarketingPostprocessHandlers,
   existingRunId?: string,
@@ -72,6 +73,7 @@ export async function runMarketingPostprocess(
     });
   try {
     const outcome = await waitForAgentRun(run.id, {
+      api,
       approve: confirmAgentApproval,
       clientTools: {
         "workbook.insert_image": async (request) => {

@@ -12,6 +12,8 @@ import {
   type CatalogImportIntent,
 } from "./catalogCleanupWorkflow";
 import { confirmAgentApproval, executeAgentWorkflow } from "../agentRuntime";
+import { useDesktopApi } from "../services/desktopApi";
+import type { DesktopAPI } from "../../shared/types";
 
 export interface SpreadsheetCatalogCleanupPanelProps {
   fileName?: string;
@@ -50,17 +52,18 @@ function isNonCatalogSheetError(error: unknown): boolean {
   return message.toLowerCase().includes("could not find catalog header");
 }
 
-async function runCatalogCleanup(parameters: Record<string, unknown>, metadata: Record<string, string> = {}): Promise<CatalogCleanupBatch> {
+async function runCatalogCleanup(api: DesktopAPI, parameters: Record<string, unknown>, metadata: Record<string, string> = {}): Promise<CatalogCleanupBatch> {
   const { result } = await executeAgentWorkflow<CatalogCleanupBatch>(
     "catalog.cleanup.v1",
     { parameters },
-    {},
+    { api },
     { surface: "spreadsheet.catalog-cleanup", operation: "scan", ...metadata },
   );
   return result;
 }
 
 export function SpreadsheetCatalogCleanupPanel({ fileName, filePath, workspaceId, onInspect, onPreview, onApply, onSave, onCompleted, autoScan = false }: SpreadsheetCatalogCleanupPanelProps) {
+  const api = useDesktopApi();
   const t = useT();
   const [intent, setIntent] = useState<CatalogImportIntent>("create");
   const [batches, setBatches] = useState<CatalogCleanupBatch[]>([]);
@@ -110,7 +113,7 @@ export function SpreadsheetCatalogCleanupPanel({ fileName, filePath, workspaceId
       const inspected = await onInspect();
       const results = await Promise.all(inspected.selections.map(async (selection) => {
         try {
-          return { batch: await runCatalogCleanup({ ...selection, intent }, runtimeMetadata) };
+          return { batch: await runCatalogCleanup(api, { ...selection, intent }, runtimeMetadata) };
         } catch (err) {
           if (!isNonCatalogSheetError(err)) throw err;
           return { skipped: { sheetName: selection.sheetName, reason: err instanceof Error ? err.message : String(err) } };
@@ -141,7 +144,7 @@ export function SpreadsheetCatalogCleanupPanel({ fileName, filePath, workspaceId
   const changeRole = (column: number, role: CatalogFieldRole) => {
     if (!batch) return;
     const mapping = batch.mapping.map((item) => item.column === column ? { ...item, role, confidence: 1, reason: "User confirmed" } : item.role === role && role !== "ignored" ? { ...item, role: "ignored", confidence: 0, reason: "Replaced by user mapping" } : item);
-    void runCatalogCleanup({
+    void runCatalogCleanup(api, {
       sheetId: batch.sheetId, sheetName: batch.sheetName,
       rows: [batch.headers, ...batch.sourceRows], selectionStartRow: 1, intent,
       confirmedMapping: mapping,
@@ -151,7 +154,7 @@ export function SpreadsheetCatalogCleanupPanel({ fileName, filePath, workspaceId
 
   const changeIntent = (nextIntent: CatalogImportIntent) => {
     setIntent(nextIntent);
-    if (batches.length > 0) void Promise.all(batches.map((currentBatch) => runCatalogCleanup({
+    if (batches.length > 0) void Promise.all(batches.map((currentBatch) => runCatalogCleanup(api, {
       sheetId: currentBatch.sheetId, sheetName: currentBatch.sheetName,
       rows: [currentBatch.headers, ...currentBatch.sourceRows], selectionStartRow: 1, intent: nextIntent,
       confirmedMapping: currentBatch.mapping,
@@ -178,6 +181,7 @@ export function SpreadsheetCatalogCleanupPanel({ fileName, filePath, workspaceId
         "client-tools.v1",
         { parameters: { sheet_ids: batches.map((item) => item.sheetId) }, client_tools: clientTools },
         {
+          api,
           approve: confirmAgentApproval,
           clientTools: {
             "workbook.catalog_cleanup.apply": async (request) => {

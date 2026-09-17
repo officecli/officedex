@@ -435,7 +435,7 @@ export function SpreadsheetMarketingPanel({
     if (!batch) return;
     try {
       if (job.channel) await onSetStatus(batch, job.row.rowIndex, t("spreadsheet.marketing.status.composing"));
-      const run = await runMarketingPostprocess({
+      const run = await runMarketingPostprocess(api, {
         jobId: job.id,
         sheetId: batch.sheetId,
         rowIndex: job.row.rowIndex,

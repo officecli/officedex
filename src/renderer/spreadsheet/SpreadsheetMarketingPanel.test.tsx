@@ -72,7 +72,7 @@ vi.mock("./marketingAgentRuntime", () => {
   }
   return {
     MarketingRuntimeError,
-    runMarketingPostprocess: vi.fn(async (input: {
+    runMarketingPostprocess: vi.fn(async (_api: unknown, input: {
       jobId: string;
       sourceFilePath: string;
       channel?: string;

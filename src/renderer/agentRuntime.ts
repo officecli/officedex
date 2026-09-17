@@ -1,13 +1,15 @@
-import type { AgentRun, AgentRunApproveInput, BridgeEvent } from "../shared/types";
+import type { AgentRun, AgentRunApproveInput, BridgeEvent, DesktopAPI } from "../shared/types";
 import { agentClientId, dispatchAgentClientToolEvent, type AgentClientToolHandlers } from "./AgentClientToolHost";
 import { requestAgentApproval } from "./agentApprovalCenter";
-import { officecli } from "./bridge";
 import { recordValue, stringValue } from "./utils/values";
 import { delay } from "./utils/timing";
 
 export type { AgentClientToolRequest } from "./AgentClientToolHost";
 
 export interface AgentRunWaitOptions {
+  /** The desktop handle these calls go through. Explicit because this module
+   *  runs outside React and cannot read the provider itself. */
+  api: DesktopAPI;
   clientTools?: AgentClientToolHandlers;
   approve?: (
     request: AgentRunApproveInput & { payload: Record<string, unknown> },
@@ -62,17 +64,17 @@ export async function confirmAgentApproval(
 export async function executeAgentWorkflow<T>(
   workflow: string,
   input: Record<string, unknown>,
-  options: AgentRunWaitOptions = {},
+  options: AgentRunWaitOptions,
   metadata?: Record<string, string>,
 ): Promise<{ run: AgentRun; result: T }> {
-  const started = await officecli.startAgentRun({ workflow, input, metadata: withOriginClientId(metadata) });
+  const started = await options.api.startAgentRun({ workflow, input, metadata: withOriginClientId(metadata) });
   let outcome: AgentRunOutcome;
   try {
     outcome = await waitForAgentRun(started.id, options);
   } catch (reason) {
     if (options.cancelOnTimeout && reason instanceof AgentRunTimeoutError && !isHumanWaitStatus(reason.status)) {
       try {
-        await officecli.cancelAgentRun(started.id);
+        await options.api.cancelAgentRun(started.id);
       } catch (cancelReason) {
         const message = cancelReason instanceof Error ? cancelReason.message : String(cancelReason);
         throw new Error(`${reason.message} Automatic cancellation failed: ${message}`);
@@ -87,10 +89,11 @@ export async function executeAgentWorkflow<T>(
 }
 
 export async function restorePendingAgentInput(
+  api: DesktopAPI,
   workflow: string,
   surface?: string,
 ): Promise<{ runId: string; requestId: string; question: string } | undefined> {
-  const runs = await officecli.listAgentRuns(100);
+  const runs = await api.listAgentRuns(100);
   const run = runs.find((candidate) =>
     candidate.workflow === workflow &&
     candidate.status === "waiting_input" &&
@@ -114,7 +117,7 @@ const terminalStatuses = new Set(["completed", "failed", "cancelled"]);
 
 export async function waitForAgentRun(
   runId: string,
-  options: AgentRunWaitOptions = {},
+  options: AgentRunWaitOptions,
 ): Promise<AgentRunOutcome> {
   const timeoutMs = options.timeoutMs ?? 180_000;
   // The deadline bounds *active execution*, not the wall clock. Time the user
@@ -135,7 +138,7 @@ export async function waitForAgentRun(
   let lastProgress = "";
   let lastStatus: AgentRun["status"] | undefined;
   for (;;) {
-    const run = await officecli.getAgentRun(runId);
+    const run = await options.api.getAgentRun(runId);
     lastStatus = run.status;
     // Any new event or status change means the Run is alive; restart the budget.
     const progress = `${run.status}:${(run.events ?? []).length}`;
@@ -248,7 +251,7 @@ async function handleClientTool(
   event: BridgeEvent,
   options: AgentRunWaitOptions,
 ) {
-  return dispatchAgentClientToolEvent(run, event, options.clientTools);
+  return dispatchAgentClientToolEvent(options.api, run, event, options.clientTools);
 }
 
 async function handleApproval(
@@ -267,7 +270,7 @@ async function handleApproval(
         payload: recordValue(payload.request),
       })
     : false;
-  await officecli.approveAgentRun({
+  await options.api.approveAgentRun({
     run_id: run.id,
     request_id: requestId,
     approved,
