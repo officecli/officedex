@@ -51,7 +51,7 @@ import { loadPublishedWorkbookApps, savePublishedWorkbookApp } from "./appBuilde
 import type { PublishedWorkbookApp } from "./appBuilder/types";
 import { parseWorkbookAddChartRequest, parseWorkbookFormatCellsRequest, parseWorkbookSnapshotRequest, parseWorkbookStageMediaRequest, parseWorkbookWriteCellsRequest } from "./spreadsheet/workbookClientTools";
 import { UnsavedChangesDialog } from "./spreadsheet/UnsavedChangesDialog";
-import { useSpreadsheetSession } from "./spreadsheet/useSpreadsheetSession";
+import { useSpreadsheetSurface } from "./controllers/useSpreadsheetSurface";
 import type { SpreadsheetEntry } from "./spreadsheet/types";
 import { clearSpreadsheetEntryGrant } from "./spreadsheet/entryLifecycle";
 import { useSettings } from "./useSettings";
@@ -85,20 +85,12 @@ function OfficeDexApp() {
   const [lastError, setLastError] = useState<string>();
   const [errorKind, setErrorKind] = useState<FailureKind>("connection");
   const [errorDetails, setErrorDetails] = useState<string>();
-  const [spreadsheetEntry, setSpreadsheetEntry] = useState<SpreadsheetEntry | null>(null);
-  const [spreadsheetPreferredTool, setSpreadsheetPreferredTool] = useState<SpreadsheetAgentTool>("assistant");
-  const [catalogAutoScanFile, setCatalogAutoScanFile] = useState<string>();
   const routingRef = useRef<ReturnType<typeof useAppRouting> | null>(null);
   // Closing the document drops the timeline selection with it. The live-draft
   // controller is built from the session, so it cannot be a dependency of the
   // session; the ref is the one direction left.
   const clearTimelineRef = useRef<() => void>(() => {});
   const workspaceRef = useRef<ReturnType<typeof useWorkspaces> | null>(null);
-  const spreadsheet = useSpreadsheetSession(spreadsheetEntry);
-  const spreadsheetWorkspaceRef = useRef<SpreadsheetWorkspaceHandle>(null);
-  const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false);
-  const [unsavedDialogSaving, setUnsavedDialogSaving] = useState(false);
-  const pendingSpreadsheetActionRef = useRef<{ action: () => Promise<void>; resolve: (continued: boolean) => void } | null>(null);
   /**
    * The optimistic tasks this page has submitted but whose real ids have not
    * come back yet, keyed by the local placeholder id.
@@ -133,68 +125,21 @@ function OfficeDexApp() {
     setErrorDetails(undefined);
   }, []);
 
+  const sheet = useSpreadsheetSurface({
+    isSurfaceActive: useCallback(() => routingRef.current?.activeNav === "spreadsheet", []),
+  });
+  const spreadsheet = sheet.session;
+  const spreadsheetEntry = sheet.entry;
+  const setSpreadsheetEntry = sheet.setEntry;
+  const spreadsheetWorkspaceRef = sheet.workspaceRef;
+  const spreadsheetPreferredTool = sheet.preferredTool;
+  const setSpreadsheetPreferredTool = sheet.setPreferredTool;
+  const catalogAutoScanFile = sheet.catalogAutoScanFile;
+  const setCatalogAutoScanFile = sheet.setCatalogAutoScanFile;
+  const runSpreadsheetAction = sheet.guard;
+  const continuePendingSpreadsheetAction = sheet.resolveUnsaved;
+  const cancelPendingSpreadsheetAction = sheet.cancelUnsaved;
 
-  const runSpreadsheetAction = useCallback((action: () => Promise<void>): Promise<boolean> => {
-    if (routingRef.current?.activeNav !== "spreadsheet" || !spreadsheet.session.dirty) {
-      return action().then(() => true);
-    }
-    return new Promise<boolean>((resolve) => {
-      pendingSpreadsheetActionRef.current?.resolve(false);
-      pendingSpreadsheetActionRef.current = { action, resolve };
-      setUnsavedDialogOpen(true);
-    });
-  }, [spreadsheet.session.dirty]);
-
-  const continuePendingSpreadsheetAction = useCallback(async (discard: boolean) => {
-    const pending = pendingSpreadsheetActionRef.current;
-    if (!pending) return;
-    if (!discard) {
-      setUnsavedDialogSaving(true);
-      const saved = await spreadsheetWorkspaceRef.current?.save();
-      setUnsavedDialogSaving(false);
-      if (!saved) {
-        // Keep the pending navigation alive so the user can retry the save,
-        // explicitly discard, or cancel. Clearing it here leaves the dialog
-        // open with buttons that can no longer complete the original action.
-        return;
-      }
-    } else if (spreadsheet.session.artifact) {
-      // Dropping edits must also drop the live editor grant. Keeping the same
-      // granted entry mounted can leave Sheet SDK bound to an editor session
-      // that became invalid while the Bridge/API restarted. Re-entering the
-      // artifact without a grant unmounts that canvas; a resumed Run can then
-      // reopen the workbook with a fresh token even when the path is unchanged.
-      setSpreadsheetEntry({
-        kind: "artifact",
-        artifact: spreadsheet.session.artifact,
-        ...(spreadsheet.session.workspaceId
-          ? { workspaceId: spreadsheet.session.workspaceId }
-          : {}),
-        ...(spreadsheet.session.conversationId
-          ? { conversationId: spreadsheet.session.conversationId }
-          : {}),
-      });
-    }
-    pendingSpreadsheetActionRef.current = null;
-    setUnsavedDialogOpen(false);
-    try {
-      await pending.action();
-      pending.resolve(true);
-    } catch (error) {
-      pending.resolve(false);
-      throw error;
-    }
-  }, [
-    spreadsheet.session.artifact,
-    spreadsheet.session.conversationId,
-    spreadsheet.session.workspaceId,
-  ]);
-
-  const cancelPendingSpreadsheetAction = useCallback(() => {
-    pendingSpreadsheetActionRef.current?.resolve(false);
-    pendingSpreadsheetActionRef.current = null;
-    setUnsavedDialogOpen(false);
-  }, []);
 
   const recent = useRecentFiles(t("home.loadTimeout"));
   const { files: recentFiles, loading: recentFilesLoading, error: recentFilesError } = recent;
@@ -980,11 +925,13 @@ function OfficeDexApp() {
         </Shell>
       </div>
       <UnsavedChangesDialog
-        open={unsavedDialogOpen}
-        saving={unsavedDialogSaving}
+        open={sheet.unsavedDialogOpen}
+        saving={sheet.unsavedDialogSaving}
         onSave={async () => {
           await continuePendingSpreadsheetAction(false);
-          return !unsavedDialogOpen;
+          // A failed save leaves the gate up (R-G-02); the dialog reads that
+          // back to decide whether it stays open.
+          return !sheet.unsavedDialogOpen;
         }}
         onDiscard={() => void continuePendingSpreadsheetAction(true)}
         onCancel={cancelPendingSpreadsheetAction}
