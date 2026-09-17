@@ -5,7 +5,7 @@ import { MaterialSymbol } from "../components/Shell";
 import type { ReactNode } from "react";
 import { DiagnosticsPanel } from "../components/DiagnosticsPanel";
 import { RuntimeRunsPanel } from "../components/RuntimeRunsPanel";
-import { officecli } from "../bridge";
+import { useDesktopApi } from "../services/desktopApi";
 import { useSettings } from "../useSettings";
 import { useAppUpdate } from "../useAppUpdate";
 import { formatTestResult, ProviderForm } from "../components/ProviderForm";
@@ -41,6 +41,7 @@ export function SettingsScreen({
   activity?: ReactNode;
 } = {}) {
   const { settings, update: rawUpdate, loading, saving, error } = useSettings();
+  const api = useDesktopApi();
   const t = useT();
   const locale = useLocale();
   const setLocale = useSetLocale();
@@ -54,7 +55,7 @@ export function SettingsScreen({
 
   useEffect(() => {
     let cancelled = false;
-    officecli
+    api
       .whoami()
       .then((result) => {
         if (!cancelled) setWhoami(result);
@@ -77,7 +78,7 @@ export function SettingsScreen({
     let cancelled = false;
     setInviteLoading(true);
     setInviteError(null);
-    officecli
+    api
       .getInviteInfo()
       .then((result) => {
         if (!cancelled) setInviteInfo(result);
@@ -95,7 +96,7 @@ export function SettingsScreen({
 
   useEffect(() => {
     let cancelled = false;
-    officecli
+    api
       .getCreditStatus()
       .then((result) => {
         if (!cancelled) setCreditStatus(result);
@@ -153,10 +154,10 @@ export function SettingsScreen({
 
   const sendTestNotification = useCallback(async () => {
     try {
-      if (!officecli.sendDesktopNotification) {
+      if (!api.sendDesktopNotification) {
         throw new Error("Desktop notifications require a newer OfficeDex runtime.");
       }
-      await officecli.sendDesktopNotification({
+      await api.sendDesktopNotification({
         title: t("notification.title"),
         body: t("settings.notifications.testBody"),
       });
@@ -458,6 +459,7 @@ function ProviderFormControl({
   customProviderEnabled: boolean;
   onOpenLogin?: () => void;
 }) {
+  const api = useDesktopApi();
   const t = useT();
   const [draft, setDraft] = useState<LlmProvider>(() => remote ?? { ...EMPTY_PROVIDER_DRAFT });
   const [testing, setTesting] = useState(false);
@@ -508,12 +510,12 @@ function ProviderFormControl({
     setTestResult(null);
     try {
       const result = draft.type === "official"
-        ? await officecli.testProvider({
+        ? await api.testProvider({
           useProviderOverride: true,
           llmProvider: null,
           allowPaidOfficialProbe: true,
         })
-        : await officecli.testProvider();
+        : await api.testProvider();
       setTestResult(result);
     } catch (err) {
       setTestResult({
@@ -583,6 +585,7 @@ function ProviderFormControl({
 }
 
 function AboutCard() {
+  const api = useDesktopApi();
   const update = useAppUpdate();
   const t = useT();
   const [version, setVersion] = useState<string>("");
@@ -590,7 +593,7 @@ function AboutCard() {
 
   useEffect(() => {
     let cancelled = false;
-    officecli
+    api
       .getAppVersion()
       .then((v) => {
         if (!cancelled) setVersion(v);
@@ -628,7 +631,7 @@ function AboutCard() {
   }, [downloaded, update]);
 
   const openExternal = useCallback((url: string) => {
-    void officecli.openExternal(url).catch(() => undefined);
+    void api.openExternal(url).catch(() => undefined);
   }, []);
 
   const showDisclaimer = useCallback(() => {

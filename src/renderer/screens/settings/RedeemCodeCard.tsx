@@ -1,7 +1,7 @@
 import { Button, Space, toast as message } from "../../ui";
 import { useCallback, useState } from "react";
 import { type CreditInfo } from "../../components/Shell";
-import { officecli } from "../../bridge";
+import { useDesktopApi } from "../../services/desktopApi";
 import { useT } from "../../i18n";
 import { ImeInput } from "../../components/ImeInput";
 import { errorMessage } from "../../utils/values";
@@ -9,6 +9,7 @@ import { errorMessage } from "../../utils/values";
 
 
 export function RedeemCodeCard({ onCreditRefresh }: { onCreditRefresh?: () => void }) {
+  const api = useDesktopApi();
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [lastSuccess, setLastSuccess] = useState<{ code: string; amount: number; balance: number } | null>(null);
@@ -22,7 +23,7 @@ export function RedeemCodeCard({ onCreditRefresh }: { onCreditRefresh?: () => vo
     }
     setBusy(true);
     try {
-      const result = await officecli.redeem(trimmed);
+      const result = await api.redeem(trimmed);
       setLastSuccess({ code: result.code, amount: result.credit_amount, balance: result.new_balance });
       setCode("");
       void message.success(t("settings.redeem.success", { amount: result.credit_amount }));

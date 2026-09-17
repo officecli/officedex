@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button, Empty, Table, Tag, Tooltip, type TableColumn } from "../ui";
 import type { AgentRun } from "../../shared/types";
-import { officecli } from "../bridge";
+import { useDesktopApi } from "../services/desktopApi";
 import { useT } from "../i18n";
 import { isExternalAgentRuntimeRun, isHistoricalRuntimeRun, runtimeStatusColor } from "../runtimeRuns";
 import { AGENT_RUN_FETCH_LIMIT } from "../constants/limits";
@@ -19,6 +19,7 @@ import { usePolling } from "../utils/usePolling";
  * without visiting a debug surface.
  */
 export function RuntimeRunsPanel() {
+  const api = useDesktopApi();
   const t = useT();
   const [runs, setRuns] = useState<AgentRun[]>([]);
   const [error, setError] = useState<string>();
@@ -27,7 +28,7 @@ export function RuntimeRunsPanel() {
 
   const refresh = useCallback(async () => {
     try {
-      setRuns(await officecli.listAgentRuns(AGENT_RUN_FETCH_LIMIT));
+      setRuns(await api.listAgentRuns(AGENT_RUN_FETCH_LIMIT));
       setError(undefined);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -40,8 +41,8 @@ export function RuntimeRunsPanel() {
     setBusyRun(run.id);
     setError(undefined);
     try {
-      if (action === "cancel") await officecli.cancelAgentRun(run.id);
-      else await officecli.retryAgentRun(run.id);
+      if (action === "cancel") await api.cancelAgentRun(run.id);
+      else await api.retryAgentRun(run.id);
       await refresh();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));

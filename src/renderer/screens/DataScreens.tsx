@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Button, Empty, Input, Table, Tag, Tooltip, Typography, type TableColumn } from "../ui";
 import { PlusOutlined } from "../ui/icons";
 import type { AgentRun, Artifact, DesktopTask } from "../../shared/types";
-import { officecli } from "../bridge";
 import { DocTypeIcon } from "../components/DocTypeIcon";
 import { isClientToolForThisHost, pendingAgentClientToolEvents, resumeAgentClientTools } from "../AgentClientToolHost";
 import { agentClientId } from "../agentClientIdentity";

@@ -1,7 +1,7 @@
 import { Button, Input, Spin, Tag, toast as message } from "../../ui";
 import { GlobalOutlined } from "../../ui/icons";
 import { useCallback, useEffect, useState } from "react";
-import { officecli } from "../../bridge";
+import { useDesktopApi } from "../../services/desktopApi";
 import { useT } from "../../i18n";
 import type { LiquipediaConnectionSummary, LiquipediaProbeResult } from "../../../shared/verticals";
 import { errorMessage } from "../../utils/values";
@@ -10,6 +10,7 @@ import { errorMessage } from "../../utils/values";
 const LIQUIPEDIA_API_TERMS_URL = "https://liquipedia.net/api-terms-of-use";
 
 export function LiquipediaConnectionCard() {
+  const api = useDesktopApi();
   const t = useT();
   const [remote, setRemote] = useState<LiquipediaConnectionSummary>({ configured: false, baseUrl: "https://liquipedia.net/dota2" });
   const [baseUrl, setBaseUrl] = useState("https://liquipedia.net/dota2");
@@ -28,7 +29,7 @@ export function LiquipediaConnectionCard() {
         setError(t("settings.row.liquipedia.loadTimeout"));
       }
     }, 15_000);
-    officecli.getLiquipediaConnection().then((summary) => {
+    api.getLiquipediaConnection().then((summary) => {
       if (cancelled) return;
       setRemote(summary);
       if (summary.baseUrl) setBaseUrl(summary.baseUrl);
@@ -42,8 +43,8 @@ export function LiquipediaConnectionCard() {
     if (!canSave) return;
     setSaving(true); setError(null); setProbe(null);
     try {
-      const nextProbe = await officecli.saveLiquipediaConnection({ baseUrl: baseUrl.trim(), contact: contact.trim() });
-      const summary = await officecli.getLiquipediaConnection();
+      const nextProbe = await api.saveLiquipediaConnection({ baseUrl: baseUrl.trim(), contact: contact.trim() });
+      const summary = await api.getLiquipediaConnection();
       setRemote(summary); setProbe(nextProbe);
       window.dispatchEvent(new Event("officedex:liquipedia-connection-updated"));
       void message.success(t("settings.row.liquipedia.saveSuccess"));
@@ -52,7 +53,7 @@ export function LiquipediaConnectionCard() {
   const clear = useCallback(async () => {
     setClearing(true); setError(null);
     try {
-      await officecli.clearLiquipediaConnection();
+      await api.clearLiquipediaConnection();
       setRemote({ configured: false, baseUrl: "https://liquipedia.net/dota2" }); setProbe(null);
       window.dispatchEvent(new Event("officedex:liquipedia-connection-updated"));
       void message.success(t("settings.row.liquipedia.clearSuccess"));

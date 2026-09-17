@@ -2,7 +2,7 @@ import { Button, Form, Modal, toast as message } from "../ui";
 import { CopyOutlined } from "../ui/icons";
 import { useEffect, useState } from "react";
 import type { PeekReportContextResult, SubmitReportInput } from "../../shared/types";
-import { officecli } from "../bridge";
+import { useDesktopApi } from "../services/desktopApi";
 import { useT } from "../i18n";
 import { ImeInput, ImeTextArea } from "./ImeInput";
 
@@ -18,6 +18,7 @@ interface FormValues {
 }
 
 export function ReportIssueDialog({ open, taskId, onClose }: ReportIssueDialogProps) {
+  const api = useDesktopApi();
   const [form] = Form.useForm<FormValues>();
   const t = useT();
   const [submitting, setSubmitting] = useState(false);
@@ -29,7 +30,7 @@ export function ReportIssueDialog({ open, taskId, onClose }: ReportIssueDialogPr
       return;
     }
     let cancelled = false;
-    officecli.peekReportContext(taskId).then((result) => {
+    api.peekReportContext(taskId).then((result) => {
       if (!cancelled) setContext(result);
     }).catch(() => {
       if (!cancelled) setContext(null);
@@ -56,7 +57,7 @@ export function ReportIssueDialog({ open, taskId, onClose }: ReportIssueDialogPr
         description: values.description,
         contactEmail: values.contactEmail || undefined,
       };
-      const result = await officecli.submitReport(input);
+      const result = await api.submitReport(input);
       const requestId = result.requestId || context?.requestId || "";
       void message.success({
         content: (

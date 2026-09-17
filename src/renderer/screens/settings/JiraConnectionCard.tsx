@@ -1,7 +1,7 @@
 import { Button, Input, PasswordInput, Select, Spin, Tag, toast as message } from "../../ui";
 import { GlobalOutlined } from "../../ui/icons";
 import { useCallback, useEffect, useState } from "react";
-import { officecli } from "../../bridge";
+import { useDesktopApi } from "../../services/desktopApi";
 import { useT } from "../../i18n";
 import type { JiraAuthType, JiraConnectionSummary, JiraProbeResult } from "../../../shared/verticals";
 import { errorMessage } from "../../utils/values";
@@ -10,6 +10,7 @@ import { errorMessage } from "../../utils/values";
 const ATLASSIAN_PAT_DOCUMENTATION_URL = "https://confluence.atlassian.com/enterprise/using-personal-access-tokens-1026032365.html";
 
 export function JiraConnectionCard() {
+  const api = useDesktopApi();
   const t = useT();
   const [remote, setRemote] = useState<JiraConnectionSummary>({ configured: false, baseUrl: "", authType: "" });
   const [baseUrl, setBaseUrl] = useState("");
@@ -30,7 +31,7 @@ export function JiraConnectionCard() {
         setError(t("settings.row.jira.loadTimeout"));
       }
     }, 15_000);
-    officecli.getJiraConnection()
+    api.getJiraConnection()
       .then((summary) => {
         if (cancelled) return;
         setRemote(summary);
@@ -68,7 +69,7 @@ export function JiraConnectionCard() {
     setError(null);
     setProbe(null);
     try {
-      const nextProbe = await officecli.saveJiraConnection({
+      const nextProbe = await api.saveJiraConnection({
         baseUrl: baseUrl.trim(),
         auth: {
           type: authType,
@@ -76,7 +77,7 @@ export function JiraConnectionCard() {
           secret,
         },
       });
-      const summary = await officecli.getJiraConnection();
+      const summary = await api.getJiraConnection();
       setRemote(summary);
       setProbe(nextProbe);
       setSecret("");
@@ -93,7 +94,7 @@ export function JiraConnectionCard() {
     setClearing(true);
     setError(null);
     try {
-      await officecli.clearJiraConnection();
+      await api.clearJiraConnection();
       setRemote({ configured: false, baseUrl: "", authType: "" });
       setProbe(null);
       setSecret("");

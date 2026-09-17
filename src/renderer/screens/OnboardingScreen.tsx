@@ -1,6 +1,6 @@
 import { Alert, Button, Modal, Select, Space, Switch, Tag, toast as message } from "../ui";
 import { useCallback, useEffect, useState } from "react";
-import { officecli } from "../bridge";
+import { useDesktopApi } from "../services/desktopApi";
 import { useT } from "../i18n";
 import { broadcastSettingsChanged } from "../useSettings";
 import { defaultProxySettings, isValidProxyUrl } from "../defaults";
@@ -42,6 +42,7 @@ function shouldOfferProxyStep(result: ProviderTestResult): boolean {
 }
 
 export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: OnboardingScreenProps) {
+  const api = useDesktopApi();
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const [providerTestResult, setProviderTestResult] = useState<ProviderTestResult | null>(null);
@@ -57,7 +58,7 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
 
   useEffect(() => {
     let cancelled = false;
-    officecli
+    api
       .whoami()
       .then((result) => {
         if (!cancelled) setWhoami(result);
@@ -96,7 +97,7 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
       if (proxyOverride !== undefined) {
         patch.proxy = proxyOverride;
       }
-      const next = await officecli.updateSettings(patch);
+      const next = await api.updateSettings(patch);
       broadcastSettingsChanged(next);
       onComplete();
     } catch (err) {
@@ -109,7 +110,7 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
   }, [customProviderEnabled, draft, onComplete, t]);
 
   const testOfficialProvider = useCallback(async (proxy: ProxySettings | null) => {
-    const result = await officecli.testProvider({
+    const result = await api.testProvider({
       llmProvider: null,
       proxy,
       useProviderOverride: true,
@@ -219,7 +220,7 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
   const skip = useCallback(async () => {
     setBusy(true);
     try {
-      const next = await officecli.updateSettings({
+      const next = await api.updateSettings({
         onboardingCompletedAt: new Date().toISOString(),
       });
       broadcastSettingsChanged(next);

@@ -1,13 +1,14 @@
 import { Button, Tag, toast as message } from "../ui";
 import { CopyOutlined, DownloadOutlined, RocketOutlined } from "../ui/icons";
 import { useCallback, useState } from "react";
-import { officecli } from "../bridge";
+import { useDesktopApi } from "../services/desktopApi";
 import { useT } from "../i18n";
 import { useReportCapability } from "../useReportCapability";
 import { ReportIssueDialog } from "./ReportIssueDialog";
 import type { ProviderTestResult } from "../../shared/types";
 
 export function DiagnosticsPanel() {
+  const api = useDesktopApi();
   const t = useT();
   const [exporting, setExporting] = useState(false);
   const [exported, setExported] = useState(false);
@@ -19,7 +20,7 @@ export function DiagnosticsPanel() {
   const handleExport = useCallback(async () => {
     setExporting(true);
     try {
-      const result = await officecli.exportLogs();
+      const result = await api.exportLogs();
       setExported(true);
       void message.success(t("diagnostics.exportSuccess", { path: result.path }));
     } catch (error) {
@@ -35,7 +36,7 @@ export function DiagnosticsPanel() {
     setTesting(true);
     setTestResult(null);
     try {
-      const result = await officecli.testProvider();
+      const result = await api.testProvider();
       setTestResult(result);
     } catch (err) {
       setTestResult({
@@ -52,7 +53,7 @@ export function DiagnosticsPanel() {
 
   const handleCopySnapshot = useCallback(async () => {
     try {
-      const snapshot = await officecli.getBridgeRuntimeSnapshot();
+      const snapshot = await api.getBridgeRuntimeSnapshot();
       await navigator.clipboard.writeText(JSON.stringify(snapshot, null, 2));
       void message.success(t("diagnostics.copySnapshot.copied"));
     } catch (err) {

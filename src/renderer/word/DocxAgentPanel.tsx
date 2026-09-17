@@ -2,7 +2,7 @@ import { agentHistoryKey, messageHistoryCodec, useAgentHistory } from "../workbe
 import { AgentMessage } from "../workbench/AgentMessage";
 import { useEffect, useRef, useState } from "react";
 import { ArrowUp, FileText, Square } from "lucide-react";
-import { officecli } from "../bridge";
+import { useDesktopApi } from "../services/desktopApi";
 import { waitForAgentRun, unwrapAgentRunResult } from "../agentRuntime";
 import { agentClientId } from "../agentClientIdentity";
 import type { WriterAgentEditor } from "./WriterEditorFrame";
@@ -20,6 +20,7 @@ export function DocxAgentPanel({ scope, editor, selection, filePath }: {
 }) {
   const t = useT();
   const locale = useLocale();
+  const api = useDesktopApi();
   const [prompt, setPrompt] = useState("");
   const [phase, setPhase] = useState<"idle" | "planning" | "applying" | "saving">("idle");
   const [messages, setMessages] = useAgentHistory(agentHistoryKey("docx", filePath), messageHistoryCodec);
@@ -34,10 +35,10 @@ export function DocxAgentPanel({ scope, editor, selection, filePath }: {
       if (active) {
         operation.current = null;
         active.cancelled = true;
-        if (active.runId) void officecli.cancelAgentRun(active.runId).catch(() => {});
+        if (active.runId) void api.cancelAgentRun(active.runId).catch(() => {});
       }
     };
-  }, [editor, filePath]);
+  }, [api, editor, filePath]);
 
   const submit = async () => {
     const value = prompt.trim();
@@ -51,13 +52,13 @@ export function DocxAgentPanel({ scope, editor, selection, filePath }: {
     try {
       const captured = await editor.capture(selection && !selection.empty && !selection.collapsed ? "selection" : "document");
       if (active.cancelled) return;
-      const run = await officecli.startAgentRun({
+      const run = await api.startAgentRun({
         workflow: "office.docx.edit.v1",
         input: { parameters: { prompt: value, text: captured.text, scope: captured.scope, ui_locale: locale } },
         metadata: { surface: "docx-editor", origin_client_id: agentClientId(), ...(filePath ? { source_path: filePath } : {}) },
       });
       active.runId = run.id;
-      if (active.cancelled) { await officecli.cancelAgentRun(run.id); return; }
+      if (active.cancelled) { await api.cancelAgentRun(run.id); return; }
       const outcome = await waitForAgentRun(run.id, { timeoutMs: 180_000, pollMs: 250 });
       if (active.cancelled) return;
       if (outcome.kind !== "completed") throw new Error(outcome.question);
@@ -91,7 +92,7 @@ export function DocxAgentPanel({ scope, editor, selection, filePath }: {
     if (!active || phase !== "planning") return;
     active.cancelled = true;
     try {
-      if (active.runId) await officecli.cancelAgentRun(active.runId);
+      if (active.runId) await api.cancelAgentRun(active.runId);
       setMessages((previous) => [...previous, { role: "assistant", text: t("docx.agent.cancelled") }]);
     } catch (reason) { setError(errorMessage(reason)); }
     finally { if (operation.current === active) operation.current = null; setPhase("idle"); }

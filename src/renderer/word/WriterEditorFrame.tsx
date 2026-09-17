@@ -7,7 +7,7 @@ import {
   type WriterHostCommand,
   type WriterSelectionSummary,
 } from "../../shared/writerProtocol";
-import { officecli } from "../bridge";
+import { useDesktopApi } from "../services/desktopApi";
 import { registerActiveEditorClientTools } from "../activeEditorClientTools";
 import { errorMessage } from "../utils/values";
 
@@ -92,6 +92,7 @@ export function WriterEditorFrame({
   onSaved,
   onAgentReady,
 }: WriterEditorFrameProps) {
+  const api = useDesktopApi();
   const frameRef = useRef<HTMLIFrameElement>(null);
   const fingerprintRef = useRef<string | undefined>(undefined);
   const unregisterClientToolsRef = useRef<(() => void) | undefined>(undefined);
@@ -218,7 +219,7 @@ export function WriterEditorFrame({
             return;
           }
           try {
-            const artifact = await officecli.readArtifactFile(previewToken);
+            const artifact = await api.readArtifactFile(previewToken);
             if (disposedRef.current) return;
             fingerprintRef.current = artifact.sha256;
             unregisterClientToolsRef.current?.();
@@ -298,7 +299,7 @@ export function WriterEditorFrame({
             // App.SaveDocx keeps its existing contract: it validates the ZIP
             // package, resolves the destination, and rejects the write when the
             // file changed underneath us since we read it.
-            const result = await officecli.saveDocx(new Uint8Array(event.content), fileName, {
+            const result = await api.saveDocx(new Uint8Array(event.content), fileName, {
               previewToken,
               expectedSHA256: fingerprintRef.current,
               saveAsCopy,
@@ -342,7 +343,7 @@ export function WriterEditorFrame({
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [fileName, markUnavailable, post, previewToken, readOnly, requestReplaceText, requestSave, requestSelection]);
+  }, [api, fileName, markUnavailable, post, previewToken, readOnly, requestReplaceText, requestSave, requestSelection]);
 
   useEffect(
     () => () => {

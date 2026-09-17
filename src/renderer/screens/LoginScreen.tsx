@@ -3,7 +3,7 @@ import { RedeemCodeCard, formatCreditValue } from "./settings/RedeemCodeCard";
 import { CopyOutlined, ExclamationCircleFilled, GlobalOutlined, Loading3QuartersOutlined, LogoutOutlined, LeftOutlined, ThunderboltOutlined } from "../ui/icons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MaterialSymbol, type CreditInfo } from "../components/Shell";
-import { officecli } from "../bridge";
+import { useDesktopApi } from "../services/desktopApi";
 import { useT } from "../i18n";
 import type { AuthEvent, WhoAmIResult } from "../../shared/types";
 import { errorMessage } from "../utils/values";
@@ -12,6 +12,7 @@ import { errorMessage } from "../utils/values";
 type LoginPhase = "loading" | "anonymous" | "awaiting" | "success" | "failure";
 
 export function LoginScreen({ onReturn, onAuthenticated, credit, hasCustomProvider }: { onReturn?: () => void; onAuthenticated?: () => void; credit?: CreditInfo; hasCustomProvider?: boolean } = {}) {
+  const api = useDesktopApi();
   const [phase, setPhase] = useState<LoginPhase>("loading");
   const [whoami, setWhoami] = useState<WhoAmIResult | null>(null);
   const [loginUrl, setLoginUrl] = useState<string | null>(null);
@@ -28,7 +29,7 @@ export function LoginScreen({ onReturn, onAuthenticated, credit, hasCustomProvid
 
   const refreshWhoami = useCallback(async (): Promise<WhoAmIResult | null> => {
     try {
-      const result = await officecli.whoami();
+      const result = await api.whoami();
       if (!mountedRef.current) return null;
       setWhoami(result);
       setPhase(result.mode === "anonymous" ? "anonymous" : "success");
@@ -44,7 +45,7 @@ export function LoginScreen({ onReturn, onAuthenticated, credit, hasCustomProvid
   useEffect(() => {
     mountedRef.current = true;
     void refreshWhoami();
-    const unsubscribe = officecli.onAuthEvent((event: AuthEvent) => {
+    const unsubscribe = api.onAuthEvent((event: AuthEvent) => {
       if (!mountedRef.current) return;
       if (event.type === "url") {
         setLoginUrl(event.url);
@@ -78,7 +79,7 @@ export function LoginScreen({ onReturn, onAuthenticated, credit, hasCustomProvid
     setBusy(true);
     setErrorText(null);
     try {
-      const result = await officecli.login({});
+      const result = await api.login({});
       setLoginUrl(result.url);
       setPhase("awaiting");
       // The desktop app is the single opener of the verification URL: the
@@ -87,7 +88,7 @@ export function LoginScreen({ onReturn, onAuthenticated, credit, hasCustomProvid
       // keeps the browser hand-off automatic without racing the CLI into a
       // second tab; the awaiting screen still keeps a manual "open again"
       // fallback.
-      if (result.url) await officecli.openExternal(result.url).catch(() => undefined);
+      if (result.url) await api.openExternal(result.url).catch(() => undefined);
     } catch (error) {
       setErrorText(errorMessage(error));
       setPhase("failure");
@@ -97,14 +98,14 @@ export function LoginScreen({ onReturn, onAuthenticated, credit, hasCustomProvid
   }, []);
 
   const cancelLogin = useCallback(async () => {
-    await officecli.cancelLogin().catch(() => undefined);
+    await api.cancelLogin().catch(() => undefined);
     setPhase("anonymous");
     setLoginUrl(null);
   }, []);
 
   const openLoginUrl = useCallback(async () => {
     if (!loginUrl) return;
-    await officecli.openExternal(loginUrl).catch(() => undefined);
+    await api.openExternal(loginUrl).catch(() => undefined);
   }, [loginUrl]);
 
   const copyLoginUrl = useCallback(async () => {
@@ -120,7 +121,7 @@ export function LoginScreen({ onReturn, onAuthenticated, credit, hasCustomProvid
   const doLogout = useCallback(async () => {
     setBusy(true);
     try {
-      await officecli.logout();
+      await api.logout();
       setWhoami({ mode: "anonymous" });
       setPhase("anonymous");
       setLoginUrl(null);

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Artifact, PreviewGrant } from "../../shared/types";
-import { officecli } from "../bridge";
+import { useDesktopApi } from "../services/desktopApi";
 import { useT } from "../i18n";
 import { Button, toast } from "../ui";
 import { CheckCircleOutlined, FolderOpenOutlined } from "../ui/icons";
@@ -13,6 +13,7 @@ interface PreviewReadyNoticeProps {
 const AUTO_COLLAPSE_MS = 4_000;
 
 export function PreviewReadyNotice({ artifact, grant }: PreviewReadyNoticeProps) {
+  const api = useDesktopApi();
   const t = useT();
   const [expanded, setExpanded] = useState(true);
   const [paused, setPaused] = useState(false);
@@ -30,7 +31,7 @@ export function PreviewReadyNotice({ artifact, grant }: PreviewReadyNoticeProps)
 
   const revealInFolder = async () => {
     try {
-      await officecli.showItemInFolder(artifact.filePath);
+      await api.showItemInFolder(artifact.filePath);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       toast.error(t("preview.showInFolderFailed", { error: detail }));

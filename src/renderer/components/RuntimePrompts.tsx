@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button, Input } from "../ui";
 import type { AgentRun } from "../../shared/types";
-import { officecli } from "../bridge";
+import { useDesktopApi } from "../services/desktopApi";
 import { isClientToolForThisHost, pendingAgentClientToolEvents, resumeAgentClientTools } from "../AgentClientToolHost";
 import { agentClientId } from "../agentClientIdentity";
 import { useT } from "../i18n";
@@ -54,6 +54,7 @@ export function pendingRuntimeApproval(run: AgentRun): PendingRuntimeApproval | 
  * must not be reachable only from a diagnostics surface.
  */
 export function RuntimePrompts({ onCountChange }: { onCountChange?: (count: number) => void }) {
+  const api = useDesktopApi();
   const t = useT();
   const [runs, setRuns] = useState<AgentRun[]>([]);
   const [error, setError] = useState<string>();
@@ -63,7 +64,7 @@ export function RuntimePrompts({ onCountChange }: { onCountChange?: (count: numb
 
   const refresh = useCallback(async () => {
     try {
-      setRuns(await officecli.listAgentRuns(AGENT_RUN_FETCH_LIMIT));
+      setRuns(await api.listAgentRuns(AGENT_RUN_FETCH_LIMIT));
       setError(undefined);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -100,9 +101,9 @@ export function RuntimePrompts({ onCountChange }: { onCountChange?: (count: numb
       for (const event of pendingAgentClientToolEvents(run)) {
         const callId = String((event.payload as Record<string, unknown> | undefined)?.call_id ?? "").trim();
         if (!callId || isClientToolForThisHost(run, callId)) continue;
-        await officecli.reassignAgentClientTool({ run_id: run.id, call_id: callId, to_client_id: agentClientId(), reason: "Taken over from the home inbox" });
+        await api.reassignAgentClientTool({ run_id: run.id, call_id: callId, to_client_id: agentClientId(), reason: "Taken over from the home inbox" });
       }
-      const refreshed = await officecli.getAgentRun(run.id);
+      const refreshed = await api.getAgentRun(run.id);
       if (!await resumeAgentClientTools(refreshed)) setError(t("tasks.runtime.clientTool.deferred"));
       await refresh();
     } catch (reason) {
@@ -132,9 +133,9 @@ export function RuntimePrompts({ onCountChange }: { onCountChange?: (count: numb
     setError(undefined);
     try {
       if (interaction.kind === "input") {
-        await officecli.respondAgentRun({ run_id: interaction.run.id, request_id: interaction.pending.requestId, value: inputValue.trim() });
+        await api.respondAgentRun({ run_id: interaction.run.id, request_id: interaction.pending.requestId, value: inputValue.trim() });
       } else {
-        await officecli.approveAgentRun({
+        await api.approveAgentRun({
           run_id: interaction.run.id,
           request_id: interaction.pending.requestId,
           approved: interaction.approved,
