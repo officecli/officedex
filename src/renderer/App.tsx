@@ -7,22 +7,21 @@ import { AgentClientToolHost } from "./AgentClientToolHost";
 import { useAgentClientTools } from "./useAgentClientTools";
 import { useVerticalPanels } from "./spreadsheet/useVerticalPanels";
 import { executeActiveEditorClientTool, waitForActiveEditorSurface, type ActiveEditorSurface } from "./activeEditorClientTools";
-import { applyTaskEvent, attachPartialWork, attachTaskContext, deleteTask, discardLocalTask, finishTaskContinuing, getRunLineage, markTaskContinuing, promoteLocalTask, restoreTaskInteractiveGate, startLocalTask, type TaskContextPatch, type TaskState } from "./taskState";
+import { applyTaskEvent, attachTaskContext, deleteTask, discardLocalTask, finishTaskContinuing, getRunLineage, markTaskContinuing, promoteLocalTask, restoreTaskInteractiveGate, startLocalTask, type TaskContextPatch, type TaskState } from "./taskState";
 import { TaskStoreProvider, useTaskStore } from "./store/taskStore";
 import { useTaskRuns } from "./controllers/useTaskRuns";
 import { useWorkspaces } from "./controllers/useWorkspaces";
 import { useBridgeLifecycle } from "./controllers/useBridgeLifecycle";
 import { useDocumentSession } from "./controllers/useDocumentSession";
 import { usePptxRunControls } from "./controllers/usePptxRunControls";
+import { usePptxLiveDraft } from "./controllers/usePptxLiveDraft";
 import { useDesktopApi } from "./services/desktopApi";
 import { useRecentFiles } from "./useRecentFiles";
 import { defaultGenerateInput, type NavKey } from "./defaults";
 import type { SidebarAccount, SidebarDocument } from "./components/ProjectSidebar";
 import { Shell } from "./components/Shell";
 import { PreviewPanel } from "./components/PreviewPanel";
-import { buildReplayFeed, hasPptxDrawingContent, liveDraftFor, registerLiveDraft } from "./presentation/vibeReplay";
-import { loadNexaEdgeOps, NEXAEDGE_DEMO_ID } from "./presentation/bundledPptxDemo";
-import type { TimelineDeck, TimelineNode, VibeOp } from "../shared/types";
+import { liveDraftFor } from "./presentation/vibeReplay";
 import type { SidebarUpdateRowProps } from "./components/SidebarUpdateRow";
 import { ForceUpdateOverlay } from "./components/ForceUpdateOverlay";
 import { ActivityPanel } from "./screens/DataScreens";
@@ -34,7 +33,6 @@ import { DocumentWorkspace } from "./document";
 import { PRESENTATION_PLACEHOLDER_TOPIC, taskTitle } from "./taskTitle";
 import { captureHomeEntryTransition, type HomeEntryTransition } from "./homeEntryTransition";
 import { ProgressivePptxStage } from "./presentation/ProgressivePptxStage";
-import { pptxPartialWork } from "./presentation/pptxRuntimeActivity";
 import { SpreadsheetWorkspace, type SpreadsheetWorkspaceHandle } from "./spreadsheet/SpreadsheetWorkspace";
 import { SpreadsheetAgentPanel, type SpreadsheetAgentTool } from "./spreadsheet/SpreadsheetAgentPanel";
 import type { MarketingBatchDraft, MarketingSheetRow } from "./spreadsheet/marketingWorkflow";
@@ -979,7 +977,6 @@ function OfficeDexApp() {
   // The live draft behind the deck currently on screen, if that deck is one.
   // Registered synchronously when the draft is created, so it is already true
   // by the time the preview artifact naming that file is committed.
-  const previewLiveDraft = previewArtifact?.filePath ? liveDraftFor(previewArtifact.filePath) : undefined;
 
   useEffect(() => {
     const taskId = stageFirstTaskRef.current;
@@ -992,7 +989,8 @@ function OfficeDexApp() {
       // Completion must not replace the op-authored editor with a second
       // artifact import: the deck on screen is this task's own live draft and
       // the sequencer already saved it.
-      const keepLivePreview = previewLiveDraft?.taskId === taskId;
+      const onScreenDraft = previewArtifact?.filePath ? liveDraftFor(previewArtifact.filePath) : undefined;
+      const keepLivePreview = onScreenDraft?.taskId === taskId;
       if (!keepLivePreview && task.artifact?.filePath) {
         void openInlinePreview(task.artifact);
       }
@@ -1002,7 +1000,7 @@ function OfficeDexApp() {
       stageFirstTaskRef.current = undefined;
       setStageFirstTaskId(undefined);
     }
-  }, [openInlinePreview, previewLiveDraft, state.tasks]);
+  }, [openInlinePreview, previewArtifact, state.tasks]);
 
   const openTaskFromHome = useCallback((taskId: string) => {
     const task = state.tasks[taskId];
@@ -1114,9 +1112,6 @@ function OfficeDexApp() {
     if (file) void openRecentFile(file);
   }, [openRecentFile, openTaskFromHome, recentFiles, state.tasks]);
 
-  // Which recorded node of a deck's timeline is on screen. Null means the
-  // newest deck — the one the task produced, or the one being drawn.
-  const [timelineNodeId, setTimelineNodeId] = useState<string | null>(null);
   const deleteSidebarDocument = useCallback(async (document: SidebarDocument) => {
     const task = state.tasks[document.id];
     const conversationId = document.conversationId || task?.conversationId;
@@ -1180,215 +1175,16 @@ function OfficeDexApp() {
     }
   }, [deleteSidebarDocument]);
 
-  // ---- MOP live drawing --------------------------------------------------
-  // The first task.vibe_ops for a task opens the presentation editor on a
-  // blank draft and the replay sequencer inside PptxViewer draws the deck as
-  // the ops stream in. One draft per task; never steal an open preview.
-  const timelineTaskId = previewLiveDraft?.taskId ?? previewArtifact?.taskId ?? undefined;
-
-  const openTimelineNode = useCallback(async (deck: TimelineDeck, node: TimelineNode) => {
-    await openInlinePreview({
-      taskId: timelineTaskId ?? "",
-      filePath: deck.filePath,
-      fileName: deck.fileName,
-      documentType: "pptx",
-    } as Artifact);
-    setTimelineNodeId(node.id);
-  }, [openInlinePreview, timelineTaskId]);
-
-  const returnToLatestDeck = useCallback(async () => {
-    const latest = timelineTaskId ? state.tasks[timelineTaskId]?.artifact : undefined;
-    if (!latest?.filePath) return;
-    await openInlinePreview(latest);
-    setTimelineNodeId(null);
-  }, [openInlinePreview, state.tasks, timelineTaskId]);
-
-  const liveTaskStateRef = useRef(state);
-  liveTaskStateRef.current = state;
-  const liveDraftAttemptsRef = useRef<Set<string>>(new Set());
-  const liveDraftOpenRef = useRef(false);
-  liveDraftOpenRef.current = Boolean(previewGrant);
-  const liveCandidateTaskId = useMemo(() => {
-    for (const taskID of state.taskOrder) {
-      const task = state.tasks[taskID];
-      // Only a still-active task qualifies: history replay on page load
-      // restores completed tasks' primitives in the same state batch, and
-      // redrawing a finished deck would look like a phantom generation.
-      // Do not open the editor merely because the outline arrived: the user
-      // must still review and confirm it. The first actual drawing op is the
-      // boundary between planning and authoring, and is the only automatic
-      // trigger for the live canvas.
-      if (task && hasPptxDrawingContent(task.vibeOps) && ["starting", "running"].includes(task.status)) {
-        return taskID;
-      }
-    }
-    return null;
-  }, [state]);
-  useEffect(() => {
-    if (!liveCandidateTaskId || liveDraftAttemptsRef.current.has(liveCandidateTaskId)) return;
-    if (liveDraftOpenRef.current) return;
-    liveDraftAttemptsRef.current.add(liveCandidateTaskId);
-    void (async () => {
-      try {
-        const draft = await api.createLivePptxDraft(liveCandidateTaskId);
-        registerLiveDraft(draft.filePath, liveCandidateTaskId);
-        const grant = await api.issuePreviewToken({
-          taskId: liveCandidateTaskId,
-          filePath: draft.filePath,
-          fileName: draft.fileName,
-          documentType: "pptx",
-        } as Artifact);
-        const latestTask = liveTaskStateRef.current.tasks[liveCandidateTaskId];
-        if (!latestTask || !["starting", "running"].includes(latestTask.status) || liveDraftOpenRef.current) return;
-        documentSession.adopt(grant, {
-          taskId: liveCandidateTaskId,
-          filePath: draft.filePath,
-          fileName: draft.fileName,
-          documentType: "pptx",
-        } as Artifact);
-        setLiveTrace(false);
-      } catch (error) {
-        liveDraftAttemptsRef.current.delete(liveCandidateTaskId);
-        const message = errorMessage(error);
-        recordError(`Live PPTX drawing could not start: ${message}`, classifyError(message), extractStderr(message));
-      }
-    })();
-  }, [liveCandidateTaskId, recordError]);
-  // A run that stops mid-draw leaves a real file behind: the editor session
-  // saved every page it had drawn before the failure terminal fired. Commit it
-  // to the task model as the partial artifact, so the failed state can offer
-  // "open what was generated" and "modify this deck" instead of pretending the
-  // run produced nothing.
-  useEffect(() => {
-    const source = previewArtifact;
-    if (!source?.filePath || !source.taskId) return;
-    const task = state.tasks[source.taskId];
-    if (!task || !["failed", "cancelled"].includes(task.status)) return;
-    if (task.partialArtifact?.filePath === source.filePath) return;
-    setState((current) => attachPartialWork(current, source.taskId!, {
-      partialArtifact: source,
-      partial: pptxPartialWork(task),
-    }));
-  }, [previewArtifact, state.tasks]);
-  // Debug helper: `__officedexReplayDemo()` in the console replays the latest
-  // (or a given) task's drawing from a fresh blank draft — the live-generation
-  // experience on demand, no model calls, no credits. It bypasses the
-  // active-status guard on purpose and ends with the normal handover to the
-  // task's official artifact.
-  const replayDemoRef = useRef<(source?: string | VibeOp[]) => Promise<string>>(async () => "not ready");
-  const [liveTrace, setLiveTrace] = useState(false);
-  // An op stream handed straight to the replay, with no task behind it —
-  // a recovered recording, or one captured from a run that is long gone.
-  const [replayOps, setReplayOps] = useState<VibeOp[] | undefined>();
-  replayDemoRef.current = async (source?: string | VibeOp[]) => {
-    const finish = (message: string) => {
-      // The command is usually invoked bare in the console, so the resolved
-      // message would go unseen; announce it there as well.
-      console.info("[vibeReplayDemo]", message);
-      return message;
-    };
-    if (source === NEXAEDGE_DEMO_ID || source === "nexaedge") {
-      return startReplay(NEXAEDGE_DEMO_ID, await loadNexaEdgeOps());
-    }
-    const loaded =
-      typeof source === "string" && /^(https?:)?\//.test(source)
-        ? ((await (await fetch(source)).json()) as VibeOp[])
-        : Array.isArray(source)
-          ? source
-          : undefined;
-    if (loaded) return startReplay(`recording-${loaded.length}`, loaded);
-    const taskId = typeof source === "string" ? source : undefined;
-    const target = taskId ?? state.taskOrder.find((id) => (state.tasks[id]?.vibeOps?.length ?? 0) > 0);
-    if (!target) {
-      return finish("no task with drawing ops in this session — open the generated document first, then rerun __officedexReplayDemo()");
-    }
-    const task = state.tasks[target];
-    if (!task) return finish(`unknown task: ${target}`);
-    const opCount = task.vibeOps?.length ?? 0;
-    if (opCount === 0) return finish(`task ${target} has no drawing ops`);
-    return startReplay(target, undefined, opCount);
-  };
-  const startReplay = async (target: string, ops?: VibeOp[], opCount = ops?.length ?? 0) => {
-    const finish = (message: string) => {
-      console.info("[vibeReplayDemo]", message);
-      return message;
-    };
-    liveDraftAttemptsRef.current.delete(target);
-    if (previewGrant) await api.revokePreviewToken(previewGrant.token).catch(() => {});
-    const draft = await api.createLivePptxDraft(target);
-    registerLiveDraft(draft.filePath, target);
-    const artifact = { taskId: target, filePath: draft.filePath, fileName: draft.fileName, documentType: "pptx" } as Artifact;
-    const grant = await api.issuePreviewToken(artifact);
-    documentSession.adopt(grant, artifact);
-    setReplayOps(ops);
-    setLiveTrace(true);
-    const from = ops ? "a recording" : `task ${target}`;
-    return finish(`replaying ${opCount} ops of ${from} from a blank draft — each op is logged before it executes`);
-  };
-  useEffect(() => {
-    const host = window as unknown as { __officedexReplayDemo?: (source?: string | VibeOp[]) => Promise<string> };
-    host.__officedexReplayDemo = (source?: string | VibeOp[]) => replayDemoRef.current(source);
-    return () => {
-      delete host.__officedexReplayDemo;
-    };
-  }, []);
-
-  // The same replay behind a button in the preview's PPTX title bar. It always
-  // shows — a debug affordance nobody can find is worse than one that reports
-  // an empty session — and it replays the deck on screen and nothing else: the
-  // console command's "any task that has ops" fallback would quietly draw a
-  // different deck than the one that was clicked. Ops come back with the task
-  // history hydrated at startup, so a deck generated in an earlier run replays
-  // too; a file that no task drew has none, and the click says so.
-  const previewReplayTaskId = previewArtifact?.taskId;
-  const previewReplayTask = previewReplayTaskId ? state.tasks[previewReplayTaskId] : undefined;
-  const previewReplayOps = previewReplayTask?.vibeOps?.length ?? 0;
-  const [bundledDemoLoading, setBundledDemoLoading] = useState(false);
-  const replayBundledDemo = useCallback(async () => {
-    setBundledDemoLoading(true);
-    try {
-      await replayDemoRef.current(NEXAEDGE_DEMO_ID);
-    } catch (error) {
-      message.error(errorMessage(error));
-    } finally {
-      setBundledDemoLoading(false);
-    }
-  }, []);
-  const replayPreviewDemo = useCallback(() => {
-    if (previewReplayTaskId === NEXAEDGE_DEMO_ID) {
-      void replayBundledDemo();
-      return;
-    }
-    if (!previewReplayTaskId || previewReplayOps === 0) {
-      message.warning(t("pptx.agent.replayDemoNoOps"));
-      return;
-    }
-    void replayDemoRef.current(previewReplayTaskId).then((result) => message.info(result));
-  }, [previewReplayOps, previewReplayTaskId, replayBundledDemo, t]);
-
-  // The live feed belongs to the document on screen, not to the app. Anything
-  // else opened — a finished artifact, a recent file, another task's output —
-  // resolves to no draft and therefore no feed. Keying this off a single
-  // app-wide task id meant every pptx opened after one generation inherited
-  // that task's whole op stream and replayed it onto a document that already
-  // contained those objects.
-  const liveReplayFeed = useMemo(
-    () =>
-      previewLiveDraft
-        ? buildReplayFeed({
-          draft: previewLiveDraft,
-          ops: replayOps,
-          // A live draft is a performance even when the editor finishes booting
-          // after the backend already emitted the complete op stream. Treating
-          // that case as historical catch-up makes the whole deck appear at
-          // once, which defeats the op-mode product experience.
-          performing: true,
-          trace: liveTrace,
-          task: state.tasks[previewLiveDraft.taskId],
-        })
-        : undefined,
-    [liveTrace, previewLiveDraft, replayOps, state.tasks],
-  );
+  const pptxLive = usePptxLiveDraft({ session: documentSession, recordError, t });
+  const timelineNodeId = pptxLive.timelineNodeId;
+  const setTimelineNodeId = pptxLive.setTimelineNodeId;
+  const timelineTaskId = pptxLive.timelineTaskId;
+  const openTimelineNode = pptxLive.openTimelineNode;
+  const returnToLatestDeck = pptxLive.returnToLatestDeck;
+  const liveReplayFeed = pptxLive.replayFeed;
+  const replayBundledDemo = pptxLive.replayBundledDemo;
+  const replayPreviewDemo = pptxLive.replayPreviewDemo;
+  const bundledDemoLoading = pptxLive.bundledDemoLoading;
 
   const startSpreadsheetGeneration = useCallback(async (input: GenerateInput) => {
     clearError();
