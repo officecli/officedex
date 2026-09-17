@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PPT 模板管线实验室</title>
+  <style>
+    :root { --ink:#05101a; --teal:#006876; --paper:#fcfaf2; --card:#fff; --line:#e6e4d8; --muted:#5c6570; --danger:#9b2c2c; --ok:#1f7a4d; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font: 14px/1.45 Inter, "PingFang SC", sans-serif; }
+    header { padding: 20px 24px 12px; border-bottom: 1px solid var(--line); background: #fff; }
+    header h1 { margin: 0 0 6px; font: 600 22px/1.2 "Plus Jakarta Sans", Inter, sans-serif; }
+    header p { margin: 0; color: var(--muted); }
+    .llm { margin-top: 8px; font-size: 12px; color: var(--muted); }
+    main { display: grid; grid-template-columns: 340px 1fr; min-height: calc(100vh - 92px); }
+    .rail { padding: 16px; border-right: 1px solid var(--line); overflow: auto; }
+    .pane { padding: 16px 20px 32px; overflow: auto; }
+    h2 { margin: 18px 0 10px; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+    .step { display: grid; gap: 6px; margin-bottom: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+    .step header { all: unset; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+    .step strong { font-size: 14px; }
+    .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #eee; color: var(--muted); }
+    .badge.done { background: #e3f4ea; color: var(--ok); }
+    .badge.running { background: #e7f3f5; color: var(--teal); }
+    .badge.error { background: #fde8e8; color: var(--danger); }
+    button, .file { border: 0; border-radius: 8px; padding: 8px 12px; background: var(--teal); color: #fff; cursor: pointer; }
+    button[disabled] { opacity: .45; cursor: not-allowed; }
+    button.secondary { background: #fff; color: var(--ink); border: 1px solid var(--line); }
+    textarea, input[type=text] { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 8px; font: inherit; background: #fff; }
+    textarea { min-height: 88px; resize: vertical; }
+    .detail { font-size: 12px; color: var(--muted); white-space: pre-wrap; }
+    .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+    .tabs button { background: #fff; color: var(--ink); border: 1px solid var(--line); }
+    .tabs button.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+    .swatch { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1px solid #ccc; vertical-align: -2px; margin-right: 4px; }
+    .cards { display: grid; gap: 10px; }
+    .card { border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: #fff; }
+    .slides { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+    .slides img { width: 100%; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+    pre { margin: 0; padding: 12px; background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: auto; max-height: 70vh; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .media { display: flex; flex-wrap: wrap; gap: 8px; }
+    .media img { width: 96px; height: 96px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
+    .error { color: var(--danger); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>PPT 模板管线实验室</h1>
+    <p>把真实导入/生成拆成可点的步骤。每一步都能看到产物，用来判断原理对不对。</p>
+    <div class="llm" id="llmStatus">正在检查 LLM…</div>
+  </header>
+  <main>
+    <aside class="rail">
+      <h2>导入模板</h2>
+      <div class="step" id="s-upload">
+        <header><strong>1. 选择 PPTX</strong><span class="badge" data-badge="upload">idle</span></header>
+        <input id="file" type="file" accept=".pptx" />
+        <button type="button" id="btn-upload">上传</button>
+        <div class="detail" data-detail="upload"></div>
+      </div>
+      <div class="step">
+        <header><strong>2. 转 MOP</strong><span class="badge" data-badge="convert">idle</span></header>
+        <button type="button" id="btn-convert" disabled>运行 mop-convert</button>
+        <div class="detail" data-detail="convert"></div>
+      </div>
+      <div class="step">
+        <header><strong>3. 抽取 facts / 本地蒸馏</strong><span class="badge" data-badge="facts">idle</span></header>
+        <button type="button" id="btn-facts" disabled>抽取并展示产物</button>
+        <div class="detail" data-detail="facts"></div>
+      </div>
+      <div class="step">
+        <header><strong>4. 槽位手册（可选 LLM）</strong><span class="badge" data-badge="distillLlm">idle</span></header>
+        <button type="button" id="btn-distill" class="secondary" disabled>用模型标注每个槽该填什么</button>
+        <div class="detail" data-detail="distillLlm"></div>
+      </div>
+
+      <h2>按提纲生成（选页+填槽）</h2>
+      <div class="step">
+        <header><strong>5. 提纲</strong><span class="badge" data-badge="outline">idle</span></header>
+        <textarea id="prompt" placeholder="例如：8 页介绍石墨文档的产品、团队和收尾"></textarea>
+        <button type="button" id="btn-outline" disabled>生成提纲 JSON</button>
+        <div class="detail" data-detail="outline"></div>
+      </div>
+      <div class="step">
+        <header><strong>6. 映射页型</strong><span class="badge" data-badge="map">idle</span></header>
+        <button type="button" id="btn-map" disabled>提纲页 → 模板页型</button>
+        <div class="detail" data-detail="map"></div>
+      </div>
+      <div class="step">
+        <header><strong>7. 克隆模板页</strong><span class="badge" data-badge="clone">idle</span></header>
+        <button type="button" id="btn-clone" disabled>按映射复制页</button>
+        <div class="detail" data-detail="clone"></div>
+      </div>
+      <div class="step">
+        <header><strong>8. 填槽</strong><span class="badge" data-badge="plan">idle</span></header>
+        <button type="button" id="btn-plan" disabled>只改已有文本</button>
+        <div class="detail" data-detail="plan"></div>
+      </div>
+      <div class="step">
+        <header><strong>9. 写入并导出</strong><span class="badge" data-badge="execute">idle</span></header>
+        <button type="button" id="btn-mjs" disabled>写入 MOP</button>
+        <button type="button" id="btn-exec" class="secondary" disabled>导出 PPTX</button>
+        <div class="detail" data-detail="writeMjs"></div>
+        <div class="detail" data-detail="execute"></div>
+      </div>
+    </aside>
+    <section class="pane">
+      <div class="tabs" id="tabs"></div>
+      <div id="view"></div>
+    </section>
+  </main>
+  <script>
+    const state = { session: null, tab: "overview" };
+    const $ = (id) => document.getElementById(id);
+
+    async function api(path, options = {}) {
+      const res = await fetch(path, options);
+      const data = await res.json().catch(() => ({ error: res.statusText }));
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      return data;
+    }
+
+    function setBadge(key, status, detail = "") {
+      const badge = document.querySelector(`[data-badge="${key}"]`);
+      const box = document.querySelector(`[data-detail="${key}"]`);
+      if (badge) {
+        badge.className = "badge " + (status === "done" ? "done" : status === "running" ? "running" : status === "error" ? "error" : "");
+        badge.textContent = status;
+      }
+      if (box) box.textContent = detail || "";
+    }
+
+    function applySession(session) {
+      state.session = session;
+      const t = session?.template?.steps || {};
+      const g = session?.generate?.steps || {};
+      for (const [key, step] of Object.entries({ ...t, ...g })) {
+        setBadge(key, step.status, [step.detail, step.elapsedMs != null ? `${step.elapsedMs}ms` : ""].filter(Boolean).join(" · "));
+      }
+      $("btn-convert").disabled = !t.upload;
+      $("btn-facts").disabled = !t.convert;
+      $("btn-distill").disabled = !t.facts;
+      $("btn-outline").disabled = !t.facts;
+      $("btn-map").disabled = !g.outline;
+      $("btn-clone").disabled = !g.map;
+      $("btn-plan").disabled = !g.clone;
+      $("btn-mjs").disabled = !session?.generate?.fills;
+      $("btn-exec").disabled = !g.writeMjs;
+      render();
+    }
+
+    function tabBtn(id, label) {
+      const on = state.tab === id ? "active" : "";
+      return `<button class="${on}" data-tab="${id}">${label}</button>`;
+    }
+
+    function render() {
+      const t = state.session?.template;
+      const g = state.session?.generate;
+      const tabs = [];
+      if (t?.facts) {
+        tabs.push(tabBtn("overview", "总览"), tabBtn("slides", "模板页"), tabBtn("skill", "槽位手册"), tabBtn("facts", "facts.json"), tabBtn("profile", "视觉规则"));
+      }
+      if (g?.outline) tabs.push(tabBtn("outline", "提纲"));
+      if (g?.mapping) tabs.push(tabBtn("map", "映射"));
+      if (g?.fills) tabs.push(tabBtn("plan", "填槽 JSON"));
+      if (g?.pptxUrl) tabs.push(tabBtn("out", "导出 PPTX"));
+      $("tabs").innerHTML = tabs.join("");
+      $("tabs").onclick = (event) => {
+        const id = event.target.dataset.tab;
+        if (!id) return;
+        state.tab = id;
+        render();
+      };
+      $("view").innerHTML = viewHtml();
+    }
+
+    function viewHtml() {
+      const t = state.session?.template;
+      const g = state.session?.generate;
+      if (!t?.facts && !g) return `<p class="detail">先导入 PPTX，再逐步点右侧/左侧按钮。导入后这里会显示 facts、配色、版式和样本文字。</p>`;
+      if (state.tab === "overview" && t?.facts) {
+        const p = t.distilled.visualProfile;
+        const colors = (p.palette || []).map((hex) => `<span class="swatch" style="background:${hex}"></span>${hex}`).join("　");
+        return `<div class="cards">
+          <div class="card"><strong>${t.sourceFileName}</strong><div class="detail">${t.facts.pageCount} 页 · ${t.facts.textCount} 个文本框 · ${t.media.length} 个媒体</div></div>
+          <div class="card"><strong>配色</strong><div class="detail">${colors || "无"}</div></div>
+          <div class="card"><strong>字体</strong><div class="detail">${(t.facts.fonts || []).join(" / ") || "无"}</div></div>
+          <div class="card"><strong>版式库</strong><pre>${escapeHtml(JSON.stringify(t.distilled.layouts, null, 2))}</pre></div>
+          <div class="card"><strong>媒体</strong><div class="media">${t.media.map((m) => `<img src="${m.url}" alt="${m.name}" title="${m.name}">`).join("")}</div></div>
+        </div>`;
+      }
+      if (state.tab === "slides" && t?.facts) {
+        return `<div class="cards">${t.facts.slides.map((slide) => `
+          <div class="card"><strong>第 ${slide.index} 页</strong>
+            <div class="detail">layout ${slide.layoutRef || "—"}</div>
+            ${(slide.texts || []).map((box) => `<div class="detail">${box.slotId || ""} ${box.role || ""} ${box.replaceable ? "可替换" : "固定"} · ${box.maxChars || "?"}字 · ${escapeHtml(box.text)}</div>`).join("")}
+            ${(slide.pictures || []).map((pic) => `<div class="detail">图 ${pic.width.toFixed(0)}×${pic.height.toFixed(0)}${pic.logo ? " · logo" : ""}</div>`).join("")}
+          </div>`).join("")}</div>`;
+      }
+      if (state.tab === "skill") return `<pre>${escapeHtml(t?.distilled?.skillMarkdown || "")}</pre>`;
+      if (state.tab === "facts") return `<pre>${escapeHtml(JSON.stringify(t?.facts, null, 2))}</pre>`;
+      if (state.tab === "profile") return `<pre>${escapeHtml(JSON.stringify(t?.distilled?.visualProfile, null, 2))}</pre>`;
+      if (state.tab === "outline") return `<pre>${escapeHtml(JSON.stringify(g?.outline, null, 2))}</pre>`;
+      if (state.tab === "map") return `<pre>${escapeHtml(JSON.stringify({ mapping: g?.mapping, warnings: g?.warnings || g?.mapWarnings }, null, 2))}</pre>`;
+      if (state.tab === "plan") return `<pre>${escapeHtml(JSON.stringify({ fills: g?.fills, warnings: g?.warnings }, null, 2))}</pre>`;
+      if (state.tab === "out") {
+        const dl = g.pptxUrl ? `<p><a href="${g.pptxUrl}">下载 filled.pptx</a></p>` : "";
+        return dl + `<p class="detail">模板副本改字后导出，没有 JS-SDK 重画。</p>`;
+      }
+      return "";
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+    }
+
+    async function run(key, fn) {
+      setBadge(key, "running", "进行中…");
+      try {
+        const data = await fn();
+        applySession(data.session);
+        if (key === "facts") state.tab = "overview";
+        if (key === "plan") state.tab = "plan";
+        if (key === "writeMjs") state.tab = "mjs";
+        if (key === "execute") state.tab = "out";
+        render();
+      } catch (error) {
+        setBadge(key, "error", error.message);
+      }
+    }
+
+    $("btn-upload").onclick = () => run("upload", async () => {
+      const file = $("file").files[0];
+      if (!file) throw new Error("请选择 pptx");
+      return api("/api/import/upload", { method: "POST", headers: { "x-filename": encodeURIComponent(file.name) }, body: file });
+    });
+    $("btn-convert").onclick = () => run("convert", () => api("/api/import/convert", { method: "POST" }));
+    $("btn-facts").onclick = () => run("facts", () => api("/api/import/facts", { method: "POST" }));
+    $("btn-distill").onclick = () => run("distillLlm", () => api("/api/import/distill-llm", { method: "POST" }));
+    $("btn-outline").onclick = () => run("outline", () => api("/api/generate/outline", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ prompt: $("prompt").value }) }));
+    $("btn-map").onclick = () => run("map", () => api("/api/generate/map", { method: "POST" }));
+    $("btn-clone").onclick = () => run("clone", () => api("/api/generate/clone", { method: "POST" }));
+    $("btn-plan").onclick = () => run("plan", () => api("/api/generate/plan", { method: "POST" }));
+    $("btn-mjs").onclick = () => run("writeMjs", () => api("/api/generate/write-mjs", { method: "POST" }));
+    $("btn-exec").onclick = () => run("execute", () => api("/api/generate/execute", { method: "POST" }));
+
+    api("/api/status").then((data) => {
+      $("llmStatus").textContent = data.llm.ready
+        ? `LLM：${data.llm.model} @ ${data.llm.baseUrl}`
+        : "LLM 未就绪：会读本机 officecli config.json。先导入仍可看 facts。";
+      if (data.session) applySession(data.session);
+    }).catch((error) => { $("llmStatus").textContent = error.message; });
+  </script>
+</body>
+</html>

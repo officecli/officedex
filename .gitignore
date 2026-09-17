@@ -28,6 +28,7 @@ build/writer/
 build/writer-fonts/
 build/writer-convert/
 officecli-bin/
+demo/pptx-template-lab/work/
 
 # Wails / Go build artifacts.
 build/bin/

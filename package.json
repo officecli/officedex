@@ -21,6 +21,7 @@
     "prebuild": "npm run prefetch:officecli",
     "dev": "wails dev",
     "dev:browser": "vite --host=0.0.0.0 --port=${OFFICEDEX_DEV_WEB_PORT:-3100}",
+    "demo:pptx-lab": "node demo/pptx-template-lab/server.mjs",
     "start:desktop": "bash scripts/start-desktop.sh",
     "bundle:licenses:mac": "node scripts/bundle-licenses.mjs --target build/bin/OfficeDex.app && node scripts/verify-bundled-fonts.mjs build/bin/OfficeDex.app",
     "bundle:licenses:win": "node scripts/bundle-licenses.mjs --target build/bin && node scripts/verify-bundled-fonts.mjs build/bin",
