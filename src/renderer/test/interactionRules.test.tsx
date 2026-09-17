@@ -245,6 +245,25 @@ describe("R-A · connection lifecycle", () => {
     // The task survives the outage as its own row; nothing marked it failed.
     expect(mocks.shell.documents.some((document) => document.id === "run-1")).toBe(true);
   });
+
+  // A manually stopped bridge disables the Go client's reconnect timer, so the
+  // renderer has to trigger Initialize itself. Several client exits inside one
+  // interruption window must still produce exactly one reconnect, or the app
+  // starts duplicate bridge child processes.
+  it("R-A-06: repeated bridge.exited in one outage window starts one reconnect", async () => {
+    const { officecli } = await import("./../bridge");
+    await renderApp();
+    await waitFor(() => expect(officecli.initialize).toHaveBeenCalled());
+    const afterBoot = vi.mocked(officecli.initialize).mock.calls.length;
+
+    await emit({ type: "bridge.exited", payload: { message: "exited" } });
+    await emit({ type: "bridge.exited", payload: { message: "exited again" } });
+
+    await waitFor(() => expect(vi.mocked(officecli.initialize).mock.calls.length).toBe(afterBoot + 1));
+    // Give a second reconnect the chance to appear before concluding it did not.
+    await act(async () => { await Promise.resolve(); });
+    expect(vi.mocked(officecli.initialize).mock.calls.length).toBe(afterBoot + 1);
+  });
 });
 
 describe("R-B · routing", () => {

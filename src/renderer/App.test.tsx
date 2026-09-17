@@ -150,18 +150,6 @@ describe("OfficeDex document routing", () => {
     })?.taskId).toBe("ppt-recovered");
   });
 
-  it("retries bridge initialization after a stopped bridge emits bridge.exited", () => {
-    const source = readFileSync("src/renderer/App.tsx", "utf8");
-    const branchStart = source.indexOf('if (event.type === "bridge.exited")');
-    const branchEnd = source.indexOf("// Native OfficeCLI Runtime tasks survive", branchStart);
-
-    expect(branchStart).toBeGreaterThanOrEqual(0);
-    expect(branchEnd).toBeGreaterThan(branchStart);
-    const branch = source.slice(branchStart, branchEnd);
-    expect(branch).toContain("bridgeRecoveryPendingRef");
-    expect(branch).toContain("setConnectAttempt");
-  });
-
   it("does not recover an unrelated task from the same history page", () => {
     const entries: TaskHistoryEntry[] = [{
       taskId: "other-task",

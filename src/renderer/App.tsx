@@ -12,6 +12,7 @@ import { applyTaskEvent, attachPartialWork, attachTaskContext, deleteTask, disca
 import { TaskStoreProvider, useTaskStore } from "./store/taskStore";
 import { useTaskRuns } from "./controllers/useTaskRuns";
 import { useWorkspaces } from "./controllers/useWorkspaces";
+import { useBridgeLifecycle } from "./controllers/useBridgeLifecycle";
 import { useDesktopApi } from "./services/desktopApi";
 import { useRecentFiles } from "./useRecentFiles";
 import { defaultGenerateInput, type NavKey } from "./defaults";
@@ -235,10 +236,7 @@ function OfficeDexApp() {
   const [busy, setBusy] = useState(false);
   const [lastError, setLastError] = useState<string>();
   const [errorKind, setErrorKind] = useState<FailureKind>("connection");
-  const [bridgeInterruptionKey, setBridgeInterruptionKey] = useState(0);
-  const bridgeRecoveryPendingRef = useRef(false);
   const [errorDetails, setErrorDetails] = useState<string>();
-  const [connectAttempt, setConnectAttempt] = useState(0);
   const [previewGrant, setPreviewGrant] = useState<PreviewGrant | null>(null);
   const [documentOpenRevision, setDocumentOpenRevision] = useState(0);
   const [previewArtifact, setPreviewArtifact] = useState<Artifact | null>(null);
@@ -395,95 +393,37 @@ function OfficeDexApp() {
     refreshCredit();
   }, [persistedSettings.llmProvider, settingsLoading, refreshCredit]);
 
-  useEffect(() => {
-    if (forceUpdate) {
-      // An update gate keeps the bridge idle; nothing to connect until it clears.
-      return;
+  const onReconnected = useCallback(() => {
+    refreshProjectLists();
+    void refreshRecentFiles(homeWorkspaceId);
+  }, [homeWorkspaceId, refreshProjectLists, refreshRecentFiles]);
+
+  const onTransportLost = useCallback(() => {
+    recent.abandon(t("home.bridgeUnavailable"));
+  }, [recent, t]);
+
+  const onTaskSettled = useCallback((event: BridgeEvent, task: DesktopTask | undefined) => {
+    // Name the task in the body: "a generation finished" makes the user hunt
+    // for which one, which is the trip to the tasks page we are removing.
+    if (event.type === "task.completed") {
+      maybeNotify(api, { title: t("notification.title"), body: taskNotificationBody(task, t("notification.taskCompleted")) });
     }
-    const off = api.onBridgeEvent((event: BridgeEvent) => {
-      if (event.type === "bridge.reconnecting") {
-        return;
-      }
-      if (event.type === "bridge.reconnected") {
-        bridgeRecoveryPendingRef.current = false;
-        clearError();
-        refreshProjectLists();
-        void refreshRecentFiles(homeWorkspaceId);
-        return;
-      }
-      if (event.type === "bridge.unconfigured") {
-        bridgeRecoveryPendingRef.current = false;
-        const message = String(event.payload?.message || "OfficeCLI binary is not configured");
-        const stderr = stringOrUndef(event.payload?.stderr);
-        recordError(message, "setup", stderr);
-        return;
-      }
-      if (event.type === "bridge.reconnect_exhausted") {
-        bridgeRecoveryPendingRef.current = false;
-        const message = String(event.payload?.message || "Bridge reconnection failed. Please retry manually.");
-        const stderr = stringOrUndef(event.payload?.stderr);
-        recordError(message, classifyStatusEvent(event.payload?.kind, message, stderr), stderr);
-        return;
-      }
-      if (event.type === "bridge.exited") {
-        const message = String(event.payload?.message || "officecli agent-bridge exited");
-        recent.abandon(t("home.bridgeUnavailable"));
-        setBridgeInterruptionKey((current) => current + 1);
-        // A manually stopped bridge disables the Go client's reconnect timer.
-        // Trigger the normal Initialize path once so the App can recreate the
-        // child process. The guard prevents several client exits in the same
-        // interruption window from starting duplicate bridge instances.
-        if (!bridgeRecoveryPendingRef.current) {
-          bridgeRecoveryPendingRef.current = true;
-          setConnectAttempt((current) => current + 1);
-        }
-        // Native OfficeCLI Runtime tasks survive the stdio bridge process and
-        // are reattached after reconnect. Treat this as a transport outage,
-        // not a task failure; authoritative task/status or later task events
-        // decide whether any individual run actually failed.
-        return;
-      }
-      // A task event names the task it belongs to and nothing else. It used to
-      // be treated as evidence that the newest optimistic submission had just
-      // been assigned that id, which is only true when exactly one submission
-      // is in flight: with two, an event from the older run adopted the newer
-      // run's prompt, parent, and conversation id, merging both into one
-      // lineage. The invoke RPC that created a placeholder is the only thing
-      // that can resolve it, so reduce the event and stop there.
-      let settledTask: DesktopTask | undefined;
-      setState((current) => {
-        const next = applyTaskEvent(current, event);
-        if (event.task_id) settledTask = next.tasks[event.task_id];
-        return next;
-      });
-      if (event.type === "task.completed" || event.type === "task.failed" || event.type === "task.cancelled") {
-        // Name the task in the body: "a generation finished" makes the user
-        // hunt for which one, which is the trip to the tasks page we are
-        // trying to remove.
-        if (event.type === "task.completed") {
-          maybeNotify(api, { title: t("notification.title"), body: taskNotificationBody(settledTask, t("notification.taskCompleted")) });
-        }
-        if (event.type === "task.failed") {
-          maybeNotify(api, { title: t("notification.title"), body: taskNotificationBody(settledTask, t("notification.taskFailed")) });
-        }
-        nudgeForTaskTransition();
-      }
-    });
-    if (settingsLoading) {
-      return off;
+    if (event.type === "task.failed") {
+      maybeNotify(api, { title: t("notification.title"), body: taskNotificationBody(task, t("notification.taskFailed")) });
     }
-    // The handshake result used to be written into a state nobody rendered,
-    // so an officecli too old for this app failed silently here and loudly
-    // later. Surface it through the same error banner as everything else.
-    api
-      .initialize()
-      .then(() => api.getCapabilities())
-      .catch((error) => {
-        const text = errorMessage(error);
-        recordError(text, classifyError(text), extractStderr(text));
-      });
-    return off;
-  }, [connectAttempt, clearError, homeWorkspaceId, recordError, refreshRecentFiles, settingsLoading, forceUpdate, nudgeForTaskTransition, refreshProjectLists, t]);
+    nudgeForTaskTransition();
+  }, [api, nudgeForTaskTransition, t]);
+
+  const bridge = useBridgeLifecycle({
+    enabled: !forceUpdate,
+    settingsLoading,
+    recordError,
+    clearError,
+    onReconnected,
+    onTransportLost,
+    onTaskSettled,
+  });
+  const bridgeInterruptionKey = bridge.interruptionKey;
 
   useTaskRuns();
 
@@ -997,11 +937,6 @@ function OfficeDexApp() {
       prompt,
     }));
   }, [forceUpdate, recordError, clearError, followUpDeps, conversationTasks, conversationId, workspaces, activeWorkspace, t]);
-
-  const retry = useCallback(() => {
-    clearError();
-    setConnectAttempt((current) => current + 1);
-  }, [clearError]);
 
   const openLogin = useCallback(() => {
     if (activeNavRef.current !== "login") loginReturnNavRef.current = activeNavRef.current;
