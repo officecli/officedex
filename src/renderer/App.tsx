@@ -12,7 +12,7 @@ import { useVerticalPanels } from "./spreadsheet/useVerticalPanels";
 import { executeActiveEditorClientTool, waitForActiveEditorSurface, type ActiveEditorSurface } from "./activeEditorClientTools";
 import { applyTaskEvent, attachPartialWork, attachTaskContext, deleteTask, discardLocalTask, finishTaskContinuing, getRunLineage, markTaskContinuing, promoteLocalTask, restoreTaskInteractiveGate, startLocalTask, type TaskContextPatch, type TaskState } from "./taskState";
 import { TaskStoreProvider, useTaskStore } from "./store/taskStore";
-import { STALL_POLL_INTERVAL_MS, markStalledTasks } from "./stallDetector";
+import { useTaskRuns } from "./controllers/useTaskRuns";
 import { useDesktopApi } from "./services/desktopApi";
 import { useRecentFiles } from "./useRecentFiles";
 import { defaultGenerateInput, type NavKey } from "./defaults";
@@ -143,21 +143,6 @@ export function findRecoverableTaskHistoryEntry(
 }
 
 
-export function hydrateTaskHistory(state: TaskState, entries: TaskHistoryEntry[]): TaskState {
-  let next = state;
-  for (const entry of entries) {
-    if (next.tasks[entry.taskId]) continue;
-    for (const event of entry.events) next = applyTaskEvent(next, event);
-    next = attachTaskContext(next, entry.taskId, {
-      createdAt: entry.createdAt,
-      conversationId: entry.conversationId,
-      parentTaskId: entry.parentTaskId,
-      workspaceId: entry.workspaceId,
-      workspacePath: entry.workspacePath,
-    });
-  }
-  return next;
-}
 
 function taskCreatedTimestamp(document: SidebarDocument): number {
   if (!document.createdAt) return Number.NEGATIVE_INFINITY;
@@ -490,60 +475,7 @@ function OfficeDexApp() {
     return off;
   }, [connectAttempt, clearError, homeWorkspaceId, recordError, refreshRecentFiles, settingsLoading, forceUpdate, nudgeForTaskTransition, refreshProjectLists, t]);
 
-  useEffect(() => {
-    let cancelled = false;
-    api
-      .getTaskHistory(50)
-      .then((entries) => {
-        if (cancelled || entries.length === 0) return;
-        setState((current) => hydrateTaskHistory(current, entries));
-      })
-      .catch(() => {
-        // History hydration is best-effort; live events still flow.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const activeTaskHistoryKey = state.taskOrder
-    .filter((taskId) => {
-      const status = state.tasks[taskId]?.status;
-      return status === "starting" || status === "running" || status === "question" || status === "plan_review";
-    })
-    .join("|");
-
-  const reconcileActiveTaskHistory = useCallback(async () => {
-      try {
-        const entries = await api.getTaskHistory(50);
-        if (entries.length === 0) return;
-        setState((current) => {
-          let next = current;
-          for (const entry of entries) {
-            // History is authoritative after a bridge response. Do not limit
-            // reconciliation to the pre-refresh status: a task can have
-            // reached failed/completed while the renderer still thinks it is
-            // in plan_review.
-            const beforeEntry = next;
-            for (const event of entry.events) next = applyTaskEvent(next, event);
-            if (next !== beforeEntry) {
-            next = attachTaskContext(next, entry.taskId, {
-                createdAt: entry.createdAt,
-                conversationId: entry.conversationId,
-                parentTaskId: entry.parentTaskId,
-                workspaceId: entry.workspaceId,
-                workspacePath: entry.workspacePath,
-              });
-            }
-          }
-          return next;
-        });
-      } catch {
-        // Live events remain the fast path. The next reconciliation tick retries.
-      }
-  }, []);
-
-  usePolling(reconcileActiveTaskHistory, TASK_HISTORY_RECONCILE_INTERVAL_MS, { enabled: Boolean(activeTaskHistoryKey) });
+  useTaskRuns();
 
   const firstTaskID = state.taskOrder[0];
   useEffect(() => {
@@ -551,8 +483,6 @@ function OfficeDexApp() {
       setSelectedTaskID({ kind: "task", id: firstTaskID });
     }
   }, [firstTaskID, selectedTaskID.kind]);
-
-  usePolling(() => setState((current) => markStalledTasks(current, Date.now())), STALL_POLL_INTERVAL_MS, { immediate: false });
 
   const conversationId = useMemo(() => {
     if (selectedTaskID.kind === "task") {

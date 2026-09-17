@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { DesktopTask, TaskHistoryEntry } from "../shared/types";
-import { findModifySourceTask, findRecoverableTaskHistoryEntry, hydrateTaskHistory, readStoredAppRoute, sortSidebarDocuments, writeStoredAppRoute } from "./App";
+import { findModifySourceTask, findRecoverableTaskHistoryEntry, readStoredAppRoute, sortSidebarDocuments, writeStoredAppRoute } from "./App";
+import { hydrateTaskHistory } from "./controllers/useTaskRuns";
 import { createInitialTaskState } from "./taskState";
 
 describe("OfficeDex document routing", () => {
