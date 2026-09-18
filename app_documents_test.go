@@ -183,6 +183,49 @@ func TestDocumentRunsAndActivitiesAreReachable(t *testing.T) {
 	}
 }
 
+// Pinning is a filter on the one file list, not a move: nothing else about the
+// document changes, and an unknown id is reported rather than silently ignored.
+func TestSetDocumentPinnedFlipsTheFlagAndReportsUnknownIDs(t *testing.T) {
+	app, store := newDocumentTestApp(t)
+	seedDocument(t, store, "task-deck", "", filepath.Join(t.TempDir(), "deck.pptx"))
+
+	page, err := app.ListDocuments(types.DocumentListInput{})
+	if err != nil || len(page.Items) != 1 {
+		t.Fatalf("seed failed: %v %+v", err, page.Items)
+	}
+	before := page.Items[0]
+	if before.Pinned {
+		t.Fatal("a fresh document should not be pinned")
+	}
+
+	if err := app.SetDocumentPinned(before.ID, true); err != nil {
+		t.Fatalf("SetDocumentPinned: %v", err)
+	}
+	after, err := app.GetDocument(before.ID)
+	if err != nil {
+		t.Fatalf("GetDocument: %v", err)
+	}
+	if !after.Pinned {
+		t.Error("document should be pinned")
+	}
+	// Everything else is untouched — pinning moves nothing.
+	if after.FilePath != before.FilePath || after.WorkspaceID != before.WorkspaceID || after.FileName != before.FileName {
+		t.Errorf("pinning changed more than the flag:\n before %+v\n after  %+v", before, after)
+	}
+
+	if err := app.SetDocumentPinned(before.ID, false); err != nil {
+		t.Fatalf("unpin: %v", err)
+	}
+	unpinned, err := app.GetDocument(before.ID)
+	if err != nil || unpinned.Pinned {
+		t.Errorf("document should be unpinned again: %v %+v", err, unpinned)
+	}
+
+	if err := app.SetDocumentPinned("document:nope", true); err == nil {
+		t.Error("expected an error when pinning a document that does not exist")
+	}
+}
+
 // Every one of these refuses rather than returning an empty page when the store
 // is not there: an empty file list and an unavailable store look identical in
 // the UI otherwise.
@@ -199,5 +242,8 @@ func TestDocumentMethodsRefuseWithoutAStore(t *testing.T) {
 	}
 	if _, err := app.ListDocumentActivities(types.DocumentActivityListInput{DocumentID: "document:any"}); err == nil {
 		t.Error("ListDocumentActivities should refuse without a store")
+	}
+	if err := app.SetDocumentPinned("document:any", true); err == nil {
+		t.Error("SetDocumentPinned should refuse without a store")
 	}
 }

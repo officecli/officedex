@@ -109,3 +109,14 @@ func (a *App) ListDocumentActivities(input types.DocumentActivityListInput) (typ
 	}
 	return a.localStore.QueryDocumentActivities(ctx, input)
 }
+
+// SetDocumentPinned pins or unpins a document. Pinning is a filter on the one
+// file list rather than a move to some other location, so nothing about the
+// document changes except this flag.
+func (a *App) SetDocumentPinned(documentID string, pinned bool) error {
+	ctx, err := a.documentStoreContext()
+	if err != nil {
+		return err
+	}
+	return a.localStore.SetDocumentPinned(ctx, documentID, pinned)
+}

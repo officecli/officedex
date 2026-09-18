@@ -94,6 +94,7 @@ const PENDING_CONSUMER: Record<string, string> = {
   getDocument: "S2 · services/files.ts",
   listDocumentRuns: "S2 · services/files.ts",
   listDocumentActivities: "S2 · services/agent.ts reads the activity stream",
+  setDocumentPinned: "S2 · services/files.ts implements UiPort.files.setPinned",
 };
 
 /**

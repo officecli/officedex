@@ -104,6 +104,8 @@ export function createRealE2EAPI(endpoint: string): DesktopAPI {
     getDocument: (documentId: string) => rpc<DocumentRecord>("GetDocument", documentId),
     listDocumentRuns: async (documentId: string) => (await rpc<RunRecord[]>("ListDocumentRuns", documentId)) ?? [],
     listDocumentActivities: (input) => rpc<ActivityPage>("ListDocumentActivities", input),
+    setDocumentPinned: (documentId: string, pinned: boolean) =>
+      rpc<void>("SetDocumentPinned", { documentId, pinned }),
     modify: (input: ModifyInput) =>
       rpc<{ taskId: string; sessionId: string; status: string }>("Modify", input),
     artifactStageEdit: (input: ArtifactStageRuntimeInput) =>

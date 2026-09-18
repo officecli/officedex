@@ -10,6 +10,8 @@ type DocumentRecord struct {
 	CreatedAt             string `json:"createdAt"`
 	UpdatedAt             string `json:"updatedAt"`
 	MigrationSource       string `json:"migrationSource"`
+	// Pinned is a filter on the one file list, not a separate location.
+	Pinned                bool   `json:"pinned"`
 }
 
 type RunRecord struct {

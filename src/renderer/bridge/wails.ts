@@ -217,6 +217,7 @@ export function createWailsAPI(): DesktopAPI {
     getDocument: (documentId: string) => WailsApp.GetDocument(documentId),
     listDocumentRuns: async (documentId: string) => (await WailsApp.ListDocumentRuns(documentId)) ?? [],
     listDocumentActivities: (input) => WailsApp.ListDocumentActivities(toWails(input)),
+    setDocumentPinned: (documentId: string, pinned: boolean) => WailsApp.SetDocumentPinned(documentId, pinned),
     modify: async (input: ModifyInput) => {
       const result = await WailsApp.Modify(toWails(input));
       return { taskId: result.taskId, sessionId: result.sessionId, status: result.status };

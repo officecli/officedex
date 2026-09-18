@@ -1190,6 +1190,7 @@ export interface DocumentRecord {
   createdAt: string;
   updatedAt: string;
   migrationSource: string;
+  pinned: boolean;
 }
 
 export interface RunRecord {
@@ -1251,6 +1252,8 @@ export interface DesktopAPI extends DesktopVerticalAPI {
   getDocument(documentId: string): Promise<DocumentRecord>;
   listDocumentRuns(documentId: string): Promise<RunRecord[]>;
   listDocumentActivities(input: DocumentActivityListInput): Promise<ActivityPage>;
+  /** Pinning is a filter on the one file list, not a move to another place. */
+  setDocumentPinned(documentId: string, pinned: boolean): Promise<void>;
 
   getPptxTaskStatus?: (taskId: string) => Promise<PptxTaskStatus>;
   skipPptxResearch?: (taskId: string) => Promise<void>;

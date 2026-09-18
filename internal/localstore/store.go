@@ -214,6 +214,49 @@ WHERE created_at = '';
 CREATE INDEX IF NOT EXISTS idx_tasks_created ON tasks(created_at DESC, id ASC);
 `
 
+// schemaV11 adds the pin flag to documents. Pinning is a filter on the one
+// file list rather than a separate location, so it belongs on the row — see
+// docs/uiport-scope.md and UiPort's FileMeta.pinned.
+//
+// Split in two because SQLite has no ADD COLUMN IF NOT EXISTS and this chain
+// can re-run a version: a rewound user_version replays it, and so would a
+// partially applied upgrade. The ALTER is guarded by columnExists; the index is
+// idempotent on its own.
+const schemaV11AddPinned = `ALTER TABLE documents ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0`
+
+const schemaV11Index = `CREATE INDEX IF NOT EXISTS idx_documents_pinned ON documents(pinned DESC, updated_at DESC)`
+
+// columnExists reports whether a table already has a column.
+//
+// Additive column migrations need this. The older ones (v2, v8) issue a bare
+// ALTER and would fail the same way if their version were ever replayed; they
+// are left alone here because nothing replays them today, but a new one should
+// not add to that debt.
+func columnExists(ctx context.Context, tx *sql.Tx, table, column string) (bool, error) {
+	rows, err := tx.QueryContext(ctx, fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return false, fmt.Errorf("localstore: table_info(%s): %w", table, err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			cid        int
+			name       string
+			columnType string
+			notNull    int
+			dflt       sql.NullString
+			primaryKey int
+		)
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &dflt, &primaryKey); err != nil {
+			return false, fmt.Errorf("localstore: scan table_info(%s): %w", table, err)
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
+}
+
 // schemaV10 stores the shared OfficeDex product graph. Legacy tasks and
 // artifacts remain authoritative for compatibility; these tables add durable
 // project/data-lineage/output relationships for the multi-output workflow.
@@ -460,7 +503,7 @@ func (s *Store) Open(ctx context.Context) error {
 // latestSchemaVersion is the user_version an opened database ends up at. Tests
 // assert against this rather than a literal so adding a migration does not mean
 // hunting down every hardcoded number.
-const latestSchemaVersion = 10
+const latestSchemaVersion = 11
 
 func applyMigrations(ctx context.Context, db *sql.DB) error {
 	var current int
@@ -687,7 +730,7 @@ func applyMigrations(ctx context.Context, db *sql.DB) error {
 			return fmt.Errorf("v8 commit: %w", err)
 		}
 	}
-	if current < latestSchemaVersion {
+	if current < 10 {
 		tx, err := db.BeginTx(ctx, nil)
 		if err != nil {
 			return fmt.Errorf("begin v9: %w", err)
@@ -704,17 +747,52 @@ func applyMigrations(ctx context.Context, db *sql.DB) error {
 		}
 		if _, err := tx.ExecContext(ctx,
 			`INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)`,
-			latestSchemaVersion, nowTimestamp(),
+			10, nowTimestamp(),
 		); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("v10 stamp: %w", err)
 		}
-		if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", latestSchemaVersion)); err != nil {
+		if _, err := tx.ExecContext(ctx, "PRAGMA user_version = 10"); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("v10 set user_version: %w", err)
 		}
 		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("v10 commit: %w", err)
+		}
+	}
+	if current < latestSchemaVersion {
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("begin v11: %w", err)
+		}
+		pinnedExists, err := columnExists(ctx, tx, "documents", "pinned")
+		if err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("v11 inspect: %w", err)
+		}
+		if !pinnedExists {
+			if _, err := tx.ExecContext(ctx, schemaV11AddPinned); err != nil {
+				_ = tx.Rollback()
+				return fmt.Errorf("v11 ddl: %w", err)
+			}
+		}
+		if _, err := tx.ExecContext(ctx, schemaV11Index); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("v11 index: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)`,
+			latestSchemaVersion, nowTimestamp(),
+		); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("v11 stamp: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", latestSchemaVersion)); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("v11 set user_version: %w", err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("v11 commit: %w", err)
 		}
 	}
 	return nil
@@ -2365,7 +2443,7 @@ func scanDocument(rows *sql.Rows) (types.DocumentRecord, error) {
 	err := rows.Scan(
 		&record.ID, &record.FilePath, &record.FileName, &record.DocumentType,
 		&record.CurrentArtifactTaskID, &record.WorkspaceID, &record.CreatedAt,
-		&record.UpdatedAt, &record.MigrationSource,
+		&record.UpdatedAt, &record.MigrationSource, &record.Pinned,
 	)
 	return record, err
 }
@@ -2381,7 +2459,7 @@ func (s *Store) QueryDocuments(ctx context.Context, input types.DocumentListInpu
 		return types.DocumentPage{}, err
 	}
 	limit := clampDocumentLimit(input.Limit)
-	query := `SELECT id, file_path, file_name, document_type, COALESCE(current_artifact_task_id, ''), COALESCE(workspace_id, ''), created_at, updated_at, migration_source FROM documents WHERE 1=1`
+	query := `SELECT id, file_path, file_name, document_type, COALESCE(current_artifact_task_id, ''), COALESCE(workspace_id, ''), created_at, updated_at, migration_source, pinned FROM documents WHERE 1=1`
 	args := []any{}
 	if workspaceID := strings.TrimSpace(input.WorkspaceID); workspaceID != "" {
 		query += ` AND workspace_id = ?`
@@ -2428,9 +2506,9 @@ func (s *Store) GetDocument(ctx context.Context, documentID string) (types.Docum
 	if documentID == "" {
 		return types.DocumentRecord{}, false, nil
 	}
-	row := s.db.QueryRowContext(ctx, `SELECT id, file_path, file_name, document_type, COALESCE(current_artifact_task_id, ''), COALESCE(workspace_id, ''), created_at, updated_at, migration_source FROM documents WHERE id = ?`, documentID)
+	row := s.db.QueryRowContext(ctx, `SELECT id, file_path, file_name, document_type, COALESCE(current_artifact_task_id, ''), COALESCE(workspace_id, ''), created_at, updated_at, migration_source, pinned FROM documents WHERE id = ?`, documentID)
 	var record types.DocumentRecord
-	err := row.Scan(&record.ID, &record.FilePath, &record.FileName, &record.DocumentType, &record.CurrentArtifactTaskID, &record.WorkspaceID, &record.CreatedAt, &record.UpdatedAt, &record.MigrationSource)
+	err := row.Scan(&record.ID, &record.FilePath, &record.FileName, &record.DocumentType, &record.CurrentArtifactTaskID, &record.WorkspaceID, &record.CreatedAt, &record.UpdatedAt, &record.MigrationSource, &record.Pinned)
 	if errors.Is(err, sql.ErrNoRows) {
 		return types.DocumentRecord{}, false, nil
 	}
@@ -2438,6 +2516,33 @@ func (s *Store) GetDocument(ctx context.Context, documentID string) (types.Docum
 		return types.DocumentRecord{}, false, fmt.Errorf("localstore: get document: %w", err)
 	}
 	return record, true, nil
+}
+
+// SetDocumentPinned flips the pin on one document. Missing rows are reported
+// rather than silently ignored: the caller just acted on something it believed
+// was there.
+func (s *Store) SetDocumentPinned(ctx context.Context, documentID string, pinned bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return fmt.Errorf("localstore: not open")
+	}
+	documentID = strings.TrimSpace(documentID)
+	if documentID == "" {
+		return fmt.Errorf("localstore: document id is required")
+	}
+	result, err := s.db.ExecContext(ctx, `UPDATE documents SET pinned = ? WHERE id = ?`, pinned, documentID)
+	if err != nil {
+		return fmt.Errorf("localstore: set document pinned: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("localstore: set document pinned: %w", err)
+	}
+	if affected == 0 {
+		return fmt.Errorf("localstore: document not found: %s", documentID)
+	}
+	return nil
 }
 
 func (s *Store) QueryDocumentRuns(ctx context.Context, documentID string) ([]types.RunRecord, error) {

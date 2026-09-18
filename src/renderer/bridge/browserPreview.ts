@@ -87,6 +87,7 @@ export function createBrowserPreviewAPI(): DesktopAPI {
     },
     listDocumentRuns: async () => [],
     listDocumentActivities: async () => ({ items: [] }),
+    setDocumentPinned: async () => undefined,
     modify: async () => {
       throw new Error("Bridge IPC is only available inside the desktop app.");
     },
