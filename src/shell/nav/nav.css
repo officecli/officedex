@@ -1,0 +1,380 @@
+/* File navigation: the compact sidebar tree and the comfortable Home list. */
+
+.shell-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --------------------------------------------------------- compact tree */
+
+.shell-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.shell-tree-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 6px;
+  padding: 0 2px 0 8px;
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-xs);
+}
+
+.shell-tree-folder-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: var(--shell-row-h);
+  border-radius: var(--shell-radius-item);
+}
+
+.shell-tree-folder-row:hover {
+  background: var(--shell-hover);
+}
+
+.shell-tree-folder-row.is-current {
+  color: #374b5b;
+}
+
+.shell-tree-folder-row.is-drop-target {
+  outline: 1px solid #8b9eab;
+  background: #e0e8ee;
+}
+
+.shell-tree-folder-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 8px;
+  border: 0;
+  border-radius: var(--shell-radius-item);
+  background: none;
+  color: var(--shell-ink-muted);
+  font: var(--shell-text) / 20px var(--shell-font);
+  text-align: left;
+  cursor: pointer;
+}
+
+.shell-tree-folder-toggle > svg {
+  flex: none;
+}
+
+.shell-tree-folder-toggle > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.shell-tree-folder-toggle > small {
+  flex: none;
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-xs);
+}
+
+.shell-tree-chevron {
+  flex: none;
+  color: #929ba2;
+  transition: transform 140ms var(--shell-ease);
+}
+
+.shell-tree-folder-toggle[aria-expanded="true"] .shell-tree-chevron {
+  transform: rotate(90deg);
+}
+
+.shell-tree-folder-add,
+.shell-tree-file-more {
+  position: absolute;
+  right: 4px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--shell-radius-control);
+  background: var(--shell-hover);
+  color: var(--shell-ink-subtle);
+  cursor: pointer;
+}
+
+.shell-tree-folder-add {
+  width: 24px;
+  height: 24px;
+}
+
+.shell-tree-file-more {
+  width: 23px;
+  height: 23px;
+}
+
+.shell-tree-folder-row:hover .shell-tree-folder-add,
+.shell-tree-folder-row:focus-within .shell-tree-folder-add,
+.shell-tree-file-row:hover .shell-tree-file-more,
+.shell-tree-file-row:focus-within .shell-tree-file-more {
+  display: flex;
+}
+
+.shell-tree-folder-row:hover .shell-tree-folder-toggle > small {
+  opacity: 0;
+}
+
+.shell-tree-files {
+  margin: 1px 0 7px 10px;
+  padding-left: 8px;
+  border-left: 1px solid #e2e6e9;
+}
+
+.shell-tree-file-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  margin: 2px 0;
+  border-radius: var(--shell-radius-control);
+  color: #697885;
+}
+
+.shell-tree-file-row:hover {
+  background: #edf0f2;
+}
+
+.shell-tree-file-row.is-current {
+  background: var(--shell-active);
+  color: #354a5b;
+}
+
+.shell-tree-file-row[draggable="true"]:active {
+  opacity: 0.5;
+}
+
+.shell-tree-file-open {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 26px 8px 7px;
+  border: 0;
+  border-radius: var(--shell-radius-control);
+  background: none;
+  color: inherit;
+  font: var(--shell-text-sm) / 18px var(--shell-font);
+  text-align: left;
+  cursor: pointer;
+}
+
+.shell-tree-file-open > span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.shell-tree-file-open > svg:last-child {
+  flex: none;
+  color: var(--shell-ink-faint);
+}
+
+.shell-tree-empty,
+.shell-tree-more {
+  margin: 0;
+  padding: 8px 7px;
+  border: 0;
+  background: none;
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-xs);
+  line-height: 17px;
+  text-align: left;
+}
+
+.shell-tree-more {
+  cursor: pointer;
+}
+
+.shell-tree-more:hover {
+  color: var(--shell-ink-muted);
+}
+
+.shell[data-nav-collapsed="true"] .shell-tree-files,
+.shell[data-nav-collapsed="true"] .shell-tree-folder-toggle > span,
+.shell[data-nav-collapsed="true"] .shell-tree-folder-toggle > small,
+.shell[data-nav-collapsed="true"] .shell-tree-chevron,
+.shell[data-nav-collapsed="true"] .shell-tree-folder-add,
+.shell[data-nav-collapsed="true"] .shell-tree-section-head {
+  display: none;
+}
+
+.shell[data-nav-collapsed="true"] .shell-tree-folder-toggle {
+  width: var(--shell-row-h);
+  justify-content: center;
+  margin: 0 auto;
+  padding: 9px;
+}
+
+/* ----------------------------------------------------- comfortable list */
+
+.shell-list {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--shell-text);
+}
+
+.shell-list thead th {
+  padding: 0 10px 8px;
+  border-bottom: 1px solid var(--shell-line);
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-sm);
+  font-weight: 400;
+  text-align: left;
+}
+
+.shell-list-group th {
+  padding: 22px 10px 6px;
+  color: var(--shell-ink-subtle);
+  font-size: var(--shell-text-sm);
+  font-weight: 500;
+  text-align: left;
+}
+
+.shell-list-group th small {
+  margin-left: 8px;
+  color: var(--shell-ink-faint);
+  font-weight: 400;
+}
+
+.shell-list tbody tr:not(.shell-list-group) {
+  border-bottom: 1px solid #f0f1f3;
+}
+
+.shell-list tbody tr:not(.shell-list-group):hover {
+  background: var(--shell-sunken);
+}
+
+.shell-list tbody tr.is-current {
+  background: var(--shell-active);
+}
+
+.shell-list td {
+  padding: 0 10px;
+  height: 40px;
+  color: var(--shell-ink-subtle);
+  vertical-align: middle;
+}
+
+.shell-list td:first-child {
+  width: 46%;
+}
+
+.shell-list-file {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--shell-ink);
+  font: var(--shell-text) / 20px var(--shell-font);
+  text-align: left;
+  cursor: pointer;
+}
+
+.shell-list-file > span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.shell-list-dirty {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--shell-accent);
+}
+
+.shell-list-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: var(--shell-radius-control);
+  background: none;
+  color: transparent;
+  cursor: pointer;
+}
+
+.shell-list tbody tr:hover .shell-list-pin {
+  color: var(--shell-ink-faint);
+}
+
+.shell-list-pin.is-pinned {
+  color: var(--shell-accent);
+}
+
+.shell-list-pin:hover {
+  background: var(--shell-hover);
+}
+
+.shell-list-empty {
+  padding: 56px 12px;
+  color: var(--shell-ink-subtle);
+  text-align: center;
+}
+
+.shell-list-empty strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--shell-ink);
+  font-size: var(--shell-text-lg);
+  font-weight: 500;
+}
+
+.shell-list-empty p {
+  margin: 0;
+  font-size: var(--shell-text);
+}
+
+/* -------------------------------------------------------------- dialogs */
+
+.shell-dialog-label {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text);
+}
+
+.shell-dialog-note {
+  margin: 0;
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text);
+  line-height: 20px;
+}
+
+.shell-dialog-error {
+  min-height: 16px;
+  margin: 8px 0 0;
+  color: #ad5347;
+  font-size: var(--shell-text-sm);
+}
+
+.shell-dialog-error:empty {
+  margin: 0;
+}

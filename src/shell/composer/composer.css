@@ -1,0 +1,433 @@
+/* The composer: one component, three placements (home hero / docked task / floating panel). */
+
+.shell-cx {
+  position: relative;
+  container-type: inline-size;
+  background: var(--shell-paper);
+  border: 1px solid var(--shell-line-strong);
+  border-radius: var(--shell-radius-composer);
+  color: var(--shell-ink-title);
+  transition: border-color 150ms, box-shadow 150ms;
+}
+
+.shell-cx:focus-within {
+  border-color: #c7ced5;
+  box-shadow: 0 2px 6px #00000008;
+}
+
+.shell-cx--task,
+.shell-cx--floating {
+  padding: 12px 10px 9px;
+}
+
+.shell-cx--home {
+  padding: 18px 16px 11px;
+  border-radius: 20px;
+  box-shadow: 0 2px 5px #00000005;
+}
+
+.shell-cx-input {
+  display: block;
+  width: 100%;
+  min-height: 58px;
+  max-height: 145px;
+  padding: 0 6px 10px;
+  border: 0;
+  background: none;
+  color: var(--shell-ink-title);
+  font: var(--shell-text-lg) / 23px var(--shell-font);
+  resize: none;
+  outline: none;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.shell-cx--home .shell-cx-input {
+  min-height: 88px;
+  max-height: 220px;
+  padding: 0 5px 16px;
+  font-size: 16px;
+  line-height: 26px;
+}
+
+.shell-cx-input::placeholder {
+  color: var(--shell-ink-faint);
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------------- chips */
+
+.shell-cx-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 112px;
+  overflow: auto;
+  margin-bottom: 10px;
+  scrollbar-width: thin;
+}
+
+.shell-cx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 4px 7px;
+  border: 1px solid var(--shell-line);
+  border-radius: 9px;
+  background: var(--shell-sunken);
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text-sm);
+}
+
+.shell-cx-chip.is-folder {
+  background: #eef3ef;
+  border-color: #dce6de;
+  color: #657b6c;
+}
+
+.shell-cx-chip.is-file {
+  background: #eff3f6;
+  border-color: #dde5ec;
+  color: #536879;
+}
+
+.shell-cx-chip-name {
+  min-width: 0;
+  max-width: 200px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.shell-cx-chip button {
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.shell-cx-chip button:hover {
+  background: #00000010;
+}
+
+/* -------------------------------------------------------------- toolbar */
+
+.shell-cx-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+  margin-top: 6px;
+}
+
+/* The send button and the model choice hold their size; the scope chip on the
+   left is what gives up width first. */
+.shell-cx-left {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 6px;
+}
+
+.shell-cx-right {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 6px;
+}
+
+.shell-cx-scope {
+  min-width: 0;
+}
+
+.shell-cx-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
+  height: 32px;
+  min-width: 28px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--shell-ink-muted);
+  font: var(--shell-text) / 20px var(--shell-font);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.shell-cx-left > .shell-cx-scope {
+  flex-shrink: 1;
+}
+
+.shell-cx-button:hover,
+.shell-cx-button[aria-expanded="true"] {
+  background: #f0f1f2;
+  color: var(--shell-ink);
+}
+
+.shell-cx-button:focus-visible,
+.shell-cx-send:focus-visible {
+  outline: 2px solid var(--shell-focus);
+  outline-offset: 1px;
+}
+
+.shell-cx-scope-name,
+.shell-cx-model-name,
+.shell-cx-permission-name {
+  min-width: 0;
+  max-width: 160px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.shell-cx-permission {
+  color: var(--shell-ink-faint);
+}
+
+.shell-cx-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 6px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--shell-ink);
+  color: var(--shell-ink-inverse);
+  cursor: pointer;
+}
+
+.shell-cx-send:hover:not(:disabled) {
+  background: #2b3035;
+}
+
+.shell-cx-send:disabled {
+  background: #e6e8ea;
+  color: #ffffff;
+  cursor: default;
+}
+
+/* Narrow placements shed labels before they shed controls. */
+/*
+ * Narrow placements shed controls in priority order. The scope chip's name is
+ * near the end of that order on purpose: decision 2 made scope a visible
+ * property of the message, so hiding it first would undo the point of folding
+ * the prototype's folder dropdown into the composer.
+ *
+ * Order dropped: permission label → dictate → model name → scope name.
+ */
+@container (max-width: 420px) {
+  .shell-cx-permission-name {
+    display: none;
+  }
+}
+
+@container (max-width: 340px) {
+  .shell-cx-mic {
+    display: none;
+  }
+  .shell-cx-model-name {
+    max-width: 78px;
+  }
+  .shell-cx-scope-name {
+    max-width: 88px;
+  }
+  .shell-cx-left,
+  .shell-cx-right {
+    gap: 3px;
+  }
+  .shell-cx-toolbar {
+    gap: 6px;
+  }
+}
+
+@container (max-width: 252px) {
+  .shell-cx-scope-name,
+  .shell-cx-model-name {
+    display: none;
+  }
+}
+
+.shell-cx-drop {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed #7c8791;
+  border-radius: inherit;
+  background: #f4f5f6ed;
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text-lg);
+  z-index: 10;
+}
+
+/* --------------------------------------------------------- mention menu */
+
+.shell-mention {
+  position: absolute;
+  left: 0;
+  z-index: 180;
+  display: flex;
+  flex-direction: column;
+  width: min(370px, 100%);
+  overflow: hidden;
+  padding: 7px;
+  background: var(--shell-paper);
+  border: 1px solid var(--shell-line);
+  border-radius: 16px;
+  box-shadow: var(--shell-shadow-panel);
+}
+
+.shell-mention[data-side="above"] {
+  bottom: calc(100% + 8px);
+}
+
+.shell-mention[data-side="below"] {
+  top: calc(100% + 8px);
+}
+
+.shell-mention-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 8px 10px 9px;
+  color: var(--shell-ink-subtle);
+  font-size: var(--shell-text);
+  font-weight: 500;
+}
+
+.shell-mention-heading span {
+  font-size: 15px;
+  color: var(--shell-ink-faint);
+}
+
+.shell-mention-options {
+  flex: 1;
+  min-height: 40px;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.shell-mention-group {
+  padding: 10px 10px 5px;
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-xs);
+  letter-spacing: 0.15px;
+}
+
+.shell-mention-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--shell-ink);
+  font: var(--shell-text) / 20px var(--shell-font);
+  text-align: left;
+  cursor: pointer;
+}
+
+.shell-mention-option.is-highlighted {
+  background: #f0f2f3;
+}
+
+.shell-mention-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 29px;
+  height: 29px;
+  border: 1px solid var(--shell-line);
+  border-radius: 9px;
+  background: var(--shell-sunken);
+  color: var(--shell-ink-muted);
+}
+
+.shell-mention-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.shell-mention-text strong {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--shell-text);
+  font-weight: 450;
+}
+
+.shell-mention-text small {
+  display: block;
+  margin-top: 3px;
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-xs);
+  line-height: 15px;
+}
+
+.shell-mention-enter {
+  flex: none;
+  color: var(--shell-ink-faint);
+  font-size: 15px;
+  opacity: 0;
+}
+
+.shell-mention-option.is-highlighted .shell-mention-enter {
+  opacity: 1;
+}
+
+.shell-mention-empty {
+  margin: 0;
+  padding: 14px 10px;
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-sm);
+}
+
+.shell-mention-footer {
+  flex-shrink: 0;
+  margin-top: 6px;
+  padding: 10px 9px 4px;
+  border-top: 1px solid #efefef;
+  color: #a0a3a6;
+  font-size: 9px;
+}
+
+/* -------------------------------------------------------- model dialog */
+
+.shell-dialog-select {
+  display: block;
+  width: 100%;
+  height: 38px;
+  padding: 9px 10px;
+  border: 1px solid var(--shell-line-strong);
+  border-radius: 8px;
+  background: var(--shell-paper);
+  color: var(--shell-ink);
+  font: var(--shell-text) / 20px var(--shell-font);
+  outline: none;
+}
+
+.shell-dialog-label span {
+  margin-left: 4px;
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-xs);
+}

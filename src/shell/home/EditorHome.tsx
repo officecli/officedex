@@ -1,0 +1,104 @@
+import { FolderOpen, Plus } from "lucide-react";
+import { useState } from "react";
+
+import { Select } from "../../renderer/ui";
+import { FileTree } from "../nav/FileTree";
+import { useFolderDrop } from "../nav/useFolderDrop";
+import { useLibraryActions } from "../nav/useLibraryActions";
+import type { FileType } from "../port/types";
+import { useShell } from "../state/ShellContext";
+import type { Grouping } from "../nav/fileTreeModel";
+import "./home.css";
+
+const TYPE_OPTIONS = [
+  { value: "all", label: "All types" },
+  { value: "doc", label: "Documents" },
+  { value: "sheet", label: "Workbooks" },
+  { value: "slides", label: "Presentations" },
+];
+
+const GROUPING_OPTIONS = [
+  { value: "time", label: "Last opened" },
+  { value: "folder", label: "Folder" },
+];
+
+/**
+ * Editor mode's Home: the comfortable density of the one file list.
+ *
+ * Decision 2 in practice — Recent and Pinned are a filter over the same list,
+ * and grouping is a control on it. Switching the grouping to "Folder" lines the
+ * page up with the sidebar tree row for row, because both read the same model.
+ */
+export function EditorHome() {
+  const { state, dispatch, folders, files } = useShell();
+  const actions = useLibraryActions();
+  const [grouping, setGrouping] = useState<Grouping>("time");
+  const [fileType, setFileType] = useState<FileType | "all">("all");
+  const { overFolderId, dropHandlers } = useFolderDrop(actions.moveFile);
+
+  const defaultFolderId = folders.find((folder) => folder.isDefault)?.id ?? folders[0]?.id ?? "";
+
+  return (
+    <div className="shell-home shell-region shell-home--editor">
+      <header className="shell-home-head">
+        <h1>{state.homeList === "pinned" ? "Pinned" : "Recent"}</h1>
+
+        <div className="shell-home-controls">
+          <Select
+            aria-label="Group by"
+            value={grouping}
+            options={GROUPING_OPTIONS}
+            onChange={(value) => setGrouping(value as Grouping)}
+          />
+          <Select
+            aria-label="File type"
+            value={fileType}
+            options={TYPE_OPTIONS}
+            onChange={(value) => setFileType(value as FileType | "all")}
+          />
+        </div>
+      </header>
+
+      <div className="shell-home-actions">
+        {(["doc", "sheet", "slides"] as const).map((type) => (
+          <button
+            key={type}
+            type="button"
+            className="shell-home-new"
+            onClick={() => void actions.createFile(defaultFolderId, type)}
+          >
+            <Plus size={15} strokeWidth={1.8} aria-hidden="true" />
+            {type === "doc" ? "Blank document" : type === "sheet" ? "Blank workbook" : "Blank presentation"}
+          </button>
+        ))}
+        <button type="button" className="shell-home-new shell-home-new--ghost">
+          <FolderOpen size={15} strokeWidth={1.7} aria-hidden="true" />
+          Open from this computer
+        </button>
+      </div>
+
+      <div className="shell-home-list" {...dropHandlers}>
+        <FileTree
+          density="comfortable"
+          grouping={grouping}
+          folders={folders}
+          files={files}
+          activeFileId={state.activeFileId}
+          selectedFolderId={state.selectedFolderId}
+          expandedFolderIds={state.expandedFolderIds}
+          revealedFolderIds={state.revealedFolderIds}
+          filter={state.homeList === "pinned" ? "pinned" : "all"}
+          fileType={fileType}
+          dropFolderId={overFolderId}
+          onOpenFile={(fileId) => void actions.openFile(fileId)}
+          onToggleFolder={(folderId) => dispatch({ type: "toggle-folder", folderId })}
+          onToggleOverflow={(folderId) => dispatch({ type: "toggle-folder-overflow", folderId })}
+          onSelectFolder={(folderId) => dispatch({ type: "select-folder", folderId })}
+          onCreateFile={(folderId, type) => void actions.createFile(folderId, type)}
+          onMoveFile={(fileId, folderId) => void actions.moveFile(fileId, folderId)}
+          onTogglePinned={(fileId, pinned) => void actions.setPinned(fileId, pinned)}
+        />
+      </div>
+    </div>
+  );
+}

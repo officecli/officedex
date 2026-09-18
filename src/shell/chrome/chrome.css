@@ -1,0 +1,607 @@
+/* Shell chrome: window bar, tabs, sidebar, status bar, menu primitive. */
+
+/* ---------------------------------------------------------- shared bits */
+
+.shell-icon-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 5px;
+  border: 0;
+  border-radius: var(--shell-radius-item);
+  background: transparent;
+  color: var(--shell-ink-subtle);
+  cursor: pointer;
+}
+
+.shell-icon-button:hover {
+  background: var(--shell-hover);
+  color: var(--shell-ink);
+}
+
+.shell-icon-button:focus-visible,
+.shell-tab-select:focus-visible,
+.shell-sidebar-item:focus-visible,
+.shell-brand:focus-visible,
+.shell-profile:focus-visible,
+.shell-menu-item:focus-visible,
+.shell-save-state:focus-visible,
+.shell-share:focus-visible {
+  outline: 2px solid var(--shell-focus);
+  outline-offset: 1px;
+}
+
+.shell-file-icon[data-file-type="doc"] {
+  color: var(--shell-doc-accent);
+}
+.shell-file-icon[data-file-type="sheet"] {
+  color: var(--shell-sheet-accent);
+}
+.shell-file-icon[data-file-type="slides"] {
+  color: var(--shell-slides-accent);
+}
+
+/* ------------------------------------------------------------ window bar */
+
+.shell-window-controls {
+  display: flex;
+  align-items: center;
+  flex: 0 0 63px;
+  width: 63px;
+  height: 28px;
+  gap: 0;
+}
+
+.shell-window-controls button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: 0 0 21px;
+  width: 21px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.shell-window-controls button::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  box-sizing: border-box;
+  border: 1px solid #00000018;
+  border-radius: 50%;
+}
+
+.shell-window-close::before {
+  background: #ff5f57;
+}
+.shell-window-minimize::before {
+  background: #febc2e;
+}
+.shell-window-fullscreen::before {
+  background: #28c840;
+}
+
+/* Glyphs stay hidden until the cluster is hovered, as platform controls do. */
+.shell-window-glyph {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  transform: translate(-50%, -50%);
+  color: #343434c9;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.shell-window-controls:hover .shell-window-glyph,
+.shell-window-controls button:focus-visible .shell-window-glyph {
+  opacity: 1;
+}
+
+.shell-window-controls button:focus-visible {
+  outline: 1px solid var(--shell-focus);
+  outline-offset: -1px;
+  border-radius: 4px;
+}
+
+.shell-nav-toggle {
+  margin-left: 12px;
+}
+
+/* ----------------------------------------------------------------- tabs */
+
+.shell-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  padding-right: 16px;
+}
+
+.shell-tabstrip {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 3px;
+  height: var(--shell-tab-h);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.shell-tabstrip::-webkit-scrollbar {
+  display: none;
+}
+
+.shell-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 1 260px;
+  min-width: 140px;
+  height: var(--shell-tab-h);
+  border-radius: var(--shell-radius-control) var(--shell-radius-control) 0 0;
+  color: var(--shell-ink-subtle);
+}
+
+.shell-tab:not(.is-current):hover {
+  background: #ffffff70;
+}
+
+.shell-tab.is-current {
+  background: var(--shell-paper);
+  color: #4c5964;
+}
+
+.shell-tab-select {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 2px 4px 2px 8px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: 500 var(--shell-text) / 20px var(--shell-font);
+  text-align: left;
+  cursor: pointer;
+}
+
+.shell-tab-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.shell-tab-dirty {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.shell-tab-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 24px;
+  margin-right: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  opacity: 0.55;
+  cursor: pointer;
+}
+
+.shell-tab-close:hover {
+  opacity: 1;
+  background: #65748016;
+}
+
+.shell-tabs-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+}
+
+.shell-save-state {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: #4e5963;
+  font: var(--shell-text) / 20px var(--shell-font);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.shell-save-state:hover:not(:disabled) {
+  background: var(--shell-hover);
+}
+
+.shell-save-state:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.shell-share {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--shell-ink);
+  color: var(--shell-ink-inverse);
+  font: var(--shell-text) / 20px var(--shell-font);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.shell-share:hover {
+  background: #30353a;
+}
+
+.shell-tabs-icons {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.shell-tabs-icons .shell-icon-button {
+  color: #4e5963;
+  border-radius: 4px;
+}
+
+/* -------------------------------------------------------------- sidebar */
+
+.shell-sidebar-brand {
+  flex: none;
+  margin-bottom: 10px;
+}
+
+.shell-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: var(--shell-row-h);
+  padding: 4px 6px;
+  border: 0;
+  border-radius: var(--shell-radius-item);
+  background: none;
+  color: var(--shell-ink);
+  cursor: pointer;
+}
+
+.shell-brand:hover,
+.shell-brand[aria-expanded="true"] {
+  background: #e5e9ed;
+}
+
+.shell-brand-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: #2b2b2b;
+  color: #ffffff;
+}
+
+.shell-brand-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font: 600 var(--shell-text-lg) / 24px var(--shell-font);
+  letter-spacing: -0.2px;
+  text-align: left;
+}
+
+.shell-brand-chevron {
+  flex: none;
+  color: #7d858c;
+}
+
+.shell[data-nav-collapsed="true"] .shell-brand-name,
+.shell[data-nav-collapsed="true"] .shell-brand-chevron {
+  display: none;
+}
+
+.shell[data-nav-collapsed="true"] .shell-brand {
+  width: var(--shell-row-h);
+  justify-content: center;
+  padding: 4px;
+  margin: 0 auto;
+}
+
+.shell-sidebar-top,
+.shell-sidebar-views {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.shell-sidebar-views {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--shell-line);
+}
+
+.shell-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: var(--shell-row-h);
+  min-height: var(--shell-row-h);
+  padding: 8px;
+  border: 0;
+  border-radius: var(--shell-radius-item);
+  background: none;
+  color: var(--shell-ink-muted);
+  font: var(--shell-text) / 20px var(--shell-font);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.shell-sidebar-item > svg {
+  flex: none;
+}
+
+.shell-sidebar-item > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shell-sidebar-item:hover {
+  background: var(--shell-hover);
+}
+
+.shell-sidebar-item.is-current {
+  background: var(--shell-active);
+  color: #354652;
+}
+
+.shell[data-nav-collapsed="true"] .shell-sidebar-item {
+  width: var(--shell-row-h);
+  justify-content: center;
+  margin: 0 auto;
+  padding: 8px;
+}
+
+.shell-sidebar-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden auto;
+  scrollbar-width: thin;
+  margin-top: 16px;
+}
+
+.shell-sidebar-footer {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--shell-line);
+}
+
+.shell[data-nav-collapsed="true"] .shell-sidebar-footer {
+  flex-direction: column;
+}
+
+.shell-profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  height: var(--shell-row-h);
+  padding: 6px;
+  border: 0;
+  border-radius: var(--shell-radius-item);
+  background: none;
+  color: var(--shell-ink);
+  font: var(--shell-text) / 17px var(--shell-font);
+  text-align: left;
+  cursor: pointer;
+}
+
+.shell-profile:hover {
+  background: var(--shell-hover);
+}
+
+.shell[data-nav-collapsed="true"] .shell-profile {
+  flex: 0 0 var(--shell-row-h);
+  justify-content: center;
+}
+
+.shell-avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid #d3d6da;
+  background: #e5dfd7;
+  color: #857464;
+  font-size: var(--shell-text-sm);
+}
+
+.shell-profile > span:not(.shell-avatar) {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ----------------------------------------------------------- status bar */
+
+/*
+ * The device and zoom controls are the bar's fixed anchor; the per-format facts
+ * on the left give up space first. A narrow workspace (Agent mode on a small
+ * window) then clips "English (US)" rather than pushing the zoom control out.
+ */
+.shell-statusbar-facts {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  overflow: hidden;
+}
+
+.shell-statusbar-end {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-left: 12px;
+  flex: none;
+}
+
+.shell-device,
+.shell-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.shell-zoom .shell-icon-button {
+  width: 22px;
+  height: 22px;
+  padding: 4px;
+}
+
+.shell-zoom-value {
+  min-width: 34px;
+  text-align: center;
+}
+
+/* ----------------------------------------------------------------- menu */
+
+.shell-menu-anchor {
+  position: relative;
+}
+
+.shell-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  z-index: 60;
+  max-height: 340px;
+  overflow: auto;
+  padding: 6px;
+  background: var(--shell-paper);
+  border: 1px solid #dfe2e6;
+  border-radius: var(--shell-radius-card);
+  box-shadow: var(--shell-shadow-menu);
+  color: #34383c;
+}
+
+.shell-menu[data-align="start"] {
+  left: 0;
+}
+.shell-menu[data-align="end"] {
+  right: 0;
+}
+
+.shell-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 38px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--shell-radius-item);
+  background: transparent;
+  color: inherit;
+  font: var(--shell-text) / 20px var(--shell-font);
+  text-align: left;
+  cursor: pointer;
+}
+
+.shell-menu-item:hover,
+.shell-menu-item:focus-visible {
+  background: #edf0f3;
+  outline: 0;
+}
+
+.shell-menu-item:focus-visible {
+  box-shadow: inset 0 0 0 1px #9aa8b3;
+}
+
+.shell-menu-item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.shell-menu-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--shell-radius-control);
+  background: var(--shell-sunken);
+  color: var(--shell-ink-muted);
+}
+
+.shell-menu-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.shell-menu-label small {
+  display: block;
+  margin-top: 2px;
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-xs);
+  line-height: 15px;
+}
+
+.shell-menu-check {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  background: currentColor;
+  color: #5c6872;
+  clip-path: polygon(
+    14% 47%,
+    0 61%,
+    39% 100%,
+    100% 25%,
+    85% 11%,
+    37% 71%
+  );
+}

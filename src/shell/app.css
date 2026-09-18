@@ -1,0 +1,289 @@
+/* Shell layout. Tokens live in tokens.css; this file only arranges regions. */
+
+.shell {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--shell-canvas);
+  color: var(--shell-ink);
+  font: var(--shell-text) / 20px var(--shell-font);
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.shell *,
+.shell *::before,
+.shell *::after {
+  box-sizing: border-box;
+}
+
+.shell [hidden] {
+  display: none !important;
+}
+
+/* ---------------------------------------------------------------- rows */
+
+.shell-row {
+  display: flex;
+  min-width: 0;
+}
+
+.shell-row--top {
+  flex: none;
+  height: var(--shell-windowbar-h);
+  background: var(--shell-chrome);
+}
+
+.shell-row--body {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ------------------------------------------------------------- regions */
+
+.shell-windowbar {
+  flex: none;
+  width: var(--shell-nav-w);
+  min-width: 132px; /* the traffic lights and the sidebar toggle always fit */
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  transition: width var(--shell-duration) var(--shell-ease);
+}
+
+.shell-tabs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  height: var(--shell-tabs-h);
+}
+
+.shell-sidebar {
+  flex: none;
+  width: var(--shell-nav-w);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 12px 14px;
+  background: var(--shell-chrome);
+  border-right: 1px solid var(--shell-line);
+  overflow: hidden;
+  transition: width var(--shell-duration) var(--shell-ease);
+}
+
+.shell[data-nav-collapsed="true"] .shell-sidebar {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+/*
+ * The docked agent column. Its width is the only thing a mode change moves;
+ * everything else in the row keeps its box, so the document does not jump.
+ */
+.shell-agent {
+  flex: none;
+  width: var(--shell-task-w);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--shell-chrome);
+  transition: width var(--shell-duration) var(--shell-ease);
+}
+
+.shell-workspace {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--shell-canvas);
+}
+
+/* The ribbon owns its own box; see editor/ribbon.css. */
+
+.shell-statusbar {
+  flex: none;
+  height: var(--shell-statusbar-h);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 12px 0 20px;
+  background: var(--shell-sunken);
+  color: var(--shell-ink-subtle);
+  font-size: var(--shell-text-sm);
+  /* A narrow workspace (Agent mode on a small window) must clip the left-hand
+     facts rather than wrap them into a second line the 32px bar cannot show. */
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.shell-statusbar > span {
+  flex: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shell-home {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  background: var(--shell-canvas);
+}
+
+/* -------------------------------------------------------------- canvas */
+
+.shell-canvas {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  background: var(--shell-sunken);
+}
+
+.shell-canvas-scroll {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  padding: 28px 0 40px;
+  display: flex;
+  justify-content: center;
+}
+
+.shell-canvas-scroll--flush {
+  padding: 0;
+  display: block;
+}
+
+.shell-canvas-scroll--slides {
+  padding: 0;
+  display: flex;
+  justify-content: flex-start;
+}
+
+/* ------------------------------------------------------------ skeleton */
+/* Placeholder only. Replaced wholesale by a real renderer at integration. */
+
+.shell-skeleton-paper {
+  width: min(780px, 100%);
+  margin: 0 24px;
+  padding: 64px 72px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--shell-paper);
+  border: 1px solid var(--shell-line);
+  box-shadow: 0 1px 3px #2536430f;
+}
+
+.shell-skeleton-line {
+  display: block;
+  height: 10px;
+  width: 100%;
+  border-radius: 3px;
+  background: #eceef0;
+}
+
+.shell-skeleton-line--eyebrow {
+  width: 28%;
+  height: 7px;
+  margin-bottom: 18px;
+}
+
+.shell-skeleton-line--title {
+  width: 52%;
+  height: 20px;
+  margin-bottom: 14px;
+  background: #e2e5e9;
+}
+
+.shell-skeleton-line--heading {
+  width: 34%;
+  height: 13px;
+  margin: 22px 0 6px;
+  background: #e2e5e9;
+}
+
+.shell-skeleton-block {
+  height: 140px;
+  margin-top: 24px;
+  border-radius: 4px;
+  background: #f0f2f4;
+  border: 1px solid var(--shell-line);
+}
+
+.shell-skeleton-block--slide {
+  height: 200px;
+  margin-top: 28px;
+}
+
+.shell-skeleton-grid {
+  display: grid;
+  grid-template-columns: 44px repeat(7, minmax(96px, 1fr));
+  grid-auto-rows: 26px;
+  background: var(--shell-paper);
+}
+
+.shell-skeleton-cell {
+  border-right: 1px solid #edeff1;
+  border-bottom: 1px solid #edeff1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-xs);
+}
+
+.shell-skeleton-cell--head {
+  background: var(--shell-sunken);
+  color: var(--shell-ink-subtle);
+}
+
+.shell-skeleton-filmstrip {
+  flex: none;
+  width: 168px;
+  padding: 20px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+  background: var(--shell-paper);
+  border-right: 1px solid var(--shell-line);
+}
+
+.shell-skeleton-thumb {
+  display: block;
+  aspect-ratio: 16 / 9;
+  border-radius: 3px;
+  background: #f1f3f5;
+  border: 1px solid var(--shell-line);
+}
+
+.shell-skeleton-thumb--current {
+  border-color: var(--shell-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--shell-accent) 28%, transparent);
+}
+
+.shell-skeleton-stage {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 36px;
+}
+
+.shell-skeleton-slide {
+  width: min(880px, 100%);
+  aspect-ratio: 16 / 9;
+  padding: 64px 72px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--shell-paper);
+  border: 1px solid var(--shell-line);
+  box-shadow: 0 1px 3px #2536430f;
+}

@@ -1,0 +1,121 @@
+/*
+ * Shell design tokens — the source of truth for the new IA's visual language.
+ *
+ * Values were read off the approved interaction prototype's *computed* styles
+ * rather than its stylesheets: the prototype stacks thirteen CSS layers where
+ * later layers silently win, so reading the sources yields rules that never
+ * apply (its Home layout in `workspace-mode.css`, for one, is fully overridden
+ * by `workspace-layout.css`).
+ *
+ * The bottom of this file bridges the `@vo-ui` component library's `--od-*`
+ * tokens *inside the shell subtree only*. That library is shared with the old
+ * renderer, so its own `src/renderer/ui/styles/tokens.css` must stay untouched.
+ */
+
+#shell {
+  /* ---- Surfaces ------------------------------------------------------- */
+  --shell-chrome: #f5f6f8; /* window bar + sidebar */
+  --shell-canvas: #fafafa; /* the workspace behind the document */
+  --shell-paper: #ffffff; /* ribbon, cards, popovers, active tab */
+  --shell-sunken: #f9f9f9; /* editor scroll surface + status bar */
+
+  /* ---- Lines ---------------------------------------------------------- */
+  --shell-line: #e4e6e9; /* sidebar edge, card borders */
+  --shell-line-soft: #e8e9eb; /* ribbon internal dividers */
+  --shell-line-strong: #d9dfe4; /* composer border */
+
+  /* ---- Ink ------------------------------------------------------------ */
+  --shell-ink: #41464b; /* primary text, primary button fill */
+  --shell-ink-title: #343a40; /* composer + panel copy */
+  --shell-ink-muted: #596773; /* sidebar items, secondary text */
+  --shell-ink-subtle: #7e8285; /* status bar, captions */
+  --shell-ink-faint: #8b8e90; /* inactive ribbon tabs, placeholders */
+  --shell-ink-inverse: #ffffff;
+
+  /* ---- Interaction ---------------------------------------------------- */
+  --shell-hover: #e9edf0;
+  --shell-active: #e4e9ec;
+  --shell-focus: #7895ae;
+
+  /* ---- Radii ---------------------------------------------------------- */
+  --shell-radius-item: 6px; /* sidebar rows, ribbon buttons */
+  --shell-radius-control: 5px; /* small buttons, tabs */
+  --shell-radius-card: 10px; /* menus, cards */
+  --shell-radius-composer: 14px;
+  --shell-radius-panel: 20px; /* floating agent panel */
+
+  /* ---- Elevation ------------------------------------------------------ */
+  --shell-shadow-menu: 0 8px 28px #222b3520;
+  --shell-shadow-panel: 0 12px 32px #24333f18, 0 2px 5px #24333f08;
+
+  /* ---- Metrics -------------------------------------------------------- */
+  --shell-windowbar-h: 40px;
+  --shell-tabs-h: 40px;
+  --shell-tab-h: 34px;
+  --shell-ribbon-h: 112px;
+  --shell-statusbar-h: 32px;
+  --shell-row-h: 36px; /* sidebar row + collapsed rail button */
+  --shell-rail-w: 52px; /* collapsed sidebar */
+  --shell-nav-w: 220px; /* expanded sidebar, clamped 160–300 */
+  --shell-task-w: 340px; /* docked agent column, clamped 320–660 */
+
+  /* ---- Type ----------------------------------------------------------- */
+  --shell-font: "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Microsoft YaHei", sans-serif;
+  --shell-text: 12px;
+  --shell-text-lg: 14px;
+  --shell-text-sm: 11px;
+  --shell-text-xs: 10px;
+
+  /* ---- Motion --------------------------------------------------------- */
+  /* Decision 4: mode changes are a column-width transition, nothing more.
+     The prototype's snapshot-and-flip animation is deliberately not ported. */
+  --shell-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --shell-duration: 200ms;
+
+  /* ---- Document identity ---------------------------------------------- */
+  /* One accent + one titlebar tint per file type. Editor mode wears them;
+     Agent mode keeps a single neutral titlebar (see app.css). */
+  --shell-doc-accent: #596f86;
+  --shell-doc-tint: #e6ecf1;
+  --shell-sheet-accent: #5c7565;
+  --shell-sheet-tint: #e7ede8;
+  --shell-slides-accent: #926b67;
+  --shell-slides-tint: #f0e5e2;
+
+  /* Resolved per open file by theme/fileTypeAccent.ts. */
+  --shell-accent: var(--shell-doc-accent);
+  --shell-tint: var(--shell-doc-tint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #shell {
+    --shell-duration: 1ms;
+  }
+}
+
+/*
+ * Bridge: make the shared @vo-ui primitives (Button, Select, Modal, Popover,
+ * Table, Tooltip, Form…) adopt the shell's language without editing the
+ * library. Scoped to #shell so the old renderer is byte-for-byte unaffected.
+ */
+#shell {
+  --od-ink: var(--shell-ink);
+  --od-ink-medium: var(--shell-ink-muted);
+  --od-ink-secondary: var(--shell-ink-subtle);
+  --od-ink-disabled: #41464b4d;
+  --od-guidance: var(--shell-accent);
+  --od-surface: var(--shell-paper);
+  --od-surface-subtle: var(--shell-sunken);
+  --od-surface-muted: var(--shell-chrome);
+  --od-border-subtle: var(--shell-line);
+  --od-border-hover: var(--shell-line-strong);
+  --od-button-primary-bg: var(--shell-ink);
+  --od-button-primary-ink: var(--shell-ink-inverse);
+  --od-radius-control: var(--shell-radius-control);
+  --od-radius-popover: var(--shell-radius-item);
+  --od-radius-dialog: var(--shell-radius-card);
+  --od-control-md: var(--shell-row-h);
+  --od-shadow-floating: var(--shell-shadow-panel);
+  --od-font-ui: var(--shell-font);
+}

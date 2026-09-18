@@ -1,0 +1,197 @@
+/* Home screens: the comfortable density of the file library. */
+
+.shell-home {
+  padding: 40px 48px 56px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.shell-home-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.shell-home-head h1 {
+  margin: 0;
+  color: var(--shell-ink);
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: -0.3px;
+}
+
+.shell-home-lede {
+  flex: 1 1 100%;
+  margin: 8px 0 0;
+  color: var(--shell-ink-subtle);
+  font-size: var(--shell-text);
+  line-height: 20px;
+}
+
+.shell-home-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shell-home-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 28px;
+}
+
+.shell-home-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--shell-line);
+  border-radius: var(--shell-radius-item);
+  background: var(--shell-paper);
+  color: var(--shell-ink-muted);
+  font: var(--shell-text) / 20px var(--shell-font);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.shell-home-new:hover {
+  border-color: var(--shell-line-strong);
+  color: var(--shell-ink);
+}
+
+.shell-home-new:focus-visible {
+  outline: 2px solid var(--shell-focus);
+  outline-offset: 1px;
+}
+
+.shell-home-new--ghost {
+  background: transparent;
+  border-style: dashed;
+}
+
+.shell-home-list {
+  max-width: 1080px;
+}
+
+/* ------------------------------------------------------- agent hero */
+
+.shell-home--agent {
+  padding-top: 56px;
+}
+
+.shell-hero {
+  max-width: 720px;
+  margin: 0 auto 44px;
+  text-align: center;
+}
+
+.shell-hero h1 {
+  margin: 0;
+  color: var(--shell-ink);
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -0.4px;
+}
+
+.shell-hero-lede {
+  margin: 10px 0 26px;
+  color: var(--shell-ink-subtle);
+  font-size: var(--shell-text-lg);
+  line-height: 22px;
+}
+
+.shell-hero-composer {
+  text-align: left;
+}
+
+.shell-hero-prompts {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.shell-hero-prompt {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--shell-line);
+  border-radius: var(--shell-radius-item);
+  background: var(--shell-paper);
+  color: var(--shell-ink-muted);
+  font: var(--shell-text) / 20px var(--shell-font);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.shell-hero-prompt:hover {
+  border-color: var(--shell-line-strong);
+  color: var(--shell-ink);
+}
+
+.shell-hero-prompt:focus-visible,
+.shell-resume-card:focus-visible {
+  outline: 2px solid var(--shell-focus);
+  outline-offset: 1px;
+}
+
+.shell-hero-resume {
+  max-width: 1080px;
+  margin-bottom: 34px;
+}
+
+.shell-hero-resume h2,
+.shell-home-subhead {
+  margin: 0 0 12px;
+  color: var(--shell-ink-subtle);
+  font-size: var(--shell-text);
+  font-weight: 500;
+}
+
+.shell-resume-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--shell-line);
+  border-radius: var(--shell-radius-card);
+  background: var(--shell-paper);
+  color: var(--shell-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.shell-resume-card:hover {
+  border-color: var(--shell-line-strong);
+}
+
+.shell-resume-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.shell-resume-title strong {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--shell-text);
+  font-weight: 500;
+}
+
+.shell-resume-title small {
+  display: block;
+  margin-top: 3px;
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-sm);
+}
