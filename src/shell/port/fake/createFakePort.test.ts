@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { AgentEvent, AgentTask, UiPort } from "../../../shared/uiPort";
 import { createFakePort } from "./createFakePort";
+import { describeUiPortContract } from "../../../services/test/uiPortContract";
 import { SEED_FOLDER_ID } from "./seed";
 
 /** Runs every queued fake timer until the agent script is exhausted. */
@@ -10,6 +11,10 @@ async function drain() {
     await vi.advanceTimersByTimeAsync(1500);
   }
 }
+
+// The same suite the desktop services run. One contract, two implementations:
+// a difference between them is a defect, not a note for a document.
+describeUiPortContract("in-memory fake", () => createFakePort());
 
 describe("createFakePort", () => {
   it("satisfies UiPort and boots the prototype's workspace", async () => {
