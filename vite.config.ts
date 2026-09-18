@@ -131,6 +131,16 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
+    rollupOptions: {
+      // Two entries while the new IA is built alongside the old one. Vite's dev
+      // server serves any HTML it finds, so shell.html worked in `npm run dev`
+      // without this — but a production build only packages what is listed
+      // here, which is why it was missing from every packaged app until now.
+      input: {
+        main: path.resolve(__dirname, "index.html"),
+        shell: path.resolve(__dirname, "shell.html"),
+      },
+    },
   },
   test: {
     environment: "jsdom",

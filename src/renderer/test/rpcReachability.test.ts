@@ -21,7 +21,12 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const RENDERER_ROOT = "src/renderer";
+/**
+ * Where a call site can live. The renderer is the old UI; services is the layer
+ * that implements UiPort for the new one. Scanning only the first would report
+ * every RPC the new services consume as unreachable.
+ */
+const CALL_SITE_ROOTS = ["src/renderer", "src/services"];
 
 /**
  * Methods with no renderer call site today, and what was found when each was
@@ -88,26 +93,11 @@ const UNWIRED: Record<string, string> = {
  * an exception at all.
  */
 const PENDING_CONSUMER: Record<string, string> = {
-  // S1 exposed the document projection; S2's src/services/files.ts is what
-  // reads it. See docs/uiport-scope.md.
-  listDocuments: "S2 · services/files.ts implements UiPort.files.list on it",
-  getDocument: "S2 · services/files.ts",
+  // What S2's services do not consume yet. The rest of the projection is read
+  // by the agent service, which S4 builds.
   listDocumentRuns: "S2 · services/files.ts",
   listDocumentActivities: "S2 · services/agent.ts reads the activity stream",
-  setDocumentPinned: "S2 · services/files.ts implements UiPort.files.setPinned",
-
-  // S1-3 added the folder view the new IA needs; services/folders.ts is its
-  // only intended caller.
-  listFolders: "S2 · services/folders.ts implements UiPort.folders.list",
-  createFolder: "S2 · services/folders.ts",
-  renameFolder: "S2 · services/folders.ts",
-  removeFolder: "S2 · services/folders.ts",
   folderPath: "S2 · services/files.ts resolves move targets with it",
-
-  // S1-4 added the file operations; services/files.ts is their only caller.
-  renameDocument: "S2 · services/files.ts implements UiPort.files.rename",
-  moveDocument: "S2 · services/files.ts implements UiPort.files.move",
-  duplicateDocument: "S2 · services/files.ts implements UiPort.files.duplicate",
 };
 
 /**
@@ -183,10 +173,14 @@ describe("DesktopAPI reachability", () => {
     ...interfaceMembers(verticals, "DesktopVerticalAPI"),
   ];
 
-  // The renderer minus the transports: bridge/ implements every method by
-  // definition, so counting it as a call site would make this test vacuous.
-  const callSites = sourceFiles(RENDERER_ROOT)
-    .filter((path) => !path.startsWith(join(RENDERER_ROOT, "bridge")))
+  // Minus the transports: bridge/ implements every method by definition, so
+  // counting it as a call site would make this test vacuous. Test helpers are
+  // excluded for the same reason — services/test/fakeDesktopApi.ts implements
+  // the interface too.
+  const callSites = CALL_SITE_ROOTS
+    .flatMap((root) => sourceFiles(root))
+    .filter((path) => !path.includes(join("renderer", "bridge")))
+    .filter((path) => !path.includes(join("services", "test")))
     .map((path) => readFileSync(path, "utf8"))
     .join("\n");
 
