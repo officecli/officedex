@@ -3,6 +3,7 @@ import { Check, Maximize2, MoreHorizontal, Share2, X } from "lucide-react";
 import { usePort } from "../port/PortContext";
 import type { FileMeta } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
+import { notBuiltYet } from "../port/reportPortFailure";
 import { FileTypeIcon } from "./FileTypeIcon";
 
 const stripExtension = (name: string) => name.replace(/\.(docx|xlsx|pptx)$/i, "");
@@ -73,16 +74,37 @@ export function FileTabs() {
           {dirty ? "Unsaved" : "Saved"}
         </button>
 
-        <button type="button" className="shell-share" title="Share">
+        <button
+          type="button"
+          className="shell-share"
+          title="Share"
+          onClick={() =>
+            notBuiltYet("share", "Sharing a file from OfficeDex is not built yet. The file is on this computer — send it however you normally would.")
+          }
+        >
           <Share2 size={14} strokeWidth={1.7} aria-hidden="true" />
           Share
         </button>
 
         <div className="shell-tabs-icons">
-          <button type="button" className="shell-icon-button" aria-label="Full screen" title="Full screen">
+          {/* Full screen has a port method; this is the second control for it,
+              alongside the one in the window bar. */}
+          <button
+            type="button"
+            className="shell-icon-button"
+            aria-label="Full screen"
+            title="Full screen"
+            onClick={() => port.window.toggleFullscreen()}
+          >
             <Maximize2 size={16} strokeWidth={1.6} aria-hidden="true" />
           </button>
-          <button type="button" className="shell-icon-button" aria-label="More actions" title="More">
+          <button
+            type="button"
+            className="shell-icon-button"
+            aria-label="More actions"
+            title="More"
+            onClick={() => notBuiltYet("file-more-actions", "This menu has no actions in it yet.")}
+          >
             <MoreHorizontal size={16} strokeWidth={1.6} aria-hidden="true" />
           </button>
         </div>

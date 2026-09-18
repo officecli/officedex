@@ -117,6 +117,12 @@ export function createRealE2EAPI(endpoint: string): DesktopAPI {
     moveDocument: (documentId: string, folderId: string) =>
       rpc<DocumentRecord>("MoveDocument", { documentId, folderId }),
     duplicateDocument: (documentId: string) => rpc<DocumentRecord>("DuplicateDocument", documentId),
+    // A cancelled picker comes back as a zero record; null is what the interface
+    // promises for it.
+    openLocalFile: async () => {
+      const record = await rpc<DocumentRecord>("OpenLocalFile");
+      return record && record.id ? record : null;
+    },
     modify: (input: ModifyInput) =>
       rpc<{ taskId: string; sessionId: string; status: string }>("Modify", input),
     artifactStageEdit: (input: ArtifactStageRuntimeInput) =>

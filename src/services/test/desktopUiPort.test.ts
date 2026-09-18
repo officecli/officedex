@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createDesktopUiPort } from "../createDesktopUiPort";
 import { createFakeDesktopApi } from "./fakeDesktopApi";
 import { describeUiPortContract } from "./uiPortContract";
+import { NotImplementedError } from "../../shared/notImplemented";
 import type { WindowControls } from "../window";
 
 function stubWindow(): WindowControls {
@@ -14,22 +15,32 @@ function stubWindow(): WindowControls {
   };
 }
 
+/**
+ * The api behind the port `createPort` built last.
+ *
+ * The contract suite hands its arrange hooks a `UiPort`, which is all the UI
+ * ever sees — but arming the file picker is a thing done to the desktop behind
+ * it. The two are created together just below, so the most recent one is the
+ * right one.
+ */
+let lastApi: ReturnType<typeof createFakeDesktopApi>;
+
 function createPort() {
-  return createDesktopUiPort({
-    api: createFakeDesktopApi({
-      folders: [{ id: "folder-research", name: "Research", path: "/tmp/officedex/Research" }],
-      documents: [
-        { fileName: "launch deck.pptx", documentType: "pptx", lastOpenedAt: "2026-09-10T09:00:00Z" },
-        { fileName: "interviews.docx", documentType: "docx", workspaceId: "folder-research" },
-        { fileName: "budget.xlsx", documentType: "xlsx", pinned: true },
-      ],
-    }),
-    window: stubWindow(),
+  lastApi = createFakeDesktopApi({
+    folders: [{ id: "folder-research", name: "Research", path: "/tmp/officedex/Research" }],
+    documents: [
+      { fileName: "launch deck.pptx", documentType: "pptx", lastOpenedAt: "2026-09-10T09:00:00Z" },
+      { fileName: "interviews.docx", documentType: "docx", workspaceId: "folder-research" },
+      { fileName: "budget.xlsx", documentType: "xlsx", pinned: true },
+    ],
   });
+  return createDesktopUiPort({ api: lastApi, window: stubWindow() });
 }
 
 // The same suite the in-memory fake runs. One contract, two implementations.
-describeUiPortContract("desktop services", createPort);
+describeUiPortContract("desktop services", createPort, {
+  armFilePicker: () => lastApi.pickLocalFile("/Users/flora/Desktop/from-disk.docx"),
+});
 
 describe("desktop file service", () => {
   beforeEach(() => {
@@ -107,8 +118,41 @@ describe("desktop file service", () => {
     expect((await port.files.list())[0].dirty).toBe(false);
   });
 
-  it("refuses to create a document, naming the reason", async () => {
-    await expect(createPort().files.create("doc", "folder:default")).rejects.toThrow(/not implemented/i);
+  // Cancelling a picker is an ordinary thing to do, and the two outcomes have to
+  // stay distinguishable: null means "changed my mind", not "it did not work".
+  it("reports a cancelled picker as null, not an error", async () => {
+    const api = createFakeDesktopApi();
+    const port = createDesktopUiPort({ api, window: stubWindow() });
+    const before = (await port.files.list()).length;
+
+    await expect(port.files.openFromDisk()).resolves.toBeNull();
+    expect(await port.files.list()).toHaveLength(before);
+  });
+
+  // One path, one file. Opening the same document twice — or opening one the
+  // agent generated earlier — must land on the entry that already exists rather
+  // than show the user two rows for one file. The Go side guarantees this
+  // (app_local_files_test.go); the fake mirrors it so the mapping is tested too.
+  it("returns the existing file when the same one is opened twice", async () => {
+    const api = createFakeDesktopApi({ documents: [{ fileName: "deck.pptx", documentType: "pptx" }] });
+    const port = createDesktopUiPort({ api, window: stubWindow() });
+    const existing = (await port.files.list())[0];
+
+    api.pickLocalFile("/tmp/officedex/deck.pptx");
+    const opened = await port.files.openFromDisk();
+
+    expect(opened?.id).toBe(existing.id);
+    expect(await port.files.list()).toHaveLength(1);
+  });
+
+  // The UI keeps the New-document menu item; pressing it has to say why nothing
+  // happened. The shell branches on the error type, not on its wording, so that
+  // is what this asserts.
+  it("refuses to create a document as a named gap, not a failure", async () => {
+    await expect(createPort().files.create("doc", "folder:default")).rejects.toThrow(NotImplementedError);
+    await createPort().files.create("doc", "folder:default").catch((reason) => {
+      expect((reason as NotImplementedError).feature).toBe("files.create");
+    });
   });
 });
 
@@ -338,17 +382,7 @@ describe("desktop agent service", () => {
   });
 
   // Holding a run at a page boundary only exists for presentations. Saying so
-  // beats a button that silently does nothing.
-  it("refuses to pause a run that is not a presentation", async () => {
-    const { api, port } = agentPort();
-    api.emitBridgeEvent({
-      event_id: "task-doc-start", task_id: "task-doc", type: "task.started",
-      ts: "2026-09-18T10:00:00Z", payload: { document_type: "docx" },
-    });
-
-    await expect(port.agent.pause()).rejects.toThrow(/presentation/i);
-  });
-
+  // beats a button that silently does nothing. Asserted as a gap below.
   it("pauses and resumes a presentation", async () => {
     const { api, port } = agentPort();
     api.emitBridgeEvent(started("task-deck"));
@@ -357,13 +391,70 @@ describe("desktop agent service", () => {
     await expect(port.agent.resume()).resolves.toBeUndefined();
   });
 
-  // The apply/undo model has no desktop counterpart at all.
-  it("has no suggestion, and says so when asked to apply one", async () => {
+  // The apply/undo model has no desktop counterpart at all. The card stays in
+  // the UI and both buttons report the gap rather than vanishing.
+  it("has no suggestion, and names the gap when asked to apply one", async () => {
     const { api, port } = agentPort();
     api.emitBridgeEvent(started("task-1"));
 
     expect((await port.agent.current("folder:default"))?.suggestion).toBeNull();
-    await expect(port.agent.applySuggestion("any")).rejects.toThrow(/no desktop equivalent/i);
-    await expect(port.agent.undoSuggestion("any")).rejects.toThrow(/no desktop equivalent/i);
+    await expect(port.agent.applySuggestion("any")).rejects.toThrow(NotImplementedError);
+    await expect(port.agent.undoSuggestion("any")).rejects.toThrow(NotImplementedError);
+  });
+
+  // Pausing exists for presentations only. Same rule: a named gap, so the
+  // control can say so instead of failing like a bug.
+  it("reports pausing a non-presentation as a gap", async () => {
+    const { api, port } = agentPort();
+    api.emitBridgeEvent({
+      event_id: "task-doc-start", task_id: "task-doc", type: "task.started",
+      ts: "2026-09-18T10:00:00Z", payload: { document_type: "docx" },
+    });
+
+    await expect(port.agent.pause()).rejects.toThrow(NotImplementedError);
+    await expect(port.agent.pause()).rejects.toThrow(/presentation/i);
+  });
+
+  // The composer gathers mentions and attachments and the generate path takes
+  // neither. The run still goes ahead; what was dropped is said out loud.
+  it("sends without the parts it cannot carry, and says which", async () => {
+    const { api, port } = agentPort();
+    const notices: string[] = [];
+    port.agent.subscribe((event) => {
+      if (event.kind === "notice") notices.push(event.message);
+    });
+
+    await port.agent.send({
+      text: "Summarise this",
+      folderId: "folder:default",
+      mentions: [{ kind: "file", id: "f1", label: "notes.docx" }],
+      attachments: [{ id: "a1", name: "chart.png", size: 1024 }],
+      modelId: "official",
+      permission: "review",
+      activeFileId: null,
+    });
+
+    // The run happened.
+    expect(api.calls).toHaveLength(1);
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatch(/mentions/);
+    expect(notices[0]).toMatch(/attachments/);
+  });
+
+  it("says nothing when there was nothing to drop", async () => {
+    const { port } = agentPort();
+    const notices: string[] = [];
+    port.agent.subscribe((event) => {
+      if (event.kind === "notice") notices.push(event.message);
+    });
+
+    await port.agent.send({
+      text: "Summarise this",
+      folderId: "folder:default",
+      mentions: [], attachments: [], modelId: "official", permission: "review",
+      activeFileId: null,
+    });
+
+    expect(notices).toEqual([]);
   });
 });

@@ -6,6 +6,7 @@ import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import { Menu } from "../chrome/Menu";
 import type { Attachment, Mention, PermissionMode, SendInput } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
+import { notBuiltYet } from "../port/reportPortFailure";
 import { MentionMenu, type MentionOption } from "./MentionMenu";
 import { ModelMenu } from "./ModelMenu";
 import { useComposerSettings } from "./useComposerSettings";
@@ -350,7 +351,13 @@ export function Composer({ placement, busy = false, onSend, onStop }: ComposerPr
             onModelsChanged={settings.reloadModels}
           />
 
-          <button type="button" className="shell-cx-button shell-cx-mic" aria-label="Dictate" title="Dictate">
+          <button
+            type="button"
+            className="shell-cx-button shell-cx-mic"
+            aria-label="Dictate"
+            title="Dictate"
+            onClick={() => notBuiltYet("dictate", "Dictation is not built yet. Type your instruction for now.")}
+          >
             <Mic size={16} strokeWidth={1.7} aria-hidden="true" />
           </button>
 

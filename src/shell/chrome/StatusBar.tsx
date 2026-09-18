@@ -2,6 +2,7 @@ import { HardDrive, Minus, Plus } from "lucide-react";
 
 import type { FileMeta } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
+import { notBuiltYet } from "../port/reportPortFailure";
 
 /** Per-format facts on the left, device and zoom on the right. */
 function detailFor(file: FileMeta): string[] {
@@ -30,11 +31,25 @@ export function StatusBar() {
         </span>
         <span>{activeFile?.dirty ? "Unsaved changes" : "All changes saved"}</span>
         <span className="shell-zoom">
-          <button type="button" className="shell-icon-button" aria-label="Zoom out" title="Zoom out">
+          {/* Zoom belongs to whichever canvas is mounted, and the canvas
+              contract has no method for it. Both controls say so. */}
+          <button
+            type="button"
+            className="shell-icon-button"
+            aria-label="Zoom out"
+            title="Zoom out"
+            onClick={() => notBuiltYet("zoom", "Zoom is not wired to the editors yet. Use the editor's own zoom for now.")}
+          >
             <Minus size={13} strokeWidth={1.8} aria-hidden="true" />
           </button>
           <span className="shell-zoom-value">100%</span>
-          <button type="button" className="shell-icon-button" aria-label="Zoom in" title="Zoom in">
+          <button
+            type="button"
+            className="shell-icon-button"
+            aria-label="Zoom in"
+            title="Zoom in"
+            onClick={() => notBuiltYet("zoom", "Zoom is not wired to the editors yet. Use the editor's own zoom for now.")}
+          >
             <Plus size={13} strokeWidth={1.8} aria-hidden="true" />
           </button>
         </span>

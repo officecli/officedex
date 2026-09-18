@@ -3,6 +3,7 @@ import { ChevronDown, MessageSquare, Pencil, type LucideIcon } from "lucide-reac
 import { useState } from "react";
 
 import type { FileType } from "../../shared/uiPort";
+import { notBuiltYet } from "../port/reportPortFailure";
 import { ribbonTabs, STYLE_TILES, type RibbonTool } from "./ribbonSpec";
 import "./ribbon.css";
 
@@ -61,11 +62,19 @@ export function Ribbon({ type }: RibbonProps) {
         {/* Pinned: the document-level actions must not be pushed out by a long
             tab set on a narrow workspace. */}
         <div className="shell-ribbon-tabs-end">
-          <button type="button" className="shell-ribbon-meta">
+          <button
+            type="button"
+            className="shell-ribbon-meta"
+            onClick={() => notBuiltYet("comments", "Comments are not built yet.")}
+          >
             <MessageSquare size={14} strokeWidth={1.7} aria-hidden="true" />
             <span>Comments</span>
           </button>
-          <button type="button" className="shell-ribbon-meta">
+          <button
+            type="button"
+            className="shell-ribbon-meta"
+            onClick={() => notBuiltYet("editing-mode", "Switching between editing, reviewing and viewing is not built yet.")}
+          >
             <Pencil size={14} strokeWidth={1.7} aria-hidden="true" />
             <span>Editing</span>
             <ChevronDown size={12} strokeWidth={1.8} aria-hidden="true" />
@@ -121,6 +130,7 @@ function Tool({ tool }: { tool: RibbonTool }) {
             type="button"
             className={`shell-ribbon-tile${index === 0 ? " is-active" : ""}`}
             data-tile={tile}
+            onClick={() => toolNotBuilt(tile)}
           >
             {tile}
           </button>
@@ -131,7 +141,12 @@ function Tool({ tool }: { tool: RibbonTool }) {
 
   if (tool.kind === "big") {
     return (
-      <button type="button" className="shell-ribbon-button is-big" title={tool.label}>
+      <button
+        type="button"
+        className="shell-ribbon-button is-big"
+        title={tool.label}
+        onClick={() => toolNotBuilt(tool.label ?? tool.id.replace(/-/g, " "))}
+      >
         <Glyph size={22} strokeWidth={1.6} aria-hidden="true" />
         <span>{tool.label}</span>
       </button>
@@ -146,9 +161,25 @@ function Tool({ tool }: { tool: RibbonTool }) {
       aria-label={tool.label ? undefined : label}
       aria-pressed={tool.kind === "toggle" ? Boolean(tool.pressed) : undefined}
       title={label}
+      onClick={() => toolNotBuilt(label)}
     >
       <Glyph size={17} strokeWidth={1.7} aria-hidden="true" />
       {tool.kind === "label" && tool.label ? <span>{tool.label}</span> : null}
     </button>
   );
+}
+
+/**
+ * Every tool in this ribbon is drawn, none is connected.
+ *
+ * Formatting belongs to whichever editor is mounted in the canvas, and
+ * `canvasContract.ts` has no method for applying a format — it mounts, shows,
+ * hides and reports selection. So the ribbon is a complete picture of the
+ * toolbar with nothing behind it, and one shared notice covers all of it.
+ *
+ * Keyed on the group, not the tool: clicking six buttons in a row should leave
+ * one notice on screen, not six.
+ */
+function toolNotBuilt(label: string): void {
+  notBuiltYet("ribbon-tools", `“${label}” is not connected to the editor yet. Use the editor's own controls for now.`);
 }

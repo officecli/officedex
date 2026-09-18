@@ -1291,6 +1291,16 @@ export interface DesktopAPI extends DesktopVerticalAPI {
   /** The copy is a document of its own, with a new id. */
   duplicateDocument(documentId: string): Promise<DocumentRecord>;
 
+  /**
+   * Shows the native picker and registers what comes back as a document.
+   *
+   * Resolves to null when the user cancels — an ordinary thing to do, not an
+   * error. The file is neither copied nor moved: the document points at wherever
+   * the user keeps it, so it arrives with no folder and surfaces in the default
+   * one. Opening the same file twice returns the document that already exists.
+   */
+  openLocalFile(): Promise<DocumentRecord | null>;
+
   getPptxTaskStatus?: (taskId: string) => Promise<PptxTaskStatus>;
   skipPptxResearch?: (taskId: string) => Promise<void>;
   /**

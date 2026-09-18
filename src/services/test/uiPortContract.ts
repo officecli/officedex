@@ -22,7 +22,23 @@ import type { UiPort } from "../../shared/uiPort";
  *   - Models. The fake keeps a list; the desktop stores one provider, so
  *     "add two" means something different on each. Stated in services/models.ts.
  */
-export function describeUiPortContract(name: string, createPort: () => Promise<UiPort> | UiPort): void {
+export interface UiPortContractOptions {
+  /**
+   * Puts a file in the system picker before `openFromDisk` is called.
+   *
+   * The one place the two implementations cannot share a driver: the fake has no
+   * picker and invents a file, while the desktop service asks one that a test has
+   * to arm first. The arrange step differs; everything asserted afterwards is the
+   * same contract, which is the part worth sharing.
+   */
+  armFilePicker?: (port: UiPort) => void;
+}
+
+export function describeUiPortContract(
+  name: string,
+  createPort: () => Promise<UiPort> | UiPort,
+  options: UiPortContractOptions = {},
+): void {
   const port = async () => createPort();
 
   describe(`UiPort contract · ${name}`, () => {
@@ -155,6 +171,26 @@ export function describeUiPortContract(name: string, createPort: () => Promise<U
       const after = await subject.files.list();
       expect(after).toHaveLength(before + 1);
       expect(after.some((entry) => entry.id === copy.id)).toBe(true);
+    });
+
+    // An imported file is not inside any of the app's directories, so it must
+    // not claim to be: it lands in the default folder, which is where "filed
+    // nowhere" goes. Everything else about it is an ordinary file.
+    it("adds a file from disk to the default folder", async () => {
+      const subject = await port();
+      const before = await subject.files.list();
+      options.armFilePicker?.(subject);
+
+      const imported = await subject.files.openFromDisk();
+
+      expect(imported, "the picker was armed, so something should have come back").not.toBeNull();
+      const fallback = (await subject.folders.list()).find((folder) => folder.isDefault)!;
+      expect(imported!.folderId).toBe(fallback.id);
+      expect(imported!.pinned).toBe(false);
+
+      const after = await subject.files.list();
+      expect(after).toHaveLength(before.length + 1);
+      expect(after.some((entry) => entry.id === imported!.id)).toBe(true);
     });
 
     // A caller that mutates what it was handed must not change the port's

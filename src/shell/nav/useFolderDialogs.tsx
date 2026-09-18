@@ -45,8 +45,16 @@ export function useFolderDialogs(onDone: () => Promise<void> | void) {
 
   const confirm = async () => {
     if (!pending) return;
+    // Folder operations are real filesystem work, so they fail for real
+    // reasons — a name already taken, a directory that cannot be written.
+    // The modal has a place to say so; a toast behind a dialog does not.
     if (pending.kind === "remove") {
-      await port.folders.remove(pending.folder.id);
+      try {
+        await port.folders.remove(pending.folder.id);
+      } catch (reason) {
+        setError(reason instanceof Error ? reason.message : String(reason));
+        return;
+      }
       await onDone();
       close();
       return;
@@ -56,8 +64,13 @@ export function useFolderDialogs(onDone: () => Promise<void> | void) {
       setError("Enter a folder name.");
       return;
     }
-    if (pending.kind === "create") await port.folders.create(trimmed);
-    else await port.folders.rename(pending.folder.id, trimmed);
+    try {
+      if (pending.kind === "create") await port.folders.create(trimmed);
+      else await port.folders.rename(pending.folder.id, trimmed);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+      return;
+    }
     await onDone();
     close();
   };

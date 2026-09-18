@@ -71,7 +71,11 @@ export function EditorHome() {
             {type === "doc" ? "Blank document" : type === "sheet" ? "Blank workbook" : "Blank presentation"}
           </button>
         ))}
-        <button type="button" className="shell-home-new shell-home-new--ghost">
+        <button
+          type="button"
+          className="shell-home-new shell-home-new--ghost"
+          onClick={() => void actions.openFromDisk()}
+        >
           <FolderOpen size={15} strokeWidth={1.7} aria-hidden="true" />
           Open from this computer
         </button>

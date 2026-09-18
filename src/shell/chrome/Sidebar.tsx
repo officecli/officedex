@@ -2,6 +2,8 @@ import { Clock3, FolderOpen, House, Pin, Plus, Settings2 } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { useShell } from "../state/ShellContext";
+import { useLibraryActions } from "../nav/useLibraryActions";
+import { notBuiltYet } from "../port/reportPortFailure";
 import { ModeMenu } from "./ModeMenu";
 
 /**
@@ -14,6 +16,7 @@ import { ModeMenu } from "./ModeMenu";
  */
 export function Sidebar({ children }: { children?: ReactNode }) {
   const { state, dispatch } = useShell();
+  const actions = useLibraryActions();
   const agent = state.mode === "agent";
   const collapsed = state.navCollapsed;
 
@@ -41,15 +44,19 @@ export function Sidebar({ children }: { children?: ReactNode }) {
           />
         ) : (
           <>
+            {/* Home is where the three blank-document buttons are: "New" takes
+                you to the choice rather than guessing a type for you. */}
             <SidebarButton
               icon={<Plus size={18} strokeWidth={1.6} aria-hidden="true" />}
               label="New"
               collapsed={collapsed}
+              onClick={() => dispatch({ type: "go-home" })}
             />
             <SidebarButton
               icon={<FolderOpen size={18} strokeWidth={1.6} aria-hidden="true" />}
               label="Open"
               collapsed={collapsed}
+              onClick={() => void actions.openFromDisk()}
             />
           </>
         )}
@@ -83,13 +90,26 @@ export function Sidebar({ children }: { children?: ReactNode }) {
       ) : null}
 
       <div className="shell-sidebar-footer">
-        <button type="button" className="shell-profile" title="Flora · Personal workspace">
+        <button
+          type="button"
+          className="shell-profile"
+          title="Flora · Personal workspace"
+          onClick={() => notBuiltYet("account", "Accounts and workspaces are not built yet. This name is placeholder art.")}
+        >
           <span className="shell-avatar" aria-hidden="true">
             F
           </span>
           {collapsed ? null : <span>Flora</span>}
         </button>
-        <button type="button" className="shell-icon-button" aria-label="Settings" title="Settings">
+        <button
+          type="button"
+          className="shell-icon-button"
+          aria-label="Settings"
+          title="Settings"
+          onClick={() =>
+            notBuiltYet("settings-panel", "There is no settings panel yet. The model and permission controls live in the composer.")
+          }
+        >
           <Settings2 size={18} strokeWidth={1.6} aria-hidden="true" />
         </button>
       </div>
@@ -108,7 +128,16 @@ function SidebarButton({
   label: string;
   collapsed: boolean;
   current?: boolean;
-  onClick?: () => void;
+  /**
+   * Required, not optional.
+   *
+   * It used to be optional, and two of these — Editor mode's New and Open —
+   * simply omitted it and sat there doing nothing. The dead-control gate scans
+   * for `<button>` tags and could not see them, because the tag here has a
+   * handler; it was the *caller* that had none. Making this required moves the
+   * check to the compiler, which can see what a text scan cannot.
+   */
+  onClick: () => void;
 }) {
   return (
     <button

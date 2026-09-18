@@ -226,6 +226,12 @@ export function createWailsAPI(): DesktopAPI {
     renameDocument: (documentId: string, name: string) => WailsApp.RenameDocument(documentId, name),
     moveDocument: (documentId: string, folderId: string) => WailsApp.MoveDocument(documentId, folderId),
     duplicateDocument: (documentId: string) => WailsApp.DuplicateDocument(documentId),
+    // A cancelled picker comes back as a zero record; null is what the interface
+    // promises for it.
+    openLocalFile: async () => {
+      const record = await WailsApp.OpenLocalFile();
+      return record && record.id ? record : null;
+    },
     modify: async (input: ModifyInput) => {
       const result = await WailsApp.Modify(toWails(input));
       return { taskId: result.taskId, sessionId: result.sessionId, status: result.status };

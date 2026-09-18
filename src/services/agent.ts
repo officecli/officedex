@@ -1,5 +1,6 @@
 import type { BridgeEvent, DesktopAPI, DesktopTask, GenerateInput, TaskHistoryEntry } from "../shared/types";
 import type { AgentEvent, AgentMessage, AgentPort, AgentStatus, AgentStep, AgentTask, SendInput } from "../shared/uiPort";
+import { NotImplementedError } from "../shared/notImplemented";
 import { applyTaskEvent, attachTaskContext, createInitialTaskState, type TaskState } from "../renderer/taskState";
 import { taskTitle } from "../renderer/taskTitle";
 import { inferHomeTaskRoute } from "../renderer/homeIntake";
@@ -223,7 +224,13 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     async send(input: SendInput) {
       const text = input.text.trim();
       if (!text) return;
-      warnAboutUnsupported(input);
+      const dropped = unsupportedParts(input);
+      if (dropped.length > 0) {
+        emit({
+          kind: "notice",
+          message: `Sent without ${dropped.join(" or ")} — not supported yet.`,
+        });
+      }
 
       const settings = await api.getSettings();
       const workspaceId = input.folderId === DEFAULT_FOLDER_ID ? undefined : input.folderId;
@@ -270,7 +277,10 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       if (!api.pausePptx || task.documentType !== "pptx") {
         // Saying so beats a button that silently does nothing. Holding a run at
         // a boundary only exists for presentations today.
-        throw new Error("Pausing is only available while a presentation is being drawn.");
+        throw new NotImplementedError(
+          "agent.pause",
+          "Pausing only works while a presentation is being drawn. This run cannot be held.",
+        );
       }
       await api.pausePptx(task.id);
     },
@@ -279,7 +289,10 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       const task = activeTaskId ? state.tasks[activeTaskId] : undefined;
       if (!task) return;
       if (!api.resumePptxLive || task.documentType !== "pptx") {
-        throw new Error("Resuming is only available while a presentation is being drawn.");
+        throw new NotImplementedError(
+          "agent.resume",
+          "Resuming only works while a presentation is being drawn.",
+        );
       }
       await api.resumePptxLive(task.id);
     },
@@ -294,11 +307,17 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     },
 
     async applySuggestion(_id) {
-      throw new Error("Applying a suggested change has no desktop equivalent yet.");
+      throw new NotImplementedError(
+        "agent.applySuggestion",
+        "Reviewing a change before it lands is not built yet — the agent writes its changes straight to the file.",
+      );
     },
 
     async undoSuggestion(_id) {
-      throw new Error("Undoing a suggested change has no desktop equivalent yet.");
+      throw new NotImplementedError(
+        "agent.undoSuggestion",
+        "Undoing an agent change is not built yet. Nothing here records what the file looked like before.",
+      );
     },
   };
 }
@@ -306,17 +325,19 @@ export function createAgentService(api: DesktopAPI): AgentPort {
 /**
  * The parts of a submission the desktop cannot carry.
  *
- * Reported once per send and only when actually present, so a user who never
- * uses them never sees it, and one who does is not left wondering why their
- * attachment had no effect.
+ * The composer gathers all four and the generate path accepts none of them, so
+ * the run goes ahead without them. Reported as a notice rather than dropped
+ * quietly: an attachment that had no effect is indistinguishable from one that
+ * failed, and the user is the only one who can tell whether that mattered.
+ *
+ * Only what is actually present is named, so someone who never attaches a file
+ * never hears about attachments.
  */
-function warnAboutUnsupported(input: SendInput): void {
+function unsupportedParts(input: SendInput): string[] {
   const dropped: string[] = [];
   if (input.mentions.length > 0) dropped.push("mentions");
   // An attachment arrives as a name and a size; there is no path to hand on.
   if (input.attachments.length > 0) dropped.push("attachments");
   if (input.permission !== "review") dropped.push("permission mode");
-  if (dropped.length > 0) {
-    console.warn(`[agent] ignored, no desktop equivalent yet: ${dropped.join(", ")}`);
-  }
+  return dropped;
 }

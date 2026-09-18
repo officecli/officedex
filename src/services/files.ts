@@ -1,5 +1,6 @@
 import type { DesktopAPI, DocumentRecord, RecentFile } from "../shared/types";
 import type { FileMeta, FilePort, FileType } from "../shared/uiPort";
+import { NotImplementedError } from "../shared/notImplemented";
 
 /**
  * The id the desktop uses for the folder that work lands in when the user has
@@ -108,7 +109,22 @@ export function createFileService(api: DesktopAPI): FileService {
       // decision about when the file appears on disk — Office writes nothing
       // until the first save, and FileMeta.dirty can express exactly that.
       // See docs/uiport-scope.md.
-      throw new Error("Creating a document is not implemented yet.");
+      throw new NotImplementedError(
+        "files.create",
+        "Creating a blank document is not built yet. Ask the agent for one, or open a file you already have.",
+      );
+    },
+
+    async openFromDisk() {
+      const record = await api.openLocalFile();
+      // Cancelling a picker is an ordinary thing to do.
+      if (!record) return null;
+      const meta = toFileMeta(record, await lastOpenedByPath());
+      // The Go side only accepts docx/xlsx/pptx, so this cannot normally fire —
+      // it is here because returning null for "opened but unmappable" would be
+      // indistinguishable from "cancelled", and the file would just not appear.
+      if (!meta) throw new Error(`Unsupported document type: ${record.documentType}`);
+      return meta;
     },
 
     async open(id) {

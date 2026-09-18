@@ -117,6 +117,30 @@ export function createFakePort(options: FakePortOptions = {}): UiPort {
         files = [...files, file];
         return structuredClone(file);
       },
+      /**
+       * There is no system picker in a browser, so the fake stands in for one
+       * by producing a file that plausibly came from elsewhere on disk.
+       *
+       * It lands in the default folder, which is the part of this that the
+       * contract actually cares about: an imported file is not inside any of the
+       * app's directories, and the default folder is where "filed nowhere" goes.
+       */
+      async openFromDisk() {
+        const count = files.filter((entry) => entry.name.startsWith("From this computer")).length + 1;
+        const file: FileMeta = {
+          id: nextId("file"),
+          name: `From this computer ${count}.docx`,
+          type: "doc",
+          folderId: defaultFolderId(),
+          createdAt: now(),
+          updatedAt: now(),
+          lastOpenedAt: now(),
+          dirty: false,
+          pinned: false,
+        };
+        files = [...files, file];
+        return structuredClone(file);
+      },
       async open(id) {
         const file = find(id);
         file.lastOpenedAt = now();

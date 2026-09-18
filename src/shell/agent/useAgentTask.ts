@@ -5,11 +5,19 @@ import type { AgentTask } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
 import type { ComposerSubmission } from "../composer/Composer";
 import { useComposerSettings } from "../composer/useComposerSettings";
+import { attempt, reportPortFailure } from "../port/reportPortFailure";
+import { toast } from "../../renderer/ui";
 
 /**
  * The task for the folder currently in scope, kept live off the port's event
  * stream. One subscription serves every placement of the presence, because
  * there is only one conversation.
+ *
+ * Every callback here reports its own failures. Several of these controls have
+ * no implementation behind them yet — Apply, Undo, and Pause on anything but a
+ * presentation — and the rule is that the button stays where the UI layer put
+ * it and says so when pressed, rather than being hidden or quietly doing
+ * nothing.
  */
 export function useAgentTask() {
   const port = usePort();
@@ -20,8 +28,12 @@ export function useAgentTask() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const current = await port.agent.current(scopeFolderId);
-      if (!cancelled) setTask(current);
+      try {
+        const current = await port.agent.current(scopeFolderId);
+        if (!cancelled) setTask(current);
+      } catch (reason) {
+        if (!cancelled) reportPortFailure(reason);
+      }
     })();
     return () => {
       cancelled = true;
@@ -31,7 +43,16 @@ export function useAgentTask() {
   useEffect(
     () =>
       port.agent.subscribe((event) => {
-        if (event.kind !== "task") return;
+        // A run that failed, and a limitation the run ran into, are both things
+        // the user has to be told. This used to drop each on the floor.
+        if (event.kind === "error") {
+          toast.error({ content: "The run stopped", description: event.message });
+          return;
+        }
+        if (event.kind === "notice") {
+          toast.warning({ content: "Not built yet", description: event.message });
+          return;
+        }
         if (event.task.folderId !== scopeFolderId) return;
         setTask(event.task);
       }),
@@ -42,29 +63,30 @@ export function useAgentTask() {
 
   const send = useCallback(
     async (submission: ComposerSubmission) => {
-      await port.agent.send({
-        ...submission,
-        modelId: settings.value.selectedModelId,
-        permission: settings.value.permission,
-      });
+      await attempt(() =>
+        port.agent.send({
+          ...submission,
+          modelId: settings.value.selectedModelId,
+          permission: settings.value.permission,
+        }),
+      );
     },
     [port, settings.value.selectedModelId, settings.value.permission],
   );
 
   const applySuggestion = useCallback(
     async (id: string) => {
-      await port.agent.applySuggestion(id);
       // Applying marks the target file dirty, so the tab dot and status bar
-      // have to be re-read from the port rather than guessed at.
-      await reload();
+      // have to be re-read from the port rather than guessed at. Only worth
+      // doing if the call actually went through.
+      if (await attempt(() => port.agent.applySuggestion(id))) await reload();
     },
     [port, reload],
   );
 
   const undoSuggestion = useCallback(
     async (id: string) => {
-      await port.agent.undoSuggestion(id);
-      await reload();
+      if (await attempt(() => port.agent.undoSuggestion(id))) await reload();
     },
     [port, reload],
   );
@@ -75,9 +97,9 @@ export function useAgentTask() {
     send,
     applySuggestion,
     undoSuggestion,
-    pause: useCallback(() => port.agent.pause(), [port]),
-    resume: useCallback(() => port.agent.resume(), [port]),
-    finish: useCallback(() => port.agent.finish(), [port]),
-    stop: useCallback(() => port.agent.finish(), [port]),
+    pause: useCallback(async () => void (await attempt(() => port.agent.pause())), [port]),
+    resume: useCallback(async () => void (await attempt(() => port.agent.resume())), [port]),
+    finish: useCallback(async () => void (await attempt(() => port.agent.finish())), [port]),
+    stop: useCallback(async () => void (await attempt(() => port.agent.finish())), [port]),
   };
 }

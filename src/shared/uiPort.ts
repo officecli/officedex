@@ -67,6 +67,16 @@ export interface FolderPort {
 export interface FilePort {
   list(): Promise<FileMeta[]>;
   create(type: FileType, folderId: string): Promise<FileMeta>;
+  /**
+   * Adds a file the user already had, through the system picker.
+   *
+   * Resolves to null when they cancel — an ordinary thing to do, not an error.
+   * The file is neither copied nor moved: the library points at wherever they
+   * keep it, so it arrives in the default folder rather than claiming to be
+   * inside one of the app's directories. Opening the same file twice returns the
+   * entry that already exists.
+   */
+  openFromDisk(): Promise<FileMeta | null>;
   /** Records `lastOpenedAt`. The shell owns which tabs are open, not the port. */
   open(id: string): Promise<FileMeta>;
   move(id: string, folderId: string): Promise<void>;
@@ -139,7 +149,14 @@ export interface AgentTask {
 
 export type AgentEvent =
   | { kind: "task"; task: AgentTask }
-  | { kind: "error"; message: string };
+  | { kind: "error"; message: string }
+  /**
+   * A limitation worth saying out loud — not a failure. The run went ahead;
+   * part of what was asked for could not be carried. Sent when the composer
+   * gathers something the agent cannot use yet, so an attachment that had no
+   * effect does not look like one that silently failed.
+   */
+  | { kind: "notice"; message: string };
 
 export interface Mention {
   kind: "file" | "folder";

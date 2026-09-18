@@ -96,6 +96,7 @@ export function createBrowserPreviewAPI(): DesktopAPI {
     renameDocument: async () => { throw new Error("Renaming documents requires the desktop app."); },
     moveDocument: async () => { throw new Error("Moving documents requires the desktop app."); },
     duplicateDocument: async () => { throw new Error("Duplicating documents requires the desktop app."); },
+    openLocalFile: async () => { throw new Error("Opening a file from this computer requires the desktop app."); },
     modify: async () => {
       throw new Error("Bridge IPC is only available inside the desktop app.");
     },

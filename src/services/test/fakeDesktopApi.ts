@@ -54,6 +54,8 @@ function extensionOf(fileName: string): string {
  */
 export type FakeDesktopApi = DesktopAPI & {
   emitBridgeEvent(event: BridgeEvent): void;
+  /** What the next openLocalFile picker returns. Unset means cancelled. */
+  pickLocalFile(filePath: string): void;
   /** Every generate/modify call made through this fake, in order. */
   readonly calls: Array<{ method: "generate" | "modify"; input: Record<string, unknown> }>;
 };
@@ -61,6 +63,7 @@ export type FakeDesktopApi = DesktopAPI & {
 export function createFakeDesktopApi(seed: FakeDesktopSeed = {}): FakeDesktopApi {
   const bridgeListeners = new Set<(event: BridgeEvent) => void>();
   const calls: Array<{ method: "generate" | "modify"; input: Record<string, unknown> }> = [];
+  let picked: { filePath: string } | null = null;
   let taskCounter = 0;
   const folders: FolderRecord[] = [
     { id: FAKE_DEFAULT_FOLDER_ID, name: "OfficeDex", path: DEFAULT_WORKSPACE_DIR, isDefault: true },
@@ -185,6 +188,37 @@ export function createFakeDesktopApi(seed: FakeDesktopSeed = {}): FakeDesktopApi
       };
       documents = [...documents, copy];
       return { ...copy };
+    },
+
+    async openLocalFile() {
+      // Stands in for the native picker: `pick` is what a test says the user
+      // chose, and leaving it unset is a cancelled dialog.
+      if (!picked) return null;
+      const existing = documents.find((document) => document.filePath === picked!.filePath);
+      if (existing) {
+        // Mirrors RegisterLocalDocument: one path, one document, whether it got
+        // here through the agent or through the picker.
+        picked = null;
+        return { ...existing };
+      }
+      const record: DocumentRecord = {
+        id: documentIdFor(picked.filePath),
+        filePath: picked.filePath,
+        fileName: picked.filePath.slice(picked.filePath.lastIndexOf("/") + 1),
+        documentType: extensionOf(picked.filePath).slice(1),
+        // No workspace: an imported file is not inside any of the app's folders.
+        workspaceId: "",
+        createdAt: new Date(1_700_100_000_000).toISOString(),
+        updatedAt: new Date(1_700_100_000_000).toISOString(),
+        migrationSource: "user",
+        pinned: false,
+      };
+      documents = [...documents, record];
+      picked = null;
+      return { ...record };
+    },
+    pickLocalFile(filePath: string) {
+      picked = { filePath };
     },
 
     async listFolders() {

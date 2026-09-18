@@ -2686,6 +2686,82 @@ func (s *Store) InsertCopiedDocument(ctx context.Context, sourceDocumentID, newP
 	return record, nil
 }
 
+// RegisterLocalDocument records a file the user opened from somewhere else on
+// disk, so it appears in the document projection alongside generated ones.
+//
+// This closes the seam that made "open from this computer" invisible in the new
+// IA: OpenRecentFile wrote recent_files and nothing else, and the projection —
+// which is what the file list reads — is built from artifacts. A file opened
+// this way was remembered as recent and yet listed nowhere.
+//
+// Idempotent on purpose. Opening the same file twice, or opening one the agent
+// generated earlier, must land on the row that already exists rather than
+// forking a second identity for the same path: the id comes from
+// documentIDForPathTx and created_at is preserved on conflict. The file itself
+// is never copied or moved — the document points at where the user keeps it.
+func (s *Store) RegisterLocalDocument(ctx context.Context, path, name, documentType, workspaceID string) (types.DocumentRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return types.DocumentRecord{}, fmt.Errorf("localstore: not open")
+	}
+	path = filepath.Clean(strings.TrimSpace(path))
+	name = strings.TrimSpace(name)
+	documentType = strings.ToLower(strings.TrimSpace(documentType))
+	if path == "." || path == "" || !filepath.IsAbs(path) {
+		return types.DocumentRecord{}, fmt.Errorf("localstore: document path must be absolute")
+	}
+	if name == "" || documentType == "" {
+		return types.DocumentRecord{}, fmt.Errorf("localstore: name and document type are required")
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return types.DocumentRecord{}, fmt.Errorf("localstore: begin register: %w", err)
+	}
+	now := nowTimestamp()
+	// artifacts is what a full projection rebuild reads, so the row has to exist
+	// there too or the next rebuild would drop this document.
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO artifacts(file_path, task_id, file_id, file_name, document_type, preview_url, edit_url, synced_at)
+		 VALUES (?, NULL, '', ?, ?, '', '', ?)
+		 ON CONFLICT(file_path) DO UPDATE SET file_name=excluded.file_name, document_type=excluded.document_type, synced_at=excluded.synced_at`,
+		path, name, documentType, now,
+	); err != nil {
+		_ = tx.Rollback()
+		return types.DocumentRecord{}, fmt.Errorf("localstore: record local artifact: %w", err)
+	}
+
+	id, err := documentIDForPathTx(ctx, tx, path)
+	if err != nil {
+		_ = tx.Rollback()
+		return types.DocumentRecord{}, err
+	}
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO documents(id, file_path, file_name, document_type, current_artifact_task_id, workspace_id, created_at, updated_at, migration_source, pinned)
+		 VALUES (?, ?, ?, ?, NULL, NULLIF(?, ''), ?, ?, 'user', 0)
+		 ON CONFLICT(id) DO UPDATE SET file_path=excluded.file_path, file_name=excluded.file_name, document_type=excluded.document_type, updated_at=excluded.updated_at`,
+		id, path, name, documentType, strings.TrimSpace(workspaceID), now, now,
+	); err != nil {
+		_ = tx.Rollback()
+		return types.DocumentRecord{}, fmt.Errorf("localstore: record local document: %w", err)
+	}
+
+	var record types.DocumentRecord
+	if err := tx.QueryRowContext(ctx,
+		`SELECT id, file_path, file_name, document_type, COALESCE(workspace_id, ''), created_at, updated_at, migration_source, pinned
+		 FROM documents WHERE id = ?`, id,
+	).Scan(&record.ID, &record.FilePath, &record.FileName, &record.DocumentType, &record.WorkspaceID,
+		&record.CreatedAt, &record.UpdatedAt, &record.MigrationSource, &record.Pinned); err != nil {
+		_ = tx.Rollback()
+		return types.DocumentRecord{}, fmt.Errorf("localstore: read registered document: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return types.DocumentRecord{}, fmt.Errorf("localstore: commit register: %w", err)
+	}
+	return record, nil
+}
+
 // SetDocumentPinned flips the pin on one document. Missing rows are reported
 // rather than silently ignored: the caller just acted on something it believed
 // was there.
