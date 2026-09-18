@@ -1169,7 +1169,89 @@ export interface PptxTemplateProgress {
   error?: string;
 }
 
+/* ─── Document projection ───────────────────────────────────────────────────
+ *
+ * The Document/Run/Activity model the desktop maintains on every write
+ * (localstore schemaV7). A run that produced a file is that file's row, so the
+ * artifact path is the identity. This is what `UiPort.files` is built on — see
+ * docs/uiport-scope.md.
+ *
+ * Field names mirror the Go json tags exactly; verify-bridge-types.mjs compares
+ * them against the generated bindings.
+ */
+
+export interface DocumentRecord {
+  id: string;
+  filePath: string;
+  fileName: string;
+  documentType: string;
+  currentArtifactTaskId?: string;
+  workspaceId?: string;
+  createdAt: string;
+  updatedAt: string;
+  migrationSource: string;
+}
+
+export interface RunRecord {
+  id: string;
+  documentId?: string;
+  activityStreamId: string;
+  sourceConversationId: string;
+  parentRunId?: string;
+  status: string;
+  documentType?: string;
+  sourceFile?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ActivityRecord {
+  id: string;
+  activityStreamId: string;
+  sourceConversationId: string;
+  taskId: string;
+  ordinal: number;
+  kind: string;
+  eventId?: string;
+  eventType: string;
+  payloadJson: string;
+  createdAt: string;
+}
+
+export interface DocumentListInput {
+  /** Blank means every workspace, not "the ones filed nowhere". */
+  workspaceId?: string;
+  limit?: number;
+  cursor?: string;
+}
+
+export interface DocumentPage {
+  items: DocumentRecord[];
+  nextCursor?: string;
+}
+
+export interface DocumentActivityListInput {
+  documentId: string;
+  limit?: number;
+  cursor?: string;
+}
+
+export interface ActivityPage {
+  items: ActivityRecord[];
+  nextCursor?: string;
+}
+
 export interface DesktopAPI extends DesktopVerticalAPI {
+  /**
+   * The document projection. Maintained on every write since it landed and
+   * unreadable until now — these four are the missing half.
+   */
+  listDocuments(input: DocumentListInput): Promise<DocumentPage>;
+  /** Refuses rather than returning a blank record when the id is unknown. */
+  getDocument(documentId: string): Promise<DocumentRecord>;
+  listDocumentRuns(documentId: string): Promise<RunRecord[]>;
+  listDocumentActivities(input: DocumentActivityListInput): Promise<ActivityPage>;
+
   getPptxTaskStatus?: (taskId: string) => Promise<PptxTaskStatus>;
   skipPptxResearch?: (taskId: string) => Promise<void>;
   /**

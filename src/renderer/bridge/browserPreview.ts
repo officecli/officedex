@@ -81,6 +81,12 @@ export function createBrowserPreviewAPI(): DesktopAPI {
     planSpreadsheetFields: async () => { throw new Error("Spreadsheet field planning requires the desktop app."); },
     planShopifyCatalogCampaign: async () => { throw new Error("Shopify campaign planning requires the desktop app."); },
     composeCampaignImage: async () => { throw new Error("Campaign image composition requires the desktop app."); },
+    listDocuments: async () => ({ items: [] }),
+    getDocument: async (documentId: string) => {
+      throw new Error(`No document ${documentId} outside the desktop app.`);
+    },
+    listDocumentRuns: async () => [],
+    listDocumentActivities: async () => ({ items: [] }),
     modify: async () => {
       throw new Error("Bridge IPC is only available inside the desktop app.");
     },

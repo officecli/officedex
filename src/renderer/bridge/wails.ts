@@ -213,6 +213,10 @@ export function createWailsAPI(): DesktopAPI {
       if (!fn) throw new Error("Campaign image composition requires a newer OfficeDex runtime.");
       return fn(toWails(input));
     },
+    listDocuments: (input) => WailsApp.ListDocuments(toWails(input)),
+    getDocument: (documentId: string) => WailsApp.GetDocument(documentId),
+    listDocumentRuns: async (documentId: string) => (await WailsApp.ListDocumentRuns(documentId)) ?? [],
+    listDocumentActivities: (input) => WailsApp.ListDocumentActivities(toWails(input)),
     modify: async (input: ModifyInput) => {
       const result = await WailsApp.Modify(toWails(input));
       return { taskId: result.taskId, sessionId: result.sessionId, status: result.status };

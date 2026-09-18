@@ -30,6 +30,8 @@ const RENDERER_ROOT = "src/renderer";
  *
  * Removing a line (by wiring the method up) is always fine. Adding one means
  * some feature just became unreachable — say so out loud before you do.
+ *
+ * Not the same thing as PENDING_CONSUMER below.
  */
 const UNWIRED: Record<string, string> = {
   // The workbook→output lineage store is half-wired: App.tsx records a view
@@ -64,7 +66,53 @@ const UNWIRED: Record<string, string> = {
   // there is no ComposeCampaignImage on the Go side: all three transports would
   // throw. Unreachable at both ends.
   composeCampaignImage: "no Go implementation; every transport throws 'requires a newer OfficeDex runtime'",
+
+  // Found when isCalled() started matching the handle instead of the bare
+  // method name: the old pattern counted the local variable `previewArtifact`
+  // in App.tsx as a call site. The RPC opens a preview window of its own and
+  // nothing asks for it — every path goes through issuePreviewToken and renders
+  // in-app instead.
+  previewArtifact: "Go side implemented; every preview path uses issuePreviewToken and renders in-app",
 };
+
+/**
+ * Landed, with its consumer scheduled — a construction state, not a dead end.
+ *
+ * The difference from UNWIRED matters. An unreachable capability is a defect;
+ * a capability whose caller arrives next week is ordinary work in progress.
+ * Collapsing the two would either hide real regressions in a growing exception
+ * list, or make every half-finished feature look like one.
+ *
+ * Each entry names the step that will consume it. When that step lands the
+ * entry goes away on its own — the method gets a call site and stops needing
+ * an exception at all.
+ */
+const PENDING_CONSUMER: Record<string, string> = {
+  // S1 exposed the document projection; S2's src/services/files.ts is what
+  // reads it. See docs/uiport-scope.md.
+  listDocuments: "S2 · services/files.ts implements UiPort.files.list on it",
+  getDocument: "S2 · services/files.ts",
+  listDocumentRuns: "S2 · services/files.ts",
+  listDocumentActivities: "S2 · services/agent.ts reads the activity stream",
+};
+
+/**
+ * Whether a method is called on the desktop handle somewhere in `source`.
+ *
+ * The handle is matched by name, not just the method: an early version looked
+ * for `.<method>` anywhere and reported `getDocument` as wired because
+ * `PdfViewer` calls `pdfjsLib.getDocument`. Bare method names are not unique
+ * enough — and the failure mode is the dangerous direction, a genuinely
+ * unreachable RPC hidden by an unrelated library that happens to share a name.
+ *
+ * So this depends on a convention: **the injected `DesktopAPI` is always bound
+ * to `api`, `officecli` or `desktop`.** If that ever stops being true, this
+ * test starts reporting live methods as unreachable — loudly, which is the
+ * right direction to fail in.
+ */
+function isCalled(method: string, source: string): boolean {
+  return new RegExp(`\\b(?:api|officecli|desktop)\\??\\s*\\.\\s*${method}\\b`).test(source);
+}
 
 /** Extracts the member names of one interface body from a .ts source. */
 function interfaceMembers(source: string, name: string): string[] {
@@ -138,21 +186,35 @@ describe("DesktopAPI reachability", () => {
 
   it("every RPC has a renderer call site", () => {
     const unreachable = methods
-      .filter((method) => !(method in UNWIRED))
-      .filter((method) => !new RegExp(`[.?]\\s*${method}\\b`).test(callSites));
+      .filter((method) => !(method in UNWIRED) && !(method in PENDING_CONSUMER))
+      .filter((method) => !isCalled(method, callSites));
 
     expect(unreachable).toEqual([]);
   });
 
   it("no stale exceptions", () => {
-    const stale = Object.keys(UNWIRED).filter((method) => !methods.includes(method));
+    const stale = [...Object.keys(UNWIRED), ...Object.keys(PENDING_CONSUMER)]
+      .filter((method) => !methods.includes(method));
     expect(stale).toEqual([]);
+  });
+
+  // A pending entry that already has its consumer is finished work still
+  // carrying scaffolding. Drop the line.
+  it("no pending entry that is already wired", () => {
+    const arrived = Object.keys(PENDING_CONSUMER)
+      .filter((method) => isCalled(method, callSites));
+    expect(arrived).toEqual([]);
   });
 
   // The exception list is a ratchet. It may shrink freely; growing it means a
   // capability just went out of reach, and that should be an argument rather
-  // than a diff nobody reads.
+  // than a diff nobody reads. PENDING_CONSUMER is deliberately not ratcheted —
+  // it is expected to grow during a build-out and empty itself afterwards.
+  //
+  // 13 → 14 when isCalled() was tightened: `previewArtifact` had been counted
+  // as reachable because a local variable shares its name. The capability did
+  // not regress, the measurement got honest.
   it("the unwired list does not grow", () => {
-    expect(Object.keys(UNWIRED)).toHaveLength(13);
+    expect(Object.keys(UNWIRED)).toHaveLength(14);
   });
 });
