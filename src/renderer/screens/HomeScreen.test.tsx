@@ -194,6 +194,19 @@ describe("HomeScreen", () => {
     expect(screen.queryByRole("button", { name: "GIF" })).toBeNull();
   });
 
+  it("starts from the live textarea even if React state was not updated", async () => {
+    const props = renderHome();
+    const box = screen.getByRole("textbox", { name: "Describe the result you want" });
+    fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
+    expect(props.onStartTask).not.toHaveBeenCalled();
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+    descriptor?.set?.call(box, "Make a free-composition operations deck");
+    fireEvent.click(screen.getByRole("button", { name: "Start creating" }));
+    await waitFor(() => expect(props.onStartTask).toHaveBeenCalledWith({
+      prompt: "Make a free-composition operations deck", documentType: "pptx",
+    }));
+  });
+
   it("starts directly and leaves progressive review to the production stage", async () => {
     const props = renderHome();
     fireEvent.change(screen.getByRole("textbox", { name: "Describe the result you want" }), { target: { value: "Clean this supplier catalog" } });

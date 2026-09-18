@@ -1,4 +1,5 @@
 import type { Artifact, BridgeEvent, DesktopTask, GenerationMode, ImageRatio, ProviderSnapshot, StageState, TaskFailure, TaskFailureStage, TaskPartialWork, TaskPlan, TaskQuestion, TaskQuestionAnswer, TaskRuntimeSnapshot, TaskUserInput, VibeOp, VibeProjectTreeNode, VibeTreeAction, VibeTreeConfirmation, VibeTreeSnapshot, VibeTreeStage, VibeVisualAsset } from "../shared/types";
+import { normalizeVibeChart } from "../shared/chartModel";
 import type { SlidePreview } from "../shared/slidePreviewWire";
 
 export interface TaskState {
@@ -430,6 +431,14 @@ function vibeNodeFromUnknown(raw: unknown): VibeProjectTreeNode | null {
   const title = stringValue(node.title);
   if (!id || !kind || !title) return null;
   const slideNumber = numberValue(node.slideNumber ?? node.slide_number);
+  let chart: VibeProjectTreeNode["chart"];
+  if (node.chart !== undefined) {
+    try {
+      chart = normalizeVibeChart(node.chart, `node[${id}].chart`);
+    } catch {
+      chart = undefined;
+    }
+  }
   return {
     id,
     parentId: stringValue(node.parentId) || stringValue(node.parent_id) || undefined,
@@ -438,13 +447,27 @@ function vibeNodeFromUnknown(raw: unknown): VibeProjectTreeNode | null {
     summary: stringValue(node.summary) || undefined,
     status: stringValue(node.status) || undefined,
     intent: stringValue(node.intent) || undefined,
+    relation: vibeChartRelationFromUnknown(node.relation ?? node.visual_relation),
     materials: stringArrayValue(node.materials),
     slideRange: stringValue(node.slideRange) || stringValue(node.slide_range) || undefined,
     slideNumber,
     outline: stringArrayValue(node.outline),
     visualAssets: visualAssetsFromUnknown(node.visualAssets ?? node.visual_assets),
+    layout: stringValue(node.layout) || undefined,
+    role: stringValue(node.role) || undefined,
+    chart,
     trace: stringArrayValue(node.trace),
   };
+}
+
+function vibeChartRelationFromUnknown(value: unknown): VibeProjectTreeNode["relation"] {
+  return value === "trend" ||
+    value === "comparison" ||
+    value === "distribution" ||
+    value === "correlation" ||
+    value === "other"
+    ? value
+    : undefined;
 }
 
 function vibeActionFromUnknown(raw: unknown): VibeTreeAction | null {

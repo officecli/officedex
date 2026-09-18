@@ -113,6 +113,14 @@ function resourcePath(root, entry, platform) {
   return path.join(root, directory, platform === "win32" ? `${binary}.exe` : binary);
 }
 
+/** Names accepted by --may-be-absent for a resource entry. */
+export function resourceAbsenceKeys(entry) {
+  if (typeof entry.at === "string") return [entry.at];
+  const [directory, binary] = entry.at;
+  const top = directory.split(/[\\/]/).find(Boolean);
+  return [...new Set([binary, directory, top].filter(Boolean))];
+}
+
 /** The resource-root-relative path an entry occupies, binary or not. */
 function entryKey(entry) {
   return typeof entry.at === "string" ? entry.at : path.join(...entry.at);

@@ -1,0 +1,52 @@
+{
+  "contract": "jssdk-progressive/v2",
+  "generation_mode": "free_composition",
+  "note": "Drawers are per-page painters, not whole-slide templates. They keep a mechanism and reflow geometry for the current text.",
+  "drawers": [
+    "marker-columns",
+    "editorial-grid",
+    "numbered-rows",
+    "ring-labels",
+    "linked-stages",
+    "label-columns",
+    "horizontal-axis",
+    "alternating-axis",
+    "branch-left",
+    "branch-left-four",
+    "separated-tiers",
+    "filled-tiers",
+    "ticket-panels",
+    "rail-callouts",
+    "hexagon-columns",
+    "icon-blocks",
+    "open-ring-callouts",
+    "medal-panels",
+    "balanced-pair"
+  ],
+  "aliases": {
+    "vertical-axis": "horizontal-axis",
+    "slanted-tier-legend": "separated-tiers",
+    "serrated-bottom-panels": "ticket-panels",
+    "ribbon-ticket-grid": "ticket-panels",
+    "wave-bottom-panels": "editorial-grid",
+    "arched-label-panels": "editorial-grid",
+    "folded-corner-notes": "editorial-grid",
+    "balloon-rings": "open-ring-callouts",
+    "hanging-discs": "ring-labels",
+    "ribbon-circle-grid": "ring-labels",
+    "dial-badges": "ring-labels",
+    "orbital-pill-grid": "ring-labels",
+    "hub-callout-rows": "rail-callouts",
+    "arrow-icon-rows": "rail-callouts",
+    "diamond-label-grid": "hexagon-columns",
+    "hanger-panels": "ticket-panels",
+    "trapezoid-pendants": "icon-blocks",
+    "double-diamonds": "icon-blocks"
+  },
+  "charts": {
+    "line": "trend-line-with-takeaway",
+    "bar": "kpi-plus-column",
+    "pie": "share-donut-with-callouts",
+    "donut": "share-donut-with-callouts"
+  }
+}

@@ -9,18 +9,10 @@
 // must prefer its own embedded runtime -- pairing a signed x64 Node with an
 // unsigned source-tree native addon makes macOS refuse the dlopen.
 //
-// A launcher, though, hands over neither: `open` and Finder start the app
-// through launchd, which gives it cwd "/" and no PWD at all. A development
-// build that stages no runtime into its bundle -- scripts/build-local-latest.sh
-// deliberately ships none, so it runs against the checkout it was built from --
-// then has nothing to find the checkout with. The executable's own path is what
-// survives that launch, so the checkout is also looked for beside it; see
-// checkoutCandidatesBesideExecutable.
-//
-// Two functions here search for the same directory from slightly different
-// starting points: BridgeEnv from the bridge's working directory, Root from a
-// repository root. IsRoot is what they agree on -- a directory is the runtime
-// only if the four files the worker actually opens are all present.
+// BridgeEnv and Root share the same search: bundled runtime first, then a
+// sibling checkout reachable from the executable, then cwd / PWD. IsRoot is
+// what they agree on -- a directory is the runtime only if the four files the
+// worker actually opens are all present.
 package runtimeenv
 
 import (
@@ -36,12 +28,7 @@ import (
 	"officedex/internal/config"
 )
 
-func BridgeEnv(cwd string) []string { return bridgeEnv(executablePath(), cwd) }
-
-// bridgeEnv is BridgeEnv with the executable's path supplied, so the candidate
-// list a launcher would produce can be exercised without depending on where the
-// running binary happens to sit.
-func bridgeEnv(executable, cwd string) []string {
+func BridgeEnv(cwd string) []string {
 	rootExplicit := config.IsSet(config.PresentationRootEnv) || config.IsSet(config.PresentationSourceDirEnv)
 	nodeExplicit := config.IsSet(config.SkillNodeEnv)
 	env := make([]string, 0, 3)
@@ -64,34 +51,8 @@ func bridgeEnv(executable, cwd string) []string {
 		}
 		return env
 	}
-	// A packaged macOS app may be launched from a shell whose PWD points at a
-	// developer checkout. Prefer the embedded, signed presentation runtime in
-	// that case; otherwise the app can pair its signed x64 Node runtime with an
-	// unsigned source-tree Rollup native addon and macOS rejects dlopen().
-	if root := bundledPresentationRoot(executable); root != "" {
-		return append(env,
-			"PRESENTATION_SOURCE_DIR="+root,
-			"OFFICECLI_MOP_PRESENTATION_ROOT="+root,
-		)
-	}
-	// Everything below has to be a source checkout, not a staged runtime; see
-	// isPresentationCheckout. The working directories come first, as they always
-	// have; a launcher supplies none of them, and then the executable's own
-	// location decides.
-	checkouts := make([]string, 0, 8)
-	if strings.TrimSpace(cwd) != "" {
-		checkouts = append(checkouts, checkoutCandidates(cwd)...)
-	}
-	if processCwd, ok := config.ProcessCwd(); ok && processCwd != cwd {
-		checkouts = append(checkouts, checkoutCandidates(processCwd)...)
-	}
-	// GUI-launched macOS apps often have `/` as their real cwd but retain the
-	// launch shell's PWD. Include it as a local-development discovery hint.
-	if envPWD := config.LauncherPWD(); envPWD != "" && envPWD != cwd {
-		checkouts = append(checkouts, checkoutCandidates(envPWD)...)
-	}
-	checkouts = append(checkouts, checkoutCandidatesBesideExecutable(executable)...)
-	if root := firstPresentationCheckout(checkouts); root != "" {
+	processCwd, _ := config.ProcessCwd()
+	if root := firstPresentationRoot(currentExecutable(), cwd, processCwd, config.LauncherPWD()); root != "" {
 		return append(env,
 			"PRESENTATION_SOURCE_DIR="+root,
 			"OFFICECLI_MOP_PRESENTATION_ROOT="+root,
@@ -135,143 +96,88 @@ func bundledSkillsDir(cwd string) string {
 	return ""
 }
 
-// presentationDirName is the directory name a presentation runtime carries in
-// every layout this package knows about: beside the checkout, under
-// Contents/Resources, and under the repository root.
-const presentationDirName = "presentation"
-
-func Root(repoRoot string) string { return rootFrom(executablePath(), repoRoot) }
-
-// rootFrom is Root with the executable's path supplied; see bridgeEnv for why.
-func rootFrom(executable, repoRoot string) string {
-	if root := bundledPresentationRoot(executable); root != "" {
-		return root
-	}
-	// The places a development build has always looked first: the repository it
-	// was pointed at, and the working directory it was started in. A launcher
-	// supplies neither (see checkoutCandidatesBesideExecutable), and only then
-	// does the executable's own location decide.
-	candidates := make([]string, 0, 8)
-	if strings.TrimSpace(repoRoot) != "" {
-		candidates = append(candidates, checkoutCandidates(repoRoot)...)
-	}
-	if cwd, ok := config.ProcessCwd(); ok {
-		candidates = append(candidates, checkoutCandidates(cwd)...)
-	}
-	candidates = append(candidates, checkoutCandidatesBesideExecutable(executable)...)
-	return firstPresentationCheckout(candidates)
+func Root(repoRoot string) string {
+	cwd, _ := config.ProcessCwd()
+	return firstPresentationRoot(currentExecutable(), repoRoot, cwd, config.LauncherPWD())
 }
 
-// checkoutMarker is the file that separates a source checkout from a staged
-// runtime. stage-presentation-runtime.mjs copies the worker's module graph and
-// the converter, and the result passes IsRoot, but it never copies the JSSDK
-// host runner -- officecli's default generation backend execs
-// <root>/tools/execute-jssdk.mjs. A tree without the runner can convert a PPTX
-// but not generate one, which is how a stale staged copy in a local app bundle
-// passed every check and still failed PPTX generation.
-const checkoutMarker = "tools/execute-jssdk.mjs"
-
-// isPresentationCheckout reports whether root is the source checkout a
-// development build runs against: a bootable runtime that also carries the
-// sources and runners a staged copy leaves behind.
-func isPresentationCheckout(root string) bool {
-	if !IsRoot(root) {
-		return false
+func currentExecutable() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
 	}
-	info, err := os.Stat(filepath.Join(root, filepath.FromSlash(checkoutMarker)))
-	return err == nil && !info.IsDir()
+	return exe
 }
 
-// firstPresentationRoot returns the first candidate IsRoot accepts, made
-// absolute, or "" when none of them is a runtime.
-func firstPresentationRoot(candidates []string) string {
-	return firstPresentationMatching(candidates, IsRoot)
-}
+// ancestorSearchDepth bounds how far a local .app may sit under the checkout.
+// officedex/build/bin/OfficeDex.app/Contents/MacOS is 6 steps above the repo;
+// a few extra covers linked worktrees without walking the whole volume.
+const ancestorSearchDepth = 12
 
-// firstPresentationCheckout is firstPresentationRoot narrowed to source
-// checkouts.
-func firstPresentationCheckout(candidates []string) string {
-	return firstPresentationMatching(candidates, isPresentationCheckout)
-}
-
-func firstPresentationMatching(candidates []string, accepts func(string) bool) string {
-	for _, candidate := range candidates {
-		root, err := filepath.Abs(candidate)
-		if err == nil && accepts(root) {
-			return root
+// firstPresentationRoot is the shared search Root and BridgeEnv use.
+//
+// A packaged app must prefer Contents/Resources/presentation: launching from a
+// developer shell whose PWD points at the checkout would otherwise pair the
+// signed Node runtime with an unsigned source-tree native addon, and macOS
+// refuses the dlopen. A local build stages no runtime, and `open` / Finder
+// start the process with cwd "/", so the fallback walks from the executable
+// up to the sibling presentation checkout.
+func firstPresentationRoot(exe string, searchRoots ...string) string {
+	for _, candidate := range presentationSearchRoots(exe, searchRoots...) {
+		if IsRoot(candidate) {
+			return candidate
 		}
 	}
 	return ""
 }
 
-// bundledPresentationRoot is the runtime a packaged desktop app carries beside
-// its executable. It is a staged tree rather than a checkout, and a packaged
-// app has nothing else, so IsRoot alone decides -- requiring the checkout
-// marker would reject the only runtime the app shipped with.
-func bundledPresentationRoot(executable string) string {
-	if strings.TrimSpace(executable) == "" {
-		return ""
-	}
-	exeDir := filepath.Dir(executable)
-	return firstPresentationRoot([]string{
-		// Packaged macOS app: <App>.app/Contents/Resources/presentation
-		filepath.Join(exeDir, "..", "Resources", presentationDirName),
-		// Windows release zip: the runtime sits beside the executable.
-		filepath.Join(exeDir, presentationDirName),
-	})
-}
-
-// checkoutCandidates lists where a presentation checkout may sit relative to a
-// known directory: inside it, or beside it. Both layouts are real -- a source
-// archive may unpack the runtime into the repository, and a sibling checkout is
-// how the repositories are arranged on a development machine.
-func checkoutCandidates(base string) []string {
-	return []string{
-		filepath.Join(base, presentationDirName),
-		filepath.Join(base, "..", presentationDirName),
-	}
-}
-
-// checkoutCandidatesBesideExecutable walks up from the running executable
-// looking for the checkout it was built from, nearest ancestor first.
-//
-// A development app bundle is opened by a launcher, which starts it with cwd
-// "/" and no environment: a local build at
-// <checkout>/officedex/build/bin/OfficeDex.app/Contents/MacOS/officedex then
-// has no working directory to resolve <checkout>/presentation from. Walking the
-// executable's ancestors reaches <checkout> regardless, because the bundle is
-// nested inside it, and a moved or renamed checkout still resolves.
-//
-// The search is harmless for a packaged app: its own Contents/Resources runtime
-// is checked first and wins, and the ancestors of an installed app
-// (/Applications, /) do not hold a checkout. A directory only counts if it is a
-// source checkout (see isPresentationCheckout), so the staged tree under
-// <repository>/officedex/build/presentation -- which sits between the local app
-// bundle and the checkout and passes IsRoot -- is skipped rather than preferred
-// for being nearer.
-func checkoutCandidatesBesideExecutable(executable string) []string {
-	if strings.TrimSpace(executable) == "" {
-		return nil
-	}
-	candidates := make([]string, 0, 6)
-	for dir := filepath.Dir(executable); ; {
-		candidates = append(candidates, filepath.Join(dir, presentationDirName))
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return candidates
+func presentationSearchRoots(exe string, searchRoots ...string) []string {
+	candidates := make([]string, 0, 16)
+	seen := make(map[string]struct{})
+	add := func(path string) {
+		if strings.TrimSpace(path) == "" {
+			return
 		}
-		dir = parent
+		abs, err := filepath.Abs(path)
+		if err != nil {
+			return
+		}
+		if _, exists := seen[abs]; exists {
+			return
+		}
+		seen[abs] = struct{}{}
+		candidates = append(candidates, abs)
 	}
-}
 
-// executablePath is os.Executable with the error folded into "", so callers can
-// treat "unknown executable" as "no candidates there" rather than branching.
-func executablePath() string {
-	executable, err := os.Executable()
-	if err != nil {
-		return ""
+	if strings.TrimSpace(exe) != "" {
+		exeDir := filepath.Dir(exe)
+		add(filepath.Join(exeDir, "..", "Resources", "presentation"))
+		add(filepath.Join(exeDir, "presentation"))
+		// A local `wails build` lands at build/bin/OfficeDex.app/Contents/MacOS.
+		// Only walk from that layout: a test binary in the Go cache would
+		// otherwise keep discovering the developer's real checkout.
+		contents := filepath.Dir(exeDir)
+		app := filepath.Dir(contents)
+		if filepath.Base(exeDir) == "MacOS" && filepath.Base(contents) == "Contents" && strings.HasSuffix(app, ".app") {
+			dir := filepath.Dir(app)
+			for i := 0; i < ancestorSearchDepth; i++ {
+				parent := filepath.Dir(dir)
+				if parent == dir {
+					break
+				}
+				add(filepath.Join(parent, "presentation"))
+				dir = parent
+			}
+		}
 	}
-	return executable
+	for _, root := range searchRoots {
+		if strings.TrimSpace(root) == "" {
+			continue
+		}
+		add(filepath.Join(root, "presentation"))
+		add(filepath.Join(root, "..", "presentation"))
+	}
+	return candidates
 }
 
 func NodeExecutable() string {

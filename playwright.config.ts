@@ -17,6 +17,9 @@ export default defineConfig({
     : "list",
   use: {
     ...devices["Desktop Chrome"],
+    ...(process.env.PLAYWRIGHT_CHROME_CHANNEL
+      ? { channel: process.env.PLAYWRIGHT_CHROME_CHANNEL }
+      : {}),
     baseURL,
     actionTimeout: 60 * 1000,
     trace: "retain-on-failure",

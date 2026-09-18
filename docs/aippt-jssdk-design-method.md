@@ -6,7 +6,7 @@
 
 本文是 OfficeDex AI PPT 设计方法的产品侧记录，解决三个长期问题：加强模板 JSSDK 学习、增强自由构图、提高模板排版准确性。可执行约束位于 [`aippt-jssdk-design` Skill](../skills/aippt-jssdk-design/SKILL.md)，本文负责解释方法、责任边界和验收口径。
 
-当前视觉基准、与外部 AI PPT 样例的差距及下一版路线图见 [`aippt-jssdk-visual-gap-report.md`](aippt-jssdk-visual-gap-report.md)。
+当前视觉基准、与外部 AI PPT 样例的差距及下一版路线图见 [`aippt-jssdk-visual-gap-report.md`](aippt-jssdk-visual-gap-report.md)。一份已跑通的自由构图 + 原生图表示例见 [`aippt-jssdk-free-composition-tiktok.md`](aippt-jssdk-free-composition-tiktok.md)。
 
 ## 核心结论
 
@@ -73,9 +73,11 @@
 
 `required_geometry` 必须在实际运行路径中由 helper 创建，并从原生对象树中核对。注释、未调用函数或外观近似都不算模板学习证据。
 
-图表页面还必须声明 `visual_role=chart` 和数据来源。公共 JSSDK 现在已经提供受控的 `ShapeCollection.addChart` 最小入口（类型、矩阵、标题、图例和 transform），但这只代表作者 API 已接通，不代表图表配方已经通过导出、回读、渲染和视觉验收；在证据完成前，图表页仍应阻止生成或明确标记为待验收，不能用几何拼出假图表冒充可编辑图表。
+图表页面还必须声明 `visual_role=chart` 和数据来源。OfficeDex 侧先用 `normalizeVibeChart` 统一旧单系列输入，再用 `vibeChartToJssdkMatrix` 生成 `addChart` 所需的首行类别、首列系列名二维矩阵，同时用 `chartGenerationSpec` 记录 `chart_type`、`data_source`、`focal_point` 和 `content_budget`。节点通过结构化 `relation` 进入 `chartGenerationPlanToJson`，没有 relation 时保持 `other`，不从标题文本猜测语义。公共 JSSDK 现在已经提供受控的 `ShapeCollection.addChart` 最小入口（类型、矩阵、标题、图例和 transform），并已有最小导出/回读证据：作者态树为 `graphicFrame -> chartSpace`，PPTX 导出侧使用 converter 的 `chart`/`chartType`/`chartData` 别名，回导落盘时再归一化回编辑器使用的 `chartSpace`/`plotAreaChart`/`dataSource`。
 
-当前 `registry.json` 仍将 `chart` 置于 `blocked`。解除该状态必须晚于作者 API、`chartSpace` 严格回读、渲染和视觉抽查证据，不能为了让路由“看见图表”而先删掉门禁。
+这份证据只证明“原生作者入口和最小 PPTX 闭环已接通”，不代表图表配方已经通过完整类型回归、renderer、视觉抽查、数据语义和页面排版验收。当前图表页仍必须阻止生成或明确标记为待验收，不能用几何拼出假图表冒充可编辑图表。最小闭环的自动化证据位于 `presentation/tests/office-js-chart-authoring.test.mjs` 和 `presentation/tests/mop-converter-client.test.mjs`；扩展回归还覆盖 Office.js 图表、图片、目录编译和隐藏效果路径。
+
+当前 `registry.json` 仍将 `chart` 置于 `blocked`。解除该状态必须晚于作者 API、`chartSpace` 严格回读、renderer、完整类型/数据回归和视觉抽查证据，不能为了让路由“看见图表”而先删掉门禁。
 
 ### 参数化边界
 

@@ -126,12 +126,16 @@ export async function selectDocumentType(page: Page, documentType: DocumentType)
   await clickAntRadioButton(page, labels[documentType]);
 }
 
+export function homePrompt(page: Page) {
+  return page.locator("form.home-intake textarea.od-textarea, form.home-intake textarea").first();
+}
+
 export async function openNewGeneration(page: Page): Promise<void> {
-  const prompt = page.getByRole("textbox", { name: /describe the result|what you want to generate/i }).first();
+  const prompt = homePrompt(page);
   if (await prompt.isVisible().catch(() => false)) {
     return;
   }
-  const home = page.getByRole("button", { name: /^Home$/i }).first();
+  const home = page.getByRole("button", { name: /^Home$|^\+ New$/i }).first();
   if (await home.isVisible().catch(() => false)) await home.click({ force: true, timeout: 60_000 });
   await expect(prompt).toBeVisible({ timeout: 60_000 });
 }
@@ -159,10 +163,13 @@ export async function submitGeneration(page: Page, input: {
     await page.getByRole("button", { name: /Attach source file/i }).click();
     await expect(page.getByText(input.sourceFile.split(/[\\/]/).pop() ?? input.sourceFile)).toBeVisible();
   }
-  const prompt = page.getByRole("textbox", { name: /describe the result|what you want to generate/i }).first();
-  await prompt.fill(input.prompt);
-  const start = page.getByRole("button", { name: /Start creating|Analyze|Generate|Create/i }).last();
-  await start.click();
+  const prompt = homePrompt(page);
+  // Placeholder animation re-renders the textarea; skip actionability/stability waits.
+  await prompt.fill(input.prompt, { force: true });
+  await expect(prompt).toHaveValue(input.prompt);
+  const start = page.locator("button.od-button--circular-submit").last();
+  await expect(start).toBeEnabled({ timeout: 15_000 });
+  await start.click({ force: true });
   const planButton = page.getByRole("button", { name: /Create execution plan|Confirm and start/i });
   if (await planButton.isVisible().catch(() => false)) await planButton.click();
 }

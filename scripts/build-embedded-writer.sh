@@ -24,6 +24,14 @@ DEFAULT_WRITER_SOURCE="$(cd "${OFFICEDEX_MAIN_DIR}/.." && pwd)/writer"
 SOURCE="${WRITER_SOURCE_DIR:-${DEFAULT_WRITER_SOURCE}}"
 
 if [[ ! -f "${SOURCE}/pnpm-workspace.yaml" || ! -f "${SOURCE}/apps/officedex-embed/package.json" ]]; then
+  # A local app build can proceed without Word: WriterEditorFrame already
+  # falls back when public/writer is missing. Dist and `npm run build:writer`
+  # leave WRITER_OPTIONAL unset so a missing checkout stays a hard error.
+  if [[ "${WRITER_OPTIONAL:-0}" == "1" ]]; then
+    echo "[build-embedded-writer] writer source not found at ${SOURCE}; skipping Writer embed"
+    echo "[build-embedded-writer] DOCX editing will be unavailable until WRITER_SOURCE_DIR is set"
+    exit 0
+  fi
   echo "[build-embedded-writer] writer source not found at ${SOURCE}" >&2
   echo "Set WRITER_SOURCE_DIR to a local writer checkout." >&2
   exit 1

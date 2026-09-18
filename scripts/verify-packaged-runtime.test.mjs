@@ -4,7 +4,12 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { resolveResourceRoot, verifyPackagedRuntime } from "./verify-packaged-runtime.mjs";
+import {
+  REQUIRED_RESOURCES,
+  resolveResourceRoot,
+  resourceAbsenceKeys,
+  verifyPackagedRuntime,
+} from "./verify-packaged-runtime.mjs";
 
 /** Builds a package tree; `omit` drops payloads to reproduce a broken build. */
 async function packageTree({ platform = "win32", omit = [] } = {}) {
@@ -181,40 +186,35 @@ test("a local build may ship without the runtime, and says so", async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-test("a local build may ship without the presentation tree, converter included", async () => {
-  // A local build runs against the presentation checkout, so it stages no
-  // runtime at all. mop-convert lives inside that tree: tolerating the tree
-  // without tolerating what it contains would fail every local build on a
-  // converter that was never supposed to be there.
+test("a local build may ship without Writer fonts and the presentation tree", async () => {
+  // Local latest stages Skills and OfficeCLI, uses the sibling presentation
+  // checkout, and often has no writer checkout. Those payloads are allowed
+  // absent; leftovers still have to be valid.
   const { root, bin } = await packageTree({
     platform: "darwin",
-    omit: ["presentation", "mop-convert"],
+    omit: ["mop-runtime", "writer-fonts", "presentation", "mop-convert"],
   });
   const result = await verifyPackagedRuntime(bin, {
     platform: "darwin",
-    mayBeAbsent: ["presentation"],
+    mayBeAbsent: ["mop-runtime", "writer-fonts", "presentation"],
     verifyRuntime: runtimeStarts,
   });
-  assert.deepEqual(result.degraded.map((entry) => entry.split(":")[0]).sort(), [
-    "MOP presentation runtime",
-    "mop-convert",
-  ]);
+  assert.equal(result.degraded.length, 4);
+  assert.match(result.degraded.join("\n"), /Writer default-font closure: absent/);
+  assert.match(result.degraded.join("\n"), /MOP presentation runtime: absent/);
+  assert.match(result.degraded.join("\n"), /mop-convert: absent/);
   await rm(root, { recursive: true, force: true });
 });
 
-test("tolerating the presentation tree does not excuse one that is there and gutted", async () => {
-  // The stale bundled copy that broke PPTX generation was present and passed
-  // every marker check; only the payloads it never staged were missing.
-  const { root, bin } = await packageTree({ platform: "darwin", omit: ["mop-convert"] });
-  await assert.rejects(
-    verifyPackagedRuntime(bin, {
-      platform: "darwin",
-      mayBeAbsent: ["presentation"],
-      verifyRuntime: runtimeStarts,
-    }),
-    /mop-convert/,
-  );
-  await rm(root, { recursive: true, force: true });
+test("resourceAbsenceKeys covers binaries under a tolerated directory", () => {
+  const fonts = REQUIRED_RESOURCES.find((entry) => entry.at === "writer-fonts");
+  const convert = REQUIRED_RESOURCES.find((entry) => entry.label === "mop-convert");
+  assert.deepEqual(resourceAbsenceKeys(fonts), ["writer-fonts"]);
+  assert.deepEqual(resourceAbsenceKeys(convert).sort(), [
+    "mop-convert",
+    "presentation",
+    path.join("presentation", "tools", "bin"),
+  ].sort());
 });
 
 test("being allowed to be absent does not excuse being broken", async () => {

@@ -67,6 +67,8 @@ build_officecli "${OFFICECLI_STAGE_BIN}"
 echo "[build-local-latest] building OfficeDex.app"
 cd "${OFFICEDEX_DIR}"
 APP_VERSION="$(node -p 'require("./package.json").version')"
+# Writer is optional on machines without the sibling checkout.
+export WRITER_OPTIONAL=1
 PRESENTATION_SOURCE_DIR="${PRESENTATION_DIR}" env -u GOROOT "${WAILS_BIN}" build -ldflags "-X main.appVersion=${APP_VERSION}"
 node --input-type=module -e 'import { stageDesktopSkills } from "./scripts/bundle-runtime.mjs"; await stageDesktopSkills("build/bin/OfficeDex.app/Contents/Resources");'
 npm run stage:office2modoc
@@ -111,7 +113,7 @@ echo "[build-local-latest] verifying runtime dependencies"
 # and because the app prefers the runtime beside its executable over the one on
 # PATH, it was also the one the worker ran, straight into a dyld abort.
 echo "[build-local-latest] verifying packaged runtime payloads"
-node scripts/verify-packaged-runtime.mjs build/bin --may-be-absent=mop-runtime,presentation
+node scripts/verify-packaged-runtime.mjs build/bin --may-be-absent=mop-runtime,writer-fonts,presentation
 
 echo "[build-local-latest] OfficeCLI build metadata"
 go version -m "${OFFICECLI_SOURCE_BIN}" | sed -n '1,5p'
