@@ -218,6 +218,11 @@ export function createWailsAPI(): DesktopAPI {
     listDocumentRuns: async (documentId: string) => (await WailsApp.ListDocumentRuns(documentId)) ?? [],
     listDocumentActivities: (input) => WailsApp.ListDocumentActivities(toWails(input)),
     setDocumentPinned: (documentId: string, pinned: boolean) => WailsApp.SetDocumentPinned(documentId, pinned),
+    listFolders: async () => (await WailsApp.ListFolders()) ?? [],
+    createFolder: (name: string) => WailsApp.CreateFolder(name),
+    renameFolder: (folderId: string, name: string) => WailsApp.RenameFolder(folderId, name),
+    removeFolder: (folderId: string) => WailsApp.RemoveFolder(folderId),
+    folderPath: (folderId: string) => WailsApp.FolderPath(folderId),
     modify: async (input: ModifyInput) => {
       const result = await WailsApp.Modify(toWails(input));
       return { taskId: result.taskId, sessionId: result.sessionId, status: result.status };

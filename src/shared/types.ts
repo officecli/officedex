@@ -1219,6 +1219,22 @@ export interface ActivityRecord {
   createdAt: string;
 }
 
+/**
+ * A real directory documents are filed into.
+ *
+ * Exactly one folder is the default — where work lands when the user has not
+ * chosen anywhere else. It is synthesised from the per-user workspace
+ * directory rather than stored, so the old IA's "no project" and the new one's
+ * "default folder" are the same place on disk.
+ */
+export interface FolderRecord {
+  id: string;
+  name: string;
+  /** Absolute path on disk. The UI shows it; it never parses it. */
+  path: string;
+  isDefault?: boolean;
+}
+
 export interface DocumentListInput {
   /** Blank means every workspace, not "the ones filed nowhere". */
   workspaceId?: string;
@@ -1254,6 +1270,17 @@ export interface DesktopAPI extends DesktopVerticalAPI {
   listDocumentActivities(input: DocumentActivityListInput): Promise<ActivityPage>;
   /** Pinning is a filter on the one file list, not a move to another place. */
   setDocumentPinned(documentId: string, pinned: boolean): Promise<void>;
+
+  /** Folders, the default one first. */
+  listFolders(): Promise<FolderRecord[]>;
+  /** Takes a name; where the directory goes is the desktop's business. */
+  createFolder(name: string): Promise<FolderRecord>;
+  /** Renames the label. The directory on disk keeps its name. */
+  renameFolder(folderId: string, name: string): Promise<FolderRecord>;
+  /** Unregisters it. Files are neither deleted nor moved. */
+  removeFolder(folderId: string): Promise<void>;
+  /** The directory a folder id stands for. Blank resolves to the default. */
+  folderPath(folderId: string): Promise<string>;
 
   getPptxTaskStatus?: (taskId: string) => Promise<PptxTaskStatus>;
   skipPptxResearch?: (taskId: string) => Promise<void>;

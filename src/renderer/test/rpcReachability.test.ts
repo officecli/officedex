@@ -95,6 +95,14 @@ const PENDING_CONSUMER: Record<string, string> = {
   listDocumentRuns: "S2 · services/files.ts",
   listDocumentActivities: "S2 · services/agent.ts reads the activity stream",
   setDocumentPinned: "S2 · services/files.ts implements UiPort.files.setPinned",
+
+  // S1-3 added the folder view the new IA needs; services/folders.ts is its
+  // only intended caller.
+  listFolders: "S2 · services/folders.ts implements UiPort.folders.list",
+  createFolder: "S2 · services/folders.ts",
+  renameFolder: "S2 · services/folders.ts",
+  removeFolder: "S2 · services/folders.ts",
+  folderPath: "S2 · services/files.ts resolves move targets with it",
 };
 
 /**

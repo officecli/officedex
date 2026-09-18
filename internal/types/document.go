@@ -1,5 +1,20 @@
 package types
 
+// FolderRecord is a real directory the app files documents into.
+//
+// Exactly one folder is the default — where work lands when the user has not
+// chosen anywhere else. It is synthesised from the per-user workspace
+// directory rather than stored, so the old IA's "no project" path and the new
+// one's "default folder" are the same place on disk without either having to
+// agree with the other. See app_folders.go.
+type FolderRecord struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	// Absolute path on disk. The UI shows it; it never parses it.
+	Path      string `json:"path"`
+	IsDefault bool   `json:"isDefault,omitempty"`
+}
+
 type DocumentRecord struct {
 	ID                    string `json:"id"`
 	FilePath              string `json:"filePath"`

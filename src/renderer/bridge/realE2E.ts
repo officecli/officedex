@@ -1,6 +1,6 @@
 // The dev-browser E2E transport: JSON RPC + SSE to a real officedex process
 // behind the Vite proxy.
-import type { AppUpdateCheckResult, AppUpdateEvent, AppUpdateStatus, Artifact, AgentClientToolReassignInput, AgentClientToolResultInput, AgentRun, AgentRunApproveInput, AgentRunRespondInput, AgentRunStartInput, ArtifactStageRuntimeInput, AuthEvent, BinaryFileData, BridgeEvent, BridgeRuntimeSnapshot, CreditStatus, CreateImageTemplatePublishRequestInput, CreateUserImageTemplateInput, DesktopAPI, GenerateInput, ImageTemplatePublishRequest, ImagePromptTemplate, InviteInfo, LlmProvider, LocalTextDocument, LoginInput, PlanPptxJSResult, ModifyInput, PeekReportContextResult, CreateWorkbookFromSheetInput, DrawingAsset, CaptureTimelineNodeInput, TimelineCapturedNode, PreparePptxEditorResult, SavePptxEditorSnapshotInput, SavePptxEditorAssetInput, ExportPptxEditorInput, ClosePptxEditorInput, PptxEditorSaveResult, PptxEditorSaveAssetResult, PrepareXlsxEditorResult, PreviewGrant, ProviderTestInput, ProviderSnapshot, ProviderTestResult, RedeemResult, RecentFile, ReportCapabilityResult, RendererLogInput, CloseXlsxEditorInput, SpreadsheetPlanFieldsInput, SpreadsheetPlanFieldsResult, SaveDocxResult, SaveXlsxEditorInput, StageXlsxEditorImageInput, SaveXlsxEditorResult, SubmitReportInput, SubmitReportResult, TaskHistoryEntry, UserSettings, WorkspaceSummary, WhoAmIResult, ActivityPage, DocumentPage, DocumentRecord, RunRecord} from "../../shared/types";
+import type { AppUpdateCheckResult, AppUpdateEvent, AppUpdateStatus, Artifact, AgentClientToolReassignInput, AgentClientToolResultInput, AgentRun, AgentRunApproveInput, AgentRunRespondInput, AgentRunStartInput, ArtifactStageRuntimeInput, AuthEvent, BinaryFileData, BridgeEvent, BridgeRuntimeSnapshot, CreditStatus, CreateImageTemplatePublishRequestInput, CreateUserImageTemplateInput, DesktopAPI, GenerateInput, ImageTemplatePublishRequest, ImagePromptTemplate, InviteInfo, LlmProvider, LocalTextDocument, LoginInput, PlanPptxJSResult, ModifyInput, PeekReportContextResult, CreateWorkbookFromSheetInput, DrawingAsset, CaptureTimelineNodeInput, TimelineCapturedNode, PreparePptxEditorResult, SavePptxEditorSnapshotInput, SavePptxEditorAssetInput, ExportPptxEditorInput, ClosePptxEditorInput, PptxEditorSaveResult, PptxEditorSaveAssetResult, PrepareXlsxEditorResult, PreviewGrant, ProviderTestInput, ProviderSnapshot, ProviderTestResult, RedeemResult, RecentFile, ReportCapabilityResult, RendererLogInput, CloseXlsxEditorInput, SpreadsheetPlanFieldsInput, SpreadsheetPlanFieldsResult, SaveDocxResult, SaveXlsxEditorInput, StageXlsxEditorImageInput, SaveXlsxEditorResult, SubmitReportInput, SubmitReportResult, TaskHistoryEntry, UserSettings, WorkspaceSummary, WhoAmIResult, ActivityPage, DocumentPage, DocumentRecord, FolderRecord, RunRecord} from "../../shared/types";
 import type { JiraConnectionSummary, JiraProbeResult, LiquipediaConnectionSummary, LiquipediaProbeResult, MarketingCampaignPlanInput, MarketingCampaignPlanResult, CampaignImageInput, CampaignImageResult } from "../../shared/verticals";
 import { defaultProxySettings } from "../defaults";
 import { agentClientId } from "../agentClientIdentity";
@@ -106,6 +106,12 @@ export function createRealE2EAPI(endpoint: string): DesktopAPI {
     listDocumentActivities: (input) => rpc<ActivityPage>("ListDocumentActivities", input),
     setDocumentPinned: (documentId: string, pinned: boolean) =>
       rpc<void>("SetDocumentPinned", { documentId, pinned }),
+    listFolders: async () => (await rpc<FolderRecord[]>("ListFolders")) ?? [],
+    createFolder: (name: string) => rpc<FolderRecord>("CreateFolder", name),
+    renameFolder: (folderId: string, name: string) =>
+      rpc<FolderRecord>("RenameFolder", { folderId, name }),
+    removeFolder: (folderId: string) => rpc<void>("RemoveFolder", folderId),
+    folderPath: (folderId: string) => rpc<string>("FolderPath", folderId),
     modify: (input: ModifyInput) =>
       rpc<{ taskId: string; sessionId: string; status: string }>("Modify", input),
     artifactStageEdit: (input: ArtifactStageRuntimeInput) =>

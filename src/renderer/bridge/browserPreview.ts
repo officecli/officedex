@@ -88,6 +88,11 @@ export function createBrowserPreviewAPI(): DesktopAPI {
     listDocumentRuns: async () => [],
     listDocumentActivities: async () => ({ items: [] }),
     setDocumentPinned: async () => undefined,
+    listFolders: async () => [],
+    createFolder: async () => { throw new Error("Creating folders requires the desktop app."); },
+    renameFolder: async () => { throw new Error("Renaming folders requires the desktop app."); },
+    removeFolder: async () => undefined,
+    folderPath: async () => "",
     modify: async () => {
       throw new Error("Bridge IPC is only available inside the desktop app.");
     },
