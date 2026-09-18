@@ -188,23 +188,182 @@ describe("desktop model service", () => {
 });
 
 describe("desktop agent service", () => {
-  // A skeleton until S4, and it says so rather than failing silently.
-  it("reports no task and refuses to send", async () => {
-    const port = createPort();
-    expect(await port.agent.current("folder:default")).toBeNull();
-    await expect(port.agent.send({
-      text: "hello",
-      folderId: "folder:default",
-      mentions: [],
-      attachments: [],
-      modelId: "official",
-      permission: "review",
-      activeFileId: null,
-    })).rejects.toThrow(/S4/);
+  function agentPort(seed: Parameters<typeof createFakeDesktopApi>[0] = {}) {
+    const api = createFakeDesktopApi(seed);
+    return { api, port: createDesktopUiPort({ api, window: stubWindow() }) };
+  }
+
+  const started = (taskId: string, workspaceId = "") => ({
+    event_id: `${taskId}-start`,
+    task_id: taskId,
+    type: "task.started" as const,
+    ts: "2026-09-18T10:00:00Z",
+    payload: { document_type: "pptx", ...(workspaceId ? { workspace_id: workspaceId } : {}) },
   });
 
-  it("returns a working unsubscribe", async () => {
-    const unsubscribe = createPort().agent.subscribe(() => {});
-    expect(() => unsubscribe()).not.toThrow();
+  it("reports no task for a folder that has never had one", async () => {
+    expect(await agentPort().port.agent.current("folder:default")).toBeNull();
+  });
+
+  // A folder can hold several conversations and the contract has room for one.
+  it("scopes the task to its folder", async () => {
+    const { api, port } = agentPort({
+      folders: [{ id: "folder-research", name: "Research", path: "/tmp/officedex/Research" }],
+    });
+    api.emitBridgeEvent(started("task-default"));
+    api.emitBridgeEvent(started("task-research", "folder-research"));
+
+    expect((await port.agent.current("folder:default"))?.id).toBe("task-default");
+    expect((await port.agent.current("folder-research"))?.id).toBe("task-research");
+  });
+
+  // What is happening now matters more than what happened.
+  it("prefers an active run over a finished one in the same folder", async () => {
+    const { api, port } = agentPort();
+    api.emitBridgeEvent(started("task-old"));
+    api.emitBridgeEvent({
+      event_id: "task-old-done", task_id: "task-old", type: "task.completed",
+      ts: "2026-09-18T10:00:05Z", payload: {},
+    });
+    api.emitBridgeEvent(started("task-live"));
+
+    expect((await port.agent.current("folder:default"))?.id).toBe("task-live");
+  });
+
+  it("pushes task updates to subscribers", async () => {
+    const { api, port } = agentPort();
+    const seen: string[] = [];
+    const unsubscribe = port.agent.subscribe((event) => {
+      if (event.kind === "task") seen.push(event.task.status);
+    });
+
+    api.emitBridgeEvent(started("task-1"));
+    // A started run is already running, and the contract's two live states are
+    // reading and writing — `working` is for one that has not begun.
+    expect(seen).toContain("reading");
+
+    unsubscribe();
+    api.emitBridgeEvent(started("task-2"));
+    expect(seen).toHaveLength(1);
+  });
+
+  // AgentStatus has no failure state, so a failed run is reported twice: the
+  // task turns done, and an error event says why.
+  it("reports a failure as done plus an error event", async () => {
+    const { api, port } = agentPort();
+    const events: string[] = [];
+    port.agent.subscribe((event) => {
+      events.push(event.kind === "task" ? `task:${event.task.status}` : `error:${event.message}`);
+    });
+
+    api.emitBridgeEvent(started("task-1"));
+    api.emitBridgeEvent({
+      event_id: "task-1-fail", task_id: "task-1", type: "task.failed",
+      ts: "2026-09-18T10:00:09Z", payload: { message: "ran out of credits" },
+    });
+
+    expect(events).toContain("task:done");
+    expect(events.some((entry) => entry.startsWith("error:"))).toBe(true);
+  });
+
+  it("maps a question to awaiting-review and shows it as an agent message", async () => {
+    const { api, port } = agentPort();
+    api.emitBridgeEvent(started("task-1"));
+    api.emitBridgeEvent({
+      event_id: "task-1-q", task_id: "task-1", type: "task.question",
+      ts: "2026-09-18T10:00:03Z",
+      payload: { id: "q1", question: "Who is the audience?", options: [] },
+    });
+
+    const task = await port.agent.current("folder:default");
+    expect(task?.status).toBe("awaiting-review");
+    expect(task?.messages.some((message) => message.role === "agent" && message.text.includes("audience"))).toBe(true);
+  });
+
+  // The contract carries no document type, so a new run infers one from the
+  // instruction — the same rule the old Home used.
+  it("starts a new run when nothing is open", async () => {
+    const { api, port } = agentPort();
+    await port.agent.send({
+      text: "Build a launch deck for the new pricing",
+      folderId: "folder:default",
+      mentions: [], attachments: [], modelId: "official", permission: "review",
+      activeFileId: null,
+    });
+
+    expect(api.calls).toHaveLength(1);
+    expect(api.calls[0].method).toBe("generate");
+    expect(api.calls[0].input).toMatchObject({ noProject: true });
+  });
+
+  it("edits the open document instead of starting a new run", async () => {
+    const { api, port } = agentPort({
+      documents: [{ fileName: "deck.pptx", documentType: "pptx" }],
+    });
+    const file = (await port.files.list())[0];
+
+    await port.agent.send({
+      text: "Tighten the intro",
+      folderId: "folder:default",
+      mentions: [], attachments: [], modelId: "official", permission: "review",
+      activeFileId: file.id,
+    });
+
+    expect(api.calls[0].method).toBe("modify");
+    expect(api.calls[0].input).toMatchObject({ prompt: "Tighten the intro", documentType: "pptx" });
+  });
+
+  it("files a run into the folder it was sent from", async () => {
+    const { api, port } = agentPort({
+      folders: [{ id: "folder-research", name: "Research", path: "/tmp/officedex/Research" }],
+    });
+    await port.agent.send({
+      text: "Summarise the interviews",
+      folderId: "folder-research",
+      mentions: [], attachments: [], modelId: "official", permission: "review",
+      activeFileId: null,
+    });
+
+    expect(api.calls[0].input).toMatchObject({ workspaceId: "folder-research" });
+  });
+
+  it("ignores an empty instruction", async () => {
+    const { api, port } = agentPort();
+    await port.agent.send({
+      text: "   ", folderId: "folder:default",
+      mentions: [], attachments: [], modelId: "official", permission: "review",
+      activeFileId: null,
+    });
+    expect(api.calls).toHaveLength(0);
+  });
+
+  // Holding a run at a page boundary only exists for presentations. Saying so
+  // beats a button that silently does nothing.
+  it("refuses to pause a run that is not a presentation", async () => {
+    const { api, port } = agentPort();
+    api.emitBridgeEvent({
+      event_id: "task-doc-start", task_id: "task-doc", type: "task.started",
+      ts: "2026-09-18T10:00:00Z", payload: { document_type: "docx" },
+    });
+
+    await expect(port.agent.pause()).rejects.toThrow(/presentation/i);
+  });
+
+  it("pauses and resumes a presentation", async () => {
+    const { api, port } = agentPort();
+    api.emitBridgeEvent(started("task-deck"));
+
+    await expect(port.agent.pause()).resolves.toBeUndefined();
+    await expect(port.agent.resume()).resolves.toBeUndefined();
+  });
+
+  // The apply/undo model has no desktop counterpart at all.
+  it("has no suggestion, and says so when asked to apply one", async () => {
+    const { api, port } = agentPort();
+    api.emitBridgeEvent(started("task-1"));
+
+    expect((await port.agent.current("folder:default"))?.suggestion).toBeNull();
+    await expect(port.agent.applySuggestion("any")).rejects.toThrow(/no desktop equivalent/i);
+    await expect(port.agent.undoSuggestion("any")).rejects.toThrow(/no desktop equivalent/i);
   });
 });

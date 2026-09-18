@@ -1,4 +1,5 @@
 import type {
+  BridgeEvent,
   DesktopAPI,
   DocumentRecord,
   FolderRecord,
@@ -46,7 +47,21 @@ function extensionOf(fileName: string): string {
   return dot > 0 ? fileName.slice(dot) : "";
 }
 
-export function createFakeDesktopApi(seed: FakeDesktopSeed = {}): DesktopAPI {
+/**
+ * The fake plus the handles a test needs to drive it. The agent service is
+ * event-driven, so a test has to be able to push an event the way the bridge
+ * would.
+ */
+export type FakeDesktopApi = DesktopAPI & {
+  emitBridgeEvent(event: BridgeEvent): void;
+  /** Every generate/modify call made through this fake, in order. */
+  readonly calls: Array<{ method: "generate" | "modify"; input: Record<string, unknown> }>;
+};
+
+export function createFakeDesktopApi(seed: FakeDesktopSeed = {}): FakeDesktopApi {
+  const bridgeListeners = new Set<(event: BridgeEvent) => void>();
+  const calls: Array<{ method: "generate" | "modify"; input: Record<string, unknown> }> = [];
+  let taskCounter = 0;
   const folders: FolderRecord[] = [
     { id: FAKE_DEFAULT_FOLDER_ID, name: "OfficeDex", path: DEFAULT_WORKSPACE_DIR, isDefault: true },
     ...(seed.folders ?? []).map((folder) => ({ ...folder })),
@@ -227,6 +242,34 @@ export function createFakeDesktopApi(seed: FakeDesktopSeed = {}): DesktopAPI {
       documents = documents.filter((document) => document.filePath !== filePath);
     },
 
+    onBridgeEvent(callback: (event: BridgeEvent) => void) {
+      bridgeListeners.add(callback);
+      return () => bridgeListeners.delete(callback);
+    },
+    emitBridgeEvent(event: BridgeEvent) {
+      for (const listener of bridgeListeners) listener(event);
+    },
+    calls,
+
+    async getTaskHistory() {
+      return [];
+    },
+    async generate(input: Record<string, unknown>) {
+      calls.push({ method: "generate", input });
+      taskCounter += 1;
+      return { taskId: `task-${taskCounter}`, sessionId: "session", status: "running" };
+    },
+    async modify(input: Record<string, unknown>) {
+      calls.push({ method: "modify", input });
+      taskCounter += 1;
+      return { taskId: `task-${taskCounter}`, sessionId: "session", status: "running" };
+    },
+    async cancel() {
+      return undefined;
+    },
+    async pausePptx() {},
+    async resumePptxLive() {},
+
     async getSettings() {
       return { ...settings };
     },
@@ -234,7 +277,7 @@ export function createFakeDesktopApi(seed: FakeDesktopSeed = {}): DesktopAPI {
       settings = { ...settings, ...patch };
       return { ...settings };
     },
-  } as unknown as DesktopAPI, {
+  } as unknown as FakeDesktopApi, {
     get(target, property) {
       const value = Reflect.get(target, property);
       return value ?? refuse(String(property));

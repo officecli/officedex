@@ -1,69 +1,322 @@
-import type { DesktopAPI } from "../shared/types";
-import type { AgentEvent, AgentPort, AgentTask } from "../shared/uiPort";
+import type { BridgeEvent, DesktopAPI, DesktopTask, GenerateInput, TaskHistoryEntry } from "../shared/types";
+import type { AgentEvent, AgentMessage, AgentPort, AgentStatus, AgentStep, AgentTask, SendInput } from "../shared/uiPort";
+import { applyTaskEvent, attachTaskContext, createInitialTaskState, type TaskState } from "../renderer/taskState";
+import { taskTitle } from "../renderer/taskTitle";
+import { inferHomeTaskRoute } from "../renderer/homeIntake";
+import { DEFAULT_FOLDER_ID } from "./files";
 
 /**
- * The agent surface. **A skeleton: S4 builds this.**
+ * The agent surface over the desktop's task model.
  *
- * It is here rather than absent so `createDesktopUiPort` returns a complete
- * `UiPort` and the rest of the shell can run against the real service today.
- * Every method refuses in a way that names the reason, because a silent no-op
- * in a half-built layer is the thing that wastes an afternoon.
+ * `taskState.ts`, `taskTitle.ts` and `homeIntake.ts` are reused rather than
+ * reimplemented: they are pure functions with their own tests, and the rules
+ * they encode (how events reduce to a task, how a run is named, which document
+ * type an instruction implies) are the same rules whatever the UI looks like.
+ * They live under src/renderer/ because that is where they were written; they
+ * are not renderer code and move out when the old entry point is retired.
  *
- * What S4 has to reconcile, recorded now while it is fresh:
+ * Four places where the contract and the desktop do not line up. Each is
+ * handled explicitly below rather than smoothed over:
  *
- *   - `current(folderId)` is scoped to a folder. The desktop's tasks are scoped
- *     to a conversation. One folder can hold several conversations, so this has
- *     to aggregate rather than look up.
- *   - `send` maps to generate/modify, but `SendInput` also carries `mentions`,
- *     `modelId` and `permission`, none of which the generate path accepts yet.
- *   - `pause`/`resume` take no task id and exist for every type; the desktop has
- *     `pausePptx(taskId)` and nothing for the others.
- *   - `finish` ends a task but keeps applied changes. The desktop's `cancel`
- *     means "stop and discard", which is a different promise.
- *   - `AgentSuggestion` with apply/undo **has no desktop model at all**. The
- *     docx path applies edits straight through the editor. This is the one
- *     genuinely new product concept in the port, not a migration — see
- *     docs/uiport-scope.md.
+ *   1. A task is scoped to a folder here, to a conversation on the desktop. One
+ *      folder can hold several conversations, so `current` picks one.
+ *   2. `AgentStatus` has no failure state. A failed run reports `done` and the
+ *      failure arrives separately as an error event.
+ *   3. `pause`/`resume` exist for every type in the contract; the desktop only
+ *      implements them for presentations.
+ *   4. `SendInput` carries `mentions`, `attachments`, `modelId` and
+ *      `permission`, none of which the generate path accepts. Attachments are
+ *      the sharpest: the contract gives a name and a size but no path, so there
+ *      is nothing to hand the runtime even in principle.
+ *
+ * `suggestion` is always null. The apply/undo model has no desktop counterpart
+ * at all — see docs/uiport-scope.md.
  */
 
-const NOT_YET = "The agent service is not wired up yet (S4).";
+const ACTIVE_STATUSES = ["starting", "running", "question", "plan_review"];
 
-export function createAgentService(_api: DesktopAPI): AgentPort {
+/** How many history entries `current` looks back through. */
+const HISTORY_PAGE = 50;
+
+function toStatus(task: DesktopTask): AgentStatus {
+  switch (task.status) {
+    case "starting":
+      return "working";
+    case "running":
+      // The active stage says more than "running" does, and the contract has
+      // two states for it.
+      return task.activeStageId?.includes("draw") || task.activeStageId?.includes("write")
+        ? "writing"
+        : "reading";
+    case "question":
+    case "plan_review":
+      return "awaiting-review";
+    // No failure state in the contract: a failed run is over, and the failure
+    // is delivered as an error event instead.
+    case "completed":
+    case "failed":
+    case "cancelled":
+      return "done";
+    default:
+      return "idle";
+  }
+}
+
+function toSteps(task: DesktopTask): AgentStep[] {
+  return (task.stages ?? []).map((stage) => ({
+    id: stage.id,
+    label: stage.label,
+    state: stage.status === "completed" ? "done" : stage.status === "active" ? "active" : "pending",
+  }));
+}
+
+function phaseOf(task: DesktopTask): string {
+  const active = (task.stages ?? []).find((stage) => stage.id === task.activeStageId);
+  if (active) return active.label;
+  if (task.status === "question") return "Waiting for your answer";
+  if (task.status === "plan_review") return "Waiting for your review";
+  if (task.status === "failed") return task.error?.trim() || "The run stopped";
+  if (task.status === "completed") return "Done";
+  return "";
+}
+
+/**
+ * The conversation, as far as the desktop has one.
+ *
+ * The user's instruction is a message. What comes back is not chat: a run edits
+ * a document rather than replying. So the agent's messages are the things it
+ * genuinely said — a question it asked, a plan it proposed, an error it hit.
+ * Completion produces no message because there is no text to show, and
+ * inventing one would be putting words in the runtime's mouth.
+ */
+function toMessages(task: DesktopTask): AgentMessage[] {
+  const messages: AgentMessage[] = [];
+  const at = (value: string | undefined) => (value ? Date.parse(value) || 0 : 0);
+
+  if (task.userInput?.prompt) {
+    messages.push({
+      id: `${task.id}:instruction`,
+      role: "user",
+      text: task.userInput.prompt,
+      createdAt: at(task.createdAt),
+    });
+  }
+  if (task.question?.question) {
+    messages.push({
+      id: `${task.id}:question:${task.question.id}`,
+      role: "agent",
+      text: task.question.question,
+      createdAt: at(task.events.at(-1)?.ts),
+    });
+  }
+  if (task.plan?.markdown) {
+    messages.push({
+      id: `${task.id}:plan`,
+      role: "agent",
+      text: task.plan.markdown,
+      createdAt: at(task.events.at(-1)?.ts),
+    });
+  }
+  if (task.status === "failed" && task.error) {
+    messages.push({
+      id: `${task.id}:error`,
+      role: "agent",
+      text: task.error,
+      createdAt: at(task.events.at(-1)?.ts),
+    });
+  }
+  return messages.sort((left, right) => left.createdAt - right.createdAt);
+}
+
+function toAgentTask(task: DesktopTask): AgentTask {
   return {
-    async current(_folderId): Promise<AgentTask | null> {
-      // Null is the contract's "no task started here", which is honest for a
-      // surface that cannot start one yet — and lets the shell render.
-      return null;
+    id: task.id,
+    title: taskTitle(task, "Untitled task"),
+    folderId: task.workspaceId?.trim() || DEFAULT_FOLDER_ID,
+    status: toStatus(task),
+    phase: phaseOf(task),
+    steps: toSteps(task),
+    messages: toMessages(task),
+    // No desktop model for proposed-then-applied changes; see the header.
+    suggestion: null,
+  };
+}
+
+/** Replays a history page into task state, newest entries included. */
+function hydrate(entries: TaskHistoryEntry[]): TaskState {
+  let state = createInitialTaskState();
+  for (const entry of entries) {
+    for (const event of entry.events) state = applyTaskEvent(state, event);
+    state = attachTaskContext(state, entry.taskId, {
+      createdAt: entry.createdAt,
+      conversationId: entry.conversationId,
+      parentTaskId: entry.parentTaskId,
+      workspaceId: entry.workspaceId,
+      workspacePath: entry.workspacePath,
+    });
+  }
+  return state;
+}
+
+function folderOf(task: DesktopTask): string {
+  return task.workspaceId?.trim() || DEFAULT_FOLDER_ID;
+}
+
+/**
+ * The task a folder's presence shows.
+ *
+ * A folder can hold several conversations, and the contract has room for one.
+ * An active run wins over a finished one — what is happening now matters more
+ * than what happened — and among equals the most recent.
+ */
+function pickForFolder(state: TaskState, folderId: string): DesktopTask | undefined {
+  const candidates = state.taskOrder
+    .map((id) => state.tasks[id])
+    .filter((task): task is DesktopTask => Boolean(task) && folderOf(task) === folderId);
+  return candidates.find((task) => ACTIVE_STATUSES.includes(task.status)) ?? candidates[0];
+}
+
+export function createAgentService(api: DesktopAPI): AgentPort {
+  let state = createInitialTaskState();
+  /** What pause/resume/finish act on: those take no id in the contract. */
+  let activeTaskId: string | undefined;
+  const listeners = new Set<(event: AgentEvent) => void>();
+
+  const emit = (event: AgentEvent) => {
+    for (const listener of listeners) listener(event);
+  };
+
+  // Subscribed for the service's whole life rather than per listener: task
+  // state has to keep up with the bridge even while nothing is watching, or a
+  // run started before the first subscriber would be invisible afterwards.
+  api.onBridgeEvent((event: BridgeEvent) => {
+    if (!event.task_id) return;
+    state = applyTaskEvent(state, event);
+    const task = state.tasks[event.task_id];
+    if (!task) return;
+    if (ACTIVE_STATUSES.includes(task.status)) activeTaskId = task.id;
+    emit({ kind: "task", task: toAgentTask(task) });
+    // The contract has no failed status, so a failure is reported twice: the
+    // task turns `done`, and this says why.
+    if (task.status === "failed" && task.error) {
+      emit({ kind: "error", message: task.error });
+    }
+  });
+
+  return {
+    async current(folderId) {
+      const entries = await api.getTaskHistory(HISTORY_PAGE).catch(() => [] as TaskHistoryEntry[]);
+      if (entries.length > 0) {
+        const hydrated = hydrate(entries);
+        // History is authoritative for what happened; live events are ahead of
+        // it for what is happening. Merge rather than replace.
+        for (const id of hydrated.taskOrder) {
+          if (!state.tasks[id]) state = { ...state, tasks: { ...state.tasks, [id]: hydrated.tasks[id] }, taskOrder: [...state.taskOrder, id] };
+        }
+      }
+      const task = pickForFolder(state, folderId);
+      if (!task) return null;
+      if (ACTIVE_STATUSES.includes(task.status)) activeTaskId = task.id;
+      return toAgentTask(task);
     },
 
-    async send(_input) {
-      throw new Error(NOT_YET);
+    async send(input: SendInput) {
+      const text = input.text.trim();
+      if (!text) return;
+      warnAboutUnsupported(input);
+
+      const settings = await api.getSettings();
+      const workspaceId = input.folderId === DEFAULT_FOLDER_ID ? undefined : input.folderId;
+
+      // Editing what is open, or starting something new. The document type of a
+      // new run is inferred from the instruction by the same rules the old Home
+      // used — the contract carries no type field.
+      if (input.activeFileId) {
+        const record = await api.getDocument(input.activeFileId);
+        const result = await api.modify({
+          documentType: record.documentType as GenerateInput["documentType"],
+          sourceFile: record.filePath,
+          prompt: text,
+          ...(workspaceId ? { workspaceId } : { noProject: true }),
+        });
+        activeTaskId = result.taskId;
+        return;
+      }
+
+      const route = inferHomeTaskRoute({ prompt: text }, settings.defaults.documentType);
+      if (route.kind === "needs_source") {
+        throw new Error("That request needs a file to work from. Open one first.");
+      }
+      const result = await api.generate({
+        documentType: route.documentType,
+        topic: text.slice(0, 64),
+        prompt: text,
+        ...(route.sourceFile ? { sourceFile: route.sourceFile } : {}),
+        ...(workspaceId ? { workspaceId } : { noProject: true }),
+        enableImages: settings.defaults.enableImages,
+        imageQuality: settings.defaults.imageQuality,
+      });
+      activeTaskId = result.taskId;
     },
 
-    subscribe(_listener: (event: AgentEvent) => void) {
-      // A subscription that never fires is correct for a surface with no tasks;
-      // returning a working unsubscribe keeps the caller's cleanup honest.
-      return () => {};
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
     },
 
     async pause() {
-      throw new Error(NOT_YET);
+      const task = activeTaskId ? state.tasks[activeTaskId] : undefined;
+      if (!task) return;
+      if (!api.pausePptx || task.documentType !== "pptx") {
+        // Saying so beats a button that silently does nothing. Holding a run at
+        // a boundary only exists for presentations today.
+        throw new Error("Pausing is only available while a presentation is being drawn.");
+      }
+      await api.pausePptx(task.id);
     },
 
     async resume() {
-      throw new Error(NOT_YET);
+      const task = activeTaskId ? state.tasks[activeTaskId] : undefined;
+      if (!task) return;
+      if (!api.resumePptxLive || task.documentType !== "pptx") {
+        throw new Error("Resuming is only available while a presentation is being drawn.");
+      }
+      await api.resumePptxLive(task.id);
     },
 
     async finish() {
-      throw new Error(NOT_YET);
+      if (!activeTaskId) return;
+      // `cancel` is the closest the desktop has. The promises differ in wording
+      // — finish keeps what was applied, cancel stops the run — but the outcome
+      // matches: a cancelled run's output stays on disk as its partial artifact.
+      await api.cancel(activeTaskId);
+      activeTaskId = undefined;
     },
 
     async applySuggestion(_id) {
-      throw new Error(NOT_YET);
+      throw new Error("Applying a suggested change has no desktop equivalent yet.");
     },
 
     async undoSuggestion(_id) {
-      throw new Error(NOT_YET);
+      throw new Error("Undoing a suggested change has no desktop equivalent yet.");
     },
   };
+}
+
+/**
+ * The parts of a submission the desktop cannot carry.
+ *
+ * Reported once per send and only when actually present, so a user who never
+ * uses them never sees it, and one who does is not left wondering why their
+ * attachment had no effect.
+ */
+function warnAboutUnsupported(input: SendInput): void {
+  const dropped: string[] = [];
+  if (input.mentions.length > 0) dropped.push("mentions");
+  // An attachment arrives as a name and a size; there is no path to hand on.
+  if (input.attachments.length > 0) dropped.push("attachments");
+  if (input.permission !== "review") dropped.push("permission mode");
+  if (dropped.length > 0) {
+    console.warn(`[agent] ignored, no desktop equivalent yet: ${dropped.join(", ")}`);
+  }
 }

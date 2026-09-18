@@ -93,11 +93,14 @@ const UNWIRED: Record<string, string> = {
  * an exception at all.
  */
 const PENDING_CONSUMER: Record<string, string> = {
-  // What S2's services do not consume yet. The rest of the projection is read
-  // by the agent service, which S4 builds.
-  listDocumentRuns: "S2 · services/files.ts",
-  listDocumentActivities: "S2 · services/agent.ts reads the activity stream",
-  folderPath: "S2 · services/files.ts resolves move targets with it",
+  // The agent service reduces live bridge events and task history rather than
+  // reading the stored activity stream, so these two are still unconsumed. They
+  // are what an activity/history view would read.
+  listDocumentRuns: "no consumer yet · a run history view would read it",
+  listDocumentActivities: "no consumer yet · an activity view would read it",
+  // MoveDocument resolves the destination folder itself, so the service never
+  // needs the path.
+  folderPath: "no consumer yet · MoveDocument resolves the folder on the Go side",
 };
 
 /**
