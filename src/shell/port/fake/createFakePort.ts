@@ -12,7 +12,7 @@ import type {
   Model,
   ShellSettings,
   UiPort,
-} from "../types";
+} from "../../../shared/uiPort";
 import { createFakeAgent } from "./fakeAgent";
 import { SEED_FOLDER_ID, seedFiles, seedFolders, seedModels, seedSettings } from "./seed";
 

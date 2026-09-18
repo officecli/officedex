@@ -14,7 +14,7 @@ import type {
   AgentTask,
   FileMeta,
   SendInput,
-} from "../types";
+} from "../../../shared/uiPort";
 
 export interface FakeAgentDeps {
   /** Reads current file metadata, so suggestion summaries name a real file. */

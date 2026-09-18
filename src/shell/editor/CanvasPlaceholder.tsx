@@ -1,4 +1,4 @@
-import type { FileType } from "../port/types";
+import type { FileType } from "../../shared/uiPort";
 
 /**
  * What the canvas shows while no editor adapter is registered. It is a

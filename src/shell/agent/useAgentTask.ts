@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { usePort } from "../port/PortContext";
-import type { AgentTask } from "../port/types";
+import type { AgentTask } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
 import type { ComposerSubmission } from "../composer/Composer";
 import { useComposerSettings } from "../composer/useComposerSettings";

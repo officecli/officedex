@@ -4,7 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "../../renderer/ui";
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import { Menu } from "../chrome/Menu";
-import type { Attachment, Mention, PermissionMode, SendInput } from "../port/types";
+import type { Attachment, Mention, PermissionMode, SendInput } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
 import { MentionMenu, type MentionOption } from "./MentionMenu";
 import { ModelMenu } from "./ModelMenu";

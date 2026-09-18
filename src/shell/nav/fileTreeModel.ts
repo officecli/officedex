@@ -12,7 +12,7 @@
  * file could be dropped into.
  */
 
-import type { FileMeta, FileType, Folder } from "../port/types";
+import type { FileMeta, FileType, Folder } from "../../shared/uiPort";
 
 export type Grouping = "folder" | "time";
 export type FileFilter = "all" | "pinned";

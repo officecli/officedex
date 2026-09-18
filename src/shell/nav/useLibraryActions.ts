@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 
 import { usePort } from "../port/PortContext";
-import type { FileType } from "../port/types";
+import type { FileType } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
 
 /**

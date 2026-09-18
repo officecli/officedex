@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { AgentEvent, AgentTask, UiPort } from "../types";
+import type { AgentEvent, AgentTask, UiPort } from "../../../shared/uiPort";
 import { createFakePort } from "./createFakePort";
 import { SEED_FOLDER_ID } from "./seed";
 

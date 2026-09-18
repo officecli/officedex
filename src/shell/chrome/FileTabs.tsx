@@ -1,7 +1,7 @@
 import { Check, Maximize2, MoreHorizontal, Share2, X } from "lucide-react";
 
 import { usePort } from "../port/PortContext";
-import type { FileMeta } from "../port/types";
+import type { FileMeta } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
 import { FileTypeIcon } from "./FileTypeIcon";
 

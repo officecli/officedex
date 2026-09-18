@@ -1,6 +1,6 @@
 import { createContext, useContext, type ReactNode } from "react";
 
-import type { UiPort } from "./types";
+import type { UiPort } from "../../shared/uiPort";
 
 const PortContext = createContext<UiPort | null>(null);
 

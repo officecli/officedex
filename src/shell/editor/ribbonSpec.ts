@@ -12,7 +12,7 @@
  * adapter, so commands are inert by design rather than by omission.
  */
 
-import type { FileType } from "../port/types";
+import type { FileType } from "../../shared/uiPort";
 
 export type ToolKind = "icon" | "label" | "big" | "select" | "gallery" | "toggle";
 

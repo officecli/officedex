@@ -1,18 +1,21 @@
 /**
  * UiPort — everything the shell needs from the outside world, and nothing more.
  *
- * This file is the UI layer's *requirement specification*. The shell is built
- * and tested against it with an in-memory fake (`./fake/createFakePort.ts`);
- * the service layer is developed independently in its own session. At
- * integration time an adapter maps the service's shape onto this interface —
- * the shell never takes a dependency on the service's shape, and vice versa.
+ * This is the contract between the UI layer (`src/shell`) and the service layer
+ * (`src/services`). It lives in `src/shared` because neither side owns it: the
+ * same reason `types.ts` does, which is the contract between the renderer and
+ * Go. The shell is built and tested against it with an in-memory fake
+ * (`src/shell/port/fake/createFakePort.ts`); the service layer implements it
+ * directly — there is no adapter and no second domain model.
  *
- * Deliberately NOT reused: `src/shared/types.ts`'s `DesktopAPI`. That is a
- * ~150-method interface shaped by the old IA; adopting it would re-import the
- * assumptions this refactor exists to discard.
+ * Deliberately NOT reused: this directory's own `types.ts` / `DesktopAPI`. That
+ * is a ~120-method interface shaped by the old IA; adopting it would re-import
+ * the assumptions this refactor exists to discard. Which of its capabilities
+ * survive, and which new Ports they need, is settled in docs/uiport-scope.md.
  *
  * Deliberately NOT in this port: the document canvas. Word/Excel/PowerPoint
- * rendering is a *slot*, not a service call — see `../editor/canvasContract.ts`.
+ * rendering is a *slot*, not a service call — see
+ * `src/shell/editor/canvasContract.ts`.
  */
 
 /* ------------------------------------------------------------------ files */

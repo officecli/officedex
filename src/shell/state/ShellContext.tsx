@@ -10,7 +10,7 @@ import {
 } from "react";
 
 import { usePort } from "../port/PortContext";
-import type { FileMeta, Folder } from "../port/types";
+import type { FileMeta, Folder } from "../../shared/uiPort";
 import { readPersisted, writePersisted } from "./persist";
 import {
   hydrateShellState,

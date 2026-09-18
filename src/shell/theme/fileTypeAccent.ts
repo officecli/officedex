@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 
-import type { FileType } from "../port/types";
+import type { FileType } from "../../shared/uiPort";
 
 /**
  * One accent and one titlebar tint per document format, matching the

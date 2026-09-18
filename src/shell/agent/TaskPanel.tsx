@@ -2,7 +2,7 @@ import { ArrowUpRight, Check, CircleCheck, Clock3, Pause, PanelLeft, Play, Squar
 
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import { Composer } from "../composer/Composer";
-import type { AgentStep, AgentTask } from "../port/types";
+import type { AgentStep, AgentTask } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
 import { canDock, effectivePlacement } from "../state/shellReducer";
 import { PresenceFace, statusLabel } from "./PresenceFace";

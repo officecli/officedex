@@ -1,4 +1,4 @@
-import type { AgentStatus } from "../port/types";
+import type { AgentStatus } from "../../shared/uiPort";
 
 const FACES: Record<AgentStatus, { label: string; mouth: string; eyes: [number, number] }> = {
   idle: { label: "Agent idle", mouth: "M9 15.2q3 1.6 6 0", eyes: [0, 0] },

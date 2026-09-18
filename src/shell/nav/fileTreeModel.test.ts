@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { seedFiles, seedFolders } from "../port/fake/seed";
-import type { FileMeta } from "../port/types";
+import type { FileMeta } from "../../shared/uiPort";
 import {
   buildGroups,
   formatTouched,

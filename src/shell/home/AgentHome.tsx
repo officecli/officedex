@@ -7,7 +7,7 @@ import { statusLabel } from "../agent/PresenceFace";
 import { FileTree } from "../nav/FileTree";
 import { useFolderDrop } from "../nav/useFolderDrop";
 import { useLibraryActions } from "../nav/useLibraryActions";
-import type { FileType } from "../port/types";
+import type { FileType } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
 import "./home.css";
 

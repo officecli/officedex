@@ -16,7 +16,7 @@
  *    files, not a location a file can sit in.
  */
 
-import type { FileMeta } from "../port/types";
+import type { FileMeta } from "../../shared/uiPort";
 import type { PersistedShellState } from "./persist";
 
 export type Mode = "agent" | "editor";

@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 
 import { Input, Modal } from "../../renderer/ui";
 import { usePort } from "../port/PortContext";
-import type { Folder } from "../port/types";
+import type { Folder } from "../../shared/uiPort";
 
 type Pending =
   | { kind: "create" }

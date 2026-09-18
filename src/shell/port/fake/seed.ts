@@ -3,7 +3,7 @@
  * launch" workspace, so screens can be compared against it side by side.
  */
 
-import type { FileMeta, Folder, Model, ShellSettings } from "../types";
+import type { FileMeta, Folder, Model, ShellSettings } from "../../../shared/uiPort";
 
 const DAY = 86_400_000;
 

@@ -2,7 +2,7 @@ import * as Lucide from "lucide-react";
 import { ChevronDown, MessageSquare, Pencil, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 
-import type { FileType } from "../port/types";
+import type { FileType } from "../../shared/uiPort";
 import { ribbonTabs, STYLE_TILES, type RibbonTool } from "./ribbonSpec";
 import "./ribbon.css";
 

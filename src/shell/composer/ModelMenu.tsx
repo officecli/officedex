@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Input, Modal } from "../../renderer/ui";
 import { Menu } from "../chrome/Menu";
 import { usePort } from "../port/PortContext";
-import type { CustomModelInput, Model } from "../port/types";
+import type { CustomModelInput, Model } from "../../shared/uiPort";
 
 export interface ModelMenuProps {
   models: Model[];

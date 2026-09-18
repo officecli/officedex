@@ -12,7 +12,7 @@
  * about changes — it is never torn down and rebuilt to reflect a layout change.
  */
 
-import type { FileMeta } from "../port/types";
+import type { FileMeta } from "../../shared/uiPort";
 
 /** A span the user selected inside the document, offered to the agent as a reference. */
 export interface CanvasSelection {

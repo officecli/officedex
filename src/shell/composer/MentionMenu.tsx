@@ -2,7 +2,7 @@ import { Folder as FolderIcon, Paperclip, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
-import type { FileMeta, Folder, Mention } from "../port/types";
+import type { FileMeta, Folder, Mention } from "../../shared/uiPort";
 
 export interface MentionOption {
   id: string;

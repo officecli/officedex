@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { usePort } from "../port/PortContext";
-import type { Model, ShellSettings } from "../port/types";
+import type { Model, ShellSettings } from "../../shared/uiPort";
 
 const FALLBACK: ShellSettings = {
   permission: "review",

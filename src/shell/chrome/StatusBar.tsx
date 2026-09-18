@@ -1,6 +1,6 @@
 import { HardDrive, Minus, Plus } from "lucide-react";
 
-import type { FileMeta } from "../port/types";
+import type { FileMeta } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
 
 /** Per-format facts on the left, device and zoom on the right. */

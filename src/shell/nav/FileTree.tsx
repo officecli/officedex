@@ -3,9 +3,9 @@ import { useState } from "react";
 
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import { Menu, type MenuItemSpec } from "../chrome/Menu";
-import type { FileMeta, Folder } from "../port/types";
+import type { FileMeta, Folder } from "../../shared/uiPort";
 import { buildGroups, formatTouched, locationLabel, type FileFilter, type Grouping } from "./fileTreeModel";
-import type { FileType } from "../port/types";
+import type { FileType } from "../../shared/uiPort";
 import "./nav.css";
 
 const SIDEBAR_PAGE = 5;

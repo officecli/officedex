@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-import type { FileMeta } from "../port/types";
+import type { FileMeta } from "../../shared/uiPort";
 import { CanvasPlaceholder } from "./CanvasPlaceholder";
 import type { CanvasAdapter, CanvasSelection } from "./canvasContract";
 

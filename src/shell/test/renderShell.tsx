@@ -3,7 +3,7 @@ import { act, render, waitFor, type RenderResult } from "@testing-library/react"
 import { App } from "../App";
 import { PortProvider } from "../port/PortContext";
 import { createFakePort, type FakePortOptions } from "../port/fake/createFakePort";
-import type { UiPort } from "../port/types";
+import type { UiPort } from "../../shared/uiPort";
 import { ShellProvider, useShell } from "../state/ShellContext";
 import type { ShellAction, ShellState } from "../state/shellReducer";
 

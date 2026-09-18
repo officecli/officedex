@@ -5,7 +5,7 @@ import { Select } from "../../renderer/ui";
 import { FileTree } from "../nav/FileTree";
 import { useFolderDrop } from "../nav/useFolderDrop";
 import { useLibraryActions } from "../nav/useLibraryActions";
-import type { FileType } from "../port/types";
+import type { FileType } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
 import type { Grouping } from "../nav/fileTreeModel";
 import "./home.css";

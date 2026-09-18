@@ -1,6 +1,6 @@
 import { FileText, Presentation, Table2 } from "lucide-react";
 
-import type { FileType } from "../port/types";
+import type { FileType } from "../../shared/uiPort";
 
 const GLYPHS = { doc: FileText, sheet: Table2, slides: Presentation } as const;
 
