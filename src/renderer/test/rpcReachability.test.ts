@@ -103,6 +103,11 @@ const PENDING_CONSUMER: Record<string, string> = {
   renameFolder: "S2 · services/folders.ts",
   removeFolder: "S2 · services/folders.ts",
   folderPath: "S2 · services/files.ts resolves move targets with it",
+
+  // S1-4 added the file operations; services/files.ts is their only caller.
+  renameDocument: "S2 · services/files.ts implements UiPort.files.rename",
+  moveDocument: "S2 · services/files.ts implements UiPort.files.move",
+  duplicateDocument: "S2 · services/files.ts implements UiPort.files.duplicate",
 };
 
 /**

@@ -223,6 +223,9 @@ export function createWailsAPI(): DesktopAPI {
     renameFolder: (folderId: string, name: string) => WailsApp.RenameFolder(folderId, name),
     removeFolder: (folderId: string) => WailsApp.RemoveFolder(folderId),
     folderPath: (folderId: string) => WailsApp.FolderPath(folderId),
+    renameDocument: (documentId: string, name: string) => WailsApp.RenameDocument(documentId, name),
+    moveDocument: (documentId: string, folderId: string) => WailsApp.MoveDocument(documentId, folderId),
+    duplicateDocument: (documentId: string) => WailsApp.DuplicateDocument(documentId),
     modify: async (input: ModifyInput) => {
       const result = await WailsApp.Modify(toWails(input));
       return { taskId: result.taskId, sessionId: result.sessionId, status: result.status };

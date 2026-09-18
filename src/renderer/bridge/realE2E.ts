@@ -112,6 +112,11 @@ export function createRealE2EAPI(endpoint: string): DesktopAPI {
       rpc<FolderRecord>("RenameFolder", { folderId, name }),
     removeFolder: (folderId: string) => rpc<void>("RemoveFolder", folderId),
     folderPath: (folderId: string) => rpc<string>("FolderPath", folderId),
+    renameDocument: (documentId: string, name: string) =>
+      rpc<DocumentRecord>("RenameDocument", { documentId, name }),
+    moveDocument: (documentId: string, folderId: string) =>
+      rpc<DocumentRecord>("MoveDocument", { documentId, folderId }),
+    duplicateDocument: (documentId: string) => rpc<DocumentRecord>("DuplicateDocument", documentId),
     modify: (input: ModifyInput) =>
       rpc<{ taskId: string; sessionId: string; status: string }>("Modify", input),
     artifactStageEdit: (input: ArtifactStageRuntimeInput) =>

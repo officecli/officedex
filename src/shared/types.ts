@@ -1282,6 +1282,15 @@ export interface DesktopAPI extends DesktopVerticalAPI {
   /** The directory a folder id stands for. Blank resolves to the default. */
   folderPath(folderId: string): Promise<string>;
 
+  /**
+   * File operations that move real files. The document id survives all of
+   * them — the path is an attribute of a document, not its identity.
+   */
+  renameDocument(documentId: string, name: string): Promise<DocumentRecord>;
+  moveDocument(documentId: string, folderId: string): Promise<DocumentRecord>;
+  /** The copy is a document of its own, with a new id. */
+  duplicateDocument(documentId: string): Promise<DocumentRecord>;
+
   getPptxTaskStatus?: (taskId: string) => Promise<PptxTaskStatus>;
   skipPptxResearch?: (taskId: string) => Promise<void>;
   /**

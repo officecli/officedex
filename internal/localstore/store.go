@@ -899,7 +899,10 @@ func backfillV7(ctx context.Context, tx *sql.Tx) error {
 
 	docByPath := map[string]string{}
 	for _, artifact := range artifacts {
-		id := documentIDForPath(artifact.path)
+		id, err := documentIDForPathTx(ctx, tx, artifact.path)
+		if err != nil {
+			return err
+		}
 		docByPath[artifact.path] = id
 		workspaceID, createdAt := "", artifact.syncedAt
 		if task, ok := tasks[artifact.taskID]; ok {
@@ -1132,8 +1135,35 @@ func validateV7(ctx context.Context, tx *sql.Tx) error {
 	return nil
 }
 
+// documentIDForPath is the id a path gets the *first* time it is seen.
+//
+// After that the id is the document's own and stops following the path: see
+// documentIDForPathTx. Deriving the initial value from the path keeps existing
+// ids unchanged (no migration) and keeps them readable in a debugger.
 func documentIDForPath(path string) string {
 	return "document:" + url.PathEscape(strings.TrimSpace(path))
+}
+
+// documentIDForPathTx resolves the id for a path, reusing the one already
+// recorded for it.
+//
+// This is what makes a document id stable across a rename or a move. The id
+// used to be a pure function of the path, so renaming a file silently produced
+// a different document — every tab, recent-files row and agent reference the UI
+// was holding pointed at something that no longer existed. Now the path is an
+// attribute of the document rather than its identity, and both the incremental
+// projection and the full rebuild go through here.
+func documentIDForPathTx(ctx context.Context, tx *sql.Tx, path string) (string, error) {
+	path = strings.TrimSpace(path)
+	var id string
+	err := tx.QueryRowContext(ctx, `SELECT id FROM documents WHERE file_path = ?`, path).Scan(&id)
+	if err == nil && strings.TrimSpace(id) != "" {
+		return id, nil
+	}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return "", fmt.Errorf("localstore: resolve document id: %w", err)
+	}
+	return documentIDForPath(path), nil
 }
 
 func migratedOriginalEventID(taskID, storedID, eventType string) string {
@@ -1294,7 +1324,10 @@ func projectTaskTx(ctx context.Context, tx *sql.Tx, taskID string) error {
 		if !ok {
 			continue
 		}
-		docID := documentIDForPath(path)
+		docID, err := documentIDForPathTx(ctx, tx, path)
+		if err != nil {
+			return err
+		}
 		docByPath[path] = docID
 		conversationDocs[docID] = true
 		createdAt := artifact.syncedAt
@@ -2516,6 +2549,141 @@ func (s *Store) GetDocument(ctx context.Context, documentID string) (types.Docum
 		return types.DocumentRecord{}, false, fmt.Errorf("localstore: get document: %w", err)
 	}
 	return record, true, nil
+}
+
+// RelocateDocument points a document at a new path, keeping every table that
+// remembers the old one in step.
+//
+// Three tables move: artifacts (the source the projection is built from),
+// recent_files (the "open again" list) and documents (the projection itself).
+// task_events deliberately does not: it records what happened, and what
+// happened happened at the old path. Rewriting history to match the present
+// would make the activity stream lie about where a run wrote its output.
+//
+// The document id is not touched — that is the point of a rename.
+func (s *Store) RelocateDocument(ctx context.Context, documentID, newPath, newName string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return fmt.Errorf("localstore: not open")
+	}
+	documentID = strings.TrimSpace(documentID)
+	newPath = strings.TrimSpace(newPath)
+	newName = strings.TrimSpace(newName)
+	if documentID == "" || newPath == "" || newName == "" {
+		return fmt.Errorf("localstore: document id, path and name are required")
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("localstore: begin relocate: %w", err)
+	}
+	var oldPath string
+	if err := tx.QueryRowContext(ctx, `SELECT file_path FROM documents WHERE id = ?`, documentID).Scan(&oldPath); err != nil {
+		_ = tx.Rollback()
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("localstore: document not found: %s", documentID)
+		}
+		return fmt.Errorf("localstore: read document: %w", err)
+	}
+	if oldPath == newPath {
+		_ = tx.Rollback()
+		return nil
+	}
+	// file_path is UNIQUE on documents; report the collision rather than
+	// letting the constraint surface as an opaque SQL error.
+	var clashes int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM documents WHERE file_path = ? AND id != ?`, newPath, documentID).Scan(&clashes); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("localstore: check destination: %w", err)
+	}
+	if clashes > 0 {
+		_ = tx.Rollback()
+		return fmt.Errorf("localstore: another document already lives at %s", newPath)
+	}
+	now := nowTimestamp()
+	for _, statement := range []struct {
+		query string
+		args  []any
+	}{
+		{`UPDATE artifacts SET file_path = ?, file_name = ? WHERE file_path = ?`, []any{newPath, newName, oldPath}},
+		{`UPDATE recent_files SET file_path = ?, file_name = ? WHERE file_path = ?`, []any{newPath, newName, oldPath}},
+		{`UPDATE documents SET file_path = ?, file_name = ?, updated_at = ? WHERE id = ?`, []any{newPath, newName, now, documentID}},
+	} {
+		if _, err := tx.ExecContext(ctx, statement.query, statement.args...); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("localstore: relocate document: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("localstore: commit relocate: %w", err)
+	}
+	return nil
+}
+
+// InsertCopiedDocument records a file the user produced by copying another.
+//
+// It writes an artifacts row rather than a documents row directly: artifacts is
+// what the projection is built from, so a rebuild reproduces this document
+// instead of dropping it. The projection row is written here too so the copy is
+// visible immediately, without waiting for the next run to trigger one.
+func (s *Store) InsertCopiedDocument(ctx context.Context, sourceDocumentID, newPath, newName string) (types.DocumentRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return types.DocumentRecord{}, fmt.Errorf("localstore: not open")
+	}
+	newPath = strings.TrimSpace(newPath)
+	newName = strings.TrimSpace(newName)
+	if newPath == "" || newName == "" {
+		return types.DocumentRecord{}, fmt.Errorf("localstore: path and name are required")
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return types.DocumentRecord{}, fmt.Errorf("localstore: begin copy: %w", err)
+	}
+	var source types.DocumentRecord
+	if err := tx.QueryRowContext(ctx,
+		`SELECT id, file_path, file_name, document_type, COALESCE(workspace_id, '') FROM documents WHERE id = ?`,
+		strings.TrimSpace(sourceDocumentID),
+	).Scan(&source.ID, &source.FilePath, &source.FileName, &source.DocumentType, &source.WorkspaceID); err != nil {
+		_ = tx.Rollback()
+		if errors.Is(err, sql.ErrNoRows) {
+			return types.DocumentRecord{}, fmt.Errorf("localstore: document not found: %s", sourceDocumentID)
+		}
+		return types.DocumentRecord{}, fmt.Errorf("localstore: read source document: %w", err)
+	}
+	now := nowTimestamp()
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO artifacts(file_path, task_id, file_id, file_name, document_type, preview_url, edit_url, synced_at)
+		 VALUES (?, NULL, '', ?, ?, '', '', ?)
+		 ON CONFLICT(file_path) DO UPDATE SET file_name=excluded.file_name, document_type=excluded.document_type, synced_at=excluded.synced_at`,
+		newPath, newName, source.DocumentType, now,
+	); err != nil {
+		_ = tx.Rollback()
+		return types.DocumentRecord{}, fmt.Errorf("localstore: record copied artifact: %w", err)
+	}
+	record := types.DocumentRecord{
+		ID:              documentIDForPath(newPath),
+		FilePath:        newPath,
+		FileName:        newName,
+		DocumentType:    source.DocumentType,
+		WorkspaceID:     source.WorkspaceID,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+		MigrationSource: "user",
+	}
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO documents(id, file_path, file_name, document_type, current_artifact_task_id, workspace_id, created_at, updated_at, migration_source, pinned)
+		 VALUES (?, ?, ?, ?, NULL, NULLIF(?, ''), ?, ?, 'user', 0)`,
+		record.ID, record.FilePath, record.FileName, record.DocumentType, record.WorkspaceID, record.CreatedAt, record.UpdatedAt,
+	); err != nil {
+		_ = tx.Rollback()
+		return types.DocumentRecord{}, fmt.Errorf("localstore: record copied document: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return types.DocumentRecord{}, fmt.Errorf("localstore: commit copy: %w", err)
+	}
+	return record, nil
 }
 
 // SetDocumentPinned flips the pin on one document. Missing rows are reported
