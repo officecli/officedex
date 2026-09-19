@@ -127,6 +127,19 @@ test.describe("new shell · real deck generation", () => {
     await expect(page.locator(".shell-canvas .shell-skeleton-paper")).toHaveCount(0);
     await expect(page.locator(".shell-live-deck-lock")).toHaveCount(0);
 
+    /*
+     * And the editor could actually read it.
+     *
+     * An earlier revision stopped at the assertion above, and a run passed it
+     * while the canvas said "Unable to open this presentation — MOP Diagram
+     * layout did not produce native shapes": the frame mounts either way, so
+     * the deck failing to open looked exactly like the deck opening. A
+     * generation spec that cannot tell those apart is not checking the thing it
+     * exists to check.
+     */
+    await expect(page.getByText(/Unable to open this presentation/i)).toHaveCount(0);
+    await expect(page.getByText(/did not produce native shapes/i)).toHaveCount(0);
+
     await recordScenario({
       uiScenario: "shell-generate-pptx",
       documentType: "pptx",

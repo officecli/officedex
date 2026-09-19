@@ -51,18 +51,35 @@
  *
  * The file underneath is `workspaceDir/live/` scratch — replaced on every
  * redraw — so edits made now cannot survive to the finished deck. The embedded
- * editor brings its own ribbon and offers no read-only mode, so the block is
- * stated here: pointer events stop at the overlay, and the cursor says why
+ * editor brings its own ribbon and offers no read-only mode, and that ribbon is
+ * the problem: Insert, Draw, Design, Transitions and Animations all sit there
+ * looking live above a deck that will be overwritten in seconds.
+ *
+ * So the rule is stated *above* the ribbon rather than floated over it. A pill
+ * in the corner competed with the toolbar for the same glance and lost; a band
+ * across the top reframes everything below it, which is the only part of this
+ * the shell can reach — the ribbon is inside the iframe and its height is not
+ * ours to guess at.
+ *
+ * Pointer events still stop at the overlay, and the cursor still says why
  * before a click has to fail to explain it.
  */
 .shell-live-deck {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.shell-live-deck-frame {
   position: relative;
   display: flex;
   flex: 1;
   min-height: 0;
 }
 
-.shell-live-deck > :first-child {
+.shell-live-deck-frame > :first-child {
   flex: 1;
   min-width: 0;
 }
@@ -74,16 +91,34 @@
 }
 
 .shell-live-deck-note {
-  position: absolute;
-  top: 10px;
-  right: 14px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0;
-  padding: 4px 10px;
-  border: 1px solid var(--shell-line);
-  border-radius: var(--shell-radius-control);
-  background: var(--shell-paper);
-  color: var(--shell-ink-subtle);
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--shell-line);
+  background: var(--shell-tint);
+  color: var(--shell-ink-title);
   font-size: var(--shell-text-sm);
-  line-height: 18px;
-  pointer-events: none;
+  line-height: 16px;
+}
+
+/* The same spinner the task panel uses for a page in progress. One vocabulary:
+   whatever is turning is being written right now. */
+.shell-live-deck-note::before {
+  content: "";
+  flex: none;
+  width: 11px;
+  height: 11px;
+  border: 2px solid #ffffff99;
+  border-top-color: var(--shell-accent);
+  border-radius: 50%;
+  animation: shell-spin 800ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell-live-deck-note::before {
+    animation: none;
+  }
 }
