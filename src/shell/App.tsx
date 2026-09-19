@@ -9,6 +9,7 @@ import { FileTabs } from "./chrome/FileTabs";
 import { Sidebar } from "./chrome/Sidebar";
 import { StatusBar } from "./chrome/StatusBar";
 import { WindowBar } from "./chrome/WindowBar";
+import { useReduceMotion } from "./composer/useComposerSettings";
 import { EditorCanvasHost } from "./editor/EditorCanvasHost";
 import { AgentHome } from "./home/AgentHome";
 import { EditorHome } from "./home/EditorHome";
@@ -47,6 +48,7 @@ export function App() {
   const { state, activeFile, loaded } = useShell();
   const canvas = useCanvas();
   const agent = useAgentTask();
+  const reduceMotion = useReduceMotion();
   useCanvasDirty(canvas, activeFile?.id ?? null);
   useDocumentDraft(canvas, agent.task, activeFile?.id ?? null, agent.applySuggestion);
   const placement = effectivePlacement(state);
@@ -114,8 +116,16 @@ export function App() {
             workspace column, the presence sits in the body row beside it, and
             threading one through the other would couple two regions that share
             nothing else.
+
+            `reducedMotion` is not optional in practice, whatever the prop's
+            default says. This call site used to omit it, so the most prominent
+            animation in the product — a light travelling the document's edge
+            while the agent writes into it — was the one thing the Reduced
+            motion switch could never turn off (audit S7-004). Home's copy in
+            Hero.tsx passed it from the start; there is nothing different about
+            this one except that nobody noticed.
           */}
-          <AttentionBorder active={attentionActive} />
+          <AttentionBorder active={attentionActive} reducedMotion={reduceMotion} />
           <StatusBar />
         </main>
 
