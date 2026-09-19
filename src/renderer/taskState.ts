@@ -856,9 +856,13 @@ function semanticStageForProgress(payload: Record<string, unknown>): { id: strin
       return { id: "research", label: "Researching" };
     case "plan.outline":
     case "plan.outline.gate":
-    case "plan.style":
+    case "skill.plan":
       return { id: "outline", label: "Drafting outline" };
+    case "plan.style":
+    case "skill.design":
+      return { id: "design", label: "Choosing a design" };
     case "plan.expand":
+    case "skill.author":
       // The same work `generate_llm` names, so the same stage rather than a
       // second one saying it differently.
       return { id: "generate-content", label: "Generating document content" };
@@ -873,6 +877,15 @@ function semanticStageForProgress(payload: Record<string, unknown>): { id: strin
      * its completed/failed handling once a semantic stage exists, and to the
      * four-stage skeleton when one does not. Nothing is lost — the full
      * progress text is already written to the bridge log.
+     *
+     * The cost of getting this list wrong is not noise any more, it is
+     * silence: a run emits `skill.design`, `skill.plan` and `skill.author`
+     * between the outline finishing and the pages starting, and with those
+     * three unmapped the panel sat with every row ticked and nothing turning
+     * for eighty seconds. Which reads as a hang. `*.trace` steps stay
+     * unmapped on purpose — they are diagnostics, and they arrive alongside a
+     * real step rather than instead of one, so they never leave the list
+     * still.
      */
     default:
       return undefined;

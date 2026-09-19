@@ -346,6 +346,7 @@ describe("taskState", () => {
       "access",
       "research",
       "outline",
+      "design",
       "generate-content",
     ]);
     // Two `plan.expand` events, one stage: repeated work is progress within a
@@ -354,6 +355,33 @@ describe("taskState", () => {
     for (const leak of leaks) {
       expect(stages.some((stage) => stage.label === leak)).toBe(false);
     }
+  });
+
+  /*
+   * The eighty seconds of silence.
+   *
+   * Between the outline finishing and the pages starting, a real run emits
+   * `skill.design`, `skill.plan` and `skill.author`. With those unmapped the
+   * panel showed every row ticked and nothing turning for well over a minute,
+   * which reads as a hang — the opposite failure to the one that started this,
+   * and caused by the fix for it.
+   */
+  it("keeps a stage turning through the steps between outline and pages", () => {
+    let state = createInitialTaskState();
+    const taskId = "pptx-skill-steps";
+    const events = [
+      { event_id: "outline-done", task_id: taskId, type: "task.progress", payload: { step: "plan.outline", status: "completed" } },
+      { event_id: "skill-plan", task_id: taskId, type: "task.progress", payload: { step: "skill.plan", status: "running" } },
+      { event_id: "skill-design", task_id: taskId, type: "task.progress", payload: { step: "skill.design", status: "running" } },
+      { event_id: "skill-author", task_id: taskId, type: "task.progress", payload: { step: "skill.author", status: "running" } },
+    ] as const;
+    for (const event of events) state = applyTaskEvent(state, event);
+
+    const stages = state.tasks[taskId].stages ?? [];
+    expect(stages.map((stage) => stage.id)).toEqual(["outline", "design", "generate-content"]);
+    // Something is always active: that is the whole point.
+    expect(state.tasks[taskId].activeStageId).toBe("generate-content");
+    expect(stages.find((stage) => stage.id === "design")?.label).toBe("Choosing a design");
   });
 
   // An unmapped step must leave the list alone rather than inventing a row for

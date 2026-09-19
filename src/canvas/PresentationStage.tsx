@@ -4,6 +4,7 @@ import type { DesktopAPI, DesktopTask } from "../shared/types";
 import { DesktopApiProvider } from "../renderer/services/desktopApi";
 import { LocaleProvider } from "../renderer/i18n";
 import { PresentationEditorFrame } from "../renderer/presentation/PresentationEditorFrame";
+import { CanvasPlaceholder } from "../shell/editor/CanvasPlaceholder";
 import { usePptxLiveDraft } from "../renderer/controllers/usePptxLiveDraft";
 import { useCanvasSession } from "./useCanvasSession";
 
@@ -73,8 +74,6 @@ function StageBody({ api, task, onError }: PresentationStageProps) {
 
   usePptxLiveDraft({ session, recordError, t });
 
-  const editorReady = Boolean(session.grant && session.artifact?.taskId === task.id);
-
   /*
    * The deck, and nothing else.
    *
@@ -95,7 +94,21 @@ function StageBody({ api, task, onError }: PresentationStageProps) {
    * registering it for replay, issuing its token, adopting the session — and
    * every rule in it was a bug first (R-E-01 through R-E-07).
    */
-  if (!editorReady) return null;
+  const editorReady = Boolean(session.grant && session.artifact?.taskId === task.id);
+
+  /*
+   * A skeleton until there is a deck to show.
+   *
+   * Drawing does not start the moment a run does: the outline, the design pass
+   * and the first page all happen before `usePptxLiveDraft` has a file to hand
+   * the editor. This returned null through that window, so the canvas was a
+   * blank rectangle for a minute or more while the panel beside it listed work
+   * going on — which reads as broken, not as pending.
+   *
+   * The shell's own slides skeleton is the honest thing to show: a deck is
+   * coming, and this is its shape.
+   */
+  if (!editorReady) return <CanvasPlaceholder type="slides" />;
 
   return (
     <PresentationEditorFrame
