@@ -316,6 +316,17 @@ export interface CustomModelInput {
 
 export interface ModelPort {
   list(): Promise<Model[]>;
+  /**
+   * Makes a model the one tasks actually run on.
+   *
+   * `settings.selectedModelId` records what the user picked; this makes the
+   * pick take effect. They were the same call until it turned out nothing read
+   * the former — the composer sent a `modelId` with every message, the runtime
+   * has no per-message model, and every task ran on whatever provider was
+   * configured. A picker that changes a label and nothing else is worse than
+   * no picker.
+   */
+  select(id: string): Promise<void>;
   addCustom(input: CustomModelInput): Promise<Model>;
   updateCustom(id: string, input: CustomModelInput): Promise<Model>;
   removeCustom(id: string): Promise<void>;

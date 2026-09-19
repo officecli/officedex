@@ -1,5 +1,6 @@
 import type { DesktopAPI, LlmProvider, LlmProviderType } from "../shared/types";
 import type { CustomModelInput, Model, ModelPort } from "../shared/uiPort";
+import { NotImplementedError } from "../shared/notImplemented";
 
 /**
  * Models over the desktop's single configured provider.
@@ -80,6 +81,21 @@ export function createModelService(api: DesktopAPI): ModelPort {
       }
       await api.updateSettings({ llmProvider: provider });
       return toModel(provider);
+    },
+
+    /**
+     * Wave 0 seam: shape only, no implementation yet.
+     *
+     * The desktop keeps one provider, so "selecting" is really "make this the
+     * configured one": the official model means clearing `llmProvider` (see
+     * `removeCustom`), the custom one means leaving the stored provider in
+     * place. Both are a settings write — what is missing is the write.
+     */
+    async select(id) {
+      throw new NotImplementedError(
+        "models.select",
+        `Switching to ${id} is not wired up yet.`,
+      );
     },
 
     async removeCustom(id) {

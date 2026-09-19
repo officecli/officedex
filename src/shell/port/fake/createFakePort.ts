@@ -208,6 +208,10 @@ export function createFakePort(options: FakePortOptions = {}): UiPort {
         models = models.map((entry) => (entry.id === id ? model : entry));
         return structuredClone(model);
       },
+      async select(id) {
+        if (!models.some((entry) => entry.id === id)) return;
+        settings = { ...settings, selectedModelId: id };
+      },
       async removeCustom(id) {
         models = models.filter((entry) => entry.id !== id);
         if (settings.selectedModelId === id) {
