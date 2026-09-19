@@ -60,8 +60,12 @@ export function seedModels(): Model[] {
 }
 
 export function seedSettings(): ShellSettings {
+  // `full` rather than `review`: it is the only tier the runtime honours, and a
+  // fixture that boots into an unavailable one makes the composer open on a
+  // control that can only answer "not built yet". See PERMISSIONS in
+  // composer/Composer.tsx.
   return {
-    permission: "review",
+    permission: "full",
     enterToSend: true,
     customInstructions: "",
     reduceMotion: false,

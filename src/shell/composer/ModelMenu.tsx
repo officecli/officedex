@@ -1,14 +1,16 @@
-import { ChevronDown, Plus, Zap } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ChevronDown, Pencil, Plus, Zap } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
 
 import { Input, Modal } from "../../renderer/ui";
 import { Menu } from "../chrome/Menu";
 import { usePort } from "../port/PortContext";
+import { attempt } from "../port/reportPortFailure";
 import type { CustomModelInput, Model } from "../../shared/uiPort";
 
 export interface ModelMenuProps {
   models: Model[];
   selectedId: string;
+  /** Records the pick. Making it take effect is `models.select`, below. */
   onSelect: (id: string) => void;
   onModelsChanged: () => Promise<void> | void;
 }
@@ -21,8 +23,35 @@ export interface ModelMenuProps {
  * key back or puts one in its own persistence.
  */
 export function ModelMenu({ models, selectedId, onSelect, onModelsChanged }: ModelMenuProps) {
+  const port = usePort();
   const [editing, setEditing] = useState<Model | "new" | null>(null);
   const selected = models.find((model) => model.id === selectedId) ?? models[0];
+
+  /**
+   * The one custom model, if there is one.
+   *
+   * Singular because the desktop stores a single provider — services/models.ts
+   * says so in its file comment, and it is why Add replaces rather than appends.
+   */
+  const configuredCustom = models.find((model) => model.custom) ?? null;
+
+  /*
+   * Two calls, in this order, doing two different jobs. `select` makes the pick
+   * take effect — on the desktop it decides which provider a run is launched
+   * against — and `onSelect` records what the user chose.
+   *
+   * Only the record existed. Every message carried a `modelId` that
+   * `agent.send` never read and `GenerateInput` has no field for, so picking a
+   * model renamed a button and every task kept running on whatever provider was
+   * configured. Recording only once `select` resolves is the other half of
+   * that: a button naming a model no run will use is the same lie in reverse.
+   */
+  const choose = useCallback(
+    async (id: string) => {
+      if (await attempt(() => port.models.select(id))) onSelect(id);
+    },
+    [port, onSelect],
+  );
 
   const items = useMemo(
     () => [
@@ -31,17 +60,40 @@ export function ModelMenu({ models, selectedId, onSelect, onModelsChanged }: Mod
         label: model.name,
         description: [model.provider, model.detail].filter(Boolean).join(" · "),
         checked: model.id === selected?.id,
-        onSelect: () => onSelect(model.id),
+        onSelect: () => void choose(model.id),
       })),
+      /*
+       * Edit is a row of its own because `setEditing` was only ever called with
+       * "new": `CustomModelDialog`'s whole update branch — `models.updateCustom`
+       * — was unreachable, so a rotated key or a moved endpoint could only be
+       * fixed by adding the model over again.
+       *
+       * A row rather than a pencil inside the model's own row: `Menu` renders
+       * exactly one action per item, and a second control in one would mean
+       * teaching the shell's only menu primitive a concept it does not have.
+       */
+      ...(configuredCustom
+        ? [
+            {
+              id: `edit-${configuredCustom.id}`,
+              label: `Edit ${configuredCustom.name}…`,
+              description: "Change its endpoint, key or display name",
+              icon: <Pencil size={16} strokeWidth={1.8} aria-hidden="true" />,
+              onSelect: () => setEditing(configuredCustom),
+            },
+          ]
+        : []),
       {
         id: "add-model",
-        label: "Add model…",
-        description: "Point the shell at your own endpoint",
+        label: configuredCustom ? "Replace custom model…" : "Add model…",
+        description: configuredCustom
+          ? `Only one fits — this drops ${configuredCustom.name}`
+          : "Point the shell at your own endpoint",
         icon: <Plus size={16} strokeWidth={1.8} aria-hidden="true" />,
         onSelect: () => setEditing("new"),
       },
     ],
-    [models, selected?.id, onSelect],
+    [models, selected?.id, configuredCustom, choose],
   );
 
   return (
@@ -64,6 +116,13 @@ export function ModelMenu({ models, selectedId, onSelect, onModelsChanged }: Mod
       {editing ? (
         <CustomModelDialog
           model={editing === "new" ? null : editing}
+          /*
+           * What adding costs, said before it happens rather than discovered
+           * afterwards. One stored provider means a second custom model
+           * overwrites the first, and the dialog used to let that happen in
+           * silence: the previous entry simply stopped being in the menu.
+           */
+          replaces={editing === "new" ? configuredCustom : null}
           onClose={() => setEditing(null)}
           onSaved={onModelsChanged}
         />
@@ -76,19 +135,35 @@ const PROVIDERS = ["OpenAI", "Anthropic", "Kimi", "DeepSeek", "Custom"];
 
 function CustomModelDialog({
   model,
+  replaces,
   onClose,
   onSaved,
 }: {
   model: Model | null;
+  replaces: Model | null;
   onClose: () => void;
   onSaved: () => Promise<void> | void;
 }) {
   const port = usePort();
   const [form, setForm] = useState<CustomModelInput>({
     name: model?.name ?? "",
-    modelId: "",
-    provider: model?.provider ?? "Custom",
-    baseUrl: "",
+    /*
+     * `Model` carries no provider-side id. The desktop reports the configured
+     * provider's model *as* the display name (services/models.ts `toModel`),
+     * which is the only place an edit can recover it from — and recovering it
+     * matters, because `updateCustom` writes whatever this form holds. A name
+     * with whitespace in it is a label from some other port rather than an id,
+     * so it is left blank instead of prefilling a value that would then fail
+     * this dialog's own validation.
+     */
+    modelId: model && !/\s/.test(model.name) ? model.name : "",
+    // Case-insensitive because the desktop stores the type lowercased; an exact
+    // match would leave the select showing the wrong provider on every edit.
+    provider:
+      PROVIDERS.find((entry) => entry.toLowerCase() === model?.provider.toLowerCase()) ?? "Custom",
+    // `detail` is the base URL. Prefilled so an edit that only renames the model
+    // does not quietly clear the endpoint it is pointed at.
+    baseUrl: model?.detail ?? "",
     apiKey: "",
   });
   const [error, setError] = useState("");
@@ -129,6 +204,13 @@ function CustomModelDialog({
         The shell only records which model you picked. Where the key is kept is the desktop app’s
         decision — nothing is stored in this window.
       </p>
+
+      {replaces ? (
+        <p className="shell-dialog-warning">
+          Saving this replaces <strong>{replaces.name}</strong>. Only one custom model can be
+          configured at a time.
+        </p>
+      ) : null}
 
       <label className="shell-dialog-label" htmlFor="shell-model-name">
         Display name

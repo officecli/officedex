@@ -26,11 +26,11 @@
   box-shadow: 0 2px 5px #00000005;
 }
 
-/* Home exposes the folder scope as the reference-style strip above the
-   composer. The same scope menu remains available in task/floating placements. */
-.shell-cx--home .shell-cx-scope {
-  display: none;
-}
+/* No `.shell-cx--home .shell-cx-scope { display: none }` here.
+   It used to hide the chip because Home carried its own folder strip above the
+   composer; that strip was the prototype's second folder control and decision 2
+   removed it. The rule outlived it by one change and left Home with no scope
+   control at all — a `+` and nothing to say where a task would write. */
 
 .shell-cx-input {
   display: block;
@@ -263,6 +263,34 @@
   color: var(--shell-ink-faint);
 }
 
+/* Dictation is the one control here that keeps working after the click ends,
+   so it is the one that has to look busy. Without this the recogniser ran in
+   complete silence and a sentence simply appeared in the box. */
+.shell-cx-mic.is-listening {
+  background: #fdecea;
+  color: #b3392c;
+  animation: shell-cx-listening 1.4s ease-in-out infinite;
+}
+
+.shell-cx-mic.is-listening:hover {
+  background: #fadfdb;
+  color: #8f2d22;
+}
+
+@keyframes shell-cx-listening {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* A pulsing control is a distraction rather than a signal for anyone who asked
+   the system to stop moving things; the tint alone still says "listening". */
+@media (prefers-reduced-motion: reduce) {
+  .shell-cx-mic.is-listening {
+    animation: none;
+  }
+}
+
 .shell-cx-send {
   display: inline-flex;
   align-items: center;
@@ -323,8 +351,19 @@
 }
 
 @container (max-width: 252px) {
-  .shell-cx-scope-name,
   .shell-cx-model-name {
+    display: none;
+  }
+  /* Still named, just narrower. The model name and this one used to disappear
+     together, which made "scope name last" true in the comment and a tie in the
+     stylesheet; the chip shrinks to an ellipsis before it gives up its label. */
+  .shell-cx-scope-name {
+    max-width: 62px;
+  }
+}
+
+@container (max-width: 204px) {
+  .shell-cx-scope-name {
     display: none;
   }
 }
@@ -479,6 +518,20 @@
 }
 
 /* -------------------------------------------------------- model dialog */
+
+/* Adding a custom model replaces the one already configured — the desktop
+   stores a single provider. Tinted rather than red: nothing has gone wrong,
+   the user is simply about to lose an entry they may not remember setting up. */
+.shell-dialog-warning {
+  margin: 10px 0 0;
+  padding: 9px 11px;
+  border: 1px solid #e6dcc4;
+  border-radius: 8px;
+  background: #fbf5e6;
+  color: #7a6533;
+  font-size: var(--shell-text-sm);
+  line-height: 19px;
+}
 
 .shell-dialog-select {
   display: block;

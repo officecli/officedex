@@ -1,4 +1,14 @@
-import { ArrowUp, ChevronDown, Folder as FolderIcon, Mic, Plus, ShieldCheck, Square, X } from "lucide-react";
+import {
+  ArrowUp,
+  ChevronDown,
+  Folder as FolderIcon,
+  FolderPlus,
+  Mic,
+  Plus,
+  ShieldCheck,
+  Square,
+  X,
+} from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { toast } from "../../renderer/ui";
@@ -7,6 +17,7 @@ import { Menu } from "../chrome/Menu";
 import { useCanvas } from "../canvas/CanvasContext";
 import { useCanvasSelection, selectionForFile } from "../canvas/SelectionContext";
 import type { Attachment, Mention, PermissionMode, SendInput } from "../../shared/uiPort";
+import { useFolderDialogs } from "../nav/useFolderDialogs";
 import { useShell } from "../state/ShellContext";
 import { usePort } from "../port/PortContext";
 import { notBuiltYet } from "../port/reportPortFailure";
@@ -17,14 +28,57 @@ import "./composer.css";
 
 export type ComposerPlacement = "home" | "task" | "floating";
 
-const PERMISSIONS: Array<{ value: PermissionMode; label: string; description: string }> = [
-  { value: "review", label: "Review changes", description: "Nothing is applied without you" },
-  { value: "full", label: "Full access", description: "Apply edits inside this folder" },
-  { value: "custom", label: "Custom", description: "Use your own instructions" },
+/**
+ * The three tiers the IA drew, and the one the runtime can honour.
+ *
+ * Full access is first because it is the default everywhere — services/
+ * settings.ts, the fake port's seed and useComposerSettings' fallback all say
+ * `full`, and the `?? PERMISSIONS[0]` below has to land on a tier that works.
+ *
+ * The other two keep their rows. `unsupportedParts()` in services/agent.ts
+ * already downgraded them to a direct write and mentioned it in a notice
+ * *after* the message had gone — the gate was promised here and quietly
+ * withdrawn in the transcript. Custom is the worse of the two: its description
+ * offers your own instructions, and no screen in this app can write
+ * `settings.customInstructions`, so choosing it has always meant choosing none.
+ *
+ * Shown-but-unbuilt rather than hidden, for the reason every other gap in this
+ * shell is (see port/reportPortFailure): the shape of the choice is the design,
+ * and deleting the rows loses the record of it. Pressing one says so.
+ */
+const PERMISSIONS: Array<{
+  value: PermissionMode;
+  label: string;
+  description: string;
+  /** False while nothing behind the port enforces this tier. */
+  available: boolean;
+}> = [
+  {
+    value: "full",
+    label: "Full access",
+    description: "Apply edits inside this folder",
+    available: true,
+  },
+  {
+    value: "review",
+    label: "Review changes",
+    description: "Nothing is applied without you",
+    available: false,
+  },
+  { value: "custom", label: "Custom", description: "Use your own instructions", available: false },
 ];
 
 const MAX_ATTACHMENTS = 10;
 const MAX_BYTES = 20 * 1024 * 1024;
+
+/** Everything a half-written message carries, not just its words. */
+interface Draft {
+  text: string;
+  mentions: Mention[];
+  attachments: Attachment[];
+}
+
+const EMPTY_DRAFT: Draft = { text: "", mentions: [], attachments: [] };
 
 /**
  * Half-written messages, per placement, for as long as the tab is open.
@@ -34,8 +88,25 @@ const MAX_BYTES = 20 * 1024 * 1024;
  * `drafts[kind]` for exactly this. Module scope rather than persisted state:
  * an unsent message is not worth restoring after a restart, but losing it
  * because a panel moved is the app throwing away the user's typing.
+ *
+ * The whole draft, because keeping only the string was worse than keeping
+ * nothing. `mentions` and `attachments` were plain component state, so coming
+ * back to Home restored text reading "@MO sales forecast.xlsx" with no mention
+ * behind it: the message still looked like it carried the file and silently
+ * did not, and the attachments were gone without even a chip left to notice.
  */
-const drafts = new Map<ComposerPlacement, string>();
+const drafts = new Map<ComposerPlacement, Draft>();
+
+/**
+ * Forgets every kept draft.
+ *
+ * Exists for tests. The map is module state, so one test's half-written message
+ * is the next one's starting value — which was survivable while it held a
+ * string and is not now that it holds chips.
+ */
+export function resetComposerDrafts(): void {
+  drafts.clear();
+}
 
 /** Everything the composer gathers; the caller adds model and permission. */
 export type ComposerSubmission = Pick<
@@ -74,33 +145,48 @@ export interface ComposerProps {
  * folding the two together is decision 2.
  */
 export function Composer({ placement, busy = false, onSend, onStop, onRegisterFill }: ComposerProps) {
-  const { state, folders, files, scopeFolderId, dispatch } = useShell();
+  const { state, folders, files, scopeFolderId, dispatch, reload } = useShell();
   const port = usePort();
   const settings = useComposerSettings();
   const canvas = useCanvas();
   const { selection, clear: clearSelection } = useCanvasSelection();
   const inputId = useId();
 
-  const [text, setTextState] = useState(() => drafts.get(placement) ?? "");
-  const [mentions, setMentions] = useState<Mention[]>([]);
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [draft, setDraft] = useState<Draft>(() => drafts.get(placement) ?? EMPTY_DRAFT);
+  const { text, mentions, attachments } = draft;
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  /** True while a speech recogniser is running — see `dictate`. */
+  const [listening, setListening] = useState(false);
 
-  // Every write to the text goes through here so the draft cannot drift from
-  // what is on screen.
-  const setText: typeof setTextState = (value) => {
-    setTextState((current) => {
-      const next = typeof value === "function" ? (value as (prev: string) => string)(current) : value;
-      if (next) drafts.set(placement, next);
-      else drafts.delete(placement);
+  // Every write to the draft goes through here so what is kept cannot drift
+  // from what is on screen — the three parts are saved together or not at all.
+  function patchDraft(patch: (current: Draft) => Partial<Draft>) {
+    setDraft((current) => {
+      const next = { ...current, ...patch(current) };
+      const empty = !next.text && next.mentions.length === 0 && next.attachments.length === 0;
+      if (empty) drafts.delete(placement);
+      else drafts.set(placement, next);
       return next;
     });
-  };
+  }
+
+  /** React's own setState shape — a value or an updater — for one draft field. */
+  type Update<T> = T | ((current: T) => T);
+  const resolve = <T,>(value: Update<T>, current: T): T =>
+    typeof value === "function" ? (value as (previous: T) => T)(current) : value;
+
+  const setText = (value: Update<string>) =>
+    patchDraft((current) => ({ text: resolve(value, current.text) }));
+  const setMentions = (value: Update<Mention[]>) =>
+    patchDraft((current) => ({ mentions: resolve(value, current.mentions) }));
+  const setAttachments = (value: Update<Attachment[]>) =>
+    patchDraft((current) => ({ attachments: resolve(value, current.attachments) }));
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<{ stop: () => void } | null>(null);
 
   const scope = folders.find((folder) => folder.id === scopeFolderId) ?? folders[0];
   const canSend = text.trim().length > 0;
@@ -123,6 +209,13 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
     input.style.height = "auto";
     input.style.height = `${Math.min(max, Math.max(min, input.scrollHeight))}px`;
   }, [text, placement]);
+
+  /*
+   * A recogniser outlives the component that started it. Leaving the composer
+   * mid-dictation would keep the microphone open with nothing left to receive
+   * the transcript — a live mic and no indicator anywhere in the app.
+   */
+  useEffect(() => () => recognitionRef.current?.stop(), []);
 
   /*
    * Replace, not append: a quick prompt is a different suggestion, not an
@@ -299,14 +392,35 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
     await onSend(submission);
   }
 
+  /**
+   * Speech to text, with the fact that it is listening on screen.
+   *
+   * It used to run entirely in the dark: pressing the mic opened the
+   * browser's permission flow, sat silent for as long as it took, and then
+   * appended a sentence to whatever was in the box. Nothing said a recogniser
+   * was running, nothing said one had failed, and there was no way to call it
+   * off — so a mic pressed by accident could only be waited out.
+   *
+   * The handle lives in a ref because the second press has to reach the same
+   * recogniser the first one started.
+   */
   function dictate() {
+    if (recognitionRef.current) {
+      // `stop` still delivers whatever was heard so far, which is what someone
+      // pressing a live mic button means by it.
+      recognitionRef.current.stop();
+      return;
+    }
+
     type Recognition = {
       lang: string;
       interimResults: boolean;
       maxAlternatives: number;
       onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
       onerror: (() => void) | null;
+      onend: (() => void) | null;
       start: () => void;
+      stop: () => void;
     };
     const speech = window as unknown as {
       SpeechRecognition?: new () => Recognition;
@@ -325,9 +439,21 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
       const transcript = event.results[0]?.[0]?.transcript?.trim();
       if (transcript) setText((current) => `${current}${current ? " " : ""}${transcript}`);
     };
+    /*
+     * `onend` fires however the session finished — a result, an error, the
+     * recogniser's own silence timeout — so it is the one place that can
+     * honestly clear the listening state. Clearing it in `onresult` alone would
+     * leave the button pulsing after a recogniser that simply heard nothing.
+     */
+    recognition.onend = () => {
+      recognitionRef.current = null;
+      setListening(false);
+    };
     recognition.onerror = () => toast.error("Dictation could not start.");
     try {
       recognition.start();
+      recognitionRef.current = recognition;
+      setListening(true);
     } catch {
       toast.error("Dictation could not start.");
     }
@@ -336,16 +462,47 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
   const permission =
     PERMISSIONS.find((entry) => entry.value === settings.value.permission) ?? PERMISSIONS[0];
 
+  /*
+   * Creating a folder from the one control that says where a task will write.
+   *
+   * The menu listed existing folders and stopped there, so a workspace with
+   * none opened an empty panel — a dead end reached from the place the user was
+   * already standing, with the only way out being the sidebar's New folder
+   * button and a trip back. The dialog is the sidebar's own rather than a
+   * second one: folder names fail for real filesystem reasons, and that modal
+   * is where those are reported.
+   */
+  const folderDialogs = useFolderDialogs(async () => {
+    const before = new Set(folders.map((folder) => folder.id));
+    await reload();
+    /*
+     * `useFolderDialogs` does not hand back what it created, so the new folder
+     * is whichever one the refreshed list has that the old one did not.
+     * Selecting it is the point of creating it here — a folder made from the
+     * scope menu and then not scoped to would make the user pick it twice.
+     */
+    const created = (await port.folders.list()).find((folder) => !before.has(folder.id));
+    if (created) dispatch({ type: "select-folder", folderId: created.id });
+  });
+
   const scopeItems = useMemo(
-    () =>
-      folders.map((folder) => ({
+    () => [
+      ...folders.map((folder) => ({
         id: folder.id,
         label: folder.name,
         description: folder.path,
         checked: folder.id === scope?.id,
         onSelect: () => dispatch({ type: "select-folder", folderId: folder.id }),
       })),
-    [folders, scope?.id, dispatch],
+      {
+        id: "new-folder",
+        label: "New folder…",
+        description: "Create one and scope this message to it",
+        icon: <FolderPlus size={16} strokeWidth={1.8} aria-hidden="true" />,
+        onSelect: folderDialogs.createFolder,
+      },
+    ],
+    [folders, scope?.id, dispatch, folderDialogs.createFolder],
   );
 
   return (
@@ -499,7 +656,22 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
                 label: entry.label,
                 description: entry.description,
                 checked: entry.value === settings.value.permission,
-                onSelect: () => void settings.patch({ permission: entry.value }),
+                /*
+                 * Clickable, not disabled. A greyed row says "not for you";
+                 * these two are for everyone the day the runtime grows a gate,
+                 * and until then the honest answer is a sentence rather than a
+                 * dead row with no explanation attached to it.
+                 */
+                onSelect: () => {
+                  if (!entry.available) {
+                    notBuiltYet(
+                      `composer.permission.${entry.value}`,
+                      `${entry.label} is not available yet — every run applies its changes directly. Full access is the only mode the agent honours.`,
+                    );
+                    return;
+                  }
+                  void settings.patch({ permission: entry.value });
+                },
               })),
               {
                 id: "enter",
@@ -531,9 +703,10 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
 
           <button
             type="button"
-            className="shell-cx-button shell-cx-mic"
-            aria-label="Dictate"
-            title="Dictate"
+            className={`shell-cx-button shell-cx-mic${listening ? " is-listening" : ""}`}
+            aria-label={listening ? "Stop dictation" : "Dictate"}
+            aria-pressed={listening}
+            title={listening ? "Listening — press to stop" : "Dictate"}
             onClick={dictate}
           >
             <Mic size={16} strokeWidth={1.7} aria-hidden="true" />
@@ -591,6 +764,9 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
           event.target.value = "";
         }}
       />
+
+      {/* Portals to the body, so where it sits in this tree does not matter. */}
+      {folderDialogs.element}
     </div>
   );
 }

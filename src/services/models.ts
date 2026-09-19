@@ -1,6 +1,5 @@
 import type { DesktopAPI, LlmProvider, LlmProviderType } from "../shared/types";
 import type { CustomModelInput, Model, ModelPort } from "../shared/uiPort";
-import { NotImplementedError } from "../shared/notImplemented";
 
 /**
  * Models over the desktop's single configured provider.
@@ -84,18 +83,34 @@ export function createModelService(api: DesktopAPI): ModelPort {
     },
 
     /**
-     * Wave 0 seam: shape only, no implementation yet.
+     * Makes a model the one tasks actually run on.
      *
-     * The desktop keeps one provider, so "selecting" is really "make this the
-     * configured one": the official model means clearing `llmProvider` (see
-     * `removeCustom`), the custom one means leaving the stored provider in
-     * place. Both are a settings write — what is missing is the write.
+     * With a single stored provider this is not a choice between rows, it is
+     * whether `llmProvider` is set at all: the official model *is* the absence
+     * of a configured provider — the same write `removeCustom` makes — and the
+     * custom entry is whatever is already stored.
+     *
+     * So selecting the custom entry has nothing to write, and the mistake to
+     * avoid is writing anyway. A provider rebuilt here would have to come from
+     * a `CustomModelInput` this call does not receive, which means guessing the
+     * base URL and dropping the stored key.
+     *
+     * An unknown id throws rather than quietly doing nothing. The picker spent
+     * its whole life renaming a button while every run used the configured
+     * provider regardless; a silent no-op would put that back with extra steps.
      */
     async select(id) {
-      throw new NotImplementedError(
-        "models.select",
-        `Switching to ${id} is not wired up yet.`,
-      );
+      if (id === OFFICIAL_MODEL.id) {
+        await api.updateSettings({ llmProvider: null });
+        return;
+      }
+      if (id !== CUSTOM_MODEL_ID) {
+        throw new Error(`Unknown model: ${id}`);
+      }
+      const settings = await api.getSettings();
+      if (!settings.llmProvider) {
+        throw new Error("That model is no longer configured. Add it again to use it.");
+      }
     },
 
     async removeCustom(id) {

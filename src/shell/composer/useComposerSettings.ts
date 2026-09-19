@@ -3,8 +3,16 @@ import { useCallback, useEffect, useState } from "react";
 import { usePort } from "../port/PortContext";
 import type { Model, ShellSettings } from "../../shared/uiPort";
 
+/**
+ * What the composer shows before the port has answered.
+ *
+ * `permission` matches the default in services/settings.ts and the fake port's
+ * seed on purpose. The three had drifted apart on `review`, and because this
+ * one is what renders first, a mismatch meant the composer opened on a tier
+ * that only answers "not built yet" and then silently changed under the user.
+ */
 const FALLBACK: ShellSettings = {
-  permission: "review",
+  permission: "full",
   enterToSend: true,
   customInstructions: "",
   reduceMotion: false,

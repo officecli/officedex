@@ -198,7 +198,25 @@ describe("desktop settings service", () => {
   it("survives a corrupt local value", async () => {
     localStorage.setItem("officedex.shell.settings", "{not json");
     const settings = await createPort().settings.get();
-    expect(settings.permission).toBe("review");
+    // The default, which is `full`: the only permission mode the runtime
+    // honours, so it is the one a discarded value falls back to.
+    expect(settings.permission).toBe("full");
+  });
+
+  // A stored mode the runtime cannot honour is dropped on read rather than
+  // handed back. `unsupportedParts()` downgrades review to a direct write
+  // anyway, so returning it would have the composer promise a gate and the run
+  // quietly not keep it.
+  it("discards a stored permission mode the runtime does not support", async () => {
+    localStorage.setItem(
+      "officedex.shell.settings",
+      JSON.stringify({ permission: "review", enterToSend: false }),
+    );
+    const settings = await createPort().settings.get();
+
+    expect(settings.permission).toBe("full");
+    // Only the unsupported field is dropped; the rest of the value stands.
+    expect(settings.enterToSend).toBe(false);
   });
 });
 
