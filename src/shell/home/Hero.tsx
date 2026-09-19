@@ -75,15 +75,27 @@ export function Hero() {
             onRegisterFill={registerFill}
             onSend={async (submission) => {
               await agent.send(submission);
-              // A new task means work, and work happens in the workspace: leave
-              // Home for the file the task is about, or — when it is making
-              // something that does not exist yet — for the canvas the run
-              // itself fills. Staying on Home after asking for something leaves
-              // the user watching a list while the thing they asked for is
-              // being drawn behind it.
-              const target =
-                files.find((file) => file.id === submission.activeFileId) ??
-                files.find((file) => file.folderId === submission.folderId);
+              /*
+               * Leave Home, but do not guess which file the run is about.
+               *
+               * Editing the file the user already had open is the one case
+               * where the destination is known. Everything else is making
+               * something that does not exist yet, and the canvas the run
+               * fills is the honest place to wait: `ShellContext` opens the
+               * real artifact when the task completes, matching it by
+               * `artifactTaskId`.
+               *
+               * This used to fall back to `files.find(file => file.folderId
+               * === submission.folderId)` — the first file of the scoped
+               * folder, in load order, with no relation to what was asked
+               * for. Ask for a new deck in a folder holding forty files and
+               * the shell opened file number one and sat there, so the
+               * artifact card (which shows whatever is open) named it too and
+               * the whole screen agreed on the wrong document. The comment
+               * here already described the behaviour below; only the code
+               * disagreed.
+               */
+              const target = files.find((file) => file.id === submission.activeFileId);
               if (target) await actions.openFile(target.id);
               else dispatch({ type: "enter-workspace" });
             }}

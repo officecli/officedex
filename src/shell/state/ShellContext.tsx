@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import { usePort } from "../port/PortContext";
+import { logShellEvent } from "../port/shellLog";
 import type { FileMeta, Folder } from "../../shared/uiPort";
 import { readPersisted, writePersisted } from "./persist";
 import {
@@ -117,6 +118,18 @@ export function ShellProvider({ children }: { children: ReactNode }) {
           }
           return;
         }
+        /*
+         * Three passes and no artifact carrying this task's id.
+         *
+         * The run finished, so something was produced; the shell just cannot
+         * tell which file it was, and the editor stays on whatever was open —
+         * which looks exactly like the agent having written to the wrong
+         * document. Nothing was reported here before, so the one report that
+         * matters ("it opened the wrong file") arrived with no trace behind
+         * it. The usual cause is a record whose `currentArtifactTaskId` never
+         * got written on the desktop side.
+         */
+        logShellEvent("agent.artifact-not-found", { taskId, files: (await load()).files.length });
       })();
     });
     return () => {

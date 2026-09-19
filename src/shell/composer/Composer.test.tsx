@@ -197,8 +197,19 @@ describe("mentions", () => {
       fireEvent.click(shell.view.getByTitle("Send message"));
     });
 
+    /*
+     * Found through the task list rather than through `state.selectedFolderId`.
+     *
+     * Reading the selection used to work by accident: sending from Home opened
+     * a file, and opening a file selects its folder, so the selection happened
+     * to name the folder the task went to. Home no longer opens a file it was
+     * never told about, so the selection stays where the user left it and this
+     * has to ask the port which folder actually received the run.
+     */
     await waitFor(async () => {
-      const task = await shell.port.agent.current(shell.state().selectedFolderId ?? "folder-launch");
+      const [row] = await shell.port.agent.list();
+      if (!row) throw new Error("no task recorded");
+      const task = await shell.port.agent.current(row.folderId);
       if (!task?.messages.length) throw new Error("no message recorded");
       expect(task.messages[0].text).toContain("@MO sales forecast.xlsx");
     });

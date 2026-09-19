@@ -171,7 +171,15 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
               <FileTypeIcon type={activeFile.type} size={20} />
               <div>
                 <strong>{activeFile.name}</strong>
+                {/*
+                  "Current file", as the prototype labelled it. This card
+                  follows the editor, not the run — it is here so you can jump
+                  to what you are looking at while the agent works. Naming only
+                  the save state let it read as the run's output, which is a
+                  different file whenever the task is making something new.
+                */}
                 <small>
+                  Current file ·{" "}
                   {activeFile.dirty ? "Unsaved changes" : "Saved on this computer"}
                 </small>
               </div>
