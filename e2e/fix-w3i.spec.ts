@@ -491,7 +491,24 @@ function compareAll(
 }
 
 test.describe("W3-I token convergence", () => {
-  test("every shell declaration resolves to the value it resolved to before", async ({ page }) => {
+  /*
+ * A note on updating this baseline, because it will need updating again.
+ *
+ * This fingerprint is keyed by **selector text**, so any deliberate selector
+ * refactor reads as "(absent)" even when nothing about the rendering changed.
+ * That happened once already: S3-016 split `.shell-highlights button:focus-visible`
+ * — a selector that caught both the cards inside the overflow track and the two
+ * arrows outside it — into `-track` and `-controls`. The three declarations moved
+ * to the new selectors unchanged, and all three *rendering* fingerprints stayed
+ * at `0 changed`.
+ *
+ * So: the rendering fingerprints are what say whether users see a difference.
+ * This one says whether the stylesheet still says the same things in the same
+ * places. When they disagree, the rendering ones win, and this baseline gets
+ * edited **entry by entry with the reason written down** — never regenerated
+ * wholesale, which would silently absorb whatever else had drifted since.
+ */
+test("every shell declaration resolves to the value it resolved to before", async ({ page }) => {
     await open(page, "C6", { session: "fixes/W3-I" });
     const after = await declarations(page);
     settleBaseline("declarations", after);
