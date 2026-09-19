@@ -21,6 +21,15 @@ export interface FakeAgentDeps {
   getFiles(): FileMeta[];
   /** Called when a suggestion is applied or undone, so the file goes dirty. */
   markDirty(fileId: string, dirty: boolean): void;
+  /**
+   * Block the run on a question before it does any work.
+   *
+   * Off by default so the scripted run stays the straight line every other test
+   * expects. On, it is the one shape the real runtime has that this fake
+   * otherwise cannot produce — and the one the shell used to have no way
+   * through.
+   */
+  asksQuestion?: boolean;
   setTimeout?: (fn: () => void, ms: number) => unknown;
   clearTimeout?: (handle: unknown) => void;
   now?: () => number;
@@ -76,8 +85,7 @@ export function createFakeAgent(deps: FakeAgentDeps): AgentPort {
     });
   };
 
-  function suggestionFor(task: AgentTask, input: SendInput): AgentSuggestion {
-    const inScope = deps.getFiles().filter((file) => file.folderId === task.folderId);
+  function suggestionFor(task: AgentTask, input: SendInput): AgentSuggestion {    const inScope = deps.getFiles().filter((file) => file.folderId === task.folderId);
     const target =
       inScope.find((file) => file.id === input.activeFileId) ?? inScope[0] ?? deps.getFiles()[0];
     const summary =
@@ -101,15 +109,87 @@ export function createFakeAgent(deps: FakeAgentDeps): AgentPort {
       steps: [],
       messages: [],
       suggestion: null,
+      // Set only when `asksQuestion` is on; the default script runs straight
+      // through without blocking on anything.
+      question: null,
     };
     tasks.set(folderId, created);
     return created;
+  }
+
+  /** The scripted run: read, draft, hand back a suggestion. */
+  function startRun(task: AgentTask): void {
+    const input: SendInput = {
+      text: task.messages.at(-1)?.text ?? "",
+      folderId: task.folderId,
+      mentions: [],
+      attachments: [],
+      activeFileId: null,
+      modelId: "",
+      permission: "full",
+    };
+    task.suggestion = null;
+    task.status = "working";
+    task.phase = PHASES[0].phase;
+    task.steps = [
+      { id: nextId("step"), label: "Read the files in scope", state: "active" },
+      { id: nextId("step"), label: "Draft the change", state: "pending" },
+      { id: nextId("step"), label: "Hand back for review", state: "pending" },
+    ];
+    emit(task);
+
+    PHASES.forEach((entry, index) => {
+      after(entry.delay, () => {
+        task.status = entry.status;
+        task.phase = entry.phase;
+        task.steps.forEach((step, stepIndex) => {
+          step.state = stepIndex < index + 1 ? "done" : stepIndex === index + 1 ? "active" : "pending";
+        });
+        emit(task);
+      });
+    });
+
+    after(700, () => {
+      task.status = "awaiting-review";
+      task.phase = "Suggested changes are ready";
+      task.steps.forEach((step) => {
+        step.state = "done";
+      });
+      task.suggestion = suggestionFor(task, input);
+      task.messages.push({
+        id: nextId("message"),
+        role: "agent",
+        text: `${task.suggestion.summary} Review and apply when you are ready.`,
+        createdAt: now(),
+      });
+      emit(task);
+    });
+
+    pump();
   }
 
   return {
     async current(folderId) {
       const task = tasks.get(folderId);
       return task ? structuredClone(task) : null;
+    },
+
+    // Answering releases the run the question was blocking. Without a pending
+    // question there is nothing to release, which is what the real service does
+    // too.
+    async answer(input) {
+      const task = runningFolderId ? tasks.get(runningFolderId) : undefined;
+      if (!task?.question) return;
+      task.messages.push({
+        id: nextId("message"),
+        role: "user",
+        text: input.optionId
+          ? (task.question.options.find((option) => option.id === input.optionId)?.label ?? input.optionId)
+          : (input.text ?? ""),
+        createdAt: now(),
+      });
+      task.question = null;
+      startRun(task);
     },
 
     async send(input) {
@@ -128,44 +208,31 @@ export function createFakeAgent(deps: FakeAgentDeps): AgentPort {
         reference: input.reference,
         createdAt: now(),
       });
-      task.suggestion = null;
-      task.status = "working";
-      task.phase = PHASES[0].phase;
-      task.steps = [
-        { id: nextId("step"), label: "Read the files in scope", state: "active" },
-        { id: nextId("step"), label: "Draft the change", state: "pending" },
-        { id: nextId("step"), label: "Hand back for review", state: "pending" },
-      ];
-      emit(task);
 
-      PHASES.forEach((entry, index) => {
-        after(entry.delay, () => {
-          task.status = entry.status;
-          task.phase = entry.phase;
-          task.steps.forEach((step, stepIndex) => {
-            step.state = stepIndex < index + 1 ? "done" : stepIndex === index + 1 ? "active" : "pending";
-          });
-          emit(task);
-        });
-      });
-
-      after(700, () => {
+      // A question blocks before any work happens, the way a plan review does.
+      if (task.question) {
+        await this.answer({ text: input.text });
+        return;
+      }
+      if (deps.asksQuestion) {
+        task.suggestion = null;
+        task.steps = [];
         task.status = "awaiting-review";
-        task.phase = "Suggested changes are ready";
-        task.steps.forEach((step) => {
-          step.state = "done";
-        });
-        task.suggestion = suggestionFor(task, input);
-        task.messages.push({
-          id: nextId("message"),
-          role: "agent",
-          text: `${task.suggestion.summary} Review and apply when you are ready.`,
-          createdAt: now(),
-        });
+        task.phase = "Waiting for your answer";
+        task.question = {
+          id: nextId("question"),
+          text: "Who is this for?",
+          options: [
+            { id: "exec", label: "Executives", description: "Short, outcome first", recommended: true },
+            { id: "team", label: "The project team" },
+          ],
+          allowFreeform: true,
+        };
         emit(task);
-      });
+        return;
+      }
 
-      pump();
+      startRun(task);
     },
 
     subscribe(listener) {

@@ -22,6 +22,8 @@ export interface FakePortOptions {
   models?: Model[];
   settings?: ShellSettings;
   now?: () => number;
+  /** Block the scripted run on a question before it starts. Off by default. */
+  asksQuestion?: boolean;
   setTimeout?: (fn: () => void, ms: number) => unknown;
   clearTimeout?: (handle: unknown) => void;
 }
@@ -53,6 +55,7 @@ export function createFakePort(options: FakePortOptions = {}): UiPort {
   };
 
   const agent = createFakeAgent({
+    asksQuestion: options.asksQuestion ?? false,
     getFiles: () => files,
     markDirty: (fileId, dirty) => {
       const file = files.find((entry) => entry.id === fileId);

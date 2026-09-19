@@ -95,6 +95,11 @@ export function useAgentTask() {
     task,
     busy,
     send,
+    answer: useCallback(
+      async (input: { optionId?: string; text?: string }) =>
+        void (await attempt(() => port.agent.answer(input))),
+      [port],
+    ),
     applySuggestion,
     undoSuggestion,
     pause: useCallback(async () => void (await attempt(() => port.agent.pause())), [port]),

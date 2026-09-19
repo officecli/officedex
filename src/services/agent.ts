@@ -133,6 +133,32 @@ function toMessages(task: DesktopTask): AgentMessage[] {
   return messages.sort((left, right) => left.createdAt - right.createdAt);
 }
 
+/**
+ * The question the run is blocked on, or null.
+ *
+ * `task.question` survives in the desktop task after it has been answered — the
+ * reducer keeps the envelope because some bridge versions need its id for the
+ * follow-up approval. So the status is what decides whether anyone is waiting,
+ * not the presence of the envelope.
+ */
+function toQuestion(task: DesktopTask): AgentTask["question"] {
+  if (task.status !== "question" && task.status !== "plan_review") return null;
+  const question = task.question;
+  if (!question?.id) return null;
+  const active = question.questions?.[question.currentIndex ?? 0];
+  return {
+    id: question.id,
+    text: (active?.question || question.question || "").trim(),
+    options: (active?.options ?? question.options ?? []).map((option) => ({
+      id: option.id,
+      label: option.label,
+      ...(option.description ? { description: option.description } : {}),
+      ...(option.recommended ? { recommended: true } : {}),
+    })),
+    allowFreeform: active?.allowFreeform ?? question.allowFreeform ?? false,
+  };
+}
+
 function toAgentTask(task: DesktopTask): AgentTask {
   const documentType = task.documentType === "docx" || task.documentType === "xlsx" || task.documentType === "pptx"
     ? task.documentType
@@ -148,6 +174,7 @@ function toAgentTask(task: DesktopTask): AgentTask {
     messages: toMessages(task),
     // No desktop model for proposed-then-applied changes; see the header.
     suggestion: null,
+    question: toQuestion(task),
   };
 }
 
@@ -219,6 +246,14 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     for (const listener of listeners) listener(event);
   };
 
+  /** The active run and its question, when it is blocked on one. */
+  const pendingQuestion = (): { taskId: string; question: NonNullable<AgentTask["question"]> } | null => {
+    const task = activeTaskId ? state.tasks[activeTaskId] : undefined;
+    if (!task) return null;
+    const question = toQuestion(task);
+    return question ? { taskId: task.id, question } : null;
+  };
+
   // Subscribed for the service's whole life rather than per listener: task
   // state has to keep up with the bridge even while nothing is watching, or a
   // run started before the first subscriber would be invisible afterwards.
@@ -258,6 +293,28 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     async send(input: SendInput) {
       const text = input.text.trim();
       if (!text) return;
+
+      /*
+       * A blocked run gets the answer, not a new run.
+       *
+       * Without this the composer is a trap: the run is waiting on a question,
+       * the user types the answer into the only text box on screen, and it
+       * starts a *second* generation while the first stays blocked forever.
+       * Nothing on screen says that happened.
+       */
+      const pending = pendingQuestion();
+      if (pending) {
+        if (!pending.question.allowFreeform && pending.question.options.length > 0) {
+          emit({
+            kind: "notice",
+            message: "Pick one of the options above to continue — this question does not take a typed answer.",
+          });
+          return;
+        }
+        await this.answer({ text });
+        return;
+      }
+
       const dropped = unsupportedParts(input);
       if (dropped.length > 0) {
       emit({
@@ -308,6 +365,27 @@ export function createAgentService(api: DesktopAPI): AgentPort {
         imageQuality: settings.defaults.imageQuality,
       });
       activeTaskId = result.taskId;
+    },
+
+    /**
+     * Unblocks a waiting run.
+     *
+     * `optionId` when the user picked one of the offered options, `text` when
+     * they typed. The runtime wants the question id back with the answer, so a
+     * question that has already been superseded is dropped rather than replied
+     * to with a stale id.
+     */
+    async answer(input: { optionId?: string; text?: string }) {
+      const pending = pendingQuestion();
+      if (!pending) return;
+      const answer = input.text?.trim();
+      if (!input.optionId && !answer) return;
+      await api.respond({
+        taskId: pending.taskId,
+        questionId: pending.question.id,
+        ...(input.optionId ? { optionId: input.optionId } : {}),
+        ...(answer ? { answer } : {}),
+      });
     },
 
     subscribe(listener) {

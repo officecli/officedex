@@ -107,6 +107,13 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
               </ol>
             ) : null}
 
+            {task.question ? (
+              <QuestionCard
+                question={task.question}
+                onPick={(optionId) => void agent.answer({ optionId })}
+              />
+            ) : null}
+
             <div className="shell-task-actions">
               {task.documentType !== "docx" && task.documentType !== "xlsx"
                 ? status === "paused" ? (
@@ -193,8 +200,54 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
   );
 }
 
-function StepIcon({ step, paused }: { step: AgentStep; paused: boolean }) {
-  if (step.state === "done") return <CircleCheck size={15} strokeWidth={1.7} aria-hidden="true" />;
+/**
+ * The run is waiting on an answer, and this is the way through.
+ *
+ * It sits above the actions rather than among the messages because it is not
+ * something the agent said — it is a door. Rendered as a reply with no controls
+ * it read as commentary, and the only text box on screen (the composer) started
+ * a second run instead of answering, leaving the first blocked with nothing on
+ * screen to say so.
+ *
+ * The composer stays live underneath for a typed answer when the runtime takes
+ * one; when it does not, `agent.send` says so rather than silently starting
+ * something else.
+ */
+function QuestionCard({
+  question,
+  onPick,
+}: {
+  question: NonNullable<AgentTask["question"]>;
+  onPick: (optionId: string) => void;
+}) {
+  return (
+    <div className="shell-task-question" role="group" aria-label="Agent is waiting for an answer">
+      <strong>{question.text || "The Agent needs an answer to continue."}</strong>
+      {question.options.length > 0 ? (
+        <div className="shell-task-question-options">
+          {question.options.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              className={`shell-task-button${option.recommended ? " is-primary" : ""}`}
+              title={option.description ?? option.label}
+              onClick={() => onPick(option.id)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {question.allowFreeform ? (
+        <small>Or type your answer below.</small>
+      ) : question.options.length === 0 ? (
+        <small>Waiting for the Agent — no options were offered.</small>
+      ) : null}
+    </div>
+  );
+}
+
+function StepIcon({ step, paused }: { step: AgentStep; paused: boolean }) {  if (step.state === "done") return <CircleCheck size={15} strokeWidth={1.7} aria-hidden="true" />;
   if (step.state === "pending") return <Clock3 size={15} strokeWidth={1.7} aria-hidden="true" />;
   if (paused) return <Pause size={15} strokeWidth={1.7} aria-hidden="true" />;
   return <span className="shell-task-spinner" aria-hidden="true" />;

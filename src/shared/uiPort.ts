@@ -151,6 +151,29 @@ export interface AgentSuggestion {
   undoable: boolean;
 }
 
+export interface AgentQuestionOption {
+  id: string;
+  label: string;
+  description?: string;
+  recommended?: boolean;
+}
+
+/**
+ * The run is blocked until someone answers.
+ *
+ * Not a message. A message is something the agent said; this is a door it is
+ * standing behind. The shell showed questions as plain replies and offered no
+ * way through — typing into the composer started a *second* run while the first
+ * stayed blocked forever, which is worse than a button that does nothing.
+ */
+export interface AgentQuestion {
+  id: string;
+  text: string;
+  options: AgentQuestionOption[];
+  /** The runtime accepts typed text as well as one of the options. */
+  allowFreeform: boolean;
+}
+
 export interface AgentTask {
   id: string;
   title: string;
@@ -164,6 +187,8 @@ export interface AgentTask {
   steps: AgentStep[];
   messages: AgentMessage[];
   suggestion: AgentSuggestion | null;
+  /** Set while the run is waiting for an answer; null the rest of the time. */
+  question: AgentQuestion | null;
 }
 
 export type AgentEvent =
@@ -212,6 +237,14 @@ export interface AgentPort {
   /** The task for a folder, or null when none has been started there. */
   current(folderId: string): Promise<AgentTask | null>;
   send(input: SendInput): Promise<void>;
+  /**
+   * Answers the pending question and lets the run continue.
+   *
+   * Separate from `send` because they are different acts: `send` asks for work,
+   * this unblocks work already under way. Routing an answer through `send`
+   * starts a second run and leaves the first one waiting.
+   */
+  answer(input: { optionId?: string; text?: string }): Promise<void>;
   /** Push channel for phase/step/message/suggestion updates. Returns unsubscribe. */
   subscribe(listener: (event: AgentEvent) => void): () => void;
   pause(): Promise<void>;

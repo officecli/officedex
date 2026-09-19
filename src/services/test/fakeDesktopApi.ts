@@ -58,12 +58,12 @@ export type FakeDesktopApi = DesktopAPI & {
   /** What the next openLocalFile picker returns. Unset means cancelled. */
   pickLocalFile(filePath: string): void;
   /** Every generate/modify call made through this fake, in order. */
-  readonly calls: Array<{ method: "generate" | "modify"; input: Record<string, unknown> }>;
+  readonly calls: Array<{ method: "generate" | "modify" | "respond"; input: Record<string, unknown> }>;
 };
 
 export function createFakeDesktopApi(seed: FakeDesktopSeed = {}): FakeDesktopApi {
   const bridgeListeners = new Set<(event: BridgeEvent) => void>();
-  const calls: Array<{ method: "generate" | "modify"; input: Record<string, unknown> }> = [];
+  const calls: Array<{ method: "generate" | "modify" | "respond"; input: Record<string, unknown> }> = [];
   let picked: { filePath: string } | null = null;
   let taskCounter = 0;
   const folders: FolderRecord[] = [
@@ -299,6 +299,10 @@ export function createFakeDesktopApi(seed: FakeDesktopSeed = {}): FakeDesktopApi
       calls.push({ method: "modify", input });
       taskCounter += 1;
       return { taskId: `task-${taskCounter}`, sessionId: "session", status: "running" };
+    },
+    async respond(input: Record<string, unknown>) {
+      calls.push({ method: "respond", input });
+      return undefined;
     },
     async cancel() {
       return undefined;

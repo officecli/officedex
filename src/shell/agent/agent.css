@@ -587,6 +587,37 @@
   background: var(--shell-paper);
 }
 
+/* The question the run is blocked on. Carries the accent because it is the one
+   thing on screen the user has to act on for anything else to continue. */
+.shell-task-question {
+  margin: 4px 0 14px;
+  padding: 14px;
+  border: 1px solid var(--shell-accent);
+  border-radius: var(--shell-radius-card);
+  background: var(--shell-tint);
+}
+
+.shell-task-question strong {
+  display: block;
+  color: var(--shell-ink-title);
+  font-size: var(--shell-text);
+  font-weight: 500;
+}
+
+.shell-task-question-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.shell-task-question small {
+  display: block;
+  margin-top: 10px;
+  color: var(--shell-ink-subtle);
+  font-size: var(--shell-text-sm);
+}
+
 .shell-task-artifact-head {
   display: flex;
   align-items: flex-start;

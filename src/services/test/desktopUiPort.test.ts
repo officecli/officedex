@@ -344,6 +344,90 @@ describe("desktop agent service", () => {
     expect(task?.messages.some((message) => message.role === "agent" && message.text.includes("audience"))).toBe(true);
   });
 
+  /*
+   * A blocked run is a door, not a remark.
+   *
+   * The question used to arrive as an agent message and nothing else: no way to
+   * answer it, and the composer — the only text box on screen — started a
+   * *second* run while the first stayed blocked forever, with nothing on screen
+   * saying so. These four pin the way through.
+   */
+  const asks = (taskId: string, payload: Record<string, unknown>) => ({
+    event_id: `${taskId}-q`, task_id: taskId, type: "task.question" as const,
+    ts: "2026-09-18T10:00:03Z", payload,
+  });
+
+  it("exposes the pending question, with its options", async () => {
+    const { api, port } = agentPort();
+    api.emitBridgeEvent(started("task-1"));
+    api.emitBridgeEvent(asks("task-1", {
+      id: "q1",
+      question: "Who is the audience?",
+      options: [{ id: "exec", label: "Executives", recommended: true }, { id: "eng", label: "Engineers" }],
+      allow_freeform: true,
+    }));
+
+    const task = await port.agent.current("folder:default");
+    expect(task?.question).toMatchObject({ id: "q1", text: "Who is the audience?", allowFreeform: true });
+    expect(task?.question?.options.map((option) => option.id)).toEqual(["exec", "eng"]);
+    expect(task?.question?.options[0]).toMatchObject({ recommended: true });
+  });
+
+  it("answers the blocked run instead of starting a second one", async () => {
+    const { api, port } = agentPort();
+    api.emitBridgeEvent(started("task-1"));
+    api.emitBridgeEvent(asks("task-1", { id: "q1", question: "Who is the audience?", options: [], allow_freeform: true }));
+
+    await port.agent.send({
+      text: "Executives",
+      folderId: "folder:default",
+      mentions: [], attachments: [], modelId: "official", permission: "review",
+      activeFileId: null,
+    });
+
+    expect(api.calls.map((call) => call.method)).toEqual(["respond"]);
+    expect(api.calls[0].input).toMatchObject({ taskId: "task-1", questionId: "q1", answer: "Executives" });
+  });
+
+  it("carries the picked option back with the question it belongs to", async () => {
+    const { api, port } = agentPort();
+    api.emitBridgeEvent(started("task-1"));
+    api.emitBridgeEvent(asks("task-1", {
+      id: "q1", question: "Who is the audience?",
+      options: [{ id: "exec", label: "Executives" }], allow_freeform: false,
+    }));
+
+    await port.agent.answer({ optionId: "exec" });
+
+    expect(api.calls).toHaveLength(1);
+    expect(api.calls[0].input).toMatchObject({ taskId: "task-1", questionId: "q1", optionId: "exec" });
+  });
+
+  // Typing where only options are accepted is a dead end, and saying so beats
+  // silently starting something else.
+  it("says so rather than starting a run when the question takes no typed answer", async () => {
+    const { api, port } = agentPort();
+    const notices: string[] = [];
+    port.agent.subscribe((event) => {
+      if (event.kind === "notice") notices.push(event.message);
+    });
+    api.emitBridgeEvent(started("task-1"));
+    api.emitBridgeEvent(asks("task-1", {
+      id: "q1", question: "Who is the audience?",
+      options: [{ id: "exec", label: "Executives" }], allow_freeform: false,
+    }));
+
+    await port.agent.send({
+      text: "Executives",
+      folderId: "folder:default",
+      mentions: [], attachments: [], modelId: "official", permission: "review",
+      activeFileId: null,
+    });
+
+    expect(api.calls).toHaveLength(0);
+    expect(notices.join(" ")).toMatch(/Pick one of the options/);
+  });
+
   // The contract carries no document type, so a new run infers one from the
   // instruction — the same rule the old Home used.
   it("starts a new run when nothing is open", async () => {

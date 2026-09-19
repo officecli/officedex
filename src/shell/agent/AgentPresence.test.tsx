@@ -192,4 +192,44 @@ describe("task panel", () => {
     });
     await untilText(shell.view.container, "Suggested changes are ready");
   });
+
+  /*
+   * A blocked run has to have a way through.
+   *
+   * The question used to render as an agent reply and nothing else. The only
+   * text box on screen was the composer, and typing into it started a second
+   * run while the first stayed blocked — so the panel showed a conversation
+   * that had quietly stopped being about the thing still waiting.
+   */
+  it("offers the run's question as choices, and answering lets it continue", async () => {
+    const shell = await openFile({ fastAgent: true, asksQuestion: true });
+
+    await act(async () => {
+      await shell.port.agent.send({ ...sendInput, text: "Draft the launch memo.", activeFileId: null });
+    });
+    await untilText(shell.view.container, "Who is this for?");
+    expect(shell.view.container.textContent).not.toContain("Suggested changes are ready");
+
+    await act(async () => {
+      fireEvent.click(shell.view.getByText("Executives"));
+    });
+    await untilText(shell.view.container, "Suggested changes are ready");
+    expect(shell.view.container.querySelector(".shell-task-question")).toBeNull();
+  });
+
+  // The composer answers the question instead of starting a second run.
+  it("routes a typed reply to the waiting question", async () => {
+    const shell = await openFile({ fastAgent: true, asksQuestion: true });
+
+    await act(async () => {
+      await shell.port.agent.send({ ...sendInput, text: "Draft the launch memo.", activeFileId: null });
+    });
+    await untilText(shell.view.container, "Who is this for?");
+
+    await act(async () => {
+      await shell.port.agent.send({ ...sendInput, text: "The board.", activeFileId: null });
+    });
+    await untilText(shell.view.container, "Suggested changes are ready");
+    expect(shell.view.container.querySelector(".shell-task-question")).toBeNull();
+  });
 });
