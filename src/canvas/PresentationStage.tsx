@@ -43,7 +43,22 @@ export interface PresentationStageProps {
 
 export function PresentationStage({ api, task, onError }: PresentationStageProps) {
   return (
-    <LocaleProvider>
+    /*
+     * Pinned to English, not left to `navigator.language`.
+     *
+     * This stage is the one piece of the old renderer the new shell mounts
+     * whole, and it brought that renderer's i18n with it: on a Chinese system
+     * `LocaleProvider` resolved to `zh`, so the canvas said 「正在撰写页面正文」
+     * and 「内容预览」 while the panel beside it, the ribbon above it and the
+     * generated slides themselves were all English. One screen, two languages,
+     * neither chosen.
+     *
+     * `src/shell` has no i18n by decision, so English is what the rest of this
+     * window speaks. `pptxFlowCopy` is already a bilingual table — this picks
+     * its column rather than translating anything. When the shell does get
+     * i18n, this prop is what that work replaces.
+     */
+    <LocaleProvider value="en">
       <DesktopApiProvider api={api}>
         <StageBody api={api} task={task} onError={onError} />
       </DesktopApiProvider>

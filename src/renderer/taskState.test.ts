@@ -315,6 +315,64 @@ describe("taskState", () => {
     expect(state.tasks[taskId].stages?.some((stage) => stage.label === "Formatting & export")).toBe(false);
   });
 
+  /*
+   * The progressive PPTX pipeline's own steps, with the diagnostic text a real
+   * run emitted. None of `plan.*` had a case, so each became its own stage
+   * titled with that text: evidence paths, palette hex, MOP internals. Thirteen
+   * such rows on one screen, still growing.
+   */
+  it("keeps OfficeCLI's pptx pipeline steps as stages, not as their diagnostic text", () => {
+    let state = createInitialTaskState();
+    const taskId = "pptx-pipeline-stages";
+    const leaks = [
+      'Web research skipped: Post "https://platform.officecli.io/api/llm/v1/structured": context deadline exceeded',
+      "Outline request/response evidence: /Users/luyang/Library/Application Support/OfficeDex/workspace/20260919/.mop-assets/officecli-outline-1381267839",
+      "Design system: preset tech-contrast, scale display, corners square, ornament rules; palette #189776/#F2104A sampled from the family distribution",
+      "Streaming 8 slides into the MOP worker as their content lands",
+      "Using 8 provisional MOP slide compositions; real content may refine each non-image page",
+    ] as const;
+    const progress = [
+      { event_id: "license", task_id: taskId, type: "task.progress", payload: { step: "license", status: "completed" } },
+      { event_id: "research", task_id: taskId, type: "task.progress", payload: { step: "plan.research", status: "running", content: leaks[0] } },
+      { event_id: "outline", task_id: taskId, type: "task.progress", payload: { step: "plan.outline", status: "running", content: leaks[1] } },
+      { event_id: "style", task_id: taskId, type: "task.progress", payload: { step: "plan.style", status: "running", content: leaks[2] } },
+      { event_id: "expand-a", task_id: taskId, type: "task.progress", payload: { step: "plan.expand", status: "running", content: leaks[3] } },
+      { event_id: "expand-b", task_id: taskId, type: "task.progress", payload: { step: "plan.expand", status: "running", content: leaks[4] } },
+    ] as const;
+    for (const event of progress) state = applyTaskEvent(state, event);
+
+    const stages = state.tasks[taskId].stages ?? [];
+    expect(stages.map((stage) => stage.id)).toEqual([
+      "access",
+      "research",
+      "outline",
+      "generate-content",
+    ]);
+    // Two `plan.expand` events, one stage: repeated work is progress within a
+    // stage, not another stage.
+    expect(stages.filter((stage) => stage.id === "generate-content")).toHaveLength(1);
+    for (const leak of leaks) {
+      expect(stages.some((stage) => stage.label === leak)).toBe(false);
+    }
+  });
+
+  // An unmapped step must leave the list alone rather than inventing a row for
+  // itself — the behaviour that let every new runtime step reach the screen.
+  it("ignores a step it does not recognise instead of naming a stage after it", () => {
+    let state = createInitialTaskState();
+    const taskId = "pptx-unknown-step";
+    const events = [
+      { event_id: "license", task_id: taskId, type: "task.progress", payload: { step: "license", status: "completed" } },
+      { event_id: "outline", task_id: taskId, type: "task.progress", payload: { step: "plan.outline", status: "running" } },
+      { event_id: "mystery", task_id: taskId, type: "task.progress", payload: { step: "plan.something_new", status: "running", content: "internal detail nobody asked for" } },
+    ] as const;
+    for (const event of events) state = applyTaskEvent(state, event);
+
+    const stages = state.tasks[taskId].stages ?? [];
+    expect(stages.map((stage) => stage.id)).toEqual(["access", "outline"]);
+    expect(state.tasks[taskId].activeStageId).toBe("outline");
+  });
+
   it("moves an accepted plan response into running state before bridge events arrive", () => {
     const waiting = applyTaskEvent(createInitialTaskState(), {
       event_id: "event-plan",

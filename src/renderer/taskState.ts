@@ -838,8 +838,44 @@ function semanticStageForProgress(payload: Record<string, unknown>): { id: strin
       return { id: "write", label: "Writing local file" };
     case "finalize":
       return { id: "finalize", label: "Finalizing document" };
+
+    /*
+     * OfficeCLI's progressive PPTX pipeline. Each of these maps onto a stage a
+     * reader can act on, and several share one — `plan.style` is part of
+     * shaping the deck, not a phase of its own, and `plan.expand` is writing.
+     *
+     * They had no cases at all until now, so every one of them fell to the
+     * `default` below and turned its diagnostic text into a visible step:
+     * evidence file paths, `#189776` palette values, `anchor=left motif=cards`,
+     * "Streaming 8 slides into the MOP worker". A single run put thirteen such
+     * rows on screen and kept adding more, which is what "这个流程的界面非常乱"
+     * was looking at. Sources: internal/runtime/pptx_progressive.go,
+     * pptx_progressive_expand.go, pptx_research.go.
+     */
+    case "plan.research":
+      return { id: "research", label: "Researching" };
+    case "plan.outline":
+    case "plan.outline.gate":
+    case "plan.style":
+      return { id: "outline", label: "Drafting outline" };
+    case "plan.expand":
+      // The same work `generate_llm` names, so the same stage rather than a
+      // second one saying it differently.
+      return { id: "generate-content", label: "Generating document content" };
+
+    /*
+     * An unrecognised step advances nothing and names nothing.
+     *
+     * This used to return `{ id: "step:" + step, label: payload.content }`,
+     * which made every unmapped step its own stage titled with whatever
+     * diagnostic string the runtime happened to emit. Returning undefined
+     * leaves the current stage active instead: `reduceStages` falls through to
+     * its completed/failed handling once a semantic stage exists, and to the
+     * four-stage skeleton when one does not. Nothing is lost — the full
+     * progress text is already written to the bridge log.
+     */
     default:
-      return { id: `step:${step}`, label: stringValue(payload.content).trim() || "Processing request" };
+      return undefined;
   }
 }
 
