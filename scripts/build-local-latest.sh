@@ -4,6 +4,8 @@ set -euo pipefail
 OFFICE2MODOC_VERSION="$(tr -d '[:space:]' < "$(dirname "$0")/../office2modoc.version")"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/officecli-ldflags.sh
+source "${SCRIPT_DIR}/officecli-ldflags.sh"
 OFFICEDEX_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 REPO_ROOT="$(cd "${OFFICEDEX_DIR}/.." && pwd)"
 OFFICECLI_DIR="${REPO_ROOT}/officecli-internal"
@@ -41,7 +43,7 @@ build_officecli() {
   temporary="$(mktemp "${output}.tmp.XXXXXX")"
   trap 'rm -f "${temporary}"' RETURN
   env -u GOROOT go build -trimpath \
-    -ldflags "-s -w -X github.com/officecli/officecli/internal/cli.Version=${OFFICECLI_RELEASE_VERSION} -X github.com/officecli/officecli/internal/cli.Commit=local-build -X github.com/officecli/officecli/internal/cli.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    -ldflags "$(officecli_ldflags "${OFFICECLI_DIR}" "${OFFICECLI_RELEASE_VERSION}" "local-build" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")" \
     -o "${temporary}" ./cmd/officecli
   chmod 0755 "${temporary}"
   mv "${temporary}" "${output}"

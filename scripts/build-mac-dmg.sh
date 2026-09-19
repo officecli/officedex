@@ -28,6 +28,8 @@ set -euo pipefail
 OFFICE2MODOC_VERSION="$(tr -d '[:space:]' < "$(dirname "$0")/../office2modoc.version")"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/officecli-ldflags.sh
+source "${SCRIPT_DIR}/officecli-ldflags.sh"
 OFFICEDEX_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # One knob, several vocabularies: Node tarballs say x64, Go says amd64, Mach-O
@@ -270,7 +272,7 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
       # officecli is pure Go (CGO_ENABLED=0 in its own release config), so
       # GOARCH alone cross-compiles it cleanly.
       env -u GOROOT GOOS=darwin GOARCH="${GO_ARCH}" CGO_ENABLED=0 go build -trimpath \
-        -ldflags "-s -w -X github.com/officecli/officecli/internal/cli.Version=${OFFICECLI_RELEASE_VERSION} -X github.com/officecli/officecli/internal/cli.Commit=local-release -X github.com/officecli/officecli/internal/cli.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        -ldflags "$(officecli_ldflags "${OFFICECLI_INTERNAL}" "${OFFICECLI_RELEASE_VERSION}" "local-release" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")" \
         -o "${OFFICEDEX_DIR}/build/officecli/officecli" ./cmd/officecli
     )
     lipo -info "${OFFICEDEX_DIR}/build/officecli/officecli" | head -1

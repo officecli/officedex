@@ -3,6 +3,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/officecli-ldflags.sh
+source "${SCRIPT_DIR}/officecli-ldflags.sh"
 OFFICEDEX_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 REPO_ROOT="$(cd "${OFFICEDEX_DIR}/.." && pwd)"
 OFFICECLI_INTERNAL_DIR="${REPO_ROOT}/officecli-internal"
@@ -74,7 +76,7 @@ mkdir -p "$(dirname "${OFFICECLI_STAGE_BIN}")"
 (
   cd "${OFFICECLI_INTERNAL_DIR}"
   env -u GOROOT go build -trimpath \
-    -ldflags "-s -w -X github.com/officecli/officecli/internal/cli.Version=${OFFICECLI_RELEASE_VERSION} -X github.com/officecli/officecli/internal/cli.Commit=local-build -X github.com/officecli/officecli/internal/cli.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    -ldflags "$(officecli_ldflags "${OFFICECLI_INTERNAL_DIR}" "${OFFICECLI_RELEASE_VERSION}" "local-build" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")" \
     -o "${OFFICECLI_STAGE_BIN}" ./cmd/officecli
 )
 node "${OFFICEDEX_DIR}/scripts/verify-officecli-canvas-contract.mjs" \

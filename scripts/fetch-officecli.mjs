@@ -247,14 +247,53 @@ async function resolveVersion(requested) {
   return tag.replace(/^v/, "");
 }
 
+/**
+ * Is the staged tree still the release `version.json` claims?
+ *
+ * The marker file used to be the whole answer, and the binary beside it was
+ * never looked at. `scripts/build-local-latest.sh` writes its own locally
+ * compiled OfficeCLI into this very directory — on purpose, so the app bundles
+ * the CLI it was built with — and leaves the marker untouched. So the marker
+ * can describe a binary that is not there any more, and for a while it did: a
+ * local build that verified hosted licence signatures against the dev key,
+ * reported as "already staged: 0.2.121".
+ *
+ * One directory, two purposes; the marker alone cannot tell them apart, so ask
+ * the binary. A version it does not answer for is refetched. A local build of
+ * the *right* version is kept and named in the log — it is a legitimate thing
+ * to be running against, and refetching it would break every offline run — but
+ * never silently, because "which OfficeCLI was that" is the first question
+ * asked when a generation fails.
+ */
 async function hasMatchingStage(version) {
+  let meta;
   try {
-    const text = await readFile(STAGED_VERSION, "utf8");
-    const meta = JSON.parse(text);
-    return meta.version === version && meta.platform === OS_KEY && meta.arch === STAGE_ARCH;
+    meta = JSON.parse(await readFile(STAGED_VERSION, "utf8"));
   } catch {
     return false;
   }
+  if (meta.version !== version || meta.platform !== OS_KEY || meta.arch !== STAGE_ARCH) return false;
+
+  const reported = stagedBinaryVersion();
+  if (reported === null) {
+    console.log("[fetch-officecli] staged binary is missing or unrunnable — refetching");
+    return false;
+  }
+  if (!reported.includes(version)) {
+    console.log(`[fetch-officecli] staged binary reports "${reported}", not v${version} — refetching`);
+    return false;
+  }
+  if (/local-build|local-release/i.test(reported)) {
+    console.log(`[fetch-officecli] staged binary is a local build: ${reported}`);
+  }
+  return true;
+}
+
+/** What the staged binary says it is, or null when there is nothing to ask. */
+function stagedBinaryVersion() {
+  const result = spawnSync(STAGED_BINARY, ["--version"], { encoding: "utf8", timeout: 15_000 });
+  if (result.error || result.status !== 0) return null;
+  return (result.stdout || "").trim() || null;
 }
 
 async function fetchText(url) {
