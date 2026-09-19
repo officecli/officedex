@@ -1463,6 +1463,52 @@ func TestBuildBridgeEnvExtraOverrides(t *testing.T) {
 	}
 }
 
+/*
+ * The expansion budgets, and who gets to choose them.
+ *
+ * OfficeCLI's own defaults (45s a page, 120s the whole expansion) are tuned for
+ * a provider that answers in seconds. The one the desktop talks to took 21s,
+ * 23s and 32s on the page attempts that *succeeded*, so 45s was a coin flip and
+ * 120s could not hold an eight-page deck at all — both ceilings were hit in
+ * real runs and both threw away finished pages.
+ *
+ * Supplied as defaults so an operator debugging a slow provider can still set
+ * their own, which is the part `appendKV` would have broken.
+ */
+func TestBuildBridgeEnvWidensExpansionBudgets(t *testing.T) {
+	env := BuildBridgeEnv(nil)
+	for _, want := range []string{
+		"OFFICECLI_PPTX_EXPAND_ATTEMPT_SECONDS=120",
+		"OFFICECLI_PPTX_EXPAND_TOTAL_SECONDS=600",
+	} {
+		if !contains(env, want) {
+			t.Errorf("env missing %q", want)
+		}
+	}
+}
+
+func TestBuildBridgeEnvKeepsACallersOwnExpansionBudget(t *testing.T) {
+	// The real case: an operator debugging a slow provider exported the value
+	// (launchctl setenv, or a shell that launched the app), so it is already in
+	// the host environment before BuildBridgeEnv runs. `appendKV` would discard
+	// it; that is the whole reason `defaultKV` exists.
+	prevEnviron := syscallEnviron
+	syscallEnviron = func() []string { return []string{"OFFICECLI_PPTX_EXPAND_ATTEMPT_SECONDS=300"} }
+	defer func() { syscallEnviron = prevEnviron }()
+
+	env := BuildBridgeEnv(nil)
+	if !contains(env, "OFFICECLI_PPTX_EXPAND_ATTEMPT_SECONDS=300") {
+		t.Errorf("the host's own value was lost in %v", env)
+	}
+	if contains(env, "OFFICECLI_PPTX_EXPAND_ATTEMPT_SECONDS=120") {
+		t.Errorf("default overrode the host in %v", env)
+	}
+	// The budget the host said nothing about still gets its default.
+	if !contains(env, "OFFICECLI_PPTX_EXPAND_TOTAL_SECONDS=600") {
+		t.Errorf("unrelated default missing in %v", env)
+	}
+}
+
 func TestBuildBridgeEnvInjectsProxySupplier(t *testing.T) {
 	t.Cleanup(func() { SetProxyEnvSupplier(nil) })
 	prevEnviron := syscallEnviron

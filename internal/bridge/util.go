@@ -72,6 +72,24 @@ func BuildBridgeEnv(extra []string) []string {
 	base = appendKV(base, "OFFICECLI_SKIP_SKILL_PREFLIGHT", "1")
 	base = appendKV(base, "OFFICECLI_SKIP_PUBLISH_SETUP", "1")
 	base = appendKV(base, "OFFICECLI_SKIP_UPDATE_CHECK", "1")
+
+	/*
+	 * Room for a slow provider to answer.
+	 *
+	 * OfficeCLI budgets 45s per page attempt and 120s for the whole expansion
+	 * (internal/runtime/pptx_expansion_recovery.go). Those hold for a provider
+	 * answering in a few seconds; they do not hold for the one the desktop
+	 * actually talks to. Measured against platform.officecli.io: an empty 404
+	 * takes 5s to first byte, and the page attempts that *succeeded* in real
+	 * runs took 21s, 23s and 32s. At 45s the margin is a coin flip, and an
+	 * eight-page deck cannot fit in 120s at 20-45s a page — both ceilings were
+	 * hit, and each time the run threw away the pages it had finished.
+	 *
+	 * Defaults, not overrides: a caller that has already chosen a value keeps
+	 * it, which is why this cannot use appendKV.
+	 */
+	base = defaultKV(base, "OFFICECLI_PPTX_EXPAND_ATTEMPT_SECONDS", "120")
+	base = defaultKV(base, "OFFICECLI_PPTX_EXPAND_TOTAL_SECONDS", "600")
 	for _, kv := range suppliedProxy {
 		key, _, ok := strings.Cut(kv, "=")
 		if !ok {
@@ -99,6 +117,18 @@ func appendKV(env []string, key, value string) []string {
 		}
 	}
 	return append(filtered, prefix+value)
+}
+
+// defaultKV supplies a value only when the environment does not already carry
+// that key, so anything the user or the launcher chose wins over the default.
+func defaultKV(env []string, key, value string) []string {
+	prefix := key + "="
+	for _, kv := range env {
+		if strings.HasPrefix(kv, prefix) {
+			return env
+		}
+	}
+	return append(env, prefix+value)
 }
 
 // setKV replaces (or appends) an entry whose key matches kv's prefix.
