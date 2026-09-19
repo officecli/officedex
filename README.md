@@ -153,7 +153,7 @@ In one sentence: **Tell it what you want — it generates Word / PPT / Excel for
 | 📂 Local-first files    |  Manual download   | ✅ Direct save |        ✅ Direct save + one-click open         |
 | 👀 Inline preview       | Open Office needed |      None      |       ✅ DOCX/PPTX/XLSX rendered inline        |
 | 🔌 Custom LLM           |   Vendor-locked    |     ✅ Any     |              ✅ Any + GUI config               |
-| 🎨 UI & interaction     |      Generic       |   Plain text   |            ✅ Notion design system             |
+| 🎨 UI & interaction     |      Generic       |   Plain text   |       ✅ Purpose-built interaction prototype       |
 | 🔒 Data sovereignty     |    Cloud-first     |    ✅ Local    |           ✅ Local (hosted optional)           |
 | 💬 Mid-task interaction |  Single-turn chat  |      None      | ✅ AI asks back in real time, streaming status |
 
@@ -284,7 +284,7 @@ Build artifacts land in `build/bin/`. CI (`.github/workflows/release.yml`) produ
                           └────────────────────────┘
 ```
 
-- **Frontend**: React 19 + Ant Design 6 + custom Notion design tokens
+- **Frontend**: React 19 + Ant Design 6 + the shell's own tokens (`src/shell/tokens.css`)
 - **Desktop shell**: Wails v2 (Go backend + system WebView frontend) — compact bundle size (build output < 30MB)
 - **Generation engine**: decoupled `officecli` subprocess, communicating via JSON-RPC
 - **Preview**: `docx-preview` / `pdfjs-dist` / `xlsx` inline rendering — no Office install required
@@ -293,14 +293,14 @@ Build artifacts land in `build/bin/`. CI (`.github/workflows/release.yml`) produ
 
 ## 🎨 Design Language
 
-OfficeDex fully adopts the Notion design system:
+The single source of truth is the approved interaction prototype,
+`OfficeDex-Final-Light-Preview-2026-09-17.html`. Its tokens are projected into
+[`src/shell/tokens.css`](src/shell/tokens.css) — read that file before any UI work.
 
-- **Primary color** Notion Purple `#5645d4`
-- **Typography** DM Serif Display (headings) + Plus Jakarta Sans (body)
-- **Shape** 8px buttons / 12px cards / 9999px pills
-- **Vibe** Warm neutrals, deep navy hero bands, pastel feature cards
-
-Full spec: [`DESIGN.md`](DESIGN.md).
+- **Ink** `#41464b` · **Chrome** `#f5f6f8` · **Accent** `#596f86`
+- **Typography** platform UI stack, `"PingFang SC"` first; 12px body
+- **Shape** radii from `--shell-radius-*` (5 / 6 / 10 / 14 / 20px); no pills
+- **Motion** `cubic-bezier(.22, 1, .36, 1)`
 
 ---
 
@@ -429,7 +429,7 @@ Copy the generated markdown and paste it into a GitHub Issue.
 
 ## 📚 Documentation
 
-- [`DESIGN.md`](DESIGN.md) — Full design spec
+- [`src/shell/tokens.css`](src/shell/tokens.css) — Design tokens, projected from the approved interaction prototype
 - [`CLAUDE.md`](CLAUDE.md) — Project conventions & collaboration guidelines
 - [`docs/README.zh-CN.md`](docs/README.zh-CN.md) — 简体中文版
 - [`docs/aippt-jssdk-design-method.md`](docs/aippt-jssdk-design-method.md) — AI PPT JSSDK design, free composition, and layout acceptance method

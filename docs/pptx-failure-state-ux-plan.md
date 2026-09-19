@@ -164,10 +164,10 @@ export function planPptxFailure(input: PptxFailureInput): PptxFailurePlan;
 ### 4.5 视觉规范
 
 - 复用 `artifact-stage-status` 的结构与 token（`--od-danger`、`--od-danger-border`、`--od-border-subtle`、`--od-radius-dialog`），不再自造 `pptx-production-stage__error` 那种裸色块。
-- 面板圆角 12px、按钮 8px、卡片 12px —— 与 `DESIGN.md` 一致；不引入药丸按钮。
+- 圆角一律取 `src/shell/tokens.css` 的 `--shell-radius-*`（5 / 6 / 10 / 14 / 20px）；不引入药丸按钮。
 - 失败页 chips 用现有 tag 语义，不新增色彩。
 - `[data-phase="failed"]` 下：时间线节点与标题置为 danger 色；停止全部动画（复用 `progressivePptxStage.css:161` 的 `data-delayed` 停动画写法）。
-- 技术详情用等宽字体（`DESIGN.md`：JetBrains Mono），内容为 `stripFailureTag(error)` 原文 + `errorCode`。
+- 技术详情用等宽字体（取 `src/shell/tokens.css` 的字体栈），内容为 `stripFailureTag(error)` 原文 + `errorCode`。
 
 ### 4.6 终态收敛规则
 

@@ -13,4 +13,4 @@
 
 ## UI/UX
 
-- 修改 UI 前先阅读 `DESIGN.md` 和上级目录的 UI 迁移约定。
+- 修改 UI 前先阅读 `src/shell/tokens.css`（获批交互原型 `OfficeDex-Final-Light-Preview-2026-09-17.html` 的令牌投影）和上级目录的 UI 迁移约定。

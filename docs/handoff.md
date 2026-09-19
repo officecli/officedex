@@ -275,7 +275,7 @@ presentation）都没暴露 undo 协议，`DesktopAPI` 里也没有版本或快�
   假数据——这是刻意设计，它会在你给 service 加新依赖时立刻叫出来。
 
 **其它**
-- **做任何 UI 工作前必须先读根目录的 `DESIGN.md`**（`CLAUDE.md` 的硬性要求）。
+- **做任何 UI 工作前必须先读 `src/shell/tokens.css`**（获批交互原型的令牌投影；`CLAUDE.md` 的硬性要求）。
 - **用中文回复用户**，代码/标识符/日志保持英文。
 
 ---
@@ -322,6 +322,6 @@ node scripts/verify-bridge-types.mjs   # 改过 DesktopAPI 才需要
 
 1. `git status` 确认工作树状态，认清哪些改动**不是你的**（§7 git 一节）。
 2. 跑一遍 §8 的四条命令，确认基线：1103 TS 测试绿、Go 4 个已知失败。
-3. 读 `docs/not-implemented.md` 和 `DESIGN.md`。
+3. 读 `docs/not-implemented.md` 和 `src/shell/tokens.css`。
 
 然后问用户要做哪一项——§6 列了剩余方向；`files.create` 已由真实 Office 包创建 bridge 接上。

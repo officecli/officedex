@@ -368,7 +368,7 @@ git diff --stat
         ↓
 检查 dirty state、Node/Go/Wails、OfficeCLI 和 sibling repos
         ↓
-阅读本指南 + AGENTS.md + DESIGN.md + README.md
+阅读本指南 + AGENTS.md + src/shell/tokens.css + README.md
         ↓
 从 bridge.ts / App method / internal service 找到完整链路
         ↓

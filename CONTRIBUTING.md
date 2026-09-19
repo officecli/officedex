@@ -19,7 +19,7 @@ Thanks for taking the time to contribute! This document covers everything you ne
 - Be respectful — see [Code of Conduct](./CODE_OF_CONDUCT.md).
 - File an issue (or check the Discussions tab) **before** spending time on a non-trivial change so we can align on direction.
 - Prefer small, focused PRs. One concern per PR.
-- All UI changes must follow [`DESIGN.md`](./DESIGN.md) — Notion-style tokens (purple `#5645d4`, DM Serif Display headings, 8 px rectangular buttons, 12 px card radii, warm neutrals).
+- All UI changes must follow the approved interaction prototype (`OfficeDex-Final-Light-Preview-2026-09-17.html`). Its tokens are projected into [`src/shell/tokens.css`](./src/shell/tokens.css) — read that file; do not hard-code colours or type sizes outside it.
 
 ## Getting set up
 
@@ -109,7 +109,7 @@ Before opening a PR, please confirm:
 - [ ] `npm run lint` passes
 - [ ] `npx vitest run` and `go test ./...` pass
 - [ ] If you touched any renderer string, both `zh.ts` and `en.ts` are updated
-- [ ] If you touched UI, the change still matches `DESIGN.md` tokens
+- [ ] If you touched UI, the change still matches `src/shell/tokens.css`
 - [ ] The PR description explains the user-facing impact, not just the diff
 - [ ] Linked issue (or `Fixes #NNN`) when applicable
 

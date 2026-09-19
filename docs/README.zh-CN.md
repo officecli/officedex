@@ -27,7 +27,6 @@
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-37352f?style=flat-square" alt="Platform" />
   <img src="https://img.shields.io/github/v/release/officecli/officedex?style=flat-square&color=5645d4&label=version" alt="Version" />
   <img src="https://img.shields.io/badge/stack-Wails%20v2%20%2B%20React%2019-0075de?style=flat-square" alt="Stack" />
-  <img src="https://img.shields.io/badge/UI-Notion%20Design-1aae39?style=flat-square" alt="UI" />
   <img src="https://img.shields.io/badge/license-GPL--3.0-1aae39?style=flat-square" alt="License" />
 </p>
 
@@ -169,7 +168,7 @@ OfficeDex 不只是"一句话 → 一个文件"，而是一个**带记忆的文�
 | 📂 文件本地化 | 需手动下载 | ✅ 直接落盘 | ✅ 直接落盘 + 一键打开 |
 | 👀 内置预览 | 需打开 Office | 无 | ✅ DOCX/PPTX/XLSX 内联渲染 |
 | 🔌 自定义 LLM | 依赖供应商生态 | ✅ 任意 | ✅ 任意 + 图形化配置 |
-| 🎨 视觉与人机交互 | 通用样式 | 纯文本 | ✅ Notion 设计系统 |
+| 🎨 视觉与人机交互 | 通用样式 | 纯文本 | ✅ 专属交互原型 |
 | 🔒 数据可控 | 云端为主 | ✅ 本地 | ✅ 本地（可选托管） |
 | 💬 中途交互 | 单轮聊天 | 无 | ✅ AI 实时提问、流式状态 |
 
@@ -303,14 +302,13 @@ npm run dist:win      # Windows
 
 ## 🎨 设计语言
 
-OfficeDex 全量采用 Notion 设计系统：
+唯一基准是获批的交互原型 `OfficeDex-Final-Light-Preview-2026-09-17.html`，
+其令牌已投影进 [`../src/shell/tokens.css`](../src/shell/tokens.css) —— 做任何 UI 工作前先读它。
 
-- **主色** Notion Purple `#5645d4`
-- **字体** DM Serif Display (标题) + Plus Jakarta Sans (正文)
-- **形状** 按钮 8px / 卡片 12px / Pill 9999px
-- **氛围** 暖中性色调，深 navy hero 带 + pastel 功能卡
-
-完整规范见 [`../DESIGN.md`](../DESIGN.md)。
+- **墨色** `#41464b` · **壳体** `#f5f6f8` · **强调** `#596f86`
+- **字体** 平台 UI 字体栈，首位 `"PingFang SC"`；正文 12px
+- **形状** 圆角取 `--shell-radius-*`（5 / 6 / 10 / 14 / 20px）；不用药丸形
+- **动效** `cubic-bezier(.22, 1, .36, 1)`
 
 ---
 
@@ -439,7 +437,7 @@ OfficeCLI runtime 也支持手动指定本地路径，无需联网下载。
 
 ## 📚 相关文档
 
-- [`../DESIGN.md`](../DESIGN.md) — 完整设计规范
+- [`../src/shell/tokens.css`](../src/shell/tokens.css) — 设计令牌，来自获批交互原型
 - [`../CLAUDE.md`](../CLAUDE.md) — 项目约定 & 协作准则
 - [`aippt-jssdk-design-method.md`](aippt-jssdk-design-method.md) — AI PPT 的模板 JSSDK 学习、自由构图与排版验收方法
 - [`aippt-jssdk-visual-gap-report.md`](aippt-jssdk-visual-gap-report.md) — 对照 Cheso 样例的视觉差距、根因与下一版路线图

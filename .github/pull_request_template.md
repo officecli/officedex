@@ -39,6 +39,6 @@ Fixes #
 ## Checklist
 
 - [ ] I have read [CONTRIBUTING.md](../CONTRIBUTING.md)
-- [ ] UI changes follow [DESIGN.md](../DESIGN.md) tokens
+- [ ] UI changes follow `src/shell/tokens.css` (the approved prototype's tokens) — no bare hex or off-scale font sizes
 - [ ] If renderer strings changed, both `src/renderer/i18n/zh.ts` and `en.ts` are updated
 - [ ] No `Co-Authored-By: Claude` (or other AI) trailers in commit messages
