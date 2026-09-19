@@ -233,9 +233,44 @@ export interface SendInput {
   reference?: AgentReference;
 }
 
+/**
+ * One row of Home's task list.
+ *
+ * Deliberately not an `AgentTask`: the list shows every folder's recent work,
+ * and a full task carries its whole message history and suggestion state. Home
+ * needs a title, where it happened and how it is going — pulling the transcript
+ * of a dozen finished runs to render a dozen rows is the kind of thing that is
+ * cheap with three tasks and unusable with three hundred.
+ */
+export interface AgentTaskSummary {
+  id: string;
+  title: string;
+  folderId: string;
+  status: AgentStatus;
+  /** Free-text phase, same as `AgentTask.phase`. Shown as the row's subtitle. */
+  phase: string;
+  /**
+   * Epoch ms of the last change, when the runtime knows it.
+   *
+   * Optional because the desktop's task records do not all carry a timestamp.
+   * The port returns rows already ordered; this is for display and for merging
+   * live updates, not for the caller to sort by.
+   */
+  updatedAt?: number;
+}
+
 export interface AgentPort {
   /** The task for a folder, or null when none has been started there. */
   current(folderId: string): Promise<AgentTask | null>;
+  /**
+   * Recent tasks across every folder, newest first. Home's "Continue working".
+   *
+   * Separate from `current` because Home is not scoped: a run started in one
+   * folder is still the thing the user was doing, and scoping the list to the
+   * folder chip would hide it the moment they switched. Includes finished runs
+   * — "what was I doing" is mostly a question about work that already stopped.
+   */
+  list(options?: { limit?: number }): Promise<AgentTaskSummary[]>;
   send(input: SendInput): Promise<void>;
   /**
    * Answers the pending question and lets the run continue.

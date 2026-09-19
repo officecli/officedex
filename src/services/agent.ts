@@ -1,5 +1,5 @@
 import type { BridgeEvent, DesktopAPI, DesktopTask, GenerateInput, TaskHistoryEntry } from "../shared/types";
-import type { AgentEvent, AgentMessage, AgentPort, AgentStatus, AgentStep, AgentTask, SendInput } from "../shared/uiPort";
+import type { AgentEvent, AgentMessage, AgentPort, AgentStatus, AgentStep, AgentTask, AgentTaskSummary, SendInput } from "../shared/uiPort";
 import { NotImplementedError } from "../shared/notImplemented";
 import { applyTaskEvent, attachTaskContext, createInitialTaskState, type TaskState } from "../renderer/taskState";
 import { taskTitle } from "../renderer/taskTitle";
@@ -288,6 +288,21 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       if (!task) return null;
       if (ACTIVE_STATUSES.includes(task.status)) activeTaskId = task.id;
       return toAgentTaskWithReview(task, reviewArtifacts.get(task.id));
+    },
+
+    /**
+     * Wave 0 seam: shape only, no implementation yet.
+     *
+     * The raw material is already here — `api.getTaskHistory` returns entries
+     * across every folder and `hydrate` turns them into the same task records
+     * `current` reads. What is missing is the mapping to `AgentTaskSummary`
+     * and a decision about how far back "recent" goes.
+     */
+    async list(): Promise<AgentTaskSummary[]> {
+      throw new NotImplementedError(
+        "agent.list",
+        "The task list is not wired up yet.",
+      );
     },
 
     async send(input: SendInput) {

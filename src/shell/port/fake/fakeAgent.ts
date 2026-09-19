@@ -174,6 +174,31 @@ export function createFakeAgent(deps: FakeAgentDeps): AgentPort {
       return task ? structuredClone(task) : null;
     },
 
+    /**
+     * Every folder's task: whatever is live first, then newest-created.
+     *
+     * `tasks` is keyed by folder and only ever inserted into once, so its
+     * iteration order is creation order — it says nothing about what was
+     * touched most recently. Sorting live runs to the front is the closest
+     * this fake gets to the real service, which orders by the runtime's own
+     * history timestamps.
+     */
+    async list(options) {
+      const live = (status: AgentTask["status"]) =>
+        status === "working" || status === "reading" || status === "writing" || status === "paused";
+      const rows = [...tasks.values()]
+        .reverse()
+        .sort((a, b) => Number(live(b.status)) - Number(live(a.status)))
+        .map((task) => ({
+          id: task.id,
+          title: task.title,
+          folderId: task.folderId,
+          status: task.status,
+          phase: task.phase,
+        }));
+      return options?.limit === undefined ? rows : rows.slice(0, options.limit);
+    },
+
     // Answering releases the run the question was blocking. Without a pending
     // question there is nothing to release, which is what the real service does
     // too.

@@ -49,6 +49,19 @@ export interface ComposerProps {
   busy?: boolean;
   onSend: (submission: ComposerSubmission) => void | Promise<void>;
   onStop?: () => void;
+  /**
+   * Hands the parent a function that types into this composer.
+   *
+   * Home's quick prompts need to *fill* the input rather than send — the
+   * prototype's whole point there is that you edit the suggestion before it
+   * goes out. Lifting `text` into the parent to achieve that would make every
+   * keystroke on Home a parent re-render, and the docked and floating
+   * placements would pay for a feature only the hero uses.
+   *
+   * Wrap the callback in `useCallback`: it is an effect dependency, and a new
+   * identity each render re-registers on every keystroke.
+   */
+  onRegisterFill?: (fill: (text: string) => void) => void;
 }
 
 /**
@@ -60,7 +73,7 @@ export interface ComposerProps {
  * had a separate folder dropdown on Home for what the scope chip does here;
  * folding the two together is decision 2.
  */
-export function Composer({ placement, busy = false, onSend, onStop }: ComposerProps) {
+export function Composer({ placement, busy = false, onSend, onStop, onRegisterFill }: ComposerProps) {
   const { state, folders, files, scopeFolderId, dispatch } = useShell();
   const port = usePort();
   const settings = useComposerSettings();
@@ -110,6 +123,27 @@ export function Composer({ placement, busy = false, onSend, onStop }: ComposerPr
     input.style.height = "auto";
     input.style.height = `${Math.min(max, Math.max(min, input.scrollHeight))}px`;
   }, [text, placement]);
+
+  /*
+   * Replace, not append: a quick prompt is a different suggestion, not an
+   * addition to the one already there. The caret lands at the end so the
+   * next thing typed continues the sentence.
+   */
+  useEffect(() => {
+    if (!onRegisterFill) return;
+    onRegisterFill((next) => {
+      setText(next);
+      setMentionQuery(null);
+      queueMicrotask(() => {
+        const input = inputRef.current;
+        input?.focus();
+        input?.setSelectionRange(next.length, next.length);
+      });
+    });
+    // `setText` is redefined each render but only ever calls the state setter,
+    // so it is safe to leave out — including it would re-register constantly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onRegisterFill]);
 
   function addAttachments(list: FileList | null, asFolder = false) {
     const incoming = [...(list ?? [])];
