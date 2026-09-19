@@ -113,6 +113,54 @@ S2 与 S5 已给出可直接落地的草案：
 
 ---
 
+## 3.2 合并期新发现（无 owner，需排进后续波次）
+
+### [MERGE-001] 浮动面板里「发送」按钮被文件名盖住，鼠标点不到 — P1
+
+- 壳组合：C7–C10（凡 floating 面板里的 composer）｜ 运行环境：3140 fake
+- 现象：Playwright 报 `<span class="shell-cx-output-name">MO launch plan.docx</span>
+  from <div class="shell-cx-left"> subtree intercepts pointer events`，点击等满 60s 超时。
+  **用鼠标无法在这个面板里按下发送**；键盘 Enter 可以。
+- 根因：`composer/Composer.tsx:804` 的 `.shell-cx-output-name` 所在的 `.shell-cx-left`
+  在 340px 的面板宽度下压在 `.shell-cx-send` 上。`composer.css:385` 的窄容器分支没有
+  为这一组重排。
+- 归属：**composer 的行内布局，Wave 1 与 Wave 2 没有任何 track 拥有它。**
+- 与既有发现的关系：S2 早就报过同一族（`toolbarOverlap`：`.shell-cx-scope` 与
+  `.shell-cx-permission` 重叠 28px、与 `.shell-cx-model` 重叠 37/61px，并注明
+  「Playwright 鼠标点击被拦截，必须用键盘」），当时作为交叉项给了 S3。
+  **S3 只覆盖了 Home 宽度的 composer，窄面板这一半没有人接。这是波次规划的缺口。**
+- 临时处理：`e2e/fix-w1b.spec.ts` 的 `growConversation()` 改用键盘发送并在注释里
+  指回本条。修好后可以改回点击。
+
+### [MERGE-002] `e2e/fix-w1b.spec.ts` 在布局动画未结束时取基准 — 已修
+
+`open()` 只等 `data-loaded`，而那只表示数据到了、与布局无关。面板落位带过渡
+（`--ease`，约 300ms）。实测 panel top：+0ms **302.56** → +100ms **354.63** → +300ms 起 **355**。
+
+两条用例因此误判：一条把动画尾巴当成「focus 导致滚动 12.9px」（**面板稳定后同一个
+focus 的位移是 0**），另一条在手柄到位前就读它的盒子、拖到了错的地方，于是
+`data-edge` 始终为空。都不是产品缺陷。
+
+已加 `settle()`：轮询到连续两次 rect 相同为止，不硬编码时长（过渡时长是设计令牌，
+写死 300ms 的测试会在有人调它的那天悄悄变错）。修复后 14/14 通过，耗时 2.1 分钟 → 31 秒。
+
+**这条要推广**：`e2e/ui-audit-helpers.ts` 的 `open()` 有同样的问题，只是普查阶段
+拍的是静态截图没被咬到。Wave 4 接闸门前应统一。
+
+## 3.1 重跑普查 spec 会毁掉「修复前」证据（W2-E 发现）
+
+`e2e/ui-audit-s*.spec.ts` 里带 `capture()` 的用例会把截图**写回** `docs/ui-audit-2026-09-19/S*/screenshots/`。
+修复后重跑一次，「修复前」的那张就被同名覆盖了 —— 而各 findings.md 全部按文件名引用它们。
+
+好在截图已随 `b9c8404` 进了版本控制，所以：
+
+```bash
+git checkout -- docs/ui-audit-2026-09-19/S8/screenshots/
+```
+
+**每次重跑普查 spec 之后都要做这一步**（或先 `git stash` 截图目录）。
+真要留「修复后」的图，另存到 `fixes/<track>/screenshots/`，不要盖原证据。
+
 ## 4. 交叉验证与自我纠错记录（保留，供后续复盘）
 
 **独立收敛**：S2 与 S7 互不知情测得设置菜单同一组数值（`left = -210.5`，可见 15.8%）；S5 静态预测的 8 个令牌差值被 S7 用 computed style 证实；S1/S5/S8 三方独立确认设置菜单溢出**与折叠轨无关**，共同推翻 PLAN 2.1 的猜测。

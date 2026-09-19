@@ -28,6 +28,42 @@ const FACE = ".shell-presence-face";
 async function open(page: Page, combination: string): Promise<void> {
   await page.goto(`/?shellFixture=1&shell=${combination}`);
   await expect(page.locator("#shell")).toHaveAttribute("data-loaded", "true");
+  await settle(page);
+}
+
+/**
+ * Waits for the presence panel to stop moving.
+ *
+ * `data-loaded` says the workspace arrived; it says nothing about layout. The
+ * panel is placed with a transition (`--ease`, ~300ms), and measuring during it
+ * reads a position that is on its way somewhere else: probed at +0ms the panel
+ * top is 302.56, at +100ms 354.63, and only from +300ms is it 355.
+ *
+ * That cost a real afternoon. Two cases here took their "before" baseline mid-
+ * transition and then blamed the movement on whatever they did next — one
+ * measured 12.9px of "scroll on focus" that was the tail of the animation, and
+ * with the panel settled the same focus moves it by exactly 0. A third read the
+ * drag handle's box before it reached its resting place and dragged to the
+ * wrong spot, so `data-edge` never became "top".
+ *
+ * Polls for two identical readings rather than sleeping a fixed duration: the
+ * transition's length is a design token, and a test that hard-codes 300ms goes
+ * quietly wrong the day someone tunes it. No presence (Home, or Editor without
+ * a floating panel) settles immediately.
+ */
+async function settle(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () => {
+      const panel = document.querySelector(".shell-presence-panel, .shell-presence-face");
+      if (!panel) return true;
+      const now = JSON.stringify(panel.getBoundingClientRect());
+      const previous = (window as unknown as { __settleLast?: string }).__settleLast;
+      (window as unknown as { __settleLast?: string }).__settleLast = now;
+      return previous === now;
+    },
+    undefined,
+    { polling: 100 },
+  );
 }
 
 /**
@@ -75,7 +111,23 @@ async function collapse(page: Page): Promise<void> {
 async function growConversation(page: Page): Promise<void> {
   const panel = page.locator(PANEL);
   await panel.getByLabel("Message Agent").fill("Draft the launch checklist, in detail.");
-  await panel.getByTitle("Send message").click();
+  /*
+   * Sent from the keyboard, and not because that is tidier.
+   *
+   * A mouse click on Send is *intercepted* inside the 340px floating panel:
+   * `.shell-cx-left` — which carries `.shell-cx-output-name`, the current
+   * file's name — is laid over the button, so Playwright reports
+   * "<span class="shell-cx-output-name">…</span> intercepts pointer events"
+   * and waits out its full timeout. That is a real defect, not a test
+   * inconvenience: a user with a mouse cannot press Send in this panel.
+   *
+   * It is filed as MERGE-001 in docs/ui-audit-2026-09-19/SUMMARY.md §3.2 and
+   * belongs to the composer's inline layout, which no Wave 1 or Wave 2 track
+   * owned. Sending with Enter routes around it so this test can get to the
+   * thing it is actually about — the clamp — instead of dying in its own setup.
+   * When MERGE-001 is fixed, this can go back to a click.
+   */
+  await panel.getByLabel("Message Agent").press("Enter");
   await expect(panel.getByText("Suggested changes are ready")).toBeVisible({ timeout: 30_000 });
   await page.waitForTimeout(300);
 }
