@@ -12,6 +12,7 @@ import type { CanvasSelection } from "../shell/editor/canvasContract";
 import { DesktopApiProvider } from "../renderer/services/desktopApi";
 import { PresentationEditorFrame, type PresentationEditorController } from "../renderer/presentation/PresentationEditorFrame";
 import { logShellEvent } from "../shell/port/shellLog";
+import { SLIDES_CHROME, useEditorChrome } from "./editorChrome";
 
 /**
  * One open presentation, rendered by the real embedded editor.
@@ -57,6 +58,13 @@ export function PresentationCanvas({
   const [session, setSession] = useState<Session | null>(null);
   const controllerRef = useRef<PresentationEditorController | null>(null);
   const labelRef = useRef<string>(file.name);
+
+  /*
+   * The deck editor's own status bar, told to the shell. Only once there is a
+   * session — before that the host's skeleton is what is on screen and it has
+   * no status bar. See `editorChrome.ts`.
+   */
+  useEditorChrome(session ? SLIDES_CHROME : null);
 
   useEffect(() => {
     let cancelled = false;

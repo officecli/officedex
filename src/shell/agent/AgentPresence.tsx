@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useT } from "../../renderer/i18n";
+import { canvasKeepOut, useCanvasSurface } from "../editor/canvasSurface";
 import { useShell } from "../state/ShellContext";
 import { NAV_RAIL_WIDTH, canDock, effectivePlacement, showsPresenceFace } from "../state/shellReducer";
 import { PresenceFace, statusLabel } from "./PresenceFace";
@@ -118,27 +119,35 @@ export function AgentPresence() {
   /**
    * The chrome the presence must stay out of.
    *
-   * The sidebar is the one region whose width the shell already knows, so it
-   * is the first thing plugged into this channel: `z-index: 200` means the
-   * floating layer wins over everything in the body row, and tucked to the
-   * left the panel covered the whole 190px sidebar — the mode menu, Home, New,
-   * Open, Recent and Pinned all at once (S4-008). The top of the window needs
-   * no inset here: `PRESENCE_MARGIN.top` already clears the window bar, and
-   * `CHROME_RESERVE` covers the controls inside it.
+   * Two sources, merged edge by edge with `max` because they are both
+   * "somewhere the panel may not be" and neither knows about the other.
    *
-   * The canvas's own safe area — the sheet tab strip, the slide status bar,
-   * the ruler (S4-002, S4-012, S6-015) — belongs here too, and cannot be
-   * added until `editor/canvasContract.ts` reports it (Wave 3-H).
+   * The sidebar is the shell's own: `z-index: 200` means the floating layer
+   * wins over everything in the body row, and tucked to the left the panel
+   * covered the whole 190px sidebar — the mode menu, Home, New, Open, Recent
+   * and Pinned all at once (S4-008). The top of the window needs no inset:
+   * `PRESENCE_MARGIN.top` already clears the window bar, and `CHROME_RESERVE`
+   * covers the controls inside it.
+   *
+   * The canvas's own is the other: the sheet tab strip, the slide status bar,
+   * the Writer ruler (S4-002, S4-012, S6-015). It arrives through
+   * `editor/canvasSurface.ts` and is all zeros until an editor reports — which
+   * is the whole of the default case, and is why a shell with no adapter, or
+   * one showing a generation stage that has no chrome at all, behaves exactly
+   * as it did before this channel existed.
    */
-  const safeArea = useMemo<Insets>(
-    () => ({
-      top: 0,
-      right: 0,
-      bottom: 0,
-      left: state.navCollapsed ? NAV_RAIL_WIDTH : state.navWidth,
-    }),
-    [state.navCollapsed, state.navWidth],
-  );
+  const surface = useCanvasSurface();
+  const safeArea = useMemo<Insets>(() => {
+    const canvas = canvasKeepOut(surface, viewport);
+    const sidebar = state.navCollapsed ? NAV_RAIL_WIDTH : state.navWidth;
+    return {
+      top: canvas.top,
+      right: canvas.right,
+      bottom: canvas.bottom,
+      left: Math.max(sidebar, canvas.left),
+    };
+  }, [state.navCollapsed, state.navWidth, surface, viewport]);
+
 
   /**
    * Until the user has placed it, the presence sits bottom-right.

@@ -25,7 +25,8 @@ import { createShellPort } from "./port/createShellPort";
 import { CanvasProvider } from "./canvas/CanvasContext";
 import { SelectionProvider } from "./canvas/SelectionContext";
 import { createShellCanvas } from "./port/createShellCanvas";
-import { UpdateGate } from "./chrome/UpdateGate";
+import { publishEditorChrome, readCanvasSurface } from "./editor/canvasSurface";
+import { readCanvasLocale } from "./editor/canvasLocale";import { UpdateGate } from "./chrome/UpdateGate";
 import { createDesktopAPI, hasDesktopBackend, readBridgeEnvironment } from "../renderer/bridge/select";
 import { LocaleProvider } from "../renderer/i18n";
 import { ForceUpdateOverlay } from "../renderer/components/ForceUpdateOverlay";
@@ -46,6 +47,35 @@ const fixture = readDevFixture(window.location.search);
 const port = fixture?.port ?? createShellPort();
 const canvas = createShellCanvas();
 const api = hasDesktopBackend() ? createDesktopAPI(readBridgeEnvironment()) : null;
+
+/*
+ * A fixture editor's chrome, for a browser that has no editors.
+ *
+ * Published here rather than inside `readDevFixture` because publishing is an
+ * effect and that function is a parser; and here rather than in a component
+ * because there is no component for an editor that is not mounted. Dev only —
+ * `fixture` is null in a production build, see the note in `dev/fixture.ts`.
+ */
+if (fixture?.canvasChrome) publishEditorChrome(fixture.canvasChrome);
+
+/*
+ * A read handle on the two canvas channels, for the fixture only.
+ *
+ * Both are module state by design (see `canvasSurface.ts`) and neither has a
+ * DOM projection, so a regression test could otherwise only assert their
+ * *consequences* — a panel that moved, a status bar that went. Those are worth
+ * asserting and this file's spec does, but a consequence test cannot tell "the
+ * channel is empty" from "the channel is full and the consumer ignored it",
+ * which is the one distinction this whole wave is about.
+ *
+ * Guarded by `fixture`, which is null in a production build.
+ */
+if (fixture) {
+  (window as unknown as Record<string, unknown>).__officedexCanvas = {
+    surface: readCanvasSurface,
+    locale: readCanvasLocale,
+  };
+}
 
 /**
  * The mandatory-update page, standing alone.

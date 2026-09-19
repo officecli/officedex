@@ -19,6 +19,8 @@
  *   ?nav=collapsed|expanded
  *   ?presence=docked|floating
  *   ?forceUpdate=<phase>             render the mandatory-update page instead
+ *   ?canvasChrome=sheet|slides|doc   report an editor's own chrome, as if one
+ *                                    were mounted (there is none in a browser)
  *
  * **The guard is load-bearing.** `enabled` defaults to `import.meta.env.DEV`,
  * which Vite replaces with a literal `false` when it builds, so in a packaged
@@ -33,6 +35,8 @@ import type { UpdatePhase } from "../../renderer/useAppUpdate";
 import type { AppUpdateRelease } from "../../shared/types";
 import type { PersistedShellState } from "../state/persist";
 import { createFakePort } from "../port/fake/createFakePort";
+import { DOC_CHROME, SHEET_CHROME, SLIDES_CHROME } from "../../canvas/editorChrome";
+import type { EditorChrome } from "../editor/canvasSurface";
 import {
   AUDIT_ACTIVE_FILE_ID,
   AUDIT_FOLDER_IDS,
@@ -74,6 +78,21 @@ export interface DevFixture {
   stateOverride: Partial<PersistedShellState>;
   /** Non-null renders the mandatory-update page in place of the whole shell. */
   forceUpdate: { phase: UpdatePhase; release: AppUpdateRelease } | null;
+  /**
+   * An editor's self-reported chrome, published as if one were mounted.
+   *
+   * Without this the canvas channel (`editor/canvasSurface.ts`) is unreachable
+   * from a browser: `createShellCanvas()` returns null with no backend, no
+   * editor mounts, nothing publishes, and the two behaviours the channel drives
+   * — the presence keeping clear of the editor's bottom strip, the shell
+   * yielding its status bar — can only be seen on `dev-real`. That is the same
+   * arrangement that made `e2e/ui-audit-s4.spec.ts` thirty conditional skips.
+   *
+   * The values are the production constants, imported rather than restated, so
+   * a fixture run cannot agree with a number the real editors have stopped
+   * reporting.
+   */
+  canvasChrome: EditorChrome | null;
 }
 
 const UPDATE_PHASES: readonly UpdatePhase[] = [
@@ -161,6 +180,8 @@ export function readDevFixture(
       ? { phase: updatePhase as UpdatePhase, release: previewRelease() }
       : null;
 
+  const canvasChrome = CHROME_BY_NAME[params.get("canvasChrome") ?? ""] ?? null;
+
   if (!wantsFixture && !forceUpdate && Object.keys(stateOverride).length === 0) return null;
 
   return {
@@ -179,8 +200,16 @@ export function readDevFixture(
         }
       : stateOverride,
     forceUpdate,
+    canvasChrome,
   };
 }
+
+/** `?canvasChrome=sheet|slides|doc`. Anything else reports nothing. */
+const CHROME_BY_NAME: Record<string, EditorChrome | undefined> = {
+  sheet: SHEET_CHROME,
+  slides: SLIDES_CHROME,
+  doc: DOC_CHROME,
+};
 
 function auditPort(deckRun: boolean): UiPort {
   const now = Date.now();

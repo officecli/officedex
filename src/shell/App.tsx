@@ -11,6 +11,7 @@ import { StatusBar } from "./chrome/StatusBar";
 import { WindowBar } from "./chrome/WindowBar";
 import { useReduceMotion } from "./composer/useComposerSettings";
 import { EditorCanvasHost } from "./editor/EditorCanvasHost";
+import { useCanvasSurface } from "./editor/canvasSurface";
 import { AgentHome } from "./home/AgentHome";
 import { EditorHome } from "./home/EditorHome";
 import { SidebarTree } from "./nav/SidebarTree";
@@ -73,6 +74,35 @@ export function App() {
     agent.task?.status === "writing";
   const attentionActive = working && !state.home && activeFile !== null;
 
+  /**
+   * One status bar, not two and not none.
+   *
+   * `<StatusBar />` used to be unconditional, and the bottom 32px of the window
+   * came out three different ways: Writer and the deck editor each drew their
+   * own bar directly above the shell's, and the workbook's `position: fixed`
+   * footer covered the shell's completely, so there the shell's bar existed and
+   * could not be seen or clicked (S4-003, S4-010). The shell had no way to
+   * decide between yielding and keeping, because nothing told it there was
+   * anything down there.
+   *
+   * It yields. The editor's bar is about the document — pages, words, the
+   * current slide, the zoom — and the shell's said the file name, "On this
+   * computer" and whether it is saved, of which the name is already in the tab
+   * and the save state is already the tab strip's save button (`FileTabs`
+   * renders "Unsaved"/"Saved" beside it). Stacking a row that repeats two
+   * facts on top of a row that reports real ones is the wrong half to keep.
+   *
+   * `--shell-statusbar-h` goes with it. The bar's height is also what
+   * `.shell-attention` subtracts to find the document's edge, so leaving the
+   * token at 32px would trace the agent's attention border 32px above the
+   * bottom of a canvas that now reaches the window.
+   *
+   * Silence means keep: no adapter, or a generation stage with no chrome of its
+   * own, and the shell draws its bar exactly as before.
+   */
+  const surface = useCanvasSurface();
+  const editorOwnsStatusBar = surface.chrome?.ownsStatusBar === true && !state.home;
+
   return (
     <div
       id="shell"
@@ -87,6 +117,7 @@ export function App() {
           ...fileTypeAccentStyle(activeFile?.type),
           "--shell-nav-w": `${state.navCollapsed ? NAV_RAIL_WIDTH : state.navWidth}px`,
           "--shell-task-w": agentDocked ? `${state.taskWidth}px` : "0px",
+          ...(editorOwnsStatusBar ? { "--shell-statusbar-h": "0px" } : {}),
         } as React.CSSProperties
       }
     >
@@ -126,7 +157,7 @@ export function App() {
             this one except that nobody noticed.
           */}
           <AttentionBorder active={attentionActive} reducedMotion={reduceMotion} />
-          <StatusBar />
+          {editorOwnsStatusBar ? null : <StatusBar />}
         </main>
 
         {state.home ? state.mode === "agent" ? <AgentHome /> : <EditorHome /> : null}

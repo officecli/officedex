@@ -6,6 +6,7 @@ import type { WorkbookSelectionSnapshot } from "../renderer/spreadsheet/workbook
 import type { Artifact, DesktopAPI, PreviewGrant } from "../shared/types";
 import type { FileMeta } from "../shared/uiPort";
 import type { CanvasSelection } from "../shell/editor/canvasContract";
+import { SHEET_CHROME, useEditorChrome } from "./editorChrome";
 
 /**
  * The Excel canvas: the embedded workbook editor, in the shell's document slot.
@@ -91,6 +92,16 @@ export function SheetCanvas({
   const saveErrorRef = useRef<string | undefined>(undefined);
   const readSaveError = useCallback(() => saveErrorRef.current, []);
   const labelRef = useRef<string>(file.name);
+
+  /*
+   * The workbook's own footer, told to the shell.
+   *
+   * Only once there is a session: until the token is in, this component
+   * renders null and the host's skeleton is what is on screen, which has no
+   * footer. Reporting one anyway would have the floating panel step aside for
+   * a strip that has not been drawn yet. See `editorChrome.ts`.
+   */
+  useEditorChrome(session ? SHEET_CHROME : null);
 
   // A preview token is what the embed authenticates with and it is issued per
   // artifact. `FileMeta` carries no path, so the record has to be read first;

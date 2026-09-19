@@ -5,6 +5,7 @@ import { DesktopApiProvider } from "../renderer/services/desktopApi";
 import { LocaleProvider } from "../renderer/i18n";
 import { PresentationEditorFrame } from "../renderer/presentation/PresentationEditorFrame";
 import { CanvasPlaceholder } from "../shell/editor/CanvasPlaceholder";
+import { useCanvasLocale } from "../shell/editor/canvasLocale";
 import { usePptxLiveDraft } from "../renderer/controllers/usePptxLiveDraft";
 import { useCanvasSession } from "./useCanvasSession";
 
@@ -40,23 +41,29 @@ export interface PresentationStageProps {
 }
 
 export function PresentationStage({ api, task, onError }: PresentationStageProps) {
+  /*
+   * The shell's language, read from the channel rather than pinned.
+   *
+   * This stage is the one piece of the old renderer the new shell mounts
+   * whole, and it brought that renderer's i18n with it: on a Chinese system
+   * `LocaleProvider` resolved to `zh` on its own, so the canvas said
+   * 「正在撰写页面正文」 and 「内容预览」 while the panel beside it, the ribbon
+   * above it and the generated slides were all English. One screen, two
+   * languages, neither chosen (S4-009).
+   *
+   * It was pinned to `value="en"` because `src/shell` had no i18n and English
+   * was what the rest of the window spoke. It has one now, and this reads it —
+   * through `canvasLocale` and not through context, because the canvas is a
+   * separate React root and the shell's provider does not reach in.
+   *
+   * `?? "en"` is the same pin, kept for the case the channel is silent: a
+   * canvas root mounted by something that is not this shell. Falling back to
+   * `navigator.language` there is precisely the bug above.
+   */
+  const locale = useCanvasLocale() ?? "en";
+
   return (
-    /*
-     * Pinned to English, not left to `navigator.language`.
-     *
-     * This stage is the one piece of the old renderer the new shell mounts
-     * whole, and it brought that renderer's i18n with it: on a Chinese system
-     * `LocaleProvider` resolved to `zh`, so the canvas said 「正在撰写页面正文」
-     * and 「内容预览」 while the panel beside it, the ribbon above it and the
-     * generated slides themselves were all English. One screen, two languages,
-     * neither chosen.
-     *
-     * `src/shell` has no i18n by decision, so English is what the rest of this
-     * window speaks. `pptxFlowCopy` is already a bilingual table — this picks
-     * its column rather than translating anything. When the shell does get
-     * i18n, this prop is what that work replaces.
-     */
-    <LocaleProvider value="en">
+    <LocaleProvider value={locale}>
       <DesktopApiProvider api={api}>
         <StageBody api={api} task={task} onError={onError} />
       </DesktopApiProvider>
