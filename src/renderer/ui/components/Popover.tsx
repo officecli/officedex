@@ -1,5 +1,6 @@
 import { Children, cloneElement, isValidElement, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { overlayHost } from "../overlayHost";
 
 export interface PopoverProps {
   readonly content: ReactNode;
@@ -103,7 +104,7 @@ export function Popover({ content, children, open, placement = "bottom", onOpenC
           role="dialog"
           style={visible ? style : { left: -10000, opacity: 0, pointerEvents: "none", top: -10000 }}
         >{content}</div>,
-        document.body,
+        overlayHost(),
       ) : null}
     </>
   );

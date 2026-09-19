@@ -28,5 +28,9 @@ export { Timeline, type TimelineItem, type TimelineProps } from "./components/Ti
 export { Tooltip, type TooltipProps } from "./components/Tooltip";
 export { Typography, type TitleProps } from "./components/Typography";
 export { DialogHost, dialog, type DialogRequest } from "./services/dialog";
+/* A host that scopes the `--od-*` tokens (the shell does, on `#shell`) points
+   the portalled overlays at itself with this, or marks its scope with
+   `data-od-overlay-host`. */
+export { overlayHost, setOverlayHost } from "./overlayHost";
 export { ToastHost, ToastViewport, toast, type ToastOptions, type ToastTone } from "./services/toast";
 export * from "./types";

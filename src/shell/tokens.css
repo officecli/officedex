@@ -101,6 +101,11 @@
  * Bridge: make the shared @vo-ui primitives (Button, Select, Modal, Popover,
  * Table, Tooltip, Form…) adopt the shell's language without editing the
  * library. Scoped to #shell so the old renderer is byte-for-byte unaffected.
+ *
+ * For this to reach the library's *portalled* overlays, they have to mount
+ * inside this subtree — see `src/renderer/ui/overlayHost.ts`, which resolves
+ * `#shell` and puts them in a `display: contents` layer here. While they went
+ * to `document.body` every declaration below was dead.
  */
 #shell {
   --od-ink: var(--shell-ink);
@@ -121,4 +126,7 @@
   --od-control-md: var(--shell-row-h);
   --od-shadow-floating: var(--shell-shadow-panel);
   --od-font-ui: var(--shell-font);
+  /* The top strip is the file tabs, and they are clickable. Notifications drop
+     in below it instead of on top of it. */
+  --od-toast-inset-top: calc(var(--shell-windowbar-h) + 8px);
 }

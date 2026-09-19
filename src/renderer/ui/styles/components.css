@@ -10,6 +10,13 @@
   border: 0;
 }
 
+/* Portal layer (see overlayHost.ts). It exists so the overlays can inherit a
+   host's token scope; it must not take part in that host's layout, and every
+   overlay inside it is `position: fixed` anyway. */
+.od-overlay-layer {
+  display: contents;
+}
+
 .od-button,
 .od-input,
 .od-select,
@@ -149,6 +156,17 @@
   border-radius: var(--od-radius-control);
   background: var(--od-surface);
   color: var(--od-ink);
+}
+
+/* Without these two the controls fall back to UA defaults: 13.333px type, and
+   an `<input>` width of `size=20` ≈ 173px, which left 60% of a 430px dialog
+   row empty. The select's label matches the rows it opens (.od-menu__item). */
+.od-input {
+  font-size: 14px;
+}
+
+.od-select {
+  font-size: 13px;
 }
 
 .od-textarea {
@@ -416,6 +434,33 @@
   background: var(--od-surface);
   color: var(--od-ink);
   box-shadow: var(--od-shadow-floating);
+  /* The header and the content block each set their own font, so the panel
+     itself was left inheriting whatever its portal host had — `Times`, on a
+     bare `<body>`. Any new text put directly in the panel fell into serif. */
+  font: 400 14px/22px var(--od-font-ui);
+}
+
+/* A control in a dialog row, or in a form row, owns the row. Left to the UA
+   default an `<input>` is 173px wide whatever the dialog is. */
+.od-dialog .od-input,
+.od-dialog .od-textarea,
+.od-dialog .od-input-shell,
+.od-dialog .od-textarea-shell,
+.od-dialog .od-password-input,
+.od-form-item > .od-input,
+.od-form-item > .od-textarea,
+.od-form-item > .od-input-shell,
+.od-form-item > .od-textarea-shell,
+.od-form-item > .od-password-input {
+  width: 100%;
+}
+
+.od-dialog .od-input-shell .od-input,
+.od-dialog .od-password-input .od-input,
+.od-form-item > .od-input-shell .od-input,
+.od-form-item > .od-password-input .od-input {
+  flex: 1;
+  min-width: 0;
 }
 
 .od-dialog__header h2 {
@@ -446,7 +491,12 @@
 
 .od-toast-host {
   position: fixed;
-  top: max(16px, env(safe-area-inset-top));
+  /* `--od-toast-inset-top` is how a host reserves its own top strip. The old
+     renderer has nothing clickable up there and keeps the 16px default; the new
+     shell puts the file tabs on that exact band and sets the token in its
+     bridge, which is why notifications used to cover — and, being
+     `pointer-events: auto`, swallow clicks on — three of seven tabs. */
+  top: max(var(--od-toast-inset-top, 16px), env(safe-area-inset-top));
   left: 50%;
   z-index: 1100;
   display: flex;
@@ -645,7 +695,7 @@
 .od-menu__item[data-selected="true"] .od-menu__label { font-weight: 600; }
 .od-menu__item[data-selected="true"] .od-menu__icon { color: var(--od-guidance); }
 .od-dropdown-trigger { display: inline-flex; }
-.od-menu__item { display: flex; min-height: 32px; align-items: center; gap: 9px; padding: 6px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--od-ink); font-size: 13px; line-height: 20px; text-align: left; cursor: pointer; transition: background-color 120ms ease; }
+.od-menu__item { display: flex; min-height: 32px; align-items: center; gap: 9px; padding: 6px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--od-ink); font-family: var(--od-font-ui); font-size: 13px; line-height: 20px; text-align: left; cursor: pointer; transition: background-color 120ms ease; }
 .od-menu__item:hover:not(:disabled) { background: var(--od-surface-muted); }
 .od-menu__item[data-danger="true"] { color: var(--od-danger); }
 .od-menu__item:disabled { color: var(--od-ink-disabled); }

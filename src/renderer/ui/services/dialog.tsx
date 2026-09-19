@@ -2,6 +2,8 @@ import { useT } from "../../i18n";
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
+import { overlayHost } from "../overlayHost";
+import { useModalBehaviour } from "../useModalBehaviour";
 import { Button } from "../components/Button";
 
 export interface DialogRequest {
@@ -67,12 +69,23 @@ export function DialogHost() {
     return () => document.removeEventListener("keydown", closeOnEscape);
   }, [active, submitting]);
 
-  if (!active) return null;
-
   const cancel = () => {
+    if (!active) return;
     active.onCancel?.();
     emit(null);
   };
+
+  // The same contract `Modal` gets: Escape above, plus mask click, focus trap
+  // and focus return. Escape stays in its own effect because this host also has
+  // to honour it while a confirm is submitting.
+  const { panelRef, onMaskClick } = useModalBehaviour({
+    open: active !== null,
+    onDismiss: submitting ? undefined : cancel,
+    keyboard: false,
+  });
+
+  if (!active) return null;
+
   const confirm = async () => {
     setSubmitting(true);
     try {
@@ -84,8 +97,8 @@ export function DialogHost() {
   };
 
   return createPortal(
-    <div className="od-dialog-mask" role="presentation">
-      <section aria-modal="true" className="od-dialog" role="dialog">
+    <div className="od-dialog-mask" role="presentation" onClick={onMaskClick}>
+      <section ref={panelRef} aria-modal="true" className="od-dialog" role="dialog" tabIndex={-1}>
         <header className="od-dialog__header"><h2>{active.title}</h2></header>
         {active.content ? <div className="od-dialog__content">{active.content}</div> : null}
         <footer className="od-dialog__footer">
@@ -96,6 +109,6 @@ export function DialogHost() {
         </footer>
       </section>
     </div>,
-    document.body,
+    overlayHost(),
   );
 }

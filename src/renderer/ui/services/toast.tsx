@@ -2,6 +2,7 @@ import { useT } from "../../i18n";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CheckCircle2, CircleAlert, Info, LoaderCircle, TriangleAlert, X } from "lucide-react";
 import { createPortal } from "react-dom";
+import { overlayHost } from "../overlayHost";
 
 export type ToastTone = "success" | "warning" | "error" | "info" | "loading";
 
@@ -148,6 +149,6 @@ export function ToastHost() {
     <div className={`od-toast-host${viewport ? " od-toast-host--anchored" : ""}`} aria-live="polite">
       {items.map((item) => <ToastCard key={`${item.id}:${item.revision}`} item={item} />)}
     </div>,
-    viewport ?? document.body,
+    viewport ?? overlayHost(),
   );
 }
