@@ -3,6 +3,7 @@ import { createDesktopUiPort } from "../createDesktopUiPort";
 import { createFakeDesktopApi } from "./fakeDesktopApi";
 import { describeUiPortContract } from "./uiPortContract";
 import { NotImplementedError } from "../../shared/notImplemented";
+import type { BridgeEvent, TaskHistoryEntry } from "../../shared/types";
 import type { WindowControls } from "../window";
 
 function stubWindow(): WindowControls {
@@ -310,6 +311,158 @@ describe("desktop agent service", () => {
     api.emitBridgeEvent(started("task-live"));
 
     expect((await port.agent.current("folder:default"))?.id).toBe("task-live");
+  });
+
+  /**
+   * `agent.list` — what Home's "Continue working" band is drawn from.
+   *
+   * These exercise the recorded half of the service rather than the live half.
+   * That half had no coverage at all: `getTaskHistory` returned `[]` from the
+   * fake, so every existing test here replayed events the window had seen for
+   * itself. For `list` that is the wrong half entirely — its whole purpose is
+   * work from before this window opened.
+   */
+  describe("the task list", () => {
+    /** A run the desktop already has on disk, as a history page would carry it. */
+    const recorded = (
+      taskId: string,
+      { at, workspaceId, finished = true }: { at: string; workspaceId?: string; finished?: boolean },
+    ): TaskHistoryEntry => ({
+      taskId,
+      createdAt: at,
+      ...(workspaceId ? { workspaceId } : {}),
+      events: [
+        { ...started(taskId), ts: at },
+        ...(finished
+          ? [{ event_id: `${taskId}-done`, task_id: taskId, type: "task.completed", ts: at, payload: {} }]
+          : []),
+      ] as BridgeEvent[],
+    });
+
+    /**
+     * The reason this method exists. `current` answers for one folder, so the
+     * run the user started somewhere else vanishes the moment they switch —
+     * off the one screen whose job is to say what they were doing.
+     */
+    it("lists runs from every folder, not just the one in scope", async () => {
+      const { port } = agentPort({
+        folders: [{ id: "folder-research", name: "Research", path: "/tmp/officedex/Research" }],
+        taskHistory: [
+          recorded("task-research", { at: "2026-09-18T12:00:00Z", workspaceId: "folder-research" }),
+          recorded("task-default", { at: "2026-09-18T11:00:00Z" }),
+        ],
+      });
+
+      const rows = await port.agent.list();
+      expect(rows.map((row) => row.id)).toEqual(["task-research", "task-default"]);
+      expect(rows.map((row) => row.folderId)).toEqual(["folder-research", "folder:default"]);
+
+      // The same two runs asked for the old way: one folder, one answer.
+      expect((await port.agent.current("folder-research"))?.id).toBe("task-research");
+    });
+
+    it("puts the most recently touched run first, whatever order history arrives in", async () => {
+      const { port } = agentPort({
+        taskHistory: [
+          recorded("task-middle", { at: "2026-09-18T11:00:00Z" }),
+          recorded("task-newest", { at: "2026-09-18T13:00:00Z" }),
+          recorded("task-oldest", { at: "2026-09-18T09:00:00Z" }),
+        ],
+      });
+
+      expect((await port.agent.list()).map((row) => row.id)).toEqual([
+        "task-newest",
+        "task-middle",
+        "task-oldest",
+      ]);
+    });
+
+    /**
+     * History says what happened; live events say what is happening. A page
+     * fetched mid-run is a snapshot of whatever the writer had flushed, so
+     * letting it win would roll a running task back to "done" under the user.
+     */
+    it("does not let a recorded snapshot roll back a run that is still going", async () => {
+      const { api, port } = agentPort({
+        taskHistory: [
+          recorded("task-1", { at: "2026-09-18T10:00:00Z" }),
+          recorded("task-older", { at: "2026-09-18T09:00:00Z" }),
+        ],
+      });
+      api.emitBridgeEvent(started("task-1"));
+
+      const rows = await port.agent.list();
+      // `task-older` is here to prove the page was read at all — without it
+      // this passes just as well against a history that came back empty.
+      expect(rows.map((row) => row.id)).toEqual(["task-1", "task-older"]);
+      expect(rows[0].status).toBe("reading");
+      expect(rows[1].status).toBe("done");
+    });
+
+    it("bounds the list, by default and on request", async () => {
+      const { port } = agentPort({
+        taskHistory: Array.from({ length: 10 }, (_, index) =>
+          recorded(`task-${index}`, { at: `2026-09-18T${String(10 + index).padStart(2, "0")}:00:00Z` }),
+        ),
+      });
+
+      expect(await port.agent.list()).toHaveLength(8);
+      expect(await port.agent.list({ limit: 3 })).toHaveLength(3);
+    });
+
+    /**
+     * The band is drawn without anyone asking for it, so a history page that
+     * cannot be read must cost the user the rows it would have added and
+     * nothing else — not the run they can see happening.
+     */
+    it("still lists live work when the history page cannot be read", async () => {
+      const { api, port } = agentPort();
+      api.emitBridgeEvent(started("task-live"));
+      api.getTaskHistory = async () => {
+        throw new Error("bridge is down");
+      };
+
+      expect((await port.agent.list()).map((row) => row.id)).toEqual(["task-live"]);
+    });
+
+    /**
+     * Opening a folder is the user saying what they are working on; drawing a
+     * list is not. If listing moved the target, Home would silently repoint
+     * Pause, Resume and Finish at whichever run happened to sort first.
+     */
+    it("does not retarget the active run while drawing the list", async () => {
+      const { api, port } = agentPort({
+        taskHistory: [recorded("task-newer", { at: "2026-09-18T14:00:00Z" })],
+      });
+      api.emitBridgeEvent(started("task-mine"));
+      await port.agent.current("folder:default");
+
+      // `task-newer` sorts above `task-mine`, so a list that retargeted would
+      // pause the wrong run here. Asserted rather than assumed: if the history
+      // page were empty this test would pass without ever setting up its own
+      // premise.
+      const rows = await port.agent.list();
+      expect(rows.map((row) => row.id)).toEqual(["task-newer", "task-mine"]);
+
+      await port.agent.pause();
+
+      expect(api.calls.filter((call) => call.method === "pausePptx")).toEqual([
+        { method: "pausePptx", input: { taskId: "task-mine" } },
+      ]);
+    });
+
+    // `updatedAt` is optional so a consumer can tell "the runtime did not say"
+    // from a real timestamp. Sending 0 would date every undated run to 1970 and
+    // sort it against runs that have a real time.
+    it("omits updatedAt when nothing in the record carries a time", async () => {
+      const { port } = agentPort({
+        taskHistory: [{ taskId: "task-undated", events: [{ ...started("task-undated"), ts: "" }] as BridgeEvent[] }],
+      });
+
+      const [row] = await port.agent.list();
+      expect(row.id).toBe("task-undated");
+      expect("updatedAt" in row).toBe(false);
+    });
   });
 
   it("pushes task updates to subscribers", async () => {

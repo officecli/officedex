@@ -4,6 +4,7 @@ import type {
   DocumentRecord,
   FolderRecord,
   RecentFile,
+  TaskHistoryEntry,
   UserSettings,
 } from "../../shared/types";
 
@@ -37,6 +38,18 @@ export interface FakeDesktopSeed {
     pinned?: boolean;
     lastOpenedAt?: string;
   }>;
+  /**
+   * Runs the desktop has already recorded, as `getTaskHistory` would hand them
+   * back — newest-first, the way the Go side pages them.
+   *
+   * Without this the fake had `getTaskHistory` return `[]`, which is exactly
+   * the plausible empty value the note above says this file does not do: every
+   * test of `agent.current` and `agent.list` exercised only the live-event
+   * path, and the half that replays recorded events could not be reached at
+   * all. `list` in particular is *mostly* that half — Home's job is to show
+   * work from before this window opened.
+   */
+  readonly taskHistory?: readonly TaskHistoryEntry[];
 }
 
 function documentIdFor(path: string): string {
@@ -58,14 +71,15 @@ export type FakeDesktopApi = DesktopAPI & {
   /** What the next openLocalFile picker returns. Unset means cancelled. */
   pickLocalFile(filePath: string): void;
   /** Every generate/modify call made through this fake, in order. */
-  readonly calls: Array<{ method: "generate" | "modify" | "respond"; input: Record<string, unknown> }>;
+  readonly calls: Array<{ method: "generate" | "modify" | "respond" | "pausePptx"; input: Record<string, unknown> }>;
 };
 
 export function createFakeDesktopApi(seed: FakeDesktopSeed = {}): FakeDesktopApi {
   const bridgeListeners = new Set<(event: BridgeEvent) => void>();
-  const calls: Array<{ method: "generate" | "modify" | "respond"; input: Record<string, unknown> }> = [];
+  const calls: Array<{ method: "generate" | "modify" | "respond" | "pausePptx"; input: Record<string, unknown> }> = [];
   let picked: { filePath: string } | null = null;
   let taskCounter = 0;
+  const history: TaskHistoryEntry[] = [...(seed.taskHistory ?? [])];
   const folders: FolderRecord[] = [
     { id: FAKE_DEFAULT_FOLDER_ID, name: "OfficeDex", path: DEFAULT_WORKSPACE_DIR, isDefault: true },
     ...(seed.folders ?? []).map((folder) => ({ ...folder })),
@@ -287,8 +301,11 @@ export function createFakeDesktopApi(seed: FakeDesktopSeed = {}): FakeDesktopApi
     },
     calls,
 
-    async getTaskHistory() {
-      return [];
+    async getTaskHistory(limit?: number) {
+      // A page, the way the desktop pages it. Returning everything regardless
+      // of `limit` would let a caller that forgot to bound its own list look
+      // correct here and run away with the whole history against the real one.
+      return typeof limit === "number" ? history.slice(0, limit) : [...history];
     },
     async generate(input: Record<string, unknown>) {
       calls.push({ method: "generate", input });
@@ -307,7 +324,12 @@ export function createFakeDesktopApi(seed: FakeDesktopSeed = {}): FakeDesktopApi
     async cancel() {
       return undefined;
     },
-    async pausePptx() {},
+    async pausePptx(taskId: string) {
+      // Recorded, not ignored: which run a pause lands on is the only visible
+      // proof of which task the service considers active, and `list` is
+      // required not to move that target.
+      calls.push({ method: "pausePptx", input: { taskId } });
+    },
     async resumePptxLive() {},
 
     async getSettings() {
