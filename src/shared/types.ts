@@ -83,7 +83,7 @@ export interface DocumentTypeCapability {
 }
 
 export const DOCUMENT_TYPE_CAPABILITIES: Record<DocumentType, DocumentTypeCapability> = {
-  pptx: { type: "pptx", label: "PPTX", icon: "slideshow", office: true, defaultPptxBackend: "aippt-jssdk-design", imageRatio: false, frameRate: false, watermark: false, previewExtensions: ["pptx"], attachments: [] },
+  pptx: { type: "pptx", label: "PPTX", icon: "slideshow", office: true, defaultPptxBackend: "mop-skill", imageRatio: false, frameRate: false, watermark: false, previewExtensions: ["pptx"], attachments: [] },
   docx: { type: "docx", label: "DOCX", icon: "description", office: true, imageRatio: false, frameRate: false, watermark: false, previewExtensions: ["docx"], attachments: [] },
   xlsx: { type: "xlsx", label: "XLSX", icon: "table", office: true, imageRatio: false, frameRate: false, watermark: false, previewExtensions: ["xlsx"], attachments: [] },
   report: {

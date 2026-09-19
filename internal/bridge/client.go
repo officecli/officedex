@@ -662,33 +662,82 @@ func defaultPPTXBackendFor(documentType types.DocumentType) string {
 }
 
 func (c *Client) InvokeGenerate(ctx context.Context, input types.GenerateInput) (TaskInvokeResult, error) {
+	// Kept before resolvePPTXWorkflow, which cannot tell an asked-for workflow
+	// from an inferred one once it has answered.
+	requestedWorkflow := strings.TrimSpace(input.PPTXWorkflow)
 	workflow, workflowErr := resolvePPTXWorkflow(input)
 	if workflowErr != nil {
 		return TaskInvokeResult{}, workflowErr
 	}
 	input.PPTXWorkflow = workflow
 	if input.DocumentType == types.DocPPTX {
-		backend := strings.TrimSpace(input.PPTXBackend)
-		if backend != "" && backend != types.PPTXBackendJSSDKDesign {
-			return TaskInvokeResult{}, fmt.Errorf("旧 PPT Skill 后端 %q 已停用；OfficeDex 仅允许有来源验证的 JSSDK 渐进式 Skill", backend)
-		}
-		input.PPTXBackend = types.PPTXBackendJSSDKDesign
-		c.mu.Lock()
-		caps := c.capabilities
-		c.mu.Unlock()
-		if !caps.loaded && !caps.progressiveJSSDKSupported {
-			if _, err := c.GetCapabilities(ctx); err != nil {
-				return TaskInvokeResult{}, fmt.Errorf("无法确认有来源验证的 JSSDK 生成能力: %w", err)
+		/*
+		 * The backend is a default again, not a mandate.
+		 *
+		 * This block used to overwrite PPTXBackend with JSSDK design and refuse
+		 * every other value outright. That made the desktop's only PPTX path a
+		 * backend whose Host needs `tools/execute-jssdk.mjs` and a playwright
+		 * browser — neither of which the packaged presentation runtime carries
+		 * — so generation failed at the first request with "JSSDK Host runner
+		 * unavailable", while the same build's mop-skill path had been
+		 * producing decks perfectly well until the switch.
+		 *
+		 * mop-skill is the default until the JSSDK Host is something a signed,
+		 * hardened bundle can actually carry. JSSDK design stays selectable for
+		 * callers that know their runtime has it.
+		 */
+		if strings.TrimSpace(input.PPTXBackend) == "" {
+			// Animation is a JSSDK-only workflow, so asking for it by name is
+			// also choosing the backend that can do it. Inference is not:
+			// "a deck with some animation" resolves to the animation workflow
+			// from the prompt alone, and letting a single word move the run
+			// onto a backend the packaged runtime cannot start is how a
+			// throwaway phrase turns into "JSSDK Host runner unavailable".
+			if requestedWorkflow == "animation" {
+				input.PPTXBackend = types.PPTXBackendJSSDKDesign
+			} else {
+				input.PPTXBackend = defaultPPTXBackendFor(input.DocumentType)
 			}
+		}
+		usingJSSDK := input.PPTXBackend == types.PPTXBackendJSSDKDesign
+
+		/*
+		 * OfficeCLI refuses animation on any other backend outright
+		 * ("animation requires JSSDK backend"), so the pair has to be settled
+		 * here rather than sent down to fail.
+		 *
+		 * Reaching this means the caller named a backend *and* the workflow
+		 * resolved to animation. An explicit pair that cannot work is an
+		 * error; an inferred one degrades to design, because the user asked
+		 * for a deck, not for a backend.
+		 */
+		if !usingJSSDK && workflow == "animation" {
+			if requestedWorkflow != "" {
+				return TaskInvokeResult{}, fmt.Errorf(
+					"动画 PPT 需要 JSSDK 后端；当前后端为 %q", input.PPTXBackend)
+			}
+			workflow = "design"
+			input.PPTXWorkflow = workflow
+		}
+
+		if usingJSSDK {
 			c.mu.Lock()
-			caps = c.capabilities
+			caps := c.capabilities
 			c.mu.Unlock()
-		}
-		if workflow == "animation" && !caps.animationJSSDKSupported {
-			return TaskInvokeResult{}, fmt.Errorf("当前 OfficeCLI 未提供动画 PPT Skill；请更新匹配的桌面客户端与 OfficeCLI")
-		}
-		if !caps.progressiveJSSDKSupported {
-			return TaskInvokeResult{}, fmt.Errorf("当前 OfficeCLI 未提供有来源验证的 JSSDK 渐进式生成合同；请重建或更新 OfficeCLI，禁止使用旧 PPT Skill")
+			if !caps.loaded && !caps.progressiveJSSDKSupported {
+				if _, err := c.GetCapabilities(ctx); err != nil {
+					return TaskInvokeResult{}, fmt.Errorf("无法确认有来源验证的 JSSDK 生成能力: %w", err)
+				}
+				c.mu.Lock()
+				caps = c.capabilities
+				c.mu.Unlock()
+			}
+			if workflow == "animation" && !caps.animationJSSDKSupported {
+				return TaskInvokeResult{}, fmt.Errorf("当前 OfficeCLI 未提供动画 PPT Skill；请更新匹配的桌面客户端与 OfficeCLI")
+			}
+			if !caps.progressiveJSSDKSupported {
+				return TaskInvokeResult{}, fmt.Errorf("当前 OfficeCLI 未提供有来源验证的 JSSDK 渐进式生成合同；请重建或更新 OfficeCLI")
+			}
 		}
 	}
 	ratio, err := imageRatioArg(input)

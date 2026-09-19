@@ -78,7 +78,7 @@ type DocumentTypeCapability struct {
 }
 
 var DocumentTypeCapabilities = map[DocumentType]DocumentTypeCapability{
-	DocPPTX: {Type: DocPPTX, Label: "PPTX", Icon: "slideshow", Office: true, DefaultPPTXBackend: PPTXBackendJSSDKDesign, PreviewExtensions: []string{"pptx"}, Attachments: []AttachmentSpec{{
+	DocPPTX: {Type: DocPPTX, Label: "PPTX", Icon: "slideshow", Office: true, DefaultPPTXBackend: PPTXBackendMOPSkill, PreviewExtensions: []string{"pptx"}, Attachments: []AttachmentSpec{{
 		Slot:         SlotSourceWorkbook,
 		Required:     false,
 		Multiple:     false,

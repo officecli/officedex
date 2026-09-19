@@ -30,8 +30,8 @@ func TestPreviewExtensionsMatchTheHistoricalWhitelist(t *testing.T) {
 // Every per-type decision the app makes reads the table. A row states what
 // its type supports; an unknown type has no capabilities and no preview.
 func TestCapabilityTableDrivesPerTypeDecisions(t *testing.T) {
-	if !Capability(DocPPTX).Office || Capability(DocPPTX).DefaultPPTXBackend != PPTXBackendJSSDKDesign {
-		t.Error("pptx must be an office document defaulting to the aippt-jssdk-design backend")
+	if !Capability(DocPPTX).Office || Capability(DocPPTX).DefaultPPTXBackend != PPTXBackendMOPSkill {
+		t.Error("pptx must be an office document defaulting to the mop-skill backend")
 	}
 	for _, office := range []DocumentType{DocDOCX, DocXLSX, DocReport} {
 		if !Capability(office).Office || Capability(office).DefaultPPTXBackend != "" {

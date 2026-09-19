@@ -499,8 +499,8 @@ func TestInvokeGenerateOpensSessionFirst(t *testing.T) {
 	if args["local_preview"] != true {
 		t.Errorf("local_preview = %v, want true", args["local_preview"])
 	}
-	if args["pptx_backend"] != "aippt-jssdk-design" {
-		t.Errorf("pptx_backend = %v, want aippt-jssdk-design for OfficeDex PPTX generation", args["pptx_backend"])
+	if args["pptx_backend"] != types.PPTXBackendMOPSkill {
+		t.Errorf("pptx_backend = %v, want %v for OfficeDex PPTX generation", args["pptx_backend"], types.PPTXBackendMOPSkill)
 	}
 	fake.writeResponse(t, second.idString(), map[string]any{
 		"task_id":    "task-x",
@@ -1757,11 +1757,11 @@ func TestDefaultPPTXBackendIgnoresRetiredKillSwitch(t *testing.T) {
 		value string
 		want  string
 	}{
-		{name: "unset", value: "", want: types.PPTXBackendJSSDKDesign},
-		{name: "zero", value: "0", want: types.PPTXBackendJSSDKDesign},
-		{name: "off", value: "off", want: types.PPTXBackendJSSDKDesign},
-		{name: "false", value: "FALSE", want: types.PPTXBackendJSSDKDesign},
-		{name: "on", value: "1", want: types.PPTXBackendJSSDKDesign},
+		{name: "unset", value: "", want: types.PPTXBackendMOPSkill},
+		{name: "zero", value: "0", want: types.PPTXBackendMOPSkill},
+		{name: "off", value: "off", want: types.PPTXBackendMOPSkill},
+		{name: "false", value: "FALSE", want: types.PPTXBackendMOPSkill},
+		{name: "on", value: "1", want: types.PPTXBackendMOPSkill},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.value == "" {
@@ -1787,19 +1787,51 @@ func TestDefaultPPTXBackendIsEmptyForOtherTypes(t *testing.T) {
 	}
 }
 
-func TestInvokeGenerateRejectsRetiredPPTXBackendBeforeStartingTask(t *testing.T) {
-	for _, backend := range []string{"mop-skill", "presentation-pptx-quality", "aippt-list4-layout"} {
+/*
+ * mop-skill is a backend again, not a retired one.
+ *
+ * This used to assert the opposite — that naming mop-skill was refused with
+ * "已停用" before a task could start. That rule made JSSDK design the only PPTX
+ * path, and JSSDK design needs a Host runner and a playwright browser that the
+ * packaged presentation runtime does not carry, so it took the desktop's only
+ * way of producing a deck with it. mop-skill had been doing the job until the
+ * switch and does it again now.
+ *
+ * Backends this client does not know are no longer guessed at here: OfficeCLI
+ * owns that list (NormalizePPTXBackendWithWarnings) and rejects an unknown one
+ * with its own message, which is a better answer than a second, staler copy of
+ * the same list.
+ */
+func TestInvokeGeneratePassesKnownPPTXBackendsThrough(t *testing.T) {
+	for _, backend := range []string{"", types.PPTXBackendMOPSkill, types.PPTXBackendJSSDKDesign} {
 		client := New(Options{})
-		if _, err := client.InvokeGenerate(context.Background(), types.GenerateInput{DocumentType: types.DocPPTX, PPTXBackend: backend}); err == nil || !strings.Contains(err.Error(), "已停用") {
-			t.Fatalf("backend %s: %v", backend, err)
+		client.rememberCapabilities([]byte(`{"pptx_jssdk_progressive":{"v2":true}}`))
+		_, err := client.InvokeGenerate(context.Background(), types.GenerateInput{DocumentType: types.DocPPTX, PPTXBackend: backend})
+		// No bridge is running, so the call cannot succeed — but it must fail
+		// on the connection, not on a policy that refuses the backend itself.
+		if err == nil || strings.Contains(err.Error(), "已停用") {
+			t.Fatalf("backend %q was refused before reaching the bridge: %v", backend, err)
 		}
 	}
 }
-func TestInvokeGenerateRejectsOldBridgeBeforeStartingTask(t *testing.T) {
+
+// The JSSDK contract check still guards JSSDK runs — it just no longer runs for
+// backends that have nothing to do with it.
+func TestInvokeGenerateRejectsOldBridgeForJSSDKBackend(t *testing.T) {
 	client := New(Options{})
 	client.rememberCapabilities([]byte(`{"document_generation":{"pptx":{}}}`))
-	if _, err := client.InvokeGenerate(context.Background(), types.GenerateInput{DocumentType: types.DocPPTX}); err == nil || !strings.Contains(err.Error(), "当前 OfficeCLI") {
-		t.Fatalf("old bridge accepted: %v", err)
+	if _, err := client.InvokeGenerate(context.Background(), types.GenerateInput{DocumentType: types.DocPPTX, PPTXBackend: types.PPTXBackendJSSDKDesign}); err == nil || !strings.Contains(err.Error(), "当前 OfficeCLI") {
+		t.Fatalf("old bridge accepted for a JSSDK run: %v", err)
+	}
+}
+
+// ...and a mop-skill run on that same old bridge is none of its business.
+func TestInvokeGenerateDoesNotDemandJSSDKContractForMopSkill(t *testing.T) {
+	client := New(Options{})
+	client.rememberCapabilities([]byte(`{"document_generation":{"pptx":{}}}`))
+	_, err := client.InvokeGenerate(context.Background(), types.GenerateInput{DocumentType: types.DocPPTX, PPTXBackend: types.PPTXBackendMOPSkill})
+	if err == nil || strings.Contains(err.Error(), "当前 OfficeCLI") {
+		t.Fatalf("mop-skill run blocked by the JSSDK contract check: %v", err)
 	}
 }
 func TestBridgeRecognizesExactJSSDKContract(t *testing.T) {

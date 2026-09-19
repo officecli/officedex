@@ -23,7 +23,10 @@ func TestAnimationRequiresBridgeCapability(t *testing.T) {
 	c := New(Options{})
 	c.capabilities.loaded = true
 	c.capabilities.progressiveJSSDKSupported = true
-	_, err := c.InvokeGenerate(context.Background(), types.GenerateInput{DocumentType: types.DocPPTX, Prompt: "动画 PPT"})
+	// Asked for by name, not inferred from the prompt. An inferred animation
+	// now degrades to design on the default backend rather than failing the
+	// request, so only an explicit choice still reaches this check.
+	_, err := c.InvokeGenerate(context.Background(), types.GenerateInput{DocumentType: types.DocPPTX, PPTXWorkflow: "animation", Prompt: "动画 PPT"})
 	if err == nil || !strings.Contains(err.Error(), "动画 PPT Skill") {
 		t.Fatalf("%v", err)
 	}
