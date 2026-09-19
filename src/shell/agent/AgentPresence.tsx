@@ -1,32 +1,49 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useShell } from "../state/ShellContext";
-import { effectivePlacement, showsPresenceFace } from "../state/shellReducer";
+import { NAV_RAIL_WIDTH, canDock, effectivePlacement, showsPresenceFace } from "../state/shellReducer";
 import { PresenceFace, statusLabel } from "./PresenceFace";
 import { TaskPanel } from "./TaskPanel";
 import { useAgentTask } from "./useAgentTask";
-import { useDraggable, type DraggablePosition } from "./useDraggable";
+import {
+  anchorPresence,
+  defaultPresencePosition,
+  type DraggablePosition,
+  type Insets,
+} from "./presenceLayout";
+import { useDraggable } from "./useDraggable";
+import { useMeasuredSize } from "./useMeasuredSize";
+import { useViewportSize } from "./useViewportSize";
 import "./agent.css";
 
 const FACE_SIZE = 56;
-const PANEL_SIZE = { width: 340, height: 520 };
+
+/** Stable identities: these feed a memo and an effect's dependency list. */
+const FACE_BOX = { width: FACE_SIZE, height: FACE_SIZE };
 
 /**
- * Splits a tucked position into an on-screen anchor and the overhang.
+ * The panel's box *before* it has been measured, and only then.
  *
- * Only tucked positions are split: a freely placed presence is always fully on
- * screen already, and moving it would fight the drag it just finished.
+ * It is a first-paint fallback, not a fact: the panel renders at whatever its
+ * content needs under `max-height: min(76vh, 620px)`, which was 543px in the
+ * audit against a declared 520 — and every vertical clamp believed the 520
+ * (S6-011). `useMeasuredSize` replaces this with the real box on the first
+ * `ResizeObserver` callback.
  */
-function anchorTucked(
-  position: DraggablePosition,
-  size: { width: number; height: number },
-): { x: number; y: number; offsetX: number; offsetY: number } {
-  if (!position.edge || typeof window === "undefined") {
-    return { x: position.x, y: position.y, offsetX: 0, offsetY: 0 };
-  }
-  const x = Math.max(0, Math.min(position.x, window.innerWidth - size.width));
-  const y = Math.max(0, Math.min(position.y, window.innerHeight - size.height));
-  return { x, y, offsetX: position.x - x, offsetY: position.y - y };
+const PANEL_FALLBACK = { width: 340, height: 543 };
+
+/**
+ * How long the docked column takes to collapse — `--shell-duration` in
+ * `app.css`, restated because a `setTimeout` cannot read a CSS variable that
+ * has not been applied to anything yet. `onTransitionEnd` below finishes it
+ * early whenever the browser actually reports the transition, so this is the
+ * upper bound rather than the mechanism.
+ */
+const DOCK_TRANSITION_MS = 200;
+
+function prefersReducedMotion(): boolean {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 /**
@@ -51,23 +68,90 @@ export function AgentPresence() {
   const agent = useAgentTask();
   const placement = effectivePlacement(state);
   const docked = placement === "docked" && !state.home;
-  const showFace = showsPresenceFace(state) && !state.home;
   const status = agent.task?.status ?? "idle";
   const expanded = state.presence.expanded;
-  const size = expanded ? PANEL_SIZE : { width: FACE_SIZE, height: FACE_SIZE };
+  const dockable = canDock(state);
+  const viewport = useViewportSize();
 
   /**
-   * Until the user has placed it, the presence sits bottom-right. Resolving the
-   * default here rather than storing one keeps "never placed" distinguishable
-   * from "dragged to 0,0", which a numeric sentinel could not.
+   * The docked panel outlives `docked` by the length of the column's collapse.
+   *
+   * `App.tsx` promises "nothing unmounts" across a mode change; the panel used
+   * to unmount on the very frame the mode changed, leaving a 320px column of
+   * nothing animating shut while a second, fully opaque panel appeared on the
+   * right — two agent panels on screen at once, neither of them continuous
+   * with the other (S6-003). Holding the docked content until the column has
+   * finished closing, and holding the floating one back for exactly as long,
+   * means there is never more than one conversation on screen.
+   *
+   * Only a placement change gets this. Going Home swaps the whole body row and
+   * has no column collapse to wait for, and a docked panel lingering there
+   * would put a second composer on the page beside the hero's.
    */
+  const [closing, setClosing] = useState(false);
+  const wasDocked = useRef(docked);
+  const dockHost = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const was = wasDocked.current;
+    wasDocked.current = docked;
+    if (docked || !was || state.home) {
+      setClosing(false);
+      return;
+    }
+    setClosing(true);
+    const handle = window.setTimeout(
+      () => setClosing(false),
+      prefersReducedMotion() ? 0 : DOCK_TRANSITION_MS,
+    );
+    return () => window.clearTimeout(handle);
+  }, [docked, state.home]);
+
+  const dockedRender = docked || closing;
+  const showFace = showsPresenceFace(state) && !state.home && !closing;
+
+  const { size: panelSize, ref: panelRef } = useMeasuredSize(PANEL_FALLBACK);
+  const size = expanded ? panelSize : FACE_BOX;
+
+  /**
+   * The chrome the presence must stay out of.
+   *
+   * The sidebar is the one region whose width the shell already knows, so it
+   * is the first thing plugged into this channel: `z-index: 200` means the
+   * floating layer wins over everything in the body row, and tucked to the
+   * left the panel covered the whole 190px sidebar — the mode menu, Home, New,
+   * Open, Recent and Pinned all at once (S4-008). The top of the window needs
+   * no inset here: `PRESENCE_MARGIN.top` already clears the window bar, and
+   * `CHROME_RESERVE` covers the controls inside it.
+   *
+   * The canvas's own safe area — the sheet tab strip, the slide status bar,
+   * the ruler (S4-002, S4-012, S6-015) — belongs here too, and cannot be
+   * added until `editor/canvasContract.ts` reports it (Wave 3-H).
+   */
+  const safeArea = useMemo<Insets>(
+    () => ({
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: state.navCollapsed ? NAV_RAIL_WIDTH : state.navWidth,
+    }),
+    [state.navCollapsed, state.navWidth],
+  );
+
+  /**
+   * Until the user has placed it, the presence sits bottom-right.
+   *
+   * Resolving the default here rather than storing one keeps "never placed"
+   * distinguishable from "dragged to 0,0", which a numeric sentinel could not
+   * — and because it is derived from `viewport` state, growing the window
+   * still puts it in the corner instead of stranding it mid-canvas (S4-015).
+   */
+  const placed = state.presence.x !== null && state.presence.y !== null;
   const position = useMemo<DraggablePosition>(() => {
     const { x, y, edge } = state.presence;
     if (x !== null && y !== null) return { x, y, edge };
-    const width = typeof window === "undefined" ? 1440 : window.innerWidth;
-    const height = typeof window === "undefined" ? 900 : window.innerHeight;
-    return { x: Math.max(8, width - size.width - 24), y: Math.max(48, height - size.height - 28), edge: null };
-  }, [state.presence, size.width, size.height]);
+    return defaultPresencePosition(viewport, size, safeArea);
+  }, [state.presence, viewport, size, safeArea]);
 
   const onChange = useCallback(
     (next: DraggablePosition) =>
@@ -75,7 +159,17 @@ export function AgentPresence() {
     [dispatch],
   );
 
-  const { dragging, handleProps } = useDraggable({ position, onChange, size });
+  const { dragging, handleProps } = useDraggable({
+    position,
+    onChange,
+    size,
+    viewport,
+    placed,
+    safeArea,
+    // The collapsed mark hangs off the window edge; the panel parks flush
+    // against it. See presenceLayout.PlaceOptions.overhang.
+    overhang: !expanded,
+  });
 
   const badge = agent.task?.suggestion && !agent.task.suggestion.applied ? 1 : 0;
 
@@ -88,9 +182,10 @@ export function AgentPresence() {
    * tabbing to the presence would move focus to something they cannot see. The
    * prototype kept its focus target inside the app and let only the art peek
    * out; this is the same split, with the overhang expressed as a transform on
-   * the mark.
+   * the mark. An expanded panel has no overhang at all, so the offsets are
+   * zero and nothing inside it is transformed.
    */
-  const anchored = anchorTucked(position, size);
+  const anchored = anchorPresence(position, size, viewport);
 
   return (
     <>
@@ -111,12 +206,19 @@ export function AgentPresence() {
         thing a mode change animates (see App.tsx and decision 4).
       */}
       <section
+        ref={dockHost}
         className="shell-agent shell-region"
         aria-label="Agent conversation"
-        aria-hidden={!docked}
-        inert={!docked ? true : undefined}
+        aria-hidden={!dockedRender}
+        inert={!dockedRender ? true : undefined}
+        onTransitionEnd={(event) => {
+          // Only the column's own width, not a transition bubbling up from the
+          // conversation inside it.
+          if (event.target !== dockHost.current || event.propertyName !== "width") return;
+          if (!docked) setClosing(false);
+        }}
       >
-        {docked ? <TaskPanel agent={agent} placement="docked" /> : null}
+        {dockedRender ? <TaskPanel agent={agent} placement="docked" /> : null}
       </section>
 
       {showFace ? (
@@ -135,7 +237,14 @@ export function AgentPresence() {
           }
         >
           {expanded ? (
-            <div className="shell-presence-panel" style={{ width: PANEL_SIZE.width }}>
+            <div
+              ref={panelRef}
+              className="shell-presence-panel"
+              // The collapse button reserves room for the dock button beside
+              // it. Editor mode cannot dock, so without this the panel kept a
+              // 46px slot for a control that is not rendered (S4-011).
+              data-dockable={String(dockable)}
+            >
               <TaskPanel agent={agent} placement="floating" dragHandleProps={handleProps} />
               <button
                 type="button"

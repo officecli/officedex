@@ -218,41 +218,58 @@
 
 /* Tucked against an edge: only a sliver stays on screen until hovered. The
    character turns to face the window and puts its limbs out, so a mark that is
-   90% off screen reads as holding on to the edge rather than as clipped. */
-.shell-presence[data-edge="left"],
-.shell-presence[data-edge="right"],
-.shell-presence[data-edge="top"],
-.shell-presence[data-edge="bottom"] {
+   90% off screen reads as holding on to the edge rather than as clipped.
+
+   Every rule in this block is scoped to `[data-expanded="false"]`, and that
+   scoping is the fix for four of the audit's findings rather than tidying.
+   Unscoped, they applied to the *expanded* panel too, where:
+
+     - `opacity: .82` was the only thing that happened, so "tucked" meant a
+       half-transparent 340px panel sitting on top of the document with both
+       layers of text legible through each other (S4-004);
+     - `.shell-face` is a descendant selector, and the expanded panel contains
+       a `.shell-face` in its header, one in its empty state and one per
+       assistant reply — an unbounded number, since replies come from a
+       `map()`. All of them were translated 312px and rotated, out of the
+       panel and past the window edge (S4-005, S6-012).
+
+   The expanded panel parks flush against the edge instead and keeps its full
+   opacity; `presenceLayout.placePresence` produces a zero overhang for it, so
+   there is nothing here for it to consume. */
+.shell-presence[data-expanded="false"][data-edge="left"],
+.shell-presence[data-expanded="false"][data-edge="right"],
+.shell-presence[data-expanded="false"][data-edge="top"],
+.shell-presence[data-expanded="false"][data-edge="bottom"] {
   opacity: 0.82;
 }
 
-.shell-presence[data-edge]:not([data-edge=""]) .shell-face-limbs {
+.shell-presence[data-expanded="false"][data-edge]:not([data-edge=""]) .shell-face-limbs {
   opacity: 1;
 }
 
-/* The overhang. The element itself stays on screen (see anchorTucked) and the
-   mark is pushed out past the window edge from inside it, so the focus ring
-   remains visible while the character is mostly hidden. */
-.shell-presence[data-edge="left"] .shell-face {
+/* The overhang. The element itself stays on screen (see anchorPresence) and
+   the mark is pushed out past the window edge from inside it, so the focus
+   ring remains visible while the character is mostly hidden. */
+.shell-presence[data-expanded="false"][data-edge="left"] .shell-face {
   transform: translate(var(--shell-presence-peek-x, 0px), var(--shell-presence-peek-y, 0px))
     rotate(90deg);
 }
 
-.shell-presence[data-edge="right"] .shell-face {
+.shell-presence[data-expanded="false"][data-edge="right"] .shell-face {
   transform: translate(var(--shell-presence-peek-x, 0px), var(--shell-presence-peek-y, 0px))
     rotate(-90deg);
 }
 
-.shell-presence[data-edge="top"] .shell-face {
+.shell-presence[data-expanded="false"][data-edge="top"] .shell-face {
   transform: translate(var(--shell-presence-peek-x, 0px), var(--shell-presence-peek-y, 0px))
     rotate(180deg);
 }
 
-.shell-presence[data-edge="bottom"] .shell-face {
+.shell-presence[data-expanded="false"][data-edge="bottom"] .shell-face {
   transform: translate(var(--shell-presence-peek-x, 0px), var(--shell-presence-peek-y, 0px));
 }
 
-.shell-presence[data-edge]:not([data-edge=""]):hover {
+.shell-presence[data-expanded="false"][data-edge]:not([data-edge=""]):hover {
   opacity: 1;
 }
 
@@ -316,10 +333,24 @@
 
 .shell-presence-panel {
   position: relative;
+  /* Below 1280 the panel gives width back rather than eating a fixed 340px of
+     a window that no longer has it: at 1024 it was covering 32% of the canvas,
+     including the sheet tab strip — the only way to change worksheet (S4-012).
+     The real answer is for the editor to report a safe area (Wave 3-H, see
+     presenceLayout.PlaceOptions.safeArea); this is the part that does not need
+     a contract change. */
+  width: min(340px, max(272px, calc(100vw - 940px)));
   max-height: min(76vh, 620px);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  /* `clip`, not `hidden`.
+     A `hidden` box is still a scroll container — it just has no scrollbars —
+     so `scrollIntoView` and the browser's own scroll-to-focus could move it,
+     and did: focusing the composer's model button pushed the panel's header
+     36px out of view with no scrollbar to bring it back (S4-007). `clip` is
+     not a scroll container at all, so `scrollTop` stays 0. The scrolling
+     belongs to `.shell-task-scroll` below, which is already `overflow: auto`. */
+  overflow: clip;
   background: var(--shell-chrome);
   border-radius: var(--shell-radius-panel);
   box-shadow: inset 0 0 0 1px var(--shell-line-strong), 0 12px 48px #35465720;
@@ -328,7 +359,8 @@
 .shell-presence-collapse {
   position: absolute;
   top: 14px;
-  right: 46px;
+  /* Flush with the header's own padding when nothing sits beside it. */
+  right: 16px;
   width: 26px;
   height: 26px;
   display: grid;
@@ -340,6 +372,13 @@
   font-size: 18px;
   line-height: 1;
   cursor: pointer;
+}
+
+/* Only where `canDock()` actually renders the dock button does the collapse
+   key step aside for it: 16px padding + 26px button + 4px gap. Editor mode
+   cannot dock, and used to keep the gap for a button that was never there. */
+.shell-presence-panel[data-dockable="true"] .shell-presence-collapse {
+  right: 46px;
 }
 
 .shell-presence-collapse:hover {

@@ -1,30 +1,47 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Edge } from "../state/shellReducer";
+import {
+  NO_INSETS,
+  defaultPresencePosition,
+  detectEdge,
+  placePresence,
+  type DraggablePosition,
+  type Insets,
+  type Size,
+  type Viewport,
+} from "./presenceLayout";
 
-export interface DraggablePosition {
-  x: number;
-  y: number;
-  edge: Edge;
-}
+export type { DraggablePosition } from "./presenceLayout";
 
 export interface UseDraggableOptions {
   position: DraggablePosition;
   onChange: (next: DraggablePosition) => void;
-  /** Size of the dragged object, used for clamping and edge detection. */
-  size: { width: number; height: number };
-  /** Distance from an edge at which the object tucks away. */
+  /** Size of the dragged object. Measured, not declared — see useMeasuredSize. */
+  size: Size;
+  /** The viewport, as state, so a resize re-renders rather than persists. */
+  viewport: Viewport;
+  /**
+   * Whether the user has actually placed this object.
+   *
+   * False means `position` is a default derived from the viewport. A resize
+   * must not write that default into persisted state: doing so is what turned
+   * "never placed" into a stale absolute coordinate the first time a window
+   * changed size (S4-015).
+   */
+  placed?: boolean;
+  /** Whether an edge means "hang off it" or "park flush against it". */
+  overhang?: boolean;
+  /** Regions to keep clear of, on top of the viewport edges. */
+  safeArea?: Insets;
+  /** Distance from an edge at which the object snaps to it. */
   snapDistance?: number;
   /** How much of the object stays on screen when tucked. */
   peek?: number;
   /** Keyboard step, and the shift-modified step. */
   step?: number;
   bigStep?: number;
-  /** Where Home sends it back to, as a fraction of the viewport. */
-  home?: { right: number; bottom: number };
 }
-
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
 /**
  * The shell's only drag implementation.
@@ -35,73 +52,51 @@ const clamp = (value: number, min: number, max: number) => Math.max(min, Math.mi
  * clamping against a fixed 1440×900 canvas. Decision 1 collapses the three
  * objects into one, and this collapses their three drag behaviours into one.
  *
- * Coordinates are viewport-relative rather than canvas-relative: the shell is
- * genuinely responsive, so there is no 1440×900 to clamp against.
+ * The geometry itself now lives in `presenceLayout.ts`: this hook owns pointer
+ * and key handling, and asks that module where things are allowed to be. Three
+ * callers used to answer that question separately and disagree (R2).
  */
 export function useDraggable({
   position,
   onChange,
   size,
+  viewport,
+  placed = true,
+  overhang = true,
+  safeArea = NO_INSETS,
   snapDistance = 24,
   peek = 28,
   step = 10,
   bigStep = 40,
-  home = { right: 24, bottom: 28 },
 }: UseDraggableOptions) {
   const [dragging, setDragging] = useState(false);
   const origin = useRef<{ pointerId: number; x: number; y: number; from: DraggablePosition } | null>(null);
-
-  const bounds = useCallback(() => {
-    const width = typeof window === "undefined" ? 1440 : window.innerWidth;
-    const height = typeof window === "undefined" ? 900 : window.innerHeight;
-    return { width, height };
-  }, []);
+  const draggedRef = useRef(false);
 
   const place = useCallback(
-    (x: number, y: number, edge: Edge): DraggablePosition => {
-      const { width, height } = bounds();
-      if (edge === "left") return { x: peek - size.width, y: clamp(y, 48, height - peek), edge };
-      if (edge === "right") return { x: width - peek, y: clamp(y, 48, height - peek), edge };
-      if (edge === "top") return { x: clamp(x, 12, width - peek), y: peek - size.height, edge };
-      if (edge === "bottom") return { x: clamp(x, 12, width - peek), y: height - peek, edge };
-      return {
-        x: clamp(x, 8, Math.max(8, width - size.width - 8)),
-        y: clamp(y, 48, Math.max(48, height - size.height - 8)),
-        edge: null,
-      };
-    },
-    [bounds, peek, size.width, size.height],
+    (x: number, y: number, edge: Edge): DraggablePosition =>
+      placePresence(x, y, edge, { viewport, size, peek, overhang, safeArea }),
+    [viewport, size, peek, overhang, safeArea],
   );
 
-  /** Nearest edge within `snapDistance`, else no edge. */
-  const detectEdge = useCallback(
-    (x: number, y: number): Edge => {
-      const { width, height } = bounds();
-      const distances: Array<[Exclude<Edge, null>, number]> = [
-        ["left", x],
-        ["right", width - x - size.width],
-        ["top", y - 40],
-        ["bottom", height - y - size.height],
-      ];
-      distances.sort((a, b) => a[1] - b[1]);
-      return distances[0][1] <= snapDistance ? distances[0][0] : null;
-    },
-    [bounds, size.width, size.height, snapDistance],
-  );
-
+  /** The Home key. Same landing point as "never placed" — one rule, one place. */
   const reset = useCallback(() => {
-    const { width, height } = bounds();
-    onChange(
-      place(width - size.width - home.right, height - size.height - home.bottom, null),
-    );
-  }, [bounds, onChange, place, size.width, size.height, home.right, home.bottom]);
+    onChange(defaultPresencePosition(viewport, size, safeArea));
+  }, [onChange, viewport, size, safeArea]);
 
-  // A window resize must not leave the object stranded off screen.
+  /**
+   * A window resize must not leave a *placed* object stranded off screen.
+   *
+   * An unplaced one is left alone on purpose: its coordinates are derived from
+   * the viewport on every render, so re-deriving is already the correct
+   * behaviour and writing them down would only destroy the sentinel.
+   */
   useEffect(() => {
-    const onResize = () => onChange(place(position.x, position.y, position.edge));
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [onChange, place, position.x, position.y, position.edge]);
+    if (!placed) return;
+    const next = place(position.x, position.y, position.edge);
+    if (next.x === position.x && next.y === position.y && next.edge === position.edge) return;
+    onChange(next);
+  }, [placed, place, onChange, position.x, position.y, position.edge]);
 
   /**
    * Escape abandons a drag in progress and puts the object back.
@@ -130,8 +125,16 @@ export function useDraggable({
   const handleProps = {
     onPointerDown(event: React.PointerEvent<HTMLElement>) {
       if (event.button !== 0) return;
-      // The grip drags; controls sitting inside it stay clickable.
-      if ((event.target as HTMLElement).closest("button, a, input, textarea, select")) return;
+      /*
+       * Controls *inside* the grip stay clickable — the header's dock button
+       * is one. The handle itself is not one of them: the collapsed presence
+       * is a `<button>` with these props on it, so a blanket `closest("button")`
+       * matched the handle and the mark could not be dragged at all. It is the
+       * object most able to end up on top of the window controls, and the
+       * only way to move it was the arrow keys.
+       */
+      const control = (event.target as HTMLElement).closest("button, a, input, textarea, select");
+      if (control && control !== event.currentTarget) return;
       event.preventDefault();
       origin.current = {
         pointerId: event.pointerId,
@@ -140,6 +143,21 @@ export function useDraggable({
         from: { ...position },
       };
       event.currentTarget.setPointerCapture(event.pointerId);
+    },
+
+    /*
+     * A drag must not also read as a click.
+     *
+     * `dragging` is already false by the time the click arrives — the state
+     * update from pointerup has landed — so the flag the handler reads cannot
+     * be the same one the render reads. This one is a ref, set on pointerup
+     * and spent by the very next click.
+     */
+    onClickCapture(event: React.MouseEvent<HTMLElement>) {
+      if (!draggedRef.current) return;
+      draggedRef.current = false;
+      event.preventDefault();
+      event.stopPropagation();
     },
 
     onPointerMove(event: React.PointerEvent<HTMLElement>) {
@@ -157,7 +175,8 @@ export function useDraggable({
       origin.current = null;
       if (!start) return;
       if (dragging) {
-        const edge = detectEdge(position.x, position.y);
+        draggedRef.current = true;
+        const edge = detectEdge(position, size, viewport, snapDistance, safeArea);
         onChange(place(position.x, position.y, edge));
       }
       setDragging(false);

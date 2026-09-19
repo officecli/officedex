@@ -14,6 +14,22 @@ function presenceCount(container: HTMLElement) {
   return docked.length + floatingPanel.length + floatingFace.length;
 }
 
+/**
+ * Leaving the docked column animates it shut and the docked conversation stays
+ * mounted for the length of that animation (see AgentPresence and S6-003), so
+ * the floating object arrives a beat later. Tests that care about the settled
+ * state wait for it; the test that cares about the handover watches it happen.
+ */
+const untilFloating = (container: HTMLElement, selector: string) =>
+  waitFor(
+    () => {
+      const found = container.querySelector<HTMLElement>(selector);
+      if (!found) throw new Error(`waiting for ${selector}`);
+      return found;
+    },
+    { timeout: 4000 },
+  );
+
 async function openFile(options: RenderShellOptions = {}) {
   const shell = await renderShell(options);
   await shell.dispatch({ type: "open-file", fileId: SEED_ACTIVE_FILE_ID });
@@ -82,7 +98,7 @@ describe("agent presence is a single object", () => {
 
     // No dock/float control is offered where docking is impossible.
     expect(shell.view.queryByTitle("Dock the Agent panel")).toBeNull();
-    expect(shell.view.container.querySelector(".shell-presence-panel")).not.toBeNull();
+    await untilFloating(shell.view.container, ".shell-presence-panel");
 
     await shell.dispatch({ type: "set-mode", mode: "agent" });
     expect(shell.view.container.querySelector(".shell-agent .shell-task")).not.toBeNull();
@@ -93,8 +109,7 @@ describe("agent presence is a single object", () => {
     await shell.dispatch({ type: "set-placement", placement: "floating" });
     await shell.dispatch({ type: "set-presence-expanded", expanded: false });
 
-    const face = shell.view.container.querySelector<HTMLElement>(".shell-presence-face");
-    if (!face) throw new Error("collapsed face missing");
+    const face = await untilFloating(shell.view.container, ".shell-presence-face");
 
     await act(async () => {
       fireEvent.click(face);
@@ -122,9 +137,51 @@ describe("agent presence is a single object", () => {
     );
 
     await shell.dispatch({ type: "set-placement", placement: "floating" });
-    expect(shell.view.container.querySelector(".shell-presence-panel")?.textContent).toContain(
-      "Draft the launch checklist.",
-    );
+    const panel = await untilFloating(shell.view.container, ".shell-presence-panel");
+    expect(panel.textContent).toContain("Draft the launch checklist.");
+  });
+
+  /*
+   * S6-003: leaving the dock used to unmount the docked conversation on the
+   * frame the placement changed, while the column it lived in kept its 320px
+   * for another 200ms and the floating panel appeared at full opacity in the
+   * same frame. Two agent panels, one of them an empty box.
+   *
+   * The invariant is not "the panel is never remounted" — it is that a user
+   * never sees two of them, and never sees none of them.
+   */
+  it("hands the conversation over without ever showing two panels, or none", async () => {
+    const shell = await openFile();
+    expect(presenceCount(shell.view.container)).toBe(1);
+
+    await shell.dispatch({ type: "set-placement", placement: "floating" });
+    // The frame straight after the change: still exactly one.
+    expect(presenceCount(shell.view.container)).toBe(1);
+    expect(
+      shell.view.container.querySelectorAll(".shell-task").length,
+      "two conversations on screen at once",
+    ).toBe(1);
+
+    await untilFloating(shell.view.container, ".shell-presence-panel");
+    expect(presenceCount(shell.view.container)).toBe(1);
+    expect(shell.view.container.querySelectorAll(".shell-task").length).toBe(1);
+
+    // And back: the docked column takes over in the same commit.
+    await shell.dispatch({ type: "set-placement", placement: "docked" });
+    expect(presenceCount(shell.view.container)).toBe(1);
+    expect(shell.view.container.querySelector(".shell-presence-panel")).toBeNull();
+  });
+
+  /*
+   * Home is not a placement change: it replaces the whole body row, so there
+   * is no column collapse to wait for. A docked panel lingering into Home puts
+   * a second composer on the page beside the hero's.
+   */
+  it("drops the docked conversation immediately on the way to Home", async () => {
+    const shell = await openFile();
+    await shell.dispatch({ type: "go-home" });
+    expect(shell.view.container.querySelectorAll(".shell-task").length).toBe(0);
+    expect(presenceCount(shell.view.container)).toBe(0);
   });
 });
 
