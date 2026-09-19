@@ -155,8 +155,27 @@ test.describe("W1-A overlay engine", () => {
   test("S2-006 a menu never grows past the room it has", async ({ page }) => {
     await open(page, "C1", SESSION);
     const trigger = page.locator(".shell-cx-scope").first();
-    await trigger.focus();
-    await page.keyboard.press("ArrowDown");
+    /*
+     * `trigger.press` rather than `trigger.focus()` + `page.keyboard.press`.
+     *
+     * The two-step version lost the keystroke about one run in five: the page
+     * settles asynchronously after `data-loaded` (the composer reads its
+     * settings, which moves focus), and a key sent to "whatever is focused now"
+     * lands nowhere if that happens between the two calls. The menu then never
+     * opens and `waitFor` sits out its full timeout — a failure that reads as a
+     * hang rather than as a wrong answer.
+     *
+     * The locator form re-focuses immediately before the key, which closes the
+     * window instead of merely detecting it. The `aria-expanded` assertion then
+     * turns whatever is left into a named, second-scale failure instead of a
+     * silent 60s wait on a menu that was never asked to open.
+     *
+     * Not `expect(trigger).toBeFocused()` — `Menu` moves focus onto the first
+     * item as it opens, by design, so the trigger is legitimately blurred by
+     * the time the press returns. Asserting that fails 3/3 and says nothing.
+     */
+    await trigger.press("ArrowDown");
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
     await page.locator(MENU).waitFor();
     const measured = await record(page, "scope-height-C1");
     // The old `max-height: 340px` constant put this exactly 1px past the bottom

@@ -47,11 +47,46 @@ export async function open(
 ): Promise<void> {
   await page.goto(url(combination, options.params));
   await expect(page.locator("#shell")).toHaveAttribute("data-loaded", "true");
+  await settle(page);
   // The named combination has to have survived the trip, or the screenshot is
   // filed under a state it does not show.
   await expect(page.locator("#shell")).toHaveAttribute(
     "data-home",
     /^(true|false)$/,
+  );
+}
+
+/**
+ * Waits for the floating presence to stop moving.
+ *
+ * `data-loaded` says the workspace arrived; it says nothing about layout. The
+ * panel is placed with a transition (`--ease`, ~300ms), and anything measured
+ * during it reads a position that is on its way somewhere else — probed at
+ * +0ms the panel top is 302.56, at +100ms 354.63, and only from +300ms is it
+ * 355.
+ *
+ * The audit itself got away with this because it mostly took screenshots, and a
+ * frame of a moving panel still looks like a panel. The fix specs did not: two
+ * of them took a "before" baseline mid-transition and then blamed the movement
+ * on whatever they did next (see SUMMARY §3.2, MERGE-002). Same hazard, one
+ * level deeper than the `data-loaded` note above.
+ *
+ * Polls for two identical readings rather than sleeping a fixed duration: the
+ * transition's length is a design token, and a test that hard-codes 300ms goes
+ * quietly wrong the day someone tunes it.
+ */
+export async function settle(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () => {
+      const panel = document.querySelector(".shell-presence-panel, .shell-presence-face");
+      if (!panel) return true;
+      const now = JSON.stringify(panel.getBoundingClientRect());
+      const previous = (window as unknown as { __settleLast?: string }).__settleLast;
+      (window as unknown as { __settleLast?: string }).__settleLast = now;
+      return previous === now;
+    },
+    undefined,
+    { polling: 100 },
   );
 }
 
