@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accessSync, readFileSync } from "node:fs";
+import { accessSync, existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 import {
@@ -75,6 +75,12 @@ describe("chartRecipeEvidence", () => {
   });
 
   it("keeps runtime evidence aligned with the static inventory", () => {
+    // Both of these belong to the evidence-validation job, not to a checkout:
+    // `sampleall` is an external training-fixture mount, and the inventory is
+    // written beside it by the same job. The guard has to come before the read
+    // — it was below it, so every ordinary `vitest run` failed on an ENOENT for
+    // a file that is not supposed to be there.
+    if (!existsSync(INVENTORY_PATH) || !existsSync(join(REPO_ROOT, "sampleall"))) return;
     for (const inventoryRecipe of loadInventory().recipes) {
       const evidence = chartRecipeEvidenceFor(inventoryRecipe.recipe_id);
       expect(evidence.status).toBe(inventoryRecipe.status);
