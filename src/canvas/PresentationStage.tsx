@@ -1,38 +1,35 @@
 import { useCallback } from "react";
 
-import type { DesktopAPI, DesktopTask, GenerateInput } from "../shared/types";
+import type { DesktopAPI, DesktopTask } from "../shared/types";
 import { DesktopApiProvider } from "../renderer/services/desktopApi";
 import { LocaleProvider } from "../renderer/i18n";
-import { ProgressivePptxStage } from "../renderer/presentation/ProgressivePptxStage";
+import { PresentationEditorFrame } from "../renderer/presentation/PresentationEditorFrame";
 import { usePptxLiveDraft } from "../renderer/controllers/usePptxLiveDraft";
-import { usePptxRunControls } from "../renderer/controllers/usePptxRunControls";
 import { useCanvasSession } from "./useCanvasSession";
 
 /**
  * A presentation while it is being drawn.
  *
  * This is the other thing a deck can be on screen. An existing .pptx is a file
- * and gets an editor; a deck that does not exist yet is a *run*, and what the
- * user watches is the outline gate, the page-by-page drawing and the controls
- * over it. The two are different enough that the old app had a separate stage
- * for it, which is reused here whole.
+ * and gets an editor; a deck that does not exist yet is a *run*, and the file
+ * it is being written into has no library entry to route by. So the task is
+ * what puts it here — but what goes on screen is still just the deck.
  *
  * **A drawing deck is not a file.** `CreateLivePptxDraft` writes to
  * `workspaceDir/live/` and registers the path with the preview registry only —
  * it never touches `documents` or `artifacts`, so nothing about it reaches the
  * file library. That is right: the draft is scratch, replaced on every redraw
  * and deleted when the next one starts, and a library full of `live-task-3.pptx`
- * would be worse than useless. It also means this cannot be routed to by active
- * file the way an editor is; the task is what puts it on screen.
+ * would be worse than useless.
  *
- * Almost none of the behaviour lives here. `usePptxLiveDraft` owns the whole
- * draft lifecycle — spotting the moment drawing actually starts, creating the
- * file, registering it for replay, issuing its token and adopting the session —
- * and `usePptxRunControls` owns the gate, the steering and the pause/resume
- * distinction. Both depend only on a desktop API and a task store, both of which
- * this layer already has, so they are mounted rather than reimplemented. The
- * rules they encode were each a bug first (R-E-01 through R-E-07); rewriting
- * them for a new IA would be re-earning them.
+ * Everything *about* the run — the outline, each page's progress, the controls
+ * over it — belongs to the task panel, not here. This file used to render all
+ * of it (`ProgressivePptxStage`) with the deck as one panel inside its own
+ * commentary; see the note in `StageBody`.
+ *
+ * `usePptxLiveDraft` is what remains, mounted rather than reimplemented: it
+ * owns the draft lifecycle and every rule in it was a bug first (R-E-01 through
+ * R-E-07), so rewriting it for a new IA would be re-earning them.
  */
 
 export interface PresentationStageProps {
@@ -76,70 +73,39 @@ function StageBody({ api, task, onError }: PresentationStageProps) {
 
   usePptxLiveDraft({ session, recordError, t });
 
-  /**
-   * An instruction that arrives after the run is over.
-   *
-   * Steering only exists while something is drawing. Once it is not, the same
-   * words are an ordinary follow-up modification of the deck this run produced —
-   * including one it only got part-way through (R-E-04).
-   */
-  const modifyDeck = useCallback(
-    async (instruction: string, sourceTaskId: string) => {
-      const source = task.id === sourceTaskId ? task : undefined;
-      const filePath = source?.artifact?.filePath ?? session.artifact?.filePath;
-      if (!filePath) {
-        onError("There is no deck to change yet.");
-        return;
-      }
-      await api.modify({
-        documentType: "pptx" as GenerateInput["documentType"],
-        sourceFile: filePath,
-        prompt: instruction,
-        ...(task.workspaceId ? { workspaceId: task.workspaceId } : { noProject: true }),
-      });
-    },
-    [api, onError, session.artifact, task],
-  );
-
-  const controls = usePptxRunControls({ modifyDeck });
-
   const editorReady = Boolean(session.grant && session.artifact?.taskId === task.id);
 
+  /*
+   * The deck, and nothing else.
+   *
+   * This used to render the whole `ProgressivePptxStage`: the request echoed
+   * back, the outline with a status line per page, the elapsed timer, follow
+   * and cancel — with the deck being written tucked inside it. So the one
+   * surface meant for the document was mostly *about* the document, and the
+   * document itself was a panel within its own commentary.
+   *
+   * All of that moved to the task panel, where a plan is something to read and
+   * discuss. What is left is what a canvas is for. The run's own controls went
+   * with it: pause and finish are the panel's buttons, steering is the
+   * composer, and the outline gate is answered through `agent.answer` (see
+   * `toQuestion` in services/agent.ts).
+   *
+   * `usePptxLiveDraft` stays exactly where it was. It owns the draft's whole
+   * lifecycle — spotting the moment drawing starts, creating the file,
+   * registering it for replay, issuing its token, adopting the session — and
+   * every rule in it was a bug first (R-E-01 through R-E-07).
+   */
+  if (!editorReady) return null;
+
   return (
-    <ProgressivePptxStage
-      task={task}
-      draftReady={editorReady}
-      editor={
-        editorReady
-          ? {
-              previewToken: session.grant!.token,
-              fileName: session.artifact!.fileName,
-              onUnavailable: (error) => onError(error || "The presentation editor could not start."),
-            }
-          : undefined
-      }
-      onCheckStatus={api.getPptxTaskStatus ? () => controls.checkStatus(task.id) : undefined}
-      onSkipResearch={api.skipPptxResearch ? () => api.skipPptxResearch!(task.id) : undefined}
-      // The outline gate and a question are the same call with different
-      // payloads; the stage decides which one it is showing.
-      onContinue={gated(task) ? (outline) => controls.resume(task, outline) : undefined}
-      onStartDrawing={gated(task) ? (outline) => controls.resume(task, outline) : undefined}
-      onQuestionAnswer={(answer) => controls.resume(task, undefined, answer)}
-      productionProps={{
-        onCancel: () => void api.cancel(task.id),
-        onSteer: (instruction) => controls.steer(task, instruction),
-        onPause: api.pausePptx ? () => void controls.pause(task) : undefined,
-        livePaused: controls.livePausedTaskIds.includes(task.id),
-        onResumeLive: api.resumePptxLive ? () => void controls.resumeLive(task) : undefined,
-        onResume: () => void controls.resume(task),
-      }}
+    <PresentationEditorFrame
+      previewToken={session.grant!.token}
+      fileName={session.artifact!.fileName}
+      onUnavailable={(error) => onError(error || "The presentation editor could not start.")}
     />
   );
 }
 
-function gated(task: DesktopTask): boolean {
-  return task.status === "question" || task.status === "plan_review";
-}
 
 /** Statuses where a run still owns the canvas. */
 const LIVE_STATUSES = ["starting", "running", "question", "plan_review"];

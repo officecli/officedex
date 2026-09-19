@@ -1,6 +1,8 @@
 import type { BridgeEvent, DesktopAPI, DesktopTask, GenerateInput, TaskHistoryEntry } from "../shared/types";
 import type { AgentEvent, AgentMessage, AgentOutlinePage, AgentPort, AgentStatus, AgentStep, AgentTask, AgentTaskSummary, SendInput } from "../shared/uiPort";
 import { pptxPageStates } from "../renderer/presentation/pptxRuntimeActivity";
+import { respondToPlanReview } from "../renderer/presentation/planReviewResponse";
+import { planApprovalAnswer } from "../renderer/flows/resumeTask";
 import { NotImplementedError } from "../shared/notImplemented";
 import { applyTaskEvent, attachTaskContext, createInitialTaskState, type TaskState } from "../renderer/taskState";
 import { taskTitle } from "../renderer/taskTitle";
@@ -160,6 +162,29 @@ function toMessages(task: DesktopTask): AgentMessage[] {
  */
 function toQuestion(task: DesktopTask): AgentTask["question"] {
   if (task.status !== "question" && task.status !== "plan_review") return null;
+
+  /*
+   * The outline gate, as something the panel can actually show.
+   *
+   * It is the one blocking point in the product (the stage spec keeps it for
+   * pptx alone), and it used to be answered on the canvas. Moving the canvas to
+   * the editor left it with nowhere to be pressed — and it does not always
+   * arrive as a question: the runtime blocks on `plan_review` with a plan and
+   * frequently no question envelope at all, so `toQuestion` returned null and
+   * the panel drew nothing while the run waited forever.
+   *
+   * The plan is what is being approved, so the plan's id is the question's id —
+   * which is also the id `respondToPlanReview` sends back.
+   */
+  if (task.status === "plan_review" && task.plan?.id && !task.question?.id) {
+    return {
+      id: task.plan.id,
+      text: "The outline is ready.",
+      options: [{ id: "approve", label: "Start drawing", recommended: true }],
+      allowFreeform: false,
+    };
+  }
+
   const question = task.question;
   if (!question?.id) return null;
   const active = question.questions?.[question.currentIndex ?? 0];
@@ -511,6 +536,26 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     async answer(input: { optionId?: string; text?: string }) {
       const pending = pendingQuestion();
       if (!pending) return;
+
+      /*
+       * Approving the outline is not the same call as answering a question.
+       *
+       * `respondToPlanReview` sends the *plan's* id and carries a fallback for
+       * runtimes that want the legacy question id; a plain `respond` with an
+       * "approve" answer is ambiguous to older ones and can reopen the gate
+       * indefinitely (see the note in renderer/flows/resumeTask.ts). Routing
+       * both through `answer` keeps one verb for the user — unblock whatever is
+       * blocking — without pretending the wire calls are interchangeable.
+       *
+       * The outline goes back unmodified: it is read-only in this shell, so
+       * there is nothing of the user's to preserve in it.
+       */
+      const blocked = state.tasks[pending.taskId];
+      if (blocked?.status === "plan_review") {
+        await respondToPlanReview(api, blocked, "approve", planApprovalAnswer(undefined));
+        return;
+      }
+
       const answer = input.text?.trim();
       if (!input.optionId && !answer) return;
       await api.respond({

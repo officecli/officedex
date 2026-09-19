@@ -5,36 +5,54 @@ import type { DesktopAPI, DesktopTask } from "../shared/types";
 import { useLocale, type Locale } from "../renderer/i18n";
 import { PresentationStage } from "./PresentationStage";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  mounted = 0;
+});
 
 /**
- * The stage is the one piece of the old renderer the shell mounts whole, so it
- * arrives carrying that renderer's i18n. Everything under it is stubbed: what
- * is under test is the language the subtree resolves to, not what it draws.
+ * The stage mounts the old renderer's editor frame, so it arrives carrying that
+ * renderer's i18n. The frame itself is stubbed: what is under test is that the
+ * canvas puts the *editor* there and what language the subtree resolves to —
+ * not what PowerPoint draws.
  */
 let seen: Locale | null = null;
+let mounted = 0;
 
-vi.mock("../renderer/presentation/ProgressivePptxStage", () => ({
-  ProgressivePptxStage: () => {
+vi.mock("../renderer/presentation/PresentationEditorFrame", () => ({
+  PresentationEditorFrame: () => {
     seen = useLocale();
+    mounted += 1;
     return null;
   },
 }));
 
 vi.mock("./useCanvasSession", () => ({
-  useCanvasSession: () => ({ grant: null, artifact: null }),
+  useCanvasSession: () => ({
+    grant: { token: "preview-token" },
+    artifact: { taskId: "task-1", fileName: "deck.pptx" },
+  }),
 }));
 
 vi.mock("../renderer/controllers/usePptxLiveDraft", () => ({
   usePptxLiveDraft: () => undefined,
 }));
 
-vi.mock("../renderer/controllers/usePptxRunControls", () => ({
-  usePptxRunControls: () => ({ livePausedTaskIds: [] }),
-}));
-
 const task = { id: "task-1", status: "running", documentType: "pptx", events: [] } as unknown as DesktopTask;
 const api = {} as DesktopAPI;
+
+/*
+ * The canvas shows the deck, and only the deck.
+ *
+ * It used to render the whole run around it — the request echoed back, the
+ * outline with a status line per page, the timer, follow and cancel — with the
+ * document itself a panel inside its own commentary. All of that is the task
+ * panel's now.
+ */
+it("puts the editor on the canvas, and nothing else", () => {
+  render(<PresentationStage api={api} task={task} onError={() => {}} />);
+  expect(mounted).toBe(1);
+});
 
 /*
  * On a Chinese system this subtree used to resolve to `zh`, so the canvas said
