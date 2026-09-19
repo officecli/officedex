@@ -1,0 +1,3926 @@
+{
+  "C1": {
+    "screenshot": "docs/ui-audit-2026-09-19/S1/screenshots/C1-chrome.png",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "shellAttrs": {
+      "mode": "agent",
+      "home": "true",
+      "navCollapsed": "true",
+      "presence": "docked"
+    },
+    "navWidthVar": "52px",
+    "taskWidthVar": "0px",
+    "windowbar": {
+      "rect": {
+        "left": 0,
+        "top": 0,
+        "right": 1280,
+        "bottom": 40,
+        "width": 1280,
+        "height": 40
+      },
+      "controls": {
+        "left": 12,
+        "top": 6,
+        "right": 75,
+        "bottom": 34,
+        "width": 63,
+        "height": 28
+      },
+      "controlOrder": [
+        {
+          "className": "shell-window-close",
+          "label": "Close window",
+          "rect": {
+            "left": 12,
+            "top": 8,
+            "right": 33,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        },
+        {
+          "className": "shell-window-minimize",
+          "label": "Minimize window",
+          "rect": {
+            "left": 33,
+            "top": 8,
+            "right": 54,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        },
+        {
+          "className": "shell-window-fullscreen",
+          "label": "Toggle full screen",
+          "rect": {
+            "left": 54,
+            "top": 8,
+            "right": 75,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        }
+      ],
+      "navToggle": {
+        "left": 99,
+        "top": 6,
+        "right": 127,
+        "bottom": 34,
+        "width": 28,
+        "height": 28
+      },
+      "minWidth": "0px"
+    },
+    "tabs": {
+      "paddingLeft": "132px",
+      "stripRect": {
+        "left": 132,
+        "top": 8,
+        "right": 1039.2,
+        "bottom": 40,
+        "width": 907.2,
+        "height": 32
+      },
+      "scrollWidth": 998,
+      "clientWidth": 907,
+      "overflowPx": 91,
+      "count": 7,
+      "firstTab": {
+        "left": 132,
+        "top": 8,
+        "right": 272,
+        "bottom": 40,
+        "width": 140,
+        "height": 32
+      },
+      "lastTab": {
+        "left": 990,
+        "top": 8,
+        "right": 1130,
+        "bottom": 40,
+        "width": 140,
+        "height": 32
+      },
+      "tabsFullyVisible": 6,
+      "closeButtons": 7,
+      "bookmarkButtons": 0,
+      "actionsVisibility": "hidden"
+    },
+    "sidebar": {
+      "rect": {
+        "left": 0,
+        "top": 40,
+        "right": 52,
+        "bottom": 720,
+        "width": 52,
+        "height": 680
+      },
+      "width": "52px",
+      "hasTree": true,
+      "hasViews": false,
+      "items": [
+        {
+          "label": "Home",
+          "visibleText": "",
+          "ariaLabel": "Home",
+          "rect": {
+            "left": 8,
+            "top": 96,
+            "right": 44,
+            "bottom": 132,
+            "width": 36,
+            "height": 36
+          }
+        },
+        {
+          "label": "New task",
+          "visibleText": "",
+          "ariaLabel": "New task",
+          "rect": {
+            "left": 8,
+            "top": 134,
+            "right": 44,
+            "bottom": 170,
+            "width": 36,
+            "height": 36
+          }
+        }
+      ],
+      "folderRows": 5,
+      "fileRows": 9,
+      "bodyScroll": {
+        "scrollHeight": 479,
+        "clientHeight": 479
+      },
+      "footerRect": {
+        "left": 8,
+        "top": 665,
+        "right": 43,
+        "bottom": 706,
+        "width": 35,
+        "height": 41
+      },
+      "brandRect": {
+        "left": 8,
+        "top": 52,
+        "right": 44,
+        "bottom": 88,
+        "width": 36,
+        "height": 36
+      }
+    },
+    "statusbar": {
+      "rect": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "width": 0,
+        "height": 0
+      },
+      "text": "MO launch plan.docxOn this computerAll changes saved",
+      "scrollWidth": 0,
+      "clientWidth": 0,
+      "visible": true,
+      "workspaceHidden": true
+    }
+  },
+  "C2": {
+    "screenshot": "docs/ui-audit-2026-09-19/S1/screenshots/C2-chrome.png",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "shellAttrs": {
+      "mode": "agent",
+      "home": "true",
+      "navCollapsed": "false",
+      "presence": "docked"
+    },
+    "navWidthVar": "190px",
+    "taskWidthVar": "0px",
+    "windowbar": {
+      "rect": {
+        "left": 0,
+        "top": 0,
+        "right": 1280,
+        "bottom": 40,
+        "width": 1280,
+        "height": 40
+      },
+      "controls": {
+        "left": 12,
+        "top": 6,
+        "right": 75,
+        "bottom": 34,
+        "width": 63,
+        "height": 28
+      },
+      "controlOrder": [
+        {
+          "className": "shell-window-close",
+          "label": "Close window",
+          "rect": {
+            "left": 12,
+            "top": 8,
+            "right": 33,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        },
+        {
+          "className": "shell-window-minimize",
+          "label": "Minimize window",
+          "rect": {
+            "left": 33,
+            "top": 8,
+            "right": 54,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        },
+        {
+          "className": "shell-window-fullscreen",
+          "label": "Toggle full screen",
+          "rect": {
+            "left": 54,
+            "top": 8,
+            "right": 75,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        }
+      ],
+      "navToggle": {
+        "left": 99,
+        "top": 6,
+        "right": 127,
+        "bottom": 34,
+        "width": 28,
+        "height": 28
+      },
+      "minWidth": "0px"
+    },
+    "tabs": {
+      "paddingLeft": "190px",
+      "stripRect": {
+        "left": 190,
+        "top": 8,
+        "right": 1039.2,
+        "bottom": 40,
+        "width": 849.2,
+        "height": 32
+      },
+      "scrollWidth": 998,
+      "clientWidth": 849,
+      "overflowPx": 149,
+      "count": 7,
+      "firstTab": {
+        "left": 190,
+        "top": 8,
+        "right": 330,
+        "bottom": 40,
+        "width": 140,
+        "height": 32
+      },
+      "lastTab": {
+        "left": 1048,
+        "top": 8,
+        "right": 1188,
+        "bottom": 40,
+        "width": 140,
+        "height": 32
+      },
+      "tabsFullyVisible": 5,
+      "closeButtons": 7,
+      "bookmarkButtons": 0,
+      "actionsVisibility": "hidden"
+    },
+    "sidebar": {
+      "rect": {
+        "left": 0,
+        "top": 40,
+        "right": 190,
+        "bottom": 720,
+        "width": 190,
+        "height": 680
+      },
+      "width": "190px",
+      "hasTree": true,
+      "hasViews": false,
+      "items": [
+        {
+          "label": "Home",
+          "visibleText": "Home",
+          "ariaLabel": null,
+          "rect": {
+            "left": 12,
+            "top": 98,
+            "right": 177,
+            "bottom": 134,
+            "width": 165,
+            "height": 36
+          }
+        },
+        {
+          "label": "New task",
+          "visibleText": "New task",
+          "ariaLabel": null,
+          "rect": {
+            "left": 12,
+            "top": 136,
+            "right": 177,
+            "bottom": 172,
+            "width": 165,
+            "height": 36
+          }
+        }
+      ],
+      "folderRows": 5,
+      "fileRows": 9,
+      "bodyScroll": {
+        "scrollHeight": 636,
+        "clientHeight": 477
+      },
+      "footerRect": {
+        "left": 12,
+        "top": 665,
+        "right": 177,
+        "bottom": 706,
+        "width": 165,
+        "height": 41
+      },
+      "brandRect": {
+        "left": 12,
+        "top": 52,
+        "right": 177,
+        "bottom": 88,
+        "width": 165,
+        "height": 36
+      }
+    },
+    "statusbar": {
+      "rect": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "width": 0,
+        "height": 0
+      },
+      "text": "MO launch plan.docxOn this computerAll changes saved",
+      "scrollWidth": 0,
+      "clientWidth": 0,
+      "visible": true,
+      "workspaceHidden": true
+    }
+  },
+  "C3": {
+    "screenshot": "docs/ui-audit-2026-09-19/S1/screenshots/C3-chrome.png",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "shellAttrs": {
+      "mode": "editor",
+      "home": "true",
+      "navCollapsed": "true",
+      "presence": "floating"
+    },
+    "navWidthVar": "52px",
+    "taskWidthVar": "0px",
+    "windowbar": {
+      "rect": {
+        "left": 0,
+        "top": 0,
+        "right": 1280,
+        "bottom": 40,
+        "width": 1280,
+        "height": 40
+      },
+      "controls": {
+        "left": 12,
+        "top": 6,
+        "right": 75,
+        "bottom": 34,
+        "width": 63,
+        "height": 28
+      },
+      "controlOrder": [
+        {
+          "className": "shell-window-close",
+          "label": "Close window",
+          "rect": {
+            "left": 12,
+            "top": 8,
+            "right": 33,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        },
+        {
+          "className": "shell-window-minimize",
+          "label": "Minimize window",
+          "rect": {
+            "left": 33,
+            "top": 8,
+            "right": 54,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        },
+        {
+          "className": "shell-window-fullscreen",
+          "label": "Toggle full screen",
+          "rect": {
+            "left": 54,
+            "top": 8,
+            "right": 75,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        }
+      ],
+      "navToggle": {
+        "left": 99,
+        "top": 6,
+        "right": 127,
+        "bottom": 34,
+        "width": 28,
+        "height": 28
+      },
+      "minWidth": "0px"
+    },
+    "tabs": {
+      "paddingLeft": "132px",
+      "stripRect": {
+        "left": 132,
+        "top": 8,
+        "right": 1039.2,
+        "bottom": 40,
+        "width": 907.2,
+        "height": 32
+      },
+      "scrollWidth": 998,
+      "clientWidth": 907,
+      "overflowPx": 91,
+      "count": 7,
+      "firstTab": {
+        "left": 132,
+        "top": 8,
+        "right": 272,
+        "bottom": 40,
+        "width": 140,
+        "height": 32
+      },
+      "lastTab": {
+        "left": 990,
+        "top": 8,
+        "right": 1130,
+        "bottom": 40,
+        "width": 140,
+        "height": 32
+      },
+      "tabsFullyVisible": 6,
+      "closeButtons": 7,
+      "bookmarkButtons": 0,
+      "actionsVisibility": "hidden"
+    },
+    "sidebar": {
+      "rect": {
+        "left": 0,
+        "top": 40,
+        "right": 52,
+        "bottom": 720,
+        "width": 52,
+        "height": 680
+      },
+      "width": "52px",
+      "hasTree": false,
+      "hasViews": true,
+      "items": [
+        {
+          "label": "Home",
+          "visibleText": "",
+          "ariaLabel": "Home",
+          "rect": {
+            "left": 8,
+            "top": 96,
+            "right": 44,
+            "bottom": 132,
+            "width": 36,
+            "height": 36
+          }
+        },
+        {
+          "label": "New",
+          "visibleText": "",
+          "ariaLabel": "New",
+          "rect": {
+            "left": 8,
+            "top": 134,
+            "right": 44,
+            "bottom": 170,
+            "width": 36,
+            "height": 36
+          }
+        },
+        {
+          "label": "Open",
+          "visibleText": "",
+          "ariaLabel": "Open",
+          "rect": {
+            "left": 8,
+            "top": 172,
+            "right": 44,
+            "bottom": 208,
+            "width": 36,
+            "height": 36
+          }
+        },
+        {
+          "label": "Recent",
+          "visibleText": "",
+          "ariaLabel": "Recent",
+          "rect": {
+            "left": 8,
+            "top": 591,
+            "right": 44,
+            "bottom": 627,
+            "width": 36,
+            "height": 36
+          }
+        },
+        {
+          "label": "Pinned",
+          "visibleText": "",
+          "ariaLabel": "Pinned",
+          "rect": {
+            "left": 8,
+            "top": 629,
+            "right": 44,
+            "bottom": 665,
+            "width": 36,
+            "height": 36
+          }
+        }
+      ],
+      "folderRows": 0,
+      "fileRows": 0,
+      "bodyScroll": {
+        "scrollHeight": 350,
+        "clientHeight": 350
+      },
+      "footerRect": {
+        "left": 8,
+        "top": 665,
+        "right": 43,
+        "bottom": 706,
+        "width": 35,
+        "height": 41
+      },
+      "brandRect": {
+        "left": 8,
+        "top": 52,
+        "right": 44,
+        "bottom": 88,
+        "width": 36,
+        "height": 36
+      }
+    },
+    "statusbar": {
+      "rect": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "width": 0,
+        "height": 0
+      },
+      "text": "MO launch plan.docxOn this computerAll changes saved",
+      "scrollWidth": 0,
+      "clientWidth": 0,
+      "visible": true,
+      "workspaceHidden": true
+    }
+  },
+  "C4": {
+    "screenshot": "docs/ui-audit-2026-09-19/S1/screenshots/C4-chrome.png",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "shellAttrs": {
+      "mode": "editor",
+      "home": "true",
+      "navCollapsed": "false",
+      "presence": "floating"
+    },
+    "navWidthVar": "190px",
+    "taskWidthVar": "0px",
+    "windowbar": {
+      "rect": {
+        "left": 0,
+        "top": 0,
+        "right": 1280,
+        "bottom": 40,
+        "width": 1280,
+        "height": 40
+      },
+      "controls": {
+        "left": 12,
+        "top": 6,
+        "right": 75,
+        "bottom": 34,
+        "width": 63,
+        "height": 28
+      },
+      "controlOrder": [
+        {
+          "className": "shell-window-close",
+          "label": "Close window",
+          "rect": {
+            "left": 12,
+            "top": 8,
+            "right": 33,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        },
+        {
+          "className": "shell-window-minimize",
+          "label": "Minimize window",
+          "rect": {
+            "left": 33,
+            "top": 8,
+            "right": 54,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        },
+        {
+          "className": "shell-window-fullscreen",
+          "label": "Toggle full screen",
+          "rect": {
+            "left": 54,
+            "top": 8,
+            "right": 75,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        }
+      ],
+      "navToggle": {
+        "left": 99,
+        "top": 6,
+        "right": 127,
+        "bottom": 34,
+        "width": 28,
+        "height": 28
+      },
+      "minWidth": "0px"
+    },
+    "tabs": {
+      "paddingLeft": "190px",
+      "stripRect": {
+        "left": 190,
+        "top": 8,
+        "right": 1039.2,
+        "bottom": 40,
+        "width": 849.2,
+        "height": 32
+      },
+      "scrollWidth": 998,
+      "clientWidth": 849,
+      "overflowPx": 149,
+      "count": 7,
+      "firstTab": {
+        "left": 190,
+        "top": 8,
+        "right": 330,
+        "bottom": 40,
+        "width": 140,
+        "height": 32
+      },
+      "lastTab": {
+        "left": 1048,
+        "top": 8,
+        "right": 1188,
+        "bottom": 40,
+        "width": 140,
+        "height": 32
+      },
+      "tabsFullyVisible": 5,
+      "closeButtons": 7,
+      "bookmarkButtons": 0,
+      "actionsVisibility": "hidden"
+    },
+    "sidebar": {
+      "rect": {
+        "left": 0,
+        "top": 40,
+        "right": 190,
+        "bottom": 720,
+        "width": 190,
+        "height": 680
+      },
+      "width": "190px",
+      "hasTree": false,
+      "hasViews": true,
+      "items": [
+        {
+          "label": "Home",
+          "visibleText": "Home",
+          "ariaLabel": null,
+          "rect": {
+            "left": 12,
+            "top": 98,
+            "right": 177,
+            "bottom": 134,
+            "width": 165,
+            "height": 36
+          }
+        },
+        {
+          "label": "New",
+          "visibleText": "New",
+          "ariaLabel": null,
+          "rect": {
+            "left": 12,
+            "top": 136,
+            "right": 177,
+            "bottom": 172,
+            "width": 165,
+            "height": 36
+          }
+        },
+        {
+          "label": "Open",
+          "visibleText": "Open",
+          "ariaLabel": null,
+          "rect": {
+            "left": 12,
+            "top": 174,
+            "right": 177,
+            "bottom": 210,
+            "width": 165,
+            "height": 36
+          }
+        },
+        {
+          "label": "Recent",
+          "visibleText": "Recent",
+          "ariaLabel": null,
+          "rect": {
+            "left": 12,
+            "top": 591,
+            "right": 177,
+            "bottom": 627,
+            "width": 165,
+            "height": 36
+          }
+        },
+        {
+          "label": "Pinned",
+          "visibleText": "Pinned",
+          "ariaLabel": null,
+          "rect": {
+            "left": 12,
+            "top": 629,
+            "right": 177,
+            "bottom": 665,
+            "width": 165,
+            "height": 36
+          }
+        }
+      ],
+      "folderRows": 0,
+      "fileRows": 0,
+      "bodyScroll": {
+        "scrollHeight": 348,
+        "clientHeight": 348
+      },
+      "footerRect": {
+        "left": 12,
+        "top": 665,
+        "right": 177,
+        "bottom": 706,
+        "width": 165,
+        "height": 41
+      },
+      "brandRect": {
+        "left": 12,
+        "top": 52,
+        "right": 177,
+        "bottom": 88,
+        "width": 165,
+        "height": 36
+      }
+    },
+    "statusbar": {
+      "rect": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0,
+        "width": 0,
+        "height": 0
+      },
+      "text": "MO launch plan.docxOn this computerAll changes saved",
+      "scrollWidth": 0,
+      "clientWidth": 0,
+      "visible": true,
+      "workspaceHidden": true
+    }
+  },
+  "C5": {
+    "screenshot": "docs/ui-audit-2026-09-19/S1/screenshots/C5-chrome.png",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "shellAttrs": {
+      "mode": "agent",
+      "home": "false",
+      "navCollapsed": "true",
+      "presence": "docked"
+    },
+    "navWidthVar": "52px",
+    "taskWidthVar": "320px",
+    "windowbar": {
+      "rect": {
+        "left": 0,
+        "top": 0,
+        "right": 1280,
+        "bottom": 40,
+        "width": 1280,
+        "height": 40
+      },
+      "controls": {
+        "left": 12,
+        "top": 6,
+        "right": 75,
+        "bottom": 34,
+        "width": 63,
+        "height": 28
+      },
+      "controlOrder": [
+        {
+          "className": "shell-window-close",
+          "label": "Close window",
+          "rect": {
+            "left": 12,
+            "top": 8,
+            "right": 33,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        },
+        {
+          "className": "shell-window-minimize",
+          "label": "Minimize window",
+          "rect": {
+            "left": 33,
+            "top": 8,
+            "right": 54,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        },
+        {
+          "className": "shell-window-fullscreen",
+          "label": "Toggle full screen",
+          "rect": {
+            "left": 54,
+            "top": 8,
+            "right": 75,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        }
+      ],
+      "navToggle": {
+        "left": 99,
+        "top": 6,
+        "right": 127,
+        "bottom": 34,
+        "width": 28,
+        "height": 28
+      },
+      "minWidth": "0px"
+    },
+    "tabs": {
+      "paddingLeft": "372px",
+      "stripRect": {
+        "left": 372,
+        "top": 8,
+        "right": 1039.2,
+        "bottom": 40,
+        "width": 667.2,
+        "height": 32
+      },
+      "scrollWidth": 998,
+      "clientWidth": 667,
+      "overflowPx": 331,
+      "count": 7,
+      "firstTab": {
+        "left": 372,
+        "top": 8,
+        "right": 512,
+        "bottom": 40,
+        "width": 140,
+        "height": 32
+      },
+      "lastTab": {
+        "left": 1230,
+        "top": 8,
+        "right": 1370,
+        "bottom": 40,
+        "width": 140,
+        "height": 32
+      },
+      "tabsFullyVisible": 4,
+      "closeButtons": 7,
+      "bookmarkButtons": 1,
+      "actionsVisibility": "visible"
+    },
+    "sidebar": {
+      "rect": {
+        "left": 0,
+        "top": 40,
+        "right": 52,
+        "bottom": 720,
+        "width": 52,
+        "height": 680
+      },
+      "width": "52px",
+      "hasTree": true,
+      "hasViews": false,
+      "items": [
+        {
+          "label": "Home",
+          "visibleText": "",
+          "ariaLabel": "Home",
+          "rect": {
+            "left": 8,
+            "top": 96,
+            "right": 44,
+            "bottom": 132,
+            "width": 36,
+            "height": 36
+          }
+        },
+        {
+          "label": "New task",
+          "visibleText": "",
+          "ariaLabel": "New task",
+          "rect": {
+            "left": 8,
+            "top": 134,
+            "right": 44,
+            "bottom": 170,
+            "width": 36,
+            "height": 36
+          }
+        }
+      ],
+      "folderRows": 5,
+      "fileRows": 9,
+      "bodyScroll": {
+        "scrollHeight": 479,
+        "clientHeight": 479
+      },
+      "footerRect": {
+        "left": 8,
+        "top": 665,
+        "right": 43,
+        "bottom": 706,
+        "width": 35,
+        "height": 41
+      },
+      "brandRect": {
+        "left": 8,
+        "top": 52,
+        "right": 44,
+        "bottom": 88,
+        "width": 36,
+        "height": 36
+      }
+    },
+    "statusbar": {
+      "rect": {
+        "left": 372,
+        "top": 688,
+        "right": 1280,
+        "bottom": 720,
+        "width": 908,
+        "height": 32
+      },
+      "text": "MO launch plan.docxOn this computerAll changes saved",
+      "scrollWidth": 908,
+      "clientWidth": 908,
+      "visible": true,
+      "workspaceHidden": false
+    }
+  },
+  "C6": {
+    "screenshot": "docs/ui-audit-2026-09-19/S1/screenshots/C6-chrome.png",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "shellAttrs": {
+      "mode": "agent",
+      "home": "false",
+      "navCollapsed": "false",
+      "presence": "docked"
+    },
+    "navWidthVar": "190px",
+    "taskWidthVar": "320px",
+    "windowbar": {
+      "rect": {
+        "left": 0,
+        "top": 0,
+        "right": 1280,
+        "bottom": 40,
+        "width": 1280,
+        "height": 40
+      },
+      "controls": {
+        "left": 12,
+        "top": 6,
+        "right": 75,
+        "bottom": 34,
+        "width": 63,
+        "height": 28
+      },
+      "controlOrder": [
+        {
+          "className": "shell-window-close",
+          "label": "Close window",
+          "rect": {
+            "left": 12,
+            "top": 8,
+            "right": 33,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        },
+        {
+          "className": "shell-window-minimize",
+          "label": "Minimize window",
+          "rect": {
+            "left": 33,
+            "top": 8,
+            "right": 54,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        },
+        {
+          "className": "shell-window-fullscreen",
+          "label": "Toggle full screen",
+          "rect": {
+            "left": 54,
+            "top": 8,
+            "right": 75,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        }
+      ],
+      "navToggle": {
+        "left": 99,
+        "top": 6,
+        "right": 127,
+        "bottom": 34,
+        "width": 28,
+        "height": 28
+      },
+      "minWidth": "0px"
+    },
+    "tabs": {
+      "paddingLeft": "510px",
+      "stripRect": {
+        "left": 510,
+        "top": 8,
+        "right": 1039.2,
+        "bottom": 40,
+        "width": 529.2,
+        "height": 32
+      },
+      "scrollWidth": 998,
+      "clientWidth": 529,
+      "overflowPx": 469,
+      "count": 7,
+      "firstTab": {
+        "left": 510,
+        "top": 8,
+        "right": 650,
+        "bottom": 40,
+        "width": 140,
+        "height": 32
+      },
+      "lastTab": {
+        "left": 1368,
+        "top": 8,
+        "right": 1508,
+        "bottom": 40,
+        "width": 140,
+        "height": 32
+      },
+      "tabsFullyVisible": 3,
+      "closeButtons": 7,
+      "bookmarkButtons": 1,
+      "actionsVisibility": "visible"
+    },
+    "sidebar": {
+      "rect": {
+        "left": 0,
+        "top": 40,
+        "right": 190,
+        "bottom": 720,
+        "width": 190,
+        "height": 680
+      },
+      "width": "190px",
+      "hasTree": true,
+      "hasViews": false,
+      "items": [
+        {
+          "label": "Home",
+          "visibleText": "Home",
+          "ariaLabel": null,
+          "rect": {
+            "left": 12,
+            "top": 98,
+            "right": 177,
+            "bottom": 134,
+            "width": 165,
+            "height": 36
+          }
+        },
+        {
+          "label": "New task",
+          "visibleText": "New task",
+          "ariaLabel": null,
+          "rect": {
+            "left": 12,
+            "top": 136,
+            "right": 177,
+            "bottom": 172,
+            "width": 165,
+            "height": 36
+          }
+        }
+      ],
+      "folderRows": 5,
+      "fileRows": 9,
+      "bodyScroll": {
+        "scrollHeight": 636,
+        "clientHeight": 477
+      },
+      "footerRect": {
+        "left": 12,
+        "top": 665,
+        "right": 177,
+        "bottom": 706,
+        "width": 165,
+        "height": 41
+      },
+      "brandRect": {
+        "left": 12,
+        "top": 52,
+        "right": 177,
+        "bottom": 88,
+        "width": 165,
+        "height": 36
+      }
+    },
+    "statusbar": {
+      "rect": {
+        "left": 510,
+        "top": 688,
+        "right": 1280,
+        "bottom": 720,
+        "width": 770,
+        "height": 32
+      },
+      "text": "MO launch plan.docxOn this computerAll changes saved",
+      "scrollWidth": 770,
+      "clientWidth": 770,
+      "visible": true,
+      "workspaceHidden": false
+    }
+  },
+  "C7": {
+    "screenshot": "docs/ui-audit-2026-09-19/S1/screenshots/C7-chrome.png",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "shellAttrs": {
+      "mode": "agent",
+      "home": "false",
+      "navCollapsed": "true",
+      "presence": "floating"
+    },
+    "navWidthVar": "52px",
+    "taskWidthVar": "0px",
+    "windowbar": {
+      "rect": {
+        "left": 0,
+        "top": 0,
+        "right": 1280,
+        "bottom": 40,
+        "width": 1280,
+        "height": 40
+      },
+      "controls": {
+        "left": 12,
+        "top": 6,
+        "right": 75,
+        "bottom": 34,
+        "width": 63,
+        "height": 28
+      },
+      "controlOrder": [
+        {
+          "className": "shell-window-close",
+          "label": "Close window",
+          "rect": {
+            "left": 12,
+            "top": 8,
+            "right": 33,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        },
+        {
+          "className": "shell-window-minimize",
+          "label": "Minimize window",
+          "rect": {
+            "left": 33,
+            "top": 8,
+            "right": 54,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        },
+        {
+          "className": "shell-window-fullscreen",
+          "label": "Toggle full screen",
+          "rect": {
+            "left": 54,
+            "top": 8,
+            "right": 75,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        }
+      ],
+      "navToggle": {
+        "left": 99,
+        "top": 6,
+        "right": 127,
+        "bottom": 34,
+        "width": 28,
+        "height": 28
+      },
+      "minWidth": "0px"
+    },
+    "tabs": {
+      "paddingLeft": "132px",
+      "stripRect": {
+        "left": 132,
+        "top": 8,
+        "right": 1039.2,
+        "bottom": 40,
+        "width": 907.2,
+        "height": 32
+      },
+      "scrollWidth": 998,
+      "clientWidth": 907,
+      "overflowPx": 91,
+      "count": 7,
+      "firstTab": {
+        "left": 132,
+        "top": 8,
+        "right": 272,
+        "bottom": 40,
+        "width": 140,
+        "height": 32
+      },
+      "lastTab": {
+        "left": 990,
+        "top": 8,
+        "right": 1130,
+        "bottom": 40,
+        "width": 140,
+        "height": 32
+      },
+      "tabsFullyVisible": 6,
+      "closeButtons": 7,
+      "bookmarkButtons": 1,
+      "actionsVisibility": "visible"
+    },
+    "sidebar": {
+      "rect": {
+        "left": 0,
+        "top": 40,
+        "right": 52,
+        "bottom": 720,
+        "width": 52,
+        "height": 680
+      },
+      "width": "52px",
+      "hasTree": true,
+      "hasViews": false,
+      "items": [
+        {
+          "label": "Home",
+          "visibleText": "",
+          "ariaLabel": "Home",
+          "rect": {
+            "left": 8,
+            "top": 96,
+            "right": 44,
+            "bottom": 132,
+            "width": 36,
+            "height": 36
+          }
+        },
+        {
+          "label": "New task",
+          "visibleText": "",
+          "ariaLabel": "New task",
+          "rect": {
+            "left": 8,
+            "top": 134,
+            "right": 44,
+            "bottom": 170,
+            "width": 36,
+            "height": 36
+          }
+        }
+      ],
+      "folderRows": 5,
+      "fileRows": 9,
+      "bodyScroll": {
+        "scrollHeight": 479,
+        "clientHeight": 479
+      },
+      "footerRect": {
+        "left": 8,
+        "top": 665,
+        "right": 43,
+        "bottom": 706,
+        "width": 35,
+        "height": 41
+      },
+      "brandRect": {
+        "left": 8,
+        "top": 52,
+        "right": 44,
+        "bottom": 88,
+        "width": 36,
+        "height": 36
+      }
+    },
+    "statusbar": {
+      "rect": {
+        "left": 52,
+        "top": 688,
+        "right": 1280,
+        "bottom": 720,
+        "width": 1228,
+        "height": 32
+      },
+      "text": "MO launch plan.docxOn this computerAll changes saved",
+      "scrollWidth": 1228,
+      "clientWidth": 1228,
+      "visible": true,
+      "workspaceHidden": false
+    }
+  },
+  "C8": {
+    "screenshot": "docs/ui-audit-2026-09-19/S1/screenshots/C8-chrome.png",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "shellAttrs": {
+      "mode": "agent",
+      "home": "false",
+      "navCollapsed": "false",
+      "presence": "floating"
+    },
+    "navWidthVar": "190px",
+    "taskWidthVar": "0px",
+    "windowbar": {
+      "rect": {
+        "left": 0,
+        "top": 0,
+        "right": 1280,
+        "bottom": 40,
+        "width": 1280,
+        "height": 40
+      },
+      "controls": {
+        "left": 12,
+        "top": 6,
+        "right": 75,
+        "bottom": 34,
+        "width": 63,
+        "height": 28
+      },
+      "controlOrder": [
+        {
+          "className": "shell-window-close",
+          "label": "Close window",
+          "rect": {
+            "left": 12,
+            "top": 8,
+            "right": 33,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        },
+        {
+          "className": "shell-window-minimize",
+          "label": "Minimize window",
+          "rect": {
+            "left": 33,
+            "top": 8,
+            "right": 54,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        },
+        {
+          "className": "shell-window-fullscreen",
+          "label": "Toggle full screen",
+          "rect": {
+            "left": 54,
+            "top": 8,
+            "right": 75,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        }
+      ],
+      "navToggle": {
+        "left": 99,
+        "top": 6,
+        "right": 127,
+        "bottom": 34,
+        "width": 28,
+        "height": 28
+      },
+      "minWidth": "0px"
+    },
+    "tabs": {
+      "paddingLeft": "190px",
+      "stripRect": {
+        "left": 190,
+        "top": 8,
+        "right": 1039.2,
+        "bottom": 40,
+        "width": 849.2,
+        "height": 32
+      },
+      "scrollWidth": 998,
+      "clientWidth": 849,
+      "overflowPx": 149,
+      "count": 7,
+      "firstTab": {
+        "left": 190,
+        "top": 8,
+        "right": 330,
+        "bottom": 40,
+        "width": 140,
+        "height": 32
+      },
+      "lastTab": {
+        "left": 1048,
+        "top": 8,
+        "right": 1188,
+        "bottom": 40,
+        "width": 140,
+        "height": 32
+      },
+      "tabsFullyVisible": 5,
+      "closeButtons": 7,
+      "bookmarkButtons": 1,
+      "actionsVisibility": "visible"
+    },
+    "sidebar": {
+      "rect": {
+        "left": 0,
+        "top": 40,
+        "right": 190,
+        "bottom": 720,
+        "width": 190,
+        "height": 680
+      },
+      "width": "190px",
+      "hasTree": true,
+      "hasViews": false,
+      "items": [
+        {
+          "label": "Home",
+          "visibleText": "Home",
+          "ariaLabel": null,
+          "rect": {
+            "left": 12,
+            "top": 98,
+            "right": 177,
+            "bottom": 134,
+            "width": 165,
+            "height": 36
+          }
+        },
+        {
+          "label": "New task",
+          "visibleText": "New task",
+          "ariaLabel": null,
+          "rect": {
+            "left": 12,
+            "top": 136,
+            "right": 177,
+            "bottom": 172,
+            "width": 165,
+            "height": 36
+          }
+        }
+      ],
+      "folderRows": 5,
+      "fileRows": 9,
+      "bodyScroll": {
+        "scrollHeight": 636,
+        "clientHeight": 477
+      },
+      "footerRect": {
+        "left": 12,
+        "top": 665,
+        "right": 177,
+        "bottom": 706,
+        "width": 165,
+        "height": 41
+      },
+      "brandRect": {
+        "left": 12,
+        "top": 52,
+        "right": 177,
+        "bottom": 88,
+        "width": 165,
+        "height": 36
+      }
+    },
+    "statusbar": {
+      "rect": {
+        "left": 190,
+        "top": 688,
+        "right": 1280,
+        "bottom": 720,
+        "width": 1090,
+        "height": 32
+      },
+      "text": "MO launch plan.docxOn this computerAll changes saved",
+      "scrollWidth": 1090,
+      "clientWidth": 1090,
+      "visible": true,
+      "workspaceHidden": false
+    }
+  },
+  "C9": {
+    "screenshot": "docs/ui-audit-2026-09-19/S1/screenshots/C9-chrome.png",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "shellAttrs": {
+      "mode": "editor",
+      "home": "false",
+      "navCollapsed": "true",
+      "presence": "floating"
+    },
+    "navWidthVar": "52px",
+    "taskWidthVar": "0px",
+    "windowbar": {
+      "rect": {
+        "left": 0,
+        "top": 0,
+        "right": 1280,
+        "bottom": 40,
+        "width": 1280,
+        "height": 40
+      },
+      "controls": {
+        "left": 12,
+        "top": 6,
+        "right": 75,
+        "bottom": 34,
+        "width": 63,
+        "height": 28
+      },
+      "controlOrder": [
+        {
+          "className": "shell-window-close",
+          "label": "Close window",
+          "rect": {
+            "left": 12,
+            "top": 8,
+            "right": 33,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        },
+        {
+          "className": "shell-window-minimize",
+          "label": "Minimize window",
+          "rect": {
+            "left": 33,
+            "top": 8,
+            "right": 54,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        },
+        {
+          "className": "shell-window-fullscreen",
+          "label": "Toggle full screen",
+          "rect": {
+            "left": 54,
+            "top": 8,
+            "right": 75,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        }
+      ],
+      "navToggle": {
+        "left": 99,
+        "top": 6,
+        "right": 127,
+        "bottom": 34,
+        "width": 28,
+        "height": 28
+      },
+      "minWidth": "0px"
+    },
+    "tabs": {
+      "paddingLeft": "132px",
+      "stripRect": {
+        "left": 132,
+        "top": 8,
+        "right": 1039.2,
+        "bottom": 40,
+        "width": 907.2,
+        "height": 32
+      },
+      "scrollWidth": 998,
+      "clientWidth": 907,
+      "overflowPx": 91,
+      "count": 7,
+      "firstTab": {
+        "left": 132,
+        "top": 8,
+        "right": 272,
+        "bottom": 40,
+        "width": 140,
+        "height": 32
+      },
+      "lastTab": {
+        "left": 990,
+        "top": 8,
+        "right": 1130,
+        "bottom": 40,
+        "width": 140,
+        "height": 32
+      },
+      "tabsFullyVisible": 6,
+      "closeButtons": 7,
+      "bookmarkButtons": 1,
+      "actionsVisibility": "visible"
+    },
+    "sidebar": {
+      "rect": {
+        "left": 0,
+        "top": 40,
+        "right": 52,
+        "bottom": 720,
+        "width": 52,
+        "height": 680
+      },
+      "width": "52px",
+      "hasTree": false,
+      "hasViews": true,
+      "items": [
+        {
+          "label": "Home",
+          "visibleText": "",
+          "ariaLabel": "Home",
+          "rect": {
+            "left": 8,
+            "top": 96,
+            "right": 44,
+            "bottom": 132,
+            "width": 36,
+            "height": 36
+          }
+        },
+        {
+          "label": "New",
+          "visibleText": "",
+          "ariaLabel": "New",
+          "rect": {
+            "left": 8,
+            "top": 134,
+            "right": 44,
+            "bottom": 170,
+            "width": 36,
+            "height": 36
+          }
+        },
+        {
+          "label": "Open",
+          "visibleText": "",
+          "ariaLabel": "Open",
+          "rect": {
+            "left": 8,
+            "top": 172,
+            "right": 44,
+            "bottom": 208,
+            "width": 36,
+            "height": 36
+          }
+        },
+        {
+          "label": "Recent",
+          "visibleText": "",
+          "ariaLabel": "Recent",
+          "rect": {
+            "left": 8,
+            "top": 591,
+            "right": 44,
+            "bottom": 627,
+            "width": 36,
+            "height": 36
+          }
+        },
+        {
+          "label": "Pinned",
+          "visibleText": "",
+          "ariaLabel": "Pinned",
+          "rect": {
+            "left": 8,
+            "top": 629,
+            "right": 44,
+            "bottom": 665,
+            "width": 36,
+            "height": 36
+          }
+        }
+      ],
+      "folderRows": 0,
+      "fileRows": 0,
+      "bodyScroll": {
+        "scrollHeight": 350,
+        "clientHeight": 350
+      },
+      "footerRect": {
+        "left": 8,
+        "top": 665,
+        "right": 43,
+        "bottom": 706,
+        "width": 35,
+        "height": 41
+      },
+      "brandRect": {
+        "left": 8,
+        "top": 52,
+        "right": 44,
+        "bottom": 88,
+        "width": 36,
+        "height": 36
+      }
+    },
+    "statusbar": {
+      "rect": {
+        "left": 52,
+        "top": 688,
+        "right": 1280,
+        "bottom": 720,
+        "width": 1228,
+        "height": 32
+      },
+      "text": "MO launch plan.docxOn this computerAll changes saved",
+      "scrollWidth": 1228,
+      "clientWidth": 1228,
+      "visible": true,
+      "workspaceHidden": false
+    }
+  },
+  "C10": {
+    "screenshot": "docs/ui-audit-2026-09-19/S1/screenshots/C10-chrome.png",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "shellAttrs": {
+      "mode": "editor",
+      "home": "false",
+      "navCollapsed": "false",
+      "presence": "floating"
+    },
+    "navWidthVar": "190px",
+    "taskWidthVar": "0px",
+    "windowbar": {
+      "rect": {
+        "left": 0,
+        "top": 0,
+        "right": 1280,
+        "bottom": 40,
+        "width": 1280,
+        "height": 40
+      },
+      "controls": {
+        "left": 12,
+        "top": 6,
+        "right": 75,
+        "bottom": 34,
+        "width": 63,
+        "height": 28
+      },
+      "controlOrder": [
+        {
+          "className": "shell-window-close",
+          "label": "Close window",
+          "rect": {
+            "left": 12,
+            "top": 8,
+            "right": 33,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        },
+        {
+          "className": "shell-window-minimize",
+          "label": "Minimize window",
+          "rect": {
+            "left": 33,
+            "top": 8,
+            "right": 54,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        },
+        {
+          "className": "shell-window-fullscreen",
+          "label": "Toggle full screen",
+          "rect": {
+            "left": 54,
+            "top": 8,
+            "right": 75,
+            "bottom": 32,
+            "width": 21,
+            "height": 24
+          }
+        }
+      ],
+      "navToggle": {
+        "left": 99,
+        "top": 6,
+        "right": 127,
+        "bottom": 34,
+        "width": 28,
+        "height": 28
+      },
+      "minWidth": "0px"
+    },
+    "tabs": {
+      "paddingLeft": "190px",
+      "stripRect": {
+        "left": 190,
+        "top": 8,
+        "right": 1039.2,
+        "bottom": 40,
+        "width": 849.2,
+        "height": 32
+      },
+      "scrollWidth": 998,
+      "clientWidth": 849,
+      "overflowPx": 149,
+      "count": 7,
+      "firstTab": {
+        "left": 190,
+        "top": 8,
+        "right": 330,
+        "bottom": 40,
+        "width": 140,
+        "height": 32
+      },
+      "lastTab": {
+        "left": 1048,
+        "top": 8,
+        "right": 1188,
+        "bottom": 40,
+        "width": 140,
+        "height": 32
+      },
+      "tabsFullyVisible": 5,
+      "closeButtons": 7,
+      "bookmarkButtons": 1,
+      "actionsVisibility": "visible"
+    },
+    "sidebar": {
+      "rect": {
+        "left": 0,
+        "top": 40,
+        "right": 190,
+        "bottom": 720,
+        "width": 190,
+        "height": 680
+      },
+      "width": "190px",
+      "hasTree": false,
+      "hasViews": true,
+      "items": [
+        {
+          "label": "Home",
+          "visibleText": "Home",
+          "ariaLabel": null,
+          "rect": {
+            "left": 12,
+            "top": 98,
+            "right": 177,
+            "bottom": 134,
+            "width": 165,
+            "height": 36
+          }
+        },
+        {
+          "label": "New",
+          "visibleText": "New",
+          "ariaLabel": null,
+          "rect": {
+            "left": 12,
+            "top": 136,
+            "right": 177,
+            "bottom": 172,
+            "width": 165,
+            "height": 36
+          }
+        },
+        {
+          "label": "Open",
+          "visibleText": "Open",
+          "ariaLabel": null,
+          "rect": {
+            "left": 12,
+            "top": 174,
+            "right": 177,
+            "bottom": 210,
+            "width": 165,
+            "height": 36
+          }
+        },
+        {
+          "label": "Recent",
+          "visibleText": "Recent",
+          "ariaLabel": null,
+          "rect": {
+            "left": 12,
+            "top": 591,
+            "right": 177,
+            "bottom": 627,
+            "width": 165,
+            "height": 36
+          }
+        },
+        {
+          "label": "Pinned",
+          "visibleText": "Pinned",
+          "ariaLabel": null,
+          "rect": {
+            "left": 12,
+            "top": 629,
+            "right": 177,
+            "bottom": 665,
+            "width": 165,
+            "height": 36
+          }
+        }
+      ],
+      "folderRows": 0,
+      "fileRows": 0,
+      "bodyScroll": {
+        "scrollHeight": 348,
+        "clientHeight": 348
+      },
+      "footerRect": {
+        "left": 12,
+        "top": 665,
+        "right": 177,
+        "bottom": 706,
+        "width": 165,
+        "height": 41
+      },
+      "brandRect": {
+        "left": 12,
+        "top": 52,
+        "right": 177,
+        "bottom": 88,
+        "width": 165,
+        "height": 36
+      }
+    },
+    "statusbar": {
+      "rect": {
+        "left": 190,
+        "top": 688,
+        "right": 1280,
+        "bottom": 720,
+        "width": 1090,
+        "height": 32
+      },
+      "text": "MO launch plan.docxOn this computerAll changes saved",
+      "scrollWidth": 1090,
+      "clientWidth": 1090,
+      "visible": true,
+      "workspaceHidden": false
+    }
+  },
+  "windowControls": {
+    "before": "0",
+    "afterHover": "1",
+    "afterFocus": {
+      "glyphOpacity": "1",
+      "outline": "rgb(120, 149, 174) solid 1px",
+      "matchesFocusVisible": true
+    },
+    "colours": [
+      {
+        "selector": ".shell-window-close",
+        "background": "rgb(255, 95, 87)",
+        "rect": {
+          "left": 12,
+          "width": 21
+        }
+      },
+      {
+        "selector": ".shell-window-minimize",
+        "background": "rgb(254, 188, 46)",
+        "rect": {
+          "left": 33,
+          "width": 21
+        }
+      },
+      {
+        "selector": ".shell-window-fullscreen",
+        "background": "rgb(40, 200, 64)",
+        "rect": {
+          "left": 54,
+          "width": 21
+        }
+      }
+    ]
+  },
+  "tabstrip-C5": {
+    "scrollWidth": 998,
+    "clientWidth": 667,
+    "scrollLeft": 0,
+    "scrollbarWidth": "none",
+    "overflowX": "auto",
+    "hidden": [
+      {
+        "name": "MO launch plan",
+        "left": 372,
+        "right": 512,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "MO sales forecast",
+        "left": 515,
+        "right": 655,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "MO launch deck",
+        "left": 658,
+        "right": 798,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "Positioning brief",
+        "left": 801,
+        "right": 941,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总",
+        "left": 944,
+        "right": 1084,
+        "clipped": true,
+        "closeVisible": false
+      },
+      {
+        "name": "Q3-2026-product-launch-progr",
+        "left": 1087,
+        "right": 1227,
+        "clipped": true,
+        "closeVisible": false
+      },
+      {
+        "name": "Scratch notes",
+        "left": 1230,
+        "right": 1370,
+        "clipped": true,
+        "closeVisible": false
+      }
+    ]
+  },
+  "tabstrip-C6": {
+    "scrollWidth": 998,
+    "clientWidth": 529,
+    "scrollLeft": 0,
+    "scrollbarWidth": "none",
+    "overflowX": "auto",
+    "hidden": [
+      {
+        "name": "MO launch plan",
+        "left": 510,
+        "right": 650,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "MO sales forecast",
+        "left": 653,
+        "right": 793,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "MO launch deck",
+        "left": 796,
+        "right": 936,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "Positioning brief",
+        "left": 939,
+        "right": 1079,
+        "clipped": true,
+        "closeVisible": false
+      },
+      {
+        "name": "二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总",
+        "left": 1082,
+        "right": 1222,
+        "clipped": true,
+        "closeVisible": false
+      },
+      {
+        "name": "Q3-2026-product-launch-progr",
+        "left": 1225,
+        "right": 1365,
+        "clipped": true,
+        "closeVisible": false
+      },
+      {
+        "name": "Scratch notes",
+        "left": 1368,
+        "right": 1508,
+        "clipped": true,
+        "closeVisible": false
+      }
+    ]
+  },
+  "tabstrip-C7": {
+    "scrollWidth": 998,
+    "clientWidth": 907,
+    "scrollLeft": 0,
+    "scrollbarWidth": "none",
+    "overflowX": "auto",
+    "hidden": [
+      {
+        "name": "MO launch plan",
+        "left": 132,
+        "right": 272,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "MO sales forecast",
+        "left": 275,
+        "right": 415,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "MO launch deck",
+        "left": 418,
+        "right": 558,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "Positioning brief",
+        "left": 561,
+        "right": 701,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总",
+        "left": 704,
+        "right": 844,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "Q3-2026-product-launch-progr",
+        "left": 847,
+        "right": 987,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "Scratch notes",
+        "left": 990,
+        "right": 1130,
+        "clipped": true,
+        "closeVisible": false
+      }
+    ]
+  },
+  "tabstrip-C8": {
+    "scrollWidth": 998,
+    "clientWidth": 849,
+    "scrollLeft": 0,
+    "scrollbarWidth": "none",
+    "overflowX": "auto",
+    "hidden": [
+      {
+        "name": "MO launch plan",
+        "left": 190,
+        "right": 330,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "MO sales forecast",
+        "left": 333,
+        "right": 473,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "MO launch deck",
+        "left": 476,
+        "right": 616,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "Positioning brief",
+        "left": 619,
+        "right": 759,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总",
+        "left": 762,
+        "right": 902,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "Q3-2026-product-launch-progr",
+        "left": 905,
+        "right": 1045,
+        "clipped": true,
+        "closeVisible": false
+      },
+      {
+        "name": "Scratch notes",
+        "left": 1048,
+        "right": 1188,
+        "clipped": true,
+        "closeVisible": false
+      }
+    ]
+  },
+  "tabstrip-C9": {
+    "scrollWidth": 998,
+    "clientWidth": 907,
+    "scrollLeft": 0,
+    "scrollbarWidth": "none",
+    "overflowX": "auto",
+    "hidden": [
+      {
+        "name": "MO launch plan",
+        "left": 132,
+        "right": 272,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "MO sales forecast",
+        "left": 275,
+        "right": 415,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "MO launch deck",
+        "left": 418,
+        "right": 558,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "Positioning brief",
+        "left": 561,
+        "right": 701,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总",
+        "left": 704,
+        "right": 844,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "Q3-2026-product-launch-progr",
+        "left": 847,
+        "right": 987,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "Scratch notes",
+        "left": 990,
+        "right": 1130,
+        "clipped": true,
+        "closeVisible": false
+      }
+    ]
+  },
+  "tabstrip-C10": {
+    "scrollWidth": 998,
+    "clientWidth": 849,
+    "scrollLeft": 0,
+    "scrollbarWidth": "none",
+    "overflowX": "auto",
+    "hidden": [
+      {
+        "name": "MO launch plan",
+        "left": 190,
+        "right": 330,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "MO sales forecast",
+        "left": 333,
+        "right": 473,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "MO launch deck",
+        "left": 476,
+        "right": 616,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "Positioning brief",
+        "left": 619,
+        "right": 759,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总",
+        "left": 762,
+        "right": 902,
+        "clipped": false,
+        "closeVisible": true
+      },
+      {
+        "name": "Q3-2026-product-launch-progr",
+        "left": 905,
+        "right": 1045,
+        "clipped": true,
+        "closeVisible": false
+      },
+      {
+        "name": "Scratch notes",
+        "left": 1048,
+        "right": 1188,
+        "clipped": true,
+        "closeVisible": false
+      }
+    ]
+  },
+  "tabstrip-active-in-view": {
+    "scrollLeft": 0,
+    "currentTabInView": true
+  },
+  "folderAddButton": {
+    "row": {
+      "left": 12,
+      "top": 222,
+      "right": 177,
+      "bottom": 258,
+      "width": 165,
+      "height": 36
+    },
+    "add": {
+      "left": 149,
+      "top": 240,
+      "right": 173,
+      "bottom": 264,
+      "width": 24,
+      "height": 24
+    },
+    "anchor": {
+      "left": 177,
+      "top": 240,
+      "right": 177,
+      "bottom": 240,
+      "width": 0,
+      "height": 0
+    },
+    "toggle": {
+      "left": 12,
+      "top": 222,
+      "right": 177,
+      "bottom": 258,
+      "width": 165,
+      "height": 36
+    },
+    "anchorPosition": "relative",
+    "anchorClass": "shell-menu-anchor",
+    "addPosition": "absolute",
+    "addTop": "0px",
+    "addRight": "4px",
+    "togglePaddingRight": "8px",
+    "overflowBottomPx": 6,
+    "overflowTopPx": -18,
+    "overflowRightPx": -4,
+    "elementBelowRow": "button.shell-tree-file-open",
+    "labelRect": {
+      "left": 65,
+      "top": 230,
+      "right": 155,
+      "bottom": 250,
+      "width": 90,
+      "height": 20
+    }
+  },
+  "fileMoreButton": {
+    "row": {
+      "left": 31,
+      "top": 260,
+      "right": 177,
+      "bottom": 294,
+      "width": 146,
+      "height": 34
+    },
+    "more": {
+      "left": 150,
+      "top": 277,
+      "right": 173,
+      "bottom": 300,
+      "width": 23,
+      "height": 23
+    },
+    "anchorPosition": "relative",
+    "overflowBottomPx": 6,
+    "overflowRightPx": -4,
+    "nextRowTop": 296
+  },
+  "folderFocusWithin": {
+    "toggleOutline": "rgb(89, 103, 115) none 3px",
+    "toggleMatchesFocusVisible": true,
+    "addDisplay": "flex",
+    "countOpacity": "1",
+    "countRect": {
+      "left": 163,
+      "right": 169
+    },
+    "addRect": {
+      "left": 149,
+      "right": 173
+    }
+  },
+  "longFolderName": {
+    "labelRight": 155,
+    "addLeft": 149,
+    "overlapPx": 6,
+    "labelTruncated": true,
+    "labelScrollWidth": 588,
+    "labelClientWidth": 90,
+    "titleAttr": "二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总（含渠道投放、媒体沟通、",
+    "textOverflow": "ellipsis"
+  },
+  "showMore": {
+    "before": {
+      "label": "Show 40 more",
+      "fileRows": 9,
+      "bodyScrollHeight": 636,
+      "bodyClientHeight": 477,
+      "moreRect": {
+        "left": 31,
+        "top": 629,
+        "height": 33
+      },
+      "moreIsButton": "button",
+      "moreHasFocusRing": "3px"
+    },
+    "after": {
+      "label": "Show less",
+      "fileRows": 49,
+      "bodyScrollHeight": 2076,
+      "bodyClientHeight": 477,
+      "bodyScrollTop": 0,
+      "lessInView": false,
+      "focusedAfterClick": "button.shell-tree-more"
+    }
+  },
+  "rail-C1": {
+    "sidebarWidth": 52,
+    "sidebarPadding": "12px 8px 14px",
+    "items": [
+      {
+        "title": "Home",
+        "ariaLabel": "Home",
+        "textNode": "",
+        "left": 8,
+        "width": 36,
+        "height": 36
+      },
+      {
+        "title": "New task",
+        "ariaLabel": "New task",
+        "textNode": "",
+        "left": 8,
+        "width": 36,
+        "height": 36
+      }
+    ],
+    "customTooltips": 0,
+    "titleAttributes": 33,
+    "treeFolderToggles": [
+      {
+        "title": "MO product launch",
+        "left": 8,
+        "width": 35,
+        "height": 35
+      },
+      {
+        "title": "Archive 2026",
+        "left": 8,
+        "width": 35,
+        "height": 35
+      },
+      {
+        "title": "yirentk",
+        "left": 8,
+        "width": 35,
+        "height": 35
+      },
+      {
+        "title": "二〇二六年第三季度产品发布会全流程执行方案与风险",
+        "left": 8,
+        "width": 35,
+        "height": 35
+      },
+      {
+        "title": "Documents",
+        "left": 8,
+        "width": 35,
+        "height": 35
+      }
+    ],
+    "treeChevronDisplay": "none",
+    "folderAddDisplay": "none",
+    "sectionHeadDisplay": "none",
+    "newFolderReachable": "zero-size",
+    "footerDirection": "column"
+  },
+  "rail-C3": {
+    "sidebarWidth": 52,
+    "sidebarPadding": "12px 8px 14px",
+    "items": [
+      {
+        "title": "Home",
+        "ariaLabel": "Home",
+        "textNode": "",
+        "left": 8,
+        "width": 36,
+        "height": 36
+      },
+      {
+        "title": "New",
+        "ariaLabel": "New",
+        "textNode": "",
+        "left": 8,
+        "width": 36,
+        "height": 36
+      },
+      {
+        "title": "Open",
+        "ariaLabel": "Open",
+        "textNode": "",
+        "left": 8,
+        "width": 36,
+        "height": 36
+      },
+      {
+        "title": "Recent",
+        "ariaLabel": "Recent",
+        "textNode": "",
+        "left": 8,
+        "width": 36,
+        "height": 36
+      },
+      {
+        "title": "Pinned",
+        "ariaLabel": "Pinned",
+        "textNode": "",
+        "left": 8,
+        "width": 36,
+        "height": 36
+      }
+    ],
+    "customTooltips": 0,
+    "titleAttributes": 7,
+    "treeFolderToggles": [],
+    "treeChevronDisplay": null,
+    "folderAddDisplay": null,
+    "sectionHeadDisplay": null,
+    "newFolderReachable": "absent",
+    "footerDirection": "column"
+  },
+  "sidebarFork": {
+    "C2": {
+      "mode": "agent",
+      "navLabel": "Agent",
+      "topButtons": [
+        "Home",
+        "New task"
+      ],
+      "viewButtons": [],
+      "hasTree": true,
+      "bodyHeight": 477,
+      "bodyChildren": 1,
+      "tabOrder": [
+        "Switch mode. Current mode: Agent",
+        "Home",
+        "New task",
+        "New folder",
+        "MO product launch4",
+        "Actions for MO product launch",
+        "MO launch plan",
+        "Actions for MO launch plan.docx",
+        "MO sales forecast",
+        "Actions for MO sales forecast.xlsx",
+        "MO launch deck",
+        "Actions for MO launch deck.pptx",
+        "Positioning brief",
+        "Actions for Positioning brief.docx",
+        "Archive 202645",
+        "Actions for Archive 2026",
+        "Archive note 01",
+        "Actions for Archive note 01.docx",
+        "Archive note 30",
+        "Actions for Archive note 30.pptx",
+        "Archive note 02",
+        "Actions for Archive note 02.xlsx",
+        "Archive note 31",
+        "Actions for Archive note 31.docx",
+        "Archive note 03",
+        "Actions for Archive note 03.pptx",
+        "Show 40 more",
+        "yirentk0",
+        "Actions for yirentk",
+        "二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总（含渠道投放、媒体沟通、现场执行三个分册）2",
+        "Actions for 二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总（含渠道投放、媒体沟通、现场执行三个分册）",
+        "Documents2",
+        "Actions for Documents",
+        "Settings"
+      ]
+    },
+    "C4": {
+      "mode": "editor",
+      "navLabel": "File library",
+      "topButtons": [
+        "Home",
+        "New",
+        "Open"
+      ],
+      "viewButtons": [
+        "Recent",
+        "Pinned"
+      ],
+      "hasTree": false,
+      "bodyHeight": 348,
+      "bodyChildren": 0,
+      "tabOrder": [
+        "Switch mode. Current mode: Editor",
+        "Home",
+        "New",
+        "Open",
+        "Recent",
+        "Pinned",
+        "Settings"
+      ]
+    }
+  },
+  "statusbar": {
+    "C1": {
+      "present": true,
+      "workspaceHidden": true,
+      "renderedHeight": 0,
+      "rectWidth": 0,
+      "text": "MO launch plan.docxOn this computerAll changes saved",
+      "facts": "MO launch plan.docx",
+      "end": "On this computerAll changes saved",
+      "overflowPx": 0,
+      "factsOverflowPx": 0,
+      "directSpanChildren": 0,
+      "directDivChildren": 2,
+      "factsSpanTextOverflow": "clip"
+    },
+    "C2": {
+      "present": true,
+      "workspaceHidden": true,
+      "renderedHeight": 0,
+      "rectWidth": 0,
+      "text": "MO launch plan.docxOn this computerAll changes saved",
+      "facts": "MO launch plan.docx",
+      "end": "On this computerAll changes saved",
+      "overflowPx": 0,
+      "factsOverflowPx": 0,
+      "directSpanChildren": 0,
+      "directDivChildren": 2,
+      "factsSpanTextOverflow": "clip"
+    },
+    "C3": {
+      "present": true,
+      "workspaceHidden": true,
+      "renderedHeight": 0,
+      "rectWidth": 0,
+      "text": "MO launch plan.docxOn this computerAll changes saved",
+      "facts": "MO launch plan.docx",
+      "end": "On this computerAll changes saved",
+      "overflowPx": 0,
+      "factsOverflowPx": 0,
+      "directSpanChildren": 0,
+      "directDivChildren": 2,
+      "factsSpanTextOverflow": "clip"
+    },
+    "C4": {
+      "present": true,
+      "workspaceHidden": true,
+      "renderedHeight": 0,
+      "rectWidth": 0,
+      "text": "MO launch plan.docxOn this computerAll changes saved",
+      "facts": "MO launch plan.docx",
+      "end": "On this computerAll changes saved",
+      "overflowPx": 0,
+      "factsOverflowPx": 0,
+      "directSpanChildren": 0,
+      "directDivChildren": 2,
+      "factsSpanTextOverflow": "clip"
+    },
+    "C5": {
+      "present": true,
+      "workspaceHidden": false,
+      "renderedHeight": 32,
+      "rectWidth": 908,
+      "text": "MO launch plan.docxOn this computerAll changes saved",
+      "facts": "MO launch plan.docx",
+      "end": "On this computerAll changes saved",
+      "overflowPx": 0,
+      "factsOverflowPx": 0,
+      "directSpanChildren": 0,
+      "directDivChildren": 2,
+      "factsSpanTextOverflow": "clip"
+    },
+    "C6": {
+      "present": true,
+      "workspaceHidden": false,
+      "renderedHeight": 32,
+      "rectWidth": 770,
+      "text": "MO launch plan.docxOn this computerAll changes saved",
+      "facts": "MO launch plan.docx",
+      "end": "On this computerAll changes saved",
+      "overflowPx": 0,
+      "factsOverflowPx": 0,
+      "directSpanChildren": 0,
+      "directDivChildren": 2,
+      "factsSpanTextOverflow": "clip"
+    },
+    "C7": {
+      "present": true,
+      "workspaceHidden": false,
+      "renderedHeight": 32,
+      "rectWidth": 1228,
+      "text": "MO launch plan.docxOn this computerAll changes saved",
+      "facts": "MO launch plan.docx",
+      "end": "On this computerAll changes saved",
+      "overflowPx": 0,
+      "factsOverflowPx": 0,
+      "directSpanChildren": 0,
+      "directDivChildren": 2,
+      "factsSpanTextOverflow": "clip"
+    },
+    "C8": {
+      "present": true,
+      "workspaceHidden": false,
+      "renderedHeight": 32,
+      "rectWidth": 1090,
+      "text": "MO launch plan.docxOn this computerAll changes saved",
+      "facts": "MO launch plan.docx",
+      "end": "On this computerAll changes saved",
+      "overflowPx": 0,
+      "factsOverflowPx": 0,
+      "directSpanChildren": 0,
+      "directDivChildren": 2,
+      "factsSpanTextOverflow": "clip"
+    },
+    "C9": {
+      "present": true,
+      "workspaceHidden": false,
+      "renderedHeight": 32,
+      "rectWidth": 1228,
+      "text": "MO launch plan.docxOn this computerAll changes saved",
+      "facts": "MO launch plan.docx",
+      "end": "On this computerAll changes saved",
+      "overflowPx": 0,
+      "factsOverflowPx": 0,
+      "directSpanChildren": 0,
+      "directDivChildren": 2,
+      "factsSpanTextOverflow": "clip"
+    },
+    "C10": {
+      "present": true,
+      "workspaceHidden": false,
+      "renderedHeight": 32,
+      "rectWidth": 1090,
+      "text": "MO launch plan.docxOn this computerAll changes saved",
+      "facts": "MO launch plan.docx",
+      "end": "On this computerAll changes saved",
+      "overflowPx": 0,
+      "factsOverflowPx": 0,
+      "directSpanChildren": 0,
+      "directDivChildren": 2,
+      "factsSpanTextOverflow": "clip"
+    }
+  },
+  "statusbarLongName": {
+    "text": "二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总（含渠道投放、媒体沟通、现场执行三个分册）.docxOn this computerAll change",
+    "factsScroll": 566,
+    "factsClient": 497,
+    "spanScroll": 566,
+    "spanClient": 566,
+    "spanTextOverflow": "clip",
+    "spanOverflow": "visible",
+    "spanWhiteSpace": "nowrap",
+    "endRect": {
+      "left": 1045.3,
+      "right": 1268
+    },
+    "barRight": 1280,
+    "title": null
+  },
+  "controlStates": {
+    "sidebar-home": {
+      "rest": {
+        "background": "rgb(228, 233, 236)",
+        "color": "rgb(53, 70, 82)",
+        "opacity": "1",
+        "outline": "rgb(53, 70, 82) none 3px",
+        "outlineWidth": "3px",
+        "boxShadow": "none"
+      },
+      "hover": {
+        "background": "rgb(228, 233, 236)",
+        "color": "rgb(53, 70, 82)",
+        "opacity": "1",
+        "outline": "rgb(53, 70, 82) none 3px",
+        "outlineWidth": "3px",
+        "boxShadow": "none"
+      },
+      "focus": {
+        "background": "rgb(228, 233, 236)",
+        "color": "rgb(53, 70, 82)",
+        "opacity": "1",
+        "outline": "rgb(120, 149, 174) solid 2px",
+        "outlineWidth": "2px",
+        "boxShadow": "none"
+      },
+      "focusVisible": true,
+      "active": {
+        "background": "rgb(228, 233, 236)",
+        "color": "rgb(53, 70, 82)",
+        "opacity": "1",
+        "outline": "rgb(120, 149, 174) solid 2px",
+        "outlineWidth": "2px",
+        "boxShadow": "none"
+      },
+      "hoverDiffers": false,
+      "focusRing": true,
+      "activeDiffers": true
+    },
+    "sidebar-settings": {
+      "rest": {
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(126, 130, 133)",
+        "opacity": "1",
+        "outline": "rgb(126, 130, 133) none 3px",
+        "outlineWidth": "3px",
+        "boxShadow": "none"
+      },
+      "hover": {
+        "background": "rgb(233, 237, 240)",
+        "color": "rgb(65, 70, 75)",
+        "opacity": "1",
+        "outline": "rgb(65, 70, 75) none 3px",
+        "outlineWidth": "3px",
+        "boxShadow": "none"
+      },
+      "focus": {
+        "background": "rgb(233, 237, 240)",
+        "color": "rgb(65, 70, 75)",
+        "opacity": "1",
+        "outline": "rgb(120, 149, 174) solid 2px",
+        "outlineWidth": "2px",
+        "boxShadow": "none"
+      },
+      "focusVisible": true,
+      "active": {
+        "background": "rgb(233, 237, 240)",
+        "color": "rgb(65, 70, 75)",
+        "opacity": "1",
+        "outline": "rgb(120, 149, 174) solid 2px",
+        "outlineWidth": "2px",
+        "boxShadow": "none"
+      },
+      "hoverDiffers": true,
+      "focusRing": true,
+      "activeDiffers": true
+    },
+    "brand": {
+      "rest": {
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(65, 70, 75)",
+        "opacity": "1",
+        "outline": "rgb(65, 70, 75) none 3px",
+        "outlineWidth": "3px",
+        "boxShadow": "none"
+      },
+      "hover": {
+        "background": "rgb(229, 233, 237)",
+        "color": "rgb(65, 70, 75)",
+        "opacity": "1",
+        "outline": "rgb(65, 70, 75) none 3px",
+        "outlineWidth": "3px",
+        "boxShadow": "none"
+      },
+      "focus": {
+        "background": "rgb(229, 233, 237)",
+        "color": "rgb(65, 70, 75)",
+        "opacity": "1",
+        "outline": "rgb(120, 149, 174) solid 2px",
+        "outlineWidth": "2px",
+        "boxShadow": "none"
+      },
+      "focusVisible": true,
+      "active": {
+        "background": "rgb(229, 233, 237)",
+        "color": "rgb(65, 70, 75)",
+        "opacity": "1",
+        "outline": "rgb(120, 149, 174) solid 2px",
+        "outlineWidth": "2px",
+        "boxShadow": "none"
+      },
+      "hoverDiffers": true,
+      "focusRing": true,
+      "activeDiffers": true
+    },
+    "tab-close": {
+      "rest": {
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(126, 130, 133)",
+        "opacity": "0.55",
+        "outline": "rgb(126, 130, 133) none 3px",
+        "outlineWidth": "3px",
+        "boxShadow": "none"
+      },
+      "hover": {
+        "background": "rgba(101, 116, 128, 0.086)",
+        "color": "rgb(126, 130, 133)",
+        "opacity": "1",
+        "outline": "rgb(126, 130, 133) none 3px",
+        "outlineWidth": "3px",
+        "boxShadow": "none"
+      },
+      "focus": {
+        "background": "rgba(101, 116, 128, 0.086)",
+        "color": "rgb(126, 130, 133)",
+        "opacity": "1",
+        "outline": "rgb(126, 130, 133) none 3px",
+        "outlineWidth": "3px",
+        "boxShadow": "none"
+      },
+      "focusVisible": true,
+      "active": {
+        "background": "rgba(101, 116, 128, 0.086)",
+        "color": "rgb(126, 130, 133)",
+        "opacity": "1",
+        "outline": "rgb(126, 130, 133) none 3px",
+        "outlineWidth": "3px",
+        "boxShadow": "none"
+      },
+      "hoverDiffers": true,
+      "focusRing": true,
+      "activeDiffers": false
+    },
+    "tab-bookmark": {
+      "missing": true
+    },
+    "nav-toggle": {
+      "rest": {
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(126, 130, 133)",
+        "opacity": "1",
+        "outline": "rgb(126, 130, 133) none 3px",
+        "outlineWidth": "3px",
+        "boxShadow": "none"
+      },
+      "hover": {
+        "background": "rgb(233, 237, 240)",
+        "color": "rgb(65, 70, 75)",
+        "opacity": "1",
+        "outline": "rgb(65, 70, 75) none 3px",
+        "outlineWidth": "3px",
+        "boxShadow": "none"
+      },
+      "focus": {
+        "background": "rgb(233, 237, 240)",
+        "color": "rgb(65, 70, 75)",
+        "opacity": "1",
+        "outline": "rgb(120, 149, 174) solid 2px",
+        "outlineWidth": "2px",
+        "boxShadow": "none"
+      },
+      "focusVisible": true,
+      "active": {
+        "background": "rgb(233, 237, 240)",
+        "color": "rgb(65, 70, 75)",
+        "opacity": "1",
+        "outline": "rgb(120, 149, 174) solid 2px",
+        "outlineWidth": "2px",
+        "boxShadow": "none"
+      },
+      "hoverDiffers": true,
+      "focusRing": true,
+      "activeDiffers": true
+    },
+    "new-folder": {
+      "rest": {
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(126, 130, 133)",
+        "opacity": "1",
+        "outline": "rgb(126, 130, 133) none 3px",
+        "outlineWidth": "3px",
+        "boxShadow": "none"
+      },
+      "hover": {
+        "background": "rgb(233, 237, 240)",
+        "color": "rgb(65, 70, 75)",
+        "opacity": "1",
+        "outline": "rgb(65, 70, 75) none 3px",
+        "outlineWidth": "3px",
+        "boxShadow": "none"
+      },
+      "focus": {
+        "background": "rgb(233, 237, 240)",
+        "color": "rgb(65, 70, 75)",
+        "opacity": "1",
+        "outline": "rgb(120, 149, 174) solid 2px",
+        "outlineWidth": "2px",
+        "boxShadow": "none"
+      },
+      "focusVisible": true,
+      "active": {
+        "background": "rgb(233, 237, 240)",
+        "color": "rgb(65, 70, 75)",
+        "opacity": "1",
+        "outline": "rgb(120, 149, 174) solid 2px",
+        "outlineWidth": "2px",
+        "boxShadow": "none"
+      },
+      "hoverDiffers": true,
+      "focusRing": true,
+      "activeDiffers": true
+    },
+    "tree-more": {
+      "rest": {
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(139, 142, 144)",
+        "opacity": "1",
+        "outline": "rgb(139, 142, 144) none 3px",
+        "outlineWidth": "3px",
+        "boxShadow": "none"
+      },
+      "hover": {
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(89, 103, 115)",
+        "opacity": "1",
+        "outline": "rgb(89, 103, 115) none 3px",
+        "outlineWidth": "3px",
+        "boxShadow": "none"
+      },
+      "focus": {
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(89, 103, 115)",
+        "opacity": "1",
+        "outline": "rgb(89, 103, 115) none 3px",
+        "outlineWidth": "3px",
+        "boxShadow": "none"
+      },
+      "focusVisible": true,
+      "active": {
+        "background": "rgba(0, 0, 0, 0)",
+        "color": "rgb(89, 103, 115)",
+        "opacity": "1",
+        "outline": "rgb(89, 103, 115) none 3px",
+        "outlineWidth": "3px",
+        "boxShadow": "none"
+      },
+      "hoverDiffers": true,
+      "focusRing": true,
+      "activeDiffers": false
+    }
+  },
+  "visibleStrings": {
+    "C2": [
+      "aria-label:Actions for Archive 2026",
+      "aria-label:Actions for Archive note 01.docx",
+      "aria-label:Actions for Archive note 02.xlsx",
+      "aria-label:Actions for Archive note 03.pptx",
+      "aria-label:Actions for Archive note 30.pptx",
+      "aria-label:Actions for Archive note 31.docx",
+      "aria-label:Actions for Documents",
+      "aria-label:Actions for MO launch deck.pptx",
+      "aria-label:Actions for MO launch plan.docx",
+      "aria-label:Actions for MO product launch",
+      "aria-label:Actions for MO sales forecast.xlsx",
+      "aria-label:Actions for Positioning brief.docx",
+      "aria-label:Actions for yirentk",
+      "aria-label:Actions for 二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总（含渠道投放、媒体沟通、现场执行三个分册）",
+      "aria-label:Agent",
+      "aria-label:Close MO launch deck.pptx",
+      "aria-label:Close MO launch plan.docx",
+      "aria-label:Close MO sales forecast.xlsx",
+      "aria-label:Close Positioning brief.docx",
+      "aria-label:Close Q3-2026-product-launch-programme-execution-plan-and-contingency-register-including-channel-media-and-onsite-workstreams.pptx",
+      "aria-label:Close Scratch notes.docx",
+      "aria-label:Close window",
+      "aria-label:Close 二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总（含渠道投放、媒体沟通、现场执行三个分册）.docx",
+      "aria-label:Collapse sidebar",
+      "aria-label:Folders and files",
+      "aria-label:Full screen",
+      "aria-label:Minimize window",
+      "aria-label:More actions",
+      "aria-label:New folder",
+      "aria-label:Open files",
+      "aria-label:Pinned",
+      "aria-label:Settings",
+      "aria-label:Switch mode. Current mode: Agent",
+      "aria-label:Toggle full screen",
+      "aria-label:Unsaved changes",
+      "aria-label:Window controls",
+      "text:0",
+      "text:2",
+      "text:4",
+      "text:45",
+      "text:All changes saved",
+      "text:Archive 2026",
+      "text:Archive note 01",
+      "text:Archive note 02",
+      "text:Archive note 03",
+      "text:Archive note 30",
+      "text:Archive note 31",
+      "text:Documents",
+      "text:Folders",
+      "text:Home",
+      "text:MO launch deck",
+      "text:MO launch plan",
+      "text:MO launch plan.docx",
+      "text:MO product launch",
+      "text:MO sales forecast",
+      "text:New task",
+      "text:No files yet.",
+      "text:OfficeDex",
+      "text:On this computer",
+      "text:Positioning brief",
+      "text:Q3-2026-product-launch-programme-execution-plan-and-contingency-register-including-channel-media-and-onsite-workstreams",
+      "text:Saved",
+      "text:Scratch notes",
+      "text:Share",
+      "text:Show 40 more",
+      "text:yirentk",
+      "text:二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总（含渠道投放、媒体沟通、现场执行三个分册）",
+      "title:All changes saved",
+      "title:Archive 2026",
+      "title:Archive note 01.docx",
+      "title:Archive note 02.xlsx",
+      "title:Archive note 03.pptx",
+      "title:Archive note 30.pptx",
+      "title:Archive note 31.docx",
+      "title:Close",
+      "title:Close window",
+      "title:Collapse sidebar",
+      "title:Documents",
+      "title:File actions",
+      "title:Full screen",
+      "title:Home",
+      "title:MO launch deck.pptx",
+      "title:MO launch plan.docx",
+      "title:MO product launch",
+      "title:MO sales forecast.xlsx",
+      "title:Minimize window",
+      "title:Mode: Agent",
+      "title:More",
+      "title:New file in this folder",
+      "title:New folder",
+      "title:New task",
+      "title:Positioning brief.docx",
+      "title:Q3-2026-product-launch-programme-execution-plan-and-contingency-register-including-channel-media-and-onsite-workstreams.pptx",
+      "title:Scratch notes.docx",
+      "title:Settings",
+      "title:Share",
+      "title:Toggle full screen",
+      "title:yirentk",
+      "title:二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总（含渠道投放、媒体沟通、现场执行三个分册）",
+      "title:二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总（含渠道投放、媒体沟通、现场执行三个分册）.docx"
+    ],
+    "C4": [
+      "aria-label:Close MO launch deck.pptx",
+      "aria-label:Close MO launch plan.docx",
+      "aria-label:Close MO sales forecast.xlsx",
+      "aria-label:Close Positioning brief.docx",
+      "aria-label:Close Q3-2026-product-launch-programme-execution-plan-and-contingency-register-including-channel-media-and-onsite-workstreams.pptx",
+      "aria-label:Close Scratch notes.docx",
+      "aria-label:Close window",
+      "aria-label:Close 二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总（含渠道投放、媒体沟通、现场执行三个分册）.docx",
+      "aria-label:Collapse sidebar",
+      "aria-label:File library",
+      "aria-label:File views",
+      "aria-label:Full screen",
+      "aria-label:Minimize window",
+      "aria-label:More actions",
+      "aria-label:Open files",
+      "aria-label:Settings",
+      "aria-label:Switch mode. Current mode: Editor",
+      "aria-label:Toggle full screen",
+      "aria-label:Unsaved changes",
+      "aria-label:Window controls",
+      "text:All changes saved",
+      "text:Home",
+      "text:MO launch deck",
+      "text:MO launch plan",
+      "text:MO launch plan.docx",
+      "text:MO sales forecast",
+      "text:New",
+      "text:OfficeDex",
+      "text:On this computer",
+      "text:Open",
+      "text:Pinned",
+      "text:Positioning brief",
+      "text:Q3-2026-product-launch-programme-execution-plan-and-contingency-register-including-channel-media-and-onsite-workstreams",
+      "text:Recent",
+      "text:Saved",
+      "text:Scratch notes",
+      "text:Share",
+      "text:二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总（含渠道投放、媒体沟通、现场执行三个分册）",
+      "title:All changes saved",
+      "title:Close",
+      "title:Close window",
+      "title:Collapse sidebar",
+      "title:Full screen",
+      "title:Home",
+      "title:MO launch deck.pptx",
+      "title:MO launch plan.docx",
+      "title:MO sales forecast.xlsx",
+      "title:Minimize window",
+      "title:Mode: Editor",
+      "title:More",
+      "title:New",
+      "title:Open",
+      "title:Pinned",
+      "title:Positioning brief.docx",
+      "title:Q3-2026-product-launch-programme-execution-plan-and-contingency-register-including-channel-media-and-onsite-workstreams.pptx",
+      "title:Recent",
+      "title:Scratch notes.docx",
+      "title:Settings",
+      "title:Share",
+      "title:Toggle full screen",
+      "title:二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总（含渠道投放、媒体沟通、现场执行三个分册）.docx"
+    ],
+    "C6": [
+      "aria-label:Actions for Archive 2026",
+      "aria-label:Actions for Archive note 01.docx",
+      "aria-label:Actions for Archive note 02.xlsx",
+      "aria-label:Actions for Archive note 03.pptx",
+      "aria-label:Actions for Archive note 30.pptx",
+      "aria-label:Actions for Archive note 31.docx",
+      "aria-label:Actions for Documents",
+      "aria-label:Actions for MO launch deck.pptx",
+      "aria-label:Actions for MO launch plan.docx",
+      "aria-label:Actions for MO product launch",
+      "aria-label:Actions for MO sales forecast.xlsx",
+      "aria-label:Actions for Positioning brief.docx",
+      "aria-label:Actions for yirentk",
+      "aria-label:Actions for 二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总（含渠道投放、媒体沟通、现场执行三个分册）",
+      "aria-label:Agent",
+      "aria-label:Close MO launch deck.pptx",
+      "aria-label:Close MO launch plan.docx",
+      "aria-label:Close MO sales forecast.xlsx",
+      "aria-label:Close Positioning brief.docx",
+      "aria-label:Close Q3-2026-product-launch-programme-execution-plan-and-contingency-register-including-channel-media-and-onsite-workstreams.pptx",
+      "aria-label:Close Scratch notes.docx",
+      "aria-label:Close window",
+      "aria-label:Close 二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总（含渠道投放、媒体沟通、现场执行三个分册）.docx",
+      "aria-label:Collapse sidebar",
+      "aria-label:Folders and files",
+      "aria-label:Full screen",
+      "aria-label:Minimize window",
+      "aria-label:More actions",
+      "aria-label:New folder",
+      "aria-label:Open files",
+      "aria-label:Pinned",
+      "aria-label:Remove bookmark from MO launch plan.docx",
+      "aria-label:Settings",
+      "aria-label:Switch mode. Current mode: Agent",
+      "aria-label:Toggle full screen",
+      "aria-label:Unsaved changes",
+      "aria-label:Window controls",
+      "text:0",
+      "text:2",
+      "text:4",
+      "text:45",
+      "text:All changes saved",
+      "text:Archive 2026",
+      "text:Archive note 01",
+      "text:Archive note 02",
+      "text:Archive note 03",
+      "text:Archive note 30",
+      "text:Archive note 31",
+      "text:Documents",
+      "text:Folders",
+      "text:Home",
+      "text:MO launch deck",
+      "text:MO launch plan",
+      "text:MO launch plan.docx",
+      "text:MO product launch",
+      "text:MO sales forecast",
+      "text:New task",
+      "text:No files yet.",
+      "text:OfficeDex",
+      "text:On this computer",
+      "text:Positioning brief",
+      "text:Q3-2026-product-launch-programme-execution-plan-and-contingency-register-including-channel-media-and-onsite-workstreams",
+      "text:Saved",
+      "text:Scratch notes",
+      "text:Share",
+      "text:Show 40 more",
+      "text:yirentk",
+      "text:二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总（含渠道投放、媒体沟通、现场执行三个分册）",
+      "title:All changes saved",
+      "title:Archive 2026",
+      "title:Archive note 01.docx",
+      "title:Archive note 02.xlsx",
+      "title:Archive note 03.pptx",
+      "title:Archive note 30.pptx",
+      "title:Archive note 31.docx",
+      "title:Close",
+      "title:Close window",
+      "title:Collapse sidebar",
+      "title:Documents",
+      "title:File actions",
+      "title:Full screen",
+      "title:Home",
+      "title:MO launch deck.pptx",
+      "title:MO launch plan.docx",
+      "title:MO product launch",
+      "title:MO sales forecast.xlsx",
+      "title:Minimize window",
+      "title:Mode: Agent",
+      "title:More",
+      "title:New file in this folder",
+      "title:New folder",
+      "title:New task",
+      "title:Positioning brief.docx",
+      "title:Q3-2026-product-launch-programme-execution-plan-and-contingency-register-including-channel-media-and-onsite-workstreams.pptx",
+      "title:Remove bookmark",
+      "title:Scratch notes.docx",
+      "title:Settings",
+      "title:Share",
+      "title:Toggle full screen",
+      "title:yirentk",
+      "title:二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总（含渠道投放、媒体沟通、现场执行三个分册）",
+      "title:二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总（含渠道投放、媒体沟通、现场执行三个分册）.docx"
+    ],
+    "C10": [
+      "aria-label:Close MO launch deck.pptx",
+      "aria-label:Close MO launch plan.docx",
+      "aria-label:Close MO sales forecast.xlsx",
+      "aria-label:Close Positioning brief.docx",
+      "aria-label:Close Q3-2026-product-launch-programme-execution-plan-and-contingency-register-including-channel-media-and-onsite-workstreams.pptx",
+      "aria-label:Close Scratch notes.docx",
+      "aria-label:Close window",
+      "aria-label:Close 二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总（含渠道投放、媒体沟通、现场执行三个分册）.docx",
+      "aria-label:Collapse sidebar",
+      "aria-label:File library",
+      "aria-label:File views",
+      "aria-label:Full screen",
+      "aria-label:Minimize window",
+      "aria-label:More actions",
+      "aria-label:Open files",
+      "aria-label:Remove bookmark from MO launch plan.docx",
+      "aria-label:Settings",
+      "aria-label:Switch mode. Current mode: Editor",
+      "aria-label:Toggle full screen",
+      "aria-label:Unsaved changes",
+      "aria-label:Window controls",
+      "text:All changes saved",
+      "text:Home",
+      "text:MO launch deck",
+      "text:MO launch plan",
+      "text:MO launch plan.docx",
+      "text:MO sales forecast",
+      "text:New",
+      "text:OfficeDex",
+      "text:On this computer",
+      "text:Open",
+      "text:Pinned",
+      "text:Positioning brief",
+      "text:Q3-2026-product-launch-programme-execution-plan-and-contingency-register-including-channel-media-and-onsite-workstreams",
+      "text:Recent",
+      "text:Saved",
+      "text:Scratch notes",
+      "text:Share",
+      "text:二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总（含渠道投放、媒体沟通、现场执行三个分册）",
+      "title:All changes saved",
+      "title:Close",
+      "title:Close window",
+      "title:Collapse sidebar",
+      "title:Full screen",
+      "title:Home",
+      "title:MO launch deck.pptx",
+      "title:MO launch plan.docx",
+      "title:MO sales forecast.xlsx",
+      "title:Minimize window",
+      "title:Mode: Editor",
+      "title:More",
+      "title:New",
+      "title:Open",
+      "title:Pinned",
+      "title:Positioning brief.docx",
+      "title:Q3-2026-product-launch-programme-execution-plan-and-contingency-register-including-channel-media-and-onsite-workstreams.pptx",
+      "title:Recent",
+      "title:Remove bookmark",
+      "title:Scratch notes.docx",
+      "title:Settings",
+      "title:Share",
+      "title:Toggle full screen",
+      "title:二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总（含渠道投放、媒体沟通、现场执行三个分册）.docx"
+    ]
+  },
+  "focusIndicators": {
+    ".shell-sidebar-item": {
+      "focusVisible": true,
+      "isActiveElement": true,
+      "outlineStyle": "solid",
+      "outlineWidth": "2px",
+      "outlineColor": "rgb(120, 149, 174)",
+      "boxShadow": "none",
+      "drawsAnything": true
+    },
+    ".shell-icon-button": {
+      "focusVisible": true,
+      "isActiveElement": true,
+      "outlineStyle": "solid",
+      "outlineWidth": "2px",
+      "outlineColor": "rgb(120, 149, 174)",
+      "boxShadow": "none",
+      "drawsAnything": true
+    },
+    ".shell-brand": {
+      "focusVisible": true,
+      "isActiveElement": true,
+      "outlineStyle": "solid",
+      "outlineWidth": "2px",
+      "outlineColor": "rgb(120, 149, 174)",
+      "boxShadow": "none",
+      "drawsAnything": true
+    },
+    ".shell-tab-select": {
+      "focusVisible": true,
+      "isActiveElement": true,
+      "outlineStyle": "solid",
+      "outlineWidth": "2px",
+      "outlineColor": "rgb(120, 149, 174)",
+      "boxShadow": "none",
+      "drawsAnything": true
+    },
+    ".shell-tab-close": {
+      "focusVisible": true,
+      "isActiveElement": true,
+      "outlineStyle": "none",
+      "outlineWidth": "3px",
+      "outlineColor": "rgb(76, 89, 100)",
+      "boxShadow": "none",
+      "drawsAnything": false
+    },
+    ".shell-tab-bookmark": {
+      "focusVisible": true,
+      "isActiveElement": true,
+      "outlineStyle": "solid",
+      "outlineWidth": "2px",
+      "outlineColor": "rgb(120, 149, 174)",
+      "boxShadow": "none",
+      "drawsAnything": true
+    },
+    ".shell-save-state": {
+      "focusVisible": true,
+      "isActiveElement": true,
+      "outlineStyle": "solid",
+      "outlineWidth": "2px",
+      "outlineColor": "rgb(120, 149, 174)",
+      "boxShadow": "none",
+      "drawsAnything": true
+    },
+    ".shell-share": {
+      "focusVisible": true,
+      "isActiveElement": true,
+      "outlineStyle": "solid",
+      "outlineWidth": "2px",
+      "outlineColor": "rgb(120, 149, 174)",
+      "boxShadow": "none",
+      "drawsAnything": true
+    },
+    ".shell-window-close": {
+      "focusVisible": true,
+      "isActiveElement": true,
+      "outlineStyle": "solid",
+      "outlineWidth": "1px",
+      "outlineColor": "rgb(120, 149, 174)",
+      "boxShadow": "none",
+      "drawsAnything": true
+    },
+    ".shell-tree-folder-toggle": {
+      "focusVisible": true,
+      "isActiveElement": true,
+      "outlineStyle": "none",
+      "outlineWidth": "3px",
+      "outlineColor": "rgb(89, 103, 115)",
+      "boxShadow": "none",
+      "drawsAnything": false
+    },
+    ".shell-tree-file-open": {
+      "focusVisible": true,
+      "isActiveElement": true,
+      "outlineStyle": "none",
+      "outlineWidth": "3px",
+      "outlineColor": "rgb(53, 74, 91)",
+      "boxShadow": "none",
+      "drawsAnything": false
+    },
+    ".shell-tree-more": {
+      "focusVisible": true,
+      "isActiveElement": true,
+      "outlineStyle": "none",
+      "outlineWidth": "3px",
+      "outlineColor": "rgb(139, 142, 144)",
+      "boxShadow": "none",
+      "drawsAnything": false
+    }
+  },
+  "focusAfterTabIntoTree": {
+    "className": "shell-tree-folder-add",
+    "ariaLabel": "Actions for MO product launch",
+    "outlineStyle": "none",
+    "boxShadow": "none",
+    "display": "flex",
+    "rect": {
+      "top": 240,
+      "bottom": 264,
+      "width": 24
+    }
+  },
+  "railContextMenu": {
+    "railState": {
+      "sidebarOverflow": "hidden",
+      "sectionHeadDisplay": "none",
+      "newFolderButtonBox": {
+        "width": 0,
+        "height": 0
+      },
+      "newFolderFocusable": false,
+      "filesHiddenInRail": "none",
+      "folderToggleStillClickable": true
+    },
+    "menu": {
+      "open": true,
+      "rect": {
+        "left": -177,
+        "right": 43,
+        "top": 210,
+        "bottom": 425,
+        "width": 220
+      },
+      "sidebarRight": 52,
+      "overhangPx": -9,
+      "clippedBy": "shell-sidebar-body",
+      "zIndex": "60",
+      "visibleWidth": 220
+    }
+  },
+  "activeRules": {
+    "__all_active_rules": [
+      ".od-button[data-variant=\"primary\"]:active:not(:disabled), .od-button[data-variant=\"secondary\"]:active:not(:disabled), .od-button[data-variant=\"danger\"]:active:not(:disabled)",
+      ".shell-task[data-placement=\"floating\"] .shell-task-head:active",
+      ".shell-tree-file-row[draggable=\"true\"]:active",
+      ".sm-sheet-wrapper [contenteditable=\"true\"]:active, .sm-sheet-wrapper [contenteditable=\"true\"]:focus",
+      "#sm-sheet-scroll-container-v .sm-sheet-scroll-bar:active, #sm-sheet-scroll-container-v .sm-sheet-scrollbar-stateActive",
+      "#sm-sheet-scroll-container-h .sm-sheet-scroll-bar:active, #sm-sheet-scroll-container-h .sm-sheet-scrollbar-stateActive",
+      ".fx-expand-icon:active",
+      ".dialog-range-selector .dialog-range-selector-confirm:active:not(:disabled), .dialog-range-selector .dialog-range-selector-close:active:not(:disabled)",
+      ".sm-range-input > textarea.sm-range-input-main:focus:not(:disabled):not(.error), .sm-range-input > textarea.sm-range-input-main:active:not(:disabled):not(.error)",
+      ".sm-range-input > textarea.sm-range-input-main:active, .sm-range-input > textarea.sm-range-input-main:focus",
+      ".mention-users-wrapper:focus:not(:disabled):not(.error), .mention-users-wrapper:active:not(:disabled):not(.error)",
+      ".mention-users-wrapper:active, .mention-users-wrapper:focus",
+      ".mention-users-wrapper .mention-users-editor:focus:not(:disabled):not(.error), .mention-users-wrapper .mention-users-editor:active:not(:disabled):not(.error)",
+      ".ui-color-setting--modern .ui-color-setting__action:not(:disabled):active, .ui-color-setting--modern .ui-color-setting__none-action:not(:disabled):active",
+      ".ui-editable-list__drag-handle:active",
+      ".ui-input-number__step-button:active:not(:disabled)",
+      ".ui-message-bar__close-button:active",
+      ".ui-preset-gallery-select__item:not(:disabled):active",
+      ".ui-preset-gallery-select__footer-button:active",
+      ".ui-preset-gallery-select__dropdown-trigger[data-interactive=\"true\"]:active",
+      ".ui-side-rail-dialog__close-button:active",
+      ".ui-slider__range:hover:not(:disabled)::-webkit-slider-thumb, .ui-slider__range:active:not(:disabled)::-webkit-slider-thumb",
+      ".ui-workbench-dialog__close-button:active",
+      ".sheet-style-theme-add:active",
+      ".mobile-toolbar .m-tab-panel .m-tab-content .m-formatter-btn:active, .mobile-toolbar .m-tab-panel .m-tab-content .m-formatter-list:active, .s-mobile-head .m-tab-panel .m-tab-content .m-formatter-btn:active, .s-mobile-head .m-tab-panel .m-tab-content .m-formatter-list:active",
+      ".mobile-toolbar .m-tab-panel .m-tab-content .m-font-family .m-menu-group-item:active:not(.m-menu-disabled), .s-mobile-head .m-tab-panel .m-tab-content .m-font-family .m-menu-group-item:active:not(.m-menu-disabled)",
+      ".mobile-toolbar .m-menu-group .m-icon-button:active:not(.m-menu-disabled), .mobile-toolbar .m-menu-group .m-icon-button.m-menu-selected, .mobile-toolbar .m-menu-group .m-text-button:active:not(.m-menu-disabled), .mobile-toolbar .m-menu-group .m-text-button.m-menu-selected, .mobile-toolbar .m-menu-group .m-icon-text-button:active:not(.m-menu-disabled), .mobile-toolbar .m-menu-group .m-icon-text-button.m-menu-selected, .s-mobile-head .m-menu-group .m-icon-button:active:not(.m-menu-disabled), .s-mobile-head .m-menu-group .m-icon-button.m-menu-selected, .s-mobile-head .m-menu-group .m-text-button:active:not(.m-menu-disabled), .s-mobile-head .m-menu-group .m-text-button.m-menu-selected, .s-mobile-head .m-menu-group .m-icon-text-button:active:not(.m-menu-disabled), .s-mobile-head .m-menu-group .m-icon-text-button.m-menu-selected",
+      ".mobile-toolbar .m-menu-group .m-icon-button:active:not(.m-menu-disabled), .mobile-toolbar .m-menu-group .m-icon-button.m-menu-selected, .mobile-toolbar .m-menu-group .m-text-button:active:not(.m-menu-disabled), .mobile-toolbar .m-menu-group .m-text-button.m-menu-selected, .mobile-toolbar .m-menu-group .m-icon-text-button:active:not(.m-menu-disabled), .mobile-toolbar .m-menu-group .m-icon-text-button.m-menu-selected, .s-mobile-head .m-menu-group .m-icon-button:active:not(.m-menu-disabled), .s-mobile-head .m-menu-group .m-icon-button.m-menu-selected, .s-mobile-head .m-menu-group .m-text-button:active:not(.m-menu-disabled), .s-mobile-head .m-menu-group .m-text-button.m-menu-selected, .s-mobile-head .m-menu-group .m-icon-text-button:active:not(.m-menu-disabled), .s-mobile-head .m-menu-group .m-icon-text-button.m-menu-selected",
+      ".mobile-toolbar .m-header-bar .m-icon-button:active:not(.m-menu-disabled), .s-mobile-head .m-header-bar .m-icon-button:active:not(.m-menu-disabled)",
+      ".mobile-toolbar .m-formula-panel-mask .m-formula-panel .m-formula-list .m-formula-list-item-wrapper:active, .mobile-toolbar .m-formula-panel-mask .m-formula-panel .m-formula-child-list .m-formula-list-item-wrapper:active, .s-mobile-head .m-formula-panel-mask .m-formula-panel .m-formula-list .m-formula-list-item-wrapper:active, .s-mobile-head .m-formula-panel-mask .m-formula-panel .m-formula-child-list .m-formula-list-item-wrapper:active",
+      ".chart-quick-contact-input:active, .chart-quick-contact-input:focus",
+      ".chart-quick-contact-input:focus:not(:disabled):not(.error), .chart-quick-contact-input:active:not(:disabled):not(.error)",
+      ".sm-remind-manage-dialog .sm-dialog .rule-item-wrap .rule-item .rule-item-info:focus:not(:disabled):not(.error), .sm-remind-manage-dialog .sm-dialog .rule-item-wrap .rule-item .rule-item-info:active:not(:disabled):not(.error)",
+      ".sm-remind-manage-dialog .sm-dialog .rule-item-wrap .rule-item .rule-item-info:active, .sm-remind-manage-dialog .sm-dialog .rule-item-wrap .rule-item .rule-item-info:focus",
+      ".data-change-view-wrap .view-middle .data-view-cur:focus:not(:disabled):not(.error), .data-change-view-wrap .view-middle .data-view-cur:active:not(:disabled):not(.error)",
+      ".data-change-view-wrap .view-middle .data-view-cur:active, .data-change-view-wrap .view-middle .data-view-cur:focus",
+      ".data-change-view-wrap .view-middle .data-view-dropdown:focus:not(:disabled):not(.error), .data-change-view-wrap .view-middle .data-view-dropdown:active:not(:disabled):not(.error)",
+      ".data-change-view-wrap .view-middle .data-view-dropdown:active, .data-change-view-wrap .view-middle .data-view-dropdown:focus",
+      ".sm-sheet-card-view-base-cell .sm-sheet-card-view-editor-box:focus:not(:disabled):not(.error), .sm-sheet-card-view-base-cell .sm-sheet-card-view-editor-box:active:not(:disabled):not(.error)",
+      ".sm-sheet-card-view-base-cell .sm-sheet-card-view-editor-box:active, .sm-sheet-card-view-base-cell .sm-sheet-card-view-editor-box:focus",
+      ".sm-sheet-card-validate-dropdown-cell .validate-input-box:focus:not(:disabled):not(.error), .sm-sheet-card-validate-dropdown-cell .validate-input-box:active:not(:disabled):not(.error)",
+      ".sm-sheet-card-validate-dropdown-cell .validate-input-box:active, .sm-sheet-card-validate-dropdown-cell .validate-input-box:focus",
+      ".ui-dialog__close-button:active",
+      ".ui-tabs[data-appearance=\"surface\"] .ui-tabs__tab:active:not(:disabled):not(.is-active)",
+      ".ui-tabs__scroll-button:active",
+      ".ui-tabs__scroll-button:active::before",
+      ".ui-toolbar-button:not(.ui-toolbar-button--split):not(:disabled):not(.is-disabled):not([data-active=\"true\"]):not([data-open=\"true\"]):active",
+      ".ui-toolbar-button--vertical.ui-toolbar-button--dropdown:not(:disabled):not(.is-disabled):not([data-active=\"true\"]):not([data-open=\"true\"]):active",
+      ".ui-toolbar-button--vertical.ui-toolbar-button--dropdown:not(:disabled):not(.is-disabled):not([data-active=\"true\"]):not([data-open=\"true\"]):active .ui-toolbar-button__body, .ui-toolbar-button--vertical.ui-toolbar-button--dropdown:not(:disabled):not(.is-disabled):not([data-active=\"true\"]):not([data-open=\"true\"]):active .ui-toolbar-button__footer",
+      ".ui-toolbar-button--horizontal.ui-toolbar-button--split:not([data-open=\"true\"]) .ui-toolbar-button__segment--main:not(:disabled):not(.is-active):active",
+      ".ui-toolbar-button--horizontal .ui-toolbar-button__segment--menu:not(:disabled):active",
+      ".ui-toolbar-button--split:not(.is-disabled):not([data-active=\"true\"]):not([data-open=\"true\"]):active",
+      ".ui-toolbar-button--vertical.ui-toolbar-button--split:not([data-open=\"true\"]) .ui-toolbar-button__segment--main:not(:disabled):not(.is-active):active",
+      ".ui-toolbar-button--split[data-open=\"true\"] .ui-toolbar-button__segment--main:not(.is-active), .ui-toolbar-button--split[data-open=\"true\"] .ui-toolbar-button__segment--main:not(:disabled):not(.is-active):hover, .ui-toolbar-button--split[data-open=\"true\"] .ui-toolbar-button__segment--main:not(:disabled):not(.is-active):active",
+      ".ui-toolbar-button--vertical.ui-toolbar-button--split .ui-toolbar-button__segment--menu:not(:disabled):not(.is-open):active .ui-toolbar-button__footer, .ui-toolbar-button--vertical.ui-toolbar-button--split .ui-toolbar-button__segment--menu:not(:disabled).is-open:active .ui-toolbar-button__footer",
+      ".ui-toolbar-button--vertical.ui-toolbar-button--split .ui-toolbar-button__segment--menu:not(:disabled):hover, .ui-toolbar-button--vertical.ui-toolbar-button--split .ui-toolbar-button__segment--menu:not(:disabled):active, .ui-toolbar-button--vertical.ui-toolbar-button--split .ui-toolbar-button__segment--menu.is-open",
+      ".ui-button:not(:disabled):active, .ui-button[data-ui-force-state=\"active\"]",
+      ".toolbar-ribbon-header__comment-button:active",
+      ".toolbar-ribbon-header__mode-button[data-mode-tone=\"default\"]:active, .toolbar-ribbon-header__mode-button[data-mode-tone=\"default\"][data-open=\"true\"]",
+      ".toolbar-ribbon-header__mode-button[data-mode-tone=\"default\"][data-variant=\"icon\"]:active, .toolbar-ribbon-header__mode-button[data-mode-tone=\"default\"][data-variant=\"icon\"][data-open=\"true\"]",
+      ".toolbar-ribbon-mode-menu__item:active:not(.is-disabled)",
+      ".toolbar-scroll-button:active:not(:disabled)",
+      ".toolbar-button-select[data-item-id=\"insert.separator\"], .toolbar-button-select[data-item-id=\"insert.table\"] .ui-toolbar-button--vertical.ui-toolbar-button--split:has(.ui-toolbar-button__segment--main:active) .ui-toolbar-button__segment--menu .ui-toolbar-button__footer, .toolbar-button-select[data-item-id=\"insert.table\"] .ui-toolbar-button--vertical.ui-toolbar-button--split:has(.ui-toolbar-button__segment--menu:active) .ui-toolbar-button__segment--main",
+      ".toolbar-bullets-preset-panel__tile:active",
+      ".toolbar-numbering-preset-panel__tile:active",
+      ".toolbar-header-footer-preset-panel__tile:active",
+      ".toolbar-bullets-preset-panel__footer-action:active:not(:disabled), .toolbar-numbering-preset-panel__footer-action:active:not(:disabled)",
+      ".toolbar-header-footer-preset-panel__footer-action:active:not(:disabled)",
+      ".toolbar-numbering-preset-panel__footer-action--menu-item:active:not(:disabled)",
+      ".toolbar-bullets-preset-panel__footer-action--menu-item:active:not(:disabled)",
+      ".toolbar-table-insert-panel__more-action:active",
+      ".toolbar-table-insert-panel__unit-trigger:active, .toolbar-table-insert-panel__unit-trigger[data-open=\"true\"]",
+      ".m-filter-panel-wrapper .m-color-filter-panel .m-color-filter-content .m-filter-color-list .m-filter-color-list-item:active",
+      ".m-filter-panel-wrapper .m-condition-filter-panel .m-condition-filter-content .m-condition-filter-list .m-condition-filter-list-item:active",
+      ".m-filter-panel-wrapper .m-condition-filter-panel .m-custom-filter-dialog .m-custom-filter-conditions .m-custom-filter-condition-list .m-condition-list-selector:active",
+      ".m-filter-panel-wrapper .m-condition-filter-panel .m-popup-model-mask .m-popup-model-list-item:active",
+      ".m-filter-panel-wrapper .m-filter-scroll-list .m-filter-check-list-item:active",
+      ".m-filter-panel-wrapper .m-filter-check-all:active",
+      ".m-filter-panel-wrapper .m-menu-group .m-icon-button:active:not(.m-menu-disabled), .m-filter-panel-wrapper .m-menu-group .m-icon-button.m-menu-selected, .m-filter-panel-wrapper .m-menu-group .m-text-button:active:not(.m-menu-disabled), .m-filter-panel-wrapper .m-menu-group .m-text-button.m-menu-selected, .m-filter-panel-wrapper .m-menu-group .m-icon-text-button:active:not(.m-menu-disabled), .m-filter-panel-wrapper .m-menu-group .m-icon-text-button.m-menu-selected",
+      ".m-filter-panel-wrapper .m-menu-group .m-icon-button:active:not(.m-menu-disabled), .m-filter-panel-wrapper .m-menu-group .m-icon-button.m-menu-selected, .m-filter-panel-wrapper .m-menu-group .m-text-button:active:not(.m-menu-disabled), .m-filter-panel-wrapper .m-menu-group .m-text-button.m-menu-selected, .m-filter-panel-wrapper .m-menu-group .m-icon-text-button:active:not(.m-menu-disabled), .m-filter-panel-wrapper .m-menu-group .m-icon-text-button.m-menu-selected",
+      ".pswp__button:active",
+      ".ui-menu__item:active",
+      ".ui-menu__item.is-active:not([data-active=\"true\"]):not([data-selected=\"true\"]):not(:active)",
+      ".ui-menu__item[data-active=\"true\"]:not([data-selected=\"true\"]):not(:active)",
+      ".ui-menu__item[data-selected=\"true\"]:not(:active)",
+      ".suite-find-replace__group-button:active:not(:disabled), .suite-find-replace__group-button.is-selected",
+      ".sm-date-mention-dialog .sm-dialog .dmd-body .datetime-selector-wrapper .date-time-editor:focus:not(:disabled):not(.error), .sm-date-mention-dialog .sm-dialog .dmd-body .datetime-selector-wrapper .date-time-editor:active:not(:disabled):not(.error)",
+      ".sm-date-mention-dialog .sm-dialog .dmd-body .datetime-selector-wrapper .date-time-editor:active, .sm-date-mention-dialog .sm-dialog .dmd-body .datetime-selector-wrapper .date-time-editor:focus",
+      ".idpdViewport-toolbar .action-share:active, .idpdViewport-toolbar .action-delete:active, .idpdViewport-toolbar .action-quit:active, .idpdViewport-toolbar .action-open:active, .idpdViewport-toolbar .action-reset:active",
+      ".idpdViewport-toolbar .idpd-tools .idpd-tool-bar__button.active, .idpdViewport-toolbar .idpd-tools .idpd-tool-bar__button:active",
+      ".independent-viewport-toolbar-kit-dropdown .independent-viewport-menu__quick-action:active",
+      ".independent-viewport-toolbar-kit-dropdown .independent-viewport-menu__section:hover, .independent-viewport-toolbar-kit-dropdown .independent-viewport-menu__section:active",
+      ".independent-viewport-toolbar-kit-dropdown .independent-viewport-menu__empty:hover, .independent-viewport-toolbar-kit-dropdown .independent-viewport-menu__empty:active",
+      ".m-idpd-list ul li:active",
+      ".format-dialog .format-border-presets button:not(:disabled):active > span",
+      ".format-dialog .format-border-button:not(:disabled):active",
+      ".pptx-flow-host .od-button:active:not(:disabled)"
+    ]
+  },
+  "editorEmptyBody-C4": {
+    "bodyChildren": 0,
+    "bodyText": "",
+    "bodyRect": {
+      "top": 226,
+      "bottom": 574,
+      "height": 348
+    },
+    "gapBetweenTopNavAndViews": 372,
+    "bodyMarginTop": "16px",
+    "bodyFlex": "1 1 0%"
+  },
+  "editorEmptyBody-C10": {
+    "bodyChildren": 0,
+    "bodyText": "",
+    "bodyRect": {
+      "top": 226,
+      "bottom": 574,
+      "height": 348
+    },
+    "gapBetweenTopNavAndViews": 372,
+    "bodyMarginTop": "16px",
+    "bodyFlex": "1 1 0%"
+  },
+  "treeAccessibleNames": [
+    {
+      "computedName": "MO product launch4",
+      "title": "MO product launch",
+      "ariaLabel": null,
+      "labelSpan": "MO product launch",
+      "countSmall": "4",
+      "separator": "none"
+    },
+    {
+      "computedName": "Archive 202645",
+      "title": "Archive 2026",
+      "ariaLabel": null,
+      "labelSpan": "Archive 2026",
+      "countSmall": "45",
+      "separator": "none"
+    },
+    {
+      "computedName": "yirentk0",
+      "title": "yirentk",
+      "ariaLabel": null,
+      "labelSpan": "yirentk",
+      "countSmall": "0",
+      "separator": "none"
+    },
+    {
+      "computedName": "二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总（含渠道投放、媒体沟通、",
+      "title": "二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总（含",
+      "ariaLabel": null,
+      "labelSpan": "二〇二六年第三季度产品发布会全流程执行方案与风险预案汇总（含",
+      "countSmall": "2",
+      "separator": "none"
+    },
+    {
+      "computedName": "Documents2",
+      "title": "Documents",
+      "ariaLabel": null,
+      "labelSpan": "Documents",
+      "countSmall": "2",
+      "separator": "none"
+    }
+  ],
+  "homeReservedActions-C1": {
+    "actionsVisibility": "hidden",
+    "actionsWidth": 208.8,
+    "reservedPx": 240.8,
+    "stripClientWidth": 907,
+    "stripScrollWidth": 998,
+    "overflowPx": 91,
+    "wouldFit": true
+  },
+  "homeReservedActions-C2": {
+    "actionsVisibility": "hidden",
+    "actionsWidth": 208.8,
+    "reservedPx": 240.8,
+    "stripClientWidth": 849,
+    "stripScrollWidth": 998,
+    "overflowPx": 149,
+    "wouldFit": true
+  },
+  "homeReservedActions-C3": {
+    "actionsVisibility": "hidden",
+    "actionsWidth": 208.8,
+    "reservedPx": 240.8,
+    "stripClientWidth": 907,
+    "stripScrollWidth": 998,
+    "overflowPx": 91,
+    "wouldFit": true
+  },
+  "homeReservedActions-C4": {
+    "actionsVisibility": "hidden",
+    "actionsWidth": 208.8,
+    "reservedPx": 240.8,
+    "stripClientWidth": 849,
+    "stripScrollWidth": 998,
+    "overflowPx": 149,
+    "wouldFit": true
+  },
+  "comfortableCrossCheck": {
+    "present": true,
+    "rowCount": 53,
+    "pinPosition": "static",
+    "pinRect": {
+      "left": 1217.4,
+      "top": 311,
+      "right": 1243.4,
+      "bottom": 337,
+      "height": 26
+    },
+    "cellRect": {
+      "left": 1207.4,
+      "top": 294,
+      "right": 1253.4,
+      "bottom": 354.5,
+      "height": 60.5
+    },
+    "pinOverflowPx": -17.5,
+    "treeClassesPresent": 0
+  }
+}

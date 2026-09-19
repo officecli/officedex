@@ -5,6 +5,7 @@
  */
 
 import type {
+  AgentTask,
   CustomModelInput,
   FileMeta,
   FileType,
@@ -21,6 +22,8 @@ export interface FakePortOptions {
   files?: FileMeta[];
   models?: Model[];
   settings?: ShellSettings;
+  /** Tasks the agent starts life holding, one per folder. See FakeAgentDeps. */
+  tasks?: AgentTask[];
   now?: () => number;
   /** Block the scripted run on a question before it starts. Off by default. */
   asksQuestion?: boolean;
@@ -56,6 +59,7 @@ export function createFakePort(options: FakePortOptions = {}): UiPort {
 
   const agent = createFakeAgent({
     asksQuestion: options.asksQuestion ?? false,
+    seedTasks: options.tasks,
     getFiles: () => files,
     markDirty: (fileId, dirty) => {
       const file = files.find((entry) => entry.id === fileId);

@@ -27,28 +27,59 @@ import { SelectionProvider } from "./canvas/SelectionContext";
 import { createShellCanvas } from "./port/createShellCanvas";
 import { UpdateGate } from "./chrome/UpdateGate";
 import { createDesktopAPI, hasDesktopBackend, readBridgeEnvironment } from "../renderer/bridge/select";
+import { LocaleProvider } from "../renderer/i18n";
+import { ForceUpdateOverlay } from "../renderer/components/ForceUpdateOverlay";
 import { ShellProvider } from "./state/ShellContext";
+import { readDevFixture } from "./dev/fixture";
 import "./tokens.css";
 
 const container = document.getElementById("shell-root");
 if (!container) throw new Error("shell-root container is missing from index.html");
 
-const port = createShellPort();
+/**
+ * Null in a production build whatever the URL says — the guard is inside
+ * `readDevFixture`, and Vite compiles the rest of that module out. See the note
+ * there.
+ */
+const fixture = readDevFixture(window.location.search);
+
+const port = fixture?.port ?? createShellPort();
 const canvas = createShellCanvas();
 const api = hasDesktopBackend() ? createDesktopAPI(readBridgeEnvironment()) : null;
 
-createRoot(container).render(
-  <StrictMode>
-    <UpdateGate api={api}>
-      <PortProvider port={port}>
-        <CanvasProvider adapter={canvas}>
-          <SelectionProvider>
-            <ShellProvider>
-              <App />
-            </ShellProvider>
-          </SelectionProvider>
-        </CanvasProvider>
-      </PortProvider>
-    </UpdateGate>
-  </StrictMode>,
+/**
+ * The mandatory-update page, standing alone.
+ *
+ * It normally only appears when a real updater reports a build the backend
+ * refuses to serve, which makes it the one full-screen surface in this product
+ * nobody can look at on purpose. `?forceUpdate=<phase>` renders it directly,
+ * with a release that does not exist and buttons that do nothing, so its five
+ * phases can be reviewed without a backend lying about a version.
+ */
+const root = fixture?.forceUpdate ? (
+  <LocaleProvider>
+    <ForceUpdateOverlay
+      release={fixture.forceUpdate.release}
+      phase={fixture.forceUpdate.phase}
+      progress={{ bytesDone: 46_137_344, bytesTotal: 118_489_088 }}
+      error={fixture.forceUpdate.phase === "error" ? "The download could not be verified." : null}
+      currentVersion="1.3.2"
+      onUpdate={() => {}}
+      onInstall={() => {}}
+    />
+  </LocaleProvider>
+) : (
+  <UpdateGate api={api}>
+    <PortProvider port={port}>
+      <CanvasProvider adapter={canvas}>
+        <SelectionProvider>
+          <ShellProvider stateOverride={fixture?.stateOverride} persist={!fixture}>
+            <App />
+          </ShellProvider>
+        </SelectionProvider>
+      </CanvasProvider>
+    </PortProvider>
+  </UpdateGate>
 );
+
+createRoot(container).render(<StrictMode>{root}</StrictMode>);

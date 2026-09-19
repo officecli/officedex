@@ -12,7 +12,7 @@ import {
 import { usePort } from "../port/PortContext";
 import { logShellEvent } from "../port/shellLog";
 import type { FileMeta, Folder } from "../../shared/uiPort";
-import { readPersisted, writePersisted } from "./persist";
+import { readPersisted, writePersisted, type PersistedShellState } from "./persist";
 import {
   hydrateShellState,
   shellReducer,
@@ -36,9 +36,33 @@ interface ShellContextValue {
 
 const ShellContext = createContext<ShellContextValue | null>(null);
 
-export function ShellProvider({ children }: { children: ReactNode }) {
+/**
+ * `stateOverride` is merged over the persisted view state at boot.
+ *
+ * Only the dev fixture passes it (see `dev/fixture.ts`), and only so a URL can
+ * put the shell straight into one of the ten combinations the audit walks.
+ * Merged *over* rather than replacing, so an override naming one axis leaves the
+ * rest of the session's real view state alone.
+ */
+export function ShellProvider({
+  children,
+  stateOverride,
+  persist = true,
+}: {
+  children: ReactNode;
+  stateOverride?: Partial<PersistedShellState>;
+  /**
+   * Off under the dev fixture. Every audit run must start from its URL, not
+   * from what the previous run left in localStorage — and a fixture's file ids
+   * have no meaning in the real workspace, so writing them back would seed the
+   * next real session with tabs pointing at files that never existed.
+   */
+  persist?: boolean;
+}) {
   const port = usePort();
-  const [state, dispatch] = useReducer(shellReducer, undefined, () => hydrateShellState(readPersisted()));
+  const [state, dispatch] = useReducer(shellReducer, undefined, () =>
+    hydrateShellState({ ...readPersisted(), ...stateOverride }),
+  );
   const [folders, setFolders] = useState<Folder[]>([]);
   const [files, setFiles] = useState<FileMeta[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -141,8 +165,8 @@ export function ShellProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Only persist once the workspace is known, so a slow first load cannot
     // write an empty tab list over a good one.
-    if (loaded) writePersisted(toPersisted(state));
-  }, [state, loaded]);
+    if (persist && loaded) writePersisted(toPersisted(state));
+  }, [state, loaded, persist]);
 
   const activeFile = useMemo(
     () => files.find((file) => file.id === state.activeFileId) ?? null,

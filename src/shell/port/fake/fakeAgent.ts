@@ -30,6 +30,17 @@ export interface FakeAgentDeps {
    * through.
    */
   asksQuestion?: boolean;
+  /**
+   * Tasks the fake starts life holding, one per folder.
+   *
+   * The scripted run only ever produces the task it is running, so every status
+   * that is not on that path — paused, done, a second live run — was
+   * unreachable, and Home's task list could only ever be empty or hold one row.
+   * The UI audit needs all of them on screen at once. Keyed by `folderId` on the
+   * way in, matching how `ensureTask` stores them; a later `send` into the same
+   * folder resumes the seeded task rather than replacing it.
+   */
+  seedTasks?: AgentTask[];
   setTimeout?: (fn: () => void, ms: number) => unknown;
   clearTimeout?: (handle: unknown) => void;
   now?: () => number;
@@ -49,6 +60,7 @@ export function createFakeAgent(deps: FakeAgentDeps): AgentPort {
   const now = deps.now ?? (() => Date.now());
 
   const tasks = new Map<string, AgentTask>();
+  for (const task of deps.seedTasks ?? []) tasks.set(task.folderId, structuredClone(task));
   const listeners = new Set<(event: AgentEvent) => void>();
 
   let timer: unknown = null;
