@@ -46,6 +46,35 @@ describe("file tabs", () => {
     expect(selected()).toHaveLength(0);
   });
 
+  it("pins the active tab from its bookmark control", async () => {
+    const shell = await openSeedTabs();
+    const bookmark = shell.view.getByRole("button", { name: "Bookmark MO launch deck.pptx" });
+    expect(bookmark).toHaveAttribute("aria-pressed", "false");
+    await act(async () => {
+      fireEvent.click(bookmark);
+    });
+    expect(shell.view.getByRole("button", { name: "Remove bookmark from MO launch deck.pptx" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("renames the active file through the file menu", async () => {
+    const shell = await openSeedTabs();
+    await act(async () => {
+      fireEvent.click(shell.view.getByRole("button", { name: "More actions" }));
+    });
+    await act(async () => {
+      fireEvent.click(shell.view.getByRole("menuitem", { name: "Rename file…" }));
+    });
+    const input = shell.view.getByLabelText("File name");
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "Launch deck final" } });
+      fireEvent.click(shell.view.getByRole("button", { name: "Save" }));
+    });
+    expect(shell.view.getByTitle("Launch deck final.pptx")).toBeInTheDocument();
+  });
+
   it("shows the unsaved marker for a dirty file and clears it on save", async () => {
     const shell = await openSeedTabs();
     // file-forecast is seeded dirty.
@@ -62,9 +91,37 @@ describe("file tabs", () => {
   it("closes a tab from its close button", async () => {
     const shell = await openSeedTabs();
     await act(async () => {
+      fireEvent.click(shell.view.getByLabelText("Close MO launch plan.docx"));
+    });
+    expect(tabNames(shell.view.container)).toEqual(["MO sales forecast", "MO launch deck"]);
+  });
+
+  it("asks before closing a dirty tab and saves before removing it", async () => {
+    const shell = await openSeedTabs();
+    await shell.dispatch({ type: "activate-file", fileId: "file-forecast" });
+
+    await act(async () => {
       fireEvent.click(shell.view.getByLabelText("Close MO sales forecast.xlsx"));
     });
+    expect(shell.view.getByRole("dialog")).toHaveTextContent("Save before closing?");
+    expect(shell.view.getByRole("dialog")).toHaveTextContent("MO sales forecast.xlsx");
+
+    await act(async () => {
+      fireEvent.click(shell.view.getByRole("button", { name: "Save and close" }));
+    });
     expect(tabNames(shell.view.container)).toEqual(["MO launch plan", "MO launch deck"]);
+    expect(shell.view.queryByRole("dialog")).toBeNull();
+  });
+
+  it("activates an inactive dirty tab before allowing it to close", async () => {
+    const shell = await openSeedTabs();
+    // The deck is active after opening the seed tabs; the forecast is dirty.
+    await act(async () => {
+      fireEvent.click(shell.view.getByLabelText("Close MO sales forecast.xlsx"));
+    });
+    expect(shell.state().activeFileId).toBe("file-forecast");
+    expect(shell.view.getByLabelText("Close MO sales forecast.xlsx")).toBeInTheDocument();
+    expect(shell.view.queryByRole("dialog")).toBeNull();
   });
 });
 
@@ -73,13 +130,16 @@ describe("sidebar", () => {
     const shell = await openSeedTabs();
     const sidebar = () => shell.view.container.querySelector<HTMLElement>("#shell-sidebar")!;
 
-    // Frame: brand, Home and the profile footer are in both modes.
+    // Frame: brand, Home and the settings footer are in both modes. The footer
+    // used to carry an account chip reading "Flora · Personal workspace" — one
+    // name, shown to everyone, beside a workspace that does not exist.
     for (const mode of ["agent", "editor"] as const) {
       await shell.dispatch({ type: "set-mode", mode });
       const region = within(sidebar());
       expect(region.getByRole("button", { name: /Switch mode/ })).toBeInTheDocument();
       expect(region.getByTitle("Home")).toBeInTheDocument();
-      expect(region.getByTitle("Flora · Personal workspace")).toBeInTheDocument();
+      expect(region.getByTitle("Settings")).toBeInTheDocument();
+      expect(region.queryByText("Flora")).toBeNull();
     }
 
     // Middle: Agent offers New task; Editor offers the file library views.
@@ -97,10 +157,11 @@ describe("sidebar", () => {
     const shell = await openSeedTabs();
     const home = () => shell.view.container.querySelector<HTMLElement>("#shell-sidebar .shell-sidebar-item")!;
 
-    expect(home().textContent).toContain("Home");
-    await shell.dispatch({ type: "toggle-nav" });
+    // The reference shell opens on its compact icon rail.
     expect(home().textContent).toBe("");
     expect(home()).toHaveAttribute("aria-label", "Home");
+    await shell.dispatch({ type: "toggle-nav" });
+    expect(home().textContent).toContain("Home");
   });
 });
 
@@ -157,21 +218,33 @@ describe("mode menu", () => {
 });
 
 describe("status bar", () => {
-  it("reports per-format facts and the save state", async () => {
+  // It used to report per-format facts — "739 words", "Slide 3 of 6", "B6" —
+  // and this suite asserted them. They were fixed strings, identical for every
+  // file of a type, and a status bar is read as a report on *your* document. So
+  // what is asserted now is the two things the shell genuinely knows.
+  it("names the open file and its save state", async () => {
     const shell = await openSeedTabs();
     // Scoped to the bar: the task panel's artifact card reports save state too.
     const bar = () =>
       within(shell.view.container.querySelector<HTMLElement>(".shell-statusbar")!);
 
     await shell.dispatch({ type: "activate-file", fileId: "file-plan" });
-    expect(bar().getByText("739 words")).toBeInTheDocument();
+    expect(bar().getByText("MO launch plan.docx")).toBeInTheDocument();
     expect(bar().getByText("All changes saved")).toBeInTheDocument();
 
     await shell.dispatch({ type: "activate-file", fileId: "file-forecast" });
-    expect(bar().getByText("Sheet 1 of 1")).toBeInTheDocument();
+    expect(bar().getByText("MO sales forecast.xlsx")).toBeInTheDocument();
     expect(bar().getByText("Unsaved changes")).toBeInTheDocument();
+  });
 
-    await shell.dispatch({ type: "activate-file", fileId: "file-deck" });
-    expect(bar().getByText("Slide 3 of 6")).toBeInTheDocument();
+  // Nothing invented in place of an answer it does not have.
+  it("claims no page count, word count or zoom level", async () => {
+    const shell = await openSeedTabs();
+    await shell.dispatch({ type: "activate-file", fileId: "file-plan" });
+    const bar = shell.view.container.querySelector<HTMLElement>(".shell-statusbar")!;
+
+    expect(bar.textContent).not.toMatch(/\bwords?\b/i);
+    expect(bar.textContent).not.toMatch(/Page \d|Slide \d|Sheet \d/);
+    expect(bar.textContent).not.toMatch(/\d+%/);
   });
 });

@@ -82,11 +82,11 @@
 /* ------------------------------------------------------- agent hero */
 
 .shell-home--agent {
-  padding-top: 56px;
+  padding-top: 92px;
 }
 
 .shell-hero {
-  max-width: 720px;
+  max-width: 800px;
   margin: 0 auto 44px;
   text-align: center;
 }
@@ -94,7 +94,8 @@
 .shell-hero h1 {
   margin: 0;
   color: var(--shell-ink);
-  font-size: 28px;
+  font-size: 32px;
+  line-height: 38px;
   font-weight: 500;
   letter-spacing: -0.4px;
 }
@@ -102,12 +103,40 @@
 .shell-hero-lede {
   margin: 10px 0 26px;
   color: var(--shell-ink-subtle);
-  font-size: var(--shell-text-lg);
+  font-size: 13px;
   line-height: 22px;
 }
 
 .shell-hero-composer {
   text-align: left;
+}
+
+.shell-home-scope {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--shell-line);
+  border-bottom: 0;
+  border-radius: 16px 16px 0 0;
+  background: var(--shell-sunken);
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text-sm);
+  text-align: left;
+}
+
+.shell-home-scope span {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.shell-hero-composer > .shell-menu-anchor + .shell-cx--home {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }
 
 .shell-hero-prompts {

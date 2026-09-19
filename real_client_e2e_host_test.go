@@ -331,6 +331,12 @@ func (h *realClientE2EHost) call(method string, raw json.RawMessage) (any, error
 			return nil, err
 		}
 		return h.app.SavePptx(input)
+	case "SaveDocx":
+		var input SaveDocxInput
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return h.app.SaveDocx(input)
 	case "CreateLivePptxDraft":
 		value, err := decodeRealClientString(raw)
 		if err != nil {
@@ -377,6 +383,91 @@ func (h *realClientE2EHost) call(method string, raw json.RawMessage) (any, error
 			return nil, err
 		}
 		return h.app.ReadArtifactFile(token)
+	// The presentation editor's own session: the embed calls PreparePptxEditor
+	// first and renders nothing at all until it answers. Without these the deck
+	// area stays blank with no error anywhere — which is exactly how a missing
+	// case here reads from the outside, and why the new shell's pptx path could
+	// not be exercised under this harness at all.
+	case "PreparePptxEditor":
+		token, err := decodeRealClientString(raw)
+		if err != nil {
+			return nil, err
+		}
+		return h.app.PreparePptxEditor(token)
+	case "SavePptxEditorSnapshot":
+		var input SavePptxEditorSnapshotInput
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return h.app.SavePptxEditorSnapshot(input)
+	case "SavePptxEditorAsset":
+		var input SavePptxEditorAssetInput
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return h.app.SavePptxEditorAsset(input)
+	case "SavePptxEditorVideo":
+		var input SavePptxEditorVideoInput
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return h.app.SavePptxEditorVideo(input)
+	case "ExportPptxEditor":
+		var input ExportPptxEditorInput
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return h.app.ExportPptxEditor(input)
+	case "ClosePptxEditor":
+		var input ClosePptxEditorInput
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return nil, h.app.ClosePptxEditor(input)
+	// The workbook editor's own session, and the same story: the sheet embed
+	// calls PrepareXlsxEditor before it draws anything, so without these the
+	// canvas answers "unknown real e2e rpc method" and the grid never appears.
+	// newRealOfficeDexApp has wired xlsxEditorService since the pptx block above
+	// was added; only the dispatch was missing.
+	case "PrepareXlsxEditor":
+		token, err := decodeRealClientString(raw)
+		if err != nil {
+			return nil, err
+		}
+		return h.app.PrepareXlsxEditor(token)
+	case "SaveXlsxEditor":
+		var input SaveXlsxEditorInput
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return h.app.SaveXlsxEditor(input)
+	case "StageXlsxEditorImage":
+		var input StageXlsxEditorImageInput
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return h.app.StageXlsxEditorImage(input)
+	case "CloseXlsxEditor":
+		var input CloseXlsxEditorInput
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return nil, h.app.CloseXlsxEditor(input)
+	case "CreateWorkbookFromSheet":
+		var input CreateWorkbookFromSheetInput
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return h.app.CreateWorkbookFromSheet(input)
+	// Renderer-side logging. It fails closed like any other missing case, so a
+	// page that logs while it works turns a clean run into a wall of 500s in the
+	// network panel — noise that hides the request that actually mattered.
+	case "RecordRendererLog":
+		var input RendererLogInput
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return nil, h.app.RecordRendererLog(input)
 	case "ReadLocalImage":
 		value, err := decodeRealClientString(raw)
 		if err != nil {
@@ -451,6 +542,148 @@ func (h *realClientE2EHost) call(method string, raw json.RawMessage) (any, error
 		return h.app.UpdateSettings(patch)
 	case "GetDefaultWorkspaceDir":
 		return h.app.GetDefaultWorkspaceDir(), nil
+
+	// ── Document projection, folders and file operations ────────────────────
+	//
+	// The new IA's shell reads all of its library from here. None of it was
+	// dispatched until this block existed, so `shell.html` under this harness
+	// failed on its very first call (ListFolders) and never finished loading —
+	// which meant the new shell had no end-to-end coverage at all, and could
+	// not have had any. Payload shapes mirror src/renderer/bridge/realE2E.ts.
+	case "ListDocuments":
+		var input types.DocumentListInput
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return h.app.ListDocuments(input)
+	case "GetDocument":
+		documentID, err := decodeRealClientString(raw)
+		if err != nil {
+			return nil, err
+		}
+		return h.app.GetDocument(documentID)
+	case "ListDocumentRuns":
+		documentID, err := decodeRealClientString(raw)
+		if err != nil {
+			return nil, err
+		}
+		return h.app.ListDocumentRuns(documentID)
+	case "ListDocumentActivities":
+		var input types.DocumentActivityListInput
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return h.app.ListDocumentActivities(input)
+	case "SetDocumentPinned":
+		var input struct {
+			DocumentID string `json:"documentId"`
+			Pinned     bool   `json:"pinned"`
+		}
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return nil, h.app.SetDocumentPinned(input.DocumentID, input.Pinned)
+	case "ListFolders":
+		return h.app.ListFolders()
+	case "CreateFolder":
+		name, err := decodeRealClientString(raw)
+		if err != nil {
+			return nil, err
+		}
+		return h.app.CreateFolder(name)
+	case "RenameFolder":
+		var input struct {
+			FolderID string `json:"folderId"`
+			Name     string `json:"name"`
+		}
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return h.app.RenameFolder(input.FolderID, input.Name)
+	case "RemoveFolder":
+		folderID, err := decodeRealClientString(raw)
+		if err != nil {
+			return nil, err
+		}
+		return nil, h.app.RemoveFolder(folderID)
+	case "FolderPath":
+		folderID, err := decodeRealClientString(raw)
+		if err != nil {
+			return nil, err
+		}
+		return h.app.FolderPath(folderID)
+	case "RenameDocument":
+		var input struct {
+			DocumentID string `json:"documentId"`
+			Name       string `json:"name"`
+		}
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return h.app.RenameDocument(input.DocumentID, input.Name)
+	case "MoveDocument":
+		var input struct {
+			DocumentID string `json:"documentId"`
+			FolderID   string `json:"folderId"`
+		}
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return h.app.MoveDocument(input.DocumentID, input.FolderID)
+	case "DuplicateDocument":
+		documentID, err := decodeRealClientString(raw)
+		if err != nil {
+			return nil, err
+		}
+		return h.app.DuplicateDocument(documentID)
+	case "OpenLocalFile":
+		// OpenLocalFile shows a picker, and the harness answers pickers through
+		// /control/file-dialog. Going through the App method would open a real
+		// one, so the queued path is imported directly instead — the half worth
+		// testing is the registration, not the platform dialog.
+		path, _ := h.popFileDialog(false).(string)
+		if strings.TrimSpace(path) == "" {
+			return types.DocumentRecord{}, nil
+		}
+		return h.app.ImportLocalFile(path)
+	case "CreateBlankDocument":
+		var input struct {
+			DocumentType string `json:"documentType"`
+			WorkspaceID  string `json:"workspaceId"`
+		}
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return h.app.CreateBlankDocument(input.DocumentType, input.WorkspaceID)
+	// Review mode's file-level close: Apply overwrites the source from the
+	// artifact and keeps a snapshot, Undo puts the snapshot back. Both are new,
+	// and both were reachable only through the Wails binding — under this
+	// harness the shell's Apply button answered "unknown real e2e rpc method",
+	// so the round trip had never run end to end.
+	case "ApplyArtifactSuggestion":
+		var input ArtifactSuggestionFileInput
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return nil, h.app.ApplyArtifactSuggestion(input)
+	case "UndoArtifactSuggestion":
+		var input ArtifactSuggestionFileInput
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return nil, h.app.UndoArtifactSuggestion(input)
+	case "OpenRecentFile":
+		var file types.RecentFile
+		if err := decodeRealClientInput(raw, &file); err != nil {
+			return nil, err
+		}
+		return h.app.OpenRecentFile(file)
+	case "RemoveRecentFile":
+		filePath, err := decodeRealClientString(raw)
+		if err != nil {
+			return nil, err
+		}
+		return nil, h.app.RemoveRecentFile(filePath)
 	case "ListWorkspaces":
 		return h.app.ListWorkspaces()
 	case "ListRecentFiles":

@@ -65,6 +65,15 @@ export interface ShellState {
 export type ShellAction =
   | { type: "set-mode"; mode: Mode }
   | { type: "go-home"; list?: HomeList }
+  /**
+   * Leaves Home without opening anything.
+   *
+   * The counterpart of `go-home`, and the only way to reach the workspace when
+   * there is no file to reach it through. A deck being generated is exactly
+   * that case: its draft is scratch that never enters the library, so there is
+   * no tab to open and the canvas is put on screen by the run itself.
+   */
+  | { type: "enter-workspace" }
   | { type: "set-home-list"; list: HomeList }
   | { type: "select-folder"; folderId: string | null }
   | { type: "toggle-folder"; folderId: string }
@@ -94,9 +103,11 @@ export const initialShellState: ShellState = {
   mode: "agent",
   home: true,
   homeList: "recent",
-  navWidth: 220,
-  navCollapsed: false,
-  taskWidth: 340,
+  navWidth: 190,
+  // The reference shell opens on the compact icon rail; users can expand it
+  // with the window-bar control and the preference is persisted thereafter.
+  navCollapsed: true,
+  taskWidth: 320,
   selectedFolderId: null,
   expandedFolderIds: [],
   revealedFolderIds: [],
@@ -136,6 +147,9 @@ export function shellReducer(state: ShellState, action: ShellAction): ShellState
 
     case "go-home":
       return { ...state, home: true, homeList: action.list ?? state.homeList };
+
+    case "enter-workspace":
+      return { ...state, home: false };
 
     case "set-home-list":
       return { ...state, home: true, homeList: action.list };
@@ -233,7 +247,7 @@ export function hydrateShellState(persisted: Partial<PersistedShellState>): Shel
     home: persisted.home ?? initialShellState.home,
     homeList: persisted.homeList === "pinned" ? "pinned" : "recent",
     navWidth: clamp(finite(persisted.navWidth, initialShellState.navWidth), NAV_MIN_WIDTH, NAV_MAX_WIDTH),
-    navCollapsed: persisted.navCollapsed ?? false,
+    navCollapsed: persisted.navCollapsed ?? initialShellState.navCollapsed,
     taskWidth: clamp(finite(persisted.taskWidth, initialShellState.taskWidth), TASK_MIN_WIDTH, TASK_MAX_WIDTH),
     selectedFolderId: persisted.selectedFolderId ?? null,
     expandedFolderIds: Array.isArray(persisted.expandedFolderIds) ? persisted.expandedFolderIds : [],

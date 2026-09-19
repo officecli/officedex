@@ -13,6 +13,24 @@ import (
 	"officedex/internal/types"
 )
 
+// PPTX recovery now checks the bridge capability contract before opening the
+// replacement session. Keep these tests focused on recovery by acknowledging
+// that metadata request in the transport fixture.
+func readRecoverySessionOpen(t *testing.T, transport *cancelPersistTransport) cancelPersistRequest {
+	t.Helper()
+	req := transport.readRequest(t)
+	if req.Method == "capabilities/get" {
+		transport.writeResponse(t, req.ID, map[string]any{
+			"pptx_jssdk_progressive": map[string]any{"v2": true},
+		})
+		req = transport.readRequest(t)
+	}
+	if req.Method != "session/open" {
+		t.Fatalf("bridge request method = %q, want session/open", req.Method)
+	}
+	return req
+}
+
 func TestRespondRecoversStalePlanQuestionTask(t *testing.T) {
 	ctx := context.Background()
 	oldTaskID := "task-stale-plan-question"
@@ -124,10 +142,7 @@ func TestRespondRecoversStalePlanQuestionTask(t *testing.T) {
 	}
 	transport.writeError(t, req.ID, "task not found: "+oldTaskID)
 
-	req = transport.readRequest(t)
-	if req.Method != "session/open" {
-		t.Fatalf("bridge request method = %q, want session/open", req.Method)
-	}
+	req = readRecoverySessionOpen(t, transport)
 	transport.writeResponse(t, req.ID, map[string]any{"id": "session-recovered"})
 
 	req = transport.readRequest(t)
@@ -375,10 +390,7 @@ func TestRespondRecoveryUsesLivePendingQuestionID(t *testing.T) {
 	}
 	transport.writeError(t, req.ID, "task not found: "+oldTaskID)
 
-	req = transport.readRequest(t)
-	if req.Method != "session/open" {
-		t.Fatalf("bridge request method = %q, want session/open", req.Method)
-	}
+	req = readRecoverySessionOpen(t, transport)
 	transport.writeResponse(t, req.ID, map[string]any{"id": "session-recovered"})
 
 	req = transport.readRequest(t)
@@ -595,10 +607,7 @@ func TestRespondRecoveryReplaysFullAnswerHistory(t *testing.T) {
 	}
 	transport.writeError(t, req.ID, "task not found: "+oldTaskID)
 
-	req = transport.readRequest(t)
-	if req.Method != "session/open" {
-		t.Fatalf("bridge request method = %q, want session/open", req.Method)
-	}
+	req = readRecoverySessionOpen(t, transport)
 	transport.writeResponse(t, req.ID, map[string]any{"id": "session-recovered"})
 
 	req = transport.readRequest(t)
@@ -759,10 +768,7 @@ func TestRespondRecoverySkipsStalePerNodeFeedback(t *testing.T) {
 	}
 	transport.writeError(t, req.ID, "task not found: "+oldTaskID)
 
-	req = transport.readRequest(t)
-	if req.Method != "session/open" {
-		t.Fatalf("method = %q, want session/open", req.Method)
-	}
+	req = readRecoverySessionOpen(t, transport)
 	transport.writeResponse(t, req.ID, map[string]any{"id": "session-recovered"})
 
 	req = transport.readRequest(t)

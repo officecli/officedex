@@ -33,6 +33,7 @@ export interface FakeDesktopSeed {
     fileName: string;
     documentType: string;
     workspaceId?: string;
+    currentArtifactTaskId?: string;
     pinned?: boolean;
     lastOpenedAt?: string;
   }>;
@@ -83,6 +84,7 @@ export function createFakeDesktopApi(seed: FakeDesktopSeed = {}): FakeDesktopApi
       fileName: document.fileName,
       documentType: document.documentType,
       workspaceId: document.workspaceId ?? "",
+      ...(document.currentArtifactTaskId ? { currentArtifactTaskId: document.currentArtifactTaskId } : {}),
       createdAt: new Date(1_700_000_000_000 + index * 1000).toISOString(),
       updatedAt: new Date(1_700_000_000_000 + index * 1000).toISOString(),
       migrationSource: "legacy",
@@ -313,6 +315,10 @@ export function createFakeDesktopApi(seed: FakeDesktopSeed = {}): FakeDesktopApi
     },
   } as unknown as FakeDesktopApi, {
     get(target, property) {
+      // This capability is intentionally absent from the legacy fake: the
+      // desktop implementation is covered by Go tests, while service tests
+      // retain the pre-bridge NotImplemented contract.
+      if (property === "createBlankDocument") return undefined;
       const value = Reflect.get(target, property);
       return value ?? refuse(String(property));
     },

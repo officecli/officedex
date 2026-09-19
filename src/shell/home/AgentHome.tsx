@@ -1,4 +1,4 @@
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, ChevronDown, Folder as FolderIcon } from "lucide-react";
 
 import { Composer } from "../composer/Composer";
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
@@ -9,6 +9,7 @@ import { useFolderDrop } from "../nav/useFolderDrop";
 import { useLibraryActions } from "../nav/useLibraryActions";
 import type { FileType } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
+import { Menu } from "../chrome/Menu";
 import "./home.css";
 
 const PROMPTS: Array<{ type: FileType; label: string; prompt: string }> = [
@@ -36,21 +37,50 @@ export function AgentHome() {
       <div className="shell-hero">
         <h1>What would you like to get done?</h1>
         <p className="shell-hero-lede">
-          Bring a folder and a goal. You can jump in and edit at any time.
+          Bring your files and a goal. Jump in and edit at any time.
         </p>
 
         <div className="shell-hero-composer">
+          <Menu
+            label="Task folder"
+            width={260}
+            items={folders.map((folder) => ({
+              id: folder.id,
+              label: folder.name,
+              description: folder.path,
+              checked: folder.id === scopeFolderId,
+              onSelect: () => dispatch({ type: "select-folder", folderId: folder.id }),
+            }))}
+          >
+            {(triggerProps) => (
+              <button
+                {...triggerProps}
+                type="button"
+                className="shell-home-scope"
+                title={`Task folder: ${scope?.name ?? "none"}`}
+              >
+                <FolderIcon size={15} strokeWidth={1.7} aria-hidden="true" />
+                <span>{scope?.name ?? "Choose a folder"}</span>
+                <ChevronDown size={13} strokeWidth={1.8} aria-hidden="true" />
+              </button>
+            )}
+          </Menu>
           <Composer
             placement="home"
             busy={agent.busy}
             onSend={async (submission) => {
               await agent.send(submission);
-              // A new task means work, and work happens next to a file: leave
-              // Home for the file the task is about.
+              // A new task means work, and work happens in the workspace: leave
+              // Home for the file the task is about, or — when it is making
+              // something that does not exist yet — for the canvas the run
+              // itself fills. Staying on Home after asking for something leaves
+              // the user watching a list while the thing they asked for is
+              // being drawn behind it.
               const target =
                 files.find((file) => file.id === submission.activeFileId) ??
                 files.find((file) => file.folderId === submission.folderId);
               if (target) await actions.openFile(target.id);
+              else dispatch({ type: "enter-workspace" });
             }}
             onStop={agent.stop}
           />
@@ -74,6 +104,7 @@ export function AgentHome() {
                   files.find((file) => file.type === entry.type && file.folderId === scopeFolderId) ??
                   files.find((file) => file.folderId === scopeFolderId);
                 if (target) await actions.openFile(target.id);
+                else dispatch({ type: "enter-workspace" });
               }}
             >
               <FileTypeIcon type={entry.type} size={15} />

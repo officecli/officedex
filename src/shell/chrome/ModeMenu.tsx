@@ -1,6 +1,7 @@
-import { ChevronDown, PanelLeft, Sparkles } from "lucide-react";
+import { ChevronDown, PanelLeft } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { PresenceFace } from "../agent/PresenceFace";
 import { useShell } from "../state/ShellContext";
 import type { Mode } from "../state/shellReducer";
 import { Menu } from "./Menu";
@@ -10,7 +11,9 @@ const MODES: Array<{ mode: Mode; label: string; description: string; icon: React
     mode: "agent",
     label: "Agent",
     description: "Give a goal; edit alongside it",
-    icon: <Sparkles size={16} strokeWidth={1.6} aria-hidden="true" />,
+    // Agent mode is the companion, so the mark *is* the companion — the same
+    // character the presence draws, at icon size and holding still.
+    icon: <PresenceFace status="idle" size={16} animated={false} />,
   },
   {
     mode: "editor",
@@ -27,6 +30,10 @@ const MODES: Array<{ mode: Mode; label: string; description: string; icon: React
  * occasionally change, not a navigation destination competing for the most
  * valuable strip of the window. Putting it here is what frees the entire top
  * row for the file tabs.
+ *
+ * A segmented Agent/Editor control was added to the window bar once, and had to
+ * be hidden on the compact rail — the state the shell opens in — because it
+ * covered the first tab. This is the control; there is no second one.
  */
 export function ModeMenu() {
   const { state, dispatch } = useShell();

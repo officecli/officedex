@@ -7,6 +7,9 @@ import type { SpreadsheetCanvasHandle } from "./SpreadsheetCanvas";
 import { styledCellData } from "./SpreadsheetCanvas";
 
 const mocks = vi.hoisted(() => {
+  /** The workbook as loaded, and as edited. Distinct on purpose — see `serialized`. */
+  const LOADED_MODOC = "serialized-modoc";
+  const EDITED_MODOC = "edited-modoc";
   type MockRange = {
     getText: ReturnType<typeof vi.fn>;
     setText?: ReturnType<typeof vi.fn>;
@@ -18,7 +21,17 @@ const mocks = vi.hoisted(() => {
   let emitCellTextChange = true;
   let emitImageChange = true;
   const order: string[] = [];
-  const delta = { stringify: vi.fn(() => "serialized-modoc") };
+  /**
+   * What the workbook currently serializes to.
+   *
+   * A variable rather than a constant because the component asks: the SDK emits
+   * a change of its own while it settles after load, and the only thing that
+   * separates that from an edit is whether the content is different afterwards.
+   * A fake whose content never changes is a fake in which nothing the user does
+   * is an edit.
+   */
+  let serialized = LOADED_MODOC;
+  const delta = { stringify: vi.fn(() => serialized) };
   const cells = new Map<string, {
     setCellText: ReturnType<typeof vi.fn>;
     getCellText: ReturnType<typeof vi.fn>;
@@ -119,9 +132,17 @@ const mocks = vi.hoisted(() => {
     setSelectionRange,
     cells,
     order,
+    LOADED_MODOC,
+    EDITED_MODOC,
     createOfflineSheetEditor: vi.fn(async () => editor),
     registerOfflineImage: vi.fn((file: File) => file),
-    emitChange: (serialized?: string) => changeListener?.(serialized ? { stringify: () => serialized } : undefined),
+    // The content moves with the change, because that is what a change is.
+    emitChange: (next: string = EDITED_MODOC) => {
+      serialized = next;
+      changeListener?.({ stringify: () => next });
+    },
+    resetContent: () => { serialized = LOADED_MODOC; },
+    currentContent: () => serialized,
     emitHorizontalScroll: () => horizontalScrollListener?.(),
     emitRangeChange: () => rangeListener?.(),
     resetListener: () => {
@@ -187,7 +208,8 @@ describe("SpreadsheetCanvas", () => {
     mocks.resetListener();
     mocks.setEmitCellTextChange(true);
     mocks.setEmitImageChange(true);
-    mocks.delta.stringify.mockReturnValue("serialized-modoc");
+    mocks.resetContent();
+    mocks.delta.stringify.mockImplementation(() => mocks.currentContent());
     mocks.officecli.prepareXlsxEditor.mockResolvedValue({ sessionId: "session-1", modocContent: "prepared-modoc" });
     mocks.officecli.saveXlsxEditor.mockResolvedValue({ filePath: "/tmp/workbook.xlsx" });
     mocks.officecli.closeXlsxEditor.mockImplementation(async () => { mocks.order.push("close"); });
@@ -255,7 +277,7 @@ describe("SpreadsheetCanvas", () => {
     render(<SpreadsheetCanvas ref={ref} artifact={artifact} grant={grant} onDirtyChange={onDirtyChange} onStateChange={onStateChange} />);
     await waitFor(() => expect(mocks.editor.content.addChangeListener).toHaveBeenCalled());
 
-    act(() => mocks.emitChange());
+    await act(async () => { mocks.emitChange(); });
     expect(onDirtyChange).toHaveBeenLastCalledWith(true);
     expect(onStateChange).toHaveBeenLastCalledWith("dirty");
 
@@ -263,11 +285,36 @@ describe("SpreadsheetCanvas", () => {
     expect(mocks.officecli.saveXlsxEditor).toHaveBeenCalledWith({
       previewToken: "preview-token",
       sessionId: "session-1",
-      modocContent: "serialized-modoc",
+      modocContent: mocks.EDITED_MODOC,
       managedSheets: [],
     });
     expect(onDirtyChange).toHaveBeenLastCalledWith(false);
     expect(onStateChange).toHaveBeenLastCalledWith("saved");
+  });
+
+  /**
+   * The Sheet SDK emits a change of its own while it settles after load, after
+   * the listener is attached and after the editor promise has resolved. Taken
+   * at face value it marked a workbook the user had only opened as having
+   * unsaved changes — the status bar said so, the tab carried the dot, and
+   * closing it asked to save nothing.
+   */
+  it("stays clean when the editor settles without changing anything", async () => {
+    const onDirtyChange = vi.fn();
+    const onStateChange = vi.fn();
+    render(<SpreadsheetCanvas artifact={artifact} grant={grant} onDirtyChange={onDirtyChange} onStateChange={onStateChange} />);
+    await waitFor(() => expect(mocks.editor.content.addChangeListener).toHaveBeenCalled());
+
+    // The same content the load produced: a change that changed nothing.
+    await act(async () => { mocks.emitChange(mocks.LOADED_MODOC); });
+
+    expect(onDirtyChange).not.toHaveBeenCalledWith(true);
+    expect(onStateChange).not.toHaveBeenCalledWith("dirty");
+
+    // And the first real edit still lands.
+    await act(async () => { mocks.emitChange(); });
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+    expect(onStateChange).toHaveBeenLastCalledWith("dirty");
   });
 
   it("uses Sheet SDK JS APIs to read product rows and write marketing images", async () => {
@@ -745,11 +792,11 @@ describe("SpreadsheetCanvas", () => {
     const ref = createRef<SpreadsheetCanvasHandle>();
     render(<SpreadsheetCanvas ref={ref} artifact={artifact} grant={grant} onDirtyChange={onDirtyChange} />);
     await waitFor(() => expect(mocks.editor.content.addChangeListener).toHaveBeenCalled());
-    act(() => mocks.emitChange());
+    await act(async () => { mocks.emitChange(); });
 
     const saving = ref.current!.save();
     await waitFor(() => expect(mocks.officecli.saveXlsxEditor).toHaveBeenCalledTimes(1));
-    act(() => mocks.emitChange());
+    await act(async () => { mocks.emitChange(); });
     await act(async () => resolveSave?.());
 
     await expect(saving).resolves.toBe(true);
@@ -764,7 +811,7 @@ describe("SpreadsheetCanvas", () => {
     const ref = createRef<SpreadsheetCanvasHandle>();
     render(<SpreadsheetCanvas ref={ref} artifact={artifact} grant={grant} onDirtyChange={onDirtyChange} onError={onError} onSaveError={onSaveError} />);
     await waitFor(() => expect(mocks.editor.content.addChangeListener).toHaveBeenCalled());
-    act(() => mocks.emitChange());
+    await act(async () => { mocks.emitChange(); });
 
     await expect(ref.current?.save()).resolves.toBe(false);
 
@@ -782,7 +829,7 @@ describe("SpreadsheetCanvas", () => {
     const ref = createRef<SpreadsheetCanvasHandle>();
     render(<SpreadsheetCanvas ref={ref} artifact={artifact} grant={grant} />);
     await waitFor(() => expect(mocks.editor.content.addChangeListener).toHaveBeenCalled());
-    act(() => mocks.emitChange());
+    await act(async () => { mocks.emitChange(); });
 
     const first = ref.current!.save();
     const second = ref.current!.save();
@@ -800,7 +847,7 @@ describe("SpreadsheetCanvas", () => {
     const ref = createRef<SpreadsheetCanvasHandle>();
     render(<SpreadsheetCanvas ref={ref} artifact={artifact} grant={grant} />);
     await waitFor(() => expect(mocks.editor.content.addChangeListener).toHaveBeenCalled());
-    act(() => mocks.emitChange());
+    await act(async () => { mocks.emitChange(); });
 
     const first = ref.current!.save();
     await waitFor(() => expect(mocks.officecli.saveXlsxEditor).toHaveBeenCalledTimes(1));
@@ -890,7 +937,7 @@ describe("SpreadsheetCanvas", () => {
     const ref = createRef<SpreadsheetCanvasHandle>();
     render(<SpreadsheetCanvas ref={ref} artifact={artifact} grant={grant} />);
     await waitFor(() => expect(mocks.editor.content.addChangeListener).toHaveBeenCalled());
-    act(() => mocks.emitChange());
+    await act(async () => { mocks.emitChange(); });
 
     fireEvent.keyDown(document, { key: "s", metaKey: true });
     expect(mocks.officecli.saveXlsxEditor).not.toHaveBeenCalled();

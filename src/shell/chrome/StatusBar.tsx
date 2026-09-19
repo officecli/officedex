@@ -1,27 +1,32 @@
-import { HardDrive, Minus, Plus } from "lucide-react";
+import { HardDrive } from "lucide-react";
 
-import type { FileMeta } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
-import { notBuiltYet } from "../port/reportPortFailure";
 
-/** Per-format facts on the left, device and zoom on the right. */
-function detailFor(file: FileMeta): string[] {
-  if (file.type === "sheet") return ["Sheet 1 of 1", "B6"];
-  if (file.type === "slides") return ["Slide 3 of 6", "Notes"];
-  return ["Page 1 of 1", "739 words", "English (US)"];
-}
-
+/**
+ * The two things the shell actually knows about the open document: where it
+ * lives, and whether it is saved.
+ *
+ * It used to say more. `detailFor` returned "Page 1 of 1 · 739 words" for every
+ * document, "Slide 3 of 6" for every deck and "Sheet 1 of 1 · B6" for every
+ * workbook — invented, fixed, and indistinguishable from fact. A status bar is
+ * read as a report on *your* file, so a 40-page draft claiming one page is not
+ * a placeholder, it is a wrong answer delivered confidently.
+ *
+ * The page count, the word count and the cursor position all belong to the
+ * embedded editor, and `canvasContract.ts` has no way to ask for them. When it
+ * does, they come back here as real numbers. Until then this says less, which
+ * is the honest amount.
+ *
+ * The zoom control went with them for the same reason: it read 100% whatever
+ * the editor was showing, and changing it did nothing.
+ */
 export function StatusBar() {
   const { activeFile } = useShell();
 
   return (
     <div className="shell-statusbar shell-region">
       <div className="shell-statusbar-facts">
-        {activeFile ? (
-          detailFor(activeFile).map((entry) => <span key={entry}>{entry}</span>)
-        ) : (
-          <span>No file open</span>
-        )}
+        <span>{activeFile ? activeFile.name : "No file open"}</span>
       </div>
 
       <div className="shell-statusbar-end">
@@ -29,30 +34,9 @@ export function StatusBar() {
           <HardDrive size={13} strokeWidth={1.7} aria-hidden="true" />
           On this computer
         </span>
-        <span>{activeFile?.dirty ? "Unsaved changes" : "All changes saved"}</span>
-        <span className="shell-zoom">
-          {/* Zoom belongs to whichever canvas is mounted, and the canvas
-              contract has no method for it. Both controls say so. */}
-          <button
-            type="button"
-            className="shell-icon-button"
-            aria-label="Zoom out"
-            title="Zoom out"
-            onClick={() => notBuiltYet("zoom", "Zoom is not wired to the editors yet. Use the editor's own zoom for now.")}
-          >
-            <Minus size={13} strokeWidth={1.8} aria-hidden="true" />
-          </button>
-          <span className="shell-zoom-value">100%</span>
-          <button
-            type="button"
-            className="shell-icon-button"
-            aria-label="Zoom in"
-            title="Zoom in"
-            onClick={() => notBuiltYet("zoom", "Zoom is not wired to the editors yet. Use the editor's own zoom for now.")}
-          >
-            <Plus size={13} strokeWidth={1.8} aria-hidden="true" />
-          </button>
-        </span>
+        {activeFile ? (
+          <span>{activeFile.dirty ? "Unsaved changes" : "All changes saved"}</span>
+        ) : null}
       </div>
     </div>
   );

@@ -10,6 +10,7 @@ OFFICECLI_DIR="${REPO_ROOT}/officecli-internal"
 OFFICECLI_SOURCE_BIN="${OFFICECLI_DIR}/officecli"
 OFFICECLI_STAGE_BIN="${OFFICEDEX_DIR}/build/officecli/officecli"
 APP_PATH="${OFFICEDEX_DIR}/build/bin/OfficeDex.app"
+OFFICECLI_RELEASE_VERSION="$(node -p "require('${OFFICEDEX_DIR}/package.json').officecliVersion")"
 PRESENTATION_DIR="${REPO_ROOT}/presentation"
 WAILS_BIN="$(command -v wails || true)"
 if [[ -z "${WAILS_BIN}" ]]; then
@@ -39,7 +40,9 @@ build_officecli() {
   mkdir -p "$(dirname "${output}")"
   temporary="$(mktemp "${output}.tmp.XXXXXX")"
   trap 'rm -f "${temporary}"' RETURN
-  env -u GOROOT go build -o "${temporary}" ./cmd/officecli
+  env -u GOROOT go build -trimpath \
+    -ldflags "-s -w -X github.com/officecli/officecli/internal/cli.Version=${OFFICECLI_RELEASE_VERSION} -X github.com/officecli/officecli/internal/cli.Commit=local-build -X github.com/officecli/officecli/internal/cli.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    -o "${temporary}" ./cmd/officecli
   chmod 0755 "${temporary}"
   mv "${temporary}" "${output}"
   trap - RETURN
@@ -63,13 +66,23 @@ fi
 node scripts/sync-jssdk-animation-skill.mjs
 build_officecli "${OFFICECLI_SOURCE_BIN}"
 build_officecli "${OFFICECLI_STAGE_BIN}"
+node "${SCRIPT_DIR}/verify-officecli-canvas-contract.mjs" \
+  --binary "${OFFICECLI_STAGE_BIN}" \
+  --expected "${OFFICECLI_RELEASE_VERSION}"
 
 echo "[build-local-latest] building OfficeDex.app"
 cd "${OFFICEDEX_DIR}"
 APP_VERSION="$(node -p 'require("./package.json").version')"
 # Writer is optional on machines without the sibling checkout.
 export WRITER_OPTIONAL=1
-PRESENTATION_SOURCE_DIR="${PRESENTATION_DIR}" env -u GOROOT "${WAILS_BIN}" build -ldflags "-X main.appVersion=${APP_VERSION}"
+# The frontend is built here rather than left to `wails build`, which would run
+# the same script (wails.json frontend:build) through its own process plumbing.
+# Doing it directly keeps build-time switches — OFFICEDEX_ENTRY in particular —
+# on one short, visible path from this shell to vite, and puts vite's output in
+# this log instead of behind "Compiling frontend: Done.". `-s` then tells wails
+# the frontend is already there.
+PRESENTATION_SOURCE_DIR="${PRESENTATION_DIR}" bash "${SCRIPT_DIR}/build-frontend-desktop.sh"
+PRESENTATION_SOURCE_DIR="${PRESENTATION_DIR}" env -u GOROOT "${WAILS_BIN}" build -s -ldflags "-X main.appVersion=${APP_VERSION}"
 node --input-type=module -e 'import { stageDesktopSkills } from "./scripts/bundle-runtime.mjs"; await stageDesktopSkills("build/bin/OfficeDex.app/Contents/Resources");'
 npm run stage:office2modoc
 node scripts/bundle-office2modoc.mjs \
@@ -118,7 +131,10 @@ node scripts/verify-packaged-runtime.mjs build/bin --may-be-absent=mop-runtime,w
 echo "[build-local-latest] OfficeCLI build metadata"
 go version -m "${OFFICECLI_SOURCE_BIN}" | sed -n '1,5p'
 echo "[build-local-latest] built ${APP_PATH}"
-if [[ "${OSTYPE}" == darwin* ]]; then
+# scripts/build-entries.sh renames this bundle after the build, so it sets this
+# and opens the final one itself. Launching a bundle that is about to be moved
+# out from under the running process is a good way to spend an afternoon.
+if [[ "${OSTYPE}" == darwin* && "${OFFICEDEX_SKIP_OPEN:-}" != "1" ]]; then
   echo "[build-local-latest] opening ${APP_PATH}"
   open "${APP_PATH}"
 fi

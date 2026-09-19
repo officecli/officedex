@@ -11,6 +11,128 @@ import (
 	"officedex/internal/types"
 )
 
+// ArtifactSuggestionFileInput is the renderer-facing, path-only contract for
+// the shell's Review/Apply/Undo flow. Bytes never cross the Wails boundary.
+type ArtifactSuggestionFileInput struct {
+	SuggestionID string `json:"suggestionId"`
+	SourceFile   string `json:"sourceFile"`
+	ArtifactFile string `json:"artifactFile"`
+}
+
+// ApplyArtifactSuggestion replaces the source with a completed agent artifact
+// and keeps a process-local snapshot for Undo. The source remains untouched
+// until this method is called, which is the meaningful distinction between
+// Review and Full access in the shell.
+func (a *App) ApplyArtifactSuggestion(input ArtifactSuggestionFileInput) error {
+	key := strings.TrimSpace(input.SuggestionID)
+	source := filepath.Clean(strings.TrimSpace(input.SourceFile))
+	artifact := filepath.Clean(strings.TrimSpace(input.ArtifactFile))
+	if key == "" || source == "." || artifact == "." {
+		return errors.New("suggestion id, source file, and artifact file are required")
+	}
+	if filepath.Ext(source) == "" || !strings.EqualFold(filepath.Ext(source), filepath.Ext(artifact)) {
+		return errors.New("suggestion source and artifact must have the same file type")
+	}
+	if err := requireRegularSuggestionFile(source); err != nil {
+		return fmt.Errorf("source file: %w", err)
+	}
+	if err := requireRegularSuggestionFile(artifact); err != nil {
+		return fmt.Errorf("artifact file: %w", err)
+	}
+	backup := filepath.Join(os.TempDir(), "officedex-suggestion-"+sha256Hex([]byte(key))+".bak")
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if _, exists := a.artifactSuggestionBackups[key]; exists {
+		return errors.New("suggestion has already been applied")
+	}
+	if err := copyFileReplacing(source, backup); err != nil {
+		return fmt.Errorf("snapshot source file: %w", err)
+	}
+	if err := copyFileReplacing(artifact, source); err != nil {
+		_ = os.Remove(backup)
+		return fmt.Errorf("apply artifact: %w", err)
+	}
+	a.artifactSuggestionBackups[key] = backup
+	return nil
+}
+
+// UndoArtifactSuggestion restores the exact bytes captured by Apply. It is
+// refused after the process has lost the snapshot, rather than guessing from
+// a newer artifact or silently overwriting user edits.
+func (a *App) UndoArtifactSuggestion(input ArtifactSuggestionFileInput) error {
+	key := strings.TrimSpace(input.SuggestionID)
+	source := filepath.Clean(strings.TrimSpace(input.SourceFile))
+	if key == "" || source == "." {
+		return errors.New("suggestion id and source file are required")
+	}
+	if err := requireRegularSuggestionFile(source); err != nil {
+		return fmt.Errorf("source file: %w", err)
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	backup, ok := a.artifactSuggestionBackups[key]
+	if !ok {
+		return errors.New("suggestion is no longer undoable")
+	}
+	if err := requireRegularSuggestionFile(backup); err != nil {
+		return fmt.Errorf("suggestion snapshot: %w", err)
+	}
+	if err := copyFileReplacing(backup, source); err != nil {
+		return fmt.Errorf("restore source file: %w", err)
+	}
+	if err := os.Remove(backup); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("remove suggestion snapshot: %w", err)
+	}
+	delete(a.artifactSuggestionBackups, key)
+	return nil
+}
+
+func requireRegularSuggestionFile(path string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return errors.New("must be a regular non-symlink file")
+	}
+	return nil
+}
+
+func copyFileReplacing(source, destination string) error {
+	if source == destination {
+		return errors.New("source and destination must differ")
+	}
+	dir := filepath.Dir(destination)
+	temporary, err := os.CreateTemp(dir, ".officedex-suggestion-*")
+	if err != nil {
+		return err
+	}
+	temporaryPath := temporary.Name()
+	defer os.Remove(temporaryPath)
+	if err := temporary.Chmod(0o644); err != nil {
+		_ = temporary.Close()
+		return err
+	}
+	input, err := os.Open(source)
+	if err != nil {
+		_ = temporary.Close()
+		return err
+	}
+	_, copyErr := io.Copy(temporary, input)
+	closeInputErr := input.Close()
+	closeOutputErr := temporary.Close()
+	if copyErr != nil {
+		return copyErr
+	}
+	if closeInputErr != nil {
+		return closeInputErr
+	}
+	if closeOutputErr != nil {
+		return closeOutputErr
+	}
+	return os.Rename(temporaryPath, destination)
+}
+
 // ─── Document file operations ───────────────────────────────────────────────
 //
 // These move real files. A folder is a real directory, so what the user sees in
@@ -29,7 +151,8 @@ import (
 //     its new place and the next projection pass reconciles. The opposite order
 //     would leave rows pointing at a file that was never moved.
 //
-// Creating a *new* empty document is deliberately not here — see docs/uiport-scope.md.
+// Creating a new empty document lives in app_blank_document.go; this file keeps
+// the rename, move, duplicate and remove operations together.
 
 // documentExtension keeps a document's type when its name changes. A .pptx that
 // the user renames to "Q3 review" is still a .pptx.

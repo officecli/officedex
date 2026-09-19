@@ -246,3 +246,40 @@ func TestRelocatingLeavesTheActivityStreamAlone(t *testing.T) {
 		t.Errorf("activity count changed from %d to %d", len(activitiesBefore.Items), len(activitiesAfter.Items))
 	}
 }
+
+func TestArtifactSuggestionApplyAndUndoRestoresSource(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "source.docx")
+	artifact := filepath.Join(dir, "source.modified.docx")
+	if err := os.WriteFile(source, []byte("before"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(artifact, []byte("after"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	app := &App{artifactSuggestionBackups: make(map[string]string)}
+	input := ArtifactSuggestionFileInput{SuggestionID: "task-1", SourceFile: source, ArtifactFile: artifact}
+	if err := app.ApplyArtifactSuggestion(input); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "after" {
+		t.Fatalf("applied source = %q, want after", got)
+	}
+	if err := app.UndoArtifactSuggestion(input); err != nil {
+		t.Fatal(err)
+	}
+	got, err = os.ReadFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "before" {
+		t.Fatalf("restored source = %q, want before", got)
+	}
+	if err := app.UndoArtifactSuggestion(input); err == nil {
+		t.Fatal("second undo unexpectedly succeeded")
+	}
+}

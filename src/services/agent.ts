@@ -25,13 +25,17 @@ import { DEFAULT_FOLDER_ID } from "./files";
  *      failure arrives separately as an error event.
  *   3. `pause`/`resume` exist for every type in the contract; the desktop only
  *      implements them for presentations.
- *   4. `SendInput` carries `mentions`, `attachments`, `modelId` and
- *      `permission`, none of which the generate path accepts. Attachments are
- *      the sharpest: the contract gives a name and a size but no path, so there
- *      is nothing to hand the runtime even in principle.
+ *   4. `SendInput` carries `mentions`, `attachments`, `reference`, `modelId`
+ *      and `permission`, while the generate path only accepts some of these.
+ *      Attachments are carried as native paths when the desktop picker is
+ *      available; browser drag/drop attachments still have no path. The
+ *      editor reference is carried by adding the selected passage to the
+ *      existing prompt, which preserves its meaning without changing the
+ *      runtime protocol.
  *
- * `suggestion` is always null. The apply/undo model has no desktop counterpart
- * at all — see docs/uiport-scope.md.
+ * Full-access runs still have no suggestion. Review/custom runs that edit an
+ * existing file retain the completed artifact as a real, file-level suggestion
+ * and use the desktop snapshot bridge for Apply/Undo.
  */
 
 const ACTIVE_STATUSES = ["starting", "running", "question", "plan_review"];
@@ -130,16 +134,43 @@ function toMessages(task: DesktopTask): AgentMessage[] {
 }
 
 function toAgentTask(task: DesktopTask): AgentTask {
+  const documentType = task.documentType === "docx" || task.documentType === "xlsx" || task.documentType === "pptx"
+    ? task.documentType
+    : undefined;
   return {
     id: task.id,
     title: taskTitle(task, "Untitled task"),
     folderId: task.workspaceId?.trim() || DEFAULT_FOLDER_ID,
+    documentType,
     status: toStatus(task),
     phase: phaseOf(task),
     steps: toSteps(task),
     messages: toMessages(task),
     // No desktop model for proposed-then-applied changes; see the header.
     suggestion: null,
+  };
+}
+
+interface ReviewArtifactState {
+  sourceFileId: string;
+  sourceFile: string;
+  artifactFile?: string;
+  applied: boolean;
+  undoable: boolean;
+}
+
+function toAgentTaskWithReview(task: DesktopTask, review?: ReviewArtifactState): AgentTask {
+  const result = toAgentTask(task);
+  if (!review || !review.artifactFile) return result;
+  return {
+    ...result,
+    suggestion: {
+      id: task.id,
+      targetFileId: review.sourceFileId,
+      summary: `Review the generated ${task.documentType?.toUpperCase() ?? "document"} changes before applying them.`,
+      applied: review.applied,
+      undoable: review.undoable,
+    },
   };
 }
 
@@ -181,6 +212,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
   let state = createInitialTaskState();
   /** What pause/resume/finish act on: those take no id in the contract. */
   let activeTaskId: string | undefined;
+  const reviewArtifacts = new Map<string, ReviewArtifactState>();
   const listeners = new Set<(event: AgentEvent) => void>();
 
   const emit = (event: AgentEvent) => {
@@ -196,7 +228,9 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     const task = state.tasks[event.task_id];
     if (!task) return;
     if (ACTIVE_STATUSES.includes(task.status)) activeTaskId = task.id;
-    emit({ kind: "task", task: toAgentTask(task) });
+    const review = reviewArtifacts.get(task.id);
+    if (review && task.status === "completed" && task.artifact?.filePath) review.artifactFile = task.artifact.filePath;
+    emit({ kind: "task", task: toAgentTaskWithReview(task, review) });
     // The contract has no failed status, so a failure is reported twice: the
     // task turns `done`, and this says why.
     if (task.status === "failed" && task.error) {
@@ -218,7 +252,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       const task = pickForFolder(state, folderId);
       if (!task) return null;
       if (ACTIVE_STATUSES.includes(task.status)) activeTaskId = task.id;
-      return toAgentTask(task);
+      return toAgentTaskWithReview(task, reviewArtifacts.get(task.id));
     },
 
     async send(input: SendInput) {
@@ -226,10 +260,12 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       if (!text) return;
       const dropped = unsupportedParts(input);
       if (dropped.length > 0) {
-        emit({
-          kind: "notice",
-          message: `Sent without ${dropped.join(" or ")} — not supported yet.`,
-        });
+      emit({
+        kind: "notice",
+        message: dropped.some((part) => part === "review mode" || part === "custom permission mode")
+          ? `Sent with ${dropped.join(" or ")} unavailable in the current runtime. The source file stays unchanged and the result is written as a separate artifact.`
+          : `Sent without ${dropped.join(" or ")} — the current runtime has no file path for those attachments.`,
+      });
       }
 
       const settings = await api.getSettings();
@@ -243,9 +279,17 @@ export function createAgentService(api: DesktopAPI): AgentPort {
         const result = await api.modify({
           documentType: record.documentType as GenerateInput["documentType"],
           sourceFile: record.filePath,
-          prompt: text,
+          prompt: promptWithComposerContext(text, input),
           ...(workspaceId ? { workspaceId } : { noProject: true }),
         });
+        if (input.permission !== "full") {
+          reviewArtifacts.set(result.taskId, {
+            sourceFileId: record.id,
+            sourceFile: record.filePath,
+            applied: false,
+            undoable: false,
+          });
+        }
         activeTaskId = result.taskId;
         return;
       }
@@ -257,7 +301,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       const result = await api.generate({
         documentType: route.documentType,
         topic: text.slice(0, 64),
-        prompt: text,
+        prompt: promptWithComposerContext(text, input),
         ...(route.sourceFile ? { sourceFile: route.sourceFile } : {}),
         ...(workspaceId ? { workspaceId } : { noProject: true }),
         enableImages: settings.defaults.enableImages,
@@ -306,18 +350,28 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       activeTaskId = undefined;
     },
 
-    async applySuggestion(_id) {
-      throw new NotImplementedError(
-        "agent.applySuggestion",
-        "Reviewing a change before it lands is not built yet — the agent writes its changes straight to the file.",
-      );
+    async applySuggestion(id) {
+      const review = reviewArtifacts.get(id);
+      if (!review?.artifactFile || !api.applyArtifactSuggestion) {
+        throw new NotImplementedError("agent.applySuggestion", "This agent result is not available as a reviewable artifact yet.");
+      }
+      await api.applyArtifactSuggestion({ suggestionId: id, sourceFile: review.sourceFile, artifactFile: review.artifactFile });
+      review.applied = true;
+      review.undoable = true;
+      const task = state.tasks[id];
+      if (task) emit({ kind: "task", task: toAgentTaskWithReview(task, review) });
     },
 
-    async undoSuggestion(_id) {
-      throw new NotImplementedError(
-        "agent.undoSuggestion",
-        "Undoing an agent change is not built yet. Nothing here records what the file looked like before.",
-      );
+    async undoSuggestion(id) {
+      const review = reviewArtifacts.get(id);
+      if (!review?.undoable || !review.artifactFile || !api.undoArtifactSuggestion) {
+        throw new NotImplementedError("agent.undoSuggestion", "This agent result is no longer undoable.");
+      }
+      await api.undoArtifactSuggestion({ suggestionId: id, sourceFile: review.sourceFile, artifactFile: review.artifactFile });
+      review.applied = false;
+      review.undoable = false;
+      const task = state.tasks[id];
+      if (task) emit({ kind: "task", task: toAgentTaskWithReview(task, review) });
     },
   };
 }
@@ -325,19 +379,36 @@ export function createAgentService(api: DesktopAPI): AgentPort {
 /**
  * The parts of a submission the desktop cannot carry.
  *
- * The composer gathers all four and the generate path accepts none of them, so
- * the run goes ahead without them. Reported as a notice rather than dropped
- * quietly: an attachment that had no effect is indistinguishable from one that
- * failed, and the user is the only one who can tell whether that mattered.
+ * The composer gathers context that the legacy bridge cannot carry as
+ * structured fields. The run still goes ahead; reported notices make an
+ * attachment or review gate that had no effect visible instead of silently
+ * dropping it.
  *
- * Only what is actually present is named, so someone who never attaches a file
- * never hears about attachments.
+ * Full access is the desktop's current direct-write behavior, so it is not
+ * reported as dropped. Review and custom permission modes still have no
+ * matching runtime gate and are called out explicitly.
  */
 function unsupportedParts(input: SendInput): string[] {
   const dropped: string[] = [];
-  if (input.mentions.length > 0) dropped.push("mentions");
-  // An attachment arrives as a name and a size; there is no path to hand on.
-  if (input.attachments.length > 0) dropped.push("attachments");
-  if (input.permission !== "review") dropped.push("permission mode");
+  if (input.attachments.some((attachment) => !attachment.path)) dropped.push("pathless attachments");
+  if (input.permission === "review") dropped.push("review mode");
+  if (input.permission === "custom") dropped.push("custom permission mode");
   return dropped;
+}
+
+/** Carries composer context through the existing prompt-only runtime API. */
+function promptWithComposerContext(prompt: string, input: SendInput): string {
+  const context: string[] = [];
+  if (input.mentions.length > 0) {
+    context.push(`Mentioned files or folders: ${input.mentions.map((mention) => `@${mention.label}`).join(", ")}`);
+  }
+  const attachments = input.attachments.filter((attachment) => attachment.path);
+  if (attachments.length > 0) {
+    context.push(`Attached local files: ${attachments.map((attachment) => `${attachment.name} (${attachment.path})`).join(", ")}`);
+  }
+  const selected = input.reference?.text.trim();
+  if (selected) {
+    context.push(`Selected passage from ${input.reference?.label ?? "the document"}:\n${selected}`);
+  }
+  return context.length > 0 ? `${prompt}\n\n${context.join("\n\n")}` : prompt;
 }

@@ -4,8 +4,11 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "../../renderer/ui";
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import { Menu } from "../chrome/Menu";
+import { useCanvas } from "../canvas/CanvasContext";
+import { useCanvasSelection, selectionForFile } from "../canvas/SelectionContext";
 import type { Attachment, Mention, PermissionMode, SendInput } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
+import { usePort } from "../port/PortContext";
 import { notBuiltYet } from "../port/reportPortFailure";
 import { MentionMenu, type MentionOption } from "./MentionMenu";
 import { ModelMenu } from "./ModelMenu";
@@ -23,10 +26,21 @@ const PERMISSIONS: Array<{ value: PermissionMode; label: string; description: st
 const MAX_ATTACHMENTS = 10;
 const MAX_BYTES = 20 * 1024 * 1024;
 
+/**
+ * Half-written messages, per placement, for as long as the tab is open.
+ *
+ * Docking the panel, floating it or going to Home unmounts one composer and
+ * mounts another, and everything typed went with it — the prototype kept a
+ * `drafts[kind]` for exactly this. Module scope rather than persisted state:
+ * an unsent message is not worth restoring after a restart, but losing it
+ * because a panel moved is the app throwing away the user's typing.
+ */
+const drafts = new Map<ComposerPlacement, string>();
+
 /** Everything the composer gathers; the caller adds model and permission. */
 export type ComposerSubmission = Pick<
   SendInput,
-  "text" | "folderId" | "mentions" | "attachments" | "activeFileId"
+  "text" | "folderId" | "mentions" | "attachments" | "activeFileId" | "reference"
 >;
 
 export interface ComposerProps {
@@ -48,14 +62,28 @@ export interface ComposerProps {
  */
 export function Composer({ placement, busy = false, onSend, onStop }: ComposerProps) {
   const { state, folders, files, scopeFolderId, dispatch } = useShell();
+  const port = usePort();
   const settings = useComposerSettings();
+  const canvas = useCanvas();
+  const { selection, clear: clearSelection } = useCanvasSelection();
   const inputId = useId();
 
-  const [text, setText] = useState("");
+  const [text, setTextState] = useState(() => drafts.get(placement) ?? "");
   const [mentions, setMentions] = useState<Mention[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+
+  // Every write to the text goes through here so the draft cannot drift from
+  // what is on screen.
+  const setText: typeof setTextState = (value) => {
+    setTextState((current) => {
+      const next = typeof value === "function" ? (value as (prev: string) => string)(current) : value;
+      if (next) drafts.set(placement, next);
+      else drafts.delete(placement);
+      return next;
+    });
+  };
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -64,6 +92,14 @@ export function Composer({ placement, busy = false, onSend, onStop }: ComposerPr
   const scope = folders.find((folder) => folder.id === scopeFolderId) ?? folders[0];
   const canSend = text.trim().length > 0;
   const stopping = busy && !canSend;
+
+  /**
+   * The quoted span, when there is one and it belongs to the file on screen.
+   *
+   * Home never carries one: there is no document being looked at, so "this
+   * paragraph" means nothing there.
+   */
+  const reference = placement === "home" ? null : selectionForFile(selection, state.activeFileId);
 
   // Auto-height, capped so a long draft scrolls instead of eating the panel.
   useEffect(() => {
@@ -119,6 +155,29 @@ export function Composer({ placement, busy = false, onSend, onStop }: ComposerPr
     ]);
   }
 
+  async function pickNativeAttachments() {
+    const picker = port.pickAttachmentPaths;
+    if (!picker) return false;
+    const paths = await picker();
+    if (!paths || paths.length === 0) return true;
+    const room = MAX_ATTACHMENTS - attachments.length;
+    if (room <= 0) {
+      toast.error(`You can attach up to ${MAX_ATTACHMENTS} items.`);
+      return true;
+    }
+    if (paths.length > room) toast.info(`Only the first ${room} files were attached.`);
+    setAttachments((current) => [
+      ...current,
+      ...paths.slice(0, room).map((path) => ({
+        id: crypto.randomUUID(),
+        name: path.split(/[\\/]/).pop() || path,
+        size: 0,
+        path,
+      })),
+    ]);
+    return true;
+  }
+
   function handleInput(value: string, caret: number) {
     setText(value);
     const before = value.slice(0, caret);
@@ -168,19 +227,76 @@ export function Composer({ placement, busy = false, onSend, onStop }: ComposerPr
     }
     if (!canSend) return;
 
+    /*
+     * The quote's words are fetched here rather than when the selection
+     * changed: reading them costs a round trip into the editor and re-targets
+     * its one tracked edit scope, so it happens once, for the message going
+     * out. A failure is swallowed on purpose — a reference that could not be
+     * read must not swallow the message with it.
+     */
+    let quoted = reference;
+    if (reference && canvas?.resolveSelection) {
+      try {
+        const resolved = await canvas.resolveSelection();
+        if (resolved && resolved.fileId === reference.fileId) quoted = resolved;
+      } catch {
+        // Keep the label-only reference.
+      }
+    }
+
     const submission: ComposerSubmission = {
       text: text.trim(),
       folderId: scope?.id ?? "",
       mentions,
       attachments,
       activeFileId: state.activeFileId,
+      ...(quoted
+        ? { reference: { fileId: quoted.fileId, label: quoted.label, text: quoted.text } }
+        : {}),
     };
 
     setText("");
     setMentions([]);
     setAttachments([]);
     setMentionQuery(null);
+    // The quote went with the message; leaving it up would make the next one
+    // look like it is about the same passage.
+    if (reference) clearSelection();
     await onSend(submission);
+  }
+
+  function dictate() {
+    type Recognition = {
+      lang: string;
+      interimResults: boolean;
+      maxAlternatives: number;
+      onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+      onerror: (() => void) | null;
+      start: () => void;
+    };
+    const speech = window as unknown as {
+      SpeechRecognition?: new () => Recognition;
+      webkitSpeechRecognition?: new () => Recognition;
+    };
+    const Constructor = speech.SpeechRecognition ?? speech.webkitSpeechRecognition;
+    if (!Constructor) {
+      notBuiltYet("dictate", "Dictation is not available in this browser. Type your instruction for now.");
+      return;
+    }
+    const recognition = new Constructor();
+    recognition.lang = navigator.language || "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (event) => {
+      const transcript = event.results[0]?.[0]?.transcript?.trim();
+      if (transcript) setText((current) => `${current}${current ? " " : ""}${transcript}`);
+    };
+    recognition.onerror = () => toast.error("Dictation could not start.");
+    try {
+      recognition.start();
+    } catch {
+      toast.error("Dictation could not start.");
+    }
   }
 
   const permission =
@@ -216,6 +332,30 @@ export function Composer({ placement, busy = false, onSend, onStop }: ComposerPr
         addAttachments(event.dataTransfer.files);
       }}
     >
+      {/*
+        The quoted span sits above the chips, not among them: a mention and an
+        attachment are things the user added to the message, while this is
+        something the document is telling the composer about itself. It also
+        shows its text — the whole point is being able to check what "this"
+        refers to before asking for a rewrite of it.
+      */}
+      {reference ? (
+        <div className="shell-cx-reference">
+          <div className="shell-cx-reference-head">
+            <span>{reference.label}</span>
+            <button
+              type="button"
+              className="shell-cx-chip-remove"
+              aria-label={`Remove the reference to ${reference.label}`}
+              onClick={clearSelection}
+            >
+              <X size={12} strokeWidth={2} aria-hidden="true" />
+            </button>
+          </div>
+          {reference.text ? <p>{reference.text}</p> : null}
+        </div>
+      ) : null}
+
       {mentions.length > 0 || attachments.length > 0 ? (
         <div className="shell-cx-chips">
           {mentions.map((mention) => (
@@ -269,7 +409,7 @@ export function Composer({ placement, busy = false, onSend, onStop }: ComposerPr
         aria-label={placement === "home" ? "New task instructions" : "Message Agent"}
         placeholder={
           placement === "home"
-            ? "Describe the task. Use @ to add files or folders…"
+            ? "Ask anything, @ to add files or folders…"
             : "Message Agent, @ files or folders…"
         }
         onChange={(event) => handleInput(event.target.value, event.target.selectionStart ?? 0)}
@@ -288,7 +428,11 @@ export function Composer({ placement, busy = false, onSend, onStop }: ComposerPr
             className="shell-cx-button"
             aria-label="Add files or folders"
             title="Add files or folders"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => {
+              void pickNativeAttachments().then((picked) => {
+                if (!picked) fileInputRef.current?.click();
+              });
+            }}
           >
             <Plus size={18} strokeWidth={1.7} aria-hidden="true" />
           </button>
@@ -356,7 +500,7 @@ export function Composer({ placement, busy = false, onSend, onStop }: ComposerPr
             className="shell-cx-button shell-cx-mic"
             aria-label="Dictate"
             title="Dictate"
-            onClick={() => notBuiltYet("dictate", "Dictation is not built yet. Type your instruction for now.")}
+            onClick={dictate}
           >
             <Mic size={16} strokeWidth={1.7} aria-hidden="true" />
           </button>

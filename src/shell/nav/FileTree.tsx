@@ -1,14 +1,32 @@
 import { ChevronRight, Folder as FolderIcon, FolderOpen, MoreHorizontal, Pin, Plus } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
-import { Menu, type MenuItemSpec } from "../chrome/Menu";
+import { Menu, type MenuHandle, type MenuItemSpec } from "../chrome/Menu";
 import type { FileMeta, Folder } from "../../shared/uiPort";
 import { buildGroups, formatTouched, locationLabel, type FileFilter, type Grouping } from "./fileTreeModel";
 import type { FileType } from "../../shared/uiPort";
 import "./nav.css";
 
 const SIDEBAR_PAGE = 5;
+
+/**
+ * Arrow-key movement between a folder and the files inside it.
+ *
+ * Done by walking the DOM rather than by holding a focus index in state: the
+ * tree is rendered from two different call sites at two densities, its rows
+ * come and go as folders expand, and an index would have to be kept in sync
+ * with all of that to answer a question the DOM already knows the answer to.
+ */
+function focusFirstFile(toggle: HTMLElement): void {
+  const section = toggle.closest(".shell-tree-folder");
+  section?.querySelector<HTMLButtonElement>(".shell-tree-file-open")?.focus();
+}
+
+function focusOwningFolder(fileButton: HTMLElement): void {
+  const section = fileButton.closest(".shell-tree-folder");
+  section?.querySelector<HTMLButtonElement>(".shell-tree-folder-toggle")?.focus();
+}
 
 export interface FileTreeProps {
   /** `compact` is the always-on sidebar; `comfortable` is the Home list. */
@@ -155,10 +173,16 @@ function FolderRow({
     });
   }
 
+  const menuRef = useRef<MenuHandle>(null);
+
   return (
     <div
       className={`shell-tree-folder-row${current ? " is-current" : ""}${dropTarget ? " is-drop-target" : ""}`}
       data-drop-folder={folder.id}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        menuRef.current?.open();
+      }}
     >
       <button
         type="button"
@@ -169,6 +193,26 @@ function FolderRow({
         onClick={() => {
           onToggle();
           onSelect();
+        }}
+        onKeyDown={(event) => {
+          // Tree keys, as the prototype had them: right opens the folder and
+          // then steps into it, left closes it. F2 is the menu, for the same
+          // reason the desktop uses it — a context menu with no pointer.
+          if (event.key === "F2") {
+            event.preventDefault();
+            menuRef.current?.open();
+            return;
+          }
+          if (event.key === "ArrowRight") {
+            event.preventDefault();
+            if (!expanded) onToggle();
+            else focusFirstFile(event.currentTarget);
+            return;
+          }
+          if (event.key === "ArrowLeft" && expanded) {
+            event.preventDefault();
+            onToggle();
+          }
         }}
       >
         <ChevronRight className="shell-tree-chevron" size={12} strokeWidth={2} aria-hidden="true" />
@@ -181,7 +225,7 @@ function FolderRow({
         <small>{folder.count}</small>
       </button>
 
-      <Menu label={`${folder.label} actions`} items={items} align="end" width={220}>
+      <Menu ref={menuRef} label={`${folder.label} actions`} items={items} align="end" width={220}>
         {(triggerProps) => (
           <button
             {...triggerProps}
@@ -228,10 +272,16 @@ function FileRow({
       })),
   ];
 
+  const menuRef = useRef<MenuHandle>(null);
+
   return (
     <div
       className={`shell-tree-file-row${current ? " is-current" : ""}`}
       draggable
+      onContextMenu={(event) => {
+        event.preventDefault();
+        menuRef.current?.open();
+      }}
       onDragStart={(event) => {
         event.dataTransfer.setData("application/x-officedex-file", file.id);
         event.dataTransfer.effectAllowed = "move";
@@ -244,13 +294,26 @@ function FileRow({
         title={file.name}
         aria-current={current ? "page" : undefined}
         onClick={onOpen}
+        onKeyDown={(event) => {
+          if (event.key === "F2") {
+            event.preventDefault();
+            menuRef.current?.open();
+            return;
+          }
+          // Left goes back up to the folder this file is in — the counterpart
+          // of right-arrow stepping into it.
+          if (event.key === "ArrowLeft") {
+            event.preventDefault();
+            focusOwningFolder(event.currentTarget);
+          }
+        }}
       >
         <FileTypeIcon type={file.type} size={15} />
         <span>{file.name.replace(/\.(docx|xlsx|pptx)$/i, "")}</span>
         {file.pinned ? <Pin size={11} strokeWidth={1.8} aria-label="Pinned" /> : null}
       </button>
 
-      <Menu label={`${file.name} actions`} items={items} align="end" width={230}>
+      <Menu ref={menuRef} label={`${file.name} actions`} items={items} align="end" width={230}>
         {(triggerProps) => (
           <button
             {...triggerProps}
@@ -282,7 +345,7 @@ function ComfortableList(props: WithGroups) {
         <strong>
           {props.filter === "pinned"
             ? "No pinned files"
-            : props.fileType !== "all"
+            : props.fileType && props.fileType !== "all"
               ? "No files of this type"
               : "No files yet"}
         </strong>

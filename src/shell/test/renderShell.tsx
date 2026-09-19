@@ -2,6 +2,9 @@ import { act, render, waitFor, type RenderResult } from "@testing-library/react"
 
 import { App } from "../App";
 import { PortProvider } from "../port/PortContext";
+import { CanvasProvider } from "../canvas/CanvasContext";
+import { SelectionProvider } from "../canvas/SelectionContext";
+import type { CanvasAdapter } from "../editor/canvasContract";
 import { createFakePort, type FakePortOptions } from "../port/fake/createFakePort";
 import type { UiPort } from "../../shared/uiPort";
 import { ShellProvider, useShell } from "../state/ShellContext";
@@ -25,6 +28,11 @@ export interface RenderShellOptions extends FakePortOptions {
    * awaits one during mount.
    */
   fastAgent?: boolean;
+  /**
+   * A stand-in for the embedded editor. Null — the default — is what a browser
+   * gets, and what every test that is not about the canvas should use.
+   */
+  canvas?: CanvasAdapter | null;
 }
 
 /**
@@ -36,7 +44,7 @@ export interface RenderShellOptions extends FakePortOptions {
 export async function renderShell(options: RenderShellOptions = {}): Promise<ShellHarness> {
   localStorage.clear();
 
-  const { fastAgent, ...portOptions } = options;
+  const { fastAgent, canvas = null, ...portOptions } = options;
   const port = createFakePort(
     fastAgent
       ? {
@@ -56,10 +64,14 @@ export async function renderShell(options: RenderShellOptions = {}): Promise<She
 
   const view = render(
     <PortProvider port={port}>
-      <ShellProvider>
-        <Probe />
-        <App />
-      </ShellProvider>
+      <CanvasProvider adapter={canvas}>
+        <SelectionProvider>
+          <ShellProvider>
+            <Probe />
+            <App />
+          </ShellProvider>
+        </SelectionProvider>
+      </CanvasProvider>
     </PortProvider>,
   );
 

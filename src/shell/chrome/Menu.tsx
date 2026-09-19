@@ -1,7 +1,9 @@
 import {
+  forwardRef,
   useCallback,
   useEffect,
   useId,
+  useImperativeHandle,
   useRef,
   useState,
   type ReactNode,
@@ -16,6 +18,18 @@ export interface MenuItemSpec {
   checked?: boolean;
   disabled?: boolean;
   onSelect: () => void;
+}
+
+/**
+ * For openers that are not the trigger — a right-click on the row the menu
+ * belongs to, or F2 on it. The panel still anchors to the trigger rather than
+ * to the pointer: a menu that appears under the cursor has to be positioned
+ * against the viewport by hand, and this way the same menu appears in the same
+ * place however it was asked for.
+ */
+export interface MenuHandle {
+  open: () => void;
+  close: () => void;
 }
 
 export interface MenuProps {
@@ -44,7 +58,10 @@ export interface MenuProps {
  * choice and per-file actions are all menus — so the keyboard behaviour is
  * implemented once here rather than patched at four call sites.
  */
-export function Menu({ label, items, children, align = "start", width = 200 }: MenuProps) {
+export const Menu = forwardRef<MenuHandle, MenuProps>(function Menu(
+  { label, items, children, align = "start", width = 200 },
+  ref,
+) {
   const id = useId();
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -74,6 +91,15 @@ export function Menu({ label, items, children, align = "start", width = 200 }: M
       setOpen(true);
     },
     [items],
+  );
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      open: () => openAt("first"),
+      close: () => close(false),
+    }),
+    [openAt, close],
   );
 
   useEffect(() => {
@@ -185,4 +211,4 @@ export function Menu({ label, items, children, align = "start", width = 200 }: M
       ) : null}
     </div>
   );
-}
+});

@@ -14,57 +14,185 @@
   height: 100%;
 }
 
-.shell-face-head {
-  fill: #2b2f33;
+/* The companion's own palette: the mark is ink-on-ink, not a themed control. */
+.shell-face-shell {
+  fill: #2b2b2b;
+}
+
+.shell-face-plate {
+  fill: #f3f3f3;
 }
 
 .shell-face-eye {
-  fill: #ffffff;
-  transition: cx 180ms var(--shell-ease), cy 180ms var(--shell-ease);
-}
-
-.shell-face-mouth {
   fill: none;
-  stroke: #ffffff;
-  stroke-width: 1.4;
+  stroke: #262626;
   stroke-linecap: round;
+  transition: d 200ms var(--shell-ease);
 }
 
-.shell-face[data-status="awaiting-review"] .shell-face-head {
-  fill: #6d5a3d;
+.shell-face-corner > path {
+  fill: #fafafa;
 }
 
-.shell-face[data-status="done"] .shell-face-head {
-  fill: #3d5a49;
+/* Stroked glyphs (the question mark, the magnifier) declare fill="none". */
+.shell-face-corner > path[fill="none"] {
+  stroke: #fafafa;
 }
 
-.shell-face[data-status="paused"] .shell-face-head {
-  fill: #4a4f54;
+/* The question tilts, the way the prototype's `confirm` state tilted it: a
+   symbol standing perfectly upright reads as a label, a tilted one as a
+   question actually being asked. Independent `rotate` so the breathing
+   `transform` on the same element still composes. */
+.shell-face[data-status="awaiting-review"] .shell-face-corner {
+  rotate: -6deg;
 }
 
-.shell-face svg.is-working {
-  animation: shell-face-pulse 1.6s ease-in-out infinite;
+/* Paused stops the character rather than recolouring it: the dot shrinks and
+   dims, which is the same signal the eyes are already giving. */
+.shell-face[data-status="paused"] .shell-face-corner {
+  transform: scale(0.76);
+  opacity: 0.64;
 }
 
-@keyframes shell-face-pulse {
-  50% {
-    opacity: 0.72;
+/* ---- motion ----
+   Gaze, scan and blink compose, so each owns a group of its own: the outer
+   group aims the eyes at the pointer, the middle one sweeps them across the
+   work, the inner one closes the lids. `fill-box` keeps all three centred on
+   the eyes regardless of the pose's own coordinates. */
+.shell-face-gaze,
+.shell-face-blink,
+.shell-face-scan,
+.shell-face-corner,
+.shell-face-pop {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* A new symbol arrives rather than cross-fading in place — the state changed,
+   and the mark should say so. Remounted per symbol (see PresenceFace). */
+.shell-face-pop {
+  animation: shell-face-pop 340ms var(--shell-ease) 1;
+}
+
+.shell-face[data-motion="off"] .shell-face-pop {
+  animation: none;
+}
+
+@keyframes shell-face-pop {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.3;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
   }
 }
 
+/* `--shell-face-gaze-*` is written by useGaze; `--shell-face-lift` by :hover
+   below. Kept separate so a hover cannot clobber the pointer's position. */
+.shell-face-gaze {
+  transform: translate(
+    var(--shell-face-gaze-x, 0px),
+    calc(var(--shell-face-gaze-y, 0px) + var(--shell-face-lift, 0px))
+  );
+  transition: transform 180ms var(--shell-ease);
+}
+
+.shell-face[data-blink="true"] .shell-face-blink {
+  animation: shell-face-blink 4.6s var(--shell-ease) infinite;
+}
+
+.shell-face[data-motion="scan"] .shell-face-scan {
+  animation: shell-face-scan 1.9s ease-in-out infinite;
+}
+
+.shell-face[data-motion="scan"] .shell-face-blink {
+  animation-duration: 3.2s;
+}
+
+.shell-face[data-motion="rest"] .shell-face-corner {
+  animation: shell-face-breathe 4.6s ease-in-out infinite;
+}
+
+.shell-face[data-motion="beat"] .shell-face-corner {
+  animation: shell-face-beat 5.2s var(--shell-ease) infinite;
+}
+
+@keyframes shell-face-blink {
+  0%,
+  93%,
+  100% {
+    transform: scaleY(1);
+  }
+  96% {
+    transform: scaleY(0.06);
+  }
+}
+
+@keyframes shell-face-scan {
+  0%,
+  100% {
+    transform: translateX(-3.4px);
+  }
+  50% {
+    transform: translateX(3.4px);
+  }
+}
+
+@keyframes shell-face-breathe {
+  0%,
+  100% {
+    transform: scale(0.97);
+  }
+  50% {
+    transform: scale(1.03);
+  }
+}
+
+@keyframes shell-face-beat {
+  0%,
+  16%,
+  100% {
+    transform: scale(1);
+  }
+  6% {
+    transform: scale(1.16);
+  }
+  11% {
+    transform: scale(1.08);
+  }
+}
+
+/* Limbs: drawn always, shown only once the presence is tucked (see below). */
+.shell-face-limbs {
+  fill: #f3f3f3;
+  stroke: #303030;
+  opacity: 0;
+  transition: opacity 160ms var(--shell-ease);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .shell-face svg.is-working {
-    animation: none;
+  .shell-face-gaze,
+  .shell-face-blink,
+  .shell-face-scan,
+  .shell-face-corner,
+  .shell-face-pop {
+    animation: none !important;
+    transition: none;
   }
   .shell-face-eye {
     transition: none;
   }
 }
 
+/* Bottom-right, not top-right: the top-right corner is the character's own —
+   its dot, question mark or heart lives there, and a counter sitting on top of
+   the mark's one distinguishing feature hides the state it is counting. */
 .shell-face-badge {
   position: absolute;
-  top: -2px;
   right: -2px;
+  bottom: -2px;
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
@@ -88,7 +216,9 @@
   transition: none;
 }
 
-/* Tucked against an edge: only a sliver stays on screen until hovered. */
+/* Tucked against an edge: only a sliver stays on screen until hovered. The
+   character turns to face the window and puts its limbs out, so a mark that is
+   90% off screen reads as holding on to the edge rather than as clipped. */
 .shell-presence[data-edge="left"],
 .shell-presence[data-edge="right"],
 .shell-presence[data-edge="top"],
@@ -96,8 +226,72 @@
   opacity: 0.82;
 }
 
+.shell-presence[data-edge]:not([data-edge=""]) .shell-face-limbs {
+  opacity: 1;
+}
+
+/* The overhang. The element itself stays on screen (see anchorTucked) and the
+   mark is pushed out past the window edge from inside it, so the focus ring
+   remains visible while the character is mostly hidden. */
+.shell-presence[data-edge="left"] .shell-face {
+  transform: translate(var(--shell-presence-peek-x, 0px), var(--shell-presence-peek-y, 0px))
+    rotate(90deg);
+}
+
+.shell-presence[data-edge="right"] .shell-face {
+  transform: translate(var(--shell-presence-peek-x, 0px), var(--shell-presence-peek-y, 0px))
+    rotate(-90deg);
+}
+
+.shell-presence[data-edge="top"] .shell-face {
+  transform: translate(var(--shell-presence-peek-x, 0px), var(--shell-presence-peek-y, 0px))
+    rotate(180deg);
+}
+
+.shell-presence[data-edge="bottom"] .shell-face {
+  transform: translate(var(--shell-presence-peek-x, 0px), var(--shell-presence-peek-y, 0px));
+}
+
 .shell-presence[data-edge]:not([data-edge=""]):hover {
   opacity: 1;
+}
+
+/* Hovering the presence is the one interaction the character answers directly:
+   it looks up, leans towards you and blinks once. The prototype spent a whole
+   extra state ("hover — 被你注意到") on this; CSS covers it, and the wink
+   overrides the resting blink loop for as long as the pointer is on it. */
+.shell-presence-face:hover .shell-face-gaze {
+  --shell-face-lift: -2.6px;
+}
+
+.shell-presence-face:hover .shell-face-blink {
+  animation: shell-face-wink 320ms var(--shell-ease) 1;
+}
+
+.shell-face svg {
+  transition: transform 220ms var(--shell-ease);
+}
+
+.shell-presence-face:hover .shell-face svg {
+  transform: translateY(-1px) scale(1.03);
+}
+
+@keyframes shell-face-wink {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  45% {
+    transform: scaleY(0.06);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell-face svg,
+  .shell-presence-face:hover .shell-face svg {
+    transition: none;
+    transform: none;
+  }
 }
 
 .shell-presence-face {

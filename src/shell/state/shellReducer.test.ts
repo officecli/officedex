@@ -110,6 +110,16 @@ describe("tabs", () => {
     expect(state.home).toBe(true);
   });
 
+  // A deck being generated has no file to open the workspace through: its draft
+  // is scratch that never enters the library. Without a way to leave Home
+  // without one, the run would draw behind a hidden workspace.
+  it("leaves Home with nothing open", () => {
+    const state = run(initialShellState, { type: "enter-workspace" });
+    expect(state.home).toBe(false);
+    expect(state.activeFileId).toBeNull();
+    expect(state.openFileIds).toEqual([]);
+  });
+
   it("drops tabs whose file disappeared underneath the shell", () => {
     const files = seedFiles();
     const opened = run(
@@ -148,7 +158,7 @@ describe("hydration", () => {
       presence: { placement: "sideways" as never, expanded: true, x: Number.NaN, y: 4, edge: null },
     });
     expect(state.mode).toBe("agent");
-    expect(state.navWidth).toBe(220);
+    expect(state.navWidth).toBe(190);
     expect(state.openFileIds).toEqual([]);
     expect(state.presence.placement).toBe("docked");
     // A non-finite coordinate reads as "never placed" rather than as the

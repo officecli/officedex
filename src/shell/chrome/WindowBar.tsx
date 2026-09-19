@@ -14,6 +14,14 @@ const CONTROLS = [
  * The window bar spans only the sidebar's column; the file tabs own the rest of
  * the top row. That split is the prototype's, and it is what lets the tabs sit
  * at the very top of the window instead of below a full-width title bar.
+ *
+ * Nothing else belongs here. A brand mark, a segmented Agent/Editor switch, a
+ * centred "AGENT WORKSPACE · Your workspace" caption and a Ready/Working chip
+ * were all added to this strip at one point; each one landed in the lane the
+ * tab strip and the file actions already occupy, and the switch had to be
+ * hidden outright on the compact rail — which is the default — to stop it
+ * covering the first tab. The mode control has a home already: the brand button
+ * at the top of the sidebar (see ModeMenu).
  */
 export function WindowBar() {
   const port = usePort();

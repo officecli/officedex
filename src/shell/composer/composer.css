@@ -26,6 +26,12 @@
   box-shadow: 0 2px 5px #00000005;
 }
 
+/* Home exposes the folder scope as the reference-style strip above the
+   composer. The same scope menu remains available in task/floating placements. */
+.shell-cx--home .shell-cx-scope {
+  display: none;
+}
+
 .shell-cx-input {
   display: block;
   width: 100%;
@@ -113,6 +119,67 @@
 
 .shell-cx-chip button:hover {
   background: #00000010;
+}
+
+/* ------------------------------------------------------------ reference */
+
+/* The span the canvas says is selected. A quote block rather than a chip: its
+   text is the thing being checked, and a chip would truncate it to nothing. */
+.shell-cx-reference {
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--shell-accent);
+  border-radius: 0 7px 7px 0;
+  background: var(--shell-sunken);
+}
+
+.shell-cx-reference-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shell-cx-reference-head span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--shell-ink-subtle);
+  font-size: var(--shell-text-xs);
+}
+
+.shell-cx-reference p {
+  margin: 4px 0 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text-sm);
+  line-height: 18px;
+}
+
+.shell-cx-chip-remove {
+  display: flex;
+  align-items: center;
+  flex: none;
+  padding: 2px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--shell-ink-faint);
+  cursor: pointer;
+}
+
+.shell-cx-chip-remove:hover {
+  background: #00000010;
+  color: var(--shell-ink);
+}
+
+.shell-cx-chip-remove:focus-visible {
+  outline: 2px solid var(--shell-focus);
+  outline-offset: 1px;
 }
 
 /* -------------------------------------------------------------- toolbar */

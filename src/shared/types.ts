@@ -338,6 +338,13 @@ export interface ModifyInput {
   outputDir?: string;
 }
 
+/** Applies or restores a completed agent artifact without exposing raw bytes to the renderer. */
+export interface ArtifactSuggestionFileInput {
+  suggestionId: string;
+  sourceFile: string;
+  artifactFile: string;
+}
+
 export interface TaskQuestionOption {
   id: string;
   label: string;
@@ -1347,6 +1354,8 @@ export interface DesktopAPI extends DesktopVerticalAPI {
    * one. Opening the same file twice returns the document that already exists.
    */
   openLocalFile(): Promise<DocumentRecord | null>;
+  /** Creates and registers a real blank Office file in the requested folder. */
+  createBlankDocument?(documentType: "docx" | "xlsx" | "pptx", workspaceId: string): Promise<DocumentRecord>;
 
   getPptxTaskStatus?: (taskId: string) => Promise<PptxTaskStatus>;
   skipPptxResearch?: (taskId: string) => Promise<void>;
@@ -1377,6 +1386,8 @@ export interface DesktopAPI extends DesktopVerticalAPI {
   generate(input: GenerateInput): Promise<{ taskId: string; sessionId: string; status: string }>;
   planSpreadsheetFields(input: SpreadsheetPlanFieldsInput & { headerRowIndex: number }): Promise<SpreadsheetPlanFieldsResult>;
   modify(input: ModifyInput): Promise<{ taskId: string; sessionId: string; status: string }>;
+  applyArtifactSuggestion?(input: ArtifactSuggestionFileInput): Promise<void>;
+  undoArtifactSuggestion?(input: ArtifactSuggestionFileInput): Promise<void>;
   artifactStageEdit?(input: ArtifactStageRuntimeInput): Promise<{ taskId: string; sessionId: string; status: string }>;
   startAgentRun(input: AgentRunStartInput): Promise<AgentRun>;
   getAgentRun(runId: string): Promise<AgentRun>;

@@ -26,3 +26,13 @@ export const PROMPTS_POLL_INTERVAL_MS = 4_000;
 export const WORKBOOK_POLL_INTERVAL_MS = 1_500;
 /** Credit balance and entitlement. */
 export const CREDIT_POLL_INTERVAL_MS = 60_000;
+
+/**
+ * How long an embedded editor has to report ready before its frame gives up.
+ *
+ * Generous: these are large WASM/JS bundles and a cold start on a slow disk is
+ * seconds. The point is not to be quick, it is to be finite — the failure this
+ * replaces had no end at all, and every error path in both frames is reached
+ * from a message the embed sends, so an embed that never boots said nothing.
+ */
+export const EMBED_HANDSHAKE_TIMEOUT_MS = 30_000;

@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 
+import { toast } from "../../renderer/ui";
 import { usePort } from "../port/PortContext";
 import type { FileType } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
@@ -17,7 +18,7 @@ import { reportPortFailure } from "../port/reportPortFailure";
  */
 export function useLibraryActions() {
   const port = usePort();
-  const { dispatch, reload } = useShell();
+  const { dispatch, reload, folders } = useShell();
 
   const openFile = useCallback(
     async (fileId: string) => {
@@ -71,11 +72,17 @@ export function useLibraryActions() {
         await port.files.move(fileId, folderId);
         dispatch({ type: "reveal-folder", folderId });
         await reload();
+        // The one action in this shell whose result the user cannot see: a
+        // dragged file leaves the row it was on and appears somewhere that may
+        // be scrolled out of view or collapsed. The prototype said where it
+        // went, and silence here reads as a drop that did not take.
+        const folder = folders.find((entry) => entry.id === folderId);
+        if (folder) toast.success({ key: "file-moved", content: `Moved to ${folder.name}` });
       } catch (reason) {
         reportPortFailure(reason);
       }
     },
-    [port, dispatch, reload],
+    [port, dispatch, reload, folders],
   );
 
   const setPinned = useCallback(

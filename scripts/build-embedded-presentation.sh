@@ -52,11 +52,27 @@ echo "[build-embedded-presentation] installing fegit presentation dependencies (
   cd "${SOURCE}"
   if [[ "${SOURCE_PACKAGE_MANAGER}" == "pnpm" ]]; then
     # pnpm 迁移后各子包依赖写作 workspace:*，npm 无法解析，必须用 pnpm。
+    # pnpm 11 不再读 npm_config_* 环境变量，registry / store 只能走 CLI flag。
     # registry 默认走 npmmirror：直连 registry.npmjs.org 拉元数据会超时
     # （typescript 一个包的 metadata 就有 15MB），走 Clash 代理同样慢。
     # @shimo 作用域由 pptx 自己的 .npmrc 指向内网源，直连即可，不要代理。
-    npm_config_registry="${PRESENTATION_NPM_REGISTRY:-https://registry.npmmirror.com}" \
-      pnpm install --ignore-scripts
+    PNPM_INSTALL_ARGS=(
+      --ignore-scripts
+      --registry "${PRESENTATION_NPM_REGISTRY:-https://registry.npmmirror.com}"
+    )
+    # node_modules/.modules.yaml 记录了安装时的 store 路径；与本次解析出的 store
+    # 不一致时 pnpm 会要求删掉 node_modules 重装，而 Wails 子进程没有 TTY，
+    # 直接报 ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY。本机的 store 在
+    # presentation 的上一级（vibe-officing/.pnpm-store），显式指过去。
+    if [[ -n "${PRESENTATION_PNPM_STORE_DIR:-}" ]]; then
+      PNPM_INSTALL_ARGS+=(--store-dir "${PRESENTATION_PNPM_STORE_DIR}")
+    else
+      DEFAULT_PNPM_STORE_DIR="$(cd "${SOURCE}/.." && pwd)/.pnpm-store"
+      if [[ -d "${DEFAULT_PNPM_STORE_DIR}" ]]; then
+        PNPM_INSTALL_ARGS+=(--store-dir "${DEFAULT_PNPM_STORE_DIR}")
+      fi
+    fi
+    pnpm install "${PNPM_INSTALL_ARGS[@]}"
   else
     npm_config_proxy="${npm_config_proxy:-http://127.0.0.1:7890}" \
       npm_config_https_proxy="${npm_config_https_proxy:-http://127.0.0.1:7890}" \

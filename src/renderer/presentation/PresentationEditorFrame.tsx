@@ -14,7 +14,7 @@ import {
   type PresentationEditorContext,
 } from "../../shared/presentationInspect";
 import { errorMessage } from "../utils/values";
-import { EDITOR_SCRIPT_TIMEOUT_MS, EDITOR_SWAP_TIMEOUT_MS } from "../constants/timing";
+import { EDITOR_SCRIPT_TIMEOUT_MS, EDITOR_SWAP_TIMEOUT_MS, EMBED_HANDSHAKE_TIMEOUT_MS } from "../constants/timing";
 
 const DEFAULT_PRESENTATION_URL = "/presentation/index.html?mode=embed";
 const PRESENTATION_MANIFEST_URL = "/presentation/officedex-component.json";
@@ -119,6 +119,8 @@ export function PresentationEditorFrame({
   const revisionRef = useRef(0);
   const unregisterClientToolsRef = useRef<(() => void) | undefined>(undefined);
   const disposedRef = useRef(false);
+  /** The embed completed its handshake, so the boot deadline no longer applies. */
+  const readyRef = useRef(false);
   const unavailableRef = useRef(false);
   const callbacksRef = useRef({ onDirtyChange, onUnavailable, onReady, onController, onSaved });
   // One ledger for every request/reply pair with the frame (scripts, swaps);
@@ -251,6 +253,7 @@ export function PresentationEditorFrame({
     const handleRequest = async (event: PresentationEmbedEvent) => {
       switch (event.type) {
         case "presentation:embed-ready": {
+          readyRef.current = true;
           if (event.protocolVersion !== PRESENTATION_EMBED_PROTOCOL_VERSION) {
             markUnavailable(
               `Unsupported Presentation protocol ${event.protocolVersion}.`,
@@ -402,6 +405,34 @@ export function PresentationEditorFrame({
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
   }, [executeScript, fileName, markUnavailable, post, previewToken, saveToDisk]);
+
+  /**
+   * The embed has to say hello, or say why not.
+   *
+   * Every failure this component reports is reached from a message the embed
+   * sends — so an embed that never boots reports nothing at all. The frame
+   * mounts, the iframe loads an empty document, and the deck area sits blank
+   * with no error anywhere: not on screen, not in the console, not in the log.
+   * That is the state a packaged build was stuck in, and it is invisible
+   * precisely because every code path that could have spoken up is downstream
+   * of the handshake that never happened.
+   *
+   * So the handshake itself gets a deadline. What is wrong when this fires is
+   * not knowable from here — a missing asset, a runtime that threw on boot, an
+   * HTTP endpoint the packaged app does not serve — so the message says what
+   * was observed rather than guessing a cause.
+   */
+  useEffect(() => {
+    if (!componentURL || readyRef.current) return;
+    const timer = window.setTimeout(() => {
+      if (readyRef.current || disposedRef.current) return;
+      markUnavailable(
+        "The presentation editor did not start. Its window loaded but never reported ready — "
+          + "usually a missing or broken presentation runtime in this build.",
+      );
+    }, EMBED_HANDSHAKE_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [componentURL, markUnavailable]);
 
   useEffect(
     () => () => {

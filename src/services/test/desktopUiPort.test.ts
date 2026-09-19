@@ -75,6 +75,19 @@ describe("desktop file service", () => {
     expect(byName.get("budget.xlsx")).toBe("sheet");
   });
 
+  it("keeps the producing task id on generated files", async () => {
+    const port = createDesktopUiPort({
+      api: createFakeDesktopApi({
+        documents: [{ fileName: "generated.docx", documentType: "docx", currentArtifactTaskId: "task-generate" }],
+      }),
+      window: stubWindow(),
+    });
+
+    await expect(port.files.list()).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "generated.docx", artifactTaskId: "task-generate" })]),
+    );
+  });
+
   // Documents filed nowhere belong to the default folder, which is a real
   // directory their files already sit in.
   it("puts unfiled documents in the default folder", async () => {
@@ -96,6 +109,13 @@ describe("desktop file service", () => {
     const target = files.find((file) => file.name === "budget.xlsx")!;
     const opened = await port.files.open(target.id);
     expect(opened.lastOpenedAt).toBeGreaterThan(0);
+  });
+
+  it("resolves a local file path for desktop sharing", async () => {
+    const port = createPort();
+    const file = (await port.files.list())[0];
+    expect(port.files.pathOf).toBeTypeOf("function");
+    await expect(port.files.pathOf!(file.id)).resolves.toContain(file.name);
   });
 
   // dirty is a property of an open editor, not of a file on disk: persisting it
@@ -437,11 +457,32 @@ describe("desktop agent service", () => {
     // The run happened.
     expect(api.calls).toHaveLength(1);
     expect(notices).toHaveLength(1);
-    expect(notices[0]).toMatch(/mentions/);
     expect(notices[0]).toMatch(/attachments/);
   });
 
-  it("says nothing when there was nothing to drop", async () => {
+  it("carries native attachment paths into the agent prompt", async () => {
+    const { api, port } = agentPort();
+    const notices: string[] = [];
+    port.agent.subscribe((event) => {
+      if (event.kind === "notice") notices.push(event.message);
+    });
+
+    await port.agent.send({
+      text: "Use the attached workbook",
+      folderId: "folder:default",
+      mentions: [],
+      attachments: [{ id: "a1", name: "budget.xlsx", size: 0, path: "/tmp/budget.xlsx" }],
+      modelId: "official",
+      permission: "full",
+      activeFileId: null,
+    });
+
+    expect(api.calls[0]?.input.prompt).toMatch(/budget\.xlsx/);
+    expect(api.calls[0]?.input.prompt).toMatch(/\/tmp\/budget\.xlsx/);
+    expect(notices).toEqual([]);
+  });
+
+  it("says nothing for a supported full-access run", async () => {
     const { port } = agentPort();
     const notices: string[] = [];
     port.agent.subscribe((event) => {
@@ -451,10 +492,66 @@ describe("desktop agent service", () => {
     await port.agent.send({
       text: "Summarise this",
       folderId: "folder:default",
-      mentions: [], attachments: [], modelId: "official", permission: "review",
+      mentions: [], attachments: [], modelId: "official", permission: "full",
       activeFileId: null,
     });
 
     expect(notices).toEqual([]);
+  });
+
+  it("does not warn for full access, which matches the direct-write runtime", async () => {
+    const { port } = agentPort();
+    const notices: string[] = [];
+    port.agent.subscribe((event) => {
+      if (event.kind === "notice") notices.push(event.message);
+    });
+
+    await port.agent.send({
+      text: "Apply the edits",
+      folderId: "folder:default",
+      mentions: [],
+      attachments: [],
+      modelId: "official",
+      permission: "full",
+      activeFileId: null,
+    });
+
+    expect(notices).toEqual([]);
+  });
+
+  it("carries an editor selection into the runtime prompt", async () => {
+    const { api, port } = agentPort();
+    await port.agent.send({
+      text: "Tighten this paragraph",
+      folderId: "folder:default",
+      mentions: [],
+      attachments: [],
+      modelId: "official",
+      permission: "review",
+      activeFileId: null,
+      reference: {
+        fileId: "file-notes",
+        label: "notes.docx · Introduction",
+        text: "This is the selected paragraph.",
+      },
+    });
+
+    expect(api.calls[0]?.input.prompt).toContain("Selected passage from notes.docx · Introduction");
+    expect(api.calls[0]?.input.prompt).toContain("This is the selected paragraph.");
+  });
+
+  it("carries mentioned file names into the runtime prompt", async () => {
+    const { api, port } = agentPort();
+    await port.agent.send({
+      text: "Summarise these sources",
+      folderId: "folder:default",
+      mentions: [{ kind: "file", id: "file-notes", label: "notes.docx" }],
+      attachments: [],
+      modelId: "official",
+      permission: "review",
+      activeFileId: null,
+    });
+
+    expect(api.calls[0]?.input.prompt).toContain("Mentioned files or folders: @notes.docx");
   });
 });

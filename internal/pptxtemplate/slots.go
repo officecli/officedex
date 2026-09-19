@@ -71,12 +71,30 @@ func maxChars(box TextFact) int {
 	if box.Width <= 0 {
 		return 40
 	}
-	n := int(box.Width / size * 1.7)
+	cjk := false
+	for _, r := range box.Text {
+		if r >= 0x3400 && r <= 0x9fff {
+			cjk = true
+			break
+		}
+	}
+	perLine := box.Width / size * 1.6
+	if cjk {
+		perLine = box.Width / size * 1.15
+	}
+	n := int(perLine)
+	if box.Height > 0 {
+		lines := int(box.Height / (size * 1.35))
+		if lines < 1 {
+			lines = 1
+		}
+		n *= lines
+	}
 	if n < 8 {
 		return 8
 	}
-	if n > 80 {
-		return 80
+	if n > 160 {
+		return 160
 	}
 	return n
 }

@@ -54,6 +54,8 @@ export interface FileMeta {
   dirty: boolean;
   /** Decision 2: a filter on the one file list, not a separate location. */
   pinned: boolean;
+  /** Set for artifacts produced by an agent task; used to open the result when the task completes. */
+  artifactTaskId?: string;
 }
 
 export interface FolderPort {
@@ -83,8 +85,23 @@ export interface FilePort {
   rename(id: string, name: string): Promise<void>;
   duplicate(id: string): Promise<FileMeta>;
   setPinned(id: string, pinned: boolean): Promise<void>;
+  /**
+   * Marks the open document as having unsaved changes, or not.
+   *
+   * Called by whatever is editing it — the canvas adapter — not by the shell's
+   * own controls. `FileMeta.dirty` is what the tab dot, the status bar and the
+   * save button read, and until this existed nothing in production could make it
+   * true: the flag was unreachable state.
+   *
+   * Deliberately not persisted. An editor session's unsaved state does not
+   * survive a crash, and a file permanently marked dirty after one would be
+   * worse than forgetting.
+   */
+  setDirty(id: string, dirty: boolean): Promise<void>;
   save(id: string): Promise<void>;
   remove(id: string): Promise<void>;
+  /** Resolves the real local path when the runtime can expose one safely. */
+  pathOf?(id: string): Promise<string>;
 }
 
 /* ------------------------------------------------------------------ agent */
@@ -139,6 +156,8 @@ export interface AgentTask {
   title: string;
   /** Decision 2: a task is scoped to a folder, not to a single file. */
   folderId: string;
+  /** The runtime document kind, when known. Used to expose type-specific controls. */
+  documentType?: "docx" | "xlsx" | "pptx";
   status: AgentStatus;
   /** Free-text phase shown next to the active step, e.g. "Reading project files". */
   phase: string;
@@ -169,6 +188,8 @@ export interface Attachment {
   name: string;
   /** Bytes; the shell enforces its own ceiling before calling the port. */
   size: number;
+  /** Absolute path when selected through the native desktop picker. */
+  path?: string;
   /** Set for an uploaded folder; the shell shows the count. */
   fileCount?: number;
 }
@@ -270,4 +291,6 @@ export interface UiPort {
   models: ModelPort;
   settings: SettingsPort;
   window: WindowPort;
+  /** Native multi-file picker, when the shell is running in the desktop app. */
+  pickAttachmentPaths?: () => Promise<string[] | null>;
 }

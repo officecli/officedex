@@ -1,5 +1,6 @@
 import { toast } from "../../renderer/ui";
 import { isNotImplemented } from "../../shared/notImplemented";
+import { logShellEvent } from "./shellLog";
 
 /**
  * What the user sees when a port call does not go through.
@@ -20,9 +21,17 @@ import { isNotImplemented } from "../../shared/notImplemented";
  * it is why the hooks wrap their calls rather than letting them float off as
  * `void port.x()`: an unhandled rejection is a click that vanished, which the
  * user cannot tell apart from a bug in their own document.
+ *
+ * Everything reported here is also written to the app log. A toast is for the
+ * person at the keyboard and is gone in three seconds; the log is what anyone
+ * debugging a packaged build has, and the shell wrote nothing to it at all
+ * until a blank canvas with no error turned out to be unreproducible from the
+ * outside.
  */
 export function reportPortFailure(reason: unknown): void {
+  const message = reason instanceof Error ? reason.message : String(reason);
   if (isNotImplemented(reason)) {
+    logShellEvent("not-implemented", { feature: reason.feature, message });
     toast.warning({
       key: `not-implemented:${reason.feature}`,
       content: "Not built yet",
@@ -30,9 +39,13 @@ export function reportPortFailure(reason: unknown): void {
     });
     return;
   }
+  logShellEvent("port-failure", {
+    message,
+    ...(reason instanceof Error && reason.stack ? { stack: reason.stack } : {}),
+  });
   toast.error({
     content: "That did not work",
-    description: reason instanceof Error ? reason.message : String(reason),
+    description: message,
   });
 }
 
@@ -57,8 +70,8 @@ export async function attempt(action: () => Promise<void>): Promise<boolean> {
  *
  * `attempt` covers the case where the port was asked and said no. This covers
  * the other one: a button the UI layer placed for a capability that has no
- * `UiPort` method yet, so there is nothing to call. Share, Settings, zoom,
- * dictation and the ribbon are all in this state.
+ * `UiPort` method yet, so there is nothing to call. Share, Settings, dictation
+ * and the file menu are all in this state.
  *
  * They keep their place and say so when pressed. The alternative — hiding them
  * until the service layer catches up — would mean editing the UI layer's
@@ -67,6 +80,7 @@ export async function attempt(action: () => Promise<void>): Promise<boolean> {
  * Each gap here has an entry in docs/not-implemented.md.
  */
 export function notBuiltYet(feature: string, message: string): void {
+  logShellEvent("not-implemented", { feature, message });
   toast.warning({
     key: `not-implemented:${feature}`,
     content: "Not built yet",

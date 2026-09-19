@@ -108,6 +108,7 @@ cp -R "${EMBED_DIST}" "${DIST_DIRECTORY}"
 node "${ROOT}/scripts/sync-writer-component.mjs" \
   --dist "${DIST_DIRECTORY}" \
   --public "${ROOT}/public/writer" \
+  --source "${SOURCE}" \
   --source-revision "${REVISION}"
 
 # The embed is built with writerNextDefaultFontsPlugin({ desktop: true }), which

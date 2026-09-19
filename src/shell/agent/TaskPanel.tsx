@@ -42,7 +42,13 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
             }
           : {})}
       >
-        {placement === "floating" ? <PresenceFace status={status} size={40} /> : null}
+        {/*
+          The companion heads the panel in both placements. It used to appear
+          only when floating, which left Agent mode — the mode that *is* the
+          companion — without the character anywhere on screen once a task was
+          running, since the docked column suppresses the floating presence.
+        */}
+        <PresenceFace status={status} size={placement === "floating" ? 40 : 34} tracks />
 
         <div className="shell-task-title">
           <b>{task?.title ?? "Work with Agent"}</b>
@@ -102,22 +108,24 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
             ) : null}
 
             <div className="shell-task-actions">
-              {status === "paused" ? (
-                <button type="button" className="shell-task-button" onClick={() => void agent.resume()}>
-                  <Play size={14} strokeWidth={1.8} aria-hidden="true" />
-                  Resume
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="shell-task-button"
-                  disabled={status === "done" || status === "idle"}
-                  onClick={() => void agent.pause()}
-                >
-                  <Pause size={14} strokeWidth={1.8} aria-hidden="true" />
-                  Pause
-                </button>
-              )}
+              {task.documentType !== "docx" && task.documentType !== "xlsx"
+                ? status === "paused" ? (
+                    <button type="button" className="shell-task-button" onClick={() => void agent.resume()}>
+                      <Play size={14} strokeWidth={1.8} aria-hidden="true" />
+                      Resume
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="shell-task-button"
+                      disabled={status === "done" || status === "idle"}
+                      onClick={() => void agent.pause()}
+                    >
+                      <Pause size={14} strokeWidth={1.8} aria-hidden="true" />
+                      Pause
+                    </button>
+                  )
+                : null}
               <button
                 type="button"
                 className="shell-task-button"
@@ -142,7 +150,7 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
           </>
         ) : (
           <div className="shell-task-empty">
-            <PresenceFace status="idle" size={44} />
+            <PresenceFace status="idle" size={44} tracks />
             <strong>What should we work on?</strong>
             <p>
               Describe a task for {scope?.name ?? "this folder"}. You can keep editing while it runs.

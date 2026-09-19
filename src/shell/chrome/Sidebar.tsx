@@ -3,8 +3,9 @@ import type { ReactNode } from "react";
 
 import { useShell } from "../state/ShellContext";
 import { useLibraryActions } from "../nav/useLibraryActions";
-import { notBuiltYet } from "../port/reportPortFailure";
 import { ModeMenu } from "./ModeMenu";
+import { Menu } from "./Menu";
+import { useComposerSettings } from "../composer/useComposerSettings";
 
 /**
  * The sidebar keeps its position and its top/bottom furniture in both modes and
@@ -17,6 +18,7 @@ import { ModeMenu } from "./ModeMenu";
 export function Sidebar({ children }: { children?: ReactNode }) {
   const { state, dispatch } = useShell();
   const actions = useLibraryActions();
+  const settings = useComposerSettings();
   const agent = state.mode === "agent";
   const collapsed = state.navCollapsed;
 
@@ -25,7 +27,6 @@ export function Sidebar({ children }: { children?: ReactNode }) {
       <div className="shell-sidebar-brand">
         <ModeMenu />
       </div>
-
       <nav className="shell-sidebar-top" aria-label={agent ? "Agent" : "File library"}>
         <SidebarButton
           icon={<House size={18} strokeWidth={1.6} aria-hidden="true" />}
@@ -90,28 +91,50 @@ export function Sidebar({ children }: { children?: ReactNode }) {
       ) : null}
 
       <div className="shell-sidebar-footer">
-        <button
-          type="button"
-          className="shell-profile"
-          title="Flora · Personal workspace"
-          onClick={() => notBuiltYet("account", "Accounts and workspaces are not built yet. This name is placeholder art.")}
+        {/* No account chip. It read "Flora · Personal workspace" for everyone —
+            a name nobody has, next to a workspace that does not exist. There is
+            no account system yet, so the honest footer has nothing to say about
+            who you are. It comes back when there is someone to name. */}
+        <Menu
+          label="Workspace settings"
+          align="end"
+          width={250}
+          items={[
+            {
+              id: "review",
+              label: "Review changes",
+              description: "Ask before applying Agent edits",
+              checked: settings.value.permission === "review",
+              onSelect: () => void settings.patch({ permission: "review" }),
+            },
+            {
+              id: "enter",
+              label: settings.value.enterToSend ? "Enter sends" : "Enter adds a line",
+              description: "Shift + Enter always adds a line",
+              checked: settings.value.enterToSend,
+              onSelect: () => void settings.patch({ enterToSend: !settings.value.enterToSend }),
+            },
+            {
+              id: "motion",
+              label: settings.value.reduceMotion ? "Reduced motion" : "Full motion",
+              description: "Use the system animation preference",
+              checked: settings.value.reduceMotion,
+              onSelect: () => void settings.patch({ reduceMotion: !settings.value.reduceMotion }),
+            },
+          ]}
         >
-          <span className="shell-avatar" aria-hidden="true">
-            F
-          </span>
-          {collapsed ? null : <span>Flora</span>}
-        </button>
-        <button
-          type="button"
-          className="shell-icon-button"
-          aria-label="Settings"
-          title="Settings"
-          onClick={() =>
-            notBuiltYet("settings-panel", "There is no settings panel yet. The model and permission controls live in the composer.")
-          }
-        >
-          <Settings2 size={18} strokeWidth={1.6} aria-hidden="true" />
-        </button>
+          {(triggerProps) => (
+            <button
+              {...triggerProps}
+              type="button"
+              className="shell-icon-button"
+              aria-label="Settings"
+              title="Settings"
+            >
+              <Settings2 size={18} strokeWidth={1.6} aria-hidden="true" />
+            </button>
+          )}
+        </Menu>
       </div>
     </aside>
   );

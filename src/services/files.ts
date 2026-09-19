@@ -38,8 +38,6 @@ function toEpoch(value: string | undefined): number {
 export interface FileService extends FilePort {
   /** Resolves a file id to its path on disk, for the canvas adapter. */
   pathOf(id: string): Promise<string>;
-  /** Reports the dirty flag the canvas owns. See the note on `dirty` below. */
-  setDirty(id: string, dirty: boolean): void;
   /** Drops cached state for files that no longer exist. */
   forget(id: string): void;
 }
@@ -82,6 +80,7 @@ export function createFileService(api: DesktopAPI): FileService {
       lastOpenedAt: lastOpened.get(record.filePath) ?? null,
       dirty: dirtyFiles.has(record.id),
       pinned: record.pinned,
+      ...(record.currentArtifactTaskId ? { artifactTaskId: record.currentArtifactTaskId } : {}),
     };
   }
 
@@ -103,16 +102,20 @@ export function createFileService(api: DesktopAPI): FileService {
       return out;
     },
 
-    async create(_type, _folderId): Promise<FileMeta> {
-      // Deliberately unimplemented, not forgotten. Creating an empty document
-      // needs a blank seed (only blank.pptx exists) and, more importantly, a
-      // decision about when the file appears on disk — Office writes nothing
-      // until the first save, and FileMeta.dirty can express exactly that.
-      // See docs/uiport-scope.md.
-      throw new NotImplementedError(
-        "files.create",
-        "Creating a blank document is not built yet. Ask the agent for one, or open a file you already have.",
+    async create(type, folderId): Promise<FileMeta> {
+      if (!api.createBlankDocument) {
+        throw new NotImplementedError(
+          "files.create",
+          "Creating a blank document requires a newer OfficeDex runtime.",
+        );
+      }
+      const record = await api.createBlankDocument(
+        EXTENSIONS[type] as "docx" | "xlsx" | "pptx",
+        folderId,
       );
+      const meta = toFileMeta(record, await lastOpenedByPath());
+      if (!meta) throw new Error(`Unsupported document type: ${record.documentType}`);
+      return meta;
     },
 
     async openFromDisk() {
@@ -179,7 +182,7 @@ export function createFileService(api: DesktopAPI): FileService {
       return record.filePath;
     },
 
-    setDirty(id, dirty) {
+    async setDirty(id, dirty) {
       if (dirty) dirtyFiles.add(id);
       else dirtyFiles.delete(id);
     },

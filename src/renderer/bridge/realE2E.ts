@@ -1,6 +1,6 @@
 // The dev-browser E2E transport: JSON RPC + SSE to a real officedex process
 // behind the Vite proxy.
-import type { AppUpdateCheckResult, AppUpdateEvent, AppUpdateStatus, Artifact, AgentClientToolReassignInput, AgentClientToolResultInput, AgentRun, AgentRunApproveInput, AgentRunRespondInput, AgentRunStartInput, ArtifactStageRuntimeInput, AuthEvent, BinaryFileData, BridgeEvent, BridgeRuntimeSnapshot, CreditStatus, CreateImageTemplatePublishRequestInput, CreateUserImageTemplateInput, DesktopAPI, GenerateInput, ImageTemplatePublishRequest, ImagePromptTemplate, InviteInfo, LlmProvider, LocalTextDocument, LoginInput, PlanPptxJSResult, ModifyInput, PeekReportContextResult, CreateWorkbookFromSheetInput, DrawingAsset, CaptureTimelineNodeInput, TimelineCapturedNode, PreparePptxEditorResult, SavePptxEditorSnapshotInput, SavePptxEditorAssetInput, ExportPptxEditorInput, ClosePptxEditorInput, PptxEditorSaveResult, PptxEditorSaveAssetResult, PrepareXlsxEditorResult, PreviewGrant, ProviderTestInput, ProviderSnapshot, ProviderTestResult, RedeemResult, RecentFile, ReportCapabilityResult, RendererLogInput, CloseXlsxEditorInput, SpreadsheetPlanFieldsInput, SpreadsheetPlanFieldsResult, SaveDocxResult, SaveXlsxEditorInput, StageXlsxEditorImageInput, SaveXlsxEditorResult, SubmitReportInput, SubmitReportResult, TaskHistoryEntry, UserSettings, WorkspaceSummary, WhoAmIResult, ActivityPage, DocumentPage, DocumentRecord, FolderRecord, RunRecord} from "../../shared/types";
+import type { AppUpdateCheckResult, AppUpdateEvent, AppUpdateStatus, Artifact, AgentClientToolReassignInput, AgentClientToolResultInput, AgentRun, AgentRunApproveInput, AgentRunRespondInput, AgentRunStartInput, ArtifactStageRuntimeInput, ArtifactSuggestionFileInput, AuthEvent, BinaryFileData, BridgeEvent, BridgeRuntimeSnapshot, CreditStatus, CreateImageTemplatePublishRequestInput, CreateUserImageTemplateInput, DesktopAPI, GenerateInput, ImageTemplatePublishRequest, ImagePromptTemplate, InviteInfo, LlmProvider, LocalTextDocument, LoginInput, PlanPptxJSResult, ModifyInput, PeekReportContextResult, CreateWorkbookFromSheetInput, DrawingAsset, CaptureTimelineNodeInput, TimelineCapturedNode, PreparePptxEditorResult, SavePptxEditorSnapshotInput, SavePptxEditorAssetInput, ExportPptxEditorInput, ClosePptxEditorInput, PptxEditorSaveResult, PptxEditorSaveAssetResult, PrepareXlsxEditorResult, PreviewGrant, ProviderTestInput, ProviderSnapshot, ProviderTestResult, RedeemResult, RecentFile, ReportCapabilityResult, RendererLogInput, CloseXlsxEditorInput, SpreadsheetPlanFieldsInput, SpreadsheetPlanFieldsResult, SaveDocxResult, SaveXlsxEditorInput, StageXlsxEditorImageInput, SaveXlsxEditorResult, SubmitReportInput, SubmitReportResult, TaskHistoryEntry, UserSettings, WorkspaceSummary, WhoAmIResult, ActivityPage, DocumentPage, DocumentRecord, FolderRecord, RunRecord} from "../../shared/types";
 import type { JiraConnectionSummary, JiraProbeResult, LiquipediaConnectionSummary, LiquipediaProbeResult, MarketingCampaignPlanInput, MarketingCampaignPlanResult, CampaignImageInput, CampaignImageResult } from "../../shared/verticals";
 import { defaultProxySettings } from "../defaults";
 import { agentClientId } from "../agentClientIdentity";
@@ -123,8 +123,14 @@ export function createRealE2EAPI(endpoint: string): DesktopAPI {
       const record = await rpc<DocumentRecord>("OpenLocalFile");
       return record && record.id ? record : null;
     },
+    createBlankDocument: (documentType, workspaceId) =>
+      rpc<DocumentRecord>("CreateBlankDocument", { documentType, workspaceId }),
     modify: (input: ModifyInput) =>
       rpc<{ taskId: string; sessionId: string; status: string }>("Modify", input),
+    applyArtifactSuggestion: (input: ArtifactSuggestionFileInput) =>
+      rpc<void>("ApplyArtifactSuggestion", input),
+    undoArtifactSuggestion: (input: ArtifactSuggestionFileInput) =>
+      rpc<void>("UndoArtifactSuggestion", input),
     artifactStageEdit: (input: ArtifactStageRuntimeInput) =>
       rpc<{ taskId: string; sessionId: string; status: string }>("ArtifactStageEdit", input),
     respond: async (input) => decodeRealE2ERawBytes(await rpc<unknown>("Respond", input)),

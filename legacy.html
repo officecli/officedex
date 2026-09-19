@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OfficeDex (previous interface)</title>
+    <link rel="icon" type="image/png" href="./officedex-logo.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <!--
+      The previous interface, kept reachable while the new one catches up.
+
+      It is still the only place several capabilities exist at all: accounts and
+      billing, the vertical connectors, the image and preview surfaces. Nothing
+      links here — it is reached by typing the address — because it is a way
+      back for a user who needs one, not a second front door.
+
+      Retired in S5, once docs/interaction-rules.md is annotated and nothing
+      here is the last home of anything.
+    -->
+    <div id="root"></div>
+    <script type="module" src="/src/renderer/main.tsx"></script>
+  </body>
+</html>

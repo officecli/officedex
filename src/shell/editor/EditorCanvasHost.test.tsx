@@ -73,10 +73,10 @@ describe("EditorCanvasHost persistence", () => {
     const root = shell.view.container.querySelector<HTMLElement>("#shell");
     if (!root) throw new Error("shell root missing");
 
-    expect(root.style.getPropertyValue("--shell-task-w")).toBe("340px");
+    expect(root.style.getPropertyValue("--shell-task-w")).toBe("320px");
     await shell.dispatch({ type: "set-mode", mode: "editor" });
     expect(root.style.getPropertyValue("--shell-task-w")).toBe("0px");
     // The sidebar is untouched by a mode change; only the agent column moves.
-    expect(root.style.getPropertyValue("--shell-nav-w")).toBe("220px");
+    expect(root.style.getPropertyValue("--shell-nav-w")).toBe("52px");
   });
 });

@@ -10,6 +10,7 @@ import {
 import { useDesktopApi } from "../services/desktopApi";
 import { registerActiveEditorClientTools } from "../activeEditorClientTools";
 import { errorMessage } from "../utils/values";
+import { EMBED_HANDSHAKE_TIMEOUT_MS } from "../constants/timing";
 
 const DEFAULT_WRITER_URL = "/writer/index.html";
 const WRITER_MANIFEST_URL = "/writer/officedex-component.json";
@@ -97,6 +98,8 @@ export function WriterEditorFrame({
   const fingerprintRef = useRef<string | undefined>(undefined);
   const unregisterClientToolsRef = useRef<(() => void) | undefined>(undefined);
   const disposedRef = useRef(false);
+  /** The embed completed its handshake, so the boot deadline no longer applies. */
+  const readyRef = useRef(false);
   const unavailableRef = useRef(false);
   const callbacksRef = useRef({ onDirtyChange, onSelectionChange, onUnavailable, onReady, onSaved, onAgentReady });
   // The agent's read_selection tool answers from here rather than a round trip:
@@ -214,6 +217,7 @@ export function WriterEditorFrame({
     const handleEvent = async (event: WriterEmbedEvent) => {
       switch (event.type) {
         case "writer:embed-ready": {
+          readyRef.current = true;
           if (event.protocolVersion !== WRITER_EMBED_PROTOCOL_VERSION) {
             markUnavailable(`Unsupported Writer protocol ${event.protocolVersion}.`);
             return;
@@ -344,6 +348,31 @@ export function WriterEditorFrame({
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
   }, [api, fileName, markUnavailable, post, previewToken, readOnly, requestReplaceText, requestSave, requestSelection]);
+
+  /**
+   * The embed has to say hello, or say why not.
+   *
+   * Every failure this component reports is reached from a message the embed
+   * sends, so an embed that never boots reports nothing at all: the iframe
+   * loads an empty document and the page area sits blank with no error
+   * anywhere. That is exactly how a missing host runtime read from the outside
+   * — Writer threw during module evaluation, inside its own graph, where no
+   * host callback can see it — and it cost a full investigation to find.
+   *
+   * What is wrong when this fires is not knowable from here, so the message
+   * says what was observed rather than guessing a cause.
+   */
+  useEffect(() => {
+    if (!componentURL || readyRef.current) return;
+    const timer = window.setTimeout(() => {
+      if (readyRef.current || disposedRef.current) return;
+      markUnavailable(
+        "The Word editor did not start. Its window loaded but never reported ready — "
+          + "usually a missing or broken Writer runtime in this build.",
+      );
+    }, EMBED_HANDSHAKE_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [componentURL, markUnavailable]);
 
   useEffect(
     () => () => {

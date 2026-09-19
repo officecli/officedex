@@ -77,7 +77,10 @@ export async function preparePage(page: Page): Promise<void> {
     }
     throw error;
   });
-  await page.goto("/");
+  // These specs drive the previous interface, which moved off `/` when the new
+  // shell became the entry point. It is still built and still served; only the
+  // address changed.
+  await page.goto("/legacy.html");
   await expect(page.getByText("OfficeDex").first()).toBeVisible({ timeout: 60_000 });
   await dismissOnboarding(page);
 }

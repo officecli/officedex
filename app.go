@@ -248,7 +248,11 @@ type App struct {
 	// sourceDigests is the overwrite guard for saves that write back to a file
 	// the user opened; see app_source_digest.go.
 	sourceDigests *sourceDigests
-	demoFlow      *demoflow.Engine
+	// artifactSuggestionBackups holds one guarded snapshot per applied Agent
+	// suggestion. It is process-local by design: a restart invalidates an
+	// in-memory undo affordance instead of pretending a stale snapshot is safe.
+	artifactSuggestionBackups map[string]string
+	demoFlow                  *demoflow.Engine
 
 	mu             sync.Mutex
 	cachedSettings types.UserSettings
@@ -351,16 +355,17 @@ func NewApp() (*App, error) {
 	login.SetProxyEnvSupplier(proxyPool.SubprocessEnv)
 
 	app := &App{
-		userDataDir:       userDataDir,
-		workspaceDir:      workspaceDir,
-		runtimeRoot:       filepath.Join(userDataDir, "runtime"),
-		desktopInstanceID: identity.DesktopInstanceID,
-		settingsStore:     settingsStore,
-		localStore:        localStore,
-		previewReg:        previewReg,
-		sourceDigests:     newSourceDigests(),
-		cachedSettings:    cached,
-		proxyPool:         proxyPool,
+		userDataDir:               userDataDir,
+		workspaceDir:              workspaceDir,
+		runtimeRoot:               filepath.Join(userDataDir, "runtime"),
+		desktopInstanceID:         identity.DesktopInstanceID,
+		settingsStore:             settingsStore,
+		localStore:                localStore,
+		previewReg:                previewReg,
+		sourceDigests:             newSourceDigests(),
+		artifactSuggestionBackups: make(map[string]string),
+		cachedSettings:            cached,
+		proxyPool:                 proxyPool,
 	}
 	repoRoot, ok := config.ProcessCwd()
 	if !ok {

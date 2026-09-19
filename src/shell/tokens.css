@@ -49,15 +49,18 @@
   --shell-shadow-panel: 0 12px 32px #24333f18, 0 2px 5px #24333f08;
 
   /* ---- Metrics -------------------------------------------------------- */
+  /* Final office-shell overrides in the reference prototype use a compact
+     40px titlebar and a 32px document-tab strip. The rail and Agent column
+     remain user-resizable below. */
   --shell-windowbar-h: 40px;
   --shell-tabs-h: 40px;
-  --shell-tab-h: 34px;
+  --shell-tab-h: 32px;
   --shell-ribbon-h: 112px;
   --shell-statusbar-h: 32px;
   --shell-row-h: 36px; /* sidebar row + collapsed rail button */
   --shell-rail-w: 52px; /* collapsed sidebar */
-  --shell-nav-w: 220px; /* expanded sidebar, clamped 160–300 */
-  --shell-task-w: 340px; /* docked agent column, clamped 320–660 */
+  --shell-nav-w: 190px; /* expanded sidebar, matching the reference frame */
+  --shell-task-w: 320px; /* docked agent column, matching the reference frame */
 
   /* ---- Type ----------------------------------------------------------- */
   --shell-font: "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI",

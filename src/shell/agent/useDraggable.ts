@@ -103,6 +103,30 @@ export function useDraggable({
     return () => window.removeEventListener("resize", onResize);
   }, [onChange, place, position.x, position.y, position.edge]);
 
+  /**
+   * Escape abandons a drag in progress and puts the object back.
+   *
+   * On `window`, not on the handle: a pointer capture does not move focus, so
+   * during a drag the key event goes to whatever had focus before — usually
+   * not the thing being dragged. The prototype had the same escape hatch, and
+   * without it the only way out of a drag you did not mean to start is to
+   * finish it somewhere and drag back.
+   */
+  useEffect(() => {
+    if (!dragging) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      const start = origin.current;
+      if (!start) return;
+      event.preventDefault();
+      origin.current = null;
+      setDragging(false);
+      onChange(start.from);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [dragging, onChange]);
+
   const handleProps = {
     onPointerDown(event: React.PointerEvent<HTMLElement>) {
       if (event.button !== 0) return;

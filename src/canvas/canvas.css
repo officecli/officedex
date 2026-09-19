@@ -1,0 +1,47 @@
+/**
+ * Size for the editors this layer mounts.
+ *
+ * Each embedded editor renders a single root — an iframe for Writer and the
+ * presentation runtime, a section for the workbook — and none of them sizes
+ * itself. In the old UI the rules came from `renderer/preview/PreviewApp.css`
+ * and `renderer/styles/spreadsheet.css`, which that entry point imports and the
+ * shell does not.
+ *
+ * So a deck opened in the shell mounted correctly, reported no error, and drew
+ * nothing: an iframe with no dimensions collapses to its intrinsic size against
+ * a canvas the same colour. The most expensive kind of bug — everything says it
+ * worked.
+ *
+ * Restated here rather than importing the old stylesheet, which carries several
+ * hundred rules for surfaces this shell does not have and would re-open the
+ * class-name collision that `--od-*` exists to avoid. What the canvas layer
+ * mounts, the canvas layer sizes.
+ */
+
+.shell-canvas > .pptx-embed-frame,
+.shell-canvas > .writer-embed-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* Slides carry their own paper, so the surround stays dark: a light ground here
+   would read as part of the deck. */
+.shell-canvas > .pptx-embed-frame {
+  background: #1f1f1f;
+}
+
+.shell-canvas > .writer-embed-frame {
+  background: var(--shell-sunken);
+}
+
+/* The workbook mounts a section rather than a frame. Its own stylesheet travels
+   with `SpreadsheetCanvas` now — it used to be imported only by the old entry
+   point, so in the shell the workbook had no styles at all. What is left here
+   is the outer box, which is this layer's business. Scoped by ancestor so it
+   cannot reach the old UI's copy. */
+.shell-canvas > .spreadsheet-canvas {
+  position: absolute;
+  inset: 0;
+}

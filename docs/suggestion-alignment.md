@@ -1,14 +1,15 @@
 # `AgentSuggestion` 需要对齐的问题清单
 
-**这份清单不阻塞任何进度。** 按项目原则（见 `not-implemented.md`），
-`applySuggestion` / `undoSuggestion` 已经抛 `NotImplementedError`，卡片和两个按钮
-留在 UI 层放它的位置，点击时说明尚未实现。S4-2 可以随时开工，也可以一直等。
+**2026-09-19 已完成最小闭环。** Review 修改会保留为独立 artifact，用户点击
+Apply 后由 Go 侧把 artifact 替换到源文件，并保存进程内快照；Undo 恢复该快照。
+这份文档保留 runtime 层的长期对齐问题，避免把文件级快照误说成编辑器原生 undo。
 
 清单的用途是：等 runtime 侧有余力谈这件事时，把已经查清的事实和四个待决问题一次交出去，
 不用重新考古。
 
 写下来的理由：`AgentSuggestion` 是这一期唯一的全新产品概念，不是迁移。
-服务层自行发明一套，等 runtime 侧给出真正的模型时就得推倒重来。
+当前服务层采用文件级 suggestion id；等 runtime 提供原生 suggestion/inverse 协议时，
+可以替换 Go 侧快照实现而不改 UI 合约。
 
 ---
 

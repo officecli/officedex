@@ -42,12 +42,17 @@ export function ShellProvider({ children }: { children: ReactNode }) {
   const [files, setFiles] = useState<FileMeta[]>([]);
   const [loaded, setLoaded] = useState(false);
 
-  const reload = useCallback(async () => {
+  const load = useCallback(async () => {
     const [nextFolders, nextFiles] = await Promise.all([port.folders.list(), port.files.list()]);
     setFolders(nextFolders);
     setFiles(nextFiles);
     dispatch({ type: "prune-files", files: nextFiles });
+    return { folders: nextFolders, files: nextFiles };
   }, [port]);
+
+  const reload = useCallback(async () => {
+    await load();
+  }, [load]);
 
   useEffect(() => {
     let cancelled = false;
@@ -59,6 +64,66 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [reload]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const unsubscribe = port.agent.subscribe((event) => {
+      if (event.kind !== "task") return;
+      // Apply writes the source file on disk. Reopen that source in the real
+      // editor so its in-memory session cannot keep showing the pre-Apply
+      // bytes (and avoid racing the completed-artifact auto-open below).
+      if (event.task.suggestion?.applied) {
+        const sourceId = event.task.suggestion.targetFileId;
+        void (async () => {
+          try {
+            const opened = await port.files.open(sourceId);
+            if (cancelled) return;
+            dispatch({ type: "reveal-folder", folderId: opened.folderId });
+            dispatch({ type: "select-folder", folderId: opened.folderId });
+            dispatch({ type: "open-file", fileId: opened.id });
+            await reload();
+          } catch {
+            // The Apply call already reported its failure. Keep the source
+            // available in the library if reopening the editor is transient.
+          }
+        })();
+        return;
+      }
+      if (event.task.status !== "done") return;
+      const taskId = event.task.id;
+
+      // The Wails event is emitted before the SQLite writer finishes recording
+      // the artifact. Retry briefly instead of racing the projection and
+      // leaving a completed result invisible until the next manual reload.
+      const delays = [0, 120, 400];
+      void (async () => {
+        for (const delay of delays) {
+          if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay));
+          if (cancelled) return;
+          const next = await load();
+          const artifact = next.files.find((file) => file.artifactTaskId === taskId);
+          if (!artifact) continue;
+          try {
+            const opened = await port.files.open(artifact.id);
+            if (cancelled) return;
+            dispatch({ type: "reveal-folder", folderId: opened.folderId });
+            dispatch({ type: "select-folder", folderId: opened.folderId });
+            dispatch({ type: "open-file", fileId: opened.id });
+            await reload();
+          } catch {
+            // The task itself already reported its failure. A transient open
+            // failure should not turn a successful generation into a shell
+            // error; the result remains available in the refreshed library.
+          }
+          return;
+        }
+      })();
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [load, port]);
 
   useEffect(() => {
     // Only persist once the workspace is known, so a slow first load cannot

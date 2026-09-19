@@ -176,6 +176,9 @@ export function createFakePort(options: FakePortOptions = {}): UiPort {
       async setPinned(id, pinned) {
         find(id).pinned = pinned;
       },
+      async setDirty(id, dirty) {
+        find(id).dirty = dirty;
+      },
       async save(id) {
         const file = find(id);
         file.dirty = false;

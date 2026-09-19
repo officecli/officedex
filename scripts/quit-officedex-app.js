@@ -4,11 +4,22 @@
 ObjC.import('AppKit');
 ObjC.import('Foundation');
 
+// Every bundle this repository builds. Both interfaces ship as separate apps
+// with separate identifiers, and a rebuild has to quit whichever is running —
+// matching only the shell's identifier left a legacy build replacing a bundle
+// that was open, which macOS handles by keeping the deleted one running.
+var OFFICEDEX_BUNDLES = [
+  { identifier: 'com.wails.OfficeDex', bundle: /\/OfficeDex\.app$/ },
+  { identifier: 'com.wails.OfficeDexLegacy', bundle: /\/OfficeDex Legacy\.app$/ },
+];
+
 function isOfficeDexApp(app) {
-  if (ObjC.unwrap(app.bundleIdentifier) !== 'com.wails.OfficeDex') return false;
+  var identifier = ObjC.unwrap(app.bundleIdentifier);
+  var known = OFFICEDEX_BUNDLES.filter(function (entry) { return entry.identifier === identifier; })[0];
+  if (!known) return false;
   var bundle = ObjC.unwrap(app.bundleURL.path);
   var executable = ObjC.unwrap(app.executableURL.path);
-  return typeof bundle === 'string' && /\/OfficeDex\.app$/.test(bundle)
+  return typeof bundle === 'string' && known.bundle.test(bundle)
     && executable === bundle + '/Contents/MacOS/officedex';
 }
 

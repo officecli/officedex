@@ -30,6 +30,7 @@ import type {
 import { uint8ArrayToBase64 } from "../utils/bytes";
 import { errorMessage } from "../utils/values";
 import { delay } from "../utils/timing";
+import "../styles/spreadsheet.css";
 
 export type SpreadsheetCanvasState = "loading" | "clean" | "dirty" | "saving" | "saved" | "error";
 
@@ -59,6 +60,16 @@ export interface SpreadsheetCanvasProps {
   grant: PreviewGrant;
   onDirtyChange?: (dirty: boolean) => void;
   onStateChange?: (state: SpreadsheetCanvasState) => void;
+  /**
+   * The selected range changed — **address only, no values**.
+   *
+   * Deliberately the cheap half of `readSelection`: reading the cells means
+   * `getText("matrix")` over the whole block, which is fine once for a message
+   * the user is sending and wasteful on every arrow key. Null means the
+   * selection is not a readable range (nothing selected, or a column/object
+   * selection the tools do not handle).
+   */
+  onSelectionChange?: (address: Omit<WorkbookSelectionSnapshot, "values"> | null) => void;
   onError?: (error?: string) => void;
   onSaveError?: (error?: string) => void;
   onSessionClosed?: (previewToken: string) => void;
@@ -240,7 +251,7 @@ export function styledCellData(existing: SheetCellData | undefined, style: Workb
 }
 
 export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, SpreadsheetCanvasProps>(
-  function SpreadsheetCanvas({ artifact, grant, onDirtyChange, onStateChange, onError, onSaveError, onSessionClosed }, ref) {
+  function SpreadsheetCanvas({ artifact, grant, onDirtyChange, onStateChange, onSelectionChange, onError, onSaveError, onSessionClosed }, ref) {
   const api = useDesktopApi();
     const containerRef = useRef<HTMLDivElement>(null);
     const t = useT();
@@ -263,14 +274,14 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
     const catalogSelectionChangedRef = useRef(false);
     const catalogProgrammaticSelectionUntilRef = useRef(0);
     const markerFrameRef = useRef<number | undefined>(undefined);
-    const callbacksRef = useRef({ onDirtyChange, onStateChange, onError, onSaveError, onSessionClosed });
+    const callbacksRef = useRef({ onDirtyChange, onStateChange, onSelectionChange, onError, onSaveError, onSessionClosed });
     const [state, setState] = useState<SpreadsheetCanvasState>("loading");
     const [prepareError, setPrepareError] = useState<string | null>(null);
     const [loadAttempt, setLoadAttempt] = useState(0);
     const [headerMarkers, setHeaderMarkers] = useState<HeaderMarkerPosition[]>([]);
     const [catalogRange, setCatalogRange] = useState<CatalogRangePosition>();
 
-    callbacksRef.current = { onDirtyChange, onStateChange, onError, onSaveError, onSessionClosed };
+    callbacksRef.current = { onDirtyChange, onStateChange, onSelectionChange, onError, onSaveError, onSessionClosed };
     latestGrantTokenRef.current = grant.token;
 
     const publishState = useCallback((nextState: SpreadsheetCanvasState) => {
@@ -281,6 +292,41 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
     const publishDirty = useCallback((dirty: boolean) => {
       dirtyRef.current = dirty;
       callbacksRef.current.onDirtyChange?.(dirty);
+    }, []);
+
+    /**
+     * Tell the shell what is selected, cheaply.
+     *
+     * The address only — see `onSelectionChange`. `readSelectionAddress` throws
+     * for anything that is not a readable cell range (no selection yet, an
+     * object, a whole column), and that is not an error here: it is the answer,
+     * and the answer is "nothing to quote".
+     */
+    const publishSelection = useCallback(() => {
+      const report = callbacksRef.current.onSelectionChange;
+      if (!report) return;
+      const editor = editorRef.current;
+      if (!editor) {
+        report(null);
+        return;
+      }
+      try {
+        const worksheet = editor.activeSheet;
+        const selection = editor.selections?.[0]?.getRange();
+        if (!selection || (selection.type !== "cells" && selection.type !== "rows")) {
+          report(null);
+          return;
+        }
+        const column = selection.type === "rows" ? 0 : selection.column;
+        const columnCount = selection.type === "rows" ? worksheet.columnCount : selection.columnCount;
+        report({
+          sheetId: worksheet.id,
+          sheetName: worksheet.name,
+          range: { row: selection.row, column, rowCount: selection.rowCount, columnCount },
+        });
+      } catch {
+        report(null);
+      }
     }, []);
 
     const scheduleHeaderMarkerLayout = useCallback(() => {
@@ -357,6 +403,17 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
     const openExternal = useCallback(() => {
       void api.openPath(artifact.filePath).catch(() => undefined);
     }, [artifact.filePath]);
+
+    /** Everything a real content change means, in one place. */
+    const markChanged = useCallback(() => {
+      changeVersionRef.current += 1;
+      publishDirty(true);
+      callbacksRef.current.onError?.(undefined);
+      callbacksRef.current.onSaveError?.(undefined);
+      publishState("dirty");
+      scheduleHeaderMarkerLayout();
+      scheduleCatalogRangeLayout();
+    }, [publishDirty, publishState, scheduleCatalogRangeLayout, scheduleHeaderMarkerLayout]);
 
     useLayoutEffect(() => {
       const container = containerRef.current;
@@ -462,14 +519,49 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
           }
           observer = new ResizeObserver(() => window.dispatchEvent(new Event("resize")));
           observer.observe(container);
-          unsubscribe = editor.content.addChangeListener(() => {
-            changeVersionRef.current += 1;
-            publishDirty(true);
-            callbacksRef.current.onError?.(undefined);
-            callbacksRef.current.onSaveError?.(undefined);
-            publishState("dirty");
-            scheduleHeaderMarkerLayout();
-            scheduleCatalogRangeLayout();
+          /*
+           * What the workbook looked like the moment it finished loading.
+           *
+           * The Sheet SDK emits one content change of its own while it settles,
+           * after the listener below is attached and after the editor promise
+           * has resolved — there is no point in the lifecycle at which it can be
+           * excluded by timing. Untreated it marks a file the user has only
+           * opened as having unsaved changes: the status bar says so, the tab
+           * carries the dot, and closing it demands a save of nothing.
+           *
+           * So the first change is checked rather than trusted, and checked
+           * against the SDK's own serialisation rather than against
+           * `prepared.modocContent` — the two normalise differently, and a
+           * comparison that is never equal would defeat the whole guard. The
+           * check stops after the first change that really did change
+           * something, which is the user's first edit.
+           */
+          let loadedContent: string | null = null;
+          const loaded = editor;
+          try {
+            loadedContent = (await loaded.content.getContent()).stringify();
+          } catch {
+            // Unreadable at load: fall through and treat every change as real.
+            // A spurious dirty flag is better than swallowing a genuine edit.
+          }
+          if (disposed) {
+            await teardown();
+            return;
+          }
+          unsubscribe = loaded.content.addChangeListener(() => {
+            if (loadedContent !== null) {
+              const baseline = loadedContent;
+              void Promise.resolve(loaded.content.getContent()).then((content) => {
+                if (content.stringify() === baseline) return;
+                loadedContent = null;
+                markChanged();
+              }, () => {
+                loadedContent = null;
+                markChanged();
+              });
+              return;
+            }
+            markChanged();
           });
           editorRef.current = editor;
           sessionIdRef.current = sessionId;
@@ -481,6 +573,7 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
             if (Date.now() > catalogProgrammaticSelectionUntilRef.current) {
               catalogSelectionChangedRef.current = true;
             }
+            publishSelection();
             scheduleOverlays();
           };
           viewUnsubscribers.push(
@@ -515,7 +608,7 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
         focusedRef.current = false;
         void teardown();
       };
-    }, [artifact.filePath, grant.token, loadAttempt, publishDirty, publishState, scheduleCatalogRangeLayout, scheduleHeaderMarkerLayout]);
+    }, [artifact.filePath, grant.token, loadAttempt, markChanged, publishDirty, publishState, scheduleCatalogRangeLayout, scheduleHeaderMarkerLayout]);
 
     const save = useCallback((): Promise<boolean> => {
       if (savePromiseRef.current) {

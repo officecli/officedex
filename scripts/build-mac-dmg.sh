@@ -125,6 +125,7 @@ echo "$$" > "${LOCK_DIR}/pid"
 trap 'rm -rf "${LOCK_DIR}"' EXIT
 
 APP_VERSION="$(node -p 'require("./package.json").version')"
+OFFICECLI_RELEASE_VERSION="$(node -p 'require("./package.json").officecliVersion')"
 DMG_PATH="${OUT_DIR}/OfficeDex-${APP_VERSION}-darwin-${TARGET_ARCH}.dmg"
 
 # The DMG path is fixed per version+arch, and the build step below does `rm -f`
@@ -269,9 +270,13 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
       # officecli is pure Go (CGO_ENABLED=0 in its own release config), so
       # GOARCH alone cross-compiles it cleanly.
       env -u GOROOT GOOS=darwin GOARCH="${GO_ARCH}" CGO_ENABLED=0 go build -trimpath \
+        -ldflags "-s -w -X github.com/officecli/officecli/internal/cli.Version=${OFFICECLI_RELEASE_VERSION} -X github.com/officecli/officecli/internal/cli.Commit=local-release -X github.com/officecli/officecli/internal/cli.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
         -o "${OFFICEDEX_DIR}/build/officecli/officecli" ./cmd/officecli
     )
     lipo -info "${OFFICEDEX_DIR}/build/officecli/officecli" | head -1
+    node "${OFFICEDEX_DIR}/scripts/verify-officecli-canvas-contract.mjs" \
+      --binary "${OFFICEDEX_DIR}/build/officecli/officecli" \
+      --expected "${OFFICECLI_RELEASE_VERSION}"
   else
     echo "[${LOG}] officecli-internal not found; keeping fetched release binary" >&2
     echo "[${LOG}] WARNING: it may lack the worker cacheDir fix" >&2

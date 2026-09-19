@@ -12,6 +12,24 @@ const FACE_SIZE = 56;
 const PANEL_SIZE = { width: 340, height: 520 };
 
 /**
+ * Splits a tucked position into an on-screen anchor and the overhang.
+ *
+ * Only tucked positions are split: a freely placed presence is always fully on
+ * screen already, and moving it would fight the drag it just finished.
+ */
+function anchorTucked(
+  position: DraggablePosition,
+  size: { width: number; height: number },
+): { x: number; y: number; offsetX: number; offsetY: number } {
+  if (!position.edge || typeof window === "undefined") {
+    return { x: position.x, y: position.y, offsetX: 0, offsetY: 0 };
+  }
+  const x = Math.max(0, Math.min(position.x, window.innerWidth - size.width));
+  const y = Math.max(0, Math.min(position.y, window.innerHeight - size.height));
+  return { x, y, offsetX: position.x - x, offsetY: position.y - y };
+}
+
+/**
  * The Agent presence — decision 1, in one component.
  *
  * The prototype had three draggable objects: a status pet in Agent mode, a
@@ -61,8 +79,33 @@ export function AgentPresence() {
 
   const badge = agent.task?.suggestion && !agent.task.suggestion.applied ? 1 : 0;
 
+  /**
+   * Tucking splits the presence in two: the element stays on screen, the
+   * artwork hangs over the edge.
+   *
+   * Placing the element itself off-screen (which is what the tucked
+   * coordinates literally say) takes its focus ring with it — a keyboard user
+   * tabbing to the presence would move focus to something they cannot see. The
+   * prototype kept its focus target inside the app and let only the art peek
+   * out; this is the same split, with the overhang expressed as a transform on
+   * the mark.
+   */
+  const anchored = anchorTucked(position, size);
+
   return (
     <>
+      {/*
+        The status, spoken. The prototype's status bubble was a `role="status"`
+        with a visible text label beside the character ("Agent reading", "Agent
+        waiting for review"); the shell shows that text in the panel header,
+        but a screen reader following the run has nothing to hear when the
+        panel is collapsed or the presence is tucked. One live region, mounted
+        in both placements, so state changes are announced either way.
+      */}
+      <span className="shell-visually-hidden" role="status" aria-live="polite" aria-atomic="true">
+        {statusLabel(status)}
+      </span>
+
       {/*
         The docked host is a flex child of the body row; its width is the only
         thing a mode change animates (see App.tsx and decision 4).
@@ -82,7 +125,14 @@ export function AgentPresence() {
           data-expanded={String(expanded)}
           data-edge={position.edge ?? ""}
           data-dragging={String(dragging)}
-          style={{ left: position.x, top: position.y }}
+          style={
+            {
+              left: anchored.x,
+              top: anchored.y,
+              "--shell-presence-peek-x": `${anchored.offsetX}px`,
+              "--shell-presence-peek-y": `${anchored.offsetY}px`,
+            } as React.CSSProperties
+          }
         >
           {expanded ? (
             <div className="shell-presence-panel" style={{ width: PANEL_SIZE.width }}>
@@ -111,7 +161,16 @@ export function AgentPresence() {
                 dispatch({ type: "set-presence-expanded", expanded: true });
               }}
             >
-              <PresenceFace status={status} badge={badge} size={FACE_SIZE} />
+              <PresenceFace
+                status={status}
+                badge={badge}
+                size={FACE_SIZE}
+                // Gaze is off once tucked: the mark is rotated against the
+                // window edge and mostly off screen, so eyes aimed at the
+                // cursor would point somewhere meaningless.
+                tracks={position.edge === null}
+                limbs
+              />
             </button>
           )}
         </div>

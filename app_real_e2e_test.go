@@ -22,13 +22,18 @@ import (
 
 	"officedex/internal/appupdate"
 	"officedex/internal/bridge"
+	"officedex/internal/config"
 	"officedex/internal/demoflow"
 	"officedex/internal/localstore"
 	"officedex/internal/netproxy"
+	"officedex/internal/office2modoc"
+	"officedex/internal/pptxeditor"
 	"officedex/internal/preview"
 	runtimemgr "officedex/internal/runtime"
+	"officedex/internal/runtimeenv"
 	"officedex/internal/settings"
 	"officedex/internal/types"
+	"officedex/internal/xlsxeditor"
 )
 
 type realAppE2ERecord struct {
@@ -433,6 +438,20 @@ func newRealOfficeDexApp(t *testing.T) *App {
 		runtimeMgr:     runtimeMgr,
 	}
 	app.demoFlow = demoflow.New(demoflow.Options{Recorder: app})
+	// The document editors, wired the way app.go wires them. Without these the
+	// harness answers PreparePptxEditor with "PPTX editor is unavailable" and
+	// the embedded editor renders an empty frame — no error reaches the page, so
+	// from the browser it looks exactly like a deck that will not open.
+	//
+	// The roots come from the same two calls app.go makes, and for the same
+	// reason: office2modoc resolves its native library under `build/cache` of
+	// *this* checkout, so handing it the parent directory — the enclosing
+	// multi-repo workspace — makes every workbook fail with "liboffice2modoc_ffi
+	// .dylib does not exist" while the file sits one level down.
+	repoRoot, _ := config.ProcessCwd()
+	converterPath := config.MopConvertBinary(runtimeenv.Root(repoRoot), repoRoot)
+	app.pptxEditorService = pptxeditor.NewService(previewReg, pptxeditor.NewCLIConverter(converterPath), os.TempDir())
+	app.xlsxEditorService = xlsxeditor.NewService(previewReg, office2modoc.New(repoRoot), os.TempDir())
 	if err := app.initializeWorkspaces(ctx); err != nil {
 		t.Fatalf("initializeWorkspaces: %v", err)
 	}

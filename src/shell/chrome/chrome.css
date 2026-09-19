@@ -111,6 +111,24 @@
   border-radius: 4px;
 }
 
+/* The window controls sit on top of the tab strip rather than beside it, the
+   way the reference frame does: the tab row runs the full width of the window
+   and pads its content clear of this cluster. `pointer-events` is handed back
+   per child so the strip underneath stays clickable everywhere else. */
+.shell-windowbar {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  width: 100%;
+  min-width: 0;
+  padding-right: 22px;
+  pointer-events: none;
+}
+
+.shell-windowbar > * {
+  pointer-events: auto;
+}
+
 .shell-nav-toggle {
   margin-left: 12px;
 }
@@ -122,6 +140,14 @@
   align-items: flex-end;
   gap: 16px;
   padding-right: 16px;
+  /* The titlebar starts at the content boundary. Agent's docked task column
+     is part of that boundary; a floating task leaves the editor boundary at
+     the navigation rail. */
+  padding-left: max(var(--shell-nav-w), 132px);
+}
+
+#shell[data-mode="agent"][data-home="false"][data-presence="docked"] .shell-tabs {
+  padding-left: calc(var(--shell-nav-w) + var(--shell-task-w));
 }
 
 .shell-tabstrip {
@@ -207,6 +233,33 @@
   cursor: pointer;
 }
 
+.shell-tab-bookmark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 24px;
+  margin-right: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+.shell-tab-bookmark:hover {
+  opacity: 1;
+  background: #65748016;
+}
+
+.shell-tab-bookmark:focus-visible {
+  outline: 2px solid var(--shell-focus);
+  outline-offset: 1px;
+}
+
 .shell-tab-close:hover {
   opacity: 1;
   background: #65748016;
@@ -274,11 +327,35 @@
   border-radius: 4px;
 }
 
+/* Home is a workspace view, not an open-document view. Keep the controls in
+   the DOM for keyboard/tests and preserve their handlers, but remove the file
+   actions from the visual chrome until a real document is active. This is the
+   same quiet top-right treatment used by the reference prototype. */
+#shell[data-home="true"] .shell-tabs-actions {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 /* -------------------------------------------------------------- sidebar */
 
 .shell-sidebar-brand {
   flex: none;
   margin-bottom: 10px;
+}
+
+/* On the compact rail the brand button is square and centred, like every other
+   rail item. It stays visible there: it is the mode switch, and the rail is the
+   state the shell opens in. */
+#shell[data-nav-collapsed="true"] .shell-sidebar-brand {
+  width: 36px;
+  height: 36px;
+  margin: 0 auto 8px;
+}
+
+#shell[data-nav-collapsed="true"] .shell-sidebar-brand .shell-brand {
+  width: 36px;
+  justify-content: center;
+  padding: 4px;
 }
 
 .shell-brand {

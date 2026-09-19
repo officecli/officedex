@@ -43,6 +43,26 @@ export function readBridgeEnvironment(): BridgeEnvironment {
 }
 
 /**
+ * Whether a real Go backend is reachable, by any transport.
+ *
+ * True inside the desktop app, and also in a dev browser pointed at the managed
+ * bridge — which is what `npm run test:e2e` runs. Both of those return a real
+ * `DesktopAPI` from `createDesktopAPI` below; only the browser stand-in does
+ * not.
+ *
+ * This exists because callers kept asking the narrower question. Anything that
+ * decides between "real services" and "a fake" by looking for `window.go` is
+ * right about the desktop and wrong about E2E: the RPC transport needs no
+ * injected globals, so the shell would fall back to its in-memory fake while a
+ * real backend sat one HTTP hop away, and nothing that mattered would be under
+ * test. Ask this instead, and the answer stays consistent with the transport
+ * actually chosen.
+ */
+export function hasDesktopBackend(env: BridgeEnvironment = readBridgeEnvironment()): boolean {
+  return env.wailsAvailable || (env.dev && Boolean(env.realE2EEndpoint));
+}
+
+/**
  * Picks the transport: Wails when the Go app is present; the real-E2E RPC
  * transport in dev when an endpoint is configured; a test-injected API under
  * Vitest; otherwise the browser preview stand-in.

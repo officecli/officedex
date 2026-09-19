@@ -2,14 +2,13 @@ import { useEffect, useRef } from "react";
 
 import type { FileMeta } from "../../shared/uiPort";
 import { CanvasPlaceholder } from "./CanvasPlaceholder";
-import type { CanvasAdapter, CanvasSelection } from "./canvasContract";
+import type { CanvasAdapter } from "./canvasContract";
 
 export interface EditorCanvasHostProps {
   file: FileMeta | null;
   /** False while Home is showing. The host stays mounted either way. */
   visible: boolean;
   adapter?: CanvasAdapter | null;
-  onSelectionChange?: (selection: CanvasSelection | null) => void;
 }
 
 /**
@@ -26,7 +25,7 @@ export interface EditorCanvasHostProps {
  * The invariant is guarded by EditorCanvasHost.test.tsx, which asserts node
  * identity across a mode change, a Home round trip and a tab switch.
  */
-export function EditorCanvasHost({ file, visible, adapter, onSelectionChange }: EditorCanvasHostProps) {
+export function EditorCanvasHost({ file, visible, adapter }: EditorCanvasHostProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const mountedAdapter = useRef<CanvasAdapter | null>(null);
 
@@ -42,11 +41,6 @@ export function EditorCanvasHost({ file, visible, adapter, onSelectionChange }: 
       if (mountedAdapter.current === adapter) mountedAdapter.current = null;
     };
   }, [adapter]);
-
-  useEffect(() => {
-    if (!adapter || !onSelectionChange) return;
-    return adapter.onSelection(onSelectionChange);
-  }, [adapter, onSelectionChange]);
 
   useEffect(() => {
     const active = mountedAdapter.current;

@@ -1,5 +1,5 @@
 // The production transport: the Wails-generated bindings over the Go App.
-import type { AppUpdateEvent, Artifact, AgentClientToolReassignInput, AgentClientToolResultInput, AgentRun, AgentRunApproveInput, AgentRunRespondInput, AgentRunStartInput, ArtifactStageRuntimeInput, AuthEvent, BinaryFileData, BridgeEvent, BridgeRuntimeSnapshot, CreditStatus, CreateImageTemplatePublishRequestInput, CreateUserImageTemplateInput, DesktopAPI, GenerateInput, ImageTemplatePublishRequest, ImagePromptTemplate, InviteInfo, LoginInput, PlanPptxJSResult, ModifyInput, PeekReportContextResult, CreateWorkbookFromSheetInput, DrawingAsset, CaptureTimelineNodeInput, TimelineCapturedNode, PreparePptxEditorResult, PptxTemplateProgress, SavePptxEditorSnapshotInput, SavePptxEditorAssetInput, SavePptxEditorVideoInput, ExportPptxEditorInput, ClosePptxEditorInput, PptxEditorSaveResult, PptxEditorSaveAssetResult, PptxEditorVideoSaveResult, PrepareXlsxEditorResult, PreviewGrant, ProviderTestInput, ProviderTestResult, RedeemResult, RecentFile, ReportCapabilityResult, RendererLogInput, CloseXlsxEditorInput, SpreadsheetPlanFieldsResult, SaveDocxResult, SaveXlsxEditorInput, StageXlsxEditorImageInput, SaveXlsxEditorResult, SubmitReportInput, SubmitReportResult, TaskHistoryEntry, UserSettings, WhoAmIResult } from "../../shared/types";
+import type { AppUpdateEvent, Artifact, AgentClientToolReassignInput, AgentClientToolResultInput, AgentRun, AgentRunApproveInput, AgentRunRespondInput, AgentRunStartInput, ArtifactStageRuntimeInput, ArtifactSuggestionFileInput, AuthEvent, BinaryFileData, BridgeEvent, BridgeRuntimeSnapshot, CreditStatus, CreateImageTemplatePublishRequestInput, CreateUserImageTemplateInput, DesktopAPI, GenerateInput, ImageTemplatePublishRequest, ImagePromptTemplate, InviteInfo, LoginInput, PlanPptxJSResult, ModifyInput, PeekReportContextResult, CreateWorkbookFromSheetInput, DrawingAsset, CaptureTimelineNodeInput, TimelineCapturedNode, PreparePptxEditorResult, PptxTemplateProgress, SavePptxEditorSnapshotInput, SavePptxEditorAssetInput, SavePptxEditorVideoInput, ExportPptxEditorInput, ClosePptxEditorInput, PptxEditorSaveResult, PptxEditorSaveAssetResult, PptxEditorVideoSaveResult, PrepareXlsxEditorResult, PreviewGrant, ProviderTestInput, ProviderTestResult, RedeemResult, RecentFile, ReportCapabilityResult, RendererLogInput, CloseXlsxEditorInput, SpreadsheetPlanFieldsResult, SaveDocxResult, SaveXlsxEditorInput, StageXlsxEditorImageInput, SaveXlsxEditorResult, SubmitReportInput, SubmitReportResult, TaskHistoryEntry, UserSettings, WhoAmIResult } from "../../shared/types";
 import type { JiraConnectionSummary, JiraProbeResult, LiquipediaConnectionSummary, LiquipediaProbeResult, MarketingCampaignPlanResult, CampaignImageResult } from "../../shared/verticals";
 // The Wails-generated bindings live alongside the renderer; tsconfig must
 // include them. Imports are static so the build picks them up; calls only
@@ -232,9 +232,24 @@ export function createWailsAPI(): DesktopAPI {
       const record = await WailsApp.OpenLocalFile();
       return record && record.id ? record : null;
     },
+    createBlankDocument: async (documentType, workspaceId) => {
+      const fn = optionalWailsFunction<(type: string, folder: string) => Promise<unknown>>("CreateBlankDocument");
+      if (!fn) throw new Error("Creating blank documents requires a newer OfficeDex runtime.");
+      return await fn(toWails(documentType), toWails(workspaceId)) as Awaited<ReturnType<NonNullable<DesktopAPI["createBlankDocument"]>>>;
+    },
     modify: async (input: ModifyInput) => {
       const result = await WailsApp.Modify(toWails(input));
       return { taskId: result.taskId, sessionId: result.sessionId, status: result.status };
+    },
+    applyArtifactSuggestion: async (input: ArtifactSuggestionFileInput) => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<void>>("ApplyArtifactSuggestion");
+      if (!fn) throw new Error("Applying an agent suggestion requires a newer OfficeDex runtime.");
+      await fn(toWails(input));
+    },
+    undoArtifactSuggestion: async (input: ArtifactSuggestionFileInput) => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<void>>("UndoArtifactSuggestion");
+      if (!fn) throw new Error("Undoing an agent suggestion requires a newer OfficeDex runtime.");
+      await fn(toWails(input));
     },
     artifactStageEdit: async (input: ArtifactStageRuntimeInput) => {
       const fn = (WailsApp as unknown as { ArtifactStageEdit?: (arg1: never) => Promise<{ taskId: string; sessionId: string; status: string }> }).ArtifactStageEdit;

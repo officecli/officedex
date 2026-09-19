@@ -45,5 +45,8 @@ export function createDesktopUiPort({ api, window }: DesktopUiPortOptions): UiPo
     models: createModelService(api),
     settings: createSettingsService(api),
     window: createWindowService(window),
+    pickAttachmentPaths: () => api.openMultiFileDialog({
+      filters: [{ name: "Office and image files", extensions: ["docx", "xlsx", "pptx", "pdf", "png", "jpg", "jpeg", "webp"] }],
+    }),
   };
 }

@@ -9,6 +9,7 @@ OFFICECLI_INTERNAL_DIR="${REPO_ROOT}/officecli-internal"
 OFFICECLI_STAGE_BIN="${OFFICEDEX_DIR}/build/officecli/officecli"
 APP_PATH="${OFFICEDEX_DIR}/build/bin/OfficeDex.app"
 APP_NAME="OfficeDex"
+OFFICECLI_RELEASE_VERSION="$(node -p "require('${OFFICEDEX_DIR}/package.json').officecliVersion")"
 
 export HTTP_PROXY="${HTTP_PROXY:-http://127.0.0.1:7890}"
 export HTTPS_PROXY="${HTTPS_PROXY:-http://127.0.0.1:7890}"
@@ -72,8 +73,13 @@ echo "[build-local-app] building local officecli-internal"
 mkdir -p "$(dirname "${OFFICECLI_STAGE_BIN}")"
 (
   cd "${OFFICECLI_INTERNAL_DIR}"
-  env -u GOROOT go build -o "${OFFICECLI_STAGE_BIN}" ./cmd/officecli
+  env -u GOROOT go build -trimpath \
+    -ldflags "-s -w -X github.com/officecli/officecli/internal/cli.Version=${OFFICECLI_RELEASE_VERSION} -X github.com/officecli/officecli/internal/cli.Commit=local-build -X github.com/officecli/officecli/internal/cli.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    -o "${OFFICECLI_STAGE_BIN}" ./cmd/officecli
 )
+node "${OFFICEDEX_DIR}/scripts/verify-officecli-canvas-contract.mjs" \
+  --binary "${OFFICECLI_STAGE_BIN}" \
+  --expected "${OFFICECLI_RELEASE_VERSION}"
 
 echo "[build-local-app] building OfficeDex.app"
 (

@@ -1,9 +1,21 @@
 import { embeddedPresentationDocumentPath } from "./embedded-runtime";
 
 const PROTOCOL_VERSION = 1;
-// This must match the pinned fegit presentation runtime and mop-convert revision in
-// officedex-component.json. The runtime treats a missing header as schema 0.
-const MOP_SCHEMA_VERSION = 975;
+/**
+ * Stamped on every package this bridge hands the editor. The runtime's
+ * `assertPackageCapabilities` rejects anything that does not match the schema
+ * its bundled WASM reports, and it treats a missing header as schema 0.
+ *
+ * The same pair lives in Go, at `internal/mophttp/capabilities.go`, for the
+ * packaged app's HTTP path. Two copies, and only one of them was updated when
+ * the runtime went to 1081 — so every presentation opened to
+ * "MOP schema mismatch: package=975, runtime=1081" with nothing else wrong.
+ *
+ * Both are now pinned: Go's against the real mop-wasm engine
+ * (TestDefaultCapabilitiesMatchBundledWasm), and this one against Go's
+ * (presentation-component/src/schemaVersion.test.ts). Updating one alone fails.
+ */
+const MOP_SCHEMA_VERSION = 1081;
 const PPTX_CONTENT_TYPE =
   "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 

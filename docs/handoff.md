@@ -14,12 +14,48 @@
 
 | | 旧 UI | 新 UI |
 |---|---|---|
-| 入口 | `index.html` → `src/renderer/App.tsx` | `shell.html` → `src/shell/main.tsx` |
+| 入口 | `legacy.html` → `src/renderer/App.tsx` | **`index.html`** → `src/shell/main.tsx` |
 | 状态 | **已冻结，不要改** | 在建，43 个文件 / 约 7150 行 |
 | 规模 | App.tsx + `screens/` + 10 个 controller | 完整界面已画完，功能在逐个接 |
 
 两套共用同一个 Go 后端和同一个传输层（`src/renderer/bridge/`）。
-`vite.config.ts` 是多入口，两个 html 都会进构建。
+`vite.config.ts` 是多入口，两个 html 都会进构建。**2026-09-18 起新 shell 是 `/`**；
+旧 UI 移到 `/legacy.html`，没有任何地方链接过去，只能手敲地址。
+
+两个入口可以**各编成一个独立的 app**，同时装着：
+
+```bash
+npm run build:entries          # 两个都编
+npm run build:entries shell    # 只编新界面
+npm run build:entries legacy   # 只编旧界面
+```
+
+产物是 `build/bin/OfficeDex.app`（新 shell）和 `build/bin/OfficeDex Legacy.app`（旧 UI），
+各有自己的 `CFBundleName` 和 **`CFBundleIdentifier`**。后者才是关键：两个 bundle 共用
+一个标识符，在 LaunchServices 眼里就是同一个 app，双击文档由哪个打开全看运气。
+
+`dist/` 是 `go:embed` 进二进制的，所以两个变体必须各编一次 Go——不能靠复制一个包再换
+文件得到另一个。
+
+**两个 app 共用一个数据目录**（`~/Library/Application Support/OfficeDex`），这是故意的：
+能用两种界面打开同一批文档正是它存在的意义。代价是同时开两个会有两个进程压同一个
+SQLite，而它是默认 journal、没有 busy timeout，第二个写入方会拿到
+`database is locked`。这是明确报错而不是静默损坏，但结论是：**一次只开一个**。
+
+单独要一个以旧 UI 为入口的包（不改包名、直接覆盖 `OfficeDex.app`）：
+
+```bash
+OFFICEDEX_ENTRY=legacy npm run build:local:latest
+```
+
+`OFFICEDEX_ENTRY` 取值只有 `shell`（默认，不设即此）和 `legacy`，**其余一律让构建失败**。
+这一条是有来由的：最自然的写法是「等于 legacy 就换，否则走默认」，于是
+`Legacy` / `legcy` / `LEGACY` 全都静默给你一个新 shell 的包——你以为拿到的是旧版，
+产物上没有任何地方写着它是哪一个，只能靠启动才发现。判断在
+`scripts/entry-choice.mjs`，测试在同名 `.test.mjs`，已挂进 `npm run test:scripts`。
+
+开关只在构建**成功之后**把产物里的两个 html 换个名字，源文件一个字不动，所以构建
+失败不会留下一个自称是别的东西的仓库。两边的 bundle、资源、Go 二进制完全一致。
 
 **重构最终会删掉旧 UI**（见 S5），但现在还不能删。
 
@@ -87,8 +123,8 @@ Go：app_*.go + internal/localstore（schemaV11 文档投影）
 |---|---|---|
 | S0 | 功能取舍评审 → `docs/uiport-scope.md` | ✅ |
 | S1 | Go 后端补齐：文档投影 RPC、pinned 列、默认文件夹、真实文件操作 | ✅ |
-| S2 | 六个 service 实现 UiPort | ✅（`files.create` 除外） |
-| S3 | 垂直切片：shell.html 跑通真 service | ✅ |
+| S2 | 六个 service 实现 UiPort | ✅ |
+| S3 | 垂直切片：新 shell 跑通真 service | ✅ |
 | S4-1 | agent service 的非 suggestion 部分 | ✅ |
 | S4-2 | `applySuggestion` / `undoSuggestion` | ❌ 见 §5 |
 | S5 | 删除旧入口 | ❌ 未开始 |
@@ -179,11 +215,7 @@ presentation）都没暴露 undo 协议，`DesktopAPI` 里也没有版本或快�
 
 ## 6. 接下来可以做什么（按性价比排序，用户没有指定顺序）
 
-1. **`files.create`** —— Home 上三个最显眼的按钮。缺两样：空白 docx/xlsx 种子文件
-   （现在只有 `blank.pptx`），以及一个产品决定：新文件什么时候真正落盘。
-   Office 在首次保存前不写任何东西，`FileMeta.dirty` 正好能表达这个状态。
-   **这个需要先问用户拿决定。**
-2. **S5 退役旧 UI** —— 删 `src/renderer/App.tsx`、`screens/`、10 个 controller、
+1. **S5 退役旧 UI** —— 删 `src/renderer/App.tsx`、`screens/`、10 个 controller、
    旧 `index.html`；并把 `docs/interaction-rules.md` 的 78 条规则逐条标注归宿
    （仍成立 / 已废弃 / 已迁移到某 service）。判据：`grep -rn "renderer/App" src/` 为空。
    注意：`taskState.ts`/`taskTitle.ts`/`homeIntake.ts`/`bridge/` 都在 `src/renderer/`
@@ -210,7 +242,7 @@ presentation）都没暴露 undo 协议，`DesktopAPI` 里也没有版本或快�
 
 **浏览器预览**
 - 预览用 `preview_start`（配置名 `officedex-develop-1.0`，端口 3104），进去后要手动
-  导航到 `/shell.html`。
+  打开 `/`（旧 UI 在 `/legacy.html`）。
 - **dev server 的模块可能是陈旧的**：改完代码第一次点，handler 可能还是旧的，
   **硬刷一次再判断**。我差点把这个误判成 bug。
 - toast 是 portal 到 `document.body` 的，断言要读 body 不是 render container；
@@ -292,4 +324,4 @@ node scripts/verify-bridge-types.mjs   # 改过 DesktopAPI 才需要
 2. 跑一遍 §8 的四条命令，确认基线：1103 TS 测试绿、Go 4 个已知失败。
 3. 读 `docs/not-implemented.md` 和 `DESIGN.md`。
 
-然后问用户要做哪一项——§6 列了五个方向，其中 `files.create` 需要产品决定才能动。
+然后问用户要做哪一项——§6 列了剩余方向；`files.create` 已由真实 Office 包创建 bridge 接上。
