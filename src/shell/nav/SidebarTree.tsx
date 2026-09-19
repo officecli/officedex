@@ -1,5 +1,6 @@
 import { Plus } from "lucide-react";
 
+import { useT } from "../../renderer/i18n";
 import { useShell } from "../state/ShellContext";
 import { FileTree } from "./FileTree";
 import { useFolderDrop } from "./useFolderDrop";
@@ -14,6 +15,7 @@ import { useLibraryActions } from "./useLibraryActions";
  * commands and views.
  */
 export function SidebarTree() {
+  const t = useT();
   const { state, dispatch, folders, files, reload } = useShell();
   const actions = useLibraryActions();
   const dialogs = useFolderDialogs(reload);
@@ -22,12 +24,12 @@ export function SidebarTree() {
   return (
     <div className="shell-sidebar-tree" {...dropHandlers}>
       <div className="shell-tree-section-head">
-        <span>Folders</span>
+        <span>{t("shell.tree.folders")}</span>
         <button
           type="button"
           className="shell-icon-button"
-          aria-label="New folder"
-          title="New folder"
+          aria-label={t("shell.tree.newFolder")}
+          title={t("shell.tree.newFolder")}
           onClick={dialogs.createFolder}
         >
           <Plus size={15} strokeWidth={1.8} aria-hidden="true" />

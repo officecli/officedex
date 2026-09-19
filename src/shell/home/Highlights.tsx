@@ -10,6 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { useT } from "../../renderer/i18n";
 import { useComposerSettings } from "../composer/useComposerSettings";
 import { notBuiltYet } from "../port/reportPortFailure";
 import "./highlights.css";
@@ -34,9 +35,10 @@ import "./highlights.css";
 interface Highlight {
   /** Doubles as the file stem of the still and the film: `{id}.jpg` / `{id}.mp4`. */
   id: string;
-  title: string;
-  /** The product area, shown next to the title. */
-  type: string;
+  /** Dictionary key; the copy itself lives in en.ts / zh.ts. */
+  titleKey: string;
+  /** The product area, shown next to the title — also a key. */
+  typeKey: string;
   duration: string;
 }
 
@@ -48,10 +50,30 @@ interface Highlight {
  * the reel changes, this list changes with it.
  */
 const HIGHLIGHTS: Highlight[] = [
-  { id: "word", title: "Write and edit together", type: "Documents", duration: "1:08" },
-  { id: "sheet", title: "Turn data into answers", type: "Spreadsheets", duration: "0:53" },
-  { id: "slides", title: "From template to presentation", type: "Presentations", duration: "1:04" },
-  { id: "project", title: "One task, every file", type: "Projects", duration: "1:00" },
+  {
+    id: "word",
+    titleKey: "shell.highlights.word.title",
+    typeKey: "shell.home.documents",
+    duration: "1:08",
+  },
+  {
+    id: "sheet",
+    titleKey: "shell.highlights.sheet.title",
+    typeKey: "shell.highlights.sheet.type",
+    duration: "0:53",
+  },
+  {
+    id: "slides",
+    titleKey: "shell.highlights.slides.title",
+    typeKey: "shell.home.presentations",
+    duration: "1:04",
+  },
+  {
+    id: "project",
+    titleKey: "shell.highlights.project.title",
+    typeKey: "shell.highlights.project.type",
+    duration: "1:00",
+  },
 ];
 
 /**
@@ -80,6 +102,7 @@ const POSTER_GLYPH: Record<string, LucideIcon> = {
 const posterAsset = (id: string) => `assets/highlights/${id}.jpg`;
 
 export function Highlights() {
+  const t = useT();
   const settings = useComposerSettings();
   const trackRef = useRef<HTMLDivElement>(null);
 
@@ -167,11 +190,11 @@ export function Highlights() {
   return (
     <section className="shell-highlights" aria-labelledby="shell-highlights-title">
       <header className="shell-highlights-head">
-        <h2 id="shell-highlights-title">Feature highlights</h2>
+        <h2 id="shell-highlights-title">{t("shell.highlights.title")}</h2>
         <div className="shell-highlights-controls">
           <button
             type="button"
-            aria-label="Previous highlight videos"
+            aria-label={t("shell.highlights.previous")}
             aria-controls="shell-highlights-track"
             disabled={reach.atStart}
             onClick={() => page(-1)}
@@ -180,7 +203,7 @@ export function Highlights() {
           </button>
           <button
             type="button"
-            aria-label="Next highlight videos"
+            aria-label={t("shell.highlights.next")}
             aria-controls="shell-highlights-track"
             disabled={reach.atEnd}
             onClick={() => page(1)}
@@ -195,24 +218,20 @@ export function Highlights() {
         id="shell-highlights-track"
         className="shell-highlights-track"
         role="region"
-        aria-label="Feature videos, scroll horizontally"
+        aria-label={t("shell.highlights.trackAria")}
         onKeyDown={onTrackKeyDown}
       >
         {HIGHLIGHTS.map((item) => {
           const Glyph = POSTER_GLYPH[item.id] ?? FileText;
+          const title = t(item.titleKey);
           return (
             <button
               key={item.id}
               type="button"
               className="shell-highlight-card"
               data-highlight={item.id}
-              aria-label={`Play ${item.title}, ${item.duration}`}
-              onClick={() =>
-                notBuiltYet(
-                  "home-highlights",
-                  "The feature videos have not been filmed yet. They will play right here when they land.",
-                )
-              }
+              aria-label={t("shell.highlights.play", { title, duration: item.duration })}
+              onClick={() => notBuiltYet("home-highlights", t("shell.highlights.notFilmed"))}
             >
               <span
                 className="shell-highlight-poster"
@@ -233,8 +252,8 @@ export function Highlights() {
                 </span>
               </span>
               <span className="shell-highlight-caption">
-                <strong>{item.title}</strong>
-                <small>{item.type}</small>
+                <strong>{title}</strong>
+                <small>{t(item.typeKey)}</small>
               </span>
             </button>
           );

@@ -1,5 +1,6 @@
 import { ChevronRight, Folder } from "lucide-react";
 
+import { useT } from "../../renderer/i18n";
 import { statusLabel } from "../agent/PresenceFace";
 import { useAgentTasks } from "../agent/useAgentTasks";
 import { useLibraryActions } from "../nav/useLibraryActions";
@@ -22,6 +23,7 @@ import "./taskList.css";
  * desk.
  */
 export function TaskList() {
+  const t = useT();
   const { folders, files, dispatch } = useShell();
   const actions = useLibraryActions();
   const { tasks } = useAgentTasks();
@@ -57,12 +59,15 @@ export function TaskList() {
   };
 
   return (
-    <section className="shell-hero-resume shell-task-list" aria-label="Continue working">
+    <section
+      className="shell-hero-resume shell-task-list"
+      aria-label={t("shell.taskList.continueWorking")}
+    >
       <header className="shell-task-list-head">
-        <h2>Continue working</h2>
+        <h2>{t("shell.taskList.continueWorking")}</h2>
         {/* Says what the list is ordered by, which the rows themselves cannot.
             Not a control: there is nothing else it could be sorted by. */}
-        <span className="shell-task-list-hint">Recent tasks</span>
+        <span className="shell-task-list-hint">{t("shell.taskList.hint")}</span>
       </header>
       <ul className="shell-task-rows">
         {tasks.map((task) => {

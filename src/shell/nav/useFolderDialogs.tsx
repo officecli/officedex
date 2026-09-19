@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 
+import { useT } from "../../renderer/i18n";
 import { Input, Modal } from "../../renderer/ui";
 import { usePort } from "../port/PortContext";
 import type { Folder } from "../../shared/uiPort";
@@ -15,6 +16,7 @@ type Pending =
  * the shell does not grow a second dialog implementation.
  */
 export function useFolderDialogs(onDone: () => Promise<void> | void) {
+  const t = useT();
   const port = usePort();
   const [pending, setPending] = useState<Pending>(null);
   const [name, setName] = useState("");
@@ -61,7 +63,7 @@ export function useFolderDialogs(onDone: () => Promise<void> | void) {
     }
     const trimmed = name.trim();
     if (!trimmed) {
-      setError("Enter a folder name.");
+      setError(t("shell.folder.nameRequired"));
       return;
     }
     try {
@@ -80,24 +82,22 @@ export function useFolderDialogs(onDone: () => Promise<void> | void) {
       open
       title={
         pending.kind === "create"
-          ? "New folder"
+          ? t("shell.tree.newFolder")
           : pending.kind === "rename"
-            ? "Rename folder"
-            : `Remove “${pending.folder.name}”?`
+            ? t("shell.folder.renameTitle")
+            : t("shell.folder.removeTitle", { folder: pending.folder.name })
       }
-      okText={pending.kind === "remove" ? "Remove folder" : "Save"}
+      okText={t(pending.kind === "remove" ? "shell.tree.removeFolder" : "shell.common.save")}
       onOk={confirm}
       onCancel={close}
       width={420}
     >
       {pending.kind === "remove" ? (
-        <p className="shell-dialog-note">
-          The folder is removed from the sidebar. Its files are not deleted — they move to Documents.
-        </p>
+        <p className="shell-dialog-note">{t("shell.folder.removeNote")}</p>
       ) : (
         <>
           <label className="shell-dialog-label" htmlFor="shell-folder-name">
-            Folder name
+            {t("shell.folder.nameLabel")}
           </label>
           <Input
             id="shell-folder-name"

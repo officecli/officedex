@@ -12,6 +12,7 @@
  * file could be dropped into.
  */
 
+import { getCurrentLocale, translate } from "../../renderer/i18n";
 import type { FileMeta, FileType, Folder } from "../../shared/uiPort";
 
 export type Grouping = "folder" | "time";
@@ -74,28 +75,59 @@ export function groupByFolder(
   });
 }
 
-/** Buckets matching the prototype's Home headings. */
-export function timeBucket(file: FileMeta, now = Date.now()): string {
+/**
+ * Which bucket a file falls in — an identity, not a label.
+ *
+ * The bucket used to *be* its English heading, which made it both the grouping
+ * key and the copy: translating the heading would have silently re-keyed the
+ * groups. The identity is now stable across languages and `bucketLabel` is the
+ * only thing that speaks.
+ */
+export type TimeBucket = "today" | "previous7" | "previous30" | "earlier";
+
+const BUCKET_ORDER: readonly TimeBucket[] = ["today", "previous7", "previous30", "earlier"];
+
+const BUCKET_KEYS: Record<TimeBucket, string> = {
+  today: "shell.time.today",
+  previous7: "shell.time.previous7",
+  previous30: "shell.time.previous30",
+  earlier: "shell.time.earlier",
+};
+
+export function bucketOf(file: FileMeta, now = Date.now()): TimeBucket {
   const touched = lastTouched(file);
-  if (!touched) return "Earlier";
+  if (!touched) return "earlier";
   const startOfToday = new Date(now);
   startOfToday.setHours(0, 0, 0, 0);
   const days = (startOfToday.getTime() - touched) / DAY;
-  if (days < 0) return "Today";
-  if (days < 7) return "Previous 7 days";
-  if (days < 30) return "Previous 30 days";
-  return "Earlier";
+  if (days < 0) return "today";
+  if (days < 7) return "previous7";
+  if (days < 30) return "previous30";
+  return "earlier";
 }
 
-const BUCKET_ORDER = ["Today", "Previous 7 days", "Previous 30 days", "Earlier"] as const;
+export function bucketLabel(bucket: TimeBucket): string {
+  return translate(BUCKET_KEYS[bucket]);
+}
+
+/** Buckets matching the prototype's Home headings, in the reader's language. */
+export function timeBucket(file: FileMeta, now = Date.now()): string {
+  return bucketLabel(bucketOf(file, now));
+}
 
 export function groupByTime(files: FileMeta[], options: GroupOptions = {}): FileGroup[] {
   const now = options.now ?? Date.now();
   const visible = applyFilters(files, options);
-  return BUCKET_ORDER.map((label) => {
-    const mine = visible.filter((file) => timeBucket(file, now) === label);
+  return BUCKET_ORDER.map((bucket) => {
+    const mine = visible.filter((file) => bucketOf(file, now) === bucket);
     const { files: page, total } = truncate(mine, options.limit);
-    return { id: `time:${label}`, label, folderId: null, files: page, total };
+    return {
+      id: `time:${bucket}`,
+      label: bucketLabel(bucket),
+      folderId: null,
+      files: page,
+      total,
+    };
   }).filter((group) => group.total > 0);
 }
 
@@ -112,7 +144,22 @@ export function buildGroups(
 
 /** Shown under a file's name; a file always has a real location. */
 export function locationLabel(file: FileMeta, folders: Folder[]): string {
-  return folders.find((folder) => folder.id === file.folderId)?.name ?? "On this computer";
+  return (
+    folders.find((folder) => folder.id === file.folderId)?.name ??
+    translate("shell.status.onThisComputer")
+  );
+}
+
+/**
+ * The date tag follows the reader, not the build.
+ *
+ * `en-US` was hardcoded into both calls, so a Chinese reader got "Sep 17" in a
+ * column headed 最近打开. `Intl` is the part of this that already knows how each
+ * language writes a date; the only decision left here is which language to ask
+ * it about.
+ */
+function dateTag(): string {
+  return getCurrentLocale() === "zh" ? "zh-CN" : "en-US";
 }
 
 export function formatTouched(file: FileMeta, now = Date.now()): string {
@@ -121,9 +168,11 @@ export function formatTouched(file: FileMeta, now = Date.now()): string {
   const date = new Date(touched);
   const isToday = new Date(now).toDateString() === date.toDateString();
   if (isToday) {
-    return `Today, ${date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
+    return translate("shell.time.todayAt", {
+      time: date.toLocaleTimeString(dateTag(), { hour: "numeric", minute: "2-digit" }),
+    });
   }
-  return date.toLocaleDateString("en-US", {
+  return date.toLocaleDateString(dateTag(), {
     month: "short",
     day: "numeric",
     year: date.getFullYear() === new Date(now).getFullYear() ? undefined : "numeric",

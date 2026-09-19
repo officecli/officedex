@@ -89,7 +89,16 @@ export const CORNER_SYMBOLS: Record<CornerSymbol, SymbolStroke[]> = {
 export const SYMBOL_DETAIL_MIN_SIZE = 26;
 
 interface Pose {
-  label: string;
+  /**
+   * Dictionary key, not copy.
+   *
+   * These seven strings are the only thing a screen reader hears while a run is
+   * in flight (`AgentPresence`'s live region), so they are the last place a
+   * hardcoded English label can hide. Keeping the key here means the pose table
+   * stays the single list of states and the dictionary stays the single list of
+   * words.
+   */
+  labelKey: string;
   eyes: [Eye, Eye];
   symbol: CornerSymbol;
   /** Drives the CSS: which idle loop, if any, the face runs. */
@@ -108,31 +117,31 @@ const bar = (x: number, y = 132, dy = 12, weight = 10): Eye => ({ x, y, dx: 0, d
  */
 const POSES: Record<AgentStatus, Pose> = {
   idle: {
-    label: "Agent idle",
+    labelKey: "shell.agentStatus.idle",
     eyes: [bar(108), bar(146)],
     symbol: "dot",
     motion: "rest",
   },
   reading: {
-    label: "Agent reading",
+    labelKey: "shell.agentStatus.reading",
     eyes: [bar(108, 133, 6), bar(146, 133, 6)],
     symbol: "search",
     motion: "scan",
   },
   writing: {
-    label: "Agent preparing changes",
+    labelKey: "shell.agentStatus.writing",
     eyes: [bar(108, 133, 6), bar(146, 133, 6)],
     symbol: "pencil",
     motion: "scan",
   },
   working: {
-    label: "Agent working",
+    labelKey: "shell.agentStatus.working",
     eyes: [bar(108, 133, 6), bar(146, 133, 6)],
     symbol: "dot",
     motion: "scan",
   },
   paused: {
-    label: "Agent paused",
+    labelKey: "shell.agentStatus.paused",
     eyes: [
       { x: 108, y: 135, dx: 13, dy: 0, curve: 1, weight: 6 },
       { x: 146, y: 135, dx: 13, dy: 0, curve: 1, weight: 6 },
@@ -141,13 +150,13 @@ const POSES: Record<AgentStatus, Pose> = {
     motion: "still",
   },
   "awaiting-review": {
-    label: "Agent waiting for review",
+    labelKey: "shell.agentStatus.awaitingReview",
     eyes: [bar(108, 129, 17), bar(146, 134, 5)],
     symbol: "question",
     motion: "rest",
   },
   done: {
-    label: "Agent finished",
+    labelKey: "shell.agentStatus.done",
     eyes: [
       { x: 108, y: 136, dx: 16, dy: 0, curve: -12, weight: 6 },
       { x: 146, y: 136, dx: 16, dy: 0, curve: -12, weight: 6 },

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { useT } from "../../renderer/i18n";
 import { usePort } from "../port/PortContext";
 import type { FileMeta } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
@@ -37,6 +38,7 @@ function contentLeft(strip: HTMLElement, tab: HTMLElement): number {
  * they get the top row to themselves.
  */
 export function FileTabs() {
+  const t = useT();
   const port = usePort();
   const canvas = useCanvas();
   const { state, dispatch, files, activeFile, reload } = useShell();
@@ -183,17 +185,17 @@ export function FileTabs() {
       dispatch({ type: "activate-file", fileId: file.id });
       toast.info({
         key: "dirty-file-activated",
-        content: "Open the file to save it before closing",
+        content: t("shell.tabs.dirtyActivated"),
         description: file.name,
       });
       return;
     }
 
     dialog.confirm({
-      title: "Save before closing?",
-      content: <p>“{file.name}” has unsaved changes.</p>,
-      okText: "Save and close",
-      cancelText: "Cancel",
+      title: t("shell.tabs.saveBeforeClosing"),
+      content: <p>{t("shell.tabs.unsavedBody", { file: file.name })}</p>,
+      okText: t("shell.tabs.saveAndClose"),
+      cancelText: t("ui.text.Cancel"),
       onOk: async () => {
         const saved = await attempt(async () => {
           // The active editor owns the in-memory bytes.
@@ -211,7 +213,7 @@ export function FileTabs() {
     if (!renameTarget) return;
     const value = renameValue.trim();
     if (!value) {
-      toast.error("Enter a file name.");
+      toast.error(t("shell.tabs.fileNameRequired"));
       return;
     }
     const renamed = await attempt(() => port.files.rename(renameTarget.id, value));
@@ -222,7 +224,7 @@ export function FileTabs() {
 
   return (
     <div className="shell-tabs shell-region">
-      <div className="shell-tabstrip" role="tablist" aria-label="Open files" ref={stripRef}>
+      <div className="shell-tabstrip" role="tablist" aria-label={t("shell.tabs.openFiles")} ref={stripRef}>
         {open.map((file, index) => {
           const current = file.id === selectedId;
           return (
@@ -245,14 +247,19 @@ export function FileTabs() {
               >
                 <FileTypeIcon type={file.type} />
                 <span className="shell-tab-name">{stripExtension(file.name)}</span>
-                {file.dirty ? <i className="shell-tab-dirty" aria-label="Unsaved changes" /> : null}
+                {file.dirty ? (
+                  <i className="shell-tab-dirty" aria-label={t("workbench.state.dirty")} />
+                ) : null}
               </button>
               {current ? (
                 <button
                   type="button"
                   className="shell-tab-bookmark"
-                  aria-label={file.pinned ? `Remove bookmark from ${file.name}` : `Bookmark ${file.name}`}
-                  title={file.pinned ? "Remove bookmark" : "Bookmark"}
+                  aria-label={t(
+                    file.pinned ? "shell.tabs.removeBookmarkFrom" : "shell.tabs.bookmarkFile",
+                    { file: file.name },
+                  )}
+                  title={t(file.pinned ? "shell.tabs.removeBookmark" : "shell.tabs.bookmark")}
                   aria-pressed={file.pinned}
                   onClick={() => void actions.setPinned(file.id, !file.pinned)}
                 >
@@ -266,8 +273,8 @@ export function FileTabs() {
               <button
                 type="button"
                 className="shell-tab-close"
-                aria-label={`Close ${file.name}`}
-                title="Close"
+                aria-label={t("shell.tabs.closeFile", { file: file.name })}
+                title={t("ui.text.Close")}
                 onClick={() => closeFile(file)}
               >
                 <X size={14} strokeWidth={1.8} aria-hidden="true" />
@@ -292,8 +299,8 @@ export function FileTabs() {
           <button
             type="button"
             className="shell-icon-button shell-tabstrip-scroll"
-            aria-label="Scroll tabs left"
-            title="Scroll tabs left"
+            aria-label={t("shell.tabs.scrollLeft")}
+            title={t("shell.tabs.scrollLeft")}
             disabled={overflow.atStart}
             onClick={() => scrollStrip(-1)}
           >
@@ -302,11 +309,11 @@ export function FileTabs() {
           <button
             type="button"
             className="shell-icon-button shell-tabstrip-scroll"
-            aria-label="Scroll tabs right"
+            aria-label={t("shell.tabs.scrollRight")}
             title={
               overflow.hidden > 0
-                ? `Scroll tabs right (${overflow.hidden} out of sight)`
-                : "Scroll tabs right"
+                ? t("shell.tabs.scrollRightHidden", { count: overflow.hidden })
+                : t("shell.tabs.scrollRight")
             }
             disabled={overflow.atEnd}
             onClick={() => scrollStrip(1)}
@@ -333,16 +340,16 @@ export function FileTabs() {
             await reload();
           }}
           disabled={!activeFile}
-          title={dirty ? "Save on this computer" : "All changes saved"}
+          title={t(dirty ? "shell.tabs.saveOnThisComputer" : "shell.status.saved")}
         >
           <Check size={14} strokeWidth={1.8} aria-hidden="true" />
-          {dirty ? "Unsaved" : "Saved"}
+          {t(dirty ? "shell.tabs.unsaved" : "shell.tabs.saved")}
         </button>
 
         <button
           type="button"
           className="shell-share"
-          title="Share"
+          title={t("shell.tabs.share")}
           onClick={() =>
             void (async () => {
               if (!activeFile) {
@@ -355,8 +362,8 @@ export function FileTabs() {
                  */
                 toast.info({
                   key: "share-needs-file",
-                  content: "Open a file to share it",
-                  description: "Share sends whichever file is open on the canvas.",
+                  content: t("shell.tabs.shareNeedsFile"),
+                  description: t("shell.tabs.shareNeedsFileDescription"),
                 });
                 return;
               }
@@ -369,12 +376,12 @@ export function FileTabs() {
                 const value = path || activeFile.name;
                 if (typeof navigator.share === "function") {
                   await navigator.share({ title: value, text: value });
-                  toast.success({ key: "file-shared", content: "Share sheet opened" });
+                  toast.success({ key: "file-shared", content: t("shell.tabs.shareOpened") });
                 } else if (navigator.clipboard) {
                   await navigator.clipboard.writeText(value);
-                  toast.success({ key: "file-shared", content: "File name copied" });
+                  toast.success({ key: "file-shared", content: t("shell.tabs.shareCopied") });
                 } else {
-                  toast.info(`File: ${value}`);
+                  toast.info(t("shell.tabs.shareFallback", { value }));
                 }
               } catch (reason) {
                 /*
@@ -392,7 +399,7 @@ export function FileTabs() {
           }
         >
           <Share2 size={14} strokeWidth={1.7} aria-hidden="true" />
-          Share
+          {t("shell.tabs.share")}
         </button>
 
         <div className="shell-tabs-icons">
@@ -401,19 +408,19 @@ export function FileTabs() {
           <button
             type="button"
             className="shell-icon-button"
-            aria-label="Full screen"
-            title="Full screen"
+            aria-label={t("shell.common.fullscreen")}
+            title={t("shell.common.fullscreen")}
             onClick={() => port.window.toggleFullscreen()}
           >
             <Maximize2 size={16} strokeWidth={1.6} aria-hidden="true" />
           </button>
           <Menu
-            label="File actions"
+            label={t("shell.common.fileActions")}
             width={190}
             items={activeFile ? [
               {
                 id: "rename",
-                label: "Rename file…",
+                label: t("shell.tabs.rename"),
                 onSelect: () => {
                   setRenameValue(stripExtension(activeFile.name));
                   setRenameTarget(activeFile);
@@ -421,7 +428,7 @@ export function FileTabs() {
               },
               {
                 id: "duplicate",
-                label: "Duplicate file",
+                label: t("shell.tabs.duplicate"),
                 icon: <Copy size={14} strokeWidth={1.7} aria-hidden="true" />,
                 onSelect: async () => {
                   await attempt(async () => {
@@ -433,12 +440,12 @@ export function FileTabs() {
               },
               {
                 id: "pin",
-                label: activeFile.pinned ? "Remove from Pinned" : "Pin file",
+                label: t(activeFile.pinned ? "shell.tabs.unpinFile" : "shell.tabs.pinFile"),
                 onSelect: () => void actions.setPinned(activeFile.id, !activeFile.pinned),
               },
               {
                 id: "remove",
-                label: "Remove from library",
+                label: t("shell.tabs.removeFromLibrary"),
                 icon: <Trash2 size={14} strokeWidth={1.7} aria-hidden="true" />,
                 onSelect: async () => {
                   await attempt(async () => {
@@ -455,8 +462,8 @@ export function FileTabs() {
                 {...triggerProps}
                 type="button"
                 className="shell-icon-button"
-                aria-label="More actions"
-                title="More"
+                aria-label={t("shell.tabs.moreActions")}
+                title={t("shell.tabs.more")}
               >
                 <MoreHorizontal size={16} strokeWidth={1.6} aria-hidden="true" />
               </button>
@@ -467,14 +474,14 @@ export function FileTabs() {
       {renameTarget ? (
         <Modal
           open
-          title="Rename file"
-          okText="Save"
+          title={t("shell.tabs.renameTitle")}
+          okText={t("shell.common.save")}
           onOk={submitRename}
           onCancel={() => setRenameTarget(null)}
           width={420}
         >
           <label className="shell-dialog-label" htmlFor="shell-file-name">
-            File name
+            {t("shell.tabs.fileNameLabel")}
           </label>
           <Input
             id="shell-file-name"
@@ -482,7 +489,7 @@ export function FileTabs() {
             value={renameValue}
             onChange={(event) => setRenameValue(event.target.value)}
           />
-          <p className="shell-dialog-note">The file extension is kept automatically.</p>
+          <p className="shell-dialog-note">{t("shell.tabs.extensionKept")}</p>
         </Modal>
       ) : null}
     </div>

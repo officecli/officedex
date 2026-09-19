@@ -1,6 +1,7 @@
 import { FolderOpen, Plus } from "lucide-react";
 import { useState } from "react";
 
+import { useT } from "../../renderer/i18n";
 import { Select } from "../../renderer/ui";
 import { FileTree } from "../nav/FileTree";
 import { useFolderDrop } from "../nav/useFolderDrop";
@@ -10,17 +11,24 @@ import { useShell } from "../state/ShellContext";
 import type { Grouping } from "../nav/fileTreeModel";
 import "./home.css";
 
+/** Value plus dictionary key; the visible label is resolved per render. */
 const TYPE_OPTIONS = [
-  { value: "all", label: "All types" },
-  { value: "doc", label: "Documents" },
-  { value: "sheet", label: "Workbooks" },
-  { value: "slides", label: "Presentations" },
+  { value: "all", labelKey: "shell.home.allTypes" },
+  { value: "doc", labelKey: "shell.home.documents" },
+  { value: "sheet", labelKey: "shell.home.workbooks" },
+  { value: "slides", labelKey: "shell.home.presentations" },
 ];
 
 const GROUPING_OPTIONS = [
-  { value: "time", label: "Last opened" },
-  { value: "folder", label: "Folder" },
+  { value: "time", labelKey: "shell.list.columnLastOpened" },
+  { value: "folder", labelKey: "shell.list.columnFolder" },
 ];
+
+const BLANK_KEYS = {
+  doc: "shell.home.blankDocument",
+  sheet: "shell.home.blankWorkbook",
+  slides: "shell.home.blankPresentation",
+} as const;
 
 /**
  * Editor mode's Home: the comfortable density of the one file list.
@@ -30,6 +38,7 @@ const GROUPING_OPTIONS = [
  * page up with the sidebar tree row for row, because both read the same model.
  */
 export function EditorHome() {
+  const t = useT();
   const { state, dispatch, folders, files } = useShell();
   const actions = useLibraryActions();
   const [grouping, setGrouping] = useState<Grouping>("time");
@@ -41,19 +50,19 @@ export function EditorHome() {
   return (
     <div className="shell-home shell-region shell-home--editor">
       <header className="shell-home-head">
-        <h1>{state.homeList === "pinned" ? "Pinned" : "Recent"}</h1>
+        <h1>{t(state.homeList === "pinned" ? "shell.sidebar.pinned" : "shell.sidebar.recent")}</h1>
 
         <div className="shell-home-controls">
           <Select
-            aria-label="Group by"
+            aria-label={t("shell.home.groupBy")}
             value={grouping}
-            options={GROUPING_OPTIONS}
+            options={GROUPING_OPTIONS.map(({ value, labelKey }) => ({ value, label: t(labelKey) }))}
             onChange={(value) => setGrouping(value as Grouping)}
           />
           <Select
-            aria-label="File type"
+            aria-label={t("shell.home.fileType")}
             value={fileType}
-            options={TYPE_OPTIONS}
+            options={TYPE_OPTIONS.map(({ value, labelKey }) => ({ value, label: t(labelKey) }))}
             onChange={(value) => setFileType(value as FileType | "all")}
           />
         </div>
@@ -68,7 +77,7 @@ export function EditorHome() {
             onClick={() => void actions.createFile(defaultFolderId, type)}
           >
             <Plus size={15} strokeWidth={1.8} aria-hidden="true" />
-            {type === "doc" ? "Blank document" : type === "sheet" ? "Blank workbook" : "Blank presentation"}
+            {t(BLANK_KEYS[type])}
           </button>
         ))}
         <button
@@ -77,7 +86,7 @@ export function EditorHome() {
           onClick={() => void actions.openFromDisk()}
         >
           <FolderOpen size={15} strokeWidth={1.7} aria-hidden="true" />
-          Open from this computer
+          {t("shell.home.openFromComputer")}
         </button>
       </div>
 

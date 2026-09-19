@@ -1,13 +1,21 @@
 import { PanelLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { useT } from "../../renderer/i18n";
 import { usePort } from "../port/PortContext";
 import { useShell } from "../state/ShellContext";
 
+/**
+ * The window controls, by key rather than by label.
+ *
+ * `shell.sidebar.collapse` / `shell.sidebar.expand` were already in the
+ * dictionary — in both languages — with the exact English values this file used
+ * to hardcode. They are the two entries this component reuses rather than adds.
+ */
 const CONTROLS = [
-  { action: "close", label: "Close window" },
-  { action: "minimize", label: "Minimize window" },
-  { action: "fullscreen", label: "Toggle full screen" },
+  { action: "close", labelKey: "shell.window.close" },
+  { action: "minimize", labelKey: "shell.window.minimize" },
+  { action: "fullscreen", labelKey: "shell.window.fullscreen" },
 ] as const;
 
 /**
@@ -24,34 +32,40 @@ const CONTROLS = [
  * at the top of the sidebar (see ModeMenu).
  */
 export function WindowBar() {
+  const t = useT();
   const port = usePort();
   const { state, dispatch } = useShell();
   const [fullscreen, setFullscreen] = useState(() => port.window.isFullscreen());
 
   useEffect(() => port.window.onFullscreenChange(setFullscreen), [port]);
 
-  const collapseLabel = state.navCollapsed ? "Expand sidebar" : "Collapse sidebar";
+  const collapseLabel = t(state.navCollapsed ? "shell.sidebar.expand" : "shell.sidebar.collapse");
 
   return (
     <div className="shell-windowbar shell-region">
-      <div className="shell-window-controls" aria-label="Window controls">
-        {CONTROLS.map(({ action, label }) => (
-          <button
-            key={action}
-            type="button"
-            className={`shell-window-${action}`}
-            aria-label={action === "fullscreen" && fullscreen ? "Exit full screen" : label}
-            aria-pressed={action === "fullscreen" ? fullscreen : undefined}
-            title={label}
-            onClick={() => {
-              if (action === "close") port.window.close();
-              else if (action === "minimize") port.window.minimize();
-              else port.window.toggleFullscreen();
-            }}
-          >
-            <WindowGlyph action={action} />
-          </button>
-        ))}
+      <div className="shell-window-controls" aria-label={t("shell.window.controls")}>
+        {CONTROLS.map(({ action, labelKey }) => {
+          const label = t(labelKey);
+          return (
+            <button
+              key={action}
+              type="button"
+              className={`shell-window-${action}`}
+              aria-label={
+                action === "fullscreen" && fullscreen ? t("shell.window.exitFullscreen") : label
+              }
+              aria-pressed={action === "fullscreen" ? fullscreen : undefined}
+              title={label}
+              onClick={() => {
+                if (action === "close") port.window.close();
+                else if (action === "minimize") port.window.minimize();
+                else port.window.toggleFullscreen();
+              }}
+            >
+              <WindowGlyph action={action} />
+            </button>
+          );
+        })}
       </div>
 
       <button

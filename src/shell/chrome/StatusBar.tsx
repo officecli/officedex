@@ -1,5 +1,6 @@
 import { HardDrive } from "lucide-react";
 
+import { useT } from "../../renderer/i18n";
 import { useShell } from "../state/ShellContext";
 
 /**
@@ -21,6 +22,7 @@ import { useShell } from "../state/ShellContext";
  * the editor was showing, and changing it did nothing.
  */
 export function StatusBar() {
+  const t = useT();
   const { activeFile } = useShell();
 
   return (
@@ -30,17 +32,17 @@ export function StatusBar() {
             name is the longest: a 66-character name gets an ellipsis from
             chrome.css, and this is how the rest of it is still recoverable. */}
         <span title={activeFile ? activeFile.name : undefined}>
-          {activeFile ? activeFile.name : "No file open"}
+          {activeFile ? activeFile.name : t("shell.status.noFile")}
         </span>
       </div>
 
       <div className="shell-statusbar-end">
         <span className="shell-device">
           <HardDrive size={13} strokeWidth={1.7} aria-hidden="true" />
-          On this computer
+          {t("shell.status.onThisComputer")}
         </span>
         {activeFile ? (
-          <span>{activeFile.dirty ? "Unsaved changes" : "All changes saved"}</span>
+          <span>{t(activeFile.dirty ? "workbench.state.dirty" : "shell.status.saved")}</span>
         ) : null}
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { useT } from "../../renderer/i18n";
 import { useShell } from "../state/ShellContext";
 import { NAV_RAIL_WIDTH, canDock, effectivePlacement, showsPresenceFace } from "../state/shellReducer";
 import { PresenceFace, statusLabel } from "./PresenceFace";
@@ -64,6 +65,7 @@ function prefersReducedMotion(): boolean {
  * would stop meaning anything.
  */
 export function AgentPresence() {
+  const t = useT();
   const { state, dispatch } = useShell();
   const agent = useAgentTask();
   const placement = effectivePlacement(state);
@@ -208,7 +210,7 @@ export function AgentPresence() {
       <section
         ref={dockHost}
         className="shell-agent shell-region"
-        aria-label="Agent conversation"
+        aria-label={t("shell.presence.conversation")}
         aria-hidden={!dockedRender}
         inert={!dockedRender ? true : undefined}
         onTransitionEnd={(event) => {
@@ -249,8 +251,8 @@ export function AgentPresence() {
               <button
                 type="button"
                 className="shell-presence-collapse"
-                aria-label="Collapse the Agent panel"
-                title="Collapse"
+                aria-label={t("shell.presence.collapseAria")}
+                title={t("shell.presence.collapse")}
                 onClick={() => dispatch({ type: "set-presence-expanded", expanded: false })}
               >
                 <span aria-hidden="true">–</span>
@@ -261,8 +263,8 @@ export function AgentPresence() {
               type="button"
               className="shell-presence-face"
               aria-expanded={false}
-              aria-label={`${statusLabel(status)}. Open the Agent panel. Drag, or use the arrow keys, to move it.`}
-              title="Open · drag to move · arrow keys to reposition"
+              aria-label={t("shell.presence.openAria", { status: statusLabel(status) })}
+              title={t("shell.presence.openTitle")}
               {...handleProps}
               onClick={() => {
                 // A drag must not also read as a click.

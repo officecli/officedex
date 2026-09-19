@@ -69,17 +69,29 @@ const root = fixture?.forceUpdate ? (
     />
   </LocaleProvider>
 ) : (
-  <UpdateGate api={api}>
-    <PortProvider port={port}>
-      <CanvasProvider adapter={canvas}>
-        <SelectionProvider>
-          <ShellProvider stateOverride={fixture?.stateOverride} persist={!fixture}>
-            <App />
-          </ShellProvider>
-        </SelectionProvider>
-      </CanvasProvider>
-    </PortProvider>
-  </UpdateGate>
+  /*
+   * The shell speaks the same language as the rest of the app.
+   *
+   * `LocaleProvider` used to wrap only the force-update page, which is exactly
+   * how a Chinese system ended up with a Chinese update screen in front of an
+   * all-English shell (S8-005 / S4-009). Without a provider the shell would
+   * still read `navigator.language` through the context default, but it would
+   * ignore the locale the user picked in Settings — the provider is what makes
+   * `officedex.locale` mean the same thing on both entry points.
+   */
+  <LocaleProvider>
+    <UpdateGate api={api}>
+      <PortProvider port={port}>
+        <CanvasProvider adapter={canvas}>
+          <SelectionProvider>
+            <ShellProvider stateOverride={fixture?.stateOverride} persist={!fixture}>
+              <App />
+            </ShellProvider>
+          </SelectionProvider>
+        </CanvasProvider>
+      </PortProvider>
+    </UpdateGate>
+  </LocaleProvider>
 );
 
 createRoot(container).render(<StrictMode>{root}</StrictMode>);

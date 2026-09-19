@@ -1,6 +1,7 @@
 import { Clock3, FolderOpen, House, Pin, Plus, Settings2 } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { useT } from "../../renderer/i18n";
 import { useShell } from "../state/ShellContext";
 import { useLibraryActions } from "../nav/useLibraryActions";
 import { notBuiltYet } from "../port/reportPortFailure";
@@ -17,6 +18,7 @@ import { useComposerSettings } from "../composer/useComposerSettings";
  * `children` is the mode-specific middle; M3 fills it with the file tree.
  */
 export function Sidebar({ children }: { children?: ReactNode }) {
+  const t = useT();
   const { state, dispatch } = useShell();
   const actions = useLibraryActions();
   const settings = useComposerSettings();
@@ -24,14 +26,14 @@ export function Sidebar({ children }: { children?: ReactNode }) {
   const collapsed = state.navCollapsed;
 
   return (
-    <aside id="shell-sidebar" className="shell-sidebar shell-region" aria-label="Workspace navigation">
+    <aside id="shell-sidebar" className="shell-sidebar shell-region" aria-label={t("shell.sidebar.navAria")}>
       <div className="shell-sidebar-brand">
         <ModeMenu />
       </div>
-      <nav className="shell-sidebar-top" aria-label={agent ? "Agent" : "File library"}>
+      <nav className="shell-sidebar-top" aria-label={t(agent ? "shell.sidebar.agentNav" : "shell.sidebar.libraryNav")}>
         <SidebarButton
           icon={<House size={18} strokeWidth={1.6} aria-hidden="true" />}
-          label="Home"
+          label={t("shell.nav.home")}
           collapsed={collapsed}
           current={state.home}
           onClick={() => dispatch({ type: "go-home" })}
@@ -40,7 +42,7 @@ export function Sidebar({ children }: { children?: ReactNode }) {
         {agent ? (
           <SidebarButton
             icon={<Plus size={18} strokeWidth={1.6} aria-hidden="true" />}
-            label="New task"
+            label={t("shell.sidebar.newTask")}
             collapsed={collapsed}
             onClick={() => dispatch({ type: "go-home" })}
           />
@@ -50,13 +52,13 @@ export function Sidebar({ children }: { children?: ReactNode }) {
                 you to the choice rather than guessing a type for you. */}
             <SidebarButton
               icon={<Plus size={18} strokeWidth={1.6} aria-hidden="true" />}
-              label="New"
+              label={t("shell.sidebar.new")}
               collapsed={collapsed}
               onClick={() => dispatch({ type: "go-home" })}
             />
             <SidebarButton
               icon={<FolderOpen size={18} strokeWidth={1.6} aria-hidden="true" />}
-              label="Open"
+              label={t("shell.sidebar.open")}
               collapsed={collapsed}
               onClick={() => void actions.openFromDisk()}
             />
@@ -73,17 +75,17 @@ export function Sidebar({ children }: { children?: ReactNode }) {
         library lives.
       */}
       {!agent ? (
-        <nav className="shell-sidebar-views" aria-label="File views">
+        <nav className="shell-sidebar-views" aria-label={t("shell.sidebar.fileViews")}>
           <SidebarButton
             icon={<Clock3 size={18} strokeWidth={1.6} aria-hidden="true" />}
-            label="Recent"
+            label={t("shell.sidebar.recent")}
             collapsed={collapsed}
             current={state.home && state.homeList === "recent"}
             onClick={() => dispatch({ type: "set-home-list", list: "recent" })}
           />
           <SidebarButton
             icon={<Pin size={18} strokeWidth={1.6} aria-hidden="true" />}
-            label="Pinned"
+            label={t("shell.sidebar.pinned")}
             collapsed={collapsed}
             current={state.home && state.homeList === "pinned"}
             onClick={() => dispatch({ type: "set-home-list", list: "pinned" })}
@@ -97,14 +99,14 @@ export function Sidebar({ children }: { children?: ReactNode }) {
             no account system yet, so the honest footer has nothing to say about
             who you are. It comes back when there is someone to name. */}
         <Menu
-          label="Workspace settings"
+          label={t("shell.sidebar.settingsMenu")}
           align="end"
           width={250}
           items={[
             {
               id: "review",
-              label: "Review changes",
-              description: "Ask before applying Agent edits",
+              label: t("shell.sidebar.reviewChanges"),
+              description: t("shell.sidebar.reviewChangesDescription"),
               /*
                * The fifth door onto a tier that does not exist.
                *
@@ -123,20 +125,24 @@ export function Sidebar({ children }: { children?: ReactNode }) {
               onSelect: () =>
                 notBuiltYet(
                   "composer.permission.review",
-                  "Review changes is not available yet — every run applies its changes directly. Full access is the only mode the agent honours.",
+                  t("shell.sidebar.reviewNotBuilt"),
                 ),
             },
             {
               id: "enter",
-              label: settings.value.enterToSend ? "Enter sends" : "Enter adds a line",
-              description: "Shift + Enter always adds a line",
+              label: t(
+                settings.value.enterToSend ? "shell.sidebar.enterSends" : "shell.sidebar.enterNewline",
+              ),
+              description: t("shell.sidebar.enterDescription"),
               checked: settings.value.enterToSend,
               onSelect: () => void settings.patch({ enterToSend: !settings.value.enterToSend }),
             },
             {
               id: "motion",
-              label: settings.value.reduceMotion ? "Reduced motion" : "Full motion",
-              description: "Use the system animation preference",
+              label: t(
+                settings.value.reduceMotion ? "shell.sidebar.reducedMotion" : "shell.sidebar.fullMotion",
+              ),
+              description: t("shell.sidebar.motionDescription"),
               checked: settings.value.reduceMotion,
               onSelect: () => void settings.patch({ reduceMotion: !settings.value.reduceMotion }),
             },
@@ -147,8 +153,8 @@ export function Sidebar({ children }: { children?: ReactNode }) {
               {...triggerProps}
               type="button"
               className="shell-icon-button"
-              aria-label="Settings"
-              title="Settings"
+              aria-label={t("shell.nav.settings")}
+              title={t("shell.nav.settings")}
             >
               <Settings2 size={18} strokeWidth={1.6} aria-hidden="true" />
             </button>

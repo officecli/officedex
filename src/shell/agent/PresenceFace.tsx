@@ -1,3 +1,4 @@
+import { translate } from "../../renderer/i18n";
 import type { AgentStatus } from "../../shared/uiPort";
 import {
   CORNER_ORIGIN,
@@ -154,6 +155,14 @@ export function PresenceFace({
   );
 }
 
+/**
+ * The spoken name of a state.
+ *
+ * `translate` rather than `useT` because three of the four callers want this
+ * inside a template (an `aria-label`, a live region, a row in Home's task
+ * list), and the shell has no locale switcher of its own — the language is
+ * fixed for the life of the window.
+ */
 export function statusLabel(status: AgentStatus): string {
-  return poseFor(status).label;
+  return translate(poseFor(status).labelKey);
 }

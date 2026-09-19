@@ -1,6 +1,7 @@
 import { ChevronRight, Folder as FolderIcon, FolderOpen, MoreHorizontal, Pin, Plus } from "lucide-react";
 import { useRef, useState } from "react";
 
+import { useT } from "../../renderer/i18n";
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import { Menu, type MenuHandle, type MenuItemSpec } from "../chrome/Menu";
 import type { FileMeta, Folder } from "../../shared/uiPort";
@@ -15,9 +16,10 @@ const SIDEBAR_PAGE = 5;
  *
  * The sidebar said "No files yet." and Home said "No files yet" — two hardcoded
  * copies 243 lines apart in this file, which is exactly how they drifted
- * (S3-013). Naming it is the only thing that stops it happening again.
+ * (S3-013). Naming it is the only thing that stops it happening again; now that
+ * it is a dictionary key, the two densities cannot drift in any language.
  */
-const NO_FILES_YET = "No files yet";
+const NO_FILES_YET = "shell.tree.noFilesYet";
 
 /**
  * Arrow-key movement between a folder and the files inside it.
@@ -85,8 +87,9 @@ type WithGroups = FileTreeProps & { groups: ReturnType<typeof buildGroups> };
 /* ------------------------------------------------------------- compact */
 
 function CompactTree(props: WithGroups) {
+  const t = useT();
   return (
-    <div className="shell-tree" role="tree" aria-label="Folders and files">
+    <div className="shell-tree" role="tree" aria-label={t("shell.tree.ariaLabel")}>
       {props.groups.map((group) => {
         const folderId = group.folderId;
         if (!folderId) return null;
@@ -125,7 +128,7 @@ function CompactTree(props: WithGroups) {
             {expanded ? (
               <div className="shell-tree-files" role="group">
                 {shown.length === 0 ? (
-                  <p className="shell-tree-empty">{NO_FILES_YET}</p>
+                  <p className="shell-tree-empty">{t(NO_FILES_YET)}</p>
                 ) : (
                   shown.map((file) => (
                     <FileRow
@@ -155,7 +158,9 @@ function CompactTree(props: WithGroups) {
                       requestAnimationFrame(() => button.scrollIntoView({ block: "nearest" }));
                     }}
                   >
-                    {revealed ? "Show less" : `Show ${group.total - group.files.length} more`}
+                    {revealed
+                      ? t("shell.tree.showLess")
+                      : t("shell.tree.showMore", { count: group.total - group.files.length })}
                   </button>
                 ) : null}
               </div>
@@ -186,17 +191,18 @@ function FolderRow({
   onRename?: () => void;
   onRemove?: () => void;
 }) {
+  const t = useT();
   const items: MenuItemSpec[] = [
-    { id: "doc", label: "New document", onSelect: () => onCreateFile("doc") },
-    { id: "sheet", label: "New workbook", onSelect: () => onCreateFile("sheet") },
-    { id: "slides", label: "New presentation", onSelect: () => onCreateFile("slides") },
+    { id: "doc", label: t("shell.tree.newDocument"), onSelect: () => onCreateFile("doc") },
+    { id: "sheet", label: t("shell.tree.newWorkbook"), onSelect: () => onCreateFile("sheet") },
+    { id: "slides", label: t("shell.tree.newPresentation"), onSelect: () => onCreateFile("slides") },
   ];
-  if (onRename) items.push({ id: "rename", label: "Rename folder…", onSelect: onRename });
+  if (onRename) items.push({ id: "rename", label: t("shell.tree.renameFolder"), onSelect: onRename });
   if (onRemove) {
     items.push({
       id: "remove",
-      label: "Remove folder",
-      description: "Files move to Documents",
+      label: t("shell.tree.removeFolder"),
+      description: t("shell.tree.removeFolderDescription"),
       onSelect: onRemove,
     });
   }
@@ -223,7 +229,7 @@ function FolderRow({
          * There is no text node between the two elements to separate them and
          * `title` does not contribute once an element has text content.
          */
-        aria-label={`${folder.label}, ${folder.count} files`}
+        aria-label={t("shell.tree.folderAria", { folder: folder.label, count: folder.count })}
         onClick={() => {
           onToggle();
           onSelect();
@@ -259,14 +265,20 @@ function FolderRow({
         <small>{folder.count}</small>
       </button>
 
-      <Menu ref={menuRef} label={`${folder.label} actions`} items={items} align="end" width={220}>
+      <Menu
+        ref={menuRef}
+        label={t("shell.tree.folderMenu", { folder: folder.label })}
+        items={items}
+        align="end"
+        width={220}
+      >
         {(triggerProps) => (
           <button
             {...triggerProps}
             type="button"
             className="shell-tree-folder-add"
-            aria-label={`Actions for ${folder.label}`}
-            title="New file in this folder"
+            aria-label={t("shell.tree.folderActionsFor", { folder: folder.label })}
+            title={t("shell.tree.newFileHere")}
           >
             <Plus size={15} strokeWidth={1.8} aria-hidden="true" />
           </button>
@@ -291,17 +303,18 @@ function FileRow({
   onMove: (folderId: string) => void;
   onTogglePinned: () => void;
 }) {
+  const t = useT();
   const items: MenuItemSpec[] = [
     {
       id: "pin",
-      label: file.pinned ? "Unpin" : "Pin",
+      label: t(file.pinned ? "shell.common.unpin" : "shell.common.pin"),
       onSelect: onTogglePinned,
     },
     ...folders
       .filter((folder) => folder.id !== file.folderId)
       .map((folder) => ({
         id: `move-${folder.id}`,
-        label: `Move to ${folder.name}`,
+        label: t("shell.tree.moveTo", { folder: folder.name }),
         onSelect: () => onMove(folder.id),
       })),
   ];
@@ -347,17 +360,23 @@ function FileRow({
       >
         <FileTypeIcon type={file.type} size={15} />
         <span>{file.name.replace(/\.(docx|xlsx|pptx)$/i, "")}</span>
-        {file.pinned ? <Pin size={11} strokeWidth={1.8} aria-label="Pinned" /> : null}
+        {file.pinned ? <Pin size={11} strokeWidth={1.8} aria-label={t("shell.sidebar.pinned")} /> : null}
       </button>
 
-      <Menu ref={menuRef} label={`${file.name} actions`} items={items} align="end" width={230}>
+      <Menu
+        ref={menuRef}
+        label={t("shell.tree.fileMenu", { file: file.name })}
+        items={items}
+        align="end"
+        width={230}
+      >
         {(triggerProps) => (
           <button
             {...triggerProps}
             type="button"
             className="shell-tree-file-more"
-            aria-label={`Actions for ${file.name}`}
-            title="File actions"
+            aria-label={t("shell.tree.fileActionsFor", { file: file.name })}
+            title={t("shell.common.fileActions")}
           >
             <MoreHorizontal size={14} strokeWidth={1.8} aria-hidden="true" />
           </button>
@@ -370,6 +389,7 @@ function FileRow({
 /* --------------------------------------------------------- comfortable */
 
 function ComfortableList(props: WithGroups) {
+  const t = useT();
   const [now] = useState(() => Date.now());
   const [draggingId, setDraggingId] = useState<string | null>(null);
   // The sidebar must list every folder so an empty one can still be navigated
@@ -390,19 +410,18 @@ function ComfortableList(props: WithGroups) {
      */
     const pinnedOnly = props.filter === "pinned";
     const typeFiltered = Boolean(props.fileType && props.fileType !== "all");
-    const heading = pinnedOnly
-      ? "No pinned files"
-      : typeFiltered
-        ? "No files of this type"
-        : NO_FILES_YET;
-    const body =
+    const heading = t(
+      pinnedOnly ? "shell.list.noPinned" : typeFiltered ? "shell.list.noOfType" : NO_FILES_YET,
+    );
+    const body = t(
       pinnedOnly && typeFiltered
-        ? "Nothing pinned matches the file type filter. Clear the filter, or pin a file of this type."
+        ? "shell.list.emptyPinnedAndType"
         : pinnedOnly
-          ? "Pin a file to keep it here."
+          ? "shell.list.emptyPinned"
           : typeFiltered
-            ? "Clear the file type filter, or create a file of this type."
-            : "Create a file, or open one from this computer.";
+            ? "shell.list.emptyType"
+            : "shell.list.empty",
+    );
 
     return (
       <div className="shell-list-empty">
@@ -415,15 +434,15 @@ function ComfortableList(props: WithGroups) {
   return (
     <table className="shell-list">
       <caption className="shell-visually-hidden">
-        Files grouped by {props.grouping === "folder" ? "folder" : "when they were last opened"}
+        {t(props.grouping === "folder" ? "shell.list.captionFolder" : "shell.list.captionTime")}
       </caption>
       <thead>
         <tr>
-          <th scope="col">Name</th>
-          <th scope="col">Folder</th>
-          <th scope="col">Last opened</th>
+          <th scope="col">{t("shell.list.columnName")}</th>
+          <th scope="col">{t("shell.list.columnFolder")}</th>
+          <th scope="col">{t("shell.list.columnLastOpened")}</th>
           <th scope="col">
-            <span className="shell-visually-hidden">Pin</span>
+            <span className="shell-visually-hidden">{t("shell.common.pin")}</span>
           </th>
         </tr>
       </thead>
@@ -448,7 +467,7 @@ function ComfortableList(props: WithGroups) {
               {group.label}
               <small aria-hidden="true">{group.total}</small>
               {/* Same gluing as the sidebar's folder rows (S1-012). */}
-              <span className="shell-visually-hidden">, {group.total} files</span>
+              <span className="shell-visually-hidden">{t("shell.list.groupCount", { count: group.total })}</span>
             </th>
           </tr>
           {group.files.map((file) => (
@@ -486,7 +505,9 @@ function ComfortableList(props: WithGroups) {
                 >
                   <FileTypeIcon type={file.type} />
                   <span>{file.name}</span>
-                  {file.dirty ? <i className="shell-list-dirty" aria-label="Unsaved changes" /> : null}
+                  {file.dirty ? (
+                    <i className="shell-list-dirty" aria-label={t("workbench.state.dirty")} />
+                  ) : null}
                 </button>
               </td>
               <td>{locationLabel(file, props.folders)}</td>
@@ -500,8 +521,10 @@ function ComfortableList(props: WithGroups) {
                   type="button"
                   className={`shell-list-pin${file.pinned ? " is-pinned" : ""}`}
                   aria-pressed={file.pinned}
-                  aria-label={`${file.pinned ? "Unpin" : "Pin"} ${file.name}`}
-                  title={file.pinned ? "Unpin" : "Pin"}
+                  aria-label={t(file.pinned ? "shell.list.unpinFile" : "shell.list.pinFile", {
+                    file: file.name,
+                  })}
+                  title={t(file.pinned ? "shell.common.unpin" : "shell.common.pin")}
                   onClick={() => props.onTogglePinned(file.id, !file.pinned)}
                 >
                   <Pin size={14} strokeWidth={1.7} aria-hidden="true" />

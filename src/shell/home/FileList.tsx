@@ -1,3 +1,4 @@
+import { useT } from "../../renderer/i18n";
 import { FileTree } from "../nav/FileTree";
 import { useFolderDrop } from "../nav/useFolderDrop";
 import { useLibraryActions } from "../nav/useLibraryActions";
@@ -11,15 +12,16 @@ import { useShell } from "../state/ShellContext";
  * the library contains.
  */
 export function FileList() {
+  const t = useT();
   const { state, dispatch, folders, files, scopeFolderId } = useShell();
   const actions = useLibraryActions();
   const { overFolderId, dropHandlers } = useFolderDrop(actions.moveFile);
   const scope = folders.find((folder) => folder.id === scopeFolderId);
 
   return (
-    <section className="shell-home-list" aria-label="Files" {...dropHandlers}>
+    <section className="shell-home-list" aria-label={t("shell.home.filesAria")} {...dropHandlers}>
       <h2 className="shell-home-subhead">
-        {scope ? `Files in ${scope.name}` : "Your files"}
+        {scope ? t("shell.home.filesIn", { folder: scope.name }) : t("shell.home.yourFiles")}
       </h2>
       <FileTree
         density="comfortable"

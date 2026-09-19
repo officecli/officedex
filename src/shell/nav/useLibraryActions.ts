@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 
+import { useT } from "../../renderer/i18n";
 import { toast } from "../../renderer/ui";
 import { usePort } from "../port/PortContext";
 import type { FileType } from "../../shared/uiPort";
@@ -17,6 +18,7 @@ import { reportPortFailure } from "../port/reportPortFailure";
  * nothing when clicked.
  */
 export function useLibraryActions() {
+  const t = useT();
   const port = usePort();
   const { dispatch, reload, folders } = useShell();
 
@@ -77,12 +79,17 @@ export function useLibraryActions() {
         // be scrolled out of view or collapsed. The prototype said where it
         // went, and silence here reads as a drop that did not take.
         const folder = folders.find((entry) => entry.id === folderId);
-        if (folder) toast.success({ key: "file-moved", content: `Moved to ${folder.name}` });
+        if (folder) {
+          toast.success({
+            key: "file-moved",
+            content: t("shell.library.moved", { folder: folder.name }),
+          });
+        }
       } catch (reason) {
         reportPortFailure(reason);
       }
     },
-    [port, dispatch, reload, folders],
+    [port, dispatch, reload, folders, t],
   );
 
   const setPinned = useCallback(

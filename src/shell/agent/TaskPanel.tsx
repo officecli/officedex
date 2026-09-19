@@ -1,5 +1,6 @@
 import { ArrowUpRight, Check, CircleAlert, CircleCheck, CircleSlash, Clock3, Pause, PanelLeft, Play, SquareDashed, Undo2 } from "lucide-react";
 
+import { useT } from "../../renderer/i18n";
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import { Composer } from "../composer/Composer";
 import type { AgentOutlinePage, AgentStep, AgentTask } from "../../shared/uiPort";
@@ -23,6 +24,7 @@ export interface TaskPanelProps {
  * placement is where it happens to sit.
  */
 export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps) {
+  const t = useT();
   const { state, folders, files, scopeFolderId, dispatch } = useShell();
   const actions = useLibraryActions();
   const { task } = agent;
@@ -59,7 +61,7 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
           ? {
               tabIndex: 0,
               role: "group",
-              "aria-label": "Move the Agent panel. Drag, or use the arrow keys.",
+              "aria-label": t("shell.task.dragAria"),
             }
           : {})}
       >
@@ -72,8 +74,8 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
         <PresenceFace status={status} size={placement === "floating" ? 40 : 34} tracks />
 
         <div className="shell-task-title">
-          <b>{task?.title ?? "Work with Agent"}</b>
-          <small>{task ? statusLabel(status) : (scope?.name ?? "No folder")}</small>
+          <b>{task?.title ?? t("shell.task.defaultTitle")}</b>
+          <small>{task ? statusLabel(status) : (scope?.name ?? t("shell.task.noFolder"))}</small>
         </div>
 
         {dockable ? (
@@ -81,8 +83,8 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
             type="button"
             className="shell-icon-button"
             aria-pressed={!docked}
-            aria-label={docked ? "Float the Agent panel" : "Dock the Agent panel"}
-            title={docked ? "Float the Agent panel" : "Dock the Agent panel"}
+            aria-label={t(docked ? "shell.task.float" : "shell.task.dock")}
+            title={t(docked ? "shell.task.float" : "shell.task.dock")}
             onClick={() =>
               dispatch({ type: "set-placement", placement: docked ? "floating" : "docked" })
             }
@@ -110,7 +112,7 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
                 <div key={message.id} className="shell-task-reply">
                   <div className="shell-task-reply-label">
                     <PresenceFace status="idle" size={18} />
-                    OfficeDex
+                    {t("settings.about.productName")}
                   </div>
                   <p>{message.text}</p>
                 </div>
@@ -144,7 +146,7 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
                 ? status === "paused" ? (
                     <button type="button" className="shell-task-button" onClick={() => void agent.resume()}>
                       <Play size={14} strokeWidth={1.8} aria-hidden="true" />
-                      Resume
+                      {t("shell.task.resume")}
                     </button>
                   ) : (
                     <button
@@ -154,7 +156,7 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
                       onClick={() => void agent.pause()}
                     >
                       <Pause size={14} strokeWidth={1.8} aria-hidden="true" />
-                      Pause
+                      {t("shell.task.pause")}
                     </button>
                   )
                 : null}
@@ -165,7 +167,7 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
                 onClick={() => void agent.finish()}
               >
                 <Check size={14} strokeWidth={1.8} aria-hidden="true" />
-                Finish task
+                {t("shell.task.finish")}
               </button>
             </div>
 
@@ -173,7 +175,8 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
               <SuggestionCard
                 suggestion={task.suggestion}
                 fileName={
-                  files.find((file) => file.id === task.suggestion?.targetFileId)?.name ?? "the file"
+                  files.find((file) => file.id === task.suggestion?.targetFileId)?.name ??
+                  t("shell.task.theFile")
                 }
                 onApply={() => void agent.applySuggestion(task.suggestion!.id)}
                 onUndo={() => void agent.undoSuggestion(task.suggestion!.id)}
@@ -183,9 +186,9 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
         ) : (
           <div className="shell-task-empty">
             <PresenceFace status="idle" size={44} tracks />
-            <strong>What should we work on?</strong>
+            <strong>{t("shell.task.emptyTitle")}</strong>
             <p>
-              Describe a task for {scope?.name ?? "this folder"}. You can keep editing while it runs.
+              {t("shell.task.emptyBody", { folder: scope?.name ?? t("shell.task.thisFolder") })}
             </p>
           </div>
         )}
@@ -197,7 +200,7 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
               <div>
                 <strong>{artifact.name}</strong>
                 <small>
-                  {artifact.dirty ? "Unsaved changes" : "Saved on this computer"}
+                  {t(artifact.dirty ? "workbench.state.dirty" : "shell.task.artifactSaved")}
                 </small>
               </div>
             </div>
@@ -209,7 +212,7 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
                 dispatch({ type: "set-mode", mode: "editor" });
               }}
             >
-              Open in Editor
+              {t("shell.task.openInEditor")}
               <ArrowUpRight size={13} strokeWidth={1.8} aria-hidden="true" />
             </button>
           </div>
@@ -243,8 +246,9 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
  * it is doing, and the deck itself is right there to read.
  */
 function OutlineList({ pages }: { pages: NonNullable<AgentTask["outline"]> }) {
+  const t = useT();
   return (
-    <ol className="shell-task-outline" aria-label="Pages in this deck">
+    <ol className="shell-task-outline" aria-label={t("shell.task.outlineAria")}>
       {pages.map((page) => (
         <li key={page.slide} className="shell-task-outline-row" data-state={page.state ?? "planned"}>
           <span className="shell-task-outline-index">{String(page.slide).padStart(2, "0")}</span>
@@ -262,24 +266,25 @@ function OutlineList({ pages }: { pages: NonNullable<AgentTask["outline"]> }) {
  * have to learn a second set of symbols halfway down the same column.
  */
 function PageMark({ state }: { state: AgentOutlinePage["state"] }) {
+  const t = useT();
   if (state === "ready") {
-    return <CircleCheck size={14} strokeWidth={1.7} aria-label="Content ready" />;
+    return <CircleCheck size={14} strokeWidth={1.7} aria-label={t("shell.task.pageReady")} />;
   }
   if (state === "generating" || state === "repairing") {
     return (
       <span
         className="shell-task-spinner"
-        aria-label={state === "repairing" ? "Retrying this page" : "Writing content"}
+        aria-label={t(state === "repairing" ? "shell.task.pageRetrying" : "shell.task.pageWriting")}
       />
     );
   }
   if (state === "failed") {
-    return <CircleAlert size={14} strokeWidth={1.7} aria-label="This page failed" />;
+    return <CircleAlert size={14} strokeWidth={1.7} aria-label={t("shell.task.pageFailed")} />;
   }
   if (state === "canceled") {
-    return <CircleSlash size={14} strokeWidth={1.7} aria-label="Stopped" />;
+    return <CircleSlash size={14} strokeWidth={1.7} aria-label={t("shell.task.pageStopped")} />;
   }
-  return <Clock3 size={14} strokeWidth={1.7} aria-label="Queued" />;
+  return <Clock3 size={14} strokeWidth={1.7} aria-label={t("shell.task.pageQueued")} />;
 }
 
 /**
@@ -302,9 +307,10 @@ function QuestionCard({
   question: NonNullable<AgentTask["question"]>;
   onPick: (optionId: string) => void;
 }) {
+  const t = useT();
   return (
-    <div className="shell-task-question" role="group" aria-label="Agent is waiting for an answer">
-      <strong>{question.text || "The Agent needs an answer to continue."}</strong>
+    <div className="shell-task-question" role="group" aria-label={t("shell.task.questionAria")}>
+      <strong>{question.text || t("shell.task.questionFallback")}</strong>
       {question.options.length > 0 ? (
         <div className="shell-task-question-options">
           {question.options.map((option) => (
@@ -321,9 +327,9 @@ function QuestionCard({
         </div>
       ) : null}
       {question.allowFreeform ? (
-        <small>Or type your answer below.</small>
+        <small>{t("shell.task.questionFreeform")}</small>
       ) : question.options.length === 0 ? (
-        <small>Waiting for the Agent — no options were offered.</small>
+        <small>{t("shell.task.questionNoOptions")}</small>
       ) : null}
     </div>
   );
@@ -346,9 +352,12 @@ function SuggestionCard({
   onApply: () => void;
   onUndo: () => void;
 }) {
+  const t = useT();
   return (
     <div className="shell-task-suggestion" data-applied={String(suggestion.applied)}>
-      <strong>{suggestion.applied ? "Changes applied" : "Suggested changes are ready"}</strong>
+      <strong>
+        {t(suggestion.applied ? "shell.task.suggestionApplied" : "shell.task.suggestionReady")}
+      </strong>
       <p>{suggestion.summary}</p>
       <small>{fileName}</small>
       {suggestion.applied ? (
@@ -356,20 +365,16 @@ function SuggestionCard({
           type="button"
           className="shell-task-button"
           disabled={!suggestion.undoable}
-          title={
-            suggestion.undoable
-              ? "Undo this change"
-              : "The file changed after applying, so this can no longer be undone"
-          }
+          title={t(suggestion.undoable ? "shell.task.undoTitle" : "shell.task.undoBlocked")}
           onClick={onUndo}
         >
           <Undo2 size={14} strokeWidth={1.8} aria-hidden="true" />
-          Undo
+          {t("shell.task.undo")}
         </button>
       ) : (
         <button type="button" className="shell-task-button is-primary" onClick={onApply}>
           <Check size={14} strokeWidth={1.8} aria-hidden="true" />
-          Review and apply
+          {t("shell.task.reviewApply")}
         </button>
       )}
     </div>
