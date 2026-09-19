@@ -4,24 +4,44 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { extractFacts } from "../lib/facts.mjs";
 import { distillFromFacts } from "../lib/distill.mjs";
-import { pageTypesFromHandbook, remapSlots } from "../lib/page-types.mjs";
+import { pageTypesFromHandbook, remapSlots, remapPictureSlots } from "../lib/page-types.mjs";
 import { mapOutlineToPages } from "../lib/map-outline.mjs";
 import { cloneMappedSlides } from "../lib/clone.mjs";
 import { applyFills, applyPageNumbers, overflowWarnings } from "../lib/fill.mjs";
 import { completeJson } from "../lib/llm.mjs";
+import { FILL_SYSTEM, slotPayload, applyKnownFacts, missingSlots, leftoverPlaceholders, remapFillIds } from "../lib/fill-plan.mjs";
+import { classifyPicture, replacePhotos } from "../lib/images.mjs";
 import { exportMopDirectory } from "../../../../presentation/tools/lib/mop-converter-client.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TEMPLATE = path.join(ROOT, "work/template");
 const BRAND = "石墨文档";
+const FACTS = {
+  brand: BRAND,
+  presenter: "林晓",
+  date: "2026.09",
+  phone: "400-000-0000",
+  address: "北京市海淀区",
+  email: "hi@shimo.im",
+  website: "shimo.im",
+  closingKicker: "Thanks",
+  closingMessage: "感谢观看",
+  team: [
+    { name: "林晓", role: "产品负责人" },
+    { name: "周可", role: "设计负责人" },
+    { name: "韩牧", role: "工程负责人" },
+  ],
+};
 const BRIEF = `Fill cloned template slides for 石墨文档 (Shimo Docs).
+Known facts only — do not invent partners, customers, prices, or metrics:
 Company: 石墨文档. Tagline: 实时协作的云端办公套件.
-Presenter: 林晓. Date: 2026.09.
-Phone: 400-000-0000. Address: 北京市海淀区.
-About: 多人同时编辑文档/表格/幻灯片，企业知识沉淀。
+Presenter: 林晓. Date: 2026.09. Phone: 400-000-0000. Address: 北京市海淀区.
+Email: hi@shimo.im. Website: shimo.im.
 Products: 在线文档、智能表格、幻灯片、知识库.
-Team: 林晓 产品; 周可 设计; 韩牧 工程.
-Chinese copy. Respect maxChars. Same brand.name 石墨文档 on every brand slot.`;
+Team: 林晓 产品负责人; 周可 设计负责人; 韩牧 工程负责人.
+Partners: none listed.
+Prices: 免费版 / 专业版 / 企业版 (no fake currency amounts).
+Same brand.name 石墨文档 on every brand slot.`;
 
 const SHORT_OUTLINE = {
   title: "石墨文档",
@@ -78,11 +98,13 @@ const LONG_OUTLINE = {
 };
 
 const mop = JSON.parse(await fs.readFile(path.join(TEMPLATE, "source.mop/content.json"), "utf8"));
-const handbook = distillFromFacts(extractFacts(mop)).handbook;
+const templateFacts = extractFacts(mop);
+const handbook = distillFromFacts(templateFacts).handbook;
 const pageTypes = pageTypesFromHandbook(handbook);
+const skipImages = process.argv.includes("--no-images");
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const only = process.argv[2];
+  const only = process.argv.filter((arg) => !arg.startsWith("--"))[2];
   if (only === "map") {
     for (const [name, outline] of [["short-8", SHORT_OUTLINE], ["long-32", LONG_OUTLINE]]) {
       const { mapping, warnings } = mapOutlineToPages(outline, pageTypes);
@@ -90,13 +112,14 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
       if (warnings.length) console.log("  warnings", warnings);
     }
   } else {
-    if (!only || only === "short") {
+    if (!only || only === "short" || only === "short-reuse") {
       await generateDeck({
         name: "short-8",
         outDir: path.join(ROOT, "work/pair-short"),
         pptxName: "shimo-short-8.pptx",
         outline: SHORT_OUTLINE,
         expectedPages: 8,
+        reuseFills: only === "short-reuse",
       });
     }
     if (!only || only === "long" || only === "long-reuse") {
@@ -144,20 +167,13 @@ async function generateDeck({ name, outDir, pptxName, outline, expectedPages, re
     return { newIndex: i + 1, ...row, slots: remapSlots(srcPage, i + 1) };
   });
 
+  const allSlots = catalog.flatMap((page) => page.slots || []);
   let fills = Array.isArray(saved?.fills) ? saved.fills : [];
   if (!saved) {
     const batches = chunk(catalog, 6);
     for (const [bi, batch] of batches.entries()) {
       const slots = batch.flatMap((page) =>
-        (page.slots || [])
-          .filter((slot) => slot.role !== "brand.name")
-          .map((slot) => ({
-            slotId: slot.slotId,
-            role: slot.role,
-            fillWith: slot.fillWith,
-            maxChars: slot.maxChars,
-            sample: slot.sample,
-          })),
+        (page.slots || []).filter((slot) => slot.role !== "brand.name").map(slotPayload),
       );
       console.log(`[${name}] fill batch ${bi + 1}/${batches.length} slides ${batch.map((p) => p.newIndex).join(",")} slots ${slots.length}`);
       const result = await completeJson(
@@ -169,26 +185,41 @@ async function generateDeck({ name, outDir, pptxName, outline, expectedPages, re
             purpose: page.purpose,
             pageKind: page.pageKind,
             bullets: page.bullets,
+            modules: (handbook.pages.find((item) => item.index === page.sourceSlide) || {}).modules,
           })),
           slots,
         }),
-        "Return JSON {fills:[{slotId,text}]} only. Chinese copy. NEW slot indexes. Respect maxChars.",
+        FILL_SYSTEM,
       );
       const part = Array.isArray(result.fills) ? result.fills : [];
       console.log(`[${name}]   got ${part.length} fills`);
       fills.push(...part);
     }
-
-    for (const page of catalog) {
-      for (const slot of page.slots || []) {
-        if (slot.role === "brand.name") fills.push({ slotId: slot.slotId, text: BRAND });
+    remapFillIds(fills, mapping);
+    const missing = missingSlots(fills, allSlots);
+    if (missing.length) {
+      console.log(`[${name}] refill ${missing.length} missing slots`);
+      const extra = await completeJson(JSON.stringify({ brief: BRIEF, slots: missing.map(slotPayload) }), FILL_SYSTEM);
+      fills.push(...(Array.isArray(extra.fills) ? extra.fills : []));
+    }
+    const leftover = leftoverPlaceholders(fills);
+    if (leftover.length) {
+      console.log(`[${name}] rewrite ${leftover.length} leftover placeholders`);
+      const extra = await completeJson(
+        JSON.stringify({ brief: BRIEF, slots: leftover.map((fill) => slotPayload(allSlots.find((slot) => slot.slotId === fill.slotId) || fill)) }),
+        FILL_SYSTEM,
+      );
+      const rewritten = new Map((Array.isArray(extra.fills) ? extra.fills : []).map((fill) => [fill.slotId, fill.text]));
+      for (const fill of fills) {
+        if (rewritten.has(fill.slotId)) fill.text = rewritten.get(fill.slotId);
       }
     }
   } else {
     console.log(`[${name}] reuse ${fills.length} fills`);
   }
+  applyKnownFacts(fills, allSlots, FACTS);
 
-  const overflow = overflowWarnings(fills, catalog.flatMap((page) => page.slots || []));
+  const overflow = overflowWarnings(fills, allSlots);
   await fs.writeFile(
     path.join(outDir, "fills.json"),
     JSON.stringify({ mapping, fills, warnings: [...warnings, ...overflow] }, null, 2),
@@ -197,6 +228,41 @@ async function generateDeck({ name, outDir, pptxName, outline, expectedPages, re
   const filled = JSON.parse(await fs.readFile(path.join(dest, "content.json"), "utf8"));
   applyFills(filled, fills);
   applyPageNumbers(filled);
+
+  if (!skipImages) {
+    const photoSlots = [];
+    for (const [index, row] of mapping.entries()) {
+      const srcFacts = templateFacts.slides[row.sourceSlide - 1];
+      const pics = remapPictureSlots(srcFacts, index + 1)
+        .map((pic, picIndex) => {
+          const src = srcFacts?.pictures?.[picIndex];
+          return {
+            ...pic,
+            kind: classifyPicture(src || pic, row.pageKind, templateFacts.canvas),
+            pageKind: row.pageKind,
+            purpose: row.purpose,
+            bullets: row.bullets,
+          };
+        })
+        .filter((pic) => pic.kind === "photo");
+      const ordered = [...pics].sort((a, b) => (a.top || 0) - (b.top || 0) || (a.left || 0) - (b.left || 0));
+      if (row.pageKind === "team") {
+        ordered.forEach((pic, i) => { pic.person = FACTS.team[i % FACTS.team.length]; });
+      } else {
+        ordered.forEach((pic, i) => { pic.caption = (row.bullets || [])[i] || row.purpose; });
+      }
+      photoSlots.push(...pics);
+    }
+    console.log(`[${name}] replace ${photoSlots.length} photos`);
+    await replacePhotos({
+      mopRoot: filled,
+      mopDir: dest,
+      slots: photoSlots,
+      facts: FACTS,
+      cacheDir: path.join(ROOT, "work/image-cache"),
+    });
+  }
+
   await fs.writeFile(path.join(dest, "content.json"), JSON.stringify(filled));
   const pptx = path.join(outDir, pptxName);
   await exportMopDirectory(dest, pptx);

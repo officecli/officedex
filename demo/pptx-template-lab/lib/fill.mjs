@@ -12,11 +12,21 @@ function retargetPageNumbers(nodes, value) {
     if (node.type === "picture") continue;
     if (node.type === "shape") {
       const text = collectText(node);
-      if (/^\d{1,3}$/.test(text)) setText(node, value);
+      if (/^\d{1,3}$/.test(text)) {
+        setText(node, value);
+        if (String(value).length > text.length) widenDigitBox(node, String(value).length);
+      }
       continue;
     }
     retargetPageNumbers(asArray(node.data), value);
   }
+}
+
+function widenDigitBox(node, digits) {
+  const extent = node.attrs?.transform?.extent;
+  if (!extent) return;
+  const minEmu = digits * 16 * 12700;
+  if ((extent.cx || 0) < minEmu) extent.cx = minEmu;
 }
 
 export function applyFills(root, fills) {
@@ -103,7 +113,7 @@ export function overflowWarnings(fills, slots) {
   return warnings;
 }
 
-export function applyImageFills(root, imageFills, resolveFile) {
+export function applyImageFills(root, imageFills) {
   const byID = new Map();
   for (const fill of imageFills || []) {
     if (fill?.slotId && fill.digest) byID.set(fill.slotId, fill);
@@ -126,13 +136,26 @@ function walkPics(nodes, nextId, byID) {
       const id = nextId();
       const fill = byID.get(id);
       if (fill?.digest && node.attrs?.resource) {
-        node.attrs.resource.digest = fill.digest.startsWith("sha256:") ? fill.digest : `sha256:${fill.digest}`;
+        const hex = fill.digest.replace(/^sha256:/u, "");
+        const ext = fill.extension || node.attrs.resource.extension || "png";
+        node.attrs.resource.digest = `sha256:${hex}`;
+        node.attrs.resource.extension = ext;
+        node.attrs.resource.contentType = fill.contentType || mimeFromExt(ext);
+        node.attrs.resource.resourceUri = `mop-asset:/media/${hex}.${ext}`;
+        if (fill.size) node.attrs.resource.resourceSize = fill.size;
+        if (node.attrs.sourceRect) node.attrs.sourceRect = { top: 0, left: 0, bottom: 0, right: 0 };
       }
       continue;
     }
     if (node.type === "shape") continue;
     walkPics(asArray(node.data), nextId, byID);
   }
+}
+
+function mimeFromExt(ext) {
+  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+  if (ext === "webp") return "image/webp";
+  return "image/png";
 }
 
 export function replaceableSlots(facts) {

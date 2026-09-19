@@ -209,7 +209,7 @@ const routes = {
     });
     const result = await completeJson(
       JSON.stringify({ brief: session.generate.prompt, brandName: session.generate.outline.brandName, catalog }),
-      "Return JSON {fills:[{slotId,text}]}. Chinese copy. slotId uses the NEW index. Respect maxChars.",
+      "Return JSON {fills:[{slotId,text}]}. Chinese copy. slotId uses the NEW index. Fill EVERY slot. Respect maxChars/maxLines. Do not invent partners or prices not in the brief. Combined cards need title plus short features. Never copy placeholders.",
     );
     const fills = Array.isArray(result.fills) ? result.fills : [];
     const brand = session.generate.outline.brandName || "";

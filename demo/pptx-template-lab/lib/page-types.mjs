@@ -35,6 +35,9 @@ export function remapPictureSlots(factsSlide, newIndex) {
       replaceable: !pic.logo,
       width: pic.width,
       height: pic.height,
+      left: pic.left,
+      top: pic.top,
+      name: pic.name,
     }));
 }
 

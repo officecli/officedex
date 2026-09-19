@@ -297,7 +297,10 @@ function classifySlideTexts(slide) {
     const sample = String(box.text || "").trim();
     const size = box.sizePt < 10 ? 12 : box.sizePt;
     const cjk = /[\u3400-\u9fff]/.test(sample);
-    box.maxChars = Math.min(160, Math.max(8, Math.round((box.width || 120) / size * (cjk ? 1.7 : 2.2))));
+    const perLine = Math.max(4, Math.floor((box.width || 120) / size * (cjk ? 1.15 : 1.6)));
+    const lines = Math.max(1, Math.floor((box.height || size) / (size * 1.35)));
+    box.maxLines = lines;
+    box.maxChars = Math.min(160, Math.max(8, perLine * lines));
     if (/汇报人|姓名/.test(sample)) {
       box.role = "presenter";
       box.replaceable = true;
