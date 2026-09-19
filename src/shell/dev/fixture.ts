@@ -28,7 +28,7 @@
  * nobody knows the state of.
  */
 
-import type { UiPort } from "../../shared/uiPort";
+import type { AgentTask, UiPort } from "../../shared/uiPort";
 import type { UpdatePhase } from "../../renderer/useAppUpdate";
 import type { AppUpdateRelease } from "../../shared/types";
 import type { PersistedShellState } from "../state/persist";
@@ -134,6 +134,7 @@ export function readDevFixture(
   const wantsFixture = params.get("shellFixture") === "1";
   const combination = params.get("shell");
   const updatePhase = params.get("forceUpdate");
+  const deckRun = params.get("deckRun") === "1";
 
   const stateOverride: Partial<PersistedShellState> = combination
     ? combinationOverride(combination)
@@ -163,7 +164,7 @@ export function readDevFixture(
   if (!wantsFixture && !forceUpdate && Object.keys(stateOverride).length === 0) return null;
 
   return {
-    port: wantsFixture ? auditPort() : null,
+    port: wantsFixture ? auditPort(deckRun) : null,
     // Tabs and the selected folder come from the fixture, not from whatever the
     // last session left in localStorage — otherwise the first audit run against
     // a browser profile that has used the shell before opens on stale file ids
@@ -181,11 +182,70 @@ export function readDevFixture(
   };
 }
 
-function auditPort(): UiPort {
+function auditPort(deckRun: boolean): UiPort {
   const now = Date.now();
+  const tasks = auditTasks(now);
   return createFakePort({
     folders: auditFolders(),
     files: auditFiles(now),
-    tasks: auditTasks(now),
+    // The fake keys tasks by folder, one each, so the deck run has to *take*
+    // the scoped folder rather than join it — appending beside the audit's own
+    // working task would just lose to it.
+    tasks: deckRun
+      ? [...tasks.filter((task) => task.folderId !== AUDIT_FOLDER_IDS.launch), deckRunTask()]
+      : tasks,
   });
+}
+
+/**
+ * A deck mid-draw, for looking at the state that has no other way to be seen.
+ *
+ * The generation panel is the one surface that only exists while a run is going,
+ * so the only way to look at it used to be to start a real generation and watch
+ * — three minutes, real credits, and a layout that has already moved on by the
+ * time anything is noticed. The audit seed's five task states are all generic;
+ * none of them carries an outline, which is most of what this panel draws.
+ *
+ * Opt-in (`?deckRun=1`) rather than a sixth seeded task: the audit's C1-C10
+ * captures are a baseline someone else is working against, and adding a row to
+ * every one of them would be a diff nobody asked for.
+ *
+ * Every page mark at once, which is the point — queued, generating, repairing,
+ * ready and failed are five different glyphs in a 320px column, and whether they
+ * read as a set is not something the code can answer.
+ */
+function deckRunTask(): AgentTask {
+  return {
+    id: "task-deck-run",
+    title: "Prepare a three-slide product launch brief",
+    folderId: AUDIT_FOLDER_IDS.launch,
+    documentType: "pptx",
+    status: "working",
+    phase: "Generating document content",
+    steps: [
+      { id: "analyze", label: "Analyzing request", state: "done" },
+      { id: "research", label: "Researching", state: "done" },
+      { id: "outline", label: "Drafting outline", state: "done" },
+      { id: "design", label: "Choosing a design", state: "done" },
+      { id: "generate-content", label: "Generating document content", state: "active" },
+      { id: "export", label: "Formatting & export", state: "pending" },
+    ],
+    outline: [
+      { slide: 1, title: "Positioning: who this is for and why now", state: "ready" },
+      { slide: 2, title: "Launch timeline", state: "generating" },
+      { slide: 3, title: "Next steps and owners", state: "repairing" },
+      { slide: 4, title: "Risks we are carrying into the quarter", state: "queued" },
+      { slide: 5, title: "Appendix: pricing detail", state: "failed" },
+    ],
+    messages: [
+      {
+        id: "deck-msg-1",
+        role: "user",
+        text: "Prepare a three-slide product launch brief covering positioning, timeline and next steps.",
+        createdAt: Date.now() - 90_000,
+      },
+    ],
+    suggestion: null,
+    question: null,
+  };
 }

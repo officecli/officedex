@@ -609,6 +609,24 @@
   color: var(--shell-ink-title);
 }
 
+/* A page that failed is not a page that has not started.
+   Both were --shell-ink-faint, so a dead page sat in the list looking like it
+   was still waiting its turn — the one state the reader has to notice read as
+   the one state that needs nothing from them. The mark is currentColor, so the
+   glyph follows. */
+.shell-task-outline-row[data-state="failed"] {
+  color: var(--shell-status-danger);
+}
+
+/* Repairing is generating again after the page came back wrong, and it wore the
+   identical spinner — the same wait, with nothing saying the first attempt was
+   thrown away. Only the leading edge changes: it is still work in progress, so
+   it keeps the row's working colour and borrows the failure hue for the part
+   that moves. */
+.shell-task-outline-row[data-state="repairing"] .shell-task-spinner {
+  border-top-color: var(--shell-status-danger);
+}
+
 .shell-task-spinner {
   display: block;
   width: 14px;

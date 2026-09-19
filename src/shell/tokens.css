@@ -76,6 +76,18 @@
   --shell-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --shell-duration: 200ms;
 
+  /* ---- Status --------------------------------------------------------- */
+  /* The prototype has one colour for "this went wrong" and no others: form
+     validation wears #ad5347 (.cx-form-error) and #a04e48 (.form-error). The
+     later layer wins per the note at the top of this file. There is no warning
+     or success hue to take — the preview only ever shows the happy path — so
+     nothing else belongs in this section until the prototype grows one.
+
+     Used where grey would lie: a page that failed rendered in the same
+     --shell-ink-faint as a page that had not started yet, so a deck with a
+     dead page read as a deck still working through its queue. */
+  --shell-status-danger: #ad5347;
+
   /* ---- Document identity ---------------------------------------------- */
   /* One accent + one titlebar tint per file type. Editor mode wears them;
      Agent mode keeps a single neutral titlebar (see app.css). */
