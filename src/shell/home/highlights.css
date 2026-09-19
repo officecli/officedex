@@ -10,10 +10,17 @@
  */
 
 .shell-highlights {
-  /* Same column the resume card and the file list sit in, so Home reads as one
-     stack rather than three widths. */
-  max-width: 1080px;
-  margin: 0 auto 34px;
+  /*
+   * Width and centring come from `home.css`'s shared column rule, which this
+   * band is listed in.
+   *
+   * This comment used to claim "Same column the resume card and the file list
+   * sit in" — and this file was the only one of the three that actually
+   * centred itself, so the claim was false in the direction that mattered:
+   * measured, the reel's left edge was 126 and the other two were at 100
+   * (S3-001). The comment was describing an intention nobody had implemented.
+   */
+  margin-bottom: 34px;
 }
 
 .shell-highlights-head {
@@ -62,11 +69,24 @@
   cursor: default;
 }
 
-.shell-highlights button:focus-visible {
+/*
+ * Inset, because a card's outline would otherwise be clipped by the track's own
+ * overflow — and scoped to the track, because the arrows are not in it.
+ *
+ * The selector used to be `.shell-highlights button:focus-visible`, which also
+ * caught `.shell-highlights-controls button`: two 26px circles in the header,
+ * outside any overflow container, wearing a ring drawn 2px inside their own
+ * border (S3-016). Nothing was clipping them; they just inherited a workaround
+ * for somebody else's problem.
+ */
+.shell-highlights-track button:focus-visible {
   outline: 2px solid var(--shell-focus);
-  /* Inset, because a card's outline would otherwise be clipped by the track's
-     own overflow. */
   outline-offset: -2px;
+}
+
+.shell-highlights-controls button:focus-visible {
+  outline: 2px solid var(--shell-focus);
+  outline-offset: 1px;
 }
 
 .shell-highlights-track {

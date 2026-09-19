@@ -39,6 +39,71 @@
   display: none !important;
 }
 
+/* --------------------------------------------------------- loading state */
+
+/*
+ * The consumer side of `data-loaded`.
+ *
+ * `App.tsx` has written that attribute since the shell existed and nothing had
+ * ever read it: `grep -rn loaded src/shell` found five hits, all of them state
+ * plumbing, and the CSS consumption count was zero (S6-013, seconded by
+ * S5-010). The cost is not cosmetic — with no branch on it, "still reading the
+ * disk" and "this workspace is empty" are the same picture, and the empty one
+ * is stated in words. On the fixture port the read resolves within a frame so
+ * nobody saw it; on the real bridge it is a directory scan.
+ *
+ * `.shell[…]` rather than `#shell[…]`: both forms appear in this repository and
+ * the mixture is a known hazard (S5 table 8, conclusion 4 — two rules on
+ * `.shell-brand`, different forms, silently diverging). Every other root-scoped
+ * rule in this file and in `nav.css` uses the class, so these do too.
+ *
+ * Two rules, in the order they matter. First: do not assert an empty library
+ * before the library has been read.
+ */
+.shell[data-loaded="false"] .shell-list-empty,
+.shell[data-loaded="false"] .shell-tree-empty {
+  visibility: hidden;
+}
+
+/* Second: say that something is happening, in the two places the files will
+   appear. A sweep rather than a spinner — it occupies one line of the layout
+   the list is about to fill, so nothing jumps when the data lands. */
+.shell[data-loaded="false"] .shell-sidebar-body::before,
+.shell[data-loaded="false"] .shell-home-list::before {
+  content: "";
+  display: block;
+  height: 2px;
+  margin-bottom: 10px;
+  border-radius: 1px;
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    var(--shell-line-strong),
+    transparent
+  );
+  background-size: 38% 100%;
+  background-repeat: no-repeat;
+  animation: shell-loading-sweep 1.1s linear infinite;
+}
+
+@keyframes shell-loading-sweep {
+  from {
+    background-position: -38% 0;
+  }
+  to {
+    background-position: 138% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Still a bar, still only while loading — it just stops travelling. */
+  .shell[data-loaded="false"] .shell-sidebar-body::before,
+  .shell[data-loaded="false"] .shell-home-list::before {
+    animation: none;
+    background-size: 100% 100%;
+  }
+}
+
 /* ---------------------------------------------------------------- rows */
 
 .shell-row {

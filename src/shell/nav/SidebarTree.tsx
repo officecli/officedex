@@ -21,6 +21,30 @@ export function SidebarTree() {
   const dialogs = useFolderDialogs(reload);
   const { overFolderId, dropHandlers } = useFolderDrop(actions.moveFile);
 
+  /*
+   * On the 52px rail a folder has nowhere to open into.
+   *
+   * The rail hides `.shell-tree-files`, so pressing a folder icon used to flip
+   * `aria-expanded` and change nothing on screen, while the nine file rows it
+   * "revealed" sat in the DOM at 0×0, invisible and unfocusable — the second
+   * half of S1-008. Widening the sidebar is the only place the files can go, so
+   * that is what the press does now, and the folder is opened in the same
+   * gesture. Collapsing again is the sidebar's own toggle, unchanged.
+   */
+  const collapsed = state.navCollapsed;
+  const expandedFolderIds = collapsed ? [] : state.expandedFolderIds;
+
+  const toggleFolder = (folderId: string) => {
+    if (!collapsed) {
+      dispatch({ type: "toggle-folder", folderId });
+      return;
+    }
+    dispatch({ type: "toggle-nav" });
+    if (!state.expandedFolderIds.includes(folderId)) {
+      dispatch({ type: "toggle-folder", folderId });
+    }
+  };
+
   return (
     <div className="shell-sidebar-tree" {...dropHandlers}>
       <div className="shell-tree-section-head">
@@ -43,11 +67,11 @@ export function SidebarTree() {
         files={files}
         activeFileId={state.home ? null : state.activeFileId}
         selectedFolderId={state.selectedFolderId}
-        expandedFolderIds={state.expandedFolderIds}
+        expandedFolderIds={expandedFolderIds}
         revealedFolderIds={state.revealedFolderIds}
         dropFolderId={overFolderId}
         onOpenFile={(fileId) => void actions.openFile(fileId)}
-        onToggleFolder={(folderId) => dispatch({ type: "toggle-folder", folderId })}
+        onToggleFolder={toggleFolder}
         onToggleOverflow={(folderId) => dispatch({ type: "toggle-folder-overflow", folderId })}
         onSelectFolder={(folderId) => dispatch({ type: "select-folder", folderId })}
         onCreateFile={(folderId, type) => void actions.createFile(folderId, type)}

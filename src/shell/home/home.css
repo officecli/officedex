@@ -7,12 +7,40 @@
  * decides (S5-008). Both blocks declared `overflow: auto`, identically.
  */
 .shell-home {
+  /*
+   * Home's one column width. Local to this file rather than a design token:
+   * it is a layout constant for these two screens, not a value the rest of the
+   * shell shares. It exists so the number is typed once — it used to be typed
+   * per band, which is how three bands ended up on three different edges.
+   */
+  --shell-home-column: 1080px;
   flex: 1;
   min-width: 0;
   padding: 40px 48px 56px;
   overflow: auto;
   scrollbar-gutter: stable;
   background: var(--shell-canvas);
+}
+
+/*
+ * Home is one column, and these are the rules that decide where its left edge
+ * is. Every band that participates declares both halves — the width and the
+ * centring — because declaring only the width is what pulled them apart: the
+ * carousel carried `margin: 0 auto` and the two bands below it did not, so at
+ * C1's content width the reel sat 26px right of the resume card and the file
+ * table (S3-001), while the Editor Home's heading row and button row, having no
+ * `max-width` at all, ran 52px past the table under them (S3-002).
+ *
+ * `--shell-home-column` is the single source for the 1080 that used to be typed
+ * out once per band.
+ */
+.shell-home-head,
+.shell-home-actions,
+.shell-home-list,
+.shell-hero-resume,
+.shell-highlights {
+  max-width: var(--shell-home-column);
+  margin-inline: auto;
 }
 
 .shell-home-head {
@@ -54,6 +82,14 @@
   margin-bottom: 28px;
 }
 
+/*
+ * Agent Home puts the same four actions under a subhead rather than under a
+ * page title, so they sit closer to the list they act on.
+ */
+.shell-home-actions--compact {
+  margin-bottom: 14px;
+}
+
 .shell-home-new {
   display: inline-flex;
   align-items: center;
@@ -85,7 +121,8 @@
 }
 
 .shell-home-list {
-  max-width: 1080px;
+  /* Width and centring come from the shared column rule above. */
+  min-width: 0;
 }
 
 /* ------------------------------------------------------- agent hero */
@@ -164,7 +201,7 @@
 }
 
 .shell-hero-resume {
-  max-width: 1080px;
+  /* Width and centring come from the shared column rule above. */
   margin-bottom: 34px;
 }
 

@@ -614,6 +614,25 @@
   margin-top: 16px;
 }
 
+/*
+ * An empty middle takes no height.
+ *
+ * `App.tsx` passes `null` here in Editor mode — the folder tree is Agent
+ * mode's, and Editor's library lives on Home — but the div rendered anyway with
+ * `flex: 1`, so in C3/C4/C9/C10 the sidebar carried a 348px hole between the
+ * top nav and Recent/Pinned, measured identical in both (`bodyChildren: 0`,
+ * height 348, S1-009). Keyed on `:empty` rather than on `data-mode="editor"`
+ * because the defect is "a box with nothing in it is claiming the slack",
+ * which is true of any mode that ever passes nothing.
+ *
+ * The footer already carries `margin-top: auto`, so it stays on the floor
+ * without this item stretching; `margin-top` above survives as the separator
+ * between the top nav and whatever comes next.
+ */
+.shell-sidebar-body:empty {
+  flex: 0 0 auto;
+}
+
 .shell-sidebar-footer {
   flex: none;
   display: flex;

@@ -252,8 +252,28 @@
 .shell[data-nav-collapsed="true"] .shell-tree-folder-toggle > span,
 .shell[data-nav-collapsed="true"] .shell-tree-folder-toggle > small,
 .shell[data-nav-collapsed="true"] .shell-tree-chevron,
-.shell[data-nav-collapsed="true"] .shell-tree-folder-add,
+.shell[data-nav-collapsed="true"] .shell-tree-folder-add {
+  display: none;
+}
+
+/*
+ * The rail drops the word "Folders", not the button beside it.
+ *
+ * `.shell-tree-section-head` used to be in the list above, and it carries the
+ * shell's only "New folder" control (`SidebarTree.tsx`; `grep -rn createFolder
+ * src/shell` still returns exactly one hit). Hiding the head therefore took
+ * folder creation off the screen entirely in the three collapsed shells — C1
+ * included, which is the state a new user opens the app in: measured
+ * `sectionHeadDisplay: "none"`, the button at 0×0 and `newFolderFocusable:
+ * false` (S1-008). The label is what does not fit in 52px; the 24px button
+ * always did.
+ */
 .shell[data-nav-collapsed="true"] .shell-tree-section-head {
+  justify-content: center;
+  padding: 0;
+}
+
+.shell[data-nav-collapsed="true"] .shell-tree-section-head > span {
   display: none;
 }
 

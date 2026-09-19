@@ -75,9 +75,20 @@ const STYLESHEETS = [
  * because that is what the DOM actually gets: docking is Agent-mode-only, so
  * the two Editor Home shells report `floating` even though nothing is floating
  * there — and a selector written against `[data-presence="floating"]` really
- * does match them. `data-loaded` is `"true"` for every shell the user can see.
+ * does match them.
+ *
+ * `data-loaded` is the one attribute that is not part of a combination's
+ * identity: all ten shells pass through `"false"` on the way to `"true"`, so it
+ * is an axis *across* the table rather than a coordinate in it. It used to be
+ * pinned to `"true"` here, on the reasoning that `"true"` is what the user
+ * sees — which was accurate while no rule read the attribute at all (the
+ * header above says so), and became a trap the moment one did: the first
+ * loading rule written would have matched zero combinations and been reported
+ * as dead CSS. Both phases are evaluated below instead.
  */
-function attributesOf(name: ShellCombination): Record<string, string> {
+const LOAD_PHASES = ["true", "false"] as const;
+
+function attributesOf(name: ShellCombination, loaded: string): Record<string, string> {
   const combination = SHELL_COMBINATIONS[name] as {
     mode: "agent" | "editor";
     home: boolean;
@@ -99,7 +110,7 @@ function attributesOf(name: ShellCombination): Record<string, string> {
     "data-home": String(state.home),
     "data-nav-collapsed": String(state.navCollapsed),
     "data-presence": effectivePlacement(state),
-    "data-loaded": "true",
+    "data-loaded": loaded,
   };
 }
 
@@ -140,19 +151,21 @@ export function scopedRules(sources: Array<{ path: string; text: string }>): Sco
   return out;
 }
 
-/** The shells a root-scoped selector applies to. */
+/** The shells a root-scoped selector applies to, in either load phase. */
 export function combinationsFor(selector: string): ShellCombination[] {
   const root = selector.split(" ")[0];
   const predicates = [...root.matchAll(/\[([a-z-]+)(?:=["']?([^"'\]]*)["']?)?\]/g)].map((match) => ({
     attribute: match[1],
     value: match[2],
   }));
-  return COMBINATION_IDS.filter((name) => {
-    const attributes = attributesOf(name);
-    return predicates.every(({ attribute, value }) =>
-      value === undefined ? attribute in attributes : attributes[attribute] === value,
-    );
-  });
+  return COMBINATION_IDS.filter((name) =>
+    LOAD_PHASES.some((loaded) => {
+      const attributes = attributesOf(name, loaded);
+      return predicates.every(({ attribute, value }) =>
+        value === undefined ? attribute in attributes : attributes[attribute] === value,
+      );
+    }),
+  );
 }
 
 /**
@@ -183,7 +196,34 @@ const REGISTRY: Record<string, readonly ShellCombination[]> = {
   '.shell[data-nav-collapsed="true"] .shell-tree-chevron': ["C1", "C3", "C5", "C7", "C9"],
   '.shell[data-nav-collapsed="true"] .shell-tree-folder-add': ["C1", "C3", "C5", "C7", "C9"],
   '.shell[data-nav-collapsed="true"] .shell-tree-section-head': ["C1", "C3", "C5", "C7", "C9"],
+  // The rail keeps the "New folder" button and drops only its label. Splitting
+  // the entry above was S1-008's fix: it hid the head outright, and with it the
+  // shell's only folder-creation control, in every collapsed shell.
+  '.shell[data-nav-collapsed="true"] .shell-tree-section-head > span': ["C1", "C3", "C5", "C7", "C9"],
   '.shell[data-nav-collapsed="true"] .shell-tree-folder-toggle': ["C1", "C3", "C5", "C7", "C9"],
+
+  /*
+   * The loading phase: all ten shells, because every shell has one.
+   *
+   * Two things happen while the workspace is being read, and they are two rules
+   * because they are two different claims. The first withdraws the empty-state
+   * sentence — "No files yet" is a statement about a library nobody has opened
+   * yet. The second puts a bar where the list will be. Before them,
+   * `data-loaded` was written by `App.tsx` and read by nothing, so a directory
+   * scan and an empty workspace were the same screen (S6-013 / S5-010).
+   */
+  '.shell[data-loaded="false"] .shell-list-empty': [
+    "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10",
+  ],
+  '.shell[data-loaded="false"] .shell-tree-empty': [
+    "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10",
+  ],
+  '.shell[data-loaded="false"] .shell-sidebar-body::before': [
+    "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10",
+  ],
+  '.shell[data-loaded="false"] .shell-home-list::before': [
+    "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10",
+  ],
 
   // Home: the tab strip's actions are not drawn there.
   '#shell[data-home="true"] .shell-tabs-actions': ["C1", "C2", "C3", "C4"],
