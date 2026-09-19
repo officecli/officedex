@@ -51,6 +51,29 @@ async function fakeCheckout(root, { hoistNatives = false, converterMode = 0o755 
   await write("tools/fixtures/blank-presentation/content.json", "{}");
   await write("tools/bin/mop-convert", "#!/bin/sh\n");
   await chmod(path.join(root, "tools/bin/mop-convert"), converterMode);
+  // The JSSDK Host runner officecli spawns, with the same import shape the real
+  // one has: a sibling at the top level, two under lib/, one of them reaching
+  // back up, and a bare specifier that is node_modules' business rather than
+  // the closure walker's.
+  await write(
+    "tools/execute-jssdk.mjs",
+    'import { createJssdkNativeRuntime } from "./lib/jssdk-native-runtime.mjs";\nexport const run = createJssdkNativeRuntime;\n',
+  );
+  await write("tools/batch-convert-pptx-to-mop.mjs", "export const sanitizeXmlForMop = (xml) => xml;\n");
+  await write(
+    "tools/lib/jssdk-native-runtime.mjs",
+    'import { chromium } from "playwright";\n' +
+      'import { wrapPowerPointHostWithVibeOps } from "./jssdk-vibe-ops.mjs";\n' +
+      'import { createJssdkVideoRuntime } from "./jssdk-video-authoring.mjs";\n' +
+      "export const createJssdkNativeRuntime = () => ({ chromium, wrapPowerPointHostWithVibeOps, createJssdkVideoRuntime });\n",
+  );
+  await write("tools/lib/jssdk-vibe-ops.mjs", "export const wrapPowerPointHostWithVibeOps = () => ({});\n");
+  await write("tools/lib/jssdk-video-authoring.mjs", "export const createJssdkVideoRuntime = () => ({});\n");
+  await write(
+    "tools/lib/mop-converter-client.mjs",
+    'import { sanitizeXmlForMop } from "../batch-convert-pptx-to-mop.mjs";\nexport { sanitizeXmlForMop };\n',
+  );
+  await write("tools/lib/jssdk-native-browser.ts", "export const browserRuntime = 1;");
   await write("node_modules/lodash-es/package.json", JSON.stringify({ name: "lodash-es" }));
   await write("packages/deps/ink/index.ts", "export const ink = 1;");
   await write("packages/deps/scientific-formula/index.ts", "export const formula = 1;");
@@ -107,8 +130,9 @@ test("stages the sources, converter and vite closure the MOP worker needs", asyn
   assert.equal(typeof manifest.sourceRevision, "string");
   assert.equal(typeof manifest.sourceDirty, "boolean");
 
-  // The four markers officecli's validMOPPresentationRoot() requires, so a
-  // staged tree is a tree the packaged runtime will accept.
+  // The four markers officecli's validMOPPresentationRoot() requires. They get
+  // the staged tree *selected* as the presentation root; what makes it usable
+  // is the rest of this list, and the runner covered further down.
   for (const marker of [
     "package.json",
     path.join("node_modules", "vite", "dist", "node", "index.js"),
@@ -257,4 +281,87 @@ test("rejects a source directory that is not a valid presentation root", async (
   const tmp = await mkdtemp(path.join(os.tmpdir(), "officedex-presentation-bad-"));
   t.after(() => rm(tmp, { recursive: true, force: true }));
   assert.throws(() => resolvePresentationSource(tmp), /presentation checkout not found/);
+});
+
+/**
+ * The JSSDK Host runner.
+ *
+ * It was absent from the staged tree for as long as PRESENTATION_SOURCES has
+ * existed, and no gate noticed: the four markers a root is validated by do not
+ * mention it, so `build/presentation` looked healthy, won the resolution race
+ * against a complete checkout, and failed only when a user asked for a deck —
+ * "JSSDK Host runner unavailable", minutes into a generation.
+ */
+test("stages the JSSDK Host runner and everything it imports", async (t) => {
+  const { source, dest } = await stageInto(t);
+  await stagePresentationRuntime({ source, dest });
+
+  for (const relative of [
+    "tools/execute-jssdk.mjs",
+    "tools/batch-convert-pptx-to-mop.mjs",
+    "tools/lib/jssdk-native-runtime.mjs",
+    "tools/lib/jssdk-vibe-ops.mjs",
+    "tools/lib/jssdk-video-authoring.mjs",
+    "tools/lib/mop-converter-client.mjs",
+    // Reached through an absolute Vite SSR URL, so no import graph shows it.
+    "tools/lib/jssdk-native-browser.ts",
+  ]) {
+    await stat(path.join(dest, relative));
+  }
+});
+
+test("refuses to stage a runner whose imports were left behind", async (t) => {
+  const { source, dest } = await stageInto(t);
+  // A transitive dependency, two hops from the entry point: the shape a
+  // hand-maintained file list gets wrong.
+  await rm(path.join(source, "tools/lib/jssdk-vibe-ops.mjs"), { force: true });
+  await assert.rejects(
+    stagePresentationRuntime({ source, dest }),
+    /presentation source is missing tools\/lib\/jssdk-vibe-ops\.mjs/,
+  );
+});
+
+test("walks the runner's imports rather than trusting the list", async (t) => {
+  const { source, dest } = await stageInto(t);
+  // Add an import the manifest does not know about, the way an upstream change
+  // would. Staging must fail here, not in the user's app.
+  await writeFile(
+    path.join(source, "tools/execute-jssdk.mjs"),
+    'import { createJssdkNativeRuntime } from "./lib/jssdk-native-runtime.mjs";\n' +
+      'import { newThing } from "./lib/added-upstream.mjs";\n' +
+      "export const run = () => [createJssdkNativeRuntime, newThing];\n",
+  );
+  await assert.rejects(
+    stagePresentationRuntime({ source, dest }),
+    /runner is incomplete[\s\S]*tools\/lib\/added-upstream\.mjs/,
+  );
+});
+
+// `playwright` is a bare specifier: node_modules' business, not the walker's.
+// Treating it as a missing file would make every staging run fail on a
+// dependency that is deliberately not staged.
+test("does not mistake a bare specifier for a missing file", async (t) => {
+  const { source, dest } = await stageInto(t);
+  const { jssdkRunner } = JSON.parse(
+    await readFile(path.join((await stagePresentationRuntime({ source, dest })).dest, "runtime.json"), "utf8"),
+  );
+  assert.ok(!jssdkRunner.closure.some((entry) => entry.includes("playwright")));
+});
+
+/**
+ * The browser the runner needs is not staged, and the build says so.
+ *
+ * `jssdk-native-runtime.mjs` imports playwright, staging it would mean shipping
+ * a Chromium inside a hardened-runtime bundle, and whether the desktop's only
+ * PPTX backend may depend on a browser is a product decision. So the staged
+ * tree records what it cannot run instead of pretending otherwise.
+ */
+test("records that the runner's browser is absent from the staged tree", async (t) => {
+  const { source, dest } = await stageInto(t);
+  const { playwrightStaged } = await stagePresentationRuntime({ source, dest });
+  assert.equal(playwrightStaged, false);
+
+  const manifest = JSON.parse(await readFile(path.join(dest, "runtime.json"), "utf8"));
+  assert.equal(manifest.jssdkRunner.playwright, false);
+  assert.equal(manifest.jssdkRunner.entry, "tools/execute-jssdk.mjs");
 });

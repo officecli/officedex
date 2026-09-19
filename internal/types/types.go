@@ -166,8 +166,20 @@ const PPTXBackendMOPSkill = "mop-skill"
 // JSSDK program that the presentation Host executes from an empty document.
 // It authors native text and shapes only, so decks made this way carry no
 // generated images, stream no drawing ops (nothing is drawn live), and cannot
-// be re-rendered through reslide/tail. Set config.PPTXJSSDKDesignEnv to "0" to
-// put the desktop back on PPTXBackendMOPSkill without a rebuild.
+// be re-rendered through reslide/tail.
+//
+// There is no switch back. config.PPTXJSSDKDesignEnv was that switch and is
+// retired (see its own comment); bridge.Client.InvokeGenerate now rejects any
+// other backend outright, so this constant is the only value a PPTX request can
+// carry. Returning to PPTXBackendMOPSkill is a code change, not configuration.
+//
+// It also costs more than a backend usually does to run: the Host it executes
+// against drives a real browser (presentation's tools/lib/jssdk-native-runtime
+// .mjs imports playwright), which the packaged app does not carry. A build
+// whose staged presentation runtime lacks it reports so in build/presentation/
+// runtime.json under jssdkRunner.playwright, and PPTX generation fails at the
+// first request unless OFFICECLI_MOP_PRESENTATION_ROOT points somewhere
+// complete.
 const PPTXBackendJSSDKDesign = "aippt-jssdk-design"
 
 // GenericPreviewExtensions can be opened in the preview without belonging to

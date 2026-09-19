@@ -53,6 +53,26 @@ export const PRESENTATION_SOURCES = Object.freeze([
   { from: "bos/dist/mop-wasm/pkg", required: true },
   // The blank deck every generated presentation is cloned from.
   { from: "tools/fixtures/blank-presentation", required: true },
+  // The JSSDK Host runner and everything it imports.
+  //
+  // officecli's jssdk-design backend spawns this file directly
+  // (internal/runtime/pptx_jssdk_design.go) and it is the *only* PPTX backend
+  // the desktop allows — internal/bridge/client.go rejects every other value.
+  // It was absent for as long as this list has existed, and nothing caught it:
+  // the four markers a root is validated by (see resolvePresentationSource)
+  // do not include the runner, so a tree missing it looks entirely healthy
+  // until someone asks for a deck and gets "JSSDK Host runner unavailable".
+  //
+  // `jssdk-native-browser.ts` is reached through an absolute Vite SSR URL
+  // (`import("/tools/lib/jssdk-native-browser.ts")`), so it appears in no
+  // static import graph. assertRunnerClosure below covers the rest.
+  { from: "tools/execute-jssdk.mjs", required: true },
+  { from: "tools/batch-convert-pptx-to-mop.mjs", required: true },
+  { from: "tools/lib/jssdk-native-runtime.mjs", required: true },
+  { from: "tools/lib/jssdk-vibe-ops.mjs", required: true },
+  { from: "tools/lib/jssdk-video-authoring.mjs", required: true },
+  { from: "tools/lib/mop-converter-client.mjs", required: true },
+  { from: "tools/lib/jssdk-native-browser.ts", required: true },
 ]);
 
 // Dev-only payloads inside the staged packages. reference-cache alone is ~107MB
@@ -141,8 +161,12 @@ export function resolvePresentationSource(explicit = process.env.PRESENTATION_SO
   else candidates.push(path.join(ROOT, "..", "presentation"), path.join(ROOT, "presentation"));
   for (const candidate of candidates) {
     const resolved = path.resolve(candidate);
-    // Same four markers officecli's validMOPPresentationRoot() checks, so a
-    // root accepted here is a root the runtime will accept.
+    // The four markers officecli's validMOPPresentationRoot() looks for. They
+    // identify a presentation checkout; they do not certify one. Passing them
+    // only means the runtime will *select* this root — the jssdk-design
+    // backend then needs tools/execute-jssdk.mjs and a playwright it does not
+    // check for here, which is how a staged tree missing the runner was chosen
+    // over a complete checkout and failed at generation time instead.
     const markers = [
       "package.json",
       path.join("node_modules", "vite", "dist", "node", "index.js"),
@@ -186,6 +210,55 @@ export async function findNativeModules(dir) {
   return found.sort();
 }
 
+/** The entry points officecli spawns or loads from the staged tree. */
+const RUNNER_ENTRIES = Object.freeze(["tools/execute-jssdk.mjs"]);
+
+/**
+ * Every relative import reachable from the runner must exist in the staged tree.
+ *
+ * The runner is spawned as a plain Node process, so a missing sibling is not a
+ * build error — it is a `ERR_MODULE_NOT_FOUND` thrown at the user, minutes into
+ * a generation, from inside a subprocess. Listing the closure by hand in
+ * PRESENTATION_SOURCES is what let the runner go unstaged in the first place;
+ * this walks it instead, so the next import added upstream fails here rather
+ * than in someone's app.
+ *
+ * Only static relative specifiers are followed. Bare specifiers are
+ * node_modules' problem (PRESENTATION_NODE_MODULES) and dynamic URL imports
+ * cannot be resolved without running Vite — `jssdk-native-browser.ts` is listed
+ * explicitly above for exactly that reason.
+ */
+export async function assertRunnerClosure(dest, entries = RUNNER_ENTRIES) {
+  const seen = new Set();
+  const queue = [...entries];
+  const missing = [];
+
+  while (queue.length > 0) {
+    const relative = queue.shift();
+    if (seen.has(relative)) continue;
+    seen.add(relative);
+
+    const absolute = path.join(dest, relative);
+    if (!existsSync(absolute)) {
+      missing.push(relative);
+      continue;
+    }
+    if (!/\.(mjs|js)$/.test(relative)) continue;
+
+    const source = await readFile(absolute, "utf8");
+    for (const [, specifier] of source.matchAll(/\bfrom\s+"(\.[^"]+)"/g)) {
+      queue.push(path.normalize(path.join(path.dirname(relative), specifier)));
+    }
+  }
+
+  if (missing.length > 0) {
+    throw new Error(
+      `the JSSDK Host runner is incomplete in the staged tree; add to PRESENTATION_SOURCES:\n  ${missing.join("\n  ")}`,
+    );
+  }
+  return [...seen].sort();
+}
+
 export async function stagePresentationRuntime({ source, dest = DEST } = {}) {
   const root = source || resolvePresentationSource();
   let sourceRevision = "unknown";
@@ -219,6 +292,7 @@ export async function stagePresentationRuntime({ source, dest = DEST } = {}) {
   }
 
   await assertObfuscatedRuntime(path.join(dest, "dist-ssr"));
+  const runnerClosure = await assertRunnerClosure(dest);
 
   const modules = path.join(dest, "node_modules");
   await mkdir(modules, { recursive: true });
@@ -299,6 +373,24 @@ export async function stagePresentationRuntime({ source, dest = DEST } = {}) {
     );
   }
 
+  /*
+   * The runner is staged; its browser is not.
+   *
+   * `tools/lib/jssdk-native-runtime.mjs` does `import { chromium } from
+   * "playwright"`, and playwright is deliberately absent from
+   * PRESENTATION_NODE_MODULES: staging it means shipping a Chromium inside the
+   * app bundle — every Mach-O of it signed, under a hardened runtime that this
+   * very script already refuses to hand a second V8 to (see the stray-node
+   * check below). Whether the desktop's only PPTX backend may depend on a
+   * browser is a product decision, not something to settle by quietly adding a
+   * dependency here.
+   *
+   * So it is recorded rather than resolved: the staged tree is honest about
+   * what it can and cannot run, and a build that ships without playwright says
+   * so in runtime.json instead of failing for the user at generation time.
+   */
+  const playwrightStaged = existsSync(path.join(modules, "playwright"));
+
   await writeFile(
     path.join(dest, "runtime.json"),
     JSON.stringify(
@@ -311,6 +403,12 @@ export async function stagePresentationRuntime({ source, dest = DEST } = {}) {
         sourceRevision,
         sourceDirty,
         converter: path.relative(dest, converterDest),
+        jssdkRunner: {
+          entry: RUNNER_ENTRIES[0],
+          closure: runnerClosure,
+          // false means the jssdk-design backend cannot run from this tree.
+          playwright: playwrightStaged,
+        },
         nativeModules: natives.map((native) => path.relative(dest, native)).sort(),
       },
       null,
@@ -318,13 +416,23 @@ export async function stagePresentationRuntime({ source, dest = DEST } = {}) {
     ) + "\n",
     "utf8",
   );
-  return { root, dest, converter: converterDest };
+  return { root, dest, converter: converterDest, playwrightStaged };
 }
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
   stagePresentationRuntime()
-    .then(({ root, dest }) => console.log(`[stage-presentation-runtime] ${root} -> ${dest}`))
+    .then(({ root, dest, playwrightStaged }) => {
+      console.log(`[stage-presentation-runtime] ${root} -> ${dest}`);
+      if (!playwrightStaged) {
+        console.warn(
+          "[stage-presentation-runtime] playwright is not staged: the jssdk-design " +
+            "PPTX backend cannot run from this tree, and it is the only backend the " +
+            "desktop allows. Generation will fail with a missing-module error unless " +
+            "OFFICECLI_MOP_PRESENTATION_ROOT points at a full presentation checkout.",
+        );
+      }
+    })
     .catch((error) => {
       console.error(`[stage-presentation-runtime] ${error.message}`);
       process.exit(1);
