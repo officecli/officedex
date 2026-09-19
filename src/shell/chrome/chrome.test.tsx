@@ -72,7 +72,14 @@ describe("file tabs", () => {
       fireEvent.change(input, { target: { value: "Launch deck final" } });
       fireEvent.click(shell.view.getByRole("button", { name: "Save" }));
     });
-    expect(shell.view.getByTitle("Launch deck final.pptx")).toBeInTheDocument();
+    // Scoped to the tablist: the status bar carries the same name in a `title`
+    // now (it is how a clipped 66-character name stays recoverable), so a
+    // document-wide `getByTitle` has two hits and neither is the one meant here.
+    expect(
+      within(shell.view.getByRole("tablist", { name: "Open files" })).getByTitle(
+        "Launch deck final.pptx",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("shows the unsaved marker for a dirty file and clears it on save", async () => {

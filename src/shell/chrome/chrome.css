@@ -22,8 +22,19 @@
   color: var(--shell-ink);
 }
 
+/*
+ * Every control the keyboard can reach draws a ring. The list used to name eight
+ * selectors and miss `.shell-tab-close`, which — because no tab was the tab
+ * strip's tab stop on Home — was stops one through seven of the Tab order: the
+ * first seven presses moved focus with nothing at all on screen to show it.
+ *
+ * Read `outline-style` when checking this, not `outline-width`: a computed
+ * `outline-width` still reports 3px while the style is `none`.
+ */
 .shell-icon-button:focus-visible,
 .shell-tab-select:focus-visible,
+.shell-tab-close:focus-visible,
+.shell-tab-bookmark:focus-visible,
 .shell-sidebar-item:focus-visible,
 .shell-brand:focus-visible,
 .shell-profile:focus-visible,
@@ -31,6 +42,34 @@
 .shell-share:focus-visible {
   outline: 2px solid var(--shell-focus);
   outline-offset: 1px;
+}
+
+/*
+ * Press feedback. Every chrome control had hover and focus and nothing for the
+ * moment of the press, while the legacy controls sharing the same window did —
+ * 90 `:active` rules in the loaded stylesheets, 88 of them from the old
+ * renderer. In one window that reads as the new shell being the dead half.
+ *
+ * Derived from the interaction tokens rather than a fresh colour: a press is one
+ * step past hover in the same direction.
+ */
+.shell-icon-button:active,
+.shell-tab-select:active,
+.shell-tab-close:active,
+.shell-tab-bookmark:active,
+.shell-sidebar-item:active,
+.shell-brand:active,
+.shell-profile:active,
+.shell-save-state:not(:disabled):active,
+.shell-tabstrip-scroll:not(:disabled):active {
+  background: color-mix(in srgb, var(--shell-active) 88%, var(--shell-ink));
+}
+
+/* The one filled button in the chrome darkens its own fill instead — a mix
+   would have to name a colour, and the 25 bare values already in this file are
+   W3-I's to remove, not this track's to add to. */
+.shell-share:active {
+  filter: brightness(0.9);
 }
 
 .shell-file-icon[data-file-type="doc"] {
@@ -113,13 +152,24 @@
 /* The window controls sit on top of the tab strip rather than beside it, the
    way the reference frame does: the tab row runs the full width of the window
    and pads its content clear of this cluster. `pointer-events` is handed back
-   per child so the strip underneath stays clickable everywhere else. */
+   per child so the strip underneath stays clickable everywhere else.
+
+   This is the only `.shell-windowbar` rule. `app.css` used to declare the same
+   selector with `width: var(--shell-nav-w)`, `min-width: 132px` and a width
+   transition; this block reached the cascade second and took all three, so the
+   measured `min-width` was `0px` in all ten shell combinations and the comment
+   promising the traffic lights always fit described nothing. The clearance is
+   real, but it comes from `.shell-tabs`' `padding-left` below. */
 .shell-windowbar {
   position: absolute;
   inset: 0;
   z-index: 3;
   width: 100%;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-left: 12px;
   padding-right: 22px;
   pointer-events: none;
 }
@@ -139,9 +189,24 @@
   align-items: flex-end;
   gap: 16px;
   padding-right: 16px;
-  /* The titlebar starts at the content boundary. Agent's docked task column
-     is part of that boundary; a floating task leaves the editor boundary at
-     the navigation rail. */
+  /*
+   * Two rules meet here, and on the collapsed rail they disagree.
+   *
+   * The titlebar is supposed to start at the content boundary — the sidebar's
+   * right edge, or the docked task column's. It also has to clear the window
+   * controls plus the sidebar toggle, which together need 132px (12px padding +
+   * 63px of lights + 24px gap + 28px toggle, measured; `CHROME_RESERVE.width`
+   * in `agent/presenceLayout.ts` restates the same number for the floating
+   * panel). This `max()` is the whole of that safe area: nothing in `app.css`
+   * contributes to it any more.
+   *
+   * Expanded (190px) and docked (52/190 + 320px) satisfy both at once. The
+   * 52px rail does not, and clearance wins — so on C1/C3/C7/C9 the strip starts
+   * 80px to the right of the rail's edge. That is deliberate and visible; the
+   * alternative is a tab under the traffic lights. Worth saying plainly because
+   * the 132px is a macOS assumption: on a Windows build the controls are on the
+   * other side and this padding is reserving space at the wrong end.
+   */
   padding-left: max(var(--shell-nav-w), 132px);
 }
 
@@ -149,6 +214,17 @@
   padding-left: calc(var(--shell-nav-w) + var(--shell-task-w));
 }
 
+/*
+ * The strip scrolls, and the scrollbar stays hidden — a 32px tab row cannot
+ * give up height to one, and it would sit across the bottom edge of the tabs
+ * where the active tab meets the paper.
+ *
+ * The affordance is `.shell-tabstrip-nav` instead, which `FileTabs.tsx` renders
+ * only while there is something off-screen. Hiding the scrollbar without it was
+ * the defect: seven tabs fit in none of the ten combinations, and in the worst
+ * one four tabs and their close buttons were outside the visible box with
+ * nothing on screen saying so.
+ */
 .shell-tabstrip {
   flex: 1;
   min-width: 0;
@@ -162,6 +238,33 @@
 
 .shell-tabstrip::-webkit-scrollbar {
   display: none;
+}
+
+.shell-tabstrip-nav {
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: 28px;
+  /* Pulled back into the row's 16px gap: these arrows belong to the strip they
+     scroll, and every pixel they take is a pixel of tab they take. */
+  margin-left: -8px;
+}
+
+.shell-tabstrip-scroll {
+  width: 22px;
+  height: 24px;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.shell-tabstrip-scroll:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.shell-tabstrip-scroll:disabled:hover {
+  background: transparent;
+  color: var(--shell-ink-subtle);
 }
 
 .shell-tab {
@@ -254,11 +357,6 @@
   background: #65748016;
 }
 
-.shell-tab-bookmark:focus-visible {
-  outline: 2px solid var(--shell-focus);
-  outline-offset: 1px;
-}
-
 .shell-tab-close:hover {
   opacity: 1;
   background: #65748016;
@@ -326,13 +424,21 @@
   border-radius: 4px;
 }
 
-/* Home is a workspace view, not an open-document view. Keep the controls in
-   the DOM for keyboard/tests and preserve their handlers, but remove the file
-   actions from the visual chrome until a real document is active. This is the
-   same quiet top-right treatment used by the reference prototype. */
+/*
+ * Home is a workspace view, not an open-document view: the file actions have no
+ * file to act on, so they leave the row entirely.
+ *
+ * This was `visibility: hidden`, with a comment saying the controls stayed in the
+ * DOM "for keyboard/tests". They did not: a `visibility: hidden` element is out
+ * of the tab order and out of the accessibility tree — measured, `focus()` on
+ * `.shell-share` here did not make it the active element. What it *did* keep was
+ * the layout box: 240.8px of the top row, reserved on the four combinations whose
+ * tab strip was already overflowing. `display: none` gives that back, and the
+ * seven fixture tabs then fit with room to spare. Nothing is lost, because
+ * nothing was reachable.
+ */
 #shell[data-home="true"] .shell-tabs-actions {
-  visibility: hidden;
-  pointer-events: none;
+  display: none;
 }
 
 /* -------------------------------------------------------------- sidebar */
@@ -466,6 +572,15 @@
   color: #354652;
 }
 
+/* The current row needs its own hover state. `.is-current` and `:hover` have the
+   same specificity (0,2,0) and `.is-current` comes second, so it won the pointer
+   too: the one row a user is most likely to aim at was the one row that did not
+   answer. One step past `--shell-active`, so hover always moves in the same
+   direction whatever the row's resting state. */
+.shell-sidebar-item.is-current:hover {
+  background: color-mix(in srgb, var(--shell-active) 90%, var(--shell-ink));
+}
+
 .shell[data-nav-collapsed="true"] .shell-sidebar-item {
   width: var(--shell-row-h);
   justify-content: center;
@@ -555,6 +670,24 @@
   align-items: center;
   gap: 18px;
   overflow: hidden;
+}
+
+/*
+ * …and the fact that gives it up is a file name, so it has to end in an ellipsis.
+ *
+ * `app.css` carried `.shell-statusbar > span { text-overflow: ellipsis }` for
+ * this, and that selector matched nothing: the bar's two direct children are
+ * `<div>`s (`StatusBar.tsx`), so the rule sat in the stylesheet looking like the
+ * job was done while the clipping was actually being performed by the
+ * `overflow: hidden` above, which has no ellipsis of its own. A 66-character
+ * Chinese file name was cut mid-character at 497px with no "…" and no tooltip —
+ * unreadable and unrecoverable. The `title` in `StatusBar.tsx` is the other half.
+ */
+.shell-statusbar-facts > span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .shell-statusbar-end {

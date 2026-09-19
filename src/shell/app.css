@@ -60,16 +60,13 @@
 
 /* ------------------------------------------------------------- regions */
 
-.shell-windowbar {
-  flex: none;
-  width: var(--shell-nav-w);
-  min-width: 132px; /* the traffic lights and the sidebar toggle always fit */
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 0 12px;
-  transition: width var(--shell-duration) var(--shell-ease);
-}
+/* `.shell-windowbar` is laid out entirely by `chrome/chrome.css`. It used to be
+   declared here as well, with the same selector and the same specificity, and
+   every property that mattered — width, min-width, the width transition — was
+   taken by the later file. Its `min-width: 132px` measured `0px` in all ten
+   shell combinations, and the comment next to it ("the traffic lights and the
+   sidebar toggle always fit") was the most quotable line in the audit's list of
+   macOS assumptions while describing a rule that never applied. */
 
 .shell-tabs {
   flex: 1;
@@ -149,11 +146,10 @@
   overflow: hidden;
 }
 
-.shell-statusbar > span {
-  flex: none;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+/* The ellipsis rule that used to live here selected `.shell-statusbar > span`,
+   and the bar's direct children are two `<div>`s — it matched nothing. It now
+   lives in `chrome/chrome.css` next to the container that does the clipping,
+   written against the DOM that exists. */
 
 .shell-home {
   flex: 1;

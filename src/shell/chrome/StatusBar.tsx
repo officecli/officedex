@@ -26,7 +26,12 @@ export function StatusBar() {
   return (
     <div className="shell-statusbar shell-region">
       <div className="shell-statusbar-facts">
-        <span>{activeFile ? activeFile.name : "No file open"}</span>
+        {/* `title` because the bar is the narrowest thing on screen and a file
+            name is the longest: a 66-character name gets an ellipsis from
+            chrome.css, and this is how the rest of it is still recoverable. */}
+        <span title={activeFile ? activeFile.name : undefined}>
+          {activeFile ? activeFile.name : "No file open"}
+        </span>
       </div>
 
       <div className="shell-statusbar-end">

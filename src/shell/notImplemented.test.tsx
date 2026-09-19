@@ -59,9 +59,21 @@ describe("reportPortFailure", () => {
 });
 
 describe("controls with nothing behind them", () => {
-  // Share is drawn in the tab bar and has no UiPort method of any kind. It is
-  // the representative of a dozen like it: settings, zoom, dictation, the whole
-  // ribbon. Each one is listed in docs/not-implemented.md.
+  /*
+   * Share used to be the representative of this class, and these two cases
+   * asserted it said "Not built yet".
+   *
+   * It is not in that class, and saying so was the bug (S8-011): sharing *is*
+   * implemented — the system share sheet when there is one, the file's path on
+   * the clipboard otherwise — it just needs a document. The old notice ran
+   * "Sharing a file from OfficeDex is not built yet. Open a local file first.",
+   * two sentences that cancel each other out, and the assertion below was
+   * keeping them that way.
+   *
+   * What the rule actually requires is unchanged and still asserted here: press
+   * the control, and it answers. Toasts portal outside the render container, so
+   * the assertions read from `document.body`.
+   */
   it("answers when pressed", async () => {
     const shell = await renderShell();
     await shell.dispatch({ type: "go-home" });
@@ -70,8 +82,9 @@ describe("controls with nothing behind them", () => {
     expect(share, "the Share button is still in the UI").not.toBeNull();
 
     fireEvent.click(share!);
-    await untilNotice("Not built yet");
-    expect(notice()).toContain("Sharing a file from OfficeDex is not built yet");
+    await untilNotice("Open a file to share it");
+    // And it no longer claims the feature is missing.
+    expect(notice()).not.toContain("not built yet");
   });
 
   // Six clicks on six formatting tools should leave one notice on screen, not
@@ -83,7 +96,7 @@ describe("controls with nothing behind them", () => {
     fireEvent.click(share);
     fireEvent.click(share);
     fireEvent.click(share);
-    await untilNotice("Not built yet");
+    await untilNotice("Open a file to share it");
 
     expect(document.body.querySelectorAll(".od-toast-slot")).toHaveLength(1);
   });

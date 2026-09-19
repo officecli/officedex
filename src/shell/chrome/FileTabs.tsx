@@ -1,17 +1,34 @@
-import { Bookmark, BookmarkCheck, Check, Copy, Maximize2, MoreHorizontal, Share2, Trash2, X } from "lucide-react";
-import { useState } from "react";
+import {
+  Bookmark,
+  BookmarkCheck,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  Maximize2,
+  MoreHorizontal,
+  Share2,
+  Trash2,
+  X,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { usePort } from "../port/PortContext";
 import type { FileMeta } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
 import { useCanvas } from "../canvas/CanvasContext";
-import { attempt, notBuiltYet } from "../port/reportPortFailure";
+import { attempt, reportPortFailure } from "../port/reportPortFailure";
 import { useLibraryActions } from "../nav/useLibraryActions";
 import { Menu } from "./Menu";
 import { dialog, Input, Modal, toast } from "../../renderer/ui";
 import { FileTypeIcon } from "./FileTypeIcon";
 
 const stripExtension = (name: string) => name.replace(/\.(docx|xlsx|pptx)$/i, "");
+
+/** A tab's left edge in the strip's scroll content, whatever the offset parent is. */
+function contentLeft(strip: HTMLElement, tab: HTMLElement): number {
+  return tab.getBoundingClientRect().left - strip.getBoundingClientRect().left + strip.scrollLeft;
+}
 
 /**
  * The file tabs are shell furniture, not a property of a screen: they stay put
@@ -26,11 +43,132 @@ export function FileTabs() {
   const actions = useLibraryActions();
   const [renameTarget, setRenameTarget] = useState<FileMeta | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const stripRef = useRef<HTMLDivElement>(null);
   const open = state.openFileIds
     .map((id) => files.find((file) => file.id === id))
     .filter((file): file is FileMeta => Boolean(file));
 
   const dirty = activeFile?.dirty ?? false;
+
+  /*
+   * Which tab the canvas is showing, and which tab is the strip's single tab
+   * stop. They are not the same question, and conflating them cost the whole
+   * strip its keyboard access on Home.
+   *
+   * `home` means "no document is on the canvas", so nothing is selected there —
+   * that part was right. But the roving tabindex was derived from the same flag
+   * with no fallback, so on Home every `.shell-tab-select` got `tabIndex={-1}`
+   * while the seven close buttons kept their default. Tab then walked seven
+   * "Close …" buttons and never once reached a tab: a keyboard could close
+   * every open file and open none of them.
+   *
+   * A tablist always has exactly one tab stop. With no selection that is the
+   * first tab, and the arrow keys move from there.
+   */
+  const selectedId = state.home ? null : state.activeFileId;
+  const tabStopId = open.some((file) => file.id === selectedId) ? selectedId : open[0]?.id ?? null;
+
+  /*
+   * How far the strip overruns, and which way.
+   *
+   * `overflow-x: auto` plus a hidden scrollbar is a promise the shell was not
+   * keeping: seven tabs do not fit in any of the ten shell combinations, and the
+   * only sign of it was a half-drawn icon at the right edge. In the worst one
+   * (docked Agent on an expanded rail) four of the seven tabs were cut off and
+   * their close buttons sat outside the visible box entirely — present in the
+   * DOM, impossible to click.
+   *
+   * Measured rather than guessed from the combination: the strip's width moves
+   * with the rail, the docked column, the window, and — on Home — with the file
+   * actions leaving the row.
+   */
+  const [overflow, setOverflow] = useState({ amount: 0, hidden: 0, atStart: true, atEnd: true });
+
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip) return;
+
+    const measure = () => {
+      const amount = strip.scrollWidth - strip.clientWidth;
+      const bounds = strip.getBoundingClientRect();
+      const hidden = Array.from(strip.querySelectorAll<HTMLElement>(".shell-tab")).filter((tab) => {
+        const rect = tab.getBoundingClientRect();
+        return rect.left < bounds.left - 0.5 || rect.right > bounds.right + 0.5;
+      }).length;
+      setOverflow({
+        amount,
+        hidden,
+        atStart: strip.scrollLeft <= 1,
+        atEnd: strip.scrollLeft >= amount - 1,
+      });
+    };
+
+    measure();
+    strip.addEventListener("scroll", measure, { passive: true });
+    const observer = new ResizeObserver(measure);
+    observer.observe(strip);
+    for (const child of Array.from(strip.children)) observer.observe(child);
+    return () => {
+      strip.removeEventListener("scroll", measure);
+      observer.disconnect();
+    };
+  }, [open.length]);
+
+  // Activating a tab that is scrolled out of sight has to bring it into sight,
+  // or the click just made looks like it did nothing. Done with `scrollLeft`
+  // rather than `scrollIntoView`: this axis is the only one that should move,
+  // and jsdom has no `scrollIntoView` for the unit tests to fall over.
+  useEffect(() => {
+    const strip = stripRef.current;
+    const current = strip?.querySelector<HTMLElement>(".shell-tab.is-current");
+    if (!strip || !current) return;
+    const left = contentLeft(strip, current);
+    const right = left + current.offsetWidth;
+    if (left < strip.scrollLeft) strip.scrollLeft = left;
+    else if (right > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = right - strip.clientWidth;
+  }, [state.activeFileId, state.home]);
+
+  /** Scrolls by whole tabs: a fixed pixel step lands mid-tab, which is the state these controls exist to leave. */
+  const scrollStrip = (direction: -1 | 1) => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const tabs = Array.from(strip.querySelectorAll<HTMLElement>(".shell-tab"));
+    const target =
+      direction === 1
+        ? tabs.find((tab) => contentLeft(strip, tab) + tab.offsetWidth > strip.scrollLeft + strip.clientWidth + 1)
+        : [...tabs].reverse().find((tab) => contentLeft(strip, tab) < strip.scrollLeft - 1);
+    if (!target) {
+      strip.scrollLeft += direction * 120;
+      return;
+    }
+    strip.scrollLeft =
+      direction === 1
+        ? contentLeft(strip, target) + target.offsetWidth - strip.clientWidth
+        : contentLeft(strip, target);
+  };
+
+  /*
+   * Arrow keys move focus along the strip; Enter or Space activates.
+   *
+   * Manual activation rather than automatic (both are allowed by the ARIA tabs
+   * pattern): activating a tab here swaps the document on the canvas, so
+   * arrowing past four tabs to reach the fifth must not mount and unmount four
+   * editors on the way. `focus()` on a clipped tab scrolls it into view, which
+   * is how the keyboard reaches the tabs the strip is hiding.
+   */
+  const moveFocus = (from: number, to: number | "first" | "last") => {
+    const selects = Array.from(
+      stripRef.current?.querySelectorAll<HTMLButtonElement>(".shell-tab-select") ?? [],
+    );
+    if (selects.length === 0) return;
+    const index =
+      to === "first"
+        ? 0
+        : to === "last"
+          ? selects.length - 1
+          : Math.min(selects.length - 1, Math.max(0, from + to));
+    selects[index]?.focus();
+  };
 
   const closeFile = (file: FileMeta) => {
     if (!file.dirty) {
@@ -84,19 +222,26 @@ export function FileTabs() {
 
   return (
     <div className="shell-tabs shell-region">
-      <div className="shell-tabstrip" role="tablist" aria-label="Open files">
-        {open.map((file) => {
-          const current = file.id === state.activeFileId && !state.home;
+      <div className="shell-tabstrip" role="tablist" aria-label="Open files" ref={stripRef}>
+        {open.map((file, index) => {
+          const current = file.id === selectedId;
           return (
             <div key={file.id} className={`shell-tab${current ? " is-current" : ""}`}>
               <button
                 type="button"
                 role="tab"
                 aria-selected={current}
-                tabIndex={current ? 0 : -1}
+                tabIndex={file.id === tabStopId ? 0 : -1}
                 className="shell-tab-select"
                 title={file.name}
                 onClick={() => dispatch({ type: "activate-file", fileId: file.id })}
+                onKeyDown={(event) => {
+                  const moves = { ArrowRight: 1, ArrowLeft: -1, Home: "first", End: "last" } as const;
+                  const move = moves[event.key as keyof typeof moves];
+                  if (move === undefined) return;
+                  event.preventDefault();
+                  moveFocus(index, move);
+                }}
               >
                 <FileTypeIcon type={file.type} />
                 <span className="shell-tab-name">{stripExtension(file.name)}</span>
@@ -132,6 +277,45 @@ export function FileTabs() {
         })}
       </div>
 
+      {/*
+        The overflow affordance. It exists only while there is something it can
+        do, so the row keeps its shape once every tab fits — which is what the
+        four Home combinations do now that the file actions leave the flow.
+
+        Both controls sit to the *right* of the strip on purpose. A left-hand
+        control would move the strip's left edge, and that edge is the top row's
+        content boundary: it lines up with the sidebar (or with the docked
+        column) and must not shift because a seventh file was opened.
+      */}
+      {overflow.amount > 1 ? (
+        <div className="shell-tabstrip-nav">
+          <button
+            type="button"
+            className="shell-icon-button shell-tabstrip-scroll"
+            aria-label="Scroll tabs left"
+            title="Scroll tabs left"
+            disabled={overflow.atStart}
+            onClick={() => scrollStrip(-1)}
+          >
+            <ChevronLeft size={16} strokeWidth={1.7} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="shell-icon-button shell-tabstrip-scroll"
+            aria-label="Scroll tabs right"
+            title={
+              overflow.hidden > 0
+                ? `Scroll tabs right (${overflow.hidden} out of sight)`
+                : "Scroll tabs right"
+            }
+            disabled={overflow.atEnd}
+            onClick={() => scrollStrip(1)}
+          >
+            <ChevronRight size={16} strokeWidth={1.7} aria-hidden="true" />
+          </button>
+        </div>
+      ) : null}
+
       <div className="shell-tabs-actions">
         <button
           type="button"
@@ -162,10 +346,18 @@ export function FileTabs() {
           onClick={() =>
             void (async () => {
               if (!activeFile) {
-                notBuiltYet(
-                  "share",
-                  "Sharing a file from OfficeDex is not built yet. Open a local file first.",
-                );
+                /*
+                 * Not `notBuiltYet`. That channel means "there is nothing behind
+                 * this control", and it produced two sentences that cancelled
+                 * each other out: "Sharing … is not built yet. Open a local file
+                 * first." If it is not built, opening a file cannot help. It *is*
+                 * built — what is missing is a document to share.
+                 */
+                toast.info({
+                  key: "share-needs-file",
+                  content: "Open a file to share it",
+                  description: "Share sends whichever file is open on the canvas.",
+                });
                 return;
               }
               try {
@@ -184,8 +376,17 @@ export function FileTabs() {
                 } else {
                   toast.info(`File: ${value}`);
                 }
-              } catch {
-                // Cancelling the native share sheet is not an error.
+              } catch (reason) {
+                /*
+                 * Dismissing the native share sheet is a decision, not a failure,
+                 * and it is the one thing this catch was written for. It then went
+                 * on to swallow every other outcome on the path — a rejected
+                 * clipboard permission (which is what actually happens in a plain
+                 * browser), a `navigator.share` that throws, a port that refuses.
+                 * Pressing Share with a file open produced no toast at all.
+                 */
+                if (reason instanceof DOMException && reason.name === "AbortError") return;
+                reportPortFailure(reason);
               }
             })()
           }
