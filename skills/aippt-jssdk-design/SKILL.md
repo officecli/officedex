@@ -15,7 +15,7 @@ description: 唯一 PPT 生成入口：按内容关系渐进加载 SSIM 大于 0
 
 命中家族后必须加载源码及报告，保留其 API 调用方式、组件关系和构图机制，再按新内容参数化。不能只读几条建议后自由绘制。缺少合格来源时返回 `needs_source_evidence` 并停止该页生成；封面、结尾页、容量冲突也不能绕过。禁止调用已退役的 `aippt-list4-layout`、`presentation-pptx-quality` 或切回 `mop-skill`。
 
-OfficeDex 产品生成走自由构图 drawer：LLM 只产出语义内容和每页关系，`free-composition/assemble.mjs` 按选中的 variant 调用独立 painter 写出 `generated.mjs`。drawer 不是整页模板——它保留机制（票签、环形、时间轴、原生图），按当前正文重算几何。禁止让模型临场把不同机制压成空卡片。参考 PPTX、图片及重建代码只读；从空白文档通过本项目公开 JSSDK 创建原生对象，再用既有 typed MOP converter 导出。不要修改源 PPTX、拼接 OOXML、直接写 MOP 或用整页图片替代可编辑内容。图表家族在 `registry.json` 中仍为 blocked；仅当内容带有 `chart` 时，实验 `addChart` painter 可用于预览，不宣称来源放行。
+主要产物是本次新写、独立的 `generated.mjs`，导出 `build(PowerPoint, data, runtime)`。参考 PPTX、图片及重建代码只读；从空白文档通过本项目公开 JSSDK 创建原生对象，再用既有 typed MOP converter 导出。不要修改源 PPTX、拼接 OOXML、直接写 MOP 或用整页图片替代可编辑内容。
 
 ## 按需加载
 
