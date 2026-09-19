@@ -27,7 +27,6 @@
 .shell-sidebar-item:focus-visible,
 .shell-brand:focus-visible,
 .shell-profile:focus-visible,
-.shell-menu-item:focus-visible,
 .shell-save-state:focus-visible,
 .shell-share:focus-visible {
   outline: 2px solid var(--shell-focus);
@@ -583,102 +582,4 @@
 .shell-zoom-value {
   min-width: 34px;
   text-align: center;
-}
-
-/* ----------------------------------------------------------------- menu */
-
-.shell-menu-anchor {
-  position: relative;
-}
-
-.shell-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  z-index: 60;
-  max-height: 340px;
-  overflow: auto;
-  padding: 6px;
-  background: var(--shell-paper);
-  border: 1px solid #dfe2e6;
-  border-radius: var(--shell-radius-card);
-  box-shadow: var(--shell-shadow-menu);
-  color: #34383c;
-}
-
-.shell-menu[data-align="start"] {
-  left: 0;
-}
-.shell-menu[data-align="end"] {
-  right: 0;
-}
-
-.shell-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 38px;
-  padding: 6px 8px;
-  border: 0;
-  border-radius: var(--shell-radius-item);
-  background: transparent;
-  color: inherit;
-  font: var(--shell-text) / 20px var(--shell-font);
-  text-align: left;
-  cursor: pointer;
-}
-
-.shell-menu-item:hover,
-.shell-menu-item:focus-visible {
-  background: #edf0f3;
-  outline: 0;
-}
-
-.shell-menu-item:focus-visible {
-  box-shadow: inset 0 0 0 1px #9aa8b3;
-}
-
-.shell-menu-item:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.shell-menu-icon {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 24px;
-  height: 24px;
-  border-radius: var(--shell-radius-control);
-  background: var(--shell-sunken);
-  color: var(--shell-ink-muted);
-}
-
-.shell-menu-label {
-  flex: 1;
-  min-width: 0;
-}
-
-.shell-menu-label small {
-  display: block;
-  margin-top: 2px;
-  color: var(--shell-ink-faint);
-  font-size: var(--shell-text-xs);
-  line-height: 15px;
-}
-
-.shell-menu-check {
-  flex: none;
-  width: 13px;
-  height: 13px;
-  background: currentColor;
-  color: #5c6872;
-  clip-path: polygon(
-    14% 47%,
-    0 61%,
-    39% 100%,
-    100% 25%,
-    85% 11%,
-    37% 71%
-  );
 }

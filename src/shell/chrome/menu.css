@@ -1,0 +1,133 @@
+/*
+ * The menu primitive's own stylesheet, imported by Menu.tsx.
+ *
+ * These rules used to live at the bottom of chrome.css. They were moved out so
+ * the component that draws them also ships them — a menu rendered from a module
+ * that happens not to import chrome.css used to come out unstyled — and so the
+ * two files have one owner each.
+ *
+ * Positioning is no longer done here. `.shell-menu` is portalled to `#shell`
+ * and placed by measurement in Menu.tsx; everything below is appearance only,
+ * with `left` / `top` / `width` / `max-height` supplied inline.
+ */
+
+/*
+ * Kept `position: relative` because nav.css positions the per-row action
+ * buttons (`.shell-tree-folder-add`, `.shell-tree-file-more`) against it. The
+ * panel itself no longer needs it.
+ */
+.shell-menu-anchor {
+  position: relative;
+}
+
+.shell-menu {
+  position: fixed;
+  /*
+   * Above the floating agent panel (`agent.css` `.shell-presence`, z-index 200)
+   * and below the legacy dialog/toast stack (1000–1200).
+   *
+   * The old value was 60, which worked only because the panel was a DOM child
+   * of its trigger: the composer menus inside the floating panel inherited that
+   * panel's own 200. Portalling them out of it would have dropped them behind
+   * it, so the layer has to clear 200 by itself.
+   */
+  z-index: 300;
+  /* Inline `max-height` narrows this to the room actually available. */
+  max-height: 340px;
+  overflow: auto;
+  /* The panel repositions on scroll; chaining its scroll to the page behind it
+     would move the anchor under it while the user is reading it. */
+  overscroll-behavior: contain;
+  padding: 6px;
+  background: var(--shell-paper);
+  border: 1px solid #dfe2e6;
+  border-radius: var(--shell-radius-card);
+  box-shadow: var(--shell-shadow-menu);
+  color: #34383c;
+  /*
+   * Portalled to `#shell`, not `document.body`: `--shell-*` and the `--od-*`
+   * bridge are declared on `#shell` (tokens.css), and the type stack comes from
+   * `.shell` — the same element. A panel on `document.body` would render in the
+   * browser's default serif with every token unresolved.
+   */
+  font: var(--shell-text) / 20px var(--shell-font);
+}
+
+.shell-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 38px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--shell-radius-item);
+  background: transparent;
+  color: inherit;
+  font: var(--shell-text) / 20px var(--shell-font);
+  text-align: left;
+  cursor: pointer;
+}
+
+.shell-menu-item:hover,
+.shell-menu-item:focus-visible {
+  background: #edf0f3;
+  outline: 0;
+}
+
+/*
+ * `.shell-menu-item:focus-visible` was also one selector in chrome.css's shared
+ * focus-ring list, but the `outline: 0` above it (later in source order) always
+ * won, so the ring a menu item actually wore was this inset shadow. It came
+ * across with the component unchanged rather than being "fixed" here — the
+ * focus-ring inventory is W2-F's, and a menu that suddenly grew a 2px outline
+ * would be an unrequested visual change riding along with a layout fix.
+ */
+.shell-menu-item:focus-visible {
+  box-shadow: inset 0 0 0 1px #9aa8b3;
+}
+
+.shell-menu-item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.shell-menu-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--shell-radius-control);
+  background: var(--shell-sunken);
+  color: var(--shell-ink-muted);
+}
+
+.shell-menu-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.shell-menu-label small {
+  display: block;
+  margin-top: 2px;
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-xs);
+  line-height: 15px;
+}
+
+.shell-menu-check {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  background: currentColor;
+  color: #5c6872;
+  clip-path: polygon(
+    14% 47%,
+    0 61%,
+    39% 100%,
+    100% 25%,
+    85% 11%,
+    37% 71%
+  );
+}
