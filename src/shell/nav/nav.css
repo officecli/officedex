@@ -35,9 +35,40 @@
   color: #374b5b;
 }
 
-.shell-tree-folder-row.is-drop-target {
+/*
+ * The drop highlight sits on the whole folder section, not on its title row.
+ *
+ * The hit area and the highlight have to be the same shape or the user is
+ * being told a lie: the row is 36px of a section that is 187px–258px tall once
+ * the folder is open, so highlighting the row while accepting a drop anywhere
+ * in the section (or, as it was before, accepting only on the row) leaves
+ * 81%–86% of what looks like one folder behaving differently from the rest
+ * (S8-014).
+ */
+.shell-tree-folder.is-drop-target {
   outline: 1px solid #8b9eab;
+  border-radius: var(--shell-radius-item);
   background: #e0e8ee;
+}
+
+/*
+ * The row is the containing block for its own inline actions.
+ *
+ * `.shell-tree-folder-add` / `.shell-tree-file-more` are `position: absolute`
+ * with no `top`, so they resolve against the nearest positioned ancestor. That
+ * used to be `Menu`'s `.shell-menu-anchor` wrapper (`position: relative`),
+ * whose only child is the absolutely positioned button itself — leaving the
+ * wrapper a 0×0 flex item that `align-items: center` parks on the row's
+ * vertical midline. The button therefore hung half outside its row and the
+ * bottom 6px of it was covered by the next row (S1-001).
+ *
+ * The wrapper's own box is unchanged by this (a 0×0 static item sits exactly
+ * where a 0×0 relative one did), so the menu panel — which measures this
+ * wrapper — lands where it did before.
+ */
+.shell-tree-folder-row > .shell-menu-anchor,
+.shell-tree-file-row > .shell-menu-anchor {
+  position: static;
 }
 
 .shell-tree-folder-toggle {
@@ -46,7 +77,11 @@
   gap: 8px;
   width: 100%;
   min-width: 0;
-  padding: 8px;
+  /* Right padding reserves the 28px the "+" occupies (4px inset + 24px wide),
+     the way the file row already reserved 26px for its own action button.
+     Without it the folder name and the count badge run under the button
+     (S5-007 / S1-011). */
+  padding: 8px 30px 8px 8px;
   border: 0;
   border-radius: var(--shell-radius-item);
   background: none;
@@ -87,7 +122,11 @@
 .shell-tree-folder-add,
 .shell-tree-file-more {
   position: absolute;
+  top: 50%;
   right: 4px;
+  /* Centred on the row it belongs to. `top` was simply missing, which is how
+     the used value ended up on the row's midline instead of around it. */
+  transform: translateY(-50%);
   display: none;
   align-items: center;
   justify-content: center;
@@ -146,6 +185,19 @@
 
 .shell-tree-file-row[draggable="true"]:active {
   opacity: 0.5;
+}
+
+/*
+ * "You are dragging this one."
+ *
+ * `:active` above only covers the press, not the drag: the browser drops
+ * `:active` the moment the drag gesture starts, so from the user's point of
+ * view the source row looked untouched for the whole operation (S8-017). The
+ * class is set in `FileTree`'s dragstart and cleared on dragend.
+ */
+.shell-tree-file-row.is-dragging,
+.shell-list tbody tr.is-dragging {
+  opacity: 0.45;
 }
 
 .shell-tree-file-open {
@@ -216,6 +268,18 @@
 
 .shell-list {
   width: 100%;
+  /*
+   * Fixed, so the declared column widths below are what the columns get.
+   *
+   * With `auto`, a cell's minimum is its content's min-content width, and
+   * `text-overflow: ellipsis` does not participate in that calculation — one
+   * unbreakable 771px filename pinned the Name column at 829px (81.6% rather
+   * than the declared 46%), squeezed "Folder" to 83px and "Last opened" to
+   * 58px, broke both into multi-line cells, pushed a row from its declared
+   * 40px to 201px, and made the table 21px wider than its container at 1280
+   * and 277px wider at 1024 (S3-003 / S6-009).
+   */
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: var(--shell-text);
 }
@@ -227,6 +291,31 @@
   font-size: var(--shell-text-sm);
   font-weight: 400;
   text-align: left;
+  /* The header broke over two lines for the same reason the cells did. */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/*
+ * The four columns. Under `table-layout: fixed` only the first row of cells is
+ * consulted, so these are declared on the header cells and every body row
+ * follows them.
+ */
+.shell-list thead th:nth-child(1) {
+  width: 46%;
+}
+
+.shell-list thead th:nth-child(2) {
+  width: 25%;
+}
+
+.shell-list thead th:nth-child(3) {
+  width: 21%;
+}
+
+.shell-list thead th:nth-child(4) {
+  width: 8%;
 }
 
 .shell-list-group th {
@@ -235,6 +324,9 @@
   font-size: var(--shell-text-sm);
   font-weight: 500;
   text-align: left;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .shell-list-group th small {
@@ -255,15 +347,29 @@
   background: var(--shell-active);
 }
 
+/*
+ * The comfortable list's drop highlight.
+ *
+ * `ComfortableList` accepts drops on a whole `<tbody>` and always did — it just
+ * never rendered the fact, so a file moved without the user ever being shown
+ * where it was going (S8-015). Same two values as the compact tree, so one
+ * gesture looks the same in both densities.
+ */
+.shell-list tbody.is-drop-target {
+  outline: 1px solid #8b9eab;
+  background: #e0e8ee;
+}
+
 .shell-list td {
   padding: 0 10px;
   height: 40px;
   color: var(--shell-ink-subtle);
   vertical-align: middle;
-}
-
-.shell-list td:first-child {
-  width: 46%;
+  /* All four columns truncate. Only the Name column used to (via
+     `.shell-list-file > span`); Folder and Last opened wrapped instead. */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .shell-list-file {
@@ -313,6 +419,12 @@
   color: var(--shell-ink-faint);
 }
 
+/* Keyboard focus has to reveal the icon too: at rest the button is
+   `color: transparent`, so a focus ring on its own framed an empty box. */
+.shell-list-pin:focus-visible {
+  color: var(--shell-ink-faint);
+}
+
 .shell-list-pin.is-pinned {
   color: var(--shell-accent);
 }
@@ -338,6 +450,34 @@
 .shell-list-empty p {
   margin: 0;
   font-size: var(--shell-text);
+}
+
+/* ------------------------------------------------------- focus visibility */
+
+/*
+ * Both densities, one list.
+ *
+ * `nav.css` had no `:focus-visible` rule at all: the shared list in
+ * `chrome.css` names eight selectors and none of them is in this file, so every
+ * control in the file tree and in the Home list moved focus without drawing
+ * anything (S1-005 / S3-012). The check is on `outline-style` — with
+ * `outline-style: none` the computed `outline-width` still reports 3px, so a
+ * test that reads the width passes against a tree that shows nothing.
+ *
+ * `outline-offset` is negative because three of these live inside
+ * `overflow: hidden` boxes (`.shell-sidebar-body`, and the `<td>`s, which now
+ * clip so they can truncate): an outline drawn outside the border box would be
+ * cut off exactly where it matters.
+ */
+.shell-tree-folder-toggle:focus-visible,
+.shell-tree-file-open:focus-visible,
+.shell-tree-more:focus-visible,
+.shell-tree-folder-add:focus-visible,
+.shell-tree-file-more:focus-visible,
+.shell-list-file:focus-visible,
+.shell-list-pin:focus-visible {
+  outline: 2px solid var(--shell-focus);
+  outline-offset: -2px;
 }
 
 /* -------------------------------------------------------------- dialogs */

@@ -32,7 +32,9 @@ function props(overrides: Partial<FileTreeProps> = {}): FileTreeProps {
 
 const compactStructure = (root: HTMLElement) =>
   [...root.querySelectorAll(".shell-tree-folder")].map((section) => ({
-    folder: section.querySelector(".shell-tree-folder-row")?.getAttribute("data-drop-folder"),
+    // The drop attribute is on the section — row *and* files — rather than on
+    // the title row alone, so an open folder accepts a drop anywhere on itself.
+    folder: section.getAttribute("data-drop-folder"),
     files: [...section.querySelectorAll(".shell-tree-file-open > span")].map((node) => node.textContent),
   }));
 
@@ -91,7 +93,7 @@ describe("FileTree densities (decision 2)", () => {
 
     const compact = render(<FileTree {...shared} density="compact" />);
     expect(compact.container.querySelectorAll(".shell-tree-folder-row")).toHaveLength(folders.length);
-    expect(compact.getAllByText("No files yet.")).toHaveLength(folders.length - 1);
+    expect(compact.getAllByText("No files yet")).toHaveLength(folders.length - 1);
 
     cleanup();
 
@@ -111,6 +113,21 @@ describe("time grouping (decision 3)", () => {
     expect(view.container.querySelectorAll(".shell-list-file").length).toBeGreaterThan(0);
     // …but nothing in the page will accept a dropped file.
     expect(view.container.querySelectorAll("[data-drop-folder]")).toHaveLength(0);
+  });
+
+  it("does not offer a drag it has nowhere to accept (S8-016)", () => {
+    // Every row used to be `draggable` even though no group in the page could
+    // take a drop, so a file could be picked up, carried around and put back
+    // with nothing explaining why.
+    const time = render(<FileTree {...props({ density: "comfortable", grouping: "time" })} />);
+    expect(time.container.querySelectorAll("tbody tr[draggable='true']")).toHaveLength(0);
+
+    cleanup();
+
+    const folder = render(<FileTree {...props({ density: "comfortable", grouping: "folder" })} />);
+    expect(
+      folder.container.querySelectorAll("tbody tr[draggable='true']").length,
+    ).toBeGreaterThan(0);
   });
 
   it("still labels each file with the real folder it lives in", () => {
@@ -139,6 +156,77 @@ describe("pinned filter", () => {
     const files = seedFiles(NOW).map((file) => ({ ...file, pinned: false }));
     const view = render(<FileTree {...props({ density: "comfortable", filter: "pinned", files })} />);
     expect(view.getByText("No pinned files")).toBeInTheDocument();
+  });
+
+  it("names every filter that is hiding files, not just the first one (S3-014)", () => {
+    const files = seedFiles(NOW).map((file) => ({ ...file, pinned: false }));
+
+    // Pinned only.
+    const pinned = render(<FileTree {...props({ density: "comfortable", filter: "pinned", files })} />);
+    expect(pinned.getByText("Pin a file to keep it here.")).toBeInTheDocument();
+    cleanup();
+
+    // File type only — the body used to fall through to the generic sentence
+    // and never mention the filter that was actually emptying the list.
+    const typed = render(
+      <FileTree {...props({ density: "comfortable", fileType: "sheet", files: [] })} />,
+    );
+    expect(typed.getByText("No files of this type")).toBeInTheDocument();
+    expect(typed.getByText(/Clear the file type filter/)).toBeInTheDocument();
+    cleanup();
+
+    // Both at once — the case the two-branch body could not express at all.
+    const both = render(
+      <FileTree
+        {...props({ density: "comfortable", filter: "pinned", fileType: "sheet", files })}
+      />,
+    );
+    expect(both.getByText("No pinned files")).toBeInTheDocument();
+    expect(both.getByText(/file type filter/)).toBeInTheDocument();
+  });
+});
+
+describe("drop targets and drag state", () => {
+  it("makes the whole folder section the drop target, not just its title row (S8-014)", () => {
+    const view = render(<FileTree {...props({ density: "compact" })} />);
+    const sections = [...view.container.querySelectorAll(".shell-tree-folder")];
+
+    expect(sections.length).toBeGreaterThan(0);
+    for (const section of sections) {
+      expect(section.getAttribute("data-drop-folder")).toBeTruthy();
+      // The title row must not carry it as well, or the section would only be
+      // found from outside the row and the two would drift apart again.
+      expect(
+        section.querySelector(".shell-tree-folder-row")?.hasAttribute("data-drop-folder"),
+      ).toBe(false);
+      // The file area is a sibling of the row, so this is the relationship that
+      // `closest()` needs and did not have.
+      const files = section.querySelector(".shell-tree-files");
+      if (files) expect(files.closest("[data-drop-folder]")).toBe(section);
+    }
+  });
+
+  it("renders the drop highlight at both densities (S8-015)", () => {
+    const target = seedFolders()[0].id;
+
+    const compact = render(
+      <FileTree {...props({ density: "compact", dropFolderId: target })} />,
+    );
+    expect(
+      compact.container.querySelector(`.shell-tree-folder.is-drop-target[data-drop-folder="${target}"]`),
+    ).not.toBeNull();
+    cleanup();
+
+    // `ComfortableList` never read `dropFolderId` at all: it accepted the drop
+    // and moved the file with nothing on screen having changed.
+    const comfortable = render(
+      <FileTree
+        {...props({ density: "comfortable", grouping: "folder", dropFolderId: target })}
+      />,
+    );
+    const highlighted = [...comfortable.container.querySelectorAll("tbody.is-drop-target")];
+    expect(highlighted).toHaveLength(1);
+    expect(highlighted[0].getAttribute("data-drop-folder")).toBe(target);
   });
 });
 

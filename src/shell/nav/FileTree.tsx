@@ -11,6 +11,15 @@ import "./nav.css";
 const SIDEBAR_PAGE = 5;
 
 /**
+ * One string, both densities.
+ *
+ * The sidebar said "No files yet." and Home said "No files yet" — two hardcoded
+ * copies 243 lines apart in this file, which is exactly how they drifted
+ * (S3-013). Naming it is the only thing that stops it happening again.
+ */
+const NO_FILES_YET = "No files yet";
+
+/**
  * Arrow-key movement between a folder and the files inside it.
  *
  * Done by walking the DOM rather than by holding a focus index in state: the
@@ -88,12 +97,24 @@ function CompactTree(props: WithGroups) {
           : group.files;
 
         return (
-          <section key={group.id} className="shell-tree-folder" role="none">
+          <section
+            key={group.id}
+            className={`shell-tree-folder${folderId === props.dropFolderId ? " is-drop-target" : ""}`}
+            role="none"
+            /*
+             * The drop target is the folder, and the folder is this section —
+             * title row plus the files under it. It used to be the title row
+             * alone, which `useFolderDrop`'s `closest()` could not reach from
+             * the file area because that area is the row's *sibling*: an open
+             * folder accepted a drop on 14%–19% of its own surface and silently
+             * refused the rest (S8-014).
+             */
+            data-drop-folder={folderId}
+          >
             <FolderRow
               folder={{ id: folderId, label: group.label, count: group.total }}
               expanded={expanded}
               current={folderId === props.selectedFolderId}
-              dropTarget={folderId === props.dropFolderId}
               onToggle={() => props.onToggleFolder(folderId)}
               onSelect={() => props.onSelectFolder(folderId)}
               onCreateFile={(type) => props.onCreateFile(folderId, type)}
@@ -104,7 +125,7 @@ function CompactTree(props: WithGroups) {
             {expanded ? (
               <div className="shell-tree-files" role="group">
                 {shown.length === 0 ? (
-                  <p className="shell-tree-empty">No files yet.</p>
+                  <p className="shell-tree-empty">{NO_FILES_YET}</p>
                 ) : (
                   shown.map((file) => (
                     <FileRow
@@ -123,7 +144,16 @@ function CompactTree(props: WithGroups) {
                   <button
                     type="button"
                     className="shell-tree-more"
-                    onClick={() => props.onToggleOverflow(folderId)}
+                    onClick={(event) => {
+                      // Revealing 40 rows pushes this button — which still has
+                      // focus — out of the scroll port, so the keyboard user
+                      // loses their place and cannot collapse the list again
+                      // (S1-010). The button is not remounted, so bringing it
+                      // back after the commit is enough.
+                      const button = event.currentTarget;
+                      props.onToggleOverflow(folderId);
+                      requestAnimationFrame(() => button.scrollIntoView({ block: "nearest" }));
+                    }}
                   >
                     {revealed ? "Show less" : `Show ${group.total - group.files.length} more`}
                   </button>
@@ -141,7 +171,6 @@ function FolderRow({
   folder,
   expanded,
   current,
-  dropTarget,
   onToggle,
   onSelect,
   onCreateFile,
@@ -151,7 +180,6 @@ function FolderRow({
   folder: { id: string; label: string; count: number };
   expanded: boolean;
   current: boolean;
-  dropTarget: boolean;
   onToggle: () => void;
   onSelect: () => void;
   onCreateFile: (type: FileType) => void;
@@ -177,8 +205,7 @@ function FolderRow({
 
   return (
     <div
-      className={`shell-tree-folder-row${current ? " is-current" : ""}${dropTarget ? " is-drop-target" : ""}`}
-      data-drop-folder={folder.id}
+      className={`shell-tree-folder-row${current ? " is-current" : ""}`}
       onContextMenu={(event) => {
         event.preventDefault();
         menuRef.current?.open();
@@ -190,6 +217,13 @@ function FolderRow({
         aria-expanded={expanded}
         className="shell-tree-folder-toggle"
         title={folder.label}
+        /*
+         * Without this the name and the count run together into one word —
+         * "Archive 2026" + "45" was announced as "Archive 202645" (S1-012).
+         * There is no text node between the two elements to separate them and
+         * `title` does not contribute once an element has text content.
+         */
+        aria-label={`${folder.label}, ${folder.count} files`}
         onClick={() => {
           onToggle();
           onSelect();
@@ -273,10 +307,11 @@ function FileRow({
   ];
 
   const menuRef = useRef<MenuHandle>(null);
+  const [dragging, setDragging] = useState(false);
 
   return (
     <div
-      className={`shell-tree-file-row${current ? " is-current" : ""}`}
+      className={`shell-tree-file-row${current ? " is-current" : ""}${dragging ? " is-dragging" : ""}`}
       draggable
       onContextMenu={(event) => {
         event.preventDefault();
@@ -285,7 +320,9 @@ function FileRow({
       onDragStart={(event) => {
         event.dataTransfer.setData("application/x-officedex-file", file.id);
         event.dataTransfer.effectAllowed = "move";
+        setDragging(true);
       }}
+      onDragEnd={() => setDragging(false)}
     >
       <button
         type="button"
@@ -334,26 +371,43 @@ function FileRow({
 
 function ComfortableList(props: WithGroups) {
   const [now] = useState(() => Date.now());
+  const [draggingId, setDraggingId] = useState<string | null>(null);
   // The sidebar must list every folder so an empty one can still be navigated
   // to; a page-sized list should not spend a heading on "Customer research 0".
   const groups = props.groups.filter((group) => group.files.length > 0);
   const empty = groups.length === 0;
 
   if (empty) {
+    /*
+     * Three headings, and the body has to match all of them — including the
+     * case where both filters are on at once.
+     *
+     * The heading was a three-way choice and the body only a two-way one, so
+     * "No pinned files" was explained by "Pin a file to keep it here." while a
+     * File type filter was also narrowing the list and the screen never
+     * mentioned it. Whichever filter is hiding files has to be named, because
+     * clearing it is the shortest way out (S3-014).
+     */
+    const pinnedOnly = props.filter === "pinned";
+    const typeFiltered = Boolean(props.fileType && props.fileType !== "all");
+    const heading = pinnedOnly
+      ? "No pinned files"
+      : typeFiltered
+        ? "No files of this type"
+        : NO_FILES_YET;
+    const body =
+      pinnedOnly && typeFiltered
+        ? "Nothing pinned matches the file type filter. Clear the filter, or pin a file of this type."
+        : pinnedOnly
+          ? "Pin a file to keep it here."
+          : typeFiltered
+            ? "Clear the file type filter, or create a file of this type."
+            : "Create a file, or open one from this computer.";
+
     return (
       <div className="shell-list-empty">
-        <strong>
-          {props.filter === "pinned"
-            ? "No pinned files"
-            : props.fileType && props.fileType !== "all"
-              ? "No files of this type"
-              : "No files yet"}
-        </strong>
-        <p>
-          {props.filter === "pinned"
-            ? "Pin a file to keep it here."
-            : "Create a file, or open one from this computer."}
-        </p>
+        <strong>{heading}</strong>
+        <p>{body}</p>
       </div>
     );
   }
@@ -374,22 +428,54 @@ function ComfortableList(props: WithGroups) {
         </tr>
       </thead>
       {groups.map((group) => (
-        <tbody key={group.id} data-drop-folder={group.folderId ?? undefined}>
+        <tbody
+          key={group.id}
+          data-drop-folder={group.folderId ?? undefined}
+          /*
+           * The tbody already accepted drops — it just never said so, so a file
+           * moved on release with nothing on screen having changed (S8-015).
+           * `ComfortableList` was the half of this component that never read
+           * `dropFolderId` at all.
+           */
+          className={
+            group.folderId !== null && group.folderId === props.dropFolderId
+              ? "is-drop-target"
+              : undefined
+          }
+        >
           <tr className="shell-list-group">
             <th scope="colgroup" colSpan={4}>
               {group.label}
-              <small>{group.total}</small>
+              <small aria-hidden="true">{group.total}</small>
+              {/* Same gluing as the sidebar's folder rows (S1-012). */}
+              <span className="shell-visually-hidden">, {group.total} files</span>
             </th>
           </tr>
           {group.files.map((file) => (
             <tr
               key={file.id}
-              className={file.id === props.activeFileId ? "is-current" : undefined}
-              draggable
+              className={
+                `${file.id === props.activeFileId ? "is-current" : ""}${
+                  file.id === draggingId ? " is-dragging" : ""
+                }`.trim() || undefined
+              }
+              /*
+               * Only rows that have somewhere to go are draggable.
+               *
+               * Under time grouping every group has `folderId: null` by design
+               * — a time bucket is a view, not a place — so no target in the
+               * page accepted a drop, yet every row advertised itself as
+               * draggable. The user could pick a file up, carry it around the
+               * whole page and put it back down with no explanation (S8-016).
+               * Not offering the gesture is the honest version of that.
+               */
+              draggable={group.folderId !== null}
               onDragStart={(event) => {
                 event.dataTransfer.setData("application/x-officedex-file", file.id);
                 event.dataTransfer.effectAllowed = "move";
+                setDraggingId(file.id);
               }}
+              onDragEnd={() => setDraggingId(null)}
             >
               <td>
                 <button
