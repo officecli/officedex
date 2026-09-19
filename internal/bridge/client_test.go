@@ -1466,11 +1466,16 @@ func TestBuildBridgeEnvExtraOverrides(t *testing.T) {
 /*
  * The expansion budgets, and who gets to choose them.
  *
- * OfficeCLI's own defaults (45s a page, 120s the whole expansion) are tuned for
- * a provider that answers in seconds. The one the desktop talks to took 21s,
- * 23s and 32s on the page attempts that *succeeded*, so 45s was a coin flip and
- * 120s could not hold an eight-page deck at all — both ceilings were hit in
- * real runs and both threw away finished pages.
+ * OfficeCLI's own defaults (45s a page, 20s a repair, 120s the whole expansion)
+ * are tuned for a provider that answers in seconds. The one the desktop talks
+ * to took 14s, 21s, 23s, 28s and 32s on the page attempts that *succeeded*, so
+ * 45s was a coin flip and 120s could not hold an eight-page deck at all — both
+ * ceilings were hit in real runs and both threw away finished pages.
+ *
+ * The repair budget is the one that decides whether a page survives a bad first
+ * answer. A measured run rejected a page on its content, retried it, and lost
+ * the retry to a 20s timeout against that same 14-32s provider: the page was
+ * recoverable and went down as failed anyway.
  *
  * Supplied as defaults so an operator debugging a slow provider can still set
  * their own, which is the part `appendKV` would have broken.
@@ -1479,6 +1484,7 @@ func TestBuildBridgeEnvWidensExpansionBudgets(t *testing.T) {
 	env := BuildBridgeEnv(nil)
 	for _, want := range []string{
 		"OFFICECLI_PPTX_EXPAND_ATTEMPT_SECONDS=120",
+		"OFFICECLI_PPTX_EXPAND_REPAIR_SECONDS=120",
 		"OFFICECLI_PPTX_EXPAND_TOTAL_SECONDS=600",
 	} {
 		if !contains(env, want) {

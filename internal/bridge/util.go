@@ -76,19 +76,28 @@ func BuildBridgeEnv(extra []string) []string {
 	/*
 	 * Room for a slow provider to answer.
 	 *
-	 * OfficeCLI budgets 45s per page attempt and 120s for the whole expansion
-	 * (internal/runtime/pptx_expansion_recovery.go). Those hold for a provider
-	 * answering in a few seconds; they do not hold for the one the desktop
-	 * actually talks to. Measured against platform.officecli.io: an empty 404
-	 * takes 5s to first byte, and the page attempts that *succeeded* in real
-	 * runs took 21s, 23s and 32s. At 45s the margin is a coin flip, and an
-	 * eight-page deck cannot fit in 120s at 20-45s a page — both ceilings were
-	 * hit, and each time the run threw away the pages it had finished.
+	 * OfficeCLI budgets 45s per page attempt, 20s for a repair and 120s for the
+	 * whole expansion (internal/runtime/pptx_expansion_recovery.go). Those hold
+	 * for a provider answering in a few seconds; they do not hold for the one
+	 * the desktop actually talks to. Measured against platform.officecli.io: an
+	 * empty 404 takes 5s to first byte, and the page attempts that *succeeded*
+	 * in real runs took 14s, 21s, 23s, 28s and 32s. At 45s the margin is a coin
+	 * flip, and an eight-page deck cannot fit in 120s at 20-45s a page — both
+	 * ceilings were hit, and each time the run threw away the pages it had
+	 * finished.
+	 *
+	 * The repair budget is the one that actually decides whether a page is
+	 * lost. A first attempt can fail on its content and still be recoverable —
+	 * that is what repair is for — but at 20s it was timing out against a
+	 * provider whose *successful* answers take 14-32s, so the retry could not
+	 * land and the page went down as failed. It gets the same room as a first
+	 * attempt, because it is the same request to the same provider.
 	 *
 	 * Defaults, not overrides: a caller that has already chosen a value keeps
 	 * it, which is why this cannot use appendKV.
 	 */
 	base = defaultKV(base, "OFFICECLI_PPTX_EXPAND_ATTEMPT_SECONDS", "120")
+	base = defaultKV(base, "OFFICECLI_PPTX_EXPAND_REPAIR_SECONDS", "120")
 	base = defaultKV(base, "OFFICECLI_PPTX_EXPAND_TOTAL_SECONDS", "600")
 	for _, kv := range suppliedProxy {
 		key, _, ok := strings.Cut(kv, "=")
