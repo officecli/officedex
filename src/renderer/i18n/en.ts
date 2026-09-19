@@ -1042,9 +1042,27 @@ export const en: Record<string, string> = {
     "This release contains required changes. OfficeDex will resume once the update is installed.",
   "update.force.restarting": "Restarting...",
   "update.force.downloadComplete": "Download complete. Restarting...",
+  "update.force.downloadReady": "Download complete.",
   "update.force.downloadingProgress": "Downloading... {done} / {total}",
   "update.force.updateNow": "Update now",
   "update.force.restartToInstall": "Restart to install",
+  // One status line per phase. Three phases used to render the same page
+  // because only downloading/downloaded/installing were ever named.
+  "update.force.statusIdle": "The update has not started yet.",
+  "update.force.statusChecking": "Checking for the latest version...",
+  "update.force.statusAvailable": "Version {version} is ready to download.",
+  "update.force.statusError": "The update did not finish.",
+  "update.force.checking": "Checking...",
+  "update.force.retry": "Try again",
+  // Server-authored text, labelled so it does not read as the app's own voice.
+  "update.force.notesHeading": "Release notes",
+  "update.force.errorLabel": "Error details",
+  // Second way out of the error state.
+  "update.force.fallbackHeading": "If the update keeps failing",
+  "update.force.downloadManually": "Download {version} manually",
+  "update.force.downloadFor": "Download for {platform}",
+  "update.force.copyDetails": "Copy error details",
+  "update.force.copyDetailsDone": "Copied",
 
   // Report Issue Dialog
   "report.dialog.title": "Report Issue",

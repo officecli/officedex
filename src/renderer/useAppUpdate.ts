@@ -100,6 +100,7 @@ export function useAppUpdate(): UseAppUpdateValue {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
       setPhase("error");
+      autoInstallTriggeredRef.current = false;
     }
   }, []);
 
@@ -138,6 +139,11 @@ export function useAppUpdate(): UseAppUpdateValue {
           return;
         case "downloaded":
           setPhase("downloaded");
+          // A finished download is 100%, whatever the last progress event said.
+          // Without this the byte counter keeps whatever fraction it stopped on
+          // (38.94% in the recorded case) and anything rendering a bar from it
+          // contradicts the "download complete" copy sitting next to it.
+          setProgress((p) => (p.bytesTotal > 0 ? { bytesDone: p.bytesTotal, bytesTotal: p.bytesTotal } : p));
           setStatus((s) => ({ ...s, downloadedPath: event.downloadedPath, downloading: false }));
           return;
         case "installed":
@@ -146,6 +152,10 @@ export function useAppUpdate(): UseAppUpdateValue {
         case "error":
           setError(event.message);
           setPhase("error");
+          // Let a retry install itself again. The latch exists to stop the
+          // effect below firing twice for one download, not to spend the user's
+          // only automatic install on an attempt that failed.
+          autoInstallTriggeredRef.current = false;
           return;
       }
     });

@@ -339,17 +339,26 @@
 
 /* ───── Force update overlay ───── */
 
+/*
+ * A page, not a scrim.
+ *
+ * Both call sites return this instead of the application (legacy `App.tsx`
+ * returns it in place of the whole tree, and the shell's `UpdateGate` does the
+ * same), so there has never been anything behind it. The 70% ink plus a 6px
+ * backdrop blur was written for a modal: it paid for a compositing layer to
+ * blur an empty document and rendered as a flat grey either way. Opaque says
+ * what it is and costs nothing.
+ */
 .force-update-overlay {
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: rgba(15, 15, 15, 0.7);
+  background: #3a3a3d;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
   overflow: auto;
-  backdrop-filter: blur(6px);
 }
 
 .force-update-card {
@@ -398,12 +407,32 @@
   color: #a4a097;
 }
 
+.force-update-notes-block {
+  text-align: left;
+  margin: 0 0 12px;
+}
+
+.force-update-notes-heading {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #a4a097;
+  margin: 0 0 4px;
+}
+
 .force-update-notes {
   font-size: 14px;
   line-height: 1.5;
   color: #37352f;
-  margin: 0 0 12px;
+  margin: 0;
   white-space: pre-line;
+  /*
+   * The only text on this card the update server writes, and therefore the
+   * only one that can arrive as a 109-character URL with no break opportunity.
+   * `.force-update-reason` and `.force-update-error` already guard for this.
+   */
+  overflow-wrap: anywhere;
 }
 
 .force-update-reason {
@@ -430,10 +459,63 @@
 }
 
 .force-update-error {
+  display: block;
   margin-top: 12px;
   font-size: 13px;
   color: #e03131;
   overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.force-update-error-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #b04a4a;
+  margin-bottom: 2px;
+}
+
+.force-update-error-detail {
+  display: block;
+}
+
+/* Status line for the phases that have no progress bar to speak for them. */
+.force-update-status {
+  font-size: 13px;
+  color: #5d5b54;
+  margin: 0 0 12px;
+  overflow-wrap: anywhere;
+}
+
+/* The way out when the in-app update keeps failing. */
+.force-update-fallback {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #e5e3df;
+  text-align: left;
+}
+
+.force-update-fallback-heading {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #a4a097;
+  margin: 0 0 8px;
+}
+
+.force-update-download {
+  display: block;
+  font-size: 13px;
+  color: #05101a;
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
+}
+
+.force-update-secondary {
+  margin-top: 4px;
 }
 
 @media (max-width: 600px) {
