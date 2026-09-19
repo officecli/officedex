@@ -25,6 +25,39 @@ import { expect, test, type Page } from "@playwright/test";
 import { expectNoClip } from "./ui-audit-helpers";
 
 const BRIDGE = process.env.S4_BRIDGE ?? "";
+
+/**
+ * A missing bridge is a broken run, not a case that does not apply.
+ *
+ * Every one of the thirty tests below used to open with
+ * `test.skip(!BRIDGE, "S4_BRIDGE must point at the dev-real bridge endpoint")`.
+ * Run without the variable — which is what happens when CI forgets to start
+ * `dev-real`, or when somebody runs the whole `e2e/` directory — the suite
+ * printed `30 skipped` and exited 0. In a summary line that is indistinguishable
+ * from thirty passes, and it is the reason this file could not be put behind any
+ * gate: it reported success for a configuration in which it had checked nothing
+ * at all.
+ *
+ * `skip` is the right verb for "this case does not apply to this environment" —
+ * a Windows-only assertion on macOS. It is the wrong verb for "the environment
+ * this suite exists to test is not here", which is a configuration error, and
+ * configuration errors have to be loud.
+ *
+ * The failure names the variable and the command, because the person who sees it
+ * is usually someone who ran `npx playwright test` with no arguments and needs to
+ * know what they were missing, not that something was missing.
+ */
+function requireBridge(): string {
+  if (!BRIDGE) {
+    throw new Error(
+      "S4_BRIDGE is not set, so this suite has no real bridge to measure.\n" +
+        "  node scripts/dev-real.mjs --port 3210 <pptx> <xlsx> <docx>\n" +
+        "  S4_BRIDGE=<endpoint it prints> PLAYWRIGHT_BASE_URL=http://127.0.0.1:3210 \\\n" +
+        "    npx playwright test e2e/ui-audit-s4.spec.ts",
+    );
+  }
+  return BRIDGE;
+}
 const SHOTS = "docs/ui-audit-2026-09-19/S4/screenshots";
 const PERSIST_KEY = "officedex.shell.v1";
 
@@ -203,7 +236,7 @@ function combo(patch: Partial<Persisted>): Persisted {
 
 test.describe.serial("S4 — editing canvas & floating agent (dev-real 3210)", () => {
   test("imports three real documents and captures the base shell state", async ({ page }) => {
-    test.skip(!BRIDGE, "S4_BRIDGE must point at the dev-real bridge endpoint");
+    requireBridge();
 
     await page.addInitScript(
       ([key, value]) => localStorage.setItem(key as string, value as string),
@@ -257,7 +290,7 @@ test.describe.serial("S4 — editing canvas & floating agent (dev-real 3210)", (
 
   for (const c of combos) {
     test(`${c.id}: geometry over a real editor`, async ({ page }) => {
-      test.skip(!BRIDGE, "S4_BRIDGE must point at the dev-real bridge endpoint");
+      requireBridge();
       await page.setViewportSize({ width: 1440, height: 900 });
       await load(
         page,
@@ -287,7 +320,7 @@ test.describe.serial("S4 — editing canvas & floating agent (dev-real 3210)", (
 
   for (const document of DOCUMENTS) {
     test(`C10: floating panel over a real ${document.type} editor`, async ({ page }) => {
-      test.skip(!BRIDGE, "S4_BRIDGE must point at the dev-real bridge endpoint");
+      requireBridge();
       await page.setViewportSize({ width: 1440, height: 900 });
       await load(page, combo({ mode: "editor", home: false, navCollapsed: false }));
 
@@ -307,7 +340,7 @@ test.describe.serial("S4 — editing canvas & floating agent (dev-real 3210)", (
   /* -------------------------------------------------------- drag behaviour */
 
   test("C10: the panel can be dragged and where it lands", async ({ page }) => {
-    test.skip(!BRIDGE, "S4_BRIDGE must point at the dev-real bridge endpoint");
+    requireBridge();
     await page.setViewportSize({ width: 1440, height: 900 });
     await load(page, combo({ mode: "editor", home: false, navCollapsed: false }));
 
@@ -343,7 +376,7 @@ test.describe.serial("S4 — editing canvas & floating agent (dev-real 3210)", (
   });
 
   test("C10: a tucked panel survives a reload, and can it be dragged back", async ({ page }) => {
-    test.skip(!BRIDGE, "S4_BRIDGE must point at the dev-real bridge endpoint");
+    requireBridge();
     await page.setViewportSize({ width: 1440, height: 900 });
     // Persist a position that is already off the right edge, the way a drag to
     // the far right leaves it, and see what the shell renders on a cold start.
@@ -376,7 +409,7 @@ test.describe.serial("S4 — editing canvas & floating agent (dev-real 3210)", (
   });
 
   test("C10: small window — the panel against a 1024x700 viewport", async ({ page }) => {
-    test.skip(!BRIDGE, "S4_BRIDGE must point at the dev-real bridge endpoint");
+    requireBridge();
     await page.setViewportSize({ width: 1024, height: 700 });
     await load(page, combo({ mode: "editor", home: false, navCollapsed: false }));
     const g = await geometry(page);
@@ -387,7 +420,7 @@ test.describe.serial("S4 — editing canvas & floating agent (dev-real 3210)", (
   /* ---------------------------------------------------------------- seams */
 
   test("C10: the seam between shell chrome and the embedded editor", async ({ page }) => {
-    test.skip(!BRIDGE, "S4_BRIDGE must point at the dev-real bridge endpoint");
+    requireBridge();
     await page.setViewportSize({ width: 1440, height: 900 });
     await load(page, combo({ mode: "editor", home: false, navCollapsed: false }));
 
@@ -433,7 +466,7 @@ test.describe.serial("S4 — editing canvas & floating agent (dev-real 3210)", (
   });
 
   test("C10: the collapse button's reserved slot", async ({ page }) => {
-    test.skip(!BRIDGE, "S4_BRIDGE must point at the dev-real bridge endpoint");
+    requireBridge();
     await page.setViewportSize({ width: 1440, height: 900 });
     await load(page, combo({ mode: "editor", home: false, navCollapsed: false }));
 
@@ -457,7 +490,7 @@ test.describe.serial("S4 — editing canvas & floating agent (dev-real 3210)", (
   });
 
   test("C8 vs C10: docked-preference round trip and the agent column", async ({ page }) => {
-    test.skip(!BRIDGE, "S4_BRIDGE must point at the dev-real bridge endpoint");
+    requireBridge();
     await page.setViewportSize({ width: 1440, height: 900 });
 
     await load(page, combo({ mode: "agent", home: false, navCollapsed: false }));
@@ -492,7 +525,7 @@ test.describe.serial("S4 — editing canvas & floating agent (dev-real 3210)", (
   });
 
   test("C10: the attention border against the real canvas", async ({ page }) => {
-    test.skip(!BRIDGE, "S4_BRIDGE must point at the dev-real bridge endpoint");
+    requireBridge();
     await page.setViewportSize({ width: 1440, height: 900 });
     await load(page, combo({ mode: "editor", home: false, navCollapsed: false }));
 
@@ -518,7 +551,7 @@ test.describe.serial("S4 — editing canvas & floating agent (dev-real 3210)", (
   });
 
   test("C10: does the menu layer lose to the floating panel", async ({ page }) => {
-    test.skip(!BRIDGE, "S4_BRIDGE must point at the dev-real bridge endpoint");
+    requireBridge();
     await page.setViewportSize({ width: 1440, height: 900 });
     await load(page, combo({ mode: "editor", home: false, navCollapsed: false }));
 
@@ -559,7 +592,7 @@ test.describe.serial("S4 — editing canvas & floating agent (dev-real 3210)", (
    * current viewport.
    */
   test("C9/C10: the never-placed default position over a real editor", async ({ page }) => {
-    test.skip(!BRIDGE, "S4_BRIDGE must point at the dev-real bridge endpoint");
+    requireBridge();
     for (const [id, navCollapsed] of [["C9", true], ["C10", false]] as const) {
       await page.setViewportSize({ width: 1440, height: 900 });
       await load(
@@ -598,7 +631,7 @@ test.describe.serial("S4 — editing canvas & floating agent (dev-real 3210)", (
    * open is laid out inside a box that clips it.
    */
   test("C10: the floating composer's own menus against the panel's overflow", async ({ page }) => {
-    test.skip(!BRIDGE, "S4_BRIDGE must point at the dev-real bridge endpoint");
+    requireBridge();
     await page.setViewportSize({ width: 1440, height: 900 });
     await load(
       page,
@@ -684,7 +717,7 @@ test.describe.serial("S4 — editing canvas & floating agent (dev-real 3210)", (
    * window bar's traffic lights live between x=13 and x=75 (WindowBar.tsx).
    */
   test("C10: the panel parked over the window bar's traffic lights", async ({ page }) => {
-    test.skip(!BRIDGE, "S4_BRIDGE must point at the dev-real bridge endpoint");
+    requireBridge();
     await page.setViewportSize({ width: 1440, height: 900 });
     await load(page, combo({ mode: "editor", home: false, navCollapsed: false }));
 
@@ -726,7 +759,7 @@ test.describe.serial("S4 — editing canvas & floating agent (dev-real 3210)", (
    * rule matches those too.
    */
   test("C10: what edge-tucking does to an expanded panel", async ({ page }) => {
-    test.skip(!BRIDGE, "S4_BRIDGE must point at the dev-real bridge endpoint");
+    requireBridge();
     await page.setViewportSize({ width: 1440, height: 900 });
     await load(
       page,
@@ -770,7 +803,7 @@ test.describe.serial("S4 — editing canvas & floating agent (dev-real 3210)", (
 
   /** The base font the shell hands to the document, per mounted editor. */
   test("C10: what each embedded editor does to the shell's typography", async ({ page }) => {
-    test.skip(!BRIDGE, "S4_BRIDGE must point at the dev-real bridge endpoint");
+    requireBridge();
     await page.setViewportSize({ width: 1440, height: 900 });
     for (const document of DOCUMENTS) {
       await load(page, combo({ mode: "editor", home: false, navCollapsed: false }));
@@ -801,7 +834,7 @@ test.describe.serial("S4 — editing canvas & floating agent (dev-real 3210)", (
 
   /** Scrolling the document must not move a viewport-fixed panel. */
   test("C10: the panel while the document scrolls", async ({ page }) => {
-    test.skip(!BRIDGE, "S4_BRIDGE must point at the dev-real bridge endpoint");
+    requireBridge();
     await page.setViewportSize({ width: 1440, height: 900 });
     await load(
       page,
@@ -834,7 +867,7 @@ test.describe.serial("S4 — editing canvas & floating agent (dev-real 3210)", (
    * SDK's bar is not, which is the question this answers with numbers.
    */
   test("C10: who owns the bottom 32px — the shell status bar or the workbook's", async ({ page }) => {
-    test.skip(!BRIDGE, "S4_BRIDGE must point at the dev-real bridge endpoint");
+    requireBridge();
     await page.setViewportSize({ width: 1440, height: 900 });
 
     for (const document of DOCUMENTS) {
@@ -887,7 +920,7 @@ test.describe.serial("S4 — editing canvas & floating agent (dev-real 3210)", (
 
   /** Where do the portaled legacy overlays live, and in whose type stack. */
   test("C10: portaled overlays are outside .shell", async ({ page }) => {
-    test.skip(!BRIDGE, "S4_BRIDGE must point at the dev-real bridge endpoint");
+    requireBridge();
     await page.setViewportSize({ width: 1440, height: 900 });
     await load(page, combo({ mode: "editor", home: false, navCollapsed: false }));
 
@@ -920,7 +953,7 @@ test.describe.serial("S4 — editing canvas & floating agent (dev-real 3210)", (
    * traffic lights occupy 12–75 (WindowBar.tsx). This is that exact state.
    */
   test("C10: a top-tucked panel at the minimum x, over the traffic lights", async ({ page }) => {
-    test.skip(!BRIDGE, "S4_BRIDGE must point at the dev-real bridge endpoint");
+    requireBridge();
     await page.setViewportSize({ width: 1440, height: 900 });
     await load(
       page,
@@ -969,7 +1002,7 @@ test.describe.serial("S4 — editing canvas & floating agent (dev-real 3210)", (
    * Tab order is `openFileIds` order: docx, pptx, xlsx.
    */
   test("C10: floating panel over the real presentation editor", async ({ page }) => {
-    test.skip(!BRIDGE, "S4_BRIDGE must point at the dev-real bridge endpoint");
+    requireBridge();
     await page.setViewportSize({ width: 1440, height: 900 });
     await load(
       page,
@@ -1008,7 +1041,7 @@ test.describe.serial("S4 — editing canvas & floating agent (dev-real 3210)", (
    * each one actually says, so the mix is a string and not an impression.
    */
   test("C10: the language of each embedded editor next to the English shell", async ({ page }) => {
-    test.skip(!BRIDGE, "S4_BRIDGE must point at the dev-real bridge endpoint");
+    requireBridge();
     await page.setViewportSize({ width: 1440, height: 900 });
 
     const byIndex = [
@@ -1056,7 +1089,7 @@ test.describe.serial("S4 — editing canvas & floating agent (dev-real 3210)", (
 
   /** Which ancestor lets the workbook's bottom bar escape `.shell-canvas`. */
   test("C10: the workbook's escape route out of the canvas", async ({ page }) => {
-    test.skip(!BRIDGE, "S4_BRIDGE must point at the dev-real bridge endpoint");
+    requireBridge();
     await page.setViewportSize({ width: 1440, height: 900 });
     await load(page, combo({ mode: "editor", home: false, navCollapsed: false }));
     await page.locator(".shell-tab-name", { hasText: "sales-report" }).first().click();

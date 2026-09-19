@@ -60,7 +60,8 @@
     "build:html-app": "node scripts/build-html-app.mjs",
     "test:e2e:install": "playwright install chromium",
     "lint": "tsc --noEmit",
-    "verify:bridge:types": "node scripts/verify-bridge-types.mjs"
+    "verify:bridge:types": "node scripts/verify-bridge-types.mjs",
+    "verify:shell:styles": "node --test scripts/verify-shell-styles.test.mjs"
   },
   "dependencies": {
     "@shimo/editor-sdk-core": "0.0.1-124-jsapi.51",
