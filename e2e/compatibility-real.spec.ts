@@ -3,6 +3,38 @@ import { readFile } from "node:fs/promises";
 
 import { attachHostReport, fixturePath, hostControl, preparePage, recordScenario } from "./support/real-e2e";
 
+/**
+ * The capability manifest, as text.
+ *
+ * Two layers sit between the assertion and the words it looks for, and this
+ * canary reported `office.modify` missing from a runtime that has always had it
+ * because it matched against the outermost one:
+ *
+ *   1. the RPC envelope, `{"ok":true,"result":"…"}`, arriving as a *string*;
+ *   2. `result` itself, because `App.GetCapabilities` returns `[]byte` and Go
+ *      marshals that to base64.
+ */
+function decodeCapabilities(result: unknown): string {
+  let value: unknown = result;
+  if (typeof value === "string" && value.trimStart().startsWith("{")) {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return value as string;
+    }
+  }
+  if (value && typeof value === "object" && "result" in value) {
+    value = (value as { result: unknown }).result;
+  }
+  if (typeof value !== "string") return JSON.stringify(value);
+  if (value.trimStart().startsWith("{")) return value;
+  try {
+    return Buffer.from(value, "base64").toString("utf8");
+  } catch {
+    return value;
+  }
+}
+
 test.describe("OfficeDex D/E compatibility canaries", () => {
   test.skip(process.env.OFFICEDEX_E2E_COMPAT !== "1", "Set OFFICEDEX_E2E_COMPAT=1 to run compatibility canaries against the managed real bridge.");
 
@@ -14,7 +46,7 @@ test.describe("OfficeDex D/E compatibility canaries", () => {
     await preparePage(page);
     await hostControl("/rpc/Initialize", { method: "POST", body: "null" });
     const result = await hostControl<string>("/rpc/GetCapabilities", { method: "POST", body: "null" });
-    const capabilities = typeof result === "string" ? result : JSON.stringify(result);
+    const capabilities = decodeCapabilities(result);
     expect(capabilities).toContain("office.modify");
     expect(capabilities).toContain("artifact_stage_edit.v1");
     expect(capabilities).toContain("pptx");

@@ -188,6 +188,7 @@ export async function waitForCompletedArtifact(page: Page, documentType: Documen
       throw new Error(`Real ${documentType} generation failed in the user-visible UI.`);
     }
     await assertNoResponseContractError(page);
+    await assertRunDidNotFail(page, documentType);
     if (await answerVisibleInteraction(page)) {
       continue;
     }
@@ -220,6 +221,7 @@ export async function answerPlanUntilCompleted(page: Page, documentType: Documen
       return waitForCompletedArtifact(page, documentType);
     }
     await assertNoResponseContractError(page);
+    await assertRunDidNotFail(page, documentType);
 
     if (await answerVisibleInteraction(page)) {
       continue;
@@ -228,6 +230,33 @@ export async function answerPlanUntilCompleted(page: Page, documentType: Documen
     await page.waitForTimeout(1_000);
   }
   throw new Error(`Timed out waiting for ${documentType} plan generation to complete`);
+}
+
+/**
+ * Stops the moment the UI says the run failed, and says why.
+ *
+ * This loop used to poll past a visible failure until the test timed out — an
+ * hour, on the suite's own configuration — and then report "timed out waiting
+ * for generation", which is true and useless. A whole suite run once spent
+ * eighteen minutes on a run that had failed in the first five seconds with
+ * "license proof validation failed", and nothing on the way said so.
+ *
+ * The reason is read off the page rather than inferred: the failure banner is a
+ * headline, and the sentence underneath it is the part worth putting in the
+ * test output.
+ */
+async function assertRunDidNotFail(page: Page, documentType: DocumentType): Promise<void> {
+  const banner = page
+    .getByText(/Generation failed|Generation could not be completed|Task failed|Image generation failed|Something went wrong/i)
+    .first();
+  if (!(await banner.isVisible().catch(() => false))) return;
+  const detail = await page
+    .locator(".result-error, .task-error, [role='alert']")
+    .first()
+    .innerText()
+    .catch(() => "");
+  const reason = detail.trim() || (await banner.innerText().catch(() => "")).trim();
+  throw new Error(`Real ${documentType} generation failed in the user-visible UI: ${reason || "no reason shown"}`);
 }
 
 async function isCompletedArtifactVisible(page: Page): Promise<boolean> {
