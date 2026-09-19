@@ -1,0 +1,221 @@
+/*
+ * Home's feature-video shelf.
+ *
+ * Its own file rather than a band in home.css: four people work on Home's four
+ * bands, and a shared stylesheet is where those four changes collide.
+ *
+ * Every poster here is empty by design — there is no footage in the repo — so
+ * the rules below spend most of their length making "the still has not been
+ * shot" look deliberate instead of broken. See Highlights.tsx.
+ */
+
+.shell-highlights {
+  /* Same column the resume card and the file list sit in, so Home reads as one
+     stack rather than three widths. */
+  max-width: 1080px;
+  margin: 0 auto 34px;
+}
+
+.shell-highlights-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 12px;
+}
+
+.shell-highlights-head h2 {
+  margin: 0;
+  color: var(--shell-ink);
+  font-size: var(--shell-text);
+  font-weight: 500;
+}
+
+.shell-highlights-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.shell-highlights-controls button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--shell-line);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--shell-ink-muted);
+  cursor: pointer;
+}
+
+.shell-highlights-controls button:hover:not(:disabled) {
+  background: var(--shell-hover);
+  color: var(--shell-ink);
+}
+
+.shell-highlights-controls button:disabled {
+  /* Dimmed rather than hidden: an arrow that disappears at the end of the reel
+     shifts the header under the cursor that was about to press it. */
+  opacity: 0.3;
+  cursor: default;
+}
+
+.shell-highlights button:focus-visible {
+  outline: 2px solid var(--shell-focus);
+  /* Inset, because a card's outline would otherwise be clipped by the track's
+     own overflow. */
+  outline-offset: -2px;
+}
+
+.shell-highlights-track {
+  display: grid;
+  grid-auto-flow: column;
+  /* Exactly three cards per view at any column width, the fourth waiting one
+     press away. Fixed-width cards were tried first and left a ragged half-card
+     at the right edge on some widths, which reads as a clipping bug rather than
+     as more to see. */
+  grid-auto-columns: calc((100% - 32px) / 3);
+  gap: 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  /* Top padding leaves room for the cards' focus ring and hover shadow, which
+     an overflow container would otherwise clip. */
+  padding: 2px 0 8px;
+  scrollbar-width: thin;
+}
+
+.shell-highlight-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0;
+  border: 1px solid var(--shell-line);
+  border-radius: var(--shell-radius-card);
+  background: var(--shell-paper);
+  color: var(--shell-ink);
+  text-align: left;
+  overflow: hidden;
+  scroll-snap-align: start;
+  cursor: pointer;
+  transition:
+    border-color var(--shell-duration) var(--shell-ease),
+    box-shadow var(--shell-duration) var(--shell-ease);
+}
+
+.shell-highlight-card:hover {
+  border-color: var(--shell-line-strong);
+  box-shadow: var(--shell-shadow-menu);
+}
+
+/* ------------------------------------------------------- the empty poster */
+
+.shell-highlight-poster {
+  display: block;
+  position: relative;
+  width: 100%;
+  /* Locked to the frame the films will arrive in, so dropping the stills in
+     later changes the picture and not the layout. */
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-bottom: 1px solid var(--shell-line-soft);
+  /* Per-type identity, resolved below. Defaults to the neutral chrome so a
+     poster whose tone is unknown is still a surface, never a hole. */
+  --highlight-tone: var(--shell-ink-muted);
+  --highlight-tint: var(--shell-chrome);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--highlight-tone) 14%, transparent),
+      transparent 62%
+    ),
+    var(--highlight-tint);
+}
+
+/* The three document formats wear the same accents they wear in tabs and in
+   the sidebar; projects are not a format and have no accent of their own, so
+   they keep the neutral default above rather than inventing a fourth token in
+   the shared tokens.css. */
+.shell-highlight-poster[data-tone="word"] {
+  --highlight-tone: var(--shell-doc-accent);
+  --highlight-tint: var(--shell-doc-tint);
+}
+
+.shell-highlight-poster[data-tone="sheet"] {
+  --highlight-tone: var(--shell-sheet-accent);
+  --highlight-tint: var(--shell-sheet-tint);
+}
+
+.shell-highlight-poster[data-tone="slides"] {
+  --highlight-tone: var(--shell-slides-accent);
+  --highlight-tint: var(--shell-slides-tint);
+}
+
+.shell-highlight-watermark {
+  position: absolute;
+  left: 12px;
+  top: 8px;
+  /* Faint and off to one side: it is a hint at the subject, not the subject.
+     Loud enough to be seen, quiet enough that the play control stays the only
+     thing worth pressing, and out of the two corners the play button and the
+     duration badge already own. */
+  color: color-mix(in srgb, var(--highlight-tone) 26%, transparent);
+}
+
+.shell-highlight-play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--shell-ink) 82%, transparent);
+  color: var(--shell-ink-inverse);
+}
+
+.shell-highlight-play svg {
+  /* Optical centring: a triangle's centroid sits right of its bounding box. */
+  margin-left: -1px;
+}
+
+.shell-highlight-duration {
+  position: absolute;
+  right: 9px;
+  bottom: 9px;
+  padding: 2px 5px;
+  border-radius: var(--shell-radius-control);
+  background: color-mix(in srgb, var(--shell-ink) 78%, transparent);
+  color: var(--shell-ink-inverse);
+  font-size: var(--shell-text-xs);
+  line-height: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.shell-highlight-caption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 45px;
+  padding: 10px 12px;
+}
+
+.shell-highlight-caption strong {
+  min-width: 0;
+  font-size: var(--shell-text);
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.shell-highlight-caption small {
+  flex: none;
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-xs);
+  line-height: 16px;
+}

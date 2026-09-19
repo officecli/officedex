@@ -43,6 +43,22 @@ const ACTIVE_STATUSES = ["starting", "running", "question", "plan_review"];
 /** How many history entries `current` looks back through. */
 const HISTORY_PAGE = 50;
 
+/**
+ * How many rows `list` hands back when the caller does not say.
+ *
+ * "Recent" is bounded by a row count, not by a time window. `createdAt` is
+ * optional on a history entry and the runtime does not stamp every event
+ * either, so a cut like "the last seven days" would silently drop exactly the
+ * runs whose age is unknown — the oldest records, which are the ones most
+ * likely to be missing a timestamp. A row count drops a run only when there is
+ * something newer to show in its place.
+ *
+ * Eight because Home's band is a way back into work, not a history view: past
+ * that the list stops answering "what was I doing" and starts needing its own
+ * screen, which this is not.
+ */
+const LIST_LIMIT = 8;
+
 function toStatus(task: DesktopTask): AgentStatus {
   switch (task.status) {
     case "starting":
@@ -222,6 +238,63 @@ function folderOf(task: DesktopTask): string {
 }
 
 /**
+ * Epoch ms of the last thing that happened to a run.
+ *
+ * The runtime stamps events, not tasks, so "last touched" is the newest event
+ * it recorded; `createdAt` covers a task that has an envelope but nothing in it
+ * yet. Zero is the answer when neither is readable, which sorts the row to the
+ * bottom — an unknown time must not be allowed to read as "just now" and take
+ * the top of the list away from a run the user actually remembers.
+ */
+function updatedAtOf(task: DesktopTask): number {
+  const last = task.events.at(-1)?.ts;
+  // Date.parse yields NaN, which is falsy, so each fallback is reached only
+  // when the one before it was absent or unparseable.
+  return (last ? Date.parse(last) : NaN) || (task.createdAt ? Date.parse(task.createdAt) : NaN) || 0;
+}
+
+/**
+ * A row, not a task.
+ *
+ * `AgentTaskSummary` is deliberately thinner than `AgentTask`: messages, steps
+ * and the suggestion are the expensive parts, and Home renders a dozen of these
+ * at once. Building the full record here and letting the caller ignore most of
+ * it would mean replaying every event of every recent run to draw a list that
+ * shows a title and a status.
+ */
+function toSummary(task: DesktopTask): AgentTaskSummary {
+  const updatedAt = updatedAtOf(task);
+  return {
+    id: task.id,
+    title: taskTitle(task, "Untitled task"),
+    folderId: folderOf(task),
+    status: toStatus(task),
+    phase: phaseOf(task),
+    // Omitted rather than sent as 0: the field is optional precisely so a
+    // consumer can tell "the runtime did not say" from a real timestamp.
+    ...(updatedAt ? { updatedAt } : {}),
+  };
+}
+
+/**
+ * Live task state plus whatever history knows that it does not.
+ *
+ * History is authoritative for what happened and live events are ahead of it
+ * for what is happening, so the two are merged rather than one replacing the
+ * other. Replacing a live task with its recorded form would roll a running run
+ * back to whichever event the writer had flushed when the page was fetched.
+ */
+function mergeHistory(live: TaskState, history: TaskState): TaskState {
+  let next = live;
+  for (const id of history.taskOrder) {
+    const task = history.tasks[id];
+    if (!task || next.tasks[id]) continue;
+    next = { ...next, tasks: { ...next.tasks, [id]: task }, taskOrder: [...next.taskOrder, id] };
+  }
+  return next;
+}
+
+/**
  * The task a folder's presence shows.
  *
  * A folder can hold several conversations, and the contract has room for one.
@@ -291,18 +364,35 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     },
 
     /**
-     * Wave 0 seam: shape only, no implementation yet.
+     * Every folder's recent runs, newest first.
      *
-     * The raw material is already here — `api.getTaskHistory` returns entries
-     * across every folder and `hydrate` turns them into the same task records
-     * `current` reads. What is missing is the mapping to `AgentTaskSummary`
-     * and a decision about how far back "recent" goes.
+     * Reads the same history page `current` does. There is no deeper query in
+     * `DesktopAPI` — `getTaskHistory(limit)` is the only way in — so "how far
+     * back" is one page of entries narrowed to `LIST_LIMIT` rows, and a run
+     * older than that page is simply not recent.
+     *
+     * Ordered by `updatedAtOf` alone, with no rule hoisting live runs to the
+     * top. A run that is under way emits events continuously, so it *is* the
+     * most recently touched thing and lands there on its own; a second
+     * "active first" rule would only bite when a run goes quiet, and its
+     * visible effect would be rows jumping down the list at the moment they
+     * finish — right as the user reaches for them.
+     *
+     * `activeTaskId` is deliberately not touched. `current` sets it because
+     * opening a folder is a statement about what the user is working on;
+     * drawing a list is not, and letting Home retarget pause/resume/finish as
+     * a side effect of rendering would make those buttons act on whatever
+     * happened to be listed last.
      */
-    async list(): Promise<AgentTaskSummary[]> {
-      throw new NotImplementedError(
-        "agent.list",
-        "The task list is not wired up yet.",
-      );
+    async list(options): Promise<AgentTaskSummary[]> {
+      const entries = await api.getTaskHistory(HISTORY_PAGE).catch(() => [] as TaskHistoryEntry[]);
+      if (entries.length > 0) state = mergeHistory(state, hydrate(entries));
+      return state.taskOrder
+        .map((id) => state.tasks[id])
+        .filter((task): task is DesktopTask => Boolean(task))
+        .sort((left, right) => updatedAtOf(right) - updatedAtOf(left))
+        .slice(0, options?.limit ?? LIST_LIMIT)
+        .map(toSummary);
     },
 
     async send(input: SendInput) {

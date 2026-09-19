@@ -1,0 +1,107 @@
+/*
+ * Home's "Continue working" list.
+ *
+ * Its own file rather than a band in home.css: four people work on Home's four
+ * bands at once, and a shared stylesheet is where those four changes collide.
+ *
+ * The row frame itself is still `.shell-resume-card` from home.css. That class
+ * is what a single resumable thing looks like in this IA, and a list of them
+ * should not look like a different object just because there are now several —
+ * so this file adds what a *list* needs (the head, the stack, the status mark)
+ * and changes nothing about the card.
+ */
+
+.shell-task-list-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 20px;
+  /* home.css puts this margin on the h2; the heading is inside a flex row now,
+     so it moves to the row and the h2 gives it up below. */
+  margin: 0 0 12px;
+}
+
+.shell-task-list-head h2 {
+  margin: 0;
+}
+
+.shell-task-list-hint {
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-sm);
+}
+
+.shell-task-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shell-task-row-icon {
+  flex: none;
+  color: var(--shell-ink-faint);
+}
+
+/* Pushed away from the title block so the chevron stays on the right edge and
+   the status never drifts into the middle of a short title. */
+.shell-task-row-status {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  color: var(--shell-ink-subtle);
+  font-size: var(--shell-text-sm);
+  white-space: nowrap;
+}
+
+.shell-task-row-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--shell-ink-faint);
+}
+
+/*
+ * Strength and fill, not hue.
+ *
+ * See `dotState` in TaskList.tsx for why there are three marks and not seven:
+ * the label says which state it is, the dot says whether the row is still
+ * moving. Everything here comes off the ink scale, so the mark cannot drift
+ * with `--shell-accent`, which App resolves from whichever file happens to be
+ * open behind Home.
+ */
+.shell-task-row-status[data-state="live"] .shell-task-row-dot {
+  background: var(--shell-ink);
+  animation: shell-task-row-pulse 1.6s var(--shell-ease) infinite;
+}
+
+.shell-task-row-status[data-state="waiting"] .shell-task-row-dot {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--shell-ink-muted);
+}
+
+.shell-task-row-chevron {
+  flex: none;
+  color: var(--shell-ink-faint);
+}
+
+.shell-task-row:hover .shell-task-row-chevron {
+  color: var(--shell-ink-muted);
+}
+
+@keyframes shell-task-row-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* The shell answers this in one place per animation; a pulse that cannot be
+   switched off is exactly what the setting exists to switch off. */
+@media (prefers-reduced-motion: reduce) {
+  .shell-task-row-status[data-state="live"] .shell-task-row-dot {
+    animation: none;
+  }
+}
