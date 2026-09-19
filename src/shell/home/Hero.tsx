@@ -5,7 +5,6 @@ import { Composer } from "../composer/Composer";
 import { QuickPrompts } from "./QuickPrompts";
 import { useAgentTask } from "../agent/useAgentTask";
 import { useComposerSettings } from "../composer/useComposerSettings";
-import { useLibraryActions } from "../nav/useLibraryActions";
 import { useShell } from "../state/ShellContext";
 
 /**
@@ -30,8 +29,7 @@ const COMPOSER_RADIUS = 20;
  * travels with the message is the one that survived.
  */
 export function Hero() {
-  const { dispatch, files } = useShell();
-  const actions = useLibraryActions();
+  const { dispatch } = useShell();
   const agent = useAgentTask();
   const settings = useComposerSettings();
 
@@ -76,28 +74,23 @@ export function Hero() {
             onSend={async (submission) => {
               await agent.send(submission);
               /*
-               * Leave Home, but do not guess which file the run is about.
+               * Leave Home for the canvas the run fills, and open nothing.
                *
-               * Editing the file the user already had open is the one case
-               * where the destination is known. Everything else is making
-               * something that does not exist yet, and the canvas the run
-               * fills is the honest place to wait: `ShellContext` opens the
-               * real artifact when the task completes, matching it by
-               * `artifactTaskId`.
+               * There is no file to open. A task started from Home is about
+               * something that does not exist yet — the composer deliberately
+               * sends no `activeFileId` from here, because the service layer
+               * reads that as "edit this document instead" — so the only
+               * honest destination is the empty canvas, and `ShellContext`
+               * opens the real artifact by `artifactTaskId` once the run
+               * finishes.
                *
-               * This used to fall back to `files.find(file => file.folderId
-               * === submission.folderId)` — the first file of the scoped
-               * folder, in load order, with no relation to what was asked
-               * for. Ask for a new deck in a folder holding forty files and
-               * the shell opened file number one and sat there, so the
-               * artifact card (which shows whatever is open) named it too and
-               * the whole screen agreed on the wrong document. The comment
-               * here already described the behaviour below; only the code
-               * disagreed.
+               * This used to guess: `files.find(file => file.folderId ===
+               * submission.folderId)`, the first file of the scoped folder in
+               * load order. Ask for a new deck in a folder of forty documents
+               * and it opened document number one, which the task panel's
+               * artifact card then named as though the agent had made it.
                */
-              const target = files.find((file) => file.id === submission.activeFileId);
-              if (target) await actions.openFile(target.id);
-              else dispatch({ type: "enter-workspace" });
+              dispatch({ type: "enter-workspace" });
             }}
             onStop={agent.stop}
           />

@@ -200,6 +200,24 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
    */
   const reference = placement === "home" ? null : selectionForFile(selection, state.activeFileId);
 
+  /**
+   * The document this message is about — and on Home, nothing is.
+   *
+   * The same argument as `reference` above, which for a long time was the only
+   * half of it that got made. `SendInput.activeFileId` is not a hint: the
+   * service layer treats its presence as the whole routing decision, sending
+   * the run down `office.modify` against that file instead of generating
+   * anything (see `send` in services/agent.ts). Home passed whatever tab
+   * happened to be open, so asking Home for a *new* deck while a document sat
+   * behind it rewrote that document — a file the user had opened from disk,
+   * edited in place, seven operations deep, with nothing on screen having
+   * suggested that was the plan.
+   *
+   * To work on a specific file, open it: the docked and floating composers
+   * both carry it, and that is what makes them about it.
+   */
+  const targetFileId = placement === "home" ? null : state.activeFileId;
+
   // Auto-height, capped so a long draft scrolls instead of eating the panel.
   useEffect(() => {
     const input = inputRef.current;
@@ -376,7 +394,7 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
       folderId: scope?.id ?? "",
       mentions,
       attachments,
-      activeFileId: state.activeFileId,
+      activeFileId: targetFileId,
       ...(quoted
         ? { reference: { fileId: quoted.fileId, label: quoted.label, text: quoted.text } }
         : {}),

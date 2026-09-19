@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { toast } from "../../renderer/ui";
+import type { SendInput } from "../../shared/uiPort";
 import { renderShell } from "../test/renderShell";
 import { resetComposerDrafts } from "../composer/Composer";
 
@@ -11,13 +12,18 @@ afterEach(() => {
   resetComposerDrafts();
 });
 
-async function agentHome() {
-  const shell = await renderShell({ fastAgent: true });
-  await shell.dispatch({ type: "go-home" });
-  return shell;
+/** Records what the shell actually handed the port, which is the thing at issue. */
+function captureSends(port: Awaited<ReturnType<typeof renderShell>>["port"]) {
+  const sent: SendInput[] = [];
+  const original = port.agent.send.bind(port.agent);
+  port.agent.send = async (input) => {
+    sent.push(input);
+    return original(input);
+  };
+  return sent;
 }
 
-const send = async (shell: Awaited<ReturnType<typeof agentHome>>, text: string) => {
+const send = async (shell: Awaited<ReturnType<typeof renderShell>>, text: string) => {
   await act(async () => {
     fireEvent.change(shell.view.getByLabelText("New task instructions"), { target: { value: text } });
   });
@@ -27,40 +33,65 @@ const send = async (shell: Awaited<ReturnType<typeof agentHome>>, text: string) 
 };
 
 /**
- * Where Home goes once a task has been asked for.
+ * What a task asked for from Home is, and is not, about.
  *
- * This is guarded because getting it wrong is invisible in the worst way. Home
- * used to fall back to "the first file of the scoped folder, in load order" —
- * a file with no relation to the request. Ask for a new deck in a folder of
- * forty documents and the shell opened document number one; the task panel's
- * artifact card names whatever is open, so the entire screen then agreed that
- * an unrelated file was the thing the agent had just made.
+ * This is guarded because getting it wrong rewrote a user's file. The service
+ * layer treats `SendInput.activeFileId` as the entire routing decision — with
+ * one it runs `office.modify` against that document instead of generating
+ * anything — and Home used to pass whichever tab was open behind it. Opening a
+ * deck from disk, returning to Home and asking for a *new* presentation edited
+ * the deck in place, seven operations deep, with the artifact card then naming
+ * that same file as though the agent had produced it.
  */
-describe("Home after sending", () => {
-  it("opens no file when the task is making something new", async () => {
-    const shell = await agentHome();
-    await send(shell, "Build a launch deck for the new workspace line.");
-
-    await waitFor(() => {
-      expect(shell.state().home).toBe(false);
-    });
-    // The run fills a canvas; ShellContext opens the real artifact by
-    // `artifactTaskId` when it completes. Until then there is nothing honest
-    // to show, and showing a stand-in is what caused the confusion.
-    expect(shell.state().activeFileId).toBeNull();
-  });
-
-  it("stays with the open document when the task is about it", async () => {
+describe("a task started from Home", () => {
+  it("is not aimed at whatever document happens to be open", async () => {
     const shell = await renderShell({ fastAgent: true });
     const [file] = await shell.port.files.list();
     await shell.dispatch({ type: "open-file", fileId: file.id });
     await shell.dispatch({ type: "go-home" });
+    // The tab is still open behind Home — that is the whole trap.
+    expect(shell.state().activeFileId).toBe(file.id);
 
-    await send(shell, "Tighten the wording on slide two.");
+    const sent = captureSends(shell.port);
+    await send(shell, "Build a launch deck for the new workspace line.");
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0].activeFileId).toBeNull();
+  });
+
+  it("leaves Home for the canvas the run fills, opening nothing on the way", async () => {
+    const shell = await renderShell({ fastAgent: true });
+    await shell.dispatch({ type: "go-home" });
+    await send(shell, "Draft a plan for the launch.");
 
     await waitFor(() => {
       expect(shell.state().home).toBe(false);
     });
-    expect(shell.state().activeFileId).toBe(file.id);
+    // `ShellContext` opens the real artifact by `artifactTaskId` when the run
+    // finishes. Anything shown before that is a stand-in the user did not ask
+    // for, and a stand-in is what made the agent look like it had written to
+    // the wrong document.
+    expect(shell.state().activeFileId).toBeNull();
+  });
+
+  // The docked composer is about the document it sits beside; that is what
+  // makes "rewrite this paragraph" mean anything there.
+  it("still aims at the open document when sent from the task column", async () => {
+    const shell = await renderShell({ fastAgent: true });
+    const [file] = await shell.port.files.list();
+    await shell.dispatch({ type: "open-file", fileId: file.id });
+
+    const sent = captureSends(shell.port);
+    await act(async () => {
+      fireEvent.change(shell.view.getByLabelText("Message Agent"), {
+        target: { value: "Tighten the wording on slide two." },
+      });
+    });
+    await act(async () => {
+      fireEvent.click(shell.view.getByTitle("Send message"));
+    });
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0].activeFileId).toBe(file.id);
   });
 });
