@@ -1,8 +1,8 @@
-import { ArrowUpRight, Check, CircleCheck, Clock3, Pause, PanelLeft, Play, SquareDashed, Undo2 } from "lucide-react";
+import { ArrowUpRight, Check, CircleAlert, CircleCheck, CircleSlash, Clock3, Pause, PanelLeft, Play, SquareDashed, Undo2 } from "lucide-react";
 
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import { Composer } from "../composer/Composer";
-import type { AgentStep, AgentTask } from "../../shared/uiPort";
+import type { AgentOutlinePage, AgentStep, AgentTask } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
 import { useLibraryActions } from "../nav/useLibraryActions";
 import { canDock, effectivePlacement } from "../state/shellReducer";
@@ -128,6 +128,10 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
               </ol>
             ) : null}
 
+            {task.outline && task.outline.length > 0 ? (
+              <OutlineList pages={task.outline} />
+            ) : null}
+
             {task.question ? (
               <QuestionCard
                 question={task.question}
@@ -222,6 +226,60 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
       </div>
     </div>
   );
+}
+
+/**
+ * The pages the run is writing, beside the conversation rather than on the
+ * canvas.
+ *
+ * The canvas used to carry all of this — the outline, the per-page status, the
+ * request echoed back — and the deck being written was nowhere on screen. That
+ * is backwards: a plan is something to read and talk about, which is what this
+ * column is for, and the document is what the canvas is for.
+ *
+ * Titles and status only. The runtime writes a sentence of intent per page and
+ * it reads well at full width, but eight of them in a 320px column stop being a
+ * list of pages and become a wall. The title says which page, the mark says how
+ * it is doing, and the deck itself is right there to read.
+ */
+function OutlineList({ pages }: { pages: NonNullable<AgentTask["outline"]> }) {
+  return (
+    <ol className="shell-task-outline" aria-label="Pages in this deck">
+      {pages.map((page) => (
+        <li key={page.slide} className="shell-task-outline-row" data-state={page.state ?? "planned"}>
+          <span className="shell-task-outline-index">{String(page.slide).padStart(2, "0")}</span>
+          <span className="shell-task-outline-title">{page.title}</span>
+          <PageMark state={page.state} />
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/**
+ * One mark per page, in the same vocabulary the step list already uses: a tick
+ * for done, a spinner for working, a clock for not yet. A reader should not
+ * have to learn a second set of symbols halfway down the same column.
+ */
+function PageMark({ state }: { state: AgentOutlinePage["state"] }) {
+  if (state === "ready") {
+    return <CircleCheck size={14} strokeWidth={1.7} aria-label="Content ready" />;
+  }
+  if (state === "generating" || state === "repairing") {
+    return (
+      <span
+        className="shell-task-spinner"
+        aria-label={state === "repairing" ? "Retrying this page" : "Writing content"}
+      />
+    );
+  }
+  if (state === "failed") {
+    return <CircleAlert size={14} strokeWidth={1.7} aria-label="This page failed" />;
+  }
+  if (state === "canceled") {
+    return <CircleSlash size={14} strokeWidth={1.7} aria-label="Stopped" />;
+  }
+  return <Clock3 size={14} strokeWidth={1.7} aria-label="Queued" />;
 }
 
 /**

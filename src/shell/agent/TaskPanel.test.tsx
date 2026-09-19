@@ -97,3 +97,61 @@ describe("the task panel's file card", () => {
     expect(cardText()).not.toContain(unrelated!.name);
   });
 });
+
+/**
+ * The deck's pages belong beside the conversation.
+ *
+ * They used to live on the canvas — outline, per-page status and the request
+ * echoed back — which left the deck being written with nowhere to be. Titles
+ * and marks only: the runtime writes a sentence of intent per page, and eight
+ * of those in a 320px column stop being a list.
+ */
+describe("the task panel's page list", () => {
+  const withOutline = (): AgentTask => ({
+    ...runningTask(),
+    outline: [
+      { slide: 1, title: "Product Launch", state: "ready" },
+      { slide: 2, title: "How We Position", state: "generating" },
+      { slide: 3, title: "Launch Timeline", state: null },
+    ],
+  });
+
+  it("lists every page with its own mark", async () => {
+    const shell = await renderShell({ fastAgent: true, tasks: [withOutline()] });
+    // The seeded run lives in `folder-launch`; the default scope is
+    // `folder-inbox`, so without this the panel is asking about a folder that
+    // has no task and renders its empty state.
+    await shell.dispatch({ type: "select-folder", folderId: SEED_FOLDER_ID });
+    await shell.dispatch({ type: "enter-workspace" });
+
+    await waitFor(() => expect(document.querySelectorAll(".shell-task-outline-row")).toHaveLength(3));
+    const rows = [...document.querySelectorAll(".shell-task-outline-row")];
+    expect(rows.map((row) => row.getAttribute("data-state"))).toEqual([
+      "ready",
+      "generating",
+      "planned",
+    ]);
+    expect(rows[0].textContent).toContain("Product Launch");
+  });
+
+  /*
+   * A run with no page-level plan must not draw an empty frame where the list
+   * would be. Both shapes count: `toOutline` returns `[]` for a run the runtime
+   * gave no outline, and a task recorded before the field existed has none at
+   * all. They mean the same thing to a reader, so they have to look the same.
+   */
+  it.each([
+    ["an empty list", [] as AgentTask["outline"]],
+    ["no list at all", undefined],
+  ])("renders nothing for a run with %s", async (_label, outline) => {
+    const shell = await renderShell({
+      fastAgent: true,
+      tasks: [{ ...runningTask(), outline }],
+    });
+    await shell.dispatch({ type: "select-folder", folderId: SEED_FOLDER_ID });
+    await shell.dispatch({ type: "enter-workspace" });
+
+    await waitFor(() => expect(document.querySelector(".shell-task")).not.toBeNull());
+    expect(document.querySelector(".shell-task-outline")).toBeNull();
+  });
+});

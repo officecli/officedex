@@ -1,5 +1,6 @@
 import type { BridgeEvent, DesktopAPI, DesktopTask, GenerateInput, TaskHistoryEntry } from "../shared/types";
-import type { AgentEvent, AgentMessage, AgentPort, AgentStatus, AgentStep, AgentTask, AgentTaskSummary, SendInput } from "../shared/uiPort";
+import type { AgentEvent, AgentMessage, AgentOutlinePage, AgentPort, AgentStatus, AgentStep, AgentTask, AgentTaskSummary, SendInput } from "../shared/uiPort";
+import { pptxPageStates } from "../renderer/presentation/pptxRuntimeActivity";
 import { NotImplementedError } from "../shared/notImplemented";
 import { applyTaskEvent, attachTaskContext, createInitialTaskState, type TaskState } from "../renderer/taskState";
 import { taskTitle } from "../renderer/taskTitle";
@@ -175,6 +176,32 @@ function toQuestion(task: DesktopTask): AgentTask["question"] {
   };
 }
 
+/**
+ * The pages a run is writing, for the task panel's list.
+ *
+ * Two sources, joined on the slide number: the runtime's outline supplies the
+ * titles, and `pptxPageStates` — the same reader the old stage used — supplies
+ * how each page is doing. Reusing it keeps one definition of what "ready"
+ * means; the states come off `slide_state` payloads, which the outline itself
+ * knows nothing about.
+ *
+ * Only presentations have this. A document or a workbook has no page-level plan
+ * to show, and an empty list is what tells the panel to render nothing.
+ */
+function toOutline(task: DesktopTask): AgentOutlinePage[] {
+  const slides = task.vibeOutline?.slides;
+  if (!Array.isArray(slides) || slides.length === 0) return [];
+  const states = pptxPageStates(task);
+  return slides.map((slide, index) => {
+    const number = Number.isInteger(slide.slide) && Number(slide.slide) > 0 ? Number(slide.slide) : index + 1;
+    return {
+      slide: number,
+      title: String(slide.headline ?? "").trim() || `Slide ${number}`,
+      state: states.get(number) ?? null,
+    };
+  });
+}
+
 function toAgentTask(task: DesktopTask): AgentTask {
   const documentType = task.documentType === "docx" || task.documentType === "xlsx" || task.documentType === "pptx"
     ? task.documentType
@@ -188,6 +215,7 @@ function toAgentTask(task: DesktopTask): AgentTask {
     phase: phaseOf(task),
     steps: toSteps(task),
     messages: toMessages(task),
+    outline: toOutline(task),
     // No desktop model for proposed-then-applied changes; see the header.
     suggestion: null,
     question: toQuestion(task),

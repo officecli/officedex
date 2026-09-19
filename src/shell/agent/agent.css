@@ -546,6 +546,69 @@
   color: var(--shell-ink-title);
 }
 
+/*
+ * The deck's pages, listed beside the conversation.
+ *
+ * No new colour: the mark carries the meaning (tick, spinner, clock) and the
+ * text only moves along the existing ink ramp, so a page that is done reads
+ * slightly stronger than one still queued without inventing a status palette
+ * this shell does not have. Rows are one line each and the title truncates —
+ * eight pages have to fit a 320px column without turning into a wall.
+ */
+.shell-task-outline {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--shell-line);
+  border-radius: var(--shell-radius-card);
+  overflow: hidden;
+}
+
+.shell-task-outline-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-sm);
+  line-height: 18px;
+}
+
+.shell-task-outline-row + .shell-task-outline-row {
+  border-top: 1px solid var(--shell-line-soft);
+}
+
+.shell-task-outline-index {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Truncates rather than wraps: a wrapping title reflows every row below it
+   each time a page's state arrives. */
+.shell-task-outline-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.shell-task-outline-row > svg,
+.shell-task-outline-row .shell-task-spinner {
+  flex: none;
+}
+
+.shell-task-outline-row[data-state="ready"] {
+  color: var(--shell-ink-muted);
+}
+
+.shell-task-outline-row[data-state="generating"],
+.shell-task-outline-row[data-state="repairing"] {
+  color: var(--shell-ink-title);
+}
+
 .shell-task-spinner {
   display: block;
   width: 14px;

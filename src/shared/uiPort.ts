@@ -174,6 +174,25 @@ export interface AgentQuestion {
   allowFreeform: boolean;
 }
 
+/**
+ * One page of a deck being written, as the task panel lists it.
+ *
+ * The outline belongs beside the conversation, not on the canvas. A run's plan
+ * is something to read and talk about; the canvas is where the document itself
+ * goes. Carrying it here is what lets the panel show what the agent is working
+ * through while the editor shows the thing being worked on.
+ *
+ * Title and state only — the runtime's per-page description is a paragraph, and
+ * a 320px column that has to hold eight of them stops being a list of pages.
+ */
+export interface AgentOutlinePage {
+  /** 1-based, as the runtime numbers slides. */
+  slide: number;
+  title: string;
+  /** Null until the runtime has said anything about this page. */
+  state: "queued" | "generating" | "repairing" | "ready" | "failed" | "canceled" | null;
+}
+
 export interface AgentTask {
   id: string;
   title: string;
@@ -186,6 +205,16 @@ export interface AgentTask {
   phase: string;
   steps: AgentStep[];
   messages: AgentMessage[];
+  /**
+   * The pages this run is writing.
+   *
+   * Optional rather than an always-present array: most runs have no page-level
+   * plan at all (a document, a workbook, anything before the outline lands),
+   * and a task record written before this field existed is still a valid task.
+   * Absent and empty mean the same thing to a reader — there is no page list to
+   * show — so consumers can treat them alike.
+   */
+  outline?: AgentOutlinePage[];
   suggestion: AgentSuggestion | null;
   /** Set while the run is waiting for an answer; null the rest of the time. */
   question: AgentQuestion | null;
