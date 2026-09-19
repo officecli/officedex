@@ -307,6 +307,37 @@ git checkout -- docs/ui-audit-2026-09-19/S8/screenshots/ docs/ui-audit-2026-09-1
 **记账口径的教训**：「各 track 自报关闭数的累加」不是覆盖率。要知道覆盖率只能逐 ID
 对账——这件事我拖到第五波才做。
 
+## 3.8 新根因：`Menu` 的 wrapper 是一个没人预期的布局中间层
+
+两条形态完全不同的缺陷，根因是同一个：`chrome/Menu.tsx` 把触发器包进
+`<div class="shell-menu-anchor">`，**于是「设给按钮」的布局属性全部设丢了**——
+真正参与父级布局的是 anchor，不是按钮。
+
+| 实例 | 现象 | 谁发现 |
+|---|---|---|
+| **S1-001** | 文件树行内 "+" 按钮整个挂到行外，下沿越界 6px，那 6px 的点击被下一行抢走 | S1（本轮普查） |
+| **MERGE-001** | 340px 悬浮面板里文件名压住发送按钮，鼠标点不到 | docx track（合并期） |
+
+S1-001 的机制：按钮被 `position:absolute` 抽出正常流后，anchor 成了 **0×0 的 flex item**，
+在 `align-items:center` 下被居中到行的垂直中线。
+MERGE-001 的机制：`.shell-cx-left > .shell-cx-scope { flex-shrink: 1 }` **匹配 0 个元素**，
+因为选择器打的是按钮而 flex item 是 anchor；`.shell-cx-button` 自身是 `flex-shrink: 0`，
+于是左组永远按内容宽撑开、压到右侧去。
+
+两条都长期存在而没被发现，原因也相似：**只有在空间变紧时才显形**——一个要等行内出现
+第二个控件，一个要等左组出现第二个 chip。
+
+**正确的模板**（docx track 给的）：选择器要打到 anchor，再往下打一层到按钮。
+
+```css
+.shell-cx-left > .shell-menu-anchor { display: flex; min-width: 0; flex-shrink: 1 }
+.shell-cx-left > .shell-menu-anchor > .shell-cx-button { min-width: 0; flex-shrink: 1 }
+```
+
+**给闸门的建议**：这一类可以机械扫——「一个选择器把 flex/grid 属性设在了被 `Menu`
+包裹的按钮上」是可判定的。W1-A 把菜单 portal 出去之后 anchor 的 `position:relative`
+已成残留，但它作为 DOM 层仍然在，所以这个陷阱不会自己消失。
+
 ## 4. 交叉验证与自我纠错记录（保留，供后续复盘）
 
 **独立收敛**：S2 与 S7 互不知情测得设置菜单同一组数值（`left = -210.5`，可见 15.8%）；S5 静态预测的 8 个令牌差值被 S7 用 computed style 证实；S1/S5/S8 三方独立确认设置菜单溢出**与折叠轨无关**，共同推翻 PLAN 2.1 的猜测。
