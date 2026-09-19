@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { useShell } from "../state/ShellContext";
 import { useLibraryActions } from "../nav/useLibraryActions";
+import { notBuiltYet } from "../port/reportPortFailure";
 import { ModeMenu } from "./ModeMenu";
 import { Menu } from "./Menu";
 import { useComposerSettings } from "../composer/useComposerSettings";
@@ -104,8 +105,26 @@ export function Sidebar({ children }: { children?: ReactNode }) {
               id: "review",
               label: "Review changes",
               description: "Ask before applying Agent edits",
-              checked: settings.value.permission === "review",
-              onSelect: () => void settings.patch({ permission: "review" }),
+              /*
+               * The fifth door onto a tier that does not exist.
+               *
+               * The composer's permission menu gained a gate when Review and
+               * Custom turned out to have nothing behind them, and all four
+               * defaults moved to Full access — but this row kept writing
+               * `permission: "review"` straight through. Pressing it left the
+               * composer button reading "Review changes" for the rest of the
+               * session while every run still applied its edits directly: the
+               * one shape of failure this shell refuses, a control that
+               * answers by lying.
+               *
+               * No `checked`: the stored value is filtered on read now, so it
+               * could only ever have rendered a tick that was about to vanish.
+               */
+              onSelect: () =>
+                notBuiltYet(
+                  "composer.permission.review",
+                  "Review changes is not available yet — every run applies its changes directly. Full access is the only mode the agent honours.",
+                ),
             },
             {
               id: "enter",

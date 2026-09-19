@@ -702,3 +702,34 @@
 .shell-task[data-placement="floating"] .shell-task-composer {
   padding: 0 14px 14px;
 }
+
+/* ------------------------------------------- hero composer focus glow */
+
+/*
+ * Agent Home's composer wears the agent's own border while it has focus — the
+ * prototype's `agent-home-glow`. Lives here and not in home.css because it is
+ * the agent's mark, not Home's layout: the gradient, the stroke stack and the
+ * travelling light all come out of attentionOverlay.ts, and the day that
+ * recipe is retuned this rule is what has to follow it.
+ */
+.shell-attention-anchor {
+  position: relative;
+}
+
+/*
+ * The overlay's host, re-aimed at the composer.
+ *
+ * `.shell-attention` in app.css is written for the workspace, where it stops
+ * short of the status bar; here it has to cover the composer exactly, so all
+ * four edges are restated. `overflow: hidden` on the same radius as
+ * `.shell-cx--home` clips the outer half of the widest glow strokes, which is
+ * what gives the lit edge a crisp outside and a soft inside — the prototype
+ * clipped it the same way, and without it the wash bleeds a centimetre into
+ * the page around a control that is only meant to look focused.
+ */
+.shell-attention-anchor > .shell-attention {
+  inset: 0;
+  overflow: hidden;
+  border-radius: 20px;
+}
+

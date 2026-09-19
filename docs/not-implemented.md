@@ -40,8 +40,8 @@ Composer 完整采集这些字段。mentions 和 reference 已转成明确的 pr
 | `mentions` | 已将 `@文件/@文件夹` 名称拼入 prompt；runtime 仍没有结构化 mentions 字段 |
 | `attachments` | 桌面原生选择的附件现在带绝对路径并写入 prompt 上下文；浏览器拖入或无法提供路径的附件仍会提示。runtime 尚无结构化附件输入，因此不会自动读取或嵌入附件内容 |
 | `reference` | 已将选区文本拼入 prompt；`modify` 仍收整份文件，没有只改这一段的结构化入口 |
-| `permission` | `full` 走当前直接写入路径；`review` / `custom` 会提示 runtime 尚未提供对应闸门。见下面的待确认事项 |
-| `modelId` | 只有内置模型和至多一个自定义模型，选了别的没有意义。目前静默按内置处理 |
+| `permission` | 只有 `full` 是可选的，它走当前的直接写入路径。`review` / `custom` 在菜单里点了出提示，不会再变成一个发出去的值 —— 详见下面第三节同名条目 |
+| `modelId` | **没有任何消费者，是个死字段。** `GenerateInput` 没有 model 字段，runtime 也没有按消息选模型的入口；真正决定用哪个模型的是 `settings.llmProvider`，而桌面端只存一个 provider。模型选择器因此改成了「切换当前 provider」（`ModelPort.select`），选了确实会生效。这个字段留在 `SendInput` 里只是还没摘 |
 
 ## 三、完全没有 `UiPort` 方法的控件（调 `notBuiltYet`）
 
@@ -58,7 +58,9 @@ Composer 完整采集这些字段。mentions 和 reference 已转成明确的 pr
 | `share` | 文件标签栏 "Share" | 已接入系统分享（可用时）或复制本地路径；协作链接、权限和邀请成员仍未立项 |
 | `file-more-actions` | 文件标签栏 "⋯" | 重命名、创建副本、置顶和移出库已经接入；版本历史、导出和打印仍未接入 |
 | `settings-panel` | 侧栏齿轮 | UI 层没做设置面板。模型和权限控制现在在 composer 里 |
-| `dictate` | Composer 麦克风 | 语音输入未立项 |
+| `dictate` | Composer 麦克风 | 走浏览器的 Web Speech API，听写中麦克风有可视状态、再按一次停止。没有这个 API 的宿主（打包后的 webview 视版本而定）才提示；自建语音识别未立项 |
+| `composer.permission.review` / `composer.permission.custom` | Composer 权限菜单第 2/3 档；侧栏齿轮菜单的 "Review changes" | runtime 没有「先给用户看、确认后再写」的闸门，所有 run 都直接写。两档保留在菜单里但点了只出提示，四处默认值都已改为 `full`，读取时还会丢掉旧版本存在盘上的 `review`。Custom 更早一层就是空的：没有任何界面能写 `settings.customInstructions` |
+| `home-highlights` | Agent 首页 "Feature highlights" 的卡片 | 仓库里没有任何功能介绍视频素材，所以只出货架不接播放器。卡片、轮播、键盘导航都是真的，点击出提示。素材到位后放进 `public/assets/highlights/{id}.jpg`（DOM 上的 `data-asset` 就是契约），再把播放器接回来 |
 
 ### Writer 的界面语言（2026-09-19）
 

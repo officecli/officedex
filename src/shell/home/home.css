@@ -111,33 +111,14 @@
   text-align: left;
 }
 
-.shell-home-scope {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-height: 40px;
-  padding: 0 14px;
-  border: 1px solid var(--shell-line);
-  border-bottom: 0;
-  border-radius: 16px 16px 0 0;
-  background: var(--shell-sunken);
-  color: var(--shell-ink-muted);
-  font-size: var(--shell-text-sm);
-  text-align: left;
-}
-
-.shell-home-scope span {
-  flex: 1;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.shell-hero-composer > .shell-menu-anchor + .shell-cx--home {
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
-}
+/*
+ * The strip that used to sit on top of the composer is gone, and so are the
+ * rules that shaped it (`.shell-home-scope`, and the square top corners the
+ * composer wore to meet it). Home had two folder controls saying the same
+ * thing — that strip and the composer's own scope chip — and decision 2 keeps
+ * the chip, because scope is a property of the message being written rather
+ * than of the screen it is written on.
+ */
 
 .shell-hero-prompts {
   display: flex;

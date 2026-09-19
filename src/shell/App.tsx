@@ -58,6 +58,12 @@ export function App() {
    * not light it: nothing is happening in there any more, and a border that
    * keeps shimmering over a finished run is the agent claiming to still be
    * working.
+   *
+   * `!state.home` is not just "Home has no document". Home mounts its own
+   * `AttentionBorder` around the hero composer, lit by input focus rather than
+   * by the run (see Hero.tsx). Two instances, never on screen at once, because
+   * Home and the workspace are different subtrees and the two lights answer
+   * different questions.
    */
   const working =
     agent.task?.status === "working" ||

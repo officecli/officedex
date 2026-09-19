@@ -78,3 +78,62 @@ describe("AttentionBorder", () => {
     expect(overlay(container)).toBeNull();
   });
 });
+
+/**
+ * Agent Home's hero glow is this same component, flush with the composer and
+ * lit by input focus (see the note on AttentionBorder). These assert the two
+ * things that make it a glow rather than a second copy of the canvas frame.
+ */
+describe("AttentionBorder as the hero composer's focus glow", () => {
+  it("sits flush with the composer instead of inset inside it", () => {
+    withSize(720, 190);
+    const { container } = render(<AttentionBorder active inset={0} radius={20} />);
+    const svg = overlay(container);
+    expect(svg?.style.display).toBe("block");
+
+    const rects = [...(svg?.querySelectorAll("g rect") ?? [])];
+    expect(rects.length).toBeGreaterThan(5);
+    for (const rect of rects) {
+      expect(rect.getAttribute("x")).toBe("0");
+      expect(rect.getAttribute("y")).toBe("0");
+      expect(rect.getAttribute("width")).toBe("720");
+      expect(rect.getAttribute("height")).toBe("190");
+      // The composer's own corner, not the overlay's default 18.
+      expect(rect.getAttribute("rx")).toBe("20");
+    }
+  });
+
+  it("goes out when the composer loses focus", () => {
+    withSize(720, 190);
+    // Reduced motion so the exit is immediate: the fade otherwise needs a
+    // frame loop, and jsdom is not running one.
+    const { container, rerender } = render(
+      <AttentionBorder active inset={0} radius={20} reducedMotion />,
+    );
+    expect(overlay(container)?.style.display).toBe("block");
+    rerender(<AttentionBorder active={false} inset={0} radius={20} reducedMotion />);
+    expect(overlay(container)?.style.display).toBe("none");
+  });
+
+  it("parks the travelling light when the user asked for less motion", () => {
+    withSize(720, 190);
+    const frame = vi.spyOn(window, "requestAnimationFrame");
+    const { container } = render(
+      <AttentionBorder active inset={0} radius={20} reducedMotion />,
+    );
+    // The border is still drawn — it is information, not decoration — but
+    // nothing is scheduled to move it.
+    expect(overlay(container)?.style.display).toBe("block");
+    expect(frame).not.toHaveBeenCalled();
+  });
+
+  it("starts moving again when the setting is turned back off", () => {
+    withSize(720, 190);
+    const frame = vi.spyOn(window, "requestAnimationFrame").mockReturnValue(1);
+    const { rerender } = render(<AttentionBorder active inset={0} radius={20} reducedMotion />);
+    expect(frame).not.toHaveBeenCalled();
+    rerender(<AttentionBorder active inset={0} radius={20} reducedMotion={false} />);
+    expect(frame).toHaveBeenCalled();
+  });
+});
+

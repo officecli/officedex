@@ -30,6 +30,15 @@ export interface AttentionBox {
   top: number;
   width: number;
   height: number;
+  /**
+   * Corner radius, defaulting to `RADIUS_PX`.
+   *
+   * The prototype's `focusWhole({ radiusPx })` read this off the element being
+   * framed, because a border drawn rounder than the thing under it shows the
+   * mismatch at all four corners. The overlay paints SVG and cannot inherit a
+   * CSS radius, so whoever knows the shape has to say it.
+   */
+  radius?: number;
 }
 
 type Box = [number, number, number, number];
@@ -72,9 +81,9 @@ function sameBox(a: Box, b: Box): boolean {
 }
 
 /** A point travelling continuously around a rounded rectangle, in CSS pixels. */
-function perimeterPoint(box: Box, phase: number): [number, number] {
+function perimeterPoint(box: Box, phase: number, radiusPx: number): [number, number] {
   const [x, y, width, height] = box;
-  const radius = Math.min(RADIUS_PX, width / 2, height / 2);
+  const radius = Math.min(radiusPx, width / 2, height / 2);
   const horizontal = width - 2 * radius;
   const vertical = height - 2 * radius;
   const arc = (Math.PI * radius) / 2;
@@ -123,6 +132,8 @@ export class AttentionOverlay {
   readonly #rects: SVGRectElement[] = [];
   readonly #spots: SVGCircleElement[] = [];
   readonly #media: MediaQueryList | null;
+  #reduced = false;
+  #radius = RADIUS_PX;
   #current?: Box;
   #target?: Box;
   #velocity: Box = [0, 0, 0, 0];
@@ -214,16 +225,24 @@ export class AttentionOverlay {
       this.hide(true);
       return;
     }
+    const radius = Math.max(0, box.radius ?? RADIUS_PX);
+    const reshaped = radius !== this.#radius;
+    this.#radius = radius;
     this.#mask.setAttribute("width", String(target[2] + 320));
     this.#mask.setAttribute("height", String(target[3] + 320));
 
-    const unchanged = this.#target && sameBox(target, this.#target) && !this.#fading;
+    const unchanged = this.#target && sameBox(target, this.#target) && !this.#fading && !reshaped;
     this.#target = target;
     // A first appearance, or a reduced-motion user, lands on the box rather
     // than springing to it from wherever the last one was.
-    if (!this.#current || this.#media?.matches) {
+    if (!this.#current || this.#still()) {
       this.#current = [...target];
       this.#velocity = [0, 0, 0, 0];
+      this.#paintGeometry();
+    } else if (reshaped) {
+      // The spring only carries position and size; a corner that changed has
+      // to be repainted or the strokes keep the previous shape until it
+      // settles.
       this.#paintGeometry();
     }
     if (unchanged) return;
@@ -235,9 +254,38 @@ export class AttentionOverlay {
     this.#schedule();
   }
 
+  /**
+   * The user's own reduced-motion preference, on top of the OS one.
+   *
+   * `prefers-reduced-motion` is the only signal the overlay could see by
+   * itself, but the shell also ships its own switch (`ShellSettings.reduceMotion`,
+   * offered in the sidebar) — a user who cannot change an OS setting, or who
+   * wants this app still while the rest of the desktop moves, has to be obeyed
+   * too. Either one stops the travelling light; neither hides the border,
+   * because the border is information, not decoration.
+   */
+  setReducedMotion(reduced: boolean): void {
+    if (this.#disposed || this.#reduced === reduced) return;
+    this.#reduced = reduced;
+    if (!this.#current) return;
+    if (!reduced) {
+      this.#schedule();
+      return;
+    }
+    // Stop where the spring was heading rather than wherever it happens to be
+    // mid-flight: a frozen half-grown box is not a shape anyone asked for.
+    this.#cancelFrame();
+    if (this.#target) {
+      this.#current = [...this.#target];
+      this.#velocity = [0, 0, 0, 0];
+      this.#paintGeometry();
+    }
+    this.#paintLight();
+  }
+
   hide(immediate = false): void {
     this.#target = undefined;
-    if (immediate || this.#media?.matches || this.#svg.ownerDocument.hidden) {
+    if (immediate || this.#still() || this.#svg.ownerDocument.hidden) {
       this.#cancelFrame();
       this.#svg.style.display = "none";
       this.#current = undefined;
@@ -256,10 +304,15 @@ export class AttentionOverlay {
     this.#svg.remove();
   }
 
+  /** Motion is off — because the OS says so, or because the user does. */
+  #still(): boolean {
+    return this.#reduced || this.#media?.matches === true;
+  }
+
   #paintGeometry(): void {
     if (!this.#current) return;
     const [x, y, width, height] = this.#current;
-    const radius = Math.min(RADIUS_PX, width / 2, height / 2);
+    const radius = Math.min(this.#radius, width / 2, height / 2);
     for (const rect of this.#rects) {
       rect.setAttribute("x", String(x));
       rect.setAttribute("y", String(y));
@@ -276,9 +329,9 @@ export class AttentionOverlay {
 
   #paintLight(): void {
     if (!this.#current) return;
-    const phase = this.#media?.matches ? 0.18 : (this.#clockMs % PERIOD_MS) / PERIOD_MS;
+    const phase = this.#still() ? 0.18 : (this.#clockMs % PERIOD_MS) / PERIOD_MS;
     this.#spots.forEach((spot, index) => {
-      const [x, y] = perimeterPoint(this.#current!, (phase + index * 0.5) % 1);
+      const [x, y] = perimeterPoint(this.#current!, (phase + index * 0.5) % 1, this.#radius);
       spot.setAttribute("transform", `translate(${x} ${y})`);
     });
   }
@@ -288,7 +341,7 @@ export class AttentionOverlay {
       this.#frame !== undefined ||
       this.#disposed ||
       !this.#current ||
-      this.#media?.matches ||
+      this.#still() ||
       this.#svg.ownerDocument.hidden ||
       typeof requestAnimationFrame !== "function"
     ) {
