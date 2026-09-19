@@ -110,12 +110,32 @@ function StageBody({ api, task, onError }: PresentationStageProps) {
    */
   if (!editorReady) return <CanvasPlaceholder type="slides" />;
 
+  /*
+   * Visible, but not editable yet.
+   *
+   * The deck on screen is `workspaceDir/live/` scratch: every redraw replaces
+   * it and the next run deletes it. Anything typed into it is gone by the next
+   * page, so letting it accept edits would be offering a change the app cannot
+   * keep. The embedded editor owns its own ribbon and has no read-only mode to
+   * ask for, so the shell states the rule on top of it instead of pretending
+   * the controls are live.
+   *
+   * It lifts itself: once the run leaves LIVE_STATUSES the canvas routes to the
+   * finished file's editor and this component is gone, so there is no state to
+   * unwind and no way to be left locked.
+   */
   return (
-    <PresentationEditorFrame
-      previewToken={session.grant!.token}
-      fileName={session.artifact!.fileName}
-      onUnavailable={(error) => onError(error || "The presentation editor could not start.")}
-    />
+    <div className="shell-live-deck">
+      <PresentationEditorFrame
+        previewToken={session.grant!.token}
+        fileName={session.artifact!.fileName}
+        onUnavailable={(error) => onError(error || "The presentation editor could not start.")}
+      />
+      <div className="shell-live-deck-lock" aria-hidden="true" />
+      <p className="shell-live-deck-note" role="status">
+        Being drawn — edit once it is done
+      </p>
+    </div>
   );
 }
 

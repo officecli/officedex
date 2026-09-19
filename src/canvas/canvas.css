@@ -45,3 +45,45 @@
   position: absolute;
   inset: 0;
 }
+
+/*
+ * A deck while it is being drawn.
+ *
+ * The file underneath is `workspaceDir/live/` scratch — replaced on every
+ * redraw — so edits made now cannot survive to the finished deck. The embedded
+ * editor brings its own ribbon and offers no read-only mode, so the block is
+ * stated here: pointer events stop at the overlay, and the cursor says why
+ * before a click has to fail to explain it.
+ */
+.shell-live-deck {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.shell-live-deck > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.shell-live-deck-lock {
+  position: absolute;
+  inset: 0;
+  cursor: not-allowed;
+}
+
+.shell-live-deck-note {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  margin: 0;
+  padding: 4px 10px;
+  border: 1px solid var(--shell-line);
+  border-radius: var(--shell-radius-control);
+  background: var(--shell-paper);
+  color: var(--shell-ink-subtle);
+  font-size: var(--shell-text-sm);
+  line-height: 18px;
+  pointer-events: none;
+}

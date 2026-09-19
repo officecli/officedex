@@ -55,6 +55,18 @@ it("puts the editor on the canvas, and nothing else", () => {
 });
 
 /*
+ * The deck on screen is `workspaceDir/live/` scratch — replaced on every redraw
+ * and deleted by the next run — so an edit made now cannot reach the finished
+ * file. The embedded editor owns its ribbon and has no read-only mode to ask
+ * for, so the shell blocks pointer events over it and says why.
+ */
+it("does not let the scratch deck be edited while it is being drawn", () => {
+  const { container } = render(<PresentationStage api={api} task={task} onError={() => {}} />);
+  expect(container.querySelector(".shell-live-deck-lock")).not.toBeNull();
+  expect(container.querySelector(".shell-live-deck-note")?.textContent).toContain("Being drawn");
+});
+
+/*
  * On a Chinese system this subtree used to resolve to `zh`, so the canvas said
  * 「正在撰写页面正文」 while the task panel beside it, the ribbon above it and
  * the slides themselves were English — one screen, two languages, neither
