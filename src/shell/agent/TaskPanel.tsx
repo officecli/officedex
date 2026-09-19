@@ -4,6 +4,7 @@ import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import { Composer } from "../composer/Composer";
 import type { AgentStep, AgentTask } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
+import { useLibraryActions } from "../nav/useLibraryActions";
 import { canDock, effectivePlacement } from "../state/shellReducer";
 import { PresenceFace, statusLabel } from "./PresenceFace";
 import type { useAgentTask } from "./useAgentTask";
@@ -22,8 +23,28 @@ export interface TaskPanelProps {
  * placement is where it happens to sit.
  */
 export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps) {
-  const { state, folders, files, activeFile, scopeFolderId, dispatch } = useShell();
+  const { state, folders, files, scopeFolderId, dispatch } = useShell();
+  const actions = useLibraryActions();
   const { task } = agent;
+
+  /**
+   * The file this run produced — not the file that happens to be open.
+   *
+   * This card used to render `activeFile`, so asking for a brand new deck put
+   * an unrelated document's name inside the task panel, under the task's own
+   * title, while the run was still working on something else entirely. The
+   * label was changed to say "Current file" first, which stopped it lying
+   * without stopping it confusing: in a panel about one task, a filename reads
+   * as that task's output no matter what the caption says.
+   *
+   * `FileMeta.artifactTaskId` is the link the library already keeps for
+   * exactly this question, and `ShellContext` opens the match when a run
+   * finishes. Until there is a match there is nothing truthful to show — a run
+   * mid-flight has produced no file, and a failed one produced none either —
+   * so the card stays away. The open document remains one click away in the
+   * tab bar, which is what a tab bar is for.
+   */
+  const artifact = task ? (files.find((file) => file.artifactTaskId === task.id) ?? null) : null;
   const scope = folders.find((folder) => folder.id === scopeFolderId);
   const status = task?.status ?? "idle";
   const dockable = canDock(state);
@@ -165,29 +186,24 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
           </div>
         )}
 
-        {activeFile ? (
+        {artifact ? (
           <div className="shell-task-artifact">
             <div className="shell-task-artifact-head">
-              <FileTypeIcon type={activeFile.type} size={20} />
+              <FileTypeIcon type={artifact.type} size={20} />
               <div>
-                <strong>{activeFile.name}</strong>
-                {/*
-                  "Current file", as the prototype labelled it. This card
-                  follows the editor, not the run — it is here so you can jump
-                  to what you are looking at while the agent works. Naming only
-                  the save state let it read as the run's output, which is a
-                  different file whenever the task is making something new.
-                */}
+                <strong>{artifact.name}</strong>
                 <small>
-                  Current file ·{" "}
-                  {activeFile.dirty ? "Unsaved changes" : "Saved on this computer"}
+                  {artifact.dirty ? "Unsaved changes" : "Saved on this computer"}
                 </small>
               </div>
             </div>
             <button
               type="button"
               className="shell-task-button"
-              onClick={() => dispatch({ type: "set-mode", mode: "editor" })}
+              onClick={() => {
+                void actions.openFile(artifact.id);
+                dispatch({ type: "set-mode", mode: "editor" });
+              }}
             >
               Open in Editor
               <ArrowUpRight size={13} strokeWidth={1.8} aria-hidden="true" />
