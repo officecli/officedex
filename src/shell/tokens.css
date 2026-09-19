@@ -47,6 +47,17 @@
   /* ---- Elevation ------------------------------------------------------ */
   --shell-shadow-menu: 0 8px 28px #222b3520;
   --shell-shadow-panel: 0 12px 32px #24333f18, 0 2px 5px #24333f08;
+  /* The floating panel's outer shadow. It is the second layer of a two-layer
+     `box-shadow`, the first being an inset hairline, so only this half is a
+     token. */
+  --shell-shadow-float: 0 12px 48px #35465720;
+  /* The collapsed companion, which casts through `filter: drop-shadow()` and
+     therefore follows the mark's silhouette rather than its box. Same reason
+     `drop-shadow` takes no spread: these two are offset/blur/colour only. */
+  --shell-shadow-face: 0 8px 20px #24333f28;
+  --shell-shadow-face-hover: 0 10px 24px #24333f38;
+  /* A sheet of paper on the canvas. */
+  --shell-shadow-paper: 0 1px 3px #2536430f;
 
   /* ---- Metrics -------------------------------------------------------- */
   /* Final office-shell overrides in the reference prototype use a compact
@@ -63,12 +74,81 @@
   --shell-task-w: 320px; /* docked agent column, matching the reference frame */
 
   /* ---- Type ----------------------------------------------------------- */
+  /*
+   * An inventory made addressable, not a modular scale.
+   *
+   * These nine steps are every distinct font-size the shell renders. Four of
+   * them were already here; the other five were written as literals in five
+   * stylesheets, which is why the audit could not tell a deliberate size from
+   * a typo. Naming them does not make them a designed ramp — 17 and 18 sitting
+   * one pixel apart is the giveaway — but it does make the set closed, so a
+   * "sizes come from the scale" gate needs no per-line exemptions and adding a
+   * tenth size becomes a decision somebody takes rather than a line somebody
+   * writes.
+   *
+   * Prototype-backed steps (read off its computed styles, per the note at the
+   * top of this file): 12 (body), 13 (`.agent-home-hero .intro`, and the
+   * prototype's own root size), 17 (`#od-companion .od-empty`).
+   * Shell-grown steps with no prototype counterpart: 18 (the floating panel's
+   * collapse glyph), 26, 32. The prototype's one heading is 31px/38.75px/550
+   * with -1.1px tracking where the shell writes 32/38/500/-0.4 — a real
+   * divergence, deliberately not closed here because closing it is a visible
+   * change and this file's job this round is where values live, not what they
+   * are. See docs/ui-audit-2026-09-19/fixes/W3-I.md.
+   */
   --shell-font: "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI",
     "Microsoft YaHei", sans-serif;
-  --shell-text: 12px;
-  --shell-text-lg: 14px;
-  --shell-text-sm: 11px;
   --shell-text-xs: 10px;
+  --shell-text-sm: 11px;
+  --shell-text: 12px;
+  --shell-text-md: 13px;
+  --shell-text-lg: 14px;
+  --shell-text-xl: 17px;
+  --shell-text-2xl: 18px;
+  --shell-text-3xl: 26px;
+  --shell-text-4xl: 32px;
+
+  /* ---- Layers ---------------------------------------------------------- */
+  /*
+   * The whole stack, including the half of it this shell does not own.
+   *
+   * Read the three groups as three different answers to "above what?".
+   *
+   * 1. Root context. `.shell` is `position: absolute; z-index: auto` and has no
+   *    transform/filter/contain/opacity, so it does not open a stacking context
+   *    of its own: everything below compares directly against everything else
+   *    in the document. The menu has to clear the floating agent panel by
+   *    itself — it used to be 60, which only ever worked because a menu opened
+   *    inside the panel was a DOM child of it and inherited the panel's 200.
+   *
+   * 2. Composer-local. `composer.css:5` sets `container-type: inline-size` on
+   *    `.shell-cx` for its four container queries. Per css-contain-3 that
+   *    applies layout containment, which *does* open a stacking context — so
+   *    `.shell-cx-drop` (10) and `.shell-mention` (180) only sort against each
+   *    other and against `.shell-cx`'s own children. `.shell-cx` itself is
+   *    `z-index: auto`. Neither number means anything to the rest of the shell
+   *    (S5-005), and a ladder that listed them beside 200 and 300 without
+   *    saying so would be a table that lies. They are declared here so the set
+   *    is complete; `composer.css` is another track's file and still writes the
+   *    two literals — see W3-I.md for what is owed there.
+   *
+   * 3. Legacy. `src/renderer/ui/styles/components.css` is shared with the old
+   *    renderer and is not this shell's to edit, so these four are *declared,
+   *    not applied*: they exist so that anyone picking a new value can see the
+   *    whole ladder at once, and so the 800-wide gap between 200 and 1000 is a
+   *    visible fact rather than something you discover by collision.
+   */
+  --shell-z-chrome: 3; /* .shell-windowbar */
+  --shell-z-presence: 200; /* .shell-presence, the floating agent */
+  --shell-z-menu: 300; /* .shell-menu, portalled to #shell */
+
+  --shell-z-cx-drop: 10; /* .shell-cx-drop, inside .shell-cx only */
+  --shell-z-cx-mention: 180; /* .shell-mention, inside .shell-cx only */
+
+  --shell-z-legacy-dialog: 1000; /* components.css .od-dialog-mask */
+  --shell-z-legacy-popover: 1050; /* components.css .od-popover */
+  --shell-z-legacy-toast: 1100; /* components.css .od-toast-host */
+  --shell-z-legacy-tooltip: 1200; /* components.css .od-tooltip */
 
   /* ---- Motion --------------------------------------------------------- */
   /* Decision 4: mode changes are a column-width transition, nothing more.
@@ -77,16 +157,39 @@
   --shell-duration: 200ms;
 
   /* ---- Status --------------------------------------------------------- */
-  /* The prototype has one colour for "this went wrong" and no others: form
-     validation wears #ad5347 (.cx-form-error) and #a04e48 (.form-error). The
-     later layer wins per the note at the top of this file. There is no warning
-     or success hue to take — the preview only ever shows the happy path — so
-     nothing else belongs in this section until the prototype grows one.
+  /* The prototype has one colour for "this went wrong": form validation wears
+     #ad5347 (.cx-form-error) and #a04e48 (.form-error). The later layer wins
+     per the note at the top of this file.
 
      Used where grey would lie: a page that failed rendered in the same
      --shell-ink-faint as a page that had not started yet, so a deck with a
      dead page read as a deck still working through its queue. */
   --shell-status-danger: #ad5347;
+
+  /* A finished step. Prototype-backed on the same surface, not an invention:
+     `#app #task .step.done{color:#617f6f}`, which is the rule this shell's
+     `.shell-task-step.is-done` is a port of.
+
+     Worth recording how that was established, because the obvious method gets
+     it wrong: this file is 27MB of embedded base64, so `grep -c` on a six-hex
+     string finds matches inside image payloads and reports a colour that is
+     not in any stylesheet. Every value here was confirmed by reading enough
+     surrounding bytes to see a selector, and the sizes above by computed style
+     in a real browser. A hit count is not evidence. */
+  --shell-status-done: #617f6f;
+
+  /* The "this suggestion has been applied" card. These two are *shell-grown* —
+     zero occurrences in the prototype, which only ever shows the happy path
+     and has no applied-state card at all. They are named here so the value is
+     written once rather than so a design system blesses them, which is why
+     they are not called `--shell-status-success-*`.
+
+     The nearest thing the prototype does have is a palette accent in its
+     `:root` — `--sage: #718f80` / `--sage-soft: #edf3ef` — used exactly once,
+     for a spreadsheet total row. Aligning to it is a visible recolour and is
+     listed as its own candidate in W3-I.md, not smuggled into a refactor. */
+  --shell-applied-line: #cddac9;
+  --shell-applied-surface: #f5f8f4;
 
   /* ---- Document identity ---------------------------------------------- */
   /* One accent + one titlebar tint per file type. Editor mode wears them;
@@ -101,6 +204,95 @@
   /* Resolved per open file by theme/fileTypeAccent.ts. */
   --shell-accent: var(--shell-doc-accent);
   --shell-tint: var(--shell-doc-tint);
+
+  /* ---- Surface palette ------------------------------------------------- */
+  /*
+   * The rest of the shell's colours, one entry per value, named for the
+   * surface that uses it.
+   *
+   * These are not an extension of the ramps above and should not be read as
+   * one. They are the 34 literals that were living in five stylesheets, moved
+   * here unchanged so that this file is the only place in `src/shell` where a
+   * colour is written down. That is the whole of what this section claims.
+   *
+   * It is deliberately not a *tidied* palette. Measuring each value against
+   * the nearest existing token turned up only five exact matches in 68
+   * occurrences; most of the rest sit one to four channel-steps away from a
+   * token that means roughly the same thing — `--shell-menu-hover #edf0f3` and
+   * `--shell-hover #e9edf0`, `--shell-tree-line #e2e6e9` and `--shell-line
+   * #e4e6e9`, and so on. Collapsing those pairs is the obvious next move and
+   * it is also a visible recolour, so it is written up as a list of candidates
+   * with per-channel deltas in W3-I.md rather than done here under cover of a
+   * refactor. Having them side by side in one table is what makes that list
+   * possible to compile at all.
+   *
+   * Two groups of literals stayed in their stylesheets on purpose and are
+   * *not* here: the macOS traffic lights (`chrome.css`) and the companion's
+   * own ink-on-ink palette (`agent.css`). Both are explained where they are.
+   */
+
+  /* tabs and the top row */
+  --shell-tab-ink: #4c5964; /* the current tab's label */
+  --shell-tab-hover: #ffffff70; /* paper, half strength, over chrome */
+  --shell-tab-action-hover: #65748016; /* close + bookmark */
+  --shell-action-ink: #4e5963; /* save state, tab-row icon buttons */
+  --shell-share-hover: #30353a; /* the one filled button, pressed darker */
+
+  /* sidebar */
+  --shell-brand-hover: #e5e9ed;
+  --shell-brand-mark: #2b2b2b; /* see agent.css: the companion's shell is the
+                                  same black, written separately on purpose */
+  --shell-brand-chevron: #7d858c;
+  --shell-nav-current-ink: #354652;
+  --shell-avatar-line: #d3d6da;
+  --shell-avatar-fill: #e5dfd7;
+  --shell-avatar-ink: #857464;
+
+  /* menu panel */
+  --shell-menu-line: #dfe2e6;
+  --shell-menu-ink: #34383c;
+  --shell-menu-hover: #edf0f3;
+  --shell-menu-focus-ring: #9aa8b3; /* inset ring, not the outline ring */
+  --shell-menu-check: #5c6872;
+
+  /* agent panel */
+  --shell-badge-fill: #7d7d7d;
+  --shell-bubble-fill: #e9edf1; /* the user's own message */
+  --shell-bubble-quote-line: #b6c2cd;
+  --shell-reply-ink: #697480;
+  --shell-spinner-track: #d5dde2;
+  --shell-spinner-head: #748997;
+  --shell-button-hover-line: #c3ccd4;
+  --shell-button-primary-hover: #2b3035;
+
+  /* file tree and list */
+  --shell-tree-folder-current-ink: #374b5b;
+  --shell-tree-chevron: #929ba2;
+  --shell-tree-line: #e2e6e9; /* the vertical rule beside a folder's files */
+  --shell-tree-file-ink: #697885;
+  --shell-tree-file-hover: #edf0f2;
+  --shell-tree-file-current-ink: #354a5b;
+  --shell-list-row-line: #f0f1f3;
+  --shell-drop-line: #8b9eab; /* both densities, one gesture */
+  --shell-drop-fill: #e0e8ee;
+
+  /* ---- Canvas skeleton ------------------------------------------------- */
+  /*
+   * Placeholder greys, kept apart from everything above because they are
+   * scheduled to die.
+   *
+   * `editor/CanvasPlaceholder.tsx` is the stand-in shown while no real editor
+   * adapter is registered, and it says in its own header that it is thrown
+   * away at integration. Its five greys are not design decisions — they are
+   * five neutrals somebody picked to make a wireframe read — so folding them
+   * into the ramps above would freeze them into the language permanently.
+   * When the placeholder goes, this block goes with it, in one delete.
+   */
+  --shell-skeleton-line: #eceef0;
+  --shell-skeleton-line-strong: #e2e5e9;
+  --shell-skeleton-block: #f0f2f4;
+  --shell-skeleton-rule: #edeff1;
+  --shell-skeleton-thumb: #f1f3f5;
 }
 
 @media (prefers-reduced-motion: reduce) {

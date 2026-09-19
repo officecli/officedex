@@ -66,8 +66,8 @@
 }
 
 /* The one filled button in the chrome darkens its own fill instead — a mix
-   would have to name a colour, and the 25 bare values already in this file are
-   W3-I's to remove, not this track's to add to. */
+   would have to name a colour, and a bare colour in this file now needs a
+   reason (see the window controls below, which are the only ones left). */
 .shell-share:active {
   filter: brightness(0.9);
 }
@@ -106,6 +106,24 @@
   cursor: pointer;
 }
 
+/*
+ * The five literals below are the only bare colours left in this file, and
+ * they stay bare deliberately.
+ *
+ * They are not this product's palette: they are macOS's close/minimise/zoom
+ * buttons, reproduced at the system's own values because a user recognises
+ * that red-amber-green triplet before they read anything else in the window.
+ * Putting them in `tokens.css` would file them alongside colours that exist to
+ * be themed, and the first person to build a dark theme would quite reasonably
+ * retune them — at which point the controls stop looking like the platform's
+ * and start looking like a bug. The hairline and the glyph ink belong to the
+ * same cluster and travel with it.
+ *
+ * They are also the wrong colours on Windows and Linux, where the controls are
+ * square, on the other side, and drawn by the system. That is a porting
+ * problem, not a token problem, and it is recorded on `.shell-tabs`' 132px
+ * padding below.
+ */
 .shell-window-controls button::before {
   content: "";
   width: 12px;
@@ -163,7 +181,7 @@
 .shell-windowbar {
   position: absolute;
   inset: 0;
-  z-index: 3;
+  z-index: var(--shell-z-chrome);
   width: 100%;
   min-width: 0;
   display: flex;
@@ -279,12 +297,12 @@
 }
 
 .shell-tab:not(.is-current):hover {
-  background: #ffffff70;
+  background: var(--shell-tab-hover);
 }
 
 .shell-tab.is-current {
   background: var(--shell-paper);
-  color: #4c5964;
+  color: var(--shell-tab-ink);
 }
 
 .shell-tab-select {
@@ -354,12 +372,12 @@
 
 .shell-tab-bookmark:hover {
   opacity: 1;
-  background: #65748016;
+  background: var(--shell-tab-action-hover);
 }
 
 .shell-tab-close:hover {
   opacity: 1;
-  background: #65748016;
+  background: var(--shell-tab-action-hover);
 }
 
 .shell-tabs-actions {
@@ -379,7 +397,7 @@
   border: 0;
   border-radius: 4px;
   background: none;
-  color: #4e5963;
+  color: var(--shell-action-ink);
   font: var(--shell-text) / 20px var(--shell-font);
   white-space: nowrap;
   cursor: pointer;
@@ -410,7 +428,7 @@
 }
 
 .shell-share:hover {
-  background: #30353a;
+  background: var(--shell-share-hover);
 }
 
 .shell-tabs-icons {
@@ -420,7 +438,7 @@
 }
 
 .shell-tabs-icons .shell-icon-button {
-  color: #4e5963;
+  color: var(--shell-action-ink);
   border-radius: 4px;
 }
 
@@ -479,7 +497,7 @@
 
 .shell-brand:hover,
 .shell-brand[aria-expanded="true"] {
-  background: #e5e9ed;
+  background: var(--shell-brand-hover);
 }
 
 .shell-brand-mark {
@@ -489,8 +507,8 @@
   width: 28px;
   height: 28px;
   border-radius: 7px;
-  background: #2b2b2b;
-  color: #ffffff;
+  background: var(--shell-brand-mark);
+  color: var(--shell-ink-inverse);
 }
 
 .shell-brand-name {
@@ -506,7 +524,7 @@
 
 .shell-brand-chevron {
   flex: none;
-  color: #7d858c;
+  color: var(--shell-brand-chevron);
 }
 
 .shell[data-nav-collapsed="true"] .shell-brand-name,
@@ -569,7 +587,7 @@
 
 .shell-sidebar-item.is-current {
   background: var(--shell-active);
-  color: #354652;
+  color: var(--shell-nav-current-ink);
 }
 
 /* The current row needs its own hover state. `.is-current` and `:hover` have the
@@ -643,9 +661,9 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  border: 1px solid #d3d6da;
-  background: #e5dfd7;
-  color: #857464;
+  border: 1px solid var(--shell-avatar-line);
+  background: var(--shell-avatar-fill);
+  color: var(--shell-avatar-ink);
   font-size: var(--shell-text-sm);
 }
 

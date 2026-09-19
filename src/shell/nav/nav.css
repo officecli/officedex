@@ -32,7 +32,7 @@
 }
 
 .shell-tree-folder-row.is-current {
-  color: #374b5b;
+  color: var(--shell-tree-folder-current-ink);
 }
 
 /*
@@ -46,9 +46,9 @@
  * (S8-014).
  */
 .shell-tree-folder.is-drop-target {
-  outline: 1px solid #8b9eab;
+  outline: 1px solid var(--shell-drop-line);
   border-radius: var(--shell-radius-item);
-  background: #e0e8ee;
+  background: var(--shell-drop-fill);
 }
 
 /*
@@ -111,7 +111,7 @@
 
 .shell-tree-chevron {
   flex: none;
-  color: #929ba2;
+  color: var(--shell-tree-chevron);
   transition: transform 140ms var(--shell-ease);
 }
 
@@ -161,7 +161,7 @@
 .shell-tree-files {
   margin: 1px 0 7px 10px;
   padding-left: 8px;
-  border-left: 1px solid #e2e6e9;
+  border-left: 1px solid var(--shell-tree-line);
 }
 
 .shell-tree-file-row {
@@ -171,16 +171,16 @@
   min-height: 34px;
   margin: 2px 0;
   border-radius: var(--shell-radius-control);
-  color: #697885;
+  color: var(--shell-tree-file-ink);
 }
 
 .shell-tree-file-row:hover {
-  background: #edf0f2;
+  background: var(--shell-tree-file-hover);
 }
 
 .shell-tree-file-row.is-current {
   background: var(--shell-active);
-  color: #354a5b;
+  color: var(--shell-tree-file-current-ink);
 }
 
 .shell-tree-file-row[draggable="true"]:active {
@@ -336,7 +336,7 @@
 }
 
 .shell-list tbody tr:not(.shell-list-group) {
-  border-bottom: 1px solid #f0f1f3;
+  border-bottom: 1px solid var(--shell-list-row-line);
 }
 
 .shell-list tbody tr:not(.shell-list-group):hover {
@@ -356,8 +356,8 @@
  * gesture looks the same in both densities.
  */
 .shell-list tbody.is-drop-target {
-  outline: 1px solid #8b9eab;
-  background: #e0e8ee;
+  outline: 1px solid var(--shell-drop-line);
+  background: var(--shell-drop-fill);
 }
 
 .shell-list td {
@@ -499,7 +499,7 @@
 .shell-dialog-error {
   min-height: 16px;
   margin: 8px 0 0;
-  color: #ad5347;
+  color: var(--shell-status-danger);
   font-size: var(--shell-text-sm);
 }
 

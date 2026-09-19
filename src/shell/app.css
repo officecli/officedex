@@ -151,12 +151,18 @@
    lives in `chrome/chrome.css` next to the container that does the clipping,
    written against the DOM that exists. */
 
-.shell-home {
-  flex: 1;
-  min-width: 0;
-  overflow: auto;
-  background: var(--shell-canvas);
-}
+/* `.shell-home` is laid out entirely by `home/home.css`, which is the file that
+   ships with the two components that render it (`AgentHome`, `EditorHome` —
+   the only two). It used to be declared here as well, with the same selector
+   and the same specificity, so what reached the screen was the union of two
+   blocks in two files and which one won any shared property depended on the
+   order `App.tsx`'s imports happen to evaluate in — an ordering no rule
+   guarantees and any import-sorting tool can flip. The three properties this
+   block contributed (`flex`, `min-width`, `background`) moved to home.css
+   unchanged; `overflow: auto` was declared identically in both.
+
+   This is the second of the two duplicates S5-008 found. The first was
+   `.shell-windowbar`, above. */
 
 /* -------------------------------------------------------------- canvas */
 
@@ -200,7 +206,7 @@
   gap: 14px;
   background: var(--shell-paper);
   border: 1px solid var(--shell-line);
-  box-shadow: 0 1px 3px #2536430f;
+  box-shadow: var(--shell-shadow-paper);
 }
 
 .shell-skeleton-line {
@@ -208,7 +214,7 @@
   height: 10px;
   width: 100%;
   border-radius: 3px;
-  background: #eceef0;
+  background: var(--shell-skeleton-line);
 }
 
 .shell-skeleton-line--eyebrow {
@@ -221,21 +227,21 @@
   width: 52%;
   height: 20px;
   margin-bottom: 14px;
-  background: #e2e5e9;
+  background: var(--shell-skeleton-line-strong);
 }
 
 .shell-skeleton-line--heading {
   width: 34%;
   height: 13px;
   margin: 22px 0 6px;
-  background: #e2e5e9;
+  background: var(--shell-skeleton-line-strong);
 }
 
 .shell-skeleton-block {
   height: 140px;
   margin-top: 24px;
   border-radius: 4px;
-  background: #f0f2f4;
+  background: var(--shell-skeleton-block);
   border: 1px solid var(--shell-line);
 }
 
@@ -252,8 +258,8 @@
 }
 
 .shell-skeleton-cell {
-  border-right: 1px solid #edeff1;
-  border-bottom: 1px solid #edeff1;
+  border-right: 1px solid var(--shell-skeleton-rule);
+  border-bottom: 1px solid var(--shell-skeleton-rule);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -282,7 +288,7 @@
   display: block;
   aspect-ratio: 16 / 9;
   border-radius: 3px;
-  background: #f1f3f5;
+  background: var(--shell-skeleton-thumb);
   border: 1px solid var(--shell-line);
 }
 
@@ -309,5 +315,5 @@
   gap: 14px;
   background: var(--shell-paper);
   border: 1px solid var(--shell-line);
-  box-shadow: 0 1px 3px #2536430f;
+  box-shadow: var(--shell-shadow-paper);
 }

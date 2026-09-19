@@ -1,9 +1,18 @@
 /* Home screens: the comfortable density of the file library. */
 
+/*
+ * The only `.shell-home` rule. `app.css` carried a second block under the same
+ * selector; its `flex` / `min-width` / `background` are the three lines below
+ * that are about the region rather than the page, brought here so one file
+ * decides (S5-008). Both blocks declared `overflow: auto`, identically.
+ */
 .shell-home {
+  flex: 1;
+  min-width: 0;
   padding: 40px 48px 56px;
   overflow: auto;
   scrollbar-gutter: stable;
+  background: var(--shell-canvas);
 }
 
 .shell-home-head {
@@ -18,7 +27,7 @@
 .shell-home-head h1 {
   margin: 0;
   color: var(--shell-ink);
-  font-size: 26px;
+  font-size: var(--shell-text-3xl);
   font-weight: 500;
   letter-spacing: -0.3px;
 }
@@ -94,7 +103,7 @@
 .shell-hero h1 {
   margin: 0;
   color: var(--shell-ink);
-  font-size: 32px;
+  font-size: var(--shell-text-4xl);
   line-height: 38px;
   font-weight: 500;
   letter-spacing: -0.4px;
@@ -103,7 +112,7 @@
 .shell-hero-lede {
   margin: 10px 0 26px;
   color: var(--shell-ink-subtle);
-  font-size: 13px;
+  font-size: var(--shell-text-md);
   line-height: 22px;
 }
 
