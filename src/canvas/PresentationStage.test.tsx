@@ -1,4 +1,5 @@
 import { cleanup, render } from "@testing-library/react";
+import { useEffect } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 
 import type { DesktopAPI, DesktopTask } from "../shared/types";
@@ -9,6 +10,23 @@ afterEach(() => {
   cleanup();
   mounted = 0;
   liveOps = [{ op: "shape.add" }];
+  wiredControllers = [];
+});
+
+/*
+ * The ops reach the renderer whether or not anything draws them.
+ *
+ * That was the bug: the feed arrived, the editor mounted, and the deck stayed
+ * blank for the length of the run because the thing that executes ops lives in
+ * the workbench — a layer above what this stage mounts. The frame hands out a
+ * controller for exactly this, so what has to hold is that the stage takes it
+ * and gives it to the replay.
+ */
+it("hands the editor's controller to the replay, so the run can draw", () => {
+  render(<PresentationStage api={api} task={task} onError={() => {}} />);
+  expect(wiredControllers.at(-1), "the replay was wired with no controller").toEqual({
+    id: "editor-controller",
+  });
 });
 
 /**
@@ -19,12 +37,22 @@ afterEach(() => {
  */
 let seen: Locale | null = null;
 let mounted = 0;
+/** Controllers the stage passed to the replay wiring, in order. */
+let wiredControllers: unknown[] = [];
 
 vi.mock("../renderer/presentation/PresentationEditorFrame", () => ({
-  PresentationEditorFrame: () => {
+  PresentationEditorFrame: ({ onController }: { onController?: (c: unknown) => void }) => {
     seen = useLocale();
     mounted += 1;
+    // The real frame hands its controller over once the editor has booted.
+    useEffect(() => onController?.({ id: "editor-controller" }), [onController]);
     return null;
+  },
+}));
+
+vi.mock("./useLiveDeckReplay", () => ({
+  useLiveDeckReplay: (_api: unknown, controller: unknown) => {
+    wiredControllers.push(controller);
   },
 }));
 
@@ -58,7 +86,10 @@ const api = {} as DesktopAPI;
  */
 it("puts the editor on the canvas, and nothing else", () => {
   render(<PresentationStage api={api} task={task} onError={() => {}} />);
-  expect(mounted).toBe(1);
+  // Presence, not a mount count: the stage re-renders when the editor hands
+  // over its controller, and how many times React runs the child is not what
+  // this is about.
+  expect(mounted).toBeGreaterThan(0);
 });
 
 /*

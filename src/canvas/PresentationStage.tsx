@@ -1,14 +1,15 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 
 import type { DesktopAPI, DesktopTask } from "../shared/types";
 import { DesktopApiProvider } from "../renderer/services/desktopApi";
 import { LocaleProvider } from "../renderer/i18n";
-import { PresentationEditorFrame } from "../renderer/presentation/PresentationEditorFrame";
+import { PresentationEditorFrame, type PresentationEditorController } from "../renderer/presentation/PresentationEditorFrame";
 import { CanvasPlaceholder } from "../shell/editor/CanvasPlaceholder";
 import { useCanvasLocale } from "../shell/editor/canvasLocale";
 import { usePptxLiveDraft } from "../renderer/controllers/usePptxLiveDraft";
 import { hasPptxDrawingContent } from "../renderer/presentation/vibeReplay";
 import { useCanvasSession } from "./useCanvasSession";
+import { useLiveDeckReplay } from "./useLiveDeckReplay";
 
 /**
  * A presentation while it is being drawn.
@@ -110,6 +111,19 @@ function StageBody({ api, task, onError }: PresentationStageProps) {
   const drawing = hasPptxDrawingContent(live?.replayFeed?.ops);
 
   /*
+   * The editor's own handle, so the run can draw into it.
+   *
+   * `useLiveDeckReplay` is the wiring the shell was missing: the ops reached
+   * the renderer and stopped, because the thing that executes them lives in the
+   * workbench, a layer above what this stage mounts. Held as state rather than
+   * a ref so the hook re-runs when the editor hands over a new controller —
+   * a new editor session has to get a new sequencer, or the old one draws into
+   * a document that is gone.
+   */
+  const [controller, setController] = useState<PresentationEditorController | null>(null);
+  useLiveDeckReplay(api, controller, live?.replayFeed);
+
+  /*
    * The deck, and nothing else.
    *
    * This used to render the whole `ProgressivePptxStage`: the request echoed
@@ -173,6 +187,7 @@ function StageBody({ api, task, onError }: PresentationStageProps) {
         <PresentationEditorFrame
           previewToken={session.grant!.token}
           fileName={session.artifact!.fileName}
+          onController={setController}
           onUnavailable={(error) => onError(error || "The presentation editor could not start.")}
         />
         <div className="shell-live-deck-lock" aria-hidden="true" />
