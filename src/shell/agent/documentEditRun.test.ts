@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { resetDocumentEditIds, startDocumentEditRun } from "./documentEditRun";
+import {
+  resetDocumentEditIds,
+  startDocumentEditRun,
+  type DocumentEditRunInput,
+} from "./documentEditRun";
 import type { AgentTask } from "../../shared/uiPort";
 import type { DocumentEditRequest, DocumentEditResult } from "../editor/canvasContract";
 
@@ -19,11 +23,12 @@ function collect() {
   return { snapshots, onTask: (task: AgentTask) => void snapshots.push(task) };
 }
 
-const input = {
+const input: DocumentEditRunInput = {
   instruction: "Shorten the second paragraph",
   folderId: "folder-launch",
   fileId: "file-plan",
   fileName: "MO launch plan.docx",
+  documentType: "docx",
 };
 
 function canvasReturning(result: Partial<DocumentEditResult> & { applied: number }) {
@@ -151,6 +156,44 @@ describe("startDocumentEditRun", () => {
     expect(last.suggestion).toBeNull();
   });
 
+  /*
+   * Three ticks beside a failure is three claims the app knows are false.
+   *
+   * Reported from the field: a title edit failed with `bridge: officecli bridge
+   * request timed out: pptx/plan-js`, and the panel showed "Read the document ✓
+   * / Draft the change ✓ / Apply to the document ✓" next to the error. The run
+   * had reached the planner and stopped there; it never applied anything.
+   *
+   * `AgentStep.state` has no failure value, so what is asserted is the weaker
+   * true thing: the steps stay where the run left them, and the one it was on
+   * does not keep spinning on a run that is over.
+   */
+  it("does not tick the steps it never took when the edit fails", async () => {
+    const { snapshots, onTask } = collect();
+    const run = startDocumentEditRun(
+      {
+        canvas: {
+          editDocument: async (request: DocumentEditRequest) => {
+            request.onPhase?.("reading");
+            request.onPhase?.("drafting");
+            throw new Error("bridge: officecli bridge request timed out: pptx/plan-js");
+          },
+        },
+        onTask,
+      },
+      input,
+    );
+    await expect(run.done).resolves.toBeUndefined();
+
+    const last = snapshots.at(-1)!;
+    const byId = (suffix: string) => last.steps.find((step) => step.id.endsWith(suffix))!;
+    expect(byId("read").state, "reading did happen").toBe("done");
+    expect(byId("draft").state, "the planner never answered").not.toBe("done");
+    expect(byId("apply").state, "nothing was applied").toBe("pending");
+    // A spinner on a finished run never resolves.
+    expect(last.steps.some((step) => step.state === "active")).toBe(false);
+  });
+
   it("says the document was left alone when the run is stopped", async () => {
     const { snapshots, onTask } = collect();
     let release: () => void = () => {};
@@ -249,5 +292,91 @@ describe("startDocumentEditRun", () => {
     expect(last.suggestion).toBeNull();
     expect(last.phase).toBe("Reverted, but not saved");
     expect(last.messages.at(-1)?.text).toContain("not saved yet");
+  });
+});
+
+/**
+ * A run that asks before it changes anything.
+ *
+ * The deck planner sets `requires_confirmation` for an instruction that reads
+ * as more than it looks, and the question has to be answerable: `AgentQuestion`
+ * is documented as "a door it is standing behind", and a local run that put one
+ * up with no way through would be the dead end that description warns about.
+ * Answers for a local run never reach the port, so the handle carries them.
+ */
+function canvasAsking(): { seen: DocumentEditRequest[] } {
+  const seen: DocumentEditRequest[] = [];
+  return {
+    seen,
+    editDocument: async (request: DocumentEditRequest): Promise<DocumentEditResult> => {
+      seen.push(request);
+      const approved = await request.onConfirm?.({
+        text: "This changes a dozen text runs. Continue?",
+      });
+      if (!approved) {
+        return {
+          summary: "Cancelled. The deck was not changed.",
+          applied: 0,
+          scope: "document",
+          undo: null,
+          saveError: null,
+        };
+      }
+      return {
+        summary: "Translated slide 2.",
+        applied: 1,
+        scope: "document",
+        undo: null,
+        saveError: null,
+      };
+    },
+  } as never;
+}
+
+describe("a run that asks first", () => {
+  it("puts the question on the task and finishes only once it is answered", async () => {
+    resetDocumentEditIds();
+    const canvas = canvasAsking();
+    const tasks: AgentTask[] = [];
+    const run = startDocumentEditRun(
+      { canvas: canvas as never, onTask: (task) => tasks.push(structuredClone(task)) },
+      input,
+    );
+
+    // The question is up, and the run has not gone past it.
+    const asked = await vi.waitFor(() => {
+      const withQuestion = tasks.find((task) => task.question);
+      expect(withQuestion).toBeDefined();
+      return withQuestion!;
+    });
+    expect(asked.question?.text).toContain("dozen text runs");
+    expect(asked.question?.options.map((option) => option.id)).toEqual(["apply", "cancel"]);
+    expect(tasks.some((task) => task.suggestion)).toBe(false);
+
+    run.answer({ optionId: "apply" });
+    await run.done;
+
+    const finished = tasks.at(-1)!;
+    expect(finished.question).toBeNull();
+    expect(finished.suggestion?.applied).toBe(true);
+    expect(finished.status).toBe("done");
+  });
+
+  it("changes nothing when the answer is no", async () => {
+    resetDocumentEditIds();
+    const canvas = canvasAsking();
+    const tasks: AgentTask[] = [];
+    const run = startDocumentEditRun(
+      { canvas: canvas as never, onTask: (task) => tasks.push(structuredClone(task)) },
+      input,
+    );
+
+    await vi.waitFor(() => expect(tasks.some((task) => task.question)).toBe(true));
+    run.answer({ optionId: "cancel" });
+    await run.done;
+
+    const finished = tasks.at(-1)!;
+    expect(finished.suggestion).toBeNull();
+    expect(finished.messages.some((message) => /cancel/i.test(message.text))).toBe(true);
   });
 });

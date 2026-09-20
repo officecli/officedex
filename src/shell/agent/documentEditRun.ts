@@ -27,6 +27,15 @@ export interface DocumentEditRunInput {
   fileId: string;
   fileName: string;
   reference?: AgentReference;
+  /**
+   * Which editor this instruction is for.
+   *
+   * The run itself is the same for both — read, plan, apply, save, and the same
+   * three steps in the panel — so it is a parameter rather than a second copy.
+   * It reaches the task so the panel and the file projection describe the right
+   * file type, and the adapter routes to the matching in-place editor.
+   */
+  documentType: "docx" | "pptx";
 }
 
 export interface DocumentEditRunDeps {
@@ -45,6 +54,15 @@ export interface DocumentEditRunHandle {
   undo: () => Promise<void>;
   /** The suggestion id this run owns, so Undo can be routed back to it. */
   suggestionId: string;
+  /**
+   * Answers the question this run is blocked on, if any.
+   *
+   * A question is a door, not a message — `AgentQuestion` says so — and a run
+   * that put one up and cannot be answered is exactly the dead end that
+   * description warns about. The in-place edit is a local run, so the shell's
+   * answer has to reach it here rather than through the port.
+   */
+  answer: (input: { optionId?: string; text?: string }) => void;
 }
 
 const STEP_IDS = ["read", "draft", "apply"] as const;
@@ -89,8 +107,27 @@ function title(instruction: string): string {
  * so the summary alone cannot be trusted to mean "applied". The count can: it
  * is what the editor reports having actually replaced.
  */
-function appliedLine(applied: number, scope: "selection" | "document"): string {
-  const where = scope === "selection" ? "the selected text" : "the document";
+/**
+ * What landed, said in the words of the thing it landed in.
+ *
+ * A deck counts slides where a document counts replacements, so "3 changes made
+ * to the document" would be two kinds of wrong on a presentation. The noun comes
+ * from the file type rather than from the count, because the count cannot tell
+ * them apart.
+ */
+function appliedLine(
+  applied: number,
+  scope: "selection" | "document",
+  documentType: "docx" | "pptx",
+): string {
+  const where =
+    documentType === "pptx"
+      ? applied === 1
+        ? "the slide that needed it"
+        : "the slides that needed it"
+      : scope === "selection"
+        ? "the selected text"
+        : "the document";
   return applied === 1
     ? `One change made to ${where}.`
     : `${applied} changes made to ${where}.`;
@@ -110,7 +147,7 @@ export function startDocumentEditRun(
     id,
     title: title(input.instruction),
     folderId: input.folderId,
-    documentType: "docx",
+    documentType: input.documentType,
     status: "reading",
     phase: PHASE_TEXT.reading,
     steps: STEP_IDS.map((step, index) => ({
@@ -143,15 +180,79 @@ export function startDocumentEditRun(
     emit();
   };
 
+  /*
+   * The confirmation the run is waiting on, if any.
+   *
+   * Held as a resolver rather than as state because the run is *blocked* on it:
+   * the editor asked whether to apply a plan and is awaiting the answer, so
+   * there is nothing to re-render — there is something to release.
+   */
+  let pendingAnswer: ((optionId: string) => void) | null = null;
+
+  const ask = (question: { text: string; detail?: string }): Promise<boolean> =>
+    new Promise<boolean>((resolve) => {
+      /*
+       * `awaiting-review`, not a "question" status — there is no such member.
+       * The card renders off `task.question` alone, and the status is what
+       * stops the panel offering Pause/Finish for a run that is waiting on the
+       * person rather than on itself.
+       */
+      task.status = "awaiting-review";
+      task.phase = question.detail ?? question.text;
+      task.question = {
+        id: nextId("question"),
+        text: question.text,
+        options: [
+          { id: "apply", label: "Apply the change", recommended: true },
+          { id: "cancel", label: "Cancel" },
+        ],
+        allowFreeform: false,
+      };
+      emit();
+      pendingAnswer = (optionId: string) => {
+        pendingAnswer = null;
+        task.question = null;
+        task.status = "writing";
+        emit();
+        resolve(optionId === "apply");
+      };
+    });
+
+  const answer = (input: { optionId?: string; text?: string }) => {
+    // Free text is not an option list; the closest reading is "yes".
+    const optionId = input.optionId ?? (input.text?.trim() ? "apply" : "cancel");
+    pendingAnswer?.(optionId);
+  };
+
   const say = (text: string) => {
     task.messages.push({ id: nextId("message"), role: "agent", text, createdAt: now() });
   };
 
-  const finish = (phase: string) => {
+  /*
+   * Ends the run, and says how far it actually got.
+   *
+   * `completed` is not decoration. This used to tick every step on the way out
+   * of all three exits, so a run that timed out in the planner still showed
+   * "Read the document ✓ / Draft the change ✓ / Apply to the document ✓" beside
+   * the failure that had just been reported — three claims the app knew were
+   * false, next to the message saying so.
+   *
+   * `AgentStep.state` has no failure value (`done | active | pending`), and
+   * adding one reaches the shared port and every panel that renders it. It is
+   * not needed here: leaving the steps where the run left them already says the
+   * true thing, which is that it stopped part way. The step it was *on* goes
+   * back to pending rather than staying active, because a spinner on a finished
+   * run never resolves.
+   *
+   * What went wrong is the conversation's job — `say()` has already put the
+   * runtime's own sentence there — and `phase` names the outcome.
+   */
+  const finish = (phase: string, completed = true) => {
     task.status = "done";
     task.phase = phase;
     task.steps.forEach((step) => {
-      step.state = "done";
+      if (completed) step.state = "done";
+      else if (step.state === "active") step.state = "pending";
     });
   };
 
@@ -161,6 +262,7 @@ export function startDocumentEditRun(
     try {
       const result = await deps.canvas.editDocument!({
         instruction: input.instruction,
+        onConfirm: ask,
         // A quoted passage is the user pointing at part of the document, and
         // it is the same selection the editor still has tracked. Without one,
         // the whole document is the scope.
@@ -191,8 +293,8 @@ export function startDocumentEditRun(
         id: suggestionId,
         targetFileId: input.fileId,
         summary: result.saveError
-          ? `${appliedLine(result.applied, result.scope)} They are not saved yet — ${result.saveError}`
-          : appliedLine(result.applied, result.scope),
+          ? `${appliedLine(result.applied, result.scope, input.documentType)} They are not saved yet — ${result.saveError}`
+          : appliedLine(result.applied, result.scope, input.documentType),
         applied: true,
         // The card's Undo is disabled rather than hidden when a change cannot
         // be taken back, and says why on hover — see `TaskPanel`.
@@ -213,12 +315,12 @@ export function startDocumentEditRun(
     } catch (reason) {
       if (controller.signal.aborted) {
         say("Stopped. The document was not changed.");
-        finish("Stopped");
+        finish("Stopped", false);
         emit();
         return;
       }
       say(reason instanceof Error ? reason.message : String(reason));
-      finish("The edit stopped");
+      finish("The edit stopped", false);
       emit();
     }
   })();
@@ -226,6 +328,7 @@ export function startDocumentEditRun(
   return {
     done,
     abort: () => controller.abort(),
+    answer,
     suggestionId,
     undo: async () => {
       if (!revert) {
