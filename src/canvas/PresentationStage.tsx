@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { DesktopAPI, DesktopTask } from "../shared/types";
 import { DesktopApiProvider } from "../renderer/services/desktopApi";
@@ -6,7 +6,14 @@ import { LocaleProvider } from "../renderer/i18n";
 import { CanvasPlaceholder } from "../shell/editor/CanvasPlaceholder";
 import { useCanvasLocale } from "../shell/editor/canvasLocale";
 import { usePptxLiveDraft } from "../renderer/controllers/usePptxLiveDraft";
+import {
+  PresentationEditorFrame,
+  type PresentationEditorController,
+} from "../renderer/presentation/PresentationEditorFrame";
+import { hasPptxDrawingContent } from "../renderer/presentation/vibeReplay";
+import { SLIDES_CHROME, useEditorChrome } from "./editorChrome";
 import { useCanvasSession } from "./useCanvasSession";
+import { useLiveDeckReplay } from "./useLiveDeckReplay";
 
 /**
  * A presentation while it is being drawn.
@@ -37,9 +44,21 @@ export interface PresentationStageProps {
   api: DesktopAPI;
   task: DesktopTask;
   onError: (message: string) => void;
+  /**
+   * Run the bundled NexaEdge recording instead of waiting for a run's own op
+   * stream.
+   *
+   * This is the legacy **Watch PPT generation** demo carried into the shell: a
+   * real 141-op recording of a real generation (`demos/nexaedge/ops.json`), so
+   * the live-drawing path can be exercised on demand — no model calls, no
+   * credits, and no three-minute wait to reach the state under test. It drives
+   * exactly the same sequencer, controller, draft and editor as a real run, so
+   * what it proves about the drawing path applies to the real one.
+   */
+  demo?: boolean;
 }
 
-export function PresentationStage({ api, task, onError }: PresentationStageProps) {
+export function PresentationStage({ api, task, onError, demo }: PresentationStageProps) {
   /*
    * The shell's language, read from the channel rather than pinned.
    *
@@ -64,13 +83,13 @@ export function PresentationStage({ api, task, onError }: PresentationStageProps
   return (
     <LocaleProvider value={locale}>
       <DesktopApiProvider api={api}>
-        <StageBody api={api} task={task} onError={onError} />
+        <StageBody api={api} task={task} onError={onError} demo={demo} />
       </DesktopApiProvider>
     </LocaleProvider>
   );
 }
 
-function StageBody({ api, task, onError }: PresentationStageProps) {
+function StageBody({ api, task, onError, demo }: PresentationStageProps) {
   const session = useCanvasSession(api);
   const recordError = useCallback((text: string) => onError(text), [onError]);
 
@@ -81,38 +100,106 @@ function StageBody({ api, task, onError }: PresentationStageProps) {
   const live = usePptxLiveDraft({ session, recordError, t });
 
   /*
-   * A run does not get an editor, because nothing can be drawn into one.
+   * The bundled recording, started once the stage has somewhere to put it.
    *
-   * The premise of this surface was progressive disclosure: watch the deck
-   * appear page by page. It does not work here, and the reason is not timing.
+   * `replayBundledDemo` creates its own blank draft, registers it, issues its
+   * token and adopts the session — the same `startReplay` a recovered op stream
+   * uses — so everything downstream of here is the ordinary live path.
    *
-   * The runtime does stream drawing ops (`pptx_mop_skill.go`, on by default)
-   * and `usePptxLiveDraft` does turn them into a feed. What is missing is the
-   * far end. Wiring the sequencer to this stage's editor was tried and failed
-   * at the editor itself: it reported `drawing slide 1 of 3` and then threw
-   * "Editing is not permitted" (`access-policy.ts`). There are two embed stacks
-   * against the same editor and only one of them may write — the workbench's
-   * `?officedexEmbed=1&channel=…` boot is granted `documentWrite`
-   * (`officedex-embed-bridge.ts`), the `?mode=embed` one this stage uses is
-   * not. Mounting the workbench instead was tried too: it failed to import the
-   * deck and brought its own agent panel back onto a canvas that was emptied of
-   * exactly that.
-   *
-   * So until that boot is sorted out, an editor here can only ever show an
-   * empty document. Measured: the live draft stayed 10111 bytes, byte-for-byte
-   * a blank deck, against a finished file of 1.6MB — three and a half minutes
-   * of a live PowerPoint ribbon over nothing, under a banner claiming it was
-   * being drawn.
-   *
-   * The skeleton is what is true: a deck is coming, and this is its shape. The
-   * run's progress is next door in the task panel, which has the outline and a
-   * mark per page. When the run finishes, the canvas routes to the finished
-   * file and a real editor opens on it.
-   *
-   * The full trace is in `docs/ui-audit-2026-09-19/findings-pptx-track.md`.
+   * Guarded by a ref, not by state: a second call would revoke the first
+   * draft's token and start over, which is exactly the redraw loop this demo is
+   * used to watch for.
    */
-  usePptxLiveDraft({ session, recordError, t });
-  return <CanvasPlaceholder type="slides" />;
+  const demoStartedRef = useRef(false);
+  const replayBundledDemo = live.replayBundledDemo;
+  useEffect(() => {
+    if (!demo || demoStartedRef.current) return;
+    demoStartedRef.current = true;
+    void replayBundledDemo().catch((error: unknown) => {
+      demoStartedRef.current = false;
+      onError(error instanceof Error ? error.message : String(error));
+    });
+  }, [demo, onError, replayBundledDemo]);
+
+  /*
+   * Is there anything to draw?
+   *
+   * `hasPptxDrawingContent` is the runtime's own test, and the same one
+   * `usePptxLiveDraft` uses to decide whether a draft is worth creating. The
+   * editor is mounted when there is something to put in it and not otherwise:
+   * a whole-deck editor over an empty scratch file is the state this stage was
+   * once in for three and a half minutes, under a banner claiming it was being
+   * drawn.
+   *
+   * The demo branch is separate on purpose. A demo is an op stream with no run
+   * behind it, so between "the demo started" and "the first feed exists" there
+   * is a window where `drawing` is still false — mounting on `drawing` alone
+   * would unmount the editor the moment the draft it is drawing into arrives,
+   * and the sequencer would be holding a controller for a frame that is gone.
+   */
+  const drawing = hasPptxDrawingContent(live.replayFeed?.ops);
+
+  /*
+   * The editor's own handle, so the run can draw into it.
+   *
+   * Held as state rather than a ref so the hook re-runs when the editor hands
+   * over a new controller: a new editor session has to get a new sequencer, or
+   * the old one draws into a document that is gone.
+   *
+   * This is the half that was missing. The ops reached the renderer and stopped
+   * because the thing that executes them lives inside the workbench, a layer
+   * above what this stage mounts; `useLiveDeckReplay` is the wiring, and it
+   * needs nothing from the workbench but the controller the frame already
+   * hands out.
+   */
+  const [controller, setController] = useState<PresentationEditorController | null>(null);
+  useLiveDeckReplay(api, controller, live.replayFeed);
+
+  /*
+   * The editor draws; the user does not.
+   *
+   * The deck on screen is `workspaceDir/live/` scratch: every redraw replaces
+   * it and the next run deletes it. Text typed into it is gone by the next
+   * page, so the overlay stops the *user* — it does not stop the runtime, whose
+   * drawing goes through the controller rather than the DOM.
+   *
+   * The editor has no read-only mode to ask for, so Insert/Draw/Design sit
+   * there looking live. The lock is what makes them inert.
+   */
+  const drawingOrDemo = demo ? Boolean(live.liveDraft) || drawing : drawing;
+  const editorReady = Boolean(
+    session.grant && session.artifact?.taskId === task.id && drawingOrDemo,
+  );
+
+  /*
+   * The deck's own status bar, reported like the file editor's.
+   *
+   * `editorChrome.ts` says the stages report nothing because they mount no
+   * editor — true when this stage was a skeleton, and false since it draws
+   * through `PresentationEditorFrame`, which renders the same 32px status bar
+   * ("Slide 2 / 8") the file editor does. Without this the agent's attention
+   * frame sits on it, because the frame insets by what the editor reports.
+   *
+   * Called before the early return below, like every hook here: the stage
+   * renders the skeleton on the same commits it renders the editor.
+   */
+  useEditorChrome(editorReady ? SLIDES_CHROME : null);
+
+  if (!editorReady) return <CanvasPlaceholder type="slides" />;
+
+  return (
+    <div className="shell-live-deck" data-testid="shell-live-deck">
+      <div className="shell-live-deck-frame">
+        <PresentationEditorFrame
+          previewToken={session.grant!.token}
+          fileName={session.artifact!.fileName}
+          onController={setController}
+          onUnavailable={(error) => onError(error || "The presentation editor could not start.")}
+        />
+        <div className="shell-live-deck-lock" aria-hidden="true" data-testid="shell-live-deck-lock" />
+      </div>
+    </div>
+  );
 }
 
 

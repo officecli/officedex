@@ -8,11 +8,20 @@ import { PresentationStage } from "./PresentationStage";
 afterEach(() => {
   cleanup();
   editorMounts = 0;
+  replayFeed = { ops: [{ op: "shape.add" }] };
 });
 
 let seen: Locale | null = null;
 /** Any mount of the embedded editor, by either embed stack. */
 let editorMounts = 0;
+/**
+ * What the live-draft controller hands back; per-test so both halves can run.
+ *
+ * Initialised here and not only in `afterEach`: the first test runs before any
+ * `afterEach` does, so leaving it undefined made "there are ops" read as "there
+ * are none" and the test failed for the wrong reason.
+ */
+let replayFeed: { ops: unknown[] } | undefined = { ops: [{ op: "shape.add" }] };
 
 vi.mock("../renderer/presentation/PresentationEditorFrame", () => ({
   PresentationEditorFrame: () => {
@@ -37,39 +46,47 @@ vi.mock("./useCanvasSession", () => ({
   }),
 }));
 
-/** Drawing ops do arrive; that was never the missing half. */
 vi.mock("../renderer/controllers/usePptxLiveDraft", () => ({
-  usePptxLiveDraft: () => ({ replayFeed: { ops: [{ op: "shape.add" }] } }),
+  usePptxLiveDraft: () => ({
+    replayFeed,
+    replayBundledDemo: async () => {},
+    liveDraft: undefined,
+  }),
 }));
 
 const task = { id: "task-1", status: "running", documentType: "pptx", events: [] } as unknown as DesktopTask;
 const api = {} as DesktopAPI;
 
 /*
- * An empty editor is worse than a skeleton — and an empty editor is all this
- * surface could show.
+ * The editor is mounted when there is something to draw, and not otherwise.
  *
- * Measured on real runs: the live draft stayed 10111 bytes, byte-for-byte a
- * blank deck, against a finished file of 1.6MB. So the canvas held a live
- * PowerPoint ribbon over nothing for three and a half minutes, under a banner
- * saying it was being drawn.
+ * This file previously asserted the opposite — that a ready grant and a ready
+ * artifact were *not* enough to earn an editor, because drawing into it had
+ * "failed at the editor itself" with `Editing is not permitted`. That
+ * attribution was wrong: a probe measured the frame editor accepting
+ * `shapes.addTextBox` (the sequencer's own call) and the shape landing. See
+ * `docs/ui-audit-2026-09-19/findings-pptx-write-probe.md`.
  *
- * Wiring the drawing was tried and failed at the editor itself: it reported
- * `drawing slide 1 of 3` and threw "Editing is not permitted". Of the two embed
- * stacks only the workbench's boot carries `documentWrite`, and mounting the
- * workbench failed to import the deck and dragged its own agent panel back onto
- * a canvas that had been emptied of exactly that.
- *
- * So a ready grant and a ready artifact no longer earn an editor here, which is
- * precisely what this file used to assert.
+ * So the guard belongs on the other axis. What made the old surface dishonest
+ * was never the editor — it was an editor over an *empty* document for three
+ * and a half minutes under a banner claiming it was being drawn. That is what
+ * `hasPptxDrawingContent` still prevents, and it is the half worth asserting:
+ * ops arriving is the precondition, and no ops means skeleton.
  */
-it("shows the deck's shape while it is being written, not an empty editor", () => {
+it("mounts the editor when there are ops for it to draw", () => {
   const { container } = render(<PresentationStage api={api} task={task} onError={() => {}} />);
-  expect(editorMounts, "an editor was mounted for a run that cannot draw into one").toBe(0);
+  expect(editorMounts).toBe(1);
+  // The lock is what makes the editor's own live-looking toolbar inert while
+  // the runtime draws through the controller.
+  expect(container.querySelector('[data-testid="shell-live-deck-lock"]')).not.toBeNull();
+});
+
+it("shows the deck's shape instead when nothing is being drawn", () => {
+  replayFeed = { ops: [] };
+  const { container } = render(<PresentationStage api={api} task={task} onError={() => {}} />);
+  expect(editorMounts, "an editor was mounted over a document with nothing in it").toBe(0);
   expect(container.querySelector(".shell-skeleton-slide")).not.toBeNull();
-  // Nothing to lock and nothing to caption: both belonged to the live editor.
-  expect(container.querySelector(".shell-live-deck-lock")).toBeNull();
-  expect(container.querySelector(".shell-live-deck-note")).toBeNull();
+  expect(container.querySelector('[data-testid="shell-live-deck-lock"]')).toBeNull();
 });
 
 /*
