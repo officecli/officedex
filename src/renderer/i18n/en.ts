@@ -660,6 +660,7 @@ export const en: Record<string, string> = {
   "shell.sidebar.fullMotion": "Full motion",
   "shell.sidebar.motionDescription": "Use the system animation preference",
 
+  "shell.canvas.beingDrawn": "Being drawn — the toolbar below is inactive until this deck is finished",
   "shell.status.beingWritten": "Being written…",
   "shell.status.noFile": "No file open",
   "shell.status.onThisComputer": "On this computer",

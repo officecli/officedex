@@ -650,6 +650,7 @@ export const zh: Record<string, string> = {
   "shell.sidebar.fullMotion": "完整动效",
   "shell.sidebar.motionDescription": "跟随系统的动画偏好",
 
+  "shell.canvas.beingDrawn": "正在绘制——完成前下方工具栏不可用",
   "shell.status.beingWritten": "正在生成…",
   "shell.status.noFile": "未打开文件",
   "shell.status.onThisComputer": "在这台电脑上",

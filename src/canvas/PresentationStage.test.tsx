@@ -107,3 +107,22 @@ it("speaks the shell's language, not the operating system's", () => {
     Object.defineProperty(navigator, "language", { value: original, configurable: true });
   }
 });
+
+/*
+ * A click blocker with nothing saying why is worse than either state it can
+ * stand in for.
+ *
+ * The overlay is correct — the deck under it is `workspaceDir/live/` scratch
+ * and anything typed into it is gone by the next redraw — but it was shipped
+ * for a while with its banner removed, so the deck drew, the editor's full
+ * ribbon sat above it looking live, and the only feedback was the cursor
+ * turning into a no-entry sign. The two have to travel together.
+ */
+it("says why the deck cannot be typed into, wherever it blocks clicks", () => {
+  const { container } = render(<PresentationStage api={api} task={task} onError={() => {}} />);
+  const blocked = container.querySelector(".shell-live-deck-lock");
+  const note = container.querySelector(".shell-live-deck-note");
+  expect(Boolean(blocked), "this test is about the locked state").toBe(true);
+  expect(note, "clicks are blocked with nothing explaining it").not.toBeNull();
+  expect(note?.textContent?.trim().length).toBeGreaterThan(0);
+});

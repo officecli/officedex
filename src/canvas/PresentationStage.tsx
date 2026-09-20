@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { DesktopAPI, DesktopTask } from "../shared/types";
 import { DesktopApiProvider } from "../renderer/services/desktopApi";
-import { LocaleProvider } from "../renderer/i18n";
+import { LocaleProvider, useT } from "../renderer/i18n";
 import { CanvasPlaceholder } from "../shell/editor/CanvasPlaceholder";
 import { useCanvasLocale } from "../shell/editor/canvasLocale";
 import { usePptxLiveDraft } from "../renderer/controllers/usePptxLiveDraft";
@@ -93,9 +93,9 @@ function StageBody({ api, task, onError, demo }: PresentationStageProps) {
   const session = useCanvasSession(api);
   const recordError = useCallback((text: string) => onError(text), [onError]);
 
-  // The stage's copy comes from `pptxFlowCopy`; this `t` is only what
-  // usePptxLiveDraft uses for the one message it raises itself.
-  const t = useCallback((key: string) => key, []);
+  // The same `t` the rest of this subtree uses. `usePptxLiveDraft` raises one
+  // message of its own through it, and the lock's note below is the other.
+  const t = useT();
 
   const live = usePptxLiveDraft({ session, recordError, t });
 
@@ -189,6 +189,25 @@ function StageBody({ api, task, onError, demo }: PresentationStageProps) {
 
   return (
     <div className="shell-live-deck" data-testid="shell-live-deck">
+      {/*
+       * The lock needs its sentence back.
+       *
+       * The overlay below stops pointer events over the whole deck. That is
+       * still right — the file under it is `workspaceDir/live/` scratch,
+       * replaced on every redraw, so anything typed into it is gone by the next
+       * page — but on its own it is a mystery: the deck now genuinely draws,
+       * the editor's ribbon is fully rendered above it, and the only feedback
+       * is the cursor turning into a no-entry sign with nothing saying why.
+       *
+       * It says so across the top rather than in a corner. An earlier version
+       * put this in a pill at the top right, where it competed with the ribbon
+       * for the same glance and lost; a band above the toolbar reframes what is
+       * under it, which is the only part of this surface the shell can reach —
+       * the ribbon lives inside the iframe and its height is not ours to guess.
+       */}
+      <p className="shell-live-deck-note" role="status">
+        {t("shell.canvas.beingDrawn")}
+      </p>
       <div className="shell-live-deck-frame">
         <PresentationEditorFrame
           previewToken={session.grant!.token}
