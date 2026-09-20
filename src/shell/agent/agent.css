@@ -609,8 +609,7 @@
   text-overflow: ellipsis;
 }
 
-.shell-task-outline-row > svg,
-.shell-task-outline-row .shell-task-spinner {
+.shell-task-outline-row > svg,.shell-task-outline-row .shell-task-spinner {
   flex: none;
 }
 
@@ -867,3 +866,61 @@
   border-radius: 20px;
 }
 
+
+/*
+ * The outline while it can still be changed.
+ *
+ * Same rows as the read-only list — the gate is the same object at a different
+ * moment, and moving the page titles around between the two would make the pause
+ * look like a different screen. What changes is that the title is a field and
+ * each row can be dropped.
+ *
+ * The field carries no chrome of its own until it is touched: a box around every
+ * line would turn a three-line plan into a form, and the thing being reviewed is
+ * the plan, not the form.
+ */
+.shell-task-outline--editable .shell-task-outline-row {
+  gap: 6px;
+  padding-right: 4px;
+}
+
+.shell-task-outline-input {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--shell-radius-control);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 18px;
+}
+
+.shell-task-outline-input:hover {
+  border-color: var(--shell-line);
+}
+
+.shell-task-outline-input:focus {
+  border-color: var(--shell-focus);
+  background: var(--shell-paper);
+  outline: none;
+}
+
+.shell-task-outline-drop {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--shell-radius-control);
+  background: transparent;
+  color: var(--shell-ink-faint);
+  cursor: pointer;
+}
+
+.shell-task-outline-drop:hover {
+  background: var(--shell-hover);
+  color: var(--shell-status-danger);
+}

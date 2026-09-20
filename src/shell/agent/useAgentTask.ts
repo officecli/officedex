@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { usePort } from "../port/PortContext";
-import type { AgentTask } from "../../shared/uiPort";
+import type { AgentOutlinePage, AgentTask } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
 import { useCanvas } from "../canvas/CanvasContext";
 import type { ComposerSubmission } from "../composer/Composer";
+import type { CanvasAdapter } from "../editor/canvasContract";
+import { logShellEvent } from "../port/shellLog";
 import { useComposerSettings } from "../composer/useComposerSettings";
 import { attempt, reportPortFailure } from "../port/reportPortFailure";
 import { startDocumentEditRun, type DocumentEditRunHandle } from "./documentEditRun";
@@ -37,6 +39,34 @@ import { toast } from "../../renderer/ui";
  * whose editor failed to mount cannot be edited in place, and says so by
  * answering false, and the message goes the long way round instead.
  */
+/**
+ * Which in-place editor, if any, this instruction belongs to.
+ *
+ * A file the agent can change where it stands gets the in-place path; anything
+ * else goes to the generation runtime. Two things have to be true at once — the
+ * file is the kind that has an in-place editor, and one is mounted for it — and
+ * the adapter answers the second because only it knows what is on screen.
+ *
+ * This used to ask about documents alone (`target?.type === "doc"`), so an
+ * instruction about an open deck fell through to the generation runtime:
+ * "change slide 3's title" re-authored the whole deck from the prompt, which
+ * filled the canvas with a deck being drawn and left the title unchanged. Both
+ * editors have had an in-place runner the whole time — Word's
+ * `office.docx.edit.v1` and the deck's `office.pptx.plan_js` (`pptxEditRun`) —
+ * and neither was reachable for a deck.
+ *
+ * Pure, so the decision can be tested without rendering the shell.
+ */
+export function inPlaceEditorFor(
+  file: { readonly type?: string } | null,
+  canvas: Pick<CanvasAdapter, "canEditDocument" | "editDocument" | "onDraftAction" | "showDraft"> | null,
+): "docx" | "pptx" | null {
+  if (!file || !canvas?.canEditDocument?.()) return null;
+  if (file.type === "doc") return "docx";
+  if (file.type === "slides") return "pptx";
+  return null;
+}
+
 export function useAgentTask() {
   const port = usePort();
   const canvas = useCanvas();
@@ -115,7 +145,27 @@ export function useAgentTask() {
         ? (files.find((file) => file.id === submission.activeFileId) ?? null)
         : null;
 
-      if (target?.type === "doc" && canvas?.canEditDocument?.()) {
+      const editableAs = inPlaceEditorFor(target, canvas);
+      /*
+       * Which way this instruction went, and why.
+       *
+       * Whether a message edits the open file or starts a run is a decision
+       * made from two inputs the user cannot see — what is on the canvas right
+       * now, and whether the composer was aimed at a file — and getting it
+       * wrong is invisible from the outside: the wrong path still succeeds, it
+       * just rewrites the deck instead of changing slide 2. A packaged build
+       * offers no console, so this is the only record that would let the next
+       * report be diagnosed from a file rather than from a screenshot.
+       */
+      logShellEvent("agent.routing", {
+        targetFileId: target?.id ?? null,
+        targetType: target?.type ?? null,
+        inPlace: editableAs,
+        // `null` here with a file in mind means the canvas had something else
+        // mounted — a run's stage, or an editor that is still coming up.
+        canvasCanEditInPlace: Boolean(canvas?.canEditDocument?.()),
+      });
+      if (editableAs && target && canvas) {
         // One at a time. A second instruction into the same document while the
         // first is mid-`apply` would capture a scope the first one is holding,
         // and the editor would reject whichever arrived second.
@@ -127,6 +177,7 @@ export function useAgentTask() {
             folderId: submission.folderId || scopeFolderId,
             fileId: target.id,
             fileName: target.name,
+            documentType: editableAs,
             ...(submission.reference ? { reference: submission.reference } : {}),
           },
         );
@@ -207,8 +258,21 @@ export function useAgentTask() {
     busy,
     send,
     answer: useCallback(
-      async (input: { optionId?: string; text?: string }) =>
-        void (await attempt(() => port.agent.answer(input))),
+      async (input: { optionId?: string; text?: string; outline?: readonly AgentOutlinePage[] }) => {
+        /*
+         * A question from an in-place edit is answered here, not by the port.
+         *
+         * The run is local — it never reached the runtime — so `agent.answer`
+         * would be answering a run that does not exist, and the edit would stay
+         * blocked on a question the user had already pressed a button for.
+         */
+        const local = localRun.current;
+        if (local) {
+          local.answer(input);
+          return;
+        }
+        await attempt(() => port.agent.answer(input));
+      },
       [port],
     ),
     applySuggestion,

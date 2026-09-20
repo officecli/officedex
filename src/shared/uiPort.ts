@@ -322,8 +322,20 @@ export interface AgentPort {
    * Separate from `send` because they are different acts: `send` asks for work,
    * this unblocks work already under way. Routing an answer through `send`
    * starts a second run and leaves the first one waiting.
+   *
+   * `outline` is the deck's plan as the user left it, and only the outline gate
+   * sends one. That gate exists because the outline is the last point where a
+   * change costs nothing — everything after it rewrites whole pages — so a gate
+   * that can only be approved is a pause that buys nothing. Order is the array's
+   * order and a page left out is a page dropped, which is how the runtime reads
+   * a decision; the shell hands over the list and lets the service put it on the
+   * wire, rather than assembling the runtime's payload shape itself.
    */
-  answer(input: { optionId?: string; text?: string }): Promise<void>;
+  answer(input: {
+    optionId?: string;
+    text?: string;
+    outline?: readonly AgentOutlinePage[];
+  }): Promise<void>;
   /** Push channel for phase/step/message/suggestion updates. Returns unsubscribe. */
   subscribe(listener: (event: AgentEvent) => void): () => void;
   pause(): Promise<void>;

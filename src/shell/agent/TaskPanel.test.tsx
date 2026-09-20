@@ -1,4 +1,4 @@
-import { cleanup, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { toast } from "../../renderer/ui";
@@ -153,5 +153,92 @@ describe("the task panel's page list", () => {
 
     await waitFor(() => expect(document.querySelector(".shell-task")).not.toBeNull());
     expect(document.querySelector(".shell-task-outline")).toBeNull();
+  });
+});
+
+/*
+ * The outline gate, which is the one place a run stops and asks.
+ *
+ * It stops there because the outline is the last point where a change costs
+ * nothing — everything after it rewrites whole pages — so what matters is not
+ * that the card appears but that it can be *used*. A gate offering only
+ * approval spends the interruption and returns nothing for it, which is what
+ * this was before: three read-only lines and one button.
+ */
+describe("the outline gate", () => {
+  const gateTask = (): AgentTask => ({
+    ...runningTask(),
+    documentType: "pptx",
+    status: "awaiting-review",
+    phase: "Waiting for your review",
+    outline: [
+      { slide: 1, title: "Product Launch", state: "queued" },
+      { slide: 2, title: "How We Position", state: "queued" },
+      { slide: 3, title: "Launch Timeline", state: "queued" },
+    ],
+    question: {
+      id: "plan-1",
+      text: "The outline is ready.",
+      options: [{ id: "approve", label: "Start drawing", recommended: true }],
+      allowFreeform: false,
+    },
+  });
+
+  async function openGate() {
+    const shell = await renderShell({ fastAgent: true, tasks: [gateTask()] });
+    await shell.dispatch({ type: "select-folder", folderId: SEED_FOLDER_ID });
+    await shell.dispatch({ type: "enter-workspace" });
+    await waitFor(() => expect(document.querySelectorAll(".shell-task-outline-input")).toHaveLength(3));
+    return shell;
+  }
+
+  const inputs = () =>
+    [...document.querySelectorAll<HTMLInputElement>(".shell-task-outline-input")];
+  const approve = () =>
+    document.querySelector<HTMLButtonElement>(".shell-task-question .shell-task-button")!;
+
+  it("sends the outline as the user left it, not as it arrived", async () => {
+    const shell = await openGate();
+    const sent: unknown[] = [];
+    const original = shell.port.agent.answer.bind(shell.port.agent);
+    shell.port.agent.answer = async (input) => {
+      sent.push(input);
+      return original(input);
+    };
+
+    fireEvent.change(inputs()[1], { target: { value: "Where we sit in the market" } });
+    fireEvent.click(
+      document.querySelectorAll<HTMLButtonElement>(".shell-task-outline-drop")[2],
+    );
+    fireEvent.click(approve());
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    const input = sent[0] as { optionId?: string; outline?: { slide: number; title: string }[] };
+    expect(input.optionId).toBe("approve");
+    expect(input.outline?.map((page) => page.title)).toEqual([
+      "Product Launch",
+      "Where we sit in the market",
+    ]);
+  });
+
+  /*
+   * Dropping every page is a gesture with no reading: the runtime treats an
+   * empty list as "unchanged", so approving one would start the very deck the
+   * user had just emptied.
+   */
+  it("will not approve a deck with no pages left", async () => {
+    await openGate();
+    const drops = () => [...document.querySelectorAll<HTMLButtonElement>(".shell-task-outline-drop")];
+    while (drops().length > 0) fireEvent.click(drops()[0]);
+
+    expect(inputs()).toHaveLength(0);
+    expect(approve().disabled, "an empty deck was offered as a plan").toBe(true);
+  });
+
+  /* The read-only list would be a second copy of the same pages. */
+  it("does not also draw the read-only page list", async () => {
+    await openGate();
+    expect(document.querySelectorAll(".shell-task-outline")).toHaveLength(1);
+    expect(document.querySelector(".shell-task-outline--editable")).not.toBeNull();
   });
 });

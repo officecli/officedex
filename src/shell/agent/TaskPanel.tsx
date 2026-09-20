@@ -1,4 +1,5 @@
-import { ArrowUpRight, Check, CircleAlert, CircleCheck, CircleSlash, Clock3, Pause, PanelLeft, Play, SquareDashed, Undo2 } from "lucide-react";
+import { ArrowUpRight, Check, CircleAlert, CircleCheck, CircleSlash, Clock3, Pause, PanelLeft, Play, SquareDashed, Undo2, X } from "lucide-react";
+import { useState } from "react";
 
 import { useT } from "../../renderer/i18n";
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
@@ -130,15 +131,23 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
               </ol>
             ) : null}
 
-            {task.outline && task.outline.length > 0 ? (
+            {task.outline && task.outline.length > 0 && !isOutlineGate(task) ? (
               <OutlineList pages={task.outline} />
             ) : null}
 
             {task.question ? (
-              <QuestionCard
-                question={task.question}
-                onPick={(optionId) => void agent.answer({ optionId })}
-              />
+              isOutlineGate(task) ? (
+                <OutlineGateCard
+                  question={task.question}
+                  pages={task.outline ?? []}
+                  onApprove={(optionId, outline) => void agent.answer({ optionId, outline })}
+                />
+              ) : (
+                <QuestionCard
+                  question={task.question}
+                  onPick={(optionId) => void agent.answer({ optionId })}
+                />
+              )
             ) : null}
 
             <div className="shell-task-actions">
@@ -285,6 +294,103 @@ function PageMark({ state }: { state: AgentOutlinePage["state"] }) {
     return <CircleSlash size={14} strokeWidth={1.7} aria-label={t("shell.task.pageStopped")} />;
   }
   return <Clock3 size={14} strokeWidth={1.7} aria-label={t("shell.task.pageQueued")} />;
+}
+
+/**
+ * Is this the run's one blocking stop, rather than an ordinary question?
+ *
+ * The gate arrives as a question like any other, so it is recognised by shape:
+ * a deck, a page list to decide about, and a single approval with no freeform
+ * — the runtime wants a decision on the plan, not a sentence.
+ */
+function isOutlineGate(task: AgentTask): boolean {
+  return (
+    task.documentType === "pptx" &&
+    (task.outline?.length ?? 0) > 0 &&
+    task.question?.allowFreeform === false &&
+    task.question.options.length === 1
+  );
+}
+
+/**
+ * The outline, while it is still free to change.
+ *
+ * This is the whole argument for stopping here. The gate is the last point
+ * where fixing the plan costs nothing — every stage after it rewrites whole
+ * pages, and by then a wrong title is three minutes and a regeneration. A gate
+ * that can only be approved spends the interruption and buys nothing back,
+ * which is what this used to be: three read-only lines and one button.
+ *
+ * Renaming and dropping are the two edits that pay for the pause. Order is the
+ * third and is left for now: it needs a second interaction to be worth having
+ * (drag, or a pair of buttons per row in a 320px column), and these two cover
+ * what a wrong outline is usually wrong about.
+ *
+ * Nothing is sent until the approval. Dropping every page is refused rather
+ * than silently approved — an empty deck is not a plan, and the runtime reads
+ * an empty list as "unchanged", which is the opposite of what the gesture meant.
+ */
+function OutlineGateCard({
+  question,
+  pages,
+  onApprove,
+}: {
+  question: NonNullable<AgentTask["question"]>;
+  pages: readonly AgentOutlinePage[];
+  onApprove: (optionId: string, outline: readonly AgentOutlinePage[]) => void;
+}) {
+  const t = useT();
+  const [draft, setDraft] = useState<AgentOutlinePage[]>(() => pages.map((page) => ({ ...page })));
+
+  const rename = (slide: number, title: string) =>
+    setDraft((current) => current.map((page) => (page.slide === slide ? { ...page, title } : page)));
+  const drop = (slide: number) =>
+    setDraft((current) => current.filter((page) => page.slide !== slide));
+
+  const option = question.options[0];
+  const emptied = draft.length === 0;
+
+  return (
+    <div className="shell-task-question" role="group" aria-label={t("shell.task.questionAria")}>
+      <strong>{question.text || t("shell.task.questionFallback")}</strong>
+
+      <ol className="shell-task-outline shell-task-outline--editable" aria-label={t("shell.task.gateOutlineAria")}>
+        {draft.map((page, index) => (
+          <li key={page.slide} className="shell-task-outline-row">
+            <span className="shell-task-outline-index">{String(index + 1).padStart(2, "0")}</span>
+            <input
+              className="shell-task-outline-input"
+              value={page.title}
+              aria-label={t("shell.task.gateRenameAria", { slide: String(index + 1) })}
+              onChange={(event) => rename(page.slide, event.target.value)}
+            />
+            <button
+              type="button"
+              className="shell-task-outline-drop"
+              aria-label={t("shell.task.gateDropAria", { title: page.title })}
+              title={t("shell.task.gateDrop")}
+              onClick={() => drop(page.slide)}
+            >
+              <X size={13} strokeWidth={1.7} aria-hidden="true" />
+            </button>
+          </li>
+        ))}
+      </ol>
+
+      {emptied ? <small>{t("shell.task.gateEmpty")}</small> : null}
+
+      <div className="shell-task-question-options">
+        <button
+          type="button"
+          className="shell-task-button is-primary"
+          disabled={emptied}
+          onClick={() => onApprove(option.id, draft)}
+        >
+          {option.label}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /**

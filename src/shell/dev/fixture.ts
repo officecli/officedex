@@ -35,6 +35,7 @@ import type { UpdatePhase } from "../../renderer/useAppUpdate";
 import type { AppUpdateRelease } from "../../shared/types";
 import type { PersistedShellState } from "../state/persist";
 import { createFakePort } from "../port/fake/createFakePort";
+import { deckDemoEnabled } from "./deckDemo";
 import { DOC_CHROME, SHEET_CHROME, SLIDES_CHROME } from "../../canvas/editorChrome";
 import type { EditorChrome } from "../editor/canvasSurface";
 import {
@@ -154,6 +155,8 @@ export function readDevFixture(
   const combination = params.get("shell");
   const updatePhase = params.get("forceUpdate");
   const deckRun = params.get("deckRun") === "1";
+  // The gate is a state of the same run, so asking for it implies asking for it.
+  const gate = params.get("gate") === "1";
 
   const stateOverride: Partial<PersistedShellState> = combination
     ? combinationOverride(combination)
@@ -166,6 +169,19 @@ export function readDevFixture(
 
   const home = params.get("home");
   if (home === "1" || home === "0") stateOverride.home = home === "1";
+
+  /*
+   * `?deckDemo=1` is the shortcut to the Home button for the bundled recording.
+   * The recording is drawn *in the canvas* (`EditorCanvasHost` is hidden with
+   * the workspace while Home is up), so the flag has to leave Home as well or
+   * it would start behind a screen that never goes away, and it has to set the
+   * same state the button does. Explicit `home=1` still wins — it is read just
+   * above.
+   */
+  if (deckDemoEnabled(search)) {
+    stateOverride.demo = true;
+    if (home !== "1") stateOverride.home = false;
+  }
 
   const nav = params.get("nav");
   if (nav === "collapsed" || nav === "expanded") stateOverride.navCollapsed = nav === "collapsed";
@@ -185,7 +201,7 @@ export function readDevFixture(
   if (!wantsFixture && !forceUpdate && Object.keys(stateOverride).length === 0) return null;
 
   return {
-    port: wantsFixture ? auditPort(deckRun) : null,
+    port: wantsFixture ? auditPort(deckRun || gate, gate) : null,
     // Tabs and the selected folder come from the fixture, not from whatever the
     // last session left in localStorage — otherwise the first audit run against
     // a browser profile that has used the shell before opens on stale file ids
@@ -211,7 +227,7 @@ const CHROME_BY_NAME: Record<string, EditorChrome | undefined> = {
   doc: DOC_CHROME,
 };
 
-function auditPort(deckRun: boolean): UiPort {
+function auditPort(deckRun: boolean, gate = false): UiPort {
   const now = Date.now();
   const tasks = auditTasks(now);
   return createFakePort({
@@ -221,7 +237,7 @@ function auditPort(deckRun: boolean): UiPort {
     // the scoped folder rather than join it — appending beside the audit's own
     // working task would just lose to it.
     tasks: deckRun
-      ? [...tasks.filter((task) => task.folderId !== AUDIT_FOLDER_IDS.launch), deckRunTask()]
+      ? [...tasks.filter((task) => task.folderId !== AUDIT_FOLDER_IDS.launch), deckRunTask(gate)]
       : tasks,
   });
 }
@@ -243,7 +259,8 @@ function auditPort(deckRun: boolean): UiPort {
  * ready and failed are five different glyphs in a 320px column, and whether they
  * read as a set is not something the code can answer.
  */
-function deckRunTask(): AgentTask {
+function deckRunTask(gate: boolean): AgentTask {
+  if (gate) return outlineGateTask();
   return {
     id: "task-deck-run",
     title: "Prepare a three-slide product launch brief",
@@ -276,5 +293,71 @@ function deckRunTask(): AgentTask {
     ],
     suggestion: null,
     question: null,
+  };
+}
+
+/**
+ * The outline gate, which no interface can currently reach.
+ *
+ * This is the pipeline's one blocking stop: generation pauses once the outline
+ * is fixed, because that is the last point where changing your mind costs
+ * nothing — every stage after it rewrites whole pages.
+ *
+ * It exists on both sides and has never been seen. The runtime wires it only
+ * for an interactive best-mode run, which the bridge produces only for
+ * `generationMode: "plan"`, and nothing in `src/shell` sets that field — so
+ * every real run is `fast` and the card never appears. The panel's half of it
+ * (`toQuestion` synthesising a question from a `plan_review` that carries a
+ * plan and no question of its own, `answer` routing back through
+ * `respondToPlanReview`) has unit tests and no other evidence.
+ *
+ * Turning it on is a product decision with a real cost — a mandatory pause in
+ * front of every deck — and that decision was being asked for in the abstract.
+ * This renders the card from the same shape `toQuestion` produces, so it can be
+ * looked at first: `?shellFixture=1&gate=1`.
+ */
+function outlineGateTask(): AgentTask {
+  return {
+    id: "task-outline-gate",
+    title: "Prepare a three-slide product launch brief",
+    folderId: AUDIT_FOLDER_IDS.launch,
+    documentType: "pptx",
+    status: "awaiting-review",
+    phase: "Waiting for your review",
+    steps: [
+      { id: "analyze", label: "Analyzing request", state: "done" },
+      { id: "research", label: "Researching", state: "done" },
+      { id: "outline", label: "Drafting outline", state: "done" },
+      { id: "design", label: "Choosing a design", state: "pending" },
+      { id: "generate-content", label: "Generating document content", state: "pending" },
+      { id: "export", label: "Formatting & export", state: "pending" },
+    ],
+    // Nothing has been drawn yet: the gate is in front of all of it, which is
+    // the point of stopping here rather than later.
+    outline: [
+      { slide: 1, title: "Positioning: who this is for and why now", state: "queued" },
+      { slide: 2, title: "Launch timeline", state: "queued" },
+      { slide: 3, title: "Next steps and owners", state: "queued" },
+    ],
+    messages: [
+      {
+        id: "gate-msg-1",
+        role: "user",
+        text: "Prepare a three-slide product launch brief covering positioning, timeline and next steps.",
+        createdAt: Date.now() - 40_000,
+      },
+    ],
+    suggestion: null,
+    /*
+     * The shape `toQuestion` synthesises, copied rather than paraphrased: the
+     * plan's id is the question's id, one recommended option, no freeform —
+     * because the runtime accepts an approval, not a sentence.
+     */
+    question: {
+      id: "plan-outline-gate",
+      text: "The outline is ready.",
+      options: [{ id: "approve", label: "Start drawing", recommended: true }],
+      allowFreeform: false,
+    },
   };
 }

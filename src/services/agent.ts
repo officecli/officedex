@@ -581,7 +581,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
      * question that has already been superseded is dropped rather than replied
      * to with a stale id.
      */
-    async answer(input: { optionId?: string; text?: string }) {
+    async answer(input: { optionId?: string; text?: string; outline?: readonly AgentOutlinePage[] }) {
       const pending = pendingQuestion();
       if (!pending) return;
 
@@ -595,12 +595,36 @@ export function createAgentService(api: DesktopAPI): AgentPort {
        * both through `answer` keeps one verb for the user — unblock whatever is
        * blocking — without pretending the wire calls are interchangeable.
        *
-       * The outline goes back unmodified: it is read-only in this shell, so
-       * there is nothing of the user's to preserve in it.
+       * What goes back is whatever the panel collected. The gate's whole point
+       * is that the outline is the last place a change costs nothing — every
+       * stage after it rewrites whole pages — so a gate that can only be
+       * approved is a pause that buys the user nothing. `input.text` carries
+       * the edited outline when the card offered one (`planApprovalAnswer`
+       * serialises it: titles, order, and absence meaning removal); an empty
+       * string is the unmodified plan, which is what the runtime treats as
+       * "approved as proposed".
        */
       const blocked = state.tasks[pending.taskId];
       if (blocked?.status === "plan_review") {
-        await respondToPlanReview(api, blocked, "approve", planApprovalAnswer(undefined));
+        /*
+         * The edited outline, put on the wire here rather than in the panel.
+         *
+         * `planApprovalAnswer` writes the runtime's decision shape — a section
+         * per page, numbered by position, with a page left out meaning dropped.
+         * The shell hands over the list it collected and stays out of that
+         * format; `undefined` is the unmodified plan, which the runtime reads
+         * as approved as proposed.
+         */
+        const edited = input.outline?.length
+          ? planApprovalAnswer(
+              input.outline.map((page, index) => ({
+                id: String(page.slide),
+                slide: index + 1,
+                title: page.title,
+              })),
+            )
+          : planApprovalAnswer(undefined);
+        await respondToPlanReview(api, blocked, "approve", edited);
         return;
       }
 
