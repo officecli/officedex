@@ -49,7 +49,18 @@
 
 ---
 
-## 4. 「边画边看」在新 shell 里不工作 — 已确诊，未修复
+## 4. 「边画边看」在新 shell 里不工作 — **已修**（2026-09-20）
+
+> ⚠️ **本节关于「frame 没有写权限」的归因已被实测推翻，功能随后修好。**
+> frame 的 `?mode=embed` 编辑器**允许写入**（`slides.add()` 与 `shapes.addTextBox()`
+> 都成功，形状计数 `0 → 1`）。真正的失败是另一回事：**本地编辑权限设得太晚** ——
+> 第一帧绘制跑在会话设置 `privilege` 之前，`AccessPolicy.assertCanApply` 于是在
+> `editPermission=undefined` 的 policy 上拒绝，抛出与 `assertCanEdit` 完全相同的
+> `Editing is not permitted`。修法是在 `use-presentation-editor-session` 里把那次
+> `updatePrivilege` 提前到文档 mount 之前。
+>
+> 现在 shell 里可以逐步画出来，入口 `?deckDemo=1`（legacy 的 Watch PPT generation
+> 录制，8 页 123 shape）。完整证据链与踩坑见 `findings-pptx-write-probe.md`。
 
 legacy 有这个能力，新 shell 没有。生成期间画布上是一个**空的** PowerPoint 编辑器，整个运行过程都空着。
 
@@ -80,10 +91,25 @@ event=failed    error: "Editing is not permitted"
 
 | | URL | 权限 |
 |---|---|---|
-| `PresentationEditorFrame` | `?mode=embed`，`presentation:*` 消息 | 无写权限 |
-| workbench | `?officedexEmbed=1&channel=…&sessionMode=…`，nonce 通道 | **`documentWrite`** |
+| `PresentationEditorFrame` | `?mode=embed`，`presentation:*` 消息 | ~~无写权限~~ ← **这一栏是错的，见下** |
+| workbench | `?officedexEmbed=1&channel=…&sessionMode=…`，nonce 通道 | `documentWrite` |
 
 `officedex-embed-bridge.ts` 明确授予 `documentRead / documentWrite / documentExport / uiDialog`。那句拒绝来自 `access-policy.ts` 的 `assertCanEdit()`。
+
+> ### ⚠️ 更正（2026-09-20）：「frame 没有写权限」已被证伪
+>
+> 上面那个推断是我从「workbench 那条明确授予 documentWrite」+「frame 这条我读不到声明」倒推出来的 —— **观察到的是拒绝，权限归因是猜的**，当时我也标注了这一点。
+>
+> 另一条 track 在 `presentation-component/src/officedex-editor-diagnose.ts` 建了行为探针，实测结论：**frame 的编辑器接受 slide 级写入**（`slides.add()` + `sync()` 成功）。所以「frame 没有写权限」是假的。
+>
+> 真正的问题被收窄了：sequencer 加的不是 slide 而是**形状**（`slide.shapes.addTextBox`，`vibeReplay.ts:562`），那是另一条、权限更敏感的路径。而且 `Editing is not permitted` 这句话**有两个生产者**，光看消息分不出是哪个：
+>
+> - `AccessPolicy.canEdit()` —— `mode === "edit" && !forceDisconnected && privilege.permissionWithReason.edit.hasPermission`
+> - Office.js 的能力授予 —— `#grant.permissions.includes(permission)`
+>
+> 而 `?mode=embed` **不会**设置 `isEmbeddedPreview`（那个标志要 `mode=preview`），所以编辑器并没有被强制只读，privilege 工厂也确实给了 `edit`。
+>
+> **这意味着下面「要修的话」那一段也要打折看**：它建的前提是「给 frame 加写权限」，而写权限可能本来就有。探针跑出形状级的结果之前，不要按那个前提动手。
 
 **尝试二：改挂 workbench。** 编辑器报 `Failed to import the PowerPoint file`，画布上出现「AI editor unavailable」、编辑器自己的中文空状态占位，以及**一整个 OfficeDex Agent 面板**（Simplify text / Improve layout / Unify the style）—— 正是这块画布刚被清掉的那套 chrome。比修之前更糟，已回退。
 
