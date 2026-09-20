@@ -7,6 +7,7 @@ import { PresentationEditorFrame } from "../renderer/presentation/PresentationEd
 import { CanvasPlaceholder } from "../shell/editor/CanvasPlaceholder";
 import { useCanvasLocale } from "../shell/editor/canvasLocale";
 import { usePptxLiveDraft } from "../renderer/controllers/usePptxLiveDraft";
+import { hasPptxDrawingContent } from "../renderer/presentation/vibeReplay";
 import { useCanvasSession } from "./useCanvasSession";
 
 /**
@@ -79,7 +80,34 @@ function StageBody({ api, task, onError }: PresentationStageProps) {
   // usePptxLiveDraft uses for the one message it raises itself.
   const t = useCallback((key: string) => key, []);
 
-  usePptxLiveDraft({ session, recordError, t });
+  const live = usePptxLiveDraft({ session, recordError, t });
+
+  /*
+   * Is anything actually being drawn?
+   *
+   * Measured on a real run: the live draft came out byte-for-byte identical to
+   * `blank.pptx` — 10111 bytes, one empty slide — while the finished deck was
+   * 1.6MB. So the editor sat on the canvas for three and a half minutes showing
+   * an empty document under a banner that said it was being drawn.
+   *
+   * The drawing ops have exactly one producer in the runtime,
+   * `runJSSDKDesignProgram` (`pptx_jssdk_design.go`). The desktop's default
+   * backend is `mop-skill`, which authors the deck server-side and hands back
+   * the finished file — no op stream, and nothing for a live editor to show.
+   * On that backend the live editor is structurally empty, not slow.
+   *
+   * So the editor is mounted when there is drawing to put in it, and not
+   * otherwise. `hasPptxDrawingContent` is the runtime's own test for that, and
+   * the same one `usePptxLiveDraft` uses to decide whether a draft is worth
+   * creating.
+   *
+   * Note for whoever re-enables jssdk-design: ops arriving is necessary but not
+   * sufficient. `replayFeed` is what applies them, and in this shell nothing
+   * consumes it — the legacy renderer routed it through `PreviewPanel` into
+   * `PptxViewer`, and this stage mounts `PresentationEditorFrame` directly,
+   * below that layer. Wiring the interpreter is the other half.
+   */
+  const drawing = hasPptxDrawingContent(live?.replayFeed?.ops);
 
   /*
    * The deck, and nothing else.
@@ -101,7 +129,7 @@ function StageBody({ api, task, onError }: PresentationStageProps) {
    * registering it for replay, issuing its token, adopting the session — and
    * every rule in it was a bug first (R-E-01 through R-E-07).
    */
-  const editorReady = Boolean(session.grant && session.artifact?.taskId === task.id);
+  const editorReady = Boolean(session.grant && session.artifact?.taskId === task.id && drawing);
 
   /*
    * A skeleton until there is a deck to show.

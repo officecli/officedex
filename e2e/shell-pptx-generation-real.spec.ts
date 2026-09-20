@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
 
 import { attachHostReport, recordScenario } from "./support/real-e2e";
 
@@ -34,13 +34,39 @@ function questionCard(page: Page): Locator {
   return page.locator(".shell-task-question");
 }
 
-/** Drives the run to completion, answering questions as they come. */
-async function runToCompletion(page: Page): Promise<number> {
+/**
+ * Drives the run to completion, answering questions as they come, and captures
+ * the deck mid-draw on the way past.
+ *
+ * The capture is the point of passing it `testInfo`. Everything this spec looks
+ * at exists only while the run is going — the live draft on the canvas, the
+ * banner over the editor's ribbon, the per-page marks in the panel — and the
+ * project retains video, traces and screenshots `only-on-failure`. So a *green*
+ * run left no picture of the one interface nobody can otherwise see: not the
+ * static fixtures (`createShellCanvas()` returns null in a browser, so the
+ * canvas falls back to a skeleton), not a later inspection (the run is over and
+ * the draft is deleted), and not the audit's ten shell combinations, which
+ * describe a workspace at rest.
+ *
+ * Attached rather than asserted. What "being drawn" should look like is a
+ * judgement, and a pixel assertion here would fail on every legitimate change
+ * to the deck's own content.
+ */
+async function runToCompletion(page: Page, testInfo: TestInfo): Promise<number> {
   const deadline = Date.now() + RUN_DEADLINE_MS;
   let answered = 0;
+  let captured = false;
 
   while (Date.now() < deadline) {
     if (await page.getByRole("tab").first().isVisible().catch(() => false)) return answered;
+
+    // First moment the live deck is on screen, with the banner over it.
+    if (!captured && (await page.locator(".shell-live-deck").isVisible().catch(() => false))) {
+      captured = true;
+      await testInfo
+        .attach("deck-being-drawn.png", { body: await page.screenshot(), contentType: "image/png" })
+        .catch(() => undefined);
+    }
 
     const card = questionCard(page);
     if (await card.isVisible().catch(() => false)) {
@@ -84,7 +110,7 @@ test.describe("new shell · real deck generation", () => {
     await attachHostReport(testInfo);
   });
 
-  test("generates a deck from the shell composer and opens it in the canvas", async ({ page }) => {
+  test("generates a deck from the shell composer and opens it in the canvas", async ({ page }, testInfo) => {
     page.on("pageerror", (error) => {
       if (/Failed to fetch/i.test(error.message)) return;
       throw error;
@@ -106,7 +132,7 @@ test.describe("new shell · real deck generation", () => {
 
     await expect(page.locator("#shell")).toHaveAttribute("data-home", "false", { timeout: 30_000 });
 
-    await runToCompletion(page);
+    await runToCompletion(page, testInfo);
 
     const tab = page.getByRole("tab").first();
     await expect(tab).toBeVisible();

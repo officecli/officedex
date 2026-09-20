@@ -8,6 +8,7 @@ import { PresentationStage } from "./PresentationStage";
 afterEach(() => {
   cleanup();
   mounted = 0;
+  liveOps = [{ op: "shape.add" }];
 });
 
 /**
@@ -34,8 +35,14 @@ vi.mock("./useCanvasSession", () => ({
   }),
 }));
 
+/**
+ * The ops the stage is told about. `shape.add` is what
+ * `hasPptxDrawingContent` counts as drawing.
+ */
+let liveOps: Array<{ op: string }> = [{ op: "shape.add" }];
+
 vi.mock("../renderer/controllers/usePptxLiveDraft", () => ({
-  usePptxLiveDraft: () => undefined,
+  usePptxLiveDraft: () => ({ replayFeed: { ops: liveOps } }),
 }));
 
 const task = { id: "task-1", status: "running", documentType: "pptx", events: [] } as unknown as DesktopTask;
@@ -64,6 +71,25 @@ it("does not let the scratch deck be edited while it is being drawn", () => {
   const { container } = render(<PresentationStage api={api} task={task} onError={() => {}} />);
   expect(container.querySelector(".shell-live-deck-lock")).not.toBeNull();
   expect(container.querySelector(".shell-live-deck-note")?.textContent).toContain("Being drawn");
+});
+
+/*
+ * An empty editor is worse than a skeleton.
+ *
+ * Measured on a real run: the live draft came out byte-for-byte the size of
+ * `blank.pptx` — 10111 bytes, one empty slide — while the finished deck was
+ * 1.6MB. The drawing ops have one producer in the runtime, the jssdk-design
+ * path, and the desktop's default backend (`mop-skill`) authors server-side and
+ * returns the finished file. So on the default path the canvas showed a live
+ * editor with nothing in it, for the length of the run, under a banner saying
+ * it was being drawn.
+ */
+it("shows a skeleton rather than an empty editor when nothing is being drawn", () => {
+  liveOps = [];
+  const { container } = render(<PresentationStage api={api} task={task} onError={() => {}} />);
+  expect(mounted, "the editor was mounted with no drawing to put in it").toBe(0);
+  expect(container.querySelector(".shell-live-deck")).toBeNull();
+  expect(container.querySelector(".shell-skeleton-slide")).not.toBeNull();
 });
 
 /*
