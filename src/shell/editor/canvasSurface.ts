@@ -97,7 +97,22 @@ export interface EditorChrome {
 export interface CanvasSurface {
   /** Where the canvas is, or null while the workspace is hidden (Home). */
   readonly box: CanvasBox | null;
-  /** What is in it, or null when nothing has said — see the note above. */
+  /**
+   * What is in it, or null when nothing has said — see the note above.
+   *
+   * **This describes an editor's chrome, not a document's existence.** Today
+   * every publisher happens to be showing a document — the three file editors
+   * and the live stage — so `chrome !== null` also reads as "the canvas is not
+   * empty", and `StatusBar` leans on exactly that to stop claiming "No file
+   * open" over a deck being drawn.
+   *
+   * That is an accident of who publishes, not a promise of this channel. A
+   * future surface with a bottom strip of its own and no document in it — an
+   * empty state, a picker — would publish too, and every reader that took
+   * `chrome !== null` for "there is a document" would quietly start lying
+   * rather than break. If one arrives, those readers need their own signal;
+   * this one cannot be stretched to carry it.
+   */
   readonly chrome: EditorChrome | null;
 }
 
