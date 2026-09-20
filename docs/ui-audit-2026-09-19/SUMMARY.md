@@ -198,7 +198,7 @@ git checkout -- docs/ui-audit-2026-09-19/S8/screenshots/ docs/ui-audit-2026-09-1
 |---|---|
 | `git checkout -- <file>` | 回滚该文件里**所有人**的未提交改动 |
 | `git restore <file>` | 同上 |
-| `git add <files> && git commit` | 提交**整个索引**，包括别人 stage 的东西 |
+| `git add -A && git commit` | 提交**整个索引**，包括别人 stage 的东西 |
 | `git stash` / `git clean` | 同样按文件/目录，不按归属 |
 
 安全形式：提交用 `git commit -- <paths>` 显式限定路径；回滚前先 `git diff <file>`
@@ -206,6 +206,35 @@ git checkout -- docs/ui-audit-2026-09-19/S8/screenshots/ docs/ui-audit-2026-09-1
 
 （本轮协调方的 11 笔提交是用 `git add <files> && git commit` 做的，事后逐笔核对
 干净——但那是运气：每次提交前重新看过 `git status`，而对方恰好没有 stage 过东西。）
+
+### 更正：提交方向的代价是归属混淆，不是数据丢失
+
+本文件早先的表述（以及协调方发给几个 session 的消息）说「谁先 `git commit -- <file>`
+都会把对方的一起**带走**」。**这个说法是错的，由 docx track 更正。**
+
+`git commit -- <path>` 提交的是那个路径的**工作区内容**，两个人的改动都会进同一个
+commit，**一行不丢**。它的代价是**归属混淆**：别人的工作被记在你的 commit message 下。
+
+真正会毁掉东西的只有那两个：`git checkout -- <file>`（按文件丢弃、不分归属）与
+`git add -A && git commit`（把无关文件一并收进去）。
+
+**为什么这个区分要紧**：如果记录停在「别人改过的文件我碰不得」，协作会直接卡死——
+而本轮恰恰有反例：W3-H 面对一个装着别人 90 行未提交改动的 `canvasContract.ts`，
+**没有去碰它**，而是把三个通道做成了新模块（`canvasSurface.ts` / `canvasLocale.ts` /
+`editorChrome.ts`）。事后看那是更好的形状：通道与 adapter 的生命周期本就无关。
+**争用有时是设计信号，不只是调度问题。**
+
+### 第四条：耦合在同一文件里的多方改动，提交顺序要从依赖底层往上
+
+docx track 的 `1676bb9` 带上了 xlsx track 在 `CanvasContent.tsx` 里的行（三个舞台的
+路由在同一个文件，`liveDoc` 与 `liveSheet` 拆不开），commit body 里点名了没有冒领——
+但 **HEAD 因此缺了 xlsx 那五个未提交的文件、暂时编译不过**。
+
+正确顺序是**先请依赖底层的一方提交，再提交自己的**。它倒过来了。
+
+这条对协调方同样成立：本轮的「最终全绿」是在 `09fbe4f` 上验的，那时为真；分支尖端
+此后被这次耦合提交弄坏。**「我验证过」与「分支现在是好的」是两件事**，共享分支上
+尤其要分清。
 
 ### 第三条：量具对准了错的时刻
 
