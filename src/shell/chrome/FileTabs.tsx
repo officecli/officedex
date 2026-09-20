@@ -11,7 +11,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useT } from "../../renderer/i18n";
 import { usePort } from "../port/PortContext";
@@ -23,6 +23,7 @@ import { useLibraryActions } from "../nav/useLibraryActions";
 import { Menu } from "./Menu";
 import { dialog, Input, Modal, toast } from "../../renderer/ui";
 import { FileTypeIcon } from "./FileTypeIcon";
+import { closeTabShortcutLabel, isCloseTabShortcut } from "./closeTabShortcut";
 
 const stripExtension = (name: string) => name.replace(/\.(docx|xlsx|pptx)$/i, "");
 
@@ -69,6 +70,9 @@ export function FileTabs() {
    */
   const selectedId = state.home ? null : state.activeFileId;
   const tabStopId = open.some((file) => file.id === selectedId) ? selectedId : open[0]?.id ?? null;
+  /** The tab the close chord acts on: the selected one, and nothing on Home. */
+  const currentFile = open.find((file) => file.id === selectedId) ?? null;
+  const closeShortcut = useMemo(() => closeTabShortcutLabel(), []);
 
   /*
    * How far the strip overruns, and which way.
@@ -172,42 +176,67 @@ export function FileTabs() {
     selects[index]?.focus();
   };
 
-  const closeFile = (file: FileMeta) => {
-    if (!file.dirty) {
-      dispatch({ type: "close-file", fileId: file.id });
-      return;
-    }
-
-    // Only the visible editor owns a save handle. Activating an inactive dirty
-    // tab first is safer than clearing its dirty flag while its bytes are
-    // still only in an editor that is not mounted here.
-    if (activeFile?.id !== file.id) {
-      dispatch({ type: "activate-file", fileId: file.id });
-      toast.info({
-        key: "dirty-file-activated",
-        content: t("shell.tabs.dirtyActivated"),
-        description: file.name,
-      });
-      return;
-    }
-
-    dialog.confirm({
-      title: t("shell.tabs.saveBeforeClosing"),
-      content: <p>{t("shell.tabs.unsavedBody", { file: file.name })}</p>,
-      okText: t("shell.tabs.saveAndClose"),
-      cancelText: t("ui.text.Cancel"),
-      onOk: async () => {
-        const saved = await attempt(async () => {
-          // The active editor owns the in-memory bytes.
-          await canvas?.save();
-          await port.files.save(file.id);
-        });
-        if (!saved) return;
+  const closeFile = useCallback(
+    (file: FileMeta) => {
+      if (!file.dirty) {
         dispatch({ type: "close-file", fileId: file.id });
-        await reload();
-      },
-    });
-  };
+        return;
+      }
+
+      // Only the visible editor owns a save handle. Activating an inactive dirty
+      // tab first is safer than clearing its dirty flag while its bytes are
+      // still only in an editor that is not mounted here.
+      if (activeFile?.id !== file.id) {
+        dispatch({ type: "activate-file", fileId: file.id });
+        toast.info({
+          key: "dirty-file-activated",
+          content: t("shell.tabs.dirtyActivated"),
+          description: file.name,
+        });
+        return;
+      }
+
+      dialog.confirm({
+        title: t("shell.tabs.saveBeforeClosing"),
+        content: <p>{t("shell.tabs.unsavedBody", { file: file.name })}</p>,
+        okText: t("shell.tabs.saveAndClose"),
+        cancelText: t("ui.text.Cancel"),
+        onOk: async () => {
+          const saved = await attempt(async () => {
+            // The active editor owns the in-memory bytes.
+            await canvas?.save();
+            await port.files.save(file.id);
+          });
+          if (!saved) return;
+          dispatch({ type: "close-file", fileId: file.id });
+          await reload();
+        },
+      });
+    },
+    [activeFile, canvas, dispatch, port, reload, t],
+  );
+
+  /*
+   * ⌘W (Ctrl+W off macOS) closes the tab on the canvas — the same path the X
+   * takes, so an unsaved file still gets its "save before closing?" question
+   * instead of being dropped by a keystroke.
+   *
+   * Capture phase on `window`: the chord has to work while focus is inside the
+   * mounted editor, and those editors keep their own document-level key
+   * handlers. Cancelling only once a tab is actually going to close leaves
+   * ⌘W meaning "close the window" when the shell is showing no document, which
+   * is what the platform promises when an app has nothing to close first.
+   */
+  useEffect(() => {
+    if (!currentFile) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!isCloseTabShortcut(event)) return;
+      event.preventDefault();
+      closeFile(currentFile);
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [currentFile, closeFile]);
 
   const submitRename = async () => {
     if (!renameTarget) return;
@@ -274,7 +303,7 @@ export function FileTabs() {
                 type="button"
                 className="shell-tab-close"
                 aria-label={t("shell.tabs.closeFile", { file: file.name })}
-                title={t("ui.text.Close")}
+                title={current ? `${t("ui.text.Close")} (${closeShortcut})` : t("ui.text.Close")}
                 onClick={() => closeFile(file)}
               >
                 <X size={14} strokeWidth={1.8} aria-hidden="true" />

@@ -103,6 +103,36 @@ describe("file tabs", () => {
     expect(tabNames(shell.view.container)).toEqual(["MO sales forecast", "MO launch deck"]);
   });
 
+  // jsdom is not macOS, so the chord under test is the Ctrl+W branch. The
+  // platform split itself is covered in closeTabShortcut.test.ts.
+  const pressCloseChord = (shell: Awaited<ReturnType<typeof openSeedTabs>>) =>
+    act(async () => {
+      fireEvent.keyDown(shell.view.container, { key: "w", code: "KeyW", ctrlKey: true });
+    });
+
+  it("closes the tab on the canvas from the keyboard", async () => {
+    const shell = await openSeedTabs();
+    // The deck is active after opening the seed tabs.
+    await pressCloseChord(shell);
+    expect(tabNames(shell.view.container)).toEqual(["MO launch plan", "MO sales forecast"]);
+  });
+
+  it("routes the keyboard close through the unsaved question, not around it", async () => {
+    const shell = await openSeedTabs();
+    await shell.dispatch({ type: "activate-file", fileId: "file-forecast" });
+
+    await pressCloseChord(shell);
+    expect(shell.view.getByRole("dialog")).toHaveTextContent("Save before closing?");
+    expect(tabNames(shell.view.container)).toHaveLength(3);
+  });
+
+  it("has nothing to close on Home, and leaves the open files alone", async () => {
+    const shell = await openSeedTabs();
+    await shell.dispatch({ type: "go-home" });
+    await pressCloseChord(shell);
+    expect(tabNames(shell.view.container)).toHaveLength(3);
+  });
+
   it("asks before closing a dirty tab and saves before removing it", async () => {
     const shell = await openSeedTabs();
     await shell.dispatch({ type: "activate-file", fileId: "file-forecast" });
