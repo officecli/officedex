@@ -7,6 +7,7 @@ import { NotImplementedError } from "../shared/notImplemented";
 import { applyTaskEvent, attachTaskContext, createInitialTaskState, type TaskState } from "../renderer/taskState";
 import { taskTitle } from "../renderer/taskTitle";
 import { inferHomeTaskRoute } from "../renderer/homeIntake";
+import { planModeRequested } from "./planMode";
 import { DEFAULT_FOLDER_ID } from "./files";
 
 /**
@@ -567,6 +568,25 @@ export function createAgentService(api: DesktopAPI): AgentPort {
         prompt: promptWithComposerContext(text, input),
         ...(route.sourceFile ? { sourceFile: route.sourceFile } : {}),
         ...(workspaceId ? { workspaceId } : { noProject: true }),
+        /*
+         * `plan` is what makes the run stop at the outline; without it the
+         * gate is unreachable.
+         *
+         * The runtime wires its one confirmation stop only for an interactive
+         * best-mode run, and the bridge produces that only for
+         * `generationMode: "plan"` (`officeGenerateModeArgs`). Nothing here has
+         * ever set the field, so every run is `fast` and the outline gate — a
+         * feature that exists on both sides, with a card, a decision payload
+         * and tests — has never appeared in front of anyone.
+         *
+         * Whether it *should* appear is a product question, not a defect:
+         * turning it on puts a mandatory pause in front of every deck. So this
+         * is opt-in and off, and the switch exists so the question can be
+         * answered by trying it rather than by imagining it. `?planMode=1` on
+         * the shell URL, or `officedex.planMode` in localStorage for a
+         * packaged build, which has no address bar.
+         */
+        ...(planModeRequested() ? { generationMode: "plan" as const } : {}),
         enableImages: settings.defaults.enableImages,
         imageQuality: settings.defaults.imageQuality,
       });
