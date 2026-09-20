@@ -482,6 +482,55 @@ describe("desktop agent service", () => {
     expect(seen).toHaveLength(1);
   });
 
+  /*
+   * The stage the agent spends most of a document run in.
+   *
+   * `toStatus` used to test `activeStageId.includes("draw") ||
+   * .includes("write")` against ids `taskState.ts` assigns itself — no id
+   * contains "draw", and "writing" does not contain "write", so the only match
+   * was the two-second `write` step that copies the finished file to disk. A
+   * document therefore read "Agent reading" for the whole minute the model was
+   * writing it.
+   */
+  it("says the agent is writing while it generates content", async () => {
+    const { api, port } = agentPort();
+    const seen: string[] = [];
+    port.agent.subscribe((event) => {
+      if (event.kind === "task") seen.push(event.task.status);
+    });
+
+    api.emitBridgeEvent(started("task-1"));
+    api.emitBridgeEvent({
+      event_id: "task-1-generate",
+      task_id: "task-1",
+      type: "task.progress",
+      ts: "2026-09-18T10:00:05Z",
+      payload: { step: "generate_llm", status: "running", content: "Requesting DOCX content" },
+    });
+
+    expect(seen.at(-1)).toBe("writing");
+  });
+
+  it("stays on reading for a stage it does not recognise", async () => {
+    const { api, port } = agentPort();
+    const seen: string[] = [];
+    port.agent.subscribe((event) => {
+      if (event.kind === "task") seen.push(event.task.status);
+    });
+
+    api.emitBridgeEvent(started("task-1"));
+    api.emitBridgeEvent({
+      event_id: "task-1-odd",
+      task_id: "task-1",
+      type: "task.progress",
+      ts: "2026-09-18T10:00:05Z",
+      payload: { step: "something.new", status: "running" },
+    });
+
+    // Not `working`: that means "has not begun", and this run plainly has.
+    expect(seen.at(-1)).toBe("reading");
+  });
+
   // AgentStatus has no failure state, so a failed run is reported twice: the
   // task turns done, and an error event says why.
   it("reports a failure as done plus an error event", async () => {

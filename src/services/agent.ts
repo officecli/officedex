@@ -62,16 +62,51 @@ const HISTORY_PAGE = 50;
  */
 const LIST_LIMIT = 8;
 
+/**
+ * The stages during which the agent is *producing* something, by id.
+ *
+ * `toStatus` used to answer this with `activeStageId?.includes("draw") ||
+ * .includes("write")`, over a closed set of ids that `taskState.ts` assigns
+ * itself — and the substrings missed almost all of it. Nothing in that set
+ * contains "draw" at all, and "writing" (the default skeleton's third stage)
+ * does not contain "write", so the only id the test ever matched was `write`,
+ * the two-second step that copies the finished file to disk.
+ *
+ * The visible cost was on documents, which spend nearly their whole run in
+ * `generate-content`: the panel said "Agent reading" for a minute while the
+ * model wrote the document, and then flickered to "writing" as the bytes were
+ * saved. Matching on the ids themselves is also what makes this readable —
+ * the set is small, closed, and defined in one place.
+ */
+const WRITING_STAGES = new Set([
+  "outline",
+  "generate",
+  "generate-content",
+  "assemble",
+  "write",
+  "finalize",
+  // The four-stage skeleton `taskState.ts` falls back to when the runtime
+  // sends no semantic step.
+  "writing",
+  "format",
+]);
+
 function toStatus(task: DesktopTask): AgentStatus {
   switch (task.status) {
     case "starting":
       return "working";
     case "running":
-      // The active stage says more than "running" does, and the contract has
-      // two states for it.
-      return task.activeStageId?.includes("draw") || task.activeStageId?.includes("write")
-        ? "writing"
-        : "reading";
+      /*
+       * The active stage says more than "running" does, and the contract has
+       * two states for it.
+       *
+       * Reading is the fallback rather than `working`: a run that is under way
+       * but has named no stage is doing *something*, and `working` in this
+       * contract means "has not begun". An unrecognised stage is the same case
+       * — better to say the quieter of the two true things than to invent a
+       * third.
+       */
+      return task.activeStageId && WRITING_STAGES.has(task.activeStageId) ? "writing" : "reading";
     case "question":
     case "plan_review":
       return "awaiting-review";
@@ -486,9 +521,9 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       const settings = await api.getSettings();
       const workspaceId = input.folderId === DEFAULT_FOLDER_ID ? undefined : input.folderId;
 
-      // Editing what is open, or starting something new. The document type of a
-      // new run is inferred from the instruction by the same rules the old Home
-      // used — the contract carries no type field.
+      // Editing what is open, or starting something new. A stated document type
+      // is the composer saying "a new one" — it clears `activeFileId` on the way
+      // out, so this branch is reached only when the user left the choice alone.
       if (input.activeFileId) {
         const record = await api.getDocument(input.activeFileId);
         const result = await api.modify({
@@ -509,7 +544,20 @@ export function createAgentService(api: DesktopAPI): AgentPort {
         return;
       }
 
-      const route = inferHomeTaskRoute({ prompt: text }, settings.defaults.documentType);
+      /*
+       * What to make. The composer's answer wins over the heuristic.
+       *
+       * `inferHomeTaskRoute` reads the type off the words, and it has to:
+       * for most of this shell's life there was nowhere for a user to say it.
+       * It is still the fallback, and still the only thing that can spot a
+       * catalog cleanup — but a stated type is not a hint to be weighed against
+       * keywords, so it goes in as `input.documentType` and comes back out of
+       * the route unchanged.
+       */
+      const route = inferHomeTaskRoute(
+        { prompt: text, ...(input.documentType ? { documentType: input.documentType } : {}) },
+        settings.defaults.documentType,
+      );
       if (route.kind === "needs_source") {
         throw new Error("That request needs a file to work from. Open one first.");
       }
