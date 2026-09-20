@@ -12,7 +12,7 @@
  * fix on the combinations the audit measured: ModeMenu on four of ten, the
  * settings menu on four of ten, the file-row menu on exactly one. The audit was
  * explicit that the rest was inference, not measurement ("同取值同结果归类 ——
- * 这是推断不是实测", S2 §4). This runs the full cross product: eight call sites
+ * 这是推断不是实测", S2 §4). This runs the full cross product: nine call sites
  * × ten shells, every cell either opened and measured or **declared absent**.
  *
  * Declared, not skipped. A trigger that does not exist in a shell is a row in
@@ -66,9 +66,9 @@ interface CallSite {
 }
 
 /**
- * The eight `<Menu>` call sites in `src/shell`, and how to open each.
+ * The nine `<Menu>` call sites in `src/shell`, and how to open each.
  *
- * `arrow-down` rather than a click for the three composer chips: the chips
+ * `arrow-down` rather than a click for the four composer chips: the chips
  * overlap each other in a 340px panel (S2-005's cross-reference to S3, and
  * SUMMARY MERGE-001), so a mouse click on one is intercepted by its neighbour.
  * That is a real defect owned by another track — opening from the keyboard
@@ -103,6 +103,12 @@ const CALL_SITES: readonly CallSite[] = [
   },
   { id: "scope", source: "composer/Composer.tsx (scope)", trigger: ".shell-cx-scope", gesture: "arrow-down" },
   {
+    id: "output",
+    source: "composer/Composer.tsx (output type)",
+    trigger: ".shell-cx-output",
+    gesture: "arrow-down",
+  },
+  {
     id: "permission",
     source: "composer/Composer.tsx (permission)",
     trigger: ".shell-cx-permission",
@@ -125,20 +131,21 @@ const CALL_SITES: readonly CallSite[] = [
  *   file-row    file rows render at 0×0 on the collapsed rail, so only the
  *               expanded-sidebar shells have one to right-click.
  *   scope /     Editor's Home is the file library, with no composer on it. The
- *   permission  three chips exist everywhere else, Home hero included.
+ *   output /    four chips exist everywhere else, Home hero included.
+ *   permission
  *   / model
  */
 const REACHABILITY: Record<Combination, readonly string[]> = {
-  C1: ["mode", "settings", "folder-row", "scope", "permission", "model"],
-  C2: ["mode", "settings", "folder-row", "file-row", "scope", "permission", "model"],
+  C1: ["mode", "settings", "folder-row", "scope", "output", "permission", "model"],
+  C2: ["mode", "settings", "folder-row", "file-row", "scope", "output", "permission", "model"],
   C3: ["mode", "settings"],
   C4: ["mode", "settings"],
-  C5: ["mode", "settings", "tabs-more", "folder-row", "scope", "permission", "model"],
-  C6: ["mode", "settings", "tabs-more", "folder-row", "file-row", "scope", "permission", "model"],
-  C7: ["mode", "settings", "tabs-more", "folder-row", "scope", "permission", "model"],
-  C8: ["mode", "settings", "tabs-more", "folder-row", "file-row", "scope", "permission", "model"],
-  C9: ["mode", "settings", "tabs-more", "scope", "permission", "model"],
-  C10: ["mode", "settings", "tabs-more", "scope", "permission", "model"],
+  C5: ["mode", "settings", "tabs-more", "folder-row", "scope", "output", "permission", "model"],
+  C6: ["mode", "settings", "tabs-more", "folder-row", "file-row", "scope", "output", "permission", "model"],
+  C7: ["mode", "settings", "tabs-more", "folder-row", "scope", "output", "permission", "model"],
+  C8: ["mode", "settings", "tabs-more", "folder-row", "file-row", "scope", "output", "permission", "model"],
+  C9: ["mode", "settings", "tabs-more", "scope", "output", "permission", "model"],
+  C10: ["mode", "settings", "tabs-more", "scope", "output", "permission", "model"],
 };
 
 async function isVisible(page: Page, selector: string): Promise<boolean> {

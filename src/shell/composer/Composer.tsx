@@ -227,7 +227,21 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
 
   const scope = folders.find((folder) => folder.id === scopeFolderId) ?? folders[0];
   const canSend = text.trim().length > 0;
-  const stopping = busy && !canSend;
+  /**
+   * The send button doubles as Stop — but never on Home.
+   *
+   * `busy` is the scope *folder's* task, not one this composer started, and
+   * Home's composer is for starting something new. So a run going anywhere in
+   * the selected folder turned the hero's main button into Stop the moment the
+   * input was empty: a destructive action, with no confirmation, on the first
+   * control a new user sees, cancelling work they may not even know about.
+   *
+   * Home already makes this same exception twice — `reference` and
+   * `targetFileId` both refuse to read the workspace from here. `busy` was the
+   * one that got missed. Stopping a run stays available where the run is: the
+   * task panel, and Home's own task list.
+   */
+  const stopping = placement !== "home" && busy && !canSend;
 
   /**
    * The quoted span, when there is one and it belongs to the file on screen.
@@ -875,10 +889,15 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
             <Mic size={16} strokeWidth={1.7} aria-hidden="true" />
           </button>
 
+          {/*
+            Enabled when there is something to send, or something to stop — and
+            that is `stopping`, not `busy`. Keyed to `busy` it stayed clickable
+            on Home with an empty box, where it now neither sends nor stops.
+          */}
           <button
             type="button"
             className="shell-cx-send"
-            disabled={!canSend && !busy}
+            disabled={!canSend && !stopping}
             aria-label={stopping ? "Stop task" : "Send message"}
             title={stopping ? "Stop task" : "Send message"}
             onClick={() => void submit()}

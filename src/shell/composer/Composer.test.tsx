@@ -614,3 +614,58 @@ describe("the scope menu makes folders as well as choosing them", () => {
     );
   });
 });
+
+/**
+ * The send button doubles as Stop, and must not do so on Home.
+ *
+ * `busy` is the scope folder's task — not one this composer started — so any
+ * run anywhere in the selected folder turned Home's main button into Stop the
+ * moment the box was empty. A destructive action, no confirmation, on the
+ * first control a new user sees, cancelling work they may not know exists.
+ */
+describe("the hero's main button never cancels a run", () => {
+  it("stays a disabled Send on Home while a run is going", async () => {
+    const shell = await agentHome();
+    const input = shell.view.getByLabelText("New task instructions");
+
+    fireEvent.change(input, { target: { value: "Write the launch memo" } });
+    await act(async () => {
+      fireEvent.click(shell.view.getByLabelText("Send message"));
+    });
+
+    // The run started and the box is empty again — exactly the state that used
+    // to flip this button to Stop.
+    await waitFor(() => expect((input as HTMLTextAreaElement).value).toBe(""));
+
+    expect(shell.view.queryByLabelText("Stop task")).toBeNull();
+    expect(shell.view.getByLabelText("Send message")).toBeDisabled();
+  });
+
+  /*
+   * The other half: over-correcting would take Stop away everywhere.
+   *
+   * The run is seeded rather than started, because `fastAgent` collapses the
+   * scripted delays to ~1ms — a live run is past `working` before `waitFor`
+   * gets its first look, so asserting on one would be asserting on a race.
+   */
+  it("still offers Stop in the task column, where the run is", async () => {
+    const shell = await renderShell({
+      tasks: [
+        {
+          id: "task-live",
+          title: "Draft the launch checklist",
+          folderId: "folder-launch",
+          status: "writing",
+          phase: "Preparing suggested changes",
+          steps: [],
+          messages: [],
+          suggestion: null,
+          question: null,
+        },
+      ],
+    });
+    await shell.dispatch({ type: "open-file", fileId: SEED_ACTIVE_FILE_ID });
+
+    await waitFor(() => expect(shell.view.getByLabelText("Stop task")).toBeEnabled());
+  });
+});
