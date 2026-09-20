@@ -1,15 +1,12 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 
 import type { DesktopAPI, DesktopTask } from "../shared/types";
 import { DesktopApiProvider } from "../renderer/services/desktopApi";
 import { LocaleProvider } from "../renderer/i18n";
-import { PresentationEditorFrame, type PresentationEditorController } from "../renderer/presentation/PresentationEditorFrame";
 import { CanvasPlaceholder } from "../shell/editor/CanvasPlaceholder";
 import { useCanvasLocale } from "../shell/editor/canvasLocale";
 import { usePptxLiveDraft } from "../renderer/controllers/usePptxLiveDraft";
-import { hasPptxDrawingContent } from "../renderer/presentation/vibeReplay";
 import { useCanvasSession } from "./useCanvasSession";
-import { useLiveDeckReplay } from "./useLiveDeckReplay";
 
 /**
  * A presentation while it is being drawn.
@@ -84,116 +81,38 @@ function StageBody({ api, task, onError }: PresentationStageProps) {
   const live = usePptxLiveDraft({ session, recordError, t });
 
   /*
-   * Is anything actually being drawn?
+   * A run does not get an editor, because nothing can be drawn into one.
    *
-   * Measured on a real run: the live draft came out byte-for-byte identical to
-   * `blank.pptx` — 10111 bytes, one empty slide — while the finished deck was
-   * 1.6MB. So the editor sat on the canvas for three and a half minutes showing
-   * an empty document under a banner that said it was being drawn.
+   * The premise of this surface was progressive disclosure: watch the deck
+   * appear page by page. It does not work here, and the reason is not timing.
    *
-   * The drawing ops have exactly one producer in the runtime,
-   * `runJSSDKDesignProgram` (`pptx_jssdk_design.go`). The desktop's default
-   * backend is `mop-skill`, which authors the deck server-side and hands back
-   * the finished file — no op stream, and nothing for a live editor to show.
-   * On that backend the live editor is structurally empty, not slow.
+   * The runtime does stream drawing ops (`pptx_mop_skill.go`, on by default)
+   * and `usePptxLiveDraft` does turn them into a feed. What is missing is the
+   * far end. Wiring the sequencer to this stage's editor was tried and failed
+   * at the editor itself: it reported `drawing slide 1 of 3` and then threw
+   * "Editing is not permitted" (`access-policy.ts`). There are two embed stacks
+   * against the same editor and only one of them may write — the workbench's
+   * `?officedexEmbed=1&channel=…` boot is granted `documentWrite`
+   * (`officedex-embed-bridge.ts`), the `?mode=embed` one this stage uses is
+   * not. Mounting the workbench instead was tried too: it failed to import the
+   * deck and brought its own agent panel back onto a canvas that was emptied of
+   * exactly that.
    *
-   * So the editor is mounted when there is drawing to put in it, and not
-   * otherwise. `hasPptxDrawingContent` is the runtime's own test for that, and
-   * the same one `usePptxLiveDraft` uses to decide whether a draft is worth
-   * creating.
+   * So until that boot is sorted out, an editor here can only ever show an
+   * empty document. Measured: the live draft stayed 10111 bytes, byte-for-byte
+   * a blank deck, against a finished file of 1.6MB — three and a half minutes
+   * of a live PowerPoint ribbon over nothing, under a banner claiming it was
+   * being drawn.
    *
-   * Note for whoever re-enables jssdk-design: ops arriving is necessary but not
-   * sufficient. `replayFeed` is what applies them, and in this shell nothing
-   * consumes it — the legacy renderer routed it through `PreviewPanel` into
-   * `PptxViewer`, and this stage mounts `PresentationEditorFrame` directly,
-   * below that layer. Wiring the interpreter is the other half.
+   * The skeleton is what is true: a deck is coming, and this is its shape. The
+   * run's progress is next door in the task panel, which has the outline and a
+   * mark per page. When the run finishes, the canvas routes to the finished
+   * file and a real editor opens on it.
+   *
+   * The full trace is in `docs/ui-audit-2026-09-19/findings-pptx-track.md`.
    */
-  const drawing = hasPptxDrawingContent(live?.replayFeed?.ops);
-
-  /*
-   * The editor's own handle, so the run can draw into it.
-   *
-   * `useLiveDeckReplay` is the wiring the shell was missing: the ops reached
-   * the renderer and stopped, because the thing that executes them lives in the
-   * workbench, a layer above what this stage mounts. Held as state rather than
-   * a ref so the hook re-runs when the editor hands over a new controller —
-   * a new editor session has to get a new sequencer, or the old one draws into
-   * a document that is gone.
-   */
-  const [controller, setController] = useState<PresentationEditorController | null>(null);
-  useLiveDeckReplay(api, controller, live?.replayFeed);
-
-  /*
-   * The deck, and nothing else.
-   *
-   * This used to render the whole `ProgressivePptxStage`: the request echoed
-   * back, the outline with a status line per page, the elapsed timer, follow
-   * and cancel — with the deck being written tucked inside it. So the one
-   * surface meant for the document was mostly *about* the document, and the
-   * document itself was a panel within its own commentary.
-   *
-   * All of that moved to the task panel, where a plan is something to read and
-   * discuss. What is left is what a canvas is for. The run's own controls went
-   * with it: pause and finish are the panel's buttons, steering is the
-   * composer, and the outline gate is answered through `agent.answer` (see
-   * `toQuestion` in services/agent.ts).
-   *
-   * `usePptxLiveDraft` stays exactly where it was. It owns the draft's whole
-   * lifecycle — spotting the moment drawing starts, creating the file,
-   * registering it for replay, issuing its token, adopting the session — and
-   * every rule in it was a bug first (R-E-01 through R-E-07).
-   */
-  const editorReady = Boolean(session.grant && session.artifact?.taskId === task.id && drawing);
-
-  /*
-   * A skeleton until there is a deck to show.
-   *
-   * Drawing does not start the moment a run does: the outline, the design pass
-   * and the first page all happen before `usePptxLiveDraft` has a file to hand
-   * the editor. This returned null through that window, so the canvas was a
-   * blank rectangle for a minute or more while the panel beside it listed work
-   * going on — which reads as broken, not as pending.
-   *
-   * The shell's own slides skeleton is the honest thing to show: a deck is
-   * coming, and this is its shape.
-   */
-  if (!editorReady) return <CanvasPlaceholder type="slides" />;
-
-  /*
-   * Visible, but not editable yet.
-   *
-   * The deck on screen is `workspaceDir/live/` scratch: every redraw replaces
-   * it and the next run deletes it. Anything typed into it is gone by the next
-   * page, so letting it accept edits would be offering a change the app cannot
-   * keep.
-   *
-   * The embedded editor owns its own ribbon and has no read-only mode to ask
-   * for, so Insert, Draw, Design, Transitions and Animations sit there looking
-   * live the whole time. Blocking the clicks is not enough on its own — a
-   * toolbar that looks live and does nothing is worse than one that is plainly
-   * not yours yet. The note says so across the top, above the ribbon, because
-   * that band is the only part of this surface the shell can reach.
-   *
-   * It lifts itself: once the run leaves LIVE_STATUSES the canvas routes to the
-   * finished file's editor and this component is gone, so there is no state to
-   * unwind and no way to be left locked.
-   */
-  return (
-    <div className="shell-live-deck">
-      <p className="shell-live-deck-note" role="status">
-        Being drawn — the toolbar below is inactive until this deck is finished
-      </p>
-      <div className="shell-live-deck-frame">
-        <PresentationEditorFrame
-          previewToken={session.grant!.token}
-          fileName={session.artifact!.fileName}
-          onController={setController}
-          onUnavailable={(error) => onError(error || "The presentation editor could not start.")}
-        />
-        <div className="shell-live-deck-lock" aria-hidden="true" />
-      </div>
-    </div>
-  );
+  usePptxLiveDraft({ session, recordError, t });
+  return <CanvasPlaceholder type="slides" />;
 }
 
 

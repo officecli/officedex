@@ -22,7 +22,7 @@
 
 ---
 
-## 2. 生成中显示完整的编辑 ribbon — 已修（`a5a4fab`）
+## 2. 生成中显示完整的编辑 ribbon — 已修（`a5a4fab`），后被整块移除（见 §4）
 
 **现象**：正在画的 deck 上方是一整条 Insert / Draw / Design / Transitions / Animations / Slide Show / Review / View 工具栏，看起来完全可用。
 
@@ -49,7 +49,56 @@
 
 ---
 
-## 观察这些状态的工具
+## 4. 「边画边看」在新 shell 里不工作 — 已确诊，未修复
+
+legacy 有这个能力，新 shell 没有。生成期间画布上是一个**空的** PowerPoint 编辑器，整个运行过程都空着。
+
+**逐字节证据**：live 草稿 10111 bytes、1 页，与 `blank.pptx` 完全相同；同一次运行的成品 1.6MB。
+
+### 链路与断点
+
+```
+officecli  边写边流式吐绘制 op（pptx_mop_skill.go，默认开）      ✅ 到位
+bridge     转成任务事件 → task.vibeOps                          ✅ 到位
+renderer   usePptxLiveDraft 建空白草稿、组装 VibeReplayFeed       ✅ 到位
+执行       VibeReplaySequencer 把 op 编成脚本在编辑器里跑         ❌ 断在这
+```
+
+legacy 的执行端在 `PreviewPanel → PptxViewer → PresentationPptxWorkbench`，sequencer 在工作台内部构造。shell 的 `PresentationStage` 直接挂 `PresentationEditorFrame`，在那一层之下。
+
+### 两次尝试都失败，原因不同
+
+**尝试一：把 sequencer 接到 frame 的 controller 上。** sequencer 确实跑起来了，渲染器日志：
+
+```
+event=drawing   slide 1 / total 3
+event=waiting
+event=failed    error: "Editing is not permitted"
+```
+
+根因是**同一个编辑器有两套嵌入协议，权限不同**：
+
+| | URL | 权限 |
+|---|---|---|
+| `PresentationEditorFrame` | `?mode=embed`，`presentation:*` 消息 | 无写权限 |
+| workbench | `?officedexEmbed=1&channel=…&sessionMode=…`，nonce 通道 | **`documentWrite`** |
+
+`officedex-embed-bridge.ts` 明确授予 `documentRead / documentWrite / documentExport / uiDialog`。那句拒绝来自 `access-policy.ts` 的 `assertCanEdit()`。
+
+**尝试二：改挂 workbench。** 编辑器报 `Failed to import the PowerPoint file`，画布上出现「AI editor unavailable」、编辑器自己的中文空状态占位，以及**一整个 OfficeDex Agent 面板**（Simplify text / Improve layout / Unify the style）—— 正是这块画布刚被清掉的那套 chrome。比修之前更糟，已回退。
+
+### 当前处置
+
+运行期间画布显示**幻灯片骨架**，不挂编辑器。理由：既然只能显示空文档，骨架至少是真话（「一份 deck 正在来的路上，这是它的形状」），而一个挂着「Being drawn」横幅的空编辑器是假话。运行的进度在旁边的任务面板里（大纲 + 每页状态标记）。运行结束后画布路由到成品文件，打开真正的编辑器。
+
+连带移除：只读罩、「Being drawn」横幅 —— 它们都只服务于那个不该存在的 live 编辑器。
+
+### 要修的话
+
+得让 live 草稿这条路用带写权限的那套 boot。不是简单换组件：workbench 的内容管线和 frame 的 `preparePptxEditor` 不同（导入失败就是这个）。两件事：**给 frame 的 embed 加写权限**，或**把 workbench 的 client 生命周期抽出来、不带它的 UI**。
+
+⚠️ **写 e2e 断言时注意**：我两次都在「画面明显坏掉」的情况下拿到绿灯。第一次断言的是 `.pptx-embed-frame` 可见（iframe 无论如何都会挂载），第二次断言的是文案「Unable to open this presentation」而实际报的是「Failed to import the PowerPoint file」。**断言「容器在」几乎总是太弱，断言具体错误文案则会被换一种说法绕过。**
+
 
 `?shellFixture=1&deckRun=1` （`src/shell/dev/fixture.ts`）渲染一个生成中的 pptx 任务，五种页状态同屏，不需要后端、不花 credits。
 
