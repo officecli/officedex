@@ -1430,6 +1430,34 @@ func TestBridgeResultToArtifactInfersFileNameAndType(t *testing.T) {
 	}
 }
 
+// A completed *edit* names its result `output_file`, not `file_path`. Reading
+// only the generate spelling meant every edit finished with no artifact
+// recorded: nothing entered the library, nothing opened, and the editor kept
+// showing the document the run had just rewritten a copy of.
+func TestBridgeResultToArtifactReadsAnEditOutput(t *testing.T) {
+	raw := []byte(`{"document_type":"xlsx","output_file":"/tmp/budget.modified.xlsx","format":"bundle"}`)
+	got := bridgeResultToArtifact(raw)
+	if got == nil {
+		t.Fatal("expected artifact, got nil")
+	}
+	if got.FilePath != "/tmp/budget.modified.xlsx" {
+		t.Errorf("filePath = %q, want the edited file", got.FilePath)
+	}
+	if got.FileName != "budget.modified.xlsx" || got.DocumentType != "xlsx" {
+		t.Errorf("unexpected artifact: %+v", got)
+	}
+}
+
+// Both spellings in one payload: the generated path is the primary one, so it
+// wins rather than being overwritten by a field that happens to sort later.
+func TestBridgeResultToArtifactPrefersFilePath(t *testing.T) {
+	raw := []byte(`{"file_path":"/tmp/a.xlsx","output_file":"/tmp/b.xlsx"}`)
+	got := bridgeResultToArtifact(raw)
+	if got == nil || got.FilePath != "/tmp/a.xlsx" {
+		t.Errorf("filePath = %+v, want /tmp/a.xlsx", got)
+	}
+}
+
 func TestBridgeResultToArtifactNilWithoutPath(t *testing.T) {
 	if got := bridgeResultToArtifact([]byte(`{}`)); got != nil {
 		t.Errorf("expected nil, got %+v", got)
@@ -1957,5 +1985,64 @@ func TestInvokeGenerateSendsResumeCheckpoint(t *testing.T) {
 	}, nil)
 	if err := <-done; err != nil {
 		t.Errorf("InvokeGenerate: %v", err)
+	}
+}
+
+/*
+ * The planner gets its own clock, and a long one.
+ *
+ * An in-place edit failed in the field with `[kind:connection] bridge:
+ * officecli bridge request timed out: pptx/plan-js` — one model call against a
+ * provider measured the same day at 14s to 110s, cut off at 45s. There is no
+ * second deadline behind this one: `agent_bridge.go` hands the request context
+ * straight to `runWorkflowSync`, so whatever this client allows is the whole
+ * budget, and ending the call early ends a call that was going to succeed.
+ *
+ * What has to hold is that the planner is *not* governed by the general
+ * `RequestTimeout`, which is 30s and right for the dozens of small RPCs that
+ * are not model calls.
+ */
+func TestPlanPptxJSUsesItsOwnTimeoutNotTheGeneralOne(t *testing.T) {
+	fake := newFakeTransport()
+	client := New(Options{
+		RequestTimeout:       80 * time.Millisecond,
+		PptxJSPlanTimeout:    3 * time.Second,
+		CreateTransport:      func(Options) (Transport, error) { return fake, nil },
+		DisableAutoReconnect: true,
+	})
+	if err := client.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer client.Stop()
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := client.PlanPptxJS(context.Background(), PlanPptxJSInput{Prompt: "change this title to Japanese"})
+		done <- err
+	}()
+
+	req := fake.readRequest(t)
+	if req.Method != MethodPptxPlanJS {
+		t.Fatalf("method = %q, want %q", req.Method, MethodPptxPlanJS)
+	}
+	// Slower than the general timeout, well inside the planner's own.
+	time.Sleep(250 * time.Millisecond)
+	fake.writeResponse(t, req.idString(), map[string]any{"source": "slide.title = 'タイトル'"}, nil)
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("a planner answer inside its own budget was rejected: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("PlanPptxJS never returned")
+	}
+}
+
+// The default is what ships: nothing in the app overrides it.
+func TestDefaultPlannerTimeoutCoversTheMeasuredProvider(t *testing.T) {
+	// 110s was the slowest single call measured against this provider.
+	if DefaultPptxJSPlanTimeout < 110*time.Second {
+		t.Errorf("DefaultPptxJSPlanTimeout = %s, too short for a provider measured at 110s", DefaultPptxJSPlanTimeout)
 	}
 }

@@ -34,9 +34,28 @@ import (
 
 // Defaults mirror the TypeScript constructor defaults.
 const (
-	DefaultRequestTimeout             = 30 * time.Second
-	DefaultTaskInvokeTimeout          = 30 * time.Minute
-	DefaultPptxJSPlanTimeout          = 45 * time.Second
+	DefaultRequestTimeout    = 30 * time.Second
+	DefaultTaskInvokeTimeout = 30 * time.Minute
+	/*
+	 * One model call, against the provider the desktop actually talks to.
+	 *
+	 * This was 45s, and an in-place edit ("change this title to Japanese")
+	 * failed on it with `[kind:connection] bridge: officecli bridge request
+	 * timed out: pptx/plan-js` — the planner had not answered yet, and nothing
+	 * about the run was wrong.
+	 *
+	 * 45s does not describe this provider. Measured on real generations the
+	 * same day, single calls to it returned in 14s, 21s, 23s, 28s, 32s and then
+	 * 90s, 98s and 110s; the spread is the provider's, not the prompt's. It is
+	 * also out of step with its own sibling — `pptx/analyze-template` is the
+	 * same shape of call and has had two minutes all along.
+	 *
+	 * `pptx/plan-js` has no deadline of its own on the other side
+	 * (`agent_bridge.go` hands the request context straight to
+	 * `runWorkflowSync`), so this is the only clock, and cutting it early ends a
+	 * call that was still going to succeed.
+	 */
+	DefaultPptxJSPlanTimeout          = 2 * time.Minute
 	DefaultPptxTemplateAnalyzeTimeout = 2 * time.Minute
 	DefaultMaxReconnectAttempts       = 8
 	DefaultBaseReconnectDelay         = 1 * time.Second
