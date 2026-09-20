@@ -1,0 +1,129 @@
+/*
+ * The Word stage, while a run is writing a document.
+ *
+ * Its own file rather than a block in canvas.css: that stylesheet is the size
+ * rules every mounted editor needs, and this is one surface's appearance. Kept
+ * deliberately parallel to `sheetStage.css` — a user who starts a document and
+ * a workbook in the same minute should see one product, not two.
+ *
+ * Every value is a token. The accent is `--shell-doc-accent` by name rather
+ * than the ambient `--shell-accent`, which follows whatever file is open: a
+ * document run started while a deck was on screen would otherwise wear the
+ * presentation's rose.
+ */
+
+.shell-doc-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: hidden;
+  padding: 28px 24px 40px;
+  background: var(--shell-sunken);
+}
+
+/*
+ * The page, pushed back far enough to read as ground rather than as content.
+ *
+ * Same width and margins as the shell's own document skeleton, so the swap from
+ * this to the mounted editor moves the paper as little as the two can manage.
+ */
+.shell-doc-stage-paper {
+  position: relative;
+  width: min(780px, 100%);
+  min-height: 100%;
+  padding: 64px 72px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--shell-paper);
+  border: 1px solid var(--shell-line);
+  box-shadow: 0 1px 3px #2536430f;
+  opacity: 0.55;
+}
+
+.shell-doc-stage-block {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.shell-doc-stage-line {
+  display: block;
+  height: 10px;
+  width: 100%;
+  border-radius: 3px;
+  background: #eceef0;
+}
+
+.shell-doc-stage-line--title {
+  width: 52%;
+  height: 20px;
+  margin-bottom: 14px;
+  background: #e2e5e9;
+}
+
+.shell-doc-stage-line--heading {
+  width: 34%;
+  height: 13px;
+  margin: 22px 0 6px;
+  background: #e2e5e9;
+}
+
+/*
+ * The status, over the page rather than under it.
+ *
+ * Centred on the first third: low enough not to sit on the title rule, high
+ * enough to stay in view on a short window without the page having to scroll to
+ * find out what is happening.
+ */
+.shell-doc-stage-status {
+  position: absolute;
+  top: 34%;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 0 24px;
+  text-align: center;
+}
+
+.shell-doc-stage-title {
+  color: var(--shell-ink-title);
+  font-size: var(--shell-text-lg);
+  font-weight: 600;
+}
+
+.shell-doc-stage-phase {
+  color: var(--shell-ink-subtle);
+  font-size: var(--shell-text);
+}
+
+/* A hairline in the document's own accent, so the stage is identifiably a Word
+   run at a glance and not the workbook one with different words in it. */
+.shell-doc-stage-paper::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--shell-doc-accent);
+}
+
+/*
+ * There is deliberately no idle animation here — no shimmer over the rules, no
+ * sweep down the page.
+ *
+ * It is the obvious way to make a quiet thirty seconds look alive, and it would
+ * be a second copy of audit finding S7-004: the shell's own Reduced motion
+ * switch lives in a settings store the canvas root cannot reach, so anything
+ * animated here would answer only to the OS media query and the app's switch
+ * would be a control that does nothing.
+ *
+ * What moves instead is real: the phase line changes as the run reports, and
+ * the whole stage is replaced by the document the moment the file exists.
+ */

@@ -7,9 +7,12 @@ import type { WriterAgentEditor } from "../renderer/word/WriterEditorFrame";
 import type { PresentationEditorController } from "../renderer/presentation/PresentationEditorFrame";
 import { useTaskStore } from "../renderer/store/taskStore";
 import { PresentationCanvas } from "./PresentationCanvas";
-import { DocxCanvas } from "./DocxCanvas";
+import { DocxCanvas, type DocumentEditRunner } from "./DocxCanvas";
 import { SheetCanvas } from "./SheetCanvas";
+import { SheetStage } from "./SheetStage";
+import { liveWorkbookTask } from "./sheetRuntimeProgress";
 import { PresentationStage, liveDeckTask } from "./PresentationStage";
+import { DocxStage, liveDocTask } from "./DocxStage";
 
 /**
  * What fills the canvas box.
@@ -40,6 +43,11 @@ export interface CanvasContentProps {
   onResolveSelection: (resolve: (() => Promise<CanvasSelection | null>) | null) => void;
   /** The handle the shell saves through, or null when nothing is editable. */
   onSave: (save: (() => Promise<unknown>) | null) => void;
+  /**
+   * How to rewrite part of the open document in place, or null when whatever
+   * is on screen cannot be edited that way — which is everything except Word.
+   */
+  onEditRunner: (edit: DocumentEditRunner | null) => void;
   onUnavailable: (reason: string) => void;
 }
 
@@ -50,11 +58,34 @@ export function CanvasContent({
   onSelectionChange,
   onResolveSelection,
   onSave,
+  onEditRunner,
   onUnavailable,
 }: CanvasContentProps) {
   const { state } = useTaskStore();
-  const live = liveDeckTask(state.tasks, state.taskOrder);
-  const open = live ? null : file;
+  const liveDeck = liveDeckTask(state.tasks, state.taskOrder);
+  /*
+   * A document being written takes the canvas the same way a deck does, and for
+   * the same reason: there is no file yet, so routing on the active file shows
+   * the *last* document the user had open while a different one is being
+   * written — for the length of the run, with nothing saying so.
+   *
+   * A deck wins a tie. Two runs of different types at once is rare, and when it
+   * happens the deck has the more informative stage: it shows the real pages
+   * appearing, while this one can only show that something is coming.
+   */
+  const liveDoc = liveDeck ? null : liveDocTask(state.tasks, state.taskOrder);
+  /*
+   * A workbook being written is the third of these, and the plainest case for
+   * it: the runtime hands back one XLSX at the end, so there is nothing to
+   * render until the run is over and the canvas showed a blank rectangle for
+   * the whole minute it took.
+   *
+   * Last of the three for the same reason the document is second — the deck's
+   * stage shows real pages, the workbook's can only show which sheets are
+   * planned and which are written.
+   */
+  const liveSheet = liveDeck || liveDoc ? null : liveWorkbookTask(state.tasks, state.taskOrder);
+  const open = liveDeck || liveDoc || liveSheet ? null : file;
 
   // Nothing editable on screen means nothing for the shell to save through.
   // Done in an effect rather than during render: an editor that is mounted
@@ -65,14 +96,43 @@ export function CanvasContent({
       onSave(null);
       onResolveSelection(null);
       onSelectionChange(null);
+      onEditRunner(null);
     }
-  }, [open, onSave, onResolveSelection, onSelectionChange]);
+  }, [open, onSave, onResolveSelection, onSelectionChange, onEditRunner]);
 
-  if (live) {
+  /*
+   * In-place editing belongs to Word alone, so every other branch withdraws it.
+   *
+   * Reported here rather than left to the adapter's own file-change reset,
+   * because switching from a document to a *deck* never passes through the
+   * null branch above: the runner would still be the document's, and an
+   * instruction typed beside a slide would silently rewrite the Word file
+   * behind it.
+   */
+  useEffect(() => {
+    if (open && open.type !== "doc") onEditRunner(null);
+  }, [open, onEditRunner]);
+
+  if (liveDeck) {
     // The stage owns its own editor session and saves through the runtime: there
     // is no finished file for the shell's save button to write yet.
-    return <PresentationStage api={api} task={live} onError={onUnavailable} />;
+    return <PresentationStage api={api} task={liveDeck} onError={onUnavailable} />;
   }
+
+  // No editor session and nothing to save: a document under construction is not
+  // a file yet, and this stage mounts no editor to become one.
+  if (liveDoc) return <DocxStage task={liveDoc} />;
+
+  /*
+   * Same for a workbook — and here the remount on the way out is doing work.
+   *
+   * An edit rewrites the file the mounted editor is holding, and the editor
+   * keeps showing the bytes it loaded: it has no reason to know the disk moved
+   * under it. Routing the run through the stage tears that session down, so
+   * when the artifact opens the workbook is read fresh, which is the only
+   * reading of it that is true.
+   */
+  if (liveSheet) return <SheetStage task={liveSheet} />;
 
   if (!open) return null;
 
@@ -114,6 +174,7 @@ export function CanvasContent({
       onSelectionChange={onSelectionChange}
       onResolveSelection={onResolveSelection}
       onEditor={(editor: WriterAgentEditor | null) => onSave(editor ? () => editor.save() : null)}
+      onEditRunner={onEditRunner}
       onUnavailable={onUnavailable}
     />
   );

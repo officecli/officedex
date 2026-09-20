@@ -5,6 +5,7 @@ import type { FileMeta } from "../shared/uiPort";
 import type { CanvasAdapter, CanvasSelection } from "../shell/editor/canvasContract";
 import { CanvasTaskStore } from "./CanvasTaskStore";
 import { CanvasContent } from "./CanvasContent";
+import type { DocumentEditRunner } from "./DocxCanvas";
 import "./canvas.css";
 
 /**
@@ -53,6 +54,11 @@ export function createDesktopCanvas({ api, onUnavailable }: DesktopCanvasDeps): 
    * mounted changes under this adapter's feet.
    */
   let resolveCurrent: (() => Promise<CanvasSelection | null>) | null = null;
+  /**
+   * How the editor showing right now rewrites part of itself in place, or null
+   * when it cannot. Word is the only one that can; see `docxEditRun.ts`.
+   */
+  let editCurrent: DocumentEditRunner | null = null;
   const selectionListeners = new Set<(selection: CanvasSelection | null) => void>();
   const dirtyListeners = new Set<(dirty: boolean) => void>();
 
@@ -72,6 +78,10 @@ export function createDesktopCanvas({ api, onUnavailable }: DesktopCanvasDeps): 
     resolveCurrent = resolve;
   };
 
+  const setEditRunner = (edit: DocumentEditRunner | null) => {
+    editCurrent = edit;
+  };
+
   function render() {
     if (!root) return;
     // One element, always the same component type, so React updates the tree
@@ -86,6 +96,7 @@ export function createDesktopCanvas({ api, onUnavailable }: DesktopCanvasDeps): 
           onSelectionChange={announceSelection}
           onResolveSelection={setResolveSelection}
           onSave={setSave}
+          onEditRunner={setEditRunner}
           onUnavailable={onUnavailable}
         />
       </CanvasTaskStore>,
@@ -117,6 +128,11 @@ export function createDesktopCanvas({ api, onUnavailable }: DesktopCanvasDeps): 
       if (current?.id !== file.id) {
         saveCurrent = null;
         resolveCurrent = null;
+        // Same argument, and a sharper one: an edit runner holds a live Writer
+        // handle onto a specific document. Left behind after a tab switch it
+        // would rewrite the file the user just left, while they watched a
+        // different one.
+        editCurrent = null;
         // Whatever was selected belonged to the document being left. Saying so
         // is what stops the composer quoting the previous file.
         announceSelection(null);
@@ -145,6 +161,7 @@ export function createDesktopCanvas({ api, onUnavailable }: DesktopCanvasDeps): 
       current = null;
       saveCurrent = null;
       resolveCurrent = null;
+      editCurrent = null;
       selectionListeners.clear();
       dirtyListeners.clear();
       // Synchronously, so the host node is free before anything mounts into it
@@ -181,6 +198,24 @@ export function createDesktopCanvas({ api, onUnavailable }: DesktopCanvasDeps): 
       // Nothing editing means a sheet, or Home. Saving nothing is not a failure.
       if (!saveCurrent) return;
       await saveCurrent();
+    },
+
+    canEditDocument() {
+      return editCurrent !== null;
+    },
+
+    /*
+     * Refuses rather than no-ops when nothing on screen can be edited in
+     * place. Unlike `save`, there is no reading under which doing nothing is
+     * the right answer here: the caller asked for an instruction to be carried
+     * out, and silence would look exactly like an instruction that was carried
+     * out and changed nothing.
+     */
+    async editDocument(request) {
+      if (!editCurrent) {
+        throw new Error("There is no open Word document for this instruction to change.");
+      }
+      return editCurrent(request);
     },
   };
 }
