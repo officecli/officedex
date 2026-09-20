@@ -47,7 +47,7 @@
 //    what catches the ones that do not.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 
 /**
@@ -218,15 +218,47 @@ export function verifyShellStyles({ root = process.cwd(), dist = "dist", entry =
   return { stylesheets: hrefs, modules: modules.length, defined: defined.size, missing, nowStyled };
 }
 
-function build(root) {
-  execFileSync("npx", ["vite", "build"], { cwd: root, stdio: "inherit" });
+/**
+ * Builds into a directory of this check's own, not into `dist/`.
+ *
+ * It used to run a plain `npx vite build`, which writes `dist/` — and in a
+ * worktree with several sessions in it, two builds racing over the same output
+ * fail in a way that reads as **"the build is broken"** rather than as "someone
+ * else is building right now". A gate that goes red for a reason it misreports
+ * is worse than no gate: it teaches people that its red means nothing.
+ *
+ * The directory is per-process, so concurrent runs cannot collide with each
+ * other either. It is removed afterwards — this check reads the artifact once
+ * and has no reason to leave 6MB behind.
+ */
+function build(root, outDir) {
+  try {
+    execFileSync("npx", ["vite", "build", "--outDir", outDir, "--emptyOutDir"], {
+      cwd: root,
+      stdio: "inherit",
+    });
+  } catch (cause) {
+    throw new Error(
+      `vite build failed while checking shell stylesheets (out dir ${outDir}). ` +
+        "If another session is building in this worktree at the same time, that is not this failure — " +
+        "this build has its own output directory. Re-run to confirm.",
+      { cause },
+    );
+  }
 }
 
 const invokedDirectly = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname);
 if (invokedDirectly) {
   const root = process.cwd();
-  if (!process.argv.includes("--no-build")) build(root);
-  const report = verifyShellStyles({ root });
+  const noBuild = process.argv.includes("--no-build");
+  const outDir = noBuild ? "dist" : `dist-style-check-${process.pid}`;
+  if (!noBuild) build(root, outDir);
+  let report;
+  try {
+    report = verifyShellStyles({ root, dist: outDir });
+  } finally {
+    if (!noBuild) rmSync(path.resolve(root, outDir), { recursive: true, force: true });
+  }
   console.log(`shell stylesheets: ${report.stylesheets.join(", ")}`);
   console.log(`modules reachable from the shell entry: ${report.modules}`);
   console.log(`classes defined in the shell bundle: ${report.defined}`);

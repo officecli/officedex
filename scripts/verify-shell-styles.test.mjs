@@ -21,6 +21,7 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { rmSync } from "node:fs";
 import { test } from "node:test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -75,8 +76,30 @@ test("moduleClosure follows dynamic imports as well as static ones", () => {
 });
 
 test("the shell build ships the styles of every component the shell can reach", () => {
-  execFileSync("npx", ["vite", "build"], { cwd: root, stdio: "inherit" });
-  const report = verifyShellStyles({ root });
+  /*
+   * Builds into a directory of this test's own rather than into `dist/`.
+   *
+   * Two builds racing over the same output fail in a way that reads as "the
+   * build is broken" rather than as "someone else is building right now" —
+   * which is what happened the first time another session ran this gate while
+   * building in the same worktree. A gate that goes red for a reason it
+   * misreports is worse than no gate.
+   *
+   * Keyed by pid so two runs of this file cannot collide either, and removed
+   * afterwards: the artifact is read once and there is no reason to leave 6MB
+   * of it behind.
+   */
+  const outDir = `dist-style-check-test-${process.pid}`;
+  let report;
+  try {
+    execFileSync("npx", ["vite", "build", "--outDir", outDir, "--emptyOutDir"], {
+      cwd: root,
+      stdio: "inherit",
+    });
+    report = verifyShellStyles({ root, dist: outDir });
+  } finally {
+    rmSync(path.resolve(root, outDir), { recursive: true, force: true });
+  }
 
   assert.ok(report.stylesheets.length > 0, "dist/index.html links no stylesheet");
   assert.ok(report.modules > 50, `only ${report.modules} modules reachable -- the walker is broken`);

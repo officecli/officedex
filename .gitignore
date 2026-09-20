@@ -69,3 +69,4 @@ id_rsa*
 credentials*
 secrets*
 output
+dist-style-check-*/

@@ -95,3 +95,18 @@ document.querySelector("[data-canvas-host] iframe").contentDocument.body.innerHT
   表现为 `DOCX export unavailable: docx-export-failed`）。就地编辑因此保存不了，
   但**替换本身成功、撤销也成功** —— docx track 那条「apply 成功 / save 失败必须分开报」
   的设计就是被这个逼出来的。**别把它当成编辑失败。**
+
+## 基线提醒：裸 worktree 上 tsc 不是 0 而是 12
+
+`src/renderer/generated/wailsjs/**` 在 `.gitignore:36` 里，是 wails 生成物，**永远不在 HEAD**。
+所以「`git worktree add` + `tsc --noEmit`」这套 A/B 归因方法的基线是 **12 条错**，不是 0。
+
+解法（本轮各 track 用的）：建完 worktree 后把生成物拷进去。
+
+```bash
+git worktree add -q /tmp/x HEAD
+ln -s "$PWD/node_modules" /tmp/x/node_modules
+cp -R src/renderer/generated /tmp/x/src/renderer/     # ← 少这步会有 12 条假红
+```
+
+不拷的话别去追那 12 条，它们不是任何人的退化。
