@@ -401,6 +401,25 @@ verify:shell:styles   pass 6 / fail 0
 - `composer.css` 欠 27 处裸色值 + 4 处离表字号 + `font-weight:450` + 2 处 z-index（W3-I §3 逐条带行号）。
 - W3-J 欠约 94 条文案，其中 `port/reportPortFailure.ts` 的 4 条覆盖面最大——它是**所有**端口失败的统一 toast 外壳。
 
+## 3.10 真后端验证的 runbook 已单独成文
+
+`docs/dev-real-runbook.md` —— 由 docx track 实际走通并连坑一起交付。
+
+为什么值得单独一份：**浏览器 fixture（3100 系列）到不了真编辑器、真生成、真 LLM**。
+`createShellCanvas()` 在 `!hasDesktopBackend()` 时返回 null，画布退回骨架；
+`?deckRun=1` 喂的是 port 的 `AgentTask`（任务面板）而不是画布的 task store。
+本轮有 track 差点为此在 3100 上找一条根本不存在的轴。
+
+里面几条只有踩过才知道的：`OFFICEDEX_E2E_NO_HMR=1` 不加会被别人的热更新打断；
+`RUN_DIR` 曾写死目录导致并发实例互相 `rm -rf`、症状是 SQLite readonly 而日志看不出真因；
+`127.0.0.1` 与 `localhost` 在预览标签页里不总可互换；**触发生成直接打桥不要走 UI**
+（合成 `element.click()` 填不进 composer，表现成「点了发送什么都没发生」）；
+等 Writer 渲染完要看 iframe 的 `innerHTML.length`（272522 = 只有壳，1319785 = 真渲染了）
+而不是固定 sleep。
+
+以及两条做截图取证时会误判的既有缺陷：Writer 的 apply 替换标题会丢字符格式；
+dev-real 里 DOCX 导出必失败但**替换与撤销本身是成功的**。
+
 ## 4. 交叉验证与自我纠错记录（保留，供后续复盘）
 
 **独立收敛**：S2 与 S7 互不知情测得设置菜单同一组数值（`left = -210.5`，可见 15.8%）；S5 静态预测的 8 个令牌差值被 S7 用 computed style 证实；S1/S5/S8 三方独立确认设置菜单溢出**与折叠轨无关**，共同推翻 PLAN 2.1 的猜测。
