@@ -46,6 +46,9 @@ src/renderer/generated/
 # `scripts/dev-real.mjs` writes into its run directory.
 .dsh-project-memory/
 build/dev-real/
+# …and the per-port ones: the run directory used to be hard-coded, so two
+# instances deleted each other's SQLite (symptom: "readonly database").
+build/dev-real-*/
 
 # Misc local marker files.
 package.json.md5
