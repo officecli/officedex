@@ -7,6 +7,9 @@ import { pathToFileURL } from "node:url";
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 
+/** The id this gate asks under, and the only one it will accept an answer on. */
+const INITIALIZE_ID = 1;
+
 export function verifyVersionOutput(output, expectedVersion) {
   const text = String(output ?? "").trim();
   const match = text.match(/officecli\s+version\s+v?(\d+\.\d+\.\d+)/i);
@@ -56,7 +59,7 @@ export async function verifyOfficecliCanvasContract({ binary, expectedVersion, t
 
   try {
     const responsePromise = readLspResponse(child, timeoutMs);
-    child.stdin.write(encodeLspMessage({ jsonrpc: "2.0", id: 1, method: "initialize" }));
+    child.stdin.write(encodeLspMessage({ jsonrpc: "2.0", id: INITIALIZE_ID, method: "initialize" }));
     const response = await responsePromise;
     if (response?.error) {
       throw new Error(`OfficeCLI initialize failed: ${JSON.stringify(response.error)}`);
@@ -102,25 +105,53 @@ function readLspResponse(child, timeoutMs) {
     const onExit = (code, signal) => {
       fail(new Error(`OfficeCLI agent-bridge exited before initialize response (code=${code ?? ""}, signal=${signal ?? ""})${stderr ? `: ${stderr.trim()}` : ""}`));
     };
+    /*
+     * Drain frames until the answer to *this* request arrives.
+     *
+     * The bridge is a JSON-RPC server, not a request/response pipe: it emits
+     * `event` notifications whenever it has something to say, including before
+     * it has answered anything. A run left over from a previous session is
+     * enough — it resumes on startup and announces itself, and this gate used
+     * to take that first frame as the initialize response, find no `result` on
+     * a notification, and fail the whole build with "OfficeCLI initialize
+     * result is missing".
+     *
+     * Observed exactly that: a stuck run announced `run.failed: run was
+     * resumed too many times without finishing` ahead of the response, and a
+     * build that had nothing wrong with it stopped here.
+     *
+     * So frames are consumed until one carries this request's id. Notifications
+     * have no id at all, which is what makes them skippable rather than
+     * ambiguous.
+     */
     const onStdout = (chunk) => {
       stdout = Buffer.concat([stdout, Buffer.from(chunk)]);
-      const headerEnd = stdout.indexOf("\r\n\r\n");
-      if (headerEnd < 0) return;
-      const header = stdout.subarray(0, headerEnd).toString("ascii");
-      const match = header.match(/(?:^|\r\n)Content-Length:\s*(\d+)/i);
-      if (!match) {
-        fail(new Error(`OfficeCLI initialize response is missing Content-Length: ${header}`));
-        return;
-      }
-      const length = Number(match[1]);
-      const bodyStart = headerEnd + 4;
-      if (stdout.length < bodyStart + length) return;
-      try {
-        const response = JSON.parse(stdout.subarray(bodyStart, bodyStart + length).toString("utf8"));
-        cleanup();
-        resolve(response);
-      } catch (error) {
-        fail(new Error(`invalid OfficeCLI initialize JSON: ${error instanceof Error ? error.message : String(error)}`));
+      for (;;) {
+        const headerEnd = stdout.indexOf("\r\n\r\n");
+        if (headerEnd < 0) return;
+        const header = stdout.subarray(0, headerEnd).toString("ascii");
+        const match = header.match(/(?:^|\r\n)Content-Length:\s*(\d+)/i);
+        if (!match) {
+          fail(new Error(`OfficeCLI initialize response is missing Content-Length: ${header}`));
+          return;
+        }
+        const length = Number(match[1]);
+        const bodyStart = headerEnd + 4;
+        if (stdout.length < bodyStart + length) return;
+        const body = stdout.subarray(bodyStart, bodyStart + length).toString("utf8");
+        stdout = stdout.subarray(bodyStart + length);
+        let frame;
+        try {
+          frame = JSON.parse(body);
+        } catch (error) {
+          fail(new Error(`invalid OfficeCLI initialize JSON: ${error instanceof Error ? error.message : String(error)}`));
+          return;
+        }
+        if (frame && frame.id === INITIALIZE_ID) {
+          cleanup();
+          resolve(frame);
+          return;
+        }
       }
     };
 
