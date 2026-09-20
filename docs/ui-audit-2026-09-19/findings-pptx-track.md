@@ -113,17 +113,31 @@ event=failed    error: "Editing is not permitted"
 
 **尝试二：改挂 workbench。** 编辑器报 `Failed to import the PowerPoint file`，画布上出现「AI editor unavailable」、编辑器自己的中文空状态占位，以及**一整个 OfficeDex Agent 面板**（Simplify text / Improve layout / Unify the style）—— 正是这块画布刚被清掉的那套 chrome。比修之前更糟，已回退。
 
-### 当前处置
+### 结局：接线本来就是对的，我删错了
 
-运行期间画布显示**幻灯片骨架**，不挂编辑器。理由：既然只能显示空文档，骨架至少是真话（「一份 deck 正在来的路上，这是它的形状」），而一个挂着「Being drawn」横幅的空编辑器是假话。运行的进度在旁边的任务面板里（大纲 + 每页状态标记）。运行结束后画布路由到成品文件，打开真正的编辑器。
+**实测（`e2e/editor-write-permission-real.spec.ts` + `officedex-editor-diagnose.ts`，在编辑器自己的 realm 里跑）：**
 
-连带移除：只读罩、「Being drawn」横幅 —— 它们都只服务于那个不该存在的 live 编辑器。
+```json
+"slideWrite": { "attempted": true, "ok": true }
+"shapeWrite": { "attempted": true, "ok": true, "shapesAdded": 1 }
+"url":        { "search": "?officedexEmbed=1", "hasChannel": false }
+```
 
-### 要修的话
+**两级写入都成功。** 写权限从来不是问题。而且 frame 实际启动的 URL 是 `?officedexEmbed=1` —— 连「两条协议」这个前提本身也是错的。上面那套「frame 没有写权限 / 要跨团队加权限」的推断，前提和结论全错。
 
-得让 live 草稿这条路用带写权限的那套 boot。不是简单换组件：workbench 的内容管线和 frame 的 `preparePptxEditor` 不同（导入失败就是这个）。两件事：**给 frame 的 embed 加写权限**，或**把 workbench 的 client 生命周期抽出来、不带它的 UI**。
+所以 `7e7a6d2` 那个 `useLiveDeckReplay` 接线**本来就是对的**，而我因为一个错误的推断把它删掉了（`9b96338`），连带删掉了只读罩和横幅，把画布退成骨架。另一条 track 把它们恢复了回来，加上「watch a deck being drawn」入口和 CSS 尺寸修复（frame 嵌套深一层，直接子选择器选不中，deck 塌成编辑器 ribbon 的 154px 高），现在 e2e 能把内置录像画进 live 编辑器。
+
+**我上一版写在这里的「当前处置：显示骨架，不挂编辑器」和「要修的话：给 frame 加写权限」都已作废，不要照做。**
+
+### 教训
+
+我观察到的是一句拒绝（`Editing is not permitted`），归因是推的：「workbench 那条明确授予 documentWrite，frame 这条我在压缩 bundle 里读不到声明」→ 把**读不到**当成了**没有**。然后据此得出「跨团队、不是能顺手修的东西」，还动手删掉了正确的代码。
+
+那句 `Editing is not permitted` 有两个生产者（`AccessPolicy.canEdit` 和 Office.js 的能力授予），消息本身分不出是哪个 —— 这正是探针存在的理由。**行为探针花了几分钟，推断花了我两次错误结论和一次误删。**
 
 ⚠️ **写 e2e 断言时注意**：我两次都在「画面明显坏掉」的情况下拿到绿灯。第一次断言的是 `.pptx-embed-frame` 可见（iframe 无论如何都会挂载），第二次断言的是文案「Unable to open this presentation」而实际报的是「Failed to import the PowerPoint file」。**断言「容器在」几乎总是太弱，断言具体错误文案则会被换一种说法绕过。**
+
+## 观察这些状态的工具
 
 
 `?shellFixture=1&deckRun=1` （`src/shell/dev/fixture.ts`）渲染一个生成中的 pptx 任务，五种页状态同屏，不需要后端、不花 credits。
