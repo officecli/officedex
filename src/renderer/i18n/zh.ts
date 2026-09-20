@@ -650,6 +650,7 @@ export const zh: Record<string, string> = {
   "shell.sidebar.fullMotion": "完整动效",
   "shell.sidebar.motionDescription": "跟随系统的动画偏好",
 
+  "shell.status.beingWritten": "正在生成…",
   "shell.status.noFile": "未打开文件",
   "shell.status.onThisComputer": "在这台电脑上",
   "shell.status.saved": "改动已全部保存",
@@ -795,6 +796,7 @@ export const zh: Record<string, string> = {
   "shell.home.blankDocument": "空白文档",
   "shell.home.blankWorkbook": "空白表格",
   "shell.home.blankPresentation": "空白演示",
+  "shell.home.watchDeckDrawing": "看一份演示被画出来",
   "shell.home.openFromComputer": "从这台电脑打开",
   "shell.home.filesAria": "文件",
   "shell.home.filesIn": "{folder} 里的文件",

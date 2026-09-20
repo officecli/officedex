@@ -1,6 +1,7 @@
 import { HardDrive } from "lucide-react";
 
 import { useT } from "../../renderer/i18n";
+import { useCanvasSurface } from "../editor/canvasSurface";
 import { useShell } from "../state/ShellContext";
 
 /**
@@ -25,6 +26,33 @@ export function StatusBar() {
   const t = useT();
   const { activeFile } = useShell();
 
+  /*
+   * A document being written is not "no file open".
+   *
+   * A run that has not finished has no library entry to be the active file —
+   * deliberately, the live draft is scratch in `workspaceDir/live/` and never
+   * reaches `documents` — so `activeFile` is null for the whole minute or more
+   * a deck is being drawn right there on the canvas. This bar said "No file
+   * open" the entire time, under a visibly half-drawn deck. Its own rule, at
+   * the top of this file, is to say less rather than say wrong; that was
+   * saying wrong.
+   *
+   * The canvas already announces itself: a mounted editor publishes its chrome
+   * (`canvasSurface.ts`), and the live stage publishes too. That is the shell's
+   * own boundary, a plain synchronous store, so reading it here costs nothing
+   * and subscribes nothing twice — which is what ruled out the two earlier
+   * attempts (`useTaskStore` is not mounted at this entry at all and crashed
+   * the shell; `useAgentTask` is already live in AgentPresence and would
+   * duplicate its port reads).
+   *
+   * Only the empty branch changes: an open file still reports itself, so this
+   * can only replace a statement that was wrong with one that is not. Type
+   * agnostic on purpose — whichever stage owns the canvas, the fact being
+   * stated is the same.
+   */
+  const { chrome } = useCanvasSurface();
+  const canvasBusy = !activeFile && chrome !== null;
+
   return (
     <div className="shell-statusbar shell-region">
       <div className="shell-statusbar-facts">
@@ -32,7 +60,11 @@ export function StatusBar() {
             name is the longest: a 66-character name gets an ellipsis from
             chrome.css, and this is how the rest of it is still recoverable. */}
         <span title={activeFile ? activeFile.name : undefined}>
-          {activeFile ? activeFile.name : t("shell.status.noFile")}
+          {activeFile
+            ? activeFile.name
+            : canvasBusy
+              ? t("shell.status.beingWritten")
+              : t("shell.status.noFile")}
         </span>
       </div>
 

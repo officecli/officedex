@@ -660,6 +660,7 @@ export const en: Record<string, string> = {
   "shell.sidebar.fullMotion": "Full motion",
   "shell.sidebar.motionDescription": "Use the system animation preference",
 
+  "shell.status.beingWritten": "Being written…",
   "shell.status.noFile": "No file open",
   "shell.status.onThisComputer": "On this computer",
   "shell.status.saved": "All changes saved",
@@ -807,6 +808,7 @@ export const en: Record<string, string> = {
   "shell.home.blankDocument": "Blank document",
   "shell.home.blankWorkbook": "Blank workbook",
   "shell.home.blankPresentation": "Blank presentation",
+  "shell.home.watchDeckDrawing": "Watch a deck being drawn",
   "shell.home.openFromComputer": "Open from this computer",
   "shell.home.filesAria": "Files",
   "shell.home.filesIn": "Files in {folder}",
