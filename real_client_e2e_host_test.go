@@ -244,6 +244,31 @@ func (h *realClientE2EHost) call(method string, raw json.RawMessage) (any, error
 		// The real generation E2E host does not run the separate Agent Runtime;
 		// return an empty, valid collection so the renderer can finish startup.
 		return []any{}, nil
+	// The three below are not stubbed, unlike the list above: they are the Word
+	// in-place edit path (office.docx.edit.v1), and stubbing them would leave
+	// the one way this app edits an open document with no end-to-end coverage
+	// at all. They need no separate Agent Runtime process — `run/start`,
+	// `run/get` and `run/cancel` are registered on the same officecli bridge
+	// this host already speaks to (officecli internal/cli/agent_bridge_runtime.go),
+	// and `agentRuntimeRequest` falls through to `ensureBridge()` for them.
+	case "StartAgentRun":
+		var input map[string]any
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return h.app.StartAgentRun(input)
+	case "GetAgentRun":
+		runID, err := decodeRealClientString(raw)
+		if err != nil {
+			return nil, err
+		}
+		return h.app.GetAgentRun(runID)
+	case "CancelAgentRun":
+		runID, err := decodeRealClientString(raw)
+		if err != nil {
+			return nil, err
+		}
+		return h.app.CancelAgentRun(runID)
 	case "CreateImageTemplate":
 		var input types.CreateUserImageTemplateInput
 		if err := decodeRealClientInput(raw, &input); err != nil {
