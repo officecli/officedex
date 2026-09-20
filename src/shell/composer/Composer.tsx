@@ -7,6 +7,7 @@ import {
   Plus,
   ShieldCheck,
   Square,
+  Wand2,
   X,
 } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
@@ -16,7 +17,7 @@ import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import { Menu } from "../chrome/Menu";
 import { useCanvas } from "../canvas/CanvasContext";
 import { useCanvasSelection, selectionForFile } from "../canvas/SelectionContext";
-import type { Attachment, Mention, PermissionMode, SendInput } from "../../shared/uiPort";
+import type { Attachment, FileType, Mention, PermissionMode, SendInput } from "../../shared/uiPort";
 import { useFolderDialogs } from "../nav/useFolderDialogs";
 import { useShell } from "../state/ShellContext";
 import { usePort } from "../port/PortContext";
@@ -71,14 +72,43 @@ const PERMISSIONS: Array<{
 const MAX_ATTACHMENTS = 10;
 const MAX_BYTES = 20 * 1024 * 1024;
 
+/**
+ * What this message will produce, as the user states it.
+ *
+ * `auto` is the historical behaviour and stays the default: the runtime reads
+ * the instruction and picks a type. It is a heuristic, though, and Home's own
+ * "Write a document" prompt is a case it gets wrong — no word in "Draft a
+ * project plan covering goals, milestones, owners and risks" matches the
+ * document rule, so it fell through to the settings default and the document
+ * button produced a deck. A stated type is not a hint; it is the answer.
+ *
+ * The three types are the ones `SendInput.documentType` carries, which is in
+ * turn the three the generate runtime accepts from this shell.
+ */
+type OutputChoice = "auto" | FileType;
+
+const OUTPUTS: Array<{ value: FileType; label: string; description: string }> = [
+  { value: "doc", label: "New document", description: "A Word file (.docx)" },
+  { value: "sheet", label: "New workbook", description: "An Excel file (.xlsx)" },
+  { value: "slides", label: "New presentation", description: "A PowerPoint file (.pptx)" },
+];
+
+const DOCUMENT_TYPES: Record<FileType, NonNullable<SendInput["documentType"]>> = {
+  doc: "docx",
+  sheet: "xlsx",
+  slides: "pptx",
+};
+
 /** Everything a half-written message carries, not just its words. */
 interface Draft {
   text: string;
   mentions: Mention[];
   attachments: Attachment[];
+  /** What the user said to make, or "auto" to let the instruction decide. */
+  output: OutputChoice;
 }
 
-const EMPTY_DRAFT: Draft = { text: "", mentions: [], attachments: [] };
+const EMPTY_DRAFT: Draft = { text: "", mentions: [], attachments: [], output: "auto" };
 
 /**
  * Half-written messages, per placement, for as long as the tab is open.
@@ -111,7 +141,7 @@ export function resetComposerDrafts(): void {
 /** Everything the composer gathers; the caller adds model and permission. */
 export type ComposerSubmission = Pick<
   SendInput,
-  "text" | "folderId" | "mentions" | "attachments" | "activeFileId" | "reference"
+  "text" | "folderId" | "mentions" | "attachments" | "activeFileId" | "reference" | "documentType"
 >;
 
 export interface ComposerProps {
@@ -129,10 +159,15 @@ export interface ComposerProps {
    * keystroke on Home a parent re-render, and the docked and floating
    * placements would pay for a feature only the hero uses.
    *
+   * The second argument sets the output type along with the words. A quick
+   * prompt is a whole intent — "Write a document" says the type out loud, and
+   * leaving it to be re-derived from the sentence is what made that button
+   * produce a deck.
+   *
    * Wrap the callback in `useCallback`: it is an effect dependency, and a new
    * identity each render re-registers on every keystroke.
    */
-  onRegisterFill?: (fill: (text: string) => void) => void;
+  onRegisterFill?: (fill: (text: string, output?: FileType) => void) => void;
 }
 
 /**
@@ -153,18 +188,19 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
   const inputId = useId();
 
   const [draft, setDraft] = useState<Draft>(() => drafts.get(placement) ?? EMPTY_DRAFT);
-  const { text, mentions, attachments } = draft;
+  const { text, mentions, attachments, output } = draft;
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   /** True while a speech recogniser is running — see `dictate`. */
   const [listening, setListening] = useState(false);
 
   // Every write to the draft goes through here so what is kept cannot drift
-  // from what is on screen — the three parts are saved together or not at all.
+  // from what is on screen — the parts are saved together or not at all.
   function patchDraft(patch: (current: Draft) => Partial<Draft>) {
     setDraft((current) => {
       const next = { ...current, ...patch(current) };
-      const empty = !next.text && next.mentions.length === 0 && next.attachments.length === 0;
+      const empty =
+        !next.text && next.mentions.length === 0 && next.attachments.length === 0 && next.output === "auto";
       if (empty) drafts.delete(placement);
       else drafts.set(placement, next);
       return next;
@@ -182,6 +218,7 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
     patchDraft((current) => ({ mentions: resolve(value, current.mentions) }));
   const setAttachments = (value: Update<Attachment[]>) =>
     patchDraft((current) => ({ attachments: resolve(value, current.attachments) }));
+  const setOutput = (value: OutputChoice) => patchDraft(() => ({ output: value }));
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -218,6 +255,19 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
    */
   const targetFileId = placement === "home" ? null : state.activeFileId;
 
+  /**
+   * The file this message would edit, once the stated output type is taken
+   * into account.
+   *
+   * Picking a type is how the user says "a new one, not this one". Without
+   * that, a document open in the editor captures every message sent from the
+   * panel beside it — including "now write me the summary memo", which would
+   * rewrite the document being read rather than produce the memo.
+   */
+  const editingFileId = output === "auto" ? targetFileId : null;
+  const openFile = files.find((file) => file.id === targetFileId) ?? null;
+  const editingFile = output === "auto" ? openFile : null;
+
   // Auto-height, capped so a long draft scrolls instead of eating the panel.
   useEffect(() => {
     const input = inputRef.current;
@@ -242,8 +292,11 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
    */
   useEffect(() => {
     if (!onRegisterFill) return;
-    onRegisterFill((next) => {
+    onRegisterFill((next, output) => {
       setText(next);
+      // A quick prompt states its own type; a plain fill leaves the choice
+      // alone rather than resetting one the user made by hand.
+      if (output) setOutput(output);
       setMentionQuery(null);
       queueMicrotask(() => {
         const input = inputRef.current;
@@ -394,7 +447,8 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
       folderId: scope?.id ?? "",
       mentions,
       attachments,
-      activeFileId: targetFileId,
+      activeFileId: editingFileId,
+      ...(output === "auto" ? {} : { documentType: DOCUMENT_TYPES[output] }),
       ...(quoted
         ? { reference: { fileId: quoted.fileId, label: quoted.label, text: quoted.text } }
         : {}),
@@ -403,6 +457,10 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
     setText("");
     setMentions([]);
     setAttachments([]);
+    // Back to auto: a stated type belongs to the message that stated it. Left
+    // sticky, one "New document" would silently turn every later instruction
+    // typed beside an open file into a new file.
+    setOutput("auto");
     setMentionQuery(null);
     // The quote went with the message; leaving it up would make the next one
     // look like it is about the same passage.
@@ -522,6 +580,73 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
     ],
     [folders, scope?.id, dispatch, folderDialogs.createFolder],
   );
+
+  /*
+   * What this message will do, as one readable phrase.
+   *
+   * Two questions collapse into one control here, because they are one
+   * question: does this instruction change the document I am looking at, or
+   * make something new — and if new, of what kind. Splitting them into an
+   * "edit / create" toggle plus a type picker would put two controls on screen
+   * whose only legal combinations are the four rows below.
+   */
+  const outputItems = useMemo(
+    () => [
+      ...(targetFileId && openFile
+        ? [
+            {
+              id: "edit",
+              label: `Edit ${openFile.name}`,
+              description: "Change the document on screen",
+              icon: <FileTypeIcon type={openFile.type} size={16} />,
+              checked: output === "auto",
+              onSelect: () => setOutput("auto"),
+            },
+          ]
+        : [
+            {
+              id: "auto",
+              label: "Decide from my instruction",
+              description: "Read the type off what I asked for",
+              icon: <Wand2 size={16} strokeWidth={1.8} aria-hidden="true" />,
+              checked: output === "auto",
+              onSelect: () => setOutput("auto"),
+            },
+          ]),
+      ...OUTPUTS.map((entry) => ({
+        id: entry.value,
+        label: entry.label,
+        description: entry.description,
+        icon: <FileTypeIcon type={entry.value} size={16} />,
+        checked: output === entry.value,
+        onSelect: () => setOutput(entry.value),
+      })),
+    ],
+    // `setOutput` closes over `patchDraft`, redefined every render; including it
+    // would rebuild this list on every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [targetFileId, openFile?.id, openFile?.name, openFile?.type, output],
+  );
+
+  /** The chip's own face: an icon and the shortest true phrase for it. */
+  const outputFace =
+    output !== "auto"
+      ? {
+          icon: <FileTypeIcon type={output} size={14} />,
+          name: OUTPUTS.find((entry) => entry.value === output)?.label ?? "New file",
+          title: `This message creates a ${OUTPUTS.find((entry) => entry.value === output)?.description ?? "new file"}`,
+        }
+      : editingFile
+        ? {
+            icon: <FileTypeIcon type={editingFile.type} size={14} />,
+            name: editingFile.name,
+            title: `This message edits ${editingFile.name}`,
+          }
+        : {
+            icon: <Wand2 size={14} strokeWidth={1.7} aria-hidden="true" />,
+            name: "Auto",
+            title: "The type is read off your instruction. Pick one to be sure.",
+          };
 
   return (
     <div
@@ -657,6 +782,26 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
               >
                 <FolderIcon size={14} strokeWidth={1.7} aria-hidden="true" />
                 <span className="shell-cx-scope-name">{scope?.name ?? "No folder"}</span>
+                <ChevronDown size={12} strokeWidth={1.8} aria-hidden="true" />
+              </button>
+            )}
+          </Menu>
+
+          {/*
+            And what it will produce. Same argument as the scope chip: the
+            answer travels with the message, so the control does too.
+          */}
+          <Menu label="What this message makes" items={outputItems} align="start" width={280}>
+            {(triggerProps) => (
+              <button
+                {...triggerProps}
+                type="button"
+                className="shell-cx-button shell-cx-output"
+                data-stated={String(output !== "auto")}
+                title={outputFace.title}
+              >
+                {outputFace.icon}
+                <span className="shell-cx-output-name">{outputFace.name}</span>
                 <ChevronDown size={12} strokeWidth={1.8} aria-hidden="true" />
               </button>
             )}

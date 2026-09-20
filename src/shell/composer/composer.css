@@ -213,6 +213,32 @@
 
 .shell-cx-scope {
   min-width: 0;
+  flex-shrink: 1;
+}
+
+/*
+ * The output chip reads as an answer, not a setting: "Auto" is the quiet
+ * default and a stated type is the user having decided something, so it is the
+ * one state that takes ink and a tint.
+ *
+ * The tint is the document accent at low alpha, composed from the token rather
+ * than written out as `#596f861a` — the audit's token pass (W3-I) is working
+ * through exactly that kind of hard-coded value in this file, and there is no
+ * reason to add two more to the list while it does.
+ */
+.shell-cx-output {
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.shell-cx-output[data-stated="true"] {
+  background: color-mix(in srgb, var(--shell-doc-accent) 10%, transparent);
+  color: var(--shell-ink);
+}
+
+.shell-cx-output[data-stated="true"]:hover,
+.shell-cx-output[data-stated="true"][aria-expanded="true"] {
+  background: color-mix(in srgb, var(--shell-doc-accent) 16%, transparent);
 }
 
 .shell-cx-button {
@@ -233,7 +259,24 @@
   cursor: pointer;
 }
 
-.shell-cx-left > .shell-cx-scope {
+/*
+ * The two left-hand chips are the only things here allowed to give up width.
+ *
+ * They are addressed through `Menu`'s `.shell-menu-anchor` wrapper rather than
+ * directly: the anchor is the flex item, so a `flex-shrink` set on the button
+ * inside it is read by nobody. This rule used to be written as
+ * `.shell-cx-left > .shell-cx-scope`, which matched nothing at all — the scope
+ * chip never shrank, and it went unnoticed for as long as it was the only chip
+ * on that side and had room regardless.
+ */
+.shell-cx-left > .shell-menu-anchor {
+  display: flex;
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.shell-cx-left > .shell-menu-anchor > .shell-cx-button {
+  min-width: 0;
   flex-shrink: 1;
 }
 
@@ -250,6 +293,7 @@
 }
 
 .shell-cx-scope-name,
+.shell-cx-output-name,
 .shell-cx-model-name,
 .shell-cx-permission-name {
   min-width: 0;
@@ -318,12 +362,21 @@
 
 /* Narrow placements shed labels before they shed controls. */
 /*
- * Narrow placements shed controls in priority order. The scope chip's name is
- * near the end of that order on purpose: decision 2 made scope a visible
- * property of the message, so hiding it first would undo the point of folding
- * the prototype's folder dropdown into the composer.
+ * Narrow placements shed controls in priority order. The two chips on the left
+ * are last in that order on purpose: both are properties of the message being
+ * composed — where it writes, and what it produces — while everything on the
+ * right is a setting that happens to live beside them.
  *
- * Order dropped: permission label → dictate → model name → scope name.
+ * Order dropped: permission label → dictate → output name → scope name.
+ *
+ * Below 340px the toolbar wraps instead of truncating. The docked column is
+ * 320px by design, so its composer sits at ~288px permanently, and four
+ * controls do not fit on one line there at any truncation: measured, the two
+ * chips had ~34px between them for two names, which is an ellipsis and nothing
+ * else. Two lines cost 34px of height in a column that has hundreds to spare,
+ * and they buy back the model name that the single-line version had to drop.
+ * Wrapping is also why the names below are capped rather than hidden — each
+ * group gets the full width of the toolbar, so there is room to read them.
  */
 @container (max-width: 420px) {
   .shell-cx-permission-name {
@@ -335,18 +388,27 @@
   .shell-cx-mic {
     display: none;
   }
-  .shell-cx-model-name {
-    max-width: 78px;
-  }
-  .shell-cx-scope-name {
-    max-width: 88px;
+  .shell-cx-toolbar {
+    flex-wrap: wrap;
+    row-gap: 2px;
+    gap: 6px;
   }
   .shell-cx-left,
   .shell-cx-right {
+    flex: 1 1 100%;
     gap: 3px;
   }
-  .shell-cx-toolbar {
-    gap: 6px;
+  .shell-cx-right {
+    justify-content: flex-end;
+  }
+  .shell-cx-model-name {
+    max-width: 120px;
+  }
+  .shell-cx-output-name {
+    max-width: 104px;
+  }
+  .shell-cx-scope-name {
+    max-width: 96px;
   }
 }
 
@@ -354,11 +416,20 @@
   .shell-cx-model-name {
     display: none;
   }
-  /* Still named, just narrower. The model name and this one used to disappear
-     together, which made "scope name last" true in the comment and a tie in the
-     stylesheet; the chip shrinks to an ellipsis before it gives up its label. */
+  .shell-cx-output-name {
+    max-width: 78px;
+  }
   .shell-cx-scope-name {
-    max-width: 62px;
+    max-width: 70px;
+  }
+}
+
+@container (max-width: 204px) {
+  .shell-cx-output-name {
+    display: none;
+  }
+  .shell-cx-scope-name {
+    display: none;
   }
 }
 

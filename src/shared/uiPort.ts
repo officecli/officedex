@@ -260,6 +260,21 @@ export interface SendInput {
   /** The file the user is looking at, if any. */
   activeFileId: string | null;
   reference?: AgentReference;
+  /**
+   * What to make, when the user said so rather than leaving it to be guessed.
+   *
+   * Absent means "read it off the instruction", which is what the runtime did
+   * for every message before this existed — and got wrong in the one place it
+   * was asked most directly: Home's "Write a document" prompt contains no word
+   * the heuristic recognises, so it fell through to the settings default
+   * (presentations) and the document button made a deck.
+   *
+   * Set, it is also a statement that this message starts something new. A
+   * message sent with a document open normally edits that document; picking an
+   * output type is the only way to say "not that one, a new one", and it is
+   * the reason the control stays on screen while a file is open.
+   */
+  documentType?: "docx" | "xlsx" | "pptx";
 }
 
 /**

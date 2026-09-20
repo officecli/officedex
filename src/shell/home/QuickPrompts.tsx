@@ -42,8 +42,8 @@ const PROMPTS: Array<{ type: FileType; label: string; prompt: string }> = [
 ];
 
 export interface QuickPromptsProps {
-  /** Puts the suggestion in the composer. Never sends it. */
-  onPick: (prompt: string) => void;
+  /** Puts the suggestion and its output type in the composer. Never sends it. */
+  onPick: (prompt: string, type: FileType) => void;
 }
 
 /**
@@ -53,6 +53,11 @@ export interface QuickPromptsProps {
  * the user's intent, not the intent itself — "Write a document" with no idea
  * which document is not a task anyone meant to start, and sending on click
  * meant the only way to correct it was to stop a run that had already begun.
+ *
+ * The type travels with the words. It used to be left for the runtime to infer
+ * from the sentence, and the sentence under "Write a document" contains no word
+ * the inference recognises — so the button labelled with a document glyph fell
+ * through to the settings default and produced a presentation.
  */
 export function QuickPrompts({ onPick }: QuickPromptsProps) {
   return (
@@ -62,7 +67,7 @@ export function QuickPrompts({ onPick }: QuickPromptsProps) {
           key={entry.type}
           type="button"
           className="shell-hero-prompt"
-          onClick={() => onPick(entry.prompt)}
+          onClick={() => onPick(entry.prompt, entry.type)}
         >
           <FileTypeIcon type={entry.type} size={15} />
           {entry.label}

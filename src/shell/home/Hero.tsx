@@ -6,6 +6,7 @@ import { QuickPrompts } from "./QuickPrompts";
 import { useAgentTask } from "../agent/useAgentTask";
 import { useComposerSettings } from "../composer/useComposerSettings";
 import { useShell } from "../state/ShellContext";
+import type { FileType } from "../../shared/uiPort";
 
 /**
  * The corner radius of the hero composer, from `.shell-cx--home`.
@@ -45,8 +46,8 @@ export function Hero() {
   const [focused, setFocused] = useState(false);
 
   // Handed to us by the composer on mount; the quick prompts type through it.
-  const fill = useRef<((text: string) => void) | null>(null);
-  const registerFill = useCallback((next: (text: string) => void) => {
+  const fill = useRef<((text: string, output?: FileType) => void) | null>(null);
+  const registerFill = useCallback((next: (text: string, output?: FileType) => void) => {
     fill.current = next;
   }, []);
 
@@ -109,7 +110,7 @@ export function Hero() {
         </div>
       </div>
 
-      <QuickPrompts onPick={(prompt) => fill.current?.(prompt)} />
+      <QuickPrompts onPick={(prompt, type) => fill.current?.(prompt, type)} />
     </div>
   );
 }
