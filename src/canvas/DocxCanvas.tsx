@@ -4,7 +4,14 @@ import { DesktopApiProvider } from "../renderer/services/desktopApi";
 import { WriterEditorFrame, type WriterAgentEditor } from "../renderer/word/WriterEditorFrame";
 import type { DesktopAPI } from "../shared/types";
 import type { FileMeta } from "../shared/uiPort";
-import type { CanvasSelection } from "../shell/editor/canvasContract";
+import type {
+  CanvasSelection,
+  DocumentEditRequest,
+  DocumentEditResult,
+} from "../shell/editor/canvasContract";
+import { createDocxEditRunner } from "./docxEditRun";
+
+export type DocumentEditRunner = (request: DocumentEditRequest) => Promise<DocumentEditResult>;
 
 /**
  * The Word canvas: the embedded Writer editor, in the shell's document slot.
@@ -35,6 +42,15 @@ export interface DocxCanvasProps {
    * port clears the dirty flag and writes nothing on its own.
    */
   onEditor: (editor: WriterAgentEditor | null) => void;
+  /**
+   * Reports how to rewrite part of this document in place, once Writer is up.
+   *
+   * Word is the only canvas that has this, so it is reported from here rather
+   * than derived in the dispatcher: a deck and a workbook leave the adapter's
+   * `editDocument` unusable and their instructions keep going to the
+   * generation runtime.
+   */
+  onEditRunner: (edit: DocumentEditRunner | null) => void;
   /** The editor could not load at all — the caller falls back to a skeleton. */
   onUnavailable: (reason: string) => void;
 }
@@ -42,6 +58,8 @@ export interface DocxCanvasProps {
 interface Session {
   token: string;
   fileName: string;
+  /** Where the file lives, for the edit run's metadata. */
+  filePath: string;
 }
 
 /** What the chip says, given what Writer is willing to tell us for free. */
@@ -57,11 +75,21 @@ export function DocxCanvas({
   onSelectionChange,
   onResolveSelection,
   onEditor,
+  onEditRunner,
   onUnavailable,
 }: DocxCanvasProps) {
   const [session, setSession] = useState<Session | null>(null);
   const editorRef = useRef<WriterAgentEditor | null>(null);
   const labelRef = useRef<string>(file.name);
+  /**
+   * Whether there is a selection to narrow an edit to, read at the moment an
+   * instruction is sent rather than captured when it was written.
+   *
+   * A ref, not state: the edit runner is handed upward once, when Writer comes
+   * up, and a value closed over then would be the selection as it stood at
+   * mount — which is none.
+   */
+  const hasSelectionRef = useRef(false);
 
   // A preview token is what the embed authenticates with and it is issued per
   // artifact. `FileMeta` carries no path, so the record has to be read first;
@@ -77,7 +105,9 @@ export function DocxCanvas({
           documentType: record.documentType,
           ...(record.currentArtifactTaskId ? { taskId: record.currentArtifactTaskId } : {}),
         });
-        if (!cancelled) setSession({ token: grant.token, fileName: record.fileName });
+        if (!cancelled) {
+          setSession({ token: grant.token, fileName: record.fileName, filePath: record.filePath });
+        }
       } catch (reason) {
         if (!cancelled) {
           onUnavailable(reason instanceof Error ? reason.message : String(reason));
@@ -122,6 +152,25 @@ export function DocxCanvas({
                 }
               : null,
           );
+          onEditRunner(
+            editor
+              ? createDocxEditRunner({
+                  api,
+                  editor,
+                  filePath: session.filePath,
+                  hasSelection: () => hasSelectionRef.current,
+                  /*
+                   * The planner writes its summary in this language, and the
+                   * summary is the only part of the result the user reads. The
+                   * shell has no i18n by decision and speaks English, so the
+                   * answer must too — `navigator.language` here would put a
+                   * Chinese sentence in an English panel, which is the same
+                   * mistake `PresentationStage` had to undo.
+                   */
+                  locale: "en",
+                })
+              : null,
+          );
         }}
         onDirtyChange={onDirtyChange}
         onSelectionChange={(summary) => {
@@ -129,9 +178,11 @@ export function DocxCanvas({
           // and carries no text. A caret is not a selection: quoting it would
           // put an empty reference on every message the user types.
           if (summary.empty || summary.collapsed) {
+            hasSelectionRef.current = false;
             onSelectionChange(null);
             return;
           }
+          hasSelectionRef.current = true;
           labelRef.current = selectionLabel(session.fileName, summary.paragraphs);
           onSelectionChange({ fileId: file.id, label: labelRef.current, text: "" });
         }}

@@ -79,7 +79,7 @@ describe("DocxCanvas", () => {
   it("turns a file id into a preview token by way of the document record", async () => {
     const api = stubApi();
     render(
-      <DocxCanvas api={api} file={file()} onSelectionChange={noop} onResolveSelection={noop} onDirtyChange={noop} onEditor={noop} onUnavailable={noop} />,
+      <DocxCanvas api={api} file={file()} onSelectionChange={noop} onResolveSelection={noop} onDirtyChange={noop} onEditor={noop} onEditRunner={noop} onUnavailable={noop} />,
     );
 
     await waitFor(() => expect(frameProps).toHaveLength(1));
@@ -101,7 +101,7 @@ describe("DocxCanvas", () => {
       getDocument: vi.fn(async () => record({ currentArtifactTaskId: "task-7" })),
     } as unknown as Partial<DesktopAPI>);
     render(
-      <DocxCanvas api={api} file={file()} onSelectionChange={noop} onResolveSelection={noop} onDirtyChange={noop} onEditor={noop} onUnavailable={noop} />,
+      <DocxCanvas api={api} file={file()} onSelectionChange={noop} onResolveSelection={noop} onDirtyChange={noop} onEditor={noop} onEditRunner={noop} onUnavailable={noop} />,
     );
 
     await waitFor(() => expect(frameProps).toHaveLength(1));
@@ -115,12 +115,12 @@ describe("DocxCanvas", () => {
   it("rebuilds the frame for a different file", async () => {
     const api = stubApi();
     const view = render(
-      <DocxCanvas api={api} file={file()} onSelectionChange={noop} onResolveSelection={noop} onDirtyChange={noop} onEditor={noop} onUnavailable={noop} />,
+      <DocxCanvas api={api} file={file()} onSelectionChange={noop} onResolveSelection={noop} onDirtyChange={noop} onEditor={noop} onEditRunner={noop} onUnavailable={noop} />,
     );
     await waitFor(() => expect(frameProps).toHaveLength(1));
 
     view.rerender(
-      <DocxCanvas api={api} file={file("document:two")} onSelectionChange={noop} onResolveSelection={noop} onDirtyChange={noop} onEditor={noop} onUnavailable={noop} />,
+      <DocxCanvas api={api} file={file("document:two")} onSelectionChange={noop} onResolveSelection={noop} onDirtyChange={noop} onEditor={noop} onEditRunner={noop} onUnavailable={noop} />,
     );
 
     await waitFor(() => expect(frameProps.at(-1)?.previewToken).toBe("token-2"));
@@ -133,12 +133,12 @@ describe("DocxCanvas", () => {
     const api = stubApi();
     const target = file();
     const view = render(
-      <DocxCanvas api={api} file={target} onSelectionChange={noop} onResolveSelection={noop} onDirtyChange={noop} onEditor={noop} onUnavailable={noop} />,
+      <DocxCanvas api={api} file={target} onSelectionChange={noop} onResolveSelection={noop} onDirtyChange={noop} onEditor={noop} onEditRunner={noop} onUnavailable={noop} />,
     );
     await waitFor(() => expect(frameProps).toHaveLength(1));
 
     view.rerender(
-      <DocxCanvas api={api} file={target} onSelectionChange={noop} onResolveSelection={noop} onDirtyChange={() => {}} onEditor={() => {}} onUnavailable={() => {}} />,
+      <DocxCanvas api={api} file={target} onSelectionChange={noop} onResolveSelection={noop} onDirtyChange={() => {}} onEditor={() => {}} onEditRunner={() => {}} onUnavailable={() => {}} />,
     );
 
     expect(api.issuePreviewToken).toHaveBeenCalledTimes(1);
@@ -148,7 +148,7 @@ describe("DocxCanvas", () => {
     const onEditor = vi.fn();
     const onResolveSelection = vi.fn();
     render(
-      <DocxCanvas api={stubApi()} file={file()} onSelectionChange={noop} onResolveSelection={onResolveSelection} onDirtyChange={noop} onEditor={onEditor} onUnavailable={noop} />,
+      <DocxCanvas api={stubApi()} file={file()} onSelectionChange={noop} onResolveSelection={onResolveSelection} onDirtyChange={noop} onEditor={onEditor} onEditRunner={noop} onUnavailable={noop} />,
     );
     await waitFor(() => expect(frameProps).toHaveLength(1));
 
@@ -176,7 +176,7 @@ describe("DocxCanvas", () => {
           resolve = next;
         }}
         onDirtyChange={noop}
-        onEditor={noop}
+        onEditor={noop} onEditRunner={noop}
         onUnavailable={noop}
       />,
     );
@@ -204,7 +204,7 @@ describe("DocxCanvas", () => {
   it("passes the editor's dirty flag straight through", async () => {
     const onDirtyChange = vi.fn();
     render(
-      <DocxCanvas api={stubApi()} file={file()} onSelectionChange={noop} onResolveSelection={noop} onDirtyChange={onDirtyChange} onEditor={noop} onUnavailable={noop} />,
+      <DocxCanvas api={stubApi()} file={file()} onSelectionChange={noop} onResolveSelection={noop} onDirtyChange={onDirtyChange} onEditor={noop} onEditRunner={noop} onUnavailable={noop} />,
     );
     await waitFor(() => expect(frameProps).toHaveLength(1));
 
@@ -222,7 +222,7 @@ describe("DocxCanvas", () => {
     } as unknown as Partial<DesktopAPI>);
 
     render(
-      <DocxCanvas api={api} file={file()} onSelectionChange={noop} onResolveSelection={noop} onDirtyChange={noop} onEditor={noop} onUnavailable={onUnavailable} />,
+      <DocxCanvas api={api} file={file()} onSelectionChange={noop} onResolveSelection={noop} onDirtyChange={noop} onEditor={noop} onEditRunner={noop} onUnavailable={onUnavailable} />,
     );
 
     await waitFor(() => expect(onUnavailable).toHaveBeenCalledWith("the file is gone"));
@@ -234,7 +234,7 @@ describe("DocxCanvas", () => {
   it("explains a missing Word editor build", async () => {
     const onUnavailable = vi.fn();
     render(
-      <DocxCanvas api={stubApi()} file={file()} onSelectionChange={noop} onResolveSelection={noop} onDirtyChange={noop} onEditor={noop} onUnavailable={onUnavailable} />,
+      <DocxCanvas api={stubApi()} file={file()} onSelectionChange={noop} onResolveSelection={noop} onDirtyChange={noop} onEditor={noop} onEditRunner={noop} onUnavailable={onUnavailable} />,
     );
     await waitFor(() => expect(frameProps).toHaveLength(1));
 
@@ -246,7 +246,7 @@ describe("DocxCanvas", () => {
   it("passes on what Writer said when it could not start", async () => {
     const onUnavailable = vi.fn();
     render(
-      <DocxCanvas api={stubApi()} file={file()} onSelectionChange={noop} onResolveSelection={noop} onDirtyChange={noop} onEditor={noop} onUnavailable={onUnavailable} />,
+      <DocxCanvas api={stubApi()} file={file()} onSelectionChange={noop} onResolveSelection={noop} onDirtyChange={noop} onEditor={noop} onEditRunner={noop} onUnavailable={onUnavailable} />,
     );
     await waitFor(() => expect(frameProps).toHaveLength(1));
 
