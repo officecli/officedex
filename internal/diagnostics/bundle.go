@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	maxFileSize    = 10 * 1024 * 1024  // 10MB
-	maxTotalSize   = 25 * 1024 * 1024  // 25MB
+	maxFileSize    = 10 * 1024 * 1024 // 10MB
+	maxTotalSize   = 25 * 1024 * 1024 // 25MB
 	recentLimit    = 200
 	logRetainDays  = 3
 	zip64Threshold = 4 * 1024 * 1024 * 1024 // 4GB
@@ -266,6 +266,12 @@ func buildMeta(opts BundleOptions, now func() time.Time) map[string]any {
 		"bundleId":            opts.BundleID,
 		"bundleSchemaVersion": 1,
 		"runtimeDroppedBytes": opts.RuntimeDroppedBytes,
+	}
+	if opts.UpdateChannel != "" {
+		m["updateChannel"] = opts.UpdateChannel
+	}
+	if opts.ManifestURL != "" {
+		m["manifestUrl"] = opts.ManifestURL
 	}
 	if opts.TaskID != "" {
 		m["taskId"] = opts.TaskID

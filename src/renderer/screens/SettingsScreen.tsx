@@ -652,6 +652,9 @@ function AboutCard() {
         </div>
         <h3>{t("settings.about.productName")}</h3>
         <div className="about-version">{t("settings.about.versionValue", { version: displayVersion })}</div>
+        {status.updateChannel ? (
+          <div className="about-version">{t("settings.about.updateChannel", { channel: status.updateChannel })}</div>
+        ) : null}
         <p className="about-description">{t("settings.about.description")}</p>
         <div className="about-links" aria-label={t("settings.about.linksLabel")}>
           <Button type="text" icon={<GlobalOutlined />} onClick={() => openExternal("https://officecli.io")}>
@@ -667,6 +670,7 @@ function AboutCard() {
       </div>
 
       <div className="about-meta">
+        {status.manifestUrl ? <span className="about-label">{status.manifestUrl}</span> : null}
         <span className="about-label">{t("settings.about.lastChecked")}: {formatLastChecked(status.lastCheckedAt, t)}</span>
         {status.lastError ? <span className="about-error">{t("settings.about.lastError")}: {status.lastError}</span> : null}
       </div>

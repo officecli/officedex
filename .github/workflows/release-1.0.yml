@@ -1,0 +1,17 @@
+name: Release 1.0
+
+on:
+  push:
+    tags:
+      - 'v1.0.*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    uses: ./.github/workflows/release.yml
+    with:
+      channel: "1.0"
+    secrets: inherit

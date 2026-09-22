@@ -985,6 +985,7 @@ export const zh: Record<string, string> = {
     "OfficeDex AI 可能生成不准确内容。请在使用、分享或交付重要信息前进行人工核实。",
   "settings.about.version": "版本",
   "settings.about.versionValue": "OfficeDex {version}",
+  "settings.about.updateChannel": "渠道 {channel}",
   "settings.about.lastChecked": "上次检查",
   "settings.about.lastCheckedNever": "从未",
   "settings.about.lastCheckedJustNow": "刚刚",

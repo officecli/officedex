@@ -127,6 +127,13 @@ func (a *App) ExportLogs(input ExportLogsInput) (ExportLogsResult, error) {
 	}
 
 	bundleID := uuid.New().String()
+	updateChannel := ""
+	manifestURL := ""
+	if a.appUpdateMgr != nil {
+		status := a.appUpdateMgr.Status()
+		updateChannel = status.UpdateChannel
+		manifestURL = status.ManifestURL
+	}
 
 	zipPath, manifest, err := diagnostics.BuildBundle(a.ctx, diagnostics.BundleOptions{
 		DestDir:             downloads,
@@ -141,6 +148,8 @@ func (a *App) ExportLogs(input ExportLogsInput) (ExportLogsResult, error) {
 		IncludeRecent:       input.IncludeRecent,
 		IncludeLogs:         input.IncludeLogs,
 		AppVersion:          appVersion,
+		UpdateChannel:       updateChannel,
+		ManifestURL:         manifestURL,
 		BundleID:            bundleID,
 		RuntimeDroppedBytes: droppedBytes,
 	})

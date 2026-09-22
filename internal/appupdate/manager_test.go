@@ -112,6 +112,20 @@ func TestCheckLatest_Success(t *testing.T) {
 	if got := events.types(); !containsAll(got, EventStatus) {
 		t.Fatalf("missing status event: %v", got)
 	}
+	if status.ManifestURL != "https://example.test/manifest.json" {
+		t.Fatalf("ManifestURL = %q", status.ManifestURL)
+	}
+}
+
+func TestStatus_IncludesChannel(t *testing.T) {
+	m := mustManager(t, func(o *Options) { o.Channel = "1.0" })
+	status := m.Status()
+	if status.UpdateChannel != "1.0" {
+		t.Fatalf("UpdateChannel = %q", status.UpdateChannel)
+	}
+	if status.ManifestURL != "https://example.test/manifest.json" {
+		t.Fatalf("ManifestURL = %q", status.ManifestURL)
+	}
 }
 
 func TestCheckLatest_DevModeShortCircuit(t *testing.T) {

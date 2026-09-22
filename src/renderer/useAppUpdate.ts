@@ -42,6 +42,8 @@ const INITIAL_STATUS: AppUpdateStatus = {
   downloadedPath: null,
   lastCheckedAt: null,
   lastError: null,
+  updateChannel: undefined,
+  manifestUrl: undefined,
 };
 
 export function useAppUpdate(): UseAppUpdateValue {

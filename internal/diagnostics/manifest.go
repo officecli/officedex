@@ -13,20 +13,22 @@ type EventQuerier interface {
 }
 
 type BundleOptions struct {
-	DestDir         string
-	UserDataDir     string
-	WorkspaceDir    string
-	LocalStore      EventQuerier
-	Settings        types.UserSettings
-	CachedBridgeEnv []string
-	TaskID          string
-	IncludeRecent   bool
-	IncludeLogs     bool
-	IncludeSettings bool
-	IncludeEvents   bool
-	AppVersion      string
-	Now             func() time.Time
-	BundleID        string
+	DestDir             string
+	UserDataDir         string
+	WorkspaceDir        string
+	LocalStore          EventQuerier
+	Settings            types.UserSettings
+	CachedBridgeEnv     []string
+	TaskID              string
+	IncludeRecent       bool
+	IncludeLogs         bool
+	IncludeSettings     bool
+	IncludeEvents       bool
+	AppVersion          string
+	UpdateChannel       string
+	ManifestURL         string
+	Now                 func() time.Time
+	BundleID            string
 	RuntimeDroppedBytes int64
 }
 

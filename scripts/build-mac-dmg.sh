@@ -294,7 +294,7 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
 
   echo "[${LOG}] building OfficeDex.app (darwin/${GO_ARCH})"
   env -u GOROOT wails build -platform "darwin/${GO_ARCH}" -trimpath -s \
-    -ldflags "-X main.appVersion=${APP_VERSION}"
+    -ldflags "-X main.appVersion=${APP_VERSION} -X main.appUpdateChannel=1.0"
 
   node scripts/verify-wails-app.mjs "${APP_PATH}"
 
@@ -414,4 +414,12 @@ else
 fi
 
 shasum -a 256 "${DMG_PATH}"
+
+# The in-app updater extracts a .zip of OfficeDex.app, not the DMG. Local
+# 1.0 releases compile here, so emit the zip next to the installer image.
+ZIP_PATH="${OUT_DIR}/OfficeDex-v${APP_VERSION}-darwin-${TARGET_ARCH}.zip"
+rm -f "${ZIP_PATH}"
+ditto -c -k --sequesterRsrc --keepParent "${APP_PATH}" "${ZIP_PATH}"
+shasum -a 256 "${ZIP_PATH}"
 echo "[${LOG}] done: ${DMG_PATH}"
+echo "[${LOG}] update zip: ${ZIP_PATH}"

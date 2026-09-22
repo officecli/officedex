@@ -5,7 +5,10 @@
 //   node scripts/build-manifest.mjs \
 //     --version 0.2.0 \
 //     --darwin path/to/OfficeDex-v0.2.0-darwin-universal.zip \
+//     [--darwin-arm64 path/to/OfficeDex-v0.2.0-darwin-arm64.zip] \
+//     [--darwin-amd64 path/to/OfficeDex-v0.2.0-darwin-amd64.zip] \
 //     --windows path/to/OfficeDex-v0.2.0-windows-amd64.zip \
+//     [--channel stable|1.0] \
 //     [--min-supported 0.1.0] \
 //     [--mandatory] \
 //     [--notes "Release notes here..."] \
@@ -25,9 +28,12 @@
 // (mandatory / minSupportedVersion) the GitHub Releases API doesn't carry.
 
 import { createReadStream, statSync } from "node:fs";
+import { mkdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { writeFile } from "node:fs/promises";
-import { basename } from "node:path";
+import { basename, dirname } from "node:path";
+
+import { assertVersionMatchesChannel } from "./update-channel.mjs";
 
 const DEFAULT_BASE_URL = "https://github.com/officecli/officedex";
 
@@ -78,12 +84,16 @@ async function main() {
       process.exit(2);
     }
   }
-  if (!args.darwin && !args.windows) {
-    console.error("Need at least one of --darwin / --windows");
+  if (!args.darwin && !args["darwin-arm64"] && !args["darwin-amd64"] && !args.windows) {
+    console.error("Need at least one of --darwin / --darwin-arm64 / --darwin-amd64 / --windows");
     process.exit(2);
   }
 
   const version = String(args.version).replace(/^v/, "");
+  const channel = args.channel ? String(args.channel) : "";
+  if (channel) {
+    assertVersionMatchesChannel(channel, version);
+  }
   const baseUrl = (args["base-url"] || DEFAULT_BASE_URL).replace(/\/$/, "");
   const minSupported = args["min-supported"] || "";
   const mandatory = Boolean(args.mandatory && args.mandatory !== "false");
@@ -99,6 +109,12 @@ async function main() {
     assets["darwin-amd64"] = a;
     assets["darwin-universal"] = a;
   }
+  if (args["darwin-arm64"]) {
+    assets["darwin-arm64"] = await buildAsset(args["darwin-arm64"], baseUrl, version);
+  }
+  if (args["darwin-amd64"]) {
+    assets["darwin-amd64"] = await buildAsset(args["darwin-amd64"], baseUrl, version);
+  }
   if (args.windows) {
     assets["windows-amd64"] = await buildAsset(args.windows, baseUrl, version);
   }
@@ -112,8 +128,10 @@ async function main() {
     assets,
   };
 
+  await mkdir(dirname(outPath), { recursive: true });
   await writeFile(outPath, JSON.stringify(manifest, null, 2) + "\n");
-  console.log(`Wrote ${outPath} (version=${version}, mandatory=${mandatory}, assets=${Object.keys(assets).join(",")})`);
+  const channelNote = channel ? `, channel=${channel}` : "";
+  console.log(`Wrote ${outPath} (version=${version}, mandatory=${mandatory}${channelNote}, assets=${Object.keys(assets).join(",")})`);
 }
 
 main().catch((err) => {

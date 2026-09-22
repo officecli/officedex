@@ -117,12 +117,33 @@ CI must be green before review. Maintainers will squash-merge once approved.
 
 ## Release flow
 
-Releases are tag-driven. See [`.github/workflows/release.yml`](./.github/workflows/release.yml).
+There are two update channels; they must not share a manifest. `develop/1.0` ships from a local signed build, not from GitHub Actions.
 
-1. Bump `version` in `package.json`
-2. Commit: `chore(release): vX.Y.Z`
-3. Tag: `git tag vX.Y.Z && git push origin vX.Y.Z`
-4. GitHub Actions builds macOS-universal + Windows-amd64, publishes a GitHub Release, and syncs the manifest into the `officedex-dist` repo for in-app updates.
+### 0.5.x production (`stable`)
+
+Root `officedex-dist/manifest.json`. Already-installed 0.5.x clients keep polling this file. Do not write 1.0.x into it.
+
+### 1.0 (`develop/1.0`) — local compile
+
+1.0 clients bake `channels/1.0/manifest.json`. Version is a `1.0.N` patch train (the client ignores `-beta` suffixes).
+
+1. Bump `version` in `package.json` and `wails.json` to `1.0.N`.
+2. Compile and notarize on this machine:
+   `bash scripts/build-mac-dmg.sh` (Intel: `TARGET_ARCH=x64`).
+   That writes a DMG installer and an updater zip under `dist-artifacts/`.
+3. Upload the zip (and DMG if you want a downloadable installer) as a **prerelease** so GitHub `/releases/latest` stays on 0.5.x:
+   `gh release create v1.0.N --prerelease dist-artifacts/OfficeDex-v1.0.N-darwin-arm64.zip`
+4. Point the 1.0 channel at that zip, without touching production:
+   ```
+   node scripts/publish-update-channel.mjs \
+     --channel 1.0 \
+     --darwin-arm64 dist-artifacts/OfficeDex-v1.0.N-darwin-arm64.zip \
+     --dist ../officedex-dist \
+     --commit
+   ```
+   Push `officedex-dist` separately. Same-version publishes merge assets, so an arm64 zip and an Intel zip can land in one manifest.
+
+GitHub Actions `release.yml` only matches `v0.*`. `release-1.0.yml` exists as a guard / optional CI path; it is not how 1.0 is shipped. `v1.*` tags never write the root production manifest.
 
 ## Reporting bugs / security issues
 

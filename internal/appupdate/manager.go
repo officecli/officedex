@@ -108,6 +108,11 @@ type Status struct {
 	// the Settings → Diagnostics panel can render a timeline. The buffer is
 	// capped at maxErrorHistory.
 	LastErrors []ErrorEntry `json:"lastErrors,omitempty"`
+	// UpdateChannel is the baked release line (stable, 1.0). Empty when the
+	// caller did not set Options.Channel.
+	UpdateChannel string `json:"updateChannel,omitempty"`
+	// ManifestURL is the URL CheckLatest polls. Always populated.
+	ManifestURL string `json:"manifestUrl,omitempty"`
 }
 
 // ErrorEntry records a single CheckLatest failure for the Diagnostics panel.
@@ -123,13 +128,13 @@ const maxErrorHistory = 5
 
 // Event is the value emitted on every state transition.
 type Event struct {
-	Type           EventType `json:"type"`
-	Status         *Status   `json:"status,omitempty"`
+	Type           EventType    `json:"type"`
+	Status         *Status      `json:"status,omitempty"`
 	Release        *ReleaseInfo `json:"release,omitempty"`
-	BytesDone      *int64    `json:"bytesDone,omitempty"`
-	BytesTotal     *int64    `json:"bytesTotal,omitempty"`
-	Message        string    `json:"message,omitempty"`
-	DownloadedPath string    `json:"downloadedPath,omitempty"`
+	BytesDone      *int64       `json:"bytesDone,omitempty"`
+	BytesTotal     *int64       `json:"bytesTotal,omitempty"`
+	Message        string       `json:"message,omitempty"`
+	DownloadedPath string       `json:"downloadedPath,omitempty"`
 }
 
 // FetchFunc fetches a URL and returns the response body. Implementations
@@ -142,7 +147,11 @@ type DownloadFunc func(ctx context.Context, url string) (io.ReadCloser, int64, e
 
 // Options configures a Manager.
 type Options struct {
-	ManifestURL    string
+	ManifestURL string
+	// Channel is the named release line this manager belongs to (stable, 1.0).
+	// It is echoed on Status so Settings / diagnostics can show which feed
+	// the binary is polling. Empty is allowed.
+	Channel        string
 	CurrentVersion string
 	UpdatesDir     string // <userDataDir>/updates
 	Platform       string // empty = auto-detect via runtime.GOOS
@@ -161,6 +170,7 @@ type Options struct {
 // install hand-off. Safe for concurrent use.
 type Manager struct {
 	manifestURL    string
+	channel        string
 	currentVersion string
 	updatesDir     string
 	platform       string
@@ -214,6 +224,7 @@ func New(opts Options) (*Manager, error) {
 	}
 	return &Manager{
 		manifestURL:    opts.ManifestURL,
+		channel:        strings.TrimSpace(opts.Channel),
 		currentVersion: opts.CurrentVersion,
 		updatesDir:     opts.UpdatesDir,
 		platform:       platform,
@@ -257,6 +268,8 @@ func (m *Manager) statusLocked() Status {
 		LastError:       m.lastError,
 		Notes:           notes,
 		LastErrors:      errs,
+		UpdateChannel:   m.channel,
+		ManifestURL:     m.manifestURL,
 	}
 }
 

@@ -3,14 +3,21 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - 'v0.*'
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      channel:
+        description: Update channel to publish (stable or 1.0)
+        type: string
+        required: true
 
 permissions:
   contents: read
 
 env:
   WAILS_VERSION: v2.12.0
+  UPDATE_CHANNEL: ${{ inputs.channel || 'stable' }}
 
 jobs:
   build:
@@ -231,11 +238,13 @@ jobs:
         shell: bash
         run: |
           version="${GITHUB_REF_NAME#v}"
+          channel="${UPDATE_CHANNEL}"
+          ldflags="-X main.appVersion=${version} -X main.appUpdateChannel=${channel}"
           if [[ "${{ runner.os }}" == "macOS" ]]; then
             npm run build:frontend:desktop
-            wails build -platform ${{ matrix.platform }} -trimpath -s -ldflags "-X main.appVersion=${version}"
+            wails build -platform ${{ matrix.platform }} -trimpath -s -ldflags "${ldflags}"
           else
-            wails build -platform ${{ matrix.platform }} -trimpath -ldflags "-X main.appVersion=${version}"
+            wails build -platform ${{ matrix.platform }} -trimpath -ldflags "${ldflags}"
           fi
 
       - name: Verify Wails app bundle (macOS)
@@ -299,6 +308,7 @@ jobs:
         shell: bash
         run: |
           version="${GITHUB_REF_NAME#v}"
+          node scripts/update-channel.mjs --assert --channel "${UPDATE_CHANNEL}" --version "${version}"
           args=(--expected "$version" --package package.json --wails wails.json --tag "$GITHUB_REF_NAME")
           if [[ "${{ runner.os }}" == "macOS" ]]; then
             args+=(--app build/bin/OfficeDex.app)
@@ -526,7 +536,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
           draft: false
-          prerelease: false
+          prerelease: ${{ inputs.channel == '1.0' }}
           generate_release_notes: true
           fail_on_unmatched_files: false
           files: |
@@ -574,24 +584,53 @@ jobs:
 
       - name: Generate manifest.json
         run: |
+          set -euo pipefail
           tag="${GITHUB_REF_NAME}"
           version="${tag#v}"
+          channel="${UPDATE_CHANNEL}"
+          node src/scripts/update-channel.mjs --assert --channel "${channel}" --version "${version}"
+          if [ "${channel}" = "1.0" ]; then
+            manifest_rel="channels/1.0/manifest.json"
+            archive_rel="channels/1.0/archive"
+          else
+            manifest_rel="manifest.json"
+            archive_rel="archive"
+          fi
           notes=$(gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" --json body --jq .body 2>/dev/null || echo "")
           node src/scripts/build-manifest.mjs \
             --version "${version}" \
+            --channel "${channel}" \
             --darwin "artifacts/OfficeDex-${tag}-darwin-universal.zip" \
             --windows "artifacts/OfficeDex-${tag}-windows-amd64.zip" \
             --notes "${notes:-Release ${tag}}" \
-            --out dist/manifest.json
-          mkdir -p dist/archive
-          cp dist/manifest.json "dist/archive/manifest-${tag}.json"
+            --out "dist/${manifest_rel}"
+          mkdir -p "dist/${archive_rel}"
+          cp "dist/${manifest_rel}" "dist/${archive_rel}/manifest-${tag}.json"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Commit and push to officedex-dist
         run: |
+          set -euo pipefail
           cd dist
           tag="${GITHUB_REF_NAME}"
-          git add manifest.json archive/
-          git commit -m "release: ${tag}" -m "Auto-synced from officecli/officedex@${GITHUB_SHA} (assets served from source repo release)"
+          channel="${UPDATE_CHANNEL}"
+          if [ "${channel}" = "1.0" ]; then
+            git add channels/1.0/
+            staged="$(git diff --cached --name-only)"
+            echo "${staged}"
+            if echo "${staged}" | grep -qx 'manifest.json'; then
+              echo "::error::channel 1.0 refused to modify root manifest.json"
+              exit 1
+            fi
+          else
+            git add manifest.json archive/
+            staged="$(git diff --cached --name-only)"
+            echo "${staged}"
+            if echo "${staged}" | grep -E '^channels/' >/dev/null; then
+              echo "::error::channel stable refused to modify channels/"
+              exit 1
+            fi
+          fi
+          git commit -m "release: ${tag} (${channel})" -m "Auto-synced from officecli/officedex@${GITHUB_SHA} (assets served from source repo release)"
           git push origin main

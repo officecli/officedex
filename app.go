@@ -57,14 +57,13 @@ import (
 )
 
 const (
-	appName                  = "OfficeDex"
-	previewExtraWidth        = 500
-	bridgeEventChannel       = "bridge:event"
-	authEventChannel         = "auth:event"
-	previewEventChannel      = "preview:open"
-	appUpdateChannel         = "appupdate:event"
-	runtimeEventChannel      = "runtime:event"
-	defaultUpdateManifestURL = "https://raw.githubusercontent.com/officecli/officedex-dist/main/manifest.json"
+	appName               = "OfficeDex"
+	previewExtraWidth     = 500
+	bridgeEventChannel    = "bridge:event"
+	authEventChannel      = "auth:event"
+	previewEventChannel   = "preview:open"
+	appUpdateEventChannel = "appupdate:event"
+	runtimeEventChannel   = "runtime:event"
 )
 
 func sha256Hex(data []byte) string {
@@ -74,6 +73,7 @@ func sha256Hex(data []byte) string {
 
 // appVersion is injected at build time via `-ldflags "-X main.appVersion=<v>"`.
 // The default "dev" sentinel makes `go run` / `wails dev` work without flags.
+// Pair it with `-X main.appUpdateChannel=<stable|1.0>` on packaged builds.
 var appVersion = "dev"
 
 type DesktopNotificationInput struct {
@@ -439,17 +439,15 @@ func NewApp() (*App, error) {
 
 	app.demoFlow = demoflow.New(demoflow.Options{Recorder: app})
 
-	manifestURL := config.Trimmed(config.UpdateManifestURLEnv)
-	if manifestURL == "" {
-		manifestURL = defaultUpdateManifestURL
-	}
+	updateChannel, manifestURL := resolveUpdateManifestURL()
 	updateMgr, err := appupdate.New(appupdate.Options{
 		ManifestURL:    manifestURL,
+		Channel:        updateChannel,
 		CurrentVersion: appVersion,
 		UpdatesDir:     filepath.Join(userDataDir, "updates"),
 		HTTPClient:     proxyPool.NewClient(0),
 		Listener: func(ev appupdate.Event) {
-			emit(app.ctx, appUpdateChannel, ev)
+			emit(app.ctx, appUpdateEventChannel, ev)
 		},
 	})
 	if err != nil {

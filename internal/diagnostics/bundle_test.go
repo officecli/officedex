@@ -15,7 +15,7 @@ import (
 )
 
 type mockQuerier struct {
-	taskEvents  map[string][]types.BridgeEvent
+	taskEvents   map[string][]types.BridgeEvent
 	recentEvents []types.BridgeEvent
 }
 
@@ -69,7 +69,7 @@ func TestBuildBundleBasic(t *testing.T) {
 		IncludeLogs:     true,
 		AppVersion:      "1.0.0",
 		BundleID:        "test-bundle-id-123",
-		Now:           func() time.Time { return now },
+		Now:             func() time.Time { return now },
 	})
 	if err != nil {
 		t.Fatalf("BuildBundle: %v", err)
@@ -217,6 +217,8 @@ func TestBuildBundleMetaJSON(t *testing.T) {
 		Settings:            types.UserSettings{},
 		BundleID:            "meta-test",
 		AppVersion:          "2.0.0",
+		UpdateChannel:       "1.0",
+		ManifestURL:         "https://example.test/channels/1.0/manifest.json",
 		TaskID:              "task-42",
 		RuntimeDroppedBytes: 1024,
 		Now:                 func() time.Time { return now },
@@ -242,6 +244,12 @@ func TestBuildBundleMetaJSON(t *testing.T) {
 
 		if meta["appVersion"] != "2.0.0" {
 			t.Errorf("appVersion = %v", meta["appVersion"])
+		}
+		if meta["updateChannel"] != "1.0" {
+			t.Errorf("updateChannel = %v", meta["updateChannel"])
+		}
+		if meta["manifestUrl"] != "https://example.test/channels/1.0/manifest.json" {
+			t.Errorf("manifestUrl = %v", meta["manifestUrl"])
 		}
 		if meta["bundleId"] != "meta-test" {
 			t.Errorf("bundleId = %v", meta["bundleId"])

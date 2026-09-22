@@ -84,7 +84,7 @@ export WRITER_OPTIONAL=1
 # this log instead of behind "Compiling frontend: Done.". `-s` then tells wails
 # the frontend is already there.
 PRESENTATION_SOURCE_DIR="${PRESENTATION_DIR}" bash "${SCRIPT_DIR}/build-frontend-desktop.sh"
-PRESENTATION_SOURCE_DIR="${PRESENTATION_DIR}" env -u GOROOT "${WAILS_BIN}" build -s -ldflags "-X main.appVersion=${APP_VERSION}"
+PRESENTATION_SOURCE_DIR="${PRESENTATION_DIR}" env -u GOROOT "${WAILS_BIN}" build -s -ldflags "-X main.appVersion=${APP_VERSION} -X main.appUpdateChannel=1.0"
 node --input-type=module -e 'import { stageDesktopSkills } from "./scripts/bundle-runtime.mjs"; await stageDesktopSkills("build/bin/OfficeDex.app/Contents/Resources");'
 npm run stage:office2modoc
 node scripts/bundle-office2modoc.mjs \

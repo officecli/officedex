@@ -302,6 +302,8 @@ export function normaliseAppUpdateStatus(raw: unknown): AppUpdateStatus {
     lastError: value.lastError ?? null,
     notes: value.notes,
     lastErrors: Array.isArray(value.lastErrors) ? value.lastErrors : [],
+    updateChannel: value.updateChannel,
+    manifestUrl: value.manifestUrl,
   };
 }
 

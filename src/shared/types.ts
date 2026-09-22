@@ -972,6 +972,8 @@ export interface AppUpdateStatus {
   lastError: string | null;
   notes?: string;
   lastErrors?: AppUpdateErrorEntry[];
+  updateChannel?: string;
+  manifestUrl?: string;
 }
 
 export interface AppUpdateCheckResult {

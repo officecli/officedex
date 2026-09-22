@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `develop/1.0` builds poll a dedicated auto-update channel at `officedex-dist/channels/1.0/manifest.json`, isolated from the 0.5.x production feed.
+
 ## [0.5.37] - 2026-06-12
 
 ### Changed

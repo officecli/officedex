@@ -1009,6 +1009,7 @@ export const en: Record<string, string> = {
     "OfficeDex AI may produce inaccurate content. Please manually verify important information before using, sharing, or delivering it.",
   "settings.about.version": "Version",
   "settings.about.versionValue": "OfficeDex {version}",
+  "settings.about.updateChannel": "Channel {channel}",
   "settings.about.lastChecked": "Last checked",
   "settings.about.lastCheckedNever": "Never",
   "settings.about.lastCheckedJustNow": "just now",
