@@ -65,6 +65,11 @@ export function buildMentionOptions(
   return [...matches, ...uploads];
 }
 
+/** True while the key press belongs to an IME (candidate selection/confirm). */
+export function isImeKeyEvent(event: KeyboardEvent): boolean {
+  return event.isComposing || event.keyCode === 229;
+}
+
 export interface MentionMenuProps {
   open: boolean;
   query: string;
@@ -139,6 +144,8 @@ export function MentionMenu({
     if (!input) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
+      // Arrow/Enter/Escape belong to the IME's candidate list while composing.
+      if (isImeKeyEvent(event)) return;
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         event.preventDefault();
         event.stopImmediatePropagation();

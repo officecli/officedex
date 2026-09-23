@@ -10,7 +10,7 @@ import {
   Wand2,
   X,
 } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 
 import { toast } from "../../renderer/ui";
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
@@ -22,7 +22,7 @@ import { useFolderDialogs } from "../nav/useFolderDialogs";
 import { useShell } from "../state/ShellContext";
 import { usePort } from "../port/PortContext";
 import { notBuiltYet } from "../port/reportPortFailure";
-import { MentionMenu, type MentionOption } from "./MentionMenu";
+import { MentionMenu, isImeKeyEvent, type MentionOption } from "./MentionMenu";
 import { ModelMenu } from "./ModelMenu";
 import { useComposerSettings } from "./useComposerSettings";
 import { ImageSummary, ImageTools } from "../image/composer/ImageTools";
@@ -282,6 +282,7 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
   });
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const composingRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<{ stop: () => void } | null>(null);
@@ -498,6 +499,25 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
   function removeMention(mention: Mention) {
     setMentions((current) => current.filter((entry) => entry !== mention));
     setText((current) => current.split(`@${mention.label}`).join("").replace(/ {2,}/g, " "));
+  }
+
+  // The Enter that confirms an IME candidate must stay inside the IME. WebKit
+  // (Wails) fires compositionend before that keydown, so isComposing is already
+  // false there — keyCode 229 is what still marks it.
+  function onCompositionStart() {
+    composingRef.current = true;
+  }
+
+  function onCompositionEnd() {
+    composingRef.current = false;
+  }
+
+  function onInputKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== "Enter" || event.shiftKey) return;
+    if (isImeKeyEvent(event.nativeEvent) || composingRef.current) return;
+    if (!settings.value.enterToSend && !event.metaKey && !event.ctrlKey) return;
+    event.preventDefault();
+    void submit();
   }
 
   async function submit() {
@@ -882,12 +902,9 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
             aria-label={placement === "home" ? "New task instructions" : "Message Agent"}
             placeholder={placeholder}
             onChange={(event) => handleInput(event.target.value, event.target.selectionStart ?? 0)}
-            onKeyDown={(event) => {
-              if (event.key !== "Enter" || event.shiftKey) return;
-              if (!settings.value.enterToSend && !event.metaKey && !event.ctrlKey) return;
-              event.preventDefault();
-              void submit();
-            }}
+            onCompositionStart={onCompositionStart}
+            onCompositionEnd={onCompositionEnd}
+            onKeyDown={onInputKeyDown}
           />
         </div>
       ) : (
@@ -900,12 +917,9 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
           aria-label={placement === "home" ? "New task instructions" : "Message Agent"}
           placeholder={placeholder}
           onChange={(event) => handleInput(event.target.value, event.target.selectionStart ?? 0)}
-          onKeyDown={(event) => {
-            if (event.key !== "Enter" || event.shiftKey) return;
-            if (!settings.value.enterToSend && !event.metaKey && !event.ctrlKey) return;
-            event.preventDefault();
-            void submit();
-          }}
+          onCompositionStart={onCompositionStart}
+          onCompositionEnd={onCompositionEnd}
+          onKeyDown={onInputKeyDown}
         />
       )}
 
