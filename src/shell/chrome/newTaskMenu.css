@@ -1,0 +1,79 @@
+/* Agent mode's New task grid — the prototype's #agent-new-task-menu. */
+
+.shell-new-task-menu {
+  position: fixed;
+  z-index: var(--shell-z-menu);
+  box-sizing: border-box;
+  width: 284px;
+  padding: 12px;
+  border: 1px solid var(--shell-line-strong);
+  border-radius: 12px;
+  background: var(--shell-paper);
+  box-shadow: var(--shell-shadow-menu);
+  color: var(--shell-ink-muted);
+  font: var(--shell-text) / 18px var(--shell-font);
+}
+
+.shell-new-task-title {
+  margin: 0 2px 10px;
+  font-weight: 600;
+  color: var(--shell-ink-title);
+}
+
+.shell-new-task-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.shell-new-task-grid > button {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 4px;
+  min-width: 0;
+  height: 82px;
+  padding: 12px;
+  border: 1px solid var(--shell-line);
+  border-radius: 8px;
+  background: var(--shell-sunken);
+  color: var(--shell-ink-muted);
+  text-align: left;
+  cursor: pointer;
+}
+
+.shell-new-task-grid > button > :first-child {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.shell-new-task-grid small {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-xs);
+  line-height: 16px;
+}
+
+.shell-new-task-grid strong {
+  grid-column: 1 / -1;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.shell-new-task-grid > button:hover {
+  border-color: var(--shell-line-strong);
+  background: var(--shell-hover);
+}
+
+.shell-new-task-grid > button:focus-visible {
+  outline: 2px solid var(--shell-focus);
+  outline-offset: 1px;
+  background: var(--shell-hover);
+}
+
+.shell-sidebar-item[aria-haspopup="menu"][aria-expanded="true"] {
+  background: var(--shell-active);
+}

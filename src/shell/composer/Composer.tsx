@@ -25,7 +25,13 @@ import { notBuiltYet } from "../port/reportPortFailure";
 import { MentionMenu, type MentionOption } from "./MentionMenu";
 import { ModelMenu } from "./ModelMenu";
 import { useComposerSettings } from "./useComposerSettings";
+import { ImageSummary, ImageTools } from "../image/composer/ImageTools";
+import { ReferenceList } from "../image/composer/ReferenceList";
+import { EMPTY_IMAGE_DRAFT, restoreImageDraft, toImageGenerationInput, type ImageDraft } from "../image/composer/imageDraft";
+import { useComposerFillRequests } from "../image/composerFill";
+import { useImageEditTarget } from "../image/useImageEditTarget";
 import "./composer.css";
+import "../image/composer/imageComposer.css";
 
 export type ComposerPlacement = "home" | "task" | "floating";
 
@@ -93,10 +99,11 @@ const OUTPUTS: Array<{ value: FileType; label: string; description: string }> = 
   { value: "slides", label: "New presentation", description: "A PowerPoint file (.pptx)" },
 ];
 
-const DOCUMENT_TYPES: Partial<Record<FileType, NonNullable<SendInput["documentType"]>>> = {
+const DOCUMENT_TYPES: Record<FileType, NonNullable<SendInput["documentType"]>> = {
   doc: "docx",
   sheet: "xlsx",
   slides: "pptx",
+  image: "img",
 };
 
 /** Everything a half-written message carries, not just its words. */
@@ -106,9 +113,11 @@ interface Draft {
   attachments: Attachment[];
   /** What the user said to make, or "auto" to let the instruction decide. */
   output: OutputChoice;
+  mode: "agent" | "image";
+  image: ImageDraft;
 }
 
-const EMPTY_DRAFT: Draft = { text: "", mentions: [], attachments: [], output: "auto" };
+const EMPTY_DRAFT: Draft = { text: "", mentions: [], attachments: [], output: "auto", mode: "agent", image: EMPTY_IMAGE_DRAFT };
 
 /**
  * Half-written messages, per placement, for as long as the tab is open.
@@ -141,11 +150,14 @@ export function resetComposerDrafts(): void {
 /** Everything the composer gathers; the caller adds model and permission. */
 export type ComposerSubmission = Pick<
   SendInput,
-  "text" | "folderId" | "mentions" | "attachments" | "activeFileId" | "reference" | "documentType"
+  "text" | "folderId" | "mentions" | "attachments" | "activeFileId" | "reference" | "documentType" | "imageGeneration"
 >;
 
 export interface ComposerProps {
   placement: ComposerPlacement;
+  showScopeInToolbar?: boolean;
+  showModeControls?: boolean;
+  showPermission?: boolean;
   /** True while a task is running, which turns an empty Send into Stop. */
   busy?: boolean;
   onSend: (submission: ComposerSubmission) => void | Promise<void>;
@@ -167,7 +179,20 @@ export interface ComposerProps {
    * Wrap the callback in `useCallback`: it is an effect dependency, and a new
    * identity each render re-registers on every keystroke.
    */
-  onRegisterFill?: (fill: (text: string, output?: FileType) => void) => void;
+  onRegisterFill?: (fill: (text: string, output?: FileType | "image") => void) => void;
+  /**
+   * Hands the caller a way to switch image mode on and off without touching
+   * the words — Home's "Create an image" is a mode, not a suggested sentence.
+   */
+  onRegisterImageMode?: (set: (on: boolean) => void) => void;
+  /** Told whenever image mode turns on or off, so Home can retitle itself. */
+  onImageModeChange?: (on: boolean) => void;
+  /**
+   * The task beside this composer is making a picture. Every message from here
+   * is then a change to it, so the composer stays in image mode and cannot be
+   * switched out of it.
+   */
+  imageTask?: boolean;
 }
 
 /**
@@ -179,7 +204,7 @@ export interface ComposerProps {
  * had a separate folder dropdown on Home for what the scope chip does here;
  * folding the two together is decision 2.
  */
-export function Composer({ placement, busy = false, onSend, onStop, onRegisterFill }: ComposerProps) {
+export function Composer({ placement, showScopeInToolbar = true, showModeControls = true, showPermission = true, busy = false, onSend, onStop, onRegisterFill, onRegisterImageMode, onImageModeChange, imageTask = false }: ComposerProps) {
   const { state, folders, files, scopeFolderId, dispatch, reload } = useShell();
   const port = usePort();
   const settings = useComposerSettings();
@@ -187,8 +212,19 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
   const { selection, clear: clearSelection } = useCanvasSelection();
   const inputId = useId();
 
-  const [draft, setDraft] = useState<Draft>(() => drafts.get(placement) ?? EMPTY_DRAFT);
-  const { text, mentions, attachments, output } = draft;
+  const [draft, setDraft] = useState<Draft>(() => {
+    const saved = drafts.get(placement);
+    return saved ? { ...EMPTY_DRAFT, ...saved, image: restoreImageDraft(saved.image) } : EMPTY_DRAFT;
+  });
+  const { text, mentions, attachments, output, image } = draft;
+  const editTarget = useImageEditTarget();
+  /*
+   * Beside an image task the mode is not a choice. Anything typed there is a
+   * change to the picture on screen; letting it fall back to Agent would send
+   * it down the document path, which has no idea what to do with an image.
+   */
+  const forcedImage = placement !== "home" && (imageTask || editTarget !== null);
+  const mode: Draft["mode"] = forcedImage ? "image" : draft.mode;
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   /** True while a speech recogniser is running — see `dictate`. */
@@ -199,8 +235,7 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
   function patchDraft(patch: (current: Draft) => Partial<Draft>) {
     setDraft((current) => {
       const next = { ...current, ...patch(current) };
-      const empty =
-        !next.text && next.mentions.length === 0 && next.attachments.length === 0 && next.output === "auto";
+      const empty = !next.text && next.mentions.length === 0 && next.attachments.length === 0 && next.output === "auto" && next.mode === "agent";
       if (empty) drafts.delete(placement);
       else drafts.set(placement, next);
       return next;
@@ -219,6 +254,32 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
   const setAttachments = (value: Update<Attachment[]>) =>
     patchDraft((current) => ({ attachments: resolve(value, current.attachments) }));
   const setOutput = (value: OutputChoice) => patchDraft(() => ({ output: value }));
+  const setMode = (value: Draft["mode"]) => patchDraft(() => ({ mode: value }));
+  const setImage = (patch: Partial<ImageDraft>) => patchDraft((current) => ({ image: { ...current.image, ...patch } }));
+
+  useEffect(() => {
+    onRegisterImageMode?.((on) => setMode(on ? "image" : "agent"));
+    // `setMode` only calls the state setter; see the fill registration below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onRegisterImageMode]);
+
+  useEffect(() => {
+    onImageModeChange?.(mode === "image");
+  }, [mode, onImageModeChange]);
+
+  /*
+   * "Create another" and "Try again" on the image workspace put words here.
+   * Only the composer beside the task listens: Home's belongs to the next task.
+   */
+  useComposerFillRequests((next) => {
+    if (placement === "home") return;
+    setText(next);
+    queueMicrotask(() => {
+      const input = inputRef.current;
+      input?.focus();
+      input?.setSelectionRange(next.length, next.length);
+    });
+  });
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -310,7 +371,8 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
       setText(next);
       // A quick prompt states its own type; a plain fill leaves the choice
       // alone rather than resetting one the user made by hand.
-      if (output) setOutput(output);
+      if (output === "image") setMode("image");
+      else if (output) setOutput(output);
       setMentionQuery(null);
       queueMicrotask(() => {
         const input = inputRef.current;
@@ -461,8 +523,12 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
       folderId: scope?.id ?? "",
       mentions,
       attachments,
-      activeFileId: editingFileId,
+      activeFileId: mode === "image" ? null : editingFileId,
       ...(output === "auto" ? {} : { documentType: DOCUMENT_TYPES[output] }),
+      ...(mode === "image" ? {
+        documentType: "img" as const,
+        imageGeneration: toImageGenerationInput(image, text.trim(), placement === "home" ? null : editTarget?.fileId ?? null),
+      } : {}),
       ...(quoted
         ? { reference: { fileId: quoted.fileId, label: quoted.label, text: quoted.text } }
         : {}),
@@ -475,6 +541,10 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
     // sticky, one "New document" would silently turn every later instruction
     // typed beside an open file into a new file.
     setOutput("auto");
+    // The references went with the picture they were for; the look (ratio,
+    // style, camera) is kept, since the next version usually wants the same.
+    if (mode === "image") setImage({ references: [] });
+    if (placement === "home") setMode("agent");
     setMentionQuery(null);
     // The quote went with the message; leaving it up would make the next one
     // look like it is about the same passage.
@@ -662,9 +732,51 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
             title: "The type is read off your instruction. Pick one to be sure.",
           };
 
+  /** "@" at the caret, and the mention menu open on it — the @ tool's job. */
+  function startMention() {
+    const input = inputRef.current;
+    const start = input?.selectionStart ?? text.length;
+    const end = input?.selectionEnd ?? text.length;
+    const gap = start > 0 && !/\s$/.test(text.slice(0, start)) ? " " : "";
+    const next = `${text.slice(0, start)}${gap}@${text.slice(end)}`;
+    setText(next);
+    setMentionQuery("");
+    queueMicrotask(() => {
+      input?.focus();
+      const caret = start + gap.length + 1;
+      input?.setSelectionRange(caret, caret);
+    });
+  }
+
+  /**
+   * Quotes the selection — or opens an empty pair at the caret. Words in
+   * quotes are what image models read as "draw this text", which is the whole
+   * of what the Tт tool promises.
+   */
+  function quoteSelection() {
+    const input = inputRef.current;
+    const start = input?.selectionStart ?? text.length;
+    const end = input?.selectionEnd ?? text.length;
+    const gap = start > 0 && !/\s$/.test(text.slice(0, start)) ? " " : "";
+    const picked = text.slice(start, end);
+    setText(`${text.slice(0, start)}${gap}"${picked}"${text.slice(end)}`);
+    queueMicrotask(() => {
+      input?.focus();
+      const from = start + gap.length + 1;
+      input?.setSelectionRange(from, from + picked.length);
+    });
+  }
+
+  const imageMode = mode === "image";
+  const placeholder = placement === "home"
+    ? imageMode ? "Describe your image, or use @ to add files or folders…" : "Ask anything, @ to add files or folders…"
+    : imageMode
+      ? editTarget ? `Describe changes to Version ${editTarget.version}…` : "Describe your image, or use @ to add files or folders…"
+      : "Message Agent, @ files or folders…";
+
   return (
     <div
-      className={`shell-cx shell-cx--${placement}${dragging ? " is-dragging" : ""}`}
+      className={`shell-cx shell-cx--${placement}${dragging ? " is-dragging" : ""}${imageMode ? " is-image" : ""}`}
       onDragOver={(event) => {
         if (![...event.dataTransfer.types].includes("Files")) return;
         event.preventDefault();
@@ -748,29 +860,76 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
         </div>
       ) : null}
 
-      <textarea
-        id={inputId}
-        ref={inputRef}
-        className="shell-cx-input"
-        rows={2}
-        value={text}
-        aria-label={placement === "home" ? "New task instructions" : "Message Agent"}
-        placeholder={
-          placement === "home"
-            ? "Ask anything, @ to add files or folders…"
-            : "Message Agent, @ files or folders…"
-        }
-        onChange={(event) => handleInput(event.target.value, event.target.selectionStart ?? 0)}
-        onKeyDown={(event) => {
-          if (event.key !== "Enter" || event.shiftKey) return;
-          if (!settings.value.enterToSend && !event.metaKey && !event.ctrlKey) return;
-          event.preventDefault();
-          void submit();
-        }}
-      />
+      {imageMode ? (
+        <div className="shell-ig-prompt-row">
+          <ReferenceList
+            references={image.references}
+            onChange={(references) => setImage({ references })}
+            disabled={busy && placement !== "home"}
+          />
+          <textarea
+            id={inputId}
+            ref={inputRef}
+            className="shell-cx-input"
+            rows={2}
+            value={text}
+            aria-label={placement === "home" ? "New task instructions" : "Message Agent"}
+            placeholder={placeholder}
+            onChange={(event) => handleInput(event.target.value, event.target.selectionStart ?? 0)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" || event.shiftKey) return;
+              if (!settings.value.enterToSend && !event.metaKey && !event.ctrlKey) return;
+              event.preventDefault();
+              void submit();
+            }}
+          />
+        </div>
+      ) : (
+        <textarea
+          id={inputId}
+          ref={inputRef}
+          className="shell-cx-input"
+          rows={2}
+          value={text}
+          aria-label={placement === "home" ? "New task instructions" : "Message Agent"}
+          placeholder={placeholder}
+          onChange={(event) => handleInput(event.target.value, event.target.selectionStart ?? 0)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || event.shiftKey) return;
+            if (!settings.value.enterToSend && !event.metaKey && !event.ctrlKey) return;
+            event.preventDefault();
+            void submit();
+          }}
+        />
+      )}
+
+      {imageMode ? <ImageSummary draft={image} onChange={setImage} disabled={busy && placement !== "home"} /> : null}
 
       <div className="shell-cx-toolbar">
         <div className="shell-cx-left">
+          {imageMode ? (
+            <ImageTools
+              draft={image}
+              onChange={setImage}
+              onExit={forcedImage ? undefined : () => setMode("agent")}
+              onMention={startMention}
+              onQuoteText={quoteSelection}
+              disabled={busy && placement !== "home"}
+            />
+          ) : <>
+          {showModeControls ? (
+            <button
+              type="button"
+              className="shell-cx-button shell-cx-mode"
+              aria-pressed={false}
+              aria-label="Generate image"
+              title="Generate image"
+              onClick={() => setMode("image")}
+            >
+              <Wand2 size={16} strokeWidth={1.7} aria-hidden="true" />
+              <span>Agent</span>
+            </button>
+          ) : null}
           <button
             type="button"
             className="shell-cx-button"
@@ -786,7 +945,7 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
           </button>
 
           {/* Decision 2: task scope is a property of this message, shown inline. */}
-          <Menu label="Task scope" items={scopeItems} align="start" width={260}>
+          {showScopeInToolbar ? <Menu label="Task scope" items={scopeItems} align="start" width={260}>
             {(triggerProps) => (
               <button
                 {...triggerProps}
@@ -799,13 +958,13 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
                 <ChevronDown size={12} strokeWidth={1.8} aria-hidden="true" />
               </button>
             )}
-          </Menu>
+          </Menu> : null}
 
           {/*
             And what it will produce. Same argument as the scope chip: the
             answer travels with the message, so the control does too.
           */}
-          <Menu label="What this message makes" items={outputItems} align="start" width={280}>
+          {mode === "agent" && showModeControls ? <Menu label="What this message makes" items={outputItems} align="start" width={280}>
             {(triggerProps) => (
               <button
                 {...triggerProps}
@@ -819,11 +978,12 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
                 <ChevronDown size={12} strokeWidth={1.8} aria-hidden="true" />
               </button>
             )}
-          </Menu>
+          </Menu> : null}
+          </>}
         </div>
 
         <div className="shell-cx-right">
-          <Menu
+          {showPermission && !imageMode ? <Menu
             label="Permissions"
             align="end"
             width={280}
@@ -869,25 +1029,30 @@ export function Composer({ placement, busy = false, onSend, onStop, onRegisterFi
                 <span className="shell-cx-permission-name">{permission.label}</span>
               </button>
             )}
-          </Menu>
+          </Menu> : null}
 
-          <ModelMenu
-            models={settings.models}
-            selectedId={settings.value.selectedModelId}
-            onSelect={(id) => void settings.patch({ selectedModelId: id })}
-            onModelsChanged={settings.reloadModels}
-          />
+          {/* The text model has no say in a picture; the image strip names its own. */}
+          {imageMode ? null : (
+            <>
+              <ModelMenu
+                models={settings.models}
+                selectedId={settings.value.selectedModelId}
+                onSelect={(id) => void settings.patch({ selectedModelId: id })}
+                onModelsChanged={settings.reloadModels}
+              />
 
-          <button
-            type="button"
-            className={`shell-cx-button shell-cx-mic${listening ? " is-listening" : ""}`}
-            aria-label={listening ? "Stop dictation" : "Dictate"}
-            aria-pressed={listening}
-            title={listening ? "Listening — press to stop" : "Dictate"}
-            onClick={dictate}
-          >
-            <Mic size={16} strokeWidth={1.7} aria-hidden="true" />
-          </button>
+              <button
+                type="button"
+                className={`shell-cx-button shell-cx-mic${listening ? " is-listening" : ""}`}
+                aria-label={listening ? "Stop dictation" : "Dictate"}
+                aria-pressed={listening}
+                title={listening ? "Listening — press to stop" : "Dictate"}
+                onClick={dictate}
+              >
+                <Mic size={16} strokeWidth={1.7} aria-hidden="true" />
+              </button>
+            </>
+          )}
 
           {/*
             Enabled when there is something to send, or something to stop — and

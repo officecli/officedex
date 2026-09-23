@@ -61,6 +61,7 @@ Composer 完整采集这些字段。mentions 和 reference 已转成明确的 pr
 | `dictate` | Composer 麦克风 | 走浏览器的 Web Speech API，听写中麦克风有可视状态、再按一次停止。没有这个 API 的宿主（打包后的 webview 视版本而定）才提示；自建语音识别未立项 |
 | `composer.permission.review` / `composer.permission.custom` | Composer 权限菜单第 2/3 档；侧栏齿轮菜单的 "Review changes" | runtime 没有「先给用户看、确认后再写」的闸门，所有 run 都直接写。两档保留在菜单里但点了只出提示，四处默认值都已改为 `full`，读取时还会丢掉旧版本存在盘上的 `review`。Custom 更早一层就是空的：没有任何界面能写 `settings.customInstructions` |
 | `home-highlights` | Agent 首页 "Feature highlights" 的卡片 | 仓库里没有任何功能介绍视频素材，所以只出货架不接播放器。卡片、轮播、键盘导航都是真的，点击出提示。素材到位后放进 `public/assets/highlights/{id}.jpg`（DOM 上的 `data-asset` 就是契约），再把播放器接回来 |
+| `composer.image.model` | 图片模式 composer 的模型菜单（Seedream 5.0 Pro / GPT Image 2 / Nano Banana 2） | 图片 runtime 自己选模型：hosted 路径 CLI 写死 `hosted/image`、external 路径只读配置里的 `image_model`，没有按请求覆盖的参数。四个选项照原型列出，只有 Auto 可选，其余点了出提示并标 "Soon"。要真做得先在 officecli `office.generate` 加 `image_model` 参数、平台侧按 profile 计价，再把 `ImageGenerationInput.modelId` 透传下去（字段已在契约里） |
 
 ### Writer 的界面语言（2026-09-19）
 

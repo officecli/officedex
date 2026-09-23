@@ -344,6 +344,19 @@ func (h *realClientE2EHost) call(method string, raw json.RawMessage) (any, error
 		return h.popFileDialog(false), nil
 	case "OpenMultiFileDialog":
 		return h.popFileDialog(true), nil
+	case "SaveFileCopy":
+		// A headless E2E run has no native save panel, so this records the
+		// request and answers the way a cancelled dialog does. What the test
+		// can assert is that the renderer asked to save the right file.
+		var input struct {
+			SourcePath    string `json:"sourcePath"`
+			SuggestedName string `json:"suggestedName"`
+		}
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		h.recordAction("saveFileCopy", input.SourcePath)
+		return "", nil
 	case "SavePastedImage":
 		var input PastedImageInput
 		if err := decodeRealClientInput(raw, &input); err != nil {

@@ -1010,6 +1010,104 @@ func TestInvokeGenerateRejectsInvalidImageRatio(t *testing.T) {
 	}
 }
 
+func TestInvokeGenerateSendsImageSizeAndStyleForIMG(t *testing.T) {
+	client, fake := newClientWithFake(t)
+	defer client.Stop()
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := client.InvokeGenerate(context.Background(), types.GenerateInput{
+			DocumentType: types.DocIMG,
+			Topic:        "Poster",
+			Prompt:       "red bicycle",
+			ImageSize:    " 1024X768 ",
+			ImageStyle:   "  watercolor  ",
+		})
+		done <- err
+	}()
+
+	first := fake.readRequest(t)
+	fake.writeResponse(t, first.idString(), map[string]any{"id": "sess-1"}, nil)
+
+	second := fake.readRequest(t)
+	var params map[string]any
+	if err := json.Unmarshal(second.Params, &params); err != nil {
+		t.Fatalf("decode params: %v", err)
+	}
+	args, _ := params["args"].(map[string]any)
+	if args["size"] != "1024x768" {
+		t.Fatalf("size = %v, want 1024x768", args["size"])
+	}
+	if args["style"] != "watercolor" {
+		t.Fatalf("style = %v, want watercolor", args["style"])
+	}
+	fake.writeResponse(t, second.idString(), map[string]any{
+		"task_id":    "task-img",
+		"session_id": "sess-1",
+		"status":     "starting",
+	}, nil)
+	if err := <-done; err != nil {
+		t.Errorf("InvokeGenerate: %v", err)
+	}
+}
+
+func TestInvokeGenerateDoesNotSendImageSizeOrStyleForNonIMG(t *testing.T) {
+	client, fake := newClientWithFake(t)
+	defer client.Stop()
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := client.InvokeGenerate(context.Background(), types.GenerateInput{
+			DocumentType: types.DocPPTX,
+			Topic:        "Deck",
+			Prompt:       "make slides",
+			ImageSize:    "1024x768",
+			ImageStyle:   "watercolor",
+		})
+		done <- err
+	}()
+
+	first := fake.readRequest(t)
+	fake.writeResponse(t, first.idString(), map[string]any{"id": "sess-1"}, nil)
+
+	second := fake.readRequest(t)
+	var params map[string]any
+	if err := json.Unmarshal(second.Params, &params); err != nil {
+		t.Fatalf("decode params: %v", err)
+	}
+	args, _ := params["args"].(map[string]any)
+	if _, ok := args["size"]; ok {
+		t.Fatalf("size should not be sent for non-img generation: %#v", args["size"])
+	}
+	if _, ok := args["style"]; ok {
+		t.Fatalf("style should not be sent for non-img generation: %#v", args["style"])
+	}
+	fake.writeResponse(t, second.idString(), map[string]any{
+		"task_id":    "task-pptx",
+		"session_id": "sess-1",
+		"status":     "starting",
+	}, nil)
+	if err := <-done; err != nil {
+		t.Errorf("InvokeGenerate: %v", err)
+	}
+}
+
+func TestInvokeGenerateRejectsInvalidImageSize(t *testing.T) {
+	for _, size := range []string{"1024", "1024*768", "128x768", "1024x8192", "1024x768px"} {
+		client, _ := newClientWithFake(t)
+		_, err := client.InvokeGenerate(context.Background(), types.GenerateInput{
+			DocumentType: types.DocIMG,
+			Topic:        "Poster",
+			Prompt:       "red bicycle",
+			ImageSize:    size,
+		})
+		if err == nil || !strings.Contains(err.Error(), "unsupported image size") {
+			t.Fatalf("size %q: err = %v, want unsupported image size", size, err)
+		}
+		client.Stop()
+	}
+}
+
 func TestInvokeModifyBuildsOfficeModifyRequest(t *testing.T) {
 	client, fake := newClientWithFake(t)
 	defer client.Stop()

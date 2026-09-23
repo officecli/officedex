@@ -413,6 +413,45 @@ describe("permission tiers", () => {
   });
 });
 
+describe("image generation mode", () => {
+  it("collects image settings and sends an explicit image payload", async () => {
+    const shell = await agentHome();
+    let received: any;
+    const send = shell.port.agent.send.bind(shell.port.agent);
+    shell.port.agent.send = async (input) => {
+      received = input;
+      await send(input);
+    };
+
+    await act(async () => {
+      fireEvent.click(shell.view.getByRole("button", { name: "Create an image" }));
+      fireEvent.change(shell.view.getByLabelText("New task instructions"), {
+        target: { value: "A calm workspace at sunrise" },
+      });
+    });
+    // The settings live in a panel now, not in inline selects.
+    await act(async () => {
+      fireEvent.click(shell.view.getByRole("button", { name: "Image settings" }));
+    });
+    const panel = shell.view.getByRole("dialog", { name: "Image settings" });
+    await act(async () => {
+      fireEvent.click(within(panel).getByRole("radio", { name: "16:9" }));
+      fireEvent.click(within(panel).getByRole("radio", { name: "4K" }));
+    });
+    await act(async () => {
+      fireEvent.click(shell.view.getByTitle("Send message"));
+    });
+
+    expect(received.imageGeneration).toMatchObject({
+      prompt: "A calm workspace at sunrise",
+      ratio: "16:9",
+      resolution: "4K",
+      count: 1,
+    });
+    expect(received.activeFileId).toBeNull();
+  });
+});
+
 /**
  * A draft is the message, not the string.
  *

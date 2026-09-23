@@ -1,0 +1,129 @@
+/*
+ * The image conversation, inside the agent column.
+ *
+ * It borrows the column's own furniture where the shapes are the same — the
+ * user bubble is `.shell-task-user`, the spinner is `.shell-task-spinner`, the
+ * retry is a `.shell-task-button` — and only adds what an image run needs that
+ * a document run does not: the context line, the "based on" label, the result
+ * card, and the edit-target bar above the composer.
+ */
+
+.shell-image-context {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 2px 0 14px;
+  color: var(--shell-ink-subtle);
+  font-size: var(--shell-text-sm);
+}
+
+.shell-image-based-on {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--shell-ink-subtle);
+  font-size: var(--shell-text-xs);
+}
+
+.shell-image-result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 0 0 14px;
+  padding: 10px;
+  border: 1px solid var(--shell-line);
+  border-radius: var(--shell-radius-card);
+  background: var(--shell-paper);
+  color: var(--shell-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.shell-image-result:hover {
+  border-color: var(--shell-line-strong);
+}
+
+.shell-image-result > img {
+  flex: none;
+  width: 68px;
+  height: 49px;
+  object-fit: cover;
+  border: 1px solid var(--shell-line-soft);
+  border-radius: var(--shell-radius-control);
+  background: var(--shell-canvas);
+}
+
+.shell-image-result > span {
+  flex: 1;
+  min-width: 0;
+}
+
+.shell-image-result strong {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--shell-text-sm);
+  font-weight: 600;
+  line-height: 19px;
+}
+
+.shell-image-result small {
+  display: block;
+  margin-top: 3px;
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-xs);
+}
+
+.shell-image-hint {
+  margin: 14px 0 0;
+  color: var(--shell-ink-faint);
+  font: var(--shell-text-xs) / 1.8 var(--shell-font);
+}
+
+.shell-image-progress {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 14px;
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text);
+}
+
+/* The prototype tints this box warm. The shell has one colour for "this went
+   wrong" and no surface to go with it, so the danger ink sits on paper with a
+   danger-tinted hairline rather than on an invented fill. */
+.shell-image-error {
+  margin-top: 4px;
+  padding: 12px;
+  border: 1px solid var(--shell-line-strong);
+  border-left: 2px solid var(--shell-status-danger);
+  border-radius: var(--shell-radius-item);
+  background: var(--shell-paper);
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text);
+  line-height: 1.7;
+}
+
+.shell-image-error .shell-task-button {
+  margin-top: 10px;
+}
+
+.shell-image-edit-target {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 9px;
+  padding: 0 3px;
+  color: var(--shell-ink-subtle);
+  font: var(--shell-text-xs) / 20px var(--shell-font);
+}
+
+.shell-image-edit-target > span {
+  margin-left: auto;
+  color: var(--shell-ink-faint);
+}
+
+.shell-task[data-placement="floating"] .shell-image-edit-target {
+  padding: 0 14px;
+}

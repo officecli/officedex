@@ -16,8 +16,8 @@
  * even when the desktop's own answer is more precise. Those places are marked.
  */
 
-import type { DesktopAPI } from "../shared/types";
-import type { UiPort } from "../shared/uiPort";
+import type { BinaryFileData, DesktopAPI } from "../shared/types";
+import type { ImagePort, UiPort } from "../shared/uiPort";
 import { createFolderService } from "./folders";
 import { createFileService } from "./files";
 import { createSettingsService } from "./settings";
@@ -48,5 +48,40 @@ export function createDesktopUiPort({ api, window }: DesktopUiPortOptions): UiPo
     pickAttachmentPaths: () => api.openMultiFileDialog({
       filters: [{ name: "Office and image files", extensions: ["docx", "xlsx", "pptx", "pdf", "png", "jpg", "jpeg", "webp"] }],
     }),
+    images: createImageService(api),
+  };
+}
+
+/**
+ * Pixels and pickers for the image surfaces.
+ *
+ * Bytes come through `readLocalImage` rather than an `<img>` pointed at the
+ * path: the packaged webview cannot load `file://`, which is also why the
+ * canvas reads its picture through the bridge.
+ */
+function createImageService(api: DesktopAPI): ImagePort {
+  const toBlob = ({ data, mime }: { data: BinaryFileData; mime: string }) =>
+    new Blob([data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(data)], { type: mime });
+  return {
+    pickReferences: () => api.openMultiFileDialog({
+      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp"] }],
+    }),
+    async importReference(file) {
+      const extension = file.name.split(".").pop()?.toLowerCase() || file.type.split("/").pop() || "png";
+      // An ArrayBuffer, not the File: the webview drops Blob bodies on the way
+      // to Go, and the bridge encodes bytes itself.
+      return api.savePastedImage(new Uint8Array(await file.arrayBuffer()), extension === "jpeg" ? "jpg" : extension);
+    },
+    async readPath(path) {
+      return toBlob(await api.readLocalImage(path));
+    },
+    async readFile(fileId) {
+      const record = await api.getDocument(fileId);
+      return toBlob(await api.readLocalImage(record.filePath));
+    },
+    async saveCopy(fileId) {
+      const record = await api.getDocument(fileId);
+      return api.saveFileCopy(record.filePath, record.fileName);
+    },
   };
 }

@@ -1,5 +1,6 @@
 import type { BridgeEvent, DesktopAPI, DesktopTask, GenerateInput, TaskHistoryEntry } from "../shared/types";
-import type { AgentEvent, AgentMessage, AgentOutlinePage, AgentPort, AgentStatus, AgentStep, AgentTask, AgentTaskSummary, SendInput } from "../shared/uiPort";
+import type { AgentEvent, AgentImageRun, AgentImageSeries, AgentMessage, AgentOutlinePage, AgentPort, AgentStatus, AgentStep, AgentTask, AgentTaskSummary, ImageGenerationInput, SendInput } from "../shared/uiPort";
+import { imageDimensions, imageStyleText, isReferenceImagePath, ratioBucket } from "../shared/imageGeneration";
 import { pptxPageStates } from "../renderer/presentation/pptxRuntimeActivity";
 import { respondToPlanReview } from "../renderer/presentation/planReviewResponse";
 import { planApprovalAnswer } from "../renderer/flows/resumeTask";
@@ -264,7 +265,7 @@ function toOutline(task: DesktopTask): AgentOutlinePage[] {
 }
 
 function toAgentTask(task: DesktopTask): AgentTask {
-  const documentType = task.documentType === "docx" || task.documentType === "xlsx" || task.documentType === "pptx"
+  const documentType = task.documentType === "docx" || task.documentType === "xlsx" || task.documentType === "pptx" || task.documentType === "img"
     ? task.documentType
     : undefined;
   return {
@@ -408,6 +409,148 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     for (const listener of listeners) listener(event);
   };
 
+  /**
+   * What `send` knows about an image run before the bridge does.
+   *
+   * `generate` returns a task id long before the first event creates the task,
+   * and history is the only other place the conversation id is written. Without
+   * this a second version would show up as a separate image until the next
+   * reload — and the prompt shown for a run would be whatever the runtime
+   * echoed back rather than what the user typed.
+   */
+  const imageRuns = new Map<string, { conversationId: string; parentTaskId?: string; prompt: string }>();
+
+  // What `send` recorded wins: the reducer defaults a task's conversation to
+  // its own id until history says otherwise, which would split a batch into
+  // unrelated pictures for as long as the window stays open.
+  const conversationOf = (task: DesktopTask): string =>
+    imageRuns.get(task.id)?.conversationId || task.conversationId || task.id;
+
+  const runStatus = (task: DesktopTask): AgentImageRun["status"] => {
+    if (task.status === "completed") return "done";
+    if (task.status === "failed") return "failed";
+    if (task.status === "cancelled") return "cancelled";
+    return "running";
+  };
+
+  /**
+   * Every run of the picture `task` belongs to, oldest first.
+   *
+   * Grouped by conversation because that is the one link the desktop records
+   * for a run started from another (`recordTaskWorkspaceContext`). Ordered by
+   * creation time where it is known and by arrival otherwise — `taskOrder` is
+   * newest first for live runs and appends history behind them.
+   */
+  const imageSeries = (task: DesktopTask): AgentImageSeries | undefined => {
+    if (task.documentType !== "img") return undefined;
+    const key = conversationOf(task);
+    const members = state.taskOrder
+      .map((id, index) => ({ task: state.tasks[id], index }))
+      .filter((entry): entry is { task: DesktopTask; index: number } =>
+        Boolean(entry.task) && entry.task!.documentType === "img" && conversationOf(entry.task!) === key,
+      )
+      .sort((left, right) => {
+        const a = Date.parse(left.task.createdAt ?? "");
+        const b = Date.parse(right.task.createdAt ?? "");
+        if (!Number.isNaN(a) && !Number.isNaN(b) && a !== b) return a - b;
+        return right.index - left.index;
+      });
+    return {
+      runs: members.map(({ task: run }) => {
+        const known = imageRuns.get(run.id);
+        const baseTaskId = run.parentTaskId || known?.parentTaskId;
+        return {
+          taskId: run.id,
+          status: runStatus(run),
+          prompt: known?.prompt ?? run.userInput?.prompt ?? "",
+          ...(baseTaskId ? { baseTaskId } : {}),
+          ...(run.status === "failed" && run.error ? { error: run.error } : {}),
+        };
+      }),
+    };
+  };
+
+  /** The contract's view of a desktop task, with everything this closure knows added. */
+  const project = (task: DesktopTask): AgentTask => {
+    const result = toAgentTaskWithReview(task, reviewArtifacts.get(task.id));
+    const image = imageSeries(task);
+    return image ? { ...result, image } : result;
+  };
+
+  /**
+   * Starts the runs one image message asks for.
+   *
+   * A separate path from `generate` below because nothing about it is
+   * inferred: the type is stated, the size is stated, and what the runtime
+   * gets is the user's words untouched — the look travels as the runtime's own
+   * `style` argument instead of being appended to the prompt.
+   *
+   * "Four images" is four runs in one conversation. The runtime makes one
+   * picture per run, and each is a version the user can pick, download or
+   * change on its own, which is what a result grid would be for anyway.
+   */
+  const sendImage = async (text: string, input: SendInput, image: ImageGenerationInput, workspaceId: string | undefined) => {
+    const references = [...(image.references ?? [])];
+    for (const attachment of input.attachments) {
+      if (attachment.path && isReferenceImagePath(attachment.path)) references.push(attachment.path);
+    }
+    const ignored: string[] = [];
+    for (const mention of input.mentions) {
+      if (mention.kind !== "file") {
+        ignored.push(`@${mention.label}`);
+        continue;
+      }
+      const record = await api.getDocument(mention.id).catch(() => null);
+      if (record && isReferenceImagePath(record.filePath)) references.push(record.filePath);
+      else ignored.push(`@${mention.label}`);
+    }
+    if (ignored.length > 0) {
+      emit({
+        kind: "notice",
+        message: `Only pictures can guide an image. ${ignored.join(", ")} ${ignored.length === 1 ? "was" : "were"} left out.`,
+      });
+    }
+
+    let conversationId: string | undefined;
+    let parentTaskId: string | undefined;
+    /*
+     * The runtime names the file after the topic. A change keeps the picture's
+     * name — "Make the light warmer" is an instruction, not what the picture
+     * is — and the runtime suffixes it (`name-2.png`) rather than overwrite.
+     */
+    let topic = text.slice(0, 64);
+    if (image.baseFileId) {
+      const base = await api.getDocument(image.baseFileId);
+      topic = base.fileName.replace(/(?:-\d+)?\.[^.]+$/, "") || topic;
+      references.unshift(base.filePath);
+      parentTaskId = base.currentArtifactTaskId || undefined;
+      const baseTask = parentTaskId ? state.tasks[parentTaskId] : undefined;
+      conversationId = baseTask ? conversationOf(baseTask) : parentTaskId;
+    }
+
+    const size = image.ratio === "auto" ? null : imageDimensions(image);
+    const style = imageStyleText(image);
+    const count = Math.min(4, Math.max(1, Math.round(image.count) || 1));
+    for (let index = 0; index < count; index += 1) {
+      const result = await api.generate({
+        documentType: "img",
+        topic,
+        prompt: text,
+        ...(workspaceId ? { workspaceId } : { noProject: true }),
+        ...(conversationId ? { conversationId } : {}),
+        ...(parentTaskId ? { parentTaskId } : {}),
+        ...(references.length > 0 ? { referenceImages: [...new Set(references)] } : {}),
+        ...(size ? { imageRatio: ratioBucket(size[0], size[1]), imageSize: `${size[0]}x${size[1]}` } : {}),
+        ...(style ? { imageStyle: style } : {}),
+      });
+      // The first run of a new picture names the conversation: the desktop
+      // defaults a run's conversation to its own id.
+      conversationId ??= result.taskId;
+      imageRuns.set(result.taskId, { conversationId, ...(parentTaskId ? { parentTaskId } : {}), prompt: text });
+      activeTaskId = result.taskId;
+    }
+  };
+
   /** The active run and its question, when it is blocked on one. */
   const pendingQuestion = (): { taskId: string; question: NonNullable<AgentTask["question"]> } | null => {
     const task = activeTaskId ? state.tasks[activeTaskId] : undefined;
@@ -427,7 +570,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     if (ACTIVE_STATUSES.includes(task.status)) activeTaskId = task.id;
     const review = reviewArtifacts.get(task.id);
     if (review && task.status === "completed" && task.artifact?.filePath) review.artifactFile = task.artifact.filePath;
-    emit({ kind: "task", task: toAgentTaskWithReview(task, review) });
+    emit({ kind: "task", task: project(task) });
     // The contract has no failed status, so a failure is reported twice: the
     // task turns `done`, and this says why.
     if (task.status === "failed" && task.error) {
@@ -449,7 +592,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       const task = pickForFolder(state, folderId);
       if (!task) return null;
       if (ACTIVE_STATUSES.includes(task.status)) activeTaskId = task.id;
-      return toAgentTaskWithReview(task, reviewArtifacts.get(task.id));
+      return project(task);
     },
 
     /**
@@ -476,12 +619,39 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     async list(options): Promise<AgentTaskSummary[]> {
       const entries = await api.getTaskHistory(HISTORY_PAGE).catch(() => [] as TaskHistoryEntry[]);
       if (entries.length > 0) state = mergeHistory(state, hydrate(entries));
+      /*
+       * One row per picture, not per run. An image series is several runs —
+       * one per version, one per picture in a batch — and listed run by run
+       * it would push every other task off Home. The newest run speaks for the
+       * series (status, time); the id is the series' first run, so the row
+       * keeps its identity as versions are added.
+       */
+      const seen = new Set<string>();
       return state.taskOrder
         .map((id) => state.tasks[id])
         .filter((task): task is DesktopTask => Boolean(task))
         .sort((left, right) => updatedAtOf(right) - updatedAtOf(left))
+        .filter((task) => {
+          if (task.documentType !== "img") return true;
+          const key = conversationOf(task);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
         .slice(0, options?.limit ?? LIST_LIMIT)
-        .map(toSummary);
+        .map((task) => {
+          const summary = toSummary(task);
+          const image = imageSeries(task);
+          if (!image) return summary;
+          const busy = image.runs.some((run) => run.status === "running");
+          return {
+            ...summary,
+            id: image.runs[0]?.taskId ?? summary.id,
+            // A batch still drawing is working even if its newest run landed.
+            ...(busy && summary.status === "done" ? { status: "writing" as const } : {}),
+            image,
+          };
+        });
     },
 
     async send(input: SendInput) {
@@ -519,8 +689,13 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       });
       }
 
-      const settings = await api.getSettings();
       const workspaceId = input.folderId === DEFAULT_FOLDER_ID ? undefined : input.folderId;
+      if (input.imageGeneration) {
+        await sendImage(text, input, input.imageGeneration, workspaceId);
+        return;
+      }
+
+      const settings = await api.getSettings();
 
       // Editing what is open, or starting something new. A stated document type
       // is the composer saying "a new one" — it clears `activeFileId` on the way
@@ -691,6 +866,17 @@ export function createAgentService(api: DesktopAPI): AgentPort {
 
     async finish() {
       if (!activeTaskId) return;
+      /*
+       * "Four images" is four runs, and Stop means all of them: cancelling
+       * only the one pause/resume track would leave three still billing.
+       */
+      const held = state.tasks[activeTaskId];
+      if (held?.documentType === "img") {
+        const running = imageSeries(held)?.runs.filter((run) => run.status === "running") ?? [];
+        for (const run of running) await api.cancel(run.taskId);
+        activeTaskId = undefined;
+        return;
+      }
       // `cancel` is the closest the desktop has. The promises differ in wording
       // — finish keeps what was applied, cancel stops the run — but the outcome
       // matches: a cancelled run's output stays on disk as its partial artifact.
@@ -707,7 +893,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       review.applied = true;
       review.undoable = true;
       const task = state.tasks[id];
-      if (task) emit({ kind: "task", task: toAgentTaskWithReview(task, review) });
+      if (task) emit({ kind: "task", task: project(task) });
     },
 
     async undoSuggestion(id) {
@@ -719,7 +905,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       review.applied = false;
       review.undoable = false;
       const task = state.tasks[id];
-      if (task) emit({ kind: "task", task: toAgentTaskWithReview(task, review) });
+      if (task) emit({ kind: "task", task: project(task) });
     },
   };
 }

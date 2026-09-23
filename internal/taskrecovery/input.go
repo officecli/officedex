@@ -78,6 +78,8 @@ func EncodeGenerateInput(input types.GenerateInput, taskCtx localstore.TaskConte
 	set("prompt_template_id", input.PromptTemplateID)
 	set("source_file", input.SourceFile)
 	set("image_ratio", strings.TrimSpace(input.ImageRatio))
+	set("image_size", strings.TrimSpace(input.ImageSize))
+	set("image_style", strings.TrimSpace(input.ImageStyle))
 	set("output_dir", input.OutputDir)
 	set("image_quality", input.ImageQuality)
 	if len(input.ReferenceImages) > 0 {
@@ -151,6 +153,8 @@ func DecodeGenerateInput(events []types.BridgeEvent, taskCtx localstore.TaskCont
 		SourceFile:       payloadfield.String(userInput, "source_file", "sourceFile"),
 		ReferenceImages:  payloadfield.StringSlice(userInput, "reference_images", "referenceImages"),
 		ImageRatio:       payloadfield.String(userInput, "image_ratio", "imageRatio"),
+		ImageSize:        payloadfield.String(userInput, "image_size", "imageSize"),
+		ImageStyle:       payloadfield.String(userInput, "image_style", "imageStyle"),
 		FPS:              payloadfield.Int(userInput, "fps"),
 		OutputDir:        payloadfield.String(userInput, "output_dir", "outputDir"),
 		Publish:          payloadfield.Bool(userInput, "publish"),

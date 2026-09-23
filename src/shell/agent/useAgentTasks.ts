@@ -98,14 +98,18 @@ export function useAgentTasks(limit: number = DEFAULT_LIMIT) {
  * guessed.
  */
 function merge(rows: AgentTaskSummary[], task: AgentTask, limit: number): AgentTaskSummary[] {
+  const busyImage = task.image?.runs.some((run) => run.status === "running") ?? false;
   const row: AgentTaskSummary = {
-    id: task.id,
+    // An image series is one row keyed by its first run, whichever run this
+    // event came from — see `AgentTaskSummary.image`.
+    id: task.image?.runs[0]?.taskId ?? task.id,
     title: task.title,
     folderId: task.folderId,
-    status: task.status,
+    status: busyImage && task.status === "done" ? "writing" : task.status,
     phase: task.phase,
+    ...(task.image ? { image: task.image } : {}),
   };
-  const index = rows.findIndex((entry) => entry.id === task.id);
+  const index = rows.findIndex((entry) => entry.id === row.id);
   if (index < 0) return [row, ...rows].slice(0, limit);
   const next = [...rows];
   next[index] = { ...rows[index], ...row };

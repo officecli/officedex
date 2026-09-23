@@ -1,0 +1,816 @@
+/*
+ * The composer in image mode. Values follow the 2026-09-22 image-review
+ * prototype (image-creation-tools.css / image-generation-preview.css), with its
+ * literal colours mapped onto the shell's tokens.
+ */
+
+/* ------------------------------------------------------------ prompt row */
+
+.shell-cx.is-image .shell-ig-prompt-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  min-height: 116px;
+}
+
+.shell-cx.is-image .shell-ig-prompt-row .shell-cx-input {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  padding-top: 5px;
+}
+
+.shell-cx--task.is-image .shell-ig-prompt-row,
+.shell-cx--floating.is-image .shell-ig-prompt-row {
+  gap: 10px;
+  min-height: 86px;
+}
+
+/* ------------------------------------------------------------ references */
+
+.shell-ig-references {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: none;
+  max-width: 160px;
+}
+
+.shell-ig-reference,
+.shell-ig-reference-add {
+  position: relative;
+  box-sizing: border-box;
+  flex: none;
+  width: 70px;
+  height: 78px;
+  border-radius: 9px;
+}
+
+.shell-ig-reference-add {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--shell-ink-faint);
+  cursor: pointer;
+}
+
+.shell-ig-reference-sheet {
+  display: grid;
+  place-items: center;
+  width: 49px;
+  height: 61px;
+  border: 1px solid var(--shell-line);
+  border-radius: 3px;
+  background: var(--shell-hover);
+  transform: rotate(-8deg);
+  transition:
+    transform 180ms var(--shell-ease),
+    background 180ms var(--shell-ease),
+    border-color 180ms var(--shell-ease);
+}
+
+.shell-ig-reference-add:hover:not(:disabled) .shell-ig-reference-sheet {
+  transform: translateY(-2px) rotate(-4deg);
+  border-color: var(--shell-image-accent);
+  color: var(--shell-image-accent);
+  background: var(--shell-image-tint);
+}
+
+.shell-ig-reference {
+  border: 1px solid var(--shell-line);
+  background: var(--shell-chrome);
+}
+
+.shell-ig-reference > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.shell-ig-reference-name {
+  display: block;
+  padding: 6px;
+  font-size: var(--shell-text-xs);
+  color: var(--shell-ink-subtle);
+  overflow-wrap: anywhere;
+}
+
+.shell-ig-reference > button {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 3px;
+  border: 1px solid var(--shell-line);
+  border-radius: 50%;
+  background: var(--shell-paper);
+  color: var(--shell-ink-muted);
+  cursor: pointer;
+}
+
+.shell-ig-reference > span[aria-hidden="true"] {
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--shell-paper);
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text-xs);
+  opacity: 0.9;
+}
+
+.shell-cx--task .shell-ig-references,
+.shell-cx--floating .shell-ig-references {
+  max-width: 92px;
+  gap: 5px;
+}
+
+.shell-cx--task .shell-ig-reference,
+.shell-cx--task .shell-ig-reference-add,
+.shell-cx--floating .shell-ig-reference,
+.shell-cx--floating .shell-ig-reference-add {
+  width: 42px;
+  height: 48px;
+  border-radius: 6px;
+}
+
+.shell-cx--task .shell-ig-reference-sheet,
+.shell-cx--floating .shell-ig-reference-sheet {
+  width: 29px;
+  height: 37px;
+  border-radius: 2px;
+}
+
+/* ---------------------------------------------------------------- tools */
+
+.shell-ig-tools {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.shell-ig-mode,
+.shell-ig-tool {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  box-sizing: border-box;
+  border-radius: var(--shell-radius-item);
+  font-size: var(--shell-text-sm);
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.shell-ig-mode {
+  padding: 0 4px 0 6px;
+  color: var(--shell-image-accent);
+}
+
+.shell-ig-mode:hover,
+.shell-ig-mode:focus-within {
+  background: var(--shell-image-tint);
+}
+
+.shell-ig-mode-close {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 22px;
+  padding: 2px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--shell-image-accent);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 120ms var(--shell-ease);
+}
+
+.shell-ig-mode:hover .shell-ig-mode-close,
+.shell-ig-mode:focus-within .shell-ig-mode-close {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .shell-ig-mode-close {
+    opacity: 1;
+  }
+}
+
+.shell-ig-tool {
+  justify-content: center;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--shell-ink-muted);
+  cursor: pointer;
+}
+
+.shell-ig-tool > i {
+  font-style: normal;
+  color: var(--shell-ink-faint);
+  margin: 0 1px;
+}
+
+.shell-ig-tool:hover:not(:disabled),
+.shell-ig-tool[aria-expanded="true"] {
+  background: var(--shell-hover);
+  color: var(--shell-ink-title);
+}
+
+.shell-ig-tool.is-set {
+  background: var(--shell-image-tint);
+  color: var(--shell-image-accent);
+}
+
+.shell-ig-tool:disabled,
+.shell-ig-mode-close:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.shell-ig-tool-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shell-ig-chevron {
+  color: var(--shell-ink-faint);
+  transition: transform 150ms var(--shell-ease);
+}
+
+.shell-ig-tool[aria-expanded="true"] > .shell-ig-chevron {
+  transform: rotate(180deg);
+}
+
+.shell-ig-ratio-glyph {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.shell-ig-divider {
+  width: 1px;
+  height: 15px;
+  margin: 0 4px;
+  background: var(--shell-line);
+}
+
+.shell-ig-dot {
+  position: absolute;
+  top: 5px;
+  left: 19px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--shell-image-accent);
+}
+
+/*
+ * The 320px column cannot hold the strip on one line. Two rows, as the
+ * prototype lays them: what kind of picture on top, how it looks below.
+ */
+.shell-cx--task .shell-ig-tools,
+.shell-cx--floating .shell-ig-tools {
+  display: grid;
+  grid-template-columns: minmax(70px, 1fr) 26px 26px 34px 34px;
+  gap: 2px;
+  flex: 1 1 auto;
+}
+
+.shell-cx--task .shell-ig-mode,
+.shell-cx--task .shell-ig-tool,
+.shell-cx--floating .shell-ig-mode,
+.shell-cx--floating .shell-ig-tool {
+  height: 28px;
+  gap: 3px;
+  padding: 0 4px;
+  font-size: var(--shell-text-xs);
+  min-width: 0;
+}
+
+.shell-cx--task .shell-ig-mode,
+.shell-cx--floating .shell-ig-mode {
+  grid-area: 1 / 1;
+}
+
+.shell-cx--task .shell-ig-tool--model,
+.shell-cx--floating .shell-ig-tool--model {
+  grid-area: 1 / 2 / 2 / 6;
+  justify-content: flex-start;
+}
+
+.shell-cx--task .shell-ig-tool--settings,
+.shell-cx--floating .shell-ig-tool--settings {
+  grid-area: 2 / 1;
+  justify-content: flex-start;
+}
+
+.shell-cx--task .shell-ig-tool--settings > .shell-ig-ratio-glyph,
+.shell-cx--floating .shell-ig-tool--settings > .shell-ig-ratio-glyph {
+  display: none;
+}
+
+.shell-cx--task .shell-ig-divider,
+.shell-cx--floating .shell-ig-divider {
+  display: none;
+}
+
+/* The toolbar in image mode: tools on the left, send on the right. */
+.shell-cx.is-image .shell-cx-toolbar {
+  align-items: flex-end;
+}
+
+.shell-cx.is-image .shell-cx-left {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------- summary */
+
+.shell-ig-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin: 4px 0 8px;
+  padding: 0 6px;
+}
+
+.shell-ig-summary > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  height: 28px;
+  box-sizing: border-box;
+  padding: 0 8px;
+  border: 1px solid var(--shell-line);
+  border-radius: var(--shell-radius-item);
+  background: var(--shell-image-tint);
+  color: var(--shell-image-accent);
+  font-size: var(--shell-text-sm);
+  cursor: pointer;
+}
+
+.shell-ig-summary > button > span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.shell-cx--task .shell-ig-summary,
+.shell-cx--floating .shell-ig-summary {
+  padding: 0;
+}
+
+/* -------------------------------------------------- popover contents */
+
+.shell-ig-popover h3 {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 9px;
+  font-size: var(--shell-text-sm);
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--shell-ink-subtle);
+}
+
+.shell-ig-block + .shell-ig-block {
+  margin-top: 17px;
+}
+
+.shell-ig-ratios {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.shell-ig-ratios > button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 55px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: var(--shell-sunken);
+  color: var(--shell-ink-subtle);
+  font-size: var(--shell-text-xs);
+  cursor: pointer;
+}
+
+.shell-ig-ratios .shell-ig-ratio-glyph {
+  width: 20px;
+  height: 20px;
+}
+
+.shell-ig-ratios > button:hover {
+  background: var(--shell-hover);
+}
+
+.shell-ig-ratios > button.is-selected {
+  border-color: var(--shell-line-strong);
+  background: var(--shell-active);
+  color: var(--shell-ink-title);
+}
+
+.shell-ig-segments {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--shell-chrome);
+}
+
+.shell-ig-segments > button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 31px;
+  border: 1px solid transparent;
+  border-radius: var(--shell-radius-item);
+  background: transparent;
+  color: var(--shell-ink-subtle);
+  font-size: var(--shell-text-xs);
+  cursor: pointer;
+}
+
+.shell-ig-segments > button > strong {
+  font-weight: 500;
+}
+
+.shell-ig-segments > button.is-selected {
+  border-color: var(--shell-line);
+  background: var(--shell-paper);
+  color: var(--shell-ink-title);
+  box-shadow: var(--shell-shadow-paper);
+}
+
+.shell-ig-count > button {
+  font-size: var(--shell-text);
+}
+
+.shell-ig-dimensions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--shell-ink-faint);
+}
+
+.shell-ig-dimensions > label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--shell-line);
+  border-radius: 7px;
+  background: var(--shell-chrome);
+  color: var(--shell-ink-subtle);
+}
+
+.shell-ig-dimensions > label:focus-within {
+  border-color: var(--shell-focus);
+}
+
+.shell-ig-dimensions input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--shell-ink-muted);
+  font: inherit;
+  font-size: var(--shell-text);
+  text-align: right;
+  outline: none;
+}
+
+.shell-ig-dimensions input[aria-invalid="true"] {
+  color: var(--shell-status-danger);
+}
+
+.shell-ig-error {
+  margin: 8px 0 0;
+  color: var(--shell-status-danger);
+  font-size: var(--shell-text-sm);
+}
+
+.shell-ig-hint {
+  margin: 7px 0 0;
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-sm);
+}
+
+.shell-ig-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.shell-ig-list > button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 9px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--shell-ink-muted);
+  text-align: left;
+  cursor: pointer;
+  font-size: var(--shell-text);
+  line-height: 18px;
+}
+
+.shell-ig-list > button:hover {
+  background: var(--shell-sunken);
+}
+
+.shell-ig-list > button.is-selected {
+  border-color: var(--shell-line);
+  background: var(--shell-image-tint);
+  color: var(--shell-image-accent);
+}
+
+.shell-ig-list > button > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+
+.shell-ig-list strong {
+  display: block;
+  font-size: var(--shell-text);
+  font-weight: 500;
+  color: var(--shell-ink-title);
+}
+
+.shell-ig-list small {
+  display: block;
+  margin-top: 3px;
+  font-size: var(--shell-text-xs);
+  line-height: 1.6;
+  color: var(--shell-ink-subtle);
+}
+
+.shell-ig-soon {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--shell-chrome);
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-xs);
+  font-style: normal;
+}
+
+.shell-ig-mark,
+.shell-ig-swatch {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 31px;
+  height: 31px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  font-size: var(--shell-text-xs);
+  font-weight: 600;
+}
+
+.shell-ig-mark {
+  border: 1px solid var(--shell-line);
+  background: var(--shell-image-tint);
+  color: var(--shell-image-accent);
+}
+
+.shell-ig-mark.is-auto {
+  background: var(--shell-doc-tint);
+  color: var(--shell-doc-accent);
+}
+
+.shell-ig-mark.is-gpt {
+  background: var(--shell-sheet-tint);
+  color: var(--shell-sheet-accent);
+}
+
+.shell-ig-mark.is-banana {
+  background: var(--shell-slides-tint);
+  color: var(--shell-slides-accent);
+}
+
+.shell-ig-swatch {
+  background: var(--shell-chrome);
+  color: var(--shell-ink-subtle);
+}
+
+.shell-ig-swatch.is-photo {
+  background: var(--shell-sheet-tint);
+  color: var(--shell-sheet-accent);
+}
+
+.shell-ig-swatch.is-cinematic {
+  background: var(--shell-doc-tint);
+  color: var(--shell-doc-accent);
+}
+
+.shell-ig-swatch.is-illustration {
+  background: var(--shell-slides-tint);
+  color: var(--shell-slides-accent);
+}
+
+.shell-ig-swatch.is-3d {
+  background: var(--shell-image-tint);
+  color: var(--shell-image-accent);
+}
+
+.shell-ig-camera-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.shell-ig-switch {
+  flex: none;
+  width: 32px;
+  height: 19px;
+  padding: 2px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--shell-line-strong);
+  cursor: pointer;
+}
+
+.shell-ig-switch > span {
+  display: block;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--shell-paper);
+  box-shadow: var(--shell-shadow-paper);
+  transition: transform 150ms var(--shell-ease);
+}
+
+.shell-ig-switch[aria-checked="true"] {
+  background: var(--shell-image-accent);
+}
+
+.shell-ig-switch[aria-checked="true"] > span {
+  transform: translateX(13px);
+}
+
+.shell-ig-camera-switch + .shell-ig-hint {
+  margin-bottom: 16px;
+}
+
+.shell-ig-camera-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.shell-ig-camera-grid[data-muted="true"] {
+  opacity: 0.5;
+}
+
+.shell-ig-camera-column {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+  text-align: center;
+}
+
+.shell-ig-camera-label {
+  font-size: var(--shell-text-xs);
+  color: var(--shell-ink-subtle);
+}
+
+.shell-ig-camera-symbol {
+  display: grid;
+  place-items: center;
+  height: 67px;
+  border: 1px solid var(--shell-line);
+  border-radius: 8px;
+  background: var(--shell-chrome);
+  color: var(--shell-ink-subtle);
+}
+
+.shell-ig-camera-select {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.shell-ig-camera-select select {
+  width: 100%;
+  appearance: none;
+  padding: 6px 20px 6px 6px;
+  border: 1px solid var(--shell-line);
+  border-radius: var(--shell-radius-item);
+  background: var(--shell-paper);
+  color: var(--shell-ink-muted);
+  font: inherit;
+  font-size: var(--shell-text-xs);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shell-ig-camera-select > .shell-ig-chevron {
+  position: absolute;
+  right: 5px;
+  pointer-events: none;
+}
+
+.shell-ig-tool:focus-visible,
+.shell-ig-mode-close:focus-visible,
+.shell-ig-popover button:focus-visible,
+.shell-ig-popover select:focus-visible,
+.shell-ig-summary button:focus-visible,
+.shell-ig-reference-add:focus-visible,
+.shell-ig-reference > button:focus-visible {
+  outline: 2px solid var(--shell-focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell-ig-chevron,
+  .shell-ig-switch > span,
+  .shell-ig-mode-close,
+  .shell-ig-reference-sheet {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------- home */
+
+/* "Create an image" is a mode switch; pressed, it wears the image tint. */
+.shell-hero-prompt.is-selected {
+  border-color: var(--shell-image-accent);
+  background: var(--shell-image-tint);
+  color: var(--shell-image-accent);
+}
+
+.shell-hero-purposes {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-xs);
+}
+
+.shell-hero-purposes > span {
+  margin-right: 2px;
+}
+
+.shell-hero-purposes > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 11px;
+  border: 1px solid var(--shell-line);
+  border-radius: 16px;
+  background: var(--shell-sunken);
+  color: var(--shell-ink-subtle);
+  font: var(--shell-text-xs) / 16px var(--shell-font);
+  cursor: pointer;
+}
+
+.shell-hero-purposes > button:hover {
+  border-color: var(--shell-image-accent);
+  background: var(--shell-image-tint);
+  color: var(--shell-image-accent);
+}
+
+.shell-hero-purposes > button:focus-visible {
+  outline: 2px solid var(--shell-focus);
+  outline-offset: 1px;
+}
+
+.shell-hero-purposes + .shell-hero-prompts {
+  margin-top: 18px;
+}

@@ -297,6 +297,8 @@ type GenerateInput struct {
 	SourceFile       string                         `json:"sourceFile,omitempty"`
 	ReferenceImages  []string                       `json:"referenceImages,omitempty"`
 	ImageRatio       string                         `json:"imageRatio,omitempty"`
+	ImageSize        string                         `json:"imageSize,omitempty"`
+	ImageStyle       string                         `json:"imageStyle,omitempty"`
 	FPS              int                            `json:"fps,omitempty"`
 	ImageWatermark   *ImageWatermarkGenerateOptions `json:"imageWatermark,omitempty"`
 	OutputDir        string                         `json:"outputDir,omitempty"`

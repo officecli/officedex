@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -77,6 +78,75 @@ func (a *App) OpenMultiFileDialog(options *FileDialogOptions) ([]string, error) 
 	return wailsruntime.OpenMultipleFilesDialog(a.ctx, wailsruntime.OpenDialogOptions{
 		Filters: dialogFilters(options),
 	})
+}
+
+// saveFileDialog is the seam the SaveFileCopy tests stub: the real dialog
+// needs a live Wails frontend, which a unit test has no way to stand up.
+var saveFileDialog = func(ctx context.Context, options wailsruntime.SaveDialogOptions) (string, error) {
+	return wailsruntime.SaveFileDialog(ctx, options)
+}
+
+// SaveFileCopy asks the user where to put a copy of sourcePath and writes it
+// there. This is what "download" means for a file the app already produced
+// locally: the artifact stays where it is and the user gets a copy wherever
+// they picked. Returns "" when the user cancels the dialog.
+func (a *App) SaveFileCopy(sourcePath string, suggestedName string) (string, error) {
+	if a.ctx == nil {
+		return "", errors.New("app: not started")
+	}
+	source, err := filepath.Abs(strings.TrimSpace(sourcePath))
+	if err != nil {
+		return "", fmt.Errorf("save file copy: source path: %w", err)
+	}
+	info, err := os.Stat(source)
+	if err != nil {
+		return "", fmt.Errorf("save file copy: source: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("save file copy: %s is not a file", source)
+	}
+	name := filepath.Base(strings.ReplaceAll(strings.TrimSpace(suggestedName), "\\", "/"))
+	if name == "" || name == "." || name == string(filepath.Separator) {
+		name = filepath.Base(source)
+	}
+	dest, err := saveFileDialog(a.ctx, wailsruntime.SaveDialogOptions{
+		DefaultFilename: name,
+		Filters:         saveCopyFilters(source),
+	})
+	if err != nil {
+		return "", fmt.Errorf("save file copy: dialog: %w", err)
+	}
+	if strings.TrimSpace(dest) == "" {
+		return "", nil
+	}
+	dest, err = filepath.Abs(dest)
+	if err != nil {
+		return "", fmt.Errorf("save file copy: destination path: %w", err)
+	}
+	if dest == source {
+		return "", errors.New("save file copy: destination is the source file")
+	}
+	data, err := os.ReadFile(source)
+	if err != nil {
+		return "", fmt.Errorf("save file copy: read source: %w", err)
+	}
+	if err := atomicfile.WriteFile(dest, data, 0o644); err != nil {
+		return "", fmt.Errorf("save file copy: write destination: %w", err)
+	}
+	return dest, nil
+}
+
+// saveCopyFilters offers the source file's own extension, so the picker does
+// not invite the user to rename a .png into something the bytes are not.
+func saveCopyFilters(source string) []wailsruntime.FileFilter {
+	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(source)), ".")
+	if ext == "" {
+		return []wailsruntime.FileFilter{{DisplayName: "All Files (*.*)", Pattern: "*.*"}}
+	}
+	return []wailsruntime.FileFilter{
+		{DisplayName: strings.ToUpper(ext) + " (*." + ext + ")", Pattern: "*." + ext},
+		{DisplayName: "All Files (*.*)", Pattern: "*.*"},
+	}
 }
 
 // PastedImageInput is the renderer-facing payload for SavePastedImage.

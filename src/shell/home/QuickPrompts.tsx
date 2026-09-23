@@ -23,7 +23,11 @@ import type { FileType } from "../../shared/uiPort";
  * be a fake gate, and the property that matters (does this make sense in an
  * empty workspace?) is not one an assertion can check. Read it before editing.
  */
-const PROMPTS: Array<{ type: FileType; label: string; prompt: string }> = [
+export const PROMPTS: Array<{
+  type: FileType | "image";
+  label: string;
+  prompt: string;
+}> = [
   {
     type: "doc",
     label: "Write a document",
@@ -31,23 +35,35 @@ const PROMPTS: Array<{ type: FileType; label: string; prompt: string }> = [
   },
   {
     type: "sheet",
-    label: "Analyse a workbook",
+    label: "Analyze a spreadsheet",
     prompt: "Build a quarterly budget with revenue, cost and gross margin by month.",
   },
   {
     type: "slides",
-    label: "Build a presentation",
+    label: "Create a presentation",
     prompt: "Prepare a product launch presentation covering positioning, timeline and next steps.",
+  },
+  {
+    type: "image",
+    label: "Create an image",
+    prompt: "Create a clean editorial image for a product launch.",
   },
 ];
 
 export interface QuickPromptsProps {
   /** Puts the suggestion and its output type in the composer. Never sends it. */
   onPick: (prompt: string, type: FileType) => void;
+  /** Whether the composer is in image mode — "Create an image" shows as pressed. */
+  imageSelected: boolean;
+  /**
+   * "Create an image" is a mode, not a sentence: it switches the composer to
+   * image and keeps whatever is typed. Pressed again, it switches back.
+   */
+  onToggleImage: () => void;
 }
 
 /**
- * The three starting points under the hero.
+ * The starting points under the hero.
  *
  * They fill the composer rather than starting a run. A suggestion is a draft of
  * the user's intent, not the intent itself — "Write a document" with no idea
@@ -59,19 +75,32 @@ export interface QuickPromptsProps {
  * the inference recognises — so the button labelled with a document glyph fell
  * through to the settings default and produced a presentation.
  */
-export function QuickPrompts({ onPick }: QuickPromptsProps) {
+export function QuickPrompts({ onPick, imageSelected, onToggleImage }: QuickPromptsProps) {
   return (
     <div className="shell-hero-prompts">
       {PROMPTS.map((entry) => (
-        <button
-          key={entry.type}
-          type="button"
-          className="shell-hero-prompt"
-          onClick={() => onPick(entry.prompt, entry.type)}
-        >
-          <FileTypeIcon type={entry.type} size={15} />
-          {entry.label}
-        </button>
+        <span key={entry.type} className="shell-hero-prompt-group">
+          {entry.type === "image" ? (
+            <button
+              type="button"
+              className={`shell-hero-prompt${imageSelected ? " is-selected" : ""}`}
+              aria-pressed={imageSelected}
+              onClick={onToggleImage}
+            >
+              <FileTypeIcon type="image" size={15} />
+              {entry.label}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="shell-hero-prompt"
+              onClick={() => onPick(entry.prompt, entry.type as FileType)}
+            >
+              <FileTypeIcon type={entry.type} size={15} />
+              {entry.label}
+            </button>
+          )}
+        </span>
       ))}
     </div>
   );

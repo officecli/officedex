@@ -13,6 +13,7 @@ import { useReduceMotion } from "./composer/useComposerSettings";
 import { EditorCanvasHost } from "./editor/EditorCanvasHost";
 import { useCanvasSurface } from "./editor/canvasSurface";
 import { AgentHome } from "./home/AgentHome";
+import { ImageWorkspace } from "./image/ImageWorkspace";
 import { EditorHome } from "./home/EditorHome";
 import { SidebarTree } from "./nav/SidebarTree";
 import { useShell } from "./state/ShellContext";
@@ -141,6 +142,16 @@ export function App() {
         */}
         <main className="shell-workspace" hidden={state.home}>
           <EditorCanvasHost file={activeFile} visible={!state.home} adapter={canvas} />
+          {/*
+            A picture, over the canvas rather than inside it.
+
+            `EditorCanvasHost` above never unmounts — decision 4 — and outside
+            the desktop build it has no adapter to show an image with anyway, so
+            the image surface draws its own `<img>` from `images.readFile` and
+            covers the canvas while it is up. It renders nothing at all when
+            there is no picture and no image run, which is most of the time.
+          */}
+          <ImageWorkspace agent={agent} />
           {/*
             The agent's attention border. Its own subscription to the task
             rather than a prop drilled down from the presence: this sits in the

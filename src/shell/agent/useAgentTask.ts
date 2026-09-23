@@ -165,7 +165,7 @@ export function useAgentTask() {
         // mounted — a run's stage, or an editor that is still coming up.
         canvasCanEditInPlace: Boolean(canvas?.canEditDocument?.()),
       });
-      if (editableAs && target && canvas) {
+      if (!submission.imageGeneration && editableAs && target && canvas) {
         // One at a time. A second instruction into the same document while the
         // first is mid-`apply` would capture a scope the first one is holding,
         // and the editor would reject whichever arrived second.

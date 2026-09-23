@@ -204,7 +204,7 @@ export interface AgentTask {
   /** Decision 2: a task is scoped to a folder, not to a single file. */
   folderId: string;
   /** The runtime document kind, when known. Used to expose type-specific controls. */
-  documentType?: "docx" | "xlsx" | "pptx";
+  documentType?: "docx" | "xlsx" | "pptx" | "img";
   status: AgentStatus;
   /** Free-text phase shown next to the active step, e.g. "Reading project files". */
   phase: string;
@@ -223,6 +223,31 @@ export interface AgentTask {
   suggestion: AgentSuggestion | null;
   /** Set while the run is waiting for an answer; null the rest of the time. */
   question: AgentQuestion | null;
+  /**
+   * The picture this task is making, when it is an image task.
+   *
+   * An image is not edited in place: every change is a new run that produces a
+   * new file, and the earlier file stays. So one image task is a *series* of
+   * runs, and each finished run is a version. The runtime ties them together
+   * with a conversation id; this is that conversation, oldest run first.
+   */
+  image?: AgentImageSeries;
+}
+
+export interface AgentImageSeries {
+  runs: AgentImageRun[];
+}
+
+export interface AgentImageRun {
+  /** Matches `FileMeta.artifactTaskId` of the file the run produced. */
+  taskId: string;
+  status: "running" | "done" | "failed" | "cancelled";
+  /** What the user asked this run for, as typed. */
+  prompt: string;
+  /** The run whose picture this one started from, when it was a change to a version. */
+  baseTaskId?: string;
+  /** Set when the run failed and the runtime said why. */
+  error?: string;
 }
 
 export type AgentEvent =
@@ -279,7 +304,61 @@ export interface SendInput {
    * output type is the only way to say "not that one, a new one", and it is
    * the reason the control stays on screen while a file is open.
    */
-  documentType?: "docx" | "xlsx" | "pptx";
+  documentType?: "docx" | "xlsx" | "pptx" | "img";
+  imageGeneration?: ImageGenerationInput;
+}
+
+export interface ImageGenerationInput {
+  modelId: string;
+  ratio: "auto" | "1:1" | "3:4" | "4:3" | "16:9" | "9:16" | "2:3" | "3:2" | "21:9" | "custom";
+  resolution: "1K" | "2K" | "4K";
+  count: number;
+  width?: number;
+  height?: number;
+  style: "auto" | "photo" | "cinematic" | "illustration" | "3d" | "minimal";
+  /** Null or absent: no camera look was asked for. */
+  camera?: ImageCameraSettings | null;
+  /** Local paths of reference pictures, in the order they were added. At most four. */
+  references?: string[];
+  /**
+   * The version this message changes, as a file id.
+   *
+   * Its picture goes to the runtime as the first reference, and the new run
+   * joins the same series, so the result shows up as the next version rather
+   * than as an unrelated image.
+   */
+  baseFileId?: string;
+  prompt: string;
+}
+
+export interface ImageCameraSettings {
+  body: string;
+  lens: string;
+  focal: string;
+  aperture: string;
+}
+
+/**
+ * What the image surfaces need beyond files and tasks: pixels and the system's
+ * own pickers. Optional on `UiPort` because a plain browser has none of it.
+ */
+export interface ImagePort {
+  /**
+   * System picker for reference pictures. Null when cancelled; absent where
+   * there is no system picker, and the caller falls back to a file input.
+   */
+  pickReferences?(): Promise<string[] | null>;
+  /**
+   * Turns a picture that has no path — dropped from a browser, pasted — into a
+   * local file the runtime can read, and returns its path.
+   */
+  importReference(file: File): Promise<string>;
+  /** Bytes of a local picture, for a thumbnail. */
+  readPath(path: string): Promise<Blob>;
+  /** Bytes of a picture in the library. */
+  readFile(fileId: string): Promise<Blob>;
+  /** Saves a copy through the system save dialog. Resolves to where, or null when cancelled. */
+  saveCopy(fileId: string): Promise<string | null>;
 }
 
 /**
@@ -306,6 +385,13 @@ export interface AgentTaskSummary {
    * live updates, not for the caller to sort by.
    */
   updatedAt?: number;
+  /**
+   * Set when the task makes a picture. One row stands for the whole series —
+   * every version of it — so four versions are one line on Home, not four; the
+   * row's `id` is the series' first run, which does not change as versions
+   * are added.
+   */
+  image?: AgentImageSeries;
 }
 
 export interface AgentPort {
@@ -433,4 +519,5 @@ export interface UiPort {
   window: WindowPort;
   /** Native multi-file picker, when the shell is running in the desktop app. */
   pickAttachmentPaths?: () => Promise<string[] | null>;
+  images?: ImagePort;
 }

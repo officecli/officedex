@@ -1,11 +1,13 @@
-import { ChevronRight, Folder } from "lucide-react";
+import { ChevronRight, Folder, Image as ImageIcon } from "lucide-react";
 
 import { useT } from "../../renderer/i18n";
 import { statusLabel } from "../agent/PresenceFace";
 import { useAgentTasks } from "../agent/useAgentTasks";
 import { useLibraryActions } from "../nav/useLibraryActions";
 import { useShell } from "../state/ShellContext";
-import type { AgentStatus, AgentTaskSummary } from "../../shared/uiPort";
+import type { AgentStatus, AgentTaskSummary, FileMeta } from "../../shared/uiPort";
+import { fileBaseName } from "../image/imageFormat";
+import { useImageBlobUrl } from "../image/useImageBlobUrl";
 import "./taskList.css";
 
 /**
@@ -72,6 +74,28 @@ export function TaskList() {
       <ul className="shell-task-rows">
         {tasks.map((task) => {
           const folder = folders.find((entry) => entry.id === task.folderId);
+          if (task.image) {
+            return (
+              <li key={task.id}>
+                <ImageTaskRow
+                  task={task}
+                  files={files}
+                  onOpen={(fileId) => {
+                    if (fileId) {
+                      void actions.openFile(fileId);
+                      return;
+                    }
+                    // Nothing has landed yet: the picture is still being made,
+                    // and the place that shows that is the workspace beside the
+                    // folder's task.
+                    dispatch({ type: "reveal-folder", folderId: task.folderId });
+                    dispatch({ type: "select-folder", folderId: task.folderId });
+                    dispatch({ type: "enter-workspace" });
+                  }}
+                />
+              </li>
+            );
+          }
           return (
             <li key={task.id}>
               <button
@@ -110,6 +134,66 @@ export function TaskList() {
         })}
       </ul>
     </section>
+  );
+}
+
+/**
+ * A picture's row: the latest version as the thumbnail, the picture's name,
+ * how many versions it has, and "Ready" once nothing is still being drawn.
+ *
+ * Named after the picture rather than the task. The task's title is the last
+ * instruction — "Make the light warmer" — which says what was asked, not what
+ * there is to come back to; the file name is what the picture is called
+ * everywhere else, in the sidebar and on its tab.
+ */
+function ImageTaskRow({
+  task,
+  files,
+  onOpen,
+}: {
+  task: AgentTaskSummary;
+  files: FileMeta[];
+  onOpen: (fileId: string | null) => void;
+}) {
+  const runs = task.image?.runs ?? [];
+  const versions = runs
+    .filter((run) => run.status === "done")
+    .map((run) => files.find((file) => file.artifactTaskId === run.taskId))
+    .filter((file): file is FileMeta => Boolean(file));
+  const latest = versions.at(-1) ?? null;
+  const thumbnail = useImageBlobUrl(latest?.id ?? null);
+  const busy = runs.some((run) => run.status === "running");
+  const name = versions[0] ? fileBaseName(versions[0].name) : task.title;
+  const count = versions.length;
+  const detail = busy
+    ? "Image · Creating image"
+    : count > 0
+      ? `Image · ${count} version${count === 1 ? "" : "s"}`
+      : `Image · ${task.phase || "No picture yet"}`;
+
+  return (
+    <button
+      type="button"
+      className="shell-resume-card shell-task-row shell-task-row--image"
+      onClick={() => onOpen(latest?.id ?? null)}
+    >
+      <span className="shell-task-row-thumb" aria-hidden="true">
+        {thumbnail ? <img src={thumbnail} alt="" draggable={false} /> : <ImageIcon size={16} strokeWidth={1.7} />}
+      </span>
+      <span className="shell-resume-title">
+        <strong>{name}</strong>
+        <small>{detail}</small>
+      </span>
+      {busy || count === 0 ? (
+        <span className="shell-task-row-status" data-state={dotState(task.status)}>
+          <span className="shell-task-row-dot" aria-hidden="true" />
+          {statusLabel(task.status)}
+        </span>
+      ) : (
+        <span className="shell-task-row-ready">Ready</span>
+      )}
+      <ChevronRight className="shell-task-row-chevron" size={16} strokeWidth={1.7} aria-hidden="true" />
+    </button>
   );
 }
 

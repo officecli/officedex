@@ -274,6 +274,10 @@ export function createWailsAPI(): DesktopAPI {
       const result = await WailsApp.OpenMultiFileDialog(toWails(options ?? { filters: [] }));
       return result && result.length > 0 ? result : null;
     },
+    saveFileCopy: async (sourcePath: string, suggestedName: string) => {
+      const result = await WailsApp.SaveFileCopy(sourcePath, suggestedName);
+      return result ? result : null;
+    },
     deletePptxTemplate: async (assetDir: string) => {
       const fn = optionalWailsFunction<(path: string) => Promise<void>>("DeletePptxTemplate");
       if (!fn) throw new Error("Template deletion requires a newer OfficeDex runtime.");

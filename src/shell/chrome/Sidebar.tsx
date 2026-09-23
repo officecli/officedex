@@ -6,6 +6,7 @@ import { useShell } from "../state/ShellContext";
 import { useLibraryActions } from "../nav/useLibraryActions";
 import { notBuiltYet } from "../port/reportPortFailure";
 import { ModeMenu } from "./ModeMenu";
+import { NewTaskMenu } from "./NewTaskMenu";
 import { Menu } from "./Menu";
 import { useComposerSettings } from "../composer/useComposerSettings";
 
@@ -40,12 +41,7 @@ export function Sidebar({ children }: { children?: ReactNode }) {
         />
 
         {agent ? (
-          <SidebarButton
-            icon={<Plus size={18} strokeWidth={1.6} aria-hidden="true" />}
-            label={t("shell.sidebar.newTask")}
-            collapsed={collapsed}
-            onClick={() => dispatch({ type: "go-home" })}
-          />
+          <NewTaskMenu label={t("shell.sidebar.newTask")} collapsed={collapsed} />
         ) : (
           <>
             {/* Home is where the three blank-document buttons are: "New" takes

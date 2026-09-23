@@ -1,8 +1,10 @@
 import { useCallback, useRef, useState } from "react";
 
+import { ArrowUpRight } from "lucide-react";
 import { AttentionBorder } from "../agent/AttentionBorder";
 import { Composer } from "../composer/Composer";
-import { QuickPrompts } from "./QuickPrompts";
+import { PROMPTS, QuickPrompts } from "./QuickPrompts";
+import { useHomeStartRequests } from "./homeStart";
 import { useAgentTask } from "../agent/useAgentTask";
 import { useComposerSettings } from "../composer/useComposerSettings";
 import { useShell } from "../state/ShellContext";
@@ -17,6 +19,29 @@ import type { FileType } from "../../shared/uiPort";
  * rule in agent.css move with it.
  */
 const COMPOSER_RADIUS = 20;
+
+/**
+ * Starting sentences for a picture, shown while the composer is in image mode.
+ * Like the quick prompts they fill, never send — a purpose is not yet a brief.
+ */
+const IMAGE_PURPOSES = [
+  {
+    label: "Product photo",
+    prompt: "Create a clean product photo with a warm white background, soft natural light, and a carefully balanced composition.",
+  },
+  {
+    label: "Marketing visual",
+    prompt: "Create a campaign visual for a product launch. Use a bold composition with plenty of space for a headline. No text.",
+  },
+  {
+    label: "Illustration",
+    prompt: "Create an editorial illustration about a calm, productive workspace. Use simple shapes, subtle texture, and a muted color palette.",
+  },
+  {
+    label: "Social cover",
+    prompt: "Create a striking social media cover for a product launch. Keep the main subject centered and leave room for a short headline. No text.",
+  },
+];
 
 /**
  * Agent Home's top half: the question, the composer, the starting points.
@@ -46,16 +71,35 @@ export function Hero() {
   const [focused, setFocused] = useState(false);
 
   // Handed to us by the composer on mount; the quick prompts type through it.
-  const fill = useRef<((text: string, output?: FileType) => void) | null>(null);
-  const registerFill = useCallback((next: (text: string, output?: FileType) => void) => {
+  const fill = useRef<((text: string, output?: FileType | "image") => void) | null>(null);
+  const registerFill = useCallback((next: (text: string, output?: FileType | "image") => void) => {
     fill.current = next;
   }, []);
+  const setImageMode = useRef<((on: boolean) => void) | null>(null);
+  const registerImageMode = useCallback((next: (on: boolean) => void) => {
+    setImageMode.current = next;
+  }, []);
+  const [imageMode, setImageModeShown] = useState(false);
+
+  // The sidebar's New task menu: the kind it picked, primed in the composer.
+  useHomeStartRequests((kind) => {
+    if (kind === "image") {
+      setImageMode.current?.(true);
+      fill.current?.(IMAGE_PURPOSES[0].prompt, "image");
+      return;
+    }
+    setImageMode.current?.(false);
+    const entry = PROMPTS.find((prompt) => prompt.type === kind);
+    if (entry) fill.current?.(entry.prompt, kind);
+  });
 
   return (
-    <div className="shell-hero">
-      <h1>What would you like to get done?</h1>
+    <div className="shell-hero" data-image-mode={String(imageMode)}>
+      <h1>{imageMode ? "What would you like to create?" : "What would you like to get done?"}</h1>
       <p className="shell-hero-lede">
-        Bring your files and a goal. Jump in and edit at any time.
+        {imageMode
+          ? "Describe an image, add references, and make it yours."
+          : "Bring your files and a goal. Jump in and edit at any time."}
       </p>
 
       <div className="shell-hero-composer">
@@ -71,7 +115,11 @@ export function Hero() {
           <Composer
             placement="home"
             busy={agent.busy}
+            // Home switches modes with "Create an image" below, not a toolbar toggle.
+            showModeControls={false}
             onRegisterFill={registerFill}
+            onRegisterImageMode={registerImageMode}
+            onImageModeChange={setImageModeShown}
             onSend={async (submission) => {
               await agent.send(submission);
               /*
@@ -110,7 +158,23 @@ export function Hero() {
         </div>
       </div>
 
-      <QuickPrompts onPick={(prompt, type) => fill.current?.(prompt, type)} />
+      {imageMode ? (
+        <div className="shell-hero-purposes" role="group" aria-label="Image prompt ideas">
+          <span>Try</span>
+          {IMAGE_PURPOSES.map((purpose) => (
+            <button key={purpose.label} type="button" onClick={() => fill.current?.(purpose.prompt, "image")}>
+              {purpose.label}
+              <ArrowUpRight size={11} strokeWidth={1.8} aria-hidden="true" />
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      <QuickPrompts
+        onPick={(prompt, type) => fill.current?.(prompt, type)}
+        imageSelected={imageMode}
+        onToggleImage={() => setImageMode.current?.(!imageMode)}
+      />
     </div>
   );
 }

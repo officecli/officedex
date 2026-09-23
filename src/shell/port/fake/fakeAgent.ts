@@ -13,14 +13,21 @@ import type {
   AgentSuggestion,
   AgentTask,
   FileMeta,
+  ImageGenerationInput,
   SendInput,
 } from "../../../shared/uiPort";
+import { imageDimensions } from "../../../shared/imageGeneration";
 
 export interface FakeAgentDeps {
   /** Reads current file metadata, so suggestion summaries name a real file. */
   getFiles(): FileMeta[];
   /** Called when a suggestion is applied or undone, so the file goes dirty. */
   markDirty(fileId: string, dirty: boolean): void;
+  /**
+   * Files a finished image run into the library. Optional so the agent can be
+   * built on its own in tests that never send an image.
+   */
+  addImage?(folderId: string, name: string, taskId: string, size: [number, number], seed: number): FileMeta;
   /**
    * Block the run on a question before it does any work.
    *
@@ -180,6 +187,76 @@ export function createFakeAgent(deps: FakeAgentDeps): AgentPort {
     pump();
   }
 
+  /**
+   * The scripted image run: a pause, then one file per requested picture.
+   *
+   * Mirrors the desktop service's shape rather than the document run above:
+   * every picture is its own run in the task's series, a change to a version
+   * continues that version's series, and the task emitted when a run lands
+   * carries the run's id — that id is what the shell opens the new file by.
+   */
+  let imageSeed = 0;
+  function runImage(input: SendInput, image: ImageGenerationInput): void {
+    const files = deps.getFiles();
+    const baseRun = image.baseFileId ? files.find((file) => file.id === image.baseFileId)?.artifactTaskId : undefined;
+    const existing = tasks.get(input.folderId);
+    const continuing = Boolean(baseRun && existing?.image?.runs.some((run) => run.taskId === baseRun));
+    const title = input.text.length > 60 ? `${input.text.slice(0, 60)}…` : input.text;
+    const task: AgentTask = continuing && existing
+      ? existing
+      : {
+          id: nextId("task"),
+          title,
+          folderId: input.folderId,
+          documentType: "img",
+          status: "idle",
+          phase: "",
+          steps: [],
+          messages: [],
+          suggestion: null,
+          question: null,
+          image: { runs: [] },
+        };
+    // Re-inserted so a new picture lists as the newest task: a Map keeps a
+    // replaced key in its old slot, which put a fresh run below stale ones.
+    tasks.delete(input.folderId);
+    tasks.set(input.folderId, task);
+    const series = task.image!;
+    const count = Math.min(4, Math.max(1, image.count));
+    const started = Array.from({ length: count }, () => ({
+      taskId: nextId("image-run"),
+      status: "running" as const,
+      prompt: input.text,
+      ...(baseRun ? { baseTaskId: baseRun } : {}),
+    }));
+    series.runs.push(...started);
+    task.messages.push({ id: nextId("message"), role: "user", text: input.text, createdAt: now() });
+    task.status = "writing";
+    task.phase = "Creating image";
+    task.id = started[0].taskId;
+    emit(task);
+
+    const size = image.ratio === "auto" ? ([1600, 1600] as [number, number]) : imageDimensions(image);
+    const slug = (continuing ? task.title : title).replace(/[\\/:*?"<>|…]+/g, "").trim().slice(0, 40) || "Image";
+    started.forEach((run, index) => {
+      after(index === 0 ? 2200 : 500, () => {
+        const version = series.runs.indexOf(run) + 1;
+        const live = series.runs.find((entry) => entry.taskId === run.taskId);
+        if (!live || live.status !== "running") return;
+        deps.addImage?.(input.folderId, version === 1 ? `${slug}.png` : `${slug} v${version}.png`, run.taskId, size, (imageSeed += 1));
+        Object.assign(live, { status: "done" });
+        const pending = series.runs.some((entry) => entry.status === "running");
+        task.status = pending ? "writing" : "done";
+        task.phase = pending ? "Creating image" : "Image ready";
+        // The last landing names the batch's first picture: a new batch opens
+        // on its first version, as the prototype does.
+        task.id = pending ? run.taskId : started[0].taskId;
+        emit(task);
+      });
+    });
+    pump();
+  }
+
   return {
     async current(folderId) {
       const task = tasks.get(folderId);
@@ -202,11 +279,14 @@ export function createFakeAgent(deps: FakeAgentDeps): AgentPort {
         .reverse()
         .sort((a, b) => Number(live(b.status)) - Number(live(a.status)))
         .map((task) => ({
-          id: task.id,
+          // An image task's id moves to whichever run landed last; the row
+          // keeps the series' first run, as the desktop service does.
+          id: task.image?.runs[0]?.taskId ?? task.id,
           title: task.title,
           folderId: task.folderId,
           status: task.status,
           phase: task.phase,
+          ...(task.image ? { image: structuredClone(task.image) } : {}),
         }));
       return options?.limit === undefined ? rows : rows.slice(0, options.limit);
     },
@@ -233,6 +313,11 @@ export function createFakeAgent(deps: FakeAgentDeps): AgentPort {
       stop();
       paused = false;
       runningFolderId = input.folderId;
+
+      if (input.imageGeneration) {
+        runImage(input, input.imageGeneration);
+        return;
+      }
 
       const title = input.text.length > 60 ? `${input.text.slice(0, 60)}…` : input.text;
       const task = ensureTask(input.folderId, title);
@@ -308,6 +393,9 @@ export function createFakeAgent(deps: FakeAgentDeps): AgentPort {
       paused = false;
       const task = runningFolderId ? tasks.get(runningFolderId) : null;
       if (!task) return;
+      for (const run of task.image?.runs ?? []) {
+        if (run.status === "running") Object.assign(run, { status: "cancelled" });
+      }
       task.status = "done";
       task.phase = "Task complete";
       task.steps.forEach((step) => {

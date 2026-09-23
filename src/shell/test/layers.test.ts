@@ -334,6 +334,24 @@ const Z_INDEX_SITES: ZIndexSite[] = [
     context: "root",
   },
   {
+    file: "src/shell/chrome/newTaskMenu.css",
+    selector: ".shell-new-task-menu",
+    rung: "--shell-z-menu",
+    context: "root",
+    note:
+      "Agent mode's New task grid. A menu in everything but shape, portalled to " +
+      "`#shell` like `.shell-menu`, so it shares that rung.",
+  },
+  {
+    file: "src/shell/image/composer/imagePopover.css",
+    selector: ".shell-ig-popover",
+    rung: "--shell-z-menu",
+    context: "root",
+    note:
+      "The image tools' settings panels. Portalled to `#shell`; never open at the " +
+      "same time as a menu, since opening either closes the other on pointerdown.",
+  },
+  {
     file: "src/shell/chrome/menu.css",
     selector: ".shell-menu",
     rung: "--shell-z-menu",
@@ -563,6 +581,18 @@ describe("the z-index ladder", () => {
     expect([...new Set(elsewhere)]).toEqual([
       "src/shell/home/highlights.css  .shell-highlight-play { transform }",
       "src/shell/home/highlights.css  .shell-highlights-controls button:disabled { opacity }",
+      // The image composer's leaf controls: a tilted "add" sheet, a close
+      // button that fades in on hover, disabled tools, a switch knob, a chevron.
+      // None of them is an ancestor of anything positioned.
+      'src/shell/image/composer/imageComposer.css  .shell-ig-camera-grid[data-muted="true"] { opacity }',
+      "src/shell/image/composer/imageComposer.css  .shell-ig-mode-close { opacity }",
+      'src/shell/image/composer/imageComposer.css  .shell-ig-reference > span[aria-hidden="true"] { opacity }',
+      "src/shell/image/composer/imageComposer.css  .shell-ig-reference-add:hover:not(:disabled) .shell-ig-reference-sheet { transform }",
+      "src/shell/image/composer/imageComposer.css  .shell-ig-reference-sheet { transform }",
+      'src/shell/image/composer/imageComposer.css  .shell-ig-switch[aria-checked="true"] > span { transform }',
+      "src/shell/image/composer/imageComposer.css  .shell-ig-tool:disabled, .shell-ig-mode-close:disabled { opacity }",
+      'src/shell/image/composer/imageComposer.css  .shell-ig-tool[aria-expanded="true"] > .shell-ig-chevron { transform }',
+      "src/shell/image/imageWorkspace.css  .shell-image-action:disabled { opacity }",
       'src/shell/nav/nav.css  .shell-tree-file-row.is-dragging, .shell-list tbody tr.is-dragging { opacity }',
       'src/shell/nav/nav.css  .shell-tree-file-row[draggable="true"]:active { opacity }',
       "src/shell/nav/nav.css  .shell-tree-folder-add, .shell-tree-file-more { transform }",

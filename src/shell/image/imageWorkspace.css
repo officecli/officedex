@@ -1,0 +1,305 @@
+/*
+ * The image workspace — the prototype's `.image-workspace`, mapped onto the
+ * shell's tokens.
+ *
+ * It is a layer rather than a region: `EditorCanvasHost` stays mounted
+ * underneath (decision 4), so this covers the canvas and stops at the status
+ * bar, which keeps reporting the open file while a picture is up.
+ *
+ * Two values the prototype uses have no token and are taken to the nearest one,
+ * deliberately and not silently: its 16px toolbar title reads as
+ * `--shell-text-lg` (14px), and its 18px loading-mark corner as
+ * `--shell-radius-panel` (20px). Both are noted in the handover rather than
+ * added to `tokens.css`, which is not this track's file.
+ */
+
+.shell-image-surface {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: var(--shell-statusbar-h);
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+  background: var(--shell-canvas);
+}
+
+/* ------------------------------------------------------------- toolbar */
+
+.shell-image-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 28px;
+}
+
+.shell-image-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.shell-image-titles strong {
+  font-size: var(--shell-text-lg);
+  font-weight: 600;
+  color: var(--shell-ink-title);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.shell-image-titles span {
+  font-size: var(--shell-text-sm);
+  color: var(--shell-ink-faint);
+}
+
+.shell-image-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shell-image-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--shell-line-strong);
+  border-radius: var(--shell-radius-item);
+  background: var(--shell-paper);
+  color: var(--shell-ink-muted);
+  font: var(--shell-text-sm) / 16px var(--shell-font);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--shell-duration) var(--shell-ease);
+}
+
+.shell-image-action:hover:not(:disabled) {
+  background: var(--shell-hover);
+}
+
+/* The one `opacity` in this file, and the only stacking context it opens. It
+   is registered in the pinned list in `test/layers.test.ts`: a leaf control
+   that is an ancestor of nothing positioned. */
+.shell-image-action:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.shell-image-action.is-primary {
+  border-color: var(--shell-ink);
+  background: var(--shell-ink);
+  color: var(--shell-ink-inverse);
+}
+
+.shell-image-action.is-primary:hover:not(:disabled) {
+  background: var(--shell-button-primary-hover);
+}
+
+/* -------------------------------------------------------------- canvas */
+
+.shell-image-canvas {
+  flex: 1;
+  min-height: 310px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 36px 28px;
+}
+
+.shell-image-figure {
+  width: 100%;
+  max-width: 1050px;
+  margin: 0;
+}
+
+.shell-image-figure > img {
+  display: block;
+  width: 100%;
+  max-height: 560px;
+  object-fit: contain;
+  border: 1px solid var(--shell-line);
+  border-radius: var(--shell-radius-control);
+  background: var(--shell-paper);
+  box-shadow: var(--shell-shadow-paper);
+}
+
+.shell-image-figure figcaption {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 1px 0;
+  font: var(--shell-text-xs) / 16px var(--shell-font);
+  color: var(--shell-ink-faint);
+}
+
+/* ------------------------------------------------ waiting and recovery */
+
+.shell-image-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+  color: var(--shell-ink-subtle);
+}
+
+.shell-image-message h2 {
+  margin: 6px 0 0;
+  font-size: var(--shell-text-2xl);
+  font-weight: 500;
+  color: var(--shell-ink-muted);
+}
+
+.shell-image-message p {
+  margin: 0;
+  font-size: var(--shell-text);
+}
+
+.shell-image-message-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--shell-line-strong);
+  border-radius: var(--shell-radius-item);
+  background: var(--shell-paper);
+  color: var(--shell-ink-muted);
+  font: var(--shell-text-sm) / 16px var(--shell-font);
+  cursor: pointer;
+}
+
+.shell-image-message-button:hover {
+  background: var(--shell-hover);
+}
+
+/* The prototype's breathing tile. It is the only thing on screen while a
+   picture is being made, so it carries the image accent rather than the neutral
+   ink the rest of this surface wears. */
+.shell-image-mark {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border: 1px solid var(--shell-line);
+  border-radius: var(--shell-radius-panel);
+  background: var(--shell-image-tint);
+  color: var(--shell-image-accent);
+  animation: shell-image-breathe 1.8s var(--shell-ease) infinite;
+}
+
+@keyframes shell-image-breathe {
+  50% {
+    opacity: 0.55;
+    transform: scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell-image-mark {
+    animation: none;
+  }
+}
+
+/* ------------------------------------------------------------ versions */
+
+.shell-image-versions {
+  flex: none;
+  padding: 18px 36px 30px;
+  border-top: 1px solid var(--shell-line-soft);
+  background: var(--shell-sunken);
+}
+
+.shell-image-versions-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.shell-image-versions-head strong {
+  font-size: var(--shell-text-sm);
+  font-weight: 600;
+  color: var(--shell-ink-title);
+}
+
+.shell-image-versions-head span {
+  font-size: var(--shell-text-xs);
+  color: var(--shell-ink-faint);
+}
+
+.shell-image-version-list {
+  display: flex;
+  gap: 12px;
+  padding: 2px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.shell-image-version {
+  flex: none;
+  width: 112px;
+  padding: 4px;
+  border: 1px solid var(--shell-line-strong);
+  border-radius: var(--shell-radius-item);
+  background: var(--shell-paper);
+  color: var(--shell-ink-muted);
+  cursor: pointer;
+}
+
+.shell-image-version > img {
+  display: block;
+  width: 100%;
+  height: 59px;
+  object-fit: cover;
+  border-radius: var(--shell-radius-control);
+  background: var(--shell-canvas);
+}
+
+.shell-image-version > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 4px 2px;
+  font-size: var(--shell-text-xs);
+}
+
+/* `--shell-accent` is already this file type's accent: `App.tsx` resolves it
+   from the open file, and the open file here is the picture. */
+.shell-image-version.is-selected {
+  border-color: var(--shell-accent);
+  box-shadow: 0 0 0 1px var(--shell-accent);
+  background: var(--shell-tint);
+  color: var(--shell-ink-title);
+}
+
+.shell-image-new-version {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 112px;
+  min-height: 92px;
+  border: 1px dashed var(--shell-line-strong);
+  border-radius: var(--shell-radius-item);
+  background: transparent;
+  color: var(--shell-ink-subtle);
+  font-size: var(--shell-text-xs);
+  cursor: pointer;
+}
+
+.shell-image-new-version:hover {
+  border-color: var(--shell-ink-faint);
+  background: var(--shell-hover);
+}

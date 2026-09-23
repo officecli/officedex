@@ -304,6 +304,10 @@ export interface GenerateInput {
   sourceFile?: string;
   referenceImages?: string[];
   imageRatio?: ImageRatio;
+  /** Explicit output pixels for image generation, "WxH"; each side 256..4096. */
+  imageSize?: string;
+  /** Free-form visual style hint for image generation; trimmed to 64 chars. */
+  imageStyle?: string;
   fps?: number;
   imageWatermark?: ImageWatermarkGenerateOptions;
   outputDir?: string;
@@ -1408,6 +1412,8 @@ export interface DesktopAPI extends DesktopVerticalAPI {
   openFileDialog(options?: { filters?: Array<{ name: string; extensions: string[] }> }): Promise<string | null>;
   openDirectoryDialog(): Promise<string | null>;
   openMultiFileDialog(options?: { filters?: Array<{ name: string; extensions: string[] }> }): Promise<string[] | null>;
+  /** Saves a copy of an existing local file through the system save dialog; null when the user cancels. */
+  saveFileCopy(sourcePath: string, suggestedName: string): Promise<string | null>;
   readPptxTemplateSource?(assetDir: string): Promise<{ data: Uint8Array; sha256: string }>;
   deletePptxTemplate?(assetDir: string): Promise<void>;
   onPptxTemplateProgress?(callback: (event: PptxTemplateProgress) => void): () => void;

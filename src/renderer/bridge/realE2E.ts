@@ -150,6 +150,10 @@ export function createRealE2EAPI(endpoint: string): DesktopAPI {
       const result = await rpc<string[]>("OpenMultiFileDialog", options ?? { filters: [] });
       return result && result.length > 0 ? result : null;
     },
+    saveFileCopy: async (sourcePath: string, suggestedName: string) => {
+      const result = await rpc<string>("SaveFileCopy", { sourcePath, suggestedName });
+      return result ? result : null;
+    },
     savePastedImage: (data: Uint8Array, ext: string) =>
       rpc<string>("SavePastedImage", { dataBase64: uint8ArrayToBase64(data), ext }),
     savePptx: (data: Uint8Array, fileName: string, options = {}) =>

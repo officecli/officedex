@@ -5,6 +5,7 @@ import { useT } from "../../renderer/i18n";
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import { Composer } from "../composer/Composer";
 import type { AgentOutlinePage, AgentStep, AgentTask } from "../../shared/uiPort";
+import { ImageEditTargetBar, ImageTranscript } from "../image/ImageTranscript";
 import { useShell } from "../state/ShellContext";
 import { useLibraryActions } from "../nav/useLibraryActions";
 import { canDock, effectivePlacement } from "../state/shellReducer";
@@ -48,6 +49,17 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
    * tab bar, which is what a tab bar is for.
    */
   const artifact = task ? (files.find((file) => file.artifactTaskId === task.id) ?? null) : null;
+  /**
+   * A picture run reads nothing like a document run, so it gets its own
+   * transcript rather than a banner on top of this one.
+   *
+   * The generic column is steps, an outline, a suggestion to apply and one
+   * artifact card at the bottom. An image run has none of those: it has a list
+   * of versions, and every message is a change to one of them. What used to be
+   * here was a stub saying "Image generation" above a message list that then
+   * showed the same prompts again — see `ImageTranscript` for what replaced it.
+   */
+  const imageTask = task?.documentType === "img";
   const scope = folders.find((folder) => folder.id === scopeFolderId);
   const status = task?.status ?? "idle";
   const dockable = canDock(state);
@@ -96,7 +108,9 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
       </header>
 
       <div className="shell-task-scroll">
-        {task ? (
+        {task && imageTask ? <ImageTranscript agent={agent} /> : null}
+
+        {task && !imageTask ? (
           <>
             {task.messages.map((message) =>
               message.role === "user" ? (
@@ -192,7 +206,9 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
               />
             ) : null}
           </>
-        ) : (
+        ) : null}
+
+        {task ? null : (
           <div className="shell-task-empty">
             <PresenceFace status="idle" size={44} tracks />
             <strong>{t("shell.task.emptyTitle")}</strong>
@@ -202,7 +218,9 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
           </div>
         )}
 
-        {artifact ? (
+        {/* The generic artifact card is the document column's. An image run's
+            results are its versions, and the transcript already lists them. */}
+        {artifact && !imageTask ? (
           <div className="shell-task-artifact">
             <div className="shell-task-artifact-head">
               <FileTypeIcon type={artifact.type} size={20} />
@@ -228,10 +246,15 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
         ) : null}
       </div>
 
+      {/* What the next message changes, stated where it is typed. The composer
+          carries the same fact as `baseFileId`; this is its visible half. */}
+      {imageTask ? <ImageEditTargetBar /> : null}
+
       <div className="shell-task-composer">
         <Composer
           placement={placement === "docked" ? "task" : "floating"}
           busy={agent.busy}
+          imageTask={imageTask}
           onSend={agent.send}
           onStop={agent.stop}
         />

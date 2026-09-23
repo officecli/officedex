@@ -105,3 +105,33 @@
     animation: none;
   }
 }
+
+/*
+ * A picture's row: the latest version stands where the folder icon would.
+ * Sizes from the 2026-09-22 image-review prototype (`.image-recent-task`).
+ */
+.shell-task-row-thumb {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 42px;
+  height: 32px;
+  overflow: hidden;
+  border: 1px solid var(--shell-line);
+  border-radius: var(--shell-radius-control);
+  background: var(--shell-image-tint);
+  color: var(--shell-image-accent);
+}
+
+.shell-task-row-thumb > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.shell-task-row-ready {
+  flex: none;
+  color: var(--shell-status-done);
+  font-size: var(--shell-text-sm);
+}

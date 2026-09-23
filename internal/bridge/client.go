@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -763,6 +765,11 @@ func (c *Client) InvokeGenerate(ctx context.Context, input types.GenerateInput) 
 	if err != nil {
 		return TaskInvokeResult{}, err
 	}
+	imageSize, err := imageSizeArg(input)
+	if err != nil {
+		return TaskInvokeResult{}, err
+	}
+	imageStyle := imageStyleArg(input)
 	fps, err := gifFPSArg(input)
 	if err != nil {
 		return TaskInvokeResult{}, err
@@ -822,6 +829,12 @@ func (c *Client) InvokeGenerate(ctx context.Context, input types.GenerateInput) 
 	if ratio != "" {
 		args["ratio"] = ratio
 	}
+	if imageSize != "" {
+		args["size"] = imageSize
+	}
+	if imageStyle != "" {
+		args["style"] = imageStyle
+	}
 	if fps > 0 {
 		args["fps"] = fps
 	}
@@ -879,6 +892,50 @@ func imageRatioArg(input types.GenerateInput) (string, error) {
 	default:
 		return "", fmt.Errorf("bridge: unsupported image ratio: %s", input.ImageRatio)
 	}
+}
+
+// imageSizePattern is officecli's own shape for office.generate's `size`
+// argument: explicit pixels as "<width>x<height>".
+var imageSizePattern = regexp.MustCompile(`^\d+x\d+$`)
+
+const (
+	minImageSidePixels = 256
+	maxImageSidePixels = 4096
+	maxImageStyleChars = 64
+)
+
+// imageSizeArg validates the renderer's explicit pixel size for image
+// generation. Like imageRatioArg it stays silent for document types that have
+// no image pipeline, so a stale field on a pptx request can't leak through.
+func imageSizeArg(input types.GenerateInput) (string, error) {
+	size := strings.ToLower(strings.TrimSpace(input.ImageSize))
+	if size == "" || !types.Capability(input.DocumentType).ImageRatio {
+		return "", nil
+	}
+	if !imageSizePattern.MatchString(size) {
+		return "", fmt.Errorf("bridge: unsupported image size: %s", input.ImageSize)
+	}
+	for _, part := range strings.Split(size, "x") {
+		side, err := strconv.Atoi(part)
+		if err != nil || side < minImageSidePixels || side > maxImageSidePixels {
+			return "", fmt.Errorf("bridge: unsupported image size: %s", input.ImageSize)
+		}
+	}
+	return size, nil
+}
+
+// imageStyleArg passes the renderer's free-form style hint through for image
+// generation only, trimmed and length-capped so a runaway prompt can't be
+// smuggled in through the style field.
+func imageStyleArg(input types.GenerateInput) string {
+	style := strings.TrimSpace(input.ImageStyle)
+	if style == "" || !types.Capability(input.DocumentType).ImageRatio {
+		return ""
+	}
+	if len([]rune(style)) > maxImageStyleChars {
+		style = string([]rune(style)[:maxImageStyleChars])
+	}
+	return style
 }
 
 func gifFPSArg(input types.GenerateInput) (int, error) {

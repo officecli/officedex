@@ -114,6 +114,7 @@ export function createBrowserPreviewAPI(): DesktopAPI {
     openFileDialog: async () => null,
     openDirectoryDialog: async () => null,
     openMultiFileDialog: async () => null,
+    saveFileCopy: async () => null,
     onPptxTemplateProgress: () => () => undefined,
     importPptxTemplate: async () => {
       throw new Error("Local PPTX template import requires the desktop app.");

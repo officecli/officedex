@@ -15,6 +15,7 @@ import type {
   UiPort,
 } from "../../../shared/uiPort";
 import { createFakeAgent } from "./fakeAgent";
+import { createFakeImageStore } from "./fakeImages";
 import { SEED_FOLDER_ID, seedFiles, seedFolders, seedModels, seedSettings } from "./seed";
 
 export interface FakePortOptions {
@@ -58,8 +59,28 @@ export function createFakePort(options: FakePortOptions = {}): UiPort {
     return file;
   };
 
+  const images = createFakeImageStore();
+
   const agent = createFakeAgent({
     asksQuestion: options.asksQuestion ?? false,
+    addImage: (folderId, name, taskId, size, seed) => {
+      const stamp = now();
+      const file: FileMeta = {
+        id: nextId("file"),
+        name,
+        type: "image",
+        folderId,
+        createdAt: stamp,
+        updatedAt: stamp,
+        lastOpenedAt: null,
+        dirty: false,
+        pinned: false,
+        artifactTaskId: taskId,
+      };
+      files = [...files, file];
+      images.register(file.id, size[0], size[1], seed);
+      return structuredClone(file);
+    },
     seedTasks: options.tasks,
     getFiles: () => files,
     markDirty: (fileId, dirty) => {
@@ -236,6 +257,8 @@ export function createFakePort(options: FakePortOptions = {}): UiPort {
     },
 
     window: createBrowserWindowPort(),
+
+    images: images.port(() => files),
   };
 }
 
