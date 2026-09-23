@@ -14,6 +14,7 @@ const ACCENTS: Record<FileType, { accent: string; tint: string }> = {
   doc: { accent: "var(--shell-doc-accent)", tint: "var(--shell-doc-tint)" },
   sheet: { accent: "var(--shell-sheet-accent)", tint: "var(--shell-sheet-tint)" },
   slides: { accent: "var(--shell-slides-accent)", tint: "var(--shell-slides-tint)" },
+  image: { accent: "var(--shell-image-accent)", tint: "var(--shell-image-tint)" },
 };
 
 export function fileTypeAccentStyle(type: FileType | null | undefined): CSSProperties {
@@ -25,4 +26,5 @@ export const FILE_TYPE_LABELS: Record<FileType, string> = {
   doc: "Document",
   sheet: "Workbook",
   slides: "Presentation",
+  image: "Image",
 };

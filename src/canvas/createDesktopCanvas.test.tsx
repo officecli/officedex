@@ -118,6 +118,37 @@ describe("desktop canvas adapter", () => {
   // wired that passed for the wrong reason: `lastProps` is only set by the
   // presentation stub, so it stayed null while the real `SheetCanvas` rendered
   // underneath against a stub api and failed its way into `onUnavailable`.
+  /*
+   * A finished image run opens its picture here. Rendered for real rather than
+   * stubbed: what matters is that the bytes arrive through the preview token
+   * and end up in an <img>, since the webview cannot load the path itself.
+   */
+  it("shows a generated image from its preview token", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const createObjectURL = vi.fn(() => "blob:poster");
+    const revokeObjectURL = vi.fn();
+    Object.assign(URL, { createObjectURL, revokeObjectURL });
+    const api = {
+      ...stubApi(),
+      getDocument: async () => ({ filePath: "/tmp/poster.png", fileName: "poster.png", documentType: "img" }),
+      issuePreviewToken: async () => ({ token: "tok-1" }),
+      readArtifactFile: async () => ({ data: new Uint8Array([137, 80, 78, 71]) }),
+      revokePreviewToken: vi.fn(async () => {}),
+    } as unknown as DesktopAPI;
+    const adapter = createDesktopCanvas({ api, onUnavailable: () => {} });
+    act(() => {
+      void adapter.mount(host);
+    });
+
+    await act(async () => adapter.show({ ...file("img-1", "image"), name: "poster.png" }));
+
+    const image = host.querySelector(".shell-image-canvas img");
+    expect(image?.getAttribute("src")).toBe("blob:poster");
+    expect(image?.getAttribute("alt")).toBe("poster.png");
+    expect(adapter.canEditDocument?.()).toBe(false);
+  });
+
   it("leaves the skeleton alone until something is opened", () => {
     const { adapter } = mounted();
 

@@ -20,7 +20,12 @@
 
 /* ------------------------------------------------------------------ files */
 
-export type FileType = "doc" | "sheet" | "slides";
+/**
+ * `image` is a generated picture (`img` on the desktop side). It opens in a
+ * viewer, not an editor: nothing creates a blank one, and nothing edits one in
+ * place.
+ */
+export type FileType = "doc" | "sheet" | "slides" | "image";
 
 /**
  * Decision 3: a folder is a real directory, named "folder" everywhere —

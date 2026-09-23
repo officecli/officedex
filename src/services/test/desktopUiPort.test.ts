@@ -48,8 +48,10 @@ describe("desktop file service", () => {
     localStorage.clear();
   });
 
-  // The desktop produces img, gif and report too. They have no FileType, and a
-  // GIF shown as a "document" would open an editor that cannot read it.
+  // The desktop produces gif and report too. They have no FileType, and a GIF
+  // shown as a "document" would open an editor that cannot read it. A generated
+  // picture does have one: filtering `img` out is what left a finished image
+  // run on "No file open", because the shell could not find its artifact.
   it("leaves out document types the new IA has no place for", async () => {
     const port = createDesktopUiPort({
       api: createFakeDesktopApi({
@@ -65,7 +67,20 @@ describe("desktop file service", () => {
 
     const files = await port.files.list();
 
-    expect(files.map((file) => file.type).sort()).toEqual(["doc", "slides"]);
+    expect(files.map((file) => file.type).sort()).toEqual(["doc", "image", "slides"]);
+  });
+
+  it("keeps a generated image findable by the task that produced it", async () => {
+    const port = createDesktopUiPort({
+      api: createFakeDesktopApi({
+        documents: [{ fileName: "poster.png", documentType: "img", currentArtifactTaskId: "task-image" }],
+      }),
+      window: stubWindow(),
+    });
+
+    await expect(port.files.list()).resolves.toEqual([
+      expect.objectContaining({ name: "poster.png", type: "image", artifactTaskId: "task-image" }),
+    ]);
   });
 
   it("maps document types onto the three the shell knows", async () => {

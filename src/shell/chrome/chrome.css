@@ -81,6 +81,9 @@
 .shell-file-icon[data-file-type="slides"] {
   color: var(--shell-slides-accent);
 }
+.shell-file-icon[data-file-type="image"] {
+  color: var(--shell-image-accent);
+}
 
 /* ------------------------------------------------------------ window bar */
 

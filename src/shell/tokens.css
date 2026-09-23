@@ -200,6 +200,8 @@
   --shell-sheet-tint: #e7ede8;
   --shell-slides-accent: #926b67;
   --shell-slides-tint: #f0e5e2;
+  --shell-image-accent: #7a6f8f;
+  --shell-image-tint: #ebe8f0;
 
   /* Resolved per open file by theme/fileTypeAccent.ts. */
   --shell-accent: var(--shell-doc-accent);

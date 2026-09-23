@@ -31,11 +31,12 @@ export interface FakePortOptions {
   clearTimeout?: (handle: unknown) => void;
 }
 
-const EXTENSIONS: Record<FileType, string> = { doc: "docx", sheet: "xlsx", slides: "pptx" };
+const EXTENSIONS: Record<FileType, string> = { doc: "docx", sheet: "xlsx", slides: "pptx", image: "png" };
 const TYPE_NAMES: Record<FileType, string> = {
   doc: "document",
   sheet: "workbook",
   slides: "presentation",
+  image: "image",
 };
 
 let sequence = 0;

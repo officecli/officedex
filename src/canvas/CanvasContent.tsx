@@ -9,6 +9,7 @@ import { useTaskStore } from "../renderer/store/taskStore";
 import { PresentationCanvas } from "./PresentationCanvas";
 import { DocxCanvas, type DocumentEditRunner } from "./DocxCanvas";
 import { SheetCanvas } from "./SheetCanvas";
+import { ImageCanvas } from "./ImageCanvas";
 import { SheetStage } from "./SheetStage";
 import { liveWorkbookTask } from "./sheetRuntimeProgress";
 import { PresentationStage, liveDeckTask } from "./PresentationStage";
@@ -92,7 +93,8 @@ export function CanvasContent({
   // reports its own handle, and clearing inline would race that report on the
   // renders where both happen.
   useEffect(() => {
-    if (!open) {
+    // A picture is on screen but nothing in it is saved, selected or edited.
+    if (!open || open.type === "image") {
       onSave(null);
       onResolveSelection(null);
       onSelectionChange(null);
@@ -150,6 +152,10 @@ export function CanvasContent({
         onUnavailable={onUnavailable}
       />
     );
+  }
+
+  if (open.type === "image") {
+    return <ImageCanvas api={api} file={open} onUnavailable={onUnavailable} />;
   }
 
   if (open.type === "sheet") {

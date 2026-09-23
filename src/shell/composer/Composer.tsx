@@ -93,7 +93,7 @@ const OUTPUTS: Array<{ value: FileType; label: string; description: string }> = 
   { value: "slides", label: "New presentation", description: "A PowerPoint file (.pptx)" },
 ];
 
-const DOCUMENT_TYPES: Record<FileType, NonNullable<SendInput["documentType"]>> = {
+const DOCUMENT_TYPES: Partial<Record<FileType, NonNullable<SendInput["documentType"]>>> = {
   doc: "docx",
   sheet: "xlsx",
   slides: "pptx",

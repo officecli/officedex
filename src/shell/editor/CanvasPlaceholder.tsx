@@ -14,6 +14,8 @@ import type { FileType } from "../../shared/uiPort";
 export function CanvasPlaceholder({ type }: { type: FileType }) {
   if (type === "sheet") return <SheetSkeleton />;
   if (type === "slides") return <SlidesSkeleton />;
+  // A picture loads in a moment; a page skeleton behind it would read as a document.
+  if (type === "image") return null;
   return <DocSkeleton />;
 }
 

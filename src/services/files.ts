@@ -9,10 +9,15 @@ import { NotImplementedError } from "../shared/notImplemented";
 export const DEFAULT_FOLDER_ID = "folder:default";
 
 /**
- * The three document types the new IA has a place for.
+ * The document types the new IA has a place for.
  *
- * The desktop also produces `img`, `gif` and `report`. They have no `FileType`
- * and are filtered out of the file list rather than coerced into one — a GIF
+ * `img` is a generated picture and opens in the canvas's image viewer. It used
+ * to be filtered out with the rest, which meant an image run finished, the
+ * shell looked for the file carrying its task id, found nothing, and left the
+ * canvas on "No file open" — the picture existed only on disk.
+ *
+ * The desktop also produces `gif` and `report`. They have no `FileType` and
+ * are filtered out of the file list rather than coerced into one — a GIF
  * shown as a "document" would open an editor that cannot read it. Giving them
  * a home is part of the deferred scope in docs/uiport-scope.md.
  */
@@ -20,9 +25,10 @@ const FILE_TYPES: Record<string, FileType> = {
   pptx: "slides",
   docx: "doc",
   xlsx: "sheet",
+  img: "image",
 };
 
-const EXTENSIONS: Record<FileType, string> = { doc: "docx", sheet: "xlsx", slides: "pptx" };
+const EXTENSIONS: Record<Exclude<FileType, "image">, string> = { doc: "docx", sheet: "xlsx", slides: "pptx" };
 
 function fileTypeOf(record: DocumentRecord): FileType | undefined {
   return FILE_TYPES[record.documentType.trim().toLowerCase()];
@@ -103,6 +109,8 @@ export function createFileService(api: DesktopAPI): FileService {
     },
 
     async create(type, folderId): Promise<FileMeta> {
+      // There is no blank picture to start from; images come from a run.
+      if (type === "image") throw new Error("An image cannot be created blank.");
       if (!api.createBlankDocument) {
         throw new NotImplementedError(
           "files.create",
