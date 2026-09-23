@@ -8,7 +8,12 @@ BUILT_APP_EXECUTABLE="${OFFICEDEX_DIR}/build/bin/OfficeDex.app/Contents/MacOS/of
 OFFICECLI_EXECUTABLE="${OFFICEDEX_DIR}/build/officecli/officecli"
 USER_DATA_DIR="${OFFICEDEX_DEV_USER_DATA_DIR:-${HOME}/Library/Application Support/OfficeDex-Test}"
 PLATFORM_BASE_URL="${OFFICECLI_DEV_PLATFORM_BASE_URL:-https://officecli.shimodev.com}"
-PROFILE="${OFFICE_CLI_PROFILE:-dev}"
+# Production by default. The OfficeCLI this launcher builds carries the release
+# licence proof key, which only the production platform signs with; the test
+# platform (profile `dev`) uses its own seed, so every generation there fails
+# with "license proof signature mismatch" unless OFFICE_CLI_LICENSE_PROOF_PUBLIC_KEY
+# is set to the test platform's public key.
+PROFILE="${OFFICE_CLI_PROFILE:-}"
 PRESENTATION_SOURCE="${PRESENTATION_SOURCE_DIR:-${OFFICEDEX_DIR}/../presentation}"
 PPT2MOP_SOURCE="${PPT2MOP_SOURCE_DIR:-${OFFICEDEX_DIR}/../ppt2mop}"
 DRY_RUN=false
@@ -23,11 +28,15 @@ font and platform behavior match the desktop client rather than a browser tab.
 
 Environment overrides:
   OFFICEDEX_DEV_USER_DATA_DIR        Test user-data directory
-  OFFICE_CLI_PROFILE                 OfficeCLI profile (default: dev)
-  OFFICECLI_DEV_PLATFORM_BASE_URL    Development platform URL
+  OFFICE_CLI_PROFILE                 OfficeCLI profile (default: production; `dev` = test platform)
+  OFFICECLI_DEV_PLATFORM_BASE_URL    Test platform URL, used only with OFFICE_CLI_PROFILE=dev
   OFFICEDEX_MOP_CONVERT_BIN          Explicit mop-convert executable
   PRESENTATION_SOURCE_DIR            Presentation checkout
   PPT2MOP_SOURCE_DIR                 Local ppt2mop checkout
+  WRITER_SOURCE_DIR                  Writer checkout (default: ../writer)
+  OFFICECLI_SOURCE_DIR               OfficeCLI checkout (default: ../officecli-internal)
+  OFFICEDEX_DEPS_WATCH               0 disables rebuilding on new commits
+  OFFICEDEX_DEPS_PULL                0 disables fast-forwarding clean checkouts
 EOF
 }
 
@@ -88,10 +97,17 @@ fi
 command=(
   env
   -u GOROOT
-  "OFFICE_CLI_PROFILE=${PROFILE}"
-  "OFFICECLI_DEV_PLATFORM_BASE_URL=${PLATFORM_BASE_URL}"
+  # `env` takes -u only before the first assignment. Clearing the profile here
+  # keeps one exported in the calling shell from overriding production below.
+  -u OFFICE_CLI_PROFILE
   "OFFICEDEX_DEV_USER_DATA_DIR=${USER_DATA_DIR}"
 )
+if [[ -n "${PROFILE}" ]]; then
+  command+=("OFFICE_CLI_PROFILE=${PROFILE}")
+  if [[ "${PROFILE}" == "dev" ]]; then
+    command+=("OFFICECLI_DEV_PLATFORM_BASE_URL=${PLATFORM_BASE_URL}")
+  fi
+fi
 
 if [[ -d "${PRESENTATION_SOURCE}" ]]; then
   command+=("PRESENTATION_SOURCE_DIR=${PRESENTATION_SOURCE}")
@@ -107,6 +123,7 @@ command+=(wails dev)
 echo "[start-desktop] mode: Wails desktop dev"
 echo "[start-desktop] source: ${OFFICEDEX_DIR}"
 echo "[start-desktop] user data: ${USER_DATA_DIR}"
+echo "[start-desktop] OfficeCLI platform: ${PROFILE:+profile ${PROFILE}}${PROFILE:-production}"
 if [[ -n "${MOP_CONVERT_BIN}" ]]; then
   echo "[start-desktop] mop-convert: ${MOP_CONVERT_BIN}"
 fi
@@ -123,13 +140,14 @@ if [[ ! -x "${OFFICECLI_EXECUTABLE}" ]]; then
   echo "[start-desktop] OfficeCLI is missing; downloading it once"
   npm run prefetch:officecli
 fi
-if [[ -d "${PRESENTATION_SOURCE}" ]]; then
-  echo "[start-desktop] rebuilding the desktop Presentation bundle"
-  presentation_build=(env "PRESENTATION_SOURCE_DIR=${PRESENTATION_SOURCE}")
-  if [[ -d "${PPT2MOP_SOURCE}" ]]; then
-    presentation_build+=("PPT2MOP_SOURCE_DIR=${PPT2MOP_SOURCE}")
-  fi
-  presentation_build+=(npm run build:presentation:desktop)
-  "${presentation_build[@]}"
+# Bring the embedded editors and OfficeCLI up to date, then keep watching the
+# checkouts so a `git pull` in presentation or writer lands without a restart.
+PRESENTATION_SOURCE_DIR="${PRESENTATION_SOURCE}" PPT2MOP_SOURCE_DIR="${PPT2MOP_SOURCE}" \
+  bash scripts/dev-deps.sh sync
+if [[ "${OFFICEDEX_DEPS_WATCH:-1}" == "1" ]]; then
+  PRESENTATION_SOURCE_DIR="${PRESENTATION_SOURCE}" PPT2MOP_SOURCE_DIR="${PPT2MOP_SOURCE}" \
+    bash scripts/dev-deps.sh watch &
+  DEPS_WATCHER_PID=$!
+  trap 'kill "${DEPS_WATCHER_PID}" 2>/dev/null || true' EXIT
 fi
 "${command[@]}"

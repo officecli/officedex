@@ -26,7 +26,8 @@
 
 ## 构建与测试
 
-- `npm run dev` — 启动开发服务器
+- `npm run start:desktop` — 日常开发入口：先把 presentation / writer / officecli-internal 同步到最新，再起 Wails dev；运行中两者有新 commit 会自动重建，Cmd+R 刷新即可（`npm run dev` 不同步编辑器，会用旧产物）
+- `npm run sync:deps` — 只同步 presentation / writer / officecli（改了它们的未提交代码时用）
 - `npm run build` — 构建生产版本
 - `npx vitest run` — 运行测试
 - `npm run lint` — 类型检查
