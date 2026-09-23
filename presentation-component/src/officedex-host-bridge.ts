@@ -15,7 +15,7 @@ const PROTOCOL_VERSION = 1;
  * (TestDefaultCapabilitiesMatchBundledWasm), and this one against Go's
  * (presentation-component/src/schemaVersion.test.ts). Updating one alone fails.
  */
-const MOP_SCHEMA_VERSION = 1081;
+const MOP_SCHEMA_VERSION = 1097;
 const PPTX_CONTENT_TYPE =
   "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 

@@ -11,5 +11,5 @@ package mophttp
 // updating them.
 const (
 	DefaultProtocolVersion = 1
-	DefaultSchemaVersion   = 1081
+	DefaultSchemaVersion   = 1097
 )
