@@ -99,6 +99,34 @@ describe("the image workspace while a picture is being made", () => {
     await waitFor(() => expect(finish).toHaveBeenCalled());
   });
 
+  /* The run is the folder's; a deck the user clicked is what they are looking at. */
+  it("stands aside for a document opened while it runs, and comes back without one", async () => {
+    const shell = await renderShell({
+      fastAgent: true,
+      tasks: [imageTask([run({ taskId: "r1", status: "running" })])],
+    });
+    await shell.dispatch({ type: "select-folder", folderId: SEED_FOLDER_ID });
+    await shell.dispatch({ type: "enter-workspace" });
+    await waitFor(() => expect(text()).toContain("Creating your image"));
+
+    await shell.dispatch({ type: "open-file", fileId: "file-deck" });
+    await waitFor(() => expect(surface()).toBeNull());
+
+    await shell.dispatch({ type: "enter-workspace" });
+    await waitFor(() => expect(text()).toContain("Creating your image"));
+  });
+
+  it("does not cover a document with a failed run's Try again", async () => {
+    const shell = await renderShell({
+      fastAgent: true,
+      tasks: [imageTask([run({ taskId: "r1", status: "cancelled" })])],
+    });
+    await shell.dispatch({ type: "select-folder", folderId: SEED_FOLDER_ID });
+    await shell.dispatch({ type: "open-file", fileId: "file-plan" });
+    await waitFor(() => expect(document.querySelector(".shell-task")).not.toBeNull());
+    expect(surface()).toBeNull();
+  });
+
   it("offers the instruction again when a run ended with nothing", async () => {
     const shell = await renderShell({
       fastAgent: true,

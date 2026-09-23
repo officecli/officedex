@@ -114,6 +114,14 @@ interface Draft {
   /** What the user said to make, or "auto" to let the instruction decide. */
   output: OutputChoice;
   mode: "agent" | "image";
+  /**
+   * The document on screen when image mode was picked, or null when none was.
+   *
+   * Image mode chosen beside a picture is not a choice about the deck opened
+   * after it, and the draft outlives both the tab switch and the panel's
+   * remount — so the mode is only honoured beside the file it was picked for.
+   */
+  modeFileId?: string | null;
   image: ImageDraft;
 }
 
@@ -205,7 +213,7 @@ export interface ComposerProps {
  * folding the two together is decision 2.
  */
 export function Composer({ placement, showScopeInToolbar = true, showModeControls = true, showPermission = true, busy = false, onSend, onStop, onRegisterFill, onRegisterImageMode, onImageModeChange, imageTask = false }: ComposerProps) {
-  const { state, folders, files, scopeFolderId, dispatch, reload } = useShell();
+  const { state, folders, files, activeFile, scopeFolderId, dispatch, reload } = useShell();
   const port = usePort();
   const settings = useComposerSettings();
   const canvas = useCanvas();
@@ -218,13 +226,28 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
   });
   const { text, mentions, attachments, output, image } = draft;
   const editTarget = useImageEditTarget();
+  /**
+   * A document open in the editor — never on Home, where nothing is.
+   *
+   * The panel's task is the *folder's* latest, not the open file's. Open a
+   * deck in a folder whose last run made a picture, and `imageTask` is still
+   * true: without this, "summarise this deck" was locked into image mode and
+   * went to the image model as a brief, with the deck left untouched.
+   */
+  const documentOnScreen = placement !== "home" && activeFile !== null && activeFile.type !== "image";
   /*
    * Beside an image task the mode is not a choice. Anything typed there is a
    * change to the picture on screen; letting it fall back to Agent would send
    * it down the document path, which has no idea what to do with an image.
+   * Unless what is on screen is a document: then the message is about that.
    */
-  const forcedImage = placement !== "home" && (imageTask || editTarget !== null);
-  const mode: Draft["mode"] = forcedImage ? "image" : draft.mode;
+  const forcedImage = placement !== "home" && (editTarget !== null || (imageTask && !documentOnScreen));
+  /*
+   * Picked beside something else — a picture, the workspace, another file —
+   * and now looking at a document: the message is about the document.
+   */
+  const staleImage = draft.mode === "image" && documentOnScreen && (draft.modeFileId ?? null) !== activeFile?.id;
+  const mode: Draft["mode"] = forcedImage ? "image" : staleImage ? "agent" : draft.mode;
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   /** True while a speech recogniser is running — see `dictate`. */
@@ -254,7 +277,8 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
   const setAttachments = (value: Update<Attachment[]>) =>
     patchDraft((current) => ({ attachments: resolve(value, current.attachments) }));
   const setOutput = (value: OutputChoice) => patchDraft(() => ({ output: value }));
-  const setMode = (value: Draft["mode"]) => patchDraft(() => ({ mode: value }));
+  const setMode = (value: Draft["mode"]) =>
+    patchDraft(() => ({ mode: value, modeFileId: documentOnScreen ? (activeFile?.id ?? null) : null }));
   const setImage = (patch: Partial<ImageDraft>) => patchDraft((current) => ({ image: { ...current.image, ...patch } }));
 
   useEffect(() => {
@@ -575,6 +599,14 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
     // The quote went with the message; leaving it up would make the next one
     // look like it is about the same passage.
     if (reference) clearSelection();
+    // A picture asked for beside a document is a new thing, not a change to
+    // that document: step off it the way Home does, so "Creating your image"
+    // has the canvas instead of waiting behind the deck.
+    // The mode goes with it: coming back to the deck is coming back to Agent.
+    if (mode === "image" && documentOnScreen) {
+      patchDraft(() => ({ modeFileId: null }));
+      dispatch({ type: "enter-workspace" });
+    }
     await onSend(submission);
   }
 
