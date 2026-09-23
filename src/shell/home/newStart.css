@@ -1,0 +1,126 @@
+/*
+ * Editor mode's New page. Sizes are the prototype's computed values
+ * (`.office-templates`, `.office-template-preview`, `.office-blank-sheet`);
+ * colours are the nearest shell tokens.
+ */
+
+/* The same centred column as `.shell-home-head`, so the heading and the first
+   card start on one line — as the Recent and Pinned pages do. */
+.shell-new-templates {
+  max-width: 1080px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 240px);
+  gap: 24px;
+}
+
+.shell-new-template {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 13px;
+  width: 240px;
+  padding: 0 0 12px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--shell-ink-title);
+  font: inherit;
+  font-size: var(--shell-text-md);
+  cursor: pointer;
+}
+
+.shell-new-preview {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 238px;
+  height: 154px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: var(--shell-chrome);
+  transition: border-color 160ms var(--shell-ease), background 160ms var(--shell-ease);
+}
+
+.shell-new-template:hover .shell-new-preview {
+  border-color: var(--shell-line-strong);
+  background: var(--shell-hover);
+}
+
+.shell-new-template:focus-visible {
+  outline: none;
+}
+
+.shell-new-template:focus-visible .shell-new-preview {
+  outline: 2px solid var(--shell-focus);
+  outline-offset: 2px;
+}
+
+.shell-new-blank {
+  display: block;
+  box-sizing: border-box;
+  border: 1px solid var(--shell-line-strong);
+  background: var(--shell-paper);
+  box-shadow: var(--shell-shadow-paper);
+}
+
+/* A page. */
+.shell-new-preview[data-type="doc"] .shell-new-blank {
+  width: 78px;
+  height: 110px;
+}
+
+/* A ruled grid, with the header row and column a workbook opens with. */
+.shell-new-preview[data-type="sheet"] .shell-new-blank {
+  width: 145px;
+  height: 97px;
+  border-color: var(--shell-line);
+  background:
+    linear-gradient(var(--shell-sheet-tint), var(--shell-sheet-tint)) top / 100% 11px no-repeat,
+    linear-gradient(var(--shell-sheet-tint), var(--shell-sheet-tint)) left / 9px 100% no-repeat,
+    repeating-linear-gradient(0deg, transparent 0 11px, var(--shell-line-soft) 11px 12px),
+    repeating-linear-gradient(90deg, transparent 0 23px, var(--shell-line-soft) 23px 24px),
+    var(--shell-paper);
+}
+
+/* An empty slide with a title and a subtitle placeholder. */
+.shell-new-preview[data-type="slides"] .shell-new-blank {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 160px;
+  height: 90px;
+  padding: 20px 16px;
+}
+
+.shell-new-preview[data-type="slides"] .shell-new-blank > i {
+  display: block;
+  height: 17px;
+  border: 1px dashed var(--shell-line);
+}
+
+.shell-new-preview[data-type="slides"] .shell-new-blank > i + i {
+  height: 11px;
+}
+
+.shell-new-icon {
+  position: absolute;
+  right: 17px;
+  bottom: 13px;
+  display: grid;
+  place-items: center;
+  width: 29px;
+  height: 30px;
+  border-radius: 3px;
+  background: inherit;
+}
+
+.shell-new-label {
+  line-height: 20px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell-new-preview {
+    transition: none;
+  }
+}

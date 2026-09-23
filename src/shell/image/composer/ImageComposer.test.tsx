@@ -209,3 +209,25 @@ describe("New task in agent mode", () => {
     expect(document.activeElement?.getAttribute("aria-label")).toBe("Image");
   });
 });
+
+describe("leaving image mode from Home", () => {
+  it("drops image mode when a document type is picked after Create an image", async () => {
+    const shell = await agentHome();
+    await enterImageMode(shell);
+    expect(shell.view.getByRole("group", { name: "Image options" })).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(shell.view.getByRole("button", { name: "Write a document" }));
+    });
+
+    expect(shell.view.queryByRole("group", { name: "Image options" })).toBeNull();
+    expect(shell.view.getByRole("heading", { level: 1 }).textContent).toBe("What would you like to get done?");
+    expect(shell.view.getByRole("button", { name: "Create an image" }).getAttribute("aria-pressed")).toBe("false");
+
+    await act(async () => {
+      fireEvent.click(shell.view.getByTitle("Send message"));
+    });
+    expect(shell.sent[0].documentType).toBe("docx");
+    expect(shell.sent[0].imageGeneration).toBeUndefined();
+  });
+});

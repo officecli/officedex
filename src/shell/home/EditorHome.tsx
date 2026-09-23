@@ -6,6 +6,7 @@ import { Select } from "../../renderer/ui";
 import { FileTree } from "../nav/FileTree";
 import { useFolderDrop } from "../nav/useFolderDrop";
 import { useLibraryActions } from "../nav/useLibraryActions";
+import { NewStart } from "./NewStart";
 import type { FileType } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
 import type { Grouping } from "../nav/fileTreeModel";
@@ -49,6 +50,10 @@ export function EditorHome() {
 
   return (
     <div className="shell-home shell-region shell-home--editor">
+      {state.homeList === "new" ? (
+        <NewStart onCreate={(type) => void actions.createFile(defaultFolderId, type)} />
+      ) : (
+      <>
       <header className="shell-home-head">
         <h1>{t(state.homeList === "pinned" ? "shell.sidebar.pinned" : "shell.sidebar.recent")}</h1>
 
@@ -112,6 +117,8 @@ export function EditorHome() {
           onTogglePinned={(fileId, pinned) => void actions.setPinned(fileId, pinned)}
         />
       </div>
+      </>
+      )}
     </div>
   );
 }

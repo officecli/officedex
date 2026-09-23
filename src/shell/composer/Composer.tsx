@@ -371,8 +371,14 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
       setText(next);
       // A quick prompt states its own type; a plain fill leaves the choice
       // alone rather than resetting one the user made by hand.
+      // A stated document type is a way out of image mode too: "Write a
+      // document" pressed after "Create an image" means a document, and left
+      // in image mode it would be sent to the image model as a picture brief.
       if (output === "image") setMode("image");
-      else if (output) setOutput(output);
+      else if (output) {
+        setMode("agent");
+        setOutput(output);
+      }
       setMentionQuery(null);
       queueMicrotask(() => {
         const input = inputRef.current;

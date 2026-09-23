@@ -36,7 +36,7 @@ export function Sidebar({ children }: { children?: ReactNode }) {
           icon={<House size={18} strokeWidth={1.6} aria-hidden="true" />}
           label={t("shell.nav.home")}
           collapsed={collapsed}
-          current={state.home}
+          current={state.home && (agent || state.homeList !== "new")}
           onClick={() => dispatch({ type: "go-home" })}
         />
 
@@ -44,13 +44,17 @@ export function Sidebar({ children }: { children?: ReactNode }) {
           <NewTaskMenu label={t("shell.sidebar.newTask")} collapsed={collapsed} />
         ) : (
           <>
-            {/* Home is where the three blank-document buttons are: "New" takes
-                you to the choice rather than guessing a type for you. */}
+            {/*
+              The prototype's New is a page — three blank templates with a
+              picture of each — not a return to Home, which is a no-op on Home,
+              exactly where people press it.
+            */}
             <SidebarButton
               icon={<Plus size={18} strokeWidth={1.6} aria-hidden="true" />}
               label={t("shell.sidebar.new")}
               collapsed={collapsed}
-              onClick={() => dispatch({ type: "go-home" })}
+              current={state.home && state.homeList === "new"}
+              onClick={() => dispatch({ type: "set-home-list", list: "new" })}
             />
             <SidebarButton
               icon={<FolderOpen size={18} strokeWidth={1.6} aria-hidden="true" />}

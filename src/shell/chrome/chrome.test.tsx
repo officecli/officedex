@@ -202,6 +202,32 @@ describe("sidebar", () => {
   });
 });
 
+describe("sidebar brand", () => {
+  /*
+   * The prototype's corner mark says which mode the window is in: the companion
+   * (dark tile, white plate, eyes) in Agent mode, the same plate with nobody in
+   * it in Editor mode. An earlier pass drew the companion as a bare ink plate
+   * with no tile and kept a generic panel glyph for Editor — neither is in the
+   * prototype.
+   */
+  it("is the companion on a dark tile in Agent mode", async () => {
+    const shell = await renderShell();
+    await shell.dispatch({ type: "set-mode", mode: "agent" });
+    const tile = shell.view.container.querySelector(".shell-brand-mark .shell-brand-tile");
+    expect(tile).toHaveAttribute("data-mode", "agent");
+    expect(tile?.querySelectorAll(".shell-brand-eyes path")).toHaveLength(2);
+  });
+
+  it("is the plain document mark, with no eyes, in Editor mode", async () => {
+    const shell = await renderShell();
+    await shell.dispatch({ type: "set-mode", mode: "editor" });
+    const tile = shell.view.container.querySelector(".shell-brand-mark .shell-brand-tile");
+    expect(tile).toHaveAttribute("data-mode", "editor");
+    expect(tile?.querySelector(".shell-brand-eyes")).toBeNull();
+    expect(tile?.querySelector("img")).not.toBeNull();
+  });
+});
+
 describe("mode menu", () => {
   it("opens on ArrowDown, marks the current mode, and switches on select", async () => {
     const shell = await openSeedTabs();

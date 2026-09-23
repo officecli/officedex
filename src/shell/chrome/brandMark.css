@@ -1,0 +1,27 @@
+/* The corner mark — see BrandMark.tsx. Measured off the prototype's rail. */
+
+.shell-brand-tile {
+  display: block;
+  flex: none;
+  overflow: hidden;
+  border-radius: 7px;
+  background: var(--shell-brand-mark);
+}
+
+.shell-brand-tile > img,
+.shell-brand-tile > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.shell-brand-eyes {
+  fill: none;
+  stroke: var(--shell-brand-mark);
+  stroke-linecap: round;
+  stroke-width: 11;
+}
+
+.shell-brand-dot {
+  fill: var(--shell-canvas);
+}

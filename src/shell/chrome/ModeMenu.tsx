@@ -1,8 +1,8 @@
-import { ChevronDown, PanelLeft } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { useT } from "../../renderer/i18n";
-import { PresenceFace } from "../agent/PresenceFace";
+import { BrandMark } from "./BrandMark";
 import { useShell } from "../state/ShellContext";
 import type { Mode } from "../state/shellReducer";
 import { Menu } from "./Menu";
@@ -14,13 +14,14 @@ const MODES: Array<{ mode: Mode; labelKey: string; descriptionKey: string; icon:
     descriptionKey: "shell.mode.agentDescription",
     // Agent mode is the companion, so the mark *is* the companion — the same
     // character the presence draws, at icon size and holding still.
-    icon: <PresenceFace status="idle" size={16} animated={false} />,
+    icon: <BrandMark mode="agent" size={20} />,
   },
   {
     mode: "editor",
     labelKey: "shell.mode.editor",
     descriptionKey: "shell.mode.editorDescription",
-    icon: <PanelLeft size={16} strokeWidth={1.6} aria-hidden="true" />,
+    // The same plate with nobody in it: the document, without the agent.
+    icon: <BrandMark mode="editor" size={20} />,
   },
 ];
 
@@ -64,7 +65,7 @@ export function ModeMenu() {
           aria-label={t("shell.mode.switchAria", { mode: currentLabel })}
         >
           <span className="shell-brand-mark" aria-hidden="true">
-            {current.icon}
+            <BrandMark mode={current.mode} size={28} />
           </span>
           <span className="shell-brand-name">{t("settings.about.productName")}</span>
           <ChevronDown className="shell-brand-chevron" size={12} strokeWidth={1.8} aria-hidden="true" />

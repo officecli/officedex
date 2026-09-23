@@ -22,7 +22,12 @@ import type { PersistedShellState } from "./persist";
 export type Mode = "agent" | "editor";
 export type Placement = "docked" | "floating";
 export type Edge = "left" | "right" | "top" | "bottom" | null;
-export type HomeList = "recent" | "pinned";
+/**
+ * What Editor Home shows. `new` is the prototype's New page — three blank
+ * templates — reached from the sidebar's "+"; it is a place, not a filter, so it
+ * is never restored on reload and Home on its own leaves it.
+ */
+export type HomeList = "recent" | "pinned" | "new";
 
 export const NAV_RAIL_WIDTH = 52;
 export const NAV_MIN_WIDTH = 160;
@@ -146,7 +151,11 @@ export function shellReducer(state: ShellState, action: ShellAction): ShellState
     }
 
     case "go-home":
-      return { ...state, home: true, homeList: action.list ?? state.homeList };
+      return {
+        ...state,
+        home: true,
+        homeList: action.list ?? (state.homeList === "new" ? "recent" : state.homeList),
+      };
 
     case "enter-workspace":
       return { ...state, home: false };
@@ -276,7 +285,8 @@ export function toPersisted(state: ShellState): PersistedShellState {
     openFileIds: state.openFileIds,
     activeFileId: state.activeFileId,
     home: state.home,
-    homeList: state.homeList,
+    // The New page is somewhere you go, not where you were; reload lands on the list.
+    homeList: state.homeList === "new" ? "recent" : state.homeList,
     presence: { ...state.presence },
   };
 }
