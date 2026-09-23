@@ -106,8 +106,18 @@
 
 /* -------------------------------------------------------------- canvas */
 
+/*
+ * The picture fits the room left between the toolbar and the versions strip,
+ * rather than asking for its natural height. The canvas takes its height from
+ * the surface (a zero basis makes it definite), the figure is capped at that
+ * height, and the image is the one thing in the figure that gives way.
+ *
+ * Without the cap a picture taller than the room overflowed the centred canvas
+ * in both directions: up over the title and the Download / Save to folder
+ * buttons, and down under the versions strip, which hid the caption.
+ */
 .shell-image-canvas {
-  flex: 1;
+  flex: 1 1 0;
   min-height: 310px;
   display: flex;
   align-items: center;
@@ -116,13 +126,19 @@
 }
 
 .shell-image-figure {
+  display: flex;
+  flex-direction: column;
   width: 100%;
   max-width: 1050px;
+  max-height: 100%;
+  min-height: 0;
   margin: 0;
 }
 
 .shell-image-figure > img {
   display: block;
+  flex: 0 1 auto;
+  min-height: 0;
   width: 100%;
   max-height: 560px;
   object-fit: contain;
