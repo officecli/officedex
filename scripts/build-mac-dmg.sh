@@ -85,11 +85,53 @@ resolve_arch
 # timeouts, transient network hiccups). CI wraps notarize.mjs in a retry loop
 # for the same reason; do it here too so a single upload blip does not throw
 # away the whole build.
+# `wails dev` (npm run start:desktop) builds into the same build/bin/OfficeDex.app
+# and rebuilds it — as a dev binary — whenever a Go file changes. In a shared
+# worktree that happens mid-build: 1.0.3 shipped a `-tags=dev,devtools` binary
+# that quits on launch looking for dist/index.html, because a rebuild landed
+# between `wails build` and the notarization retry that re-signed build/bin.
+# Signing and notarization do not care what kind of build they are given, so
+# the check has to be ours: no dev tag, and the same bytes `wails build` made.
+PRODUCTION_BINARY_SHA=""
+
+refuse_while_wails_dev_runs() {
+  local pid cwd
+  for pid in $(pgrep -f "wails dev" 2>/dev/null); do
+    cwd="$(lsof -a -p "${pid}" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)"
+    if [[ "${cwd}" == "${OFFICEDEX_DIR}" || "${cwd}" == "${OFFICEDEX_DIR}/"* ]]; then
+      echo "[${LOG}] wails dev is running in this checkout (pid ${pid}); it rebuilds build/bin/OfficeDex.app as a dev binary on every Go change." >&2
+      echo "[${LOG}] stop npm run start:desktop / wails dev before building a release" >&2
+      exit 1
+    fi
+  done
+}
+
+assert_production_binary() {
+  local app="$1" binary tags sha
+  binary="${app}/Contents/MacOS/officedex"
+  tags="$(go version -m "${binary}" 2>/dev/null | awk '$1 == "build" && $2 ~ /^-tags=/ { sub(/^-tags=/, "", $2); print $2 }')"
+  if [[ ",${tags}," == *",dev,"* ]]; then
+    echo "[${LOG}] ${binary} is a dev build (-tags=${tags}); refusing to sign or package it" >&2
+    exit 1
+  fi
+  sha="$(shasum -a 256 "${binary}" | cut -d' ' -f1)"
+  if [[ -z "${PRODUCTION_BINARY_SHA}" ]]; then
+    PRODUCTION_BINARY_SHA="${sha}"
+  elif [[ "${sha}" != "${PRODUCTION_BINARY_SHA}" ]]; then
+    echo "[${LOG}] ${binary} changed since the production build (${PRODUCTION_BINARY_SHA} -> ${sha}); something rebuilt build/bin mid-run" >&2
+    exit 1
+  fi
+}
+
 notarize_with_retry() {
   local target="$1"
   local attempt=1
   local max=4
   while (( attempt <= max )); do
+    # Every attempt re-signs what is on disk now, so check it again each time.
+    if [[ "${target}" == *.app ]]; then
+      assert_production_binary "${target}"
+    fi
     if node scripts/notarize.mjs "${target}"; then
       return 0
     fi
@@ -125,6 +167,8 @@ if ! mkdir "${LOCK_DIR}" 2>/dev/null; then
 fi
 echo "$$" > "${LOCK_DIR}/pid"
 trap 'rm -rf "${LOCK_DIR}"' EXIT
+
+refuse_while_wails_dev_runs
 
 APP_VERSION="$(node -p 'require("./package.json").version')"
 OFFICECLI_RELEASE_VERSION="$(node -p 'require("./package.json").officecliVersion')"
@@ -302,6 +346,8 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
   echo "[${LOG}] building OfficeDex.app (darwin/${GO_ARCH})"
   env -u GOROOT wails build -platform "darwin/${GO_ARCH}" -trimpath -s \
     -ldflags "-X main.appVersion=${APP_VERSION} -X main.appUpdateChannel=1.0"
+  # Pin the bytes this step produced; every later check compares against them.
+  assert_production_binary "${APP_PATH}"
 
   node scripts/verify-wails-app.mjs "${APP_PATH}"
 
@@ -392,6 +438,8 @@ STAGING="$(mktemp -d)"
 # Keep the lock cleanup: a bare `trap ... EXIT` here would replace it.
 trap 'rm -rf "${STAGING}" "${LOCK_DIR}"' EXIT
 cp -R "${APP_PATH}" "${STAGING}/"
+# The copy is what goes into the image; check the copy.
+assert_production_binary "${STAGING}/OfficeDex.app"
 ln -s /Applications "${STAGING}/Applications"
 
 if command -v create-dmg >/dev/null 2>&1; then
