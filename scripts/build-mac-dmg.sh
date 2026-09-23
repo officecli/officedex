@@ -254,6 +254,13 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
   PRESENTATION_TARGET_ARCH="${TARGET_ARCH}" PRESENTATION_TARGET_PLATFORM=darwin \
     npm run stage:presentation
 
+  # The schema OfficeDex stamps on packages must be the one the staged runtime
+  # reports, or every presentation in this build fails to open with
+  # "MOP schema mismatch". Checked against the tree that ships, before the
+  # twenty minutes of building and notarizing that would otherwise hide it.
+  echo "[${LOG}] verifying MOP schema against the staged runtime"
+  node "${OFFICEDEX_DIR}/scripts/verify-mop-schema.mjs" --root "${OFFICEDEX_DIR}/build/presentation"
+
   # The embedded MOP worker was patched (worker cacheDir must live outside
   # the bundle, or Vite invalidates the code signature on first write). That
   # worker is `//go:embed`-ed into officecli, so we must rebuild officecli

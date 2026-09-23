@@ -108,6 +108,12 @@ sync_presentation() {
     mkdir -p "$(dirname "${PRESENTATION_STAMP}")"
     echo "${stamp}" >"${PRESENTATION_STAMP}"
     log "presentation rebuilt; reload the OfficeDex window (Cmd+R) to pick it up"
+    # A new mop-wasm arrives with a sync, and a schema bump the stamps do not
+    # follow makes every presentation fail to open. Not fatal here — nothing in
+    # this script is — but loud, because the symptom points nowhere near it.
+    if ! (cd "${OFFICEDEX_DIR}" && node scripts/verify-mop-schema.mjs --root "${PRESENTATION_SOURCE}"); then
+      log "WARNING: MOP schema mismatch — presentations will not open until both schema constants are updated (see above)"
+    fi
   else
     log "WARNING: presentation rebuild failed; keeping the previous public/presentation"
   fi
