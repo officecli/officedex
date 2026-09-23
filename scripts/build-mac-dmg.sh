@@ -91,12 +91,21 @@ resolve_arch
 # that quits on launch looking for dist/index.html, because a rebuild landed
 # between `wails build` and the notarization retry that re-signed build/bin.
 # Signing and notarization do not care what kind of build they are given, so
-# the check has to be ours: no dev tag, and the same bytes `wails build` made.
-PRODUCTION_BINARY_SHA=""
+# the check has to be ours: no dev tag, and the same Go build `wails build` made.
+#
+# Identity is the Go build ID, not a sha256 of the file: this script re-signs
+# the app itself after `wails build` (bundling officecli, re-sealing), and
+# codesign rewrites the Mach-O, so the bytes legitimately change. The build ID
+# survives signing and differs for any rebuild.
+PRODUCTION_BUILD_ID=""
 
 refuse_while_wails_dev_runs() {
-  local pid cwd
-  for pid in $(pgrep -f "wails dev" 2>/dev/null); do
+  local pid cwd args
+  # By process name, then by argv: `pgrep -f "wails dev"` also matches any
+  # shell whose command line merely mentions the words (a grep, a log tail).
+  for pid in $(pgrep -x wails 2>/dev/null); do
+    args="$(ps -o args= -p "${pid}" 2>/dev/null)"
+    [[ " ${args} " == *" dev "* ]] || continue
     cwd="$(lsof -a -p "${pid}" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)"
     if [[ "${cwd}" == "${OFFICEDEX_DIR}" || "${cwd}" == "${OFFICEDEX_DIR}/"* ]]; then
       echo "[${LOG}] wails dev is running in this checkout (pid ${pid}); it rebuilds build/bin/OfficeDex.app as a dev binary on every Go change." >&2
@@ -107,18 +116,22 @@ refuse_while_wails_dev_runs() {
 }
 
 assert_production_binary() {
-  local app="$1" binary tags sha
+  local app="$1" binary tags build_id
   binary="${app}/Contents/MacOS/officedex"
   tags="$(go version -m "${binary}" 2>/dev/null | awk '$1 == "build" && $2 ~ /^-tags=/ { sub(/^-tags=/, "", $2); print $2 }')"
   if [[ ",${tags}," == *",dev,"* ]]; then
     echo "[${LOG}] ${binary} is a dev build (-tags=${tags}); refusing to sign or package it" >&2
     exit 1
   fi
-  sha="$(shasum -a 256 "${binary}" | cut -d' ' -f1)"
-  if [[ -z "${PRODUCTION_BINARY_SHA}" ]]; then
-    PRODUCTION_BINARY_SHA="${sha}"
-  elif [[ "${sha}" != "${PRODUCTION_BINARY_SHA}" ]]; then
-    echo "[${LOG}] ${binary} changed since the production build (${PRODUCTION_BINARY_SHA} -> ${sha}); something rebuilt build/bin mid-run" >&2
+  build_id="$(go tool buildid "${binary}" 2>/dev/null)"
+  if [[ -z "${build_id}" ]]; then
+    echo "[${LOG}] could not read the Go build ID of ${binary}" >&2
+    exit 1
+  fi
+  if [[ -z "${PRODUCTION_BUILD_ID}" ]]; then
+    PRODUCTION_BUILD_ID="${build_id}"
+  elif [[ "${build_id}" != "${PRODUCTION_BUILD_ID}" ]]; then
+    echo "[${LOG}] ${binary} was rebuilt since the production build (build ID ${PRODUCTION_BUILD_ID} -> ${build_id}); something rebuilt build/bin mid-run" >&2
     exit 1
   fi
 }
@@ -346,7 +359,7 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
   echo "[${LOG}] building OfficeDex.app (darwin/${GO_ARCH})"
   env -u GOROOT wails build -platform "darwin/${GO_ARCH}" -trimpath -s \
     -ldflags "-X main.appVersion=${APP_VERSION} -X main.appUpdateChannel=1.0"
-  # Pin the bytes this step produced; every later check compares against them.
+  # Pin the build this step produced; every later check compares against it.
   assert_production_binary "${APP_PATH}"
 
   node scripts/verify-wails-app.mjs "${APP_PATH}"
