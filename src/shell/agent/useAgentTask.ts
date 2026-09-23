@@ -245,12 +245,17 @@ export function useAgentTask() {
     [port, reload],
   );
 
-  const stop = useCallback(async () => {
+  /**
+   * Resolves to whether the run was actually stopped. The composer hands the
+   * message back for editing on `true`, and a Stop the port refused must not
+   * do that: the run is still going, and a full input turns Stop into Send.
+   */
+  const stop = useCallback(async (): Promise<boolean> => {
     if (localRun.current) {
       localRun.current.abort();
-      return;
+      return true;
     }
-    await attempt(() => port.agent.finish());
+    return attempt(() => port.agent.finish());
   }, [port]);
 
   return {

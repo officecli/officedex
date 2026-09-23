@@ -153,7 +153,25 @@ const drafts = new Map<ComposerPlacement, Draft>();
  */
 export function resetComposerDrafts(): void {
   drafts.clear();
+  lastSent = null;
 }
+
+/**
+ * The message that started the run now going, exactly as it sat in the input.
+ *
+ * An Enter pressed too early sends a half-written message, and Stop used to be
+ * the end of it: the words were in the transcript, not in the input, so fixing
+ * one typo meant typing the whole thing again. Stop now puts them back — the
+ * way the send took them, chips and attachments included — so the fix is an
+ * edit and a second Enter.
+ *
+ * Module scope for the same reason as `drafts`, and more so: the commonest
+ * slip is on Home, whose composer is gone by the time Stop is pressed from the
+ * task panel's. Cleared when the run ends on its own, so a Stop pressed on some
+ * later run — one started by a quick reply or a retry — does not bring back an
+ * old message.
+ */
+let lastSent: Draft | null = null;
 
 /** Everything the composer gathers; the caller adds model and permission. */
 export type ComposerSubmission = Pick<
@@ -169,7 +187,11 @@ export interface ComposerProps {
   /** True while a task is running, which turns an empty Send into Stop. */
   busy?: boolean;
   onSend: (submission: ComposerSubmission) => void | Promise<void>;
-  onStop?: () => void;
+  /**
+   * Stops the run. Resolving to `false` says it did not stop, and the message
+   * that started it stays out of the input.
+   */
+  onStop?: () => void | boolean | Promise<void | boolean>;
   /**
    * Hands the parent a function that types into this composer.
    *
@@ -328,6 +350,43 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
    * task panel, and Home's own task list.
    */
   const stopping = placement !== "home" && busy && !canSend;
+
+  /*
+   * A run that ends on its own took its message with it — see `lastSent`.
+   *
+   * Only the busy-to-idle edge counts. Idle on its own proves nothing: the
+   * render right after a send is still idle, because the run has not reported
+   * in yet, and clearing there would forget the message before Stop could
+   * reach it.
+   */
+  const wasBusy = useRef(busy);
+  useEffect(() => {
+    if (wasBusy.current && !busy) lastSent = null;
+    wasBusy.current = busy;
+  }, [busy]);
+
+  async function stop() {
+    const sent = lastSent;
+    const stopped = await onStop?.();
+    if (stopped === false || !sent) return;
+    // Another message went out while the stop was in flight; that one is now
+    // the run, and this one is history.
+    if (lastSent !== null && lastSent !== sent) return;
+    lastSent = null;
+    // Only into an empty input: anything typed while the stop was in flight is
+    // newer than the message coming back, and is not the user's to lose.
+    patchDraft((current) =>
+      current.text.trim() || current.mentions.length > 0 || current.attachments.length > 0
+        ? {}
+        : { ...sent, modeFileId: documentOnScreen ? (activeFile?.id ?? null) : null },
+    );
+    queueMicrotask(() => {
+      const input = inputRef.current;
+      input?.focus();
+      const end = input?.value.length ?? 0;
+      input?.setSelectionRange(end, end);
+    });
+  }
 
   /**
    * The quoted span, when there is one and it belongs to the file on screen.
@@ -546,7 +605,7 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
 
   async function submit() {
     if (stopping) {
-      onStop?.();
+      await stop();
       return;
     }
     if (!canSend) return;
@@ -584,6 +643,8 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
         : {}),
     };
 
+    // Kept whole, before any of it is cleared, so Stop can put it back.
+    lastSent = draft;
     setText("");
     setMentions([]);
     setAttachments([]);

@@ -708,3 +708,78 @@ describe("the hero's main button never cancels a run", () => {
     await waitFor(() => expect(shell.view.getByLabelText("Stop task")).toBeEnabled());
   });
 });
+
+/**
+ * An Enter pressed too early, and then Stop.
+ *
+ * The message used to be gone from the input the moment it was sent, so the
+ * only way to fix a typo in it was to type the whole thing again. Stop now
+ * hands it back. The runs here use the fake agent's real delays — `fastAgent`
+ * would finish them before Stop could be pressed.
+ */
+describe("Stop hands the message back for editing", () => {
+  it("puts the message back into the task column's input", async () => {
+    const shell = await renderShell();
+    await shell.dispatch({ type: "open-file", fileId: SEED_ACTIVE_FILE_ID });
+    const input = shell.view.getByLabelText("Message Agent") as HTMLTextAreaElement;
+
+    fireEvent.change(input, { target: { value: "Tighten the intro paragarph" } });
+    await act(async () => {
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
+    await waitFor(() => expect(input.value).toBe(""));
+    await waitFor(() => expect(shell.view.getByLabelText("Stop task")).toBeEnabled());
+
+    await act(async () => {
+      fireEvent.click(shell.view.getByLabelText("Stop task"));
+    });
+
+    await waitFor(() => expect(input.value).toBe("Tighten the intro paragarph"));
+    expect(shell.view.getByLabelText("Send message")).toBeEnabled();
+  });
+
+  it("brings back a message sent from Home in the task panel's input", async () => {
+    const shell = await renderShell();
+    await shell.dispatch({ type: "go-home" });
+    const home = shell.view.getByLabelText("New task instructions");
+
+    fireEvent.change(home, { target: { value: "Write the launch memo for" } });
+    await act(async () => {
+      fireEvent.keyDown(home, { key: "Enter" });
+    });
+    // Home hands over to the task panel beside the run; that composer is the
+    // one holding Stop, and Home's is gone.
+    await waitFor(() => expect(shell.view.getByLabelText("Stop task")).toBeEnabled());
+    expect(shell.view.queryByLabelText("New task instructions")).toBeNull();
+
+    await act(async () => {
+      fireEvent.click(shell.view.getByLabelText("Stop task"));
+    });
+
+    const input = shell.view.getByLabelText("Message Agent") as HTMLTextAreaElement;
+    await waitFor(() => expect(input.value).toBe("Write the launch memo for"));
+  });
+
+  it("leaves the input empty when the run could not be stopped", async () => {
+    const shell = await renderShell();
+    await shell.dispatch({ type: "open-file", fileId: SEED_ACTIVE_FILE_ID });
+    const input = shell.view.getByLabelText("Message Agent") as HTMLTextAreaElement;
+
+    fireEvent.change(input, { target: { value: "Tighten the intro" } });
+    await act(async () => {
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
+    await waitFor(() => expect(shell.view.getByLabelText("Stop task")).toBeEnabled());
+
+    shell.port.agent.finish = async () => {
+      throw new Error("runtime unreachable");
+    };
+    await act(async () => {
+      fireEvent.click(shell.view.getByLabelText("Stop task"));
+    });
+
+    // Still running: a full input would turn Stop into Send beside a live run.
+    expect(input.value).toBe("");
+    expect(shell.view.getByLabelText("Stop task")).toBeEnabled();
+  });
+});
