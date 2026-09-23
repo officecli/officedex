@@ -279,6 +279,10 @@ export function useAgentTask() {
     undoSuggestion,
     pause: useCallback(async () => void (await attempt(() => port.agent.pause())), [port]),
     resume: useCallback(async () => void (await attempt(() => port.agent.resume())), [port]),
+    resumeFailed: useCallback(
+      async (taskId: string) => void (await attempt(() => port.agent.resumeFailed(taskId))),
+      [port],
+    ),
     finish: useCallback(async () => {
       // Finishing a local edit is dismissing it: there is no run left to stop,
       // and the change is already in the document.

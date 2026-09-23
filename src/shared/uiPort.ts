@@ -224,6 +224,13 @@ export interface AgentTask {
   /** Set while the run is waiting for an answer; null the rest of the time. */
   question: AgentQuestion | null;
   /**
+   * Set when a run failed but left finished pages it can pick up from.
+   *
+   * Absent for every other task, including failures with nothing to resume:
+   * offering "retry the rest" there would promise work the runtime refuses.
+   */
+  recovery?: AgentRecovery;
+  /**
    * The picture this task is making, when it is an image task.
    *
    * An image is not edited in place: every change is a new run that produces a
@@ -232,6 +239,12 @@ export interface AgentTask {
    * with a conversation id; this is that conversation, oldest run first.
    */
   image?: AgentImageSeries;
+}
+
+export interface AgentRecovery {
+  /** Pages whose content is finished. Absent when the runtime did not say. */
+  readyPages?: number;
+  totalPages?: number;
 }
 
 export interface AgentImageSeries {
@@ -433,6 +446,14 @@ export interface AgentPort {
   resume(): Promise<void>;
   /** Ends the task; leaves applied changes in place. */
   finish(): Promise<void>;
+  /**
+   * Picks a failed run up from its `recovery`: finished pages are kept and only
+   * the unfinished ones are written again, as a new run.
+   *
+   * Takes the task id because a failed run is no longer the active one — the
+   * other run verbs act on whatever is live, and nothing is.
+   */
+  resumeFailed(taskId: string): Promise<void>;
   applySuggestion(id: string): Promise<void>;
   undoSuggestion(id: string): Promise<void>;
 }

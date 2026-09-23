@@ -1,4 +1,4 @@
-import { ArrowUpRight, Check, CircleAlert, CircleCheck, CircleSlash, Clock3, Pause, PanelLeft, Play, SquareDashed, Undo2, X } from "lucide-react";
+import { ArrowUpRight, Check, CircleAlert, CircleCheck, CircleSlash, Clock3, Pause, PanelLeft, Play, RotateCcw, SquareDashed, Undo2, X } from "lucide-react";
 import { useState } from "react";
 
 import { useT } from "../../renderer/i18n";
@@ -164,7 +164,19 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
               )
             ) : null}
 
+            {task.recovery ? <RecoveryNote recovery={task.recovery} t={t} /> : null}
+
             <div className="shell-task-actions">
+              {task.recovery ? (
+                <button
+                  type="button"
+                  className="shell-task-button is-primary"
+                  onClick={() => void agent.resumeFailed(task.id)}
+                >
+                  <RotateCcw size={14} strokeWidth={1.8} aria-hidden="true" />
+                  {recoveryLabel(task.recovery, t)}
+                </button>
+              ) : null}
               {task.documentType !== "docx" && task.documentType !== "xlsx"
                 ? status === "paused" ? (
                     <button type="button" className="shell-task-button" onClick={() => void agent.resume()}>
@@ -508,4 +520,26 @@ function SuggestionCard({
       )}
     </div>
   );
+}
+
+type Translate = ReturnType<typeof useT>;
+
+/** Unfinished pages, when the runtime said enough to count them. */
+function unfinishedPages(recovery: NonNullable<AgentTask["recovery"]>): number | null {
+  const { readyPages, totalPages } = recovery;
+  return readyPages !== undefined && totalPages !== undefined && totalPages > readyPages ? totalPages - readyPages : null;
+}
+
+function recoveryLabel(recovery: NonNullable<AgentTask["recovery"]>, t: Translate): string {
+  const count = unfinishedPages(recovery);
+  return count === null ? t("shell.task.recoveryRetryUnknown") : t("shell.task.recoveryRetry", { count });
+}
+
+function RecoveryNote({ recovery, t }: { recovery: NonNullable<AgentTask["recovery"]>; t: Translate }) {
+  const { readyPages, totalPages } = recovery;
+  // Only a count the runtime reported goes in the sentence.
+  const text = readyPages !== undefined && totalPages !== undefined
+    ? t("shell.task.recoveryKept", { ready: readyPages, total: totalPages })
+    : t("shell.task.recoveryKeptUnknown");
+  return <p className="shell-task-recovery">{text}</p>;
 }

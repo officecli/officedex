@@ -404,6 +404,16 @@ export function createFakeAgent(deps: FakeAgentDeps): AgentPort {
       emit(task);
     },
 
+    async resumeFailed(taskId) {
+      const task = [...tasks.values()].find((candidate) => candidate.id === taskId);
+      if (!task?.recovery) throw new Error("This run left nothing to pick up from. Start it again instead.");
+      stop();
+      paused = false;
+      runningFolderId = task.folderId;
+      delete task.recovery;
+      startRun(task);
+    },
+
     async applySuggestion(id) {
       for (const task of tasks.values()) {
         if (task.suggestion?.id !== id || task.suggestion.applied) continue;

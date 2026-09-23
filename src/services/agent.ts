@@ -1,5 +1,5 @@
 import type { BridgeEvent, DesktopAPI, DesktopTask, GenerateInput, TaskHistoryEntry } from "../shared/types";
-import type { AgentEvent, AgentImageRun, AgentImageSeries, AgentMessage, AgentOutlinePage, AgentPort, AgentStatus, AgentStep, AgentTask, AgentTaskSummary, ImageGenerationInput, SendInput } from "../shared/uiPort";
+import type { AgentEvent, AgentImageRun, AgentImageSeries, AgentMessage, AgentOutlinePage, AgentPort, AgentRecovery, AgentStatus, AgentStep, AgentTask, AgentTaskSummary, ImageGenerationInput, SendInput } from "../shared/uiPort";
 import { imageDimensions, imageStyleText, isReferenceImagePath, ratioBucket } from "../shared/imageGeneration";
 import { pptxPageStates } from "../renderer/presentation/pptxRuntimeActivity";
 import { respondToPlanReview } from "../renderer/presentation/planReviewResponse";
@@ -264,10 +264,44 @@ function toOutline(task: DesktopTask): AgentOutlinePage[] {
   });
 }
 
+/**
+ * Where a failed deck can be picked up from, or undefined.
+ *
+ * A drawing failure carries the checkpoint in its structured failure; a content
+ * failure ("expansion is incomplete") only announces it on the event stream.
+ * The old workbench read both, and so does this.
+ */
+function resumeCheckpointOf(task: DesktopTask): string | undefined {
+  if (task.status !== "failed" || task.documentType !== "pptx") return undefined;
+  if (task.failure && !task.failure.retryable) return undefined;
+  if (task.failure?.resume_checkpoint) return task.failure.resume_checkpoint;
+  for (let index = task.events.length - 1; index >= 0; index -= 1) {
+    const checkpoint = task.events[index].payload?.resume_checkpoint;
+    if (typeof checkpoint === "string" && checkpoint.trim()) return checkpoint.trim();
+  }
+  return undefined;
+}
+
+function toRecovery(task: DesktopTask, outline: AgentOutlinePage[]): AgentRecovery | undefined {
+  if (!resumeCheckpointOf(task)) return undefined;
+  const retained = task.failure?.retained;
+  if (retained) {
+    return { readyPages: retained.ready_pages, ...(retained.total_pages ? { totalPages: retained.total_pages } : {}) };
+  }
+  // A content failure has no retained facts; the page states it streamed are
+  // the same facts, one page at a time.
+  if (outline.length) {
+    return { readyPages: outline.filter((page) => page.state === "ready").length, totalPages: outline.length };
+  }
+  return {};
+}
+
 function toAgentTask(task: DesktopTask): AgentTask {
   const documentType = task.documentType === "docx" || task.documentType === "xlsx" || task.documentType === "pptx" || task.documentType === "img"
     ? task.documentType
     : undefined;
+  const outline = toOutline(task);
+  const recovery = toRecovery(task, outline);
   return {
     id: task.id,
     title: taskTitle(task, "Untitled task"),
@@ -277,10 +311,11 @@ function toAgentTask(task: DesktopTask): AgentTask {
     phase: phaseOf(task),
     steps: toSteps(task),
     messages: toMessages(task),
-    outline: toOutline(task),
+    outline,
     // No desktop model for proposed-then-applied changes; see the header.
     suggestion: null,
     question: toQuestion(task),
+    ...(recovery ? { recovery } : {}),
   };
 }
 
@@ -882,6 +917,41 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       // matches: a cancelled run's output stays on disk as its partial artifact.
       await api.cancel(activeTaskId);
       activeTaskId = undefined;
+    },
+
+    async resumeFailed(taskId) {
+      const task = state.tasks[taskId];
+      const checkpoint = task ? resumeCheckpointOf(task) : undefined;
+      const input = task?.userInput;
+      if (!task || !checkpoint || !input?.prompt.trim()) {
+        throw new Error("This run left nothing to pick up from. Start it again instead.");
+      }
+      const settings = await api.getSettings();
+      // The runtime refuses a resume whose prompt, target or image decision
+      // differs from the checkpoint's, so all three come from the failed run —
+      // the prompt as the bridge recorded it, images as the runtime announced.
+      // No generation mode: the outline was approved before the checkpoint was
+      // written, and the runtime restores it without reopening the gate.
+      let images: boolean | undefined;
+      for (let index = task.events.length - 1; index >= 0 && images === undefined; index -= 1) {
+        const value = task.events[index].payload?.resume_images;
+        if (typeof value === "boolean") images = value;
+      }
+      const result = await api.generate({
+        documentType: "pptx",
+        topic: task.topic || input.prompt.slice(0, 64),
+        prompt: input.prompt,
+        ...(input.pptxWorkflow ? { pptxWorkflow: input.pptxWorkflow } : {}),
+        ...(input.sourceFile ? { sourceFile: input.sourceFile } : {}),
+        ...(input.templateId ? { templateId: input.templateId, templateVersion: input.templateVersion, templateAssetDir: input.templateAssetDir } : {}),
+        ...(task.workspaceId ? { workspaceId: task.workspaceId } : { noProject: true }),
+        resumeCheckpoint: checkpoint,
+        enableImages: images ?? settings.defaults.enableImages,
+        // No web search: the research the pages were written from is part of
+        // the checkpoint and is reused as it is.
+        imageQuality: settings.defaults.imageQuality,
+      });
+      activeTaskId = result.taskId;
     },
 
     async applySuggestion(id) {

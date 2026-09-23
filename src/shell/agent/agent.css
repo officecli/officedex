@@ -664,6 +664,12 @@
 
 /* actions */
 
+.shell-task-recovery {
+  margin: 14px 0 -6px;
+  color: var(--shell-ink-muted);
+  font: var(--shell-text-sm) / 18px var(--shell-font);
+}
+
 .shell-task-actions {
   display: flex;
   gap: 6px;
