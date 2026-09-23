@@ -19,7 +19,10 @@ else
   SOURCE_PACKAGE_MANAGER=""
 fi
 
-if [[ -z "${SOURCE_PACKAGE_MANAGER}" || ! -f "${SOURCE}/packages/presentation-app/src/main.ts" ]]; then
+# presentation 2dbde19 moved the product app from packages/ to apps/; accept
+# either so checkouts from before the move still build.
+if [[ -z "${SOURCE_PACKAGE_MANAGER}" || ( ! -f "${SOURCE}/apps/presentation-app/src/main.ts" \
+  && ! -f "${SOURCE}/packages/presentation-app/src/main.ts" ) ]]; then
   echo "[build-embedded-presentation] fegit presentation source not found at ${SOURCE}" >&2
   echo "Set PRESENTATION_SOURCE_DIR to a local presentation checkout." >&2
   exit 1

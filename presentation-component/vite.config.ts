@@ -32,6 +32,13 @@ const mopRuntimeEntry = resolveMopRuntimeEntry({
   preferredRoot: mopSourceRoot,
   requirePreferred: Boolean(explicitMopSourceRoot),
 });
+// presentation 2dbde19 moved the product app from packages/ to apps/. Accept
+// both while checkouts from before the move are still around.
+const presentationAppDirectory = ["apps", "packages"]
+  .map((parent) => path.join(parent, "presentation-app"))
+  .find((candidate) => existsSync(fromSource(candidate, "src", "main.ts")))
+  ?? path.join("apps", "presentation-app");
+const fromApp = (...segments: string[]) => fromSource(presentationAppDirectory, ...segments);
 const sourceDependency = (name: string, ...fallbacks: string[]) => {
   const candidates = [
     fromSource("node_modules", name),
@@ -62,7 +69,7 @@ export default defineConfig({
   root: componentRoot,
   appType: "spa",
   base: "./",
-  publicDir: fromSource("packages", "presentation-app", "public"),
+  publicDir: fromApp("public"),
   define: {
     "process.env.NODE_ENV": '"production"',
   },
@@ -85,7 +92,7 @@ export default defineConfig({
       scheduler: path.join(
         sourceDependency(
           "scheduler",
-          "packages/presentation-app/node_modules/scheduler",
+          path.join(presentationAppDirectory, "node_modules", "scheduler"),
         ),
         "index.js",
       ),
@@ -97,20 +104,13 @@ export default defineConfig({
       "@learnof/symbol": fromSource("packages", "deps", "symbol", "src"),
       "@mop/runtime": mopRuntimeEntry,
       "mop-wasm": resolveMopWasmEntry(sourceRoot),
-      "@presentation/source-main": fromSource(
-        "packages",
-        "presentation-app",
-        "src",
-        "main.ts",
-      ),
-      "@presentation/source-local-runtime-bootstrap": fromSource(
-        "packages",
-        "presentation-app",
+      "@presentation/source-main": fromApp("src", "main.ts"),
+      "@presentation/source-local-runtime-bootstrap": fromApp(
         "src",
         "bootstrap",
         "local-runtime-bootstrap.js",
       ),
-      "@presentation/app": fromSource("packages", "presentation-app", "src"),
+      "@presentation/app": fromApp("src"),
       "@presentation/assets": fromSource("packages", "presentation-assets", "src"),
       "@presentation/collab": fromSource("packages", "presentation-collab", "src"),
       "@presentation/collaboration-runtime": fromSource(

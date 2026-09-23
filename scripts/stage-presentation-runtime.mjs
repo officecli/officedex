@@ -43,8 +43,17 @@ export const PRESENTATION_SOURCES = Object.freeze([
   // These are not visible in Vite's module graph, but authoring fails as soon
   // as it seeds native diagrams or installs the headless presentation host if
   // either directory is absent.
+  //
+  // `from` is where the staged copy lands, and it stays at the pre-2dbde19 path
+  // because OfficeCLI's pptx_mop_skill_worker.mjs reads it from there.
+  // `sources` lists where to find it: presentation 2dbde19 moved the product
+  // app from packages/ to apps/, and older checkouts still have it in packages/.
   {
     from: "packages/presentation-app/public/presentation-assets/diagram",
+    sources: [
+      "apps/presentation-app/public/presentation-assets/diagram",
+      "packages/presentation-app/public/presentation-assets/diagram",
+    ],
     required: true,
   },
   { from: "quality/deps-golden/lib", required: true },
@@ -281,11 +290,13 @@ export async function stagePresentationRuntime({ source, dest = DEST } = {}) {
   await mkdir(dest, { recursive: true });
 
   for (const entry of PRESENTATION_SOURCES) {
-    if (!existsSync(path.join(root, entry.from))) {
-      if (entry.required) throw new Error(`presentation source is missing ${entry.from} in ${root}`);
+    const candidates = entry.sources ?? [entry.from];
+    const source = candidates.find((candidate) => existsSync(path.join(root, candidate)));
+    if (!source) {
+      if (entry.required) throw new Error(`presentation source is missing ${candidates.join(" or ")} in ${root}`);
       continue;
     }
-    await copyEntry(root, entry.from, path.join(dest, entry.from));
+    await copyEntry(root, source, path.join(dest, entry.from));
   }
   for (const pruned of PRESENTATION_PRUNE) {
     await rm(path.join(dest, pruned), { recursive: true, force: true });
