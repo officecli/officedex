@@ -44,6 +44,7 @@ import (
 	"officedex/internal/mophttp"
 	"officedex/internal/netproxy"
 	"officedex/internal/office2modoc"
+	"officedex/internal/opstelemetry"
 	"officedex/internal/pptxeditor"
 	"officedex/internal/pptxtemplate"
 	"officedex/internal/preview"
@@ -229,6 +230,14 @@ type App struct {
 	workspaceDir      string
 	runtimeRoot       string
 	desktopInstanceID string
+	// instanceCreatedAt is instance.json's creation stamp: when this install
+	// actually first ran, which is what app_first_open reports even for an
+	// install that predates usage reporting.
+	instanceCreatedAt string
+	// opsTelemetry reports the four product-usage events. Nil when the
+	// recorder could not start, or in a demo build, and every call site
+	// tolerates that.
+	opsTelemetry *opstelemetry.Recorder
 
 	settingsStore *settings.Store
 	localStore    *localstore.Store
@@ -367,6 +376,7 @@ func NewApp() (*App, error) {
 		cachedSettings:            cached,
 		proxyPool:                 proxyPool,
 	}
+	app.initOpsTelemetry(identity.CreatedAt, cached.UsageAnalyticsEnabled)
 	repoRoot, ok := config.ProcessCwd()
 	if !ok {
 		return nil, errors.New("resolve XLSX editor repo root: working directory unavailable")
@@ -533,6 +543,11 @@ func (a *App) startup(ctx context.Context) {
 			applog.Logger().Error("init workspace", applog.Err(err))
 		}
 	}
+	// Last, and only here: app_first_open means the app started successfully,
+	// and the interrupted-task pass above is itself a source of
+	// generation_failed events, so the recorder has to exist before it but
+	// must not report a launch that has not finished yet.
+	a.startOpsTelemetry(ctx)
 }
 
 func (a *App) ensureLocalStoreOpen(ctx context.Context) error {
@@ -566,7 +581,7 @@ func (a *App) failInterruptedTasks(ctx context.Context) error {
 		return err
 	}
 	for _, taskID := range taskIDs {
-		if err := a.localStore.RecordEvent(types.BridgeEvent{
+		event := types.BridgeEvent{
 			EventID: "local-interrupted-" + uuid.NewString(),
 			TaskID:  taskID,
 			Type:    types.EventTaskFailed,
@@ -576,9 +591,17 @@ func (a *App) failInterruptedTasks(ctx context.Context) error {
 				"code":     bridge.StrandedTaskCode,
 				"stranded": true,
 			},
-		}); err != nil {
+		}
+		transition, err := a.localStore.RecordEventTransition(event)
+		if err != nil {
 			return err
 		}
+		// A task the previous process left running really did fail -- the
+		// contract counts a crash or a timeout as generation_failed -- so it
+		// is reported. The recorder exists from NewApp and its queue is
+		// durable, so enqueuing here, before startOpsTelemetry starts the
+		// drain loop, only delays the send.
+		a.observeTaskTelemetry(event, transition, nil)
 	}
 	return nil
 }
@@ -606,7 +629,16 @@ func (a *App) recordTaskEventBestEffort(event types.BridgeEvent) {
 	// written task.cancelled could land before the queued task.question that
 	// preceded it, and recovery ordered by write time saw the wrong last state.
 	a.queueEventWrite(func() {
-		if err := a.localStore.RecordEvent(event); err != nil && ctx != nil {
+		transition, err := a.localStore.RecordEventTransition(event)
+		if err == nil {
+			// Locally synthesised terminal events (a cancel, a plan
+			// abandonment) go through here rather than the bridge listener, so
+			// the usage hook has to sit on both paths or a whole class of
+			// outcomes would be invisible. Cancels report nothing by contract;
+			// the hook decides that, not this call site.
+			a.observeTaskTelemetry(event, transition, nil)
+		}
+		if err != nil && ctx != nil {
 			applog.Logger().Warn("record task event; this task may not be recoverable",
 				slog.String("event_type", event.Type),
 				applog.Task(event.TaskID),
@@ -677,6 +709,9 @@ func (a *App) drainEventWrites() {
 
 func (a *App) shutdown(ctx context.Context) {
 	wailsEventsArmed.Store(false)
+	// Before the bridge teardown below, which can take a while: a short,
+	// bounded flush of whatever usage events this session queued.
+	a.stopOpsTelemetry()
 	// The Wails logger stops accepting records around here; send the rest of
 	// shutdown's logging to stderr rather than into a closing runtime.
 	applog.SetForwarder(nil)
@@ -1117,9 +1152,11 @@ func (a *App) recordTaskEvent(event types.BridgeEvent) error {
 		completedArtifact = artifactFromCompletedEvent(event)
 	}
 	if a.localStore != nil {
-		if err := a.localStore.RecordEvent(event); err != nil {
+		transition, err := a.localStore.RecordEventTransition(event)
+		if err != nil {
 			return err
 		}
+		a.observeTaskTelemetry(event, transition, completedArtifact)
 	}
 	if event.Type == types.EventTaskCompleted && completedArtifact != nil {
 		if err := a.AllowArtifact(*completedArtifact); err != nil {

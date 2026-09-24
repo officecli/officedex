@@ -54,9 +54,17 @@ func (a *App) CancelLogin() error {
 }
 
 // WhoAmI runs `officecli whoami` and returns the parsed result.
+//
+// It is also where usage reporting learns the account: the shell asks for this
+// on start and again after a login, which is the one place the desktop finds
+// out a platform user id without spawning an extra subprocess of its own.
 func (a *App) WhoAmI() (types.WhoAmIResult, error) {
 	opts := a.runCommandOptions()
-	return login.GetWhoAmI(a.ctx, opts)
+	result, err := login.GetWhoAmI(a.ctx, opts)
+	if err == nil {
+		a.noteOpsTelemetryIdentity(result)
+	}
+	return result, err
 }
 
 // GetCreditStatus runs `officecli auth status` and returns the parsed quota

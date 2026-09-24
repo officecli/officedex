@@ -74,6 +74,12 @@ func (a *App) UpdateSettings(patch settings.Patch) (types.UserSettings, error) {
 	}
 	a.mu.Unlock()
 
+	if patch.UsageAnalyticsEnabled != nil {
+		// Turning it off clears the pending queue on the spot, so nothing
+		// collected before the switch is sent afterwards.
+		a.setOpsTelemetryEnabled(merged.UsageAnalyticsEnabled)
+	}
+
 	if patch.WorkspaceDir != nil || patch.OutputDir != nil {
 		if err := a.refreshPreviewTrustedRoots(merged); err != nil {
 			return types.UserSettings{}, err
