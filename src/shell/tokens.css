@@ -166,6 +166,11 @@
      dead page read as a deck still working through its queue. */
   --shell-status-danger: #ad5347;
 
+  /* "Something here wants you": the dot on the sidebar's update button while an
+     optional update is waiting. Brighter than --shell-status-danger on purpose — that
+     one reports a failure in text, this one has to be seen at 7px. */
+  --shell-notice-dot: #e5484d;
+
   /* A finished step. Prototype-backed on the same surface, not an invention:
      `#app #task .step.done{color:#617f6f}`, which is the rule this shell's
      `.shell-task-step.is-done` is a port of.

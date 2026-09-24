@@ -7,6 +7,7 @@ import { useLibraryActions } from "../nav/useLibraryActions";
 import { notBuiltYet } from "../port/reportPortFailure";
 import { ModeMenu } from "./ModeMenu";
 import { NewTaskMenu } from "./NewTaskMenu";
+import { UpdateButton } from "./UpdateButton";
 import { Menu } from "./Menu";
 import { useComposerSettings } from "../composer/useComposerSettings";
 
@@ -98,6 +99,8 @@ export function Sidebar({ children }: { children?: ReactNode }) {
             a name nobody has, next to a workspace that does not exist. There is
             no account system yet, so the honest footer has nothing to say about
             who you are. It comes back when there is someone to name. */}
+        {/* Only there while an optional update is waiting — see UpdateButton. */}
+        <UpdateButton />
         <Menu
           label={t("shell.sidebar.settingsMenu")}
           align="end"

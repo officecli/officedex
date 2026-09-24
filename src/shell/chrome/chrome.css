@@ -650,6 +650,58 @@
   flex-direction: column;
 }
 
+/* The sidebar's update button — see UpdateButton.tsx. It only exists while an
+   optional update waits, so it reads one step louder than the gear beside it:
+   full ink rather than subtle, plus the dot. The dot's ring is the sidebar's
+   own fill, so it reads as sitting on the icon, not touching it. */
+.shell-update-button {
+  position: relative;
+  color: var(--shell-ink);
+}
+
+.shell-update-button[aria-busy="true"] {
+  cursor: default;
+}
+
+.shell-update-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--shell-notice-dot);
+  box-shadow: 0 0 0 2px var(--shell-chrome);
+  pointer-events: none;
+}
+
+.shell-update-button:hover .shell-update-dot {
+  box-shadow: 0 0 0 2px var(--shell-hover);
+}
+
+.shell-update-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.shell-update-ring circle {
+  fill: none;
+  stroke-width: 2;
+}
+
+.shell-update-ring-track {
+  stroke: var(--shell-spinner-track);
+}
+
+.shell-update-ring-head {
+  stroke: var(--shell-spinner-head);
+  stroke-linecap: round;
+  transition: stroke-dashoffset var(--shell-duration) var(--shell-ease);
+}
+
 .shell-profile {
   display: flex;
   align-items: center;
