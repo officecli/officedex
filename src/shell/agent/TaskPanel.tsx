@@ -1,4 +1,4 @@
-import { ArrowUpRight, Check, CircleAlert, CircleCheck, CircleSlash, Clock3, Pause, PanelLeft, Play, RotateCcw, SquareDashed, Undo2, X } from "lucide-react";
+import { ArrowUpRight, Check, CircleAlert, CircleCheck, CircleSlash, Clock3, MessageSquarePlus, Pause, PanelLeft, Play, RotateCcw, SquareDashed, Undo2, X } from "lucide-react";
 import { useState } from "react";
 
 import { useT } from "../../renderer/i18n";
@@ -91,6 +91,24 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
           <small>{task ? statusLabel(status) : (scope?.name ?? t("shell.task.noFolder"))}</small>
         </div>
 
+        {/*
+          Messages typed below continue the conversation above; this is the
+          way out of it. Only offered when there is a conversation to leave,
+          and not mid-run — the run would carry on with nothing on screen.
+        */}
+        {task ? (
+          <button
+            type="button"
+            className="shell-icon-button"
+            disabled={agent.busy}
+            aria-label={t("shell.task.newConversation")}
+            title={t("shell.task.newConversation")}
+            onClick={() => void agent.newConversation()}
+          >
+            <MessageSquarePlus size={16} strokeWidth={1.7} />
+          </button>
+        ) : null}
+
         {dockable ? (
           <button
             type="button"
@@ -139,7 +157,7 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
                 {task.steps.map((step) => (
                   <li key={step.id} className={`shell-task-step is-${step.state}`}>
                     <StepIcon step={step} paused={status === "paused"} />
-                    <span>{step.state === "active" && task.phase ? task.phase : step.label}</span>
+                    <span>{stepCaption(step, task.phase, t)}</span>
                   </li>
                 ))}
               </ol>
@@ -177,7 +195,7 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
                   {recoveryLabel(task.recovery, t)}
                 </button>
               ) : null}
-              {task.documentType !== "docx" && task.documentType !== "xlsx"
+              {task.documentType === "pptx"
                 ? status === "paused" ? (
                     <button type="button" className="shell-task-button" onClick={() => void agent.resume()}>
                       <Play size={14} strokeWidth={1.8} aria-hidden="true" />
@@ -198,7 +216,8 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
               <button
                 type="button"
                 className="shell-task-button"
-                disabled={status === "done"}
+                disabled={status === "done" || status === "idle"}
+                title={t("shell.task.finishHint")}
                 onClick={() => void agent.finish()}
               >
                 <Check size={14} strokeWidth={1.8} aria-hidden="true" />
@@ -470,6 +489,18 @@ function QuestionCard({
       ) : null}
     </div>
   );
+}
+
+function stepCaption(
+  step: AgentStep,
+  phase: string | undefined,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): string {
+  const key = `shell.task.step.${step.id}`;
+  const translated = t(key);
+  if (translated !== key) return translated;
+  if (step.state === "active" && phase) return phase;
+  return step.label;
 }
 
 function StepIcon({ step, paused }: { step: AgentStep; paused: boolean }) {  if (step.state === "done") return <CircleCheck size={15} strokeWidth={1.7} aria-hidden="true" />;

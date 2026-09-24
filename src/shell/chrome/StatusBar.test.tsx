@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { StatusBar } from "./StatusBar";
 import { publishEditorChrome, resetCanvasSurface } from "../editor/canvasSurface";
-import { SLIDES_CHROME } from "../../canvas/editorChrome";
+import { SLIDES_CHROME, STAGE_CHROME } from "../../canvas/editorChrome";
 
 /**
  * The status bar during a run, which is the one time it was wrong.
@@ -66,4 +66,29 @@ it("still reports the open file by name when there is one", () => {
   } finally {
     release();
   }
+});
+
+/*
+ * The deck was only half the problem.
+ *
+ * `DocxStage` and `SheetStage` reserve no space, and used to report nothing at
+ * all — which this bar cannot tell apart from an empty canvas. So a workbook
+ * generated from Home said "No file open" for the length of the run, under a
+ * stage captioned "Writing the workbook". They report `STAGE_CHROME` now:
+ * still nothing reserved, but no longer silence.
+ */
+it("does not claim nothing is open while a document or workbook stage owns the canvas", () => {
+  const release = publishEditorChrome(STAGE_CHROME);
+  try {
+    render(<StatusBar />);
+    expect(screen.queryByText("shell.status.noFile")).toBeNull();
+    expect(screen.getByText("shell.status.beingWritten")).toBeTruthy();
+  } finally {
+    release();
+  }
+});
+
+// A stage draws no status bar of its own, so the shell must keep drawing one.
+it("keeps the shell's own bar for a stage", () => {
+  expect(STAGE_CHROME.ownsStatusBar).toBe(false);
 });

@@ -80,6 +80,13 @@ export function createFakeAgent(deps: FakeAgentDeps): AgentPort {
     for (const listener of listeners) listener(snapshot);
   };
 
+  /** One task per folder is one conversation per folder: a new one replaces it. */
+  const clear = (folderId: string) => {
+    tasks.delete(folderId);
+    const event: AgentEvent = { kind: "cleared", folderId };
+    for (const listener of listeners) listener(event);
+  };
+
   const stop = () => {
     if (timer !== null) cancel(timer);
     timer = null;
@@ -313,6 +320,7 @@ export function createFakeAgent(deps: FakeAgentDeps): AgentPort {
       stop();
       paused = false;
       runningFolderId = input.folderId;
+      if (input.newConversation) clear(input.folderId);
 
       if (input.imageGeneration) {
         runImage(input, input.imageGeneration);
@@ -322,6 +330,8 @@ export function createFakeAgent(deps: FakeAgentDeps): AgentPort {
       const title = input.text.length > 60 ? `${input.text.slice(0, 60)}…` : input.text;
       const task = ensureTask(input.folderId, title);
       if (task.messages.length === 0) task.title = title;
+      // The real service routes on it; the task panel offers Pause only for decks.
+      if (input.documentType) task.documentType = input.documentType;
 
       task.messages.push({
         id: nextId("message"),
@@ -449,6 +459,21 @@ export function createFakeAgent(deps: FakeAgentDeps): AgentPort {
         emit(task);
         return;
       }
+    },
+
+    async startConversation(folderId) {
+      if (runningFolderId === folderId) stop();
+      clear(folderId);
+    },
+
+    // The desktop keeps an edit made before any conversation for the next one;
+    // the fake has nowhere to put it until a task exists, and drops it.
+    async recordExchange({ folderId, messages }) {
+      const task = tasks.get(folderId);
+      if (!task) return;
+      const seen = new Set(task.messages.map((message) => message.id));
+      task.messages.push(...messages.filter((message) => !seen.has(message.id)).map((message) => ({ ...message })));
+      emit(task);
     },
   };
 }

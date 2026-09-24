@@ -1,3 +1,4 @@
+import { useT } from "../../renderer/i18n";
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import type { FileType } from "../../shared/uiPort";
 
@@ -23,6 +24,7 @@ import type { FileType } from "../../shared/uiPort";
  * be a fake gate, and the property that matters (does this make sense in an
  * empty workspace?) is not one an assertion can check. Read it before editing.
  */
+/** `label` and `prompt` are dictionary keys — translate them where they are shown or filled. */
 export const PROMPTS: Array<{
   type: FileType | "image";
   label: string;
@@ -30,23 +32,23 @@ export const PROMPTS: Array<{
 }> = [
   {
     type: "doc",
-    label: "Write a document",
-    prompt: "Draft a project plan covering goals, milestones, owners and risks.",
+    label: "shell.quickPrompt.doc.label",
+    prompt: "shell.quickPrompt.doc.prompt",
   },
   {
     type: "sheet",
-    label: "Analyze a spreadsheet",
-    prompt: "Build a quarterly budget with revenue, cost and gross margin by month.",
+    label: "shell.quickPrompt.sheet.label",
+    prompt: "shell.quickPrompt.sheet.prompt",
   },
   {
     type: "slides",
-    label: "Create a presentation",
-    prompt: "Prepare a product launch presentation covering positioning, timeline and next steps.",
+    label: "shell.quickPrompt.slides.label",
+    prompt: "shell.quickPrompt.slides.prompt",
   },
   {
     type: "image",
-    label: "Create an image",
-    prompt: "Create a clean editorial image for a product launch.",
+    label: "shell.quickPrompt.image.label",
+    prompt: "shell.quickPrompt.image.prompt",
   },
 ];
 
@@ -76,6 +78,7 @@ export interface QuickPromptsProps {
  * through to the settings default and produced a presentation.
  */
 export function QuickPrompts({ onPick, imageSelected, onToggleImage }: QuickPromptsProps) {
+  const t = useT();
   return (
     <div className="shell-hero-prompts">
       {PROMPTS.map((entry) => (
@@ -88,16 +91,16 @@ export function QuickPrompts({ onPick, imageSelected, onToggleImage }: QuickProm
               onClick={onToggleImage}
             >
               <FileTypeIcon type="image" size={15} />
-              {entry.label}
+              {t(entry.label)}
             </button>
           ) : (
             <button
               type="button"
               className="shell-hero-prompt"
-              onClick={() => onPick(entry.prompt, entry.type as FileType)}
+              onClick={() => onPick(t(entry.prompt), entry.type as FileType)}
             >
               <FileTypeIcon type={entry.type} size={15} />
-              {entry.label}
+              {t(entry.label)}
             </button>
           )}
         </span>

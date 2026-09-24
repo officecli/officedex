@@ -6,6 +6,7 @@ import { usePort } from "../port/PortContext";
 import type { FileType } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
 import { reportPortFailure } from "../port/reportPortFailure";
+import { logShellEvent } from "../port/shellLog";
 
 /**
  * The file-navigation behaviours shared by the sidebar tree and the Home list.
@@ -68,6 +69,43 @@ export function useLibraryActions() {
     }
   }, [port, dispatch, reload]);
 
+  /**
+   * Files dragged in from Finder or Explorer. Each one opens in its own tab and
+   * the last one ends up in front, as if they had been opened one after
+   * another. One bad file does not stop the rest: the ones that were Word,
+   * Excel or PowerPoint open, and the others are named in a single error.
+   */
+  const openDropped = useCallback(
+    async (paths: string[]) => {
+      const rejected: string[] = [];
+      let opened = 0;
+      for (const path of paths) {
+        try {
+          const file = await port.files.openDropped(path);
+          dispatch({ type: "reveal-folder", folderId: file.folderId });
+          dispatch({ type: "select-folder", folderId: file.folderId });
+          dispatch({ type: "open-file", fileId: file.id });
+          opened += 1;
+        } catch (reason) {
+          logShellEvent("drop-open-failed", {
+            path,
+            message: reason instanceof Error ? reason.message : String(reason),
+          });
+          rejected.push(path.slice(Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")) + 1));
+        }
+      }
+      if (opened > 0) await reload();
+      if (rejected.length > 0) {
+        toast.error({
+          key: "drop-open-failed",
+          content: t("shell.home.dropRejected", { count: rejected.length }),
+          description: rejected.join(", "),
+        });
+      }
+    },
+    [port, dispatch, reload, t],
+  );
+
   const moveFile = useCallback(
     async (fileId: string, folderId: string) => {
       try {
@@ -104,5 +142,18 @@ export function useLibraryActions() {
     [port, reload],
   );
 
-  return { openFile, createFile, openFromDisk, moveFile, setPinned };
+  const removeFile = useCallback(
+    async (fileId: string) => {
+      try {
+        await port.files.remove(fileId);
+        dispatch({ type: "close-file", fileId });
+        await reload();
+      } catch (reason) {
+        reportPortFailure(reason);
+      }
+    },
+    [port, dispatch, reload],
+  );
+
+  return { openFile, createFile, openFromDisk, openDropped, moveFile, setPinned, removeFile };
 }

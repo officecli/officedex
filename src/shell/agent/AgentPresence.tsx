@@ -41,7 +41,7 @@ const PANEL_FALLBACK = { width: 340, height: 543 };
  * early whenever the browser actually reports the transition, so this is the
  * upper bound rather than the mechanism.
  */
-const DOCK_TRANSITION_MS = 200;
+const DOCK_TRANSITION_MS = 280;
 
 function prefersReducedMotion(): boolean {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
@@ -213,8 +213,11 @@ export function AgentPresence() {
       </span>
 
       {/*
-        The docked host is a flex child of the body row; its width is the only
-        thing a mode change animates (see App.tsx and decision 4).
+        The docked host is a flex child of the body row. Its width is the part
+        of a mode change this component owns; the rest of the transition —
+        which raises this column over the pinned workspace while it moves — is
+        `data-mode-switching` (see App.tsx and the mode-switch section of
+        app.css), and shares `--shell-duration` with DOCK_TRANSITION_MS above.
       */}
       <section
         ref={dockHost}

@@ -128,7 +128,7 @@
 /* ------------------------------------------------------- agent hero */
 
 .shell-home--agent {
-  padding-top: 92px;
+  padding-top: 86px;
 }
 
 .shell-hero {
@@ -140,14 +140,14 @@
 .shell-hero h1 {
   margin: 0;
   color: var(--shell-ink);
-  font-size: var(--shell-text-4xl);
-  line-height: 38px;
-  font-weight: 500;
-  letter-spacing: -0.4px;
+  font-size: var(--shell-text-display);
+  line-height: 1.25;
+  font-weight: 550;
+  letter-spacing: -1.1px;
 }
 
 .shell-hero-lede {
-  margin: 10px 0 26px;
+  margin: 12px 0 28px;
   color: var(--shell-ink-subtle);
   font-size: var(--shell-text-md);
   line-height: 22px;
@@ -155,6 +155,23 @@
 
 .shell-hero-composer {
   text-align: left;
+}
+
+.shell-home-scope {
+  min-height: 48px;
+  margin: 0 12px -10px;
+  padding: 6px 10px 14px;
+  box-sizing: border-box;
+  background: var(--shell-home-scope-fill);
+  border-radius: 16px 16px 0 0;
+}
+
+.shell-home-scope .shell-cx-button {
+  height: 28px;
+  padding: 0 8px;
+  justify-content: flex-start;
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text);
 }
 
 /*
@@ -192,6 +209,29 @@
 .shell-hero-prompt:hover {
   border-color: var(--shell-line-strong);
   color: var(--shell-ink);
+}
+
+/*
+ * A starter that offers two actions, and the second one.
+ *
+ * The group is inline-flex so wrapping still happens between groups rather than
+ * between a prompt and its alternative — "Build a presentation" and "watch a
+ * deck being drawn" are one choice, and splitting them across lines reads as
+ * two unrelated buttons.
+ */
+.shell-hero-prompt-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/*
+ * The alternative is the quieter of the two: it writes nothing, so it should
+ * not compete with the button that starts actual work.
+ */
+.shell-hero-prompt--watch {
+  border-style: dashed;
+  color: var(--shell-ink-faint);
 }
 
 .shell-hero-prompt:focus-visible,
@@ -250,4 +290,74 @@
   margin-top: 3px;
   color: var(--shell-ink-faint);
   font-size: var(--shell-text-sm);
+}
+
+/*
+ * Editor Home takes files dragged in from the desktop.
+ *
+ * `--wails-drop-target` is what the Wails runtime checks before it reports a
+ * native drop: it is inherited, so every element on the page counts, and
+ * nothing outside it does — a file dropped onto an open document or the
+ * sidebar is swallowed rather than opened.
+ */
+.shell-home-dropzone {
+  --wails-drop-target: drop;
+}
+
+.shell-home-drop {
+  position: fixed;
+  z-index: var(--shell-z-home-drop);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+  pointer-events: none;
+  animation: shell-home-drop-in 160ms var(--shell-ease);
+}
+
+.shell-home-drop::before {
+  content: "";
+  position: absolute;
+  inset: 12px;
+  border: 1.5px dashed var(--shell-accent);
+  border-radius: var(--shell-radius-panel);
+  background: color-mix(in srgb, var(--shell-tint) 72%, transparent);
+}
+
+.shell-home-drop-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 20px 28px;
+  border-radius: var(--shell-radius-card);
+  background: var(--shell-paper);
+  box-shadow: var(--shell-shadow-panel);
+  color: var(--shell-accent);
+  text-align: center;
+}
+
+.shell-home-drop-card strong {
+  color: var(--shell-ink);
+  font-size: var(--shell-text-lg);
+  font-weight: 500;
+}
+
+.shell-home-drop-card span {
+  color: var(--shell-ink-subtle);
+  font-size: var(--shell-text);
+}
+
+@keyframes shell-home-drop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell-home-drop {
+    animation: none;
+  }
 }

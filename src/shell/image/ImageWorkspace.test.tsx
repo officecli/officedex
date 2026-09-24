@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { toast } from "../../renderer/ui";
 import type { AgentImageRun, AgentTask, FileMeta } from "../../shared/uiPort";
@@ -214,6 +214,119 @@ describe("the image workspace with a finished picture", () => {
     });
     await waitFor(() => expect(text()).toContain("Saved to folder"));
     expect(document.body.textContent).toContain("Image saved to Customer research");
+  });
+});
+
+/*
+ * The canvas shows the picture at whatever size the frame leaves it; the viewer
+ * is how you see it bigger. jsdom has no layout, so these assert the viewer's
+ * contract — it opens from the picture, it is modal, it steps through versions
+ * and it gives focus back — and leave the zoom arithmetic to the browser.
+ */
+describe("the full-size viewer", () => {
+  const viewer = () => document.querySelector<HTMLElement>(".shell-image-viewer");
+  const trigger = () => document.querySelector<HTMLButtonElement>(".shell-image-zoom-trigger")!;
+
+  // jsdom has no blob URLs, and the picture is only a button once it has one.
+  beforeEach(() => {
+    let count = 0;
+    vi.stubGlobal("URL", Object.assign(URL, {
+      createObjectURL: vi.fn(() => `blob:picture-${++count}`),
+      revokeObjectURL: vi.fn(),
+    }));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete (URL as { createObjectURL?: unknown }).createObjectURL;
+    delete (URL as { revokeObjectURL?: unknown }).revokeObjectURL;
+  });
+
+  async function openViewer() {
+    const shell = await readyShell();
+    await waitFor(() => expect(trigger().disabled).toBe(false));
+    trigger().focus();
+    fireEvent.click(trigger());
+    await waitFor(() => expect(viewer()).not.toBeNull());
+    return shell;
+  }
+
+  it("opens from the picture as a modal dialog inside the shell", async () => {
+    await openViewer();
+
+    expect(viewer()!.getAttribute("role")).toBe("dialog");
+    expect(viewer()!.getAttribute("aria-modal")).toBe("true");
+    expect(viewer()!.closest("#shell")).not.toBeNull();
+    expect(viewer()!.textContent).toContain("Version 2 · 2 of 2");
+    expect(document.activeElement).toBe(viewer());
+  });
+
+  it("closes on Escape and gives focus back to the picture", async () => {
+    await openViewer();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    await waitFor(() => expect(viewer()).toBeNull());
+    expect(document.activeElement).toBe(trigger());
+  });
+
+  it("closes from its close button", async () => {
+    await openViewer();
+
+    fireEvent.click(viewer()!.querySelector<HTMLButtonElement>('button[aria-label^="Close"]')!);
+
+    await waitFor(() => expect(viewer()).toBeNull());
+  });
+
+  /*
+   * The real app keeps the presentation and Word editors mounted under the
+   * picture as <iframe>s, and a key pressed inside a frame never reaches this
+   * window — which is how Esc stopped working there and nowhere else.
+   */
+  it("makes the rest of the shell inert while it is up, and gives it back", async () => {
+    await openViewer();
+    const others = [...document.getElementById("shell")!.children].filter((element) => element !== viewer());
+    expect(others.length).toBeGreaterThan(0);
+    expect(others.every((element) => element.hasAttribute("inert"))).toBe(true);
+
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    await waitFor(() => expect(viewer()).toBeNull());
+    expect(others.some((element) => element.hasAttribute("inert"))).toBe(false);
+  });
+
+  it("takes focus back when something underneath grabs it, so Esc still closes", async () => {
+    await openViewer();
+    const frame = document.createElement("iframe");
+    document.body.append(frame);
+
+    frame.focus();
+    fireEvent.focusIn(frame);
+    expect(document.activeElement).toBe(viewer());
+
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    await waitFor(() => expect(viewer()).toBeNull());
+    frame.remove();
+  });
+
+  it("steps through the versions with the arrow keys, and only where there is one", async () => {
+    const shell = await openViewer();
+    expect(viewer()!.querySelector('[data-side="next"]')).toBeNull();
+
+    fireEvent.keyDown(window, { key: "ArrowLeft" });
+
+    await waitFor(() => expect(shell.state().activeFileId).toBe("f1"));
+    await waitFor(() => expect(viewer()!.textContent).toContain("Version 1 · 1 of 2"));
+    expect(viewer()!.querySelector('[data-side="previous"]')).toBeNull();
+    expect(viewer()!.querySelector('[data-side="next"]')).not.toBeNull();
+  });
+
+  it("downloads the picture it is showing", async () => {
+    const shell = await openViewer();
+    const saveCopy = vi.spyOn(shell.port.images!, "saveCopy");
+
+    fireEvent.click(viewer()!.querySelector<HTMLButtonElement>('button[aria-label="Download"]')!);
+
+    await waitFor(() => expect(saveCopy).toHaveBeenCalledWith("f2"));
   });
 });
 

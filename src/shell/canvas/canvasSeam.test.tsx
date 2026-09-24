@@ -257,6 +257,60 @@ describe("canvas selection → composer reference", () => {
 });
 
 /**
+ * Editing does not unfold the agent. The collapsed mark in the corner stays
+ * there until the user clicks it: selecting a block, moving the caret, or
+ * picking another shape are all just editing.
+ */
+describe("canvas selection → agent presence", () => {
+  const block: CanvasSelection = {
+    fileId: SEED_ACTIVE_FILE_ID,
+    label: "MO launch plan.docx · Heading",
+    text: "",
+    block: true,
+  };
+
+  const face = (container: HTMLElement) => container.querySelector(".shell-presence-face");
+  const panel = (container: HTMLElement) => container.querySelector(".shell-presence-panel");
+
+  /** Editor mode with the presence collapsed — the state the mark is in. */
+  async function collapsedInEditor() {
+    const fake = fakeAdapter();
+    const shell = await renderShell({ canvas: fake.adapter });
+    await shell.dispatch({ type: "open-file", fileId: SEED_ACTIVE_FILE_ID });
+    await shell.dispatch({ type: "set-mode", mode: "editor" });
+    await waitFor(() => expect(face(shell.view.container)).not.toBeNull());
+    expect(shell.state().presence.expanded).toBe(false);
+    return { ...fake, shell };
+  }
+
+  it("stays collapsed when the user picks a block", async () => {
+    const { shell, select } = await collapsedInEditor();
+
+    await act(async () => {
+      select(block);
+    });
+
+    expect(face(shell.view.container)).not.toBeNull();
+    expect(panel(shell.view.container)).toBeNull();
+    expect(shell.state().presence.expanded).toBe(false);
+  });
+
+  it("stays collapsed across further selections while the user edits", async () => {
+    const { shell, select } = await collapsedInEditor();
+    await act(async () => {
+      select(block);
+    });
+    await act(async () => {
+      select({ ...block, label: "MO launch plan.docx · Body" });
+    });
+
+    expect(face(shell.view.container)).not.toBeNull();
+    expect(panel(shell.view.container)).toBeNull();
+    expect(shell.state().presence.expanded).toBe(false);
+  });
+});
+
+/**
  * The proposal, shown in the document rather than only in the panel.
  *
  * No editor implements `showDraft` yet, so these run against the fake adapter

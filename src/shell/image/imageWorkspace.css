@@ -135,7 +135,34 @@
   margin: 0;
 }
 
-.shell-image-figure > img {
+/*
+ * The picture is a button that opens the full-window viewer. The button takes
+ * over the image's old place as the one thing in the figure that gives way;
+ * the image inside it keeps the frame (border, paper, shadow) it always had.
+ */
+.shell-image-zoom-trigger {
+  position: relative;
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--shell-radius-control);
+  background: none;
+  cursor: zoom-in;
+}
+
+.shell-image-zoom-trigger:disabled {
+  cursor: default;
+}
+
+.shell-image-zoom-trigger:focus-visible {
+  outline: 2px solid var(--shell-focus);
+  outline-offset: 2px;
+}
+
+.shell-image-zoom-trigger > img {
   display: block;
   flex: 0 1 auto;
   min-height: 0;
@@ -146,6 +173,31 @@
   border-radius: var(--shell-radius-control);
   background: var(--shell-paper);
   box-shadow: var(--shell-shadow-paper);
+}
+
+/* "View full size", in the corner, for as long as the pointer or the focus is
+   on the picture. Hidden rather than absent so it does not jump in. */
+.shell-image-zoom-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border: 1px solid var(--shell-line);
+  border-radius: var(--shell-radius-item);
+  background: var(--shell-paper);
+  box-shadow: var(--shell-shadow-paper);
+  color: var(--shell-ink-muted);
+  font: var(--shell-text-sm) / 14px var(--shell-font);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.shell-image-zoom-trigger:hover:not(:disabled) .shell-image-zoom-badge,
+.shell-image-zoom-trigger:focus-visible .shell-image-zoom-badge {
+  visibility: visible;
 }
 
 .shell-image-figure figcaption {

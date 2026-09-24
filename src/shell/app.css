@@ -104,6 +104,151 @@
   }
 }
 
+/* ------------------------------------------------------ mode switch */
+
+/*
+ * The consumer side of `data-mode-switching` — one section, on purpose.
+ *
+ * `state/useModeTransition.ts` writes the attribute for one `--shell-duration`
+ * whenever `state.mode` changes, whichever control changed it. Everything the
+ * mode affects reacts here, so the durations and the easing cannot drift apart
+ * across four stylesheets, and so the next person can read the whole of the
+ * transition in one place instead of discovering it a rule at a time.
+ *
+ * What moves, and why each one is the way it is:
+ *
+ * 1. **The workspace is pinned to its final box.** This is the expensive one.
+ *    `.shell-workspace` is `flex: 1`, so while `.shell-agent` eases between
+ *    320px and 0 the workspace — and the embedded editor inside it — is a
+ *    different width on every frame of the animation. That is not a shell
+ *    cost: `renderer/spreadsheet/SpreadsheetCanvas.tsx` observes its container
+ *    and answers a size change by dispatching a window `resize`, which is a
+ *    full workbook relayout, and `renderer/presentation/ProgressivePptxStage`
+ *    re-measures its stage the same way. Twelve of those inside 200ms is the
+ *    stutter. So for the length of the transition the workspace comes out of
+ *    flow at exactly the box it is going to end up in — `left` is the same
+ *    `--shell-nav-w` + `--shell-task-w` the flex layout will settle on, and
+ *    both variables are already at their final values on the first frame
+ *    (only the *used width* of `.shell-agent` interpolates). The editor is
+ *    laid out once, at the size it will keep, and when the attribute clears
+ *    the element returns to a flex box computed from the same two lengths —
+ *    the same number arrived at two ways, so there is nothing left to move.
+ *
+ *    Position only: no `transform`, `filter` or `will-change` anywhere on the
+ *    canvas's ancestors, because any of those would make it the containing
+ *    block for the `position: fixed` chrome the workbook draws inside it.
+ *
+ * 2. **The column is raised over it.** A positioned element paints above its
+ *    in-flow siblings, so pinning the workspace would otherwise hide the
+ *    docked column outright on the very frame it is meant to start closing.
+ *    `--shell-z-mode-switch` puts it back on top, where it reads as a panel
+ *    sliding shut over the document rather than a document appearing.
+ *
+ * 3. **The row wears the chrome colour.** Opening the column, the wedge
+ *    between its animating right edge and the pinned workspace is the only
+ *    part of the row nothing covers. Painting it `--shell-chrome` makes that
+ *    wedge the space being made for the panel instead of a flash of canvas.
+ *
+ * 4. **Swapped content fades in.** The sidebar's middle (`<SidebarTree />` or
+ *    nothing), its file-view filters and Home's whole subtree are React
+ *    swapping one tree for another; there is no outgoing element left to
+ *    animate, so the incoming one settles into place instead of appearing.
+ *
+ * The honest cost of (1) is one reflow, at the start, rather than one per
+ * frame: a centred page re-centres on the first frame of the transition
+ * instead of tracking the column. `shell-mode-settle` covers that single
+ * change with a short fade — the document re-rendering, rather than jumping.
+ */
+
+#shell[data-mode-switching="true"] .shell-workspace {
+  position: absolute;
+  top: var(--shell-windowbar-h);
+  bottom: 0;
+  left: calc(var(--shell-nav-w) + var(--shell-task-w));
+  right: 0;
+}
+
+#shell[data-mode-switching="true"] .shell-agent {
+  position: relative;
+  z-index: var(--shell-z-mode-switch);
+}
+
+#shell[data-mode-switching="true"] .shell-row--body {
+  background: var(--shell-chrome);
+}
+
+#shell[data-mode-switching="true"] .shell-canvas {
+  animation: shell-mode-settle var(--shell-duration) var(--shell-ease) both;
+}
+
+#shell[data-mode-switching="true"] .shell-sidebar-body,
+#shell[data-mode-switching="true"] .shell-sidebar-views,
+#shell[data-mode-switching="true"] .shell-home {
+  animation: shell-mode-enter var(--shell-duration) var(--shell-ease) both;
+}
+
+/* The column's own fade, in the direction it is going. `data-mode` is already
+   the destination by the time the attribute goes up, so it is the whole of the
+   direction test — no second flag saying which way. */
+#shell[data-mode-switching="true"][data-mode="agent"] .shell-agent {
+  animation: shell-mode-agent-enter var(--shell-duration) var(--shell-ease) both;
+}
+
+#shell[data-mode-switching="true"][data-mode="editor"] .shell-agent {
+  animation: shell-mode-agent-leave var(--shell-duration) var(--shell-ease) both;
+}
+
+@keyframes shell-mode-enter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--shell-mode-shift));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes shell-mode-settle {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes shell-mode-leave {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes shell-mode-agent-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes shell-mode-agent-leave {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+}
+
 /* ---------------------------------------------------------------- rows */
 
 .shell-row {
@@ -116,6 +261,30 @@
   flex: none;
   height: var(--shell-windowbar-h);
   background: var(--shell-chrome);
+  /*
+   * The desktop window has no title bar (`mac.TitleBarHidden`). This strip is
+   * the drag region: empty chrome, the padding that clears the traffic lights,
+   * and the unused end of the tab row. Interactive children opt out below so a
+   * press on a tab or the sidebar toggle still clicks rather than dragging.
+   */
+  --wails-draggable: drag;
+  -webkit-app-region: drag;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.shell-row--top button,
+.shell-row--top a,
+.shell-row--top input,
+.shell-row--top textarea,
+.shell-row--top select,
+.shell-row--top .shell-tab,
+.shell-row--top .shell-tabs-actions,
+.shell-row--top .shell-tabstrip-nav,
+.shell-row--top .shell-menu-anchor,
+.shell-row--top .shell-window-controls {
+  --wails-draggable: no-drag;
+  -webkit-app-region: no-drag;
 }
 
 .shell-row--body {
@@ -160,8 +329,9 @@
 }
 
 /*
- * The docked agent column. Its width is the only thing a mode change moves;
- * everything else in the row keeps its box, so the document does not jump.
+ * The docked agent column. Its width is the one box a mode change moves; the
+ * rest of the transition is the mode-switch section above, which pins the
+ * workspace to its final box while this animates over it.
  */
 .shell-agent {
   flex: none;

@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Folder as FolderIcon } from "lucide-react";
 import { AttentionBorder } from "../agent/AttentionBorder";
 import { Composer } from "../composer/Composer";
 import { PROMPTS, QuickPrompts } from "./QuickPrompts";
@@ -8,7 +8,11 @@ import { useHomeStartRequests } from "./homeStart";
 import { useAgentTask } from "../agent/useAgentTask";
 import { useComposerSettings } from "../composer/useComposerSettings";
 import { useShell } from "../state/ShellContext";
+import { usePort } from "../port/PortContext";
 import type { FileType } from "../../shared/uiPort";
+import { Menu } from "../chrome/Menu";
+import { useT } from "../../renderer/i18n";
+import { useFolderDialogs } from "../nav/useFolderDialogs";
 
 /**
  * The corner radius of the hero composer, from `.shell-cx--home`.
@@ -24,24 +28,12 @@ const COMPOSER_RADIUS = 20;
  * Starting sentences for a picture, shown while the composer is in image mode.
  * Like the quick prompts they fill, never send — a purpose is not yet a brief.
  */
-const IMAGE_PURPOSES = [
-  {
-    label: "Product photo",
-    prompt: "Create a clean product photo with a warm white background, soft natural light, and a carefully balanced composition.",
-  },
-  {
-    label: "Marketing visual",
-    prompt: "Create a campaign visual for a product launch. Use a bold composition with plenty of space for a headline. No text.",
-  },
-  {
-    label: "Illustration",
-    prompt: "Create an editorial illustration about a calm, productive workspace. Use simple shapes, subtle texture, and a muted color palette.",
-  },
-  {
-    label: "Social cover",
-    prompt: "Create a striking social media cover for a product launch. Keep the main subject centered and leave room for a short headline. No text.",
-  },
-];
+const IMAGE_PURPOSES = ["product", "marketing", "illustration", "social"].map((id) => ({
+  id,
+  // Dictionary keys, translated where they are shown or filled.
+  label: `shell.hero.purpose.${id}.label`,
+  prompt: `shell.hero.purpose.${id}.prompt`,
+}));
 
 /**
  * Agent Home's top half: the question, the composer, the starting points.
@@ -55,9 +47,18 @@ const IMAGE_PURPOSES = [
  * travels with the message is the one that survived.
  */
 export function Hero() {
-  const { dispatch } = useShell();
+  const { dispatch, folders, scopeFolderId, reload } = useShell();
+  const t = useT();
+  const port = usePort();
   const agent = useAgentTask();
   const settings = useComposerSettings();
+  const scope = folders.find((folder) => folder.id === scopeFolderId) ?? folders[0];
+  const folderDialogs = useFolderDialogs(async () => {
+    const before = new Set(folders.map((folder) => folder.id));
+    await reload();
+    const created = (await port.folders.list()).find((folder) => !before.has(folder.id));
+    if (created) dispatch({ type: "select-folder", folderId: created.id });
+  });
 
   /**
    * Focus anywhere inside the composer — its input, its chips, its buttons.
@@ -85,24 +86,44 @@ export function Hero() {
   useHomeStartRequests((kind) => {
     if (kind === "image") {
       setImageMode.current?.(true);
-      fill.current?.(IMAGE_PURPOSES[0].prompt, "image");
+      fill.current?.(t(IMAGE_PURPOSES[0].prompt), "image");
       return;
     }
     setImageMode.current?.(false);
     const entry = PROMPTS.find((prompt) => prompt.type === kind);
-    if (entry) fill.current?.(entry.prompt, kind);
+    if (entry) fill.current?.(t(entry.prompt), kind);
   });
 
   return (
     <div className="shell-hero" data-image-mode={String(imageMode)}>
-      <h1>{imageMode ? "What would you like to create?" : "What would you like to get done?"}</h1>
+      <h1>{imageMode ? t("shell.hero.titleImage") : t("shell.hero.title")}</h1>
       <p className="shell-hero-lede">
-        {imageMode
-          ? "Describe an image, add references, and make it yours."
-          : "Bring your files and a goal. Jump in and edit at any time."}
+        {imageMode ? t("shell.hero.ledeImage") : t("shell.hero.lede")}
       </p>
 
       <div className="shell-hero-composer">
+        <div className="shell-home-scope">
+          <Menu
+            label={t("shell.cx.scope.menu")}
+            items={[...folders.map((folder) => ({
+              id: folder.id,
+              label: folder.name,
+              description: folder.path,
+              checked: folder.id === scope?.id,
+              onSelect: () => dispatch({ type: "select-folder", folderId: folder.id }),
+            })), { id: "new-folder", label: t("shell.cx.scope.newFolder"), onSelect: folderDialogs.createFolder }]}
+            align="start"
+            width={260}
+          >
+            {(triggerProps) => (
+              <button {...triggerProps} type="button" className="shell-cx-button shell-cx-scope" title={t("shell.cx.scope.title", { name: scope?.name ?? t("shell.cx.scope.none") })}>
+                <FolderIcon size={14} strokeWidth={1.7} aria-hidden="true" />
+                <span className="shell-cx-scope-name">{scope?.name ?? t("shell.task.noFolder")}</span>
+                <ChevronDown size={12} strokeWidth={1.8} aria-hidden="true" />
+              </button>
+            )}
+          </Menu>
+        </div>
         {/* Positions the overlay over the composer; see agent.css. */}
         <div
           className="shell-attention-anchor"
@@ -114,14 +135,17 @@ export function Hero() {
         >
           <Composer
             placement="home"
-            busy={agent.busy}
-            // Home switches modes with "Create an image" below, not a toolbar toggle.
+            showScopeInToolbar={false}
             showModeControls={false}
+            showPermission={false}
+            busy={agent.busy}
             onRegisterFill={registerFill}
             onRegisterImageMode={registerImageMode}
             onImageModeChange={setImageModeShown}
             onSend={async (submission) => {
-              await agent.send(submission);
+              // Home starts new work. Whatever the folder's panel was showing
+              // stays in its own conversation rather than absorbing this one.
+              await agent.send({ ...submission, newConversation: true });
               /*
                * Leave Home for the canvas the run fills, and open nothing.
                *
@@ -157,13 +181,14 @@ export function Hero() {
           />
         </div>
       </div>
+      {folderDialogs.element}
 
       {imageMode ? (
-        <div className="shell-hero-purposes" role="group" aria-label="Image prompt ideas">
-          <span>Try</span>
+        <div className="shell-hero-purposes" role="group" aria-label={t("shell.hero.purposes")}>
+          <span>{t("shell.hero.try")}</span>
           {IMAGE_PURPOSES.map((purpose) => (
-            <button key={purpose.label} type="button" onClick={() => fill.current?.(purpose.prompt, "image")}>
-              {purpose.label}
+            <button key={purpose.id} type="button" onClick={() => fill.current?.(t(purpose.prompt), "image")}>
+              {t(purpose.label)}
               <ArrowUpRight size={11} strokeWidth={1.8} aria-hidden="true" />
             </button>
           ))}

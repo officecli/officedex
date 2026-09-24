@@ -1,0 +1,158 @@
+/*
+ * Layered OfficeDex agent mark.
+ *
+ * Eyes are holes in the body PNG. A white pill sits in each hole, on top of a
+ * solid ink silhouette, so blink is scaleY(0) (the ink shows through) and gaze
+ * is a translate of the pill. The top-right square is its own layer — the only
+ * other moving part. The body itself only translates as a whole, plus a land
+ * squash owned by the generating canvas.
+ */
+
+.od-mark {
+  position: relative;
+  display: block;
+  flex: none;
+  width: var(--mark-size, 96px);
+  height: var(--mark-size, 96px);
+  filter: drop-shadow(var(--shell-shadow-mark));
+}
+
+.od-mark__ink,
+.od-mark__body,
+.od-mark__dot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.od-mark__eye {
+  position: absolute;
+  top: 44.141%;
+  width: 7.617%;
+  height: 17.383%;
+  transform: translate(calc(var(--gaze-x, 0) * 82%), calc(var(--gaze-y, 0) * 35%));
+  transition: transform 0.28s var(--shell-ease);
+}
+
+.od-mark__eye--l {
+  left: 32.227%;
+}
+
+.od-mark__eye--r {
+  left: 58.594%;
+}
+
+.od-mark__eye i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--shell-ink-inverse);
+  border-radius: 999px;
+  transform: scaleY(var(--blink, 1));
+}
+
+/*
+ * The light plate is the official white mark. Its eyes are holes, so the pill
+ * has to be the dark surface behind it — a white pill fills the holes and the
+ * face disappears. Blink still works: the pill scales away and the white ink
+ * behind the hole shows through.
+ */
+.od-mark[data-tone="light"] .od-mark__eye i {
+  background: var(--shell-brand-mark);
+}
+
+@keyframes od-blink {
+  0% { transform: scaleY(1); }
+  45% { transform: scaleY(0.04); }
+  100% { transform: scaleY(1); }
+}
+
+.od-mark.is-blink .od-mark__eye i {
+  animation: od-blink calc(0.2s / var(--shell-gen-speed, 1)) ease-in-out;
+}
+
+.od-mark__dot {
+  transform-origin: 82.9% 17.2%;
+  animation: od-dot-idle calc(2.6s / var(--shell-gen-speed, 1)) var(--shell-ease) infinite;
+}
+
+@keyframes od-dot-idle {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+@keyframes od-dot-search {
+  0%, 100% { transform: translateX(0) rotate(0deg); opacity: 0.82; }
+  28% { transform: translateX(-5.5%) rotate(-7deg); opacity: 1; }
+  64% { transform: translateX(6%) rotate(6deg); opacity: 1; }
+}
+
+@keyframes od-dot-type {
+  0% { transform: scale(1); }
+  26% { transform: scale(1.18); }
+  62%, 100% { transform: scale(1); }
+}
+
+@keyframes od-dot-draw {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  45% { transform: scale(1.3) rotate(9deg); }
+}
+
+@keyframes od-dot-stamp {
+  0% { transform: scale(1); }
+  20% { transform: scale(1.35); }
+  42% { transform: scale(0.92); }
+  62% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+
+[data-phase="research"] .actor .od-mark__dot {
+  animation: od-dot-search calc(1.9s / var(--shell-gen-speed, 1)) var(--shell-ease) infinite;
+}
+
+[data-phase="outline"] .actor .od-mark__dot {
+  animation: od-dot-idle calc(1.5s / var(--shell-gen-speed, 1)) var(--shell-ease) infinite;
+}
+
+[data-phase="writing"] .actor .od-mark__dot {
+  animation: od-dot-type calc(0.6s / var(--shell-gen-speed, 1)) ease-in-out infinite;
+}
+
+[data-phase="drawing"] .actor .od-mark__dot {
+  animation: od-dot-draw calc(1.4s / var(--shell-gen-speed, 1)) var(--shell-ease) infinite;
+}
+
+[data-phase="polish"] .actor .od-mark__dot {
+  animation: od-dot-stamp calc(1.5s / var(--shell-gen-speed, 1)) var(--shell-ease) infinite;
+}
+
+.is-land .od-mark {
+  animation: od-land calc(0.42s / var(--shell-gen-speed, 1)) var(--shell-ease);
+}
+
+@keyframes od-land {
+  0% { transform: scale(1); }
+  34% { transform: scale(0.94); }
+  70% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.is-land .actor .od-mark__dot {
+  animation: od-dot-stamp calc(0.45s / var(--shell-gen-speed, 1)) var(--shell-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .od-mark,
+  .od-mark__dot,
+  .od-mark__eye i {
+    animation: none !important;
+  }
+
+  .od-mark__eye {
+    transform: none !important;
+    transition: none !important;
+  }
+}

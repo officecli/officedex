@@ -44,7 +44,22 @@ const DAY = 86_400_000;
 
 const lastTouched = (file: FileMeta) => file.lastOpenedAt ?? file.updatedAt ?? file.createdAt ?? 0;
 
-const byRecency = (a: FileMeta, b: FileMeta) => lastTouched(b) - lastTouched(a);
+/**
+ * Newest *edit* first — not newest open.
+ *
+ * This used to prefer `lastOpenedAt`, so opening a file moved it to the top of
+ * its folder. That reads as the list rearranging itself under the pointer: the
+ * row you clicked is gone and everything below it has shifted, and the order
+ * says "what I looked at last" when a file list is a list of documents.
+ *
+ * The backend already orders documents by `updated_at DESC`
+ * (`internal/localstore/store.go`), so this agrees with it rather than
+ * re-deciding. `lastOpenedAt` still decides the time buckets and the date tag
+ * — that is what "recently touched" means there, and both are views *about*
+ * recency rather than a plain list.
+ */
+const byUpdated = (a: FileMeta, b: FileMeta) =>
+  (b.updatedAt ?? b.createdAt ?? 0) - (a.updatedAt ?? a.createdAt ?? 0);
 
 function applyFilters(files: FileMeta[], options: GroupOptions): FileMeta[] {
   const { filter = "all", fileType = "all" } = options;
@@ -56,7 +71,7 @@ function applyFilters(files: FileMeta[], options: GroupOptions): FileMeta[] {
 }
 
 function truncate(files: FileMeta[], limit?: number): { files: FileMeta[]; total: number } {
-  const sorted = [...files].sort(byRecency);
+  const sorted = [...files].sort(byUpdated);
   if (limit === undefined || sorted.length <= limit) return { files: sorted, total: sorted.length };
   return { files: sorted.slice(0, limit), total: sorted.length };
 }

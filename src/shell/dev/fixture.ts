@@ -21,6 +21,9 @@
  *   ?forceUpdate=<phase>             render the mandatory-update page instead
  *   ?canvasChrome=sheet|slides|doc   report an editor's own chrome, as if one
  *                                    were mounted (there is none in a browser)
+ *   ?slidesGenerating=research|outline|writing|drawing|polish
+ *                                    paint the PPT generating canvas on the
+ *                                    host skeleton (browser has no editor)
  *
  * **The guard is load-bearing.** `enabled` defaults to `import.meta.env.DEV`,
  * which Vite replaces with a literal `false` when it builds, so in a packaged
@@ -36,6 +39,7 @@ import type { AppUpdateRelease } from "../../shared/types";
 import type { PersistedShellState } from "../state/persist";
 import { createFakePort } from "../port/fake/createFakePort";
 import { deckDemoEnabled } from "./deckDemo";
+import { slidesGeneratingPreview } from "../editor/slidesGenerating/slidesGeneratingPreview";
 import { DOC_CHROME, SHEET_CHROME, SLIDES_CHROME } from "../../canvas/editorChrome";
 import type { EditorChrome } from "../editor/canvasSurface";
 import {
@@ -181,6 +185,10 @@ export function readDevFixture(
   if (deckDemoEnabled(search)) {
     stateOverride.demo = true;
     if (home !== "1") stateOverride.home = false;
+  }
+
+  if (slidesGeneratingPreview(search) && home !== "1") {
+    stateOverride.home = false;
   }
 
   const nav = params.get("nav");

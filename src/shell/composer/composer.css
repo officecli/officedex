@@ -1,6 +1,12 @@
 /* The composer: one component, three placements (home hero / docked task / floating panel). */
 
+/*
+ * `--wails-drop-target` makes the composer a place the desktop reports file
+ * drops for; without it Wails swallows them and the paths never arrive. It is
+ * inherited, so the drop overlay and every control inside count too.
+ */
 .shell-cx {
+  --wails-drop-target: drop;
   position: relative;
   container-type: inline-size;
   background: var(--shell-paper);
@@ -24,6 +30,10 @@
   padding: 18px 16px 11px;
   border-radius: 20px;
   box-shadow: 0 2px 5px #00000005;
+  border-color: transparent;
+  background:
+    linear-gradient(var(--shell-paper), var(--shell-paper)) padding-box,
+    linear-gradient(110deg, var(--shell-home-glow-from) 0%, var(--shell-home-glow-mid) 48%, var(--shell-home-glow-to) 100%) border-box;
 }
 
 /* No `.shell-cx--home .shell-cx-scope { display: none }` here.
@@ -451,6 +461,8 @@
   color: var(--shell-ink-muted);
   font-size: var(--shell-text-lg);
   z-index: 10;
+  /* It says what a drop will do; it must never be what stops the composer being used. */
+  pointer-events: none;
 }
 
 /* --------------------------------------------------------- mention menu */

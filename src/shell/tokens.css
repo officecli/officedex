@@ -56,6 +56,10 @@
      `drop-shadow` takes no spread: these two are offset/blur/colour only. */
   --shell-shadow-face: 0 8px 20px #24333f28;
   --shell-shadow-face-hover: 0 10px 24px #24333f38;
+  /* The layered agent mark on the generating canvas; same family as the
+     companion's drop-shadow, smaller because the 96px mark already fills more
+     of the paper than the 56px presence. */
+  --shell-shadow-mark: 0 3px 8px #24333f26;
   /* A sheet of paper on the canvas. */
   --shell-shadow-paper: 0 1px 3px #2536430f;
 
@@ -107,6 +111,7 @@
   --shell-text-2xl: 18px;
   --shell-text-3xl: 26px;
   --shell-text-4xl: 32px;
+  --shell-text-display: 31px; /* Home hero heading, the prototype's one heading */
 
   /* ---- Layers ---------------------------------------------------------- */
   /*
@@ -138,9 +143,28 @@
    *    whole ladder at once, and so the 800-wide gap between 200 and 1000 is a
    *    visible fact rather than something you discover by collision.
    */
+  /* The docked agent column, and only while a mode change is in flight. The
+     workspace is pinned out of flow for that moment (see the mode-switch
+     section of app.css), and a positioned element paints above its in-flow
+     siblings — without this rung the column it is supposed to be revealing or
+     making room for would be covered from the first frame. One is enough: it
+     sorts against the row it lives in, which holds nothing else positioned. */
+  --shell-z-mode-switch: 1;
   --shell-z-chrome: 3; /* .shell-windowbar */
+  /* Editor Home's "drop to open" overlay. Fixed, so it compares against the
+     root; below the floating agent, which a file cannot be dropped onto. */
+  --shell-z-home-drop: 150; /* .shell-home-drop */
   --shell-z-presence: 200; /* .shell-presence, the floating agent */
   --shell-z-menu: 300; /* .shell-menu, portalled to #shell */
+  /* The full-window picture viewer. Above the menus, which it cannot be opened
+     from and which close on the click that opens it; below the account page,
+     which covers everything. */
+  --shell-z-viewer: 350; /* .shell-image-viewer */
+  /* The account page. Above the menus because it is not opened *from* one: it
+     covers the whole window, and a menu left open underneath must not float
+     over it. Below the legacy toast host on purpose — the page copies a URL to
+     the clipboard and that confirmation has to be visible. */
+  --shell-z-gate: 400; /* .shell-account */
 
   --shell-z-cx-drop: 10; /* .shell-cx-drop, inside .shell-cx only */
   --shell-z-cx-mention: 180; /* .shell-mention, inside .shell-cx only */
@@ -151,10 +175,35 @@
   --shell-z-legacy-tooltip: 1200; /* components.css .od-tooltip */
 
   /* ---- Motion --------------------------------------------------------- */
-  /* Decision 4: mode changes are a column-width transition, nothing more.
-     The prototype's snapshot-and-flip animation is deliberately not ported. */
+  /*
+   * Decision 4, as it now stands: a mode change is a transition of the whole
+   * shell, and it is still not the prototype's snapshot-and-flip.
+   *
+   * What this section used to say was "mode changes are a column-width
+   * transition, nothing more". That was true of the CSS and false of the
+   * screen: the column's width was the only thing interpolating, while the
+   * sidebar's middle, Home's entire subtree and the tab strip's left inset all
+   * changed in one frame around it. One box easing between two widths while
+   * three others cut is not a continuous shell, it is a continuous column.
+   *
+   * So the shell now marks itself `data-mode-switching="true"` for the length
+   * of one `--shell-duration` (`state/useModeTransition.ts`) and the regions
+   * that change share this duration and this easing. The prototype's technique
+   * — snapshot the DOM, slice it, hinge it in 3D — is still deliberately not
+   * ported: it cannot survive a live document renderer, and nothing here needs
+   * it, because no editor is torn down for a layout reason.
+   *
+   * `--shell-duration` is load-bearing in three places that must agree: this
+   * transition, `.shell-agent`'s width, and `AgentPresence.DOCK_TRANSITION_MS`,
+   * which holds the docked conversation on screen until the column has closed.
+   */
   --shell-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --shell-duration: 200ms;
+  --shell-duration: 280ms;
+  /* How far mode-swapped content drifts as it fades in (the sidebar's middle,
+     Home). A new token rather than a literal in `app.css` because three
+     regions share it and "the mode switch's drift" is one decision; it is
+     deliberately small — this is a settle, not an entrance. */
+  --shell-mode-shift: 10px;
 
   /* ---- Status --------------------------------------------------------- */
   /* The prototype has one colour for "this went wrong": form validation wears
@@ -250,6 +299,10 @@
   --shell-brand-mark: #2b2b2b; /* see agent.css: the companion's shell is the
                                   same black, written separately on purpose */
   --shell-brand-chevron: #7d858c;
+  --shell-home-scope-fill: #f0f1f3; /* the scope strip under Home's composer */
+  --shell-home-glow-from: #c4d9ff; /* Home composer's border gradient, 0% */
+  --shell-home-glow-mid: #ead0ff; /* 48% */
+  --shell-home-glow-to: #bcebe5; /* 100% */
   --shell-nav-current-ink: #354652;
   --shell-avatar-line: #d3d6da;
   --shell-avatar-fill: #e5dfd7;
@@ -283,6 +336,20 @@
   --shell-drop-line: #8b9eab; /* both densities, one gesture */
   --shell-drop-fill: #e0e8ee;
 
+  /* image viewer — dark in every theme on purpose (see imageViewer.css) */
+  --shell-viewer-backdrop: #111417f5;
+  --shell-viewer-backdrop-clear: #11141700; /* the same, fully clear: what it fades from */
+  --shell-viewer-scrim: #111417d9; /* behind the title, over a zoomed picture */
+  --shell-viewer-panel: #24282ce6; /* the zoom bar */
+  --shell-viewer-line: #ffffff1f;
+  --shell-viewer-ink: #f2f4f5;
+  --shell-viewer-ink-muted: #a4acb3;
+  --shell-viewer-ink-disabled: #ffffff4d;
+  --shell-viewer-control: #ffffff14;
+  --shell-viewer-control-hover: #ffffff29;
+  --shell-viewer-focus: #9fb6c9;
+  --shell-viewer-shadow: 0 12px 40px #00000059;
+
   /* ---- Canvas skeleton ------------------------------------------------- */
   /*
    * Placeholder greys, kept apart from everything above because they are
@@ -305,6 +372,11 @@
 @media (prefers-reduced-motion: reduce) {
   #shell {
     --shell-duration: 1ms;
+    /* The mode switch's drift, withdrawn rather than shortened. The JS half of
+       this preference (`state/useModeTransition.ts`) already keeps the whole
+       animated path from being entered, so this is the belt to that braces:
+       anything that does reach the keyframes moves no distance. */
+    --shell-mode-shift: 0px;
   }
 }
 

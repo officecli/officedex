@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { usePort } from "../port/PortContext";
-import type { AgentOutlinePage, AgentTask } from "../../shared/uiPort";
+import { translate } from "../../renderer/i18n";
+import type { AgentMessage, AgentOutlinePage, AgentTask } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
 import { useCanvas } from "../canvas/CanvasContext";
 import type { ComposerSubmission } from "../composer/Composer";
@@ -84,6 +85,8 @@ export function useAgentTask() {
    */
   const [localTask, setLocalTask] = useState<AgentTask | null>(null);
   const localRun = useRef<DocumentEditRunHandle | null>(null);
+  /** The newest snapshot of the local edit, for handing to the conversation when it ends. */
+  const localSnapshot = useRef<AgentTask | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -114,14 +117,28 @@ export function useAgentTask() {
         // A run that failed, and a limitation the run ran into, are both things
         // the user has to be told. This used to drop each on the floor.
         if (event.kind === "error") {
-          toast.error({ content: "The run stopped", description: event.message });
+          toast.error({ content: translate("shell.agentRun.stopped"), description: event.message });
           return;
         }
         if (event.kind === "notice") {
-          toast.warning({ content: "Not built yet", description: event.message });
+          toast.warning({ content: translate("shell.port.notBuilt"), description: event.message });
+          return;
+        }
+        if (event.kind === "cleared") {
+          if (event.folderId !== scopeFolderId) return;
+          setTask(null);
+          // A finished in-place edit belongs to the conversation just left.
+          // One still running keeps its place until it is done.
+          if (!isLive(localSnapshot.current)) {
+            localRun.current = null;
+            setLocalTask(null);
+          }
           return;
         }
         if (event.task.folderId !== scopeFolderId) return;
+        // Another conversation in this folder, or an older run of this one:
+        // the list and the library want it, the panel does not.
+        if (event.focused === false) return;
         setTask(event.task);
       }),
     [port, scopeFolderId],
@@ -135,12 +152,14 @@ export function useAgentTask() {
    * what happens to a runtime task that was already finished when the user
    * started editing by hand. That task is history; the edit is now.
    */
-  const shown = localTask ?? task;
+  const shown: AgentTask | null = localTask
+    ? { ...localTask, messages: mergeMessages(task?.messages ?? [], localTask.messages) }
+    : task;
   const busy =
     shown?.status === "working" || shown?.status === "reading" || shown?.status === "writing";
 
   const send = useCallback(
-    async (submission: ComposerSubmission) => {
+    async (submission: ComposerSubmission & { newConversation?: boolean }) => {
       const target = submission.activeFileId
         ? (files.find((file) => file.id === submission.activeFileId) ?? null)
         : null;
@@ -165,13 +184,20 @@ export function useAgentTask() {
         // mounted — a run's stage, or an editor that is still coming up.
         canvasCanEditInPlace: Boolean(canvas?.canEditDocument?.()),
       });
-      if (!submission.imageGeneration && editableAs && target && canvas) {
+      if (!submission.imageGeneration && !submission.newConversation && editableAs && target && canvas) {
         // One at a time. A second instruction into the same document while the
         // first is mid-`apply` would capture a scope the first one is holding,
         // and the editor would reject whichever arrived second.
         localRun.current?.abort();
+        const folderId = submission.folderId || scopeFolderId;
         const run = startDocumentEditRun(
-          { canvas, onTask: setLocalTask },
+          {
+            canvas,
+            onTask: (next) => {
+              localSnapshot.current = next;
+              setLocalTask(next);
+            },
+          },
           {
             instruction: submission.text,
             folderId: submission.folderId || scopeFolderId,
@@ -183,6 +209,15 @@ export function useAgentTask() {
         );
         localRun.current = run;
         await run.done;
+        /*
+         * The edit is part of the conversation. Handed to the port once it is
+         * over, so the thread still has it after the next message goes to the
+         * runtime — and the runtime is told it happened.
+         */
+        const finished = localSnapshot.current;
+        if (finished?.messages.length) {
+          await attempt(() => port.agent.recordExchange({ folderId, messages: finished.messages }));
+        }
         // The document changed under the library's feet: the editor wrote it,
         // so nothing else knows its size or its modified time has moved.
         await reload();
@@ -262,6 +297,13 @@ export function useAgentTask() {
     task: shown,
     busy,
     send,
+    /** Empties the panel; the next message starts a new conversation. */
+    newConversation: useCallback(async () => {
+      // The panel disables the button while anything runs; this is the same
+      // rule for a caller that did not.
+      if (isLive(localSnapshot.current)) return;
+      await attempt(() => port.agent.startConversation(scopeFolderId));
+    }, [port, scopeFolderId]),
     answer: useCallback(
       async (input: { optionId?: string; text?: string; outline?: readonly AgentOutlinePage[] }) => {
         /*
@@ -301,4 +343,19 @@ export function useAgentTask() {
     }, [port]),
     stop,
   };
+}
+
+/**
+ * The conversation's messages with the in-place edit on screen added.
+ *
+ * The port also carries a finished edit once it has been recorded, so the two
+ * overlap for as long as the edit stays on screen; the id is what they share.
+ */
+export function mergeMessages(conversation: readonly AgentMessage[], local: readonly AgentMessage[]): AgentMessage[] {
+  const seen = new Set(conversation.map((message) => message.id));
+  return [...conversation, ...local.filter((message) => !seen.has(message.id))];
+}
+
+function isLive(task: AgentTask | null): boolean {
+  return task?.status === "working" || task?.status === "reading" || task?.status === "writing";
 }

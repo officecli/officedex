@@ -2,6 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Plus } from "lucide-react";
 
+import { useT } from "../../renderer/i18n";
 import type { FileType } from "../../shared/uiPort";
 import { requestHomeStart } from "../home/homeStart";
 import { useShell } from "../state/ShellContext";
@@ -22,16 +23,17 @@ import "./newTaskMenu.css";
  */
 
 const KINDS: ReadonlyArray<{ id: FileType; label: string; format: string }> = [
-  { id: "doc", label: "Document", format: "DOCX" },
-  { id: "sheet", label: "Spreadsheet", format: "XLSX" },
-  { id: "slides", label: "Presentation", format: "PPTX" },
-  { id: "image", label: "Image", format: "PNG" },
+  { id: "doc", label: "shell.newTask.doc", format: "DOCX" },
+  { id: "sheet", label: "shell.newTask.sheet", format: "XLSX" },
+  { id: "slides", label: "shell.newTask.slides", format: "PPTX" },
+  { id: "image", label: "shell.newTask.image", format: "PNG" },
 ];
 
 const COLUMNS = 2;
 
 export function NewTaskMenu({ collapsed, label }: { collapsed: boolean; label: string }) {
   const { dispatch } = useShell();
+  const t = useT();
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -110,7 +112,7 @@ export function NewTaskMenu({ collapsed, label }: { collapsed: boolean; label: s
               id={id}
               className="shell-new-task-menu"
               role="menu"
-              aria-label="New task type"
+              aria-label={t("shell.newTask.menuAria")}
               style={{ left: place?.left ?? -9999, top: place?.top ?? -9999 }}
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
@@ -135,7 +137,7 @@ export function NewTaskMenu({ collapsed, label }: { collapsed: boolean; label: s
                 items[next]?.focus();
               }}
             >
-              <div className="shell-new-task-title">New task</div>
+              <div className="shell-new-task-title">{t("shell.sidebar.newTask")}</div>
               <div className="shell-new-task-grid">
                 {KINDS.map((kind) => (
                   <button
@@ -143,13 +145,13 @@ export function NewTaskMenu({ collapsed, label }: { collapsed: boolean; label: s
                     type="button"
                     role="menuitem"
                     tabIndex={-1}
-                    aria-label={kind.label}
+                    aria-label={t(kind.label)}
                     data-kind={kind.id}
                     onClick={() => choose(kind.id)}
                   >
                     <FileTypeIcon type={kind.id} size={24} />
                     <small>{kind.format}</small>
-                    <strong>{kind.label}</strong>
+                    <strong>{t(kind.label)}</strong>
                   </button>
                 ))}
               </div>

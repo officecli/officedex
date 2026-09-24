@@ -3,6 +3,7 @@ import { Plus, X } from "lucide-react";
 
 import { MAX_REFERENCES, isReferenceImagePath } from "../../../shared/imageGeneration";
 import { toast } from "../../../renderer/ui";
+import { translate, useT } from "../../../renderer/i18n";
 import { usePort } from "../../port/PortContext";
 import type { ImageReference } from "./imageDraft";
 
@@ -39,7 +40,7 @@ export function useReferenceImport({ references, onChange }: Pick<ReferenceListP
 
   const append = (incoming: ImageReference[]) => {
     const room = MAX_REFERENCES - references.length;
-    if (incoming.length > room) toast.info(`You can add up to ${MAX_REFERENCES} reference images.`);
+    if (incoming.length > room) toast.info(translate("shell.imageRef.max", { count: MAX_REFERENCES }));
     if (room > 0) onChange([...references, ...incoming.slice(0, room)]);
   };
 
@@ -48,13 +49,13 @@ export function useReferenceImport({ references, onChange }: Pick<ReferenceListP
     const picked: ImageReference[] = [];
     for (const file of [...list]) {
       if (!ACCEPTED.includes(file.type) || file.size > MAX_BYTES) {
-        toast.error("Choose a PNG, JPG or WebP under 20 MB.");
+        toast.error(translate("shell.imageRef.type"));
         continue;
       }
       try {
         picked.push({ path: await images.importReference(file), name: file.name });
       } catch {
-        toast.error(`${file.name} could not be added.`);
+        toast.error(translate("shell.imageRef.failed", { name: file.name }));
       }
     }
     append(picked);
@@ -99,11 +100,12 @@ export function useReferenceImport({ references, onChange }: Pick<ReferenceListP
 
 /** Home's layout: tiles left of the prompt, the add sheet last among them. */
 export function ReferenceList({ references, onChange, disabled }: ReferenceListProps) {
+  const t = useT();
   const picker = useReferenceImport({ references, onChange });
   if (!picker.available) return null;
 
   return (
-    <div className="shell-ig-references" role="group" aria-label="Reference images">
+    <div className="shell-ig-references" role="group" aria-label={t("shell.imageRef.aria")}>
       {references.map((reference, index) => (
         <ReferenceTile
           key={reference.path}
@@ -117,8 +119,8 @@ export function ReferenceList({ references, onChange, disabled }: ReferenceListP
         <button
           type="button"
           className="shell-ig-reference-add"
-          aria-label="Add reference image"
-          title="Add reference image · PNG, JPG or WebP"
+          aria-label={t("shell.imageTool.addReference")}
+          title={t("shell.imageTool.addReferenceTitle")}
           disabled={disabled}
           onClick={picker.add}
         >
@@ -137,10 +139,11 @@ export function ReferenceList({ references, onChange, disabled }: ReferenceListP
  * Nothing at all until there is one — the add button lives in the tool strip.
  */
 export function ReferenceStrip({ references, onChange, disabled }: ReferenceListProps) {
+  const t = useT();
   const images = usePort().images;
   if (!images || references.length === 0) return null;
   return (
-    <div className="shell-ig-reference-strip" role="group" aria-label="Reference images">
+    <div className="shell-ig-reference-strip" role="group" aria-label={t("shell.imageRef.aria")}>
       {references.map((reference, index) => (
         <ReferenceTile
           key={reference.path}
@@ -165,10 +168,11 @@ function ReferenceTile({
   disabled: boolean;
   onRemove: () => void;
 }) {
+  const t = useT();
   return (
     <div className="shell-ig-reference" title={reference.name}>
       <ReferenceThumb path={reference.path} name={reference.name} />
-      <button type="button" aria-label={`Remove reference ${index + 1}`} disabled={disabled} onClick={onRemove}>
+      <button type="button" aria-label={t("shell.imageRef.remove", { index: index + 1 })} disabled={disabled} onClick={onRemove}>
         <X size={12} strokeWidth={1.8} aria-hidden="true" />
       </button>
       <span aria-hidden="true">{index + 1}</span>

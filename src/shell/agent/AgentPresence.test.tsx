@@ -98,7 +98,10 @@ describe("agent presence is a single object", () => {
 
     // No dock/float control is offered where docking is impossible.
     expect(shell.view.queryByTitle("Dock the Agent panel")).toBeNull();
-    await untilFloating(shell.view.container, ".shell-presence-panel");
+    // Editor opens on the collapsed mark, not the conversation.
+    await untilFloating(shell.view.container, ".shell-presence-face");
+    expect(shell.state().presence.expanded).toBe(false);
+    expect(shell.view.container.querySelector(".shell-presence-panel")).toBeNull();
 
     await shell.dispatch({ type: "set-mode", mode: "agent" });
     expect(shell.view.container.querySelector(".shell-agent .shell-task")).not.toBeNull();
@@ -234,11 +237,53 @@ describe("task panel", () => {
     expect(plan?.dirty).toBe(false);
   });
 
-  it("pauses and resumes without losing the task", async () => {
-    const shell = await openFile({ fastAgent: true });
+  it("follows the open file's folder when switching tabs", async () => {
+    const shell = await renderShell({
+      fastAgent: true,
+      tasks: [
+        {
+          id: "task-launch",
+          title: "Launch deck work",
+          folderId: SEED_FOLDER_ID,
+          status: "working",
+          phase: "Writing the launch deck",
+          steps: [],
+          messages: [{ id: "m-launch", role: "user", text: "Write the launch deck", createdAt: 1 }],
+          suggestion: null,
+          question: null,
+        },
+        {
+          id: "task-research",
+          title: "Interview notes work",
+          folderId: "folder-research",
+          status: "working",
+          phase: "Reading the interviews",
+          steps: [],
+          messages: [{ id: "m-research", role: "user", text: "Summarise the interviews", createdAt: 1 }],
+          suggestion: null,
+          question: null,
+        },
+      ],
+    });
+    await shell.dispatch({ type: "open-file", fileId: SEED_ACTIVE_FILE_ID });
+    await shell.dispatch({ type: "open-file", fileId: "file-interviews" });
+    await untilText(shell.view.container, "Interview notes work");
 
     await act(async () => {
-      await shell.port.agent.send({ ...sendInput, text: "Summarise the folder.", activeFileId: null });
+      fireEvent.click(shell.view.getByTitle("MO launch plan.docx"));
+    });
+    await untilText(shell.view.container, "Launch deck work");
+    expect(shell.state().selectedFolderId).toBe(SEED_FOLDER_ID);
+  });
+
+  it("pauses and resumes without losing the task", async () => {
+    const shell = await openFile({ fastAgent: true });
+    // The editor opens on the collapsed mark; the controls live in the panel.
+    await shell.dispatch({ type: "set-presence-expanded", expanded: true });
+
+    await act(async () => {
+      // Pausing only exists for decks, so this run has to be one.
+      await shell.port.agent.send({ ...sendInput, text: "Summarise the folder.", activeFileId: null, documentType: "pptx" });
       await shell.port.agent.pause();
     });
     await untilText(shell.view.container, "Agent paused");

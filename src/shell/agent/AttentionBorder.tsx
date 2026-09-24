@@ -1,10 +1,22 @@
 import { useEffect, useRef } from "react";
 
+import { useCanvasSurface } from "../editor/canvasSurface";
 import { AttentionOverlay, type AttentionBox } from "./attentionOverlay";
 import "./agent.css";
 
-/** How far inside the workspace the border sits when it frames the whole canvas. */
-const INSET = 10;
+/**
+ * How far the border keeps off the edge it is framing.
+ *
+ * Ten was too tight once an editor filled the canvas: the workspace's edge is
+ * the *canvas host's* edge, so the frame landed on the embedded editor's
+ * scrollbar and grazed its bottom controls. Sixteen clears both and still reads
+ * as a frame around the document rather than a box floating inside it.
+ *
+ * It is a fixed inset rather than a proportional one because the strokes are a
+ * fixed width: the number that matters is "wider than the glow", not a fraction
+ * of the pane.
+ */
+const INSET = 16;
 
 export interface AttentionBorderProps {
   /**
@@ -86,6 +98,35 @@ export function AttentionBorder({
 }: AttentionBorderProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<AttentionOverlay | null>(null);
+  /*
+   * Controls the editor draws for itself along the canvas edges.
+   *
+   * The frame has to clear those, not just the canvas box: the deck runs its
+   * own status bar 32px tall along the bottom and a scrollbar down the side,
+   * and a frame drawn INSET pixels inside the box sits on them. This is the
+   * channel that already knows — the same numbers the floating agent panel
+   * keeps out of the way with (`editorChrome.ts`) — so the frame uses them
+   * rather than carrying a second, soon-stale guess.
+   *
+   * It also makes the border honest about what it frames: what is inside the
+   * editor's own chrome is the document, which is the thing the light is about.
+   *
+   * ── Which is why the box has to be there too ────────────────────────────────
+   *
+   * `insets` are measured inward from the *canvas box* (`CanvasInsets` in
+   * canvasSurface.ts), so with no canvas on screen they are not a distance from
+   * anything. That is not hypothetical, and it is the bug the hero glow shipped
+   * with: the canvas host is kept mounted behind Home on purpose
+   * (`EditorCanvasHost visible={false}`, so a document keeps its session, its
+   * scroll position and its undo stack), and an editor that is merely hidden
+   * keeps reporting. Home's composer then read the open *deck's* 32px status bar
+   * as though it were its own and lit the top 129px of a 161px input, its
+   * bottom edge crossing the scope chips. `canvasKeepOut` in the same module
+   * answers "no information" the same way, for the same reason: either half
+   * missing is silence.
+   */
+  const { box: canvasBox, chrome } = useCanvasSurface();
+  const insets = canvasBox ? chrome?.insets : undefined;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -119,14 +160,20 @@ export function AttentionBorder({
         return;
       }
       const rect = host.getBoundingClientRect();
-      const width = rect.width - 2 * inset;
-      const height = rect.height - 2 * inset;
+      // Editor-drawn controls push the frame further in, per edge, on top of
+      // the glow's own clearance.
+      const left = inset + (insets?.left ?? 0);
+      const top = inset + (insets?.top ?? 0);
+      const right = inset + (insets?.right ?? 0);
+      const bottom = inset + (insets?.bottom ?? 0);
+      const width = rect.width - left - right;
+      const height = rect.height - top - bottom;
       // A host smaller than its own inset would be framed inside out.
       if (width < 1 || height < 1) {
         overlay.hide(true);
         return;
       }
-      overlay.focus({ left: inset, top: inset, width, height, radius });
+      overlay.focus({ left, top, width, height, radius });
     };
 
     paint();
@@ -134,7 +181,17 @@ export function AttentionBorder({
     const observer = new ResizeObserver(paint);
     observer.observe(host);
     return () => observer.disconnect();
-  }, [active, box, inset, radius, reducedMotion]);
+  }, [
+    active,
+    box,
+    inset,
+    radius,
+    reducedMotion,
+    insets?.bottom,
+    insets?.left,
+    insets?.right,
+    insets?.top,
+  ]);
 
   return <div ref={hostRef} className="shell-attention" aria-hidden="true" />;
 }

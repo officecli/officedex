@@ -238,6 +238,63 @@ describe("startDocumentEditRun", () => {
   });
 
   /*
+   * And *which* selection, because "narrow this" is not a target.
+   *
+   * The deck path needs the words: it resolves the scope from the editor's own
+   * snapshot, and when that snapshot no longer holds the selection the chip was
+   * captured from, the quoted text is the only way left to find the shape the
+   * user pointed at. A flag alone sent it back to editing the whole deck.
+   */
+  it("passes the quoted passage down, not only the fact that there was one", async () => {
+    const seen: DocumentEditRequest[] = [];
+    const canvas = {
+      editDocument: async (request: DocumentEditRequest): Promise<DocumentEditResult> => {
+        seen.push(request);
+        return { summary: "done", applied: 1, undo: null, scope: "selection" as const, saveError: null };
+      },
+    };
+
+    await startDocumentEditRun(
+      { canvas, onTask: () => {} },
+      {
+        ...input,
+        reference: { fileId: "file-plan", label: "deck.pptx · Title 1", text: "Why We Win" },
+      },
+    ).done;
+    await startDocumentEditRun({ canvas, onTask: () => {} }, input).done;
+
+    expect(seen[0].selection).toEqual({ label: "deck.pptx · Title 1", text: "Why We Win" });
+    expect(seen[1].selection).toBeUndefined();
+  });
+
+  /*
+   * A deck edit that stayed inside the selection says so.
+   *
+   * "The slides that needed it" is the deck deciding, and a user who picked one
+   * title and read that had no way to tell whether the other nine slides were
+   * left alone — which, before the edit was scoped, they were not.
+   */
+  it("names the selection when a deck edit was scoped to one", async () => {
+    const { snapshots, onTask } = collect();
+    await startDocumentEditRun(
+      { canvas: canvasReturning({ applied: 1, scope: "selection" }), onTask },
+      { ...input, documentType: "pptx", fileName: "deck.pptx" },
+    ).done;
+
+    expect(snapshots.at(-1)!.suggestion?.summary).toBe("One change made to what you selected.");
+  });
+
+  it("still counts slides when a deck edit was not scoped", async () => {
+    const { snapshots, onTask } = collect();
+    await startDocumentEditRun(
+      { canvas: canvasReturning({ applied: 2, scope: "document" }), onTask },
+      { ...input, documentType: "pptx", fileName: "deck.pptx" },
+    ).done;
+
+    expect(snapshots.at(-1)!.suggestion?.summary).toBe("2 changes made to the slides that needed it.");
+  });
+
+  /*
    * The case a real run turned up: the replacements landed, and the Writer
    * embed's DOCX export then failed. Reported as a plain failure — which is
    * what it used to be — the panel said the edit stopped while the document
@@ -378,5 +435,68 @@ describe("a run that asks first", () => {
     const finished = tasks.at(-1)!;
     expect(finished.suggestion).toBeNull();
     expect(finished.messages.some((message) => /cancel/i.test(message.text))).toBe(true);
+  });
+
+  /*
+   * A confirmation whose default answer is yes is a formality, and a formality
+   * in front of "this plan changes the whole deck and you selected one title"
+   * is worse than no question at all: it teaches the user to click through the
+   * one gate that exists to stop that edit.
+   */
+  it("does not recommend Apply on a dangerous question", async () => {
+    resetDocumentEditIds();
+    const tasks: AgentTask[] = [];
+    const canvas = {
+      editDocument: async (request: DocumentEditRequest): Promise<DocumentEditResult> => {
+        const approved = await request.onConfirm?.({
+          text: "This plan reaches past your selection. Apply it to the rest of the deck anyway?",
+          danger: true,
+        });
+        return {
+          summary: approved ? "Applied." : "Cancelled. The deck was not changed.",
+          applied: approved ? 1 : 0,
+          scope: "document" as const,
+          undo: null,
+          saveError: null,
+        };
+      },
+    };
+    const run = startDocumentEditRun(
+      { canvas, onTask: (task) => tasks.push(structuredClone(task)) },
+      { ...input, documentType: "pptx" },
+    );
+
+    const asked = await vi.waitFor(() => {
+      const withQuestion = tasks.find((task) => task.question);
+      expect(withQuestion).toBeDefined();
+      return withQuestion!;
+    });
+    const options = asked.question!.options;
+    expect(options.find((option) => option.id === "apply")?.recommended).toBeUndefined();
+    expect(options.find((option) => option.id === "cancel")?.recommended).toBe(true);
+
+    run.answer({ optionId: "cancel" });
+    await run.done;
+    expect(tasks.at(-1)!.suggestion).toBeNull();
+  });
+
+  it("still recommends Apply on the planner's own caution", async () => {
+    resetDocumentEditIds();
+    const canvas = canvasAsking();
+    const tasks: AgentTask[] = [];
+    const run = startDocumentEditRun(
+      { canvas: canvas as never, onTask: (task) => tasks.push(structuredClone(task)) },
+      input,
+    );
+
+    const asked = await vi.waitFor(() => {
+      const withQuestion = tasks.find((task) => task.question);
+      expect(withQuestion).toBeDefined();
+      return withQuestion!;
+    });
+    expect(asked.question!.options.find((option) => option.id === "apply")?.recommended).toBe(true);
+
+    run.answer({ optionId: "cancel" });
+    await run.done;
   });
 });

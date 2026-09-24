@@ -406,6 +406,56 @@
   font-size: var(--shell-text-xs);
 }
 
+/*
+ * A version the shell picked, not one the user opened: the whole chip opens
+ * it, so it reads as a thing to look at rather than a caption.
+ */
+.shell-ig-head-target.is-button {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.shell-ig-head-target.is-button:hover .shell-ig-head-label {
+  color: var(--shell-accent);
+}
+
+.shell-ig-head-target.is-button:focus-visible {
+  outline: 2px solid var(--shell-accent);
+  outline-offset: 2px;
+  border-radius: var(--shell-radius-item);
+}
+
+/* "New image instead" / "Edit Version N": the other answer to "which picture". */
+.shell-ig-head-switch {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 4px;
+  height: 24px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--shell-radius-item);
+  background: transparent;
+  color: var(--shell-ink-subtle);
+  font: var(--shell-text-xs) / 1 var(--shell-font);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.shell-ig-head-switch:hover:not(:disabled) {
+  background: var(--shell-hover);
+  color: var(--shell-ink-title);
+}
+
+.shell-ig-head-switch:disabled {
+  cursor: default;
+}
+
 /* The note is also the label's tooltip; in the docked column it yields first. */
 @container (max-width: 340px) {
   .shell-ig-head-note {
@@ -443,6 +493,72 @@
 
 .shell-ig-head-exit:disabled {
   cursor: default;
+}
+
+/* --------------------------------------------------------------- aside */
+
+/*
+ * Above a document composer whose panel is a picture's conversation: what the
+ * message is about, and the way over to the picture.
+ */
+.shell-ig-aside {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: -2px -2px 8px;
+  padding: 0 0 8px 4px;
+  border-bottom: 1px solid var(--shell-line);
+  font: var(--shell-text-sm) / 18px var(--shell-font);
+}
+
+.shell-ig-aside-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 140px;
+  min-width: 0;
+  color: var(--shell-ink-subtle);
+}
+
+.shell-ig-aside-text > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell-ig-aside-switch {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px 0 4px;
+  border: 1px solid var(--shell-line);
+  border-radius: var(--shell-radius-item);
+  background: transparent;
+  color: var(--shell-ink-title);
+  font: var(--shell-text-xs) / 1 var(--shell-font);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.shell-ig-aside-switch:hover {
+  background: var(--shell-hover);
+}
+
+.shell-ig-aside-switch:focus-visible {
+  outline: 2px solid var(--shell-accent);
+  outline-offset: 2px;
+}
+
+.shell-ig-aside-thumb {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--shell-radius-control);
+  object-fit: cover;
 }
 
 /* ------------------------------------------------------------- summary */

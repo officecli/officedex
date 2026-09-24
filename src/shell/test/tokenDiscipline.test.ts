@@ -77,6 +77,7 @@ const TYPE_SCALE: Record<string, string> = {
   "--shell-text-2xl": "18px",
   "--shell-text-3xl": "26px",
   "--shell-text-4xl": "32px",
+  "--shell-text-display": "31px",
 };
 
 interface Exemption {

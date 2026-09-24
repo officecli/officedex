@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 
+import type { DesktopTask } from "../../shared/types";
 import type { FileType } from "../../shared/uiPort";
+import { generationCanvasPhase } from "./slidesGenerating/pptxGenerationPhase";
+import { SlidesGenerating } from "./slidesGenerating/SlidesGenerating";
 
 /**
  * What the canvas shows while no editor adapter is registered. It is a
@@ -11,9 +14,18 @@ import type { FileType } from "../../shared/uiPort";
  * The proportions follow the prototype so the surrounding chrome can be
  * screenshot-compared against it.
  */
-export function CanvasPlaceholder({ type }: { type: FileType }) {
+export function CanvasPlaceholder({
+  type,
+  mode,
+  task,
+}: {
+  type: FileType;
+  /** Live PPT generation: the agent-mark canvas instead of the grey skeleton. */
+  mode?: "generating";
+  task?: DesktopTask;
+}) {
   if (type === "sheet") return <SheetSkeleton />;
-  if (type === "slides") return <SlidesSkeleton />;
+  if (type === "slides") return <SlidesSkeleton mode={mode} task={task} />;
   // A picture loads in a moment; a page skeleton behind it would read as a document.
   if (type === "image") return null;
   return <DocSkeleton />;
@@ -111,7 +123,37 @@ function SheetSkeleton() {
   );
 }
 
-function SlidesSkeleton() {
+function prefersReducedMotion(): boolean {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function usePrefersReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(prefersReducedMotion);
+  useEffect(() => {
+    const media = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    if (!media) return;
+    const sync = () => setReduced(media.matches);
+    sync();
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", sync);
+      return () => media.removeEventListener("change", sync);
+    }
+    media.addListener(sync);
+    return () => media.removeListener(sync);
+  }, []);
+  return reduced;
+}
+
+function SlidesSkeleton({ mode, task }: { mode?: "generating"; task?: DesktopTask }) {
+  const reducedMotion = usePrefersReducedMotion();
+  const phase = mode === "generating" && task ? generationCanvasPhase(task) : null;
+  // Live PPT runs keep the agent canvas until the js-api editor mounts.
+  // The paper is a looping PPT skeleton, not fake slide text — that was the
+  // typewriter that drifted from the outline.
+  if (!reducedMotion && phase) {
+    return <SlidesGenerating task={task!} />;
+  }
   return (
     <div className="shell-canvas-scroll shell-canvas-scroll--slides">
       <div className="shell-skeleton-filmstrip" aria-hidden="true">

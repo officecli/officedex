@@ -88,7 +88,25 @@ const STYLESHEETS = [
  */
 const LOAD_PHASES = ["true", "false"] as const;
 
-function attributesOf(name: ShellCombination, loaded: string): Record<string, string> {
+/**
+ * The second axis across the table, for the same reason and with the same
+ * shape.
+ *
+ * `data-mode-switching` is written by `state/useModeTransition.ts` for one
+ * `--shell-duration` after the mode changes, so every combination that can be
+ * arrived at by switching modes passes through `"true"` and then rests at
+ * `"false"`. Like `data-loaded` it is a phase rather than a coordinate: pinning
+ * it to `"false"` here would report the whole mode-switch section of `app.css`
+ * as dead CSS, and pinning it to `"true"` would claim the shell is permanently
+ * mid-animation.
+ */
+const SWITCH_PHASES = ["false", "true"] as const;
+
+function attributesOf(
+  name: ShellCombination,
+  loaded: string,
+  switching: string,
+): Record<string, string> {
   const combination = SHELL_COMBINATIONS[name] as {
     mode: "agent" | "editor";
     home: boolean;
@@ -111,6 +129,7 @@ function attributesOf(name: ShellCombination, loaded: string): Record<string, st
     "data-nav-collapsed": String(state.navCollapsed),
     "data-presence": effectivePlacement(state),
     "data-loaded": loaded,
+    "data-mode-switching": switching,
   };
 }
 
@@ -159,12 +178,14 @@ export function combinationsFor(selector: string): ShellCombination[] {
     value: match[2],
   }));
   return COMBINATION_IDS.filter((name) =>
-    LOAD_PHASES.some((loaded) => {
-      const attributes = attributesOf(name, loaded);
-      return predicates.every(({ attribute, value }) =>
-        value === undefined ? attribute in attributes : attributes[attribute] === value,
-      );
-    }),
+    LOAD_PHASES.some((loaded) =>
+      SWITCH_PHASES.some((switching) => {
+        const attributes = attributesOf(name, loaded, switching);
+        return predicates.every(({ attribute, value }) =>
+          value === undefined ? attribute in attributes : attributes[attribute] === value,
+        );
+      }),
+    ),
   );
 }
 
@@ -239,6 +260,49 @@ const REGISTRY: Record<string, readonly ShellCombination[]> = {
    * under a tab, with no CSS anywhere admitting the dependency.
    */
   '#shell[data-mode="agent"][data-home="false"][data-presence="docked"] .shell-tabs': ["C5", "C6"],
+
+  /*
+   * The mode switch: ten shells, because every shell can be switched into.
+   *
+   * These are the transition's consumers, and they are registered as one group
+   * because they are one mechanism — `app.css` says what each does. The first
+   * four are the expensive half (the workspace pinned to its final box, the
+   * column raised over it, the row painted chrome behind the wedge, the
+   * document's single reflow covered by a fade); the next three are the
+   * content swaps; the last two are the column's own fade, which reads
+   * `data-mode` for its direction because by the time the switching attribute
+   * goes up the mode is already the destination.
+   *
+   * The ten is what the axis means, not a claim that every shell looks
+   * different: `data-mode-switching` is a phase every combination passes
+   * through, exactly like `data-loaded`. The last two entries are the ones
+   * that carry real information — six agent shells, four editor ones.
+   */
+  '#shell[data-mode-switching="true"] .shell-workspace': [
+    "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10",
+  ],
+  '#shell[data-mode-switching="true"] .shell-agent': [
+    "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10",
+  ],
+  '#shell[data-mode-switching="true"] .shell-row--body': [
+    "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10",
+  ],
+  '#shell[data-mode-switching="true"] .shell-canvas': [
+    "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10",
+  ],
+  '#shell[data-mode-switching="true"] .shell-sidebar-body': [
+    "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10",
+  ],
+  '#shell[data-mode-switching="true"] .shell-sidebar-views': [
+    "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10",
+  ],
+  '#shell[data-mode-switching="true"] .shell-home': [
+    "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10",
+  ],
+  '#shell[data-mode-switching="true"][data-mode="agent"] .shell-agent': [
+    "C1", "C2", "C5", "C6", "C7", "C8",
+  ],
+  '#shell[data-mode-switching="true"][data-mode="editor"] .shell-agent': ["C3", "C4", "C9", "C10"],
 };
 
 describe("shell combination selectors", () => {

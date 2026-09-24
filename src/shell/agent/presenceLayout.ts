@@ -42,12 +42,15 @@ export const NO_INSETS: Insets = { top: 0, right: 0, bottom: 0, left: 0 };
 /**
  * The strip the window controls own, measured from the viewport's top-left.
  *
- * The desktop build draws its own close / minimise / full-screen cluster and
- * the sidebar toggle in the top row; on that build they are the *only* window
- * controls there are. A floating presence is `position: fixed` at `z-index:
- * 200`, so anything it is allowed to sit on top of, it also swallows the
- * clicks of — which is how the presence could be parked over the close button
- * with no way to shut the window (S4-001, P0).
+ * The desktop build reserves a close / minimise / full-screen cluster and the
+ * sidebar toggle in the top row; on that build they are the *only* window
+ * controls there are. (On macOS the cluster is the system's own traffic lights
+ * showing through the band rather than a set the page drew — see
+ * `chrome/WindowBar.tsx`. Same region either way, which is why this contract is
+ * about the region and not about the buttons.) A floating presence is
+ * `position: fixed` at `z-index: 200`, so anything it is allowed to sit on top
+ * of, it also swallows the clicks of — which is how the presence could be
+ * parked over the close button with no way to shut the window (S4-001, P0).
  *
  * The numbers are deliberately **not** imported from `chrome/WindowBar.tsx`:
  * the floating layer and the window chrome are owned by different parts of the
@@ -58,7 +61,7 @@ export const NO_INSETS: Insets = { top: 0, right: 0, bottom: 0, left: 0 };
  *   width  132px — `.shell-windowbar`'s `min-width` in `app.css`, which exists
  *                  for exactly this reason ("the traffic lights and the
  *                  sidebar toggle always fit"). The cluster itself measures
- *                  12px padding + 63px of lights + 24px gap + 28px toggle.
+ *                  12px padding + 63px of lights + 12px gap + 28px toggle.
  *   height  40px — `--shell-windowbar-h` in `tokens.css`, the top row.
  *
  * If the window bar ever grows past either number, the presence will start

@@ -155,6 +155,7 @@ function ImageTaskRow({
   files: FileMeta[];
   onOpen: (fileId: string | null) => void;
 }) {
+  const t = useT();
   const runs = task.image?.runs ?? [];
   const versions = runs
     .filter((run) => run.status === "done")
@@ -166,10 +167,10 @@ function ImageTaskRow({
   const name = versions[0] ? fileBaseName(versions[0].name) : task.title;
   const count = versions.length;
   const detail = busy
-    ? "Image · Creating image"
+    ? t("shell.taskList.imageCreating")
     : count > 0
-      ? `Image · ${count} version${count === 1 ? "" : "s"}`
-      : `Image · ${task.phase || "No picture yet"}`;
+      ? t(count === 1 ? "shell.taskList.imageVersion" : "shell.taskList.imageVersions", { count })
+      : t("shell.taskList.imagePhase", { phase: task.phase || t("shell.taskList.noPicture") });
 
   return (
     <button
@@ -190,7 +191,7 @@ function ImageTaskRow({
           {statusLabel(task.status)}
         </span>
       ) : (
-        <span className="shell-task-row-ready">Ready</span>
+        <span className="shell-task-row-ready">{t("shell.taskList.ready")}</span>
       )}
       <ChevronRight className="shell-task-row-chevron" size={16} strokeWidth={1.7} aria-hidden="true" />
     </button>

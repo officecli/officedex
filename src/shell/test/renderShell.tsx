@@ -33,6 +33,11 @@ export interface RenderShellOptions extends FakePortOptions {
    * gets, and what every test that is not about the canvas should use.
    */
   canvas?: CanvasAdapter | null;
+  /**
+   * Leave localStorage alone. The default clears it so each test starts on
+   * Home; pass this when the test itself is about restoring persisted chrome.
+   */
+  keepStorage?: boolean;
 }
 
 /**
@@ -42,9 +47,8 @@ export interface RenderShellOptions extends FakePortOptions {
  * anything the production entry does not already exercise.
  */
 export async function renderShell(options: RenderShellOptions = {}): Promise<ShellHarness> {
-  localStorage.clear();
-
-  const { fastAgent, canvas = null, ...portOptions } = options;
+  const { fastAgent, canvas = null, keepStorage = false, ...portOptions } = options;
+  if (!keepStorage) localStorage.clear();
   const port = createFakePort(
     fastAgent
       ? {

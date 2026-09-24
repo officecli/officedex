@@ -1,12 +1,29 @@
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import {
+  publishCanvasBox,
+  publishEditorChrome,
+  resetCanvasSurface,
+  type EditorChrome,
+} from "../editor/canvasSurface";
 import { AttentionBorder } from "./AttentionBorder";
 
 afterEach(() => {
   cleanup();
+  // The two channels are module state shared by every case in this file.
+  resetCanvasSurface();
   vi.restoreAllMocks();
 });
+
+/** A deck's own status bar, reported by an editor that is mounted. */
+const SLIDES_CHROME: EditorChrome = {
+  insets: { top: 0, right: 0, bottom: 32, left: 0 },
+  ownsStatusBar: true,
+};
+
+/** The canvas host, on screen. Only published while the workspace is showing. */
+const ON_SCREEN = { top: 0, right: 800, bottom: 600, left: 0 };
 
 /**
  * jsdom measures every element as 0×0, and the border refuses to draw a box it
@@ -42,14 +59,63 @@ describe("AttentionBorder", () => {
     const svg = overlay(container);
     expect(svg?.style.display).toBe("block");
 
-    // Every stroke in the stack sits on the same inset box.
+    /*
+     * Every stroke in the stack sits on the same inset box, and that box clears
+     * the editor's own chrome.
+     *
+     * The number is asserted rather than derived because it is the thing that
+     * regressed: at 10 the frame landed on an embedded editor's scrollbar and
+     * its bottom controls. See the constant.
+     */
     const rects = [...(svg?.querySelectorAll("g rect") ?? [])];
     expect(rects.length).toBeGreaterThan(5);
     for (const rect of rects) {
-      expect(rect.getAttribute("x")).toBe("10");
-      expect(rect.getAttribute("width")).toBe("780");
-      expect(rect.getAttribute("height")).toBe("580");
+      expect(rect.getAttribute("x")).toBe("16");
+      expect(rect.getAttribute("width")).toBe("768");
+      expect(rect.getAttribute("height")).toBe("568");
     }
+  });
+
+  /*
+   * The frame clears the editor's own chrome, not just the canvas box.
+   *
+   * Reported from a screenshot: with a deck open, a 10px frame sat on the
+   * editor's scrollbar and grazed its bottom controls — that editor runs a
+   * 32px status bar along the bottom. The channel that knows those numbers is
+   * the one the floating panel already keeps off with.
+   */
+  it("insets the frame by the editor's own chrome", () => {
+    withSize(800, 600);
+    publishCanvasBox(ON_SCREEN);
+    publishEditorChrome(SLIDES_CHROME);
+
+    const { container } = render(<AttentionBorder active />);
+    const rect = overlay(container)?.querySelector("g rect");
+    expect(rect?.getAttribute("x")).toBe("16");
+    // 600 - 16 - (16 + 32): the deck's status bar is kept out of the frame.
+    expect(rect?.getAttribute("height")).toBe("536");
+  });
+
+  /*
+   * Home's composer glow, with a document open behind it.
+   *
+   * The canvas host stays mounted behind Home (`EditorCanvasHost
+   * visible={false}`) so the document keeps its session and undo stack, and the
+   * editor in it keeps reporting its chrome — but it publishes no *box*, and
+   * chrome insets are distances from that box. Read anyway they were subtracted
+   * from the composer instead, and the glow framed the top 129px of a 161px
+   * input with its bottom edge across the scope chips — reported from a
+   * screenshot of Home with a document open behind it.
+   */
+  it("ignores a hidden editor's chrome when no canvas is on screen", () => {
+    withSize(720, 190);
+    publishCanvasBox(null);
+    publishEditorChrome(SLIDES_CHROME);
+
+    const { container } = render(<AttentionBorder active inset={0} radius={20} />);
+    const rect = overlay(container)?.querySelector("g rect");
+    expect(rect?.getAttribute("y")).toBe("0");
+    expect(rect?.getAttribute("height")).toBe("190");
   });
 
   it("takes a box when the canvas can say where the work is", () => {

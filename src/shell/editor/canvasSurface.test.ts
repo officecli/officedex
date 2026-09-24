@@ -26,6 +26,7 @@ import {
   publishCanvasLocale,
   readCanvasLocale,
   subscribeCanvasLocale,
+  withEmbedLocaleQuery,
 } from "./canvasLocale";
 
 const VIEWPORT = { width: 1440, height: 900 };
@@ -142,5 +143,16 @@ describe("canvas locale", () => {
   it("spells the tag out for a request parameter", () => {
     expect(canvasLocaleTag("zh")).toBe("zh-CN");
     expect(canvasLocaleTag("en")).toBe("en-US");
+  });
+
+  it("puts the tag on an embed URL only after the shell has spoken", () => {
+    expect(withEmbedLocaleQuery("/writer/index.html")).toBe("/writer/index.html");
+    expect(withEmbedLocaleQuery("/writer/index.html", "zh")).toBe("/writer/index.html?lang=zh-CN");
+    expect(withEmbedLocaleQuery("/presentation/index.html?mode=embed", "en")).toBe(
+      "/presentation/index.html?mode=embed&lang=en-US",
+    );
+    expect(withEmbedLocaleQuery("/writer/index.html?lang=en-US#ready", "zh")).toBe(
+      "/writer/index.html?lang=zh-CN#ready",
+    );
   });
 });

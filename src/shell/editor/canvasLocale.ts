@@ -26,12 +26,14 @@
  *    `canvas/PresentationStage.tsx` is the one piece of the old renderer the
  *    shell mounts whole, and it brought that renderer's i18n with it. It was
  *    pinned to `value="en"` because the shell had no locale to give it; now it
- *    reads this.
- * 2. **An embed's render language**, where the embed accepts one.
+ *    reads this. The canvas root itself is also wrapped, so a sheet editor
+ *    that calls `useLocale()` sees the same value.
+ * 2. **An embed's render language.** `withEmbedLocaleQuery` puts `lang=` on the
+ *    iframe URL; Writer's host runtime and the presentation ribbon both read it.
  * 3. **`ui_locale` on a request.** Not a rendering language — a parameter.
  *    `planDocxEdit` writes its summary in it, and that summary is the one
- *    sentence of the whole run the user reads. `localeTag()` is what goes in
- *    the request.
+ *    sentence of the whole run the user reads. `canvasLocaleTag()` is what
+ *    goes in the request.
  *
  * ── The default is silence ──────────────────────────────────────────────────
  *
@@ -76,10 +78,32 @@ export function useCanvasLocale(): CanvasLocale | null {
  * matches on a full tag, and the language subtag alone has been read as
  * unrecognised and silently answered in English. Null rather than a default so
  * a caller omits the parameter entirely instead of asserting a language nobody
- * chose — which is what `locale: "en"` hard-coded at the call site does today.
+ * chose.
  */
 export function canvasLocaleTag(value: CanvasLocale | null = locale): string | null {
   if (value === "zh") return "zh-CN";
   if (value === "en") return "en-US";
   return null;
+}
+
+/**
+ * Puts the shell's language on an embed URL, or leaves the URL alone when the
+ * shell has not said.
+ *
+ * `lang` is the name Writer and the presentation runtime already look for. The
+ * tag is the BCP-47 form: a bare `"zh"` has been read as unrecognised. An
+ * existing `lang` is replaced so a configured `VITE_*_EDITOR_URL` that already
+ * carries one still follows the shell.
+ */
+export function withEmbedLocaleQuery(url: string, value: CanvasLocale | null = locale): string {
+  const tag = canvasLocaleTag(value);
+  if (!tag) return url;
+  const hashAt = url.indexOf("#");
+  const hash = hashAt >= 0 ? url.slice(hashAt) : "";
+  const withoutHash = hashAt >= 0 ? url.slice(0, hashAt) : url;
+  if (/[?&]lang=/i.test(withoutHash)) {
+    return `${withoutHash.replace(/([?&]lang=)[^&]*/i, `$1${tag}`)}${hash}`;
+  }
+  const joiner = withoutHash.includes("?") ? "&" : "?";
+  return `${withoutHash}${joiner}lang=${tag}${hash}`;
 }

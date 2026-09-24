@@ -1,4 +1,4 @@
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { seedFiles, seedFolders } from "../port/fake/seed";
@@ -102,6 +102,36 @@ describe("FileTree densities (decision 2)", () => {
       th.childNodes[0]?.textContent?.trim(),
     );
     expect(headings).toEqual([folders[0].name]);
+  });
+});
+
+describe("one icon size per row (the two row kinds drifted apart)", () => {
+  it("keeps the folder glyph identifiable, because the CSS targets it by class", () => {
+    /*
+     * The sidebar read as two densities: a folder's glyph came out at 17px
+     * (lucide's default) and a file's at 15px, in the same list at the same
+     * indent. `nav.css` levels them by excluding the disclosure control —
+     * the chevron is the folder toggle's *first child*, so a `:first-child`
+     * rule lands on the chevron and leaves the glyph untouched, which is what
+     * the first attempt at the fix did.
+     *
+     * jsdom computes no stylesheet, so the rule itself cannot be asserted
+     * here. What can be asserted is the thing that rule depends on: the
+     * leading glyph has to stay identifiable as the not-chevron child. Move
+     * the chevron out of first position, or give the folder glyph the chevron
+     * class, and the sizes silently diverge again.
+     */
+    const view = render(<FileTree {...props({ density: "compact", grouping: "folder" })} />);
+    const toggles = [...view.container.querySelectorAll(".shell-tree-folder-toggle")];
+    expect(toggles.length).toBeGreaterThan(0);
+    for (const toggle of toggles) {
+      const chevrons = toggle.querySelectorAll("svg.shell-tree-chevron");
+      expect(chevrons, "the disclosure control lost its class").toHaveLength(1);
+      expect(
+        toggle.querySelectorAll("svg:not(.shell-tree-chevron)").length,
+        "the folder glyph is indistinguishable from the chevron, so the one icon size cannot reach it",
+      ).toBe(1);
+    }
   });
 });
 
@@ -255,5 +285,60 @@ describe("compact tree paging", () => {
       />,
     );
     expect(few.queryByText(/Show \d+ more/)).toBeNull();
+  });
+});
+
+describe("compact tree menus", () => {
+  it("offers only Remove on a folder that can be removed", () => {
+    const folders = seedFolders();
+    const removable = folders.find((folder) => !folder.isDefault)!;
+    const view = render(
+      <FileTree
+        {...props({
+          density: "compact",
+          onRemoveFolder: vi.fn(),
+        })}
+      />,
+    );
+
+    fireEvent.click(view.getByRole("button", { name: `Actions for ${removable.name}` }));
+    const menu = screen.getByRole("menu", { name: `${removable.name} actions` });
+    expect(within(menu).getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
+      "Remove folderFiles move to Documents",
+    ]);
+  });
+
+  it("hides the folder menu on the default folder", () => {
+    const folders = seedFolders();
+    const defaults = folders.find((folder) => folder.isDefault)!;
+    const view = render(
+      <FileTree
+        {...props({
+          density: "compact",
+          onRemoveFolder: vi.fn(),
+        })}
+      />,
+    );
+    expect(view.queryByRole("button", { name: `Actions for ${defaults.name}` })).toBeNull();
+  });
+
+  it("offers only Remove from library on a file", () => {
+    const files = seedFiles(NOW);
+    const file = files[0];
+    const view = render(
+      <FileTree
+        {...props({
+          density: "compact",
+          files,
+          onRemoveFile: vi.fn(),
+        })}
+      />,
+    );
+
+    fireEvent.click(view.getByRole("button", { name: `Actions for ${file.name}` }));
+    const menu = screen.getByRole("menu", { name: `${file.name} actions` });
+    expect(within(menu).getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
+      "Remove task",
+    ]);
   });
 });

@@ -1,4 +1,8 @@
+import { useCallback, useState } from "react";
+
 import { ToastHost } from "../renderer/ui";
+import { AccountPage } from "./account/AccountPage";
+import { useAccount } from "./account/useAccount";
 import { AgentPresence } from "./agent/AgentPresence";
 import { AttentionBorder } from "./agent/AttentionBorder";
 import { useAgentTask } from "./agent/useAgentTask";
@@ -16,8 +20,10 @@ import { AgentHome } from "./home/AgentHome";
 import { ImageWorkspace } from "./image/ImageWorkspace";
 import { EditorHome } from "./home/EditorHome";
 import { SidebarTree } from "./nav/SidebarTree";
+import { SettingsPage } from "./settings/SettingsPage";
 import { useShell } from "./state/ShellContext";
 import { effectivePlacement, NAV_RAIL_WIDTH } from "./state/shellReducer";
+import { useModeTransition } from "./state/useModeTransition";
 import { fileTypeAccentStyle } from "./theme/fileTypeAccent";
 import "./app.css";
 import "./chrome/chrome.css";
@@ -25,9 +31,12 @@ import "./chrome/chrome.css";
 /**
  * The shell's layout.
  *
- * Two rows of flex. A mode change moves exactly one thing — the width of the
- * agent column — and the browser transitions it. Nothing unmounts, which is why
- * decision 4 needs no animation machinery to feel continuous.
+ * Two rows of flex. A mode change moves one box — the width of the agent
+ * column — and changes what is inside three others: the sidebar's middle, Home,
+ * and the tab strip's left inset. Nothing unmounts that holds document state,
+ * which is what decision 4 is actually about; the transition that carries the
+ * rest is `data-mode-switching`, written here by `useModeTransition` and read
+ * by the "mode switch" section of app.css.
  *
  *   ┌───────────────┬──────────────────────────────────┐
  *   │ window bar    │ file tabs                        │  40px, always present
@@ -47,13 +56,40 @@ import "./chrome/chrome.css";
  * dependable, while flex-item width transitions are.
  */
 export function App() {
-  const { state, activeFile, loaded } = useShell();
+  const { state, dispatch, activeFile, loaded } = useShell();
   const canvas = useCanvas();
   const agent = useAgentTask();
   const reduceMotion = useReduceMotion();
+  /*
+   * Asked once here and handed down, because "who is signed in" is one fact
+   * about the whole shell and every `whoami` is a subprocess. The account page
+   * calls `refresh` after a sign-in or sign-out, which is the only time the
+   * answer changes — so nothing polls.
+   */
+  const account = useAccount();
+  const [accountOpen, setAccountOpen] = useState(false);
+  /**
+   * The settings page, when it is open — the second full-page surface, owned
+   * here for the same reason as the first: nothing about being mid-settings
+   * belongs in persisted view state, and a reload should not reopen it.
+   */
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  /**
+   * One transition for the whole shell, driven by the state rather than by the
+   * control that changed it — see `state/useModeTransition.ts`. It only writes
+   * an attribute; every region decides for itself what to do with it.
+   */
+  const shellRef = useModeTransition(state.mode, reduceMotion);
   useCanvasDirty(canvas, activeFile?.id ?? null);
   useDocumentDraft(canvas, agent.task, activeFile?.id ?? null, agent.applySuggestion);
   const placement = effectivePlacement(state);
+  /*
+   * The recording tells the shell when it has been superseded, rather than the
+   * shell trying to watch for it: the canvas is a separate React root and owns
+   * the precedence decision. Stable so the canvas effect does not re-run on
+   * every render.
+   */
+  const leaveDemo = useCallback(() => dispatch({ type: "leave-demo" }), [dispatch]);
   const agentDocked = placement === "docked" && !state.home;
 
   /**
@@ -73,7 +109,19 @@ export function App() {
     agent.task?.status === "working" ||
     agent.task?.status === "reading" ||
     agent.task?.status === "writing";
-  const attentionActive = working && !state.home && activeFile !== null;
+  /*
+   * "The document it is touching" includes one that has no file yet.
+   *
+   * A run started from Home has no active file by design — there is nothing on
+   * disk to open — and what it is writing into is the stage on the canvas. The
+   * test used to be `activeFile !== null`, which lit only because a stale file
+   * was still selected underneath the stage; once that was fixed the border
+   * went dark for exactly the runs it exists to announce. `chrome` is the
+   * canvas saying something is mounted on it, stage or editor.
+   */
+  const surface = useCanvasSurface();
+  const attentionActive =
+    working && !state.home && (activeFile !== null || surface.chrome !== null);
 
   /**
    * One status bar, not two and not none.
@@ -98,15 +146,15 @@ export function App() {
    * token at 32px would trace the agent's attention border 32px above the
    * bottom of a canvas that now reaches the window.
    *
-   * Silence means keep: no adapter, or a generation stage with no chrome of its
-   * own, and the shell draws its bar exactly as before.
+   * A stage reports `STAGE_CHROME`, which owns no status bar, so the shell
+   * keeps drawing its own over a run exactly as it did before.
    */
-  const surface = useCanvasSurface();
   const editorOwnsStatusBar = surface.chrome?.ownsStatusBar === true && !state.home;
 
   return (
     <div
       id="shell"
+      ref={shellRef}
       className="shell"
       data-mode={state.mode}
       data-home={String(state.home)}
@@ -130,7 +178,13 @@ export function App() {
       <div className="shell-row shell-row--body">
         {/* Agent mode keeps the folder tree permanently: folders are how a task
             is scoped. Editor mode's library lives on Home instead. */}
-        <Sidebar>{state.mode === "agent" ? <SidebarTree /> : null}</Sidebar>
+        <Sidebar
+          account={account.account}
+          onOpenAccount={() => setAccountOpen(true)}
+          onOpenSettings={() => setSettingsOpen(true)}
+        >
+          {state.mode === "agent" ? <SidebarTree /> : null}
+        </Sidebar>
 
         {/* Owns both the docked column and the floating layer — decision 1. */}
         <AgentPresence />
@@ -141,7 +195,20 @@ export function App() {
           survive a trip to Home the same way it survives a mode change.
         */}
         <main className="shell-workspace" hidden={state.home}>
-          <EditorCanvasHost file={activeFile} visible={!state.home} adapter={canvas} />
+          {/*
+            `fileless` covers both things that own the canvas without a file: a
+            deck being drawn (a run, not a library entry) and the bundled
+            recording started from Home. `state.demo` is the second one; the
+            first is reported by the canvas adapter itself.
+          */}
+          <EditorCanvasHost
+            file={activeFile}
+            visible={!state.home}
+            adapter={canvas}
+            fileless={state.demo}
+            demoStartedAt={state.demoStartedAt}
+            onDemoSuperseded={leaveDemo}
+          />
           {/*
             A picture, over the canvas rather than inside it.
 
@@ -175,6 +242,45 @@ export function App() {
       </div>
 
       <ToastHost />
+
+      {/*
+        The settings page — the shell's other full-page surface, and the one it
+        did not have at all until now.
+      */}
+      {settingsOpen ? (
+        <SettingsPage
+          onClose={() => setSettingsOpen(false)}
+          /*
+           * The provider section's "sign in" link lands on the account page.
+           * Settings closes first: one full-page flow at a time, and the account
+           * page is the higher rung of the two, so leaving both mounted would
+           * stack two covers whose order nobody could reason about.
+           */
+          onOpenLogin={() => {
+            setSettingsOpen(false);
+            setAccountOpen(true);
+          }}
+        />
+      ) : null}
+
+      {/*
+        The account page, when it is open.
+
+        A sibling of every region rather than a replacement for them. R-B-09
+        wants the sign-in flow not to render inside the shell frame, and an
+        opaque full-window cover satisfies that; unmounting the frame instead —
+        which is what the old renderer did — would take the open document's
+        editor with it, and the whole point of keeping the workspace mounted
+        (decision 4, and `EditorCanvasHost` being hidden rather than removed on
+        Home) is that it survives a trip somewhere else.
+
+        Owning the flag here rather than in `ShellProvider`: nothing about being
+        mid-sign-in belongs in persisted view state, and a reload should not
+        reopen it.
+      */}
+      {accountOpen ? (
+        <AccountPage onClose={() => setAccountOpen(false)} onAccountChanged={account.refresh} />
+      ) : null}
     </div>
   );
 }

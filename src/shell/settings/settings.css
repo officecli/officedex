@@ -1,0 +1,801 @@
+/*
+ * The settings page — the shell's second full-page surface.
+ *
+ * It follows `account/account.css` in structure: a fixed cover over the whole
+ * window at `--shell-z-gate`, rendered as a sibling of every region so the open
+ * document's editor survives the trip (decision 4 in `App.tsx`). It exists
+ * because the shell had no settings page at all: the legacy renderer's page was
+ * reachable only by typing `legacy.html`, which a packaged WKWebView has no
+ * address bar for, so 94 of its settings were permanently gone (audit S7 §3).
+ *
+ * **Why this file writes no colour and no font-size of its own.** Two gates own
+ * that: `test/tokenDiscipline.test.ts` fails on any literal colour or off-scale
+ * size outside `tokens.css`, and it pins the exemption file set to exactly
+ * `agent.css`, `chrome.css` and `composer.css` — so this file cannot be
+ * excused. Every value below is a `var(--shell-*)` token or a `color-mix()` of
+ * one, which is the escape hatch `composer.css` already uses for a tint that
+ * has no token.
+ *
+ * **Why nothing here opens a stacking context.** `test/layers.test.ts` requires
+ * every `opacity < 1`, `transform`, `filter`, `contain` or `container-type`
+ * declaration in a stylesheet that also declares a `z-index` to be registered
+ * in its `STACKING_CONTEXTS` table. This file must declare one — it is a cover
+ * — so it keeps itself out of that table by not writing any of those
+ * properties. That is the whole reason the disabled states below are drawn by
+ * `renderer/ui/styles/components.css` (on `.od-button:disabled`, which this
+ * file does not restyle) rather than by an `opacity` here, and the reason the
+ * spinner's rotation lives in `@keyframes`, which the gate skips by design.
+ *
+ * The controls themselves are the shared `@vo-ui` primitives. `tokens.css`
+ * already re-points their `--od-*` tokens at the shell's language inside
+ * `#shell`, so a `Button` or a `Select` here is the same control the composer
+ * and Editor Home already draw — the shell does not get a second control
+ * vocabulary for its settings.
+ */
+
+.shell-settings {
+  position: fixed;
+  inset: 0;
+  z-index: var(--shell-z-gate);
+  overflow: auto;
+  background: var(--shell-canvas);
+  color: var(--shell-ink);
+  font-family: var(--shell-font);
+  font-size: var(--shell-text);
+}
+
+.shell-settings-page {
+  box-sizing: border-box;
+  width: min(1000px, 100%);
+  margin: 0 auto;
+  padding: 28px 32px 56px;
+}
+
+/* ---- Head -------------------------------------------------------------- */
+
+.shell-settings-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--shell-line);
+}
+
+.shell-settings-heading {
+  min-width: 0;
+}
+
+.shell-settings-eyebrow {
+  margin: 0 0 4px;
+  color: var(--shell-accent);
+  font-size: var(--shell-text-sm);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.shell-settings-title {
+  margin: 0;
+  color: var(--shell-ink-title);
+  font-size: var(--shell-text-3xl);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.shell-settings-subtitle {
+  max-width: 620px;
+  margin: 6px 0 0;
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text-md);
+  line-height: 1.6;
+}
+
+.shell-settings-head-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+/*
+ * The save state. Legacy drew this as a green pill; the shell's one
+ * prototype-backed "this finished" colour is `--shell-status-done`, so the dot
+ * takes that rather than a new success green.
+ */
+.shell-settings-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--shell-line);
+  border-radius: 999px;
+  background: var(--shell-paper);
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text-sm);
+}
+
+.shell-settings-save > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--shell-status-done);
+}
+
+.shell-settings-save[data-state="saving"] > span {
+  background: var(--shell-ink-faint);
+}
+
+.shell-settings-close {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--shell-line);
+  border-radius: var(--shell-radius-control);
+  background: var(--shell-paper);
+  color: var(--shell-ink-muted);
+  cursor: pointer;
+}
+
+.shell-settings-close:hover {
+  background: var(--shell-hover);
+  color: var(--shell-ink);
+}
+
+/* ---- Layout ------------------------------------------------------------ */
+
+.shell-settings-layout {
+  display: grid;
+  grid-template-columns: 208px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  margin-top: 20px;
+}
+
+.shell-settings-nav {
+  position: sticky;
+  top: 0;
+  display: grid;
+  gap: 2px;
+  padding: 8px;
+  border: 1px solid var(--shell-line);
+  border-radius: var(--shell-radius-card);
+  background: var(--shell-paper);
+}
+
+.shell-settings-nav-item {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--shell-radius-item);
+  background: transparent;
+  color: var(--shell-ink-muted);
+  font-family: var(--shell-font);
+  font-size: var(--shell-text-md);
+  text-align: left;
+  cursor: pointer;
+}
+
+.shell-settings-nav-item:hover {
+  background: var(--shell-hover);
+  color: var(--shell-ink);
+}
+
+.shell-settings-nav-item[aria-current="page"] {
+  background: var(--shell-active);
+  color: var(--shell-nav-current-ink);
+  font-weight: 600;
+}
+
+.shell-settings-nav-icon {
+  display: grid;
+  place-items: center;
+  color: currentColor;
+}
+
+.shell-settings-nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell-settings-nav-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--shell-line-soft);
+}
+
+.shell-settings-content {
+  min-width: 0;
+}
+
+.shell-settings-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--shell-line);
+  border-radius: var(--shell-radius-card);
+  background: var(--shell-paper);
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text-md);
+}
+
+.shell-settings-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--shell-status-danger) 40%, transparent);
+  border-radius: var(--shell-radius-item);
+  background: var(--shell-paper);
+  color: var(--shell-status-danger);
+  font-size: var(--shell-text-md);
+  overflow-wrap: anywhere;
+}
+
+.shell-settings-spin {
+  animation: shell-settings-spin 900ms linear infinite;
+}
+
+@keyframes shell-settings-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* A spinner is motion, and the platform preference switches it off — the same
+   rule the account page keeps for its own. */
+@media (prefers-reduced-motion: reduce) {
+  .shell-settings-spin {
+    animation: none;
+  }
+}
+
+/* ---- Section card and rows -------------------------------------------- */
+
+.shell-settings-group {
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--shell-line);
+  border-radius: var(--shell-radius-card);
+  background: var(--shell-paper);
+  box-shadow: var(--shell-shadow-paper);
+}
+
+.shell-settings-group[data-variant="danger"] {
+  border-color: color-mix(in srgb, var(--shell-status-danger) 40%, transparent);
+}
+
+.shell-settings-group-title {
+  margin: 0;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--shell-line-soft);
+  color: var(--shell-ink-title);
+  font-size: var(--shell-text-lg);
+  font-weight: 600;
+}
+
+.shell-settings-group-body {
+  min-width: 0;
+}
+
+.shell-settings-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 20px;
+  min-height: 68px;
+  padding: 14px 18px;
+}
+
+.shell-settings-row + .shell-settings-row {
+  border-top: 1px solid var(--shell-line-soft);
+}
+
+/* A form row gives its control the whole width and stacks it under the copy —
+   a two-column grid is for a switch, not for four labelled fields. */
+.shell-settings-row[data-variant="form"] {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+
+.shell-settings-copy {
+  min-width: 0;
+}
+
+.shell-settings-copy h3 {
+  margin: 0;
+  color: var(--shell-ink-title);
+  font-size: var(--shell-text-md);
+  font-weight: 600;
+}
+
+.shell-settings-copy p {
+  max-width: 620px;
+  margin: 4px 0 0;
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.shell-settings-control {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.shell-settings-row[data-variant="form"] .shell-settings-control {
+  display: grid;
+  gap: 10px;
+  justify-content: stretch;
+}
+
+/* A block that is its own row rather than a labelled setting: the diagnostics
+   or runtime table, which bring their own headings. */
+.shell-settings-block {
+  min-width: 0;
+  padding: 14px 18px;
+}
+
+.shell-settings-block + .shell-settings-block,
+.shell-settings-block + .shell-settings-row,
+.shell-settings-row + .shell-settings-block {
+  border-top: 1px solid var(--shell-line-soft);
+}
+
+.shell-settings-subhead {
+  margin: 0;
+  color: var(--shell-ink-title);
+  font-size: var(--shell-text-md);
+  font-weight: 600;
+}
+
+.shell-settings-block > .shell-settings-subhead {
+  margin-bottom: 8px;
+}
+
+.shell-settings-note {
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-sm);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+/* The redeem confirmation. `--shell-status-done` is the shell's one
+   prototype-backed "this finished" colour — the same one the save pill's dot
+   uses — rather than a second success green invented for one line. */
+.shell-settings-note[data-tone="done"] {
+  color: var(--shell-status-done);
+}
+
+.shell-settings-hint {
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text);
+  line-height: 1.6;
+}
+
+.shell-settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.shell-settings-actions[data-align="end"] {
+  justify-content: flex-end;
+}
+
+.shell-settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.shell-settings-toggle > span {
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text);
+}
+
+/*
+ * Form controls fill the field they sit in.
+ *
+ * `.od-input` and `.od-select` stretch because Grid does it for them — they are
+ * direct children of a grid track. `.od-password-input` is a wrapper
+ * `<span>` with `display: inline-flex` and no width, so it stretched while the
+ * `<input>` inside it kept its UA width: the PAT field came out about 200px
+ * wide in a 300px column, with the reveal toggle floating in the gap. The
+ * legacy card carried the same declarations for the same reason.
+ */
+.shell-settings-connector-field .od-input,
+.shell-settings-connector-field .od-password-input,
+.shell-settings-connector-field .od-select,
+.shell-settings-row[data-variant="form"] .od-input,
+.shell-settings-row[data-variant="form"] .od-password-input,
+.shell-settings-row[data-variant="form"] .od-select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.shell-settings-connector-field .od-password-input .od-input,
+.shell-settings-row[data-variant="form"] .od-password-input .od-input {
+  width: 100%;
+  min-width: 0;
+}
+
+/*
+ * A row whose control should use the whole column rather than sit at its end —
+ * the redeem field, which wants the room and puts the button after it.
+ */
+.shell-settings-actions[data-grow="true"] {
+  flex: 1 1 auto;
+}
+
+.shell-settings-actions[data-grow="true"] .od-input {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.shell-settings-code {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--shell-line);
+  border-radius: var(--shell-radius-item);
+  background: var(--shell-sunken);
+}
+
+.shell-settings-code-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--shell-ink);
+  font-size: var(--shell-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Connector cards (Jira, Liquipedia) -------------------------------- */
+
+.shell-settings-connector {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+  width: 100%;
+}
+
+.shell-settings-connector-field {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.shell-settings-connector-field > span {
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text-sm);
+  font-weight: 500;
+}
+
+.shell-settings-connector-wide {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.shell-settings-connector-help {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--shell-line);
+  border-radius: var(--shell-radius-item);
+  background: var(--shell-sunken);
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text);
+  line-height: 1.6;
+}
+
+.shell-settings-connector-help strong {
+  color: var(--shell-ink-title);
+  font-size: var(--shell-text);
+}
+
+.shell-settings-connector-help ol {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.shell-settings-connector-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text);
+  overflow-wrap: anywhere;
+}
+
+.shell-settings-connector-probe {
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+/*
+ * A failed read or write, anywhere on the page: the connector cards, the proxy
+ * validation, the runtime table's poll. One class, because it is one thing.
+ */
+.shell-settings-error {
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--shell-status-danger) 40%, transparent);
+  border-radius: var(--shell-radius-item);
+  background: var(--shell-paper);
+  color: var(--shell-status-danger);
+  font-size: var(--shell-text);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+/* The workflow cell of the runtime table: a name with tags beside it. */
+.shell-settings-runtime-run {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.shell-settings-connector-link {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 6px;
+  color: var(--shell-accent);
+  font-size: var(--shell-text);
+  text-decoration: none;
+}
+
+.shell-settings-connector-link:hover {
+  text-decoration: underline;
+}
+
+/*
+ * The report-issue dialog is the one legacy component this page renders, and
+ * its two class names have a rule in no stylesheet at all — not the shell's,
+ * not the legacy renderer's either. They are drawn here, where the dialog is
+ * opened from. `scripts/verify-shell-styles.mjs` is the gate that asked the
+ * question, and these rules are its answer rather than an exemption.
+ *
+ * Unscoped on purpose: the dialog portals into `#shell`, so it is a sibling of
+ * this page rather than a descendant of `.shell-settings`.
+ */
+.report-context-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.report-context-item {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--shell-sunken);
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text-sm);
+}
+
+/* ---- Activity ---------------------------------------------------------- */
+
+.shell-settings-activity-hint {
+  margin: 0;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--shell-line-soft);
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text);
+  line-height: 1.6;
+}
+
+.shell-settings-activity-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 18px;
+  border: 0;
+  border-top: 1px solid var(--shell-line-soft);
+  background: transparent;
+  color: var(--shell-ink);
+  font-family: var(--shell-font);
+  font-size: var(--shell-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.shell-settings-activity-item:hover {
+  background: var(--shell-hover);
+}
+
+.shell-settings-activity-copy {
+  min-width: 0;
+}
+
+.shell-settings-activity-title {
+  overflow: hidden;
+  color: var(--shell-ink-title);
+  font-size: var(--shell-text-md);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell-settings-activity-phase {
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell-settings-activity-empty {
+  margin: 0;
+  padding: 18px;
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-md);
+}
+
+/* ---- About ------------------------------------------------------------- */
+
+.shell-settings-about {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 28px 18px;
+  text-align: center;
+}
+
+.shell-settings-about-mark {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--shell-radius-card);
+  background: var(--shell-ink);
+  color: var(--shell-ink-inverse);
+}
+
+.shell-settings-about-name {
+  margin: 4px 0 0;
+  color: var(--shell-ink-title);
+  font-size: var(--shell-text-2xl);
+  font-weight: 600;
+}
+
+.shell-settings-about-version {
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text-md);
+}
+
+.shell-settings-about-desc {
+  max-width: 620px;
+  margin: 0;
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text-md);
+  line-height: 1.6;
+}
+
+.shell-settings-about-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.shell-settings-about-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 14px;
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-sm);
+}
+
+.shell-settings-about-error {
+  color: var(--shell-status-danger);
+}
+
+.shell-settings-about-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 420px;
+}
+
+.shell-settings-about-progress-label {
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text-sm);
+}
+
+.shell-settings-about-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.shell-settings-about-uptodate {
+  align-self: center;
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-md);
+  font-style: italic;
+}
+
+/* ---- Narrow windows ---------------------------------------------------- */
+
+@media (max-width: 980px) {
+  .shell-settings-row {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 10px;
+  }
+
+  .shell-settings-control {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 760px) {
+  .shell-settings-page {
+    padding: 20px 16px 40px;
+  }
+
+  .shell-settings-head {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .shell-settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .shell-settings-nav {
+    position: static;
+    display: flex;
+    overflow-x: auto;
+    padding: 6px;
+  }
+
+  .shell-settings-nav-item {
+    width: auto;
+    grid-template-columns: 18px auto;
+  }
+
+  .shell-settings-nav-sep {
+    display: none;
+  }
+
+  .shell-settings-connector {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

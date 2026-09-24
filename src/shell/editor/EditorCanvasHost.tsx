@@ -1,17 +1,37 @@
 import { useEffect, useRef } from "react";
 
-import { useLocale } from "../../renderer/i18n";
+import { useLocale, useT } from "../../renderer/i18n";
 import type { FileMeta } from "../../shared/uiPort";
 import { CanvasPlaceholder } from "./CanvasPlaceholder";
 import type { CanvasAdapter } from "./canvasContract";
-import { publishCanvasLocale } from "./canvasLocale";
+import { canvasLocaleTag, publishCanvasLocale } from "./canvasLocale";
 import { publishCanvasBox } from "./canvasSurface";
+import { fixtureGenerationTask } from "./slidesGenerating/generationTaskFixtures";
+import { slidesGeneratingPreview } from "./slidesGenerating/slidesGeneratingPreview";
 
 export interface EditorCanvasHostProps {
   file: FileMeta | null;
   /** False while Home is showing. The host stays mounted either way. */
   visible: boolean;
   adapter?: CanvasAdapter | null;
+  /**
+   * Show the canvas even though no library file is open.
+   *
+   * The live-drawing stage has nothing in `documents` to key on: a deck being
+   * drawn is a run, not a file (`CreateLivePptxDraft` writes to
+   * `workspaceDir/live/` and registers only a preview token), so `activeFile`
+   * is null for its whole life and the `visible && file` guard below would hide
+   * the very surface the run is meant to be on. The bundled recording has the
+   * same shape and is what reaches here today.
+   */
+  fileless?: boolean;
+  /**
+   * When the recording was last asked for. It both restarts the replay and
+   * decides whether the recording still outranks a run; only the demo uses it.
+   */
+  demoStartedAt?: string | null;
+  /** The recording lost the canvas; see `CanvasAdapter.showFileless`. */
+  onDemoSuperseded?: () => void;
 }
 
 /**
@@ -28,10 +48,18 @@ export interface EditorCanvasHostProps {
  * The invariant is guarded by EditorCanvasHost.test.tsx, which asserts node
  * identity across a mode change, a Home round trip and a tab switch.
  */
-export function EditorCanvasHost({ file, visible, adapter }: EditorCanvasHostProps) {
+export function EditorCanvasHost({
+  file,
+  visible,
+  adapter,
+  fileless,
+  demoStartedAt,
+  onDemoSuperseded,
+}: EditorCanvasHostProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const mountedAdapter = useRef<CanvasAdapter | null>(null);
   const locale = useLocale();
+  const t = useT();
 
   /**
    * The shell's language, on the channel the canvas root can read.
@@ -44,13 +72,15 @@ export function EditorCanvasHost({ file, visible, adapter }: EditorCanvasHostPro
    *
    * `document.documentElement.lang` goes with it, because it is the same fact
    * and the audit measured it going wrong: `<html lang="en">` around a shell
-   * whose own text had become Chinese (S4-009). Nothing in the shell reads it,
-   * but assistive technology, hyphenation and the CJK font fallback all do.
+   * whose own text had become Chinese (S4-009). The Sheet SDK reads the BCP-47
+   * tag (`en-US` / `zh-CN`); an empty lang falls through to Chinese. Nothing in
+   * the shell reads it, but assistive technology, hyphenation and the CJK font
+   * fallback all do.
    */
   useEffect(() => {
     const value = locale === "zh" ? "zh" : "en";
     publishCanvasLocale(value);
-    document.documentElement.lang = value === "zh" ? "zh-CN" : "en";
+    document.documentElement.lang = canvasLocaleTag(value) ?? "en-US";
   }, [locale]);
 
   /**
@@ -122,9 +152,15 @@ export function EditorCanvasHost({ file, visible, adapter }: EditorCanvasHostPro
   useEffect(() => {
     const active = mountedAdapter.current;
     if (!active) return;
-    if (visible && file) active.show(file);
+    // `showFileless` is optional: an adapter that cannot render without a file
+    // keeps the skeleton rather than pretending. Falling through to `hide()` is
+    // what leaves the placeholder in place.
+    if (visible && fileless && active.showFileless) {
+      active.showFileless({ demo: true, demoStartedAt });
+    }
+    else if (visible && file) active.show(file);
     else active.hide();
-  }, [file, visible]);
+  }, [demoStartedAt, file, fileless, visible]);
 
   return (
     <div
@@ -133,9 +169,15 @@ export function EditorCanvasHost({ file, visible, adapter }: EditorCanvasHostPro
       data-canvas-host="true"
       data-file-type={file?.type ?? "doc"}
       role="document"
-      aria-label={file ? file.name : "Document canvas"}
+      aria-label={file ? file.name : t("shell.canvas.documentAria")}
     >
-      {adapter ? null : <CanvasPlaceholder type={file?.type ?? "doc"} />}
+      {adapter ? null : <HostPlaceholder type={file?.type ?? "doc"} />}
     </div>
   );
+}
+
+function HostPlaceholder({ type }: { type: FileMeta["type"] }) {
+  const phase = slidesGeneratingPreview();
+  if (!phase) return <CanvasPlaceholder type={type} />;
+  return <CanvasPlaceholder type="slides" mode="generating" task={fixtureGenerationTask(phase)} />;
 }

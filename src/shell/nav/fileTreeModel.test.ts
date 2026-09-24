@@ -43,13 +43,34 @@ describe("grouping by folder", () => {
     expect(new Set(placed).size).toBe(files.length);
   });
 
-  it("orders files inside a folder by how recently they were touched", () => {
+  it("orders files inside a folder by how recently they were edited", () => {
     const groups = groupByFolder(seedFolders().slice(0, 1), [
       file("older", "folder-launch", 5),
       file("newest", "folder-launch", 0),
       file("middle", "folder-launch", 2),
     ]);
     expect(groups[0].files.map((entry) => entry.id)).toEqual(["newest", "middle", "older"]);
+  });
+
+  /*
+   * Opening a file does not move it.
+   *
+   * The order used to prefer `lastOpenedAt`, so clicking a row in the middle of
+   * a folder sent it to the top and shifted everything below it under the
+   * pointer. A file list is a list of documents, not of what the user looked at
+   * last; the backend already orders by edit time, and this agrees with it.
+   */
+  it("does not promote a file because it was opened", () => {
+    const groups = groupByFolder(seedFolders().slice(0, 1), [
+      // Edited six days ago, opened a moment ago: the case that used to float.
+      file("opened-lately", "folder-launch", 6, { lastOpenedAt: NOW }),
+      // Edited today, never opened.
+      file("edited-today", "folder-launch", 0, { lastOpenedAt: null }),
+    ]);
+    expect(groups[0].files.map((entry) => entry.id)).toEqual([
+      "edited-today",
+      "opened-lately",
+    ]);
   });
 
   it("reports the untruncated total so the caller can offer the rest", () => {

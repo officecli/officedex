@@ -13,6 +13,7 @@ import {
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 
 import { toast } from "../../renderer/ui";
+import { translate, useT } from "../../renderer/i18n";
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import { Menu } from "../chrome/Menu";
 import { useCanvas } from "../canvas/CanvasContext";
@@ -21,6 +22,7 @@ import type { Attachment, FileType, Mention, PermissionMode, SendInput } from ".
 import { useFolderDialogs } from "../nav/useFolderDialogs";
 import { useShell } from "../state/ShellContext";
 import { usePort } from "../port/PortContext";
+import { useDiskDrop } from "../home/useDiskDrop";
 import { notBuiltYet } from "../port/reportPortFailure";
 import { MentionMenu, isImeKeyEvent, type MentionOption } from "./MentionMenu";
 import { ModelMenu } from "./ModelMenu";
@@ -29,7 +31,8 @@ import { ImageComposerHeader, ImageSummary, ImageTools } from "../image/composer
 import { ReferenceList, ReferenceStrip } from "../image/composer/ReferenceList";
 import { EMPTY_IMAGE_DRAFT, restoreImageDraft, toImageGenerationInput, type ImageDraft } from "../image/composer/imageDraft";
 import { useComposerFillRequests } from "../image/composerFill";
-import { useImageEditTarget } from "../image/useImageEditTarget";
+import { useImageBesideDocument, useImageEditTarget } from "../image/useImageEditTarget";
+import { ImageAsideNotice } from "../image/composer/ImageAsideNotice";
 import "./composer.css";
 import "../image/composer/imageComposer.css";
 
@@ -55,6 +58,7 @@ export type ComposerPlacement = "home" | "task" | "floating";
  */
 const PERMISSIONS: Array<{
   value: PermissionMode;
+  /** Dictionary keys — translated at render so a language switch reaches them. */
   label: string;
   description: string;
   /** False while nothing behind the port enforces this tier. */
@@ -62,17 +66,17 @@ const PERMISSIONS: Array<{
 }> = [
   {
     value: "full",
-    label: "Full access",
-    description: "Apply edits inside this folder",
+    label: "shell.cx.permission.full",
+    description: "shell.cx.permission.fullDescription",
     available: true,
   },
   {
     value: "review",
-    label: "Review changes",
-    description: "Nothing is applied without you",
+    label: "shell.sidebar.reviewChanges",
+    description: "shell.cx.permission.reviewDescription",
     available: false,
   },
-  { value: "custom", label: "Custom", description: "Use your own instructions", available: false },
+  { value: "custom", label: "shell.cx.permission.custom", description: "shell.cx.permission.customDescription", available: false },
 ];
 
 const MAX_ATTACHMENTS = 10;
@@ -93,10 +97,11 @@ const MAX_BYTES = 20 * 1024 * 1024;
  */
 type OutputChoice = "auto" | FileType;
 
+/** `label` / `description` are dictionary keys, translated at render. */
 const OUTPUTS: Array<{ value: FileType; label: string; description: string }> = [
-  { value: "doc", label: "New document", description: "A Word file (.docx)" },
-  { value: "sheet", label: "New workbook", description: "An Excel file (.xlsx)" },
-  { value: "slides", label: "New presentation", description: "A PowerPoint file (.pptx)" },
+  { value: "doc", label: "shell.tree.newDocument", description: "shell.cx.output.docDescription" },
+  { value: "sheet", label: "shell.tree.newWorkbook", description: "shell.cx.output.sheetDescription" },
+  { value: "slides", label: "shell.tree.newPresentation", description: "shell.cx.output.slidesDescription" },
 ];
 
 const DOCUMENT_TYPES: Record<FileType, NonNullable<SendInput["documentType"]>> = {
@@ -236,6 +241,7 @@ export interface ComposerProps {
  */
 export function Composer({ placement, showScopeInToolbar = true, showModeControls = true, showPermission = true, busy = false, onSend, onStop, onRegisterFill, onRegisterImageMode, onImageModeChange, imageTask = false }: ComposerProps) {
   const { state, folders, files, activeFile, scopeFolderId, dispatch, reload } = useShell();
+  const t = useT();
   const port = usePort();
   const settings = useComposerSettings();
   const canvas = useCanvas();
@@ -247,7 +253,20 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
     return saved ? { ...EMPTY_DRAFT, ...saved, image: restoreImageDraft(saved.image) } : EMPTY_DRAFT;
   });
   const { text, mentions, attachments, output, image } = draft;
-  const editTarget = useImageEditTarget();
+  const suggestedTarget = useImageEditTarget();
+  /*
+   * "New image instead", for a version the shell picked rather than one the
+   * user opened. Held as the file it was said about, so it lapses by itself
+   * when a newer version lands or a picture is opened — the choice was about
+   * that one picture, not a standing preference.
+   */
+  const [declinedTarget, setDeclinedTarget] = useState<string | null>(null);
+  const editTarget =
+    suggestedTarget && !(suggestedTarget.source === "latest" && suggestedTarget.fileId === declinedTarget)
+      ? suggestedTarget
+      : null;
+  const declined = suggestedTarget && !editTarget ? suggestedTarget : null;
+  const imageAside = useImageBesideDocument();
   /**
    * A document open in the editor — never on Home, where nothing is.
    *
@@ -271,7 +290,6 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
   const staleImage = draft.mode === "image" && documentOnScreen && (draft.modeFileId ?? null) !== activeFile?.id;
   const mode: Draft["mode"] = forcedImage ? "image" : staleImage ? "agent" : draft.mode;
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
-  const [dragging, setDragging] = useState(false);
   /** True while a speech recogniser is running — see `dictate`. */
   const [listening, setListening] = useState(false);
 
@@ -498,16 +516,16 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
 
     const tooBig = incoming.find((file) => file.size > MAX_BYTES);
     if (tooBig) {
-      toast.error(`${tooBig.name} is larger than 20 MB.`);
+      toast.error(translate("shell.cx.attach.tooBig", { name: tooBig.name }));
       return;
     }
 
     if (asFolder) {
       if (attachments.length >= MAX_ATTACHMENTS) {
-        toast.error(`You can attach up to ${MAX_ATTACHMENTS} items.`);
+        toast.error(translate("shell.cx.attach.max", { count: MAX_ATTACHMENTS }));
         return;
       }
-      const name = incoming[0].webkitRelativePath?.split("/")[0] || "Uploaded folder";
+      const name = incoming[0].webkitRelativePath?.split("/")[0] || translate("shell.cx.attach.uploadedFolder");
       setAttachments((current) => [
         ...current,
         {
@@ -522,10 +540,10 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
 
     const room = MAX_ATTACHMENTS - attachments.length;
     if (room <= 0) {
-      toast.error(`You can attach up to ${MAX_ATTACHMENTS} items.`);
+      toast.error(translate("shell.cx.attach.max", { count: MAX_ATTACHMENTS }));
       return;
     }
-    if (incoming.length > room) toast.info(`Only the first ${room} files were attached.`);
+    if (incoming.length > room) toast.info(translate("shell.cx.attach.onlyFirst", { count: room }));
     setAttachments((current) => [
       ...current,
       ...incoming.slice(0, room).map((file) => ({
@@ -540,13 +558,18 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
     const picker = port.pickAttachmentPaths;
     if (!picker) return false;
     const paths = await picker();
-    if (!paths || paths.length === 0) return true;
+    if (paths && paths.length > 0) attachPaths(paths);
+    return true;
+  }
+
+  /** Real paths — from the native picker or a drop — which the agent can read. */
+  function attachPaths(paths: string[]) {
     const room = MAX_ATTACHMENTS - attachments.length;
     if (room <= 0) {
-      toast.error(`You can attach up to ${MAX_ATTACHMENTS} items.`);
-      return true;
+      toast.error(translate("shell.cx.attach.max", { count: MAX_ATTACHMENTS }));
+      return;
     }
-    if (paths.length > room) toast.info(`Only the first ${room} files were attached.`);
+    if (paths.length > room) toast.info(translate("shell.cx.attach.onlyFirst", { count: room }));
     setAttachments((current) => [
       ...current,
       ...paths.slice(0, room).map((path) => ({
@@ -556,8 +579,19 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
         path,
       })),
     ]);
-    return true;
   }
+
+  /*
+   * Files dragged in from the desktop are attached by path, which only the
+   * port can supply: on the desktop Wails keeps the drop from the webview and
+   * reports the paths natively, so the DOM `drop` never arrives. Handling it
+   * here left `dragging` set for good, and the drop overlay covered the whole
+   * composer — it looked frozen. `dataTransfer.files` would not have helped
+   * either; a browser `File` has no path, and pathless attachments are dropped
+   * at send.
+   */
+  const { overlay: dropOverlay, zoneHandlers: dropZone } = useDiskDrop(attachPaths);
+  const dragging = dropOverlay !== null;
 
   function handleInput(value: string, caret: number) {
     setText(value);
@@ -672,6 +706,8 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
     // The references went with the picture they were for; the look (ratio,
     // style, camera) is kept, since the next version usually wants the same.
     if (mode === "image") setImage({ references: [] });
+    // "New image instead" was about this message.
+    setDeclinedTarget(null);
     if (placement === "home") setMode("agent");
     setMentionQuery(null);
     // The quote went with the message; leaving it up would make the next one
@@ -724,7 +760,7 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
     };
     const Constructor = speech.SpeechRecognition ?? speech.webkitSpeechRecognition;
     if (!Constructor) {
-      notBuiltYet("dictate", "Dictation is not available in this browser. Type your instruction for now.");
+      notBuiltYet("dictate", translate("shell.cx.dictateUnavailable"));
       return;
     }
     const recognition = new Constructor();
@@ -745,13 +781,13 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
       recognitionRef.current = null;
       setListening(false);
     };
-    recognition.onerror = () => toast.error("Dictation could not start.");
+    recognition.onerror = () => toast.error(translate("shell.cx.dictateFailed"));
     try {
       recognition.start();
       recognitionRef.current = recognition;
       setListening(true);
     } catch {
-      toast.error("Dictation could not start.");
+      toast.error(translate("shell.cx.dictateFailed"));
     }
   }
 
@@ -792,13 +828,13 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
       })),
       {
         id: "new-folder",
-        label: "New folder…",
-        description: "Create one and scope this message to it",
+        label: t("shell.cx.scope.newFolder"),
+        description: t("shell.cx.scope.newFolderDescription"),
         icon: <FolderPlus size={16} strokeWidth={1.8} aria-hidden="true" />,
         onSelect: folderDialogs.createFolder,
       },
     ],
-    [folders, scope?.id, dispatch, folderDialogs.createFolder],
+    [folders, scope?.id, dispatch, folderDialogs.createFolder, t],
   );
 
   /*
@@ -816,8 +852,8 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
         ? [
             {
               id: "edit",
-              label: `Edit ${openFile.name}`,
-              description: "Change the document on screen",
+              label: t("shell.cx.output.editFile", { name: openFile.name }),
+              description: t("shell.cx.output.editFileDescription"),
               icon: <FileTypeIcon type={openFile.type} size={16} />,
               checked: output === "auto",
               onSelect: () => setOutput("auto"),
@@ -826,8 +862,8 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
         : [
             {
               id: "auto",
-              label: "Decide from my instruction",
-              description: "Read the type off what I asked for",
+              label: t("shell.cx.output.auto"),
+              description: t("shell.cx.output.autoDescription"),
               icon: <Wand2 size={16} strokeWidth={1.8} aria-hidden="true" />,
               checked: output === "auto",
               onSelect: () => setOutput("auto"),
@@ -835,8 +871,8 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
           ]),
       ...OUTPUTS.map((entry) => ({
         id: entry.value,
-        label: entry.label,
-        description: entry.description,
+        label: t(entry.label),
+        description: t(entry.description),
         icon: <FileTypeIcon type={entry.value} size={16} />,
         checked: output === entry.value,
         onSelect: () => setOutput(entry.value),
@@ -845,7 +881,7 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
     // `setOutput` closes over `patchDraft`, redefined every render; including it
     // would rebuild this list on every keystroke.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [targetFileId, openFile?.id, openFile?.name, openFile?.type, output],
+    [targetFileId, openFile?.id, openFile?.name, openFile?.type, output, t],
   );
 
   /** The chip's own face: an icon and the shortest true phrase for it. */
@@ -853,19 +889,21 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
     output !== "auto"
       ? {
           icon: <FileTypeIcon type={output} size={14} />,
-          name: OUTPUTS.find((entry) => entry.value === output)?.label ?? "New file",
-          title: `This message creates a ${OUTPUTS.find((entry) => entry.value === output)?.description ?? "new file"}`,
+          name: t(OUTPUTS.find((entry) => entry.value === output)?.label ?? "shell.cx.output.newFile"),
+          title: t("shell.cx.output.createsTitle", {
+            description: t(OUTPUTS.find((entry) => entry.value === output)?.description ?? "shell.cx.output.newFileDescription"),
+          }),
         }
       : editingFile
         ? {
             icon: <FileTypeIcon type={editingFile.type} size={14} />,
             name: editingFile.name,
-            title: `This message edits ${editingFile.name}`,
+            title: t("shell.cx.output.editsTitle", { name: editingFile.name }),
           }
         : {
             icon: <Wand2 size={14} strokeWidth={1.7} aria-hidden="true" />,
-            name: "Auto",
-            title: "The type is read off your instruction. Pick one to be sure.",
+            name: t("shell.cx.output.autoName"),
+            title: t("shell.cx.output.autoTitle"),
           };
 
   /** "@" at the caret, and the mention menu open on it — the @ tool's job. */
@@ -907,28 +945,15 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
   /* The task column is ~300px: Home's two-column prompt and wide strip do not fit it. */
   const compactImage = imageMode && placement !== "home";
   const placeholder = placement === "home"
-    ? imageMode ? "Describe your image, or use @ to add files or folders…" : "Ask anything, @ to add files or folders…"
+    ? imageMode ? t("shell.cx.placeholder.homeImage") : t("shell.cx.placeholder.home")
     : imageMode
-      ? editTarget ? `Describe changes to Version ${editTarget.version}…` : "Describe your image, or use @ to add files or folders…"
-      : "Message Agent, @ files or folders…";
+      ? editTarget ? t("shell.cx.placeholder.imageVersion", { version: editTarget.version }) : t("shell.cx.placeholder.homeImage")
+      : t("shell.cx.placeholder.task");
 
   return (
     <div
       className={`shell-cx shell-cx--${placement}${dragging ? " is-dragging" : ""}${imageMode ? " is-image" : ""}`}
-      onDragOver={(event) => {
-        if (![...event.dataTransfer.types].includes("Files")) return;
-        event.preventDefault();
-        setDragging(true);
-      }}
-      onDragLeave={(event) => {
-        if (event.currentTarget.contains(event.relatedTarget as Node)) return;
-        setDragging(false);
-      }}
-      onDrop={(event) => {
-        event.preventDefault();
-        setDragging(false);
-        addAttachments(event.dataTransfer.files);
-      }}
+      {...dropZone}
     >
       {/*
         The quoted span sits above the chips, not among them: a mention and an
@@ -937,6 +962,9 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
         shows its text — the whole point is being able to check what "this"
         refers to before asking for a rewrite of it.
       */}
+      {/* The panel is a picture's conversation; the message is about the document. */}
+      {placement !== "home" && mode !== "image" && imageAside ? <ImageAsideNotice aside={imageAside} /> : null}
+
       {reference ? (
         <div className="shell-cx-reference">
           <div className="shell-cx-reference-head">
@@ -944,7 +972,7 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
             <button
               type="button"
               className="shell-cx-chip-remove"
-              aria-label={`Remove the reference to ${reference.label}`}
+              aria-label={t("shell.cx.reference.remove", { name: reference.label })}
               onClick={clearSelection}
             >
               <X size={12} strokeWidth={2} aria-hidden="true" />
@@ -969,7 +997,7 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
               <span className="shell-cx-chip-name">{mention.label}</span>
               <button
                 type="button"
-                aria-label={`Remove ${mention.label}`}
+                aria-label={t("shell.cx.chip.remove", { name: mention.label })}
                 onClick={() => removeMention(mention)}
               >
                 <X size={11} strokeWidth={2} aria-hidden="true" />
@@ -982,11 +1010,11 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
               <Plus size={13} strokeWidth={1.7} aria-hidden="true" />
               <span className="shell-cx-chip-name">
                 {attachment.name}
-                {attachment.fileCount ? ` · ${attachment.fileCount} files` : ""}
+                {attachment.fileCount ? t("shell.cx.chip.fileCount", { count: attachment.fileCount }) : ""}
               </span>
               <button
                 type="button"
-                aria-label={`Remove ${attachment.name}`}
+                aria-label={t("shell.cx.chip.remove", { name: attachment.name })}
                 onClick={() =>
                   setAttachments((current) => current.filter((entry) => entry !== attachment))
                 }
@@ -1003,6 +1031,10 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
           <ImageComposerHeader
             draft={image}
             onChange={setImage}
+            target={editTarget}
+            declined={declined}
+            onDecline={() => setDeclinedTarget(editTarget?.fileId ?? null)}
+            onRestore={() => setDeclinedTarget(null)}
             onExit={forcedImage ? undefined : () => setMode("agent")}
             disabled={busy}
           />
@@ -1017,7 +1049,7 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
             className="shell-cx-input"
             rows={2}
             value={text}
-            aria-label="Message Agent"
+            aria-label={t("shell.cx.aria.messageAgent")}
             placeholder={placeholder}
             onChange={(event) => handleInput(event.target.value, event.target.selectionStart ?? 0)}
             onCompositionStart={onCompositionStart}
@@ -1038,7 +1070,7 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
             className="shell-cx-input"
             rows={2}
             value={text}
-            aria-label={placement === "home" ? "New task instructions" : "Message Agent"}
+            aria-label={placement === "home" ? t("shell.cx.aria.newTask") : t("shell.cx.aria.messageAgent")}
             placeholder={placeholder}
             onChange={(event) => handleInput(event.target.value, event.target.selectionStart ?? 0)}
             onCompositionStart={onCompositionStart}
@@ -1053,7 +1085,7 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
           className="shell-cx-input"
           rows={2}
           value={text}
-          aria-label={placement === "home" ? "New task instructions" : "Message Agent"}
+          aria-label={placement === "home" ? t("shell.cx.aria.newTask") : t("shell.cx.aria.messageAgent")}
           placeholder={placeholder}
           onChange={(event) => handleInput(event.target.value, event.target.selectionStart ?? 0)}
           onCompositionStart={onCompositionStart}
@@ -1082,19 +1114,19 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
               type="button"
               className="shell-cx-button shell-cx-mode"
               aria-pressed={false}
-              aria-label="Generate image"
-              title="Generate image"
+              aria-label={t("shell.cx.generateImage")}
+              title={t("shell.cx.generateImage")}
               onClick={() => setMode("image")}
             >
               <Wand2 size={16} strokeWidth={1.7} aria-hidden="true" />
-              <span>Agent</span>
+              <span>{t("shell.mode.agent")}</span>
             </button>
           ) : null}
           <button
             type="button"
             className="shell-cx-button"
-            aria-label="Add files or folders"
-            title="Add files or folders"
+            aria-label={t("shell.cx.addFiles")}
+            title={t("shell.cx.addFiles")}
             onClick={() => {
               void pickNativeAttachments().then((picked) => {
                 if (!picked) fileInputRef.current?.click();
@@ -1105,16 +1137,16 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
           </button>
 
           {/* Decision 2: task scope is a property of this message, shown inline. */}
-          {showScopeInToolbar ? <Menu label="Task scope" items={scopeItems} align="start" width={260}>
+          {showScopeInToolbar ? <Menu label={t("shell.cx.scope.menu")} items={scopeItems} align="start" width={260}>
             {(triggerProps) => (
               <button
                 {...triggerProps}
                 type="button"
                 className="shell-cx-button shell-cx-scope"
-                title={`Scope: ${scope?.name ?? "none"}`}
+                title={t("shell.cx.scope.title", { name: scope?.name ?? t("shell.cx.scope.none") })}
               >
                 <FolderIcon size={14} strokeWidth={1.7} aria-hidden="true" />
-                <span className="shell-cx-scope-name">{scope?.name ?? "No folder"}</span>
+                <span className="shell-cx-scope-name">{scope?.name ?? t("shell.task.noFolder")}</span>
                 <ChevronDown size={12} strokeWidth={1.8} aria-hidden="true" />
               </button>
             )}
@@ -1124,7 +1156,7 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
             And what it will produce. Same argument as the scope chip: the
             answer travels with the message, so the control does too.
           */}
-          {mode === "agent" && showModeControls ? <Menu label="What this message makes" items={outputItems} align="start" width={280}>
+          {mode === "agent" && showModeControls ? <Menu label={t("shell.cx.output.menu")} items={outputItems} align="start" width={280}>
             {(triggerProps) => (
               <button
                 {...triggerProps}
@@ -1144,14 +1176,14 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
 
         <div className="shell-cx-right">
           {showPermission && !imageMode ? <Menu
-            label="Permissions"
+            label={t("shell.cx.permission.menu")}
             align="end"
             width={280}
             items={[
               ...PERMISSIONS.map((entry) => ({
                 id: entry.value,
-                label: entry.label,
-                description: entry.description,
+                label: t(entry.label),
+                description: t(entry.description),
                 checked: entry.value === settings.value.permission,
                 /*
                  * Clickable, not disabled. A greyed row says "not for you";
@@ -1163,7 +1195,7 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
                   if (!entry.available) {
                     notBuiltYet(
                       `composer.permission.${entry.value}`,
-                      `${entry.label} is not available yet — every run applies its changes directly. Full access is the only mode the agent honours.`,
+                      t("shell.cx.permission.notBuilt", { mode: t(entry.label) }),
                     );
                     return;
                   }
@@ -1172,8 +1204,8 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
               })),
               {
                 id: "enter",
-                label: settings.value.enterToSend ? "Enter sends · on" : "Enter sends · off",
-                description: "Shift + Enter adds a new line",
+                label: settings.value.enterToSend ? t("shell.cx.enterOn") : t("shell.cx.enterOff"),
+                description: t("shell.cx.enterDescription"),
                 onSelect: () => void settings.patch({ enterToSend: !settings.value.enterToSend }),
               },
             ]}
@@ -1183,10 +1215,10 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
                 {...triggerProps}
                 type="button"
                 className="shell-cx-button shell-cx-permission"
-                title={`Permission: ${permission.label}`}
+                title={t("shell.cx.permission.title", { name: t(permission.label) })}
               >
                 <ShieldCheck size={14} strokeWidth={1.7} aria-hidden="true" />
-                <span className="shell-cx-permission-name">{permission.label}</span>
+                <span className="shell-cx-permission-name">{t(permission.label)}</span>
               </button>
             )}
           </Menu> : null}
@@ -1204,9 +1236,9 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
               <button
                 type="button"
                 className={`shell-cx-button shell-cx-mic${listening ? " is-listening" : ""}`}
-                aria-label={listening ? "Stop dictation" : "Dictate"}
+                aria-label={listening ? t("shell.cx.dictateStop") : t("shell.cx.dictate")}
                 aria-pressed={listening}
-                title={listening ? "Listening — press to stop" : "Dictate"}
+                title={listening ? t("shell.cx.dictateListening") : t("shell.cx.dictate")}
                 onClick={dictate}
               >
                 <Mic size={16} strokeWidth={1.7} aria-hidden="true" />
@@ -1223,8 +1255,8 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
             type="button"
             className="shell-cx-send"
             disabled={!canSend && !stopping}
-            aria-label={stopping ? "Stop task" : "Send message"}
-            title={stopping ? "Stop task" : "Send message"}
+            aria-label={stopping ? t("shell.cx.stop") : t("shell.cx.send")}
+            title={stopping ? t("shell.cx.stop") : t("shell.cx.send")}
             onClick={() => void submit()}
           >
             {stopping ? (
@@ -1236,7 +1268,7 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
         </div>
       </div>
 
-      {dragging ? <div className="shell-cx-drop">Drop files to add context</div> : null}
+      {dragging ? <div className="shell-cx-drop">{t("shell.cx.drop")}</div> : null}
 
       <MentionMenu
         open={mentionQuery !== null}

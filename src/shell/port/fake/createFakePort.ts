@@ -170,6 +170,57 @@ export function createFakePort(options: FakePortOptions = {}): UiPort {
         files = [...files, file];
         return structuredClone(file);
       },
+      /**
+       * A browser gives a dropped file a name but never a path, so the fake's
+       * "path" is the name — which is all it needs to decide the type and
+       * whether this file is already in the list.
+       */
+      async openDropped(path) {
+        const name = path.slice(Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")) + 1);
+        const extension = name.slice(name.lastIndexOf(".") + 1).toLowerCase();
+        const type = (Object.keys(EXTENSIONS) as FileType[]).find(
+          (candidate) => candidate !== "image" && EXTENSIONS[candidate] === extension,
+        );
+        if (!type || !name.includes(".")) {
+          throw new Error(`OfficeDex opens Word, Excel and PowerPoint files; "${name}" is not one`);
+        }
+        const existing = files.find((entry) => entry.name === name && entry.folderId === defaultFolderId());
+        if (existing) {
+          existing.lastOpenedAt = now();
+          return structuredClone(existing);
+        }
+        const file: FileMeta = {
+          id: nextId("file"),
+          name,
+          type,
+          folderId: defaultFolderId(),
+          createdAt: now(),
+          updatedAt: now(),
+          lastOpenedAt: now(),
+          dirty: false,
+          pinned: false,
+        };
+        files = [...files, file];
+        return structuredClone(file);
+      },
+      /**
+       * Stands in for the Wails runtime's OS drop with the DOM's: same rule
+       * that only a drop on a `--wails-drop-target` element counts, and the
+       * file names stand in for paths.
+       */
+      onDropFromDisk(callback) {
+        if (typeof window === "undefined") return () => undefined;
+        const onDrop = (event: DragEvent) => {
+          const names = Array.from(event.dataTransfer?.files ?? []).map((file) => file.name);
+          if (names.length === 0) return;
+          const target = event.target instanceof Element ? event.target : null;
+          if (!target || getComputedStyle(target).getPropertyValue("--wails-drop-target").trim() !== "drop") return;
+          event.preventDefault();
+          callback(names, { x: event.clientX, y: event.clientY });
+        };
+        window.addEventListener("drop", onDrop);
+        return () => window.removeEventListener("drop", onDrop);
+      },
       async open(id) {
         const file = find(id);
         file.lastOpenedAt = now();

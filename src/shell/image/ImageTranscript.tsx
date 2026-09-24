@@ -1,6 +1,7 @@
 import { ArrowUpRight, Image as ImageGlyph, RotateCcw } from "lucide-react";
 import { Fragment, useState } from "react";
 
+import { useT } from "../../renderer/i18n";
 import type { useAgentTask } from "../agent/useAgentTask";
 import { useShell } from "../state/ShellContext";
 import { aspectLabel } from "./imageFormat";
@@ -24,6 +25,7 @@ import "./imageTranscript.css";
  */
 export function ImageTranscript({ agent }: { agent: ReturnType<typeof useAgentTask> }) {
   const { dispatch } = useShell();
+  const t = useT();
   const series = useImageSeries(agent.task);
   const failure = series.failure;
 
@@ -34,14 +36,14 @@ export function ImageTranscript({ agent }: { agent: ReturnType<typeof useAgentTa
     <>
       <div className="shell-image-context">
         <ImageGlyph size={14} strokeWidth={1.6} aria-hidden="true" />
-        <span>Image creation</span>
+        <span>{t("shell.imageWs.creation")}</span>
       </div>
 
       {series.batches.map((batch) => (
         <Fragment key={batch.id}>
           <div className="shell-task-user">
             {batch.baseVersion !== null ? (
-              <small className="shell-image-based-on">Based on Version {batch.baseVersion}</small>
+              <small className="shell-image-based-on">{t("shell.imageWs.basedOn", { version: batch.baseVersion })}</small>
             ) : null}
             {batch.prompt}
           </div>
@@ -54,13 +56,13 @@ export function ImageTranscript({ agent }: { agent: ReturnType<typeof useAgentTa
       {series.busy ? (
         <div className="shell-image-progress" role="status">
           <span className="shell-task-spinner" aria-hidden="true" />
-          Creating your image…
+          {t("shell.imageWs.creatingEllipsis")}
         </div>
       ) : null}
 
       {!series.busy && series.versions.length > 0 ? (
         <p className="shell-image-hint">
-          Describe a change below. Your original stays in version history.
+          {t("shell.imageWs.changeHint")}
         </p>
       ) : null}
 
@@ -70,15 +72,15 @@ export function ImageTranscript({ agent }: { agent: ReturnType<typeof useAgentTa
           role={failure.status === "failed" ? "alert" : "status"}
         >
           {failure.status === "failed"
-            ? "The image couldn't be created. Your instructions are saved."
-            : "Generation stopped. Your previous images are safe."}
+            ? t("shell.imageWs.failed")
+            : t("shell.imageWs.stopped")}
           <button
             type="button"
             className="shell-task-button"
             onClick={() => void retryImageRun(agent, agent.task, failure.prompt)}
           >
             <RotateCcw size={13} strokeWidth={1.8} aria-hidden="true" />
-            Try again
+            {t("shell.imageWs.tryAgain")}
           </button>
         </div>
       ) : null}
@@ -94,6 +96,7 @@ export function ImageTranscript({ agent }: { agent: ReturnType<typeof useAgentTa
  * card is how you return to a picture you have moved past.
  */
 function ImageResultCard({ version, onOpen }: { version: ImageVersion; onOpen: () => void }) {
+  const t = useT();
   const url = useImageBlobUrl(version.file.id);
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   const ratio = size ? aspectLabel(size.width, size.height) : null;
@@ -112,7 +115,7 @@ function ImageResultCard({ version, onOpen }: { version: ImageVersion; onOpen: (
       />
       <span>
         <strong>{version.file.name}</strong>
-        <small>{[`Version ${version.version}`, ratio].filter(Boolean).join(" · ")}</small>
+        <small>{[t("shell.imageWs.version", { version: version.version }), ratio].filter(Boolean).join(" · ")}</small>
       </span>
       <ArrowUpRight size={14} strokeWidth={1.8} aria-hidden="true" />
     </button>

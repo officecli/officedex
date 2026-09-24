@@ -1,6 +1,7 @@
 import { toast } from "../../renderer/ui";
 import { isNotImplemented } from "../../shared/notImplemented";
 import { logShellEvent } from "./shellLog";
+import { translate } from "../../renderer/i18n";
 
 /**
  * What the user sees when a port call does not go through.
@@ -34,7 +35,7 @@ export function reportPortFailure(reason: unknown): void {
     logShellEvent("not-implemented", { feature: reason.feature, message });
     toast.warning({
       key: `not-implemented:${reason.feature}`,
-      content: "Not built yet",
+      content: translate("shell.port.notBuilt"),
       description: reason.message,
     });
     return;
@@ -44,7 +45,7 @@ export function reportPortFailure(reason: unknown): void {
     ...(reason instanceof Error && reason.stack ? { stack: reason.stack } : {}),
   });
   toast.error({
-    content: "That did not work",
+    content: translate("shell.port.failed"),
     description: message,
   });
 }
@@ -83,7 +84,7 @@ export function notBuiltYet(feature: string, message: string): void {
   logShellEvent("not-implemented", { feature, message });
   toast.warning({
     key: `not-implemented:${feature}`,
-    content: "Not built yet",
+    content: translate("shell.port.notBuilt"),
     description: message,
   });
 }

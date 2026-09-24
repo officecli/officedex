@@ -30,6 +30,25 @@ export interface CanvasSelection {
    * moment the message is actually sent.
    */
   text: string;
+  /**
+   * The user singled a block out, rather than moving through the document.
+   *
+   * The reference chip quotes any selection — a cell address is worth quoting
+   * — but the presence *opens itself* only for this one, and that difference
+   * is the whole reason the flag exists. Picking a shape, or dragging across a
+   * range, is a question about that thing; stepping from B2 to B3 with an
+   * arrow key is not, and an agent panel that unfolded on every keystroke
+   * would be something to fight rather than something to use.
+   *
+   * Only the editor can tell the two apart, which is why this is reported
+   * rather than inferred: the shell sees a label and cannot know whether
+   * "Sheet1!B2" was clicked or scrolled past.
+   *
+   * Absent means "this editor does not distinguish", and is read as false — an
+   * adapter that has not thought about it must not get the loud behaviour by
+   * default.
+   */
+  block?: boolean;
 }
 
 /**
@@ -82,8 +101,49 @@ export interface DocumentEditRequest {
    * something. False edits the whole document.
    */
   preferSelection: boolean;
+  /**
+   * *What* the user selected, when they quoted something.
+   *
+   * `preferSelection` says a selection exists; this says which one, and the two
+   * are not interchangeable. A deck's editor holds the selection itself and can
+   * look it up, but only if it knows to — and when its own snapshot has moved on
+   * (the reference was captured when Send was pressed, the inspect happens after)
+   * the quoted words are the last remaining way to find the shape the user meant.
+   *
+   * Optional, and an editor is free to ignore it: Word narrows by re-reading its
+   * own tracked range and needs nothing here.
+   */
+  selection?: {
+    /** The chip's text, e.g. "deck.pptx · Title 1". Diagnostics, not a target. */
+    label?: string;
+    /** The quoted words themselves, as they were when the message was sent. */
+    text?: string;
+  };
   /** Progress, so a run that takes twenty seconds does not look like a hang. */
   onPhase?(phase: DocumentEditPhase): void;
+  /**
+   * The planner wants the user to confirm before this lands; ask them.
+   *
+   * Resolves true to go ahead. A deck planner sets `requires_confirmation` when
+   * an instruction reads as more than it looks — "change page 2 to Japanese" is
+   * one slide and a dozen text runs — and the workbench has always put that
+   * behind a confirmation step. On this path the shell asks, because an edit
+   * that is refused with no way to approve it is a dead end: the user said what
+   * they wanted and the app answered with a sentence they could not act on.
+   *
+   * Optional. An editor whose planner cannot ask, or a caller with nowhere to
+   * put the question, gets the old behaviour: refuse rather than apply
+   * something the planner itself flagged.
+   *
+   * `danger` marks the questions where yes is the wider-than-asked-for answer:
+   * a plan that reaches outside what the user selected, or one that fell back
+   * to the whole document because the quoted passage could not be placed. It
+   * exists so the panel can stop pre-selecting Apply — a confirmation whose
+   * default answer is yes teaches the user to click through it, and a gate
+   * everybody clicks through is not a gate. Absent is an ordinary "are you
+   * sure", where the recommendation is the planner's own caution.
+   */
+  onConfirm?(question: { text: string; detail?: string; danger?: boolean }): Promise<boolean>;
   signal?: AbortSignal;
 }
 
@@ -132,6 +192,25 @@ export interface CanvasAdapter {
   mount(host: HTMLElement): void | Promise<void>;
   /** The visible file changed, or became visible again after Home. */
   show(file: FileMeta): void;
+  /**
+   * Become visible with no file behind it.
+   *
+   * A deck being drawn is a run, not a file: it has no library entry for `show`
+   * to key on, and yet the canvas is exactly where it belongs. Optional,
+   * because an adapter that cannot render anything without a file should keep
+   * the skeleton rather than pretend.
+   *
+   * `demo` selects the bundled recording instead of a live run — the shell's
+   * "watch a deck being drawn" entry. It is a parameter rather than a
+   * construction-time choice because the button that starts it is on Home, and
+   * the adapter is built before any of that.
+   *
+   * `demoStartedAt` changes every time the recording is asked for, so asking
+   * again restarts it — `demo` alone cannot carry that, because a second press
+   * sets a flag that is already set. It is also what lets a later run take the
+   * canvas back; see `CanvasContent`.
+   */
+  showFileless?(options?: { demo?: boolean; demoStartedAt?: string | null }): void;
   /** The workspace is hidden (Home). The adapter keeps its state. */
   hide(): void;
   /** Called only when the shell itself is torn down. */
@@ -176,13 +255,15 @@ export interface CanvasAdapter {
    */
   showDraft?(draft: CanvasDraft | null): void;
   /**
-   * Rewrites part of the open document in place, or null-ish (absent) when the
-   * mounted editor cannot.
+   * Rewrites the open file in place, or null-ish (absent) when the mounted
+   * editor cannot.
    *
-   * Only Word implements it today. A deck's editor has no equivalent of
-   * "replace exactly this text with exactly that", and a workbook's changes are
-   * cell values rather than prose, so both leave it out and their instructions
-   * keep going to the generation runtime.
+   * Word and PowerPoint implement it, in different ways and through different
+   * planners: a document is handed one scope of text and returns exact
+   * replacements (`office.docx.edit.v1`), while a deck is handed a snapshot of
+   * itself and returns Office.js the editor runs (`office.pptx.plan_js`). A
+   * workbook's changes are cell values rather than prose and it leaves this
+   * out, so its instructions keep going to the generation runtime.
    */
   editDocument?(request: DocumentEditRequest): Promise<DocumentEditResult>;
   /**
@@ -190,9 +271,12 @@ export interface CanvasAdapter {
    *
    * Separate from the method's presence because the adapter is one object for
    * the life of the shell while the editor under it changes with every tab: the
-   * method exists whether or not a Word document happens to be open, and a
-   * caller deciding how to route a message has to be able to ask about the
-   * document on screen rather than about the adapter.
+   * method exists whether or not an editable file happens to be open, and a
+   * caller deciding how to route a message has to be able to ask about the file
+   * on screen rather than about the adapter.
+   *
+   * The answer also says *which* editor: a caller routes an instruction by file
+   * type, and `inPlaceEditorFor` is that decision.
    */
   canEditDocument?(): boolean;
   /**

@@ -1,5 +1,6 @@
 import type { AgentTask, AgentReference } from "../../shared/uiPort";
 import type { CanvasAdapter, DocumentEditPhase } from "../editor/canvasContract";
+import { translate } from "../../renderer/i18n";
 
 /**
  * An in-place document edit, as a conversation.
@@ -67,10 +68,11 @@ export interface DocumentEditRunHandle {
 
 const STEP_IDS = ["read", "draft", "apply"] as const;
 
+/** Dictionary keys; a run is labelled in the language it started in. */
 const STEP_LABELS: Record<(typeof STEP_IDS)[number], string> = {
-  read: "Read the document",
-  draft: "Draft the change",
-  apply: "Apply to the document",
+  read: "shell.edit.step.read",
+  draft: "shell.edit.step.draft",
+  apply: "shell.edit.step.apply",
 };
 
 /** Which step a phase belongs to. Saving is applying, as far as a reader goes. */
@@ -82,10 +84,10 @@ const STEP_OF_PHASE: Record<DocumentEditPhase, (typeof STEP_IDS)[number]> = {
 };
 
 const PHASE_TEXT: Record<DocumentEditPhase, string> = {
-  reading: "Reading the document",
-  drafting: "Working out what to change",
-  applying: "Applying the changes",
-  saving: "Saving",
+  reading: "shell.edit.phase.reading",
+  drafting: "shell.edit.phase.drafting",
+  applying: "shell.edit.phase.applying",
+  saving: "shell.edit.phase.saving",
 };
 
 let counter = 0;
@@ -114,6 +116,13 @@ function title(instruction: string): string {
  * to the document" would be two kinds of wrong on a presentation. The noun comes
  * from the file type rather than from the count, because the count cannot tell
  * them apart.
+ *
+ * A scoped deck edit gets its own noun too. "The slides that needed it" is a
+ * claim about the deck deciding, and a user who picked one title and was told
+ * that has no way to know whether the other nine slides were left alone —
+ * which, until scoping existed, they were not. "What you selected" is the
+ * narrower and the checkable thing, and it stays true whether the pick was a
+ * shape or a whole slide.
  */
 function appliedLine(
   applied: number,
@@ -122,15 +131,17 @@ function appliedLine(
 ): string {
   const where =
     documentType === "pptx"
-      ? applied === 1
-        ? "the slide that needed it"
-        : "the slides that needed it"
+      ? scope === "selection"
+        ? translate("shell.edit.where.selection")
+        : applied === 1
+          ? translate("shell.edit.where.slideOne")
+          : translate("shell.edit.where.slideMany")
       : scope === "selection"
-        ? "the selected text"
-        : "the document";
+        ? translate("shell.edit.where.selectedText")
+        : translate("shell.edit.where.document");
   return applied === 1
-    ? `One change made to ${where}.`
-    : `${applied} changes made to ${where}.`;
+    ? translate("shell.edit.appliedOne", { where })
+    : translate("shell.edit.appliedMany", { count: applied, where });
 }
 
 export function startDocumentEditRun(
@@ -149,10 +160,10 @@ export function startDocumentEditRun(
     folderId: input.folderId,
     documentType: input.documentType,
     status: "reading",
-    phase: PHASE_TEXT.reading,
+    phase: translate(PHASE_TEXT.reading),
     steps: STEP_IDS.map((step, index) => ({
       id: `${id}:${step}`,
-      label: STEP_LABELS[step],
+      label: translate(STEP_LABELS[step]),
       state: index === 0 ? "active" : "pending",
     })),
     messages: [
@@ -173,7 +184,7 @@ export function startDocumentEditRun(
   const advance = (phase: DocumentEditPhase) => {
     const reached = STEP_IDS.indexOf(STEP_OF_PHASE[phase]);
     task.status = phase === "reading" ? "reading" : "writing";
-    task.phase = PHASE_TEXT[phase];
+    task.phase = translate(PHASE_TEXT[phase]);
     task.steps.forEach((step, index) => {
       step.state = index < reached ? "done" : index === reached ? "active" : "pending";
     });
@@ -189,7 +200,7 @@ export function startDocumentEditRun(
    */
   let pendingAnswer: ((optionId: string) => void) | null = null;
 
-  const ask = (question: { text: string; detail?: string }): Promise<boolean> =>
+  const ask = (question: { text: string; detail?: string; danger?: boolean }): Promise<boolean> =>
     new Promise<boolean>((resolve) => {
       /*
        * `awaiting-review`, not a "question" status — there is no such member.
@@ -202,10 +213,24 @@ export function startDocumentEditRun(
       task.question = {
         id: nextId("question"),
         text: question.text,
-        options: [
-          { id: "apply", label: "Apply the change", recommended: true },
-          { id: "cancel", label: "Cancel" },
-        ],
+        /*
+         * Which answer is offered first is not decoration on a dangerous
+         * question. Recommending Apply on "this plan changes the whole deck,
+         * you selected one title" is the app nudging the user through the one
+         * gate that exists to stop it, and a gate everybody is nudged through
+         * stops being read. So on those, Cancel is the recommendation and yes
+         * has to be chosen deliberately; the planner's own "are you sure" keeps
+         * the old default, because there the app has no reason to doubt it.
+         */
+        options: question.danger
+          ? [
+              { id: "apply", label: translate("shell.edit.applyAnyway") },
+              { id: "cancel", label: translate("ui.text.Cancel"), recommended: true },
+            ]
+          : [
+              { id: "apply", label: translate("shell.edit.applyChange"), recommended: true },
+              { id: "cancel", label: translate("ui.text.Cancel") },
+            ],
         allowFreeform: false,
       };
       emit();
@@ -267,6 +292,12 @@ export function startDocumentEditRun(
         // it is the same selection the editor still has tracked. Without one,
         // the whole document is the scope.
         preferSelection: Boolean(input.reference),
+        // And *which* passage, because "narrow this" is not a target. A deck
+        // editor locates the selected shape from these words when its own
+        // snapshot no longer has the selection the chip was captured from.
+        ...(input.reference
+          ? { selection: { label: input.reference.label, text: input.reference.text } }
+          : {}),
         onPhase: advance,
         signal: controller.signal,
       });
@@ -281,8 +312,8 @@ export function startDocumentEditRun(
          * is what a summary-only check would do — would be the app claiming a
          * change the document never received.
          */
-        say(result.summary || "Nothing in the document needed to change.");
-        finish("No changes were needed");
+        say(result.summary || translate("shell.edit.nothingToChange"));
+        finish(translate("shell.edit.noChangesNeeded"));
         emit();
         return;
       }
@@ -293,7 +324,7 @@ export function startDocumentEditRun(
         id: suggestionId,
         targetFileId: input.fileId,
         summary: result.saveError
-          ? `${appliedLine(result.applied, result.scope, input.documentType)} They are not saved yet — ${result.saveError}`
+          ? translate("shell.edit.notSaved", { applied: appliedLine(result.applied, result.scope, input.documentType), error: result.saveError })
           : appliedLine(result.applied, result.scope, input.documentType),
         applied: true,
         // The card's Undo is disabled rather than hidden when a change cannot
@@ -310,17 +341,17 @@ export function startDocumentEditRun(
        * itself worked, which it used to not: the whole run was reported as a
        * failure and the document was quietly left dirty behind the message.
        */
-      finish(result.saveError ? "Changed, but not saved" : "Changes applied");
+      finish(result.saveError ? translate("shell.edit.changedNotSaved") : translate("shell.edit.changesApplied"));
       emit();
     } catch (reason) {
       if (controller.signal.aborted) {
-        say("Stopped. The document was not changed.");
-        finish("Stopped", false);
+        say(translate("shell.edit.stoppedUnchanged"));
+        finish(translate("shell.edit.stopped"), false);
         emit();
         return;
       }
       say(reason instanceof Error ? reason.message : String(reason));
-      finish("The edit stopped", false);
+      finish(translate("shell.edit.editStopped"), false);
       emit();
     }
   })();
@@ -332,7 +363,7 @@ export function startDocumentEditRun(
     suggestionId,
     undo: async () => {
       if (!revert) {
-        throw new Error("This change can no longer be undone.");
+        throw new Error(translate("shell.edit.notUndoable"));
       }
       const { saveError } = await revert();
       revert = null;
@@ -354,10 +385,10 @@ export function startDocumentEditRun(
       // the write's failure is a qualifier on it — not a replacement for it.
       say(
         saveError
-          ? `Put back. ${input.fileName} is not saved yet — ${saveError}`
-          : `Reverted. ${input.fileName} is back to what it was.`,
+          ? translate("shell.edit.putBack", { name: input.fileName, error: saveError })
+          : translate("shell.edit.reverted", { name: input.fileName }),
       );
-      task.phase = saveError ? "Reverted, but not saved" : "Change reverted";
+      task.phase = saveError ? translate("shell.edit.revertedNotSaved") : translate("shell.edit.changeReverted");
       emit();
     },
   };

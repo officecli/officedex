@@ -2,6 +2,7 @@ import { ChevronDown, Pencil, Plus, Zap } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
 import { Input, Modal } from "../../renderer/ui";
+import { useT } from "../../renderer/i18n";
 import { Menu } from "../chrome/Menu";
 import { usePort } from "../port/PortContext";
 import { attempt } from "../port/reportPortFailure";
@@ -23,6 +24,7 @@ export interface ModelMenuProps {
  * key back or puts one in its own persistence.
  */
 export function ModelMenu({ models, selectedId, onSelect, onModelsChanged }: ModelMenuProps) {
+  const t = useT();
   const port = usePort();
   const [editing, setEditing] = useState<Model | "new" | null>(null);
   const selected = models.find((model) => model.id === selectedId) ?? models[0];
@@ -76,8 +78,8 @@ export function ModelMenu({ models, selectedId, onSelect, onModelsChanged }: Mod
         ? [
             {
               id: `edit-${configuredCustom.id}`,
-              label: `Edit ${configuredCustom.name}…`,
-              description: "Change its endpoint, key or display name",
+              label: t("shell.modelMenu.edit", { name: configuredCustom.name }),
+              description: t("shell.modelMenu.editDescription"),
               icon: <Pencil size={16} strokeWidth={1.8} aria-hidden="true" />,
               onSelect: () => setEditing(configuredCustom),
             },
@@ -85,29 +87,29 @@ export function ModelMenu({ models, selectedId, onSelect, onModelsChanged }: Mod
         : []),
       {
         id: "add-model",
-        label: configuredCustom ? "Replace custom model…" : "Add model…",
+        label: configuredCustom ? t("shell.modelMenu.replace") : t("shell.modelMenu.add"),
         description: configuredCustom
-          ? `Only one fits — this drops ${configuredCustom.name}`
-          : "Point the shell at your own endpoint",
+          ? t("shell.modelMenu.replaceDescription", { name: configuredCustom.name })
+          : t("shell.modelMenu.addDescription"),
         icon: <Plus size={16} strokeWidth={1.8} aria-hidden="true" />,
         onSelect: () => setEditing("new"),
       },
     ],
-    [models, selected?.id, configuredCustom, choose],
+    [models, selected?.id, configuredCustom, choose, t],
   );
 
   return (
     <>
-      <Menu label="Model" items={items} align="end" width={280}>
+      <Menu label={t("shell.modelMenu.menu")} items={items} align="end" width={280}>
         {(triggerProps) => (
           <button
             {...triggerProps}
             type="button"
             className="shell-cx-button shell-cx-model"
-            title={`Model: ${selected?.name ?? "none"}`}
+            title={t("shell.modelMenu.title", { name: selected?.name ?? t("shell.modelMenu.none") })}
           >
             <Zap size={13} strokeWidth={1.7} aria-hidden="true" />
-            <span className="shell-cx-model-name">{selected?.name ?? "No model"}</span>
+            <span className="shell-cx-model-name">{selected?.name ?? t("shell.modelMenu.noModel")}</span>
             <ChevronDown size={12} strokeWidth={1.8} aria-hidden="true" />
           </button>
         )}
@@ -144,6 +146,7 @@ function CustomModelDialog({
   onClose: () => void;
   onSaved: () => Promise<void> | void;
 }) {
+  const t = useT();
   const port = usePort();
   const [form, setForm] = useState<CustomModelInput>({
     name: model?.name ?? "",
@@ -174,15 +177,15 @@ function CustomModelDialog({
   };
 
   const save = async () => {
-    if (!form.name.trim()) return setError("Enter a display name.");
-    if (!form.modelId.trim()) return setError("Enter the model ID from your provider.");
-    if (/\s/.test(form.modelId.trim())) return setError("Model ID cannot contain spaces.");
+    if (!form.name.trim()) return setError(t("shell.modelMenu.errorName"));
+    if (!form.modelId.trim()) return setError(t("shell.modelMenu.errorModelId"));
+    if (/\s/.test(form.modelId.trim())) return setError(t("shell.modelMenu.errorModelIdSpaces"));
     if (form.baseUrl.trim()) {
       try {
         const url = new URL(form.baseUrl);
         if (!["http:", "https:"].includes(url.protocol) || url.username || url.search) throw new Error();
       } catch {
-        return setError("Use an http or https URL without credentials or query parameters.");
+        return setError(t("shell.modelMenu.errorBaseUrl"));
       }
     }
     if (model) await port.models.updateCustom(model.id, form);
@@ -194,26 +197,24 @@ function CustomModelDialog({
   return (
     <Modal
       open
-      title={model ? "Edit model" : "Add model"}
-      okText="Save model"
+      title={model ? t("shell.modelMenu.dialogEdit") : t("shell.modelMenu.dialogAdd")}
+      okText={t("shell.modelMenu.save")}
       onOk={save}
       onCancel={onClose}
       width={480}
     >
       <p className="shell-dialog-note">
-        The shell only records which model you picked. Where the key is kept is the desktop app’s
-        decision — nothing is stored in this window.
+        {t("shell.modelMenu.note")}
       </p>
 
       {replaces ? (
         <p className="shell-dialog-warning">
-          Saving this replaces <strong>{replaces.name}</strong>. Only one custom model can be
-          configured at a time.
+          {t("shell.modelMenu.replacesLead")} <strong>{replaces.name}</strong>{t("shell.modelMenu.replacesTail")}
         </p>
       ) : null}
 
       <label className="shell-dialog-label" htmlFor="shell-model-name">
-        Display name
+        {t("shell.modelMenu.name")}
       </label>
       <Input
         id="shell-model-name"
@@ -223,7 +224,7 @@ function CustomModelDialog({
       />
 
       <label className="shell-dialog-label" htmlFor="shell-model-id">
-        Model ID
+        {t("shell.modelMenu.modelId")}
       </label>
       <Input
         id="shell-model-id"
@@ -233,7 +234,7 @@ function CustomModelDialog({
       />
 
       <label className="shell-dialog-label" htmlFor="shell-model-provider">
-        Provider
+        {t("shell.modelMenu.provider")}
       </label>
       <select
         id="shell-model-provider"
@@ -243,13 +244,13 @@ function CustomModelDialog({
       >
         {PROVIDERS.map((provider) => (
           <option key={provider} value={provider}>
-            {provider}
+            {provider === "Custom" ? t("shell.cx.permission.custom") : provider}
           </option>
         ))}
       </select>
 
       <label className="shell-dialog-label" htmlFor="shell-model-base">
-        Base URL <span>optional</span>
+        {t("shell.modelMenu.baseUrl")} <span>{t("shell.modelMenu.optional")}</span>
       </label>
       <Input
         id="shell-model-base"
@@ -259,7 +260,7 @@ function CustomModelDialog({
       />
 
       <label className="shell-dialog-label" htmlFor="shell-model-key">
-        API key <span>not stored by this window</span>
+        {t("shell.modelMenu.apiKey")} <span>{t("shell.modelMenu.apiKeyHint")}</span>
       </label>
       <Input
         id="shell-model-key"

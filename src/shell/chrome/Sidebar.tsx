@@ -1,15 +1,13 @@
-import { Clock3, FolderOpen, House, Pin, Plus, Settings2 } from "lucide-react";
+import { Clock3, FolderOpen, House, Pin, Plus, Settings2, UserRound } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { useT } from "../../renderer/i18n";
 import { useShell } from "../state/ShellContext";
 import { useLibraryActions } from "../nav/useLibraryActions";
-import { notBuiltYet } from "../port/reportPortFailure";
 import { ModeMenu } from "./ModeMenu";
 import { NewTaskMenu } from "./NewTaskMenu";
 import { UpdateButton } from "./UpdateButton";
-import { Menu } from "./Menu";
-import { useComposerSettings } from "../composer/useComposerSettings";
+import type { Account } from "../account/useAccount";
 
 /**
  * The sidebar keeps its position and its top/bottom furniture in both modes and
@@ -18,14 +16,56 @@ import { useComposerSettings } from "../composer/useComposerSettings";
  * feel like navigating to a different application.
  *
  * `children` is the mode-specific middle; M3 fills it with the file tree.
+ *
+ * `account` and `onOpenAccount` are required props rather than something this
+ * component fetches. The account is one fact about the whole shell — the agent
+ * column will want it too, and a second `whoami` per consumer is a second
+ * subprocess for an answer that cannot differ. With the handler required, the
+ * compiler catches a call site that forgot to wire the chip: the audit that
+ * found the old chip silent found it precisely because the prop was optional.
  */
-export function Sidebar({ children }: { children?: ReactNode }) {
+export function Sidebar({
+  children,
+  account,
+  onOpenAccount,
+  onOpenSettings,
+}: {
+  children?: ReactNode;
+  account: Account;
+  onOpenAccount: () => void;
+  /** Opens the settings page. Required so the compiler finds a call site that forgot it. */
+  onOpenSettings: () => void;
+}) {
   const t = useT();
   const { state, dispatch } = useShell();
   const actions = useLibraryActions();
-  const settings = useComposerSettings();
   const agent = state.mode === "agent";
   const collapsed = state.navCollapsed;
+
+  /*
+   * What the chip says, given that nobody may be signed in.
+   *
+   * The three cases are deliberately different words. An anonymous user is not
+   * an unanswered question, and a CLI that could not be reached is not an
+   * anonymous user — the chip never claims a state nothing reported. The
+   * identity itself is the email the CLI printed, or the user id when it printed
+   * no email; it is never synthesised, which is the whole reason the old chip
+   * reading "Flora · Personal workspace" had to go.
+   */
+  const accountLabel =
+    account.mode === "account"
+      ? account.label ?? t("shell.account.signedIn")
+      : account.mode === "anonymous"
+        ? t("shell.account.signIn")
+        : t("shell.account.open");
+  const accountTitle =
+    account.mode === "account"
+      ? account.label
+        ? t("shell.account.signedInAs", { id: account.label })
+        : t("shell.account.signedIn")
+      : account.mode === "anonymous"
+        ? t("shell.account.notSignedIn")
+        : t("shell.account.openHint");
 
   return (
     <aside id="shell-sidebar" className="shell-sidebar shell-region" aria-label={t("shell.sidebar.navAria")}>
@@ -46,9 +86,17 @@ export function Sidebar({ children }: { children?: ReactNode }) {
         ) : (
           <>
             {/*
+              "New" used to only `go-home`, on the theory that Home already
+              holds the three blank-document buttons. On Home that is a no-op,
+              which is exactly where people press this control. The menu is the
+              same three types the folder "+" offers, created in the default
+              folder — never a guessed type, never a silent return to a page
+              already on screen.
+            */}
+            {/*
               The prototype's New is a page — three blank templates with a
-              picture of each — not a return to Home, which is a no-op on Home,
-              exactly where people press it.
+              picture of each — not a menu. Pressed on Home it still changes what
+              is on screen, which was the reason for the menu it replaces.
             */}
             <SidebarButton
               icon={<Plus size={18} strokeWidth={1.6} aria-hidden="true" />}
@@ -95,74 +143,60 @@ export function Sidebar({ children }: { children?: ReactNode }) {
       ) : null}
 
       <div className="shell-sidebar-footer">
-        {/* No account chip. It read "Flora · Personal workspace" for everyone —
-            a name nobody has, next to a workspace that does not exist. There is
-            no account system yet, so the honest footer has nothing to say about
-            who you are. It comes back when there is someone to name. */}
+        {/*
+          The account chip. The shell used to draw one that read "Flora ·
+          Personal workspace" for everyone — a name nobody has, next to a
+          workspace that does not exist — and the audit that found it doing
+          nothing at all was right to remove it. It comes back now that there is
+          someone to name: the email `whoami` reported, or the word for not being
+          signed in, or a neutral control when there was no answer to report.
+
+          Pressing it opens the account page, which is where signing in and out
+          happens — a full-page flow, not a panel in this frame (R-B-09). The
+          chip holds no state of its own, so there is nothing here that can
+          disagree with that page.
+        */}
+        <button
+          type="button"
+          className="shell-profile"
+          onClick={onOpenAccount}
+          aria-label={t("shell.account.openHint")}
+          title={accountTitle}
+        >
+          <span className="shell-avatar" aria-hidden="true">
+            {account.mode === "account" && account.label ? (
+              account.label.slice(0, 1).toUpperCase()
+            ) : (
+              <UserRound size={14} strokeWidth={1.6} />
+            )}
+          </span>
+          {collapsed ? null : <span>{accountLabel}</span>}
+        </button>
+        {/*
+          The gear opens the settings page, and nothing else.
+
+          It used to open a three-row menu — Review changes, Enter sends,
+          Reduced motion — which was the shell's *only* door onto settings and
+          the only door it had at all: the legacy renderer's full settings page
+          exists, but a packaged WKWebView has no address bar to type
+          `legacy.html` into, so 94 of its settings were unreachable (audit
+          S7-001 and §3). The two rows that were real preferences moved onto the
+          page, under Appearance; the third was a switch that only ever said it
+          was not available, and it stays where it belongs, in the composer's
+          permission menu, rather than being copied onto a page that exists to
+          be the honest list of what can be changed.
+        */}
         {/* Only there while an optional update is waiting — see UpdateButton. */}
         <UpdateButton />
-        <Menu
-          label={t("shell.sidebar.settingsMenu")}
-          align="end"
-          width={250}
-          items={[
-            {
-              id: "review",
-              label: t("shell.sidebar.reviewChanges"),
-              description: t("shell.sidebar.reviewChangesDescription"),
-              /*
-               * The fifth door onto a tier that does not exist.
-               *
-               * The composer's permission menu gained a gate when Review and
-               * Custom turned out to have nothing behind them, and all four
-               * defaults moved to Full access — but this row kept writing
-               * `permission: "review"` straight through. Pressing it left the
-               * composer button reading "Review changes" for the rest of the
-               * session while every run still applied its edits directly: the
-               * one shape of failure this shell refuses, a control that
-               * answers by lying.
-               *
-               * No `checked`: the stored value is filtered on read now, so it
-               * could only ever have rendered a tick that was about to vanish.
-               */
-              onSelect: () =>
-                notBuiltYet(
-                  "composer.permission.review",
-                  t("shell.sidebar.reviewNotBuilt"),
-                ),
-            },
-            {
-              id: "enter",
-              label: t(
-                settings.value.enterToSend ? "shell.sidebar.enterSends" : "shell.sidebar.enterNewline",
-              ),
-              description: t("shell.sidebar.enterDescription"),
-              checked: settings.value.enterToSend,
-              onSelect: () => void settings.patch({ enterToSend: !settings.value.enterToSend }),
-            },
-            {
-              id: "motion",
-              label: t(
-                settings.value.reduceMotion ? "shell.sidebar.reducedMotion" : "shell.sidebar.fullMotion",
-              ),
-              description: t("shell.sidebar.motionDescription"),
-              checked: settings.value.reduceMotion,
-              onSelect: () => void settings.patch({ reduceMotion: !settings.value.reduceMotion }),
-            },
-          ]}
+        <button
+          type="button"
+          className="shell-icon-button"
+          aria-label={t("shell.nav.settings")}
+          title={t("shell.nav.settings")}
+          onClick={onOpenSettings}
         >
-          {(triggerProps) => (
-            <button
-              {...triggerProps}
-              type="button"
-              className="shell-icon-button"
-              aria-label={t("shell.nav.settings")}
-              title={t("shell.nav.settings")}
-            >
-              <Settings2 size={18} strokeWidth={1.6} aria-hidden="true" />
-            </button>
-          )}
-        </Menu>
+          <Settings2 size={18} strokeWidth={1.6} aria-hidden="true" />
+        </button>
       </div>
     </aside>
   );

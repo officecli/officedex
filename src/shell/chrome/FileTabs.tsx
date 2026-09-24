@@ -188,6 +188,7 @@ export function FileTabs() {
       // still only in an editor that is not mounted here.
       if (activeFile?.id !== file.id) {
         dispatch({ type: "activate-file", fileId: file.id });
+        dispatch({ type: "select-folder", folderId: file.folderId });
         toast.info({
           key: "dirty-file-activated",
           content: t("shell.tabs.dirtyActivated"),
@@ -265,7 +266,10 @@ export function FileTabs() {
                 tabIndex={file.id === tabStopId ? 0 : -1}
                 className="shell-tab-select"
                 title={file.name}
-                onClick={() => dispatch({ type: "activate-file", fileId: file.id })}
+                onClick={() => {
+                  dispatch({ type: "activate-file", fileId: file.id });
+                  dispatch({ type: "select-folder", folderId: file.folderId });
+                }}
                 onKeyDown={(event) => {
                   const moves = { ArrowRight: 1, ArrowLeft: -1, Home: "first", End: "last" } as const;
                   const move = moves[event.key as keyof typeof moves];

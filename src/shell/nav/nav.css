@@ -91,8 +91,39 @@
   cursor: pointer;
 }
 
-.shell-tree-folder-toggle > svg {
+/*
+ * One icon size for the tree's two row kinds.
+ *
+ * The rows are drawn by different code paths and had drifted apart, which is
+ * what makes the sidebar read as two densities rather than one list:
+ *
+ *     folder row   text 12px / 20px   glyph 17px (lucide default)   chevron 12px
+ *     file row     text 11px / 18px   glyph 15px
+ *
+ * Same list, same indent, two glyph sizes 2px apart. Measured on the real
+ * fixture, not read off the CSS.
+ *
+ * 17 → 15 rather than the other way round because the file glyph is the one
+ * that already matches the approved prototype's file row
+ * (`.nav-file-open` draws at 11px text with a 15px-leading frame), and because
+ * the folder glyph at 17px is the one that came from a component default rather
+ * than from a decision. The prototype's own navigation uses a single leading
+ * box for every row; this is the two rows agreeing on the width that already
+ * exists.
+ *
+ * Targeting is by what each glyph *is*, not by position: the chevron is the
+ * folder toggle's first child, so a `:first-child` rule lands on the
+ * disclosure control and leaves the folder glyph untouched — which is exactly
+ * what the first attempt at this did.
+ *
+ * The chevron is deliberately not in either rule: it is a disclosure control,
+ * not a document glyph, and the prototype keeps it smaller.
+ */
+.shell-tree-folder-toggle > svg:not(.shell-tree-chevron),
+.shell-tree-file-open > svg:first-child {
   flex: none;
+  width: 15px;
+  height: 15px;
 }
 
 .shell-tree-folder-toggle > span {

@@ -74,19 +74,15 @@ export function SidebarTree() {
         onToggleFolder={toggleFolder}
         onToggleOverflow={(folderId) => dispatch({ type: "toggle-folder-overflow", folderId })}
         onSelectFolder={(folderId) => dispatch({ type: "select-folder", folderId })}
-        onCreateFile={(folderId, type) => void actions.createFile(folderId, type)}
         onMoveFile={(fileId, folderId) => void actions.moveFile(fileId, folderId)}
         onTogglePinned={(fileId, pinned) => void actions.setPinned(fileId, pinned)}
-        onRenameFolder={(folderId) => {
-          const folder = folders.find((entry) => entry.id === folderId);
-          if (folder) dialogs.renameFolder(folder);
-        }}
         onRemoveFolder={(folderId) => {
           const folder = folders.find((entry) => entry.id === folderId);
           // The default folder is where removed folders' files land, so it
           // cannot itself be removed.
           if (folder && !folder.isDefault) dialogs.removeFolder(folder);
         }}
+        onRemoveFile={(fileId) => void actions.removeFile(fileId)}
       />
 
       {dialogs.element}

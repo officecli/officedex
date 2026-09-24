@@ -12,7 +12,7 @@ import {
 import { usePort } from "../port/PortContext";
 import { logShellEvent } from "../port/shellLog";
 import type { FileMeta, Folder } from "../../shared/uiPort";
-import { readPersisted, writePersisted, type PersistedShellState } from "./persist";
+import { bootPersisted, writePersisted, type PersistedShellState } from "./persist";
 import {
   hydrateShellState,
   shellReducer,
@@ -61,7 +61,7 @@ export function ShellProvider({
 }) {
   const port = usePort();
   const [state, dispatch] = useReducer(shellReducer, undefined, () =>
-    hydrateShellState({ ...readPersisted(), ...stateOverride }),
+    hydrateShellState(bootPersisted(stateOverride)),
   );
   const [folders, setFolders] = useState<Folder[]>([]);
   const [files, setFiles] = useState<FileMeta[]>([]);

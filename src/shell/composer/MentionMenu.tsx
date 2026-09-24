@@ -1,6 +1,7 @@
 import { Folder as FolderIcon, Paperclip, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { translate, useT } from "../../renderer/i18n";
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import type { FileMeta, Folder, Mention } from "../../shared/uiPort";
 
@@ -23,16 +24,16 @@ export function buildMentionOptions(
     {
       id: "upload-files",
       kind: "upload-files",
-      label: "Upload files",
-      description: "Choose files from this computer",
-      group: "From this computer",
+      label: translate("shell.mention.uploadFiles"),
+      description: translate("shell.mention.uploadFilesDescription"),
+      group: translate("shell.mention.fromComputer"),
     },
     {
       id: "upload-folder",
       kind: "upload-folder",
-      label: "Upload folder",
-      description: "Include the files inside a folder",
-      group: "From this computer",
+      label: translate("shell.mention.uploadFolder"),
+      description: translate("shell.mention.uploadFolderDescription"),
+      group: translate("shell.mention.fromComputer"),
     },
   ];
 
@@ -41,8 +42,8 @@ export function buildMentionOptions(
       id: `folder:${folder.id}`,
       kind: "folder" as const,
       label: folder.name,
-      description: `${files.filter((file) => file.folderId === folder.id).length} files`,
-      group: "Folders",
+      description: translate("shell.mention.fileCount", { count: files.filter((file) => file.folderId === folder.id).length }),
+      group: translate("shell.tree.folders"),
       mention: { kind: "folder" as const, id: folder.id, label: folder.name },
     })),
     ...files.map((file) => ({
@@ -50,7 +51,7 @@ export function buildMentionOptions(
       kind: "file" as const,
       label: file.name,
       description: folders.find((folder) => folder.id === file.folderId)?.name ?? "",
-      group: "Files",
+      group: translate("shell.home.filesAria"),
       fileType: file.type,
       mention: { kind: "file" as const, id: file.id, label: file.name },
     })),
@@ -98,7 +99,9 @@ export function MentionMenu({
   onClose,
   inputId,
 }: MentionMenuProps) {
-  const options = useMemo(() => buildMentionOptions(folders, files, query), [folders, files, query]);
+  const t = useT();
+  // `t` changes identity with the locale, so a language switch rebuilds the labels.
+  const options = useMemo(() => buildMentionOptions(folders, files, query), [folders, files, query, t]);
   const [activeIndex, setActiveIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -188,16 +191,16 @@ export function MentionMenu({
       data-side={placement.side}
       style={{ maxHeight: placement.maxHeight }}
       role="listbox"
-      aria-label="Files and folders"
+      aria-label={t("shell.mention.heading")}
       id={`${inputId}-mentions`}
     >
       <div className="shell-mention-heading">
-        <span aria-hidden="true">@</span> Files and folders
+        <span aria-hidden="true">@</span> {t("shell.mention.heading")}
       </div>
 
       <div className="shell-mention-options" ref={listRef}>
         {options.length === 0 ? (
-          <p className="shell-mention-empty">Nothing matches “{query}”.</p>
+          <p className="shell-mention-empty">{t("shell.mention.empty", { query })}</p>
         ) : (
           options.map((option, index) => {
             const heading = option.group !== previousGroup ? option.group : null;
@@ -239,7 +242,7 @@ export function MentionMenu({
       </div>
 
       <div className="shell-mention-footer">
-        <span>↑ ↓ navigate · ↵ select · esc close</span>
+        <span>{t("shell.mention.footer")}</span>
       </div>
     </div>
   );

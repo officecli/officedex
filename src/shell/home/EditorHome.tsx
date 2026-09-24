@@ -1,4 +1,4 @@
-import { FolderOpen, Plus } from "lucide-react";
+import { FileDown, FolderOpen, Play, Plus } from "lucide-react";
 import { useState } from "react";
 
 import { useT } from "../../renderer/i18n";
@@ -6,6 +6,8 @@ import { Select } from "../../renderer/ui";
 import { FileTree } from "../nav/FileTree";
 import { useFolderDrop } from "../nav/useFolderDrop";
 import { useLibraryActions } from "../nav/useLibraryActions";
+import { useDeckDemo } from "./useDeckDemo";
+import { useDiskDrop } from "./useDiskDrop";
 import { NewStart } from "./NewStart";
 import type { FileType } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
@@ -45,11 +47,17 @@ export function EditorHome() {
   const [grouping, setGrouping] = useState<Grouping>("time");
   const [fileType, setFileType] = useState<FileType | "all">("all");
   const { overFolderId, dropHandlers } = useFolderDrop(actions.moveFile);
+  const startDeckDemo = useDeckDemo();
+  const { overlay, zoneHandlers } = useDiskDrop((paths) => void actions.openDropped(paths));
 
   const defaultFolderId = folders.find((folder) => folder.isDefault)?.id ?? folders[0]?.id ?? "";
 
   return (
-    <div className="shell-home shell-region shell-home--editor">
+    <div
+      className="shell-home shell-region shell-home--editor shell-home-dropzone"
+      data-testid="shell-home-dropzone"
+      {...zoneHandlers}
+    >
       {state.homeList === "new" ? (
         <NewStart onCreate={(type) => void actions.createFile(defaultFolderId, type)} />
       ) : (
@@ -93,6 +101,25 @@ export function EditorHome() {
           <FolderOpen size={15} strokeWidth={1.7} aria-hidden="true" />
           {t("shell.home.openFromComputer")}
         </button>
+        {/*
+          Watch a deck being drawn.
+
+          Legacy's **Watch PPT generation** carried into the shell. It sits with
+          the other starting points because that is what it is — something to
+          start from — and it is the only one here that creates no file, which
+          is why it starts the recording instead of going through
+          `useLibraryActions`. Shared with Agent Home's prompt; see
+          `useDeckDemo`.
+        */}
+        <button
+          type="button"
+          className="shell-home-new shell-home-new--ghost"
+          data-testid="shell-home-watch-deck"
+          onClick={startDeckDemo}
+        >
+          <Play size={15} strokeWidth={1.7} aria-hidden="true" />
+          {t("shell.home.watchDeckDrawing")}
+        </button>
       </div>
 
       <div className="shell-home-list" {...dropHandlers}>
@@ -119,6 +146,21 @@ export function EditorHome() {
       </div>
       </>
       )}
+
+      {/*
+        Files dragged in from Finder or Explorer open here, each in its own
+        tab. The overlay only says so; it takes no pointer events, so the drop
+        still lands on the zone underneath. See `useDiskDrop`.
+      */}
+      {overlay ? (
+        <div className="shell-home-drop" style={overlay} data-testid="shell-home-drop" aria-hidden="true">
+          <div className="shell-home-drop-card">
+            <FileDown size={22} strokeWidth={1.6} aria-hidden="true" />
+            <strong>{t("shell.home.dropTitle")}</strong>
+            <span>{t("shell.home.dropHint")}</span>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

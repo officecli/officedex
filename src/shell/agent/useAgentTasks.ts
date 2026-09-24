@@ -100,9 +100,11 @@ export function useAgentTasks(limit: number = DEFAULT_LIMIT) {
 function merge(rows: AgentTaskSummary[], task: AgentTask, limit: number): AgentTaskSummary[] {
   const busyImage = task.image?.runs.some((run) => run.status === "running") ?? false;
   const row: AgentTaskSummary = {
-    // An image series is one row keyed by its first run, whichever run this
-    // event came from — see `AgentTaskSummary.image`.
-    id: task.image?.runs[0]?.taskId ?? task.id,
+    // An image series is one row keyed by its first run, and a conversation
+    // one row keyed by its id, whichever run this event came from — the same
+    // keys `agent.list` hands out.
+    id: task.image?.runs[0]?.taskId ?? task.conversationId ?? task.id,
+    ...(task.conversationId ? { conversationId: task.conversationId } : {}),
     title: task.title,
     folderId: task.folderId,
     status: busyImage && task.status === "done" ? "writing" : task.status,

@@ -96,6 +96,15 @@
   gap: 0;
 }
 
+/* Empty on macOS, where the system draws the real traffic lights over this
+   corner and `WindowBar` does not draw a second set. The band stays exactly as
+   wide so nothing to its right moves between builds, and hands its events back
+   to the title bar underneath — that strip is the system's drag region, and the
+   buttons in it are the system's too. */
+.shell-window-controls[data-system-drawn="true"] {
+  pointer-events: none;
+}
+
 .shell-window-controls button {
   position: relative;
   display: grid;
@@ -199,8 +208,16 @@
   pointer-events: auto;
 }
 
-.shell-nav-toggle {
-  margin-left: 12px;
+/*
+ * On the macOS desktop window the real traffic lights sit on a 16px axis
+ * (AppKit's 14×14 buttons occupy y 9–23). Centering this 40px row puts the
+ * sidebar toggle 4px below them. Pin the cluster to that axis so the two
+ * line up; the browser preview keeps the 40px center because it draws its
+ * own lights in this flex.
+ */
+html[data-window-chrome="overlay"] .shell-windowbar {
+  align-items: flex-start;
+  padding-top: 2px;
 }
 
 /* ----------------------------------------------------------------- tabs */
@@ -216,7 +233,7 @@
    * The titlebar is supposed to start at the content boundary — the sidebar's
    * right edge, or the docked task column's. It also has to clear the window
    * controls plus the sidebar toggle, which together need 132px (12px padding +
-   * 63px of lights + 24px gap + 28px toggle, measured; `CHROME_RESERVE.width`
+   * 63px of lights + 12px gap + 28px toggle, measured; `CHROME_RESERVE.width`
    * in `agent/presenceLayout.ts` restates the same number for the floating
    * panel). This `max()` is the whole of that safe area: nothing in `app.css`
    * contributes to it any more.
@@ -229,6 +246,17 @@
    * other side and this padding is reserving space at the wrong end.
    */
   padding-left: max(var(--shell-nav-w), 132px);
+  /*
+   * And it eases, because both of the things that move it are animations
+   * elsewhere: the sidebar's width (app.css) and the docked column's. The strip
+   * used to be the one part of a mode change that cut — the rule below swaps
+   * `calc(nav + task)` for the `max()` above in the same frame the mode
+   * attribute flips, so the first tab jumped 320px while the column it is
+   * aligned to was still sliding. Both endpoints resolve to absolute lengths,
+   * so the browser interpolates between them; `--shell-duration` is the same
+   * one every other part of the switch uses.
+   */
+  transition: padding-left var(--shell-duration) var(--shell-ease);
 }
 
 #shell[data-mode="agent"][data-home="false"][data-presence="docked"] .shell-tabs {
@@ -509,9 +537,22 @@
   flex: none;
   width: 28px;
   height: 28px;
+  color: var(--shell-ink-inverse);
+}
+
+/*
+ * Editor mode keeps the dark rounded tile behind its glyph. Agent mode does
+ * not: on this light button the brand lockup is the ink plate itself, and a
+ * clipped tile cuts off the separated corner square.
+ */
+.shell-brand-mark:not(:has(.od-mark)) {
+  overflow: hidden;
   border-radius: 7px;
   background: var(--shell-brand-mark);
-  color: var(--shell-ink-inverse);
+}
+
+.shell-brand-mark .od-mark {
+  filter: none;
 }
 
 .shell-brand-name {
@@ -548,6 +589,16 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+/*
+ * Menu wraps the New trigger in `.shell-menu-anchor`. Without stretching that
+ * wrapper to the row, the trigger would shrink to its content and sit off the
+ * rest of the rail — especially on the compact 36px icon column.
+ */
+.shell-sidebar-top > .shell-menu-anchor {
+  display: block;
+  width: 100%;
 }
 
 .shell-sidebar-views {

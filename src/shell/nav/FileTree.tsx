@@ -1,4 +1,4 @@
-import { ChevronRight, Folder as FolderIcon, FolderOpen, MoreHorizontal, Pin, Plus } from "lucide-react";
+import { ChevronRight, Folder as FolderIcon, FolderOpen, MoreHorizontal, Pin } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { useT } from "../../renderer/i18n";
@@ -57,11 +57,11 @@ export interface FileTreeProps {
   onToggleFolder: (folderId: string) => void;
   onToggleOverflow: (folderId: string) => void;
   onSelectFolder: (folderId: string) => void;
-  onCreateFile: (folderId: string, type: FileType) => void;
+  onCreateFile?: (folderId: string, type: FileType) => void;
   onMoveFile: (fileId: string, folderId: string) => void;
   onTogglePinned: (fileId: string, pinned: boolean) => void;
-  onRenameFolder?: (folderId: string) => void;
   onRemoveFolder?: (folderId: string) => void;
+  onRemoveFile?: (fileId: string) => void;
 }
 
 /**
@@ -120,9 +120,11 @@ function CompactTree(props: WithGroups) {
               current={folderId === props.selectedFolderId}
               onToggle={() => props.onToggleFolder(folderId)}
               onSelect={() => props.onSelectFolder(folderId)}
-              onCreateFile={(type) => props.onCreateFile(folderId, type)}
-              onRename={props.onRenameFolder ? () => props.onRenameFolder?.(folderId) : undefined}
-              onRemove={props.onRemoveFolder ? () => props.onRemoveFolder?.(folderId) : undefined}
+              onRemove={
+                props.onRemoveFolder && !props.folders.find((folder) => folder.id === folderId)?.isDefault
+                  ? () => props.onRemoveFolder?.(folderId)
+                  : undefined
+              }
             />
 
             {expanded ? (
@@ -134,11 +136,9 @@ function CompactTree(props: WithGroups) {
                     <FileRow
                       key={file.id}
                       file={file}
-                      folders={props.folders}
                       current={file.id === props.activeFileId}
                       onOpen={() => props.onOpenFile(file.id)}
-                      onMove={(target) => props.onMoveFile(file.id, target)}
-                      onTogglePinned={() => props.onTogglePinned(file.id, !file.pinned)}
+                      onRemove={props.onRemoveFile ? () => props.onRemoveFile?.(file.id) : undefined}
                     />
                   ))
                 )}
@@ -178,8 +178,6 @@ function FolderRow({
   current,
   onToggle,
   onSelect,
-  onCreateFile,
-  onRename,
   onRemove,
 }: {
   folder: { id: string; label: string; count: number };
@@ -187,25 +185,19 @@ function FolderRow({
   current: boolean;
   onToggle: () => void;
   onSelect: () => void;
-  onCreateFile: (type: FileType) => void;
-  onRename?: () => void;
   onRemove?: () => void;
 }) {
   const t = useT();
-  const items: MenuItemSpec[] = [
-    { id: "doc", label: t("shell.tree.newDocument"), onSelect: () => onCreateFile("doc") },
-    { id: "sheet", label: t("shell.tree.newWorkbook"), onSelect: () => onCreateFile("sheet") },
-    { id: "slides", label: t("shell.tree.newPresentation"), onSelect: () => onCreateFile("slides") },
-  ];
-  if (onRename) items.push({ id: "rename", label: t("shell.tree.renameFolder"), onSelect: onRename });
-  if (onRemove) {
-    items.push({
-      id: "remove",
-      label: t("shell.tree.removeFolder"),
-      description: t("shell.tree.removeFolderDescription"),
-      onSelect: onRemove,
-    });
-  }
+  const items: MenuItemSpec[] = onRemove
+    ? [
+        {
+          id: "remove",
+          label: t("shell.tree.removeFolder"),
+          description: t("shell.tree.removeFolderDescription"),
+          onSelect: onRemove,
+        },
+      ]
+    : [];
 
   const menuRef = useRef<MenuHandle>(null);
 
@@ -213,6 +205,7 @@ function FolderRow({
     <div
       className={`shell-tree-folder-row${current ? " is-current" : ""}`}
       onContextMenu={(event) => {
+        if (items.length === 0) return;
         event.preventDefault();
         menuRef.current?.open();
       }}
@@ -239,6 +232,7 @@ function FolderRow({
           // then steps into it, left closes it. F2 is the menu, for the same
           // reason the desktop uses it — a context menu with no pointer.
           if (event.key === "F2") {
+            if (items.length === 0) return;
             event.preventDefault();
             menuRef.current?.open();
             return;
@@ -265,59 +259,52 @@ function FolderRow({
         <small>{folder.count}</small>
       </button>
 
-      <Menu
-        ref={menuRef}
-        label={t("shell.tree.folderMenu", { folder: folder.label })}
-        items={items}
-        align="end"
-        width={220}
-      >
-        {(triggerProps) => (
-          <button
-            {...triggerProps}
-            type="button"
-            className="shell-tree-folder-add"
-            aria-label={t("shell.tree.folderActionsFor", { folder: folder.label })}
-            title={t("shell.tree.newFileHere")}
-          >
-            <Plus size={15} strokeWidth={1.8} aria-hidden="true" />
-          </button>
-        )}
-      </Menu>
+      {items.length > 0 ? (
+        <Menu
+          ref={menuRef}
+          label={t("shell.tree.folderMenu", { folder: folder.label })}
+          items={items}
+          align="end"
+          width={220}
+        >
+          {(triggerProps) => (
+            <button
+              {...triggerProps}
+              type="button"
+              className="shell-tree-folder-add"
+              aria-label={t("shell.tree.folderActionsFor", { folder: folder.label })}
+              title={t("shell.tree.removeFolder")}
+            >
+              <MoreHorizontal size={14} strokeWidth={1.8} aria-hidden="true" />
+            </button>
+          )}
+        </Menu>
+      ) : null}
     </div>
   );
 }
 
 function FileRow({
   file,
-  folders,
   current,
   onOpen,
-  onMove,
-  onTogglePinned,
+  onRemove,
 }: {
   file: FileMeta;
-  folders: Folder[];
   current: boolean;
   onOpen: () => void;
-  onMove: (folderId: string) => void;
-  onTogglePinned: () => void;
+  onRemove?: () => void;
 }) {
   const t = useT();
-  const items: MenuItemSpec[] = [
-    {
-      id: "pin",
-      label: t(file.pinned ? "shell.common.unpin" : "shell.common.pin"),
-      onSelect: onTogglePinned,
-    },
-    ...folders
-      .filter((folder) => folder.id !== file.folderId)
-      .map((folder) => ({
-        id: `move-${folder.id}`,
-        label: t("shell.tree.moveTo", { folder: folder.name }),
-        onSelect: () => onMove(folder.id),
-      })),
-  ];
+  const items: MenuItemSpec[] = onRemove
+    ? [
+        {
+          id: "remove",
+          label: t("shell.tree.removeFile"),
+          onSelect: onRemove,
+        },
+      ]
+    : [];
 
   const menuRef = useRef<MenuHandle>(null);
   const [dragging, setDragging] = useState(false);
@@ -327,6 +314,7 @@ function FileRow({
       className={`shell-tree-file-row${current ? " is-current" : ""}${dragging ? " is-dragging" : ""}`}
       draggable
       onContextMenu={(event) => {
+        if (items.length === 0) return;
         event.preventDefault();
         menuRef.current?.open();
       }}
@@ -346,6 +334,7 @@ function FileRow({
         onClick={onOpen}
         onKeyDown={(event) => {
           if (event.key === "F2") {
+            if (items.length === 0) return;
             event.preventDefault();
             menuRef.current?.open();
             return;
@@ -363,25 +352,27 @@ function FileRow({
         {file.pinned ? <Pin size={11} strokeWidth={1.8} aria-label={t("shell.sidebar.pinned")} /> : null}
       </button>
 
-      <Menu
-        ref={menuRef}
-        label={t("shell.tree.fileMenu", { file: file.name })}
-        items={items}
-        align="end"
-        width={230}
-      >
-        {(triggerProps) => (
-          <button
-            {...triggerProps}
-            type="button"
-            className="shell-tree-file-more"
-            aria-label={t("shell.tree.fileActionsFor", { file: file.name })}
-            title={t("shell.common.fileActions")}
-          >
-            <MoreHorizontal size={14} strokeWidth={1.8} aria-hidden="true" />
-          </button>
-        )}
-      </Menu>
+      {items.length > 0 ? (
+        <Menu
+          ref={menuRef}
+          label={t("shell.tree.fileMenu", { file: file.name })}
+          items={items}
+          align="end"
+          width={230}
+        >
+          {(triggerProps) => (
+            <button
+              {...triggerProps}
+              type="button"
+              className="shell-tree-file-more"
+              aria-label={t("shell.tree.fileActionsFor", { file: file.name })}
+              title={t("shell.tree.removeFile")}
+            >
+              <MoreHorizontal size={14} strokeWidth={1.8} aria-hidden="true" />
+            </button>
+          )}
+        </Menu>
+      ) : null}
     </div>
   );
 }

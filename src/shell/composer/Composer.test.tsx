@@ -371,13 +371,20 @@ describe("model choice", () => {
  * on one of them.
  */
 describe("permission tiers", () => {
-  it("opens on the tier the runtime honours", async () => {
+  it("hides the chip on Home, matching the prototype composer", async () => {
     const shell = await agentHome();
+    expect(shell.view.queryByTitle(/^Permission:/)).not.toBeInTheDocument();
+    expect(shell.view.queryByTestId("shell-home-watch-deck-agent")).not.toBeInTheDocument();
+    expect(shell.view.container.querySelectorAll(".shell-hero-prompt")).toHaveLength(4);
+  });
+
+  it("opens on the tier the runtime honours", async () => {
+    const shell = await taskColumn();
     expect(shell.view.getByTitle("Permission: Full access")).toBeInTheDocument();
   });
 
   it("says so rather than switching to a tier with nothing behind it", async () => {
-    const shell = await agentHome();
+    const shell = await taskColumn();
 
     await act(async () => {
       fireEvent.click(shell.view.getByTitle(/^Permission: /));

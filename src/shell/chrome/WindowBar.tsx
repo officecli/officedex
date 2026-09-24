@@ -2,6 +2,7 @@ import { PanelLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { useT } from "../../renderer/i18n";
+import { hasOverlayWindowChrome } from "../../renderer/windowChrome";
 import { usePort } from "../port/PortContext";
 import { useShell } from "../state/ShellContext";
 
@@ -43,30 +44,7 @@ export function WindowBar() {
 
   return (
     <div className="shell-windowbar shell-region">
-      <div className="shell-window-controls" aria-label={t("shell.window.controls")}>
-        {CONTROLS.map(({ action, labelKey }) => {
-          const label = t(labelKey);
-          return (
-            <button
-              key={action}
-              type="button"
-              className={`shell-window-${action}`}
-              aria-label={
-                action === "fullscreen" && fullscreen ? t("shell.window.exitFullscreen") : label
-              }
-              aria-pressed={action === "fullscreen" ? fullscreen : undefined}
-              title={label}
-              onClick={() => {
-                if (action === "close") port.window.close();
-                else if (action === "minimize") port.window.minimize();
-                else port.window.toggleFullscreen();
-              }}
-            >
-              <WindowGlyph action={action} />
-            </button>
-          );
-        })}
-      </div>
+      <WindowControls fullscreen={fullscreen} />
 
       <button
         type="button"
@@ -79,6 +57,57 @@ export function WindowBar() {
       >
         <PanelLeft size={18} strokeWidth={1.6} aria-hidden="true" />
       </button>
+    </div>
+  );
+}
+
+/**
+ * The traffic lights — unless the system is already drawing them.
+ *
+ * On macOS the desktop window keeps the real close/minimise/zoom buttons and
+ * floats them over this corner (`mac.TitleBarHidden()` in `main.go`), so a page
+ * that draws its own ends up with two overlapping sets a few pixels apart. The
+ * system's win: they are the ones that answer a long press, an option-click and
+ * a green-button drag, and they grey out with the window. What is left here is
+ * the band they need, kept at the same width so the sidebar toggle, the tabs
+ * and the presence reserve (`agent/presenceLayout.ts`) do not shift between the
+ * two builds.
+ *
+ * Drawn in full everywhere else: a browser tab has no window controls to dodge,
+ * and Windows puts its native ones on the other side of the title bar.
+ */
+function WindowControls({ fullscreen }: { fullscreen: boolean }) {
+  const t = useT();
+  const port = usePort();
+
+  if (hasOverlayWindowChrome()) {
+    return <div className="shell-window-controls" data-system-drawn="true" aria-hidden="true" />;
+  }
+
+  return (
+    <div className="shell-window-controls" aria-label={t("shell.window.controls")}>
+      {CONTROLS.map(({ action, labelKey }) => {
+        const label = t(labelKey);
+        return (
+          <button
+            key={action}
+            type="button"
+            className={`shell-window-${action}`}
+            aria-label={
+              action === "fullscreen" && fullscreen ? t("shell.window.exitFullscreen") : label
+            }
+            aria-pressed={action === "fullscreen" ? fullscreen : undefined}
+            title={label}
+            onClick={() => {
+              if (action === "close") port.window.close();
+              else if (action === "minimize") port.window.minimize();
+              else port.window.toggleFullscreen();
+            }}
+          >
+            <WindowGlyph action={action} />
+          </button>
+        );
+      })}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import type { CanvasAdapter } from "../editor/canvasContract";
 import { createDesktopCanvas } from "../../canvas/createDesktopCanvas";
 import { createDesktopAPI, hasDesktopBackend, readBridgeEnvironment } from "../../renderer/bridge/select";
+import { deckDemoEnabled } from "../dev/deckDemo";
 import { reportPortFailure } from "./reportPortFailure";
 import { NotImplementedError } from "../../shared/notImplemented";
 
@@ -23,6 +24,16 @@ export function createShellCanvas(): CanvasAdapter | null {
   if (!hasDesktopBackend()) return null;
   return createDesktopCanvas({
     api: createDesktopAPI(readBridgeEnvironment()),
+    /*
+     * `?deckDemo=1` shows the bundled NexaEdge recording — legacy's "Watch PPT
+     * generation" demo, carried over so the live-drawing path can be exercised
+     * without a run. Read here rather than through `readDevFixture` because it
+     * is a diagnosing entry, not an audit fixture; see `dev/deckDemo.ts`.
+     *
+     * It still needs a real backend: the draft is a real file and the editor is
+     * the real embedded one.
+     */
+    demo: deckDemoEnabled(),
     // Each leaf already says which editor it is and what went wrong — Writer,
     // the workbook SDK and the presentation runtime fail for different reasons
     // and are staged by different build steps. Naming one of them here produced

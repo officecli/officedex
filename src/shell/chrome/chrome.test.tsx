@@ -1,4 +1,5 @@
-import { act, cleanup, fireEvent, within } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { act, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { SEED_OPEN_FILE_IDS } from "../port/fake/seed";
@@ -20,6 +21,31 @@ async function openSeedTabs() {
 }
 
 describe("file tabs", () => {
+  it("does not reopen last session's documents on launch", async () => {
+    localStorage.setItem(
+      "officedex.shell.v1",
+      JSON.stringify({
+        mode: "agent",
+        home: false,
+        homeList: "recent",
+        navWidth: 190,
+        navCollapsed: true,
+        taskWidth: 320,
+        selectedFolderId: null,
+        expandedFolderIds: [],
+        revealedFolderIds: [],
+        openFileIds: SEED_OPEN_FILE_IDS,
+        activeFileId: SEED_OPEN_FILE_IDS[0],
+        presence: { placement: "docked", expanded: true, x: null, y: null, edge: null },
+      }),
+    );
+    const shell = await renderShell({ keepStorage: true });
+    expect(shell.state().home).toBe(true);
+    expect(shell.state().openFileIds).toEqual([]);
+    expect(tabNames(shell.view.container)).toEqual([]);
+    expect(shell.view.container.querySelector("#shell")?.getAttribute("data-home")).toBe("true");
+  });
+
   it("survive a mode change and a Home round trip", async () => {
     const shell = await openSeedTabs();
     const expected = ["MO launch plan", "MO sales forecast", "MO launch deck"];
@@ -190,6 +216,24 @@ describe("sidebar", () => {
     expect(within(sidebar()).getByTitle("Recent")).toBeInTheDocument();
   });
 
+  it("creates a blank file from New even when Home is already on screen", async () => {
+    const shell = await renderShell();
+    await shell.dispatch({ type: "set-mode", mode: "editor" });
+    expect(shell.state().home).toBe(true);
+
+    const sidebar = () => shell.view.container.querySelector<HTMLElement>("#shell-sidebar")!;
+    await act(async () => {
+      fireEvent.click(within(sidebar()).getByTitle("New"));
+    });
+    // New is a page of blank templates, as in the prototype, not a menu.
+    await act(async () => {
+      fireEvent.click(shell.view.getByRole("button", { name: "Blank workbook" }));
+    });
+
+    await waitFor(() => expect(shell.state().home).toBe(false));
+    expect(tabNames(shell.view.container).some((name) => name?.startsWith("Untitled workbook"))).toBe(true);
+  });
+
   it("hides labels but keeps accessible names when collapsed", async () => {
     const shell = await openSeedTabs();
     const home = () => shell.view.container.querySelector<HTMLElement>("#shell-sidebar .shell-sidebar-item")!;
@@ -199,32 +243,6 @@ describe("sidebar", () => {
     expect(home()).toHaveAttribute("aria-label", "Home");
     await shell.dispatch({ type: "toggle-nav" });
     expect(home().textContent).toContain("Home");
-  });
-});
-
-describe("sidebar brand", () => {
-  /*
-   * The prototype's corner mark says which mode the window is in: the companion
-   * (dark tile, white plate, eyes) in Agent mode, the same plate with nobody in
-   * it in Editor mode. An earlier pass drew the companion as a bare ink plate
-   * with no tile and kept a generic panel glyph for Editor — neither is in the
-   * prototype.
-   */
-  it("is the companion on a dark tile in Agent mode", async () => {
-    const shell = await renderShell();
-    await shell.dispatch({ type: "set-mode", mode: "agent" });
-    const tile = shell.view.container.querySelector(".shell-brand-mark .shell-brand-tile");
-    expect(tile).toHaveAttribute("data-mode", "agent");
-    expect(tile?.querySelectorAll(".shell-brand-eyes path")).toHaveLength(2);
-  });
-
-  it("is the plain document mark, with no eyes, in Editor mode", async () => {
-    const shell = await renderShell();
-    await shell.dispatch({ type: "set-mode", mode: "editor" });
-    const tile = shell.view.container.querySelector(".shell-brand-mark .shell-brand-tile");
-    expect(tile).toHaveAttribute("data-mode", "editor");
-    expect(tile?.querySelector(".shell-brand-eyes")).toBeNull();
-    expect(tile?.querySelector("img")).not.toBeNull();
   });
 });
 
@@ -309,5 +327,79 @@ describe("status bar", () => {
     expect(bar.textContent).not.toMatch(/\bwords?\b/i);
     expect(bar.textContent).not.toMatch(/Page \d|Slide \d|Sheet \d/);
     expect(bar.textContent).not.toMatch(/\d+%/);
+  });
+});
+
+describe("window controls", () => {
+  // Set by `mountWindowChrome` on the real entry point, from the live root
+  // element — so it survives `cleanup`, and has to come off by hand.
+  const overlayChrome = () => document.documentElement.setAttribute("data-window-chrome", "overlay");
+  afterEach(() => document.documentElement.removeAttribute("data-window-chrome"));
+
+  const band = (shell: { view: { container: HTMLElement } }) =>
+    shell.view.container.querySelector<HTMLElement>(".shell-window-controls")!;
+
+  it("draws its own traffic lights where no system chrome overlays the page", async () => {
+    const shell = await renderShell();
+    expect([...band(shell).querySelectorAll("button")].map((node) => node.className)).toEqual([
+      "shell-window-close",
+      "shell-window-minimize",
+      "shell-window-fullscreen",
+    ]);
+  });
+
+  // The macOS desktop window keeps the system's traffic lights and floats them
+  // over this corner. Drawing a second set put two overlapping clusters a few
+  // pixels apart in the shipped app; the band is reserved for the system's.
+  it("drags the window from the top row, except on the controls in it", () => {
+    const css = readFileSync("src/shell/app.css", "utf8");
+    expect(css).toMatch(/\.shell-row--top \{[^}]*--wails-draggable:\s*drag/s);
+    expect(css).toMatch(/\.shell-row--top button,[\s\S]*--wails-draggable:\s*no-drag/);
+    expect(css).toMatch(/user-select:\s*none/);
+  });
+
+  it("yields to the system's traffic lights, keeping their band reserved", async () => {
+    overlayChrome();
+    const shell = await renderShell();
+
+    expect(band(shell)).not.toBeNull();
+    expect(band(shell).querySelectorAll("button")).toHaveLength(0);
+    expect(band(shell)).toHaveAttribute("aria-hidden", "true");
+    // The sidebar toggle is not a window control and stays on both builds.
+    expect(shell.view.container.querySelector(".shell-nav-toggle")).toBeInTheDocument();
+  });
+
+  it("pins the sidebar toggle to the traffic-light axis under overlay chrome", () => {
+    const css = readFileSync("src/shell/chrome/chrome.css", "utf8");
+    expect(css).toMatch(
+      /html\[data-window-chrome="overlay"\] \.shell-windowbar \{[^}]*padding-top:\s*2px/s,
+    );
+    expect(css).not.toMatch(/\.shell-nav-toggle \{[^}]*margin-left:\s*12px/s);
+  });
+});
+
+describe("sidebar brand", () => {
+  /*
+   * The prototype's corner mark says which mode the window is in: the companion
+   * (dark tile, white plate, eyes) in Agent mode, the same plate with nobody in
+   * it in Editor mode. An earlier pass drew the companion as a bare ink plate
+   * with no tile and kept a generic panel glyph for Editor — neither is in the
+   * prototype.
+   */
+  it("is the companion on a dark tile in Agent mode", async () => {
+    const shell = await renderShell();
+    await shell.dispatch({ type: "set-mode", mode: "agent" });
+    const tile = shell.view.container.querySelector(".shell-brand-mark .shell-brand-tile");
+    expect(tile).toHaveAttribute("data-mode", "agent");
+    expect(tile?.querySelectorAll(".shell-brand-eyes path")).toHaveLength(2);
+  });
+
+  it("is the plain document mark, with no eyes, in Editor mode", async () => {
+    const shell = await renderShell();
+    await shell.dispatch({ type: "set-mode", mode: "editor" });
+    const tile = shell.view.container.querySelector(".shell-brand-mark .shell-brand-tile");
+    expect(tile).toHaveAttribute("data-mode", "editor");
+    expect(tile?.querySelector(".shell-brand-eyes")).toBeNull();
+    expect(tile?.querySelector("img")).not.toBeNull();
   });
 });

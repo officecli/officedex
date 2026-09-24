@@ -64,9 +64,13 @@ import { opensStackingContext, parseCss, parseShellCss } from "./cssModel";
  */
 const LADDER: Record<string, string> = {
   // Root context: these compare directly against each other.
+  "--shell-z-mode-switch": "1",
   "--shell-z-chrome": "3",
+  "--shell-z-home-drop": "150",
   "--shell-z-presence": "200",
   "--shell-z-menu": "300",
+  "--shell-z-viewer": "350",
+  "--shell-z-gate": "400",
   // Composer-local: meaningful only inside `.shell-cx`.
   "--shell-z-cx-drop": "10",
   "--shell-z-cx-mention": "180",
@@ -79,7 +83,15 @@ const LADDER: Record<string, string> = {
   "--shell-z-legacy-tooltip": "1200",
 };
 
-const ROOT_RUNGS = ["--shell-z-chrome", "--shell-z-presence", "--shell-z-menu"];
+const ROOT_RUNGS = [
+  "--shell-z-mode-switch",
+  "--shell-z-chrome",
+  "--shell-z-home-drop",
+  "--shell-z-presence",
+  "--shell-z-menu",
+  "--shell-z-viewer",
+  "--shell-z-gate",
+];
 
 interface StackingContext {
   file: string;
@@ -105,8 +117,9 @@ const MARK = "inside the companion mark, which is a drawing: SVG shapes only";
  * is a table nobody re-reads when it matters. The cost of the narrower scope is
  * stated as blind spot 5 below: an opener in a stylesheet with no z-index of
  * its own could still wrap a z-index from another stylesheet. It does not
- * today — `app.css`, which owns every ancestor of the four, declares none —
- * and the guard below asserts that stays true.
+ * today — `app.css`, which owns every ancestor of the others, declares one
+ * z-index of its own and no opener at all — and the guard below asserts that
+ * stays true.
  */
 const STACKING_CONTEXTS: StackingContext[] = [
   {
@@ -302,6 +315,41 @@ const STACKING_CONTEXTS: StackingContext[] = [
     why: LEAF,
   },
   {
+    file: "src/shell/image/imageViewer.css",
+    selector:
+      '.shell-image-viewer[data-loaded="false"] .shell-image-viewer-picture, ' +
+      '.shell-image-viewer[data-phase="leaving"][data-flying="false"] .shell-image-viewer-picture',
+    property: "opacity",
+    traps: [],
+    localRungs: [],
+    why: LEAF + " — the viewer's <img>, hidden until its bytes decode",
+  },
+  {
+    file: "src/shell/image/imageViewer.css",
+    selector:
+      '.shell-image-viewer[data-phase="entering"] .shell-image-viewer-bar, ' +
+      '.shell-image-viewer[data-phase="entering"] .shell-image-viewer-zoom, ' +
+      '.shell-image-viewer[data-phase="entering"] .shell-image-viewer-step, ' +
+      '.shell-image-viewer[data-phase="leaving"] .shell-image-viewer-bar, ' +
+      '.shell-image-viewer[data-phase="leaving"] .shell-image-viewer-zoom, ' +
+      '.shell-image-viewer[data-phase="leaving"] .shell-image-viewer-step',
+    property: "opacity",
+    traps: [],
+    localRungs: [],
+    why:
+      "the viewer's chrome fading with its backdrop. The bars hold buttons and " +
+      "one absolutely placed title, none with a z-index, all inside the " +
+      "viewer's own context already.",
+  },
+  {
+    file: "src/shell/image/imageViewer.css",
+    selector: '.shell-image-viewer-hint[data-shown="false"]',
+    property: "opacity",
+    traps: [],
+    localRungs: [],
+    why: LEAF + " — the viewer's one-line \"Esc to close\" hint, a bare <p>",
+  },
+  {
     file: "src/shell/chrome/menu.css",
     selector: ".shell-menu-item:disabled",
     property: "opacity",
@@ -327,6 +375,20 @@ interface ZIndexSite {
 }
 
 const Z_INDEX_SITES: ZIndexSite[] = [
+  {
+    file: "src/shell/app.css",
+    selector: '#shell[data-mode-switching="true"] .shell-agent',
+    rung: "--shell-z-mode-switch",
+    context: "root",
+    note:
+      "Only while a mode change is in flight. The same rule set pins " +
+      "`.shell-workspace` out of flow so the embedded editor is laid out once " +
+      "rather than on every frame, and a positioned element paints above its " +
+      "in-flow siblings — this is the one rung that keeps the docked column " +
+      "visible while it opens or closes. It sorts at the root because nothing " +
+      "between it and `#shell` opens a stacking context; `.shell-row--body` " +
+      "and `.shell` are both plain boxes.",
+  },
   {
     file: "src/shell/chrome/chrome.css",
     selector: ".shell-windowbar",
@@ -365,6 +427,59 @@ const Z_INDEX_SITES: ZIndexSite[] = [
     selector: ".shell-presence",
     rung: "--shell-z-presence",
     context: "root",
+  },
+  {
+    file: "src/shell/home/home.css",
+    selector: ".shell-home-drop",
+    rung: "--shell-z-home-drop",
+    context: "root",
+    note:
+      "Editor Home's \"drop to open\" overlay, shown only while files from the " +
+      "desktop are dragged over the page. `position: fixed` and a sibling of " +
+      "Home's content inside `#shell`, which opens no stacking context, so it " +
+      "sorts at the root: above the window bar it never overlaps anyway, below " +
+      "the floating agent, which is not a place a file can be dropped.",
+  },
+  {
+    file: "src/shell/account/account.css",
+    selector: ".shell-account",
+    rung: "--shell-z-gate",
+    context: "root",
+    note:
+      "The account page, covering the window while the user signs in. It is a " +
+      "sibling of every shell region inside `#shell`, and `#shell` opens no " +
+      "stacking context of its own, so it sorts at the root — and it has to " +
+      "sort above `--shell-z-menu`, because the control that opens it lives " +
+      "inside the sidebar's menu. Below `--shell-z-legacy-toast` on purpose: " +
+      "the page copies the verification URL to the clipboard, and that " +
+      "confirmation is worthless if the page hides it.",
+  },
+  {
+    file: "src/shell/image/imageViewer.css",
+    selector: ".shell-image-viewer",
+    rung: "--shell-z-viewer",
+    context: "root",
+    note:
+      "The full-window picture viewer, portalled to `#shell`. Above the menus: " +
+      "it is opened by a click on the canvas, which closes any open menu on " +
+      "pointerdown, and nothing inside it opens one. Below the account page, " +
+      "and below the legacy toast host so Download's confirmation stays visible.",
+  },
+  {
+    file: "src/shell/settings/settings.css",
+    selector: ".shell-settings",
+    rung: "--shell-z-gate",
+    context: "root",
+    note:
+      "The settings page, covering the window while the user works through it. " +
+      "A sibling of every region inside `#shell`, which opens no stacking " +
+      "context of its own, so it sorts at the root. It takes the same rung as " +
+      "the account page rather than a new one because the two are never on " +
+      "screen together: the provider section's sign-in link closes this page " +
+      "before it opens that one, and both are opened from the same sidebar " +
+      "footer. Below `--shell-z-legacy-toast` for the same reason the account " +
+      "page is — every change on this page confirms itself with a toast, and a " +
+      "confirmation the page hides is worthless.",
   },
   {
     file: "src/shell/composer/composer.css",
@@ -559,8 +674,9 @@ describe("the z-index ladder", () => {
 
   it("is not quietly bypassed by a stylesheet that declares no z-index of its own", () => {
     // The narrow scope above is only safe while no *other* shell stylesheet
-    // wraps one of the four. `app.css` owns every ancestor of the window bar,
-    // the panel and the composer; if it — or any other z-index-free sheet —
+    // wraps one of the registered z-indexes. `app.css` owns every ancestor of
+    // the window bar, the panel and the composer, and is now inside the scan
+    // itself because it declares one; if any remaining z-index-free sheet
     // grows an opener, that assumption needs re-checking by hand.
     const files = new Set(zIndexes.map((declaration) => declaration.file));
     const elsewhere = shellCss
@@ -579,6 +695,28 @@ describe("the z-index ladder", () => {
     // to be looked at rather than absorbed. Keyed by selector, never by line —
     // `composer.css` moved sixty-seven lines while these gates were written.
     expect([...new Set(elsewhere)]).toEqual([
+      "src/shell/agent/odMark.css  .od-mark { filter }",
+      "src/shell/agent/odMark.css  .od-mark__eye i { transform }",
+      "src/shell/agent/odMark.css  .od-mark__eye { transform }",
+      "src/shell/editor/slidesGenerating/slidesGenerating.css  .shell-gen-badge { opacity }",
+      "src/shell/editor/slidesGenerating/slidesGenerating.css  .shell-gen-badge { transform }",
+      "src/shell/editor/slidesGenerating/slidesGenerating.css  .shell-gen-chart .bar { transform }",
+      "src/shell/editor/slidesGenerating/slidesGenerating.css  .shell-gen-chart .line circle { opacity }",
+      "src/shell/editor/slidesGenerating/slidesGenerating.css  .shell-gen-cursor .arrow { filter }",
+      "src/shell/editor/slidesGenerating/slidesGenerating.css  .shell-gen-cursor .label { opacity }",
+      "src/shell/editor/slidesGenerating/slidesGenerating.css  .shell-gen-cursor .ripple { opacity }",
+      "src/shell/editor/slidesGenerating/slidesGenerating.css  .shell-gen-cursor { opacity }",
+      "src/shell/editor/slidesGenerating/slidesGenerating.css  .shell-gen-eyebrow { opacity }",
+      "src/shell/editor/slidesGenerating/slidesGenerating.css  .shell-gen-eyebrow { transform }",
+      "src/shell/editor/slidesGenerating/slidesGenerating.css  .shell-gen-figure { opacity }",
+      "src/shell/editor/slidesGenerating/slidesGenerating.css  .shell-gen-figure { transform }",
+      "src/shell/editor/slidesGenerating/slidesGenerating.css  .shell-gen-list li i { opacity }",
+      "src/shell/editor/slidesGenerating/slidesGenerating.css  .shell-gen-panel { opacity }",
+      "src/shell/editor/slidesGenerating/slidesGenerating.css  .shell-gen-panel { transform }",
+      "src/shell/editor/slidesGenerating/slidesGenerating.css  .shell-gen-pill { transform }",
+      "src/shell/editor/slidesGenerating/slidesGenerating.css  .shell-gen-rule { opacity }",
+      "src/shell/editor/slidesGenerating/slidesGenerating.css  .shell-gen-scan { opacity }",
+      'src/shell/editor/slidesGenerating/slidesGenerating.css  .shell-gen[data-phase="drawing"] .shell-gen-chart .bar, .shell-gen[data-phase="polish"] .shell-gen-chart .bar { transform }',
       "src/shell/home/highlights.css  .shell-highlight-play { transform }",
       "src/shell/home/highlights.css  .shell-highlights-controls button:disabled { opacity }",
       // The image composer's leaf controls: a tilted "add" sheet, a close
