@@ -39,9 +39,17 @@ test("tells a dead Reduced motion wire apart from a stale one", async ({ page })
 
   const baseline = await page.evaluate(CAROUSEL_PROBE);
 
-  // Turn it on from the sidebar footer, which is the only place it lives.
+  /*
+   * Turn it on from the settings page, which is the only place it lives. The
+   * page is a full-window cover, so it is closed again before the mode switches
+   * below — those click `.shell-brand`, which the cover would intercept. The
+   * carousel probe itself is script-driven and reads the same either way.
+   */
   await page.locator('.shell-sidebar-footer button[aria-label="Settings"]').click();
-  await page.locator('.shell-menu[role="menu"] .shell-menu-item', { hasText: /motion/i }).click();
+  await page.getByRole("button", { name: "Appearance", exact: true }).click();
+  await page.getByRole("switch", { name: "Reduced motion" }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".shell-settings")).toHaveCount(0);
 
   const sameMount = await page.evaluate(CAROUSEL_PROBE);
 
@@ -57,16 +65,13 @@ test("tells a dead Reduced motion wire apart from a stale one", async ({ page })
 
   const afterRemount = await page.evaluate(CAROUSEL_PROBE);
 
-  // And what the port itself now holds, so the report can name the stale side.
+  // And what the control itself now holds, so the report can name the stale side.
   await page.locator('.shell-sidebar-footer button[aria-label="Settings"]').click();
-  const motionRow = await page.$$eval('.shell-menu[role="menu"] .shell-menu-item', (nodes) =>
-    nodes
-      .map((node) => ({
-        label: node.querySelector(".shell-menu-label")?.childNodes[0]?.textContent?.trim() ?? "",
-        checked: node.getAttribute("aria-checked"),
-      }))
-      .find((row) => /motion/i.test(row.label)),
-  );
+  await page.getByRole("button", { name: "Appearance", exact: true }).click();
+  const motionRow = {
+    label: "Reduced motion",
+    checked: await page.getByRole("switch", { name: "Reduced motion" }).getAttribute("aria-checked"),
+  };
   await capture(page, "C2", "S7-motion-after-remount", SESSION);
   await page.keyboard.press("Escape");
 

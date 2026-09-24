@@ -496,26 +496,32 @@ test.describe("S8-3 the five notBuiltYet dead ends", () => {
     );
   });
 
-  test("sidebar settings > review changes", async ({ page }) => {
+  test("sidebar settings led to a dead end; it now leads to a page", async ({ page }) => {
     for (const combination of ["C1", "C2"] as const) {
       await open(page, combination, SESSION);
+      /*
+       * S8 recorded a dead end here: the gear opened a three-row dropdown, and
+       * its "Review changes" row only ever raised a "not available yet" toast —
+       * the shell's sole settings door, with three rows behind it, two of which
+       * duplicated the composer.
+       *
+       * The dropdown is gone and the gear opens the settings page, so what is
+       * measured now is that the dead end is absent: no menu opens, and no such
+       * row exists on the page that opens in its place. The tier itself still
+       * exists, in the composer's permission menu — the test above measures it.
+       */
       await page.locator('.shell-sidebar-footer button[aria-label="Settings"]').click();
-      const menu = page.locator(".shell-menu").first();
-      await expect(menu).toBeVisible();
-      const menuBox = await menu.boundingBox();
-      const openShot = await capture(page, combination, "S8-settings-menu-open", SESSION);
-      await page.getByText("Review changes", { exact: false }).first().click();
-      await expect(page.locator(".od-toast-host")).toBeVisible();
-      const shotPath = await capture(page, combination, "S8-deadend-review-changes", SESSION);
+      await expect(page.locator(".shell-settings")).toBeVisible();
+      const menuCount = await page.locator(".shell-menu").count();
+      const reviewRows = await page.getByText("Review changes", { exact: false }).count();
+      const sections = await page.locator(".shell-settings-nav-label").allTextContents();
+      const openShot = await capture(page, combination, "S8-settings-page-open", SESSION);
       console.log(
-        `S8-3 review changes ${combination}:\n` +
-          JSON.stringify(
-            { openShot, shot: shotPath, menuBox, toast: await measureToast(page) },
-            null,
-            2,
-          ),
+        `S8-3 sidebar settings ${combination}:\n` +
+          JSON.stringify({ openShot, menuCount, reviewRows, sections }, null, 2),
       );
-      await clearToasts(page);
+      await page.keyboard.press("Escape");
+      await expect(page.locator(".shell-settings")).toHaveCount(0);
     }
   });
 });

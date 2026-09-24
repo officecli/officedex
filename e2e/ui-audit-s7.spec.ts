@@ -1,16 +1,24 @@
 /**
  * S7 — settings & preference consistency (docs/ui-audit-2026-09-19/PLAN.md §2.1).
  *
- * The shell has no settings page. Preferences are scattered over three menus,
- * two of which offer the same switch under two different names. This spec
- * measures that, rather than describing it: every finding in S7/findings.md
- * cites a number produced here.
+ * When this spec was written the shell had **no settings page**: preferences
+ * were scattered over three menus, two of which offered the same switch under
+ * two different names, and the legacy renderer's 2130-line page was reachable
+ * only by typing `legacy.html` — which a packaged WKWebView has no address bar
+ * for. Every number in `S7/findings.md` came from here.
+ *
+ * The gear now opens a settings page, so this measures the surface that
+ * replaced the footer dropdown: the page's sections, whether it fits on screen
+ * in the shells the old panel was clipped in, whether one preference reads the
+ * same in both of the two places it can still be changed, and whether changing
+ * it reaches the thing that animates. The two composer menus and the
+ * custom-model dialog are untouched, and are measured the same way as before.
  *
  * Read-only against the fixture server on 3100. Nothing here writes to a real
  * workspace; the fake port keeps its settings in memory for the page's life.
  */
 
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { capture, open, type Combination } from "./ui-audit-helpers";
 
@@ -55,13 +63,30 @@ async function measure(page: import("@playwright/test").Page, selector: string) 
   }, selector);
 }
 
-async function openFooterSettings(page: import("@playwright/test").Page) {
+/** The sidebar footer's gear, and the page it opens. */
+async function openSettingsPage(page: Page) {
   await page.locator('.shell-sidebar-footer button[aria-label="Settings"]').click();
-  await expect(page.locator('.shell-menu[role="menu"]')).toBeVisible();
+  await expect(page.locator(".shell-settings")).toBeVisible();
+}
+
+/** The page's section nav, with the current section marked. */
+async function settingsSections(page: Page) {
+  return page.$$eval(".shell-settings-nav-item", (nodes) =>
+    nodes.map((node) => ({
+      label: node.querySelector(".shell-settings-nav-label")?.textContent?.trim() ?? "",
+      current: node.getAttribute("aria-current"),
+    })),
+  );
+}
+
+/** Opens one section of the page by its nav label. */
+async function openSection(page: Page, label: string) {
+  await page.getByRole("button", { name: label, exact: true }).click();
+  await expect(page.locator(".shell-settings-group-title")).toHaveText(label);
 }
 
 /** Every row of an open menu, with its label, sub-label and tick state. */
-async function menuRows(page: import("@playwright/test").Page) {
+async function menuRows(page: Page) {
   return page.$$eval('.shell-menu[role="menu"] .shell-menu-item', (nodes) =>
     nodes.map((node) => ({
       label: node.querySelector(".shell-menu-label")?.childNodes[0]?.textContent?.trim() ?? "",
@@ -73,15 +98,16 @@ async function menuRows(page: import("@playwright/test").Page) {
 }
 
 test.describe("S7 settings & preferences", () => {
-  /* ------------------------------------------------- 1. the three entries */
+  /* ------------------------------------------- 1. the settings surface itself */
 
-  test("inventories the three settings entry points", async ({ page }) => {
+  test("inventories the settings page and the two preference menus", async ({ page }) => {
     await open(page, "C2", SESSION);
 
-    await openFooterSettings(page);
-    const footer = await menuRows(page);
-    const footerPanel = await measure(page, '.shell-menu[role="menu"]');
-    await capture(page, "C2", "S7-footer-menu", SESSION);
+    await openSettingsPage(page);
+    const sections = await settingsSections(page);
+    const pageBox = await measure(page, ".shell-settings");
+    const saveState = await page.locator(".shell-settings-save").textContent();
+    await capture(page, "C2", "S7-settings-page", SESSION);
     await page.keyboard.press("Escape");
 
     await page.locator(".shell-cx-permission").click();
@@ -96,44 +122,57 @@ test.describe("S7 settings & preferences", () => {
     await capture(page, "C2", "S7-model-menu", SESSION);
     await page.keyboard.press("Escape");
 
-    console.log("S7-INVENTORY " + JSON.stringify({ footer, footerPanel, permission, model }, null, 2));
+    console.log(
+      "S7-INVENTORY " + JSON.stringify({ sections, pageBox, saveState, permission, model }, null, 2),
+    );
   });
 
   /* ------------------------------- 2. the collapsed rail (C1 is the default) */
 
-  test("measures the 250px footer menu on every home combination", async ({ page }) => {
+  test("measures the settings page on every home combination", async ({ page }) => {
     const results: Record<string, unknown> = {};
 
     for (const combination of ["C1", "C2", "C3", "C4"] as Combination[]) {
       await open(page, combination, SESSION);
       const rail = await measure(page, "#shell-sidebar");
       const trigger = await measure(page, '.shell-sidebar-footer button[aria-label="Settings"]');
-      await openFooterSettings(page);
-      const panel = await measure(page, '.shell-menu[role="menu"]');
-      // The rows are what the user is actually trying to read; a panel that
-      // fits while its text does not is still a defect.
-      const rowOverflow = await page.$$eval('.shell-menu[role="menu"] .shell-menu-item', (nodes) =>
+      await openSettingsPage(page);
+      const panel = await measure(page, ".shell-settings");
+      /*
+       * The nav labels are what the user is actually trying to read; a panel
+       * that fits while its text does not is still a defect. This is the
+       * question the old 250px dropdown failed at 15.8% visible.
+       */
+      const navOverflow = await page.$$eval(".shell-settings-nav-label", (nodes) =>
         nodes.map((node) => ({
-          label: node.querySelector(".shell-menu-label")?.childNodes[0]?.textContent?.trim() ?? "",
+          label: node.textContent?.trim() ?? "",
           scrollWidth: node.scrollWidth,
           clientWidth: node.clientWidth,
         })),
       );
-      await capture(page, combination, "S7-footer-settings-open", SESSION);
-      results[combination] = { rail, trigger, panel, rowOverflow };
+      await capture(page, combination, "S7-settings-page-open", SESSION);
+      results[combination] = { rail, trigger, panel, navOverflow };
       await page.keyboard.press("Escape");
     }
 
-    console.log("S7-FOOTER-MENU " + JSON.stringify(results, null, 2));
+    console.log("S7-SETTINGS-PAGE " + JSON.stringify(results, null, 2));
   });
 
-  /* --------------------------------- 3. does one setting reach the other menu */
+  /* --------------------------- 3. does one setting read the same in both places */
 
-  test("checks whether Enter sends stays in step across its two entry points", async ({ page }) => {
+  test("checks whether Enter sends stays in step between the page and the composer menu", async ({ page }) => {
     await open(page, "C2", SESSION);
 
-    await openFooterSettings(page);
-    const footerBefore = (await menuRows(page)).find((row) => /Enter/.test(row.label));
+    /*
+     * The two entry points are the settings page's Appearance switch and the
+     * composer's permission menu. S7-002 was these two disagreeing inside one
+     * page view; the shared store in `composer/settingsStore.ts` is what fixed
+     * it, and this is the same question asked of the new surface.
+     */
+    await openSettingsPage(page);
+    await openSection(page, "Appearance");
+    const enterSwitch = page.getByRole("switch", { name: "Enter sends" });
+    const pageBefore = await enterSwitch.getAttribute("aria-checked");
     await page.keyboard.press("Escape");
 
     // Flip it from the composer's copy of the switch.
@@ -148,18 +187,14 @@ test.describe("S7 settings & preferences", () => {
     const composerAfter = (await menuRows(page)).find((row) => /Enter/.test(row.label));
     await page.keyboard.press("Escape");
 
-    await openFooterSettings(page);
-    const footerAfter = (await menuRows(page)).find((row) => /Enter/.test(row.label));
-    await capture(page, "C2", "S7-enter-desync", SESSION);
+    await openSettingsPage(page);
+    await openSection(page, "Appearance");
+    const pageAfter = await page.getByRole("switch", { name: "Enter sends" }).getAttribute("aria-checked");
+    await capture(page, "C2", "S7-enter-sync", SESSION);
     await page.keyboard.press("Escape");
 
-    // What the port itself believes, so the report can say which of the two
-    // labels is the stale one rather than only that they disagree.
-    const stored = await page.evaluate(() => (window as unknown as Record<string, unknown>).__shellPort);
-
     console.log(
-      "S7-ENTER-SYNC " +
-        JSON.stringify({ footerBefore, composerBefore, composerAfter, footerAfter, stored }, null, 2),
+      "S7-ENTER-SYNC " + JSON.stringify({ pageBefore, composerBefore, composerAfter, pageAfter }, null, 2),
     );
   });
 
@@ -263,14 +298,21 @@ test.describe("S7 settings & preferences", () => {
       };
     });
 
-    await openFooterSettings(page);
-    const motionRowBefore = (await menuRows(page)).find((row) => /motion/i.test(row.label));
-    await page.locator('.shell-menu[role="menu"] .shell-menu-item', { hasText: /motion/i }).click();
-
-    // Re-open: did the label the user just pressed change?
-    await openFooterSettings(page);
-    const motionRowAfter = (await menuRows(page)).find((row) => /motion/i.test(row.label));
+    /*
+     * Flip it on the settings page. The page is a full-window cover, so it is
+     * closed again before the carousel probe below — the probe clicks the
+     * "next" button from script, but the sample it takes is only meaningful
+     * with Home actually on screen.
+     */
+    await openSettingsPage(page);
+    await openSection(page, "Appearance");
+    const motionSwitch = page.getByRole("switch", { name: "Reduced motion" });
+    const motionBefore = await motionSwitch.getAttribute("aria-checked");
+    await motionSwitch.click();
+    // Did the control the user just pressed change?
+    const motionAfter = await page.getByRole("switch", { name: "Reduced motion" }).getAttribute("aria-checked");
     await page.keyboard.press("Escape");
+    await expect(page.locator(".shell-settings")).toHaveCount(0);
 
     const after = await page.evaluate(() => {
       const shell = document.querySelector("#shell");
@@ -327,7 +369,7 @@ test.describe("S7 settings & preferences", () => {
     console.log(
       "S7-REDUCED-MOTION " +
         JSON.stringify(
-          { before, motionRowBefore, motionRowAfter, after, carousel, carouselAfterReload },
+          { before, motionBefore, motionAfter, after, carousel, carouselAfterReload },
           null,
           2,
         ),
@@ -336,9 +378,20 @@ test.describe("S7 settings & preferences", () => {
 
   /* ------------------------------- 6. the fake switch and its stated wording */
 
-  test("records what the Review changes row does when pressed", async ({ page }) => {
+  test("records what the composer's Review changes row does when pressed", async ({ page }) => {
     await open(page, "C2", SESSION);
-    await openFooterSettings(page);
+
+    /*
+     * The sidebar's copy of this row is gone: the dropdown it lived in was
+     * replaced by the settings page, and a control that only ever says it is
+     * not available has no business on a page whose job is the honest list of
+     * what *can* be changed. The composer's permission menu is where the tier
+     * belongs — it is one of three, and the other two are real — so this
+     * measures that one.
+     */
+    await page.locator(".shell-cx-permission").click();
+    await expect(page.locator('.shell-menu[role="menu"]')).toBeVisible();
+    const rowsBefore = await menuRows(page);
     await page.locator('.shell-menu[role="menu"] .shell-menu-item', { hasText: "Review changes" }).click();
 
     // notBuiltYet goes through the legacy toast host, which is fixed to the top
@@ -360,13 +413,14 @@ test.describe("S7 settings & preferences", () => {
 
     // And the state afterwards: a fake switch that also leaves a mark would be
     // worse than one that does nothing.
-    await openFooterSettings(page);
-    const rowsAfter = await menuRows(page);
-    await page.keyboard.press("Escape");
     await page.locator(".shell-cx-permission").click();
+    await expect(page.locator('.shell-menu[role="menu"]')).toBeVisible();
+    const rowsAfter = await menuRows(page);
     const permissionLabel = await page.locator(".shell-cx-permission-name").textContent();
     await page.keyboard.press("Escape");
 
-    console.log("S7-REVIEW-CHANGES " + JSON.stringify({ toast, rowsAfter, permissionLabel }, null, 2));
+    console.log(
+      "S7-REVIEW-CHANGES " + JSON.stringify({ toast, rowsBefore, rowsAfter, permissionLabel }, null, 2),
+    );
   });
 });

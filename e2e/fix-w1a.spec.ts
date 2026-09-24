@@ -57,14 +57,29 @@ test.describe("W1-A overlay engine", () => {
 
   /* ------------------------------------------------------------- S2-002 */
 
-  test("S2-002 sidebar settings menu is fully visible in C1-C4", async ({ page }) => {
+  /*
+   * S2-002 was "the 250px sidebar settings menu is 84% clipped in all four
+   * combinations". That menu is gone: the gear now opens the settings page,
+   * because a dropdown of three rows was the shell's only door onto settings
+   * and could not be the whole of one.
+   *
+   * The finding is still guarded, and more strictly than before. The reason the
+   * old panel was clipped was structural — `.shell-sidebar { overflow: hidden }`
+   * cut it to the sidebar's box — so its replacement is asserted to escape that
+   * box entirely: a fixed, full-window cover, which `expectNoClip` fails unless
+   * no ancestor's overflow touches.
+   */
+  test("S2-002 the settings door opens a full-window page, not a clipped panel", async ({ page }) => {
     for (const combination of ["C1", "C2", "C3", "C4"] as Combination[]) {
       await open(page, combination, SESSION);
-      await page.locator(".shell-sidebar-footer button[aria-haspopup='menu']").click();
-      await page.locator(MENU).waitFor();
-      await record(page, `settings-menu-${combination}`);
-      await capture(page, combination, "W1A-settings-menu", SESSION);
-      await closeMenu(page);
+      await page.locator("#shell-sidebar .shell-sidebar-footer button[aria-label='Settings']").click();
+      await page.locator(".shell-settings").waitFor();
+      const measured = await expectNoClip(page, ".shell-settings");
+      // eslint-disable-next-line no-console
+      console.log(`W1A-FIXED settings-page-${combination} ${JSON.stringify(measured)}`);
+      await capture(page, combination, "W1A-settings-page", SESSION);
+      await page.keyboard.press("Escape");
+      await expect(page.locator(".shell-settings")).toHaveCount(0);
     }
   });
 
@@ -296,10 +311,19 @@ test.describe("W1-A overlay engine", () => {
   });
 
   test("the keyboard contract S2-015 recorded as correct still holds", async ({ page }) => {
-    // Portalling moves the panel out of its trigger's DOM subtree, which is
-    // exactly the kind of change that quietly breaks Escape-returns-focus.
+    /*
+     * Portalling moves the panel out of its trigger's DOM subtree, which is
+     * exactly the kind of change that quietly breaks Escape-returns-focus.
+     *
+     * Measured on the brand (ModeMenu) rather than the sidebar footer's gear.
+     * That gear used to open the settings menu and now opens the settings page,
+     * so it is no longer a `<Menu>` call site at all — the sidebar's last
+     * dropdown went with it. The contract being guarded is `Menu`'s, and the
+     * brand is the call site that still exercises it from the same corner of
+     * the frame.
+     */
     await open(page, "C2", SESSION);
-    const trigger = page.locator(".shell-sidebar-footer button[aria-haspopup='menu']");
+    const trigger = page.locator(".shell-brand");
     await trigger.click();
     await page.locator(MENU).waitFor();
 
@@ -311,10 +335,10 @@ test.describe("W1-A overlay engine", () => {
     const afterEscape = await page.evaluate(
       () => document.activeElement?.getAttribute("aria-label") ?? "",
     );
-    expect(afterEscape).toBe("Settings");
+    expect(afterEscape).toBe("Switch mode");
 
     // And a click on an item still reaches its handler through the portal.
-    await page.locator(".shell-brand").click();
+    await trigger.click();
     await page.locator(MENU).waitFor();
     await page.getByRole("menuitemradio", { name: /Editor/ }).click();
     await expect(page.locator("#shell")).toHaveAttribute("data-mode", "editor");

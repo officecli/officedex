@@ -31,22 +31,46 @@ import { capture, open } from "./ui-audit-helpers";
 const SESSION = { session: "fixes/W2-G" };
 
 const SIDEBAR_TRIGGER = '.shell-sidebar-footer button[aria-label="Settings"]';
-const SIDEBAR_MENU = '[role="menu"][aria-label="Workspace settings"]';
 const COMPOSER_TRIGGER = ".shell-cx-permission";
 const COMPOSER_MENU = '[role="menu"][aria-label="Permissions"]';
 
-/** The sidebar's Enter row, as a screen reader and a user each see it. */
-async function readSidebarEnter(page: Page) {
+/*
+ * The sidebar's side of every check below is the settings page now.
+ *
+ * W2-G was written against a three-row dropdown in the sidebar footer: its
+ * Enter row carried its state in its label ("Enter sends" / "Enter adds a
+ * line"), which is one of the three inconsistencies S7-012 recorded. That
+ * dropdown is gone — the gear opens the settings page — and the preference is
+ * a `role="switch"` with `aria-checked`, so the state is now read from the
+ * attribute rather than parsed out of the words. The label no longer changes;
+ * that is the fix, not a gap in the check.
+ *
+ * Both preferences live under Appearance.
+ */
+async function readAppearanceSwitch(page: Page, name: string) {
   await page.locator(SIDEBAR_TRIGGER).click();
-  const row = page.locator(SIDEBAR_MENU).locator(".shell-menu-item").filter({ hasText: /Enter/ });
-  await expect(row).toHaveCount(1);
-  const state = {
-    label: ((await row.locator(".shell-menu-label").innerText()) ?? "").split("\n")[0].trim(),
-    checked: await row.getAttribute("aria-checked"),
-  };
+  await expect(page.locator(".shell-settings")).toBeVisible();
+  await page.getByRole("button", { name: "Appearance", exact: true }).click();
+  const control = page.getByRole("switch", { name });
+  await expect(control).toHaveCount(1);
+  const state = { label: name, checked: await control.getAttribute("aria-checked") };
   await page.keyboard.press("Escape");
-  await expect(page.locator(SIDEBAR_MENU)).toHaveCount(0);
+  await expect(page.locator(".shell-settings")).toHaveCount(0);
   return state;
+}
+
+async function clickAppearanceSwitch(page: Page, name: string) {
+  await page.locator(SIDEBAR_TRIGGER).click();
+  await expect(page.locator(".shell-settings")).toBeVisible();
+  await page.getByRole("button", { name: "Appearance", exact: true }).click();
+  await page.getByRole("switch", { name }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".shell-settings")).toHaveCount(0);
+}
+
+/** The shell's Enter preference, as a screen reader and a user each see it. */
+async function readSidebarEnter(page: Page) {
+  return readAppearanceSwitch(page, "Enter sends");
 }
 
 /** The composer's Enter row, which writes its state into the label instead. */
@@ -61,9 +85,7 @@ async function readComposerEnter(page: Page) {
 }
 
 async function clickSidebarEnter(page: Page) {
-  await page.locator(SIDEBAR_TRIGGER).click();
-  await page.locator(SIDEBAR_MENU).locator(".shell-menu-item").filter({ hasText: /Enter/ }).click();
-  await expect(page.locator(SIDEBAR_MENU)).toHaveCount(0);
+  await clickAppearanceSwitch(page, "Enter sends");
 }
 
 async function clickComposerEnter(page: Page) {
@@ -76,11 +98,9 @@ async function clickComposerEnter(page: Page) {
   await expect(page.locator(COMPOSER_MENU)).toHaveCount(0);
 }
 
-/** Flips Reduced motion from the sidebar footer, its only entry point. */
+/** Flips Reduced motion, whose only entry point is the settings page. */
 async function toggleReducedMotion(page: Page) {
-  await page.locator(SIDEBAR_TRIGGER).click();
-  await page.locator(SIDEBAR_MENU).locator(".shell-menu-item").filter({ hasText: /motion/i }).click();
-  await expect(page.locator(SIDEBAR_MENU)).toHaveCount(0);
+  await clickAppearanceSwitch(page, "Reduced motion");
 }
 
 /**
@@ -125,7 +145,11 @@ test.describe("W2-G one settings store", () => {
     const afterComposer = await readSidebarEnter(page);
     // eslint-disable-next-line no-console
     console.log(`W2G-ENTER-SYNC composer->sidebar ${JSON.stringify(afterComposer)}`);
-    expect(afterComposer).toEqual({ label: "Enter adds a line", checked: "false" });
+    // The label stays "Enter sends" and only `aria-checked` moves. The old
+    // sidebar row wrote its state into its own words — "Enter adds a line" —
+    // which is one of the three label/sub-label/ARIA inconsistencies S7-012
+    // recorded, and a `role="switch"` makes it unnecessary.
+    expect(afterComposer).toEqual({ label: "Enter sends", checked: "false" });
     expect(await readComposerEnter(page)).toBe("Enter sends · off");
 
     await capture(page, "C2", "W2G-enter-sync", SESSION);
@@ -257,6 +281,6 @@ test.describe("W2-G one settings store", () => {
     // the value the user just chose, not on the default it would have read for
     // itself.
     expect(await readComposerEnter(page)).toBe("Enter sends · off");
-    expect(await readSidebarEnter(page)).toEqual({ label: "Enter adds a line", checked: "false" });
+    expect(await readSidebarEnter(page)).toEqual({ label: "Enter sends", checked: "false" });
   });
 });

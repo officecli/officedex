@@ -159,11 +159,23 @@ function report(name: string, payload: unknown) {
   console.log(`S2-PROBE ${name} ${JSON.stringify(payload)}`);
 }
 
-/** Fires the sidebar's `notBuiltYet` row, which is the cheapest toast trigger. */
+/**
+ * Raises a toast, which is the overlay this file measures next.
+ *
+ * It used to fire the sidebar footer's `notBuiltYet` "Review changes" row. That
+ * row is gone with the dropdown it lived in, and the obvious replacement — the
+ * settings page's auto-save toast — is the wrong instrument here: the page is a
+ * full-window cover, so every tab centre this file hit-tests would report the
+ * cover rather than the toast.
+ *
+ * The composer's permission menu carries the shell's other `notBuiltYet` row
+ * and opens over the frame without replacing it. Every caller opens C7, which
+ * has the composer chip.
+ */
 async function raiseToast(page: Page) {
-  await page.locator(".shell-sidebar-footer button[aria-haspopup='menu']").click();
+  await page.locator(".shell-cx-permission").press("ArrowDown");
   await page.locator(".shell-menu").waitFor();
-  await page.getByRole("menuitem", { name: /Review changes/ }).click();
+  await page.getByRole("menuitemradio", { name: /Review changes/ }).click();
   await page.locator(".od-toast").waitFor();
 }
 
@@ -197,18 +209,25 @@ test.describe("S2 overlays", () => {
     report("folder-context-menu", results);
   });
 
-  test("sidebar footer settings menu — 250px panel on a collapsed rail", async ({ page }) => {
+  /*
+   * S2-002 measured a 250px settings panel clipped to 15.8% of itself by
+   * `.shell-sidebar`'s `overflow: hidden`. There is no such panel any more —
+   * the gear opens a full-page settings surface — so what is measured here is
+   * that replacement: whether the cover escapes the sidebar's box, which is the
+   * property S2-002 was really about.
+   */
+  test("settings page — a full-window cover, not a panel inside the sidebar", async ({ page }) => {
     const results: Record<string, unknown> = {};
     for (const combination of ["C1", "C2", "C3", "C4"] as Combination[]) {
       await open(page, combination, SESSION);
       const rail = await page.locator("#shell-sidebar").boundingBox();
-      await page.locator(".shell-sidebar-footer button[aria-haspopup='menu']").click();
-      await page.locator(".shell-menu").waitFor();
-      results[combination] = { sidebar: rail, ...(await probe(page, ".shell-menu")) };
-      await capture(page, combination, "S2-002-settings-menu", SESSION);
+      await page.locator("#shell-sidebar .shell-sidebar-footer button[aria-label='Settings']").click();
+      await page.locator(".shell-settings").waitFor();
+      results[combination] = { sidebar: rail, ...(await probe(page, ".shell-settings")) };
+      await capture(page, combination, "S2-002-settings-page", SESSION);
       await page.keyboard.press("Escape");
     }
-    report("settings-menu", results);
+    report("settings-page", results);
   });
 
   test("ModeMenu — 220px panel under the brand", async ({ page }) => {
@@ -316,7 +335,10 @@ test.describe("S2 overlays", () => {
 
   test("Escape and Tab out of an open menu", async ({ page }) => {
     await open(page, "C2", SESSION);
-    const trigger = page.locator(".shell-sidebar-footer button[aria-haspopup='menu']");
+    // The brand, not the footer gear: the gear opened a menu when S2 was
+    // written and opens the settings page now, so it is no longer a `<Menu>`
+    // call site. See `chrome/Sidebar.tsx`.
+    const trigger = page.locator(".shell-brand");
 
     await trigger.click();
     await page.locator(".shell-menu").waitFor();

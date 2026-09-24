@@ -217,10 +217,19 @@ test.describe("W1-C overlays and the token bridge", () => {
 
     const before = await hits();
 
-    await page.getByRole("button", { name: "Settings" }).first().click();
-    // Dispatched rather than clicked: the settings menu is itself clipped by the
-    // sidebar (R1, W1-A's fix), and this case is about the toast, not the menu.
-    await page.locator(".shell-menu button").filter({ hasText: "Review changes" }).first().dispatchEvent("click");
+    /*
+     * A toast, raised without covering the frame.
+     *
+     * This used to open the sidebar footer's settings menu and dispatch a click
+     * on its "Review changes" row. That menu is gone — the gear opens the
+     * settings page now — and the page is a full-window cover, so raising the
+     * toast from there would put it between this test and every tab centre it
+     * is about to hit-test. The composer's permission menu carries the shell's
+     * other `notBuiltYet` row and opens over the frame instead of replacing it.
+     */
+    await page.locator(".shell-cx-permission").click();
+    await page.locator(".shell-menu").waitFor();
+    await page.getByRole("menuitemradio", { name: /Review changes/ }).click();
     await expect(page.locator(".od-toast")).toBeVisible();
 
     const after = await hits();

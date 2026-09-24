@@ -15,9 +15,10 @@
  *
  * The shell has no `?shellFixture=1` equivalent against a real bridge, so the
  * ten combinations are reached by writing `officedex.shell.v1` (state/persist.ts)
- * directly and reloading. The file ids in that state must be real, so the first
- * test imports three documents through the bridge's file-dialog control channel
- * and every later test reuses the persisted state it produced.
+ * and reloading with `?restoreSession=1` — a cold launch otherwise always
+ * lands on Home with no tabs. The file ids in that state must be real, so the
+ * first test imports three documents through the bridge's file-dialog control
+ * channel and every later test reuses the persisted state it produced.
  */
 
 import { expect, test, type Page } from "@playwright/test";
@@ -113,7 +114,7 @@ async function load(page: Page, state: Persisted): Promise<void> {
     ([key, value]) => localStorage.setItem(key as string, value as string),
     [PERSIST_KEY, JSON.stringify(state)] as const,
   );
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/?restoreSession=1", { waitUntil: "domcontentloaded" });
   await expect(page.locator("#shell")).toHaveAttribute("data-loaded", "true");
   // The embedded editor mounts asynchronously; a screenshot before it lands is
   // a picture of an empty canvas that looks exactly like a broken adapter.

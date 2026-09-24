@@ -48,18 +48,16 @@ Composer 完整采集这些字段。mentions 和 reference 已转成明确的 pr
 这些是 UI 层为一个还不存在的能力画的，连可调的接口都没有。
 
 **2026-09-18 起新 shell 成为应用入口（`/`），旧 UI 退到 `/legacy.html`。**
-所以下面这一节从「界面上有个按钮没反应」升级成了「这个能力用户现在够不着」——
-旧 UI 是唯一还有账号、计费、垂直连接器、图片与预览界面的地方，而没有任何入口链接到它。
-强制更新闸门已经随入口一起搬进 shell（`src/shell/chrome/UpdateGate.tsx`），
-其余尚未搬。
+账号页、整页设置（含连接器 / 订阅 / 诊断）、强制更新闸门已经搬进 shell。
+下面这一节剩下的是「界面上有控件、能力仍不完整」或「新 shell 根本没有入口」的条目。
 
 | feature key | 界面位置 | 说明 |
 |---|---|---|
 | `share` | 文件标签栏 "Share" | 已接入系统分享（可用时）或复制本地路径；协作链接、权限和邀请成员仍未立项 |
-| `file-more-actions` | 文件标签栏 "⋯" | 重命名、创建副本、置顶和移出库已经接入；版本历史、导出和打印仍未接入 |
-| `settings-panel` | 侧栏齿轮 | UI 层没做设置面板。模型和权限控制现在在 composer 里 |
+| `file-more-actions` | 文件标签栏 "⋯" | 重命名、创建副本、置顶和移出库已经接入。版本历史、导出和打印在**新 shell 没有入口**（菜单只有这四项），不是点了出 notice |
+| `settings-panel` | ~~侧栏齿轮~~ | ~~UI 层没做设置面板。模型和权限控制现在在 composer 里~~ **已实现（2026-09-20）**：齿轮直接打开整页设置（`src/shell/settings/`），九个分区与 legacy 一致（生成 / 通知 / 外观 / 连接设置 / 订阅 / 活动记录 / 高级与支持 / 重置 / 关于）。侧栏菜单里的 `Enter sends` 与 `Reduced motion` 移到「外观」；`Review changes` 不再重复出现，只留在 composer 权限菜单。模型和权限控制仍在 composer 里 |
 | `dictate` | Composer 麦克风 | 走浏览器的 Web Speech API，听写中麦克风有可视状态、再按一次停止。没有这个 API 的宿主（打包后的 webview 视版本而定）才提示；自建语音识别未立项 |
-| `composer.permission.review` / `composer.permission.custom` | Composer 权限菜单第 2/3 档；侧栏齿轮菜单的 "Review changes" | runtime 没有「先给用户看、确认后再写」的闸门，所有 run 都直接写。两档保留在菜单里但点了只出提示，四处默认值都已改为 `full`，读取时还会丢掉旧版本存在盘上的 `review`。Custom 更早一层就是空的：没有任何界面能写 `settings.customInstructions` |
+| `composer.permission.review` / `composer.permission.custom` | Composer 权限菜单第 2/3 档~~；侧栏齿轮菜单的 "Review changes"~~ | runtime 没有「先给用户看、确认后再写」的闸门，所有 run 都直接写。两档保留在菜单里但点了只出提示，四处默认值都已改为 `full`，读取时还会丢掉旧版本存在盘上的 `review`。Custom 更早一层就是空的：没有任何界面能写 `settings.customInstructions`。侧栏那份重复的 "Review changes" 已随齿轮改为整页设置一并移除 |
 | `home-highlights` | Agent 首页 "Feature highlights" 的卡片 | 仓库里没有任何功能介绍视频素材，所以只出货架不接播放器。卡片、轮播、键盘导航都是真的，点击出提示。素材到位后放进 `public/assets/highlights/{id}.jpg`（DOM 上的 `data-asset` 就是契约），再把播放器接回来 |
 | `composer.image.model` | 图片模式 composer 的模型菜单（Seedream 5.0 Pro / GPT Image 2 / Nano Banana 2） | 图片 runtime 自己选模型：hosted 路径 CLI 写死 `hosted/image`、external 路径只读配置里的 `image_model`，没有按请求覆盖的参数。四个选项照原型列出，只有 Auto 可选，其余点了出提示并标 "Soon"。要真做得先在 officecli `office.generate` 加 `image_model` 参数、平台侧按 profile 计价，再把 `ImageGenerationInput.modelId` 透传下去（字段已在契约里） |
 
@@ -72,10 +70,13 @@ Writer 自己**不加载文案、不选 locale**——`writer-i18n.ts` 原话是
 Word 编辑器整条工具栏渲染的是 `toolbar.start` / `statusbar.words 0` 这样的原始 key。
 
 **剩下的缺口是 writer 仓库只有 `locales/zh-CN.json`，没有英文词典。**
-所以英文系统上 Word 编辑器是中文界面（工具栏 chrome 的
-`suite-components-toolbar-kit` 两种语言都有，会跟随系统）。
-这不在本仓库能修的范围内；writer 侧补出 `locales/en-US.json` 当天，
-`collectWriterLocaleResources` 会自动带上，这里不需要改任何代码。
+英文下 host 用 `public/writer/host-runtime.js` 的 `WRITER_SDK_ENGLISH_CHROME`
+覆盖 11 个顶层词条（`toolbar.start/insert/page/reference/review/view/help`
++ 4 个 statusbar），其余 key 走 `humanizeKey()`（如 `toolbar.font.bold` →
+`Toolbar Font Bold`）。这是已知降级，不是「整栏仍是中文」。
+Excel 相反：`@shimo/sdk-sheet` 有完整 `en-US`（与 `zh-CN` 同键数），不要
+和 Writer 混为一谈。writer 侧补出 `locales/en-US.json` 当天，
+`collectWriterLocaleResources` 会自动带上。
 
 ## 四、已经删掉的（不是「未实现」，是不该存在）
 
@@ -108,10 +109,23 @@ Word 编辑器整条工具栏渲染的是 `toolbar.start` / `statusbar.words 0` 
 docx / xlsx / pptx 三边能达成一致的东西本来就不多，而每加一个字段，三个编辑器都要
 各自实现一遍。
 
+## 六之二、工作簿编辑还没有的两件（2026-09-20 新增）
+
+xlsx 的「生成 → 打开 → 提要求 → 改完再打开」整条链已经通了（见第七节），
+剩下这两件是 runtime 的能力边界，**不是 UI 少画了什么**，记在这里是因为两件都是
+安静降级——界面不会报错，只是要求没有被执行。
+
+| 缺什么 | 现在的行为 |
+|---|---|
+| 格式化类的编辑 | xlsx 的编辑 op 只有 `update_xlsx_cells` / `append_xlsx_summary` / `rewrite_xlsx_sheet`，**没有任何一个能改样式**。「把合计行加粗」这样的要求会被安静忽略，而 run 仍然报 `ops_applied: 1, ops_failed: 0`，因为它确实成功地做了它理解的那一部分。要修得先给 officecli 加一个格式化 op，再让它把没做到的部分报出来 |
+| 编辑落在副本上 | 一次编辑写的是 `X.modified.xlsx`，原件不动。两个文件都会进文件列表，编辑后打开的是副本。这是 runtime 的产物约定，不是 shell 选的；`PermissionMode` 的 `review` 档（第八节）真正落地时，这条会变成「原件 + 一个可 Apply 的建议」 |
+
 ## 七、已经接上的
 
 | feature key | 接上的日期 | 做了什么 |
 |---|---|---|
+| `workbook-live-stage` | 2026-09-20 | 工作簿在写的时候画布不再是一分钟的空白。runtime 新发 `sheet_state`（`engine.ProgressEvent.SheetState`，与 deck 的 `slide_state` 对称），`SheetStage` 把计划中的每张表画成底部的表标签并随写入逐个点亮。同一次改动修掉了三个 runtime 缺陷：编辑单元格的数值被 JSON 解码拒绝（整单失败）、数字被写成共享字符串（SUM 归零）、预览行号被重新编号（改到相邻那一行去了） |
+| `modify-artifact` | 2026-09-20 | 编辑完成后产物终于能被打开。`bridge.ResultToArtifact` 只认 `file_path`，而编辑的完成事件报的是 `output_file`，于是每一次编辑都没有 artifact、没有 document 行、没有任何入口——run 说「完成」，文件写在原件旁边，编辑器继续显示没改过的那一份 |
 | `files.create` | 2026-09-19 | `App.CreateBlankDocument()` 生成并注册真实 DOCX/XLSX/PPTX 包；shell 通过 `FilePort.create()` 创建后直接打开，不再依赖 prototype seed |
 | `open-local-file` | 2026-09-18 | 新增 `FilePort.openFromDisk()` ← `App.OpenLocalFile()`。补上的关键接缝是 `localstore.RegisterLocalDocument`：原来 `OpenRecentFile` 只写 `recent_files`，而文件列表读的是 documents 投影，所以本地打开的文件「被记为最近打开、却哪里都列不出来」。文件不复制不移动，落在默认文件夹，重复打开复用同一个 document id |
 | `canvas-selection` | 2026-09-18 | `CanvasAdapter.onSelection` 从「有订阅、无推送」接成整条链：Writer 的 `writer:selection-changed` → `DocxCanvas` 转成标签 → `SelectionProvider` → composer 引用块 → `SendInput.reference`。**文字不在推送里**：Writer 的选区摘要不含文本，取文本只能 `capture("selection")`，而 embed 只保留一个被 track 的 scope（`writer/apps/officedex-embed/src/agent-editing.ts`），光标一动就 capture 会作废 agent 正等着 apply 的那个 id。所以新增可选的 `resolveSelection()`，只在按下发送时取一次 |
@@ -128,3 +142,17 @@ docx / xlsx / pptx 三边能达成一致的东西本来就不多，而每加一�
 如果这个理解成立，那第一节里 suggestion 的状态不是「功能没做完」，而是
 **「xlsx 和 pptx 目前只支持 full 模式，docx 将先支持 review」**——同一件事，
 后者是个能对外说的产品状态。
+
+## 九、新 shell 产品缺失（不要写成验收用例）
+
+测试清单整改（`docs/test-cases-remediation.md` D 批）核对过：下面这些**不是
+漏测**，是产品本身没有的能力。写进验收清单只会让执行人去找不存在的按钮。
+对应的测试故障也不要开。
+
+| # | 缺失 | 现在的行为 | 证据 |
+|---|---|---|---|
+| D-1 | 系统语言不影响首启 | `detectLocale()` 恒返回 `"en"`，不读 `navigator.language`。**待产品决策**：是否应跟随系统语言 | `src/renderer/i18n/index.tsx` |
+| D-2 | 侧栏与 agent 列不可缩放 | reducer 有 `set-nav-width` / `set-task-width` 与 min/max，但全仓库无任何非测试 dispatch。面板恒为约 190 / 320 | `src/shell/state/shellReducer.ts`；消费点 `src/shell/App.tsx` |
+| D-3 | 无 Finder 文件关联 / 无应用菜单栏 / 无深链；Finder 拖入与双击打开是死路 | `wails.json` 未声明 `fileAssociations` / `protocols`，`Info.plist` 对应块不展开。`EnableFileDrop` 开着且 `DisableWebViewDrop: true`，但 `ImportLocalFile` 在新 shell **无调用方**（只有旧渲染器 `homeDropZone.ts`） | `wails.json`、`build/darwin/Info.plist`、`main.go`、`app_local_files.go` |
+| D-4 | 无 `⌘S` / `⌘N` / `⌘,` | 保存仅点击路径。已实现的键盘快捷键只有关标签 `⌘W`/`Ctrl+W` | `src/shell/chrome/closeTabShortcut.ts`；`src/shell` / `src/canvas` 无 KeyS |
+| D-5 | 无多选 / 无面包屑 / 无文本搜索 | `FileFilter` 只有 `"pinned" \| "all"` | `src/shell/nav/fileTreeModel.ts` |

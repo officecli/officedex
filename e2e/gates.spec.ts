@@ -78,12 +78,6 @@ interface CallSite {
 const CALL_SITES: readonly CallSite[] = [
   { id: "mode", source: "chrome/ModeMenu.tsx", trigger: ".shell-brand", gesture: "click" },
   {
-    id: "settings",
-    source: "chrome/Sidebar.tsx",
-    trigger: ".shell-sidebar-footer button[aria-haspopup='menu']",
-    gesture: "click",
-  },
-  {
     id: "tabs-more",
     source: "chrome/FileTabs.tsx",
     trigger: "button[aria-label='More actions']",
@@ -136,16 +130,16 @@ const CALL_SITES: readonly CallSite[] = [
  *   / model
  */
 const REACHABILITY: Record<Combination, readonly string[]> = {
-  C1: ["mode", "settings", "folder-row", "scope", "output", "permission", "model"],
-  C2: ["mode", "settings", "folder-row", "file-row", "scope", "output", "permission", "model"],
-  C3: ["mode", "settings"],
-  C4: ["mode", "settings"],
-  C5: ["mode", "settings", "tabs-more", "folder-row", "scope", "output", "permission", "model"],
-  C6: ["mode", "settings", "tabs-more", "folder-row", "file-row", "scope", "output", "permission", "model"],
-  C7: ["mode", "settings", "tabs-more", "folder-row", "scope", "output", "permission", "model"],
-  C8: ["mode", "settings", "tabs-more", "folder-row", "file-row", "scope", "output", "permission", "model"],
-  C9: ["mode", "settings", "tabs-more", "scope", "output", "permission", "model"],
-  C10: ["mode", "settings", "tabs-more", "scope", "output", "permission", "model"],
+  C1: ["mode", "folder-row", "scope", "output", "permission", "model"],
+  C2: ["mode", "folder-row", "file-row", "scope", "output", "permission", "model"],
+  C3: ["mode"],
+  C4: ["mode"],
+  C5: ["mode", "tabs-more", "folder-row", "scope", "output", "permission", "model"],
+  C6: ["mode", "tabs-more", "folder-row", "file-row", "scope", "output", "permission", "model"],
+  C7: ["mode", "tabs-more", "folder-row", "scope", "output", "permission", "model"],
+  C8: ["mode", "tabs-more", "folder-row", "file-row", "scope", "output", "permission", "model"],
+  C9: ["mode", "tabs-more", "scope", "output", "permission", "model"],
+  C10: ["mode", "tabs-more", "scope", "output", "permission", "model"],
 };
 
 async function isVisible(page: Page, selector: string): Promise<boolean> {

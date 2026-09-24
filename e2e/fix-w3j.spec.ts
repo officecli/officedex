@@ -43,10 +43,18 @@ async function text(page: Page, selector: string): Promise<string> {
   return ((await page.locator(selector).first().textContent()) ?? "").trim();
 }
 
-/** Opens the sidebar footer's settings menu, which is the only settings door. */
-async function openSettingsMenu(page: Page, label: string): Promise<void> {
+/**
+ * Opens the settings page, which is the sidebar footer's gear and the shell's
+ * only settings door.
+ *
+ * It used to open a three-row `.shell-menu` dropdown. That menu's two real
+ * preferences moved onto the page (under Appearance) and the third was a
+ * switch that only ever reported that it was not available, so the gear now
+ * opens the page directly — see `chrome/Sidebar.tsx`.
+ */
+async function openSettingsPage(page: Page, label: string): Promise<void> {
   await page.getByRole("button", { name: label }).first().click();
-  await expect(page.locator(".shell-menu")).toBeVisible();
+  await expect(page.locator(".shell-settings")).toBeVisible();
 }
 
 /**
@@ -81,6 +89,9 @@ async function expectSingleLine(locator: Locator, label: string): Promise<void> 
 
 test.describe("zh-CN renders the shell in Chinese", () => {
   test.use({ locale: "zh-CN" });
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("officedex.locale", "zh"));
+  });
 
   test("window bar, sidebar and mode switch", async ({ page }) => {
     await open(page, "C2" as Combination, SESSION);
@@ -108,17 +119,31 @@ test.describe("zh-CN renders the shell in Chinese", () => {
     await expect(page.getByRole("button", { name: "新建文件夹" })).toBeVisible();
   });
 
-  test("the settings menu in the sidebar footer", async ({ page }) => {
+  test("the settings page behind the sidebar footer's gear", async ({ page }) => {
     await open(page, "C2" as Combination, SESSION);
-    await openSettingsMenu(page, "设置");
+    await openSettingsPage(page, "设置");
 
-    const labels = await page.locator(".shell-menu [role^='menuitem']").allTextContents();
-    const joined = labels.join(" | ");
-    expect(joined).toContain("审阅改动");
-    expect(joined).toMatch(/回车(发送|换行)/);
-    expect(joined).toMatch(/(减弱|完整)动效/);
-    // The descriptions are user-visible too — S5 counted them in the 227.
-    expect(joined).toContain("Shift + Enter 始终换行");
+    // The page's own copy, in the reader's language.
+    await expect(page.getByRole("heading", { name: "应用设置" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "设置分区" })).toBeVisible();
+
+    const nav = (await page.locator(".shell-settings-nav-label").allTextContents()).join(" | ");
+    expect(nav).toContain("生成");
+    expect(nav).toContain("外观");
+    expect(nav).toContain("活动记录");
+    expect(nav).toContain("高级与支持");
+
+    /*
+     * The two preferences that used to be rows in the footer dropdown, now on
+     * the page under Appearance, with the same words they had in the menu.
+     */
+    await page.getByRole("button", { name: "外观" }).click();
+    await expect(page.getByRole("switch", { name: "减弱动效" })).toBeVisible();
+    await expect(page.getByRole("switch", { name: "回车发送" })).toBeVisible();
+
+    // The page replaces the shell frame rather than sitting inside it, so the
+    // footer menu it was opened from is gone while it is up.
+    await expect(page.locator(".shell-menu")).toHaveCount(0);
   });
 
   test("file tree rows, folder menu and the file list header", async ({ page }) => {
@@ -274,6 +299,9 @@ test.describe("en-US is byte-for-byte what it was", () => {
 
 test.describe("Chinese copy does not break the rows it sits in", () => {
   test.use({ locale: "zh-CN" });
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("officedex.locale", "zh"));
+  });
 
   test("sidebar rows and tree rows stay on one line and keep W2-E's truncation", async ({
     page,

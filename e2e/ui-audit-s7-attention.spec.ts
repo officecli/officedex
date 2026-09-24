@@ -35,8 +35,15 @@ test("counts the attention borders and checks which one the switch reaches", asy
   await expect(page.locator(".shell-attention svg")).toHaveCount(2);
   const movingBefore = await page.evaluate(LIGHT_PROBE);
 
+  /*
+   * The switch is on the settings page, which is a full-window cover, so it is
+   * closed again before the mode switches below touch `.shell-brand`.
+   */
   await page.locator('.shell-sidebar-footer button[aria-label="Settings"]').click();
-  await page.locator('.shell-menu[role="menu"] .shell-menu-item', { hasText: /motion/i }).click();
+  await page.getByRole("button", { name: "Appearance", exact: true }).click();
+  await page.getByRole("switch", { name: "Reduced motion" }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".shell-settings")).toHaveCount(0);
 
   // Remount Home so Hero re-reads the setting (see ui-audit-s7-motion.spec.ts).
   await page.locator(".shell-brand").click();
