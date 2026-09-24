@@ -232,7 +232,8 @@ async function writeDist({ args, channel, version, incoming, merge }) {
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
   main().catch((err) => {
-    console.error(err instanceof Error ? err.message : String(err));
+    const cause = err instanceof Error && err.cause ? ` (${err.cause.code || err.cause.message || err.cause})` : "";
+    console.error(err instanceof Error ? `${err.message}${cause}` : String(err));
     process.exit(1);
   });
 }

@@ -113,8 +113,9 @@ export async function bucketRegion(credentials, bucket, region = DEFAULT_OBS_REG
 
 /**
  * Uploads one object. `publicRead` sets the object ACL so anonymous clients —
- * the desktop updater sends no credentials — can download it. The bucket's own
- * listing stays private.
+ * the desktop updater sends no credentials — can download it; pass false for
+ * anything that must stay private. Object ACLs do not control whether the
+ * bucket can be listed; that is the bucket's own policy.
  */
 export async function putObject(credentials, { bucket, region, key, body, contentType = "application/octet-stream", publicRead = true, cacheControl }) {
   const bytes = typeof body === "string" ? Buffer.from(body, "utf8") : body;
@@ -125,7 +126,27 @@ export async function putObject(credentials, { bucket, region, key, body, conten
     ...(publicRead ? { "x-amz-acl": "public-read" } : {}),
     ...(cacheControl ? { "Cache-Control": cacheControl } : {}),
   };
-  await expectOk(await obsRequest(credentials, { method: "PUT", region, bucket, key, body: bytes, headers }), `put ${key}`);
+  // A 330 MB single PUT over a home link drops now and then ("fetch failed"
+  // from undici). Transport errors and 5xx are retried; a 4xx is an answer.
+  for (let attempt = 1; ; attempt += 1) {
+    let response;
+    try {
+      response = await obsRequest(credentials, { method: "PUT", region, bucket, key, body: bytes, headers });
+    } catch (error) {
+      if (attempt >= 5) throw error;
+      console.error(`put ${key}: ${error.cause?.code || error.message}; retrying (${attempt}/5)`);
+      await new Promise((resolve) => setTimeout(resolve, attempt * 10_000));
+      continue;
+    }
+    if (response.status >= 500 && attempt < 5) {
+      console.error(`put ${key}: HTTP ${response.status}; retrying (${attempt}/5)`);
+      await response.arrayBuffer().catch(() => {});
+      await new Promise((resolve) => setTimeout(resolve, attempt * 10_000));
+      continue;
+    }
+    await expectOk(response, `put ${key}`);
+    return;
+  }
 }
 
 export async function getObject(credentials, { bucket, region, key }) {
