@@ -318,6 +318,29 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
   echo "[${LOG}] verifying MOP schema against the staged runtime"
   node "${OFFICEDEX_DIR}/scripts/verify-mop-schema.mjs" --root "${OFFICEDEX_DIR}/build/presentation"
 
+  # A worker that cannot draw is a release that cannot make a deck, and nothing
+  # above notices: 1.0.4 shipped an obfuscated office-js.js that threw on the
+  # worker's first Office.js call, and every packaged render died there while
+  # signing, notarization and the schema check all passed. So draw one: the
+  # real end-to-end smoke, against the staged presentation tree and the staged
+  # Node — the pair that ships — before any time is spent signing it.
+  if [[ "${SKIP_MOP_SMOKE:-0}" == "1" ]]; then
+    echo "[${LOG}] WARNING: SKIP_MOP_SMOKE=1 — this build has NOT drawn a deck with its own runtime" >&2
+  else
+    if [[ ! -d "${OFFICEDEX_DIR}/../officecli-internal" ]]; then
+      echo "[${LOG}] the MOP worker smoke needs ../officecli-internal (or SKIP_MOP_SMOKE=1)" >&2
+      exit 1
+    fi
+    echo "[${LOG}] drawing a deck with the staged runtime (MOP worker smoke)"
+    (
+      cd "${OFFICEDEX_DIR}/../officecli-internal"
+      OFFICECLI_MOP_SKILL_NODE="${OFFICEDEX_DIR}/build/mop-runtime/bin/node" \
+      OFFICECLI_MOP_PRESENTATION_ROOT="${OFFICEDEX_DIR}/build/presentation" \
+      PRESENTATION_SOURCE_DIR="${OFFICEDEX_DIR}/build/presentation" \
+        env -u GOROOT go test ./internal/runtime/ -run '^TestPPTXMOPSkillEndToEndSmoke$' -count=1
+    )
+  fi
+
   # The embedded MOP worker was patched (worker cacheDir must live outside
   # the bundle, or Vite invalidates the code signature on first write). That
   # worker is `//go:embed`-ed into officecli, so we must rebuild officecli
