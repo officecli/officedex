@@ -47,6 +47,7 @@ async function fakeCheckout(root, { hoistNatives = false, converterMode = 0o755 
   await write("packages/presentation-office-js/scripts/b.mjs", "dev only");
   await write("packages/presentation-office-js/baseline/c.json", "{}");
   await write("mop/runtime/index.js", "module.exports = {};");
+  await write("packages/mop-wasm/mop_wasm_bg.wasm", "\0asm-current");
   await write("bos/dist/mop-wasm/pkg/mop_wasm_bg.wasm", "\0asm");
   await write("tools/fixtures/blank-presentation/content.json", "{}");
   await write("tools/bin/mop-convert", "#!/bin/sh\n");
@@ -136,6 +137,7 @@ test("stages the sources, converter and vite closure the MOP worker needs", asyn
   for (const marker of [
     "package.json",
     path.join("node_modules", "vite", "dist", "node", "index.js"),
+    path.join("packages", "mop-wasm", "mop_wasm_bg.wasm"),
     path.join("bos", "dist", "mop-wasm", "pkg", "mop_wasm_bg.wasm"),
     path.join("tools", "fixtures", "blank-presentation", "content.json"),
     // The minified runtime replaces the authored sources below.
@@ -261,6 +263,56 @@ test("fails when a required presentation source is absent", async (t) => {
     stagePresentationRuntime({ source, dest }),
     /presentation source is missing bos\/dist\/mop-wasm\/pkg/,
   );
+});
+
+test("copies nested rolldown deps such as @rolldown/pluginutils", async (t) => {
+  const { source, dest } = await stageInto(t);
+  const viteStore = path.join(source, "node_modules", ".pnpm", "vite@6.4.3", "node_modules");
+  const rolldownStore = path.join(source, "node_modules", ".pnpm", "rolldown@1.0.0", "node_modules");
+  const write = async (rel, body) => {
+    const target = path.join(source, rel);
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, body);
+  };
+  await rm(path.join(viteStore, "rolldown"), { recursive: true, force: true });
+  await write(
+    path.join(path.relative(source, rolldownStore), "rolldown/package.json"),
+    JSON.stringify({
+      name: "rolldown",
+      version: "1.0.0",
+      optionalDependencies: { "@rolldown/binding-darwin-arm64": "1.0.0" },
+    }),
+  );
+  await write(
+    path.join(path.relative(source, rolldownStore), "@rolldown/pluginutils/package.json"),
+    JSON.stringify({ name: "@rolldown/pluginutils", version: "1.0.0" }),
+  );
+  await symlink(path.join(rolldownStore, "rolldown"), path.join(viteStore, "rolldown"));
+  await stagePresentationRuntime({ source, dest });
+  await stat(path.join(dest, "node_modules", "@rolldown", "pluginutils", "package.json"));
+});
+
+test("stages rolldown natives when the vite closure has no rollup", async (t) => {
+  const { source, dest } = await stageInto(t);
+  const rollup = nativePackages().find((native) => native.host === "rollup");
+  assert.ok(rollup, "expected rollup in nativePackages()");
+  await rm(path.join(source, "node_modules", ".pnpm", "vite@6.4.3", "node_modules", "rollup"), {
+    recursive: true,
+    force: true,
+  });
+  await rm(
+    path.join(
+      source,
+      "node_modules/.pnpm",
+      `${rollup.name.replace("/", "+")}@1.0.0`,
+    ),
+    { recursive: true, force: true },
+  );
+  await stagePresentationRuntime({ source, dest });
+  await assert.rejects(stat(path.join(dest, "node_modules", "rollup")), { code: "ENOENT" });
+  await stat(path.join(dest, "node_modules", "rolldown", "package.json"));
+  const rolldown = nativePackages().find((native) => native.host === "rolldown");
+  await stat(path.join(dest, "node_modules", rolldown.name, "binding.node"));
 });
 
 test("fails when the platform native package version does not match its host", async (t) => {

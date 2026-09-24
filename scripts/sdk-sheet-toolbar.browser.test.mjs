@@ -30,33 +30,52 @@ test("Sheet SDK menus render and formatting/undo works without runtime errors", 
     await page.goto(`http://127.0.0.1:${port}/__sheet_toolbar_test`);
     await page.evaluate(async (modoc) => {
       const { createOfflineSheetEditor } = await import("/src/renderer/spreadsheet/sheetSdk.ts");
-      window.editor = await createOfflineSheetEditor(document.querySelector("#editor"), modoc);
+      window.editor = await createOfflineSheetEditor(document.querySelector("#editor"), modoc, [], undefined, "en");
     }, content);
     const toolbar = page.locator(".s-new-toolbar");
     await expect(toolbar).toBeVisible();
-    for (const name of ["开始", "插入", "页面", "公式", "数据", "审阅", "视图", "帮助"]) {
+    for (const name of ["Start", "Insert", "Page", "Formula", "Data", "Review", "View", "Help"]) {
       await expect(toolbar.getByRole("tab", { name, exact: true })).toBeVisible();
     }
-    await toolbar.getByRole("tab", { name: "插入", exact: true }).click();
-    await expect(toolbar.getByRole("tab", { name: "插入", exact: true })).toHaveAttribute("aria-selected", "true");
-    await toolbar.getByRole("tab", { name: "开始", exact: true }).click();
+    await toolbar.getByRole("tab", { name: "Insert", exact: true }).click();
+    await expect(toolbar.getByRole("tab", { name: "Insert", exact: true })).toHaveAttribute("aria-selected", "true");
+    await toolbar.getByRole("tab", { name: "Start", exact: true }).click();
     await page.mouse.click(126, 207);
     // Inspect the rendered cell style: this SDK version omits bold from getCellData().
     const isBold = () => page.evaluate(() => /\bbold\b/.test(window.editor.__editor.spread.coreBook.sheets[0].getStyle(1, 1)?.font ?? ""));
     const before = await isBold();
-    await toolbar.getByRole('button', { name: '加粗', exact: true }).click();
+    await toolbar.getByRole('button', { name: 'Bold', exact: true }).click();
     await expect.poll(isBold).toBe(!before);
-    await toolbar.getByRole('button', { name: '撤销', exact: true }).click();
+    await toolbar.getByRole('button', { name: 'Undo', exact: true }).click();
     await expect.poll(isBold).toBe(before);
     // Match the narrower canvas beside the AI assistant, then check resize/reflow.
     await page.setViewportSize({ width: 960, height: 760 });
-    await expect(toolbar.getByRole("tab", { name: "开始", exact: true })).toBeVisible();
+    await expect(toolbar.getByRole("tab", { name: "Start", exact: true })).toBeVisible();
     assert.deepEqual(errors, []);
+    // The ribbon used to keep the language of the first editor: Chinese tabs
+    // survived a later English mount because labels were copied at chunk load.
+    const remount = async (locale) => {
+      await page.evaluate(async ({ modoc, locale: next }) => {
+        await window.editor.unmount().catch(() => undefined);
+        await window.editor.destroy().catch(() => undefined);
+        const host = document.querySelector("#editor");
+        host.replaceChildren();
+        const { createOfflineSheetEditor } = await import("/src/renderer/spreadsheet/sheetSdk.ts");
+        window.editor = await createOfflineSheetEditor(host, modoc, [], undefined, next);
+      }, { modoc: content, locale });
+    };
+    await remount("zh");
+    for (const name of ["开始", "插入", "页面", "公式", "数据", "审阅", "视图", "帮助"]) {
+      await expect(toolbar.getByRole("tab", { name, exact: true })).toBeVisible();
+    }
+    await remount("en");
+    for (const name of ["Start", "Insert", "Page", "Formula", "Data", "Review", "View", "Help"]) {
+      await expect(toolbar.getByRole("tab", { name, exact: true })).toBeVisible();
+    }
     const output = new URL("../test-results/sheet-toolbar/", import.meta.url);
     await mkdir(output, { recursive: true });
     await page.screenshot({ path: fileURLToPath(new URL("restored.png", output)) });
     await page.evaluate(() => window.editor.destroy());
-    assert.deepEqual(errors, []);
   } finally {
     await browser?.close();
     await server.close();

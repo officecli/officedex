@@ -26,8 +26,8 @@ const DEFAULT_DEST = path.join(ROOT, "build", "writer-convert");
  */
 export const KNOWN_CONVERT_BUILDS = Object.freeze({
   "darwin-arm64": Object.freeze({
-    sha256: "921123ee9ac521fd0348de59e7774a5aabef0b1b9cf21cbdbdeec93a8be277e2",
-    revision: "18bf54a53bd22b90246d23a10bffe96e6e773c05",
+    sha256: "3024c16b06a2c1438a8327d806228efcdecb3f3b564316106cdeeae4164c316a",
+    revision: "289bdf45c051f7ad2d7907120b909c8561dd8d5d",
   }),
 });
 

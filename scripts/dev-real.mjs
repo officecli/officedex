@@ -42,7 +42,19 @@ for (let index = 0, args = process.argv.slice(2); index < args.length; index += 
 const PORT = Number(options.get("port") ?? process.env.OFFICEDEX_DEV_REAL_PORT ?? 3210);
 const KEEP = options.get("keep") === true;
 
-const RUN_DIR = path.join(ROOT, "build", "dev-real");
+/*
+ * Where this run keeps its workspace, its SQLite store and its artifacts.
+ *
+ * Named after the port by default, because the directory used to be a single
+ * fixed `build/dev-real` while the port was already a flag. A second dev-real
+ * started in the same checkout — a second person, or a second task — deletes
+ * that directory as it boots, and the first one's store is then a file that no
+ * longer exists: every call after that fails with "attempt to write a readonly
+ * database", which says nothing about what actually happened.
+ */
+const RUN_DIR = process.env.OFFICEDEX_DEV_REAL_RUN_DIR
+  ? path.resolve(process.env.OFFICEDEX_DEV_REAL_RUN_DIR)
+  : path.join(ROOT, "build", `dev-real-${PORT}`);
 const WORKSPACE = path.join(RUN_DIR, "artifacts", "_app", "workspace", "dev");
 const OFFICECLI = process.env.OFFICECLI_DESKTOP_BINARY
   || path.join(ROOT, "build", "officecli", process.platform === "win32" ? "officecli.exe" : "officecli");

@@ -79,7 +79,7 @@ test("refuses a page with no module entry", () => {
  * a locale the dictionaries do not have.
  */
 
-function runBootstrap(resources, languages) {
+function runBootstrap(resources, languages, search) {
   const namespaces = new Map();
   const getS18n = (namespace) => {
     if (!namespaces.has(namespace)) {
@@ -96,7 +96,12 @@ function runBootstrap(resources, languages) {
     }
     return namespaces.get(namespace);
   };
-  const scope = { navigator: { languages } };
+  const documentElement = { lang: "en" };
+  const scope = {
+    navigator: { languages },
+    location: search === undefined ? undefined : { search },
+    document: { documentElement },
+  };
   // eslint-disable-next-line no-new-func -- the bootstrap ships as source so it can be exercised here.
   new Function(
     "globalThis",
@@ -136,8 +141,24 @@ test("falls back to a dictionary that exists rather than leaving the locale empt
   const { namespaces } = runBootstrap(RESOURCES, ["en-US"]);
   assert.equal(namespaces.get("suite-components-toolbar-kit").locale, "en-US");
   const writer = namespaces.get("writer-sdk");
-  assert.equal(writer.locale, "zh-CN", "writer-sdk ships zh-CN only");
+  assert.equal(writer.locale, "en-US", "writer-sdk synthesises en-US from zh-CN");
+  assert.equal(writer.registered["en-US"]["toolbar.start"], "Home");
   assert.deepEqual(writer.registered["zh-CN"], RESOURCES["writer-sdk"]["zh-CN"]);
+});
+
+test("follows the host iframe lang query rather than the operating system", () => {
+  const { namespaces, scope } = runBootstrap(RESOURCES, ["en-US"], "?mode=embed&lang=zh-CN");
+  assert.equal(namespaces.get("writer-sdk").locale, "zh-CN");
+  assert.equal(namespaces.get("suite-components-toolbar-kit").locale, "zh-CN");
+  assert.equal(scope.document.documentElement.lang, "zh-CN");
+});
+
+test("names the ribbon tabs in English when the host asks for English", () => {
+  const { namespaces, scope } = runBootstrap(RESOURCES, ["zh-CN"], "?lang=en-US");
+  assert.equal(namespaces.get("writer-sdk").locale, "en-US");
+  assert.equal(namespaces.get("writer-sdk").registered["en-US"]["toolbar.start"], "Home");
+  assert.equal(namespaces.get("suite-components-toolbar-kit").locale, "en-US");
+  assert.equal(scope.document.documentElement.lang, "en-US");
 });
 
 test("matches on language when the exact region is not shipped", () => {

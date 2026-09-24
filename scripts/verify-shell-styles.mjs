@@ -74,6 +74,23 @@ export const UNSTYLED_BY_DESIGN = Object.freeze({
   "spreadsheet-header-markers": "legacy sheet canvas: positioned by inline style",
   "spreadsheet-header-marker": "legacy sheet canvas: positioned by inline style",
   "spreadsheet-catalog-range": "legacy sheet canvas: positioned by inline style",
+  /*
+   * Two state markers on the account page's status line.
+   *
+   * `AccountPage.tsx` writes `shell-account-status is-loading` / `is-awaiting`
+   * and account.css styles only the base class and `is-failure`. They are not
+   * forgotten rules: the state they name is carried by the spinner beside them
+   * and by the sentence inside them, and the base rule's `--shell-ink-muted` is
+   * the right colour for both, so giving them rules would change no pixel. They
+   * are listed here rather than deleted from the component because they are
+   * useful hooks for a future state-specific rule.
+   *
+   * Found by this gate on 2026-09-20, pre-existing and unrelated to the settings
+   * page that was being added when it was noticed; listed rather than fixed so
+   * the red does not outlive the finding.
+   */
+  "is-loading": "account page status marker; state is carried by the spinner beside it",
+  "is-awaiting": "account page status marker; same, for the browser hand-off phase",
 });
 
 const SOURCE_EXTENSIONS = [".tsx", ".ts", ".jsx", ".js"];

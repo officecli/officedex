@@ -31,12 +31,12 @@ export const HOST_RUNTIME_FILE = "host-runtime.js";
  * runtime below went in, Writer stopped throwing, and it came up rendering
  * `toolbar.start`, `statusbar.words 0` and `ribbon.workspace.edit` at the user.
  *
- * `writer-sdk` ships zh-CN only. That is not a bug here to fix: there is no
- * English dictionary in the writer repository at all, so an English build shows
- * Chinese Writer strings inside an otherwise-English shell. Raw dotted keys are
- * the worse of the two, and this stops being a question the day writer ships
- * `locales/en-US.json` — `localeResourcesFor` will pick it up with no change
- * here.
+ * `writer-sdk` ships zh-CN only. An English shell used to show those Chinese
+ * strings (S4-009). The bootstrap now synthesises an `en-US` dictionary from
+ * the Chinese keys — chrome tabs get real English names, the rest a readable
+ * label — so the iframe can follow `?lang=` from the host. The day writer
+ * ships `locales/en-US.json`, `collectWriterLocaleResources` picks it up and
+ * the synthesis is skipped.
  */
 const LOCALE_SOURCES = [
   { namespace: "writer-sdk", directory: "packages/writer-next-ui-react/locales" },
@@ -132,25 +132,84 @@ bootstrapWriterI18n(getS18n, ${JSON.stringify(resources)});`,
  * `setLocale` is called with the locale the dictionary was actually chosen for,
  * not with the browser's: the runtime defaults each namespace to
  * `navigator.languages[0]`, and leaving it there while registering a zh-CN
- * dictionary under `zh-CN` is the raw-key bug written a second way.
+ * dictionary under `zh-CN` is the raw-key bug written a second way. The host
+ * iframe URL's `lang` query wins over `navigator.languages`, so the editor
+ * follows the app language rather than the operating system's.
  */
 export const HOST_RUNTIME_BOOTSTRAP = `
 function preferredLocale(available, requested) {
   if (available.includes(requested)) return requested;
-  const language = requested.toLowerCase().split("-")[0];
+  const language = String(requested || "").toLowerCase().split("-")[0];
   const sameLanguage = available.find((locale) => locale.toLowerCase().split("-")[0] === language);
   return sameLanguage || available[0];
 }
 
+function requestedLocale() {
+  try {
+    const search = globalThis.location && globalThis.location.search;
+    if (typeof search === "string" && search) {
+      const match = /(?:^|[?&])lang=([^&]+)/.exec(search);
+      if (match) return decodeURIComponent(match[1].replace(/\\+/g, " "));
+    }
+  } catch (e) {}
+  const languages = globalThis.navigator && globalThis.navigator.languages;
+  return (languages && languages[0]) || "en-US";
+}
+
+var WRITER_SDK_ENGLISH_CHROME = {
+  "toolbar.start": "Home",
+  "toolbar.insert": "Insert",
+  "toolbar.page": "Layout",
+  "toolbar.reference": "References",
+  "toolbar.review": "Review",
+  "toolbar.view": "View",
+  "toolbar.help": "Help",
+  "statusbar.page": "Pages",
+  "statusbar.section": "Section",
+  "statusbar.words": "Words",
+  "statusbar.characterProperties": "Character",
+};
+
+function humanizeKey(key) {
+  const placeholders = key.match(/\\{arg\\d+\\}/g);
+  const words = key
+    .replace(/\\{arg\\d+\\}/g, "")
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map(function (word) {
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(" ");
+  return placeholders && placeholders.length ? words + " " + placeholders.join(" ") : words;
+}
+
+function englishFrom(resource) {
+  const out = {};
+  for (const key of Object.keys(resource)) {
+    out[key] = WRITER_SDK_ENGLISH_CHROME[key] || humanizeKey(key);
+  }
+  return out;
+}
+
 function bootstrapWriterI18n(getS18n, resources) {
   if (globalThis.s18n === undefined) globalThis.s18n = { getS18n };
-  const requested = (globalThis.navigator && globalThis.navigator.languages || [])[0] || "en-US";
+  const requested = requestedLocale();
+  let htmlLang = "en-US";
   for (const namespace of Object.keys(resources)) {
-    const dictionaries = resources[namespace];
+    const dictionaries = Object.assign({}, resources[namespace]);
+    if (!dictionaries["en-US"] && dictionaries["zh-CN"]) {
+      dictionaries["en-US"] = englishFrom(dictionaries["zh-CN"]);
+    }
     const locale = preferredLocale(Object.keys(dictionaries), requested);
     const s18n = getS18n(namespace);
-    s18n.addLocaleResource(locale, dictionaries[locale]);
+    for (const name of Object.keys(dictionaries)) {
+      s18n.addLocaleResource(name, dictionaries[name]);
+    }
     s18n.setLocale(locale);
+    htmlLang = locale;
+  }
+  if (globalThis.document && globalThis.document.documentElement) {
+    globalThis.document.documentElement.lang = htmlLang;
   }
 }
 `;

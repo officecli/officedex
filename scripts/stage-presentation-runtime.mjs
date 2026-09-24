@@ -7,7 +7,7 @@
 // office-js sources. So the app needs a real directory, not just the converter
 // binary. Everything staged here was derived from the worker's actual module
 // graph — see PRESENTATION_SOURCES below.
-import { access, chmod, cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, chmod, cp, lstat, mkdir, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import { existsSync } from "node:fs";
 import os from "node:os";
@@ -59,6 +59,11 @@ export const PRESENTATION_SOURCES = Object.freeze([
   { from: "quality/deps-golden/lib", required: true },
   // Workspace packages imported by bare specifier from the graph above.
   { from: "mop/runtime", required: true },
+  // The SSR bundle is compiled against this wasm. bos/dist/mop-wasm/pkg is an
+  // older snapshot; pairing it with the current JS wrapper fails at startup as
+  // an opaque LinkError inside the obfuscated chunk, which is what the
+  // packaged app reported as "chunk-GOFHCYK3.js:1" dumping the whole file.
+  { from: "packages/mop-wasm", required: true },
   { from: "bos/dist/mop-wasm/pkg", required: true },
   // The blank deck every generated presentation is cloned from.
   { from: "tools/fixtures/blank-presentation", required: true },
@@ -117,15 +122,58 @@ function converterName() {
   return process.platform === "win32" ? "mop-convert.exe" : "mop-convert";
 }
 
-// esbuild and rollup each load a platform-specific native package at runtime and
-// throw if it is absent. The version must match the host package exactly, so
+// esbuild, rollup (Vite 6/7) and rolldown (Vite 8) each load a platform-specific
+// native package at runtime and throw if it is absent. lightningcss is the same
+// for Vite 8's CSS pipeline. The version must match the host package exactly, so
 // derive it from the staged copy rather than assuming a hoisted top-level one:
 // pnpm may hold several versions side by side in .pnpm/.
+async function copyPnpmSiblingSet(packageDir, destModules) {
+  const real = await realpath(packageDir);
+  await cp(path.dirname(real), destModules, { recursive: true, force: true, dereference: true });
+  return path.dirname(real);
+}
+
+async function nestedPnpmPackages(siblingsDir) {
+  const found = [];
+  for (const entry of await readdir(siblingsDir, { withFileTypes: true })) {
+    const full = path.join(siblingsDir, entry.name);
+    if (entry.name.startsWith("@")) {
+      if (!entry.isDirectory()) continue;
+      for (const child of await readdir(full, { withFileTypes: true })) {
+        found.push(path.join(full, child.name));
+      }
+      continue;
+    }
+    found.push(full);
+  }
+  return found;
+}
+
+// Vite 8's rolldown (and lightningcss/postcss) keep their runtime deps in
+// their own .pnpm folder, not beside vite. Copying only vite's siblings leaves
+// `import "@rolldown/pluginutils"` unresolved inside the bundle.
+async function copyPnpmClosures(linkedPackage, destModules) {
+  const siblingsDir = await copyPnpmSiblingSet(linkedPackage, destModules);
+  for (const nested of await nestedPnpmPackages(siblingsDir)) {
+    try {
+      const info = await lstat(nested);
+      if (!info.isSymbolicLink() && !info.isDirectory()) continue;
+    } catch {
+      continue;
+    }
+    const nestedSiblings = path.dirname(await realpath(nested));
+    if (nestedSiblings === siblingsDir) continue;
+    await copyPnpmSiblingSet(nested, destModules);
+  }
+}
+
 export function nativePackages(platform = process.platform, arch = os.arch()) {
   const slice = `${platform === "win32" ? "win32" : platform}-${arch}`;
   return [
     { host: "esbuild", name: `@esbuild/${slice}` },
     { host: "rollup", name: `@rollup/rollup-${slice}` },
+    { host: "rolldown", name: `@rolldown/binding-${slice}` },
+    { host: "lightningcss", name: `lightningcss-${slice}` },
   ];
 }
 
@@ -311,10 +359,10 @@ export async function stagePresentationRuntime({ source, dest = DEST } = {}) {
     if (entry.closure) {
       // pnpm keeps a package's own dependencies beside it under .pnpm/<id>/
       // node_modules/. Copying only the linked package would leave vite unable
-      // to resolve rollup, so copy the whole sibling set.
+      // to resolve rollup/rolldown, so copy the whole sibling set, then each
+      // nested host's own sibling set (rolldown → @rolldown/pluginutils).
       const linked = path.join(root, "node_modules", entry.from);
-      const real = await import("node:fs/promises").then((fs) => fs.realpath(linked));
-      await cp(path.dirname(real), modules, { recursive: true, force: true, dereference: true });
+      await copyPnpmClosures(linked, modules);
       continue;
     }
     const installed = path.join("node_modules", entry.from);
@@ -325,14 +373,18 @@ export async function stagePresentationRuntime({ source, dest = DEST } = {}) {
     await copyEntry(root, source, path.join(modules, entry.from));
   }
   // Cross-arch staging: an Intel package built on an Apple Silicon machine (or
-  // the reverse) needs the *target's* esbuild/rollup natives, not the build
-  // host's. pnpm only installs the host slice by default, so the presentation
-  // checkout must have been installed with the target architecture included
-  // (pnpm's supportedArchitectures) before staging can find them.
+  // the reverse) needs the *target's* esbuild/rollup/rolldown natives, not the
+  // build host's. pnpm only installs the host slice by default, so the
+  // presentation checkout must have been installed with the target architecture
+  // included (pnpm's supportedArchitectures) before staging can find them.
+  // Vite 8 replaced rollup with rolldown; only copy natives for hosts that the
+  // staged vite closure actually contains.
   const targetArch = String(process.env.PRESENTATION_TARGET_ARCH || "").trim() || os.arch();
   const targetPlatform =
     String(process.env.PRESENTATION_TARGET_PLATFORM || "").trim() || process.platform;
+  const copiedHosts = [];
   for (const native of nativePackages(targetPlatform, targetArch)) {
+    if (!existsSync(path.join(dest, "node_modules", native.host, "package.json"))) continue;
     const found = await findNativePackage(root, dest, native);
     if (!found) {
       throw new Error(
@@ -344,6 +396,15 @@ export async function stagePresentationRuntime({ source, dest = DEST } = {}) {
     const target = path.join(modules, native.name);
     await mkdir(path.dirname(target), { recursive: true });
     await cp(found.path, target, { recursive: true, force: true, dereference: true });
+    copiedHosts.push(native.host);
+  }
+  if (!copiedHosts.includes("esbuild")) {
+    throw new Error("staged vite closure is missing esbuild; cannot package a working SSR runtime");
+  }
+  if (!copiedHosts.includes("rollup") && !copiedHosts.includes("rolldown")) {
+    throw new Error(
+      "staged vite closure is missing rollup/rolldown; cannot package a working SSR runtime",
+    );
   }
 
   // mop-convert: the typed PPTX <-> MOP converter the worker shells out to.
