@@ -109,21 +109,3 @@
   margin-top: 10px;
 }
 
-.shell-image-edit-target {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0 0 9px;
-  padding: 0 3px;
-  color: var(--shell-ink-subtle);
-  font: var(--shell-text-xs) / 20px var(--shell-font);
-}
-
-.shell-image-edit-target > span {
-  margin-left: auto;
-  color: var(--shell-ink-faint);
-}
-
-.shell-task[data-placement="floating"] .shell-image-edit-target {
-  padding: 0 14px;
-}

@@ -105,21 +105,18 @@ describe("the image transcript", () => {
     await waitFor(() => expect(shell.state().activeFileId).toBe("f1"));
   });
 
-  it("says what the next message will change once a version is open", async () => {
+  it("says what the next message will change once a version is open, inside the composer", async () => {
     const shell = await openTranscript(
       [run({ taskId: "r1" })],
       [...seedFiles(), picture("f1", "r1")],
     );
     await shell.dispatch({ type: "open-file", fileId: "f1" });
 
-    await waitFor(() =>
-      expect(document.querySelector(".shell-image-edit-target")?.textContent).toContain(
-        "Editing Version 1",
-      ),
-    );
-    expect(document.querySelector(".shell-image-edit-target")?.textContent).toContain(
-      "Original preserved",
-    );
+    // The header is the card's first line, not a bar floating above it.
+    const head = () => document.querySelector(".shell-cx--task .shell-ig-head");
+    await waitFor(() => expect(head()?.textContent).toContain("Editing Version 1"));
+    expect(head()?.textContent).toContain("Original preserved");
+    expect(document.querySelector(".shell-cx--task")?.firstElementChild).toBe(head());
   });
 
   it("keeps the instruction and offers it again when a run failed", async () => {

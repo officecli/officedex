@@ -25,8 +25,8 @@ import { notBuiltYet } from "../port/reportPortFailure";
 import { MentionMenu, isImeKeyEvent, type MentionOption } from "./MentionMenu";
 import { ModelMenu } from "./ModelMenu";
 import { useComposerSettings } from "./useComposerSettings";
-import { ImageSummary, ImageTools } from "../image/composer/ImageTools";
-import { ReferenceList } from "../image/composer/ReferenceList";
+import { ImageComposerHeader, ImageSummary, ImageTools } from "../image/composer/ImageTools";
+import { ReferenceList, ReferenceStrip } from "../image/composer/ReferenceList";
 import { EMPTY_IMAGE_DRAFT, restoreImageDraft, toImageGenerationInput, type ImageDraft } from "../image/composer/imageDraft";
 import { useComposerFillRequests } from "../image/composerFill";
 import { useImageEditTarget } from "../image/useImageEditTarget";
@@ -427,15 +427,32 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
   const openFile = files.find((file) => file.id === targetFileId) ?? null;
   const editingFile = output === "auto" ? openFile : null;
 
-  // Auto-height, capped so a long draft scrolls instead of eating the panel.
+  /*
+   * Auto-height, capped so a long draft scrolls instead of eating the panel.
+   * Measured again when the width changes: the task column opens from zero
+   * width, and a placeholder measured mid-animation wraps a word per line and
+   * leaves the box at its cap with nothing in it.
+   */
   useEffect(() => {
     const input = inputRef.current;
     if (!input) return;
     const min = placement === "home" ? 88 : 58;
     const max = placement === "home" ? 220 : 145;
-    input.style.height = "auto";
-    input.style.height = `${Math.min(max, Math.max(min, input.scrollHeight))}px`;
-  }, [text, placement]);
+    const fit = () => {
+      input.style.height = "auto";
+      input.style.height = `${Math.min(max, Math.max(min, input.scrollHeight))}px`;
+    };
+    fit();
+    if (typeof ResizeObserver === "undefined") return;
+    let width = input.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (input.clientWidth === width) return;
+      width = input.clientWidth;
+      fit();
+    });
+    observer.observe(input);
+    return () => observer.disconnect();
+  }, [text, placement, mode]);
 
   /*
    * A recogniser outlives the component that started it. Leaving the composer
@@ -887,6 +904,8 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
   }
 
   const imageMode = mode === "image";
+  /* The task column is ~300px: Home's two-column prompt and wide strip do not fit it. */
+  const compactImage = imageMode && placement !== "home";
   const placeholder = placement === "home"
     ? imageMode ? "Describe your image, or use @ to add files or folders…" : "Ask anything, @ to add files or folders…"
     : imageMode
@@ -979,7 +998,34 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
         </div>
       ) : null}
 
-      {imageMode ? (
+      {imageMode && compactImage ? (
+        <>
+          <ImageComposerHeader
+            draft={image}
+            onChange={setImage}
+            onExit={forcedImage ? undefined : () => setMode("agent")}
+            disabled={busy}
+          />
+          <ReferenceStrip
+            references={image.references}
+            onChange={(references) => setImage({ references })}
+            disabled={busy}
+          />
+          <textarea
+            id={inputId}
+            ref={inputRef}
+            className="shell-cx-input"
+            rows={2}
+            value={text}
+            aria-label="Message Agent"
+            placeholder={placeholder}
+            onChange={(event) => handleInput(event.target.value, event.target.selectionStart ?? 0)}
+            onCompositionStart={onCompositionStart}
+            onCompositionEnd={onCompositionEnd}
+            onKeyDown={onInputKeyDown}
+          />
+        </>
+      ) : imageMode ? (
         <div className="shell-ig-prompt-row">
           <ReferenceList
             references={image.references}
@@ -1028,6 +1074,7 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
               onMention={startMention}
               onQuoteText={quoteSelection}
               disabled={busy && placement !== "home"}
+              compact={compactImage}
             />
           ) : <>
           {showModeControls ? (

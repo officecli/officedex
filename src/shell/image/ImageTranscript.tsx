@@ -6,7 +6,6 @@ import { useShell } from "../state/ShellContext";
 import { aspectLabel } from "./imageFormat";
 import { retryImageRun } from "./retryImageRun";
 import { useImageBlobUrl } from "./useImageBlobUrl";
-import { useImageEditTarget } from "./useImageEditTarget";
 import { useImageSeries, type ImageVersion } from "./useImageSeries";
 import "./imageTranscript.css";
 
@@ -117,25 +116,5 @@ function ImageResultCard({ version, onOpen }: { version: ImageVersion; onOpen: (
       </span>
       <ArrowUpRight size={14} strokeWidth={1.8} aria-hidden="true" />
     </button>
-  );
-}
-
-/**
- * What the next message will change, said once, right above where it is typed.
- *
- * The composer carries the same fact as `baseFileId` and as its placeholder;
- * this is the visible half, and it is here rather than inside the composer
- * because the composer is another track's file and because the bar belongs to
- * the conversation's bottom edge, not to the input's chrome.
- */
-export function ImageEditTargetBar() {
-  const target = useImageEditTarget();
-  if (!target) return null;
-  return (
-    <div className="shell-image-edit-target">
-      <ImageGlyph size={13} strokeWidth={1.6} aria-hidden="true" />
-      Editing Version {target.version}
-      <span>Original preserved</span>
-    </div>
   );
 }

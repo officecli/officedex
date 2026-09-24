@@ -20,12 +20,6 @@
   padding-top: 5px;
 }
 
-.shell-cx--task.is-image .shell-ig-prompt-row,
-.shell-cx--floating.is-image .shell-ig-prompt-row {
-  gap: 10px;
-  min-height: 86px;
-}
-
 /* ------------------------------------------------------------ references */
 
 .shell-ig-references {
@@ -127,26 +121,38 @@
   opacity: 0.9;
 }
 
-.shell-cx--task .shell-ig-references,
-.shell-cx--floating .shell-ig-references {
-  max-width: 92px;
-  gap: 5px;
+/*
+ * The task column's references: a row of small squares above the prompt,
+ * present only once there is a picture in it. The add button is a tool in the
+ * strip below, so an empty row never costs the prompt its height.
+ */
+.shell-ig-reference-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 2px 6px 10px;
 }
 
-.shell-cx--task .shell-ig-reference,
-.shell-cx--task .shell-ig-reference-add,
-.shell-cx--floating .shell-ig-reference,
-.shell-cx--floating .shell-ig-reference-add {
-  width: 42px;
-  height: 48px;
+.shell-ig-reference-strip .shell-ig-reference {
+  width: 44px;
+  height: 44px;
+  border-radius: 7px;
+}
+
+.shell-ig-reference-strip .shell-ig-reference > img {
   border-radius: 6px;
 }
 
-.shell-cx--task .shell-ig-reference-sheet,
-.shell-cx--floating .shell-ig-reference-sheet {
-  width: 29px;
-  height: 37px;
-  border-radius: 2px;
+.shell-ig-reference-strip .shell-ig-reference > button {
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  padding: 2px;
+}
+
+.shell-ig-reference-strip .shell-ig-reference > span[aria-hidden="true"] {
+  display: none;
 }
 
 /* ---------------------------------------------------------------- tools */
@@ -217,10 +223,10 @@
   cursor: pointer;
 }
 
-.shell-ig-tool > i {
+.shell-ig-tool i {
+  margin: 0 3px;
   font-style: normal;
   color: var(--shell-ink-faint);
-  margin: 0 1px;
 }
 
 .shell-ig-tool:hover:not(:disabled),
@@ -241,6 +247,7 @@
 }
 
 .shell-ig-tool-name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -280,52 +287,31 @@
 }
 
 /*
- * The 320px column cannot hold the strip on one line. Two rows, as the
- * prototype lays them: what kind of picture on top, how it looks below.
+ * The task column's strip: one line, send on the same line to the right.
+ * Reference · size · text · mention · camera · style. The size summary is the
+ * only part with words in it, so it is the part that gives up width.
  */
-.shell-cx--task .shell-ig-tools,
-.shell-cx--floating .shell-ig-tools {
-  display: grid;
-  grid-template-columns: minmax(70px, 1fr) 26px 26px 34px 34px;
-  gap: 2px;
+.shell-ig-tools.is-compact {
   flex: 1 1 auto;
+  gap: 1px;
 }
 
-.shell-cx--task .shell-ig-mode,
-.shell-cx--task .shell-ig-tool,
-.shell-cx--floating .shell-ig-mode,
-.shell-cx--floating .shell-ig-tool {
-  height: 28px;
-  gap: 3px;
-  padding: 0 4px;
-  font-size: var(--shell-text-xs);
+.shell-ig-tools.is-compact .shell-ig-tool {
+  flex: none;
+  min-width: 28px;
+  height: 30px;
+  padding: 0 6px;
+}
+
+/* Words only — the ratio glyph and chevron are what a 300px line cannot spare. */
+.shell-ig-tools.is-compact .shell-ig-tool--settings {
+  flex: 0 1 auto;
   min-width: 0;
+  padding: 0 7px;
+  font-size: var(--shell-text-xs);
 }
 
-.shell-cx--task .shell-ig-mode,
-.shell-cx--floating .shell-ig-mode {
-  grid-area: 1 / 1;
-}
-
-.shell-cx--task .shell-ig-tool--model,
-.shell-cx--floating .shell-ig-tool--model {
-  grid-area: 1 / 2 / 2 / 6;
-  justify-content: flex-start;
-}
-
-.shell-cx--task .shell-ig-tool--settings,
-.shell-cx--floating .shell-ig-tool--settings {
-  grid-area: 2 / 1;
-  justify-content: flex-start;
-}
-
-.shell-cx--task .shell-ig-tool--settings > .shell-ig-ratio-glyph,
-.shell-cx--floating .shell-ig-tool--settings > .shell-ig-ratio-glyph {
-  display: none;
-}
-
-.shell-cx--task .shell-ig-divider,
-.shell-cx--floating .shell-ig-divider {
+.shell-ig-tools.is-compact .shell-ig-tool--settings > svg {
   display: none;
 }
 
@@ -334,9 +320,129 @@
   align-items: flex-end;
 }
 
+/*
+ * composer.css wraps the toolbar under 340px so the text composer's scope chip
+ * and model name each get a line. The image strip is sized to share one line
+ * with send, and a send button alone on a third row is what looked broken.
+ */
+.shell-cx--task.is-image .shell-cx-toolbar,
+.shell-cx--floating.is-image .shell-cx-toolbar {
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.shell-cx--task.is-image .shell-cx-right,
+.shell-cx--floating.is-image .shell-cx-right {
+  flex: none;
+}
+
 .shell-cx.is-image .shell-cx-left {
   flex: 1 1 auto;
   min-width: 0;
+}
+
+/* -------------------------------------------------------------- header */
+
+/*
+ * The column's first line: which picture this message changes, and the model.
+ * A hairline under it separates "about what" from "what to do".
+ */
+.shell-ig-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  margin: -4px -2px 10px;
+  padding: 0 0 8px 4px;
+  border-bottom: 1px solid var(--shell-line);
+}
+
+.shell-ig-head-target {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  font: var(--shell-text-sm) / 18px var(--shell-font);
+  white-space: nowrap;
+}
+
+.shell-ig-head-thumb,
+.shell-ig-head-glyph {
+  flex: none;
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+}
+
+.shell-ig-head-thumb {
+  display: block;
+  border: 1px solid var(--shell-line);
+  object-fit: cover;
+  background: var(--shell-chrome);
+}
+
+.shell-ig-head-glyph {
+  display: grid;
+  place-items: center;
+  background: var(--shell-image-tint);
+  color: var(--shell-image-accent);
+}
+
+.shell-ig-head-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--shell-ink-title);
+  font-weight: 500;
+}
+
+.shell-ig-head-note {
+  flex: none;
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-xs);
+}
+
+/* The note is also the label's tooltip; in the docked column it yields first. */
+@container (max-width: 340px) {
+  .shell-ig-head-note {
+    display: none;
+  }
+}
+
+.shell-ig-tool--model.is-quiet {
+  flex: none;
+  height: 26px;
+  gap: 4px;
+  padding: 0 5px 0 7px;
+  color: var(--shell-ink-subtle);
+  font-size: var(--shell-text-xs);
+}
+
+.shell-ig-head-exit {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--shell-radius-item);
+  background: transparent;
+  color: var(--shell-ink-faint);
+  cursor: pointer;
+}
+
+.shell-ig-head-exit:hover:not(:disabled) {
+  background: var(--shell-hover);
+  color: var(--shell-ink-title);
+}
+
+.shell-ig-head-exit:disabled {
+  cursor: default;
 }
 
 /* ------------------------------------------------------------- summary */
@@ -745,6 +851,7 @@
 
 .shell-ig-tool:focus-visible,
 .shell-ig-mode-close:focus-visible,
+.shell-ig-head-exit:focus-visible,
 .shell-ig-popover button:focus-visible,
 .shell-ig-popover select:focus-visible,
 .shell-ig-summary button:focus-visible,

@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Focus,
   Image as ImageIcon,
+  ImagePlus,
   MoveHorizontal,
   Palette,
   Sparkles,
@@ -27,7 +28,10 @@ import {
   imageSizeProblem,
 } from "../../../shared/imageGeneration";
 import { notBuiltYet } from "../../port/reportPortFailure";
+import { useImageBlobUrl } from "../useImageBlobUrl";
+import { useImageEditTarget } from "../useImageEditTarget";
 import { ImagePopover } from "./ImagePopover";
+import { useReferenceImport } from "./ReferenceList";
 import type { ImageDraft } from "./imageDraft";
 
 /**
@@ -39,7 +43,7 @@ import type { ImageDraft } from "./imageDraft";
  * chosen — the others say so rather than pretending to switch.
  */
 
-type ToolName = "model" | "settings" | "camera" | "style";
+type ToolName = "settings" | "camera" | "style";
 
 interface ImageModelOption {
   id: string;
@@ -91,12 +95,18 @@ export interface ImageToolsProps {
   /** Wraps the selection in quotes — words the picture should show. */
   onQuoteText: () => void;
   disabled: boolean;
+  /**
+   * The task column's strip. The mode label and the model move up into
+   * `ImageComposerHeader`, the reference tiles into a row above the prompt,
+   * and adding a reference becomes the strip's first tool — so what is left
+   * fits one line beside the send button in a 300px column.
+   */
+  compact?: boolean;
 }
 
-export function ImageTools({ draft, onChange, onExit, onMention, onQuoteText, disabled }: ImageToolsProps) {
+export function ImageTools({ draft, onChange, onExit, onMention, onQuoteText, disabled, compact = false }: ImageToolsProps) {
   const [open, setOpen] = useState<ToolName | null>(null);
   const anchors = {
-    model: useRef<HTMLButtonElement>(null),
     settings: useRef<HTMLButtonElement>(null),
     camera: useRef<HTMLButtonElement>(null),
     style: useRef<HTMLButtonElement>(null),
@@ -113,9 +123,12 @@ export function ImageTools({ draft, onChange, onExit, onMention, onQuoteText, di
     [],
   );
   const toggle = (name: ToolName) => setOpen((current) => (current === name ? null : name));
-  const model = MODELS.find((entry) => entry.id === draft.modelId) ?? MODELS[0];
+  const references = useReferenceImport({
+    references: draft.references,
+    onChange: (next) => onChange({ references: next }),
+  });
 
-  const tool = (name: ToolName, label: string, content: ReactNode, set = false) => (
+  const tool = (name: ToolName, label: string, content: ReactNode, set = false, chevron = true) => (
     <button
       ref={anchors[name]}
       type="button"
@@ -128,12 +141,29 @@ export function ImageTools({ draft, onChange, onExit, onMention, onQuoteText, di
       onClick={() => toggle(name)}
     >
       {content}
-      <ChevronDown className="shell-ig-chevron" size={12} strokeWidth={1.8} aria-hidden="true" />
+      {chevron ? <ChevronDown className="shell-ig-chevron" size={12} strokeWidth={1.8} aria-hidden="true" /> : null}
     </button>
   );
 
   return (
-    <div className="shell-ig-tools" role="group" aria-label="Image options">
+    <div className={`shell-ig-tools${compact ? " is-compact" : ""}`} role="group" aria-label="Image options">
+      {compact ? (
+        references.available ? (
+          <>
+            <button
+              type="button"
+              className="shell-ig-tool shell-ig-tool--reference"
+              aria-label="Add reference image"
+              title={references.full ? "Up to four reference images" : "Add reference image · PNG, JPG or WebP"}
+              disabled={disabled || references.full}
+              onClick={references.add}
+            >
+              <ImagePlus size={16} strokeWidth={1.65} aria-hidden="true" />
+            </button>
+            {references.input}
+          </>
+        ) : null
+      ) : <>
       <span className="shell-ig-mode">
         <ImageIcon size={16} strokeWidth={1.65} aria-hidden="true" />
         <span>Image</span>
@@ -151,28 +181,24 @@ export function ImageTools({ draft, onChange, onExit, onMention, onQuoteText, di
         ) : null}
       </span>
 
-      {tool(
-        "model",
-        "Choose image model",
-        <>
-          <Box size={16} strokeWidth={1.65} aria-hidden="true" />
-          <span className="shell-ig-tool-name">{model.name}</span>
-        </>,
-      )}
+      <ImageModelButton draft={draft} onChange={onChange} disabled={disabled} />
+      </>}
       {tool(
         "settings",
         "Image settings",
         <>
           <RatioGlyph ratio={draft.ratio === "custom" ? "1:1" : draft.ratio} />
-          <span>{draft.ratio === "custom" && draft.width && draft.height ? `${draft.width}×${draft.height}` : ratioLabel(draft.ratio)}</span>
-          <i aria-hidden="true">·</i>
-          <span>{draft.resolution}</span>
-          <i aria-hidden="true">·</i>
-          <span>{draft.count}</span>
+          <span className="shell-ig-tool-name">
+            {draft.ratio === "custom" && draft.width && draft.height ? `${draft.width}×${draft.height}` : ratioLabel(draft.ratio)}
+            <i aria-hidden="true">·</i>
+            {draft.resolution}
+            <i aria-hidden="true">·</i>
+            {draft.count}
+          </span>
         </>,
       )}
 
-      <span className="shell-ig-divider" aria-hidden="true" />
+      {compact ? null : <span className="shell-ig-divider" aria-hidden="true" />}
 
       <button
         type="button"
@@ -202,43 +228,9 @@ export function ImageTools({ draft, onChange, onExit, onMention, onQuoteText, di
           {draft.camera.enabled ? <span className="shell-ig-dot" aria-hidden="true" /> : null}
         </>,
         draft.camera.enabled,
+        !compact,
       )}
-      {tool("style", "Image style", <Palette size={16} strokeWidth={1.65} aria-hidden="true" />, draft.style !== "auto")}
-
-      {open === "model" ? (
-        <ImagePopover anchor={anchors.model} title="Image model" width={350} onClose={close}>
-          <div className="shell-ig-list" role="radiogroup" aria-label="Image models">
-            {MODELS.map((entry) => (
-              <button
-                key={entry.id}
-                type="button"
-                role="radio"
-                aria-checked={entry.id === model.id}
-                className={entry.id === model.id ? "is-selected" : undefined}
-                onClick={() => {
-                  if (!entry.available) {
-                    notBuiltYet(
-                      "composer.image.model",
-                      `Choosing ${entry.name} is not available yet — the image runtime picks its model itself. Auto uses that choice.`,
-                    );
-                    return;
-                  }
-                  onChange({ modelId: entry.id });
-                  close(true);
-                }}
-              >
-                <span className={`shell-ig-mark is-${entry.tone}`}>{entry.mark}</span>
-                <span>
-                  <strong>{entry.name}</strong>
-                  <small>{entry.detail}</small>
-                </span>
-                {entry.id === model.id ? <Check size={15} strokeWidth={1.8} aria-hidden="true" /> : null}
-                {!entry.available ? <em className="shell-ig-soon">Soon</em> : null}
-              </button>
-            ))}
-          </div>
-        </ImagePopover>
-      ) : null}
+      {tool("style", "Image style", <Palette size={16} strokeWidth={1.65} aria-hidden="true" />, draft.style !== "auto", !compact)}
 
       {open === "settings" ? (
         <ImagePopover anchor={anchors.settings} title="Image settings" width={350} onClose={close}>
@@ -317,6 +309,139 @@ export function ImageTools({ draft, onChange, onExit, onMention, onQuoteText, di
             ))}
           </div>
         </ImagePopover>
+      ) : null}
+    </div>
+  );
+}
+
+/** The model, as a button that opens its list. Home's strip and the task column's header both use it. */
+function ImageModelButton({
+  draft,
+  onChange,
+  disabled,
+  quiet = false,
+}: {
+  draft: ImageDraft;
+  onChange: (patch: Partial<ImageDraft>) => void;
+  disabled: boolean;
+  /** In the header: no icon box, smaller type — it is a setting there, not a tool. */
+  quiet?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const anchor = useRef<HTMLButtonElement>(null);
+  const model = MODELS.find((entry) => entry.id === draft.modelId) ?? MODELS[0];
+  const close = useCallback((returnFocus: boolean) => {
+    setOpen(false);
+    if (returnFocus) queueMicrotask(() => anchor.current?.focus());
+  }, []);
+
+  return (
+    <>
+      <button
+        ref={anchor}
+        type="button"
+        className={`shell-ig-tool shell-ig-tool--model${quiet ? " is-quiet" : ""}`}
+        aria-label="Choose image model"
+        title="Choose image model"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        disabled={disabled}
+        onClick={() => setOpen((current) => !current)}
+      >
+        {quiet ? <Sparkles size={13} strokeWidth={1.7} aria-hidden="true" /> : <Box size={16} strokeWidth={1.65} aria-hidden="true" />}
+        <span className="shell-ig-tool-name">{model.name}</span>
+        <ChevronDown className="shell-ig-chevron" size={12} strokeWidth={1.8} aria-hidden="true" />
+      </button>
+      {open ? (
+        <ImagePopover anchor={anchor} title="Image model" width={350} onClose={close}>
+          <div className="shell-ig-list" role="radiogroup" aria-label="Image models">
+            {MODELS.map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                role="radio"
+                aria-checked={entry.id === model.id}
+                className={entry.id === model.id ? "is-selected" : undefined}
+                onClick={() => {
+                  if (!entry.available) {
+                    notBuiltYet(
+                      "composer.image.model",
+                      `Choosing ${entry.name} is not available yet — the image runtime picks its model itself. Auto uses that choice.`,
+                    );
+                    return;
+                  }
+                  onChange({ modelId: entry.id });
+                  close(true);
+                }}
+              >
+                <span className={`shell-ig-mark is-${entry.tone}`}>{entry.mark}</span>
+                <span>
+                  <strong>{entry.name}</strong>
+                  <small>{entry.detail}</small>
+                </span>
+                {entry.id === model.id ? <Check size={15} strokeWidth={1.8} aria-hidden="true" /> : null}
+                {!entry.available ? <em className="shell-ig-soon">Soon</em> : null}
+              </button>
+            ))}
+          </div>
+        </ImagePopover>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * The top line of the composer in the task column: what this message acts on,
+ * and with which model.
+ *
+ * "Editing Version 2" used to float above the card as a separate bar; it is
+ * the most important fact about the message, so it now opens the card itself,
+ * with the version's thumbnail so "Version 2" is a picture rather than a
+ * number to look up. With nothing open it says "New image", and — when the
+ * composer can leave image mode — carries the way out.
+ */
+export function ImageComposerHeader({
+  draft,
+  onChange,
+  onExit,
+  disabled,
+}: {
+  draft: ImageDraft;
+  onChange: (patch: Partial<ImageDraft>) => void;
+  onExit?: () => void;
+  disabled: boolean;
+}) {
+  const target = useImageEditTarget();
+  const thumb = useImageBlobUrl(target?.fileId ?? null);
+
+  return (
+    <div className="shell-ig-head">
+      <span
+        className="shell-ig-head-target"
+        title={target ? "Your change becomes a new version. The original stays in Versions." : undefined}
+      >
+        {target && thumb ? (
+          <img className="shell-ig-head-thumb" src={thumb} alt="" draggable={false} />
+        ) : (
+          <span className="shell-ig-head-glyph" aria-hidden="true">
+            <ImageIcon size={13} strokeWidth={1.7} />
+          </span>
+        )}
+        <span className="shell-ig-head-label">{target ? `Editing Version ${target.version}` : "New image"}</span>
+        {target ? <span className="shell-ig-head-note">Original preserved</span> : null}
+      </span>
+      <ImageModelButton draft={draft} onChange={onChange} disabled={disabled} quiet />
+      {onExit ? (
+        <button
+          type="button"
+          className="shell-ig-head-exit"
+          aria-label="Exit image creation"
+          title="Exit image creation"
+          disabled={disabled}
+          onClick={onExit}
+        >
+          <X size={13} strokeWidth={1.8} aria-hidden="true" />
+        </button>
       ) : null}
     </div>
   );

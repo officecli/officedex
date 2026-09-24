@@ -5,7 +5,7 @@ import { useT } from "../../renderer/i18n";
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import { Composer } from "../composer/Composer";
 import type { AgentOutlinePage, AgentStep, AgentTask } from "../../shared/uiPort";
-import { ImageEditTargetBar, ImageTranscript } from "../image/ImageTranscript";
+import { ImageTranscript } from "../image/ImageTranscript";
 import { useShell } from "../state/ShellContext";
 import { useLibraryActions } from "../nav/useLibraryActions";
 import { canDock, effectivePlacement } from "../state/shellReducer";
@@ -257,10 +257,6 @@ export function TaskPanel({ agent, placement, dragHandleProps }: TaskPanelProps)
           </div>
         ) : null}
       </div>
-
-      {/* What the next message changes, stated where it is typed. The composer
-          carries the same fact as `baseFileId`; this is its visible half. */}
-      {imageTask ? <ImageEditTargetBar /> : null}
 
       <div className="shell-task-composer">
         <Composer

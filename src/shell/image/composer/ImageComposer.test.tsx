@@ -210,6 +210,36 @@ describe("New task in agent mode", () => {
   });
 });
 
+describe("the image composer in the task column", () => {
+  it("fits one line: add-reference first, no mode label, model in the header", async () => {
+    const shell = await agentHome();
+    await enterImageMode(shell);
+    await act(async () => {
+      fireEvent.change(shell.view.getByLabelText("New task instructions"), { target: { value: "A lamp" } });
+    });
+    await act(async () => {
+      fireEvent.click(shell.view.getByTitle("Send message"));
+    });
+
+    const composer = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>(".shell-cx--task.is-image");
+      expect(found).toBeTruthy();
+      return found!;
+    });
+    const strip = within(composer).getByRole("group", { name: "Image options" });
+    expect(strip.classList.contains("is-compact")).toBe(true);
+    expect(strip.firstElementChild?.getAttribute("aria-label")).toBe("Add reference image");
+    expect(within(strip).queryByRole("button", { name: "Choose image model" })).toBeNull();
+    expect(strip.querySelector(".shell-ig-mode")).toBeNull();
+
+    const head = composer.querySelector<HTMLElement>(".shell-ig-head")!;
+    expect(within(head).getByRole("button", { name: "Choose image model" }).textContent).toContain("Auto");
+    // No tile column beside the prompt, and no empty reference row above it.
+    expect(composer.querySelector(".shell-ig-prompt-row")).toBeNull();
+    expect(composer.querySelector(".shell-ig-reference-strip")).toBeNull();
+  });
+});
+
 describe("leaving image mode from Home", () => {
   it("drops image mode when a document type is picked after Create an image", async () => {
     const shell = await agentHome();
