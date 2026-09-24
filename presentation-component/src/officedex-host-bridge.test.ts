@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { inlineAssetUris, restoreAssetUris } from "./officedex-host-bridge";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { inlineAssetUris, installSelectionNotifier, restoreAssetUris } from "./officedex-host-bridge";
 
 const encode = (value: unknown) => new TextEncoder().encode(JSON.stringify(value));
 const decode = (bytes: Uint8Array) => JSON.parse(new TextDecoder().decode(bytes));
@@ -50,5 +50,41 @@ describe("MOP asset inlining", () => {
     const authored = encode(deck("data:image/png;base64,AAAA"));
     expect(decode(restoreAssetUris(authored, new Map([["data:image/jpeg;base64,AQIDBA==", "mop-asset:/media/a.jpg"]]))))
       .toEqual(decode(authored));
+  });
+});
+
+/**
+ * The gesture the host reads a selection on.
+ *
+ * PowerPoint has no selection event to subscribe to, so the embed reports that
+ * the user did something and the host decides whether to spend a script on it.
+ * What matters here is the debounce: a drag across a slide is one message, not
+ * one per frame of the gesture.
+ */
+describe("selection notifier", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("reports one gesture per burst, and nothing after it is removed", () => {
+    vi.useFakeTimers();
+    const notify = vi.fn();
+    const stop = installSelectionNotifier(window, notify, 50);
+
+    window.dispatchEvent(new Event("pointerup"));
+    window.dispatchEvent(new Event("pointerup"));
+    vi.advanceTimersByTime(49);
+    expect(notify).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(1);
+    expect(notify).toHaveBeenCalledTimes(1);
+
+    // Keyboard selection counts too: Tab between placeholders, arrows on a shape.
+    window.dispatchEvent(new Event("keyup"));
+    vi.advanceTimersByTime(50);
+    expect(notify).toHaveBeenCalledTimes(2);
+
+    stop();
+    window.dispatchEvent(new Event("pointerup"));
+    vi.advanceTimersByTime(50);
+    expect(notify).toHaveBeenCalledTimes(2);
   });
 });

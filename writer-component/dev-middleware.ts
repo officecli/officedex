@@ -285,11 +285,55 @@ async function runExport(convertPath: string, scratch: string, body: Buffer): Pr
   const packageDirectory = path.join(scratch, "document.mow.dir");
   const outputPath = path.join(scratch, "output.docx");
   await writeMowDirectory(packageDirectory, body);
+  await dropWriterRuntimeNodeIdsFile(path.join(packageDirectory, CONTENT_FILE_NAME));
   await runConvert(convertPath, ["export", "-m", packageDirectory, "-o", outputPath]);
 
   const output = await readFile(outputPath);
   if (output.byteLength === 0) throw new TypeError("word2mow produced an empty DOCX file.");
   return output;
+}
+
+/**
+ * Writer stamps `nodeId` on live blocks. It is not an OOXML field, and the
+ * pinned converter rejects it on any table. Drop only that key; other unknown
+ * keys stay so the converter still fails closed.
+ *
+ * Rewrites the file only when a key was removed.
+ */
+export async function dropWriterRuntimeNodeIdsFile(contentPath: string): Promise<void> {
+  const raw = await readFile(contentPath, "utf8");
+  const snapshot: unknown = JSON.parse(raw);
+  if (!dropWriterRuntimeNodeIds(snapshot)) return;
+  await writeFile(contentPath, JSON.stringify(snapshot));
+}
+
+export function dropWriterRuntimeNodeIds(value: unknown): boolean {
+  let removed = false;
+  const visit = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      for (const child of node) visit(child);
+      return;
+    }
+    if (node === null || typeof node !== "object") return;
+    const record = node as Record<string, unknown>;
+    if (Object.hasOwn(record, "nodeId")) {
+      delete record.nodeId;
+      removed = true;
+    }
+    for (const child of Object.values(record)) visit(child);
+  };
+  visit(value);
+  return removed;
+}
+
+/** The export the Vite dev server serves. E2E hits this, not the Go handler. */
+export async function exportDocxFromMowZip(convertPath: string, body: Buffer): Promise<Buffer> {
+  const scratch = await mkdtemp(path.join(tmpdir(), "officedex-word2mow-"));
+  try {
+    return await runExport(convertPath, scratch, body);
+  } finally {
+    await rm(scratch, { recursive: true, force: true });
+  }
 }
 
 /** Unpack a MOW ZIP into `root`, applying the shared path whitelist. */

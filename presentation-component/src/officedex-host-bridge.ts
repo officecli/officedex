@@ -596,11 +596,75 @@ function installScriptBridge() {
           type: "presentation:script-result",
           requestId,
           ok: false,
-          error: error instanceof Error ? error.message : String(error),
+          /*
+           * The stack, not just the message.
+           *
+           * A script that dies inside the editor returns a bare string, and the
+           * host records exactly that string in the renderer log. For
+           * `Editing is not permitted` that is not enough to tell the two gates
+           * apart — `AccessPolicy.canEdit` and `assertCanApply` throw identical
+           * text — which cost two wrong diagnoses of the live-draw failure. The
+           * stack names the frame that threw, and it is worth the bytes.
+           *
+           * `PresentationEditorFrame` surfaces this string as the sequencer's
+           * `status.error`, and `useLiveDeckReplay` writes that to the app log,
+           * so it is what makes a packaged failure diagnosable after the fact.
+           */
+          error:
+            error instanceof Error
+              ? `${error.message}\n${error.stack ?? "(no stack)"}`
+              : String(error),
           snapshotSaved: false,
         }),
     );
   });
+}
+
+/**
+ * How long a burst of clicks or keystrokes is allowed to settle before the
+ * host is told the selection may have moved.
+ *
+ * Long enough that a drag across three shapes is one message rather than
+ * forty, short enough that letting go of the mouse and seeing the agent open
+ * reads as the same action.
+ */
+const SELECTION_NOTIFY_DEBOUNCE_MS = 120;
+
+/**
+ * Tells the host that the user did something that may have changed what is
+ * selected — a click on a shape, an arrow key, a Tab between placeholders.
+ *
+ * Deliberately *not* the selection itself. Reading it needs Office.js, the
+ * host already has the script for that (`PRESENTATION_SELECTION_SOURCE`), and
+ * keeping a second copy of it in this bundle would mean two definitions of
+ * "what is selected" that drift apart. So the embed reports the gesture and
+ * the host decides whether it is worth a round trip.
+ *
+ * `pointerup`/`keyup` rather than `down`: the editor sets its selection during
+ * the gesture, so asking after it has ended is what returns the shape the user
+ * just picked instead of the one they had before. Capture phase, because the
+ * editor stops plenty of these before they reach the document.
+ *
+ * Exported for the test; `installOfficeDexPresentationBridge` wires the real
+ * window.
+ */
+export function installSelectionNotifier(
+  target: Window,
+  notify: () => void,
+  debounceMs = SELECTION_NOTIFY_DEBOUNCE_MS,
+): () => void {
+  let timer = 0;
+  const schedule = () => {
+    target.clearTimeout(timer);
+    timer = target.setTimeout(notify, debounceMs);
+  };
+  target.addEventListener("pointerup", schedule, true);
+  target.addEventListener("keyup", schedule, true);
+  return () => {
+    target.clearTimeout(timer);
+    target.removeEventListener("pointerup", schedule, true);
+    target.removeEventListener("keyup", schedule, true);
+  };
 }
 
 export async function installOfficeDexPresentationBridge(): Promise<void> {
@@ -609,4 +673,5 @@ export async function installOfficeDexPresentationBridge(): Promise<void> {
   installDocumentSwapBridge();
   await waitForPresentation();
   installDesktopHostBridge();
+  installSelectionNotifier(window, () => post({ type: "presentation:selection-changed" }));
 }
