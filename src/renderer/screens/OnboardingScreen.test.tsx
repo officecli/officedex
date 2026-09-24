@@ -20,6 +20,7 @@ const baseSettings: UserSettings = {
   proxy: null,
   imageWatermark: { showWatermark: true, preferenceSource: "system" },
   waiting2048Enabled: false,
+  usageAnalyticsEnabled: true,
 };
 
 let updateSettingsSpy: ReturnType<typeof vi.fn>;

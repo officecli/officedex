@@ -23,6 +23,7 @@ const settings: UserSettings = {
   proxy: null,
   imageWatermark: { showWatermark: true, preferenceSource: "system" },
   waiting2048Enabled: false,
+  usageAnalyticsEnabled: true,
 };
 
 vi.mock("./notifications", () => ({

@@ -53,6 +53,10 @@ var defaultSettings = types.UserSettings{
 		ShowWatermark:    true,
 		PreferenceSource: "system",
 	},
+	// On by default and stated here rather than left to the zero value: the
+	// event contract makes usage reporting opt-out, and reading the default
+	// off the absent key would silently disable it for every existing install.
+	UsageAnalyticsEnabled: true,
 }
 
 // Defaults returns a copy of the package-level defaults.
@@ -179,6 +183,7 @@ type Patch struct {
 	Proxy                 *types.ProxySettings          `json:"proxy,omitempty"`
 	ImageWatermark        *types.ImageWatermarkSettings `json:"imageWatermark,omitempty"`
 	Waiting2048Enabled    *bool                         `json:"waiting2048Enabled,omitempty"`
+	UsageAnalyticsEnabled *bool                         `json:"usageAnalyticsEnabled,omitempty"`
 	// ClearLlmProvider, when true, removes the stored provider. Ignored when
 	// LlmProvider is non-nil.
 	ClearLlmProvider bool `json:"clearLlmProvider,omitempty"`
@@ -249,6 +254,9 @@ func applyPatch(base types.UserSettings, patch Patch) types.UserSettings {
 	if patch.Waiting2048Enabled != nil {
 		out.Waiting2048Enabled = *patch.Waiting2048Enabled
 	}
+	if patch.UsageAnalyticsEnabled != nil {
+		out.UsageAnalyticsEnabled = *patch.UsageAnalyticsEnabled
+	}
 	return out
 }
 
@@ -267,6 +275,7 @@ type rawSettings struct {
 	Proxy                 *rawProxySettings          `json:"proxy,omitempty"`
 	ImageWatermark        *rawImageWatermarkSettings `json:"imageWatermark,omitempty"`
 	Waiting2048Enabled    *bool                      `json:"waiting2048Enabled,omitempty"`
+	UsageAnalyticsEnabled *bool                      `json:"usageAnalyticsEnabled,omitempty"`
 }
 
 type rawGenerateDefaults struct {
@@ -334,6 +343,11 @@ func sanitizeRaw(raw rawSettings) types.UserSettings {
 	if raw.Waiting2048Enabled != nil {
 		out.Waiting2048Enabled = *raw.Waiting2048Enabled
 	}
+	// Absent means "never answered", which for an opt-out setting is the
+	// default (on), not false.
+	if raw.UsageAnalyticsEnabled != nil {
+		out.UsageAnalyticsEnabled = *raw.UsageAnalyticsEnabled
+	}
 	return out
 }
 
@@ -365,6 +379,7 @@ func sanitizeCanonical(s types.UserSettings) types.UserSettings {
 	out.Proxy = sanitizeCanonicalProxy(s.Proxy)
 	out.ImageWatermark = sanitizeCanonicalImageWatermark(s.ImageWatermark)
 	out.Waiting2048Enabled = s.Waiting2048Enabled
+	out.UsageAnalyticsEnabled = s.UsageAnalyticsEnabled
 	return out
 }
 

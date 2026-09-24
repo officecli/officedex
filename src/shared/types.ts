@@ -945,6 +945,11 @@ export interface UserSettings {
   proxy: ProxySettings | null;
   imageWatermark: ImageWatermarkSettings;
   waiting2048Enabled: boolean;
+  /**
+   * Product-usage reporting (ops-bridge/docs/event-contract.md §7). Opt-out:
+   * absent means on, so never default this to `false` when normalising.
+   */
+  usageAnalyticsEnabled: boolean;
   /** Explicit officecli binary; null uses the bundled one. */
   bridgeBinaryPath?: string | null;
   supportReportEndpoint?: string | null;

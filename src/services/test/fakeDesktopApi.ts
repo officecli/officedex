@@ -156,6 +156,7 @@ export function createFakeDesktopApi(seed: FakeDesktopSeed = {}): FakeDesktopApi
     proxy: null,
     imageWatermark: { showWatermark: true, preferenceSource: "system" },
     waiting2048Enabled: false,
+    usageAnalyticsEnabled: true,
   };
 
   const find = (id: string): DocumentRecord => {

@@ -1058,6 +1058,10 @@ export const zh: Record<string, string> = {
   "settings.about.updateTo": "更新到 {version}",
   "settings.about.upToDate": "已是最新版本",
   "settings.group.reset": "重置",
+  "settings.row.usageAnalytics.title": "使用统计",
+  "settings.row.usageAnalytics.desc":
+    "上报四项匿名计数：首次启动、文档生成成功、首次成功、生成失败，仅关联一个随机安装标识。不包含文档内容、文件名、提示词或错误信息。",
+  "settings.row.usageAnalytics.label": "发送匿名使用统计",
   "settings.row.onboarding.title": "重新显示引导向导",
   "settings.row.onboarding.desc":
     "下次启动应用时重新运行 3 步设置流程，当前设置保留。",

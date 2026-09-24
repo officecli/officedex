@@ -49,6 +49,11 @@ const (
 	WriterFontsDirEnv = "OFFICEDEX_WRITER_FONTS_DIR"
 	// UpdateManifestURLEnv overrides where update checks look.
 	UpdateManifestURLEnv = "OFFICEDEX_UPDATE_MANIFEST_URL"
+	// OpsCollectURLEnv overrides the product-usage collector. It exists for
+	// development against a staging platform; a packaged .app launched from
+	// Finder inherits no shell environment, so it cannot become a shipping
+	// channel by accident.
+	OpsCollectURLEnv = "OFFICEDEX_OPS_COLLECT_URL"
 )
 
 // PPTXJSSDKDesignEnv is a retired switch, retained only for migration tests.
@@ -87,6 +92,9 @@ const (
 	DevOfficeCLIHomeEnv    = "OFFICEDEX_DEV_OFFICECLI_HOME"
 	E2EHostEnv             = "OFFICEDEX_E2E_HOST"
 	DemoAcceptAnyPromptEnv = "OFFICEDEX_DEMO_ACCEPT_ANY_PROMPT"
+	// OpsTestEnv forces product-usage events to be marked as test traffic even
+	// from a build that would otherwise report as production.
+	OpsTestEnv = "OFFICEDEX_OPS_TEST"
 )
 
 // MOPConvertBinaryEnvKeys are the variables naming a mop-convert binary, in

@@ -87,6 +87,7 @@ function makeSettings(overrides: Partial<UserSettings> = {}): UserSettings {
     proxy: overrides.proxy ?? DEFAULT_PROXY,
     imageWatermark: overrides.imageWatermark ?? { showWatermark: true, preferenceSource: "system" },
     waiting2048Enabled: overrides.waiting2048Enabled ?? false,
+    usageAnalyticsEnabled: overrides.usageAnalyticsEnabled ?? true,
   };
 }
 

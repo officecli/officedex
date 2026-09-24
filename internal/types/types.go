@@ -624,6 +624,10 @@ type UserSettings struct {
 	Proxy                 *ProxySettings         `json:"proxy,omitempty"`
 	ImageWatermark        ImageWatermarkSettings `json:"imageWatermark"`
 	Waiting2048Enabled    bool                   `json:"waiting2048Enabled"`
+	// UsageAnalyticsEnabled is the product-usage reporting opt-out (contract
+	// §7). It defaults to true, so unlike every other bool here a missing key
+	// must not read as false; see settings.sanitizeRaw.
+	UsageAnalyticsEnabled bool `json:"usageAnalyticsEnabled"`
 }
 
 // RuntimeStatus mirrors the renderer-facing status object emitted by the

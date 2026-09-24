@@ -485,3 +485,41 @@ func TestProxyEnabledWithoutURLDropped(t *testing.T) {
 		t.Errorf("Proxy = %+v, want nil (enabled but empty URL is meaningless)", got.Proxy)
 	}
 }
+
+// usageAnalyticsEnabled is the one bool here that defaults to on. The event
+// contract makes usage reporting opt-out, so an install whose settings file
+// predates the key -- every existing one -- must read as enabled, not as the
+// zero value.
+func TestUsageAnalyticsDefaultsToEnabled(t *testing.T) {
+	store, path, _ := newTempStore(t)
+	if err := os.WriteFile(path, []byte(`{"version":1,"defaults":{"documentType":"pptx"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !got.UsageAnalyticsEnabled {
+		t.Fatal("UsageAnalyticsEnabled = false for a settings file written before the key existed")
+	}
+}
+
+func TestUsageAnalyticsOptOutPersists(t *testing.T) {
+	store, _, _ := newTempStore(t)
+	got, err := store.Update(Patch{UsageAnalyticsEnabled: ptr(false)})
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if got.UsageAnalyticsEnabled {
+		t.Fatal("UsageAnalyticsEnabled = true right after opting out")
+	}
+	// The opt-out has to survive a reload; sanitize re-applies defaults and an
+	// explicit false must not be mistaken for an absent key.
+	reloaded, err := store.Reload()
+	if err != nil {
+		t.Fatalf("Reload: %v", err)
+	}
+	if reloaded.UsageAnalyticsEnabled {
+		t.Fatal("UsageAnalyticsEnabled = true after reload; the opt-out was lost")
+	}
+}

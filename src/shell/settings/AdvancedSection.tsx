@@ -86,6 +86,21 @@ export function AdvancedSection({
       <SettingsBlock title={t("tasks.runtime.title")}>
         <RuntimeRunsControl />
       </SettingsBlock>
+      <SettingRow
+        title={t("settings.row.usageAnalytics.title")}
+        desc={t("settings.row.usageAnalytics.desc")}
+      >
+        <div className="shell-settings-toggle">
+          <Switch
+            ariaLabel={t("settings.row.usageAnalytics.label")}
+            /* Opt-out, so an install that has never answered reads as on. The
+               `!== false` also covers a Go build older than the setting. */
+            checked={settings.usageAnalyticsEnabled !== false}
+            onChange={(checked) => void update({ usageAnalyticsEnabled: checked }).catch(() => undefined)}
+          />
+          <span>{t("settings.row.usageAnalytics.label")}</span>
+        </div>
+      </SettingRow>
       <SettingRow title={t("settings.row.onboarding.title")} desc={t("settings.row.onboarding.desc")}>
         <Button onClick={onRerunOnboarding}>{t("settings.row.onboarding.button")}</Button>
       </SettingRow>

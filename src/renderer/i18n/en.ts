@@ -1083,6 +1083,10 @@ export const en: Record<string, string> = {
   "settings.about.updateTo": "Update to {version}",
   "settings.about.upToDate": "You're on the latest version",
   "settings.group.reset": "Reset",
+  "settings.row.usageAnalytics.title": "Usage Reporting",
+  "settings.row.usageAnalytics.desc":
+    "Send four anonymous counters — first launch, document generated, first success, generation failed — tied to a random install ID. Never document content, file names, prompts or error messages.",
+  "settings.row.usageAnalytics.label": "Share anonymous usage counts",
   "settings.row.onboarding.title": "Show onboarding wizard again",
   "settings.row.onboarding.desc":
     "Re-runs the 3-step setup on next app launch. Current settings are preserved.",

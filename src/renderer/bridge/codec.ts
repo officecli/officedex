@@ -34,6 +34,7 @@ export const DEFAULT_BROWSER_SETTINGS: UserSettings = {
   proxy: { ...defaultProxySettings },
   imageWatermark: { showWatermark: true, preferenceSource: "system" },
   waiting2048Enabled: false,
+  usageAnalyticsEnabled: true,
 };
 
 export function stampOriginClientId(input: AgentRunStartInput): AgentRunStartInput {
@@ -201,6 +202,9 @@ export function adaptSettingsPatch(patch: Partial<UserSettings>): settingsNS.Pat
   if (patch.waiting2048Enabled !== undefined) {
     out.waiting2048Enabled = patch.waiting2048Enabled;
   }
+  if (patch.usageAnalyticsEnabled !== undefined) {
+    out.usageAnalyticsEnabled = patch.usageAnalyticsEnabled;
+  }
   return out as unknown as settingsNS.Patch;
 }
 
@@ -221,6 +225,9 @@ export function normaliseUserSettings(raw: unknown): UserSettings {
       preferenceSource: merged.imageWatermark?.preferenceSource === "user" ? "user" : "system",
     },
     waiting2048Enabled: merged.waiting2048Enabled === true,
+    // `!== false`, not `=== true`: this one is opt-out, and an older Go build
+    // or a settings file written before the key existed sends undefined.
+    usageAnalyticsEnabled: merged.usageAnalyticsEnabled !== false,
   };
 }
 

@@ -25,6 +25,7 @@ const SETTINGS: UserSettings = {
   proxy: null,
   imageWatermark: { showWatermark: true, preferenceSource: "system" },
   waiting2048Enabled: false,
+  usageAnalyticsEnabled: true,
 };
 
 const UPDATE_STATUS = {
@@ -319,6 +320,43 @@ describe("SettingsPage", () => {
     await screen.findByRole("heading", { name: "App Settings" });
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  /*
+   * Usage reporting is the one setting here that is on unless the user says
+   * otherwise (event contract §7), so the switch has to start checked from a
+   * settings object that has never been written — and the patch it sends has to
+   * be the explicit `false` the Go store needs to tell "declined" from "never
+   * asked".
+   */
+  it("offers the usage reporting opt-out, on by default", async () => {
+    const { api, patches } = makeApi();
+    renderPage(api);
+    await openSection("Advanced & Support");
+
+    const toggle = await screen.findByRole("switch", { name: "Share anonymous usage counts" });
+    expect(toggle).toHaveAttribute("aria-checked", "true");
+
+    fireEvent.click(toggle);
+    await waitFor(() => expect(patches).toHaveLength(1));
+    expect(patches[0]).toEqual({ usageAnalyticsEnabled: false });
+    await waitFor(() => expect(toggle).toHaveAttribute("aria-checked", "false"));
+  });
+
+  // A build older than the setting sends no key at all; that must not read as
+  // an opt-out the user never made.
+  it("treats a settings object without the key as opted in", async () => {
+    const { api } = makeApi({
+      getSettings: vi.fn(async () => {
+        const { usageAnalyticsEnabled: _omitted, ...withoutKey } = SETTINGS;
+        return withoutKey as UserSettings;
+      }),
+    });
+    renderPage(api);
+    await openSection("Advanced & Support");
+
+    const toggle = await screen.findByRole("switch", { name: "Share anonymous usage counts" });
+    expect(toggle).toHaveAttribute("aria-checked", "true");
   });
 
   it("shows the version and can check for an update, which the shell never could", async () => {
