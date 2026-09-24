@@ -70,6 +70,19 @@
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  /*
+   * The canvas host is a block box, not a flex container, so `flex: 1` above
+   * does nothing on its own — a flex-grow item needs a flex parent. Without a
+   * height the deck collapsed to the height of the editor's ribbon: measured
+   * 154px inside a 648px canvas, with the slides below the fold and no way to
+   * scroll to them.
+   *
+   * `height: 100%` is what actually sizes it, and it resolves against the host
+   * because the host has a definite height from the shell's column. The
+   * `flex` properties stay for the case where a future host does make itself a
+   * flex container.
+   */
+  height: 100%;
 }
 
 .shell-live-deck-frame {
@@ -82,6 +95,24 @@
 .shell-live-deck-frame > :first-child {
   flex: 1;
   min-width: 0;
+}
+
+/*
+ * The size the direct-child rule in this file cannot reach.
+ *
+ * `.shell-canvas > .pptx-embed-frame` is what sizes the file editor's frame.
+ * This one is nested inside the live-deck wrappers, so it never matched and the
+ * iframe fell back to `height: auto` — the full 648px of canvas was there and
+ * the deck drew into the top 154px of it. Same rules, one level down.
+ */
+.shell-live-deck .pptx-embed-frame {
+  display: block;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  background: #1f1f1f;
 }
 
 .shell-live-deck-lock {

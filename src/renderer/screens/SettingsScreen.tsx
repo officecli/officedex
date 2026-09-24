@@ -179,6 +179,7 @@ export function SettingsScreen({
           defaults: {
             documentType: "pptx",
             enableImages: true,
+            enableWebSearch: false,
             imageQuality: "premium",
           },
           workspaceDir: null,
@@ -287,6 +288,14 @@ export function SettingsScreen({
                   checked={settings.defaults.enableImages}
                   ariaLabel={t("settings.row.enableImages.title")}
                   onChange={(checked) => updateDefaults({ enableImages: checked })}
+                />
+              </SettingRow>
+              <SettingRow title={t("settings.row.enableWebSearch.title")} desc={t("settings.row.enableWebSearch.desc")}>
+                <SettingsToggle
+                  label={toggleStatusLabel(settings.defaults.enableWebSearch, locale)}
+                  checked={settings.defaults.enableWebSearch}
+                  ariaLabel={t("settings.row.enableWebSearch.title")}
+                  onChange={(checked) => updateDefaults({ enableWebSearch: checked })}
                 />
               </SettingRow>
             </SettingsSection>

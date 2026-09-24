@@ -59,7 +59,7 @@ export function PreviewPanel({
   const t = useT();
   const [closing, setClosing] = useState(false);
   const [documentDirty, setDocumentDirty] = useState(false);
-  const pptxFlushRef = useRef<(() => Promise<void>) | null>(null);
+  const documentFlushRef = useRef<(() => Promise<void>) | null>(null);
   const closeTimerRef = useRef<number | null>(null);
 
   // The preview is a full-screen overlay, but the cockpit underneath keeps auto-opening its
@@ -85,7 +85,7 @@ export function PreviewPanel({
   }, [closing, onClose]);
 
   const flushAndClose = useCallback(() => {
-    const flush = pptxFlushRef.current;
+    const flush = documentFlushRef.current;
     if (!flush) {
       beginClose();
       return;
@@ -129,7 +129,7 @@ export function PreviewPanel({
             onReplayDemo={onReplayDemo}
             onDirtyChange={setDocumentDirty}
             onFlushReady={(flush) => {
-              pptxFlushRef.current = flush;
+              documentFlushRef.current = flush;
             }}
             onRequestClose={requestClose}
           />
@@ -142,6 +142,9 @@ export function PreviewPanel({
             documentType={documentType}
             filePath={artifact?.filePath}
             onDirtyChange={setDocumentDirty}
+            onFlushReady={(flush) => {
+              documentFlushRef.current = flush;
+            }}
             onRequestClose={requestClose}
           />
         );
@@ -154,6 +157,9 @@ export function PreviewPanel({
             artifact={artifact}
             grant={grant}
             onDirtyChange={setDocumentDirty}
+            onFlushReady={(flush) => {
+              documentFlushRef.current = flush;
+            }}
             onRequestClose={requestClose}
           />
         );

@@ -18,6 +18,7 @@
 
 import type { BinaryFileData, DesktopAPI } from "../shared/types";
 import type { ImagePort, UiPort } from "../shared/uiPort";
+import { translate } from "../renderer/i18n";
 import { createFolderService } from "./folders";
 import { createFileService } from "./files";
 import { createSettingsService } from "./settings";
@@ -46,7 +47,7 @@ export function createDesktopUiPort({ api, window }: DesktopUiPortOptions): UiPo
     settings: createSettingsService(api),
     window: createWindowService(window),
     pickAttachmentPaths: () => api.openMultiFileDialog({
-      filters: [{ name: "Office and image files", extensions: ["docx", "xlsx", "pptx", "pdf", "png", "jpg", "jpeg", "webp"] }],
+      filters: [{ name: translate("shell.service.picker.officeAndImages"), extensions: ["docx", "xlsx", "pptx", "pdf", "png", "jpg", "jpeg", "webp"] }],
     }),
     images: createImageService(api),
   };
@@ -64,7 +65,7 @@ function createImageService(api: DesktopAPI): ImagePort {
     new Blob([data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(data)], { type: mime });
   return {
     pickReferences: () => api.openMultiFileDialog({
-      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp"] }],
+      filters: [{ name: translate("shell.service.picker.images"), extensions: ["png", "jpg", "jpeg", "webp"] }],
     }),
     async importReference(file) {
       const extension = file.name.split(".").pop()?.toLowerCase() || file.type.split("/").pop() || "png";

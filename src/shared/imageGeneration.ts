@@ -1,4 +1,5 @@
 import type { ImageCameraSettings, ImageGenerationInput } from "./uiPort";
+import { translate } from "../renderer/i18n";
 
 /**
  * The image options, and the arithmetic both sides of the port need.
@@ -113,14 +114,14 @@ export function imageDimensions(
 /** Why a typed size cannot be sent, or null when it can. */
 export function imageSizeProblem(width: number, height: number): string | null {
   if (!isValidImageEdge(width) || !isValidImageEdge(height)) {
-    return `Enter a whole number from ${MIN_IMAGE_EDGE} to ${MAX_IMAGE_EDGE}.`;
+    return translate("shell.imageTool.sizeProblem.range", { min: MIN_IMAGE_EDGE, max: MAX_IMAGE_EDGE });
   }
-  if (width % 16 !== 0 || height % 16 !== 0) return "Use a multiple of 16 for each side.";
+  if (width % 16 !== 0 || height % 16 !== 0) return translate("shell.imageTool.sizeProblem.multiple");
   const pixels = width * height;
-  if (pixels < MIN_IMAGE_PIXELS) return "That size is too small. Try at least 816 × 816.";
-  if (pixels > MAX_IMAGE_PIXELS) return "That size is too large. Try at most 2880 × 2880.";
+  if (pixels < MIN_IMAGE_PIXELS) return translate("shell.imageTool.sizeProblem.small");
+  if (pixels > MAX_IMAGE_PIXELS) return translate("shell.imageTool.sizeProblem.large");
   if (Math.max(width, height) / Math.min(width, height) > MAX_IMAGE_ASPECT) {
-    return "Keep the long side within three times the short side.";
+    return translate("shell.imageTool.sizeProblem.aspect");
   }
   return null;
 }

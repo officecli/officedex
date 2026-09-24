@@ -73,6 +73,20 @@ export type PresentationEmbedEvent =
   | { type: "presentation:embed-error"; error?: string }
   | { type: "presentation:dirty-changed"; dirty: boolean }
   | {
+      /**
+       * The user clicked or typed inside the editor, so what is selected may
+       * have changed. Carries nothing: reading the selection needs Office.js
+       * and the host already owns that script, so the embed reports the
+       * gesture and the host decides whether to spend a round trip on it.
+       *
+       * PowerPoint has no selection event to subscribe to, and polling for one
+       * would be a script into the iframe forever. This is the cheap half of
+       * that trade — debounced in the embed, so a drag is one message.
+       */
+      type: "presentation:selection-changed";
+    }
+
+  | {
       type: "presentation:save-snapshot";
       requestId: string;
       sessionId: string;

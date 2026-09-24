@@ -1,19 +1,22 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { en } from "./en";
 import { homeEn, homeZh } from "./home";
+import { shellAgentEn, shellAgentZh } from "./shellAgent";
+import { shellComposerEn, shellComposerZh } from "./shellComposer";
+import { shellImageHomeEn, shellImageHomeZh } from "./shellImageHome";
+import { shellServicesEn, shellServicesZh } from "./shellServices";
 import { zh } from "./zh";
 
 export type Locale = "en" | "zh";
 type Dictionary = Record<string, string>;
 const dictionaries: Record<Locale, Dictionary> = {
-  en: { ...en, ...homeEn },
-  zh: { ...zh, ...homeZh },
+  en: { ...en, ...homeEn, ...shellComposerEn, ...shellImageHomeEn, ...shellAgentEn, ...shellServicesEn },
+  zh: { ...zh, ...homeZh, ...shellComposerZh, ...shellImageHomeZh, ...shellAgentZh, ...shellServicesZh },
 };
 
 export const LOCALE_STORAGE_KEY = "officedex.locale";
 
 export function detectLocale(): Locale {
-  if (typeof navigator !== "undefined" && navigator.language?.toLowerCase().startsWith("zh")) return "zh";
   return "en";
 }
 

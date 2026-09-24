@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { DesktopApiProvider } from "../renderer/services/desktopApi";
+import { translate } from "../renderer/i18n";
 import { SpreadsheetCanvas, type SpreadsheetCanvasHandle } from "../renderer/spreadsheet/SpreadsheetCanvas";
 import type { WorkbookSelectionSnapshot } from "../renderer/spreadsheet/workbookClientTools";
 import type { Artifact, DesktopAPI, PreviewGrant } from "../shared/types";
@@ -169,7 +170,7 @@ export function SheetCanvas({
         // see — it would type the field as `never` after the reset above.
         if (!written) {
           const reason = readSaveError();
-          throw new Error(reason?.trim() ? reason : "The workbook could not be saved.");
+          throw new Error(reason?.trim() ? reason : translate("shell.canvas.workbookNotSaved"));
         }
       });
     },
@@ -200,18 +201,26 @@ export function SheetCanvas({
             return;
           }
           labelRef.current = `${session.artifact.fileName} · ${rangeAddress(address)}`;
-          onSelectionChange({ fileId: file.id, label: labelRef.current, text: "" });
+          onSelectionChange({
+            fileId: file.id,
+            label: labelRef.current,
+            text: "",
+            // A range was dragged out; a single cell is where the cursor
+            // happens to be. Both are worth quoting, only the first is worth
+            // opening the agent for — arrowing across a sheet would otherwise
+            // unfold the panel on every keystroke.
+            block: address.range.rowCount * address.range.columnCount > 1,
+          });
         }}
         onSaveError={(error) => {
           saveErrorRef.current = error;
         }}
-        onError={(error) =>
-          onUnavailable(
-            error?.trim()
-              ? `The workbook editor could not start. ${error}`
-              : "The workbook editor could not start.",
-          )
-        }
+        onError={(error) => {
+          // SpreadsheetCanvas calls onError(undefined) to clear a previous
+          // failure. Treating that as a start failure toasts over a live grid.
+          if (!error?.trim()) return;
+          onUnavailable(translate("shell.canvas.workbookUnavailable", { error }));
+        }}
       />
     </DesktopApiProvider>
   );

@@ -123,6 +123,7 @@ export function createRealE2EAPI(endpoint: string): DesktopAPI {
       const record = await rpc<DocumentRecord>("OpenLocalFile");
       return record && record.id ? record : null;
     },
+    importLocalFile: (filePath: string) => rpc<DocumentRecord>("ImportLocalFile", filePath),
     createBlankDocument: (documentType, workspaceId) =>
       rpc<DocumentRecord>("CreateBlankDocument", { documentType, workspaceId }),
     modify: (input: ModifyInput) =>
@@ -257,6 +258,7 @@ export function createRealE2EAPI(endpoint: string): DesktopAPI {
     listRecentFiles: async (workspaceId?: string) => normaliseRecentFiles(await rpc<unknown>("ListRecentFiles", workspaceId ?? "")),
     removeRecentFile: (filePath: string) => rpc<void>("RemoveRecentFile", filePath),
     deleteDocument: (taskId: string) => rpc<void>("DeleteDocument", taskId),
+    removeDocument: (documentId: string) => rpc<void>("RemoveDocument", documentId),
     renameWorkspace: async (workspaceId: string, name: string) => normaliseWorkspaceSummaries([await rpc<unknown>("RenameWorkspace", { workspaceId, name })])[0],
     openRecentFile: (file: RecentFile) => rpc<Artifact>("OpenRecentFile", file),
     addWorkspace: async (path: string) => normaliseWorkspaceSummaries([await rpc<unknown>("AddWorkspace", path)])[0],

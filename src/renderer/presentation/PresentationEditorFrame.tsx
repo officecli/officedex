@@ -7,6 +7,8 @@ import {
   type PresentationEmbedEvent,
   type PresentationHostCommand,
 } from "../../shared/presentationProtocol";
+import { getCurrentLocale } from "../i18n";
+import { useCanvasLocale, withEmbedLocaleQuery } from "../../shell/editor/canvasLocale";
 import { useDesktopApi } from "../services/desktopApi";
 import { registerActiveEditorClientTools } from "../activeEditorClientTools";
 import {
@@ -70,6 +72,11 @@ export interface PresentationEditorFrameProps {
   previewToken: string;
   fileName: string;
   onDirtyChange?: (dirty: boolean) => void;
+  /**
+   * The user clicked or typed in the editor, so the selection may have moved.
+   * Debounced by the embed; the caller decides whether to go and read it.
+   */
+  onSelectionChanged?: () => void;
   onUnavailable: (error?: string) => void;
   onReady?: () => void;
   onController?: (controller: PresentationEditorController | null) => void;
@@ -108,12 +115,17 @@ export function PresentationEditorFrame({
   previewToken,
   fileName,
   onDirtyChange,
+  onSelectionChanged,
   onUnavailable,
   onReady,
   onController,
   onSaved,
 }: PresentationEditorFrameProps) {
   const api = useDesktopApi();
+  // Canvas channel is silent until the shell host publishes. The app language
+  // is already in localStorage; waiting for the channel left the first iframe
+  // URL without `lang=`, so a Chinese shell still loaded an English ribbon.
+  const locale = useCanvasLocale() ?? getCurrentLocale();
   const frameRef = useRef<HTMLIFrameElement>(null);
   const sessionIdRef = useRef("");
   const revisionRef = useRef(0);
@@ -122,13 +134,20 @@ export function PresentationEditorFrame({
   /** The embed completed its handshake, so the boot deadline no longer applies. */
   const readyRef = useRef(false);
   const unavailableRef = useRef(false);
-  const callbacksRef = useRef({ onDirtyChange, onUnavailable, onReady, onController, onSaved });
+  const callbacksRef = useRef({ onDirtyChange, onSelectionChanged, onUnavailable, onReady, onController, onSaved });
   // One ledger for every request/reply pair with the frame (scripts, swaps);
   // see shared/embedRequests.ts.
   const requestsRef = useRef(new PendingRequests({ idPrefix: "presentation" }));
   const [componentURL, setComponentURL] = useState<string>();
 
-  callbacksRef.current = { onDirtyChange, onUnavailable, onReady, onController, onSaved };
+  callbacksRef.current = { onDirtyChange, onSelectionChanged, onUnavailable, onReady, onController, onSaved };
+
+  useEffect(() => {
+    disposedRef.current = false;
+    return () => {
+      disposedRef.current = true;
+    };
+  }, []);
 
   const markUnavailable = useCallback((error?: string) => {
     if (unavailableRef.current) return;
@@ -141,21 +160,21 @@ export function PresentationEditorFrame({
   }, []);
 
   useEffect(() => {
-    disposedRef.current = false;
+    let cancelled = false;
     unavailableRef.current = false;
     void hasPresentationComponent().then((available) => {
-      if (disposedRef.current) return;
+      if (cancelled) return;
       if (!available) {
         markUnavailable("Presentation component assets are not installed.");
         return;
       }
       const configured = import.meta.env.VITE_PRESENTATION_EDITOR_URL?.trim();
-      setComponentURL(configured || DEFAULT_PRESENTATION_URL);
+      setComponentURL(withEmbedLocaleQuery(configured || DEFAULT_PRESENTATION_URL, locale));
     });
     return () => {
-      disposedRef.current = true;
+      cancelled = true;
     };
-  }, [markUnavailable]);
+  }, [locale, markUnavailable]);
 
   const executeScript = useCallback(
     (source: string, options: { awaitSnapshotMs?: number; timeoutMs?: number } = {}) =>
@@ -327,6 +346,9 @@ export function PresentationEditorFrame({
           return;
         case "presentation:dirty-changed":
           callbacksRef.current.onDirtyChange?.(event.dirty);
+          return;
+        case "presentation:selection-changed":
+          callbacksRef.current.onSelectionChanged?.();
           return;
         case "presentation:save-snapshot":
           try {

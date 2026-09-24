@@ -13,6 +13,7 @@ const settings: UserSettings = {
   defaults: {
     documentType: "pptx",
     enableImages: true,
+    enableWebSearch: false,
     imageQuality: "premium",
   },
   workspaceDir: null,

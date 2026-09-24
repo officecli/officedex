@@ -340,6 +340,7 @@ export function useGeneration({
       enableImages: resumeCheckpoint
         ? ([...task.events].reverse().find((event) => typeof event.payload?.resume_images === "boolean")?.payload?.resume_images as boolean | undefined) ?? defaults.enableImages
         : defaults.enableImages,
+      ...(defaults.enableWebSearch ? { enableWebSearch: true } : {}),
       imageQuality: defaults.imageQuality,
       sourceFile: input.sourceFile,
       templateId: input.templateId,
@@ -356,7 +357,7 @@ export function useGeneration({
     if (task.workspaceId) values.workspaceId = task.workspaceId;
     else values.noProject = true;
     await submit(values);
-  }, [defaults.enableImages, defaults.imageQuality, submit]);
+  }, [defaults.enableImages, defaults.enableWebSearch, defaults.imageQuality, submit]);
 
   const startFromHome = useCallback(async (input: HomeTaskIntake) => {
     const fallback = isGenerateDocumentType(input.documentType)
@@ -390,6 +391,7 @@ export function useGeneration({
         sourceFile: route.sourceFile,
         ...(homeWorkspaceId ? { workspaceId: homeWorkspaceId } : { noProject: true }),
         enableImages: defaults.enableImages,
+        ...(defaults.enableWebSearch ? { enableWebSearch: true } : {}),
         imageQuality: defaults.imageQuality,
       });
       return;
@@ -411,6 +413,7 @@ export function useGeneration({
       ...(route.documentType === "gif" && input.fps ? { fps: input.fps } : {}),
       ...(homeWorkspaceId ? { workspaceId: homeWorkspaceId } : { noProject: true }),
       enableImages: defaults.enableImages,
+      ...(defaults.enableWebSearch ? { enableWebSearch: true } : {}),
       imageQuality: defaults.imageQuality,
     }, { fromHome: true });
   }, [api, defaults, homeWorkspaceId, onCatalogCleanup, onWorkbookGeneration, submit, t]);
@@ -461,6 +464,7 @@ export function useGeneration({
       prompt,
       ...(generationMode ? { generationMode } : {}),
       enableImages: defaults.enableImages,
+      ...(defaults.enableWebSearch ? { enableWebSearch: true } : {}),
       imageQuality: defaults.imageQuality,
       referenceImages,
       imageRatio,

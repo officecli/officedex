@@ -30,12 +30,14 @@ import type {
 import { uint8ArrayToBase64 } from "../utils/bytes";
 import { errorMessage } from "../utils/values";
 import { delay } from "../utils/timing";
+import { isSaveConflict, useIdleAutosave } from "../workbench/idleAutosave";
 import "../styles/spreadsheet.css";
 
 export type SpreadsheetCanvasState = "loading" | "clean" | "dirty" | "saving" | "saved" | "error";
 
 export interface SpreadsheetCanvasHandle {
   save(): Promise<boolean>;
+  flush(): Promise<void>;
   focus(): void;
   snapshot(request: WorkbookSnapshotRequest): Promise<WorkbookSnapshot>;
   readSelection(): WorkbookSelectionSnapshot;
@@ -73,6 +75,9 @@ export interface SpreadsheetCanvasProps {
   onError?: (error?: string) => void;
   onSaveError?: (error?: string) => void;
   onSessionClosed?: (previewToken: string) => void;
+  onFlushReady?: (flush: (() => Promise<void>) | null) => void;
+  /** Forwarded to the shared idle autosave window; tests only. */
+  autosaveIdleMs?: number;
 }
 
 // The sheet SDK hydrates a worksheet's cell text lazily. Right after
@@ -251,7 +256,7 @@ export function styledCellData(existing: SheetCellData | undefined, style: Workb
 }
 
 export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, SpreadsheetCanvasProps>(
-  function SpreadsheetCanvas({ artifact, grant, onDirtyChange, onStateChange, onSelectionChange, onError, onSaveError, onSessionClosed }, ref) {
+  function SpreadsheetCanvas({ artifact, grant, onDirtyChange, onStateChange, onSelectionChange, onError, onSaveError, onSessionClosed, onFlushReady, autosaveIdleMs }, ref) {
   const api = useDesktopApi();
     const containerRef = useRef<HTMLDivElement>(null);
     const t = useT();
@@ -263,11 +268,21 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
     const latestGrantTokenRef = useRef(grant.token);
     const changeVersionRef = useRef(0);
     const dirtyRef = useRef(false);
+    const saveConflictRef = useRef(false);
     const stagedImagePendingRef = useRef(false);
     const stagedImageVersionRef = useRef(0);
     const managedSheetsRef = useRef(new Map<string, string[][]>());
     const savePromiseRef = useRef<Promise<boolean> | null>(null);
     const saveHandlerRef = useRef<() => Promise<boolean>>(async () => false);
+    const autosave = useIdleAutosave({
+      idleMs: autosaveIdleMs,
+      canSchedule: () => !saveConflictRef.current,
+      isDirty: () => dirtyRef.current || stagedImagePendingRef.current,
+      save: async () => {
+        const saved = await saveHandlerRef.current();
+        if (!saved) throw new Error("Workbook save failed.");
+      },
+    });
     const marketingMutationQueueRef = useRef<Promise<void>>(Promise.resolve());
     const marketingMappingRef = useRef<MarketingFieldMapping | undefined>(undefined);
     const catalogRangeTargetRef = useRef<CatalogRangeTarget | undefined>(undefined);
@@ -413,7 +428,8 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
       publishState("dirty");
       scheduleHeaderMarkerLayout();
       scheduleCatalogRangeLayout();
-    }, [publishDirty, publishState, scheduleCatalogRangeLayout, scheduleHeaderMarkerLayout]);
+      autosave.schedule();
+    }, [autosave.schedule, publishDirty, publishState, scheduleCatalogRangeLayout, scheduleHeaderMarkerLayout]);
 
     useLayoutEffect(() => {
       const container = containerRef.current;
@@ -474,6 +490,7 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
       editorRef.current = null;
       sessionIdRef.current = "";
       savePromiseRef.current = null;
+      saveConflictRef.current = false;
       managedSheetsRef.current = new Map();
       marketingMutationQueueRef.current = Promise.resolve();
       marketingMappingRef.current = undefined;
@@ -608,7 +625,7 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
         focusedRef.current = false;
         void teardown();
       };
-    }, [artifact.filePath, grant.token, loadAttempt, markChanged, publishDirty, publishState, scheduleCatalogRangeLayout, scheduleHeaderMarkerLayout]);
+    }, [artifact.filePath, grant.token, loadAttempt, locale, markChanged, publishDirty, publishState, scheduleCatalogRangeLayout, scheduleHeaderMarkerLayout]);
 
     const save = useCallback((): Promise<boolean> => {
       if (savePromiseRef.current) {
@@ -640,6 +657,7 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
       callbacksRef.current.onError?.(undefined);
       callbacksRef.current.onSaveError?.(undefined);
 
+      autosave.cancel();
       const pending = (async () => {
         try {
           // A staged marketing image is persisted as a native XLSX drawing by
@@ -662,10 +680,12 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
           const changedDuringSave = changeVersionRef.current !== versionAtSaveStart;
           publishDirty(changedDuringSave);
           publishState(changedDuringSave ? "dirty" : "saved");
+          if (changedDuringSave) autosave.schedule();
           return true;
         } catch (error) {
           if (lifecycleVersionRef.current === lifecycleVersion) {
             const message = errorMessage(error);
+            if (isSaveConflict(error)) saveConflictRef.current = true;
             publishDirty(true);
             callbacksRef.current.onSaveError?.(message);
             publishState("error");
@@ -679,7 +699,7 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
       })();
       savePromiseRef.current = pending;
       return pending;
-    }, [grant.token, publishDirty, publishState, state]);
+    }, [autosave, grant.token, publishDirty, publishState, state]);
 
     const enqueueMarketingMutation = useCallback(function enqueue<T>(operation: () => Promise<T>): Promise<T> {
       const pending = marketingMutationQueueRef.current.then(operation, operation);
@@ -688,8 +708,14 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
     }, []);
     saveHandlerRef.current = save;
 
+    useEffect(() => {
+      onFlushReady?.(autosave.flush);
+      return () => onFlushReady?.(null);
+    }, [autosave.flush, onFlushReady]);
+
     useImperativeHandle(ref, () => ({
       save,
+      flush: autosave.flush,
       focus() {
         focusedRef.current = true;
         containerRef.current?.focus();
@@ -1305,7 +1331,7 @@ export const SpreadsheetCanvas = forwardRef<SpreadsheetCanvasHandle, Spreadsheet
           };
         });
       },
-    }), [enqueueMarketingMutation, publishDirty, publishState, save, scheduleHeaderMarkerLayout, t]);
+    }), [autosave.flush, enqueueMarketingMutation, publishDirty, publishState, save, scheduleHeaderMarkerLayout, t]);
 
     useEffect(() => {
       const handlePointerDown = (event: PointerEvent) => {

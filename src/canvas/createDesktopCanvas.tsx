@@ -1,12 +1,28 @@
 import { createRoot, type Root } from "react-dom/client";
+import type { ReactNode } from "react";
 
+import { LocaleProvider, translate } from "../renderer/i18n";
 import type { DesktopAPI } from "../shared/types";
 import type { FileMeta } from "../shared/uiPort";
 import type { CanvasAdapter, CanvasSelection } from "../shell/editor/canvasContract";
+import { useCanvasLocale } from "../shell/editor/canvasLocale";
 import { CanvasTaskStore } from "./CanvasTaskStore";
 import { CanvasContent } from "./CanvasContent";
 import type { DocumentEditRunner } from "./DocxCanvas";
 import "./canvas.css";
+
+/**
+ * The shell's language, on this React tree.
+ *
+ * The canvas is a separate root (`createRoot` below), so the shell's
+ * `LocaleProvider` does not reach anything mounted here. The sheet editor
+ * reads `useLocale()`; without this wrap it always saw the default `"en"`,
+ * even after the user had switched the app to Chinese.
+ */
+function CanvasLocaleRoot({ children }: { children: ReactNode }) {
+  const locale = useCanvasLocale() ?? "en";
+  return <LocaleProvider value={locale}>{children}</LocaleProvider>;
+}
 
 /**
  * The desktop's implementation of `CanvasAdapter`.
@@ -32,13 +48,35 @@ export interface DesktopCanvasDeps {
   readonly api: DesktopAPI;
   /** Told when the editor cannot load, so the shell can say so out loud. */
   readonly onUnavailable: (reason: string) => void;
+  /** Show the bundled NexaEdge recording; see `CanvasContent`. */
+  readonly demo?: boolean;
+  /**
+   * Told when the recording loses the canvas to something newer, so the shell
+   * can drop the flag it set. See `CanvasContentProps.onDemoSuperseded`.
+   */
+  readonly onDemoSuperseded?: () => void;
 }
 
-export function createDesktopCanvas({ api, onUnavailable }: DesktopCanvasDeps): CanvasAdapter {
+export function createDesktopCanvas({
+  api,
+  onUnavailable,
+  demo,
+  onDemoSuperseded,
+}: DesktopCanvasDeps): CanvasAdapter {
   let root: Root | null = null;
   /** The node `root` is attached to, so a repeat mount reuses it. */
   let mountedHost: HTMLElement | null = null;
   let current: FileMeta | null = null;
+  /**
+   * Whether the canvas should show the bundled recording rather than a file.
+   *
+   * Seeded from the `demo` dep (`?deckDemo=1`) and flipped by `showFileless`,
+   * because the button that starts it lives on Home — after the adapter was
+   * built. Cleared by `show`, so opening any real file ends the demo.
+   */
+  let demoRequested = demo === true;
+  /** When the recording was asked for; see `showFileless`. */
+  let demoStartedAt: string | null = null;
   /**
    * How the editor showing right now writes itself to disk, or null when none
    * is. Generalised from a presentation controller because each editor hands
@@ -88,18 +126,23 @@ export function createDesktopCanvas({ api, onUnavailable }: DesktopCanvasDeps): 
     // rather than rebuilding it. That is what keeps the task store alive — and
     // with it a drawing run's history — across every tab switch.
     root.render(
-      <CanvasTaskStore api={api}>
-        <CanvasContent
-          api={api}
-          file={current}
-          onDirtyChange={announceDirty}
-          onSelectionChange={announceSelection}
-          onResolveSelection={setResolveSelection}
-          onSave={setSave}
-          onEditRunner={setEditRunner}
-          onUnavailable={onUnavailable}
-        />
-      </CanvasTaskStore>,
+      <CanvasLocaleRoot>
+        <CanvasTaskStore api={api}>
+          <CanvasContent
+            api={api}
+            file={current}
+            onDirtyChange={announceDirty}
+            onSelectionChange={announceSelection}
+            onResolveSelection={setResolveSelection}
+            onSave={setSave}
+            onEditRunner={setEditRunner}
+            onUnavailable={onUnavailable}
+            demo={demoRequested}
+            demoStartedAt={demoStartedAt}
+            onDemoSuperseded={onDemoSuperseded}
+          />
+        </CanvasTaskStore>
+      </CanvasLocaleRoot>,
     );
   }
 
@@ -138,6 +181,35 @@ export function createDesktopCanvas({ api, onUnavailable }: DesktopCanvasDeps): 
         announceSelection(null);
       }
       current = file;
+      demoRequested = false;
+      render();
+    },
+
+    showFileless(options) {
+      /*
+       * Visible with no file behind it.
+       *
+       * A deck being drawn has no library entry — `CreateLivePptxDraft` writes
+       * to `workspaceDir/live/` and registers only a preview token — so
+       * `activeFile` is null for its whole life. Without this the canvas stayed
+       * hidden and the stage had nowhere to draw.
+       *
+       * `options.demo` selects the bundled recording; a real run leaves it
+       * unset. Either way the handles are cleared for the same reason `show`
+       * clears them: they belong to whichever document was open, and `save()`
+       * on a stale one writes the file the user just left.
+       */
+      if (current) {
+        saveCurrent = null;
+        resolveCurrent = null;
+        editCurrent = null;
+        announceSelection(null);
+      }
+      current = null;
+      demoRequested = options?.demo === true;
+      if (options?.demo === true) {
+        demoStartedAt = options.demoStartedAt ?? new Date().toISOString();
+      }
       render();
     },
 
@@ -213,7 +285,7 @@ export function createDesktopCanvas({ api, onUnavailable }: DesktopCanvasDeps): 
      */
     async editDocument(request) {
       if (!editCurrent) {
-        throw new Error("There is no open Word document for this instruction to change.");
+        throw new Error(translate("shell.edit.noWordDocument"));
       }
       return editCurrent(request);
     },

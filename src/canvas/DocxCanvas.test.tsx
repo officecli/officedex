@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DesktopAPI, DocumentRecord } from "../shared/types";
 import type { FileMeta } from "../shared/uiPort";
 import type { WriterEditorFrameProps } from "../renderer/word/WriterEditorFrame";
+import { publishCanvasLocale } from "../shell/editor/canvasLocale";
+import * as docxEditRun from "./docxEditRun";
 
 /**
  * The Word leaf's own work, and nothing above it.
@@ -71,7 +73,10 @@ const noop = () => {};
 beforeEach(() => {
   frameProps.length = 0;
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  publishCanvasLocale(null);
+});
 
 describe("DocxCanvas", () => {
   // FileMeta has no path and the embed authenticates with a per-artifact token,
@@ -229,9 +234,10 @@ describe("DocxCanvas", () => {
     expect(frameProps).toHaveLength(0);
   });
 
-  // The Writer build is an optional asset: a source checkout without
-  // `npm run build:writer` has no public/writer at all.
-  it("explains a missing Word editor build", async () => {
+  // Writer uses onUnavailable(undefined) only as a missing reason, and already
+  // names a missing build itself. Filling one in here toasts "Not built yet"
+  // over an editor that is already up.
+  it("does not treat a cleared unavailable as a start failure", async () => {
     const onUnavailable = vi.fn();
     render(
       <DocxCanvas api={stubApi()} file={file()} onSelectionChange={noop} onResolveSelection={noop} onDirtyChange={noop} onEditor={noop} onEditRunner={noop} onUnavailable={onUnavailable} />,
@@ -239,8 +245,10 @@ describe("DocxCanvas", () => {
     await waitFor(() => expect(frameProps).toHaveLength(1));
 
     frameProps[0].onUnavailable("");
+    frameProps[0].onUnavailable(undefined);
+    frameProps[0].onUnavailable("   ");
 
-    expect(onUnavailable).toHaveBeenCalledWith(expect.stringMatching(/not installed/i));
+    expect(onUnavailable).not.toHaveBeenCalled();
   });
 
   it("passes on what Writer said when it could not start", async () => {
@@ -253,5 +261,27 @@ describe("DocxCanvas", () => {
     frameProps[0].onUnavailable("protocol 2 is not supported");
 
     expect(onUnavailable).toHaveBeenCalledWith(expect.stringContaining("protocol 2 is not supported"));
+  });
+
+  it("tells the planner the shell's language", async () => {
+    publishCanvasLocale("zh");
+    const spy = vi.spyOn(docxEditRun, "createDocxEditRunner");
+    const onEditRunner = vi.fn();
+    render(
+      <DocxCanvas
+        api={stubApi()}
+        file={file()}
+        onSelectionChange={noop}
+        onResolveSelection={noop}
+        onDirtyChange={noop}
+        onEditor={noop}
+        onEditRunner={onEditRunner}
+        onUnavailable={noop}
+      />,
+    );
+    await waitFor(() => expect(frameProps).toHaveLength(1));
+    frameProps[0].onAgentReady?.({ capture: vi.fn(), apply: vi.fn(), save: vi.fn() } as never);
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ locale: "zh-CN" }));
+    spy.mockRestore();
   });
 });

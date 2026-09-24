@@ -1,5 +1,6 @@
 import { useState, type CSSProperties, type HTMLAttributes, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useT } from "../../i18n";
 import { overlayHost } from "../overlayHost";
 import { useModalBehaviour } from "../useModalBehaviour";
 import { dialog, type DialogRequest } from "../services/dialog";
@@ -25,8 +26,9 @@ export interface ModalProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"
   readonly keyboard?: boolean;
 }
 
-function ModalRoot({ open, title, footer, okText = "OK", cancelText = "Cancel", onOk, onCancel, okButtonProps, cancelButtonProps, width, styles, children, className, maskClosable = true, keyboard = true, destroyOnHidden: _destroyOnHidden, centered: _centered, ...props }: ModalProps) {
+function ModalRoot({ open, title, footer, okText, cancelText, onOk, onCancel, okButtonProps, cancelButtonProps, width, styles, children, className, maskClosable = true, keyboard = true, destroyOnHidden: _destroyOnHidden, centered: _centered, ...props }: ModalProps) {
   const [submitting, setSubmitting] = useState(false);
+  const t = useT();
   // Escape, mask click, focus trap and focus return — see useModalBehaviour for
   // why `aria-modal` below is otherwise a claim with nothing behind it.
   const { panelRef, onMaskClick } = useModalBehaviour({
@@ -46,8 +48,8 @@ function ModalRoot({ open, title, footer, okText = "OK", cancelText = "Cancel", 
         <div className="od-dialog__content" style={styles?.body}>{children}</div>
         {footer === null ? null : footer ?? (
           <footer className="od-dialog__footer">
-            <Button {...cancelButtonProps} onClick={onCancel}>{cancelText}</Button>
-            <Button {...okButtonProps} type="primary" loading={submitting || okButtonProps?.loading} onClick={() => void confirm()}>{okText}</Button>
+            <Button {...cancelButtonProps} onClick={onCancel}>{cancelText ?? t("ui.text.Cancel")}</Button>
+            <Button {...okButtonProps} type="primary" loading={submitting || okButtonProps?.loading} onClick={() => void confirm()}>{okText ?? t("ui.text.OK")}</Button>
           </footer>
         )}
       </section>

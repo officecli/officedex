@@ -7,10 +7,13 @@ import {
   type WriterHostCommand,
   type WriterSelectionSummary,
 } from "../../shared/writerProtocol";
+import { getCurrentLocale } from "../i18n";
+import { useCanvasLocale, withEmbedLocaleQuery } from "../../shell/editor/canvasLocale";
 import { useDesktopApi } from "../services/desktopApi";
 import { registerActiveEditorClientTools } from "../activeEditorClientTools";
 import { errorMessage } from "../utils/values";
 import { EMBED_HANDSHAKE_TIMEOUT_MS } from "../constants/timing";
+import { isSaveConflict, useIdleAutosave } from "../workbench/idleAutosave";
 
 const DEFAULT_WRITER_URL = "/writer/index.html";
 const WRITER_MANIFEST_URL = "/writer/officedex-component.json";
@@ -41,6 +44,9 @@ export interface WriterEditorFrameProps {
   onReady?: () => void;
   /** Fired after the host writes the document back to disk. */
   onSaved?: (result: { filePath: string; sha256: string; saveAsCopy: boolean }) => void;
+  onFlushReady?: (flush: (() => Promise<void>) | null) => void;
+  /** Forwarded to the shared idle autosave window; tests only. */
+  autosaveIdleMs?: number;
 }
 
 export interface WriterAgentEditor {
@@ -92,8 +98,11 @@ export function WriterEditorFrame({
   onReady,
   onSaved,
   onAgentReady,
+  onFlushReady,
+  autosaveIdleMs,
 }: WriterEditorFrameProps) {
   const api = useDesktopApi();
+  const locale = useCanvasLocale() ?? getCurrentLocale();
   const frameRef = useRef<HTMLIFrameElement>(null);
   const fingerprintRef = useRef<string | undefined>(undefined);
   const unregisterClientToolsRef = useRef<(() => void) | undefined>(undefined);
@@ -102,6 +111,10 @@ export function WriterEditorFrame({
   const readyRef = useRef(false);
   const unavailableRef = useRef(false);
   const callbacksRef = useRef({ onDirtyChange, onSelectionChange, onUnavailable, onReady, onSaved, onAgentReady });
+  const onFlushReadyRef = useRef(onFlushReady);
+  const dirtyRef = useRef(false);
+  const loadedRef = useRef(false);
+  const conflictRef = useRef(false);
   // The agent's read_selection tool answers from here rather than a round trip:
   // the embed pushes every change already, so a pull would only add latency.
   const selectionRef = useRef<WriterSelectionSummary>(UNKNOWN_SELECTION);
@@ -111,6 +124,14 @@ export function WriterEditorFrame({
   const [componentURL, setComponentURL] = useState<string>();
 
   callbacksRef.current = { onDirtyChange, onSelectionChange, onUnavailable, onReady, onSaved, onAgentReady };
+  onFlushReadyRef.current = onFlushReady;
+
+  useEffect(() => {
+    disposedRef.current = false;
+    return () => {
+      disposedRef.current = true;
+    };
+  }, []);
 
   const markUnavailable = useCallback((error?: string) => {
     if (unavailableRef.current) return;
@@ -124,21 +145,21 @@ export function WriterEditorFrame({
   }, []);
 
   useEffect(() => {
-    disposedRef.current = false;
+    let cancelled = false;
     unavailableRef.current = false;
     void hasWriterComponent().then((available) => {
-      if (disposedRef.current) return;
+      if (cancelled) return;
       if (!available) {
         markUnavailable("Writer component assets are not installed.");
         return;
       }
       const configured = import.meta.env.VITE_WRITER_EDITOR_URL?.trim();
-      setComponentURL(configured || DEFAULT_WRITER_URL);
+      setComponentURL(withEmbedLocaleQuery(configured || DEFAULT_WRITER_URL, locale));
     });
     return () => {
-      disposedRef.current = true;
+      cancelled = true;
     };
-  }, [markUnavailable]);
+  }, [locale, markUnavailable]);
 
   /** Asks the embed to export and save; resolves once the file is on disk. */
   const requestSave = useCallback(
@@ -160,6 +181,15 @@ export function WriterEditorFrame({
       }),
     [post],
   );
+
+  const autosave = useIdleAutosave({
+    idleMs: autosaveIdleMs,
+    canSchedule: () => loadedRef.current && !readOnly && !conflictRef.current,
+    isDirty: () => dirtyRef.current,
+    save: async () => {
+      await requestSave(false);
+    },
+  });
 
   /** Pulls the selection from the embed rather than trusting the last push. */
   const requestSelection = useCallback(
@@ -268,6 +298,10 @@ export function WriterEditorFrame({
           return;
         }
         case "writer:document-loaded":
+          loadedRef.current = true;
+          dirtyRef.current = false;
+          conflictRef.current = false;
+          onFlushReadyRef.current?.(readOnly ? null : autosave.flush);
           callbacksRef.current.onAgentReady?.({
             capture: (scope) => {
               const requestId = requestsRef.current.nextId();
@@ -291,7 +325,10 @@ export function WriterEditorFrame({
           markUnavailable(event.error);
           return;
         case "writer:dirty-changed":
+          dirtyRef.current = event.dirty;
           callbacksRef.current.onDirtyChange?.(event.dirty);
+          if (event.dirty) autosave.schedule();
+          else autosave.cancel();
           return;
         case "writer:selection-changed":
           selectionRef.current = event.selection;
@@ -310,12 +347,16 @@ export function WriterEditorFrame({
             });
             if (!saveAsCopy) {
               fingerprintRef.current = result.sha256;
+              dirtyRef.current = false;
+              conflictRef.current = false;
+              autosave.cancel();
               callbacksRef.current.onDirtyChange?.(false);
             }
             callbacksRef.current.onSaved?.({ ...result, saveAsCopy });
             respond(event.requestId, result);
             requestsRef.current.resolve(event.requestId, result);
           } catch (error) {
+            if (isSaveConflict(error)) conflictRef.current = true;
             respond(event.requestId, undefined, error);
             requestsRef.current.reject(event.requestId, new Error(errorMessage(error)));
           }
@@ -347,7 +388,7 @@ export function WriterEditorFrame({
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [api, fileName, markUnavailable, post, previewToken, readOnly, requestReplaceText, requestSave, requestSelection]);
+  }, [api, autosave.cancel, autosave.flush, autosave.schedule, fileName, markUnavailable, post, previewToken, readOnly, requestReplaceText, requestSave, requestSelection]);
 
   /**
    * The embed has to say hello, or say why not.
@@ -377,6 +418,11 @@ export function WriterEditorFrame({
   useEffect(
     () => () => {
       fingerprintRef.current = undefined;
+      loadedRef.current = false;
+      dirtyRef.current = false;
+      conflictRef.current = false;
+      autosave.cancel();
+      onFlushReadyRef.current?.(null);
       callbacksRef.current.onAgentReady?.(null);
       selectionRef.current = UNKNOWN_SELECTION;
       unregisterClientToolsRef.current?.();

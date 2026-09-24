@@ -193,6 +193,26 @@ export function describeUiPortContract(
       expect(after.some((entry) => entry.id === imported!.id)).toBe(true);
     });
 
+    // A drop follows the picker's rules — default folder, one path one entry —
+    // but has no "cancel", so a file the app cannot open is an error to show.
+    it("adds a dropped file to the default folder and refuses other types", async () => {
+      const subject = await port();
+      const before = await subject.files.list();
+
+      const dropped = await subject.files.openDropped("/tmp/officedex-drop/Quarterly.xlsx");
+      const again = await subject.files.openDropped("/tmp/officedex-drop/Quarterly.xlsx");
+
+      const fallback = (await subject.folders.list()).find((folder) => folder.isDefault)!;
+      expect(dropped.type).toBe("sheet");
+      expect(dropped.name).toBe("Quarterly.xlsx");
+      expect(dropped.folderId).toBe(fallback.id);
+      expect(again.id).toBe(dropped.id);
+      expect(await subject.files.list()).toHaveLength(before.length + 1);
+
+      await expect(subject.files.openDropped("/tmp/officedex-drop/notes.txt")).rejects.toThrow(/notes\.txt/);
+      expect(await subject.files.list()).toHaveLength(before.length + 1);
+    });
+
     // A caller that mutates what it was handed must not change the port's
     // answer to the next question.
     it("never returns internal state by reference", async () => {

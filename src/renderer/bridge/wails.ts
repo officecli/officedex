@@ -1,5 +1,5 @@
 // The production transport: the Wails-generated bindings over the Go App.
-import type { AppUpdateEvent, Artifact, AgentClientToolReassignInput, AgentClientToolResultInput, AgentRun, AgentRunApproveInput, AgentRunRespondInput, AgentRunStartInput, ArtifactStageRuntimeInput, ArtifactSuggestionFileInput, AuthEvent, BinaryFileData, BridgeEvent, BridgeRuntimeSnapshot, CreditStatus, CreateImageTemplatePublishRequestInput, CreateUserImageTemplateInput, DesktopAPI, GenerateInput, ImageTemplatePublishRequest, ImagePromptTemplate, InviteInfo, LoginInput, PlanPptxJSResult, ModifyInput, PeekReportContextResult, CreateWorkbookFromSheetInput, DrawingAsset, CaptureTimelineNodeInput, TimelineCapturedNode, PreparePptxEditorResult, PptxTemplateProgress, SavePptxEditorSnapshotInput, SavePptxEditorAssetInput, SavePptxEditorVideoInput, ExportPptxEditorInput, ClosePptxEditorInput, PptxEditorSaveResult, PptxEditorSaveAssetResult, PptxEditorVideoSaveResult, PrepareXlsxEditorResult, PreviewGrant, ProviderTestInput, ProviderTestResult, RedeemResult, RecentFile, ReportCapabilityResult, RendererLogInput, CloseXlsxEditorInput, SpreadsheetPlanFieldsResult, SaveDocxResult, SaveXlsxEditorInput, StageXlsxEditorImageInput, SaveXlsxEditorResult, SubmitReportInput, SubmitReportResult, TaskHistoryEntry, UserSettings, WhoAmIResult } from "../../shared/types";
+import type { AppUpdateEvent, Artifact, AgentClientToolReassignInput, AgentClientToolResultInput, AgentRun, AgentRunApproveInput, AgentRunRespondInput, AgentRunStartInput, ArtifactStageRuntimeInput, ArtifactSuggestionFileInput, AuthEvent, BinaryFileData, BridgeEvent, BridgeRuntimeSnapshot, CreditStatus, CreateImageTemplatePublishRequestInput, CreateUserImageTemplateInput, DesktopAPI, GenerateInput, ImageTemplatePublishRequest, ImagePromptTemplate, InviteInfo, LoginInput, PlanPptxJSResult, ModifyInput, PeekReportContextResult, CreateWorkbookFromSheetInput, DrawingAsset, FileDropPoint, CaptureTimelineNodeInput, TimelineCapturedNode, PreparePptxEditorResult, PptxTemplateProgress, SavePptxEditorSnapshotInput, SavePptxEditorAssetInput, SavePptxEditorVideoInput, ExportPptxEditorInput, ClosePptxEditorInput, PptxEditorSaveResult, PptxEditorSaveAssetResult, PptxEditorVideoSaveResult, PrepareXlsxEditorResult, PreviewGrant, ProviderTestInput, ProviderTestResult, RedeemResult, RecentFile, ReportCapabilityResult, RendererLogInput, CloseXlsxEditorInput, SpreadsheetPlanFieldsResult, SaveDocxResult, SaveXlsxEditorInput, StageXlsxEditorImageInput, SaveXlsxEditorResult, SubmitReportInput, SubmitReportResult, TaskHistoryEntry, UserSettings, WhoAmIResult } from "../../shared/types";
 import type { JiraConnectionSummary, JiraProbeResult, LiquipediaConnectionSummary, LiquipediaProbeResult, MarketingCampaignPlanResult, CampaignImageResult } from "../../shared/verticals";
 // The Wails-generated bindings live alongside the renderer; tsconfig must
 // include them. Imports are static so the build picks them up; calls only
@@ -23,6 +23,32 @@ function toWails<T>(value: T): never {
 
 function optionalWailsFunction<T extends (...args: never[]) => unknown>(name: string): T | undefined {
   return (WailsApp as unknown as Record<string, unknown>)[name] as T | undefined;
+}
+
+/**
+ * Everyone listening for native file drops.
+ *
+ * The Wails runtime keeps exactly one: a second `OnFileDrop` is ignored while
+ * the first is registered, and `OnFileDropOff` tears down every listener —
+ * including the window handlers that stop the webview navigating to a file.
+ * Editor Home and the agent composer both take drops, so the one registration
+ * is made here and shared; each subscriber gets the drop point and decides from
+ * it whether the drop was meant for it.
+ */
+const fileDropListeners = new Set<(paths: string[], point: FileDropPoint) => void>();
+
+function subscribeFileDrop(callback: (paths: string[], point?: FileDropPoint) => void): () => void {
+  if (fileDropListeners.size === 0) {
+    OnFileDrop((x: number, y: number, paths: string[]) => {
+      const list = Array.isArray(paths) ? paths : [];
+      for (const listener of [...fileDropListeners]) listener(list, { x, y });
+    }, true);
+  }
+  fileDropListeners.add(callback);
+  return () => {
+    if (!fileDropListeners.delete(callback)) return;
+    if (fileDropListeners.size === 0) OnFileDropOff();
+  };
 }
 
 export function createWailsAPI(): DesktopAPI {
@@ -232,6 +258,7 @@ export function createWailsAPI(): DesktopAPI {
       const record = await WailsApp.OpenLocalFile();
       return record && record.id ? record : null;
     },
+    importLocalFile: (filePath: string) => WailsApp.ImportLocalFile(filePath),
     createBlankDocument: async (documentType, workspaceId) => {
       const fn = optionalWailsFunction<(type: string, folder: string) => Promise<unknown>>("CreateBlankDocument");
       if (!fn) throw new Error("Creating blank documents requires a newer OfficeDex runtime.");
@@ -474,6 +501,11 @@ export function createWailsAPI(): DesktopAPI {
       if (!fn) throw new Error("Document deletion requires a newer OfficeDex runtime.");
       await fn(taskId);
     },
+    removeDocument: async (documentId: string) => {
+      const fn = optionalWailsFunction<(documentId: string) => Promise<void>>(["Remove", "Document"].join(""));
+      if (!fn) throw new Error("Removing a file from the library requires a newer OfficeDex runtime.");
+      await fn(documentId);
+    },
     renameWorkspace: async (workspaceId: string, name: string) => {
       const fn = optionalWailsFunction<(workspaceId: string, name: string) => Promise<unknown>>(["Rename", "Workspace"].join(""));
       if (!fn) throw new Error("Workspace rename requires a newer OfficeDex runtime.");
@@ -503,10 +535,7 @@ export function createWailsAPI(): DesktopAPI {
       EventsOn("auth:event", (payload: unknown) => callback(payload as AuthEvent)),
     onBridgeEvent: (callback: (event: BridgeEvent) => void) =>
       EventsOn("bridge:event", (payload: unknown) => callback(payload as BridgeEvent)),
-    onFileDrop: (callback: (paths: string[]) => void) => {
-      OnFileDrop((_x: number, _y: number, paths: string[]) => callback(Array.isArray(paths) ? paths : []), true);
-      return () => OnFileDropOff();
-    },
+    onFileDrop: subscribeFileDrop,
     getAppVersion: () => WailsApp.GetAppVersion(),
     getAppUpdateStatus: async () => normaliseAppUpdateStatus(await WailsApp.GetAppUpdateStatus()),
     checkAppUpdate: async () => {

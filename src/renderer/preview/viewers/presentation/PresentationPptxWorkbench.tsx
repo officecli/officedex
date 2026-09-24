@@ -58,6 +58,11 @@ import type {
 } from "../../../presentation/PresentationEditorFrame";
 import { registerActiveEditorClientTools } from "../../../activeEditorClientTools";
 import { OfficeWorkbenchLayout } from "../../../workbench/OfficeWorkbenchLayout";
+import {
+  AUTOSAVE_IDLE_MS,
+  SOURCE_CHANGED_MARKER,
+  useIdleAutosave,
+} from "../../../workbench/idleAutosave";
 
 export interface PresentationPptxWorkbenchProps {
   editorBaseUrl: string;
@@ -119,16 +124,6 @@ function saveErrorDetail(error: unknown): string | undefined {
   const detail = (error as { detail?: unknown } | null)?.detail;
   return typeof detail === "string" ? detail : undefined;
 }
-
-// The stable part of the host's conflict message. Wails delivers an error as
-// text and nothing else; the Go side pins this substring in
-// TestSourceChangedErrorKeepsItsMarker (see SourceChangedMarker).
-const SOURCE_CHANGED_MARKER = "changed outside OfficeDex";
-
-// How long editing has to pause before a save runs. Every save exports the deck
-// through mop-convert and rewrites the whole file, so saving on each change made
-// a large deck queue conversions behind every keystroke.
-const AUTOSAVE_IDLE_MS = 1_500;
 
 type TurnStage =
   | "inspecting"
@@ -261,7 +256,6 @@ export default function PresentationPptxWorkbench({
   const saveInFlightRef = useRef(false);
   const savePendingRef = useRef(false);
   const savePromiseRef = useRef<Promise<void> | null>(null);
-  const saveTimerRef = useRef<number | null>(null);
   // A conflict does not resolve itself, so retrying on every keystroke only
   // burns a mop-convert run per character. Autosave stays parked until the
   // document is reopened, which is what clears this state by remounting.
@@ -378,44 +372,16 @@ export default function PresentationPptxWorkbench({
     [saveCurrentToDisk],
   );
 
-  const cancelScheduledSave = useCallback(() => {
-    if (saveTimerRef.current === null) return;
-    window.clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = null;
-  }, []);
-
-  const requestSave = useCallback(() => {
-    cancelScheduledSave();
-    if (!filePathRef.current) return;
-    void enqueueSave().catch(() => {
-      // Keep the document dirty; the failure bar explains why, and the next
-      // edit or an explicit Agent save retries.
-    });
-  }, [cancelScheduledSave, enqueueSave]);
-
-  /** Saves once editing pauses, so a burst of changes costs one export. */
-  const scheduleSave = useCallback(() => {
-    if (!filePathRef.current || conflictRef.current) return;
-    cancelScheduledSave();
-    saveTimerRef.current = window.setTimeout(() => {
-      saveTimerRef.current = null;
-      requestSave();
-    }, autosaveIdleMs ?? AUTOSAVE_IDLE_MS);
-  }, [autosaveIdleMs, cancelScheduledSave, requestSave]);
-
-  // Closing or handing over must not wait out the idle window: save what is
-  // pending now, then wait for it.
-  const flushPendingSave = useCallback(async () => {
-    const scheduled = saveTimerRef.current !== null;
-    cancelScheduledSave();
-    if (conflictRef.current) return;
-    if (
-      (scheduled || dirtyRef.current || savePendingRef.current) &&
-      !saveInFlightRef.current
-    )
-      requestSave();
-    await savePromiseRef.current;
-  }, [cancelScheduledSave, requestSave]);
+  const {
+    schedule: scheduleSave,
+    cancel: cancelScheduledSave,
+    flush: flushPendingSave,
+  } = useIdleAutosave({
+    idleMs: autosaveIdleMs ?? AUTOSAVE_IDLE_MS,
+    canSchedule: () => Boolean(filePathRef.current) && !conflictRef.current,
+    isDirty: () => dirtyRef.current || savePendingRef.current,
+    save: () => enqueueSave(),
+  });
 
   /**
    * Writes the current deck to Downloads. It is the way out of a conflict: the

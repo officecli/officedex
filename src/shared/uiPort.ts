@@ -71,6 +71,12 @@ export interface FolderPort {
   remove(id: string): Promise<void>;
 }
 
+/** Where a file dropped from the operating system landed, in viewport CSS pixels. */
+export interface FileDropPoint {
+  x: number;
+  y: number;
+}
+
 export interface FilePort {
   list(): Promise<FileMeta[]>;
   create(type: FileType, folderId: string): Promise<FileMeta>;
@@ -84,6 +90,24 @@ export interface FilePort {
    * entry that already exists.
    */
   openFromDisk(): Promise<FileMeta | null>;
+  /**
+   * Adds a file the user dragged onto the window. Same rules as `openFromDisk`
+   * — not copied, lands in the default folder, one path is one entry — but it
+   * rejects instead of returning null, because a drop cannot be "cancelled":
+   * anything that is not a Word, Excel or PowerPoint file is an error to show.
+   */
+  openDropped(path: string): Promise<FileMeta>;
+  /**
+   * Files dropped onto the window from the operating system.
+   *
+   * Only drops that land on an element carrying `--wails-drop-target: drop`
+   * are reported; everywhere else the drop is swallowed so the webview never
+   * navigates to the file. Every subscriber hears every drop, so `point` —
+   * where it landed, in viewport CSS pixels, when the runtime says — is how a
+   * zone tells whether the drop was its own. See `shell/dropZone.ts`.
+   * Returns the unsubscribe.
+   */
+  onDropFromDisk(callback: (paths: string[], point?: FileDropPoint) => void): () => void;
   /** Records `lastOpenedAt`. The shell owns which tabs are open, not the port. */
   open(id: string): Promise<FileMeta>;
   move(id: string, folderId: string): Promise<void>;
@@ -201,6 +225,16 @@ export interface AgentOutlinePage {
 export interface AgentTask {
   id: string;
   title: string;
+  /**
+   * The conversation this run belongs to.
+   *
+   * A follow-up message is a new run in the same conversation, so `id` moves
+   * to the newest run while this stays put. `messages` covers the whole
+   * conversation, not just this run. Optional because a fake or a record from
+   * before conversations were tracked has none; absent reads as "this run is
+   * its own conversation".
+   */
+  conversationId?: string;
   /** Decision 2: a task is scoped to a folder, not to a single file. */
   folderId: string;
   /** The runtime document kind, when known. Used to expose type-specific controls. */
@@ -264,7 +298,15 @@ export interface AgentImageRun {
 }
 
 export type AgentEvent =
-  | { kind: "task"; task: AgentTask }
+  /**
+   * `focused` is false when the run is not the head of the conversation its
+   * folder's panel shows — a run in another conversation, or an older run of
+   * this one. Lists and artifact handling want every run; the panel wants only
+   * the focused ones. Absent means the port does not distinguish.
+   */
+  | { kind: "task"; task: AgentTask; focused?: boolean }
+  /** The folder's panel was reset to an empty, new conversation. */
+  | { kind: "cleared"; folderId: string }
   | { kind: "error"; message: string }
   /**
    * A limitation worth saying out loud — not a failure. The run went ahead;
@@ -319,6 +361,15 @@ export interface SendInput {
    */
   documentType?: "docx" | "xlsx" | "pptx" | "img";
   imageGeneration?: ImageGenerationInput;
+  /**
+   * Start a new conversation rather than continuing the folder's current one.
+   *
+   * Absent means continue: a message typed into the task panel is a follow-up
+   * to what the panel shows, and the runtime is told which conversation it
+   * belongs to. Home's composer always sets it — a task started from Home is a
+   * new piece of work, whatever the folder did before.
+   */
+  newConversation?: boolean;
 }
 
 export interface ImageGenerationInput {
@@ -386,6 +437,8 @@ export interface ImagePort {
 export interface AgentTaskSummary {
   id: string;
   title: string;
+  /** One row per conversation; see `AgentTask.conversationId`. */
+  conversationId?: string;
   folderId: string;
   status: AgentStatus;
   /** Free-text phase, same as `AgentTask.phase`. Shown as the row's subtitle. */
@@ -456,6 +509,21 @@ export interface AgentPort {
   resumeFailed(taskId: string): Promise<void>;
   applySuggestion(id: string): Promise<void>;
   undoSuggestion(id: string): Promise<void>;
+  /**
+   * Empties the folder's panel; the next message starts a new conversation.
+   * Runs already under way keep going — they are just no longer what the panel
+   * shows.
+   */
+  startConversation(folderId: string): Promise<void>;
+  /**
+   * Adds an exchange that happened outside the runtime — an in-place edit the
+   * editor carried out — to the folder's current conversation.
+   *
+   * Without this the conversation has holes: the panel forgets the edit as soon
+   * as the next message goes to the runtime, and the runtime is never told it
+   * happened.
+   */
+  recordExchange(input: { folderId: string; messages: readonly AgentMessage[] }): Promise<void>;
 }
 
 /* ----------------------------------------------------------------- models */

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DesktopApiProvider } from "../services/desktopApi";
 import type { DesktopAPI } from "../../shared/types";
+import { publishCanvasLocale } from "../../shell/editor/canvasLocale";
 import { PresentationEditorFrame } from "./PresentationEditorFrame";
 
 afterEach(cleanup);
@@ -46,6 +47,7 @@ describe("presentation embed handshake", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+    publishCanvasLocale(null);
   });
 
   it("reports an embed that loads but never reports ready", async () => {
@@ -79,5 +81,16 @@ describe("presentation embed handshake", () => {
     });
 
     expect(onUnavailable).not.toHaveBeenCalled();
+  });
+
+  it("tells the embed the shell's language", async () => {
+    publishCanvasLocale("zh");
+    renderFrame(vi.fn());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    const frame = document.querySelector("iframe.pptx-embed-frame");
+    expect(frame?.getAttribute("src")).toContain("lang=zh-CN");
+    expect(frame?.getAttribute("src")).toContain("mode=embed");
   });
 });

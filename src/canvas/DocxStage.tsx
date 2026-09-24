@@ -1,4 +1,6 @@
 import type { DesktopTask } from "../shared/types";
+import { useT } from "../renderer/i18n";
+import { STAGE_CHROME, useEditorChrome } from "./editorChrome";
 import "./docxStage.css";
 
 /**
@@ -62,12 +64,12 @@ export function liveDocTask(
  * screen. Falls back to a plain statement rather than to an empty string: a
  * stage with no caption at all reads as a hang.
  */
-function caption(task: DesktopTask): string {
+function caption(task: DesktopTask, t: (key: string) => string): string {
   const active = (task.stages ?? []).find((stage) => stage.id === task.activeStageId);
   if (active?.label) return active.label;
-  if (task.status === "question") return "Waiting for your answer";
-  if (task.status === "plan_review") return "Waiting for your review";
-  return "Working on your document";
+  if (task.status === "question") return t("shell.canvas.waitingAnswer");
+  if (task.status === "plan_review") return t("shell.canvas.waitingReview");
+  return t("shell.canvas.workingOnDocument");
 }
 
 /**
@@ -88,6 +90,9 @@ export interface DocxStageProps {
 }
 
 export function DocxStage({ task }: DocxStageProps) {
+  const t = useT();
+  // Reserves nothing; says the canvas is not empty. See STAGE_CHROME.
+  useEditorChrome(STAGE_CHROME);
   return (
     <div className="shell-doc-stage">
       <div className="shell-doc-stage-paper" aria-hidden="true">
@@ -107,9 +112,9 @@ export function DocxStage({ task }: DocxStageProps) {
       </div>
 
       <div className="shell-doc-stage-status">
-        <strong className="shell-doc-stage-title">Writing a document</strong>
+        <strong className="shell-doc-stage-title">{t("shell.canvas.writingDocument")}</strong>
         <span className="shell-doc-stage-phase" role="status">
-          {caption(task)}
+          {caption(task, t)}
         </span>
       </div>
     </div>

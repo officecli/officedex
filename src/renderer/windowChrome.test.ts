@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { applyWindowChrome, mountDragRegionGuard, shouldOverlayWindowChrome } from "./windowChrome";
+import {
+  applyWindowChrome,
+  hasOverlayWindowChrome,
+  mountDragRegionGuard,
+  shouldOverlayWindowChrome,
+} from "./windowChrome";
 
 const MAC = "MacIntel Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)";
 const WIN = "Win32 Mozilla/5.0 (Windows NT 10.0; Win64; x64)";
@@ -27,6 +32,25 @@ describe("applyWindowChrome", () => {
 
     applyWindowChrome(root, { wailsAvailable: false, platform: MAC });
     expect(root.hasAttribute("data-window-chrome")).toBe(false);
+  });
+});
+
+describe("hasOverlayWindowChrome", () => {
+  afterEach(() => { document.documentElement.removeAttribute("data-window-chrome"); });
+
+  // What a component asks before drawing window controls of its own.
+  it("reads back what applyWindowChrome stamped", () => {
+    const root = document.createElement("html");
+    expect(hasOverlayWindowChrome(root)).toBe(false);
+
+    applyWindowChrome(root, { wailsAvailable: true, platform: MAC });
+    expect(hasOverlayWindowChrome(root)).toBe(true);
+  });
+
+  it("defaults to the live document root", () => {
+    expect(hasOverlayWindowChrome()).toBe(false);
+    applyWindowChrome(document.documentElement, { wailsAvailable: true, platform: MAC });
+    expect(hasOverlayWindowChrome()).toBe(true);
   });
 });
 

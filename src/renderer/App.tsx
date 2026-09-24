@@ -550,9 +550,10 @@ function OfficeDexApp() {
       ...(parentTaskId ? { parentTaskId } : {}),
       ...(workspaceId ? { workspaceId } : { noProject: true }),
       enableImages: persistedSettings.defaults.enableImages,
+      ...(persistedSettings.defaults.enableWebSearch ? { enableWebSearch: true } : {}),
       imageQuality: persistedSettings.defaults.imageQuality,
     }, { preserveWorkbookContext: true });
-  }, [persistedSettings.defaults.enableImages, persistedSettings.defaults.imageQuality, spreadsheet.session.artifact?.taskId, spreadsheet.session.taskId, spreadsheet.session.workspaceId, t]);
+  }, [persistedSettings.defaults.enableImages, persistedSettings.defaults.enableWebSearch, persistedSettings.defaults.imageQuality, spreadsheet.session.artifact?.taskId, spreadsheet.session.taskId, spreadsheet.session.workspaceId, t]);
 
   const startSpreadsheetModify = useCallback(async (input: ModifyInput) => {
     clearError();

@@ -17,6 +17,9 @@ interface DocxViewerProps {
   filePath?: string;
   onDirtyChange?: (dirty: boolean) => void;
   onRequestClose?: () => void;
+  onFlushReady?: (flush: (() => Promise<void>) | null) => void;
+  /** Forwarded to the shared idle autosave window; tests only. */
+  autosaveIdleMs?: number;
   /**
    * This viewer is the whole window (`?offlinePreview=1`) rather than an overlay
    * on top of the cockpit. Only then does it own a file rail: under the shell
@@ -41,6 +44,8 @@ export default function DocxViewer({
   filePath,
   onDirtyChange,
   onRequestClose,
+  onFlushReady,
+  autosaveIdleMs,
   standalone = false,
 }: DocxViewerProps) {
   const api = useDesktopApi();
@@ -125,6 +130,8 @@ export default function DocxViewer({
         }}
         onSelectionChange={setSelection}
         onUnavailable={(error) => setUnavailable(error ?? "")}
+        onFlushReady={onFlushReady}
+        autosaveIdleMs={autosaveIdleMs}
       />
     </OfficeWorkbenchLayout>
   );

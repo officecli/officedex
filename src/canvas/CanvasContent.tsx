@@ -1,10 +1,11 @@
 import { useEffect } from "react";
 
-import type { DesktopAPI } from "../shared/types";
+import type { DesktopAPI, DesktopTask } from "../shared/types";
 import type { FileMeta } from "../shared/uiPort";
 import type { CanvasSelection } from "../shell/editor/canvasContract";
 import type { WriterAgentEditor } from "../renderer/word/WriterEditorFrame";
 import type { PresentationEditorController } from "../renderer/presentation/PresentationEditorFrame";
+import { NEXAEDGE_DEMO_ID } from "../renderer/presentation/bundledPptxDemo";
 import { useTaskStore } from "../renderer/store/taskStore";
 import { PresentationCanvas } from "./PresentationCanvas";
 import { DocxCanvas, type DocumentEditRunner } from "./DocxCanvas";
@@ -50,6 +51,52 @@ export interface CanvasContentProps {
    */
   onEditRunner: (edit: DocumentEditRunner | null) => void;
   onUnavailable: (reason: string) => void;
+  /**
+   * The recording was on the canvas and something newer took it.
+   *
+   * The shell owns the flag and the canvas decides precedence, so the loser has
+   * to say so or the flag outlives its demo and comes back on the next reload.
+   */
+  onDemoSuperseded?: () => void;
+  /**
+   * Show the bundled NexaEdge recording instead of whatever is open.
+   *
+   * A dev entry (`?deckDemo=1`, see `readDevFixture`) rather than a product
+   * surface: it is how the live-drawing path gets exercised on demand, without
+   * a run, credits or a three-minute wait. The recording is a real one, so
+   * everything downstream of it is the real path.
+   */
+  demo?: boolean;
+  /**
+   * When the recording was last asked for.
+   *
+   * Two jobs: it keys the stage so a second press replays, and it decides
+   * whether the recording still holds the canvas — see the routing below.
+   */
+  demoStartedAt?: string | null;
+}
+
+/** Default for the demo prop: the recording is opt-in, everywhere. */
+const NOT_DEMO = false;
+
+/**
+ * The stage's `DesktopTask` for the bundled recording.
+ *
+ * `PresentationStage` is typed around a task because a run is normally what
+ * puts a deck there. A recording has no run, so it gets a stand-in carrying
+ * only what the stage reads: the id it matches its session against, the
+ * document type, and a status that keeps it a live deck. No `vibeOps` — the
+ * demo feeds itself from the bundled recording, not from task events.
+ */
+function demoDeckTask(): DesktopTask {
+  return {
+    id: NEXAEDGE_DEMO_ID,
+    conversationId: NEXAEDGE_DEMO_ID,
+    documentType: "pptx",
+    topic: "NexaEdge AI Fabric product launch (recorded generation)",
+    status: "running",
+    events: [],
+  };
 }
 
 export function CanvasContent({
@@ -61,6 +108,9 @@ export function CanvasContent({
   onSave,
   onEditRunner,
   onUnavailable,
+  onDemoSuperseded,
+  demo = NOT_DEMO,
+  demoStartedAt = null,
 }: CanvasContentProps) {
   const { state } = useTaskStore();
   const liveDeck = liveDeckTask(state.tasks, state.taskOrder);
@@ -103,17 +153,60 @@ export function CanvasContent({
   }, [open, onSave, onResolveSelection, onSelectionChange, onEditRunner]);
 
   /*
-   * In-place editing belongs to Word alone, so every other branch withdraws it.
+   * In-place editing is withdrawn from every branch that cannot offer it.
    *
    * Reported here rather than left to the adapter's own file-change reset,
-   * because switching from a document to a *deck* never passes through the
-   * null branch above: the runner would still be the document's, and an
-   * instruction typed beside a slide would silently rewrite the Word file
-   * behind it.
+   * because switching from a document to something else never passes through
+   * the null branch above: the runner would still be the previous file's, and
+   * an instruction typed beside it would silently rewrite that file.
+   *
+   * Word and decks both edit in place now — `office.docx.edit.v1` and
+   * `office.pptx.plan_js` — so the test is "is this an editable type", not
+   * "is this Word". It used to be `open.type !== "doc"`, which withdrew the
+   * deck's runner the moment it registered it: `PresentationCanvas` reports its
+   * controller from an effect, and this effect runs after it, so
+   * `canEditDocument()` was false for an open deck and every instruction about
+   * one went to the generation runtime instead. That is the routing bug, one
+   * layer below the one that made it reachable: registering the runner was
+   * necessary and not sufficient.
    */
   useEffect(() => {
-    if (open && open.type !== "doc") onEditRunner(null);
+    if (open && open.type !== "doc" && open.type !== "slides") onEditRunner(null);
   }, [open, onEditRunner]);
+
+  /*
+   * The recording holds the canvas only until something newer asks for it.
+   *
+   * `demo` alone is not enough to decide this. Only `open-file` clears it, and
+   * a run has no file — so watching the recording and then asking for a real
+   * deck left `demo` true with the finished recording on screen while the panel
+   * beside it listed the new run's pages: two different decks in one window.
+   *
+   * Comparing the two timestamps says which was asked for more recently, which
+   * is the rule the rest of this file already follows — what is happening now
+   * outranks what was open before.
+   */
+  const demoIsNewerThanRun =
+    demo &&
+    (demoStartedAt === null ||
+      Date.parse(demoStartedAt) >= Date.parse(liveDeck?.createdAt ?? "") ||
+      Number.isNaN(Date.parse(liveDeck?.createdAt ?? "")));
+
+  useEffect(() => {
+    if (demo && !demoIsNewerThanRun) onDemoSuperseded?.();
+  }, [demo, demoIsNewerThanRun, onDemoSuperseded]);
+
+  if (demo && demoIsNewerThanRun) {
+    return (
+      <PresentationStage
+        key={`deck-demo-${demoStartedAt ?? "initial"}`}
+        api={api}
+        task={demoDeckTask()}
+        onError={onUnavailable}
+        demo
+      />
+    );
+  }
 
   if (liveDeck) {
     // The stage owns its own editor session and saves through the runtime: there
@@ -149,6 +242,7 @@ export function CanvasContent({
         onController={(controller: PresentationEditorController | null) =>
           onSave(controller ? () => controller.save() : null)
         }
+        onEditRunner={onEditRunner}
         onUnavailable={onUnavailable}
       />
     );

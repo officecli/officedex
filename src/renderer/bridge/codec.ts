@@ -24,6 +24,7 @@ export const DEFAULT_BROWSER_SETTINGS: UserSettings = {
   defaults: {
     documentType: "pptx",
     enableImages: true,
+    enableWebSearch: false,
     imageQuality: "standard",
   },
   workspaceDir: null,
@@ -167,6 +168,7 @@ export function adaptSettingsPatch(patch: Partial<UserSettings>): settingsNS.Pat
     const d: Record<string, unknown> = {};
     if (patch.defaults.documentType !== undefined) d.documentType = patch.defaults.documentType;
     if (patch.defaults.enableImages !== undefined) d.enableImages = patch.defaults.enableImages;
+    if (patch.defaults.enableWebSearch !== undefined) d.enableWebSearch = patch.defaults.enableWebSearch;
     if (patch.defaults.imageQuality !== undefined) d.imageQuality = patch.defaults.imageQuality;
     out.defaults = d;
   }

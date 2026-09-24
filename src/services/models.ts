@@ -1,5 +1,6 @@
 import type { DesktopAPI, LlmProvider, LlmProviderType } from "../shared/types";
 import type { CustomModelInput, Model, ModelPort } from "../shared/uiPort";
+import { translate } from "../renderer/i18n";
 
 /**
  * Models over the desktop's single configured provider.
@@ -58,7 +59,8 @@ export function createModelService(api: DesktopAPI): ModelPort {
   return {
     async list() {
       const settings = await api.getSettings();
-      return settings.llmProvider ? [OFFICIAL_MODEL, toModel(settings.llmProvider)] : [OFFICIAL_MODEL];
+      const official = { ...OFFICIAL_MODEL, detail: translate("shell.service.model.officialDetail") };
+      return settings.llmProvider ? [official, toModel(settings.llmProvider)] : [official];
     },
 
     async addCustom(input) {
@@ -69,7 +71,7 @@ export function createModelService(api: DesktopAPI): ModelPort {
 
     async updateCustom(id, input) {
       if (id === OFFICIAL_MODEL.id) {
-        throw new Error("The built-in model cannot be edited.");
+        throw new Error(translate("shell.service.model.builtinNotEditable"));
       }
       const provider = toProvider(input);
       // An update with no key keeps the stored one: the UI never reads a key
@@ -109,13 +111,13 @@ export function createModelService(api: DesktopAPI): ModelPort {
       }
       const settings = await api.getSettings();
       if (!settings.llmProvider) {
-        throw new Error("That model is no longer configured. Add it again to use it.");
+        throw new Error(translate("shell.service.model.notConfigured"));
       }
     },
 
     async removeCustom(id) {
       if (id === OFFICIAL_MODEL.id) {
-        throw new Error("The built-in model cannot be removed.");
+        throw new Error(translate("shell.service.model.builtinNotRemovable"));
       }
       await api.updateSettings({ llmProvider: null });
     },

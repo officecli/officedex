@@ -58,6 +58,9 @@ export interface PresentationStageProps {
   demo?: boolean;
 }
 
+/** Statuses where a run still owns the canvas. */
+const LIVE_STATUSES = ["starting", "running", "question", "plan_review"];
+
 export function PresentationStage({ api, task, onError, demo }: PresentationStageProps) {
   /*
    * The shell's language, read from the channel rather than pinned.
@@ -78,7 +81,7 @@ export function PresentationStage({ api, task, onError, demo }: PresentationStag
    * canvas root mounted by something that is not this shell. Falling back to
    * `navigator.language` there is precisely the bug above.
    */
-  const locale = useCanvasLocale() ?? "en";
+  const locale = useCanvasLocale() ?? (typeof document !== "undefined" && document.documentElement.lang.startsWith("zh") ? "zh" : "en");
 
   return (
     <LocaleProvider value={locale}>
@@ -185,7 +188,16 @@ function StageBody({ api, task, onError, demo }: PresentationStageProps) {
    */
   useEditorChrome(editorReady ? SLIDES_CHROME : null);
 
-  if (!editorReady) return <CanvasPlaceholder type="slides" />;
+  if (!editorReady) {
+    const generating = LIVE_STATUSES.includes(task.status);
+    return (
+      <CanvasPlaceholder
+        type="slides"
+        mode={generating ? "generating" : undefined}
+        task={generating ? task : undefined}
+      />
+    );
+  }
 
   return (
     <div className="shell-live-deck" data-testid="shell-live-deck">
@@ -213,17 +225,16 @@ function StageBody({ api, task, onError, demo }: PresentationStageProps) {
           previewToken={session.grant!.token}
           fileName={session.artifact!.fileName}
           onController={setController}
-          onUnavailable={(error) => onError(error || "The presentation editor could not start.")}
+          onUnavailable={(error) => {
+            if (!error?.trim()) return;
+            onError(error);
+          }}
         />
         <div className="shell-live-deck-lock" aria-hidden="true" data-testid="shell-live-deck-lock" />
       </div>
     </div>
   );
 }
-
-
-/** Statuses where a run still owns the canvas. */
-const LIVE_STATUSES = ["starting", "running", "question", "plan_review"];
 
 /**
  * The run the canvas should be showing, if any.

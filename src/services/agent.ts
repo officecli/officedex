@@ -1,15 +1,18 @@
-import type { BridgeEvent, DesktopAPI, DesktopTask, GenerateInput, TaskHistoryEntry } from "../shared/types";
+import type { BridgeEvent, DesktopAPI, DesktopTask, DocumentRecord, GenerateInput, TaskHistoryEntry } from "../shared/types";
 import type { AgentEvent, AgentImageRun, AgentImageSeries, AgentMessage, AgentOutlinePage, AgentPort, AgentRecovery, AgentStatus, AgentStep, AgentTask, AgentTaskSummary, ImageGenerationInput, SendInput } from "../shared/uiPort";
 import { imageDimensions, imageStyleText, isReferenceImagePath, ratioBucket } from "../shared/imageGeneration";
 import { pptxPageStates } from "../renderer/presentation/pptxRuntimeActivity";
 import { respondToPlanReview } from "../renderer/presentation/planReviewResponse";
 import { planApprovalAnswer } from "../renderer/flows/resumeTask";
+import { BRIDGE_ERROR_CODES, errorCode } from "../renderer/failureKind";
 import { NotImplementedError } from "../shared/notImplemented";
-import { applyTaskEvent, attachTaskContext, createInitialTaskState, type TaskState } from "../renderer/taskState";
+import { applyTaskEvent, attachTaskContext, attachUserInput, createInitialTaskState, type TaskState } from "../renderer/taskState";
+import { errorMessage } from "../renderer/utils/values";
 import { taskTitle } from "../renderer/taskTitle";
 import { inferHomeTaskRoute } from "../renderer/homeIntake";
 import { planModeRequested } from "./planMode";
 import { DEFAULT_FOLDER_ID } from "./files";
+import { translate } from "../renderer/i18n";
 
 /**
  * The agent surface over the desktop's task model.
@@ -134,10 +137,10 @@ function toSteps(task: DesktopTask): AgentStep[] {
 function phaseOf(task: DesktopTask): string {
   const active = (task.stages ?? []).find((stage) => stage.id === task.activeStageId);
   if (active) return active.label;
-  if (task.status === "question") return "Waiting for your answer";
-  if (task.status === "plan_review") return "Waiting for your review";
-  if (task.status === "failed") return task.error?.trim() || "The run stopped";
-  if (task.status === "completed") return "Done";
+  if (task.status === "question") return translate("shell.service.phase.question");
+  if (task.status === "plan_review") return translate("shell.service.phase.review");
+  if (task.status === "failed") return task.error?.trim() || translate("shell.service.phase.failed");
+  if (task.status === "completed") return translate("shell.service.phase.done");
   return "";
 }
 
@@ -158,7 +161,10 @@ function toMessages(task: DesktopTask): AgentMessage[] {
     messages.push({
       id: `${task.id}:instruction`,
       role: "user",
-      text: task.userInput.prompt,
+      // What the user typed. The runtime also got the conversation so far,
+      // appended by `send`; showing that here would echo the whole thread
+      // back inside every follow-up.
+      text: stripConversationContext(task.userInput.prompt),
       createdAt: at(task.createdAt),
     });
   }
@@ -216,8 +222,8 @@ function toQuestion(task: DesktopTask): AgentTask["question"] {
   if (task.status === "plan_review" && task.plan?.id && !task.question?.id) {
     return {
       id: task.plan.id,
-      text: "The outline is ready.",
-      options: [{ id: "approve", label: "Start drawing", recommended: true }],
+      text: translate("shell.service.outline.ready"),
+      options: [{ id: "approve", label: translate("shell.service.outline.start"), recommended: true }],
       allowFreeform: false,
     };
   }
@@ -304,7 +310,7 @@ function toAgentTask(task: DesktopTask): AgentTask {
   const recovery = toRecovery(task, outline);
   return {
     id: task.id,
-    title: taskTitle(task, "Untitled task"),
+    title: taskTitle(task, translate("shell.service.untitledTask")),
     folderId: task.workspaceId?.trim() || DEFAULT_FOLDER_ID,
     documentType,
     status: toStatus(task),
@@ -335,7 +341,7 @@ function toAgentTaskWithReview(task: DesktopTask, review?: ReviewArtifactState):
     suggestion: {
       id: task.id,
       targetFileId: review.sourceFileId,
-      summary: `Review the generated ${task.documentType?.toUpperCase() ?? "document"} changes before applying them.`,
+      summary: translate("shell.service.review.summary", { type: task.documentType?.toUpperCase() ?? translate("shell.service.review.document") }),
       applied: review.applied,
       undoable: review.undoable,
     },
@@ -391,7 +397,7 @@ function toSummary(task: DesktopTask): AgentTaskSummary {
   const updatedAt = updatedAtOf(task);
   return {
     id: task.id,
-    title: taskTitle(task, "Untitled task"),
+    title: taskTitle(task, translate("shell.service.untitledTask")),
     folderId: folderOf(task),
     status: toStatus(task),
     phase: phaseOf(task),
@@ -445,21 +451,136 @@ export function createAgentService(api: DesktopAPI): AgentPort {
   };
 
   /**
-   * What `send` knows about an image run before the bridge does.
+   * What `send` knows about a run before the bridge does.
    *
    * `generate` returns a task id long before the first event creates the task,
    * and history is the only other place the conversation id is written. Without
-   * this a second version would show up as a separate image until the next
-   * reload — and the prompt shown for a run would be whatever the runtime
-   * echoed back rather than what the user typed.
+   * this a follow-up — or a second version of a picture — would show up as a
+   * separate conversation until the next reload, and the prompt shown for a run
+   * would be whatever the runtime echoed back rather than what the user typed.
    */
-  const imageRuns = new Map<string, { conversationId: string; parentTaskId?: string; prompt: string }>();
+  const sentRuns = new Map<string, { conversationId: string; parentTaskId?: string; prompt: string }>();
 
   // What `send` recorded wins: the reducer defaults a task's conversation to
   // its own id until history says otherwise, which would split a batch into
   // unrelated pictures for as long as the window stays open.
   const conversationOf = (task: DesktopTask): string =>
-    imageRuns.get(task.id)?.conversationId || task.conversationId || task.id;
+    sentRuns.get(task.id)?.conversationId || task.conversationId || task.id;
+
+  /**
+   * Which conversation each folder's panel shows.
+   *
+   * Pinned the first time a conversation is shown or continued, so a run
+   * finishing somewhere else in the folder cannot pull the panel away from the
+   * thread the user is typing into. `fresh` is "New conversation": nothing is
+   * shown until the next message starts one.
+   */
+  const threads = new Map<string, { conversationId?: string; fresh: boolean }>();
+
+  /**
+   * In-place edits, which never reach the runtime, by conversation.
+   *
+   * An edit made while the folder has no conversation yet waits under
+   * `orphanKey` and joins whichever conversation the next message starts.
+   */
+  const localTurns = new Map<string, LocalTurn[]>();
+  const orphanKey = (folderId: string) => `orphan:${folderId}`;
+
+  /** Every run of a conversation, oldest first. */
+  const conversationTasks = (conversationId: string): DesktopTask[] =>
+    state.taskOrder
+      .map((id, index) => ({ task: state.tasks[id], index }))
+      .filter((entry): entry is { task: DesktopTask; index: number } =>
+        Boolean(entry.task) && conversationOf(entry.task!) === conversationId,
+      )
+      .sort((left, right) => {
+        const a = Date.parse(left.task.createdAt ?? "");
+        const b = Date.parse(right.task.createdAt ?? "");
+        if (!Number.isNaN(a) && !Number.isNaN(b) && a !== b) return a - b;
+        // `taskOrder` is newest first for live runs.
+        return right.index - left.index;
+      })
+      .map((entry) => entry.task);
+
+  /** The run that speaks for a conversation: a live one, else the newest. */
+  const headOf = (conversationId: string): DesktopTask | undefined => {
+    const runs = conversationTasks(conversationId);
+    return [...runs].reverse().find((task) => ACTIVE_STATUSES.includes(task.status)) ?? runs.at(-1);
+  };
+
+  const focusedConversation = (folderId: string): string | undefined => {
+    const thread = threads.get(folderId);
+    if (thread?.conversationId) return thread.conversationId;
+    if (thread?.fresh) return undefined;
+    const task = pickForFolder(state, folderId);
+    return task ? conversationOf(task) : undefined;
+  };
+
+  const isFocused = (task: DesktopTask): boolean => {
+    const conversationId = conversationOf(task);
+    return conversationId === focusedConversation(folderOf(task)) && headOf(conversationId)?.id === task.id;
+  };
+
+  /**
+   * The conversation's messages, runs and in-place edits interleaved.
+   *
+   * Ordered by when each run started rather than by message timestamp: a run
+   * whose record carries no time would otherwise sort to the top of the
+   * thread. A run with no time of its own takes the one before it.
+   */
+  const conversationMessages = (conversationId: string): AgentMessage[] => {
+    const groups: Array<{ at: number; messages: AgentMessage[] }> = [];
+    let previous = 0;
+    for (const run of conversationTasks(conversationId)) {
+      const at = Date.parse(run.createdAt ?? "") || Date.parse(run.events[0]?.ts ?? "") || previous;
+      previous = at;
+      const known = sentRuns.get(run.id)?.prompt;
+      groups.push({
+        at,
+        messages: toMessages(run).map((message) =>
+          known && message.id === `${run.id}:instruction` ? { ...message, text: known } : message,
+        ),
+      });
+    }
+    for (const turn of localTurns.get(conversationId) ?? []) groups.push({ at: turn.at, messages: turn.messages });
+    return groups
+      .map((group, index) => ({ ...group, index }))
+      .sort((left, right) => left.at - right.at || left.index - right.index)
+      .flatMap((group) => group.messages);
+  };
+
+  /** What the runtime is told about the conversation so far, or "" for a first message. */
+  const conversationContext = (conversationId: string | undefined, folderId: string): string => {
+    const turns: Array<{ at: number; lines: string[] }> = [];
+    if (conversationId) {
+      for (const run of conversationTasks(conversationId)) {
+        const instruction = sentRuns.get(run.id)?.prompt ?? stripConversationContext(run.userInput?.prompt ?? "");
+        if (!instruction.trim()) continue;
+        const lines = [`User: ${clip(instruction, TURN_CHARS)}`];
+        if (run.status === "completed") {
+          lines.push(run.artifact?.fileName ? `Result: wrote ${run.artifact.fileName}` : "Result: done");
+        } else if (run.status === "failed") {
+          lines.push(`Result: failed${run.error ? ` — ${clip(run.error, TURN_CHARS)}` : ""}`);
+        } else if (run.status === "cancelled") {
+          lines.push("Result: stopped before finishing");
+        }
+        turns.push({ at: Date.parse(run.createdAt ?? "") || 0, lines });
+      }
+    }
+    const local = [...(conversationId ? (localTurns.get(conversationId) ?? []) : []), ...(localTurns.get(orphanKey(folderId)) ?? [])];
+    for (const turn of local) {
+      const lines = turn.messages
+        .filter((message) => message.text.trim())
+        .map((message) => `${message.role === "user" ? "User" : "Agent (edited the open file in place)"}: ${clip(message.text, TURN_CHARS)}`);
+      if (lines.length) turns.push({ at: turn.at, lines });
+    }
+    if (turns.length === 0) return "";
+    const ordered = turns.sort((left, right) => left.at - right.at).slice(-CONTEXT_TURNS);
+    // Oldest turns go first when the block is over budget; the latest one is
+    // what "make it shorter" refers to.
+    while (ordered.length > 1 && ordered.map((turn) => turn.lines.join("\n")).join("\n").length > CONTEXT_CHARS) ordered.shift();
+    return `${CONVERSATION_CONTEXT_MARKER}\n${ordered.map((turn) => turn.lines.join("\n")).join("\n")}`;
+  };
 
   const runStatus = (task: DesktopTask): AgentImageRun["status"] => {
     if (task.status === "completed") return "done";
@@ -492,7 +613,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       });
     return {
       runs: members.map(({ task: run }) => {
-        const known = imageRuns.get(run.id);
+        const known = sentRuns.get(run.id);
         const baseTaskId = run.parentTaskId || known?.parentTaskId;
         return {
           taskId: run.id,
@@ -508,8 +629,18 @@ export function createAgentService(api: DesktopAPI): AgentPort {
   /** The contract's view of a desktop task, with everything this closure knows added. */
   const project = (task: DesktopTask): AgentTask => {
     const result = toAgentTaskWithReview(task, reviewArtifacts.get(task.id));
+    const conversationId = conversationOf(task);
     const image = imageSeries(task);
-    return image ? { ...result, image } : result;
+    if (image) return { ...result, conversationId, image };
+    // A follow-up is a run of its own, but the panel is the conversation: the
+    // messages are every run's, and the title is what the first one asked for.
+    const first = conversationTasks(conversationId)[0];
+    return {
+      ...result,
+      conversationId,
+      ...(first && first.id !== task.id ? { title: taskTitle(first, result.title) } : {}),
+      messages: conversationMessages(conversationId),
+    };
   };
 
   /**
@@ -542,7 +673,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     if (ignored.length > 0) {
       emit({
         kind: "notice",
-        message: `Only pictures can guide an image. ${ignored.join(", ")} ${ignored.length === 1 ? "was" : "were"} left out.`,
+        message: translate(ignored.length === 1 ? "shell.service.image.ignoredOne" : "shell.service.image.ignoredMany", { items: ignored.join(", ") }),
       });
     }
 
@@ -581,9 +712,19 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       // The first run of a new picture names the conversation: the desktop
       // defaults a run's conversation to its own id.
       conversationId ??= result.taskId;
-      imageRuns.set(result.taskId, { conversationId, ...(parentTaskId ? { parentTaskId } : {}), prompt: text });
+      sentRuns.set(result.taskId, { conversationId, ...(parentTaskId ? { parentTaskId } : {}), prompt: text });
+      // The picture is what the panel shows now.
+      threads.set(input.folderId, { conversationId, fresh: false });
       activeTaskId = result.taskId;
     }
+  };
+
+  /** The library's record of the file a run wrote, if it is still there. */
+  const documentMadeBy = async (task: DesktopTask): Promise<DocumentRecord | undefined> => {
+    const page = await api
+      .listDocuments({ ...(task.workspaceId ? { workspaceId: task.workspaceId } : {}), limit: 200 })
+      .catch(() => null);
+    return page?.items.find((record) => record.currentArtifactTaskId === task.id || record.filePath === task.artifact?.filePath);
   };
 
   /** The active run and its question, when it is blocked on one. */
@@ -594,6 +735,53 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     return question ? { taskId: task.id, question } : null;
   };
 
+  /**
+   * The run pause/resume/finish should act on.
+   *
+   * `send` records `activeTaskId` from the generate/modify response, which
+   * arrives *before* the first bridge event hydrates `state.tasks`. Looking
+   * only in `state.tasks` made every control a no-op for the whole of that
+   * gap — which is exactly when the user reaches for Stop.
+   *
+   * If the id is known, that is the run. If it is not (a run that started
+   * before this window, or whose id was dropped), the live task in state is
+   * the next-best answer. Either way the buttons never silently return.
+   */
+  const liveTask = (): DesktopTask | { id: string } | undefined => {
+    if (activeTaskId) return state.tasks[activeTaskId] ?? { id: activeTaskId };
+    return state.taskOrder
+      .map((id) => state.tasks[id])
+      .find((task): task is DesktopTask => Boolean(task) && ACTIVE_STATUSES.includes(task.status));
+  };
+
+  /**
+   * Pause/resume/finish follow this id until the run it names is over.
+   *
+   * `send` records the generate/modify result before any event exists. `current`
+   * then hydrates history, which can still list an older run as "running", and
+   * a leftover event from that run can arrive after the new id is known. Either
+   * would retarget Stop at a task the bridge has already forgotten — the
+   * `task_not_found` toast that used to answer a click on Stop.
+   */
+  const adoptActive = (id: string) => {
+    if (!activeTaskId || activeTaskId === id) {
+      activeTaskId = id;
+      return;
+    }
+    const held = state.tasks[activeTaskId];
+    if (held && !ACTIVE_STATUSES.includes(held.status)) activeTaskId = id;
+  };
+
+  const cancelTask = async (taskId: string) => {
+    try {
+      await api.cancel(taskId);
+    } catch (reason) {
+      // The Go side already records a local `task.cancelled` for this code.
+      // The run is gone; treating it as a failure made Stop look broken.
+      if (errorCode(errorMessage(reason)) !== BRIDGE_ERROR_CODES.taskNotFound) throw reason;
+    }
+  };
+
   // Subscribed for the service's whole life rather than per listener: task
   // state has to keep up with the bridge even while nothing is watching, or a
   // run started before the first subscriber would be invisible afterwards.
@@ -602,10 +790,10 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     state = applyTaskEvent(state, event);
     const task = state.tasks[event.task_id];
     if (!task) return;
-    if (ACTIVE_STATUSES.includes(task.status)) activeTaskId = task.id;
+    if (ACTIVE_STATUSES.includes(task.status)) adoptActive(task.id);
     const review = reviewArtifacts.get(task.id);
     if (review && task.status === "completed" && task.artifact?.filePath) review.artifactFile = task.artifact.filePath;
-    emit({ kind: "task", task: project(task) });
+    emit({ kind: "task", task: project(task), focused: isFocused(task) });
     // The contract has no failed status, so a failure is reported twice: the
     // task turns `done`, and this says why.
     if (task.status === "failed" && task.error) {
@@ -624,9 +812,11 @@ export function createAgentService(api: DesktopAPI): AgentPort {
           if (!state.tasks[id]) state = { ...state, tasks: { ...state.tasks, [id]: hydrated.tasks[id] }, taskOrder: [...state.taskOrder, id] };
         }
       }
-      const task = pickForFolder(state, folderId);
-      if (!task) return null;
-      if (ACTIVE_STATUSES.includes(task.status)) activeTaskId = task.id;
+      const conversationId = focusedConversation(folderId);
+      const task = conversationId ? headOf(conversationId) : undefined;
+      if (!conversationId || !task) return null;
+      threads.set(folderId, { conversationId, fresh: false });
+      if (ACTIVE_STATUSES.includes(task.status)) adoptActive(task.id);
       return project(task);
     },
 
@@ -655,11 +845,11 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       const entries = await api.getTaskHistory(HISTORY_PAGE).catch(() => [] as TaskHistoryEntry[]);
       if (entries.length > 0) state = mergeHistory(state, hydrate(entries));
       /*
-       * One row per picture, not per run. An image series is several runs —
-       * one per version, one per picture in a batch — and listed run by run
-       * it would push every other task off Home. The newest run speaks for the
-       * series (status, time); the id is the series' first run, so the row
-       * keeps its identity as versions are added.
+       * One row per conversation, not per run. A follow-up is a run of its
+       * own, and so is every version of a picture; listed run by run, one
+       * conversation would push every other task off Home. The most recently
+       * touched run speaks for the row (status, time); the id is the
+       * conversation's, so the row keeps its identity as runs are added.
        */
       const seen = new Set<string>();
       return state.taskOrder
@@ -667,7 +857,6 @@ export function createAgentService(api: DesktopAPI): AgentPort {
         .filter((task): task is DesktopTask => Boolean(task))
         .sort((left, right) => updatedAtOf(right) - updatedAtOf(left))
         .filter((task) => {
-          if (task.documentType !== "img") return true;
           const key = conversationOf(task);
           if (seen.has(key)) return false;
           seen.add(key);
@@ -675,7 +864,14 @@ export function createAgentService(api: DesktopAPI): AgentPort {
         })
         .slice(0, options?.limit ?? LIST_LIMIT)
         .map((task) => {
-          const summary = toSummary(task);
+          const conversationId = conversationOf(task);
+          const first = conversationTasks(conversationId)[0];
+          const summary: AgentTaskSummary = {
+            ...toSummary(task),
+            id: conversationId,
+            conversationId,
+            ...(first && first.id !== task.id ? { title: taskTitle(first, translate("shell.service.untitledTask")) } : {}),
+          };
           const image = imageSeries(task);
           if (!image) return summary;
           const busy = image.runs.some((run) => run.status === "running");
@@ -701,12 +897,13 @@ export function createAgentService(api: DesktopAPI): AgentPort {
        * starts a *second* generation while the first stays blocked forever.
        * Nothing on screen says that happened.
        */
-      const pending = pendingQuestion();
-      if (pending) {
+      const pending = input.newConversation ? null : pendingQuestion();
+      const pendingTask = pending ? state.tasks[pending.taskId] : undefined;
+      if (pending && pendingTask && conversationOf(pendingTask) === focusedConversation(input.folderId)) {
         if (!pending.question.allowFreeform && pending.question.options.length > 0) {
           emit({
             kind: "notice",
-            message: "Pick one of the options above to continue — this question does not take a typed answer.",
+            message: translate("shell.service.question.pickOption"),
           });
           return;
         }
@@ -719,12 +916,86 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       emit({
         kind: "notice",
         message: dropped.some((part) => part === "review mode" || part === "custom permission mode")
-          ? `Sent with ${dropped.join(" or ")} unavailable in the current runtime. The source file stays unchanged and the result is written as a separate artifact.`
-          : `Sent without ${dropped.join(" or ")} — the current runtime has no file path for those attachments.`,
+          ? translate("shell.service.dropped.with", { parts: droppedLabels(dropped) })
+          : translate("shell.service.dropped.without", { parts: droppedLabels(dropped) }),
       });
       }
 
       const workspaceId = input.folderId === DEFAULT_FOLDER_ID ? undefined : input.folderId;
+
+      /*
+       * Which conversation this message continues.
+       *
+       * The panel shows one, and a message typed under it is a follow-up. The
+       * desktop defaults a run's conversation to its own id, so leaving this
+       * out — which is what every send did — made each message a conversation
+       * of its own: a new row on Home, and a panel that forgot everything said
+       * before it.
+       */
+      if (input.newConversation) {
+        threads.set(input.folderId, { fresh: true });
+        localTurns.delete(orphanKey(input.folderId));
+        emit({ kind: "cleared", folderId: input.folderId });
+      }
+      const conversationId = input.newConversation ? undefined : focusedConversation(input.folderId);
+      const parentTaskId = conversationId ? headOf(conversationId)?.id : undefined;
+      const lineage = {
+        ...(conversationId ? { conversationId } : {}),
+        ...(parentTaskId ? { parentTaskId } : {}),
+      };
+      /*
+       * The runtime keeps no conversation of its own — every run starts from
+       * the prompt alone — so what was said before travels in the prompt.
+       */
+      const context = conversationContext(conversationId, input.folderId);
+      const withContext = (prompt: string) => (context ? `${prompt}\n\n${context}` : prompt);
+      const started = (taskId: string, sentPrompt: string) => {
+        const joined = conversationId ?? taskId;
+        sentRuns.set(taskId, { conversationId: joined, ...(parentTaskId ? { parentTaskId } : {}), prompt: text });
+        /*
+         * On the panel now, not at the first bridge event.
+         *
+         * The desktop records what was asked (`task.user_input`) but does not
+         * push it, so a run only appeared once the runtime said something —
+         * and the message the user had just sent was missing from the thread
+         * until a reload read it back from history. The prompt kept here is
+         * the one the runtime got, which is what a resume has to repeat.
+         */
+        state = attachUserInput(state, taskId, { prompt: sentPrompt }, parentTaskId, {
+          conversationId: joined,
+          createdAt: new Date().toISOString(),
+          ...(workspaceId ? { workspaceId } : {}),
+        });
+        threads.set(input.folderId, { conversationId: joined, fresh: false });
+        const orphans = localTurns.get(orphanKey(input.folderId));
+        if (orphans) {
+          localTurns.set(joined, [...(localTurns.get(joined) ?? []), ...orphans]);
+          localTurns.delete(orphanKey(input.folderId));
+        }
+        activeTaskId = taskId;
+        const task = state.tasks[taskId];
+        if (task) emit({ kind: "task", task: project(task), focused: true });
+      };
+      const modifyDocument = async (record: DocumentRecord) => {
+        const prompt = withContext(promptWithComposerContext(text, input));
+        const result = await api.modify({
+          documentType: record.documentType as GenerateInput["documentType"],
+          sourceFile: record.filePath,
+          prompt,
+          ...(workspaceId ? { workspaceId } : { noProject: true }),
+          ...lineage,
+        });
+        if (input.permission !== "full") {
+          reviewArtifacts.set(result.taskId, {
+            sourceFileId: record.id,
+            sourceFile: record.filePath,
+            applied: false,
+            undoable: false,
+          });
+        }
+        started(result.taskId, prompt);
+      };
+
       if (input.imageGeneration) {
         await sendImage(text, input, input.imageGeneration, workspaceId);
         return;
@@ -737,22 +1008,26 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       // out, so this branch is reached only when the user left the choice alone.
       if (input.activeFileId) {
         const record = await api.getDocument(input.activeFileId);
-        const result = await api.modify({
-          documentType: record.documentType as GenerateInput["documentType"],
-          sourceFile: record.filePath,
-          prompt: promptWithComposerContext(text, input),
-          ...(workspaceId ? { workspaceId } : { noProject: true }),
-        });
-        if (input.permission !== "full") {
-          reviewArtifacts.set(result.taskId, {
-            sourceFileId: record.id,
-            sourceFile: record.filePath,
-            applied: false,
-            undoable: false,
-          });
-        }
-        activeTaskId = result.taskId;
+        await modifyDocument(record);
         return;
+      }
+
+      /*
+       * A follow-up with nothing open still means the thing this conversation
+       * made. "Make it shorter" after a run wrote a document is about that
+       * document; generating from the words alone would start a new one that
+       * knows nothing of it. A stated type is the user asking for a new file,
+       * so it goes the generate way below.
+       */
+      if (conversationId && !input.documentType) {
+        const made = [...conversationTasks(conversationId)]
+          .reverse()
+          .find((task) => task.status === "completed" && task.artifact?.filePath && MODIFIABLE.has(task.artifact.documentType || task.documentType || ""));
+        const record = made ? await documentMadeBy(made) : undefined;
+        if (record) {
+          await modifyDocument(record);
+          return;
+        }
       }
 
       /*
@@ -770,12 +1045,14 @@ export function createAgentService(api: DesktopAPI): AgentPort {
         settings.defaults.documentType,
       );
       if (route.kind === "needs_source") {
-        throw new Error("That request needs a file to work from. Open one first.");
+        throw new Error(translate("shell.service.needsSource"));
       }
+      const prompt = withContext(promptWithComposerContext(text, input));
       const result = await api.generate({
         documentType: route.documentType,
         topic: text.slice(0, 64),
-        prompt: promptWithComposerContext(text, input),
+        prompt,
+        ...lineage,
         ...(route.sourceFile ? { sourceFile: route.sourceFile } : {}),
         ...(workspaceId ? { workspaceId } : { noProject: true }),
         /*
@@ -798,9 +1075,13 @@ export function createAgentService(api: DesktopAPI): AgentPort {
          */
         ...(planModeRequested() ? { generationMode: "plan" as const } : {}),
         enableImages: settings.defaults.enableImages,
+        // Only sent when the setting is on. An explicit false would suppress
+        // request wording such as "联网搜索…"; omitting it leaves that path
+        // open while keeping the default off.
+        ...(settings.defaults.enableWebSearch ? { enableWebSearch: true } : {}),
         imageQuality: settings.defaults.imageQuality,
       });
-      activeTaskId = result.taskId;
+      started(result.taskId, prompt);
     },
 
     /**
@@ -874,48 +1155,50 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     },
 
     async pause() {
-      const task = activeTaskId ? state.tasks[activeTaskId] : undefined;
+      const task = liveTask();
       if (!task) return;
-      if (!api.pausePptx || task.documentType !== "pptx") {
+      const documentType = "documentType" in task ? task.documentType : undefined;
+      if (!api.pausePptx || (documentType && documentType !== "pptx")) {
         // Saying so beats a button that silently does nothing. Holding a run at
         // a boundary only exists for presentations today.
         throw new NotImplementedError(
           "agent.pause",
-          "Pausing only works while a presentation is being drawn. This run cannot be held.",
+          translate("shell.service.pauseUnavailable"),
         );
       }
       await api.pausePptx(task.id);
     },
 
     async resume() {
-      const task = activeTaskId ? state.tasks[activeTaskId] : undefined;
+      const task = liveTask();
       if (!task) return;
-      if (!api.resumePptxLive || task.documentType !== "pptx") {
+      const documentType = "documentType" in task ? task.documentType : undefined;
+      if (!api.resumePptxLive || (documentType && documentType !== "pptx")) {
         throw new NotImplementedError(
           "agent.resume",
-          "Resuming only works while a presentation is being drawn.",
+          translate("shell.service.resumeUnavailable"),
         );
       }
       await api.resumePptxLive(task.id);
     },
 
     async finish() {
-      if (!activeTaskId) return;
+      const task = liveTask();
+      if (!task) return;
       /*
        * "Four images" is four runs, and Stop means all of them: cancelling
        * only the one pause/resume track would leave three still billing.
        */
-      const held = state.tasks[activeTaskId];
-      if (held?.documentType === "img") {
-        const running = imageSeries(held)?.runs.filter((run) => run.status === "running") ?? [];
-        for (const run of running) await api.cancel(run.taskId);
+      if ("documentType" in task && task.documentType === "img") {
+        const running = imageSeries(task)?.runs.filter((run) => run.status === "running") ?? [];
+        for (const run of running) await cancelTask(run.taskId);
         activeTaskId = undefined;
         return;
       }
       // `cancel` is the closest the desktop has. The promises differ in wording
       // — finish keeps what was applied, cancel stops the run — but the outcome
       // matches: a cancelled run's output stays on disk as its partial artifact.
-      await api.cancel(activeTaskId);
+      await cancelTask(task.id);
       activeTaskId = undefined;
     },
 
@@ -924,7 +1207,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       const checkpoint = task ? resumeCheckpointOf(task) : undefined;
       const input = task?.userInput;
       if (!task || !checkpoint || !input?.prompt.trim()) {
-        throw new Error("This run left nothing to pick up from. Start it again instead.");
+        throw new Error(translate("shell.service.nothingToResume"));
       }
       const settings = await api.getSettings();
       // The runtime refuses a resume whose prompt, target or image decision
@@ -957,7 +1240,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     async applySuggestion(id) {
       const review = reviewArtifacts.get(id);
       if (!review?.artifactFile || !api.applyArtifactSuggestion) {
-        throw new NotImplementedError("agent.applySuggestion", "This agent result is not available as a reviewable artifact yet.");
+        throw new NotImplementedError("agent.applySuggestion", translate("shell.service.suggestionUnavailable"));
       }
       await api.applyArtifactSuggestion({ suggestionId: id, sourceFile: review.sourceFile, artifactFile: review.artifactFile });
       review.applied = true;
@@ -969,13 +1252,31 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     async undoSuggestion(id) {
       const review = reviewArtifacts.get(id);
       if (!review?.undoable || !review.artifactFile || !api.undoArtifactSuggestion) {
-        throw new NotImplementedError("agent.undoSuggestion", "This agent result is no longer undoable.");
+        throw new NotImplementedError("agent.undoSuggestion", translate("shell.service.suggestionNotUndoable"));
       }
       await api.undoArtifactSuggestion({ suggestionId: id, sourceFile: review.sourceFile, artifactFile: review.artifactFile });
       review.applied = false;
       review.undoable = false;
       const task = state.tasks[id];
       if (task) emit({ kind: "task", task: project(task) });
+    },
+
+    async startConversation(folderId) {
+      threads.set(folderId, { fresh: true });
+      localTurns.delete(orphanKey(folderId));
+      emit({ kind: "cleared", folderId });
+    },
+
+    async recordExchange({ folderId, messages }) {
+      if (messages.length === 0) return;
+      const conversationId = focusedConversation(folderId);
+      const key = conversationId ?? orphanKey(folderId);
+      const turn = { at: messages[0].createdAt || Date.now(), messages: messages.map((message) => ({ ...message })) };
+      localTurns.set(key, [...(localTurns.get(key) ?? []), turn]);
+      if (!conversationId) return;
+      threads.set(folderId, { conversationId, fresh: false });
+      const head = headOf(conversationId);
+      if (head) emit({ kind: "task", task: project(head), focused: true });
     },
   };
 }
@@ -1000,6 +1301,19 @@ function unsupportedParts(input: SendInput): string[] {
   return dropped;
 }
 
+const DROPPED_LABEL_KEYS: Record<string, string> = {
+  "pathless attachments": "shell.service.dropped.pathless",
+  "review mode": "shell.service.dropped.review",
+  "custom permission mode": "shell.service.dropped.custom",
+};
+
+/** `unsupportedParts` keeps stable English ids; this is how they read in the UI. */
+function droppedLabels(dropped: string[]): string {
+  return dropped
+    .map((part) => (DROPPED_LABEL_KEYS[part] ? translate(DROPPED_LABEL_KEYS[part]) : part))
+    .join(translate("shell.service.dropped.or"));
+}
+
 /** Carries composer context through the existing prompt-only runtime API. */
 function promptWithComposerContext(prompt: string, input: SendInput): string {
   const context: string[] = [];
@@ -1015,4 +1329,31 @@ function promptWithComposerContext(prompt: string, input: SendInput): string {
     context.push(`Selected passage from ${input.reference?.label ?? "the document"}:\n${selected}`);
   }
   return context.length > 0 ? `${prompt}\n\n${context.join("\n\n")}` : prompt;
+}
+
+/** What the runtime is told the conversation-so-far block starts with; see `send`. */
+const CONVERSATION_CONTEXT_MARKER = "[Earlier in this conversation — for context only; do not redo these requests]";
+/** Turns carried into a follow-up's prompt, newest kept. */
+const CONTEXT_TURNS = 6;
+/** Ceiling on the whole block, so a long thread cannot crowd out the instruction. */
+const CONTEXT_CHARS = 2000;
+/** Ceiling on one instruction or reply inside the block. */
+const TURN_CHARS = 300;
+/** Types `office.modify` can change in place. */
+const MODIFIABLE = new Set(["docx", "xlsx", "pptx"]);
+
+interface LocalTurn {
+  at: number;
+  messages: AgentMessage[];
+}
+
+/** The instruction as typed, without the conversation block `send` appended. */
+export function stripConversationContext(prompt: string): string {
+  const index = prompt.indexOf(`\n\n${CONVERSATION_CONTEXT_MARKER}`);
+  return index < 0 ? prompt : prompt.slice(0, index);
+}
+
+function clip(text: string, limit: number): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length > limit ? `${flat.slice(0, limit - 1)}…` : flat;
 }

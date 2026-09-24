@@ -8,12 +8,14 @@ import { PresentationStage } from "./PresentationStage";
 afterEach(() => {
   cleanup();
   editorMounts = 0;
+  frameOnUnavailable = undefined;
   replayFeed = { ops: [{ op: "shape.add" }] };
 });
 
 let seen: Locale | null = null;
 /** Any mount of the embedded editor, by either embed stack. */
 let editorMounts = 0;
+let frameOnUnavailable: ((error?: string) => void) | undefined;
 /**
  * What the live-draft controller hands back; per-test so both halves can run.
  *
@@ -24,9 +26,10 @@ let editorMounts = 0;
 let replayFeed: { ops: unknown[] } | undefined = { ops: [{ op: "shape.add" }] };
 
 vi.mock("../renderer/presentation/PresentationEditorFrame", () => ({
-  PresentationEditorFrame: () => {
+  PresentationEditorFrame: (props: { onUnavailable?: (error?: string) => void }) => {
     seen = useLocale();
     editorMounts += 1;
+    frameOnUnavailable = props.onUnavailable;
     return null;
   },
 }));
@@ -85,7 +88,7 @@ it("shows the deck's shape instead when nothing is being drawn", () => {
   replayFeed = { ops: [] };
   const { container } = render(<PresentationStage api={api} task={task} onError={() => {}} />);
   expect(editorMounts, "an editor was mounted over a document with nothing in it").toBe(0);
-  expect(container.querySelector(".shell-skeleton-slide")).not.toBeNull();
+  expect(container.querySelector("[data-testid='shell-slides-generating']")).not.toBeNull();
   expect(container.querySelector('[data-testid="shell-live-deck-lock"]')).toBeNull();
 });
 
@@ -125,4 +128,23 @@ it("says why the deck cannot be typed into, wherever it blocks clicks", () => {
   expect(Boolean(blocked), "this test is about the locked state").toBe(true);
   expect(note, "clicks are blocked with nothing explaining it").not.toBeNull();
   expect(note?.textContent?.trim().length).toBeGreaterThan(0);
+});
+
+// Same empty-reason trap as PresentationCanvas: filling in "could not start"
+// toasts "Not built yet" over a deck that is already drawing.
+it("does not treat a cleared unavailable as a start failure", () => {
+  const onError = vi.fn();
+  render(<PresentationStage api={api} task={task} onError={onError} />);
+  expect(frameOnUnavailable).toBeTypeOf("function");
+  frameOnUnavailable?.(undefined);
+  frameOnUnavailable?.("");
+  frameOnUnavailable?.("   ");
+  expect(onError).not.toHaveBeenCalled();
+});
+
+it("passes on what the editor said when it could not start", () => {
+  const onError = vi.fn();
+  render(<PresentationStage api={api} task={task} onError={onError} />);
+  frameOnUnavailable?.("the runtime never reported ready");
+  expect(onError).toHaveBeenCalledWith(expect.stringContaining("never reported ready"));
 });

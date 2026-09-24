@@ -1,6 +1,7 @@
 import type { DesktopAPI } from "../shared/types";
 import type { WriterAgentEditor } from "../renderer/word/WriterEditorFrame";
 import { agentClientId } from "../renderer/agentClientIdentity";
+import { translate } from "../renderer/i18n";
 import { unwrapAgentRunResult, waitForAgentRun } from "../renderer/agentRuntime";
 import type { DocumentEditRequest, DocumentEditResult } from "../shell/editor/canvasContract";
 
@@ -48,7 +49,7 @@ const PLAN_TIMEOUT_MS = 180_000;
 
 class EditAborted extends Error {
   constructor() {
-    super("The edit was stopped.");
+    super(translate("shell.edit.aborted"));
     this.name = "EditAborted";
   }
 }
@@ -108,7 +109,7 @@ function eachOccursOnce(haystack: string, needles: string[]): boolean {
 export function createDocxEditRunner(deps: DocxEditDeps) {
   return async function editDocument(request: DocumentEditRequest): Promise<DocumentEditResult> {
     const instruction = request.instruction.trim();
-    if (!instruction) throw new Error("There is no instruction to carry out.");
+    if (!instruction) throw new Error(translate("shell.edit.noInstruction"));
 
     const scope: "selection" | "document" =
       request.preferSelection && deps.hasSelection() ? "selection" : "document";
@@ -183,7 +184,7 @@ export function createDocxEditRunner(deps: DocxEditDeps) {
 
     assertLive(request.signal);
     if (!plan || typeof plan.summary !== "string" || !Array.isArray(plan.edits)) {
-      throw new Error("The agent returned an edit plan this app could not read.");
+      throw new Error(translate("shell.edit.unreadablePlan"));
     }
 
     // No edits is an answer, not an error: the planner returns an empty list
@@ -263,7 +264,7 @@ async function undo(
   const fresh = await deps.editor.capture("document");
   if (!eachOccursOnce(fresh.text, edits.map((edit) => edit.replacement))) {
     throw new Error(
-      "This change can no longer be undone on its own — the document has moved on since it was applied.",
+      translate("shell.edit.docMovedOn"),
     );
   }
   await deps.editor.apply(

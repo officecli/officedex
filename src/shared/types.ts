@@ -314,6 +314,8 @@ export interface GenerateInput {
   publish?: boolean;
   resumeCheckpoint?: string;
   enableImages?: boolean;
+  /** Opt-in web research before planning; omitted means "let the runtime read the prompt's wording". */
+  enableWebSearch?: boolean;
   imageQuality?: "standard" | "premium";
   localPreview?: boolean;
   /** Which runtime ran the task ("custom" / "hosted"); Go fills it in for history. */
@@ -896,6 +898,12 @@ export type AuthEvent =
 export interface GenerateDefaults {
   documentType: DocumentType;
   enableImages: boolean;
+  /**
+   * Ground decks in a live web search before planning. Defaults to false:
+   * the search is an extra model call in front of the outline, so it costs
+   * time before the first slide appears.
+   */
+  enableWebSearch: boolean;
   imageQuality: "standard" | "premium";
 }
 
@@ -1318,6 +1326,12 @@ export interface ActivityPage {
   nextCursor?: string;
 }
 
+/** Where a native file drop landed, in viewport CSS pixels. */
+export interface FileDropPoint {
+  x: number;
+  y: number;
+}
+
 export interface DesktopAPI extends DesktopVerticalAPI {
   /**
    * The document projection. Maintained on every write since it landed and
@@ -1330,6 +1344,16 @@ export interface DesktopAPI extends DesktopVerticalAPI {
   listDocumentActivities(input: DocumentActivityListInput): Promise<ActivityPage>;
   /** Pinning is a filter on the one file list, not a move to another place. */
   setDocumentPinned(documentId: string, pinned: boolean): Promise<void>;
+  /**
+   * Unregisters one document from the library, by document id. The file on disk
+   * is never touched.
+   *
+   * Optional because an older runtime does not have it. It is the only call that
+   * removes a row the file list can see: `removeRecentFile` forgets a different
+   * table, and `deleteDocument` needs a task id that an imported file does not
+   * have.
+   */
+  removeDocument?(documentId: string): Promise<void>;
 
   /** Folders, the default one first. */
   listFolders(): Promise<FolderRecord[]>;
@@ -1360,6 +1384,13 @@ export interface DesktopAPI extends DesktopVerticalAPI {
    * one. Opening the same file twice returns the document that already exists.
    */
   openLocalFile(): Promise<DocumentRecord | null>;
+  /**
+   * Registers a path the user already chose some other way — a file dragged in
+   * from Finder or Explorer. Same rules as `openLocalFile`: only docx/xlsx/pptx,
+   * not copied, and a path already in the library returns its existing record.
+   * Rejects for any other type, a relative path, or a file that is not there.
+   */
+  importLocalFile(filePath: string): Promise<DocumentRecord>;
   /** Creates and registers a real blank Office file in the requested folder. */
   createBlankDocument?(documentType: "docx" | "xlsx" | "pptx", workspaceId: string): Promise<DocumentRecord>;
 
@@ -1479,7 +1510,13 @@ export interface DesktopAPI extends DesktopVerticalAPI {
   removeWorkspace(workspaceId: string): Promise<void>;
   onAuthEvent(callback: (event: AuthEvent) => void): () => void;
   onBridgeEvent(callback: (event: BridgeEvent) => void): () => void;
-  onFileDrop(callback: (paths: string[]) => void): () => void;
+  /**
+   * Files dropped onto the window from the operating system. `point` is where
+   * the drop landed, in viewport CSS pixels, when the runtime reports it —
+   * several parts of the page take drops, and it is how each tells whether a
+   * drop was meant for it.
+   */
+  onFileDrop(callback: (paths: string[], point?: FileDropPoint) => void): () => void;
   getAppVersion(): Promise<string>;
   getAppUpdateStatus(): Promise<AppUpdateStatus>;
   checkAppUpdate(): Promise<AppUpdateCheckResult>;

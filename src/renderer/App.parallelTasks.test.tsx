@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
 
 const settings: UserSettings = {
   version: 1,
-  defaults: { documentType: "pptx", enableImages: true, imageQuality: "premium" },
+  defaults: { documentType: "pptx", enableImages: true, enableWebSearch: false, imageQuality: "premium" },
   workspaceDir: null,
   outputDir: null,
   llmProvider: null,

@@ -401,6 +401,61 @@ describe("taskState", () => {
     expect(state.tasks[taskId].activeStageId).toBe("outline");
   });
 
+  /*
+   * Sheet edit's first bridge event is EventStepStarted for the wrapper
+   * step `modify`. That used to miss every semantic case and seed the
+   * four-stage document skeleton; `license` then appended "Checking access"
+   * under it and ticked Analyzing request. The access check is a preflight
+   * and the wrapper is not a stage.
+   */
+  it("keeps a sheet-edit access check first, without the document skeleton", () => {
+    let state = createInitialTaskState();
+    const taskId = "xlsx-modify-access";
+    const events = [
+      { event_id: "modify-started", task_id: taskId, type: "task.progress", payload: { step: "modify", status: "running" } },
+      { event_id: "license-running", task_id: taskId, type: "task.progress", payload: { step: "license", status: "running" } },
+      { event_id: "license-completed", task_id: taskId, type: "task.progress", payload: { step: "license", status: "completed" } },
+    ] as const;
+    for (const event of events) state = applyTaskEvent(state, event);
+
+    const stages = state.tasks[taskId].stages ?? [];
+    expect(stages.map((stage) => stage.id)).toEqual(["access"]);
+    expect(stages[0]).toEqual(expect.objectContaining({ id: "access", status: "completed" }));
+    expect(state.tasks[taskId].activeStageId).toBeUndefined();
+    expect(stages.some((stage) => stage.id === "analyze" || stage.label === "Formatting & export")).toBe(false);
+  });
+
+  it("inserts a late access check ahead of a wrapper generate stage", () => {
+    let state = createInitialTaskState();
+    const taskId = "generate-then-license";
+    const events = [
+      { event_id: "generate-started", task_id: taskId, type: "task.progress", payload: { step: "generate", status: "running" } },
+      { event_id: "license-running", task_id: taskId, type: "task.progress", payload: { step: "license", status: "running" } },
+      { event_id: "license-completed", task_id: taskId, type: "task.progress", payload: { step: "license", status: "completed" } },
+    ] as const;
+    for (const event of events) state = applyTaskEvent(state, event);
+
+    const stages = state.tasks[taskId].stages ?? [];
+    expect(stages.map((stage) => stage.id)).toEqual(["access", "generate"]);
+    expect(stages[0]?.status).toBe("completed");
+    expect(stages[1]?.status).toBe("active");
+    expect(state.tasks[taskId].activeStageId).toBe("generate");
+  });
+
+  it("does not seed the four-stage skeleton from an unmapped named step", () => {
+    let state = createInitialTaskState();
+    const taskId = "xlsx-modify-wrapper";
+    state = applyTaskEvent(state, {
+      event_id: "modify-started",
+      task_id: taskId,
+      type: "task.progress",
+      payload: { step: "modify", status: "running" },
+    });
+
+    expect(state.tasks[taskId].stages).toEqual([]);
+    expect(state.tasks[taskId].activeStageId).toBeUndefined();
+  });
+
   it("moves an accepted plan response into running state before bridge events arrive", () => {
     const waiting = applyTaskEvent(createInitialTaskState(), {
       event_id: "event-plan",

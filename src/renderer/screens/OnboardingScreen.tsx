@@ -265,6 +265,9 @@ export function OnboardingScreen({ settings, defaultWorkspaceDir, onComplete }: 
             <Field label={t("onboarding.field.images")}>
               <Switch checked={draft.defaults.enableImages} onChange={(checked) => updateDefaults({ enableImages: checked })} />
             </Field>
+            <Field label={t("onboarding.field.webSearch")}>
+              <Switch checked={draft.defaults.enableWebSearch} onChange={(checked) => updateDefaults({ enableWebSearch: checked })} />
+            </Field>
           </Space>
         ) : null}
 

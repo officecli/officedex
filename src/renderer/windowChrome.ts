@@ -36,6 +36,20 @@ export function applyWindowChrome(root: HTMLElement, env: WindowChromeEnvironmen
   root.removeAttribute(CHROME_ATTRIBUTE);
 }
 
+/**
+ * Whether the system is already drawing window controls over this page.
+ *
+ * Reads the attribute `applyWindowChrome` stamped, so a component asks the same
+ * question the stylesheets do and gets the same answer. A component that draws
+ * its own controls has to ask: on macOS the real traffic lights float over the
+ * top-left corner whatever the page puts there, and two overlapping sets is
+ * what you get if it does not (see `chrome/WindowBar.tsx`).
+ */
+export function hasOverlayWindowChrome(root?: HTMLElement): boolean {
+  const element = root ?? (typeof document === "undefined" ? null : document.documentElement);
+  return element?.getAttribute(CHROME_ATTRIBUTE) === "overlay";
+}
+
 export function mountWindowChrome(): void {
   if (typeof document === "undefined") return;
   applyWindowChrome(document.documentElement, readWindowChromeEnvironment());

@@ -873,9 +873,9 @@ function semanticStageForProgress(payload: Record<string, unknown>): { id: strin
      * This used to return `{ id: "step:" + step, label: payload.content }`,
      * which made every unmapped step its own stage titled with whatever
      * diagnostic string the runtime happened to emit. Returning undefined
-     * leaves the current stage active instead: `reduceStages` falls through to
-     * its completed/failed handling once a semantic stage exists, and to the
-     * four-stage skeleton when one does not. Nothing is lost — the full
+     * leaves the current stage active instead: `reduceStages` ignores a named
+     * step it does not know, and only uses the four-stage skeleton for
+     * progress that never named a step at all. Nothing is lost — the full
      * progress text is already written to the bridge log.
      *
      * The cost of getting this list wrong is not noise any more, it is
@@ -906,6 +906,7 @@ export function reduceStages(events: BridgeEvent[]): { stages: StageState[]; act
   let semanticMode = false;
   let activeId: string | undefined;
   let derivedIndex = -1;
+  const preempted = new Set<string>();
 
   function upsert(id: string, label: string, status: StageState["status"], ts?: string) {
     const existing = stageMap.get(id);
@@ -917,7 +918,11 @@ export function reduceStages(events: BridgeEvent[]): { stages: StageState[]; act
         stage.completedAt = ts;
       }
       stageMap.set(id, stage);
-      order.push(id);
+      // Access is a preflight. Wrapper steps such as `generate` / `modify`
+      // can open a later stage before the license event arrives; it still
+      // belongs at the front of the list.
+      if (id === "access") order.unshift(id);
+      else order.push(id);
       return;
     }
     if (label && label !== existing.label) existing.label = label;
@@ -971,14 +976,45 @@ export function reduceStages(events: BridgeEvent[]): { stages: StageState[]; act
     if (!nativeMode && semanticStage) {
       semanticMode = true;
       const status = stageStatusForProgress(payload);
-      for (const id of order) {
-        const stage = stageMap.get(id);
-        if (stage && id !== semanticStage.id && stage.status === "active") {
-          upsert(id, stage.label, "completed", ts);
+      const preflight = semanticStage.id === "access";
+      if (!preflight) {
+        for (const id of order) {
+          const stage = stageMap.get(id);
+          if (stage && id !== semanticStage.id && stage.status === "active") {
+            upsert(id, stage.label, "completed", ts);
+          }
+        }
+      } else if (status === "active") {
+        for (const id of order) {
+          const stage = stageMap.get(id);
+          if (stage && id !== semanticStage.id && stage.status === "active") {
+            upsert(id, stage.label, "pending", ts);
+            preempted.add(id);
+          }
         }
       }
       upsert(semanticStage.id, semanticStage.label, status, ts);
-      activeId = status === "active" ? semanticStage.id : undefined;
+      if (status === "active") {
+        activeId = semanticStage.id;
+      } else if (preflight) {
+        const resumed = order.find((id) => {
+          if (id === "access") return false;
+          const stage = stageMap.get(id);
+          if (!stage) return false;
+          if (stage.status === "active") return true;
+          return stage.status === "pending" && preempted.has(id);
+        });
+        if (resumed) {
+          const stage = stageMap.get(resumed);
+          if (stage && stage.status !== "active") upsert(resumed, stage.label, "active", ts);
+          preempted.delete(resumed);
+          activeId = resumed;
+        } else {
+          activeId = undefined;
+        }
+      } else {
+        activeId = undefined;
+      }
       continue;
     }
 
@@ -1003,6 +1039,11 @@ export function reduceStages(events: BridgeEvent[]): { stages: StageState[]; act
       case "task.started":
         break;
       case "task.progress": {
+        // A named step that semanticStageForProgress did not map is silence
+        // on purpose. The four-stage skeleton is only for progress that
+        // never named a step — sheet edit's wrapper `modify` used to land
+        // here and paint Analyzing / outline / export above the access check.
+        if (stringValue(payload.step).trim()) break;
         ensureDerivedDefaults();
         derivedIndex = Math.min(derivedIndex + 1, DEFAULT_STAGE_DEFS.length - 1);
         for (let i = 0; i < derivedIndex; i++) {

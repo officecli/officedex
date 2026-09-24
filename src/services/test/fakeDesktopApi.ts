@@ -70,15 +70,21 @@ export type FakeDesktopApi = DesktopAPI & {
   emitBridgeEvent(event: BridgeEvent): void;
   /** What the next openLocalFile picker returns. Unset means cancelled. */
   pickLocalFile(filePath: string): void;
+  /** Files dropped onto the window from the OS, as the Wails runtime reports them. */
+  dropFiles(paths: string[]): void;
   /** Every generate/modify call made through this fake, in order. */
-  readonly calls: Array<{ method: "generate" | "modify" | "respond" | "pausePptx"; input: Record<string, unknown> }>;
+  readonly calls: Array<{ method: "generate" | "modify" | "respond" | "pausePptx" | "cancel" | "deleteDocument"; input: Record<string, unknown> }>;
+  /** Next `cancel` throws this, then clears. */
+  failNextCancel(error: Error): void;
 };
 
 export function createFakeDesktopApi(seed: FakeDesktopSeed = {}): FakeDesktopApi {
   const bridgeListeners = new Set<(event: BridgeEvent) => void>();
-  const calls: Array<{ method: "generate" | "modify" | "respond" | "pausePptx"; input: Record<string, unknown> }> = [];
+  const dropListeners = new Set<(paths: string[]) => void>();
+  const calls: Array<{ method: "generate" | "modify" | "respond" | "pausePptx" | "cancel" | "deleteDocument"; input: Record<string, unknown> }> = [];
   let picked: { filePath: string } | null = null;
   let taskCounter = 0;
+  let nextCancelError: Error | null = null;
   const history: TaskHistoryEntry[] = [...(seed.taskHistory ?? [])];
   const folders: FolderRecord[] = [
     { id: FAKE_DEFAULT_FOLDER_ID, name: "OfficeDex", path: DEFAULT_WORKSPACE_DIR, isDefault: true },
@@ -106,6 +112,29 @@ export function createFakeDesktopApi(seed: FakeDesktopSeed = {}): FakeDesktopApi
     };
   });
 
+  /**
+   * Mirrors RegisterLocalDocument: one path, one document, whether it got here
+   * through the agent, the picker or a drop.
+   */
+  function registerLocal(filePath: string): DocumentRecord {
+    const existing = documents.find((document) => document.filePath === filePath);
+    if (existing) return { ...existing };
+    const record: DocumentRecord = {
+      id: documentIdFor(filePath),
+      filePath,
+      fileName: filePath.slice(filePath.lastIndexOf("/") + 1),
+      documentType: extensionOf(filePath).slice(1),
+      // No workspace: an imported file is not inside any of the app's folders.
+      workspaceId: "",
+      createdAt: new Date(1_700_100_000_000).toISOString(),
+      updatedAt: new Date(1_700_100_000_000).toISOString(),
+      migrationSource: "user",
+      pinned: false,
+    };
+    documents = [...documents, record];
+    return { ...record };
+  }
+
   const recents: RecentFile[] = (seed.documents ?? [])
     .map((document, index) => ({ document, record: documents[index] }))
     .filter(({ document }) => Boolean(document.lastOpenedAt))
@@ -119,7 +148,7 @@ export function createFakeDesktopApi(seed: FakeDesktopSeed = {}): FakeDesktopApi
 
   let settings: UserSettings = {
     version: 1,
-    defaults: { documentType: "pptx", enableImages: true, imageQuality: "premium" },
+    defaults: { documentType: "pptx", enableImages: true, enableWebSearch: false, imageQuality: "premium" },
     workspaceDir: DEFAULT_WORKSPACE_DIR,
     outputDir: null,
     llmProvider: null,
@@ -158,6 +187,21 @@ export function createFakeDesktopApi(seed: FakeDesktopSeed = {}): FakeDesktopApi
     },
     async setDocumentPinned(id: string, pinned: boolean) {
       find(id).pinned = pinned;
+    },
+    /*
+     * The row the file list reads, gone. That is the whole point of this call:
+     * `removeRecentFile` touches a different table, so a remove that only did
+     * that removed nothing anyone could see.
+     *
+     * An id that is already gone is a no-op, as it is on the desktop — a menu
+     * item pressed twice is not a failure.
+     */
+    async removeDocument(id: string) {
+      const record = documents.find((entry) => entry.id === id);
+      if (!record) return;
+      documents = documents.filter((entry) => entry.id !== id);
+      const stale = recents.findIndex((recent) => recent.filePath === record.filePath);
+      if (stale >= 0) recents.splice(stale, 1);
     },
     // Mirrors app_document_files.go: the extension survives, the id does not
     // change, and a collision is refused.
@@ -210,28 +254,23 @@ export function createFakeDesktopApi(seed: FakeDesktopSeed = {}): FakeDesktopApi
       // Stands in for the native picker: `pick` is what a test says the user
       // chose, and leaving it unset is a cancelled dialog.
       if (!picked) return null;
-      const existing = documents.find((document) => document.filePath === picked!.filePath);
-      if (existing) {
-        // Mirrors RegisterLocalDocument: one path, one document, whether it got
-        // here through the agent or through the picker.
-        picked = null;
-        return { ...existing };
-      }
-      const record: DocumentRecord = {
-        id: documentIdFor(picked.filePath),
-        filePath: picked.filePath,
-        fileName: picked.filePath.slice(picked.filePath.lastIndexOf("/") + 1),
-        documentType: extensionOf(picked.filePath).slice(1),
-        // No workspace: an imported file is not inside any of the app's folders.
-        workspaceId: "",
-        createdAt: new Date(1_700_100_000_000).toISOString(),
-        updatedAt: new Date(1_700_100_000_000).toISOString(),
-        migrationSource: "user",
-        pinned: false,
-      };
-      documents = [...documents, record];
+      const chosen = picked.filePath;
       picked = null;
-      return { ...record };
+      return registerLocal(chosen);
+    },
+    async importLocalFile(filePath: string) {
+      // Mirrors ImportLocalFile's type rule, which is what a drop runs into.
+      if (![".docx", ".xlsx", ".pptx"].includes(extensionOf(filePath).toLowerCase())) {
+        throw new Error(`OfficeDex opens Word, Excel and PowerPoint files; "${filePath.slice(filePath.lastIndexOf("/") + 1)}" is not one`);
+      }
+      return registerLocal(filePath);
+    },
+    onFileDrop(callback: (paths: string[]) => void) {
+      dropListeners.add(callback);
+      return () => dropListeners.delete(callback);
+    },
+    dropFiles(paths: string[]) {
+      for (const listener of dropListeners) listener(paths);
     },
     pickLocalFile(filePath: string) {
       picked = { filePath };
@@ -286,10 +325,27 @@ export function createFakeDesktopApi(seed: FakeDesktopSeed = {}): FakeDesktopApi
         documentType: file.documentType,
       };
     },
+    /*
+     * Recents only — the way `RemoveRecentFile` behaves in app_settings.go.
+     *
+     * This used to drop the matching `documents` row as well, which made the
+     * fake more generous than the desktop and hid a real defect: `files.remove`
+     * called nothing but this, so every test said the file was gone while the
+     * shipped app left the row in the list.
+     */
     async removeRecentFile(filePath: string) {
       const index = recents.findIndex((recent) => recent.filePath === filePath);
       if (index >= 0) recents.splice(index, 1);
-      documents = documents.filter((document) => document.filePath !== filePath);
+    },
+    /** Keyed on the task, as `DeleteDocument` is; takes its document with it. */
+    async deleteDocument(taskId: string) {
+      calls.push({ method: "deleteDocument", input: { taskId } });
+      const doomed = documents.filter((document) => document.currentArtifactTaskId === taskId);
+      documents = documents.filter((document) => document.currentArtifactTaskId !== taskId);
+      for (const document of doomed) {
+        const index = recents.findIndex((recent) => recent.filePath === document.filePath);
+        if (index >= 0) recents.splice(index, 1);
+      }
     },
 
     onBridgeEvent(callback: (event: BridgeEvent) => void) {
@@ -321,7 +377,16 @@ export function createFakeDesktopApi(seed: FakeDesktopSeed = {}): FakeDesktopApi
       calls.push({ method: "respond", input });
       return undefined;
     },
-    async cancel() {
+    failNextCancel(error: Error) {
+      nextCancelError = error;
+    },
+    async cancel(taskId: string) {
+      calls.push({ method: "cancel", input: { taskId } });
+      if (nextCancelError) {
+        const error = nextCancelError;
+        nextCancelError = null;
+        throw error;
+      }
       return undefined;
     },
     async pausePptx(taskId: string) {

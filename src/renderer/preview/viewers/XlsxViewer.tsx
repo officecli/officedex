@@ -19,6 +19,9 @@ interface XlsxViewerProps {
   grant?: PreviewGrant | null;
   onDirtyChange?: (dirty: boolean) => void;
   onRequestClose?: () => void;
+  onFlushReady?: (flush: (() => Promise<void>) | null) => void;
+  /** Forwarded to the shared idle autosave window; tests only. */
+  autosaveIdleMs?: number;
 }
 
 const CANVAS_SAVE_STATE: Record<SpreadsheetCanvasState, WorkbenchSaveState> = {
@@ -41,6 +44,8 @@ export default function XlsxViewer({
   grant,
   onDirtyChange,
   onRequestClose,
+  onFlushReady,
+  autosaveIdleMs,
 }: XlsxViewerProps) {
   const api = useDesktopApi();
   const t = useT();
@@ -95,6 +100,8 @@ export default function XlsxViewer({
         onStateChange={setCanvasState}
         onError={setError}
         onSaveError={setError}
+        onFlushReady={onFlushReady}
+        autosaveIdleMs={autosaveIdleMs}
       />
     </OfficeWorkbenchLayout>
   );

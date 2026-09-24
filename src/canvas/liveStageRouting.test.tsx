@@ -129,6 +129,34 @@ describe("a drawing deck takes the canvas", () => {
     expect(presentation).toBeNull();
   });
 
+  /*
+   * A run outranks the recording.
+   *
+   * Watching the demo and then asking for a real deck is the ordinary next
+   * thing to do, and the recording must not survive it: `demo` is still set on
+   * the shell (nothing clears it but `open-file`, and a run has no file), so
+   * the canvas was keeping the finished recording on screen while the panel
+   * beside it listed the new run's pages — two different decks, one window.
+   */
+  it("lets a new run take the canvas away from the recording", () => {
+    const { adapter, emit } = harness();
+    // Long before the run below: this is "watched the recording, then asked for
+    // a real deck", so the run is the newer request.
+    act(() =>
+      adapter.showFileless?.({
+        demo: true,
+        demoStartedAt: new Date(0).toISOString(),
+      }),
+    );
+    expect((stage!.task as { id: string }).id).toBe("builtin-nexaedge");
+
+    stage = null;
+    emit(started("task-deck"));
+
+    expect(stage).not.toBeNull();
+    expect((stage!.task as { id: string }).id).toBe("task-deck");
+  });
+
   // Once the run is over the deck is an ordinary file, and the open tab is
   // whatever the user was looking at.
   it("gives the canvas back when the run ends", () => {

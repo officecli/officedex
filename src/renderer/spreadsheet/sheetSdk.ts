@@ -264,6 +264,11 @@ export class OfflineImageUploader implements AbstractedEditorFileUploader {
   resume(): void {}
 }
 
+export function resetOfflineSheetEditorLoader(): void {
+  loadedScripts.clear();
+  localeNamespaces.clear();
+}
+
 function loadScriptOnce(src: string): Promise<void> {
   const existing = loadedScripts.get(src);
   if (existing) return existing;
@@ -345,6 +350,10 @@ export async function createOfflineSheetEditor(
   } };
 
   const sdkLocale = locale === "zh" ? "zh-CN" : "en-US";
+  // The SDK's getRealLocale() reads <html lang> once and caches it. Spreadsheet
+  // canvas mounts in useLayoutEffect, before the shell's useEffect stamps lang,
+  // and an empty lang falls through to zh-CN. Set it here, before the import.
+  if (typeof document !== "undefined") document.documentElement.lang = sdkLocale;
   await loadScriptOnce(`/sdk-sheet-locales/fe-common/${sdkLocale}.js`);
   await loadScriptOnce(`/sdk-sheet-locales/lizard-service-sheet-sdk/${sdkLocale}.js`);
   // Cached bundles do not run again when a later editor switches back.
@@ -356,6 +365,9 @@ export async function createOfflineSheetEditor(
     mode: {
       type: "standard",
       role: "editor",
+    },
+    i18n: {
+      language: sdkLocale,
     },
     attachment: {
       uploader: new OfflineImageUploader(modocAssets, stageImage),

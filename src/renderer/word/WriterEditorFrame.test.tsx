@@ -1,4 +1,4 @@
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WRITER_EMBED_PROTOCOL_VERSION, type WriterHostCommand } from "../../shared/writerProtocol";
 
@@ -36,6 +36,7 @@ function captureFrame(container: HTMLElement) {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
   vi.unstubAllGlobals();
 });
@@ -157,5 +158,50 @@ describe("WriterEditorFrame agent tools", () => {
     fromEmbed({ type: "writer:response", requestId: request.requestId, ok: false, error: "Writer 尚未装载文档。" });
 
     await expect(pending).rejects.toThrow("Writer 尚未装载文档。");
+  });
+
+  it("autosaves a manual edit after the shared idle window", async () => {
+    mockManifest();
+    const { container } = render(
+      <WriterEditorFrame previewToken="token" fileName="report.docx" onUnavailable={vi.fn()} autosaveIdleMs={40} />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector("iframe.writer-embed-frame")).not.toBeNull();
+    });
+    const { posted, fromEmbed } = captureFrame(container);
+    fromEmbed({ type: "writer:embed-ready", protocolVersion: WRITER_EMBED_PROTOCOL_VERSION });
+    await waitFor(() => {
+      expect(posted.some((message) => message.type === "writer:load")).toBe(true);
+    });
+    fromEmbed({ type: "writer:document-loaded", fileName: "report.docx" });
+
+    vi.useFakeTimers();
+    fromEmbed({ type: "writer:dirty-changed", dirty: true });
+    expect(posted.some((message) => message.type === "writer:save-request")).toBe(false);
+    await act(async () => { await vi.advanceTimersByTimeAsync(40); });
+    expect(posted.filter((message) => message.type === "writer:save-request")).toHaveLength(1);
+  });
+
+  it("coalesces a burst of Writer edits into one idle autosave", async () => {
+    mockManifest();
+    const { container } = render(
+      <WriterEditorFrame previewToken="token" fileName="report.docx" onUnavailable={vi.fn()} autosaveIdleMs={40} />,
+    );
+    await waitFor(() => {
+      expect(container.querySelector("iframe.writer-embed-frame")).not.toBeNull();
+    });
+    const { posted, fromEmbed } = captureFrame(container);
+    fromEmbed({ type: "writer:embed-ready", protocolVersion: WRITER_EMBED_PROTOCOL_VERSION });
+    await waitFor(() => {
+      expect(posted.some((message) => message.type === "writer:load")).toBe(true);
+    });
+    fromEmbed({ type: "writer:document-loaded", fileName: "report.docx" });
+
+    vi.useFakeTimers();
+    for (let index = 0; index < 4; index += 1) {
+      fromEmbed({ type: "writer:dirty-changed", dirty: true });
+    }
+    await act(async () => { await vi.advanceTimersByTimeAsync(40); });
+    expect(posted.filter((message) => message.type === "writer:save-request")).toHaveLength(1);
   });
 });

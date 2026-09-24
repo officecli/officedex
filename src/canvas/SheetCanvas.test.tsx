@@ -235,6 +235,19 @@ describe("SheetCanvas", () => {
     expect(onUnavailable).toHaveBeenCalledWith(expect.stringMatching(/workbook editor/i));
   });
 
+  // SpreadsheetCanvas uses onError(undefined) as a clear, not a failure.
+  // Passing that through as "could not start" is how a working grid used to
+  // toast "Not built yet" on every open.
+  it("does not treat a cleared error as a start failure", async () => {
+    const { onUnavailable } = await mounted();
+
+    canvasProps[0].onError?.(undefined);
+    canvasProps[0].onError?.("");
+    canvasProps[0].onError?.("   ");
+
+    expect(onUnavailable).not.toHaveBeenCalled();
+  });
+
   /*
    * Selection. The editor reports the address on every range change, which is
    * cheap; the cells themselves are read once, when the message is sent —

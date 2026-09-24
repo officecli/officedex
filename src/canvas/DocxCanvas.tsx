@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { DesktopApiProvider } from "../renderer/services/desktopApi";
+import { translate } from "../renderer/i18n";
 import { WriterEditorFrame, type WriterAgentEditor } from "../renderer/word/WriterEditorFrame";
 import type { DesktopAPI } from "../shared/types";
 import type { FileMeta } from "../shared/uiPort";
@@ -9,6 +10,7 @@ import type {
   DocumentEditRequest,
   DocumentEditResult,
 } from "../shell/editor/canvasContract";
+import { canvasLocaleTag, useCanvasLocale } from "../shell/editor/canvasLocale";
 import { createDocxEditRunner } from "./docxEditRun";
 
 export type DocumentEditRunner = (request: DocumentEditRequest) => Promise<DocumentEditResult>;
@@ -64,8 +66,8 @@ interface Session {
 
 /** What the chip says, given what Writer is willing to tell us for free. */
 function selectionLabel(fileName: string, paragraphs: number | undefined): string {
-  if (!paragraphs || paragraphs <= 1) return `${fileName} · selection`;
-  return `${fileName} · ${paragraphs} paragraphs`;
+  if (!paragraphs || paragraphs <= 1) return translate("shell.canvas.selection", { name: fileName });
+  return translate("shell.canvas.paragraphs", { name: fileName, count: paragraphs });
 }
 
 export function DocxCanvas({
@@ -78,6 +80,7 @@ export function DocxCanvas({
   onEditRunner,
   onUnavailable,
 }: DocxCanvasProps) {
+  const locale = useCanvasLocale();
   const [session, setSession] = useState<Session | null>(null);
   const editorRef = useRef<WriterAgentEditor | null>(null);
   const labelRef = useRef<string>(file.name);
@@ -162,12 +165,11 @@ export function DocxCanvas({
                   /*
                    * The planner writes its summary in this language, and the
                    * summary is the only part of the result the user reads. The
-                   * shell has no i18n by decision and speaks English, so the
-                   * answer must too — `navigator.language` here would put a
-                   * Chinese sentence in an English panel, which is the same
-                   * mistake `PresentationStage` had to undo.
+                   * tag comes from the shell's locale channel: pinning `"en"`
+                   * here was the same S4-009 mismatch `PresentationStage` had
+                   * to undo, just on the request rather than the chrome.
                    */
-                  locale: "en",
+                  locale: canvasLocaleTag(locale) ?? undefined,
                 })
               : null,
           );
@@ -184,15 +186,17 @@ export function DocxCanvas({
           }
           hasSelectionRef.current = true;
           labelRef.current = selectionLabel(session.fileName, summary.paragraphs);
-          onSelectionChange({ fileId: file.id, label: labelRef.current, text: "" });
+          // Anything that gets this far is a range the user dragged out, which
+          // is what `CanvasSelection.block` means. The carets are filtered out
+          // above.
+          onSelectionChange({ fileId: file.id, label: labelRef.current, text: "", block: true });
         }}
-        onUnavailable={(error) =>
-          onUnavailable(
-            error?.trim()
-              ? `The Word editor could not start. ${error}`
-              : "The Word editor is not installed in this build.",
-          )
-        }
+        onUnavailable={(error) => {
+          // Writer already names missing assets and handshake timeouts. An
+          // empty reason is not a start failure.
+          if (!error?.trim()) return;
+          onUnavailable(translate("shell.canvas.wordUnavailable", { error }));
+        }}
       />
     </DesktopApiProvider>
   );

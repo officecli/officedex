@@ -19,6 +19,8 @@
  */
 
 import type { DesktopTask } from "../shared/types";
+import { useT } from "../renderer/i18n";
+import { STAGE_CHROME, useEditorChrome } from "./editorChrome";
 import { xlsxSheetProgress, type SheetProgress } from "./sheetRuntimeProgress";
 import "./sheetStage.css";
 
@@ -40,19 +42,26 @@ export interface SheetStageProps {
  * guess like "Planning the sheets" was wrong for every edit, and stating a
  * phase the run is not in is worse than repeating one it is.
  */
-function statusLine(task: DesktopTask, sheets: SheetProgress[]): string {
+function statusLine(
+  task: DesktopTask,
+  sheets: SheetProgress[],
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): string {
   if (sheets.length === 0) {
     const active = (task.stages ?? []).find((stage) => stage.id === task.activeStageId);
-    return active?.label.trim() || "Getting started";
+    return active?.label.trim() || t("shell.canvas.gettingStarted");
   }
   const written = sheets.filter((sheet) => sheet.state === "written").length;
-  if (written === 0) return sheets.length === 1 ? "Writing 1 sheet" : `Writing ${sheets.length} sheets`;
-  if (written < sheets.length) return `${written} of ${sheets.length} sheets written`;
-  return "Assembling the workbook";
+  if (written === 0) return sheets.length === 1 ? t("shell.canvas.writingOneSheet") : t("shell.canvas.writingSheets", { count: sheets.length });
+  if (written < sheets.length) return t("shell.canvas.sheetsWritten", { written, total: sheets.length });
+  return t("shell.canvas.assemblingWorkbook");
 }
 
 export function SheetStage({ task }: SheetStageProps) {
+  const t = useT();
   const sheets = xlsxSheetProgress(task);
+  // Reserves nothing; says the canvas is not empty. See STAGE_CHROME.
+  useEditorChrome(STAGE_CHROME);
 
   return (
     <div className="shell-sheet-stage" data-sheets={sheets.length}>
@@ -72,8 +81,8 @@ export function SheetStage({ task }: SheetStageProps) {
       {/* One live region for the whole stage: a screen reader should hear the
           workbook's progress, not each tab's state read out in turn. */}
       <div className="shell-sheet-stage-status" role="status">
-        <span className="shell-sheet-stage-title">Writing the workbook</span>
-        <span className="shell-sheet-stage-phase">{statusLine(task, sheets)}</span>
+        <span className="shell-sheet-stage-title">{t("shell.canvas.writingWorkbook")}</span>
+        <span className="shell-sheet-stage-phase">{statusLine(task, sheets, t)}</span>
       </div>
 
       {sheets.length > 0 ? (

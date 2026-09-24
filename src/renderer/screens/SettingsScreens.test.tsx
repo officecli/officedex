@@ -76,6 +76,7 @@ function makeSettings(overrides: Partial<UserSettings> = {}): UserSettings {
     defaults: {
       documentType: "pptx",
       enableImages: true,
+      enableWebSearch: false,
       imageQuality: "premium",
       ...(overrides.defaults ?? {}),
     },
@@ -300,12 +301,22 @@ describe("SettingsScreen", () => {
     await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
     await screen.findByText("Enable Images");
 
-    // The Switch in Enable Images row
-    const enableImagesSwitches = screen.getAllByRole("switch");
-    fireEvent.click(enableImagesSwitches[0]);
+    fireEvent.click(screen.getByRole("switch", { name: "Enable Images" }));
     await waitFor(() => expect(updateSettingsSpy).toHaveBeenCalled());
     const last = updateSettingsSpy.mock.calls.at(-1)![0] as Partial<UserSettings>;
     expect(last.defaults?.enableImages).toBe(false);
+  });
+
+  it("toggling enableWebSearch persists the new value", async () => {
+    const { SettingsScreen } = await import("./SettingsScreens");
+    render(<SettingsScreen />);
+    await waitFor(() => expect(getSettingsSpy).toHaveBeenCalledTimes(1));
+    await screen.findByText("Web Search");
+
+    fireEvent.click(screen.getByRole("switch", { name: "Web Search" }));
+    await waitFor(() => expect(updateSettingsSpy).toHaveBeenCalled());
+    const last = updateSettingsSpy.mock.calls.at(-1)![0] as Partial<UserSettings>;
+    expect(last.defaults?.enableWebSearch).toBe(true);
   });
 
   it("does not show desktop notifications in the Generation section", async () => {
@@ -416,6 +427,7 @@ describe("SettingsScreen", () => {
       defaults: {
         documentType: "pptx",
         enableImages: true,
+        enableWebSearch: false,
         imageQuality: "premium",
       },
     });

@@ -3,6 +3,7 @@ import { createRef, StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getS18n } from "@shimo/simple-i18n";
 import type { Artifact, PreviewGrant } from "../../shared/types";
+import { LocaleProvider } from "../i18n";
 import type { SpreadsheetCanvasHandle } from "./SpreadsheetCanvas";
 import { styledCellData } from "./SpreadsheetCanvas";
 
@@ -200,7 +201,10 @@ const grant: PreviewGrant = {
 };
 
 describe("SpreadsheetCanvas", () => {
-  afterEach(() => cleanup());
+  afterEach(() => {
+    vi.useRealTimers();
+    cleanup();
+  });
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -239,6 +243,45 @@ describe("SpreadsheetCanvas", () => {
     expect(mocks.officecli.prepareXlsxEditor).toHaveBeenCalledWith("preview-token");
     expect(mocks.createOfflineSheetEditor).toHaveBeenCalledWith(
       container.querySelector(".spreadsheet-canvas__editor"),
+      "prepared-modoc",
+      [],
+      expect.any(Function),
+      "en",
+    );
+  });
+
+  it("mounts the sheet editor in the shell's language", async () => {
+    render(
+      <LocaleProvider value="zh">
+        <SpreadsheetCanvas artifact={artifact} grant={grant} />
+      </LocaleProvider>,
+    );
+    await waitFor(() => expect(mocks.createOfflineSheetEditor).toHaveBeenCalledTimes(1));
+    expect(mocks.createOfflineSheetEditor).toHaveBeenCalledWith(
+      expect.anything(),
+      "prepared-modoc",
+      [],
+      expect.any(Function),
+      "zh",
+    );
+  });
+
+  it("remounts the sheet editor when the shell switches language", async () => {
+    const view = render(
+      <LocaleProvider value="zh">
+        <SpreadsheetCanvas artifact={artifact} grant={grant} />
+      </LocaleProvider>,
+    );
+    await waitFor(() => expect(mocks.createOfflineSheetEditor).toHaveBeenCalledTimes(1));
+
+    view.rerender(
+      <LocaleProvider value="en">
+        <SpreadsheetCanvas artifact={artifact} grant={grant} />
+      </LocaleProvider>,
+    );
+    await waitFor(() => expect(mocks.createOfflineSheetEditor).toHaveBeenCalledTimes(2));
+    expect(mocks.createOfflineSheetEditor).toHaveBeenLastCalledWith(
+      expect.anything(),
       "prepared-modoc",
       [],
       expect.any(Function),
@@ -290,6 +333,38 @@ describe("SpreadsheetCanvas", () => {
     });
     expect(onDirtyChange).toHaveBeenLastCalledWith(false);
     expect(onStateChange).toHaveBeenLastCalledWith("saved");
+  });
+
+  it("autosaves a manual edit after the shared idle window", async () => {
+    const ref = createRef<SpreadsheetCanvasHandle>();
+    render(<SpreadsheetCanvas ref={ref} artifact={artifact} grant={grant} autosaveIdleMs={40} />);
+    await waitFor(() => expect(mocks.editor.content.addChangeListener).toHaveBeenCalled());
+
+    vi.useFakeTimers();
+    try {
+      await act(async () => { mocks.emitChange(); });
+      expect(mocks.officecli.saveXlsxEditor).not.toHaveBeenCalled();
+      await act(async () => { await vi.advanceTimersByTimeAsync(40); });
+      expect(mocks.officecli.saveXlsxEditor).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("coalesces a burst of edits into one idle autosave", async () => {
+    render(<SpreadsheetCanvas artifact={artifact} grant={grant} autosaveIdleMs={40} />);
+    await waitFor(() => expect(mocks.editor.content.addChangeListener).toHaveBeenCalled());
+
+    vi.useFakeTimers();
+    try {
+      await act(async () => { mocks.emitChange(); });
+      await act(async () => { mocks.emitChange("edited-modoc-2"); });
+      await act(async () => { mocks.emitChange("edited-modoc-3"); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(40); });
+      expect(mocks.officecli.saveXlsxEditor).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   /**

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { act, cleanup } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -24,6 +25,24 @@ vi.mock("./PresentationCanvas", () => ({
   PresentationCanvas: (props: Record<string, unknown>) => {
     lastProps = props;
     renderCount += 1;
+    /*
+     * The real one reports its in-place editor from a controller callback that
+     * arrives after the editor boots, and this adapter is what routes an
+     * instruction to it. The stub reports one from an effect for the same
+     * reason the real one does: `CanvasContent` withdraws the runner from an
+     * effect of its own, and a stub that reported during render would hide the
+     * ordering that decides whether the withdrawal wins.
+     */
+    const report = props.onEditRunner as ((edit: unknown) => void) | undefined;
+    useEffect(() => {
+      report?.(async () => ({
+        summary: "stub",
+        applied: 1,
+        scope: "document",
+        saveError: null,
+        undo: null,
+      }));
+    }, [report]);
     return null;
   },
 }));
@@ -108,6 +127,36 @@ describe("desktop canvas adapter", () => {
 
     expect(renderCount).toBe(afterShow);
     expect((lastProps?.file as FileMeta).id).toBe("deck-1");
+  });
+
+  /*
+   * An open deck must be able to take an instruction.
+   *
+   * `CanvasContent` withdraws the in-place runner for any branch that cannot
+   * offer one, and the test for that was `open.type !== "doc"` — which is
+   * every deck. Because the runner is reported from an effect and withdrawn
+   * from a later one, the withdrawal won: `canEditDocument()` was false for an
+   * open deck, so "change slide 2" was routed to the generation runtime and
+   * re-authored the whole deck. Words, decks and sheets are the three answers;
+   * only the first two edit in place.
+   */
+  it("keeps the deck's in-place editor available after the open", () => {
+    const { adapter } = mounted();
+
+    act(() => adapter.show(file("deck-1", "slides")));
+
+    expect(adapter.canEditDocument?.()).toBe(true);
+  });
+
+  it("withdraws in-place editing for a workbook", () => {
+    const { adapter } = mounted();
+
+    // A sheet reports no runner of its own, so whatever the previous file left
+    // behind must be cleared rather than kept.
+    act(() => adapter.show(file("deck-1", "slides")));
+    act(() => adapter.show(file("book-1", "sheet")));
+
+    expect(adapter.canEditDocument?.()).toBe(false);
   });
 
   // There is no longer a file type without an editor — documents, decks and

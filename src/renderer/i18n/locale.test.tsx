@@ -1,6 +1,6 @@
 import { act, render, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { LocaleProvider, LOCALE_STORAGE_KEY, useLocale, useSetLocale, useT, type Locale } from "./index";
+import { detectLocale, LocaleProvider, LOCALE_STORAGE_KEY, useLocale, useSetLocale, useT, type Locale } from "./index";
 
 function createMemoryStorage(): Storage {
   let store: Record<string, string> = {};
@@ -72,12 +72,23 @@ describe("LocaleProvider runtime switching", () => {
     expect(result.current).toBe("zh");
   });
 
-  it("ignores invalid stored values and falls back to detection", () => {
+  it("ignores invalid stored values and falls back to English", () => {
     localStorage.setItem(LOCALE_STORAGE_KEY, "fr");
 
     const { result } = renderHook(() => useLocale(), { wrapper: wrapper() });
-    expect(["en", "zh"]).toContain(result.current);
-    expect(result.current).not.toBe("fr");
+    expect(result.current).toBe("en");
+  });
+
+  it("defaults to English even when the operating system is Chinese", () => {
+    const original = navigator.language;
+    Object.defineProperty(navigator, "language", { value: "zh-CN", configurable: true });
+    try {
+      expect(detectLocale()).toBe("en");
+      const { result } = renderHook(() => useLocale(), { wrapper: wrapper() });
+      expect(result.current).toBe("en");
+    } finally {
+      Object.defineProperty(navigator, "language", { value: original, configurable: true });
+    }
   });
 
   it("value prop forces a fixed locale and disables switching", () => {
@@ -109,7 +120,7 @@ describe("LocaleProvider runtime switching", () => {
     );
 
     const button = getByRole("button");
-    expect(["Language", "界面语言"]).toContain(button.textContent);
+    expect(button.textContent).toBe("Language");
     act(() => button.click());
     expect(button.textContent).toBe("界面语言");
   });

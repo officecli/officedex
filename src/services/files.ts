@@ -1,6 +1,7 @@
 import type { DesktopAPI, DocumentRecord, RecentFile } from "../shared/types";
 import type { FileMeta, FilePort, FileType } from "../shared/uiPort";
 import { NotImplementedError } from "../shared/notImplemented";
+import { translate } from "../renderer/i18n";
 
 /**
  * The id the desktop uses for the folder that work lands in when the user has
@@ -110,11 +111,11 @@ export function createFileService(api: DesktopAPI): FileService {
 
     async create(type, folderId): Promise<FileMeta> {
       // There is no blank picture to start from; images come from a run.
-      if (type === "image") throw new Error("An image cannot be created blank.");
+      if (type === "image") throw new Error(translate("shell.service.file.imageNotBlank"));
       if (!api.createBlankDocument) {
         throw new NotImplementedError(
           "files.create",
-          "Creating a blank document requires a newer OfficeDex runtime.",
+          translate("shell.service.file.createNeedsRuntime"),
         );
       }
       const record = await api.createBlankDocument(
@@ -136,6 +137,17 @@ export function createFileService(api: DesktopAPI): FileService {
       // indistinguishable from "cancelled", and the file would just not appear.
       if (!meta) throw new Error(`Unsupported document type: ${record.documentType}`);
       return meta;
+    },
+
+    async openDropped(path) {
+      const record = await api.importLocalFile(path);
+      const meta = toFileMeta(record, await lastOpenedByPath());
+      if (!meta) throw new Error(`Unsupported document type: ${record.documentType}`);
+      return meta;
+    },
+
+    onDropFromDisk(callback) {
+      return api.onFileDrop(callback);
     },
 
     async open(id) {
@@ -179,10 +191,36 @@ export function createFileService(api: DesktopAPI): FileService {
       dirtyFiles.delete(id);
     },
 
+    /**
+     * Unregisters the file. Nothing is deleted from disk.
+     *
+     * This used to forget the recent-files entry and stop there, which removed
+     * nothing the user could see: `list` reads `listDocuments`, so the row came
+     * straight back on the next reload and the menu item looked dead.
+     *
+     * `removeDocument` is the call that removes a row this list shows. It also
+     * decides which removal a row needs — a generated document goes through its
+     * task, so a run still in flight is cancelled first — because that is a fact
+     * about the desktop's storage, not about the UI.
+     */
     async remove(id) {
-      const record = await api.getDocument(id);
       dirtyFiles.delete(id);
-      await api.removeRecentFile(record.filePath);
+      if (api.removeDocument) {
+        await api.removeDocument(id);
+        return;
+      }
+      // An older runtime has no document-level removal. A generated document can
+      // still go through the task that produced it; an imported file has no task
+      // and cannot be removed at all, which is said rather than swallowed.
+      const record = await api.getDocument(id);
+      const taskId = record.currentArtifactTaskId?.trim();
+      if (!taskId) {
+        throw new NotImplementedError(
+          "files.remove",
+          translate("shell.service.file.removeNeedsRuntime"),
+        );
+      }
+      await api.deleteDocument(taskId);
     },
 
     async pathOf(id) {

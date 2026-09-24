@@ -165,6 +165,20 @@ describe("desktop file service", () => {
     expect(await port.files.list()).toHaveLength(before);
   });
 
+  // The Wails runtime reports native drops; the port only forwards them.
+  it("forwards files dropped onto the window", async () => {
+    const api = createFakeDesktopApi();
+    const port = createDesktopUiPort({ api, window: stubWindow() });
+    const seen: string[][] = [];
+
+    const off = port.files.onDropFromDisk((paths) => seen.push(paths));
+    api.dropFiles(["/Users/me/a.docx", "/Users/me/b.pptx"]);
+    off();
+    api.dropFiles(["/Users/me/c.xlsx"]);
+
+    expect(seen).toEqual([["/Users/me/a.docx", "/Users/me/b.pptx"]]);
+  });
+
   // One path, one file. Opening the same document twice — or opening one the
   // agent generated earlier — must land on the entry that already exists rather
   // than show the user two rows for one file. The Go side guarantees this
@@ -189,6 +203,60 @@ describe("desktop file service", () => {
     await createPort().files.create("doc", "folder:default").catch((reason) => {
       expect((reason as NotImplementedError).feature).toBe("files.create");
     });
+  });
+
+  /*
+   * Removing a file has to remove the row the list shows.
+   *
+   * This used to forget the recent-files entry and nothing else, while `list`
+   * reads the document projection — so the row returned on the next reload and
+   * the sidebar's Remove looked like a dead control.
+   */
+  it("removes the file from the list, not just from recents", async () => {
+    const api = createFakeDesktopApi({
+      documents: [
+        { fileName: "deck.pptx", documentType: "pptx" },
+        { fileName: "plan.docx", documentType: "docx" },
+      ],
+    });
+    const port = createDesktopUiPort({ api, window: stubWindow() });
+    const target = (await port.files.list()).find((file) => file.name === "deck.pptx")!;
+
+    await port.files.remove(target.id);
+
+    expect((await port.files.list()).map((file) => file.name)).toEqual(["plan.docx"]);
+  });
+
+  // Pressing the same menu item twice is not a failure.
+  it("treats removing an already-removed file as done", async () => {
+    const api = createFakeDesktopApi({ documents: [{ fileName: "deck.pptx", documentType: "pptx" }] });
+    const port = createDesktopUiPort({ api, window: stubWindow() });
+    const target = (await port.files.list())[0];
+
+    await port.files.remove(target.id);
+    await expect(port.files.remove(target.id)).resolves.toBeUndefined();
+  });
+
+  // An older runtime has no document-level removal. A generated file can still
+  // go through its task; an imported one cannot, and says so.
+  it("names the gap when an older runtime cannot remove an imported file", async () => {
+    const api = createFakeDesktopApi({ documents: [{ fileName: "deck.pptx", documentType: "pptx" }] });
+    const { removeDocument: _dropped, ...older } = api;
+    const port = createDesktopUiPort({ api: older as typeof api, window: stubWindow() });
+    const target = (await port.files.list())[0];
+
+    await expect(port.files.remove(target.id)).rejects.toThrow(NotImplementedError);
+  });
+
+  it("falls back to the task behind a generated file on an older runtime", async () => {
+    const api = createFakeDesktopApi({
+      documents: [{ fileName: "deck.pptx", documentType: "pptx", currentArtifactTaskId: "task-deck" }],
+    });
+    const { removeDocument: _dropped, ...older } = api;
+    const port = createDesktopUiPort({ api: older as typeof api, window: stubWindow() });
+    const target = (await port.files.list())[0];
+
+    await expect(port.files.remove(target.id)).resolves.toBeUndefined();
   });
 });
 
@@ -552,7 +620,8 @@ describe("desktop agent service", () => {
     const { api, port } = agentPort();
     const events: string[] = [];
     port.agent.subscribe((event) => {
-      events.push(event.kind === "task" ? `task:${event.task.status}` : `error:${event.message}`);
+      if (event.kind === "task") events.push(`task:${event.task.status}`);
+      else if (event.kind === "error") events.push(`error:${event.message}`);
     });
 
     api.emitBridgeEvent(started("task-1"));
@@ -730,6 +799,66 @@ describe("desktop agent service", () => {
     await expect(port.agent.resume()).resolves.toBeUndefined();
   });
 
+  it("finishes a run before the first bridge event has arrived", async () => {
+    const { api, port } = agentPort();
+    await port.agent.send({
+      text: "Write a deck",
+      folderId: "folder:default",
+      mentions: [],
+      attachments: [],
+      modelId: "official",
+      permission: "full",
+      activeFileId: null,
+    });
+
+    await port.agent.finish();
+
+    expect(api.calls.filter((call) => call.method === "cancel")).toEqual([
+      { method: "cancel", input: { taskId: "task-1" } },
+    ]);
+  });
+
+  it("keeps finishing the run that was just sent, not an older recorded one", async () => {
+    const { api, port } = agentPort({
+      taskHistory: [{
+        taskId: "task-stale",
+        events: [started("task-stale")],
+      }],
+    });
+    await port.agent.send({
+      text: "Write a deck",
+      folderId: "folder:default",
+      mentions: [],
+      attachments: [],
+      modelId: "official",
+      permission: "full",
+      activeFileId: null,
+    });
+    await port.agent.current("folder:default");
+
+    await port.agent.finish();
+
+    expect(api.calls.filter((call) => call.method === "cancel")).toEqual([
+      { method: "cancel", input: { taskId: "task-1" } },
+    ]);
+  });
+
+  it("treats a missing bridge task as already finished", async () => {
+    const { api, port } = agentPort();
+    await port.agent.send({
+      text: "Write a deck",
+      folderId: "folder:default",
+      mentions: [],
+      attachments: [],
+      modelId: "official",
+      permission: "full",
+      activeFileId: null,
+    });
+    api.failNextCancel(new Error("[kind:task] [code:task_not_found] bridge: task not found: task-1"));
+
+    await expect(port.agent.finish()).resolves.toBeUndefined();
+  });
+
   // The apply/undo model has no desktop counterpart at all. The card stays in
   // the UI and both buttons report the gap rather than vanishing.
   it("has no suggestion, and names the gap when asked to apply one", async () => {
@@ -872,5 +1001,200 @@ describe("desktop agent service", () => {
     });
 
     expect(api.calls[0]?.input.prompt).toContain("Mentioned files or folders: @notes.docx");
+  });
+});
+
+/*
+ * One conversation, several runs.
+ *
+ * Every message typed into the panel used to go out with no conversation id,
+ * and the desktop defaults a run's conversation to its own id — so each
+ * follow-up was a conversation of its own: a new row on Home, a panel that
+ * forgot everything said before it, and a runtime that was never told.
+ */
+describe("desktop agent conversations", () => {
+  const FOLDER = "folder:default";
+
+  function setup(seed: Parameters<typeof createFakeDesktopApi>[0] = {}) {
+    const api = createFakeDesktopApi(seed);
+    return { api, port: createDesktopUiPort({ api, window: stubWindow() }) };
+  }
+
+  const say = (text: string, extra: Record<string, unknown> = {}) => ({
+    text,
+    folderId: FOLDER,
+    mentions: [],
+    attachments: [],
+    modelId: "official",
+    permission: "full" as const,
+    activeFileId: null,
+    ...extra,
+  });
+
+  const completed = (taskId: string, payload: Record<string, unknown> = {}): BridgeEvent => ({
+    event_id: `${taskId}-done`,
+    task_id: taskId,
+    type: "task.completed",
+    ts: "2026-09-23T10:00:05Z",
+    payload,
+  });
+
+  const generateCalls = (api: ReturnType<typeof createFakeDesktopApi>) =>
+    api.calls.filter((call) => call.method === "generate" || call.method === "modify");
+
+  it("sends a follow-up as part of the conversation the panel shows", async () => {
+    const { api, port } = setup();
+    await port.agent.send(say("Write a memo about the offsite"));
+    api.emitBridgeEvent(completed("task-1"));
+    await port.agent.send(say("Make it shorter"));
+
+    const [first, second] = generateCalls(api);
+    expect(first.input.conversationId).toBeUndefined();
+    expect(second.input).toMatchObject({ conversationId: "task-1", parentTaskId: "task-1" });
+  });
+
+  it("tells the runtime what was said before, and shows only what was typed", async () => {
+    const { api, port } = setup();
+    await port.agent.send(say("Write a memo about the offsite"));
+    api.emitBridgeEvent(completed("task-1"));
+    await port.agent.send(say("Make it shorter"));
+
+    const prompt = String(generateCalls(api)[1].input.prompt);
+    expect(prompt.startsWith("Make it shorter")).toBe(true);
+    expect(prompt).toContain("User: Write a memo about the offsite");
+
+    const task = await port.agent.current(FOLDER);
+    expect(task?.id).toBe("task-2");
+    expect(task?.conversationId).toBe("task-1");
+    expect(task?.messages.filter((message) => message.role === "user").map((message) => message.text)).toEqual([
+      "Write a memo about the offsite",
+      "Make it shorter",
+    ]);
+  });
+
+  it("does not add a context block to the first message", async () => {
+    const { api, port } = setup();
+    await port.agent.send(say("Write a memo about the offsite"));
+    expect(generateCalls(api)[0].input.prompt).toBe("Write a memo about the offsite");
+  });
+
+  it("lists a conversation once on Home, however many runs it has", async () => {
+    const { api, port } = setup();
+    await port.agent.send(say("Write a memo about the offsite"));
+    api.emitBridgeEvent(completed("task-1"));
+    await port.agent.send(say("Make it shorter"));
+
+    const rows = await port.agent.list();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: "task-1", conversationId: "task-1" });
+  });
+
+  it("starts a new conversation when the message says so", async () => {
+    const { api, port } = setup();
+    const cleared: string[] = [];
+    port.agent.subscribe((event) => {
+      if (event.kind === "cleared") cleared.push(event.folderId);
+    });
+    await port.agent.send(say("Write a memo about the offsite"));
+    api.emitBridgeEvent(completed("task-1"));
+    await port.agent.send(say("Plan the Q4 budget", { newConversation: true }));
+
+    const second = generateCalls(api)[1];
+    expect(second.input.conversationId).toBeUndefined();
+    expect(second.input.prompt).toBe("Plan the Q4 budget");
+    expect(cleared).toEqual([FOLDER]);
+    expect((await port.agent.current(FOLDER))?.conversationId).toBe("task-2");
+    expect(await port.agent.list()).toHaveLength(2);
+  });
+
+  it("empties the panel on New conversation, and the next message starts one", async () => {
+    const { api, port } = setup();
+    await port.agent.send(say("Write a memo about the offsite"));
+    api.emitBridgeEvent(completed("task-1"));
+
+    await port.agent.startConversation(FOLDER);
+    expect(await port.agent.current(FOLDER)).toBeNull();
+
+    await port.agent.send(say("Plan the Q4 budget"));
+    expect(generateCalls(api)[1].input.conversationId).toBeUndefined();
+  });
+
+  it("changes what the conversation made when a follow-up has nothing open", async () => {
+    const { api, port } = setup({
+      documents: [{ fileName: "offsite memo.docx", documentType: "docx", currentArtifactTaskId: "task-1" }],
+    });
+    await port.agent.send(say("Write a memo about the offsite", { documentType: "docx" }));
+    api.emitBridgeEvent(completed("task-1", {
+      file_path: "/tmp/officedex/offsite memo.docx",
+      file_name: "offsite memo.docx",
+      document_type: "docx",
+    }));
+    await port.agent.send(say("Make it shorter"));
+
+    const second = generateCalls(api)[1];
+    expect(second.method).toBe("modify");
+    expect(second.input).toMatchObject({
+      sourceFile: "/tmp/officedex/offsite memo.docx",
+      documentType: "docx",
+      conversationId: "task-1",
+    });
+    expect(String(second.input.prompt)).toContain("Result: wrote offsite memo.docx");
+  });
+
+  it("still makes a new file when the follow-up names a type", async () => {
+    const { api, port } = setup({
+      documents: [{ fileName: "offsite memo.docx", documentType: "docx", currentArtifactTaskId: "task-1" }],
+    });
+    await port.agent.send(say("Write a memo about the offsite", { documentType: "docx" }));
+    api.emitBridgeEvent(completed("task-1", { file_path: "/tmp/officedex/offsite memo.docx", document_type: "docx" }));
+    await port.agent.send(say("Now turn it into slides", { documentType: "pptx" }));
+
+    const second = generateCalls(api)[1];
+    expect(second.method).toBe("generate");
+    expect(second.input).toMatchObject({ documentType: "pptx", conversationId: "task-1" });
+  });
+
+  it("keeps an in-place edit in the thread and tells the runtime about it", async () => {
+    const { api, port } = setup();
+    await port.agent.send(say("Write a memo about the offsite"));
+    api.emitBridgeEvent(completed("task-1"));
+    await port.agent.recordExchange({
+      folderId: FOLDER,
+      messages: [
+        // After the run, on the same clock the service stamps runs with.
+        { id: "local-1", role: "user", text: "Bold the agenda", createdAt: Date.now() + 1000 },
+        { id: "local-2", role: "agent", text: "Made the agenda bold.", createdAt: Date.now() + 2000 },
+      ],
+    });
+
+    expect((await port.agent.current(FOLDER))?.messages.map((message) => message.text)).toEqual([
+      "Write a memo about the offsite",
+      "Bold the agenda",
+      "Made the agenda bold.",
+    ]);
+
+    await port.agent.send(say("Now add a dress code line"));
+    expect(String(generateCalls(api)[1].input.prompt)).toContain("User: Bold the agenda");
+  });
+
+  it("shows the message just sent before the runtime says anything", async () => {
+    const { port } = setup();
+    await port.agent.send(say("Write a memo about the offsite"));
+    const task = await port.agent.current(FOLDER);
+    expect(task?.messages.map((message) => message.text)).toEqual(["Write a memo about the offsite"]);
+  });
+
+  it("does not let a run in another conversation take over the panel", async () => {
+    const { api, port } = setup();
+    const focused: Array<[string, boolean | undefined]> = [];
+    port.agent.subscribe((event) => {
+      if (event.kind === "task") focused.push([event.task.id, event.focused]);
+    });
+    await port.agent.send(say("Write a memo about the offsite"));
+    await port.agent.send(say("Plan the Q4 budget", { newConversation: true }));
+    api.emitBridgeEvent(completed("task-1"));
+
+    expect(focused.filter(([id]) => id === "task-1").at(-1)?.[1]).toBe(false);
+    expect((await port.agent.current(FOLDER))?.id).toBe("task-2");
   });
 });

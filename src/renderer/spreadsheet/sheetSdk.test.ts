@@ -22,11 +22,15 @@ import {
   installRatioValidationCompatibility,
   OfflineImageUploader,
   registerOfflineImage,
+  resetOfflineSheetEditorLoader,
 } from "./sheetSdk";
 
 describe("createOfflineSheetEditor", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getS18n.mockReset();
+    mocks.getS18n.mockReturnValue({ setLocale: vi.fn() });
+    resetOfflineSheetEditorLoader();
     delete (globalThis as typeof globalThis & { s18n?: unknown }).s18n;
   });
 
@@ -86,6 +90,30 @@ describe("createOfflineSheetEditor", () => {
     expect(coreSheet.isValid(4, 31, "16:9")).toBe(false);
   });
 
+  it("reapplies the locale when a later editor switches language", async () => {
+    const setLocale = vi.fn();
+    mocks.getS18n.mockReturnValue({ setLocale });
+    const appendChild = vi.spyOn(document.head, "appendChild").mockImplementation((node) => {
+      const script = node as HTMLScriptElement;
+      queueMicrotask(() => script.onload?.(new Event("load")));
+      return node;
+    });
+    const wrapper = (globalThis as typeof globalThis & {
+      s18n?: { getS18n: (namespace: string) => { setLocale: (locale: string) => void } };
+    });
+
+    await createOfflineSheetEditor(document.createElement("div"), "serialized-modoc", [], undefined, "zh");
+    wrapper.s18n?.getS18n("sheet-sdk");
+    await createOfflineSheetEditor(document.createElement("div"), "serialized-modoc", [], undefined, "en");
+
+    expect(document.documentElement.lang).toBe("en-US");
+    expect(setLocale).toHaveBeenCalledWith("en-US");
+    expect((mocks.createSheetSDK.mock.calls.at(-1) as unknown[] | undefined)?.[0]).toEqual(expect.objectContaining({
+      i18n: { language: "en-US" },
+    }));
+    appendChild.mockRestore();
+  });
+
   it.each(["en", "zh"] as const)("loads %s resources before initializing and mounting the editor", async (locale) => {
     const loadedScripts: string[] = [];
     const appendChild = vi.spyOn(document.head, "appendChild").mockImplementation((node) => {
@@ -105,8 +133,10 @@ describe("createOfflineSheetEditor", () => {
     ]);
     expect((globalThis as typeof globalThis & { s18n?: unknown }).s18n).toEqual({ getS18n: expect.any(Function) });
     expect(mocks.createSheetSDK).toHaveBeenCalledTimes(1);
+    expect(document.documentElement.lang).toBe(locale === "zh" ? "zh-CN" : "en-US");
     expect(mocks.createSheetSDK).toHaveBeenCalledWith(expect.objectContaining({
       mode: { type: "standard", role: "editor" },
+      i18n: { language: locale === "zh" ? "zh-CN" : "en-US" },
       content: "serialized-modoc",
       collaboration: undefined,
       file: undefined,

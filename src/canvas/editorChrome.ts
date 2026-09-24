@@ -31,18 +31,43 @@
  *
  * ── What deliberately does not report ───────────────────────────────────────
  *
- * The generation stages (`DocxStage`, `SheetStage`, `PresentationStage`). They
- * mount `position: absolute; inset: 0` over the whole canvas with no chrome of
- * their own, so "the editor for this file type has a 36px footer" is false
- * while one is on screen, and acting on it would move the shell out of the way
- * of a strip that is not there. Nothing published means nothing reserved, which
- * is the correct answer for a stage and is why the channel's default is silence
- * rather than a per-type table the shell could look up on its own.
+ * `DocxStage` and `SheetStage`. They mount `position: absolute; inset: 0` over
+ * the whole canvas with no chrome of their own, so "the editor for this file
+ * type has a 36px footer" is false while one is on screen, and acting on it
+ * would move the shell out of the way of a strip that is not there. They do
+ * report `STAGE_CHROME` — zero insets, no status bar — which reserves nothing
+ * and is not the same as staying silent: silence is how this channel says "no
+ * canvas at all", and the status bar and the attention border both need to tell
+ * that apart from a run drawing on it.
+ *
+ * `PresentationStage` used to be on that list and no longer is: it draws through
+ * `PresentationEditorFrame` now, so the deck's 32px status bar is on screen
+ * during a run or the bundled recording and it reports `SLIDES_CHROME` while its
+ * editor is up. The rule was never "stages are silent" — it is "report the
+ * chrome you actually drew".
  */
 
 import { useEffect } from "react";
 
-import { publishEditorChrome, type EditorChrome } from "../shell/editor/canvasSurface";
+import { NO_CANVAS_INSETS, publishEditorChrome, type EditorChrome } from "../shell/editor/canvasSurface";
+
+/**
+ * A stage: it covers the canvas and draws no chrome of its own.
+ *
+ * Zero insets, no status bar — and deliberately not *silence*. Silence is what
+ * this channel means by "there is no canvas", and the shell has to tell that
+ * apart from "a run owns the canvas": while a stage is up there is no active
+ * file, so anything describing the canvas from `activeFile` alone reports an
+ * empty workspace over a document that is visibly being written.
+ *
+ * Reserving nothing is still the right answer for the layout half — a stage has
+ * no strip for the floating panel to avoid — so this changes what the shell can
+ * *know*, not what it keeps clear.
+ */
+export const STAGE_CHROME: EditorChrome = {
+  insets: NO_CANVAS_INSETS,
+  ownsStatusBar: false,
+};
 
 /** The workbook's footer: sheet tabs, status bar and zoom, in one strip. */
 export const SHEET_CHROME: EditorChrome = {
