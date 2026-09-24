@@ -11,7 +11,9 @@ const (
 	updateChannel10     = "1.0"
 
 	stableUpdateManifestURL    = "https://raw.githubusercontent.com/officecli/officedex-dist/main/manifest.json"
-	channel10UpdateManifestURL = "https://raw.githubusercontent.com/officecli/officedex-dist/main/channels/1.0/manifest.json"
+	// 1.0 prereleases are hosted on Huawei Cloud OBS, not GitHub. Keep in step
+	// with MANIFEST_URLS in scripts/update-channel.mjs (a test checks it).
+	channel10UpdateManifestURL = "https://aichatoffice-test.obs.cn-north-4.myhuaweicloud.com/officedex/channels/1.0/manifest.json"
 )
 
 // appUpdateChannel is injected at build time via

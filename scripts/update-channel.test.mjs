@@ -41,3 +41,12 @@ test("dist paths keep 1.0 off the production manifest", () => {
   assert.equal(isPrereleaseChannel(CHANNEL_10), true);
   assert.equal(isPrereleaseChannel(CHANNEL_STABLE), false);
 });
+
+test("the desktop app polls the 1.0 manifest this script publishes", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { MANIFEST_URLS, obsManifestKey, OBS_ORIGIN } = await import("./update-channel.mjs");
+  const go = await readFile(new URL("../app_update_channel.go", import.meta.url), "utf8");
+  const baked = /channel10UpdateManifestURL\s*=\s*"([^"]+)"/.exec(go)?.[1];
+  assert.equal(baked, MANIFEST_URLS[CHANNEL_10]);
+  assert.equal(MANIFEST_URLS[CHANNEL_10], `${OBS_ORIGIN}/${obsManifestKey(CHANNEL_10)}`);
+});

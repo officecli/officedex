@@ -125,23 +125,20 @@ Root `officedex-dist/manifest.json`. Already-installed 0.5.x clients keep pollin
 
 ### 1.0 (`develop/1.0`) — local compile
 
-1.0 clients bake `channels/1.0/manifest.json`. Version is a `1.0.N` patch train (the client ignores `-beta` suffixes).
+1.0 clients bake the manifest on Huawei Cloud OBS (`officedex/channels/1.0/manifest.json` in bucket `aichatoffice-test`, cn-north-4); no GitHub Release is made for 1.0. Version is a `1.0.N` patch train (the client ignores `-beta` suffixes).
 
 1. Bump `version` in `package.json` and `wails.json` to `1.0.N`.
 2. Compile and notarize on this machine:
    `bash scripts/build-mac-dmg.sh` (Intel: `TARGET_ARCH=x64`).
    That writes a DMG installer and an updater zip under `dist-artifacts/`.
-3. Upload the zip (and DMG if you want a downloadable installer) as a **prerelease** so GitHub `/releases/latest` stays on 0.5.x:
-   `gh release create v1.0.N --prerelease dist-artifacts/OfficeDex-v1.0.N-darwin-arm64.zip`
-4. Point the 1.0 channel at that zip, without touching production:
+3. Publish to OBS. The zip is uploaded and checked by an anonymous download before the manifest that names it goes up:
    ```
    node scripts/publish-update-channel.mjs \
      --channel 1.0 \
-     --darwin-arm64 dist-artifacts/OfficeDex-v1.0.N-darwin-arm64.zip \
-     --dist ../officedex-dist \
-     --commit
+     --darwin-arm64 dist-artifacts/OfficeDex-v1.0.N-darwin-arm64.zip
    ```
-   Push `officedex-dist` separately. Same-version publishes merge assets, so an arm64 zip and an Intel zip can land in one manifest.
+   Credentials come from `OBS_ACCESS_KEY_ID` / `OBS_SECRET_ACCESS_KEY` or `~/.officedex-signing/huawei-obs.env`; never commit them. Same-version publishes merge assets, so an arm64 zip and an Intel zip can land in one manifest.
+4. Only for the first OBS release: add `--bridge-dist --dist ../officedex-dist --commit` and push `officedex-dist`. 1.0.1–1.0.5 poll `officedex-dist/channels/1.0/manifest.json`; that one write hands them a build that polls OBS, and the file is frozen afterwards.
 
 GitHub Actions `release.yml` only matches `v0.*`. `release-1.0.yml` exists as a guard / optional CI path; it is not how 1.0 is shipped. `v1.*` tags never write the root production manifest.
 

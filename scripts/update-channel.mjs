@@ -11,10 +11,44 @@ import { fileURLToPath } from "node:url";
 export const CHANNEL_STABLE = "stable";
 export const CHANNEL_10 = "1.0";
 
+// The 1.0 prerelease train is hosted on Huawei Cloud OBS, not GitHub: no
+// public GitHub Release, and the bucket is in-region for the users it serves.
+// Objects are public-read (the updater sends no credentials); keys mirror the
+// GitHub Releases layout so build-manifest.mjs only needs a different base URL.
+export const OBS_BUCKET = "aichatoffice-test";
+export const OBS_REGION = "cn-north-4";
+export const OBS_PREFIX = "officedex";
+export const OBS_ORIGIN = `https://${OBS_BUCKET}.obs.${OBS_REGION}.myhuaweicloud.com`;
+
 export const MANIFEST_URLS = {
   [CHANNEL_STABLE]: "https://raw.githubusercontent.com/officecli/officedex-dist/main/manifest.json",
-  [CHANNEL_10]: "https://raw.githubusercontent.com/officecli/officedex-dist/main/channels/1.0/manifest.json",
+  [CHANNEL_10]: `${OBS_ORIGIN}/${OBS_PREFIX}/channels/1.0/manifest.json`,
 };
+
+// Where 1.0.1–1.0.5 poll. Written once more (--bridge-dist) to hand those
+// clients a build that polls OBS; after that it is frozen.
+export const LEGACY_DIST_MANIFEST_URL_10 =
+  "https://raw.githubusercontent.com/officecli/officedex-dist/main/channels/1.0/manifest.json";
+
+/** OBS object key of a channel manifest, under `prefix` (default OBS_PREFIX). */
+export function obsManifestKey(channel, prefix = OBS_PREFIX) {
+  if (assertKnownChannel(channel) !== CHANNEL_10) throw new Error(`channel ${channel} is not hosted on OBS`);
+  return `${prefix}/channels/1.0/manifest.json`;
+}
+
+export function obsArchiveKey(channel, version, prefix = OBS_PREFIX) {
+  if (assertKnownChannel(channel) !== CHANNEL_10) throw new Error(`channel ${channel} is not hosted on OBS`);
+  return `${prefix}/channels/1.0/archive/manifest-v${normalizeVersion(version)}.json`;
+}
+
+/** Base URL build-manifest.mjs appends `/releases/download/vX/<file>` to. */
+export function obsAssetBaseUrl(prefix = OBS_PREFIX) {
+  return `${OBS_ORIGIN}/${prefix}`;
+}
+
+export function obsAssetKey(version, fileName, prefix = OBS_PREFIX) {
+  return `${prefix}/releases/download/v${normalizeVersion(version)}/${fileName}`;
+}
 
 const CHANNELS = new Set([CHANNEL_STABLE, CHANNEL_10]);
 
