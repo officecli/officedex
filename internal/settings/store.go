@@ -39,7 +39,11 @@ var defaultSettings = types.UserSettings{
 	Defaults: types.GenerateDefaults{
 		DocumentType: types.DocPPTX,
 		EnableImages: true,
-		ImageQuality: types.ImagePremium,
+		// Off on purpose: web research adds a model call in front of the
+		// outline and delays the first visible slide. Stated, not left to
+		// the zero value, because it is a product decision.
+		EnableWebSearch: false,
+		ImageQuality:    types.ImagePremium,
 	},
 	Proxy: &types.ProxySettings{
 		Enabled: false,
@@ -186,9 +190,10 @@ type Patch struct {
 // GenerateDefaultsPatch is the partial form of GenerateDefaults. Nil pointer =
 // leave unchanged.
 type GenerateDefaultsPatch struct {
-	DocumentType *types.DocumentType `json:"documentType,omitempty"`
-	EnableImages *bool               `json:"enableImages,omitempty"`
-	ImageQuality *types.ImageQuality `json:"imageQuality,omitempty"`
+	DocumentType    *types.DocumentType `json:"documentType,omitempty"`
+	EnableImages    *bool               `json:"enableImages,omitempty"`
+	EnableWebSearch *bool               `json:"enableWebSearch,omitempty"`
+	ImageQuality    *types.ImageQuality `json:"imageQuality,omitempty"`
 }
 
 func applyPatch(base types.UserSettings, patch Patch) types.UserSettings {
@@ -200,6 +205,9 @@ func applyPatch(base types.UserSettings, patch Patch) types.UserSettings {
 		}
 		if d.EnableImages != nil {
 			out.Defaults.EnableImages = *d.EnableImages
+		}
+		if d.EnableWebSearch != nil {
+			out.Defaults.EnableWebSearch = *d.EnableWebSearch
 		}
 		if d.ImageQuality != nil {
 			out.Defaults.ImageQuality = *d.ImageQuality
@@ -262,9 +270,10 @@ type rawSettings struct {
 }
 
 type rawGenerateDefaults struct {
-	DocumentType *string `json:"documentType,omitempty"`
-	EnableImages *bool   `json:"enableImages,omitempty"`
-	ImageQuality *string `json:"imageQuality,omitempty"`
+	DocumentType    *string `json:"documentType,omitempty"`
+	EnableImages    *bool   `json:"enableImages,omitempty"`
+	EnableWebSearch *bool   `json:"enableWebSearch,omitempty"`
+	ImageQuality    *string `json:"imageQuality,omitempty"`
 }
 
 type rawLlmProvider struct {
@@ -296,6 +305,9 @@ func sanitizeRaw(raw rawSettings) types.UserSettings {
 		}
 		if d.EnableImages != nil {
 			out.Defaults.EnableImages = *d.EnableImages
+		}
+		if d.EnableWebSearch != nil {
+			out.Defaults.EnableWebSearch = *d.EnableWebSearch
 		}
 		if d.ImageQuality != nil {
 			if v, ok := pickImageQuality(*d.ImageQuality); ok {
@@ -336,6 +348,7 @@ func sanitizeCanonical(s types.UserSettings) types.UserSettings {
 		out.Defaults.DocumentType = s.Defaults.DocumentType
 	}
 	out.Defaults.EnableImages = s.Defaults.EnableImages
+	out.Defaults.EnableWebSearch = s.Defaults.EnableWebSearch
 	if v, ok := pickImageQuality(string(s.Defaults.ImageQuality)); ok {
 		out.Defaults.ImageQuality = v
 	}

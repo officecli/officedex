@@ -94,6 +94,9 @@ func EncodeGenerateInput(input types.GenerateInput, taskCtx localstore.TaskConte
 	if input.EnableImages != nil {
 		payload["enable_images"] = *input.EnableImages
 	}
+	if input.EnableWebSearch != nil {
+		payload["enable_web_search"] = *input.EnableWebSearch
+	}
 	return payload
 }
 
@@ -163,6 +166,9 @@ func DecodeGenerateInput(events []types.BridgeEvent, taskCtx localstore.TaskCont
 	}
 	if v, ok := payloadfield.OptionalBool(userInput, "enable_images", "enableImages"); ok {
 		input.EnableImages = &v
+	}
+	if v, ok := payloadfield.OptionalBool(userInput, "enable_web_search", "enableWebSearch"); ok {
+		input.EnableWebSearch = &v
 	}
 	return input, nil
 }

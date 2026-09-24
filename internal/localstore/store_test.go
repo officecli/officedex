@@ -417,6 +417,55 @@ func TestTaskAnswersPersistAndHydrateHistory(t *testing.T) {
 	}
 }
 
+// A document registered from disk has no task behind it, so the task-keyed
+// delete cannot reach it. Before RemoveDocumentByID there was no way to forget
+// one at all: its row stayed in `documents`, which is what the file list reads.
+func TestRemoveDocumentByIDForgetsALocalDocument(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "imported.docx")
+	record, err := store.RegisterLocalDocument(ctx, path, "imported.docx", "docx", "")
+	if err != nil {
+		t.Fatalf("RegisterLocalDocument: %v", err)
+	}
+	if err := store.UpsertRecentFile(ctx, types.RecentFile{
+		FilePath:     path,
+		FileName:     "imported.docx",
+		DocumentType: "docx",
+		Source:       "local",
+	}); err != nil {
+		t.Fatalf("UpsertRecentFile: %v", err)
+	}
+
+	if err := store.RemoveDocumentByID(ctx, record.ID); err != nil {
+		t.Fatalf("RemoveDocumentByID: %v", err)
+	}
+
+	page, err := store.QueryDocuments(ctx, types.DocumentListInput{})
+	if err != nil {
+		t.Fatalf("QueryDocuments: %v", err)
+	}
+	for _, item := range page.Items {
+		if item.ID == record.ID {
+			t.Fatal("document survived RemoveDocumentByID")
+		}
+	}
+	recents, err := store.QueryRecentFiles(ctx, "", 10)
+	if err != nil {
+		t.Fatalf("QueryRecentFiles: %v", err)
+	}
+	for _, recent := range recents {
+		if recent.FilePath == path {
+			t.Fatal("recent file survived RemoveDocumentByID")
+		}
+	}
+
+	// Removing it twice is a menu item pressed twice, not a failure.
+	if err := store.RemoveDocumentByID(ctx, record.ID); err != nil {
+		t.Fatalf("RemoveDocumentByID second call: %v", err)
+	}
+}
+
 func TestTaskWorkspacePathReturnsRecordedWorkspacePath(t *testing.T) {
 	store := newTempStore(t)
 	ctx := context.Background()

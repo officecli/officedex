@@ -809,6 +809,13 @@ func (c *Client) InvokeGenerate(ctx context.Context, input types.GenerateInput) 
 		// of the Wails binding rewrite.
 		"local_preview": true,
 	}
+	// Only sent when the renderer actually stated a choice. Omitting it lets
+	// officecli fall back to reading the request's own wording ("联网搜索…"),
+	// which is the behaviour a caller that knows nothing about the toggle
+	// should still get; sending an explicit false would suppress that.
+	if input.EnableWebSearch != nil {
+		args["enable_web_search"] = *input.EnableWebSearch
+	}
 	if input.PPTXWorkflow != "" {
 		args["pptx_workflow"] = input.PPTXWorkflow
 	}

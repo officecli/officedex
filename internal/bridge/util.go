@@ -188,7 +188,14 @@ func ResultToArtifact(result []byte) *types.Artifact {
 	if err := json.Unmarshal(result, &obj); err != nil {
 		return nil
 	}
-	filePath := firstString(obj, "file_path", "filePath")
+	// `output_file` is how a *modify* names its result. Generate reports
+	// `file_path`; the edit path has always reported `output_file`, and only
+	// the generate spelling was read here — so every completed edit produced no
+	// artifact, no document row and nothing for the app to open. The run said
+	// "done", the file was written next to the original as `X.modified.xlsx`,
+	// and the editor went on showing the unedited document with no way to reach
+	// the edited one.
+	filePath := firstString(obj, "file_path", "filePath", "output_file", "outputFile")
 	if filePath == "" {
 		return nil
 	}

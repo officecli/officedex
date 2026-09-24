@@ -175,6 +175,10 @@ func (h *Handler) exportDocx(w http.ResponseWriter, r *http.Request) {
 		h.reject(w, r, newAPIError(http.StatusBadRequest, "INVALID_MOW_PACKAGE", err.Error()))
 		return
 	}
+	if err := dropWriterRuntimeAttrs(filepath.Join(packageDirectory, contentFileName)); err != nil {
+		h.reject(w, r, newAPIError(http.StatusBadRequest, "INVALID_MOW_PACKAGE", err.Error()))
+		return
+	}
 
 	if err := h.convertExport(r, packageDirectory, outputPath); err != nil {
 		h.rejectConversion(w, r, err)

@@ -120,3 +120,41 @@ func (a *App) SetDocumentPinned(documentID string, pinned bool) error {
 	}
 	return a.localStore.SetDocumentPinned(ctx, documentID, pinned)
 }
+
+// RemoveDocument unregisters one document from the library, by document id.
+// Files on disk are never touched: this forgets the row, which is all the
+// sidebar's Remove ever promised.
+//
+// Which removal it is depends on what is behind the row, and the caller cannot
+// be expected to know. A generated document is keyed on the task that produced
+// it, so it goes through DeleteDocument — that path settles the lineage first,
+// cancelling a run still in flight, which the store requires before it will
+// delete. A file opened from disk has no task at all and is removed by id.
+//
+// This exists because the UI had no way to do either. `files.remove` in the
+// UiPort could only forget a recent-files entry, while the file list reads the
+// document projection, so the row came straight back on the next reload and the
+// menu item looked dead.
+func (a *App) RemoveDocument(documentID string) error {
+	ctx, err := a.documentStoreContext()
+	if err != nil {
+		return err
+	}
+	documentID = strings.TrimSpace(documentID)
+	if documentID == "" {
+		return errors.New("document id is required")
+	}
+	record, found, err := a.localStore.GetDocument(ctx, documentID)
+	if err != nil {
+		return err
+	}
+	// Already gone. Removing a row twice is the user pressing a menu item twice,
+	// not a failure worth an error banner.
+	if !found {
+		return nil
+	}
+	if taskID := strings.TrimSpace(record.CurrentArtifactTaskID); taskID != "" {
+		return a.DeleteDocument(taskID)
+	}
+	return a.localStore.RemoveDocumentByID(ctx, documentID)
+}

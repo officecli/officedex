@@ -85,7 +85,7 @@ func TestEncodeGenerateInputEmitsSnakeCaseOnly(t *testing.T) {
 
 func TestEncodeGenerateInputOmitsUnsetOptionalFields(t *testing.T) {
 	payload := EncodeGenerateInput(types.GenerateInput{DocumentType: types.DocDOCX, Prompt: "P"}, localstore.TaskContext{})
-	for _, key := range []string{"conversation_id", "parent_task_id", "workspace_id", "runtime_mode", "generation_mode", "source_file", "reference_images", "image_ratio", "fps", "output_dir", "publish", "enable_images", "image_quality"} {
+	for _, key := range []string{"conversation_id", "parent_task_id", "workspace_id", "runtime_mode", "generation_mode", "source_file", "reference_images", "image_ratio", "fps", "output_dir", "publish", "enable_images", "enable_web_search", "image_quality"} {
 		if _, ok := payload[key]; ok {
 			t.Errorf("unset field %q was emitted as %#v", key, payload[key])
 		}
@@ -119,11 +119,12 @@ func TestEncodeGenerateInputBackfillsTopicFromPrompt(t *testing.T) {
 
 func TestDecodeGenerateInputRoundTripsEveryField(t *testing.T) {
 	enable := false
+	search := true
 	in := types.GenerateInput{
 		DocumentType: types.DocGIF, Topic: "T", Prompt: "P",
 		RuntimeMode: "custom", GenerationMode: "plan", PromptTemplateID: "tpl", SourceFile: "/a.pptx",
 		ReferenceImages: []string{"/r.png"}, ImageRatio: "square", FPS: 12, OutputDir: "/out",
-		Publish: true, EnableImages: &enable, ImageQuality: "high", LocalPreview: true,
+		Publish: true, EnableImages: &enable, EnableWebSearch: &search, ImageQuality: "high", LocalPreview: true,
 	}
 	taskCtx := localstore.TaskContext{WorkspaceID: "ws", ConversationID: "conv", ParentTaskID: "parent"}
 	got, err := DecodeGenerateInput(userInputEvent(EncodeGenerateInput(in, taskCtx)), taskCtx)
@@ -135,7 +136,11 @@ func TestDecodeGenerateInputRoundTripsEveryField(t *testing.T) {
 	if got.EnableImages == nil || *got.EnableImages != false {
 		t.Fatalf("EnableImages = %v, want explicit false", got.EnableImages)
 	}
+	if got.EnableWebSearch == nil || *got.EnableWebSearch != true {
+		t.Fatalf("EnableWebSearch = %v, want explicit true", got.EnableWebSearch)
+	}
 	got.EnableImages, want.EnableImages = nil, nil
+	got.EnableWebSearch, want.EnableWebSearch = nil, nil
 	if strings.Join(got.ReferenceImages, ",") != "/r.png" {
 		t.Fatalf("ReferenceImages = %v", got.ReferenceImages)
 	}

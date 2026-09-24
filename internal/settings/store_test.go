@@ -99,6 +99,9 @@ func TestLoadUnknownEnumFallsBack(t *testing.T) {
 	if got.Defaults.EnableImages {
 		t.Errorf("EnableImages should preserve explicit false")
 	}
+	if got.Defaults.EnableWebSearch {
+		t.Errorf("EnableWebSearch should stay off by default")
+	}
 	if got.Defaults.ImageQuality != types.ImagePremium {
 		t.Errorf("ImageQuality = %v, want premium", got.Defaults.ImageQuality)
 	}
@@ -131,8 +134,9 @@ func TestUpdatePersistsAndSanitizes(t *testing.T) {
 	store, path, _ := newTempStore(t)
 	got, err := store.Update(Patch{
 		Defaults: &GenerateDefaultsPatch{
-			DocumentType: ptr(types.DocDOCX),
-			EnableImages: ptr(false),
+			DocumentType:    ptr(types.DocDOCX),
+			EnableImages:    ptr(false),
+			EnableWebSearch: ptr(true),
 		},
 		WorkspaceDir: ptr("  /Users/lu/Documents  "),
 		LlmProvider: &types.LlmProvider{
@@ -150,6 +154,9 @@ func TestUpdatePersistsAndSanitizes(t *testing.T) {
 	}
 	if got.Defaults.EnableImages {
 		t.Errorf("EnableImages should be false")
+	}
+	if !got.Defaults.EnableWebSearch {
+		t.Errorf("EnableWebSearch should be true")
 	}
 	if got.WorkspaceDir == nil || *got.WorkspaceDir != "/Users/lu/Documents" {
 		t.Errorf("WorkspaceDir = %v, want trimmed path", got.WorkspaceDir)

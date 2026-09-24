@@ -304,6 +304,7 @@ type GenerateInput struct {
 	OutputDir        string                         `json:"outputDir,omitempty"`
 	Publish          bool                           `json:"publish,omitempty"`
 	EnableImages     *bool                          `json:"enableImages,omitempty"`
+	EnableWebSearch  *bool                          `json:"enableWebSearch,omitempty"`
 	ImageQuality     string                         `json:"imageQuality,omitempty"`
 	LocalPreview     bool                           `json:"localPreview,omitempty"`
 	PPTXBackend      string                         `json:"pptxBackend,omitempty"`
@@ -549,7 +550,12 @@ const (
 type GenerateDefaults struct {
 	DocumentType DocumentType `json:"documentType"`
 	EnableImages bool         `json:"enableImages"`
-	ImageQuality ImageQuality `json:"imageQuality"`
+	// EnableWebSearch grounds a generated deck in a live web-research call
+	// that runs before any planning. It defaults to false: that call is a
+	// whole extra round trip in front of the outline, and nothing renders
+	// until it returns, so the wait is opt-in rather than the default.
+	EnableWebSearch bool         `json:"enableWebSearch"`
+	ImageQuality    ImageQuality `json:"imageQuality"`
 }
 
 type LlmProviderType string

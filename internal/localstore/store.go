@@ -1780,6 +1780,72 @@ func (s *Store) RemoveRecentFile(ctx context.Context, filePath string) error {
 	return nil
 }
 
+// RemoveDocumentByID unregisters a document that has no task behind it — a file
+// the user opened from disk, or a blank one the app created. Files on disk are
+// never removed.
+//
+// The task-backed case belongs to RemoveDocumentByTaskID, which has a whole
+// lineage to settle. This is the other half, and without it the library had no
+// way to forget an imported file at all: the row lives in `documents`, so
+// dropping its recent-files entry left it exactly where it was.
+//
+// A document that does have a task is refused rather than half-removed here:
+// deleting the row while its lineage stayed behind would leave activities and
+// artifacts pointing at a document that no longer exists.
+func (s *Store) RemoveDocumentByID(ctx context.Context, documentID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return fmt.Errorf("localstore: not open")
+	}
+	documentID = strings.TrimSpace(documentID)
+	if documentID == "" {
+		return fmt.Errorf("localstore: document id is empty")
+	}
+
+	var filePath string
+	var taskID sql.NullString
+	err := s.db.QueryRowContext(ctx,
+		`SELECT file_path, current_artifact_task_id FROM documents WHERE id = ?`, documentID,
+	).Scan(&filePath, &taskID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("localstore: resolve document: %w", err)
+	}
+	if strings.TrimSpace(taskID.String) != "" {
+		return fmt.Errorf("localstore: document %s belongs to task %s", documentID, strings.TrimSpace(taskID.String))
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("localstore: begin remove document: %w", err)
+	}
+	rollback := func(err error) error {
+		_ = tx.Rollback()
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM document_activity_streams WHERE document_id = ?`, documentID); err != nil {
+		return rollback(fmt.Errorf("localstore: remove document activity links: %w", err))
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM recent_files WHERE file_path = ?`, filePath); err != nil {
+		return rollback(fmt.Errorf("localstore: remove document recent file: %w", err))
+	}
+	// Only the row this registration owns. An artifact that carries a task id
+	// belongs to that task's lineage, not to a local file registration.
+	if _, err := tx.ExecContext(ctx, `DELETE FROM artifacts WHERE file_path = ? AND task_id IS NULL`, filePath); err != nil {
+		return rollback(fmt.Errorf("localstore: remove document artifact: %w", err))
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM documents WHERE id = ?`, documentID); err != nil {
+		return rollback(fmt.Errorf("localstore: remove document: %w", err))
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("localstore: commit remove document: %w", err)
+	}
+	return nil
+}
+
 // RemoveDocumentByTaskID deletes the local metadata for the document lineage
 // containing taskID. Generated files are never removed from disk.
 func (s *Store) RemoveDocumentByTaskID(ctx context.Context, taskID string) error {

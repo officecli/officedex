@@ -581,6 +581,19 @@ func (h *realClientE2EHost) call(method string, raw json.RawMessage) (any, error
 	case "GetDefaultWorkspaceDir":
 		return h.app.GetDefaultWorkspaceDir(), nil
 
+	// Jira connector. The renderer's real-E2E bridge already names these three
+	// RPCs, so they are dispatched here to keep that contract whole.
+	case "GetJiraConnection":
+		return h.app.GetJiraConnection()
+	case "SaveJiraConnection":
+		var input map[string]any
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return h.app.SaveJiraConnection(input)
+	case "ClearJiraConnection":
+		return nil, h.app.ClearJiraConnection()
+
 	// ── Document projection, folders and file operations ────────────────────
 	//
 	// The new IA's shell reads all of its library from here. None of it was
@@ -682,6 +695,14 @@ func (h *realClientE2EHost) call(method string, raw json.RawMessage) (any, error
 		path, _ := h.popFileDialog(false).(string)
 		if strings.TrimSpace(path) == "" {
 			return types.DocumentRecord{}, nil
+		}
+		return h.app.ImportLocalFile(path)
+	case "ImportLocalFile":
+		// A file dropped onto the window. The drop itself is native and cannot be
+		// staged from a browser, so the harness drives the half that is ours.
+		path, err := decodeRealClientString(raw)
+		if err != nil {
+			return nil, err
 		}
 		return h.app.ImportLocalFile(path)
 	case "CreateBlankDocument":
