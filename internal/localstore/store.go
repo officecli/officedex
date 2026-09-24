@@ -2271,14 +2271,44 @@ func (s *Store) queryTaskAnswersLocked(ctx context.Context, taskID string) ([]Ta
 	return out, rows.Err()
 }
 
+// StatusTransition is what one recorded event did to its task's status.
+//
+// Callers that must act exactly once per real state change — usage reporting is
+// the first — cannot decide from the event alone: the bridge replays events on
+// resume, recovery re-records history, and a late frame from a process that was
+// already given up on arrives after the task finished. statusTransition already
+// resolves all of that inside the write transaction, so the answer is returned
+// rather than recomputed by anyone who needs it.
+type StatusTransition struct {
+	// Previous is the status held before this event; empty for a new task.
+	Previous string
+	// Next is the status the task holds after it.
+	Next string
+}
+
+// Entered reports a genuine arrival at `status`: the task holds it now and did
+// not hold it before. A replayed task.completed leaves Previous == Next ==
+// "completed" and answers false.
+func (t StatusTransition) Entered(status string) bool {
+	return t.Next == status && t.Previous != status
+}
+
 // RecordEvent upserts a row into tasks and inserts/replaces a row into
 // task_events. Events without a task_id are silently dropped, matching the
 // behaviour of the TypeScript source.
 func (s *Store) RecordEvent(event types.BridgeEvent) error {
+	_, err := s.RecordEventTransition(event)
+	return err
+}
+
+// RecordEventTransition is RecordEvent plus the status change it caused. A
+// dropped event (no task id, closed store) reports an empty transition, which
+// Entered answers false for.
+func (s *Store) RecordEventTransition(event types.BridgeEvent) (StatusTransition, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil || event.TaskID == "" {
-		return nil
+		return StatusTransition{}, nil
 	}
 	now := nowTimestamp()
 	// Order events by when they happened, not by when the writer goroutine
@@ -2289,14 +2319,14 @@ func (s *Store) RecordEvent(event types.BridgeEvent) error {
 	topic := nullableString(stringPayload(event, "topic"))
 	tx, err := s.db.BeginTx(context.Background(), nil)
 	if err != nil {
-		return fmt.Errorf("localstore: begin record event: %w", err)
+		return StatusTransition{}, fmt.Errorf("localstore: begin record event: %w", err)
 	}
 	// The new status depends on the current one: a task that already finished
 	// stays finished unless this event starts a fresh attempt.
 	var previousStatus string
 	if err := tx.QueryRow(`SELECT status FROM tasks WHERE id = ?`, event.TaskID).Scan(&previousStatus); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		_ = tx.Rollback()
-		return fmt.Errorf("localstore: read task status: %w", err)
+		return StatusTransition{}, fmt.Errorf("localstore: read task status: %w", err)
 	}
 	status := statusTransition(previousStatus, event.Type)
 	if _, err := tx.Exec(
@@ -2310,13 +2340,13 @@ func (s *Store) RecordEvent(event types.BridgeEvent) error {
 		event.TaskID, status, documentType, topic, now, now,
 	); err != nil {
 		_ = tx.Rollback()
-		return fmt.Errorf("localstore: upsert task: %w", err)
+		return StatusTransition{}, fmt.Errorf("localstore: upsert task: %w", err)
 	}
 
 	payloadJSON, err := json.Marshal(orEmptyPayload(event.Payload))
 	if err != nil {
 		_ = tx.Rollback()
-		return fmt.Errorf("localstore: marshal payload: %w", err)
+		return StatusTransition{}, fmt.Errorf("localstore: marshal payload: %w", err)
 	}
 	eventID := storedEventID(event, recordedAt)
 	if _, err := tx.Exec(
@@ -2325,16 +2355,16 @@ func (s *Store) RecordEvent(event types.BridgeEvent) error {
 		eventID, event.TaskID, event.Type, string(payloadJSON), recordedAt, event.RequestID,
 	); err != nil {
 		_ = tx.Rollback()
-		return fmt.Errorf("localstore: insert event: %w", err)
+		return StatusTransition{}, fmt.Errorf("localstore: insert event: %w", err)
 	}
 	if err := projectTaskTx(context.Background(), tx, event.TaskID); err != nil {
 		_ = tx.Rollback()
-		return fmt.Errorf("localstore: project event: %w", err)
+		return StatusTransition{}, fmt.Errorf("localstore: project event: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("localstore: commit record event: %w", err)
+		return StatusTransition{}, fmt.Errorf("localstore: commit record event: %w", err)
 	}
-	return nil
+	return StatusTransition{Previous: previousStatus, Next: status}, nil
 }
 
 // QueryEventsByTask returns all BridgeEvent rows for the given task, ordered
@@ -2354,6 +2384,33 @@ func (s *Store) QueryEventsByTask(ctx context.Context, taskID string) ([]types.B
 	}
 	defer rows.Close()
 	return scanEvents(rows)
+}
+
+// HasCompletedDocumentHistory reports whether this profile already finished a
+// document task at some point.
+//
+// It answers one question, for usage reporting: is this an install whose first
+// document success happened before anything was watching? An install that has
+// completed tasks or recorded artifacts from earlier versions must not have a
+// later run reported as its first, which would show a months-old install
+// converting today.
+func (s *Store) HasCompletedDocumentHistory(ctx context.Context) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return false, fmt.Errorf("localstore: not open")
+	}
+	var found int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT 1 WHERE EXISTS(SELECT 1 FROM artifacts)
+		    OR EXISTS(SELECT 1 FROM tasks WHERE status = 'completed')`).Scan(&found)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("localstore: query document history: %w", err)
+	}
+	return true, nil
 }
 
 // QueryTaskIDsByStatus returns the ids of tasks currently stored with the given

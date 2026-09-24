@@ -2147,3 +2147,91 @@ func TestRecordEventKeepsFinishedTasksFinishedUnlessRestarted(t *testing.T) {
 		}
 	})
 }
+
+// RecordEventTransition exposes what statusTransition already decided inside
+// the write transaction. Callers that must act exactly once per real outcome
+// (usage reporting) cannot recompute it: only the store knows the previous
+// status, and only inside that transaction.
+func TestRecordEventTransitionReportsWhatChanged(t *testing.T) {
+	store := newTempStore(t)
+
+	started, err := store.RecordEventTransition(types.BridgeEvent{EventID: "t1", TaskID: "task-tr", Type: "task.started"})
+	if err != nil {
+		t.Fatalf("RecordEventTransition: %v", err)
+	}
+	if started.Previous != "" || started.Next != "running" {
+		t.Fatalf("started transition = %+v, want {\"\", running}", started)
+	}
+
+	done, err := store.RecordEventTransition(types.BridgeEvent{EventID: "t2", TaskID: "task-tr", Type: "task.completed"})
+	if err != nil {
+		t.Fatalf("RecordEventTransition: %v", err)
+	}
+	if !done.Entered("completed") {
+		t.Fatalf("completing a running task did not report entering completed: %+v", done)
+	}
+
+	// A replay -- which resume and recovery both produce -- is not a new
+	// outcome, and this is the property the usage hook depends on.
+	replay, err := store.RecordEventTransition(types.BridgeEvent{EventID: "t3", TaskID: "task-tr", Type: "task.completed"})
+	if err != nil {
+		t.Fatalf("RecordEventTransition: %v", err)
+	}
+	if replay.Entered("completed") {
+		t.Fatalf("a replayed task.completed reported a fresh transition: %+v", replay)
+	}
+
+	// Progress arriving after the terminal event leaves the status alone.
+	late, err := store.RecordEventTransition(types.BridgeEvent{EventID: "t4", TaskID: "task-tr", Type: "task.progress"})
+	if err != nil {
+		t.Fatalf("RecordEventTransition: %v", err)
+	}
+	if late.Next != "completed" || late.Entered("completed") {
+		t.Fatalf("late progress transition = %+v", late)
+	}
+
+	// An event without a task id is dropped, and Entered must answer false for
+	// the empty transition rather than panicking or claiming a change.
+	dropped, err := store.RecordEventTransition(types.BridgeEvent{Type: "task.completed"})
+	if err != nil {
+		t.Fatalf("RecordEventTransition: %v", err)
+	}
+	if dropped.Entered("completed") || dropped.Entered("") {
+		t.Fatalf("a dropped event reported a transition: %+v", dropped)
+	}
+}
+
+func TestHasCompletedDocumentHistory(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+
+	has, err := store.HasCompletedDocumentHistory(ctx)
+	if err != nil {
+		t.Fatalf("HasCompletedDocumentHistory: %v", err)
+	}
+	if has {
+		t.Fatal("a fresh profile reported prior document history")
+	}
+
+	if err := store.RecordEvent(types.BridgeEvent{TaskID: "task-open", Type: "task.started"}); err != nil {
+		t.Fatalf("RecordEvent: %v", err)
+	}
+	has, err = store.HasCompletedDocumentHistory(ctx)
+	if err != nil {
+		t.Fatalf("HasCompletedDocumentHistory: %v", err)
+	}
+	if has {
+		t.Fatal("a running task counted as completed history")
+	}
+
+	if err := store.RecordEvent(types.BridgeEvent{TaskID: "task-open", Type: "task.completed"}); err != nil {
+		t.Fatalf("RecordEvent: %v", err)
+	}
+	has, err = store.HasCompletedDocumentHistory(ctx)
+	if err != nil {
+		t.Fatalf("HasCompletedDocumentHistory: %v", err)
+	}
+	if !has {
+		t.Fatal("a completed task did not count as history")
+	}
+}
