@@ -5,6 +5,14 @@ const outputDir = process.env.OFFICEDEX_E2E_PLAYWRIGHT_OUTPUT || "test-results/p
 
 export default defineConfig({
   testDir: "./e2e",
+  /*
+   * The S0–S8 audit sessions (`ui-audit*.spec.ts`) are survey instruments:
+   * they record measurements against the 2026-09-19 snapshot, and S4 needs a
+   * dev-real server on 3210 of its own. They are not gates — the gates are
+   * `gates.spec.ts`, the `fix-w*` regressions and the real-bridge shell specs —
+   * so they run only when asked for: OFFICEDEX_E2E_AUDIT=1.
+   */
+  testIgnore: process.env.OFFICEDEX_E2E_AUDIT === "1" ? [] : ["**/ui-audit*.spec.ts"],
   fullyParallel: false,
   workers: 1,
   /*

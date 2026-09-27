@@ -546,7 +546,9 @@ test("every shell declaration resolves to the value it resolved to before", asyn
     const after: Record<string, Record<string, string>> = {};
     for (const combination of combinations) {
       await open(page, combination, { session: "fixes/W3-I" });
-      await page.getByRole("button", { name: "Settings" }).first().click();
+      // The mode menu: the settings gear has opened a full page since 2026-09-20,
+      // and this is the one menu every combination can open.
+      await page.getByRole("button", { name: /^Switch mode/ }).first().click();
       await expect(page.locator(".shell-menu")).toBeVisible();
       after[combination] = await fingerprint(page, ".shell-menu");
       expect(

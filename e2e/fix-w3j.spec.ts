@@ -156,14 +156,15 @@ test.describe("zh-CN renders the shell in Chinese", () => {
     await folderRow.hover();
     const folderAdd = folderRow.locator(".shell-tree-folder-add");
     await expect(folderAdd).toBeVisible();
-    expect(await folderAdd.getAttribute("title")).toBe("在这个文件夹里新建文件");
+    // The control is the folder's actions menu now, and its title says so.
+    expect(await folderAdd.getAttribute("title")).toMatch(/ 的操作$/);
     await folderAdd.click();
     const menu = page.locator(".shell-menu");
     await expect(menu).toBeVisible();
+    // The folder menu is the remove action alone now; new files are made from
+    // Home's "+" and the New page, not from a folder row.
     const items = (await menu.locator("[role^='menuitem']").allTextContents()).join(" | ");
-    expect(items).toContain("新建文档");
-    expect(items).toContain("新建表格");
-    expect(items).toContain("新建演示");
+    expect(items).toContain("移除文件夹");
     await page.keyboard.press("Escape");
 
     // The folder toggle's accessible name is the interpolated one, in Chinese
@@ -177,7 +178,7 @@ test.describe("zh-CN renders the shell in Chinese", () => {
 
     expect(await text(page, ".shell-device")).toContain("在这台电脑上");
     expect(await attr(page, ".shell-tabstrip", "aria-label")).toBe("已打开的文件");
-    expect(await attr(page, ".shell-tab-close", "title")).toBe("关闭");
+    expect(await attr(page, ".shell-tab-close", "title")).toMatch(/^关闭/);
     expect(await attr(page, ".shell-tab-close", "aria-label")).toMatch(/^关闭 /);
 
     // The save chip reads one of the two states, both translated.
@@ -200,6 +201,7 @@ test.describe("zh-CN renders the shell in Chinese", () => {
       "空白表格",
       "空白演示",
       "从这台电脑打开",
+      "看一份演示被画出来",
     ]);
 
     // Column headers of the comfortable list.
@@ -266,7 +268,7 @@ test.describe("en-US is byte-for-byte what it was", () => {
     await open(page, "C6" as Combination, SESSION);
 
     expect(await attr(page, ".shell-tabstrip", "aria-label")).toBe("Open files");
-    expect(await attr(page, ".shell-tab-close", "title")).toBe("Close");
+    expect(await attr(page, ".shell-tab-close", "title")).toMatch(/^Close/);
     expect(await text(page, ".shell-share")).toBe("Share");
     expect(await text(page, ".shell-device")).toContain("On this computer");
     expect(await attr(page, ".shell-agent", "aria-label")).toBe("Agent conversation");

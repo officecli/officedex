@@ -132,8 +132,10 @@ test.describe("new shell · real generation", () => {
     ).toHaveCount(0);
 
     // And the shell agrees it is saved, rather than reporting unsaved changes
-    // on a file nobody has touched.
-    await expect(page.locator(".shell-statusbar")).toContainText("All changes saved");
+    // on a file nobody has touched. The save state is the tab strip's save
+    // control: the workbook editor publishes its own status bar and the shell
+    // withdraws `.shell-statusbar` rather than drawing a second one.
+    await expect(page.getByRole("button", { name: /^Saved$/ })).toBeVisible({ timeout: 30_000 });
 
     await recordScenario({
       uiScenario: "shell-generate-xlsx",

@@ -57,6 +57,31 @@ async function waitForDeck(page: Page, testInfo: TestInfo): Promise<void> {
   throw new Error("the run never produced a deck");
 }
 
+/** Answers every question before the gate — the brief round — and returns at the gate. */
+async function untilGate(page: Page): Promise<void> {
+  const deadline = Date.now() + 10 * 60_000;
+  while (Date.now() < deadline) {
+    if (await page.locator(GATE).isVisible().catch(() => false)) return;
+    const failed = page.getByText(/The run stopped/i).first();
+    if (await failed.isVisible().catch(() => false)) {
+      const detail = await page.locator(".shell-task-reply p").last().innerText().catch(() => "");
+      throw new Error(`the run failed before the outline: ${detail.trim().replace(/\s+/g, " ") || "no reason shown"}`);
+    }
+    const card = page.locator(".shell-task-question");
+    if (await card.isVisible().catch(() => false)) {
+      const options = card.locator(".shell-task-question-options button");
+      if ((await options.count()) > 0) {
+        const recommended = options.locator("css=.is-primary");
+        await ((await recommended.count()) > 0 ? recommended.first() : options.first()).click();
+        await expect(card).toBeHidden({ timeout: 60_000 });
+        continue;
+      }
+    }
+    await page.waitForTimeout(1_000);
+  }
+  throw new Error("the run never stopped at the outline");
+}
+
 test.describe.configure({ mode: "serial" });
 
 test.describe("new shell · the outline gate, for real", () => {
@@ -84,10 +109,12 @@ test.describe("new shell · the outline gate, for real", () => {
     /*
      * The stop itself. Generous, because everything before it is real: the
      * brief, the outline call and whatever the provider is doing today.
+     *
+     * The brief comes first (`kind: pptx_brief`, "Here is what I understood.
+     * Correct anything, then start.") and is a stop of its own; it is answered
+     * as proposed so the run can reach the gate, which is what this spec is about.
      */
-    await expect(page.locator(GATE), "the run never stopped at the outline").toBeVisible({
-      timeout: 10 * 60_000,
-    });
+    await untilGate(page);
 
     const titles = page.locator(`${GATE} .shell-task-outline-input`);
     await expect(titles.first()).toBeVisible();

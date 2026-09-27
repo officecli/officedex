@@ -95,7 +95,16 @@ const CALL_SITES: readonly CallSite[] = [
     trigger: ".shell-tree-file-row",
     gesture: "contextmenu",
   },
-  { id: "scope", source: "composer/Composer.tsx (scope)", trigger: ".shell-cx-scope", gesture: "arrow-down" },
+  { id: "scope", source: "composer/Composer.tsx (scope)", trigger: ".shell-cx .shell-cx-scope", gesture: "arrow-down" },
+  // Home's scope chip sits on the hero, outside the composer, since 2026-09-24.
+  { id: "hero-scope", source: "home/Hero.tsx", trigger: ".shell-home-scope .shell-cx-scope", gesture: "arrow-down" },
+  // Only on an image task's workspace; no audit combination opens one.
+  {
+    id: "image-save",
+    source: "image/ImageWorkspace.tsx",
+    trigger: ".shell-image-actions .shell-image-action.is-primary",
+    gesture: "click",
+  },
   {
     id: "output",
     source: "composer/Composer.tsx (output type)",
@@ -130,8 +139,10 @@ const CALL_SITES: readonly CallSite[] = [
  *   / model
  */
 const REACHABILITY: Record<Combination, readonly string[]> = {
-  C1: ["mode", "folder-row", "scope", "output", "permission", "model"],
-  C2: ["mode", "folder-row", "file-row", "scope", "output", "permission", "model"],
+  // Home's composer keeps the model menu; output and permission live with the
+  // docked and floating composers, and the scope chip moved onto the hero.
+  C1: ["mode", "folder-row", "hero-scope", "model"],
+  C2: ["mode", "folder-row", "file-row", "hero-scope", "model"],
   C3: ["mode"],
   C4: ["mode"],
   C5: ["mode", "tabs-more", "folder-row", "scope", "output", "permission", "model"],

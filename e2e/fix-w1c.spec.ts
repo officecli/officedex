@@ -230,7 +230,7 @@ test.describe("W1-C overlays and the token bridge", () => {
     await page.locator(".shell-cx-permission").click();
     await page.locator(".shell-menu").waitFor();
     await page.getByRole("menuitemradio", { name: /Review changes/ }).click();
-    await expect(page.locator(".od-toast")).toBeVisible();
+    await expect(page.locator(".od-toast").last()).toBeVisible();
 
     const after = await hits();
     expect(after.tabs.length).toBeGreaterThan(0);

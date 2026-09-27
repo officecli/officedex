@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { fixturePath, queueFileDialog } from "./support/real-e2e";
+import { agentComposer, fixturePath, queueFileDialog } from "./support/real-e2e";
 
 /**
  * An instruction about an open deck edits the deck, and does not regenerate it.
@@ -47,12 +47,17 @@ function recordRpc(page: Page): string[] {
   return methods;
 }
 
-/** The Office.js a real planner would return for "change the title". */
-const TITLE_SOURCE = [
+/**
+ * The Office.js a real planner would return for "change the title".
+ *
+ * Scoped to the slide the shell handed the planner (`context.scope.slideIds`):
+ * a script that walks `context.presentation.slides` reaches past the selection,
+ * and the shell asks before applying such a plan — which is the second test's
+ * subject, not this one's.
+ */
+const titleSource = (slideId: string): string => [
   "return await PowerPoint.run(async (context) => {",
-  "  const slides = context.presentation.slides.load('items/id');",
-  "  await context.sync();",
-  "  const slide = slides.items[0];",
+  `  const slide = context.presentation.slides.getItem(${JSON.stringify(slideId)});`,
   "  const shapes = slide.shapes.load('items/name,type');",
   "  await context.sync();",
   "  const TEXT_TYPES = ['TextBox', 'Placeholder', 'GeometricShape'];",
@@ -71,10 +76,12 @@ const TITLE_SOURCE = [
 /** Serves one planner answer for every `PlanPptxJS` call. */
 async function stubPlanner(page: Page, result: Record<string, unknown>): Promise<void> {
   await page.route("**/rpc/PlanPptxJS", async (route) => {
+    const input = route.request().postDataJSON() as { context?: { scope?: { slideIds?: string[] } } } | null;
+    const slideId = input?.context?.scope?.slideIds?.[0] ?? "";
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ ok: true, result }),
+      body: JSON.stringify({ ok: true, result: { ...result, source: titleSource(slideId) } }),
     });
   });
 }
@@ -178,7 +185,7 @@ test.describe("an instruction about an open deck", () => {
 
     const rpc = recordRpc(page);
 
-    await openDeck(page);
+    await openDeck(page, "in-place");
 
     // The deck is on screen as a file — the editor, not a generation stage.
     await expect(page.locator("iframe.pptx-embed-frame")).toBeVisible({ timeout: 60_000 });
@@ -198,12 +205,10 @@ test.describe("an instruction about an open deck", () => {
     await stubPlanner(page, {
       summary: "Renamed the first slide's title to Hello World.",
       confidence: "high",
-      source: TITLE_SOURCE,
     });
 
     rpc.length = 0;
-    const composer = page.getByRole("textbox", { name: /Message Agent/ });
-    await expect(composer).toBeVisible({ timeout: 30_000 });
+    const composer = await agentComposer(page);
     await composer.fill("Change slide 1's title to Hello World");
     /*
      * Enter, not the send button.
@@ -296,10 +301,9 @@ test.describe("an instruction about an open deck", () => {
       confidence: "low",
       requires_confirmation: true,
       confirmation: { message: "This changes a dozen text runs. Continue?" },
-      source: TITLE_SOURCE,
     });
 
-    const composer = page.getByRole("textbox", { name: /Message Agent/ });
+    const composer = await agentComposer(page);
     await composer.fill("Change slide 1's title to Hello World");
     await composer.press("Enter");
 

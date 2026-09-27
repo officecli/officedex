@@ -1,4 +1,4 @@
-import { type TestInfo } from "@playwright/test";
+import { expect, type Page, type TestInfo } from "@playwright/test";
 
 export type DocumentType = "pptx" | "docx" | "xlsx" | "report" | "img" | "gif";
 export type GenerationMode = "plan";
@@ -65,4 +65,21 @@ export async function queueFileDialog(paths: string | string[]): Promise<void> {
 export async function fixturePath(name: string): Promise<string> {
   const result = await hostControl<{ path: string }>(`/control/fixture/${encodeURIComponent(name)}`);
   return result.path;
+}
+
+/**
+ * The composer inside the Agent panel, opened if the panel is collapsed.
+ *
+ * Editor mode starts on the collapsed mark (2026-09-24), so an instruction
+ * about an open document has to open the panel first — the way a person does,
+ * by clicking the mark.
+ */
+export async function agentComposer(page: Page) {
+  const composer = page.getByRole("textbox", { name: /Message Agent/ });
+  if (!(await composer.isVisible().catch(() => false))) {
+    const mark = page.getByRole("button", { name: /Open the Agent panel/ });
+    if (await mark.isVisible().catch(() => false)) await mark.click();
+  }
+  await expect(composer).toBeVisible({ timeout: 30_000 });
+  return composer;
 }

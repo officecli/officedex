@@ -188,11 +188,14 @@ async function startSampling(page: Page): Promise<void> {
     (window as unknown as { __w1b: unknown[] }).__w1b = frames;
     const tick = () => {
       const column = document.querySelector(".shell-agent");
+      // The collapsed mark is the conversation too: Editor mode opens on it
+      // (2026-09-24), so a frame showing only the mark is not "no conversation".
+      const mark = document.querySelector(".shell-presence-face") ? 1 : 0;
       frames.push({
-        panels: document.querySelectorAll(".shell-task").length,
+        panels: document.querySelectorAll(".shell-task").length + mark,
         columnWidth: column ? column.getBoundingClientRect().width : 0,
         columnFilled: !!column?.querySelector(".shell-task"),
-        floating: !!document.querySelector(".shell-presence-panel"),
+        floating: !!document.querySelector(".shell-presence-panel") || mark === 1,
       });
       (window as unknown as { __w1bRaf: number }).__w1bRaf = requestAnimationFrame(tick);
     };
@@ -492,8 +495,8 @@ test.describe("the conversation is handed over, never duplicated", () => {
     const samples = await stopSampling(page);
 
     assertOnePanelThroughout(samples);
-
-    await expect(page.locator(PANEL)).toHaveCount(1);
+    // Editor mode lands on the collapsed mark, not an open panel.
+    await expect(page.locator(`${PANEL}, .shell-presence-face`)).toHaveCount(1);
     await expect(page.locator("#shell")).toHaveAttribute("data-mode", "editor");
   });
 

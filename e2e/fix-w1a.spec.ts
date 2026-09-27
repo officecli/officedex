@@ -146,11 +146,18 @@ test.describe("W1-A overlay engine", () => {
     // where only the height mattered (S2-006).
     for (const combination of ["C1", "C2", "C5", "C6", "C7", "C8", "C9", "C10"] as Combination[]) {
       await open(page, combination, SESSION);
-      for (const [name, selector] of [
-        ["scope", ".shell-cx-scope"],
-        ["permission", ".shell-cx-permission"],
-        ["model", ".shell-cx-model"],
-      ] as const) {
+      // Home's composer (C1/C2) keeps only the scope chip, on the hero
+      // (`Hero.tsx`); output, permission and model live with the docked and
+      // floating composers.
+      const controls: ReadonlyArray<readonly [string, string]> =
+        combination === "C1" || combination === "C2"
+          ? [["scope", ".shell-home-scope .shell-cx-scope"]]
+          : [
+              ["scope", ".shell-cx .shell-cx-scope"],
+              ["permission", ".shell-cx-permission"],
+              ["model", ".shell-cx-model"],
+            ];
+      for (const [name, selector] of controls) {
         const trigger = page.locator(selector).first();
         // Opened from the keyboard: the toolbar's chips overlap each other
         // (S2-005's cross-reference to S3), so a mouse click on the scope chip
@@ -169,7 +176,7 @@ test.describe("W1-A overlay engine", () => {
 
   test("S2-006 a menu never grows past the room it has", async ({ page }) => {
     await open(page, "C1", SESSION);
-    const trigger = page.locator(".shell-cx-scope").first();
+    const trigger = page.locator(".shell-home-scope .shell-cx-scope").first();
     /*
      * `trigger.press` rather than `trigger.focus()` + `page.keyboard.press`.
      *
@@ -197,7 +204,8 @@ test.describe("W1-A overlay engine", () => {
     // of a 720px window.
     expect(measured?.rect.bottom).toBeLessThanOrEqual(720);
     const maxHeight = await page.locator(MENU).evaluate((node) => getComputedStyle(node).maxHeight);
-    expect(maxHeight).not.toBe("340px");
+    // `min(340px, room)`: the cap is fine, a menu taller than the room is not.
+    expect(parseFloat(maxHeight)).toBeLessThanOrEqual(340);
   });
 
   /* ------------------------------------------------------------- S2-007 */
@@ -335,7 +343,8 @@ test.describe("W1-A overlay engine", () => {
     const afterEscape = await page.evaluate(
       () => document.activeElement?.getAttribute("aria-label") ?? "",
     );
-    expect(afterEscape).toBe("Switch mode");
+    // The label now also says which mode is current.
+    expect(afterEscape).toMatch(/^Switch mode/);
 
     // And a click on an item still reaches its handler through the portal.
     await trigger.click();

@@ -129,7 +129,9 @@ test.describe("W2-G one settings store", () => {
   /* ------------------------------------------------------------- S7-002 */
 
   test("S7-002 the two Enter sends menus agree, in both directions", async ({ page }) => {
-    await open(page, "C2", SESSION);
+    // C6, not C2: Home's composer no longer carries the permission menu, so
+    // the two entry points share a screen only inside a workspace.
+    await open(page, "C6", SESSION);
 
     // Both entry points are on screen at once — that is what made the old
     // disagreement visible in a single screenshot.
@@ -276,11 +278,8 @@ test.describe("W2-G one settings store", () => {
 
     await page.locator('.shell-sidebar-item[title="Home"]').click();
     await expect(page.locator("#shell")).toHaveAttribute("data-home", "true");
-
-    // Home mounts a different composer in a different subtree. It must open on
-    // the value the user just chose, not on the default it would have read for
-    // itself.
-    expect(await readComposerEnter(page)).toBe("Enter sends · off");
+    // Home's composer has no permission menu any more; the sidebar row is the
+    // one reader left on this screen, and it must show the value just chosen.
     expect(await readSidebarEnter(page)).toEqual({ label: "Enter sends", checked: "false" });
   });
 });

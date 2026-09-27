@@ -6,6 +6,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { strFromU8, unzipSync } from "fflate";
 
 import {
+  agentComposer,
   attachHostReport,
   fixturePath,
   hostControl,
@@ -566,8 +567,7 @@ test.describe("new shell · core editing matrix", () => {
     const rpc = recordRpc(page);
     await stubDocxPlanner(page, query as string, replacement);
 
-    const composer = page.getByRole("textbox", { name: /Message Agent/ });
-    await expect(composer).toBeVisible({ timeout: 30_000 });
+    const composer = await agentComposer(page);
     await composer.fill("Rewrite that sentence for the core matrix.");
     await composer.press("Enter");
     await expect(composer, "the composer still holds the instruction").toHaveValue("", {
@@ -714,8 +714,7 @@ test.describe("new shell · core editing matrix", () => {
     const rpc = recordRpc(page);
     await stubPptxPlanner(page);
 
-    const composer = page.getByRole("textbox", { name: /Message Agent/ });
-    await expect(composer).toBeVisible({ timeout: 30_000 });
+    const composer = await agentComposer(page);
     await composer.fill("Change slide 1's title to Hello World");
     await composer.press("Enter");
     await expect(composer, "the composer still holds the instruction").toHaveValue("", {

@@ -153,27 +153,21 @@ test.describe("S8-008: the empty state names actions this screen has", () => {
     console.log(`W5 C1/home-actions ${JSON.stringify(labels)}`);
   });
 
-  test("C1: an empty Agent workspace shows the sentence with its controls above it", async ({ page }) => {
-    // No `shellFixture`, which is the explicit empty workspace the finding used.
-    await page.goto("/?shell=C1");
+  test("C1: an empty Agent workspace shows the sentence, below the hero's own entry points", async ({ page }) => {
+    // `workspace=empty` is the fixture with nothing in it: the sentence only
+    // appears when the whole workspace is empty, which the audit dataset never
+    // is and which a bridge-backed preview cannot promise either.
+    await page.goto("/?shellFixture=1&shell=C1&workspace=empty");
     await expect(page.locator("#shell")).toHaveAttribute("data-loaded", "true");
-
     const empty = page.locator(".shell-list-empty");
     await expect(empty).toBeVisible();
     await expect(empty.locator("p")).toHaveText("Create a file, or open one from this computer.");
-
-    const actions = page.locator(".shell-home-list .shell-home-new");
-    await expect(actions).toHaveCount(4);
-
-    const actionBox = await box(page, ".shell-home-list .shell-home-new");
+    // The actions the sentence names live on the hero now (add files, the
+    // quick prompts), which sits above the list; the list itself carries none.
+    const heroBox = await box(page, ".shell-hero");
     const emptyBox = await box(page, ".shell-list-empty");
-    // Same screen, and above the sentence rather than six steps away.
-    expect(actionBox!.bottom).toBeLessThanOrEqual(emptyBox!.top);
-
-    // eslint-disable-next-line no-console
-    console.log(
-      `W5 C1/empty-actions actions=${JSON.stringify(actionBox)} empty=${JSON.stringify(emptyBox)}`,
-    );
+    expect(heroBox!.bottom).toBeLessThanOrEqual(emptyBox!.top);
+    console.log(`W5 C1/empty hero=${JSON.stringify(heroBox)} empty=${JSON.stringify(emptyBox)}`);
   });
 
   test("C1: pressing Blank document creates a file and leaves Home", async ({ page }) => {
@@ -236,7 +230,7 @@ test.describe("S6-013: the loading phase looks different from an empty workspace
   test("C2: `data-loaded=\"false\"` withdraws the empty sentence and shows a bar", async ({ page }) => {
     // No fixture: an empty workspace, which is the state the loading phase was
     // indistinguishable from.
-    await page.goto("/?shell=C2");
+    await page.goto("/?shellFixture=1&shell=C2&workspace=empty");
     await expect(page.locator("#shell")).toHaveAttribute("data-loaded", "true");
 
     const read = async () =>
