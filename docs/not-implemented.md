@@ -47,7 +47,7 @@ Composer 完整采集这些字段。mentions 和 reference 已转成明确的 pr
 
 这些是 UI 层为一个还不存在的能力画的，连可调的接口都没有。
 
-**2026-09-18 起新 shell 成为应用入口（`/`），旧 UI 退到 `/legacy.html`。**
+**2026-09-18 起新 shell 成为应用入口（`/`）；2026-09-28 旧 UI（`legacy.html` / `src/renderer/App.tsx` 及其 screens、controllers、preview）已整体删除，shell 是唯一界面。**
 账号页、整页设置（含连接器 / 订阅 / 诊断）、强制更新闸门已经搬进 shell。
 下面这一节剩下的是「界面上有控件、能力仍不完整」或「新 shell 根本没有入口」的条目。
 

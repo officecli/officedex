@@ -22,11 +22,4 @@ describe("spreadsheet workspace boundaries", () => {
     expect(source).not.toContain(["preview", "components"].join("/"));
   });
 
-  it("contains Sheet SDK stacking so App Builder overlays remain fully visible", () => {
-    // The workspace shares the Office workbench frame, so the stacking context
-    // that keeps the sheet editor under the overlay lives there now.
-    const css = readFileSync("src/renderer/workbench/workbench.css", "utf8");
-    expect(css).toMatch(/\.wb-body\s*\{[^}]*isolation:\s*isolate/s);
-    expect(css).toMatch(/\.wb-overlay\s*\{[^}]*z-index:\s*40/s);
-  });
 });

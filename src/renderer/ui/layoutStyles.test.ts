@@ -11,23 +11,8 @@ describe("Chinese layout safeguards", () => {
     expect(components).toContain("flex-wrap: wrap;");
   });
 
-  it("uses mobile-safe layouts for settings, home attention rows, and updates", () => {
-    const settings = readFileSync(`${process.cwd()}/src/renderer/styles/settings.css`, "utf8");
-    const home = readFileSync(`${process.cwd()}/src/renderer/styles/home.css`, "utf8");
+  it("keeps the update banner's actions inside a narrow viewport", () => {
     const updates = readFileSync(`${process.cwd()}/src/renderer/styles/onboarding-update.css`, "utf8");
-    expect(settings).toContain("@media (max-width: 900px) and (min-width: 761px)");
-    expect(settings).toContain(".effective-row { align-items: flex-start; flex-direction: column;");
-    expect(home).toContain(".home-attention-row--runtime { grid-template-areas:");
     expect(updates).toContain(".update-banner-actions { width: 100%; justify-content: flex-end; }");
-  });
-
-  it("keeps document icons centered when the rail shrinks on a narrow window", () => {
-    const home = readFileSync(`${process.cwd()}/src/renderer/styles/home.css`, "utf8");
-    expect(home).toContain(".project-sidebar__document-open { display: grid; width: 100%;");
-    // The icon-only rail survives only as the narrow-viewport treatment; the
-    // collapsed rail is unmounted outright, so it has no styling of its own.
-    expect(home).toContain("@media (max-width: 720px)");
-    expect(home).toContain(".project-sidebar__document-open { grid-template-columns: 1fr; justify-items: center; padding: 0; }");
-    expect(home).not.toContain("data-compact");
   });
 });

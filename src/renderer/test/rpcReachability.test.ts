@@ -38,6 +38,8 @@ const CALL_SITE_ROOTS = ["src/renderer", "src/services"];
  *
  * Not the same thing as PENDING_CONSUMER below.
  */
+const LEGACY_ONLY = "only the old UI called it; removed with legacy.html on 2026-09-28";
+
 const UNWIRED: Record<string, string> = {
   // The workbook→output lineage store is half-wired: App.tsx records a view
   // (saveOfficeProductView) and Home lists outputs (listOfficeProductOutputs).
@@ -78,6 +80,66 @@ const UNWIRED: Record<string, string> = {
   // nothing asks for it — every path goes through issuePreviewToken and renders
   // in-app instead.
   previewArtifact: "Go side implemented; every preview path uses issuePreviewToken and renders in-app",
+  /*
+   * Everything below lost its only call site when the old UI was deleted
+   * (2026-09-28: legacy.html, App.tsx, screens/, controllers/, preview/,
+   * appBuilder/). The Go side is untouched, so each is a capability the shell
+   * does not expose yet — PPT research/intervention controls, the workbook
+   * product store, the HTML app builder, the vertical connectors (Jira,
+   * TikTok), report/GIF generation, and the preview window. Wiring one up in
+   * the shell removes its line here.
+   */
+  getPptxTaskStatus: LEGACY_ONLY,
+  skipPptxResearch: LEGACY_ONLY,
+  intervenePptx: LEGACY_ONLY,
+  saveOfficeProductSource: LEGACY_ONLY,
+  saveOfficeProductView: LEGACY_ONLY,
+  saveOfficeProductOutput: LEGACY_ONLY,
+  listOfficeProductOutputs: LEGACY_ONLY,
+  writeHtmlAppFiles: LEGACY_ONLY,
+  initialize: LEGACY_ONLY,
+  getCapabilities: LEGACY_ONLY,
+  planSpreadsheetFields: LEGACY_ONLY,
+  respondAgentRun: LEGACY_ONLY,
+  retryAgentRun: LEGACY_ONLY,
+  reassignAgentClientTool: LEGACY_ONLY,
+  showItemInFolder: LEGACY_ONLY,
+  openExternal: LEGACY_ONLY,
+  openFileDialog: LEGACY_ONLY,
+  openDirectoryDialog: LEGACY_ONLY,
+  deletePptxTemplate: LEGACY_ONLY,
+  onPptxTemplateProgress: LEGACY_ONLY,
+  importPptxTemplate: LEGACY_ONLY,
+  savePptx: LEGACY_ONLY,
+  planPptxJS: LEGACY_ONLY,
+  createWorkbookFromSheet: LEGACY_ONLY,
+  readLocalTextDocuments: LEGACY_ONLY,
+  login: LEGACY_ONLY,
+  cancelLogin: LEGACY_ONLY,
+  whoami: LEGACY_ONLY,
+  logout: LEGACY_ONLY,
+  getCreditStatus: LEGACY_ONLY,
+  getInviteInfo: LEGACY_ONLY,
+  redeem: LEGACY_ONLY,
+  listWorkspaces: LEGACY_ONLY,
+  removeRecentFile: LEGACY_ONLY,
+  renameWorkspace: LEGACY_ONLY,
+  addWorkspace: LEGACY_ONLY,
+  selectWorkspace: LEGACY_ONLY,
+  removeWorkspace: LEGACY_ONLY,
+  onAuthEvent: LEGACY_ONLY,
+  getAppVersion: LEGACY_ONLY,
+  exportLogs: LEGACY_ONLY,
+  getBridgeRuntimeSnapshot: LEGACY_ONLY,
+  recordRendererLog: LEGACY_ONLY,
+  testProvider: LEGACY_ONLY,
+  getJiraConnection: LEGACY_ONLY,
+  saveJiraConnection: LEGACY_ONLY,
+  clearJiraConnection: LEGACY_ONLY,
+  getLiquipediaConnection: LEGACY_ONLY,
+  saveLiquipediaConnection: LEGACY_ONLY,
+  clearLiquipediaConnection: LEGACY_ONLY,
+  planShopifyCatalogCampaign: LEGACY_ONLY,
 };
 
 /**
@@ -225,7 +287,12 @@ describe("DesktopAPI reachability", () => {
   // 13 → 14 when isCalled() was tightened: `previewArtifact` had been counted
   // as reachable because a local variable shares its name. The capability did
   // not regress, the measurement got honest.
+  //
+  // 14 → 65 on 2026-09-28, when the old UI was deleted: 51 RPCs had only ever
+  // been called from it (LEGACY_ONLY above). This is the argument the comment
+  // asks for — those capabilities are out of the shell's reach until it grows
+  // a surface for them, and the list is where that debt is written down.
   it("the unwired list does not grow", () => {
-    expect(Object.keys(UNWIRED)).toHaveLength(14);
+    expect(Object.keys(UNWIRED)).toHaveLength(65);
   });
 });

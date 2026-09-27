@@ -10,54 +10,16 @@
 **技术栈**：Wails v2 桌面应用 = Go 后端 + React/TypeScript 前端
 **任务**：把这个应用的 UI/UX 完全重构成一套新的信息架构（IA），功能不变。
 
-工作树里目前**有两套 UI 并存**：
+**2026-09-28 起只剩一套 UI**：`index.html` → `src/shell/main.tsx`。旧 UI（`legacy.html` →
+`src/renderer/App.tsx`、`screens/`、`controllers/`、`preview/`、`components/` 等 226 个源文件）、
+`OFFICEDEX_ENTRY` 开关、`scripts/entry-choice.mjs`、`scripts/build-entries.sh` 和驱动旧界面的
+7 个 real e2e 套件已全部删除。`src/renderer/` 里剩下的是 shell 仍在用的共享层：`bridge/`、
+`i18n/`、`ui/`、`taskState.ts`、`spreadsheet/`（SheetCanvas 的底座）、`presentation/`
+（deck 状态与内置录像）、`word/` 等。判断某文件是否还在用：从 `src/shell/main.tsx` 做一次
+`tsc --listFilesOnly` 闭包，够不到且无测试引用即可删。
 
-| | 旧 UI | 新 UI |
-|---|---|---|
-| 入口 | `legacy.html` → `src/renderer/App.tsx` | **`index.html`** → `src/shell/main.tsx` |
-| 状态 | **已冻结，不要改** | 在建，43 个文件 / 约 7150 行 |
-| 规模 | App.tsx + `screens/` + 10 个 controller | 完整界面已画完，功能在逐个接 |
-
-两套共用同一个 Go 后端和同一个传输层（`src/renderer/bridge/`）。
-`vite.config.ts` 是多入口，两个 html 都会进构建。**2026-09-18 起新 shell 是 `/`**；
-旧 UI 移到 `/legacy.html`，没有任何地方链接过去，只能手敲地址。
-
-两个入口可以**各编成一个独立的 app**，同时装着：
-
-```bash
-npm run build:entries          # 两个都编
-npm run build:entries shell    # 只编新界面
-npm run build:entries legacy   # 只编旧界面
-```
-
-产物是 `build/bin/OfficeDex.app`（新 shell）和 `build/bin/OfficeDex Legacy.app`（旧 UI），
-各有自己的 `CFBundleName` 和 **`CFBundleIdentifier`**。后者才是关键：两个 bundle 共用
-一个标识符，在 LaunchServices 眼里就是同一个 app，双击文档由哪个打开全看运气。
-
-`dist/` 是 `go:embed` 进二进制的，所以两个变体必须各编一次 Go——不能靠复制一个包再换
-文件得到另一个。
-
-**两个 app 共用一个数据目录**（`~/Library/Application Support/OfficeDex`），这是故意的：
-能用两种界面打开同一批文档正是它存在的意义。代价是同时开两个会有两个进程压同一个
-SQLite，而它是默认 journal、没有 busy timeout，第二个写入方会拿到
-`database is locked`。这是明确报错而不是静默损坏，但结论是：**一次只开一个**。
-
-单独要一个以旧 UI 为入口的包（不改包名、直接覆盖 `OfficeDex.app`）：
-
-```bash
-OFFICEDEX_ENTRY=legacy npm run build:local:latest
-```
-
-`OFFICEDEX_ENTRY` 取值只有 `shell`（默认，不设即此）和 `legacy`，**其余一律让构建失败**。
-这一条是有来由的：最自然的写法是「等于 legacy 就换，否则走默认」，于是
-`Legacy` / `legcy` / `LEGACY` 全都静默给你一个新 shell 的包——你以为拿到的是旧版，
-产物上没有任何地方写着它是哪一个，只能靠启动才发现。判断在
-`scripts/entry-choice.mjs`，测试在同名 `.test.mjs`，已挂进 `npm run test:scripts`。
-
-开关只在构建**成功之后**把产物里的两个 html 换个名字，源文件一个字不动，所以构建
-失败不会留下一个自称是别的东西的仓库。两边的 bundle、资源、Go 二进制完全一致。
-
-**重构最终会删掉旧 UI**（见 S5），但现在还不能删。
+随旧 UI 一起消失、shell 没有对应入口的能力：Jira / TikTok 运营等垂直连接器界面（`appBuilder/`、
+`DataScreens`）、报告（report）与 GIF 生成的界面入口。Go 侧绑定仍在，只是没有 UI 调用。
 
 ---
 
@@ -242,7 +204,7 @@ presentation）都没暴露 undo 协议，`DesktopAPI` 里也没有版本或快�
 
 **浏览器预览**
 - 预览用 `preview_start`（配置名 `officedex-develop-1.0`，端口 3104），进去后要手动
-  打开 `/`（旧 UI 在 `/legacy.html`）。
+  打开 `/`。
 - **dev server 的模块可能是陈旧的**：改完代码第一次点，handler 可能还是旧的，
   **硬刷一次再判断**。我差点把这个误判成 bug。
 - toast 是 portal 到 `document.body` 的，断言要读 body 不是 render container；

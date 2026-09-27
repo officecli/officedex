@@ -46,16 +46,12 @@ import { describe, expect, it } from "vitest";
  * Portals that still name `document.body`, each one a finding rather than a
  * pardon.
  *
- * `renderer/spreadsheet/UnsavedChangesDialog.tsx` is reachable from the shell
- * (the sheet canvas raises it on close) and draws its own dialog instead of
- * using `Modal`, so W1-C's fix does not reach it: inside the shell it renders
- * with the library defaults, which is R3's symptom in a component R3's fix did
- * not cover. It belongs to whoever owns `renderer/spreadsheet`; it is listed
- * here so the count cannot grow quietly while it waits.
+ * Empty since 2026-09-28: the last entry, `renderer/spreadsheet/
+ * UnsavedChangesDialog.tsx`, was only mounted by the old UI and left with it.
+ * The set stays so a new offender has somewhere to be listed rather than
+ * somewhere to hide.
  */
-const KNOWN_BODY_PORTALS = new Set([
-  "src/renderer/spreadsheet/UnsavedChangesDialog.tsx",
-]);
+const KNOWN_BODY_PORTALS = new Set<string>([]);
 
 function withoutComments(source: string): string {
   return source
