@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { DesktopAPI, DesktopTask } from "../shared/types";
+import { liveRunOfType } from "./liveRun";
 import { DesktopApiProvider } from "../renderer/services/desktopApi";
 import { LocaleProvider, useT } from "../renderer/i18n";
 import { CanvasPlaceholder } from "../shell/editor/CanvasPlaceholder";
@@ -244,10 +245,5 @@ function StageBody({ api, task, onError, demo }: PresentationStageProps) {
  * `taskOrder` is newest-first.
  */
 export function liveDeckTask(tasks: Record<string, DesktopTask>, order: readonly string[]): DesktopTask | null {
-  for (const id of order) {
-    const task = tasks[id];
-    if (!task || task.documentType !== "pptx") continue;
-    if (LIVE_STATUSES.includes(task.status)) return task;
-  }
-  return null;
+  return liveRunOfType(tasks, order, "pptx");
 }

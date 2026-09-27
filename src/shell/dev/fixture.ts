@@ -13,6 +13,7 @@
  * production build.
  *
  *   ?shellFixture=1                  the in-memory fake port, audit dataset
+ *   ?workspace=empty                 …with no folders or files at all
  *   ?shell=C7                        a named shell combination (see below)
  *   ?mode=agent|editor               individual overrides, applied after ?shell
  *   ?home=1|0
@@ -208,13 +209,17 @@ export function readDevFixture(
 
   if (!wantsFixture && !forceUpdate && Object.keys(stateOverride).length === 0) return null;
 
+  // `?workspace=empty`: the fake port with nothing in it. The empty-state
+  // findings (S8-008, S6-013) need a workspace with no files, which the audit
+  // dataset never is and which a bridge-backed preview cannot promise either.
+  const emptyWorkspace = params.get("workspace") === "empty";
   return {
-    port: wantsFixture ? auditPort(deckRun || gate, gate) : null,
+    port: wantsFixture ? (emptyWorkspace ? createFakePort({ folders: [], files: [] }) : auditPort(deckRun || gate, gate)) : null,
     // Tabs and the selected folder come from the fixture, not from whatever the
     // last session left in localStorage — otherwise the first audit run against
     // a browser profile that has used the shell before opens on stale file ids
     // the fake has never heard of.
-    stateOverride: wantsFixture
+    stateOverride: wantsFixture && !emptyWorkspace
       ? {
           openFileIds: AUDIT_OPEN_FILE_IDS,
           activeFileId: AUDIT_ACTIVE_FILE_ID,

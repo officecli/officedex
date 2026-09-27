@@ -369,6 +369,8 @@ export interface TaskQuestionAnswer {
 export interface TaskQuestion {
   id: string;
   question: string;
+  /** Runtime-declared kind for questions with a dedicated UI, e.g. "pptx_outline_gate". */
+  kind?: string;
   options: Array<TaskQuestionOption>;
   allowFreeform: boolean;
   questions?: Array<{

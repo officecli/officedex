@@ -273,7 +273,7 @@ function FolderRow({
               type="button"
               className="shell-tree-folder-add"
               aria-label={t("shell.tree.folderActionsFor", { folder: folder.label })}
-              title={t("shell.tree.removeFolder")}
+              title={t("shell.tree.folderMenu", { folder: folder.label })}
             >
               <MoreHorizontal size={14} strokeWidth={1.8} aria-hidden="true" />
             </button>

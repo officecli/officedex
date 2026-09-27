@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useT } from "../../renderer/i18n";
 import { FileTypeIcon } from "../chrome/FileTypeIcon";
 import { Composer } from "../composer/Composer";
-import type { AgentOutlinePage, AgentStep, AgentTask } from "../../shared/uiPort";
+import { OUTLINE_GATE_KIND, type AgentOutlinePage, type AgentStep, type AgentTask } from "../../shared/uiPort";
 import { ImageTranscript } from "../image/ImageTranscript";
 import { useShell } from "../state/ShellContext";
 import { useLibraryActions } from "../nav/useLibraryActions";
@@ -354,12 +354,11 @@ function PageMark({ state }: { state: AgentOutlinePage["state"] }) {
  * — the runtime wants a decision on the plan, not a sentence.
  */
 function isOutlineGate(task: AgentTask): boolean {
-  return (
-    task.documentType === "pptx" &&
-    (task.outline?.length ?? 0) > 0 &&
-    task.question?.allowFreeform === false &&
-    task.question.options.length === 1
-  );
+  if (task.documentType !== "pptx" || (task.outline?.length ?? 0) === 0 || !task.question) return false;
+  // The runtime names it. The shape test below is for runtimes that do not,
+  // and for the card the service synthesises on a bare plan_review.
+  if (task.question.kind === OUTLINE_GATE_KIND) return true;
+  return task.question.allowFreeform === false && task.question.options.length === 1;
 }
 
 /**

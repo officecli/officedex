@@ -601,6 +601,7 @@ function questionFromPayload(payload: BridgeEvent["payload"]): TaskQuestion | un
   const question: TaskQuestion = {
     id: String(payload.id || ""),
     question: String(payload.question || ""),
+    ...(typeof payload.kind === "string" && payload.kind.trim() ? { kind: payload.kind.trim() } : {}),
     options,
     allowFreeform: payload.allow_freeform === true || payload.allowFreeform === true,
   };

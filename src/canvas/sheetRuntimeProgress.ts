@@ -1,4 +1,5 @@
 import type { DesktopTask } from "../shared/types";
+import { liveRunOfType } from "./liveRun";
 
 /**
  * What the runtime says about the workbook it is writing.
@@ -77,10 +78,5 @@ export function liveWorkbookTask(
   tasks: Record<string, DesktopTask>,
   order: readonly string[],
 ): DesktopTask | null {
-  for (const id of order) {
-    const task = tasks[id];
-    if (!task || task.documentType !== "xlsx") continue;
-    if (LIVE_STATUSES.includes(task.status)) return task;
-  }
-  return null;
+  return liveRunOfType(tasks, order, "xlsx");
 }

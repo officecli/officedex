@@ -1,5 +1,5 @@
 import type { BridgeEvent, DesktopAPI, DesktopTask, DocumentRecord, GenerateInput, TaskHistoryEntry } from "../shared/types";
-import type { AgentEvent, AgentImageRun, AgentImageSeries, AgentMessage, AgentOutlinePage, AgentPort, AgentRecovery, AgentStatus, AgentStep, AgentTask, AgentTaskSummary, ImageGenerationInput, SendInput } from "../shared/uiPort";
+import { OUTLINE_GATE_KIND, type AgentEvent, type AgentImageRun, type AgentImageSeries, type AgentMessage, type AgentOutlinePage, type AgentPort, type AgentRecovery, type AgentStatus, type AgentStep, type AgentTask, type AgentTaskSummary, type ImageGenerationInput, type SendInput } from "../shared/uiPort";
 import { imageDimensions, imageStyleText, isReferenceImagePath, ratioBucket } from "../shared/imageGeneration";
 import { pptxPageStates } from "../renderer/presentation/pptxRuntimeActivity";
 import { respondToPlanReview } from "../renderer/presentation/planReviewResponse";
@@ -223,6 +223,7 @@ function toQuestion(task: DesktopTask): AgentTask["question"] {
     return {
       id: task.plan.id,
       text: translate("shell.service.outline.ready"),
+      kind: OUTLINE_GATE_KIND,
       options: [{ id: "approve", label: translate("shell.service.outline.start"), recommended: true }],
       allowFreeform: false,
     };
@@ -234,6 +235,10 @@ function toQuestion(task: DesktopTask): AgentTask["question"] {
   return {
     id: question.id,
     text: (active?.question || question.question || "").trim(),
+    // The runtime's gate arrives as a question with `allow_freeform: true` —
+    // that is its degradation path for clients with no gate UI. The kind is
+    // what says it is the gate; the shape no longer does.
+    ...(question.kind ? { kind: question.kind } : {}),
     options: (active?.options ?? question.options ?? []).map((option) => ({
       id: option.id,
       label: option.label,
@@ -1116,26 +1121,41 @@ export function createAgentService(api: DesktopAPI): AgentPort {
        * "approved as proposed".
        */
       const blocked = state.tasks[pending.taskId];
+      /*
+       * The edited outline, put on the wire here rather than in the panel.
+       *
+       * `planApprovalAnswer` writes the runtime's decision shape — a section
+       * per page, numbered by position, with a page left out meaning dropped.
+       * The shell hands over the list it collected and stays out of that
+       * format; `undefined` is the unmodified plan, which the runtime reads
+       * as approved as proposed.
+       */
+      const edited = input.outline?.length
+        ? planApprovalAnswer(
+            input.outline.map((page, index) => ({
+              id: String(page.slide),
+              slide: index + 1,
+              title: page.title,
+            })),
+          )
+        : planApprovalAnswer(undefined);
       if (blocked?.status === "plan_review") {
-        /*
-         * The edited outline, put on the wire here rather than in the panel.
-         *
-         * `planApprovalAnswer` writes the runtime's decision shape — a section
-         * per page, numbered by position, with a page left out meaning dropped.
-         * The shell hands over the list it collected and stays out of that
-         * format; `undefined` is the unmodified plan, which the runtime reads
-         * as approved as proposed.
-         */
-        const edited = input.outline?.length
-          ? planApprovalAnswer(
-              input.outline.map((page, index) => ({
-                id: String(page.slide),
-                slide: index + 1,
-                title: page.title,
-              })),
-            )
-          : planApprovalAnswer(undefined);
         await respondToPlanReview(api, blocked, "approve", edited);
+        return;
+      }
+      /*
+       * The same gate, delivered as a question (`kind: pptx_outline_gate`) by
+       * the progressive pipeline. The runtime reads a decision only off the
+       * approve option with a JSON answer; anything else approves the outline
+       * as proposed, which is what an empty edit should mean.
+       */
+      if (pending.question.kind === OUTLINE_GATE_KIND) {
+        await api.respond({
+          taskId: pending.taskId,
+          questionId: pending.question.id,
+          optionId: "approve",
+          ...(edited ? { answer: edited } : {}),
+        });
         return;
       }
 

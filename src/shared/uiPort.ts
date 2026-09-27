@@ -198,10 +198,18 @@ export interface AgentQuestionOption {
 export interface AgentQuestion {
   id: string;
   text: string;
+  /**
+   * What the runtime says this question is, when it has a UI of its own.
+   * `"pptx_outline_gate"` is the deck's one blocking stop; the panel draws the
+   * editable outline for it rather than a plain question card.
+   */
+  kind?: "pptx_outline_gate" | string;
   options: AgentQuestionOption[];
   /** The runtime accepts typed text as well as one of the options. */
   allowFreeform: boolean;
 }
+
+export const OUTLINE_GATE_KIND = "pptx_outline_gate";
 
 /**
  * One page of a deck being written, as the task panel lists it.

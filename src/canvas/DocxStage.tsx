@@ -1,4 +1,5 @@
 import type { DesktopTask } from "../shared/types";
+import { liveRunOfType } from "./liveRun";
 import { useT } from "../renderer/i18n";
 import { STAGE_CHROME, useEditorChrome } from "./editorChrome";
 import "./docxStage.css";
@@ -47,12 +48,7 @@ export function liveDocTask(
   tasks: Record<string, DesktopTask>,
   order: readonly string[],
 ): DesktopTask | null {
-  for (const id of order) {
-    const task = tasks[id];
-    if (!task || task.documentType !== "docx") continue;
-    if (LIVE_STATUSES.includes(task.status)) return task;
-  }
-  return null;
+  return liveRunOfType(tasks, order, "docx");
 }
 
 /**

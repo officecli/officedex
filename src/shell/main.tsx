@@ -59,7 +59,13 @@ mountWindowChrome();
 const fixture = readDevFixture(window.location.search);
 
 const port = fixture?.port ?? createShellPort();
-const canvas = createShellCanvas();
+/*
+ * No editor on the fixture's files. They are the audit dataset, not documents,
+ * and a real adapter asked to show one (a browser tab with the bridge proxied
+ * in, which is what the e2e runner is) drew nothing where the host's own
+ * skeleton should be.
+ */
+const canvas = fixture?.port ? null : createShellCanvas();
 const api = hasDesktopBackend() ? createDesktopAPI(readBridgeEnvironment()) : null;
 
 /*
