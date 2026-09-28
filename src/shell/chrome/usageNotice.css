@@ -1,0 +1,34 @@
+.shell-usage-notice {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: var(--shell-z-menu);
+  width: 320px;
+  padding: 16px;
+  border: 1px solid var(--shell-line);
+  border-radius: var(--shell-radius-card);
+  background: var(--shell-paper);
+  box-shadow: var(--shell-shadow-panel);
+  color: var(--shell-ink);
+  font-size: var(--shell-text);
+  line-height: 1.6;
+}
+
+.shell-usage-notice h2 {
+  margin: 0 0 6px;
+  color: var(--shell-ink-title);
+  font-size: var(--shell-text-md);
+  font-weight: 600;
+}
+
+.shell-usage-notice p {
+  margin: 0;
+  color: var(--shell-ink-muted);
+}
+
+.shell-usage-notice-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}

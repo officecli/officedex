@@ -95,20 +95,24 @@ func (r *Recorder) FirstDocumentSuccessSettled() bool {
 // The caller is responsible for the preconditions the contract states: a
 // genuine transition to completed, and an artifact that exists, is non-empty
 // and opens. This method only owns the "first time" bookkeeping.
-func (r *Recorder) RecordDocumentSuccess(instanceID, taskID string, at time.Time) error {
+//
+// documentType is the artifact's type; it is mapped onto the contract's closed
+// set by DocType, so nothing derived from a file name can reach the event.
+func (r *Recorder) RecordDocumentSuccess(instanceID, taskID, documentType string, at time.Time) error {
 	if !r.Enabled() {
 		return nil
 	}
 	if strings.TrimSpace(taskID) == "" {
 		return nil
 	}
-	if err := r.Enqueue(EventDocumentSuccess, DocumentSuccessID(taskID), at); err != nil {
+	docType := DocType(documentType)
+	if err := r.enqueueEvent(Event{Name: EventDocumentSuccess, ID: DocumentSuccessID(taskID), At: FormatAt(at), DocType: docType}); err != nil {
 		return err
 	}
 	if r.markers().FirstDocumentSuccess != "" {
 		return nil
 	}
-	if err := r.Enqueue(EventFirstDocumentSuccess, FirstDocumentSuccessID(instanceID), at); err != nil {
+	if err := r.enqueueEvent(Event{Name: EventFirstDocumentSuccess, ID: FirstDocumentSuccessID(instanceID), At: FormatAt(at), DocType: docType}); err != nil {
 		return err
 	}
 	r.setMarker(func(state *markerState) { state.FirstDocumentSuccess = markerEnqueued })
@@ -127,4 +131,82 @@ func (r *Recorder) RecordGenerationFailed(taskID string, at time.Time) error {
 		return nil
 	}
 	return r.Enqueue(EventGenerationFailed, GenerationFailedID(taskID), at)
+}
+
+// RecordAppOpen queues app_open for a successful launch, at most once per UTC
+// day. The id carries the day, so a second launch the same day would be
+// de-duplicated by the collector anyway; the marker just saves the request.
+func (r *Recorder) RecordAppOpen(instanceID string, at time.Time) error {
+	if !r.Enabled() {
+		return nil
+	}
+	day := utcDay(at)
+	if r.markers().LastAppOpenDay == day {
+		return nil
+	}
+	if err := r.Enqueue(EventAppOpen, AppOpenID(instanceID, at), at); err != nil {
+		return err
+	}
+	r.setMarker(func(state *markerState) { state.LastAppOpenDay = day })
+	return nil
+}
+
+// RecordVersion compares this build with the one that ran last and queues
+// update_installed when it is newer. The first version an install is seen at is
+// a baseline, a downgrade moves the baseline without an event, and a build
+// whose version is not x.y.z (a development build) is ignored entirely.
+func (r *Recorder) RecordVersion(instanceID string, at time.Time) error {
+	if !r.Enabled() {
+		return nil
+	}
+	current := r.device.AppVersion
+	if current == "" {
+		return nil
+	}
+	previous := r.markers().LastVersion
+	if previous == current {
+		return nil
+	}
+	if order, ok := CompareVersions(current, previous); ok && order > 0 {
+		if err := r.Enqueue(EventUpdateInstalled, UpdateInstalledID(instanceID, current), at); err != nil {
+			return err
+		}
+	}
+	r.setMarker(func(state *markerState) { state.LastVersion = current })
+	return nil
+}
+
+// ObserveIdentity is told who is signed in every time the app finds out, and
+// both attaches the account to later events and decides whether a login just
+// happened. platformID is the raw id from `officecli whoami`, or empty for
+// signed out; a value that is not a numeric platform id counts as signed out.
+//
+// A login is a change from "nobody" or "somebody else" to this account that
+// this install witnessed. The first observation after install or upgrade is a
+// baseline, so an account that was already signed in is not reported as
+// logging in, and the same account appearing again on the next launch is not
+// one either.
+func (r *Recorder) ObserveIdentity(instanceID, platformID string, at time.Time) error {
+	r.SetPlatformUserID(platformID)
+	if !r.Enabled() {
+		return nil
+	}
+	current := ""
+	if _, ok := UserID(platformID); ok {
+		current = strings.TrimSpace(platformID)
+	}
+	state := r.markers()
+	if state.IdentitySeen && state.LastPlatformUserID == current {
+		return nil
+	}
+	if state.IdentitySeen && current != "" {
+		if err := r.Enqueue(EventLogin, LoginID(instanceID, current, at), at); err != nil {
+			return err
+		}
+	}
+	r.setMarker(func(state *markerState) {
+		state.IdentitySeen = true
+		state.LastPlatformUserID = current
+	})
+	return nil
 }

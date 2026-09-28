@@ -334,7 +334,7 @@ describe("SettingsPage", () => {
     renderPage(api);
     await openSection("Advanced & Support");
 
-    const toggle = await screen.findByRole("switch", { name: "Share anonymous usage counts" });
+    const toggle = await screen.findByRole("switch", { name: "Share usage counts" });
     expect(toggle).toHaveAttribute("aria-checked", "true");
 
     fireEvent.click(toggle);
@@ -355,7 +355,7 @@ describe("SettingsPage", () => {
     renderPage(api);
     await openSection("Advanced & Support");
 
-    const toggle = await screen.findByRole("switch", { name: "Share anonymous usage counts" });
+    const toggle = await screen.findByRole("switch", { name: "Share usage counts" });
     expect(toggle).toHaveAttribute("aria-checked", "true");
   });
 

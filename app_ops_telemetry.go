@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"officedex/internal/applog"
@@ -52,6 +53,7 @@ func (a *App) initOpsTelemetry(instanceCreatedAt string, enabled bool) {
 		Endpoint:     endpoint,
 		HTTPClient:   a.proxyPool.NewClient(opstelemetry.DefaultRequestTimeout),
 		ClientHeader: "desktop/" + appVersion,
+		Device:       opstelemetry.NewDevice(appVersion, appUpdateChannel, runtime.GOOS, runtime.GOARCH),
 		TestTraffic:  opsTelemetryTestTraffic(),
 		Enabled:      enabled,
 		Logger:       applog.With(slog.String("component", "opstelemetry")),
@@ -74,6 +76,15 @@ func (a *App) startOpsTelemetry(ctx context.Context) {
 	a.seedOpsHistoryMarker(ctx)
 	if err := a.opsTelemetry.RecordAppFirstOpen(a.desktopInstanceID, a.instanceCreatedAt); err != nil {
 		applog.Logger().Warn("queue app_first_open", applog.Err(err))
+	}
+	// app_open and update_installed follow app_first_open so a first launch
+	// reports in the order it happened.
+	now := time.Now().UTC()
+	if err := a.opsTelemetry.RecordAppOpen(a.desktopInstanceID, now); err != nil {
+		applog.Logger().Warn("queue app_open", applog.Err(err))
+	}
+	if err := a.opsTelemetry.RecordVersion(a.desktopInstanceID, now); err != nil {
+		applog.Logger().Warn("queue update_installed", applog.Err(err))
 	}
 	a.opsTelemetry.Start()
 }
@@ -131,11 +142,13 @@ func (a *App) noteOpsTelemetryIdentity(result types.WhoAmIResult) {
 	if a.opsTelemetry == nil {
 		return
 	}
-	if result.Mode != types.WhoAmILoggedIn {
-		a.opsTelemetry.SetPlatformUserID("")
-		return
+	platformID := ""
+	if result.Mode == types.WhoAmILoggedIn {
+		platformID = result.UserID
 	}
-	a.opsTelemetry.SetPlatformUserID(result.UserID)
+	if err := a.opsTelemetry.ObserveIdentity(a.desktopInstanceID, platformID, time.Now().UTC()); err != nil {
+		applog.Logger().Warn("queue login", applog.Err(err))
+	}
 }
 
 // observeTaskTelemetry turns one recorded task event into at most one product
@@ -168,7 +181,7 @@ func (a *App) observeTaskTelemetry(event types.BridgeEvent, transition localstor
 				applog.Task(event.TaskID), applog.Err(err))
 			return
 		}
-		if err := a.opsTelemetry.RecordDocumentSuccess(a.desktopInstanceID, event.TaskID, at); err != nil {
+		if err := a.opsTelemetry.RecordDocumentSuccess(a.desktopInstanceID, event.TaskID, artifact.DocumentType, at); err != nil {
 			applog.Logger().Warn("queue document_success", applog.Task(event.TaskID), applog.Err(err))
 		}
 	case transition.Entered("failed"):

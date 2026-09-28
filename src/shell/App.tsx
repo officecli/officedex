@@ -21,6 +21,7 @@ import { ImageWorkspace } from "./image/ImageWorkspace";
 import { EditorHome } from "./home/EditorHome";
 import { SidebarTree } from "./nav/SidebarTree";
 import { SettingsPage } from "./settings/SettingsPage";
+import { UsageNotice } from "./chrome/UsageNotice";
 import { useShell } from "./state/ShellContext";
 import { effectivePlacement, NAV_RAIL_WIDTH } from "./state/shellReducer";
 import { useModeTransition } from "./state/useModeTransition";
@@ -242,6 +243,7 @@ export function App() {
       </div>
 
       <ToastHost />
+      <UsageNotice />
 
       {/*
         The settings page — the shell's other full-page surface, and the one it

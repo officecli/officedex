@@ -405,6 +405,18 @@ const Z_INDEX_SITES: ZIndexSite[] = [
       "`#shell` like `.shell-menu`, so it shares that rung.",
   },
   {
+    file: "src/shell/chrome/usageNotice.css",
+    selector: ".shell-usage-notice",
+    rung: "--shell-z-menu",
+    context: "root",
+    note:
+      "The one-time usage reporting notice, fixed to the window's corner and " +
+      "rendered beside `ToastHost` at the root. It has to read over the " +
+      "floating agent, which can sit in the same corner, and it must not cover " +
+      "the image viewer or the account page, so it takes the menu rung: a menu " +
+      "opened over it is dismissed by the same click that would reach it.",
+  },
+  {
     file: "src/shell/image/composer/imagePopover.css",
     selector: ".shell-ig-popover",
     rung: "--shell-z-menu",

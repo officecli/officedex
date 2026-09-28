@@ -57,6 +57,8 @@ type Options struct {
 	HTTPClient *http.Client
 	// ClientHeader is the X-OfficeDex-Client value, e.g. "desktop/1.0.6".
 	ClientHeader string
+	// Device is stamped onto every event (contract v1.1).
+	Device Device
 	// TestTraffic marks the stream with X-Ops-Test: 1. Every non-release build
 	// sets it, so a developer's runs never land in the production funnel.
 	TestTraffic bool
@@ -88,6 +90,7 @@ type Recorder struct {
 	endpoint       string
 	client         *http.Client
 	clientHeader   string
+	device         Device
 	testTraffic    bool
 	requestTimeout time.Duration
 	flushDebounce  time.Duration
@@ -163,6 +166,7 @@ func New(options Options) (*Recorder, error) {
 		endpoint:       endpoint,
 		client:         client,
 		clientHeader:   options.ClientHeader,
+		device:         options.Device,
 		testTraffic:    options.TestTraffic,
 		requestTimeout: requestTimeout,
 		flushDebounce:  flushDebounce,
@@ -295,12 +299,23 @@ func (r *Recorder) EnqueueAt(name, id, at string) error {
 }
 
 func (r *Recorder) enqueueAt(name, id, at string) error {
+	return r.enqueueEvent(Event{ID: id, Name: name, At: at})
+}
+
+// enqueueEvent stamps the install, the account and the device onto an event
+// and persists it. The caller fills in only what is particular to the event.
+func (r *Recorder) enqueueEvent(event Event) error {
 	r.mu.Lock()
 	if !r.enabled {
 		r.mu.Unlock()
 		return nil
 	}
-	event := Event{ID: id, Subject: r.subject, Name: name, At: at, UserID: r.userID}
+	event.Subject = r.subject
+	event.UserID = r.userID
+	event.AppVersion = r.device.AppVersion
+	event.AppChannel = r.device.AppChannel
+	event.OS = r.device.OS
+	event.Arch = r.device.Arch
 	if err := event.Validate(r.now()); err != nil {
 		r.mu.Unlock()
 		return err

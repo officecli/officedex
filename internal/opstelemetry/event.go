@@ -1,13 +1,16 @@
-// Package opstelemetry reports the four desktop product-usage events defined
-// by ops-bridge/docs/event-contract.md — app_first_open, document_success,
-// first_document_success and generation_failed — to the platform collector.
+// Package opstelemetry reports the desktop product-usage events defined by
+// ops-bridge/docs/event-contract.md to the platform collector: the four v1
+// events (app_first_open, document_success, first_document_success,
+// generation_failed) and the three added in v1.1 (app_open, login,
+// update_installed).
 //
 // What it is not: this is not diagnostics, not crash reporting and not an
-// analytics SDK. It sends four counters keyed by an anonymous install id and
-// nothing else. The contract forbids file names, paths, prompts, document
-// content and error text, so no event carries a free-form field at all — the
-// event object has room for exactly id/subject/name/at/userId and this package
-// never populates more than those.
+// analytics SDK. It sends counters keyed by an install id, plus the platform
+// account id once the user has signed in. The contract forbids file names,
+// paths, prompts, document content and error text, so no event carries a
+// free-form field at all: beyond id/subject/name/at/userId there are only the
+// v1.1 device fields, and every one of those is a closed set or a strict
+// format (see Device).
 //
 // Delivery is at-least-once with server-side de-duplication: every event id is
 // deterministic (§4 of the contract), so a retry, a replayed task event or a
@@ -32,6 +35,11 @@ const (
 	EventFirstDocumentSuccess = "first_document_success"
 	EventDocumentSuccess      = "document_success"
 	EventGenerationFailed     = "generation_failed"
+
+	// Contract v1.1.
+	EventAppOpen         = "app_open"
+	EventLogin           = "login"
+	EventUpdateInstalled = "update_installed"
 )
 
 // Deterministic id prefixes (contract §4).
@@ -40,6 +48,9 @@ const (
 	idPrefixFirstDocumentSuccess = "fds_"
 	idPrefixDocumentSuccess      = "ds_"
 	idPrefixGenerationFailed     = "gf_"
+	idPrefixAppOpen              = "ao_"
+	idPrefixLogin                = "li_"
+	idPrefixUpdateInstalled      = "ui_"
 )
 
 const (
@@ -63,7 +74,67 @@ var (
 	// id that is not a number is treated as "no id available" rather than
 	// forwarded and hoped for.
 	platformUserID = regexp.MustCompile(`^[0-9]{1,120}$`)
+
+	appVersionPattern = regexp.MustCompile(`^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,6}$`)
+	appChannelPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,16}$`)
 )
+
+// Device describes the build and the machine, in the contract's v1.1 device
+// fields. Every field is optional and is dropped, not sent malformed, when the
+// value is outside what the collector accepts — a development build's version
+// "dev" simply produces events without appVersion.
+type Device struct {
+	AppVersion string
+	AppChannel string
+	OS         string
+	Arch       string
+}
+
+// NewDevice maps Go's names onto the contract's. goos and goarch are
+// runtime.GOOS and runtime.GOARCH.
+func NewDevice(appVersion, appChannel, goos, goarch string) Device {
+	device := Device{}
+	if version := strings.TrimPrefix(strings.TrimSpace(appVersion), "v"); appVersionPattern.MatchString(version) {
+		device.AppVersion = version
+	}
+	if channel := strings.TrimSpace(appChannel); appChannelPattern.MatchString(channel) {
+		device.AppChannel = channel
+	}
+	switch goos {
+	case "darwin":
+		device.OS = "macos"
+	case "windows", "linux":
+		device.OS = goos
+	}
+	switch goarch {
+	case "arm64":
+		device.Arch = "arm64"
+	case "amd64":
+		device.Arch = "x64"
+	}
+	return device
+}
+
+// DocType maps an artifact's document type onto the contract's closed set.
+// Anything unrecognised is "other"; an empty type is no doc type at all.
+func DocType(documentType string) string {
+	switch strings.ToLower(strings.TrimSpace(documentType)) {
+	case "":
+		return ""
+	case "pptx", "docx", "xlsx", "image", "report":
+		return strings.ToLower(strings.TrimSpace(documentType))
+	case "png", "jpg", "jpeg", "webp", "img":
+		return "image"
+	default:
+		return "other"
+	}
+}
+
+var docTypeValues = map[string]bool{"pptx": true, "docx": true, "xlsx": true, "image": true, "report": true, "other": true}
+
+func acceptsDocType(name string) bool {
+	return name == EventDocumentSuccess || name == EventFirstDocumentSuccess || name == EventGenerationFailed
+}
 
 // Clock skew and staleness bounds the collector enforces (contract §2). They
 // are applied here too so an event that would certainly be rejected is never
@@ -84,6 +155,13 @@ type Event struct {
 	Name    string `json:"name"`
 	At      string `json:"at"`
 	UserID  string `json:"userId,omitempty"`
+
+	// Contract v1.1 device fields.
+	AppVersion string `json:"appVersion,omitempty"`
+	AppChannel string `json:"appChannel,omitempty"`
+	OS         string `json:"os,omitempty"`
+	Arch       string `json:"arch,omitempty"`
+	DocType    string `json:"docType,omitempty"`
 }
 
 // Subject returns the `inst:<desktop_instance_id>` subject for this install.
@@ -142,6 +220,48 @@ func GenerationFailedID(taskID string) string {
 	return TaskEventID(idPrefixGenerationFailed, taskID)
 }
 
+// utcDay is the day part of the v1.1 per-day ids.
+func utcDay(at time.Time) string { return at.UTC().Format("20060102") }
+
+// AppOpenID is one id per install per UTC day, which is what makes app_open a
+// daily-active count rather than a launch count.
+func AppOpenID(instanceID string, at time.Time) string {
+	return InstanceEventID(idPrefixAppOpen, instanceID) + "_" + utcDay(at)
+}
+
+// LoginID is one id per install, account and UTC day. platformID must already
+// be a numeric platform id.
+func LoginID(instanceID, platformID string, at time.Time) string {
+	return InstanceEventID(idPrefixLogin, instanceID) + "_" + strings.TrimSpace(platformID) + "_" + utcDay(at)
+}
+
+// UpdateInstalledID is one id per install per version. The dots in the version
+// are not in the id character class, so they become dashes.
+func UpdateInstalledID(instanceID, version string) string {
+	return InstanceEventID(idPrefixUpdateInstalled, instanceID) + "_" + strings.ReplaceAll(version, ".", "-")
+}
+
+// CompareVersions orders two x.y.z versions. ok is false when either is not
+// one, in which case nothing can be said about which is newer.
+func CompareVersions(a, b string) (order int, ok bool) {
+	if !appVersionPattern.MatchString(a) || !appVersionPattern.MatchString(b) {
+		return 0, false
+	}
+	left, right := strings.Split(a, "."), strings.Split(b, ".")
+	for i := range left {
+		var x, y int
+		_, _ = fmt.Sscanf(left[i], "%d", &x)
+		_, _ = fmt.Sscanf(right[i], "%d", &y)
+		if x != y {
+			if x < y {
+				return -1, true
+			}
+			return 1, true
+		}
+	}
+	return 0, true
+}
+
 // FormatAt renders a timestamp the way the contract requires: ISO 8601 in UTC,
 // second precision, `Z` suffix.
 func FormatAt(at time.Time) string {
@@ -162,7 +282,8 @@ func NormalizeAt(raw string) string {
 
 func isAllowedName(name string) bool {
 	switch name {
-	case EventAppFirstOpen, EventFirstDocumentSuccess, EventDocumentSuccess, EventGenerationFailed:
+	case EventAppFirstOpen, EventFirstDocumentSuccess, EventDocumentSuccess, EventGenerationFailed,
+		EventAppOpen, EventLogin, EventUpdateInstalled:
 		return true
 	default:
 		return false
@@ -200,6 +321,26 @@ func (e Event) Validate(now time.Time) error {
 	}
 	if strings.Contains(e.UserID, "@") {
 		return fmt.Errorf("opstelemetry: userId must be a platform id, not an email")
+	}
+	if e.AppVersion != "" && !appVersionPattern.MatchString(e.AppVersion) {
+		return fmt.Errorf("opstelemetry: appVersion %q is not x.y.z", e.AppVersion)
+	}
+	if e.AppChannel != "" && !appChannelPattern.MatchString(e.AppChannel) {
+		return fmt.Errorf("opstelemetry: appChannel %q is not a channel name", e.AppChannel)
+	}
+	if e.OS != "" && e.OS != "macos" && e.OS != "windows" && e.OS != "linux" {
+		return fmt.Errorf("opstelemetry: os %q is not macos, windows or linux", e.OS)
+	}
+	if e.Arch != "" && e.Arch != "arm64" && e.Arch != "x64" {
+		return fmt.Errorf("opstelemetry: arch %q is not arm64 or x64", e.Arch)
+	}
+	if e.DocType != "" {
+		if !docTypeValues[e.DocType] {
+			return fmt.Errorf("opstelemetry: docType %q is not in the contract's set", e.DocType)
+		}
+		if !acceptsDocType(e.Name) {
+			return fmt.Errorf("opstelemetry: docType is not accepted on %s", e.Name)
+		}
 	}
 	return nil
 }

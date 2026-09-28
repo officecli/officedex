@@ -1085,8 +1085,13 @@ export const en: Record<string, string> = {
   "settings.group.reset": "Reset",
   "settings.row.usageAnalytics.title": "Usage Reporting",
   "settings.row.usageAnalytics.desc":
-    "Send four anonymous counters — first launch, document generated, first success, generation failed — tied to a random install ID. Never document content, file names, prompts or error messages.",
-  "settings.row.usageAnalytics.label": "Share anonymous usage counts",
+    "Send usage counts — app opened, signed in, updated, document generated, generation failed — with the app version, system and document type. They are tied to a random install ID and, once you sign in, to your account ID. Never document content, file names, prompts or error messages.",
+  "settings.row.usageAnalytics.label": "Share usage counts",
+  "usageNotice.title": "OfficeDex shares usage counts",
+  "usageNotice.body":
+    "Counts such as app opened and document generated help us see what works. They never include document content, file names or prompts. You can turn this off at any time in Settings.",
+  "usageNotice.accept": "Got it",
+  "usageNotice.decline": "Turn off",
   "settings.row.onboarding.title": "Show onboarding wizard again",
   "settings.row.onboarding.desc":
     "Re-runs the 3-step setup on next app launch. Current settings are preserved.",

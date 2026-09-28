@@ -1060,8 +1060,13 @@ export const zh: Record<string, string> = {
   "settings.group.reset": "重置",
   "settings.row.usageAnalytics.title": "使用统计",
   "settings.row.usageAnalytics.desc":
-    "上报四项匿名计数：首次启动、文档生成成功、首次成功、生成失败，仅关联一个随机安装标识。不包含文档内容、文件名、提示词或错误信息。",
-  "settings.row.usageAnalytics.label": "发送匿名使用统计",
+    "上报使用计数：打开应用、登录、更新、文档生成成功、生成失败，并附带应用版本、系统和文档类型。计数关联一个随机安装标识，登录后还会关联你的账号 ID。不包含文档内容、文件名、提示词或错误信息。",
+  "settings.row.usageAnalytics.label": "发送使用统计",
+  "usageNotice.title": "OfficeDex 会发送使用统计",
+  "usageNotice.body":
+    "打开应用、生成文档这类计数能帮助我们了解哪些功能好用。统计不包含文档内容、文件名和提示词。你可以随时在设置里关闭。",
+  "usageNotice.accept": "知道了",
+  "usageNotice.decline": "关闭统计",
   "settings.row.onboarding.title": "重新显示引导向导",
   "settings.row.onboarding.desc":
     "下次启动应用时重新运行 3 步设置流程，当前设置保留。",

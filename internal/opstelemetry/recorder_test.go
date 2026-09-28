@@ -634,10 +634,10 @@ func TestAppFirstOpenIsSkippedForAnInstallOlderThanTheWindow(t *testing.T) {
 // first_document_success only ever once.
 func TestFirstDocumentSuccessAccompaniesTheFirstSuccessOnly(t *testing.T) {
 	h := newHarness(t)
-	if err := h.recorder.RecordDocumentSuccess(testInstance, "task-1", h.clock.Now()); err != nil {
+	if err := h.recorder.RecordDocumentSuccess(testInstance, "task-1", "pptx", h.clock.Now()); err != nil {
 		t.Fatalf("RecordDocumentSuccess: %v", err)
 	}
-	if err := h.recorder.RecordDocumentSuccess(testInstance, "task-2", h.clock.Now()); err != nil {
+	if err := h.recorder.RecordDocumentSuccess(testInstance, "task-2", "pptx", h.clock.Now()); err != nil {
 		t.Fatalf("RecordDocumentSuccess: %v", err)
 	}
 	h.recorder.Flush(context.Background())
@@ -662,7 +662,7 @@ func TestHistoryBeforeTrackingSuppressesFirstDocumentSuccess(t *testing.T) {
 	if !h.recorder.FirstDocumentSuccessSettled() {
 		t.Fatal("FirstDocumentSuccessSettled = false after NoteHistoryBeforeTracking")
 	}
-	if err := h.recorder.RecordDocumentSuccess(testInstance, "task-later", h.clock.Now()); err != nil {
+	if err := h.recorder.RecordDocumentSuccess(testInstance, "task-later", "pptx", h.clock.Now()); err != nil {
 		t.Fatalf("RecordDocumentSuccess: %v", err)
 	}
 	h.recorder.Flush(context.Background())
@@ -680,7 +680,7 @@ func TestHistoryBeforeTrackingSuppressesFirstDocumentSuccess(t *testing.T) {
 // has actually been reported it must not rewrite the marker.
 func TestHistoryNoteDoesNotOverwriteAnAlreadyReportedFirstSuccess(t *testing.T) {
 	h := newHarness(t)
-	if err := h.recorder.RecordDocumentSuccess(testInstance, "task-1", h.clock.Now()); err != nil {
+	if err := h.recorder.RecordDocumentSuccess(testInstance, "task-1", "pptx", h.clock.Now()); err != nil {
 		t.Fatalf("RecordDocumentSuccess: %v", err)
 	}
 	h.recorder.NoteHistoryBeforeTracking()

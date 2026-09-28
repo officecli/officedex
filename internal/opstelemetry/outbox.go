@@ -178,6 +178,20 @@ type markerState struct {
 	// latter for an install that already had finished documents when this
 	// feature first ran, whose real first success happened unobserved.
 	FirstDocumentSuccess string `json:"firstDocumentSuccess,omitempty"`
+
+	// LastAppOpenDay is the UTC day (YYYYMMDD) app_open was last queued for.
+	LastAppOpenDay string `json:"lastAppOpenDay,omitempty"`
+	// LastVersion is the app version seen on the previous launch. Empty means
+	// this install has not been seen by a build that records it, so the first
+	// value is a baseline and not an update.
+	LastVersion string `json:"lastVersion,omitempty"`
+	// IdentitySeen says whether the sign-in state has been observed at least
+	// once. The first observation is a baseline: an install that is already
+	// signed in when this build first runs has not just logged in.
+	IdentitySeen bool `json:"identitySeen,omitempty"`
+	// LastPlatformUserID is the account that was signed in when the sign-in
+	// state was last observed; empty for signed out.
+	LastPlatformUserID string `json:"lastPlatformUserId,omitempty"`
 }
 
 const (
