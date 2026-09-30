@@ -1,16 +1,22 @@
-/* Shell layout. Tokens live in tokens.css; this file only arranges regions. */
+/*
+ * Shell layout — OD-UI-1.2 (r10).
+ *
+ * Tokens live in tokens.css. The workspace's own look is the prototype's,
+ * ported layer by layer into `styles/` (see scripts/port-prototype-styles.mjs);
+ * this file holds what the prototype has no reason to say because it is a web
+ * page and this is a desktop window: where the shell's root sits, which bands
+ * drag the window, and how the persistent editor host fits the content region.
+ */
 
 .shell {
   position: absolute;
   inset: 0;
-  display: flex;
-  flex-direction: column;
   overflow: hidden;
-  background: var(--shell-canvas);
-  color: var(--shell-ink);
-  font: var(--shell-text) / 20px var(--shell-font);
+  background: var(--dx-canvas);
+  color: var(--dx-text);
+  font: 400 var(--dx-fs-14) / 20px var(--dx-font);
   font-synthesis: none;
-  -webkit-font-smoothing: antialiased;
+  color-scheme: light;
 }
 
 .shell *,
@@ -19,10 +25,7 @@
   box-sizing: border-box;
 }
 
-/* Text for screen readers only. Lives here, not in a feature's stylesheet:
-   it is used by the tree, the presence's live region and anything else that
-   needs a spoken name, and a shared utility that loads only when one
-   particular feature's CSS happens to be imported is a trap. */
+/* Text for screen readers only. */
 .shell-visually-hidden {
   position: absolute;
   width: 1px;
@@ -39,365 +42,93 @@
   display: none !important;
 }
 
-/* --------------------------------------------------------- loading state */
+/* ------------------------------------------------------------ workspace */
+
+/* The prototype sizes its root against the viewport; here the root is the
+   shell, which already is the window. */
+#dx-workspace {
+  height: 100%;
+}
+
+/* ---------------------------------------------------------- window drag */
 
 /*
- * The consumer side of `data-loaded`.
- *
- * `App.tsx` has written that attribute since the shell existed and nothing had
- * ever read it: `grep -rn loaded src/shell` found five hits, all of them state
- * plumbing, and the CSS consumption count was zero (S6-013, seconded by
- * S5-010). The cost is not cosmetic — with no branch on it, "still reading the
- * disk" and "this workspace is empty" are the same picture, and the empty one
- * is stated in words. On the fixture port the read resolves within a frame so
- * nobody saw it; on the real bridge it is a directory scan.
- *
- * `.shell[…]` rather than `#shell[…]`: both forms appear in this repository and
- * the mixture is a known hazard (S5 table 8, conclusion 4 — two rules on
- * `.shell-brand`, different forms, silently diverging). Every other root-scoped
- * rule in this file and in `nav.css` uses the class, so these do too.
- *
- * Two rules, in the order they matter. First: do not assert an empty library
- * before the library has been read.
+ * The desktop window has no title bar (`mac.TitleBarHidden`), so the 40px top
+ * row of every column is where the window is dragged from: the window-control
+ * band, the blank band above Home, Local and Settings, the unused end of the
+ * document tabs and the conversation's header. OD-UI-1.2 §03 keeps those rows
+ * per column rather than adding one bar across the window, so the drag region
+ * is per column too. Anything that can be pressed opts out.
  */
-.shell[data-loaded="false"] .shell-list-empty,
-.shell[data-loaded="false"] .shell-tree-empty {
-  visibility: hidden;
-}
-
-/* Second: say that something is happening, in the two places the files will
-   appear. A sweep rather than a spinner — it occupies one line of the layout
-   the list is about to fill, so nothing jumps when the data lands. */
-.shell[data-loaded="false"] .shell-sidebar-body::before,
-.shell[data-loaded="false"] .shell-home-list::before {
-  content: "";
-  display: block;
-  height: 2px;
-  margin-bottom: 10px;
-  border-radius: 1px;
-  background-image: linear-gradient(
-    90deg,
-    transparent,
-    var(--shell-line-strong),
-    transparent
-  );
-  background-size: 38% 100%;
-  background-repeat: no-repeat;
-  animation: shell-loading-sweep 1.1s linear infinite;
-}
-
-@keyframes shell-loading-sweep {
-  from {
-    background-position: -38% 0;
-  }
-  to {
-    background-position: 138% 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  /* Still a bar, still only while loading — it just stops travelling. */
-  .shell[data-loaded="false"] .shell-sidebar-body::before,
-  .shell[data-loaded="false"] .shell-home-list::before {
-    animation: none;
-    background-size: 100% 100%;
-  }
-}
-
-/* ------------------------------------------------------ mode switch */
-
-/*
- * The consumer side of `data-mode-switching` — one section, on purpose.
- *
- * `state/useModeTransition.ts` writes the attribute for one `--shell-duration`
- * whenever `state.mode` changes, whichever control changed it. Everything the
- * mode affects reacts here, so the durations and the easing cannot drift apart
- * across four stylesheets, and so the next person can read the whole of the
- * transition in one place instead of discovering it a rule at a time.
- *
- * What moves, and why each one is the way it is:
- *
- * 1. **The workspace is pinned to its final box.** This is the expensive one.
- *    `.shell-workspace` is `flex: 1`, so while `.shell-agent` eases between
- *    320px and 0 the workspace — and the embedded editor inside it — is a
- *    different width on every frame of the animation. That is not a shell
- *    cost: `renderer/spreadsheet/SpreadsheetCanvas.tsx` observes its container
- *    and answers a size change by dispatching a window `resize`, which is a
- *    full workbook relayout, and `renderer/presentation/ProgressivePptxStage`
- *    re-measures its stage the same way. Twelve of those inside 200ms is the
- *    stutter. So for the length of the transition the workspace comes out of
- *    flow at exactly the box it is going to end up in — `left` is the same
- *    `--shell-nav-w` + `--shell-task-w` the flex layout will settle on, and
- *    both variables are already at their final values on the first frame
- *    (only the *used width* of `.shell-agent` interpolates). The editor is
- *    laid out once, at the size it will keep, and when the attribute clears
- *    the element returns to a flex box computed from the same two lengths —
- *    the same number arrived at two ways, so there is nothing left to move.
- *
- *    Position only: no `transform`, `filter` or `will-change` anywhere on the
- *    canvas's ancestors, because any of those would make it the containing
- *    block for the `position: fixed` chrome the workbook draws inside it.
- *
- * 2. **The column is raised over it.** A positioned element paints above its
- *    in-flow siblings, so pinning the workspace would otherwise hide the
- *    docked column outright on the very frame it is meant to start closing.
- *    `--shell-z-mode-switch` puts it back on top, where it reads as a panel
- *    sliding shut over the document rather than a document appearing.
- *
- * 3. **The row wears the chrome colour.** Opening the column, the wedge
- *    between its animating right edge and the pinned workspace is the only
- *    part of the row nothing covers. Painting it `--shell-chrome` makes that
- *    wedge the space being made for the panel instead of a flash of canvas.
- *
- * 4. **Swapped content fades in.** The sidebar's middle (`<SidebarTree />` or
- *    nothing), its file-view filters and Home's whole subtree are React
- *    swapping one tree for another; there is no outgoing element left to
- *    animate, so the incoming one settles into place instead of appearing.
- *
- * The honest cost of (1) is one reflow, at the start, rather than one per
- * frame: a centred page re-centres on the first frame of the transition
- * instead of tracking the column. `shell-mode-settle` covers that single
- * change with a short fade — the document re-rendering, rather than jumping.
- */
-
-#shell[data-mode-switching="true"] .shell-workspace {
-  position: absolute;
-  top: var(--shell-windowbar-h);
-  bottom: 0;
-  left: calc(var(--shell-nav-w) + var(--shell-task-w));
-  right: 0;
-}
-
-#shell[data-mode-switching="true"] .shell-agent {
-  position: relative;
-  z-index: var(--shell-z-mode-switch);
-}
-
-#shell[data-mode-switching="true"] .shell-row--body {
-  background: var(--shell-chrome);
-}
-
-#shell[data-mode-switching="true"] .shell-canvas {
-  animation: shell-mode-settle var(--shell-duration) var(--shell-ease) both;
-}
-
-#shell[data-mode-switching="true"] .shell-sidebar-body,
-#shell[data-mode-switching="true"] .shell-sidebar-views,
-#shell[data-mode-switching="true"] .shell-home {
-  animation: shell-mode-enter var(--shell-duration) var(--shell-ease) both;
-}
-
-/* The column's own fade, in the direction it is going. `data-mode` is already
-   the destination by the time the attribute goes up, so it is the whole of the
-   direction test — no second flag saying which way. */
-#shell[data-mode-switching="true"][data-mode="agent"] .shell-agent {
-  animation: shell-mode-agent-enter var(--shell-duration) var(--shell-ease) both;
-}
-
-#shell[data-mode-switching="true"][data-mode="editor"] .shell-agent {
-  animation: shell-mode-agent-leave var(--shell-duration) var(--shell-ease) both;
-}
-
-@keyframes shell-mode-enter {
-  from {
-    opacity: 0;
-    transform: translateY(var(--shell-mode-shift));
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes shell-mode-settle {
-  from {
-    opacity: 0.55;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes shell-mode-leave {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-  }
-}
-
-@keyframes shell-mode-agent-enter {
-  from {
-    opacity: 0;
-    transform: translateX(-16px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes shell-mode-agent-leave {
-  from {
-    opacity: 1;
-    transform: none;
-  }
-  to {
-    opacity: 0;
-    transform: translateX(-12px);
-  }
-}
-
-/* ---------------------------------------------------------------- rows */
-
-.shell-row {
-  display: flex;
-  min-width: 0;
-}
-
-.shell-row--top {
-  position: relative;
-  flex: none;
-  height: var(--shell-windowbar-h);
-  background: var(--shell-chrome);
-  /*
-   * The desktop window has no title bar (`mac.TitleBarHidden`). This strip is
-   * the drag region: empty chrome, the padding that clears the traffic lights,
-   * and the unused end of the tab row. Interactive children opt out below so a
-   * press on a tab or the sidebar toggle still clicks rather than dragging.
-   */
+#dx-global-controls .dx-window-controls,
+#dx-content > .dx-home-top,
+#dx-content > .dx-tabs-strip,
+#dx-conversation > .dx-pane-top {
   --wails-draggable: drag;
   -webkit-app-region: drag;
   -webkit-user-select: none;
   user-select: none;
 }
 
-.shell-row--top button,
-.shell-row--top a,
-.shell-row--top input,
-.shell-row--top textarea,
-.shell-row--top select,
-.shell-row--top .shell-tab,
-.shell-row--top .shell-tabs-actions,
-.shell-row--top .shell-tabstrip-nav,
-.shell-row--top .shell-menu-anchor,
-.shell-row--top .shell-window-controls {
+#dx-global-controls button,
+#dx-content > .dx-tabs-strip button,
+#dx-content > .dx-tabs-strip .dx-file-tab,
+#dx-content > .dx-tabs-strip .dx-source-header-actions,
+#dx-conversation > .dx-pane-top button,
+/* A floating conversation is dragged by its own header, not the window. */
+#dx-workspace.dx-chat-floating #dx-conversation > .dx-pane-top {
   --wails-draggable: no-drag;
   -webkit-app-region: no-drag;
 }
 
-.shell-row--body {
-  flex: 1;
-  min-height: 0;
-}
-
-/* ------------------------------------------------------------- regions */
-
-/* `.shell-windowbar` is laid out entirely by `chrome/chrome.css`. It used to be
-   declared here as well, with the same selector and the same specificity, and
-   every property that mattered — width, min-width, the width transition — was
-   taken by the later file. Its `min-width: 132px` measured `0px` in all ten
-   shell combinations, and the comment next to it ("the traffic lights and the
-   sidebar toggle always fit") was the most quotable line in the audit's list of
-   macOS assumptions while describing a rule that never applied. */
-
-.shell-tabs {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: flex-end;
-  height: var(--shell-tabs-h);
-}
-
-.shell-sidebar {
+/*
+ * macOS draws the real traffic lights over this corner. The band keeps the
+ * width the three drawn buttons would have taken, so the sidebar switch and the
+ * Logo tab sit where the standard puts them in both builds.
+ */
+#dx-global-controls .dx-traffic-reserve {
   flex: none;
-  width: var(--shell-nav-w);
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 12px 12px 14px;
-  background: var(--shell-chrome);
-  border-right: 1px solid var(--shell-line);
-  overflow: hidden;
-  transition: width var(--shell-duration) var(--shell-ease);
+  width: 52px;
+  height: 12px;
 }
 
-.shell[data-nav-collapsed="true"] .shell-sidebar {
-  padding-left: 8px;
-  padding-right: 8px;
-}
+/* --------------------------------------------------------- loading state */
 
 /*
- * The docked agent column. Its width is the one box a mode change moves; the
- * rest of the transition is the mode-switch section above, which pins the
- * workspace to its final box while this animates over it.
+ * "Still reading the disk" and "this workspace is empty" must not be the same
+ * picture: the empty one is stated in words. Until the first read lands, the
+ * empty states stay out of sight.
  */
-.shell-agent {
-  flex: none;
-  width: var(--shell-task-w);
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background: var(--shell-chrome);
-  transition: width var(--shell-duration) var(--shell-ease);
+.shell[data-loaded="false"] .dx-empty {
+  visibility: hidden;
+}
+
+/* --------------------------------------------------------- editor region */
+
+/*
+ * The document host never unmounts: an editor holding unsaved state has to
+ * survive a trip to Home, to Assets or to Settings. It is hidden instead, and
+ * the page that replaced it is drawn beside it in the same column.
+ */
+.dx-editor-wrapper[hidden] {
+  display: none !important;
 }
 
 .shell-workspace {
   position: relative;
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--shell-canvas);
 }
 
-/* The attention border's host: the canvas area, minus the status bar. Sized by
-   CSS rather than measured from the canvas element so the border does not have
-   to re-measure on every editor repaint. */
+/* The attention border's host: the editor area. */
 .shell-attention {
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: var(--shell-statusbar-h);
+  inset: 0;
   pointer-events: none;
 }
-
-.shell-statusbar {
-  flex: none;
-  height: var(--shell-statusbar-h);
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  padding: 0 12px 0 20px;
-  background: var(--shell-sunken);
-  color: var(--shell-ink-subtle);
-  font-size: var(--shell-text-sm);
-  /* A narrow workspace (Agent mode on a small window) must clip the left-hand
-     facts rather than wrap them into a second line the 32px bar cannot show. */
-  white-space: nowrap;
-  overflow: hidden;
-}
-
-/* The ellipsis rule that used to live here selected `.shell-statusbar > span`,
-   and the bar's direct children are two `<div>`s — it matched nothing. It now
-   lives in `chrome/chrome.css` next to the container that does the clipping,
-   written against the DOM that exists. */
-
-/* `.shell-home` is laid out entirely by `home/home.css`, which is the file that
-   ships with the two components that render it (`AgentHome`, `EditorHome` —
-   the only two). It used to be declared here as well, with the same selector
-   and the same specificity, so what reached the screen was the union of two
-   blocks in two files and which one won any shared property depended on the
-   order `App.tsx`'s imports happen to evaluate in — an ordering no rule
-   guarantees and any import-sorting tool can flip. The three properties this
-   block contributed (`flex`, `min-width`, `background`) moved to home.css
-   unchanged; `overflow: auto` was declared identically in both.
-
-   This is the second of the two duplicates S5-008 found. The first was
-   `.shell-windowbar`, above. */
 
 /* -------------------------------------------------------------- canvas */
 

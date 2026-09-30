@@ -1,8 +1,12 @@
 .shell-usage-notice {
   position: fixed;
   right: 20px;
-  bottom: 20px;
-  z-index: var(--shell-z-menu);
+  /* Clear of Dex, which sits in this corner of a document (42px, 48px up): a
+     notice over it would take its clicks until the notice was dismissed. */
+  bottom: 106px;
+  /* A floating panel, so it sorts with the workspace's: over Dex and the
+     conversation, under any menu, tip or dialog opened while it is showing. */
+  z-index: var(--dx-z-flyout);
   width: 320px;
   padding: 16px;
   border: 1px solid var(--shell-line);

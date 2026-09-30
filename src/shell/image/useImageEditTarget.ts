@@ -1,6 +1,7 @@
 import type { FileMeta } from "../../shared/uiPort";
 import { useAgentTask } from "../agent/useAgentTask";
 import { useShell } from "../state/ShellContext";
+import type { ShellState } from "../state/shellReducer";
 import { useImageSeries, type ImageSeries } from "./useImageSeries";
 
 /**
@@ -53,11 +54,23 @@ export function imageEditTargetFor(input: {
   return { fileId: selected.file.id, version: selected.version, source: "latest" };
 }
 
+/**
+ * Whether what is typed starts something new rather than continuing something.
+ *
+ * It does on Home, Local, Settings and the image creator: no conversation is
+ * open and no document is on screen, so there is nothing a message could be a
+ * follow-up to. It does not beside a conversation, whatever the content region
+ * shows — a picture's conversation with its project's Assets next to it is the
+ * ordinary place to ask for a change to that picture.
+ */
+const outsideConversation = (state: Pick<ShellState, "chat" | "page">): boolean =>
+  state.chat === null && state.page !== "editor";
+
 export function useImageEditTarget(): ImageEditTarget | null {
   const { state, activeFile } = useShell();
   const agent = useAgentTask();
   const series = useImageSeries(agent.task);
-  return imageEditTargetFor({ home: state.home, activeFile, series });
+  return imageEditTargetFor({ home: outsideConversation(state), activeFile, series });
 }
 
 /**
@@ -93,5 +106,5 @@ export function useImageBesideDocument(): ImageBesideDocument | null {
   const { state, activeFile } = useShell();
   const agent = useAgentTask();
   const series = useImageSeries(agent.task);
-  return imageBesideDocumentFor({ home: state.home, activeFile, series });
+  return imageBesideDocumentFor({ home: outsideConversation(state), activeFile, series });
 }

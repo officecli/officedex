@@ -1,311 +1,516 @@
 import { describe, expect, it } from "vitest";
 
-import { seedFiles } from "../port/fake/seed";
+import type { FileMeta } from "../../shared/uiPort";
 import {
-  canDock,
-  effectivePlacement,
+  CHAT_DEFAULT_WIDTH,
+  CHAT_MAX_WIDTH,
+  CHAT_MIN_WIDTH,
   hydrateShellState,
   initialShellState,
+  sameChat,
   shellReducer,
-  showsPresenceFace,
+  showsEditor,
+  showsTabStrip,
+  tabIsChat,
+  toPersisted,
+  workspaceClosed,
+  type ChatRef,
   type ShellAction,
   type ShellState,
 } from "./shellReducer";
 
 const run = (state: ShellState, ...actions: ShellAction[]) => actions.reduce(shellReducer, state);
 
-describe("mode change", () => {
-  it("collapses the sidebar when entering Agent mode", () => {
-    const expandedEditor = run(
-      initialShellState,
-      { type: "set-mode", mode: "editor" },
-      { type: "toggle-nav" },
-    );
-    expect(expandedEditor.navCollapsed).toBe(false);
+const PLAN: ChatRef = { folderId: "launch", conversationId: "plan" };
+const SALES: ChatRef = { folderId: "launch", conversationId: "sales" };
+const NEW_CHAT: ChatRef = { folderId: "launch", conversationId: null };
 
-    const agent = run(expandedEditor, { type: "set-mode", mode: "agent" });
-    expect(agent.navCollapsed).toBe(true);
-    expect(agent.mode).toBe("agent");
-  });
-
-  it("leaves the sidebar as-is when entering Editor mode", () => {
-    const expanded = run(initialShellState, { type: "toggle-nav" });
-    expect(expanded.navCollapsed).toBe(false);
-    expect(run(expanded, { type: "set-mode", mode: "editor" }).navCollapsed).toBe(false);
-  });
-
-  it("collapses the agent presence when entering Editor mode", () => {
-    const editor = run(initialShellState, { type: "set-mode", mode: "editor" });
-    expect(editor.presence.expanded).toBe(false);
-  });
+const file = (id: string): FileMeta => ({
+  id,
+  name: `${id}.docx`,
+  type: "doc",
+  folderId: "launch",
+  createdAt: 0,
+  updatedAt: 0,
+  lastOpenedAt: null,
+  dirty: false,
+  pinned: false,
 });
 
-describe("agent presence placement (decision 1)", () => {
-  it("only allows docking in Agent mode", () => {
-    const agent = run(initialShellState, { type: "set-placement", placement: "docked" });
-    expect(canDock(agent)).toBe(true);
-    expect(effectivePlacement(agent)).toBe("docked");
-
-    const editor = run(agent, { type: "set-mode", mode: "editor" });
-    expect(canDock(editor)).toBe(false);
-    expect(effectivePlacement(editor)).toBe("floating");
-  });
-
-  it("remembers the Agent-mode preference across a trip through Editor", () => {
-    const state = run(
-      initialShellState,
-      { type: "set-placement", placement: "floating" },
-      { type: "set-mode", mode: "editor" },
-      { type: "set-mode", mode: "agent" },
-    );
-    expect(effectivePlacement(state)).toBe("floating");
-
-    const docked = run(
-      state,
-      { type: "set-placement", placement: "docked" },
-      { type: "set-mode", mode: "editor" },
-      { type: "set-mode", mode: "agent" },
-    );
-    expect(effectivePlacement(docked)).toBe("docked");
-  });
-
-  it("never shows a collapsed face beside the docked column", () => {
-    const docked = run(initialShellState, { type: "set-placement", placement: "docked" });
-    expect(showsPresenceFace(docked)).toBe(false);
-
-    const floating = run(docked, { type: "set-placement", placement: "floating" });
-    expect(showsPresenceFace(floating)).toBe(true);
-
-    // Editor cannot dock, so the face is always the presence there.
-    expect(showsPresenceFace(run(docked, { type: "set-mode", mode: "editor" }))).toBe(true);
-  });
-});
-
-describe("folder selection (decisions 2 and 3)", () => {
-  it("treats no-folder-chosen as null rather than a pseudo-folder", () => {
-    const state = run(
-      initialShellState,
-      { type: "select-folder", folderId: "folder-launch" },
-      { type: "select-folder", folderId: null },
-    );
-    expect(state.selectedFolderId).toBeNull();
-  });
-});
-
-describe("tabs", () => {
-  it("activates a newly opened file and leaves Home", () => {
-    const state = run(initialShellState, { type: "open-file", fileId: "file-plan" });
-    expect(state.home).toBe(false);
-    expect(state.openFileIds).toEqual(["file-plan"]);
-    expect(state.activeFileId).toBe("file-plan");
-  });
-
-  it("collapses the agent presence when opening a file in Editor mode", () => {
-    const editor = run(
-      initialShellState,
-      { type: "set-mode", mode: "editor" },
-      { type: "set-presence-expanded", expanded: true },
-    );
-    expect(editor.presence.expanded).toBe(true);
-
-    const opened = run(editor, { type: "open-file", fileId: "file-plan" });
-    expect(opened.presence.expanded).toBe(false);
-  });
-
-  it("leaves the agent presence expanded when opening a file in Agent mode", () => {
-    const opened = run(initialShellState, { type: "open-file", fileId: "file-plan" });
-    expect(opened.presence.expanded).toBe(true);
-  });
-
-  it("does not duplicate an already open file", () => {
-    const state = run(
-      initialShellState,
-      { type: "open-file", fileId: "file-plan" },
-      { type: "open-file", fileId: "file-deck" },
-      { type: "open-file", fileId: "file-plan" },
-    );
-    expect(state.openFileIds).toEqual(["file-plan", "file-deck"]);
-    expect(state.activeFileId).toBe("file-plan");
-  });
-
-  it("moves activation to the neighbour when the active tab closes", () => {
-    const state = run(
-      initialShellState,
-      { type: "open-file", fileId: "file-plan" },
-      { type: "open-file", fileId: "file-forecast" },
-      { type: "open-file", fileId: "file-deck" },
-      { type: "activate-file", fileId: "file-forecast" },
-      { type: "close-file", fileId: "file-forecast" },
-    );
-    expect(state.openFileIds).toEqual(["file-plan", "file-deck"]);
-    expect(state.activeFileId).toBe("file-deck");
-    expect(state.home).toBe(false);
-  });
-
-  it("falls back to Home when the last tab closes", () => {
-    const state = run(
-      initialShellState,
-      { type: "open-file", fileId: "file-plan" },
-      { type: "close-file", fileId: "file-plan" },
-    );
-    expect(state.openFileIds).toEqual([]);
-    expect(state.activeFileId).toBeNull();
-    expect(state.home).toBe(true);
-  });
-
-  // A deck being generated has no file to open the workspace through: its draft
-  // is scratch that never enters the library. Without a way to leave Home
-  // without one, the run would draw behind a hidden workspace.
-  it("leaves Home with nothing open", () => {
-    const state = run(initialShellState, { type: "enter-workspace" });
-    expect(state.home).toBe(false);
-    expect(state.activeFileId).toBeNull();
-    expect(state.openFileIds).toEqual([]);
-  });
-
-  /*
-   * "Nothing open" has to mean nothing, including what was open already.
-   *
-   * The case above starts from the initial state, where no file is active, so
-   * it passed whatever this action did with an existing one. Generate a
-   * workbook from Home with a document in a tab and the stale id put that
-   * document's name in the tab strip and the status bar, over a stage writing
-   * something else — and aimed the composer at it, which routes a follow-up
-   * into `office.modify` against the wrong file.
-   */
-  it("drops the file that was open, keeping its tab", () => {
-    const opened = run(
-      initialShellState,
-      { type: "open-file", fileId: "file-plan" },
-      { type: "open-file", fileId: "file-deck" },
-      { type: "go-home" },
-    );
-    expect(opened.activeFileId).toBe("file-deck");
-
-    const entered = run(opened, { type: "enter-workspace" });
-    expect(entered.activeFileId).toBeNull();
-    // The tabs are the user's, not the run's: only the selection goes.
-    expect(entered.openFileIds).toEqual(["file-plan", "file-deck"]);
-  });
-
-  /*
-   * The recording is a canvas state, and a state means clearing too.
-   *
-   * `enter-workspace` is used by both the real live-run path (no demo) and
-   * Home's "watch a deck being drawn" button (demo). Leaving it set on the
-   * non-demo path would show the recording over a live run; not clearing it when
-   * a file opens would leave the demo on screen behind that file.
-   */
-  it("enters the workspace on the recording only when asked", () => {
-    expect(run(initialShellState, { type: "enter-workspace" }).demo).toBe(false);
-    const demo = run(initialShellState, { type: "enter-workspace", demo: true });
-    expect(demo.home).toBe(false);
-    expect(demo.demo).toBe(true);
-  });
-
-  /*
-   * Asking twice has to be a change, not a no-op.
-   *
-   * Going Home does not unmount the canvas, so pressing the button again finds
-   * `demo` already true and the finished deck still loaded. The counter is what
-   * the stage keys its session on; without it the second press does nothing.
-   */
-  it("stamps each request for the recording, so asking again restarts it", () => {
-    const first = run(initialShellState, { type: "enter-workspace", demo: true });
-    expect(first.demoStartedAt).not.toBeNull();
-    const second = run(first, { type: "enter-workspace", demo: true });
-    /*
-     * Strictly newer, not merely set.
-     *
-     * Two presses can land in the same millisecond, and an equal stamp means an
-     * unchanged React key, which means the second press does nothing at all —
-     * the failure this whole mechanism exists to prevent.
-     */
-    expect(Date.parse(second.demoStartedAt!)).toBeGreaterThan(
-      Date.parse(first.demoStartedAt!),
-    );
-  });
-
-  it("leaves the recording's stamp alone for a live run", () => {
-    // A run's stage is mid-draw; remounting it under the sequencer would throw
-    // the drawing away. Leaving the stamp is also what lets the run outrank the
-    // recording on the canvas.
-    const demo = run(initialShellState, { type: "enter-workspace", demo: true });
-    const live = run(demo, { type: "enter-workspace" });
-    expect(live.demoStartedAt).toBe(demo.demoStartedAt);
-  });
-
-  it("drops the recording when it reports being superseded", () => {
-    // The canvas decides when a later run outranks the recording; the flag has
-    // to go with that decision, or a reload restores it over the run.
-    const demo = run(initialShellState, { type: "enter-workspace", demo: true });
-    const left = run(demo, { type: "leave-demo" });
-    expect(left.demo).toBe(false);
-    expect(left.demoStartedAt).toBeNull();
-    // Nothing else moves: the workspace stays open on the run.
-    expect(left.home).toBe(false);
-  });
-
-  it("clears the recording as soon as a file is opened", () => {
-    const demo = run(initialShellState, { type: "enter-workspace", demo: true });
-    const opened = run(demo, { type: "open-file", fileId: "file-plan" });
-    expect(opened.demo).toBe(false);
-    expect(opened.activeFileId).toBe("file-plan");
-  });
-
-  it("drops tabs whose file disappeared underneath the shell", () => {
-    const files = seedFiles();
-    const opened = run(
-      initialShellState,
-      { type: "open-file", fileId: "file-plan" },
-      { type: "open-file", fileId: "file-deck" },
-    );
-    const pruned = run(opened, {
-      type: "prune-files",
-      files: files.filter((file) => file.id !== "file-deck"),
+describe("launch", () => {
+  it("lands on Home with the sidebar showing, no conversation and no tabs (§02)", () => {
+    expect(initialShellState).toMatchObject({
+      page: "home",
+      chat: null,
+      navCollapsed: false,
+      openFileIds: [],
+      activeFileId: null,
+      chatWidth: CHAT_DEFAULT_WIDTH,
+      chatPosition: "left",
     });
-    expect(pruned.openFileIds).toEqual(["file-plan"]);
-    expect(pruned.activeFileId).toBe("file-plan");
   });
 });
 
-describe("sidebar width", () => {
-  it("collapses to the rail below the halfway point and clamps otherwise", () => {
-    expect(run(initialShellState, { type: "set-nav-width", width: 80 }).navCollapsed).toBe(true);
-    expect(run(initialShellState, { type: "set-nav-width", width: 999 }).navWidth).toBe(300);
-    expect(run(initialShellState, { type: "set-nav-width", width: 120 }).navWidth).toBe(160);
+describe("opening a conversation (§16)", () => {
+  it("shows the chat beside the project's Assets and opens no file", () => {
+    const state = run(initialShellState, { type: "open-chat", chat: PLAN });
+    expect(state).toMatchObject({ page: "assets", chat: PLAN, panel: "chat", workspaceOpen: true, activeFileId: null });
+    expect(state.openFileIds).toEqual([]);
+    expect(state.expandedFolderIds).toContain("launch");
   });
 
-  it("clamps the docked agent column", () => {
-    expect(run(initialShellState, { type: "set-task-width", width: 10 }).taskWidth).toBe(320);
-    expect(run(initialShellState, { type: "set-task-width", width: 9999 }).taskWidth).toBe(660);
+  it("does not touch the sidebar", () => {
+    const hidden = run(initialShellState, { type: "toggle-nav" }, { type: "open-chat", chat: PLAN });
+    expect(hidden.navCollapsed).toBe(true);
+    const shown = run(initialShellState, { type: "open-chat", chat: PLAN });
+    expect(shown.navCollapsed).toBe(false);
+  });
+
+  it("keeps the name of a chat that has not been spoken in, until a run names it", () => {
+    const pending = run(initialShellState, { type: "open-chat", chat: NEW_CHAT, name: "  Launch copy  " });
+    expect(pending.pendingChatName).toBe("Launch copy");
+
+    const adopted = run(pending, { type: "adopt-conversation", folderId: "launch", conversationId: "c-1" });
+    expect(adopted.chat).toEqual({ folderId: "launch", conversationId: "c-1" });
+    expect(adopted.pendingChatName).toBeNull();
+  });
+
+  it("hands tabs opened in a new chat to the conversation it becomes", () => {
+    const state = run(
+      initialShellState,
+      { type: "open-chat", chat: NEW_CHAT },
+      { type: "open-file", fileId: "a" },
+      { type: "adopt-conversation", folderId: "launch", conversationId: "c-1" },
+    );
+    expect(state.tabContexts.a).toEqual({ folderId: "launch", conversationId: "c-1" });
+  });
+
+  it("ignores an adoption meant for another project, or for a chat that already has an id", () => {
+    const pending = run(initialShellState, { type: "open-chat", chat: NEW_CHAT });
+    expect(run(pending, { type: "adopt-conversation", folderId: "other", conversationId: "x" })).toBe(pending);
+    const named = run(initialShellState, { type: "open-chat", chat: PLAN });
+    expect(run(named, { type: "adopt-conversation", folderId: "launch", conversationId: "x" })).toBe(named);
+  });
+});
+
+describe("going somewhere else", () => {
+  it("leaves the conversation and keeps the tabs", () => {
+    const state = run(
+      initialShellState,
+      { type: "open-chat", chat: PLAN },
+      { type: "open-file", fileId: "a" },
+      { type: "go", page: "local" },
+    );
+    expect(state).toMatchObject({ page: "local", chat: null, activeFileId: null, workspaceOpen: false });
+    expect(state.openFileIds).toEqual(["a"]);
+  });
+
+  it("opens Settings at the section asked for, or the last one", () => {
+    const account = run(initialShellState, { type: "go", page: "settings", section: "account" });
+    expect(account.settingsSection).toBe("account");
+    const again = run(account, { type: "go", page: "home" }, { type: "go", page: "settings" });
+    expect(again.settingsSection).toBe("account");
+  });
+});
+
+describe("tabs remember how they were opened (§18)", () => {
+  const twoContexts = run(
+    initialShellState,
+    { type: "open-local-file", fileId: "local" },
+    { type: "open-chat", chat: PLAN },
+    { type: "open-file", fileId: "chat" },
+  );
+
+  it("records the conversation a file was opened from, and null for Local", () => {
+    expect(twoContexts.tabContexts).toEqual({ local: null, chat: PLAN });
+    expect(tabIsChat(twoContexts, "chat")).toBe(true);
+    expect(tabIsChat(twoContexts, "local")).toBe(false);
+  });
+
+  it("restores Local when a Local tab is activated beside a conversation", () => {
+    const state = run(twoContexts, { type: "activate-file", fileId: "local" });
+    expect(state).toMatchObject({ page: "editor", activeFileId: "local", chat: null, workspaceOpen: false });
+  });
+
+  it("restores the conversation when a Chat tab is activated from Local", () => {
+    const state = run(twoContexts, { type: "activate-file", fileId: "local" }, { type: "activate-file", fileId: "chat" });
+    expect(state).toMatchObject({ page: "editor", activeFileId: "chat", chat: PLAN, workspaceOpen: true });
+  });
+
+  it("moves between two conversations of one project", () => {
+    const state = run(
+      twoContexts,
+      { type: "open-chat", chat: SALES },
+      { type: "open-file", fileId: "forecast" },
+      { type: "activate-file", fileId: "chat" },
+    );
+    expect(state.chat).toEqual(PLAN);
+    expect(state.tabContexts.forecast).toEqual(SALES);
+  });
+
+  it("re-files a tab under the context it is opened from again", () => {
+    const state = run(twoContexts, { type: "open-file", fileId: "local" });
+    expect(state.tabContexts.local).toEqual(PLAN);
+  });
+
+  it("opening Local from a conversation leaves the conversation", () => {
+    const state = run(initialShellState, { type: "open-chat", chat: PLAN }, { type: "open-local-file", fileId: "a" });
+    expect(state).toMatchObject({ chat: null, page: "editor", activeFileId: "a" });
+    expect(state.tabContexts.a).toBeNull();
+  });
+
+  it("does nothing for a file that has no tab", () => {
+    expect(run(twoContexts, { type: "activate-file", fileId: "missing" })).toBe(twoContexts);
+  });
+});
+
+describe("closing a tab", () => {
+  it("activates the last remaining tab, in that tab's context", () => {
+    const state = run(
+      initialShellState,
+      { type: "open-local-file", fileId: "local" },
+      { type: "open-chat", chat: PLAN },
+      { type: "open-file", fileId: "chat" },
+      { type: "close-file", fileId: "chat" },
+    );
+    expect(state).toMatchObject({ activeFileId: "local", chat: null, page: "editor" });
+    expect(state.tabContexts).toEqual({ local: null });
+  });
+
+  it("returns to Assets from a conversation, and Home from Local, when nothing is left", () => {
+    const chat = run(
+      initialShellState,
+      { type: "open-chat", chat: PLAN },
+      { type: "open-file", fileId: "a" },
+      { type: "close-file", fileId: "a" },
+    );
+    expect(chat).toMatchObject({ page: "assets", chat: PLAN, activeFileId: null });
+
+    const local = run(initialShellState, { type: "open-local-file", fileId: "a" }, { type: "close-file", fileId: "a" });
+    expect(local).toMatchObject({ page: "home", chat: null, activeFileId: null });
+  });
+
+  it("leaves the screen alone when a background tab closes", () => {
+    const state = run(
+      initialShellState,
+      { type: "open-local-file", fileId: "a" },
+      { type: "open-local-file", fileId: "b" },
+      { type: "close-file", fileId: "a" },
+    );
+    expect(state).toMatchObject({ activeFileId: "b", page: "editor" });
+    expect(state.openFileIds).toEqual(["b"]);
+  });
+
+  it("reopens the most recently closed tab first", () => {
+    const state = run(
+      initialShellState,
+      { type: "open-local-file", fileId: "a" },
+      { type: "open-local-file", fileId: "b" },
+      { type: "close-file", fileId: "a" },
+      { type: "close-file", fileId: "b" },
+      { type: "reopen-tab" },
+    );
+    expect(state.activeFileId).toBe("b");
+    expect(state.closedFileIds).toEqual(["a"]);
+    expect(run(initialShellState, { type: "reopen-tab" })).toBe(initialShellState);
+  });
+
+  it("reorders within the strip and clamps the index", () => {
+    const three = run(
+      initialShellState,
+      { type: "open-local-file", fileId: "a" },
+      { type: "open-local-file", fileId: "b" },
+      { type: "open-local-file", fileId: "c" },
+    );
+    expect(run(three, { type: "move-tab", fileId: "a", toIndex: 99 }).openFileIds).toEqual(["b", "c", "a"]);
+    expect(run(three, { type: "move-tab", fileId: "c", toIndex: -4 }).openFileIds).toEqual(["c", "a", "b"]);
+    expect(run(three, { type: "move-tab", fileId: "x", toIndex: 0 })).toBe(three);
+  });
+});
+
+describe("a finished run's result (§10)", () => {
+  it("adds a tab without taking the screen, and marks it unread", () => {
+    const before = run(initialShellState, { type: "open-chat", chat: PLAN }, { type: "open-file", fileId: "a" });
+    const state = run(before, { type: "add-tab", fileId: "result", chat: PLAN, unread: true });
+    expect(state.activeFileId).toBe("a");
+    expect(state.openFileIds).toEqual(["a", "result"]);
+    expect(state.unreadFileIds).toEqual(["result"]);
+    expect(state.tabContexts.result).toEqual(PLAN);
+  });
+
+  it("clears unread when the file is opened or its tab is activated", () => {
+    const unread = run(initialShellState, { type: "add-tab", fileId: "result", chat: null, unread: true });
+    expect(run(unread, { type: "activate-file", fileId: "result" }).unreadFileIds).toEqual([]);
+    expect(run(unread, { type: "open-file", fileId: "result" }).unreadFileIds).toEqual([]);
+    expect(run(unread, { type: "open-local-file", fileId: "other" }).unreadFileIds).toEqual(["result"]);
+  });
+
+  it("never marks the file on screen as unread", () => {
+    const watching = run(initialShellState, { type: "open-local-file", fileId: "a" });
+    expect(run(watching, { type: "mark-unread", fileId: "a" })).toBe(watching);
+    expect(run(watching, { type: "add-tab", fileId: "a", chat: null, unread: true })).toBe(watching);
+    expect(run(watching, { type: "mark-unread", fileId: "b" }).unreadFileIds).toEqual(["b"]);
+  });
+});
+
+describe("the conversation column (§03)", () => {
+  const chat = run(initialShellState, { type: "open-chat", chat: PLAN });
+
+  it("clamps its width to 320–520", () => {
+    expect(run(chat, { type: "set-chat-width", width: 10 }).chatWidth).toBe(CHAT_MIN_WIDTH);
+    expect(run(chat, { type: "set-chat-width", width: 9000 }).chatWidth).toBe(CHAT_MAX_WIDTH);
+    expect(run(chat, { type: "set-chat-width", width: 401.6 }).chatWidth).toBe(402);
+  });
+
+  it("swaps sides and back", () => {
+    expect(run(chat, { type: "swap-chat" }).chatPosition).toBe("right");
+    expect(run(chat, { type: "swap-chat" }, { type: "swap-chat" }).chatPosition).toBe("left");
+  });
+
+  it("closes the content region, which leaves the conversation filling the window", () => {
+    const closed = run(chat, { type: "toggle-workspace" });
+    expect(workspaceClosed(closed)).toBe(true);
+    expect(workspaceClosed(run(closed, { type: "toggle-workspace" }))).toBe(false);
+  });
+
+  it("re-docks a floating conversation when the content region closes", () => {
+    const state = run(chat, { type: "toggle-chat-display" }, { type: "toggle-workspace" });
+    expect(state).toMatchObject({ chatFloating: false, workspaceOpen: false });
+  });
+
+  it("floating opens the content region it floats over", () => {
+    const state = run(chat, { type: "toggle-workspace" }, { type: "toggle-chat-display" });
+    expect(state).toMatchObject({ chatFloating: true, workspaceOpen: true, page: "assets" });
+  });
+
+  it("keeps the document on screen when it floats over one", () => {
+    const state = run(chat, { type: "open-file", fileId: "a" }, { type: "toggle-chat-display" });
+    expect(state).toMatchObject({ chatFloating: true, page: "editor", activeFileId: "a" });
+  });
+
+  it("shows the compact Assets list in place of the conversation, and only beside one", () => {
+    expect(run(chat, { type: "set-panel", panel: "assets" }).panel).toBe("assets");
+    expect(run(initialShellState, { type: "set-panel", panel: "assets" })).toBe(initialShellState);
+  });
+
+  it("has nothing to toggle without a conversation", () => {
+    expect(run(initialShellState, { type: "toggle-workspace" })).toBe(initialShellState);
+    expect(run(initialShellState, { type: "toggle-chat-display" })).toBe(initialShellState);
+  });
+});
+
+describe("the sidebar (§16)", () => {
+  it("moves only when the user moves it", () => {
+    const navigation: ShellAction[] = [
+      { type: "open-chat", chat: PLAN },
+      { type: "open-file", fileId: "a" },
+      { type: "open-local-file", fileId: "b" },
+      { type: "activate-file", fileId: "a" },
+      { type: "toggle-workspace" },
+      { type: "close-file", fileId: "a" },
+      { type: "go", page: "settings" },
+      { type: "go", page: "home" },
+    ];
+    for (const collapsed of [false, true]) {
+      let state: ShellState = { ...initialShellState, navCollapsed: collapsed };
+      for (const action of navigation) {
+        state = shellReducer(state, action);
+        expect(state.navCollapsed, action.type).toBe(collapsed);
+      }
+    }
+  });
+
+  it("opens and closes a project in the tree", () => {
+    const open = run(initialShellState, { type: "toggle-folder", folderId: "launch" });
+    expect(open.expandedFolderIds).toEqual(["launch"]);
+    expect(run(open, { type: "toggle-folder", folderId: "launch" }).expandedFolderIds).toEqual([]);
+    expect(run(open, { type: "reveal-folder", folderId: "launch" })).toBe(open);
+  });
+});
+
+describe("what the content region shows", () => {
+  it("has a tab strip everywhere but Home, Local and Settings", () => {
+    const at = (page: ShellState["page"]) => showsTabStrip({ ...initialShellState, page });
+    expect(["home", "local", "settings"].map((page) => at(page as ShellState["page"]))).toEqual([false, false, false]);
+    expect(["projects", "assets", "editor", "image"].map((page) => at(page as ShellState["page"]))).toEqual([
+      true,
+      true,
+      true,
+      true,
+    ]);
+  });
+
+  it("shows the canvas for a file, a stage or the recording", () => {
+    expect(showsEditor(run(initialShellState, { type: "open-local-file", fileId: "a" }))).toBe(true);
+    expect(showsEditor(run(initialShellState, { type: "enter-stage" }))).toBe(true);
+    expect(showsEditor(run(initialShellState, { type: "enter-stage", demo: true }))).toBe(true);
+    expect(showsEditor(initialShellState)).toBe(false);
+  });
+});
+
+describe("a run's stage", () => {
+  it("puts the canvas on screen with no file selected", () => {
+    const state = run(
+      initialShellState,
+      { type: "open-chat", chat: PLAN },
+      { type: "open-file", fileId: "a" },
+      { type: "enter-stage" },
+    );
+    expect(state).toMatchObject({ page: "editor", stage: true, demo: false, activeFileId: null, workspaceOpen: true });
+    expect(state.openFileIds).toEqual(["a"]);
+  });
+
+  it("is left behind by opening a file", () => {
+    const state = run(initialShellState, { type: "enter-stage" }, { type: "open-local-file", fileId: "a" });
+    expect(state).toMatchObject({ stage: false, activeFileId: "a" });
+  });
+
+  it("stamps each request for the recording later than the last", () => {
+    const first = run(initialShellState, { type: "enter-stage", demo: true });
+    const second = run(first, { type: "enter-stage", demo: true });
+    expect(Date.parse(second.demoStartedAt!)).toBeGreaterThan(Date.parse(first.demoStartedAt!));
+    const left = run(second, { type: "leave-demo" });
+    expect(left).toMatchObject({ demo: false, demoStartedAt: null });
+    expect(run(left, { type: "leave-demo" })).toBe(left);
+  });
+});
+
+describe("files that disappear", () => {
+  const open = run(
+    initialShellState,
+    { type: "open-chat", chat: PLAN },
+    { type: "open-file", fileId: "a" },
+    { type: "open-file", fileId: "b" },
+    { type: "add-tab", fileId: "c", chat: PLAN, unread: true },
+  );
+
+  it("drops their tabs, contexts and unread marks", () => {
+    const state = run(open, { type: "prune-files", files: [file("a")] });
+    expect(state.openFileIds).toEqual(["a"]);
+    expect(state.tabContexts).toEqual({ a: PLAN });
+    expect(state.unreadFileIds).toEqual([]);
+    expect(state.activeFileId).toBe("a");
+  });
+
+  it("falls back to Assets when nothing is left to show", () => {
+    const state = run(open, { type: "prune-files", files: [] });
+    expect(state).toMatchObject({ page: "assets", activeFileId: null, openFileIds: [] });
+  });
+
+  it("returns the same state when nothing was lost", () => {
+    expect(run(open, { type: "prune-files", files: [file("a"), file("b"), file("c")] })).toBe(open);
+  });
+});
+
+describe("preferences", () => {
+  it("creates the gift button the first time the features are closed, for good (§21)", () => {
+    const closed = run(initialShellState, { type: "set-features", visible: false });
+    expect(closed).toMatchObject({ featuresVisible: false, featuresDocked: true });
+    expect(run(closed, { type: "set-features", visible: true })).toMatchObject({
+      featuresVisible: true,
+      featuresDocked: true,
+    });
+  });
+
+  it("resets appearance and layout, and keeps what is open", () => {
+    const changed = run(
+      initialShellState,
+      { type: "open-chat", chat: PLAN },
+      { type: "open-file", fileId: "a" },
+      { type: "set-theme", theme: "dark" },
+      { type: "set-avatar", avatar: "think" },
+      { type: "set-chat-width", width: 500 },
+      { type: "swap-chat" },
+      { type: "toggle-nav" },
+      { type: "set-features", visible: false },
+    );
+    const reset = run(changed, { type: "reset-preferences" });
+    expect(reset).toMatchObject({
+      theme: "light",
+      avatar: "ready",
+      chatWidth: CHAT_DEFAULT_WIDTH,
+      chatPosition: "left",
+      navCollapsed: false,
+      featuresVisible: true,
+      // The gift button, once made, stays.
+      featuresDocked: true,
+      chat: PLAN,
+      activeFileId: "a",
+    });
   });
 });
 
 describe("hydration", () => {
-  it("ignores a malformed persisted payload instead of throwing", () => {
-    const state = hydrateShellState({
-      mode: "nonsense" as never,
-      navWidth: Number.NaN,
-      openFileIds: "not-an-array" as never,
-      presence: { placement: "sideways" as never, expanded: true, x: Number.NaN, y: 4, edge: null },
+  it("round-trips a session", () => {
+    const state = run(
+      initialShellState,
+      { type: "open-local-file", fileId: "local" },
+      { type: "open-chat", chat: PLAN },
+      { type: "open-file", fileId: "a" },
+      { type: "set-chat-width", width: 444 },
+      { type: "swap-chat" },
+      { type: "set-avatar", avatar: "write" },
+    );
+    const restored = hydrateShellState(toPersisted(state));
+    expect(restored).toMatchObject({
+      page: "editor",
+      chat: PLAN,
+      activeFileId: "a",
+      openFileIds: ["local", "a"],
+      tabContexts: { local: null, a: PLAN },
+      chatWidth: 444,
+      chatPosition: "right",
+      avatar: "write",
     });
-    expect(state.mode).toBe("agent");
-    expect(state.navWidth).toBe(190);
-    expect(state.openFileIds).toEqual([]);
-    expect(state.presence.placement).toBe("docked");
-    // A non-finite coordinate reads as "never placed" rather than as the
-    // top-left corner, so the presence still gets its default position.
-    expect(state.presence.x).toBeNull();
-    expect(state.presence.y).toBe(4);
   });
 
-  it("treats a persisted 0 as a real position, not as unplaced", () => {
+  it("treats what it reads as untrusted", () => {
     const state = hydrateShellState({
-      presence: { placement: "floating", expanded: false, x: 0, y: 0, edge: "left" },
+      page: "nowhere" as never,
+      chatWidth: Number.NaN,
+      chatPosition: "top" as never,
+      avatar: "clown" as never,
+      theme: "sepia" as never,
+      settingsSection: "secret" as never,
+      openFileIds: ["a", 7 as never],
+      activeFileId: "gone",
+      tabContexts: { a: { folderId: "" } as never },
+      chat: { conversationId: "x" } as never,
     });
-    expect(state.presence.x).toBe(0);
-    expect(state.presence.y).toBe(0);
-    expect(state.presence.edge).toBe("left");
+    expect(state).toMatchObject({
+      page: "home",
+      chatWidth: CHAT_DEFAULT_WIDTH,
+      chatPosition: "left",
+      avatar: "ready",
+      theme: "light",
+      settingsSection: "general",
+      openFileIds: ["a"],
+      activeFileId: null,
+      tabContexts: { a: null },
+      chat: null,
+    });
+  });
+
+  it("falls to Home from a page whose subject did not come back", () => {
+    expect(hydrateShellState({ page: "assets" }).page).toBe("home");
+    expect(hydrateShellState({ page: "editor", openFileIds: [] }).page).toBe("home");
+    expect(hydrateShellState({ page: "editor", stage: true }).page).toBe("editor");
+  });
+
+  it("has no floating or Assets panel without a conversation", () => {
+    expect(hydrateShellState({ chatFloating: true, panel: "assets", workspaceOpen: true })).toMatchObject({
+      chatFloating: false,
+      panel: "chat",
+      workspaceOpen: false,
+    });
+  });
+});
+
+describe("sameChat", () => {
+  it("compares by project and conversation", () => {
+    expect(sameChat(PLAN, { ...PLAN })).toBe(true);
+    expect(sameChat(PLAN, SALES)).toBe(false);
+    expect(sameChat(null, null)).toBe(true);
+    expect(sameChat(PLAN, null)).toBe(false);
   });
 });

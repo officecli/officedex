@@ -61,6 +61,13 @@ export interface FileMeta {
   pinned: boolean;
   /** Set for artifacts produced by an agent task; used to open the result when the task completes. */
   artifactTaskId?: string;
+  /**
+   * The conversation that first brought this file into its project — by
+   * generating it or by adding it — when the workspace recorded one. It is a
+   * statement of origin ("From chat"), not of access: every conversation in
+   * the project can use the file whatever this says.
+   */
+  originConversationId?: string;
 }
 
 export interface FolderPort {
@@ -230,6 +237,16 @@ export interface AgentOutlinePage {
   state: "queued" | "generating" | "repairing" | "ready" | "failed" | "canceled" | null;
 }
 
+/**
+ * How a run that is over ended.
+ *
+ * `AgentStatus` has one word for "not running any more" — `done` — and a run
+ * that failed, one the user stopped and one that finished all report it. The
+ * conversation has to tell those apart: they offer different ways forward
+ * (Retry, Resume, Open) and only one of them is a success.
+ */
+export type AgentOutcome = "completed" | "failed" | "stopped" | "partial" | "interrupted";
+
 export interface AgentTask {
   id: string;
   title: string;
@@ -265,6 +282,20 @@ export interface AgentTask {
   suggestion: AgentSuggestion | null;
   /** Set while the run is waiting for an answer; null the rest of the time. */
   question: AgentQuestion | null;
+  /** Set once the run is over. Absent while it runs, and on a record that predates it. */
+  outcome?: AgentOutcome;
+  /** Why the run did not finish, in the runtime's words. */
+  error?: string;
+  /**
+   * What kind of thing went wrong, when the runtime said. `model` failures are
+   * the ones a trip to Settings → Models can fix.
+   */
+  failureKind?: "model" | "network" | "other";
+  /** Epoch ms the newest attempt started, and when it ended. */
+  startedAt?: number;
+  finishedAt?: number;
+  /** 1 for a first run; a retry or a resume of the same request counts up. */
+  attempt?: number;
   /**
    * Set when a run failed but left finished pages it can pick up from.
    *
@@ -523,6 +554,18 @@ export interface AgentPort {
    * shows.
    */
   startConversation(folderId: string): Promise<void>;
+  /**
+   * Makes `conversationId` the conversation the folder's panel shows, and
+   * returns it as `current` would — or null when the port knows of no such
+   * conversation in that folder.
+   *
+   * A project holds many conversations and the sidebar lists them; picking one
+   * is a statement about which thread the next message continues. Without this
+   * the port went on choosing for itself (a live run, else the most recent),
+   * and a message typed under an older conversation would have joined a
+   * different one.
+   */
+  openConversation(folderId: string, conversationId: string): Promise<AgentTask | null>;
   /**
    * Adds an exchange that happened outside the runtime — an in-place edit the
    * editor carried out — to the folder's current conversation.

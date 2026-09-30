@@ -159,7 +159,8 @@ export function ImageTools({ draft, onChange, onExit, onMention, onQuoteText, di
           <>
             <button
               type="button"
-              className="shell-ig-tool shell-ig-tool--reference"
+              className="shell-ig-tool"
+        data-tool="reference"
               aria-label={t("shell.imageTool.addReference")}
               title={references.full ? t("shell.imageTool.referencesFull") : t("shell.imageTool.addReferenceTitle")}
               disabled={disabled || references.full}
@@ -209,7 +210,8 @@ export function ImageTools({ draft, onChange, onExit, onMention, onQuoteText, di
 
       <button
         type="button"
-        className="shell-ig-tool shell-ig-tool--text"
+        className="shell-ig-tool"
+        data-tool="text"
         aria-label={t("shell.imageTool.addText")}
         title={t("shell.imageTool.addText")}
         disabled={disabled}
@@ -219,7 +221,8 @@ export function ImageTools({ draft, onChange, onExit, onMention, onQuoteText, di
       </button>
       <button
         type="button"
-        className="shell-ig-tool shell-ig-tool--mention"
+        className="shell-ig-tool"
+        data-tool="mention"
         aria-label={t("shell.imageTool.mention")}
         title={t("shell.imageTool.mention")}
         disabled={disabled}

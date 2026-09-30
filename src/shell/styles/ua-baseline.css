@@ -1,0 +1,105 @@
+/*
+ * The browser's own defaults, put back inside the OfficeDex outer UI.
+ *
+ * The workbook editor's stylesheet ends up in this document — that editor is
+ * mounted in the page, not in a frame — and it opens with
+ *
+ *     * { outline: none; margin: 0; padding: 0 }
+ *     ul { list-style: none; padding-inline-start: 0 }
+ *
+ * which is a reasonable thing for an editor to say about itself and an
+ * unreasonable thing for it to say about everything else. The prototype was
+ * written against a browser's defaults: a paragraph has a margin, a button has
+ * a little padding, a dialog is centred because its margin is `auto`. With
+ * those zeroed, the shell is a few pixels off in a hundred places and its
+ * dialogs open in the top-left corner.
+ *
+ * So the defaults are restated here, for OfficeDex regions only, as the values
+ * Chromium's own stylesheet uses — which also makes them the same in the
+ * desktop app's WebKit as in the browser the prototype was reviewed in.
+ *
+ * Specificity is the whole trick. `:where()` contributes nothing, so each rule
+ * below weighs exactly one element (0,0,1): enough to beat a bare `*`, never
+ * enough to beat a rule the prototype wrote. This file must stay first among
+ * the workspace's stylesheets.
+ *
+ * Nothing here reaches into an editor. SHIMO-BOUNDARY §5: an editor's fields,
+ * menus and dialogs keep the editor's own rules.
+ */
+
+:where([data-ui-scope="officedex"]) p,
+:where([data-ui-scope="officedex"]) dl,
+:where([data-ui-scope="officedex"]) pre {
+  margin: 1em 0;
+}
+
+:where([data-ui-scope="officedex"]) h1 {
+  margin: 0.67em 0;
+}
+
+:where([data-ui-scope="officedex"]) h2 {
+  margin: 0.83em 0;
+}
+
+:where([data-ui-scope="officedex"]) h3 {
+  margin: 1em 0;
+}
+
+:where([data-ui-scope="officedex"]) h4 {
+  margin: 1.33em 0;
+}
+
+:where([data-ui-scope="officedex"]) ul,
+:where([data-ui-scope="officedex"]) ol {
+  margin: 1em 0;
+  padding-inline-start: 40px;
+}
+
+:where([data-ui-scope="officedex"]) ul {
+  list-style: disc;
+}
+
+:where([data-ui-scope="officedex"]) ol {
+  list-style: decimal;
+}
+
+:where([data-ui-scope="officedex"]) dd {
+  margin-inline-start: 40px;
+}
+
+:where([data-ui-scope="officedex"]) blockquote,
+:where([data-ui-scope="officedex"]) figure {
+  margin: 1em 40px;
+}
+
+:where([data-ui-scope="officedex"]) hr {
+  margin: 0.5em auto;
+}
+
+:where([data-ui-scope="officedex"]) button {
+  padding: 1px 6px;
+}
+
+:where([data-ui-scope="officedex"]) input {
+  padding: 1px 2px;
+}
+
+:where([data-ui-scope="officedex"]) textarea {
+  padding: 2px;
+}
+
+:where([data-ui-scope="officedex"]) input[type="checkbox"],
+:where([data-ui-scope="officedex"]) input[type="radio"] {
+  margin: 3px 3px 3px 4px;
+}
+
+:where([data-ui-scope="officedex"]) td,
+:where([data-ui-scope="officedex"]) th {
+  padding: 1px;
+}
+
+/* A dialog is centred by its automatic margins. */
+dialog:where([data-ui-scope="officedex"]) {
+  margin: auto;
+  padding: 1em;
+}

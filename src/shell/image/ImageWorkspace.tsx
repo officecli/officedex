@@ -57,13 +57,13 @@ export function ImageWorkspace({ agent }: { agent: ReturnType<typeof useAgentTas
    * folder's, not the tab's: clicking a deck while a picture was still being
    * made left "Creating your image" drawn over the deck, with the deck's name
    * in the tab strip and the status bar. Starting a picture clears the open
-   * file (`enter-workspace`), so this only stands aside when the user has
+   * file (`enter-stage`), so this only stands aside when the user has
    * turned to a document since; the finished picture still opens itself.
    */
   const imageTask = agent.task?.documentType === "img";
   const documentOpen = activeFile !== null && activeFile.type !== "image";
   const visible =
-    !state.home &&
+    state.page === "editor" &&
     (activeFile?.type === "image" ||
       (imageTask && !documentOpen && (series.busy || (series.failure !== null && series.versions.length === 0))));
   if (!visible) return null;

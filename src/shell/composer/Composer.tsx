@@ -1,31 +1,20 @@
-import {
-  ArrowUp,
-  ChevronDown,
-  Folder as FolderIcon,
-  FolderPlus,
-  Mic,
-  Plus,
-  ShieldCheck,
-  Square,
-  Wand2,
-  X,
-} from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { ArrowUp, Square } from "lucide-react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 
 import { toast } from "../../renderer/ui";
 import { translate, useT } from "../../renderer/i18n";
-import { FileTypeIcon } from "../chrome/FileTypeIcon";
-import { Menu } from "../chrome/Menu";
+import { referenceRequests } from "../chrome/useFileActions";
 import { useCanvas } from "../canvas/CanvasContext";
 import { useCanvasSelection, selectionForFile } from "../canvas/SelectionContext";
-import type { Attachment, FileType, Mention, PermissionMode, SendInput } from "../../shared/uiPort";
-import { useFolderDialogs } from "../nav/useFolderDialogs";
+import type { Attachment, FileType, Mention, SendInput } from "../../shared/uiPort";
+import { FileIcon, Icon, extensionOf } from "../kit/Icon";
+import { openMenu } from "../kit/layers";
 import { useShell } from "../state/ShellContext";
 import { usePort } from "../port/PortContext";
 import { useDiskDrop } from "../home/useDiskDrop";
 import { notBuiltYet } from "../port/reportPortFailure";
 import { MentionMenu, isImeKeyEvent, type MentionOption } from "./MentionMenu";
-import { ModelMenu } from "./ModelMenu";
+import { openTaskContext } from "./TaskContextDialog";
 import { useComposerSettings } from "./useComposerSettings";
 import { ImageComposerHeader, ImageSummary, ImageTools } from "../image/composer/ImageTools";
 import { ReferenceList, ReferenceStrip } from "../image/composer/ReferenceList";
@@ -37,47 +26,6 @@ import "./composer.css";
 import "../image/composer/imageComposer.css";
 
 export type ComposerPlacement = "home" | "task" | "floating";
-
-/**
- * The three tiers the IA drew, and the one the runtime can honour.
- *
- * Full access is first because it is the default everywhere — services/
- * settings.ts, the fake port's seed and useComposerSettings' fallback all say
- * `full`, and the `?? PERMISSIONS[0]` below has to land on a tier that works.
- *
- * The other two keep their rows. `unsupportedParts()` in services/agent.ts
- * already downgraded them to a direct write and mentioned it in a notice
- * *after* the message had gone — the gate was promised here and quietly
- * withdrawn in the transcript. Custom is the worse of the two: its description
- * offers your own instructions, and no screen in this app can write
- * `settings.customInstructions`, so choosing it has always meant choosing none.
- *
- * Shown-but-unbuilt rather than hidden, for the reason every other gap in this
- * shell is (see port/reportPortFailure): the shape of the choice is the design,
- * and deleting the rows loses the record of it. Pressing one says so.
- */
-const PERMISSIONS: Array<{
-  value: PermissionMode;
-  /** Dictionary keys — translated at render so a language switch reaches them. */
-  label: string;
-  description: string;
-  /** False while nothing behind the port enforces this tier. */
-  available: boolean;
-}> = [
-  {
-    value: "full",
-    label: "shell.cx.permission.full",
-    description: "shell.cx.permission.fullDescription",
-    available: true,
-  },
-  {
-    value: "review",
-    label: "shell.sidebar.reviewChanges",
-    description: "shell.cx.permission.reviewDescription",
-    available: false,
-  },
-  { value: "custom", label: "shell.cx.permission.custom", description: "shell.cx.permission.customDescription", available: false },
-];
 
 const MAX_ATTACHMENTS = 10;
 const MAX_BYTES = 20 * 1024 * 1024;
@@ -147,7 +95,7 @@ const EMPTY_DRAFT: Draft = { text: "", mentions: [], attachments: [], output: "a
  * behind it: the message still looked like it carried the file and silently
  * did not, and the attachments were gone without even a chip left to notice.
  */
-const drafts = new Map<ComposerPlacement, Draft>();
+const drafts = new Map<string, Draft>();
 
 /**
  * Forgets every kept draft.
@@ -186,9 +134,17 @@ export type ComposerSubmission = Pick<
 
 export interface ComposerProps {
   placement: ComposerPlacement;
-  showScopeInToolbar?: boolean;
-  showModeControls?: boolean;
-  showPermission?: boolean;
+  /**
+   * What the half-written message belongs to — a conversation, a document.
+   * Drafts are kept per object (OD-UI-1.2 §02), so a message begun in one
+   * conversation is still there on the way back and never shows up in another.
+   */
+  draftKey?: string;
+  /**
+   * Starts in image mode and stays there: the image creator's composer. Home's
+   * "AI image" opens that page rather than switching this control's mode.
+   */
+  imageOnly?: boolean;
   /** True while a task is running, which turns an empty Send into Stop. */
   busy?: boolean;
   onSend: (submission: ComposerSubmission) => void | Promise<void>;
@@ -231,16 +187,25 @@ export interface ComposerProps {
 }
 
 /**
- * One composer, three placements.
+ * One composer, three placements — OD-CHAT-2026.09.
  *
- * The hero on Agent Home, the docked task column and the floating panel are the
- * same component with different padding — and, more importantly, the same
- * mention menu, model menu, permission control and scope chip. The prototype
- * had a separate folder dropdown on Home for what the scope chip does here;
- * folding the two together is decision 2.
+ * Home, the project conversation and the Dex panel over a document are the
+ * same component at three widths. Top to bottom: what the message refers to
+ * (when anything), the text, then one row of tools — a single "add" on the
+ * left; Model, voice and the round send on the right. Nothing in that row
+ * changes size or place between empty, typing, sending and running: an empty
+ * input beside a running task turns Send into Stop in the same 32px circle.
+ *
+ * Container 24px radius with 8px padding; the text sits 4px further in. The
+ * text box grows from 56 to 200px and then scrolls. The focus ring is the
+ * container's — the 1.0 colour glow, drawn by `attention/inputGlow` — and the
+ * textarea inside has no outline of its own.
+ *
+ * The image creator keeps the interface it already had (§18: "AI image 保留
+ * 既有图像创作界面"); that branch of this component is unchanged.
  */
-export function Composer({ placement, showScopeInToolbar = true, showModeControls = true, showPermission = true, busy = false, onSend, onStop, onRegisterFill, onRegisterImageMode, onImageModeChange, imageTask = false }: ComposerProps) {
-  const { state, folders, files, activeFile, scopeFolderId, dispatch, reload } = useShell();
+export function Composer({ placement, draftKey = "", imageOnly = false, busy = false, onSend, onStop, onRegisterFill, onRegisterImageMode, onImageModeChange, imageTask = false }: ComposerProps) {
+  const { state, folders, files, activeFile, scopeFolderId, dispatch } = useShell();
   const t = useT();
   const port = usePort();
   const settings = useComposerSettings();
@@ -249,9 +214,11 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
   const inputId = useId();
 
   const [draft, setDraft] = useState<Draft>(() => {
-    const saved = drafts.get(placement);
+    const saved = drafts.get(`${placement}:${draftKey}`);
     return saved ? { ...EMPTY_DRAFT, ...saved, image: restoreImageDraft(saved.image) } : EMPTY_DRAFT;
   });
+  /** The draft as of the last write, so several in one event build on each other. */
+  const latestDraft = useRef(draft);
   const { text, mentions, attachments, output, image } = draft;
   const suggestedTarget = useImageEditTarget();
   /*
@@ -282,7 +249,8 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
    * it down the document path, which has no idea what to do with an image.
    * Unless what is on screen is a document: then the message is about that.
    */
-  const forcedImage = placement !== "home" && (editTarget !== null || (imageTask && !documentOnScreen));
+  const forcedImage =
+    imageOnly || (placement !== "home" && (editTarget !== null || (imageTask && !documentOnScreen)));
   /*
    * Picked beside something else — a picture, the workspace, another file —
    * and now looking at a document: the message is about the document.
@@ -295,14 +263,20 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
 
   // Every write to the draft goes through here so what is kept cannot drift
   // from what is on screen — the parts are saved together or not at all.
+  //
+  // The kept copy is written here, as the call is made, and not from inside the
+  // state update. Sending a conversation's first message gives it an id, which
+  // re-keys this composer: it is replaced in the same commit, its queued
+  // updates are dropped with it, and a write that waited for them left the
+  // message that had just gone out — attachments included — as the draft of
+  // the next new chat in that project.
   function patchDraft(patch: (current: Draft) => Partial<Draft>) {
-    setDraft((current) => {
-      const next = { ...current, ...patch(current) };
-      const empty = !next.text && next.mentions.length === 0 && next.attachments.length === 0 && next.output === "auto" && next.mode === "agent";
-      if (empty) drafts.delete(placement);
-      else drafts.set(placement, next);
-      return next;
-    });
+    const next = { ...latestDraft.current, ...patch(latestDraft.current) };
+    latestDraft.current = next;
+    const empty = !next.text && next.mentions.length === 0 && next.attachments.length === 0 && next.output === "auto" && next.mode === "agent";
+    if (empty) drafts.delete(`${placement}:${draftKey}`);
+    else drafts.set(`${placement}:${draftKey}`, next);
+    setDraft(next);
   }
 
   /** React's own setState shape — a value or an updater — for one draft field. */
@@ -454,11 +428,13 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
   useEffect(() => {
     const input = inputRef.current;
     if (!input) return;
-    const min = placement === "home" ? 88 : 58;
-    const max = placement === "home" ? 220 : 145;
+    // OD-CHAT §2: 56–200 in every placement. The image creator keeps its own.
+    const min = mode === "image" ? (placement === "home" ? 88 : 58) : 56;
+    const max = mode === "image" ? (placement === "home" ? 220 : 145) : 200;
     const fit = () => {
       input.style.height = "auto";
       input.style.height = `${Math.min(max, Math.max(min, input.scrollHeight))}px`;
+      input.style.overflowY = input.scrollHeight > max ? "auto" : "hidden";
     };
     fit();
     if (typeof ResizeObserver === "undefined") return;
@@ -719,7 +695,7 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
     // The mode goes with it: coming back to the deck is coming back to Agent.
     if (mode === "image" && documentOnScreen) {
       patchDraft(() => ({ modeFileId: null }));
-      dispatch({ type: "enter-workspace" });
+      dispatch({ type: "enter-stage" });
     }
     await onSend(submission);
   }
@@ -791,120 +767,65 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
     }
   }
 
-  const permission =
-    PERMISSIONS.find((entry) => entry.value === settings.value.permission) ?? PERMISSIONS[0];
-
   /*
-   * Creating a folder from the one control that says where a task will write.
-   *
-   * The menu listed existing folders and stopped there, so a workspace with
-   * none opened an empty panel — a dead end reached from the place the user was
-   * already standing, with the only way out being the sidebar's New folder
-   * button and a trip back. The dialog is the sidebar's own rather than a
-   * second one: folder names fail for real filesystem reasons, and that modal
-   * is where those are reported.
+   * A file picked from a menu elsewhere ("Reference") joins the message being
+   * written here. Only the composer beside the work listens; on Home it is the
+   * hero's, because that is the only one there is.
    */
-  const folderDialogs = useFolderDialogs(async () => {
-    const before = new Set(folders.map((folder) => folder.id));
-    await reload();
-    /*
-     * `useFolderDialogs` does not hand back what it created, so the new folder
-     * is whichever one the refreshed list has that the old one did not.
-     * Selecting it is the point of creating it here — a folder made from the
-     * scope menu and then not scoped to would make the user pick it twice.
-     */
-    const created = (await port.folders.list()).find((folder) => !before.has(folder.id));
-    if (created) dispatch({ type: "select-folder", folderId: created.id });
-  });
-
-  const scopeItems = useMemo(
-    () => [
-      ...folders.map((folder) => ({
-        id: folder.id,
-        label: folder.name,
-        description: folder.path,
-        checked: folder.id === scope?.id,
-        onSelect: () => dispatch({ type: "select-folder", folderId: folder.id }),
-      })),
-      {
-        id: "new-folder",
-        label: t("shell.cx.scope.newFolder"),
-        description: t("shell.cx.scope.newFolderDescription"),
-        icon: <FolderPlus size={16} strokeWidth={1.8} aria-hidden="true" />,
-        onSelect: folderDialogs.createFolder,
-      },
-    ],
-    [folders, scope?.id, dispatch, folderDialogs.createFolder, t],
-  );
-
-  /*
-   * What this message will do, as one readable phrase.
-   *
-   * Two questions collapse into one control here, because they are one
-   * question: does this instruction change the document I am looking at, or
-   * make something new — and if new, of what kind. Splitting them into an
-   * "edit / create" toggle plus a type picker would put two controls on screen
-   * whose only legal combinations are the four rows below.
-   */
-  const outputItems = useMemo(
-    () => [
-      ...(targetFileId && openFile
-        ? [
-            {
-              id: "edit",
-              label: t("shell.cx.output.editFile", { name: openFile.name }),
-              description: t("shell.cx.output.editFileDescription"),
-              icon: <FileTypeIcon type={openFile.type} size={16} />,
-              checked: output === "auto",
-              onSelect: () => setOutput("auto"),
-            },
-          ]
-        : [
-            {
-              id: "auto",
-              label: t("shell.cx.output.auto"),
-              description: t("shell.cx.output.autoDescription"),
-              icon: <Wand2 size={16} strokeWidth={1.8} aria-hidden="true" />,
-              checked: output === "auto",
-              onSelect: () => setOutput("auto"),
-            },
-          ]),
-      ...OUTPUTS.map((entry) => ({
-        id: entry.value,
-        label: t(entry.label),
-        description: t(entry.description),
-        icon: <FileTypeIcon type={entry.value} size={16} />,
-        checked: output === entry.value,
-        onSelect: () => setOutput(entry.value),
-      })),
-    ],
-    // `setOutput` closes over `patchDraft`, redefined every render; including it
-    // would rebuild this list on every keystroke.
+  useEffect(
+    () =>
+      referenceRequests.subscribe((fileId) => {
+        const file = files.find((entry) => entry.id === fileId);
+        if (!file) return;
+        setMentions((current) =>
+          current.some((entry) => entry.kind === "file" && entry.id === file.id)
+            ? current
+            : [...current, { kind: "file", id: file.id, label: file.name }],
+        );
+        inputRef.current?.focus();
+      }),
+    // `setMentions` only calls the state setter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [targetFileId, openFile?.id, openFile?.name, openFile?.type, output, t],
+    [files],
   );
 
-  /** The chip's own face: an icon and the shortest true phrase for it. */
-  const outputFace =
-    output !== "auto"
-      ? {
-          icon: <FileTypeIcon type={output} size={14} />,
-          name: t(OUTPUTS.find((entry) => entry.value === output)?.label ?? "shell.cx.output.newFile"),
-          title: t("shell.cx.output.createsTitle", {
-            description: t(OUTPUTS.find((entry) => entry.value === output)?.description ?? "shell.cx.output.newFileDescription"),
-          }),
-        }
-      : editingFile
-        ? {
-            icon: <FileTypeIcon type={editingFile.type} size={14} />,
-            name: editingFile.name,
-            title: t("shell.cx.output.editsTitle", { name: editingFile.name }),
-          }
-        : {
-            icon: <Wand2 size={14} strokeWidth={1.7} aria-hidden="true" />,
-            name: t("shell.cx.output.autoName"),
-            title: t("shell.cx.output.autoTitle"),
-          };
+  /** The "add" button: which files this message may use, and what it should make. */
+  function chooseContext() {
+    openTaskContext({
+      files,
+      currentFile: openFile,
+      selected: mentions.filter((mention) => mention.kind === "file").map((mention) => mention.id),
+      attachments,
+      output,
+      provider: settings.models.find((model) => model.id === settings.value.selectedModelId)?.provider ?? "",
+      onChooseFromDisk: () =>
+        void pickNativeAttachments().then((picked) => {
+          if (!picked) fileInputRef.current?.click();
+        }),
+      onApply: (next) => {
+        setMentions((current) => [
+          ...current.filter((mention) => mention.kind !== "file"),
+          ...next.fileIds
+            .map((id) => files.find((file) => file.id === id))
+            .filter((file): file is NonNullable<typeof file> => Boolean(file))
+            .map((file): Mention => ({ kind: "file", id: file.id, label: file.name })),
+        ]);
+        setOutput(next.output);
+      },
+    });
+  }
+
+  function chooseModel(anchor: HTMLElement) {
+    openMenu(anchor, [
+      ...settings.models.map((model) => ({
+        label: model.provider ? `${model.name} · ${model.provider}` : model.name,
+        checked: model.id === settings.value.selectedModelId,
+        onSelect: () => void settings.patch({ selectedModelId: model.id }),
+      })),
+      "-",
+      { label: t("dx.composer.manageModels"), onSelect: () => dispatch({ type: "go", page: "settings", section: "models" }) },
+    ]);
+  }
 
   /** "@" at the caret, and the mention menu open on it — the @ tool's job. */
   function startMention() {
@@ -950,336 +871,8 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
       ? editTarget ? t("shell.cx.placeholder.imageVersion", { version: editTarget.version }) : t("shell.cx.placeholder.homeImage")
       : t("shell.cx.placeholder.task");
 
-  return (
-    <div
-      className={`shell-cx shell-cx--${placement}${dragging ? " is-dragging" : ""}${imageMode ? " is-image" : ""}`}
-      {...dropZone}
-    >
-      {/*
-        The quoted span sits above the chips, not among them: a mention and an
-        attachment are things the user added to the message, while this is
-        something the document is telling the composer about itself. It also
-        shows its text — the whole point is being able to check what "this"
-        refers to before asking for a rewrite of it.
-      */}
-      {/* The panel is a picture's conversation; the message is about the document. */}
-      {placement !== "home" && mode !== "image" && imageAside ? <ImageAsideNotice aside={imageAside} /> : null}
-
-      {reference ? (
-        <div className="shell-cx-reference">
-          <div className="shell-cx-reference-head">
-            <span>{reference.label}</span>
-            <button
-              type="button"
-              className="shell-cx-chip-remove"
-              aria-label={t("shell.cx.reference.remove", { name: reference.label })}
-              onClick={clearSelection}
-            >
-              <X size={12} strokeWidth={2} aria-hidden="true" />
-            </button>
-          </div>
-          {reference.text ? <p>{reference.text}</p> : null}
-        </div>
-      ) : null}
-
-      {mentions.length > 0 || attachments.length > 0 ? (
-        <div className="shell-cx-chips">
-          {mentions.map((mention) => (
-            <span key={`${mention.kind}:${mention.id}`} className={`shell-cx-chip is-${mention.kind}`}>
-              {mention.kind === "folder" ? (
-                <FolderIcon size={13} strokeWidth={1.7} aria-hidden="true" />
-              ) : (
-                <FileTypeIcon
-                  type={files.find((file) => file.id === mention.id)?.type ?? "doc"}
-                  size={13}
-                />
-              )}
-              <span className="shell-cx-chip-name">{mention.label}</span>
-              <button
-                type="button"
-                aria-label={t("shell.cx.chip.remove", { name: mention.label })}
-                onClick={() => removeMention(mention)}
-              >
-                <X size={11} strokeWidth={2} aria-hidden="true" />
-              </button>
-            </span>
-          ))}
-
-          {attachments.map((attachment) => (
-            <span key={attachment.id} className="shell-cx-chip">
-              <Plus size={13} strokeWidth={1.7} aria-hidden="true" />
-              <span className="shell-cx-chip-name">
-                {attachment.name}
-                {attachment.fileCount ? t("shell.cx.chip.fileCount", { count: attachment.fileCount }) : ""}
-              </span>
-              <button
-                type="button"
-                aria-label={t("shell.cx.chip.remove", { name: attachment.name })}
-                onClick={() =>
-                  setAttachments((current) => current.filter((entry) => entry !== attachment))
-                }
-              >
-                <X size={11} strokeWidth={2} aria-hidden="true" />
-              </button>
-            </span>
-          ))}
-        </div>
-      ) : null}
-
-      {imageMode && compactImage ? (
-        <>
-          <ImageComposerHeader
-            draft={image}
-            onChange={setImage}
-            target={editTarget}
-            declined={declined}
-            onDecline={() => setDeclinedTarget(editTarget?.fileId ?? null)}
-            onRestore={() => setDeclinedTarget(null)}
-            onExit={forcedImage ? undefined : () => setMode("agent")}
-            disabled={busy}
-          />
-          <ReferenceStrip
-            references={image.references}
-            onChange={(references) => setImage({ references })}
-            disabled={busy}
-          />
-          <textarea
-            id={inputId}
-            ref={inputRef}
-            className="shell-cx-input"
-            rows={2}
-            value={text}
-            aria-label={t("shell.cx.aria.messageAgent")}
-            placeholder={placeholder}
-            onChange={(event) => handleInput(event.target.value, event.target.selectionStart ?? 0)}
-            onCompositionStart={onCompositionStart}
-            onCompositionEnd={onCompositionEnd}
-            onKeyDown={onInputKeyDown}
-          />
-        </>
-      ) : imageMode ? (
-        <div className="shell-ig-prompt-row">
-          <ReferenceList
-            references={image.references}
-            onChange={(references) => setImage({ references })}
-            disabled={busy && placement !== "home"}
-          />
-          <textarea
-            id={inputId}
-            ref={inputRef}
-            className="shell-cx-input"
-            rows={2}
-            value={text}
-            aria-label={placement === "home" ? t("shell.cx.aria.newTask") : t("shell.cx.aria.messageAgent")}
-            placeholder={placeholder}
-            onChange={(event) => handleInput(event.target.value, event.target.selectionStart ?? 0)}
-            onCompositionStart={onCompositionStart}
-            onCompositionEnd={onCompositionEnd}
-            onKeyDown={onInputKeyDown}
-          />
-        </div>
-      ) : (
-        <textarea
-          id={inputId}
-          ref={inputRef}
-          className="shell-cx-input"
-          rows={2}
-          value={text}
-          aria-label={placement === "home" ? t("shell.cx.aria.newTask") : t("shell.cx.aria.messageAgent")}
-          placeholder={placeholder}
-          onChange={(event) => handleInput(event.target.value, event.target.selectionStart ?? 0)}
-          onCompositionStart={onCompositionStart}
-          onCompositionEnd={onCompositionEnd}
-          onKeyDown={onInputKeyDown}
-        />
-      )}
-
-      {imageMode ? <ImageSummary draft={image} onChange={setImage} disabled={busy && placement !== "home"} /> : null}
-
-      <div className="shell-cx-toolbar">
-        <div className="shell-cx-left">
-          {imageMode ? (
-            <ImageTools
-              draft={image}
-              onChange={setImage}
-              onExit={forcedImage ? undefined : () => setMode("agent")}
-              onMention={startMention}
-              onQuoteText={quoteSelection}
-              disabled={busy && placement !== "home"}
-              compact={compactImage}
-            />
-          ) : <>
-          {showModeControls ? (
-            <button
-              type="button"
-              className="shell-cx-button shell-cx-mode"
-              aria-pressed={false}
-              aria-label={t("shell.cx.generateImage")}
-              title={t("shell.cx.generateImage")}
-              onClick={() => setMode("image")}
-            >
-              <Wand2 size={16} strokeWidth={1.7} aria-hidden="true" />
-              <span>{t("shell.mode.agent")}</span>
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className="shell-cx-button"
-            aria-label={t("shell.cx.addFiles")}
-            title={t("shell.cx.addFiles")}
-            onClick={() => {
-              void pickNativeAttachments().then((picked) => {
-                if (!picked) fileInputRef.current?.click();
-              });
-            }}
-          >
-            <Plus size={18} strokeWidth={1.7} aria-hidden="true" />
-          </button>
-
-          {/* Decision 2: task scope is a property of this message, shown inline. */}
-          {showScopeInToolbar ? <Menu label={t("shell.cx.scope.menu")} items={scopeItems} align="start" width={260}>
-            {(triggerProps) => (
-              <button
-                {...triggerProps}
-                type="button"
-                className="shell-cx-button shell-cx-scope"
-                title={t("shell.cx.scope.title", { name: scope?.name ?? t("shell.cx.scope.none") })}
-              >
-                <FolderIcon size={14} strokeWidth={1.7} aria-hidden="true" />
-                <span className="shell-cx-scope-name">{scope?.name ?? t("shell.task.noFolder")}</span>
-                <ChevronDown size={12} strokeWidth={1.8} aria-hidden="true" />
-              </button>
-            )}
-          </Menu> : null}
-
-          {/*
-            And what it will produce. Same argument as the scope chip: the
-            answer travels with the message, so the control does too.
-          */}
-          {mode === "agent" && showModeControls ? <Menu label={t("shell.cx.output.menu")} items={outputItems} align="start" width={280}>
-            {(triggerProps) => (
-              <button
-                {...triggerProps}
-                type="button"
-                className="shell-cx-button shell-cx-output"
-                data-stated={String(output !== "auto")}
-                title={outputFace.title}
-              >
-                {outputFace.icon}
-                <span className="shell-cx-output-name">{outputFace.name}</span>
-                <ChevronDown size={12} strokeWidth={1.8} aria-hidden="true" />
-              </button>
-            )}
-          </Menu> : null}
-          </>}
-        </div>
-
-        <div className="shell-cx-right">
-          {showPermission && !imageMode ? <Menu
-            label={t("shell.cx.permission.menu")}
-            align="end"
-            width={280}
-            items={[
-              ...PERMISSIONS.map((entry) => ({
-                id: entry.value,
-                label: t(entry.label),
-                description: t(entry.description),
-                checked: entry.value === settings.value.permission,
-                /*
-                 * Clickable, not disabled. A greyed row says "not for you";
-                 * these two are for everyone the day the runtime grows a gate,
-                 * and until then the honest answer is a sentence rather than a
-                 * dead row with no explanation attached to it.
-                 */
-                onSelect: () => {
-                  if (!entry.available) {
-                    notBuiltYet(
-                      `composer.permission.${entry.value}`,
-                      t("shell.cx.permission.notBuilt", { mode: t(entry.label) }),
-                    );
-                    return;
-                  }
-                  void settings.patch({ permission: entry.value });
-                },
-              })),
-              {
-                id: "enter",
-                label: settings.value.enterToSend ? t("shell.cx.enterOn") : t("shell.cx.enterOff"),
-                description: t("shell.cx.enterDescription"),
-                onSelect: () => void settings.patch({ enterToSend: !settings.value.enterToSend }),
-              },
-            ]}
-          >
-            {(triggerProps) => (
-              <button
-                {...triggerProps}
-                type="button"
-                className="shell-cx-button shell-cx-permission"
-                title={t("shell.cx.permission.title", { name: t(permission.label) })}
-              >
-                <ShieldCheck size={14} strokeWidth={1.7} aria-hidden="true" />
-                <span className="shell-cx-permission-name">{t(permission.label)}</span>
-              </button>
-            )}
-          </Menu> : null}
-
-          {/* The text model has no say in a picture; the image strip names its own. */}
-          {imageMode ? null : (
-            <>
-              <ModelMenu
-                models={settings.models}
-                selectedId={settings.value.selectedModelId}
-                onSelect={(id) => void settings.patch({ selectedModelId: id })}
-                onModelsChanged={settings.reloadModels}
-              />
-
-              <button
-                type="button"
-                className={`shell-cx-button shell-cx-mic${listening ? " is-listening" : ""}`}
-                aria-label={listening ? t("shell.cx.dictateStop") : t("shell.cx.dictate")}
-                aria-pressed={listening}
-                title={listening ? t("shell.cx.dictateListening") : t("shell.cx.dictate")}
-                onClick={dictate}
-              >
-                <Mic size={16} strokeWidth={1.7} aria-hidden="true" />
-              </button>
-            </>
-          )}
-
-          {/*
-            Enabled when there is something to send, or something to stop — and
-            that is `stopping`, not `busy`. Keyed to `busy` it stayed clickable
-            on Home with an empty box, where it now neither sends nor stops.
-          */}
-          <button
-            type="button"
-            className="shell-cx-send"
-            disabled={!canSend && !stopping}
-            aria-label={stopping ? t("shell.cx.stop") : t("shell.cx.send")}
-            title={stopping ? t("shell.cx.stop") : t("shell.cx.send")}
-            onClick={() => void submit()}
-          >
-            {stopping ? (
-              <Square size={13} fill="currentColor" strokeWidth={0} aria-hidden="true" />
-            ) : (
-              <ArrowUp size={20} strokeWidth={1.7} aria-hidden="true" />
-            )}
-          </button>
-        </div>
-      </div>
-
-      {dragging ? <div className="shell-cx-drop">{t("shell.cx.drop")}</div> : null}
-
-      <MentionMenu
-        open={mentionQuery !== null}
-        query={mentionQuery ?? ""}
-        folders={folders}
-        files={files}
-        inputId={inputId}
-        onPick={pickMention}
-        onClose={() => setMentionQuery(null)}
-      />
-
+  const hiddenInputs = (
+    <>
       <input
         ref={fileInputRef}
         type="file"
@@ -1303,9 +896,304 @@ export function Composer({ placement, showScopeInToolbar = true, showModeControl
           event.target.value = "";
         }}
       />
+    </>
+  );
 
-      {/* Portals to the body, so where it sits in this tree does not matter. */}
-      {folderDialogs.element}
+  const sendButton = (
+    <button
+      type="button"
+      className={imageMode ? "shell-cx-send" : "dx-send"}
+      data-act={stopping ? "task-stop" : "send"}
+      disabled={!canSend && !stopping}
+      aria-label={stopping ? t("shell.cx.stop") : t("shell.cx.send")}
+      title={stopping ? t("shell.cx.stop") : t("shell.cx.send")}
+      onClick={() => void submit()}
+    >
+      {imageMode ? (
+        stopping ? (
+          <Square size={13} fill="currentColor" strokeWidth={0} aria-hidden="true" />
+        ) : (
+          <ArrowUp size={20} strokeWidth={1.7} aria-hidden="true" />
+        )
+      ) : (
+        <Icon name={stopping ? "Square" : "ArrowUp"} />
+      )}
+    </button>
+  );
+
+  if (imageMode) {
+    return (
+      <div
+        className={`shell-cx shell-cx--${placement}${dragging ? " is-dragging" : ""} is-image`}
+        {...dropZone}
+      >
+        {compactImage ? (
+          <>
+            <ImageComposerHeader
+              draft={image}
+              onChange={setImage}
+              target={editTarget}
+              declined={declined}
+              onDecline={() => setDeclinedTarget(editTarget?.fileId ?? null)}
+              onRestore={() => setDeclinedTarget(null)}
+              onExit={forcedImage ? undefined : () => setMode("agent")}
+              disabled={busy}
+            />
+            <ReferenceStrip
+              references={image.references}
+              onChange={(references) => setImage({ references })}
+              disabled={busy}
+            />
+            <textarea
+              id={inputId}
+              ref={inputRef}
+              className="shell-cx-input"
+              rows={2}
+              value={text}
+              aria-label={t("shell.cx.aria.messageAgent")}
+              placeholder={placeholder}
+              onChange={(event) => handleInput(event.target.value, event.target.selectionStart ?? 0)}
+              onCompositionStart={onCompositionStart}
+              onCompositionEnd={onCompositionEnd}
+              onKeyDown={onInputKeyDown}
+            />
+          </>
+        ) : (
+          <div className="shell-ig-prompt-row">
+            <ReferenceList
+              references={image.references}
+              onChange={(references) => setImage({ references })}
+              disabled={busy && placement !== "home"}
+            />
+            <textarea
+              id={inputId}
+              ref={inputRef}
+              className="shell-cx-input"
+              rows={2}
+              value={text}
+              aria-label={placement === "home" ? t("shell.cx.aria.newTask") : t("shell.cx.aria.messageAgent")}
+              placeholder={placeholder}
+              onChange={(event) => handleInput(event.target.value, event.target.selectionStart ?? 0)}
+              onCompositionStart={onCompositionStart}
+              onCompositionEnd={onCompositionEnd}
+              onKeyDown={onInputKeyDown}
+            />
+          </div>
+        )}
+
+        <ImageSummary draft={image} onChange={setImage} disabled={busy && placement !== "home"} />
+
+        <div className="shell-cx-toolbar">
+          <div className="shell-cx-left">
+            <ImageTools
+              draft={image}
+              onChange={setImage}
+              onExit={forcedImage ? undefined : () => setMode("agent")}
+              onMention={startMention}
+              onQuoteText={quoteSelection}
+              disabled={busy && placement !== "home"}
+              compact={compactImage}
+            />
+          </div>
+          <div className="shell-cx-right">{sendButton}</div>
+        </div>
+
+        {dragging ? <div className="shell-cx-drop">{t("shell.cx.drop")}</div> : null}
+
+        <MentionMenu
+          open={mentionQuery !== null}
+          query={mentionQuery ?? ""}
+          folders={folders}
+          files={files}
+          inputId={inputId}
+          onPick={pickMention}
+          onClose={() => setMentionQuery(null)}
+        />
+        {hiddenInputs}
+      </div>
+    );
+  }
+
+  const kind = placement === "home" ? "home" : placement === "floating" ? "dex" : "chat";
+
+  /*
+   * What "this" refers to: the passage selected in the document, with its
+   * source and its actual words — never a bare "Selected content" (§17). In a
+   * conversation it sits inside the composer, above the text; over a Local
+   * document the Dex panel shows it above the composer, so it is drawn outside
+   * the box there.
+   */
+  const quote = reference ? (
+    <div
+      className={kind === "dex" ? "dx-dex-reference" : "dx-chat-reference"}
+      role="group"
+      aria-label={t("dx.composer.referenceAria")}
+    >
+      <header>
+        {kind === "chat" && activeFile ? <FileIcon ext={extensionOf(activeFile)} size={16} /> : null}
+        <span className="dx-ellipsis" title={reference.label}>
+          {reference.label}
+        </span>
+        <button
+          type="button"
+          className="dx-ib"
+          aria-label={t("dx.composer.removeReference")}
+          title={t("dx.composer.removeReference")}
+          data-act="remove-selection-reference"
+          onClick={() => {
+            clearSelection();
+            inputRef.current?.focus({ preventScroll: true });
+          }}
+        >
+          <Icon name="X" />
+        </button>
+      </header>
+      {reference.text ? <p>{reference.text}</p> : null}
     </div>
+  ) : null;
+
+  return (
+    <>
+      {kind === "dex" ? quote : null}
+      <div className="dx-composer" data-composer={kind} data-dragging={dragging ? "true" : undefined} {...dropZone}>
+        {/* The panel is a picture's conversation; the message is about the document. */}
+        {placement !== "home" && imageAside ? <ImageAsideNotice aside={imageAside} /> : null}
+
+        {kind === "dex" ? null : quote}
+
+        {mentions.map((mention) => {
+          const file = mention.kind === "file" ? files.find((entry) => entry.id === mention.id) : undefined;
+          return (
+            <span key={`${mention.kind}:${mention.id}`} className="dx-reference-chip">
+              <FileIcon ext={file ? extensionOf(file) : mention.kind === "folder" ? "folder" : "file"} size={16} />
+              <span className="dx-reference-label dx-ellipsis" title={mention.label}>
+                {mention.label}
+              </span>
+              <button
+                type="button"
+                className="dx-ib"
+                aria-label={t("shell.cx.chip.remove", { name: mention.label })}
+                title={t("shell.cx.chip.remove", { name: mention.label })}
+                data-act="remove-ref"
+                onClick={() => removeMention(mention)}
+              >
+                <Icon name="X" />
+              </button>
+            </span>
+          );
+        })}
+
+        {attachments.map((attachment) => (
+          <span key={attachment.id} className="dx-reference-chip">
+            <FileIcon ext={attachment.fileCount ? "folder" : attachment.name} size={16} />
+            <span className="dx-reference-label dx-ellipsis" title={attachment.name}>
+              {attachment.name}
+              {attachment.fileCount ? t("shell.cx.chip.fileCount", { count: attachment.fileCount }) : ""}
+            </span>
+            <button
+              type="button"
+              className="dx-ib"
+              aria-label={t("shell.cx.chip.remove", { name: attachment.name })}
+              title={t("shell.cx.chip.remove", { name: attachment.name })}
+              data-act="remove-ref"
+              onClick={() => setAttachments((current) => current.filter((entry) => entry !== attachment))}
+            >
+              <Icon name="X" />
+            </button>
+          </span>
+        ))}
+
+        {output !== "auto" ? (
+          <span className="dx-reference-chip" data-output={output}>
+            <FileIcon ext={DOCUMENT_TYPES[output]} size={16} />
+            <span className="dx-reference-label dx-ellipsis">
+              {t("dx.composer.createsNew", {
+                type: t(OUTPUTS.find((entry) => entry.value === output)?.label ?? "shell.cx.output.newFile"),
+              })}
+            </span>
+            <button
+              type="button"
+              className="dx-ib"
+              aria-label={t("dx.composer.clearOutput")}
+              title={t("dx.composer.clearOutput")}
+              onClick={() => setOutput("auto")}
+            >
+              <Icon name="X" />
+            </button>
+          </span>
+        ) : null}
+
+        <textarea
+          id={inputId}
+          ref={inputRef}
+          rows={2}
+          value={text}
+          data-draft={kind}
+          aria-label={t(
+            kind === "home"
+              ? "dx.composer.ariaHome"
+              : kind === "dex"
+                ? "dx.composer.ariaDex"
+                : "dx.composer.ariaChat",
+          )}
+          placeholder={t("dx.composer.placeholder")}
+          onChange={(event) => handleInput(event.target.value, event.target.selectionStart ?? 0)}
+          onCompositionStart={onCompositionStart}
+          onCompositionEnd={onCompositionEnd}
+          onKeyDown={onInputKeyDown}
+        />
+
+        <div className="dx-composer-tools">
+          <div className="dx-composer-tools-start">
+            <button
+              type="button"
+              className="dx-context-button"
+              data-act="context"
+              aria-label={t("dx.composer.context")}
+              title={t("dx.composer.context")}
+              onClick={chooseContext}
+            >
+              <Icon name="Plus" />
+            </button>
+          </div>
+          <div className="dx-composer-tools-end">
+            <button
+              type="button"
+              className="dx-model-button"
+              data-act="model-picker"
+              aria-label={t("dx.composer.model")}
+              title={t("dx.composer.chooseModel")}
+              onClick={(event) => chooseModel(event.currentTarget)}
+            >
+              <span className="dx-ellipsis">{t("dx.composer.model")}</span>
+              <Icon name="ChevronDown" />
+            </button>
+            <button
+              type="button"
+              className="dx-ib"
+              data-act="voice"
+              aria-label={listening ? t("shell.cx.dictateStop") : t("dx.composer.voice")}
+              aria-pressed={listening}
+              title={listening ? t("shell.cx.dictateListening") : t("dx.composer.voice")}
+              onClick={dictate}
+            >
+              <Icon name="Mic" />
+            </button>
+            {sendButton}
+          </div>
+        </div>
+
+        <MentionMenu
+          open={mentionQuery !== null}
+          query={mentionQuery ?? ""}
+          folders={folders}
+          files={files}
+          inputId={inputId}
+          onPick={pickMention}
+          onClose={() => setMentionQuery(null)}
+        />
+        {hiddenInputs}
+      </div>
+    </>
   );
 }

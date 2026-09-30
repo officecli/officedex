@@ -1,7 +1,7 @@
 import { ImageIcon } from "lucide-react";
 
 import { useT } from "../../../renderer/i18n";
-import { FileTypeIcon } from "../../chrome/FileTypeIcon";
+import { FileTypeGlyph } from "../../kit/Icon";
 import { useLibraryActions } from "../../nav/useLibraryActions";
 import { useImageBlobUrl } from "../useImageBlobUrl";
 import type { ImageBesideDocument } from "../useImageEditTarget";
@@ -23,7 +23,7 @@ export function ImageAsideNotice({ aside }: { aside: ImageBesideDocument }) {
   return (
     <div className="shell-ig-aside" role="note">
       <span className="shell-ig-aside-text">
-        <FileTypeIcon type={aside.documentType} size={13} />
+        <FileTypeGlyph type={aside.documentType} size={13} />
         <span>{t("shell.imageTool.asideNotice", { name: aside.documentName })}</span>
       </span>
       <button

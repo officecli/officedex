@@ -1,355 +1,305 @@
 /**
- * Wave 4 gate 4: every shell-combination rule declares which shells it covers.
+ * Wave 4 gate 4, for OD-UI-1.2: every rule that depends on the workspace's
+ * state names a state the workspace can be in.
  *
- * The shell writes five attributes on its root (`App.tsx`), and the CSS reacts
- * to four of them. That is a 10-cell state space (`SHELL_COMBINATIONS`) styled
- * by a handful of selectors, and S5's table 8 is what happens when nobody keeps
- * a map of it:
+ * The design lays its three columns out from state classes on `#dx-workspace`
+ * — `.dx-compact`, `.dx-with-chat`, `.dx-chat-right`, `.dx-workspace-closed`
+ * and six more — and its stylesheets combine them freely:
+ * `#dx-workspace.dx-compact.dx-chat-right:not(.dx-workspace-closed)`. Ten
+ * classes are a thousand combinations on paper and a few dozen in practice,
+ * and nothing in a selector says which kind it is. A rule written for a
+ * combination that cannot occur is dead; a rule that was meant for one state
+ * and matches three is a layout bug in the two nobody looked at.
  *
- *   - `#shell[data-mode="agent"][data-home="false"][data-presence="docked"]
- *     .shell-tabs` turns out to cover exactly two of the ten shells, and in
- *     doing so drops the `max(…, 132px)` floor the base rule has. It does not
- *     break today only because `TASK_MIN_WIDTH` is 320 at run time — a
- *     JavaScript constant holding up a CSS guarantee.
- *   - Editor mode has no rule of its own at all; four shells are styled
- *     entirely by the agent-shaped defaults.
- *   - `data-presence` has one rule, `data-loaded` none.
+ * So the gate asks two questions of every such selector, and answers both from
+ * the product rather than from a list somebody typed:
  *
- * None of that is visible from reading any single rule. The gate is therefore
- * not "is this rule correct" — CSS cannot be asked that — but "does the author
- * know what it hits": a combination-scoped selector must appear in REGISTRY
- * with the exact set of shells it matches, and the set is recomputed from
- * `SHELL_COMBINATIONS` on every run. Add a rule and the gate is red until you
- * say which shells you meant; narrow an existing one and it is red until the
- * registry agrees.
- *
- * The expected sets are *derived*, never typed twice: `SHELL_COMBINATIONS` is
- * imported from `../dev/fixture` (the same table the audit specs and the
- * fixture server use) and the presence axis comes from `effectivePlacement`,
- * so the "which shells exist" question has one answer in the repository.
+ *  - **Can it match at all?** The reachable states are found by walking the
+ *    reducer from a cold start with every navigation it has, and turned into
+ *    classes by `workspaceClasses` — the function `App.tsx` calls. A selector
+ *    no reachable state satisfies is reported.
+ *  - **Which of the ten reviewed shells does it cover?** `SHELL_COMBINATIONS`
+ *    is the table the audit specs and the fixture walk. REGISTRY pins, for each
+ *    state selector, the ones it matches; the set is recomputed on every run,
+ *    so narrowing a selector — or the generator rewriting one — is red until
+ *    the registry agrees. An empty set is allowed and means "reachable, and
+ *    outside the ten": the audit has never looked at it.
  *
  * **Known blind spots.**
  *
  * 1. It reads selector text, not the cascade. Two registered rules can still
- *    fight — `chrome.css` has a pair that both set `.shell-brand`'s width,
- *    one as `36px` and one as `var(--shell-row-h)`, so changing the token moves
- *    only one of them (S5 table 8, conclusion 4). Both are registered, both
- *    match the same shells, and this gate is happy. Catching that needs a
- *    cascade model; what stops it in practice is that the two rules are now
- *    adjacent entries in one list.
- * 2. It only sees rules scoped on the *root*. A combination difference
- *    expressed some other way — a `data-` attribute on an inner element, a
- *    class toggled in TSX, a container query — is outside it.
- * 3. It cannot tell a rule that matches nothing *useful* from one that matches
- *    nothing at all; it only fails the second case.
- * 4. The registry is keyed by selector text, not by `file:line`. That is
- *    deliberate: line numbers move every time somebody edits the file above,
- *    and a gate that goes red for unrelated edits gets deleted. The cost is
- *    that moving a rule verbatim between files is invisible here.
+ *    fight over one property.
+ * 2. It sees state expressed on `#dx-workspace` and `#shell`. A difference
+ *    expressed some other way — an attribute on an inner element, a container
+ *    query, a media query — is outside it. The narrow-window layout
+ *    (`@media (max-width: 900px)`) is the large one.
+ * 3. Reachable is not sensible. The walk finds every state the reducer can
+ *    produce; it does not know that a floating conversation over Assets with
+ *    the sidebar hidden is a state nobody designed for.
+ * 4. The registry is keyed by selector text, not by `file:line`: line numbers
+ *    move every time somebody edits the file above, and the generated
+ *    stylesheets are rewritten whole.
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { SHELL_COMBINATIONS, type ShellCombination } from "../dev/fixture";
-import { effectivePlacement, initialShellState } from "../state/shellReducer";
-
-/** Every stylesheet the shell entry loads. */
-const STYLESHEETS = [
-  "src/shell/tokens.css",
-  "src/shell/app.css",
-  "src/shell/chrome/chrome.css",
-  "src/shell/chrome/menu.css",
-  "src/shell/nav/nav.css",
-  "src/shell/agent/agent.css",
-  "src/shell/composer/composer.css",
-  "src/shell/home/home.css",
-  "src/shell/home/highlights.css",
-  "src/shell/home/taskList.css",
-];
-
-/**
- * What each combination puts on the root element.
- *
- * Mirrors `App.tsx`'s five `data-*` props. `data-presence` goes through
- * `effectivePlacement` rather than through the fixture's `placement` field,
- * because that is what the DOM actually gets: docking is Agent-mode-only, so
- * the two Editor Home shells report `floating` even though nothing is floating
- * there — and a selector written against `[data-presence="floating"]` really
- * does match them.
- *
- * `data-loaded` is the one attribute that is not part of a combination's
- * identity: all ten shells pass through `"false"` on the way to `"true"`, so it
- * is an axis *across* the table rather than a coordinate in it. It used to be
- * pinned to `"true"` here, on the reasoning that `"true"` is what the user
- * sees — which was accurate while no rule read the attribute at all (the
- * header above says so), and became a trap the moment one did: the first
- * loading rule written would have matched zero combinations and been reported
- * as dead CSS. Both phases are evaluated below instead.
- */
-const LOAD_PHASES = ["true", "false"] as const;
-
-/**
- * The second axis across the table, for the same reason and with the same
- * shape.
- *
- * `data-mode-switching` is written by `state/useModeTransition.ts` for one
- * `--shell-duration` after the mode changes, so every combination that can be
- * arrived at by switching modes passes through `"true"` and then rests at
- * `"false"`. Like `data-loaded` it is a phase rather than a coordinate: pinning
- * it to `"false"` here would report the whole mode-switch section of `app.css`
- * as dead CSS, and pinning it to `"true"` would claim the shell is permanently
- * mid-animation.
- */
-const SWITCH_PHASES = ["false", "true"] as const;
-
-function attributesOf(
-  name: ShellCombination,
-  loaded: string,
-  switching: string,
-): Record<string, string> {
-  const combination = SHELL_COMBINATIONS[name] as {
-    mode: "agent" | "editor";
-    home: boolean;
-    navCollapsed: boolean;
-    placement?: "docked" | "floating";
-  };
-  const state = {
-    ...initialShellState,
-    mode: combination.mode,
-    home: combination.home,
-    navCollapsed: combination.navCollapsed,
-    presence: {
-      ...initialShellState.presence,
-      placement: combination.placement ?? initialShellState.presence.placement,
-    },
-  };
-  return {
-    "data-mode": state.mode,
-    "data-home": String(state.home),
-    "data-nav-collapsed": String(state.navCollapsed),
-    "data-presence": effectivePlacement(state),
-    "data-loaded": loaded,
-    "data-mode-switching": switching,
-  };
-}
+import {
+  hydrateShellState,
+  initialShellState,
+  shellReducer,
+  type ChatRef,
+  type ShellAction,
+  type ShellState,
+} from "../state/shellReducer";
+import { WORKSPACE_STATE_CLASSES, workspaceClasses } from "../state/workspaceClasses";
+import { cssFiles } from "./cssModel";
 
 const COMBINATION_IDS = Object.keys(SHELL_COMBINATIONS) as ShellCombination[];
 
+/* --------------------------------------------------------- reachable states */
+
+const CHAT: ChatRef = { folderId: "project", conversationId: "chat" };
+
+/** Every way the user can move the workspace, with one file and one conversation. */
+const MOVES: ShellAction[] = [
+  { type: "go", page: "home" },
+  { type: "go", page: "local" },
+  { type: "go", page: "projects" },
+  { type: "go", page: "settings" },
+  { type: "go", page: "image" },
+  { type: "open-chat", chat: CHAT },
+  { type: "open-file", fileId: "file" },
+  { type: "open-local-file", fileId: "file" },
+  { type: "activate-file", fileId: "file" },
+  { type: "close-file", fileId: "file" },
+  { type: "toggle-workspace" },
+  { type: "toggle-chat-display" },
+  { type: "swap-chat" },
+  { type: "toggle-nav" },
+  { type: "enter-stage" },
+];
+
+/** The classes of every state the reducer can reach, as sorted, joined sets. */
+function reachableClassSets(): Set<string> {
+  const seen = new Set<string>();
+  const queue: ShellState[] = [initialShellState];
+  const out = new Set<string>();
+  while (queue.length > 0) {
+    const state = queue.pop()!;
+    const id = JSON.stringify(state);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    // The two facts that are not shell state vary freely; `workspaceClasses`
+    // is what decides when each of them can show.
+    for (const peek of [false, true]) {
+      for (const hasWorkspaceToggle of [false, true]) {
+        out.add(workspaceClasses(state, { peek, hasWorkspaceToggle }).join(" "));
+      }
+    }
+    for (const move of MOVES) queue.push(shellReducer(state, move));
+  }
+  return out;
+}
+
+/** What a reviewed shell puts on `#dx-workspace`, at rest. */
+function classesOf(name: ShellCombination): string[] {
+  const state = hydrateShellState({ ...SHELL_COMBINATIONS[name], openFileIds: ["file"], activeFileId: "file" });
+  // At rest: nothing is being hovered, and a conversation with a document or
+  // its Assets beside it has its switch.
+  return workspaceClasses(state, { peek: false, hasWorkspaceToggle: state.chat !== null });
+}
+
+/* ---------------------------------------------------------------- selectors */
+
 interface ScopedRule {
+  /** `#dx-workspace.dx-compact:not(.dx-chat-right)` — the part that names a state. */
+  root: string;
   selector: string;
-  at: string;
+  file: string;
 }
 
-function withoutComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, " "));
-}
+const ROOT = /^#dx-workspace((?:\.[\w-]+|:not\(\.[\w-]+\))+)/;
 
-/**
- * Every root-scoped selector in the shell's stylesheets.
- *
- * Splits selector lists on commas and keeps the individual selectors, because
- * a list is not one rule for this purpose: `.shell[…] .shell-brand-name,
- * .shell[…] .shell-brand-chevron` styles two different things and each of them
- * is a separate thing to be accountable for.
- */
-export function scopedRules(sources: Array<{ path: string; text: string }>): ScopedRule[] {
+export function scopedRules(files: string[]): ScopedRule[] {
   const out: ScopedRule[] = [];
-  for (const { path, text } of sources) {
-    const css = withoutComments(text);
+  for (const file of files) {
+    const css = readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, " "));
     for (const match of css.matchAll(/(^|[};])([^{};]*?)\{/g)) {
-      const list = match[2];
-      if (!/(#shell|\.shell)\[data-/.test(list)) continue;
-      const line = css.slice(0, match.index! + match[1].length).split("\n").length;
-      for (const selector of list.split(",")) {
-        const trimmed = selector.trim().replace(/\s+/g, " ");
-        if (!/^(#shell|\.shell)\[data-/.test(trimmed)) continue;
-        out.push({ selector: trimmed, at: `${path}:${line}` });
+      // A list is not one rule for this purpose: each selector in it styles
+      // something, and each is a separate thing to be accountable for.
+      for (const part of match[2].split(/,(?![^(]*\))/)) {
+        const selector = part.trim().replace(/\s+/g, " ");
+        const root = ROOT.exec(selector)?.[0];
+        if (root) out.push({ root, selector, file });
       }
     }
   }
   return out;
 }
 
-/** The shells a root-scoped selector applies to, in either load phase. */
-export function combinationsFor(selector: string): ShellCombination[] {
-  const root = selector.split(" ")[0];
-  const predicates = [...root.matchAll(/\[([a-z-]+)(?:=["']?([^"'\]]*)["']?)?\]/g)].map((match) => ({
-    attribute: match[1],
-    value: match[2],
-  }));
-  return COMBINATION_IDS.filter((name) =>
-    LOAD_PHASES.some((loaded) =>
-      SWITCH_PHASES.some((switching) => {
-        const attributes = attributesOf(name, loaded, switching);
-        return predicates.every(({ attribute, value }) =>
-          value === undefined ? attribute in attributes : attributes[attribute] === value,
-        );
-      }),
-    ),
-  );
+interface Requirement {
+  present: string[];
+  absent: string[];
 }
 
+export function requirementOf(root: string): Requirement {
+  const states = ROOT.exec(root)?.[1] ?? "";
+  return {
+    absent: [...states.matchAll(/:not\(\.([\w-]+)\)/g)].map((match) => match[1]),
+    present: [...states.replace(/:not\([^)]*\)/g, "").matchAll(/\.([\w-]+)/g)].map((match) => match[1]),
+  };
+}
+
+const satisfies = (classes: readonly string[], { present, absent }: Requirement) =>
+  present.every((name) => classes.includes(name)) && absent.every((name) => !classes.includes(name));
+
+export const combinationsFor = (root: string): ShellCombination[] =>
+  COMBINATION_IDS.filter((name) => satisfies(classesOf(name), requirementOf(root)));
+
 /**
- * The declaration. A selector is in here or the gate is red.
+ * The declaration: which of the ten reviewed shells each state selector covers.
  *
- * Read this as the answer to "which of the ten shells does the product look
- * different in, and why". Fifteen of the eighteen entries are the collapsed
- * rail, which is the one axis anybody has actually styled.
+ *   C1  Home                      C6  document, conversation on the right, sidebar hidden
+ *   C2  Home, sidebar hidden      C7  document, conversation floating, sidebar hidden
+ *   C3  Local                     C8  conversation alone (content region closed)
+ *   C4  conversation + Assets     C9  Local document, sidebar hidden
+ *   C5  conversation + document   C10 Settings
  */
 const REGISTRY: Record<string, readonly ShellCombination[]> = {
-  // The rail: five shells, every mode, Home and workspace alike.
-  '.shell[data-nav-collapsed="true"] .shell-sidebar': ["C1", "C3", "C5", "C7", "C9"],
-  '#shell[data-nav-collapsed="true"] .shell-sidebar-brand': ["C1", "C3", "C5", "C7", "C9"],
-  '#shell[data-nav-collapsed="true"] .shell-sidebar-brand .shell-brand': ["C1", "C3", "C5", "C7", "C9"],
-  // These two set the same three properties on `.shell-brand` as the entry
-  // above, one through `36px` and one through `var(--shell-row-h)`. Kept
-  // adjacent on purpose: they are a known duplication (S5 table 8, conclusion
-  // 4), and the next person to change the row height has to see both.
-  '.shell[data-nav-collapsed="true"] .shell-brand': ["C1", "C3", "C5", "C7", "C9"],
-  '.shell[data-nav-collapsed="true"] .shell-brand-name': ["C1", "C3", "C5", "C7", "C9"],
-  '.shell[data-nav-collapsed="true"] .shell-brand-chevron': ["C1", "C3", "C5", "C7", "C9"],
-  '.shell[data-nav-collapsed="true"] .shell-sidebar-item': ["C1", "C3", "C5", "C7", "C9"],
-  '.shell[data-nav-collapsed="true"] .shell-sidebar-footer': ["C1", "C3", "C5", "C7", "C9"],
-  '.shell[data-nav-collapsed="true"] .shell-profile': ["C1", "C3", "C5", "C7", "C9"],
-  '.shell[data-nav-collapsed="true"] .shell-tree-files': ["C1", "C3", "C5", "C7", "C9"],
-  '.shell[data-nav-collapsed="true"] .shell-tree-folder-toggle > span': ["C1", "C3", "C5", "C7", "C9"],
-  '.shell[data-nav-collapsed="true"] .shell-tree-folder-toggle > small': ["C1", "C3", "C5", "C7", "C9"],
-  '.shell[data-nav-collapsed="true"] .shell-tree-chevron': ["C1", "C3", "C5", "C7", "C9"],
-  '.shell[data-nav-collapsed="true"] .shell-tree-folder-add': ["C1", "C3", "C5", "C7", "C9"],
-  '.shell[data-nav-collapsed="true"] .shell-tree-section-head': ["C1", "C3", "C5", "C7", "C9"],
-  // The rail keeps the "New folder" button and drops only its label. Splitting
-  // the entry above was S1-008's fix: it hid the head outright, and with it the
-  // shell's only folder-creation control, in every collapsed shell.
-  '.shell[data-nav-collapsed="true"] .shell-tree-section-head > span': ["C1", "C3", "C5", "C7", "C9"],
-  '.shell[data-nav-collapsed="true"] .shell-tree-folder-toggle': ["C1", "C3", "C5", "C7", "C9"],
+  // ---- the sidebar, hidden -------------------------------------------------
+  "#dx-workspace.dx-compact": ["C2", "C6", "C7", "C9"],
+  "#dx-workspace:not(.dx-compact)": ["C1", "C3", "C4", "C5", "C8", "C10"],
+  // Shown while the pointer is at the window's edge. A hover, so no shell at rest.
+  "#dx-workspace.dx-compact.dx-sidebar-peek": [],
+  "#dx-workspace.dx-compact:not(.dx-with-chat)": ["C2", "C9"],
+  "#dx-workspace.dx-compact:not(.dx-chat-right)": ["C2", "C7", "C9"],
+  "#dx-workspace.dx-compact:not(.dx-chat-right):not(.dx-chat-floating)": ["C2", "C9"],
+  "#dx-workspace.dx-compact.dx-with-chat:not(.dx-workspace-closed)": ["C6", "C7"],
+  "#dx-workspace.dx-compact.dx-chat-floating": ["C7"],
+  "#dx-workspace.dx-chat-floating.dx-compact": ["C7"],
+  // Which side is a preference and is kept on Home, so this one matches a
+  // hidden sidebar with no conversation open as well.
+  "#dx-workspace.dx-compact.dx-chat-right": ["C6"],
+  "#dx-workspace.dx-compact.dx-chat-right.dx-with-chat": ["C6"],
+  "#dx-workspace.dx-compact.dx-chat-right:not(.dx-workspace-closed)": ["C6"],
+  // Reachable — hide the sidebar, swap sides, close the content region — and
+  // outside the ten. The band of global controls has to move for it.
+  "#dx-workspace.dx-compact.dx-chat-right.dx-workspace-closed": [],
 
-  /*
-   * The loading phase: all ten shells, because every shell has one.
-   *
-   * Two things happen while the workspace is being read, and they are two rules
-   * because they are two different claims. The first withdraws the empty-state
-   * sentence — "No files yet" is a statement about a library nobody has opened
-   * yet. The second puts a bar where the list will be. Before them,
-   * `data-loaded` was written by `App.tsx` and read by nothing, so a directory
-   * scan and an empty workspace were the same screen (S6-013 / S5-010).
-   */
-  '.shell[data-loaded="false"] .shell-list-empty': [
-    "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10",
-  ],
-  '.shell[data-loaded="false"] .shell-tree-empty': [
-    "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10",
-  ],
-  '.shell[data-loaded="false"] .shell-sidebar-body::before': [
-    "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10",
-  ],
-  '.shell[data-loaded="false"] .shell-home-list::before': [
-    "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10",
-  ],
+  // ---- a conversation beside the content ----------------------------------
+  "#dx-workspace.dx-with-chat": ["C4", "C5", "C6", "C7", "C8"],
+  "#dx-workspace:not(.dx-compact).dx-with-chat": ["C4", "C5", "C8"],
+  "#dx-workspace.dx-with-chat:not(.dx-workspace-closed)": ["C4", "C5", "C6", "C7"],
+  "#dx-workspace.dx-with-chat.dx-workspace-closed": ["C8"],
+  "#dx-workspace.dx-workspace-closed": ["C8"],
+  "#dx-workspace.dx-has-workspace-toggle": ["C4", "C5", "C6", "C7", "C8"],
+  "#dx-workspace.dx-workspace-closed.dx-has-workspace-toggle": ["C8"],
 
-  // Home: the tab strip's actions are not drawn there.
-  '#shell[data-home="true"] .shell-tabs-actions': ["C1", "C2", "C3", "C4"],
+  // ---- on the right --------------------------------------------------------
+  "#dx-workspace.dx-chat-right": ["C6"],
+  "#dx-workspace.dx-with-chat.dx-chat-right": ["C6"],
+  "#dx-workspace.dx-with-chat.dx-chat-right:not(.dx-workspace-closed)": ["C6"],
+  "#dx-workspace.dx-chat-right.dx-has-workspace-toggle": ["C6"],
+  // The conversation alone, on the right. Reachable and outside the ten.
+  "#dx-workspace.dx-with-chat.dx-chat-right.dx-workspace-closed": [],
 
-  /*
-   * The two-shell rule, and the one worth staring at.
-   *
-   * It replaces `.shell-tabs`'s `padding-left: max(var(--shell-nav-w), 132px)`
-   * with `calc(var(--shell-nav-w) + var(--shell-task-w))` — dropping the 132px
-   * floor that keeps the macOS traffic lights clear of the first tab. It is
-   * safe only while `--shell-task-w` stays at or above `TASK_MIN_WIDTH` (320),
-   * a reducer constant. Lower that constant and C5 loses its window controls
-   * under a tab, with no CSS anywhere admitting the dependency.
-   */
-  '#shell[data-mode="agent"][data-home="false"][data-presence="docked"] .shell-tabs': ["C5", "C6"],
+  // ---- floating ------------------------------------------------------------
+  "#dx-workspace.dx-chat-floating": ["C7"],
+  "#dx-workspace.dx-chat-floating.dx-with-chat": ["C7"],
+  // Floating, having been docked on the right. Reachable and outside the ten.
+  "#dx-workspace.dx-chat-floating.dx-with-chat.dx-chat-right": [],
 
-  /*
-   * The mode switch: ten shells, because every shell can be switched into.
-   *
-   * These are the transition's consumers, and they are registered as one group
-   * because they are one mechanism — `app.css` says what each does. The first
-   * four are the expensive half (the workspace pinned to its final box, the
-   * column raised over it, the row painted chrome behind the wedge, the
-   * document's single reflow covered by a fade); the next three are the
-   * content swaps; the last two are the column's own fade, which reads
-   * `data-mode` for its direction because by the time the switching attribute
-   * goes up the mode is already the destination.
-   *
-   * The ten is what the axis means, not a claim that every shell looks
-   * different: `data-mode-switching` is a phase every combination passes
-   * through, exactly like `data-loaded`. The last two entries are the ones
-   * that carry real information — six agent shells, four editor ones.
-   */
-  '#shell[data-mode-switching="true"] .shell-workspace': [
-    "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10",
-  ],
-  '#shell[data-mode-switching="true"] .shell-agent': [
-    "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10",
-  ],
-  '#shell[data-mode-switching="true"] .shell-row--body': [
-    "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10",
-  ],
-  '#shell[data-mode-switching="true"] .shell-canvas': [
-    "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10",
-  ],
-  '#shell[data-mode-switching="true"] .shell-sidebar-body': [
-    "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10",
-  ],
-  '#shell[data-mode-switching="true"] .shell-sidebar-views': [
-    "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10",
-  ],
-  '#shell[data-mode-switching="true"] .shell-home': [
-    "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10",
-  ],
-  '#shell[data-mode-switching="true"][data-mode="agent"] .shell-agent': [
-    "C1", "C2", "C5", "C6", "C7", "C8",
-  ],
-  '#shell[data-mode-switching="true"][data-mode="editor"] .shell-agent': ["C3", "C4", "C9", "C10"],
+  // ---- pages ---------------------------------------------------------------
+  "#dx-workspace.dx-at-settings": ["C10"],
 };
 
-describe("shell combination selectors", () => {
-  const sources = STYLESHEETS.map((path) => ({ path, text: readFileSync(path, "utf8") }));
-  const rules = scopedRules(sources);
+/**
+ * State on the root that is an axis across the table rather than a coordinate
+ * in it: every shell is loading before it has loaded, either theme, with or
+ * without reduced motion, and while the divider is being dragged.
+ */
+const PHASES = [
+  '.shell[data-loaded="false"]',
+  '#shell[data-theme="dark"]',
+  "#shell[data-theme=dark]",
+  "#shell.dx-reduced",
+  "#shell.dx-resizing",
+];
 
-  it("every combination-scoped rule is registered", () => {
-    const unregistered = rules
-      .filter(({ selector }) => !(selector in REGISTRY))
-      .map(({ at, selector }) => `${at}  ${selector}`);
-    expect(
-      unregistered,
-      "a new #shell[data-*] rule must declare the combinations it covers in REGISTRY",
-    ).toEqual([]);
+describe("workspace state selectors", () => {
+  const rules = scopedRules(cssFiles("src/shell"));
+  const roots = [...new Set(rules.map((rule) => rule.root))];
+  const reachable = [...reachableClassSets()].map((set) => (set ? set.split(" ") : []));
+
+  it("name only states the workspace has", () => {
+    const known = new Set<string>(WORKSPACE_STATE_CLASSES);
+    const unknown = rules
+      .filter(({ root }) => {
+        const { present, absent } = requirementOf(root);
+        return [...present, ...absent].some((name) => !known.has(name));
+      })
+      .map(({ file, selector }) => `${file}  ${selector}`);
+    expect(unknown, "a state class `workspaceClasses` never sets matches nothing, ever").toEqual([]);
   });
 
-  it("each registration names the combinations the selector actually matches", () => {
+  it("each match a state the reducer can reach", () => {
+    const dead = roots.filter((root) => !reachable.some((classes) => satisfies(classes, requirementOf(root))));
+    expect(dead, "a rule that no reachable state satisfies is dead CSS").toEqual([]);
+  });
+
+  it("are all registered", () => {
+    const unregistered = roots.filter((root) => !(root in REGISTRY));
+    expect(unregistered, "a new #dx-workspace state selector must declare the shells it covers").toEqual([]);
+  });
+
+  it("cover the reviewed shells the registry says they do", () => {
     const wrong: string[] = [];
-    for (const { selector, at } of rules) {
-      const declared = REGISTRY[selector];
+    for (const root of roots) {
+      const declared = REGISTRY[root];
       if (!declared) continue;
-      const actual = combinationsFor(selector);
+      const actual = combinationsFor(root);
       if (actual.join(",") !== [...declared].join(",")) {
-        wrong.push(`${at}  ${selector}\n    declared ${declared.join("/")}\n    matches  ${actual.join("/")}`);
+        wrong.push(`${root}\n    declared ${declared.join("/") || "none"}\n    matches  ${actual.join("/") || "none"}`);
       }
     }
     expect(wrong).toEqual([]);
   });
 
-  it("no registered selector matches nothing", () => {
-    const dead = rules
-      .filter(({ selector }) => combinationsFor(selector).length === 0)
-      .map(({ at, selector }) => `${at}  ${selector}`);
-    expect(dead, "a rule that no shell satisfies is dead CSS").toEqual([]);
-  });
-
-  it("the registry has no entries for rules that no longer exist", () => {
-    const present = new Set(rules.map(({ selector }) => selector));
-    const stale = Object.keys(REGISTRY).filter((selector) => !present.has(selector));
+  it("leave no entry for a selector that is gone", () => {
+    const stale = Object.keys(REGISTRY).filter((root) => !roots.includes(root));
     expect(stale, "delete the entry, do not leave the registry describing CSS that is gone").toEqual([]);
   });
 
+  it("are the only state the stylesheets read off the root", () => {
+    // Anything else scoped on `#shell` is a new axis, and a new axis is a
+    // decision about all ten shells at once.
+    const other = new Set<string>();
+    for (const file of cssFiles("src/shell")) {
+      const css = readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+      for (const match of css.matchAll(/(?:^|[\s,};])((?:#shell|\.shell)(?:\[[^\]]+\]|\.[\w-]+)+)/g)) {
+        other.add(match[1]);
+      }
+    }
+    expect([...other].sort()).toEqual([...PHASES].sort());
+  });
+
+  it("reaches the states the ten shells are in", () => {
+    // The walk and the table answer the same question two ways. A reviewed
+    // shell the reducer cannot produce is a fixture reviewing a fiction.
+    const unreachable = COMBINATION_IDS.filter(
+      (name) => !reachable.some((classes) => classes.join(" ") === classesOf(name).join(" ")),
+    );
+    expect(unreachable).toEqual([]);
+  });
+
   // A guard on the parser, in the spirit of deadControls.test.ts: a change that
-  // made `scopedRules` find nothing would turn all four assertions above green
+  // made `scopedRules` find nothing would turn every assertion above green
   // while checking no CSS at all.
   it("finds the rules it is meant to be checking", () => {
-    expect(rules.length).toBeGreaterThanOrEqual(15);
-    expect(new Set(rules.map(({ at }) => at.split(":")[0])).size).toBeGreaterThanOrEqual(3);
+    expect(rules.length).toBeGreaterThanOrEqual(50);
+    expect(roots.length).toBeGreaterThanOrEqual(20);
+    expect(reachable.length).toBeGreaterThanOrEqual(20);
+    expect(new Set(rules.map(({ file }) => file)).size).toBeGreaterThanOrEqual(2);
   });
 });

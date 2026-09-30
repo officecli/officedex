@@ -5,13 +5,15 @@ import { shellAgentEn, shellAgentZh } from "./shellAgent";
 import { shellComposerEn, shellComposerZh } from "./shellComposer";
 import { shellImageHomeEn, shellImageHomeZh } from "./shellImageHome";
 import { shellServicesEn, shellServicesZh } from "./shellServices";
+import { shellWorkspaceEn, shellWorkspaceZh } from "./shellWorkspace";
+import { shellSettingsPageEn, shellSettingsPageZh } from "./shellSettingsPage";
 import { zh } from "./zh";
 
 export type Locale = "en" | "zh";
 type Dictionary = Record<string, string>;
 const dictionaries: Record<Locale, Dictionary> = {
-  en: { ...en, ...homeEn, ...shellComposerEn, ...shellImageHomeEn, ...shellAgentEn, ...shellServicesEn },
-  zh: { ...zh, ...homeZh, ...shellComposerZh, ...shellImageHomeZh, ...shellAgentZh, ...shellServicesZh },
+  en: { ...en, ...homeEn, ...shellComposerEn, ...shellImageHomeEn, ...shellAgentEn, ...shellServicesEn, ...shellWorkspaceEn, ...shellSettingsPageEn },
+  zh: { ...zh, ...homeZh, ...shellComposerZh, ...shellImageHomeZh, ...shellAgentZh, ...shellServicesZh, ...shellWorkspaceZh, ...shellSettingsPageZh },
 };
 
 export const LOCALE_STORAGE_KEY = "officedex.locale";

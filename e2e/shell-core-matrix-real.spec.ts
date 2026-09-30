@@ -2,16 +2,24 @@ import { copyFile, mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { strFromU8, unzipSync } from "fflate";
 
 import {
-  agentComposer,
+  answerPendingQuestion,
+  assertRunDidNotFail,
   attachHostReport,
+  dexComposer,
   fixturePath,
+  expectLeftHome,
+  homeComposer,
   hostControl,
+  openFromDisk,
+  openShell,
   queueFileDialog,
+  questionCard,
   recordScenario,
+  runCard,
 } from "./support/real-e2e";
 
 /**
@@ -32,16 +40,21 @@ import {
  *   TC-XLS-02  edit an open workbook     → "edits the workbook in the grid"
  *   TC-EDT-01  edit an open deck         → "edits the presentation in place"
  *
- * ── Why the entry point is the Home quick prompts ───────────────────────────
+ * ── How a type is asked for in r10 ──────────────────────────────────────────
  *
- * Home's composer is `showModeControls={false}`: the "What this message makes"
- * menu and the image toggle are deliberately not drawn there, so a test that
- * opened that menu would be asserting a control the shell does not have. What
- * Home does offer is the four starting points — "Write a document", "Analyze a
- * spreadsheet", "Create a presentation", "Create an image" — and picking one
- * fills the composer *and* states the output type (`Composer.onRegisterFill`),
- * which is why the button labelled "Write a document" stops producing decks.
- * That is the user's own route to each type, so it is the one driven here.
+ * The four quick prompts are gone. OD-UI-1.2's Home offers one composer and a
+ * Quick start row, and Quick start opens a *blank* Local document rather than
+ * asking for one to be written (`pages/Home.tsx`, `useCreateOfType`). What
+ * replaced "Write a document" as the way to state an output type is the
+ * composer's own "add" button: Task context carries "Create as" — Document,
+ * Spreadsheet, Presentation — and applying it puts the type on the message
+ * (`composer/TaskContextDialog.tsx`, `SendInput.documentType`). That is the
+ * user's own route to each type, so it is the one driven here, and it states the
+ * type outright rather than leaving the runtime's heuristic to guess it.
+ *
+ * Images are no longer a mode of this composer at all: "AI image" is a page of
+ * its own (`pages/ImageCreatePage.tsx`), reached from Quick start, and that page
+ * is where an image is asked for.
  *
  * ── Why every artifact is verified on disk ──────────────────────────────────
  *
@@ -52,8 +65,6 @@ import {
  * run was asked for. The edit cases go further and read the changed text back
  * out of the file, which is the only assertion that distinguishes "the editor
  * showed my typing" from "the document was written".
- *
- * ── What is stubbed, and why that is still a real test ──────────────────────
  *
  * ── Two cases are expected to be red, and why ───────────────────────────────
  *
@@ -75,6 +86,8 @@ import {
  * one fails with the runtime's own sentence in the message so the reason travels
  * with the report.
  *
+ * ── What is stubbed, and why that is still a real test ──────────────────────
+ *
  * Both in-place edits stub the *planner* and nothing else. A planner needs a
  * provider and a key; whether a model can rewrite a sentence is not what these
  * cases are about — whether the shell, given a plan, changes the document that
@@ -93,55 +106,6 @@ const EDITOR_DEADLINE_MS = 3 * 60_000;
 /** What the generation cases produced, for the edit cases that follow them. */
 const generated = new Map<string, Artifact>();
 
-function questionCard(page: Page): Locator {
-  return page.locator(".shell-task-question");
-}
-
-/**
- * Fails the moment the shell says the run failed, with the runtime's own words.
- *
- * Polling past a visible failure until a twenty-five minute deadline and then
- * reporting "timed out" is true and useless — see the same note in
- * `support/real-e2e.ts`, written after a run spent eighteen minutes waiting on
- * a task that had died in the first five seconds.
- */
-async function assertRunDidNotFail(page: Page): Promise<void> {
-  const banner = page
-    .getByText(/The run stopped|Generation failed|could not be completed|Image generation failed|Something went wrong/i)
-    .first();
-  if (!(await banner.isVisible().catch(() => false))) return;
-  const detail = await page
-    .locator(".shell-task-reply p")
-    .last()
-    .innerText()
-    .catch(() => "");
-  throw new Error(
-    `The shell reported the run as failed: ${detail.trim().replace(/\s+/g, " ") || "no reason shown"}`,
-  );
-}
-
-/**
- * Answers whatever the run asks, so it can reach its end without a person.
- *
- * The recommended option when the run marked one, otherwise the first; a
- * freeform-only question is answered through the composer, which routes a typed
- * message to the pending question rather than starting a second run.
- */
-async function answerQuestions(page: Page): Promise<void> {
-  const card = questionCard(page);
-  if (!(await card.isVisible().catch(() => false))) return;
-  const options = card.locator(".shell-task-question-options button");
-  if ((await options.count()) > 0) {
-    const recommended = options.locator("css=.is-primary");
-    const pick = (await recommended.count()) > 0 ? recommended.first() : options.first();
-    await pick.click();
-    return;
-  }
-  const composer = page.getByRole("textbox", { name: /Message Agent|New task instructions/ });
-  await composer.fill("Use the recommended concise default.");
-  await composer.press("Enter");
-}
-
 /**
  * The host's completion ledger, polled until it names this artifact type.
  *
@@ -151,7 +115,7 @@ async function answerQuestions(page: Page): Promise<void> {
 async function waitForArtifact(page: Page, documentType: string): Promise<Artifact> {
   const deadline = Date.now() + RUN_DEADLINE_MS;
   while (Date.now() < deadline) {
-    await answerQuestions(page);
+    await answerPendingQuestion(page);
     await assertRunDidNotFail(page);
     const artifact = await hostControl<Artifact>("/control/artifacts/latest").catch(() => null);
     if (artifact && artifact.documentType === documentType && Number(artifact.size) > 0) {
@@ -162,40 +126,47 @@ async function waitForArtifact(page: Page, documentType: string): Promise<Artifa
   throw new Error(`the run never produced a real ${documentType} artifact`);
 }
 
-/** Boots the shell on the real bridge and refuses the in-memory fake. */
-async function openShell(page: Page): Promise<void> {
-  page.on("pageerror", (error) => {
-    // The bridge's SSE stream aborts as the page navigates; everything else is
-    // a genuine failure and should surface here rather than as a later timeout.
-    if (/Failed to fetch/i.test(error.message)) return;
-    throw error;
-  });
-  await page.addInitScript(() => {
-    try {
-      localStorage.removeItem("officedex.shell.v1");
-    } catch {
-      /* a locked-down profile keeps its state */
-    }
-  });
-  await page.goto("/");
-  await expect(page.locator('#shell[data-loaded="true"]')).toBeVisible({ timeout: 60_000 });
-  // The seed rows belong to `src/shell/port/fake`. Seeing them means the page
-  // fell back to the in-memory port and the whole file would prove nothing.
-  await expect(page.getByText("MO product launch", { exact: true })).toHaveCount(0);
+/**
+ * States what this message should make, through the composer's Task context
+ * dialog — r10's only way to say it (see the note at the top of this file).
+ */
+async function stateOutputType(page: Page, output: "doc" | "sheet" | "slides"): Promise<void> {
+  await page.locator(".dx-home-composer [data-act=context]").click();
+  const dialog = page.locator("dialog#dx-modal");
+  await expect(dialog).toBeVisible({ timeout: 30_000 });
+  await dialog.locator(".dx-context-output select").selectOption(output);
+  await dialog.locator("[data-act=context-apply]").click();
+  await expect(dialog).toBeHidden();
+  // The composer says so on the message, as a chip, before it goes out.
+  await expect(page.locator(`.dx-home-composer .dx-reference-chip[data-output="${output}"]`)).toBeVisible();
 }
 
-/** Asks for a new document of the named type, the way Home offers it. */
-async function generateFromHome(page: Page, quickPrompt: string, prompt: string): Promise<void> {
-  await expect(page.getByRole("button", { name: quickPrompt, exact: true }).first()).toBeVisible({
-    timeout: 60_000,
-  });
-  await page.getByRole("button", { name: quickPrompt, exact: true }).first().click();
-  const composer = page.getByRole("textbox", { name: "New task instructions" });
+/** Asks Home for a new document of the named type. */
+async function generateFromHome(
+  page: Page,
+  output: "doc" | "sheet" | "slides",
+  prompt: string,
+): Promise<void> {
+  const composer = homeComposer(page);
+  await expect(composer).toBeVisible({ timeout: 60_000 });
+  await composer.fill(prompt);
+  await stateOutputType(page, output);
+  await composer.press("Enter");
+  await expectLeftHome(page);
+}
+
+/** Asks the image creator for a picture: r10's own page for it. */
+async function generateImage(page: Page, prompt: string): Promise<void> {
+  // Quick start's "AI image" opens the page; the type is the page, not a toggle.
+  await page.locator('.dx-quick-start [data-act=create-local][data-id="png"]').click();
+  await expect(page.locator("#shell")).toHaveAttribute("data-page", "image");
+  const composer = page.locator(".dx-image-create .shell-cx-input");
   await expect(composer).toBeVisible({ timeout: 30_000 });
   await composer.fill(prompt);
-  await page.getByRole("button", { name: "Send message" }).click();
-  // Asking for something leaves Home — the canvas the run fills is behind it.
-  await expect(page.locator("#shell")).toHaveAttribute("data-home", "false", { timeout: 30_000 });
+  await page.locator(".dx-image-create .shell-cx-send").click();
+  // Asking for a picture steps off the creator: the run's stage is what the
+  // content region shows, with the conversation beside it (`enter-stage`).
+  await expect(page.locator("#shell")).toHaveAttribute("data-page", "editor", { timeout: 30_000 });
 }
 
 /**
@@ -205,11 +176,7 @@ async function generateFromHome(page: Page, quickPrompt: string, prompt: string)
  * library entry under a name derived from the file, so two cases sharing one
  * name share one document — and the second then edits the first one's work.
  */
-async function openCopyInShell(
-  page: Page,
-  source: string,
-  label: string,
-): Promise<string> {
+async function openCopyInShell(page: Page, source: string, label: string): Promise<string> {
   const dir = await mkdtemp(path.join(tmpdir(), "officedex-matrix-"));
   const copy = path.join(dir, `${label}${path.extname(source) || ".bin"}`);
   await copyFile(source, copy);
@@ -217,17 +184,8 @@ async function openCopyInShell(
   // Navigation belongs here, not to the callers: a case that reused an artifact
   // generated earlier in the same run has no page of its own yet.
   await openShell(page);
-  /*
-   * The file is opened from Agent Home, and the mode is left alone.
-   *
-   * Docking is Agent-mode only (`effectivePlacement`/`canDock` in
-   * `shellReducer`): in Editor mode the agent is a collapsed face, so the
-   * composer these cases send through is not mounted at all. Agent Home carries
-   * the same "Open from this computer" action, so nothing is lost by staying.
-   */
-  await page.getByRole("button", { name: "Home", exact: true }).first().click();
   await queueFileDialog(copy);
-  await page.getByRole("button", { name: /Open from this computer/i }).click();
+  await openFromDisk(page);
   await expect(page.getByRole("tab", { name: new RegExp(label) })).toBeVisible({ timeout: 30_000 });
   return copy;
 }
@@ -255,13 +213,13 @@ async function packageText(filePath: string, entryPattern: RegExp): Promise<stri
 async function ensureGenerated(
   page: Page,
   documentType: "docx" | "xlsx",
-  quickPrompt: string,
+  output: "doc" | "sheet",
   prompt: string,
 ): Promise<Artifact> {
   const known = generated.get(documentType);
   if (known) return known;
   await openShell(page);
-  await generateFromHome(page, quickPrompt, prompt);
+  await generateFromHome(page, output, prompt);
   const artifact = await waitForArtifact(page, documentType);
   generated.set(documentType, artifact);
   return artifact;
@@ -277,7 +235,7 @@ test.describe("new shell · core generation matrix", () => {
     await openShell(page);
     await generateFromHome(
       page,
-      "Write a document",
+      "doc",
       "Write a short OfficeDex core-matrix memo about release readiness, with a heading and two paragraphs.",
     );
 
@@ -313,7 +271,7 @@ test.describe("new shell · core generation matrix", () => {
     await openShell(page);
     await generateFromHome(
       page,
-      "Analyze a spreadsheet",
+      "sheet",
       "Build a compact OfficeDex core-matrix budget with a header row, three months and a totals row.",
     );
 
@@ -342,7 +300,7 @@ test.describe("new shell · core generation matrix", () => {
     await openShell(page);
     await generateFromHome(
       page,
-      "Create a presentation",
+      "slides",
       "Prepare a three-slide OfficeDex core-matrix brief covering readiness, risks and next steps.",
     );
 
@@ -373,14 +331,10 @@ test.describe("new shell · core generation matrix", () => {
     });
   });
 
-  test("generates an image from the shell composer", async ({ page }) => {
+  test("generates an image from the image creator", async ({ page }) => {
     const startedAt = Date.now();
     await openShell(page);
-
-    // Picking the image starting point also flips the composer into image mode;
-    // that is the only way the image controls appear on Home, where the mode
-    // toggle is otherwise not drawn.
-    await generateFromHome(page, "Create an image", "A calm product-launch still life, soft daylight.");
+    await generateImage(page, "A calm product-launch still life, soft daylight.");
 
     const artifact = await waitForArtifact(page, "img");
     expect(artifact.size).toBeGreaterThan(1_000);
@@ -525,7 +479,7 @@ test.describe("new shell · core editing matrix", () => {
     const source = await ensureGenerated(
       page,
       "docx",
-      "Write a document",
+      "doc",
       "Write a short OfficeDex core-matrix memo about release readiness, with a heading and two paragraphs.",
     );
     const copy = await openCopyInShell(page, source.path, "matrix-runner-docx");
@@ -567,7 +521,9 @@ test.describe("new shell · core editing matrix", () => {
     const rpc = recordRpc(page);
     await stubDocxPlanner(page, query as string, replacement);
 
-    const composer = await agentComposer(page);
+    // Dex is where an instruction about the document on screen is typed in r10:
+    // the panel's composer carries the open file, so the message is about it.
+    const composer = await dexComposer(page);
     await composer.fill("Rewrite that sentence for the core matrix.");
     await composer.press("Enter");
     await expect(composer, "the composer still holds the instruction").toHaveValue("", {
@@ -578,16 +534,19 @@ test.describe("new shell · core editing matrix", () => {
      * Two stages, asserted separately.
      *
      * "The document changed" and "the document was written" fail for different
-     * reasons and one of them is reachable while the other is not — the runtime's
-     * own notice says which ("Changes applied" versus "Changed, but not saved").
-     * Collapsing them into one disk assertion reports the second as if the first
-     * had never happened.
+     * reasons and one of them is reachable while the other is not. The run card
+     * reports the first: an in-place edit that landed becomes a change to
+     * review, with Undo beside it (`documentEditRun` sets `task.suggestion`,
+     * `AgentRun` draws it) — and a run that never applied anything has neither.
+     * Collapsing the two into one disk assertion reports the second as if the
+     * first had never happened.
      */
-    const panel = page.locator(".shell-task");
+    const card = runCard(page).first();
     await expect(
-      panel,
+      card.locator("[data-act=review-task]"),
       "the runtime never reported an outcome for the edit",
-    ).toContainText(/Changes applied|Changed, but not saved/, { timeout: 180_000 });
+    ).toBeVisible({ timeout: 180_000 });
+    await expect(card.locator("[data-act=undo-task]")).toBeVisible();
 
     const deadline = Date.now() + 120_000;
     let body = "";
@@ -595,7 +554,7 @@ test.describe("new shell · core editing matrix", () => {
     while (Date.now() < deadline) {
       body = await packageText(copy, /^word\/document\.xml$/);
       if (body.includes(replacement)) break;
-      said = await panel.innerText().catch(() => "");
+      said = await card.innerText().catch(() => "");
       await page.waitForTimeout(1_000);
     }
     expect(
@@ -630,7 +589,7 @@ test.describe("new shell · core editing matrix", () => {
     const source = await ensureGenerated(
       page,
       "xlsx",
-      "Analyze a spreadsheet",
+      "sheet",
       "Build a compact OfficeDex core-matrix budget with a header row, three months and a totals row.",
     );
     const copy = await openCopyInShell(page, source.path, "matrix-runner-xlsx");
@@ -649,9 +608,9 @@ test.describe("new shell · core editing matrix", () => {
     await page.keyboard.press("Enter");
 
     /*
-     * The save control in the tab bar, not `.shell-statusbar`: the workbook's own
-     * editor publishes a status bar of its own and the shell withdraws its copy
-     * rather than drawing a second one (`canvas/editorChrome.ts`).
+     * The save control is in the tab row: r10 draws no status bar at all
+     * (`tokens.css`: `--shell-statusbar-h: 0px`, "save state sits in the tab
+     * row"), and `[data-act=save]` is that control.
      *
      * The response is what is waited on rather than the "Unsaved" label, because
      * the workbook autosaves 1500 ms after the last change — a label assertion
@@ -661,7 +620,7 @@ test.describe("new shell · core editing matrix", () => {
       (response) => response.url().includes("/rpc/SaveXlsxEditor"),
       { timeout: 90_000 },
     );
-    await page.locator("button.shell-save-state").click();
+    await page.locator("[data-act=save]").click();
     await written;
 
     const deadline = Date.now() + 60_000;
@@ -714,7 +673,7 @@ test.describe("new shell · core editing matrix", () => {
     const rpc = recordRpc(page);
     await stubPptxPlanner(page);
 
-    const composer = await agentComposer(page);
+    const composer = await dexComposer(page);
     await composer.fill("Change slide 1's title to Hello World");
     await composer.press("Enter");
     await expect(composer, "the composer still holds the instruction").toHaveValue("", {
@@ -728,15 +687,17 @@ test.describe("new shell · core editing matrix", () => {
      * the editor was handed one — is put to the user as a card rather than
      * applied, and nothing happens until it is answered. Answering it is part of
      * the flow, not a workaround: the same gate is asserted in
-     * `deck-edit-routing-real.spec.ts`.
+     * `deck-edit-routing-real.spec.ts`. In r10 picking an answer only fills the
+     * field; Continue is what sends it.
      */
-    const card = page.locator(".shell-task-question");
+    const card = questionCard(page).first();
     const gate = Date.now() + 30_000;
     while (Date.now() < gate && !(await card.isVisible().catch(() => false))) {
       await page.waitForTimeout(500);
     }
     if (await card.isVisible().catch(() => false)) {
       await card.getByRole("button", { name: /apply/i }).click();
+      await card.locator("button[type=submit]").click();
     }
 
     // The exported package is the assertion. Reading the editor back would prove

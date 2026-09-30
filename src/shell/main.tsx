@@ -32,6 +32,7 @@ import { LocaleProvider } from "../renderer/i18n";
 import { ForceUpdateOverlay } from "../renderer/components/ForceUpdateOverlay";
 import { ShellProvider } from "./state/ShellContext";
 import { readDevFixture } from "./dev/fixture";
+import { holdOnline } from "./state/useOnline";
 import { deckDemoEnabled } from "./dev/deckDemo";
 import { mountWindowChrome } from "../renderer/windowChrome";
 import "./tokens.css";
@@ -77,6 +78,8 @@ const api = hasDesktopBackend() ? createDesktopAPI(readBridgeEnvironment()) : nu
  * `fixture` is null in a production build, see the note in `dev/fixture.ts`.
  */
 if (fixture?.canvasChrome) publishEditorChrome(fixture.canvasChrome);
+// The same reasoning: holding the workspace offline is an effect.
+if (fixture?.offline) holdOnline(false);
 
 /*
  * A read handle on the two canvas channels, for the fixture only.

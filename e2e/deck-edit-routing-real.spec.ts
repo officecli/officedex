@@ -4,7 +4,14 @@ import path from "node:path";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { agentComposer, fixturePath, queueFileDialog } from "./support/real-e2e";
+import {
+  dexComposer,
+  fixturePath,
+  openFromDisk,
+  openShell,
+  queueFileDialog,
+  questionCard,
+} from "./support/real-e2e";
 
 /**
  * An instruction about an open deck edits the deck, and does not regenerate it.
@@ -33,6 +40,11 @@ import { agentComposer, fixturePath, queueFileDialog } from "./support/real-e2e"
  * is saved. The stub's own source was written exactly as the real planner is
  * told to write it, and getting it wrong once is what proved the difference
  * between a broken stub and a broken product path.
+ *
+ * OD-UI-1.2 (r10) changed only the way in. There is no Agent/Editor mode: the
+ * file is opened from Local, and the instruction is typed into the Dex panel
+ * over the document (`button.dx-dex[data-act=dex]` → `.dx-dex-panel`), which is
+ * the composer that carries the open file.
  */
 
 /** RPC methods the page asked for, in order. */
@@ -101,20 +113,9 @@ async function openDeck(page: Page, label: string): Promise<void> {
   const copy = path.join(dir, `${label}.pptx`);
   await copyFile(source, copy);
 
-  await page.addInitScript(() => {
-    try {
-      localStorage.removeItem("officedex.shell.v1");
-    } catch {
-      /* a locked-down profile keeps its state */
-    }
-  });
-  await page.goto("/");
-  await expect(page.locator('#shell[data-loaded="true"]')).toBeVisible({ timeout: 60_000 });
-  await page.getByRole("button", { name: /Switch mode/ }).click();
-  await page.getByRole("menuitemradio", { name: /^Editor\b/ }).click();
-  await page.getByRole("button", { name: "Home", exact: true }).first().click();
+  await openShell(page);
   await queueFileDialog(copy);
-  await page.getByRole("button", { name: /Open from this computer/i }).click();
+  await openFromDisk(page);
   await expect(page.getByRole("tab", { name: new RegExp(label) })).toBeVisible({ timeout: 30_000 });
   await deckEditorReady(page);
 }
@@ -208,7 +209,7 @@ test.describe("an instruction about an open deck", () => {
     });
 
     rpc.length = 0;
-    const composer = await agentComposer(page);
+    const composer = await dexComposer(page);
     await composer.fill("Change slide 1's title to Hello World");
     /*
      * Enter, not the send button.
@@ -303,12 +304,12 @@ test.describe("an instruction about an open deck", () => {
       confirmation: { message: "This changes a dozen text runs. Continue?" },
     });
 
-    const composer = await agentComposer(page);
+    const composer = await dexComposer(page);
     await composer.fill("Change slide 1's title to Hello World");
     await composer.press("Enter");
 
     // The question is a card with a way through it.
-    const card = page.locator(".shell-task-question");
+    const card = questionCard(page).first();
     await expect(card).toBeVisible({ timeout: 60_000 });
     await expect(card).toContainText("dozen text runs");
     const apply = card.getByRole("button", { name: /apply/i });
@@ -319,7 +320,14 @@ test.describe("an instruction about an open deck", () => {
     await expect(page.locator("iframe.pptx-embed-frame")).toBeVisible();
     expect((await deckTexts(page)).join(" | ")).not.toContain("Hello World");
 
+    /*
+     * Choosing an answer and sending it are two presses in r10: picking an
+     * option fills the field, and Continue is what submits it
+     * (`chat/AgentRun.tsx`, `Question`). A test that only clicked the option
+     * would wait forever on a run that was never answered.
+     */
     await apply.click();
+    await card.locator("button[type=submit]").click();
 
     const deadline = Date.now() + 60_000;
     let texts: string[] = [];

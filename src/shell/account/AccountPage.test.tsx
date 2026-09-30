@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AuthEvent, DesktopAPI, WhoAmIResult } from "../../shared/types";
 import { LocaleProvider } from "../../renderer/i18n";
 import { DesktopApiProvider } from "../../renderer/services/desktopApi";
+import { SEED_ACTIVE_FILE_ID } from "../port/fake/seed";
 import { renderShell } from "../test/renderShell";
 import { AccountPage } from "./AccountPage";
 import { accountFromWhoAmI } from "./useAccount";
@@ -215,33 +216,47 @@ describe("AccountPage", () => {
 
 describe("the shell's account entry", () => {
   /*
-   * The wiring, not the page: App owns the open flag, Sidebar draws the chip,
-   * and the two have to agree. Also the property that decided the whole shape —
+   * The wiring, not the page: the sidebar's account row goes to Settings →
+   * Account & usage, that section owns the sign-in button, and App owns the
+   * open flag the button sets. Also the property that decided the whole shape —
    * the shell is still mounted behind the cover, so an open document survives a
    * trip to sign in.
    */
-  it("shows who is signed in and opens the account page over a live shell", async () => {
+  it("reaches the account page from the sidebar, over a live shell", async () => {
     const shell = await renderShell();
-    const chip = await waitFor(() => {
-      const node = shell.view.container.querySelector(".shell-profile");
-      if (!node) throw new Error("account chip is missing");
-      return node as HTMLElement;
+    await shell.dispatch({ type: "open-file", fileId: SEED_ACTIVE_FILE_ID });
+    const host = shell.canvasHost();
+
+    const row = await waitFor(() => {
+      const node = shell.view.container.querySelector<HTMLElement>("button.dx-account-row[data-act=account]");
+      if (!node) throw new Error("account row is missing");
+      return node;
     });
     /*
-     * The browser preview answers `whoami` with anonymous, so this is the honest
-     * label — not a name, and not an empty control. Read from `title` because the
-     * sidebar starts collapsed, where the rail shows the chip's icon and hides
-     * its words; the words are asserted once, expanded, below.
+     * The browser preview has no CLI to ask, so this is the honest label — not a
+     * name, and not an empty control.
      */
-    await waitFor(() => expect(chip.getAttribute("title")).toBe("Not signed in"));
+    await waitFor(() => expect(row.textContent).toContain("Guest"));
 
-    await shell.dispatch({ type: "toggle-nav" });
-    expect(await waitFor(() => chip.textContent)).toContain("Sign in");
+    fireEvent.click(row);
 
-    fireEvent.click(chip);
+    expect(shell.state().page).toBe("settings");
+    expect(shell.state().settingsSection).toBe("account");
+    const signIn = await waitFor(() => {
+      const node = shell.view.container.querySelector<HTMLElement>("[data-act=sign-in]");
+      if (!node) throw new Error("the Account & usage section has no sign-in button");
+      return node;
+    });
+    expect(signIn.textContent).toContain("Sign in");
+
+    fireEvent.click(signIn);
 
     expect(await screen.findByRole("dialog")).toBeTruthy();
-    expect(shell.view.container.querySelector("#shell-sidebar")).toBeTruthy();
+    // The cover is over the shell, not instead of it: the sidebar is still
+    // there and the document's editor was never torn down.
+    expect(shell.view.container.querySelector("#dx-sidebar")).toBeTruthy();
     expect(shell.view.container.querySelector(".shell-account")).toBeTruthy();
+    expect(Object.is(host, shell.canvasHost())).toBe(true);
+    expect(shell.state().openFileIds).toContain(SEED_ACTIVE_FILE_ID);
   });
 });

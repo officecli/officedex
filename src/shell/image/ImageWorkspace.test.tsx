@@ -2,9 +2,9 @@ import { cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { toast } from "../../renderer/ui";
-import type { AgentImageRun, AgentTask, FileMeta } from "../../shared/uiPort";
-import { SEED_FOLDER_ID, seedFiles } from "../port/fake/seed";
+import { seedFiles } from "../port/fake/seed";
 import { renderShell } from "../test/renderShell";
+import { imageRun, imageTask, openImageChat, picture } from "./imageHarness";
 
 /**
  * The picture surface, over the canvas.
@@ -13,47 +13,17 @@ import { renderShell } from "../test/renderShell";
  * finished picture, because those are the parts that have no equivalent
  * anywhere else in the shell: a document surface never has to draw its own
  * bytes, never has a version strip, and never offers "save this somewhere".
+ *
+ * It lives inside the persistent editor wrapper, so it is on screen exactly
+ * when the content region is the canvas: a version open, or — with no document
+ * in the way — the run's stage (`enter-stage`, which is where r10 put what
+ * entering the workspace used to do).
  */
 
 afterEach(() => {
   cleanup();
   toast.destroy();
 });
-
-function run(partial: Partial<AgentImageRun> & { taskId: string }): AgentImageRun {
-  return { status: "done", prompt: "A warm desk lamp", ...partial };
-}
-
-function imageTask(runs: AgentImageRun[]): AgentTask {
-  return {
-    id: runs[0].taskId,
-    title: "A warm desk lamp",
-    folderId: SEED_FOLDER_ID,
-    documentType: "img",
-    status: runs.some((entry) => entry.status === "running") ? "writing" : "done",
-    phase: "Creating image",
-    steps: [],
-    messages: [],
-    suggestion: null,
-    question: null,
-    image: { runs },
-  };
-}
-
-function picture(id: string, taskId: string, folderId = SEED_FOLDER_ID): FileMeta {
-  return {
-    id,
-    name: `${id}.png`,
-    type: "image",
-    folderId,
-    createdAt: 0,
-    updatedAt: 0,
-    lastOpenedAt: null,
-    dirty: false,
-    pinned: false,
-    artifactTaskId: taskId,
-  };
-}
 
 const surface = () => document.querySelector(".shell-image-surface");
 const text = () => surface()?.textContent ?? "";
@@ -64,25 +34,27 @@ const buttonWith = (label: string) =>
 
 /** Two finished versions, the newer one open. */
 async function readyShell() {
-  const shell = await renderShell({
-    fastAgent: true,
-    tasks: [imageTask([run({ taskId: "r1" }), run({ taskId: "r2" })])],
+  const shell = await openImageChat({
+    task: imageTask([imageRun({ taskId: "r1" }), imageRun({ taskId: "r2" })]),
     files: [...seedFiles(), picture("f1", "r1"), picture("f2", "r2")],
   });
-  await shell.dispatch({ type: "select-folder", folderId: SEED_FOLDER_ID });
   await shell.dispatch({ type: "open-file", fileId: "f2" });
   await waitFor(() => expect(surface()).not.toBeNull());
   return shell;
 }
 
+/** A run still going, with the stage on the canvas — what sending one leaves behind. */
+async function runningShell() {
+  const shell = await openImageChat({
+    task: imageTask([imageRun({ taskId: "r1", status: "running" })]),
+  });
+  await shell.dispatch({ type: "enter-stage" });
+  return shell;
+}
+
 describe("the image workspace while a picture is being made", () => {
   it("says so on the canvas and offers a way out", async () => {
-    const shell = await renderShell({
-      fastAgent: true,
-      tasks: [imageTask([run({ taskId: "r1", status: "running" })])],
-    });
-    await shell.dispatch({ type: "select-folder", folderId: SEED_FOLDER_ID });
-    await shell.dispatch({ type: "enter-workspace" });
+    const shell = await runningShell();
 
     await waitFor(() => expect(text()).toContain("Creating your image"));
     expect(text()).toContain("You can leave this task and come back.");
@@ -101,39 +73,34 @@ describe("the image workspace while a picture is being made", () => {
 
   /* The run is the folder's; a deck the user clicked is what they are looking at. */
   it("stands aside for a document opened while it runs, and comes back without one", async () => {
-    const shell = await renderShell({
-      fastAgent: true,
-      tasks: [imageTask([run({ taskId: "r1", status: "running" })])],
-    });
-    await shell.dispatch({ type: "select-folder", folderId: SEED_FOLDER_ID });
-    await shell.dispatch({ type: "enter-workspace" });
+    const shell = await runningShell();
     await waitFor(() => expect(text()).toContain("Creating your image"));
 
     await shell.dispatch({ type: "open-file", fileId: "file-deck" });
     await waitFor(() => expect(surface()).toBeNull());
 
-    await shell.dispatch({ type: "enter-workspace" });
+    await shell.dispatch({ type: "enter-stage" });
     await waitFor(() => expect(text()).toContain("Creating your image"));
   });
 
   it("does not cover a document with a failed run's Try again", async () => {
-    const shell = await renderShell({
-      fastAgent: true,
-      tasks: [imageTask([run({ taskId: "r1", status: "cancelled" })])],
+    const shell = await openImageChat({
+      task: imageTask([imageRun({ taskId: "r1", status: "cancelled" })]),
     });
-    await shell.dispatch({ type: "select-folder", folderId: SEED_FOLDER_ID });
     await shell.dispatch({ type: "open-file", fileId: "file-plan" });
-    await waitFor(() => expect(document.querySelector(".shell-task")).not.toBeNull());
+
+    // The conversation is the picture's, and still says the run stopped.
+    await waitFor(() =>
+      expect(document.querySelector("#dx-conversation .shell-image-error")).not.toBeNull(),
+    );
     expect(surface()).toBeNull();
   });
 
   it("offers the instruction again when a run ended with nothing", async () => {
-    const shell = await renderShell({
-      fastAgent: true,
-      tasks: [imageTask([run({ taskId: "r1", status: "cancelled" })])],
+    const shell = await openImageChat({
+      task: imageTask([imageRun({ taskId: "r1", status: "cancelled" })]),
     });
-    await shell.dispatch({ type: "select-folder", folderId: SEED_FOLDER_ID });
-    await shell.dispatch({ type: "enter-workspace" });
+    await shell.dispatch({ type: "enter-stage" });
 
     await waitFor(() => expect(text()).toContain("Try again"));
     expect(text()).toContain("Your prompt and reference files are still here.");
@@ -192,13 +159,11 @@ describe("the image workspace with a finished picture", () => {
    * rather than the memory of a click.
    */
   it("moves the picture into the folder that was chosen", async () => {
-    const shell = await renderShell({
-      fastAgent: true,
-      tasks: [imageTask([run({ taskId: "r1" })])],
+    const shell = await openImageChat({
+      task: imageTask([imageRun({ taskId: "r1" })]),
       // The default folder: nothing has been filed anywhere yet.
       files: [...seedFiles(), picture("f1", "r1", "folder-inbox")],
     });
-    await shell.dispatch({ type: "select-folder", folderId: SEED_FOLDER_ID });
     await shell.dispatch({ type: "open-file", fileId: "f1" });
     await waitFor(() => expect(text()).toContain("Save to folder"));
 

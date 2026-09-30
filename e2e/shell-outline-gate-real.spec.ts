@@ -1,6 +1,15 @@
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
-import { attachHostReport, recordScenario } from "./support/real-e2e";
+import {
+  answerPendingQuestion,
+  assertRunDidNotFail,
+  attachHostReport,
+  expectLeftHome,
+  homeComposer,
+  openShell,
+  outlineGate,
+  recordScenario,
+} from "./support/real-e2e";
 
 /**
  * The outline gate, against the real runtime, for the first time.
@@ -20,38 +29,22 @@ import { attachHostReport, recordScenario } from "./support/real-e2e";
  * what it stops with is the outline the panel can render, that an edited plan
  * is accepted on the wire, and that the run then carries on to a finished deck
  * rather than hanging on an answer it did not understand.
+ *
+ * In r10 the gate is `.dx-agent-question[data-gate=outline]` — the same form a
+ * plain question uses, with an editable outline in it (`chat/AgentRun.tsx`,
+ * `OutlineGate`) — and its titles are the inputs of `ol.dx-agent-outline`.
  */
 
 const RUN_DEADLINE_MS = 20 * 60_000;
 
-/** The gate's own card: an editable outline, not the plain question card. */
-const GATE = ".shell-task-question .shell-task-outline--editable";
-
-async function waitForDeck(page: Page, testInfo: TestInfo): Promise<void> {
+async function waitForDeck(page: Page): Promise<void> {
   const deadline = Date.now() + RUN_DEADLINE_MS;
   while (Date.now() < deadline) {
     if (await page.getByRole("tab").first().isVisible().catch(() => false)) return;
-
-    const failed = page.getByText(/The run stopped/i).first();
-    if (await failed.isVisible().catch(() => false)) {
-      const detail = await page.locator(".shell-task-reply p").last().innerText().catch(() => "");
-      throw new Error(
-        `The shell reported the run as failed: ${detail.trim().replace(/\s+/g, " ") || "no reason shown"}`,
-      );
-    }
-
+    await assertRunDidNotFail(page);
     // Any other question — a brief round, say — is answered so the run can
-    // reach the gate, which is what this spec is about.
-    const card = page.locator(".shell-task-question");
-    if ((await card.isVisible().catch(() => false)) && (await page.locator(GATE).count()) === 0) {
-      const options = card.locator(".shell-task-question-options button");
-      if ((await options.count()) > 0) {
-        const recommended = options.locator("css=.is-primary");
-        await ((await recommended.count()) > 0 ? recommended.first() : options.first()).click();
-        await expect(card).toBeHidden({ timeout: 60_000 });
-        continue;
-      }
-    }
+    // reach the end; the gate itself is over by this point.
+    if (await answerPendingQuestion(page)) continue;
     await page.waitForTimeout(1_000);
   }
   throw new Error("the run never produced a deck");
@@ -61,22 +54,9 @@ async function waitForDeck(page: Page, testInfo: TestInfo): Promise<void> {
 async function untilGate(page: Page): Promise<void> {
   const deadline = Date.now() + 10 * 60_000;
   while (Date.now() < deadline) {
-    if (await page.locator(GATE).isVisible().catch(() => false)) return;
-    const failed = page.getByText(/The run stopped/i).first();
-    if (await failed.isVisible().catch(() => false)) {
-      const detail = await page.locator(".shell-task-reply p").last().innerText().catch(() => "");
-      throw new Error(`the run failed before the outline: ${detail.trim().replace(/\s+/g, " ") || "no reason shown"}`);
-    }
-    const card = page.locator(".shell-task-question");
-    if (await card.isVisible().catch(() => false)) {
-      const options = card.locator(".shell-task-question-options button");
-      if ((await options.count()) > 0) {
-        const recommended = options.locator("css=.is-primary");
-        await ((await recommended.count()) > 0 ? recommended.first() : options.first()).click();
-        await expect(card).toBeHidden({ timeout: 60_000 });
-        continue;
-      }
-    }
+    if (await outlineGate(page).isVisible().catch(() => false)) return;
+    await assertRunDidNotFail(page);
+    if (await answerPendingQuestion(page)) continue;
     await page.waitForTimeout(1_000);
   }
   throw new Error("the run never stopped at the outline");
@@ -89,22 +69,15 @@ test.describe("new shell · the outline gate, for real", () => {
     await attachHostReport(testInfo);
   });
 
-  test("stops at the outline, takes an edit, and draws what was approved", async ({ page }, testInfo) => {
-    page.on("pageerror", (error) => {
-      if (/Failed to fetch/i.test(error.message)) return;
-      throw error;
-    });
-
+  test("stops at the outline, takes an edit, and draws what was approved", async ({ page }, testInfo: TestInfo) => {
     const startedAt = Date.now();
-    await page.goto("/?planMode=1");
-    await expect(page.locator('#shell[data-loaded="true"]')).toBeVisible({ timeout: 60_000 });
-    await expect(page.getByText("MO product launch", { exact: true })).toHaveCount(0);
+    await openShell(page, "/?planMode=1");
 
-    await page
-      .getByRole("textbox", { name: "New task instructions" })
-      .fill("Prepare a three-slide product launch brief covering positioning, timeline and next steps.");
-    await page.getByRole("button", { name: "Send message" }).click();
-    await expect(page.locator("#shell")).toHaveAttribute("data-home", "false", { timeout: 30_000 });
+    const composer = homeComposer(page);
+    await expect(composer).toBeVisible({ timeout: 30_000 });
+    await composer.fill("Prepare a three-slide product launch brief covering positioning, timeline and next steps.");
+    await composer.press("Enter");
+    await expectLeftHome(page);
 
     /*
      * The stop itself. Generous, because everything before it is real: the
@@ -116,7 +89,8 @@ test.describe("new shell · the outline gate, for real", () => {
      */
     await untilGate(page);
 
-    const titles = page.locator(`${GATE} .shell-task-outline-input`);
+    const gate = outlineGate(page);
+    const titles = gate.locator("ol.dx-agent-outline input");
     await expect(titles.first()).toBeVisible();
     const before = await titles.count();
     expect(before, "the gate opened with no pages to decide about").toBeGreaterThan(1);
@@ -130,12 +104,14 @@ test.describe("new shell · the outline gate, for real", () => {
      */
     const renamed = "Renamed by the gate";
     await titles.nth(1).fill(renamed);
-    await page.locator(".shell-task-question .shell-task-button").click();
+    // The gate's own approval: the submit button carries the runtime's label for
+    // it ("Start drawing"), and nothing is sent until it is pressed.
+    await gate.locator("button[type=submit]").click();
 
     // The card goes away because the run took the answer, not because it broke.
-    await expect(page.locator(GATE)).toBeHidden({ timeout: 60_000 });
+    await expect(gate).toBeHidden({ timeout: 60_000 });
 
-    await waitForDeck(page, testInfo);
+    await waitForDeck(page);
 
     const tab = page.getByRole("tab").first();
     await expect(tab).toBeVisible();

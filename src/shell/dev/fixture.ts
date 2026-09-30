@@ -13,12 +13,30 @@
  * production build.
  *
  *   ?shellFixture=1                  the in-memory fake port, audit dataset
+ *   ?seed=prototype                  …with the approved prototype's own sample
+ *                                    workspace instead, for side-by-side review
  *   ?workspace=empty                 …with no folders or files at all
  *   ?shell=C7                        a named shell combination (see below)
- *   ?mode=agent|editor               individual overrides, applied after ?shell
- *   ?home=1|0
+ *   ?page=home|local|projects|assets|editor|settings|image
+ *                                    individual overrides, applied after ?shell
  *   ?nav=collapsed|expanded
- *   ?presence=docked|floating
+ *   ?chat=<conversation id>          open a conversation (its project's Assets
+ *                                    beside it, unless ?page says otherwise)
+ *   ?panel=chat|assets
+ *   ?side=left|right                 which side the conversation docks on
+ *   ?float=1                         float the conversation
+ *   ?workspace=closed                close the content region
+ *   ?file=<file id>                  open a file, in the context on screen
+ *   ?tabs=<file id>,<file id>        open several; ?file picks the one in front
+ *   ?run=<state>                     put the open conversation's run in one of
+ *                                    the standard's states (seed=prototype):
+ *                                    planning reading working checking input
+ *                                    review complete stopped failed partial
+ *                                    offline
+ *   ?offline=1                       hold the workspace offline (?run=offline
+ *                                    implies it)
+ *   ?section=<settings section>
+ *   ?theme=dark
  *   ?forceUpdate=<phase>             render the mandatory-update page instead
  *   ?canvasChrome=sheet|slides|doc   report an editor's own chrome, as if one
  *                                    were mounted (there is none in a browser)
@@ -51,29 +69,43 @@ import {
   auditFolders,
   auditTasks,
 } from "../port/fake/auditSeed";
+import {
+  PROTOTYPE_FOLDER_IDS,
+  prototypeFiles,
+  prototypeFolders,
+  prototypeRun,
+  prototypeTasks,
+} from "../port/fake/prototypeSeed";
+import { SETTINGS_SECTIONS, type ChatRef, type Page, type SettingsSectionId } from "../state/shellReducer";
+
+/** The audit dataset's working conversation, which the combinations open. */
+const AUDIT_CHAT: ChatRef = { folderId: AUDIT_FOLDER_IDS.launch, conversationId: "task-working" };
 
 /**
- * The ten shell combinations from the audit plan, by name.
+ * The ten shell combinations, by name.
  *
- * Sessions refer to these by number all day; spelling out four flags each time
- * is how a screenshot ends up filed under the wrong combination. `home: true`
- * has no presence entry because the presence does not render on Home at all
- * (`AgentPresence.tsx`), and Editor mode has no docked entry because
- * `canDock()` is false there (`state/shellReducer.ts`) — the combinations that
- * are missing from this table are the ones that do not exist.
+ * The axes are OD-UI-1.2's: which page the content region shows, whether a
+ * conversation is beside it and on which side, whether that conversation is
+ * docked, floating or has the window to itself, and whether the sidebar is
+ * showing. Sessions refer to these by number; spelling the flags out each time
+ * is how a screenshot ends up filed under the wrong combination.
+ *
+ * The combinations that are missing are the ones that do not exist: Home,
+ * Local and Settings never have a conversation beside them, and a floating
+ * conversation always has a content region to float over.
  */
 export const SHELL_COMBINATIONS = {
-  C1: { mode: "agent", home: true, navCollapsed: true },
-  C2: { mode: "agent", home: true, navCollapsed: false },
-  C3: { mode: "editor", home: true, navCollapsed: true },
-  C4: { mode: "editor", home: true, navCollapsed: false },
-  C5: { mode: "agent", home: false, navCollapsed: true, placement: "docked" },
-  C6: { mode: "agent", home: false, navCollapsed: false, placement: "docked" },
-  C7: { mode: "agent", home: false, navCollapsed: true, placement: "floating" },
-  C8: { mode: "agent", home: false, navCollapsed: false, placement: "floating" },
-  C9: { mode: "editor", home: false, navCollapsed: true, placement: "floating" },
-  C10: { mode: "editor", home: false, navCollapsed: false, placement: "floating" },
-} as const satisfies Record<string, Partial<PersistedShellState> & { placement?: "docked" | "floating" }>;
+  C1: { page: "home", navCollapsed: false },
+  C2: { page: "home", navCollapsed: true },
+  C3: { page: "local", navCollapsed: false },
+  C4: { page: "assets", chat: AUDIT_CHAT, workspaceOpen: true, navCollapsed: false },
+  C5: { page: "editor", chat: AUDIT_CHAT, workspaceOpen: true, navCollapsed: false },
+  C6: { page: "editor", chat: AUDIT_CHAT, workspaceOpen: true, chatPosition: "right", navCollapsed: true },
+  C7: { page: "editor", chat: AUDIT_CHAT, workspaceOpen: true, chatFloating: true, navCollapsed: true },
+  C8: { page: "assets", chat: AUDIT_CHAT, workspaceOpen: false, navCollapsed: false },
+  C9: { page: "editor", chat: null, navCollapsed: true },
+  C10: { page: "settings", navCollapsed: false },
+} as const satisfies Record<string, Partial<PersistedShellState>>;
 
 export type ShellCombination = keyof typeof SHELL_COMBINATIONS;
 
@@ -99,6 +131,8 @@ export interface DevFixture {
    * reporting.
    */
   canvasChrome: EditorChrome | null;
+  /** Hold the workspace offline, so the state can be reviewed with a connection. */
+  offline: boolean;
 }
 
 const UPDATE_PHASES: readonly UpdatePhase[] = [
@@ -144,10 +178,10 @@ function previewRelease(): AppUpdateRelease {
 
 function combinationOverride(name: string): Partial<PersistedShellState> {
   const combination = SHELL_COMBINATIONS[name.toUpperCase() as ShellCombination];
-  if (!combination) return {};
-  const { placement, ...rest } = combination as { placement?: "docked" | "floating" };
-  return placement ? { ...rest, presence: { placement, expanded: true, x: null, y: null, edge: null } } : rest;
+  return combination ? { ...combination } : {};
 }
+
+const PAGES: readonly Page[] = ["home", "local", "projects", "assets", "editor", "settings", "image"];
 
 export function readDevFixture(
   search: string,
@@ -157,48 +191,86 @@ export function readDevFixture(
 
   const params = new URLSearchParams(search);
   const wantsFixture = params.get("shellFixture") === "1";
+  const prototype = params.get("seed") === "prototype";
   const combination = params.get("shell");
   const updatePhase = params.get("forceUpdate");
   const deckRun = params.get("deckRun") === "1";
   // The gate is a state of the same run, so asking for it implies asking for it.
   const gate = params.get("gate") === "1";
+  const run = params.get("run");
+  // A run that lost its connection is looked at without one, as the prototype shows it.
+  const offline = params.get("offline") === "1" || run === "offline";
 
   const stateOverride: Partial<PersistedShellState> = combination
     ? combinationOverride(combination)
     : {};
 
   // Individual flags win over the named combination, so a session can take C7
-  // and vary one axis without spelling the other three out again.
-  const mode = params.get("mode");
-  if (mode === "agent" || mode === "editor") stateOverride.mode = mode;
+  // and vary one axis without spelling the others out again.
+  const chat = params.get("chat");
+  if (chat) {
+    stateOverride.chat = {
+      folderId: prototype ? PROTOTYPE_FOLDER_IDS.launch : AUDIT_FOLDER_IDS.launch,
+      conversationId: chat,
+    };
+    stateOverride.page = "assets";
+    stateOverride.workspaceOpen = true;
+  }
 
-  const home = params.get("home");
-  if (home === "1" || home === "0") stateOverride.home = home === "1";
+  const file = params.get("file");
+  if (file) {
+    stateOverride.openFileIds = [file];
+    stateOverride.activeFileId = file;
+    stateOverride.tabContexts = { [file]: stateOverride.chat ?? null };
+    stateOverride.page = "editor";
+  }
+
+  // `?tabs=doc,sheet` opens several files in the context on screen; `?file`
+  // says which is in front, the first otherwise.
+  const tabs = params.get("tabs")?.split(",").filter(Boolean) ?? [];
+  if (tabs.length > 0) {
+    stateOverride.openFileIds = tabs;
+    stateOverride.activeFileId = file && tabs.includes(file) ? file : tabs[0];
+    stateOverride.tabContexts = Object.fromEntries(tabs.map((id) => [id, stateOverride.chat ?? null]));
+    stateOverride.page = "editor";
+  }
+
+  const page = params.get("page");
+  if (page && (PAGES as readonly string[]).includes(page)) stateOverride.page = page as Page;
+
+  const panel = params.get("panel");
+  if (panel === "chat" || panel === "assets") stateOverride.panel = panel;
+
+  const side = params.get("side");
+  if (side === "left" || side === "right") stateOverride.chatPosition = side;
+
+  if (params.get("float") === "1") stateOverride.chatFloating = true;
+  if (params.get("workspace") === "closed") stateOverride.workspaceOpen = false;
+  if (params.get("theme") === "dark") stateOverride.theme = "dark";
+
+  const section = params.get("section");
+  if (section && (SETTINGS_SECTIONS as readonly string[]).includes(section)) {
+    stateOverride.settingsSection = section as SettingsSectionId;
+    stateOverride.page = "settings";
+  }
 
   /*
-   * `?deckDemo=1` is the shortcut to the Home button for the bundled recording.
-   * The recording is drawn *in the canvas* (`EditorCanvasHost` is hidden with
-   * the workspace while Home is up), so the flag has to leave Home as well or
-   * it would start behind a screen that never goes away, and it has to set the
-   * same state the button does. Explicit `home=1` still wins — it is read just
-   * above.
+   * `?deckDemo=1` is the shortcut to the bundled recording. The recording is
+   * drawn in the canvas, which is hidden while any other page is up, so the
+   * flag has to put the editor region on screen as well.
    */
   if (deckDemoEnabled(search)) {
     stateOverride.demo = true;
-    if (home !== "1") stateOverride.home = false;
+    if (!page) stateOverride.page = "editor";
   }
 
-  if (slidesGeneratingPreview(search) && home !== "1") {
-    stateOverride.home = false;
+  if (slidesGeneratingPreview(search) && !page) {
+    stateOverride.page = "editor";
+    stateOverride.stage = true;
   }
 
   const nav = params.get("nav");
   if (nav === "collapsed" || nav === "expanded") stateOverride.navCollapsed = nav === "collapsed";
-
-  const presence = params.get("presence");
-  if (presence === "docked" || presence === "floating") {
-    stateOverride.presence = { placement: presence, expanded: true, x: null, y: null, edge: null };
-  }
 
   const forceUpdate =
     updatePhase && (UPDATE_PHASES as readonly string[]).includes(updatePhase)
@@ -209,28 +281,52 @@ export function readDevFixture(
 
   if (!wantsFixture && !forceUpdate && Object.keys(stateOverride).length === 0) return null;
 
-  // `?workspace=empty`: the fake port with nothing in it. The empty-state
-  // findings (S8-008, S6-013) need a workspace with no files, which the audit
-  // dataset never is and which a bridge-backed preview cannot promise either.
+  // `?workspace=empty`: the fake port with nothing in it.
   const emptyWorkspace = params.get("workspace") === "empty";
-  return {
-    port: wantsFixture ? (emptyWorkspace ? createFakePort({ folders: [], files: [] }) : auditPort(deckRun || gate, gate)) : null,
-    // Tabs and the selected folder come from the fixture, not from whatever the
-    // last session left in localStorage — otherwise the first audit run against
-    // a browser profile that has used the shell before opens on stale file ids
-    // the fake has never heard of.
-    stateOverride: wantsFixture && !emptyWorkspace
-      ? {
+  const port = !wantsFixture
+    ? null
+    : emptyWorkspace
+      ? createFakePort({ folders: [], files: [] })
+      : prototype
+        ? prototypePort(run)
+        : auditPort(deckRun || gate, gate);
+
+  // Tabs come from the fixture, not from whatever the last session left in
+  // localStorage — otherwise the first run against a browser profile that has
+  // used the shell before opens on stale file ids the fake has never heard of.
+  const seeded: Partial<PersistedShellState> = !wantsFixture || emptyWorkspace
+    ? {}
+    : prototype
+      ? { expandedFolderIds: [PROTOTYPE_FOLDER_IDS.launch] }
+      : {
           openFileIds: AUDIT_OPEN_FILE_IDS,
           activeFileId: AUDIT_ACTIVE_FILE_ID,
-          selectedFolderId: AUDIT_FOLDER_IDS.launch,
+          tabContexts: Object.fromEntries(
+            AUDIT_OPEN_FILE_IDS.map((id, index) => [id, index % 2 === 0 ? AUDIT_CHAT : null]),
+          ),
           expandedFolderIds: [AUDIT_FOLDER_IDS.launch, AUDIT_FOLDER_IDS.bulk, AUDIT_FOLDER_IDS.empty],
-          ...stateOverride,
-        }
-      : stateOverride,
+        };
+
+  return {
+    port,
+    stateOverride: { ...seeded, ...stateOverride },
     forceUpdate,
     canvasChrome,
+    offline,
   };
+}
+
+function prototypePort(run: string | null): UiPort {
+  const now = Date.now();
+  const staged = run ? prototypeRun(run, now) : null;
+  // The fake lists its conversations newest first, which is last seeded first.
+  const tasks = prototypeTasks().reverse();
+  return createFakePort({
+    folders: prototypeFolders(),
+    files: prototypeFiles(now),
+    // In place: a run does not move its conversation in the list.
+    tasks: staged ? tasks.map((task) => (task.conversationId === staged.conversationId ? staged : task)) : tasks,
+  });
 }
 
 /** `?canvasChrome=sheet|slides|doc`. Anything else reports nothing. */
@@ -246,11 +342,13 @@ function auditPort(deckRun: boolean, gate = false): UiPort {
   return createFakePort({
     folders: auditFolders(),
     files: auditFiles(now),
-    // The fake keys tasks by folder, one each, so the deck run has to *take*
-    // the scoped folder rather than join it — appending beside the audit's own
-    // working task would just lose to it.
+    // The deck run takes the working conversation's place, so the combinations
+    // that open that conversation open the deck run.
     tasks: deckRun
-      ? [...tasks.filter((task) => task.folderId !== AUDIT_FOLDER_IDS.launch), deckRunTask(gate)]
+      ? [
+          { ...deckRunTask(gate), conversationId: "task-working" },
+          ...tasks.filter((task) => task.id !== "task-working"),
+        ]
       : tasks,
   });
 }

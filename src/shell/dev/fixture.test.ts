@@ -12,7 +12,7 @@ describe("the production guard", () => {
     for (const search of [
       "?shellFixture=1",
       "?shell=C7",
-      "?mode=editor&home=0&nav=expanded&presence=floating",
+      "?page=editor&nav=expanded&float=1&chat=plan",
       "?forceUpdate=downloading",
       "?shellFixture=1&shell=C9&forceUpdate=error",
     ]) {
@@ -36,15 +36,29 @@ describe("shell combinations", () => {
   });
 
   it("expands a named combination into view state", () => {
-    const fixture = readDevFixture("?shell=C9", true);
-    expect(fixture?.stateOverride.mode).toBe("editor");
-    expect(fixture?.stateOverride.home).toBe(false);
-    expect(fixture?.stateOverride.navCollapsed).toBe(true);
-    expect(fixture?.stateOverride.presence?.placement).toBe("floating");
+    const fixture = readDevFixture("?shell=C7", true);
+    expect(fixture?.stateOverride).toMatchObject({
+      page: "editor",
+      workspaceOpen: true,
+      chatFloating: true,
+      navCollapsed: true,
+    });
+    expect(fixture?.stateOverride.chat).not.toBeNull();
   });
 
-  it("gives Home combinations no presence, because none renders there", () => {
-    expect(readDevFixture("?shell=C1", true)?.stateOverride.presence).toBeUndefined();
+  it("puts no conversation beside Home, Local or Settings", () => {
+    // OD-UI-1.2 §16: those three never have a second column. A combination
+    // that drew one would be reviewing a state the product cannot reach.
+    for (const name of ["C1", "C2", "C3", "C10"]) {
+      expect(readDevFixture(`?shell=${name}`, true)?.stateOverride.chat ?? null, name).toBeNull();
+    }
+  });
+
+  it("only floats a conversation over an open content region", () => {
+    for (const [name, combination] of Object.entries(SHELL_COMBINATIONS)) {
+      const floating = "chatFloating" in combination && combination.chatFloating;
+      if (floating) expect("workspaceOpen" in combination && combination.workspaceOpen, name).toBe(true);
+    }
   });
 
   it("ignores an unknown combination rather than inventing one", () => {
@@ -52,11 +66,98 @@ describe("shell combinations", () => {
   });
 
   it("lets an individual flag override the named combination", () => {
-    const fixture = readDevFixture("?shell=C7&nav=expanded", true);
-    // C7 is the collapsed rail; the explicit flag has to win, or a session
-    // varying one axis would silently screenshot the wrong one.
+    const fixture = readDevFixture("?shell=C7&nav=expanded&side=right", true);
+    // C7 hides the sidebar; the explicit flag has to win, or a session varying
+    // one axis would silently screenshot the wrong one.
     expect(fixture?.stateOverride.navCollapsed).toBe(false);
-    expect(fixture?.stateOverride.mode).toBe("agent");
+    expect(fixture?.stateOverride.chatPosition).toBe("right");
+    expect(fixture?.stateOverride.chatFloating).toBe(true);
+  });
+});
+
+describe("individual flags", () => {
+  it("opens a conversation beside its project's Assets", () => {
+    const fixture = readDevFixture("?shellFixture=1&seed=prototype&chat=plan", true);
+    expect(fixture?.stateOverride).toMatchObject({
+      page: "assets",
+      workspaceOpen: true,
+      chat: { conversationId: "plan" },
+    });
+  });
+
+  it("opens a file in the context on screen", () => {
+    const local = readDevFixture("?shellFixture=1&seed=prototype&file=doc", true)?.stateOverride;
+    expect(local).toMatchObject({ page: "editor", activeFileId: "doc", openFileIds: ["doc"] });
+    expect(local?.tabContexts?.doc ?? null).toBeNull();
+
+    const chat = readDevFixture("?shellFixture=1&seed=prototype&chat=plan&file=doc", true)?.stateOverride;
+    expect(chat?.tabContexts?.doc).toMatchObject({ conversationId: "plan" });
+  });
+
+  it("opens several tabs, with the named one in front", () => {
+    const first = readDevFixture("?shellFixture=1&seed=prototype&tabs=doc,sheet", true)?.stateOverride;
+    expect(first).toMatchObject({ openFileIds: ["doc", "sheet"], activeFileId: "doc", page: "editor" });
+    const second = readDevFixture("?shellFixture=1&seed=prototype&tabs=doc,sheet&file=sheet", true)?.stateOverride;
+    expect(second?.activeFileId).toBe("sheet");
+    expect(second?.openFileIds).toEqual(["doc", "sheet"]);
+  });
+
+  it("lets ?page decide what the content region shows", () => {
+    const fixture = readDevFixture("?shellFixture=1&seed=prototype&chat=plan&page=editor", true);
+    expect(fixture?.stateOverride.page).toBe("editor");
+    expect(readDevFixture("?page=nowhere", true)).toBeNull();
+  });
+
+  it("opens Settings at a section, and refuses one that does not exist", () => {
+    expect(readDevFixture("?section=models", true)?.stateOverride).toMatchObject({
+      page: "settings",
+      settingsSection: "models",
+    });
+    expect(readDevFixture("?section=secret", true)).toBeNull();
+  });
+
+  it("closes the content region, floats and docks the conversation", () => {
+    const fixture = readDevFixture("?shellFixture=1&chat=x&workspace=closed&float=1&panel=assets&side=right", true);
+    expect(fixture?.stateOverride).toMatchObject({
+      workspaceOpen: false,
+      chatFloating: true,
+      panel: "assets",
+      chatPosition: "right",
+    });
+  });
+});
+
+describe("a run in a named state", () => {
+  const taskFor = async (state: string) => {
+    const port = readDevFixture(`?shellFixture=1&seed=prototype&chat=plan&run=${state}`, true)?.port;
+    return port!.agent.openConversation("launch", "plan");
+  };
+
+  it("stages each state the standard describes", async () => {
+    for (const state of [
+      "planning", "reading", "working", "checking", "input", "review",
+      "complete", "stopped", "failed", "partial", "offline",
+    ]) {
+      const task = await taskFor(state);
+      expect(task, state).not.toBeNull();
+      expect(task!.status, state).not.toBe("idle");
+    }
+  });
+
+  it("leaves the conversation where it was in the list", async () => {
+    const port = readDevFixture("?shellFixture=1&seed=prototype&chat=plan&run=complete", true)?.port;
+    const plain = readDevFixture("?shellFixture=1&seed=prototype", true)?.port;
+    const order = async (from: typeof port) => (await from!.agent.list()).map((task) => task.conversationId);
+    expect(await order(port)).toEqual(await order(plain));
+  });
+
+  it("asks for an offline workspace without making one", () => {
+    // Parsing must not reach into the app: a test that reads this fixture would
+    // otherwise leave every later test in the file offline.
+    expect(readDevFixture("?shellFixture=1&seed=prototype&chat=plan&run=offline", true)?.offline).toBe(true);
+    expect(readDevFixture("?shellFixture=1&offline=1", true)?.offline).toBe(true);
+    expect(readDevFixture("?shellFixture=1", true)?.offline).toBe(false);
+    expect(navigator.onLine).toBe(true);
   });
 });
 
@@ -81,19 +182,34 @@ describe("the fixture port", () => {
     );
   });
 
+  it("serves the prototype's workspace when asked", async () => {
+    const port = readDevFixture("?shellFixture=1&seed=prototype", true)?.port;
+    const folders = await port!.folders.list();
+    const tasks = await port!.agent.list();
+    expect(folders.filter((folder) => !folder.isDefault).map((folder) => folder.name)).toEqual([
+      "MO product launch",
+      "Quarterly review",
+    ]);
+    expect(tasks.map((task) => task.title)).toEqual([
+      "Launch plan & copy",
+      "Sales forecast review",
+      "Launch presentation",
+    ]);
+  });
+
   it("opens on enough tabs to overflow the strip", () => {
     const fixture = readDevFixture("?shellFixture=1", true);
     expect(fixture?.stateOverride.openFileIds?.length).toBeGreaterThanOrEqual(5);
     expect(fixture?.stateOverride.activeFileId).toBe("file-plan");
   });
 
-  it("does not let a stale combination override the fixture's own tabs", () => {
+  it("does not let a combination override the fixture's own tabs", () => {
     // `?shell=` writes no tab state, so the fixture's ids have to survive the
     // merge. They did not in the first version: the spread order was wrong and
     // every fixture run opened on whatever localStorage happened to hold.
     const fixture = readDevFixture("?shellFixture=1&shell=C6", true);
     expect(fixture?.stateOverride.openFileIds).toContain("file-deck");
-    expect(fixture?.stateOverride.home).toBe(false);
+    expect(fixture?.stateOverride.page).toBe("editor");
   });
 });
 

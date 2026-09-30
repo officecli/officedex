@@ -1,42 +1,47 @@
 /**
  * Shell-local view state persistence.
  *
- * This is deliberately separate from the UiPort: how wide the sidebar is and
- * where the agent bubble sits are properties of *this window*, not of the
- * workspace, so they never travel through the service seam. Open tabs and
- * whether the workspace is on screen are session navigation and are not
- * restored on launch — see `omitSessionNavigation`.
+ * This is deliberately separate from the UiPort: whether the sidebar is hidden,
+ * how wide the conversation is and which avatar the user picked are properties
+ * of *this window*, not of the workspace, so they never travel through the
+ * service seam. Open tabs, the open conversation and the page on screen are
+ * session navigation and are not restored on launch — see
+ * `omitSessionNavigation`.
  *
  * One namespaced key, one version. A shape change bumps the version and the
  * old value is dropped rather than migrated — view state is cheap to rebuild.
+ * `v2` is the OD-UI-1.2 shape; `v1` belonged to the Agent/Editor shell and
+ * shares no field that would mean the same thing here.
  */
 
-const KEY = "officedex.shell.v1";
+import type { AvatarId, ChatPanel, ChatPosition, ChatRef, Page, SettingsSectionId } from "./shellReducer";
+
+const KEY = "officedex.shell.v2";
 
 export interface PersistedShellState {
-  mode: "agent" | "editor";
-  navWidth: number;
+  page: Page;
+  chat: ChatRef | null;
+  panel: ChatPanel;
+  workspaceOpen: boolean;
+  chatFloating: boolean;
+  chatPosition: ChatPosition;
+  chatWidth: number;
   navCollapsed: boolean;
-  taskWidth: number;
-  selectedFolderId: string | null;
   expandedFolderIds: string[];
-  revealedFolderIds: string[];
   openFileIds: string[];
   activeFileId: string | null;
-  home: boolean;
-  homeList: "recent" | "pinned";
+  tabContexts: Record<string, ChatRef | null>;
+  settingsSection: SettingsSectionId;
+  avatar: AvatarId;
+  theme: "light" | "dark";
+  featuresVisible: boolean;
+  featuresDocked: boolean;
   /** The bundled recording is on the canvas rather than a file. */
   demo: boolean;
   /** When it was last asked for; it loses the canvas to anything newer. */
   demoStartedAt?: string | null;
-  presence: {
-    placement: "docked" | "floating";
-    expanded: boolean;
-    /** null until the presence has been placed; see PresenceState. */
-    x: number | null;
-    y: number | null;
-    edge: "left" | "right" | "top" | "bottom" | null;
-  };
+  /** A run's live stage is on the canvas rather than a file. */
+  stage: boolean;
 }
 
 export function readPersisted(): Partial<PersistedShellState> {
@@ -52,23 +57,31 @@ export function readPersisted(): Partial<PersistedShellState> {
 }
 
 /**
- * Chrome preferences that survive a relaunch. Session navigation — Home vs the
- * workspace, which tabs were open, the bundled recording — does not: entering
- * the app always lands on Home with an empty tab strip. Previous documents stay
- * in the library.
+ * Preferences survive a relaunch; session navigation does not.
  *
- * Tests that must reload into a workspace (S4) pass `?restoreSession=1`.
+ * OD-UI-1.2 §02: an ordinary launch lands on Home with no document tabs, and
+ * does not restore the previous ones. Whatever was open stays in the library,
+ * and unsaved drafts come back through the recovery entry on Home, by the
+ * user's choice.
+ *
+ * Tests that must reload into a workspace pass `?restoreSession=1`.
  */
 export function omitSessionNavigation(
   persisted: Partial<PersistedShellState>,
 ): Partial<PersistedShellState> {
-  const chrome = { ...persisted };
-  delete chrome.home;
-  delete chrome.openFileIds;
-  delete chrome.activeFileId;
-  delete chrome.demo;
-  delete chrome.demoStartedAt;
-  return chrome;
+  const preferences = { ...persisted };
+  delete preferences.page;
+  delete preferences.chat;
+  delete preferences.panel;
+  delete preferences.workspaceOpen;
+  delete preferences.chatFloating;
+  delete preferences.openFileIds;
+  delete preferences.activeFileId;
+  delete preferences.tabContexts;
+  delete preferences.demo;
+  delete preferences.demoStartedAt;
+  delete preferences.stage;
+  return preferences;
 }
 
 export function shouldRestoreSession(search?: string): boolean {

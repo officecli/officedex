@@ -4,17 +4,34 @@ import { afterEach, describe, expect, it } from "vitest";
 import { toast } from "../../../renderer/ui";
 import type { SendInput } from "../../../shared/uiPort";
 import { resetComposerDrafts } from "../../composer/Composer";
+import { resetLayers } from "../../kit/layers";
 import { renderShell } from "../../test/renderShell";
+
+/**
+ * The image creator, and the image composer beside a picture's conversation.
+ *
+ * r10 keeps this interface as it was (§18: "AI image 保留既有图像创作界面") and
+ * moves it: it is a page of its own — New → AI image, or Home's Quick start —
+ * rather than a mode Home's composer could be toggled into. So what these
+ * assert is unchanged, the brief and every control that decides what the run
+ * receives, plus the two ways in and the compact form the same control takes in
+ * the task column afterwards.
+ */
 
 afterEach(() => {
   cleanup();
   toast.destroy();
   resetComposerDrafts();
+  resetLayers();
 });
 
-async function agentHome() {
+/** The image creator page, the way the UI opens it. */
+async function imageCreator() {
   const shell = await renderShell({ fastAgent: true });
-  await shell.dispatch({ type: "go-home" });
+  await act(async () => {
+    fireEvent.click(shell.view.getByRole("button", { name: "New AI image" }));
+  });
+  await waitFor(() => expect(shell.state().page).toBe("image"));
   const sent: SendInput[] = [];
   const send = shell.port.agent.send.bind(shell.port.agent);
   shell.port.agent.send = async (input) => {
@@ -24,46 +41,60 @@ async function agentHome() {
   return { ...shell, sent };
 }
 
-async function enterImageMode(shell: Awaited<ReturnType<typeof agentHome>>) {
-  await act(async () => {
-    fireEvent.click(shell.view.getByRole("button", { name: "Create an image" }));
-  });
-}
+describe("the way into the image creator", () => {
+  it("is Home's Quick start", async () => {
+    const shell = await renderShell({ fastAgent: true });
 
-describe("Home's image mode", () => {
-  it("is a toggle that retitles Home and keeps what was typed", async () => {
-    const shell = await agentHome();
-    const input = shell.view.getByLabelText("New task instructions");
     await act(async () => {
-      fireEvent.change(input, { target: { value: "A lamp" } });
+      fireEvent.click(shell.view.getByRole("button", { name: "New AI image" }));
     });
 
-    await enterImageMode(shell);
+    expect(shell.state().page).toBe("image");
     expect(shell.view.getByRole("heading", { level: 1 }).textContent).toBe("What would you like to create?");
-    expect(shell.view.getByRole("button", { name: "Create an image" }).getAttribute("aria-pressed")).toBe("true");
-    expect(shell.view.getByRole("group", { name: "Image prompt ideas" })).toBeTruthy();
-    expect((input as HTMLTextAreaElement).value).toBe("A lamp");
-
-    await enterImageMode(shell);
-    expect(shell.view.getByRole("heading", { level: 1 }).textContent).toBe("What would you like to get done?");
-    expect(shell.view.queryByRole("group", { name: "Image prompt ideas" })).toBeNull();
+    // The brief, not a conversation: nothing has been sent and no chat opened.
+    expect(shell.state().chat).toBeNull();
   });
 
-  it("swaps the text controls for the image strip", async () => {
-    const shell = await agentHome();
-    await enterImageMode(shell);
+  it("is New → AI image", async () => {
+    const shell = await renderShell({ fastAgent: true });
+
+    await act(async () => {
+      fireEvent.click(shell.view.getByRole("button", { name: "New" }));
+    });
+    await act(async () => {
+      fireEvent.click(
+        document.querySelector<HTMLButtonElement>('#dx-new-popover [data-act=create-local][data-id=png]')!,
+      );
+    });
+
+    await waitFor(() => expect(shell.state().page).toBe("image"));
+    expect(shell.view.getByRole("heading", { level: 1 }).textContent).toBe("What would you like to create?");
+  });
+});
+
+describe("the image creator's composer", () => {
+  it("is the image interface, not the agent one, and cannot be switched out of it", async () => {
+    const shell = await imageCreator();
+
+    const composer = document.querySelector<HTMLElement>(".shell-cx.is-image");
+    expect(composer).not.toBeNull();
+    // The r10 agent composer is not also on the page: this is the form the
+    // design keeps, not a fourth chat input.
+    expect(document.querySelector(".dx-composer")).toBeNull();
+    // The page *is* image mode, so there is no way out of it to offer.
+    expect(composer!.querySelector(".shell-ig-mode-close")).toBeNull();
+    expect(composer!.querySelector(".shell-ig-head-exit")).toBeNull();
+
     const strip = shell.view.getByRole("group", { name: "Image options" });
     for (const name of ["Choose image model", "Image settings", "Add text to image", "Mention files or folders", "Camera settings", "Image style"]) {
       expect(within(strip).getByRole("button", { name })).toBeTruthy();
     }
-    expect(shell.view.queryByRole("button", { name: "Dictate" })).toBeNull();
-    expect(shell.view.queryByRole("button", { name: "Add files or folders" })).toBeNull();
     expect(shell.view.getByRole("button", { name: "Add reference image" })).toBeTruthy();
+    expect(shell.view.getByRole("group", { name: "Image prompt ideas" })).toBeTruthy();
   });
 
   it("fills a purpose without sending it", async () => {
-    const shell = await agentHome();
-    await enterImageMode(shell);
+    const shell = await imageCreator();
     await act(async () => {
       fireEvent.click(shell.view.getByRole("button", { name: /Product photo/ }));
     });
@@ -74,8 +105,7 @@ describe("Home's image mode", () => {
 
 describe("the image settings", () => {
   it("send what the panel shows", async () => {
-    const shell = await agentHome();
-    await enterImageMode(shell);
+    const shell = await imageCreator();
     await act(async () => {
       fireEvent.click(shell.view.getByRole("button", { name: "Image settings" }));
     });
@@ -102,8 +132,7 @@ describe("the image settings", () => {
   });
 
   it("refuses a typed size the model would reject", async () => {
-    const shell = await agentHome();
-    await enterImageMode(shell);
+    const shell = await imageCreator();
     await act(async () => {
       fireEvent.click(shell.view.getByRole("button", { name: "Image settings" }));
     });
@@ -117,8 +146,7 @@ describe("the image settings", () => {
   });
 
   it("only lets Auto be picked as the model, and says why", async () => {
-    const shell = await agentHome();
-    await enterImageMode(shell);
+    const shell = await imageCreator();
     await act(async () => {
       fireEvent.click(shell.view.getByRole("button", { name: "Choose image model" }));
     });
@@ -130,8 +158,7 @@ describe("the image settings", () => {
   });
 
   it("shows a chosen style and camera as chips that remove them", async () => {
-    const shell = await agentHome();
-    await enterImageMode(shell);
+    const shell = await imageCreator();
     await act(async () => {
       fireEvent.click(shell.view.getByRole("button", { name: "Image style" }));
     });
@@ -159,8 +186,7 @@ describe("the image settings", () => {
   });
 
   it("quotes the selection as text for the picture", async () => {
-    const shell = await agentHome();
-    await enterImageMode(shell);
+    const shell = await imageCreator();
     const input = shell.view.getByLabelText("New task instructions") as HTMLTextAreaElement;
     await act(async () => {
       fireEvent.change(input, { target: { value: "A poster saying Hello" } });
@@ -173,47 +199,9 @@ describe("the image settings", () => {
   });
 });
 
-describe("New task in agent mode", () => {
-  it("asks what kind, then primes Home for it", async () => {
-    const shell = await renderShell({ fastAgent: true });
-    await act(async () => {
-      fireEvent.click(shell.view.getByRole("button", { name: "New task" }));
-    });
-    const menu = shell.view.getByRole("menu", { name: "New task type" });
-    expect(within(menu).getAllByRole("menuitem").map((item) => item.getAttribute("aria-label"))).toEqual([
-      "Document",
-      "Spreadsheet",
-      "Presentation",
-      "Image",
-    ]);
-
-    await act(async () => {
-      fireEvent.click(within(menu).getByRole("menuitem", { name: "Image" }));
-    });
-    await waitFor(() =>
-      expect(shell.view.getByRole("heading", { level: 1 }).textContent).toBe("What would you like to create?"),
-    );
-    expect((shell.view.getByLabelText("New task instructions") as HTMLTextAreaElement).value).not.toBe("");
-  });
-
-  it("moves by row with the arrow keys", async () => {
-    const shell = await renderShell({ fastAgent: true });
-    await act(async () => {
-      fireEvent.click(shell.view.getByRole("button", { name: "New task" }));
-    });
-    const menu = shell.view.getByRole("menu", { name: "New task type" });
-    await waitFor(() => expect(document.activeElement?.getAttribute("aria-label")).toBe("Document"));
-    fireEvent.keyDown(menu, { key: "ArrowDown" });
-    expect(document.activeElement?.getAttribute("aria-label")).toBe("Presentation");
-    fireEvent.keyDown(menu, { key: "ArrowRight" });
-    expect(document.activeElement?.getAttribute("aria-label")).toBe("Image");
-  });
-});
-
 describe("the image composer in the task column", () => {
   it("fits one line: add-reference first, no mode label, model in the header", async () => {
-    const shell = await agentHome();
-    await enterImageMode(shell);
+    const shell = await imageCreator();
     await act(async () => {
       fireEvent.change(shell.view.getByLabelText("New task instructions"), { target: { value: "A lamp" } });
     });
@@ -221,8 +209,9 @@ describe("the image composer in the task column", () => {
       fireEvent.click(shell.view.getByTitle("Send message"));
     });
 
+    // Sending opens the request's own conversation beside the run's stage.
     const composer = await waitFor(() => {
-      const found = document.querySelector<HTMLElement>(".shell-cx--task.is-image");
+      const found = document.querySelector<HTMLElement>("#dx-conversation .shell-cx--task.is-image");
       expect(found).toBeTruthy();
       return found!;
     });
@@ -237,27 +226,5 @@ describe("the image composer in the task column", () => {
     // No tile column beside the prompt, and no empty reference row above it.
     expect(composer.querySelector(".shell-ig-prompt-row")).toBeNull();
     expect(composer.querySelector(".shell-ig-reference-strip")).toBeNull();
-  });
-});
-
-describe("leaving image mode from Home", () => {
-  it("drops image mode when a document type is picked after Create an image", async () => {
-    const shell = await agentHome();
-    await enterImageMode(shell);
-    expect(shell.view.getByRole("group", { name: "Image options" })).toBeTruthy();
-
-    await act(async () => {
-      fireEvent.click(shell.view.getByRole("button", { name: "Write a document" }));
-    });
-
-    expect(shell.view.queryByRole("group", { name: "Image options" })).toBeNull();
-    expect(shell.view.getByRole("heading", { level: 1 }).textContent).toBe("What would you like to get done?");
-    expect(shell.view.getByRole("button", { name: "Create an image" }).getAttribute("aria-pressed")).toBe("false");
-
-    await act(async () => {
-      fireEvent.click(shell.view.getByTitle("Send message"));
-    });
-    expect(shell.sent[0].documentType).toBe("docx");
-    expect(shell.sent[0].imageGeneration).toBeUndefined();
   });
 });

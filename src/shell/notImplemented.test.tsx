@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { ToastHost, toast } from "../renderer/ui";
 import { NotImplementedError } from "../shared/notImplemented";
+import { Layers, resetLayers } from "./kit/layers";
+import { SEED_ACTIVE_FILE_ID } from "./port/fake/seed";
 import { reportPortFailure } from "./port/reportPortFailure";
 import { renderShell } from "./test/renderShell";
 
@@ -23,6 +25,7 @@ import { renderShell } from "./test/renderShell";
 
 afterEach(() => {
   toast.destroy();
+  resetLayers();
   cleanup();
 });
 
@@ -34,17 +37,25 @@ const untilNotice = (needle: string) =>
   });
 
 describe("reportPortFailure", () => {
-  // The shell mounts ToastHost inside App; these two exercise the reporter on
-  // its own, so they bring their own host.
-  const host = () => render(<ToastHost />);
+  // The shell mounts both hosts inside App; these exercise the reporter on its
+  // own, so they bring their own.
+  const host = () =>
+    render(
+      <>
+        <ToastHost />
+        <Layers />
+      </>,
+    );
 
-  // Two different things to tell someone, so two different tones and two
-  // different headlines.
+  // Two different things to tell someone, said in two different places: a
+  // missing feature is the workspace's own one-line notice, which asks nothing
+  // of the user; a real failure is an error with a headline.
   it("separates a missing feature from a real failure", async () => {
     host();
     reportPortFailure(new NotImplementedError("files.create", "Creating a blank document is not built yet."));
-    await untilNotice("Not built yet");
-    expect(notice()).toContain("Creating a blank document is not built yet.");
+    await untilNotice("Creating a blank document is not built yet.");
+    expect(document.querySelector("#dx-notice")?.textContent).toBe("Creating a blank document is not built yet.");
+    expect(document.body.querySelectorAll(".od-toast-slot")).toHaveLength(0);
 
     reportPortFailure(new Error("the disk is full"));
     await untilNotice("That did not work");
@@ -60,44 +71,57 @@ describe("reportPortFailure", () => {
 
 describe("controls with nothing behind them", () => {
   /*
-   * Share used to be the representative of this class, and these two cases
-   * asserted it said "Not built yet".
+   * Share is where this class of control is now reached from, and it is worth
+   * being precise about which half is missing.
    *
-   * It is not in that class, and saying so was the bug (S8-011): sharing *is*
-   * implemented — the system share sheet when there is one, the file's path on
-   * the clipboard otherwise — it just needs a document. The old notice ran
-   * "Sharing a file from OfficeDex is not built yet. Open a local file first.",
-   * two sentences that cancel each other out, and the assertion below was
-   * keeping them that way.
+   * Sharing itself is implemented: a local file is shared as a copy, and
+   * pressing Share opens that dialog (§09). "Export file copy" inside it is the
+   * one with no port method behind it, and it is the representative here —
+   * saying "Share is not built yet" was itself the bug (S8-011).
    *
-   * What the rule actually requires is unchanged and still asserted here: press
-   * the control, and it answers. Toasts portal outside the render container, so
-   * the assertions read from `document.body`.
+   * Share only exists while a document is open, so these open one first.
+   * Toasts portal outside the render container; the modal is drawn inside it.
    */
-  it("answers when pressed", async () => {
+  async function shellWithShareDialog() {
     const shell = await renderShell();
-    await shell.dispatch({ type: "go-home" });
+    await shell.dispatch({ type: "open-file", fileId: SEED_ACTIVE_FILE_ID });
 
-    const share = shell.view.container.querySelector<HTMLElement>(".shell-share");
+    const share = shell.view.container.querySelector<HTMLElement>(".dx-source-share");
     expect(share, "the Share button is still in the UI").not.toBeNull();
-
     fireEvent.click(share!);
-    await untilNotice("Open a file to share it");
-    // And it no longer claims the feature is missing.
-    expect(notice()).not.toContain("not built yet");
+
+    const dialog = await waitFor(() => {
+      const node = shell.view.container.querySelector<HTMLElement>("#dx-modal");
+      if (!node?.textContent?.includes("Share a copy")) {
+        throw new Error(`waiting for the share dialog — saw: ${node?.textContent?.slice(0, 200) ?? "nothing"}`);
+      }
+      return node;
+    });
+    const exportCopy = dialog.querySelector<HTMLElement>("[data-act=export]");
+    expect(exportCopy, "Export file copy is still in the dialog").not.toBeNull();
+    return { shell, exportCopy: exportCopy! };
+  }
+
+  it("answers when pressed", async () => {
+    const { exportCopy } = await shellWithShareDialog();
+
+    fireEvent.click(exportCopy);
+
+    await untilNotice("Export is not available yet");
+    expect(document.querySelector("#dx-notice")?.textContent).toContain("Export is not available yet");
   });
 
-  // Six clicks on six formatting tools should leave one notice on screen, not
-  // six. The key is what makes that true.
+  // Three presses should leave one notice on screen, not three: the workspace
+  // has one notice, and saying a thing again replaces it.
   it("does not stack one notice per click", async () => {
-    const shell = await renderShell();
-    const share = shell.view.container.querySelector<HTMLElement>(".shell-share")!;
+    const { exportCopy } = await shellWithShareDialog();
 
-    fireEvent.click(share);
-    fireEvent.click(share);
-    fireEvent.click(share);
-    await untilNotice("Open a file to share it");
+    fireEvent.click(exportCopy);
+    fireEvent.click(exportCopy);
+    fireEvent.click(exportCopy);
+    await untilNotice("Export is not available yet");
 
-    expect(document.body.querySelectorAll(".od-toast-slot")).toHaveLength(1);
+    expect(document.body.querySelectorAll("#dx-notice.dx-visible")).toHaveLength(1);
+    expect(document.body.querySelectorAll(".od-toast-slot")).toHaveLength(0);
   });
 });

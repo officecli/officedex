@@ -71,7 +71,9 @@ export function inPlaceEditorFor(
 export function useAgentTask() {
   const port = usePort();
   const canvas = useCanvas();
-  const { scopeFolderId, reload, files } = useShell();
+  const { scopeFolderId, reload, files, state } = useShell();
+  // A project holds many conversations; the panel shows the selected one.
+  const conversationId = state.chat?.folderId === scopeFolderId ? state.chat.conversationId : null;
   const settings = useComposerSettings();
   const [task, setTask] = useState<AgentTask | null>(null);
 
@@ -92,7 +94,13 @@ export function useAgentTask() {
     let cancelled = false;
     void (async () => {
       try {
-        const current = await port.agent.current(scopeFolderId);
+        // The port shows one conversation per folder and keeps its own idea of
+        // which. A restored selection, or a move between two conversations of
+        // one project, has to tell it — otherwise the panel shows the folder's
+        // last conversation under the selected one's name.
+        const current = conversationId
+          ? await port.agent.openConversation(scopeFolderId, conversationId)
+          : await port.agent.current(scopeFolderId);
         if (!cancelled) setTask(current);
       } catch (reason) {
         if (!cancelled) reportPortFailure(reason);
@@ -101,7 +109,7 @@ export function useAgentTask() {
     return () => {
       cancelled = true;
     };
-  }, [port, scopeFolderId]);
+  }, [port, scopeFolderId, conversationId]);
 
   // A local edit belongs to the folder it was run in. Changing scope is the
   // user looking somewhere else, and the conversation they find there should be

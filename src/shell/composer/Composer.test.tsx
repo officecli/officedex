@@ -3,13 +3,18 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { toast } from "../../renderer/ui";
 import { NotImplementedError } from "../../shared/notImplemented";
-import { SEED_ACTIVE_FILE_ID, seedModels } from "../port/fake/seed";
-import { renderShell } from "../test/renderShell";
+import type { SendInput } from "../../shared/uiPort";
+import { resetLayers } from "../kit/layers";
+import { SEED_ACTIVE_FILE_ID, SEED_FOLDER_ID } from "../port/fake/seed";
+import { renderShell, type RenderShellOptions } from "../test/renderShell";
 import { resetComposerDrafts } from "./Composer";
+import { settingsStoreFor } from "./settingsStore";
 
 afterEach(() => {
   cleanup();
   toast.destroy();
+  // The menu, dialog and notice slots are module state shared by every render.
+  resetLayers();
   // `drafts` is module state shared by every composer in this file. Without
   // this, one test's half-written message is the next one's starting value.
   resetComposerDrafts();
@@ -18,541 +23,642 @@ afterEach(() => {
 /** Toasts portal to the body, so notices are read from there. */
 const notice = () => document.body.textContent ?? "";
 
-async function agentHome() {
-  const shell = await renderShell({ fastAgent: true });
-  await shell.dispatch({ type: "go-home" });
-  return shell;
-}
-
-async function taskColumn() {
-  const shell = await renderShell({ fastAgent: true });
-  await shell.dispatch({ type: "open-file", fileId: SEED_ACTIVE_FILE_ID });
-  return shell;
-}
+type Shell = Awaited<ReturnType<typeof renderShell>>;
 
 /**
- * The guard for the second half of decision 2.
+ * Where unfiled conversations live — the seed's default folder.
  *
- * The prototype put a folder dropdown in the Agent Home header whose only job
- * was to pick what a task would touch — while the composer separately supported
- * `@folder` mentions that did the same thing. These assertions pin the merged
- * result: scope is a chip on the message, there is no second folder control,
- * and every placement of the composer offers the same one.
+ * Home's messages go here, because Home starts work that belongs to no project
+ * yet. It is not exported by the seed, so it is named once, here.
  */
-describe("task scope is a composer chip", () => {
-  it("defaults to the folder the sidebar has selected", async () => {
-    const shell = await agentHome();
-    await shell.dispatch({ type: "select-folder", folderId: "folder-research" });
+const DEFAULT_FOLDER_ID = "folder-inbox";
 
-    expect(shell.view.getByTitle("Scope: Customer research")).toBeInTheDocument();
+/**
+ * The composer in the conversation column.
+ *
+ * `open-chat` with no conversation id is a chat that has been started and not
+ * yet spoken in — the state most messages in these tests begin from.
+ */
+async function conversation(folderId = SEED_FOLDER_ID, options: RenderShellOptions = {}): Promise<Shell> {
+  const shell = await renderShell({ fastAgent: true, ...options });
+  await shell.dispatch({ type: "open-chat", chat: { folderId, conversationId: null } });
+  return shell;
+}
+
+/** The Dex panel over a Local document, opened from its bubble. */
+async function dexPanel(fileId = SEED_ACTIVE_FILE_ID, options: RenderShellOptions = {}): Promise<Shell> {
+  const shell = await renderShell({ fastAgent: true, ...options });
+  await shell.dispatch({ type: "open-local-file", fileId });
+  await act(async () => {
+    fireEvent.click(shell.view.container.querySelector<HTMLElement>("button.dx-dex[data-act=dex]")!);
+  });
+  return shell;
+}
+
+const chatInput = (shell: Shell) => shell.view.getByLabelText("Message OfficeDex") as HTMLTextAreaElement;
+const dexInput = (shell: Shell) => shell.view.getByLabelText("Message Dex about this document") as HTMLTextAreaElement;
+/** Home's one main input. A fresh render starts on Home, so no dispatch is needed. */
+const homeInput = (shell: Shell) => shell.view.getByLabelText("Describe your task") as HTMLTextAreaElement;
+
+/** Every message the shell handed the port, in order. */
+function watchSends(shell: Shell): SendInput[] {
+  const sent: SendInput[] = [];
+  const send = shell.port.agent.send.bind(shell.port.agent);
+  shell.port.agent.send = async (input) => {
+    sent.push(input);
+    await send(input);
+  };
+  return sent;
+}
+
+const type = (input: HTMLElement, value: string) =>
+  act(async () => {
+    fireEvent.change(input, { target: { value } });
   });
 
-  it("falls back to the active file's folder when nothing is selected", async () => {
-    const shell = await taskColumn();
-    // `open-file` is the raw reducer action, so no folder gets selected: this is
-    // exactly the case the fallback exists for.
-    expect(shell.state().selectedFolderId).toBeNull();
-    expect(shell.view.getByTitle("Scope: MO product launch")).toBeInTheDocument();
+const press = (element: HTMLElement) =>
+  act(async () => {
+    fireEvent.click(element);
   });
 
-  it("offers no folder control outside the composer", async () => {
-    const shell = await agentHome();
+/** The composer's hidden file picker, which stands in for the system one. */
+const filePicker = (shell: Shell) =>
+  shell.view.container.querySelector<HTMLInputElement>(
+    '.dx-composer input[type="file"]:not([webkitdirectory])',
+  )!;
 
-    // The prototype's header dropdown is gone; the only folder picker is the
-    // scope chip, and the sidebar selection that feeds it.
-    const home = shell.view.container.querySelector<HTMLElement>(".shell-home")!;
-    const banner = within(home).queryByRole("button", { name: /Switch folder/i });
-    expect(banner).toBeNull();
-
-    const scopeTriggers = shell.view.container.querySelectorAll(".shell-cx-scope");
-    expect(scopeTriggers).toHaveLength(1);
+const attach = (shell: Shell, name: string) =>
+  act(async () => {
+    fireEvent.change(filePicker(shell), { target: { files: [new File(["x"], name)] } });
   });
 
-  it("changes scope from the chip and sends the new folder", async () => {
-    const shell = await agentHome();
+/**
+ * Where a message goes, now that nothing in the composer chooses it.
+ *
+ * The old composer carried a folder chip and a folder menu; scope is now the
+ * conversation the message was typed in, or — in the Dex panel — the folder of
+ * the document on screen. These pin that the run lands there, and that the
+ * conversation the shell was left holding is the one the run named.
+ */
+describe("a message starts a run where it was typed", () => {
+  it("sends it to the conversation's project", async () => {
+    const shell = await conversation("folder-research");
+    const sent = watchSends(shell);
 
-    await act(async () => {
-      fireEvent.click(shell.view.getByTitle(/^Scope: /));
-    });
-    await act(async () => {
-      fireEvent.click(shell.view.getByRole("menuitemradio", { name: /Customer research/ }));
-    });
+    await type(chatInput(shell), "Summarise the interviews.");
+    await press(shell.view.getByTitle("Send message"));
 
-    expect(shell.state().selectedFolderId).toBe("folder-research");
-
-    await act(async () => {
-      fireEvent.change(shell.view.getByLabelText("New task instructions"), {
-        target: { value: "Summarise the interviews." },
-      });
-    });
-    await act(async () => {
-      fireEvent.click(shell.view.getByTitle("Send message"));
-    });
-
+    expect(sent).toHaveLength(1);
+    expect(sent[0].folderId).toBe("folder-research");
     await waitFor(async () => {
       const task = await shell.port.agent.current("folder-research");
-      if (!task) throw new Error("task not started in the chosen folder");
-      expect(task.folderId).toBe("folder-research");
+      if (!task?.messages.length) throw new Error("no message recorded in the chosen project");
+      expect(task.messages[0].text).toBe("Summarise the interviews.");
     });
   });
 
-  it("is the same control in every placement", async () => {
-    const shell = await taskColumn();
+  it("adopts the conversation id the first run gives it", async () => {
+    const shell = await conversation();
+    expect(shell.state().chat).toEqual({ folderId: SEED_FOLDER_ID, conversationId: null });
 
-    // Docked column.
-    expect(shell.view.getAllByTitle(/^Scope: /)).toHaveLength(1);
+    await type(chatInput(shell), "Draft the launch checklist.");
+    await press(shell.view.getByTitle("Send message"));
 
-    // Floating panel.
-    await shell.dispatch({ type: "set-placement", placement: "floating" });
-    expect(shell.view.getAllByTitle(/^Scope: /)).toHaveLength(1);
-
-    // Home hero.
-    await shell.dispatch({ type: "go-home" });
-    expect(shell.view.getAllByTitle(/^Scope: /)).toHaveLength(1);
-  });
-});
-
-describe("mentions", () => {
-  it("opens on @ and inserts a folder as a chip", async () => {
-    const shell = await agentHome();
-    const input = shell.view.getByLabelText("New task instructions") as HTMLTextAreaElement;
-
-    await act(async () => {
-      fireEvent.change(input, { target: { value: "Use @" } });
-    });
-
-    const listbox = shell.view.getByRole("listbox", { name: "Files and folders" });
-    expect(listbox).toBeInTheDocument();
-
-    // Targeted by role: "Customer research" is also the location label on every
-    // file that lives in it, so a bare text query is ambiguous.
-    await act(async () => {
-      fireEvent.click(within(listbox).getByRole("option", { name: /^Customer research/ }));
-    });
-
-    expect(input.value).toContain("@Customer research");
-    expect(shell.view.container.querySelector(".shell-cx-chip.is-folder")?.textContent).toContain(
-      "Customer research",
-    );
+    // Until the run names it there is nothing to call this conversation, so a
+    // second message must not start a second one.
+    await waitFor(() => expect(shell.state().chat?.conversationId).toBeTruthy());
+    expect(shell.state().chat?.folderId).toBe(SEED_FOLDER_ID);
   });
 
-  it("filters as you type and mentions a file", async () => {
-    const shell = await agentHome();
-    const input = shell.view.getByLabelText("New task instructions") as HTMLTextAreaElement;
-
-    await act(async () => {
-      fireEvent.change(input, { target: { value: "Check @forecast" } });
-    });
-
-    const listbox = shell.view.getByRole("listbox", { name: "Files and folders" });
-    expect(within(listbox).getByText("MO sales forecast.xlsx")).toBeInTheDocument();
-    // Unrelated files are filtered out.
-    expect(within(listbox).queryByText("Interview notes.docx")).toBeNull();
-
-    await act(async () => {
-      fireEvent.click(within(listbox).getByText("MO sales forecast.xlsx"));
-    });
-    expect(shell.view.container.querySelector(".shell-cx-chip.is-file")).not.toBeNull();
-  });
-
-  it("removing a chip also removes its token from the text", async () => {
-    const shell = await agentHome();
-    const input = shell.view.getByLabelText("New task instructions") as HTMLTextAreaElement;
-
-    await act(async () => {
-      fireEvent.change(input, { target: { value: "Use @" } });
-    });
-    await act(async () => {
-      fireEvent.click(
-        within(shell.view.getByRole("listbox", { name: "Files and folders" })).getByRole("option", {
-          name: /^Customer research/,
-        }),
-      );
-    });
-    expect(input.value).toContain("@Customer research");
-
-    await act(async () => {
-      fireEvent.click(shell.view.getByLabelText("Remove Customer research"));
-    });
-
-    expect(input.value).not.toContain("@Customer research");
-    expect(shell.view.container.querySelector(".shell-cx-chip.is-folder")).toBeNull();
-  });
-
-  it("sends the mentions alongside the text", async () => {
-    const shell = await agentHome();
-    const input = shell.view.getByLabelText("New task instructions");
-
-    await act(async () => {
-      fireEvent.change(input, { target: { value: "Compare @" } });
-    });
-    await act(async () => {
-      fireEvent.click(
-        within(shell.view.getByRole("listbox", { name: "Files and folders" })).getByText(
-          "MO sales forecast.xlsx",
-        ),
-      );
-    });
-    await act(async () => {
-      fireEvent.click(shell.view.getByTitle("Send message"));
-    });
-
-    /*
-     * Found through the task list rather than through `state.selectedFolderId`.
-     *
-     * Reading the selection used to work by accident: sending from Home opened
-     * a file, and opening a file selects its folder, so the selection happened
-     * to name the folder the task went to. Home no longer opens a file it was
-     * never told about, so the selection stays where the user left it and this
-     * has to ask the port which folder actually received the run.
-     */
-    await waitFor(async () => {
-      const [row] = await shell.port.agent.list();
-      if (!row) throw new Error("no task recorded");
-      const task = await shell.port.agent.current(row.folderId);
-      if (!task?.messages.length) throw new Error("no message recorded");
-      expect(task.messages[0].text).toContain("@MO sales forecast.xlsx");
-    });
-  });
-});
-
-describe("send button", () => {
   it("is disabled until there is text", async () => {
-    const shell = await agentHome();
-    const send = shell.view.getByTitle("Send message");
-    expect(send).toBeDisabled();
+    const shell = await conversation();
+    expect(shell.view.getByTitle("Send message")).toBeDisabled();
 
-    await act(async () => {
-      fireEvent.change(shell.view.getByLabelText("New task instructions"), {
-        target: { value: "Go" },
-      });
-    });
+    await type(chatInput(shell), "Go");
     expect(shell.view.getByTitle("Send message")).toBeEnabled();
   });
 
-  it("switches to Stop while a task runs with an empty draft", async () => {
-    const shell = await taskColumn();
-    await act(async () => {
-      await shell.port.agent.send({
-        text: "Long task",
-        folderId: "folder-launch",
-        mentions: [],
-        attachments: [],
-        modelId: "gpt-6-astra",
-        permission: "review",
-        activeFileId: SEED_ACTIVE_FILE_ID,
-      });
-      await shell.port.agent.pause();
-    });
+  /*
+   * The Dex panel's composer is about the document it sits over. `activeFileId`
+   * is not a hint — the service layer treats its presence as the whole routing
+   * decision — so the file has to travel with the message.
+   */
+  it("aims a message from the Dex panel at the document on screen", async () => {
+    const shell = await dexPanel();
+    const sent = watchSends(shell);
 
-    // Paused counts as running: the control has to offer a way out.
-    await shell.dispatch({ type: "set-placement", placement: "docked" });
-    expect(shell.view.queryByTitle("Send message")).toBeDisabled();
+    await type(dexInput(shell), "Tighten the opening paragraph.");
+    await press(shell.view.getByTitle("Send message"));
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0].activeFileId).toBe(SEED_ACTIVE_FILE_ID);
+    expect(sent[0].folderId).toBe(SEED_FOLDER_ID);
   });
 });
 
 /**
- * The model picker used to be a label.
+ * Home keeps one main input (§20, "Home 保留一个主要输入"), and everything about
+ * it says "this is new work".
  *
- * `SendInput.modelId` went out with every message and nothing read it —
- * `agent.send` ignores it and `GenerateInput` has no model field — so the one
- * thing that decides which provider a run uses is `models.select`. These pin
- * that the menu calls it, and that it does not claim a switch the port refused.
+ * It belongs to no project and no open file: `placement === "home"` refuses to
+ * read the workspace three separate times in `Composer` — `reference`,
+ * `targetFileId` and `busy` — and Home's own `onSend` opens a conversation of
+ * its own in the default folder. `activeFileId` is not a hint; the service layer
+ * treats its presence as the whole routing decision, so a new deck asked for
+ * from Home with a document behind it used to rewrite that document.
  */
-describe("model choice", () => {
-  it("makes the pick take effect instead of only labelling it", async () => {
-    const shell = await agentHome();
-    const chosen: string[] = [];
-    const select = shell.port.models.select.bind(shell.port.models);
-    shell.port.models.select = async (id) => {
-      chosen.push(id);
-      await select(id);
-    };
+describe("Home's composer", () => {
+  it("starts a new conversation in the default folder, aimed at no open file", async () => {
+    const shell = await renderShell({ fastAgent: true });
+    const sent = watchSends(shell);
+    expect(shell.state().chat).toBeNull();
 
-    await act(async () => {
-      fireEvent.click(shell.view.getByTitle(/^Model: /));
-    });
-    await act(async () => {
-      fireEvent.click(shell.view.getByRole("menuitemradio", { name: /GPT-5\.6 Sol/ }));
-    });
+    // A document is open behind Home; the message must not be about it.
+    await shell.dispatch({ type: "open-local-file", fileId: SEED_ACTIVE_FILE_ID });
+    await shell.dispatch({ type: "go", page: "home" });
 
-    expect(chosen).toEqual(["gpt-5.6-sol"]);
-    expect(shell.view.getByTitle("Model: GPT-5.6 Sol")).toBeInTheDocument();
+    await type(homeInput(shell), "Draft a project plan");
+    await press(shell.view.getByTitle("Send message"));
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0].folderId).toBe(DEFAULT_FOLDER_ID);
+    expect(sent[0].newConversation).toBe(true);
+    expect(sent[0].activeFileId).toBeNull();
+
+    // The conversation it opened is the one on screen, and the document it was
+    // never about keeps its tab.
+    await waitFor(() => expect(shell.state().chat?.conversationId).toBeTruthy());
+    expect(shell.state().chat?.folderId).toBe(DEFAULT_FOLDER_ID);
+    expect(shell.state().openFileIds).toContain(SEED_ACTIVE_FILE_ID);
   });
 
-  it("keeps naming the old model when the port refuses the switch", async () => {
-    const shell = await agentHome();
-    shell.port.models.select = async () => {
-      throw new NotImplementedError("models.select", "Switching models is not wired up yet.");
-    };
+  it("never continues the conversation that was focused before", async () => {
+    const shell = await renderShell({ fastAgent: true });
+    const sent = watchSends(shell);
 
-    await act(async () => {
-      fireEvent.click(shell.view.getByTitle(/^Model: /));
-    });
-    await act(async () => {
-      fireEvent.click(shell.view.getByRole("menuitemradio", { name: /^K3/ }));
-    });
+    await shell.dispatch({ type: "open-chat", chat: { folderId: SEED_FOLDER_ID, conversationId: null } });
+    await type(chatInput(shell), "About the launch");
+    await press(shell.view.getByTitle("Send message"));
+    await waitFor(() => expect(shell.state().chat?.conversationId).toBeTruthy());
+    const project = shell.state().chat!.conversationId;
 
-    await waitFor(() => expect(notice()).toContain("Not built yet"));
-    // A button naming a model no task will run on is the same lie as a button
-    // that changed nothing — so it does not move.
-    expect(shell.view.getByTitle("Model: GPT-6 Astra")).toBeInTheDocument();
+    await shell.dispatch({ type: "go", page: "home" });
+    await type(homeInput(shell), "Something else entirely");
+    await press(shell.view.getByTitle("Send message"));
+
+    expect(sent[1].folderId).toBe(DEFAULT_FOLDER_ID);
+    expect(sent[1].newConversation).toBe(true);
+    await waitFor(() => expect(shell.state().chat?.conversationId).toBeTruthy());
+    expect(shell.state().chat?.conversationId).not.toBe(project);
+
+    // And the project's conversation did not gain a message it never heard.
+    const before = await shell.port.agent.current(SEED_FOLDER_ID);
+    expect(before?.messages.filter((message) => message.role === "user").map((message) => message.text)).toEqual([
+      "About the launch",
+    ]);
   });
 
-  it("can edit a configured custom model", async () => {
+  /**
+   * `busy` is the scope folder's task, not one this composer started, so a run
+   * going anywhere in the default folder turned Home's main button into Stop the
+   * moment the box was empty: a destructive action, no confirmation, on the
+   * first control a new user sees, cancelling work they may not know exists.
+   */
+  it("never turns its main button into Stop while a run goes elsewhere", async () => {
     const shell = await renderShell({
-      fastAgent: true,
-      models: [
-        ...seedModels(),
+      tasks: [
         {
-          id: "custom-1",
-          name: "Local Qwen",
-          provider: "Custom",
-          detail: "http://127.0.0.1:11434/v1",
-          custom: true,
+          id: "task-live",
+          title: "Draft the launch checklist",
+          // The folder Home's own messages go to — the case that used to flip it.
+          folderId: DEFAULT_FOLDER_ID,
+          status: "writing",
+          phase: "Preparing suggested changes",
+          steps: [],
+          messages: [],
+          suggestion: null,
+          question: null,
         },
       ],
     });
-    await shell.dispatch({ type: "go-home" });
 
-    await act(async () => {
-      fireEvent.click(shell.view.getByTitle(/^Model: /));
-    });
-    // The update branch of CustomModelDialog was unreachable until this row
-    // existed: `setEditing` was only ever called with "new".
-    await act(async () => {
-      fireEvent.click(shell.view.getByRole("menuitem", { name: /Edit Local Qwen/ }));
-    });
-
-    const dialog = within(document.body).getByRole("dialog");
-    expect(within(dialog).getByText("Edit model")).toBeInTheDocument();
-    // The endpoint is prefilled, so a rename cannot silently clear it.
-    expect(within(dialog).getByLabelText(/Base URL/)).toHaveValue("http://127.0.0.1:11434/v1");
-
-    fireEvent.change(within(dialog).getByLabelText("Display name"), {
-      target: { value: "Qwen (work)" },
-    });
-    fireEvent.change(within(dialog).getByLabelText("Model ID"), { target: { value: "qwen3-max" } });
-    await act(async () => {
-      fireEvent.click(within(document.body).getByText("Save model"));
-    });
-
-    const saved = (await shell.port.models.list()).find((model) => model.id === "custom-1");
-    expect(saved?.name).toBe("Qwen (work)");
+    expect(homeInput(shell)).toHaveValue("");
+    expect(shell.view.queryByLabelText("Stop task")).toBeNull();
+    expect(shell.view.getByLabelText("Send message")).toBeDisabled();
   });
 
-  it("warns that a second custom model replaces the first", async () => {
-    const shell = await renderShell({
-      fastAgent: true,
-      models: [
-        ...seedModels(),
-        { id: "custom-1", name: "Local Qwen", provider: "Custom", custom: true },
-      ],
-    });
-    await shell.dispatch({ type: "go-home" });
+  /**
+   * What the old permission-chip test protected: the toolbar carries what the
+   * design gives it and nothing more. Scope, permission and the output-type
+   * menu are gone from every placement; output type moved into Task context.
+   */
+  it("offers only the four r10 tools", async () => {
+    const shell = await renderShell({ fastAgent: true });
+    const composer = shell.view.container.querySelector<HTMLElement>(".dx-home-composer .dx-composer")!;
 
-    await act(async () => {
-      fireEvent.click(shell.view.getByTitle(/^Model: /));
-    });
-    await act(async () => {
-      fireEvent.click(shell.view.getByRole("menuitem", { name: /Replace custom model/ }));
-    });
-
-    expect(within(document.body).getByRole("dialog").textContent).toContain("Local Qwen");
+    expect([...composer.querySelectorAll("[data-act]")].map((control) => control.getAttribute("data-act"))).toEqual([
+      "context",
+      "model-picker",
+      "voice",
+      "send",
+    ]);
+    expect(within(composer).queryByTitle(/^Scope: /)).toBeNull();
+    expect(within(composer).queryByTitle(/^Permission: /)).toBeNull();
+    expect(within(composer).queryByTitle("Generate image")).toBeNull();
   });
 });
 
 /**
- * Only Full access is real.
+ * Enter is the send key, unless the user said otherwise.
  *
- * `unsupportedParts()` in services/agent.ts downgrades review and custom to a
- * direct write, so the other two tiers promised a gate that does not exist.
- * They stay on screen and say so; what must not happen is the composer opening
- * on one of them.
+ * Shift + Enter is always a new line, and with the preference off Enter alone
+ * types a line too — the modifier chord is then the only way out, so it has to
+ * keep working.
  */
-describe("permission tiers", () => {
-  it("hides the chip on Home, matching the prototype composer", async () => {
-    const shell = await agentHome();
-    expect(shell.view.queryByTitle(/^Permission:/)).not.toBeInTheDocument();
-    expect(shell.view.queryByTestId("shell-home-watch-deck-agent")).not.toBeInTheDocument();
-    expect(shell.view.container.querySelectorAll(".shell-hero-prompt")).toHaveLength(4);
+describe("Enter sends", () => {
+  it("sends on a plain Enter", async () => {
+    const shell = await conversation();
+    const sent = watchSends(shell);
+    const input = chatInput(shell);
+
+    await type(input, "Write the launch memo");
+    await act(async () => {
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
+
+    expect(sent.map((input) => input.text)).toEqual(["Write the launch memo"]);
   });
 
-  it("opens on the tier the runtime honours", async () => {
-    const shell = await taskColumn();
-    expect(shell.view.getByTitle("Permission: Full access")).toBeInTheDocument();
+  it("adds a line on Shift + Enter instead", async () => {
+    const shell = await conversation();
+    const sent = watchSends(shell);
+    const input = chatInput(shell);
+
+    await type(input, "First line");
+    await act(async () => {
+      fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
+    });
+
+    expect(sent).toEqual([]);
+    // The keystroke was not swallowed either: the words are still there to
+    // carry on typing after.
+    expect(input.value).toBe("First line");
   });
 
-  it("says so rather than switching to a tier with nothing behind it", async () => {
-    const shell = await taskColumn();
+  it("leaves Enter alone when the preference is off, and sends on Cmd + Enter", async () => {
+    const shell = await conversation();
+    const sent = watchSends(shell);
+    // The switch itself lives in Settings → General; this is the call it makes.
+    await act(async () => {
+      await settingsStoreFor(shell.port).patch({ enterToSend: false });
+    });
+    const input = chatInput(shell);
+
+    await type(input, "Half a thought");
+    await act(async () => {
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
+    expect(sent).toEqual([]);
+    expect(input.value).toBe("Half a thought");
 
     await act(async () => {
-      fireEvent.click(shell.view.getByTitle(/^Permission: /));
+      fireEvent.keyDown(input, { key: "Enter", metaKey: true });
     });
-    await act(async () => {
-      fireEvent.click(shell.view.getByRole("menuitemradio", { name: /Review changes/ }));
-    });
-
-    await waitFor(() => expect(notice()).toContain("Not built yet"));
-    expect(shell.view.getByTitle("Permission: Full access")).toBeInTheDocument();
-    expect((await shell.port.settings.get()).permission).toBe("full");
+    expect(sent.map((input) => input.text)).toEqual(["Half a thought"]);
   });
 
-  it("sends full access, which is what the run will actually do", async () => {
-    const shell = await agentHome();
-    const sent: string[] = [];
-    const send = shell.port.agent.send.bind(shell.port.agent);
-    shell.port.agent.send = async (input) => {
-      sent.push(input.permission);
-      await send(input);
-    };
+  /* Home is the same control at a different width, and the keys are the same. */
+  it("behaves the same on Home", async () => {
+    const shell = await renderShell({ fastAgent: true });
+    const sent = watchSends(shell);
+
+    await type(homeInput(shell), "Write the launch memo");
+    await act(async () => {
+      fireEvent.keyDown(homeInput(shell), { key: "Enter", shiftKey: true });
+    });
+    expect(sent).toEqual([]);
+    expect(homeInput(shell).value).toBe("Write the launch memo");
 
     await act(async () => {
-      fireEvent.change(shell.view.getByLabelText("New task instructions"), {
-        target: { value: "Tidy the deck." },
-      });
+      fireEvent.keyDown(homeInput(shell), { key: "Enter" });
     });
-    await act(async () => {
-      fireEvent.click(shell.view.getByTitle("Send message"));
-    });
-
-    expect(sent).toEqual(["full"]);
-  });
-});
-
-describe("image generation mode", () => {
-  it("collects image settings and sends an explicit image payload", async () => {
-    const shell = await agentHome();
-    let received: any;
-    const send = shell.port.agent.send.bind(shell.port.agent);
-    shell.port.agent.send = async (input) => {
-      received = input;
-      await send(input);
-    };
-
-    await act(async () => {
-      fireEvent.click(shell.view.getByRole("button", { name: "Create an image" }));
-      fireEvent.change(shell.view.getByLabelText("New task instructions"), {
-        target: { value: "A calm workspace at sunrise" },
-      });
-    });
-    // The settings live in a panel now, not in inline selects.
-    await act(async () => {
-      fireEvent.click(shell.view.getByRole("button", { name: "Image settings" }));
-    });
-    const panel = shell.view.getByRole("dialog", { name: "Image settings" });
-    await act(async () => {
-      fireEvent.click(within(panel).getByRole("radio", { name: "16:9" }));
-      fireEvent.click(within(panel).getByRole("radio", { name: "4K" }));
-    });
-    await act(async () => {
-      fireEvent.click(shell.view.getByTitle("Send message"));
-    });
-
-    expect(received.imageGeneration).toMatchObject({
-      prompt: "A calm workspace at sunrise",
-      ratio: "16:9",
-      resolution: "4K",
-      count: 1,
-    });
-    expect(received.activeFileId).toBeNull();
+    expect(sent.map((input) => input.text)).toEqual(["Write the launch memo"]);
   });
 });
 
 /**
- * A draft is the message, not the string.
+ * The `@` list offers the workspace's files, and picking one puts a reference
+ * on the message rather than only a word in the text.
+ */
+describe("mentions", () => {
+  const list = (shell: Shell) => shell.view.getByRole("listbox", { name: "Files to add to this message" });
+
+  it("opens on @ and inserts a file reference", async () => {
+    const shell = await conversation();
+    const input = chatInput(shell);
+
+    await type(input, "Check @");
+
+    await press(within(list(shell)).getByText("MO sales forecast.xlsx"));
+
+    expect(input.value).toContain("@MO sales forecast.xlsx");
+    expect(shell.view.getByLabelText("Remove MO sales forecast.xlsx")).toBeInTheDocument();
+  });
+
+  it("filters as you type, and says when nothing matches", async () => {
+    const shell = await conversation();
+    const input = chatInput(shell);
+
+    await type(input, "Check @forecast");
+    expect(within(list(shell)).getByText("MO sales forecast.xlsx")).toBeInTheDocument();
+    // Unrelated files are filtered out.
+    expect(within(list(shell)).queryByText("Interview notes.docx")).toBeNull();
+
+    // A list with nothing to offer says so rather than vanishing, which would
+    // look like the feature had broken.
+    await type(input, "Check @zzzz");
+    expect(within(list(shell)).getByText("No matching files")).toBeInTheDocument();
+  });
+
+  it("closes on Escape without sending or inserting anything", async () => {
+    const shell = await conversation();
+    const input = chatInput(shell);
+
+    await type(input, "Compare @");
+    expect(list(shell)).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.keyDown(input, { key: "Escape" });
+    });
+
+    expect(shell.view.queryByRole("listbox", { name: "Files to add to this message" })).toBeNull();
+    expect(input.value).toBe("Compare @");
+  });
+
+  it("removing a chip also removes its token from the text", async () => {
+    const shell = await conversation();
+    const input = chatInput(shell);
+
+    await type(input, "Use @");
+    await press(within(list(shell)).getByText("MO sales forecast.xlsx"));
+    expect(input.value).toContain("@MO sales forecast.xlsx");
+
+    await press(shell.view.getByLabelText("Remove MO sales forecast.xlsx"));
+
+    expect(input.value).not.toContain("@MO sales forecast.xlsx");
+    expect(shell.view.queryByLabelText("Remove MO sales forecast.xlsx")).toBeNull();
+  });
+
+  it("sends the mentions alongside the text", async () => {
+    const shell = await conversation();
+    const sent = watchSends(shell);
+
+    await type(chatInput(shell), "Compare @");
+    await press(within(list(shell)).getByText("MO sales forecast.xlsx"));
+    await press(shell.view.getByTitle("Send message"));
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0].mentions).toEqual([
+      { kind: "file", id: "file-forecast", label: "MO sales forecast.xlsx" },
+    ]);
+    expect(sent[0].text).toContain("@MO sales forecast.xlsx");
+  });
+
+  it("offers the same list on Home, and sends what was picked", async () => {
+    const shell = await renderShell({ fastAgent: true });
+    const sent = watchSends(shell);
+
+    await type(homeInput(shell), "Compare @forecast");
+    await press(within(list(shell)).getByText("MO sales forecast.xlsx"));
+    expect(homeInput(shell).value).toContain("@MO sales forecast.xlsx");
+
+    await press(shell.view.getByTitle("Send message"));
+    expect(sent[0].mentions).toEqual([
+      { kind: "file", id: "file-forecast", label: "MO sales forecast.xlsx" },
+    ]);
+  });
+});
+
+/** An attached file is visible on the message, and can be taken off again. */
+describe("attachments", () => {
+  it("shows one as a chip, removes it, and sends the ones that are left", async () => {
+    const shell = await conversation();
+    const sent = watchSends(shell);
+
+    await attach(shell, "budget.csv");
+    await attach(shell, "notes.txt");
+    expect(shell.view.getByLabelText("Remove budget.csv")).toBeInTheDocument();
+
+    await press(shell.view.getByLabelText("Remove budget.csv"));
+    expect(shell.view.queryByLabelText("Remove budget.csv")).toBeNull();
+
+    await type(chatInput(shell), "Summarise this.");
+    await press(shell.view.getByTitle("Send message"));
+
+    expect(sent[0].attachments.map((attachment) => attachment.name)).toEqual(["notes.txt"]);
+  });
+});
+
+/**
+ * The model picker decides which provider a run uses.
+ *
+ * It is the workspace preference `selectedModelId` that does it — `useAgentTask`
+ * reads it for every message — so the assertions follow the id onto the message
+ * rather than onto a label. The button says only "Model"; the menu is where the
+ * choice shows.
+ */
+describe("model choice", () => {
+  it("lists the models and sends the one that was picked", async () => {
+    const shell = await conversation();
+    const sent = watchSends(shell);
+
+    await press(shell.view.getByTitle("Choose model"));
+    const menu = shell.view.getByRole("menu");
+    expect(within(menu).getAllByRole("menuitemradio")).toHaveLength(4);
+    expect(within(menu).getByRole("menuitemradio", { name: /GPT-6 Astra/ })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+
+    await press(within(menu).getByRole("menuitemradio", { name: /GPT-5\.6 Sol/ }));
+
+    await waitFor(async () => {
+      expect((await shell.port.settings.get()).selectedModelId).toBe("gpt-5.6-sol");
+    });
+
+    await type(chatInput(shell), "Tidy the deck.");
+    await press(shell.view.getByTitle("Send message"));
+    expect(sent[0].modelId).toBe("gpt-5.6-sol");
+  });
+
+  it("says so and keeps the half-written message when the port refuses the switch", async () => {
+    const shell = await conversation();
+    const sent = watchSends(shell);
+    shell.port.settings.patch = async () => {
+      throw new NotImplementedError("settings.patch", "Switching models is not wired up yet.");
+    };
+
+    await type(chatInput(shell), "Tidy the deck.");
+    await press(shell.view.getByTitle("Choose model"));
+    await press(shell.view.getByRole("menuitemradio", { name: /^K3/ }));
+
+    await waitFor(() => expect(notice()).toContain("Switching models is not wired up yet."));
+    // A refused switch must not cost the user what they were writing.
+    expect(chatInput(shell).value).toBe("Tidy the deck.");
+
+    // And a menu claiming a model no run will use is the same lie as a switch
+    // that changed nothing, so it goes back.
+    await press(shell.view.getByTitle("Choose model"));
+    expect(shell.view.getByRole("menuitemradio", { name: /GPT-6 Astra/ })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    resetLayers();
+
+    await press(shell.view.getByTitle("Send message"));
+    expect(sent[0].modelId).toBe("gpt-6-astra");
+  });
+});
+
+/**
+ * A draft is the message, not the string, and it belongs to one object.
  *
  * Text lived in a module-level map while mentions and attachments were plain
  * component state, so leaving the composer and coming back restored words that
- * read "@MO sales forecast.xlsx" with nothing attached to them.
+ * read "@MO sales forecast.xlsx" with nothing attached to them. Drafts are kept
+ * per placement and `draftKey` (OD-UI-1.2 §02), so one conversation's
+ * half-written message never turns up in another.
  */
 describe("drafts", () => {
-  const attachTo = async (shell: Awaited<ReturnType<typeof agentHome>>, name: string) => {
-    const picker = shell.view.container.querySelector<HTMLInputElement>(
-      'input[type="file"]:not([webkitdirectory])',
-    )!;
-    await act(async () => {
-      fireEvent.change(picker, { target: { files: [new File(["x"], name)] } });
-    });
+  const leaveAndReturn = async (shell: Shell, folderId = SEED_FOLDER_ID) => {
+    await shell.dispatch({ type: "go", page: "home" });
+    await shell.dispatch({ type: "open-chat", chat: { folderId, conversationId: null } });
   };
 
   it("keeps the mentions and attachments, not just the words", async () => {
-    const shell = await agentHome();
-    const input = shell.view.getByLabelText("New task instructions") as HTMLTextAreaElement;
+    const shell = await conversation();
 
-    await act(async () => {
-      fireEvent.change(input, { target: { value: "Check @" } });
-    });
-    await act(async () => {
-      fireEvent.click(
-        within(shell.view.getByRole("listbox", { name: "Files and folders" })).getByText(
-          "MO sales forecast.xlsx",
-        ),
-      );
-    });
-    await attachTo(shell, "budget.csv");
+    await type(chatInput(shell), "Check @");
+    await press(
+      within(shell.view.getByRole("listbox", { name: "Files to add to this message" })).getByText(
+        "MO sales forecast.xlsx",
+      ),
+    );
+    await attach(shell, "budget.csv");
 
-    // Open a document and come back: Home's composer unmounts and a new one
-    // mounts, which is the whole reason the draft store exists.
-    await shell.dispatch({ type: "open-file", fileId: SEED_ACTIVE_FILE_ID });
-    await shell.dispatch({ type: "go-home" });
+    // Going to Home unmounts this composer and coming back mounts another,
+    // which is the whole reason the draft store exists.
+    await leaveAndReturn(shell);
 
-    const returned = shell.view.getByLabelText("New task instructions") as HTMLTextAreaElement;
-    expect(returned.value).toContain("@MO sales forecast.xlsx");
+    expect(chatInput(shell).value).toContain("@MO sales forecast.xlsx");
     expect(shell.view.getByLabelText("Remove MO sales forecast.xlsx")).toBeInTheDocument();
     expect(shell.view.getByLabelText("Remove budget.csv")).toBeInTheDocument();
   });
 
   it("still carries them when the restored draft is finally sent", async () => {
-    const shell = await agentHome();
+    const shell = await conversation();
 
-    await act(async () => {
-      fireEvent.change(shell.view.getByLabelText("New task instructions"), {
-        target: { value: "Compare @" } });
-    });
-    await act(async () => {
-      fireEvent.click(
-        within(shell.view.getByRole("listbox", { name: "Files and folders" })).getByText(
-          "MO sales forecast.xlsx",
-        ),
-      );
-    });
-    await attachTo(shell, "notes.txt");
+    await type(chatInput(shell), "Compare @");
+    await press(
+      within(shell.view.getByRole("listbox", { name: "Files to add to this message" })).getByText(
+        "MO sales forecast.xlsx",
+      ),
+    );
+    await attach(shell, "notes.txt");
+    await leaveAndReturn(shell);
 
-    await shell.dispatch({ type: "open-file", fileId: SEED_ACTIVE_FILE_ID });
-    await shell.dispatch({ type: "go-home" });
+    const sent = watchSends(shell);
+    await press(shell.view.getByTitle("Send message"));
 
-    const sent: Array<{ mentions: number; attachments: number }> = [];
-    const send = shell.port.agent.send.bind(shell.port.agent);
-    shell.port.agent.send = async (input) => {
-      sent.push({ mentions: input.mentions.length, attachments: input.attachments.length });
-      await send(input);
-    };
-    await act(async () => {
-      fireEvent.click(shell.view.getByTitle("Send message"));
-    });
-
-    expect(sent).toEqual([{ mentions: 1, attachments: 1 }]);
+    expect(sent).toHaveLength(1);
+    expect(sent[0].mentions).toHaveLength(1);
+    expect(sent[0].attachments).toHaveLength(1);
   });
 
   it("clears the kept draft once the message goes out", async () => {
-    const shell = await agentHome();
+    const shell = await conversation();
 
-    await act(async () => {
-      fireEvent.change(shell.view.getByLabelText("New task instructions"), {
-        target: { value: "Go" },
-      });
-    });
-    await attachTo(shell, "one.txt");
-    await act(async () => {
-      fireEvent.click(shell.view.getByTitle("Send message"));
-    });
+    await type(chatInput(shell), "Go");
+    await attach(shell, "one.txt");
+    await press(shell.view.getByTitle("Send message"));
 
-    await shell.dispatch({ type: "open-file", fileId: SEED_ACTIVE_FILE_ID });
-    await shell.dispatch({ type: "go-home" });
+    await leaveAndReturn(shell);
 
-    expect(shell.view.getByLabelText("New task instructions")).toHaveValue("");
+    // A sent message offered back for sending again is the draft store handing
+    // over work the user already gave away.
+    expect(chatInput(shell)).toHaveValue("");
     expect(shell.view.queryByLabelText("Remove one.txt")).toBeNull();
+  });
+
+  /* The same guarantee for the Dex panel, whose draft is keyed by the file. */
+  it("clears it in the Dex panel too", async () => {
+    const shell = await dexPanel();
+
+    await type(dexInput(shell), "Go");
+    await attach(shell, "one.txt");
+    await press(shell.view.getByTitle("Send message"));
+
+    await shell.dispatch({ type: "set-dex-open", open: false });
+    await press(shell.view.container.querySelector<HTMLElement>("button.dx-dex[data-act=dex]")!);
+
+    expect(dexInput(shell)).toHaveValue("");
+    expect(shell.view.queryByLabelText("Remove one.txt")).toBeNull();
+  });
+
+  /**
+   * Home's draft is its own, and it outlives a trip elsewhere.
+   *
+   * Home is the placement the composer's own notes single out: the commonest
+   * half-written message is the one begun there, and going to a project or a
+   * document unmounts that composer entirely.
+   */
+  it("keeps Home's words, mentions and attachments across a trip away", async () => {
+    const shell = await renderShell({ fastAgent: true });
+
+    await type(homeInput(shell), "Draft a plan for @forecast");
+    await press(
+      within(shell.view.getByRole("listbox", { name: "Files to add to this message" })).getByText(
+        "MO sales forecast.xlsx",
+      ),
+    );
+    await attach(shell, "budget.csv");
+
+    // A conversation's composer must not show Home's half-written message…
+    await shell.dispatch({ type: "open-chat", chat: { folderId: SEED_FOLDER_ID, conversationId: null } });
+    expect(chatInput(shell)).toHaveValue("");
+
+    // …and Home must still have it when it comes back.
+    await shell.dispatch({ type: "go", page: "home" });
+    expect(homeInput(shell).value).toContain("@MO sales forecast.xlsx");
+    expect(shell.view.getByLabelText("Remove MO sales forecast.xlsx")).toBeInTheDocument();
+    expect(shell.view.getByLabelText("Remove budget.csv")).toBeInTheDocument();
+  });
+
+  it("clears Home's draft once the message goes out", async () => {
+    const shell = await renderShell({ fastAgent: true });
+
+    await type(homeInput(shell), "Go");
+    await attach(shell, "one.txt");
+    await press(shell.view.getByTitle("Send message"));
+
+    // Sending from Home hands over to the conversation it opened, so Home is
+    // gone; coming back must not offer the sent message again.
+    await shell.dispatch({ type: "go", page: "home" });
+    expect(homeInput(shell)).toHaveValue("");
+    expect(shell.view.queryByLabelText("Remove one.txt")).toBeNull();
+  });
+
+  it("keeps one draft per conversation", async () => {
+    const shell = await conversation("folder-launch");
+    await type(chatInput(shell), "About the launch");
+
+    await shell.dispatch({ type: "open-chat", chat: { folderId: "folder-research", conversationId: null } });
+    // A message begun in one conversation must never show up in another.
+    expect(chatInput(shell)).toHaveValue("");
+    await type(chatInput(shell), "About the interviews");
+
+    await shell.dispatch({ type: "open-chat", chat: { folderId: "folder-launch", conversationId: null } });
+    expect(chatInput(shell)).toHaveValue("About the launch");
   });
 });
 
@@ -561,7 +667,7 @@ describe("drafts", () => {
  * to call it off, and then a sentence appeared in the box.
  */
 describe("dictation", () => {
-  /** Stands in for the browser's SpeechRecognition, which jsdom has no. */
+  /** Stands in for the browser's SpeechRecognition, which jsdom has not. */
   class StubRecognition {
     static live: StubRecognition | null = null;
     lang = "";
@@ -592,22 +698,18 @@ describe("dictation", () => {
   it("shows that it is listening and can be called off", async () => {
     const uninstall = install();
     try {
-      const shell = await agentHome();
+      const shell = await conversation();
 
-      await act(async () => {
-        fireEvent.click(shell.view.getByTitle("Dictate"));
-      });
+      await press(shell.view.getByLabelText("Voice input"));
       const live = StubRecognition.live!;
       expect(live).toBeTruthy();
       expect(shell.view.getByLabelText("Stop dictation")).toHaveAttribute("aria-pressed", "true");
 
       // The second press reaches the same recogniser, rather than starting a
       // second one that nothing can stop.
-      await act(async () => {
-        fireEvent.click(shell.view.getByLabelText("Stop dictation"));
-      });
+      await press(shell.view.getByLabelText("Stop dictation"));
       expect(live.stopped).toBe(true);
-      expect(shell.view.getByTitle("Dictate")).toHaveAttribute("aria-pressed", "false");
+      expect(shell.view.getByLabelText("Voice input")).toHaveAttribute("aria-pressed", "false");
     } finally {
       uninstall();
     }
@@ -616,103 +718,18 @@ describe("dictation", () => {
   it("stops looking busy when the recogniser ends without hearing anything", async () => {
     const uninstall = install();
     try {
-      const shell = await agentHome();
-      await act(async () => {
-        fireEvent.click(shell.view.getByTitle("Dictate"));
-      });
+      const shell = await conversation();
+      await press(shell.view.getByLabelText("Voice input"));
       // No `onresult` at all — a silence timeout. Clearing the state only on a
       // result would leave the button pulsing for good.
       await act(async () => {
         StubRecognition.live!.onend?.();
       });
 
-      expect(shell.view.getByTitle("Dictate")).toHaveAttribute("aria-pressed", "false");
+      expect(shell.view.getByLabelText("Voice input")).toHaveAttribute("aria-pressed", "false");
     } finally {
       uninstall();
     }
-  });
-});
-
-describe("the scope menu makes folders as well as choosing them", () => {
-  it("creates one and scopes the message to it", async () => {
-    const shell = await agentHome();
-
-    await act(async () => {
-      fireEvent.click(shell.view.getByTitle(/^Scope: /));
-    });
-    await act(async () => {
-      fireEvent.click(shell.view.getByRole("menuitem", { name: /New folder/ }));
-    });
-
-    const dialog = within(document.body).getByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText("Folder name"), {
-      target: { value: "Q3 planning" },
-    });
-    await act(async () => {
-      fireEvent.click(within(document.body).getByText("Save"));
-    });
-
-    await waitFor(() => {
-      expect(shell.view.getByTitle("Scope: Q3 planning")).toBeInTheDocument();
-    });
-    expect((await shell.port.folders.list()).some((folder) => folder.name === "Q3 planning")).toBe(
-      true,
-    );
-  });
-});
-
-/**
- * The send button doubles as Stop, and must not do so on Home.
- *
- * `busy` is the scope folder's task — not one this composer started — so any
- * run anywhere in the selected folder turned Home's main button into Stop the
- * moment the box was empty. A destructive action, no confirmation, on the
- * first control a new user sees, cancelling work they may not know exists.
- */
-describe("the hero's main button never cancels a run", () => {
-  it("stays a disabled Send on Home while a run is going", async () => {
-    const shell = await agentHome();
-    const input = shell.view.getByLabelText("New task instructions");
-
-    fireEvent.change(input, { target: { value: "Write the launch memo" } });
-    await act(async () => {
-      fireEvent.click(shell.view.getByLabelText("Send message"));
-    });
-
-    // The run started and the box is empty again — exactly the state that used
-    // to flip this button to Stop.
-    await waitFor(() => expect((input as HTMLTextAreaElement).value).toBe(""));
-
-    expect(shell.view.queryByLabelText("Stop task")).toBeNull();
-    expect(shell.view.getByLabelText("Send message")).toBeDisabled();
-  });
-
-  /*
-   * The other half: over-correcting would take Stop away everywhere.
-   *
-   * The run is seeded rather than started, because `fastAgent` collapses the
-   * scripted delays to ~1ms — a live run is past `working` before `waitFor`
-   * gets its first look, so asserting on one would be asserting on a race.
-   */
-  it("still offers Stop in the task column, where the run is", async () => {
-    const shell = await renderShell({
-      tasks: [
-        {
-          id: "task-live",
-          title: "Draft the launch checklist",
-          folderId: "folder-launch",
-          status: "writing",
-          phase: "Preparing suggested changes",
-          steps: [],
-          messages: [],
-          suggestion: null,
-          question: null,
-        },
-      ],
-    });
-    await shell.dispatch({ type: "open-file", fileId: SEED_ACTIVE_FILE_ID });
-
-    await waitFor(() => expect(shell.view.getByLabelText("Stop task")).toBeEnabled());
   });
 });
 
@@ -725,68 +742,134 @@ describe("the hero's main button never cancels a run", () => {
  * would finish them before Stop could be pressed.
  */
 describe("Stop hands the message back for editing", () => {
-  it("puts the message back into the task column's input", async () => {
-    const shell = await renderShell();
-    await shell.dispatch({ type: "open-file", fileId: SEED_ACTIVE_FILE_ID });
-    const input = shell.view.getByLabelText("Message Agent") as HTMLTextAreaElement;
+  /*
+   * The input is re-queried after every step rather than held.
+   *
+   * The first run gives the conversation its id, which changes the key
+   * `ConversationPane` gives the composer — so the composer holding Stop is a
+   * different mount from the one the message was typed into, under a different
+   * draft key. That is exactly why the sent message is kept in module state.
+   */
+  it("puts the message back into the conversation's input", async () => {
+    const shell = await conversation(SEED_FOLDER_ID, { fastAgent: false });
 
-    fireEvent.change(input, { target: { value: "Tighten the intro paragarph" } });
+    await type(chatInput(shell), "Tighten the intro paragarph");
     await act(async () => {
-      fireEvent.keyDown(input, { key: "Enter" });
+      fireEvent.keyDown(chatInput(shell), { key: "Enter" });
     });
-    await waitFor(() => expect(input.value).toBe(""));
+    await waitFor(() => expect(chatInput(shell).value).toBe(""));
     await waitFor(() => expect(shell.view.getByLabelText("Stop task")).toBeEnabled());
 
-    await act(async () => {
-      fireEvent.click(shell.view.getByLabelText("Stop task"));
-    });
+    await press(shell.view.getByLabelText("Stop task"));
 
-    await waitFor(() => expect(input.value).toBe("Tighten the intro paragarph"));
+    await waitFor(() => expect(chatInput(shell).value).toBe("Tighten the intro paragarph"));
     expect(shell.view.getByLabelText("Send message")).toBeEnabled();
   });
 
-  it("brings back a message sent from Home in the task panel's input", async () => {
+  /**
+   * A message sent from Home is stopped from somewhere else entirely.
+   *
+   * Home hands over to the conversation it opened, so the composer holding Stop
+   * is not the one the message was typed into — a different placement and a
+   * different draft key. The sent message is module state for exactly this.
+   */
+  it("brings back a message sent from Home in the conversation's composer", async () => {
     const shell = await renderShell();
-    await shell.dispatch({ type: "go-home" });
-    const home = shell.view.getByLabelText("New task instructions");
 
-    fireEvent.change(home, { target: { value: "Write the launch memo for" } });
+    await type(homeInput(shell), "Write the launch memo for");
     await act(async () => {
-      fireEvent.keyDown(home, { key: "Enter" });
+      fireEvent.keyDown(homeInput(shell), { key: "Enter" });
     });
-    // Home hands over to the task panel beside the run; that composer is the
-    // one holding Stop, and Home's is gone.
     await waitFor(() => expect(shell.view.getByLabelText("Stop task")).toBeEnabled());
-    expect(shell.view.queryByLabelText("New task instructions")).toBeNull();
+    expect(shell.view.queryByLabelText("Describe your task")).toBeNull();
 
-    await act(async () => {
-      fireEvent.click(shell.view.getByLabelText("Stop task"));
-    });
+    await press(shell.view.getByLabelText("Stop task"));
 
-    const input = shell.view.getByLabelText("Message Agent") as HTMLTextAreaElement;
-    await waitFor(() => expect(input.value).toBe("Write the launch memo for"));
+    await waitFor(() => expect(chatInput(shell).value).toBe("Write the launch memo for"));
   });
 
   it("leaves the input empty when the run could not be stopped", async () => {
-    const shell = await renderShell();
-    await shell.dispatch({ type: "open-file", fileId: SEED_ACTIVE_FILE_ID });
-    const input = shell.view.getByLabelText("Message Agent") as HTMLTextAreaElement;
+    const shell = await conversation(SEED_FOLDER_ID, { fastAgent: false });
 
-    fireEvent.change(input, { target: { value: "Tighten the intro" } });
+    await type(chatInput(shell), "Tighten the intro");
     await act(async () => {
-      fireEvent.keyDown(input, { key: "Enter" });
+      fireEvent.keyDown(chatInput(shell), { key: "Enter" });
     });
     await waitFor(() => expect(shell.view.getByLabelText("Stop task")).toBeEnabled());
 
     shell.port.agent.finish = async () => {
       throw new Error("runtime unreachable");
     };
-    await act(async () => {
-      fireEvent.click(shell.view.getByLabelText("Stop task"));
-    });
+    await press(shell.view.getByLabelText("Stop task"));
 
     // Still running: a full input would turn Stop into Send beside a live run.
-    expect(input.value).toBe("");
+    expect(chatInput(shell).value).toBe("");
     expect(shell.view.getByLabelText("Stop task")).toBeEnabled();
+  });
+
+  /*
+   * The run is seeded rather than started, because `fastAgent` collapses the
+   * scripted delays to ~1ms — a live run is past `working` before `waitFor`
+   * gets its first look, so asserting on one would be asserting on a race.
+   */
+  it("offers Stop in the composer beside the run, with an empty input", async () => {
+    const shell = await conversation(SEED_FOLDER_ID, {
+      tasks: [
+        {
+          id: "task-live",
+          title: "Draft the launch checklist",
+          folderId: SEED_FOLDER_ID,
+          status: "writing",
+          phase: "Preparing suggested changes",
+          steps: [],
+          messages: [],
+          suggestion: null,
+          question: null,
+        },
+      ],
+    });
+
+    await waitFor(() => expect(shell.view.getByLabelText("Stop task")).toBeEnabled());
+    expect(shell.view.queryByLabelText("Send message")).toBeNull();
+
+    // Typing takes the send button back: the run is still going, but the thing
+    // the button would do now is send this.
+    await type(chatInput(shell), "Actually, make it shorter");
+    expect(shell.view.getByLabelText("Send message")).toBeEnabled();
+    expect(shell.view.queryByLabelText("Stop task")).toBeNull();
+  });
+});
+
+/**
+ * The image creator keeps the interface it already had (§18), and this is the
+ * one surface that starts in image mode. What it sends has to be an explicit
+ * image request rather than a sentence the runtime has to guess at.
+ */
+describe("the image creator", () => {
+  it("collects the image settings and sends an explicit image payload", async () => {
+    const shell = await renderShell({ fastAgent: true });
+    await shell.dispatch({ type: "go", page: "image" });
+    const sent = watchSends(shell);
+
+    await type(shell.view.getByLabelText("New task instructions"), "A calm workspace at sunrise");
+
+    // The settings live in a panel anchored to the tool, not in inline selects.
+    await press(shell.view.getByRole("button", { name: "Image settings" }));
+    const panel = shell.view.getByRole("dialog", { name: "Image settings" });
+    await press(within(panel).getByRole("radio", { name: "16:9" }));
+    await press(within(panel).getByRole("radio", { name: "4K" }));
+
+    await press(shell.view.getByTitle("Send message"));
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0].imageGeneration).toMatchObject({
+      prompt: "A calm workspace at sunrise",
+      ratio: "16:9",
+      resolution: "4K",
+      count: 1,
+    });
+    expect(sent[0].documentType).toBe("img");
+    // A picture is a new file, never an edit of whatever tab was open.
+    expect(sent[0].activeFileId).toBeNull();
   });
 });

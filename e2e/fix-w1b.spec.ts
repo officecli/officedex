@@ -1,141 +1,87 @@
 /**
- * Wave 1, track B — the floating Agent presence.
+ * Wave 1, track B — the floating conversation and the Dex bubble.
  *
- * The inverse of the audit's R2 findings: every assertion here fails on the
- * code as it stood on 2026-09-19 and passes after the fix. Read it as the
+ * The inverse of the audit's R2 findings: every assertion here failed on the
+ * code as it stood on 2026-09-19 and passed after the fix. Read it as the
  * regression fence, not as a survey — the survey is
  * `docs/ui-audit-2026-09-19/S4` and `…/S6`.
  *
- * There is deliberately **no** `test.skip` in this file, conditional or
- * otherwise. `e2e/ui-audit-s4.spec.ts` is 30 cases of `test.skip(!BRIDGE)`:
- * run without its environment variable it prints `30 skipped` and exits 0,
- * which reads exactly like success and was once reported as such. Everything
- * below runs against the fixture server (`?shellFixture=1`), which needs
- * nothing but a dev server, so there is nothing to skip on.
+ * **What r10 changed.** R2 was about `.shell-presence`: one floating panel that
+ * could be collapsed to a 56px mark, dragged anywhere, tucked against an edge,
+ * and that swapped places with a docked Agent column when the mode changed. r10
+ * has no modes and no presence dock. What is left are two draggable objects, and
+ * between them they carry every one of R2's guarantees:
  *
- *   npx vite --port 3122 --strictPort
- *   PLAYWRIGHT_BASE_URL=http://localhost:3122 npx playwright test e2e/fix-w1b.spec.ts
+ *   - the **floating conversation** (`#dx-conversation` under
+ *     `#dx-workspace.dx-chat-floating`, `chat/ConversationPane.tsx`) — the same
+ *     column as the docked one, dragged by its header, clamped to the window,
+ *     600px tall, and flipped between docked and floating by
+ *     `[data-act=toggle-chat-display]`;
+ *   - the **Dex bubble** (`.dx-dex`, `dex/Dex.tsx`) — 42px, dragged over the
+ *     document, and the object that still *rests against an edge* with 60%
+ *     showing and a rotation, which is what the old collapsed mark did.
+ *
+ * Three cases are gone rather than reinterpreted, and are in the migration
+ * ledger with their reasons: the mode-switch handover, the unbounded overhang
+ * transform, and the header slot reserved for a conditional dock button.
+ *
+ * There is deliberately **no** `test.skip` in this file, conditional or
+ * otherwise. `e2e/ui-audit-s4.spec.ts` is 30 cases of `test.skip(!BRIDGE)`: run
+ * without its environment variable it prints `30 skipped` and exits 0, which
+ * reads exactly like success and was once reported as such. Everything below
+ * runs against the fixture server (`?shellFixture=1`), which needs nothing but a
+ * dev server, so there is nothing to skip on.
+ *
+ *   PLAYWRIGHT_BASE_URL=http://localhost:3131 npx playwright test e2e/fix-w1b.spec.ts
  */
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
+import { open, settle } from "./r10-a-helpers";
+
 test.use({ viewport: { width: 1280, height: 800 } });
 
-const PANEL = ".shell-presence-panel";
-const GRIP = ".shell-presence-panel .shell-task-head";
-const FACE = ".shell-presence-face";
-
-async function open(page: Page, combination: string): Promise<void> {
-  await page.goto(`/?shellFixture=1&shell=${combination}`);
-  await expect(page.locator("#shell")).toHaveAttribute("data-loaded", "true");
-  await settle(page);
-}
+/** The floating conversation, and the header it is dragged by. */
+const PANE = "#dx-workspace.dx-chat-floating #dx-conversation";
+const GRIP = `${PANE} > .dx-pane-top`;
+/** The Dex bubble over an open document. */
+const DEX = "button.dx-dex[data-act=dex]";
 
 /**
- * Waits for the presence panel to stop moving.
+ * Drags `handle` so the pointer ends on `to`.
  *
- * `data-loaded` says the workspace arrived; it says nothing about layout. The
- * panel is placed with a transition (`--ease`, ~300ms), and measuring during it
- * reads a position that is on its way somewhere else: probed at +0ms the panel
- * top is 302.56, at +100ms 354.63, and only from +300ms is it 355.
- *
- * That cost a real afternoon. Two cases here took their "before" baseline mid-
- * transition and then blamed the movement on whatever they did next — one
- * measured 12.9px of "scroll on focus" that was the tail of the animation, and
- * with the panel settled the same focus moves it by exactly 0. A third read the
- * drag handle's box before it reached its resting place and dragged to the
- * wrong spot, so `data-edge` never became "top".
- *
- * Polls for two identical readings rather than sleeping a fixed duration: the
- * transition's length is a design token, and a test that hard-codes 300ms goes
- * quietly wrong the day someone tunes it. No presence (Home, or Editor without
- * a floating panel) settles immediately.
- */
-async function settle(page: Page): Promise<void> {
-  await page.waitForFunction(
-    () => {
-      const panel = document.querySelector(".shell-presence-panel, .shell-presence-face");
-      if (!panel) return true;
-      const now = JSON.stringify(panel.getBoundingClientRect());
-      const previous = (window as unknown as { __settleLast?: string }).__settleLast;
-      (window as unknown as { __settleLast?: string }).__settleLast = now;
-      return previous === now;
-    },
-    undefined,
-    { polling: 100 },
-  );
-}
-
-/**
- * Drags `handle` by the delta that would land the pointer on `to`.
- *
- * Stepped, because the drag does not start until the pointer has travelled 6px
- * (`useDraggable`), and a single jump produces one `pointermove`.
+ * Stepped, because a single jump produces one `pointermove` and both drag
+ * handlers derive the object's new position from the movement since
+ * `pointerdown`. Grabbed 40px in from the handle's left edge, away from its
+ * buttons: `ConversationPane.onHeaderPointerDown` ignores a press that started
+ * on one, so a grab at the centre of the header would sometimes catch a control.
  */
 async function drag(page: Page, handle: Locator, to: { x: number; y: number }): Promise<void> {
   const box = await handle.boundingBox();
-  expect(box, "drag handle has no box").not.toBeNull();
-  await page.mouse.move(box!.x + box!.width / 2, box!.y + Math.min(12, box!.height / 2));
+  expect(box, "the drag handle has no box").not.toBeNull();
+  await page.mouse.move(box!.x + Math.min(40, box!.width / 2), box!.y + box!.height / 2);
   await page.mouse.down();
   await page.mouse.move(to.x, to.y, { steps: 24 });
   await page.mouse.up();
-  // The snap animates (`transition: left/top 160ms` on .shell-presence).
+  // The Dex bubble's snap to an edge animates (`INFLATE_MS` easing on left/top).
   await page.waitForTimeout(420);
 }
 
-/**
- * Collapses the panel and waits for the mark to stop moving.
- *
- * Collapsing changes the object's size, so the derived bottom-right landing
- * point changes with it and `.shell-presence` animates `left`/`top` for 160ms.
- * A `boundingBox()` taken during that animation is a coordinate the mark has
- * already left, and a drag from it lands on the canvas instead.
- */
-async function collapse(page: Page): Promise<void> {
-  await page.getByTitle("Collapse").click();
-  await expect(page.locator(FACE)).toBeVisible();
-  await page.waitForTimeout(420);
+/** Drags the Dex bubble itself, which is its own handle. */
+async function dragBubble(page: Page, to: { x: number; y: number }): Promise<void> {
+  const box = await page.locator(DEX).boundingBox();
+  expect(box, "there is no Dex bubble on this shell").not.toBeNull();
+  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 24 });
+  await page.mouse.up();
+  await page.waitForTimeout(500);
 }
 
-
-/**
- * Runs a task in the floating panel until the conversation is tall enough to
- * hit the panel's `max-height`.
- *
- * Necessary, not decorative. The audit measured the panel at 543px against a
- * declared 520 (S6-011) and found one `.shell-face` per assistant reply thrown
- * out of the window (S4-005). The fixture's opening state is a single user
- * message — 417px, one avatar — which reproduces neither. A conversation is
- * what the panel is *for*, and the defects only exist once there is one.
- */
-async function growConversation(page: Page): Promise<void> {
-  const panel = page.locator(PANEL);
-  await panel.getByLabel("Message Agent").fill("Draft the launch checklist, in detail.");
-  /*
-   * Sent from the keyboard, and not because that is tidier.
-   *
-   * A mouse click on Send is *intercepted* inside the 340px floating panel:
-   * `.shell-cx-left` — which carries `.shell-cx-output-name`, the current
-   * file's name — is laid over the button, so Playwright reports
-   * "<span class="shell-cx-output-name">…</span> intercepts pointer events"
-   * and waits out its full timeout. That is a real defect, not a test
-   * inconvenience: a user with a mouse cannot press Send in this panel.
-   *
-   * It is filed as MERGE-001 in docs/ui-audit-2026-09-19/SUMMARY.md §3.2 and
-   * belongs to the composer's inline layout, which no Wave 1 or Wave 2 track
-   * owned. Sending with Enter routes around it so this test can get to the
-   * thing it is actually about — the clamp — instead of dying in its own setup.
-   * When MERGE-001 is fixed, this can go back to a click.
-   */
-  await panel.getByLabel("Message Agent").press("Enter");
-  await expect(panel.getByText("Suggested changes are ready")).toBeVisible({ timeout: 30_000 });
-  await page.waitForTimeout(300);
-}
-
-/** The window controls' own rects, read from the live DOM rather than assumed. */
+/** The three self-drawn window controls' own rects, read from the live DOM. */
 async function windowControls(page: Page) {
   return page.evaluate(() =>
-    [".shell-window-close", ".shell-window-minimize", ".shell-window-fullscreen"].map((selector) => {
+    [".dx-traffic.dx-close", ".dx-traffic.dx-min", ".dx-traffic.dx-max"].map((selector) => {
       const element = document.querySelector(selector);
       const rect = element!.getBoundingClientRect();
       const x = rect.left + rect.width / 2;
@@ -143,8 +89,9 @@ async function windowControls(page: Page) {
       const hit = document.elementFromPoint(x, y);
       return {
         selector,
+        rect: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom },
         centre: { x, y },
-        hit: hit ? `${hit.tagName.toLowerCase()}.${hit.className}` : null,
+        hit: hit ? `${hit.tagName.toLowerCase()}.${String(hit.className)}` : null,
         reachable: hit === element || element!.contains(hit),
       };
     }),
@@ -168,17 +115,264 @@ async function rectOf(page: Page, selector: string) {
   }, selector);
 }
 
+/* --------------------------------------------------------------- S4-001 */
+
+test.describe("a floating object cannot sit on the window controls", () => {
+  /**
+   * S4-001 (P0). `useDraggable.place()` clamped x to a floor of 12 on the top
+   * edge; the self-drawn close / minimise / full-screen cluster occupies 12–75px.
+   * `elementFromPoint` on all three centres returned
+   * `header.shell-task-head is-grip` — the window could not be closed.
+   *
+   * r10's answer for the conversation is a clamp rather than a reserved strip:
+   * `ConversationPane.floatingStyle` floors y at 48, which is below the 40px band
+   * the controls live in (WORKSPACE-STANDARD §02). Asserted as the outcome —
+   * all three hittable — with the clamp measured underneath it so the case
+   * cannot pass because the drag did nothing.
+   */
+  test("the floating conversation tucked to the top leaves all three controls hittable", async ({ page }) => {
+    await open(page, "C7");
+    await drag(page, page.locator(GRIP), { x: 4, y: 2 });
+
+    const pane = await rectOf(page, PANE);
+    expect(pane, "the conversation is not floating").not.toBeNull();
+    // It really is as far up and left as it goes, so this is not passing by
+    // having stayed where it started.
+    expect(pane!.top).toBeLessThan(80);
+    expect(pane!.left).toBeLessThan(24);
+    // And it stops clear of the 40px band rather than being let onto it.
+    expect(pane!.top).toBeGreaterThanOrEqual(40);
+
+    for (const control of await windowControls(page)) {
+      expect(control.reachable, `${control.selector} is covered by ${control.hit}`).toBe(true);
+    }
+  });
+
+  /**
+   * The same finding for the object that r10 *does* let onto the band.
+   *
+   * The Dex bubble is the heir to the collapsed mark: 42px, and parked against an
+   * edge it is pulled outside its host by 40% of its width, which over the top
+   * edge puts it into the window's top band and across the controls' own
+   * coordinates. What keeps them workable is the ladder rather than a reserved
+   * strip — `--dx-z-global-controls` 45 over `--dx-z-dex` 22 (`tokens.css`).
+   *
+   * So the overlap is asserted too. Without it this would pass the day the bubble
+   * stops reaching the corner, and the stacking claim would go untested.
+   */
+  test("the parked Dex bubble leaves all three controls hittable", async ({ page }) => {
+    await open(page, "C9");
+    await expect(page.locator(DEX)).toBeVisible();
+    await dragBubble(page, { x: 6, y: 2 });
+    await expect(page.locator(DEX)).toHaveAttribute("data-edge", "top");
+
+    const controls = await windowControls(page);
+    const bubble = await rectOf(page, DEX);
+    // The premise: it is in the band, over the cluster's own strip.
+    expect(bubble!.top).toBeLessThan(40);
+    const overlapsAny = controls.some(
+      (control) =>
+        bubble!.left < control.rect.right &&
+        bubble!.right > control.rect.left &&
+        bubble!.top < control.rect.bottom &&
+        bubble!.bottom > control.rect.top,
+    );
+    expect(overlapsAny, `the parked bubble no longer reaches the controls: ${JSON.stringify(bubble)}`).toBe(true);
+
+    for (const control of controls) {
+      expect(control.reachable, `${control.selector} is covered by ${control.hit}`).toBe(true);
+    }
+  });
+});
+
+/* --------------------------------------------------------------- S6-011 */
+
+test.describe("the floating conversation is clamped to the box it actually has", () => {
+  /**
+   * S6-011. `PANEL_SIZE.height` was declared 520 and rendered 543, so every
+   * vertical clamp left 23px too little and a panel dragged into the corner hung
+   * out of the window with its composer cut off.
+   *
+   * The declared-versus-rendered split cannot recur the same way in r10: the
+   * height is `min(600px, calc(100% - 80px))` in CSS and the clamp reads
+   * `pane.offsetHeight`, so there is no second number to disagree. What is
+   * asserted is the property the two numbers were supposed to produce, plus the
+   * premise that the panel really is at its designed 600px cap — the old spec
+   * had to run a whole task to get the panel past its constant, which r10 does
+   * not need because the height is not content-driven.
+   */
+  test("dragged into the bottom-right corner, the conversation stays inside the window", async ({ page }) => {
+    await open(page, "C7");
+    const grown = await rectOf(page, PANE);
+    // OD-CHAT §2 / ConversationPane: at most 600px tall.
+    expect(grown!.height).toBe(600);
+
+    await drag(page, page.locator(GRIP), { x: 1270, y: 795 });
+
+    const pane = await rectOf(page, PANE);
+    expect(pane).not.toBeNull();
+    expect(pane!.bottom).toBeLessThanOrEqual(pane!.viewport.height + 0.5);
+    expect(pane!.right).toBeLessThanOrEqual(pane!.viewport.width + 0.5);
+
+    // The composer is the control the old clamp cut off. It has to be whole.
+    const composer = await rectOf(page, `${PANE} .dx-chat-composer-wrap`);
+    expect(composer).not.toBeNull();
+    expect(composer!.bottom).toBeLessThanOrEqual(composer!.viewport.height + 0.5);
+  });
+
+  test("the same holds at every edge, not just the corner", async ({ page }) => {
+    await open(page, "C7");
+    for (const target of [
+      { x: 2, y: 400 },
+      { x: 1278, y: 400 },
+      { x: 640, y: 798 },
+      { x: 640, y: 2 },
+    ]) {
+      await drag(page, page.locator(GRIP), target);
+      const pane = await rectOf(page, PANE);
+      expect(
+        pane!.bottom <= pane!.viewport.height + 0.5 &&
+          pane!.top >= -0.5 &&
+          pane!.left >= -0.5 &&
+          pane!.right <= pane!.viewport.width + 0.5,
+        `the conversation escaped the viewport at ${JSON.stringify(target)}: ${JSON.stringify(pane)}`,
+      ).toBe(true);
+    }
+  });
+});
+
+/* ------------------------------------------------------- S4-004 / S6-012 */
+
+test.describe("a parked object is a solid object", () => {
+  /**
+   * S4-004. "Tucked" used to mean nothing for an expanded panel but
+   * `opacity: .82`, so the document's text and the panel's text printed through
+   * each other. A parked panel is opaque.
+   */
+  test("a parked conversation is fully opaque, not a ghost over the document", async ({ page }) => {
+    await open(page, "C7");
+    await drag(page, page.locator(GRIP), { x: 1278, y: 400 });
+
+    const opacity = await page.locator(PANE).evaluate((node) => getComputedStyle(node).opacity);
+    expect(Number(opacity)).toBe(1);
+  });
+
+  /**
+   * The other half of S6-012: the overhang is a property of the parked object and
+   * is meant to survive. `.dx-dex[data-edge]` is what carries it in r10 — the fix
+   * scoped the transform to the object itself, it did not delete it.
+   */
+  test("the parked Dex bubble still hangs off the edge, and is opaque doing it", async ({ page }) => {
+    await open(page, "C9");
+    await dragBubble(page, { x: 1278, y: 400 });
+    await expect(page.locator(DEX)).toHaveAttribute("data-edge", "right");
+
+    const parked = await page.locator(DEX).evaluate((node) => ({
+      transform: getComputedStyle(node).transform,
+      opacity: getComputedStyle(node).opacity,
+      rect: node.getBoundingClientRect().toJSON(),
+      host: document.querySelector(".dx-editor-wrapper")!.getBoundingClientRect().toJSON(),
+    }));
+    // eslint-disable-next-line no-console
+    console.log(`W1B-FIXED parked-dex ${JSON.stringify(parked)}`);
+
+    expect(parked.transform, "the parked bubble lost its overhang").not.toBe("none");
+    expect(Number(parked.opacity)).toBe(1);
+    /*
+     * BRAND-DEX §04, Chat 初始位置: "右边缘趴伏，42px圆形露出60%、旋转−90°" — 60% of
+     * the 42px circle showing, the rest past the edge. So the overhang is
+     * measured as the fraction still inside the host rather than bounded by the
+     * window: hanging out of the window is what this object is *for*, which is
+     * why S4-005 was about the panel's avatars inheriting the transform and not
+     * about the mark carrying it.
+     *
+     * A couple of pixels of slack: the −90° rotation widens the bounding box by
+     * about 0.9px on each side, so an exact 25.2 would fail on geometry that is
+     * correct.
+     */
+    const showing = parked.host.right - parked.rect.left;
+    expect(showing, `${showing}px of the bubble shows; the design asks for 60% of 42`).toBeGreaterThan(42 * 0.55);
+    expect(showing).toBeLessThan(42 * 0.7);
+  });
+});
+
+/* --------------------------------------------------------------- S4-007 */
+
+test.describe("the floating conversation is not a scroll container", () => {
+  /**
+   * S4-007. `overflow: hidden` still makes a box programmatically scrollable — it
+   * only removes the scrollbars. Focusing a control near the bottom pushed the
+   * old panel's header 36px out of view with no way to bring it back.
+   *
+   * The symptom to fence off is the header leaving the panel's box, which is what
+   * the audit measured (`headTop 316 < panelTop 352`).
+   */
+  test("moving focus inside the conversation never scrolls it", async ({ page }) => {
+    await open(page, "C7");
+
+    const before = await rectOf(page, GRIP);
+
+    const focused = await page.evaluate(() => {
+      const pane = document.querySelector<HTMLElement>("#dx-conversation")!;
+      const controls = pane.querySelectorAll<HTMLElement>("button, input, textarea, [tabindex]");
+      const last = controls[controls.length - 1];
+      last.focus();
+      last.scrollIntoView();
+      return { count: controls.length, scrollTop: pane.scrollTop };
+    });
+
+    expect(focused.count).toBeGreaterThan(0);
+    expect(focused.scrollTop).toBe(0);
+
+    /*
+     * An exact rect match is the wrong assertion: focusing a control relayouts
+     * the composer by a couple of pixels. 36px of lost header is the defect; 3px
+     * of composer is not.
+     */
+    const after = await rectOf(page, GRIP);
+    const pane = await rectOf(page, PANE);
+    expect(after!.top).toBeGreaterThanOrEqual(pane!.top - 0.5);
+    expect(Math.abs(after!.top - before!.top)).toBeLessThan(8);
+  });
+
+  /**
+   * The direct statement of the property, rather than of one implementation of
+   * it.
+   *
+   * The old fix was `overflow: clip`, which is not a scroll container at all.
+   * r10's panel is `overflow: hidden` again — and is safe for a different reason:
+   * it is a flex column whose middle child (`.dx-chat-scroll`) takes the
+   * overflow, so the panel's own box has none to scroll. Asserting `clip` here
+   * would be asserting the old mechanism; what matters is that a write to
+   * `scrollTop` cannot move the panel's contents, and that the scrolling happens
+   * in the child that is meant to do it.
+   */
+  test("scrollTop cannot be written on the panel, and the log scrolls instead", async ({ page }) => {
+    await open(page, "C7");
+    const result = await page.evaluate(() => {
+      const pane = document.querySelector<HTMLElement>("#dx-conversation")!;
+      const log = pane.querySelector<HTMLElement>(".dx-chat-scroll")!;
+      pane.scrollTop = 240;
+      return {
+        scrollTop: pane.scrollTop,
+        paneOverflow: pane.scrollHeight - pane.clientHeight,
+        logScrolls: log.scrollHeight - log.clientHeight > 0,
+      };
+    });
+    expect(result.scrollTop).toBe(0);
+    expect(result.paneOverflow).toBe(0);
+    expect(result.logScrolls, "the conversation's messages do not scroll anywhere").toBe(true);
+  });
+});
 
 /* --------------------------------------------------------------- S6-003 */
 
 interface Frame {
-  /** How many `.shell-task` conversations are mounted. */
-  panels: number;
-  /** The docked column's laid-out width, mid-transition. */
-  columnWidth: number;
-  /** Whether that column currently holds a conversation. */
-  columnFilled: boolean;
-  /** Whether the floating panel is on screen. */
+  /** How many conversation columns are mounted. */
+  panes: number;
+  /** The width the workspace's grid still reserves for the `chat` area, or 0. */
+  trackWidth: number;
+  /** Whether the pane has been taken out of the grid and is floating. */
   floating: boolean;
 }
 
@@ -187,15 +381,24 @@ async function startSampling(page: Page): Promise<void> {
     const frames: unknown[] = [];
     (window as unknown as { __w1b: unknown[] }).__w1b = frames;
     const tick = () => {
-      const column = document.querySelector(".shell-agent");
-      // The collapsed mark is the conversation too: Editor mode opens on it
-      // (2026-09-24), so a frame showing only the mark is not "no conversation".
-      const mark = document.querySelector(".shell-presence-face") ? 1 : 0;
+      const workspace = document.querySelector("#dx-workspace")!;
+      const pane = document.querySelector<HTMLElement>("#dx-conversation");
+      const style = getComputedStyle(workspace);
+      /*
+       * The grid's chat track, found by name rather than by position.
+       *
+       * The columns are `nav chat split main` docked left and `nav main split
+       * chat` docked right, and floating drops the chat and splitter tracks
+       * altogether — so an index picked by hand reads the *main* column's width
+       * on the right-docked shells, which is a number that means nothing here.
+       */
+      const areas = style.gridTemplateAreas.replace(/"/g, "").trim().split(/\s+/);
+      const columns = style.gridTemplateColumns.split(" ").map(parseFloat);
+      const chat = areas.indexOf("chat");
       frames.push({
-        panels: document.querySelectorAll(".shell-task").length + mark,
-        columnWidth: column ? column.getBoundingClientRect().width : 0,
-        columnFilled: !!column?.querySelector(".shell-task"),
-        floating: !!document.querySelector(".shell-presence-panel") || mark === 1,
+        panes: document.querySelectorAll("#dx-conversation").length,
+        trackWidth: chat < 0 ? 0 : (columns[chat] ?? 0),
+        floating: workspace.classList.contains("dx-chat-floating") && pane !== null,
       });
       (window as unknown as { __w1bRaf: number }).__w1bRaf = requestAnimationFrame(tick);
     };
@@ -214,378 +417,135 @@ async function stopSampling(page: Page): Promise<Frame[]> {
  * The invariant S6-003 broke, stated over every frame of the transition.
  *
  * Counting mounted panels alone is not enough, and saying so matters: on the
- * unfixed code the count is 1 in every frame too, because the docked
- * conversation unmounts in the same React commit that mounts the floating one.
- * What the audit actually saw was a 320px column that still had its width but
- * no longer had its contents, sitting next to a full floating panel. So the
- * shape of the assertion is: a column that is still taking up space must still
- * be showing the conversation.
+ * unfixed code the count was 1 in every frame too, because the docked
+ * conversation unmounted in the same React commit that mounted the floating one.
+ * What the audit actually saw was a 320px column that still had its width but no
+ * longer had its contents. So the shape of the assertion is: a column that is
+ * still taking up space must still be holding the conversation.
  */
-function assertOnePanelThroughout(frames: Frame[]): void {
+function assertOneConversationThroughout(frames: Frame[]): void {
   expect(frames.length, "the frame sampler never ran").toBeGreaterThan(10);
 
-  const twoPanels = frames.filter((frame) => frame.panels > 1);
-  const noPanel = frames.filter((frame) => frame.panels < 1);
-  const emptyColumn = frames.filter((frame) => frame.columnWidth > 8 && !frame.columnFilled);
-  const both = frames.filter((frame) => frame.columnWidth > 8 && frame.floating);
+  const two = frames.filter((frame) => frame.panes > 1);
+  const none = frames.filter((frame) => frame.panes < 1);
+  const both = frames.filter((frame) => frame.trackWidth > 8 && frame.floating);
 
-  expect(twoPanels, `two conversations mounted: ${JSON.stringify(twoPanels[0])}`).toHaveLength(0);
-  expect(noPanel, "no conversation on screen at all").toHaveLength(0);
-  expect(
-    emptyColumn,
-    `${emptyColumn.length}/${frames.length} frames showed an empty ${Math.round(
-      emptyColumn[0]?.columnWidth ?? 0,
-    )}px agent column: ${JSON.stringify(emptyColumn[0])}`,
-  ).toHaveLength(0);
+  expect(two, `two conversations mounted: ${JSON.stringify(two[0])}`).toHaveLength(0);
+  expect(none, "no conversation on screen at all").toHaveLength(0);
   expect(
     both,
-    `${both.length}/${frames.length} frames showed the docked column and the floating panel together`,
+    `${both.length}/${frames.length} frames reserved a ${Math.round(
+      both[0]?.trackWidth ?? 0,
+    )}px docked column while the conversation was floating: ${JSON.stringify(both[0])}`,
   ).toHaveLength(0);
 }
 
-/* --------------------------------------------------------------- S4-001 */
-
-test.describe("the presence cannot sit on the window controls", () => {
-  /**
-   * S4-001 (P0). `useDraggable.place()` clamped x to a floor of 12 on the top
-   * edge; the self-drawn close / minimise / full-screen cluster occupies
-   * 12–75px. `elementFromPoint` on all three centres returned
-   * `header.shell-task-head is-grip` — the window could not be closed.
-   */
-  test("expanded panel tucked to the top leaves all three controls hittable", async ({ page }) => {
-    await open(page, "C9");
-    await drag(page, page.locator(GRIP), { x: 4, y: 2 });
-
-    await expect(page.locator(".shell-presence")).toHaveAttribute("data-edge", "top");
-
-    const controls = await windowControls(page);
-    for (const control of controls) {
-      expect(control.reachable, `${control.selector} is covered by ${control.hit}`).toBe(true);
-    }
-
-    // And the panel really is at the top edge, so this is not passing because
-    // the drag did nothing.
-    const panel = await rectOf(page, PANEL);
-    expect(panel!.top).toBeLessThan(120);
-  });
-
-  /**
-   * The collapsed mark is the object that could actually overlap the cluster:
-   * it is 56px wide and, tucked to the top, its host box is pulled back to
-   * y = 0 — straight over the controls. `CHROME_RESERVE` is what keeps it out.
-   */
-  test("collapsed mark tucked to the top leaves all three controls hittable", async ({ page }) => {
-    await open(page, "C9");
-    await collapse(page);
-
-    await drag(page, page.locator(FACE), { x: 6, y: 2 });
-    await expect(page.locator(".shell-presence")).toHaveAttribute("data-edge", "top");
-
-    const face = await rectOf(page, ".shell-presence");
-    expect(face!.top).toBeLessThan(40); // it really is in the window bar's band
-    expect(face!.left).toBeGreaterThanOrEqual(132); // the reserved strip
-
-    for (const control of await windowControls(page)) {
-      expect(control.reachable, `${control.selector} is covered by ${control.hit}`).toBe(true);
-    }
-  });
-});
-
-/* --------------------------------------------------------------- S6-011 */
-
-test.describe("the presence is clamped to the box it actually has", () => {
-  /**
-   * S6-011. `PANEL_SIZE.height` was declared 520 and rendered 543, so every
-   * vertical clamp left 23px too little and a panel dragged into the corner
-   * hung out of the window with its composer cut off.
-   */
-  test("dragged into the bottom-right corner, the panel stays inside the window", async ({ page }) => {
-    await open(page, "C9");
-    await growConversation(page);
-
-    // The premise: the panel is taller than the constant the old code clamped
-    // against. Without this the test would pass on the broken code too.
-    const grown = await rectOf(page, PANEL);
-    expect(grown!.height, "the panel never grew past the declared 520").toBeGreaterThan(520);
-
-    await drag(page, page.locator(GRIP), { x: 1270, y: 795 });
-
-    const panel = await rectOf(page, PANEL);
-    expect(panel).not.toBeNull();
-    expect(panel!.bottom).toBeLessThanOrEqual(panel!.viewport.height + 0.5);
-    expect(panel!.right).toBeLessThanOrEqual(panel!.viewport.width + 0.5);
-
-    // The composer is the control the old clamp cut off. It has to be whole.
-    const composer = await rectOf(page, `${PANEL} .shell-task-composer`);
-    expect(composer).not.toBeNull();
-    expect(composer!.bottom).toBeLessThanOrEqual(composer!.viewport.height + 0.5);
-  });
-
-  test("the same holds at every edge, not just the corner", async ({ page }) => {
-    await open(page, "C9");
-    await growConversation(page);
-    for (const target of [
-      { x: 2, y: 400 },
-      { x: 1278, y: 400 },
-      { x: 640, y: 798 },
-      { x: 640, y: 2 },
-    ]) {
-      await drag(page, page.locator(GRIP), target);
-      const panel = await rectOf(page, PANEL);
-      expect(
-        panel!.bottom <= panel!.viewport.height + 0.5 &&
-          panel!.top >= -0.5 &&
-          panel!.left >= -0.5 &&
-          panel!.right <= panel!.viewport.width + 0.5,
-        `panel escaped the viewport at ${JSON.stringify(target)}: ${JSON.stringify(panel)}`,
-      ).toBe(true);
-    }
-  });
-});
-
-/* ------------------------------------------------------- S4-004 / S4-005 */
-
-test.describe("tucking an expanded panel does not throw its avatars out", () => {
-  /**
-   * S4-005 / S6-012. The overhang transform was written on `.shell-face` as a
-   * *descendant* of `.shell-presence[data-edge]`, and `.shell-face` is also
-   * the panel header's avatar, the empty state's avatar and one per assistant
-   * reply — an unbounded number. All of them were translated 312px and rotated
-   * 90°, ending up 28px past the window edge.
-   */
-  test("every avatar inside a tucked panel stays in the viewport and untransformed", async ({ page }) => {
-    await open(page, "C9");
-    await growConversation(page);
-    await drag(page, page.locator(GRIP), { x: 1278, y: 400 });
-    await expect(page.locator(".shell-presence")).toHaveAttribute("data-edge", "right");
-
-    const faces = await page.evaluate(() =>
-      Array.from(document.querySelectorAll(".shell-presence-panel .shell-face")).map((element) => {
-        const rect = element.getBoundingClientRect();
-        return {
-          rect: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom },
-          transform: getComputedStyle(element).transform,
-        };
-      }),
-    );
-    const viewport = page.viewportSize()!;
-
-    // Header avatar plus one per assistant reply: the unbounded set the old
-    // descendant selector matched.
-    expect(faces.length, "the panel has no reply avatars to check").toBeGreaterThan(1);
-    for (const face of faces) {
-      expect(face.transform, `avatar is transformed: ${JSON.stringify(face)}`).toBe("none");
-      expect(
-        face.rect.left >= -0.5 &&
-          face.rect.top >= -0.5 &&
-          face.rect.right <= viewport.width + 0.5 &&
-          face.rect.bottom <= viewport.height + 0.5,
-        `avatar left the viewport: ${JSON.stringify(face.rect)}`,
-      ).toBe(true);
-    }
-  });
-
-  /**
-   * S4-004. "Tucked" used to mean nothing for an expanded panel but
-   * `opacity: .82`, so the document's text and the panel's text printed
-   * through each other. A parked panel is opaque.
-   */
-  test("a parked panel is fully opaque, not a ghost over the document", async ({ page }) => {
-    await open(page, "C9");
-    await drag(page, page.locator(GRIP), { x: 1278, y: 400 });
-
-    const opacity = await page.evaluate(
-      () => getComputedStyle(document.querySelector(".shell-presence")!).opacity,
-    );
-    expect(Number(opacity)).toBe(1);
-  });
-
-  /** The collapsed mark keeps its overhang — the fix scopes it, it does not delete it. */
-  test("the collapsed mark still hangs off the edge", async ({ page }) => {
-    await open(page, "C9");
-    await collapse(page);
-    await drag(page, page.locator(FACE), { x: 1278, y: 400 });
-    await expect(page.locator(".shell-presence")).toHaveAttribute("data-edge", "right");
-
-    const transform = await page.evaluate(
-      () => getComputedStyle(document.querySelector(".shell-presence .shell-face")!).transform,
-    );
-    expect(transform, "the tucked mark lost its overhang").not.toBe("none");
-  });
-});
-
-/* --------------------------------------------------------------- S4-007 */
-
-test.describe("the panel is not a scroll container", () => {
-  /**
-   * S4-007. `overflow: hidden` still makes a box programmatically scrollable —
-   * it only removes the scrollbars. Focusing a control near the bottom pushed
-   * the panel's header 36px out of view with no way to bring it back.
-   */
-  test("moving focus inside the panel never scrolls it", async ({ page }) => {
-    await open(page, "C9");
-
-    const before = await rectOf(page, `${PANEL} .shell-task-head`);
-
-    const focused = await page.evaluate(() => {
-      const panel = document.querySelector<HTMLElement>(".shell-presence-panel")!;
-      const controls = panel.querySelectorAll<HTMLElement>("button, input, textarea, [tabindex]");
-      const last = controls[controls.length - 1];
-      last.focus();
-      last.scrollIntoView();
-      return { count: controls.length, scrollTop: panel.scrollTop };
-    });
-
-    expect(focused.count).toBeGreaterThan(0);
-    expect(focused.scrollTop).toBe(0);
-
-    /*
-     * The symptom to fence off is the header leaving the panel's box, which is
-     * what the audit measured (`headTop 316 < panelTop 352`). An exact rect
-     * match is the wrong assertion: focusing a control relayouts the composer
-     * by a couple of pixels, and since the panel is measured and re-placed
-     * from its own box, its top moves with it. 36px of lost header is the
-     * defect; 3px of composer is not.
-     */
-    const after = await rectOf(page, `${PANEL} .shell-task-head`);
-    const panel = await rectOf(page, PANEL);
-    expect(after!.top).toBeGreaterThanOrEqual(panel!.top - 0.5);
-    expect(Math.abs(after!.top - before!.top)).toBeLessThan(8);
-  });
-
-  /**
-   * The direct statement of the fix: `overflow: clip` is not a scroll
-   * container at all, so an assignment to `scrollTop` cannot take. With
-   * `hidden` this assertion fails.
-   */
-  test("scrollTop cannot be written", async ({ page }) => {
-    await open(page, "C9");
-    const result = await page.evaluate(() => {
-      const panel = document.querySelector<HTMLElement>(".shell-presence-panel")!;
-      panel.scrollTop = 240;
-      return { scrollTop: panel.scrollTop, overflow: getComputedStyle(panel).overflowY };
-    });
-    expect(result.overflow).toBe("clip");
-    expect(result.scrollTop).toBe(0);
-  });
-});
-
-/* --------------------------------------------------------------- S6-003 */
-
 test.describe("the conversation is handed over, never duplicated", () => {
   /**
-   * S6-003. `{docked ? <TaskPanel/> : null}` unmounted the docked
-   * conversation on the frame the mode changed, while its 320px column took
-   * another 200ms to close and the floating panel appeared at full opacity in
-   * the same frame — an empty column beside a full panel.
+   * S6-003, driven by the control that is the flip itself.
    *
-   * Sampled every animation frame across the whole transition, because the
-   * defect lasted 200ms and a single assertion after the fact would miss it.
+   * The audited driver was the Agent/Editor mode switch, which r10 does not have;
+   * `[data-act=toggle-chat-display]` is the r10 control that moves the
+   * conversation between the grid and the floating layer, which is the same
+   * handover. Sampled every animation frame because the defect lasted 200ms and a
+   * single assertion after the fact would miss it.
    */
-  test("agent → editor never shows two task panels, or none", async ({ page }) => {
+  test("floating the conversation never shows two of it, or none", async ({ page }) => {
     await open(page, "C6");
-    await expect(page.locator(".shell-agent .shell-task")).toHaveCount(1);
+    await expect(page.locator("#dx-conversation .dx-chat-scroll")).toHaveCount(1);
 
     await startSampling(page);
-
-    await page.getByRole("button", { name: /Switch mode/ }).click();
-    await page.getByRole("menuitemradio", { name: "Editor" }).click();
+    await page.locator("#dx-conversation [data-act=toggle-chat-display]").click();
     await page.waitForTimeout(700);
+    assertOneConversationThroughout(await stopSampling(page));
 
-    const samples = await stopSampling(page);
-
-    assertOnePanelThroughout(samples);
-    // Editor mode lands on the collapsed mark, not an open panel.
-    await expect(page.locator(`${PANEL}, .shell-presence-face`)).toHaveCount(1);
-    await expect(page.locator("#shell")).toHaveAttribute("data-mode", "editor");
+    await expect(page.locator("#dx-workspace")).toHaveClass(/dx-chat-floating/);
+    await expect(page.locator("#dx-conversation")).toHaveCount(1);
   });
 
-  /** The same handover driven by the dock control, which is the flip itself. */
-  test("undocking never shows two task panels, or none", async ({ page }) => {
-    await open(page, "C6");
+  /** And back again, which is the same handover in the other direction. */
+  test("docking it again never shows two of it, or none", async ({ page }) => {
+    await open(page, "C7");
 
     await startSampling(page);
-
-    await page.getByTitle("Float the Agent panel").click();
+    await page.locator("#dx-conversation [data-act=toggle-chat-display]").click();
     await page.waitForTimeout(700);
+    assertOneConversationThroughout(await stopSampling(page));
 
-    const samples = await stopSampling(page);
-
-    assertOnePanelThroughout(samples);
+    await expect(page.locator("#dx-workspace")).not.toHaveClass(/dx-chat-floating/);
+    // Docked, the column is back in the grid at the design's default width.
+    const pane = await rectOf(page, "#dx-conversation");
+    expect(pane!.width).toBe(360);
   });
 });
 
-/* ------------------------------------------------- S4-011 / S4-012 / S4-015 */
+/* ------------------------------------------------- S4-012 / S4-015 */
 
-test.describe("the panel's own layout follows the state it is in", () => {
-  /** S4-011: a 46px slot was reserved for a dock button Editor mode never renders. */
-  test("the collapse key only steps aside where a dock button exists", async ({ page }) => {
-    await open(page, "C9"); // editor — canDock() is false
-    await expect(page.locator(`${PANEL} .shell-icon-button[aria-pressed]`)).toHaveCount(0);
-    const editorGap = await page.evaluate(() => {
-      const panel = document.querySelector(".shell-presence-panel")!.getBoundingClientRect();
-      const key = document.querySelector(".shell-presence-collapse")!.getBoundingClientRect();
-      return panel.right - key.right;
-    });
-    expect(editorGap).toBeCloseTo(16, 0);
-
-    await open(page, "C8"); // agent — the dock button is rendered
-    await expect(page.locator(`${PANEL} .shell-icon-button[aria-pressed]`)).toHaveCount(1);
-    const agentGap = await page.evaluate(() => {
-      const panel = document.querySelector(".shell-presence-panel")!.getBoundingClientRect();
-      const key = document.querySelector(".shell-presence-collapse")!.getBoundingClientRect();
-      return panel.right - key.right;
-    });
-    expect(agentGap).toBeCloseTo(46, 0);
-  });
-
+test.describe("the floating conversation follows the window it is in", () => {
   /**
    * S4-012: at 1024×700 a fixed 340px panel covered 32% of the canvas. It now
-   * gives width back on a window that does not have it. This is a bound, not
-   * the cure — the cure needs the editor's safe area (Wave 3-H).
+   * gives width back on a window that does not have it.
+   *
+   * The numbers are the design's, not a recording of what r10 happens to render:
+   * OD-UI-1.2 §03 gives the conversation 320–520px with 360 as the default, and
+   * 320 is the floor. So a roomy window gets the default and a narrow one is
+   * taken down to the floor — never below it, which is the other half of the
+   * range being a range.
    */
-  test("a narrow window gets a narrower panel", async ({ page }) => {
+  test("a narrow window gets a narrower conversation, down to the design's floor", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await open(page, "C9");
-    const wide = (await rectOf(page, PANEL))!.width;
+    await open(page, "C7");
+    const wide = (await rectOf(page, PANE))!.width;
 
     await page.setViewportSize({ width: 1024, height: 700 });
-    await page.waitForTimeout(200);
-    const narrow = (await rectOf(page, PANEL))!.width;
+    await page.waitForTimeout(300);
+    await settle(page);
+    const narrow = (await rectOf(page, PANE))!.width;
+    // eslint-disable-next-line no-console
+    console.log(`W1B-FIXED conversation-width wide=${wide} narrow=${narrow}`);
 
-    expect(wide).toBeCloseTo(340, 0);
+    expect(wide).toBe(360);
     expect(narrow).toBeLessThan(wide);
-    // 32% of the canvas was the audit's reading at 1024 wide; the panel now
-    // gives back 68px there.
-    expect(narrow).toBeLessThanOrEqual(272);
+    expect(narrow).toBeGreaterThanOrEqual(320);
   });
 
   /**
    * S4-015: the first window resize wrote the derived default into persisted
-   * state, so "never placed" was gone forever and a grown window left the
-   * panel stranded mid-canvas.
+   * state, so "never placed" was gone forever and a grown window left the panel
+   * stranded mid-canvas.
+   *
+   * r10 keeps the floating position in component state (`ConversationPane`'s
+   * `point`) and `state/persist.ts` has no field for it, so there is nothing a
+   * resize could write. Asserted rather than assumed, both ways round: nothing
+   * about a position appears in storage, and an unplaced panel is still where the
+   * window puts it after the window changes size.
    */
-  test("an unplaced panel follows the window instead of being written down", async ({ page }) => {
+  test("an unplaced conversation follows the window instead of being written down", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
-    await open(page, "C9");
+    await open(page, "C7");
+    const before = (await rectOf(page, PANE))!;
 
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.waitForTimeout(300);
+    await settle(page);
 
-    const stored = await page.evaluate(() => {
-      const raw = localStorage.getItem("officedex.shell.v1");
-      return raw ? (JSON.parse(raw).presence as { x: number | null; y: number | null }) : null;
-    });
+    const stored = await page.evaluate(() => localStorage.getItem("officedex.shell.v1"));
     // Nothing persisted at all is also correct — the defect was a resize
-    // *writing* the derived default down. What must never appear is a number.
+    // *writing* the derived default down. What must never appear is a coordinate.
     if (stored) {
-      expect(stored.x, "a resize wrote the derived default into storage").toBeNull();
-      expect(stored.y, "a resize wrote the derived default into storage").toBeNull();
+      const parsed = JSON.parse(stored) as Record<string, unknown>;
+      expect(Object.keys(parsed), "a resize wrote a floating position into storage").not.toContain("chatPoint");
+      expect(Object.keys(parsed)).not.toContain("presence");
     }
 
-    // And it is in the corner the design asks for, not at the old coordinates.
-    const panel = (await rectOf(page, PANEL))!;
-    expect(panel.right).toBeCloseTo(1440 - 24, 0);
-    expect(panel.bottom).toBeCloseTo(900 - 28, 0);
+    const after = (await rectOf(page, PANE))!;
+    // eslint-disable-next-line no-console
+    console.log(`W1B-FIXED unplaced-follows ${JSON.stringify({ before, after })}`);
+    // It moved with the window rather than staying at the old coordinates, and
+    // it is whole and clear of the 40px band wherever it landed.
+    expect(after.bottom).toBeGreaterThan(before.bottom);
+    expect(after.bottom).toBeLessThanOrEqual(900);
+    expect(after.right).toBeLessThanOrEqual(1440);
+    expect(after.top).toBeGreaterThanOrEqual(40);
   });
 });

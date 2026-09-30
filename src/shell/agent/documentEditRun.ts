@@ -272,9 +272,14 @@ export function startDocumentEditRun(
    * What went wrong is the conversation's job — `say()` has already put the
    * runtime's own sentence there — and `phase` names the outcome.
    */
-  const finish = (phase: string, completed = true) => {
+  // How it ended is said as well as that it ended: the run card reads the
+  // outcome, and a run that finished with none is drawn as "Complete".
+  const finish = (phase: string, completed = true, outcome: AgentTask["outcome"] = "completed", error?: string) => {
     task.status = "done";
     task.phase = phase;
+    task.outcome = outcome;
+    task.finishedAt = Date.now();
+    if (error) task.error = error;
     task.steps.forEach((step) => {
       if (completed) step.state = "done";
       else if (step.state === "active") step.state = "pending";
@@ -346,12 +351,13 @@ export function startDocumentEditRun(
     } catch (reason) {
       if (controller.signal.aborted) {
         say(translate("shell.edit.stoppedUnchanged"));
-        finish(translate("shell.edit.stopped"), false);
+        finish(translate("shell.edit.stopped"), false, "stopped");
         emit();
         return;
       }
-      say(reason instanceof Error ? reason.message : String(reason));
-      finish(translate("shell.edit.editStopped"), false);
+      const message = reason instanceof Error ? reason.message : String(reason);
+      say(message);
+      finish(translate("shell.edit.editStopped"), false, "failed", message);
       emit();
     }
   })();

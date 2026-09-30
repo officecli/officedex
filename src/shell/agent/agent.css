@@ -2,18 +2,6 @@
 
 /* ----------------------------------------------------------------- face */
 
-.shell-face {
-  position: relative;
-  display: block;
-  flex: none;
-}
-
-.shell-face svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
 /*
  * The companion's own palette: the mark is ink-on-ink, not a themed control.
  *
@@ -29,206 +17,36 @@
  * (Written without naming the value, so a "no bare colours" gate counting hex
  * literals in this file finds seven and not eight.)
  */
-.shell-face-shell {
-  fill: #2b2b2b;
-}
-
-.shell-face-plate {
-  fill: #f3f3f3;
-}
-
-.shell-face-eye {
-  fill: none;
-  stroke: #262626;
-  stroke-linecap: round;
-  transition: d 200ms var(--shell-ease);
-}
-
-.shell-face-corner > path {
-  fill: #fafafa;
-}
 
 /* Stroked glyphs (the question mark, the magnifier) declare fill="none". */
-.shell-face-corner > path[fill="none"] {
-  stroke: #fafafa;
-}
 
 /* The question tilts, the way the prototype's `confirm` state tilted it: a
    symbol standing perfectly upright reads as a label, a tilted one as a
    question actually being asked. Independent `rotate` so the breathing
    `transform` on the same element still composes. */
-.shell-face[data-status="awaiting-review"] .shell-face-corner {
-  rotate: -6deg;
-}
 
 /* Paused stops the character rather than recolouring it: the dot shrinks and
    dims, which is the same signal the eyes are already giving. */
-.shell-face[data-status="paused"] .shell-face-corner {
-  transform: scale(0.76);
-  opacity: 0.64;
-}
 
 /* ---- motion ----
    Gaze, scan and blink compose, so each owns a group of its own: the outer
    group aims the eyes at the pointer, the middle one sweeps them across the
    work, the inner one closes the lids. `fill-box` keeps all three centred on
    the eyes regardless of the pose's own coordinates. */
-.shell-face-gaze,
-.shell-face-blink,
-.shell-face-scan,
-.shell-face-corner,
-.shell-face-pop {
-  transform-box: fill-box;
-  transform-origin: center;
-}
 
 /* A new symbol arrives rather than cross-fading in place — the state changed,
    and the mark should say so. Remounted per symbol (see PresenceFace). */
-.shell-face-pop {
-  animation: shell-face-pop 340ms var(--shell-ease) 1;
-}
-
-.shell-face[data-motion="off"] .shell-face-pop {
-  animation: none;
-}
-
-@keyframes shell-face-pop {
-  0% {
-    transform: scale(0.8);
-    opacity: 0.3;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
 
 /* `--shell-face-gaze-*` is written by useGaze; `--shell-face-lift` by :hover
    below. Kept separate so a hover cannot clobber the pointer's position. */
-.shell-face-gaze {
-  transform: translate(
-    var(--shell-face-gaze-x, 0px),
-    calc(var(--shell-face-gaze-y, 0px) + var(--shell-face-lift, 0px))
-  );
-  transition: transform 180ms var(--shell-ease);
-}
-
-.shell-face[data-blink="true"] .shell-face-blink {
-  animation: shell-face-blink 4.6s var(--shell-ease) infinite;
-}
-
-.shell-face[data-motion="scan"] .shell-face-scan {
-  animation: shell-face-scan 1.9s ease-in-out infinite;
-}
-
-.shell-face[data-motion="scan"] .shell-face-blink {
-  animation-duration: 3.2s;
-}
-
-.shell-face[data-motion="rest"] .shell-face-corner {
-  animation: shell-face-breathe 4.6s ease-in-out infinite;
-}
-
-.shell-face[data-motion="beat"] .shell-face-corner {
-  animation: shell-face-beat 5.2s var(--shell-ease) infinite;
-}
-
-@keyframes shell-face-blink {
-  0%,
-  93%,
-  100% {
-    transform: scaleY(1);
-  }
-  96% {
-    transform: scaleY(0.06);
-  }
-}
-
-@keyframes shell-face-scan {
-  0%,
-  100% {
-    transform: translateX(-3.4px);
-  }
-  50% {
-    transform: translateX(3.4px);
-  }
-}
-
-@keyframes shell-face-breathe {
-  0%,
-  100% {
-    transform: scale(0.97);
-  }
-  50% {
-    transform: scale(1.03);
-  }
-}
-
-@keyframes shell-face-beat {
-  0%,
-  16%,
-  100% {
-    transform: scale(1);
-  }
-  6% {
-    transform: scale(1.16);
-  }
-  11% {
-    transform: scale(1.08);
-  }
-}
 
 /* Limbs: drawn always, shown only once the presence is tucked (see below). */
-.shell-face-limbs {
-  fill: #f3f3f3;
-  stroke: #303030;
-  opacity: 0;
-  transition: opacity 160ms var(--shell-ease);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .shell-face-gaze,
-  .shell-face-blink,
-  .shell-face-scan,
-  .shell-face-corner,
-  .shell-face-pop {
-    animation: none !important;
-    transition: none;
-  }
-  .shell-face-eye {
-    transition: none;
-  }
-}
 
 /* Bottom-right, not top-right: the top-right corner is the character's own —
    its dot, question mark or heart lives there, and a counter sitting on top of
    the mark's one distinguishing feature hides the state it is counting. */
-.shell-face-badge {
-  position: absolute;
-  right: -2px;
-  bottom: -2px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  display: grid;
-  place-items: center;
-  border-radius: 9px;
-  background: var(--shell-badge-fill);
-  color: var(--shell-ink-inverse);
-  font-size: var(--shell-text-xs);
-}
 
 /* ------------------------------------------------------- floating layer */
-
-.shell-presence {
-  position: fixed;
-  z-index: var(--shell-z-presence);
-  transition: left 160ms var(--shell-ease), top 160ms var(--shell-ease);
-}
-
-.shell-presence[data-dragging="true"] {
-  transition: none;
-}
 
 /* Tucked against an edge: only a sliver stays on screen until hovered. The
    character turns to face the window and puts its limbs out, so a mark that is
@@ -250,231 +68,21 @@
    The expanded panel parks flush against the edge instead and keeps its full
    opacity; `presenceLayout.placePresence` produces a zero overhang for it, so
    there is nothing here for it to consume. */
-.shell-presence[data-expanded="false"][data-edge="left"],
-.shell-presence[data-expanded="false"][data-edge="right"],
-.shell-presence[data-expanded="false"][data-edge="top"],
-.shell-presence[data-expanded="false"][data-edge="bottom"] {
-  opacity: 0.82;
-}
-
-.shell-presence[data-expanded="false"][data-edge]:not([data-edge=""]) .shell-face-limbs {
-  opacity: 1;
-}
 
 /* The overhang. The element itself stays on screen (see anchorPresence) and
    the mark is pushed out past the window edge from inside it, so the focus
    ring remains visible while the character is mostly hidden. */
-.shell-presence[data-expanded="false"][data-edge="left"] .shell-face {
-  transform: translate(var(--shell-presence-peek-x, 0px), var(--shell-presence-peek-y, 0px))
-    rotate(90deg);
-}
-
-.shell-presence[data-expanded="false"][data-edge="right"] .shell-face {
-  transform: translate(var(--shell-presence-peek-x, 0px), var(--shell-presence-peek-y, 0px))
-    rotate(-90deg);
-}
-
-.shell-presence[data-expanded="false"][data-edge="top"] .shell-face {
-  transform: translate(var(--shell-presence-peek-x, 0px), var(--shell-presence-peek-y, 0px))
-    rotate(180deg);
-}
-
-.shell-presence[data-expanded="false"][data-edge="bottom"] .shell-face {
-  transform: translate(var(--shell-presence-peek-x, 0px), var(--shell-presence-peek-y, 0px));
-}
-
-.shell-presence[data-expanded="false"][data-edge]:not([data-edge=""]):hover {
-  opacity: 1;
-}
 
 /* Hovering the presence is the one interaction the character answers directly:
    it looks up, leans towards you and blinks once. The prototype spent a whole
    extra state ("hover — 被你注意到") on this; CSS covers it, and the wink
    overrides the resting blink loop for as long as the pointer is on it. */
-.shell-presence-face:hover .shell-face-gaze {
-  --shell-face-lift: -2.6px;
-}
-
-.shell-presence-face:hover .shell-face-blink {
-  animation: shell-face-wink 320ms var(--shell-ease) 1;
-}
-
-.shell-face svg {
-  transition: transform 220ms var(--shell-ease);
-}
-
-.shell-presence-face:hover .shell-face svg {
-  transform: translateY(-1px) scale(1.03);
-}
-
-@keyframes shell-face-wink {
-  0%,
-  100% {
-    transform: scaleY(1);
-  }
-  45% {
-    transform: scaleY(0.06);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .shell-face svg,
-  .shell-presence-face:hover .shell-face svg {
-    transition: none;
-    transform: none;
-  }
-}
-
-.shell-presence-face {
-  display: block;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: none;
-  cursor: pointer;
-  filter: drop-shadow(var(--shell-shadow-face));
-  touch-action: none;
-}
-
-.shell-presence-face:hover {
-  filter: drop-shadow(var(--shell-shadow-face-hover));
-}
-
-.shell-presence-face:focus-visible {
-  outline: 2px solid var(--shell-focus);
-  outline-offset: 3px;
-}
-
-.shell-presence-panel {
-  position: relative;
-  /* Below 1280 the panel gives width back rather than eating a fixed 340px of
-     a window that no longer has it: at 1024 it was covering 32% of the canvas,
-     including the sheet tab strip — the only way to change worksheet (S4-012).
-     The real answer is for the editor to report a safe area (Wave 3-H, see
-     presenceLayout.PlaceOptions.safeArea); this is the part that does not need
-     a contract change. */
-  width: min(340px, max(272px, calc(100vw - 940px)));
-  max-height: min(76vh, 620px);
-  display: flex;
-  flex-direction: column;
-  /* `clip`, not `hidden`.
-     A `hidden` box is still a scroll container — it just has no scrollbars —
-     so `scrollIntoView` and the browser's own scroll-to-focus could move it,
-     and did: focusing the composer's model button pushed the panel's header
-     36px out of view with no scrollbar to bring it back (S4-007). `clip` is
-     not a scroll container at all, so `scrollTop` stays 0. The scrolling
-     belongs to `.shell-task-scroll` below, which is already `overflow: auto`. */
-  overflow: clip;
-  background: var(--shell-chrome);
-  border-radius: var(--shell-radius-panel);
-  box-shadow: inset 0 0 0 1px var(--shell-line-strong), var(--shell-shadow-float);
-}
-
-.shell-presence-collapse {
-  position: absolute;
-  top: 14px;
-  /* Flush with the header's own padding when nothing sits beside it. */
-  right: 16px;
-  width: 26px;
-  height: 26px;
-  display: grid;
-  place-items: center;
-  border: 0;
-  border-radius: var(--shell-radius-control);
-  background: transparent;
-  color: var(--shell-ink-subtle);
-  font-size: var(--shell-text-2xl);
-  line-height: 1;
-  cursor: pointer;
-}
 
 /* Only where `canDock()` actually renders the dock button does the collapse
    key step aside for it: 16px padding + 26px button + 4px gap. Editor mode
    cannot dock, and used to keep the gap for a button that was never there. */
-.shell-presence-panel[data-dockable="true"] .shell-presence-collapse {
-  right: 46px;
-}
-
-.shell-presence-collapse:hover {
-  background: var(--shell-hover);
-  color: var(--shell-ink);
-}
 
 /* -------------------------------------------------------- task panel */
-
-.shell-task {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  height: 100%;
-}
-
-.shell-task[data-placement="docked"] {
-  padding: 16px 16px 0;
-}
-
-.shell-task[data-placement="floating"] {
-  padding: 0;
-}
-
-.shell-task-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: none;
-}
-
-.shell-task[data-placement="floating"] .shell-task-head {
-  padding: 16px 16px 12px;
-  cursor: grab;
-  touch-action: none;
-}
-
-.shell-task[data-placement="floating"] .shell-task-head:active {
-  cursor: grabbing;
-}
-
-.shell-task-head:focus-visible {
-  outline: 2px solid var(--shell-focus);
-  outline-offset: -2px;
-}
-
-.shell-task-title {
-  flex: 1;
-  min-width: 0;
-}
-
-.shell-task-title b {
-  display: block;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: var(--shell-ink-title);
-  font-size: var(--shell-text-lg);
-  font-weight: 600;
-}
-
-.shell-task-title small {
-  display: block;
-  margin-top: 2px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: var(--shell-ink-faint);
-  font-size: var(--shell-text-xs);
-}
-
-.shell-task-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  scrollbar-width: thin;
-  padding: 12px 0 8px;
-}
-
-.shell-task[data-placement="floating"] .shell-task-scroll {
-  padding: 0 16px 8px;
-}
 
 /* messages */
 
@@ -506,58 +114,10 @@
   font-style: normal;
 }
 
-.shell-task-reply {
-  margin: 0 0 14px;
-}
-
-.shell-task-reply-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-  color: var(--shell-ink-title);
-  font-size: var(--shell-text-sm);
-}
-
-.shell-task-reply p {
-  margin: 0;
-  color: var(--shell-reply-ink);
-  font-size: var(--shell-text);
-  line-height: 22px;
-  overflow-wrap: anywhere;
-}
-
 /* steps */
 
-.shell-task-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 13px;
-  margin: 16px 0;
-  padding: 0;
-  list-style: none;
-}
-
-.shell-task-step {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--shell-ink-faint);
-  font-size: var(--shell-text-sm);
-  line-height: 18px;
-}
-
-.shell-task-step > svg,
 .shell-task-spinner {
   flex: none;
-}
-
-.shell-task-step.is-done {
-  color: var(--shell-status-done);
-}
-
-.shell-task-step.is-active {
-  color: var(--shell-ink-title);
 }
 
 /*
@@ -569,76 +129,21 @@
  * this shell does not have. Rows are one line each and the title truncates —
  * eight pages have to fit a 320px column without turning into a wall.
  */
-.shell-task-outline {
-  display: flex;
-  flex-direction: column;
-  margin: 0 0 16px;
-  padding: 0;
-  list-style: none;
-  border: 1px solid var(--shell-line);
-  border-radius: var(--shell-radius-card);
-  overflow: hidden;
-}
-
-.shell-task-outline-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 10px;
-  color: var(--shell-ink-faint);
-  font-size: var(--shell-text-sm);
-  line-height: 18px;
-}
-
-.shell-task-outline-row + .shell-task-outline-row {
-  border-top: 1px solid var(--shell-line-soft);
-}
-
-.shell-task-outline-index {
-  flex: none;
-  font-variant-numeric: tabular-nums;
-}
 
 /* Truncates rather than wraps: a wrapping title reflows every row below it
    each time a page's state arrives. */
-.shell-task-outline-title {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.shell-task-outline-row > svg,.shell-task-outline-row .shell-task-spinner {
-  flex: none;
-}
-
-.shell-task-outline-row[data-state="ready"] {
-  color: var(--shell-ink-muted);
-}
-
-.shell-task-outline-row[data-state="generating"],
-.shell-task-outline-row[data-state="repairing"] {
-  color: var(--shell-ink-title);
-}
 
 /* A page that failed is not a page that has not started.
    Both were --shell-ink-faint, so a dead page sat in the list looking like it
    was still waiting its turn — the one state the reader has to notice read as
    the one state that needs nothing from them. The mark is currentColor, so the
    glyph follows. */
-.shell-task-outline-row[data-state="failed"] {
-  color: var(--shell-status-danger);
-}
 
 /* Repairing is generating again after the page came back wrong, and it wore the
    identical spinner — the same wait, with nothing saying the first attempt was
    thrown away. Only the leading edge changes: it is still work in progress, so
    it keeps the row's working colour and borrows the failure hue for the part
    that moves. */
-.shell-task-outline-row[data-state="repairing"] .shell-task-spinner {
-  border-top-color: var(--shell-status-danger);
-}
 
 .shell-task-spinner {
   display: block;
@@ -663,18 +168,6 @@
 }
 
 /* actions */
-
-.shell-task-recovery {
-  margin: 14px 0 -6px;
-  color: var(--shell-ink-muted);
-  font: var(--shell-text-sm) / 18px var(--shell-font);
-}
-
-.shell-task-actions {
-  display: flex;
-  gap: 6px;
-  margin: 14px 0;
-}
 
 .shell-task-button {
   display: inline-flex;
@@ -717,130 +210,10 @@
 
 /* cards */
 
-.shell-task-artifact,
-.shell-task-suggestion {
-  margin: 4px 0 14px;
-  padding: 14px;
-  border: 1px solid var(--shell-line-strong);
-  border-radius: var(--shell-radius-card);
-  background: var(--shell-paper);
-}
-
 /* The question the run is blocked on. Carries the accent because it is the one
    thing on screen the user has to act on for anything else to continue. */
-.shell-task-question {
-  margin: 4px 0 14px;
-  padding: 14px;
-  border: 1px solid var(--shell-accent);
-  border-radius: var(--shell-radius-card);
-  background: var(--shell-tint);
-}
-
-.shell-task-question strong {
-  display: block;
-  color: var(--shell-ink-title);
-  font-size: var(--shell-text);
-  font-weight: 500;
-}
-
-.shell-task-question-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.shell-task-question small {
-  display: block;
-  margin-top: 10px;
-  color: var(--shell-ink-subtle);
-  font-size: var(--shell-text-sm);
-}
-
-.shell-task-artifact-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.shell-task-artifact-head > div {
-  min-width: 0;
-}
-
-.shell-task-artifact-head strong {
-  display: block;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: var(--shell-ink-title);
-  font-size: var(--shell-text);
-  font-weight: 500;
-  line-height: 19px;
-}
-
-.shell-task-artifact-head small {
-  display: block;
-  margin-top: 2px;
-  color: var(--shell-ink-faint);
-  font-size: var(--shell-text-xs);
-}
-
-.shell-task-suggestion strong {
-  display: block;
-  color: var(--shell-ink-title);
-  font-size: var(--shell-text);
-  font-weight: 500;
-}
-
-.shell-task-suggestion p {
-  margin: 6px 0 4px;
-  color: var(--shell-ink-muted);
-  font-size: var(--shell-text-sm);
-  line-height: 19px;
-}
-
-.shell-task-suggestion small {
-  display: block;
-  margin-bottom: 12px;
-  color: var(--shell-ink-faint);
-  font-size: var(--shell-text-xs);
-}
-
-.shell-task-suggestion[data-applied="true"] {
-  border-color: var(--shell-applied-line);
-  background: var(--shell-applied-surface);
-}
 
 /* empty + composer */
-
-.shell-task-empty {
-  padding: 26px 4px 20px;
-  color: var(--shell-ink-subtle);
-}
-
-.shell-task-empty strong {
-  display: block;
-  margin: 14px 0 6px;
-  color: var(--shell-ink-title);
-  font-size: var(--shell-text-xl);
-  font-weight: 500;
-}
-
-.shell-task-empty p {
-  margin: 0;
-  font-size: var(--shell-text);
-  line-height: 21px;
-}
-
-.shell-task-composer {
-  flex: none;
-  padding-bottom: 16px;
-}
-
-.shell-task[data-placement="floating"] .shell-task-composer {
-  padding: 0 14px 14px;
-}
 
 /* ------------------------------------------- hero composer focus glow */
 
@@ -872,7 +245,6 @@
   border-radius: 20px;
 }
 
-
 /*
  * The outline while it can still be changed.
  *
@@ -885,48 +257,3 @@
  * line would turn a three-line plan into a form, and the thing being reviewed is
  * the plan, not the form.
  */
-.shell-task-outline--editable .shell-task-outline-row {
-  gap: 6px;
-  padding-right: 4px;
-}
-
-.shell-task-outline-input {
-  flex: 1;
-  min-width: 0;
-  padding: 2px 6px;
-  border: 1px solid transparent;
-  border-radius: var(--shell-radius-control);
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  line-height: 18px;
-}
-
-.shell-task-outline-input:hover {
-  border-color: var(--shell-line);
-}
-
-.shell-task-outline-input:focus {
-  border-color: var(--shell-focus);
-  background: var(--shell-paper);
-  outline: none;
-}
-
-.shell-task-outline-drop {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--shell-radius-control);
-  background: transparent;
-  color: var(--shell-ink-faint);
-  cursor: pointer;
-}
-
-.shell-task-outline-drop:hover {
-  background: var(--shell-hover);
-  color: var(--shell-status-danger);
-}

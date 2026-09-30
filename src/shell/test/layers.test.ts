@@ -26,6 +26,18 @@
  * disjoint sets. That disjointness is the "intersection must be empty"
  * requirement stated as something a machine can check.
  *
+ * **OD-UI-1.2.** There are two ladders in one document now: the design's
+ * (`--dx-z-*`, 1–200, plus the input glow at 10000) and the one the surfaces the
+ * design keeps as they were already used (`--shell-z-menu` 300, `-viewer` 350,
+ * `-gate` 400). They share the root context — `#shell` and `#dx-workspace` open
+ * none — so they are one table here, and the order between them is a decision:
+ * the image tools' menus, the picture viewer and the account page cover the
+ * workspace, its menus and its notice. The `context:` column below was filled
+ * in from a browser, by walking up from each z-indexed element to the nearest
+ * ancestor that opens a stacking context, rather than from reading selectors.
+ * That is how `.dx-window-controls` (30) turned out to sort inside
+ * `#dx-global-controls` (45) and not against the sidebar beside it.
+ *
  * **Known blind spots.**
  *
  * 1. **Containment comes from the DOM, and this reads CSS.** `.shell-mention`
@@ -57,263 +69,276 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { opensStackingContext, parseCss, parseShellCss } from "./cssModel";
 
+const V11 = "src/shell/styles/workspace-v11.css";
+const V12 = "src/shell/styles/workspace-v12.css";
+const ATTENTION = "src/shell/styles/attention.css";
+
 /**
  * The ladder, copied from `tokens.css` — and asserted equal to it below, so the
- * copy cannot drift. Three groups, because they answer three different
- * questions; see the long note in `tokens.css` for the argument.
+ * copy cannot drift. See the notes in `tokens.css` for the argument behind each
+ * group.
  */
 const LADDER: Record<string, string> = {
-  // Root context: these compare directly against each other.
-  "--shell-z-mode-switch": "1",
-  "--shell-z-chrome": "3",
-  "--shell-z-home-drop": "150",
-  "--shell-z-presence": "200",
+  // The design's rungs (OD-UI-1.2 §05): content → sticky tools → Dex and
+  // floating panels → menus and tips.
+  "--dx-z-raised": "1",
+  "--dx-z-raised-2": "2",
+  "--dx-z-modal-head": "2",
+  "--dx-z-sidebar": "15",
+  "--dx-z-splitter": "20",
+  "--dx-z-dex": "22",
+  "--dx-z-dex-panel": "23",
+  "--dx-z-dex-open": "24",
+  "--dx-z-chat-overlay": "25",
+  "--dx-z-window-controls": "30",
+  "--dx-z-chat-floating": "30",
+  "--dx-z-workspace-toggle": "35",
+  "--dx-z-sidebar-peek": "40",
+  "--dx-z-drop": "40",
+  "--dx-z-global-controls": "45",
+  "--dx-z-flyout": "45",
+  "--dx-z-menu": "60",
+  "--dx-z-popover": "70",
+  "--dx-z-tooltip": "90",
+  "--dx-z-agent-effects": "110",
+  "--dx-z-flight": "120",
+  "--dx-z-notice": "200",
+  "--dx-z-input-glow": "10000",
+  // The surfaces the design keeps as they were. Root context, above the design's.
   "--shell-z-menu": "300",
   "--shell-z-viewer": "350",
   "--shell-z-gate": "400",
   // Composer-local: meaningful only inside `.shell-cx`.
   "--shell-z-cx-drop": "10",
-  "--shell-z-cx-mention": "180",
   // Declared, not applied — `renderer/ui/styles/components.css` is shared with
-  // the old renderer and is not this shell's to edit. They are on the ladder so
-  // the 800-wide gap above 200 is visible rather than discovered by collision.
+  // the old renderer and is not this shell's to edit.
   "--shell-z-legacy-dialog": "1000",
   "--shell-z-legacy-popover": "1050",
   "--shell-z-legacy-toast": "1100",
   "--shell-z-legacy-tooltip": "1200",
 };
 
-const ROOT_RUNGS = [
-  "--shell-z-mode-switch",
-  "--shell-z-chrome",
-  "--shell-z-home-drop",
-  "--shell-z-presence",
-  "--shell-z-menu",
-  "--shell-z-viewer",
-  "--shell-z-gate",
-];
+/** Rungs that mean something only inside the context that holds them. */
+const LOCAL_RUNGS = ["--dx-z-raised-2", "--dx-z-modal-head", "--dx-z-window-controls", "--shell-z-cx-drop"];
 
-interface StackingContext {
+const ROOT_RUNGS = Object.keys(LADDER).filter(
+  (rung) => !LOCAL_RUNGS.includes(rung) && !rung.startsWith("--shell-z-legacy-"),
+);
+
+interface Site {
   file: string;
   selector: string;
+}
+
+interface StackingContext extends Site {
+  /**
+   * What opens it. A CSS property that does so by itself, `z-index` for a
+   * positioned element whose own rung makes it a context for what is inside
+   * it, or `top-layer` for the dialog, which the browser lifts out of the page.
+   */
   property: string;
-  /** z-index-bearing selectors that sort inside this context, not at the root. */
-  traps: string[];
+  /** z-index-bearing rules that sort inside this context, not at the root. */
+  traps: Site[];
   /** Rungs that mean nothing outside it. Empty unless `traps` is non-empty. */
   localRungs: string[];
   why: string;
 }
 
 const LEAF = "a leaf control's own fade; it has no positioned descendants";
-const MARK = "inside the companion mark, which is a drawing: SVG shapes only";
+const REVEAL = "a row's own button, hidden until the row is hovered or focused; " + LEAF;
+const EFFECT =
+  "inside the agent's work cursor, which is a drawing laid over the document: " +
+  "the pointer and its tag flip to stay inside the frame, and neither holds anything";
+const DEX_ITSELF =
+  "This is the z-index element itself, turned to sit on an edge. An element's own " +
+  "transform opens a context for what is inside it — the bubble's two pseudo-elements " +
+  "— and does not move where the bubble's own rung sorts.";
 
 /**
  * Every declaration that opens a stacking context, in every stylesheet that
- * also declares a z-index.
+ * also declares a z-index — plus the three contexts that are opened by a rung
+ * or by the browser rather than by a property, because those are the ones that
+ * actually trap something.
  *
- * Scoped that way on purpose. Registering all nineteen openers in `src/shell`
- * would mean annotating `nav.css`'s drag fade, which can trap nothing because
- * nothing under the file tree is positioned — and a table that is mostly noise
- * is a table nobody re-reads when it matters. The cost of the narrower scope is
- * stated as blind spot 5 below: an opener in a stylesheet with no z-index of
- * its own could still wrap a z-index from another stylesheet. It does not
- * today — `app.css`, which owns every ancestor of the others, declares one
- * z-index of its own and no opener at all — and the guard below asserts that
- * stays true.
+ * Scoped to stylesheets with a z-index on purpose; the guard further down pins
+ * the openers everywhere else so a new one has to be looked at.
  */
 const STACKING_CONTEXTS: StackingContext[] = [
+  // ---- contexts that trap a rung ------------------------------------------
+  {
+    file: V12,
+    selector: "#dx-global-controls",
+    property: "z-index",
+    traps: [{ file: V11, selector: ".dx-window-controls" }],
+    localRungs: ["--dx-z-window-controls"],
+    why:
+      "The 244 × 40 band that holds the traffic lights, the sidebar toggle and the " +
+      "Home tab is positioned with a rung of its own (45), so the 30 on the group " +
+      "inside it sorts against its siblings in the band and nothing else. Measured: " +
+      "its nearest stacking ancestor is this element, not the root.",
+  },
+  {
+    file: V11,
+    selector: ".dx-dex",
+    property: "z-index",
+    traps: [{ file: V12, selector: "#dx-workspace .dx-dex::before, #dx-workspace .dx-dex::after" }],
+    localRungs: ["--dx-z-raised-2"],
+    why:
+      "The bubble is positioned on the Dex rung, which makes it a context for its " +
+      "two pseudo-elements — the halo it shows while a run is working. Their 2 " +
+      "lifts them over the drawing inside the bubble and means nothing outside it.",
+  },
+  {
+    file: ATTENTION,
+    selector: ".dx-od-agent-effects",
+    property: "z-index",
+    traps: [{ file: ATTENTION, selector: ".dx-od-agent-effects .dx-agent-work-cursor" }],
+    localRungs: ["--dx-z-raised-2"],
+    why:
+      "The layer the agent's target frame, draft and work cursor are drawn in: " +
+      "fixed, view-only, on its own rung. The cursor's 2 puts it over the frame " +
+      "and the draft inside that layer.",
+  },
+  {
+    file: V11,
+    selector: "#dx-modal",
+    property: "top-layer",
+    traps: [{ file: V11, selector: ".dx-modal-head" }],
+    localRungs: ["--dx-z-modal-head"],
+    why:
+      "A `<dialog>` opened with `showModal()` is in the browser's top layer: above " +
+      "every z-index in the page, this ladder's and the component library's alike. " +
+      "Its sticky header's 2 keeps the title over the body scrolling under it.",
+  },
   {
     file: "src/shell/composer/composer.css",
     selector: ".shell-cx",
     property: "container-type",
-    traps: [".shell-cx-drop", ".shell-mention"],
-    localRungs: ["--shell-z-cx-drop", "--shell-z-cx-mention"],
+    traps: [{ file: "src/shell/composer/composer.css", selector: ".shell-cx-drop" }],
+    localRungs: ["--shell-z-cx-drop"],
     why:
-      "S5-005. `inline-size` is here for the composer's four container queries, " +
-      "and layout containment comes with it whether or not anyone wanted it. " +
-      "Both numbers inside are therefore composer-local; `.shell-cx` itself is " +
+      "S5-005. `inline-size` is here for the image composer's container queries, " +
+      "and layout containment comes with it whether or not anyone wanted it. The " +
+      "drop target inside is therefore composer-local; `.shell-cx` itself is " +
       "`z-index: auto`, so the composer as a whole sorts by document order.",
   },
   {
-    file: "src/shell/composer/composer.css",
-    selector: ".shell-mention-enter",
+    file: V11,
+    selector: ".dx-composer",
+    property: "container-type",
+    traps: [],
+    localRungs: [],
+    why:
+      "The same containment, on the design's composer, for the same reason. It " +
+      "traps nothing because nothing inside it has a rung: the @ list and the " +
+      "model menu are drawn in `#dx-layers`, outside it, which is what lets them " +
+      "open over the conversation instead of being clipped to the composer.",
+  },
+
+  // ---- the z-index element's own transform or opacity ---------------------
+  {
+    file: V11,
+    selector: "#dx-notice",
+    property: "transform",
+    traps: [],
+    localRungs: [],
+    why: "the notice centring itself; it is the z-index element and holds one line of text",
+  },
+  {
+    file: V11,
+    selector: "#dx-notice",
     property: "opacity",
     traps: [],
     localRungs: [],
-    why: LEAF + " — the ⏎ hint in a mention row, a bare <span>",
+    why: "the same notice, invisible until it has something to say",
+  },
+  { file: V12, selector: "#dx-workspace .dx-dex[data-edge=left]", property: "transform", traps: [], localRungs: [], why: DEX_ITSELF },
+  { file: V12, selector: "#dx-workspace .dx-dex[data-edge=right]", property: "transform", traps: [], localRungs: [], why: DEX_ITSELF },
+  { file: V12, selector: "#dx-workspace .dx-dex[data-edge=top]", property: "transform", traps: [], localRungs: [], why: DEX_ITSELF },
+  {
+    file: V12,
+    selector: "#dx-workspace .dx-dex[aria-expanded=true]",
+    property: "transform",
+    traps: [],
+    localRungs: [],
+    why:
+      "The bubble riding the corner of its open panel, scaled down. Still the " +
+      "z-index element itself: `--dx-z-dex-open` sorts at the root, one above the panel.",
   },
   {
-    file: "src/shell/agent/agent.css",
-    selector:
-      '.shell-presence[data-expanded="false"][data-edge="left"], ' +
-      '.shell-presence[data-expanded="false"][data-edge="right"], ' +
-      '.shell-presence[data-expanded="false"][data-edge="top"], ' +
-      '.shell-presence[data-expanded="false"][data-edge="bottom"]',
+    file: V12,
+    selector: "#dx-workspace .dx-dex::before, #dx-workspace .dx-dex::after",
+    property: "opacity",
+    traps: [],
+    localRungs: [],
+    why: "the halo's two rings, invisible until a run is working; pseudo-elements hold nothing",
+  },
+
+  // ---- leaves -------------------------------------------------------------
+  {
+    file: V11,
+    selector: 'button:where([data-ui-scope="officedex"], [data-ui-scope="officedex"] *):disabled',
+    property: "opacity",
+    traps: [],
+    localRungs: [],
+    why: LEAF + " — every disabled button in the workspace",
+  },
+  { file: V11, selector: ".dx-project-row .dx-more, .dx-chat-tree .dx-more", property: "opacity", traps: [], localRungs: [], why: REVEAL },
+  { file: V11, selector: ".dx-project-row>.dx-ib, .dx-chat-tree>.dx-ib", property: "opacity", traps: [], localRungs: [], why: REVEAL },
+  { file: V12, selector: ".dx-file-tab>.dx-ib", property: "opacity", traps: [], localRungs: [], why: REVEAL },
+  { file: V12, selector: "#dx-workspace .dx-file-tab>.dx-ib", property: "opacity", traps: [], localRungs: [], why: REVEAL },
+  { file: V12, selector: ".dx-asset-line>.dx-ib", property: "opacity", traps: [], localRungs: [], why: REVEAL },
+  { file: V12, selector: "#dx-conversation .dx-asset-line>.dx-ib", property: "opacity", traps: [], localRungs: [], why: REVEAL },
+  {
+    file: V11,
+    selector: ".dx-swap",
+    property: "opacity",
+    traps: [],
+    localRungs: [],
+    why: LEAF + " — the swap button on the divider, shown while the divider is hovered or focused",
+  },
+  {
+    file: V11,
+    selector: ".dx-file-tab .dx-bookmark:not(.dx-bookmarked)",
+    property: "opacity",
+    traps: [],
+    localRungs: [],
+    why: LEAF + " — a tab's favourite mark",
+  },
+  {
+    file: V12,
+    selector: "#dx-workspace .dx-file-tab .dx-tab-dex-watermark",
     property: "opacity",
     traps: [],
     localRungs: [],
     why:
-      "This is the z-index element itself, tucked to an edge. An element's own " +
-      "opacity opens a context for its descendants; it does not move where the " +
-      "element's own z-index sorts, so `--shell-z-presence` still means 200 " +
-      "against the window bar and the menu. What it does mean is that nothing " +
-      "the companion draws can ever escape above it while it is tucked.",
+      "The Dex watermark behind a conversation tab's title, at 5.5%. It holds one " +
+      "image; the title and the close button beside it carry `--dx-z-raised` " +
+      "precisely so they paint over it, and they are its siblings, not inside it.",
   },
   {
-    file: "src/shell/agent/agent.css",
-    selector: '.shell-face[data-status="paused"] .shell-face-corner',
+    file: V12,
+    selector: ".dx-agent-process[open]>summary>.dx-icon, .dx-agent-tool[open]>summary>.dx-icon",
     property: "transform",
     traps: [],
     localRungs: [],
-    why: MARK,
+    why: LEAF + " — a disclosure's chevron, turned when it is open",
   },
   {
-    file: "src/shell/agent/agent.css",
-    selector: '.shell-face[data-status="paused"] .shell-face-corner',
-    property: "opacity",
-    traps: [],
-    localRungs: [],
-    why: MARK,
-  },
-  {
-    file: "src/shell/agent/agent.css",
-    selector: ".shell-face-limbs",
-    property: "opacity",
-    traps: [],
-    localRungs: [],
-    why: MARK,
-  },
-  {
-    file: "src/shell/agent/agent.css",
-    selector: ".shell-face-gaze",
+    file: V12,
+    selector: ".dx-agent-jump",
     property: "transform",
     traps: [],
     localRungs: [],
-    why: MARK + " — the group the eyes track the cursor with",
+    why: LEAF + " — \"Latest update ↓\", centring itself over the composer",
   },
-  {
-    file: "src/shell/agent/agent.css",
-    selector: '.shell-presence[data-expanded="false"][data-edge="left"] .shell-face',
-    property: "transform",
-    traps: [],
-    localRungs: [],
-    why: MARK,
-  },
-  {
-    file: "src/shell/agent/agent.css",
-    selector: '.shell-presence[data-expanded="false"][data-edge="right"] .shell-face',
-    property: "transform",
-    traps: [],
-    localRungs: [],
-    why: MARK,
-  },
-  {
-    file: "src/shell/agent/agent.css",
-    selector: '.shell-presence[data-expanded="false"][data-edge="top"] .shell-face',
-    property: "transform",
-    traps: [],
-    localRungs: [],
-    why: MARK,
-  },
-  {
-    file: "src/shell/agent/agent.css",
-    selector: '.shell-presence[data-expanded="false"][data-edge="bottom"] .shell-face',
-    property: "transform",
-    traps: [],
-    localRungs: [],
-    why: MARK,
-  },
-  {
-    file: "src/shell/agent/agent.css",
-    selector: ".shell-presence-face:hover .shell-face svg",
-    property: "transform",
-    traps: [],
-    localRungs: [],
-    why: MARK,
-  },
-  {
-    file: "src/shell/agent/agent.css",
-    selector: ".shell-presence-face",
-    property: "filter",
-    traps: [],
-    localRungs: [],
-    why:
-      "drop-shadow on the collapsed mark's button. It wraps the mark and the " +
-      "mark only — the expanded panel's children are siblings of this button, " +
-      "not descendants — so the 200 above it is unaffected.",
-  },
-  {
-    file: "src/shell/agent/agent.css",
-    selector: ".shell-presence-face:hover",
-    property: "filter",
-    traps: [],
-    localRungs: [],
-    why: "the hover half of the same drop-shadow",
-  },
-  {
-    file: "src/shell/agent/agent.css",
-    selector: ".shell-task-button:disabled",
-    property: "opacity",
-    traps: [],
-    localRungs: [],
-    why: LEAF,
-  },
-  {
-    file: "src/shell/chrome/chrome.css",
-    selector: ".shell-share:active",
-    property: "filter",
-    traps: [],
-    localRungs: [],
-    why: LEAF + " — a pressed <button> with a label inside it",
-  },
-  {
-    file: "src/shell/chrome/chrome.css",
-    selector: ".shell-window-glyph",
-    property: "transform",
-    traps: [],
-    localRungs: [],
-    why: "the ×/–/+ glyph centred inside a traffic light, a leaf <span>",
-  },
-  {
-    file: "src/shell/chrome/chrome.css",
-    selector: ".shell-window-glyph",
-    property: "opacity",
-    traps: [],
-    localRungs: [],
-    why: "the same glyph, hidden until the controls are hovered",
-  },
-  {
-    file: "src/shell/chrome/chrome.css",
-    selector: ".shell-tabstrip-scroll:disabled",
-    property: "opacity",
-    traps: [],
-    localRungs: [],
-    why: LEAF,
-  },
-  {
-    file: "src/shell/chrome/chrome.css",
-    selector: ".shell-tab-close",
-    property: "opacity",
-    traps: [],
-    localRungs: [],
-    why: LEAF,
-  },
-  {
-    file: "src/shell/chrome/chrome.css",
-    selector: ".shell-tab-bookmark",
-    property: "opacity",
-    traps: [],
-    localRungs: [],
-    why: LEAF,
-  },
-  {
-    file: "src/shell/chrome/chrome.css",
-    selector: ".shell-save-state:disabled",
-    property: "opacity",
-    traps: [],
-    localRungs: [],
-    why: LEAF,
-  },
+  { file: ATTENTION, selector: ".dx-od-agent-effects .dx-agent-work-pointer", property: "filter", traps: [], localRungs: [], why: EFFECT },
+  { file: ATTENTION, selector: ".dx-od-agent-effects [data-corner=tr] .dx-agent-work-pointer", property: "transform", traps: [], localRungs: [], why: EFFECT },
+  { file: ATTENTION, selector: ".dx-od-agent-effects [data-corner=bl] .dx-agent-work-pointer", property: "transform", traps: [], localRungs: [], why: EFFECT },
+  { file: ATTENTION, selector: ".dx-od-agent-effects [data-corner=br] .dx-agent-work-pointer", property: "transform", traps: [], localRungs: [], why: EFFECT },
+  { file: ATTENTION, selector: ".dx-od-agent-effects [data-corner=tr] .dx-agent-work-tag", property: "transform", traps: [], localRungs: [], why: EFFECT },
+  { file: ATTENTION, selector: ".dx-od-agent-effects [data-corner=bl] .dx-agent-work-tag", property: "transform", traps: [], localRungs: [], why: EFFECT },
+  { file: ATTENTION, selector: ".dx-od-agent-effects [data-corner=br] .dx-agent-work-tag", property: "transform", traps: [], localRungs: [], why: EFFECT },
   {
     file: "src/shell/image/imageViewer.css",
     selector:
@@ -359,62 +384,154 @@ const STACKING_CONTEXTS: StackingContext[] = [
   },
 ];
 
-interface ZIndexSite {
-  file: string;
-  selector: string;
+interface ZIndexSite extends Site {
   /** The rung it must resolve to. */
   rung: string;
   /** `"root"`, or the selector of the context it sorts inside. */
   context: string;
-  /**
-   * Set when the stylesheet still writes the number instead of the token.
-   * Every one of these is somebody's debt and says whose, and what deletes it.
-   */
-  debt?: { owedBy: string; until: string };
   note?: string;
 }
 
 const Z_INDEX_SITES: ZIndexSite[] = [
+  // ---- the design's workspace, bottom to top ------------------------------
   {
-    file: "src/shell/app.css",
-    selector: '#shell[data-mode-switching="true"] .shell-agent',
-    rung: "--shell-z-mode-switch",
+    file: V12,
+    selector: "#dx-workspace .dx-file-tab .dx-tab-title, #dx-workspace .dx-file-tab>.dx-ib",
+    rung: "--dx-z-raised",
     context: "root",
     note:
-      "Only while a mode change is in flight. The same rule set pins " +
-      "`.shell-workspace` out of flow so the embedded editor is laid out once " +
-      "rather than on every frame, and a positioned element paints above its " +
-      "in-flow siblings — this is the one rung that keeps the docked column " +
-      "visible while it opens or closes. It sorts at the root because nothing " +
-      "between it and `#shell` opens a stacking context; `.shell-row--body` " +
-      "and `.shell` are both plain boxes.",
+      "A tab's title and close button, lifted over the watermark behind them. " +
+      "Measured at the root: nothing between a tab and `#shell` opens a context, " +
+      "so this 1 does compare against the sidebar's 15 — and loses, which is " +
+      "right, since the hover-shown sidebar is drawn over the tab strip.",
   },
+  { file: V11, selector: "#dx-sidebar", rung: "--dx-z-sidebar", context: "root" },
+  { file: V11, selector: "#dx-splitter", rung: "--dx-z-splitter", context: "root" },
   {
-    file: "src/shell/chrome/chrome.css",
-    selector: ".shell-windowbar",
-    rung: "--shell-z-chrome",
+    file: V11,
+    selector: ".dx-dex",
+    rung: "--dx-z-dex",
     context: "root",
+    note: "Inside `.dx-editor-wrapper`, which is a plain positioned box and opens nothing.",
+  },
+  { file: V11, selector: ".dx-dex-panel", rung: "--dx-z-dex-panel", context: "root" },
+  {
+    file: V12,
+    selector: "#dx-workspace .dx-dex[aria-expanded=true]",
+    rung: "--dx-z-dex-open",
+    context: "root",
+    note: "One above its own panel, whose corner it sits on while the panel is open.",
   },
   {
-    file: "src/shell/chrome/newTaskMenu.css",
-    selector: ".shell-new-task-menu",
-    rung: "--shell-z-menu",
+    file: V11,
+    selector: "#dx-workspace.dx-with-chat #dx-conversation",
+    rung: "--dx-z-chat-overlay",
     context: "root",
     note:
-      "Agent mode's New task grid. A menu in everything but shape, portalled to " +
-      "`#shell` like `.shell-menu`, so it shares that rung.",
+      "Windows under 900px: the conversation is laid over the content region " +
+      "rather than beside it. Above Dex, which belongs to the document underneath.",
   },
+  {
+    file: V12,
+    selector: "#dx-workspace.dx-chat-floating #dx-conversation",
+    rung: "--dx-z-chat-floating",
+    context: "root",
+  },
+  { file: V12, selector: "#dx-workspace-toggle", rung: "--dx-z-workspace-toggle", context: "root" },
+  {
+    file: V12,
+    selector: "#dx-workspace.dx-compact #dx-sidebar",
+    rung: "--dx-z-sidebar-peek",
+    context: "root",
+    note:
+      "The hidden sidebar, shown while the pointer is at the window's edge. Over " +
+      "the conversation and the workspace toggle; under the band of global controls, " +
+      "which stays where it is while the sidebar comes and goes beneath it.",
+  },
+  {
+    file: V11,
+    selector: ".dx-drop-active:after",
+    rung: "--dx-z-drop",
+    context: "root",
+    note: "\"Drop to open\", drawn over whichever region a file is being dragged across.",
+  },
+  { file: V12, selector: "#dx-global-controls", rung: "--dx-z-global-controls", context: "root" },
+  {
+    file: V12,
+    selector: "#dx-feature-flyout",
+    rung: "--dx-z-flyout",
+    context: "root",
+    note: "Hot and fresh features, opened from the gift button away from Home.",
+  },
+  {
+    file: V11,
+    selector: ".dx-menu",
+    rung: "--dx-z-menu",
+    context: "root",
+    note: "Drawn in `#dx-layers`, a child of `#shell`, never inside what opened it.",
+  },
+  { file: V12, selector: ".dx-new-popover", rung: "--dx-z-popover", context: "root" },
+  { file: V12, selector: ".dx-control-tooltip", rung: "--dx-z-tooltip", context: "root" },
+  {
+    file: ATTENTION,
+    selector: ".dx-od-agent-effects",
+    rung: "--dx-z-agent-effects",
+    context: "root",
+  },
+  {
+    file: V12,
+    selector: ".dx-feature-flight",
+    rung: "--dx-z-flight",
+    context: "root",
+    note: "The features panel folding into its gift button: a copy that exists for the length of the flight.",
+  },
+  { file: V11, selector: "#dx-notice", rung: "--dx-z-notice", context: "root" },
+  {
+    file: ATTENTION,
+    selector: ".dx-od-input-glow",
+    rung: "--dx-z-input-glow",
+    context: "root",
+    note:
+      "The colour glow around the text field that has focus. 10000 because it has " +
+      "to show over a field inside the component library's dialogs (1000+) as " +
+      "well; harmless there because it is view-only and takes no pointer event. " +
+      "It cannot show over a field inside `#dx-modal` — nothing in the page can — " +
+      "which is why the glow for those is mounted inside the dialog.",
+  },
+
+  // ---- inside a context ---------------------------------------------------
+  { file: V11, selector: ".dx-window-controls", rung: "--dx-z-window-controls", context: "#dx-global-controls" },
+  {
+    file: V12,
+    selector: "#dx-workspace .dx-dex::before, #dx-workspace .dx-dex::after",
+    rung: "--dx-z-raised-2",
+    context: ".dx-dex",
+  },
+  {
+    file: ATTENTION,
+    selector: ".dx-od-agent-effects .dx-agent-work-cursor",
+    rung: "--dx-z-raised-2",
+    context: ".dx-od-agent-effects",
+  },
+  { file: V11, selector: ".dx-modal-head", rung: "--dx-z-modal-head", context: "#dx-modal" },
+  {
+    file: "src/shell/composer/composer.css",
+    selector: ".shell-cx-drop",
+    rung: "--shell-z-cx-drop",
+    context: ".shell-cx",
+  },
+
+  // ---- the surfaces the design keeps --------------------------------------
   {
     file: "src/shell/chrome/usageNotice.css",
     selector: ".shell-usage-notice",
-    rung: "--shell-z-menu",
+    rung: "--dx-z-flyout",
     context: "root",
     note:
       "The one-time usage reporting notice, fixed to the window's corner and " +
-      "rendered beside `ToastHost` at the root. It has to read over the " +
-      "floating agent, which can sit in the same corner, and it must not cover " +
-      "the image viewer or the account page, so it takes the menu rung: a menu " +
-      "opened over it is dismissed by the same click that would reach it.",
+      "rendered beside `ToastHost` at the root. A floating panel: over Dex and " +
+      "the conversation, under the workspace's menus — at 300 it was drawn over " +
+      "a menu opened from the composer beside it (S2-010's shape).",
   },
   {
     file: "src/shell/image/composer/imagePopover.css",
@@ -430,27 +547,7 @@ const Z_INDEX_SITES: ZIndexSite[] = [
     selector: ".shell-menu",
     rung: "--shell-z-menu",
     context: "root",
-    note:
-      "Root only since W1-A portalled it to `#shell`. Before that it was a DOM " +
-      "child of whatever opened it, which is why 60 survived under a panel of 200.",
-  },
-  {
-    file: "src/shell/agent/agent.css",
-    selector: ".shell-presence",
-    rung: "--shell-z-presence",
-    context: "root",
-  },
-  {
-    file: "src/shell/home/home.css",
-    selector: ".shell-home-drop",
-    rung: "--shell-z-home-drop",
-    context: "root",
-    note:
-      "Editor Home's \"drop to open\" overlay, shown only while files from the " +
-      "desktop are dragged over the page. `position: fixed` and a sibling of " +
-      "Home's content inside `#shell`, which opens no stacking context, so it " +
-      "sorts at the root: above the window bar it never overlaps anyway, below " +
-      "the floating agent, which is not a place a file can be dropped.",
+    note: "The image creator's own menus. Portalled to `#shell` since W1-A.",
   },
   {
     file: "src/shell/account/account.css",
@@ -459,12 +556,10 @@ const Z_INDEX_SITES: ZIndexSite[] = [
     context: "root",
     note:
       "The account page, covering the window while the user signs in. It is a " +
-      "sibling of every shell region inside `#shell`, and `#shell` opens no " +
-      "stacking context of its own, so it sorts at the root — and it has to " +
-      "sort above `--shell-z-menu`, because the control that opens it lives " +
-      "inside the sidebar's menu. Below `--shell-z-legacy-toast` on purpose: " +
-      "the page copies the verification URL to the clipboard, and that " +
-      "confirmation is worthless if the page hides it.",
+      "sibling of `#dx-workspace` inside `#shell`, which opens no stacking context " +
+      "of its own, so it sorts at the root, above everything the workspace draws. " +
+      "Below `--shell-z-legacy-toast` on purpose: the page copies the verification " +
+      "URL to the clipboard, and that confirmation is worthless if the page hides it.",
   },
   {
     file: "src/shell/image/imageViewer.css",
@@ -477,75 +572,47 @@ const Z_INDEX_SITES: ZIndexSite[] = [
       "pointerdown, and nothing inside it opens one. Below the account page, " +
       "and below the legacy toast host so Download's confirmation stays visible.",
   },
-  {
-    file: "src/shell/settings/settings.css",
-    selector: ".shell-settings",
-    rung: "--shell-z-gate",
-    context: "root",
-    note:
-      "The settings page, covering the window while the user works through it. " +
-      "A sibling of every region inside `#shell`, which opens no stacking " +
-      "context of its own, so it sorts at the root. It takes the same rung as " +
-      "the account page rather than a new one because the two are never on " +
-      "screen together: the provider section's sign-in link closes this page " +
-      "before it opens that one, and both are opened from the same sidebar " +
-      "footer. Below `--shell-z-legacy-toast` for the same reason the account " +
-      "page is — every change on this page confirms itself with a toast, and a " +
-      "confirmation the page hides is worthless.",
-  },
-  {
-    file: "src/shell/composer/composer.css",
-    selector: ".shell-cx-drop",
-    rung: "--shell-z-cx-drop",
-    context: ".shell-cx",
-    debt: {
-      owedBy: "whoever owns src/shell/composer — it was under concurrent edit all of Wave 4",
-      until:
-        "the line reads `z-index: var(--shell-z-cx-drop)`. The token was built " +
-        "for it in W3-I (c9cdf6f) and holds this exact value; see W3-I.md §3.3. " +
-        "Delete this `debt` field then — the site itself stays registered.",
-    },
-  },
-  {
-    file: "src/shell/composer/composer.css",
-    selector: ".shell-mention",
-    rung: "--shell-z-cx-mention",
-    context: ".shell-cx",
-    debt: {
-      owedBy: "whoever owns src/shell/composer — it was under concurrent edit all of Wave 4",
-      until:
-        "the line reads `z-index: var(--shell-z-cx-mention)`. Same token, same " +
-        "commit, same paragraph of W3-I.md §3.3.",
-    },
-  },
 ];
 
 /**
  * Style literals assigned from TypeScript, where no CSS gate can see them.
  *
  * Not an exemption so much as a note that the hole exists and how big it is
- * right now. `attentionOverlay.ts` builds its SVG imperatively and styles it
- * with `Object.assign(el.style, …)`, so its `zIndex: "3"` — numerically the
- * window bar's rung, written as a string — and its four gradient stops are
- * outside every stylesheet in the repository. Asserted in both directions, so
- * the count cannot grow quietly and a fix must delete the entry.
+ * right now. Asserted in both directions, so the count cannot grow quietly and
+ * a fix must delete the entry.
  */
 const KNOWN_STYLE_LITERALS: Record<string, { zIndex: number; colours: number; why: string }> = {
   "src/shell/agent/attentionOverlay.ts": {
     zIndex: 1,
     colours: 4,
     why:
-      "The attention frame is drawn, not styled: a four-stop rainbow gradient " +
-      "that exists to be unmistakably not-the-document, and a zIndex of 3 " +
-      "inside whichever host it is mounted in. The colours are the prototype's " +
-      "and belong to the effect rather than the palette; the 3 is the thing " +
-      "worth moving, because it is `--shell-z-chrome` spelled as a string.",
+      "The attention frame is drawn, not styled: a four-stop gradient that exists " +
+      "to be unmistakably not-the-document, and a zIndex of 3 inside whichever " +
+      "host it is mounted in. The colours are the design's and belong to the " +
+      "effect rather than the palette.",
+  },
+  "src/shell/dex/faceRenderer.ts": {
+    zIndex: 0,
+    colours: 3,
+    why:
+      "Dex is a drawing. The renderer is a port of the approved prototype's, and " +
+      "the three values are the ink, the plate and the corner mark of the rounded-" +
+      "square face — a fixed relationship that makes it read as a face at 20px. " +
+      "A theme moving them independently would be breaking the mark, not recolouring it.",
+  },
+  "src/shell/kit/fileIcons.ts": {
+    zIndex: 0,
+    colours: 30,
+    why:
+      "File Icon System 1.0: each file type's own colours, light and dark, as the " +
+      "design system publishes them. They identify a format — Word blue, Excel " +
+      "green — and are not the workspace's palette; the file is the table.",
   },
 };
 
 const shellCss = parseShellCss("src/shell");
 const zIndexes = shellCss.filter((declaration) => declaration.property === "z-index");
-const rungPattern = /^var\(\s*(--shell-z-[a-z-]+)\s*\)$/;
+const rungPattern = /^var\(\s*(--(?:shell|dx)-z-[a-z0-9-]+)\s*\)$/;
 const key = (file: string, selector: string) => `${file}  ${selector}`;
 
 function shellSources(directory: string): string[] {
@@ -565,7 +632,8 @@ describe("the z-index ladder", () => {
   it("is exactly the set tokens.css declares", () => {
     const declared = Object.fromEntries(
       parseCss("src/shell/tokens.css")
-        .filter((declaration) => declaration.property.startsWith("--shell-z-"))
+        // The light block only: a theme may recolour, it may not re-stack.
+        .filter((declaration) => /^--(shell|dx)-z-/.test(declaration.property))
         .map((declaration) => [declaration.property, declaration.value]),
     );
     // Both directions. A new rung in tokens.css that nobody added here is a
@@ -589,10 +657,6 @@ describe("the z-index ladder", () => {
         }
         continue;
       }
-      // A literal is allowed only where a registered debt says so, and only at
-      // the value its rung holds — so the number cannot drift while the token
-      // is owed.
-      if (site?.debt && declaration.value === LADDER[site.rung]) continue;
       offenders.push(
         `${declaration.file}:${declaration.line} ${declaration.selector} -> ${declaration.value}`,
       );
@@ -612,7 +676,7 @@ describe("the z-index ladder", () => {
   it("keeps root rungs and context-local rungs disjoint", () => {
     const trapped = new Map<string, StackingContext>();
     for (const context of STACKING_CONTEXTS) {
-      for (const selector of context.traps) trapped.set(key(context.file, selector), context);
+      for (const trap of context.traps) trapped.set(key(trap.file, trap.selector), context);
     }
 
     const problems: string[] = [];
@@ -671,25 +735,33 @@ describe("the z-index ladder", () => {
     expect(unaccounted).toEqual([]);
 
     // And the other way: a registered context whose declaration is gone is a
-    // reason that outlived its cause.
-    const stale = STACKING_CONTEXTS.filter(
-      (context) =>
-        !found.some(
-          (declaration) =>
-            declaration.file === context.file &&
-            declaration.selector === context.selector &&
-            declaration.property === context.property,
-        ),
-    ).map((context) => `${context.file}  ${context.selector} { ${context.property} }`);
+    // reason that outlived its cause. A context opened by a rung is checked
+    // against the z-indexes; the dialog, which the browser lifts by itself,
+    // against there still being a rule for it at all.
+    const exists = (context: StackingContext) => {
+      const at = (declaration: { file: string; selector: string }) =>
+        declaration.file === context.file && declaration.selector === context.selector;
+      if (context.property === "z-index") return zIndexes.some(at);
+      if (context.property === "top-layer") return shellCss.some(at);
+      return found.some((declaration) => at(declaration) && declaration.property === context.property);
+    };
+    const stale = STACKING_CONTEXTS.filter((context) => !exists(context)).map(
+      (context) => `${context.file}  ${context.selector} { ${context.property} }`,
+    );
     expect(stale).toEqual([]);
+
+    // A context that traps something names the rungs it keeps, and only those.
+    for (const context of STACKING_CONTEXTS) {
+      expect(context.localRungs.length > 0, context.selector).toBe(context.traps.length > 0);
+      for (const rung of context.localRungs) expect(LOCAL_RUNGS, context.selector).toContain(rung);
+    }
   });
 
   it("is not quietly bypassed by a stylesheet that declares no z-index of its own", () => {
     // The narrow scope above is only safe while no *other* shell stylesheet
-    // wraps one of the registered z-indexes. `app.css` owns every ancestor of
-    // the window bar, the panel and the composer, and is now inside the scan
-    // itself because it declares one; if any remaining z-index-free sheet
-    // grows an opener, that assumption needs re-checking by hand.
+    // wraps one of the registered z-indexes. `app.css` and `product.css` style
+    // ancestors of the workspace's regions and declare neither a z-index nor
+    // an opener; if either grows one, that assumption needs re-checking by hand.
     const files = new Set(zIndexes.map((declaration) => declaration.file));
     const elsewhere = shellCss
       .filter(
@@ -702,11 +774,11 @@ describe("the z-index ladder", () => {
       .map((declaration) => `${declaration.file}  ${declaration.selector} { ${declaration.property} }`)
       .sort();
 
-    // nav.css and home/*.css fade and translate leaf controls. None of them is
-    // an ancestor of anything positioned; the list is pinned so a new one has
-    // to be looked at rather than absorbed. Keyed by selector, never by line —
-    // `composer.css` moved sixty-seven lines while these gates were written.
+    // Leaf controls that fade, turn or slide. None of them is an ancestor of
+    // anything positioned; the list is pinned so a new one has to be looked at
+    // rather than absorbed. Keyed by selector, never by line.
     expect([...new Set(elsewhere)]).toEqual([
+      "src/shell/agent/agent.css  .shell-task-button:disabled { opacity }",
       "src/shell/agent/odMark.css  .od-mark { filter }",
       "src/shell/agent/odMark.css  .od-mark__eye i { transform }",
       "src/shell/agent/odMark.css  .od-mark__eye { transform }",
@@ -729,11 +801,8 @@ describe("the z-index ladder", () => {
       "src/shell/editor/slidesGenerating/slidesGenerating.css  .shell-gen-rule { opacity }",
       "src/shell/editor/slidesGenerating/slidesGenerating.css  .shell-gen-scan { opacity }",
       'src/shell/editor/slidesGenerating/slidesGenerating.css  .shell-gen[data-phase="drawing"] .shell-gen-chart .bar, .shell-gen[data-phase="polish"] .shell-gen-chart .bar { transform }',
-      "src/shell/home/highlights.css  .shell-highlight-play { transform }",
-      "src/shell/home/highlights.css  .shell-highlights-controls button:disabled { opacity }",
       // The image composer's leaf controls: a tilted "add" sheet, a close
       // button that fades in on hover, disabled tools, a switch knob, a chevron.
-      // None of them is an ancestor of anything positioned.
       'src/shell/image/composer/imageComposer.css  .shell-ig-camera-grid[data-muted="true"] { opacity }',
       "src/shell/image/composer/imageComposer.css  .shell-ig-mode-close { opacity }",
       'src/shell/image/composer/imageComposer.css  .shell-ig-reference > span[aria-hidden="true"] { opacity }',
@@ -743,11 +812,6 @@ describe("the z-index ladder", () => {
       "src/shell/image/composer/imageComposer.css  .shell-ig-tool:disabled, .shell-ig-mode-close:disabled { opacity }",
       'src/shell/image/composer/imageComposer.css  .shell-ig-tool[aria-expanded="true"] > .shell-ig-chevron { transform }',
       "src/shell/image/imageWorkspace.css  .shell-image-action:disabled { opacity }",
-      'src/shell/nav/nav.css  .shell-tree-file-row.is-dragging, .shell-list tbody tr.is-dragging { opacity }',
-      'src/shell/nav/nav.css  .shell-tree-file-row[draggable="true"]:active { opacity }',
-      "src/shell/nav/nav.css  .shell-tree-folder-add, .shell-tree-file-more { transform }",
-      "src/shell/nav/nav.css  .shell-tree-folder-row:hover .shell-tree-folder-toggle > small { opacity }",
-      'src/shell/nav/nav.css  .shell-tree-folder-toggle[aria-expanded="true"] .shell-tree-chevron { transform }',
     ]);
   });
 
@@ -771,7 +835,7 @@ describe("the z-index ladder", () => {
 
   it("finds the declarations it is meant to be checking", () => {
     // A drift that parsed nothing would satisfy every assertion above.
-    expect(zIndexes.length).toBeGreaterThanOrEqual(5);
-    expect(shellCss.length).toBeGreaterThan(800);
+    expect(zIndexes.length).toBeGreaterThanOrEqual(25);
+    expect(shellCss.length).toBeGreaterThan(3000);
   });
 });

@@ -1,284 +1,347 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ToastHost } from "../renderer/ui";
 import { AccountPage } from "./account/AccountPage";
 import { useAccount } from "./account/useAccount";
-import { AgentPresence } from "./agent/AgentPresence";
+import { AgentProvider, useAgent } from "./agent/AgentContext";
 import { AttentionBorder } from "./agent/AttentionBorder";
-import { useAgentTask } from "./agent/useAgentTask";
+import { mountInputGlow } from "./attention/inputGlow";
 import { useCanvas } from "./canvas/CanvasContext";
+import { useCanvasSelection } from "./canvas/SelectionContext";
 import { useCanvasDirty } from "./canvas/useCanvasDirty";
 import { useDocumentDraft } from "./canvas/useDocumentDraft";
-import { FileTabs } from "./chrome/FileTabs";
+import { ConversationPane } from "./chat/ConversationPane";
+import { runStateOf, isRunning } from "./chat/runState";
+import { DocumentTabs } from "./chrome/DocumentTabs";
+import { GlobalControls } from "./chrome/GlobalControls";
+import { NewPopover } from "./chrome/NewPopover";
 import { Sidebar } from "./chrome/Sidebar";
-import { StatusBar } from "./chrome/StatusBar";
-import { WindowBar } from "./chrome/WindowBar";
+import { Splitter } from "./chrome/Splitter";
+import { UsageNotice } from "./chrome/UsageNotice";
+import { useWorkspaceMenus } from "./chrome/useWorkspaceMenus";
 import { useReduceMotion } from "./composer/useComposerSettings";
+import { Dex } from "./dex/Dex";
+import { dexFaceSettings } from "./dex/faceRenderer";
 import { EditorCanvasHost } from "./editor/EditorCanvasHost";
 import { useCanvasSurface } from "./editor/canvasSurface";
-import { AgentHome } from "./home/AgentHome";
 import { ImageWorkspace } from "./image/ImageWorkspace";
-import { EditorHome } from "./home/EditorHome";
-import { SidebarTree } from "./nav/SidebarTree";
-import { SettingsPage } from "./settings/SettingsPage";
-import { UsageNotice } from "./chrome/UsageNotice";
+import { Icon } from "./kit/Icon";
+import { Layers, closeMenu } from "./kit/layers";
+import { mountTooltips } from "./kit/tooltips";
+import { AssetsPage } from "./pages/AssetsPage";
+import { FeatureHighlights } from "./pages/FeatureHighlights";
+import { Home, useCreateOfType } from "./pages/Home";
+import { ImageCreatePage } from "./pages/ImageCreatePage";
+import { LocalPage } from "./pages/LocalPage";
+import { ProjectsPage } from "./pages/ProjectsPage";
+import { filesTouchedBy } from "./pages/fileRows";
+import { useKeyboardShortcuts } from "./chrome/useKeyboardShortcuts";
+import { SettingsPage } from "./pages/SettingsPage";
+import { workspaceClasses } from "./state/workspaceClasses";
 import { useShell } from "./state/ShellContext";
-import { effectivePlacement, NAV_RAIL_WIDTH } from "./state/shellReducer";
-import { useModeTransition } from "./state/useModeTransition";
-import { fileTypeAccentStyle } from "./theme/fileTypeAccent";
+import { workspaceClosed } from "./state/shellReducer";
+import { useT } from "../renderer/i18n";
 import "./app.css";
-import "./chrome/chrome.css";
+import "./styles/ua-baseline.css";
+import "./styles/workspace-v11.css";
+import "./styles/workspace-v12.css";
+import "./styles/attention.css";
+import "./styles/workspace-structure.css";
+import "./styles/product.css";
 
 /**
- * The shell's layout.
+ * The shell — OD-UI-1.2 (r10).
  *
- * Two rows of flex. A mode change moves one box — the width of the agent
- * column — and changes what is inside three others: the sidebar's middle, Home,
- * and the tab strip's left inset. Nothing unmounts that holds document state,
- * which is what decision 4 is actually about; the transition that carries the
- * rest is `data-mode-switching`, written here by `useModeTransition` and read
- * by the "mode switch" section of app.css.
+ *   ┌──────────────┬───────────────────┬──────────────────────────────┐
+ *   │ ● ● ●  ▯  ⌂  │ conversation   ▢ ⤢│ document tabs      save ⋯  ▯ │ 40
+ *   ├──────────────┼───────────────────┼──────────────────────────────┤
+ *   │ New          │                   │                              │
+ *   │ Local        │  messages         │  Home · Local · Assets ·     │
+ *   │              │                   │  Settings · a document       │
+ *   │ Projects     │                   │                         Dex ●│
+ *   │   chats      │  composer         │                              │
+ *   │ account   ⚙  │                   │                              │
+ *   └──────────────┴───────────────────┴──────────────────────────────┘
+ *       244 / 0          320–520                    the rest
  *
- *   ┌───────────────┬──────────────────────────────────┐
- *   │ window bar    │ file tabs                        │  40px, always present
- *   ├───────────────┼───────────┬──────────────────────┤
- *   │ sidebar       │ agent     │ workspace            │
- *   │               │ (docked)  │  canvas  ← persists  │
- *   │               │           │  status bar          │
- *   └───────────────┴───────────┴──────────────────────┘
+ * Each column has its own 40px top row; there is no bar across the window. The
+ * top-left band — traffic lights, sidebar switch, Logo Home tab — is 244px and
+ * stays put whether or not the sidebar is showing.
  *
- * There was a ribbon above the canvas — a full Office toolbar, drawn tab by tab,
- * with nothing behind any of it. Formatting belongs to whichever editor is
- * mounted in the canvas, and those bring their own toolbars, so the shell's copy
- * was a picture of controls the user already had working two rows below it.
- *
- * `width` on a flex item is used rather than animating `grid-template-columns`:
- * the desktop build runs in WKWebView, where interpolating grid tracks is not
- * dependable, while flex-item width transitions are.
+ * The document host never unmounts. An editor holding unsaved work survives a
+ * trip to Home, Assets or Settings: the page is drawn in the same column and
+ * the host is hidden, not removed.
  */
 export function App() {
-  const { state, dispatch, activeFile, loaded } = useShell();
+  return (
+    <AgentProvider>
+      <Workspace />
+    </AgentProvider>
+  );
+}
+
+function Workspace() {
+  const t = useT();
+  const { state, dispatch, activeFile, loaded, defaultFolderId } = useShell();
   const canvas = useCanvas();
-  const agent = useAgentTask();
+  const agent = useAgent();
   const reduceMotion = useReduceMotion();
-  /*
-   * Asked once here and handed down, because "who is signed in" is one fact
-   * about the whole shell and every `whoami` is a subprocess. The account page
-   * calls `refresh` after a sign-in or sign-out, which is the only time the
-   * answer changes — so nothing polls.
-   */
   const account = useAccount();
+  const menus = useWorkspaceMenus();
+  const createOfType = useCreateOfType();
+  const surface = useCanvasSurface();
+  const { selection } = useCanvasSelection();
+  const shell = useRef<HTMLDivElement>(null);
+  const editorWrapper = useRef<HTMLElement>(null);
   const [accountOpen, setAccountOpen] = useState(false);
-  /**
-   * The settings page, when it is open — the second full-page surface, owned
-   * here for the same reason as the first: nothing about being mid-settings
-   * belongs in persisted view state, and a reload should not reopen it.
-   */
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  /**
-   * One transition for the whole shell, driven by the state rather than by the
-   * control that changed it — see `state/useModeTransition.ts`. It only writes
-   * an attribute; every region decides for itself what to do with it.
-   */
-  const shellRef = useModeTransition(state.mode, reduceMotion);
+  const [resizing, setResizing] = useState(false);
+  const [peek, setPeek] = useState(false);
+  const [newAnchor, setNewAnchor] = useState<HTMLElement | null>(null);
+  const [featureFlyout, setFeatureFlyout] = useState(false);
+
   useCanvasDirty(canvas, activeFile?.id ?? null);
   useDocumentDraft(canvas, agent.task, activeFile?.id ?? null, agent.applySuggestion);
-  const placement = effectivePlacement(state);
-  /*
-   * The recording tells the shell when it has been superseded, rather than the
-   * shell trying to watch for it: the canvas is a separate React root and owns
-   * the precedence decision. Stable so the canvas effect does not re-run on
-   * every render.
-   */
-  const leaveDemo = useCallback(() => dispatch({ type: "leave-demo" }), [dispatch]);
-  const agentDocked = placement === "docked" && !state.home;
+  useKeyboardShortcuts({ onNew: () => openNew(null) });
 
-  /**
-   * The border shows while the agent is actually touching the document, and
-   * only on the document it is touching. `awaiting-review` deliberately does
-   * not light it: nothing is happening in there any more, and a border that
-   * keeps shimmering over a finished run is the agent claiming to still be
-   * working.
-   *
-   * `!state.home` is not just "Home has no document". Home mounts its own
-   * `AttentionBorder` around the hero composer, lit by input focus rather than
-   * by the run (see Hero.tsx). Two instances, never on screen at once, because
-   * Home and the workspace are different subtrees and the two lights answer
-   * different questions.
-   */
-  const working =
-    agent.task?.status === "working" ||
-    agent.task?.status === "reading" ||
-    agent.task?.status === "writing";
-  /*
-   * "The document it is touching" includes one that has no file yet.
-   *
-   * A run started from Home has no active file by design — there is nothing on
-   * disk to open — and what it is writing into is the stage on the canvas. The
-   * test used to be `activeFile !== null`, which lit only because a stale file
-   * was still selected underneath the stage; once that was fixed the border
-   * went dark for exactly the runs it exists to announce. `chrome` is the
-   * canvas saying something is mounted on it, stage or editor.
-   */
-  const surface = useCanvasSurface();
-  const attentionActive =
-    working && !state.home && (activeFile !== null || surface.chrome !== null);
+  /* ---- the hidden sidebar's temporary reveal (§03) ------------------------ */
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const newOpen = newAnchor !== null;
+  const newOpenRef = useRef(newOpen);
+  newOpenRef.current = newOpen;
+  const startPeek = useCallback(() => {
+    clearTimeout(hideTimer.current);
+    if (state.navCollapsed) setPeek(true);
+  }, [state.navCollapsed]);
+  const holdPeek = useCallback(() => clearTimeout(hideTimer.current), []);
+  const endPeek = useCallback(() => {
+    clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => {
+      // Moving onto the New picker is still "inside" the sidebar.
+      if (!newOpenRef.current) setPeek(false);
+    }, 120);
+  }, []);
+  useEffect(() => {
+    if (!state.navCollapsed) setPeek(false);
+  }, [state.navCollapsed]);
+  useEffect(() => {
+    if (!peek) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setPeek(false);
+      document.querySelector<HTMLElement>("#dx-global-controls [data-act=toggle-sidebar]")?.focus();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [peek]);
 
-  /**
-   * One status bar, not two and not none.
-   *
-   * `<StatusBar />` used to be unconditional, and the bottom 32px of the window
-   * came out three different ways: Writer and the deck editor each drew their
-   * own bar directly above the shell's, and the workbook's `position: fixed`
-   * footer covered the shell's completely, so there the shell's bar existed and
-   * could not be seen or clicked (S4-003, S4-010). The shell had no way to
-   * decide between yielding and keeping, because nothing told it there was
-   * anything down there.
-   *
-   * It yields. The editor's bar is about the document — pages, words, the
-   * current slide, the zoom — and the shell's said the file name, "On this
-   * computer" and whether it is saved, of which the name is already in the tab
-   * and the save state is already the tab strip's save button (`FileTabs`
-   * renders "Unsaved"/"Saved" beside it). Stacking a row that repeats two
-   * facts on top of a row that reports real ones is the wrong half to keep.
-   *
-   * `--shell-statusbar-h` goes with it. The bar's height is also what
-   * `.shell-attention` subtracts to find the document's edge, so leaving the
-   * token at 32px would trace the agent's attention border 32px above the
-   * bottom of a canvas that now reaches the window.
-   *
-   * A stage reports `STAGE_CHROME`, which owns no status bar, so the shell
-   * keeps drawing its own over a run exactly as it did before.
+  /* ---- New ---------------------------------------------------------------- */
+  function openNew(anchor: HTMLElement | null) {
+    if (newAnchor) {
+      setNewAnchor(null);
+      return;
+    }
+    closeMenu();
+    setNewAnchor(
+      anchor ??
+        document.querySelector<HTMLElement>("#dx-sidebar:not([inert]) [data-act=new-file]") ??
+        document.querySelector<HTMLElement>("#dx-global-controls [data-act=toggle-sidebar]"),
+    );
+  }
+  const closeNew = useCallback(
+    (focusAnchor: boolean) => {
+      setNewAnchor((anchor) => {
+        if (focusAnchor && anchor?.isConnected) anchor.focus();
+        return null;
+      });
+      // A sidebar that was only peeking goes back once the pointer is elsewhere.
+      if (state.navCollapsed && !document.querySelector("#dx-sidebar:hover, #dx-global-controls:hover")) endPeek();
+    },
+    [state.navCollapsed, endPeek],
+  );
+
+  /* ---- one-time mounts ---------------------------------------------------- */
+  useEffect(() => (shell.current ? mountTooltips(shell.current) : undefined), []);
+  useEffect(() => mountInputGlow(() => reduceMotion), [reduceMotion]);
+  useEffect(() => dexFaceSettings({ paused: reduceMotion }), [reduceMotion]);
+
+  /* ---- a selection made beside a conversation goes to its composer (§19) --- */
+  useEffect(() => {
+    if (selection && state.chat && state.panel === "assets") dispatch({ type: "set-panel", panel: "chat" });
+    if (selection && state.chat && state.dexOpen) dispatch({ type: "set-dex-open", open: false });
+  }, [selection, state.chat, state.panel, state.dexOpen, dispatch]);
+
+  /* ---- Hot and fresh features --------------------------------------------- */
+  const atHome = state.page === "home";
+  useEffect(() => {
+    if (atHome) setFeatureFlyout(false);
+  }, [atHome]);
+  useEffect(() => {
+    if (!featureFlyout) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setFeatureFlyout(false);
+    };
+    const onClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest("#dx-feature-flyout,#dx-features-toggle,#dx-modal")) setFeatureFlyout(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("click", onClick);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("click", onClick);
+    };
+  }, [featureFlyout]);
+  const featuresExpanded = atHome ? state.featuresVisible : featureFlyout;
+  const toggleFeatures = () => {
+    if (atHome) {
+      dispatch({ type: "set-features", visible: !state.featuresVisible });
+      if (!state.featuresVisible) {
+        requestAnimationFrame(() =>
+          document.querySelector<HTMLElement>("#dx-feature-highlights [data-act=hide-features]")?.focus({ preventScroll: true }),
+        );
+      }
+      return;
+    }
+    setFeatureFlyout((open) => !open);
+  };
+
+  /* ---- what the run is doing to which files -------------------------------- */
+  const touched = useMemo(() => filesTouchedBy(agent.task), [agent.task]);
+  const running = isRunning(runStateOf(agent.task));
+
+  const onEditor = state.page === "editor";
+  /*
+   * The switch appears once there is work beside the conversation — a message
+   * sent, a run, a file opened — and then stays in the window's top-right
+   * corner whether the content region is open or not (§03).
    */
-  const editorOwnsStatusBar = surface.chrome?.ownsStatusBar === true && !state.home;
+  const spokenIn = agent.task !== null && (agent.task.messages.length > 0 || agent.task.status !== "idle");
+  const hasWorkspaceToggle = state.chat !== null && (spokenIn || (onEditor && (activeFile !== null || state.stage)));
+  const closed = workspaceClosed(state);
+  const editorKind = activeFile?.type === "sheet" ? "sheet" : "other";
+  /*
+   * The attention border shows while the agent is touching the document on
+   * screen, and only then. Waiting for review does not light it: nothing is
+   * happening in there any more.
+   */
+  const attentionActive = running && onEditor && (activeFile !== null || surface.chrome !== null);
+
+  const classes = workspaceClasses(state, { peek, hasWorkspaceToggle }).join(" ");
 
   return (
     <div
       id="shell"
-      ref={shellRef}
-      className="shell"
-      data-mode={state.mode}
-      data-home={String(state.home)}
-      data-nav-collapsed={String(state.navCollapsed)}
-      data-presence={placement}
+      ref={shell}
+      className={["shell", reduceMotion ? "dx-reduced" : "", resizing ? "dx-resizing" : ""].filter(Boolean).join(" ")}
+      data-theme={state.theme}
+      data-page={state.page}
       data-loaded={String(loaded)}
-      style={
-        {
-          ...fileTypeAccentStyle(activeFile?.type),
-          "--shell-nav-w": `${state.navCollapsed ? NAV_RAIL_WIDTH : state.navWidth}px`,
-          "--shell-task-w": agentDocked ? `${state.taskWidth}px` : "0px",
-          ...(editorOwnsStatusBar ? { "--shell-statusbar-h": "0px" } : {}),
-        } as React.CSSProperties
-      }
+      style={{ "--dx-chat": `${state.chatWidth}px` } as React.CSSProperties}
     >
-      <div className="shell-row shell-row--top">
-        <WindowBar />
-        <FileTabs />
-      </div>
+      <div id="dx-workspace" className={classes}>
+        <GlobalControls onPeek={startPeek} onPeekEnd={endPeek} />
 
-      <div className="shell-row shell-row--body">
-        {/* Agent mode keeps the folder tree permanently: folders are how a task
-            is scoped. Editor mode's library lives on Home instead. */}
         <Sidebar
           account={account.account}
-          onOpenAccount={() => setAccountOpen(true)}
-          onOpenSettings={() => setSettingsOpen(true)}
-        >
-          {state.mode === "agent" ? <SidebarTree /> : null}
-        </Sidebar>
+          peek={peek}
+          newPopoverOpen={newOpen}
+          onNew={openNew}
+          onPeekHold={holdPeek}
+          onPeekEnd={endPeek}
+          onOpenFeatures={toggleFeatures}
+          featuresExpanded={featuresExpanded}
+        />
 
-        {/* Owns both the docked column and the floating layer — decision 1. */}
-        <AgentPresence />
+        <ConversationPane />
+        <Splitter onResizing={setResizing} />
 
-        {/*
-          Hidden rather than unmounted on Home: the canvas host — and, after
-          integration, a live document renderer holding unsaved state — must
-          survive a trip to Home the same way it survives a mode change.
-        */}
-        <main className="shell-workspace" hidden={state.home}>
-          {/*
-            `fileless` covers both things that own the canvas without a file: a
-            deck being drawn (a run, not a library entry) and the bundled
-            recording started from Home. `state.demo` is the second one; the
-            first is reported by the canvas adapter itself.
-          */}
-          <EditorCanvasHost
-            file={activeFile}
-            visible={!state.home}
-            adapter={canvas}
-            fileless={state.demo}
-            demoStartedAt={state.demoStartedAt}
-            onDemoSuperseded={leaveDemo}
-          />
-          {/*
-            A picture, over the canvas rather than inside it.
+        <main id="dx-content" inert={closed ? true : undefined}>
+          <DocumentTabs workingFileIds={touched.working} />
 
-            `EditorCanvasHost` above never unmounts — decision 4 — and outside
-            the desktop build it has no adapter to show an image with anyway, so
-            the image surface draws its own `<img>` from `images.readFile` and
-            covers the canvas while it is up. It renders nothing at all when
-            there is no picture and no image run, which is most of the time.
-          */}
-          <ImageWorkspace agent={agent} />
-          {/*
-            The agent's attention border. Its own subscription to the task
-            rather than a prop drilled down from the presence: this sits in the
-            workspace column, the presence sits in the body row beside it, and
-            threading one through the other would couple two regions that share
-            nothing else.
+          {state.page === "home" ? <Home onQuickStart={createOfType} /> : null}
+          {state.page === "local" ? <LocalPage /> : null}
+          {state.page === "projects" ? <ProjectsPage /> : null}
+          {state.page === "assets" ? <AssetsPage /> : null}
+          {state.page === "image" ? <ImageCreatePage /> : null}
+          {state.page === "settings" ? <SettingsPage onOpenAccount={() => setAccountOpen(true)} /> : null}
 
-            `reducedMotion` is not optional in practice, whatever the prop's
-            default says. This call site used to omit it, so the most prominent
-            animation in the product — a light travelling the document's edge
-            while the agent writes into it — was the one thing the Reduced
-            motion switch could never turn off (audit S7-004). Home's copy in
-            Hero.tsx passed it from the start; there is nothing different about
-            this one except that nobody noticed.
-          */}
-          <AttentionBorder active={attentionActive} reducedMotion={reduceMotion} />
-          {editorOwnsStatusBar ? null : <StatusBar />}
+          {/* Hidden rather than unmounted: see the note at the top of this file. */}
+          <section
+            ref={editorWrapper}
+            className="dx-editor-wrapper dx-office-editor shell-workspace"
+            data-file-editor={activeFile?.id ?? ""}
+            data-editor-mode={state.chat ? "agent" : "editor"}
+            data-editor-kind={editorKind}
+            hidden={!onEditor}
+          >
+            <EditorCanvasHost
+              file={activeFile}
+              visible={onEditor}
+              adapter={canvas}
+              fileless={state.demo}
+              demoStartedAt={state.demoStartedAt}
+              onDemoSuperseded={() => dispatch({ type: "leave-demo" })}
+            />
+            <ImageWorkspace agent={agent} />
+            <AttentionBorder active={attentionActive} reducedMotion={reduceMotion} />
+            {onEditor && activeFile && activeFile.type !== "image" ? <Dex host={editorWrapper} editorKind={editorKind} /> : null}
+          </section>
         </main>
 
-        {state.home ? state.mode === "agent" ? <AgentHome /> : <EditorHome /> : null}
+        {hasWorkspaceToggle ? (
+          <button
+            type="button"
+            id="dx-workspace-toggle"
+            className="dx-ib"
+            data-ui-scope="officedex"
+            data-act="toggle-workspace"
+            aria-pressed={state.workspaceOpen}
+            aria-label={t(state.workspaceOpen ? "dx.workspace.close" : "dx.workspace.open")}
+            title={t(state.workspaceOpen ? "dx.workspace.close" : "dx.workspace.open")}
+            onClick={() => dispatch({ type: "toggle-workspace" })}
+          >
+            <Icon name="PanelRight" size={18} />
+          </button>
+        ) : null}
+
+        {!atHome && featureFlyout ? (
+          <aside id="dx-feature-flyout" data-ui-scope="officedex" aria-label={t("dx.features.title")}>
+            <FeatureHighlights
+              onHide={() => {
+                setFeatureFlyout(false);
+                document.getElementById("dx-features-toggle")?.focus({ preventScroll: true });
+              }}
+            />
+          </aside>
+        ) : null}
       </div>
 
-      <ToastHost />
-      <UsageNotice />
-
-      {/*
-        The settings page — the shell's other full-page surface, and the one it
-        did not have at all until now.
-      */}
-      {settingsOpen ? (
-        <SettingsPage
-          onClose={() => setSettingsOpen(false)}
-          /*
-           * The provider section's "sign in" link lands on the account page.
-           * Settings closes first: one full-page flow at a time, and the account
-           * page is the higher rung of the two, so leaving both mounted would
-           * stack two covers whose order nobody could reason about.
-           */
-          onOpenLogin={() => {
-            setSettingsOpen(false);
-            setAccountOpen(true);
+      {newAnchor ? (
+        <NewPopover
+          anchor={newAnchor}
+          onClose={closeNew}
+          onNewChat={() => {
+            setNewAnchor(null);
+            void menus.startUnfiledChat(defaultFolderId).then(() =>
+              requestAnimationFrame(() =>
+                document.querySelector<HTMLElement>("#dx-conversation [data-draft]")?.focus(),
+              ),
+            );
+          }}
+          onCreate={(type) => {
+            setNewAnchor(null);
+            createOfType(type);
           }}
         />
       ) : null}
 
+      <Layers />
+      <ToastHost />
+      <UsageNotice />
+
       {/*
-        The account page, when it is open.
-
-        A sibling of every region rather than a replacement for them. R-B-09
-        wants the sign-in flow not to render inside the shell frame, and an
-        opaque full-window cover satisfies that; unmounting the frame instead —
-        which is what the old renderer did — would take the open document's
-        editor with it, and the whole point of keeping the workspace mounted
-        (decision 4, and `EditorCanvasHost` being hidden rather than removed on
-        Home) is that it survives a trip somewhere else.
-
-        Owning the flag here rather than in `ShellProvider`: nothing about being
-        mid-sign-in belongs in persisted view state, and a reload should not
-        reopen it.
+        The sign-in page covers the window rather than replacing the shell, so
+        the open document's editor survives the trip.
       */}
       {accountOpen ? (
         <AccountPage onClose={() => setAccountOpen(false)} onAccountChanged={account.refresh} />

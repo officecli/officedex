@@ -2,33 +2,49 @@
  * Wave 3, track H — the canvas contract.
  *
  * Five findings (S4-002, S4-003, S4-009, S4-010, S6-015) with one cause: the
- * shell and the editor mounted inside it had no way to tell each other
- * anything. The presence placed itself against the viewport and landed on the
+ * shell and the editor mounted inside it had no way to tell each other anything.
+ * The floating presence placed itself against the viewport and landed on the
  * sheet tab strip; `App` drew a status bar over three editors that each draw
  * one; and nothing told a mounted runtime which language to speak.
  *
  * This file is the fence around the two channels that fixed it
- * (`src/shell/editor/canvasSurface.ts`, `…/canvasLocale.ts`), and it asserts
- * the *absence* case as hard as the presence case. A channel whose silent
- * default is wrong is worse than no channel at all: `createShellCanvas()`
- * returns null in every browser, so silence is the common path, and it has to
- * mean "behave exactly as before".
+ * (`src/shell/editor/canvasSurface.ts`, `…/canvasLocale.ts`), and it asserts the
+ * *absence* case as hard as the presence case. A channel whose silent default is
+ * wrong is worse than no channel at all: `createShellCanvas()` returns null in
+ * every browser, so silence is the common path, and it has to mean "behave
+ * exactly as before".
+ *
+ * ── What r10 moved ─────────────────────────────────────────────────────────
+ *
+ * Both channels are unchanged. Their consumers are not:
+ *
+ *  - The floating presence panel and its dock are gone. Dex is the floating
+ *    agent affordance now (a 42px bubble over the document), and it keeps off
+ *    the editor's bottom controls from its own `editorKind` rather than from
+ *    this channel — so the presence-placement cases went with the panel.
+ *  - The shell draws no status bar at all: `--shell-statusbar-h` is 0px for
+ *    good. So "the editor's status bar takes the shell's place" is no longer a
+ *    decision the shell makes each time; what survives is that there is never a
+ *    second row, whatever an editor reports.
+ *  - The reader that does act on `chrome.insets` is the attention border
+ *    (`agent/AttentionBorder.tsx`), which pushes its frame in by the editor's
+ *    own chrome so the light traces the document rather than the deck's status
+ *    bar. That is where the reported strips are checked here.
  *
  * **No `test.skip`, conditional or otherwise.** `e2e/ui-audit-s4.spec.ts` is 30
- * cases gated on `S4_BRIDGE`; run without it they print `30 skipped` and exit
- * 0, which reads like success and once was reported as such. Everything here
- * runs against the fixture server, which needs a dev server and nothing else —
+ * cases gated on `S4_BRIDGE`; run without it they print `30 skipped` and exit 0,
+ * which reads like success and once was reported as such. Everything here runs
+ * against the fixture server, which needs a dev server and nothing else —
  * `?canvasChrome=` exists precisely so the channel is reachable without a real
  * editor (see `dev/fixture.ts`).
  *
  * **What it does not prove.** The numbers each editor reports (36px for the
  * workbook footer, 32px for the two status bars) were measured on `dev-real`
- * during the audit and are restated as constants; this file proves the shell
- * does the right thing *with* them, not that they are still the right numbers.
- * Nothing here has a real editor in it.
+ * during the audit and are restated as constants in `src/canvas/editorChrome.ts`;
+ * this file proves the shell does the right thing *with* them, not that they are
+ * still the right numbers. Nothing here has a real editor in it.
  *
- *   npx vite --port 3171 --strictPort
- *   PLAYWRIGHT_BASE_URL=http://localhost:3171 npx playwright test e2e/fix-w3h.spec.ts
+ *   PLAYWRIGHT_BASE_URL=http://localhost:3131 npx playwright test e2e/fix-w3h.spec.ts
  */
 
 import { expect, test, type Page } from "@playwright/test";
@@ -40,26 +56,17 @@ interface CanvasProbe {
   locale: () => string | null;
 }
 
+/**
+ * The combination every case here starts from.
+ *
+ * C5 is the editor page with the audit dataset's working conversation beside it:
+ * a run in progress and a document on screen, which is what lights the attention
+ * border. C9 is the same content region with no conversation, used where the
+ * question is only about the channel.
+ */
 async function open(page: Page, query: string): Promise<void> {
   await page.goto(`/?shellFixture=1&${query}`);
   await expect(page.locator("#shell")).toHaveAttribute("data-loaded", "true");
-  await settle(page);
-}
-
-/** Two identical readings of the presence box — see the note in fix-w1b. */
-async function settle(page: Page): Promise<void> {
-  await page.waitForFunction(
-    () => {
-      const panel = document.querySelector(".shell-presence-panel, .shell-presence-face");
-      if (!panel) return true;
-      const now = JSON.stringify(panel.getBoundingClientRect());
-      const previous = (window as unknown as { __settleLast?: string }).__settleLast;
-      (window as unknown as { __settleLast?: string }).__settleLast = now;
-      return previous === now;
-    },
-    undefined,
-    { polling: 100 },
-  );
 }
 
 function readChannels(page: Page) {
@@ -70,11 +77,54 @@ function readChannels(page: Page) {
   });
 }
 
-async function presenceRect(page: Page) {
-  const box = await page.locator(".shell-presence-panel").boundingBox();
-  expect(box, "the floating panel has no box").not.toBeNull();
-  return box!;
+/**
+ * How far the attention border's frame sits inside each edge of its host.
+ *
+ * Read off the overlay's `<rect>` geometry, not off the `<svg>`: the svg fills
+ * the host, and the frame is the rectangle painted inside it, in the host's own
+ * coordinates. Those are the numbers `AttentionBorder` computes from `inset` plus
+ * whatever the editor reported, so they are the thing under test.
+ *
+ * The geometry eases toward its target rather than jumping, so this waits for two
+ * identical readings — a measurement taken mid-transition is a position on its
+ * way somewhere else, which is the hazard the audit specs recorded as MERGE-002.
+ */
+interface FrameInsets {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
 }
+
+async function frameInsets(page: Page): Promise<FrameInsets> {
+  const frame = await page.waitForFunction<FrameInsets | null>(
+    () => {
+      const host = document.querySelector<HTMLElement>(".dx-editor-wrapper .shell-attention");
+      const rect = host?.querySelector("rect");
+      if (!host || !rect) return null;
+      const read = (name: string) => Math.round(parseFloat(rect.getAttribute(name) ?? "NaN"));
+      const now = {
+        left: read("x"),
+        top: read("y"),
+        right: Math.round(host.clientWidth) - (read("x") + read("width")),
+        bottom: Math.round(host.clientHeight) - (read("y") + read("height")),
+      };
+      const key = JSON.stringify(now);
+      const store = window as unknown as { __w3hLast?: string };
+      const settled = store.__w3hLast === key;
+      store.__w3hLast = key;
+      return settled ? now : null;
+    },
+    undefined,
+    { polling: 120 },
+  );
+  // `waitForFunction` only resolves once the predicate returns something truthy,
+  // so the null branch above is what the wait is made of rather than a result.
+  return (await frame.jsonValue())!;
+}
+
+/** The frame's own clearance from the host edge, with no editor reporting. */
+const INSET = 16;
 
 /* ───────────────────────────────── silence ───────────────────────────────── */
 
@@ -89,87 +139,54 @@ test("with no editor mounted the channel is empty, not zero", async ({ page }) =
   expect(channels!.surface.chrome).toBeNull();
 });
 
-test("silence leaves the panel in the corner it used before this channel existed", async ({
-  page,
-}) => {
-  await open(page, "shell=C9");
-  const rect = await presenceRect(page);
-  const viewport = page.viewportSize()!;
-  // `HOME_OFFSET.bottom` is 28 (presenceLayout.ts). Unchanged from W1-B.
-  expect(Math.round(rect.y + rect.height)).toBe(viewport.height - 28);
+test("silence leaves the attention frame exactly where it was", async ({ page }) => {
+  // The "no information" answer has to be the additive identity: with nothing
+  // reported the frame sits its own 16px inside the host and no further. A
+  // channel that answered zeros as though they were a measurement would be
+  // indistinguishable here, which is why the reporting cases below exist.
+  await open(page, "shell=C5");
+  expect((await readChannels(page))!.surface.chrome).toBeNull();
+  expect(await frameInsets(page)).toEqual({ left: INSET, top: INSET, right: INSET, bottom: INSET });
 });
 
-test("silence leaves the shell's own status bar exactly where it was", async ({ page }) => {
-  await open(page, "shell=C9");
-  await expect(page.locator(".shell-statusbar")).toBeVisible();
-  const height = await page.evaluate(() =>
-    getComputedStyle(document.getElementById("shell")!).getPropertyValue("--shell-statusbar-h").trim(),
-  );
-  expect(height).toBe("32px");
+test("the shell draws no status bar of its own, reporting editor or not", async ({ page }) => {
+  // S4-003 / S4-010 were two status bars on screen, and under the workbook's
+  // `position: fixed` footer none at all. r10 settles it once: the shell has no
+  // status bar, the save state lives in the tab row, and the token is 0px for
+  // good — so an editor that draws one can never be the second.
+  for (const query of ["shell=C5", "shell=C5&canvasChrome=sheet", "shell=C5&canvasChrome=slides"]) {
+    await open(page, query);
+    expect(await page.locator(".shell-statusbar, .dx-statusbar").count(), query).toBe(0);
+    const token = await page.evaluate(() =>
+      getComputedStyle(document.getElementById("shell")!).getPropertyValue("--shell-statusbar-h").trim(),
+    );
+    expect(token, query).toBe("0px");
+    // The save state is in the tab row instead, and it is still reachable.
+    await expect(page.locator(".dx-source-header-actions [data-act=save]")).toHaveCount(1);
+  }
 });
 
 /* ─────────────────────────── a reporting editor ──────────────────────────── */
 
-test("a reported bottom strip moves the panel's first landing point off it", async ({ page }) => {
-  await open(page, "shell=C9");
-  const before = await presenceRect(page);
+test("a reported bottom strip pushes the attention frame off it", async ({ page }) => {
+  await open(page, "shell=C5");
+  const before = await frameInsets(page);
 
-  await open(page, "shell=C9&canvasChrome=sheet");
-  const after = await presenceRect(page);
-  const viewport = page.viewportSize()!;
-
+  await open(page, "shell=C5&canvasChrome=sheet");
   const channels = await readChannels(page);
   expect(channels!.surface.chrome).not.toBeNull();
   expect(channels!.surface.chrome!.insets.bottom).toBe(36);
 
-  // The workbook's footer owns the bottom 36px of the window. The panel used to
-  // start 28px off the bottom, i.e. 8px inside it (S4-002, S6-015).
-  const keepOutTop = viewport.height - 36;
-  expect(after.y + after.height).toBeLessThanOrEqual(keepOutTop);
-  expect(after.y + after.height).toBeLessThan(before.y + before.height);
-});
-
-test("the panel dragged to the bottom edge still stops above the editor's strip", async ({
-  page,
-}) => {
-  await open(page, "shell=C9&canvasChrome=sheet");
-  const grip = page.locator(".shell-presence-panel .shell-task-head");
-  const box = await grip.boundingBox();
-  await page.mouse.move(box!.x + box!.width / 2, box!.y + 12);
-  await page.mouse.down();
-  await page.mouse.move(box!.x + box!.width / 2, 1400, { steps: 24 });
-  await page.mouse.up();
-  await settle(page);
-
-  const rect = await presenceRect(page);
-  const viewport = page.viewportSize()!;
-  // Not just the first landing point: the clamp reads the same safe area, which
-  // is the whole reason W1-B threaded `safeArea` through `placePresence` rather
-  // than offsetting the default position.
-  expect(Math.round(rect.y + rect.height)).toBeLessThanOrEqual(viewport.height - 36);
-});
-
-test("an editor that owns a status bar takes the shell's place, not a second row", async ({
-  page,
-}) => {
-  await open(page, "shell=C9&canvasChrome=sheet");
-  await expect(page.locator(".shell-statusbar")).toHaveCount(0);
-  const measured = await page.evaluate(() => {
-    const shell = document.getElementById("shell")!;
-    const canvas = document.querySelector(".shell-canvas")!;
-    const attention = document.querySelector(".shell-attention")!;
-    return {
-      token: getComputedStyle(shell).getPropertyValue("--shell-statusbar-h").trim(),
-      canvasBottom: Math.round(canvas.getBoundingClientRect().bottom),
-      attentionBottom: Math.round(attention.getBoundingClientRect().bottom),
-    };
-  });
-  expect(measured.token).toBe("0px");
-  // The canvas reaches the window, and the attention border reaches the canvas.
-  // Leaving the token at 32px is how the border ends up tracing a line 32px
-  // above the document it is supposed to be around.
-  expect(measured.canvasBottom).toBe(page.viewportSize()!.height);
-  expect(measured.attentionBottom).toBe(measured.canvasBottom);
+  const after = await frameInsets(page);
+  // eslint-disable-next-line no-console
+  console.log(`W3H frame ${JSON.stringify({ before, after })}`);
+  // The workbook's footer owns the bottom 36px of the canvas. The frame used to
+  // be drawn 16px inside the host whatever was in it, i.e. 20px inside the
+  // footer, tracing a line across the sheet tab strip (S4-002, S6-015).
+  expect(after.bottom).toBe(INSET + 36);
+  // Only the edge the editor claimed moves; the other three are the editor's
+  // business to claim too, and it claimed nothing there.
+  expect({ ...after, bottom: INSET }).toEqual(before);
 });
 
 test("the three editors report three different strips, and each is honoured", async ({ page }) => {
@@ -178,32 +195,31 @@ test("the three editors report three different strips, and each is honoured", as
     ["slides", 32],
     ["doc", 32],
   ] as const) {
-    await open(page, `shell=C9&canvasChrome=${name}`);
+    await open(page, `shell=C5&canvasChrome=${name}`);
     const channels = await readChannels(page);
     expect(channels!.surface.chrome!.insets.bottom, name).toBe(bottom);
-    const rect = await presenceRect(page);
-    expect(Math.round(rect.y + rect.height), name).toBeLessThanOrEqual(
-      page.viewportSize()!.height - bottom,
-    );
+    expect(channels!.surface.chrome!.ownsStatusBar, name).toBe(true);
+    expect((await frameInsets(page)).bottom, name).toBe(INSET + bottom);
   }
 });
 
-test("going Home withdraws the box, so nothing is reserved over the hero", async ({ page }) => {
-  await open(page, "shell=C9&canvasChrome=sheet");
+test("going to a page without a canvas withdraws the box, so nothing is reserved", async ({ page }) => {
+  await open(page, "shell=C5&canvasChrome=sheet");
   expect((await readChannels(page))!.surface.box).not.toBeNull();
 
-  await page.goto("/?shellFixture=1&shell=C3&canvasChrome=sheet");
+  // Home, with the same fixture editor still reporting.
+  await page.goto("/?shellFixture=1&shell=C1&canvasChrome=sheet");
   await expect(page.locator("#shell")).toHaveAttribute("data-loaded", "true");
-  await settle(page);
   const channels = await readChannels(page);
-  // The chrome is still published — nothing unmounted — but with no box there
-  // is nothing to keep out of, which is what `canvasKeepOut` returns zeros for.
+  // The chrome is still published — nothing unmounted — but with no box there is
+  // nothing to keep out of, which is what `canvasKeepOut` returns zeros for and
+  // what `AttentionBorder` reads as "no insets".
+  expect(channels!.surface.chrome).not.toBeNull();
   expect(channels!.surface.box).toBeNull();
-  // The workspace is hidden rather than unmounted, so the shell's status bar is
-  // still in the tree; what matters is that it is not on screen competing with
-  // anything, and that Home never had a floating presence to place.
-  await expect(page.locator(".shell-statusbar")).not.toBeVisible();
-  await expect(page.locator(".shell-presence")).toHaveCount(0);
+  // The document host is hidden rather than unmounted, so it is still in the
+  // tree; what matters is that nothing of it is on screen over Home.
+  await expect(page.locator(".dx-editor-wrapper")).toHaveAttribute("hidden", "");
+  await expect(page.locator(".dx-dex")).toHaveCount(0);
 });
 
 /* ──────────────────────────────── locale ─────────────────────────────────── */

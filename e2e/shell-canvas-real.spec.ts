@@ -1,9 +1,16 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-import { attachHostReport, fixturePath, queueFileDialog } from "./support/real-e2e";
+import {
+  attachHostReport,
+  fixturePath,
+  homeComposer,
+  openFromDisk,
+  openShell,
+  queueFileDialog,
+} from "./support/real-e2e";
 
 /**
- * The new shell against the real Go backend.
+ * The shell against the real Go backend.
  *
  * Every other spec here drives the previous interface, now at `/legacy.html`.
  * This one drives the shell, which is the entry point,
@@ -14,7 +21,7 @@ import { attachHostReport, fixturePath, queueFileDialog } from "./support/real-e
  *
  * What it covers, in one pass because they are one user action:
  *
- *   - "Open from this computer" — the picker, the import, and the document
+ *   - Open from this Mac — the picker, the import, and the document
  *     projection row without which an opened file is remembered as recent and
  *     listed nowhere.
  *   - The workbook canvas — that a real editor mounts in the shell's slot
@@ -23,24 +30,13 @@ import { attachHostReport, fixturePath, queueFileDialog } from "./support/real-e
  * The skeleton is the thing to assert against: it is what the host draws when
  * no adapter is registered, so "the skeleton is gone" is precisely "an adapter
  * mounted something".
- */
-
-const SKELETON = ".shell-canvas [data-canvas-host] .shell-skeleton-paper, .shell-canvas .shell-skeleton-paper";
-
-/**
- * Switches mode the way the shell actually offers it: the brand button at the
- * top of the sidebar opens a menu. Asserting on a segmented Agent/Editor pair
- * in the window bar looks tidier and passes nowhere — the shell opens on its
- * compact rail, and that control is display:none there.
  *
- * The menu item's accessible name is the label *and* its description, so it is
- * matched by prefix rather than exactly.
+ * OD-UI-1.2 (r10) moved the way in, not the thing being tested: there is no
+ * Agent/Editor mode to switch and no Home hero action for the picker, so the
+ * file is opened from Local, which is where r10 puts Open (§07).
  */
-async function switchMode(page: Page, mode: "Agent" | "Editor") {
-  await page.getByRole("button", { name: /Switch mode/ }).click();
-  await page.getByRole("menuitemradio", { name: new RegExp(`^${mode}\\b`) }).click();
-  await expect(page.locator("#shell")).toHaveAttribute("data-mode", mode.toLowerCase());
-}
+
+const SKELETON = ".shell-canvas[data-canvas-host] .shell-skeleton-paper, .shell-canvas .shell-skeleton-paper";
 
 test.describe("new shell · real bridge", () => {
   test.afterEach(async ({}, testInfo) => {
@@ -48,32 +44,10 @@ test.describe("new shell · real bridge", () => {
   });
 
   test("opens a workbook from disk and mounts the real editor in the canvas", async ({ page }) => {
-    page.on("pageerror", (error) => {
-      // The bridge's SSE stream can abort as the page navigates; everything
-      // else is a genuine failure and should surface here rather than be
-      // swallowed into a timeout further down.
-      if (/Failed to fetch/i.test(error.message)) return;
-      throw error;
-    });
-
-    await page.goto("/");
-    await expect(page.locator('#shell[data-loaded="true"]')).toBeVisible({ timeout: 60_000 });
-
-    // The fake port seeds a sample workspace; the real one starts from whatever
-    // the backend has. Asserting on the seed's own names is how a test that is
-    // silently running on the fake still passes, so check the port instead:
-    // the fake never answers this.
-    const onFake = await page.evaluate(() =>
-      document.body.textContent?.includes("MO product launch") ?? false,
-    );
-    expect(onFake, "the shell fell back to its in-memory fake — check hasDesktopBackend()").toBe(false);
-
-    // Editor mode's Home is where "Open from this computer" lives.
-    await switchMode(page, "Editor");
-    await page.getByRole("button", { name: "Home", exact: true }).first().click();
+    await openShell(page);
 
     await queueFileDialog(await fixturePath("sales-report.xlsx"));
-    await page.getByRole("button", { name: /Open from this computer/i }).click();
+    await openFromDisk(page);
 
     // Imported files land in the default folder and open straight away.
     await expect(page.getByRole("tab", { name: /sales-report/i })).toBeVisible({ timeout: 30_000 });
@@ -95,20 +69,27 @@ test.describe("new shell · real bridge", () => {
     await expect(page.locator(SKELETON)).toHaveCount(0);
   });
 
-  test("keeps Agent and Editor modes on the real shell without prototype documents", async ({ page }) => {
-    await page.goto("/");
-    await expect(page.locator('#shell[data-loaded="true"]')).toBeVisible({ timeout: 60_000 });
-
-    // The production shell must never expose the browser-preview seed rows.
-    // Those names belong only to src/shell/port/fake and would make a release
-    // look functional while bypassing the desktop bridge entirely.
-    await expect(page.getByText("MO product launch", { exact: true })).toHaveCount(0);
+  test("boots the real shell with none of the preview workspace in it", async ({ page }) => {
+    /*
+     * The production shell must never expose the browser-preview seed rows.
+     * Those names belong only to `src/shell/port/fake` and would make a release
+     * look functional while bypassing the desktop bridge entirely. `openShell`
+     * refuses the folder; the files are named here because a fake that seeded
+     * only documents would still pass that check.
+     */
+    await openShell(page);
     await expect(page.getByText("MO launch plan.docx", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("MO sales forecast.xlsx", { exact: true })).toHaveCount(0);
 
-    await switchMode(page, "Agent");
-    await expect(page.locator(".shell-home--agent")).toBeVisible();
+    // Home, with the three ways in r10 gives it, and nothing open behind them.
+    await expect(page.locator("#shell")).toHaveAttribute("data-page", "home");
+    await expect(homeComposer(page)).toBeVisible();
+    await expect(page.locator(".dx-quick-start [data-act=create-local]").first()).toBeVisible();
+    await expect(page.getByRole("tab")).toHaveCount(0);
 
-    await switchMode(page, "Editor");
-    await expect(page.getByRole("button", { name: "Home", exact: true }).first()).toBeVisible();
+    // And Local is reachable and empty of anyone else's documents.
+    await page.locator("#dx-sidebar [data-act=local]").click();
+    await expect(page.locator("#shell")).toHaveAttribute("data-page", "local");
+    await expect(page.getByText("MO launch plan.docx", { exact: true })).toHaveCount(0);
   });
 });

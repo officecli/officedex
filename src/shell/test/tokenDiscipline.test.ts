@@ -55,6 +55,15 @@
  *    a stylelint rule (`declaration-property-value-disallowed-list`) with the
  *    same exemptions, run by the editor as you type. This gate is the version
  *    that exists today.
+ *
+ * **OD-UI-1.2.** The workspace's stylesheets under `styles/` are generated
+ * from the approved prototype by `scripts/port-prototype-styles.mjs`, which
+ * refuses to write a colour or a font-size it has no token for — so for those
+ * files this gate is the second check rather than the first. There are two
+ * scales now and both are closed: `--dx-fs-*` is the design's, named by its
+ * pixel size because the design's own table is; `--shell-text-*` is what the
+ * surfaces the design keeps as they were (the image creator, the account page,
+ * the generating canvas) were already written in. One surface uses one scale.
  */
 import { describe, expect, it } from "vitest";
 import { parseCss, parseShellCss, type CssDeclaration } from "./cssModel";
@@ -79,6 +88,26 @@ const TYPE_SCALE: Record<string, string> = {
   "--shell-text-4xl": "32px",
   "--shell-text-display": "31px",
 };
+
+/**
+ * The design's scale (OD-UI-1.2 §04), copied from `tokens.css` and asserted
+ * equal to it below. Ten sizes; 9px is the glyph inside a traffic light and
+ * nothing else.
+ */
+const DESIGN_SCALE: Record<string, string> = {
+  "--dx-fs-9": "9px",
+  "--dx-fs-12": "12px",
+  "--dx-fs-13": "13px",
+  "--dx-fs-14": "14px",
+  "--dx-fs-16": "16px",
+  "--dx-fs-20": "20px",
+  "--dx-fs-22": "22px",
+  "--dx-fs-24": "24px",
+  "--dx-fs-26": "26px",
+  "--dx-fs-28": "28px",
+};
+
+const SCALE_TOKEN = /--(?:shell-text(?:-[a-z0-9]+)?|dx-fs-\d+)/;
 
 interface Exemption {
   file: string;
@@ -114,25 +143,14 @@ const MACOS = (surface: string) =>
   `wrong on Windows and Linux (other side, square, drawn by the system).`;
 
 /**
- * By design: the companion's own palette.
- *
- * The mark is drawn, not styled. Shell, plate, eye and corner are a fixed
- * relationship between four values, and at 40px it is that contrast that makes
- * it read as a face.
- */
-const COMPANION = (part: string) =>
-  `${part} — one of four values in a fixed relationship that makes the mark ` +
-  `read as a face at 40px. A theme moving them independently would not be ` +
-  `recolouring the companion, it would be breaking it. Revoked if the mark ` +
-  `ever becomes a themed control rather than an illustration.`;
-
-/**
  * Two kinds of thing live in this list and they are not the same kind.
  *
- * `chrome.css` and `agent.css` hold *by-design* literals: W3-I argued in each
- * stylesheet why tokenising them would make the product worse, and the row
- * below records the event that would revoke the argument rather than a date,
- * because there isn't one. Everything in `composer.css` is *debt*: a token
+ * The traffic lights are *by-design* literals: the row records the event that
+ * would revoke the argument rather than a date, because there isn't one. (The
+ * companion's palette used to be the second such group; the mark is drawn from
+ * its own SVG now and no stylesheet colours it.) Everything in `composer.css`
+ * is *debt* — what is left of it after OD-UI-1.2 removed the chips, the mention
+ * list and the dictation state that owed the rest: a token
  * already exists or should, somebody owns the file, and the row says what has
  * to happen. An exemption with neither an expiry nor a revoking condition is
  * how a rule quietly stops being one, so every row carries one or the other.
@@ -140,90 +158,39 @@ const COMPANION = (part: string) =>
 const BARE_COLOURS: Exemption[] = [
   // ---- by design: the macOS traffic lights -------------------------------
   {
-    file: "src/shell/chrome/chrome.css",
-    selector: ".shell-window-controls button::before",
+    file: "src/shell/styles/workspace-v11.css",
+    selector: ".dx-traffic",
     property: "border",
-    value: "1px solid #00000018",
+    value: "1px solid #0001",
     why: MACOS("the traffic lights' shared hairline"),
   },
   {
-    file: "src/shell/chrome/chrome.css",
-    selector: ".shell-window-close::before",
+    file: "src/shell/styles/workspace-v11.css",
+    selector: ".dx-traffic.dx-close",
     property: "background",
     value: "#ff5f57",
     why: MACOS("close"),
   },
   {
-    file: "src/shell/chrome/chrome.css",
-    selector: ".shell-window-minimize::before",
+    file: "src/shell/styles/workspace-v11.css",
+    selector: ".dx-traffic.dx-min",
     property: "background",
-    value: "#febc2e",
+    value: "#ffbd2e",
     why: MACOS("minimise"),
   },
   {
-    file: "src/shell/chrome/chrome.css",
-    selector: ".shell-window-fullscreen::before",
+    file: "src/shell/styles/workspace-v11.css",
+    selector: ".dx-traffic.dx-max",
     property: "background",
     value: "#28c840",
     why: MACOS("zoom"),
   },
   {
-    file: "src/shell/chrome/chrome.css",
-    selector: ".shell-window-glyph",
+    file: "src/shell/styles/workspace-v11.css",
+    selector: ".dx-traffic:hover",
     property: "color",
-    value: "#343434c9",
+    value: "#222",
     why: MACOS("the ×/–/+ the system draws inside them on hover"),
-  },
-
-  // ---- by design: the companion's own palette ----------------------------
-  {
-    file: "src/shell/agent/agent.css",
-    selector: ".shell-face-shell",
-    property: "fill",
-    value: "#2b2b2b",
-    why: COMPANION("the mark's shell, the same black as --shell-brand-mark but written apart on purpose"),
-  },
-  {
-    file: "src/shell/agent/agent.css",
-    selector: ".shell-face-plate",
-    property: "fill",
-    value: "#f3f3f3",
-    why: COMPANION("the face plate"),
-  },
-  {
-    file: "src/shell/agent/agent.css",
-    selector: ".shell-face-eye",
-    property: "stroke",
-    value: "#262626",
-    why: COMPANION("the eye"),
-  },
-  {
-    file: "src/shell/agent/agent.css",
-    selector: ".shell-face-corner > path",
-    property: "fill",
-    value: "#fafafa",
-    why: COMPANION("the status corner badge"),
-  },
-  {
-    file: "src/shell/agent/agent.css",
-    selector: '.shell-face-corner > path[fill="none"]',
-    property: "stroke",
-    value: "#fafafa",
-    why: COMPANION("the same badge's outlined variant"),
-  },
-  {
-    file: "src/shell/agent/agent.css",
-    selector: ".shell-face-limbs",
-    property: "fill",
-    value: "#f3f3f3",
-    why: COMPANION("the limbs that show when the mark is tucked to an edge"),
-  },
-  {
-    file: "src/shell/agent/agent.css",
-    selector: ".shell-face-limbs",
-    property: "stroke",
-    value: "#303030",
-    why: COMPANION("those limbs' outline"),
   },
 
   // ---- debt: composer.css ------------------------------------------------
@@ -273,94 +240,10 @@ const BARE_COLOURS: Exemption[] = [
   },
   {
     file: "src/shell/composer/composer.css",
-    selector: ".shell-cx-chip.is-folder",
-    property: "background",
-    value: "#eef3ef",
-    why: COMPOSER("Folder-chip green, one of a three-value set. Zero hits in the prototype."),
-  },
-  {
-    file: "src/shell/composer/composer.css",
-    selector: ".shell-cx-chip.is-folder",
-    property: "border-color",
-    value: "#dce6de",
-    why: COMPOSER("Folder-chip green, 2 of 3."),
-  },
-  {
-    file: "src/shell/composer/composer.css",
-    selector: ".shell-cx-chip.is-folder",
-    property: "color",
-    value: "#657b6c",
-    why: COMPOSER("Folder-chip green, 3 of 3."),
-  },
-  {
-    file: "src/shell/composer/composer.css",
-    selector: ".shell-cx-chip.is-file",
-    property: "background",
-    value: "#eff3f6",
-    why: COMPOSER("File-chip blue, one of a three-value set."),
-  },
-  {
-    file: "src/shell/composer/composer.css",
-    selector: ".shell-cx-chip.is-file",
-    property: "border-color",
-    value: "#dde5ec",
-    why: COMPOSER("File-chip blue, 2 of 3."),
-  },
-  {
-    file: "src/shell/composer/composer.css",
-    selector: ".shell-cx-chip.is-file",
-    property: "color",
-    value: "#536879",
-    why: COMPOSER("File-chip blue, 3 of 3."),
-  },
-  {
-    file: "src/shell/composer/composer.css",
-    selector: ".shell-cx-chip button:hover",
-    property: "background",
-    value: "#00000010",
-    why: COMPOSER("Same value as the other chip-remove hover below; one token, two uses."),
-  },
-  {
-    file: "src/shell/composer/composer.css",
-    selector: ".shell-cx-chip-remove:hover",
-    property: "background",
-    value: "#00000010",
-    why: COMPOSER("Same value as the chip-button hover above; one token, two uses."),
-  },
-  {
-    file: "src/shell/composer/composer.css",
     selector: '.shell-cx-button:hover, .shell-cx-button[aria-expanded="true"]',
     property: "background",
     value: "#f0f1f2",
     why: COMPOSER("Another hover grey; W3-I.md §4.1 lists four already competing for one token."),
-  },
-  {
-    file: "src/shell/composer/composer.css",
-    selector: ".shell-cx-mic.is-listening",
-    property: "background",
-    value: "#fdecea",
-    why: COMPOSER("Recording red, 1 of 4. Zero hits in the prototype (S5-011) — a shell invention."),
-  },
-  {
-    file: "src/shell/composer/composer.css",
-    selector: ".shell-cx-mic.is-listening",
-    property: "color",
-    value: "#b3392c",
-    why: COMPOSER("Recording red, 2 of 4. Note --shell-status-danger #ad5347 already exists."),
-  },
-  {
-    file: "src/shell/composer/composer.css",
-    selector: ".shell-cx-mic.is-listening:hover",
-    property: "background",
-    value: "#fadfdb",
-    why: COMPOSER("Recording red, 3 of 4."),
-  },
-  {
-    file: "src/shell/composer/composer.css",
-    selector: ".shell-cx-mic.is-listening:hover",
-    property: "color",
-    value: "#8f2d22",
-    why: COMPOSER("Recording red, 4 of 4."),
   },
   {
     file: "src/shell/composer/composer.css",
@@ -375,27 +258,6 @@ const BARE_COLOURS: Exemption[] = [
     property: "background",
     value: "#f4f5f6ed",
     why: COMPOSER("Drop-target scrim; nav.css uses --shell-drop-fill."),
-  },
-  {
-    file: "src/shell/composer/composer.css",
-    selector: ".shell-mention-option.is-highlighted",
-    property: "background",
-    value: "#f0f2f3",
-    why: COMPOSER("A fifth hover grey."),
-  },
-  {
-    file: "src/shell/composer/composer.css",
-    selector: ".shell-mention-footer",
-    property: "border-top",
-    value: "1px solid #efefef",
-    why: COMPOSER("Needs a token; nearest existing is --shell-chrome at Δ7."),
-  },
-  {
-    file: "src/shell/composer/composer.css",
-    selector: ".shell-mention-footer",
-    property: "color",
-    value: "#a0a3a6",
-    why: COMPOSER("Caption ink; --shell-ink-faint #8b8e90 is the nearest, Δ21 — not a swap."),
   },
   {
     file: "src/shell/composer/composer.css",
@@ -422,6 +284,17 @@ const BARE_COLOURS: Exemption[] = [
 
 const BARE_FONT_SIZES: Exemption[] = [
   {
+    file: "src/shell/styles/workspace-v12.css",
+    selector: ".dx-source-share",
+    property: "font-size",
+    value: "0",
+    why:
+      "Not a size: the design sets the Share button's own text to nothing so that a " +
+      "narrow strip keeps the icon, and restores the label on the element inside it. " +
+      "Generated from the approved prototype, which writes it this way. Revoked when " +
+      "the design hides the label some other way.",
+  },
+  {
     file: "src/shell/composer/composer.css",
     selector: ".shell-cx--home .shell-cx-input",
     property: "font-size",
@@ -432,27 +305,6 @@ const BARE_FONT_SIZES: Exemption[] = [
         "rather than a tenth rung on a scale it does not belong to.",
     ),
   },
-  {
-    file: "src/shell/composer/composer.css",
-    selector: ".shell-mention-heading span",
-    property: "font-size",
-    value: "15px",
-    why: COMPOSER("15px has no step; the same value appears twice, so it is one decision."),
-  },
-  {
-    file: "src/shell/composer/composer.css",
-    selector: ".shell-mention-enter",
-    property: "font-size",
-    value: "15px",
-    why: COMPOSER("The second 15px. Decide the step once and take both."),
-  },
-  {
-    file: "src/shell/composer/composer.css",
-    selector: ".shell-mention-footer",
-    property: "font-size",
-    value: "9px",
-    why: COMPOSER("Smaller than --shell-text-xs, the current floor. Adding a rung below 10px is a decision."),
-  },
 ];
 
 /**
@@ -462,6 +314,18 @@ const BARE_FONT_SIZES: Exemption[] = [
  * purpose — they pin no value and survive a theme swap intact.
  */
 const COLOUR = /#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?|hwb|lch|lab|oklch|oklab)\s*\(|\b(?:white|black|red|green|blue|gray|grey|silver|navy|teal|olive|maroon|orange|yellow|purple|fuchsia|aqua|lime)\b/;
+
+/**
+ * What a declaration writes itself, with what it takes from a token removed.
+ *
+ * `var(--dx-white)` is a reference; "white" there is part of a name. Reading
+ * the name as a colour would make the gate fail every stylesheet that does the
+ * right thing, and the only way to satisfy it would be to stop naming tokens
+ * after what they hold.
+ */
+const written = (value: string) => value.replace(/var\(\s*--[\w-]+\s*(?:,[^()]*)?\)/g, "").replace(/\s*!important\s*$/, "");
+
+const writesColour = (declaration: CssDeclaration) => COLOUR.test(written(declaration.value));
 
 const shellCss = parseShellCss("src/shell").filter(
   (declaration) => declaration.file !== "src/shell/tokens.css",
@@ -486,11 +350,14 @@ function stale(exemptions: Exemption[], declarations: CssDeclaration[]): string[
 
 describe("colour and size come from the token table", () => {
   it("the type scale is exactly the set tokens.css declares", () => {
-    const declared = Object.fromEntries(
-      parseCss("src/shell/tokens.css")
-        .filter((declaration) => /^--shell-text(-[a-z0-9]+)?$/.test(declaration.property))
-        .map((declaration) => [declaration.property, declaration.value]),
-    );
+    const declaredAs = (pattern: RegExp) =>
+      Object.fromEntries(
+        parseCss("src/shell/tokens.css")
+          .filter((declaration) => pattern.test(declaration.property))
+          .map((declaration) => [declaration.property, declaration.value]),
+      );
+    expect(declaredAs(/^--dx-fs-\d+$/)).toEqual(DESIGN_SCALE);
+    const declared = declaredAs(/^--shell-text(-[a-z0-9]+)?$/);
     // Both directions: a tenth size in tokens.css that nobody added here is a
     // step that entered the scale without a decision, and a row here that
     // tokens.css dropped is a size this gate would keep blessing.
@@ -501,7 +368,7 @@ describe("colour and size come from the token table", () => {
     const offenders = shellCss
       .filter(
         (declaration) =>
-          COLOUR.test(declaration.value) &&
+          writesColour(declaration) &&
           !BARE_COLOURS.some(
             (exemption) => matches(exemption, declaration) && exemption.value === declaration.value,
           ),
@@ -515,7 +382,9 @@ describe("colour and size come from the token table", () => {
       .filter(
         (declaration) =>
           declaration.property === "font-size" &&
-          !/^var\(\s*--shell-text(-[a-z0-9]+)?\s*\)$/.test(declaration.value) &&
+          !new RegExp(`^var\\(\\s*${SCALE_TOKEN.source}\\s*\\)$`).test(
+            declaration.value.replace(/\s*!important\s*$/, ""),
+          ) &&
           !BARE_FONT_SIZES.some(
             (exemption) => matches(exemption, declaration) && exemption.value === declaration.value,
           ),
@@ -529,12 +398,12 @@ describe("colour and size come from the token table", () => {
     // inherits, which looks like a layout bug rather than a missing token.
     const unknown = shellCss
       .flatMap((declaration) =>
-        [...declaration.value.matchAll(/var\(\s*(--shell-text[a-z0-9-]*)\s*\)/g)].map((match) => ({
+        [...declaration.value.matchAll(/var\(\s*(--shell-text[a-z0-9-]*|--dx-fs-[a-z0-9-]*)\s*\)/g)].map((match) => ({
           declaration,
           token: match[1],
         })),
       )
-      .filter(({ token }) => !(token in TYPE_SCALE))
+      .filter(({ token }) => !(token in TYPE_SCALE) && !(token in DESIGN_SCALE))
       .map(({ declaration, token }) => `${declaration.file}:${declaration.line} ${token}`);
     expect(unknown).toEqual([]);
   });
@@ -557,9 +426,9 @@ describe("colour and size come from the token table", () => {
       expect(exemption.why.length, `${exemption.selector} has no reason`).toBeGreaterThan(30);
     }
     expect([...new Set([...BARE_COLOURS, ...BARE_FONT_SIZES].map((entry) => entry.file))].sort()).toEqual([
-      "src/shell/agent/agent.css",
-      "src/shell/chrome/chrome.css",
       "src/shell/composer/composer.css",
+      "src/shell/styles/workspace-v11.css",
+      "src/shell/styles/workspace-v12.css",
     ]);
   });
 
@@ -568,6 +437,10 @@ describe("colour and size come from the token table", () => {
     // floors are well under the real counts so an ordinary edit cannot trip
     // them, and far above zero so a total failure cannot hide.
     expect(shellCss.filter((declaration) => declaration.property === "font-size").length).toBeGreaterThan(50);
-    expect(shellCss.filter((declaration) => COLOUR.test(declaration.value)).length).toBeGreaterThan(30);
+    // Bare colours are nearly gone, which is the point; what is counted here is
+    // that the scanner still sees the ones that are exempt.
+    expect(shellCss.filter(writesColour).length).toBeGreaterThanOrEqual(BARE_COLOURS.length);
+    expect(BARE_COLOURS.length).toBeGreaterThan(4);
+    expect(shellCss.filter((declaration) => /var\(\s*--dx-/.test(declaration.value)).length).toBeGreaterThan(300);
   });
 });

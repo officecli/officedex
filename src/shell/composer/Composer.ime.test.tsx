@@ -2,25 +2,43 @@ import { act, cleanup, fireEvent, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { toast } from "../../renderer/ui";
+import { resetLayers } from "../kit/layers";
+import { SEED_FOLDER_ID } from "../port/fake/seed";
 import { renderShell } from "../test/renderShell";
 import { resetComposerDrafts } from "./Composer";
 
 afterEach(() => {
   cleanup();
   toast.destroy();
+  resetLayers();
   resetComposerDrafts();
 });
 
-async function homeWithSpy() {
-  const shell = await renderShell({ fastAgent: true });
-  await shell.dispatch({ type: "go-home" });
+/** Records every message the port receives, whichever composer sent it. */
+function watchSends(shell: Awaited<ReturnType<typeof renderShell>>) {
   const sent: string[] = [];
   const send = shell.port.agent.send.bind(shell.port.agent);
   shell.port.agent.send = async (input) => {
     sent.push(input.text);
     await send(input);
   };
-  const input = shell.view.getByLabelText("New task instructions") as HTMLTextAreaElement;
+  return sent;
+}
+
+/** The conversation column's composer, where a project's messages are typed. */
+async function chatWithSpy() {
+  const shell = await renderShell({ fastAgent: true });
+  await shell.dispatch({ type: "open-chat", chat: { folderId: SEED_FOLDER_ID, conversationId: null } });
+  const sent = watchSends(shell);
+  const input = shell.view.getByLabelText("Message OfficeDex") as HTMLTextAreaElement;
+  return { shell, sent, input };
+}
+
+/** Home's one main input — a fresh render is already there. */
+async function homeWithSpy() {
+  const shell = await renderShell({ fastAgent: true });
+  const sent = watchSends(shell);
+  const input = shell.view.getByLabelText("Describe your task") as HTMLTextAreaElement;
   return { shell, sent, input };
 }
 
@@ -30,7 +48,7 @@ async function homeWithSpy() {
  */
 describe("composer with an IME", () => {
   it("does not send on the Enter that confirms a candidate", async () => {
-    const { sent, input } = await homeWithSpy();
+    const { sent, input } = await chatWithSpy();
 
     await act(async () => {
       fireEvent.compositionStart(input);
@@ -43,7 +61,7 @@ describe("composer with an IME", () => {
   });
 
   it("ignores the keyCode 229 Enter WebKit fires after compositionend", async () => {
-    const { sent, input } = await homeWithSpy();
+    const { sent, input } = await chatWithSpy();
 
     await act(async () => {
       fireEvent.compositionStart(input);
@@ -56,7 +74,7 @@ describe("composer with an IME", () => {
   });
 
   it("still sends on a plain Enter once composition is over", async () => {
-    const { sent, input } = await homeWithSpy();
+    const { sent, input } = await chatWithSpy();
 
     await act(async () => {
       fireEvent.compositionStart(input);
@@ -71,20 +89,38 @@ describe("composer with an IME", () => {
   });
 
   it("does not pick a mention while the IME owns Enter", async () => {
-    const { shell, input } = await homeWithSpy();
+    const { shell, input } = await chatWithSpy();
+    const list = () => shell.view.getByRole("listbox", { name: "Files to add to this message" });
 
     await act(async () => {
       fireEvent.change(input, { target: { value: "Compare @" } });
     });
-    expect(shell.view.getByRole("listbox", { name: "Files and folders" })).toBeInTheDocument();
+    expect(list()).toBeInTheDocument();
 
     await act(async () => {
       fireEvent.keyDown(input, { key: "Enter", isComposing: true, keyCode: 229 });
     });
 
     expect(input.value).toBe("Compare @");
-    expect(
-      within(shell.view.getByRole("listbox", { name: "Files and folders" })).getAllByRole("option").length,
-    ).toBeGreaterThan(0);
+    expect(within(list()).getAllByRole("option").length).toBeGreaterThan(0);
+  });
+
+  /*
+   * Home is where a Chinese sentence is most often typed from scratch, and it is
+   * the placement whose send opens a new conversation — so a candidate confirmed
+   * there would not only send, it would start a run.
+   */
+  it("holds the same on Home", async () => {
+    const { shell, sent, input } = await homeWithSpy();
+
+    await act(async () => {
+      fireEvent.compositionStart(input);
+      fireEvent.change(input, { target: { value: "帮我写一份发布计划a" } });
+      fireEvent.keyDown(input, { key: "Enter", isComposing: true, keyCode: 229 });
+    });
+
+    expect(sent).toEqual([]);
+    expect(input.value).toBe("帮我写一份发布计划a");
+    expect(shell.state().chat).toBeNull();
   });
 });

@@ -53,12 +53,12 @@ Composer 完整采集这些字段。mentions 和 reference 已转成明确的 pr
 
 | feature key | 界面位置 | 说明 |
 |---|---|---|
-| `share` | 文件标签栏 "Share" | 已接入系统分享（可用时）或复制本地路径；协作链接、权限和邀请成员仍未立项 |
-| `file-more-actions` | 文件标签栏 "⋯" | 重命名、创建副本、置顶和移出库已经接入。版本历史、导出和打印在**新 shell 没有入口**（菜单只有这四项），不是点了出 notice |
+| `share` | 文件标签栏 "Share" | r10 起是「Share a copy」对话框：说明本地路径不是链接，导出副本见 `file.export`；协作链接、权限和邀请成员仍未立项 |
+| `file-more-actions` | 文件标签栏 "⋯" | 重命名、创建副本、收藏、引用到对话、移出项目、移除已经接入。r10 的菜单把版本历史、导出、打印等放了回来，点击出提示（见下方 r10 表） |
 | `settings-panel` | ~~侧栏齿轮~~ | ~~UI 层没做设置面板。模型和权限控制现在在 composer 里~~ **已实现（2026-09-20）**：齿轮直接打开整页设置（`src/shell/settings/`），九个分区与 legacy 一致（生成 / 通知 / 外观 / 连接设置 / 订阅 / 活动记录 / 高级与支持 / 重置 / 关于）。侧栏菜单里的 `Enter sends` 与 `Reduced motion` 移到「外观」；`Review changes` 不再重复出现，只留在 composer 权限菜单。模型和权限控制仍在 composer 里 |
 | `dictate` | Composer 麦克风 | 走浏览器的 Web Speech API，听写中麦克风有可视状态、再按一次停止。没有这个 API 的宿主（打包后的 webview 视版本而定）才提示；自建语音识别未立项 |
 | `composer.permission.review` / `composer.permission.custom` | Composer 权限菜单第 2/3 档~~；侧栏齿轮菜单的 "Review changes"~~ | runtime 没有「先给用户看、确认后再写」的闸门，所有 run 都直接写。两档保留在菜单里但点了只出提示，四处默认值都已改为 `full`，读取时还会丢掉旧版本存在盘上的 `review`。Custom 更早一层就是空的：没有任何界面能写 `settings.customInstructions`。侧栏那份重复的 "Review changes" 已随齿轮改为整页设置一并移除 |
-| `home-highlights` | Agent 首页 "Feature highlights" 的卡片 | 仓库里没有任何功能介绍视频素材，所以只出货架不接播放器。卡片、轮播、键盘导航都是真的，点击出提示。素材到位后放进 `public/assets/highlights/{id}.jpg`（DOM 上的 `data-asset` 就是契约），再把播放器接回来 |
+| `features.video` | Home "Hot and fresh features" 的卡片 | 原型的四段介绍视频（约 9MB）不随仓库走（2026-09-30 拍板），卡片点击出提示。素材到位后放进 `public/highlights/{id}.mp4`，再把 `FeatureHighlights.tsx` 的播放器接回来 |
 | `composer.image.model` | 图片模式 composer 的模型菜单（Seedream 5.0 Pro / GPT Image 2 / Nano Banana 2） | 图片 runtime 自己选模型：hosted 路径 CLI 写死 `hosted/image`、external 路径只读配置里的 `image_model`，没有按请求覆盖的参数。四个选项照原型列出，只有 Auto 可选，其余点了出提示并标 "Soon"。要真做得先在 officecli `office.generate` 加 `image_model` 参数、平台侧按 profile 计价，再把 `ImageGenerationInput.modelId` 透传下去（字段已在契约里） |
 
 ### Writer 的界面语言（2026-09-19）
@@ -77,6 +77,38 @@ Word 编辑器整条工具栏渲染的是 `toolbar.start` / `statusbar.words 0` 
 Excel 相反：`@shimo/sdk-sheet` 有完整 `en-US`（与 `zh-CN` 同键数），不要
 和 Writer 混为一谈。writer 侧补出 `locales/en-US.json` 当天，
 `collectWriterLocaleResources` 会自动带上。
+
+### OD-UI-1.2 r10 新增（2026-09-30）
+
+界面按 r10 重做后，设计画了、服务层还没有的控件。全部保留位置，点击走 `notBuiltYet`。
+
+| feature key | 界面位置 | 说明 |
+|---|---|---|
+| `new.<type>` | New 面板 / Home Quick start 的纯文本、Markdown、富文本、HTML、PDF | `FilePort.create` 只会建 DOCX / XLSX / PPTX；AI 图片走图像创作页。其余类型没有编辑器也没有创建入口 |
+| `file.export` | 文件菜单 Export、分享对话框 "Export file copy" | 没有导出副本 / 导出 PDF 的端口方法 |
+| `file.saveAs` / `file.print` / `file.history` / `file.template` / `file.newWindow` / `file.preview` | 文件菜单 | 同上，均无端口方法。r10 把它们放回了菜单（旧 shell 没有入口） |
+| `editor.present` | 文档标签栏右侧的演示按钮 | 放映属于内嵌编辑器，契约里没有触发通道 |
+| `chat.move` | 会话菜单 "Move to project" | 会话归属由 runtime 的 folder 决定，没有改归属的接口 |
+| `agent.rejectSuggestion` | 审阅对话框 "Keep original" | 只有 apply / undo，没有显式拒绝；关闭对话框即保持原件 |
+| `settings.quickEntry` | 设置 → 通用 → Quick entry | 没有菜单栏入口 / 全局快捷键 |
+| `settings.workspaceLocation` | 设置 → 文件与存储 → Workspace location → Change | 没有目录选择器接口；`workspaceDir` 目前只能被重置 |
+| `settings.defaultApps` | 设置 → 文件与存储 → Default apps | 未声明文件关联（见第九节 D-3） |
+| `settings.recovery` / `settings.trash` | 设置 → 文件与存储 | 没有草稿恢复中心，也没有废纸篓；移除文件前会先确认 |
+| `settings.sound` / `settings.quietActive` | 设置 → 通知 | 通知只有开 / 关与测试 |
+| `settings.license` | 设置 → 商业授权 → Request a license | 没有应用内申请流程 |
+
+同一轮里**改了位置但能力不变**的：自有模型的编辑与连接测试从 composer 的模型菜单移到「设置 → 模型」；
+Jira、网络代理、兑换码、诊断、运行记录各自进了对应分区的对话框；输出类型与「从本机选择」进了
+composer 的 Task context 对话框。会话与项目的重命名、置顶、归档存在本机（`state/libraryMeta.ts`），
+runtime 不知道这些——换设备不会跟着走。
+
+**Agent 执行反馈（规范 §20）只落地了一半。** 输入框聚焦彩光已与原型一致；运行时的彩色光边仍然框住
+整块画布（`AttentionBorder`）。原型里的「目标段落彩框、框内草稿、工作光标」需要编辑器告诉 shell
+「正在动哪一块、在屏幕哪里」，而 `CanvasAdapter` 没有这条坐标通道（见第六节）。样式已随原型移植
+（`styles/attention.css` 的 `.dx-od-agent-effects`），等适配器给出矩形即可接上。
+
+Local 页的文件夹是**项目文件夹**而不是磁盘目录（原型示意的是 Documents / Downloads / Desktop）：
+工作区不扫描磁盘，只列它已经知道的文件。
 
 ## 四、已经删掉的（不是「未实现」，是不该存在）
 
@@ -152,7 +184,7 @@ xlsx 的「生成 → 打开 → 提要求 → 改完再打开」整条链已经
 | # | 缺失 | 现在的行为 | 证据 |
 |---|---|---|---|
 | D-1 | 系统语言不影响首启 | `detectLocale()` 恒返回 `"en"`，不读 `navigator.language`。**待产品决策**：是否应跟随系统语言 | `src/renderer/i18n/index.tsx` |
-| D-2 | 侧栏与 agent 列不可缩放 | reducer 有 `set-nav-width` / `set-task-width` 与 min/max，但全仓库无任何非测试 dispatch。面板恒为约 190 / 320 | `src/shell/state/shellReducer.ts`；消费点 `src/shell/App.tsx` |
+| ~~D-2~~ | ~~侧栏与 agent 列不可缩放~~（r10 起会话栏可拖拽 / 键盘调宽 320–520，侧栏为固定 244 或隐藏） | reducer 有 `set-nav-width` / `set-task-width` 与 min/max，但全仓库无任何非测试 dispatch。面板恒为约 190 / 320 | `src/shell/state/shellReducer.ts`；消费点 `src/shell/App.tsx` |
 | D-3 | 无 Finder 文件关联 / 无应用菜单栏 / 无深链；Finder 拖入与双击打开是死路 | `wails.json` 未声明 `fileAssociations` / `protocols`，`Info.plist` 对应块不展开。`EnableFileDrop` 开着且 `DisableWebViewDrop: true`，但 `ImportLocalFile` 在新 shell **无调用方**（只有旧渲染器 `homeDropZone.ts`） | `wails.json`、`build/darwin/Info.plist`、`main.go`、`app_local_files.go` |
-| D-4 | 无 `⌘S` / `⌘N` / `⌘,` | 保存仅点击路径。已实现的键盘快捷键只有关标签 `⌘W`/`Ctrl+W` | `src/shell/chrome/closeTabShortcut.ts`；`src/shell` / `src/canvas` 无 KeyS |
+| ~~D-4~~ | ~~无 `⌘S` / `⌘N` / `⌘,`~~（r10 起 `⌘O` `⌘N` `⌘S` `⌘,` `⌘W` 已实现，见 `chrome/useKeyboardShortcuts.ts`） | 保存仅点击路径。已实现的键盘快捷键只有关标签 `⌘W`/`Ctrl+W` | `src/shell/chrome/closeTabShortcut.ts`；`src/shell` / `src/canvas` 无 KeyS |
 | D-5 | 无多选 / 无面包屑 / 无文本搜索 | `FileFilter` 只有 `"pinned" \| "all"` | `src/shell/nav/fileTreeModel.ts` |

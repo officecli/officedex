@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-import { attachHostReport, fixturePath, queueFileDialog } from "./support/real-e2e";
+import { fixturePath, openFromDisk, openShell, queueFileDialog } from "./support/real-e2e";
 
 /**
  * Why the frame's editor refuses writes — measured, not inferred.
@@ -61,45 +61,9 @@ interface DiagnoseReport {
   readonly exposedGlobals: readonly string[];
 }
 
-/**
- * Switches mode the way the shell offers it: the sidebar brand button.
- *
- * `menuitemradio`, not `menuitem`, and the accessible name carries the label's
- * description too — copied from `shell-canvas-real.spec.ts`, where both facts
- * were learned the hard way.
- */
-async function switchMode(page: Page, mode: "Agent" | "Editor") {
-  await page.getByRole("button", { name: /Switch mode/ }).click();
-  await page.getByRole("menuitemradio", { name: new RegExp(`^${mode}\\b`) }).click();
-  await expect(page.locator("#shell")).toHaveAttribute("data-mode", mode.toLowerCase());
-}
-
-/**
- * Boots the shell with no persisted view state.
- *
- * The shell keeps its state in `localStorage`, and the recording is part of it,
- * so a test that leaves the demo running hands that state to the next one in
- * the same browser profile. Each of these tests has to start from Home or the
- * assertions measure the previous test's leftovers.
- */
-async function gotoShellClean(page: Page, url = "/"): Promise<void> {
-  await page.addInitScript(() => {
-    try {
-      localStorage.removeItem("officedex.shell.v1");
-    } catch {
-      /* a locked-down profile just keeps its state */
-    }
-  });
-  await page.goto(url);
-  await expect(page.locator('#shell[data-loaded="true"]')).toBeVisible({ timeout: 60_000 });
-}
-
 test.describe("frame editor write permission", () => {
   test("reports which gate refuses a draw into the embedded editor", async ({ page }, testInfo) => {
-    await gotoShellClean(page);
-
-    await switchMode(page, "Editor");
-    await page.getByRole("button", { name: "Home", exact: true }).first().click();
+    await openShell(page);
 
     /*
      * The blank deck is the fixture to write against.
@@ -109,9 +73,12 @@ test.describe("frame editor write permission", () => {
      * the source settled it — two attributions were already wrong. A read can
      * never answer it. `blank.pptx` is a one-empty-slide fixture, and the probe
      * rolls its own mutation back when it succeeds.
+     *
+     * Opened from Local, which is where r10 puts Open: there is no Agent/Editor
+     * mode any more and no Home action for the picker (§07).
      */
     await queueFileDialog(await fixturePath("blank.pptx"));
-    await page.getByRole("button", { name: /Open from this computer/i }).click();
+    await openFromDisk(page);
     await expect(page.getByRole("tab", { name: /blank/i })).toBeVisible({ timeout: 30_000 });
 
     // `.pptx-embed-frame` being present only means the iframe mounted, and the
@@ -200,75 +167,6 @@ test.describe("frame editor write permission", () => {
   });
 
   /**
-   * A second click replays from the start.
-   *
-   * The stage keeps a "already started" ref so a re-render cannot restart the
-   * draft under the sequencer, and going Home does NOT unmount the canvas — the
-   * workspace is hidden, not torn down. So without a restart signal, coming back
-   * and pressing the button again finds the finished deck still loaded and does
-   * nothing at all.
-   */
-  test("replays from the start when the button is pressed again", async ({ page }) => {
-    await gotoShellClean(page);
-    await switchMode(page, "Editor");
-
-    const watch = page.getByTestId("shell-home-watch-deck");
-    await expect(watch).toBeVisible({ timeout: 30_000 });
-    await watch.click();
-
-    const deck = page.locator('[data-testid="shell-live-deck"]');
-    await expect(deck).toBeVisible({ timeout: 90_000 });
-    const frame = page.frameLocator('[data-testid="shell-live-deck"] iframe');
-    const slides = async (): Promise<number> => {
-      const report = (await frame.locator("html").evaluate(async () => {
-        const scope = globalThis as unknown as {
-          __officedexEditorDiagnose?: (options?: {
-            attemptWrite?: boolean;
-          }) => Promise<unknown>;
-        };
-        return scope.__officedexEditorDiagnose
-          ? await scope.__officedexEditorDiagnose({ attemptWrite: false })
-          : null;
-      })) as { read?: { slideCount: number | null } } | null;
-      return report?.read?.slideCount ?? 0;
-    };
-
-    // Let it get past the blank draft, so "back to one slide" means something.
-    const grown = Date.now() + 30_000;
-    while ((await slides()) < 2 && Date.now() < grown) await page.waitForTimeout(500);
-    expect(await slides(), "the first run never advanced").toBeGreaterThan(1);
-
-    // Home and back, the way a person does it.
-    await page.getByRole("button", { name: "Home", exact: true }).first().click();
-    await expect(page.getByTestId("shell-home-watch-deck")).toBeVisible({ timeout: 30_000 });
-    await page.getByTestId("shell-home-watch-deck").click();
-    await expect(deck).toBeVisible({ timeout: 90_000 });
-
-    /*
-     * A fresh draft starts at one slide.
-     *
-     * `startReplay` creates a new blank draft, so seeing it back at one slide is
-     * the observable difference between "replayed again" and "the finished deck
-     * is still on screen". Polled rather than read once: the first slide is
-     * drawn within a second, and a single immediate read could catch either
-     * side of that.
-     */
-    let reset = false;
-    const deadline = Date.now() + 20_000;
-    while (Date.now() < deadline) {
-      if ((await slides()) <= 1) {
-        reset = true;
-        break;
-      }
-      await page.waitForTimeout(250);
-    }
-    expect(
-      reset,
-      "the second click left the finished deck on screen instead of replaying from a blank draft",
-    ).toBe(true);
-  });
-
-  /**
    * The bundled NexaEdge recording, drawn into the live editor.
    *
    * This is the shell's half of legacy's **Watch PPT generation**: a real
@@ -278,26 +176,20 @@ test.describe("frame editor write permission", () => {
    *
    * It is the acceptance test for that §4 finding, so it asserts the thing §4
    * said never happened: shapes landing in the editor over time.
+   *
+   * The entry is the URL now. r10's Home is a composer, Quick start and Recent
+   * (§09) and carries no "watch a deck being drawn" button, so `?deckDemo=1` —
+   * documented in `src/shell/dev/deckDemo.ts` as the same state from the address
+   * bar, and honoured outside the dev fixture in `src/shell/main.tsx` — is the
+   * only way in. What is under test is the recording reaching the editor, and
+   * that is the same either way.
    */
   test("draws the bundled recording into the live editor", async ({ page }) => {
     // 180s: the recording is paced deliberately (a demo, not a benchmark), and
     // this is the ceiling rather than the expectation.
     test.setTimeout(180_000);
 
-    /*
-     * Through the UI, not a URL flag.
-     *
-     * The recording has a real entry now — Home's "watch a deck being drawn"
-     * button — and the point of this test is that entry, so it clicks it. The
-     * `?deckDemo=1` shortcut sets the same state from the address bar and is
-     * covered by the write probe above booting without it.
-     */
-    await gotoShellClean(page);
-    await switchMode(page, "Editor");
-    const demoButton = page.getByTestId("shell-home-watch-deck");
-    await expect(demoButton).toBeVisible({ timeout: 30_000 });
-    await expect(demoButton).toContainText(/watch|看/i);
-    await demoButton.click();
+    await openShell(page, "/?deckDemo=1");
 
     /*
      * One frame, and it is the live stage's — not `PresentationCanvas`'s.

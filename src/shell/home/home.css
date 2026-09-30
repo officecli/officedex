@@ -6,21 +6,6 @@
  * that are about the region rather than the page, brought here so one file
  * decides (S5-008). Both blocks declared `overflow: auto`, identically.
  */
-.shell-home {
-  /*
-   * Home's one column width. Local to this file rather than a design token:
-   * it is a layout constant for these two screens, not a value the rest of the
-   * shell shares. It exists so the number is typed once — it used to be typed
-   * per band, which is how three bands ended up on three different edges.
-   */
-  --shell-home-column: 1080px;
-  flex: 1;
-  min-width: 0;
-  padding: 40px 48px 56px;
-  overflow: auto;
-  scrollbar-gutter: stable;
-  background: var(--shell-canvas);
-}
 
 /*
  * Home is one column, and these are the rules that decide where its left edge
@@ -34,102 +19,13 @@
  * `--shell-home-column` is the single source for the 1080 that used to be typed
  * out once per band.
  */
-.shell-home-head,
-.shell-home-actions,
-.shell-home-list,
-.shell-hero-resume,
-.shell-highlights {
-  max-width: var(--shell-home-column);
-  margin-inline: auto;
-}
-
-.shell-home-head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px;
-  flex-wrap: wrap;
-  margin-bottom: 20px;
-}
-
-.shell-home-head h1 {
-  margin: 0;
-  color: var(--shell-ink);
-  font-size: var(--shell-text-3xl);
-  font-weight: 500;
-  letter-spacing: -0.3px;
-}
-
-.shell-home-lede {
-  flex: 1 1 100%;
-  margin: 8px 0 0;
-  color: var(--shell-ink-subtle);
-  font-size: var(--shell-text);
-  line-height: 20px;
-}
-
-.shell-home-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.shell-home-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 28px;
-}
 
 /*
  * Agent Home puts the same four actions under a subhead rather than under a
  * page title, so they sit closer to the list they act on.
  */
-.shell-home-actions--compact {
-  margin-bottom: 14px;
-}
-
-.shell-home-new {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--shell-line);
-  border-radius: var(--shell-radius-item);
-  background: var(--shell-paper);
-  color: var(--shell-ink-muted);
-  font: var(--shell-text) / 20px var(--shell-font);
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.shell-home-new:hover {
-  border-color: var(--shell-line-strong);
-  color: var(--shell-ink);
-}
-
-.shell-home-new:focus-visible {
-  outline: 2px solid var(--shell-focus);
-  outline-offset: 1px;
-}
-
-.shell-home-new--ghost {
-  background: transparent;
-  border-style: dashed;
-}
-
-.shell-home-list {
-  /* Width and centring come from the shared column rule above. */
-  min-width: 0;
-}
 
 /* ------------------------------------------------------- agent hero */
-
-.shell-home--agent {
-  padding-top: 86px;
-}
 
 .shell-hero {
   max-width: 800px;
@@ -157,23 +53,6 @@
   text-align: left;
 }
 
-.shell-home-scope {
-  min-height: 48px;
-  margin: 0 12px -10px;
-  padding: 6px 10px 14px;
-  box-sizing: border-box;
-  background: var(--shell-home-scope-fill);
-  border-radius: 16px 16px 0 0;
-}
-
-.shell-home-scope .shell-cx-button {
-  height: 28px;
-  padding: 0 8px;
-  justify-content: flex-start;
-  color: var(--shell-ink-muted);
-  font-size: var(--shell-text);
-}
-
 /*
  * The strip that used to sit on top of the composer is gone, and so are the
  * rules that shaped it (`.shell-home-scope`, and the square top corners the
@@ -183,34 +62,6 @@
  * than of the screen it is written on.
  */
 
-.shell-hero-prompts {
-  display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 18px;
-}
-
-.shell-hero-prompt {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--shell-line);
-  border-radius: var(--shell-radius-item);
-  background: var(--shell-paper);
-  color: var(--shell-ink-muted);
-  font: var(--shell-text) / 20px var(--shell-font);
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.shell-hero-prompt:hover {
-  border-color: var(--shell-line-strong);
-  color: var(--shell-ink);
-}
-
 /*
  * A starter that offers two actions, and the second one.
  *
@@ -219,78 +70,11 @@
  * deck being drawn" are one choice, and splitting them across lines reads as
  * two unrelated buttons.
  */
-.shell-hero-prompt-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
 
 /*
  * The alternative is the quieter of the two: it writes nothing, so it should
  * not compete with the button that starts actual work.
  */
-.shell-hero-prompt--watch {
-  border-style: dashed;
-  color: var(--shell-ink-faint);
-}
-
-.shell-hero-prompt:focus-visible,
-.shell-resume-card:focus-visible {
-  outline: 2px solid var(--shell-focus);
-  outline-offset: 1px;
-}
-
-.shell-hero-resume {
-  /* Width and centring come from the shared column rule above. */
-  margin-bottom: 34px;
-}
-
-.shell-hero-resume h2,
-.shell-home-subhead {
-  margin: 0 0 12px;
-  color: var(--shell-ink-subtle);
-  font-size: var(--shell-text);
-  font-weight: 500;
-}
-
-.shell-resume-card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  width: 100%;
-  padding: 14px 16px;
-  border: 1px solid var(--shell-line);
-  border-radius: var(--shell-radius-card);
-  background: var(--shell-paper);
-  color: var(--shell-ink);
-  text-align: left;
-  cursor: pointer;
-}
-
-.shell-resume-card:hover {
-  border-color: var(--shell-line-strong);
-}
-
-.shell-resume-title {
-  flex: 1;
-  min-width: 0;
-}
-
-.shell-resume-title strong {
-  display: block;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: var(--shell-text);
-  font-weight: 500;
-}
-
-.shell-resume-title small {
-  display: block;
-  margin-top: 3px;
-  color: var(--shell-ink-faint);
-  font-size: var(--shell-text-sm);
-}
 
 /*
  * Editor Home takes files dragged in from the desktop.
@@ -300,64 +84,3 @@
  * nothing outside it does — a file dropped onto an open document or the
  * sidebar is swallowed rather than opened.
  */
-.shell-home-dropzone {
-  --wails-drop-target: drop;
-}
-
-.shell-home-drop {
-  position: fixed;
-  z-index: var(--shell-z-home-drop);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  box-sizing: border-box;
-  pointer-events: none;
-  animation: shell-home-drop-in 160ms var(--shell-ease);
-}
-
-.shell-home-drop::before {
-  content: "";
-  position: absolute;
-  inset: 12px;
-  border: 1.5px dashed var(--shell-accent);
-  border-radius: var(--shell-radius-panel);
-  background: color-mix(in srgb, var(--shell-tint) 72%, transparent);
-}
-
-.shell-home-drop-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 20px 28px;
-  border-radius: var(--shell-radius-card);
-  background: var(--shell-paper);
-  box-shadow: var(--shell-shadow-panel);
-  color: var(--shell-accent);
-  text-align: center;
-}
-
-.shell-home-drop-card strong {
-  color: var(--shell-ink);
-  font-size: var(--shell-text-lg);
-  font-weight: 500;
-}
-
-.shell-home-drop-card span {
-  color: var(--shell-ink-subtle);
-  font-size: var(--shell-text);
-}
-
-@keyframes shell-home-drop-in {
-  from {
-    opacity: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .shell-home-drop {
-    animation: none;
-  }
-}

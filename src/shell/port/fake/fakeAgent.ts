@@ -66,8 +66,35 @@ export function createFakeAgent(deps: FakeAgentDeps): AgentPort {
   const cancel = deps.clearTimeout ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>));
   const now = deps.now ?? (() => Date.now());
 
+  /**
+   * Every conversation, by conversation id.
+   *
+   * A project holds many conversations and the sidebar lists them, so the fake
+   * keeps them all; `focus` says which one each folder's panel is showing, the
+   * way the desktop service's `threads` does. A seeded task that names no
+   * conversation is its own.
+   */
   const tasks = new Map<string, AgentTask>();
-  for (const task of deps.seedTasks ?? []) tasks.set(task.folderId, structuredClone(task));
+  /** folder → the conversation its panel shows; null is a fresh, empty panel. */
+  const focus = new Map<string, string | null>();
+  const live = (status: AgentStatus) =>
+    status === "working" || status === "reading" || status === "writing" || status === "paused";
+  const keyOf = (task: AgentTask) => task.conversationId ?? task.id;
+  for (const seed of deps.seedTasks ?? []) {
+    const task = structuredClone(seed);
+    task.conversationId = keyOf(task);
+    tasks.set(task.conversationId, task);
+    const shown = focus.get(task.folderId);
+    // The first seeded conversation speaks for its folder, unless a later one is live.
+    if (shown === undefined || (live(task.status) && !live(tasks.get(shown!)?.status ?? "idle"))) {
+      focus.set(task.folderId, task.conversationId);
+    }
+  }
+  /** The conversation a folder's panel shows, or undefined. */
+  const currentOf = (folderId: string): AgentTask | undefined => {
+    const id = focus.get(folderId);
+    return id ? tasks.get(id) : undefined;
+  };
   const listeners = new Set<(event: AgentEvent) => void>();
 
   let timer: unknown = null;
@@ -76,13 +103,17 @@ export function createFakeAgent(deps: FakeAgentDeps): AgentPort {
   let runningFolderId: string | null = null;
 
   const emit = (task: AgentTask) => {
-    const snapshot: AgentEvent = { kind: "task", task: structuredClone(task) };
+    const snapshot: AgentEvent = {
+      kind: "task",
+      task: structuredClone(task),
+      focused: focus.get(task.folderId) === keyOf(task),
+    };
     for (const listener of listeners) listener(snapshot);
   };
 
-  /** One task per folder is one conversation per folder: a new one replaces it. */
+  /** Empties the folder's panel. The conversation it was showing is kept. */
   const clear = (folderId: string) => {
-    tasks.delete(folderId);
+    focus.set(folderId, null);
     const event: AgentEvent = { kind: "cleared", folderId };
     for (const listener of listeners) listener(event);
   };
@@ -124,10 +155,12 @@ export function createFakeAgent(deps: FakeAgentDeps): AgentPort {
   }
 
   function ensureTask(folderId: string, title: string): AgentTask {
-    const existing = tasks.get(folderId);
+    const existing = currentOf(folderId);
     if (existing) return existing;
+    const id = nextId("task");
     const created: AgentTask = {
-      id: nextId("task"),
+      id,
+      conversationId: id,
       title,
       folderId,
       status: "idle",
@@ -139,7 +172,8 @@ export function createFakeAgent(deps: FakeAgentDeps): AgentPort {
       // through without blocking on anything.
       question: null,
     };
-    tasks.set(folderId, created);
+    tasks.set(id, created);
+    focus.set(folderId, id);
     return created;
   }
 
@@ -206,7 +240,7 @@ export function createFakeAgent(deps: FakeAgentDeps): AgentPort {
   function runImage(input: SendInput, image: ImageGenerationInput): void {
     const files = deps.getFiles();
     const baseRun = image.baseFileId ? files.find((file) => file.id === image.baseFileId)?.artifactTaskId : undefined;
-    const existing = tasks.get(input.folderId);
+    const existing = currentOf(input.folderId);
     const continuing = Boolean(baseRun && existing?.image?.runs.some((run) => run.taskId === baseRun));
     const title = input.text.length > 60 ? `${input.text.slice(0, 60)}…` : input.text;
     const task: AgentTask = continuing && existing
@@ -226,8 +260,10 @@ export function createFakeAgent(deps: FakeAgentDeps): AgentPort {
         };
     // Re-inserted so a new picture lists as the newest task: a Map keeps a
     // replaced key in its old slot, which put a fresh run below stale ones.
-    tasks.delete(input.folderId);
-    tasks.set(input.folderId, task);
+    task.conversationId ??= task.id;
+    tasks.delete(task.conversationId);
+    tasks.set(task.conversationId, task);
+    focus.set(input.folderId, task.conversationId);
     const series = task.image!;
     const count = Math.min(4, Math.max(1, image.count));
     const started = Array.from({ length: count }, () => ({
@@ -266,7 +302,7 @@ export function createFakeAgent(deps: FakeAgentDeps): AgentPort {
 
   return {
     async current(folderId) {
-      const task = tasks.get(folderId);
+      const task = currentOf(folderId);
       return task ? structuredClone(task) : null;
     },
 
@@ -280,15 +316,14 @@ export function createFakeAgent(deps: FakeAgentDeps): AgentPort {
      * history timestamps.
      */
     async list(options) {
-      const live = (status: AgentTask["status"]) =>
-        status === "working" || status === "reading" || status === "writing" || status === "paused";
       const rows = [...tasks.values()]
         .reverse()
         .sort((a, b) => Number(live(b.status)) - Number(live(a.status)))
         .map((task) => ({
           // An image task's id moves to whichever run landed last; the row
           // keeps the series' first run, as the desktop service does.
-          id: task.image?.runs[0]?.taskId ?? task.id,
+          id: task.image?.runs[0]?.taskId ?? keyOf(task),
+          conversationId: keyOf(task),
           title: task.title,
           folderId: task.folderId,
           status: task.status,
@@ -302,7 +337,7 @@ export function createFakeAgent(deps: FakeAgentDeps): AgentPort {
     // question there is nothing to release, which is what the real service does
     // too.
     async answer(input) {
-      const task = runningFolderId ? tasks.get(runningFolderId) : undefined;
+      const task = runningFolderId ? currentOf(runningFolderId) : undefined;
       if (!task?.question) return;
       task.messages.push({
         id: nextId("message"),
@@ -379,7 +414,7 @@ export function createFakeAgent(deps: FakeAgentDeps): AgentPort {
         cancel(timer);
         timer = null;
       }
-      const task = runningFolderId ? tasks.get(runningFolderId) : null;
+      const task = runningFolderId ? (currentOf(runningFolderId) ?? null) : null;
       if (!task) return;
       task.status = "paused";
       task.phase = "Task paused";
@@ -389,7 +424,7 @@ export function createFakeAgent(deps: FakeAgentDeps): AgentPort {
     async resume() {
       if (!paused) return;
       paused = false;
-      const task = runningFolderId ? tasks.get(runningFolderId) : null;
+      const task = runningFolderId ? (currentOf(runningFolderId) ?? null) : null;
       if (task) {
         task.status = "working";
         task.phase = PHASES[0].phase;
@@ -401,7 +436,7 @@ export function createFakeAgent(deps: FakeAgentDeps): AgentPort {
     async finish() {
       stop();
       paused = false;
-      const task = runningFolderId ? tasks.get(runningFolderId) : null;
+      const task = runningFolderId ? (currentOf(runningFolderId) ?? null) : null;
       if (!task) return;
       for (const run of task.image?.runs ?? []) {
         if (run.status === "running") Object.assign(run, { status: "cancelled" });
@@ -466,10 +501,17 @@ export function createFakeAgent(deps: FakeAgentDeps): AgentPort {
       clear(folderId);
     },
 
+    async openConversation(folderId, conversationId) {
+      const task = tasks.get(conversationId);
+      if (!task || task.folderId !== folderId) return null;
+      focus.set(folderId, conversationId);
+      return structuredClone(task);
+    },
+
     // The desktop keeps an edit made before any conversation for the next one;
     // the fake has nowhere to put it until a task exists, and drops it.
     async recordExchange({ folderId, messages }) {
-      const task = tasks.get(folderId);
+      const task = currentOf(folderId);
       if (!task) return;
       const seen = new Set(task.messages.map((message) => message.id));
       task.messages.push(...messages.filter((message) => !seen.has(message.id)).map((message) => ({ ...message })));

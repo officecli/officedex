@@ -2,9 +2,9 @@ import { act, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { toast } from "../../renderer/ui";
-import type { AgentImageRun, AgentTask, FileMeta, SendInput } from "../../shared/uiPort";
-import { SEED_ACTIVE_FILE_ID, SEED_FOLDER_ID, seedFiles } from "../port/fake/seed";
-import { renderShell } from "../test/renderShell";
+import type { FileMeta, SendInput } from "../../shared/uiPort";
+import { SEED_ACTIVE_FILE_ID, seedFiles } from "../port/fake/seed";
+import { imageRun, imageTask, openImageChat, picture } from "./imageHarness";
 import { imageBesideDocumentFor, imageEditTargetFor } from "./useImageEditTarget";
 
 afterEach(() => {
@@ -55,51 +55,14 @@ describe("imageEditTargetFor", () => {
   });
 });
 
-function run(taskId: string): AgentImageRun {
-  return { taskId, status: "done", prompt: "A warm desk lamp" };
-}
+const head = () => document.querySelector<HTMLElement>("#dx-conversation .shell-ig-head");
 
-function picture(id: string, taskId: string): FileMeta {
-  return {
-    id,
-    name: `${id}.png`,
-    type: "image",
-    folderId: SEED_FOLDER_ID,
-    createdAt: 0,
-    updatedAt: 0,
-    lastOpenedAt: null,
-    dirty: false,
-    pinned: false,
-    artifactTaskId: taskId,
-  };
-}
-
-function imageTask(runs: AgentImageRun[]): AgentTask {
-  return {
-    id: runs[0].taskId,
-    title: "A warm desk lamp",
-    folderId: SEED_FOLDER_ID,
-    documentType: "img",
-    status: "done",
-    phase: "Image ready",
-    steps: [],
-    messages: [],
-    suggestion: null,
-    question: null,
-    image: { runs },
-  };
-}
-
-const head = () => document.querySelector<HTMLElement>(".shell-task .shell-ig-head");
-
+/** A picture's conversation in the second column, with nothing open on the canvas. */
 async function pictureConversation() {
-  const shell = await renderShell({
-    fastAgent: true,
-    tasks: [imageTask([run("r1"), run("r2")])],
+  const shell = await openImageChat({
+    task: imageTask([imageRun({ taskId: "r1" }), imageRun({ taskId: "r2" })]),
     files: [...seedFiles(), picture("f1", "r1"), picture("f2", "r2")],
   });
-  await shell.dispatch({ type: "select-folder", folderId: SEED_FOLDER_ID });
-  await shell.dispatch({ type: "enter-workspace" });
   await waitFor(() => expect(head()).not.toBeNull());
   const sent: SendInput[] = [];
   const send = shell.port.agent.send.bind(shell.port.agent);
@@ -111,11 +74,11 @@ async function pictureConversation() {
 }
 
 async function type(text: string) {
-  const box = [...document.querySelectorAll<HTMLTextAreaElement>(".shell-task-composer textarea")][0];
+  const box = document.querySelector<HTMLTextAreaElement>("#dx-conversation textarea")!;
   await act(async () => {
     fireEvent.change(box, { target: { value: text } });
   });
-  const button = [...document.querySelectorAll<HTMLButtonElement>(".shell-task-composer [title='Send message']")][0];
+  const button = document.querySelector<HTMLButtonElement>("#dx-conversation [data-act=send]")!;
   await act(async () => {
     fireEvent.click(button);
   });
@@ -145,19 +108,19 @@ describe("the composer header under a picture's conversation", () => {
   it("makes a new image instead when asked, and can go back", async () => {
     const { sent } = await pictureConversation();
     await act(async () => {
-      fireEvent.click(document.querySelector<HTMLButtonElement>(".shell-task .shell-ig-head-switch")!);
+      fireEvent.click(document.querySelector<HTMLButtonElement>("#dx-conversation .shell-ig-head-switch")!);
     });
     expect(head()!.dataset.target).toBe("declined");
     expect(head()!.textContent).toContain("New image");
     expect(head()!.textContent).toContain("Edit Version 2");
 
     await act(async () => {
-      fireEvent.click(document.querySelector<HTMLButtonElement>(".shell-task .shell-ig-head-switch")!);
+      fireEvent.click(document.querySelector<HTMLButtonElement>("#dx-conversation .shell-ig-head-switch")!);
     });
     expect(head()!.dataset.target).toBe("latest");
 
     await act(async () => {
-      fireEvent.click(document.querySelector<HTMLButtonElement>(".shell-task .shell-ig-head-switch")!);
+      fireEvent.click(document.querySelector<HTMLButtonElement>("#dx-conversation .shell-ig-head-switch")!);
     });
     await type("A blue armchair");
     expect(sent[0].imageGeneration?.baseFileId).toBeUndefined();
@@ -205,7 +168,7 @@ describe("imageBesideDocumentFor", () => {
  * picture one click away.
  */
 describe("a document on the canvas beside a picture's conversation", () => {
-  const aside = () => document.querySelector<HTMLElement>(".shell-task .shell-ig-aside");
+  const aside = () => document.querySelector<HTMLElement>("#dx-conversation .shell-ig-aside");
 
   it("says the message is about the document, and switches to the picture", async () => {
     const { shell, sent } = await pictureConversation();

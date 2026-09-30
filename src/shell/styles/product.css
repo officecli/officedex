@@ -1,0 +1,176 @@
+/*
+ * What the product needs that the prototype had no reason to say.
+ *
+ * The four files beside this one are the prototype's own stylesheets, ported
+ * and never edited (see scripts/port-prototype-styles.mjs). Anything the shell
+ * adds — because it mounts real editors, real dialogs and a desktop window
+ * where the prototype had stand-ins — is written here, by hand, in the same
+ * tokens.
+ */
+
+/* ------------------------------------------------------------ dex layer */
+
+/*
+ * Dex and its panel are positioned against the editor region. The wrapper
+ * exists only to mark them as OfficeDex outer UI; it must not become their
+ * containing block.
+ */
+.dx-dex-layer {
+  display: contents;
+}
+
+/* ---------------------------------------------------------------- dialogs */
+
+/* "Task context" and "Add": the lists the prototype sized inline. */
+.dx-context-current {
+  margin-bottom: 16px;
+}
+
+.dx-context-list {
+  max-height: 280px;
+  overflow: auto;
+}
+
+.dx-context-file {
+  padding: 8px 0;
+}
+
+.dx-context-more {
+  margin-top: 16px;
+  justify-content: space-between;
+}
+
+.dx-context-output {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--dx-fs-14);
+  line-height: 20px;
+}
+
+.dx-context-output select {
+  width: auto;
+  min-width: 160px;
+  height: 36px;
+  padding: 4px 28px 4px 8px;
+  font-size: var(--dx-fs-14);
+}
+
+.dx-modal-body .dx-context-recipient {
+  margin-top: 16px;
+}
+
+
+.dx-review-card {
+  margin: 16px 0;
+}
+
+.dx-review-card .dx-helper {
+  margin-top: 12px;
+}
+
+/* ------------------------------------------------- projects & conversations */
+
+.dx-project-card {
+  margin-bottom: 16px;
+}
+
+.dx-project-card h2 {
+  font-size: var(--dx-fs-20);
+  line-height: 28px;
+}
+
+.dx-project-chat {
+  justify-content: flex-start;
+}
+
+/* --------------------------------------------------------------- agent run */
+
+/* A deck's pages, listed as a second Progress: a row, not a disclosure. */
+.dx-agent-page {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 4px;
+  font-size: var(--dx-fs-14);
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+/* The outline gate: the question card, holding the pages while they can still change. */
+.dx-agent-outline {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.dx-agent-outline li {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 6px;
+}
+
+/* --------------------------------------------------------- image creator */
+
+/* The image creator keeps its own layout; the page only gives it room. */
+.dx-image-create {
+  background: var(--dx-surface);
+}
+
+/* A sidebar row for a chat that has no conversation yet keeps the action slot's width. */
+#dx-sidebar .dx-chat-tree > span.dx-ib {
+  display: block;
+  width: 32px;
+  height: 32px;
+}
+
+/* ----------------------------------------------------------------- settings */
+
+/* The prototype sets these three with inline styles; they are rules here. */
+.dx-models-heading {
+  margin-bottom: 24px;
+}
+
+.dx-models-heading h2 {
+  margin: 0;
+}
+
+.dx-settings-note {
+  margin-top: 24px;
+}
+
+.dx-settings-note[data-gap="20"] {
+  margin-top: 20px;
+}
+
+/* --------------------------------------------------------------------- tabs */
+
+/*
+ * A document tab answers a press.
+ *
+ * The standard names three compound click areas that follow one state layer —
+ * a conversation row, a compact Assets row, a document tab — and the prototype
+ * gives the first two a pressed state and leaves the tab without one, so a tab
+ * looks the same held down as hovered. This is the missing third, written the
+ * way the other two are.
+ */
+#dx-workspace .dx-file-tab:not(.dx-active):has(.dx-tab-title:active) {
+  background: var(--dx-pressed);
+}
+
+/* ----------------------------------------------------------------- features */
+
+/*
+ * A feature card's focus ring is drawn inside the card.
+ *
+ * The shelf scrolls sideways, so it clips, and the default ring sits 4px
+ * outside the box it belongs to: top, bottom and the first card's left edge
+ * were cut off. Rows and tabs that live in clipping containers already draw
+ * theirs inset; this is the same answer for the same reason.
+ */
+.dx-highlights .dx-highlight:focus-visible {
+  outline-offset: -2px;
+}

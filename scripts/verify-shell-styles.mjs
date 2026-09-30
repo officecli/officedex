@@ -58,19 +58,20 @@ import path from "node:path";
  * "this class has no rule" is exactly the S0-001 symptom and each instance
  * should have had to be looked at once by a person.
  *
- * `.shell-region` is the one worth knowing about: six components carry it as a
- * landmark marker and nothing styles it. If a rule for any of these appears,
- * delete the entry -- the list is checked in both directions.
+ * If a rule for any of these appears, delete the entry -- the list is checked
+ * in both directions.
  */
 export const UNSTYLED_BY_DESIGN = Object.freeze({
-  "shell-region": "landmark marker on the six top-level regions; no rule, by design",
-  "shell-sidebar-tree": "wrapper that exists only to carry the folder drop handlers",
-  "shell-task-list": "block name; only its `-head`/`-hint` elements are styled",
-  "shell-cx-model": "variant marker on a `.shell-cx-button`; only `-name` is styled",
-  "shell-home--editor":
-    "Editor Home has no styling of its own -- `.shell-home--agent` does, this does not. " +
-    "The same asymmetry S5 table 8 found at the root (`data-mode` has one rule and it is " +
-    "the agent's). Not this gate's to fix; delete this line when Editor Home gets a rule.",
+  /*
+   * OD-UI-1.2 markers. The approved prototype writes each of these into its
+   * markup and gives none of them a rule: they name a region for the script
+   * and for a reader, and the look comes from the class beside them or from the
+   * children. They are kept because the design's own selectors and the review
+   * tooling find elements by them.
+   */
+  "dx-local-recent": "Local's Recent section; `-cards` and `-card` carry the layout",
+  "dx-agent-run-actions": "a run's button row; laid out by `.dx-actions`, which it always sits beside",
+  "dx-mention-menu": "the @ list; it is a `.dx-menu`, this names which one",
   "spreadsheet-header-markers": "legacy sheet canvas: positioned by inline style",
   "spreadsheet-header-marker": "legacy sheet canvas: positioned by inline style",
   "spreadsheet-catalog-range": "legacy sheet canvas: positioned by inline style",

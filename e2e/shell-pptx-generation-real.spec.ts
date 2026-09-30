@@ -1,6 +1,14 @@
-import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
-import { attachHostReport, recordScenario } from "./support/real-e2e";
+import {
+  answerPendingQuestion,
+  assertRunDidNotFail,
+  attachHostReport,
+  expectLeftHome,
+  homeComposer,
+  openShell,
+  recordScenario,
+} from "./support/real-e2e";
 
 /**
  * A deck, generated through the shell, against the real runtime.
@@ -12,27 +20,20 @@ import { attachHostReport, recordScenario } from "./support/real-e2e";
  *
  * ## Why the outline gate is not asserted here
  *
- * The gate is the pipeline's one confirmation stop, and it cannot be reached
- * from this interface today. It is wired only for an interactive best-mode run
- * (`agent_bridge_office_runtime.go`: `request.Interactive && job.Mode ==
- * "best"`), which the bridge produces only for `generationMode: "plan"`
- * (`officeGenerateModeArgs`). Nothing in `src/shell` sets that field, so every
- * shell run is `fast` and non-interactive; the legacy renderer does not set it
- * either — `generationModeForDocumentType` returns `"fast"` for every office
- * type. The gate is a default-off feature behind an opt-in no interface offers,
- * not a regression.
+ * The gate is the pipeline's one confirmation stop, and it is wired only for an
+ * interactive best-mode run (`agent_bridge_office_runtime.go`:
+ * `request.Interactive && job.Mode == "best"`), which the bridge produces only
+ * for `generationMode: "plan"` (`officeGenerateModeArgs`). The shell sends that
+ * field only behind the `?planMode=1` opt-in (`services/planMode.ts`), so an
+ * ordinary run — which is what this spec is — is `fast` and non-interactive and
+ * never reaches the gate. `shell-outline-gate-real.spec.ts` is the spec that
+ * takes the opt-in and asserts the gate.
  *
  * An earlier revision of this spec asserted the gate and failed on a run that
- * was otherwise perfect, which is how the above was found. Asserting it again
- * would mean asserting something unreachable; covering it needs the opt-in to
- * exist first, and that is a product decision rather than a test change.
+ * was otherwise perfect, which is how the above was found.
  */
 
 const RUN_DEADLINE_MS = 20 * 60_000;
-
-function questionCard(page: Page): Locator {
-  return page.locator(".shell-task-question");
-}
 
 /**
  * Drives the run to completion, answering questions as they come, and captures
@@ -68,35 +69,11 @@ async function runToCompletion(page: Page, testInfo: TestInfo): Promise<number> 
         .catch(() => undefined);
     }
 
-    const card = questionCard(page);
-    if (await card.isVisible().catch(() => false)) {
-      const options = card.locator(".shell-task-question-options button");
-      if ((await options.count()) > 0) {
-        const recommended = options.locator("css=.is-primary");
-        const pick = (await recommended.count()) > 0 ? recommended.first() : options.first();
-        await pick.click();
-        answered += 1;
-        await expect(card).toBeHidden({ timeout: 60_000 });
-        continue;
-      }
-      await page.getByRole("textbox", { name: /Message Agent|New task instructions/ }).fill("Yes, go ahead.");
-      await page.getByRole("button", { name: "Send message" }).click();
+    if (await answerPendingQuestion(page)) {
       answered += 1;
-      await expect(card).toBeHidden({ timeout: 60_000 });
       continue;
     }
-
-    const failed = page.getByText(/The run stopped/i).first();
-    if (await failed.isVisible().catch(() => false)) {
-      const detail = await page
-        .locator(".shell-task-reply p")
-        .last()
-        .innerText()
-        .catch(() => "");
-      throw new Error(
-        `The shell reported the run as failed: ${detail.trim().replace(/\s+/g, " ") || "no reason shown"}`,
-      );
-    }
+    await assertRunDidNotFail(page);
     await page.waitForTimeout(1_000);
   }
 
@@ -111,26 +88,17 @@ test.describe("new shell · real deck generation", () => {
   });
 
   test("generates a deck from the shell composer and opens it in the canvas", async ({ page }, testInfo) => {
-    page.on("pageerror", (error) => {
-      if (/Failed to fetch/i.test(error.message)) return;
-      throw error;
-    });
-
     const startedAt = Date.now();
-    await page.goto("/");
-    await expect(page.locator('#shell[data-loaded="true"]')).toBeVisible({ timeout: 60_000 });
+    await openShell(page);
 
-    // The seed rows belong to src/shell/port/fake. Seeing them here would mean
-    // the page fell back to its in-memory fake and proved nothing.
-    await expect(page.getByText("MO product launch", { exact: true })).toHaveCount(0);
-
-    const prompt = page.getByRole("textbox", { name: "New task instructions" });
+    const prompt = homeComposer(page);
+    await expect(prompt).toBeVisible({ timeout: 30_000 });
     await prompt.fill(
       "Prepare a three-slide product launch brief covering positioning, timeline and next steps.",
     );
-    await page.getByRole("button", { name: "Send message" }).click();
+    await prompt.press("Enter");
 
-    await expect(page.locator("#shell")).toHaveAttribute("data-home", "false", { timeout: 30_000 });
+    await expectLeftHome(page);
 
     await runToCompletion(page, testInfo);
 

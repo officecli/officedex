@@ -1,10 +1,24 @@
 /**
- * W2-E — the file list and the file tree, after the fix.
+ * W2-E — the file lists and the project tree, after the r10 rebuild.
  *
- * Covers R5 (`.shell-list` had no `table-layout`), R6 (the drop hit area was on
- * the wrong node and each density rendered half the feedback), R16 (the inline
- * row actions resolved against a 0×0 `.shell-menu-anchor` instead of their row)
- * and the `nav.css` half of R8 (no `:focus-visible` anywhere in the file).
+ * The four findings this file was written for were R5 (a list table with no
+ * `table-layout`, so no column got the width it declared), R6 (a drop target on
+ * the wrong node), R16 (an inline row action resolving against a 0×0 anchor
+ * instead of its row) and the `nav.css` half of R8 (no `:focus-visible`
+ * anywhere). Three of the four are about classes of defect that r10 can still
+ * have, and they are asserted here against r10's own surfaces:
+ *
+ *   R5   Local's My Files table (`dx-local-page`) declares 64/12/18/6% and is
+ *        `table-layout: fixed`; Home's Recent is the second list.
+ *   R6   the only drag left in the shell is reordering document tabs, so the
+ *        guarantee shrinks to "every draggable thing has somewhere to drop it".
+ *   R16  the project row's and the conversation row's trailing ⋯ buttons.
+ *   R8   the tree controls and the list rows.
+ *
+ * What is gone: the sidebar no longer holds files, so there is no file tree, no
+ * "Show N more" pagination, no empty-folder line and no dragging a file into a
+ * folder; and Home's list has no density switch and no time buckets. The ledger
+ * in the session report says which tests went with them.
  *
  * There is no `test.skip` in this file, conditional or otherwise, and there is
  * not going to be one: `e2e/ui-audit-s4.spec.ts` is 30 cases that are all
@@ -16,441 +30,265 @@
  *   npx playwright test e2e/fix-w2e.spec.ts
  */
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-import { open } from "./ui-audit-helpers";
+import { DRAG_HARNESS, focusRing, open } from "./r10-b-helpers";
 
-const SESSION = { session: "fixes/W2-E" };
-
-/** The declared column split, as `nav.css` now states it. */
-const COLUMNS = [
-  { label: "Name", share: 0.46 },
-  { label: "Folder", share: 0.25 },
-  { label: "Last opened", share: 0.21 },
-  { label: "Pin", share: 0.08 },
+/** The column split Local's table declares, as `workspace-structure.css` states it. */
+const LOCAL_COLUMNS = [
+  { label: "Name", share: 0.64 },
+  { label: "Size", share: 0.12 },
+  { label: "Modified", share: 0.18 },
+  { label: "actions", share: 0.06 },
 ];
 
-/**
- * A DataTransfer carrying the shell's private file MIME, plus the three drag
- * verbs, installed on the page.
- *
- * Synthetic rather than a real pointer drag for the same reason S8 used
- * synthetic events: Playwright cannot drive the OS drag loop, and the handlers
- * under test read `dataTransfer.types` and `event.target`, both of which a
- * dispatched `DragEvent` reproduces faithfully.
- */
-const DRAG_HARNESS = `
-  window.__w2e = {
-    dt: null,
-    start(selector) {
-      const source = document.querySelector(selector);
-      if (!source) return { ok: false, why: "no source " + selector };
-      this.dt = new DataTransfer();
-      const event = new DragEvent("dragstart", { bubbles: true, cancelable: true, dataTransfer: this.dt });
-      source.dispatchEvent(event);
-      return { ok: true, payload: this.dt.getData("application/x-officedex-file"), sourceClass: source.className };
-    },
-    overPoint(x, y) {
-      const target = document.elementFromPoint(x, y);
-      if (!target) return { ok: false, why: "nothing at " + x + "," + y };
-      const event = new DragEvent("dragover", {
-        bubbles: true, cancelable: true, dataTransfer: this.dt, clientX: x, clientY: y,
-      });
-      target.dispatchEvent(event);
-      return {
-        ok: true,
-        defaultPrevented: event.defaultPrevented,
-        highlighted: document.querySelectorAll(".is-drop-target").length,
-        hitFolder: target.closest("[data-drop-folder]")?.getAttribute("data-drop-folder") ?? null,
-      };
-    },
-    over(selector) {
-      const target = document.querySelector(selector);
-      if (!target) return { ok: false, why: "no target " + selector };
-      const event = new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: this.dt });
-      target.dispatchEvent(event);
-      return { ok: true, defaultPrevented: event.defaultPrevented };
-    },
-    end(selector) {
-      const source = document.querySelector(selector);
-      source?.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer: this.dt }));
-    },
-  };
-`;
+/** The cell heights the two lists declare, from the same stylesheets. */
+const ROW_HEIGHT = { local: 52, home: 48 };
 
-/**
- * Puts the browser into keyboard modality, then focuses `selector`.
- *
- * Chromium only matches `:focus-visible` on a programmatically focused button
- * when the most recent interaction was a key press, so the Tab comes first. The
- * verdict is read off `outlineStyle`, never `outlineWidth`: with
- * `outline-style: none` the computed width still reports 3px, which is how a
- * tree that draws nothing can pass a width-based check.
- */
-async function focusRing(page: Page, selector: string) {
-  await page.keyboard.press("Tab");
-  return page.evaluate((target: string) => {
-    const element = document.querySelector<HTMLElement>(target);
-    if (!element) return null;
-    element.focus();
-    const style = getComputedStyle(element);
-    return {
-      focused: document.activeElement === element,
-      focusVisible: element.matches(":focus-visible"),
-      outlineStyle: style.outlineStyle,
-      outlineWidth: style.outlineWidth,
-      outlineColor: style.outlineColor,
-    };
-  }, selector);
-}
+test.describe("W2-E R5 — the file list tables", () => {
+  test("Local gives every column the width it declares, and no header wraps", async ({ page }) => {
+    await open(page, "C3");
+    await expect(page.locator(".dx-local-page table")).toBeVisible();
 
-/**
- * EditorHome's "Group by" is `renderer/ui`'s `Select`, which is a button plus a
- * popover of `menuitemradio`s rather than a native `<select>`.
- */
-async function setGrouping(page: Page, option: "Folder" | "Last opened") {
-  await page.getByRole("button", { name: "Group by" }).click();
-  await page.getByRole("menuitemradio", { name: option }).click();
-  await expect(page.locator(".od-menu")).toHaveCount(0);
-}
-
-test.describe("W2-E R5 — the Home file table", () => {
-  test("gives every column the width it declares, and every column truncates", async ({ page }) => {
-    for (const combination of ["C2", "C4"] as const) {
-      await open(page, combination, SESSION);
-      // C4 (EditorHome) defaults to time grouping; the Folder column is the one
-      // that collapsed, so read the table in the grouping that fills it.
-      if (combination === "C4") {
-        await setGrouping(page, "Folder");
-      }
-      await expect(page.locator("table.shell-list")).toBeVisible();
-
-      const measured = await page.evaluate(() => {
-        const table = document.querySelector<HTMLTableElement>("table.shell-list");
-        if (!table) return null;
-        const headers = [...table.querySelectorAll("thead th")];
-        const bodyRow = table.querySelector<HTMLTableRowElement>("tbody tr:not(.shell-list-group)");
-        const cells = bodyRow ? [...bodyRow.querySelectorAll("td")] : [];
-        return {
-          tableLayout: getComputedStyle(table).tableLayout,
-          tableWidth: table.getBoundingClientRect().width,
-          headerWidths: headers.map((th) => th.getBoundingClientRect().width),
-          headerLineBoxes: headers.map((th) => th.getClientRects().length),
-          cellTruncation: cells.map((td) => ({
-            overflow: getComputedStyle(td).overflow,
-            whiteSpace: getComputedStyle(td).whiteSpace,
-            textOverflow: getComputedStyle(td).textOverflow,
-          })),
-        };
-      });
-
-      expect(measured, `${combination}: no table`).not.toBeNull();
-      const report = measured!;
-      expect(report.tableLayout).toBe("fixed");
-      expect(report.headerWidths).toHaveLength(4);
-
-      COLUMNS.forEach((column, index) => {
-        const share = report.headerWidths[index] / report.tableWidth;
-        expect(
-          share,
-          `${combination}: ${column.label} is ${(share * 100).toFixed(1)}% of the table, declared ${column.share * 100}%`,
-        ).toBeCloseTo(column.share, 2);
-        // The header itself used to break over two lines ("Last opened").
-        expect(report.headerLineBoxes[index]).toBe(1);
-      });
-
-      expect(report.cellTruncation).toHaveLength(4);
-      for (const [index, cell] of report.cellTruncation.entries()) {
-        expect(cell.textOverflow, `${combination}: column ${index} does not truncate`).toBe(
-          "ellipsis",
-        );
-        expect(cell.whiteSpace).toBe("nowrap");
-        expect(cell.overflow).toBe("hidden");
-      }
-    }
-  });
-
-  test("keeps the row with the long Chinese folder name at its declared 40px", async ({ page }) => {
-    await open(page, "C2", SESSION);
-    await expect(page.locator("table.shell-list")).toBeVisible();
-
-    const rows = await page.evaluate(() => {
-      const table = document.querySelector("table.shell-list");
+    const measured = await page.evaluate(() => {
+      const table = document.querySelector<HTMLTableElement>(".dx-local-page table");
       if (!table) return null;
-      const bodyRows = [...table.querySelectorAll<HTMLTableRowElement>("tbody tr:not(.shell-list-group)")];
-      const measured = bodyRows.map((row) => ({
-        folder: (row.children[1]?.textContent ?? "").trim(),
-        height: Math.round(row.getBoundingClientRect().height),
-      }));
+      const headers = [...table.querySelectorAll("thead th")];
+      const first = table.querySelector<HTMLTableRowElement>("tbody tr");
+      const name = first?.querySelector<HTMLElement>(".dx-local-file-name .dx-ellipsis");
       return {
-        tallest: Math.max(...measured.map((row) => row.height)),
-        // The 201px row in S3-003 was one whose Folder cell held the long CJK
-        // folder name and wrapped over five lines.
-        longFolderRows: measured.filter((row) => row.folder.length > 30),
+        tableLayout: getComputedStyle(table).tableLayout,
+        tableWidth: table.getBoundingClientRect().width,
+        headerWidths: headers.map((th) => th.getBoundingClientRect().width),
+        // More than one client rect means the header broke over two lines.
+        headerLineBoxes: headers.map((th) => th.getClientRects().length),
+        nameTruncation: name
+          ? {
+              overflow: getComputedStyle(name).overflow,
+              whiteSpace: getComputedStyle(name).whiteSpace,
+              textOverflow: getComputedStyle(name).textOverflow,
+            }
+          : null,
       };
     });
 
-    expect(rows).not.toBeNull();
-    expect(rows!.longFolderRows.length).toBeGreaterThan(0);
-    for (const row of rows!.longFolderRows) {
-      expect(row.height, `long-folder row is ${row.height}px, declared 40px`).toBeLessThanOrEqual(42);
-    }
-    expect(rows!.tallest).toBeLessThanOrEqual(42);
+    expect(measured, "no table on Local").not.toBeNull();
+    const report = measured!;
+    expect(report.tableLayout).toBe("fixed");
+    expect(report.headerWidths).toHaveLength(4);
+
+    LOCAL_COLUMNS.forEach((column, index) => {
+      const share = report.headerWidths[index] / report.tableWidth;
+      expect(
+        share,
+        `${column.label} is ${(share * 100).toFixed(1)}% of the table, declared ${column.share * 100}%`,
+      ).toBeCloseTo(column.share, 2);
+      expect(report.headerLineBoxes[index], `${column.label} broke over two lines`).toBe(1);
+    });
+
+    // The name is the only column whose content can be long, and it is the one
+    // that has to give way rather than push the others out.
+    expect(report.nameTruncation).toEqual({
+      overflow: "hidden",
+      whiteSpace: "nowrap",
+      textOverflow: "ellipsis",
+    });
   });
 
-  test("does not overflow its container at 1024, where it used to be 277px wide of it", async ({
-    page,
-  }) => {
-    for (const combination of ["C2", "C4"] as const) {
-      await page.setViewportSize({ width: 1024, height: 768 });
-      await open(page, combination, SESSION);
-      await expect(page.locator("table.shell-list")).toBeVisible();
+  test("the long Chinese file name does not make its row five lines tall", async ({ page }) => {
+    // The 201px row in S3-003 was one whose cell held the 100-character CJK
+    // name and wrapped. Both lists carry that file, and both declare one line.
+    for (const [combination, selector, declared] of [
+      ["C3", ".dx-local-page table", ROW_HEIGHT.local],
+      ["C1", ".dx-home-recent table", ROW_HEIGHT.home],
+    ] as const) {
+      await open(page, combination);
+      await expect(page.locator(selector)).toBeVisible();
 
-      const fit = await page.evaluate(() => {
-        const table = document.querySelector<HTMLTableElement>("table.shell-list");
-        const wrapper = table?.closest<HTMLElement>(".shell-home-list");
-        const home = document.querySelector<HTMLElement>(".shell-home");
-        if (!table || !wrapper || !home) return null;
+      const rows = await page.evaluate((target: string) => {
+        const table = document.querySelector(target);
+        if (!table) return null;
+        const measured = [...table.querySelectorAll<HTMLTableRowElement>("tbody tr")].map((row) => ({
+          name: (row.querySelector(".dx-ellipsis")?.textContent ?? "").trim(),
+          height: Math.round(row.getBoundingClientRect().height),
+        }));
         return {
-          tableWidth: Math.round(table.getBoundingClientRect().width),
-          tableScrollWidth: table.scrollWidth,
-          wrapperClientWidth: wrapper.clientWidth,
-          overflowPx: Math.round(table.getBoundingClientRect().right - wrapper.getBoundingClientRect().right),
-          homeScrollWidth: home.scrollWidth,
-          homeClientWidth: home.clientWidth,
+          tallest: Math.max(...measured.map((row) => row.height)),
+          longNameRows: measured.filter((row) => row.name.length > 30),
         };
-      });
+      }, selector);
+
+      expect(rows, `${combination}: no rows`).not.toBeNull();
+      expect(rows!.longNameRows.length, `${combination}: no long name in the list`).toBeGreaterThan(0);
+      for (const row of rows!.longNameRows) {
+        expect(row.height, `${combination}: long-name row is ${row.height}px, declared ${declared}px`).toBeLessThanOrEqual(declared + 2);
+      }
+      expect(rows!.tallest).toBeLessThanOrEqual(declared + 2);
+    }
+  });
+
+  test("neither list makes its page scroll sideways at 1024", async ({ page }) => {
+    // S3 measured a table 277px wider than its container, which turned into a
+    // horizontal scrollbar on the whole page. A table wider than the space it
+    // has is allowed now — `.dx-table-wrap` scrolls — but the page is not.
+    await page.setViewportSize({ width: 1024, height: 768 });
+    for (const [combination, selector] of [
+      ["C3", ".dx-local-page table"],
+      ["C1", ".dx-home-recent table"],
+    ] as const) {
+      await open(page, combination);
+      await expect(page.locator(selector)).toBeVisible();
+
+      const fit = await page.evaluate((target: string) => {
+        const table = document.querySelector<HTMLTableElement>(target);
+        const wrap = table?.closest<HTMLElement>(".dx-table-wrap");
+        const scroller = document.querySelector<HTMLElement>(".dx-page-scroll");
+        if (!table || !wrap || !scroller) return null;
+        return {
+          wrapOverflowX: getComputedStyle(wrap).overflowX,
+          tableScrollWidth: table.scrollWidth,
+          wrapClientWidth: wrap.clientWidth,
+          pageScrollWidth: scroller.scrollWidth,
+          pageClientWidth: scroller.clientWidth,
+          // Whatever the table does, it must not stick out of the region.
+          overhang: Math.round(table.getBoundingClientRect().right - wrap.getBoundingClientRect().right),
+        };
+      }, selector);
 
       expect(fit, `${combination}: no table at 1024`).not.toBeNull();
-      expect(fit!.tableScrollWidth).toBeLessThanOrEqual(fit!.wrapperClientWidth + 1);
-      expect(fit!.overflowPx).toBeLessThanOrEqual(1);
-      // …and the page itself therefore no longer scrolls sideways.
-      expect(fit!.homeScrollWidth).toBeLessThanOrEqual(fit!.homeClientWidth + 1);
+      expect(fit!.overhang).toBeLessThanOrEqual(1);
+      if (fit!.tableScrollWidth > fit!.wrapClientWidth + 1) {
+        expect(fit!.wrapOverflowX, `${combination}: the table overflows and its wrapper does not scroll`).toBe("auto");
+      }
+      expect(fit!.pageScrollWidth).toBeLessThanOrEqual(fit!.pageClientWidth + 1);
     }
     await page.setViewportSize({ width: 1280, height: 720 });
   });
 });
 
-test.describe("W2-E R6 — drop targets", () => {
-  test("an open folder accepts a drop on all of itself, not on 14% of itself", async ({ page }) => {
-    await open(page, "C2", SESSION);
+test.describe("W2-E R6 — the one drag that is left", () => {
+  test("every draggable tab has somewhere to drop it, and the drop reorders", async ({ page }) => {
+    // R6's guarantee was that a surface does not advertise a drag it cannot
+    // accept. Files no longer move between folders by dragging; the tabs do
+    // move, so the same rule applies to them — and to all of them, not to the
+    // first one somebody tried.
+    await open(page, "C5");
     await page.addScriptTag({ content: DRAG_HARNESS });
 
-    const started = await page.evaluate(() => window.__w2e.start(".shell-tree-file-row"));
+    const tabs = await page.locator(".dx-file-tab").evaluateAll((nodes) =>
+      nodes.map((node) => ({ id: node.getAttribute("data-tab"), draggable: (node as HTMLElement).draggable })),
+    );
+    expect(tabs.length).toBeGreaterThan(1);
+    for (const tab of tabs) expect(tab.draggable, `${tab.id} is not draggable`).toBe(true);
+
+    const before = tabs.map((tab) => tab.id);
+    const started = await page.evaluate(() => window.__r10drag.start(".dx-file-tab:first-child"));
     expect(started.ok).toBe(true);
-    expect(started.payload).toBeTruthy();
+    // It carries the file it is a tab for, not an empty string: a drag whose
+    // payload is blank reorders nothing however well the drop target behaves.
+    expect(started.payload).toBe(before[0]);
 
-    // The file area is the part that used to refuse: it is the title row's
-    // sibling, so `closest("[data-drop-folder]")` found nothing from inside it.
-    const filesArea = await page.evaluate(() => window.__w2e.over(".shell-tree-files"));
-    expect(filesArea.ok).toBe(true);
-    expect(filesArea.defaultPrevented, "the file area still refuses the drop").toBe(true);
-
-    // Geometric coverage: sample the whole visible surface of every expanded
-    // folder and count the points that resolve to that folder.
-    const coverage = await page.evaluate(() => {
-      const body = document.querySelector<HTMLElement>(".shell-sidebar-body");
-      const bodyBox = body?.getBoundingClientRect();
-      return [...document.querySelectorAll<HTMLElement>(".shell-tree-folder")].map((section) => {
-        const box = section.getBoundingClientRect();
-        const top = bodyBox ? Math.max(box.top, bodyBox.top) : box.top;
-        const bottom = bodyBox ? Math.min(box.bottom, bodyBox.bottom) : box.bottom;
-        let sampled = 0;
-        let accepted = 0;
-        for (let y = top + 2; y < bottom - 2; y += 3) {
-          for (let x = box.left + 3; x < box.right - 3; x += 6) {
-            const hit = document.elementFromPoint(x, y);
-            if (!hit || !section.contains(hit)) continue;
-            sampled += 1;
-            if (hit.closest("[data-drop-folder]") === section) accepted += 1;
-          }
-        }
-        return {
-          folder: section.getAttribute("data-drop-folder"),
-          expanded: Boolean(section.querySelector(".shell-tree-files")),
-          sampled,
-          share: sampled === 0 ? null : Number((accepted / sampled).toFixed(3)),
-        };
-      });
-    });
-
-    console.log("W2E drop coverage:\n" + JSON.stringify(coverage, null, 2));
-    const expanded = coverage.filter((entry) => entry.expanded && (entry.sampled ?? 0) > 0);
-    expect(expanded.length, "no expanded folder was sampled").toBeGreaterThan(0);
-    for (const entry of expanded) {
-      expect(
-        entry.share,
-        `${entry.folder}: only ${((entry.share ?? 0) * 100).toFixed(1)}% of the folder accepts a drop`,
-      ).toBeGreaterThan(0.9);
+    // Every other tab has to accept it, not just the neighbour.
+    for (let index = 2; index <= tabs.length; index += 1) {
+      const hovered = await page.evaluate(
+        (nth: number) => window.__r10drag.over(`.dx-file-tab:nth-child(${nth})`),
+        index,
+      );
+      expect(hovered.defaultPrevented, `tab ${index} refuses the drop`).toBe(true);
     }
 
-    await page.evaluate(() => window.__w2e.end(".shell-tree-file-row"));
-  });
-
-  test("the comfortable list shows where the file is going", async ({ page }) => {
-    await open(page, "C2", SESSION);
-    await page.addScriptTag({ content: DRAG_HARNESS });
-
-    const before = await page.evaluate(() => {
-      const tbody = document.querySelector<HTMLElement>(".shell-home-list tbody[data-drop-folder]");
-      if (!tbody) return null;
-      const style = getComputedStyle(tbody);
-      return {
-        className: tbody.className,
-        background: style.backgroundColor,
-        outlineStyle: style.outlineStyle,
-      };
-    });
-    expect(before).not.toBeNull();
-    expect(before!.className).not.toContain("is-drop-target");
-
-    const started = await page.evaluate(() =>
-      window.__w2e.start(".shell-home-list tbody tr[draggable='true']"),
+    const dropped = await page.evaluate(() => window.__r10drag.drop(".dx-file-tab:nth-child(3)"));
+    expect(dropped.ok).toBe(true);
+    const after = await page.locator(".dx-file-tab").evaluateAll((nodes) =>
+      nodes.map((node) => node.getAttribute("data-tab")),
     );
-    expect(started.ok).toBe(true);
-
-    const hovered = await page.evaluate(() =>
-      window.__w2e.over(".shell-home-list tbody[data-drop-folder] .shell-list-group"),
-    );
-    expect(hovered.defaultPrevented, "the tbody does not accept the drop").toBe(true);
-
-    const after = await page.evaluate(() => {
-      const tbody = document.querySelector<HTMLElement>(".shell-home-list tbody[data-drop-folder]");
-      if (!tbody) return null;
-      const style = getComputedStyle(tbody);
-      return {
-        highlighted: document.querySelectorAll(".shell-home-list tbody.is-drop-target").length,
-        className: tbody.className,
-        background: style.backgroundColor,
-        outlineStyle: style.outlineStyle,
-        outlineWidth: style.outlineWidth,
-        draggingSources: document.querySelectorAll(".shell-list tbody tr.is-dragging").length,
-      };
-    });
-
-    console.log("W2E comfortable drop feedback:\n" + JSON.stringify({ before, after }, null, 2));
-    expect(after!.highlighted).toBe(1);
-    expect(after!.className).toContain("is-drop-target");
-    // Visible means it actually changed on screen, not just in the class list.
-    expect(after!.background).not.toBe(before!.background);
-    expect(after!.outlineStyle).not.toBe("none");
-    // …and the row being carried says so too (S8-017).
-    expect(after!.draggingSources).toBe(1);
-
-    await page.evaluate(() => window.__w2e.end(".shell-home-list tbody tr[draggable='true']"));
-  });
-
-  test("time buckets do not offer a drag they cannot accept", async ({ page }) => {
-    await open(page, "C4", SESSION);
-    await expect(page.locator("table.shell-list")).toBeVisible();
-
-    const timeView = await page.evaluate(() => ({
-      droppable: document.querySelectorAll(".shell-home-list tbody[data-drop-folder]").length,
-      tbodies: document.querySelectorAll(".shell-home-list tbody").length,
-      draggable: document.querySelectorAll(".shell-home-list tbody tr[draggable='true']").length,
-    }));
-    expect(timeView.tbodies).toBeGreaterThan(0);
-    expect(timeView.droppable).toBe(0);
-    expect(timeView.draggable, "rows are draggable with nowhere to drop them").toBe(0);
-
-    // Switching to folder grouping turns both back on together.
-    await setGrouping(page, "Folder");
-    const folderView = await page.evaluate(() => ({
-      droppable: document.querySelectorAll(".shell-home-list tbody[data-drop-folder]").length,
-      draggable: document.querySelectorAll(".shell-home-list tbody tr[draggable='true']").length,
-    }));
-    expect(folderView.droppable).toBeGreaterThan(0);
-    expect(folderView.draggable).toBeGreaterThan(0);
+    expect(after, "the drop landed and the strip did not reorder").not.toEqual(before);
+    expect([...after].sort()).toEqual([...before].sort());
   });
 });
 
 test.describe("W2-E R16 — the inline row actions", () => {
-  test("the folder row's + button is inside its own row, top and bottom", async ({ page }) => {
-    await open(page, "C2", SESSION);
+  test("the project row's ⋯ button stays inside its own row and off the name", async ({ page }) => {
+    await open(page, "C1");
 
-    const row = page.locator(".shell-tree-folder-row").first();
+    const row = page.locator("#dx-sidebar .dx-project-row").first();
     await row.hover();
-    await expect(page.locator(".shell-tree-folder-add").first()).toBeVisible();
+    await expect(row.locator("[data-act=project-menu]")).toBeVisible();
 
     const geometry = await page.evaluate(() => {
-      const rowNode = document.querySelector<HTMLElement>(".shell-tree-folder-row");
-      const add = rowNode?.querySelector<HTMLElement>(".shell-tree-folder-add");
-      const label = rowNode?.querySelector<HTMLElement>(".shell-tree-folder-toggle > span");
-      if (!rowNode || !add || !label) return null;
+      const rowNode = document.querySelector<HTMLElement>("#dx-sidebar .dx-project-row");
+      const more = rowNode?.querySelector<HTMLElement>("[data-act=project-menu]");
+      const label = rowNode?.querySelector<HTMLElement>("[data-act=toggle-project] .dx-ellipsis");
+      if (!rowNode || !more || !label) return null;
       const rowBox = rowNode.getBoundingClientRect();
-      const addBox = add.getBoundingClientRect();
+      const moreBox = more.getBoundingClientRect();
       const labelBox = label.getBoundingClientRect();
-      // One pixel inside the button's bottom edge: the strip that used to hang
-      // over the row below and hand its clicks to `.shell-tree-file-open`.
-      const probe = document.elementFromPoint(addBox.left + addBox.width / 2, addBox.bottom - 1);
+      // One pixel inside the button's own bottom edge: the strip that used to
+      // hang over the row below and hand its clicks to the next row's control.
+      const probe = document.elementFromPoint(moreBox.left + moreBox.width / 2, moreBox.bottom - 1);
       return {
-        row: { top: rowBox.top, bottom: rowBox.bottom, right: rowBox.right },
-        add: { top: addBox.top, bottom: addBox.bottom, left: addBox.left, right: addBox.right },
-        overflowTop: Math.round(rowBox.top - addBox.top),
-        overflowBottom: Math.round(addBox.bottom - rowBox.bottom),
-        labelRight: labelBox.right,
-        horizontalOverlap: Math.round(labelBox.right - addBox.left),
-        atBottomEdge: probe ? probe.className : null,
-        containingBlockIsRow: getComputedStyle(
-          add.parentElement as HTMLElement,
-        ).position,
+        overflowTop: Math.round(rowBox.top - moreBox.top),
+        overflowBottom: Math.round(moreBox.bottom - rowBox.bottom),
+        horizontalOverlap: Math.round(labelBox.right - moreBox.left),
+        atBottomEdge: probe ? probe.closest("[data-act]")?.getAttribute("data-act") ?? null : null,
       };
     });
 
-    console.log("W2E folder + button:\n" + JSON.stringify(geometry, null, 2));
     expect(geometry).not.toBeNull();
     const box = geometry!;
-    // Fully inside the row, on both edges.
-    expect(box.add.top).toBeGreaterThanOrEqual(box.row.top - 0.5);
-    expect(box.add.bottom).toBeLessThanOrEqual(box.row.bottom + 0.5);
-    expect(box.overflowBottom).toBeLessThanOrEqual(0);
-    // Its own bottom edge belongs to it, not to the next row.
-    expect(box.atBottomEdge).toContain("shell-tree-folder-add");
-    // And it no longer sits on top of the folder name.
-    expect(box.horizontalOverlap, "the + button still covers the folder name").toBeLessThanOrEqual(0);
-    // The wrapper is no longer the containing block.
-    expect(box.containingBlockIsRow).toBe("static");
+    expect(box.overflowTop, "the ⋯ button hangs above its row").toBeLessThanOrEqual(0);
+    expect(box.overflowBottom, "the ⋯ button hangs below its row").toBeLessThanOrEqual(0);
+    expect(box.atBottomEdge, "the button's own bottom edge belongs to something else").toBe("project-menu");
+    expect(box.horizontalOverlap, "the ⋯ button still covers the project name").toBeLessThanOrEqual(0);
   });
 
-  test("the file row's ⋯ button is inside its own row too", async ({ page }) => {
-    await open(page, "C2", SESSION);
+  test("the conversation row's ⋯ button stays inside its own row too", async ({ page }) => {
+    await open(page, "C1");
 
-    const row = page.locator(".shell-tree-file-row").first();
+    const row = page.locator("#dx-sidebar .dx-chat-tree").first();
+    await expect(row).toBeAttached();
     await row.hover();
-    await expect(page.locator(".shell-tree-file-more").first()).toBeVisible();
+    await expect(row.locator("[data-act=chat-menu]")).toBeVisible();
 
     const geometry = await page.evaluate(() => {
-      const rowNode = document.querySelector<HTMLElement>(".shell-tree-file-row");
-      const more = rowNode?.querySelector<HTMLElement>(".shell-tree-file-more");
-      if (!rowNode || !more) return null;
+      const rowNode = document.querySelector<HTMLElement>("#dx-sidebar .dx-chat-tree");
+      const more = rowNode?.querySelector<HTMLElement>("[data-act=chat-menu]");
+      const label = rowNode?.querySelector<HTMLElement>("[data-act=open-chat] .dx-ellipsis");
+      if (!rowNode || !more || !label) return null;
       const rowBox = rowNode.getBoundingClientRect();
       const moreBox = more.getBoundingClientRect();
       const probe = document.elementFromPoint(moreBox.left + moreBox.width / 2, moreBox.bottom - 1);
       return {
         overflowTop: Math.round(rowBox.top - moreBox.top),
         overflowBottom: Math.round(moreBox.bottom - rowBox.bottom),
-        atBottomEdge: probe ? probe.className : null,
+        horizontalOverlap: Math.round(label.getBoundingClientRect().right - moreBox.left),
+        atBottomEdge: probe ? probe.closest("[data-act]")?.getAttribute("data-act") ?? null : null,
       };
     });
 
     expect(geometry).not.toBeNull();
     expect(geometry!.overflowTop).toBeLessThanOrEqual(0);
     expect(geometry!.overflowBottom).toBeLessThanOrEqual(0);
-    expect(geometry!.atBottomEdge).toContain("shell-tree-file-more");
+    expect(geometry!.atBottomEdge).toBe("chat-menu");
+    expect(geometry!.horizontalOverlap).toBeLessThanOrEqual(0);
   });
 });
 
-test.describe("W2-E R8 — focus is visible in the file list", () => {
-  test("all five tree controls draw a focus ring", async ({ page }) => {
-    await open(page, "C2", SESSION);
+test.describe("W2-E R8 — focus is visible in the tree and the lists", () => {
+  test("every control in the project tree draws a focus ring", async ({ page }) => {
+    await open(page, "C1");
 
     const report: Record<string, unknown> = {};
-
-    // Directly focusable.
     for (const selector of [
-      ".shell-tree-folder-toggle",
-      ".shell-tree-file-open",
-      ".shell-tree-more",
+      "#dx-sidebar [data-act=new-file]",
+      "#dx-sidebar [data-act=local]",
+      "#dx-sidebar [data-act=project-library]",
+      "#dx-sidebar [data-act=new-project]",
+      "#dx-sidebar [data-act=toggle-project]",
+      "#dx-sidebar [data-act=project-menu]",
+      "#dx-sidebar [data-act=open-chat]",
+      "#dx-sidebar [data-act=chat-menu]",
+      "#dx-sidebar [data-act=settings]",
     ]) {
       const ring = await focusRing(page, selector);
       report[selector] = ring;
@@ -459,153 +297,93 @@ test.describe("W2-E R8 — focus is visible in the file list", () => {
       expect(ring!.outlineStyle, `${selector} draws nothing on focus`).not.toBe("none");
     }
 
-    /*
-     * The two hover-only buttons are reached the way a keyboard user reaches
-     * them: focusing the row's first control puts `:focus-within` on the row,
-     * which is what takes them out of `display: none`, and Tab then lands on
-     * them. Focusing them directly would be testing a state the user cannot get
-     * into.
-     */
-    for (const [owner, expected] of [
-      [".shell-tree-folder-toggle", "shell-tree-folder-add"],
-      [".shell-tree-file-open", "shell-tree-file-more"],
-    ] as const) {
-      await page.locator(owner).first().focus();
-      await page.keyboard.press("Tab");
-      const ring = await page.evaluate(() => {
-        const element = document.activeElement as HTMLElement | null;
-        if (!element) return null;
-        const style = getComputedStyle(element);
-        return {
-          className: element.className,
-          focusVisible: element.matches(":focus-visible"),
-          outlineStyle: style.outlineStyle,
-          outlineWidth: style.outlineWidth,
-        };
-      });
-      report[expected] = ring;
-      expect(ring, `nothing focused after Tab from ${owner}`).not.toBeNull();
-      expect(ring!.className).toContain(expected);
-      expect(ring!.outlineStyle, `${expected} draws nothing on focus`).not.toBe("none");
-    }
-
+    // eslint-disable-next-line no-console
     console.log("W2E tree focus rings:\n" + JSON.stringify(report, null, 2));
   });
 
-  test("the Home list's pin button draws a ring and shows its icon", async ({ page }) => {
-    await open(page, "C2", SESSION);
-    // An *unpinned* one: `.is-pinned` is coloured at rest by design, so it
-    // cannot show whether focus reveals anything.
-    const unpinned = ".shell-list-pin:not(.is-pinned)";
-    await expect(page.locator(unpinned).first()).toBeAttached();
+  test("a tab's close button becomes visible as well as ringed when focus reaches it", async ({ page }) => {
+    // The other half of S3-012: a ring around an invisible control is half an
+    // answer. The close button is `opacity: 0` at rest and is revealed by the
+    // tab's `:focus-within`, which is the state a keyboard user is actually in.
+    await open(page, "C5");
+    // A tab that is *not* the current one: the current tab shows its close
+    // button at rest by design, so it cannot show whether focus reveals one.
+    const tab = ".dx-file-tab:not(.dx-active)";
+    await expect(page.locator(`${tab} [data-act=close-file]`).first()).toBeAttached();
 
     const atRest = await page.evaluate(
-      (selector: string) => getComputedStyle(document.querySelector(selector)!).color,
-      unpinned,
+      (selector: string) => getComputedStyle(document.querySelector(selector)!).opacity,
+      `${tab} [data-act=close-file]`,
     );
+    expect(atRest, "the close button is already visible, so focus cannot reveal it").toBe("0");
 
-    const ring = await focusRing(page, unpinned);
-    console.log("W2E pin focus:\n" + JSON.stringify({ atRest, ring }, null, 2));
+    // Reached the way a keyboard reaches it: focus the tab's title, then Tab.
+    await page.locator(`${tab} .dx-tab-title`).first().focus();
+    await page.keyboard.press("Tab");
 
-    expect(ring).not.toBeNull();
-    expect(ring!.focused).toBe(true);
-    expect(ring!.outlineStyle, "the pin button draws nothing on focus").not.toBe("none");
+    const focused = await page.evaluate(() => {
+      const element = document.activeElement as HTMLElement | null;
+      if (!element) return null;
+      let ringOn: string | null = null;
+      for (let node: HTMLElement | null = element; node; node = node.parentElement) {
+        if (getComputedStyle(node).outlineStyle !== "none") {
+          ringOn = node.className;
+          break;
+        }
+        if (node.id === "dx-workspace") break;
+      }
+      return { act: element.getAttribute("data-act"), opacity: getComputedStyle(element).opacity, ringOn };
+    });
 
-    const onFocus = await page.evaluate(
-      (selector: string) => getComputedStyle(document.querySelector(selector)!).color,
-      unpinned,
-    );
-    // At rest the icon is `color: transparent`; a ring around an invisible icon
-    // is only half an answer (S3-012).
-    expect(atRest).toBe("rgba(0, 0, 0, 0)");
-    expect(onFocus).not.toBe("rgba(0, 0, 0, 0)");
+    // eslint-disable-next-line no-console
+    console.log("W2E tab close focus:\n" + JSON.stringify({ atRest, focused }, null, 2));
+    expect(focused).not.toBeNull();
+    expect(focused!.act, "Tab from the tab title did not land on its close button").toBe("close-file");
+    expect(focused!.opacity, "the focused close button is still invisible").not.toBe("0");
+    expect(focused!.ringOn, "nothing draws a ring for the focused close button").not.toBeNull();
   });
 
-  test("the file list's own name button draws a ring", async ({ page }) => {
-    await open(page, "C2", SESSION);
-    const ring = await focusRing(page, ".shell-list-file");
-    expect(ring).not.toBeNull();
-    expect(ring!.outlineStyle).not.toBe("none");
+  test("a file row in each list draws a focus ring", async ({ page }) => {
+    for (const [combination, selector] of [
+      ["C3", ".dx-local-open-row"],
+      ["C1", ".dx-home-recent .dx-open-row"],
+    ] as const) {
+      await open(page, combination);
+      const ring = await focusRing(page, selector);
+      expect(ring, `${combination}: ${selector} is not in the DOM`).not.toBeNull();
+      expect(ring!.focused).toBe(true);
+      expect(ring!.outlineStyle, `${combination}: the row draws nothing on focus`).not.toBe("none");
+    }
   });
 });
 
 test.describe("W2-E odds and ends", () => {
-  test("both densities call an empty folder the same thing", async ({ page }) => {
-    await open(page, "C2", SESSION);
-    const strings = await page.evaluate(() => ({
-      sidebar: [...document.querySelectorAll(".shell-tree-empty")].map((n) => n.textContent),
-      home: [...document.querySelectorAll(".shell-list-empty strong")].map((n) => n.textContent),
-    }));
-    // The empty folder in the fixture (yirentk) is collapsed by default, so
-    // open it first if it is not already showing its empty line.
-    if (strings.sidebar.length === 0) {
-      await page.getByRole("treeitem", { name: /yirentk/ }).click();
-    }
-    const sidebar = await page.evaluate(() =>
-      [...document.querySelectorAll(".shell-tree-empty")].map((n) => n.textContent),
-    );
-    expect(sidebar.length).toBeGreaterThan(0);
-    for (const text of sidebar) expect(text).toBe("No files yet");
-  });
-
-  test("a folder's accessible name separates its name from its count", async ({ page }) => {
-    await open(page, "C2", SESSION);
-    const names = await page.evaluate(() =>
-      [...document.querySelectorAll<HTMLElement>(".shell-tree-folder-toggle")].map((button) => ({
-        text: (button.textContent ?? "").replace(/\s+/g, " ").trim(),
-        ariaLabel: button.getAttribute("aria-label"),
+  test("a project's accessible name is its name, with nothing glued on to it", async ({ page }) => {
+    // The defect was an `aria-label` that ran the folder's name straight into
+    // its file count — "MO product launch3 files" to a screen reader. r10 has no
+    // counts, so the name must be the name, and the disclosure state must be an
+    // attribute rather than more words.
+    await open(page, "C1");
+    const rows = await page.evaluate(() =>
+      [...document.querySelectorAll<HTMLElement>("#dx-sidebar [role=treeitem][data-project]")].map((item) => ({
+        ariaLabel: item.getAttribute("aria-label"),
+        ariaExpanded: item.getAttribute("aria-expanded"),
+        toggleLabel: (item.querySelector("[data-act=toggle-project] .dx-ellipsis")?.textContent ?? "").trim(),
+        toggleExpanded: item.querySelector("[data-act=toggle-project]")?.getAttribute("aria-expanded"),
       })),
     );
-    console.log("W2E folder names:\n" + JSON.stringify(names, null, 2));
-    expect(names.length).toBeGreaterThan(0);
-    for (const entry of names) {
-      expect(entry.ariaLabel, "no accessible name at all").toBeTruthy();
-      expect(entry.ariaLabel).toMatch(/, \d+ files$/);
+
+    // eslint-disable-next-line no-console
+    console.log("W2E project names:\n" + JSON.stringify(rows, null, 2));
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row.ariaLabel, "no accessible name at all").toBeTruthy();
+      // The visible name and the accessible name are the same string; nothing
+      // numeric has been appended to either.
+      expect(row.ariaLabel).toBe(row.toggleLabel);
+      expect(row.ariaLabel).not.toMatch(/\d+\s*(files?|conversations?)$/);
+      expect(row.ariaExpanded).toMatch(/^(true|false)$/);
+      expect(row.toggleExpanded).toBe(row.ariaExpanded);
     }
   });
-
-  test("Show N more keeps the button it was pressed on in view", async ({ page }) => {
-    await open(page, "C2", SESSION);
-
-    const button = page.getByRole("button", { name: /^Show \d+ more$/ }).first();
-    await button.click();
-
-    const after = await page.evaluate(() => {
-      const less = [...document.querySelectorAll<HTMLElement>(".shell-tree-more")].find(
-        (node) => node.textContent === "Show less",
-      );
-      const body = document.querySelector<HTMLElement>(".shell-sidebar-body");
-      if (!less || !body) return null;
-      const box = less.getBoundingClientRect();
-      const bodyBox = body.getBoundingClientRect();
-      return {
-        label: less.textContent,
-        inView: box.top >= bodyBox.top - 1 && box.bottom <= bodyBox.bottom + 1,
-        top: Math.round(box.top),
-        bottom: Math.round(box.bottom),
-        containerBottom: Math.round(bodyBox.bottom),
-        rows: document.querySelectorAll(".shell-tree-file-row").length,
-      };
-    });
-
-    console.log("W2E show-more:\n" + JSON.stringify(after, null, 2));
-    expect(after).not.toBeNull();
-    expect(after!.label).toBe("Show less");
-    expect(after!.rows).toBeGreaterThan(9);
-    expect(after!.inView, "the button the user just pressed scrolled out of the list").toBe(true);
-  });
 });
-
-declare global {
-  interface Window {
-    __w2e: {
-      start(selector: string): { ok: boolean; why?: string; payload?: string; sourceClass?: string };
-      overPoint(
-        x: number,
-        y: number,
-      ): { ok: boolean; why?: string; defaultPrevented?: boolean; highlighted?: number; hitFolder?: string | null };
-      over(selector: string): { ok: boolean; why?: string; defaultPrevented?: boolean };
-      end(selector: string): void;
-    };
-  }
-}

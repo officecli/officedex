@@ -2,6 +2,7 @@ import { toast } from "../../renderer/ui";
 import { isNotImplemented } from "../../shared/notImplemented";
 import { logShellEvent } from "./shellLog";
 import { translate } from "../../renderer/i18n";
+import { notice } from "../kit/layers";
 
 /**
  * What the user sees when a port call does not go through.
@@ -9,14 +10,15 @@ import { translate } from "../../renderer/i18n";
  * Every action in this shell is a promise handed back by the port, and the
  * three outcomes need three different things said:
  *
- *   - **not built yet** — a notice. The control is where the UI layer put it
- *     and it works the day the service layer catches up. Nothing is wrong with
- *     the file or the app.
+ *   - **not built yet** — a notice, the workspace's own (OD-UI-1.2 §08): one
+ *     line at the foot of the window that goes away by itself. The control is
+ *     where the design put it and it works the day the service layer catches
+ *     up. Nothing is wrong with the file or the app, and nothing needs doing.
  *   - **a real failure** — an error, with whatever the port said. The user's
  *     work may be affected.
  *   - **success** — nothing. Silence is the reward.
  *
- * Keyed by feature so a double-click does not stack two identical notices.
+ * There is one notice at a time, so a double-click cannot stack two.
  *
  * This is the only place the shell decides how a rejected port call looks, and
  * it is why the hooks wrap their calls rather than letting them float off as
@@ -33,11 +35,7 @@ export function reportPortFailure(reason: unknown): void {
   const message = reason instanceof Error ? reason.message : String(reason);
   if (isNotImplemented(reason)) {
     logShellEvent("not-implemented", { feature: reason.feature, message });
-    toast.warning({
-      key: `not-implemented:${reason.feature}`,
-      content: translate("shell.port.notBuilt"),
-      description: reason.message,
-    });
+    notice(reason.message);
     return;
   }
   logShellEvent("port-failure", {
@@ -82,9 +80,5 @@ export async function attempt(action: () => Promise<void>): Promise<boolean> {
  */
 export function notBuiltYet(feature: string, message: string): void {
   logShellEvent("not-implemented", { feature, message });
-  toast.warning({
-    key: `not-implemented:${feature}`,
-    content: translate("shell.port.notBuilt"),
-    description: message,
-  });
+  notice(message);
 }

@@ -1,179 +1,212 @@
 /**
- * The shell's view state as a pure reducer, so the IA's invariants are
- * assertable without mounting React.
+ * The shell's view state as a pure reducer — OD-UI-1.2 (r10).
  *
- * Two invariants live here and nowhere else:
+ * The workspace is three columns: the sidebar (244px or hidden), the
+ * conversation (320–520px, docked left or right, or floating) and the content
+ * region, which shows Home, Local, a project's Assets, Settings or an open
+ * document. There is no Agent/Editor mode: the standard retired it (§10,
+ * "不恢复 Agent / Editor 模式切换"), and what used to be a mode is now simply
+ * whether a conversation is open beside the content.
  *
- *  - Decision 1: the agent presence may only dock in Agent mode. Editor mode
- *    keeps it floating; if Editor could dock it on the right, "Editor with a
- *    dock" would be Agent mode mirrored and the two modes would stop meaning
- *    anything. The user's Agent-mode preference is remembered across the trip
- *    through Editor, so `placement` is a *preference* and
- *    `effectivePlacement()` is what the layout reads.
+ * Three rules live here and nowhere else, so they can be asserted without
+ * mounting React:
  *
- *  - Decision 2/3: `selectedFolderId` is a real folder or null for "no folder
- *    chosen". It is never the string "recent" — Recent is a time view over all
- *    files, not a location a file can sit in.
+ *  - **A tab remembers how it was opened.** `tabContexts` records, per open
+ *    file, the conversation it was opened from — or null for Local. Activating
+ *    a tab restores that context; it never converts a Local tab into a Chat tab
+ *    because a conversation happens to be on screen (§18).
+ *  - **Opening a conversation opens nothing else.** It shows the chat and the
+ *    project's Assets list, resets no sidebar preference and activates no file
+ *    (§16, WORKSPACE-STANDARD §01).
+ *  - **The sidebar only moves when the user moves it.** No navigation action
+ *    touches `navCollapsed` (§16, "首栏默认常驻").
  */
 
 import type { FileMeta } from "../../shared/uiPort";
 import type { PersistedShellState } from "./persist";
 
-export type Mode = "agent" | "editor";
-export type Placement = "docked" | "floating";
-export type Edge = "left" | "right" | "top" | "bottom" | null;
+export type Page = "home" | "local" | "projects" | "assets" | "editor" | "settings" | "image";
+export type ChatPanel = "chat" | "assets";
+export type ChatPosition = "left" | "right";
+
+export const NAV_WIDTH = 244;
+export const CHAT_DEFAULT_WIDTH = 360;
+export const CHAT_MIN_WIDTH = 320;
+export const CHAT_MAX_WIDTH = 520;
+/** Arrow-key step on the splitter (§03). */
+export const CHAT_KEYBOARD_STEP = 16;
+
 /**
- * What Editor Home shows. `new` is the prototype's New page — three blank
- * templates — reached from the sidebar's "+"; it is a place, not a filter, so it
- * is never restored on reload and Home on its own leaves it.
+ * Which conversation the second column shows.
+ *
+ * `conversationId` is null for a chat that has been started but not yet spoken
+ * in: the runtime names a conversation after its first run, so until a message
+ * is sent there is nothing to call it. `folderId` is the project — or the
+ * default folder for a chat that belongs to none ("Unfiled").
  */
-export type HomeList = "recent" | "pinned" | "new";
-
-export const NAV_RAIL_WIDTH = 52;
-export const NAV_MIN_WIDTH = 160;
-export const NAV_MAX_WIDTH = 300;
-export const TASK_MIN_WIDTH = 320;
-export const TASK_MAX_WIDTH = 660;
-
-export interface PresenceState {
-  /** The user's preference. Only honoured in Agent mode — see effectivePlacement. */
-  placement: Placement;
-  expanded: boolean;
-  /**
-   * null until the presence has been placed. A sentinel of 0,0 would be
-   * indistinguishable from "dragged to the top-left corner", and the resize
-   * clamp would quietly turn it into a real position before the first layout
-   * ever ran.
-   */
-  x: number | null;
-  y: number | null;
-  edge: Edge;
+export interface ChatRef {
+  folderId: string;
+  conversationId: string | null;
 }
 
+export const sameChat = (left: ChatRef | null, right: ChatRef | null): boolean =>
+  left === right ||
+  (left !== null &&
+    right !== null &&
+    left.folderId === right.folderId &&
+    left.conversationId === right.conversationId);
+
+export type SettingsSectionId =
+  | "general"
+  | "files"
+  | "models"
+  | "permissions"
+  | "notifications"
+  | "account"
+  | "license"
+  | "about";
+
+export const SETTINGS_SECTIONS: readonly SettingsSectionId[] = [
+  "general",
+  "files",
+  "models",
+  "permissions",
+  "notifications",
+  "account",
+  "license",
+  "about",
+];
+
+/** The six static Dex avatars, by the state each was drawn from (WORKSPACE-STANDARD §05). */
+export type AvatarId = "ready" | "hover" | "done" | "think" | "write" | "celebrate";
+export const AVATAR_IDS: readonly AvatarId[] = ["ready", "hover", "done", "think", "write", "celebrate"];
+
 export interface ShellState {
-  mode: Mode;
-  home: boolean;
-  homeList: HomeList;
-  navWidth: number;
+  page: Page;
+  chat: ChatRef | null;
+  /**
+   * The name the user gave a chat that has not been spoken in yet. It becomes
+   * the conversation's name when its first run gives it an id.
+   */
+  pendingChatName: string | null;
+  /** What the second column shows: the conversation, or the compact Assets list. */
+  panel: ChatPanel;
+  /** Whether the content region is showing beside an open conversation. */
+  workspaceOpen: boolean;
+  chatFloating: boolean;
+  chatPosition: ChatPosition;
+  chatWidth: number;
+  /** The sidebar is fully hidden (0px). Hover shows it temporarily; that is not state. */
   navCollapsed: boolean;
-  taskWidth: number;
-  selectedFolderId: string | null;
-  /** Which folders are open in the sidebar tree. */
+  /** Projects open in the sidebar tree. */
   expandedFolderIds: string[];
-  /** Folder keys whose file list is showing past the first few entries. */
-  revealedFolderIds: string[];
   openFileIds: string[];
   activeFileId: string | null;
-  presence: PresenceState;
+  tabContexts: Record<string, ChatRef | null>;
+  /** Most recently closed first, for Reopen. */
+  closedFileIds: string[];
   /**
-   * The canvas is showing the bundled recording, not a file.
-   *
-   * Part of shell state rather than the canvas adapter's, because three things
-   * have to agree about it: the workspace has to be on screen (`home`), the
-   * canvas host has to treat it as visible-without-a-file, and a reload has to
-   * come back to the same thing rather than to Home. It is cleared the moment a
-   * real file is opened — see `open-file`.
+   * Files an agent finished with that the user has not looked at since (§10).
+   * Opening or re-focusing the file clears it; seeing the tab, or opening some
+   * other file, does not.
+   */
+  unreadFileIds: string[];
+  /** The Dex panel over a Local document. */
+  dexOpen: boolean;
+  settingsSection: SettingsSectionId;
+  avatar: AvatarId;
+  theme: "light" | "dark";
+  /** Hot and fresh features: shown on Home, and whether its gift button exists yet (§21). */
+  featuresVisible: boolean;
+  featuresDocked: boolean;
+  /**
+   * The canvas is showing the bundled recording, not a file. See `enter-stage`.
    */
   demo: boolean;
-  /**
-   * When the recording was last asked for, ISO, or null when it was never
-   * asked for.
-   *
-   * Two jobs, and they are the same fact:
-   *
-   * 1. **Restarting.** Going Home does not unmount the canvas (the workspace is
-   *    hidden, not torn down), so pressing the button again set a flag that was
-   *    already set — no state change, no re-render, and the stage's start-once
-   *    ref kept the finished deck on screen. A value that always moves is what
-   *    the stage keys its session on.
-   * 2. **Losing to a run.** The recording holds the canvas until something else
-   *    asks for it, and a new run does — but `demo` stayed true through that,
-   *    because only `open-file` clears it and a run has no file. So the canvas
-   *    kept the finished recording up while the panel beside it listed the new
-   *    run's pages. Comparing this against the task's own `createdAt` says
-   *    which of the two was asked for later, which is the honest rule.
-   */
+  /** When the recording was last asked for, ISO; it loses the canvas to anything newer. */
   demoStartedAt: string | null;
+  /**
+   * The content region is showing a run's live stage rather than a library
+   * file — a document being generated has no file until it finishes.
+   */
+  stage: boolean;
 }
 
 export type ShellAction =
-  | { type: "set-mode"; mode: Mode }
-  | { type: "go-home"; list?: HomeList }
-  /**
-   * Leaves Home without opening anything.
-   *
-   * The counterpart of `go-home`, and the only way to reach the workspace when
-   * there is no file to reach it through. A deck being generated is exactly
-   * that case: its draft is scratch that never enters the library, so there is
-   * no tab to open and the canvas is put on screen by the run itself.
-   *
-   * `demo` asks for the bundled recording instead, and asking a second time
-   * replays it from a fresh draft rather than being a no-op — see
-   * `demoStartedAt`.
-   */
-  | { type: "enter-workspace"; demo?: boolean }
-  /**
-   * The recording lost the canvas to something newer, and says so.
-   *
-   * Without this the flag outlives its own demo: a reload restores `demo` and
-   * its stamp, and the recording comes back over a run that has since
-   * finished. The canvas decides precedence and the shell owns the state, so
-   * the canvas has to report the decision it made.
-   */
-  | { type: "leave-demo" }
-  | { type: "set-home-list"; list: HomeList }
-  | { type: "select-folder"; folderId: string | null }
+  /** Home, Local, Settings or the image creator: leaves any conversation. */
+  | { type: "go"; page: "home" | "local" | "projects" | "settings" | "image"; section?: SettingsSectionId }
+  | { type: "open-chat"; chat: ChatRef; name?: string }
+  /** A chat that had no conversation id has just been given one by its first run. */
+  | { type: "adopt-conversation"; folderId: string; conversationId: string }
+  | { type: "set-panel"; panel: ChatPanel }
+  | { type: "toggle-workspace" }
+  | { type: "toggle-chat-display" }
+  | { type: "swap-chat" }
+  | { type: "set-chat-width"; width: number }
+  | { type: "toggle-nav" }
   | { type: "toggle-folder"; folderId: string }
   | { type: "reveal-folder"; folderId: string }
-  | { type: "toggle-folder-overflow"; folderId: string }
+  /** Opens a file in the context on screen: the open conversation, or Local. */
   | { type: "open-file"; fileId: string }
-  | { type: "close-file"; fileId: string }
+  /** Opens a file as Local, leaving any conversation. */
+  | { type: "open-local-file"; fileId: string }
+  /** Activates an open tab, restoring the context it was opened in. */
   | { type: "activate-file"; fileId: string }
-  | { type: "toggle-nav" }
-  | { type: "set-nav-width"; width: number }
-  | { type: "set-task-width"; width: number }
-  | { type: "set-placement"; placement: Placement }
-  | { type: "set-presence-expanded"; expanded: boolean }
-  | { type: "set-presence-position"; x: number; y: number; edge: Edge }
+  /** Adds a tab without activating it — a finished run's result (§10). */
+  | { type: "add-tab"; fileId: string; chat: ChatRef | null; unread?: boolean }
+  | { type: "mark-unread"; fileId: string }
+  | { type: "close-file"; fileId: string }
+  | { type: "move-tab"; fileId: string; toIndex: number }
+  | { type: "reopen-tab" }
+  | { type: "set-dex-open"; open: boolean }
+  | { type: "set-settings-section"; section: SettingsSectionId }
+  | { type: "set-avatar"; avatar: AvatarId }
+  | { type: "set-theme"; theme: "light" | "dark" }
+  /** Settings → Reset: appearance and layout go back; what is open stays open. */
+  | { type: "reset-preferences" }
+  | { type: "set-features"; visible: boolean }
+  /**
+   * Puts the canvas on screen without a file: a run's live stage, or (`demo`)
+   * the bundled recording. Asking for the recording again replays it.
+   */
+  | { type: "enter-stage"; demo?: boolean }
+  | { type: "leave-demo" }
   | { type: "prune-files"; files: FileMeta[] };
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
-/**
- * `??` only catches null and undefined, so a persisted NaN would survive it and
- * poison the clamp. Persisted view state is untrusted input like any other.
- */
+/** Persisted view state is untrusted input: `??` lets NaN through. */
 const finite = (value: unknown, fallback: number) =>
   typeof value === "number" && Number.isFinite(value) ? value : fallback;
 
 export const initialShellState: ShellState = {
-  mode: "agent",
-  home: true,
-  homeList: "recent",
-  navWidth: 190,
-  // The reference shell opens on the compact icon rail; users can expand it
-  // with the window-bar control and the preference is persisted thereafter.
-  navCollapsed: true,
-  taskWidth: 320,
-  selectedFolderId: null,
+  page: "home",
+  chat: null,
+  pendingChatName: null,
+  panel: "chat",
+  workspaceOpen: false,
+  chatFloating: false,
+  chatPosition: "left",
+  chatWidth: CHAT_DEFAULT_WIDTH,
+  navCollapsed: false,
   expandedFolderIds: [],
-  revealedFolderIds: [],
   openFileIds: [],
   activeFileId: null,
-  presence: { placement: "docked", expanded: true, x: null, y: null, edge: null },
+  tabContexts: {},
+  closedFileIds: [],
+  unreadFileIds: [],
+  dexOpen: false,
+  settingsSection: "general",
+  avatar: "ready",
+  theme: "light",
+  featuresVisible: true,
+  featuresDocked: false,
   demo: false,
   demoStartedAt: null,
+  stage: false,
 };
 
-/**
- * A stamp that is always *newer* than the last one, never just different.
- *
- * `new Date().toISOString()` is not enough: two presses inside the same
- * millisecond produce the same string, the stage's key does not change, and the
- * second press silently does nothing — the exact bug this replaced a counter to
- * fix. It also has to stay ahead of a live run's `createdAt`, which is what
- * decides who owns the canvas.
- */
+/** A stamp that is always newer than the last one, never just different. */
 function nextDemoStamp(previous: string | null): string {
   const now = Date.now();
   const last = previous === null ? Number.NaN : Date.parse(previous);
@@ -183,104 +216,137 @@ function nextDemoStamp(previous: string | null): string {
 const toggleIn = (list: string[], value: string) =>
   list.includes(value) ? list.filter((entry) => entry !== value) : [...list, value];
 
-/** Decision 1: docking is an Agent-mode-only affordance. */
-export function canDock(state: ShellState): boolean {
-  return state.mode === "agent";
+/* ---------------------------------------------------------------- selectors */
+
+/** The second column is on screen at all. */
+export const hasChat = (state: ShellState): boolean => state.chat !== null;
+
+/** Home, Local and Settings show no document strip (they keep a blank 40px band). */
+export const showsTabStrip = (state: ShellState): boolean =>
+  state.page !== "home" && state.page !== "local" && state.page !== "settings";
+
+/** An open document, or a run's stage, is what the content region shows. */
+export const showsEditor = (state: ShellState): boolean =>
+  state.page === "editor" && (state.activeFileId !== null || state.stage || state.demo);
+
+/** The conversation fills the window because the content region is closed. */
+export const workspaceClosed = (state: ShellState): boolean => state.chat !== null && !state.workspaceOpen;
+
+/** Whether an open file's tab belongs to a conversation (draws the Dex watermark). */
+export const tabIsChat = (state: ShellState, fileId: string): boolean =>
+  Boolean(state.tabContexts[fileId]);
+
+/* ------------------------------------------------------------------ reducer */
+
+/** Leaving a conversation drops everything that only means something inside one. */
+function withoutChat(state: ShellState): ShellState {
+  return { ...state, chat: null, pendingChatName: null, panel: "chat", workspaceOpen: false, chatFloating: false };
 }
 
-/** What the layout reads. Never consult `state.presence.placement` directly. */
-export function effectivePlacement(state: ShellState): Placement {
-  return canDock(state) ? state.presence.placement : "floating";
-}
-
-/**
- * Whether the collapsed face is on screen. Docked has no face: the column
- * *is* the presence, so rendering a bubble beside it would be the same object
- * drawn twice — the duplication this refactor exists to remove.
- */
-export function showsPresenceFace(state: ShellState): boolean {
-  return effectivePlacement(state) === "floating";
+function withContext(state: ShellState, context: ChatRef | null): ShellState {
+  if (sameChat(state.chat, context)) {
+    return { ...state, workspaceOpen: context !== null };
+  }
+  return {
+    ...state,
+    chat: context,
+    pendingChatName: null,
+    panel: "chat",
+    chatFloating: false,
+    workspaceOpen: context !== null,
+  };
 }
 
 export function shellReducer(state: ShellState, action: ShellAction): ShellState {
   switch (action.type) {
-    case "set-mode": {
-      if (state.mode === action.mode) return state;
+    case "go": {
+      const next = withoutChat(state);
       return {
-        ...state,
-        mode: action.mode,
-        /*
-         * Agent mode's conversation is the centre of the window. An expanded
-         * library beside it is a second navigator for the same folders the
-         * composer already scopes, so entering Agent always returns to the
-         * compact rail. Editor keeps whatever the user last chose there.
-         */
-        ...(action.mode === "agent" ? { navCollapsed: true } : {}),
-        /*
-         * Editor's presence is the collapsed mark in the corner. Opening the
-         * panel is a click, not the default: the document is the work, and an
-         * expanded conversation on top of it is something the user asks for.
-         */
-        ...(action.mode === "editor"
-          ? { presence: { ...state.presence, expanded: false } }
-          : {}),
-      };
-    }
-
-    case "go-home":
-      return {
-        ...state,
-        home: true,
-        homeList: action.list ?? (state.homeList === "new" ? "recent" : state.homeList),
-      };
-
-    case "enter-workspace": {
-      const demo = action.demo === true;
-      return {
-        ...state,
-        home: false,
-        /*
-         * Nothing is open — including whatever was open before this.
-         *
-         * The canvas already knows a run outranks the open file (see
-         * `CanvasContent`), but everything drawn *around* the canvas reads
-         * `activeFileId` instead: the selected tab, the status bar's name, and
-         * the composer's target. Leaving a stale id set meant generating a
-         * workbook from Home with a document still open put that document's
-         * name in the tab strip and the status bar, over a stage visibly
-         * writing something else.
-         *
-         * The composer is the half that does damage rather than merely
-         * confusing: `SendInput.activeFileId` is not a hint, it is the whole
-         * routing decision (`send` in services/agent.ts), so a follow-up typed
-         * while the workbook was being written would have gone to
-         * `office.modify` against the document instead.
-         *
-         * Only the selection goes; the tabs stay open. `ShellContext` opens the
-         * artifact by `artifactTaskId` when the run finishes, which is what
-         * makes this the brief state it looks like.
-         */
+        ...next,
+        page: action.page,
         activeFileId: null,
-        demo,
-        /*
-         * Stamped only when the recording is asked for. A live run's stage has
-         * its own lifecycle and must not be remounted under a sequencer that is
-         * mid-draw, so its `enter-workspace` leaves the recording's timestamp
-         * alone — and that is also what lets the run outrank it below.
-         */
-        demoStartedAt: demo ? nextDemoStamp(state.demoStartedAt) : state.demoStartedAt,
+        stage: false,
+        demo: false,
+        demoStartedAt: null,
+        dexOpen: false,
+        settingsSection:
+          action.page === "settings" ? (action.section ?? state.settingsSection) : state.settingsSection,
       };
     }
 
-    case "leave-demo":
-      if (!state.demo && state.demoStartedAt === null) return state;
-      return { ...state, demo: false, demoStartedAt: null };
+    case "open-chat":
+      return {
+        ...state,
+        chat: action.chat,
+        pendingChatName: action.chat.conversationId === null ? (action.name?.trim() || null) : null,
+        page: "assets",
+        panel: "chat",
+        chatFloating: false,
+        workspaceOpen: true,
+        activeFileId: null,
+        stage: false,
+        demo: false,
+        demoStartedAt: null,
+        dexOpen: false,
+        expandedFolderIds: state.expandedFolderIds.includes(action.chat.folderId)
+          ? state.expandedFolderIds
+          : [...state.expandedFolderIds, action.chat.folderId],
+      };
 
-    case "set-home-list":
-      return { ...state, home: true, homeList: action.list };
+    case "adopt-conversation": {
+      if (
+        !state.chat ||
+        state.chat.folderId !== action.folderId ||
+        state.chat.conversationId !== null
+      ) {
+        return state;
+      }
+      const chat: ChatRef = { folderId: action.folderId, conversationId: action.conversationId };
+      const tabContexts = Object.fromEntries(
+        Object.entries(state.tabContexts).map(([fileId, context]) => [
+          fileId,
+          context && context.folderId === action.folderId && context.conversationId === null ? chat : context,
+        ]),
+      );
+      return { ...state, chat, pendingChatName: null, tabContexts };
+    }
 
-    case "select-folder":
-      return { ...state, selectedFolderId: action.folderId };
+    case "set-panel":
+      return state.chat ? { ...state, panel: action.panel } : state;
+
+    case "toggle-workspace": {
+      if (!state.chat) return state;
+      const open = !state.workspaceOpen;
+      return {
+        ...state,
+        workspaceOpen: open,
+        // Closing the content region re-docks a floating chat: there is nothing
+        // left for it to float over.
+        chatFloating: open ? state.chatFloating : false,
+        page: open && !showsEditorTarget(state) ? "assets" : state.page,
+      };
+    }
+
+    case "toggle-chat-display": {
+      if (!state.chat) return state;
+      const floating = !state.chatFloating;
+      if (!floating) return { ...state, chatFloating: false };
+      return {
+        ...state,
+        chatFloating: true,
+        workspaceOpen: true,
+        page: showsEditorTarget(state) ? state.page : "assets",
+      };
+    }
+
+    case "swap-chat":
+      return { ...state, chatPosition: state.chatPosition === "left" ? "right" : "left" };
+
+    case "set-chat-width":
+      return { ...state, chatWidth: clamp(Math.round(action.width), CHAT_MIN_WIDTH, CHAT_MAX_WIDTH) };
+
+    case "toggle-nav":
+      return { ...state, navCollapsed: !state.navCollapsed };
 
     case "toggle-folder":
       return { ...state, expandedFolderIds: toggleIn(state.expandedFolderIds, action.folderId) };
@@ -290,91 +356,178 @@ export function shellReducer(state: ShellState, action: ShellAction): ShellState
         ? state
         : { ...state, expandedFolderIds: [...state.expandedFolderIds, action.folderId] };
 
-    case "toggle-folder-overflow":
-      return { ...state, revealedFolderIds: toggleIn(state.revealedFolderIds, action.folderId) };
-
     case "open-file": {
       const openFileIds = state.openFileIds.includes(action.fileId)
         ? state.openFileIds
         : [...state.openFileIds, action.fileId];
       return {
         ...state,
-        home: false,
+        page: "editor",
         openFileIds,
         activeFileId: action.fileId,
+        // Opening from another entry deliberately updates the tab's context.
+        tabContexts: { ...state.tabContexts, [action.fileId]: state.chat },
+        unreadFileIds: state.unreadFileIds.filter((id) => id !== action.fileId),
+        workspaceOpen: state.chat !== null,
+        dexOpen: false,
+        stage: false,
         demo: false,
         demoStartedAt: null,
-        // A document opening in Editor is the user going to write, not to
-        // talk. The mark stays in the corner until they open it themselves.
-        ...(state.mode === "editor"
-          ? { presence: { ...state.presence, expanded: false } }
-          : {}),
       };
     }
 
-    case "close-file": {
-      const index = state.openFileIds.indexOf(action.fileId);
-      if (index < 0) return state;
-      const openFileIds = state.openFileIds.filter((id) => id !== action.fileId);
-      if (state.activeFileId !== action.fileId) return { ...state, openFileIds };
-      const next = openFileIds[Math.min(index, openFileIds.length - 1)] ?? null;
-      return { ...state, openFileIds, activeFileId: next, home: next === null ? true : state.home };
-    }
+    case "open-local-file":
+      return shellReducer(withoutChat(state), { type: "open-file", fileId: action.fileId });
 
     case "activate-file": {
       if (!state.openFileIds.includes(action.fileId)) return state;
+      const context = state.tabContexts[action.fileId] ?? null;
       return {
-        ...state,
-        home: false,
+        ...withContext(state, context),
+        page: "editor",
         activeFileId: action.fileId,
+        unreadFileIds: state.unreadFileIds.filter((id) => id !== action.fileId),
+        dexOpen: false,
+        stage: false,
         demo: false,
         demoStartedAt: null,
       };
     }
 
-    case "toggle-nav":
-      return { ...state, navCollapsed: !state.navCollapsed };
-
-    case "set-nav-width": {
-      if (action.width < (NAV_MIN_WIDTH + NAV_RAIL_WIDTH) / 2) {
-        return { ...state, navCollapsed: true };
+    case "add-tab": {
+      const unreadFileIds =
+        action.unread && state.activeFileId !== action.fileId && !state.unreadFileIds.includes(action.fileId)
+          ? [...state.unreadFileIds, action.fileId]
+          : state.unreadFileIds;
+      if (state.openFileIds.includes(action.fileId)) {
+        return unreadFileIds === state.unreadFileIds ? state : { ...state, unreadFileIds };
       }
       return {
         ...state,
-        navCollapsed: false,
-        navWidth: clamp(Math.round(action.width), NAV_MIN_WIDTH, NAV_MAX_WIDTH),
+        openFileIds: [...state.openFileIds, action.fileId],
+        tabContexts: { ...state.tabContexts, [action.fileId]: action.chat },
+        unreadFileIds,
       };
     }
 
-    case "set-task-width":
+    case "mark-unread":
+      // The file on screen is being looked at; it cannot also be unseen.
+      if (state.unreadFileIds.includes(action.fileId)) return state;
+      if (state.page === "editor" && state.activeFileId === action.fileId) return state;
+      return { ...state, unreadFileIds: [...state.unreadFileIds, action.fileId] };
+
+    case "close-file": {
+      if (!state.openFileIds.includes(action.fileId)) return state;
+      const openFileIds = state.openFileIds.filter((id) => id !== action.fileId);
+      const { [action.fileId]: _closed, ...tabContexts } = state.tabContexts;
+      const closedFileIds = [action.fileId, ...state.closedFileIds.filter((id) => id !== action.fileId)].slice(0, 20);
+      const base = { ...state, openFileIds, tabContexts, closedFileIds };
+      if (state.activeFileId !== action.fileId) return base;
+      const next = openFileIds.at(-1) ?? null;
+      if (next !== null) {
+        return {
+          ...withContext(base, tabContexts[next] ?? null),
+          page: "editor",
+          activeFileId: next,
+          dexOpen: false,
+        };
+      }
+      return {
+        ...base,
+        activeFileId: null,
+        dexOpen: false,
+        page: state.chat ? "assets" : "home",
+      };
+    }
+
+    case "move-tab": {
+      const from = state.openFileIds.indexOf(action.fileId);
+      if (from < 0) return state;
+      const openFileIds = state.openFileIds.filter((id) => id !== action.fileId);
+      openFileIds.splice(clamp(action.toIndex, 0, openFileIds.length), 0, action.fileId);
+      return { ...state, openFileIds };
+    }
+
+    case "reopen-tab": {
+      const [fileId, ...closedFileIds] = state.closedFileIds;
+      if (!fileId) return state;
+      return shellReducer({ ...state, closedFileIds }, { type: "open-file", fileId });
+    }
+
+    case "set-dex-open":
+      return state.dexOpen === action.open ? state : { ...state, dexOpen: action.open };
+
+    case "set-settings-section":
+      return { ...state, settingsSection: action.section };
+
+    case "set-avatar":
+      return { ...state, avatar: action.avatar };
+
+    case "set-theme":
+      return { ...state, theme: action.theme };
+
+    case "reset-preferences":
       return {
         ...state,
-        taskWidth: clamp(Math.round(action.width), TASK_MIN_WIDTH, TASK_MAX_WIDTH),
+        theme: initialShellState.theme,
+        avatar: initialShellState.avatar,
+        navCollapsed: initialShellState.navCollapsed,
+        chatWidth: initialShellState.chatWidth,
+        chatPosition: initialShellState.chatPosition,
+        chatFloating: initialShellState.chatFloating,
+        featuresVisible: initialShellState.featuresVisible,
       };
 
-    case "set-placement":
-      // Stored even when Editor mode cannot honour it, so returning to Agent
-      // restores what the user chose there.
-      return { ...state, presence: { ...state.presence, placement: action.placement } };
+    case "set-features":
+      // Closing it once is what creates the gift button; it never goes away again.
+      return { ...state, featuresVisible: action.visible, featuresDocked: state.featuresDocked || !action.visible };
 
-    case "set-presence-expanded":
-      return { ...state, presence: { ...state.presence, expanded: action.expanded } };
-
-    case "set-presence-position":
+    case "enter-stage": {
+      const demo = action.demo === true;
       return {
         ...state,
-        presence: { ...state.presence, x: action.x, y: action.y, edge: action.edge },
+        page: "editor",
+        /*
+         * Nothing is open — including whatever was open before this. Everything
+         * drawn around the canvas reads `activeFileId`: the selected tab and the
+         * composer's target, which is a routing decision and not a hint. A
+         * follow-up typed while a workbook was being written would otherwise be
+         * sent as an edit of the document that was open underneath it.
+         */
+        activeFileId: null,
+        workspaceOpen: state.chat !== null,
+        dexOpen: false,
+        stage: !demo,
+        demo,
+        demoStartedAt: demo ? nextDemoStamp(state.demoStartedAt) : state.demoStartedAt,
       };
+    }
+
+    case "leave-demo":
+      if (!state.demo && state.demoStartedAt === null) return state;
+      return { ...state, demo: false, demoStartedAt: null };
 
     case "prune-files": {
-      // Files can disappear underneath the shell (deleted elsewhere). Tabs that
-      // point at nothing are dropped rather than rendered as ghosts.
+      // Files can disappear underneath the shell. Tabs that point at nothing
+      // are dropped rather than rendered as ghosts.
       const live = new Set(action.files.map((file) => file.id));
       const openFileIds = state.openFileIds.filter((id) => live.has(id));
       if (openFileIds.length === state.openFileIds.length) return state;
+      const tabContexts = Object.fromEntries(
+        Object.entries(state.tabContexts).filter(([fileId]) => live.has(fileId)),
+      );
       const activeFileId =
         state.activeFileId && live.has(state.activeFileId) ? state.activeFileId : (openFileIds.at(-1) ?? null);
-      return { ...state, openFileIds, activeFileId, home: activeFileId === null ? true : state.home };
+      const orphaned = state.page === "editor" && activeFileId === null && !state.stage && !state.demo;
+      return {
+        ...state,
+        openFileIds,
+        tabContexts,
+        activeFileId,
+        closedFileIds: state.closedFileIds.filter((id) => live.has(id)),
+        unreadFileIds: state.unreadFileIds.filter((id) => live.has(id)),
+        page: orphaned ? (state.chat ? "assets" : "home") : state.page,
+      };
     }
 
     default:
@@ -382,49 +535,83 @@ export function shellReducer(state: ShellState, action: ShellAction): ShellState
   }
 }
 
+/** Whether the content region has a document (or a stage) to keep showing. */
+function showsEditorTarget(state: ShellState): boolean {
+  return state.page === "editor" && (state.activeFileId !== null || state.stage || state.demo);
+}
+
+/* -------------------------------------------------------------- persistence */
+
+const chatRefOf = (value: unknown): ChatRef | null => {
+  if (!value || typeof value !== "object") return null;
+  const { folderId, conversationId } = value as Partial<ChatRef>;
+  if (typeof folderId !== "string" || !folderId) return null;
+  return { folderId, conversationId: typeof conversationId === "string" ? conversationId : null };
+};
+
 export function hydrateShellState(persisted: Partial<PersistedShellState>): ShellState {
-  const presence = persisted.presence;
+  const openFileIds = Array.isArray(persisted.openFileIds) ? persisted.openFileIds.filter((id) => typeof id === "string") : [];
+  const tabContexts: Record<string, ChatRef | null> = {};
+  for (const fileId of openFileIds) tabContexts[fileId] = chatRefOf(persisted.tabContexts?.[fileId]);
+  const pages: readonly Page[] = ["home", "local", "projects", "assets", "editor", "settings", "image"];
+  const page = pages.includes(persisted.page as Page) ? (persisted.page as Page) : initialShellState.page;
+  const chat = chatRefOf(persisted.chat);
+  const activeFileId =
+    typeof persisted.activeFileId === "string" && openFileIds.includes(persisted.activeFileId)
+      ? persisted.activeFileId
+      : null;
+  const demo = persisted.demo === true;
+  const stage = persisted.stage === true;
   return {
     ...initialShellState,
-    mode: persisted.mode === "editor" ? "editor" : "agent",
-    home: persisted.home ?? initialShellState.home,
-    homeList: persisted.homeList === "pinned" ? "pinned" : "recent",
-    navWidth: clamp(finite(persisted.navWidth, initialShellState.navWidth), NAV_MIN_WIDTH, NAV_MAX_WIDTH),
-    navCollapsed: persisted.navCollapsed ?? initialShellState.navCollapsed,
-    taskWidth: clamp(finite(persisted.taskWidth, initialShellState.taskWidth), TASK_MIN_WIDTH, TASK_MAX_WIDTH),
-    selectedFolderId: persisted.selectedFolderId ?? null,
+    // A page that needs something the session did not bring back falls to Home.
+    page:
+      (page === "assets" && !chat) || (page === "editor" && !activeFileId && !demo && !stage) ? "home" : page,
+    chat,
+    panel: persisted.panel === "assets" && chat ? "assets" : "chat",
+    workspaceOpen: chat ? persisted.workspaceOpen !== false : false,
+    chatFloating: Boolean(chat) && persisted.chatFloating === true,
+    chatPosition: persisted.chatPosition === "right" ? "right" : "left",
+    chatWidth: clamp(finite(persisted.chatWidth, CHAT_DEFAULT_WIDTH), CHAT_MIN_WIDTH, CHAT_MAX_WIDTH),
+    navCollapsed: persisted.navCollapsed === true,
     expandedFolderIds: Array.isArray(persisted.expandedFolderIds) ? persisted.expandedFolderIds : [],
-    revealedFolderIds: Array.isArray(persisted.revealedFolderIds) ? persisted.revealedFolderIds : [],
-    openFileIds: Array.isArray(persisted.openFileIds) ? persisted.openFileIds : [],
-    activeFileId: persisted.activeFileId ?? null,
-    presence: {
-      placement: presence?.placement === "floating" ? "floating" : "docked",
-      expanded: presence?.expanded ?? true,
-      x: typeof presence?.x === "number" && Number.isFinite(presence.x) ? presence.x : null,
-      y: typeof presence?.y === "number" && Number.isFinite(presence.y) ? presence.y : null,
-      edge: presence?.edge ?? null,
-    },
-    demo: persisted.demo === true,
+    openFileIds,
+    activeFileId,
+    tabContexts,
+    settingsSection: SETTINGS_SECTIONS.includes(persisted.settingsSection as SettingsSectionId)
+      ? (persisted.settingsSection as SettingsSectionId)
+      : "general",
+    avatar: AVATAR_IDS.includes(persisted.avatar as AvatarId) ? (persisted.avatar as AvatarId) : "ready",
+    theme: persisted.theme === "dark" ? "dark" : "light",
+    featuresVisible: persisted.featuresVisible !== false,
+    featuresDocked: persisted.featuresDocked === true,
+    demo,
     demoStartedAt: persisted.demoStartedAt ?? null,
+    stage,
   };
 }
 
 export function toPersisted(state: ShellState): PersistedShellState {
   return {
-    mode: state.mode,
-    navWidth: state.navWidth,
+    page: state.page,
+    chat: state.chat,
+    panel: state.panel,
+    workspaceOpen: state.workspaceOpen,
+    chatFloating: state.chatFloating,
+    chatPosition: state.chatPosition,
+    chatWidth: state.chatWidth,
     navCollapsed: state.navCollapsed,
-    taskWidth: state.taskWidth,
-    selectedFolderId: state.selectedFolderId,
     expandedFolderIds: state.expandedFolderIds,
-    revealedFolderIds: state.revealedFolderIds,
     openFileIds: state.openFileIds,
     activeFileId: state.activeFileId,
-    home: state.home,
-    // The New page is somewhere you go, not where you were; reload lands on the list.
-    homeList: state.homeList === "new" ? "recent" : state.homeList,
+    tabContexts: state.tabContexts,
+    settingsSection: state.settingsSection,
+    avatar: state.avatar,
+    theme: state.theme,
+    featuresVisible: state.featuresVisible,
+    featuresDocked: state.featuresDocked,
     demo: state.demo,
     demoStartedAt: state.demoStartedAt,
-    presence: { ...state.presence },
+    stage: state.stage,
   };
 }

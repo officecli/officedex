@@ -326,7 +326,37 @@ function toAgentTask(task: DesktopTask): AgentTask {
     // No desktop model for proposed-then-applied changes; see the header.
     suggestion: null,
     question: toQuestion(task),
+    ...outcomeOf(task, recovery),
     ...(recovery ? { recovery } : {}),
+  };
+}
+
+/** How the run ended and when, for a task that is over; the clock, for one that is not. */
+function outcomeOf(
+  task: DesktopTask,
+  recovery: AgentRecovery | undefined,
+): Pick<AgentTask, "outcome" | "error" | "failureKind" | "startedAt" | "finishedAt"> {
+  const parse = (value: string | undefined) => (value ? Date.parse(value) || undefined : undefined);
+  const startedAt = parse(task.createdAt) ?? parse(task.events[0]?.ts);
+  const clock = startedAt ? { startedAt } : {};
+  if (task.status !== "completed" && task.status !== "failed" && task.status !== "cancelled") return clock;
+  const finishedAt = parse(task.events.at(-1)?.ts);
+  const ended = { ...clock, ...(finishedAt ? { finishedAt } : {}) };
+  if (task.status === "completed") return { ...ended, outcome: "completed" };
+  if (task.status === "cancelled") return { ...ended, outcome: "stopped" };
+  const error = task.error?.trim();
+  const text = `${task.failure?.reason ?? ""} ${error ?? ""}`.toLowerCase();
+  // The backend names the stage; a transport failure is the connection's, not the model's.
+  const network =
+    task.failure?.stage === "transport" || /network|offline|econn|enotfound|timed? ?out|socket|dns/.test(text);
+  const model = /auth|api[ _-]?key|unauthori[sz]ed|quota|credit|rate[ _-]?limit|model|provider|401|403|429/.test(text);
+  // Finished pages that can be kept make this a partial result, not a loss.
+  const kept = (recovery?.readyPages ?? 0) > 0;
+  return {
+    ...ended,
+    outcome: network ? "interrupted" : kept ? "partial" : "failed",
+    ...(error ? { error } : {}),
+    failureKind: network ? "network" : model ? "model" : "other",
   };
 }
 
@@ -1285,6 +1315,16 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       threads.set(folderId, { fresh: true });
       localTurns.delete(orphanKey(folderId));
       emit({ kind: "cleared", folderId });
+    },
+
+    async openConversation(folderId, conversationId) {
+      const entries = await api.getTaskHistory(HISTORY_PAGE).catch(() => [] as TaskHistoryEntry[]);
+      if (entries.length > 0) state = mergeHistory(state, hydrate(entries));
+      const task = headOf(conversationId);
+      if (!task || folderOf(task) !== folderId) return null;
+      threads.set(folderId, { conversationId, fresh: false });
+      if (ACTIVE_STATUSES.includes(task.status)) adoptActive(task.id);
+      return project(task);
     },
 
     async recordExchange({ folderId, messages }) {

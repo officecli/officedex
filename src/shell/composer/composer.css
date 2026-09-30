@@ -73,124 +73,10 @@
 
 /* ---------------------------------------------------------------- chips */
 
-.shell-cx-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  max-height: 112px;
-  overflow: auto;
-  margin-bottom: 10px;
-  scrollbar-width: thin;
-}
-
-.shell-cx-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  max-width: 100%;
-  padding: 4px 7px;
-  border: 1px solid var(--shell-line);
-  border-radius: 9px;
-  background: var(--shell-sunken);
-  color: var(--shell-ink-muted);
-  font-size: var(--shell-text-sm);
-}
-
-.shell-cx-chip.is-folder {
-  background: #eef3ef;
-  border-color: #dce6de;
-  color: #657b6c;
-}
-
-.shell-cx-chip.is-file {
-  background: #eff3f6;
-  border-color: #dde5ec;
-  color: #536879;
-}
-
-.shell-cx-chip-name {
-  min-width: 0;
-  max-width: 200px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.shell-cx-chip button {
-  display: flex;
-  align-items: center;
-  padding: 2px;
-  border: 0;
-  border-radius: 4px;
-  background: none;
-  color: inherit;
-  cursor: pointer;
-}
-
-.shell-cx-chip button:hover {
-  background: #00000010;
-}
-
 /* ------------------------------------------------------------ reference */
 
 /* The span the canvas says is selected. A quote block rather than a chip: its
    text is the thing being checked, and a chip would truncate it to nothing. */
-.shell-cx-reference {
-  margin-bottom: 10px;
-  padding: 8px 10px;
-  border-left: 2px solid var(--shell-accent);
-  border-radius: 0 7px 7px 0;
-  background: var(--shell-sunken);
-}
-
-.shell-cx-reference-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.shell-cx-reference-head span {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: var(--shell-ink-subtle);
-  font-size: var(--shell-text-xs);
-}
-
-.shell-cx-reference p {
-  margin: 4px 0 0;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  overflow: hidden;
-  color: var(--shell-ink-muted);
-  font-size: var(--shell-text-sm);
-  line-height: 18px;
-}
-
-.shell-cx-chip-remove {
-  display: flex;
-  align-items: center;
-  flex: none;
-  padding: 2px;
-  border: 0;
-  border-radius: 4px;
-  background: none;
-  color: var(--shell-ink-faint);
-  cursor: pointer;
-}
-
-.shell-cx-chip-remove:hover {
-  background: #00000010;
-  color: var(--shell-ink);
-}
-
-.shell-cx-chip-remove:focus-visible {
-  outline: 2px solid var(--shell-focus);
-  outline-offset: 1px;
-}
 
 /* -------------------------------------------------------------- toolbar */
 
@@ -221,11 +107,6 @@
   gap: 6px;
 }
 
-.shell-cx-scope {
-  min-width: 0;
-  flex-shrink: 1;
-}
-
 /*
  * The output chip reads as an answer, not a setting: "Auto" is the quiet
  * default and a stated type is the user having decided something, so it is the
@@ -236,20 +117,6 @@
  * through exactly that kind of hard-coded value in this file, and there is no
  * reason to add two more to the list while it does.
  */
-.shell-cx-output {
-  min-width: 0;
-  flex-shrink: 1;
-}
-
-.shell-cx-output[data-stated="true"] {
-  background: color-mix(in srgb, var(--shell-doc-accent) 10%, transparent);
-  color: var(--shell-ink);
-}
-
-.shell-cx-output[data-stated="true"]:hover,
-.shell-cx-output[data-stated="true"][aria-expanded="true"] {
-  background: color-mix(in srgb, var(--shell-doc-accent) 16%, transparent);
-}
 
 .shell-cx-button {
   display: inline-flex;
@@ -302,10 +169,7 @@
   outline-offset: 1px;
 }
 
-.shell-cx-scope-name,
-.shell-cx-output-name,
-.shell-cx-model-name,
-.shell-cx-permission-name {
+.shell-cx-model-name {
   min-width: 0;
   max-width: 160px;
   overflow: hidden;
@@ -313,37 +177,12 @@
   text-overflow: ellipsis;
 }
 
-.shell-cx-permission {
-  color: var(--shell-ink-faint);
-}
-
 /* Dictation is the one control here that keeps working after the click ends,
    so it is the one that has to look busy. Without this the recogniser ran in
    complete silence and a sentence simply appeared in the box. */
-.shell-cx-mic.is-listening {
-  background: #fdecea;
-  color: #b3392c;
-  animation: shell-cx-listening 1.4s ease-in-out infinite;
-}
-
-.shell-cx-mic.is-listening:hover {
-  background: #fadfdb;
-  color: #8f2d22;
-}
-
-@keyframes shell-cx-listening {
-  50% {
-    opacity: 0.55;
-  }
-}
 
 /* A pulsing control is a distraction rather than a signal for anyone who asked
    the system to stop moving things; the tint alone still says "listening". */
-@media (prefers-reduced-motion: reduce) {
-  .shell-cx-mic.is-listening {
-    animation: none;
-  }
-}
 
 .shell-cx-send {
   display: inline-flex;
@@ -388,16 +227,8 @@
  * Wrapping is also why the names below are capped rather than hidden — each
  * group gets the full width of the toolbar, so there is room to read them.
  */
-@container (max-width: 420px) {
-  .shell-cx-permission-name {
-    display: none;
-  }
-}
 
 @container (max-width: 340px) {
-  .shell-cx-mic {
-    display: none;
-  }
   .shell-cx-toolbar {
     flex-wrap: wrap;
     row-gap: 2px;
@@ -414,37 +245,10 @@
   .shell-cx-model-name {
     max-width: 120px;
   }
-  .shell-cx-output-name {
-    max-width: 104px;
-  }
-  .shell-cx-scope-name {
-    max-width: 96px;
-  }
 }
 
 @container (max-width: 252px) {
   .shell-cx-model-name {
-    display: none;
-  }
-  .shell-cx-output-name {
-    max-width: 78px;
-  }
-  .shell-cx-scope-name {
-    max-width: 70px;
-  }
-}
-
-@container (max-width: 204px) {
-  .shell-cx-output-name {
-    display: none;
-  }
-  .shell-cx-scope-name {
-    display: none;
-  }
-}
-
-@container (max-width: 204px) {
-  .shell-cx-scope-name {
     display: none;
   }
 }
@@ -460,145 +264,12 @@
   background: #f4f5f6ed;
   color: var(--shell-ink-muted);
   font-size: var(--shell-text-lg);
-  z-index: 10;
+  z-index: var(--shell-z-cx-drop);
   /* It says what a drop will do; it must never be what stops the composer being used. */
   pointer-events: none;
 }
 
 /* --------------------------------------------------------- mention menu */
-
-.shell-mention {
-  position: absolute;
-  left: 0;
-  z-index: 180;
-  display: flex;
-  flex-direction: column;
-  width: min(370px, 100%);
-  overflow: hidden;
-  padding: 7px;
-  background: var(--shell-paper);
-  border: 1px solid var(--shell-line);
-  border-radius: 16px;
-  box-shadow: var(--shell-shadow-panel);
-}
-
-.shell-mention[data-side="above"] {
-  bottom: calc(100% + 8px);
-}
-
-.shell-mention[data-side="below"] {
-  top: calc(100% + 8px);
-}
-
-.shell-mention-heading {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-  padding: 8px 10px 9px;
-  color: var(--shell-ink-subtle);
-  font-size: var(--shell-text);
-  font-weight: 500;
-}
-
-.shell-mention-heading span {
-  font-size: 15px;
-  color: var(--shell-ink-faint);
-}
-
-.shell-mention-options {
-  flex: 1;
-  min-height: 40px;
-  overflow: auto;
-  scrollbar-width: thin;
-}
-
-.shell-mention-group {
-  padding: 10px 10px 5px;
-  color: var(--shell-ink-faint);
-  font-size: var(--shell-text-xs);
-  letter-spacing: 0.15px;
-}
-
-.shell-mention-option {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 9px 10px;
-  border: 0;
-  border-radius: 9px;
-  background: none;
-  color: var(--shell-ink);
-  font: var(--shell-text) / 20px var(--shell-font);
-  text-align: left;
-  cursor: pointer;
-}
-
-.shell-mention-option.is-highlighted {
-  background: #f0f2f3;
-}
-
-.shell-mention-icon {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 29px;
-  height: 29px;
-  border: 1px solid var(--shell-line);
-  border-radius: 9px;
-  background: var(--shell-sunken);
-  color: var(--shell-ink-muted);
-}
-
-.shell-mention-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.shell-mention-text strong {
-  display: block;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: var(--shell-text);
-  font-weight: 450;
-}
-
-.shell-mention-text small {
-  display: block;
-  margin-top: 3px;
-  color: var(--shell-ink-faint);
-  font-size: var(--shell-text-xs);
-  line-height: 15px;
-}
-
-.shell-mention-enter {
-  flex: none;
-  color: var(--shell-ink-faint);
-  font-size: 15px;
-  opacity: 0;
-}
-
-.shell-mention-option.is-highlighted .shell-mention-enter {
-  opacity: 1;
-}
-
-.shell-mention-empty {
-  margin: 0;
-  padding: 14px 10px;
-  color: var(--shell-ink-faint);
-  font-size: var(--shell-text-sm);
-}
-
-.shell-mention-footer {
-  flex-shrink: 0;
-  margin-top: 6px;
-  padding: 10px 9px 4px;
-  border-top: 1px solid #efefef;
-  color: #a0a3a6;
-  font-size: 9px;
-}
 
 /* -------------------------------------------------------- model dialog */
 

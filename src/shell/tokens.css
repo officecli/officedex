@@ -1,48 +1,212 @@
 /*
- * Shell design tokens — the source of truth for the new IA's visual language.
+ * Shell design tokens — OD-UI-1.2 (revision r10).
  *
- * Values were read off the approved interaction prototype's *computed* styles
- * rather than its stylesheets: the prototype stacks thirteen CSS layers where
- * later layers silently win, so reading the sources yields rules that never
- * apply (its Home layout in `workspace-mode.css`, for one, is fully overridden
- * by `workspace-layout.css`).
+ * The baseline is the approved interaction prototype and its design standard
+ * (`OfficeDex-Interactive-Prototype-1.2-r10.html`,
+ * `OfficeDex-Interaction-Design-Standard-1.2-r10.html`). Every `--dx-*` value
+ * below is either a token the standard names (§04 type, §05 colour, tokens.json)
+ * or a literal the prototype's stylesheets carry, given a name so that this file
+ * stays the only place in `src/shell` where a colour, a font size or a z-index
+ * is written down. `scripts/port-prototype-styles.mjs` maps the prototype's
+ * literals onto these names and fails on one it does not know.
  *
- * The bottom of this file bridges the `@vo-ui` component library's `--od-*`
- * tokens *inside the shell subtree only*. That library is shared with the old
- * renderer, so its own `src/renderer/ui/styles/tokens.css` must stay untouched.
+ * Three groups:
+ *
+ *  1. `--dx-*` — the outer workspace. Light values on `#shell`, the prototype's
+ *     dark values on `#shell[data-theme="dark"]`.
+ *  2. `--shell-*` — the names the surfaces that predate r10 still read (image
+ *     workspace, generating stage, account page). They resolve to the r10
+ *     palette wherever r10 has an equivalent, so those surfaces follow the new
+ *     language without being rewritten in the same change.
+ *  3. The `--od-*` bridge for the shared component library, unchanged in
+ *     purpose: scoped to `#shell`, so the library's own tokens stay untouched.
+ *
+ * Scope: the OfficeDex outer UI only. Editor ribbons, menus, dialogs and the
+ * user's document content follow their own source assets (SHIMO-BOUNDARY) and
+ * must not inherit any of this.
  */
 
 #shell {
+  /* ---- OD-UI-1.2 · colour (§05) ---------------------------------------- */
+  --dx-text: #343a40; /* primary text, filled primary button */
+  --dx-muted: #626e79; /* secondary text, placeholders */
+  --dx-surface: #ffffff; /* content, dialogs, inputs */
+  --dx-canvas: #f5f6f8; /* application background, pane headers */
+  --dx-line: #d9dfe4; /* dividers, decorative borders */
+  --dx-control: #7b8794; /* input and control outlines */
+  --dx-hover: #eceff2;
+  --dx-selected: #e4e9ee; /* selected row, current navigation */
+  --dx-pressed: #d9e0e6;
+  --dx-focus: #526f89; /* focus outline: 2px, offset 2px */
+  --dx-blue: #2768c9; /* agent finished, not yet viewed: the 7px dot */
+  --dx-success: #2e6b4f;
+  --dx-warning: #8a5a17;
+  --dx-error: #a43d37;
+
+  /* Absolute white: a switch knob, a glyph on a filled control, paper. It does
+     not follow the theme — `--dx-surface` does. */
+  --dx-white: #ffffff;
+
+  /* focus */
+  --dx-focus-halo: #526f8929; /* keyboard focus fallback ring, 4px */
+  --dx-focus-wash: #526f8920;
+  --dx-home-tab-focus: #63778c;
+
+  /* filled controls */
+  --dx-primary-hover: #20262c;
+  --dx-primary-pressed: #14191e;
+  --dx-share: #41464b; /* Share keeps dark fill and white text in every state */
+  --dx-share-hover: #33383d;
+  --dx-share-pressed: #262b30;
+
+  /* surfaces with one owner */
+  --dx-sidebar: #f7f7f6;
+  --dx-chrome: #eef0f3; /* the 244px window-control band */
+  --dx-home-tab: #e3e6eb; /* Logo tab, not on Home */
+  --dx-home-tab-hover: #edf0f3;
+  --dx-card-preview: #f5f5f5;
+  --dx-card-hover-line: #aeb8c2;
+  --dx-canvas-veil: #f5f6f8ed; /* drop-to-add overlay */
+  --dx-tooltip: #252a30;
+  --dx-play-scrim: #343a40c0;
+  --dx-backdrop: #0000003d; /* modal backdrop, black 24% */
+
+  /* brand — BRAND-DEX-STANDARD §04 */
+  --dx-face-tile: #2b2b2b;
+  --dx-dex-ink: #252525;
+
+  /* agent work cursor and identity tag — ATTENTION-STANDARD §05 */
+  --dx-work-cursor: #292d34;
+  --dx-work-tag: #282c32;
+  --dx-work-tag-shade: #20242b13;
+
+  /* One ink at the alphas the standard's shadows use (§05: popover .14,
+     dialog .20, composer .03). */
+  --dx-shade-03: #17212b08;
+  --dx-shade-05: #17212b0d;
+  --dx-shade-07: #17212b12;
+  --dx-shade-08: #17212b15;
+  --dx-shade-09: #17212b16;
+  --dx-shade-14: #17212b24;
+  --dx-shade-20: #17212b33;
+  --dx-black-07: #00000012;
+  --dx-black-08: #00000014;
+  --dx-black-13: #0002;
+  /* Carried by the v1.1 layer and overridden by v1.2 on every surface that
+     still exists; named so the layer ports without a literal. */
+  --dx-dex-shade-v11: #23303b20;
+  --dx-dex-panel-shade-v11: #24334225;
+
+  /* The dark theme's one-off literals. Declared here, used only under
+     `[data-theme="dark"]` selectors. */
+  --dx-dark-on-primary: #20252a;
+  --dx-dark-chrome: #24272c;
+  --dx-dark-home-tab: #343840;
+  --dx-dark-home-tab-selected: #4b515a;
+  --dx-dark-primary-hover: #d1d8de;
+  --dx-dark-primary-pressed: #b9c3cd;
+
+  /* ---- OD-UI-1.2 · type (§04) ------------------------------------------ */
+  /*
+   * The adopted scale: metadata 12/18, body 14/20, reading 16/24, section
+   * 16/24·600, settings section 20/28, title 22/30, hero 28/36. 13 is the Logo
+   * tab's word mark (WORKSPACE-STANDARD §02) and nothing else. 24 and 26 are
+   * the hero at its narrow breakpoint and a rendered preview's heading; 9 is
+   * the glyph inside a traffic light. Line heights are written beside the size
+   * they belong to, as the standard pairs them.
+   */
+  --dx-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Segoe UI",
+    sans-serif;
+  --dx-font-mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --dx-fs-9: 9px;
+  --dx-fs-12: 12px;
+  --dx-fs-13: 13px;
+  --dx-fs-14: 14px;
+  --dx-fs-16: 16px;
+  --dx-fs-20: 20px;
+  --dx-fs-22: 22px;
+  --dx-fs-24: 24px;
+  --dx-fs-26: 26px;
+  --dx-fs-28: 28px;
+
+  /* ---- OD-UI-1.2 · layout (§03) ---------------------------------------- */
+  --dx-nav: 244px; /* first column: 244 or 0, never dragged */
+  --dx-chat: 360px; /* second column: 320–520 */
+  --dx-composer-radius: 24px;
+  --dx-composer-padding: 8px;
+  --dx-composer-icon: 20px;
+
+  /* ---- OD-UI-1.2 · layers ---------------------------------------------- */
+  /*
+   * The prototype's stack, rung by rung: content → sticky tools → Dex and
+   * floating panels → menus and tips → modal (§05). All of it sorts below the
+   * shell's full-window surfaces further down (`--shell-z-viewer` 350,
+   * `--shell-z-gate` 400) and below the component library's overlays (1000+),
+   * which is the intended order: a picture viewer or a sign-in page covers the
+   * workspace, menus included.
+   */
+  --dx-z-raised: 1;
+  --dx-z-raised-2: 2;
+  --dx-z-modal-head: 2; /* sticky dialog header, inside the dialog */
+  --dx-z-sidebar: 15;
+  --dx-z-splitter: 20;
+  --dx-z-dex: 22;
+  --dx-z-dex-panel: 23;
+  --dx-z-dex-open: 24; /* the bubble, riding its open panel's corner */
+  --dx-z-chat-overlay: 25; /* conversation over the editor, narrow windows */
+  --dx-z-window-controls: 30;
+  --dx-z-chat-floating: 30;
+  --dx-z-workspace-toggle: 35;
+  --dx-z-sidebar-peek: 40; /* the hidden sidebar, shown on hover */
+  --dx-z-drop: 40;
+  --dx-z-global-controls: 45;
+  --dx-z-flyout: 45; /* Hot and fresh features, away from Home */
+  --dx-z-menu: 60;
+  --dx-z-popover: 70; /* New */
+  --dx-z-tooltip: 90;
+  --dx-z-agent-effects: 110;
+  --dx-z-flight: 120; /* the features panel folding into its gift button */
+  --dx-z-notice: 200;
+  --dx-z-input-glow: 10000; /* view-only, never takes a pointer event */
+
+  /* ==== Names the pre-r10 surfaces still read ============================ */
+  /*
+   * Everything from here to the end of this block predates OD-UI-1.2. Where r10
+   * has an equivalent the value is a reference to it; where it has none the
+   * literal stays, because the surface that reads it (the picture viewer, the
+   * generating stage's skeleton) has not been redesigned.
+   */
+
   /* ---- Surfaces ------------------------------------------------------- */
-  --shell-chrome: #f5f6f8; /* window bar + sidebar */
+  --shell-chrome: var(--dx-canvas); /* window bar + sidebar */
   --shell-canvas: #fafafa; /* the workspace behind the document */
-  --shell-paper: #ffffff; /* ribbon, cards, popovers, active tab */
+  --shell-paper: var(--dx-surface); /* ribbon, cards, popovers, active tab */
   --shell-sunken: #f9f9f9; /* editor scroll surface + status bar */
 
   /* ---- Lines ---------------------------------------------------------- */
-  --shell-line: #e4e6e9; /* sidebar edge, card borders */
+  --shell-line: var(--dx-line); /* sidebar edge, card borders */
   --shell-line-soft: #e8e9eb; /* ribbon internal dividers */
-  --shell-line-strong: #d9dfe4; /* composer border */
+  --shell-line-strong: var(--dx-line); /* composer border */
 
   /* ---- Ink ------------------------------------------------------------ */
-  --shell-ink: #41464b; /* primary text, primary button fill */
-  --shell-ink-title: #343a40; /* composer + panel copy */
-  --shell-ink-muted: #596773; /* sidebar items, secondary text */
-  --shell-ink-subtle: #7e8285; /* status bar, captions */
-  --shell-ink-faint: #8b8e90; /* inactive ribbon tabs, placeholders */
-  --shell-ink-inverse: #ffffff;
+  --shell-ink: var(--dx-text); /* primary text, primary button fill */
+  --shell-ink-title: var(--dx-text); /* composer + panel copy */
+  --shell-ink-muted: var(--dx-muted); /* sidebar items, secondary text */
+  --shell-ink-subtle: var(--dx-muted); /* status bar, captions */
+  --shell-ink-faint: var(--dx-muted); /* inactive ribbon tabs, placeholders */
+  --shell-ink-inverse: var(--dx-white);
 
   /* ---- Interaction ---------------------------------------------------- */
-  --shell-hover: #e9edf0;
-  --shell-active: #e4e9ec;
-  --shell-focus: #7895ae;
+  --shell-hover: var(--dx-hover);
+  --shell-active: var(--dx-selected);
+  --shell-focus: var(--dx-focus);
 
   /* ---- Radii ---------------------------------------------------------- */
   --shell-radius-item: 6px; /* sidebar rows, ribbon buttons */
-  --shell-radius-control: 5px; /* small buttons, tabs */
-  --shell-radius-card: 10px; /* menus, cards */
-  --shell-radius-composer: 14px;
-  --shell-radius-panel: 20px; /* floating agent panel */
+  --shell-radius-control: 6px; /* small buttons, tabs */
+  --shell-radius-card: 8px; /* menus, cards */
+  --shell-radius-composer: 24px;
+  --shell-radius-panel: 12px; /* floating agent panel */
 
   /* ---- Elevation ------------------------------------------------------ */
   --shell-shadow-menu: 0 8px 28px #222b3520;
@@ -71,11 +235,11 @@
   --shell-tabs-h: 40px;
   --shell-tab-h: 32px;
   --shell-ribbon-h: 112px;
-  --shell-statusbar-h: 32px;
+  --shell-statusbar-h: 0px; /* r10: the shell draws no status bar; save state sits in the tab row */
   --shell-row-h: 36px; /* sidebar row + collapsed rail button */
   --shell-rail-w: 52px; /* collapsed sidebar */
-  --shell-nav-w: 190px; /* expanded sidebar, matching the reference frame */
-  --shell-task-w: 320px; /* docked agent column, matching the reference frame */
+  --shell-nav-w: 244px; /* expanded sidebar, matching the reference frame */
+  --shell-task-w: 360px; /* docked agent column, matching the reference frame */
 
   /* ---- Type ----------------------------------------------------------- */
   /*
@@ -100,8 +264,7 @@
    * change and this file's job this round is where values live, not what they
    * are. See docs/ui-audit-2026-09-19/fixes/W3-I.md.
    */
-  --shell-font: "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI",
-    "Microsoft YaHei", sans-serif;
+  --shell-font: var(--dx-font);
   --shell-text-xs: 10px;
   --shell-text-sm: 11px;
   --shell-text: 12px;
@@ -115,46 +278,25 @@
 
   /* ---- Layers ---------------------------------------------------------- */
   /*
-   * The whole stack, including the half of it this shell does not own.
+   * The surfaces OD-UI-1.2 keeps as they were, and the half of the stack this
+   * shell does not own.
    *
-   * Read the three groups as three different answers to "above what?".
+   * 1. Root context. `#shell` opens no stacking context of its own, so these
+   *    compare directly against the design's rungs above — and sit over all of
+   *    them, which is the intended order: the image tools' menus, the picture
+   *    viewer and the account page each cover the workspace they were opened
+   *    from, its menus and its notice included.
    *
-   * 1. Root context. `.shell` is `position: absolute; z-index: auto` and has no
-   *    transform/filter/contain/opacity, so it does not open a stacking context
-   *    of its own: everything below compares directly against everything else
-   *    in the document. The menu has to clear the floating agent panel by
-   *    itself — it used to be 60, which only ever worked because a menu opened
-   *    inside the panel was a DOM child of it and inherited the panel's 200.
-   *
-   * 2. Composer-local. `composer.css:5` sets `container-type: inline-size` on
-   *    `.shell-cx` for its four container queries. Per css-contain-3 that
-   *    applies layout containment, which *does* open a stacking context — so
-   *    `.shell-cx-drop` (10) and `.shell-mention` (180) only sort against each
-   *    other and against `.shell-cx`'s own children. `.shell-cx` itself is
-   *    `z-index: auto`. Neither number means anything to the rest of the shell
-   *    (S5-005), and a ladder that listed them beside 200 and 300 without
-   *    saying so would be a table that lies. They are declared here so the set
-   *    is complete; `composer.css` is another track's file and still writes the
-   *    two literals — see W3-I.md for what is owed there.
+   * 2. Composer-local. `composer.css` sets `container-type: inline-size` on
+   *    `.shell-cx` for its container queries. Per css-contain-3 that applies
+   *    layout containment, which opens a stacking context — so `.shell-cx-drop`
+   *    (10) sorts against `.shell-cx`'s own children and nothing else (S5-005).
    *
    * 3. Legacy. `src/renderer/ui/styles/components.css` is shared with the old
    *    renderer and is not this shell's to edit, so these four are *declared,
    *    not applied*: they exist so that anyone picking a new value can see the
-   *    whole ladder at once, and so the 800-wide gap between 200 and 1000 is a
-   *    visible fact rather than something you discover by collision.
+   *    whole ladder at once.
    */
-  /* The docked agent column, and only while a mode change is in flight. The
-     workspace is pinned out of flow for that moment (see the mode-switch
-     section of app.css), and a positioned element paints above its in-flow
-     siblings — without this rung the column it is supposed to be revealing or
-     making room for would be covered from the first frame. One is enough: it
-     sorts against the row it lives in, which holds nothing else positioned. */
-  --shell-z-mode-switch: 1;
-  --shell-z-chrome: 3; /* .shell-windowbar */
-  /* Editor Home's "drop to open" overlay. Fixed, so it compares against the
-     root; below the floating agent, which a file cannot be dropped onto. */
-  --shell-z-home-drop: 150; /* .shell-home-drop */
-  --shell-z-presence: 200; /* .shell-presence, the floating agent */
   --shell-z-menu: 300; /* .shell-menu, portalled to #shell */
   /* The full-window picture viewer. Above the menus, which it cannot be opened
      from and which close on the click that opens it; below the account page,
@@ -167,7 +309,6 @@
   --shell-z-gate: 400; /* .shell-account */
 
   --shell-z-cx-drop: 10; /* .shell-cx-drop, inside .shell-cx only */
-  --shell-z-cx-mention: 180; /* .shell-mention, inside .shell-cx only */
 
   --shell-z-legacy-dialog: 1000; /* components.css .od-dialog-mask */
   --shell-z-legacy-popover: 1050; /* components.css .od-popover */
@@ -213,7 +354,7 @@
      Used where grey would lie: a page that failed rendered in the same
      --shell-ink-faint as a page that had not started yet, so a deck with a
      dead page read as a deck still working through its queue. */
-  --shell-status-danger: #ad5347;
+  --shell-status-danger: var(--dx-error);
 
   /* "Something here wants you": the dot on the sidebar's update button while an
      optional update is waiting. Brighter than --shell-status-danger on purpose — that
@@ -230,7 +371,7 @@
      not in any stylesheet. Every value here was confirmed by reading enough
      surrounding bytes to see a selector, and the sizes above by computed style
      in a real browser. A hit count is not evidence. */
-  --shell-status-done: #617f6f;
+  --shell-status-done: var(--dx-success);
 
   /* The "this suggestion has been applied" card. These two are *shell-grown* —
      zero occurrences in the prototype, which only ever shows the happy path
@@ -367,6 +508,30 @@
   --shell-skeleton-block: #f0f2f4;
   --shell-skeleton-rule: #edeff1;
   --shell-skeleton-thumb: #f1f3f5;
+}
+
+/*
+ * The prototype's dark values for the semantic palette. The standard scopes its
+ * acceptance to the light theme (§05: dark is a separate design and QA task),
+ * so this block exists to carry the prototype's Appearance setting across, not
+ * to claim the pre-r10 surfaces have been checked against it.
+ */
+#shell[data-theme="dark"] {
+  color-scheme: dark;
+  --dx-text: #e5e9ed;
+  --dx-muted: #a8b4c0;
+  --dx-surface: #20252a;
+  --dx-canvas: #191e23;
+  --dx-line: #46515c;
+  --dx-control: #9ba9b6;
+  --dx-hover: #303940;
+  --dx-selected: #3a4651;
+  --dx-pressed: #445360;
+  --dx-focus: #9ab7d2;
+  --dx-blue: #6ca3ff;
+  --dx-error: #ffa9a5;
+  --dx-success: #90ccab;
+  --dx-warning: #e0bd79;
 }
 
 @media (prefers-reduced-motion: reduce) {

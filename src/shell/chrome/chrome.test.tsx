@@ -1,405 +1,446 @@
-import { readFileSync } from "node:fs";
-import { act, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+/**
+ * The window's own furniture — OD-UI-1.2 §03, §07, §10, §17, §18.
+ *
+ * The sidebar, the top-left band, the document tabs, the divider and the
+ * shortcuts. What they have in common is that none of them is about a document's
+ * content: they are how the user moves between things, so what is asserted here
+ * is where a gesture lands, not what it draws.
+ *
+ * The one rule worth naming is §18: a tab remembers how it was opened. Bringing
+ * a Local tab forward leaves the conversation, because that tab was never part
+ * of it — the alternative is a Local file silently joining whatever chat happens
+ * to be beside it.
+ */
+import { act, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { SEED_OPEN_FILE_IDS } from "../port/fake/seed";
+import { resetLayers } from "../kit/layers";
+import {
+  PROTOTYPE_CHAT_IDS,
+  PROTOTYPE_FOLDER_IDS,
+  prototypeFiles,
+  prototypeFolders,
+  prototypeTasks,
+} from "../port/fake/prototypeSeed";
+import { CHAT_DEFAULT_WIDTH, CHAT_MAX_WIDTH, CHAT_MIN_WIDTH } from "../state/shellReducer";
 import { renderShell } from "../test/renderShell";
+import type { FileMeta } from "../../shared/uiPort";
 
-// `globals: false` in vite.config means Testing Library never registers its own
-// afterEach, so every suite in this repo unmounts explicitly.
-afterEach(cleanup);
+afterEach(() => {
+  resetLayers();
+  cleanup();
+});
 
-const tabNames = (container: HTMLElement) =>
-  [...container.querySelectorAll(".shell-tab-name")].map((node) => node.textContent);
-
-async function openSeedTabs() {
-  const shell = await renderShell();
-  for (const fileId of SEED_OPEN_FILE_IDS) {
-    await shell.dispatch({ type: "open-file", fileId });
-  }
-  return shell;
+/** The prototype's workspace, with the projects' conversations loaded. */
+async function shell(files: FileMeta[] = prototypeFiles()) {
+  const harness = await renderShell({
+    folders: prototypeFolders(),
+    files,
+    tasks: prototypeTasks().reverse(),
+  });
+  const find = <T extends HTMLElement>(selector: string) => harness.view.container.querySelector<T>(selector);
+  const all = (selector: string) => [...harness.view.container.querySelectorAll<HTMLElement>(selector)];
+  await waitFor(() => {
+    if (!find("#dx-sidebar [data-act=toggle-project]")) throw new Error("the project tree is still loading");
+  });
+  return { ...harness, find, all };
 }
 
-describe("file tabs", () => {
-  it("does not reopen last session's documents on launch", async () => {
-    localStorage.setItem(
-      "officedex.shell.v1",
-      JSON.stringify({
-        mode: "agent",
-        home: false,
-        homeList: "recent",
-        navWidth: 190,
-        navCollapsed: true,
-        taskWidth: 320,
-        selectedFolderId: null,
-        expandedFolderIds: [],
-        revealedFolderIds: [],
-        openFileIds: SEED_OPEN_FILE_IDS,
-        activeFileId: SEED_OPEN_FILE_IDS[0],
-        presence: { placement: "docked", expanded: true, x: null, y: null, edge: null },
-      }),
-    );
-    const shell = await renderShell({ keepStorage: true });
-    expect(shell.state().home).toBe(true);
-    expect(shell.state().openFileIds).toEqual([]);
-    expect(tabNames(shell.view.container)).toEqual([]);
-    expect(shell.view.container.querySelector("#shell")?.getAttribute("data-home")).toBe("true");
+type Shell = Awaited<ReturnType<typeof shell>>;
+
+const openLaunchChat = async (view: Shell) => {
+  await view.dispatch({
+    type: "open-chat",
+    chat: { folderId: PROTOTYPE_FOLDER_IDS.launch, conversationId: PROTOTYPE_CHAT_IDS.plan },
+  });
+};
+
+describe("the sidebar's project tree", () => {
+  it("lists the projects closed, with no files in the tree", async () => {
+    const view = await shell();
+    const projects = view.all("#dx-sidebar [data-act=toggle-project]");
+
+    expect(projects.map((row) => row.dataset.id)).toEqual([PROTOTYPE_FOLDER_IDS.launch, PROTOTYPE_FOLDER_IDS.quarter]);
+    expect(projects.every((row) => row.getAttribute("aria-expanded") === "false")).toBe(true);
+    expect(view.all("#dx-sidebar [data-act=open-chat]")).toHaveLength(0);
+    // Files live in Local, Home's Recent or a project's Assets — never here.
+    expect(view.find("#dx-sidebar")?.textContent).not.toContain("MO launch plan.docx");
   });
 
-  it("survive a mode change and a Home round trip", async () => {
-    const shell = await openSeedTabs();
-    const expected = ["MO launch plan", "MO sales forecast", "MO launch deck"];
-    expect(tabNames(shell.view.container)).toEqual(expected);
+  it("opens and closes a project", async () => {
+    const view = await shell();
+    const toggle = () => view.find("#dx-sidebar [data-act=toggle-project][data-id=launch]")!;
 
-    await shell.dispatch({ type: "set-mode", mode: "editor" });
-    expect(tabNames(shell.view.container)).toEqual(expected);
-
-    await shell.dispatch({ type: "go-home" });
-    expect(tabNames(shell.view.container)).toEqual(expected);
-
-    await shell.dispatch({ type: "set-mode", mode: "agent" });
-    expect(tabNames(shell.view.container)).toEqual(expected);
-  });
-
-  it("marks only the active tab selected, and drops selection on Home", async () => {
-    const shell = await openSeedTabs();
-    // Scoped to the file tablist: the ribbon is a second, unrelated tablist.
-    const strip = () => within(shell.view.getByRole("tablist", { name: "Open files" }));
-    const selected = () => strip().getAllByRole("tab").filter((tab) => tab.getAttribute("aria-selected") === "true");
-
-    expect(selected()).toHaveLength(1);
-    await shell.dispatch({ type: "go-home" });
-    expect(selected()).toHaveLength(0);
-  });
-
-  it("pins the active tab from its bookmark control", async () => {
-    const shell = await openSeedTabs();
-    const bookmark = shell.view.getByRole("button", { name: "Bookmark MO launch deck.pptx" });
-    expect(bookmark).toHaveAttribute("aria-pressed", "false");
-    await act(async () => {
-      fireEvent.click(bookmark);
-    });
-    expect(shell.view.getByRole("button", { name: "Remove bookmark from MO launch deck.pptx" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-  });
-
-  it("renames the active file through the file menu", async () => {
-    const shell = await openSeedTabs();
-    await act(async () => {
-      fireEvent.click(shell.view.getByRole("button", { name: "More actions" }));
-    });
-    await act(async () => {
-      fireEvent.click(shell.view.getByRole("menuitem", { name: "Rename file…" }));
-    });
-    const input = shell.view.getByLabelText("File name");
-    await act(async () => {
-      fireEvent.change(input, { target: { value: "Launch deck final" } });
-      fireEvent.click(shell.view.getByRole("button", { name: "Save" }));
-    });
-    // Scoped to the tablist: the status bar carries the same name in a `title`
-    // now (it is how a clipped 66-character name stays recoverable), so a
-    // document-wide `getByTitle` has two hits and neither is the one meant here.
-    expect(
-      within(shell.view.getByRole("tablist", { name: "Open files" })).getByTitle(
-        "Launch deck final.pptx",
-      ),
-    ).toBeInTheDocument();
-  });
-
-  it("shows the unsaved marker for a dirty file and clears it on save", async () => {
-    const shell = await openSeedTabs();
-    // file-forecast is seeded dirty.
-    expect(shell.view.container.querySelectorAll(".shell-tab-dirty")).toHaveLength(1);
-
-    await shell.dispatch({ type: "activate-file", fileId: "file-forecast" });
-    await act(async () => {
-      fireEvent.click(shell.view.getByTitle("Save on this computer"));
-    });
-
-    expect(shell.view.container.querySelectorAll(".shell-tab-dirty")).toHaveLength(0);
-  });
-
-  it("closes a tab from its close button", async () => {
-    const shell = await openSeedTabs();
-    await act(async () => {
-      fireEvent.click(shell.view.getByLabelText("Close MO launch plan.docx"));
-    });
-    expect(tabNames(shell.view.container)).toEqual(["MO sales forecast", "MO launch deck"]);
-  });
-
-  // jsdom is not macOS, so the chord under test is the Ctrl+W branch. The
-  // platform split itself is covered in closeTabShortcut.test.ts.
-  const pressCloseChord = (shell: Awaited<ReturnType<typeof openSeedTabs>>) =>
-    act(async () => {
-      fireEvent.keyDown(shell.view.container, { key: "w", code: "KeyW", ctrlKey: true });
-    });
-
-  it("closes the tab on the canvas from the keyboard", async () => {
-    const shell = await openSeedTabs();
-    // The deck is active after opening the seed tabs.
-    await pressCloseChord(shell);
-    expect(tabNames(shell.view.container)).toEqual(["MO launch plan", "MO sales forecast"]);
-  });
-
-  it("routes the keyboard close through the unsaved question, not around it", async () => {
-    const shell = await openSeedTabs();
-    await shell.dispatch({ type: "activate-file", fileId: "file-forecast" });
-
-    await pressCloseChord(shell);
-    expect(shell.view.getByRole("dialog")).toHaveTextContent("Save before closing?");
-    expect(tabNames(shell.view.container)).toHaveLength(3);
-  });
-
-  it("has nothing to close on Home, and leaves the open files alone", async () => {
-    const shell = await openSeedTabs();
-    await shell.dispatch({ type: "go-home" });
-    await pressCloseChord(shell);
-    expect(tabNames(shell.view.container)).toHaveLength(3);
-  });
-
-  it("asks before closing a dirty tab and saves before removing it", async () => {
-    const shell = await openSeedTabs();
-    await shell.dispatch({ type: "activate-file", fileId: "file-forecast" });
-
-    await act(async () => {
-      fireEvent.click(shell.view.getByLabelText("Close MO sales forecast.xlsx"));
-    });
-    expect(shell.view.getByRole("dialog")).toHaveTextContent("Save before closing?");
-    expect(shell.view.getByRole("dialog")).toHaveTextContent("MO sales forecast.xlsx");
-
-    await act(async () => {
-      fireEvent.click(shell.view.getByRole("button", { name: "Save and close" }));
-    });
-    expect(tabNames(shell.view.container)).toEqual(["MO launch plan", "MO launch deck"]);
-    expect(shell.view.queryByRole("dialog")).toBeNull();
-  });
-
-  it("activates an inactive dirty tab before allowing it to close", async () => {
-    const shell = await openSeedTabs();
-    // The deck is active after opening the seed tabs; the forecast is dirty.
-    await act(async () => {
-      fireEvent.click(shell.view.getByLabelText("Close MO sales forecast.xlsx"));
-    });
-    expect(shell.state().activeFileId).toBe("file-forecast");
-    expect(shell.view.getByLabelText("Close MO sales forecast.xlsx")).toBeInTheDocument();
-    expect(shell.view.queryByRole("dialog")).toBeNull();
-  });
-});
-
-describe("sidebar", () => {
-  it("keeps its frame in both modes and swaps only the middle", async () => {
-    const shell = await openSeedTabs();
-    const sidebar = () => shell.view.container.querySelector<HTMLElement>("#shell-sidebar")!;
-
-    // Frame: brand, Home and the settings footer are in both modes. The footer
-    // used to carry an account chip reading "Flora · Personal workspace" — one
-    // name, shown to everyone, beside a workspace that does not exist.
-    for (const mode of ["agent", "editor"] as const) {
-      await shell.dispatch({ type: "set-mode", mode });
-      const region = within(sidebar());
-      expect(region.getByRole("button", { name: /Switch mode/ })).toBeInTheDocument();
-      expect(region.getByTitle("Home")).toBeInTheDocument();
-      expect(region.getByTitle("Settings")).toBeInTheDocument();
-      expect(region.queryByText("Flora")).toBeNull();
-    }
-
-    // Middle: Agent offers New task; Editor offers the file library views.
-    await shell.dispatch({ type: "set-mode", mode: "agent" });
-    expect(within(sidebar()).getByTitle("New task")).toBeInTheDocument();
-    expect(within(sidebar()).queryByTitle("Pinned")).toBeNull();
-
-    await shell.dispatch({ type: "set-mode", mode: "editor" });
-    expect(within(sidebar()).queryByTitle("New task")).toBeNull();
-    expect(within(sidebar()).getByTitle("Pinned")).toBeInTheDocument();
-    expect(within(sidebar()).getByTitle("Recent")).toBeInTheDocument();
-  });
-
-  it("creates a blank file from New even when Home is already on screen", async () => {
-    const shell = await renderShell();
-    await shell.dispatch({ type: "set-mode", mode: "editor" });
-    expect(shell.state().home).toBe(true);
-
-    const sidebar = () => shell.view.container.querySelector<HTMLElement>("#shell-sidebar")!;
-    await act(async () => {
-      fireEvent.click(within(sidebar()).getByTitle("New"));
-    });
-    // New is a page of blank templates, as in the prototype, not a menu.
-    await act(async () => {
-      fireEvent.click(shell.view.getByRole("button", { name: "Blank workbook" }));
-    });
-
-    await waitFor(() => expect(shell.state().home).toBe(false));
-    expect(tabNames(shell.view.container).some((name) => name?.startsWith("Untitled workbook"))).toBe(true);
-  });
-
-  it("hides labels but keeps accessible names when collapsed", async () => {
-    const shell = await openSeedTabs();
-    const home = () => shell.view.container.querySelector<HTMLElement>("#shell-sidebar .shell-sidebar-item")!;
-
-    // The reference shell opens on its compact icon rail.
-    expect(home().textContent).toBe("");
-    expect(home()).toHaveAttribute("aria-label", "Home");
-    await shell.dispatch({ type: "toggle-nav" });
-    expect(home().textContent).toContain("Home");
-  });
-});
-
-describe("mode menu", () => {
-  it("opens on ArrowDown, marks the current mode, and switches on select", async () => {
-    const shell = await openSeedTabs();
-    const trigger = shell.view.getByRole("button", { name: /Switch mode/ });
-
-    expect(trigger).toHaveAttribute("aria-expanded", "false");
-    await act(async () => {
-      fireEvent.keyDown(trigger, { key: "ArrowDown" });
-    });
-    expect(trigger).toHaveAttribute("aria-expanded", "true");
-
-    const options = shell.view.getAllByRole("menuitemradio");
-    expect(options.map((option) => option.getAttribute("aria-checked"))).toEqual(["true", "false"]);
-
-    await act(async () => {
-      fireEvent.click(options[1]);
-    });
-    expect(shell.state().mode).toBe("editor");
-    // Closing returns focus to the trigger rather than dropping it on <body>.
-    expect(document.activeElement).toBe(trigger);
-  });
-
-  it("moves focus with the arrow keys and closes on Escape", async () => {
-    const shell = await openSeedTabs();
-    const trigger = shell.view.getByRole("button", { name: /Switch mode/ });
-
-    await act(async () => {
-      fireEvent.click(trigger);
-    });
-    const [agent, editor] = shell.view.getAllByRole("menuitemradio");
-    expect(document.activeElement).toBe(agent);
-
-    await act(async () => {
-      fireEvent.keyDown(shell.view.getByRole("menu"), { key: "ArrowDown" });
-    });
-    expect(document.activeElement).toBe(editor);
-
-    // Wrapping keeps a two-item menu usable from either end.
-    await act(async () => {
-      fireEvent.keyDown(shell.view.getByRole("menu"), { key: "ArrowDown" });
-    });
-    expect(document.activeElement).toBe(agent);
-
-    await act(async () => {
-      fireEvent.keyDown(shell.view.getByRole("menu"), { key: "Escape" });
-    });
-    expect(shell.view.queryByRole("menu")).toBeNull();
-    expect(shell.state().mode).toBe("agent");
-    expect(document.activeElement).toBe(trigger);
-  });
-});
-
-describe("status bar", () => {
-  // It used to report per-format facts — "739 words", "Slide 3 of 6", "B6" —
-  // and this suite asserted them. They were fixed strings, identical for every
-  // file of a type, and a status bar is read as a report on *your* document. So
-  // what is asserted now is the two things the shell genuinely knows.
-  it("names the open file and its save state", async () => {
-    const shell = await openSeedTabs();
-    // Scoped to the bar: the task panel's artifact card reports save state too.
-    const bar = () =>
-      within(shell.view.container.querySelector<HTMLElement>(".shell-statusbar")!);
-
-    await shell.dispatch({ type: "activate-file", fileId: "file-plan" });
-    expect(bar().getByText("MO launch plan.docx")).toBeInTheDocument();
-    expect(bar().getByText("All changes saved")).toBeInTheDocument();
-
-    await shell.dispatch({ type: "activate-file", fileId: "file-forecast" });
-    expect(bar().getByText("MO sales forecast.xlsx")).toBeInTheDocument();
-    expect(bar().getByText("Unsaved changes")).toBeInTheDocument();
-  });
-
-  // Nothing invented in place of an answer it does not have.
-  it("claims no page count, word count or zoom level", async () => {
-    const shell = await openSeedTabs();
-    await shell.dispatch({ type: "activate-file", fileId: "file-plan" });
-    const bar = shell.view.container.querySelector<HTMLElement>(".shell-statusbar")!;
-
-    expect(bar.textContent).not.toMatch(/\bwords?\b/i);
-    expect(bar.textContent).not.toMatch(/Page \d|Slide \d|Sheet \d/);
-    expect(bar.textContent).not.toMatch(/\d+%/);
-  });
-});
-
-describe("window controls", () => {
-  // Set by `mountWindowChrome` on the real entry point, from the live root
-  // element — so it survives `cleanup`, and has to come off by hand.
-  const overlayChrome = () => document.documentElement.setAttribute("data-window-chrome", "overlay");
-  afterEach(() => document.documentElement.removeAttribute("data-window-chrome"));
-
-  const band = (shell: { view: { container: HTMLElement } }) =>
-    shell.view.container.querySelector<HTMLElement>(".shell-window-controls")!;
-
-  it("draws its own traffic lights where no system chrome overlays the page", async () => {
-    const shell = await renderShell();
-    expect([...band(shell).querySelectorAll("button")].map((node) => node.className)).toEqual([
-      "shell-window-close",
-      "shell-window-minimize",
-      "shell-window-fullscreen",
+    fireEvent.click(toggle());
+    expect(toggle().getAttribute("aria-expanded")).toBe("true");
+    expect(view.all("#dx-sidebar [data-act=open-chat] .dx-ellipsis").map((row) => row.textContent)).toEqual([
+      "Launch plan & copy",
+      "Sales forecast review",
+      "Launch presentation",
     ]);
+
+    fireEvent.click(toggle());
+    expect(toggle().getAttribute("aria-expanded")).toBe("false");
+    expect(view.all("#dx-sidebar [data-act=open-chat]")).toHaveLength(0);
   });
 
-  // The macOS desktop window keeps the system's traffic lights and floats them
-  // over this corner. Drawing a second set put two overlapping clusters a few
-  // pixels apart in the shipped app; the band is reserved for the system's.
-  it("drags the window from the top row, except on the controls in it", () => {
-    const css = readFileSync("src/shell/app.css", "utf8");
-    expect(css).toMatch(/\.shell-row--top \{[^}]*--wails-draggable:\s*drag/s);
-    expect(css).toMatch(/\.shell-row--top button,[\s\S]*--wails-draggable:\s*no-drag/);
-    expect(css).toMatch(/user-select:\s*none/);
+  // The port shows one conversation per folder, so it has to be told which
+  // before the second column can show it.
+  it("tells the port which conversation, then shows it", async () => {
+    const view = await shell();
+    const openConversation = vi.spyOn(view.port.agent, "openConversation");
+
+    fireEvent.click(view.find("#dx-sidebar [data-act=toggle-project][data-id=launch]")!);
+    fireEvent.click(view.find("#dx-sidebar [data-act=open-chat][data-id=plan]")!);
+
+    await waitFor(() => {
+      if (!view.state().chat) throw new Error("no conversation open");
+    });
+    expect(openConversation).toHaveBeenCalledWith(PROTOTYPE_FOLDER_IDS.launch, PROTOTYPE_CHAT_IDS.plan);
+    expect(view.find("#dx-conversation .dx-conversation-title")?.textContent).toBe("Launch plan & copy");
+    expect(view.find("#dx-sidebar [data-act=open-chat][data-id=plan]")?.closest(".dx-chat-tree")?.getAttribute("aria-selected")).toBe("true");
   });
 
-  it("yields to the system's traffic lights, keeping their band reserved", async () => {
-    overlayChrome();
-    const shell = await renderShell();
+  /*
+   * A chat that has been started but not spoken in has no conversation id yet —
+   * the runtime names a conversation after its first run. It still has a row,
+   * under the project it belongs to, so it is not invisible while it is empty.
+   */
+  it("shows a chat that has not been spoken in yet", async () => {
+    const view = await shell();
+    await view.dispatch({
+      type: "open-chat",
+      chat: { folderId: PROTOTYPE_FOLDER_IDS.launch, conversationId: null },
+      name: "Pricing questions",
+    });
 
-    expect(band(shell)).not.toBeNull();
-    expect(band(shell).querySelectorAll("button")).toHaveLength(0);
-    expect(band(shell)).toHaveAttribute("aria-hidden", "true");
-    // The sidebar toggle is not a window control and stays on both builds.
-    expect(shell.view.container.querySelector(".shell-nav-toggle")).toBeInTheDocument();
+    const rows = view.all("#dx-sidebar .dx-chat-tree");
+    expect(rows[0].textContent).toContain("Pricing questions");
+    expect(rows[0].getAttribute("aria-selected")).toBe("true");
+    // Nothing to manage yet, so no menu button on that row.
+    expect(rows[0].querySelector("[data-act=chat-menu]")).toBeNull();
   });
 
-  it("pins the sidebar toggle to the traffic-light axis under overlay chrome", () => {
-    const css = readFileSync("src/shell/chrome/chrome.css", "utf8");
-    expect(css).toMatch(
-      /html\[data-window-chrome="overlay"\] \.shell-windowbar \{[^}]*padding-top:\s*2px/s,
-    );
-    expect(css).not.toMatch(/\.shell-nav-toggle \{[^}]*margin-left:\s*12px/s);
+  it("falls back to a name for an unnamed new chat", async () => {
+    const view = await shell();
+    await view.dispatch({
+      type: "open-chat",
+      chat: { folderId: PROTOTYPE_FOLDER_IDS.launch, conversationId: null },
+    });
+    expect(view.all("#dx-sidebar .dx-chat-tree")[0].textContent).toContain("New chat");
   });
 });
 
-describe("sidebar brand", () => {
-  /*
-   * The prototype's corner mark says which mode the window is in: the companion
-   * (dark tile, white plate, eyes) in Agent mode, the same plate with nobody in
-   * it in Editor mode. An earlier pass drew the companion as a bare ink plate
-   * with no tile and kept a generic panel glyph for Editor — neither is in the
-   * prototype.
-   */
-  it("is the companion on a dark tile in Agent mode", async () => {
-    const shell = await renderShell();
-    await shell.dispatch({ type: "set-mode", mode: "agent" });
-    const tile = shell.view.container.querySelector(".shell-brand-mark .shell-brand-tile");
-    expect(tile).toHaveAttribute("data-mode", "agent");
-    expect(tile?.querySelectorAll(".shell-brand-eyes path")).toHaveLength(2);
+describe("the top-left band", () => {
+  it("hides and shows the sidebar, and says which it is doing", async () => {
+    const view = await shell();
+    const toggle = () => view.find("#dx-global-controls [data-act=toggle-sidebar]")!;
+
+    expect(toggle().getAttribute("aria-expanded")).toBe("true");
+    expect(toggle().getAttribute("aria-label")).toBe("Hide sidebar");
+
+    fireEvent.click(toggle());
+    expect(view.state().navCollapsed).toBe(true);
+    expect(toggle().getAttribute("aria-expanded")).toBe("false");
+    expect(toggle().getAttribute("aria-label")).toBe("Show sidebar");
+    expect(view.find("#dx-workspace")?.className).toContain("dx-compact");
+    // Hidden means out of the tab order as well as out of sight.
+    expect(view.find("#dx-sidebar")?.hasAttribute("inert")).toBe(true);
+
+    fireEvent.click(toggle());
+    expect(view.state().navCollapsed).toBe(false);
+    expect(view.find("#dx-sidebar")?.hasAttribute("inert")).toBe(false);
   });
 
-  it("is the plain document mark, with no eyes, in Editor mode", async () => {
-    const shell = await renderShell();
-    await shell.dispatch({ type: "set-mode", mode: "editor" });
-    const tile = shell.view.container.querySelector(".shell-brand-mark .shell-brand-tile");
-    expect(tile).toHaveAttribute("data-mode", "editor");
-    expect(tile?.querySelector(".shell-brand-eyes")).toBeNull();
-    expect(tile?.querySelector("img")).not.toBeNull();
+  // The Logo tab is a permanent page tab, not a document tab: it does not close,
+  // and it stays where it is when the sidebar goes.
+  it("keeps a Home tab that always goes Home", async () => {
+    const view = await shell();
+    const home = () => view.find("#dx-global-controls [data-act=home]")!;
+
+    expect(home().getAttribute("aria-current")).toBe("page");
+    expect(home().getAttribute("aria-label")).toBe("OfficeDex Home");
+    expect(home().dataset.tooltip).toBe("Home");
+
+    await view.dispatch({ type: "go", page: "local" });
+    expect(home().getAttribute("aria-current")).toBe("false");
+
+    fireEvent.click(home());
+    expect(view.state().page).toBe("home");
+    expect(home().getAttribute("aria-current")).toBe("page");
+
+    // And it is still there with the sidebar hidden.
+    fireEvent.click(view.find("#dx-global-controls [data-act=toggle-sidebar]")!);
+    expect(view.find("#dx-global-controls [data-act=home]")).not.toBeNull();
+  });
+
+  it("leaves a conversation when it goes Home", async () => {
+    const view = await shell();
+    await openLaunchChat(view);
+    fireEvent.click(view.find("#dx-global-controls [data-act=home]")!);
+
+    expect(view.state().chat).toBeNull();
+    expect(view.state().page).toBe("home");
+  });
+});
+
+describe("the document tabs", () => {
+  const tab = (view: Shell, fileId: string) => view.find(`[data-tab="${fileId}"]`);
+
+  it("marks a Local tab and a Chat tab differently", async () => {
+    const view = await shell();
+    await view.dispatch({ type: "open-local-file", fileId: "brief" });
+    expect(tab(view, "brief")?.dataset.context).toBe("local");
+    expect(tab(view, "brief")?.querySelector(".dx-tab-dex-watermark")).toBeNull();
+
+    await openLaunchChat(view);
+    await view.dispatch({ type: "open-file", fileId: "doc" });
+    expect(tab(view, "doc")?.dataset.context).toBe("chat");
+    // The watermark is what says a tab belongs to a conversation.
+    expect(tab(view, "doc")?.querySelector(".dx-tab-dex-watermark")).not.toBeNull();
+    expect(tab(view, "brief")?.dataset.context).toBe("local");
+  });
+
+  // §18: a tab remembers how it was opened, and activating it restores that.
+  it("leaves the conversation when a Local tab is brought forward", async () => {
+    const view = await shell();
+    await view.dispatch({ type: "open-local-file", fileId: "brief" });
+    await openLaunchChat(view);
+    await view.dispatch({ type: "open-file", fileId: "doc" });
+    expect(view.state().chat).not.toBeNull();
+
+    fireEvent.click(tab(view, "brief")!.querySelector<HTMLElement>(".dx-tab-title")!);
+
+    expect(view.state().activeFileId).toBe("brief");
+    expect(view.state().chat).toBeNull();
+    // And it did not quietly become a Chat tab on the way.
+    expect(tab(view, "brief")?.dataset.context).toBe("local");
+  });
+
+  it("returns to the conversation when its own tab is brought forward", async () => {
+    const view = await shell();
+    await openLaunchChat(view);
+    await view.dispatch({ type: "open-file", fileId: "doc" });
+    await view.dispatch({ type: "open-local-file", fileId: "brief" });
+    expect(view.state().chat).toBeNull();
+
+    fireEvent.click(tab(view, "doc")!.querySelector<HTMLElement>(".dx-tab-title")!);
+    expect(view.state().chat).toEqual({
+      folderId: PROTOTYPE_FOLDER_IDS.launch,
+      conversationId: PROTOTYPE_CHAT_IDS.plan,
+    });
+  });
+
+  it("closes a tab from its own close button", async () => {
+    const view = await shell();
+    await view.dispatch({ type: "open-local-file", fileId: "brief" });
+    await view.dispatch({ type: "open-local-file", fileId: "doc" });
+
+    fireEvent.click(view.find("[data-act=close-file][data-id=brief]")!);
+
+    expect(tab(view, "brief")).toBeNull();
+    expect(tab(view, "doc")).not.toBeNull();
+    expect(view.state().openFileIds).toEqual(["doc"]);
+  });
+
+  /*
+   * A finished run does not take the screen: its result becomes a tab with the
+   * unread dot, and opening the file is what clears it.
+   */
+  it("marks a tab a run added as unread, until it is opened", async () => {
+    const view = await shell();
+    await view.dispatch({ type: "open-local-file", fileId: "brief" });
+    await view.dispatch({ type: "add-tab", fileId: "slides", chat: null, unread: true });
+
+    expect(tab(view, "slides")?.querySelector(".dx-dot")).not.toBeNull();
+    // Added, not activated: the document being read is still the one on screen.
+    expect(view.state().activeFileId).toBe("brief");
+    expect(tab(view, "slides")?.className).not.toContain("dx-active");
+
+    fireEvent.click(tab(view, "slides")!.querySelector<HTMLElement>(".dx-tab-title")!);
+    expect(tab(view, "slides")?.querySelector(".dx-dot")).toBeNull();
+  });
+
+  it("adds no dot for a tab that was not flagged", async () => {
+    const view = await shell();
+    await view.dispatch({ type: "open-local-file", fileId: "brief" });
+    await view.dispatch({ type: "add-tab", fileId: "slides", chat: null });
+
+    expect(tab(view, "slides")).not.toBeNull();
+    expect(tab(view, "slides")?.querySelector(".dx-dot")).toBeNull();
+  });
+
+  it("says whether the document on screen is saved", async () => {
+    const dirty = prototypeFiles().map((file) => (file.id === "sheet" ? { ...file, dirty: true } : file));
+    const view = await shell(dirty);
+
+    await view.dispatch({ type: "open-local-file", fileId: "brief" });
+    expect(view.find(".dx-source-saved")?.textContent).toBe("Saved");
+
+    await view.dispatch({ type: "open-local-file", fileId: "sheet" });
+    expect(view.find(".dx-source-saved")?.textContent).toBe("Unsaved");
+    // The tab itself carries the same news, for a file that is not on screen.
+    expect(tab(view, "sheet")?.querySelector(".dx-dirty-mark")).not.toBeNull();
+  });
+});
+
+describe("the divider between the columns", () => {
+  /** jsdom has neither PointerEvent nor pointer capture; a drag needs both. */
+  function capturable(element: HTMLElement) {
+    Object.assign(element, { setPointerCapture: () => {}, releasePointerCapture: () => {} });
+  }
+  const pointer = (type: string, clientX: number) => {
+    const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX, button: 0 });
+    Object.defineProperty(event, "pointerId", { value: 1 });
+    return event;
+  };
+
+  const openSplitter = async () => {
+    const view = await shell();
+    await openLaunchChat(view);
+    const handle = view.find(".dx-resize-handle")!;
+    return { view, handle, width: () => view.state().chatWidth };
+  };
+
+  it("steps the conversation's width with the arrow keys", async () => {
+    const { view, handle, width } = await openSplitter();
+    expect(width()).toBe(CHAT_DEFAULT_WIDTH);
+    expect(handle.getAttribute("aria-valuenow")).toBe(String(CHAT_DEFAULT_WIDTH));
+
+    fireEvent.keyDown(handle, { key: "ArrowRight" });
+    expect(width()).toBe(CHAT_DEFAULT_WIDTH + 16);
+
+    fireEvent.keyDown(handle, { key: "ArrowLeft" });
+    fireEvent.keyDown(handle, { key: "ArrowLeft" });
+    expect(width()).toBe(CHAT_DEFAULT_WIDTH - 16);
+    expect(view.find(".dx-resize-handle")?.getAttribute("aria-valuenow")).toBe(String(CHAT_DEFAULT_WIDTH - 16));
+  });
+
+  it("goes to the limits with Home and End, and stays inside them", async () => {
+    const { handle, width } = await openSplitter();
+
+    fireEvent.keyDown(handle, { key: "Home" });
+    expect(width()).toBe(CHAT_MIN_WIDTH);
+    // Already at the minimum: a further step changes nothing.
+    fireEvent.keyDown(handle, { key: "ArrowLeft" });
+    expect(width()).toBe(CHAT_MIN_WIDTH);
+
+    fireEvent.keyDown(handle, { key: "End" });
+    expect(width()).toBe(CHAT_MAX_WIDTH);
+    fireEvent.keyDown(handle, { key: "ArrowRight" });
+    expect(width()).toBe(CHAT_MAX_WIDTH);
+  });
+
+  it("puts the width back when a drag is abandoned with Escape", async () => {
+    const { handle, width } = await openSplitter();
+    capturable(handle);
+
+    act(() => {
+      handle.dispatchEvent(pointer("pointerdown", 400));
+    });
+    act(() => {
+      handle.dispatchEvent(pointer("pointermove", 460));
+    });
+    expect(width()).toBe(CHAT_DEFAULT_WIDTH + 60);
+
+    fireEvent.keyDown(handle, { key: "Escape" });
+    expect(width()).toBe(CHAT_DEFAULT_WIDTH);
+  });
+
+  it("swaps which side the conversation is on", async () => {
+    const { view } = await openSplitter();
+    expect(view.state().chatPosition).toBe("left");
+    expect(view.find("#dx-workspace")?.className).not.toContain("dx-chat-right");
+
+    fireEvent.click(view.find("[data-act=swap]")!);
+    expect(view.state().chatPosition).toBe("right");
+    expect(view.find("#dx-workspace")?.className).toContain("dx-chat-right");
+
+    fireEvent.click(view.find("[data-act=swap]")!);
+    expect(view.state().chatPosition).toBe("left");
+  });
+});
+
+describe("the workspace switch", () => {
+  // It appears once there is work beside the conversation, and only then.
+  it("is absent with no conversation, and with a conversation that has nothing beside it", async () => {
+    const view = await shell();
+    expect(view.find("#dx-workspace-toggle")).toBeNull();
+
+    await openLaunchChat(view);
+    expect(view.find("#dx-workspace-toggle")).toBeNull();
+  });
+
+  it("appears once a document is open beside the conversation, and closes the content region", async () => {
+    const view = await shell();
+    await openLaunchChat(view);
+    await view.dispatch({ type: "open-file", fileId: "doc" });
+
+    const toggle = () => view.find("#dx-workspace-toggle")!;
+    expect(toggle().getAttribute("aria-pressed")).toBe("true");
+    expect(toggle().getAttribute("aria-label")).toBe("Close workspace");
+
+    fireEvent.click(toggle());
+    expect(view.state().workspaceOpen).toBe(false);
+    expect(view.find("#dx-workspace")?.className).toContain("dx-workspace-closed");
+    expect(view.find("#dx-content")?.hasAttribute("inert")).toBe(true);
+
+    fireEvent.click(toggle());
+    expect(view.state().workspaceOpen).toBe(true);
+    expect(view.find("#dx-content")?.hasAttribute("inert")).toBe(false);
+  });
+});
+
+describe("the keyboard shortcuts", () => {
+  const chord = (key: string) => fireEvent.keyDown(window, { key, metaKey: true });
+
+  it("⌘O opens a file from the system picker, as Local", async () => {
+    const view = await shell();
+    await openLaunchChat(view);
+
+    chord("o");
+    await waitFor(() => {
+      if (view.state().page !== "editor") throw new Error(`still on ${view.state().page}`);
+    });
+    // Opened from outside any project, so it brings no conversation with it.
+    expect(view.state().chat).toBeNull();
+    expect(view.find(".dx-tabs-strip")?.textContent).toContain("From this computer 1");
+  });
+
+  it("⌘N opens the New picker", async () => {
+    const view = await shell();
+    chord("n");
+    expect(view.find("#dx-new-popover")).not.toBeNull();
+  });
+
+  it("⌘, opens Settings", async () => {
+    const view = await shell();
+    chord(",");
+    expect(view.state().page).toBe("settings");
+  });
+
+  it("⌘S saves the document on screen", async () => {
+    const view = await shell();
+    await view.dispatch({ type: "open-local-file", fileId: "brief" });
+    const save = vi.spyOn(view.port.files, "save");
+
+    chord("s");
+    await waitFor(() => {
+      if (save.mock.calls.length === 0) throw new Error("the port was not asked to save");
+    });
+    expect(save).toHaveBeenCalledWith("brief");
+  });
+
+  // With nothing on screen ⌘S is not the shell's to take; it keeps its usual
+  // meaning for whatever has focus.
+  it("⌘S is left alone with no document on screen", async () => {
+    const view = await shell();
+    const save = vi.spyOn(view.port.files, "save");
+
+    chord("s");
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(save).not.toHaveBeenCalled();
   });
 });
