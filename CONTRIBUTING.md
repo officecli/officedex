@@ -19,7 +19,7 @@ Thanks for taking the time to contribute! This document covers everything you ne
 - Be respectful — see [Code of Conduct](./CODE_OF_CONDUCT.md).
 - File an issue (or check the Discussions tab) **before** spending time on a non-trivial change so we can align on direction.
 - Prefer small, focused PRs. One concern per PR.
-- All UI changes must follow the approved interaction prototype (`OfficeDex-Final-Light-Preview-2026-09-17.html`). Its tokens are projected into [`src/shell/tokens.css`](./src/shell/tokens.css) — read that file; do not hard-code colours or type sizes outside it.
+- All UI changes must follow the approved OD-UI-1.2 r10 prototype and standard (see `CLAUDE.md`). Its tokens are projected into [`src/shell/tokens.css`](./src/shell/tokens.css) — read that file; do not hard-code colours or type sizes outside it.
 
 ## Getting set up
 
