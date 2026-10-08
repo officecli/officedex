@@ -56,7 +56,13 @@ func TestLegacyImageExportWithRealConverter(t *testing.T) {
 	if binary == "" {
 		t.Skip("real converter unavailable")
 	}
-	fixture := filepath.Join("..", "..", "..", "presentation", "tools", "fixtures", "blank-presentation", "content.json")
+	// The checkout is found the way the sibling tests find it: a linked
+	// worktree has no ../../../presentation, only PRESENTATION_SOURCE_DIR.
+	presentationRoot := locatePresentationRoot(t)
+	if presentationRoot == "" {
+		t.Skip("presentation checkout unavailable")
+	}
+	fixture := filepath.Join(presentationRoot, "tools", "fixtures", "blank-presentation", "content.json")
 	content, err := os.ReadFile(fixture)
 	if err != nil {
 		t.Fatal(err)
