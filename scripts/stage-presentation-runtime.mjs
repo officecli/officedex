@@ -7,7 +7,20 @@
 // office-js sources. So the app needs a real directory, not just the converter
 // binary. Everything staged here was derived from the worker's actual module
 // graph — see PRESENTATION_SOURCES below.
-import { access, chmod, cp, lstat, mkdir, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  chmod,
+  cp,
+  lstat,
+  mkdir,
+  open,
+  readdir,
+  readFile,
+  realpath,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import { existsSync } from "node:fs";
 import os from "node:os";
@@ -140,10 +153,21 @@ export function resolveStagingTarget({
 // for Vite 8's CSS pipeline. The version must match the host package exactly, so
 // derive it from the staged copy rather than assuming a hoisted top-level one:
 // pnpm may hold several versions side by side in .pnpm/.
+
+// pnpm keeps a package at .pnpm/<id>/node_modules/<name> with its dependencies
+// beside it. For a scoped name that is .pnpm/<id>/node_modules/@scope/<pkg>, so
+// the sibling set is the grandparent: taking the parent would copy the scope
+// directory's children to the top level (@types/node as node_modules/node,
+// @esbuild/darwin-arm64 as node_modules/darwin-arm64).
+function pnpmSiblingsOf(realPackageDir) {
+  const parent = path.dirname(realPackageDir);
+  return path.basename(parent).startsWith("@") ? path.dirname(parent) : parent;
+}
+
 async function copyPnpmSiblingSet(packageDir, destModules) {
-  const real = await realpath(packageDir);
-  await cp(path.dirname(real), destModules, { recursive: true, force: true, dereference: true });
-  return path.dirname(real);
+  const siblings = pnpmSiblingsOf(await realpath(packageDir));
+  await cp(siblings, destModules, { recursive: true, force: true, dereference: true });
+  return siblings;
 }
 
 async function nestedPnpmPackages(siblingsDir) {
@@ -174,7 +198,7 @@ async function copyPnpmClosures(linkedPackage, destModules) {
     } catch {
       continue;
     }
-    const nestedSiblings = path.dirname(await realpath(nested));
+    const nestedSiblings = pnpmSiblingsOf(await realpath(nested));
     if (nestedSiblings === siblingsDir) continue;
     await copyPnpmSiblingSet(nested, destModules);
   }
@@ -198,6 +222,204 @@ export function nativePackages(platform = process.platform, arch = os.arch()) {
     { host: "rolldown", name: `@rolldown/binding-${slice}${abi}` },
     { host: "lightningcss", name: `lightningcss-${slice}${abi}` },
   ];
+}
+
+// The four families above publish one package per OS/CPU slice, and pnpm
+// installs every slice named in supportedArchitectures. A checkout prepared for
+// a cross-arch build therefore carries both the host's and the target's, and
+// copyPnpmClosures copies them all: an Intel package staged on Apple Silicon
+// shipped @esbuild/darwin-arm64, @rolldown/binding-darwin-arm64 and friends —
+// ~30 MB of Mach-O that is signed, notarized and never loaded.
+const NATIVE_SLICE =
+  "(?:aix|android|darwin|freebsd|linux|netbsd|openbsd|sunos|win32|wasm32)-[a-z0-9]+(?:-[a-z0-9]+)*";
+const NATIVE_SLICE_FAMILIES = Object.freeze([
+  new RegExp(`^@esbuild/${NATIVE_SLICE}$`),
+  new RegExp(`^@rollup/rollup-${NATIVE_SLICE}$`),
+  new RegExp(`^@rolldown/binding-${NATIVE_SLICE}$`),
+  new RegExp(`^lightningcss-${NATIVE_SLICE}$`),
+]);
+
+/** Whether `name` is a per-slice native companion of esbuild/rollup/rolldown/lightningcss. */
+export function isNativeSlicePackage(name) {
+  return NATIVE_SLICE_FAMILIES.some((family) => family.test(name));
+}
+
+// Mach-O cputype values (mach/machine.h) mapped to Node's os.arch() names.
+// CPU_ARCH_ABI64 (0x01000000) marks the 64-bit variants.
+const MACHO_CPU_TYPES = new Map([
+  [0x00000007, "ia32"],
+  [0x01000007, "x64"],
+  [0x0000000c, "arm"],
+  [0x0100000c, "arm64"],
+]);
+
+/**
+ * The architectures a Mach-O image carries, as os.arch() names, read from its
+ * own header: one for a thin image, one per slice for a universal (fat) one.
+ * Returns null for anything that is not a Mach-O — a JS shim, a shell script,
+ * an ELF. `bytes` is the start of the file; 1 KiB covers any real fat header.
+ */
+export function machoArchitectures(bytes) {
+  if (bytes.length < 8) return null;
+  const name = (cputype) => MACHO_CPU_TYPES.get(cputype) ?? `cputype-${cputype.toString(16)}`;
+  const magicLE = bytes.readUInt32LE(0);
+  const magicBE = bytes.readUInt32BE(0);
+  // Thin images (MH_MAGIC / MH_MAGIC_64) are stored in the target's own byte
+  // order; every 64-bit Apple target is little-endian, but accept both.
+  if (magicLE === 0xfeedface || magicLE === 0xfeedfacf) return [name(bytes.readUInt32LE(4))];
+  if (magicBE === 0xfeedface || magicBE === 0xfeedfacf) return [name(bytes.readUInt32BE(4))];
+  // Universal images (FAT_MAGIC / FAT_MAGIC_64) are always big-endian: nfat_arch
+  // then one fat_arch per slice (20 bytes, or 32 for the 64-bit variant), each
+  // starting with its cputype. Java class files share the FAT_MAGIC bytes; like
+  // file(1), treat an implausible slice count as not-a-Mach-O.
+  if (magicBE === 0xcafebabe || magicBE === 0xcafebabf) {
+    const count = bytes.readUInt32BE(4);
+    if (count === 0 || count > 30) return null;
+    const entrySize = magicBE === 0xcafebabe ? 20 : 32;
+    const archs = [];
+    for (let index = 0; index < count; index += 1) {
+      const offset = 8 + index * entrySize;
+      if (offset + 4 > bytes.length) break;
+      archs.push(name(bytes.readUInt32BE(offset)));
+    }
+    return archs;
+  }
+  return null;
+}
+
+async function readHead(file, length = 1024) {
+  const handle = await open(file, "r");
+  try {
+    const buffer = Buffer.alloc(length);
+    const { bytesRead } = await handle.read(buffer, 0, length, 0);
+    return buffer.subarray(0, bytesRead);
+  } finally {
+    await handle.close();
+  }
+}
+
+// A Mach-O that the target cannot execute: any Mach-O when the target is not
+// macOS, otherwise one without a slice for the target's CPU. A universal
+// binary that includes the target (fsevents ships fat) is fine.
+async function isForeignMachO(file, platform, arch) {
+  let archs;
+  try {
+    archs = machoArchitectures(await readHead(file));
+  } catch {
+    return false;
+  }
+  if (!archs) return false;
+  return platform !== "darwin" || !archs.includes(arch);
+}
+
+/**
+ * Remove every native slice package in the staged node_modules (nested ones
+ * included) that is not the target's, plus esbuild's own `bin/esbuild` when it
+ * is a Mach-O for another CPU: pnpm's postinstall replaces that JS shim with a
+ * hard link to the *host's* binary, which copying the closure turned into a
+ * 10 MB copy of the wrong slice. esbuild's library API never spawns it (Vite
+ * goes through @esbuild/<slice>/bin/esbuild), so dropping it costs nothing.
+ *
+ * Returns the removed entries relative to `dest`, sorted, for runtime.json.
+ */
+export async function pruneForeignNatives(dest, { platform, arch }) {
+  const wanted = nativePackages(platform, arch).map((native) => native.name);
+  // Keep the target's package, and a libc-suffixed variant of it
+  // (@rollup/rollup-linux-x64-gnu for a linux-x64 target).
+  const isTargets = (name) => wanted.some((want) => name === want || name.startsWith(`${want}-`));
+  const pruned = [];
+
+  const visit = async (modules) => {
+    let entries;
+    try {
+      entries = await readdir(modules, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    const packages = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const dir = path.join(modules, entry.name);
+      if (entry.name.startsWith("@")) {
+        for (const child of await readdir(dir, { withFileTypes: true })) {
+          if (child.isDirectory()) {
+            packages.push({ name: `${entry.name}/${child.name}`, dir: path.join(dir, child.name) });
+          }
+        }
+        continue;
+      }
+      packages.push({ name: entry.name, dir });
+    }
+    for (const pkg of packages) {
+      // fsevents is macOS-only (a universal Mach-O that no other platform can
+      // load); vite's closure brings it along whenever the tree is staged on
+      // a Mac, so a Windows or Linux target drops it like any foreign slice.
+      const foreignPackage =
+        (isNativeSlicePackage(pkg.name) && !isTargets(pkg.name)) || (pkg.name === "fsevents" && platform !== "darwin");
+      if (foreignPackage) {
+        await rm(pkg.dir, { recursive: true, force: true });
+        pruned.push(path.relative(dest, pkg.dir));
+        continue;
+      }
+      if (pkg.name === "esbuild") {
+        const bin = path.join(pkg.dir, "bin", "esbuild");
+        if (existsSync(bin) && (await isForeignMachO(bin, platform, arch))) {
+          await rm(bin, { force: true });
+          pruned.push(path.relative(dest, bin));
+        }
+      }
+      await visit(path.join(pkg.dir, "node_modules"));
+    }
+  };
+
+  await visit(path.join(dest, "node_modules"));
+  return pruned.sort();
+}
+
+/**
+ * Every Mach-O in `dir` (native addons, dylibs and executables) that lacks a
+ * slice for `arch`, as `{ file, archs }` relative to `dir`. This is the same
+ * sweep as `find -perm +111 | xargs file | grep Mach-O`, and it is what the
+ * pruning above is checked against: a wrong-arch converter or a native the
+ * families above do not know about is caught here, not by a user whose Intel
+ * app cannot load it.
+ */
+export async function findForeignMachO(dir, arch) {
+  const foreign = [];
+  const walk = async (current) => {
+    let entries;
+    try {
+      entries = await readdir(current, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        await walk(full);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      let candidate = /\.(node|dylib|so)$/.test(entry.name);
+      if (!candidate) {
+        try {
+          candidate = ((await stat(full)).mode & 0o111) !== 0;
+        } catch {
+          continue;
+        }
+      }
+      if (!candidate) continue;
+      let archs;
+      try {
+        archs = machoArchitectures(await readHead(full));
+      } catch {
+        continue;
+      }
+      if (archs && !archs.includes(arch)) foreign.push({ file: path.relative(dir, full), archs });
+    }
+  };
+  await walk(dir);
+  return foreign.sort((a, b) => a.file.localeCompare(b.file));
 }
 
 // Find a native package at the exact version the staged host package expects.
@@ -462,11 +684,6 @@ export async function stagePresentationRuntime({
     await cp(found.path, target, { recursive: true, force: true, dereference: true });
     copiedHosts.push(native.host);
   }
-  // vite's pnpm sibling set brought the *host's* natives along (and fsevents
-  // on a Mac). On a package for another platform they are dead weight that no
-  // code path loads -- some 50MB of Mach-O inside a Windows installer -- and
-  // the PE audit in dist-win.mjs would rightly refuse them.
-  const prunedNatives = await pruneForeignPlatformNatives(modules, targetPlatform);
   if (!copiedHosts.includes("esbuild")) {
     throw new Error("staged vite closure is missing esbuild; cannot package a working SSR runtime");
   }
@@ -475,6 +692,10 @@ export async function stagePresentationRuntime({
       "staged vite closure is missing rollup/rolldown; cannot package a working SSR runtime",
     );
   }
+  // The closure copied above brought every installed slice along; keep only
+  // the target's. Done after the copy so a missing target native still fails
+  // with the message above rather than leaving a tree with no natives at all.
+  const prunedNatives = await pruneForeignNatives(dest, { platform: targetPlatform, arch: targetArch });
 
   // mop-convert: the typed PPTX <-> MOP converter the worker shells out to.
   // Resolved the same way officecli's resolveMOPConvert() resolves it, under
@@ -499,6 +720,23 @@ export async function stagePresentationRuntime({
   // so normalize the bits here to keep every native module in that sweep.
   const natives = await findNativeModules(dest);
   for (const native of natives) await chmod(native, 0o755);
+
+  // On a macOS target nothing Mach-O may remain that the target CPU cannot
+  // run: a native outside the families pruneForeignNatives knows, or a
+  // mop-convert built for the build host, would be signed and notarized only
+  // to fail at load time on the user's machine.
+  if (targetPlatform === "darwin") {
+    const foreign = await findForeignMachO(dest, targetArch);
+    if (foreign.length > 0) {
+      throw new Error(
+        `staged presentation runtime for darwin-${targetArch} contains Mach-O files without a ${targetArch} slice:\n` +
+          foreign.map(({ file, archs }) => `  ${file} (${archs.join(", ")})`).join("\n") +
+          (foreign.some(({ file }) => file === path.relative(dest, converterDest))
+            ? `\nset MOP_CONVERT_BIN to a mop-convert built for darwin-${targetArch}`
+            : ""),
+      );
+    }
+  }
 
   // Any node/node.exe inside the presentation tree would be a second V8
   // engine. It would get signed with hardened runtime + no entitlements and
@@ -552,7 +790,9 @@ export async function stagePresentationRuntime({
           playwright: playwrightStaged,
         },
         nativeModules: natives.map((native) => path.relative(dest, native)).sort(),
-        prunedForeignNatives: prunedNatives,
+        // Native slice packages (and esbuild's host-arch CLI copy) that the
+        // checkout had installed for other CPUs and this tree does not ship.
+        prunedNatives,
       },
       null,
       2,
@@ -560,47 +800,6 @@ export async function stagePresentationRuntime({
     "utf8",
   );
   return { root, dest, converter: converterDest, playwrightStaged, target: { platform: targetPlatform, arch: targetArch } };
-}
-
-const NATIVE_PLATFORMS = ["darwin", "win32", "linux", "freebsd", "android", "aix", "sunos", "openbsd", "netbsd"];
-
-/** The platform a native package name is for, or "" when it is not a per-platform package. */
-export function nativePackagePlatform(name) {
-  const match =
-    /^@esbuild\/([a-z0-9]+)-/.exec(name) ||
-    /^@rollup\/rollup-([a-z0-9]+)-/.exec(name) ||
-    /^@rolldown\/binding-([a-z0-9]+)-/.exec(name) ||
-    /^lightningcss-([a-z0-9]+)-/.exec(name);
-  if (match && NATIVE_PLATFORMS.includes(match[1])) return match[1];
-  if (name === "fsevents") return "darwin";
-  return "";
-}
-
-/**
- * Removes native packages built for platforms other than the target from a
- * staged node_modules. Same-platform packages for another CPU are kept: a
- * macOS tree legitimately carries both darwin slices.
- */
-export async function pruneForeignPlatformNatives(modules, targetPlatform) {
-  const pruned = [];
-  const candidates = [];
-  for (const entry of await readdir(modules, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    if (entry.name.startsWith("@")) {
-      for (const child of await readdir(path.join(modules, entry.name), { withFileTypes: true })) {
-        if (child.isDirectory()) candidates.push(`${entry.name}/${child.name}`);
-      }
-      continue;
-    }
-    candidates.push(entry.name);
-  }
-  for (const name of candidates) {
-    const platform = nativePackagePlatform(name);
-    if (!platform || platform === targetPlatform) continue;
-    await rm(path.join(modules, ...name.split("/")), { recursive: true, force: true });
-    pruned.push(name);
-  }
-  return pruned.sort();
 }
 
 /**

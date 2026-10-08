@@ -69,8 +69,10 @@ reuses an existing `dist/`.
 
 Every `.exe`, `.dll` and `.node` in the finished tree is checked to be PE32+
 x86-64 (`auditPortableExecutables`); a Mach-O or an arm64 image fails the
-build. Natives for other platforms that vite's pnpm sibling set drags in are
-pruned from the staged presentation tree (`pruneForeignPlatformNatives`).
+build. Native slice packages for any other OS or CPU that vite's pnpm sibling
+set drags in, and fsevents on a non-macOS target, are pruned from the staged
+presentation tree (`pruneForeignNatives`; what was removed is listed as
+`prunedNatives` in its runtime.json).
 
 ### Presentation natives through pnpm instead
 
