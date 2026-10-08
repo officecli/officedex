@@ -43,10 +43,10 @@
     "stage:presentation": "node scripts/stage-presentation-runtime.mjs",
     "stage:writer-fonts": "node scripts/stage-writer-fonts.mjs",
     "dist:mac": "npm run prefetch:officecli && npm run prefetch:word2mow && npm run stage:mop-runtime && npm run stage:presentation && npm run stage:writer-fonts && wails build -ldflags \"-X main.appVersion=$(node -p 'require(`./package.json`).version')\" && node scripts/bundle-runtime.mjs && node scripts/verify-packaged-runtime.mjs build/bin && npm run bundle:office2modoc:mac && npm run bundle:officecli:mac && node scripts/notarize.mjs build/bin/OfficeDex.app",
-    "dist:win": "npm run prefetch:officecli && npm run prefetch:word2mow && npm run stage:mop-runtime && npm run stage:presentation && npm run stage:writer-fonts && wails build -platform windows/amd64 -ldflags \"-X main.appVersion=$(node -p 'require(`./package.json`).version')\" && node scripts/bundle-runtime.mjs && node scripts/verify-packaged-runtime.mjs build/bin && npm run bundle:licenses:win",
+    "dist:win": "node scripts/dist-win.mjs",
     "test": "vitest run",
     "test:sheet-toolbar": "node --test scripts/sdk-sheet-chunks.test.mjs scripts/sdk-sheet-toolbar.browser.test.mjs scripts/sdk-sheet-build-assets.test.mjs",
-    "test:scripts": "node scripts/verify-presentation-source.mjs && node scripts/verify-bridge-types.mjs && node --test scripts/sync-writer-component.hostRuntime.test.mjs scripts/bundle-office2modoc.test.mjs scripts/bundle-runtime.test.mjs scripts/codesign-bundled-officecli.test.mjs scripts/sdk-sheet-build-assets.test.mjs scripts/stage-presentation-runtime.test.mjs scripts/sync-presentation-component.test.mjs scripts/sync-writer-component.test.mjs scripts/writer-embed-cache.test.mjs scripts/stage-writer-fonts.test.mjs scripts/prefetch-word2mow-convert.test.mjs scripts/verify-font-licenses.test.mjs scripts/verify-bundled-fonts.test.mjs scripts/verify-officecli-canvas-contract.test.mjs scripts/relocatable-runtime.test.mjs scripts/verify-packaged-runtime.test.mjs scripts/verify-release-version.test.mjs scripts/update-channel.test.mjs scripts/build-manifest.test.mjs scripts/manifest-signing.test.mjs scripts/publish-update-channel.test.mjs scripts/verify-mop-schema.test.mjs",
+    "test:scripts": "node scripts/verify-presentation-source.mjs && node scripts/verify-bridge-types.mjs && node --test scripts/sync-writer-component.hostRuntime.test.mjs scripts/bundle-office2modoc.test.mjs scripts/bundle-runtime.test.mjs scripts/codesign-bundled-officecli.test.mjs scripts/sdk-sheet-build-assets.test.mjs scripts/stage-presentation-runtime.test.mjs scripts/sync-presentation-component.test.mjs scripts/sync-writer-component.test.mjs scripts/writer-embed-cache.test.mjs scripts/stage-writer-fonts.test.mjs scripts/prefetch-word2mow-convert.test.mjs scripts/verify-font-licenses.test.mjs scripts/verify-bundled-fonts.test.mjs scripts/verify-officecli-canvas-contract.test.mjs scripts/relocatable-runtime.test.mjs scripts/verify-packaged-runtime.test.mjs scripts/verify-release-version.test.mjs scripts/update-channel.test.mjs scripts/build-manifest.test.mjs scripts/manifest-signing.test.mjs scripts/publish-update-channel.test.mjs scripts/verify-mop-schema.test.mjs scripts/pe-executable.test.mjs scripts/stage-mop-runtime.test.mjs scripts/dist-win.test.mjs scripts/windows-inputs.test.mjs scripts/fetch-presentation-natives.test.mjs",
     "verify:chart:evidence": "node skills/aippt-jssdk-design/chart/validate-evidence-inventory.mjs",
     "verify:officecli:canvas": "node scripts/verify-officecli-canvas-contract.mjs",
     "test:go": "env -u GOROOT go test ./... -count=1 && env -u GOROOT go test -tags officedex_demo ./... -count=1",
@@ -61,7 +61,11 @@
     "test:e2e:install": "playwright install chromium",
     "lint": "tsc --noEmit",
     "verify:bridge:types": "node scripts/verify-bridge-types.mjs",
-    "verify:shell:styles": "node --test scripts/verify-shell-styles.test.mjs"
+    "verify:shell:styles": "node --test scripts/verify-shell-styles.test.mjs",
+    "dist:win:installer": "node scripts/dist-win.mjs --installer --zip",
+    "fetch:presentation-natives": "node scripts/fetch-presentation-natives.mjs",
+    "windows:inputs:pack": "node scripts/windows-inputs.mjs pack",
+    "windows:smoke": "node scripts/windows-smoke.mjs"
   },
   "dependencies": {
     "@shimo/editor-sdk-core": "0.0.1-124-jsapi.51",
