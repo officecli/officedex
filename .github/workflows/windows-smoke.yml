@@ -1,0 +1,218 @@
+name: Windows smoke
+
+# The checks a Windows package needs that a Mac cannot run: Go tests on
+# Windows, the staged node.exe actually executed, the package assembled
+# natively (NSIS installer included), `officedex.exe --verify-runtime`, a
+# launch, and officecli's end-to-end MOP generation against the packaged
+# presentation tree. Manual only, and it publishes nothing: the artifacts are
+# uploaded to the run for a human to inspect. Releases are cut from the
+# release machine (CONTRIBUTING.md, Release flow).
+#
+# GitHub-hosted runners reach neither the presentation repository nor the Rust
+# registry, so the parts only a Mac can produce arrive as the "windows inputs"
+# archive (`npm run windows:inputs:pack`, scripts/windows-inputs.mjs): dist/,
+# the staged presentation tree, the Writer fonts and the two converters. Point
+# the workflow at it either by URL + sha256, or by the tag of a (draft) GitHub
+# release in this repository that carries it as an asset.
+#
+# Everything the workflow does is `scripts/*.mjs` so the same steps run on a
+# developer's Windows machine:
+#
+#   node scripts/windows-inputs.mjs unpack <archive> --sha256 <hex>
+#   node scripts/dist-win.mjs --inputs build/windows-inputs --installer --zip
+#   node scripts/windows-smoke.mjs verify-runtime
+#   node scripts/windows-smoke.mjs launch
+#   node scripts/windows-smoke.mjs mop-smoke --officecli-source <officecli-internal checkout>
+#
+# Secrets used (all already exist for release.yml):
+#   OFFICECLI_INTERNAL_TOKEN, OFFICECLI_INTERNAL_REF  the office2modoc DLL and the MOP smoke test source
+# No new secret is required.
+
+on:
+  workflow_dispatch:
+    inputs:
+      inputs_url:
+        description: HTTPS URL of the officedex-windows-inputs-*.tar.gz archive (leave empty when using inputs_release_tag)
+        type: string
+        required: false
+        default: ""
+      inputs_sha256:
+        description: sha256 of that archive (required with inputs_url; optional with inputs_release_tag, the manifest inside still verifies every file)
+        type: string
+        required: false
+        default: ""
+      inputs_release_tag:
+        description: Tag of a GitHub release in this repository (a draft is fine) whose assets include officedex-windows-inputs-*.tar.gz
+        type: string
+        required: false
+        default: ""
+      run_mop_smoke:
+        description: Run officecli's TestPPTXMOPSkillEndToEndSmoke against the packaged tree (clones officecli-internal)
+        type: boolean
+        required: false
+        default: true
+      launch_seconds:
+        description: How long officedex.exe must stay alive after launch (0 skips the launch check)
+        type: string
+        required: false
+        default: "20"
+
+permissions:
+  contents: read
+
+env:
+  WAILS_VERSION: v2.12.0
+  NODE_RUNTIME_VERSION: "24.18.0"
+
+jobs:
+  smoke:
+    name: Build, verify and launch on windows-latest
+    runs-on: windows-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Stub dist/ so main.go compiles before the renderer arrives
+        # main.go has `//go:embed all:dist`; the real dist/ comes with the
+        # inputs archive below. The placeholder lets `go test` and
+        # `wails generate module` run first.
+        run: mkdir -p dist && touch dist/.placeholder
+
+      - name: Generate Wails bindings
+        run: wails generate module
+
+      - name: Go vet (windows/amd64)
+        run: go vet ./...
+
+      - name: Go tests on Windows
+        run: go test ./... -count=1
+
+      - name: Windows-relevant build-script tests (node:test)
+        run: >-
+          node --test
+          scripts/pe-executable.test.mjs
+          scripts/relocatable-runtime.test.mjs
+          scripts/stage-mop-runtime.test.mjs
+          scripts/verify-packaged-runtime.test.mjs
+          scripts/bundle-runtime.test.mjs
+          scripts/dist-win.test.mjs
+          scripts/windows-inputs.test.mjs
+
+      - name: Resolve the inputs archive
+        id: inputs
+        env:
+          INPUTS_URL: ${{ inputs.inputs_url }}
+          INPUTS_SHA256: ${{ inputs.inputs_sha256 }}
+          INPUTS_RELEASE_TAG: ${{ inputs.inputs_release_tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/inputs"
+          if [[ -n "$INPUTS_URL" ]]; then
+            test -n "$INPUTS_SHA256" || { echo "::error::inputs_sha256 is required with inputs_url"; exit 1; }
+            curl --fail --location --retry 3 --connect-timeout 30 "$INPUTS_URL" \
+              --output "$RUNNER_TEMP/inputs/windows-inputs.tar.gz"
+          elif [[ -n "$INPUTS_RELEASE_TAG" ]]; then
+            gh release download "$INPUTS_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --pattern 'officedex-windows-inputs-*.tar.gz' --dir "$RUNNER_TEMP/inputs"
+            mv "$RUNNER_TEMP"/inputs/officedex-windows-inputs-*.tar.gz "$RUNNER_TEMP/inputs/windows-inputs.tar.gz"
+          else
+            echo "::error::provide inputs_url (+ inputs_sha256) or inputs_release_tag; see scripts/windows-inputs.mjs"
+            exit 1
+          fi
+          echo "archive=$RUNNER_TEMP/inputs/windows-inputs.tar.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Unpack and verify the inputs archive
+        env:
+          INPUTS_SHA256: ${{ inputs.inputs_sha256 }}
+          ARCHIVE: ${{ steps.inputs.outputs.archive }}
+        run: |
+          set -euo pipefail
+          args=(unpack "$ARCHIVE" --dest build/windows-inputs)
+          if [[ -n "$INPUTS_SHA256" ]]; then args+=(--sha256 "$INPUTS_SHA256"); fi
+          node scripts/windows-inputs.mjs "${args[@]}"
+
+      - name: Download the pinned Node runtime for win-x64
+        run: |
+          set -euo pipefail
+          version="$NODE_RUNTIME_VERSION"
+          cache="build/cache/pptxgenjs-runtime"
+          mkdir -p "$cache"
+          curl --fail --location --retry 3 --connect-timeout 20 \
+            "https://nodejs.org/dist/v${version}/SHASUMS256.txt" \
+            --output "$cache/node-v${version}-SHASUMS256.txt"
+          curl --fail --location --retry 3 --connect-timeout 20 \
+            "https://nodejs.org/dist/v${version}/node-v${version}-win-x64.zip" \
+            --output "$cache/node-v${version}-win-x64.zip"
+          # stage-mop-runtime.mjs verifies the zip against SHASUMS256 itself.
+
+      - name: Fetch the office2modoc Windows FFI from officecli-internal
+        env:
+          OFFICECLI_INTERNAL_TOKEN: ${{ secrets.OFFICECLI_INTERNAL_TOKEN }}
+          OFFICECLI_INTERNAL_REF: ${{ secrets.OFFICECLI_INTERNAL_REF }}
+        run: |
+          set -euo pipefail
+          test -n "$OFFICECLI_INTERNAL_TOKEN" || { echo "::error::OFFICECLI_INTERNAL_TOKEN secret is required"; exit 1; }
+          test -n "$OFFICECLI_INTERNAL_REF" || { echo "::error::OFFICECLI_INTERNAL_REF secret is required"; exit 1; }
+          git clone --depth 1 --branch "$OFFICECLI_INTERNAL_REF" \
+            "https://x-access-token:${OFFICECLI_INTERNAL_TOKEN}@github.com/officecli/officecli-internal.git" \
+            "$RUNNER_TEMP/officecli-internal"
+          version="$(tr -d '[:space:]' < office2modoc.version)"
+          src="$RUNNER_TEMP/officecli-internal/third_party/office2modoc-ffi/${version}/x86_64-pc-windows-msvc/office2modoc_ffi.dll"
+          test -f "$src" || { echo "::error::no Windows office2modoc FFI at $src"; exit 1; }
+          echo "OFFICE2MODOC_WINDOWS_DLL=$src" >> "$GITHUB_ENV"
+          echo "OFFICECLI_INTERNAL_DIR=$RUNNER_TEMP/officecli-internal" >> "$GITHUB_ENV"
+
+      - name: Assemble the Windows package natively (installer + portable zip)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # On this host stage-mop-runtime executes the staged node.exe from a
+        # relocated copy, verify-packaged-runtime runs it where it ships, and
+        # makensis (preinstalled on windows-latest) builds the installer.
+        run: node scripts/dist-win.mjs --inputs build/windows-inputs --installer --zip
+
+      - name: officedex.exe --verify-runtime
+        run: node scripts/windows-smoke.mjs verify-runtime --package build/win32-x64
+
+      - name: Launch officedex.exe and keep it alive
+        if: inputs.launch_seconds != '0'
+        run: node scripts/windows-smoke.mjs launch --package build/win32-x64 --seconds "${{ inputs.launch_seconds }}"
+
+      - name: MOP end-to-end smoke (officecli TestPPTXMOPSkillEndToEndSmoke)
+        if: inputs.run_mop_smoke
+        run: node scripts/windows-smoke.mjs mop-smoke --package build/win32-x64 --officecli-source "$OFFICECLI_INTERNAL_DIR"
+
+      - name: Upload artifacts (for inspection; nothing is published)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: officedex-windows-amd64-smoke
+          path: |
+            dist-artifacts/
+            build/win32-x64/mop-runtime/runtime.json
+            build/win32-x64/presentation/runtime.json
+          if-no-files-found: warn
+          retention-days: 14
