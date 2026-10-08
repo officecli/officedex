@@ -140,12 +140,16 @@ func (a *App) CancelRuntimeUpdate() error {
 	return nil
 }
 
+// launchInstaller starts the platform's update mechanism for a verified
+// download: the in-place bundle swap on macOS (app_update_darwin.go), the
+// silent NSIS installer on Windows (app_update_windows.go). Both return once a
+// detached helper owns the rest, and both expect this process to exit next.
 func launchInstaller(path string) error {
 	switch runtime.GOOS {
 	case "darwin":
 		return installDarwinUpdate(path)
 	case "windows":
-		return subprocess.Command("cmd", "/c", "start", "", path).Start()
+		return installWindowsUpdate(path)
 	default:
 		return subprocess.Command("xdg-open", path).Start()
 	}
