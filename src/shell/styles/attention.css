@@ -50,18 +50,18 @@
   border-radius: 14px;
   background: var(--dx-white);
   color: var(--dx-share);
-  font: var(--dx-fs-14)/1.8 -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
+  font: var(--dx-fs-14)/1.8 var(--dx-font);
   overflow: hidden;
 }
 
 .dx-od-agent-draft header {
-  font: var(--dx-fs-12)/18px -apple-system, BlinkMacSystemFont, sans-serif;
+  font: var(--dx-fs-12)/18px var(--dx-font);
   color: var(--dx-muted);
   margin: 0 0 8px;
 }
 
 .dx-od-agent-draft p {
-  font: var(--dx-fs-14)/1.8 -apple-system, BlinkMacSystemFont, sans-serif;
+  font: var(--dx-fs-14)/1.8 var(--dx-font);
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -77,7 +77,7 @@
   padding: 4px 12px;
   background: var(--dx-white);
   color: var(--dx-text);
-  font: var(--dx-fs-14)/20px -apple-system, BlinkMacSystemFont, sans-serif;
+  font: var(--dx-fs-14)/20px var(--dx-font);
   cursor: pointer;
 }
 
@@ -138,7 +138,7 @@
   background: var(--dx-work-tag);
   color: var(--dx-white);
   box-shadow: 0 3px 10px var(--dx-work-tag-shade);
-  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
+  font-family: var(--dx-font);
 }
 
 .dx-od-agent-effects .dx-agent-work-portrait {
