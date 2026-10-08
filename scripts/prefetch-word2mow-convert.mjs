@@ -5,9 +5,11 @@
 // way the MOP handler shells out to mop-convert. bundle-runtime.mjs copies the
 // staged binary into Contents/Resources/word2mow.
 //
-// Only one build of this binary exists today (macOS arm64, checked into the
-// writer checkout). Every other target is an explicit, loud gap: shipping a
-// package whose DOCX editor cannot convert anything is worse than failing here.
+// Two builds of this binary exist today: macOS arm64 (checked into the writer
+// checkout) and macOS x64 (cross-compiled on the release machine and kept in
+// build/cache/word2mow/darwin-x64). Every other target is an explicit, loud
+// gap: shipping a package whose DOCX editor cannot convert anything is worse
+// than failing here.
 import { chmod, copyFile, mkdir, readFile, rm } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
@@ -19,6 +21,9 @@ import { resolveWriterSource } from "./writer-source.mjs";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
 const DEFAULT_DEST = path.join(ROOT, "build", "writer-convert");
+// Per-target converters that are not the writer checkout's own binary live
+// here, keyed like KNOWN_CONVERT_BUILDS: build/cache/word2mow/<platform>-<arch>/.
+const DEFAULT_CACHE = path.join(ROOT, "build", "cache", "word2mow");
 
 /**
  * The word2mow builds we know how to ship, keyed by `<platform>-<arch>`.
@@ -29,18 +34,38 @@ export const KNOWN_CONVERT_BUILDS = Object.freeze({
     sha256: "3024c16b06a2c1438a8327d806228efcdecb3f3b564316106cdeeae4164c316a",
     revision: "289bdf45c051f7ad2d7907120b909c8561dd8d5d",
   }),
+  // Built from a clean checkout of the same revision with
+  //   cargo --config cargo.config build --offline --release -p word2mow \
+  //     --bin convert --target x86_64-apple-darwin
+  "darwin-x64": Object.freeze({
+    sha256: "09f22bb574aa265f1349876bc2d08d6c338b751c3360d6cd8d4d0234508f9e22",
+    revision: "289bdf45c051f7ad2d7907120b909c8561dd8d5d",
+  }),
 });
 
 export function convertBinaryName(platform = process.platform) {
   return platform === "win32" ? "convert.exe" : "convert";
 }
 
-/** The checked-in binary in the writer repository. */
-export function defaultConvertSource({ platform = process.platform, writerSource } = {}) {
+/**
+ * Where the converter for a target comes from, in order: an explicit
+ * OFFICEDEX_WORD2MOW_CONVERT_SRC, the per-target cache (the only place a
+ * cross-arch build has one), then the binary checked into the writer
+ * repository, which is the build host's own arch.
+ */
+export function defaultConvertSource({
+  platform = process.platform,
+  arch = process.arch,
+  writerSource,
+  cacheRoot = DEFAULT_CACHE,
+} = {}) {
   const configured = String(process.env.OFFICEDEX_WORD2MOW_CONVERT_SRC || "").trim();
   if (configured) return path.resolve(configured);
+  const name = convertBinaryName(platform);
+  const cached = path.join(cacheRoot, `${platform}-${arch}`, name);
+  if (existsSync(cached)) return cached;
   const source = writerSource || resolveWriterSource();
-  return path.join(source, "apps", "docx-demo", "bin", convertBinaryName(platform));
+  return path.join(source, "apps", "docx-demo", "bin", name);
 }
 
 export async function sha256File(file) {
@@ -55,6 +80,7 @@ export async function prefetchWord2MowConvert({
   source,
   dest = DEFAULT_DEST,
   builds = KNOWN_CONVERT_BUILDS,
+  cacheRoot = DEFAULT_CACHE,
 } = {}) {
   const target = `${platform}-${arch}`;
   const build = builds[target];
@@ -65,17 +91,20 @@ export async function prefetchWord2MowConvert({
     );
   }
 
-  const from = source ? path.resolve(source) : defaultConvertSource({ platform });
+  const from = source ? path.resolve(source) : defaultConvertSource({ platform, arch, cacheRoot });
   if (!existsSync(from)) {
     throw new Error(
-      `word2mow convert binary not found: ${from}; set OFFICEDEX_WORD2MOW_CONVERT_SRC to a local build`,
+      `word2mow convert binary not found: ${from}; set OFFICEDEX_WORD2MOW_CONVERT_SRC to a local build ` +
+        `or place it at ${path.join(cacheRoot, target, convertBinaryName(platform))}`,
     );
   }
 
   const digest = await sha256File(from);
   if (digest !== build.sha256) {
     throw new Error(
-      `word2mow convert digest mismatch for ${target}: expected ${build.sha256}, got ${digest} (${from})`,
+      `word2mow convert digest mismatch for ${target}: expected ${build.sha256}, got ${digest} (${from}). ` +
+        `A cross-arch build needs the ${target} binary (OFFICEDEX_WORD2MOW_CONVERT_SRC or ` +
+        `${path.join(cacheRoot, target)}), not the build host's.`,
     );
   }
 
