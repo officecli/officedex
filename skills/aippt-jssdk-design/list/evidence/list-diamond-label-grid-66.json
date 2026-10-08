@@ -1,0 +1,982 @@
+{
+  "id": "list-diamond-label-grid-66",
+  "family": "list",
+  "source": "samplev2/并列4项1.pptx",
+  "page": 66,
+  "program": "samplev2/jssdk/并列4项1/compilations/v085/slides/slide-0066.mjs",
+  "verification": "artifacts/aippt/full-distillation/font-metrics-v3/source-2dba8400e69e7057125f/verification.json",
+  "observed_items": 4,
+  "mechanism": "diamond-label-grid",
+  "source_fact": "两行两列标题说明条，左端菱形图标与长矩形相接",
+  "transfer_hypothesis": "保留菱形与色条衔接，标题正文在同一条内对齐；不得把四项误判为两个维度的矩阵。",
+  "visual_review": "source_preview_inspected",
+  "review_artifact": "artifacts/aippt/full-distillation/new-verified-contact.png",
+  "state": "source_fact",
+  "ssim": 0.9767364334203634,
+  "exact_reference": false,
+  "program_sha256": "64e03634a1c13b17a609d5d98c9d106050593386ac6b8b0f9bc564b71f50dbd1",
+  "verification_sha256": "06cc3d0a116a74d669023ac629c02fa8629d114378b1a762c15bd28e8c91206b",
+  "preview": "/Users/agent/askuy/code/vibeofficing/samplev2/并列4项1/幻灯片66.png",
+  "checks": {
+    "jssdk_executed": true,
+    "native_objects": {
+      "count": 22,
+      "types": [
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "picture",
+        "picture",
+        "picture",
+        "picture",
+        "shape",
+        "shape"
+      ]
+    },
+    "text_overflow": 0,
+    "render_errors": 0,
+    "pptx_export": "passed",
+    "strict_reimport": "passed",
+    "text_coverage_version": 2,
+    "text_measurement": "font_metrics"
+  },
+  "canvas_pt": [
+    960.0,
+    540.0
+  ],
+  "objects": [
+    {
+      "id": "s1",
+      "api": "addGeometricShape",
+      "kind": "Diamond",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.005729,
+        "top": 0.386574,
+        "width": 0.090469,
+        "height": 0.160833
+      },
+      "slide_bounds_pt": {
+        "left": 5.5,
+        "top": 208.75,
+        "width": 86.85,
+        "height": 86.85
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s2",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.076823,
+        "top": 0.397222,
+        "width": 0.420729,
+        "height": 0.142315
+      },
+      "slide_bounds_pt": {
+        "left": 73.75,
+        "top": 214.5,
+        "width": 403.9,
+        "height": 76.85
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "e2fc91505f8110d090e9e676004b245e0cc7af63e49296692d6acb4f3ded6832"
+    },
+    {
+      "id": "s3",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.1225,
+        "top": 0.413981,
+        "width": 0.124844,
+        "height": 0.054907
+      },
+      "slide_bounds_pt": {
+        "left": 117.6,
+        "top": 223.55,
+        "width": 119.85,
+        "height": 29.65
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        20.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s4",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.1225,
+        "top": 0.474444,
+        "width": 0.375104,
+        "height": 0.059444
+      },
+      "slide_bounds_pt": {
+        "left": 117.6,
+        "top": 256.2,
+        "width": 360.1,
+        "height": 32.1
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        12.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s5",
+      "api": "addGeometricShape",
+      "kind": "Diamond",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.005729,
+        "top": 0.681481,
+        "width": 0.090469,
+        "height": 0.160833
+      },
+      "slide_bounds_pt": {
+        "left": 5.5,
+        "top": 368,
+        "width": 86.85,
+        "height": 86.85
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s6",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.076146,
+        "top": 0.69213,
+        "width": 0.420729,
+        "height": 0.142315
+      },
+      "slide_bounds_pt": {
+        "left": 73.1,
+        "top": 373.75,
+        "width": 403.9,
+        "height": 76.85
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "e2fc91505f8110d090e9e676004b245e0cc7af63e49296692d6acb4f3ded6832"
+    },
+    {
+      "id": "s7",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.121823,
+        "top": 0.707963,
+        "width": 0.125521,
+        "height": 0.054907
+      },
+      "slide_bounds_pt": {
+        "left": 116.95,
+        "top": 382.3,
+        "width": 120.5,
+        "height": 29.65
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        25.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s8",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.121823,
+        "top": 0.768426,
+        "width": 0.375104,
+        "height": 0.059444
+      },
+      "slide_bounds_pt": {
+        "left": 116.95,
+        "top": 414.95,
+        "width": 360.1,
+        "height": 32.1
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        12.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s9",
+      "api": "addGeometricShape",
+      "kind": "Diamond",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.502396,
+        "top": 0.384722,
+        "width": 0.090469,
+        "height": 0.160833
+      },
+      "slide_bounds_pt": {
+        "left": 482.3,
+        "top": 207.75,
+        "width": 86.85,
+        "height": 86.85
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s10",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.57349,
+        "top": 0.39537,
+        "width": 0.420729,
+        "height": 0.142315
+      },
+      "slide_bounds_pt": {
+        "left": 550.55,
+        "top": 213.5,
+        "width": 403.9,
+        "height": 76.85
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "e2fc91505f8110d090e9e676004b245e0cc7af63e49296692d6acb4f3ded6832"
+    },
+    {
+      "id": "s11",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.619167,
+        "top": 0.41213,
+        "width": 0.117031,
+        "height": 0.054907
+      },
+      "slide_bounds_pt": {
+        "left": 594.4,
+        "top": 222.55,
+        "width": 112.35,
+        "height": 29.65
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        25.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s12",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.619167,
+        "top": 0.472593,
+        "width": 0.375104,
+        "height": 0.059444
+      },
+      "slide_bounds_pt": {
+        "left": 594.4,
+        "top": 255.2,
+        "width": 360.1,
+        "height": 32.1
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        12.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s13",
+      "api": "addGeometricShape",
+      "kind": "Diamond",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.502396,
+        "top": 0.67963,
+        "width": 0.090469,
+        "height": 0.160833
+      },
+      "slide_bounds_pt": {
+        "left": 482.3,
+        "top": 367,
+        "width": 86.85,
+        "height": 86.85
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s14",
+      "api": "addCustomGeometry",
+      "kind": "addCustomGeometry",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.572812,
+        "top": 0.690278,
+        "width": 0.420729,
+        "height": 0.142315
+      },
+      "slide_bounds_pt": {
+        "left": 549.9,
+        "top": 372.75,
+        "width": 403.9,
+        "height": 76.85
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": "e2fc91505f8110d090e9e676004b245e0cc7af63e49296692d6acb4f3ded6832"
+    },
+    {
+      "id": "s15",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.61849,
+        "top": 0.706111,
+        "width": 0.117708,
+        "height": 0.054907
+      },
+      "slide_bounds_pt": {
+        "left": 593.75,
+        "top": 381.3,
+        "width": 113,
+        "height": 29.65
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        25.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s16",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.61849,
+        "top": 0.766574,
+        "width": 0.375104,
+        "height": 0.059444
+      },
+      "slide_bounds_pt": {
+        "left": 593.75,
+        "top": 413.95,
+        "width": 360.1,
+        "height": 32.1
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        12.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s17",
+      "api": "addImage",
+      "kind": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9InllcyI/PjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgdmVyc2lvbj0iMS4yIiBiYXNlUHJvZmlsZT0idGlueSIgeD0iMCIgeT0iMCIgd2lkdGg9IjI1NiIgaGVpZ2h0PSIyNTYiIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGcgdHJhbnNmb3JtPSJtYXRyaXgoNy42NDE3OSwwLDAsNy42NDE3OSwzNC4zODgxLDApIj48ZyBpZD0i5Zu+5bGCXzIiPjxnIGlkPSLlm77lsYJfNCI+PHBhdGggZmlsbD0iI2ZmZmZmZiIgZmlsbC1vcGFjaXR5PSIxIiBkPSJNIDIzLjUgMjUuMTUgQyAyNC4wNTIzIDI1LjE1IDI0LjUgMjQuNzAyMyAyNC41IDI0LjE1IEwgMjQuNSA1LjUgQyAyNC41IDQuOTQ3NzIgMjQuMDUyMyA0LjUgMjMuNSA0LjUgTCAyMCA0LjUgTCAyMCAxIEMgMjAgMC40NDc3MTUgMTkuNTUyMyAzLjM4MTc3ZS0xNyAxOSAwIEwgMSAwIEMgMC40NDc3MTUgLTMuMzgxNzdlLTE3IDYuNzYzNTRlLTE3IDAuNDQ3NzE1IDAgMSBMIDAgMjggQyA2Ljc2MzU0ZS0xNyAyOC41NTIzIDAuNDQ3NzE1IDI5IDEgMjkgQyAxLjU1MjI4IDI5IDIgMjguNTUyMyAyIDI4IEwgMiAyIEwgMTggMiBMIDE4IDQuNSBMIDUuNSA0LjUgQyA0Ljk0NzcyIDQuNSA0LjUgNC45NDc3MiA0LjUgNS41IEwgNC41IDMyLjUgQyA0LjUgMzMuMDUyMyA0Ljk0NzcyIDMzLjUgNS41IDMzLjUgTCAyMy41IDMzLjUgQyAyNC4wNTIzIDMzLjUgMjQuNSAzMy4wNTIzIDI0LjUgMzIuNSBMIDI0LjUgMjggQyAyNC41IDI3LjQ0NzcgMjQuMDUyMyAyNyAyMy41IDI3IEMgMjIuOTQ3NyAyNyAyMi41IDI3LjQ0NzcgMjIuNSAyOCBMIDIyLjUgMzEuNSBMIDYuNSAzMS41IEwgNi41IDYuNSBMIDIyLjUgNi41IEwgMjIuNSAyNC4xNSBDIDIyLjUgMjQuNzAyMyAyMi45NDc3IDI1LjE1IDIzLjUgMjUuMTUgWiIvPjxwYXRoIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMSIgZD0iTSAyMC4xMyAxMS4yNSBMIDguODggMTEuMjUgQyA4LjMyNzcyIDExLjI1IDcuODggMTEuNjk3NyA3Ljg4IDEyLjI1IEMgNy44OCAxMi44MDIzIDguMzI3NzIgMTMuMjUgOC44OCAxMy4yNSBMIDIwLjEzIDEzLjI1IEMgMjAuNjgyMyAxMy4yNSAyMS4xMyAxMi44MDIzIDIxLjEzIDEyLjI1IEMgMjEuMTMgMTEuNjk3NyAyMC42ODIzIDExLjI1IDIwLjEzIDExLjI1IFoiLz48cGF0aCBmaWxsPSIjZmZmZmZmIiBmaWxsLW9wYWNpdHk9IjEiIGQ9Ik0gMjAuMTMgMTUuNzUgTCA4Ljg4IDE1Ljc1IEMgOC4zMjc3MiAxNS43NSA3Ljg4IDE2LjE5NzcgNy44OCAxNi43NSBDIDcuODggMTcuMzAyMyA4LjMyNzcyIDE3Ljc1IDguODggMTcuNzUgTCAyMC4xMyAxNy43NSBDIDIwLjY4MjMgMTcuNzUgMjEuMTMgMTcuMzAyMyAyMS4xMyAxNi43NSBDIDIxLjEzIDE2LjE5NzcgMjAuNjgyMyAxNS43NSAyMC4xMyAxNS43NSBaIi8+PHBhdGggZmlsbD0iI2ZmZmZmZiIgZmlsbC1vcGFjaXR5PSIxIiBkPSJNIDIwLjEzIDIwLjI1IEwgOC44OCAyMC4yNSBDIDguMzI3NzIgMjAuMjUgNy44OCAyMC42OTc3IDcuODggMjEuMjUgQyA3Ljg4IDIxLjgwMjMgOC4zMjc3MiAyMi4yNSA4Ljg4IDIyLjI1IEwgMjAuMTMgMjIuMjUgQyAyMC42ODIzIDIyLjI1IDIxLjEzIDIxLjgwMjMgMjEuMTMgMjEuMjUgQyAyMS4xMyAyMC42OTc3IDIwLjY4MjMgMjAuMjUgMjAuMTMgMjAuMjUgWiIvPjwvZz48L2c+PC9nPjwvc3ZnPgo=",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.531302,
+        "top": 0.735648,
+        "width": 0.032604,
+        "height": 0.057963
+      },
+      "slide_bounds_pt": {
+        "left": 510.05,
+        "top": 397.25,
+        "width": 31.3,
+        "height": 31.3
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s18",
+      "api": "addImage",
+      "kind": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9InllcyI/PjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgdmVyc2lvbj0iMS4yIiBiYXNlUHJvZmlsZT0idGlueSIgeD0iMCIgeT0iMCIgd2lkdGg9IjI1NiIgaGVpZ2h0PSIyNTYiIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGcgdHJhbnNmb3JtPSJtYXRyaXgoNy42NDE3OSwwLDAsNy42NDE3OSwwLDE3LjE5NCkiPjxnIGlkPSLlm77lsYJfMiI+PGcgaWQ9IuWbvuWxgl80Ij48cGF0aCBmaWxsPSIjZmZmZmZmIiBmaWxsLW9wYWNpdHk9IjEiIGQ9Ik0gMzIuNSAwIEwgMSAwIEMgMC40NDc3MTUgLTMuMzgxNzdlLTE3IDYuNzYzNTRlLTE3IDAuNDQ3NzE1IDAgMSBMIDAgMjEuMzkgQyA2Ljc2MzU0ZS0xNyAyMS45NDIzIDAuNDQ3NzE1IDIyLjM5IDEgMjIuMzkgQyAxLjU1MjI4IDIyLjM5IDIgMjEuOTQyMyAyIDIxLjM5IEwgMiAxNy43MiBMIDMxLjUgMTcuNzIgTCAzMS41IDIwLjM5IEwgNC42MSAyMC4zOSBDIDQuMDU3NzIgMjAuMzkgMy42MSAyMC44Mzc3IDMuNjEgMjEuMzkgQyAzLjYxIDIxLjk0MjMgNC4wNTc3MiAyMi4zOSA0LjYxIDIyLjM5IEwgMTMuNSAyMi4zOSBMIDEzLjUgMjcgTCAxMCAyNyBDIDkuNDQ3NzIgMjcgOSAyNy40NDc3IDkgMjggQyA5IDI4LjU1MjMgOS40NDc3MiAyOSAxMCAyOSBMIDIzLjUgMjkgQyAyNC4wNTIzIDI5IDI0LjUgMjguNTUyMyAyNC41IDI4IEMgMjQuNSAyNy40NDc3IDI0LjA1MjMgMjcgMjMuNSAyNyBMIDIwIDI3IEwgMjAgMjQuNyBDIDIwIDI0LjE0NzcgMTkuNTUyMyAyMy43IDE5IDIzLjcgQyAxOC40NDc3IDIzLjcgMTggMjQuMTQ3NyAxOCAyNC43IEwgMTggMjcgTCAxNS41IDI3IEwgMTUuNSAyMi4zOSBMIDMyLjUgMjIuMzkgQyAzMy4wNTIzIDIyLjM5IDMzLjUgMjEuOTQyMyAzMy41IDIxLjM5IEwgMzMuNSAxIEMgMzMuNSAwLjQ0NzcxNSAzMy4wNTIzIDMuMzgxNzdlLTE3IDMyLjUgMCBNIDIgMTUuNzIgTCAyIDIgTCAzMS41IDIgTCAzMS41IDE1LjcyIEwgMiAxNS43MiIvPjwvZz48L2c+PC9nPjwvc3ZnPgo=",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.531354,
+        "top": 0.434815,
+        "width": 0.032604,
+        "height": 0.057963
+      },
+      "slide_bounds_pt": {
+        "left": 510.1,
+        "top": 234.8,
+        "width": 31.3,
+        "height": 31.3
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s19",
+      "api": "addImage",
+      "kind": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9InllcyI/PjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgdmVyc2lvbj0iMS4yIiBiYXNlUHJvZmlsZT0idGlueSIgeD0iMCIgeT0iMCIgd2lkdGg9IjI1NiIgaGVpZ2h0PSIyNTYiIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGcgdHJhbnNmb3JtPSJtYXRyaXgoNy42NDE3OSwwLDAsNy42NDE3OSwyNS43OTEsMCkiPjxnIGlkPSLlm77lsYJfMiI+PGcgaWQ9IuWbvuWxgl80Ij48cGF0aCBmaWxsPSIjZmZmZmZmIiBmaWxsLW9wYWNpdHk9IjEiIGQ9Ik0gMTYuNzUgNi43NSBMIDUuNSA2Ljc1IEMgNC45NDc3MiA2Ljc1IDQuNSA3LjE5NzcyIDQuNSA3Ljc1IEwgNC41IDEyLjI1IEMgNC41IDEyLjgwMjMgNC45NDc3MiAxMy4yNSA1LjUgMTMuMjUgTCAxMy4zOCAxMy4yNSBDIDEzLjkzMjMgMTMuMjUgMTQuMzggMTIuODAyMyAxNC4zOCAxMi4yNSBDIDE0LjM4IDExLjY5NzcgMTMuOTMyMyAxMS4yNSAxMy4zOCAxMS4yNSBMIDYuNSAxMS4yNSBMIDYuNSA4Ljc1IEwgMTUuNzUgOC43NSBMIDE1Ljc1IDEyLjI1IEMgMTUuNzUgMTIuODAyMyAxNi4xOTc3IDEzLjI1IDE2Ljc1IDEzLjI1IEMgMTcuMzAyMyAxMy4yNSAxNy43NSAxMi44MDIzIDE3Ljc1IDEyLjI1IEwgMTcuNzUgNy43NSBDIDE3Ljc1IDcuMTk3NzIgMTcuMzAyMyA2Ljc1IDE2Ljc1IDYuNzUgWiIvPjxwYXRoIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMSIgZD0iTSAyNS43NSAwIEwgMSAwIEMgMC40NDc3MTUgLTMuMzgxNzdlLTE3IDYuNzYzNTRlLTE3IDAuNDQ3NzE1IDAgMSBMIDAgMzIuNSBDIDYuNzYzNTRlLTE3IDMzLjA1MjMgMC40NDc3MTUgMzMuNSAxIDMzLjUgTCAyMS4yNSAzMy41IEMgMjEuODAyMyAzMy41IDIyLjI1IDMzLjA1MjMgMjIuMjUgMzIuNSBMIDIyLjI1IDIgTCAyNC43NSAyIEwgMjQuNzUgMzIuNSBDIDI0Ljc1IDMzLjA1MjMgMjUuMTk3NyAzMy41IDI1Ljc1IDMzLjUgQyAyNi4zMDIzIDMzLjUgMjYuNzUgMzMuMDUyMyAyNi43NSAzMi41IEwgMjYuNzUgMSBDIDI2Ljc1IDAuNDQ3NzE1IDI2LjMwMjMgMy4zODE3N2UtMTcgMjUuNzUgMCBNIDIgMiBMIDIwLjI1IDIgTCAyMC4yNSAzMS41IEwgMiAzMS41IEwgMiAyIi8+PC9nPjwvZz48L2c+PC9zdmc+Cg==",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.034635,
+        "top": 0.439352,
+        "width": 0.032604,
+        "height": 0.057963
+      },
+      "slide_bounds_pt": {
+        "left": 33.25,
+        "top": 237.25,
+        "width": 31.3,
+        "height": 31.3
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s20",
+      "api": "addImage",
+      "kind": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9InllcyI/PjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgdmVyc2lvbj0iMS4yIiBiYXNlUHJvZmlsZT0idGlueSIgeD0iMCIgeT0iMCIgd2lkdGg9IjI1NiIgaGVpZ2h0PSIyNTYiIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGcgdHJhbnNmb3JtPSJtYXRyaXgoOC4yNTczOCwwLDAsOC4yNTczOCw4LjI2Nzc1LC0yLjEyNTc3KSI+PGcgaWQ9IuWbvuWxgl8yIj48ZyBpZD0i5Zu+5bGCXzQiPjxwYXRoIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMSIgZD0iTSAyOCAxMS4yNSBMIDIzLjUgMTEuMjUgQyAyMi45NDc3IDExLjI1IDIyLjUgMTEuNjk3NyAyMi41IDEyLjI1IEMgMjIuNSAxMi44MDIzIDIyLjk0NzcgMTMuMjUgMjMuNSAxMy4yNSBMIDI3IDEzLjI1IEwgMjcgMjkuMjUgTCAyIDI5LjI1IEwgMiAxMy4yNSBMIDIwLjEzIDEzLjI1IEMgMjAuNjgyMyAxMy4yNSAyMS4xMyAxMi44MDIzIDIxLjEzIDEyLjI1IEwgMjEuMTMgNi42MyBDIDIwLjk5MTcgMy4wNzEyIDE4LjA2NjUgMC4yNTc0MzkgMTQuNTA1IDAuMjU3NDM5IEMgMTAuOTQzNSAwLjI1NzQzOSA4LjAxODI5IDMuMDcxMiA3Ljg4IDYuNjMgTCA3Ljg4IDExLjI2IEwgMSAxMS4yNiBDIDAuNDQ3NzE1IDExLjI2IDYuNzYzNTRlLTE3IDExLjcwNzcgMCAxMi4yNiBMIDAgMzAuMjYgQyA2Ljc2MzU0ZS0xNyAzMC44MTIzIDAuNDQ3NzE1IDMxLjI2IDEgMzEuMjYgTCAyOCAzMS4yNiBDIDI4LjU1MjMgMzEuMjYgMjkgMzAuODEyMyAyOSAzMC4yNiBMIDI5IDEyLjI2IEMgMjkuMDAyNyAxMS45OTMxIDI4Ljg5ODUgMTEuNzM2MSAyOC43MTA3IDExLjU0NjQgQyAyOC41MjI4IDExLjM1NjcgMjguMjY3IDExLjI1IDI4IDExLjI1IE0gOS44OCA2LjYzIEMgOS45OTQ5MiA0LjE1OTIzIDEyLjAzMTYgMi4yMTUxMiAxNC41MDUgMi4yMTUxMiBDIDE2Ljk3ODQgMi4yMTUxMiAxOS4wMTUxIDQuMTU5MjMgMTkuMTMgNi42MyBMIDE5LjEzIDExLjI2IEwgOS44OCAxMS4yNiBMIDkuODggNi42MyIvPjxwYXRoIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMSIgZD0iTSAxNS40MSAyMS4xNCBDIDE1LjEwMjUgMjEuMzE3NiAxNC45MTIxIDIxLjY0NDkgMTQuOTEgMjIgTCAxNC45MSAyNC43NSBMIDEzLjA5IDI0Ljc1IEMgMTIuNTM3NyAyNC43NSAxMi4wOSAyNS4xOTc3IDEyLjA5IDI1Ljc1IEMgMTIuMDkgMjYuMzAyMyAxMi41Mzc3IDI2Ljc1IDEzLjA5IDI2Ljc1IEwgMTUuOTEgMjYuNzUgQyAxNi40NjIzIDI2Ljc1IDE2LjkxIDI2LjMwMjMgMTYuOTEgMjUuNzUgTCAxNi45MSAyMi41MiBDIDE4LjE2NDQgMjEuNSAxOC42NDA4IDE5LjgwMDggMTguMDk5NiAxOC4yNzc0IEMgMTcuNTU4NCAxNi43NTM5IDE2LjExNjcgMTUuNzM2MiAxNC41IDE1LjczNjIgQyAxMi44ODMzIDE1LjczNjIgMTEuNDQxNiAxNi43NTM5IDEwLjkwMDQgMTguMjc3NCBDIDEwLjM1OTIgMTkuODAwOCAxMC44MzU2IDIxLjUgMTIuMDkgMjIuNTIgTCAxMi4wOSAyMyBDIDEyLjA5IDIzLjU1MjMgMTIuNTM3NyAyNCAxMy4wOSAyNCBDIDEzLjY0MjMgMjQgMTQuMDkgMjMuNTUyMyAxNC4wOSAyMyBMIDE0LjA5IDIyIEMgMTQuMDg3OSAyMS42NDQ5IDEzLjg5NzUgMjEuMzE3NiAxMy41OSAyMS4xNCBDIDEzLjAyNTggMjAuODE5IDEyLjY3OCAyMC4yMTkxIDEyLjY4IDE5LjU3IEMgMTIuNjggMTguNTY0OCAxMy40OTQ4IDE3Ljc1IDE0LjUgMTcuNzUgQyAxNS41MDUyIDE3Ljc1IDE2LjMyIDE4LjU2NDggMTYuMzIgMTkuNTcgQyAxNi4zMjIgMjAuMjE5MSAxNS45NzQyIDIwLjgxOSAxNS40MSAyMS4xNCBaIi8+PC9nPjwvZz48L2c+PC9zdmc+Cg==",
+      "parent": "slide",
+      "role": "native_component",
+      "bounds_fraction": {
+        "left": 0.03401,
+        "top": 0.731019,
+        "width": 0.032604,
+        "height": 0.057963
+      },
+      "slide_bounds_pt": {
+        "left": 32.65,
+        "top": 394.75,
+        "width": 31.3,
+        "height": 31.3
+      },
+      "has_text_slot": false,
+      "font_pt": [],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s21",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.290729,
+        "top": 0.15787,
+        "width": 0.418594,
+        "height": 0.085556
+      },
+      "slide_bounds_pt": {
+        "left": 279.1,
+        "top": 85.25,
+        "width": 401.85,
+        "height": 46.2
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        32.0
+      ],
+      "geometry_sha256": null
+    },
+    {
+      "id": "s22",
+      "api": "addTextBox",
+      "kind": "addTextBox",
+      "parent": "slide",
+      "role": "text_slot",
+      "bounds_fraction": {
+        "left": 0.382344,
+        "top": 0.243611,
+        "width": 0.235365,
+        "height": 0.060556
+      },
+      "slide_bounds_pt": {
+        "left": 367.05,
+        "top": 131.55,
+        "width": 225.95,
+        "height": 32.7
+      },
+      "has_text_slot": true,
+      "font_pt": [
+        20.0
+      ],
+      "geometry_sha256": null
+    }
+  ],
+  "groups": [],
+  "structural_parameters": {
+    "components": [
+      {
+        "signature": "4eb84aabc8dd8aa01bfaa558612771a3f661bd17230d52dea6cacc5ad2ef03ef",
+        "observed_instances": [
+          "s1",
+          "s5",
+          "s9",
+          "s13"
+        ],
+        "observed_count": 4,
+        "structure": {
+          "api": "addGeometricShape",
+          "kind": "Diamond",
+          "geometry": null,
+          "aspect": 1.0,
+          "text_slot": false
+        },
+        "repeat_axis": "two_dimensional",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "33ac7a7d2e9f073ac633ca01515ec0614a912be297897390f10844c55e6b8bb2",
+        "observed_instances": [
+          "s2",
+          "s6",
+          "s10",
+          "s14"
+        ],
+        "observed_count": 4,
+        "structure": {
+          "api": "addCustomGeometry",
+          "kind": "addCustomGeometry",
+          "geometry": "e2fc91505f8110d090e9e676004b245e0cc7af63e49296692d6acb4f3ded6832",
+          "aspect": 5.256,
+          "text_slot": false
+        },
+        "repeat_axis": "two_dimensional",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "5d2c8becd0fcb5a385f67ec025e3ead2956691ba843cad60332e16c580d9954b",
+        "observed_instances": [
+          "s3"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addTextBox",
+          "kind": "addTextBox",
+          "geometry": null,
+          "aspect": 4.042,
+          "text_slot": true
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "b5f69d227f3cbea53d60a4383f17b31901f8b55f62dc0b22faeb63988c540caa",
+        "observed_instances": [
+          "s4",
+          "s8",
+          "s12",
+          "s16"
+        ],
+        "observed_count": 4,
+        "structure": {
+          "api": "addTextBox",
+          "kind": "addTextBox",
+          "geometry": null,
+          "aspect": 11.218,
+          "text_slot": true
+        },
+        "repeat_axis": "two_dimensional",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "b0b8d05bdd6728d7fbce8058c7ff6f8c3cc4dea50a2307e476cd2dbe2a49dd18",
+        "observed_instances": [
+          "s7"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addTextBox",
+          "kind": "addTextBox",
+          "geometry": null,
+          "aspect": 4.064,
+          "text_slot": true
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "27df2efa2a994a81963268b367372fd005f80c9c5f7c7bdab9bf67e2c01c3910",
+        "observed_instances": [
+          "s11"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addTextBox",
+          "kind": "addTextBox",
+          "geometry": null,
+          "aspect": 3.789,
+          "text_slot": true
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "4e1b6ef35f740afd60eefea34a1593d7faa735cc5ee244f7d5489d11f8e20ac7",
+        "observed_instances": [
+          "s15"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addTextBox",
+          "kind": "addTextBox",
+          "geometry": null,
+          "aspect": 3.811,
+          "text_slot": true
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "c5ed7d0089efbd19b0203b77597609d5f3f479bb4fc0cec90e128b9ef7f0b569",
+        "observed_instances": [
+          "s17"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addImage",
+          "kind": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9InllcyI/PjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgdmVyc2lvbj0iMS4yIiBiYXNlUHJvZmlsZT0idGlueSIgeD0iMCIgeT0iMCIgd2lkdGg9IjI1NiIgaGVpZ2h0PSIyNTYiIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGcgdHJhbnNmb3JtPSJtYXRyaXgoNy42NDE3OSwwLDAsNy42NDE3OSwzNC4zODgxLDApIj48ZyBpZD0i5Zu+5bGCXzIiPjxnIGlkPSLlm77lsYJfNCI+PHBhdGggZmlsbD0iI2ZmZmZmZiIgZmlsbC1vcGFjaXR5PSIxIiBkPSJNIDIzLjUgMjUuMTUgQyAyNC4wNTIzIDI1LjE1IDI0LjUgMjQuNzAyMyAyNC41IDI0LjE1IEwgMjQuNSA1LjUgQyAyNC41IDQuOTQ3NzIgMjQuMDUyMyA0LjUgMjMuNSA0LjUgTCAyMCA0LjUgTCAyMCAxIEMgMjAgMC40NDc3MTUgMTkuNTUyMyAzLjM4MTc3ZS0xNyAxOSAwIEwgMSAwIEMgMC40NDc3MTUgLTMuMzgxNzdlLTE3IDYuNzYzNTRlLTE3IDAuNDQ3NzE1IDAgMSBMIDAgMjggQyA2Ljc2MzU0ZS0xNyAyOC41NTIzIDAuNDQ3NzE1IDI5IDEgMjkgQyAxLjU1MjI4IDI5IDIgMjguNTUyMyAyIDI4IEwgMiAyIEwgMTggMiBMIDE4IDQuNSBMIDUuNSA0LjUgQyA0Ljk0NzcyIDQuNSA0LjUgNC45NDc3MiA0LjUgNS41IEwgNC41IDMyLjUgQyA0LjUgMzMuMDUyMyA0Ljk0NzcyIDMzLjUgNS41IDMzLjUgTCAyMy41IDMzLjUgQyAyNC4wNTIzIDMzLjUgMjQuNSAzMy4wNTIzIDI0LjUgMzIuNSBMIDI0LjUgMjggQyAyNC41IDI3LjQ0NzcgMjQuMDUyMyAyNyAyMy41IDI3IEMgMjIuOTQ3NyAyNyAyMi41IDI3LjQ0NzcgMjIuNSAyOCBMIDIyLjUgMzEuNSBMIDYuNSAzMS41IEwgNi41IDYuNSBMIDIyLjUgNi41IEwgMjIuNSAyNC4xNSBDIDIyLjUgMjQuNzAyMyAyMi45NDc3IDI1LjE1IDIzLjUgMjUuMTUgWiIvPjxwYXRoIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMSIgZD0iTSAyMC4xMyAxMS4yNSBMIDguODggMTEuMjUgQyA4LjMyNzcyIDExLjI1IDcuODggMTEuNjk3NyA3Ljg4IDEyLjI1IEMgNy44OCAxMi44MDIzIDguMzI3NzIgMTMuMjUgOC44OCAxMy4yNSBMIDIwLjEzIDEzLjI1IEMgMjAuNjgyMyAxMy4yNSAyMS4xMyAxMi44MDIzIDIxLjEzIDEyLjI1IEMgMjEuMTMgMTEuNjk3NyAyMC42ODIzIDExLjI1IDIwLjEzIDExLjI1IFoiLz48cGF0aCBmaWxsPSIjZmZmZmZmIiBmaWxsLW9wYWNpdHk9IjEiIGQ9Ik0gMjAuMTMgMTUuNzUgTCA4Ljg4IDE1Ljc1IEMgOC4zMjc3MiAxNS43NSA3Ljg4IDE2LjE5NzcgNy44OCAxNi43NSBDIDcuODggMTcuMzAyMyA4LjMyNzcyIDE3Ljc1IDguODggMTcuNzUgTCAyMC4xMyAxNy43NSBDIDIwLjY4MjMgMTcuNzUgMjEuMTMgMTcuMzAyMyAyMS4xMyAxNi43NSBDIDIxLjEzIDE2LjE5NzcgMjAuNjgyMyAxNS43NSAyMC4xMyAxNS43NSBaIi8+PHBhdGggZmlsbD0iI2ZmZmZmZiIgZmlsbC1vcGFjaXR5PSIxIiBkPSJNIDIwLjEzIDIwLjI1IEwgOC44OCAyMC4yNSBDIDguMzI3NzIgMjAuMjUgNy44OCAyMC42OTc3IDcuODggMjEuMjUgQyA3Ljg4IDIxLjgwMjMgOC4zMjc3MiAyMi4yNSA4Ljg4IDIyLjI1IEwgMjAuMTMgMjIuMjUgQyAyMC42ODIzIDIyLjI1IDIxLjEzIDIxLjgwMjMgMjEuMTMgMjEuMjUgQyAyMS4xMyAyMC42OTc3IDIwLjY4MjMgMjAuMjUgMjAuMTMgMjAuMjUgWiIvPjwvZz48L2c+PC9nPjwvc3ZnPgo=",
+          "geometry": null,
+          "aspect": 1.0,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "5867f46a7bf6d6e7e1ceb74e45da29387b3da3e43045b0094aa65586e9c1ea75",
+        "observed_instances": [
+          "s18"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addImage",
+          "kind": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9InllcyI/PjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgdmVyc2lvbj0iMS4yIiBiYXNlUHJvZmlsZT0idGlueSIgeD0iMCIgeT0iMCIgd2lkdGg9IjI1NiIgaGVpZ2h0PSIyNTYiIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGcgdHJhbnNmb3JtPSJtYXRyaXgoNy42NDE3OSwwLDAsNy42NDE3OSwwLDE3LjE5NCkiPjxnIGlkPSLlm77lsYJfMiI+PGcgaWQ9IuWbvuWxgl80Ij48cGF0aCBmaWxsPSIjZmZmZmZmIiBmaWxsLW9wYWNpdHk9IjEiIGQ9Ik0gMzIuNSAwIEwgMSAwIEMgMC40NDc3MTUgLTMuMzgxNzdlLTE3IDYuNzYzNTRlLTE3IDAuNDQ3NzE1IDAgMSBMIDAgMjEuMzkgQyA2Ljc2MzU0ZS0xNyAyMS45NDIzIDAuNDQ3NzE1IDIyLjM5IDEgMjIuMzkgQyAxLjU1MjI4IDIyLjM5IDIgMjEuOTQyMyAyIDIxLjM5IEwgMiAxNy43MiBMIDMxLjUgMTcuNzIgTCAzMS41IDIwLjM5IEwgNC42MSAyMC4zOSBDIDQuMDU3NzIgMjAuMzkgMy42MSAyMC44Mzc3IDMuNjEgMjEuMzkgQyAzLjYxIDIxLjk0MjMgNC4wNTc3MiAyMi4zOSA0LjYxIDIyLjM5IEwgMTMuNSAyMi4zOSBMIDEzLjUgMjcgTCAxMCAyNyBDIDkuNDQ3NzIgMjcgOSAyNy40NDc3IDkgMjggQyA5IDI4LjU1MjMgOS40NDc3MiAyOSAxMCAyOSBMIDIzLjUgMjkgQyAyNC4wNTIzIDI5IDI0LjUgMjguNTUyMyAyNC41IDI4IEMgMjQuNSAyNy40NDc3IDI0LjA1MjMgMjcgMjMuNSAyNyBMIDIwIDI3IEwgMjAgMjQuNyBDIDIwIDI0LjE0NzcgMTkuNTUyMyAyMy43IDE5IDIzLjcgQyAxOC40NDc3IDIzLjcgMTggMjQuMTQ3NyAxOCAyNC43IEwgMTggMjcgTCAxNS41IDI3IEwgMTUuNSAyMi4zOSBMIDMyLjUgMjIuMzkgQyAzMy4wNTIzIDIyLjM5IDMzLjUgMjEuOTQyMyAzMy41IDIxLjM5IEwgMzMuNSAxIEMgMzMuNSAwLjQ0NzcxNSAzMy4wNTIzIDMuMzgxNzdlLTE3IDMyLjUgMCBNIDIgMTUuNzIgTCAyIDIgTCAzMS41IDIgTCAzMS41IDE1LjcyIEwgMiAxNS43MiIvPjwvZz48L2c+PC9nPjwvc3ZnPgo=",
+          "geometry": null,
+          "aspect": 1.0,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "da04394ccbe679a00c4315539e8850f1fe5e43282393141d5591f77f306126ec",
+        "observed_instances": [
+          "s19"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addImage",
+          "kind": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9InllcyI/PjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgdmVyc2lvbj0iMS4yIiBiYXNlUHJvZmlsZT0idGlueSIgeD0iMCIgeT0iMCIgd2lkdGg9IjI1NiIgaGVpZ2h0PSIyNTYiIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGcgdHJhbnNmb3JtPSJtYXRyaXgoNy42NDE3OSwwLDAsNy42NDE3OSwyNS43OTEsMCkiPjxnIGlkPSLlm77lsYJfMiI+PGcgaWQ9IuWbvuWxgl80Ij48cGF0aCBmaWxsPSIjZmZmZmZmIiBmaWxsLW9wYWNpdHk9IjEiIGQ9Ik0gMTYuNzUgNi43NSBMIDUuNSA2Ljc1IEMgNC45NDc3MiA2Ljc1IDQuNSA3LjE5NzcyIDQuNSA3Ljc1IEwgNC41IDEyLjI1IEMgNC41IDEyLjgwMjMgNC45NDc3MiAxMy4yNSA1LjUgMTMuMjUgTCAxMy4zOCAxMy4yNSBDIDEzLjkzMjMgMTMuMjUgMTQuMzggMTIuODAyMyAxNC4zOCAxMi4yNSBDIDE0LjM4IDExLjY5NzcgMTMuOTMyMyAxMS4yNSAxMy4zOCAxMS4yNSBMIDYuNSAxMS4yNSBMIDYuNSA4Ljc1IEwgMTUuNzUgOC43NSBMIDE1Ljc1IDEyLjI1IEMgMTUuNzUgMTIuODAyMyAxNi4xOTc3IDEzLjI1IDE2Ljc1IDEzLjI1IEMgMTcuMzAyMyAxMy4yNSAxNy43NSAxMi44MDIzIDE3Ljc1IDEyLjI1IEwgMTcuNzUgNy43NSBDIDE3Ljc1IDcuMTk3NzIgMTcuMzAyMyA2Ljc1IDE2Ljc1IDYuNzUgWiIvPjxwYXRoIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMSIgZD0iTSAyNS43NSAwIEwgMSAwIEMgMC40NDc3MTUgLTMuMzgxNzdlLTE3IDYuNzYzNTRlLTE3IDAuNDQ3NzE1IDAgMSBMIDAgMzIuNSBDIDYuNzYzNTRlLTE3IDMzLjA1MjMgMC40NDc3MTUgMzMuNSAxIDMzLjUgTCAyMS4yNSAzMy41IEMgMjEuODAyMyAzMy41IDIyLjI1IDMzLjA1MjMgMjIuMjUgMzIuNSBMIDIyLjI1IDIgTCAyNC43NSAyIEwgMjQuNzUgMzIuNSBDIDI0Ljc1IDMzLjA1MjMgMjUuMTk3NyAzMy41IDI1Ljc1IDMzLjUgQyAyNi4zMDIzIDMzLjUgMjYuNzUgMzMuMDUyMyAyNi43NSAzMi41IEwgMjYuNzUgMSBDIDI2Ljc1IDAuNDQ3NzE1IDI2LjMwMjMgMy4zODE3N2UtMTcgMjUuNzUgMCBNIDIgMiBMIDIwLjI1IDIgTCAyMC4yNSAzMS41IEwgMiAzMS41IEwgMiAyIi8+PC9nPjwvZz48L2c+PC9zdmc+Cg==",
+          "geometry": null,
+          "aspect": 1.0,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "b4613348123038b7a4f82069a173ac01b5785a481a2526f6fe9689c12f67fe62",
+        "observed_instances": [
+          "s20"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addImage",
+          "kind": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9InllcyI/PjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgdmVyc2lvbj0iMS4yIiBiYXNlUHJvZmlsZT0idGlueSIgeD0iMCIgeT0iMCIgd2lkdGg9IjI1NiIgaGVpZ2h0PSIyNTYiIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGRlZnMvPjxkZWZzLz48ZGVmcy8+PGcgdHJhbnNmb3JtPSJtYXRyaXgoOC4yNTczOCwwLDAsOC4yNTczOCw4LjI2Nzc1LC0yLjEyNTc3KSI+PGcgaWQ9IuWbvuWxgl8yIj48ZyBpZD0i5Zu+5bGCXzQiPjxwYXRoIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMSIgZD0iTSAyOCAxMS4yNSBMIDIzLjUgMTEuMjUgQyAyMi45NDc3IDExLjI1IDIyLjUgMTEuNjk3NyAyMi41IDEyLjI1IEMgMjIuNSAxMi44MDIzIDIyLjk0NzcgMTMuMjUgMjMuNSAxMy4yNSBMIDI3IDEzLjI1IEwgMjcgMjkuMjUgTCAyIDI5LjI1IEwgMiAxMy4yNSBMIDIwLjEzIDEzLjI1IEMgMjAuNjgyMyAxMy4yNSAyMS4xMyAxMi44MDIzIDIxLjEzIDEyLjI1IEwgMjEuMTMgNi42MyBDIDIwLjk5MTcgMy4wNzEyIDE4LjA2NjUgMC4yNTc0MzkgMTQuNTA1IDAuMjU3NDM5IEMgMTAuOTQzNSAwLjI1NzQzOSA4LjAxODI5IDMuMDcxMiA3Ljg4IDYuNjMgTCA3Ljg4IDExLjI2IEwgMSAxMS4yNiBDIDAuNDQ3NzE1IDExLjI2IDYuNzYzNTRlLTE3IDExLjcwNzcgMCAxMi4yNiBMIDAgMzAuMjYgQyA2Ljc2MzU0ZS0xNyAzMC44MTIzIDAuNDQ3NzE1IDMxLjI2IDEgMzEuMjYgTCAyOCAzMS4yNiBDIDI4LjU1MjMgMzEuMjYgMjkgMzAuODEyMyAyOSAzMC4yNiBMIDI5IDEyLjI2IEMgMjkuMDAyNyAxMS45OTMxIDI4Ljg5ODUgMTEuNzM2MSAyOC43MTA3IDExLjU0NjQgQyAyOC41MjI4IDExLjM1NjcgMjguMjY3IDExLjI1IDI4IDExLjI1IE0gOS44OCA2LjYzIEMgOS45OTQ5MiA0LjE1OTIzIDEyLjAzMTYgMi4yMTUxMiAxNC41MDUgMi4yMTUxMiBDIDE2Ljk3ODQgMi4yMTUxMiAxOS4wMTUxIDQuMTU5MjMgMTkuMTMgNi42MyBMIDE5LjEzIDExLjI2IEwgOS44OCAxMS4yNiBMIDkuODggNi42MyIvPjxwYXRoIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMSIgZD0iTSAxNS40MSAyMS4xNCBDIDE1LjEwMjUgMjEuMzE3NiAxNC45MTIxIDIxLjY0NDkgMTQuOTEgMjIgTCAxNC45MSAyNC43NSBMIDEzLjA5IDI0Ljc1IEMgMTIuNTM3NyAyNC43NSAxMi4wOSAyNS4xOTc3IDEyLjA5IDI1Ljc1IEMgMTIuMDkgMjYuMzAyMyAxMi41Mzc3IDI2Ljc1IDEzLjA5IDI2Ljc1IEwgMTUuOTEgMjYuNzUgQyAxNi40NjIzIDI2Ljc1IDE2LjkxIDI2LjMwMjMgMTYuOTEgMjUuNzUgTCAxNi45MSAyMi41MiBDIDE4LjE2NDQgMjEuNSAxOC42NDA4IDE5LjgwMDggMTguMDk5NiAxOC4yNzc0IEMgMTcuNTU4NCAxNi43NTM5IDE2LjExNjcgMTUuNzM2MiAxNC41IDE1LjczNjIgQyAxMi44ODMzIDE1LjczNjIgMTEuNDQxNiAxNi43NTM5IDEwLjkwMDQgMTguMjc3NCBDIDEwLjM1OTIgMTkuODAwOCAxMC44MzU2IDIxLjUgMTIuMDkgMjIuNTIgTCAxMi4wOSAyMyBDIDEyLjA5IDIzLjU1MjMgMTIuNTM3NyAyNCAxMy4wOSAyNCBDIDEzLjY0MjMgMjQgMTQuMDkgMjMuNTUyMyAxNC4wOSAyMyBMIDE0LjA5IDIyIEMgMTQuMDg3OSAyMS42NDQ5IDEzLjg5NzUgMjEuMzE3NiAxMy41OSAyMS4xNCBDIDEzLjAyNTggMjAuODE5IDEyLjY3OCAyMC4yMTkxIDEyLjY4IDE5LjU3IEMgMTIuNjggMTguNTY0OCAxMy40OTQ4IDE3Ljc1IDE0LjUgMTcuNzUgQyAxNS41MDUyIDE3Ljc1IDE2LjMyIDE4LjU2NDggMTYuMzIgMTkuNTcgQyAxNi4zMjIgMjAuMjE5MSAxNS45NzQyIDIwLjgxOSAxNS40MSAyMS4xNCBaIi8+PC9nPjwvZz48L2c+PC9zdmc+Cg==",
+          "geometry": null,
+          "aspect": 1.0,
+          "text_slot": false
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "886a8e5c894c55aee45110f97b5ea5bc5c91ed96a04bcee9577c67427f8b6a23",
+        "observed_instances": [
+          "s21"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addTextBox",
+          "kind": "addTextBox",
+          "geometry": null,
+          "aspect": 8.698,
+          "text_slot": true
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      },
+      {
+        "signature": "39ec4015c34d2f42c5c56c0d90b094f4684e5f9f2dc73c8d36b506fbef2a24ac",
+        "observed_instances": [
+          "s22"
+        ],
+        "observed_count": 1,
+        "structure": {
+          "api": "addTextBox",
+          "kind": "addTextBox",
+          "geometry": null,
+          "aspect": 6.91,
+          "text_slot": true
+        },
+        "repeat_axis": "unresolved",
+        "observed_gaps_pt": [],
+        "equal_gap_observed": false,
+        "cardinality_transfer": "not_validated"
+      }
+    ],
+    "text_parameters": [
+      {
+        "object": "s3",
+        "container": "slide",
+        "source_text": "添加标题",
+        "source_characters": 4,
+        "font_pt": [
+          20.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 105.44999999999999,
+          "height": 26.049999999999997
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s4",
+        "container": "slide",
+        "source_text": "单击此处输入你的正文，文字是您思想的提炼。",
+        "source_characters": 21,
+        "font_pt": [
+          12.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 345.70000000000005,
+          "height": 24.9
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s7",
+        "container": "slide",
+        "source_text": "添加标题",
+        "source_characters": 4,
+        "font_pt": [
+          25.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 106.1,
+          "height": 26.049999999999997
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s8",
+        "container": "slide",
+        "source_text": "单击此处输入你的正文，文字是您思想的提炼。",
+        "source_characters": 21,
+        "font_pt": [
+          12.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 345.70000000000005,
+          "height": 24.9
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s11",
+        "container": "slide",
+        "source_text": "添加标题",
+        "source_characters": 4,
+        "font_pt": [
+          25.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 97.94999999999999,
+          "height": 26.049999999999997
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s12",
+        "container": "slide",
+        "source_text": "单击此处输入你的正文，文字是您思想的提炼。",
+        "source_characters": 21,
+        "font_pt": [
+          12.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 345.70000000000005,
+          "height": 24.9
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s15",
+        "container": "slide",
+        "source_text": "添加标题",
+        "source_characters": 4,
+        "font_pt": [
+          25.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 98.6,
+          "height": 26.049999999999997
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s16",
+        "container": "slide",
+        "source_text": "单击此处输入你的正文，文字是您思想的提炼。",
+        "source_characters": 21,
+        "font_pt": [
+          12.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 345.70000000000005,
+          "height": 24.9
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s21",
+        "container": "slide",
+        "source_text": "单击此处添加大标题内容",
+        "source_characters": 11,
+        "font_pt": [
+          32.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 387.45000000000005,
+          "height": 42.6
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      },
+      {
+        "object": "s22",
+        "container": "slide",
+        "source_text": "单击此处添加副标题",
+        "source_characters": 9,
+        "font_pt": [
+          20.0
+        ],
+        "source_inner_bounds_pt": {
+          "width": 211.55,
+          "height": 29.1
+        },
+        "binding": "Assign a content role after semantic review; source character count is not a new-content capacity.",
+        "fit_contract": "Measure the exact chosen font, text, actual post-layout box, margins and spacing; fits must be true and native overflow zero."
+      }
+    ],
+    "parameterization": {
+      "component_tree": "Keep each selected native component and its children together; resize through its group coordinate system.",
+      "repetition": "Solve positions from available region, component extents and gaps. Observed instance count is evidence, not permission to add/remove items.",
+      "text": "Bind complete user text to reviewed roles; recompute inner boxes and reject failed measurements. Preserve text-bearing geometric shapes.",
+      "style": "Map source colors to explicit theme roles and retain shape/fill/line relationships; preserve native paths via the verified source.",
+      "semantics": "Geometric equality does not imply semantic equivalence. Review relation, reading order and role bindings before admission."
+    }
+  },
+  "unseen_content_validation": "not_run",
+  "capacity_status": "observed_source_only",
+  "source_admission": "high_similarity_verified",
+  "revalidation": {
+    "state": "source_verified",
+    "reasons": [],
+    "complete_group_text_coverage_required": true,
+    "font_metrics_required": true
+  }
+}

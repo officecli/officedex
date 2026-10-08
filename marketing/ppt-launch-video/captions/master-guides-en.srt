@@ -1,0 +1,23 @@
+1
+00:00:06,000 --> 00:00:13,000
+Start with one prompt
+
+2
+00:00:20,000 --> 00:00:28,000
+Review and approve each step
+
+3
+00:00:34,000 --> 00:00:42,000
+Confirm before slides are built
+
+4
+00:00:48,000 --> 00:00:55,000
+Preview a real, editable PPTX
+
+5
+00:00:59,000 --> 00:01:09,000
+Describe the change
+
+6
+00:01:10,000 --> 00:01:18,000
+Apply a precise AI edit

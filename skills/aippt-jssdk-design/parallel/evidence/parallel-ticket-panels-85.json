@@ -1,0 +1,69 @@
+{
+  "id": "parallel-ticket-panels-85",
+  "family": "parallel",
+  "source": "sampleall/shape/并列3项/并列3项.pptx",
+  "page": 85,
+  "program": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__并列3项__并列3项/slides/slide-0085.mjs",
+  "verification": "artifacts/aippt/full-distillation/font-metrics-v3/source-e3cf7b03370bd7b5a638/verification.json",
+  "observed_items": 3,
+  "mechanism": "ticket-panels",
+  "source_fact": "票签式面板：锯齿上沿、露出的倾斜标签、面板底部双线",
+  "transfer_hypothesis": "保留票签轮廓和层叠标签；正文进入面板，不能降级为圆点三栏。",
+  "visual_review": "source_preview_inspected",
+  "state": "source_fact",
+  "ssim": 0.995586444591137,
+  "exact_reference": false,
+  "program_sha256": "5752e4048662cccb3d20c6e2f5fa0d91adcaea3520e26a2edd9ab9408225ee36",
+  "verification_sha256": "0b7ea80e3bfb5330ede4ed993c306fd1a141c0853dd9f8bdcc5c3af1ad69997c",
+  "preview": "sampleall/shape/并列3项/并列3项/幻灯片85.png",
+  "checks": {
+    "jssdk_executed": true,
+    "native_objects": {
+      "count": 4,
+      "types": [
+        "group",
+        "group",
+        "group",
+        "shape"
+      ]
+    },
+    "text_overflow": 0,
+    "render_errors": 0,
+    "pptx_export": "passed",
+    "strict_reimport": "passed",
+    "text_coverage_version": 2,
+    "text_measurement": "font_metrics"
+  },
+  "canvas_pt": [
+    960.0,
+    540.0
+  ],
+  "objects": [
+    {
+      "id": "s7",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.26319,
+        "top": 0.1963,
+        "width": 0.47362,
+        "height": 0.12897
+      },
+      "text_characters": 17,
+      "font_pt": [
+        24.0
+      ],
+      "colors": [
+        "#000000"
+      ]
+    }
+  ],
+  "extraction_scope": "literal object geometry; group transforms and custom paths require source inspection",
+  "source_admission": "high_similarity_verified",
+  "revalidation": {
+    "state": "source_verified",
+    "reasons": [],
+    "complete_group_text_coverage_required": true,
+    "font_metrics_required": true
+  }
+}

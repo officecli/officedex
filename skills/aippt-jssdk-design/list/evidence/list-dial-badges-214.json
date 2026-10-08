@@ -1,0 +1,135 @@
+{
+  "id": "list-dial-badges-214",
+  "family": "list",
+  "source": "sampleall/shape/列表4项/列表4项.pptx",
+  "page": 214,
+  "program": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__列表4项__列表4项/slides/slide-0214.mjs",
+  "verification": "artifacts/aippt/full-distillation/font-metrics-v3/source-63290c09df2c91d9856b/verification.json",
+  "observed_items": 4,
+  "mechanism": "dial-badges",
+  "source_fact": "带放射刻度的编号圆章，内部标题，外部正文",
+  "transfer_hypothesis": "刻度是装饰而非数据；保留圆章、顶部编号带和标题，正文放章下。",
+  "visual_review": "source_preview_inspected",
+  "state": "source_fact",
+  "ssim": 0.988144274903752,
+  "exact_reference": false,
+  "program_sha256": "73342da89bba89166196ea3c1f7da261c123c621c1552c4c8b82df46b0a8681a",
+  "verification_sha256": "ade2cda968373cf801c0725ee339fa2bedb6ba037ea31c2d20e75f00356dca6a",
+  "preview": "sampleall/shape/列表4项/列表4项_PPTX_TO_PNG_WPS/幻灯片214.png",
+  "checks": {
+    "jssdk_executed": true,
+    "native_objects": {
+      "count": 16,
+      "types": [
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape"
+      ]
+    },
+    "text_overflow": 0,
+    "render_errors": 0,
+    "pptx_export": "passed",
+    "strict_reimport": "passed",
+    "text_coverage_version": 2,
+    "text_measurement": "font_metrics"
+  },
+  "canvas_pt": [
+    960.0,
+    540.0
+  ],
+  "objects": [
+    {
+      "id": "s4",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.70039,
+        "top": 0.43442,
+        "width": 0.11147,
+        "height": 0.13116
+      },
+      "text_characters": 4,
+      "font_pt": [
+        18.0
+      ],
+      "colors": [
+        "#80A57B"
+      ]
+    },
+    {
+      "id": "s8",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.18814,
+        "top": 0.43442,
+        "width": 0.11147,
+        "height": 0.13116
+      },
+      "text_characters": 4,
+      "font_pt": [
+        18.0
+      ],
+      "colors": [
+        "#E6AA00"
+      ]
+    },
+    {
+      "id": "s12",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.35889,
+        "top": 0.43442,
+        "width": 0.11147,
+        "height": 0.13116
+      },
+      "text_characters": 4,
+      "font_pt": [
+        18.0
+      ],
+      "colors": [
+        "#E1B11C"
+      ]
+    },
+    {
+      "id": "s16",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.53343,
+        "top": 0.43442,
+        "width": 0.11147,
+        "height": 0.13116
+      },
+      "text_characters": 4,
+      "font_pt": [
+        18.0
+      ],
+      "colors": [
+        "#BDAD4E"
+      ]
+    }
+  ],
+  "extraction_scope": "literal object geometry; group transforms and custom paths require source inspection",
+  "source_admission": "high_similarity_verified",
+  "revalidation": {
+    "state": "source_verified",
+    "reasons": [],
+    "complete_group_text_coverage_required": true,
+    "font_metrics_required": true
+  }
+}

@@ -1,0 +1,538 @@
+/* ─── Onboarding ─── */
+
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(28, 26, 38, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 24px;
+  overflow: auto;
+}
+
+.onboarding-card {
+  box-sizing: border-box;
+  width: min(640px, 100%);
+  max-width: 100%;
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  background: var(--n-canvas, #ffffff);
+  border: 1px solid var(--n-hairline, #e6e4d8);
+  border-radius: 8px;
+  padding: 28px 32px;
+  box-shadow: 0 24px 60px rgba(28, 26, 38, 0.28);
+}
+
+.onboarding-header {
+  margin-bottom: 24px;
+}
+
+.onboarding-eyebrow {
+  display: inline-block;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--n-primary, #05101a);
+  margin-bottom: 8px;
+}
+
+.onboarding-title {
+  font-family: var(--font-body, 'Plus Jakarta Sans', system-ui, sans-serif);
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0 0 8px;
+  color: var(--n-ink, #1a1a1a);
+}
+
+.onboarding-title-row {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.onboarding-title-row .onboarding-title {
+  min-width: 0;
+  margin: 0;
+}
+
+.onboarding-step-counter {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: #74777c;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.onboarding-subtitle {
+  margin: 0;
+  color: #74777c;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+.onboarding-field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.onboarding-field label {
+  font-weight: 600;
+  color: #1a2530;
+}
+
+.onboarding-field .od-switch {
+  align-self: flex-start;
+}
+
+.onboarding-field .od-radio-group {
+  align-self: flex-start;
+}
+
+.onboarding-field .od-space-compact .od-button,
+.settings-panel .od-space-compact .od-button {
+  height: 44px;
+}
+
+.onboarding-summary {
+  border: 1px solid color-mix(in srgb, var(--n-primary, #05101a) 16%, var(--n-hairline, #e6e4d8));
+  border-radius: 8px;
+  padding: 16px 20px;
+  background: var(--n-primary-soft, #f0eee6);
+}
+
+.onboarding-summary h3 {
+  margin: 0 0 8px;
+  font-family: var(--font-body, 'Plus Jakarta Sans', system-ui, sans-serif);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.onboarding-summary ul {
+  margin: 0;
+  padding-left: 18px;
+  color: #44474b;
+}
+
+.onboarding-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 28px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.onboarding-actions > .od-button[data-variant="ghost-normal"] {
+  height: 38px;
+  padding-inline: 0;
+}
+
+/* ─── Runtime overlay ─── */
+
+.runtime-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(28, 26, 38, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 24px;
+  overflow: auto;
+}
+
+.runtime-card {
+  box-sizing: border-box;
+  width: min(540px, 100%);
+  max-width: 100%;
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 32px 36px;
+  border: 1px solid #e5e3df;
+  box-shadow: 0 24px 60px rgba(28, 26, 38, 0.18);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+.runtime-eyebrow {
+  display: inline-block;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--n-primary, #05101a);
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.runtime-repo-info {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #ede9e4;
+  text-align: center;
+}
+
+.runtime-repo-info code {
+  background: #f6f5f4;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.runtime-settings-card {
+  background: #fafaf9;
+  border: 1px solid #e5e3df;
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin-top: 12px;
+}
+
+.runtime-settings-card .runtime-info-row {
+  display: flex;
+  min-width: 0;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 14px;
+}
+
+.runtime-settings-card .runtime-info-label {
+  min-width: 0;
+  color: #74777c;
+}
+
+.runtime-settings-card .runtime-info-value {
+  min-width: 0;
+  max-width: 100%;
+  color: #1a2530;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.runtime-settings-card code {
+  background: #f0eeec;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: 'SFMono-Regular', Menlo, Consolas, monospace;
+  word-break: break-all;
+}
+
+/* ───── App auto-update banner ───── */
+
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, var(--n-primary, #05101a) 0%, var(--n-primary-pressed, #1a2530) 100%);
+  color: #ffffff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.update-banner--stacked {
+  align-items: flex-end;
+}
+
+.update-banner-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.16);
+  font-size: 18px;
+  flex: 0 0 auto;
+}
+
+.update-banner--stacked .update-banner-icon {
+  align-self: center;
+}
+
+.update-banner-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.update-banner-title {
+  overflow-wrap: anywhere;
+  font-family: var(--font-body, 'Plus Jakarta Sans', system-ui, sans-serif);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 2px;
+}
+
+.update-banner-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  margin-top: 6px;
+}
+
+.update-banner-progress .od-progress {
+  flex: 1 1 auto;
+  margin: 0;
+}
+
+.update-banner-bytes {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.84);
+  white-space: nowrap;
+}
+
+.update-banner-error {
+  font-size: 12px;
+  color: #ffe1e1;
+  margin-top: 4px;
+}
+
+.update-banner-actions {
+  display: flex;
+  align-items: center;
+  align-self: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.update-banner--stacked .update-banner-actions {
+  align-self: flex-end;
+}
+
+.update-banner-actions .od-button[data-variant="primary"] {
+  background: #ffffff;
+  color: var(--n-primary-pressed, #1a2530);
+  border-color: #ffffff;
+}
+
+.update-banner-actions .od-button[data-variant="primary"]:hover {
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--n-primary-deep, #05101a);
+  border-color: rgba(255, 255, 255, 0.92);
+}
+
+.update-banner-actions .od-button[data-variant="secondary"]:disabled {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.86);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.update-banner-actions .od-button[data-variant="ghost-normal"] {
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.update-banner-actions .od-button[data-variant="ghost-normal"]:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* ───── Force update overlay ───── */
+
+/*
+ * A page, not a scrim.
+ *
+ * Both call sites return this instead of the application (legacy `App.tsx`
+ * returns it in place of the whole tree, and the shell's `UpdateGate` does the
+ * same), so there has never been anything behind it. The 70% ink plus a 6px
+ * backdrop blur was written for a modal: it paid for a compositing layer to
+ * blur an empty document and rendered as a flat grey either way. Opaque says
+ * what it is and costs nothing.
+ */
+.force-update-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #3a3a3d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  overflow: auto;
+}
+
+.force-update-card {
+  box-sizing: border-box;
+  width: min(480px, 100%);
+  max-width: 100%;
+  background: #fafaf9;
+  border: 1px solid #e5e3df;
+  border-radius: 12px;
+  padding: 32px 28px;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.32);
+  text-align: center;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  color: #37352f;
+}
+
+.force-update-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  background: var(--n-primary-soft, #f0eee6);
+  color: var(--n-primary, #05101a);
+  font-size: 24px;
+  margin-bottom: 16px;
+}
+
+.force-update-title {
+  font-family: var(--font-body, 'Plus Jakarta Sans', system-ui, sans-serif);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.15;
+  margin: 0 0 8px;
+  color: #1a1a1a;
+}
+
+.force-update-version {
+  font-size: 14px;
+  color: #5d5b54;
+  margin-bottom: 14px;
+}
+
+.force-update-version-current {
+  color: #a4a097;
+}
+
+.force-update-notes-block {
+  text-align: left;
+  margin: 0 0 12px;
+}
+
+.force-update-notes-heading {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #a4a097;
+  margin: 0 0 4px;
+}
+
+.force-update-notes {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #37352f;
+  margin: 0;
+  white-space: pre-line;
+  /*
+   * The only text on this card the update server writes, and therefore the
+   * only one that can arrive as a 109-character URL with no break opportunity.
+   * `.force-update-reason` and `.force-update-error` already guard for this.
+   */
+  overflow-wrap: anywhere;
+}
+
+.force-update-reason {
+  font-size: 13px;
+  color: #787671;
+  margin: 0 0 20px;
+  overflow-wrap: anywhere;
+}
+
+.force-update-action {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.force-update-progress {
+  margin-top: 8px;
+}
+
+.force-update-progress-label {
+  font-size: 12px;
+  color: #5d5b54;
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.force-update-error {
+  display: block;
+  margin-top: 12px;
+  font-size: 13px;
+  color: #e03131;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.force-update-error-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #b04a4a;
+  margin-bottom: 2px;
+}
+
+.force-update-error-detail {
+  display: block;
+}
+
+/* Status line for the phases that have no progress bar to speak for them. */
+.force-update-status {
+  font-size: 13px;
+  color: #5d5b54;
+  margin: 0 0 12px;
+  overflow-wrap: anywhere;
+}
+
+/* The way out when the in-app update keeps failing. */
+.force-update-fallback {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #e5e3df;
+  text-align: left;
+}
+
+.force-update-fallback-heading {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #a4a097;
+  margin: 0 0 8px;
+}
+
+.force-update-download {
+  display: block;
+  font-size: 13px;
+  color: #05101a;
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
+}
+
+.force-update-secondary {
+  margin-top: 4px;
+}
+
+@media (max-width: 600px) {
+  .onboarding-overlay,
+  .runtime-overlay,
+  .force-update-overlay { align-items: flex-start; padding: 16px; }
+  .onboarding-card { padding: 22px 18px; }
+  .runtime-card { padding: 24px 18px; }
+  .force-update-card { padding: 24px 18px; }
+  .onboarding-title-row { align-items: flex-start; flex-direction: column; gap: 6px; }
+  .onboarding-actions { align-items: stretch; flex-direction: column-reverse; }
+  .onboarding-actions > .od-button { width: 100%; }
+  .runtime-settings-card .runtime-info-row { align-items: flex-start; flex-direction: column; gap: 2px; }
+  .runtime-settings-card .runtime-info-value { text-align: left; }
+  .update-banner { align-items: flex-start; flex-wrap: wrap; padding: 12px 16px; }
+  .update-banner-body { flex: 1 1 calc(100% - 52px); }
+  .update-banner-actions { width: 100%; justify-content: flex-end; }
+  .update-banner-progress { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .update-banner-progress .od-progress { width: 100%; }
+}

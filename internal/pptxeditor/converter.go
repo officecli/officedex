@@ -1,0 +1,73 @@
+package pptxeditor
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"officedex/internal/config"
+	"officedex/internal/subprocess"
+	"os"
+	"strings"
+)
+
+// Converter translates between PowerPoint files and the editable MOP package
+// consumed by the presentation editor. Implementations must be safe for
+// sequential reuse.
+type Converter interface {
+	ImportPptx(context.Context, string, string) error
+	ExportPptx(context.Context, string, string) error
+	Close() error
+}
+
+type CLIConverter struct {
+	binary string
+}
+
+// NewCLIConverter takes the already-resolved mop-convert executable.
+//
+// Resolution belongs to config.MopConvertBinary, which the app calls once and
+// hands to both this converter and the MOP HTTP service. The two used to
+// resolve the binary separately and could disagree; see that function's
+// comment. An empty path is allowed and means every call reports the converter
+// as unavailable.
+func NewCLIConverter(binary string) *CLIConverter {
+	return &CLIConverter{binary: binary}
+}
+
+func (c *CLIConverter) ImportPptx(ctx context.Context, sourcePath, mopDirectory string) error {
+	if strings.TrimSpace(c.binary) == "" {
+		return errors.New("mop-convert is unavailable; set OFFICEDEX_MOP_CONVERT_BIN or PRESENTATION_SOURCE_DIR")
+	}
+	return c.run(ctx, "import", "--input", sourcePath, "--mop", mopDirectory, "--format", "json")
+}
+
+func (c *CLIConverter) ExportPptx(ctx context.Context, mopDirectory, outputPath string) error {
+	if strings.TrimSpace(c.binary) == "" {
+		return errors.New("mop-convert is unavailable; set OFFICEDEX_MOP_CONVERT_BIN or PRESENTATION_SOURCE_DIR")
+	}
+	return c.run(ctx, "export", "--mop", mopDirectory, "--output", outputPath)
+}
+
+func (c *CLIConverter) Close() error { return nil }
+
+func (c *CLIConverter) run(ctx context.Context, args ...string) error {
+	runCtx, cancel := context.WithTimeout(ctx, config.MopConvertTimeout)
+	defer cancel()
+	// subprocess.CommandContext puts mop-convert in its own process group and
+	// kills the whole group on timeout: mop-convert spawns helpers, and killing
+	// only the parent left them holding the session directory open.
+	command := subprocess.CommandContext(runCtx, c.binary, args...)
+	command.Env = os.Environ()
+	output, err := command.CombinedOutput()
+	if err == nil {
+		return nil
+	}
+	if runCtx.Err() == context.DeadlineExceeded {
+		return fmt.Errorf("mop-convert %s timed out after %s", args[0], config.MopConvertTimeout)
+	}
+	detail := strings.TrimSpace(string(output))
+	if detail == "" {
+		detail = err.Error()
+	}
+	return fmt.Errorf("mop-convert %s: %s", args[0], detail)
+}

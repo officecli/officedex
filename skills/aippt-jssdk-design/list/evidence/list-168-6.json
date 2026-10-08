@@ -1,0 +1,262 @@
+{
+  "id": "list-168-6",
+  "family": "list",
+  "source": "sampleall/shape/列表3项/列表3项.pptx",
+  "page": 168,
+  "program": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__列表3项__列表3项/slides/slide-0168.mjs",
+  "verification": "artifacts/aippt/full-distillation/font-metrics-v3/source-ca1d9955ec36f6bfaa23/verification.json",
+  "observed_items": 3,
+  "mechanism": "rail-callouts",
+  "source_fact": "左侧图形竖列通过水平虚线映射到右侧等高说明条。",
+  "transfer_hypothesis": "只迁移一一对应的双区关系；立体柱不能用于暗示数值大小。",
+  "visual_review": "source_preview_inspected",
+  "state": "source_fact",
+  "ssim": 0.9827039026637115,
+  "exact_reference": false,
+  "program_sha256": "23a5e1dfc6792536463cca5c1c24c2635ad87eb215ad7353f0d4fa0f1cee0a59",
+  "verification_sha256": "53979211dc6460ad088a681bdfca09f6fbcdb0b4d33dbe7524e90f47415d03db",
+  "preview": "sampleall/shape/列表3项/列表3项_PPTX_TO_PNG_WPS/幻灯片168.png",
+  "checks": {
+    "jssdk_executed": true,
+    "native_objects": {
+      "count": 23,
+      "types": [
+        "connector",
+        "shape",
+        "shape",
+        "shape",
+        "connector",
+        "shape",
+        "shape",
+        "shape",
+        "connector",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "picture",
+        "picture",
+        "picture",
+        "shape",
+        "shape",
+        "shape"
+      ]
+    },
+    "text_overflow": 0,
+    "render_errors": 0,
+    "pptx_export": "passed",
+    "strict_reimport": "passed",
+    "text_coverage_version": 2,
+    "text_measurement": "font_metrics"
+  },
+  "canvas_pt": [
+    960.0,
+    540.0
+  ],
+  "objects": [
+    {
+      "id": "s1",
+      "api": "addLine",
+      "kind": "Line",
+      "bounds_fraction": {
+        "left": 0.34068,
+        "top": 0.315,
+        "width": 0.17719,
+        "height": 0.00065
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#CED3EA"
+      ]
+    },
+    {
+      "id": "s2",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.75875,
+        "top": 0.26954,
+        "width": 0.00531,
+        "height": 0.09157
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#8590CA"
+      ]
+    },
+    {
+      "id": "s4",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.54344,
+        "top": 0.28796,
+        "width": 0.21526,
+        "height": 0.05556
+      },
+      "text_characters": 12,
+      "font_pt": [
+        14.0
+      ],
+      "colors": [
+        "#262626"
+      ]
+    },
+    {
+      "id": "s5",
+      "api": "addLine",
+      "kind": "Line",
+      "bounds_fraction": {
+        "left": 0.34068,
+        "top": 0.47389,
+        "width": 0.17719,
+        "height": 0.00065
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#D2DDF1"
+      ]
+    },
+    {
+      "id": "s6",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.75875,
+        "top": 0.42843,
+        "width": 0.00531,
+        "height": 0.09157
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#8EAADC"
+      ]
+    },
+    {
+      "id": "s8",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.54344,
+        "top": 0.44676,
+        "width": 0.21526,
+        "height": 0.05556
+      },
+      "text_characters": 12,
+      "font_pt": [
+        14.0
+      ],
+      "colors": [
+        "#262626"
+      ]
+    },
+    {
+      "id": "s9",
+      "api": "addLine",
+      "kind": "Line",
+      "bounds_fraction": {
+        "left": 0.34068,
+        "top": 0.63259,
+        "width": 0.17719,
+        "height": 0.00065
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#C9E2ED"
+      ]
+    },
+    {
+      "id": "s10",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.75875,
+        "top": 0.58713,
+        "width": 0.00531,
+        "height": 0.09157
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#79B6D3"
+      ]
+    },
+    {
+      "id": "s12",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.54344,
+        "top": 0.60528,
+        "width": 0.21526,
+        "height": 0.05556
+      },
+      "text_characters": 12,
+      "font_pt": [
+        14.0
+      ],
+      "colors": [
+        "#262626"
+      ]
+    },
+    {
+      "id": "s18",
+      "api": "addImage",
+      "kind": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9InllcyI/PjxzdmcgY2xhc3M9Imljb24iIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHZlcnNpb249IjEuMiIgYmFzZVByb2ZpbGU9InRpbnkiIHg9IjAiIHk9IjAiIHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiB2aWV3Qm94PSIwIDAgMTAyNCAxMDI0Ij48ZGVmcy8+PGRlZnMvPjxkZWZzLz48cGF0aCBmaWxsPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjEuMDAwMiIgZD0iTSA4OTguMzAzIDE0OC45MDMgTCAxMjcuNzQ3IDE0OC45MDMgQyAxMDIuNDYgMTQ4LjkwMyA4MS44ODcgMTY4LjQ4NyA4MS44ODcgMTkyLjU1NSBMIDgxLjg4NyA2OTkuMTMgQyA4MS44ODcgNzIzLjE5MyAxMDIuNDYgNzQyLjc3MiAxMjcuNzQ3IDc0Mi43NzIgTCA0MjguNTQ2IDc0Mi43NzIgTCA0MjguNTQ2IDgyOC41MTEgTCAzNTQuOTU5IDgyOC41MTEgQyAzNDIuMDg3IDgyOC41MTEgMzMxLjY1NCA4MzguOTM5IDMzMS42NTQgODUxLjgxMSBDIDMzMS42NTQgODY0LjY4MiAzNDIuMDg3IDg3NS4xMTYgMzU0Ljk1OSA4NzUuMTE2IEwgNjc0Ljc3MSA4NzUuMTE2IEMgNjg3LjYzOSA4NzUuMTE2IDY5OC4wNzEgODY0LjY4MiA2OTguMDcxIDg1MS44MTEgQyA2OTguMDcxIDgzOC45MzkgNjg3LjYzOSA4MjguNTExIDY3NC43NzEgODI4LjUxMSBMIDYwMS4xNzkgODI4LjUxMSBMIDYwMS4xNzkgNzQyLjc3MiBMIDg5OC4zMDMgNzQyLjc3MiBDIDkyMy41OTEgNzQyLjc3MiA5NDQuMTY1IDcyMy4xOTMgOTQ0LjE2NSA2OTkuMTMgTCA5NDQuMTY1IDE5Mi41NTYgQyA5NDQuMTY1IDE2OC40ODcgOTIzLjU5MSAxNDguOTAzIDg5OC4zMDMgMTQ4LjkwMyBNIDkwNC4yNzUgMTg5LjYxMSBMIDkwNC4yNzUgNTk5Ljk5IEwgMTIyLjE5IDU5OS45OSBMIDEyMi4xOSAxODkuNjExIEwgOTA0LjI3NSAxODkuNjExIE0gNDY4Ljk1NCA4MjguNTExIEwgNDY4Ljk1NCA3NDIuNzcyIEwgNTYxLjE2OSA3NDIuNzcyIEwgNTYxLjE2OSA4MjguNTExIEwgNDY4Ljk1NCA4MjguNTExIE0gMTIyLjE5IDcwNC4yNzMgTCAxMjIuMTkgNjQwLjMwNCBMIDkwNC4yNjYgNjQwLjMwNCBMIDkwNC4yNjYgNzA0LjI3MyBMIDEyMi4xOSA3MDQuMjczIi8+PHBhdGggZmlsbD0iI2ZmZmZmZiIgc3Ryb2tlLXdpZHRoPSIxLjAwMDIiIGQ9Ik0gNTk4LjU1MiA0MDkuMjUzIEMgNTkxLjkxMyA0MDkuMTA4IDU4NC45ODUgNDA5LjMyNiA1NzcuNzY5IDQwOS45MDMgQyA1NzEuNTYzIDQxMC4zMzYgNTY0LjUyNiA0MTEuMDU3IDU1Ni42NiA0MTIuMDY4IEMgNTQ4Ljc5NSA0MTMuMDc5IDU0MC43NDggNDE0LjY2NSA1MzIuNTIxIDQxNi44MyBMIDU2NC4zNDUgNDY5LjQzOSBDIDU2NS43ODkgNDcyLjE4MiA1NjYuNjE5IDQ3NC45OTUgNTY2LjgzNSA0NzcuODgzIEMgNTY3LjA1MiA0ODAuNzcgNTY2LjcyNyA0ODMuNTQ5IDU2NS44NjEgNDg2LjIxOSBDIDU2NC45OTUgNDg4Ljg4OSA1NjMuNjYxIDQ5MS4zNDMgNTYxLjg1NyA0OTMuNTc5IEMgNTYwLjA1MSA0OTUuODE2IDU1Ny43NzkgNDk3LjY1NyA1NTUuMDM2IDQ5OS4xIEMgNTUyLjQzOCA1MDAuNTQzIDU0OS42OTYgNTAxLjM3NCA1NDYuODA5IDUwMS41OSBDIDU0My45MjMgNTAxLjgwNiA1NDEuMTQ0IDUwMS40ODEgNTM4LjQ3MyA1MDAuNjE2IEMgNTM1LjgwMyA0OTkuNzUgNTMzLjM0OSA0OTguNDE1IDUzMS4xMTIgNDk2LjYxMSBDIDUyOC44NzYgNDk0LjgwNiA1MjcuMDM1IDQ5Mi41MzMgNTI1LjU5MiA0ODkuNzkgTCA0OTguOTYzIDQzMC42ODYgQyA0OTEuNzQ2IDQzNC44NzIgNDg1LjIxNiA0MzkuMzQ2IDQ3OS4zNzEgNDQ0LjExIEMgNDczLjUyNSA0NDguODcyIDQ2OC41MDkgNDUzLjM0NyA0NjQuMzIzIDQ1Ny41MzIgQyA0NTkuNDE1IDQ2Mi4yOTYgNDU1LjA4NiA0NjcuMTMxIDQ1MS4zMzQgNDcyLjAzOCBMIDQ1MC45IDI5NS4zNzYgTCA1OTguNTUyIDQwOS4yNTMgWiIvPjwvc3ZnPgo=",
+      "bounds_fraction": {
+        "left": 0.26104,
+        "top": 0.28185,
+        "width": 0.04427,
+        "height": 0.0787
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": []
+    },
+    {
+      "id": "s19",
+      "api": "addImage",
+      "kind": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9InllcyI/PjxzdmcgY2xhc3M9Imljb24iIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHZlcnNpb249IjEuMiIgYmFzZVByb2ZpbGU9InRpbnkiIHg9IjAiIHk9IjAiIHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiB2aWV3Qm94PSIwIDAgMTAyNCAxMDI0Ij48ZGVmcy8+PGRlZnMvPjxkZWZzLz48cGF0aCBmaWxsPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjAuOTk5NTgyIiBkPSJNIDcwNy4xIDUwNS43IEwgNTQ3LjkgNTA1LjcgTCA1NDcuOSAyNDkuOCBDIDU0Ny45IDI0OC43IDU0NyAyNDcuOCA1NDUuOSAyNDcuOCBMIDQ4NS40IDI0Ny44IEMgNDg0LjMgMjQ3LjggNDgzLjQgMjQ4LjcgNDgzLjQgMjQ5LjggTCA0ODMuNCA1NjguMSBDIDQ4My40IDU2OS4yIDQ4NC4zIDU3MC4xIDQ4NS40IDU3MC4xIEwgNzA3IDU3MC4xIEMgNzA4LjEgNTcwLjEgNzA5IDU2OS4yIDcwOSA1NjguMSBMIDcwOSA1MDcuNiBDIDcwOS4xIDUwNi42IDcwOC4yIDUwNS43IDcwNy4xIDUwNS43IFoiLz48cGF0aCBmaWxsPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjAuOTk5NTgyIiBkPSJNIDgwNC4yIDgzNS41IEMgODgyLjQgNzU5LjMgOTMxIDY1MyA5MzEgNTM1LjUgQyA5MzEgNDQwLjUgODk5LjIgMzUyLjggODQ1LjcgMjgyLjQgQyA4NjkuMyAyNTguNCA4ODIuNiAyMjYuMyA4ODIuNiAxOTIuMSBDIDg4Mi42IDEyMSA4MjQuOCA2My4yIDc1My43IDYzLjIgQyA3MDMuMyA2My4yIDY1OC44IDkyIDYzNy43IDEzNS44IEMgNTk4IDEyMy4zIDU1NS44IDExNi41IDUxMiAxMTYuNSBDIDQ2OC4yIDExNi41IDQyNiAxMjMuMyAzODYuMyAxMzUuOCBDIDM2NS4yIDkyLjMgMzIwLjcgNjMuMiAyNzAuMyA2My4yIEMgMTk5LjIgNjMuMiAxNDEuNCAxMjEgMTQxLjQgMTkyLjEgQyAxNDEuNCAyMjYuNCAxNTUgMjU4LjcgMTc4LjMgMjgyLjQgQyAxMjQuOCAzNTIuNyA5MyA0NDAuNSA5MyA1MzUuNSBDIDkzIDY0NiAxMzYgNzQ2LjYgMjA2LjEgODIxLjYgTCAxMTIuOSA5MTQuOCBDIDExMi4xIDkxNS42IDExMi4xIDkxNi45IDExMi45IDkxNy42IEwgMTU1LjcgOTYwLjQgQyAxNTYuNSA5NjEuMiAxNTcuOCA5NjEuMiAxNTguNSA5NjAuNCBMIDI1My43IDg2NS4yIEMgMzI0LjkgOTIxLjEgNDE0LjcgOTU0LjUgNTEyIDk1NC41IEMgNjAyLjMgOTU0LjUgNjg2IDkyNS44IDc1NC41IDg3NyBMIDgzNy44IDk2MC4zIEMgODM4LjYgOTYxLjEgODM5LjkgOTYxLjEgODQwLjYgOTYwLjMgTCA4ODMuNCA5MTcuNSBDIDg4NC4yIDkxNi43IDg4NC4yIDkxNS40IDg4My40IDkxNC43IEwgODA0LjIgODM1LjUgTSA3NTMuNyAxMjcuNiBDIDc4OS4yIDEyNy42IDgxOC4yIDE1Ni41IDgxOC4yIDE5Mi4xIEMgODE4LjIgMjA3LjcgODEyLjYgMjIyLjQgODAyLjcgMjM0IEMgNzcxLjkgMjA0LjMgNzM2LjUgMTc5LjIgNjk3LjggMTYwIEMgNzA5IDE0MC4zIDczMC4xIDEyNy42IDc1My43IDEyNy42IE0gMjcwLjMgMTI3LjYgQyAyOTQgMTI3LjYgMzE1IDE0MC40IDMyNi4yIDE1OS45IEMgMjg3LjUgMTc5LjEgMjUyLjEgMjA0LjIgMjIxLjMgMjMzLjkgQyAyMTEuNSAyMjIuNCAyMDUuOCAyMDcuNiAyMDUuOCAxOTIgQyAyMDUuOCAxNTYuNSAyMzQuNyAxMjcuNiAyNzAuMyAxMjcuNiBNIDE1Ny41IDUzNS41IEMgMTU3LjUgMzQwIDMxNi41IDE4MSA1MTIgMTgxIEMgNzA3LjUgMTgxIDg2Ni41IDM0MCA4NjYuNSA1MzUuNSBDIDg2Ni41IDczMSA3MDcuNSA4OTAgNTEyIDg5MCBDIDMxNi41IDg5MCAxNTcuNSA3MzAuOSAxNTcuNSA1MzUuNSIvPjwvc3ZnPgo=",
+      "bounds_fraction": {
+        "left": 0.26536,
+        "top": 0.45222,
+        "width": 0.03693,
+        "height": 0.06565
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": []
+    },
+    {
+      "id": "s20",
+      "api": "addImage",
+      "kind": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9InllcyI/PjxzdmcgY2xhc3M9Imljb24iIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHZlcnNpb249IjEuMiIgYmFzZVByb2ZpbGU9InRpbnkiIHg9IjAiIHk9IjAiIHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiB2aWV3Qm94PSIwIDAgMTAyNCAxMDI0Ij48ZGVmcy8+PGRlZnMvPjxkZWZzLz48cGF0aCBmaWxsPSIjZmZmZmZmIiBkPSJNIDEwMDQuOSAyODcuMyBDIDk4Ny43MDQgMjYwIDk1OC43MDQgMjQ0IDk1OC43MDQgMjQ0IEwgODkxLjcwNCAyMDQuMyBMIDg5MS43MDQgMTExLjggQyA4ODkuMzA0IDc4IDg1OS4xMDQgNTQuMyA4MzQuMjA0IDU0LjMgTCAxODkuNjA0IDU0LjMgQyAxNTIuODA0IDU0LjMgMTM1LjEwNCA3OC42IDEzMi4xMDQgMTExLjggTCAxMzIuMTA0IDIwNC4zIEwgNTIuMTA0IDI1MCBDIDUyLjEwNCAyNTAgMjQuODA0IDI2NiAxMy4wMDQgMjg3LjQgQyAtMC41OTYgMzExLjcgMC4wMDQgMzUwLjggMC4wMDQgMzUwLjggTCAwLjAwNCA4MjIuOCBDIDAuMDA0IDg5Mi4yIDY5LjQwNCA5NjUuNyAxMzAuNDA0IDk2NS43IEwgODkxLjEwNCA5NjUuNyBDIDk0My4zMDQgOTY1LjcgMTAyMy45IDkyMyAxMDIzLjkgODI5LjkgTCAxMDIzLjkgMzU3LjMgQyAxMDIzLjggMzU3LjMgMTAyMi4xIDMxNS4yIDEwMDQuOSAyODcuMyBNIDEzMi43MDQgMzU2LjcgTCA2Mi43MDQgMzA5LjkgTCAxMzIuNzA0IDI2My43IEwgMTMyLjcwNCAzNTYuNyBNIDg0MC4wMDQgMzgyLjIgTCA1NDkuNTA0IDU1NC44IEMgNTQ5LjUwNCA1NTQuOCA1MzIuOTA0IDU2Ny44IDUxMS42MDQgNTY3LjMgQyA0OTEuNDA0IDU2Ni43IDQ3Ny4yMDQgNTU3LjIgNDc3LjIwNCA1NTcuMiBMIDE4My4xMDQgMzgyLjIgTCAxODMuMTA0IDEzMi42IEMgMTgzLjEwNCAxMTMgMTkxLjQwNCAxMDQuNyAyMTEuMDA0IDEwNC43IEwgODEyLjIwNCAxMDQuNyBDIDgzMS44MDQgMTA0LjcgODQwLjEwNCAxMTMgODQwLjEwNCAxMzIuNiBMIDg0MC4xMDQgMzgyLjIgTCA4NDAuMDA0IDM4Mi4yIE0gODkyLjIwNCAzNTguNSBMIDg5Mi4yMDQgMjYyLjQgTCA5NjMuOTA0IDMxMi4yIEwgODkyLjIwNCAzNTguNSIvPjxwYXRoIGZpbGw9IiNmZmZmZmYiIGQ9Ik0gNjA1LjIwNCAzMTQuNiBMIDMxMy41MDQgMzE0LjYgQyAzMDIuMjA0IDMxNC42IDI5MS42MDQgMzI4LjIgMjkxLjYwNCAzMzkuNSBDIDI5MS42MDQgMzUwLjggMzAyLjMwNCAzNjQuNCAzMTMuNTA0IDM2NC40IEwgNjA1LjIwNCAzNjQuNCBDIDYxNy4xMDQgMzY0LjQgNjI2LjAwNCAzNTAuOCA2MjYuMDA0IDMzOS41IEMgNjI2LjAwNCAzMjguMyA2MTYuNTA0IDMxNC42IDYwNS4yMDQgMzE0LjYgTSA3MTYuNzA0IDE5NC4zIEwgMzA3LjYwNCAxOTQuMyBDIDI5Ni4zMDQgMTk0LjMgMjg1LjcwNCAyMDcuOSAyODUuNzA0IDIxOS4yIEMgMjg1LjcwNCAyMzAuNSAyOTYuNDA0IDI0NC4xIDMwNy42MDQgMjQ0LjEgTCA3MTYuNzA0IDI0NC4xIEMgNzI4LjAwNCAyNDQuMSA3MzcuNTA0IDIzMC41IDczNy41MDQgMjE5LjIgQyA3MzcuNDA0IDIwNy45IDcyOC4wMDQgMTk0LjMgNzE2LjcwNCAxOTQuMyIvPjwvc3ZnPgo=",
+      "bounds_fraction": {
+        "left": 0.26474,
+        "top": 0.60713,
+        "width": 0.03693,
+        "height": 0.06565
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": []
+    }
+  ],
+  "extraction_scope": "literal object geometry; group transforms and custom paths require source inspection",
+  "source_admission": "high_similarity_verified",
+  "revalidation": {
+    "state": "source_verified",
+    "reasons": [],
+    "complete_group_text_coverage_required": true,
+    "font_metrics_required": true
+  }
+}

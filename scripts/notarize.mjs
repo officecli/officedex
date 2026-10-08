@@ -1,0 +1,224 @@
+#!/usr/bin/env node
+// Signs, notarizes, and staples a macOS .app or .dmg for distribution outside
+// the App Store. Two credential modes:
+//   - Local: notarytool keychain profile (default: OfficeDex-Notarize).
+//   - CI: App Store Connect API key via NOTARIZE_API_KEY_PATH/ID/ISSUER.
+// API-key mode auto-activates when all three env vars are set.
+//
+// Usage:
+//   node scripts/notarize.mjs <path/to/App.app | App.dmg>
+//
+// Environment overrides:
+//   CODESIGN_IDENTITY        — signing identity (default: team cert below)
+//   NOTARIZE_PROFILE         — keychain profile name (local mode)
+//   NOTARIZE_API_KEY_PATH    — path to .p8 file (CI mode)
+//   NOTARIZE_API_KEY_ID      — App Store Connect key id (CI mode)
+//   NOTARIZE_API_ISSUER      — App Store Connect issuer uuid (CI mode)
+//   SKIP_NOTARIZE=1          — sign only, skip notarization + staple
+//   NOTARIZE_UPLOADER        — notarytool (default) | direct | relay
+//                              direct: upload with scripts/notarize-relay.mjs's own
+//                              multipart uploader (10x+ faster than notarytool from
+//                              Beijing); relay: ship to NOTARIZE_RELAY_HOST first.
+//                              Both need the API-key credentials. Transport failures
+//                              fall back to notarytool unless NOTARIZE_RELAY_FALLBACK=0.
+
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
+
+import { buildNotarizationSigningPlan } from "./codesign-bundled-officecli.mjs";
+
+const IDENTITY =
+  process.env.CODESIGN_IDENTITY ||
+  "Developer ID Application: ChuXin Tec Co., Ltd. (Z35T9799TW)";
+const PROFILE = process.env.NOTARIZE_PROFILE || "OfficeDex-Notarize";
+const API_KEY_PATH = process.env.NOTARIZE_API_KEY_PATH || "";
+const API_KEY_ID = process.env.NOTARIZE_API_KEY_ID || "";
+const API_ISSUER = process.env.NOTARIZE_API_ISSUER || "";
+const USE_API_KEY = API_KEY_PATH && API_KEY_ID && API_ISSUER;
+const SKIP_NOTARIZE = process.env.SKIP_NOTARIZE === "1";
+const UPLOADER = process.env.NOTARIZE_UPLOADER || "notarytool";
+const RELAY_FALLBACK = process.env.NOTARIZE_RELAY_FALLBACK !== "0";
+
+function notarytoolCredArgs() {
+  return USE_API_KEY
+    ? ["--key", API_KEY_PATH, "--key-id", API_KEY_ID, "--issuer", API_ISSUER]
+    : ["--keychain-profile", PROFILE];
+}
+
+function run(cmd, args, opts) {
+  console.log(`  > ${cmd} ${args.join(" ")}`);
+  return execFileSync(cmd, args, { stdio: "inherit", ...opts });
+}
+
+function runCapture(cmd, args) {
+  return execFileSync(cmd, args, { encoding: "utf8" }).trim();
+}
+
+function findMachOBinaries(appPath) {
+  const output = runCapture("find", [appPath, "-type", "f", "-perm", "+111"]);
+  if (!output) return [];
+  const candidates = output.split("\n").filter(Boolean);
+  const binaries = [];
+  for (const f of candidates) {
+    try {
+      const info = runCapture("file", [f]);
+      if (info.includes("Mach-O")) binaries.push(f);
+    } catch {
+      // skip non-binary executables
+    }
+  }
+  return binaries;
+}
+
+function signBinary(filePath, entitlements) {
+  console.log(`[sign] ${path.relative(process.cwd(), filePath)}`);
+  const args = [
+    "--force",
+    "--sign", IDENTITY,
+    "--options", "runtime",
+    "--timestamp",
+  ];
+  if (entitlements) args.push("--entitlements", entitlements);
+  args.push(filePath);
+  run("codesign", args);
+}
+
+async function main() {
+  const targetPath = process.argv[2];
+  if (!targetPath || !(targetPath.endsWith(".app") || targetPath.endsWith(".dmg"))) {
+    console.error("Usage: node scripts/notarize.mjs <path/to/App.app | App.dmg>");
+    process.exit(2);
+  }
+  const isDmg = targetPath.endsWith(".dmg");
+
+  if (process.platform !== "darwin") {
+    console.log("[notarize] not on macOS, skipping");
+    return;
+  }
+
+  if (isDmg) {
+    // --- DMG path: sign the dmg, notarize, staple ---
+    console.log("\n=== DMG Signing ===");
+    run("codesign", [
+      "--force",
+      "--sign", IDENTITY,
+      "--timestamp",
+      targetPath,
+    ]);
+  } else {
+    // --- App path: sign all Mach-O binaries inside-out, then the app bundle ---
+    console.log("\n=== Code Signing ===");
+    const binaries = findMachOBinaries(targetPath);
+    const signingPlan = buildNotarizationSigningPlan({ app: targetPath, binaries });
+    for (const item of signingPlan) {
+      if (item.bundle) {
+        console.log(`[sign] ${item.target}`);
+        run("codesign", [
+          "--force",
+          "--sign", IDENTITY,
+          "--options", "runtime",
+          "--timestamp",
+          item.target,
+        ]);
+        continue;
+      }
+      signBinary(item.target, item.entitlements);
+    }
+
+    console.log("[sign] verifying...");
+    run("codesign", ["--verify", "--strict", targetPath]);
+    console.log("[sign] OK\n");
+  }
+
+  if (SKIP_NOTARIZE) {
+    console.log("[notarize] SKIP_NOTARIZE=1, skipping notarization");
+    return;
+  }
+
+  // --- Notarization submission ---
+  console.log("=== Notarization ===");
+  console.log(
+    USE_API_KEY
+      ? `[notarize] using App Store Connect API key id=${API_KEY_ID}`
+      : `[notarize] using keychain profile ${PROFILE}`
+  );
+
+  let submitTarget = targetPath;
+  let tmpDir = null;
+  if (!isDmg) {
+    // .app must be zipped before submission; .dmg is submitted directly.
+    tmpDir = mkdtempSync(path.join(tmpdir(), "notarize-"));
+    submitTarget = path.join(tmpDir, "app.zip");
+    console.log("[notarize] creating zip...");
+    run("ditto", ["-c", "-k", "--keepParent", targetPath, submitTarget]);
+  }
+
+  let submitted = false;
+  if (UPLOADER !== "notarytool") {
+    if (!["direct", "relay"].includes(UPLOADER)) {
+      console.error(`[notarize] NOTARIZE_UPLOADER must be notarytool, direct or relay (got ${UPLOADER})`);
+      process.exit(2);
+    }
+    if (!USE_API_KEY) {
+      console.error(`[notarize] NOTARIZE_UPLOADER=${UPLOADER} needs NOTARIZE_API_KEY_PATH/_ID/_ISSUER (it signs its own JWT)`);
+      process.exit(2);
+    }
+    if (UPLOADER === "relay" && !process.env.NOTARIZE_RELAY_HOST) {
+      console.error("[notarize] NOTARIZE_UPLOADER=relay needs NOTARIZE_RELAY_HOST");
+      process.exit(2);
+    }
+    console.log(`[notarize] submitting via ${UPLOADER} uploader...`);
+    try {
+      const { relayNotarize } = await import("./notarize-relay.mjs");
+      await relayNotarize(submitTarget, { direct: UPLOADER === "direct" });
+      submitted = true;
+    } catch (error) {
+      // Apple's verdict on the file would be the same through notarytool;
+      // only transport or relay trouble is worth a second, slower attempt.
+      if (error.verdict || !RELAY_FALLBACK) throw error;
+      console.error(`[notarize] ${UPLOADER} upload failed: ${error.message}`);
+      console.error("[notarize] falling back to notarytool (set NOTARIZE_RELAY_FALLBACK=0 to fail instead)");
+    }
+  }
+
+  if (!submitted) {
+    console.log("[notarize] submitting to Apple with notarytool...");
+    run("xcrun", [
+      "notarytool", "submit", submitTarget,
+      ...notarytoolCredArgs(),
+      "--wait",
+    ]);
+  }
+
+  console.log("\n=== Stapling ===");
+  run("xcrun", ["stapler", "staple", targetPath]);
+
+  // --- Final verification ---
+  console.log("\n=== Verification ===");
+  const spctlArgs = isDmg
+    ? ["--assess", "--type", "open", "--context", "context:primary-signature", "--verbose", targetPath]
+    : ["--assess", "--type", "execute", "--verbose", targetPath];
+  const spctlResult = spawnSync("spctl", spctlArgs, { encoding: "utf8" });
+  const output = (spctlResult.stdout || "") + (spctlResult.stderr || "");
+  console.log(output.trim());
+
+  if (output.includes("accepted")) {
+    console.log("\n[notarize] Done — target is signed, notarized, and stapled.");
+  } else {
+    console.error("\n[notarize] WARNING: Gatekeeper did not accept the target.");
+    process.exit(1);
+  }
+}
+
+const scriptPath = fileURLToPath(import.meta.url);
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === scriptPath;
+if (isMain) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.stack : String(error));
+    process.exitCode = 1;
+  });
+}

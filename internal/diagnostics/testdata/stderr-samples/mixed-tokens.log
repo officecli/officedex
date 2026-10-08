@@ -1,0 +1,10 @@
+2024-06-04T16:45:00.001Z [DEBUG] Multi-token line: apiKey=sk-FAKEKEY-DO-NOT-USE-MULTI00001111 and token=eyJhbGciOiJIUzI1NiJ9.FAKEMULTITOKEN-DO-NOT-USE.sig with Bearer sk-FAKEKEY-DO-NOT-USE-BEARER22223333
+2024-06-04T16:45:00.002Z [DEBUG] Authorization: Bearer eyJhbGciOiJSUzI1NiJ9.FAKEJWT-MIXED-DO-NOT-USE-PAYLOAD.FAKESIGNATURE
+2024-06-04T16:45:00.003Z [INFO] Request to https://api.example.com/v1/chat with apiKey=sk-FAKEKEY-DO-NOT-USE-CHAT44445555
+2024-06-04T16:45:00.004Z [DEBUG] Proxy header set: Authorization: SecretProxyToken-FAKE-DO-NOT-USE-67890
+2024-06-04T16:45:00.005Z [DEBUG] Fallback token=eyJhbGciOiJIUzI1NiJ9.FAKEFALLBACK-DO-NOT-USE.sig123
+2024-06-04T16:45:00.006Z [INFO] Loaded from /Users/testuser/Library/Application Support/OfficeDex/cache/models.json
+2024-06-04T16:45:00.007Z [DEBUG] Session cookie: token=eyJhbGciOiJIUzI1NiJ9.FAKECOOKIE-DO-NOT-USE-SESSION.sig456
+2024-06-04T16:45:00.008Z [ERROR] Auth failed for sk-FAKEKEY-DO-NOT-USE-EXPIRED99998888 — retrying with refresh
+2024-06-04T16:45:00.009Z [DEBUG] New Bearer eyJhbGciOiJSUzI1NiJ9.FAKEREFRESHED-DO-NOT-USE.newsig789
+2024-06-04T16:45:00.010Z [INFO] Request completed successfully

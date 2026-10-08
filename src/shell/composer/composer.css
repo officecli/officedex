@@ -1,0 +1,307 @@
+/* The composer: one component, three placements (home hero / docked task / floating panel). */
+
+/*
+ * `--wails-drop-target` makes the composer a place the desktop reports file
+ * drops for; without it Wails swallows them and the paths never arrive. It is
+ * inherited, so the drop overlay and every control inside count too.
+ */
+.shell-cx {
+  --wails-drop-target: drop;
+  position: relative;
+  container-type: inline-size;
+  background: var(--shell-paper);
+  border: 1px solid var(--shell-line-strong);
+  border-radius: var(--shell-radius-composer);
+  color: var(--shell-ink-title);
+  transition: border-color 150ms, box-shadow 150ms;
+}
+
+.shell-cx:focus-within {
+  border-color: #c7ced5;
+  box-shadow: 0 2px 6px #00000008;
+}
+
+.shell-cx--task,
+.shell-cx--floating {
+  padding: 12px 10px 9px;
+}
+
+.shell-cx--home {
+  padding: 18px 16px 11px;
+  border-radius: 20px;
+  box-shadow: 0 2px 5px #00000005;
+  border-color: transparent;
+  background:
+    linear-gradient(var(--shell-paper), var(--shell-paper)) padding-box,
+    linear-gradient(110deg, var(--shell-home-glow-from) 0%, var(--shell-home-glow-mid) 48%, var(--shell-home-glow-to) 100%) border-box;
+}
+
+/* No `.shell-cx--home .shell-cx-scope { display: none }` here.
+   It used to hide the chip because Home carried its own folder strip above the
+   composer; that strip was the prototype's second folder control and decision 2
+   removed it. The rule outlived it by one change and left Home with no scope
+   control at all — a `+` and nothing to say where a task would write. */
+
+.shell-cx-input {
+  display: block;
+  width: 100%;
+  min-height: 58px;
+  max-height: 145px;
+  padding: 0 6px 10px;
+  border: 0;
+  background: none;
+  color: var(--shell-ink-title);
+  font: var(--shell-text-lg) / 23px var(--shell-font);
+  resize: none;
+  outline: none;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.shell-cx--home .shell-cx-input {
+  min-height: 88px;
+  max-height: 220px;
+  padding: 0 5px 16px;
+  font-size: 16px;
+  line-height: 26px;
+}
+
+.shell-cx-input::placeholder {
+  color: var(--shell-ink-faint);
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------------- chips */
+
+/* ------------------------------------------------------------ reference */
+
+/* The span the canvas says is selected. A quote block rather than a chip: its
+   text is the thing being checked, and a chip would truncate it to nothing. */
+
+/* -------------------------------------------------------------- toolbar */
+
+.shell-cx-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+  margin-top: 6px;
+}
+
+/* The send button and the model choice hold their size; the scope chip on the
+   left is what gives up width first. */
+.shell-cx-left {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 6px;
+}
+
+.shell-cx-right {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 6px;
+}
+
+/*
+ * The output chip reads as an answer, not a setting: "Auto" is the quiet
+ * default and a stated type is the user having decided something, so it is the
+ * one state that takes ink and a tint.
+ *
+ * The tint is the document accent at low alpha, composed from the token rather
+ * than written out as `#596f861a` — the audit's token pass (W3-I) is working
+ * through exactly that kind of hard-coded value in this file, and there is no
+ * reason to add two more to the list while it does.
+ */
+
+.shell-cx-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
+  height: 32px;
+  min-width: 28px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--shell-ink-muted);
+  font: var(--shell-text) / 20px var(--shell-font);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/*
+ * The two left-hand chips are the only things here allowed to give up width.
+ *
+ * They are addressed through `Menu`'s `.shell-menu-anchor` wrapper rather than
+ * directly: the anchor is the flex item, so a `flex-shrink` set on the button
+ * inside it is read by nobody. This rule used to be written as
+ * `.shell-cx-left > .shell-cx-scope`, which matched nothing at all — the scope
+ * chip never shrank, and it went unnoticed for as long as it was the only chip
+ * on that side and had room regardless.
+ */
+.shell-cx-left > .shell-menu-anchor {
+  display: flex;
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.shell-cx-left > .shell-menu-anchor > .shell-cx-button {
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.shell-cx-button:hover,
+.shell-cx-button[aria-expanded="true"] {
+  background: #f0f1f2;
+  color: var(--shell-ink);
+}
+
+.shell-cx-button:focus-visible,
+.shell-cx-send:focus-visible {
+  outline: 2px solid var(--shell-focus);
+  outline-offset: 1px;
+}
+
+.shell-cx-model-name {
+  min-width: 0;
+  max-width: 160px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Dictation is the one control here that keeps working after the click ends,
+   so it is the one that has to look busy. Without this the recogniser ran in
+   complete silence and a sentence simply appeared in the box. */
+
+/* A pulsing control is a distraction rather than a signal for anyone who asked
+   the system to stop moving things; the tint alone still says "listening". */
+
+.shell-cx-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 6px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--shell-ink);
+  color: var(--shell-ink-inverse);
+  cursor: pointer;
+}
+
+.shell-cx-send:hover:not(:disabled) {
+  background: #2b3035;
+}
+
+.shell-cx-send:disabled {
+  background: #e6e8ea;
+  color: #ffffff;
+  cursor: default;
+}
+
+/* Narrow placements shed labels before they shed controls. */
+/*
+ * Narrow placements shed controls in priority order. The two chips on the left
+ * are last in that order on purpose: both are properties of the message being
+ * composed — where it writes, and what it produces — while everything on the
+ * right is a setting that happens to live beside them.
+ *
+ * Order dropped: permission label → dictate → output name → scope name.
+ *
+ * Below 340px the toolbar wraps instead of truncating. The docked column is
+ * 320px by design, so its composer sits at ~288px permanently, and four
+ * controls do not fit on one line there at any truncation: measured, the two
+ * chips had ~34px between them for two names, which is an ellipsis and nothing
+ * else. Two lines cost 34px of height in a column that has hundreds to spare,
+ * and they buy back the model name that the single-line version had to drop.
+ * Wrapping is also why the names below are capped rather than hidden — each
+ * group gets the full width of the toolbar, so there is room to read them.
+ */
+
+@container (max-width: 340px) {
+  .shell-cx-toolbar {
+    flex-wrap: wrap;
+    row-gap: 2px;
+    gap: 6px;
+  }
+  .shell-cx-left,
+  .shell-cx-right {
+    flex: 1 1 100%;
+    gap: 3px;
+  }
+  .shell-cx-right {
+    justify-content: flex-end;
+  }
+  .shell-cx-model-name {
+    max-width: 120px;
+  }
+}
+
+@container (max-width: 252px) {
+  .shell-cx-model-name {
+    display: none;
+  }
+}
+
+.shell-cx-drop {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed #7c8791;
+  border-radius: inherit;
+  background: #f4f5f6ed;
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text-lg);
+  z-index: var(--shell-z-cx-drop);
+  /* It says what a drop will do; it must never be what stops the composer being used. */
+  pointer-events: none;
+}
+
+/* --------------------------------------------------------- mention menu */
+
+/* -------------------------------------------------------- model dialog */
+
+/* Adding a custom model replaces the one already configured — the desktop
+   stores a single provider. Tinted rather than red: nothing has gone wrong,
+   the user is simply about to lose an entry they may not remember setting up. */
+.shell-dialog-warning {
+  margin: 10px 0 0;
+  padding: 9px 11px;
+  border: 1px solid #e6dcc4;
+  border-radius: 8px;
+  background: #fbf5e6;
+  color: #7a6533;
+  font-size: var(--shell-text-sm);
+  line-height: 19px;
+}
+
+.shell-dialog-select {
+  display: block;
+  width: 100%;
+  height: 38px;
+  padding: 9px 10px;
+  border: 1px solid var(--shell-line-strong);
+  border-radius: 8px;
+  background: var(--shell-paper);
+  color: var(--shell-ink);
+  font: var(--shell-text) / 20px var(--shell-font);
+  outline: none;
+}
+
+.shell-dialog-label span {
+  margin-left: 4px;
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-xs);
+}

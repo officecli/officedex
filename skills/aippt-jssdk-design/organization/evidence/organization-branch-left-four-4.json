@@ -1,0 +1,198 @@
+{
+  "id": "organization-branch-left-four-4",
+  "family": "organization",
+  "source": "sampleall/shape/组织架构4项/组织架构4项.pptx",
+  "page": 4,
+  "program": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__组织架构4项__组织架构4项/slides/slide-0004.mjs",
+  "verification": "artifacts/aippt/full-distillation/font-metrics-v3/source-9ceb6366ed75ca07a41c/verification.json",
+  "observed_items": 4,
+  "mechanism": "branch-left-four",
+  "source_fact": "一个左侧父节点向右侧三行子节点分叉",
+  "transfer_hypothesis": "items 包括父节点；描述可放节点外，父子关系必须真实，不能当中性列表。",
+  "visual_review": "source_preview_inspected",
+  "state": "source_fact",
+  "ssim": 0.9927916648521578,
+  "exact_reference": false,
+  "program_sha256": "a9f697dd7ea0fd1bb6d26ca0c7f2c45198c9e9976a3450ccd389e34994075e7a",
+  "verification_sha256": "15dad1fe3430929a23fe00e4f02dab4898234242a8f66d10f31e46b3b4e35e5b",
+  "preview": "sampleall/shape/组织架构4项/组织架构4项_PPTX_TO_PNG_WPS/幻灯片4.png",
+  "checks": {
+    "jssdk_executed": true,
+    "native_objects": {
+      "count": 11,
+      "types": [
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape"
+      ]
+    },
+    "text_overflow": 0,
+    "render_errors": 0,
+    "pptx_export": "passed",
+    "strict_reimport": "passed",
+    "text_coverage_version": 2,
+    "text_measurement": "font_metrics"
+  },
+  "canvas_pt": [
+    960.0,
+    540.0
+  ],
+  "objects": [
+    {
+      "id": "s1",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.33551,
+        "top": 0.44989,
+        "width": 0.13086,
+        "height": 0.11632
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#175782",
+        "#1F74AD"
+      ]
+    },
+    {
+      "id": "s3",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.53314,
+        "top": 0.30726,
+        "width": 0.13086,
+        "height": 0.11632
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#1F74AD",
+        "#3498DB"
+      ]
+    },
+    {
+      "id": "s5",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.53314,
+        "top": 0.5763,
+        "width": 0.13086,
+        "height": 0.11632
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#1F74AD",
+        "#3498DB"
+      ]
+    },
+    {
+      "id": "s7",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.53266,
+        "top": 0.4409,
+        "width": 0.13086,
+        "height": 0.11632
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#1F74AD",
+        "#3498DB"
+      ]
+    },
+    {
+      "id": "s8",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.34525,
+        "top": 0.46298,
+        "width": 0.1114,
+        "height": 0.09014
+      },
+      "text_characters": 4,
+      "font_pt": [
+        14.0
+      ],
+      "colors": [
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s9",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.54287,
+        "top": 0.32035,
+        "width": 0.1114,
+        "height": 0.09014
+      },
+      "text_characters": 4,
+      "font_pt": [
+        14.0
+      ],
+      "colors": [
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s10",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.54239,
+        "top": 0.45399,
+        "width": 0.1114,
+        "height": 0.09014
+      },
+      "text_characters": 4,
+      "font_pt": [
+        14.0
+      ],
+      "colors": [
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s11",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.54287,
+        "top": 0.58939,
+        "width": 0.1114,
+        "height": 0.09014
+      },
+      "text_characters": 4,
+      "font_pt": [
+        14.0
+      ],
+      "colors": [
+        "#FFFFFF"
+      ]
+    }
+  ],
+  "extraction_scope": "literal object geometry; group transforms and custom paths require source inspection",
+  "source_admission": "high_similarity_verified",
+  "revalidation": {
+    "state": "source_verified",
+    "reasons": [],
+    "complete_group_text_coverage_required": true,
+    "font_metrics_required": true
+  }
+}

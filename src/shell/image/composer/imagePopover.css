@@ -1,0 +1,62 @@
+/*
+ * The image tools' popover shell. Its own stylesheet because it is the one
+ * image rule with a z-index: it is portalled to #shell and sits on the menu
+ * rung (see layers.test.ts), and keeping it apart keeps the leaf transforms in
+ * imageComposer.css out of the stacking-context audit's scope.
+ */
+
+.shell-ig-popover {
+  position: fixed;
+  z-index: var(--shell-z-menu);
+  box-sizing: border-box;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 14px;
+  border: 1px solid var(--shell-line-strong);
+  border-radius: 13px;
+  background: var(--shell-paper);
+  box-shadow: var(--shell-shadow-menu);
+  color: var(--shell-ink-muted);
+  font-family: var(--shell-font);
+  font-size: var(--shell-text);
+  line-height: 1.55;
+  text-align: left;
+  scrollbar-width: thin;
+}
+
+.shell-ig-popover:focus {
+  outline: none;
+}
+
+.shell-ig-popover > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+.shell-ig-popover > header > strong {
+  font-size: var(--shell-text-md);
+  font-weight: 600;
+  color: var(--shell-ink-title);
+}
+
+.shell-ig-popover > header > button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 4px;
+  border: 0;
+  border-radius: var(--shell-radius-control);
+  background: none;
+  color: var(--shell-ink-faint);
+  cursor: pointer;
+}
+
+.shell-ig-popover > header > button:hover {
+  background: var(--shell-hover);
+  color: var(--shell-ink-muted);
+}
+

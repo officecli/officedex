@@ -1,0 +1,3 @@
+# Internal developers only: the @shimo scope is served from a private registry.
+# Copy this file to .npmrc (git-ignored) before running `npm ci`.
+@shimo:registry=http://registry.npm.shimo.run

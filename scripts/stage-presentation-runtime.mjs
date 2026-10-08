@@ -1,0 +1,550 @@
+#!/usr/bin/env node
+// Stage the MOP authoring runtime (the fegit presentation checkout) into
+// build/presentation/ so bundle-runtime.mjs can copy it into the packaged app.
+//
+// The MOP worker does not merely shell out to mop-convert: it boots a Vite SSR
+// server rooted at the presentation checkout and ssrLoadModule()s the engine and
+// office-js sources. So the app needs a real directory, not just the converter
+// binary. Everything staged here was derived from the worker's actual module
+// graph — see PRESENTATION_SOURCES below.
+import { access, chmod, cp, lstat, mkdir, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
+import { existsSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { execSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(HERE, "..");
+const DEST = path.join(ROOT, "build", "presentation");
+
+// Directories and files the worker's module graph actually reaches. Traced by
+// booting the worker's four ssrLoadModule() entry points and reading Vite's
+// resolved module graph, then confirmed by running officecli's
+// TestPPTXMOPSkillWorkerReal against the staged tree.
+export const PRESENTATION_SOURCES = Object.freeze([
+  // Vite's SSR root needs the manifest and the tsconfig that package
+  // tsconfigs extend, otherwise esbuild refuses to transform the sources.
+  { from: "package.json", required: true },
+  { from: "tsconfig.json", required: true },
+  // The authored engine and the office-js host the worker loads.
+  // Minified authoring runtime; built by presentation/scripts/build-ssr-runtime.mjs.
+  // The worker prefers it over the TypeScript sources, which keeps the engine
+  // out of the public installer in readable form.
+  { from: "dist-ssr", required: true },
+  { from: "packages/presentation-engine", required: true },
+  { from: "packages/presentation-office-js", required: true },
+  // SmartArt is loaded by an absolute Vite SSR URL, so the nested workspace
+  // link under presentation-engine/node_modules is not sufficient. Keep the
+  // package at the root-relative path used by the worker and root tsconfig.
+  { from: "packages/deps/smartart", required: true },
+  // Runtime data read directly from sourceRoot after the SSR graph has booted.
+  // These are not visible in Vite's module graph, but authoring fails as soon
+  // as it seeds native diagrams or installs the headless presentation host if
+  // either directory is absent.
+  //
+  // `from` is where the staged copy lands, and it stays at the pre-2dbde19 path
+  // because OfficeCLI's pptx_mop_skill_worker.mjs reads it from there.
+  // `sources` lists where to find it: presentation 2dbde19 moved the product
+  // app from packages/ to apps/, and older checkouts still have it in packages/.
+  {
+    from: "packages/presentation-app/public/presentation-assets/diagram",
+    sources: [
+      "apps/presentation-app/public/presentation-assets/diagram",
+      "packages/presentation-app/public/presentation-assets/diagram",
+    ],
+    required: true,
+  },
+  { from: "quality/deps-golden/lib", required: true },
+  // Workspace packages imported by bare specifier from the graph above.
+  { from: "mop/runtime", required: true },
+  // The SSR bundle is compiled against this wasm. bos/dist/mop-wasm/pkg is an
+  // older snapshot; pairing it with the current JS wrapper fails at startup as
+  // an opaque LinkError inside the obfuscated chunk, which is what the
+  // packaged app reported as "chunk-GOFHCYK3.js:1" dumping the whole file.
+  { from: "packages/mop-wasm", required: true },
+  { from: "bos/dist/mop-wasm/pkg", required: true },
+  // The blank deck every generated presentation is cloned from.
+  { from: "tools/fixtures/blank-presentation", required: true },
+  // The JSSDK Host runner and everything it imports.
+  //
+  // officecli's jssdk-design backend spawns this file directly
+  // (internal/runtime/pptx_jssdk_design.go) and it is the *only* PPTX backend
+  // the desktop allows — internal/bridge/client.go rejects every other value.
+  // It was absent for as long as this list has existed, and nothing caught it:
+  // the four markers a root is validated by (see resolvePresentationSource)
+  // do not include the runner, so a tree missing it looks entirely healthy
+  // until someone asks for a deck and gets "JSSDK Host runner unavailable".
+  //
+  // `jssdk-native-browser.ts` is reached through an absolute Vite SSR URL
+  // (`import("/tools/lib/jssdk-native-browser.ts")`), so it appears in no
+  // static import graph. assertRunnerClosure below covers the rest.
+  { from: "tools/execute-jssdk.mjs", required: true },
+  { from: "tools/batch-convert-pptx-to-mop.mjs", required: true },
+  { from: "tools/lib/jssdk-native-runtime.mjs", required: true },
+  { from: "tools/lib/jssdk-vibe-ops.mjs", required: true },
+  { from: "tools/lib/jssdk-video-authoring.mjs", required: true },
+  { from: "tools/lib/mop-converter-client.mjs", required: true },
+  { from: "tools/lib/jssdk-native-browser.ts", required: true },
+]);
+
+// Dev-only payloads inside the staged packages. reference-cache alone is ~107MB
+// of captured PowerPoint reference material used by the differential audit
+// tooling; none of it is read at authoring time.
+export const PRESENTATION_PRUNE = Object.freeze([
+  // Authored TypeScript: the worker loads dist-ssr instead, so shipping the
+  // sources would only publish a readable copy of the engine.
+  "packages/presentation-engine/src",
+  "packages/presentation-office-js/src",
+  "packages/deps/smartart/src",
+  // Ships in the public installer otherwise: it documents the compatibility
+  // surface, the RPC protocol name and the host bridge interfaces.
+  "packages/presentation-office-js/README.md",
+  "packages/presentation-office-js/reference-cache",
+  "packages/presentation-office-js/differential",
+  "packages/presentation-office-js/scripts",
+  "packages/presentation-office-js/baseline",
+]);
+
+// node_modules entries the SSR graph resolves. pnpm stores these as symlinks
+// into .pnpm/, so each is copied dereferenced.
+export const PRESENTATION_NODE_MODULES = Object.freeze([
+  // Vite and its own runtime dependencies (rollup, postcss, esbuild, ...).
+  { from: "vite", closure: true, required: true },
+  // Bare specifiers imported by the engine/office-js sources.
+  { from: "lodash-es", required: true },
+  { from: "@learnof/ink", sourceFallback: "packages/deps/ink", required: true },
+  { from: "@learnof/scientific-formula", sourceFallback: "packages/deps/scientific-formula", required: true },
+]);
+
+function converterName() {
+  return process.platform === "win32" ? "mop-convert.exe" : "mop-convert";
+}
+
+// esbuild, rollup (Vite 6/7) and rolldown (Vite 8) each load a platform-specific
+// native package at runtime and throw if it is absent. lightningcss is the same
+// for Vite 8's CSS pipeline. The version must match the host package exactly, so
+// derive it from the staged copy rather than assuming a hoisted top-level one:
+// pnpm may hold several versions side by side in .pnpm/.
+async function copyPnpmSiblingSet(packageDir, destModules) {
+  const real = await realpath(packageDir);
+  await cp(path.dirname(real), destModules, { recursive: true, force: true, dereference: true });
+  return path.dirname(real);
+}
+
+async function nestedPnpmPackages(siblingsDir) {
+  const found = [];
+  for (const entry of await readdir(siblingsDir, { withFileTypes: true })) {
+    const full = path.join(siblingsDir, entry.name);
+    if (entry.name.startsWith("@")) {
+      if (!entry.isDirectory()) continue;
+      for (const child of await readdir(full, { withFileTypes: true })) {
+        found.push(path.join(full, child.name));
+      }
+      continue;
+    }
+    found.push(full);
+  }
+  return found;
+}
+
+// Vite 8's rolldown (and lightningcss/postcss) keep their runtime deps in
+// their own .pnpm folder, not beside vite. Copying only vite's siblings leaves
+// `import "@rolldown/pluginutils"` unresolved inside the bundle.
+async function copyPnpmClosures(linkedPackage, destModules) {
+  const siblingsDir = await copyPnpmSiblingSet(linkedPackage, destModules);
+  for (const nested of await nestedPnpmPackages(siblingsDir)) {
+    try {
+      const info = await lstat(nested);
+      if (!info.isSymbolicLink() && !info.isDirectory()) continue;
+    } catch {
+      continue;
+    }
+    const nestedSiblings = path.dirname(await realpath(nested));
+    if (nestedSiblings === siblingsDir) continue;
+    await copyPnpmSiblingSet(nested, destModules);
+  }
+}
+
+export function nativePackages(platform = process.platform, arch = os.arch()) {
+  const slice = `${platform === "win32" ? "win32" : platform}-${arch}`;
+  return [
+    { host: "esbuild", name: `@esbuild/${slice}` },
+    { host: "rollup", name: `@rollup/rollup-${slice}` },
+    { host: "rolldown", name: `@rolldown/binding-${slice}` },
+    { host: "lightningcss", name: `lightningcss-${slice}` },
+  ];
+}
+
+// Find a native package at the exact version the staged host package expects.
+// Checks the host's own node_modules and the top level first (both are plain
+// resolution), then the pnpm store, which is where a non-hoisted install keeps
+// it. Returns null when no matching version exists.
+async function findNativePackage(root, staged, { host, name }) {
+  let version = "";
+  try {
+    const hostManifest = JSON.parse(
+      await readFile(path.join(staged, "node_modules", host, "package.json"), "utf8"),
+    );
+    version = String(hostManifest.optionalDependencies?.[name] || "").trim();
+  } catch {
+    // A host without a manifest is a staging bug; report it as a missing native.
+    return null;
+  }
+  if (!version) return null;
+  const candidates = [
+    path.join(staged, "node_modules", host, "node_modules", name),
+    path.join(root, "node_modules", name),
+    // pnpm's store layout: @esbuild/darwin-arm64 -> @esbuild+darwin-arm64@X.Y.Z
+    path.join(root, "node_modules", ".pnpm", `${name.replace("/", "+")}@${version}`, "node_modules", name),
+  ];
+  for (const candidate of candidates) {
+    if (!existsSync(path.join(candidate, "package.json"))) continue;
+    try {
+      const manifest = JSON.parse(await readFile(path.join(candidate, "package.json"), "utf8"));
+      if (manifest.version === version) return { path: candidate, version };
+    } catch {
+      // Unreadable manifest: treat as a non-match and keep looking.
+    }
+  }
+  return null;
+}
+
+export function resolvePresentationSource(explicit = process.env.PRESENTATION_SOURCE_DIR) {
+  const candidates = [];
+  const configured = String(explicit || "").trim();
+  if (configured) candidates.push(configured);
+  else candidates.push(path.join(ROOT, "..", "presentation"), path.join(ROOT, "presentation"));
+  for (const candidate of candidates) {
+    const resolved = path.resolve(candidate);
+    // The four markers officecli's validMOPPresentationRoot() looks for. They
+    // identify a presentation checkout; they do not certify one. Passing them
+    // only means the runtime will *select* this root — the jssdk-design
+    // backend then needs tools/execute-jssdk.mjs and a playwright it does not
+    // check for here, which is how a staged tree missing the runner was chosen
+    // over a complete checkout and failed at generation time instead.
+    const markers = [
+      "package.json",
+      path.join("node_modules", "vite", "dist", "node", "index.js"),
+      path.join("bos", "dist", "mop-wasm", "pkg", "mop_wasm_bg.wasm"),
+      path.join("tools", "fixtures", "blank-presentation", "content.json"),
+    ];
+    if (markers.every((marker) => existsSync(path.join(resolved, marker)))) return resolved;
+  }
+  throw new Error(
+    `presentation checkout not found${configured ? ` at ${configured}` : ""}; ` +
+    "set PRESENTATION_SOURCE_DIR to a prepared presentation checkout",
+  );
+}
+
+async function copyEntry(source, from, to) {
+  const src = path.join(source, from);
+  await mkdir(path.dirname(to), { recursive: true });
+  // dereference: pnpm links and Homebrew-style symlinks would otherwise bundle
+  // dangling absolute paths, which codesign rejects outright.
+  await cp(src, to, { recursive: true, force: true, dereference: true });
+}
+
+// Native addons and dylibs inside the staged tree. Each is a Mach-O that must be
+// codesigned along with the bundle on macOS.
+export async function findNativeModules(dir) {
+  const found = [];
+  const walk = async (current) => {
+    let entries;
+    try {
+      entries = await readdir(current, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) await walk(full);
+      else if (entry.isFile() && /\.(node|dylib|so)$/.test(entry.name)) found.push(full);
+    }
+  };
+  await walk(dir);
+  return found.sort();
+}
+
+/** The entry points officecli spawns or loads from the staged tree. */
+const RUNNER_ENTRIES = Object.freeze(["tools/execute-jssdk.mjs"]);
+
+/**
+ * Every relative import reachable from the runner must exist in the staged tree.
+ *
+ * The runner is spawned as a plain Node process, so a missing sibling is not a
+ * build error — it is a `ERR_MODULE_NOT_FOUND` thrown at the user, minutes into
+ * a generation, from inside a subprocess. Listing the closure by hand in
+ * PRESENTATION_SOURCES is what let the runner go unstaged in the first place;
+ * this walks it instead, so the next import added upstream fails here rather
+ * than in someone's app.
+ *
+ * Only static relative specifiers are followed. Bare specifiers are
+ * node_modules' problem (PRESENTATION_NODE_MODULES) and dynamic URL imports
+ * cannot be resolved without running Vite — `jssdk-native-browser.ts` is listed
+ * explicitly above for exactly that reason.
+ */
+export async function assertRunnerClosure(dest, entries = RUNNER_ENTRIES) {
+  const seen = new Set();
+  const queue = [...entries];
+  const missing = [];
+
+  while (queue.length > 0) {
+    const relative = queue.shift();
+    if (seen.has(relative)) continue;
+    seen.add(relative);
+
+    const absolute = path.join(dest, relative);
+    if (!existsSync(absolute)) {
+      missing.push(relative);
+      continue;
+    }
+    if (!/\.(mjs|js)$/.test(relative)) continue;
+
+    const source = await readFile(absolute, "utf8");
+    for (const [, specifier] of source.matchAll(/\bfrom\s+"(\.[^"]+)"/g)) {
+      queue.push(path.normalize(path.join(path.dirname(relative), specifier)));
+    }
+  }
+
+  if (missing.length > 0) {
+    throw new Error(
+      `the JSSDK Host runner is incomplete in the staged tree; add to PRESENTATION_SOURCES:\n  ${missing.join("\n  ")}`,
+    );
+  }
+  return [...seen].sort();
+}
+
+/**
+ * What runtime.json records as the origin of the staged tree. The default is
+ * the neutral component name; set PRESENTATION_SOURCE_REPOSITORY (or pass
+ * sourceRepository) when the manifest should name the checkout's remote.
+ */
+export function presentationSourceRepository(env = process.env) {
+  return String(env.PRESENTATION_SOURCE_REPOSITORY || "").trim() || "presentation";
+}
+
+export async function stagePresentationRuntime({
+  source,
+  dest = DEST,
+  sourceRepository = presentationSourceRepository(),
+} = {}) {
+  const root = source || resolvePresentationSource();
+  let sourceRevision = "unknown";
+  let sourceDirty = false;
+  try {
+    sourceRevision = execSync("git rev-parse HEAD", {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    sourceDirty = execSync("git status --porcelain --untracked-files=normal", {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim().length > 0;
+  } catch {
+    // Source archives may not contain Git metadata; runtime.json remains explicit.
+  }
+  await rm(dest, { recursive: true, force: true });
+  await mkdir(dest, { recursive: true });
+
+  for (const entry of PRESENTATION_SOURCES) {
+    const candidates = entry.sources ?? [entry.from];
+    const source = candidates.find((candidate) => existsSync(path.join(root, candidate)));
+    if (!source) {
+      if (entry.required) throw new Error(`presentation source is missing ${candidates.join(" or ")} in ${root}`);
+      continue;
+    }
+    await copyEntry(root, source, path.join(dest, entry.from));
+  }
+  for (const pruned of PRESENTATION_PRUNE) {
+    await rm(path.join(dest, pruned), { recursive: true, force: true });
+  }
+
+  await assertObfuscatedRuntime(path.join(dest, "dist-ssr"));
+  const runnerClosure = await assertRunnerClosure(dest);
+
+  const modules = path.join(dest, "node_modules");
+  await mkdir(modules, { recursive: true });
+  for (const entry of PRESENTATION_NODE_MODULES) {
+    if (entry.closure) {
+      // pnpm keeps a package's own dependencies beside it under .pnpm/<id>/
+      // node_modules/. Copying only the linked package would leave vite unable
+      // to resolve rollup/rolldown, so copy the whole sibling set, then each
+      // nested host's own sibling set (rolldown → @rolldown/pluginutils).
+      const linked = path.join(root, "node_modules", entry.from);
+      await copyPnpmClosures(linked, modules);
+      continue;
+    }
+    const installed = path.join("node_modules", entry.from);
+    const source = existsSync(path.join(root, installed)) ? installed : entry.sourceFallback;
+    if (!source || !existsSync(path.join(root, source))) {
+      throw new Error(`presentation dependency ${entry.from} is missing from ${root}`);
+    }
+    await copyEntry(root, source, path.join(modules, entry.from));
+  }
+  // Cross-arch staging: an Intel package built on an Apple Silicon machine (or
+  // the reverse) needs the *target's* esbuild/rollup/rolldown natives, not the
+  // build host's. pnpm only installs the host slice by default, so the
+  // presentation checkout must have been installed with the target architecture
+  // included (pnpm's supportedArchitectures) before staging can find them.
+  // Vite 8 replaced rollup with rolldown; only copy natives for hosts that the
+  // staged vite closure actually contains.
+  const targetArch = String(process.env.PRESENTATION_TARGET_ARCH || "").trim() || os.arch();
+  const targetPlatform =
+    String(process.env.PRESENTATION_TARGET_PLATFORM || "").trim() || process.platform;
+  const copiedHosts = [];
+  for (const native of nativePackages(targetPlatform, targetArch)) {
+    if (!existsSync(path.join(dest, "node_modules", native.host, "package.json"))) continue;
+    const found = await findNativePackage(root, dest, native);
+    if (!found) {
+      throw new Error(
+        `native package ${native.name} (matching the staged ${native.host}) is missing ` +
+          `from ${root}; install the presentation checkout for ${targetPlatform}-${targetArch} ` +
+          "before staging (pnpm supportedArchitectures, or install on that platform)",
+      );
+    }
+    const target = path.join(modules, native.name);
+    await mkdir(path.dirname(target), { recursive: true });
+    await cp(found.path, target, { recursive: true, force: true, dereference: true });
+    copiedHosts.push(native.host);
+  }
+  if (!copiedHosts.includes("esbuild")) {
+    throw new Error("staged vite closure is missing esbuild; cannot package a working SSR runtime");
+  }
+  if (!copiedHosts.includes("rollup") && !copiedHosts.includes("rolldown")) {
+    throw new Error(
+      "staged vite closure is missing rollup/rolldown; cannot package a working SSR runtime",
+    );
+  }
+
+  // mop-convert: the typed PPTX <-> MOP converter the worker shells out to.
+  // Resolved the same way officecli's resolveMOPConvert() resolves it.
+  const converter = converterName();
+  const converterSource =
+    String(process.env.MOP_CONVERT_BIN || "").trim() || path.join(root, "tools", "bin", converter);
+  await access(converterSource, fsConstants.X_OK).catch(() => {
+    throw new Error(
+      `mop-convert not found or not executable at ${converterSource}; ` +
+        "build it for this platform or set MOP_CONVERT_BIN",
+    );
+  });
+  const converterDest = path.join(dest, "tools", "bin", converter);
+  await mkdir(path.dirname(converterDest), { recursive: true });
+  await cp(converterSource, converterDest, { force: true, dereference: true });
+  if (process.platform !== "win32") await chmod(converterDest, 0o755);
+
+  // notarize.mjs discovers signing targets with `find -type f -perm +111`, but
+  // npm ships some native addons non-executable (rollup's .node is 0644). An
+  // unsigned Mach-O left inside the bundle fails `codesign --verify --strict`,
+  // so normalize the bits here to keep every native module in that sweep.
+  const natives = await findNativeModules(dest);
+  for (const native of natives) await chmod(native, 0o755);
+
+  // Any node/node.exe inside the presentation tree would be a second V8
+  // engine. It would get signed with hardened runtime + no entitlements and
+  // trap the first time it JITs code (only Resources/mop-runtime/bin/node
+  // carries the JIT entitlements). Refuse to stage rather than ship such a
+  // bundle.
+  const stray = execSync(
+    `find "${dest}" -type f \\( -name node -o -name node.exe \\)`,
+    { encoding: "utf8" },
+  ).trim();
+  if (stray) {
+    throw new Error(
+      `presentation runtime contains a stray node binary; the packaged app would trap under hardened runtime:\n${stray}`,
+    );
+  }
+
+  /*
+   * The runner is staged; its browser is not.
+   *
+   * `tools/lib/jssdk-native-runtime.mjs` does `import { chromium } from
+   * "playwright"`, and playwright is deliberately absent from
+   * PRESENTATION_NODE_MODULES: staging it means shipping a Chromium inside the
+   * app bundle — every Mach-O of it signed, under a hardened runtime that this
+   * very script already refuses to hand a second V8 to (see the stray-node
+   * check below). Whether the desktop's only PPTX backend may depend on a
+   * browser is a product decision, not something to settle by quietly adding a
+   * dependency here.
+   *
+   * So it is recorded rather than resolved: the staged tree is honest about
+   * what it can and cannot run, and a build that ships without playwright says
+   * so in runtime.json instead of failing for the user at generation time.
+   */
+  const playwrightStaged = existsSync(path.join(modules, "playwright"));
+
+  await writeFile(
+    path.join(dest, "runtime.json"),
+    JSON.stringify(
+      {
+        name: "officedex-presentation-runtime",
+        platform: process.platform,
+        arch: os.arch(),
+        source: root,
+        sourceRepository,
+        sourceRevision,
+        sourceDirty,
+        converter: path.relative(dest, converterDest),
+        jssdkRunner: {
+          entry: RUNNER_ENTRIES[0],
+          closure: runnerClosure,
+          // false means the jssdk-design backend cannot run from this tree.
+          playwright: playwrightStaged,
+        },
+        nativeModules: natives.map((native) => path.relative(dest, native)).sort(),
+      },
+      null,
+      2,
+    ) + "\n",
+    "utf8",
+  );
+  return { root, dest, converter: converterDest, playwrightStaged };
+}
+
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain) {
+  stagePresentationRuntime()
+    .then(({ root, dest, playwrightStaged }) => {
+      console.log(`[stage-presentation-runtime] ${root} -> ${dest}`);
+      if (!playwrightStaged) {
+        console.warn(
+          "[stage-presentation-runtime] playwright is not staged: the jssdk-design " +
+            "PPTX backend cannot run from this tree, and it is the only backend the " +
+            "desktop allows. Generation will fail with a missing-module error unless " +
+            "OFFICECLI_MOP_PRESENTATION_ROOT points at a full presentation checkout.",
+        );
+      }
+    })
+    .catch((error) => {
+      console.error(`[stage-presentation-runtime] ${error.message}`);
+      process.exit(1);
+    });
+}
+
+/**
+ * The authored sources are pruned above, so dist-ssr is the only copy of the
+ * engine that ships. Refuse to package a plain build: without obfuscation the
+ * installer would still carry readable logic, which is the thing pruning the
+ * sources was meant to prevent. javascript-obfuscator emits hexadecimal
+ * identifiers, so their absence means the release step did not run.
+ */
+async function assertObfuscatedRuntime(runtimeDir) {
+  const entries = await readdir(runtimeDir, { withFileTypes: true });
+  const scripts = entries.filter(
+    (entry) => entry.isFile() && entry.name.endsWith(".js"),
+  );
+  if (scripts.length === 0) {
+    throw new Error(`no JavaScript found in ${runtimeDir}`);
+  }
+  for (const script of scripts) {
+    const source = await readFile(path.join(runtimeDir, script.name), "utf8");
+    if (!source.includes("_0x")) {
+      throw new Error(
+        `${script.name} is not obfuscated; build it with "pnpm run build:ssr-runtime:release" in the presentation checkout`,
+      );
+    }
+  }
+}

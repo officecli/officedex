@@ -1,0 +1,12 @@
+OfficeDex
+Copyright 2026 OfficeDex Contributors
+
+This product is the official desktop client for OfficeCLI
+(https://officecli.io) and is distributed under the GNU General Public
+License, Version 3 only (see LICENSE).
+
+It bundles a separately licensed copy of the `officecli` binary at build
+time. That binary is fetched from https://github.com/officecli/officecli-dist
+and is licensed under the MIT License.
+
+Additional third-party and font notices are listed in THIRD_PARTY_NOTICES.md.

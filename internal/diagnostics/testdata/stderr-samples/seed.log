@@ -1,0 +1,10 @@
+2024-03-15T10:23:45.123Z [INFO] Starting bridge process...
+2024-03-15T10:23:45.456Z [DEBUG] Authorization: Bearer sk-FAKETESTKEY123456789abcdef
+2024-03-15T10:23:46.789Z [DEBUG] Sending request with apiKey=test_api_key_value_12345
+2024-03-15T10:23:47.012Z [DEBUG] Using token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0
+2024-03-15T10:23:48.345Z [INFO] Loaded config from /Users/testuser/Library/Application Support/OfficeDex/settings.json
+2024-03-15T10:23:49.678Z [DEBUG] Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2V4YW1wbGUuY29tIn0
+2024-03-15T10:23:50.901Z [ERROR] API call failed with key sk-LiveKeyABCDEFGHIJKLMNOP1234
+2024-03-15T10:23:51.234Z [DEBUG] Response header: Authorization: SecretTokenValue123456
+2024-03-15T10:23:52.567Z [INFO] Output saved to /Users/testuser/Documents/workspace/output.pptx
+2024-03-15T10:23:53.890Z [INFO] Bridge process completed successfully

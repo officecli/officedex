@@ -1,0 +1,180 @@
+/*
+ * The workbook stage, while a run is writing one.
+ *
+ * Its own file rather than a block in canvas.css: that stylesheet is the size
+ * rules every mounted editor needs, and this is one surface's appearance.
+ *
+ * Every value is a token. The accent is `--shell-sheet-accent` by name rather
+ * than the ambient `--shell-accent`, because during a run there is no open file
+ * for the shell to take an accent from and the ambient one would be the
+ * document blue on what is plainly a spreadsheet.
+ */
+
+.shell-sheet-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+  background: var(--shell-paper);
+}
+
+/*
+ * Ruled ground.
+ *
+ * Two repeating gradients rather than a grid of cells: the row height and
+ * column width match the skeleton the shell draws for a workbook (26px rows,
+ * 96px columns), and gradients cover whatever height the canvas happens to be.
+ * The cell version is a fixed 18 rows, so on anything taller than ~500px the
+ * paper stopped halfway down and the rest was white.
+ */
+.shell-sheet-stage-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    repeating-linear-gradient(to bottom, #edeff1 0 1px, transparent 1px 26px),
+    repeating-linear-gradient(to right, #edeff1 0 1px, transparent 1px 96px);
+  background-position: 44px 22px, 44px 22px;
+  opacity: 0.75;
+}
+
+/* The row-number gutter and the column-letter strip: no letters or numbers in
+   them, because there is no sheet yet for a B4 to be in. They are here for the
+   shape — a workbook is recognisable from its margins. */
+.shell-sheet-stage-gutter {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 44px;
+  border-right: 1px solid var(--shell-line);
+  background: var(--shell-sunken);
+}
+
+.shell-sheet-stage-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 22px;
+  border-bottom: 1px solid var(--shell-line);
+  background: var(--shell-sunken);
+}
+
+/*
+ * The status sits on paper of its own.
+ *
+ * Over ruled ground, plain text reads as a value someone typed into a cell.
+ * A card says it is the app talking about the document rather than part of it —
+ * the same distinction the task panel's cards make.
+ */
+.shell-sheet-stage-status {
+  position: absolute;
+  top: 34%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  max-width: calc(100% - 48px);
+  padding: 14px 22px;
+  border: 1px solid var(--shell-line);
+  border-radius: var(--shell-radius-card);
+  background: var(--shell-paper);
+  box-shadow: var(--shell-shadow-panel);
+  text-align: center;
+}
+
+.shell-sheet-stage-title {
+  color: var(--shell-ink-title);
+  font-size: var(--shell-text-lg);
+  font-weight: 600;
+}
+
+.shell-sheet-stage-phase {
+  color: var(--shell-ink-subtle);
+  font-size: var(--shell-text);
+}
+
+/*
+ * Where the mounted workbook keeps its sheet tabs.
+ *
+ * Same corner, same height, same left inset, so the swap from this to the real
+ * editor moves the tabs as little as the data allows.
+ */
+.shell-sheet-stage-tabs {
+  position: relative;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 0 10px;
+  height: 34px;
+  border-top: 1px solid var(--shell-line);
+  background: var(--shell-sunken);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.shell-sheet-stage-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.shell-sheet-stage-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  max-width: 220px;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--shell-line);
+  border-radius: var(--shell-radius-control);
+  background: var(--shell-paper);
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text);
+}
+
+.shell-sheet-stage-tab[data-state="written"] {
+  border-color: var(--shell-sheet-accent);
+  background: var(--shell-sheet-tint);
+  color: var(--shell-ink-title);
+}
+
+.shell-sheet-stage-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Pending: an open ring, the step list's "not started yet". Written: the same
+   ring filled, which is as close to its tick as 10px allows. */
+.shell-sheet-stage-mark {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  opacity: 0.7;
+}
+
+.shell-sheet-stage-tab[data-state="written"] .shell-sheet-stage-mark {
+  border-color: var(--shell-sheet-accent);
+  background: var(--shell-sheet-accent);
+  opacity: 1;
+}
+
+/*
+ * There is deliberately no idle animation here.
+ *
+ * A sweep over the grid was the obvious way to make a quiet thirty seconds look
+ * alive, and it would have been a second copy of audit finding S7-004: the
+ * shell's own Reduced motion switch lives in a settings store the canvas root
+ * cannot reach, so anything animated here answers only to the OS media query
+ * and the app's own switch would be a control that does nothing.
+ *
+ * What moves instead is real: the status line changes as the run reports, tabs
+ * appear when the blueprint lands, and each one fills as its sheet is written.
+ */

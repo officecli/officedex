@@ -1,0 +1,16 @@
+{
+  "contract": "jssdk-animation/v1",
+  "version": "0.1.0",
+  "files": {
+    "SKILL.md": "3621898d6ce8b27aacc79697e8eee13c6b597b57099d9a04b22ff7ca90a57754",
+    "agents/openai.yaml": "4a0e937604a26a01fa6e262e2095792f51fef04ef44d2f8032ef2931dcbb7471",
+    "evidence/native-probe.json": "5b451737db8a4def8d272ba09c1ebee4b6c2430239109e45ec92f93aaa3433aa",
+    "references/fade-sequence.md": "34142e511429908b9e14f2c043b99855da066aae87b23939e04d7c88d7e1931e",
+    "references/native-animation.md": "0700a55e2b07756a109d452b16fb4682d59bf5f14112cc117ea0ed1831b47633",
+    "references/stagger.md": "2b5a0f8cedadd7d30156eb058dd91d566de8508ffdcc397dd2806b451dcdbfcc",
+    "registry.json": "9be2ad730abb3e0c86a770eab56ddd5caa986ee00685f5ced3201acc1cc03a24",
+    "scripts/probe.mjs": "4768e70c99c4fa95870417a674dbe42b198b58dcbeb49cd811043bc259f292d9",
+    "scripts/validate-animation.mjs": "624b2e84b8b0bcedce3e1856aef85cf19a3609f9de0681f81a39d11625100316",
+    "scripts/validate-animation.test.mjs": "3210c95c3f37fc347f243b10b9900479c388373bce8c77e355d9962639db0df2"
+  }
+}

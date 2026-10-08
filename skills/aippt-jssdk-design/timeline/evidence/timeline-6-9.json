@@ -1,0 +1,453 @@
+{
+  "id": "timeline-6-9",
+  "family": "timeline",
+  "source": "sampleall/shape/时间轴5项/时间轴5项.pptx",
+  "page": 6,
+  "program": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__时间轴5项__时间轴5项/slides/slide-0006.mjs",
+  "verification": "artifacts/aippt/full-distillation/font-metrics-v3/source-424b375dddbbec14ff8d/verification.json",
+  "observed_items": 5,
+  "mechanism": "horizontal-axis",
+  "source_fact": "同一横轴从四项扩到五项，维持节点大小并收紧横向节距。",
+  "transfer_hypothesis": "只增加短说明；不能据此承诺五个长段落也能水平排下。",
+  "visual_review": "source_preview_inspected",
+  "state": "source_fact",
+  "ssim": 0.9645105188477913,
+  "exact_reference": false,
+  "program_sha256": "934a07fab65d90e0073208d18bf3f1371591261778200532c2379b68f2aae9e2",
+  "verification_sha256": "8250661de0efef91c5dbc000aee94a5d99e2faf8b7ce492c7cf4bf731ad42bbb",
+  "preview": "sampleall/shape/时间轴5项/时间轴5项_PPTX_TO_PNG_WPS/幻灯片6.png",
+  "checks": {
+    "jssdk_executed": true,
+    "native_objects": {
+      "count": 27,
+      "types": [
+        "connector",
+        "shape",
+        "connector",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "connector",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "connector",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "connector",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "connector",
+        "shape",
+        "shape",
+        "shape",
+        "shape"
+      ]
+    },
+    "text_overflow": 0,
+    "render_errors": 0,
+    "pptx_export": "passed",
+    "strict_reimport": "passed",
+    "text_coverage_version": 2,
+    "text_measurement": "font_metrics"
+  },
+  "canvas_pt": [
+    960.0,
+    540.0
+  ],
+  "objects": [
+    {
+      "id": "s1",
+      "api": "addLine",
+      "kind": "Line",
+      "bounds_fraction": {
+        "left": 0.145,
+        "top": 0.55442,
+        "width": 0.71,
+        "height": 0.0
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#808080"
+      ]
+    },
+    {
+      "id": "s2",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.20691,
+        "top": 0.52178,
+        "width": 0.03594,
+        "height": 0.06389
+      },
+      "text_characters": 1,
+      "font_pt": [
+        36.0
+      ],
+      "colors": [
+        "#1F74AD",
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s3",
+      "api": "addLine",
+      "kind": "Line",
+      "bounds_fraction": {
+        "left": 0.22487,
+        "top": 0.40827,
+        "width": 0.0,
+        "height": 0.11351
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#1F74AD"
+      ]
+    },
+    {
+      "id": "s4",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.19036,
+        "top": 0.28555,
+        "width": 0.06903,
+        "height": 0.12273
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#1F74AD"
+      ]
+    },
+    {
+      "id": "s6",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.1732,
+        "top": 0.60219,
+        "width": 0.10335,
+        "height": 0.19545
+      },
+      "text_characters": 12,
+      "font_pt": [
+        14.0
+      ],
+      "colors": [
+        "#000000"
+      ]
+    },
+    {
+      "id": "s7",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.34447,
+        "top": 0.52178,
+        "width": 0.03594,
+        "height": 0.06389
+      },
+      "text_characters": 1,
+      "font_pt": [
+        36.0
+      ],
+      "colors": [
+        "#3498DB",
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s8",
+      "api": "addLine",
+      "kind": "Line",
+      "bounds_fraction": {
+        "left": 0.36471,
+        "top": 0.4081,
+        "width": 0.0,
+        "height": 0.11351
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#3498DB"
+      ]
+    },
+    {
+      "id": "s9",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.32792,
+        "top": 0.2862,
+        "width": 0.06903,
+        "height": 0.12273
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#3498DB"
+      ]
+    },
+    {
+      "id": "s11",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.31076,
+        "top": 0.60219,
+        "width": 0.10335,
+        "height": 0.19545
+      },
+      "text_characters": 12,
+      "font_pt": [
+        14.0
+      ],
+      "colors": [
+        "#000000"
+      ]
+    },
+    {
+      "id": "s12",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.48203,
+        "top": 0.52178,
+        "width": 0.03594,
+        "height": 0.06389
+      },
+      "text_characters": 1,
+      "font_pt": [
+        36.0
+      ],
+      "colors": [
+        "#1AA3AA",
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s13",
+      "api": "addLine",
+      "kind": "Line",
+      "bounds_fraction": {
+        "left": 0.5,
+        "top": 0.40827,
+        "width": 0.0,
+        "height": 0.11351
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#1AA3AA"
+      ]
+    },
+    {
+      "id": "s14",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.46548,
+        "top": 0.28538,
+        "width": 0.06903,
+        "height": 0.12273
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#1AA3AA"
+      ]
+    },
+    {
+      "id": "s16",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.44833,
+        "top": 0.60219,
+        "width": 0.10335,
+        "height": 0.19545
+      },
+      "text_characters": 12,
+      "font_pt": [
+        14.0
+      ],
+      "colors": [
+        "#000000"
+      ]
+    },
+    {
+      "id": "s17",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.61959,
+        "top": 0.52178,
+        "width": 0.03594,
+        "height": 0.06389
+      },
+      "text_characters": 1,
+      "font_pt": [
+        36.0
+      ],
+      "colors": [
+        "#69A35B",
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s18",
+      "api": "addLine",
+      "kind": "Line",
+      "bounds_fraction": {
+        "left": 0.63756,
+        "top": 0.40827,
+        "width": 0.0,
+        "height": 0.11351
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#69A35B"
+      ]
+    },
+    {
+      "id": "s19",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.60305,
+        "top": 0.28781,
+        "width": 0.06903,
+        "height": 0.12273
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#69A35B"
+      ]
+    },
+    {
+      "id": "s21",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.58589,
+        "top": 0.60219,
+        "width": 0.10335,
+        "height": 0.19545
+      },
+      "text_characters": 12,
+      "font_pt": [
+        14.0
+      ],
+      "colors": [
+        "#000000"
+      ]
+    },
+    {
+      "id": "s22",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.75716,
+        "top": 0.52178,
+        "width": 0.03594,
+        "height": 0.06389
+      },
+      "text_characters": 1,
+      "font_pt": [
+        36.0
+      ],
+      "colors": [
+        "#9BBB59",
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s23",
+      "api": "addLine",
+      "kind": "Line",
+      "bounds_fraction": {
+        "left": 0.77513,
+        "top": 0.40827,
+        "width": 0.0,
+        "height": 0.11351
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#9BBB59"
+      ]
+    },
+    {
+      "id": "s24",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.74061,
+        "top": 0.28781,
+        "width": 0.06903,
+        "height": 0.12273
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#9BBB59"
+      ]
+    },
+    {
+      "id": "s25",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.72345,
+        "top": 0.60219,
+        "width": 0.10335,
+        "height": 0.19545
+      },
+      "text_characters": 12,
+      "font_pt": [
+        14.0
+      ],
+      "colors": [
+        "#000000"
+      ]
+    },
+    {
+      "id": "s27",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.27571,
+        "top": 0.13199,
+        "width": 0.44859,
+        "height": 0.08684
+      },
+      "text_characters": 8,
+      "font_pt": [
+        20.0
+      ],
+      "colors": [
+        "#1F74AD"
+      ]
+    }
+  ],
+  "extraction_scope": "literal object geometry; group transforms and custom paths require source inspection",
+  "source_admission": "high_similarity_verified",
+  "revalidation": {
+    "state": "source_verified",
+    "reasons": [],
+    "complete_group_text_coverage_required": true,
+    "font_metrics_required": true
+  }
+}

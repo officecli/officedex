@@ -1,0 +1,75 @@
+node_modules/
+dist/
+dist-artifacts/
+dist-electron/
+/release/
+*.log
+!internal/diagnostics/testdata/stderr-samples/*.log
+.DS_Store
+
+# Local bundled OfficeCLI binaries for packaging.
+build/_icon_backup/
+build/officecli/
+build/cache/
+build/canvas-render-smoke/
+build/packaged-canvas-smoke/
+build/presentation/
+build/mop-runtime/
+build/node-runtime/
+build/node-runtime-x64/
+build/node-runtime-darwin-arm64/
+build/notarized-backup/
+# Built fegit presentation embed component (npm run build:presentation).
+public/presentation/
+# Built Writer embed component and its out-of-bundle payloads
+# (npm run build:writer / stage:writer-fonts / prefetch:word2mow).
+public/writer/
+build/writer/
+build/writer-fonts/
+build/writer-convert/
+officecli-bin/
+demo/pptx-template-lab/work/
+
+# Wails / Go build artifacts.
+build/bin/
+/officedex
+src/renderer/generated/
+
+# Tooling caches (Claude Code, OMC, Playwright MCP).
+.claude/
+.omc/
+.omo/
+.omx/
+.playwright-mcp/
+
+# Local agent tooling state, and the screenshots/artifacts that
+# `scripts/dev-real.mjs` writes into its run directory.
+.dsh-project-memory/
+build/dev-real/
+# …and the per-port ones: the run directory used to be hard-coded, so two
+# instances deleted each other's SQLite (symptom: "readonly database").
+build/dev-real-*/
+
+# Misc local marker files.
+package.json.md5
+
+# Playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/
+
+# Secrets / credentials (defense in depth)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+*.p12
+*.pfx
+.npmrc
+.netrc
+credentials*
+secrets*
+output
+dist-style-check-*/

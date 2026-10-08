@@ -1,0 +1,33 @@
+{
+  "schema_version": 2,
+  "family": "process",
+  "variants": [
+    {
+      "id": "linked-stages",
+      "items": [
+        3,
+        4,
+        5,
+        6
+      ],
+      "densities": [
+        "short",
+        "medium"
+      ],
+      "orientation": "horizontal",
+      "mechanism": "编号节点沿连续弯折连线从左到右排列，说明上下交错",
+      "source_evidence": [
+        "process-linked-stages-553"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "linked-stages",
+      "visual_tags": [
+        "sequence",
+        "diagram",
+        "stages"
+      ],
+      "preserve": "保留连续连线、节点编号及先后次序；items 为真实步骤数，不把中性条目变成因果流程。",
+      "generation_ready": true
+    }
+  ]
+}

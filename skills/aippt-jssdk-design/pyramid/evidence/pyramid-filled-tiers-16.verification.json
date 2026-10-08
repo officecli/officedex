@@ -1,0 +1,250 @@
+{
+  "schemaVersion": 1,
+  "program": "/Users/agent/askuy/code/vibeofficing/plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__金字塔4项__金字塔4项/slides/slide-0016.mjs",
+  "reference": "/Users/agent/askuy/code/vibeofficing/sampleall/shape/金字塔4项/金字塔4项_PPTX_TO_PNG_WPS/幻灯片16.png",
+  "creationEntrypoint": "independent JSSDK build(PowerPoint) from an empty presentation",
+  "host": "MopEditorPowerPointHost",
+  "slides": 1,
+  "nativeObjects": {
+    "count": 17,
+    "types": [
+      "group",
+      "group",
+      "shape",
+      "shape",
+      "shape",
+      "shape",
+      "shape",
+      "shape",
+      "shape",
+      "shape",
+      "shape",
+      "shape",
+      "shape",
+      "shape",
+      "shape",
+      "shape",
+      "shape"
+    ]
+  },
+  "render": {
+    "outputs": [
+      {
+        "index": 1,
+        "slideId": "slide-1",
+        "renderWidth": 1920,
+        "nativeTextElements": 11,
+        "nativeImages": 0,
+        "textLayout": [
+          {
+            "id": "slide-1-officejs-3d4e99e9",
+            "content": "请在这里输入您的标题内容",
+            "box": {
+              "left": 657.8250393700786,
+              "top": 819.5083464566928,
+              "right": 1262.175118110236,
+              "bottom": 894.8083464566929
+            },
+            "text": {
+              "left": 708.0000610351562,
+              "top": 830.0923461914062,
+              "right": 1212.015625,
+              "bottom": 889.0923461914062
+            },
+            "overflow": false
+          },
+          {
+            "id": "slide-1-officejs-00f79d27",
+            "content": "请在这里输入您的内容文字请在这里输入您的内容文字请在这里输入请在这里输入您的内容文字请在这里输入",
+            "box": {
+              "left": 718.2211023622046,
+              "top": 708.6588976377952,
+              "right": 1202.6543307086613,
+              "bottom": 779.5588976377952
+            },
+            "text": {
+              "left": 735.437744140625,
+              "top": 719.3229370117188,
+              "right": 1185.453369140625,
+              "bottom": 772.4028930664062
+            },
+            "overflow": false
+          },
+          {
+            "id": "slide-1-officejs-6cb480d3",
+            "content": "您的内容文字",
+            "box": {
+              "left": 873.7376377952755,
+              "top": 666.440157480315,
+              "right": 1047.1376377952756,
+              "bottom": 709.8401574803149
+            },
+            "text": {
+              "left": 888.4376220703125,
+              "top": 671.68017578125,
+              "right": 1032.4532470703125,
+              "bottom": 704.68017578125
+            },
+            "overflow": false
+          },
+          {
+            "id": "slide-1-officejs-9c452cf0",
+            "content": "请在这里输入您的内容文字请在这里输入您的内容文字请在这里输入您的文字",
+            "box": {
+              "left": 774.4601574803149,
+              "top": 552.1806299212598,
+              "right": 1144.32,
+              "bottom": 623.0806299212599
+            },
+            "text": {
+              "left": 797.3900756835938,
+              "top": 562.8446655273438,
+              "right": 1121.4056396484375,
+              "bottom": 615.9246215820312
+            },
+            "overflow": false
+          },
+          {
+            "id": "slide-1-officejs-5f56b0f4",
+            "content": "您的内容文字",
+            "box": {
+              "left": 873.7376377952755,
+              "top": 508.44692913385825,
+              "right": 1047.1376377952756,
+              "bottom": 551.8469291338582
+            },
+            "text": {
+              "left": 888.4376220703125,
+              "top": 513.6869506835938,
+              "right": 1032.4532470703125,
+              "bottom": 546.6869506835938
+            },
+            "overflow": false
+          },
+          {
+            "id": "slide-1-officejs-854efce8",
+            "content": "请在这里输入您的内容文字请在这里输入您的内容文字",
+            "box": {
+              "left": 832.0011023622047,
+              "top": 394.7921259842519,
+              "right": 1082.8738582677165,
+              "bottom": 465.69212598425196
+            },
+            "text": {
+              "left": 849.4375,
+              "top": 405.4561462402344,
+              "right": 1065.453125,
+              "bottom": 458.5361328125
+            },
+            "overflow": false
+          },
+          {
+            "id": "slide-1-officejs-cc23e61a",
+            "content": "您的内容文字",
+            "box": {
+              "left": 870.7376377952755,
+              "top": 353.3585826771653,
+              "right": 1044.1376377952756,
+              "bottom": 396.75858267716535
+            },
+            "text": {
+              "left": 885.4376220703125,
+              "top": 358.59857177734375,
+              "right": 1029.4532470703125,
+              "bottom": 391.59857177734375
+            },
+            "overflow": false
+          },
+          {
+            "id": "slide-1-officejs-2efa8227",
+            "content": "内容文字",
+            "box": {
+              "left": 898.8376377952756,
+              "top": 261.3297637795276,
+              "right": 1024.0376377952755,
+              "bottom": 304.72976377952756
+            },
+            "text": {
+              "left": 913.4376220703125,
+              "top": 266.56976318359375,
+              "right": 1009.4532470703125,
+              "bottom": 299.56976318359375
+            },
+            "overflow": false
+          }
+        ],
+        "textLayoutCoverage": {
+          "version": 2,
+          "measurement": "font_metrics",
+          "coordinateSpace": "scene_world_axis_aligned_bounds",
+          "textBodies": 8,
+          "checked": 8,
+          "skipped": []
+        },
+        "directFontUsability": [
+          {
+            "family": "微软雅黑",
+            "weight": 700,
+            "italic": false,
+            "usable": false
+          },
+          {
+            "family": "苹方-简",
+            "weight": 400,
+            "italic": false,
+            "usable": true
+          },
+          {
+            "family": "苹方-简",
+            "weight": 700,
+            "italic": false,
+            "usable": true
+          }
+        ],
+        "renderedFontStacks": [
+          "微软雅黑, \"PingFang SC\", Arial, \"Microsoft YaHei\", \"WenQuanYi Micro Hei\"",
+          "等线, DengXian, \"Microsoft YaHei\", \"PingFang SC\", \"Noto Sans SC\", Helvetica, Arial"
+        ],
+        "fonts": {
+          "Arial": true,
+          "微软雅黑": false
+        }
+      }
+    ],
+    "browser": "151.0.7922.34",
+    "errors": [],
+    "provenance": {
+      "wasmEntry": "/Users/agent/askuy/code/vibeofficing/presentation/packages/mop-wasm/mop_wasm.js",
+      "wasmJsSha256": "cfce6ddbd5f86c41a8900a32d34448a8fafa344ba4f6555001a49b0bf0be109c",
+      "wasmSha256": "8264153b300f773b87c4eb7482524cee3fa2da0114b614c8c323a589b9b36866",
+      "node": "v26.0.0",
+      "platform": "darwin",
+      "sdk": {
+        "index": "286355728778e6f57dc08c0abc319db624a2758f487187375d85cbfc2d099ef2",
+        "objects": "1cc9d25b5a6094c07ab7514e1e6a2fcd1f088e39362b4979e36a210afc3a248d",
+        "text-format": "30b04222f824006896be65c187606d846807e14fdc2a2a92a7bdd5b3ef9eaa49",
+        "line-format": "fb67638f323015a566e92c35b8b350c58c12bfd79cf556cab642717958cbb521",
+        "fill-format": "c67966b24f3ce0c3e70b0496827d00749049a000741af3cd2a9a85a00352bdfd",
+        "effect-format": "6e87e91c4d9c5b6dd1253832016ab15e83387fa5dd3217ec4bd1bb23787f6244",
+        "transform-format": "07f9d5e09a66b386540f125b3b41b50e94397206073983e1510b85f345581b3f",
+        "mop-editor-host": "70417d11bc085db8ace3ca611a8c75d7a83bda53965206976f960b8b6daa3ca4"
+      },
+      "layout": {
+        "pipeline": "cdb04a4672fd1dbfbac2067745ea837a3529e08abd487a34e86f4786a80dca4f",
+        "authoredAutofit": "68bfaa228a4ad984eaa4748802c3ce2f1d861d72824a2f9bf89ed3ba311bdfdb"
+      },
+      "nativeBrowserSha256": "d3110a3c1b8cb98c07b05592a36244cbfc243d154181a4b3ba8e673304f62092"
+    }
+  },
+  "textOverflow": [],
+  "comparison": {
+    "rawSsim": 0.9755805089389948,
+    "targetRawSsim": 0.999,
+    "passed": false,
+    "sizeMismatch": false
+  },
+  "pptxExport": "passed",
+  "strictReimport": "passed",
+  "exactSolution": false,
+  "note": "Page-level execution evidence. Exact acceptance still requires the configured visual, structural and Office checks."
+}

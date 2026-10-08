@@ -1,0 +1,222 @@
+/*
+ * The account page — the shell's one full-page surface.
+ *
+ * It covers the whole viewport rather than sitting inside the frame: R-B-09 in
+ * `docs/interaction-rules.md` requires the sign-in flow not to render within the
+ * shell, so that the browser hand-off is not read as a stuck in-app state. The
+ * shell stays mounted underneath (see the note in `AccountPage.tsx`), which is
+ * why this needs a z-index at all: it is a sibling of every region, and the
+ * ladder's `--shell-z-gate` is the rung above the menus.
+ *
+ * Colours and sizes come from `tokens.css`. The one status colour is
+ * `--shell-status-danger`, which already exists for exactly this — grey would
+ * report a failed sign-in the same way it reports a pending one.
+ */
+.shell-account {
+  position: fixed;
+  inset: 0;
+  z-index: var(--shell-z-gate);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow: auto;
+  background: var(--shell-canvas);
+  color: var(--shell-ink);
+}
+
+.shell-account-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 420px;
+  padding: 28px 24px 18px;
+  border: 1px solid var(--shell-line);
+  border-radius: var(--shell-radius-panel);
+  background: var(--shell-paper);
+  box-shadow: var(--shell-shadow-panel);
+  text-align: center;
+}
+
+.shell-account-mark {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--shell-line-strong);
+  border-radius: 50%;
+  background: var(--shell-chrome);
+  color: var(--shell-accent);
+}
+
+.shell-account-title {
+  margin: 4px 0 0;
+  font-size: var(--shell-text-2xl);
+  font-weight: 600;
+  color: var(--shell-ink-title);
+}
+
+.shell-account-subtitle {
+  margin: 0;
+  max-width: 320px;
+  font-size: var(--shell-text-md);
+  line-height: 1.7;
+  color: var(--shell-ink-muted);
+}
+
+.shell-account-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.shell-account-primary,
+.shell-account-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: var(--shell-radius-control);
+  font: var(--shell-text-md) / 1 var(--shell-font);
+  cursor: pointer;
+}
+
+.shell-account-primary {
+  border: 0;
+  background: var(--shell-ink);
+  color: var(--shell-ink-inverse);
+}
+
+.shell-account-primary:hover:not(:disabled) {
+  background: var(--shell-ink-title);
+}
+
+.shell-account-secondary {
+  border: 1px solid var(--shell-line-strong);
+  background: var(--shell-paper);
+  color: var(--shell-ink);
+}
+
+.shell-account-secondary:hover:not(:disabled) {
+  background: var(--shell-hover);
+}
+
+.shell-account-primary:disabled,
+.shell-account-secondary:disabled {
+  /* stacking-context: a disabled button fading itself. It is a leaf control
+     with no positioned descendants, so this opens a context that traps
+     nothing — registered here rather than in `layers.test.ts` because the
+     gate accepts a local answer from the stylesheet's own owner. */
+  opacity: 0.55;
+  cursor: default;
+}
+
+.shell-account-primary:focus-visible,
+.shell-account-secondary:focus-visible,
+.shell-account-back:focus-visible {
+  outline: 2px solid var(--shell-focus);
+  outline-offset: 1px;
+}
+
+.shell-account-hint {
+  margin: 0;
+  font-size: var(--shell-text-sm);
+  line-height: 1.6;
+  color: var(--shell-ink-faint);
+}
+
+.shell-account-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: var(--shell-text-md);
+  color: var(--shell-ink-muted);
+}
+
+.shell-account-status.is-failure {
+  color: var(--shell-status-danger);
+  text-align: left;
+}
+
+.shell-account-url {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--shell-line);
+  border-radius: var(--shell-radius-item);
+  background: var(--shell-sunken);
+}
+
+.shell-account-url-text {
+  width: 100%;
+  font-size: var(--shell-text-sm);
+  line-height: 1.6;
+  color: var(--shell-ink-muted);
+  text-align: left;
+  word-break: break-all;
+}
+
+.shell-account-url-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.shell-account-url-actions .shell-account-secondary {
+  height: 28px;
+  width: auto;
+  flex: 1;
+}
+
+.shell-account-back {
+  width: 100%;
+  height: 32px;
+  margin-top: 2px;
+  border: 0;
+  border-radius: var(--shell-radius-control);
+  background: none;
+  color: var(--shell-ink-muted);
+  font: var(--shell-text-md) / 1 var(--shell-font);
+  cursor: pointer;
+}
+
+.shell-account-back:hover {
+  background: var(--shell-hover);
+  color: var(--shell-ink);
+}
+
+.shell-account-copyright {
+  font-size: var(--shell-text-xs);
+  color: var(--shell-ink-faint);
+}
+
+.shell-account-spin {
+  animation: shell-account-spin 900ms linear infinite;
+}
+
+@keyframes shell-account-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* A spinner is motion, and `tokens.css` collapses motion at the same
+   breakpoint. Rotating one anyway is exactly the thing the preference is
+   about. */
+@media (prefers-reduced-motion: reduce) {
+  .shell-account-spin {
+    animation: none;
+  }
+}

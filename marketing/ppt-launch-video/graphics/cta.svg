@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <defs>
+    <linearGradient id="glow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#12B947"/>
+      <stop offset="0.52" stop-color="#03849B"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="#05101A"/>
+  <circle cx="300" cy="180" r="360" fill="#03849B" opacity="0.18"/>
+  <circle cx="1660" cy="900" r="440" fill="#7C3AED" opacity="0.22"/>
+  <rect x="790" y="155" width="340" height="10" rx="5" fill="url(#glow)"/>
+  <text x="960" y="430" fill="#FFFFFF" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="64" font-weight="800" letter-spacing="-2">Create presentations with control.</text>
+  <text x="960" y="535" fill="#C8D5D8" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="500">From first thought to final polish.</text>
+  <rect x="645" y="650" width="630" height="116" rx="26" fill="#FFFFFF"/>
+  <text x="960" y="725" fill="#05101A" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="32" font-weight="800">Download OfficeDex now  →</text>
+  <text x="960" y="920" fill="#9FECFC" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="3">REAL PPTX · VISIBLE STEPS · EDITABLE OUTPUT</text>
+</svg>

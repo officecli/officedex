@@ -1,0 +1,363 @@
+/**
+ * The in-memory UiPort the shell runs against while the service layer is built
+ * separately. Everything lives in module state for the page's lifetime; nothing
+ * is written to disk and no request leaves the page.
+ */
+
+import type {
+  AgentTask,
+  CustomModelInput,
+  FileMeta,
+  FileType,
+  Folder,
+  Model,
+  ShellSettings,
+  UiPort,
+} from "../../../shared/uiPort";
+import { createFakeAgent } from "./fakeAgent";
+import { createFakeImageStore } from "./fakeImages";
+import { SEED_FOLDER_ID, seedFiles, seedFolders, seedModels, seedSettings } from "./seed";
+
+export interface FakePortOptions {
+  folders?: Folder[];
+  files?: FileMeta[];
+  models?: Model[];
+  settings?: ShellSettings;
+  /** Tasks the agent starts life holding, one per folder. See FakeAgentDeps. */
+  tasks?: AgentTask[];
+  now?: () => number;
+  /** Block the scripted run on a question before it starts. Off by default. */
+  asksQuestion?: boolean;
+  setTimeout?: (fn: () => void, ms: number) => unknown;
+  clearTimeout?: (handle: unknown) => void;
+}
+
+const EXTENSIONS: Record<FileType, string> = { doc: "docx", sheet: "xlsx", slides: "pptx", image: "png" };
+const TYPE_NAMES: Record<FileType, string> = {
+  doc: "document",
+  sheet: "workbook",
+  slides: "presentation",
+  image: "image",
+};
+
+let sequence = 0;
+const nextId = (prefix: string) => `${prefix}-${(sequence += 1)}`;
+
+export function createFakePort(options: FakePortOptions = {}): UiPort {
+  const now = options.now ?? (() => Date.now());
+  let folders: Folder[] = options.folders ?? seedFolders();
+  let files: FileMeta[] = options.files ?? seedFiles(now());
+  let models: Model[] = options.models ?? seedModels();
+  let settings: ShellSettings = options.settings ?? seedSettings();
+
+  const defaultFolderId = () =>
+    folders.find((folder) => folder.isDefault)?.id ?? folders[0]?.id ?? SEED_FOLDER_ID;
+
+  const find = (id: string) => {
+    const file = files.find((entry) => entry.id === id);
+    if (!file) throw new Error(`Unknown file: ${id}`);
+    return file;
+  };
+
+  const images = createFakeImageStore();
+
+  const agent = createFakeAgent({
+    asksQuestion: options.asksQuestion ?? false,
+    addImage: (folderId, name, taskId, size, seed) => {
+      const stamp = now();
+      const file: FileMeta = {
+        id: nextId("file"),
+        name,
+        type: "image",
+        folderId,
+        createdAt: stamp,
+        updatedAt: stamp,
+        lastOpenedAt: null,
+        dirty: false,
+        pinned: false,
+        artifactTaskId: taskId,
+      };
+      files = [...files, file];
+      images.register(file.id, size[0], size[1], seed);
+      return structuredClone(file);
+    },
+    seedTasks: options.tasks,
+    getFiles: () => files,
+    markDirty: (fileId, dirty) => {
+      const file = files.find((entry) => entry.id === fileId);
+      if (file) {
+        file.dirty = dirty;
+        file.updatedAt = now();
+      }
+    },
+    setTimeout: options.setTimeout,
+    clearTimeout: options.clearTimeout,
+    now,
+  });
+
+  return {
+    folders: {
+      async list() {
+        return structuredClone(folders);
+      },
+      async create(name) {
+        const folder: Folder = {
+          id: nextId("folder"),
+          name: name.trim(),
+          path: `~/Documents/${name.trim()}`,
+        };
+        folders = [...folders, folder];
+        return structuredClone(folder);
+      },
+      async rename(id, name) {
+        const folder = folders.find((entry) => entry.id === id);
+        if (folder) folder.name = name.trim();
+      },
+      async remove(id) {
+        const folder = folders.find((entry) => entry.id === id);
+        if (!folder || folder.isDefault) return;
+        folders = folders.filter((entry) => entry.id !== id);
+        // Decision 3: removing a folder never deletes files; they fall back to
+        // the default folder, which is a real directory like any other.
+        const fallback = defaultFolderId();
+        for (const file of files) {
+          if (file.folderId === id) file.folderId = fallback;
+        }
+      },
+    },
+
+    files: {
+      async list() {
+        return structuredClone(files);
+      },
+      async create(type, folderId) {
+        const count = files.filter((entry) => entry.type === type).length + 1;
+        const file: FileMeta = {
+          id: nextId("file"),
+          name: `Untitled ${TYPE_NAMES[type]} ${count}.${EXTENSIONS[type]}`,
+          type,
+          folderId: folders.some((entry) => entry.id === folderId) ? folderId : defaultFolderId(),
+          createdAt: now(),
+          updatedAt: now(),
+          lastOpenedAt: now(),
+          dirty: false,
+          pinned: false,
+        };
+        files = [...files, file];
+        return structuredClone(file);
+      },
+      /**
+       * There is no system picker in a browser, so the fake stands in for one
+       * by producing a file that plausibly came from elsewhere on disk.
+       *
+       * It lands in the default folder, which is the part of this that the
+       * contract actually cares about: an imported file is not inside any of the
+       * app's directories, and the default folder is where "filed nowhere" goes.
+       */
+      async openFromDisk() {
+        const count = files.filter((entry) => entry.name.startsWith("From this computer")).length + 1;
+        const file: FileMeta = {
+          id: nextId("file"),
+          name: `From this computer ${count}.docx`,
+          type: "doc",
+          folderId: defaultFolderId(),
+          createdAt: now(),
+          updatedAt: now(),
+          lastOpenedAt: now(),
+          dirty: false,
+          pinned: false,
+        };
+        files = [...files, file];
+        return structuredClone(file);
+      },
+      /**
+       * A browser gives a dropped file a name but never a path, so the fake's
+       * "path" is the name — which is all it needs to decide the type and
+       * whether this file is already in the list.
+       */
+      async openDropped(path) {
+        const name = path.slice(Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")) + 1);
+        const extension = name.slice(name.lastIndexOf(".") + 1).toLowerCase();
+        const type = (Object.keys(EXTENSIONS) as FileType[]).find(
+          (candidate) => candidate !== "image" && EXTENSIONS[candidate] === extension,
+        );
+        if (!type || !name.includes(".")) {
+          throw new Error(`OfficeDex opens Word, Excel and PowerPoint files; "${name}" is not one`);
+        }
+        const existing = files.find((entry) => entry.name === name && entry.folderId === defaultFolderId());
+        if (existing) {
+          existing.lastOpenedAt = now();
+          return structuredClone(existing);
+        }
+        const file: FileMeta = {
+          id: nextId("file"),
+          name,
+          type,
+          folderId: defaultFolderId(),
+          createdAt: now(),
+          updatedAt: now(),
+          lastOpenedAt: now(),
+          dirty: false,
+          pinned: false,
+        };
+        files = [...files, file];
+        return structuredClone(file);
+      },
+      /**
+       * Stands in for the Wails runtime's OS drop with the DOM's: same rule
+       * that only a drop on a `--wails-drop-target` element counts, and the
+       * file names stand in for paths.
+       */
+      onDropFromDisk(callback) {
+        if (typeof window === "undefined") return () => undefined;
+        const onDrop = (event: DragEvent) => {
+          const names = Array.from(event.dataTransfer?.files ?? []).map((file) => file.name);
+          if (names.length === 0) return;
+          const target = event.target instanceof Element ? event.target : null;
+          if (!target || getComputedStyle(target).getPropertyValue("--wails-drop-target").trim() !== "drop") return;
+          event.preventDefault();
+          callback(names, { x: event.clientX, y: event.clientY });
+        };
+        window.addEventListener("drop", onDrop);
+        return () => window.removeEventListener("drop", onDrop);
+      },
+      async open(id) {
+        const file = find(id);
+        file.lastOpenedAt = now();
+        return structuredClone(file);
+      },
+      async move(id, folderId) {
+        const file = find(id);
+        if (folders.some((entry) => entry.id === folderId)) file.folderId = folderId;
+      },
+      async rename(id, name) {
+        const file = find(id);
+        const trimmed = name.trim();
+        const suffix = `.${EXTENSIONS[file.type]}`;
+        file.name = trimmed.endsWith(suffix) ? trimmed : `${trimmed}${suffix}`;
+        file.updatedAt = now();
+      },
+      async duplicate(id) {
+        const source = find(id);
+        const suffix = `.${EXTENSIONS[source.type]}`;
+        const copy: FileMeta = {
+          ...structuredClone(source),
+          id: nextId("file"),
+          name: `${source.name.replace(new RegExp(`${suffix}$`), "")} copy${suffix}`,
+          createdAt: now(),
+          updatedAt: now(),
+          lastOpenedAt: now(),
+          dirty: false,
+          pinned: false,
+        };
+        files = [...files, copy];
+        return structuredClone(copy);
+      },
+      async setPinned(id, pinned) {
+        find(id).pinned = pinned;
+      },
+      async setDirty(id, dirty) {
+        find(id).dirty = dirty;
+      },
+      async save(id) {
+        const file = find(id);
+        file.dirty = false;
+        delete file.failure;
+        file.updatedAt = now();
+      },
+      async setFailure(id, failure) {
+        const file = find(id);
+        if (failure) file.failure = failure;
+        else delete file.failure;
+      },
+      async remove(id) {
+        files = files.filter((entry) => entry.id !== id);
+      },
+    },
+
+    agent,
+
+    models: {
+      async list() {
+        return structuredClone(models);
+      },
+      async addCustom(input) {
+        const model = toModel(nextId("model"), input);
+        models = [...models, model];
+        return structuredClone(model);
+      },
+      async updateCustom(id, input) {
+        const model = toModel(id, input);
+        models = models.map((entry) => (entry.id === id ? model : entry));
+        return structuredClone(model);
+      },
+      async select(id) {
+        if (!models.some((entry) => entry.id === id)) return;
+        settings = { ...settings, selectedModelId: id };
+      },
+      async removeCustom(id) {
+        models = models.filter((entry) => entry.id !== id);
+        if (settings.selectedModelId === id) {
+          settings = { ...settings, selectedModelId: models[0]?.id ?? "" };
+        }
+      },
+    },
+
+    settings: {
+      async get() {
+        return { ...settings };
+      },
+      async patch(patch) {
+        settings = { ...settings, ...patch };
+        return { ...settings };
+      },
+    },
+
+    window: createBrowserWindowPort(),
+
+    images: images.port(() => files),
+  };
+}
+
+function toModel(id: string, input: CustomModelInput): Model {
+  return {
+    id,
+    name: input.name.trim(),
+    provider: input.provider.trim() || "Custom",
+    detail: input.baseUrl.trim() || undefined,
+    custom: true,
+    // `apiKey` is intentionally dropped: the fake port never retains a key,
+    // matching the contract's note that storage is the port's decision.
+  };
+}
+
+/**
+ * Window controls in a plain browser. Close and minimize have no host to talk
+ * to, so they are no-ops the shell can still wire up and lay out; fullscreen is
+ * real via the Fullscreen API.
+ */
+function createBrowserWindowPort(): UiPort["window"] {
+  const listeners = new Set<(fullscreen: boolean) => void>();
+  const isFullscreen = () => typeof document !== "undefined" && Boolean(document.fullscreenElement);
+
+  if (typeof document !== "undefined") {
+    document.addEventListener("fullscreenchange", () => {
+      for (const listener of listeners) listener(isFullscreen());
+    });
+  }
+
+  return {
+    close() {},
+    minimize() {},
+    toggleFullscreen() {
+      if (typeof document === "undefined") return;
+      if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+      else void document.documentElement.requestFullscreen().catch(() => {});
+    },
+    isFullscreen,
+    onFullscreenChange(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+}

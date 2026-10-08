@@ -1,0 +1,285 @@
+/*
+ * Shell layout — OD-UI-1.2 (r10).
+ *
+ * Tokens live in tokens.css. The workspace's own look is the prototype's,
+ * ported layer by layer into `styles/` (see scripts/port-prototype-styles.mjs);
+ * this file holds what the prototype has no reason to say because it is a web
+ * page and this is a desktop window: where the shell's root sits, which bands
+ * drag the window, and how the persistent editor host fits the content region.
+ */
+
+.shell {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--dx-canvas);
+  color: var(--dx-text);
+  font: 400 var(--dx-fs-14) / 20px var(--dx-font);
+  font-synthesis: none;
+  color-scheme: light;
+}
+
+.shell *,
+.shell *::before,
+.shell *::after {
+  box-sizing: border-box;
+}
+
+/* Text for screen readers only. */
+.shell-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.shell [hidden] {
+  display: none !important;
+}
+
+/* ------------------------------------------------------------ workspace */
+
+/* The prototype sizes its root against the viewport; here the root is the
+   shell, which already is the window. */
+#dx-workspace {
+  height: 100%;
+}
+
+/* ---------------------------------------------------------- window drag */
+
+/*
+ * The desktop window has no title bar (`mac.TitleBarHidden`), so the 40px top
+ * row of every column is where the window is dragged from: the window-control
+ * band, the blank band above Home, Local and Settings, the unused end of the
+ * document tabs and the conversation's header. OD-UI-1.2 §03 keeps those rows
+ * per column rather than adding one bar across the window, so the drag region
+ * is per column too. Anything that can be pressed opts out.
+ */
+#dx-global-controls .dx-window-controls,
+#dx-content > .dx-home-top,
+#dx-content > .dx-tabs-strip,
+#dx-conversation > .dx-pane-top {
+  --wails-draggable: drag;
+  -webkit-app-region: drag;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#dx-global-controls button,
+#dx-content > .dx-tabs-strip button,
+#dx-content > .dx-tabs-strip .dx-file-tab,
+#dx-content > .dx-tabs-strip .dx-source-header-actions,
+#dx-conversation > .dx-pane-top button,
+/* A floating conversation is dragged by its own header, not the window. */
+#dx-workspace.dx-chat-floating #dx-conversation > .dx-pane-top {
+  --wails-draggable: no-drag;
+  -webkit-app-region: no-drag;
+}
+
+/*
+ * macOS draws the real traffic lights over this corner. The band keeps the
+ * width the three drawn buttons would have taken, so the sidebar switch and the
+ * Logo tab sit where the standard puts them in both builds.
+ */
+#dx-global-controls .dx-traffic-reserve {
+  flex: none;
+  width: 52px;
+  height: 12px;
+}
+
+/* --------------------------------------------------------- loading state */
+
+/*
+ * "Still reading the disk" and "this workspace is empty" must not be the same
+ * picture: the empty one is stated in words. Until the first read lands, the
+ * empty states stay out of sight.
+ */
+.shell[data-loaded="false"] .dx-empty {
+  visibility: hidden;
+}
+
+/* --------------------------------------------------------- editor region */
+
+/*
+ * The document host never unmounts: an editor holding unsaved state has to
+ * survive a trip to Home, to Assets or to Settings. It is hidden instead, and
+ * the page that replaced it is drawn beside it in the same column.
+ */
+.dx-editor-wrapper[hidden] {
+  display: none !important;
+}
+
+.shell-workspace {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The attention border's host: the editor area. */
+.shell-attention {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* -------------------------------------------------------------- canvas */
+
+.shell-canvas {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  background: var(--shell-sunken);
+}
+
+.shell-canvas-scroll {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  padding: 28px 0 40px;
+  display: flex;
+  justify-content: center;
+}
+
+.shell-canvas-scroll--flush {
+  padding: 0;
+  display: block;
+}
+
+.shell-canvas-scroll--slides {
+  padding: 0;
+  display: flex;
+  justify-content: flex-start;
+}
+
+/* ------------------------------------------------------------ skeleton */
+/* Placeholder only. Replaced wholesale by a real renderer at integration. */
+
+.shell-skeleton-paper {
+  width: min(780px, 100%);
+  margin: 0 24px;
+  padding: 64px 72px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--shell-paper);
+  border: 1px solid var(--shell-line);
+  box-shadow: var(--shell-shadow-paper);
+}
+
+.shell-skeleton-line {
+  display: block;
+  height: 10px;
+  width: 100%;
+  border-radius: 3px;
+  background: var(--shell-skeleton-line);
+}
+
+.shell-skeleton-line--eyebrow {
+  width: 28%;
+  height: 7px;
+  margin-bottom: 18px;
+}
+
+.shell-skeleton-line--title {
+  width: 52%;
+  height: 20px;
+  margin-bottom: 14px;
+  background: var(--shell-skeleton-line-strong);
+}
+
+.shell-skeleton-line--heading {
+  width: 34%;
+  height: 13px;
+  margin: 22px 0 6px;
+  background: var(--shell-skeleton-line-strong);
+}
+
+.shell-skeleton-block {
+  height: 140px;
+  margin-top: 24px;
+  border-radius: 4px;
+  background: var(--shell-skeleton-block);
+  border: 1px solid var(--shell-line);
+}
+
+.shell-skeleton-block--slide {
+  height: 200px;
+  margin-top: 28px;
+}
+
+.shell-skeleton-grid {
+  display: grid;
+  grid-template-columns: 44px repeat(7, minmax(96px, 1fr));
+  grid-auto-rows: 26px;
+  background: var(--shell-paper);
+}
+
+.shell-skeleton-cell {
+  border-right: 1px solid var(--shell-skeleton-rule);
+  border-bottom: 1px solid var(--shell-skeleton-rule);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-xs);
+}
+
+.shell-skeleton-cell--head {
+  background: var(--shell-sunken);
+  color: var(--shell-ink-subtle);
+}
+
+.shell-skeleton-filmstrip {
+  flex: none;
+  width: 168px;
+  padding: 20px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+  background: var(--shell-paper);
+  border-right: 1px solid var(--shell-line);
+}
+
+.shell-skeleton-thumb {
+  display: block;
+  aspect-ratio: 16 / 9;
+  border-radius: 3px;
+  background: var(--shell-skeleton-thumb);
+  border: 1px solid var(--shell-line);
+}
+
+.shell-skeleton-thumb--current {
+  border-color: var(--shell-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--shell-accent) 28%, transparent);
+}
+
+.shell-skeleton-stage {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 36px;
+}
+
+.shell-skeleton-slide {
+  width: min(880px, 100%);
+  aspect-ratio: 16 / 9;
+  padding: 64px 72px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--shell-paper);
+  border: 1px solid var(--shell-line);
+  box-shadow: var(--shell-shadow-paper);
+}

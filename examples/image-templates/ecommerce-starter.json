@@ -1,0 +1,186 @@
+{
+  "version": 1,
+  "templates": [
+    {
+      "slug": "ecom-clean-hero",
+      "title": "Clean Product Hero",
+      "description": "Create a clean, focused ecommerce hero image. Upload a real product reference when packaging, color, and structure must remain accurate.",
+      "promptPreset": "Create a clean ecommerce hero image of {{product_description}}. If a reference image is provided, preserve the reference product's packaging, colors, proportions, structure, and visible markings exactly. Show the product from a {{camera_angle}}, centered and fully visible, occupying 35–40% of the frame against a solid {{background_color}} background. Use soft diffused studio lighting, natural contact shadows, crisp material detail, and at least 45% clean negative space. Keep the composition platform-ready and visually balanced. Do not add: props, hands, people, invented packaging, changed colors, fake logos, watermarks, text, badges, gradients, reflections that hide details, or cropped product edges.",
+      "sortOrder": 10,
+      "enabled": true,
+      "tags": ["Ecommerce", "Studio"],
+      "slots": [
+        { "key": "product_description", "label": "Product Description", "helpText": "Describe the product type, material, color, and defining visual details.", "required": true, "multiline": true },
+        { "key": "background_color", "label": "Background Color", "defaultValue": "#FFFFFF", "helpText": "Use a specific HEX color value.", "required": true },
+        { "key": "camera_angle", "label": "Camera Angle", "defaultValue": "front three-quarter view", "required": true }
+      ]
+    },
+    {
+      "slug": "ecom-lifestyle-scene",
+      "title": "Lifestyle Scene",
+      "description": "Place the product naturally in a believable use environment that communicates audience, mood, and lifestyle.",
+      "promptPreset": "Create a believable lifestyle ecommerce photograph featuring {{product_description}} in {{scene}} for {{target_audience}}. If a reference image is provided, preserve the reference product's packaging, colors, proportions, structure, and visible markings exactly. Make the product naturally integrated but clearly identifiable, occupying about 20–25% of the frame, with at least 50% visual breathing room. Use natural directional light and a {{mood}} atmosphere with realistic surfaces, shadows, and lived-in details. The scene should communicate use and aspiration without looking staged. Do not add: unrelated products, fake logos, watermarks, promotional text, impossible reflections, duplicated objects, distorted hands, or changes to the product design.",
+      "sortOrder": 20,
+      "enabled": true,
+      "tags": ["Ecommerce", "Lifestyle"],
+      "slots": [
+        { "key": "product_description", "label": "Product Description", "required": true, "multiline": true },
+        { "key": "scene", "label": "Use Scene", "helpText": "For example: a morning bathroom, commuter desk, or weekend campsite.", "required": true, "multiline": true },
+        { "key": "target_audience", "label": "Target Audience", "defaultValue": "the intended everyday customer", "required": true },
+        { "key": "mood", "label": "Mood", "defaultValue": "warm, natural, and trustworthy", "required": true }
+      ]
+    },
+    {
+      "slug": "ecom-flat-lay",
+      "title": "Flat Lay Arrangement",
+      "description": "Create a clean top-down arrangement for apparel, beauty products, accessories, or compact bundles.",
+      "promptPreset": "Create a top-down flat-lay ecommerce photograph of {{product_description}} arranged with {{supporting_props}} on {{surface}}. If a reference image is provided, preserve the reference product's packaging, colors, proportions, structure, and visible markings exactly. Use the fixed palette {{brand_colors}}, soft window light from the upper left, restrained contact shadows, and a clean editorial rhythm. Keep the main product dominant but below 35% of the frame and preserve at least 45% negative space. Do not add: excessive props, unrelated brands, fake labels, watermarks, extra text, repeated products, distorted geometry, clutter, or glossy glare that hides product details.",
+      "sortOrder": 30,
+      "enabled": true,
+      "tags": ["Ecommerce", "Studio"],
+      "slots": [
+        { "key": "product_description", "label": "Product Description", "required": true, "multiline": true },
+        { "key": "supporting_props", "label": "Supporting Props", "defaultValue": "two or three category-relevant props", "required": true, "multiline": true },
+        { "key": "surface", "label": "Flat Lay Surface", "defaultValue": "a matte warm off-white surface", "required": true },
+        { "key": "brand_colors", "label": "Brand Colors", "defaultValue": "#F5F1E8, #2D2D2D, and one product-matched accent color", "required": true }
+      ]
+    },
+    {
+      "slug": "ecom-material-macro",
+      "title": "Material Detail Macro",
+      "description": "Use a macro view to reveal fabric, texture, craftsmanship, surface finish, or a key structural detail.",
+      "promptPreset": "Create a commercial macro photograph of {{product_description}}, focused tightly on {{focus_area}} and clearly revealing {{material_texture}}. If a reference image is provided, preserve the reference product's packaging, colors, proportions, structure, and visible markings exactly. Use {{lighting_style}} to reveal real texture, edge quality, stitching, grain, finish, or construction without exaggeration. Keep the focal plane precise, the background quiet, and enough negative space for a clean ecommerce crop. Do not add: invented materials, fake defects, impossible microstructure, text, labels, measurement marks, watermarks, dust, fingerprints, excessive sharpening, or changes to the product's actual construction.",
+      "sortOrder": 40,
+      "enabled": true,
+      "tags": ["Ecommerce", "Studio", "Product Detail"],
+      "slots": [
+        { "key": "product_description", "label": "Product Description", "required": true, "multiline": true },
+        { "key": "focus_area", "label": "Focus Area", "helpText": "For example: fabric weave, cap construction, or a metal connector.", "required": true },
+        { "key": "material_texture", "label": "Material and Texture", "required": true, "multiline": true },
+        { "key": "lighting_style", "label": "Lighting Style", "defaultValue": "soft raking side light with controlled highlights", "required": true }
+      ]
+    },
+    {
+      "slug": "ecom-model-showcase",
+      "title": "Model Showcase",
+      "description": "Show apparel, accessories, beauty products, or wearable goods naturally on a real person.",
+      "promptPreset": "Create a refined ecommerce model photograph of {{model_description}} naturally wearing or using {{product_description}} in {{setting}}. If a reference image is provided, preserve the reference product's packaging, colors, proportions, structure, and visible markings exactly. Use a {{expression}} expression, realistic posture, natural skin and fabric texture, and soft directional light. Keep the product clearly visible and faithful in scale, fit, placement, and material response, with generous uncluttered space around the subject. Do not add: altered garment cuts, invented accessories, fake logos, watermarks, text, beauty-filter skin, impossible anatomy, duplicated fingers, distorted product placement, or unrelated props.",
+      "sortOrder": 50,
+      "enabled": true,
+      "tags": ["Ecommerce", "Lifestyle"],
+      "slots": [
+        { "key": "product_description", "label": "Product Description", "required": true, "multiline": true },
+        { "key": "model_description", "label": "Model Description", "helpText": "Describe the age range, overall presence, and only the product-relevant characteristics.", "required": true, "multiline": true },
+        { "key": "setting", "label": "Setting", "defaultValue": "a minimal neutral studio", "required": true },
+        { "key": "expression", "label": "Expression", "defaultValue": "relaxed, confident, and natural", "required": true }
+      ]
+    },
+    {
+      "slug": "ecom-feature-infographic",
+      "title": "Feature Infographic",
+      "description": "Combine the product with two to four core benefits in a clear ecommerce detail-page infographic.",
+      "promptPreset": "Create a mobile-friendly ecommerce feature infographic for {{product_description}}. If a reference image is provided, preserve the reference product's packaging, colors, proportions, structure, and visible markings exactly. Use the headline “{{headline}}” and present only these supplied benefits: {{key_benefits}}. Use the fixed palette {{brand_colors}}, a clean geometric layout, consistent thin-line icons, and clear three-level information hierarchy. Keep the product at 25–30% of the frame, leave at least 45% open space, and make all supplied text large and legible. Do not add: invented claims, ratings, certifications, statistics, review quotes, extra benefits, fake logos, watermarks, decorative clutter, tiny unreadable copy, or unsupported comparison data.",
+      "sortOrder": 60,
+      "enabled": true,
+      "tags": ["Ecommerce", "Infographic"],
+      "slots": [
+        { "key": "product_description", "label": "Product Description", "required": true, "multiline": true },
+        { "key": "headline", "label": "Headline", "helpText": "Keep the headline concise, ideally under 15 words.", "required": true },
+        { "key": "key_benefits", "label": "Key Benefits", "helpText": "Enter two to four concise, supportable benefits.", "required": true, "multiline": true },
+        { "key": "brand_colors", "label": "Brand Colors", "defaultValue": "#F5F1E8, #2D2D2D, and one product-matched accent color", "required": true }
+      ]
+    },
+    {
+      "slug": "ecom-size-spec-guide",
+      "title": "Size and Specification Guide",
+      "description": "Present verified dimensions, specifications, or usage steps in a concise and trustworthy guide.",
+      "promptPreset": "Create a clean ecommerce specification guide for {{product_description}}. If a reference image is provided, preserve the reference product's packaging, colors, proportions, structure, and visible markings exactly. Show only these supplied dimensions or specifications: {{dimensions}}. Include only these supplied usage steps where space allows: {{usage_steps}}. Use the palette {{brand_colors}}, precise leader lines, simple labels, consistent spacing, and a calm technical layout with at least 45% negative space. Do not add: invented measurements, unsupported compatibility, certifications, fake logos, watermarks, extra steps, decorative icons with ambiguous meaning, distorted scale, or illegible small text.",
+      "sortOrder": 70,
+      "enabled": true,
+      "tags": ["Ecommerce", "Infographic"],
+      "slots": [
+        { "key": "product_description", "label": "Product Description", "required": true, "multiline": true },
+        { "key": "dimensions", "label": "Dimensions or Specifications", "helpText": "Enter only verified product data.", "required": true, "multiline": true },
+        { "key": "usage_steps", "label": "Usage Steps", "defaultValue": "no usage steps; focus on dimensions and specifications", "multiline": true },
+        { "key": "brand_colors", "label": "Brand Colors", "defaultValue": "#FFFFFF, #2D2D2D, and one product-matched accent color", "required": true }
+      ]
+    },
+    {
+      "slug": "ecom-product-bundle",
+      "title": "Product Bundle Display",
+      "description": "Clearly present a gift set, multipack, multi-SKU offer, or coordinated product bundle.",
+      "promptPreset": "Create a polished ecommerce bundle photograph of {{product_set_description}} arranged as {{arrangement}} against {{background_color}}. If a reference image is provided, preserve the reference product's packaging, colors, proportions, structure, and visible markings exactly. Make every included item clearly visible, correctly scaled, and easy to count. Let the full set occupy about 55–65% of the frame while keeping at least 35% clean breathing room. Use soft controlled studio light and {{accent_elements}} as restrained support. Do not add: duplicate items, missing items, invented variants, changed packaging, fake logos, watermarks, text, price tags, excessive props, overlapping labels, or cropped products.",
+      "sortOrder": 80,
+      "enabled": true,
+      "tags": ["Ecommerce", "Studio"],
+      "slots": [
+        { "key": "product_set_description", "label": "Bundle Contents", "helpText": "List each product with its quantity, size, and color.", "required": true, "multiline": true },
+        { "key": "arrangement", "label": "Arrangement", "defaultValue": "a balanced stepped composition with the hero item centered", "required": true },
+        { "key": "background_color", "label": "Background Color", "defaultValue": "#F5F1E8", "required": true },
+        { "key": "accent_elements", "label": "Accent Elements", "defaultValue": "one or two subtle category-relevant accent elements", "required": true }
+      ]
+    },
+    {
+      "slug": "ecom-promo-poster",
+      "title": "Promotional Poster / Banner",
+      "description": "Create a promotional visual combining the product, a short headline, offer information, and a call to action.",
+      "promptPreset": "Create a conversion-focused ecommerce promotional poster featuring {{product_description}}. If a reference image is provided, preserve the reference product's packaging, colors, proportions, structure, and visible markings exactly. Use the fixed palette {{brand_colors}} and render only this supplied copy: headline “{{headline}}”, offer “{{offer_text}}”, and CTA “{{cta}}”. Keep the product around 40% of the frame, preserve at least 45% clean negative space, and reserve a clear top-center overlay area. Use strong hierarchy, restrained graphic shapes, and commercial studio lighting. Do not add: invented discounts, dates, prices, claims, badges, reviews, fake logos, watermarks, extra copy, unreadable text, random gradients, or changes to the product design.",
+      "sortOrder": 90,
+      "enabled": true,
+      "tags": ["Ecommerce", "Promotion"],
+      "slots": [
+        { "key": "product_description", "label": "Product Description", "required": true, "multiline": true },
+        { "key": "headline", "label": "Promotional Headline", "helpText": "Keep the headline concise, ideally under 15 words.", "required": true },
+        { "key": "offer_text", "label": "Offer Text", "defaultValue": "no offer text", "required": true },
+        { "key": "cta", "label": "Call to Action", "defaultValue": "Shop now", "required": true },
+        { "key": "brand_colors", "label": "Brand Colors", "defaultValue": "#FFFFFF, #2D2D2D, and one bold product-matched accent color", "required": true }
+      ]
+    },
+    {
+      "slug": "ecom-social-seeding",
+      "title": "Social Media Product Story",
+      "description": "Create a believable, clear product visual with a defined content angle for a social feed.",
+      "promptPreset": "Create a native-looking {{platform_context}} featuring {{product_description}} with the content angle {{content_angle}} in {{setting}}. If a reference image is provided, preserve the reference product's packaging, colors, proportions, structure, and visible markings exactly. Use believable available light, a slightly off-center composition, real environmental texture, and enough negative space for platform cropping. Keep the product immediately recognizable without making the image feel like a studio catalog shot. Do not add: platform interface, account names, engagement counts, fake reviews, invented claims, fake logos, watermarks, extra products, beauty-filter smoothing, impossible hands, or overly polished advertising effects.",
+      "sortOrder": 100,
+      "enabled": true,
+      "tags": ["Ecommerce", "Lifestyle", "Social Media"],
+      "slots": [
+        { "key": "product_description", "label": "Product Description", "required": true, "multiline": true },
+        { "key": "platform_context", "label": "Platform Format", "defaultValue": "vertical social feed post", "required": true },
+        { "key": "content_angle", "label": "Content Angle", "helpText": "For example: commuting essential, unboxing experience, or desk setup favorite.", "required": true, "multiline": true },
+        { "key": "setting", "label": "Setting", "defaultValue": "a believable everyday environment relevant to the product", "required": true, "multiline": true }
+      ]
+    },
+    {
+      "slug": "ecom-authentic-ugc",
+      "title": "Authentic UGC / Customer Snapshot",
+      "description": "Create a natural smartphone snapshot without fabricating reviews, accounts, ratings, or platform interface elements.",
+      "promptPreset": "Create an authentic UGC-style snapshot of {{product_description}} showing {{creator_context}} during {{use_moment}}. If a reference image is provided, preserve the reference product's packaging, colors, proportions, structure, and visible markings exactly. Use {{camera_character}}, slightly imperfect framing, natural skin or surface texture, mixed practical lighting, and a believable lived-in environment. The image should feel candid and unretouched, not like professional studio photography. Do not add: testimonial text, usernames, platform interface, ratings, review scores, endorsements, invented claims, fake logos, watermarks, duplicated fingers, beauty-filter skin, staged luxury props, or changes to the product.",
+      "sortOrder": 110,
+      "enabled": true,
+      "tags": ["Ecommerce", "Lifestyle", "Social Media"],
+      "slots": [
+        { "key": "product_description", "label": "Product Description", "required": true, "multiline": true },
+        { "key": "creator_context", "label": "Creator and Context", "helpText": "For example: a commuter getting ready to leave or a student organizing a desk.", "required": true, "multiline": true },
+        { "key": "use_moment", "label": "Use Moment", "required": true, "multiline": true },
+        { "key": "camera_character", "label": "Smartphone Camera Character", "defaultValue": "recent smartphone main camera, slight warm cast, fine visible noise", "required": true }
+      ]
+    },
+    {
+      "slug": "ecom-luxury-atmosphere",
+      "title": "Luxury Brand Atmosphere",
+      "description": "Use restrained dark studio lighting, material reflections, and generous negative space to create a premium product mood.",
+      "promptPreset": "Create a restrained luxury ecommerce photograph of {{product_description}} on {{surface}} against a deep {{background_color}} background. If a reference image is provided, preserve the reference product's packaging, colors, proportions, structure, and visible markings exactly. Use {{accent_color}} as the single accent, controlled rim light, soft ambient fill, precise material reflections, and {{atmosphere}}. Keep the product near 30% of the frame with at least 50% negative space and a calm premium composition. Do not add: excessive smoke, floating objects, gemstones, fake logos, watermarks, text, badges, invented packaging, harsh glare, crushed shadow detail, random colors, or changes to the product design.",
+      "sortOrder": 120,
+      "enabled": true,
+      "tags": ["Ecommerce", "Studio", "Premium"],
+      "slots": [
+        { "key": "product_description", "label": "Product Description", "required": true, "multiline": true },
+        { "key": "surface", "label": "Support Surface", "defaultValue": "polished dark stone", "required": true },
+        { "key": "background_color", "label": "Background Color", "defaultValue": "#121212", "required": true },
+        { "key": "accent_color", "label": "Accent Color", "defaultValue": "#D4AF37", "required": true },
+        { "key": "atmosphere", "label": "Atmosphere Details", "defaultValue": "a subtle controlled haze and one restrained organic accent", "required": true }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "contract": "jssdk-animation/v1",
+  "version": "0.1.0",
+  "recipes": [
+    {
+      "id": "fade-sequence",
+      "status": "verified",
+      "reference": "references/fade-sequence.md",
+      "evidence": "evidence/native-probe.json"
+    },
+    {
+      "id": "stagger",
+      "status": "verified",
+      "reference": "references/stagger.md",
+      "evidence": "evidence/native-probe.json"
+    }
+  ],
+  "limitations": [
+    "PowerPoint desktop not yet verified",
+    "Complex particles, blur, paths and word-level animation are not supported in v1"
+  ]
+}

@@ -1,0 +1,379 @@
+{
+  "id": "timeline-12-8",
+  "family": "timeline",
+  "source": "sampleall/shape/时间轴4项/时间轴4项.pptx",
+  "page": 12,
+  "program": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__时间轴4项__时间轴4项/slides/slide-0012.mjs",
+  "verification": "artifacts/aippt/full-distillation/font-metrics-v3/source-03a6f67d80b3b19b1045/verification.json",
+  "observed_items": 4,
+  "mechanism": "horizontal-axis",
+  "source_fact": "四个节点沿水平轴等距；上方图标与下方说明和节点共享中心线。",
+  "transfer_hypothesis": "源页只有序号，提供轴向构图证据；时间含义由新任务日期确认。",
+  "visual_review": "source_preview_inspected",
+  "state": "source_fact",
+  "ssim": 0.9707113967070958,
+  "exact_reference": false,
+  "program_sha256": "9c6d35ebe1b33cbead965dae6595bbd98758fe3709fb8ba76c7e955626087c1b",
+  "verification_sha256": "1c0a0e09ff3821221f71ea00bfc8691a84a3f1fc95d4c8196a099e56e6c72aaa",
+  "preview": "sampleall/shape/时间轴4项/时间轴4项_PPTX_TO_PNG_WPS/幻灯片12.png",
+  "checks": {
+    "jssdk_executed": true,
+    "native_objects": {
+      "count": 22,
+      "types": [
+        "connector",
+        "shape",
+        "connector",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "connector",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "connector",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "connector",
+        "shape",
+        "shape",
+        "shape",
+        "shape"
+      ]
+    },
+    "text_overflow": 0,
+    "render_errors": 0,
+    "pptx_export": "passed",
+    "strict_reimport": "passed",
+    "text_coverage_version": 2,
+    "text_measurement": "font_metrics"
+  },
+  "canvas_pt": [
+    960.0,
+    540.0
+  ],
+  "objects": [
+    {
+      "id": "s1",
+      "api": "addLine",
+      "kind": "Line",
+      "bounds_fraction": {
+        "left": 0.145,
+        "top": 0.55442,
+        "width": 0.71,
+        "height": 0.0
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#808080"
+      ]
+    },
+    {
+      "id": "s2",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.23354,
+        "top": 0.52178,
+        "width": 0.03594,
+        "height": 0.06389
+      },
+      "text_characters": 1,
+      "font_pt": [
+        36.0
+      ],
+      "colors": [
+        "#1F74AD",
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s3",
+      "api": "addLine",
+      "kind": "Line",
+      "bounds_fraction": {
+        "left": 0.25151,
+        "top": 0.40827,
+        "width": 0.0,
+        "height": 0.11351
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#63B0E3"
+      ]
+    },
+    {
+      "id": "s4",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.217,
+        "top": 0.28555,
+        "width": 0.06903,
+        "height": 0.12273
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#1F74AD"
+      ]
+    },
+    {
+      "id": "s6",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.19984,
+        "top": 0.60219,
+        "width": 0.10335,
+        "height": 0.19545
+      },
+      "text_characters": 12,
+      "font_pt": [
+        14.0
+      ],
+      "colors": [
+        "#000000"
+      ]
+    },
+    {
+      "id": "s7",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.3992,
+        "top": 0.52178,
+        "width": 0.03594,
+        "height": 0.06389
+      },
+      "text_characters": 1,
+      "font_pt": [
+        36.0
+      ],
+      "colors": [
+        "#3498DB",
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s8",
+      "api": "addLine",
+      "kind": "Line",
+      "bounds_fraction": {
+        "left": 0.41717,
+        "top": 0.40827,
+        "width": 0.0,
+        "height": 0.11351
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#85C1E9"
+      ]
+    },
+    {
+      "id": "s9",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.38265,
+        "top": 0.2862,
+        "width": 0.06903,
+        "height": 0.12273
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#3498DB"
+      ]
+    },
+    {
+      "id": "s11",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.3655,
+        "top": 0.60219,
+        "width": 0.10335,
+        "height": 0.19545
+      },
+      "text_characters": 12,
+      "font_pt": [
+        14.0
+      ],
+      "colors": [
+        "#000000"
+      ]
+    },
+    {
+      "id": "s12",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.56486,
+        "top": 0.52178,
+        "width": 0.03594,
+        "height": 0.06389
+      },
+      "text_characters": 1,
+      "font_pt": [
+        36.0
+      ],
+      "colors": [
+        "#1AA3AA",
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s13",
+      "api": "addLine",
+      "kind": "Line",
+      "bounds_fraction": {
+        "left": 0.58283,
+        "top": 0.40827,
+        "width": 0.0,
+        "height": 0.11351
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#5CDFE6"
+      ]
+    },
+    {
+      "id": "s14",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.54831,
+        "top": 0.28538,
+        "width": 0.06903,
+        "height": 0.12273
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#1AA3AA"
+      ]
+    },
+    {
+      "id": "s16",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.53116,
+        "top": 0.60219,
+        "width": 0.10335,
+        "height": 0.19545
+      },
+      "text_characters": 12,
+      "font_pt": [
+        14.0
+      ],
+      "colors": [
+        "#000000"
+      ]
+    },
+    {
+      "id": "s17",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.73052,
+        "top": 0.52178,
+        "width": 0.03594,
+        "height": 0.06389
+      },
+      "text_characters": 1,
+      "font_pt": [
+        36.0
+      ],
+      "colors": [
+        "#69A35B",
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s18",
+      "api": "addLine",
+      "kind": "Line",
+      "bounds_fraction": {
+        "left": 0.74849,
+        "top": 0.40827,
+        "width": 0.0,
+        "height": 0.11351
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#A5C89C"
+      ]
+    },
+    {
+      "id": "s19",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.71397,
+        "top": 0.28781,
+        "width": 0.06903,
+        "height": 0.12273
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#69A35B"
+      ]
+    },
+    {
+      "id": "s21",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.69681,
+        "top": 0.60219,
+        "width": 0.10335,
+        "height": 0.19545
+      },
+      "text_characters": 12,
+      "font_pt": [
+        14.0
+      ],
+      "colors": [
+        "#000000"
+      ]
+    },
+    {
+      "id": "s22",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.27571,
+        "top": 0.13199,
+        "width": 0.44859,
+        "height": 0.08684
+      },
+      "text_characters": 8,
+      "font_pt": [
+        20.0
+      ],
+      "colors": [
+        "#1F74AD"
+      ]
+    }
+  ],
+  "extraction_scope": "literal object geometry; group transforms and custom paths require source inspection",
+  "source_admission": "high_similarity_verified",
+  "revalidation": {
+    "state": "source_verified",
+    "reasons": [],
+    "complete_group_text_coverage_required": true,
+    "font_metrics_required": true
+  }
+}

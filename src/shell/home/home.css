@@ -1,0 +1,86 @@
+/* Home screens: the comfortable density of the file library. */
+
+/*
+ * The only `.shell-home` rule. `app.css` carried a second block under the same
+ * selector; its `flex` / `min-width` / `background` are the three lines below
+ * that are about the region rather than the page, brought here so one file
+ * decides (S5-008). Both blocks declared `overflow: auto`, identically.
+ */
+
+/*
+ * Home is one column, and these are the rules that decide where its left edge
+ * is. Every band that participates declares both halves — the width and the
+ * centring — because declaring only the width is what pulled them apart: the
+ * carousel carried `margin: 0 auto` and the two bands below it did not, so at
+ * C1's content width the reel sat 26px right of the resume card and the file
+ * table (S3-001), while the Editor Home's heading row and button row, having no
+ * `max-width` at all, ran 52px past the table under them (S3-002).
+ *
+ * `--shell-home-column` is the single source for the 1080 that used to be typed
+ * out once per band.
+ */
+
+/*
+ * Agent Home puts the same four actions under a subhead rather than under a
+ * page title, so they sit closer to the list they act on.
+ */
+
+/* ------------------------------------------------------- agent hero */
+
+.shell-hero {
+  max-width: 800px;
+  margin: 0 auto 44px;
+  text-align: center;
+}
+
+.shell-hero h1 {
+  margin: 0;
+  color: var(--shell-ink);
+  font-size: var(--shell-text-display);
+  line-height: 1.25;
+  font-weight: 550;
+  letter-spacing: -1.1px;
+}
+
+.shell-hero-lede {
+  margin: 12px 0 28px;
+  color: var(--shell-ink-subtle);
+  font-size: var(--shell-text-md);
+  line-height: 22px;
+}
+
+.shell-hero-composer {
+  text-align: left;
+}
+
+/*
+ * The strip that used to sit on top of the composer is gone, and so are the
+ * rules that shaped it (`.shell-home-scope`, and the square top corners the
+ * composer wore to meet it). Home had two folder controls saying the same
+ * thing — that strip and the composer's own scope chip — and decision 2 keeps
+ * the chip, because scope is a property of the message being written rather
+ * than of the screen it is written on.
+ */
+
+/*
+ * A starter that offers two actions, and the second one.
+ *
+ * The group is inline-flex so wrapping still happens between groups rather than
+ * between a prompt and its alternative — "Build a presentation" and "watch a
+ * deck being drawn" are one choice, and splitting them across lines reads as
+ * two unrelated buttons.
+ */
+
+/*
+ * The alternative is the quieter of the two: it writes nothing, so it should
+ * not compete with the button that starts actual work.
+ */
+
+/*
+ * Editor Home takes files dragged in from the desktop.
+ *
+ * `--wails-drop-target` is what the Wails runtime checks before it reports a
+ * native drop: it is inherited, so every element on the page counts, and
+ * nothing outside it does — a file dropped onto an open document or the
+ * sidebar is swallowed rather than opened.
+ */

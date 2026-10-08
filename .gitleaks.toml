@@ -1,0 +1,72 @@
+# Gitleaks configuration for the public OfficeDex repository.
+#
+# CI runs `gitleaks dir` against the checked-out tree (not the git history)
+# with this file. On top of the built-in secret rules it fails the build when
+# internal infrastructure names or a developer's home directory land in the
+# tree, because those are exactly what slipped into the repo before the public
+# release (see docs/README.md).
+
+title = "OfficeDex public-tree rules"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "officedex-internal-hostname"
+description = "Internal hostname (private git, npm registry or other company infrastructure)"
+regex = '''(?i)\b[a-z0-9.-]*\.shimo\.(im|run)\b'''
+keywords = ["shimo.im", "shimo.run"]
+
+[[rules]]
+id = "officedex-internal-obs-bucket"
+description = "Internal object-storage bucket or region spelled out in a document"
+regex = '''\baichatoffice-test\b'''
+keywords = ["aichatoffice-test"]
+[rules.allowlist]
+# The update-channel code and scripts legitimately build the public manifest
+# URL from the bucket name; the point of the rule is to keep it out of docs.
+paths = [
+  '''^app_update_channel\.go$''',
+  '''^scripts/update-channel\.mjs$''',
+  '''^scripts/obs-client\.mjs$''',
+  '''^scripts/.*\.test\.mjs$''',
+]
+
+[[rules]]
+id = "officedex-developer-home-path"
+description = "Absolute path under a developer's home directory (macOS /Users/<name>)"
+regex = '''/Users/[A-Za-z][A-Za-z0-9._-]*/'''
+keywords = ["/Users/"]
+[rules.allowlist]
+regexes = [
+  # Placeholder users that fixtures, tests and the skill evidence files use.
+  '''/Users/(testuser|agent|example|flora|lu|me|you|qa|<[^>]+>|\$\{?[A-Za-z_]+\}?)/''',
+  # The diagnostics scrubber matches Windows home directories by pattern.
+  '''\[A-Z\]:/Users/''',
+]
+
+[allowlist]
+description = "Files and fixture values that may legitimately trip a rule"
+regexTarget = "line"
+regexes = [
+  # Fake credentials the scrubber and provider-env tests assert on.
+  '''env-api-key-12345''',
+  '''sk-1234567890abcdef''',
+]
+paths = [
+  # Sample stderr corpus the diagnostics scrubber is tested against; every
+  # token in it is synthetic.
+  '''^internal/diagnostics/testdata/stderr-samples/''',
+  # The lockfile resolves the @shimo scope from the internal registry until a
+  # public distribution exists; CONTRIBUTING.md explains.
+  '''^package-lock\.json$''',
+  # Internal developers copy this to .npmrc; it exists to name the registry.
+  '''^\.npmrc\.example$''',
+  '''^\.gitleaks\.toml$''',
+  '''^node_modules/''',
+  '''^build/''',
+  '''^dist/''',
+  '''^dist-artifacts/''',
+  '''^public/(presentation|writer)/''',
+  '''^test-results/''',
+]

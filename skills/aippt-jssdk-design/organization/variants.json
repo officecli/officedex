@@ -1,0 +1,55 @@
+{
+  "schema_version": 2,
+  "family": "organization",
+  "variants": [
+    {
+      "id": "branch-left",
+      "items": [
+        3,
+        4
+      ],
+      "densities": [
+        "short",
+        "medium"
+      ],
+      "orientation": "horizontal",
+      "mechanism": "左侧父节点向右侧子节点分叉，节点间以线相连",
+      "source_evidence": [
+        "organization-branch-left-3"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "branch-left",
+      "visual_tags": [
+        "hierarchy",
+        "diagram"
+      ],
+      "preserve": "只用于真实父子或归属关系；items 包括父节点；保留父子框与分叉线。",
+      "generation_ready": true
+    },
+    {
+      "id": "branch-left-four",
+      "items": [
+        4,
+        5,
+        6
+      ],
+      "densities": [
+        "short",
+        "medium"
+      ],
+      "orientation": "horizontal",
+      "mechanism": "一个左侧父节点向右侧三行子节点分叉",
+      "source_evidence": [
+        "organization-branch-left-four-4"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "branch-left-four",
+      "visual_tags": [
+        "hierarchy",
+        "diagram"
+      ],
+      "preserve": "items 包括父节点；描述可放节点外，父子关系必须真实，不能当中性列表。",
+      "generation_ready": true
+    }
+  ]
+}

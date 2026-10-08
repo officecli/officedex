@@ -1,0 +1,89 @@
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { en } from "./en";
+import { homeEn, homeZh } from "./home";
+import { shellAgentEn, shellAgentZh } from "./shellAgent";
+import { shellComposerEn, shellComposerZh } from "./shellComposer";
+import { shellImageHomeEn, shellImageHomeZh } from "./shellImageHome";
+import { shellServicesEn, shellServicesZh } from "./shellServices";
+import { shellWorkspaceEn, shellWorkspaceZh } from "./shellWorkspace";
+import { shellSettingsPageEn, shellSettingsPageZh } from "./shellSettingsPage";
+import { zh } from "./zh";
+
+export type Locale = "en" | "zh";
+type Dictionary = Record<string, string>;
+const dictionaries: Record<Locale, Dictionary> = {
+  en: { ...en, ...homeEn, ...shellComposerEn, ...shellImageHomeEn, ...shellAgentEn, ...shellServicesEn, ...shellWorkspaceEn, ...shellSettingsPageEn },
+  zh: { ...zh, ...homeZh, ...shellComposerZh, ...shellImageHomeZh, ...shellAgentZh, ...shellServicesZh, ...shellWorkspaceZh, ...shellSettingsPageZh },
+};
+
+export const LOCALE_STORAGE_KEY = "officedex.locale";
+
+export function detectLocale(): Locale {
+  return "en";
+}
+
+function readStoredLocale(): Locale | null {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    const stored = localStorage.getItem(LOCALE_STORAGE_KEY);
+    return stored === "en" || stored === "zh" ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistLocale(locale: Locale): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+  } catch {
+    // Ignore storage failures (private mode, quota): the in-memory choice still applies.
+  }
+}
+
+type LocaleContextValue = {
+  locale: Locale;
+  setLocale: (next: Locale) => void;
+};
+
+const LocaleContext = createContext<LocaleContextValue>({ locale: detectLocale(), setLocale: () => {} });
+
+export function LocaleProvider({ value, children }: { value?: Locale; children: ReactNode }) {
+  const [stateLocale, setStateLocale] = useState<Locale>(() => readStoredLocale() ?? detectLocale());
+
+  const setLocale = useCallback((next: Locale) => {
+    setStateLocale(next);
+    persistLocale(next);
+  }, []);
+
+  // `value` forces a fixed locale (used by tests/embeds) and disables switching.
+  const locale = value ?? stateLocale;
+  const contextValue = useMemo<LocaleContextValue>(() => ({ locale, setLocale }), [locale, setLocale]);
+
+  return <LocaleContext.Provider value={contextValue}>{children}</LocaleContext.Provider>;
+}
+
+export function useLocale(): Locale {
+  return useContext(LocaleContext).locale;
+}
+
+export function useSetLocale(): (next: Locale) => void {
+  return useContext(LocaleContext).setLocale;
+}
+
+export function getCurrentLocale(): Locale {
+  return readStoredLocale() ?? detectLocale();
+}
+
+export function translate(key: string, vars?: Record<string, string | number>, locale: Locale = getCurrentLocale()): string {
+  const raw = dictionaries[locale][key] ?? dictionaries.en[key] ?? key;
+  if (!vars) return raw;
+  return Object.entries(vars).reduce((acc, [name, value]) => acc.replaceAll(`{${name}}`, String(value)), raw);
+}
+
+export function useT(): (key: string, vars?: Record<string, string | number>) => string {
+  const locale = useLocale();
+  return useMemo(() => (key: string, vars?: Record<string, string | number>) => translate(key, vars, locale), [locale]);
+}
+
+export { en, zh };

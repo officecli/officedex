@@ -1,0 +1,580 @@
+/*
+ * Shell design tokens — OD-UI-1.2 (revision r10).
+ *
+ * The baseline is the approved interaction prototype and its design standard
+ * (`OfficeDex-Interactive-Prototype-1.2-r10.html`,
+ * `OfficeDex-Interaction-Design-Standard-1.2-r10.html`). Every `--dx-*` value
+ * below is either a token the standard names (§04 type, §05 colour, tokens.json)
+ * or a literal the prototype's stylesheets carry, given a name so that this file
+ * stays the only place in `src/shell` where a colour, a font size or a z-index
+ * is written down. `scripts/port-prototype-styles.mjs` maps the prototype's
+ * literals onto these names and fails on one it does not know.
+ *
+ * Three groups:
+ *
+ *  1. `--dx-*` — the outer workspace. Light values on `#shell`, the prototype's
+ *     dark values on `#shell[data-theme="dark"]`.
+ *  2. `--shell-*` — the names the surfaces that predate r10 still read (image
+ *     workspace, generating stage, account page). They resolve to the r10
+ *     palette wherever r10 has an equivalent, so those surfaces follow the new
+ *     language without being rewritten in the same change.
+ *  3. The `--od-*` bridge for the shared component library, unchanged in
+ *     purpose: scoped to `#shell`, so the library's own tokens stay untouched.
+ *
+ * Scope: the OfficeDex outer UI only. Editor ribbons, menus, dialogs and the
+ * user's document content follow their own source assets (SHIMO-BOUNDARY) and
+ * must not inherit any of this.
+ */
+
+#shell {
+  /* ---- OD-UI-1.2 · colour (§05) ---------------------------------------- */
+  --dx-text: #343a40; /* primary text, filled primary button */
+  --dx-muted: #626e79; /* secondary text, placeholders */
+  --dx-surface: #ffffff; /* content, dialogs, inputs */
+  --dx-canvas: #f5f6f8; /* application background, pane headers */
+  --dx-line: #d9dfe4; /* dividers, decorative borders */
+  --dx-control: #7b8794; /* input and control outlines */
+  --dx-hover: #eceff2;
+  --dx-selected: #e4e9ee; /* selected row, current navigation */
+  --dx-pressed: #d9e0e6;
+  --dx-focus: #526f89; /* focus outline: 2px, offset 2px */
+  --dx-blue: #2768c9; /* agent finished, not yet viewed: the 7px dot */
+  --dx-success: #2e6b4f;
+  --dx-warning: #8a5a17;
+  --dx-error: #a43d37;
+
+  /* Absolute white: a switch knob, a glyph on a filled control, paper. It does
+     not follow the theme — `--dx-surface` does. */
+  --dx-white: #ffffff;
+
+  /* focus */
+  --dx-focus-halo: #526f8929; /* keyboard focus fallback ring, 4px */
+  --dx-focus-wash: #526f8920;
+  --dx-home-tab-focus: #63778c;
+
+  /* filled controls */
+  --dx-primary-hover: #20262c;
+  --dx-primary-pressed: #14191e;
+  --dx-share: #41464b; /* Share keeps dark fill and white text in every state */
+  --dx-share-hover: #33383d;
+  --dx-share-pressed: #262b30;
+
+  /* surfaces with one owner */
+  --dx-sidebar: #f7f7f6;
+  --dx-chrome: #eef0f3; /* the 244px window-control band */
+  --dx-home-tab: #e3e6eb; /* Logo tab, not on Home */
+  --dx-home-tab-hover: #edf0f3;
+  --dx-card-preview: #f5f5f5;
+  --dx-card-hover-line: #aeb8c2;
+  --dx-canvas-veil: #f5f6f8ed; /* drop-to-add overlay */
+  --dx-tooltip: #252a30;
+  --dx-play-scrim: #343a40c0;
+  --dx-backdrop: #0000003d; /* modal backdrop, black 24% */
+
+  /* brand — BRAND-DEX-STANDARD §04 */
+  --dx-face-tile: #2b2b2b;
+  --dx-dex-ink: #252525;
+
+  /* agent work cursor and identity tag — ATTENTION-STANDARD §05 */
+  --dx-work-cursor: #292d34;
+  --dx-work-tag: #282c32;
+  --dx-work-tag-shade: #20242b13;
+
+  /* One ink at the alphas the standard's shadows use (§05: popover .14,
+     dialog .20, composer .03). */
+  --dx-shade-03: #17212b08;
+  --dx-shade-05: #17212b0d;
+  --dx-shade-07: #17212b12;
+  --dx-shade-08: #17212b15;
+  --dx-shade-09: #17212b16;
+  --dx-shade-14: #17212b24;
+  --dx-shade-20: #17212b33;
+  --dx-black-07: #00000012;
+  --dx-black-08: #00000014;
+  --dx-black-13: #0002;
+  /* Carried by the v1.1 layer and overridden by v1.2 on every surface that
+     still exists; named so the layer ports without a literal. */
+  --dx-dex-shade-v11: #23303b20;
+  --dx-dex-panel-shade-v11: #24334225;
+
+  /* The dark theme's one-off literals. Declared here, used only under
+     `[data-theme="dark"]` selectors. */
+  --dx-dark-on-primary: #20252a;
+  --dx-dark-chrome: #24272c;
+  --dx-dark-home-tab: #343840;
+  --dx-dark-home-tab-selected: #4b515a;
+  --dx-dark-primary-hover: #d1d8de;
+  --dx-dark-primary-pressed: #b9c3cd;
+
+  /* ---- OD-UI-1.2 · type (§04) ------------------------------------------ */
+  /*
+   * The adopted scale: metadata 12/18, body 14/20, reading 16/24, section
+   * 16/24·600, settings section 20/28, title 22/30, hero 28/36. 13 is the Logo
+   * tab's word mark (WORKSPACE-STANDARD §02) and nothing else. 24 and 26 are
+   * the hero at its narrow breakpoint and a rendered preview's heading; 9 is
+   * the glyph inside a traffic light. Line heights are written beside the size
+   * they belong to, as the standard pairs them.
+   */
+  --dx-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Segoe UI",
+    sans-serif;
+  --dx-font-mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --dx-fs-9: 9px;
+  --dx-fs-12: 12px;
+  --dx-fs-13: 13px;
+  --dx-fs-14: 14px;
+  --dx-fs-16: 16px;
+  --dx-fs-20: 20px;
+  --dx-fs-22: 22px;
+  --dx-fs-24: 24px;
+  --dx-fs-26: 26px;
+  --dx-fs-28: 28px;
+
+  /* ---- OD-UI-1.2 · layout (§03) ---------------------------------------- */
+  --dx-nav: 244px; /* first column: 244 or 0, never dragged */
+  --dx-chat: 360px; /* second column: 320–520 */
+  --dx-composer-radius: 24px;
+  --dx-composer-padding: 8px;
+  --dx-composer-icon: 20px;
+
+  /* ---- OD-UI-1.2 · layers ---------------------------------------------- */
+  /*
+   * The prototype's stack, rung by rung: content → sticky tools → Dex and
+   * floating panels → menus and tips → modal (§05). All of it sorts below the
+   * shell's full-window surfaces further down (`--shell-z-viewer` 350,
+   * `--shell-z-gate` 400) and below the component library's overlays (1000+),
+   * which is the intended order: a picture viewer or a sign-in page covers the
+   * workspace, menus included.
+   */
+  --dx-z-raised: 1;
+  --dx-z-raised-2: 2;
+  --dx-z-modal-head: 2; /* sticky dialog header, inside the dialog */
+  --dx-z-sidebar: 15;
+  --dx-z-splitter: 20;
+  --dx-z-dex: 22;
+  --dx-z-dex-panel: 23;
+  --dx-z-dex-open: 24; /* the bubble, riding its open panel's corner */
+  --dx-z-chat-overlay: 25; /* conversation over the editor, narrow windows */
+  --dx-z-window-controls: 30;
+  --dx-z-chat-floating: 30;
+  --dx-z-workspace-toggle: 35;
+  --dx-z-sidebar-peek: 40; /* the hidden sidebar, shown on hover */
+  --dx-z-drop: 40;
+  --dx-z-global-controls: 45;
+  --dx-z-flyout: 45; /* Hot and fresh features, away from Home */
+  --dx-z-menu: 60;
+  --dx-z-popover: 70; /* New */
+  --dx-z-tooltip: 90;
+  --dx-z-agent-effects: 110;
+  --dx-z-flight: 120; /* the features panel folding into its gift button */
+  --dx-z-notice: 200;
+  --dx-z-input-glow: 10000; /* view-only, never takes a pointer event */
+
+  /* ==== Names the pre-r10 surfaces still read ============================ */
+  /*
+   * Everything from here to the end of this block predates OD-UI-1.2. Where r10
+   * has an equivalent the value is a reference to it; where it has none the
+   * literal stays, because the surface that reads it (the picture viewer, the
+   * generating stage's skeleton) has not been redesigned.
+   */
+
+  /* ---- Surfaces ------------------------------------------------------- */
+  --shell-chrome: var(--dx-canvas); /* window bar + sidebar */
+  --shell-canvas: #fafafa; /* the workspace behind the document */
+  --shell-paper: var(--dx-surface); /* ribbon, cards, popovers, active tab */
+  --shell-sunken: #f9f9f9; /* editor scroll surface + status bar */
+
+  /* ---- Lines ---------------------------------------------------------- */
+  --shell-line: var(--dx-line); /* sidebar edge, card borders */
+  --shell-line-soft: #e8e9eb; /* ribbon internal dividers */
+  --shell-line-strong: var(--dx-line); /* composer border */
+
+  /* ---- Ink ------------------------------------------------------------ */
+  --shell-ink: var(--dx-text); /* primary text, primary button fill */
+  --shell-ink-title: var(--dx-text); /* composer + panel copy */
+  --shell-ink-muted: var(--dx-muted); /* sidebar items, secondary text */
+  --shell-ink-subtle: var(--dx-muted); /* status bar, captions */
+  --shell-ink-faint: var(--dx-muted); /* inactive ribbon tabs, placeholders */
+  --shell-ink-inverse: var(--dx-white);
+
+  /* ---- Interaction ---------------------------------------------------- */
+  --shell-hover: var(--dx-hover);
+  --shell-active: var(--dx-selected);
+  --shell-focus: var(--dx-focus);
+
+  /* ---- Radii ---------------------------------------------------------- */
+  --shell-radius-item: 6px; /* sidebar rows, ribbon buttons */
+  --shell-radius-control: 6px; /* small buttons, tabs */
+  --shell-radius-card: 8px; /* menus, cards */
+  --shell-radius-composer: 24px;
+  --shell-radius-panel: 12px; /* floating agent panel */
+
+  /* ---- Elevation ------------------------------------------------------ */
+  --shell-shadow-menu: 0 8px 28px #222b3520;
+  --shell-shadow-panel: 0 12px 32px #24333f18, 0 2px 5px #24333f08;
+  /* The floating panel's outer shadow. It is the second layer of a two-layer
+     `box-shadow`, the first being an inset hairline, so only this half is a
+     token. */
+  --shell-shadow-float: 0 12px 48px #35465720;
+  /* The collapsed companion, which casts through `filter: drop-shadow()` and
+     therefore follows the mark's silhouette rather than its box. Same reason
+     `drop-shadow` takes no spread: these two are offset/blur/colour only. */
+  --shell-shadow-face: 0 8px 20px #24333f28;
+  --shell-shadow-face-hover: 0 10px 24px #24333f38;
+  /* The layered agent mark on the generating canvas; same family as the
+     companion's drop-shadow, smaller because the 96px mark already fills more
+     of the paper than the 56px presence. */
+  --shell-shadow-mark: 0 3px 8px #24333f26;
+  /* A sheet of paper on the canvas. */
+  --shell-shadow-paper: 0 1px 3px #2536430f;
+
+  /* ---- Metrics -------------------------------------------------------- */
+  /* Final office-shell overrides in the reference prototype use a compact
+     40px titlebar and a 32px document-tab strip. The rail and Agent column
+     remain user-resizable below. */
+  --shell-windowbar-h: 40px;
+  --shell-tabs-h: 40px;
+  --shell-tab-h: 32px;
+  --shell-ribbon-h: 112px;
+  --shell-statusbar-h: 0px; /* r10: the shell draws no status bar; save state sits in the tab row */
+  --shell-row-h: 36px; /* sidebar row + collapsed rail button */
+  --shell-rail-w: 52px; /* collapsed sidebar */
+  --shell-nav-w: 244px; /* expanded sidebar, matching the reference frame */
+  --shell-task-w: 360px; /* docked agent column, matching the reference frame */
+
+  /* ---- Type ----------------------------------------------------------- */
+  /*
+   * An inventory made addressable, not a modular scale.
+   *
+   * These nine steps are every distinct font-size the shell renders. Four of
+   * them were already here; the other five were written as literals in five
+   * stylesheets, which is why the audit could not tell a deliberate size from
+   * a typo. Naming them does not make them a designed ramp — 17 and 18 sitting
+   * one pixel apart is the giveaway — but it does make the set closed, so a
+   * "sizes come from the scale" gate needs no per-line exemptions and adding a
+   * tenth size becomes a decision somebody takes rather than a line somebody
+   * writes.
+   *
+   * Prototype-backed steps (read off its computed styles, per the note at the
+   * top of this file): 12 (body), 13 (`.agent-home-hero .intro`, and the
+   * prototype's own root size), 17 (`#od-companion .od-empty`).
+   * Shell-grown steps with no prototype counterpart: 18 (the floating panel's
+   * collapse glyph), 26, 32. The prototype's one heading is 31px/38.75px/550
+   * with -1.1px tracking where the shell writes 32/38/500/-0.4 — a real
+   * divergence, deliberately not closed here because closing it is a visible
+   * change and this file's job this round is where values live, not what they
+   * are. See docs/ui-audit-2026-09-19/fixes/W3-I.md.
+   */
+  --shell-font: var(--dx-font);
+  --shell-text-xs: 10px;
+  --shell-text-sm: 11px;
+  --shell-text: 12px;
+  --shell-text-md: 13px;
+  --shell-text-lg: 14px;
+  --shell-text-xl: 17px;
+  --shell-text-2xl: 18px;
+  --shell-text-3xl: 26px;
+  --shell-text-4xl: 32px;
+  --shell-text-display: 31px; /* Home hero heading, the prototype's one heading */
+
+  /* ---- Layers ---------------------------------------------------------- */
+  /*
+   * The surfaces OD-UI-1.2 keeps as they were, and the half of the stack this
+   * shell does not own.
+   *
+   * 1. Root context. `#shell` opens no stacking context of its own, so these
+   *    compare directly against the design's rungs above — and sit over all of
+   *    them, which is the intended order: the image tools' menus, the picture
+   *    viewer and the account page each cover the workspace they were opened
+   *    from, its menus and its notice included.
+   *
+   * 2. Composer-local. `composer.css` sets `container-type: inline-size` on
+   *    `.shell-cx` for its container queries. Per css-contain-3 that applies
+   *    layout containment, which opens a stacking context — so `.shell-cx-drop`
+   *    (10) sorts against `.shell-cx`'s own children and nothing else (S5-005).
+   *
+   * 3. Legacy. `src/renderer/ui/styles/components.css` is shared with the old
+   *    renderer and is not this shell's to edit, so these four are *declared,
+   *    not applied*: they exist so that anyone picking a new value can see the
+   *    whole ladder at once.
+   */
+  --shell-z-menu: 300; /* .shell-menu, portalled to #shell */
+  /* The full-window picture viewer. Above the menus, which it cannot be opened
+     from and which close on the click that opens it; below the account page,
+     which covers everything. */
+  --shell-z-viewer: 350; /* .shell-image-viewer */
+  /* The account page. Above the menus because it is not opened *from* one: it
+     covers the whole window, and a menu left open underneath must not float
+     over it. Below the legacy toast host on purpose — the page copies a URL to
+     the clipboard and that confirmation has to be visible. */
+  --shell-z-gate: 400; /* .shell-account */
+
+  --shell-z-cx-drop: 10; /* .shell-cx-drop, inside .shell-cx only */
+
+  --shell-z-legacy-dialog: 1000; /* components.css .od-dialog-mask */
+  --shell-z-legacy-popover: 1050; /* components.css .od-popover */
+  --shell-z-legacy-toast: 1100; /* components.css .od-toast-host */
+  --shell-z-legacy-tooltip: 1200; /* components.css .od-tooltip */
+
+  /* ---- Motion --------------------------------------------------------- */
+  /*
+   * Decision 4, as it now stands: a mode change is a transition of the whole
+   * shell, and it is still not the prototype's snapshot-and-flip.
+   *
+   * What this section used to say was "mode changes are a column-width
+   * transition, nothing more". That was true of the CSS and false of the
+   * screen: the column's width was the only thing interpolating, while the
+   * sidebar's middle, Home's entire subtree and the tab strip's left inset all
+   * changed in one frame around it. One box easing between two widths while
+   * three others cut is not a continuous shell, it is a continuous column.
+   *
+   * So the shell now marks itself `data-mode-switching="true"` for the length
+   * of one `--shell-duration` (`state/useModeTransition.ts`) and the regions
+   * that change share this duration and this easing. The prototype's technique
+   * — snapshot the DOM, slice it, hinge it in 3D — is still deliberately not
+   * ported: it cannot survive a live document renderer, and nothing here needs
+   * it, because no editor is torn down for a layout reason.
+   *
+   * `--shell-duration` is load-bearing in three places that must agree: this
+   * transition, `.shell-agent`'s width, and `AgentPresence.DOCK_TRANSITION_MS`,
+   * which holds the docked conversation on screen until the column has closed.
+   */
+  --shell-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --shell-duration: 280ms;
+  /* How far mode-swapped content drifts as it fades in (the sidebar's middle,
+     Home). A new token rather than a literal in `app.css` because three
+     regions share it and "the mode switch's drift" is one decision; it is
+     deliberately small — this is a settle, not an entrance. */
+  --shell-mode-shift: 10px;
+
+  /* ---- Status --------------------------------------------------------- */
+  /* The prototype has one colour for "this went wrong": form validation wears
+     #ad5347 (.cx-form-error) and #a04e48 (.form-error). The later layer wins
+     per the note at the top of this file.
+
+     Used where grey would lie: a page that failed rendered in the same
+     --shell-ink-faint as a page that had not started yet, so a deck with a
+     dead page read as a deck still working through its queue. */
+  --shell-status-danger: var(--dx-error);
+
+  /* "Something here wants you": the dot on the sidebar's update button while an
+     optional update is waiting. Brighter than --shell-status-danger on purpose — that
+     one reports a failure in text, this one has to be seen at 7px. */
+  --shell-notice-dot: #e5484d;
+
+  /* A finished step. Prototype-backed on the same surface, not an invention:
+     `#app #task .step.done{color:#617f6f}`, which is the rule this shell's
+     `.shell-task-step.is-done` is a port of.
+
+     Worth recording how that was established, because the obvious method gets
+     it wrong: this file is 27MB of embedded base64, so `grep -c` on a six-hex
+     string finds matches inside image payloads and reports a colour that is
+     not in any stylesheet. Every value here was confirmed by reading enough
+     surrounding bytes to see a selector, and the sizes above by computed style
+     in a real browser. A hit count is not evidence. */
+  --shell-status-done: var(--dx-success);
+
+  /* The "this suggestion has been applied" card. These two are *shell-grown* —
+     zero occurrences in the prototype, which only ever shows the happy path
+     and has no applied-state card at all. They are named here so the value is
+     written once rather than so a design system blesses them, which is why
+     they are not called `--shell-status-success-*`.
+
+     The nearest thing the prototype does have is a palette accent in its
+     `:root` — `--sage: #718f80` / `--sage-soft: #edf3ef` — used exactly once,
+     for a spreadsheet total row. Aligning to it is a visible recolour and is
+     listed as its own candidate in W3-I.md, not smuggled into a refactor. */
+  --shell-applied-line: #cddac9;
+  --shell-applied-surface: #f5f8f4;
+
+  /* ---- Document identity ---------------------------------------------- */
+  /* One accent + one titlebar tint per file type. Editor mode wears them;
+     Agent mode keeps a single neutral titlebar (see app.css). */
+  --shell-doc-accent: #596f86;
+  --shell-doc-tint: #e6ecf1;
+  --shell-sheet-accent: #5c7565;
+  --shell-sheet-tint: #e7ede8;
+  --shell-slides-accent: #926b67;
+  --shell-slides-tint: #f0e5e2;
+  --shell-image-accent: #7a6f8f;
+  --shell-image-tint: #ebe8f0;
+
+  /* Resolved per open file by theme/fileTypeAccent.ts. */
+  --shell-accent: var(--shell-doc-accent);
+  --shell-tint: var(--shell-doc-tint);
+
+  /* ---- Surface palette ------------------------------------------------- */
+  /*
+   * The rest of the shell's colours, one entry per value, named for the
+   * surface that uses it.
+   *
+   * These are not an extension of the ramps above and should not be read as
+   * one. They are the 34 literals that were living in five stylesheets, moved
+   * here unchanged so that this file is the only place in `src/shell` where a
+   * colour is written down. That is the whole of what this section claims.
+   *
+   * It is deliberately not a *tidied* palette. Measuring each value against
+   * the nearest existing token turned up only five exact matches in 68
+   * occurrences; most of the rest sit one to four channel-steps away from a
+   * token that means roughly the same thing — `--shell-menu-hover #edf0f3` and
+   * `--shell-hover #e9edf0`, `--shell-tree-line #e2e6e9` and `--shell-line
+   * #e4e6e9`, and so on. Collapsing those pairs is the obvious next move and
+   * it is also a visible recolour, so it is written up as a list of candidates
+   * with per-channel deltas in W3-I.md rather than done here under cover of a
+   * refactor. Having them side by side in one table is what makes that list
+   * possible to compile at all.
+   *
+   * Two groups of literals stayed in their stylesheets on purpose and are
+   * *not* here: the macOS traffic lights (`chrome.css`) and the companion's
+   * own ink-on-ink palette (`agent.css`). Both are explained where they are.
+   */
+
+  /* tabs and the top row */
+  --shell-tab-ink: #4c5964; /* the current tab's label */
+  --shell-tab-hover: #ffffff70; /* paper, half strength, over chrome */
+  --shell-tab-action-hover: #65748016; /* close + bookmark */
+  --shell-action-ink: #4e5963; /* save state, tab-row icon buttons */
+  --shell-share-hover: #30353a; /* the one filled button, pressed darker */
+
+  /* sidebar */
+  --shell-brand-hover: #e5e9ed;
+  --shell-brand-mark: #2b2b2b; /* see agent.css: the companion's shell is the
+                                  same black, written separately on purpose */
+  --shell-brand-chevron: #7d858c;
+  --shell-home-scope-fill: #f0f1f3; /* the scope strip under Home's composer */
+  --shell-home-glow-from: #c4d9ff; /* Home composer's border gradient, 0% */
+  --shell-home-glow-mid: #ead0ff; /* 48% */
+  --shell-home-glow-to: #bcebe5; /* 100% */
+  --shell-nav-current-ink: #354652;
+  --shell-avatar-line: #d3d6da;
+  --shell-avatar-fill: #e5dfd7;
+  --shell-avatar-ink: #857464;
+
+  /* menu panel */
+  --shell-menu-line: #dfe2e6;
+  --shell-menu-ink: #34383c;
+  --shell-menu-hover: #edf0f3;
+  --shell-menu-focus-ring: #9aa8b3; /* inset ring, not the outline ring */
+  --shell-menu-check: #5c6872;
+
+  /* agent panel */
+  --shell-badge-fill: #7d7d7d;
+  --shell-bubble-fill: #e9edf1; /* the user's own message */
+  --shell-bubble-quote-line: #b6c2cd;
+  --shell-reply-ink: #697480;
+  --shell-spinner-track: #d5dde2;
+  --shell-spinner-head: #748997;
+  --shell-button-hover-line: #c3ccd4;
+  --shell-button-primary-hover: #2b3035;
+
+  /* file tree and list */
+  --shell-tree-folder-current-ink: #374b5b;
+  --shell-tree-chevron: #929ba2;
+  --shell-tree-line: #e2e6e9; /* the vertical rule beside a folder's files */
+  --shell-tree-file-ink: #697885;
+  --shell-tree-file-hover: #edf0f2;
+  --shell-tree-file-current-ink: #354a5b;
+  --shell-list-row-line: #f0f1f3;
+  --shell-drop-line: #8b9eab; /* both densities, one gesture */
+  --shell-drop-fill: #e0e8ee;
+
+  /* image viewer — dark in every theme on purpose (see imageViewer.css) */
+  --shell-viewer-backdrop: #111417f5;
+  --shell-viewer-backdrop-clear: #11141700; /* the same, fully clear: what it fades from */
+  --shell-viewer-scrim: #111417d9; /* behind the title, over a zoomed picture */
+  --shell-viewer-panel: #24282ce6; /* the zoom bar */
+  --shell-viewer-line: #ffffff1f;
+  --shell-viewer-ink: #f2f4f5;
+  --shell-viewer-ink-muted: #a4acb3;
+  --shell-viewer-ink-disabled: #ffffff4d;
+  --shell-viewer-control: #ffffff14;
+  --shell-viewer-control-hover: #ffffff29;
+  --shell-viewer-focus: #9fb6c9;
+  --shell-viewer-shadow: 0 12px 40px #00000059;
+
+  /* ---- Canvas skeleton ------------------------------------------------- */
+  /*
+   * Placeholder greys, kept apart from everything above because they are
+   * scheduled to die.
+   *
+   * `editor/CanvasPlaceholder.tsx` is the stand-in shown while no real editor
+   * adapter is registered, and it says in its own header that it is thrown
+   * away at integration. Its five greys are not design decisions — they are
+   * five neutrals somebody picked to make a wireframe read — so folding them
+   * into the ramps above would freeze them into the language permanently.
+   * When the placeholder goes, this block goes with it, in one delete.
+   */
+  --shell-skeleton-line: #eceef0;
+  --shell-skeleton-line-strong: #e2e5e9;
+  --shell-skeleton-block: #f0f2f4;
+  --shell-skeleton-rule: #edeff1;
+  --shell-skeleton-thumb: #f1f3f5;
+}
+
+/*
+ * The prototype's dark values for the semantic palette. The standard scopes its
+ * acceptance to the light theme (§05: dark is a separate design and QA task),
+ * so this block exists to carry the prototype's Appearance setting across, not
+ * to claim the pre-r10 surfaces have been checked against it.
+ */
+#shell[data-theme="dark"] {
+  color-scheme: dark;
+  --dx-text: #e5e9ed;
+  --dx-muted: #a8b4c0;
+  --dx-surface: #20252a;
+  --dx-canvas: #191e23;
+  --dx-line: #46515c;
+  --dx-control: #9ba9b6;
+  --dx-hover: #303940;
+  --dx-selected: #3a4651;
+  --dx-pressed: #445360;
+  --dx-focus: #9ab7d2;
+  --dx-blue: #6ca3ff;
+  --dx-error: #ffa9a5;
+  --dx-success: #90ccab;
+  --dx-warning: #e0bd79;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #shell {
+    --shell-duration: 1ms;
+    /* The mode switch's drift, withdrawn rather than shortened. The JS half of
+       this preference (`state/useModeTransition.ts`) already keeps the whole
+       animated path from being entered, so this is the belt to that braces:
+       anything that does reach the keyframes moves no distance. */
+    --shell-mode-shift: 0px;
+  }
+}
+
+/*
+ * Bridge: make the shared @vo-ui primitives (Button, Select, Modal, Popover,
+ * Table, Tooltip, Form…) adopt the shell's language without editing the
+ * library. Scoped to #shell so the old renderer is byte-for-byte unaffected.
+ *
+ * For this to reach the library's *portalled* overlays, they have to mount
+ * inside this subtree — see `src/renderer/ui/overlayHost.ts`, which resolves
+ * `#shell` and puts them in a `display: contents` layer here. While they went
+ * to `document.body` every declaration below was dead.
+ */
+#shell {
+  --od-ink: var(--shell-ink);
+  --od-ink-medium: var(--shell-ink-muted);
+  --od-ink-secondary: var(--shell-ink-subtle);
+  --od-ink-disabled: #41464b4d;
+  --od-guidance: var(--shell-accent);
+  --od-surface: var(--shell-paper);
+  --od-surface-subtle: var(--shell-sunken);
+  --od-surface-muted: var(--shell-chrome);
+  --od-border-subtle: var(--shell-line);
+  --od-border-hover: var(--shell-line-strong);
+  --od-button-primary-bg: var(--shell-ink);
+  --od-button-primary-ink: var(--shell-ink-inverse);
+  --od-radius-control: var(--shell-radius-control);
+  --od-radius-popover: var(--shell-radius-item);
+  --od-radius-dialog: var(--shell-radius-card);
+  --od-control-md: var(--shell-row-h);
+  --od-shadow-floating: var(--shell-shadow-panel);
+  --od-font-ui: var(--shell-font);
+  /* The top strip is the file tabs, and they are clickable. Notifications drop
+     in below it instead of on top of it. */
+  --od-toast-inset-top: calc(var(--shell-windowbar-h) + 8px);
+}

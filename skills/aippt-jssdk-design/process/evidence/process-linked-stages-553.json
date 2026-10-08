@@ -1,0 +1,508 @@
+{
+  "id": "process-linked-stages-553",
+  "family": "process",
+  "source": "sampleall/shape/流程6项/流程6项.pptx",
+  "page": 553,
+  "program": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__流程6项__流程6项/slides/slide-0553.mjs",
+  "verification": "artifacts/aippt/full-distillation/font-metrics-v3/source-8eb22ddcb4188a407d0f/verification.json",
+  "observed_items": 6,
+  "mechanism": "linked-stages",
+  "source_fact": "编号节点沿连续弯折连线从左到右排列，说明上下交错",
+  "transfer_hypothesis": "保留连续连线、节点编号及先后次序；items 为真实步骤数，不把中性条目变成因果流程。",
+  "visual_review": "source_preview_inspected",
+  "state": "source_fact",
+  "ssim": 0.9676853473857373,
+  "exact_reference": false,
+  "program_sha256": "649a6540200f2a4c488f38bd19518ca7cae9e070207215781a35496b59c96207",
+  "verification_sha256": "d3a4849e8c60600f690803204033c3ff61c25de2011360699c62a2fde1180ab8",
+  "preview": "sampleall/shape/流程6项/流程6项_PPTX_TO_PNG_WPS/幻灯片553.png",
+  "checks": {
+    "jssdk_executed": true,
+    "native_objects": {
+      "count": 37,
+      "types": [
+        "shape",
+        "connector",
+        "shape",
+        "shape",
+        "shape",
+        "connector",
+        "connector",
+        "shape",
+        "shape",
+        "shape",
+        "connector",
+        "shape",
+        "shape",
+        "shape",
+        "connector",
+        "shape",
+        "shape",
+        "shape",
+        "connector",
+        "shape",
+        "shape",
+        "shape",
+        "connector",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape"
+      ]
+    },
+    "text_overflow": 0,
+    "render_errors": 0,
+    "pptx_export": "passed",
+    "strict_reimport": "passed",
+    "text_coverage_version": 2,
+    "text_measurement": "font_metrics"
+  },
+  "canvas_pt": [
+    960.0,
+    540.0
+  ],
+  "objects": [
+    {
+      "id": "s1",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.13699,
+        "top": 0.58757,
+        "width": 0.12061,
+        "height": 0.10227
+      },
+      "text_characters": 12,
+      "font_pt": [
+        14.0
+      ],
+      "colors": [
+        "#000000"
+      ]
+    },
+    {
+      "id": "s2",
+      "api": "addLine",
+      "kind": "Line",
+      "bounds_fraction": {
+        "left": 0.72161,
+        "top": 0.49988,
+        "width": 0.04124,
+        "height": 0.0
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#A8E2C5"
+      ]
+    },
+    {
+      "id": "s3",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.77304,
+        "top": 0.44779,
+        "width": 0.05933,
+        "height": 0.10417
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#37A76F"
+      ]
+    },
+    {
+      "id": "s6",
+      "api": "addLine",
+      "kind": "Line",
+      "bounds_fraction": {
+        "left": 0.84243,
+        "top": 0.49988,
+        "width": 0.03257,
+        "height": 0.0
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#A8E2C5"
+      ]
+    },
+    {
+      "id": "s7",
+      "api": "addLine",
+      "kind": "Line",
+      "bounds_fraction": {
+        "left": 0.125,
+        "top": 0.49988,
+        "width": 0.03258,
+        "height": 0.0
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#D3ECB9"
+      ]
+    },
+    {
+      "id": "s8",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.16792,
+        "top": 0.44779,
+        "width": 0.05933,
+        "height": 0.10417
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#92D050"
+      ]
+    },
+    {
+      "id": "s11",
+      "api": "addLine",
+      "kind": "Line",
+      "bounds_fraction": {
+        "left": 0.23759,
+        "top": 0.49988,
+        "width": 0.04124,
+        "height": 0.0
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#BFE2A8"
+      ]
+    },
+    {
+      "id": "s12",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.28902,
+        "top": 0.44779,
+        "width": 0.05933,
+        "height": 0.10417
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#63A537"
+      ]
+    },
+    {
+      "id": "s15",
+      "api": "addLine",
+      "kind": "Line",
+      "bounds_fraction": {
+        "left": 0.35842,
+        "top": 0.49988,
+        "width": 0.04124,
+        "height": 0.0
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#A8E2C5"
+      ]
+    },
+    {
+      "id": "s16",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.40994,
+        "top": 0.44779,
+        "width": 0.05933,
+        "height": 0.10417
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#37A76F"
+      ]
+    },
+    {
+      "id": "s19",
+      "api": "addLine",
+      "kind": "Line",
+      "bounds_fraction": {
+        "left": 0.47933,
+        "top": 0.49988,
+        "width": 0.04124,
+        "height": 0.0
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#D3ECB9"
+      ]
+    },
+    {
+      "id": "s20",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.53085,
+        "top": 0.44779,
+        "width": 0.05933,
+        "height": 0.10417
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#92D050"
+      ]
+    },
+    {
+      "id": "s23",
+      "api": "addLine",
+      "kind": "Line",
+      "bounds_fraction": {
+        "left": 0.60078,
+        "top": 0.49988,
+        "width": 0.04124,
+        "height": 0.0
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#BFE2A8"
+      ]
+    },
+    {
+      "id": "s24",
+      "api": "addGeometricShape",
+      "kind": "Ellipse",
+      "bounds_fraction": {
+        "left": 0.65221,
+        "top": 0.44779,
+        "width": 0.05933,
+        "height": 0.10417
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#63A537"
+      ]
+    },
+    {
+      "id": "s27",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.17915,
+        "top": 0.47295,
+        "width": 0.03618,
+        "height": 0.05385
+      },
+      "text_characters": 2,
+      "font_pt": [
+        18.0
+      ],
+      "colors": [
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s28",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.30085,
+        "top": 0.47295,
+        "width": 0.03618,
+        "height": 0.05385
+      },
+      "text_characters": 2,
+      "font_pt": [
+        18.0
+      ],
+      "colors": [
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s29",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.42146,
+        "top": 0.47295,
+        "width": 0.03618,
+        "height": 0.05385
+      },
+      "text_characters": 2,
+      "font_pt": [
+        18.0
+      ],
+      "colors": [
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s30",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.54273,
+        "top": 0.47295,
+        "width": 0.03618,
+        "height": 0.05385
+      },
+      "text_characters": 2,
+      "font_pt": [
+        18.0
+      ],
+      "colors": [
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s31",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.66418,
+        "top": 0.47295,
+        "width": 0.03618,
+        "height": 0.05385
+      },
+      "text_characters": 2,
+      "font_pt": [
+        18.0
+      ],
+      "colors": [
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s32",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.78469,
+        "top": 0.47295,
+        "width": 0.03618,
+        "height": 0.05385
+      },
+      "text_characters": 2,
+      "font_pt": [
+        18.0
+      ],
+      "colors": [
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s33",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.37895,
+        "top": 0.58757,
+        "width": 0.12061,
+        "height": 0.10227
+      },
+      "text_characters": 12,
+      "font_pt": [
+        14.0
+      ],
+      "colors": [
+        "#000000"
+      ]
+    },
+    {
+      "id": "s34",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.62092,
+        "top": 0.58757,
+        "width": 0.12061,
+        "height": 0.10227
+      },
+      "text_characters": 12,
+      "font_pt": [
+        14.0
+      ],
+      "colors": [
+        "#000000"
+      ]
+    },
+    {
+      "id": "s35",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.26736,
+        "top": 0.31184,
+        "width": 0.12061,
+        "height": 0.10227
+      },
+      "text_characters": 12,
+      "font_pt": [
+        14.0
+      ],
+      "colors": [
+        "#000000"
+      ]
+    },
+    {
+      "id": "s36",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.50456,
+        "top": 0.31017,
+        "width": 0.12061,
+        "height": 0.10227
+      },
+      "text_characters": 12,
+      "font_pt": [
+        14.0
+      ],
+      "colors": [
+        "#000000"
+      ]
+    },
+    {
+      "id": "s37",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.74175,
+        "top": 0.3131,
+        "width": 0.12061,
+        "height": 0.10227
+      },
+      "text_characters": 12,
+      "font_pt": [
+        14.0
+      ],
+      "colors": [
+        "#000000"
+      ]
+    }
+  ],
+  "extraction_scope": "literal object geometry; group transforms and custom paths require source inspection",
+  "source_admission": "high_similarity_verified",
+  "revalidation": {
+    "state": "source_verified",
+    "reasons": [],
+    "complete_group_text_coverage_required": true,
+    "font_metrics_required": true
+  }
+}

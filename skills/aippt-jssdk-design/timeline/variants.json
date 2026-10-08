@@ -1,0 +1,113 @@
+{
+  "schema_version": 2,
+  "family": "timeline",
+  "capacity": {
+    "canvas_reference_pt": [
+      960,
+      540
+    ],
+    "outer_margin_fraction": [
+      0.05,
+      0.08
+    ],
+    "body_pt": [
+      16,
+      20
+    ],
+    "heading_pt": [
+      22,
+      28
+    ],
+    "page_title_pt": [
+      30,
+      40
+    ],
+    "measure_actual_textbox": true,
+    "overflow_action": "reflow_or_split_preserving_relation",
+    "parameter_status": "design_hypothesis_until_tested"
+  },
+  "variants": [
+    {
+      "id": "horizontal-axis",
+      "items": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "densities": [
+        "short"
+      ],
+      "orientation": "horizontal",
+      "mechanism": "共用横轴，节点、日期、说明共享中心线",
+      "source_evidence": [
+        "timeline-12-8",
+        "timeline-6-9"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "horizontal-axis",
+      "visual_tags": [
+        "horizontal"
+      ],
+      "preserve": "共用横轴，节点、日期、说明共享中心线；保留来源的构图与组件轮廓，不统一改成文本框加圆点。",
+      "generation_ready": true
+    },
+    {
+      "id": "alternating-axis",
+      "items": [
+        3,
+        4,
+        5,
+        6
+      ],
+      "densities": [
+        "medium"
+      ],
+      "orientation": "horizontal",
+      "mechanism": "横轴上下交错，让同侧段落间距等于两倍节点节距",
+      "source_evidence": [
+        "timeline-16-7",
+        "timeline-6-9"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "alternating-axis",
+      "visual_tags": [
+        "horizontal"
+      ],
+      "preserve": "横轴上下交错，让同侧段落间距等于两倍节点节距；保留来源的构图与组件轮廓，不统一改成文本框加圆点。",
+      "generation_ready": true
+    },
+    {
+      "id": "vertical-axis",
+      "items": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "densities": [
+        "medium",
+        "long"
+      ],
+      "orientation": "vertical",
+      "mechanism": "纵轴+日期列+宽正文区；长正文由列宽承载",
+      "source_evidence": [
+        "timeline-16-7"
+      ],
+      "status": "experimental_recipe",
+      "visual_signature": "vertical-axis",
+      "visual_tags": [
+        "vertical"
+      ],
+      "preserve": "纵轴+日期列+宽正文区；长正文由列宽承载；保留来源的构图与组件轮廓，不统一改成文本框加圆点。",
+      "generation_ready": true
+    }
+  ],
+  "fallbacks": [
+    "try_same_family_variant",
+    "split_same_relation",
+    "report_page_limit_conflict"
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "capabilities": {
+    "report.submit": true,
+    "generation.stream": true,
+    "preview.html": true
+  },
+  "_comment": "Synthetic fixture for capability probe tests. The report.submit flag indicates the server supports issue report submission."
+}

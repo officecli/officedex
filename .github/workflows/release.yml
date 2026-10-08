@@ -1,0 +1,637 @@
+name: Release
+
+# Releases are compiled and published from the release machine
+# (CONTRIBUTING.md, Release flow); this workflow is kept as a manual guard /
+# fallback and is never triggered by a tag. Pushing the tag of a local release
+# must not start a second, unsigned publish.
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      channel:
+        description: Update channel to publish (stable or 1.0)
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  WAILS_VERSION: v2.12.0
+  UPDATE_CHANNEL: ${{ inputs.channel || 'stable' }}
+
+jobs:
+  build:
+    name: Build (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            label: macOS-universal
+            platform: darwin/universal
+            artifact: officedex-macos
+          - os: windows-latest
+            label: Windows-amd64
+            platform: windows/amd64
+            artifact: officedex-windows
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Stub dist/ so `wails generate module` can compile main.go
+        # main.go has `//go:embed all:dist`; the renderer build that fills
+        # dist/ depends on the very bindings `wails generate module` produces.
+        # Drop a placeholder file so the embed pattern resolves now; vite
+        # will overwrite it during the real frontend build below.
+        shell: bash
+        run: mkdir -p dist && touch dist/.placeholder
+
+      - name: Generate Wails bindings
+        run: wails generate module
+
+      - name: Lint (typecheck)
+        run: npm run lint
+
+      - name: Build and release script tests (node:test)
+        run: npm run test:scripts
+
+      - name: Renderer tests (vitest)
+        run: npx vitest run
+
+      - name: Go tests (normal build)
+        run: go test ./... -count=1
+
+      - name: Go tests (demo build)
+        run: go test -tags officedex_demo ./... -count=1
+
+      - name: Prefetch pinned officecli release binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(node -p 'require("./package.json").officecliVersion')"
+          test -n "$expected"
+          echo "Pinned OfficeCLI version: $expected"
+          OFFICECLI_VERSION="$expected" npm run prefetch:officecli
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify staged officecli matches package pin
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(node -p 'require("./package.json").officecliVersion')"
+          actual="$(node -p 'require("./build/officecli/version.json").version')"
+          echo "staged officecli version: $actual"
+          test "$actual" = "$expected"
+
+      - name: Fetch private presentation checkout (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          PRESENTATION_REPOSITORY: ${{ secrets.PRESENTATION_REPOSITORY }}
+          PRESENTATION_REF: ${{ secrets.PRESENTATION_REF }}
+          PRESENTATION_TOKEN: ${{ secrets.PRESENTATION_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${PRESENTATION_REPOSITORY:-}" || { echo "::error::PRESENTATION_REPOSITORY secret is required"; exit 1; }
+          test -n "${PRESENTATION_REF:-}" || { echo "::error::PRESENTATION_REF secret is required"; exit 1; }
+          test -n "${PRESENTATION_TOKEN:-}" || { echo "::error::PRESENTATION_TOKEN secret is required"; exit 1; }
+          git -c http.extraheader="Authorization: Bearer ${PRESENTATION_TOKEN}" \
+            clone --depth 1 --branch "${PRESENTATION_REF}" "${PRESENTATION_REPOSITORY}" \
+            "$RUNNER_TEMP/presentation"
+          echo "PRESENTATION_SOURCE_DIR=$RUNNER_TEMP/presentation" >> "$GITHUB_ENV"
+
+      - name: Install presentation runtime dependencies (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PRESENTATION_SOURCE_DIR"
+          if [[ -f pnpm-lock.yaml ]]; then
+            corepack enable
+            pnpm install --frozen-lockfile --ignore-scripts
+          elif [[ -f package-lock.json ]]; then
+            npm ci --ignore-scripts
+          else
+            echo "::error::presentation checkout has neither pnpm-lock.yaml nor package-lock.json"
+            exit 1
+          fi
+
+      - name: Stage MOP Node runtime (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="24.18.0"
+          cache="$GITHUB_WORKSPACE/build/cache/pptxgenjs-runtime"
+          work="$RUNNER_TEMP/node-runtime"
+          mkdir -p "$cache" "$work"
+          curl --fail --location --retry 3 --connect-timeout 20 \
+            "https://nodejs.org/dist/v${version}/SHASUMS256.txt" \
+            --output "$cache/node-v${version}-SHASUMS256.txt"
+          for arch in arm64 x64; do
+            tarball="node-v${version}-darwin-${arch}.tar.gz"
+            curl --fail --location --retry 3 --connect-timeout 20 \
+              "https://nodejs.org/dist/v${version}/${tarball}" \
+              --output "$cache/$tarball"
+            expected="$(awk -v f="$tarball" '$2 == f || $2 == "*"f {print $1}' "$cache/node-v${version}-SHASUMS256.txt")"
+            actual="$(shasum -a 256 "$cache/$tarball" | awk '{print $1}')"
+            test -n "$expected" && test "$expected" = "$actual"
+            mkdir -p "$work/$arch"
+            tar -xzf "$cache/$tarball" -C "$work/$arch" --strip-components=1
+          done
+          runtime="$RUNNER_TEMP/node-runtime-universal"
+          rm -rf "$runtime"
+          mkdir -p "$runtime/bin"
+          lipo -create \
+            "$work/arm64/bin/node" \
+            "$work/x64/bin/node" \
+            -output "$runtime/bin/node"
+          chmod 755 "$runtime/bin/node"
+          archs="$(lipo -archs "$runtime/bin/node")"
+          echo "staged MOP Node archs: $archs"
+          for required in x86_64 arm64; do
+            echo "$archs" | grep -qw "$required" || {
+              echo "::error::staged MOP Node is missing the $required slice (got: $archs)"
+              exit 1
+            }
+          done
+          echo "MOP_RUNTIME_SOURCE=$runtime" >> "$GITHUB_ENV"
+
+      - name: Stage MOP presentation runtime (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          MOP_RUNTIME_SOURCE="$MOP_RUNTIME_SOURCE" npm run stage:mop-runtime
+          case "$(uname -m)" in
+            arm64) target_arch=arm64; target_macho=arm64 ;;
+            x86_64) target_arch=x64; target_macho=x86_64 ;;
+            *) echo "::error::unsupported macOS runner architecture: $(uname -m)"; exit 1 ;;
+          esac
+          converter="${MOP_CONVERT_BIN:-$PRESENTATION_SOURCE_DIR/tools/bin/mop-convert}"
+          test -x "$converter" || {
+            echo "::error::presentation mop-convert is missing or not executable: $converter"
+            echo "::error::provide a target-architecture converter in the presentation checkout or via MOP_CONVERT_BIN"
+            exit 1
+          }
+          converter_archs="$(lipo -archs "$converter" 2>/dev/null || echo unknown)"
+          echo "presentation mop-convert archs: $converter_archs"
+          echo "$converter_archs" | grep -qw "$target_macho" || {
+            echo "::error::presentation mop-convert is missing $target_macho (got: $converter_archs)"
+            exit 1
+          }
+          MOP_CONVERT_BIN="$converter" \
+          PRESENTATION_TARGET_ARCH="$target_arch" \
+            PRESENTATION_TARGET_PLATFORM=darwin \
+            npm run stage:presentation
+
+      - name: Verify OfficeCLI Canvas Vibe contract
+        run: node scripts/verify-officecli-canvas-contract.mjs
+
+      - name: Fetch private Office2Modoc runtime
+        shell: bash
+        env:
+          OFFICECLI_INTERNAL_TOKEN: ${{ secrets.OFFICECLI_INTERNAL_TOKEN }}
+          OFFICECLI_INTERNAL_REF: ${{ secrets.OFFICECLI_INTERNAL_REF }}
+        run: |
+          set -euo pipefail
+          ref="${OFFICECLI_INTERNAL_REF:-}"
+          test -n "$OFFICECLI_INTERNAL_TOKEN"
+          test -n "$ref"
+          git clone --depth 1 --branch "$ref" "https://x-access-token:${OFFICECLI_INTERNAL_TOKEN}@github.com/officecli/officecli-internal.git" "$RUNNER_TEMP/officecli-internal"
+          export OFFICE2MODOC_SOURCE_ROOT="$RUNNER_TEMP/officecli-internal"
+          export OFFICE2MODOC_VERSION="$(tr -d '[:space:]' < office2modoc.version)"
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            export OFFICE2MODOC_TARGET="aarch64-apple-darwin"
+            export OFFICE2MODOC_OUTPUT="$GITHUB_WORKSPACE/build/cache/office2modoc/${OFFICE2MODOC_VERSION}/darwin-arm64/liboffice2modoc_ffi.dylib"
+          elif [[ "${{ runner.os }}" == "Windows" ]]; then
+            export OFFICE2MODOC_TARGET="x86_64-pc-windows-msvc"
+            export OFFICE2MODOC_OUTPUT="$GITHUB_WORKSPACE/build/cache/office2modoc/${OFFICE2MODOC_VERSION}/windows-amd64/office2modoc_ffi.dll"
+          else
+            export OFFICE2MODOC_TARGET="x86_64-unknown-linux-gnu"
+            export OFFICE2MODOC_OUTPUT="$GITHUB_WORKSPACE/build/cache/office2modoc/${OFFICE2MODOC_VERSION}/linux-amd64/liboffice2modoc_ffi.so"
+          fi
+          node scripts/stage-office2modoc-ffi.mjs
+
+      - name: Wails build
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          channel="${UPDATE_CHANNEL}"
+          ldflags="-X main.appVersion=${version} -X main.appUpdateChannel=${channel}"
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            npm run build:frontend:desktop
+            wails build -platform ${{ matrix.platform }} -trimpath -s -ldflags "${ldflags}"
+          else
+            wails build -platform ${{ matrix.platform }} -trimpath -ldflags "${ldflags}"
+          fi
+
+      - name: Verify Wails app bundle (macOS)
+        if: runner.os == 'macOS'
+        run: node scripts/verify-wails-app.mjs build/bin/OfficeDex.app
+
+      - name: Bundle MOP runtimes (macOS)
+        if: runner.os == 'macOS'
+        run: node scripts/bundle-runtime.mjs
+
+      - name: Verify packaged presentation runtime (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime="build/bin/OfficeDex.app/Contents/Resources/presentation"
+          test -d "$runtime"
+          test -x "$runtime/tools/bin/mop-convert"
+          test -f "$runtime/runtime.json"
+          test -d "build/bin/OfficeDex.app/Contents/Resources/mop-runtime"
+          echo "packaged presentation runtime: $runtime"
+
+      - name: Verify packaged MOP native architecture (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$(uname -m)" in
+            arm64) required=arm64 ;;
+            x86_64) required=x86_64 ;;
+            *) echo "::error::unsupported macOS runner architecture: $(uname -m)"; exit 1 ;;
+          esac
+          for bin in \
+            build/bin/OfficeDex.app/Contents/Resources/presentation/tools/bin/mop-convert \
+            build/bin/OfficeDex.app/Contents/Resources/mop-runtime/bin/node; do
+            archs="$(lipo -archs "$bin" 2>/dev/null || echo unknown)"
+            echo "$(basename "$bin") archs: $archs"
+            echo "$archs" | grep -qw "$required" || {
+              echo "::error::$bin is missing $required (got: $archs)"
+              exit 1
+            }
+          done
+
+      - name: Verify packaged officecli Canvas contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            binary="build/bin/OfficeDex.app/Contents/Resources/officecli/officecli"
+          else
+            binary="build/bin/officecli/officecli.exe"
+          fi
+          node scripts/verify-officecli-canvas-contract.mjs --binary "$binary" \
+            --expected "$(node -p 'require("./package.json").officecliVersion')"
+
+      - name: Bundle release licenses (macOS)
+        if: runner.os == 'macOS'
+        run: npm run bundle:licenses:mac
+
+      - name: Verify release version metadata
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          node scripts/update-channel.mjs --assert --channel "${UPDATE_CHANNEL}" --version "${version}"
+          args=(--expected "$version" --package package.json --wails wails.json --tag "$GITHUB_REF_NAME")
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            args+=(--app build/bin/OfficeDex.app)
+          fi
+          node scripts/verify-release-version.mjs "${args[@]}"
+
+      - name: Import signing certificate (macOS)
+        if: runner.os == 'macOS'
+        env:
+          APPLE_P12_BASE64: ${{ secrets.APPLE_P12_BASE64 }}
+          APPLE_P12_PASSWORD: ${{ secrets.APPLE_P12_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # Isolate the cert in a temp keychain so its lifetime is bounded to this job.
+          KEYCHAIN_PATH="$RUNNER_TEMP/officedex-signing.keychain-db"
+          KEYCHAIN_PASS="$(openssl rand -hex 16)"
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+          echo "::add-mask::$KEYCHAIN_PASS"
+
+          security create-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+
+          # Prepend the temp keychain to the user search list so codesign finds the identity.
+          security list-keychains -d user -s "$KEYCHAIN_PATH" \
+            $(security list-keychains -d user | sed 's/"//g')
+
+          P12_PATH="$RUNNER_TEMP/cert.p12"
+          printf '%s' "$APPLE_P12_BASE64" | base64 --decode > "$P12_PATH"
+          security import "$P12_PATH" -k "$KEYCHAIN_PATH" -P "$APPLE_P12_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          rm -f "$P12_PATH"
+
+          # Authorize codesign to use the imported private key without a GUI prompt.
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
+      - name: Codesign + embed officecli (macOS)
+        if: runner.os == 'macOS'
+        env:
+          APPLE_DEVELOPER_ID: ${{ secrets.APPLE_DEVELOPER_ID }}
+        run: |
+          node scripts/codesign-bundled-officecli.mjs \
+            --app build/bin/OfficeDex.app \
+            --source build/officecli/officecli \
+            --identity "$APPLE_DEVELOPER_ID"
+
+      - name: Verify bundled officecli is universal2 (macOS)
+        if: runner.os == 'macOS'
+        # The .app is darwin/universal; an arch-specific officecli would crash on
+        # the other architecture with "bad CPU type in executable". Fail the
+        # release rather than ship a binary that bricks Intel (or Apple Silicon).
+        run: |
+          set -euo pipefail
+          bin="build/bin/OfficeDex.app/Contents/Resources/officecli/officecli"
+          archs="$(lipo -archs "$bin")"
+          echo "bundled officecli archs: $archs"
+          for required in x86_64 arm64; do
+            echo "$archs" | grep -qw "$required" || {
+              echo "::error::bundled officecli is missing the $required slice (got: $archs)"
+              exit 1
+            }
+          done
+
+      - name: Notarize .app (macOS)
+        if: runner.os == 'macOS'
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          NOTARIZE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          NOTARIZE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          CODESIGN_IDENTITY: ${{ secrets.APPLE_DEVELOPER_ID }}
+        run: |
+          set -euo pipefail
+          KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
+          printf '%s' "$APPLE_API_KEY_P8" > "$KEY_PATH"
+          trap 'rm -f "$KEY_PATH"' EXIT
+          attempt=1
+          until NOTARIZE_API_KEY_PATH="$KEY_PATH" node scripts/notarize.mjs build/bin/OfficeDex.app; do
+            if (( attempt >= 3 )); then
+              echo "::error::.app signing/notarization failed after $attempt attempts"
+              exit 1
+            fi
+            delay=$((attempt * 20))
+            echo "::warning::.app signing/notarization attempt $attempt failed; retrying in ${delay}s"
+            sleep "$delay"
+            attempt=$((attempt + 1))
+          done
+
+      - name: Bundle officecli (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $resDir = "build\bin\officecli"
+          New-Item -ItemType Directory -Force -Path $resDir | Out-Null
+          Copy-Item "build\officecli\officecli.exe" -Destination "$resDir\officecli.exe" -Force
+          Copy-Item "build\officecli\version.json" -Destination "$resDir\version.json" -Force
+
+      - name: Bundle release licenses (Windows)
+        if: runner.os == 'Windows'
+        run: npm run bundle:licenses:win
+
+      - name: Archive (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p dist-artifacts
+          tag="${GITHUB_REF_NAME}"
+          archive="OfficeDex-${tag}-darwin-universal.zip"
+          (cd build/bin && ditto -c -k --sequesterRsrc --keepParent OfficeDex.app "../../dist-artifacts/${archive}")
+          ls -la dist-artifacts/
+
+      - name: Verify archived presentation runtime (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="dist-artifacts/OfficeDex-${GITHUB_REF_NAME}-darwin-universal.zip"
+          unzip -l "$archive" | grep -Eq 'OfficeDex\.app/Contents/Resources/presentation(/|$)'
+          echo "archive contains OfficeDex.app/Contents/Resources/presentation"
+
+      - name: Install create-dmg (macOS)
+        if: runner.os == 'macOS'
+        run: brew install create-dmg
+
+      - name: Build DMG installer (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          dmg="OfficeDex-${tag}-darwin-universal.dmg"
+          # Stage the .app in its own directory so create-dmg only includes it
+          # (avoids leftover officecli/ from earlier build steps).
+          staging="$(mktemp -d)"
+          cp -R build/bin/OfficeDex.app "${staging}/"
+          create-dmg \
+            --volname "OfficeDex ${tag}" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --icon "OfficeDex.app" 175 200 \
+            --hide-extension "OfficeDex.app" \
+            --app-drop-link 425 200 \
+            --no-internet-enable \
+            "dist-artifacts/${dmg}" \
+            "${staging}"
+          ls -la dist-artifacts/
+
+      - name: Notarize DMG (macOS)
+        if: runner.os == 'macOS'
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          NOTARIZE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          NOTARIZE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          CODESIGN_IDENTITY: ${{ secrets.APPLE_DEVELOPER_ID }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
+          printf '%s' "$APPLE_API_KEY_P8" > "$KEY_PATH"
+          trap 'rm -f "$KEY_PATH"' EXIT
+          attempt=1
+          until NOTARIZE_API_KEY_PATH="$KEY_PATH" \
+            node scripts/notarize.mjs "dist-artifacts/OfficeDex-${tag}-darwin-universal.dmg"; do
+            if (( attempt >= 3 )); then
+              echo "::error::DMG signing/notarization failed after $attempt attempts"
+              exit 1
+            fi
+            delay=$((attempt * 20))
+            echo "::warning::DMG signing/notarization attempt $attempt failed; retrying in ${delay}s"
+            sleep "$delay"
+            attempt=$((attempt + 1))
+          done
+
+      - name: Archive (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist-artifacts | Out-Null
+          $tag = $env:GITHUB_REF_NAME
+          $archive = "OfficeDex-${tag}-windows-amd64.zip"
+          Compress-Archive -Path build\bin\* -DestinationPath "dist-artifacts\$archive" -Force
+          Get-ChildItem dist-artifacts
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist-artifacts/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Cleanup signing keychain (macOS)
+        if: runner.os == 'macOS' && always()
+        run: |
+          if [ -n "${KEYCHAIN_PATH:-}" ] && [ -f "$KEYCHAIN_PATH" ]; then
+            security delete-keychain "$KEYCHAIN_PATH" || true
+          fi
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: officedex-macos
+          path: dist-release/
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: officedex-windows
+          path: dist-release/
+
+      - name: List artifacts
+        run: ls -la dist-release/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: false
+          prerelease: ${{ inputs.channel == '1.0' }}
+          generate_release_notes: true
+          fail_on_unmatched_files: false
+          files: |
+            dist-release/*.zip
+            dist-release/*.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  sync-to-dist:
+    name: Sync to officedex-dist
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source repo (for scripts/build-manifest.mjs)
+        uses: actions/checkout@v6
+        with:
+          path: src
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: officedex-macos
+          path: artifacts/
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: officedex-windows
+          path: artifacts/
+
+      - name: Clone officedex-dist
+        env:
+          GH_TOKEN: ${{ secrets.DIST_DEPLOY_TOKEN }}
+        run: |
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/officecli/officedex-dist.git" dist
+          cd dist
+          git config user.email "release-bot@officedex.app"
+          git config user.name "OfficeDex Release Bot"
+
+      - name: Generate manifest.json
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          channel="${UPDATE_CHANNEL}"
+          node src/scripts/update-channel.mjs --assert --channel "${channel}" --version "${version}"
+          if [ "${channel}" = "1.0" ]; then
+            manifest_rel="channels/1.0/manifest.json"
+            archive_rel="channels/1.0/archive"
+          else
+            manifest_rel="manifest.json"
+            archive_rel="archive"
+          fi
+          notes=$(gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" --json body --jq .body 2>/dev/null || echo "")
+          node src/scripts/build-manifest.mjs \
+            --version "${version}" \
+            --channel "${channel}" \
+            --darwin "artifacts/OfficeDex-${tag}-darwin-universal.zip" \
+            --windows "artifacts/OfficeDex-${tag}-windows-amd64.zip" \
+            --notes "${notes:-Release ${tag}}" \
+            --out "dist/${manifest_rel}"
+          mkdir -p "dist/${archive_rel}"
+          cp "dist/${manifest_rel}" "dist/${archive_rel}/manifest-${tag}.json"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Commit and push to officedex-dist
+        run: |
+          set -euo pipefail
+          cd dist
+          tag="${GITHUB_REF_NAME}"
+          channel="${UPDATE_CHANNEL}"
+          if [ "${channel}" = "1.0" ]; then
+            git add channels/1.0/
+            staged="$(git diff --cached --name-only)"
+            echo "${staged}"
+            if echo "${staged}" | grep -qx 'manifest.json'; then
+              echo "::error::channel 1.0 refused to modify root manifest.json"
+              exit 1
+            fi
+          else
+            git add manifest.json archive/
+            staged="$(git diff --cached --name-only)"
+            echo "${staged}"
+            if echo "${staged}" | grep -E '^channels/' >/dev/null; then
+              echo "::error::channel stable refused to modify channels/"
+              exit 1
+            fi
+          fi
+          git commit -m "release: ${tag} (${channel})" -m "Auto-synced from officecli/officedex@${GITHUB_SHA} (assets served from source repo release)"
+          git push origin main

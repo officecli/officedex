@@ -1,0 +1,178 @@
+/**
+ * Size for the editors this layer mounts.
+ *
+ * Each embedded editor renders a single root — an iframe for Writer and the
+ * presentation runtime, a section for the workbook — and none of them sizes
+ * itself. In the old UI the rules came from `renderer/preview/PreviewApp.css`
+ * and `renderer/styles/spreadsheet.css`, which that entry point imports and the
+ * shell does not.
+ *
+ * So a deck opened in the shell mounted correctly, reported no error, and drew
+ * nothing: an iframe with no dimensions collapses to its intrinsic size against
+ * a canvas the same colour. The most expensive kind of bug — everything says it
+ * worked.
+ *
+ * Restated here rather than importing the old stylesheet, which carries several
+ * hundred rules for surfaces this shell does not have and would re-open the
+ * class-name collision that `--od-*` exists to avoid. What the canvas layer
+ * mounts, the canvas layer sizes.
+ */
+
+.shell-canvas > .pptx-embed-frame,
+.shell-canvas > .writer-embed-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* Slides carry their own paper, so the surround stays dark: a light ground here
+   would read as part of the deck. */
+.shell-canvas > .pptx-embed-frame {
+  background: #1f1f1f;
+}
+
+.shell-canvas > .writer-embed-frame {
+  background: var(--shell-sunken);
+}
+
+/* The workbook mounts a section rather than a frame. Its own stylesheet travels
+   with `SpreadsheetCanvas` now — it used to be imported only by the old entry
+   point, so in the shell the workbook had no styles at all. What is left here
+   is the outer box, which is this layer's business. Scoped by ancestor so it
+   cannot reach the old UI's copy. */
+.shell-canvas > .spreadsheet-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+/*
+ * A deck while it is being drawn.
+ *
+ * The file underneath is `workspaceDir/live/` scratch — replaced on every
+ * redraw — so edits made now cannot survive to the finished deck. The embedded
+ * editor brings its own ribbon and offers no read-only mode, and that ribbon is
+ * the problem: Insert, Draw, Design, Transitions and Animations all sit there
+ * looking live above a deck that will be overwritten in seconds.
+ *
+ * So the rule is stated *above* the ribbon rather than floated over it. A pill
+ * in the corner competed with the toolbar for the same glance and lost; a band
+ * across the top reframes everything below it, which is the only part of this
+ * the shell can reach — the ribbon is inside the iframe and its height is not
+ * ours to guess at.
+ *
+ * Pointer events still stop at the overlay, and the cursor still says why
+ * before a click has to fail to explain it.
+ */
+.shell-live-deck {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  /*
+   * The canvas host is a block box, not a flex container, so `flex: 1` above
+   * does nothing on its own — a flex-grow item needs a flex parent. Without a
+   * height the deck collapsed to the height of the editor's ribbon: measured
+   * 154px inside a 648px canvas, with the slides below the fold and no way to
+   * scroll to them.
+   *
+   * `height: 100%` is what actually sizes it, and it resolves against the host
+   * because the host has a definite height from the shell's column. The
+   * `flex` properties stay for the case where a future host does make itself a
+   * flex container.
+   */
+  height: 100%;
+}
+
+.shell-live-deck-frame {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.shell-live-deck-frame > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+/*
+ * The size the direct-child rule in this file cannot reach.
+ *
+ * `.shell-canvas > .pptx-embed-frame` is what sizes the file editor's frame.
+ * This one is nested inside the live-deck wrappers, so it never matched and the
+ * iframe fell back to `height: auto` — the full 648px of canvas was there and
+ * the deck drew into the top 154px of it. Same rules, one level down.
+ */
+.shell-live-deck .pptx-embed-frame {
+  display: block;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  background: #1f1f1f;
+}
+
+.shell-live-deck-lock {
+  position: absolute;
+  inset: 0;
+  cursor: not-allowed;
+}
+
+.shell-live-deck-note {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--shell-line);
+  background: var(--shell-tint);
+  color: var(--shell-ink-title);
+  font-size: var(--shell-text-sm);
+  line-height: 16px;
+}
+
+/* The same spinner the task panel uses for a page in progress. One vocabulary:
+   whatever is turning is being written right now. */
+.shell-live-deck-note::before {
+  content: "";
+  flex: none;
+  width: 11px;
+  height: 11px;
+  border: 2px solid #ffffff99;
+  border-top-color: var(--shell-accent);
+  border-radius: 50%;
+  animation: shell-spin 800ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell-live-deck-note::before {
+    animation: none;
+  }
+}
+
+/* A generated picture: centred and fitted, on the sunken ground the document
+   editor also sits on. */
+.shell-canvas > .shell-image-canvas {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: var(--shell-sunken);
+  overflow: hidden;
+}
+
+.shell-image-canvas > img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.08);
+  user-select: none;
+}

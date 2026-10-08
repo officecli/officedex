@@ -1,0 +1,282 @@
+{
+  "schemaVersion": 1,
+  "program": "/Users/agent/askuy/code/vibeofficing/samplev2/jssdk/并列4项1/compilations/v085/slides/slide-0066.mjs",
+  "reference": "/Users/agent/askuy/code/vibeofficing/samplev2/并列4项1/幻灯片66.png",
+  "creationEntrypoint": "independent JSSDK build(PowerPoint) from an empty presentation",
+  "host": "MopEditorPowerPointHost",
+  "slides": 1,
+  "nativeObjects": {
+    "count": 22,
+    "types": [
+      "shape",
+      "shape",
+      "shape",
+      "shape",
+      "shape",
+      "shape",
+      "shape",
+      "shape",
+      "shape",
+      "shape",
+      "shape",
+      "shape",
+      "shape",
+      "shape",
+      "shape",
+      "shape",
+      "picture",
+      "picture",
+      "picture",
+      "picture",
+      "shape",
+      "shape"
+    ]
+  },
+  "render": {
+    "outputs": [
+      {
+        "index": 1,
+        "slideId": "slide-1",
+        "renderWidth": 1920,
+        "nativeTextElements": 10,
+        "nativeImages": 4,
+        "textLayout": [
+          {
+            "id": "slide-1-officejs-e8251f9f",
+            "content": "添加标题",
+            "box": {
+              "left": 235.2,
+              "top": 447.09999999999997,
+              "right": 474.9,
+              "bottom": 506.4
+            },
+            "text": {
+              "left": 249.60000610351562,
+              "top": 450.70001220703125,
+              "right": 433.6156311035156,
+              "bottom": 506.70001220703125
+            },
+            "overflow": false
+          },
+          {
+            "id": "slide-1-officejs-eada2e6e",
+            "content": "单击此处输入你的正文，文字是您思想的提炼。",
+            "box": {
+              "left": 235.2,
+              "top": 512.4,
+              "right": 955.4,
+              "bottom": 576.6
+            },
+            "text": {
+              "left": 249.60000610351562,
+              "top": 524.552001953125,
+              "right": 816.6156311035156,
+              "bottom": 557.552001953125
+            },
+            "overflow": false
+          },
+          {
+            "id": "slide-1-officejs-5596a761",
+            "content": "添加标题",
+            "box": {
+              "left": 233.89999999999998,
+              "top": 764.5999999999999,
+              "right": 474.9,
+              "bottom": 823.9
+            },
+            "text": {
+              "left": 248.3000030517578,
+              "top": 768.2000122070312,
+              "right": 427.5031433105469,
+              "bottom": 824.2000122070312
+            },
+            "overflow": false
+          },
+          {
+            "id": "slide-1-officejs-2dcbc55b",
+            "content": "单击此处输入你的正文，文字是您思想的提炼。",
+            "box": {
+              "left": 233.89999999999998,
+              "top": 829.9,
+              "right": 954.0999999999999,
+              "bottom": 894.0999999999999
+            },
+            "text": {
+              "left": 248.3000030517578,
+              "top": 842.0519409179688,
+              "right": 815.3156280517578,
+              "bottom": 875.0519409179688
+            },
+            "overflow": false
+          },
+          {
+            "id": "slide-1-officejs-77c6cb39",
+            "content": "添加标题",
+            "box": {
+              "left": 1188.8,
+              "top": 445.09999999999997,
+              "right": 1413.5,
+              "bottom": 504.4
+            },
+            "text": {
+              "left": 1203.199951171875,
+              "top": 448.70001220703125,
+              "right": 1382.4031982421875,
+              "bottom": 504.70001220703125
+            },
+            "overflow": false
+          },
+          {
+            "id": "slide-1-officejs-b84b8759",
+            "content": "单击此处输入你的正文，文字是您思想的提炼。",
+            "box": {
+              "left": 1188.8,
+              "top": 510.4,
+              "right": 1909,
+              "bottom": 574.6
+            },
+            "text": {
+              "left": 1203.199951171875,
+              "top": 522.552001953125,
+              "right": 1770.215576171875,
+              "bottom": 555.552001953125
+            },
+            "overflow": false
+          },
+          {
+            "id": "slide-1-officejs-b8e2cf16",
+            "content": "添加标题",
+            "box": {
+              "left": 1187.5,
+              "top": 762.5999999999999,
+              "right": 1413.5,
+              "bottom": 821.9
+            },
+            "text": {
+              "left": 1201.9000244140625,
+              "top": 766.2000122070312,
+              "right": 1381.1031494140625,
+              "bottom": 822.2000122070312
+            },
+            "overflow": false
+          },
+          {
+            "id": "slide-1-officejs-253a7efe",
+            "content": "单击此处输入你的正文，文字是您思想的提炼。",
+            "box": {
+              "left": 1187.5,
+              "top": 827.9,
+              "right": 1907.6999999999998,
+              "bottom": 892.0999999999999
+            },
+            "text": {
+              "left": 1201.9000244140625,
+              "top": 840.0519409179688,
+              "right": 1768.9156494140625,
+              "bottom": 873.0519409179688
+            },
+            "overflow": false
+          },
+          {
+            "id": "slide-1-officejs-bd34f553",
+            "content": "单击此处添加大标题内容",
+            "box": {
+              "left": 558.2,
+              "top": 170.5,
+              "right": 1361.8999999999999,
+              "bottom": 262.9
+            },
+            "text": {
+              "left": 572.5999755859375,
+              "top": 171.13999938964844,
+              "right": 1342.6156005859375,
+              "bottom": 261.1400146484375
+            },
+            "overflow": false
+          },
+          {
+            "id": "slide-1-officejs-b5a68258",
+            "content": "单击此处添加副标题",
+            "box": {
+              "left": 734.0999999999999,
+              "top": 263.1,
+              "right": 1186,
+              "bottom": 328.5
+            },
+            "text": {
+              "left": 748.5,
+              "top": 266.70001220703125,
+              "right": 1162.515625,
+              "bottom": 322.70001220703125
+            },
+            "overflow": false
+          }
+        ],
+        "textLayoutCoverage": {
+          "version": 2,
+          "measurement": "font_metrics",
+          "coordinateSpace": "scene_world_axis_aligned_bounds",
+          "textBodies": 10,
+          "checked": 10,
+          "skipped": []
+        },
+        "directFontUsability": [
+          {
+            "family": "思源黑体 CN Bold",
+            "weight": 400,
+            "italic": false,
+            "usable": false
+          },
+          {
+            "family": "思源黑体 CN Regular",
+            "weight": 400,
+            "italic": false,
+            "usable": false
+          }
+        ],
+        "renderedFontStacks": [
+          "\"思源黑体 CN\", \"Source Han Sans SC\", \"Noto Sans CJK SC\", \"PingFang SC\", Arial, \"Microsoft YaHei\", \"WenQuanYi Micro Hei\""
+        ],
+        "fonts": {
+          "Arial": true,
+          "微软雅黑": false
+        }
+      }
+    ],
+    "browser": "151.0.7922.34",
+    "errors": [],
+    "provenance": {
+      "wasmEntry": "/Users/agent/askuy/code/vibeofficing/presentation/packages/mop-wasm/mop_wasm.js",
+      "wasmJsSha256": "cfce6ddbd5f86c41a8900a32d34448a8fafa344ba4f6555001a49b0bf0be109c",
+      "wasmSha256": "8264153b300f773b87c4eb7482524cee3fa2da0114b614c8c323a589b9b36866",
+      "node": "v26.0.0",
+      "platform": "darwin",
+      "sdk": {
+        "index": "286355728778e6f57dc08c0abc319db624a2758f487187375d85cbfc2d099ef2",
+        "objects": "1cc9d25b5a6094c07ab7514e1e6a2fcd1f088e39362b4979e36a210afc3a248d",
+        "text-format": "30b04222f824006896be65c187606d846807e14fdc2a2a92a7bdd5b3ef9eaa49",
+        "line-format": "fb67638f323015a566e92c35b8b350c58c12bfd79cf556cab642717958cbb521",
+        "fill-format": "c67966b24f3ce0c3e70b0496827d00749049a000741af3cd2a9a85a00352bdfd",
+        "effect-format": "6e87e91c4d9c5b6dd1253832016ab15e83387fa5dd3217ec4bd1bb23787f6244",
+        "transform-format": "07f9d5e09a66b386540f125b3b41b50e94397206073983e1510b85f345581b3f",
+        "mop-editor-host": "70417d11bc085db8ace3ca611a8c75d7a83bda53965206976f960b8b6daa3ca4"
+      },
+      "layout": {
+        "pipeline": "cdb04a4672fd1dbfbac2067745ea837a3529e08abd487a34e86f4786a80dca4f",
+        "authoredAutofit": "68bfaa228a4ad984eaa4748802c3ce2f1d861d72824a2f9bf89ed3ba311bdfdb"
+      },
+      "nativeBrowserSha256": "d3110a3c1b8cb98c07b05592a36244cbfc243d154181a4b3ba8e673304f62092"
+    }
+  },
+  "textOverflow": [],
+  "comparison": {
+    "rawSsim": 0.9767364334203634,
+    "targetRawSsim": 0.999,
+    "passed": false,
+    "sizeMismatch": false
+  },
+  "pptxExport": "passed",
+  "strictReimport": "passed",
+  "exactSolution": false,
+  "note": "Page-level execution evidence. Exact acceptance still requires the configured visual, structural and Office checks."
+}

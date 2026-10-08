@@ -1,0 +1,259 @@
+/* The Agent presence: docked column, floating panel, collapsed face. */
+
+/* ----------------------------------------------------------------- face */
+
+/*
+ * The companion's own palette: the mark is ink-on-ink, not a themed control.
+ *
+ * These seven literals are the only bare colours left in this file and they
+ * stay bare on purpose. The character is drawn, not styled — its shell, plate,
+ * eyes and corner glyph are a fixed relationship between four values, the way
+ * an illustration is, and the contrast between them is what makes it read as a
+ * face at 40px. A theme that moved them independently would not retint the
+ * companion, it would break it. `--shell-brand-mark` in `tokens.css` happens
+ * to hold the same black as the shell below; the two are written separately
+ * so that the brand tile can follow a theme while the character does not.
+ *
+ * (Written without naming the value, so a "no bare colours" gate counting hex
+ * literals in this file finds seven and not eight.)
+ */
+
+/* Stroked glyphs (the question mark, the magnifier) declare fill="none". */
+
+/* The question tilts, the way the prototype's `confirm` state tilted it: a
+   symbol standing perfectly upright reads as a label, a tilted one as a
+   question actually being asked. Independent `rotate` so the breathing
+   `transform` on the same element still composes. */
+
+/* Paused stops the character rather than recolouring it: the dot shrinks and
+   dims, which is the same signal the eyes are already giving. */
+
+/* ---- motion ----
+   Gaze, scan and blink compose, so each owns a group of its own: the outer
+   group aims the eyes at the pointer, the middle one sweeps them across the
+   work, the inner one closes the lids. `fill-box` keeps all three centred on
+   the eyes regardless of the pose's own coordinates. */
+
+/* A new symbol arrives rather than cross-fading in place — the state changed,
+   and the mark should say so. Remounted per symbol (see PresenceFace). */
+
+/* `--shell-face-gaze-*` is written by useGaze; `--shell-face-lift` by :hover
+   below. Kept separate so a hover cannot clobber the pointer's position. */
+
+/* Limbs: drawn always, shown only once the presence is tucked (see below). */
+
+/* Bottom-right, not top-right: the top-right corner is the character's own —
+   its dot, question mark or heart lives there, and a counter sitting on top of
+   the mark's one distinguishing feature hides the state it is counting. */
+
+/* ------------------------------------------------------- floating layer */
+
+/* Tucked against an edge: only a sliver stays on screen until hovered. The
+   character turns to face the window and puts its limbs out, so a mark that is
+   90% off screen reads as holding on to the edge rather than as clipped.
+
+   Every rule in this block is scoped to `[data-expanded="false"]`, and that
+   scoping is the fix for four of the audit's findings rather than tidying.
+   Unscoped, they applied to the *expanded* panel too, where:
+
+     - `opacity: .82` was the only thing that happened, so "tucked" meant a
+       half-transparent 340px panel sitting on top of the document with both
+       layers of text legible through each other (S4-004);
+     - `.shell-face` is a descendant selector, and the expanded panel contains
+       a `.shell-face` in its header, one in its empty state and one per
+       assistant reply — an unbounded number, since replies come from a
+       `map()`. All of them were translated 312px and rotated, out of the
+       panel and past the window edge (S4-005, S6-012).
+
+   The expanded panel parks flush against the edge instead and keeps its full
+   opacity; `presenceLayout.placePresence` produces a zero overhang for it, so
+   there is nothing here for it to consume. */
+
+/* The overhang. The element itself stays on screen (see anchorPresence) and
+   the mark is pushed out past the window edge from inside it, so the focus
+   ring remains visible while the character is mostly hidden. */
+
+/* Hovering the presence is the one interaction the character answers directly:
+   it looks up, leans towards you and blinks once. The prototype spent a whole
+   extra state ("hover — 被你注意到") on this; CSS covers it, and the wink
+   overrides the resting blink loop for as long as the pointer is on it. */
+
+/* Only where `canDock()` actually renders the dock button does the collapse
+   key step aside for it: 16px padding + 26px button + 4px gap. Editor mode
+   cannot dock, and used to keep the gap for a button that was never there. */
+
+/* -------------------------------------------------------- task panel */
+
+/* messages */
+
+.shell-task-user {
+  margin: 0 0 14px;
+  padding: 13px 15px;
+  border-radius: 12px;
+  background: var(--shell-bubble-fill);
+  color: var(--shell-ink-title);
+  font-size: var(--shell-text);
+  line-height: 21px;
+  overflow-wrap: anywhere;
+}
+
+.shell-task-user blockquote {
+  margin: 0 0 8px;
+  padding-left: 9px;
+  border-left: 2px solid var(--shell-bubble-quote-line);
+  color: var(--shell-ink-subtle);
+  font-size: var(--shell-text-sm);
+  line-height: 19px;
+}
+
+.shell-task-user cite {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-xs);
+  font-style: normal;
+}
+
+/* steps */
+
+.shell-task-spinner {
+  flex: none;
+}
+
+/*
+ * The deck's pages, listed beside the conversation.
+ *
+ * No new colour: the mark carries the meaning (tick, spinner, clock) and the
+ * text only moves along the existing ink ramp, so a page that is done reads
+ * slightly stronger than one still queued without inventing a status palette
+ * this shell does not have. Rows are one line each and the title truncates —
+ * eight pages have to fit a 320px column without turning into a wall.
+ */
+
+/* Truncates rather than wraps: a wrapping title reflows every row below it
+   each time a page's state arrives. */
+
+/* A page that failed is not a page that has not started.
+   Both were --shell-ink-faint, so a dead page sat in the list looking like it
+   was still waiting its turn — the one state the reader has to notice read as
+   the one state that needs nothing from them. The mark is currentColor, so the
+   glyph follows. */
+
+/* Repairing is generating again after the page came back wrong, and it wore the
+   identical spinner — the same wait, with nothing saying the first attempt was
+   thrown away. Only the leading edge changes: it is still work in progress, so
+   it keeps the row's working colour and borrows the failure hue for the part
+   that moves. */
+
+.shell-task-spinner {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--shell-spinner-track);
+  border-top-color: var(--shell-spinner-head);
+  border-radius: 50%;
+  animation: shell-spin 800ms linear infinite;
+}
+
+@keyframes shell-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell-task-spinner {
+    animation-duration: 2.4s;
+  }
+}
+
+/* actions */
+
+.shell-task-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 29px;
+  padding: 0 9px;
+  border: 1px solid var(--shell-line-strong);
+  border-radius: 7px;
+  background: var(--shell-paper);
+  color: var(--shell-ink-title);
+  font: var(--shell-text-sm) / 18px var(--shell-font);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.shell-task-button:hover:not(:disabled) {
+  border-color: var(--shell-button-hover-line);
+}
+
+.shell-task-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.shell-task-button:focus-visible {
+  outline: 2px solid var(--shell-focus);
+  outline-offset: 1px;
+}
+
+.shell-task-button.is-primary {
+  background: var(--shell-ink);
+  border-color: var(--shell-ink);
+  color: var(--shell-ink-inverse);
+}
+
+.shell-task-button.is-primary:hover {
+  background: var(--shell-button-primary-hover);
+}
+
+/* cards */
+
+/* The question the run is blocked on. Carries the accent because it is the one
+   thing on screen the user has to act on for anything else to continue. */
+
+/* empty + composer */
+
+/* ------------------------------------------- hero composer focus glow */
+
+/*
+ * Agent Home's composer wears the agent's own border while it has focus — the
+ * prototype's `agent-home-glow`. Lives here and not in home.css because it is
+ * the agent's mark, not Home's layout: the gradient, the stroke stack and the
+ * travelling light all come out of attentionOverlay.ts, and the day that
+ * recipe is retuned this rule is what has to follow it.
+ */
+.shell-attention-anchor {
+  position: relative;
+}
+
+/*
+ * The overlay's host, re-aimed at the composer.
+ *
+ * `.shell-attention` in app.css is written for the workspace, where it stops
+ * short of the status bar; here it has to cover the composer exactly, so all
+ * four edges are restated. `overflow: hidden` on the same radius as
+ * `.shell-cx--home` clips the outer half of the widest glow strokes, which is
+ * what gives the lit edge a crisp outside and a soft inside — the prototype
+ * clipped it the same way, and without it the wash bleeds a centimetre into
+ * the page around a control that is only meant to look focused.
+ */
+.shell-attention-anchor > .shell-attention {
+  inset: 0;
+  overflow: hidden;
+  border-radius: 20px;
+}
+
+/*
+ * The outline while it can still be changed.
+ *
+ * Same rows as the read-only list — the gate is the same object at a different
+ * moment, and moving the page titles around between the two would make the pause
+ * look like a different screen. What changes is that the title is a field and
+ * each row can be dropped.
+ *
+ * The field carries no chrome of its own until it is touched: a box around every
+ * line would turn a three-line plan into a form, and the thing being reviewed is
+ * the plan, not the form.
+ */

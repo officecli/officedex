@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FCFAF2"/>
+      <stop offset="0.55" stop-color="#F7FBFA"/>
+      <stop offset="1" stop-color="#F4EEFF"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#12B947"/>
+      <stop offset="0.5" stop-color="#03849B"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#paper)"/>
+  <circle cx="1690" cy="160" r="280" fill="#7C3AED" opacity="0.10"/>
+  <circle cx="1610" cy="930" r="330" fill="#03849B" opacity="0.10"/>
+  <text x="150" y="150" fill="#5D646B" font-family="Inter, Arial, sans-serif" font-size="26" font-weight="700" letter-spacing="4">OFFICEDEX · MULTI-STEP PPT GENERATION</text>
+  <text x="150" y="390" fill="#05101A" font-family="Inter, Arial, sans-serif" font-size="102" font-weight="800" letter-spacing="-4">A great presentation</text>
+  <text x="150" y="520" fill="#05101A" font-family="Inter, Arial, sans-serif" font-size="102" font-weight="800" letter-spacing="-4">should not be a</text>
+  <rect x="140" y="585" width="1070" height="154" rx="22" fill="#05101A"/>
+  <text x="185" y="695" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="102" font-weight="800" letter-spacing="-4">one-shot gamble.</text>
+  <rect x="150" y="860" width="550" height="9" rx="4.5" fill="url(#accent)"/>
+  <text x="150" y="930" fill="#36414B" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="600">Plan. Confirm. Preview. Edit.</text>
+</svg>

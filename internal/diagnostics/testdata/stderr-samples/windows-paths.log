@@ -1,0 +1,10 @@
+2024-06-03T09:30:00.100Z [INFO] OfficeDex starting on Windows platform
+2024-06-03T09:30:00.200Z [DEBUG] User data dir: C:\Users\testuser\AppData\Roaming\OfficeDex
+2024-06-03T09:30:00.201Z [DEBUG] Config loaded from C:\Users\testuser\AppData\Roaming\OfficeDex\settings.json
+2024-06-03T09:30:00.202Z [DEBUG] Log directory: C:\Users\testuser\AppData\Roaming\OfficeDex\logs
+2024-06-03T09:30:00.300Z [INFO] Workspace: C:\Users\testuser\Documents\OfficeDex Workspace
+2024-06-03T09:30:00.400Z [DEBUG] Bridge binary at C:\Users\testuser\AppData\Local\Programs\OfficeDex\resources\officecli.exe
+2024-06-03T09:30:00.500Z [DEBUG] Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.FAKEWINDOWSTOKEN-DO-NOT-USE.fakesig
+2024-06-03T09:30:00.600Z [INFO] Using apiKey=sk-FAKEKEY-DO-NOT-USE-WINDOWSTEST12345678
+2024-06-03T09:30:00.700Z [DEBUG] Temp files at C:\Users\testuser\AppData\Local\Temp\officedex-tmp-12345
+2024-06-03T09:30:00.800Z [INFO] Output will be saved to C:\Users\testuser\Documents\OfficeDex Workspace\output.pptx

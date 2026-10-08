@@ -1,0 +1,971 @@
+import { describe, expect, it } from "vitest";
+import type { BridgeEvent, TaskUserInput } from "../shared/types";
+import { applyTaskEvent, attachUserInput, createInitialTaskState, discardLocalTask, finishTaskContinuing, markTaskContinuing, promoteLocalTask, restoreTaskInteractiveGate, startLocalTask } from "./taskState";
+
+describe("taskState", () => {
+  it("records task lifecycle events and stores completed artifacts", () => {
+    const state = createInitialTaskState();
+    const started = applyTaskEvent(state, {
+      event_id: "event-1",
+      task_id: "task-1",
+      type: "task.started",
+      payload: { document_type: "pptx", topic: "Q3 Review" },
+    });
+    const completed = applyTaskEvent(started, {
+      event_id: "event-2",
+      task_id: "task-1",
+      type: "task.completed",
+      payload: {
+        result: {
+          file_path: "/tmp/Q3 Review.pptx",
+          file_name: "Q3 Review.pptx",
+          document_type: "pptx",
+        },
+      },
+    });
+
+    expect(completed.tasks["task-1"].status).toBe("completed");
+    expect(completed.tasks["task-1"].events).toHaveLength(2);
+    expect(completed.artifacts).toEqual([
+      {
+        taskId: "task-1",
+        filePath: "/tmp/Q3 Review.pptx",
+        fileName: "Q3 Review.pptx",
+        documentType: "pptx",
+      },
+    ]);
+  });
+
+  it("stores the artifact an edit reports as output_file", () => {
+    const started = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-1",
+      task_id: "task-1",
+      type: "task.started",
+      payload: { document_type: "docx", tool: "office.modify" },
+    });
+    const state = applyTaskEvent(started, {
+      event_id: "event-2",
+      task_id: "task-1",
+      type: "task.completed",
+      payload: {
+        document_type: "docx",
+        output_file: "/tmp/Brief.modified.docx",
+        status: "completed",
+      },
+    });
+    expect(state.tasks["task-1"].artifact).toMatchObject({
+      taskId: "task-1",
+      filePath: "/tmp/Brief.modified.docx",
+      fileName: "Brief.modified.docx",
+      documentType: "docx",
+    });
+  });
+
+  it("stores completed artifacts from OfficeCLI top-level result payloads", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-1",
+      task_id: "task-1",
+      type: "task.completed",
+      payload: {
+        file_path: "/tmp/Request_123_Business_Brief.docx",
+        document_name: "Request_123_Business_Brief.docx",
+        document_type: "docx",
+        status: "success",
+      },
+    });
+
+    expect(state.tasks["task-1"].artifact).toEqual({
+      taskId: "task-1",
+      filePath: "/tmp/Request_123_Business_Brief.docx",
+      fileName: "Request_123_Business_Brief.docx",
+      documentType: "docx",
+    });
+    expect(state.artifacts).toEqual([
+      {
+        taskId: "task-1",
+        filePath: "/tmp/Request_123_Business_Brief.docx",
+        fileName: "Request_123_Business_Brief.docx",
+        documentType: "docx",
+      },
+    ]);
+  });
+
+  it("tracks active questions for interactive bridge tasks", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-1",
+      task_id: "task-1",
+      type: "task.question",
+      payload: {
+        id: "question-1",
+        question: "Who is the audience?",
+        options: [{ id: "leadership", label: "Leadership" }],
+        allow_freeform: true,
+      },
+    });
+
+    expect(state.tasks["task-1"].question).toEqual({
+      id: "question-1",
+      question: "Who is the audience?",
+      options: [{ id: "leadership", label: "Leadership" }],
+      allowFreeform: true,
+    });
+  });
+
+  it("reads the stage, the retained pages and the resume point off a structured failure", () => {
+    const failed = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-failed",
+      task_id: "task-render",
+      type: "task.failed",
+      payload: {
+        message: "PPTX rendering is incomplete; drawn pages retained: worker exited 1",
+        failure: {
+          stage: "render",
+          reason: "worker_died",
+          retryable: true,
+          resume_stage: "expansion",
+          resume_checkpoint: "/tmp/officecli-expansion-1/expansion-state.json",
+          retained: { ready_pages: 8, total_pages: 12, failed_pages: [9, 10, 11, 12] },
+        },
+      },
+    });
+    const task = failed.tasks["task-render"];
+    expect(task.failure).toEqual({
+      stage: "render",
+      reason: "worker_died",
+      retryable: true,
+      resume_stage: "expansion",
+      resume_checkpoint: "/tmp/officecli-expansion-1/expansion-state.json",
+      retained: { ready_pages: 8, total_pages: 12, failed_pages: [9, 10, 11, 12] },
+    });
+    expect(task.partial).toEqual({ readyPages: 8, totalPages: 12, failedPages: [9, 10, 11, 12] });
+    // The render stage's own error must not be reported as a content failure:
+    // the stage is data now, not something read out of this sentence.
+    expect(task.error).toContain("rendering is incomplete");
+  });
+
+  it("ignores a failure payload it cannot trust", () => {
+    const failed = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-failed",
+      task_id: "task-legacy",
+      type: "task.failed",
+      payload: { message: "provider unavailable", failure: { stage: "invented", reason: "x" } },
+    });
+    const task = failed.tasks["task-legacy"];
+    expect(task.failure).toBeUndefined();
+    expect(task.partial).toBeUndefined();
+    expect(task.error).toBe("provider unavailable");
+  });
+
+  it("clears a stranded bridge error when a recovered task announces it restarted", () => {
+    const failed = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-failed",
+      task_id: "task-recovered",
+      type: "task.failed",
+      payload: { code: "BRIDGE_PROCESS_GONE", message: "OfficeCLI agent-bridge was stopped before this task finished." },
+    });
+    const restarted = applyTaskEvent(failed, {
+      event_id: "event-started",
+      task_id: "task-recovered",
+      type: "task.started",
+      payload: { run_id: "run-1", resumed: true },
+    });
+    const resumed = applyTaskEvent(restarted, {
+      event_id: "event-progress",
+      task_id: "task-recovered",
+      type: "task.progress",
+      payload: { step: "generate", status: "running", content: "Generating document content" },
+    });
+
+    expect(resumed.tasks["task-recovered"].status).toBe("running");
+    expect(resumed.tasks["task-recovered"].error).toBeUndefined();
+  });
+
+  // Progress with no restart in front of it is the signature of a run that was
+  // relaunched behind the app's back: the task was failed on purpose, and
+  // replayed steps must not put it back into a state it will never leave.
+  it("keeps a failed task failed when late progress arrives without a restart", () => {
+    const failed = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-failed",
+      task_id: "task-zombie",
+      type: "task.failed",
+      payload: { code: "BRIDGE_PROCESS_GONE", message: "OfficeCLI agent-bridge was stopped before this task finished." },
+    });
+    const late = applyTaskEvent(failed, {
+      event_id: "event-progress",
+      task_id: "task-zombie",
+      type: "task.progress",
+      payload: { step: "generate", status: "running", content: "Checking access status" },
+    });
+
+    expect(late.tasks["task-zombie"].status).toBe("failed");
+    expect(late.tasks["task-zombie"].error).toBeDefined();
+  });
+
+  // A cancel landing after a failure is still the better account of how the
+  // task ended, so terminal states may correct one another.
+  it("lets one terminal state correct another", () => {
+    const failed = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-failed",
+      task_id: "task-terminal",
+      type: "task.failed",
+      payload: { message: "interrupted" },
+    });
+    const cancelled = applyTaskEvent(failed, {
+      event_id: "event-cancelled",
+      task_id: "task-terminal",
+      type: "task.cancelled",
+      payload: { message: "Task cancelled because its document was deleted" },
+    });
+
+    expect(cancelled.tasks["task-terminal"].status).toBe("cancelled");
+  });
+
+  it("accumulates ordered PPTX drawing ops from streamed bridge events", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-ops-1",
+      task_id: "task-ops",
+      type: "task.vibe_ops",
+      payload: { ops: [{ seq: 2, op: "shape.add", slide: 1 }, { seq: 1, op: "slide.begin", slide: 1 }] },
+    });
+    const next = applyTaskEvent(state, {
+      event_id: "event-ops-2",
+      task_id: "task-ops",
+      type: "task.vibe_ops",
+      payload: { ops: [{ seq: 3, op: "slide.end", slide: 1 }, { seq: 2, op: "shape.add", slide: 1, shape: { kind: "text" } }] },
+    });
+
+    expect(next.tasks["task-ops"].vibeOps?.map((op) => op.seq)).toEqual([1, 2, 3]);
+    expect(next.tasks["task-ops"].vibeOps?.[1].shape).toEqual({ kind: "text" });
+  });
+
+  it("hydrates persisted plan question answers from history replay", () => {
+    const withQuestion = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-question",
+      task_id: "task-answers",
+      type: "task.question",
+      payload: {
+        id: "question-group",
+        question: "Who is the audience?",
+        currentIndex: 1,
+        questions: [
+          {
+            id: "q-audience",
+            question: "Who is the audience?",
+            options: [{ id: "leadership", label: "Leadership" }],
+            allowFreeform: false,
+          },
+          {
+            id: "q-context",
+            question: "What context should be included?",
+            options: [],
+            allowFreeform: true,
+          },
+        ],
+      },
+    });
+
+    const withAnswers = applyTaskEvent(withQuestion, {
+      event_id: "event-answers",
+      task_id: "task-answers",
+      type: "task.answers",
+      payload: {
+        answers: [
+          { questionId: "q-audience", optionId: "leadership", answer: "Leadership", questionIndex: 0 },
+          { questionId: "q-context", answer: "Mention the 2026 launch plan.", questionIndex: 1 },
+        ],
+      },
+    });
+
+    expect(withAnswers.tasks["task-answers"].question?.answers).toEqual([
+      { questionId: "q-audience", optionId: "leadership", answer: "Leadership", questionIndex: 0 },
+      { questionId: "q-context", answer: "Mention the 2026 launch plan.", questionIndex: 1 },
+    ]);
+  });
+
+  it("accepts renderer-facing camelCase question payload fields", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-1",
+      task_id: "task-1",
+      type: "task.question",
+      payload: {
+        id: "question-1",
+        question: "Who is this deck for?",
+        options: [],
+        allowFreeform: true,
+      },
+    });
+
+    expect(state.tasks["task-1"].question?.allowFreeform).toBe(true);
+  });
+
+  it("tracks plan review events before generation continues", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-plan",
+      task_id: "task-1",
+      type: "task.plan",
+      payload: {
+        id: "plan-1",
+        plan_id: "plan-1",
+        markdown: "# Proposed Plan\n\n- Confirm before generating.",
+        revision: 2,
+      },
+    });
+
+    expect(state.tasks["task-1"].status).toBe("plan_review");
+    expect(state.tasks["task-1"].plan).toEqual({
+      id: "plan-1",
+      markdown: "# Proposed Plan\n\n- Confirm before generating.",
+      revision: 2,
+    });
+  });
+
+  it("maps native runtime steps by meaning instead of progress event count", () => {
+    let state = createInitialTaskState();
+    const taskId = "xlsx-semantic-stages";
+    const progress = [
+      { event_id: "license-running", task_id: taskId, type: "task.progress", payload: { step: "license", status: "running" } },
+      { event_id: "license-completed", task_id: taskId, type: "task.progress", payload: { step: "license", status: "completed" } },
+      { event_id: "plan-running", task_id: taskId, type: "task.progress", payload: { step: "plan_prepare", status: "running" } },
+      { event_id: "plan-completed", task_id: taskId, type: "task.progress", payload: { step: "plan_prepare", status: "completed" } },
+      { event_id: "confirm-paused", task_id: taskId, type: "task.progress", payload: { step: "plan_confirm", status: "paused" } },
+    ] as const;
+    for (const event of progress) state = applyTaskEvent(state, event);
+
+    expect(state.tasks[taskId].stages).toEqual([
+      expect.objectContaining({ id: "access", label: "Checking access", status: "completed" }),
+      expect.objectContaining({ id: "plan", label: "Preparing execution plan", status: "completed" }),
+      expect.objectContaining({ id: "plan-review", label: "Waiting for plan approval", status: "active" }),
+    ]);
+    expect(state.tasks[taskId].activeStageId).toBe("plan-review");
+    expect(state.tasks[taskId].stages?.some((stage) => stage.label === "Formatting & export")).toBe(false);
+  });
+
+  /*
+   * The progressive PPTX pipeline's own steps, with the diagnostic text a real
+   * run emitted. None of `plan.*` had a case, so each became its own stage
+   * titled with that text: evidence paths, palette hex, MOP internals. Thirteen
+   * such rows on one screen, still growing.
+   */
+  it("keeps OfficeCLI's pptx pipeline steps as stages, not as their diagnostic text", () => {
+    let state = createInitialTaskState();
+    const taskId = "pptx-pipeline-stages";
+    const leaks = [
+      'Web research skipped: Post "https://platform.officecli.io/api/llm/v1/structured": context deadline exceeded',
+      "Outline request/response evidence: /Users/testuser/Library/Application Support/OfficeDex/workspace/20260919/.mop-assets/officecli-outline-1381267839",
+      "Design system: preset tech-contrast, scale display, corners square, ornament rules; palette #189776/#F2104A sampled from the family distribution",
+      "Streaming 8 slides into the MOP worker as their content lands",
+      "Using 8 provisional MOP slide compositions; real content may refine each non-image page",
+    ] as const;
+    const progress = [
+      { event_id: "license", task_id: taskId, type: "task.progress", payload: { step: "license", status: "completed" } },
+      { event_id: "research", task_id: taskId, type: "task.progress", payload: { step: "plan.research", status: "running", content: leaks[0] } },
+      { event_id: "outline", task_id: taskId, type: "task.progress", payload: { step: "plan.outline", status: "running", content: leaks[1] } },
+      { event_id: "style", task_id: taskId, type: "task.progress", payload: { step: "plan.style", status: "running", content: leaks[2] } },
+      { event_id: "expand-a", task_id: taskId, type: "task.progress", payload: { step: "plan.expand", status: "running", content: leaks[3] } },
+      { event_id: "expand-b", task_id: taskId, type: "task.progress", payload: { step: "plan.expand", status: "running", content: leaks[4] } },
+    ] as const;
+    for (const event of progress) state = applyTaskEvent(state, event);
+
+    const stages = state.tasks[taskId].stages ?? [];
+    expect(stages.map((stage) => stage.id)).toEqual([
+      "access",
+      "research",
+      "outline",
+      "design",
+      "generate-content",
+    ]);
+    // Two `plan.expand` events, one stage: repeated work is progress within a
+    // stage, not another stage.
+    expect(stages.filter((stage) => stage.id === "generate-content")).toHaveLength(1);
+    for (const leak of leaks) {
+      expect(stages.some((stage) => stage.label === leak)).toBe(false);
+    }
+  });
+
+  /*
+   * The eighty seconds of silence.
+   *
+   * Between the outline finishing and the pages starting, a real run emits
+   * `skill.design`, `skill.plan` and `skill.author`. With those unmapped the
+   * panel showed every row ticked and nothing turning for well over a minute,
+   * which reads as a hang — the opposite failure to the one that started this,
+   * and caused by the fix for it.
+   */
+  it("keeps a stage turning through the steps between outline and pages", () => {
+    let state = createInitialTaskState();
+    const taskId = "pptx-skill-steps";
+    const events = [
+      { event_id: "outline-done", task_id: taskId, type: "task.progress", payload: { step: "plan.outline", status: "completed" } },
+      { event_id: "skill-plan", task_id: taskId, type: "task.progress", payload: { step: "skill.plan", status: "running" } },
+      { event_id: "skill-design", task_id: taskId, type: "task.progress", payload: { step: "skill.design", status: "running" } },
+      { event_id: "skill-author", task_id: taskId, type: "task.progress", payload: { step: "skill.author", status: "running" } },
+    ] as const;
+    for (const event of events) state = applyTaskEvent(state, event);
+
+    const stages = state.tasks[taskId].stages ?? [];
+    expect(stages.map((stage) => stage.id)).toEqual(["outline", "design", "generate-content"]);
+    // Something is always active: that is the whole point.
+    expect(state.tasks[taskId].activeStageId).toBe("generate-content");
+    expect(stages.find((stage) => stage.id === "design")?.label).toBe("Choosing a design");
+  });
+
+  // An unmapped step must leave the list alone rather than inventing a row for
+  // itself — the behaviour that let every new runtime step reach the screen.
+  it("ignores a step it does not recognise instead of naming a stage after it", () => {
+    let state = createInitialTaskState();
+    const taskId = "pptx-unknown-step";
+    const events = [
+      { event_id: "license", task_id: taskId, type: "task.progress", payload: { step: "license", status: "completed" } },
+      { event_id: "outline", task_id: taskId, type: "task.progress", payload: { step: "plan.outline", status: "running" } },
+      { event_id: "mystery", task_id: taskId, type: "task.progress", payload: { step: "plan.something_new", status: "running", content: "internal detail nobody asked for" } },
+    ] as const;
+    for (const event of events) state = applyTaskEvent(state, event);
+
+    const stages = state.tasks[taskId].stages ?? [];
+    expect(stages.map((stage) => stage.id)).toEqual(["access", "outline"]);
+    expect(state.tasks[taskId].activeStageId).toBe("outline");
+  });
+
+  /*
+   * Sheet edit's first bridge event is EventStepStarted for the wrapper
+   * step `modify`. That used to miss every semantic case and seed the
+   * four-stage document skeleton; `license` then appended "Checking access"
+   * under it and ticked Analyzing request. The access check is a preflight
+   * and the wrapper is not a stage.
+   */
+  it("keeps a sheet-edit access check first, without the document skeleton", () => {
+    let state = createInitialTaskState();
+    const taskId = "xlsx-modify-access";
+    const events = [
+      { event_id: "modify-started", task_id: taskId, type: "task.progress", payload: { step: "modify", status: "running" } },
+      { event_id: "license-running", task_id: taskId, type: "task.progress", payload: { step: "license", status: "running" } },
+      { event_id: "license-completed", task_id: taskId, type: "task.progress", payload: { step: "license", status: "completed" } },
+    ] as const;
+    for (const event of events) state = applyTaskEvent(state, event);
+
+    const stages = state.tasks[taskId].stages ?? [];
+    expect(stages.map((stage) => stage.id)).toEqual(["access"]);
+    expect(stages[0]).toEqual(expect.objectContaining({ id: "access", status: "completed" }));
+    expect(state.tasks[taskId].activeStageId).toBeUndefined();
+    expect(stages.some((stage) => stage.id === "analyze" || stage.label === "Formatting & export")).toBe(false);
+  });
+
+  it("inserts a late access check ahead of a wrapper generate stage", () => {
+    let state = createInitialTaskState();
+    const taskId = "generate-then-license";
+    const events = [
+      { event_id: "generate-started", task_id: taskId, type: "task.progress", payload: { step: "generate", status: "running" } },
+      { event_id: "license-running", task_id: taskId, type: "task.progress", payload: { step: "license", status: "running" } },
+      { event_id: "license-completed", task_id: taskId, type: "task.progress", payload: { step: "license", status: "completed" } },
+    ] as const;
+    for (const event of events) state = applyTaskEvent(state, event);
+
+    const stages = state.tasks[taskId].stages ?? [];
+    expect(stages.map((stage) => stage.id)).toEqual(["access", "generate"]);
+    expect(stages[0]?.status).toBe("completed");
+    expect(stages[1]?.status).toBe("active");
+    expect(state.tasks[taskId].activeStageId).toBe("generate");
+  });
+
+  it("does not seed the four-stage skeleton from an unmapped named step", () => {
+    let state = createInitialTaskState();
+    const taskId = "xlsx-modify-wrapper";
+    state = applyTaskEvent(state, {
+      event_id: "modify-started",
+      task_id: taskId,
+      type: "task.progress",
+      payload: { step: "modify", status: "running" },
+    });
+
+    expect(state.tasks[taskId].stages).toEqual([]);
+    expect(state.tasks[taskId].activeStageId).toBeUndefined();
+  });
+
+  it("moves an accepted plan response into running state before bridge events arrive", () => {
+    const waiting = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-plan",
+      task_id: "task-1",
+      type: "task.plan",
+      payload: { id: "plan-1", plan_id: "plan-1", markdown: "# Plan", revision: 1 },
+    });
+
+    const continuing = markTaskContinuing(waiting, "task-1");
+
+    expect(continuing.tasks["task-1"].status).toBe("running");
+    expect(continuing.tasks["task-1"].plan?.id).toBe("plan-1");
+    expect(continuing.tasks["task-1"].interactiveResponsePending).toBe(true);
+  });
+
+  it("hides recovery replay gates until the interactive response finishes", () => {
+    let state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-plan-1",
+      task_id: "task-1",
+      type: "task.plan",
+      payload: { id: "plan-1", plan_id: "plan-1", markdown: "# Plan", revision: 1 },
+    });
+    state = markTaskContinuing(state, "task-1");
+    state = applyTaskEvent(state, {
+      event_id: "event-replayed-plan",
+      task_id: "task-1",
+      type: "task.plan",
+      payload: { id: "plan-2", plan_id: "plan-2", markdown: "# Replayed plan", revision: 1 },
+    });
+
+    expect(state.tasks["task-1"].status).toBe("running");
+    expect(state.tasks["task-1"].plan?.id).toBe("plan-2");
+    expect(state.tasks["task-1"].interactiveResponsePending).toBe(true);
+
+    state = finishTaskContinuing(state, "task-1");
+    expect(state.tasks["task-1"].status).toBe("running");
+    expect(state.tasks["task-1"].interactiveResponsePending).toBe(true);
+    expect(state.tasks["task-1"].interactiveResponseAccepted).toBe(true);
+
+    state = applyTaskEvent(state, {
+      event_id: "event-replayed-plan-after-accept",
+      task_id: "task-1",
+      type: "task.plan",
+      payload: { id: "plan-3", plan_id: "plan-3", markdown: "# Final replayed plan", revision: 1 },
+    });
+    expect(state.tasks["task-1"].status).toBe("running");
+    expect(state.tasks["task-1"].interactiveResponsePending).toBe(true);
+
+    state = applyTaskEvent(state, {
+      event_id: "event-generate",
+      task_id: "task-1",
+      type: "task.progress",
+      payload: { step: "generate", status: "running" },
+    });
+    expect(state.tasks["task-1"].status).toBe("running");
+    expect(state.tasks["task-1"].interactiveResponsePending).toBeUndefined();
+    expect(state.tasks["task-1"].interactiveResponseAccepted).toBeUndefined();
+  });
+
+  it("shows a new follow-up question after an accepted answer", () => {
+    let state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-question-1",
+      task_id: "task-questions",
+      type: "task.question",
+      payload: { id: "question-1", question: "Who is the audience?", options: [{ id: "beginner", label: "Beginner" }] },
+    });
+    state = markTaskContinuing(state, "task-questions");
+    state = finishTaskContinuing(state, "task-questions");
+
+    state = applyTaskEvent(state, {
+      event_id: "event-question-2",
+      task_id: "task-questions",
+      type: "task.question",
+      payload: { id: "question-2", question: "How dense should the deck be?", options: [{ id: "light", label: "Light" }] },
+    });
+
+    expect(state.tasks["task-questions"].status).toBe("question");
+    expect(state.tasks["task-questions"].question?.id).toBe("question-2");
+  });
+
+  it("restores the original gate when responding fails", () => {
+    let state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-plan",
+      task_id: "task-1",
+      type: "task.plan",
+      payload: { id: "plan-1", plan_id: "plan-1", markdown: "# Plan", revision: 1 },
+    });
+    state = markTaskContinuing(state, "task-1");
+    state = restoreTaskInteractiveGate(state, "task-1", "plan_review");
+
+    expect(state.tasks["task-1"].status).toBe("plan_review");
+    expect(state.tasks["task-1"].interactiveResponsePending).toBeUndefined();
+    expect(state.tasks["task-1"].interactiveResponseAccepted).toBeUndefined();
+  });
+
+  it("preserves execution_prompt when restoring plan review events", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-plan",
+      task_id: "task-1",
+      type: "task.plan",
+      payload: {
+        id: "plan-1",
+        plan_id: "plan-1",
+        plan_markdown: "# Proposed Plan\n\n- Confirm before generating.",
+        execution_prompt: "Generate the PPT only after the restored plan is approved.",
+        revision: 2,
+      },
+    });
+
+    expect(state.tasks["task-1"].status).toBe("plan_review");
+    expect(state.tasks["task-1"].plan).toEqual({
+      id: "plan-1",
+      markdown: "# Proposed Plan\n\n- Confirm before generating.",
+      revision: 2,
+      executionPrompt: "Generate the PPT only after the restored plan is approved.",
+    });
+  });
+
+  it("captures credits_charged and credit_mode from task.completed payload", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-1",
+      task_id: "task-1",
+      type: "task.completed",
+      payload: {
+        credits_charged: 5,
+        credit_mode: "hosted",
+      },
+    });
+    expect(state.tasks["task-1"].creditCharged).toBe(5);
+    expect(state.tasks["task-1"].creditMode).toBe("hosted");
+  });
+
+  it("captures image watermark metadata from task.completed payload", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-watermark",
+      task_id: "task-img",
+      type: "task.completed",
+      payload: {
+        result: { file_path: "/tmp/banner.png", file_name: "banner.png", document_type: "img" },
+        image_watermark: {
+          applied: true,
+          paidEntitlement: false,
+          canDisable: false,
+        },
+      },
+    });
+    expect(state.tasks["task-img"].imageWatermark).toEqual({
+      applied: true,
+      paidEntitlement: false,
+      canDisable: false,
+    });
+  });
+
+  it("captures credits on task.failed payload (zero allowed)", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-1",
+      task_id: "task-1",
+      type: "task.failed",
+      payload: {
+        credits_charged: 0,
+        credit_mode: "anonymous",
+      },
+    });
+    expect(state.tasks["task-1"].creditCharged).toBe(0);
+    expect(state.tasks["task-1"].creditMode).toBe("anonymous");
+  });
+
+  it("leaves credit fields undefined when payload lacks credits_charged (legacy binary)", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-1",
+      task_id: "task-1",
+      type: "task.completed",
+      payload: {
+        result: { file_path: "/tmp/x.pptx", file_name: "x.pptx", document_type: "pptx" },
+      },
+    });
+    expect(state.tasks["task-1"].creditCharged).toBeUndefined();
+    expect(state.tasks["task-1"].creditMode).toBeUndefined();
+  });
+
+  it("ignores non-numeric credits_charged values", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "event-1",
+      task_id: "task-1",
+      type: "task.completed",
+      payload: {
+        credits_charged: "5",
+        credit_mode: "hosted",
+      },
+    });
+    expect(state.tasks["task-1"].creditCharged).toBeUndefined();
+    expect(state.tasks["task-1"].creditMode).toBeUndefined();
+  });
+
+  it("captures runtimeSnapshot from task.started payload", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "ev-e1",
+      task_id: "task-ext",
+      type: "task.started",
+      payload: { runtime_mode: "custom", topic: "demo" },
+    });
+    expect(state.tasks["task-ext"].runtimeSnapshot).toBeDefined();
+    expect(state.tasks["task-ext"].runtimeSnapshot!.mode).toBe("custom");
+
+    const hostedState = applyTaskEvent(createInitialTaskState(), {
+      event_id: "ev-h1",
+      task_id: "task-hos",
+      type: "task.started",
+      payload: { runtime_mode: "hosted" },
+    });
+    expect(hostedState.tasks["task-hos"].runtimeSnapshot).toBeDefined();
+    expect(hostedState.tasks["task-hos"].runtimeSnapshot!.mode).toBe("hosted");
+
+    const noMode = applyTaskEvent(createInitialTaskState(), {
+      event_id: "ev-x1",
+      task_id: "task-x",
+      type: "task.started",
+      payload: { topic: "no mode" },
+    });
+    expect(noMode.tasks["task-x"].runtimeSnapshot).toBeUndefined();
+  });
+
+  it("builds runtimeSnapshot with provider details from task.started payload", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "ev-snap",
+      task_id: "task-snap",
+      type: "task.started",
+      payload: {
+        runtime_mode: "custom",
+        runtime_provider: {
+          type: "openai",
+          base_url_host: "https://api.openai.com",
+          model: "gpt-4o-mini",
+          api_key_masked: "sk-ab••••wxyz",
+          api_key_length: 43,
+        },
+        runtime_applied_at: "2026-05-25T10:00:00Z",
+      },
+    });
+    const task = state.tasks["task-snap"];
+    expect(task.runtimeSnapshot).toBeDefined();
+    expect(task.runtimeSnapshot!.mode).toBe("custom");
+    expect(task.runtimeSnapshot!.appliedAt).toBe("2026-05-25T10:00:00Z");
+    expect(task.runtimeSnapshot!.provider).toEqual({
+      type: "openai",
+      baseUrlHost: "https://api.openai.com",
+      model: "gpt-4o-mini",
+      apiKeyMasked: "sk-ab••••wxyz",
+      apiKeyLength: 43,
+    });
+  });
+
+  it("builds hosted runtimeSnapshot without provider", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "ev-hosted",
+      task_id: "task-hosted",
+      type: "task.started",
+      payload: { runtime_mode: "hosted" },
+    });
+    const task = state.tasks["task-hosted"];
+    expect(task.runtimeSnapshot).toBeDefined();
+    expect(task.runtimeSnapshot!.mode).toBe("hosted");
+    expect(task.runtimeSnapshot!.provider).toBeUndefined();
+  });
+
+  it("normalizes legacy fast generation mode from task.user_input to plan without treating it as runtime mode", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "ev-user-input",
+      task_id: "task-plan",
+      type: "task.user_input",
+      payload: {
+        prompt: "Write a plan-mode memo",
+        generation_mode: "fast",
+        runtime_mode: "hosted",
+      },
+    });
+    expect(state.tasks["task-plan"].userInput).toEqual({
+      prompt: "Write a plan-mode memo",
+      generationMode: "plan",
+      sourceFile: undefined,
+      referenceImages: undefined,
+      imageRatio: undefined,
+      fps: undefined,
+    });
+    expect(state.tasks["task-plan"].userInput).not.toHaveProperty("runtimeMode");
+  });
+
+  it("keeps a normalized chart on project tree nodes", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "ev-chart",
+      task_id: "task-chart",
+      type: "task.vibe_tree",
+      payload: {
+        stage: "slides_ready",
+        tree: {
+          id: "tree-chart",
+          rootId: "root",
+          title: "增长分析",
+          nodes: [
+            {
+              id: "slide-1",
+              kind: "slide",
+              title: "趋势",
+              relation: "trend",
+              chart: {
+                type: "line",
+                categories: ["一月", "二月"],
+                values: [10, 18],
+                source: { kind: "table", ref: "sheet1!A1:C2" },
+              },
+            },
+          ],
+        },
+      },
+    });
+
+    expect(state.tasks["task-chart"].vibeTree?.tree.nodes[0]?.chart).toMatchObject({
+      type: "line",
+      series: [{ name: "系列 1", values: [10, 18] }],
+      source: { kind: "table", ref: "sheet1!A1:C2" },
+    });
+    expect(state.tasks["task-chart"].vibeTree?.tree.nodes[0]?.relation).toBe("trend");
+  });
+
+  it("stores Vibe tree confirmation metadata from bridge events", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      event_id: "ev-vibe",
+      task_id: "task-vibe",
+      type: "task.vibe_tree",
+      payload: {
+        stage: "slides_ready",
+        tree: {
+          id: "tree-1",
+          rootId: "root",
+          title: "Confirmation Test",
+          nodes: [
+            { id: "root", kind: "root", title: "Confirmation Test" },
+            { id: "slide-outline-01", parentId: "root", kind: "slide", title: "Slide 1" },
+          ],
+        },
+        actions: [{ id: "export_pptx", label: "Generate PPTX" }],
+        confirmation: { nodeIds: ["slide-outline-01"] },
+      },
+    });
+
+    expect(state.tasks["task-vibe"].vibeTree).toMatchObject({
+      stage: "slides_ready",
+      confirmation: { nodeIds: ["slide-outline-01"] },
+    });
+  });
+
+  it("overrides a bridge-created conversation id when continuation parent is attached after task.started", () => {
+    let state = createInitialTaskState();
+    state = applyTaskEvent(state, {
+      event_id: "ev-1",
+      task_id: "task-1",
+      type: "task.completed",
+      payload: {
+        result: { file_path: "/tmp/original.png", file_name: "original.png", document_type: "img" },
+      },
+    });
+    state = applyTaskEvent(state, {
+      event_id: "ev-2",
+      task_id: "task-2",
+      type: "task.started",
+      payload: { document_type: "img", topic: "Make it brighter" },
+    });
+
+    state = attachUserInput(state, "task-2", { prompt: "Make it brighter" }, "task-1");
+
+    expect(state.tasks["task-2"].conversationId).toBe("task-1");
+  });
+
+  it("replays demo staged PPTX events into a completed reviewable task", () => {
+    let state = createInitialTaskState();
+    const taskId = "demo-task";
+    const events = [
+      { task_id: taskId, type: "task.started", payload: { document_type: "pptx", topic: "Launch strategy", stage_id: "idea", stage_label: "Idea" } },
+      { task_id: taskId, type: "task.question", payload: { id: "demo-confirm-idea", question: "Confirm the idea", options: [{ id: "confirm", label: "Approve" }] } },
+      { task_id: taskId, type: "task.vibe_tree", payload: { stage: "outline", tree: { id: "demo-tree", rootId: "root", title: "Launch Strategy", nodes: [{ id: "root", title: "Launch Strategy", summary: "Demo", kind: "idea" }] } } },
+      { task_id: taskId, type: "task.vibe_slide", payload: { index: 5, slide: { id: "demo-slide-06", elements: [{ id: "title", type: "text", left: 0, top: 0, width: 100, height: 40, content: "<p>90-Day Launch Timeline</p>" }] } } },
+      { task_id: taskId, type: "task.completed", payload: { result: { file_path: "/tmp/launch-strategy-demo.pptx", file_name: "launch-strategy-demo.pptx", document_type: "pptx" } } },
+    ] as const;
+    for (const event of events) state = applyTaskEvent(state, event);
+    const task = state.tasks[taskId];
+    expect(task.status).toBe("completed");
+    expect(task.documentType).toBe("pptx");
+    expect(task.artifact?.fileName).toBe("launch-strategy-demo.pptx");
+    expect(task.vibeSlides?.[5]?.id).toBe("demo-slide-06");
+  });
+
+  it("stores a structured vibe outline event for chapter-first rendering", () => {
+    const state = applyTaskEvent(createInitialTaskState(), {
+      task_id: "outline-task",
+      type: "task.vibe_outline",
+      payload: { outline: { sections: [{ id: "s1", title: "背景与问题", purpose: "说明现状" }] } },
+    });
+    expect(state.tasks["outline-task"].vibeOutline).toEqual({
+      sections: [{ id: "s1", title: "背景与问题", purpose: "说明现状" }],
+    });
+  });
+});
+
+describe("local task lifecycle", () => {
+  const input = { prompt: "make a deck" } as TaskUserInput;
+
+  // The card has to appear the moment the user clicks, before any round trip.
+  it("shows a placeholder under the id this window invented", () => {
+    const state = startLocalTask(createInitialTaskState(), "local-1", input, {
+      documentType: "pptx",
+      topic: "Quarterly review",
+    });
+
+    expect(state.taskOrder).toEqual(["local-1"]);
+    expect(state.tasks["local-1"].status).toBe("running");
+    expect(state.tasks["local-1"].userInput).toEqual(input);
+  });
+
+  // Promotion is a replacement, not a rename: every event from here on carries
+  // the bridge's id, so a placeholder left behind would never advance again.
+  it("replaces the placeholder with the bridge's task", () => {
+    let state = startLocalTask(createInitialTaskState(), "local-1", input, {
+      documentType: "pptx",
+      topic: "Quarterly review",
+    });
+    state = promoteLocalTask(state, "local-1", "task-9", input);
+
+    expect(state.tasks["local-1"]).toBeUndefined();
+    expect(state.taskOrder).toEqual(["task-9"]);
+    expect(state.tasks["task-9"].userInput).toEqual(input);
+  });
+
+  it("removes the placeholder when the call failed", () => {
+    let state = startLocalTask(createInitialTaskState(), "local-1", input, {
+      documentType: "pptx",
+      topic: "Quarterly review",
+    });
+    state = discardLocalTask(state, "local-1");
+
+    expect(state.tasks["local-1"]).toBeUndefined();
+    expect(state.taskOrder).toEqual([]);
+  });
+
+  // A promotion must not disturb a task that was already running, and the list
+  // stays newest-first.
+  it("leaves other tasks alone", () => {
+    let state = startLocalTask(createInitialTaskState(), "local-1", input, {
+      documentType: "pptx",
+      topic: "First",
+    });
+    state = promoteLocalTask(state, "local-1", "task-1", input);
+    state = startLocalTask(state, "local-2", input, { documentType: "docx", topic: "Second" });
+    state = promoteLocalTask(state, "local-2", "task-2", input);
+
+    expect(state.taskOrder).toEqual(["task-2", "task-1"]);
+    expect(Object.keys(state.tasks).sort()).toEqual(["task-1", "task-2"]);
+  });
+});
+
+describe("task.reslide_tail", () => {
+  it("replaces the previously drawn tail from firstSeq onwards", () => {
+    let state = applyTaskEvent(createInitialTaskState(), {
+      task_id: "t1",
+      type: "task.vibe_ops",
+      payload: { ops: [{ op: "a", seq: 1 }, { op: "b", seq: 2 }, { op: "c", seq: 3 }, { op: "d", seq: 4 }] },
+    } as BridgeEvent);
+    state = applyTaskEvent(state, {
+      task_id: "t1",
+      type: "task.reslide_tail",
+      payload: { firstSeq: 3, lastSeq: 4, fromSlide: 2, ops: [{ op: "c2", seq: 3 }, { op: "d2", seq: 4 }] },
+    } as BridgeEvent);
+    expect((state.tasks.t1.vibeOps ?? []).map((op) => op.op)).toEqual(["a", "b", "c2", "d2"]);
+  });
+
+  it("drops stale ops past the new tail even when the redo is shorter", () => {
+    let state = applyTaskEvent(createInitialTaskState(), {
+      task_id: "t1",
+      type: "task.vibe_ops",
+      payload: { ops: [{ op: "a", seq: 1 }, { op: "b", seq: 2 }, { op: "c", seq: 3 }, { op: "d", seq: 4 }] },
+    } as BridgeEvent);
+    state = applyTaskEvent(state, {
+      task_id: "t1",
+      type: "task.reslide_tail",
+      payload: { firstSeq: 3, lastSeq: 3, ops: [{ op: "c2", seq: 3 }] },
+    } as BridgeEvent);
+    expect((state.tasks.t1.vibeOps ?? []).map((op) => op.op)).toEqual(["a", "b", "c2"]);
+  });
+});

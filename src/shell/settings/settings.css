@@ -1,0 +1,196 @@
+/*
+ * The settings page — the shell's second full-page surface.
+ *
+ * It follows `account/account.css` in structure: a fixed cover over the whole
+ * window at `--shell-z-gate`, rendered as a sibling of every region so the open
+ * document's editor survives the trip (decision 4 in `App.tsx`). It exists
+ * because the shell had no settings page at all: the legacy renderer's page was
+ * reachable only by typing `legacy.html`, which a packaged WKWebView has no
+ * address bar for, so 94 of its settings were permanently gone (audit S7 §3).
+ *
+ * **Why this file writes no colour and no font-size of its own.** Two gates own
+ * that: `test/tokenDiscipline.test.ts` fails on any literal colour or off-scale
+ * size outside `tokens.css`, and it pins the exemption file set to exactly
+ * `agent.css`, `chrome.css` and `composer.css` — so this file cannot be
+ * excused. Every value below is a `var(--shell-*)` token or a `color-mix()` of
+ * one, which is the escape hatch `composer.css` already uses for a tint that
+ * has no token.
+ *
+ * **Why nothing here opens a stacking context.** `test/layers.test.ts` requires
+ * every `opacity < 1`, `transform`, `filter`, `contain` or `container-type`
+ * declaration in a stylesheet that also declares a `z-index` to be registered
+ * in its `STACKING_CONTEXTS` table. This file must declare one — it is a cover
+ * — so it keeps itself out of that table by not writing any of those
+ * properties. That is the whole reason the disabled states below are drawn by
+ * `renderer/ui/styles/components.css` (on `.od-button:disabled`, which this
+ * file does not restyle) rather than by an `opacity` here, and the reason the
+ * spinner's rotation lives in `@keyframes`, which the gate skips by design.
+ *
+ * The controls themselves are the shared `@vo-ui` primitives. `tokens.css`
+ * already re-points their `--od-*` tokens at the shell's language inside
+ * `#shell`, so a `Button` or a `Select` here is the same control the composer
+ * and Editor Home already draw — the shell does not get a second control
+ * vocabulary for its settings.
+ */
+
+/* ---- Head -------------------------------------------------------------- */
+
+/*
+ * The save state. Legacy drew this as a green pill; the shell's one
+ * prototype-backed "this finished" colour is `--shell-status-done`, so the dot
+ * takes that rather than a new success green.
+ */
+
+/* ---- Layout ------------------------------------------------------------ */
+
+/* A spinner is motion, and the platform preference switches it off — the same
+   rule the account page keeps for its own. */
+
+/* ---- Section card and rows -------------------------------------------- */
+
+/* A form row gives its control the whole width and stacks it under the copy —
+   a two-column grid is for a switch, not for four labelled fields. */
+
+/* A block that is its own row rather than a labelled setting: the diagnostics
+   or runtime table, which bring their own headings. */
+.shell-settings-block {
+  min-width: 0;
+  padding: 14px 18px;
+}
+
+.shell-settings-block + .shell-settings-block {
+  border-top: 1px solid var(--shell-line-soft);
+}
+
+.shell-settings-subhead {
+  margin: 0;
+  color: var(--shell-ink-title);
+  font-size: var(--shell-text-md);
+  font-weight: 600;
+}
+
+.shell-settings-block > .shell-settings-subhead {
+  margin-bottom: 8px;
+}
+
+.shell-settings-note {
+  color: var(--shell-ink-faint);
+  font-size: var(--shell-text-sm);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+/* The redeem confirmation. `--shell-status-done` is the shell's one
+   prototype-backed "this finished" colour — the same one the save pill's dot
+   uses — rather than a second success green invented for one line. */
+.shell-settings-note[data-tone="done"] {
+  color: var(--shell-status-done);
+}
+
+.shell-settings-hint {
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text);
+  line-height: 1.6;
+}
+
+.shell-settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.shell-settings-actions[data-align="end"] {
+  justify-content: flex-end;
+}
+
+.shell-settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.shell-settings-toggle > span {
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text);
+}
+
+/*
+ * Form controls fill the field they sit in.
+ *
+ * `.od-input` and `.od-select` stretch because Grid does it for them — they are
+ * direct children of a grid track. `.od-password-input` is a wrapper
+ * `<span>` with `display: inline-flex` and no width, so it stretched while the
+ * `<input>` inside it kept its UA width: the PAT field came out about 200px
+ * wide in a 300px column, with the reveal toggle floating in the gap. The
+ * legacy card carried the same declarations for the same reason.
+ */
+
+/*
+ * A row whose control should use the whole column rather than sit at its end —
+ * the redeem field, which wants the room and puts the button after it.
+ */
+.shell-settings-actions[data-grow="true"] {
+  flex: 1 1 auto;
+}
+
+.shell-settings-actions[data-grow="true"] .od-input {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+/* ---- Connector cards (Jira, Liquipedia) -------------------------------- */
+
+/*
+ * A failed read or write, anywhere on the page: the connector cards, the proxy
+ * validation, the runtime table's poll. One class, because it is one thing.
+ */
+.shell-settings-error {
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--shell-status-danger) 40%, transparent);
+  border-radius: var(--shell-radius-item);
+  background: var(--shell-paper);
+  color: var(--shell-status-danger);
+  font-size: var(--shell-text);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+/* The workflow cell of the runtime table: a name with tags beside it. */
+.shell-settings-runtime-run {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+/*
+ * The report-issue dialog is the one legacy component this page renders, and
+ * its two class names have a rule in no stylesheet at all — not the shell's,
+ * not the legacy renderer's either. They are drawn here, where the dialog is
+ * opened from. `scripts/verify-shell-styles.mjs` is the gate that asked the
+ * question, and these rules are its answer rather than an exemption.
+ *
+ * Unscoped on purpose: the dialog portals into `#shell`, so it is a sibling of
+ * this page rather than a descendant of `.shell-settings`.
+ */
+.report-context-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.report-context-item {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--shell-sunken);
+  color: var(--shell-ink-muted);
+  font-size: var(--shell-text-sm);
+}
+
+/* ---- Activity ---------------------------------------------------------- */
+
+/* ---- About ------------------------------------------------------------- */
+
+/* ---- Narrow windows ---------------------------------------------------- */

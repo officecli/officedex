@@ -1,0 +1,146 @@
+{
+  "id": "parallel-18-1",
+  "family": "parallel",
+  "source": "sampleall/shape/并列4项5/并列4项5.pptx",
+  "page": 18,
+  "program": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__并列4项5__并列4项5/slides/slide-0018.mjs",
+  "verification": "artifacts/aippt/full-distillation/font-metrics-v3/source-f5ce57c6497d66582839/verification.json",
+  "observed_items": 4,
+  "mechanism": "ring-labels",
+  "source_fact": "四个等大环横向等距；下方小圆为身份标签；大标题独立占一行。",
+  "transfer_hypothesis": "仅短标签；源页没有长正文，不能据此声称支持三行说明。",
+  "visual_review": "source_preview_inspected",
+  "state": "source_fact",
+  "ssim": 0.9975980192199332,
+  "exact_reference": false,
+  "program_sha256": "6563fb2c6b85e583131885540d86de5e743330084bf37d0b05ac9a7d5fb42afa",
+  "verification_sha256": "3f7887971ac344772a91614b8d31fb6fd7c8cd50e34021d02c75d5c90765890b",
+  "preview": "sampleall/shape/并列4项5/并列4项5/幻灯片18.png",
+  "checks": {
+    "jssdk_executed": true,
+    "native_objects": {
+      "count": 9,
+      "types": [
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape"
+      ]
+    },
+    "text_overflow": 0,
+    "render_errors": 0,
+    "pptx_export": "passed",
+    "strict_reimport": "passed",
+    "text_coverage_version": 2,
+    "text_measurement": "font_metrics"
+  },
+  "canvas_pt": [
+    960.0,
+    540.0
+  ],
+  "objects": [
+    {
+      "id": "s2",
+      "api": "addGeometricShape",
+      "kind": "Donut",
+      "bounds_fraction": {
+        "left": 0.13001,
+        "top": 0.72074,
+        "width": 0.05378,
+        "height": 0.09561
+      },
+      "text_characters": 1,
+      "font_pt": [
+        18.0
+      ],
+      "colors": [
+        "#FFCA08"
+      ]
+    },
+    {
+      "id": "s4",
+      "api": "addGeometricShape",
+      "kind": "Donut",
+      "bounds_fraction": {
+        "left": 0.35944,
+        "top": 0.72074,
+        "width": 0.05378,
+        "height": 0.09561
+      },
+      "text_characters": 1,
+      "font_pt": [
+        18.0
+      ],
+      "colors": [
+        "#FFCA08"
+      ]
+    },
+    {
+      "id": "s6",
+      "api": "addGeometricShape",
+      "kind": "Donut",
+      "bounds_fraction": {
+        "left": 0.58886,
+        "top": 0.72074,
+        "width": 0.05378,
+        "height": 0.09561
+      },
+      "text_characters": 1,
+      "font_pt": [
+        18.0
+      ],
+      "colors": [
+        "#FFCA08"
+      ]
+    },
+    {
+      "id": "s8",
+      "api": "addGeometricShape",
+      "kind": "Donut",
+      "bounds_fraction": {
+        "left": 0.81829,
+        "top": 0.72074,
+        "width": 0.05378,
+        "height": 0.09561
+      },
+      "text_characters": 1,
+      "font_pt": [
+        18.0
+      ],
+      "colors": [
+        "#FFCA08"
+      ]
+    },
+    {
+      "id": "s9",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.16221,
+        "top": 0.13733,
+        "width": 0.67559,
+        "height": 0.11927
+      },
+      "text_characters": 17,
+      "font_pt": [
+        32.0
+      ],
+      "colors": [
+        "#000000"
+      ]
+    }
+  ],
+  "extraction_scope": "literal object geometry; group transforms and custom paths require source inspection",
+  "source_admission": "high_similarity_verified",
+  "revalidation": {
+    "state": "source_verified",
+    "reasons": [],
+    "complete_group_text_coverage_required": true,
+    "font_metrics_required": true
+  }
+}

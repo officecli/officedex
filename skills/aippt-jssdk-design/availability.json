@@ -1,0 +1,661 @@
+{
+  "contract": "jssdk-progressive/v2",
+  "source_acceptance": {
+    "metric": "rawSsim",
+    "operator": ">",
+    "threshold": 0.95,
+    "classification": "high_similarity_verified",
+    "require_exact_reference": false
+  },
+  "candidate_references": 38,
+  "accepted_references": 38,
+  "exact_references": 0,
+  "references": [
+    {
+      "id": "parallel-18-1",
+      "family": "parallel",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9975980192199332,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "parallel/evidence/parallel-18-1.mjs",
+      "verification": "parallel/evidence/parallel-18-1.verification.json"
+    },
+    {
+      "id": "parallel-133-2",
+      "family": "parallel",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9955907970684779,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "parallel/evidence/parallel-133-2.mjs",
+      "verification": "parallel/evidence/parallel-133-2.verification.json"
+    },
+    {
+      "id": "parallel-6-3",
+      "family": "parallel",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9951798538512648,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "parallel/evidence/parallel-6-3.mjs",
+      "verification": "parallel/evidence/parallel-6-3.verification.json"
+    },
+    {
+      "id": "parallel-ticket-panels-85",
+      "family": "parallel",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.995586444591137,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "parallel/evidence/parallel-ticket-panels-85.mjs",
+      "verification": "parallel/evidence/parallel-ticket-panels-85.verification.json"
+    },
+    {
+      "id": "parallel-icon-blocks-72",
+      "family": "parallel",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9960557368010614,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "parallel/evidence/parallel-icon-blocks-72.mjs",
+      "verification": "parallel/evidence/parallel-icon-blocks-72.verification.json"
+    },
+    {
+      "id": "parallel-open-ring-callouts-136",
+      "family": "parallel",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9957855189056665,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "parallel/evidence/parallel-open-ring-callouts-136.mjs",
+      "verification": "parallel/evidence/parallel-open-ring-callouts-136.verification.json"
+    },
+    {
+      "id": "parallel-medal-panels-68",
+      "family": "parallel",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9761425905502586,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "parallel/evidence/parallel-medal-panels-68.mjs",
+      "verification": "parallel/evidence/parallel-medal-panels-68.verification.json"
+    },
+    {
+      "id": "parallel-wave-bottom-panels-67",
+      "family": "parallel",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.984205741445392,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "parallel/evidence/parallel-wave-bottom-panels-67.mjs",
+      "verification": "parallel/evidence/parallel-wave-bottom-panels-67.verification.json"
+    },
+    {
+      "id": "parallel-arched-label-panels-70",
+      "family": "parallel",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9877266454479012,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "parallel/evidence/parallel-arched-label-panels-70.mjs",
+      "verification": "parallel/evidence/parallel-arched-label-panels-70.verification.json"
+    },
+    {
+      "id": "parallel-serrated-bottom-panels-74",
+      "family": "parallel",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9767201095522714,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "parallel/evidence/parallel-serrated-bottom-panels-74.mjs",
+      "verification": "parallel/evidence/parallel-serrated-bottom-panels-74.verification.json"
+    },
+    {
+      "id": "parallel-ribbon-ticket-grid-73",
+      "family": "parallel",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9808342371739548,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "parallel/evidence/parallel-ribbon-ticket-grid-73.mjs",
+      "verification": "parallel/evidence/parallel-ribbon-ticket-grid-73.verification.json"
+    },
+    {
+      "id": "parallel-balloon-rings-83",
+      "family": "parallel",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9897581708268822,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "parallel/evidence/parallel-balloon-rings-83.mjs",
+      "verification": "parallel/evidence/parallel-balloon-rings-83.verification.json"
+    },
+    {
+      "id": "parallel-hanging-discs-84",
+      "family": "parallel",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9886966038165317,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "parallel/evidence/parallel-hanging-discs-84.mjs",
+      "verification": "parallel/evidence/parallel-hanging-discs-84.verification.json"
+    },
+    {
+      "id": "parallel-ribbon-circle-grid-90",
+      "family": "parallel",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9881350424770647,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "parallel/evidence/parallel-ribbon-circle-grid-90.mjs",
+      "verification": "parallel/evidence/parallel-ribbon-circle-grid-90.verification.json"
+    },
+    {
+      "id": "parallel-trapezoid-pendants-97",
+      "family": "parallel",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9793927060577451,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "parallel/evidence/parallel-trapezoid-pendants-97.mjs",
+      "verification": "parallel/evidence/parallel-trapezoid-pendants-97.verification.json"
+    },
+    {
+      "id": "parallel-double-diamonds-98",
+      "family": "parallel",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9906270126873149,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "parallel/evidence/parallel-double-diamonds-98.mjs",
+      "verification": "parallel/evidence/parallel-double-diamonds-98.verification.json"
+    },
+    {
+      "id": "parallel-folded-corner-notes-100",
+      "family": "parallel",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9757839550340817,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "parallel/evidence/parallel-folded-corner-notes-100.mjs",
+      "verification": "parallel/evidence/parallel-folded-corner-notes-100.verification.json"
+    },
+    {
+      "id": "parallel-hanger-panels-99",
+      "family": "parallel",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9841796293226148,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "parallel/evidence/parallel-hanger-panels-99.mjs",
+      "verification": "parallel/evidence/parallel-hanger-panels-99.verification.json"
+    },
+    {
+      "id": "list-588-5",
+      "family": "list",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9890289356493378,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "list/evidence/list-588-5.mjs",
+      "verification": "list/evidence/list-588-5.verification.json"
+    },
+    {
+      "id": "list-330-4",
+      "family": "list",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9836832557840478,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "list/evidence/list-330-4.mjs",
+      "verification": "list/evidence/list-330-4.verification.json"
+    },
+    {
+      "id": "list-168-6",
+      "family": "list",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9827039026637115,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "list/evidence/list-168-6.mjs",
+      "verification": "list/evidence/list-168-6.verification.json"
+    },
+    {
+      "id": "list-hexagon-columns-564",
+      "family": "list",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9915365254358455,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "list/evidence/list-hexagon-columns-564.mjs",
+      "verification": "list/evidence/list-hexagon-columns-564.verification.json"
+    },
+    {
+      "id": "list-dial-badges-214",
+      "family": "list",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.988144274903752,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "list/evidence/list-dial-badges-214.mjs",
+      "verification": "list/evidence/list-dial-badges-214.verification.json"
+    },
+    {
+      "id": "list-hub-callout-rows-14",
+      "family": "list",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9722731657159658,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "list/evidence/list-hub-callout-rows-14.mjs",
+      "verification": "list/evidence/list-hub-callout-rows-14.verification.json"
+    },
+    {
+      "id": "list-arrow-icon-rows-16",
+      "family": "list",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9731284799626261,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "list/evidence/list-arrow-icon-rows-16.mjs",
+      "verification": "list/evidence/list-arrow-icon-rows-16.verification.json"
+    },
+    {
+      "id": "list-diamond-label-grid-66",
+      "family": "list",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9767364334203634,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "list/evidence/list-diamond-label-grid-66.mjs",
+      "verification": "list/evidence/list-diamond-label-grid-66.verification.json"
+    },
+    {
+      "id": "list-slanted-label-legend-81",
+      "family": "list",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9666161149533555,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "list/evidence/list-slanted-label-legend-81.mjs",
+      "verification": "list/evidence/list-slanted-label-legend-81.verification.json"
+    },
+    {
+      "id": "list-orbital-pill-grid-92",
+      "family": "list",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9782115917697785,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "list/evidence/list-orbital-pill-grid-92.mjs",
+      "verification": "list/evidence/list-orbital-pill-grid-92.verification.json"
+    },
+    {
+      "id": "process-linked-stages-553",
+      "family": "process",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9676853473857373,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "process/evidence/process-linked-stages-553.mjs",
+      "verification": "process/evidence/process-linked-stages-553.verification.json"
+    },
+    {
+      "id": "timeline-12-8",
+      "family": "timeline",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9707113967070958,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "timeline/evidence/timeline-12-8.mjs",
+      "verification": "timeline/evidence/timeline-12-8.verification.json"
+    },
+    {
+      "id": "timeline-6-9",
+      "family": "timeline",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9645105188477913,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "timeline/evidence/timeline-6-9.mjs",
+      "verification": "timeline/evidence/timeline-6-9.verification.json"
+    },
+    {
+      "id": "timeline-16-7",
+      "family": "timeline",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9965577709216198,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "timeline/evidence/timeline-16-7.mjs",
+      "verification": "timeline/evidence/timeline-16-7.verification.json"
+    },
+    {
+      "id": "comparison-balanced-pair-29",
+      "family": "comparison",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9766970313243213,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "comparison/evidence/comparison-balanced-pair-29.mjs",
+      "verification": "comparison/evidence/comparison-balanced-pair-29.verification.json"
+    },
+    {
+      "id": "organization-branch-left-3",
+      "family": "organization",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9962694954560929,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "organization/evidence/organization-branch-left-3.mjs",
+      "verification": "organization/evidence/organization-branch-left-3.verification.json"
+    },
+    {
+      "id": "organization-branch-left-four-4",
+      "family": "organization",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9927916648521578,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "organization/evidence/organization-branch-left-four-4.mjs",
+      "verification": "organization/evidence/organization-branch-left-four-4.verification.json"
+    },
+    {
+      "id": "pyramid-separated-tiers-24",
+      "family": "pyramid",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9831075172649899,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "pyramid/evidence/pyramid-separated-tiers-24.mjs",
+      "verification": "pyramid/evidence/pyramid-separated-tiers-24.verification.json"
+    },
+    {
+      "id": "pyramid-filled-tiers-16",
+      "family": "pyramid",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9755805089389948,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "pyramid/evidence/pyramid-filled-tiers-16.mjs",
+      "verification": "pyramid/evidence/pyramid-filled-tiers-16.verification.json"
+    },
+    {
+      "id": "pyramid-slanted-tier-legend-86",
+      "family": "pyramid",
+      "accepted": true,
+      "evidence_class": "high_similarity_verified",
+      "raw_ssim": 0.9711999755114327,
+      "exact_reference": false,
+      "source_policy": {
+        "metric": "rawSsim",
+        "operator": ">",
+        "threshold": 0.95,
+        "classification": "high_similarity_verified",
+        "require_exact_reference": false
+      },
+      "program": "pyramid/evidence/pyramid-slanted-tier-legend-86.mjs",
+      "verification": "pyramid/evidence/pyramid-slanted-tier-legend-86.verification.json"
+    }
+  ]
+}

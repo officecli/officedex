@@ -1,0 +1,54 @@
+import type { CanvasAdapter } from "../editor/canvasContract";
+import { createDesktopCanvas } from "../../canvas/createDesktopCanvas";
+import { createDesktopAPI, hasDesktopBackend, readBridgeEnvironment } from "../../renderer/bridge/select";
+import { deckDemoEnabled } from "../dev/deckDemo";
+import { reportPortFailure } from "./reportPortFailure";
+import { NotImplementedError } from "../../shared/notImplemented";
+import { isEditorRuntimeMissing } from "../../shared/editorRuntime";
+
+/**
+ * Picks the canvas adapter for this page, the same way `createShellPort` picks
+ * the port — and by the same test, so the two cannot disagree about whether
+ * this page has a backend.
+ *
+ * Null when there is none: the host keeps drawing its skeleton, which is the
+ * normal state for a design review or a screenshot, not a degraded one. The
+ * embedded editors are served by the Go side, so where there is no backend
+ * there is nothing to mount.
+ *
+ * A missing editor runtime is reported as a gap rather than an error.
+ * `public/writer/` and `public/presentation/` are staged build artifacts — a
+ * source checkout that has not run the staging step has no editor to load, and
+ * the honest thing to say is that it is not there, not that something broke.
+ */
+export function createShellCanvas(): CanvasAdapter | null {
+  if (!hasDesktopBackend()) return null;
+  return createDesktopCanvas({
+    api: createDesktopAPI(readBridgeEnvironment()),
+    /*
+     * `?deckDemo=1` shows the bundled NexaEdge recording — legacy's "Watch PPT
+     * generation" demo, carried over so the live-drawing path can be exercised
+     * without a run. Read here rather than through `readDevFixture` because it
+     * is a diagnosing entry, not an audit fixture; see `dev/deckDemo.ts`.
+     *
+     * It still needs a real backend: the draft is a real file and the editor is
+     * the real embedded one.
+     */
+    demo: deckDemoEnabled(),
+    // Each leaf already says which editor it is and what went wrong — Writer,
+    // the workbook SDK and the presentation runtime fail for different reasons
+    // and are staged by different build steps. Naming one of them here produced
+    // "The presentation editor could not start: The Word editor could not
+    // start…" for a document.
+    //
+    // Only a runtime that is not there is a gap. Everything else that arrives
+    // here — a token the host refused, a workbook the SDK choked on — is a real
+    // failure and is shown as one, so it stays on screen. Writer's own open
+    // failures no longer come this way at all: they are reported against the
+    // file through `onFileFailure`, with a cause and a retry.
+    onUnavailable: (reason) =>
+      reportPortFailure(
+        isEditorRuntimeMissing(reason) ? new NotImplementedError("editor-runtime", reason) : new Error(reason),
+      ),
+  });
+}

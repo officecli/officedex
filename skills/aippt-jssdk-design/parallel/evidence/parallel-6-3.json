@@ -1,0 +1,70 @@
+{
+  "id": "parallel-6-3",
+  "family": "parallel",
+  "source": "sampleall/shape/并列4项2/并列4项2.pptx",
+  "page": 6,
+  "program": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__并列4项2__并列4项2/slides/slide-0006.mjs",
+  "verification": "artifacts/aippt/full-distillation/font-metrics-v3/source-1821a562c92febedfe3a/verification.json",
+  "observed_items": 4,
+  "mechanism": "editorial-grid",
+  "source_fact": "四个封套形状构成 2×2；同形同色重复，A–D 标签嵌在上沿。",
+  "transfer_hypothesis": "提取等宽分区和标签归属；不迁移齿边、封套和固定坐标。",
+  "visual_review": "source_preview_inspected",
+  "state": "source_fact",
+  "ssim": 0.9951798538512648,
+  "exact_reference": false,
+  "program_sha256": "a7fcb1f67cc748c5d4825bd29f9321ed7800314a632dfb42515d7ec738814a94",
+  "verification_sha256": "297e06ed66f5a4a6aae7188c4e06196c3640f1681b4892f549aff65c321ce4dd",
+  "preview": "sampleall/shape/并列4项2/并列4项2/幻灯片6.png",
+  "checks": {
+    "jssdk_executed": true,
+    "native_objects": {
+      "count": 5,
+      "types": [
+        "group",
+        "group",
+        "shape",
+        "group",
+        "group"
+      ]
+    },
+    "text_overflow": 0,
+    "render_errors": 0,
+    "pptx_export": "passed",
+    "strict_reimport": "passed",
+    "text_coverage_version": 2,
+    "text_measurement": "font_metrics"
+  },
+  "canvas_pt": [
+    960.0,
+    540.0
+  ],
+  "objects": [
+    {
+      "id": "s5",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.28763,
+        "top": 0.08563,
+        "width": 0.42475,
+        "height": 0.11566
+      },
+      "text_characters": 17,
+      "font_pt": [
+        24.0
+      ],
+      "colors": [
+        "#000000"
+      ]
+    }
+  ],
+  "extraction_scope": "literal object geometry; group transforms and custom paths require source inspection",
+  "source_admission": "high_similarity_verified",
+  "revalidation": {
+    "state": "source_verified",
+    "reasons": [],
+    "complete_group_text_coverage_required": true,
+    "font_metrics_required": true
+  }
+}

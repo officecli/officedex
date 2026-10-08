@@ -1,0 +1,295 @@
+/*
+ * The full-window picture viewer (`ImageViewer.tsx`).
+ *
+ * Dark in every theme, which is why its colours are a group of their own in
+ * `tokens.css` rather than the shell's ink ramp: a viewer exists to put the
+ * picture against something that does not compete with it, and the ramp flips
+ * with the theme.
+ *
+ * The backdrop fades by `background-color` rather than `opacity` so that the
+ * root — the element that carries `--shell-z-viewer` — stays one stacking
+ * context with nothing inside it deciding its own order.
+ */
+
+.shell-image-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--shell-z-viewer);
+  overflow: hidden;
+  background: var(--shell-viewer-backdrop);
+  color: var(--shell-viewer-ink);
+  font-family: var(--shell-font);
+  outline: none;
+  user-select: none;
+  touch-action: none;
+  transition: background-color var(--shell-duration) var(--shell-ease);
+}
+
+.shell-image-viewer[data-phase="entering"],
+.shell-image-viewer[data-phase="leaving"] {
+  background: var(--shell-viewer-backdrop-clear);
+}
+
+/* -------------------------------------------------------------- picture */
+
+/*
+ * The room the picture fits into. Inset from the window so a fitted picture
+ * never sits under the title, the arrows or the zoom bar; a zoomed one is free
+ * to run past it, under all three.
+ */
+.shell-image-viewer-stage {
+  position: absolute;
+  top: 60px;
+  right: 76px;
+  bottom: 76px;
+  left: 76px;
+}
+
+/*
+ * Drawn at its natural size and scaled by an inline transform, so a zoom is a
+ * compositor change rather than a relayout of a 4K bitmap. The margins that
+ * centre it are inline too: they are the natural size, halved.
+ */
+.shell-image-viewer-picture {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: block;
+  max-width: none;
+  transform-origin: center;
+  border-radius: var(--shell-radius-control);
+  box-shadow: var(--shell-viewer-shadow);
+  cursor: zoom-in;
+  -webkit-user-drag: none;
+}
+
+.shell-image-viewer[data-zoomed="true"] .shell-image-viewer-picture {
+  cursor: grab;
+}
+
+.shell-image-viewer[data-dragging="true"],
+.shell-image-viewer[data-dragging="true"] .shell-image-viewer-picture {
+  cursor: grabbing;
+}
+
+/* Eased for the discrete moves — opening, closing, a click, a button, a key —
+   and not for a drag or a wheel, which have to track the hand exactly. */
+.shell-image-viewer[data-animate="true"] .shell-image-viewer-picture {
+  transition:
+    transform var(--shell-duration) var(--shell-ease),
+    opacity var(--shell-duration) var(--shell-ease);
+}
+
+/* A version whose bytes have not decoded yet is not drawn at the previous
+   version's size; and a picture with nowhere to fly back to fades instead. */
+.shell-image-viewer[data-loaded="false"] .shell-image-viewer-picture,
+.shell-image-viewer[data-phase="leaving"][data-flying="false"] .shell-image-viewer-picture {
+  opacity: 0;
+}
+
+/* ------------------------------------------------------------ title bar */
+
+/*
+ * Transparent to the pointer except for its buttons: a zoomed picture runs
+ * under this bar, and a drag that starts on it should move the picture. The
+ * title is centred so the top-left corner stays clear for the macOS window
+ * buttons, which the system draws over this page.
+ */
+.shell-image-viewer-bar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 64px;
+  padding: 0 14px 8px;
+  /* Solid behind both lines of the title, then gone: over a zoomed, light
+     picture the meta line has nothing else to read against. */
+  background: linear-gradient(var(--shell-viewer-scrim) 60%, var(--shell-viewer-backdrop-clear));
+  pointer-events: none;
+  transition: opacity var(--shell-duration) var(--shell-ease);
+}
+
+.shell-image-viewer-titles {
+  position: absolute;
+  right: 120px;
+  left: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  text-align: center;
+}
+
+.shell-image-viewer-titles strong,
+.shell-image-viewer-titles span {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.shell-image-viewer-titles strong {
+  font-size: var(--shell-text-lg);
+  font-weight: 600;
+}
+
+.shell-image-viewer-titles span {
+  font-size: var(--shell-text-sm);
+  color: var(--shell-viewer-ink-muted);
+}
+
+.shell-image-viewer-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+/* ------------------------------------------------------------- controls */
+
+.shell-image-viewer-icon,
+.shell-image-viewer-text,
+.shell-image-viewer-percent,
+.shell-image-viewer-step {
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--shell-viewer-ink);
+  font-family: var(--shell-font);
+  cursor: pointer;
+  transition: background-color var(--shell-duration) var(--shell-ease);
+}
+
+.shell-image-viewer-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--shell-radius-item);
+}
+
+.shell-image-viewer-icon:hover:not(:disabled),
+.shell-image-viewer-text:hover,
+.shell-image-viewer-percent:hover {
+  background: var(--shell-viewer-control-hover);
+}
+
+.shell-image-viewer-icon:disabled {
+  color: var(--shell-viewer-ink-disabled);
+  cursor: default;
+}
+
+.shell-image-viewer :is(button):focus-visible {
+  outline: 2px solid var(--shell-viewer-focus);
+  outline-offset: 1px;
+}
+
+/* Previous / next version: vertically centred against the window, outside the
+   stage, so a fitted picture never sits under them. */
+.shell-image-viewer-step {
+  position: absolute;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  margin-top: -22px;
+  border-radius: var(--shell-radius-composer);
+  background: var(--shell-viewer-control);
+  transition:
+    background-color var(--shell-duration) var(--shell-ease),
+    opacity var(--shell-duration) var(--shell-ease);
+}
+
+.shell-image-viewer-step:hover {
+  background: var(--shell-viewer-control-hover);
+}
+
+.shell-image-viewer-step[data-side="previous"] {
+  left: 18px;
+}
+
+.shell-image-viewer-step[data-side="next"] {
+  right: 18px;
+}
+
+/* ------------------------------------------------------------- zoom bar */
+
+.shell-image-viewer-zoom {
+  position: absolute;
+  right: 0;
+  bottom: 20px;
+  left: 0;
+  display: flex;
+  width: fit-content;
+  margin: 0 auto;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--shell-viewer-line);
+  border-radius: var(--shell-radius-card);
+  background: var(--shell-viewer-panel);
+  transition: opacity var(--shell-duration) var(--shell-ease);
+}
+
+.shell-image-viewer-percent {
+  min-width: 56px;
+  height: 34px;
+  padding: 0 6px;
+  border-radius: var(--shell-radius-item);
+  font-size: var(--shell-text-md);
+  font-variant-numeric: tabular-nums;
+}
+
+.shell-image-viewer-text {
+  min-width: 40px;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: var(--shell-radius-item);
+  font-size: var(--shell-text);
+  font-weight: 600;
+}
+
+.shell-image-viewer-text[aria-pressed="true"] {
+  background: var(--shell-viewer-control);
+}
+
+.shell-image-viewer-divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--shell-viewer-line);
+}
+
+/* The first-open "Esc to close" line, just above the zoom bar. It never
+   takes a click: a pointer over it is a pointer over the backdrop. */
+.shell-image-viewer-hint {
+  position: absolute;
+  right: 0;
+  bottom: 72px;
+  left: 0;
+  width: fit-content;
+  margin: 0 auto;
+  padding: 6px 12px;
+  border-radius: var(--shell-radius-item);
+  background: var(--shell-viewer-panel);
+  color: var(--shell-viewer-ink);
+  font-size: var(--shell-text);
+  pointer-events: none;
+  transition: opacity var(--shell-duration) var(--shell-ease);
+}
+
+.shell-image-viewer-hint[data-shown="false"] {
+  opacity: 0;
+}
+
+/* The chrome arrives with the backdrop and leaves with it, so for the length
+   of the flight the picture is the only thing moving. */
+.shell-image-viewer[data-phase="entering"] .shell-image-viewer-bar,
+.shell-image-viewer[data-phase="entering"] .shell-image-viewer-zoom,
+.shell-image-viewer[data-phase="entering"] .shell-image-viewer-step,
+.shell-image-viewer[data-phase="leaving"] .shell-image-viewer-bar,
+.shell-image-viewer[data-phase="leaving"] .shell-image-viewer-zoom,
+.shell-image-viewer[data-phase="leaving"] .shell-image-viewer-step {
+  opacity: 0;
+}

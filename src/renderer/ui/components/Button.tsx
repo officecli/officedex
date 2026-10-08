@@ -1,0 +1,34 @@
+import type { ButtonHTMLAttributes, ReactNode } from "react";
+
+export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "aria-label" | "type"> {
+  readonly ariaLabel?: string;
+  readonly type?: "default" | "primary" | "text" | "link";
+  readonly htmlType?: ButtonHTMLAttributes<HTMLButtonElement>["type"];
+  readonly variant?: "primary" | "secondary" | "danger" | "outline" | "ghost-normal" | "ghost-guidance" | "ghost-danger";
+  readonly size?: "small" | "smallPlus" | "medium" | "middle" | "large";
+  readonly icon?: ReactNode;
+  readonly loading?: boolean;
+  readonly danger?: boolean;
+  readonly block?: boolean;
+}
+
+export function Button({ ariaLabel, type, htmlType, variant, size = "medium", icon, loading, danger, block, children, disabled, className, style, ...props }: ButtonProps) {
+  const classes = ["od-button", className].filter(Boolean).join(" ");
+  const resolvedVariant = variant ?? (danger ? "danger" : type === "primary" ? "primary" : type === "text" || type === "link" ? "ghost-normal" : "secondary");
+  const resolvedAriaLabel = ariaLabel ?? (props as Record<string, unknown>)["aria-label"] as string | undefined;
+  return (
+    <button
+      {...props}
+      aria-label={resolvedAriaLabel}
+      className={classes}
+      data-size={size === "middle" ? "medium" : size}
+      data-variant={resolvedVariant}
+      disabled={disabled || loading}
+      style={{ width: block ? "100%" : undefined, ...style }}
+      type={htmlType ?? "button"}
+    >
+      {loading ? <span className="od-button__spinner" aria-hidden="true" /> : icon ? <span className="od-button__icon">{icon}</span> : null}
+      {children ? <span className="od-button__label">{children}</span> : null}
+    </button>
+  );
+}

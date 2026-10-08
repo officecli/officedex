@@ -1,0 +1,212 @@
+{
+  "id": "list-hexagon-columns-564",
+  "family": "list",
+  "source": "sampleall/shape/列表3项/列表3项.pptx",
+  "page": 564,
+  "program": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__列表3项__列表3项/slides/slide-0564.mjs",
+  "verification": "artifacts/aippt/full-distillation/font-metrics-v3/source-a3afcbce4fe68d8e6335/verification.json",
+  "observed_items": 3,
+  "mechanism": "hexagon-columns",
+  "source_fact": "六边形编号块与其下方文字一一对应",
+  "transfer_hypothesis": "保留六边形编号和文字的垂直对应；正文置于宽列内，不把它换成普通编号行。",
+  "visual_review": "source_preview_inspected",
+  "state": "source_fact",
+  "ssim": 0.9915365254358455,
+  "exact_reference": false,
+  "program_sha256": "b18c1e982ee7bab50d782a5951f23590e2d63f3a0e29c501ebb130b9312f9aa4",
+  "verification_sha256": "f17e43218507a847635800e580232ddc15386795373fea8b4c6cd002cd871424",
+  "preview": "sampleall/shape/列表3项/列表3项_PPTX_TO_PNG_WPS/幻灯片564.png",
+  "checks": {
+    "jssdk_executed": true,
+    "native_objects": {
+      "count": 9,
+      "types": [
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "shape"
+      ]
+    },
+    "text_overflow": 0,
+    "render_errors": 0,
+    "pptx_export": "passed",
+    "strict_reimport": "passed",
+    "text_coverage_version": 2,
+    "text_measurement": "font_metrics"
+  },
+  "canvas_pt": [
+    960.0,
+    540.0
+  ],
+  "objects": [
+    {
+      "id": "s1",
+      "api": "addGeometricShape",
+      "kind": "Hexagon",
+      "bounds_fraction": {
+        "left": 0.33998,
+        "top": 0.39866,
+        "width": 0.0576,
+        "height": 0.08731
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#1D6DC2"
+      ]
+    },
+    {
+      "id": "s2",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.34441,
+        "top": 0.41014,
+        "width": 0.04943,
+        "height": 0.05898
+      },
+      "text_characters": 2,
+      "font_pt": [
+        28.0
+      ],
+      "colors": [
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s3",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.32644,
+        "top": 0.50218,
+        "width": 0.08464,
+        "height": 0.09917
+      },
+      "text_characters": 8,
+      "font_pt": [
+        12.0
+      ],
+      "colors": [
+        "#000000"
+      ]
+    },
+    {
+      "id": "s4",
+      "api": "addGeometricShape",
+      "kind": "Hexagon",
+      "bounds_fraction": {
+        "left": 0.47123,
+        "top": 0.39866,
+        "width": 0.0576,
+        "height": 0.08731
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#E34C3F"
+      ]
+    },
+    {
+      "id": "s5",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.47566,
+        "top": 0.41014,
+        "width": 0.04943,
+        "height": 0.05898
+      },
+      "text_characters": 2,
+      "font_pt": [
+        28.0
+      ],
+      "colors": [
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s6",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.45769,
+        "top": 0.50218,
+        "width": 0.08464,
+        "height": 0.09917
+      },
+      "text_characters": 8,
+      "font_pt": [
+        12.0
+      ],
+      "colors": [
+        "#000000"
+      ]
+    },
+    {
+      "id": "s7",
+      "api": "addGeometricShape",
+      "kind": "Hexagon",
+      "bounds_fraction": {
+        "left": 0.60248,
+        "top": 0.39866,
+        "width": 0.0576,
+        "height": 0.08731
+      },
+      "text_characters": 0,
+      "font_pt": [],
+      "colors": [
+        "#1D6DC2"
+      ]
+    },
+    {
+      "id": "s8",
+      "api": "addGeometricShape",
+      "kind": "Rectangle",
+      "bounds_fraction": {
+        "left": 0.60691,
+        "top": 0.41014,
+        "width": 0.04943,
+        "height": 0.05898
+      },
+      "text_characters": 2,
+      "font_pt": [
+        28.0
+      ],
+      "colors": [
+        "#FFFFFF"
+      ]
+    },
+    {
+      "id": "s9",
+      "api": "addTextBox",
+      "kind": "TextBox",
+      "bounds_fraction": {
+        "left": 0.58894,
+        "top": 0.50218,
+        "width": 0.08464,
+        "height": 0.09917
+      },
+      "text_characters": 8,
+      "font_pt": [
+        12.0
+      ],
+      "colors": [
+        "#000000"
+      ]
+    }
+  ],
+  "extraction_scope": "literal object geometry; group transforms and custom paths require source inspection",
+  "source_admission": "high_similarity_verified",
+  "revalidation": {
+    "state": "source_verified",
+    "reasons": [],
+    "complete_group_text_coverage_required": true,
+    "font_metrics_required": true
+  }
+}

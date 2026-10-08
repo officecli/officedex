@@ -1,0 +1,7 @@
+raw/
+audio/generated/
+audio/music/
+graphics/rendered/
+exports/
+project-notes/
+*.imovielibrary

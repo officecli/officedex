@@ -1,0 +1,141 @@
+import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
+import { resolveMopRuntimeEntry, resolveMopWasmEntry } from "./src/mop-runtime-source";
+
+const componentRoot = fileURLToPath(new URL(".", import.meta.url));
+const gitCommonDirectory = execFileSync(
+  "git",
+  ["-C", componentRoot, "rev-parse", "--path-format=absolute", "--git-common-dir"],
+  { encoding: "utf8" },
+).trim();
+const defaultSourceRoot = path.resolve(path.dirname(gitCommonDirectory), "..", "presentation");
+const sourceRoot = path.resolve(
+  process.env.PRESENTATION_SOURCE_DIR || defaultSourceRoot,
+);
+const explicitMopSourceRoot = process.env.PPT2MOP_SOURCE_DIR?.trim();
+const defaultMopSourceRoot = path.resolve(
+  path.dirname(gitCommonDirectory),
+  "..",
+  "ppt2mop",
+);
+const mopSourceRoot = path.resolve(explicitMopSourceRoot || defaultMopSourceRoot);
+const distDirectory = path.resolve(
+  process.env.PRESENTATION_DIST_DIR || path.join(sourceRoot, "dist-officedex"),
+);
+const fromSource = (...segments: string[]) => path.join(sourceRoot, ...segments);
+const mopRuntimeEntry = resolveMopRuntimeEntry({
+  fallbackEntry: fromSource("mop", "runtime", "index.js"),
+  preferredRoot: mopSourceRoot,
+  requirePreferred: Boolean(explicitMopSourceRoot),
+});
+// presentation 2dbde19 moved the product app from packages/ to apps/. Accept
+// both while checkouts from before the move are still around.
+const presentationAppDirectory = ["apps", "packages"]
+  .map((parent) => path.join(parent, "presentation-app"))
+  .find((candidate) => existsSync(fromSource(candidate, "src", "main.ts")))
+  ?? path.join("apps", "presentation-app");
+const fromApp = (...segments: string[]) => fromSource(presentationAppDirectory, ...segments);
+const sourceDependency = (name: string, ...fallbacks: string[]) => {
+  const candidates = [
+    fromSource("node_modules", name),
+    ...fallbacks.map((entry) => fromSource(entry)),
+  ];
+  return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
+};
+
+const bundleWebFonts = process.env.PRESENTATION_BUNDLE_WEB_FONTS !== "0";
+const desktopFontService = path.join(
+  componentRoot,
+  "src",
+  "web-font-service.desktop.ts",
+);
+const desktopFontServicePlugin = {
+  name: "officedex-desktop-font-service",
+  enforce: "pre" as const,
+  resolveId(source: string, importer?: string) {
+    if (bundleWebFonts || source !== "./fonts/web-font-service") return null;
+    if (!importer?.replaceAll("\\", "/").endsWith(
+      "/packages/presentation-host-browser/src/create-browser-host.ts",
+    )) return null;
+    return desktopFontService;
+  },
+};
+
+export default defineConfig({
+  root: componentRoot,
+  appType: "spa",
+  base: "./",
+  publicDir: fromApp("public"),
+  define: {
+    "process.env.NODE_ENV": '"production"',
+  },
+  resolve: {
+    alias: {
+      "react/jsx-runtime": fromSource("node_modules", "react", "jsx-runtime.js"),
+      "react/jsx-dev-runtime": fromSource(
+        "packages",
+        "presentation-vendor",
+        "src",
+        "react",
+        "jsx-dev-runtime-shim.ts",
+      ),
+      "react-dom/client": fromSource("node_modules", "react-dom", "client.js"),
+      // Subpath aliases must precede the bare "react-dom" entry, or Vite maps
+      // "react-dom/server" onto "index.js/server".
+      "react-dom/server": fromSource("node_modules", "react-dom", "server.browser.js"),
+      "react-dom": fromSource("node_modules", "react-dom", "index.js"),
+      react: fromSource("node_modules", "react", "index.js"),
+      scheduler: path.join(
+        sourceDependency(
+          "scheduler",
+          path.join(presentationAppDirectory, "node_modules", "scheduler"),
+        ),
+        "index.js",
+      ),
+      "@learnof/chart": fromSource("packages", "deps", "chart", "src"),
+      "@learnof/ink": fromSource("packages", "deps", "ink", "src"),
+      "@learnof/scientific-formula": fromSource("packages", "deps", "scientific-formula", "src"),
+      "@learnof/shape": fromSource("packages", "deps", "shape", "src"),
+      "@learnof/smartart": fromSource("packages", "deps", "smartart", "src"),
+      "@learnof/symbol": fromSource("packages", "deps", "symbol", "src"),
+      "@mop/runtime": mopRuntimeEntry,
+      "mop-wasm": resolveMopWasmEntry(sourceRoot),
+      "@presentation/source-main": fromApp("src", "main.ts"),
+      "@presentation/source-local-runtime-bootstrap": fromApp(
+        "src",
+        "bootstrap",
+        "local-runtime-bootstrap.js",
+      ),
+      "@presentation/app": fromApp("src"),
+      "@presentation/assets": fromSource("packages", "presentation-assets", "src"),
+      "@presentation/collab": fromSource("packages", "presentation-collab", "src"),
+      "@presentation/collaboration-runtime": fromSource(
+        "packages",
+        "presentation-collaboration-runtime",
+        "src",
+      ),
+      "@presentation/engine": fromSource("packages", "presentation-engine", "src"),
+      "@presentation/host-browser": fromSource(
+        "packages",
+        "presentation-host-browser",
+        "src",
+      ),
+      "@presentation/product": fromSource("packages", "presentation-product", "src"),
+      "@presentation/ui-react": fromSource(
+        "packages",
+        "presentation-ui-react",
+        "src",
+      ),
+      "@presentation/vendor": fromSource("packages", "presentation-vendor", "src"),
+    },
+  },
+  plugins: [desktopFontServicePlugin, react()],
+  build: {
+    outDir: distDirectory,
+    emptyOutDir: true,
+  },
+});

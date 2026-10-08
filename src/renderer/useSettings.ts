@@ -1,0 +1,109 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useDesktopApi } from "./services/desktopApi";
+import type { UserSettings } from "../shared/types";
+import { defaultProxySettings } from "./defaults";
+
+const FALLBACK: UserSettings = {
+  version: 1,
+  defaults: {
+    documentType: "pptx",
+    enableImages: true,
+    enableWebSearch: false,
+    imageQuality: "premium",
+  },
+  workspaceDir: null,
+  outputDir: null,
+  llmProvider: null,
+  onboardingCompletedAt: null,
+  proxy: { ...defaultProxySettings },
+  imageWatermark: { showWatermark: true, preferenceSource: "system" },
+  waiting2048Enabled: false,
+  usageAnalyticsEnabled: true,
+};
+
+// Cross-instance broadcast: multiple components call useSettings() independently
+// (App, SettingsScreen, document workspaces). Without this, a successful update in
+// one instance never reaches the others — they keep showing stale state until
+// the page is reloaded.
+const settingsBus =
+  typeof window !== "undefined" && typeof EventTarget !== "undefined" ? new EventTarget() : null;
+const SETTINGS_CHANGED = "officedex:settings-changed";
+
+export function broadcastSettingsChanged(next: UserSettings) {
+  settingsBus?.dispatchEvent(new CustomEvent<UserSettings>(SETTINGS_CHANGED, { detail: next }));
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent<UserSettings>("officedex:settings-updated", { detail: next }));
+  }
+}
+
+export interface UseSettingsResult {
+  settings: UserSettings;
+  defaultWorkspaceDir: string;
+  update: (patch: Partial<UserSettings>) => Promise<UserSettings>;
+  loading: boolean;
+  saving: boolean;
+  error?: string;
+}
+
+export function useSettings(): UseSettingsResult {
+  const api = useDesktopApi();
+  const [settings, setSettings] = useState<UserSettings>(FALLBACK);
+  const [defaultWorkspaceDir, setDefaultWorkspaceDir] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | undefined>(undefined);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    Promise.all([api.getSettings(), api.getDefaultWorkspaceDir()])
+      .then(([result, workspace]) => {
+        if (!mountedRef.current) return;
+        setSettings(result);
+        setDefaultWorkspaceDir(workspace);
+        setError(undefined);
+      })
+      .catch((err) => {
+        if (!mountedRef.current) return;
+        setError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!mountedRef.current) return;
+        setLoading(false);
+      });
+    const onChanged = (event: Event) => {
+      const detail = (event as CustomEvent<UserSettings>).detail;
+      if (!mountedRef.current || !detail) return;
+      setSettings(detail);
+    };
+    settingsBus?.addEventListener(SETTINGS_CHANGED, onChanged);
+    return () => {
+      mountedRef.current = false;
+      settingsBus?.removeEventListener(SETTINGS_CHANGED, onChanged);
+    };
+  }, []);
+
+  const update = useCallback(async (patch: Partial<UserSettings>): Promise<UserSettings> => {
+    setSaving(true);
+    try {
+      const next = await api.updateSettings(patch);
+      if (mountedRef.current) {
+        setSettings(next);
+        setError(undefined);
+      }
+      broadcastSettingsChanged(next);
+      return next;
+    } catch (err) {
+      if (mountedRef.current) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+      throw err;
+    } finally {
+      if (mountedRef.current) {
+        setSaving(false);
+      }
+    }
+  }, []);
+
+  return { settings, defaultWorkspaceDir, update, loading, saving, error };
+}

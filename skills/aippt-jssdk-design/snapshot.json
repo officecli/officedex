@@ -1,0 +1,702 @@
+{
+  "schema_version": 2,
+  "contract": "jssdk-progressive/v2",
+  "generated_on": "2026-09-11",
+  "files": [
+    {
+      "path": "policy.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/design-skill/policy.json",
+      "sha256": "0b9eba9ebba7d8280f706195ca726d757003de1412b200f74049faaa100349ff"
+    },
+    {
+      "path": "SKILL.md",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/design-skill/SKILL.md",
+      "sha256": "4ec6b52e6ac880b31bf04779ddca877c6d5a6edb5c627054ae156501bcdddf7c"
+    },
+    {
+      "path": "references/progressive-loading.md",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/design-skill/references/progressive-loading.md",
+      "sha256": "34384c6b6600d3457f72b47036fd28b31f361c59374225432a63a9b7b04a2bdd"
+    },
+    {
+      "path": "references/native-sdk.md",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/design-skill/references/native-sdk.md",
+      "sha256": "68580d43de7cbbe29424c19f9c4d5ee3e39814850f89f429e029df0299c0529b"
+    },
+    {
+      "path": "scripts/select-family.mjs",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/scripts/select-family.mjs",
+      "sha256": "4e559feb66277de740238d3968e7ac1f3a15a42afbeb887aa923a8b4d3becff0"
+    },
+    {
+      "path": "scripts/evidence-policy.mjs",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/scripts/evidence-policy.mjs",
+      "sha256": "cfea30507d618dab2288dd59763dbf8afc877ecd42ed16e8e8ccd496490db7e2"
+    },
+    {
+      "path": "scripts/read-source.mjs",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/scripts/read-source.mjs",
+      "sha256": "a69b66716702ec0b6652596952c7e305c90dae6444cbe9ff2cabb16a6934de83"
+    },
+    {
+      "path": "scripts/expand-source-geometry.mjs",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/scripts/expand-source-geometry.mjs",
+      "sha256": "c5ec05c49a954f6b94471e28b677b7d3e71fb954917ce6671982b2e0ca3071fb"
+    },
+    {
+      "path": "registry.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/registry.json",
+      "sha256": "73c99afcd545048e095eac6409460e8f9f1a201d925f145e18e7751ae123da3b"
+    },
+    {
+      "path": "parallel/recipe.md",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/parallel/recipe.md",
+      "sha256": "2413144bd083a70a43f7d7fb630bac013c195f5386c5420f78f200ca73aa5ef3"
+    },
+    {
+      "path": "parallel/variants.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/parallel/variants.json",
+      "sha256": "68d1366527f4b29b927b66c1ce90938d94690a8c42f4d1b56e3854a2815d78cc"
+    },
+    {
+      "path": "parallel/evidence/parallel-18-1.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/parallel/evidence/parallel-18-1.json",
+      "sha256": "e9ce47fd2247cdf53f4493acdb04421fe9d3196ff6fad8afd610e481caddae95"
+    },
+    {
+      "path": "parallel/evidence/parallel-18-1.mjs",
+      "source": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__并列4项5__并列4项5/slides/slide-0018.mjs",
+      "sha256": "6563fb2c6b85e583131885540d86de5e743330084bf37d0b05ac9a7d5fb42afa"
+    },
+    {
+      "path": "parallel/evidence/parallel-18-1.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-f5ce57c6497d66582839/verification.json",
+      "sha256": "3f7887971ac344772a91614b8d31fb6fd7c8cd50e34021d02c75d5c90765890b"
+    },
+    {
+      "path": "parallel/evidence/parallel-133-2.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/parallel/evidence/parallel-133-2.json",
+      "sha256": "be91b51a3edf72641e6ea838a8bb26af666b77e0780e6cd0c94d327633ee40b3"
+    },
+    {
+      "path": "parallel/evidence/parallel-133-2.mjs",
+      "source": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__并列3项__并列3项/slides/slide-0133.mjs",
+      "sha256": "2f98363bfebf66b8419fb094912b374c74c25ba0f31b850f7f7608554e74c732"
+    },
+    {
+      "path": "parallel/evidence/parallel-133-2.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-fb8d41ee30efbff41aa0/verification.json",
+      "sha256": "56aacad1242088f14f91ce64e321f40c1082c84d1f1085ffc593227481514f55"
+    },
+    {
+      "path": "parallel/evidence/parallel-6-3.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/parallel/evidence/parallel-6-3.json",
+      "sha256": "666a282e7cc3ba82aa6d531e6ec3f13ecfb1b7e9da36c01fab6c468c87919bd6"
+    },
+    {
+      "path": "parallel/evidence/parallel-6-3.mjs",
+      "source": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__并列4项2__并列4项2/slides/slide-0006.mjs",
+      "sha256": "a7fcb1f67cc748c5d4825bd29f9321ed7800314a632dfb42515d7ec738814a94"
+    },
+    {
+      "path": "parallel/evidence/parallel-6-3.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-1821a562c92febedfe3a/verification.json",
+      "sha256": "297e06ed66f5a4a6aae7188c4e06196c3640f1681b4892f549aff65c321ce4dd"
+    },
+    {
+      "path": "parallel/evidence/parallel-ticket-panels-85.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/parallel/evidence/parallel-ticket-panels-85.json",
+      "sha256": "1d53075910a7e0ae9bb5ca9cbc47567b0a69f1bd3286f0121f3fc9dc51e612f9"
+    },
+    {
+      "path": "parallel/evidence/parallel-ticket-panels-85.mjs",
+      "source": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__并列3项__并列3项/slides/slide-0085.mjs",
+      "sha256": "5752e4048662cccb3d20c6e2f5fa0d91adcaea3520e26a2edd9ab9408225ee36"
+    },
+    {
+      "path": "parallel/evidence/parallel-ticket-panels-85.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-e3cf7b03370bd7b5a638/verification.json",
+      "sha256": "0b7ea80e3bfb5330ede4ed993c306fd1a141c0853dd9f8bdcc5c3af1ad69997c"
+    },
+    {
+      "path": "parallel/evidence/parallel-icon-blocks-72.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/parallel/evidence/parallel-icon-blocks-72.json",
+      "sha256": "bc2b03e546ea2d9defd3965d2ce641677a2a69565e9f37369fc2eadbf8aaf9a6"
+    },
+    {
+      "path": "parallel/evidence/parallel-icon-blocks-72.mjs",
+      "source": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__并列4项4__并列4项4/slides/slide-0072.mjs",
+      "sha256": "07c91848e8c4e27b714000fa08de612227e377f9c6b6090b13e03f4e6c99f4bd"
+    },
+    {
+      "path": "parallel/evidence/parallel-icon-blocks-72.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-78aaafc102b046983293/verification.json",
+      "sha256": "79d9faad75f3b4bf3ac70bc2a1b10fca03678f2db325ac4f46874859544a7b2b"
+    },
+    {
+      "path": "parallel/evidence/parallel-open-ring-callouts-136.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/parallel/evidence/parallel-open-ring-callouts-136.json",
+      "sha256": "9cc352ca07b8c23f2d61044b939c5baa975a65e1cae57c9b96d1dcecac860063"
+    },
+    {
+      "path": "parallel/evidence/parallel-open-ring-callouts-136.mjs",
+      "source": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__并列6项1__并列6项1/slides/slide-0136.mjs",
+      "sha256": "691c1370385960cda9bb55dcd4ac82617d6a501425a1630132b0d177e326d076"
+    },
+    {
+      "path": "parallel/evidence/parallel-open-ring-callouts-136.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-fd94293ba08baa0946e7/verification.json",
+      "sha256": "d31b041b47f0e5d30ba933235e62cc8dc1212bdad7fa91daba9482943989fed0"
+    },
+    {
+      "path": "parallel/evidence/parallel-medal-panels-68.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/parallel/evidence/parallel-medal-panels-68.json",
+      "sha256": "a93aee5da7184ff928d86fa06df6f9cec8972aaee6bd935b8ca38eb0cce456f9"
+    },
+    {
+      "path": "parallel/evidence/parallel-medal-panels-68.mjs",
+      "source": "samplev2/jssdk/并列4项1/compilations/v085/slides/slide-0068.mjs",
+      "sha256": "3c861ef9812456814f18a144d49edda1042aff9e49127215f6d61dea07a4d499"
+    },
+    {
+      "path": "parallel/evidence/parallel-medal-panels-68.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-65f893e5bfa8740c0391/verification.json",
+      "sha256": "247999ce470429322b22319a54ec26c67183cd727ddc1a1bdd32cd9b54bd448f"
+    },
+    {
+      "path": "parallel/evidence/parallel-wave-bottom-panels-67.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/parallel/evidence/parallel-wave-bottom-panels-67.json",
+      "sha256": "7b4243a7b795ce975cc4460fa9aca0ac8216ca14db9211398edf1da0f6e87d2c"
+    },
+    {
+      "path": "parallel/evidence/parallel-wave-bottom-panels-67.mjs",
+      "source": "samplev2/jssdk/并列4项1/compilations/v085/slides/slide-0067.mjs",
+      "sha256": "1dc679d7e93d6f381d70f884a14ed8b8d106e14391e355c4b34eaabb29c38f0a"
+    },
+    {
+      "path": "parallel/evidence/parallel-wave-bottom-panels-67.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-6276b02445c39f827828/verification.json",
+      "sha256": "610a836b0ea61c94dc297053d3e3fa13af11f390776a1b61f7adab430ae34f0f"
+    },
+    {
+      "path": "parallel/evidence/parallel-arched-label-panels-70.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/parallel/evidence/parallel-arched-label-panels-70.json",
+      "sha256": "1a8b295470879f3c3f8b229cc8a54b201cafd4f92878906e2e8c268f168fa8b2"
+    },
+    {
+      "path": "parallel/evidence/parallel-arched-label-panels-70.mjs",
+      "source": "samplev2/jssdk/并列4项1/compilations/v085/slides/slide-0070.mjs",
+      "sha256": "15cd82ce73d2afa46f9c9eed6b2eb265e2f470da51abd41df42f593539da5fa8"
+    },
+    {
+      "path": "parallel/evidence/parallel-arched-label-panels-70.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-9f6a954e5c562c387736/verification.json",
+      "sha256": "7635e753b0d09e12c2d09e4dcd67dfda2c1411f03f3c55a52c4756c6527f9ebb"
+    },
+    {
+      "path": "parallel/evidence/parallel-serrated-bottom-panels-74.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/parallel/evidence/parallel-serrated-bottom-panels-74.json",
+      "sha256": "b135af7c037bef6bd197ffa2a572fd36450886c0496d06f7ba7efb02c63c570d"
+    },
+    {
+      "path": "parallel/evidence/parallel-serrated-bottom-panels-74.mjs",
+      "source": "samplev2/jssdk/并列4项1/compilations/v085/slides/slide-0074.mjs",
+      "sha256": "08c22d0ce5cd3ea91c8a41fe59a316fd4b41fb6d515972391a866675cf391b0e"
+    },
+    {
+      "path": "parallel/evidence/parallel-serrated-bottom-panels-74.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-8dce075513008f933275/verification.json",
+      "sha256": "3b93a798905a01e3b66c6dc99c748145edc6c9631b20fb27981c7a799fc812e6"
+    },
+    {
+      "path": "parallel/evidence/parallel-ribbon-ticket-grid-73.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/parallel/evidence/parallel-ribbon-ticket-grid-73.json",
+      "sha256": "8633f0da37f72eb77da08236b9ba9558ed883879d967ca5065983991f6313dd9"
+    },
+    {
+      "path": "parallel/evidence/parallel-ribbon-ticket-grid-73.mjs",
+      "source": "samplev2/jssdk/并列4项1/compilations/v085/slides/slide-0073.mjs",
+      "sha256": "0a01e0c8b1cb9f59153f5b0a1f3b0090e6e8e73e25b7466ec648e674e975f291"
+    },
+    {
+      "path": "parallel/evidence/parallel-ribbon-ticket-grid-73.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-a3bbf99e0ad3f4db79ac/verification.json",
+      "sha256": "9a59c35f920fb5a5109262afe6b126da4cd91dac782517efc36a087b2d629bed"
+    },
+    {
+      "path": "parallel/evidence/parallel-balloon-rings-83.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/parallel/evidence/parallel-balloon-rings-83.json",
+      "sha256": "959cfa9fb5d1d859455b1d902554d8ebb4cf665264b14946ad5848f3f6e90442"
+    },
+    {
+      "path": "parallel/evidence/parallel-balloon-rings-83.mjs",
+      "source": "samplev2/jssdk/并列4项1/compilations/v085/slides/slide-0083.mjs",
+      "sha256": "6803fa983a8a314308c7c29bd876fab99d64648850177672a9607071a26b6405"
+    },
+    {
+      "path": "parallel/evidence/parallel-balloon-rings-83.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-faa987f2b97a2eebde8c/verification.json",
+      "sha256": "bb63d3c8fc84a8cb689c47ade014627cdfa21d30e82d29d5601d9cdf1056c2bb"
+    },
+    {
+      "path": "parallel/evidence/parallel-hanging-discs-84.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/parallel/evidence/parallel-hanging-discs-84.json",
+      "sha256": "2f4f4619e65ea8044dfc8562d7fdf8981f4cc6aa30322f6d55c623d146af30c2"
+    },
+    {
+      "path": "parallel/evidence/parallel-hanging-discs-84.mjs",
+      "source": "samplev2/jssdk/并列4项1/compilations/v085/slides/slide-0084.mjs",
+      "sha256": "e7551d219781f625947d80c5f8b3fe74e5b9982cf49d63a9fa75b91ff5b4a5b9"
+    },
+    {
+      "path": "parallel/evidence/parallel-hanging-discs-84.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-73813e8c3b44b14e26a2/verification.json",
+      "sha256": "e17c3b77eb059b222f0e04be7aa3f66324c520f92afd8d84d9ddcc9dc53e8d28"
+    },
+    {
+      "path": "parallel/evidence/parallel-ribbon-circle-grid-90.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/parallel/evidence/parallel-ribbon-circle-grid-90.json",
+      "sha256": "5e535b4e6557abf10bf84e018ce63d3314a1a467e5476e7f381cb4d6c830fb49"
+    },
+    {
+      "path": "parallel/evidence/parallel-ribbon-circle-grid-90.mjs",
+      "source": "samplev2/jssdk/并列4项1/compilations/v085/slides/slide-0090.mjs",
+      "sha256": "3b7e2d57ccec35e9e3ac9b8d0ea7e9b43f846791bb43732d4affd84fd95a0038"
+    },
+    {
+      "path": "parallel/evidence/parallel-ribbon-circle-grid-90.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-668fe4bf0f0af119b979/verification.json",
+      "sha256": "3352389b55db86762fcf40fe67433d6695ed84b9b5e79c066843ee1d8b544e54"
+    },
+    {
+      "path": "parallel/evidence/parallel-trapezoid-pendants-97.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/parallel/evidence/parallel-trapezoid-pendants-97.json",
+      "sha256": "667926b4c6e7a29b6f6b35c6254b3e4ebe48cc336f3b2fa04636729f86eaf670"
+    },
+    {
+      "path": "parallel/evidence/parallel-trapezoid-pendants-97.mjs",
+      "source": "samplev2/jssdk/并列4项1/compilations/v085/slides/slide-0097.mjs",
+      "sha256": "7945e671d03f0715084912657c82b3e64c387bd63482db0e3cedeed73d7baf80"
+    },
+    {
+      "path": "parallel/evidence/parallel-trapezoid-pendants-97.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-c45dabaef3c1da555089/verification.json",
+      "sha256": "0cb9d8991599d104f9f2c522b15a5e2f1854289e52424fcdd6b9f3d16f8244ad"
+    },
+    {
+      "path": "parallel/evidence/parallel-double-diamonds-98.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/parallel/evidence/parallel-double-diamonds-98.json",
+      "sha256": "fb6ec13df9ca4b76deebd0e42836ed894c1f4e30da9c3fd89d52cda9ce247678"
+    },
+    {
+      "path": "parallel/evidence/parallel-double-diamonds-98.mjs",
+      "source": "samplev2/jssdk/并列4项1/compilations/v085/slides/slide-0098.mjs",
+      "sha256": "be3f9181093b914cba0f7d92a7950c801658f3ac3f2901a5651afb53b6057f55"
+    },
+    {
+      "path": "parallel/evidence/parallel-double-diamonds-98.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-d96d883ac2994d3a938d/verification.json",
+      "sha256": "66c06081e6d83a274cb498469df8e85bc0b18acead523cea1d0a4611374d5977"
+    },
+    {
+      "path": "parallel/evidence/parallel-folded-corner-notes-100.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/parallel/evidence/parallel-folded-corner-notes-100.json",
+      "sha256": "7c2ef3fe820293a42bfe4f905dbe4862f2a9d018adb7f5a97dc41fb849a98356"
+    },
+    {
+      "path": "parallel/evidence/parallel-folded-corner-notes-100.mjs",
+      "source": "samplev2/jssdk/并列4项1/compilations/v085/slides/slide-0100.mjs",
+      "sha256": "d29127a3911c4f668e4c24d70f825cd4d557f3887d30eac68f6214259b532c23"
+    },
+    {
+      "path": "parallel/evidence/parallel-folded-corner-notes-100.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-766d7666c20b13744a57/verification.json",
+      "sha256": "88bcefaf50646826cffc884efff54ce1f0d5456690fd0c507825c6758bb98f06"
+    },
+    {
+      "path": "parallel/evidence/parallel-hanger-panels-99.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/parallel/evidence/parallel-hanger-panels-99.json",
+      "sha256": "2cbc13bd050f55ff986e537f761fc5508689a92c36d14b51ca25b1199529769f"
+    },
+    {
+      "path": "parallel/evidence/parallel-hanger-panels-99.mjs",
+      "source": "samplev2/jssdk/并列4项1/compilations/v085/slides/slide-0099.mjs",
+      "sha256": "ace718fd3bd14a620a2ab4bf15786a90056ddf95ed728b022b390b92eb20bc60"
+    },
+    {
+      "path": "parallel/evidence/parallel-hanger-panels-99.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-27602c10369e30f8c256/verification.json",
+      "sha256": "a1b7ee0dfb34f670c7cb265051f417468fffb255b72836f6395ba5b00c8acf4c"
+    },
+    {
+      "path": "list/recipe.md",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/list/recipe.md",
+      "sha256": "d5a578f2bea3b023c8ae32d2433b3835dc79b9c685224d4972ace2bfe44c4660"
+    },
+    {
+      "path": "list/variants.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/list/variants.json",
+      "sha256": "1276cb7688791f08cdeb467fb0d4c6aa89a3b6b85595ee7bfd27311e92ec1f19"
+    },
+    {
+      "path": "list/evidence/list-588-5.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/list/evidence/list-588-5.json",
+      "sha256": "44b9f5a86f6d0d59e52d23c95132a9347caa52935029c031921046cfa416b184"
+    },
+    {
+      "path": "list/evidence/list-588-5.mjs",
+      "source": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__列表4项__列表4项/slides/slide-0588.mjs",
+      "sha256": "7ae9bfaf57d9b3bc1622d6ab5551c66c7110707d9766b8373f3c59bf22d9a36f"
+    },
+    {
+      "path": "list/evidence/list-588-5.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-0391f428e88d702434f1/verification.json",
+      "sha256": "b91ae3a1e6289a1deedc95838b66cc73f280b02da9c0cf7aecfbf8a4ba9a20b9"
+    },
+    {
+      "path": "list/evidence/list-330-4.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/list/evidence/list-330-4.json",
+      "sha256": "00cdc945ee608c66d3d64b0d57fa635daeb79fa9bf2cc9c48eda6645192f815a"
+    },
+    {
+      "path": "list/evidence/list-330-4.mjs",
+      "source": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__列表3项__列表3项/slides/slide-0330.mjs",
+      "sha256": "e6da7f0774699d82dbc5d7bee9a8b29ff90eef396cde39918d223816e202013c"
+    },
+    {
+      "path": "list/evidence/list-330-4.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-4b5f5545b17a2012eeff/verification.json",
+      "sha256": "b5ce7aac9aeef105dd96bc3e893b60e91c6a284553c45c23ce6c17353f32c365"
+    },
+    {
+      "path": "list/evidence/list-168-6.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/list/evidence/list-168-6.json",
+      "sha256": "3787ab0e1178039abfbe423b12b02bbf796197c050e980d622f2e198e40de77c"
+    },
+    {
+      "path": "list/evidence/list-168-6.mjs",
+      "source": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__列表3项__列表3项/slides/slide-0168.mjs",
+      "sha256": "23a5e1dfc6792536463cca5c1c24c2635ad87eb215ad7353f0d4fa0f1cee0a59"
+    },
+    {
+      "path": "list/evidence/list-168-6.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-ca1d9955ec36f6bfaa23/verification.json",
+      "sha256": "53979211dc6460ad088a681bdfca09f6fbcdb0b4d33dbe7524e90f47415d03db"
+    },
+    {
+      "path": "list/evidence/list-hexagon-columns-564.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/list/evidence/list-hexagon-columns-564.json",
+      "sha256": "8692f8afa7dd8b41638e02119eef4ad54d652ecefc2c93d3a73d95d902d4fc70"
+    },
+    {
+      "path": "list/evidence/list-hexagon-columns-564.mjs",
+      "source": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__列表3项__列表3项/slides/slide-0564.mjs",
+      "sha256": "b18c1e982ee7bab50d782a5951f23590e2d63f3a0e29c501ebb130b9312f9aa4"
+    },
+    {
+      "path": "list/evidence/list-hexagon-columns-564.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-a3afcbce4fe68d8e6335/verification.json",
+      "sha256": "f17e43218507a847635800e580232ddc15386795373fea8b4c6cd002cd871424"
+    },
+    {
+      "path": "list/evidence/list-dial-badges-214.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/list/evidence/list-dial-badges-214.json",
+      "sha256": "cdffeadb002315a49b246611321d69883c10292b9ba353c736053b6afdb50b0e"
+    },
+    {
+      "path": "list/evidence/list-dial-badges-214.mjs",
+      "source": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__列表4项__列表4项/slides/slide-0214.mjs",
+      "sha256": "73342da89bba89166196ea3c1f7da261c123c621c1552c4c8b82df46b0a8681a"
+    },
+    {
+      "path": "list/evidence/list-dial-badges-214.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-63290c09df2c91d9856b/verification.json",
+      "sha256": "ade2cda968373cf801c0725ee339fa2bedb6ba037ea31c2d20e75f00356dca6a"
+    },
+    {
+      "path": "list/evidence/list-hub-callout-rows-14.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/list/evidence/list-hub-callout-rows-14.json",
+      "sha256": "fa33a79b06951a0e37e9e6492e5fac0068989ecaad422f7387c2f885143a7f8d"
+    },
+    {
+      "path": "list/evidence/list-hub-callout-rows-14.mjs",
+      "source": "samplev2/jssdk/并列4项1/compilations/v085/slides/slide-0014.mjs",
+      "sha256": "a36a19ef3e88fd8aafa0e9d08719e10ca17ed63b34b62229eb866bb26fb61366"
+    },
+    {
+      "path": "list/evidence/list-hub-callout-rows-14.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-f3706cb582facba129e5/verification.json",
+      "sha256": "1d112bf60f260d485042997e65e2af68ffc53c3f9824891de8fd40750e2797a2"
+    },
+    {
+      "path": "list/evidence/list-arrow-icon-rows-16.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/list/evidence/list-arrow-icon-rows-16.json",
+      "sha256": "7462d0154ff7e8ba9e6a196dc564eb8a5dd86f0f9b1fe27d9280649237e7ffd2"
+    },
+    {
+      "path": "list/evidence/list-arrow-icon-rows-16.mjs",
+      "source": "samplev2/jssdk/并列4项1/compilations/v085/slides/slide-0016.mjs",
+      "sha256": "49e000209afc2d8de8f1486e9c1cce7789b4c8768ead9a4a823abd9b9767102b"
+    },
+    {
+      "path": "list/evidence/list-arrow-icon-rows-16.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-7d854f8d780938e4c27d/verification.json",
+      "sha256": "000ba60f6eefe09694edb0bbb8e763c2be85e93e1c34a5df69a6244c8de94554"
+    },
+    {
+      "path": "list/evidence/list-diamond-label-grid-66.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/list/evidence/list-diamond-label-grid-66.json",
+      "sha256": "53724597e53192195f690cc81562fcc251a5505ebf57ebca7417002a9f2bef9f"
+    },
+    {
+      "path": "list/evidence/list-diamond-label-grid-66.mjs",
+      "source": "samplev2/jssdk/并列4项1/compilations/v085/slides/slide-0066.mjs",
+      "sha256": "64e03634a1c13b17a609d5d98c9d106050593386ac6b8b0f9bc564b71f50dbd1"
+    },
+    {
+      "path": "list/evidence/list-diamond-label-grid-66.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-2dba8400e69e7057125f/verification.json",
+      "sha256": "06cc3d0a116a74d669023ac629c02fa8629d114378b1a762c15bd28e8c91206b"
+    },
+    {
+      "path": "list/evidence/list-slanted-label-legend-81.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/list/evidence/list-slanted-label-legend-81.json",
+      "sha256": "6a99e78306cb8642fdfc7c08bc118db8e154c9959cddebc0388211ef41fdc0eb"
+    },
+    {
+      "path": "list/evidence/list-slanted-label-legend-81.mjs",
+      "source": "samplev2/jssdk/并列4项1/compilations/v085/slides/slide-0081.mjs",
+      "sha256": "4a87eedf9d59a0efee63e05987aff408a9c9c1e7cca35e03d72bf1d484feed6e"
+    },
+    {
+      "path": "list/evidence/list-slanted-label-legend-81.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-730a0dcac0388af83b69/verification.json",
+      "sha256": "d7793f14c17a7d6ffe818ee51e06614833a8b379c0a551cd54623d6d14ef0bdc"
+    },
+    {
+      "path": "list/evidence/list-orbital-pill-grid-92.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/list/evidence/list-orbital-pill-grid-92.json",
+      "sha256": "b56a455f21c3b682668018e6cacc97876288d77ac52dd96c87df82bde6a4e938"
+    },
+    {
+      "path": "list/evidence/list-orbital-pill-grid-92.mjs",
+      "source": "samplev2/jssdk/并列4项1/compilations/v085/slides/slide-0092.mjs",
+      "sha256": "81a955723975237cc7acc575ac95f0aef6886acdff3e15412802193473ef62a4"
+    },
+    {
+      "path": "list/evidence/list-orbital-pill-grid-92.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-90865ad03ea12f93d1de/verification.json",
+      "sha256": "01f50ac8e73d8df5a064b7e95b0344fd3bf95d8fbf3cf2b598d0892a525b04b2"
+    },
+    {
+      "path": "process/recipe.md",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/process/recipe.md",
+      "sha256": "fd81e1d5c51676d2f2146c6145228223974456251b0df1f33068dcaf34e6baff"
+    },
+    {
+      "path": "process/variants.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/process/variants.json",
+      "sha256": "8f7cfc1674eb15005d65ba91b133e9775754c1cb27644a3469afa6bcc9c103e2"
+    },
+    {
+      "path": "process/evidence/process-linked-stages-553.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/process/evidence/process-linked-stages-553.json",
+      "sha256": "bd0805b23e2a4007847d77d407590171becd285a336820cae49cbb38f1a48744"
+    },
+    {
+      "path": "process/evidence/process-linked-stages-553.mjs",
+      "source": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__流程6项__流程6项/slides/slide-0553.mjs",
+      "sha256": "649a6540200f2a4c488f38bd19518ca7cae9e070207215781a35496b59c96207"
+    },
+    {
+      "path": "process/evidence/process-linked-stages-553.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-8eb22ddcb4188a407d0f/verification.json",
+      "sha256": "d3a4849e8c60600f690803204033c3ff61c25de2011360699c62a2fde1180ab8"
+    },
+    {
+      "path": "timeline/recipe.md",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/timeline/recipe.md",
+      "sha256": "22d0f3836348e70df7b38f6d3fdcdf8a49170cfb40b51cacb0072ba14f6ee24f"
+    },
+    {
+      "path": "timeline/variants.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/timeline/variants.json",
+      "sha256": "f46d4c4921ad275354d38622f606325a4d19d367f99ed0214c98a3f83de74f23"
+    },
+    {
+      "path": "timeline/evidence/timeline-12-8.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/timeline/evidence/timeline-12-8.json",
+      "sha256": "217d76aca4dbd275d9149e97a9cf3398e29f7fc5ded5fb322490e814c5f8b0ba"
+    },
+    {
+      "path": "timeline/evidence/timeline-12-8.mjs",
+      "source": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__时间轴4项__时间轴4项/slides/slide-0012.mjs",
+      "sha256": "9c6d35ebe1b33cbead965dae6595bbd98758fe3709fb8ba76c7e955626087c1b"
+    },
+    {
+      "path": "timeline/evidence/timeline-12-8.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-03a6f67d80b3b19b1045/verification.json",
+      "sha256": "1c0a0e09ff3821221f71ea00bfc8691a84a3f1fc95d4c8196a099e56e6c72aaa"
+    },
+    {
+      "path": "timeline/evidence/timeline-6-9.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/timeline/evidence/timeline-6-9.json",
+      "sha256": "b7d0b25db88addf5fb63ab8959b37fa50cdb7b3af7ea9ac11f2502006adf4f25"
+    },
+    {
+      "path": "timeline/evidence/timeline-6-9.mjs",
+      "source": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__时间轴5项__时间轴5项/slides/slide-0006.mjs",
+      "sha256": "934a07fab65d90e0073208d18bf3f1371591261778200532c2379b68f2aae9e2"
+    },
+    {
+      "path": "timeline/evidence/timeline-6-9.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-424b375dddbbec14ff8d/verification.json",
+      "sha256": "8250661de0efef91c5dbc000aee94a5d99e2faf8b7ce492c7cf4bf731ad42bbb"
+    },
+    {
+      "path": "timeline/evidence/timeline-16-7.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/timeline/evidence/timeline-16-7.json",
+      "sha256": "451dbf9abc0cb1ca1298217c32460ca7783a59ba78515ca55ab7aac98daf1aef"
+    },
+    {
+      "path": "timeline/evidence/timeline-16-7.mjs",
+      "source": "artifacts/aippt/full-distillation/source-repairs/timeline-vertical/repair-01.mjs",
+      "sha256": "1fbd83a01a19d2cacd8f7272b1112060b4f79ecb0f83af20d43bfc34c63bb372"
+    },
+    {
+      "path": "timeline/evidence/timeline-16-7.verification.json",
+      "source": "artifacts/aippt/full-distillation/source-repairs/timeline-vertical/verification-02/verification.json",
+      "sha256": "90daf72180706206235de5a834efbe1c450be912b89d19afe43456a341cc5981"
+    },
+    {
+      "path": "comparison/recipe.md",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/comparison/recipe.md",
+      "sha256": "c6260ac1256086002fe11fb809d7c481d96b934c66b21334ccc36c082f69f553"
+    },
+    {
+      "path": "comparison/variants.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/comparison/variants.json",
+      "sha256": "a608224f6c1f4d2c016f35c601ea2db93eae3ed60239c14efae95cb13c93f3dd"
+    },
+    {
+      "path": "comparison/evidence/comparison-balanced-pair-29.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/comparison/evidence/comparison-balanced-pair-29.json",
+      "sha256": "889cc489ebdbdd62a37977fa0e5c00605bebb456c0d955ef863fa99455e96fcd"
+    },
+    {
+      "path": "comparison/evidence/comparison-balanced-pair-29.mjs",
+      "source": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__对比1-2项__对比1-2项/slides/slide-0029.mjs",
+      "sha256": "8a2466be862e13d8e37c021f25f340906318a324c6c1b7e02a0dc928840462f3"
+    },
+    {
+      "path": "comparison/evidence/comparison-balanced-pair-29.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-0a0ee3dadc01f47d2f26/verification.json",
+      "sha256": "2c6346d111890b651534b7b576b4a4f33b704d3c43dff579929a8bb05a2f3cdd"
+    },
+    {
+      "path": "matrix/recipe.md",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/matrix/recipe.md",
+      "sha256": "b91845febbeddb7aeb058b27986747cdbd6901a5da71c168ad92d7803dd65138"
+    },
+    {
+      "path": "organization/recipe.md",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/organization/recipe.md",
+      "sha256": "3511da7f131fbd4c40a7ea80d7e21cccf181cac1463b65a2139edaf59d743f6d"
+    },
+    {
+      "path": "organization/variants.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/organization/variants.json",
+      "sha256": "3300c8f8017a7c3f6ef433eda34f41c262aabd6589a06f93395587d056566ecd"
+    },
+    {
+      "path": "organization/evidence/organization-branch-left-3.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/organization/evidence/organization-branch-left-3.json",
+      "sha256": "6507ec14c0b8d2a13f0d06b6e1981cdf566fcd431d5e9bc8d6131669e08db0cd"
+    },
+    {
+      "path": "organization/evidence/organization-branch-left-3.mjs",
+      "source": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__组织架构3项__组织架构3项/slides/slide-0003.mjs",
+      "sha256": "27af62990600798d2e16a5d16423eead734250914e5967e92c425379116f2347"
+    },
+    {
+      "path": "organization/evidence/organization-branch-left-3.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-aca3f0c319c63b7c77e8/verification.json",
+      "sha256": "8c2d949173891333f2e10fae8f7b1c909a4eb32bd807e5e137e1dc3c7beb682c"
+    },
+    {
+      "path": "organization/evidence/organization-branch-left-four-4.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/organization/evidence/organization-branch-left-four-4.json",
+      "sha256": "54a560483e6459dbffe1b87b1514120be2cc794a77c026c5bc8b3848aacd37cc"
+    },
+    {
+      "path": "organization/evidence/organization-branch-left-four-4.mjs",
+      "source": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__组织架构4项__组织架构4项/slides/slide-0004.mjs",
+      "sha256": "a9f697dd7ea0fd1bb6d26ca0c7f2c45198c9e9976a3450ccd389e34994075e7a"
+    },
+    {
+      "path": "organization/evidence/organization-branch-left-four-4.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-9ceb6366ed75ca07a41c/verification.json",
+      "sha256": "15dad1fe3430929a23fe00e4f02dab4898234242a8f66d10f31e46b3b4e35e5b"
+    },
+    {
+      "path": "pyramid/recipe.md",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/pyramid/recipe.md",
+      "sha256": "a111e923204d6b1cd112fb4025929951ae63f4ee7eb045be59ddf5240e3742f2"
+    },
+    {
+      "path": "pyramid/variants.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/pyramid/variants.json",
+      "sha256": "9c959efbeb7899b3c2e0d5ba63a37054bfb6db0fb38b0fa9c967e556b4ad39dc"
+    },
+    {
+      "path": "pyramid/evidence/pyramid-separated-tiers-24.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/pyramid/evidence/pyramid-separated-tiers-24.json",
+      "sha256": "f8af2f56e41097ee941bdf65358b9a3b39a6dc905fe4abf867482c49bfa00804"
+    },
+    {
+      "path": "pyramid/evidence/pyramid-separated-tiers-24.mjs",
+      "source": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__金字塔3项__金字塔3项/slides/slide-0024.mjs",
+      "sha256": "7bc359880f1eb68037435938c5fed8356998f8b6f94e04260cc08bbe40e53566"
+    },
+    {
+      "path": "pyramid/evidence/pyramid-separated-tiers-24.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-d41bd35ea6f908fd0939/verification.json",
+      "sha256": "fb771ca40c34e5d0abd6c577eabdc041aea950456c4eab779998cf54e502549a"
+    },
+    {
+      "path": "pyramid/evidence/pyramid-filled-tiers-16.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/pyramid/evidence/pyramid-filled-tiers-16.json",
+      "sha256": "db30b2f9a5567ca2e8b354a7440b30d36ada583341b0e36c8110243602d7d75a"
+    },
+    {
+      "path": "pyramid/evidence/pyramid-filled-tiers-16.mjs",
+      "source": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__金字塔4项__金字塔4项/slides/slide-0016.mjs",
+      "sha256": "3db6697015baa7f69c98e8d1cc7ac9d0bf1b9c57d84a0fca26df835082fd092a"
+    },
+    {
+      "path": "pyramid/evidence/pyramid-filled-tiers-16.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-6ef349190547570db179/verification.json",
+      "sha256": "b1e05ec5512210583fc917cfe06dc08b4352690db7af1dcaec04bd64c3631755"
+    },
+    {
+      "path": "pyramid/evidence/pyramid-slanted-tier-legend-86.json",
+      "source": "plans/aippt-jssdk-skill-strategy/distilled-skills/pyramid/evidence/pyramid-slanted-tier-legend-86.json",
+      "sha256": "4532ed0f795b8f3ce0cf39c85db5c859dc682e1309efe50d37ad02c6cff415c2"
+    },
+    {
+      "path": "pyramid/evidence/pyramid-slanted-tier-legend-86.mjs",
+      "source": "plans/aippt-jssdk-skill-strategy/sampleall-jssdk/shape/sampleall__shape__并列4项2__并列4项2/slides/slide-0086.mjs",
+      "sha256": "1ffaecfa77d995cac037a13cec0cbc9baa7e8bddd7d002ed3e72260279d8db49"
+    },
+    {
+      "path": "pyramid/evidence/pyramid-slanted-tier-legend-86.verification.json",
+      "source": "artifacts/aippt/full-distillation/font-metrics-v3/source-aee7d4d6ca02ae965893/verification.json",
+      "sha256": "bd786bef19fa8336cde4ad8bc9666f958584ab6a9050317bdca1c25ec818f6a9"
+    },
+    {
+      "path": "availability.json",
+      "source": "generated from immutable evidence",
+      "sha256": "02fea4ade24aae0e0a49627bf178e376a97952fa5fab737ad1a49698f5d64bc1"
+    }
+  ]
+}
