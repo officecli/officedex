@@ -5,7 +5,10 @@ import path from "node:path";
 import test from "node:test";
 import {
   findNativeModules,
+  findStrayNodeBinaries,
+  nativePackagePlatform,
   nativePackages,
+  pruneForeignPlatformNatives,
   presentationSourceRepository,
   resolvePresentationSource,
   stagePresentationRuntime,
@@ -470,4 +473,124 @@ test("refuses a target architecture whose natives are not installed in the check
     stagePresentationRuntime({ source, dest }),
     new RegExp(`native package @esbuild/${process.platform}-${other} .* is missing`),
   );
+});
+
+/**
+ * A Windows tree staged on a Mac. Nothing in the fake checkout is for win32:
+ * the natives come from a fetched directory (fetch-presentation-natives.mjs),
+ * the converter is handed in as mop-convert.exe, and everything platform-bound
+ * in the result must be the target's, not the host's.
+ */
+test("stages a win32-x64 tree on a foreign host: msvc natives from a fetched dir, mop-convert.exe, target in runtime.json", async (t) => {
+  const { source, dest } = await stageInto(t);
+  const wanted = nativePackages("win32", "x64");
+  assert.deepEqual(
+    wanted.map((native) => native.name),
+    ["@esbuild/win32-x64", "@rollup/rollup-win32-x64-msvc", "@rolldown/binding-win32-x64-msvc", "lightningcss-win32-x64-msvc"],
+  );
+
+  // The staged hosts must declare the win32 slice, as the real packages do.
+  const store = path.join(source, "node_modules", ".pnpm", "vite@6.4.3", "node_modules");
+  for (const native of wanted) {
+    const manifestPath = path.join(store, native.host, "package.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.optionalDependencies[native.name] = "1.0.0";
+    await writeFile(manifestPath, JSON.stringify(manifest));
+  }
+  const fetched = path.join(source, "..", "natives-win32-x64");
+  for (const native of wanted) {
+    await mkdir(path.join(fetched, native.name), { recursive: true });
+    await writeFile(path.join(fetched, native.name, "package.json"), JSON.stringify({ name: native.name, version: "1.0.0" }));
+    await writeFile(path.join(fetched, native.name, "binding.node"), "win32");
+  }
+  const converter = path.join(source, "..", "mop-convert.exe");
+  await writeFile(converter, "MZ");
+  await chmod(converter, 0o755);
+
+  const result = await stagePresentationRuntime({
+    source,
+    dest,
+    target: { platform: "win32", arch: "x64" },
+    nativePackagesDir: fetched,
+    converterSource: converter,
+  });
+  assert.deepEqual(result.target, { platform: "win32", arch: "x64" });
+  assert.equal(result.converter, path.join(dest, "tools", "bin", "mop-convert.exe"));
+  await stat(path.join(dest, "tools", "bin", "mop-convert.exe"));
+  await assert.rejects(stat(path.join(dest, "tools", "bin", "mop-convert")), { code: "ENOENT" });
+  for (const native of wanted) {
+    await stat(path.join(dest, "node_modules", native.name, "binding.node"));
+  }
+  // The host's own slice is still in the tree (it came with vite's pnpm
+  // siblings); what matters is that the target's is there too.
+  const manifest = JSON.parse(await readFile(path.join(dest, "runtime.json"), "utf8"));
+  assert.equal(manifest.platform, "win32");
+  assert.equal(manifest.arch, "x64");
+  assert.equal(manifest.stagedOn, `${process.platform}-${os.arch()}`);
+  assert.equal(manifest.converter, path.join("tools", "bin", "mop-convert.exe"));
+});
+
+test("a win32 target without fetched natives says how to get them", async (t) => {
+  const { source, dest } = await stageInto(t);
+  const converter = path.join(source, "..", "mop-convert.exe");
+  await writeFile(converter, "MZ");
+  await chmod(converter, 0o755);
+  await assert.rejects(
+    stagePresentationRuntime({ source, dest, target: { platform: "win32", arch: "x64" }, converterSource: converter }),
+    /fetch-presentation-natives\.mjs --platform win32 --arch x64/,
+  );
+});
+
+test("findStrayNodeBinaries finds node and node.exe anywhere in the tree, and nothing else", async (t) => {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), "officedex-stray-"));
+  t.after(() => rm(tmp, { recursive: true, force: true }));
+  await mkdir(path.join(tmp, "a", "bin"), { recursive: true });
+  await writeFile(path.join(tmp, "a", "bin", "node.exe"), "");
+  await writeFile(path.join(tmp, "node"), "");
+  await writeFile(path.join(tmp, "a", "node_modules.txt"), "");
+  assert.deepEqual(await findStrayNodeBinaries(tmp), [path.join(tmp, "a", "bin", "node.exe"), path.join(tmp, "node")]);
+});
+
+test("natives for other platforms are pruned from a staged tree; other CPUs of the same platform stay", async (t) => {
+  // vite's pnpm siblings bring the host's darwin natives into a Windows tree.
+  const tmp = await mkdtemp(path.join(os.tmpdir(), "officedex-prune-"));
+  t.after(() => rm(tmp, { recursive: true, force: true }));
+  const modules = path.join(tmp, "node_modules");
+  for (const name of [
+    "@rolldown/binding-darwin-arm64",
+    "@rolldown/binding-win32-x64-msvc",
+    "@rolldown/binding-win32-arm64-msvc",
+    "@esbuild/darwin-x64",
+    "@esbuild/win32-x64",
+    "lightningcss-darwin-arm64",
+    "lightningcss-win32-x64-msvc",
+    "fsevents",
+    "lodash-es",
+    "vite",
+    "@rolldown/pluginutils",
+  ]) {
+    await mkdir(path.join(modules, ...name.split("/")), { recursive: true });
+    await writeFile(path.join(modules, ...name.split("/"), "package.json"), JSON.stringify({ name }));
+  }
+  const pruned = await pruneForeignPlatformNatives(modules, "win32");
+  assert.deepEqual(pruned, ["@esbuild/darwin-x64", "@rolldown/binding-darwin-arm64", "fsevents", "lightningcss-darwin-arm64"]);
+  for (const kept of ["@rolldown/binding-win32-x64-msvc", "@rolldown/binding-win32-arm64-msvc", "@esbuild/win32-x64", "lightningcss-win32-x64-msvc", "lodash-es", "vite", "@rolldown/pluginutils"]) {
+    await stat(path.join(modules, ...kept.split("/"), "package.json"));
+  }
+  assert.equal(nativePackagePlatform("@rollup/rollup-linux-x64-gnu"), "linux");
+  assert.equal(nativePackagePlatform("@rolldown/pluginutils"), "");
+  assert.equal(nativePackagePlatform("fsevents"), "darwin");
+});
+
+test("a darwin target keeps both darwin slices and drops only foreign platforms", async (t) => {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), "officedex-prune-"));
+  t.after(() => rm(tmp, { recursive: true, force: true }));
+  const modules = path.join(tmp, "node_modules");
+  for (const name of ["@esbuild/darwin-arm64", "@esbuild/darwin-x64", "@esbuild/win32-x64", "fsevents"]) {
+    await mkdir(path.join(modules, ...name.split("/")), { recursive: true });
+  }
+  assert.deepEqual(await pruneForeignPlatformNatives(modules, "darwin"), ["@esbuild/win32-x64"]);
+  await stat(path.join(modules, "@esbuild", "darwin-arm64"));
+  await stat(path.join(modules, "@esbuild", "darwin-x64"));
+  await stat(path.join(modules, "fsevents"));
 });

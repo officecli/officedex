@@ -13,6 +13,12 @@
 // Everything below is expressed once against a resolved destination root so the
 // two layouts cannot drift apart.
 
+//
+// The *target* platform decides the shape and the binary names, not the build
+// host's: a Windows package is assembled on a Mac (scripts/dist-win.mjs), so
+// `--platform win32 --bin <dir>` select the loose layout and the .exe names
+// regardless of where this runs.
+
 import { chmod, copyFile, cp, mkdir, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -21,11 +27,12 @@ import { fileURLToPath } from "node:url";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "..");
 const BIN = path.join(REPO_ROOT, "build", "bin");
-const APP_PATH = path.join(BIN, "OfficeDex.app");
 
-const IS_WINDOWS = process.platform === "win32";
-const BINARY_NAME = IS_WINDOWS ? "officecli.exe" : "officecli";
-const CONVERT_BINARY_NAME = IS_WINDOWS ? "convert.exe" : "convert";
+/** Names of the two shelled-out binaries on a platform. */
+export function bundledBinaryNames(platform = process.platform) {
+  const exe = platform === "win32" ? ".exe" : "";
+  return { officecli: `officecli${exe}`, convert: `convert${exe}` };
+}
 
 /**
  * Where staged resources go, and whether there is a package to stage into.
@@ -66,7 +73,7 @@ export async function stageDesktopSkills(resources, source = path.join(REPO_ROOT
   }
 }
 
-async function copy(src, destDir, destName) {
+async function copy(src, destDir, destName, { executable = true } = {}) {
   if (!existsSync(src)) {
     console.warn(`[bundle-runtime] source not found: ${src}`);
     return;
@@ -74,7 +81,7 @@ async function copy(src, destDir, destName) {
   await mkdir(destDir, { recursive: true });
   const dest = path.join(destDir, destName);
   await copyFile(src, dest);
-  if (!IS_WINDOWS) {
+  if (executable && process.platform !== "win32") {
     await chmod(dest, 0o755);
   }
   console.log(`[bundle-runtime] ${src} → ${dest}`);
@@ -90,23 +97,29 @@ async function copyTreeRequired(src, dest, label) {
   console.log(`[bundle-runtime] ${src} → ${dest}`);
 }
 
-async function main() {
-  const target = resolveBundleTarget();
+export async function bundleRuntime({ platform = process.platform, bin = BIN } = {}) {
+  const target = resolveBundleTarget({ platform, bin });
   if (target === null) {
-    console.log("[bundle-runtime] no packaged application found in build/bin, skipping");
-    return;
+    console.log(`[bundle-runtime] no packaged application found in ${bin}, skipping`);
+    return null;
   }
+  const names = bundledBinaryNames(platform);
   const resources = target.root;
-  console.log(`[bundle-runtime] staging into ${resources} (${target.kind})`);
+  console.log(`[bundle-runtime] staging into ${resources} (${target.kind}, ${platform})`);
 
   // AI generation Skills used by the desktop Planner. Keep these as readable
   // resources so the packaged client and OfficeCLI can discover the same
   // authoring rules as the development checkout.
   await stageDesktopSkills(resources);
 
-  // officecli
-  const officecliSrc = path.join(REPO_ROOT, "build", "officecli", BINARY_NAME);
-  await copy(officecliSrc, path.join(resources, "officecli"), BINARY_NAME);
+  // officecli. On macOS codesign-bundled-officecli.mjs re-copies and signs it
+  // afterwards; on Windows this copy is the one that ships, so version.json
+  // travels with it for verify-officecli-canvas-contract and diagnostics.
+  const officecliSrc = path.join(REPO_ROOT, "build", "officecli", names.officecli);
+  await copy(officecliSrc, path.join(resources, "officecli"), names.officecli);
+  if (platform === "win32") {
+    await copy(path.join(REPO_ROOT, "build", "officecli", "version.json"), path.join(resources, "officecli"), "version.json", { executable: false });
+  }
 
   // MOP authoring uses both an embedded Node runtime and a Vite SSR source
   // root. Fail packaging when either is absent, otherwise generation would
@@ -131,16 +144,30 @@ async function main() {
   );
 
   // word2mow's DOCX <-> MOW converter, driven by internal/word2mowhttp.
-  const convertSrc = path.join(REPO_ROOT, "build", "writer-convert", CONVERT_BINARY_NAME);
+  const convertSrc = path.join(REPO_ROOT, "build", "writer-convert", names.convert);
   if (!existsSync(convertSrc)) {
     throw new Error(`word2mow convert binary not found: ${convertSrc}`);
   }
-  await copy(convertSrc, path.join(resources, "word2mow"), CONVERT_BINARY_NAME);
+  await copy(convertSrc, path.join(resources, "word2mow"), names.convert);
+  return target;
+}
+
+function parseArgs(argv) {
+  const options = {};
+  for (let index = 0; index < argv.length; index += 1) {
+    const flag = argv[index];
+    const value = argv[index + 1];
+    if (flag === "--platform") options.platform = value;
+    else if (flag === "--bin") options.bin = path.resolve(value);
+    else continue;
+    index += 1;
+  }
+  return options;
 }
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
-  main().catch((err) => {
+  bundleRuntime(parseArgs(process.argv.slice(2))).catch((err) => {
     console.error(`[bundle-runtime] error: ${err.message}`);
     process.exit(1);
   });

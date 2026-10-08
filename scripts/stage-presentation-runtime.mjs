@@ -118,8 +118,21 @@ export const PRESENTATION_NODE_MODULES = Object.freeze([
   { from: "@learnof/scientific-formula", sourceFallback: "packages/deps/scientific-formula", required: true },
 ]);
 
-function converterName() {
-  return process.platform === "win32" ? "mop-convert.exe" : "mop-convert";
+/** The converter's file name on the *target* platform, which may not be the host's. */
+export function converterName(platform = process.platform) {
+  return platform === "win32" ? "mop-convert.exe" : "mop-convert";
+}
+
+/**
+ * The target a staged tree is for. The build host's platform is only the
+ * default: a Windows package is staged on a Mac, and everything platform-bound
+ * in the tree (natives, the converter's name, runtime.json) is the target's.
+ */
+export function resolveStagingTarget({
+  platform = String(process.env.PRESENTATION_TARGET_PLATFORM || "").trim() || process.platform,
+  arch = String(process.env.PRESENTATION_TARGET_ARCH || "").trim() || os.arch(),
+} = {}) {
+  return { platform, arch };
 }
 
 // esbuild, rollup (Vite 6/7) and rolldown (Vite 8) each load a platform-specific
@@ -167,21 +180,34 @@ async function copyPnpmClosures(linkedPackage, destModules) {
   }
 }
 
+// esbuild names its slices by platform-arch alone; rollup, rolldown and
+// lightningcss (napi-rs conventions) add the ABI: -msvc on Windows, -gnu on
+// Linux, nothing on macOS. `@rollup/rollup-win32-x64` does not exist.
+function nativeAbiSuffix(platform) {
+  if (platform === "win32") return "-msvc";
+  if (platform === "linux") return "-gnu";
+  return "";
+}
+
 export function nativePackages(platform = process.platform, arch = os.arch()) {
-  const slice = `${platform === "win32" ? "win32" : platform}-${arch}`;
+  const slice = `${platform}-${arch}`;
+  const abi = nativeAbiSuffix(platform);
   return [
     { host: "esbuild", name: `@esbuild/${slice}` },
-    { host: "rollup", name: `@rollup/rollup-${slice}` },
-    { host: "rolldown", name: `@rolldown/binding-${slice}` },
-    { host: "lightningcss", name: `lightningcss-${slice}` },
+    { host: "rollup", name: `@rollup/rollup-${slice}${abi}` },
+    { host: "rolldown", name: `@rolldown/binding-${slice}${abi}` },
+    { host: "lightningcss", name: `lightningcss-${slice}${abi}` },
   ];
 }
 
 // Find a native package at the exact version the staged host package expects.
 // Checks the host's own node_modules and the top level first (both are plain
 // resolution), then the pnpm store, which is where a non-hoisted install keeps
-// it. Returns null when no matching version exists.
-async function findNativePackage(root, staged, { host, name }) {
+// it, then `nativePackagesDir` -- a directory of packages fetched for another
+// platform (scripts/fetch-presentation-natives.mjs), laid out as
+// <dir>/<package name>/package.json. Returns null when no matching version
+// exists.
+async function findNativePackage(root, staged, { host, name }, nativePackagesDir = "") {
   let version = "";
   try {
     const hostManifest = JSON.parse(
@@ -198,6 +224,7 @@ async function findNativePackage(root, staged, { host, name }) {
     path.join(root, "node_modules", name),
     // pnpm's store layout: @esbuild/darwin-arm64 -> @esbuild+darwin-arm64@X.Y.Z
     path.join(root, "node_modules", ".pnpm", `${name.replace("/", "+")}@${version}`, "node_modules", name),
+    ...(nativePackagesDir ? [path.join(nativePackagesDir, name)] : []),
   ];
   for (const candidate of candidates) {
     if (!existsSync(path.join(candidate, "package.json"))) continue;
@@ -211,11 +238,33 @@ async function findNativePackage(root, staged, { host, name }) {
   return null;
 }
 
+/**
+ * The repository this checkout belongs to, for a git worktree under
+ * .claude/worktrees/: its siblings (presentation, writer) sit beside the main
+ * checkout, not beside the worktree. Empty when git cannot tell.
+ */
+export function mainCheckoutRoot() {
+  try {
+    const common = execSync("git rev-parse --path-format=absolute --git-common-dir", {
+      cwd: ROOT,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    return common ? path.dirname(common) : "";
+  } catch {
+    return "";
+  }
+}
+
 export function resolvePresentationSource(explicit = process.env.PRESENTATION_SOURCE_DIR) {
   const candidates = [];
   const configured = String(explicit || "").trim();
   if (configured) candidates.push(configured);
-  else candidates.push(path.join(ROOT, "..", "presentation"), path.join(ROOT, "presentation"));
+  else {
+    candidates.push(path.join(ROOT, "..", "presentation"), path.join(ROOT, "presentation"));
+    const main = mainCheckoutRoot();
+    if (main && main !== ROOT) candidates.push(path.join(main, "..", "presentation"));
+  }
   for (const candidate of candidates) {
     const resolved = path.resolve(candidate);
     // The four markers officecli's validMOPPresentationRoot() looks for. They
@@ -329,8 +378,12 @@ export async function stagePresentationRuntime({
   source,
   dest = DEST,
   sourceRepository = presentationSourceRepository(),
+  target = resolveStagingTarget(),
+  nativePackagesDir = String(process.env.PRESENTATION_NATIVE_PACKAGES_DIR || "").trim(),
+  converterSource = String(process.env.MOP_CONVERT_BIN || "").trim(),
 } = {}) {
   const root = source || resolvePresentationSource();
+  const { platform: targetPlatform, arch: targetArch } = target;
   let sourceRevision = "unknown";
   let sourceDirty = false;
   try {
@@ -385,25 +438,23 @@ export async function stagePresentationRuntime({
     }
     await copyEntry(root, source, path.join(modules, entry.from));
   }
-  // Cross-arch staging: an Intel package built on an Apple Silicon machine (or
-  // the reverse) needs the *target's* esbuild/rollup/rolldown natives, not the
-  // build host's. pnpm only installs the host slice by default, so the
-  // presentation checkout must have been installed with the target architecture
-  // included (pnpm's supportedArchitectures) before staging can find them.
-  // Vite 8 replaced rollup with rolldown; only copy natives for hosts that the
-  // staged vite closure actually contains.
-  const targetArch = String(process.env.PRESENTATION_TARGET_ARCH || "").trim() || os.arch();
-  const targetPlatform =
-    String(process.env.PRESENTATION_TARGET_PLATFORM || "").trim() || process.platform;
+  // Cross-platform or cross-arch staging: an Intel or Windows package built on
+  // an Apple Silicon machine needs the *target's* esbuild/rollup/rolldown
+  // natives, not the build host's. pnpm only installs the host slice by
+  // default, so either the presentation checkout was installed with the target
+  // included (pnpm's supportedArchitectures) or the packages were fetched
+  // separately into nativePackagesDir. Vite 8 replaced rollup with rolldown;
+  // only copy natives for hosts that the staged vite closure actually contains.
   const copiedHosts = [];
   for (const native of nativePackages(targetPlatform, targetArch)) {
     if (!existsSync(path.join(dest, "node_modules", native.host, "package.json"))) continue;
-    const found = await findNativePackage(root, dest, native);
+    const found = await findNativePackage(root, dest, native, nativePackagesDir);
     if (!found) {
       throw new Error(
         `native package ${native.name} (matching the staged ${native.host}) is missing ` +
-          `from ${root}; install the presentation checkout for ${targetPlatform}-${targetArch} ` +
-          "before staging (pnpm supportedArchitectures, or install on that platform)",
+          `from ${root}${nativePackagesDir ? ` and ${nativePackagesDir}` : ""}; install the presentation checkout for ` +
+          `${targetPlatform}-${targetArch} before staging (pnpm supportedArchitectures), or fetch the ` +
+          `packages with scripts/fetch-presentation-natives.mjs --platform ${targetPlatform} --arch ${targetArch}`,
       );
     }
     const target = path.join(modules, native.name);
@@ -411,6 +462,11 @@ export async function stagePresentationRuntime({
     await cp(found.path, target, { recursive: true, force: true, dereference: true });
     copiedHosts.push(native.host);
   }
+  // vite's pnpm sibling set brought the *host's* natives along (and fsevents
+  // on a Mac). On a package for another platform they are dead weight that no
+  // code path loads -- some 50MB of Mach-O inside a Windows installer -- and
+  // the PE audit in dist-win.mjs would rightly refuse them.
+  const prunedNatives = await pruneForeignPlatformNatives(modules, targetPlatform);
   if (!copiedHosts.includes("esbuild")) {
     throw new Error("staged vite closure is missing esbuild; cannot package a working SSR runtime");
   }
@@ -421,19 +477,20 @@ export async function stagePresentationRuntime({
   }
 
   // mop-convert: the typed PPTX <-> MOP converter the worker shells out to.
-  // Resolved the same way officecli's resolveMOPConvert() resolves it.
-  const converter = converterName();
-  const converterSource =
-    String(process.env.MOP_CONVERT_BIN || "").trim() || path.join(root, "tools", "bin", converter);
-  await access(converterSource, fsConstants.X_OK).catch(() => {
+  // Resolved the same way officecli's resolveMOPConvert() resolves it, under
+  // the *target's* name: a Windows tree carries mop-convert.exe even when it is
+  // staged on a Mac, because that is what mop-converter-client.mjs looks for.
+  const converter = converterName(targetPlatform);
+  const converterFrom = converterSource || path.join(root, "tools", "bin", converter);
+  await access(converterFrom, fsConstants.X_OK).catch(() => {
     throw new Error(
-      `mop-convert not found or not executable at ${converterSource}; ` +
-        "build it for this platform or set MOP_CONVERT_BIN",
+      `mop-convert not found or not executable at ${converterFrom}; ` +
+        `build it for ${targetPlatform}-${targetArch} or set MOP_CONVERT_BIN`,
     );
   });
   const converterDest = path.join(dest, "tools", "bin", converter);
   await mkdir(path.dirname(converterDest), { recursive: true });
-  await cp(converterSource, converterDest, { force: true, dereference: true });
+  await cp(converterFrom, converterDest, { force: true, dereference: true });
   if (process.platform !== "win32") await chmod(converterDest, 0o755);
 
   // notarize.mjs discovers signing targets with `find -type f -perm +111`, but
@@ -448,13 +505,10 @@ export async function stagePresentationRuntime({
   // trap the first time it JITs code (only Resources/mop-runtime/bin/node
   // carries the JIT entitlements). Refuse to stage rather than ship such a
   // bundle.
-  const stray = execSync(
-    `find "${dest}" -type f \\( -name node -o -name node.exe \\)`,
-    { encoding: "utf8" },
-  ).trim();
-  if (stray) {
+  const stray = await findStrayNodeBinaries(dest);
+  if (stray.length > 0) {
     throw new Error(
-      `presentation runtime contains a stray node binary; the packaged app would trap under hardened runtime:\n${stray}`,
+      `presentation runtime contains a stray node binary; the packaged app would trap under hardened runtime:\n${stray.join("\n")}`,
     );
   }
 
@@ -481,10 +535,11 @@ export async function stagePresentationRuntime({
     JSON.stringify(
       {
         name: "officedex-presentation-runtime",
-        // The slice this tree was staged for, not the build host's: an Intel
-        // package staged on Apple Silicon carries the x64 natives above.
+        // The tree's target, not the build host's: a win32-x64 tree staged on
+        // an arm64 Mac is a win32-x64 tree.
         platform: targetPlatform,
         arch: targetArch,
+        stagedOn: `${process.platform}-${os.arch()}`,
         source: root,
         sourceRepository,
         sourceRevision,
@@ -497,13 +552,78 @@ export async function stagePresentationRuntime({
           playwright: playwrightStaged,
         },
         nativeModules: natives.map((native) => path.relative(dest, native)).sort(),
+        prunedForeignNatives: prunedNatives,
       },
       null,
       2,
     ) + "\n",
     "utf8",
   );
-  return { root, dest, converter: converterDest, playwrightStaged };
+  return { root, dest, converter: converterDest, playwrightStaged, target: { platform: targetPlatform, arch: targetArch } };
+}
+
+const NATIVE_PLATFORMS = ["darwin", "win32", "linux", "freebsd", "android", "aix", "sunos", "openbsd", "netbsd"];
+
+/** The platform a native package name is for, or "" when it is not a per-platform package. */
+export function nativePackagePlatform(name) {
+  const match =
+    /^@esbuild\/([a-z0-9]+)-/.exec(name) ||
+    /^@rollup\/rollup-([a-z0-9]+)-/.exec(name) ||
+    /^@rolldown\/binding-([a-z0-9]+)-/.exec(name) ||
+    /^lightningcss-([a-z0-9]+)-/.exec(name);
+  if (match && NATIVE_PLATFORMS.includes(match[1])) return match[1];
+  if (name === "fsevents") return "darwin";
+  return "";
+}
+
+/**
+ * Removes native packages built for platforms other than the target from a
+ * staged node_modules. Same-platform packages for another CPU are kept: a
+ * macOS tree legitimately carries both darwin slices.
+ */
+export async function pruneForeignPlatformNatives(modules, targetPlatform) {
+  const pruned = [];
+  const candidates = [];
+  for (const entry of await readdir(modules, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name.startsWith("@")) {
+      for (const child of await readdir(path.join(modules, entry.name), { withFileTypes: true })) {
+        if (child.isDirectory()) candidates.push(`${entry.name}/${child.name}`);
+      }
+      continue;
+    }
+    candidates.push(entry.name);
+  }
+  for (const name of candidates) {
+    const platform = nativePackagePlatform(name);
+    if (!platform || platform === targetPlatform) continue;
+    await rm(path.join(modules, ...name.split("/")), { recursive: true, force: true });
+    pruned.push(name);
+  }
+  return pruned.sort();
+}
+
+/**
+ * Any node / node.exe inside the staged tree. Walked in JS rather than with
+ * find(1) so the same check runs on a Windows build host.
+ */
+export async function findStrayNodeBinaries(dir) {
+  const found = [];
+  const walk = async (current) => {
+    let entries;
+    try {
+      entries = await readdir(current, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) await walk(full);
+      else if (entry.isFile() && (entry.name === "node" || entry.name === "node.exe")) found.push(full);
+    }
+  };
+  await walk(dir);
+  return found.sort();
 }
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);

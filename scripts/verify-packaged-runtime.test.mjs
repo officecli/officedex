@@ -235,3 +235,28 @@ test("being allowed to be absent does not excuse being broken", async () => {
   );
   await rm(root, { recursive: true, force: true });
 });
+
+test("a Windows package verified on a foreign host reports the runtime as not executed, never as present", async () => {
+  // A Mac cannot run node.exe. The gate must neither fail (the package may be
+  // fine) nor count the runtime among the proven payloads; it names the gap.
+  const { bin } = await packageTree({ platform: "win32" });
+  const verifyRuntime = async (_dir, options) => {
+    assert.equal(options.probe, false, "the runtime must not be executed on a host that cannot run it");
+    return { probed: false, unverifiedReason: "cross-build: a darwin host cannot execute a win32 Node" };
+  };
+  const result = await verifyPackagedRuntime(bin, { platform: "win32", arch: "x64", probeRuntime: false, verifyRuntime });
+  assert.equal(result.kind, "windows-dir");
+  assert.equal(result.present.includes("MOP Node runtime"), false);
+  assert.deepEqual(result.unverified, ["MOP Node runtime: cross-build: a darwin host cannot execute a win32 Node"]);
+  await rm(path.dirname(bin), { recursive: true, force: true });
+});
+
+test("the Windows binaries are looked up by their .exe names when the target is win32", async () => {
+  const { bin } = await packageTree({ platform: "win32" });
+  const verifyRuntime = async () => ({ probed: true, version: "v24.18.0" });
+  const result = await verifyPackagedRuntime(bin, { platform: "win32", arch: "x64", probeRuntime: true, verifyRuntime });
+  assert.ok(result.present.includes("mop-convert"));
+  assert.ok(result.present.includes("officecli"));
+  assert.ok(result.present.includes("word2mow converter"));
+  await rm(path.dirname(bin), { recursive: true, force: true });
+});

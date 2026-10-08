@@ -21,7 +21,7 @@ import { constants } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { verifyRelocatableRuntime } from "./relocatable-runtime.mjs";
+import { canExecuteRuntime, verifyRelocatableRuntime } from "./relocatable-runtime.mjs";
 
 /**
  * What a shippable package must contain, expressed against the resource root.
@@ -82,7 +82,7 @@ export const REQUIRED_RESOURCES = Object.freeze([
     at: ["word2mow", "convert"],
     label: "word2mow converter",
     optional: true,
-    why: "DOCX <-> MOW conversion; no Windows build of it exists yet, so a Windows package ships without DOCX editing",
+    why: "DOCX <-> MOW conversion; without it the DOCX editor can only report itself unavailable",
   }),
 ]);
 
@@ -151,9 +151,23 @@ async function toleratedAbsence(root, tolerated, entry) {
  * app prefers the runtime next to its executable over anything on PATH. So the
  * question this gate asks is not "required or not" but "absent, or valid".
  */
+/**
+ * `probeRuntime` is whether the Node runtime is *executed*. It defaults to
+ * "when this host can": a Windows package verified on a Mac cannot be, so its
+ * runtime is checked as a file and listed under `unverified` -- printed on
+ * every run, never folded into `present`. Passing false on a host that could
+ * run it is refused by verifyRelocatableRuntime, so this cannot become a way
+ * to green a native build.
+ */
 export async function verifyPackagedRuntime(
   binDirectory,
-  { platform = process.platform, mayBeAbsent = [], verifyRuntime = verifyRelocatableRuntime } = {},
+  {
+    platform = process.platform,
+    arch = process.arch,
+    mayBeAbsent = [],
+    probeRuntime = canExecuteRuntime(platform),
+    verifyRuntime = verifyRelocatableRuntime,
+  } = {},
 ) {
   const target = await resolveResourceRoot(binDirectory);
   if (target === null) {
@@ -164,18 +178,23 @@ export async function verifyPackagedRuntime(
   const missing = [];
   const degraded = [];
   const present = [];
+  const unverified = [];
   for (const entry of REQUIRED_RESOURCES) {
     const at = resourcePath(target.root, entry, platform);
     if ((await toleratedAbsence(target.root, tolerated, entry)) && !(await exists(at))) {
       degraded.push(`${entry.label}: absent at ${at}\n      ${entry.why}`);
       continue;
     }
-    const problem = await inspect(at, entry, platform, verifyRuntime);
-    if (problem === null) {
+    const outcome = await inspect(at, entry, { platform, arch, probeRuntime, verifyRuntime });
+    if (outcome === null) {
       present.push(entry.label);
       continue;
     }
-    (entry.optional ? degraded : missing).push(`${entry.label}: ${problem}\n      ${entry.why}`);
+    if (outcome.unverified) {
+      unverified.push(`${entry.label}: ${outcome.unverified}`);
+      continue;
+    }
+    (entry.optional ? degraded : missing).push(`${entry.label}: ${outcome.problem}\n      ${entry.why}`);
   }
 
   if (missing.length > 0) {
@@ -183,32 +202,34 @@ export async function verifyPackagedRuntime(
       `packaged application is incomplete (${target.kind}, ${target.root}):\n  ${missing.join("\n  ")}`,
     );
   }
-  return { ...target, present, degraded };
+  return { ...target, present, degraded, unverified };
 }
 
-async function inspect(at, entry, platform, verifyRuntime) {
-  if (!(await exists(at))) return `missing at ${at}`;
+async function inspect(at, entry, { platform, arch, probeRuntime, verifyRuntime }) {
+  if (!(await exists(at))) return { problem: `missing at ${at}` };
   if (entry.kind === "binary") {
     const info = await stat(at);
-    if (!info.isFile()) return `not a file: ${at}`;
+    if (!info.isFile()) return { problem: `not a file: ${at}` };
     return null;
   }
   if (entry.kind === "runtime") {
     // Run it where it sits: this copy is at its destination, which is exactly
-    // where the app will start it from.
+    // where the app will start it from -- unless this host cannot run it at
+    // all, in which case the file checks run and the gap is reported.
     try {
-      await verifyRuntime(at, { platform });
+      const result = await verifyRuntime(at, { platform, arch, probe: probeRuntime });
+      if (result && result.probed === false) return { unverified: result.unverifiedReason };
       return null;
     } catch (error) {
-      return error.message;
+      return { problem: error.message };
     }
   }
   const info = await stat(at);
-  if (!info.isDirectory()) return `not a directory: ${at}`;
+  if (!info.isDirectory()) return { problem: `not a directory: ${at}` };
   const entries = new Set(await readdir(at));
-  if (entries.size === 0) return `empty directory: ${at}`;
+  if (entries.size === 0) return { problem: `empty directory: ${at}` };
   for (const required of entry.contains ?? []) {
-    if (!(await exists(path.join(at, required)))) return `missing ${required}/ inside ${at}`;
+    if (!(await exists(path.join(at, required)))) return { problem: `missing ${required}/ inside ${at}` };
   }
   return null;
 }
@@ -220,14 +241,24 @@ if (invokedDirectly) {
   const mayBeAbsent = args
     .filter((arg) => arg.startsWith("--may-be-absent="))
     .flatMap((arg) => arg.slice("--may-be-absent=".length).split(",").filter(Boolean));
+  const flagValue = (name) => args.find((arg) => arg.startsWith(`${name}=`))?.slice(name.length + 1);
+  const platform = flagValue("--platform") || process.platform;
+  const arch = flagValue("--arch") || process.arch;
   const binDirectory =
     args.find((arg) => !arg.startsWith("--")) ??
     path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "build", "bin");
   try {
-    const { kind, root, present, degraded } = await verifyPackagedRuntime(binDirectory, { mayBeAbsent });
+    const { kind, root, present, degraded, unverified } = await verifyPackagedRuntime(binDirectory, {
+      platform,
+      arch,
+      mayBeAbsent,
+    });
     console.log(`verify-packaged-runtime: ${present.length} runtime payload(s) present (${kind}, ${root})`);
     for (const entry of degraded) {
       console.log(`verify-packaged-runtime: shipping without ${entry.split("\n")[0]}`);
+    }
+    for (const entry of unverified) {
+      console.log(`verify-packaged-runtime: NOT EXECUTED on this host -- ${entry}`);
     }
   } catch (error) {
     console.error(`verify-packaged-runtime: ${error.message}`);
