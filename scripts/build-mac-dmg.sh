@@ -434,6 +434,14 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
   echo "[${LOG}] building desktop frontend (host fonts, no bundled CJK)"
   npm run build:frontend:desktop
 
+  # Writer's default-font closure ships at Resources/writer-fonts, copied from
+  # build/writer-fonts by bundle-runtime.mjs below. Stage it from the current
+  # writer embed every run: 1.0.13 packaged whatever a previous stage had left
+  # behind, so the closure could drift from the writer build it was signed
+  # with. bundle:licenses:mac then runs the bundled-font gate over the result.
+  echo "[${LOG}] staging Writer default-font closure"
+  npm run stage:writer-fonts
+
   echo "[${LOG}] building OfficeDex.app (darwin/${GO_ARCH})"
   env -u GOROOT wails build -platform "darwin/${GO_ARCH}" -trimpath -s \
     -ldflags "-X main.appVersion=${APP_VERSION} -X main.appUpdateChannel=${UPDATE_CHANNEL:-stable}"
