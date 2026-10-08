@@ -41,6 +41,13 @@ export const KNOWN_CONVERT_BUILDS = Object.freeze({
     sha256: "09f22bb574aa265f1349876bc2d08d6c338b751c3360d6cd8d4d0234508f9e22",
     revision: "289bdf45c051f7ad2d7907120b909c8561dd8d5d",
   }),
+  // Cross-built from a clean worktree of the same revision with cargo-zigbuild
+  // (zig 0.17.0, x86_64-pc-windows-gnu, release profile); the exact command
+  // is in docs/windows-build.md.
+  "win32-x64": Object.freeze({
+    sha256: "0cba483784a48415d1615147dc5689caecbf09dc93a7c65162c25a6089ceb956",
+    revision: "289bdf45c051f7ad2d7907120b909c8561dd8d5d",
+  }),
 });
 
 export function convertBinaryName(platform = process.platform) {

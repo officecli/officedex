@@ -50,7 +50,7 @@ import { bundleRuntime } from "./bundle-runtime.mjs";
 import { OFFICE2MODOC_VERSION, bundleWindowsOffice2modoc } from "./bundle-office2modoc.mjs";
 import { fetchPresentationNatives, nativesCacheDir } from "./fetch-presentation-natives.mjs";
 import { inspectPortableExecutable } from "./pe-executable.mjs";
-import { KNOWN_CONVERT_BUILDS, prefetchWord2MowConvert, sha256File } from "./prefetch-word2mow-convert.mjs";
+import { prefetchWord2MowConvert, sha256File } from "./prefetch-word2mow-convert.mjs";
 import { mainCheckoutRoot, stagePresentationRuntime } from "./stage-presentation-runtime.mjs";
 import { stageMopRuntime } from "./stage-mop-runtime.mjs";
 import { verifyPackagedRuntime } from "./verify-packaged-runtime.mjs";
@@ -62,25 +62,14 @@ export const TARGET_PLATFORM = "win32";
 export const DEFAULT_ARCH = "x64";
 
 /**
- * Digests of the Windows builds of the two Rust converters produced for this
- * branch (see docs/windows-build.md for the toolchain and commands).
- *
- * word2mow's belongs in KNOWN_CONVERT_BUILDS in prefetch-word2mow-convert.mjs;
- * it is parked here because that table is being edited on the Intel branch at
- * the same time. Move the entry there, and delete this object, once that
- * branch has landed. mop-convert has no table of its own (the macOS build is
- * taken from the presentation checkout's tools/bin), so its digest is pinned
- * here for the same reason the word2mow one is pinned at all: a silently
- * swapped converter must fail the build, not ship.
+ * Digest of the Windows build of mop-convert (see docs/windows-build.md for the
+ * toolchain and command). word2mow's is in KNOWN_CONVERT_BUILDS like every
+ * other slice; mop-convert has no table of its own (the macOS build is taken
+ * from the presentation checkout's tools/bin), so its digest is pinned here for
+ * the same reason the word2mow one is pinned at all: a silently swapped
+ * converter must fail the build, not ship.
  */
-export const PROVISIONAL_CONVERTER_BUILDS = Object.freeze({
-  word2mow: Object.freeze({
-    "win32-x64": Object.freeze({
-      sha256: "0cba483784a48415d1615147dc5689caecbf09dc93a7c65162c25a6089ceb956",
-      revision: "289bdf45c051f7ad2d7907120b909c8561dd8d5d",
-      toolchain: "cargo-zigbuild 0.23.4, zig 0.17.0, x86_64-pc-windows-gnu, release profile",
-    }),
-  }),
+export const PINNED_CONVERTER_BUILDS = Object.freeze({
   "mop-convert": Object.freeze({
     "win32-x64": Object.freeze({
       sha256: "0a6256df61618d9330127602a828f7d2a928545a3cacd1b21f1579e7630547e1",
@@ -380,8 +369,7 @@ export async function distWin(options) {
         break;
 
       case "word2mow": {
-        const builds = { ...KNOWN_CONVERT_BUILDS, ...PROVISIONAL_CONVERTER_BUILDS.word2mow };
-        const result = await prefetchWord2MowConvert({ platform: TARGET_PLATFORM, arch, source: inputs.word2mow, builds });
+        const result = await prefetchWord2MowConvert({ platform: TARGET_PLATFORM, arch, source: inputs.word2mow });
         summary.word2mow = { sha256: result.sha256, revision: result.revision };
         log(step, `${result.source} -> ${result.dest} (word2mow ${result.revision})`);
         break;
@@ -522,11 +510,11 @@ export async function distWin(options) {
 }
 
 async function pinConverter(name, file, slice) {
-  const pinned = PROVISIONAL_CONVERTER_BUILDS[name]?.[slice];
+  const pinned = PINNED_CONVERTER_BUILDS[name]?.[slice];
   if (!pinned) throw new Error(`no pinned ${name} build for ${slice}`);
   const digest = await sha256File(file);
   if (digest !== pinned.sha256) {
-    throw new Error(`${name} digest mismatch for ${slice}: expected ${pinned.sha256}, got ${digest} (${file}); rebuild from ${pinned.revision} or update PROVISIONAL_CONVERTER_BUILDS`);
+    throw new Error(`${name} digest mismatch for ${slice}: expected ${pinned.sha256}, got ${digest} (${file}); rebuild from ${pinned.revision} or update PINNED_CONVERTER_BUILDS`);
   }
 }
 

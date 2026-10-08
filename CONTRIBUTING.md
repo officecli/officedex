@@ -129,7 +129,7 @@ There is one live update channel, `stable`: the signed manifest lives at `office
 
 Versions are plain `x.y.z`; the client compares three numeric segments and ignores a `-beta` suffix, so pre-release suffixes never trigger an update and are refused by the publish scripts.
 
-### Shipping a release (macOS arm64 and Intel; Windows is "coming soon")
+### Shipping a release (macOS arm64 and Intel; Windows is built but not yet shipped)
 
 1. Bump `version` in `package.json` and `productVersion` in `wails.json`.
 2. Compile and notarize on this machine: `bash scripts/build-mac-dmg.sh` for Apple Silicon, then `TARGET_ARCH=x64 bash scripts/build-mac-dmg.sh` for Intel (see below; the two share `build/bin`, so one after the other). Each writes `dist-artifacts/OfficeDex-<v>-darwin-<arch>.dmg` and the updater zip `OfficeDex-v<v>-darwin-<arch>.zip`.
@@ -176,6 +176,10 @@ Versions are plain `x.y.z`; the client compares three numeric segments and ignor
 - **presentation natives**: the presentation checkout must hold the darwin-x64 esbuild / rollup / rolldown / lightningcss packages next to the arm64 ones. Add `supportedArchitectures: { cpu: [arm64, x64] }` to its `pnpm-workspace.yaml` and run `pnpm install` there; `stage:presentation` fails naming the missing package otherwise.
 
 The build runs from a linked worktree as well: sibling checkouts (officecli-internal, presentation, ppt2mop) are resolved next to the main worktree, and `OFFICECLI_INTERNAL_DIR` / `PRESENTATION_SOURCE_DIR` override them. The MOP worker smoke inside the build draws a deck with the staged x64 Node and mop-convert; on an Apple Silicon host Rosetta runs them, so it is not skipped. For a manual check install the DMG and launch the app (its binary is x64-only, so macOS runs it under Rosetta), then generate a PPTX, open and save a DOCX and generate an XLSX; `lipo -archs` on `officedex`, `officecli`, `mop-runtime/bin/node`, `presentation/tools/bin/mop-convert`, `word2mow/convert` and `liboffice2modoc_ffi.dylib` inside the bundle must all say `x86_64`. None of this replaces a run on an Intel Mac before a release.
+
+### Windows (windows-amd64) packages
+
+The Windows package is assembled by `npm run dist:win` (`scripts/dist-win.mjs`), on a Mac or on a Windows machine; `npm run dist:win:installer` adds the NSIS installer `OfficeDex-v<v>-windows-amd64-installer.exe` and the portable `OfficeDex-v<v>-windows-amd64.zip` in `dist-artifacts/`. The inputs it needs (the win-x64 Node zip, the two cross-built Rust converters with their pinned digests, the win32-x64 presentation natives, the office2modoc DLL), what a Mac cannot verify and how a Windows host proves it, the updater's installer contract and the open decisions (Authenticode certificate, install scope, zip vs installer) are all in [docs/windows-build.md](docs/windows-build.md). Nothing Windows is published yet: the update manifest's `windows-amd64` asset must be the installer (`--windows <installer.exe>`), and it is not added until a signed build has passed acceptance on a Windows 10/11 machine.
 
 Clients on 0.6.x poll the same root manifest and upgrade straight to the current version. Clients on 1.0.6–1.0.12 polled the legacy OBS channel; it was written one last time (`--channel 1.0`) with a stable-channel build and is frozen. `officedex-dist/channels/1.0/` is the even older bridge for 1.0.1–1.0.5 and stays untouched.
 

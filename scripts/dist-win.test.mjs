@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  PROVISIONAL_CONVERTER_BUILDS,
+  PINNED_CONVERTER_BUILDS,
   STEPS,
   artifactNames,
   auditPortableExecutables,
@@ -74,16 +74,12 @@ test("inputs are read from a prepared archive or from build/cache", () => {
   assert.ok(local.mopConvert.endsWith(path.join("build", "cache", "mop-convert", "win32-x64", "mop-convert.exe")) || process.env.MOP_CONVERT_BIN);
 });
 
-test("the provisional converter digests are pinned for win32-x64 and do not collide with the known table", () => {
-  for (const name of ["word2mow", "mop-convert"]) {
-    const build = PROVISIONAL_CONVERTER_BUILDS[name]["win32-x64"];
+test("both win32-x64 converter digests are pinned: word2mow in the shared table, mop-convert here", () => {
+  for (const build of [KNOWN_CONVERT_BUILDS["win32-x64"], PINNED_CONVERTER_BUILDS["mop-convert"]["win32-x64"]]) {
+    assert.ok(build, "win32-x64 build must be registered");
     assert.match(build.sha256, /^[0-9a-f]{64}$/);
     assert.match(build.revision, /^[0-9a-f]{40}$/);
   }
-  // Once the Intel branch lands, the word2mow entry moves into
-  // KNOWN_CONVERT_BUILDS; until then it must not already be there, or the two
-  // tables could disagree.
-  assert.equal("win32-x64" in KNOWN_CONVERT_BUILDS, false, "move PROVISIONAL_CONVERTER_BUILDS.word2mow into KNOWN_CONVERT_BUILDS and delete it here");
 });
 
 test("the PE audit lists every image and names the ones that are not PE32+ x86-64", async () => {
