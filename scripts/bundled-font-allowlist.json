@@ -40,6 +40,11 @@
       "license": "OFL-1.1",
       "source": "adobe-fonts/source-code-pro@d3f1a5962cde503f9409c21e58527611d4a19ef1",
       "verifiedFrom": "writer/assets/fonts/licenses/README.md and source-code-pro-OFL.md"
+    },
+    "stixtwomath": {
+      "license": "OFL-1.1",
+      "source": "stipub/stixfonts STIX Two Math 2.13 b170, delivered by writer as packages/writer-next-fonts/assets/draw/STIXTwoMath-Regular.otf (formula layout)",
+      "verifiedFrom": "the font's own name table (IDs 0, 13, 14) and writer/packages/writer-next-fonts/licenses/STIXTwoMath-Regular.OFL.txt"
     }
   },
   "unresolved": {
