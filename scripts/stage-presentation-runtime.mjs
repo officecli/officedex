@@ -481,8 +481,10 @@ export async function stagePresentationRuntime({
     JSON.stringify(
       {
         name: "officedex-presentation-runtime",
-        platform: process.platform,
-        arch: os.arch(),
+        // The slice this tree was staged for, not the build host's: an Intel
+        // package staged on Apple Silicon carries the x64 natives above.
+        platform: targetPlatform,
+        arch: targetArch,
         source: root,
         sourceRepository,
         sourceRevision,

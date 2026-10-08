@@ -14,7 +14,9 @@ import {
 // Build a presentation checkout with the same shape the real one has: the four
 // markers officecli validates, a pnpm-style vite link, and the native packages
 // esbuild/rollup load at runtime.
-async function fakeCheckout(root, { hoistNatives = false, converterMode = 0o755 } = {}) {
+// `archs` lists the slices whose natives are installed (pnpm's
+// supportedArchitectures); the host's alone unless a cross-arch case asks.
+async function fakeCheckout(root, { hoistNatives = false, converterMode = 0o755, archs = [os.arch()] } = {}) {
   const write = async (rel, body) => {
     const target = path.join(root, rel);
     await mkdir(path.dirname(target), { recursive: true });
@@ -83,7 +85,11 @@ async function fakeCheckout(root, { hoistNatives = false, converterMode = 0o755 
   // pnpm store: vite lives beside its own dependency closure, and node_modules/
   // vite is a symlink into it.
   const store = path.join(root, "node_modules", ".pnpm", "vite@6.4.3", "node_modules");
-  const natives = nativePackages();
+  const natives = archs.flatMap((arch) => nativePackages(process.platform, arch));
+  const optionalByHost = {};
+  for (const native of natives) {
+    (optionalByHost[native.host] ??= {})[native.name] = "1.0.0";
+  }
   await write(
     path.join(path.relative(root, store), "vite/package.json"),
     JSON.stringify({ name: "vite", version: "6.4.3" }),
@@ -95,7 +101,7 @@ async function fakeCheckout(root, { hoistNatives = false, converterMode = 0o755 
       JSON.stringify({
         name: native.host,
         version: "1.0.0",
-        optionalDependencies: { [native.name]: "1.0.0" },
+        optionalDependencies: optionalByHost[native.host],
       }),
     );
     // A native addon npm ships non-executable — exactly the case that must not
@@ -425,5 +431,43 @@ test("sourceRepository defaults to the neutral component name and follows the en
   assert.equal(
     presentationSourceRepository({ PRESENTATION_SOURCE_REPOSITORY: "example.com/presentation" }),
     "example.com/presentation",
+  );
+});
+
+// An Intel package built on Apple Silicon (or the reverse) must carry the
+// target's natives and say so, or the shipped runtime.json claims the host's
+// slice for a tree that cannot load on it.
+function withTargetArch(t, arch) {
+  const previous = process.env.PRESENTATION_TARGET_ARCH;
+  process.env.PRESENTATION_TARGET_ARCH = arch;
+  t.after(() => {
+    if (previous === undefined) delete process.env.PRESENTATION_TARGET_ARCH;
+    else process.env.PRESENTATION_TARGET_ARCH = previous;
+  });
+}
+
+test("stages the target architecture's natives and records that slice in runtime.json", async (t) => {
+  const other = os.arch() === "arm64" ? "x64" : "arm64";
+  const { source, dest } = await stageInto(t, { archs: [os.arch(), other] });
+  withTargetArch(t, other);
+
+  await stagePresentationRuntime({ source, dest });
+
+  const manifest = JSON.parse(await readFile(path.join(dest, "runtime.json"), "utf8"));
+  assert.equal(manifest.arch, other, "runtime.json must name the staged slice, not the build host");
+  assert.equal(manifest.platform, process.platform);
+  for (const native of nativePackages(process.platform, other)) {
+    await stat(path.join(dest, "node_modules", native.name, "binding.node"));
+  }
+});
+
+test("refuses a target architecture whose natives are not installed in the checkout", async (t) => {
+  const other = os.arch() === "arm64" ? "x64" : "arm64";
+  const { source, dest } = await stageInto(t);
+  withTargetArch(t, other);
+
+  await assert.rejects(
+    stagePresentationRuntime({ source, dest }),
+    new RegExp(`native package @esbuild/${process.platform}-${other} .* is missing`),
   );
 });
