@@ -4,29 +4,46 @@ name: Windows smoke
 # Windows, the staged node.exe actually executed, the package assembled
 # natively (NSIS installer included), `officedex.exe --verify-runtime`, a
 # launch, and officecli's end-to-end MOP generation against the packaged
-# presentation tree. Manual only, and it publishes nothing: the artifacts are
-# uploaded to the run for a human to inspect. Releases are cut from the
-# release machine (CONTRIBUTING.md, Release flow).
+# presentation tree. Manual only, and it publishes nothing. Releases are cut
+# from the release machine (CONTRIBUTING.md, Release flow).
 #
-# GitHub-hosted runners reach neither the presentation repository nor the Rust
-# registry, so the parts only a Mac can produce arrive as the "windows inputs"
-# archive (`npm run windows:inputs:pack`, scripts/windows-inputs.mjs): dist/,
-# the staged presentation tree, the Writer fonts and the two converters. Point
-# the workflow at it either by URL + sha256, or by the tag of a (draft) GitHub
-# release in this repository that carries it as an asset.
+# READ BEFORE DISPATCHING
 #
-# Everything the workflow does is `scripts/*.mjs` so the same steps run on a
-# developer's Windows machine:
+# 1. This repository is public. A public repository's workflow logs and run
+#    artifacts can be read by anyone signed in to GitHub. The package this job
+#    assembles contains private components (the presentation SSR runtime,
+#    mop-convert, the office2modoc DLL, the Writer payloads), unsigned. So the
+#    job uploads *no binary and no runtime tree*: only `smoke-report/`, a few
+#    scrubbed JSON summaries produced by `scripts/windows-smoke.mjs report`.
+#    Anything the private checkouts print (the officecli-internal test run,
+#    the app's resolver report) goes through the same scrubber before it
+#    reaches the log, the clone token is masked, and the MOP smoke runs
+#    without -v. The installer and zip stay on the runner and are gone when
+#    the job ends; collect them from a machine you control instead (below).
 #
-#   node scripts/windows-inputs.mjs unpack <archive> --sha256 <hex>
-#   node scripts/dist-win.mjs --inputs build/windows-inputs --installer --zip
-#   node scripts/windows-smoke.mjs verify-runtime
-#   node scripts/windows-smoke.mjs launch
-#   node scripts/windows-smoke.mjs mop-smoke --officecli-source <officecli-internal checkout>
+# 2. `npm ci` resolves the @shimo scope from the company's private npm
+#    registry (.npmrc.example), which GitHub-hosted runners cannot reach, so on
+#    a hosted runner this workflow stops at "Check the private npm registry is
+#    reachable" with an explicit error. It is a shell around scripts/*.mjs,
+#    kept so the sequence is written down once and runs unchanged wherever the
+#    registry *is* reachable. Do not point it at a self-hosted runner. The
+#    primary way to run these checks is a Windows machine on the company
+#    network, by hand -- docs/windows-build.md, "Proving it on Windows":
 #
-# Secrets used (all already exist for release.yml):
-#   OFFICECLI_INTERNAL_TOKEN, OFFICECLI_INTERNAL_REF  the office2modoc DLL and the MOP smoke test source
-# No new secret is required.
+#      npm ci
+#      node scripts/windows-inputs.mjs unpack <archive> --sha256 <hex>
+#      node scripts/dist-win.mjs --inputs build/windows-inputs --installer --zip
+#      node scripts/windows-smoke.mjs verify-runtime
+#      node scripts/windows-smoke.mjs launch
+#      node scripts/windows-smoke.mjs mop-smoke --officecli-source <officecli-internal checkout>
+#      node scripts/windows-smoke.mjs report
+#
+# The parts only a Mac can produce (dist/, the staged presentation tree, the
+# Writer fonts, the two converters) arrive as the "windows inputs" archive
+# (`npm run windows:inputs:pack`): by URL + sha256, or as an asset of a draft
+# release in this repository. Secrets used, both already present for
+# release.yml: OFFICECLI_INTERNAL_TOKEN, OFFICECLI_INTERNAL_REF (office2modoc
+# DLL and the MOP smoke test source). No new secret is required.
 
 on:
   workflow_dispatch:
@@ -89,6 +106,22 @@ jobs:
           node-version: "22"
           cache: npm
 
+      - name: Check the private npm registry is reachable
+        # package-lock.json resolves the @shimo scope from the registry named
+        # in .npmrc.example. Without it `npm ci` fails deep inside npm with a
+        # 404; fail here instead, with the reason, before anything is built.
+        run: |
+          set -euo pipefail
+          registry="$(sed -n 's/^@shimo:registry=//p' .npmrc.example | head -n1)"
+          test -n "$registry" || { echo "::error::.npmrc.example names no @shimo registry"; exit 1; }
+          if ! curl --silent --show-error --fail --max-time 20 --output /dev/null "$registry"; then
+            echo "::error::the private npm registry that package-lock.json depends on is not reachable from this runner."
+            echo "::error::GitHub-hosted runners cannot reach it, so this workflow cannot run here; run the same scripts on a Windows machine inside the company network (see the header of this file and docs/windows-build.md)."
+            exit 1
+          fi
+          printf '%s\n' "$(sed -n 's/^@shimo:registry=.*/&/p' .npmrc.example | head -n1)" > .npmrc
+          echo "private registry reachable; .npmrc written for npm ci"
+
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
 
@@ -120,6 +153,7 @@ jobs:
           scripts/bundle-runtime.test.mjs
           scripts/dist-win.test.mjs
           scripts/windows-inputs.test.mjs
+          scripts/windows-smoke.test.mjs
 
       - name: Resolve the inputs archive
         id: inputs
@@ -133,7 +167,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/inputs"
           if [[ -n "$INPUTS_URL" ]]; then
             test -n "$INPUTS_SHA256" || { echo "::error::inputs_sha256 is required with inputs_url"; exit 1; }
-            curl --fail --location --retry 3 --connect-timeout 30 "$INPUTS_URL" \
+            curl --fail --location --retry 3 --connect-timeout 30 --silent --show-error "$INPUTS_URL" \
               --output "$RUNNER_TEMP/inputs/windows-inputs.tar.gz"
           elif [[ -n "$INPUTS_RELEASE_TAG" ]]; then
             gh release download "$INPUTS_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
@@ -161,10 +195,10 @@ jobs:
           version="$NODE_RUNTIME_VERSION"
           cache="build/cache/pptxgenjs-runtime"
           mkdir -p "$cache"
-          curl --fail --location --retry 3 --connect-timeout 20 \
+          curl --fail --location --retry 3 --connect-timeout 20 --silent --show-error \
             "https://nodejs.org/dist/v${version}/SHASUMS256.txt" \
             --output "$cache/node-v${version}-SHASUMS256.txt"
-          curl --fail --location --retry 3 --connect-timeout 20 \
+          curl --fail --location --retry 3 --connect-timeout 20 --silent --show-error \
             "https://nodejs.org/dist/v${version}/node-v${version}-win-x64.zip" \
             --output "$cache/node-v${version}-win-x64.zip"
           # stage-mop-runtime.mjs verifies the zip against SHASUMS256 itself.
@@ -177,12 +211,15 @@ jobs:
           set -euo pipefail
           test -n "$OFFICECLI_INTERNAL_TOKEN" || { echo "::error::OFFICECLI_INTERNAL_TOKEN secret is required"; exit 1; }
           test -n "$OFFICECLI_INTERNAL_REF" || { echo "::error::OFFICECLI_INTERNAL_REF secret is required"; exit 1; }
-          git clone --depth 1 --branch "$OFFICECLI_INTERNAL_REF" \
+          echo "::add-mask::$OFFICECLI_INTERNAL_TOKEN"
+          # --quiet: a failing clone must not echo its URL into the public log.
+          git clone --quiet --depth 1 --branch "$OFFICECLI_INTERNAL_REF" \
             "https://x-access-token:${OFFICECLI_INTERNAL_TOKEN}@github.com/officecli/officecli-internal.git" \
-            "$RUNNER_TEMP/officecli-internal"
+            "$RUNNER_TEMP/officecli-internal" 2>/dev/null \
+            || { echo "::error::cloning officecli-internal failed (token, ref or network)"; exit 1; }
           version="$(tr -d '[:space:]' < office2modoc.version)"
           src="$RUNNER_TEMP/officecli-internal/third_party/office2modoc-ffi/${version}/x86_64-pc-windows-msvc/office2modoc_ffi.dll"
-          test -f "$src" || { echo "::error::no Windows office2modoc FFI at $src"; exit 1; }
+          test -f "$src" || { echo "::error::no Windows office2modoc FFI for ${version} in officecli-internal"; exit 1; }
           echo "OFFICE2MODOC_WINDOWS_DLL=$src" >> "$GITHUB_ENV"
           echo "OFFICECLI_INTERNAL_DIR=$RUNNER_TEMP/officecli-internal" >> "$GITHUB_ENV"
 
@@ -191,7 +228,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         # On this host stage-mop-runtime executes the staged node.exe from a
         # relocated copy, verify-packaged-runtime runs it where it ships, and
-        # makensis (preinstalled on windows-latest) builds the installer.
+        # makensis (preinstalled on windows-latest) builds the installer. The
+        # outputs stay on the runner; see the header.
         run: node scripts/dist-win.mjs --inputs build/windows-inputs --installer --zip
 
       - name: officedex.exe --verify-runtime
@@ -205,14 +243,15 @@ jobs:
         if: inputs.run_mop_smoke
         run: node scripts/windows-smoke.mjs mop-smoke --package build/win32-x64 --officecli-source "$OFFICECLI_INTERNAL_DIR"
 
-      - name: Upload artifacts (for inspection; nothing is published)
+      - name: Write the scrubbed smoke report
+        if: always()
+        run: node scripts/windows-smoke.mjs report --package build/win32-x64 --out smoke-report || echo "::warning::no report (the build did not get far enough)"
+
+      - name: Upload the smoke report (scrubbed JSON only; no binaries, no runtime tree)
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: officedex-windows-amd64-smoke
-          path: |
-            dist-artifacts/
-            build/win32-x64/mop-runtime/runtime.json
-            build/win32-x64/presentation/runtime.json
+          name: officedex-windows-amd64-smoke-report
+          path: smoke-report/
           if-no-files-found: warn
           retention-days: 14

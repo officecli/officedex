@@ -43,9 +43,9 @@ reuses an existing `dist/`.
 | Input | Where | How it gets there |
 | --- | --- | --- |
 | Node win-x64 zip + checksums | `build/cache/pptxgenjs-runtime/node-v24.18.0-win-x64.zip`, `node-v24.18.0-SHASUMS256.txt` | download from nodejs.org/dist (the stage step verifies the zip against SHASUMS256) |
-| `mop-convert.exe` | `build/cache/mop-convert/win32-x64/` | cross-built from ppt2mop, see below; digest pinned in `PROVISIONAL_CONVERTER_BUILDS` |
-| `convert.exe` (word2mow) | `build/cache/word2mow/win32-x64/` | cross-built from word2mow, see below; digest pinned in `PROVISIONAL_CONVERTER_BUILDS` |
-| win32-x64 native npm packages | `build/cache/presentation-natives/win32-x64/` | `npm run fetch:presentation-natives -- --platform win32 --arch x64` (the flow runs it); goes away once the presentation checkout lists win32 under `pnpm.supportedArchitectures` |
+| `mop-convert.exe` | `build/cache/mop-convert/win32-x64/` | cross-built from ppt2mop, see below; digest pinned in `PINNED_CONVERTER_BUILDS` (`scripts/dist-win.mjs`) |
+| `convert.exe` (word2mow) | `build/cache/word2mow/win32-x64/` | cross-built from word2mow, see below; digest pinned under `win32-x64` in `KNOWN_CONVERT_BUILDS` (`scripts/prefetch-word2mow-convert.mjs`) |
+| win32-x64 native npm packages | `build/cache/presentation-natives/win32-x64/` | `npm run fetch:presentation-natives -- --platform win32 --arch x64` (the flow runs it); goes away once the presentation checkout lists win32 under `supportedArchitectures.os` in its `pnpm-workspace.yaml` (see below) |
 | `office2modoc_ffi.dll` | `build/cache/office2modoc/<version>/windows-amd64/` or the `officecli-internal` checkout's `third_party/office2modoc-ffi/<version>/x86_64-pc-windows-msvc/` | checked against the third_party manifest, or `OFFICE2MODOC_WINDOWS_SHA256` in `dist-win.mjs` |
 | officecli | `build/officecli/officecli.exe` | fetched from the officecli-dist release pinned in `package.json` |
 
@@ -71,6 +71,28 @@ Every `.exe`, `.dll` and `.node` in the finished tree is checked to be PE32+
 x86-64 (`auditPortableExecutables`); a Mach-O or an arm64 image fails the
 build. Natives for other platforms that vite's pnpm sibling set drags in are
 pruned from the staged presentation tree (`pruneForeignPlatformNatives`).
+
+### Presentation natives through pnpm instead
+
+The presentation checkout's `pnpm-workspace.yaml` is gaining
+`supportedArchitectures: { cpu: [arm64, x64] }` for the Intel package. pnpm
+(the checkout pins 11.x) takes an `os` list in the same block and installs the
+optional dependencies for every `os × cpu` combination, so
+
+```yaml
+supportedArchitectures:
+  os: [current, win32]     # "current" keeps the host's own platform
+  cpu: [arm64, x64]
+```
+
+would put `@esbuild/win32-x64`, `@rolldown/binding-win32-x64-msvc`,
+`lightningcss-win32-x64-msvc` (and their arm64 siblings) into the store after
+`pnpm install`, where `findNativePackage` already looks; `fetch-presentation-
+natives` would then be unnecessary. Costs: the four extra packages per slice
+(~50MB), and `win32-arm64` natives that nothing uses yet. The lockfile does not
+change (the optional dependencies are already in it), so this is an install-time
+setting only. It is a change to the presentation repository and is not made
+here.
 
 ## The two Rust converters
 
@@ -107,51 +129,90 @@ cargo zigbuild --profile release-desktop -p pptx2mop --bin pptx2mop --target x86
 #   -> target/x86_64-pc-windows-gnu/release-desktop/pptx2mop.exe, copied as mop-convert.exe
 ```
 
-Copy the results into `build/cache/<converter>/win32-x64/` and update the
-digests in `PROVISIONAL_CONVERTER_BUILDS` (`scripts/dist-win.mjs`) when the
-source revision changes. The word2mow entry belongs in `KNOWN_CONVERT_BUILDS`
-(`scripts/prefetch-word2mow-convert.mjs`) and is parked in `dist-win.mjs` only
-while that table is being edited on the Intel branch.
+Copy the results into `build/cache/<converter>/win32-x64/` and, when the
+source revision changes, update the digests: word2mow's under `win32-x64` in
+`KNOWN_CONVERT_BUILDS` (`scripts/prefetch-word2mow-convert.mjs`), mop-convert's
+in `PINNED_CONVERTER_BUILDS` (`scripts/dist-win.mjs`).
 
-## Proving it on Windows: the smoke workflow
+## Proving it on Windows
 
-`.github/workflows/windows-smoke.yml` is manual (`workflow_dispatch`) and
-publishes nothing. GitHub-hosted runners reach neither the presentation
-repository nor the Rust registry, so the Mac hands over an **inputs archive**:
+Two facts shape this:
+
+- **This repository is public.** Workflow logs and run artifacts of a public
+  repository can be read by anyone signed in to GitHub, and the Windows package
+  contains private components (presentation SSR runtime, mop-convert,
+  office2modoc DLL, Writer payloads), unsigned. Nothing that runs on GitHub may
+  therefore upload the package, and anything a private checkout prints is
+  scrubbed before it reaches the log (`scrubSensitive` in
+  `scripts/windows-smoke.mjs`).
+- **`npm ci` needs the company's private npm registry** (the `@shimo` scope,
+  `.npmrc.example`), which GitHub-hosted runners cannot reach. A hosted run of
+  the workflow therefore stops at its first real step with an explicit error.
+  Do not work around this with a self-hosted runner.
+
+So the primary path is **a Windows 10/11 x64 machine on the company network**,
+running the same scripts by hand. The hosted workflow
+(`.github/workflows/windows-smoke.yml`, manual only, publishes nothing) is the
+same sequence written down once; it becomes usable only if the registry is
+reachable from where it runs.
+
+### On the Mac: produce the inputs
+
+The parts only a Mac with the sibling checkouts can produce go into an archive
+with a per-file sha256 manifest:
 
 ```bash
-npm run dist:win                       # stages everything (needs the sibling checkouts)
-npm run windows:inputs:pack            # -> dist-artifacts/officedex-windows-inputs-<rev>.tar.gz + sha256
+npm run dist:win                       # stages everything (needs the presentation/writer checkouts)
+npm run windows:inputs:pack            # -> dist-artifacts/officedex-windows-inputs-<rev>.tar.gz, prints its sha256
 ```
 
-It contains `dist/`, the staged `presentation/` (win32-x64), `writer-fonts/`,
-`mop-convert.exe`, `convert.exe` and a manifest with every file's sha256. Put
-it somewhere the runner can fetch it — any HTTPS URL, or as an asset on a
-**draft** GitHub release in this repository (drafts are not public and are not
-a release) — and dispatch the workflow with `inputs_url` + `inputs_sha256`, or
-`inputs_release_tag`.
+It holds `dist/`, the staged `presentation/` (win32-x64), `writer-fonts/`,
+`mop-convert.exe` and `convert.exe`. Move it to the Windows machine by any
+means you control (shared drive, scp, a draft GitHub release asset — drafts
+are not public and are not a release).
 
-The runner then: runs `go vet` and `go test ./...` on Windows; runs the
-Windows-relevant `node:test` files; unpacks and verifies the archive; downloads
-the Node zip; takes `office2modoc_ffi.dll` from `officecli-internal` (secrets
-`OFFICECLI_INTERNAL_TOKEN` / `OFFICECLI_INTERNAL_REF`, both already used by
-`release.yml`); runs `dist-win.mjs --inputs … --installer --zip` natively —
-which executes the staged `node.exe` for real and builds the installer with
-the runner's makensis; runs `officedex.exe --verify-runtime`; launches the app
-and requires it to stay up; and runs officecli's
-`TestPPTXMOPSkillEndToEndSmoke` against the packaged presentation tree with
-the packaged `node.exe` and `mop-convert.exe` first on PATH. Artifacts are
-uploaded to the run for inspection. **No new secret is needed.**
+### On the Windows machine: build and smoke
 
-The same steps on a Windows PC:
+Prerequisites: Git, Go (version from `go.mod`), Node 22, NSIS (`makensis` on
+PATH; `winget install NSIS.NSIS`), `.npmrc` copied from `.npmrc.example`, and
+checkouts of this repository and of `officecli-internal` (for the DLL and the
+MOP smoke test). Then, in the repository:
 
-```bash
-node scripts/windows-inputs.mjs unpack <archive> --sha256 <hex>
+```powershell
+npm ci
+go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+node scripts/windows-inputs.mjs unpack <archive.tar.gz> --sha256 <hex>
+
+# the pinned Node runtime: node-v24.18.0-win-x64.zip and SHASUMS256.txt from nodejs.org/dist/v24.18.0/
+# into build\cache\pptxgenjs-runtime\ (save the checksums as node-v24.18.0-SHASUMS256.txt)
+
+$env:OFFICE2MODOC_WINDOWS_DLL = "<officecli-internal>\third_party\office2modoc-ffi\0.1.34\x86_64-pc-windows-msvc\office2modoc_ffi.dll"
 node scripts/dist-win.mjs --inputs build/windows-inputs --installer --zip
-node scripts/windows-smoke.mjs verify-runtime
-node scripts/windows-smoke.mjs launch
-node scripts/windows-smoke.mjs mop-smoke --officecli-source <officecli-internal checkout>
+#   stage-mop-runtime now *executes* the staged node.exe from a relocated copy,
+#   verify-packaged-runtime runs it where it ships, every image is audited as
+#   PE32+ x86-64, makensis builds the installer -> dist-artifacts\
+
+node scripts/windows-smoke.mjs verify-runtime            # officedex.exe --verify-runtime: the app's own resolver report
+node scripts/windows-smoke.mjs launch --seconds 20       # the window process must stay up
+node scripts/windows-smoke.mjs mop-smoke --officecli-source <officecli-internal>
+#   officecli's TestPPTXMOPSkillEndToEndSmoke against the packaged presentation tree,
+#   with the packaged node.exe and mop-convert.exe first on PATH
+node scripts/windows-smoke.mjs report                    # scrubbed JSON summaries -> smoke-report\
 ```
+
+`go test ./...` and `go vet ./...` on the Windows machine complete the set.
+The installer and zip in `dist-artifacts\` are the deliverables; keep them
+off public storage until they are signed.
+
+### The hosted workflow
+
+`windows-smoke.yml` runs exactly the steps above on `windows-latest`, takes the
+inputs archive by `inputs_url` + `inputs_sha256` or by `inputs_release_tag`,
+and fetches the office2modoc DLL and the MOP smoke source from
+`officecli-internal` through the secrets `release.yml` already uses
+(`OFFICECLI_INTERNAL_TOKEN`, `OFFICECLI_INTERNAL_REF`; no new secret). Its
+first real step checks that the private registry answers and fails with the
+reason otherwise. It uploads only `smoke-report/`.
 
 ## Installer and updater
 
