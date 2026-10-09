@@ -143,78 +143,62 @@ Two facts shape this:
 - **This repository is public.** Workflow logs and run artifacts of a public
   repository can be read by anyone signed in to GitHub, and the Windows package
   contains private components (presentation SSR runtime, mop-convert,
-  office2modoc DLL, Writer payloads), unsigned. Nothing that runs on GitHub may
-  therefore upload the package, and anything a private checkout prints is
-  scrubbed before it reaches the log (`scrubSensitive` in
-  `scripts/windows-smoke.mjs`).
+  office2modoc DLL, Writer payloads), unsigned. So no workflow in this
+  repository builds or verifies the Windows package; the manual
+  `windows-smoke.yml` that briefly existed here was removed for that reason.
 - **`npm ci` needs the company's private npm registry** (the `@shimo` scope,
-  `.npmrc.example`), which GitHub-hosted runners cannot reach. A hosted run of
-  the workflow therefore stops at its first real step with an explicit error.
-  Do not work around this with a self-hosted runner.
+  `.npmrc.example`), which GitHub-hosted runners cannot reach.
 
-So the primary path is **a Windows 10/11 x64 machine on the company network**,
-running the same scripts by hand. The hosted workflow
-(`.github/workflows/windows-smoke.yml`, manual only, publishes nothing) is the
-same sequence written down once; it becomes usable only if the registry is
-reachable from where it runs.
+Both are solved the same way as for the macOS test builds: the private
+repository **officecli/officedex-private-builds** runs the Windows checks. It
+vendors the three `@shimo/*` tarballs integrity-verified against this
+repository's lockfile (`ci/stage-private-npm.mjs`), takes the parts only a Mac
+can produce as a private release asset, and its artifacts are readable only by
+people with access to that repository. The workflow there
+(`private-windows-smoke.yml`) is a thin shell around the scripts in this
+repository, which is why they stay here:
+
+| Script | Role |
+| --- | --- |
+| `scripts/windows-inputs.mjs` | `pack` on the Mac: `dist/`, the staged win32-x64 `presentation/`, `writer-fonts/`, `mop-convert.exe`, `convert.exe` plus a per-file sha256 manifest; `unpack` on the runner |
+| `scripts/dist-win.mjs --inputs <dir> --installer --zip` | assembles the package natively: the staged `node.exe` is executed from a relocated copy, every image is audited as PE32+ x86-64, makensis builds the installer |
+| `scripts/windows-smoke.mjs` | `verify-runtime` (`officedex.exe --verify-runtime`), `launch` (the window process must stay up), `mop-smoke` (officecli's `TestPPTXMOPSkillEndToEndSmoke` against the packaged tree with the packaged `node.exe` and `mop-convert.exe` first on PATH), `report` (scrubbed JSON summaries) |
 
 ### On the Mac: produce the inputs
-
-The parts only a Mac with the sibling checkouts can produce go into an archive
-with a per-file sha256 manifest:
 
 ```bash
 npm run dist:win                       # stages everything (needs the presentation/writer checkouts)
 npm run windows:inputs:pack            # -> dist-artifacts/officedex-windows-inputs-<rev>.tar.gz, prints its sha256
 ```
 
-It holds `dist/`, the staged `presentation/` (win32-x64), `writer-fonts/`,
-`mop-convert.exe` and `convert.exe`. Move it to the Windows machine by any
-means you control (shared drive, scp, a draft GitHub release asset — drafts
-are not public and are not a release).
+The archive goes to the private builds repository as a pre-release asset
+(`inputs-windows-amd64-<rev>`), together with a push of the source commit to a
+`source/windows-amd64-<rev>` branch there when the commit is not on this
+repository's `main`. The private repository's README has the exact commands and
+the `gh workflow run` invocation.
 
-### On the Windows machine: build and smoke
+### On a Windows machine instead
 
-Prerequisites: Git, Go (version from `go.mod`), Node 22, NSIS (`makensis` on
-PATH; `winget install NSIS.NSIS`), `.npmrc` copied from `.npmrc.example`, and
-checkouts of this repository and of `officecli-internal` (for the DLL and the
-MOP smoke test). Then, in the repository:
+The same scripts run on a Windows 10/11 x64 machine on the company network
+(Go from `go.mod`, Node 22, NSIS on PATH, `.npmrc` from `.npmrc.example`,
+checkouts of this repository and of `officecli-internal`):
 
 ```powershell
 npm ci
 go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
 node scripts/windows-inputs.mjs unpack <archive.tar.gz> --sha256 <hex>
-
-# the pinned Node runtime: node-v24.18.0-win-x64.zip and SHASUMS256.txt from nodejs.org/dist/v24.18.0/
-# into build\cache\pptxgenjs-runtime\ (save the checksums as node-v24.18.0-SHASUMS256.txt)
-
+# node-v24.18.0-win-x64.zip + SHASUMS256.txt from nodejs.org/dist/v24.18.0/ into build\cache\pptxgenjs-runtime\
+#   (save the checksums as node-v24.18.0-SHASUMS256.txt)
 $env:OFFICE2MODOC_WINDOWS_DLL = "<officecli-internal>\third_party\office2modoc-ffi\0.1.34\x86_64-pc-windows-msvc\office2modoc_ffi.dll"
 node scripts/dist-win.mjs --inputs build/windows-inputs --installer --zip
-#   stage-mop-runtime now *executes* the staged node.exe from a relocated copy,
-#   verify-packaged-runtime runs it where it ships, every image is audited as
-#   PE32+ x86-64, makensis builds the installer -> dist-artifacts\
-
-node scripts/windows-smoke.mjs verify-runtime            # officedex.exe --verify-runtime: the app's own resolver report
-node scripts/windows-smoke.mjs launch --seconds 20       # the window process must stay up
+node scripts/windows-smoke.mjs verify-runtime
+node scripts/windows-smoke.mjs launch --seconds 20
 node scripts/windows-smoke.mjs mop-smoke --officecli-source <officecli-internal>
-#   officecli's TestPPTXMOPSkillEndToEndSmoke against the packaged presentation tree,
-#   with the packaged node.exe and mop-convert.exe first on PATH
-node scripts/windows-smoke.mjs report                    # scrubbed JSON summaries -> smoke-report\
+node scripts/windows-smoke.mjs report
 ```
 
 `go test ./...` and `go vet ./...` on the Windows machine complete the set.
-The installer and zip in `dist-artifacts\` are the deliverables; keep them
-off public storage until they are signed.
-
-### The hosted workflow
-
-`windows-smoke.yml` runs exactly the steps above on `windows-latest`, takes the
-inputs archive by `inputs_url` + `inputs_sha256` or by `inputs_release_tag`,
-and fetches the office2modoc DLL and the MOP smoke source from
-`officecli-internal` through the secrets `release.yml` already uses
-(`OFFICECLI_INTERNAL_TOKEN`, `OFFICECLI_INTERNAL_REF`; no new secret). Its
-first real step checks that the private registry answers and fails with the
-reason otherwise. It uploads only `smoke-report/`.
+Keep the installer and zip off public storage until they are signed.
 
 ## Installer and updater
 
