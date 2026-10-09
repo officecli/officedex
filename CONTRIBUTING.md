@@ -158,7 +158,7 @@ on macOS with `rsvg-convert` installed to regenerate `build/appicon.png`,
 `build/icon.png`, and `build/icon.icns`. Wails builds the bundled ICNS from
 `build/appicon.png`.
 
-The circular logo touches all four sides of a white rounded tile; the area outside
+The white logo sits on a solid black (`#000000`) rounded square tile; the area outside
 the tile stays transparent. This is intentional: macOS 26 adds a gray tile around
 the old circle-only icon. Checking PNG transparency or decoding the ICNS does not
 reveal that system treatment. Do not replace this with Finder custom-icon metadata,
@@ -171,7 +171,7 @@ system-resolved appearance (use the mounted app's real path):
 swift scripts/preview-mac-app-icon.swift "/Volumes/OfficeDex/OfficeDex.app" /tmp/officedex-system-icon.png
 ```
 
-Check the rendered PNG for a white tile and a logo filling its width. macOS may
+Check the rendered PNG for a black tile with a white logo and no gray outer tile. macOS may
 apply its own lighting effects. Also inspect the mounted installer in Finder and
 the app extracted from the update ZIP; source-image inspection alone is insufficient.
 
