@@ -520,16 +520,28 @@ async function pinConverter(name, file, slice) {
 
 /**
  * wails_tools.nsh installs Microsoft's WebView2 bootstrapper from
- * installer/tmp/. `wails build -nsis` writes it there; this flow does not use
- * -nsis, so it is written by the same code path (wails' embedded copy) through
- * a throwaway `wails build -nsis` only when the file is missing.
+ * installer/tmp/, a file `wails build -nsis` writes from the copy embedded in
+ * the Wails CLI (so its version follows the pinned Wails, not whatever the
+ * Microsoft download link serves today). installer/tmp/ is not checked in, so
+ * a fresh checkout (the CI runner) gets it the same way: a throwaway
+ * `wails build -nsis` into a scratch name. That build also runs makensis,
+ * which fails for want of the payload defines -- expected and ignored; the
+ * bootstrapper has been written by then, and that is all this wants.
  */
 async function ensureWebView2Bootstrapper(installerDir) {
   const bootstrapper = path.join(installerDir, "tmp", "MicrosoftEdgeWebview2Setup.exe");
   if (existsSync(bootstrapper)) return;
-  throw new Error(
-    `${bootstrapper} is missing. Run \`wails build -platform windows/amd64 -nsis -s -skipbindings\` once (it writes the bootstrapper and may warn about makensis), then rerun --from installer`,
+  log("installer", `${bootstrapper} is missing; letting wails write it`);
+  const probe = "officedex-webview2-probe.exe";
+  spawnSync(
+    "wails",
+    ["build", "-platform", "windows/amd64", "-nsis", "-s", "-skipbindings", "-o", probe, "-ldflags", "-X main.appVersion=0.0.0-probe"],
+    { cwd: ROOT, stdio: "ignore", shell: false },
   );
+  await rm(path.join(ROOT, "build", "bin", probe), { force: true });
+  if (!existsSync(bootstrapper)) {
+    throw new Error(`${bootstrapper} is still missing after \`wails build -nsis\`; is the Wails CLI (${process.env.WAILS_VERSION || "v2.x"}) on PATH?`);
+  }
 }
 
 async function describeArtifact(file) {
