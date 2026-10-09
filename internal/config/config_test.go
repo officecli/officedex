@@ -7,10 +7,14 @@ import (
 )
 
 // writeExecutable creates a file ExecutablePath must accept: executable bits
-// on Unix, an executable extension on Windows (ExecutableName adds it).
+// on Unix, an executable extension on Windows (ExecutableName adds it to a
+// bare name; a caller that already passed one keeps it).
 func writeExecutable(t *testing.T, dir, name string) string {
 	t.Helper()
-	path := filepath.Join(dir, ExecutableName(name))
+	if filepath.Ext(name) == "" {
+		name = ExecutableName(name)
+	}
+	path := filepath.Join(dir, name)
 	if err := os.WriteFile(path, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
