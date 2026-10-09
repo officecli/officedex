@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import test from "node:test";
 
-import { extraScrubPatterns, fatalVerifyRuntimeLines, scrubManifest, scrubSensitive, smokeEnvironment, smokePath } from "./windows-smoke.mjs";
+import { extraScrubPatterns, fatalVerifyRuntimeLines, office2modocReportProblem, scrubManifest, scrubSensitive, smokeEnvironment, smokePath } from "./windows-smoke.mjs";
 
 // Hosts and ids are assembled from parts so that this file does not itself
 // carry what the scrubber exists to keep out of the public tree.
@@ -71,4 +71,13 @@ test("fatal verify-runtime lines are the MISSING/BROKEN ones for the payloads PP
     "verify-runtime: word2mow convert         MISSING -- DOCX editing is unavailable (packaging stages it)",
   ].join("\n");
   assert.deepEqual(fatalVerifyRuntimeLines(output).map((line) => line.split(/\s+/)[1]), ["mop-convert", "mop"]);
+});
+
+test("the office2modoc line must name the packaged DLL, not a cache or nothing", () => {
+  const pkg = path.resolve("/pkg");
+  const inside = path.join(pkg, "office2modoc", "office2modoc_ffi.dll");
+  assert.equal(office2modocReportProblem(`verify-runtime: office2modoc ffi         ${inside}\n`, pkg), null);
+  assert.match(office2modocReportProblem(`verify-runtime: office2modoc ffi         ${path.join("/repo", "build", "cache", "office2modoc_ffi.dll")}\n`, pkg), /not the packaged/);
+  assert.match(office2modocReportProblem("verify-runtime: office2modoc ffi         MISSING -- no converter\n", pkg), /missing/);
+  assert.match(office2modocReportProblem("verify-runtime: mop-convert  x\n", pkg), /did not report/);
 });

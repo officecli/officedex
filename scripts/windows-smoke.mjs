@@ -136,6 +136,24 @@ export function smokeEnvironment(packageDir, base = process.env) {
   };
 }
 
+/**
+ * The office2modoc library `--verify-runtime` reports, which must be the copy
+ * inside the package: the resolver prefers the file beside the executable, so
+ * anything else means a packaged app would load a developer's or a missing
+ * one. Returns the problem, or null.
+ */
+export function office2modocReportProblem(output, packageDir) {
+  const line = output.split(/\r?\n/).find((candidate) => /^verify-runtime:\s+office2modoc ffi\s/.test(candidate));
+  if (!line) return "verify-runtime did not report office2modoc ffi";
+  if (/\bMISSING\b/.test(line)) return `office2modoc ffi is missing: ${line.trim()}`;
+  const reported = line.replace(/^verify-runtime:\s+office2modoc ffi\s+/, "").trim();
+  const expected = path.join(path.resolve(packageDir), "office2modoc", "office2modoc_ffi.dll");
+  if (path.resolve(reported).toLowerCase() !== expected.toLowerCase()) {
+    return `office2modoc ffi resolves to ${reported}, not the packaged ${expected}`;
+  }
+  return null;
+}
+
 /** Lines of `--verify-runtime` output that mean a fatal payload is missing or broken. */
 export function fatalVerifyRuntimeLines(output) {
   return output
@@ -159,7 +177,9 @@ async function verifyRuntime(options) {
   if (result.status !== 0 || fatal.length > 0) {
     throw new Error(`--verify-runtime exited ${result.status}${fatal.length ? `; fatal:\n  ${fatal.join("\n  ")}` : ""}`);
   }
-  console.log("[windows-smoke] verify-runtime: every fatal payload resolved and the packaged node started");
+  const office2modoc = office2modocReportProblem(result.stdout || "", options.package);
+  if (office2modoc) throw new Error(office2modoc);
+  console.log("[windows-smoke] verify-runtime: every fatal payload resolved, the packaged node started, office2modoc loads from the package");
 }
 
 async function launch(options) {

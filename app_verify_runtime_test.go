@@ -205,3 +205,22 @@ func TestVerifyRuntimeDepsFallsBackWhenTheOverrideIsUnusable(t *testing.T) {
 		t.Fatalf("report names an override that cannot be run:\n%s", report)
 	}
 }
+
+// The report names the office2modoc library the app would load, which is how
+// the Windows smoke checks a packaged app loads its own copy; a checkout
+// without one says so instead of failing.
+func TestResolveOffice2modocLibraryReportsOnlyAnExistingLibrary(t *testing.T) {
+	t.Setenv(config.Office2ModocFFIEnv, "")
+	repoRoot := t.TempDir()
+	if got := resolveOffice2modocLibrary(repoRoot); got != "" {
+		t.Fatalf("empty checkout reported %q", got)
+	}
+	library := filepath.Join(repoRoot, "ffi.lib")
+	if err := os.WriteFile(library, []byte("ffi"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(config.Office2ModocFFIEnv, library)
+	if got := resolveOffice2modocLibrary(repoRoot); got != library {
+		t.Fatalf("got %q, want %q", got, library)
+	}
+}
