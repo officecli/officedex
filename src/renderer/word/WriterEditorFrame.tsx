@@ -173,6 +173,8 @@ export function WriterEditorFrame({
   // Host-initiated saves (the docx.editor.save agent tool) wait here until the
   // embed has exported and the host has written the file.
   const requestsRef = useRef(new PendingRequests({ idPrefix: "writer" }));
+  // The host owns the destination; do not depend on the exporter echoing it.
+  const saveModesRef = useRef(new Map<string, boolean>());
   const [componentURL, setComponentURL] = useState<string>();
 
   callbacksRef.current = { onDirtyChange, onSelectionChange, onUnavailable, onReady, onSaved, onSaveFailed, onAgentReady };
@@ -231,13 +233,15 @@ export function WriterEditorFrame({
           return;
         }
         const requestId = requestsRef.current.nextId();
+        saveModesRef.current.set(requestId, saveAsCopy);
         requestsRef.current
           .open<{ filePath: string; sha256: string }>(
             requestId,
             SAVE_TIMEOUT_MS,
             "Saving the document timed out.",
           )
-          .then(resolve, reject);
+          .then(resolve, reject)
+          .finally(() => saveModesRef.current.delete(requestId));
         post({ type: "writer:save-request", requestId, saveAsCopy });
       }),
     [post],
@@ -399,6 +403,14 @@ export function WriterEditorFrame({
           markUnavailable(event.error);
           return;
         case "writer:dirty-changed":
+          // An exporter may mark its snapshot clean after writing a copy.
+          // The source still owns the unsaved/conflicted draft until a write
+          // to that source succeeds (which removes pendingExports).
+          if (!event.dirty && pendingExports.has(draftKey)) {
+            dirtyRef.current = true;
+            callbacksRef.current.onDirtyChange?.(true);
+            return;
+          }
           dirtyRef.current = event.dirty;
           callbacksRef.current.onDirtyChange?.(event.dirty);
           if (event.dirty) autosave.schedule();
@@ -409,7 +421,7 @@ export function WriterEditorFrame({
           callbacksRef.current.onSelectionChange?.(event.selection);
           return;
         case "writer:save": {
-          const saveAsCopy = event.saveAsCopy === true;
+          const saveAsCopy = saveModesRef.current.get(event.requestId) ?? event.saveAsCopy === true;
           const recoveryOnly = conflictRef.current && !saveAsCopy;
           try {
             // App.SaveDocx keeps its existing contract: it validates the ZIP

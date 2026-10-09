@@ -2,7 +2,7 @@ import type { DesktopAPI, PlanPptxJSResult } from "../shared/types";
 import type { PresentationEditorController } from "../renderer/presentation/PresentationEditorFrame";
 import { changedSlideIds, focusSlideAfterEdit, buildSelectSlideScript } from "../renderer/presentation/pptxEditFocus";
 import { logShellEvent } from "../shell/port/shellLog";
-import { translate } from "../renderer/i18n";
+import { getCurrentLocale, translate } from "../renderer/i18n";
 import type { DocumentEditRequest, DocumentEditResult } from "../shell/editor/canvasContract";
 import {
   auditPlanScope,
@@ -116,7 +116,7 @@ export function createPptxEditRunner(deps: PptxEditDeps) {
       withDeadline(
         deps.api.planPptxJS({
           prompt: scopedPrompt(instruction, scope, before),
-          context: buildPlannerContext(before, scope),
+          context: { ...buildPlannerContext(before, scope), ui_locale: getCurrentLocale() },
         }),
         signal,
         PLAN_TIMEOUT_MS,

@@ -360,3 +360,22 @@ describe("what the run produced", () => {
     expect(results.textContent).toContain("Changes ready for review");
   });
 });
+
+it("opens a batch proposal in Review with a real diff and apply/reject actions", async () => {
+  const staged = prototypeRun("review", Date.now())!;
+  const proposal = staged.suggestion!;
+  const run = await stage("partial", task => ({ ...task, suggestion: null, batch: [
+    { fileId: proposal.targetFileId, name: "QA.docx", taskId: proposal.id, status: "completed", suggestion: proposal },
+    { fileId: "bad", name: "Broken.docx", status: "failed", error: "Could not read file", suggestion: null },
+  ] }));
+  const changes = vi.fn().mockResolvedValue([{ part: "word/document.xml", before: "Beta nineteen.", after: "Beta revised." }]);
+  Object.assign(run.port.agent, { suggestionChanges: changes });
+  const results = run.card().querySelector('[aria-label="Batch results"]') ?? run.card().querySelector(".dx-agent-results");
+  const review = [...results!.querySelectorAll("button")].find(button => button.textContent === "Review");
+  expect(review).toBeDefined();
+  fireEvent.click(review!);
+  await waitFor(() => expect(changes).toHaveBeenCalledWith(proposal.id));
+  await waitFor(() => expect(document.body.textContent).toContain("Beta revised."));
+  expect(document.querySelector('[data-act="apply-change"]')).not.toBeNull();
+  expect(document.querySelector('[data-act="reject-change"]')).not.toBeNull();
+});

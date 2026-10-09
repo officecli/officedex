@@ -419,7 +419,7 @@ it.each([false, true])("retains failed source bytes across recovery navigation; 
   await waitFor(() => expect(dirty).toHaveBeenLastCalledWith(false));
 });
 
-it("exports a copy after a source conflict without clearing the source draft", async () => {
+it.each([true, false, undefined])("exports a copy after a source conflict even when the exporter echoes %s", async (echo) => {
   mockManifest();
   let editor: WriterAgentEditor | null = null;
   const saveDocx = vi.fn().mockRejectedValueOnce(new Error("source file changed outside OfficeDex"))
@@ -440,11 +440,13 @@ it("exports a copy after a source conflict without clearing the source draft", a
   const request = channel.posted.at(-1)!;
   expect(request.type).toBe("writer:save-request");
   expect((request as { saveAsCopy?: boolean }).saveAsCopy).toBe(true);
-  channel.fromEmbed({ type: "writer:save", requestId: (request as { requestId: string }).requestId, saveAsCopy: true, content: new Uint8Array([3, 4]).buffer });
+  channel.fromEmbed({ type: "writer:save", requestId: (request as { requestId: string }).requestId, saveAsCopy: echo, content: new Uint8Array([3, 4]).buffer });
   await expect(copying).resolves.toEqual({ filePath: "/qa/conflict-copy.docx", sha256: "copy" });
   expect(saveDocx.mock.calls[1][2]).toMatchObject({ saveAsCopy: true, expectedSHA256: "original" });
   expect(saveDocx.mock.calls[1][2].recoveryOnly).toBeUndefined();
   expect(dirty).not.toHaveBeenCalledWith(false);
   expect(saved).toHaveBeenCalledWith({ filePath: "/qa/conflict-copy.docx", sha256: "copy", saveAsCopy: true });
+  channel.fromEmbed({ type: "writer:dirty-changed", dirty: false });
+  expect(dirty).toHaveBeenLastCalledWith(true);
   discardPendingWriterExport("/qa/conflict-source.docx");
 });

@@ -4,6 +4,7 @@ import { agentClientId } from "../renderer/agentClientIdentity";
 import { translate } from "../renderer/i18n";
 import { unwrapAgentRunResult, waitForAgentRun } from "../renderer/agentRuntime";
 import type { DocumentEditRequest, DocumentEditResult } from "../shell/editor/canvasContract";
+import { requestsReadOnlyAnswer } from "./documentReadOnly";
 
 /**
  * Editing the Word document that is already open, in place.
@@ -110,6 +111,7 @@ function eachOccursOnce(haystack: string, needles: string[]): boolean {
 export function createDocxEditRunner(deps: DocxEditDeps) {
   return async function editDocument(request: DocumentEditRequest, questions = 0): Promise<DocumentEditResult> {
     const instruction = request.instruction.trim();
+    const readOnly = requestsReadOnlyAnswer(instruction);
     if (!instruction) throw new Error(translate("shell.edit.noInstruction"));
 
     const scope: "selection" | "document" =
@@ -136,6 +138,7 @@ export function createDocxEditRunner(deps: DocxEditDeps) {
           text: captured.text,
           scope: captured.scope,
           host_review: Boolean(request.requireReview),
+          read_only: readOnly,
           ...(deps.locale ? { ui_locale: deps.locale } : {}),
         },
       },
@@ -188,6 +191,8 @@ export function createDocxEditRunner(deps: DocxEditDeps) {
     if (!plan || typeof plan.summary !== "string" || !Array.isArray(plan.edits)) {
       throw new Error(translate("shell.edit.unreadablePlan"));
     }
+
+    if (readOnly && plan.edits.length) throw new Error("A read-only answer cannot apply document edits.");
 
     if (plan.question?.trim()) {
       if (!request.onQuestion || questions >= 5) throw new Error(plan.question);

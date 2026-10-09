@@ -1,6 +1,7 @@
 import type { AgentTask, AgentReference } from "../../shared/uiPort";
 import type { CanvasAdapter, DocumentEditPhase } from "../editor/canvasContract";
 import { translate } from "../../renderer/i18n";
+import { requestsReadOnlyAnswer } from "../../canvas/documentReadOnly";
 
 /**
  * An in-place document edit, as a conversation.
@@ -163,9 +164,9 @@ export function startDocumentEditRun(
     documentType: input.documentType,
     status: "reading",
     phase: translate(PHASE_TEXT.reading),
-    steps: STEP_IDS.map((step, index) => ({
+    steps: (requestsReadOnlyAnswer(input.instruction) ? STEP_IDS.slice(0, 2) : STEP_IDS).map((step, index) => ({
       id: `${id}:${step}`,
-      label: translate(STEP_LABELS[step]),
+      label: translate(requestsReadOnlyAnswer(input.instruction) && step === "draft" ? "shell.edit.step.answer" : STEP_LABELS[step]),
       state: index === 0 ? "active" : "pending",
     })),
     messages: [

@@ -234,3 +234,14 @@ describe("the panel's composer", () => {
     expect(draft().value).toBe("Shorten the second paragraph");
   });
 });
+
+it("renders the agent answer and earlier turns in the document's Dex log", async () => {
+  const staged = prototypeRun("review", Date.now())!;
+  staged.messages.push({ id: "answer-qa", role: "agent", text: "LOCAL-A-19", createdAt: Date.now() });
+  const view = await renderShell({ folders: prototypeFolders(), files: prototypeFiles(), tasks: prototypeTasks().reverse().map(task => task.conversationId === staged.conversationId ? staged : task) });
+  await view.dispatch({ type: "open-chat", chat: { folderId: PROTOTYPE_FOLDER_IDS.launch, conversationId: PROTOTYPE_CHAT_IDS.plan } });
+  await view.dispatch({ type: "open-file", fileId: "readme" });
+  fireEvent.click(view.view.container.querySelector('button.dx-dex[data-act=dex]')!);
+  await waitFor(() => expect(view.view.container.querySelector('.dx-dex-log')?.textContent).toContain("LOCAL-A-19"));
+  expect(view.view.container.querySelector('.dx-dex-log .dx-agent')?.textContent).toContain("LOCAL-A-19");
+});

@@ -448,10 +448,8 @@ export function Dex({ host, editorKind }: { host: RefObject<HTMLElement | null>;
             {task ? (
               <>
                 {task.messages
-                  .filter((message) => message.role === "user")
-                  .slice(-1)
                   .map((message) => (
-                    <div key={message.id} className="dx-message dx-user">
+                    <div key={message.id} className={`dx-message ${message.role === "user" ? "dx-user" : "dx-agent"}`}>
                       {message.reference?.text ? <blockquote>{message.reference.text}</blockquote> : null}
                       {message.text}
                     </div>

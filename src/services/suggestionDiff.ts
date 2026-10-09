@@ -21,6 +21,11 @@ export function officeTextParts(data: Uint8Array): Map<string, string> {
 
 export async function readSuggestionChanges(api: DesktopAPI, source: string, artifact: string): Promise<SuggestionChange[]> {
   const read = async (filePath: string) => {
+    // A modification of a selected external file lives beside that file.
+    // Its sibling proposal is outside preview roots and has not been opened
+    // yet. Review explicitly opens these two files; register each exact path
+    // through the same import boundary as Open, never trust its whole folder.
+    await api.importLocalFile(filePath);
     const grant = await api.issuePreviewToken({ filePath, fileName: filePath.split(/[\\/]/).pop()!, documentType: filePath.split(".").pop()! });
     try {
       const { data } = await api.readArtifactFile(grant.token);

@@ -7,7 +7,7 @@ import { formatDateTime, formatElapsed } from "../kit/format";
 import { FileIcon, Icon, extensionOf, type IconName } from "../kit/Icon";
 import { closeModal, openModal } from "../kit/layers";
 import { useLibraryActions } from "../nav/useLibraryActions";
-import { OUTLINE_GATE_KIND, type AgentOutlinePage, type AgentStep, type AgentTask, type FileMeta } from "../../shared/uiPort";
+import { OUTLINE_GATE_KIND, type AgentOutlinePage, type AgentStep, type AgentTask, type AgentSuggestion, type FileMeta } from "../../shared/uiPort";
 import { useComposerSettings } from "../composer/useComposerSettings";
 import { useShell } from "../state/ShellContext";
 import { RUN_DATA_STATUS, RUN_TITLE_KEY, isRunning, runStateOf, type RunState } from "./runState";
@@ -136,9 +136,7 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
     void agent.retry(task.id);
   };
 
-  const review = () => {
-    if (!task.suggestion) return;
-    const suggestion = task.suggestion;
+  const reviewSuggestion = (suggestion: AgentSuggestion, target = reviewTarget) => {
     openModal({
       title: t("dx.review.title"),
       className: "wide",
@@ -147,8 +145,8 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
           <p>{task.title}</p>
           <section className="dx-plan-card dx-review-card">
             <div className="dx-row">
-              {reviewTarget ? <FileIcon ext={extensionOf(reviewTarget)} /> : null}
-              <strong>{reviewTarget?.name ?? t("shell.task.theFile")}</strong>
+              {target ? <FileIcon ext={extensionOf(target)} /> : null}
+              <strong>{target?.name ?? t("shell.task.theFile")}</strong>
               <span className="dx-pill dx-end">{t(suggestion.applied ? "dx.review.applied" : "dx.status.review")}</span>
             </div>
             <p className="dx-helper">{suggestion.summary}</p>
@@ -201,6 +199,8 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
       ),
     });
   };
+
+  const review = () => { if (task.suggestion) reviewSuggestion(task.suggestion); };
 
   const details = () =>
     openModal({
@@ -324,9 +324,9 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
         {task.batch.map((item) => {
           const result = files.find((file) => file.artifactTaskId === item.taskId);
           return <div key={item.fileId} className="dx-agent-result">
-            <span><strong>{item.name}</strong><small>{t(`dx.run.batch.${item.status}`)}</small>{item.error ? <small>{item.error}</small> : null}</span>
+            <span><strong>{item.name}</strong><small>{item.suggestion && !item.suggestion.applied ? t("dx.status.review") : t(`dx.run.batch.${item.status}`)}</small>{item.error ? <small>{item.error}</small> : null}</span>
             {result ? <button type="button" className="dx-btn" onClick={() => void library.openFile(result.id)}>{t("dx.menu.open")}</button> : null}
-            {item.suggestion && !item.suggestion.applied ? <button type="button" className="dx-btn" onClick={() => void agent.applySuggestion(item.suggestion!.id)}>{t("dx.review.apply")}</button> : null}
+            {item.suggestion ? <button type="button" className="dx-btn" onClick={() => reviewSuggestion(item.suggestion!, files.find(file => file.id === item.fileId) ?? null)}>{t(item.suggestion.applied ? "dx.review.applied" : "dx.run.reviewAction")}</button> : null}
           </div>;
         })}
         {!running && task.batch.some((item) => item.status !== "completed") ? <button type="button" className="dx-btn" onClick={() => void agent.retryBatch(task.id)}>{t("dx.run.retryRemaining")}</button> : null}

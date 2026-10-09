@@ -1228,7 +1228,9 @@ export function createAgentService(api: DesktopAPI): AgentPort {
         ...(workspaceId ? { workspaceId } : { noProject: true }),
         ...lineage,
       });
-      if (reviewRequested) {
+      // Batch modifications always produce proposals. A completed worker has
+      // not written the source, even when the composer grants full access.
+      if (reviewRequested || batchItem) {
         reviewArtifacts.set(result.taskId, {
           sourceFileId: record.id,
           sourceFile: record.filePath,

@@ -63,7 +63,7 @@ export function runStateOf(task: AgentTask | null): RunState | null {
         default:
           // How the run ended outranks what it left behind: a partial result
           // with changes to review is still partial, and says so.
-          if (task.suggestion && !task.suggestion.applied) return "review";
+          if ((task.suggestion && !task.suggestion.applied) || task.batch?.some(item => item.suggestion && !item.suggestion.applied)) return "review";
           // A record from before outcomes were reported: recovery means it failed.
           return task.recovery ? "partial" : "complete";
       }

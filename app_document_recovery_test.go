@@ -45,3 +45,34 @@ func TestConflictedDocxRetainsLatestEditsAcrossRestart(t *testing.T) {
 		t.Fatal("accepted unlisted ID")
 	}
 }
+
+func TestSaveDocxCopyAfterConflictPreservesBothVersions(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	original := testDocxPackage(t, "original")
+	app, source, token := newDocxSaveTestApp(t, original)
+	app.userDataDir = t.TempDir()
+	external, edited := testDocxPackage(t, "EXTERNAL"), testDocxPackage(t, "LOCAL")
+	if err := os.WriteFile(source, external, 0600); err != nil {
+		t.Fatal(err)
+	}
+	input := SaveDocxInput{DataBase64: base64.StdEncoding.EncodeToString(edited), PreviewToken: token, FileName: "conflict.docx", ExpectedSHA256: sha256Hex(original)}
+	if _, err := app.SaveDocx(input); err == nil {
+		t.Fatal("external conflict ignored")
+	}
+	input.SaveAsCopy = true
+	copy, err := app.SaveDocx(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if copy.FilePath == source {
+		t.Fatal("copy replaced source")
+	}
+	actual, _ := os.ReadFile(copy.FilePath)
+	if string(actual) != string(edited) {
+		t.Fatal("copy missing local edits")
+	}
+	actual, _ = os.ReadFile(source)
+	if string(actual) != string(external) {
+		t.Fatal("external edits overwritten")
+	}
+}

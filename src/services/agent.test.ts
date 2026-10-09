@@ -685,3 +685,24 @@ describe("1.0.18 acceptance regressions", () => {
     expect(apply).not.toHaveBeenCalled();
   });
 });
+
+it("keeps full-access batch proposals reviewable across a failure, apply, undo and retry", async () => {
+  const desk = scripted();
+  const service = createAgentService(desk.api); const panel = listen(service);
+  desk.addDocument({ id: "good", filePath: "/external/good.docx", documentType: "docx" });
+  desk.addDocument({ id: "bad", filePath: "/external/bad.docx", documentType: "docx" });
+  const apply = vi.spyOn(desk.api, "applyArtifactSuggestion");
+  await service.send(message("Replace Beta with Delta independently in both files", { conversationId: "batch-review", mentions: [{ kind: "file", id: "good", label: "good.docx" }, { kind: "file", id: "bad", label: "bad.docx" }] }));
+  desk.push(completed("task-1", "/external/good.modified.docx", "docx"));
+  await vi.waitFor(() => expect(desk.calls.modify).toHaveLength(2));
+  desk.push({ event_id: "bad-failed", task_id: "task-2", type: "task.failed", ts: new Date().toISOString(), payload: { message: "invalid DOCX" } });
+  expect(panel.last()?.batch?.[0].suggestion).toMatchObject({ id: "task-1", targetFileId: "good", applied: false });
+  expect(apply).not.toHaveBeenCalled();
+  await service.applySuggestion("task-1");
+  expect(apply).toHaveBeenCalledWith({ suggestionId: "task-1", sourceFile: "/external/good.docx", artifactFile: "/external/good.modified.docx" });
+  expect(panel.last()?.batch?.[0].suggestion).toMatchObject({ applied: true, undoable: true });
+  await service.undoSuggestion("task-1");
+  expect(panel.last()?.batch?.[0].suggestion).toMatchObject({ applied: false, undoable: false });
+  await service.retryBatch!("task-2");
+  expect(desk.calls.modify.map(call => call.sourceFile)).toEqual(["/external/good.docx", "/external/bad.docx", "/external/bad.docx"]);
+});

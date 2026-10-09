@@ -309,3 +309,16 @@ it("asks for a choice without edits and resumes with the actual answer", async (
  expect(onQuestion).toHaveBeenCalledWith("Delta or Epsilon?");
  expect(desktop.startAgentRun).toHaveBeenLastCalledWith(expect.objectContaining({ input: { parameters: expect.objectContaining({ prompt: expect.stringContaining("User answer: Delta") }) } }));
 });
+
+it("passes read-only requests to the planner and never applies or saves an answer", async () => {
+  const editor = { capture: vi.fn(async () => ({ id: "scope", text: "OD19 local\nAlpha nineteen.", scope: "document" })), apply: vi.fn(), save: vi.fn() };
+  const api = { startAgentRun: vi.fn(async (_input: unknown) => ({ id: "answer" })),
+    getAgentRun: vi.fn(async () => ({ id: "answer", status: "completed", result: { summary: "OD19 local", question: "", edits: [] }, events: [] })) };
+  const run = createDocxEditRunner({ api: api as unknown as DesktopAPI, editor: editor as unknown as WriterAgentEditor, hasSelection: () => false });
+  expect(await run({ preferSelection: false, instruction: "Read this file and tell me its title. Do not modify the file." })).toMatchObject({ summary: "OD19 local", applied: 0 });
+  expect(api.startAgentRun.mock.calls[0][0]).toMatchObject({ input: { parameters: { read_only: true } } });
+  expect(editor.apply).not.toHaveBeenCalled(); expect(editor.save).not.toHaveBeenCalled();
+  api.getAgentRun.mockResolvedValueOnce({ id: "answer", status: "completed", result: { summary: "Wrong edit", question: "", edits: [{ query: "OD19 local", replacement: "Oops" }] }, events: [] } as never);
+  await expect(run({ preferSelection: false, instruction: 'Reply exactly "LOCAL-A-19". Do not create or edit any file.' })).rejects.toThrow("read-only");
+  expect(editor.apply).not.toHaveBeenCalled(); expect(editor.save).not.toHaveBeenCalled();
+});

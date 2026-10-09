@@ -198,3 +198,36 @@ func TestImportLocalFileRefusesAFileThatIsNotThere(t *testing.T) {
 		t.Fatal("a missing file was accepted")
 	}
 }
+
+func TestReviewRegistersOnlyExternalProposalBeforeReading(t *testing.T) {
+	app, _, _ := newLocalFileTestApp(t)
+	dir := t.TempDir()
+	source := filepath.Join(dir, "review.docx")
+	proposal := filepath.Join(dir, "review.modified.docx")
+	sibling := filepath.Join(dir, "unrelated.docx")
+	for _, path := range []string{source, proposal, sibling} {
+		if err := os.WriteFile(path, testDocxPackage(t, filepath.Base(path)), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := app.ImportLocalFile(source); err != nil {
+		t.Fatal(err)
+	}
+	artifact := types.Artifact{FilePath: proposal, FileName: filepath.Base(proposal), DocumentType: "docx"}
+	if _, err := app.IssuePreviewToken(artifact); err == nil {
+		t.Fatal("unopened sibling unexpectedly allowed")
+	}
+	if _, err := app.ImportLocalFile(proposal); err != nil {
+		t.Fatal(err)
+	}
+	grant, err := app.IssuePreviewToken(artifact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.ReadArtifactFile(grant.Token); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.IssuePreviewToken(types.Artifact{FilePath: sibling}); err == nil {
+		t.Fatal("review must not trust entire external directory")
+	}
+}
