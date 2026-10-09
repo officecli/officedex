@@ -6,9 +6,11 @@ import (
 	"testing"
 )
 
+// writeExecutable creates a file ExecutablePath must accept: executable bits
+// on Unix, an executable extension on Windows (ExecutableName adds it).
 func writeExecutable(t *testing.T, dir, name string) string {
 	t.Helper()
-	path := filepath.Join(dir, name)
+	path := filepath.Join(dir, ExecutableName(name))
 	if err := os.WriteFile(path, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -23,13 +25,13 @@ func TestExecutablePathIsAlwaysAbsolute(t *testing.T) {
 	dir := t.TempDir()
 	writeExecutable(t, dir, "mop-convert")
 	t.Chdir(dir)
-	t.Setenv(MOPConvertBinEnv, "./mop-convert")
+	t.Setenv(MOPConvertBinEnv, "./"+ExecutableName("mop-convert"))
 
 	got := ExecutablePath(MOPConvertBinEnv)
 	if !filepath.IsAbs(got) {
 		t.Fatalf("ExecutablePath returned %q, want an absolute path", got)
 	}
-	if filepath.Base(got) != "mop-convert" {
+	if filepath.Base(got) != ExecutableName("mop-convert") {
 		t.Fatalf("ExecutablePath returned %q", got)
 	}
 }

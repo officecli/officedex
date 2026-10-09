@@ -20,12 +20,22 @@ func TestResolveLibraryPathPrefersEnvironment(t *testing.T) {
 	}
 }
 
+// The platform's library layout: the Windows loader's paths where that build
+// is in effect, the macOS defaults everywhere else.
+func platformLayout() (defaultRelative, bundledRelative string) {
+	if platform, ok := windowsPlatformLibraryPaths(); ok {
+		return platform.defaultPath, platform.bundled
+	}
+	return DefaultRelativeLibraryPath, BundledRelativeLibraryPath
+}
+
 func TestResolveLibraryPathUsesRepositoryCache(t *testing.T) {
 	t.Setenv("OFFICE2MODOC_FFI_PATH", "")
 	repoRoot := t.TempDir()
+	defaultRelative, _ := platformLayout()
 
 	got, err := ResolveLibraryPath(repoRoot)
-	want := filepath.Join(repoRoot, DefaultRelativeLibraryPath)
+	want := filepath.Join(repoRoot, defaultRelative)
 	if err != nil || got != want {
 		t.Fatalf("got %q, %v; want %q", got, err, want)
 	}
@@ -34,8 +44,11 @@ func TestResolveLibraryPathUsesRepositoryCache(t *testing.T) {
 func TestResolveLibraryPathUsesBundledAppResource(t *testing.T) {
 	t.Setenv("OFFICE2MODOC_FFI_PATH", "")
 	appRoot := t.TempDir()
+	_, bundledRelative := platformLayout()
+	// macOS: Contents/MacOS/officedex with Resources/office2modoc beside it;
+	// Windows: officedex.exe with office2modoc/ beside it.
 	executablePath := filepath.Join(appRoot, "Contents", "MacOS", "officedex")
-	libraryPath := filepath.Join(appRoot, "Contents", "Resources", "office2modoc", "liboffice2modoc_ffi.dylib")
+	libraryPath := filepath.Join(appRoot, "Contents", "MacOS", bundledRelative)
 	if err := os.MkdirAll(filepath.Dir(libraryPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
