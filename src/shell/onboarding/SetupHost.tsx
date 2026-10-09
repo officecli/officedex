@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useLocale, useSetLocale } from "../../renderer/i18n";
 import { useDesktopApi } from "../../renderer/services/desktopApi";
-import type { CreditStatus, DefaultDocumentApp, SetupState } from "../../shared/types";
+import type { CreditStatus, DefaultDocumentApp, DesktopAPI, SetupState } from "../../shared/types";
 import { useShell } from "../state/ShellContext";
 import { useLibraryActions } from "../nav/useLibraryActions";
 import { Icon } from "../kit/Icon";
@@ -17,6 +17,11 @@ const fresh: SetupState = { version: 1, status: "pending", step: "welcome", star
 type Page = SetupState["step"] | "awaiting" | "login-error";
 export const SETUP_OPEN = "officedex:open-setup";
 const extensions = ["docx", "xlsx", "pptx"];
+
+export async function resetSetup(api: Pick<DesktopAPI, "saveSetupState">) {
+  await api.saveSetupState({ ...fresh });
+  window.dispatchEvent(new CustomEvent(SETUP_OPEN, { detail: "reset" }));
+}
 
 export function creditPhase(credit: CreditStatus): "ready" | "low" | "unknown" {
   const available = credit.hostedCreditBalance ?? credit.anonymousCreditAvailable;
@@ -59,9 +64,12 @@ export function SetupHost({ onVisibility, onAccountChanged }: { onVisibility: (v
       setSetup(value); setPage(value.step); setVisible(value.status === "pending"); setReady(true);
     }).catch(reason => { if (!disposed) { setReady(true); void toast.error(String(reason)); } });
     const open = (event: Event) => {
-      const onlyDefaults = (event as CustomEvent).detail === "defaults";
+      const detail = (event as CustomEvent).detail;
+      const onlyDefaults = detail === "defaults";
+      if (detail === "reset") setSetup({ ...fresh });
+      setSkip(false);
       setManual(true); setDefaultsOnly(onlyDefaults); setChecked(false); setResults(null); setError("");
-      setPage(onlyDefaults ? "defaults" : (event as CustomEvent).detail === "welcome" ? "welcome" : "introduction"); setVisible(true);
+      setPage(onlyDefaults ? "defaults" : detail === "welcome" || detail === "reset" ? "welcome" : "introduction"); setVisible(true);
     };
     window.addEventListener(SETUP_OPEN, open);
     return () => { disposed = true; window.removeEventListener(SETUP_OPEN, open); };

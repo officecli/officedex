@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"regexp"
@@ -268,7 +269,7 @@ func (m *Manager) readStdout(r io.Reader, urlCh chan<- string, done chan<- struc
 			m.mu.Unlock()
 			if !alreadyEmitted {
 				if match := urlPattern.FindStringSubmatch(snapshot); match != nil {
-					url := match[1]
+					url := desktopVerificationURL(match[1])
 					m.mu.Lock()
 					if !m.urlEmitted {
 						m.urlEmitted = true
@@ -364,7 +365,21 @@ func (m *Manager) fallbackURL() (string, bool) {
 		return "", false
 	}
 	m.urlEmitted = true
-	return match, true
+	return desktopVerificationURL(match), true
+}
+
+// Select the OfficeDex browser success page even when the bundled CLI is too
+// old to honor OFFICECLI_LOGIN_CLIENT. This is presentation only: the original
+// device challenge and PKCE exchange remain owned by the CLI.
+func desktopVerificationURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.Path != "/api/cli/login/verify" {
+		return raw
+	}
+	query := u.Query()
+	query.Set("client", "officedex")
+	u.RawQuery = query.Encode()
+	return u.String()
 }
 
 func (m *Manager) exitError(result waitResult) error {

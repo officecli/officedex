@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -123,6 +124,39 @@ func TestStartReturnsURLWhenEmittedOnStdout(t *testing.T) {
 
 	ft.finish(0, nil)
 	waitForEvent(t, events, EventSuccess)
+}
+
+// Older bundled CLIs do not recognize OFFICECLI_LOGIN_CLIENT. The desktop
+// must select its success page for both streamed and unterminated output.
+func TestStartMarksLegacyDeviceLoginURLForOfficeDex(t *testing.T) {
+	for name, suffix := range map[string]string{"streamed": "\n", "fallback": ""} {
+		t.Run(name, func(t *testing.T) {
+			mgr := New(ManagerOptions{
+				SpawnTransport: func([]string) (Transport, error) {
+					return instantExitTransport{
+						stdout: strings.NewReader("Visit https://platform.example.com/api/cli/login/verify?user_code=ABCD-EFGH&invite=invite%2B1" + suffix),
+						stderr: strings.NewReader(""),
+					}, nil
+				},
+			})
+			events := captureEvents(mgr)
+			raw, err := mgr.Start(context.Background(), "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			u, err := url.Parse(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			q := u.Query()
+			if u.Host != "platform.example.com" || q.Get("user_code") != "ABCD-EFGH" || q.Get("invite") != "invite+1" || q.Get("client") != "officedex" {
+				t.Fatalf("desktop login URL lost its presentation or challenge: %s", raw)
+			}
+			if event := waitForEvent(t, events, EventURLEmit); event.URL != raw {
+				t.Fatalf("URL event = %q, Start = %q", event.URL, raw)
+			}
+		})
+	}
 }
 
 func TestStartPassesInviteCodeToOfficeCLI(t *testing.T) {

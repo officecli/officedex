@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   applyWindowChrome,
   hasOverlayWindowChrome,
@@ -55,7 +55,10 @@ describe("hasOverlayWindowChrome", () => {
 });
 
 describe("mountDragRegionGuard", () => {
-  afterEach(() => { document.body.innerHTML = ""; });
+  afterEach(() => {
+    document.body.innerHTML = "";
+    Reflect.deleteProperty(window, "runtime");
+  });
 
   const press = (target: Element) => {
     const event = new MouseEvent("mousedown", { bubbles: true, cancelable: true, button: 0 });
@@ -101,5 +104,49 @@ describe("mountDragRegionGuard", () => {
     const selection = new Event("selectstart", { bubbles: true, cancelable: true });
     document.body.dispatchEvent(selection);
     expect(selection.defaultPrevented).toBe(false);
+  });
+
+  it("toggles maximize once per double click even if mounted twice", () => {
+    const toggle = vi.fn();
+    Object.assign(window, { runtime: { WindowToggleMaximise: toggle } });
+    mountDragRegionGuard(document);
+    mountDragRegionGuard(document);
+    const band = document.createElement("div");
+    band.style.setProperty("--wails-draggable", "drag");
+    document.body.append(band);
+
+    for (let clicks = 1; clicks <= 2; clicks++) {
+      band.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, button: 0 }));
+      expect(toggle).toHaveBeenCalledTimes(clicks);
+    }
+  });
+
+  it("does not maximize from controls, floating headers, content or secondary clicks", () => {
+    const toggle = vi.fn();
+    Object.assign(window, { runtime: { WindowToggleMaximise: toggle } });
+    mountDragRegionGuard(document);
+    const band = document.createElement("div");
+    band.style.setProperty("--wails-draggable", "drag");
+    const button = document.createElement("button");
+    button.style.setProperty("--wails-draggable", "no-drag");
+    band.append(button);
+    const floating = document.createElement("div");
+    floating.style.setProperty("--wails-draggable", "no-drag");
+    document.body.append(band, floating);
+    for (const target of [button, floating, document.body]) {
+      target.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, button: 0 }));
+    }
+    band.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, button: 2 }));
+    expect(toggle).not.toHaveBeenCalled();
+  });
+
+  it("leaves browser double clicks alone when the desktop runtime is absent", () => {
+    mountDragRegionGuard(document);
+    const band = document.createElement("div");
+    band.style.setProperty("--wails-draggable", "drag");
+    document.body.append(band);
+    const event = new MouseEvent("dblclick", { bubbles: true, cancelable: true });
+    band.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
   });
 });

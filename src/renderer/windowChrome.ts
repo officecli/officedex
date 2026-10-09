@@ -1,4 +1,4 @@
-// On macOS the desktop window hides its title bar (mac.TitleBarHiddenInset in
+// On macOS the desktop window hides its title bar (mac.TitleBarHidden in
 // main.go), so the traffic lights float over the top-left of the page and the
 // sidebar has to reserve room for them. Nothing else does: the browser preview
 // has no window controls to dodge, and Windows keeps its native frame.
@@ -81,6 +81,9 @@ function pressStartsWindowDrag(event: MouseEvent): boolean {
  *  start) is what actually stops it. Wails' own listener never looks at
  *  defaultPrevented, so the drag still happens. */
 export function mountDragRegionGuard(root: Document): void {
+  // Mounting the shell again must not toggle twice for one double click.
+  if (guardedDocuments.has(root)) return;
+  guardedDocuments.add(root);
   let dragging = false;
   root.addEventListener("mousedown", (event) => {
     dragging = pressStartsWindowDrag(event);
@@ -90,4 +93,15 @@ export function mountDragRegionGuard(root: Document): void {
     if (dragging) event.preventDefault();
   });
   root.addEventListener("mouseup", () => { dragging = false; });
+  root.addEventListener("dblclick", (event) => {
+    if (!pressStartsWindowDrag(event)) return;
+    const runtime = (root.defaultView as (Window & {
+      runtime?: { WindowToggleMaximise?: () => void };
+    }) | null)?.runtime;
+    if (!runtime?.WindowToggleMaximise) return;
+    event.preventDefault();
+    runtime.WindowToggleMaximise();
+  });
 }
+
+const guardedDocuments = new WeakSet<Document>();

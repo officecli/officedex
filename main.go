@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"net/http"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
 
 	"officedex/internal/applog"
+	"officedex/internal/windowchrome"
 	"officedex/internal/word2mowhttp"
 	"officedex/internal/writerfonts"
 )
@@ -64,17 +66,16 @@ func newWailsAppOptions(app *App) *options.App {
 		BackgroundColour: &options.RGBA{R: 246, G: 245, B: 244, A: 255},
 		// The window controls sit inside the sidebar rather than on a title bar
 		// strip of their own; the renderer reserves the traffic-light band and
-		// marks it draggable (see windowChrome.ts). Hidden rather than
-		// HiddenInset: the inset variant needs a toolbar that Wails does not
-		// style, so the lights end up at the plain hidden-titlebar position
-		// anyway and the extra reserved height reads as a gap. Windows keeps its
-		// native frame — this option is macOS-only.
+		// marks it draggable (see windowChrome.ts). windowchrome aligns the
+		// native buttons with the renderer's 40px header after the DOM is ready.
+		// Windows keeps its native frame — this option is macOS-only.
 		Mac: &mac.Options{
 			TitleBar:   mac.TitleBarHidden(),
 			OnFileOpen: app.queueNativeFile,
 			OnUrlOpen:  app.handleNativeURL,
 		},
 		OnStartup:  app.startup,
+		OnDomReady: func(context.Context) { windowchrome.Install() },
 		OnShutdown: app.shutdown,
 		Bind:       []any{app},
 	}

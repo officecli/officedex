@@ -11,7 +11,7 @@
  * itself on after such a press would be claiming a preference nobody stored, so
  * these check the answer *and* that the switch stayed where it was.
  */
-import { cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { officecli } from "../../renderer/bridge";
@@ -45,6 +45,59 @@ const untilAnnounced = (needle: string) =>
   waitFor(() => {
     if (!announced().includes(needle)) throw new Error(`waiting for “${needle}”`);
   });
+
+describe("reset tutorial", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("persists a fresh tutorial and immediately starts it without changing preferences", async () => {
+    vi.spyOn(officecli, "getSetupState").mockResolvedValue({
+      version: 1, status: "completed", step: "defaults", startMode: "local",
+    });
+    vi.spyOn(officecli, "whoami").mockResolvedValue({ mode: "logged_in" });
+    const save = vi.spyOn(officecli, "saveSetupState");
+    const update = vi.spyOn(officecli, "updateSettings");
+    const view = await settings("general");
+    fireEvent.click(view.find("[data-act=onboarding]")!);
+    const dialog = within(document.querySelector<HTMLElement>("dialog#dx-modal")!);
+    expect(save).not.toHaveBeenCalled();
+    fireEvent.click(dialog.getByRole("button", { name: "Reset and start" }));
+
+    await waitFor(() => expect(save).toHaveBeenCalledWith({
+      version: 1, status: "pending", step: "welcome", startMode: "agent",
+    }));
+    const setup = within(await view.view.findByRole("dialog", { name: "Get started" }));
+    expect(setup.getByRole("heading", { name: "Welcome to OfficeDex" })).toBeTruthy();
+    fireEvent.click(setup.getByRole("button", { name: "Log in" }));
+    await setup.findByRole("button", { name: "Get started" });
+    expect(save).toHaveBeenLastCalledWith({
+      version: 1, status: "pending", step: "introduction", startMode: "agent",
+    });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("keeps tutorial progress when the confirmation is canceled", async () => {
+    const save = vi.spyOn(officecli, "saveSetupState");
+    const view = await settings("general");
+    fireEvent.click(view.find("[data-act=onboarding]")!);
+    const dialog = within(document.querySelector<HTMLElement>("dialog#dx-modal")!);
+    fireEvent.click(dialog.getByRole("button", { name: "Cancel" }));
+    expect(save).not.toHaveBeenCalled();
+    expect(view.view.queryByRole("dialog", { name: "Get started" })).toBeNull();
+  });
+
+  it("reports a failed reset without opening the tutorial and allows retry", async () => {
+    const save = vi.spyOn(officecli, "saveSetupState").mockRejectedValueOnce(new Error("Cannot save tutorial"));
+    const view = await settings("general");
+    fireEvent.click(view.find("[data-act=onboarding]")!);
+    const dialog = within(document.querySelector<HTMLElement>("dialog#dx-modal")!);
+    fireEvent.click(dialog.getByRole("button", { name: "Reset and start" }));
+    expect(await dialog.findByRole("alert")).toHaveTextContent("Cannot save tutorial");
+    expect(view.view.queryByRole("dialog", { name: "Get started" })).toBeNull();
+    fireEvent.click(dialog.getByRole("button", { name: "Reset and start" }));
+    await view.view.findByRole("dialog", { name: "Get started" });
+    expect(save).toHaveBeenCalledTimes(2);
+  });
+});
 
 describe("the sections", () => {
   it("are the eight the design files, in order", async () => {

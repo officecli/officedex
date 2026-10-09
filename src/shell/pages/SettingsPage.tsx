@@ -1,4 +1,4 @@
-import { SETUP_OPEN } from "../onboarding/SetupHost";
+import { resetSetup, SETUP_OPEN } from "../onboarding/SetupHost";
 import { useCallback, useEffect, useState } from "react";
 
 import { useLocale, useSetLocale, useT } from "../../renderer/i18n";
@@ -204,6 +204,7 @@ export function SettingsPage({ onOpenAccount }: { onOpenAccount: () => void }) {
 
 function General({ settings, save }: { settings: UserSettings; save: (patch: Partial<UserSettings>) => void }) {
   const t = useT();
+  const api = useDesktopApi();
   const { state, dispatch } = useShell();
   const locale = useLocale();
   const setLocale = useSetLocale();
@@ -309,9 +310,7 @@ function General({ settings, save }: { settings: UserSettings; save: (patch: Par
               title: t("dx.settings.guideConfirmTitle"),
               body: <p>{t("dx.settings.guideConfirmBody")}</p>,
               action: t("dx.settings.guideConfirmAction"),
-              onConfirm: () => {
-                window.dispatchEvent(new CustomEvent(SETUP_OPEN));
-              },
+              onConfirm: () => resetSetup(api),
             })
           }
         >
