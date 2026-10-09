@@ -5,7 +5,9 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  MAX_RELATIVE_PATH,
   REQUIRED_RESOURCES,
+  findOverlongPaths,
   resolveResourceRoot,
   resourceAbsenceKeys,
   verifyPackagedRuntime,
@@ -258,5 +260,25 @@ test("the Windows binaries are looked up by their .exe names when the target is 
   assert.ok(result.present.includes("mop-convert"));
   assert.ok(result.present.includes("officecli"));
   assert.ok(result.present.includes("word2mow converter"));
+  await rm(path.dirname(bin), { recursive: true, force: true });
+});
+
+test("a payload file deeper than the MAX_PATH budget fails the gate and is named", async () => {
+  const { bin } = await packageTree({ platform: "win32" });
+  const deep = path.join(bin, "presentation", ...Array.from({ length: 10 }, (_, i) => `segment-${i}-abcdefghij`));
+  await mkdir(deep, { recursive: true });
+  await writeFile(path.join(deep, "leaf.js"), "");
+  const found = await findOverlongPaths(bin);
+  assert.equal(found.length, 1);
+  assert.ok(found[0].length > MAX_RELATIVE_PATH);
+  const verifyRuntime = async () => ({ probed: true, version: "v24.18.0" });
+  await assert.rejects(
+    verifyPackagedRuntime(bin, { platform: "win32", arch: "x64", probeRuntime: true, verifyRuntime }),
+    (error) => {
+      assert.match(error.message, new RegExp(`deeper than ${MAX_RELATIVE_PATH} characters`));
+      assert.match(error.message, /leaf\.js/);
+      return true;
+    },
+  );
   await rm(path.dirname(bin), { recursive: true, force: true });
 });

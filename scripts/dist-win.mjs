@@ -264,34 +264,6 @@ export async function auditPortableExecutables(dir, { arch = DEFAULT_ARCH } = {}
   return { rows, wrong, wanted };
 }
 
-/**
- * Windows' MAX_PATH is 260 characters unless the machine opts into long paths,
- * and the NSIS installer writes under `C:\Program Files\OfficeDex\OfficeDex\`
- * (37 characters) or `C:\Users\<name>\AppData\Local\Programs\OfficeDex\`
- * (about 50 with a short user name). The staged presentation tree nests
- * node_modules several levels deep, so the longest relative path is what
- * decides whether an install can fail with "path too long" on a stock
- * machine. 200 leaves room for a user name; today's deepest file is 197.
- */
-export const MAX_RELATIVE_PATH = 200;
-
-/** Files whose path relative to `dir` is longer than the budget, longest first. */
-export async function findOverlongPaths(dir, budget = MAX_RELATIVE_PATH) {
-  const found = [];
-  const walk = async (current) => {
-    for (const entry of await readdir(current, { withFileTypes: true })) {
-      const full = path.join(current, entry.name);
-      if (entry.isDirectory()) await walk(full);
-      else {
-        const relative = path.relative(dir, full);
-        if (relative.length > budget) found.push({ path: relative, length: relative.length });
-      }
-    }
-  };
-  await walk(dir);
-  return found.sort((a, b) => b.length - a.length);
-}
-
 /* ------------------------------------------------------------------ runner */
 
 function log(step, message) {
@@ -470,13 +442,6 @@ export async function distWin(options) {
         // files carry quarantine and where-from attributes, and a `._x.woff`
         // is also what the font licence gate trips over.
         await assertNoHostMetadataFiles(out, "the assembled Windows package");
-        const overlong = await findOverlongPaths(out);
-        if (overlong.length > 0) {
-          throw new Error(
-            `the assembled package has ${overlong.length} file(s) deeper than ${MAX_RELATIVE_PATH} characters, which can exceed MAX_PATH once installed:\n  ` +
-              overlong.slice(0, 10).map((entry) => `${entry.length}  ${entry.path}`).join("\n  "),
-          );
-        }
         const result = await verifyPackagedRuntime(out, { platform: TARGET_PLATFORM, arch });
         log(step, `${result.present.length} payload(s) present`);
         for (const entry of result.degraded) log(step, `shipping without ${entry.split("\n")[0]}`);

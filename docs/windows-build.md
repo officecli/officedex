@@ -72,7 +72,20 @@ x86-64 (`auditPortableExecutables`); a Mach-O or an arm64 image fails the
 build. Native slice packages for any other OS or CPU that vite's pnpm sibling
 set drags in, and fsevents on a non-macOS target, are pruned from the staged
 presentation tree (`pruneForeignNatives`; what was removed is listed as
-`prunedNatives` in its runtime.json).
+`prunedNatives` in its runtime.json). The workspace packages' own
+`node_modules` are pruned too: the worker loads the self-contained `dist-ssr`
+bundles, and the dereferenced copies (a second presentation-engine inside
+presentation-office-js, its @learnof deps, katex) were ~70MB nothing read and a
+197-character-deep path. Test trees, docs, source maps and type declarations
+inside `node_modules` go as well (`pruneDevelopmentFiles`).
+
+**Path budget.** Windows caps paths at 260 characters unless a machine opts in
+to long paths, and the installer writes under `C:\Program Files\OfficeDex\OfficeDex\`
+or `C:\Users\<name>\AppData\Local\Programs\OfficeDex\`. `verify-packaged-runtime`
+therefore refuses any file deeper than 150 characters below the resource root
+on every platform (`MAX_RELATIVE_PATH`), naming the deepest offenders. The CI
+runner additionally assembles under `$RUNNER_TEMP` because the 32-bit makensis
+is not long-path aware.
 
 ### Presentation natives through pnpm instead
 

@@ -86,6 +86,37 @@ export const REQUIRED_RESOURCES = Object.freeze([
   }),
 ]);
 
+/**
+ * The longest path, relative to the resource root, a package may carry.
+ *
+ * Windows caps paths at 260 characters unless a machine opts in to long paths.
+ * The NSIS installer writes under `C:\Program Files\OfficeDex\OfficeDex\` (37)
+ * or `C:\Users\<name>\AppData\Local\Programs\OfficeDex\` (about 50 with a
+ * short user name, more with a long one); 150 leaves room for both. The
+ * staged presentation tree used to nest node_modules 197 characters deep,
+ * which makensis could not even open under the CI workspace. The same budget
+ * applies on macOS, where it is far from binding, so a regression shows up on
+ * every platform's build rather than only on the one that cannot install.
+ */
+export const MAX_RELATIVE_PATH = 150;
+
+/** Files below `root` whose relative path exceeds the budget, longest first. */
+export async function findOverlongPaths(root, budget = MAX_RELATIVE_PATH) {
+  const found = [];
+  const walk = async (current) => {
+    for (const entry of await readdir(current, { withFileTypes: true })) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) await walk(full);
+      else {
+        const relative = path.relative(root, full);
+        if (relative.length > budget) found.push({ path: relative, length: relative.length });
+      }
+    }
+  };
+  await walk(root);
+  return found.sort((a, b) => b.length - a.length);
+}
+
 /** Mirrors resolveBundleTarget in bundle-runtime.mjs: .app on macOS, loose beside the exe on Windows. */
 export async function resolveResourceRoot(binDirectory) {
   const app = path.join(binDirectory, "OfficeDex.app");
@@ -200,6 +231,14 @@ export async function verifyPackagedRuntime(
   if (missing.length > 0) {
     throw new Error(
       `packaged application is incomplete (${target.kind}, ${target.root}):\n  ${missing.join("\n  ")}`,
+    );
+  }
+  const overlong = await findOverlongPaths(target.root);
+  if (overlong.length > 0) {
+    throw new Error(
+      `packaged application has ${overlong.length} file(s) deeper than ${MAX_RELATIVE_PATH} characters below ${target.root}; ` +
+        `they can exceed Windows' MAX_PATH once installed:\n  ` +
+        overlong.slice(0, 10).map((entry) => `${entry.length}  ${entry.path}`).join("\n  "),
     );
   }
   return { ...target, present, degraded, unverified };

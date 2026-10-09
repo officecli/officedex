@@ -118,7 +118,82 @@ export const PRESENTATION_PRUNE = Object.freeze([
   "packages/presentation-office-js/differential",
   "packages/presentation-office-js/scripts",
   "packages/presentation-office-js/baseline",
+  // The workspace packages' own node_modules. pnpm links them, and copying with
+  // dereference materialised every link: presentation-office-js carried a
+  // second full copy of presentation-engine, which carried its @learnof deps,
+  // which carried katex -- a chain 197 characters deep that no longer fits
+  // Windows' MAX_PATH once installed, and ~70MB that nothing loads. The
+  // worker imports the self-contained dist-ssr bundles (their only bare import
+  // is node's crypto); the source fallback that would resolve these is the
+  // development path, never the packaged one, and mop-wasm is staged at
+  // packages/mop-wasm, which the worker tries first.
+  "packages/presentation-engine/node_modules",
+  "packages/presentation-office-js/node_modules",
+  "packages/deps/smartart/node_modules",
+  "mop/runtime/test",
 ]);
+
+/**
+ * What a published npm package carries that a runtime never reads: test
+ * trees, documentation, source maps, type declarations, examples. Pruned from
+ * the staged node_modules so the package is smaller and, on Windows, shallower.
+ */
+export const DEVELOPMENT_DIRECTORY_NAMES = Object.freeze([
+  "test", "tests", "__tests__", "docs", "doc", "examples", "example", "benchmark", "benchmarks", "bench", ".github",
+]);
+export const DEVELOPMENT_FILE_PATTERNS = Object.freeze([
+  /\.map$/i,
+  /\.d\.(?:ts|mts|cts)$/i,
+  /\.(?:spec|test)\.(?:[cm]?js|[cm]?ts|jsx|tsx)$/i,
+  /^(?:changelog|changes|history|contributing|readme|authors)(?:\.|$)/i,
+  /\.(?:md|markdown)$/i,
+  /^\.(?:npmignore|eslintrc(?:\..*)?|prettierrc(?:\..*)?|editorconfig|travis\.yml)$/i,
+]);
+
+/** Files a licence check needs: never pruned, whatever their extension. */
+function isLicenceFile(name) {
+  return /^(?:licen[cs]e|copying|notice)/i.test(name);
+}
+
+/**
+ * Removes development-only directories and files below `modules`. Returns the
+ * counts for runtime.json. A directory named `test` under a package is a test
+ * tree; a package *called* test would be its own directory in node_modules,
+ * which this does not descend into by name, only by position.
+ */
+export async function pruneDevelopmentFiles(modules) {
+  const result = { directories: 0, files: 0 };
+  const walk = async (current, depth) => {
+    let entries;
+    try {
+      entries = await readdir(current, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        // depth 0 is node_modules itself and depth 1 a package (or scope);
+        // only inside a package does a name like `test` mean a test tree.
+        const insidePackage = depth >= (path.basename(current).startsWith("@") ? 2 : 1) && entry.name !== "node_modules";
+        if (insidePackage && DEVELOPMENT_DIRECTORY_NAMES.includes(entry.name)) {
+          await rm(full, { recursive: true, force: true });
+          result.directories += 1;
+          continue;
+        }
+        await walk(full, depth + 1);
+        continue;
+      }
+      if (isLicenceFile(entry.name)) continue;
+      if (DEVELOPMENT_FILE_PATTERNS.some((pattern) => pattern.test(entry.name))) {
+        await rm(full, { force: true });
+        result.files += 1;
+      }
+    }
+  };
+  await walk(modules, 0);
+  return result;
+}
 
 // node_modules entries the SSR graph resolves. pnpm stores these as symlinks
 // into .pnpm/, so each is copied dereferenced.
@@ -696,6 +771,7 @@ export async function stagePresentationRuntime({
   // the target's. Done after the copy so a missing target native still fails
   // with the message above rather than leaving a tree with no natives at all.
   const prunedNatives = await pruneForeignNatives(dest, { platform: targetPlatform, arch: targetArch });
+  const prunedDevelopment = await pruneDevelopmentFiles(modules);
 
   // mop-convert: the typed PPTX <-> MOP converter the worker shells out to.
   // Resolved the same way officecli's resolveMOPConvert() resolves it, under
@@ -793,6 +869,7 @@ export async function stagePresentationRuntime({
         // Native slice packages (and esbuild's host-arch CLI copy) that the
         // checkout had installed for other CPUs and this tree does not ship.
         prunedNatives,
+        prunedDevelopment,
       },
       null,
       2,

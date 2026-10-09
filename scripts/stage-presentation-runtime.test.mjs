@@ -10,6 +10,7 @@ import {
   isNativeSlicePackage,
   machoArchitectures,
   nativePackages,
+  pruneDevelopmentFiles,
   pruneForeignNatives,
   presentationSourceRepository,
   resolvePresentationSource,
@@ -809,4 +810,37 @@ test("a darwin target keeps fsevents and only its own CPU's slice", async (t) =>
   ]);
   await stat(path.join(modules, "@esbuild", "darwin-x64"));
   await stat(path.join(modules, "fsevents"));
+});
+
+test("development-only directories and files are pruned from node_modules; licences and runtime files stay", async (t) => {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), "officedex-devprune-"));
+  t.after(() => rm(tmp, { recursive: true, force: true }));
+  const modules = path.join(tmp, "node_modules");
+  const write = async (rel, body = "") => {
+    const file = path.join(modules, rel);
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, body);
+  };
+  await write("katex/dist/katex.js");
+  await write("katex/dist/katex.js.map");
+  await write("katex/dist/katex.d.ts");
+  await write("katex/contrib/mathtex-script-type/mathtex-script-type.js");
+  await write("katex/test/katex-spec.js");
+  await write("katex/README.md");
+  await write("katex/LICENSE");
+  await write("katex/CHANGELOG.md");
+  await write("@scope/pkg/lib/index.mjs");
+  await write("@scope/pkg/lib/index.test.mjs");
+  await write("@scope/pkg/__tests__/x.js");
+  await write("@scope/pkg/LICENSE.txt");
+  // A package whose *name* is test is a package, not a test tree.
+  await write("test/index.js");
+  const result = await pruneDevelopmentFiles(modules);
+  assert.deepEqual(result, { directories: 2, files: 5 });
+  for (const kept of ["katex/dist/katex.js", "katex/contrib/mathtex-script-type/mathtex-script-type.js", "katex/LICENSE", "@scope/pkg/lib/index.mjs", "@scope/pkg/LICENSE.txt", "test/index.js"]) {
+    await stat(path.join(modules, kept));
+  }
+  for (const gone of ["katex/dist/katex.js.map", "katex/dist/katex.d.ts", "katex/test", "katex/README.md", "katex/CHANGELOG.md", "@scope/pkg/lib/index.test.mjs", "@scope/pkg/__tests__"]) {
+    await assert.rejects(stat(path.join(modules, gone)), { code: "ENOENT" }, gone);
+  }
 });
