@@ -65,7 +65,7 @@ test("a cross-built runtime stages with relocationVerified:false and the reason 
   await writeFile(path.join(source, "bin", "node.exe"), fakePortableExecutable());
   const dest = path.join(root, "mop-runtime");
 
-  const result = await stageMopRuntime({ platform: "win32", arch: "x64", source, dest, probe: false });
+  const result = await stageMopRuntime({ platform: "win32", arch: "x64", hostPlatform: "darwin", source, dest, probe: false });
   assert.equal(result.probed, false);
   assert.equal(result.dest, dest);
   const manifest = JSON.parse(await readFile(path.join(dest, "runtime.json"), "utf8"));

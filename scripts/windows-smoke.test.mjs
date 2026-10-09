@@ -57,7 +57,7 @@ test("scrubManifest drops the presentation tree's source provenance and keeps wh
 
 test("the smoke PATH puts the packaged node.exe and mop-convert.exe first", () => {
   const p = smokePath("/pkg", "/usr/bin", ":");
-  assert.equal(p, ["/pkg/mop-runtime/bin", "/pkg/presentation/tools/bin", "/usr/bin"].map((x) => x.split("/").join(path.sep)).join(":"));
+  assert.equal(p, [path.join("/pkg", "mop-runtime", "bin"), path.join("/pkg", "presentation", "tools", "bin"), "/usr/bin"].join(":"));
   const env = smokeEnvironment("/pkg", { PATH: "/usr/bin" });
   assert.equal(env.OFFICECLI_MOP_PRESENTATION_ROOT, path.join("/pkg", "presentation"));
   assert.equal(env.MOP_CONVERT_BIN, path.join("/pkg", "presentation", "tools", "bin", "mop-convert.exe"));

@@ -112,8 +112,11 @@ export async function verifyRelocatableRuntime(runtimeDir, options = {}) {
   const {
     platform = process.platform,
     arch = os.arch(),
+    // The build host; a parameter so the cross-build rules can be tested on
+    // any machine.
+    hostPlatform = process.platform,
     relocate = false,
-    probe = canExecuteRuntime(platform),
+    probe = canExecuteRuntime(platform, hostPlatform),
     readDependencies = readMachODependencies,
     run = execFile,
   } = options;
@@ -146,7 +149,7 @@ export async function verifyRelocatableRuntime(runtimeDir, options = {}) {
   }
 
   if (!probe) {
-    if (!canExecuteRuntime(platform)) {
+    if (!canExecuteRuntime(platform, hostPlatform)) {
       // The one thing a header can prove: the right kind of image for the
       // target. A Mach-O or an i386 PE copied into a win32-x64 slice fails here.
       const fileChecks = { symlink: false, regularFile: true };
@@ -156,12 +159,12 @@ export async function verifyRelocatableRuntime(runtimeDir, options = {}) {
         version: null,
         provenFrom: null,
         probed: false,
-        unverifiedReason: unverifiedRuntimeReason(platform),
+        unverifiedReason: unverifiedRuntimeReason(platform, hostPlatform),
         fileChecks,
       };
     }
     throw new Error(
-      `refusing to skip the execution probe for ${platform} on a ${process.platform} host: the runtime can be run here, so run it`,
+      `refusing to skip the execution probe for ${platform} on a ${hostPlatform} host: the runtime can be run here, so run it`,
     );
   }
 

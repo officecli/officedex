@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { fakePortableExecutable } from "./pe-executable.mjs";
-import { INPUTS_FORMAT, buildManifest, inputEntries, packInputs, unpackInputs, verifyManifest } from "./windows-inputs.mjs";
+import { INPUTS_FORMAT, buildManifest, inputEntries, packInputs, runTar, tarExecutable, unpackInputs, verifyManifest } from "./windows-inputs.mjs";
 
 /** A repository with every input present and staged for win32-x64. */
 async function fakeRepo() {
@@ -105,8 +105,14 @@ test("unpack rejects an archive that is not a windows-inputs archive", async () 
   await mkdir(stray, { recursive: true });
   await writeFile(path.join(stray, "hello.txt"), "hi");
   const archive = path.join(root, "stray.tar.gz");
-  const { spawnSync } = await import("node:child_process");
-  spawnSync("tar", ["-czf", archive, "-C", stray, "."]);
+  runTar(["-czf", archive, "-C", stray, "."], archive);
   await assert.rejects(unpackInputs({ archive, dest: path.join(root, "out") }), /no manifest\.json/);
   await rm(root, { recursive: true, force: true });
+});
+
+test("tar is the system bsdtar on Windows and plain tar elsewhere", () => {
+  assert.equal(tarExecutable("darwin"), "tar");
+  assert.equal(tarExecutable("linux"), "tar");
+  const onWindows = tarExecutable("win32", { SystemRoot: "C:\\Windows" });
+  assert.ok(onWindows === "tar" || onWindows.endsWith(path.join("System32", "tar.exe")));
 });

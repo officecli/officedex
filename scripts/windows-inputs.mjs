@@ -52,6 +52,24 @@ async function sha256(file) {
   return createHash("sha256").update(await readFile(file)).digest("hex");
 }
 
+/**
+ * The tar to run. On Windows, Git's GNU tar can be first on PATH in a bash
+ * step and reads `C:\...` as a remote host; the system's bsdtar handles
+ * Windows paths, so it is preferred when present.
+ */
+export function tarExecutable(platform = process.platform, env = process.env) {
+  if (platform !== "win32") return "tar";
+  const system = path.join(env.SystemRoot || env.windir || "C:\\Windows", "System32", "tar.exe");
+  return existsSync(system) ? system : "tar";
+}
+
+/** Runs tar with the archive named relative to its own directory, for the same reason. */
+export function runTar(args, archive, { cwd } = {}) {
+  const archiveDir = path.dirname(archive);
+  const resolved = args.map((arg) => (arg === archive ? path.basename(archive) : arg));
+  return spawnSync(tarExecutable(), resolved, { cwd: cwd || archiveDir, stdio: "inherit" });
+}
+
 async function listFiles(dir) {
   const files = [];
   const walk = async (current) => {
@@ -142,7 +160,7 @@ export async function packInputs({ root = ROOT, out = "", slice = "win32-x64", e
     const archive = out || path.join(root, "dist-artifacts", `officedex-windows-inputs-${manifest.officedexRevision.slice(0, 12)}.tar.gz`);
     await mkdir(path.dirname(archive), { recursive: true });
     await rm(archive, { force: true });
-    const tar = spawnSync("tar", ["-czf", archive, "-C", staging, "."], { stdio: "inherit" });
+    const tar = runTar(["-czf", archive, "-C", staging, "."], archive);
     if (tar.status !== 0) throw new Error(`tar exited with ${tar.status}`);
     return { archive, sha256: await sha256(archive), size: (await stat(archive)).size, files: manifest.files.length, manifest };
   } finally {
@@ -158,7 +176,7 @@ export async function unpackInputs({ archive, dest = path.join(ROOT, "build", "w
   }
   await rm(dest, { recursive: true, force: true });
   await mkdir(dest, { recursive: true });
-  const tar = spawnSync("tar", ["-xzf", archive, "-C", dest], { stdio: "inherit" });
+  const tar = runTar(["-xzf", archive, "-C", dest], archive);
   if (tar.status !== 0) throw new Error(`tar exited with ${tar.status}`);
   const manifestPath = path.join(dest, "manifest.json");
   if (!existsSync(manifestPath)) throw new Error(`${archive} has no manifest.json; not a windows-inputs archive`);

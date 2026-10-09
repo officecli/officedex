@@ -130,11 +130,12 @@ export async function stageMopRuntime({
   source = process.env.MOP_RUNTIME_SOURCE?.trim() || "",
   dest = DEST,
   cache = CACHE,
+  hostPlatform = process.platform,
   // The probe runs whenever this host can run the target. A cross-build (a
   // Windows runtime staged on a Mac) cannot, and says so in runtime.json
   // rather than pretending; passing probe:false on a host that *could* run
   // the runtime is refused by verifyRelocatableRuntime.
-  probe = canExecuteRuntime(platform),
+  probe = canExecuteRuntime(platform, hostPlatform),
   verify = verifyRelocatableRuntime,
 } = {}) {
   // An explicit source is still honoured: CI may hand over a runtime it built
@@ -162,7 +163,7 @@ export async function stageMopRuntime({
     });
     if (platform !== "win32") await chmod(path.join(staging, "bin", nodeExecutableName(platform)), 0o755);
 
-    const verified = await verify(staging, { platform, arch, relocate: true, probe });
+    const verified = await verify(staging, { platform, arch, hostPlatform, relocate: true, probe });
 
     await writeFile(
       path.join(staging, "runtime.json"),

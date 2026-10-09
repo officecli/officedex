@@ -29,11 +29,17 @@ async function runtimeTree({ script = '#!/bin/sh\necho v24.18.0\n', mode = 0o755
 
 const systemOnly = async () => ["/usr/lib/libSystem.B.dylib", "/System/Library/Frameworks/Security.framework/Versions/A/Security"];
 
+// The fixture's `node` is a shell script, which Windows cannot start; the
+// tests that only need "it ran and said a version" inject the run instead.
+const saysVersion = async () => ({ stdout: "v24.18.0\n" });
+
 test("a self-contained runtime that runs is accepted", async () => {
   const { root, dir } = await runtimeTree();
   const result = await verifyRelocatableRuntime(dir, {
     platform: "darwin",
+    hostPlatform: "darwin",
     readDependencies: systemOnly,
+    run: saysVersion,
   });
   assert.equal(result.version, "v24.18.0");
   await rm(root, { recursive: true, force: true });
@@ -80,8 +86,13 @@ test("a runtime staged as a symlink is rejected before anything runs it", async 
 
 test("a runtime that does not execute is rejected", async () => {
   const { root, dir } = await runtimeTree({ mode: 0o644 });
+  const refuses = async () => {
+    const error = new Error("spawn EACCES");
+    error.stderr = "";
+    throw error;
+  };
   await assert.rejects(
-    verifyRelocatableRuntime(dir, { platform: "darwin", readDependencies: systemOnly }),
+    verifyRelocatableRuntime(dir, { platform: "darwin", hostPlatform: "darwin", readDependencies: systemOnly, run: refuses }),
     /does not run from/,
   );
   await rm(root, { recursive: true, force: true });
@@ -103,8 +114,10 @@ test("relocate proves the runtime somewhere other than where it was staged", asy
   const { root, dir } = await runtimeTree({ script: '#!/bin/sh\necho v24.18.0\n' });
   const result = await verifyRelocatableRuntime(dir, {
     platform: "darwin",
+    hostPlatform: "darwin",
     relocate: true,
     readDependencies: systemOnly,
+    run: saysVersion,
   });
   assert.notEqual(result.provenFrom, dir);
   assert.equal(result.version, "v24.18.0");
@@ -152,6 +165,7 @@ test("a cross-built Windows runtime is checked as a file and reported as not run
   const result = await verifyRelocatableRuntime(dir, {
     platform: "win32",
     arch: "x64",
+    hostPlatform: "darwin",
     probe: false,
     relocate: true,
     run: neverRun,
@@ -171,7 +185,7 @@ test("a cross-built Windows runtime that is not a PE32+ x86-64 image is rejected
   await rm(path.join(dir, "bin", "node"));
   await writeFile(path.join(dir, "bin", "node.exe"), fakePortableExecutable({ machine: 0xaa64 }));
   await assert.rejects(
-    verifyRelocatableRuntime(dir, { platform: "win32", arch: "x64", probe: false }),
+    verifyRelocatableRuntime(dir, { platform: "win32", arch: "x64", hostPlatform: "darwin", probe: false }),
     /PE32\+ arm64; a x64 Windows package needs PE32\+ x86-64/,
   );
   await rm(root, { recursive: true, force: true });
@@ -182,7 +196,7 @@ test("skipping the probe is refused when this host could run the runtime", async
   // native build green; it is only for the case where running is impossible.
   const { root, dir } = await runtimeTree();
   await assert.rejects(
-    verifyRelocatableRuntime(dir, { platform: process.platform, probe: false, readDependencies: systemOnly }),
+    verifyRelocatableRuntime(dir, { platform: "darwin", hostPlatform: "darwin", probe: false, readDependencies: systemOnly }),
     /refusing to skip the execution probe/,
   );
   await rm(root, { recursive: true, force: true });
