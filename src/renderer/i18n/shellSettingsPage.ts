@@ -13,6 +13,8 @@ export const shellSettingsPageEn: Record<string, string> = {
   "dx.settings.subtitle": "Make OfficeDex work the way you do.",
   "dx.settings.navAria": "Settings",
   "dx.settings.loading": "Loading settings…",
+  "dx.settings.accountLoadFailed": "Couldn't check your sign-in status. Please try again.",
+  "dx.settings.accountRetry": "Retry",
   "dx.settings.saved": "Saved",
 
   "dx.settings.section.general": "General",
@@ -301,6 +303,8 @@ export const shellSettingsPageZh: Record<string, string> = {
   "dx.settings.subtitle": "让 OfficeDex 按你的方式工作。",
   "dx.settings.navAria": "设置",
   "dx.settings.loading": "正在加载设置…",
+  "dx.settings.accountLoadFailed": "暂时无法获取登录状态，请重试。",
+  "dx.settings.accountRetry": "重试",
   "dx.settings.saved": "已保存",
 
   "dx.settings.section.general": "通用",

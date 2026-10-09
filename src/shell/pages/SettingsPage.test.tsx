@@ -11,10 +11,11 @@
  * itself on after such a press would be claiming a preference nobody stored, so
  * these check the answer *and* that the switch stayed where it was.
  */
-import { cleanup, fireEvent, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { officecli } from "../../renderer/bridge";
+import type { WhoAmIResult } from "../../shared/types";
 import { toast } from "../../renderer/ui";
 import { resetLayers } from "../kit/layers";
 import { renderShell } from "../test/renderShell";
@@ -45,6 +46,47 @@ const untilAnnounced = (needle: string) =>
   waitFor(() => {
     if (!announced().includes(needle)) throw new Error(`waiting for “${needle}”`);
   });
+
+describe("account status loading", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it.each(["logged_in", "anonymous"] as const)("waits for whoami before showing %s", async (mode) => {
+    const whoami = vi.spyOn(officecli, "whoami").mockResolvedValue({ mode: "logged_in", email: "user@example.com" });
+    const harness = await renderShell();
+    let resolve!: (result: WhoAmIResult) => void;
+    whoami.mockReturnValue(new Promise<WhoAmIResult>((done) => { resolve = done; }));
+    await harness.dispatch({ type: "go", page: "settings", section: "account" });
+    const content = within(harness.view.container.querySelector<HTMLElement>(".dx-settings-content")!);
+
+    expect(await content.findByRole("status")).toHaveTextContent("Checking sign-in status");
+    expect(content.queryByText("Guest")).toBeNull();
+    expect(content.queryByText("You’re using OfficeDex as a guest")).toBeNull();
+    expect(content.queryByRole("button", { name: "Sign in" })).toBeNull();
+
+    await act(async () => resolve({ mode, ...(mode === "logged_in" ? { email: "user@example.com" } : {}) }));
+    expect(content.queryByRole("status")).toBeNull();
+    expect(content.getByRole("button", { name: mode === "logged_in" ? "Manage account" : "Sign in" })).toBeTruthy();
+    if (mode === "logged_in") expect(content.queryByText("Guest")).toBeNull();
+    else expect(content.getByText("Guest")).toBeTruthy();
+  });
+
+  it("shows a retryable error instead of guest when whoami fails", async () => {
+    const whoami = vi.spyOn(officecli, "whoami").mockRejectedValue(new Error("Account service unavailable"));
+    const view = await settings("account");
+    const content = within(view.find<HTMLElement>(".dx-settings-content")!);
+    expect(await content.findByRole("alert")).toHaveTextContent("Couldn't check your sign-in status");
+    expect(content.queryByText("Guest")).toBeNull();
+    expect(content.queryByRole("button", { name: "Sign in" })).toBeNull();
+
+    let resolve!: (result: WhoAmIResult) => void;
+    whoami.mockReturnValue(new Promise<WhoAmIResult>((done) => { resolve = done; }));
+    fireEvent.click(content.getByRole("button", { name: "Retry" }));
+    expect(await content.findByRole("status")).toHaveTextContent("Checking sign-in status");
+    expect(content.queryByRole("alert")).toBeNull();
+    await act(async () => resolve({ mode: "logged_in", email: "user@example.com" }));
+    expect(content.getByRole("button", { name: "Manage account" })).toBeTruthy();
+  });
+});
 
 describe("reset tutorial", () => {
   afterEach(() => vi.restoreAllMocks());

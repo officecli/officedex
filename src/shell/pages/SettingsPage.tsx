@@ -71,6 +71,8 @@ export function SettingsPage({ onOpenAccount }: { onOpenAccount: () => void }) {
   const { state, dispatch } = useShell();
   const { settings, defaultWorkspaceDir, update: rawUpdate, loading, error } = useSettings();
   const [whoami, setWhoami] = useState<WhoAmIResult | null>(null);
+  const [accountLoadFailed, setAccountLoadFailed] = useState(false);
+  const [accountRetry, setAccountRetry] = useState(0);
   const [credit, setCredit] = useState<CreditStatus | null>(null);
 
   const section = state.settingsSection;
@@ -83,14 +85,16 @@ export function SettingsPage({ onOpenAccount }: { onOpenAccount: () => void }) {
   // on the account page, not while this one sits open.
   useEffect(() => {
     let cancelled = false;
+    setWhoami(null);
+    setAccountLoadFailed(false);
     api
       .whoami()
       .then((result) => !cancelled && setWhoami(result))
-      .catch(() => !cancelled && setWhoami({ mode: "anonymous" }));
+      .catch(() => !cancelled && setAccountLoadFailed(true));
     return () => {
       cancelled = true;
     };
-  }, [api]);
+  }, [api, accountRetry]);
 
   const refreshCredit = useCallback(() => {
     api
@@ -140,6 +144,26 @@ export function SettingsPage({ onOpenAccount }: { onOpenAccount: () => void }) {
       case "notifications":
         return <Notifications />;
       case "account":
+        if (whoami === null) {
+          return (
+            <>
+              <h2>{t("dx.settings.section.account")}</h2>
+              {accountLoadFailed ? (
+                <div className="dx-plan-card">
+                  <p role="alert">{t("dx.settings.accountLoadFailed")}</p>
+                  <button type="button" className="dx-btn" onClick={() => setAccountRetry((value) => value + 1)}>
+                    {t("dx.settings.accountRetry")}
+                  </button>
+                </div>
+              ) : (
+                <p className="dx-row" role="status">
+                  <span className="dx-spinner" aria-hidden="true" />
+                  {t("login.status.checking")}
+                </p>
+              )}
+            </>
+          );
+        }
         return (
           <Account
             whoami={whoami}
@@ -717,7 +741,7 @@ function Account({
   onModels,
   onRedeemed,
 }: {
-  whoami: WhoAmIResult | null;
+  whoami: WhoAmIResult;
   credit: CreditStatus | null;
   onOpenAccount: () => void;
   onModels: () => void;
