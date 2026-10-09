@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"officedex/internal/atomicfile"
 )
 
 const (
@@ -237,7 +239,7 @@ func replaceAtomicallyWithOps(originalPath, exportedPath string, ops replaceOps)
 	if err != nil {
 		return postCommitError("open XLSX parent directory for sync", err)
 	}
-	if err := directory.Sync(); err != nil {
+	if err := directory.Sync(); err != nil && !atomicfile.IsDirSyncUnsupported(err) {
 		_ = directory.Close()
 		return postCommitError("sync XLSX parent directory", err)
 	}

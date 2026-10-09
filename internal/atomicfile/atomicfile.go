@@ -3,16 +3,19 @@
 package atomicfile
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
-	"syscall"
 )
 
-// Some filesystems (and Windows directory handles) do not support fsync on a
-// directory; the rename itself already happened, so treat that as success.
-func isDirSyncUnsupported(err error) bool {
-	return errors.Is(err, syscall.EINVAL) || errors.Is(err, syscall.ENOTSUP) || errors.Is(err, syscall.EBADF)
+// IsDirSyncUnsupported reports whether err, returned by Sync on a directory
+// handle, means the platform or filesystem cannot fsync a directory at all --
+// as opposed to a sync that failed. The rename before it already happened, so
+// callers treat such an error as success. The set of errors is per platform
+// (dirsync_other.go, dirsync_windows.go): on Windows a directory opened by
+// os.Open cannot be flushed and reports "Access is denied", which this must
+// recognise or every atomic write on Windows fails after it has succeeded.
+func IsDirSyncUnsupported(err error) bool {
+	return isDirSyncUnsupported(err)
 }
 
 // WriteFile writes data to path atomically: the bytes are staged in a hidden

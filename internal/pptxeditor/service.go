@@ -714,7 +714,9 @@ func replacePptxAtomically(originalPath, exportedPath string) error {
 	}
 	if directory, err := os.Open(filepath.Dir(originalPath)); err == nil {
 		defer directory.Close()
-		return directory.Sync()
+		if err := directory.Sync(); err != nil && !atomicfile.IsDirSyncUnsupported(err) {
+			return err
+		}
 	}
 	return nil
 }
