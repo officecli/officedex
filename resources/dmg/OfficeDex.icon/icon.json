@@ -1,0 +1,31 @@
+{
+  "fill": {
+    "solid": "srgb:0.00000,0.00000,0.00000,1.00000"
+  },
+  "groups": [
+    {
+      "name": "Flat logo",
+      "layers": [
+        {
+          "glass": false,
+          "hidden": false,
+          "image-name": "logo.svg",
+          "name": "OfficeDex"
+        }
+      ],
+      "specular": false,
+      "shadow": {
+        "kind": "none",
+        "opacity": 0
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      },
+      "blur-material": 0
+    }
+  ],
+  "supported-platforms": {
+    "squares": "shared"
+  }
+}

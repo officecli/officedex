@@ -418,6 +418,7 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
   assert_production_binary "${APP_PATH}"
 
   node scripts/verify-wails-app.mjs "${APP_PATH}"
+  swift scripts/verify-mac-app-icon.swift "${APP_PATH}"
 
   echo "[${LOG}] bundling runtimes and licenses"
   node scripts/bundle-runtime.mjs

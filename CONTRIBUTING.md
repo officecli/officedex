@@ -153,16 +153,19 @@ Clients on 0.6.x poll the same root manifest and upgrade straight to the current
 
 ### App icon resources and macOS appearance
 
-The icon master is `resources/dmg/app-icon.svg`. Run `bash scripts/generate-app-icons.sh`
-on macOS with `rsvg-convert` installed to regenerate `build/appicon.png`,
-`build/icon.png`, and `build/icon.icns`. Wails builds the bundled ICNS from
-`build/appicon.png`.
+The native icon source is `resources/dmg/OfficeDex.icon` (the foreground SVG is
+inside `Assets/`). Run `bash scripts/generate-app-icons.sh` with Apple Icon Composer
+installed, or set `ICTOOL` to its `Contents/Executables/ictool`, to regenerate
+`build/appicon.png`, `build/icon.png`, and `build/icon.icns`. A full Xcode installation
+is not required. These generated files are committed, so ordinary builds do not
+need Icon Composer. Wails builds the bundled ICNS from `build/appicon.png`.
 
-The white logo sits on a solid black (`#000000`) rounded square tile; the area outside
-the tile stays transparent. This is intentional: macOS 26 adds a gray tile around
-the old circle-only icon. Checking PNG transparency or decoding the ICNS does not
-reveal that system treatment. Do not replace this with Finder custom-icon metadata,
-which fails strict code-signature verification.
+The white foreground must stay flat: its layer has `glass: false`, and the group
+disables specular, shadow, blur and translucency. Pre-render it with Icon Composer
+before generating ICNS sizes. A raw SVG raster makes macOS 26 synthesize a bevel
+on the white logo; plist compatibility flags do not prevent it. The black enclosure
+retains the system's thin edge lighting. Do not replace this with Finder custom-icon
+metadata, which fails strict code-signature verification.
 
 Before publishing an icon change, mount the final DMG and inspect the actual
 system-resolved appearance (use the mounted app's real path):
@@ -171,9 +174,11 @@ system-resolved appearance (use the mounted app's real path):
 swift scripts/preview-mac-app-icon.swift "/Volumes/OfficeDex/OfficeDex.app" /tmp/officedex-system-icon.png
 ```
 
-Check the rendered PNG for a black tile with a white logo and no gray outer tile. macOS may
-apply its own lighting effects. Also inspect the mounted installer in Finder and
-the app extracted from the update ZIP; source-image inspection alone is insufficient.
+Check the rendered PNG for a black tile, a uniformly white foreground with no bevel
+or vertical gray gradient, and no gray outer tile. Also inspect the mounted installer
+in Finder and the app extracted from the update ZIP; source-image inspection alone
+is insufficient. `swift scripts/verify-mac-app-icon.swift <app>` checks the white
+interior in the system-resolved image before a release is signed.
 
 ### Building and testing a test-channel package
 
