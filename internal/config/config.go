@@ -189,7 +189,7 @@ func FirstExecutablePath(names ...string) string {
 // bare tool name is not runnable on Windows, and a lookup that omits the suffix
 // fails silently -- the caller just sees "not found".
 func ExecutableName(name string) string {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == "windows" && !strings.EqualFold(filepath.Ext(name), ".exe") {
 		return name + ".exe"
 	}
 	return name

@@ -155,3 +155,15 @@ func TestMopConvertBinaryReportsNothingWhenNoBuildStagedIt(t *testing.T) {
 		t.Fatalf("MopConvertBinary = %q, want \"\"", got)
 	}
 }
+
+// A name that already carries the suffix is left alone, so callers can pass
+// either form without producing mop-convert.exe.exe.
+func TestExecutableNameIsIdempotent(t *testing.T) {
+	once := ExecutableName("mop-convert")
+	if got := ExecutableName(once); got != once {
+		t.Fatalf("ExecutableName(%q) = %q, want unchanged", once, got)
+	}
+	if ExecutableName("mop-convert") == "mop-convert.exe.exe" {
+		t.Fatal("suffix doubled")
+	}
+}
