@@ -7,7 +7,6 @@ import { formatDateTime, formatElapsed } from "../kit/format";
 import { FileIcon, Icon, extensionOf, type IconName } from "../kit/Icon";
 import { closeModal, openModal } from "../kit/layers";
 import { useLibraryActions } from "../nav/useLibraryActions";
-import { notBuiltYet } from "../port/reportPortFailure";
 import { OUTLINE_GATE_KIND, type AgentOutlinePage, type AgentStep, type AgentTask, type FileMeta } from "../../shared/uiPort";
 import { useComposerSettings } from "../composer/useComposerSettings";
 import { useShell } from "../state/ShellContext";
@@ -153,6 +152,7 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
               <span className="dx-pill dx-end">{t(suggestion.applied ? "dx.review.applied" : "dx.status.review")}</span>
             </div>
             <p className="dx-helper">{suggestion.summary}</p>
+            {!suggestion.applied && <SuggestionDiff id={suggestion.id} agent={agent} />}
             <div className="dx-actions">
               {suggestion.applied ? (
                 <button
@@ -173,7 +173,7 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
                     type="button"
                     className="dx-btn"
                     data-act="reject-change"
-                    onClick={() => notBuiltYet("agent.rejectSuggestion", t("dx.notBuilt.reject"))}
+                    onClick={() => { closeModal(); void agent.rejectSuggestion(suggestion.id); }}
                   >
                     {t("dx.review.reject")}
                   </button>
@@ -216,7 +216,7 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
                 t("settings.about.productName")}
             </dd>
             <dt>Task ID</dt>
-            <dd>{task.id}</dd>
+            <dd>{task.logicalTaskId ?? task.id}</dd>
             <dt>{t("dx.run.started")}</dt>
             <dd>{task.startedAt ? formatDateTime(task.startedAt) : "—"}</dd>
             <dt>{t("dx.run.attempts")}</dt>
@@ -224,7 +224,7 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
             <dt>{t("dx.run.files")}</dt>
             <dd>{[...new Set([task.targetFileName, artifact?.name, reviewTarget?.name, ...(task.batch?.map((item) => item.name) ?? [])].filter(Boolean))].join(", ") || t("dx.run.newResult")}</dd>
           </dl>
-          {task.error ? <p className="dx-error">{task.error}</p> : null}
+          {task.errorDetail || task.error ? <pre className="dx-error">{task.errorDetail ?? task.error}</pre> : null}
           <div className="dx-actions">
             <button
               type="button"
@@ -741,4 +741,23 @@ function OutlineGate({
       </div>
     </form>
   );
+}
+
+function SuggestionDiff({ id, agent }: { id: string; agent: Agent }) {
+  const t = useT();
+  const [changes, setChanges] = useState<Array<{ part: string; before: string; after: string }> | null>(null);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void agent.suggestionChanges(id).then(value => { if (active) setChanges(value); }, () => { if (active) setError(true); });
+    return () => { active = false; };
+  }, [id, agent.suggestionChanges]);
+  if (error) return <p role="alert">{t("dx.review.diffFailed")}</p>;
+  if (!changes) return <p role="status">{t("dx.review.diffLoading")}</p>;
+  if (!changes.length) return <p>{t("dx.review.noTextChanges")}</p>;
+  return <div className="dx-review-diff">{changes.map((change) => <section key={change.part}>
+    <p className="dx-helper">{change.part}</p>
+    <strong>{t("dx.review.before")}</strong><pre>{change.before || "—"}</pre>
+    <strong>{t("dx.review.after")}</strong><pre>{change.after || "—"}</pre>
+  </section>)}</div>;
 }

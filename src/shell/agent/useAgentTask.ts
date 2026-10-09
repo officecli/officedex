@@ -388,6 +388,17 @@ export function useAgentTask() {
 
   sendRef.current = send;
 
+  const rejectSuggestion = useCallback(async (id: string) => {
+    if (await attempt(async () => {
+      if (!port.agent.rejectSuggestion) throw new Error("Reject is unavailable in this runtime.");
+      await port.agent.rejectSuggestion(id);
+    })) await reload();
+  }, [port, reload]);
+  const suggestionChanges = useCallback(async (id: string) => {
+    if (!port.agent.suggestionChanges) throw new Error("Review is unavailable in this runtime.");
+    return port.agent.suggestionChanges(id);
+  }, [port]);
+
   const applySuggestion = useCallback(
     async (id: string) => {
       /*
@@ -466,6 +477,8 @@ export function useAgentTask() {
       },
       [port],
     ),
+    rejectSuggestion,
+    suggestionChanges,
     applySuggestion,
     undoSuggestion,
     pause: useCallback(async () => void (await attempt(() => port.agent.pause())), [port]),

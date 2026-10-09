@@ -23,7 +23,7 @@ import { NEW_GROUPS, type NewType } from "../pages/fileRows";
  * Escape hands focus back to New. Blank space between the groups is part of
  * the picker, not "outside".
  *
- * AI Chat starts a blank conversation. Everything under Local opens a Local
+ * AI Chat focuses Home's composer. Everything under Local opens a Local
  * editor and adds nothing to a conversation that happens to be open.
  */
 export function NewPopover({

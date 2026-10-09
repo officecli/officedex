@@ -135,6 +135,7 @@ export function createDocxEditRunner(deps: DocxEditDeps) {
           prompt: instruction,
           text: captured.text,
           scope: captured.scope,
+          host_review: Boolean(request.requireReview),
           ...(deps.locale ? { ui_locale: deps.locale } : {}),
         },
       },
@@ -208,7 +209,7 @@ export function createDocxEditRunner(deps: DocxEditDeps) {
       const approved = await request.onConfirm({ text: plan.summary,
         detail: plan.edits.map((edit) => `${edit.query} → ${edit.replacement}`).join("\n") });
       assertLive(request.signal);
-      if (!approved) return { summary: translate("shell.edit.deckCancelled"), applied: 0, undo: null, scope, saveError: null };
+      if (!approved) return { summary: translate("shell.edit.documentCancelled"), applied: 0, undo: null, scope, saveError: null };
     }
     request.onPhase?.("applying");
     const { replaced } = await deps.editor.apply(captured.id, plan.edits);

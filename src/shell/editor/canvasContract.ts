@@ -263,7 +263,11 @@ export interface CanvasAdapter {
    * a skeleton and a lie the moment a real editor is mounted. The shell saves
    * by calling this first and the port second.
    */
-  save(): Promise<void>;
+  save(fileId?: string): Promise<void>;
+  /** Export current editor bytes to a new file without writing the source. */
+  saveCopy?(fileId: string): Promise<{ filePath: string }>;
+  /** Explicit Don't save: forget the editor's draft before closing its tab. */
+  discard?(fileId: string): Promise<void>;
   /**
    * The open document became dirty, or stopped being. Returns unsubscribe.
    *

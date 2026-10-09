@@ -32,6 +32,29 @@ const dirtyMark = (container: HTMLElement) =>
   container.querySelector<HTMLElement>(`.dx-file-tab[data-tab="${SEED_ACTIVE_FILE_ID}"] .dx-dirty-mark`);
 
 describe("canvas ⇄ shell", () => {
+  it("copies a conflicted DOCX from editor bytes without retrying or clearing the failed source", async () => {
+    const { adapter, save, report } = createTestCanvasAdapter();
+    const saveCopy = vi.fn(async () => ({ filePath: "/qa/editor-copy.docx" }));
+    adapter.saveCopy = saveCopy;
+    const shell = await renderShell({ canvas: adapter });
+    const source = (await shell.port.files.list()).find(file => file.id === SEED_ACTIVE_FILE_ID)!;
+    const imported = vi.spyOn(shell.port.files, "openDropped").mockResolvedValue({ ...source, id: "copy", name: "editor-copy.docx", dirty: false });
+    const duplicate = vi.spyOn(shell.port.files, "duplicate");
+    await shell.dispatch({ type: "open-file", fileId: SEED_ACTIVE_FILE_ID });
+    await act(async () => { report(true); });
+    save.mockRejectedValue(new Error("source file changed outside OfficeDex"));
+    fireEvent.click(saveButton(shell.view.container));
+    await waitFor(() => expect(saveButton(shell.view.container).textContent).toContain("Failed"));
+    save.mockClear();
+    fireEvent.click(fileMenuButton(shell.view.container));
+    fireEvent.click(menuItem("Save copy"));
+    await waitFor(() => expect(imported).toHaveBeenCalledWith("/qa/editor-copy.docx"));
+    expect(saveCopy).toHaveBeenCalledWith(SEED_ACTIVE_FILE_ID);
+    expect(save).not.toHaveBeenCalled();
+    expect(duplicate).not.toHaveBeenCalled();
+    expect(saveButton(shell.view.container).textContent).toContain("Failed");
+  });
+
   it("shows the editor's unsaved state on the tab and in the tab row", async () => {
     const { adapter, report } = createTestCanvasAdapter();
     const shell = await renderShell({ canvas: adapter });

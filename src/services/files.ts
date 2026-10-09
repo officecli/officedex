@@ -60,17 +60,22 @@ export function createFileService(api: DesktopAPI): FileService {
    * marked. So it lives here, and the canvas adapter reports it.
    */
   const dirtyFiles = new Set<string>();
-  /**
-   * The last open or save that failed, per file, until one succeeds.
-   *
-   * Session state for the same reason `dirty` is: a write the disk refused is
-   * a fact about this editor session, and a file permanently marked "failed"
-   * after a crash would be as wrong as one permanently marked dirty. It is
-   * kept apart from `dirty` because the two answer different questions — a
-   * failed save leaves the file both — and because "Saved" must never be read
-   * off `!dirty` while a failure is on record.
-   */
+  // The last failed operation remains a fact after a restart. Only a successful
+  // retry or explicit discard/removal clears it; dirty editor state stays local.
+  const failureKey = "officedex.file-failures.v1";
   const failures = new Map<string, FileFailure>();
+  try {
+    const saved = JSON.parse(localStorage.getItem(failureKey) ?? "[]");
+    if (Array.isArray(saved)) for (const [id, failure] of saved) {
+      if (typeof id === "string" && failure && ["open", "save"].includes(failure.kind)
+        && typeof failure.reason === "string" && typeof failure.detail === "string" && Number.isFinite(failure.at)) {
+        failures.set(id, failure);
+      }
+    }
+  } catch { /* Missing or damaged storage must not prevent opening files. */ }
+  const persistFailures = () => {
+    try { localStorage.setItem(failureKey, JSON.stringify([...failures])); } catch { /* Keep session state. */ }
+  };
 
   /**
    * What the recent-files list knows about a path that the document row does
@@ -224,11 +229,13 @@ export function createFileService(api: DesktopAPI): FileService {
       // would be marking unsaved work as saved.
       dirtyFiles.delete(id);
       failures.delete(id);
+      persistFailures();
     },
 
     async setFailure(id, failure) {
       if (failure) failures.set(id, failure);
       else failures.delete(id);
+      persistFailures();
     },
 
     /**
@@ -246,6 +253,7 @@ export function createFileService(api: DesktopAPI): FileService {
     async remove(id) {
       dirtyFiles.delete(id);
       failures.delete(id);
+      persistFailures();
       if (api.removeDocument) {
         await api.removeDocument(id);
         return;
@@ -277,6 +285,7 @@ export function createFileService(api: DesktopAPI): FileService {
     forget(id) {
       dirtyFiles.delete(id);
       failures.delete(id);
+      persistFailures();
     },
   };
 }

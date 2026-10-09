@@ -9,6 +9,7 @@ import { useLibraryActions } from "../nav/useLibraryActions";
 import { useProjectAssets } from "../pages/AssetsPage";
 import { usePort } from "../port/PortContext";
 import { reportPortFailure } from "../port/reportPortFailure";
+import { newConversationId } from "../state/libraryMeta";
 import { useShell } from "../state/ShellContext";
 
 /**
@@ -24,7 +25,7 @@ import { useShell } from "../state/ShellContext";
  */
 export function CompactAssets() {
   const t = useT();
-  const { state, folders } = useShell();
+  const { state, folders, dispatch, setChatMeta } = useShell();
   const library = useLibraryActions();
   const fileActions = useFileActions();
   const assets = useProjectAssets();
@@ -44,9 +45,14 @@ export function CompactAssets() {
           aria-expanded="false"
           onClick={() => {
             if (!state.chat) return;
+            const conversationId = state.chat.conversationId ?? newConversationId();
+            if (!state.chat.conversationId) {
+              setChatMeta(conversationId, { folderId: state.chat.folderId, createdAt: Date.now() });
+              dispatch({ type: "open-chat", chat: { ...state.chat, conversationId } });
+            }
             openModal({
               title: t("dx.assets.addTitle"),
-              render: () => <AddAssets folderId={state.chat!.folderId} shared={Boolean(project && !project.isDefault)} />,
+              render: () => <AddAssets conversationId={conversationId} folderId={state.chat!.folderId} shared={Boolean(project && !project.isDefault)} />,
             });
           }}
         >
@@ -115,17 +121,26 @@ export function CompactAssets() {
  * library are shown ticked and locked, so they cannot be added twice, and the
  * confirm button stays disabled until something new is ticked (§17).
  */
-function AddAssets({ folderId, shared }: { folderId: string; shared: boolean }) {
+function AddAssets({ folderId, shared, conversationId }: { folderId: string; shared: boolean; conversationId: string }) {
   const t = useT();
   const port = usePort();
-  const { files, reload } = useShell();
+  const { files, reload, chatMeta, setChatMeta } = useShell();
+  const assets = useProjectAssets();
   const [picked, setPicked] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
   const add = async (ids: string[]) => {
     setBusy(true);
     try {
-      for (const id of ids) await port.files.move(id, folderId);
+      if (shared) {
+        for (const id of ids) await port.files.move(id, folderId);
+      } else {
+        const own = chatMeta[conversationId];
+        setChatMeta(conversationId, {
+          assetIds: [...new Set([...(own?.assetIds ?? []), ...ids])],
+          excludedAssetIds: own?.excludedAssetIds?.filter((id) => !ids.includes(id)),
+        });
+      }
       await reload();
       // "Added" is claimed only once the project's collection actually lists
       // the files. `move` resolving is not that: it used to resolve after
@@ -133,7 +148,7 @@ function AddAssets({ folderId, shared }: { folderId: string; shared: boolean }) 
       // "1 file added" over an Assets list that never changed. `files` in this
       // closure is the list from before the move, so ask the port again.
       const listed = await port.files.list();
-      const missing = ids.filter((id) => listed.find((file) => file.id === id)?.folderId !== folderId);
+      const missing = shared ? ids.filter((id) => listed.find((file) => file.id === id)?.folderId !== folderId) : [];
       if (missing.length > 0) {
         throw new Error(t("dx.assets.addNotListed", { count: missing.length }));
       }
@@ -175,7 +190,7 @@ function AddAssets({ folderId, shared }: { folderId: string; shared: boolean }) 
       <h3>{t("dx.assets.addExisting")}</h3>
       <div className="dx-context-list">
         {files.map((file) => {
-          const already = file.folderId === folderId;
+          const already = assets.some((asset) => asset.id === file.id);
           return (
             <label key={file.id} className="dx-row dx-context-file">
               <input

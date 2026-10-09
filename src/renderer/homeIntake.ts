@@ -104,6 +104,15 @@ export function inferHomeTaskRoute(input: HomeTaskIntake, fallback: DocumentType
   const unsupported = unsupportedOutputFormat(named ?? output?.[1] ?? "");
   if (unsupported) return { kind: "unsupported_format", format: unsupported };
 
+  const explicitType = /\.(docx|pptx|xlsx|png|jpe?g|gif)$/i.exec(named ?? "")?.[1]?.toLowerCase();
+  if (explicitType) {
+    const documentType = /^(png|jpe?g)$/.test(explicitType) ? "img" : explicitType as DocumentType;
+    return { kind: "generate", documentType, sourceFile };
+  }
+  // File formats near the creation verb outrank incidental content words.
+  const requestedType = /(?:create|generate|make|write|新建|创建|生成|制作)\s+(?:(?:a|an|new|separate|fresh|word|powerpoint)\s+)*(docx|pptx|xlsx|word|powerpoint)\b/i.exec(prompt)?.[1]?.toLowerCase();
+  if (requestedType) return { kind: "generate", documentType: requestedType === "word" ? "docx" : requestedType === "powerpoint" ? "pptx" : requestedType as DocumentType, sourceFile };
+
   if (/(gif|动图|动画图)/i.test(prompt)) return { kind: "generate", documentType: "gif", sourceFile };
   if (/(slides?|pptx?|presentation|deck|演示|幻灯片|路演)/i.test(prompt)) return { kind: "generate", documentType: "pptx", sourceFile };
   if (/(image|poster|banner|illustration|图片|海报|封面|配图)/i.test(prompt)) return { kind: "generate", documentType: "img", sourceFile };
@@ -158,7 +167,7 @@ export function unsupportedOutputFormat(prompt: string): string | null {
  * "name it launch plan"). The runtime has no field for this yet, so the
  * caller can only pass it on as the topic and spell it out in the prompt.
  */
-const NAMED_FILE = /([^\s"'“”「」『』《》:：,，。;；()（）]+\.(?:pptx?|docx?|xlsx?|png|jpe?g|gif|txt|md|pdf|html?))(?=$|[\s"'“”」』》,，。;；)）])/i;
+const NAMED_FILE = /([^\s"'“”「」『』《》:：,，。;；()（）]+\.(?:pptx?|docx?|xlsx?|png|jpe?g|gif|txt|md|pdf|html?))(?=$|[\s"'“”」』》.,，。;；!！?？)）])/i;
 const NAMING_PHRASE =
   /(?:文件名(?:叫|为|是|：|:)?|命名为|取名(?:为|叫)?|名字叫|叫做|保存为|存为|另存为|存成|file ?name(?: is| should be|:)?|named?(?: it| the file)?(?: as)?|call(?: it| the file)|save(?: it)? as)\s*[:：]?\s*["'“「『《]?([^"'”」』》\n,，。;；]{1,80})["'”」』》]?/i;
 
@@ -208,10 +217,13 @@ export function outputFileStem(requested: string | null): string | null {
 
 /** Ignore explicitly excluded output formats while inferring a new file's type. */
 function positiveFormatIntent(prompt: string): string {
-  return prompt.replace(/(?:不要|不需要|禁止|无需|别|do not|don't|without|no)\s*(?:生成|创建|新建|制作|输出|generate|create|make)?\s*(?:(?:a|an|any)\s+)?(?:pptx?|slides?|presentations?|decks?|演示文稿|幻灯片|docx?|word|xlsx?|excel|pdf|txt)(?=$|[\s,，。.;；!！?？])/gi, "");
+  return prompt.replace(/(?:do not|don't|不要|禁止|别)\s*(?:create|generate|make|创建|生成|新建)\b[^\n;；。.!?]*(?=[\n;；。.!?]|$)/gi, "").replace(/(?:不要|不需要|禁止|无需|别|do not|don't|without|no)\s*(?:生成|创建|新建|制作|输出|generate|create|make)?\s*(?:(?:a|an|any)\s+)?(?:pptx?|powerpoint|slides?|presentations?|decks?|演示文稿|幻灯片|docx?|word|xlsx?|excel|pdf|txt)(?=$|[\s,，。.;；!！?？])/gi, "");
 }
 
 /** A new deliverable must not silently mutate the file left open from the last run. */
 export function requestsNewFile(prompt: string): boolean {
+  const positive = positiveFormatIntent(prompt);
+  if (/\b(?:new|separate|fresh)\s+(?:[\w-]+\s+){0,3}(?:powerpoint|presentation|word|document|deck|file|slides?|workbook|spreadsheet)\b/i.test(positive)
+    || /\b(?:new|separate)\s+["“']?[^\s"”']+\.(?:pptx|docx|xlsx)\b/i.test(positive)) return true;
   return /(?:新建|创建|生成|另做|另外做|再做|另存为|保存为|输出为)[^。\n]{0,80}(?:文档|文件|报告|演示|幻灯片|表格|工作簿|docx?|pptx?|xlsx?|txt|markdown|pdf|html|rtf)|(?:create|generate|make|write)\s+(?:(?:me|a|an|another|new|separate|fresh)\s+)+(?:[^.\n]{0,70}\s)?(?:document|file|report|deck|slides?|presentation|spreadsheet|workbook|docx?|pptx?|xlsx?|txt|markdown|pdf|html|rtf)\b|\b(?:new|another|separate)\s+(?:docx?|pptx?|xlsx?|document|file|deck|spreadsheet)\b/i.test(positiveFormatIntent(prompt));
 }

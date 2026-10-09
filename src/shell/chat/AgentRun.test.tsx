@@ -156,6 +156,20 @@ describe("the retry family", () => {
 });
 
 describe("Review", () => {
+  it("loads concrete content differences and sends Reject to the agent", async () => {
+    const run = await stage("review");
+    const reject = vi.fn(async () => {});
+    run.port.agent.rejectSuggestion = reject;
+    run.port.agent.suggestionChanges = vi.fn(async () => [{ part: "word/document.xml", before: "Beta eighteen.", after: "Gamma eighteen." }]);
+    fireEvent.click(run.action("review-task")!);
+    const dialog = document.querySelector("dialog#dx-modal")!;
+    await waitFor(() => expect(dialog.textContent).toContain("Beta eighteen."));
+    expect(dialog.textContent).toContain("Gamma eighteen.");
+    fireEvent.click(dialog.querySelector("[data-act=reject-change]")!);
+    await waitFor(() => expect(reject).toHaveBeenCalledOnce());
+    expect(document.querySelector("dialog#dx-modal[open]")).toBeNull();
+  });
+
   it("is the primary action while changes are waiting", async () => {
     const run = await stage("review");
     expect(run.actions()).toEqual(["review-task"]);

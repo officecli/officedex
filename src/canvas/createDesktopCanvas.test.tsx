@@ -279,7 +279,7 @@ describe("desktop canvas adapter", () => {
     act(() => adapter.show(file("deck-1")));
     act(() => (lastProps!.onController as (c: unknown) => void)({ save }));
     act(() => adapter.show(file("budget", "sheet")));
-    await adapter.save();
+    await expect(adapter.save()).rejects.toThrow("still loading");
 
     expect(save).not.toHaveBeenCalled();
   });
@@ -295,11 +295,36 @@ describe("desktop canvas adapter", () => {
     const before = lastDocProps;
     act(() => (lastDocProps!.onEditor as (e: unknown) => void)({ save }));
     act(() => adapter.reopen!(file("memo", "doc")));
-    await adapter.save();
+    await expect(adapter.save()).rejects.toThrow("still loading");
 
     expect(save).not.toHaveBeenCalled();
     expect(lastDocProps).not.toBe(before);
     expect(lastDocProps!.file).toMatchObject({ id: "memo" });
+  });
+
+  it("retries the requested source after its editor is ready, never saving the recovery copy", async () => {
+    const { adapter } = mounted();
+    const copySave = vi.fn(async () => undefined); const sourceSave = vi.fn(async () => undefined);
+    act(() => adapter.show(file("recovered", "doc")));
+    act(() => (lastDocProps!.onEditor as (e: unknown) => void)({save: copySave}));
+    const retry = adapter.save("source");
+    act(() => adapter.show(file("source", "doc")));
+    expect(copySave).not.toHaveBeenCalled(); expect(sourceSave).not.toHaveBeenCalled();
+    act(() => (lastDocProps!.onEditor as (e: unknown) => void)({save: sourceSave}));
+    await retry;
+    expect(sourceSave).toHaveBeenCalledOnce(); expect(copySave).not.toHaveBeenCalled();
+  });
+
+  it("rejects a pending retry if its source cannot open or the user changes files", async () => {
+    const { adapter } = mounted();
+    act(() => adapter.show(file("source", "doc")));
+    const retry = adapter.save("source");
+    const rejected = expect(retry).rejects.toThrow("invalid package");
+    act(() => (lastDocProps!.onFileFailure as (id: string, f: unknown) => void)("source", {kind:"open",detail:"invalid package"}));
+    await rejected;
+    const second = adapter.save("source"); const cancelled = expect(second).rejects.toThrow();
+    act(() => adapter.show(file("another", "doc")));
+    await cancelled;
   });
 
   it("fans file failures out to subscribers", () => {

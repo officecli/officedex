@@ -271,6 +271,8 @@ export interface AgentOutlinePage {
 export type AgentOutcome = "completed" | "failed" | "stopped" | "partial" | "interrupted";
 
 export interface AgentTask {
+  /** Stable user request identity; id is the current execution attempt. */
+  logicalTaskId?: string;
   id: string;
   title: string;
   /** The source file remains visible in task details even when editing fails. */
@@ -311,6 +313,8 @@ export interface AgentTask {
   outcome?: AgentOutcome;
   /** Why the run did not finish, in the runtime's words. */
   error?: string;
+  /** Raw diagnostic text, shown only in task Details. */
+  errorDetail?: string;
   /**
    * What kind of thing went wrong, when the runtime said. `model` failures are
    * the ones a trip to Settings → Models can fix.
@@ -616,6 +620,8 @@ export interface AgentPort {
    * other run verbs act on whatever is live, and nothing is.
    */
   resumeFailed(taskId: string): Promise<void>;
+  rejectSuggestion?(id: string): Promise<void>;
+  suggestionChanges?(id: string): Promise<Array<{ part: string; before: string; after: string }>>;
   applySuggestion(id: string): Promise<void>;
   undoSuggestion(id: string): Promise<void>;
   /**

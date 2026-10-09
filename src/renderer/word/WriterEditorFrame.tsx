@@ -17,6 +17,14 @@ import { errorMessage } from "../utils/values";
 import { EMBED_HANDSHAKE_TIMEOUT_MS } from "../constants/timing";
 import { isSaveConflict, useIdleAutosave } from "../workbench/idleAutosave";
 
+// Failed exports outlive an editor mount. Recovery copies have their own path,
+// so reopening the source must keep its unsaved bytes and original conflict baseline.
+const pendingExports = new Map<string, { data: Uint8Array; sha256?: string; error: string; conflict: boolean }>();
+
+export function discardPendingWriterExport(sourcePath: string): void {
+  pendingExports.delete(sourcePath);
+}
+
 const DEFAULT_WRITER_URL = "/writer/index.html";
 const WRITER_MANIFEST_URL = "/writer/officedex-component.json";
 
@@ -35,6 +43,7 @@ const UNKNOWN_SELECTION: WriterSelectionSummary = { empty: true, collapsed: true
 export interface WriterEditorFrameProps {
   onAgentReady?: (editor: WriterAgentEditor | null) => void;
   previewToken: string;
+  sourcePath?: string;
   fileName: string;
   /**
    * Which toolbar Writer lays out, `full` (its two-row ribbon) unless said
@@ -70,6 +79,7 @@ export interface WriterAgentEditor {
   capture(scope: "selection" | "document"): Promise<{ id: string; text: string; scope: "selection" | "document" }>;
   apply(id: string, edits: { query: string; replacement: string }[]): Promise<{ replaced: number }>;
   save(): Promise<unknown>;
+  saveCopy?(): Promise<{ filePath: string; sha256: string }>;
   /**
    * The selection with its words, without tracking anything: unlike
    * `capture("selection")` this leaves the scope a pending `apply` holds
@@ -126,6 +136,7 @@ export async function hasWriterComponent(fetcher: typeof fetch = fetch): Promise
  */
 export function WriterEditorFrame({
   previewToken,
+  sourcePath,
   fileName,
   toolbarProfile = "full",
   readOnly = false,
@@ -140,6 +151,7 @@ export function WriterEditorFrame({
   autosaveIdleMs,
 }: WriterEditorFrameProps) {
   const api = useDesktopApi();
+  const draftKey = sourcePath ?? previewToken;
   const locale = useCanvasLocale() ?? getCurrentLocale();
   const frameRef = useRef<HTMLIFrameElement>(null);
   const fingerprintRef = useRef<string | undefined>(undefined);
@@ -311,7 +323,8 @@ export function WriterEditorFrame({
           try {
             const artifact = await api.readArtifactFile(previewToken);
             if (disposedRef.current) return;
-            fingerprintRef.current = artifact.sha256;
+            const pending = pendingExports.get(draftKey);
+            fingerprintRef.current = pending ? pending.sha256 : artifact.sha256;
             unregisterClientToolsRef.current?.();
             unregisterClientToolsRef.current = registerActiveEditorClientTools("docx-editor", {
               "docx.editor.save": async (arguments_) => {
@@ -337,7 +350,7 @@ export function WriterEditorFrame({
                 return { replaced: result.replaced, scope };
               },
             });
-            const content = toTransferableBuffer(artifact.data);
+            const content = toTransferableBuffer(pending?.data ?? artifact.data);
             post(
               {
                 type: "writer:load",
@@ -357,8 +370,8 @@ export function WriterEditorFrame({
         case "writer:document-loaded":
           post({ type: "writer:toolbar-profile", profile: toolbarProfileRef.current });
           loadedRef.current = true;
-          dirtyRef.current = false;
-          conflictRef.current = false;
+          dirtyRef.current = pendingExports.has(draftKey);
+          conflictRef.current = pendingExports.get(draftKey)?.conflict ?? false;
           onFlushReadyRef.current?.(readOnly ? null : autosave.flush);
           callbacksRef.current.onAgentReady?.({
             capture: (scope) => {
@@ -375,10 +388,12 @@ export function WriterEditorFrame({
               return result;
             },
             save: () => requestSave(false),
+            saveCopy: () => requestSave(true),
             readSelection: requestSelection,
           });
-          callbacksRef.current.onDirtyChange?.(false);
           callbacksRef.current.onReady?.();
+          callbacksRef.current.onDirtyChange?.(pendingExports.has(draftKey));
+          if (pendingExports.has(draftKey)) callbacksRef.current.onSaveFailed?.(pendingExports.get(draftKey)!.error);
           return;
         case "writer:embed-error":
           markUnavailable(event.error);
@@ -407,12 +422,15 @@ export function WriterEditorFrame({
               ...(recoveryOnly ? { recoveryOnly: true } : {}),
             });
             if (recoveryOnly) {
+              pendingExports.set(draftKey, { data: new Uint8Array(event.content).slice(), sha256: fingerprintRef.current,
+                error: "The source still has an external conflict. Your edits are retained in recovery.", conflict: true });
               const conflict = new Error("Edits retained in Settings > Files > View drafts. The source still has an external conflict.");
               respond(event.requestId, undefined, conflict);
               requestsRef.current.reject(event.requestId, conflict);
               return;
             }
             if (!saveAsCopy) {
+              pendingExports.delete(draftKey);
               fingerprintRef.current = result.sha256;
               dirtyRef.current = false;
               conflictRef.current = false;
@@ -424,6 +442,10 @@ export function WriterEditorFrame({
             requestsRef.current.resolve(event.requestId, result);
           } catch (error) {
             if (isSaveConflict(error)) conflictRef.current = true;
+            if (!saveAsCopy) pendingExports.set(draftKey, {
+              data: new Uint8Array(event.content).slice(), sha256: fingerprintRef.current,
+              error: errorMessage(error), conflict: conflictRef.current,
+            });
             // Told before the request is settled, so a host-initiated save sees
             // the file marked failed by the time its own rejection lands.
             if (!saveAsCopy) callbacksRef.current.onSaveFailed?.(errorMessage(error));
@@ -458,7 +480,7 @@ export function WriterEditorFrame({
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [api, autosave.cancel, autosave.flush, autosave.schedule, fileName, markUnavailable, post, previewToken, readOnly, requestReplaceText, requestSave, requestSelection]);
+  }, [api, autosave.cancel, autosave.flush, autosave.schedule, fileName, markUnavailable, post, previewToken, draftKey, readOnly, requestReplaceText, requestSave, requestSelection]);
 
   /**
    * The embed has to say hello, or say why not.

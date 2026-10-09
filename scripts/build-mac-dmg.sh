@@ -10,6 +10,9 @@
 #   SKIP_NOTARIZE=1 bash scripts/build-mac-dmg.sh     # sign only (no Apple round-trip)
 #   SKIP_SIGN=1 bash scripts/build-mac-dmg.sh         # ad-hoc only: no Developer ID, no notarization
 #   bash scripts/build-mac-dmg.sh --skip-build        # repackage the existing .app
+#   EXPECTED_NOTARIZED_APP_SHA256=<verified hash> bash scripts/build-mac-dmg.sh --skip-build --reuse-notarized-app
+#     Resume after Apple accepted the unchanged app and its ticket was stapled.
+#     Verify the original build channel/version before supplying its binary hash.
 #
 # TARGET_ARCH is arm64 or x64 and defaults to the host. Building the non-host
 # arch cross-compiles: Go/cgo and Rust both handle darwin<->darwin fine, but the
@@ -71,6 +74,7 @@ APP_PATH="${OFFICEDEX_DIR}/build/bin/OfficeDex.app"
 OUT_DIR="${OFFICEDEX_DIR}/dist-artifacts"
 IDENTITY="${CODESIGN_IDENTITY:-Developer ID Application: ChuXin Tec Co., Ltd. (Z35T9799TW)}"
 SKIP_BUILD=0
+REUSE_NOTARIZED_APP=0
 SKIP_SIGN="${SKIP_SIGN:-0}"
 # An unsigned build cannot be notarized, so SKIP_SIGN implies SKIP_NOTARIZE
 # rather than failing later on missing Apple credentials.
@@ -82,11 +86,17 @@ fi
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --skip-build) SKIP_BUILD=1 ;;
+    --reuse-notarized-app) REUSE_NOTARIZED_APP=1 ;;
     --arch) TARGET_ARCH="$2"; shift ;;
     *) echo "[${LOG}] unknown option: $1" >&2 ; exit 2 ;;
   esac
   shift
 done
+
+if [[ "${REUSE_NOTARIZED_APP}" == "1" && ( "${SKIP_BUILD}" != "1" || "${SKIP_SIGN}" == "1" || "${SKIP_NOTARIZE:-0}" == "1" ) ]]; then
+  echo "--reuse-notarized-app requires --skip-build and full signing/notarization" >&2
+  exit 2
+fi
 
 # --arch is parsed after the first resolve_arch, so redo it if it was used.
 resolve_arch
@@ -492,7 +502,17 @@ for bin in "${APP_PATH}/Contents/Resources/presentation/tools/bin/mop-convert" \
   }
 done
 
-if [[ "${SKIP_SIGN}" == "1" ]]; then
+if [[ "${REUSE_NOTARIZED_APP}" == "1" ]]; then
+  # Resume packaging after a status-query failure without resigning or
+  # uploading an app whose notarization has already been accepted.
+  assert_production_binary "${APP_PATH}"
+  [[ "$(plutil -extract CFBundleShortVersionString raw "${APP_PATH}/Contents/Info.plist")" == "${APP_VERSION}" ]] || { echo "Notarized app version mismatch" >&2; exit 1; }
+  [[ -n "${EXPECTED_NOTARIZED_APP_SHA256:-}" && "$(shasum -a 256 "${APP_PATH}/Contents/MacOS/officedex" | awk '{print $1}')" == "${EXPECTED_NOTARIZED_APP_SHA256}" ]] || { echo "Notarized app does not match the expected binary SHA256" >&2; exit 1; }
+  codesign --verify --deep --strict "${APP_PATH}"
+  xcrun stapler validate "${APP_PATH}"
+  spctl --assess --type execute --verbose "${APP_PATH}"
+  echo "[${LOG}] reusing verified notarized app"
+elif [[ "${SKIP_SIGN}" == "1" ]]; then
   echo "[${LOG}] skipping Developer ID signing + notarization of .app"
 else
   echo "[${LOG}] signing + notarizing .app"

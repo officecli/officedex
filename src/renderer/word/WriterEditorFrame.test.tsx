@@ -9,7 +9,9 @@ vi.mock("../bridge", () => ({
   },
 }));
 
-import { WriterEditorFrame, withWriterToolbarProfile, type WriterAgentEditor } from "./WriterEditorFrame";
+import { WriterEditorFrame, discardPendingWriterExport, withWriterToolbarProfile, type WriterAgentEditor } from "./WriterEditorFrame";
+import { DesktopApiProvider } from "../services/desktopApi";
+import type { DesktopAPI } from "../../shared/types";
 import { executeActiveEditorClientTool } from "../activeEditorClientTools";
 
 function mockManifest() {
@@ -261,8 +263,6 @@ describe("WriterEditorFrame agent tools", () => {
   });
 });
 
-import { DesktopApiProvider } from "../services/desktopApi";
-import type { DesktopAPI } from "../../shared/types";
 
 /**
  * A save Writer runs on its own — ⌘S inside the frame, the idle autosave —
@@ -380,4 +380,71 @@ describe("WriterEditorFrame toolbar profile", () => {
     expect(withWriterToolbarProfile("/writer/index.html?lang=zh-CN", "full")).toBe("/writer/index.html?lang=zh-CN");
     expect(withWriterToolbarProfile("/writer/index.html", undefined)).toBe("/writer/index.html");
   });
+});
+
+
+it.each([false, true])("retains failed source bytes across recovery navigation; discard=%s", async (discard) => {
+  mockManifest();
+  const saved = vi.fn().mockRejectedValueOnce(new Error("permission denied")).mockResolvedValue({filePath: "/qa/source.docx", sha256: "saved"});
+  const api = {readArtifactFile: vi.fn(async () => ({data: new Uint8Array([1,2]), sha256: "original"})), saveDocx: saved} as unknown as DesktopAPI;
+  const failed = vi.fn(); const dirty = vi.fn();
+  const mountSource = async (token: string, sourcePath = "/qa/source.docx") => {
+    const view = render(<DesktopApiProvider api={api}><WriterEditorFrame previewToken={token} sourcePath={sourcePath} fileName="source.docx" onUnavailable={vi.fn()} onSaveFailed={failed} onDirtyChange={dirty} /></DesktopApiProvider>);
+    await waitFor(() => expect(view.container.querySelector("iframe")).not.toBeNull());
+    const channel = captureFrame(view.container);
+    channel.fromEmbed({type: "writer:embed-ready", protocolVersion: WRITER_EMBED_PROTOCOL_VERSION});
+    await waitFor(() => expect(channel.posted.some(x => x.type === "writer:load")).toBe(true));
+    channel.fromEmbed({type: "writer:document-loaded", fileName: "source.docx"});
+    return {...view, ...channel};
+  };
+  const first = await mountSource("first");
+  first.fromEmbed({type: "writer:save", requestId: "save-failed", content: new Uint8Array([3,4]).buffer});
+  await waitFor(() => expect(failed).toHaveBeenCalledWith("permission denied"));
+  first.unmount();
+  const copy = await mountSource("copy", "/qa/recovered.docx");
+  expect(new Uint8Array((copy.posted.find(x => x.type === "writer:load") as any).content)).toEqual(new Uint8Array([1,2]));
+  copy.unmount();
+  if (discard) discardPendingWriterExport("/qa/source.docx");
+  const again = await mountSource("fresh-source-token");
+  if (discard) {
+    expect(new Uint8Array((again.posted.find(x => x.type === "writer:load") as any).content)).toEqual(new Uint8Array([1,2]));
+    expect(dirty).toHaveBeenLastCalledWith(false);
+    return;
+  }
+  expect(new Uint8Array((again.posted.find(x => x.type === "writer:load") as any).content)).toEqual(new Uint8Array([3,4]));
+  expect(dirty).toHaveBeenLastCalledWith(true);
+  again.fromEmbed({type: "writer:save", requestId: "retry", content: new Uint8Array([3,4]).buffer});
+  await waitFor(() => expect(saved).toHaveBeenCalledTimes(2));
+  expect(saved.mock.calls[1][2]).toMatchObject({previewToken: "fresh-source-token", expectedSHA256: "original"});
+  await waitFor(() => expect(dirty).toHaveBeenLastCalledWith(false));
+});
+
+it("exports a copy after a source conflict without clearing the source draft", async () => {
+  mockManifest();
+  let editor: WriterAgentEditor | null = null;
+  const saveDocx = vi.fn().mockRejectedValueOnce(new Error("source file changed outside OfficeDex"))
+    .mockResolvedValue({ filePath: "/qa/conflict-copy.docx", sha256: "copy" });
+  const api = { readArtifactFile: async () => ({ data: new Uint8Array([1, 2]), sha256: "original" }), saveDocx } as unknown as DesktopAPI;
+  const dirty = vi.fn(); const saved = vi.fn(); const failed = vi.fn();
+  const view = render(<DesktopApiProvider api={api}><WriterEditorFrame previewToken="conflict-copy-token" sourcePath="/qa/conflict-source.docx" fileName="source.docx"
+    onUnavailable={vi.fn()} onDirtyChange={dirty} onSaved={saved} onSaveFailed={failed} onAgentReady={value => { editor = value; }} /></DesktopApiProvider>);
+  await waitFor(() => expect(view.container.querySelector("iframe")).not.toBeNull());
+  const channel = captureFrame(view.container);
+  channel.fromEmbed({ type: "writer:embed-ready", protocolVersion: WRITER_EMBED_PROTOCOL_VERSION });
+  await waitFor(() => expect(channel.posted.some(m => m.type === "writer:load")).toBe(true));
+  channel.fromEmbed({ type: "writer:document-loaded", fileName: "source.docx" });
+  channel.fromEmbed({ type: "writer:save", requestId: "first-fails", content: new Uint8Array([3, 4]).buffer });
+  await waitFor(() => expect(failed).toHaveBeenCalled());
+  dirty.mockClear();
+  const copying = editor!.saveCopy!();
+  const request = channel.posted.at(-1)!;
+  expect(request.type).toBe("writer:save-request");
+  expect((request as { saveAsCopy?: boolean }).saveAsCopy).toBe(true);
+  channel.fromEmbed({ type: "writer:save", requestId: (request as { requestId: string }).requestId, saveAsCopy: true, content: new Uint8Array([3, 4]).buffer });
+  await expect(copying).resolves.toEqual({ filePath: "/qa/conflict-copy.docx", sha256: "copy" });
+  expect(saveDocx.mock.calls[1][2]).toMatchObject({ saveAsCopy: true, expectedSHA256: "original" });
+  expect(saveDocx.mock.calls[1][2].recoveryOnly).toBeUndefined();
+  expect(dirty).not.toHaveBeenCalledWith(false);
+  expect(saved).toHaveBeenCalledWith({ filePath: "/qa/conflict-copy.docx", sha256: "copy", saveAsCopy: true });
+  discardPendingWriterExport("/qa/conflict-source.docx");
 });

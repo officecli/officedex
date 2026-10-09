@@ -7,18 +7,7 @@ import { createDesktopCanvas } from "./createDesktopCanvas";
 
 afterEach(cleanup);
 
-/**
- * A document being written takes the canvas, and gives it back when the file
- * exists.
- *
- * The rule is the deck's rule, applied to the type that did not have it: a run
- * that has produced no file has no file to be active, so routing on the active
- * tab shows *the last document the user opened* for the length of the run. That
- * is not a blank canvas — it is a different document, sitting there looking
- * finished, while a new one is being written somewhere the user cannot see.
- *
- * The leaves are stubbed: what is under test is which of them the canvas picks.
- */
+/** Live generation is selected explicitly; background runs preserve the open file. */
 let docStage: Record<string, unknown> | null = null;
 let docCanvas: Record<string, unknown> | null = null;
 let deckStage: Record<string, unknown> | null = null;
@@ -110,7 +99,7 @@ const finished = (taskId: string): BridgeEvent => ({
   payload: {},
 });
 
-describe("a document being written takes the canvas", () => {
+describe("document stage routing", () => {
   afterEach(() => {
     docStage = null;
     docCanvas = null;
@@ -127,9 +116,7 @@ describe("a document being written takes the canvas", () => {
     expect((docStage!.task as DesktopTask).id).toBe("task-doc");
   });
 
-  // The case that made this worth building: a document open in a tab is not the
-  // document being written, and leaving it up says it is.
-  it("takes the canvas from an open document", () => {
+  it("preserves the explicitly opened document during background generation", () => {
     const { adapter, emit } = harness();
     act(() => adapter.show(doc("last-weeks-report")));
     expect(docCanvas).not.toBeNull();
@@ -137,18 +124,20 @@ describe("a document being written takes the canvas", () => {
     docCanvas = null;
     emit(started("task-doc"));
 
-    expect(docStage).not.toBeNull();
-    expect(docCanvas).toBeNull();
+    expect(docStage).toBeNull();
+    expect(docCanvas).not.toBeNull();
   });
 
   it("gives the canvas back to the editor when the run ends", () => {
     const { adapter, emit } = harness();
     act(() => adapter.show(doc("file-one")));
+    act(() => adapter.showFileless?.());
     emit(started("task-doc"));
     expect(docStage).not.toBeNull();
 
     docStage = null;
     emit(finished("task-doc"));
+    act(() => adapter.show(doc("file-one")));
 
     expect(docStage).toBeNull();
     expect(docCanvas).not.toBeNull();

@@ -175,14 +175,5 @@ export function useWorkspaceMenus() {
     [t, setChatMeta, leaveChatIfOpen, dispatch, state.chat, defaultFolderId, projects, port, reload],
   );
 
-  /** A blank conversation that belongs to no project, from New → AI Chat. */
-  const startUnfiledChat = useCallback(
-    async (defaultFolderId: string) => {
-      await port.agent.startConversation(defaultFolderId);
-      dispatch({ type: "open-chat", chat: { folderId: defaultFolderId, conversationId: null } });
-    },
-    [port, dispatch],
-  );
-
-  return { newProject, newChat, projectMenu, chatMenu, startUnfiledChat, chats };
+  return { newProject, newChat, projectMenu, chatMenu, chats };
 }

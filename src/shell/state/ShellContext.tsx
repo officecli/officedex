@@ -90,6 +90,7 @@ interface ShellContextValue {
   chats: Chat[];
   /** The conversation in the second column, when it has been spoken in. */
   currentChat: Chat | null;
+  chatMeta: Record<string, ChatMeta>;
   /** The file the canvas is showing, or null when the page is not a document. */
   activeFile: FileMeta | null;
   /** Where unfiled conversations and Local files live. */
@@ -383,6 +384,7 @@ export function ShellProvider({
       projects,
       chats,
       currentChat,
+      chatMeta: meta.chats,
       activeFile,
       defaultFolderId,
       scopeFolderId,
@@ -395,6 +397,7 @@ export function ShellProvider({
     }),
     [
       state,
+      meta.chats,
       folders,
       files,
       projects,

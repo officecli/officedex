@@ -188,6 +188,7 @@ export function DocxCanvas({
         // else. The old UI keys the frame on the token for the same reason.
         key={session.token}
         previewToken={session.token}
+        sourcePath={session.filePath}
         fileName={session.fileName}
         toolbarProfile={toolbarProfile}
         onAgentReady={(editor) => {
@@ -227,9 +228,8 @@ export function DocxCanvas({
           );
         }}
         onDirtyChange={onDirtyChange}
-        // The document is on screen, so whatever was on record — the last
-        // open that failed, the save before that — is no longer true.
-        onReady={() => onFileFailure(file.id, null)}
+        // Loading clears an open failure; only a successful write clears a save failure.
+        onReady={() => { if (file.failure?.kind !== "save") onFileFailure(file.id, null); }}
         onSaved={({ saveAsCopy }) => {
           if (!saveAsCopy) onFileFailure(file.id, null);
         }}

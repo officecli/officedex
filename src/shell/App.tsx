@@ -19,7 +19,6 @@ import { NewPopover } from "./chrome/NewPopover";
 import { Sidebar } from "./chrome/Sidebar";
 import { Splitter } from "./chrome/Splitter";
 import { UsageNotice } from "./chrome/UsageNotice";
-import { useWorkspaceMenus } from "./chrome/useWorkspaceMenus";
 import { useReduceMotion } from "./composer/useComposerSettings";
 import { Dex } from "./dex/Dex";
 import { dexFaceSettings } from "./dex/faceRenderer";
@@ -84,12 +83,11 @@ export function App() {
 
 function Workspace() {
   const t = useT();
-  const { state, dispatch, activeFile, loaded, defaultFolderId } = useShell();
+  const { state, dispatch, activeFile, loaded } = useShell();
   const canvas = useCanvas();
   const agent = useAgent();
   const reduceMotion = useReduceMotion();
   const account = useAccount();
-  const menus = useWorkspaceMenus();
   const createOfType = useCreateOfType();
   const surface = useCanvasSurface();
   const { selection } = useCanvasSelection();
@@ -286,6 +284,7 @@ function Workspace() {
               // remembers which (`tabContexts`), so the choice follows the tab.
               toolbarProfile={activeFile && tabIsChat(state, activeFile.id) ? "compact" : "full"}
               fileless={state.demo}
+              stage={state.stage}
               demoStartedAt={state.demoStartedAt}
               onDemoSuperseded={() => dispatch({ type: "leave-demo" })}
             />
@@ -329,10 +328,9 @@ function Workspace() {
           onClose={closeNew}
           onNewChat={() => {
             setNewAnchor(null);
-            void menus.startUnfiledChat(defaultFolderId).then(() =>
-              requestAnimationFrame(() =>
-                document.querySelector<HTMLElement>("#dx-conversation [data-draft]")?.focus(),
-              ),
+            dispatch({ type: "go", page: "home" });
+            requestAnimationFrame(() =>
+              document.querySelector<HTMLElement>(".dx-home-composer [data-draft]")?.focus(),
             );
           }}
           onCreate={(type) => {

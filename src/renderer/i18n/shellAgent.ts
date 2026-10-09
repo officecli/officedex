@@ -5,6 +5,7 @@
  * Merged in `index.tsx`.
  */
 export const shellAgentEn: Record<string, string> = {
+  "shell.service.chooseFormat": "Which format should I use: Word, Excel, or PowerPoint?",
   "shell.edit.step.read": "Read the document",
   "shell.edit.step.draft": "Draft the change",
   "shell.edit.step.apply": "Apply to the document",
@@ -41,6 +42,7 @@ export const shellAgentEn: Record<string, string> = {
   "shell.edit.docMovedOn": "This change can no longer be undone on its own — the document has moved on since it was applied.",
   "shell.edit.notConfident": "The agent was not confident enough about this change to make it. Try naming the slide explicitly.",
   "shell.edit.confirm": "Make this change?",
+  "shell.edit.documentCancelled": "Cancelled. The document was not changed.",
   "shell.edit.deckCancelled": "Cancelled. The deck was not changed.",
   "shell.edit.deckUpdated": "The deck was updated.",
   "shell.edit.planTimeout": "The agent took too long to plan this change.",
@@ -80,9 +82,12 @@ export const shellAgentEn: Record<string, string> = {
   "shell.misc.notificationsNeedRuntime": "Desktop notifications require a newer OfficeDex runtime.",
   "shell.misc.personalAccessToken": "Personal Access Token",
   "shell.misc.unknownError": "unknown error",
+  "shell.agent.technicalFailure": "The task could not finish. Retry, or open Details for diagnostic information.",
+  "shell.canvas.stillLoading": "The editor is still loading. Retry saving when it is ready.",
 };
 
 export const shellAgentZh: Record<string, string> = {
+  "shell.service.chooseFormat": "请选择文件格式：Word、Excel 或 PowerPoint。",
   "shell.edit.step.read": "读取文档",
   "shell.edit.step.draft": "拟定改动",
   "shell.edit.step.apply": "应用到文档",
@@ -119,6 +124,7 @@ export const shellAgentZh: Record<string, string> = {
   "shell.edit.docMovedOn": "这次改动已无法单独撤销——应用之后文档又有了新的改动。",
   "shell.edit.notConfident": "Agent 对这次改动把握不足，没有执行。试试明确指出是哪张幻灯片。",
   "shell.edit.confirm": "要做这项改动吗？",
+  "shell.edit.documentCancelled": "已取消，文档没有改动。",
   "shell.edit.deckCancelled": "已取消，演示文稿没有改动。",
   "shell.edit.deckUpdated": "演示文稿已更新。",
   "shell.edit.planTimeout": "Agent 规划这次改动用时过长。",
@@ -158,4 +164,6 @@ export const shellAgentZh: Record<string, string> = {
   "shell.misc.notificationsNeedRuntime": "桌面通知需要更新版本的 OfficeDex 运行时。",
   "shell.misc.personalAccessToken": "个人访问令牌",
   "shell.misc.unknownError": "未知错误",
+  "shell.agent.technicalFailure": "任务未能完成。请重试，或打开详情查看诊断信息。",
+  "shell.canvas.stillLoading": "编辑器仍在加载，请加载完成后重试保存。",
 };

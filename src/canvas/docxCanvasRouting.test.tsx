@@ -1,7 +1,7 @@
 import { act, cleanup } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { DesktopAPI } from "../shared/types";
+import type { BridgeEvent, DesktopAPI } from "../shared/types";
 import type { FileMeta } from "../shared/uiPort";
 import { createDesktopCanvas } from "./createDesktopCanvas";
 
@@ -19,6 +19,7 @@ afterEach(cleanup);
  * frame wants a preview token, a staged Writer build and an iframe, and a test
  * that supplied all three would be testing the embed.
  */
+let pushEvent: (event: BridgeEvent) => void;
 let lastProps: Record<string, unknown> | null = null;
 
 vi.mock("./DocxCanvas", () => ({
@@ -52,7 +53,7 @@ function mounted() {
   // The adapter mounts a task store so a drawing run can take the canvas. These
   // two are all of it these tests need: no events, no history, nothing live.
   const api = {
-    onBridgeEvent: () => () => {},
+    onBridgeEvent: (listener: (event: BridgeEvent) => void) => { pushEvent = listener; return () => {}; },
     getTaskHistory: async () => [],
   } as unknown as DesktopAPI;
   const adapter = createDesktopCanvas({ api, onUnavailable: () => {} });
@@ -98,7 +99,7 @@ describe("desktop canvas · documents", () => {
     act(() => adapter.show(file("notes", "doc")));
     act(() => (lastProps!.onEditor as (editor: unknown) => void)({ save }));
     act(() => (lastProps!.onEditor as (editor: unknown) => void)(null));
-    await adapter.save();
+    await expect(adapter.save()).rejects.toThrow("still loading");
 
     expect(save).not.toHaveBeenCalled();
   });
@@ -112,7 +113,7 @@ describe("desktop canvas · documents", () => {
     act(() => adapter.show(file("notes", "doc")));
     act(() => (lastProps!.onEditor as (editor: unknown) => void)({ save }));
     act(() => adapter.show(file("deck", "slides", "deck.pptx")));
-    await adapter.save();
+    await expect(adapter.save()).rejects.toThrow("still loading");
 
     expect(save).not.toHaveBeenCalled();
   });
@@ -156,4 +157,19 @@ describe("desktop canvas · documents", () => {
 
     expect(save).toHaveBeenCalledOnce();
   });
+});
+
+it("keeps the explicitly opened DOCX and its save handle during background PPT generation", async () => {
+  const adapter = mounted();
+  act(() => adapter.show(file("local", "doc")));
+  const save = vi.fn(); const saveCopy = vi.fn(async () => ({ filePath: "/copy.docx" }));
+  act(() => (lastProps!.onEditor as (editor: unknown) => void)({ save, saveCopy }));
+  act(() => pushEvent({ event_id: "background", task_id: "deck-run", type: "task.started", ts: new Date().toISOString(), payload: { document_type: "pptx" } }));
+  expect((lastProps!.file as FileMeta).id).toBe("local");
+  await adapter.save("local");
+  expect(save).toHaveBeenCalledOnce();
+  expect(await adapter.saveCopy!("local")).toEqual({ filePath: "/copy.docx" });
+  expect(saveCopy).toHaveBeenCalledOnce();
+  await expect(adapter.saveCopy!("other")).rejects.toThrow();
+  act(() => adapter.unmount());
 });

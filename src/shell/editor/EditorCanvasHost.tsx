@@ -25,6 +25,8 @@ export interface EditorCanvasHostProps {
    * same shape and is what reaches here today.
    */
   fileless?: boolean;
+  /** The user explicitly selected the live generation canvas. */
+  stage?: boolean;
   /**
    * When the recording was last asked for. It both restarts the replay and
    * decides whether the recording still outranks a run; only the demo uses it.
@@ -59,6 +61,7 @@ export function EditorCanvasHost({
   visible,
   adapter,
   fileless,
+  stage,
   demoStartedAt,
   onDemoSuperseded,
   toolbarProfile = "full",
@@ -165,9 +168,10 @@ export function EditorCanvasHost({
     if (visible && fileless && active.showFileless) {
       active.showFileless({ demo: true, demoStartedAt });
     }
+    else if (visible && stage && !file && active.showFileless) active.showFileless({ demo: false });
     else if (visible && file) active.show(file, { toolbarProfile });
     else active.hide();
-  }, [demoStartedAt, file, fileless, toolbarProfile, visible]);
+  }, [adapter, demoStartedAt, file, fileless, stage, toolbarProfile, visible]);
 
   return (
     <div

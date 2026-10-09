@@ -12,7 +12,7 @@ import { constants as fsConstants } from "node:fs";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -346,6 +346,16 @@ export async function stagePresentationRuntime({
     }).trim().length > 0;
   } catch {
     // Source archives may not contain Git metadata; runtime.json remains explicit.
+  }
+  // A checkout's dist-ssr may predate its engine fixes. Rebuild before copying:
+  // the generation worker prefers this bundle over the current sources.
+  // Prepared runtime archives have no build scripts and keep their payload.
+  const buildScript = path.join(root, "scripts/build-ssr-runtime.mjs");
+  if (existsSync(buildScript)) {
+    const obfuscateScript = path.join(root, "scripts/obfuscate-ssr-runtime.mjs");
+    if (!existsSync(obfuscateScript)) throw new Error("presentation runtime obfuscation script is missing");
+    execFileSync(process.execPath, [buildScript], { cwd: root, stdio: "inherit" });
+    execFileSync(process.execPath, [obfuscateScript], { cwd: root, stdio: "inherit" });
   }
   await rm(dest, { recursive: true, force: true });
   await mkdir(dest, { recursive: true });

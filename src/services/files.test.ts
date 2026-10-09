@@ -72,3 +72,18 @@ describe("originConversationId", () => {
     expect(file.lastOpenedAt).toBeNull();
   });
 });
+
+it("retains open/save failures across service restart until a successful retry", async () => {
+  localStorage.clear();
+  const desktop = api([record("bad", "/p/bad.docx"), record("conflict", "/p/conflict.docx")], []);
+  const first = createFileService(desktop);
+  await first.setFailure!("bad", { kind: "open", reason: "invalid-docx", detail: "bad zip", at: 1 });
+  await first.setFailure!("conflict", { kind: "save", reason: "source-changed", detail: "changed externally", at: 2 });
+  const second = createFileService(desktop);
+  expect((await second.list()).map(f => f.failure?.kind)).toEqual(["open", "save"]);
+  await second.save("conflict");
+  expect((await createFileService(desktop).list()).map(f => f.failure?.kind)).toEqual(["open", undefined]);
+  await second.setFailure!("bad", null);
+  expect((await createFileService(desktop).list()).every(f => !f.failure)).toBe(true);
+  localStorage.clear();
+});

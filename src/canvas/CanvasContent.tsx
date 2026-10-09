@@ -20,15 +20,8 @@ import { DocxStage, liveDocTask } from "./DocxStage";
 /**
  * What fills the canvas box.
  *
- * One decision, in one place: **a run in progress outranks the open file.**
- * While a deck is being drawn there is nothing on disk to edit yet — the draft
- * is scratch that never enters the file library — and what the user needs to
- * see is the outline gate and the pages appearing. When the run ends the deck
- * becomes an ordinary document and this falls back to whatever tab is active,
- * which by then is usually that document.
- *
- * The alternative, routing purely on the active file, cannot express a drawing
- * deck at all: it has no file to be active.
+ * An explicitly opened file owns the canvas. A background run is shown only
+ * in the fileless stage selected by the shell, never over another document.
  *
  * Each leaf reports the handle the shell saves through in its own shape —
  * a controller for slides, a Writer editor for documents, an already-prepared
@@ -46,6 +39,7 @@ export interface CanvasContentProps {
   onResolveSelection: (resolve: (() => Promise<CanvasSelection | null>) | null) => void;
   /** The handle the shell saves through, or null when nothing is editable. */
   onSave: (save: (() => Promise<unknown>) | null) => void;
+  onSaveCopy?: (save: (() => Promise<{ filePath: string }>) | null) => void;
   /** The file on screen failed to open or to save itself, or recovered. See `CanvasAdapter.onFileFailure`. */
   onFileFailure: (fileId: string, failure: FileFailure | null) => void;
   /** Bumped by `CanvasAdapter.reopen`; the Word leaf is keyed on it so a retry is a fresh editor. */
@@ -114,6 +108,7 @@ export function CanvasContent({
   onResolveSelection,
   onSave,
   onFileFailure,
+  onSaveCopy,
   openAttempt = 0,
   toolbarProfile,
   onEditRunner,
@@ -123,30 +118,15 @@ export function CanvasContent({
   demoStartedAt = null,
 }: CanvasContentProps) {
   const { state } = useTaskStore();
-  const liveDeck = liveDeckTask(state.tasks, state.taskOrder);
-  /*
-   * A document being written takes the canvas the same way a deck does, and for
-   * the same reason: there is no file yet, so routing on the active file shows
-   * the *last* document the user had open while a different one is being
-   * written — for the length of the run, with nothing saying so.
-   *
-   * A deck wins a tie. Two runs of different types at once is rare, and when it
-   * happens the deck has the more informative stage: it shows the real pages
-   * appearing, while this one can only show that something is coming.
-   */
-  const liveDoc = liveDeck ? null : liveDocTask(state.tasks, state.taskOrder);
-  /*
-   * A workbook being written is the third of these, and the plainest case for
-   * it: the runtime hands back one XLSX at the end, so there is nothing to
-   * render until the run is over and the canvas showed a blank rectangle for
-   * the whole minute it took.
-   *
-   * Last of the three for the same reason the document is second — the deck's
-   * stage shows real pages, the workbook's can only show which sheets are
-   * planned and which are written.
-   */
-  const liveSheet = liveDeck || liveDoc ? null : liveWorkbookTask(state.tasks, state.taskOrder);
+  const liveDeck = file ? null : liveDeckTask(state.tasks, state.taskOrder);
+  // With no selected file, prefer the live slide stage, then Word and Excel.
+  const liveDoc = file || liveDeck ? null : liveDocTask(state.tasks, state.taskOrder);
+  const liveSheet = file || liveDeck || liveDoc ? null : liveWorkbookTask(state.tasks, state.taskOrder);
   const open = liveDeck || liveDoc || liveSheet ? null : file;
+
+  useEffect(() => {
+    if (open?.type !== "doc") onSaveCopy?.(null);
+  }, [open, onSaveCopy]);
 
   // Nothing editable on screen means nothing for the shell to save through.
   // Done in an effect rather than during render: an editor that is mounted
@@ -285,7 +265,10 @@ export function CanvasContent({
       onDirtyChange={onDirtyChange}
       onSelectionChange={onSelectionChange}
       onResolveSelection={onResolveSelection}
-      onEditor={(editor: WriterAgentEditor | null) => onSave(editor ? () => editor.save() : null)}
+      onEditor={(editor: WriterAgentEditor | null) => {
+        onSave(editor ? () => editor.save() : null);
+        onSaveCopy?.(editor?.saveCopy ? () => editor.saveCopy!() : null);
+      }}
       onEditRunner={onEditRunner}
       onFileFailure={onFileFailure}
       onUnavailable={onUnavailable}

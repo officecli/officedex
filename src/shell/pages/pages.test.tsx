@@ -46,7 +46,7 @@ type Shell = Awaited<ReturnType<typeof shell>>;
 
 /** The file and folder names My Files is listing, in order. */
 const localRows = (view: Shell) =>
-  view.all("#dx-file-results tbody [data-row] .dx-name-button .dx-ellipsis").map((row) => row.textContent ?? "");
+  view.all("#dx-local-results tbody .dx-local-file-name .dx-ellipsis").map((row) => row.textContent ?? "");
 
 const assetRows = (view: Shell) =>
   view.all("#dx-file-results tbody [data-row] .dx-name-button .dx-ellipsis").map((row) => row.textContent ?? "");
@@ -111,45 +111,77 @@ describe("Local", () => {
     return view;
   };
 
-  it("shows a local asset list without creating or entering a project", async () => {
+  it("lists folders first, then every file the workspace knows", async () => {
     const view = await openLocal();
-    expect(localRows(view)).toHaveLength(prototypeFiles().length);
-    expect(view.find(".dx-page-header h1")?.textContent).toBe("Assets");
-    expect(view.state().chat).toBeNull();
-    expect(view.all(".dx-local-recent-card")).toHaveLength(0);
+    const rows = localRows(view);
+
+    // Two projects; the default folder is not a project and is not listed.
+    expect(rows.slice(0, 2)).toEqual(["MO product launch", "Quarterly review"]);
+    expect(rows).toHaveLength(2 + prototypeFiles().length);
+    // Newest first by default, whatever folder it is in.
+    expect(rows[2]).toBe("MO launch plan.docx");
   });
 
-  it("filters local assets by type", async () => {
+  it("lists only its own files inside a folder", async () => {
     const view = await openLocal();
-    fireEvent.change(view.find('[data-filter="format"]')!, { target: { value: "pdf" } });
-    expect(localRows(view).every(name => name.endsWith(".pdf"))).toBe(true);
+    fireEvent.click(view.find("[data-act=local-folder][data-id=launch]")!);
+
+    const rows = localRows(view);
+    expect(rows).toContain("MO launch plan.docx");
+    // Documents' own files are somebody else's.
+    expect(rows).not.toContain("Project brief.docx");
+    expect(rows).not.toContain("MO product launch");
+    // And the breadcrumb says where we are, with the way back.
+    expect(view.find(".dx-local-breadcrumb h2")?.textContent).toBe("MO product launch");
   });
 
-  it("sorts by name and modification date with truthful headers", async () => {
+  it("filters My Files as you type, and leaves Recent alone", async () => {
     const view = await openLocal();
-    fireEvent.change(view.find('[data-filter="sort"]')!, { target: { value: "name" } });
-    const names = localRows(view);
-    expect(names).toEqual([...names].sort((a,b) => a.localeCompare(b)));
-    expect(view.find('[aria-sort="ascending"]')?.textContent).toContain("Name");
-    expect(view.find('[aria-sort="descending"]')).toBeNull();
-    fireEvent.change(view.find('[data-filter="sort"]')!, { target: { value: "updated" } });
-    expect(localRows(view)[0]).toBe("MO launch plan.docx");
-    expect(view.find('[aria-sort="descending"]')?.textContent).toContain("Modified");
+    const recentBefore = view.all(".dx-local-recent-card").map((card) => card.textContent ?? "");
+    expect(recentBefore).toHaveLength(5);
+
+    fireEvent.change(view.find("[data-local-search]")!, { target: { value: "budget" } });
+
+    expect(localRows(view)).toEqual(["Launch budget.xlsx", "Archive budget.xls"]);
+    // Recent is an access record, not a search result.
+    expect(view.all(".dx-local-recent-card").map((card) => card.textContent ?? "")).toEqual(recentBefore);
   });
 
-  it("opens local asset rows without attaching a conversation", async () => {
+  it("says so when nothing matches, and offers to clear the search", async () => {
     const view = await openLocal();
-    fireEvent.click(view.find('#dx-file-results tbody [data-row]')!);
-    await waitFor(() => expect(view.state().page).toBe("editor"));
-    expect(view.state().chat).toBeNull();
+    fireEvent.change(view.find("[data-local-search]")!, { target: { value: "nothing by this name" } });
+    expect(view.find("#dx-local-results")?.textContent).toContain("No matching files");
+
+    fireEvent.click(view.find("[data-act=local-clear]")!);
+    expect(localRows(view).length).toBeGreaterThan(2);
   });
 
-  it("switches between list and grid", async () => {
+  it("sorts by name or by when a file changed", async () => {
     const view = await openLocal();
-    fireEvent.click(view.find('[data-act="layout"][data-id="grid"]')!);
-    expect(view.all('.dx-asset-card')).toHaveLength(prototypeFiles().length);
-    fireEvent.click(view.find('[data-act="layout"][data-id="list"]')!);
-    expect(localRows(view)).toHaveLength(prototypeFiles().length);
+    expect(localRows(view)[2]).toBe("MO launch plan.docx");
+
+    fireEvent.change(view.find("[data-local-sort]")!, { target: { value: "name" } });
+    const byName = localRows(view).slice(2);
+    expect(byName).toEqual([...byName].sort((a, b) => a.localeCompare(b)));
+    // Folders stay above the files whatever the sort is.
+    expect(localRows(view).slice(0, 2)).toEqual(["MO product launch", "Quarterly review"]);
+
+    fireEvent.change(view.find("[data-local-sort]")!, { target: { value: "modified" } });
+    expect(localRows(view)[2]).toBe("MO launch plan.docx");
+  });
+
+  it("switches between the list and the grid", async () => {
+    const view = await openLocal();
+    expect(view.find(".dx-table-wrap")).not.toBeNull();
+    expect(view.find("[data-act=local-layout][data-id=list]")?.getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.click(view.find("[data-act=local-layout][data-id=grid]")!);
+    expect(view.find(".dx-local-file-grid")).not.toBeNull();
+    expect(view.find("#dx-local-results .dx-table-wrap")).toBeNull();
+    expect(view.all(".dx-local-file-card")).toHaveLength(2 + prototypeFiles().length);
+
+    fireEvent.click(view.find("[data-act=local-layout][data-id=list]")!);
+    expect(view.find("#dx-local-results .dx-table-wrap")).not.toBeNull();
   });
 
   // Offline is a state of the workspace, not an error: local files stay usable
@@ -350,5 +382,26 @@ describe("the document strip", () => {
     await view.dispatch({ type: "open-local-file", fileId: "doc" });
     expect(view.find(".dx-tabs-strip")).not.toBeNull();
     expect(view.find(".dx-home-top")).toBeNull();
+  });
+});
+
+
+describe("unfiled chat assets", () => {
+  it("starts empty and keeps explicitly added files in only that chat", async () => {
+    const view = await shell();
+    const defaultId = prototypeFolders().find(x => x.isDefault)!.id;
+    await view.dispatch({type: "open-chat", chat: {folderId: defaultId, conversationId: "new-chat-a"}});
+    expect(assetRows(view)).toEqual([]);
+    await view.dispatch({type: "set-panel", panel: "assets"});
+    fireEvent.click(view.find('[data-act="add-assets"]')!);
+    const checkbox = view.view.getAllByRole("checkbox")[0];
+    fireEvent.click(checkbox);
+    fireEvent.click(view.view.getByText("Add selected"));
+    await waitFor(() => expect(assetRows(view)).toHaveLength(1));
+    const own = assetRows(view)[0];
+    await view.dispatch({type: "open-chat", chat: {folderId: defaultId, conversationId: "new-chat-b"}});
+    expect(assetRows(view)).toEqual([]);
+    await view.dispatch({type: "open-chat", chat: {folderId: defaultId, conversationId: "new-chat-a"}});
+    expect(assetRows(view)).toEqual([own]);
   });
 });

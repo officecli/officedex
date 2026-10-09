@@ -40,6 +40,9 @@
 const KEY = "officedex.shell.library.v1";
 
 export interface ChatMeta {
+  /** Explicit references for a chat without a shared project. */
+  assetIds?: string[];
+  excludedAssetIds?: string[];
   name?: string;
   pinned?: boolean;
   archived?: boolean;

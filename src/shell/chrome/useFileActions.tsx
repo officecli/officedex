@@ -58,7 +58,7 @@ export function useFileActions() {
   const t = useT();
   const port = usePort();
   const canvas = useCanvas();
-  const { state, dispatch, files, folders, activeFile, defaultFolderId, reload } = useShell();
+  const { state, dispatch, files, folders, activeFile, defaultFolderId, reload, chatMeta, setChatMeta } = useShell();
   const library = useLibraryActions();
 
   /**
@@ -73,7 +73,7 @@ export function useFileActions() {
   const writeDocument = useCallback(
     async (file: FileMeta): Promise<boolean> => {
       try {
-        await canvas?.save();
+        await canvas?.save(file.id);
         await port.files.save(file.id);
       } catch (reason) {
         const failure = describeFailure("save", reason);
@@ -95,7 +95,6 @@ export function useFileActions() {
       if (activeFile?.id !== file.id) {
         // Only the editor on screen can write its document.
         dispatch({ type: "activate-file", fileId: file.id });
-        return false;
       }
       const saved = await writeDocument(file);
       if (saved && !options.quiet) notice(t("dx.file.savedNotice", { name: file.name }));
@@ -182,11 +181,13 @@ export function useFileActions() {
                 data-act="discard-close"
                 onClick={() => {
                   void (async () => {
-                    await attempt(async () => {
+                    const discarded = await attempt(async () => {
+                      await canvas?.discard?.(file.id);
                       await port.files.setDirty(file.id, false);
                       // Nothing left to save, so nothing left to have failed.
                       await port.files.setFailure?.(file.id, null);
                     });
+                    if (!discarded) return;
                     clearFileFailureReport(file.id);
                     closeModal();
                     dispatch({ type: "close-file", fileId: file.id });
@@ -219,7 +220,7 @@ export function useFileActions() {
         ),
       });
     },
-    [activeFile, dispatch, port, reload, writeDocument, t],
+    [activeFile, canvas, dispatch, port, reload, writeDocument, t],
   );
 
   /**
@@ -343,12 +344,22 @@ export function useFileActions() {
         action: t("dx.menu.remove"),
         onConfirm: async () => {
           // The project's library lets go of it; the file itself stays, in Local.
-          for (const file of targets) await port.files.move(file.id, defaultFolderId);
+          const chat = state.chat;
+          if (chat?.folderId === defaultFolderId && chat.conversationId) {
+            const own = chatMeta[chat.conversationId];
+            const ids = targets.map((file) => file.id);
+            setChatMeta(chat.conversationId, {
+              assetIds: own?.assetIds?.filter((id) => !ids.includes(id)),
+              excludedAssetIds: [...new Set([...(own?.excludedAssetIds ?? []), ...ids])],
+            });
+          } else {
+            for (const file of targets) await port.files.move(file.id, defaultFolderId);
+          }
           await reload();
         },
       });
     },
-    [t, port, defaultFolderId, reload],
+    [t, port, defaultFolderId, reload, state.chat, chatMeta, setChatMeta],
   );
 
   const trash = useCallback(
@@ -396,6 +407,20 @@ export function useFileActions() {
           label: t("dx.menu.saveCopy"),
           onSelect: () =>
             void (async () => {
+              if (file.type === "doc" && canvas?.saveCopy && (file.dirty || file.failure?.kind === "save")) {
+                if (activeFile?.id !== file.id) {
+                  dispatch({ type: "activate-file", fileId: file.id });
+                  notice(t("shell.tabs.dirtyActivated"));
+                  return;
+                }
+                await attempt(async () => {
+                  const result = await canvas.saveCopy!(file.id);
+                  const copy = await port.files.openDropped(result.filePath);
+                  await reload();
+                  if (copy) notice(t("dx.file.copySaved", { name: copy.name }));
+                });
+                return;
+              }
               // The copy is made from the bytes on disk. An editor still
               // holding edits writes them first, or the copy is the file as
               // it was opened — and is announced as a copy of what is on
@@ -426,7 +451,7 @@ export function useFileActions() {
       ];
       openMenu(anchor, items);
     },
-    [t, state.chat, library, details, rename, share, removeFromAssets, trash, save, activeFile, port, reload],
+    [t, state.chat, library, details, rename, share, removeFromAssets, trash, save, activeFile, port, reload, canvas, dispatch],
   );
 
   const statusOf = useCallback(

@@ -1,3 +1,4 @@
+import { readSuggestionChanges } from "./suggestionDiff";
 import type { BridgeEvent, DesktopAPI, DesktopTask, DocumentRecord, GenerateInput, TaskHistoryEntry } from "../shared/types";
 import { OUTLINE_GATE_KIND, type AgentEvent, type AgentImageRun, type AgentImageSeries, type AgentMessage, type AgentOutlinePage, type AgentPort, type AgentRecovery, type AgentStatus, type AgentStep, type AgentTask, type AgentTaskSummary, type ImageGenerationInput, type SendInput } from "../shared/uiPort";
 import { imageDimensions, imageStyleText, isReferenceImagePath, ratioBucket } from "../shared/imageGeneration";
@@ -45,6 +46,19 @@ import { translate } from "../renderer/i18n";
  * existing file retain the completed artifact as a real, file-level suggestion
  * and use the desktop snapshot bridge for Apply/Undo.
  */
+
+/** Keep native/worker stack traces in Details, not conversation messages. */
+export function agentErrorSummary(error: string): string {
+  return /(?:\n\s*at\s|thread .+panicked|stack backtrace|Traceback|HideLastTransition must be bool|\.wasm:|RuntimeError:)/i.test(error) || error.length > 600
+    ? translate("shell.agent.technicalFailure") : error;
+}
+
+export function requestsFormatChoice(text: string): boolean {
+  return /(?:word|docx|文档)/i.test(text) && /(?:excel|xlsx|表格)/i.test(text)
+    && /(?:powerpoint|pptx?|幻灯片)/i.test(text)
+    && /(?:ask me|先[询问]|问我|询问我)/i.test(text)
+    && /(?:wait|等待|等我|等.*回答)/i.test(text);
+}
 
 const ACTIVE_STATUSES = ["starting", "running", "question", "plan_review"];
 
@@ -188,7 +202,7 @@ function toMessages(task: DesktopTask): AgentMessage[] {
     messages.push({
       id: `${task.id}:error`,
       role: "agent",
-      text: task.error,
+      text: agentErrorSummary(task.error),
       createdAt: at(task.events.at(-1)?.ts),
     });
   }
@@ -335,7 +349,7 @@ function toAgentTask(task: DesktopTask): AgentTask {
 function outcomeOf(
   task: DesktopTask,
   recovery: AgentRecovery | undefined,
-): Pick<AgentTask, "outcome" | "error" | "failureKind" | "startedAt" | "finishedAt"> {
+): Pick<AgentTask, "outcome" | "error" | "errorDetail" | "failureKind" | "startedAt" | "finishedAt"> {
   const parse = (value: string | undefined) => (value ? Date.parse(value) || undefined : undefined);
   const startedAt = parse(task.createdAt) ?? parse(task.events[0]?.ts);
   const clock = startedAt ? { startedAt } : {};
@@ -348,19 +362,20 @@ function outcomeOf(
   const text = `${task.failure?.reason ?? ""} ${error ?? ""}`.toLowerCase();
   // The backend names the stage; a transport failure is the connection's, not the model's.
   const network =
-    task.failure?.stage === "transport" || /network|offline|econn|enotfound|timed? ?out|socket|dns/.test(text);
+    task.failure?.stage === "transport" || /network|offline|econn|enotfound|timed? ?out|socket|dns|\beof\b|connection (?:lost|reset|refused)|fetch failed/.test(text);
   const model = /auth|api[ _-]?key|unauthori[sz]ed|quota|credit|rate[ _-]?limit|model|provider|401|403|429/.test(text);
   // Finished pages that can be kept make this a partial result, not a loss.
   const kept = (recovery?.readyPages ?? 0) > 0;
   return {
     ...ended,
     outcome: network ? "interrupted" : kept ? "partial" : "failed",
-    ...(error ? { error } : {}),
+    ...(error ? { error: agentErrorSummary(error), errorDetail: error } : {}),
     failureKind: network ? "network" : model ? "model" : "other",
   };
 }
 
 interface ReviewArtifactState {
+  rejected?: boolean;
   sourceFileId: string;
   sourceFile: string;
   artifactFile?: string;
@@ -371,6 +386,7 @@ interface ReviewArtifactState {
 function toAgentTaskWithReview(task: DesktopTask, review?: ReviewArtifactState): AgentTask {
   const result = toAgentTask(task);
   if (!review || !review.artifactFile) return result;
+  if (review.rejected) return { ...result, outcome: "stopped", suggestion: null };
   return {
     ...result,
     suggestion: {
@@ -478,7 +494,20 @@ export function createAgentService(api: DesktopAPI): AgentPort {
   let state = createInitialTaskState();
   /** What pause/resume/finish act on: those take no id in the contract. */
   let activeTaskId: string | undefined;
+  const reviewKey = "officedex.agent.reviews.v1";
   const reviewArtifacts = new Map<string, ReviewArtifactState>();
+  try {
+    const saved = JSON.parse(localStorage.getItem(reviewKey) ?? "[]");
+    if (Array.isArray(saved)) for (const [id, review] of saved) {
+      if (typeof id === "string" && typeof review?.sourceFileId === "string" && typeof review?.sourceFile === "string") {
+        // Backend Undo snapshots do not survive a process restart.
+        reviewArtifacts.set(id, { ...review, undoable: false });
+      }
+    }
+  } catch { /* Older or unavailable storage. */ }
+  const persistReviews = () => {
+    try { localStorage.setItem(reviewKey, JSON.stringify([...reviewArtifacts])); } catch { /* Keep session state. */ }
+  };
   const listeners = new Set<(event: AgentEvent) => void>();
 
   const emit = (event: AgentEvent) => {
@@ -515,6 +544,8 @@ export function createAgentService(api: DesktopAPI): AgentPort {
   const batchInputs = new WeakMap<SendInput, BatchItem>();
   const draining = new Set<string>();
   const attempts = new Map<string, number>();
+  const attemptRoots = new Map<string, { id: string; startedAt?: number }>();
+  const formatGates = new Map<string, SendInput>();
   const pendingKey = "officedex.agent.pending.v1";
   const validInput = (value: unknown): value is SendInput => {
     const input = value as SendInput | null;
@@ -523,14 +554,21 @@ export function createAgentService(api: DesktopAPI): AgentPort {
   const persistPending = () => {
     try {
       localStorage.setItem(pendingKey, JSON.stringify({
+        formatGates: [...formatGates].map(([id, input]) => [id, input, state.tasks[id]]),
         queues: [...queues], held: [...heldQueues], batches: [...batches],
-        retries: [...retryInputs].slice(-100), attempts: [...attempts].slice(-100), serial: queueSerial,
+        retries: [...retryInputs].slice(-100), attempts: [...attempts].slice(-100), serial: queueSerial, roots: [...attemptRoots].slice(-100),
       }));
     } catch { /* An unavailable store must not interrupt a running task. */ }
   };
   try {
     const saved = JSON.parse(localStorage.getItem(pendingKey) ?? "null");
     if (saved) {
+      for (const [id, input, task] of saved.formatGates ?? []) {
+        if (typeof id === "string" && validInput(input) && task?.id === id && task.status === "question") {
+          formatGates.set(id, input);
+          state = { ...state, tasks: { ...state.tasks, [id]: task }, taskOrder: [id, ...state.taskOrder] };
+        }
+      }
       queueSerial = Number.isSafeInteger(saved.serial) ? saved.serial : 0;
       for (const [id, entries] of saved.batches ?? []) {
         if (typeof id !== "string" || !Array.isArray(entries)) continue;
@@ -551,6 +589,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
         heldQueues.add(id);
       }
       for (const [id, input] of saved.retries ?? []) if (typeof id === "string" && validInput(input)) retryInputs.set(id, input);
+      for (const [id, root] of saved.roots ?? []) if (typeof id === "string" && root && typeof root.id === "string") attemptRoots.set(id, root);
       for (const [id, count] of saved.attempts ?? []) if (typeof id === "string" && Number.isSafeInteger(count)) attempts.set(id, count);
     }
   } catch { /* Invalid or absent recovery data does not prevent launch. */ }
@@ -775,12 +814,14 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     return {
       ...result,
       attempt: attempts.get(task.id) ?? 1,
+      logicalTaskId: attemptRoots.get(task.id)?.id ?? task.id,
+      startedAt: attemptRoots.get(task.id)?.startedAt ?? result.startedAt,
       targetFileName: sentRuns.get(task.id)?.target?.fileName,
       ...(batchItems ? { batch: batchItems.map((item) => {
         const run = item.taskId ? state.tasks[item.taskId] : undefined;
         return { fileId: item.fileId, name: item.name, taskId: item.taskId,
           status: item.error ? "failed" as const : run?.status === "completed" ? "completed" as const : run?.status === "failed" ? "failed" as const : run?.status === "cancelled" ? "stopped" as const : run ? "running" as const : "queued" as const,
-          error: item.error ?? run?.error,
+          error: item.error || run?.error ? agentErrorSummary(item.error ?? run!.error!) : undefined,
           suggestion: run ? toAgentTaskWithReview(run, reviewArtifacts.get(run.id)).suggestion : null };
       }) } : {}),
       ...(result.status === "done" && batchItems?.some((item) => item.error || (item.taskId && state.tasks[item.taskId]?.status === "failed")) ? { outcome: "partial" as const } : {}),
@@ -977,6 +1018,14 @@ export function createAgentService(api: DesktopAPI): AgentPort {
   };
 
   const cancelTask = async (taskId: string) => {
+    if (formatGates.has(taskId)) {
+      formatGates.delete(taskId);
+      const task = state.tasks[taskId];
+      task.status = "cancelled";
+      task.question = undefined;
+      emit({ kind: "task", task: project(task) });
+      return;
+    }
     try {
       await api.cancel(taskId);
     } catch (reason) {
@@ -996,7 +1045,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     if (!task) return;
     if (ACTIVE_STATUSES.includes(task.status)) adoptActive(task.id);
     const review = reviewArtifacts.get(task.id);
-    if (review && task.status === "completed" && task.artifact?.filePath) review.artifactFile = task.artifact.filePath;
+    if (review && task.status === "completed" && task.artifact?.filePath) { review.artifactFile = task.artifact.filePath; persistReviews(); }
     // Before the task is projected: a dropped queue must not be drawn once more.
     settleQueue(task);
     emit({ kind: "task", task: project(task), focused: isFocused(task) });
@@ -1007,7 +1056,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       const key = `${task.id}\n${task.error}`;
       if (!reportedErrors.has(key)) {
         reportedErrors.add(key);
-        emit({ kind: "error", message: task.error });
+        emit({ kind: "error", message: agentErrorSummary(task.error) });
       }
     }
   });
@@ -1092,6 +1141,23 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       }
     }
 
+    if (!input.documentType && requestsFormatChoice(text)) {
+      const id = `format-choice:${crypto.randomUUID()}`;
+      const joined = conversationId ?? id;
+      const task: DesktopTask = {
+        id, conversationId: joined, workspaceId, status: "question", topic: text,
+        createdAt: new Date().toISOString(), events: [], userInput: { prompt: text },
+        question: { id: `${id}:question`, question: translate("shell.service.chooseFormat"),
+          options: [{ id: "docx", label: "Word (.docx)" }, { id: "xlsx", label: "Excel (.xlsx)" }, { id: "pptx", label: "PowerPoint (.pptx)" }], allowFreeform: true },
+      };
+      formatGates.set(id, input);
+      state = { ...state, tasks: { ...state.tasks, [id]: task }, taskOrder: [id, ...state.taskOrder] };
+      threads.set(input.folderId, { conversationId: joined, fresh: false });
+      activeTaskId = id;
+      emit({ kind: "task", task: project(task), focused: true });
+      return;
+    }
+
     const parentTaskId = conversationId ? headOf(conversationId)?.id : undefined;
     const lineage = {
       ...(conversationId ? { conversationId } : {}),
@@ -1154,7 +1220,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       if (dropped.length > 0) emit({ kind: "notice", message: droppedNotice(dropped) });
       const batchItem = batchInputs.get(input);
       const scopedText = batchItem ? `${text}\n\nThis is one item of a batch. Modify only the source file ${record.fileName} in this run. Other referenced files are handled separately. Do not create a different document type.` : text;
-      const prompt = withContext(promptWithComposerContext(scopedText, input));
+      const prompt = explicit ? promptWithComposerContext(scopedText, input) : withContext(promptWithComposerContext(scopedText, input));
       const result = await api.modify({
         documentType: record.documentType as GenerateInput["documentType"],
         sourceFile: record.filePath,
@@ -1206,19 +1272,35 @@ export function createAgentService(api: DesktopAPI): AgentPort {
      */
     if (!newFile) {
       const named = referencedFileIds(input);
-      if (named.length > 0) {
+      const unreadable: Array<{ attachment: SendInput["attachments"][number]; reason: unknown }> = [];
+      // Native attachments carry paths, not mention ids. Register those exact
+      // targets before routing, so they never fall through to a new deck.
+      for (const attachment of input.attachments) {
+        if (!attachment.path || !/\.(docx|xlsx|pptx)$/i.test(attachment.path)) continue;
+        try {
+          const imported = await api.importLocalFile(attachment.path);
+          if (!named.includes(imported.id)) named.push(imported.id);
+        } catch (reason) { unreadable.push({ attachment, reason }); }
+      }
+      if (named.length > 0 || unreadable.length > 0) {
         const records = await Promise.all(named.map((id) => api.getDocument(id).catch(() => null)));
         const editable = records.filter(
           (record): record is DocumentRecord => Boolean(record) && MODIFIABLE.has(record!.documentType.trim().toLowerCase()),
         );
-        if (editable.length === 1) {
+        if (editable.length === 1 && unreadable.length === 0) {
           await modifyDocument(editable[0], true);
           return;
         }
-        if (editable.length > 1) {
+        if (editable.length + unreadable.length === 1 && unreadable.length) throw unreadable[0].reason;
+        if (editable.length + unreadable.length > 1) {
           const joined = conversationId ?? `batch:${Date.now()}:${++queueSerial}`;
           const items = editable.map((record): BatchItem => ({ fileId: record.id, name: record.fileName,
-            input: { ...input, activeFileId: record.id, conversationId: joined, newConversation: false } }));
+            input: { ...input, activeFileId: record.id, conversationId: joined, newConversation: false,
+              mentions: [{ kind: "file", id: record.id, label: record.fileName }],
+              attachments: input.attachments.filter(attachment => attachment.path === record.filePath),
+              reference: input.reference?.fileId === record.id ? input.reference : undefined } }));
+          for (const { attachment } of unreadable) items.push({ fileId: `attachment:${attachment.path}`, name: attachment.name,
+            input: { ...input, activeFileId: null, conversationId: joined, newConversation: false, mentions: [], reference: undefined, attachments: [attachment] } });
           batches.set(joined, items);
           for (const item of items) batchInputs.set(item.input, item);
           queues.set(joined, [...items.slice(1).map((item) => ({ id: `queued:${joined}:${++queueSerial}`, conversationId: joined, input: item.input, at: Date.now() })), ...(queues.get(joined) ?? [])]);
@@ -1303,7 +1385,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
      */
     const requestedName = requestedFileName(text);
     const outputFileName = outputFileStem(requestedName);
-    const prompt = withContext(promptWithComposerContext(text, input, requestedName));
+    const prompt = newFile ? promptWithComposerContext(text, input, requestedName) : withContext(promptWithComposerContext(text, input, requestedName));
     const result = await api.generate({
       documentType: route.documentType,
       topic: (requestedName ? requestedName.replace(/\.[^.]+$/, "") : text).slice(0, 64),
@@ -1331,7 +1413,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
        * packaged build, which has no address bar.
        */
       ...(planModeRequested() ? { generationMode: "plan" as const } : {}),
-      enableImages: settings.defaults.enableImages,
+      enableImages: /(?:no|without|do not (?:add|include|create|generate))\s+(?:any\s+)?images?\b|不要(?:添加|生成|包含)?图片|无图片|纯文字/i.test(text) ? false : settings.defaults.enableImages,
       // Only sent when the setting is on. An explicit false would suppress
       // request wording such as "联网搜索…"; omitting it leaves that path
       // open while keeping the default off.
@@ -1471,6 +1553,36 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     async answer(input: { optionId?: string; text?: string; outline?: readonly AgentOutlinePage[] }) {
       const pending = pendingQuestion();
       if (!pending) return;
+      const gate = formatGates.get(pending.taskId);
+      if (gate) {
+        const answer = (input.optionId ?? input.text ?? "").trim();
+        const choices = [
+          { type: "docx" as const, pattern: /^(?:word|docx|文档|文稿)(?:\s*\(\.docx\))?$/i },
+          { type: "xlsx" as const, pattern: /^(?:excel|xlsx|表格|工作簿)(?:\s*\(\.xlsx\))?$/i },
+          { type: "pptx" as const, pattern: /^(?:powerpoint|pptx?|幻灯片|演示文稿)(?:\s*\(\.pptx\))?$/i },
+        ];
+        const type = choices.find(choice => choice.pattern.test(answer))?.type;
+        if (!type) { emit({ kind: "notice", message: translate("shell.service.chooseFormat") }); return; }
+        const task = state.tasks[pending.taskId];
+        task.status = "completed";
+        task.question = undefined;
+        formatGates.delete(task.id);
+        try {
+          await dispatch({ ...gate, documentType: type, newConversation: false, conversationId: task.conversationId,
+            text: `${gate.text}\n\nThe user has now chosen ${type.toUpperCase()} and authorized creation. Continue using that format.`,
+          }, task.conversationId);
+          if (activeTaskId && activeTaskId !== task.id) attemptRoots.set(activeTaskId, { id: task.id, startedAt: Date.parse(task.createdAt!) });
+          persistPending();
+        } catch (error) {
+          task.status = "question";
+          task.question = { id: `${task.id}:question`, question: translate("shell.service.chooseFormat"), options: [], allowFreeform: true };
+          formatGates.set(task.id, gate);
+          activeTaskId = task.id;
+          emit({ kind: "task", task: project(task) });
+          throw error;
+        }
+        return;
+      }
 
       /*
        * Approving the outline is not the same call as answering a question.
@@ -1608,6 +1720,8 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       const next = headOf(conversationOf(task));
       if (next && next.id !== taskId) {
         attempts.set(next.id, (attempts.get(taskId) ?? 1) + 1);
+        attemptRoots.set(next.id, attemptRoots.get(taskId) ?? { id: taskId, startedAt: project(task).startedAt });
+        persistPending();
         emit({ kind: "task", task: project(next), focused: isFocused(next) });
       }
     },
@@ -1698,6 +1812,8 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       const joined = conversationOf(task);
       sentRuns.set(result.taskId, { conversationId: joined, parentTaskId: task.id, prompt: stripConversationContext(input.prompt) });
       attempts.set(result.taskId, (attempts.get(task.id) ?? 1) + 1);
+      attemptRoots.set(result.taskId, attemptRoots.get(task.id) ?? { id: task.id, startedAt: project(task).startedAt });
+      persistPending();
       state = attachUserInput(state, result.taskId, input, task.id, {
         conversationId: joined, createdAt: new Date().toISOString(), workspaceId: task.workspaceId,
       });
@@ -1705,14 +1821,31 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       emit({ kind: "task", task: project(state.tasks[result.taskId]), focused: isFocused(state.tasks[result.taskId]) });
     },
 
+    async suggestionChanges(id) {
+      const review = reviewArtifacts.get(id);
+      if (!review?.artifactFile) throw new Error(translate("shell.service.suggestionUnavailable"));
+      return readSuggestionChanges(api, review.sourceFile, review.artifactFile);
+    },
+
+    async rejectSuggestion(id) {
+      const review = reviewArtifacts.get(id);
+      if (!review || review.applied) throw new Error(translate("shell.service.suggestionUnavailable"));
+      review.rejected = true;
+      review.undoable = false;
+      persistReviews();
+      const task = state.tasks[id];
+      if (task) emit({ kind: "task", task: project(task) });
+    },
+
     async applySuggestion(id) {
       const review = reviewArtifacts.get(id);
-      if (!review?.artifactFile || !api.applyArtifactSuggestion) {
+      if (!review?.artifactFile || review.rejected || !api.applyArtifactSuggestion) {
         throw new NotImplementedError("agent.applySuggestion", translate("shell.service.suggestionUnavailable"));
       }
       await api.applyArtifactSuggestion({ suggestionId: id, sourceFile: review.sourceFile, artifactFile: review.artifactFile });
       review.applied = true;
       review.undoable = true;
+      persistReviews();
       const task = state.tasks[id];
       if (task) emit({ kind: "task", task: project(task) });
     },
@@ -1725,6 +1858,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       await api.undoArtifactSuggestion({ suggestionId: id, sourceFile: review.sourceFile, artifactFile: review.artifactFile });
       review.applied = false;
       review.undoable = false;
+      persistReviews();
       const task = state.tasks[id];
       if (task) emit({ kind: "task", task: project(task) });
     },
@@ -1804,8 +1938,8 @@ export function referencedFileIds(input: Pick<SendInput, "mentions" | "reference
 }
 
 /** Whether the message points at anything at all — a file, a folder, a quoted passage. */
-function namesAnything(input: Pick<SendInput, "mentions" | "reference">): boolean {
-  return input.mentions.length > 0 || Boolean(input.reference);
+function namesAnything(input: Pick<SendInput, "mentions" | "reference" | "attachments">): boolean {
+  return input.mentions.length > 0 || input.attachments.length > 0 || Boolean(input.reference);
 }
 
 /**

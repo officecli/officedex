@@ -193,6 +193,17 @@ test("stages the sources, converter and vite closure the MOP worker needs", asyn
   assert.equal(resolvePresentationSource(source), source);
 });
 
+test("rebuilds and obfuscates a checkout before staging its runtime", async (t) => {
+  const { source, dest } = await stageInto(t);
+  await mkdir(path.join(source, "scripts"), { recursive: true });
+  await writeFile(path.join(source, "scripts/build-ssr-runtime.mjs"),
+    'import { writeFileSync } from "node:fs"; writeFileSync("dist-ssr/engine.js", "export const currentEngine = true;");');
+  await writeFile(path.join(source, "scripts/obfuscate-ssr-runtime.mjs"),
+    'import { readFileSync, writeFileSync } from "node:fs"; const current = readFileSync("dist-ssr/engine.js", "utf8"); if (!current.includes("currentEngine")) throw new Error("stale runtime"); writeFileSync("dist-ssr/engine.js", "const _0xupdated = true; export { _0xupdated };");');
+  await stagePresentationRuntime({ source, dest });
+  assert.match(await readFile(path.join(dest, "dist-ssr/engine.js"), "utf8"), /_0xupdated/u);
+});
+
 test("resolves natives from the pnpm store and from a hoisted node_modules", async (t) => {
   for (const hoistNatives of [false, true]) {
     const { source, dest } = await stageInto(t, { hoistNatives });

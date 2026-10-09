@@ -43,6 +43,11 @@ function scripted(startSerial = 0): Scripted {
       if (!record) throw new Error(`no document ${id}`);
       return record;
     },
+    async importLocalFile(path: string) {
+      const record = [...documents.values()].find(item => item.filePath === path);
+      if (!record) throw new Error(`missing file ${path}`);
+      return record;
+    },
     async listDocuments() {
       return { items: [...documents.values()], total: documents.size };
     },
@@ -568,4 +573,115 @@ it("restores queued messages after a restart and waits for Continue", async () =
  await restored.sendQueued!("task-1");
  await new Promise((resolve) => setTimeout(resolve, 0));
  expect(second.calls.generate[0].documentType).toBe("xlsx");
+});
+
+
+describe("1.0.15 attachment and independent task isolation", () => {
+  it("edits a path attachment without adding the previous deck's content", async () => {
+    const desk = scripted();
+    const {service} = await conversationWithDeck(desk);
+    const source = desk.addDocument({id: "source", filePath: "/p/OD15-review.docx", documentType: "docx"});
+    await service.send(message('Edit the attached DOCX. Replace "Beta" with "Gamma". Keep other paragraphs.', {
+      attachments: [{id: "attached", name: source.fileName, path: source.filePath, size: 100}],
+    }));
+    expect(desk.calls.modify[0]).toMatchObject({sourceFile: source.filePath, documentType: "docx"});
+    expect(desk.calls.modify[0].prompt).not.toContain("Make a launch deck");
+  });
+  it("keeps queued two-slide generation independent from the prior twelve-slide prompt", async () => {
+    const desk = scripted(); const service = createAgentService(desk.api);
+    await service.send(message('Create a NEW presentation named "First.pptx". Exactly 12 slides.'));
+    desk.push(running("task-1"));
+    await service.send(message('Create a separate NEW presentation named "Second.pptx". Exactly two slides.'));
+    desk.push(completed("task-1", "/p/First.pptx", "pptx"));
+    await vi.waitFor(() => expect(desk.calls.generate).toHaveLength(2));
+    expect(desk.calls.generate[1].prompt).not.toContain("12 slides");
+    expect(desk.calls.generate[1].outputFileName).toBe("Second");
+    expect(desk.calls.modify).toHaveLength(0);
+  });
+  it("preserves logical request identity and start time across retry", async () => {
+    const desk = scripted(); const service = createAgentService(desk.api); const panel = listen(service);
+    await service.send(message('Create a NEW document named "Report.docx".'));
+    desk.push(running("task-1"));
+    await service.finish("task-1");
+    const before = panel.last()!;
+    await service.retry!("task-1");
+    expect(panel.last()).toMatchObject({logicalTaskId: "task-1", attempt: 2, startedAt: before.startedAt});
+  });
+});
+
+describe("acceptance failure isolation", () => {
+  it("keeps a valid attachment result and retries only an attachment that could not be imported", async () => {
+    const desk = scripted(); const service = createAgentService(desk.api); const panel = listen(service);
+    desk.addDocument({ id: "good", filePath: "/p/good.docx", documentType: "docx" });
+    await service.send(message('Process each attached DOCX independently. Replace "Beta fifteen." with "Gamma fifteen.". Do not create a presentation.', {
+      attachments: [{id:"good",name:"good.docx",path:"/p/good.docx",size:100},{id:"bad",name:"bad.docx",path:"/p/bad.docx",size:100}],
+    }));
+    expect(desk.calls.modify[0].prompt).not.toContain("/p/bad.docx");
+    desk.push(completed("task-1", "/p/good.modified.docx", "docx"));
+    await vi.waitFor(() => expect(panel.last()?.batch?.map(item => item.status)).toEqual(["completed", "failed"]));
+    const id = panel.last()!.id;
+    desk.addDocument({ id: "bad", filePath: "/p/bad.docx", documentType: "docx" });
+    await service.retryBatch!(id);
+    expect(desk.calls.modify.map(call => call.sourceFile)).toEqual(["/p/good.docx", "/p/bad.docx"]);
+    expect(desk.calls.generate).toHaveLength(0);
+  });
+  it("preserves raw diagnostics only in Details and identifies a connection failure", async () => {
+    const desk = scripted(); const service = createAgentService(desk.api); const panel = listen(service);
+    await service.send(message('Create a NEW document.'));
+    const raw = 'RuntimeError: request failed: EOF\n    at worker.mjs:50';
+    desk.push({event_id:"offline",task_id:"task-1",type:"task.failed",ts:new Date().toISOString(),payload:{message:raw}});
+    expect(panel.last()).toMatchObject({outcome:"interrupted",failureKind:"network",errorDetail:raw});
+    expect(panel.last()!.error).not.toContain('worker.mjs');
+    expect(panel.last()!.messages.some(message => message.text.includes('worker.mjs'))).toBe(false);
+    await service.retry!("task-1");
+    expect(panel.last()).toMatchObject({logicalTaskId:"task-1",attempt:2});
+  });
+});
+
+describe("1.0.18 acceptance regressions", () => {
+  const choiceRequest = "I need a NEW office file, but have not chosen Word, Excel, or PowerPoint. Ask me which of those three formats to use and WAIT for my answer before creating or editing any file. Do not choose a format yourself.";
+  it("asks for a format without creating a file, then continues with the selected format", async () => {
+    const desk = scripted(); const service = createAgentService(desk.api); const panel = listen(service);
+    await service.send(message(choiceRequest, { newConversation: true }));
+    const gate = panel.last()!;
+    expect(gate.status).toBe("awaiting-review");
+    expect(gate.question?.options.map(o => o.id)).toEqual(["docx", "xlsx", "pptx"]);
+    expect(desk.calls.generate).toHaveLength(0);
+    expect(desk.calls.modify).toHaveLength(0);
+    await service.answer({ text: "not sure" });
+    expect(desk.calls.generate).toHaveLength(0);
+    await service.answer({ optionId: "docx" });
+    expect(desk.calls.generate).toHaveLength(1);
+    expect(desk.calls.generate[0].documentType).toBe("docx");
+    expect(desk.calls.generate[0].conversationId).toBe(gate.conversationId);
+    desk.push(running("task-1"));
+    expect(panel.last()?.logicalTaskId).toBe(gate.id);
+  });
+
+  it("restores an unanswered format choice after restart", async () => {
+    const desk = scripted(); const first = createAgentService(desk.api); const panel = listen(first);
+    await first.send(message(choiceRequest, { newConversation: true }));
+    const gate = panel.last()!;
+    const restarted = createAgentService(desk.api);
+    await restarted.openConversation(FOLDER, gate.conversationId!);
+    const restored = await restarted.current(FOLDER);
+    expect(restored?.question).not.toBeNull();
+    await restarted.answer({ optionId: "pptx" });
+    expect(desk.calls.generate).toHaveLength(1);
+    expect(desk.calls.generate[0].documentType).toBe("pptx");
+  });
+
+  it("rejects a proposal and refuses a later stale Apply", async () => {
+    const desk = scripted(); desk.addDocument({ id: "source", filePath: "/p/review.docx", documentType: "docx" });
+    const apply = vi.spyOn(desk.api, "applyArtifactSuggestion");
+    const service = createAgentService(desk.api); const panel = listen(service);
+    await service.send(message("Replace Beta with Gamma; let me review first", { activeFileId: "source" }));
+    desk.push(completed("task-1", "/p/review.modified.docx", "docx"));
+    expect(panel.last()?.suggestion?.applied).toBe(false);
+    await service.rejectSuggestion!("task-1");
+    expect(panel.last()?.suggestion).toBeNull();
+    expect(panel.last()?.outcome).toBe("stopped");
+    await expect(service.applySuggestion("task-1")).rejects.toThrow();
+    expect(apply).not.toHaveBeenCalled();
+  });
 });

@@ -70,7 +70,7 @@ describe("createDocxEditRunner", () => {
         workflow: "office.docx.edit.v1",
         input: {
           parameters: expect.objectContaining({
-            prompt: "Cut the throat-clearing",
+            prompt: expect.stringContaining("Cut the throat-clearing"),
             text: "It is very important to note that we ship on Friday.",
             scope: "document",
             ui_locale: "en",

@@ -1,5 +1,5 @@
 import { cleanup } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SEED_ACTIVE_FILE_ID, SEED_FOLDER_ID, SEED_OPEN_FILE_IDS } from "../port/fake/seed";
 import { renderShell } from "../test/renderShell";
@@ -20,6 +20,20 @@ afterEach(cleanup);
  * render around the document region, these fail immediately.
  */
 describe("EditorCanvasHost persistence", () => {
+  it("selects the live stage explicitly and returns to a Local document", async () => {
+    const canvas = createTestCanvasAdapter();
+    const showFileless = vi.fn();
+    canvas.adapter.showFileless = showFileless;
+    const shell = await renderShell({ canvas: canvas.adapter });
+    await shell.dispatch({ type: "open-local-file", fileId: SEED_ACTIVE_FILE_ID });
+    await shell.dispatch({ type: "enter-stage" });
+    expect(showFileless).toHaveBeenLastCalledWith({ demo: false });
+    showFileless.mockClear();
+    await shell.dispatch({ type: "open-local-file", fileId: SEED_ACTIVE_FILE_ID });
+    expect(canvas.show.mock.calls.at(-1)?.[0].id).toBe(SEED_ACTIVE_FILE_ID);
+    expect(showFileless).not.toHaveBeenCalled();
+  });
+
   it("keeps the same host node across every page the shell can show", async () => {
     const shell = await renderShell();
     await shell.dispatch({ type: "open-file", fileId: SEED_ACTIVE_FILE_ID });

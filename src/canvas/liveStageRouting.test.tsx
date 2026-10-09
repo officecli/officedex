@@ -7,18 +7,7 @@ import { createDesktopCanvas } from "./createDesktopCanvas";
 
 afterEach(cleanup);
 
-/**
- * A deck being drawn takes the canvas, and gives it back when it is done.
- *
- * The rule this guards is the one that made the routing hard: **a drawing deck
- * is not a file.** `CreateLivePptxDraft` writes to `workspaceDir/live/` and
- * registers the path with the preview registry only — it never reaches
- * `documents`, so the deck has no library entry, no tab and nothing for the
- * canvas to key on. The run is what puts it on screen.
- *
- * The leaves are stubbed: what is under test is which of them the canvas picks,
- * not whether PowerPoint renders.
- */
+/** Live generation is selected explicitly; background runs preserve the open file. */
 let stage: Record<string, unknown> | null = null;
 let presentation: Record<string, unknown> | null = null;
 
@@ -98,7 +87,7 @@ const finished = (taskId: string): BridgeEvent => ({
   payload: {},
 });
 
-describe("a drawing deck takes the canvas", () => {
+describe("presentation stage routing", () => {
   afterEach(() => {
     stage = null;
     presentation = null;
@@ -115,9 +104,7 @@ describe("a drawing deck takes the canvas", () => {
     expect((stage!.task as { id: string }).id).toBe("task-deck");
   });
 
-  // What is happening outranks what is open: the deck being drawn is the thing
-  // the user just asked for.
-  it("takes the canvas from an open document", () => {
+  it("preserves the explicitly opened document during background generation", () => {
     const { adapter, emit } = harness();
     act(() => adapter.show(deck("existing")));
     expect(presentation).not.toBeNull();
@@ -125,8 +112,8 @@ describe("a drawing deck takes the canvas", () => {
     presentation = null;
     emit(started("task-deck"));
 
-    expect(stage).not.toBeNull();
-    expect(presentation).toBeNull();
+    expect(stage).toBeNull();
+    expect(presentation).not.toBeNull();
   });
 
   /*
@@ -162,11 +149,13 @@ describe("a drawing deck takes the canvas", () => {
   it("gives the canvas back when the run ends", () => {
     const { adapter, emit } = harness();
     act(() => adapter.show(deck("existing")));
+    act(() => adapter.showFileless?.());
     emit(started("task-deck"));
     expect(stage).not.toBeNull();
 
     stage = null;
     emit(finished("task-deck"));
+    act(() => adapter.show(deck("existing")));
 
     expect(stage).toBeNull();
     expect((presentation!.file as FileMeta).id).toBe("existing");
@@ -192,8 +181,12 @@ describe("a drawing deck takes the canvas", () => {
   it("keeps the run across a tab switch", () => {
     const { adapter, emit } = harness();
     emit(started("task-deck"));
+    stage = null;
     act(() => adapter.show(deck("other")));
+    expect(stage).toBeNull();
+    expect((presentation!.file as FileMeta).id).toBe("other");
 
+    act(() => adapter.showFileless?.());
     expect(stage).not.toBeNull();
     expect((stage!.task as { id: string }).id).toBe("task-deck");
   });

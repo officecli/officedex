@@ -646,6 +646,8 @@ describe("the out-of-scope guard", () => {
     expect(auditPlanScope("slide.shapes.items[0];", scopedDeck, slideScope)).toBeNull();
     expect(auditPlanScope("slide.shapes.load('items/id');", scopedDeck, slideScope)).toBeNull();
     expect(auditPlanScope("const shapes = slide.shapes;", scopedDeck, slideScope)).toBeNull();
+    expect(auditPlanScope('slide.shapes.getItem("s1-title");', scopedDeck, slideScope)).toBeNull();
+    expect(auditPlanScope('slide.shapes.getItem("s2-title");', scopedDeck, slideScope)?.ids).toEqual(["s2-title"]);
     // Under a shape pick a sibling is as out of scope as another slide.
     expect(
       auditPlanScope('slide.shapes.addTextBox("hi", {});', scopedDeck, shapeScope)?.enumerations,

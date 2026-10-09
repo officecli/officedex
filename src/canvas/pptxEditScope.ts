@@ -629,6 +629,12 @@ export function auditPlanScope(
   if (scope.kind !== "selection") return null;
   const { code, literals } = scanSource(source);
   const allowed = new Set([...scope.slideIds, ...scope.shapeIds]);
+  // A selected slide includes its shapes; a shape selection stays narrower.
+  if (scope.level === "slide") {
+    for (const slide of before.slides ?? []) {
+      if (scope.slideIds.includes(slide.id)) for (const shape of slide.shapes ?? []) allowed.add(shape.id);
+    }
+  }
   const known: string[] = [];
   for (const slide of before.slides ?? []) {
     known.push(slide.id);

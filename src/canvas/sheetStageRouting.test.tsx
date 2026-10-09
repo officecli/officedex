@@ -7,18 +7,7 @@ import { createDesktopCanvas } from "./createDesktopCanvas";
 
 afterEach(cleanup);
 
-/**
- * A workbook being written takes the canvas, and gives it back when it is done.
- *
- * The case this exists for is the one the canvas had no answer to: a workbook
- * only exists when the run finishes, so there is no file to route by and
- * nothing was rendered — a minute of blank white beside a panel reporting work.
- *
- * The handoff back matters as much as the handoff out. An edit rewrites the
- * file a mounted editor is holding, and the editor keeps showing what it
- * loaded; tearing the session down for the length of the run is what makes the
- * workbook that comes back the one on disk.
- */
+/** Live generation is selected explicitly; background runs preserve the open file. */
 let sheetStage: Record<string, unknown> | null = null;
 let sheetCanvas: Record<string, unknown> | null = null;
 
@@ -94,7 +83,7 @@ const finished = (taskId: string): BridgeEvent => ({
   payload: {},
 });
 
-describe("a workbook being written takes the canvas", () => {
+describe("workbook stage routing", () => {
   afterEach(() => {
     sheetStage = null;
     sheetCanvas = null;
@@ -109,9 +98,7 @@ describe("a workbook being written takes the canvas", () => {
     expect((sheetStage!.task as { id: string }).id).toBe("task-book");
   });
 
-  // The workbook on screen is the one being rewritten, and what it shows is
-  // what it loaded — bytes the run has already replaced.
-  it("takes the canvas from the workbook it is editing", () => {
+  it("preserves the explicitly opened workbook during background generation", () => {
     const { adapter, emit } = harness();
     act(() => adapter.show(workbook("budget")));
     expect(sheetCanvas).not.toBeNull();
@@ -119,18 +106,20 @@ describe("a workbook being written takes the canvas", () => {
     sheetCanvas = null;
     emit(started("task-book"));
 
-    expect(sheetStage).not.toBeNull();
-    expect(sheetCanvas).toBeNull();
+    expect(sheetStage).toBeNull();
+    expect(sheetCanvas).not.toBeNull();
   });
 
   it("gives the canvas back when the run ends", () => {
     const { adapter, emit } = harness();
     act(() => adapter.show(workbook("budget")));
+    act(() => adapter.showFileless?.());
     emit(started("task-book"));
     expect(sheetStage).not.toBeNull();
 
     sheetStage = null;
     emit(finished("task-book"));
+    act(() => adapter.show(workbook("budget")));
 
     expect(sheetStage).toBeNull();
     expect(sheetCanvas).not.toBeNull();

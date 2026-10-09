@@ -56,6 +56,21 @@ const openLaunchChat = async (view: Shell) => {
 };
 
 describe("the sidebar's project tree", () => {
+  it("returns AI Chat to Home and focuses the composer without creating an empty chat", async () => {
+    const view = await shell();
+    const startConversation = vi.spyOn(view.port.agent, "startConversation");
+    await openLaunchChat(view);
+    const before = view.all('#dx-sidebar [data-act="open-chat"]').map(row => row.dataset.id);
+    fireEvent.click(view.find('#dx-sidebar [data-act="new-file"]')!);
+    fireEvent.click(view.find('[data-act="start-ai-chat"]')!);
+    await waitFor(() => expect(document.activeElement).toBe(view.find('.dx-home-composer [data-draft]')));
+    expect(view.state().page).toBe("home");
+    expect(view.state().chat).toBeNull();
+    expect(view.find('#dx-new-popover')).toBeNull();
+    expect(view.all('#dx-sidebar [data-act="open-chat"]').map(row => row.dataset.id)).toEqual(before);
+    expect(startConversation).not.toHaveBeenCalled();
+  });
+
   it("lists the projects closed, with no files in the tree", async () => {
     const view = await shell();
     const projects = view.all("#dx-sidebar [data-act=toggle-project]");

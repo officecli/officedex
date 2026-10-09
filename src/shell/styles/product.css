@@ -71,6 +71,22 @@
 
 /* ------------------------------------------------- projects & conversations */
 
+/* One leading column for New, Local, headings and every project folder. */
+#dx-sidebar .dx-group-heading {
+  padding-left: 12px;
+}
+
+#dx-sidebar .dx-project-row > button:first-child {
+  padding-left: 12px;
+  gap: 10px;
+}
+
+/* Child conversations, including empty-project actions, follow the name column. */
+#dx-sidebar [data-project] .dx-chat-tree > button:first-child,
+#dx-sidebar [data-project] [data-act="new-chat"] {
+  padding-left: 38px;
+}
+
 .dx-project-card {
   margin-bottom: 16px;
 }
@@ -239,3 +255,6 @@
   word-break: break-all;
   font-size: var(--dx-fs-12);
 }
+
+.dx-review-diff { max-height: 45vh; overflow: auto; }
+.dx-review-diff pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; padding: 8px; background: var(--dx-canvas); }

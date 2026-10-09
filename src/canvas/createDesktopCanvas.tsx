@@ -10,6 +10,7 @@ import { useCanvasLocale } from "../shell/editor/canvasLocale";
 import { CanvasTaskStore } from "./CanvasTaskStore";
 import { CanvasContent } from "./CanvasContent";
 import type { DocumentEditRunner } from "./DocxCanvas";
+import { discardPendingWriterExport } from "../renderer/word/WriterEditorFrame";
 import "./canvas.css";
 
 /**
@@ -102,7 +103,9 @@ export function createDesktopCanvas({
    * `WriterAgentEditor` the agent's edit path uses — and the only thing this
    * adapter ever wants from either of them is `save`.
    */
+  let saveCopyCurrent: (() => Promise<{ filePath: string }>) | null = null;
   let saveCurrent: (() => Promise<unknown>) | null = null;
+  const saveWaiters = new Set<{ fileId: string; resolve: (save: () => Promise<unknown>) => void; reject: (error: Error) => void }>();
   /**
    * How the editor showing right now reads its own selection, text included,
    * or null when it cannot. Reported by the leaf alongside `save`, and for the
@@ -137,6 +140,9 @@ export function createDesktopCanvas({
   };
 
   const announceFailure = (fileId: string, failure: FileFailure | null) => {
+    if (failure?.kind === "open") for (const waiter of [...saveWaiters]) {
+      if (waiter.fileId === fileId) waiter.reject(new Error(failure.detail || translate("shell.canvas.stillLoading")));
+    }
     for (const listener of failureListeners) listener(fileId, failure);
   };
 
@@ -144,8 +150,13 @@ export function createDesktopCanvas({
     for (const listener of selectionListeners) listener(selection);
   };
 
+  const setSaveCopy = (save: typeof saveCopyCurrent) => { saveCopyCurrent = save; };
+
   const setSave = (save: (() => Promise<unknown>) | null) => {
     saveCurrent = save;
+    if (save) for (const waiter of [...saveWaiters]) {
+      if (waiter.fileId === current?.id) waiter.resolve(save);
+    }
   };
 
   const setResolveSelection = (resolve: (() => Promise<CanvasSelection | null>) | null) => {
@@ -172,6 +183,7 @@ export function createDesktopCanvas({
             onSelectionChange={announceSelection}
             onResolveSelection={setResolveSelection}
             onSave={setSave}
+            onSaveCopy={setSaveCopy}
             onEditRunner={setEditRunner}
             onUnavailable={onUnavailable}
             openAttempt={openAttempt}
@@ -201,6 +213,9 @@ export function createDesktopCanvas({
     },
 
     show(file, options) {
+      for (const waiter of [...saveWaiters]) {
+        if (waiter.fileId !== file.id) waiter.reject(new Error(translate("shell.edit.aborted")));
+      }
       toolbarProfile = options?.toolbarProfile ?? "full";
       // A different document is a different editor, so the handle the old one
       // left behind is stale — and stale in the dangerous direction: `save()`
@@ -210,6 +225,7 @@ export function createDesktopCanvas({
       // own handle once its editor is up.
       if (current?.id !== file.id) {
         saveCurrent = null;
+        saveCopyCurrent = null;
         resolveCurrent = null;
         // Same argument, and a sharper one: an edit runner holds a live Writer
         // handle onto a specific document. Left behind after a tab switch it
@@ -233,6 +249,7 @@ export function createDesktopCanvas({
       // The handles the failed editor left are stale the same way a tab
       // switch leaves them stale; the leaf re-reports once it is up.
       saveCurrent = null;
+      saveCopyCurrent = null;
       resolveCurrent = null;
       editCurrent = null;
       announceSelection(null);
@@ -243,6 +260,7 @@ export function createDesktopCanvas({
     },
 
     showFileless(options) {
+      for (const waiter of [...saveWaiters]) waiter.reject(new Error(translate("shell.edit.aborted")));
       /*
        * Visible with no file behind it.
        *
@@ -258,6 +276,7 @@ export function createDesktopCanvas({
        */
       if (current) {
         saveCurrent = null;
+        saveCopyCurrent = null;
         resolveCurrent = null;
         editCurrent = null;
         announceSelection(null);
@@ -284,11 +303,13 @@ export function createDesktopCanvas({
     },
 
     unmount() {
+      for (const waiter of [...saveWaiters]) waiter.reject(new Error(translate("shell.edit.aborted")));
       const dying = root;
       root = null;
       mountedHost = null;
       current = null;
       saveCurrent = null;
+      saveCopyCurrent = null;
       resolveCurrent = null;
       editCurrent = null;
       selectionListeners.clear();
@@ -329,10 +350,50 @@ export function createDesktopCanvas({
       return () => failureListeners.delete(listener);
     },
 
-    async save() {
-      // Nothing editing means a sheet, or Home. Saving nothing is not a failure.
-      if (!saveCurrent) return;
+    async save(fileId) {
+      // A retry may first activate the source after a recovery copy was open.
+      // Wait for that source's editor, never write through the old tab's handle.
+      if (fileId && (current?.id !== fileId || !saveCurrent)) {
+        const save = await new Promise<() => Promise<unknown>>((resolve, reject) => {
+          const finish = () => { clearTimeout(timer); saveWaiters.delete(waiter); };
+          const waiter = { fileId,
+            resolve: (save: () => Promise<unknown>) => { finish(); resolve(save); },
+            reject: (error: Error) => { finish(); reject(error); } };
+          const timer = setTimeout(() => waiter.reject(new Error(translate("shell.canvas.stillLoading"))), 150_000);
+          saveWaiters.add(waiter);
+        });
+        if (current?.id !== fileId) throw new Error(translate("shell.edit.aborted"));
+        await save();
+        return;
+      }
+      // Home and read-only previews have no editor bytes to save.
+      if (!saveCurrent) {
+        if (current && ["doc", "sheet", "slides"].includes(current.type)) throw new Error(translate("shell.canvas.stillLoading"));
+        return;
+      }
       await saveCurrent();
+    },
+
+    async saveCopy(fileId) {
+      if (current?.id !== fileId || !saveCopyCurrent) throw new Error(translate("shell.canvas.stillLoading"));
+      return saveCopyCurrent();
+    },
+
+    async discard(fileId) {
+      const record = await api.getDocument(fileId);
+      for (const waiter of [...saveWaiters]) {
+        if (waiter.fileId === fileId) waiter.reject(new Error(translate("shell.edit.aborted")));
+      }
+      discardPendingWriterExport(record.filePath);
+      if (current?.id === fileId) {
+        current = null;
+        saveCurrent = null;
+        saveCopyCurrent = null;
+        resolveCurrent = null;
+        editCurrent = null;
+        lastDirty = null;
+        render();
+      }
     },
 
     canEditDocument() {

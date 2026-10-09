@@ -37,9 +37,18 @@ type Sort = "updated" | "opened" | "name";
 
 /** The files a project's library holds: everything in its folder. */
 export function useProjectAssets(): FileMeta[] {
-  const { state, files } = useShell();
-  const folderId = state.chat?.folderId;
-  return useMemo(() => (folderId ? files.filter((file) => file.folderId === folderId) : []), [files, folderId]);
+  const { state, files, folders, chats, chatMeta } = useShell();
+  const chat = state.chat;
+  return useMemo(() => {
+    if (!chat) return [];
+    const shared = folders.some((folder) => folder.id === chat.folderId && !folder.isDefault);
+    if (shared) return files.filter((file) => file.folderId === chat.folderId);
+    if (!chat.conversationId) return [];
+    const own = chatMeta[chat.conversationId];
+    return files.filter((file) => !own?.excludedAssetIds?.includes(file.id)
+      && (own?.assetIds?.includes(file.id) || originChatOf(file, chats)?.id === chat.conversationId
+        || file.originConversationId === chat.conversationId));
+  }, [files, folders, chats, chatMeta, chat]);
 }
 
 /**
