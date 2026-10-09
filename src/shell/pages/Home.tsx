@@ -99,6 +99,8 @@ function QuickGroup({
               className="dx-ib"
               data-act="create-local"
               data-id={type}
+              disabled={!CREATABLE[type] && type !== "png"}
+              title={!CREATABLE[type] && type !== "png" ? t("dx.new.unsupported") : undefined}
               aria-label={t("dx.home.newOfType", { type: kind })}
               data-tooltip={t(type === "png" ? "dx.home.tipImage" : "dx.home.tipEditor", { type: kind, ext: type })}
               onClick={() => onPick(type)}

@@ -34,12 +34,13 @@ const RELEASE: AppUpdateRelease = {
 
 /**
  * The button under a real `UpdateGate`, the way `main.tsx` mounts the shell,
- * with the updater's event stream in the test's hands. Only the five updater
+ * with the updater's event stream in the test's hands. Only the updater
  * methods exist: the button must not reach for anything else.
  */
 function renderButton() {
   let listener: (event: AppUpdateEvent) => void = () => {};
   const spies = {
+    getAppUpdateStatus: vi.fn(async () => ({ ...STATUS, updateAvailable: false })),
     checkAppUpdate: vi.fn(async () => ({ status: { ...STATUS, updateAvailable: false }, release: null })),
     onAppUpdateEvent: vi.fn((next: (event: AppUpdateEvent) => void) => {
       listener = next;

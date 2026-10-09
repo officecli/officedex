@@ -523,3 +523,28 @@ func TestUsageAnalyticsOptOutPersists(t *testing.T) {
 		t.Fatal("UsageAnalyticsEnabled = true after reload; the opt-out was lost")
 	}
 }
+
+func TestUpdateChannelPersistsAndRejectsUnknown(t *testing.T) {
+	store, path, _ := newTempStore(t)
+	initial, _ := store.Load()
+	if initial.UpdateChannel != "" {
+		t.Fatal("new users must inherit the package default")
+	}
+	if _, err := store.Update(Patch{UpdateChannel: ptr("beta")}); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := New(path, nil).Load()
+	if err != nil || reloaded.UpdateChannel != "beta" {
+		t.Fatalf("did not persist: %+v %v", reloaded, err)
+	}
+	if _, err := store.Update(Patch{UpdateChannel: ptr("1.0")}); err == nil {
+		t.Fatal("legacy feed must not be selectable")
+	}
+	if _, err := store.Update(Patch{Waiting2048Enabled: ptr(true)}); err != nil {
+		t.Fatal(err)
+	}
+	current, _ := store.Reload()
+	if current.UpdateChannel != "beta" {
+		t.Fatal("unrelated settings erased channel")
+	}
+}

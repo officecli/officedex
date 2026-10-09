@@ -12,8 +12,9 @@
  * these check the answer *and* that the switch stayed where it was.
  */
 import { cleanup, fireEvent, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { officecli } from "../../renderer/bridge";
 import { toast } from "../../renderer/ui";
 import { resetLayers } from "../kit/layers";
 import { renderShell } from "../test/renderShell";
@@ -168,8 +169,6 @@ describe("a control with nothing behind it", () => {
 
   const buttons: Array<[SettingsSectionId, string, string]> = [
     ["files", "storage-folder", "Choosing another workspace location is not available in this version."],
-    ["files", "defaults", "Setting OfficeDex as the default app for a file type is not available in this version."],
-    ["files", "recovery", "The recovery center is not available in this version."],
     ["files", "trash", "Trash is not available in this version. Removing a file asks first."],
     ["license", "license-form", "Requesting a commercial license from the app is not available in this version."],
   ];
@@ -275,4 +274,23 @@ describe("the avatar picker", () => {
     const reopened = document.querySelector<HTMLElement>("dialog#dx-modal [role=radiogroup]")!;
     expect(reopened.querySelector<HTMLElement>("[aria-checked=true]")?.dataset.id).toBe("write");
   });
+});
+
+
+it("persists a channel selection and checks the selected feed", async () => {
+  const original = officecli.updateSettings;
+  const update = vi.spyOn(officecli, "updateSettings");
+  const check = vi.spyOn(officecli, "checkAppUpdate");
+  try {
+    const view = await settings("about");
+    const select = view.find<HTMLSelectElement>("[data-act=update-channel]")!;
+    expect(select.value).toBe("stable");
+    fireEvent.change(select, {target: {value: "beta"}});
+    await waitFor(() => expect(update).toHaveBeenCalledWith({updateChannel: "beta"}));
+    await waitFor(() => expect(select.value).toBe("beta"));
+    expect(check).toHaveBeenCalled();
+    expect(announced()).toContain("does not downgrade");
+    // The browser-preview bridge retains settings across mounts in this test suite.
+    await original({updateChannel: "stable"});
+  } finally { update.mockRestore(); check.mockRestore(); }
 });

@@ -201,6 +201,7 @@ export function createDesktopCanvas({
     },
 
     show(file, options) {
+      toolbarProfile = options?.toolbarProfile ?? "full";
       // A different document is a different editor, so the handle the old one
       // left behind is stale — and stale in the dangerous direction: `save()`
       // would write the document the user just switched away from. Clearing on
@@ -219,7 +220,6 @@ export function createDesktopCanvas({
         // is what stops the composer quoting the previous file.
         announceSelection(null);
         lastDirty = null;
-        toolbarProfile = options?.toolbarProfile ?? "full";
       } else if (lastDirty !== null) {
         // The same editor, still holding whatever it held; see `lastDirty`.
         announceDirty(lastDirty);

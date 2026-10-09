@@ -42,6 +42,22 @@ afterEach(() => {
 });
 
 describe("WriterEditorFrame agent tools", () => {
+  it("switches toolbar profiles over the channel without reloading a dirty document", async () => {
+    mockManifest();
+    const props = { previewToken: "token", fileName: "report.docx", onUnavailable: vi.fn() };
+    const view = render(<WriterEditorFrame {...props} toolbarProfile="compact" />);
+    await waitFor(() => expect(view.container.querySelector("iframe")).not.toBeNull());
+    const { frame, posted, fromEmbed } = captureFrame(view.container);
+    const source = frame.src;
+    fromEmbed({ type: "writer:embed-ready", protocolVersion: WRITER_EMBED_PROTOCOL_VERSION });
+    await waitFor(() => expect(posted.some((entry) => entry.type === "writer:load")).toBe(true));
+    fromEmbed({ type: "writer:document-loaded", fileName: "report.docx" });
+    fromEmbed({ type: "writer:dirty-changed", dirty: true });
+    view.rerender(<WriterEditorFrame {...props} toolbarProfile="full" />);
+    expect(posted.at(-1)).toEqual({ type: "writer:toolbar-profile", profile: "full" });
+    expect(frame.src).toBe(source);
+    expect(posted.filter((entry) => entry.type === "writer:load")).toHaveLength(1);
+  });
   it("exposes captured editing only after load and rejects pending edits on close", async () => {
     mockManifest();
     let editor: WriterAgentEditor | null = null;
@@ -255,6 +271,23 @@ import type { DesktopAPI } from "../../shared/types";
  * request that did not exist. The host now says so itself.
  */
 describe("WriterEditorFrame save failures", () => {
+  it("retains subsequent conflict edits as recovery drafts without marking the source saved", async () => {
+    mockManifest();
+    const onSaved = vi.fn();
+    const saveDocx = vi.fn().mockRejectedValueOnce(new Error("changed outside OfficeDex"))
+      .mockResolvedValue({ filePath: "/draft.docx", sha256: "draft" });
+    const api = { saveDocx } as unknown as DesktopAPI;
+    const view = render(<DesktopApiProvider api={api}><WriterEditorFrame previewToken="token" fileName="report.docx" onUnavailable={vi.fn()} onSaved={onSaved} /></DesktopApiProvider>);
+    await waitFor(() => expect(view.container.querySelector("iframe")).not.toBeNull());
+    const { posted, fromEmbed } = captureFrame(view.container);
+    fromEmbed({ type: "writer:save", requestId: "first", content: new ArrayBuffer(4) });
+    await waitFor(() => expect(posted.some((entry) => entry.type === "writer:response" && entry.requestId === "first")).toBe(true));
+    fromEmbed({ type: "writer:save", requestId: "latest", content: new ArrayBuffer(8) });
+    await waitFor(() => expect(saveDocx).toHaveBeenCalledTimes(2));
+    expect(saveDocx.mock.calls[1][2]).toMatchObject({ recoveryOnly: true });
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(posted.at(-1)).toMatchObject({ type: "writer:response", requestId: "latest", ok: false });
+  });
   it("tells the host when a save the embed started could not be written", async () => {
     mockManifest();
     const onSaveFailed = vi.fn();

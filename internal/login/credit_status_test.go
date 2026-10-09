@@ -165,7 +165,7 @@ func TestParseCreditStatus(t *testing.T) {
 			},
 		},
 		{
-			name:     "non-zero exit short-circuits to anonymous",
+			name:     "non-zero exit is unknown",
 			exitCode: 2,
 			stdout:   `{"mode":"logged_in","hosted_credit_balance":999}`,
 			want:     types.CreditStatus{Mode: types.WhoAmIAnonymous},
@@ -175,6 +175,12 @@ func TestParseCreditStatus(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := ParseCreditStatus(tc.stdout, tc.exitCode)
+			if tc.exitCode != 0 {
+				if err == nil {
+					t.Fatal("failed query must not masquerade as anonymous")
+				}
+				return
+			}
 			if err != nil {
 				t.Fatalf("ParseCreditStatus: %v", err)
 			}

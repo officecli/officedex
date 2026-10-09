@@ -578,3 +578,41 @@
      in below it instead of on top of it. */
   --od-toast-inset-top: calc(var(--shell-windowbar-h) + 8px);
 }
+
+/* October typography handoff. Role values do not redefine the numeric scale. */
+#shell {
+  --dx-type-ui: 400 14px/20px var(--dx-font);
+  --dx-type-chat: 400 14px/22px var(--dx-font);
+  --dx-type-code: 400 13px/20px var(--dx-font-mono);
+  --dx-type-hero: 500 24px/32px var(--dx-font);
+  --dx-type-title: 500 20px/28px var(--dx-font);
+  --dx-type-section: 500 16px/24px var(--dx-font);
+  --dx-type-label: 500 14px/20px var(--dx-font);
+  --dx-type-author: 500 14px/22px var(--dx-font);
+  --dx-type-meta: 400 12px/18px var(--dx-font);
+  --dx-primary: #000000;
+  --dx-sort-muted: #6b7280;
+  --dx-sort-hover: #f5f5f5;
+}
+#shell:not([data-theme="dark"]) { --dx-text:#1a1c1f; }
+#shell[data-theme="dark"] {
+  --dx-primary: var(--dx-text);
+  --dx-sort-muted: var(--dx-muted);
+  --dx-sort-hover: var(--dx-hover);
+}
+
+/* Setup follows the approved white installation artwork in both app themes. */
+#shell {
+  --setup-color-2126310d: #2126310d;
+  --setup-color-e5e6e8: #e5e6e8;
+  --setup-color-17181a: #17181a;
+  --setup-color-a43d37: #a43d37;
+  --setup-color-dfe1e5: #dfe1e5;
+  --setup-color-6b7280: #6b7280;
+  --setup-color-73767a: #73767a;
+  --setup-color-0002: #0002;
+  --setup-color-0004: #0004;
+  --setup-color-000: #000;
+  --setup-color-fff: #fff;
+  --setup-type-subtitle: 400 21px/32px var(--dx-font);
+}

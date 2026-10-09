@@ -26,7 +26,7 @@ import { describe, expect, it } from "vitest";
  * that implements UiPort for the new one. Scanning only the first would report
  * every RPC the new services consume as unreachable.
  */
-const CALL_SITE_ROOTS = ["src/renderer", "src/services"];
+const CALL_SITE_ROOTS = ["src/renderer", "src/services", "src/shell"];
 
 /**
  * Methods with no renderer call site today, and what was found when each was
@@ -65,9 +65,6 @@ const UNWIRED: Record<string, string> = {
 
   copyImageToClipboard: "Go side implemented; the image viewer offers no copy action",
   setPreviewMode: "Go side implemented; nothing toggles preview mode from the renderer",
-  // useAppUpdate drives the whole update flow from checkAppUpdate and the event
-  // stream, so the status getter has no caller.
-  getAppUpdateStatus: "Go side implemented; useAppUpdate reads status from checkAppUpdate and onAppUpdateEvent instead",
 
   // Declared on the renderer interface and wired through every transport, but
   // there is no ComposeCampaignImage on the Go side: all three transports would
@@ -155,6 +152,7 @@ const UNWIRED: Record<string, string> = {
  * an exception at all.
  */
 const PENDING_CONSUMER: Record<string, string> = {
+  getDefaultDocumentApps: "no standalone refresh consumer yet; onboarding gets association status through getSetupState",
   // The agent service reduces live bridge events and task history rather than
   // reading the stored activity stream, so these two are still unconsumed. They
   // are what an activity/history view would read.
@@ -293,6 +291,6 @@ describe("DesktopAPI reachability", () => {
   // asks for — those capabilities are out of the shell's reach until it grows
   // a surface for them, and the list is where that debt is written down.
   it("the unwired list does not grow", () => {
-    expect(Object.keys(UNWIRED)).toHaveLength(65);
+    expect(Object.keys(UNWIRED)).toHaveLength(64);
   });
 });

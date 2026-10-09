@@ -165,6 +165,7 @@ export function normaliseCreditStatus(raw: Partial<CreditStatus> | null | undefi
 
 export function adaptSettingsPatch(patch: Partial<UserSettings>): settingsNS.Patch {
   const out: Record<string, unknown> = {};
+  if (patch.updateChannel !== undefined) out.updateChannel = patch.updateChannel;
   if (patch.defaults !== undefined) {
     const d: Record<string, unknown> = {};
     if (patch.defaults.documentType !== undefined) d.documentType = patch.defaults.documentType;

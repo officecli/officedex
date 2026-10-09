@@ -2,9 +2,9 @@ import { useCallback } from "react";
 
 import { useT } from "../../renderer/i18n";
 import { openConfirmDialog, openNameDialog } from "../kit/dialogs";
-import { openMenu } from "../kit/layers";
+import { openMenu, openModal } from "../kit/layers";
 import { usePort } from "../port/PortContext";
-import { notBuiltYet } from "../port/reportPortFailure";
+import { attempt } from "../port/reportPortFailure";
 import { useShell, type Chat, type Project } from "../state/ShellContext";
 import { newConversationId } from "../state/libraryMeta";
 
@@ -23,7 +23,7 @@ import { newConversationId } from "../state/libraryMeta";
 export function useWorkspaceMenus() {
   const t = useT();
   const port = usePort();
-  const { state, dispatch, chats, projects, reload, setChatMeta, setProjectMeta } = useShell();
+  const { state, dispatch, chats, projects, defaultFolderId, reload, setChatMeta, setProjectMeta } = useShell();
 
   const newProject = useCallback(() => {
     openNameDialog({
@@ -135,7 +135,15 @@ export function useWorkspaceMenus() {
         },
         {
           label: t("dx.menu.move"),
-          onSelect: () => notBuiltYet("chat.move", t("dx.chat.moveNotBuilt")),
+          onSelect: () => openModal({ title: t("dx.menu.move"), render: (close) => <div className="dx-actions">
+            {[{ id: defaultFolderId, name: t("dx.file.noProject") }, ...projects.filter((project) => !project.archived)].filter((project) => project.id !== chat.folderId).map((project) => <button key={project.id} type="button" className="dx-btn" onClick={() => void attempt(async () => {
+              if (!port.agent.moveConversation) throw new Error("Moving chats requires the desktop app.");
+              await port.agent.moveConversation(chat.id, project.id);
+              setChatMeta(chat.id, { folderId: project.id });
+              await reload(); close();
+              dispatch({ type: "open-chat", chat: { folderId: project.id, conversationId: chat.id } });
+            })}>{project.name}</button>)}
+          </div> }),
         },
         {
           label: t(chat.pinned ? "dx.menu.unpin" : "dx.menu.pin"),
@@ -164,7 +172,7 @@ export function useWorkspaceMenus() {
         },
       ]);
     },
-    [t, setChatMeta, leaveChatIfOpen, dispatch, state.chat],
+    [t, setChatMeta, leaveChatIfOpen, dispatch, state.chat, defaultFolderId, projects, port, reload],
   );
 
   /** A blank conversation that belongs to no project, from New → AI Chat. */

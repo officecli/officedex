@@ -158,3 +158,11 @@ func (a *App) RemoveDocument(documentID string) error {
 	}
 	return a.localStore.RemoveDocumentByID(ctx, documentID)
 }
+
+func (a *App) MoveConversation(conversationID, workspaceID string) error {
+	ctx, err := a.documentStoreContext()
+	if err != nil {
+		return err
+	}
+	return a.localStore.MoveConversation(ctx, conversationID, workspaceID)
+}

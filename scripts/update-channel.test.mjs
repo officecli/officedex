@@ -56,3 +56,18 @@ test("the desktop app and this script agree on both manifest URLs", async () => 
   assert.equal(bakedStable, MANIFEST_URLS[CHANNEL_STABLE]);
   assert.equal(MANIFEST_URLS[CHANNEL_10], `${OBS_ORIGIN}/${obsManifestKey(CHANNEL_10)}`);
 });
+
+test("beta uses an isolated signed feed with plain versions", async () => {
+  const { MANIFEST_URLS } = await import("./update-channel.mjs");
+  const { readFile } = await import("node:fs/promises");
+  assert.deepEqual(assertVersionMatchesChannel("beta", "1.0.14"), {channel: "beta", version: "1.0.14"});
+  assert.throws(() => assertVersionMatchesChannel("beta", "1.0.14-beta.1"));
+  assert.equal(distManifestPath("beta"), "channels/beta/manifest.json");
+  assert.equal(distArchiveDir("beta"), "channels/beta/archive");
+  assert.deepEqual(gitAddPaths("beta"), ["channels/beta/"]);
+  assert.ok(forbiddenGitPaths("beta").includes("manifest.json"));
+  assert.ok(forbiddenGitPaths("beta").includes("channels/1.0/"));
+  assert.equal(isPrereleaseChannel("beta"), true);
+  const go = await readFile(new URL("../app_update_channel.go", import.meta.url), "utf8");
+  assert.equal(/betaUpdateManifestURL\s*=\s*"([^"]+)"/.exec(go)?.[1], MANIFEST_URLS.beta);
+});

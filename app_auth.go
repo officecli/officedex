@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"officedex/internal/login"
 	"officedex/internal/types"
 )
@@ -14,6 +15,7 @@ type LoginURLResult struct {
 
 type LoginInput struct {
 	InviteCode string `json:"inviteCode,omitempty"`
+	FlowID     string `json:"flowId,omitempty"`
 }
 
 // Login starts an OAuth flow if one is not already in progress, returns the
@@ -25,6 +27,7 @@ func (a *App) Login(input LoginInput) (LoginURLResult, error) {
 		a.mu.Unlock()
 		return LoginURLResult{URL: url}, nil
 	}
+	a.loginFlowID = input.FlowID
 	manager := a.ensureLoginManagerLocked()
 	a.mu.Unlock()
 
@@ -33,11 +36,15 @@ func (a *App) Login(input LoginInput) (LoginURLResult, error) {
 		return LoginURLResult{}, err
 	}
 	a.mu.Lock()
+	if a.loginManager != manager {
+		a.mu.Unlock()
+		return LoginURLResult{}, errors.New("login was canceled")
+	}
 	a.pendingLoginURL = url
 	a.mu.Unlock()
 
 	if a.ctx != nil {
-		emit(a.ctx, authEventChannel, types.AuthEvent{Type: types.AuthEventURL, URL: url})
+		emit(a.ctx, authEventChannel, types.AuthEvent{Type: types.AuthEventURL, URL: url, FlowID: input.FlowID})
 	}
 	return LoginURLResult{URL: url}, nil
 }
@@ -46,6 +53,12 @@ func (a *App) Login(input LoginInput) (LoginURLResult, error) {
 func (a *App) CancelLogin() error {
 	a.mu.Lock()
 	manager := a.loginManager
+	a.loginManager = nil
+	a.pendingLoginURL = ""
+	if a.loginUnsub != nil {
+		a.loginUnsub()
+		a.loginUnsub = nil
+	}
 	a.mu.Unlock()
 	if manager == nil {
 		return nil
@@ -69,8 +82,7 @@ func (a *App) WhoAmI() (types.WhoAmIResult, error) {
 
 // GetCreditStatus runs `officecli auth status` and returns the parsed quota
 // snapshot (hosted credit balance, free trial / reward / paid-key counters,
-// access mode, plan name). A non-zero exit from the CLI is reported as an
-// anonymous status with zeroed counters rather than an error.
+// access mode, plan name). A failed query returns an error, never a zero balance.
 func (a *App) GetCreditStatus() (types.CreditStatus, error) {
 	opts := a.runCommandOptions()
 	return login.GetCreditStatus(a.ctx, opts)

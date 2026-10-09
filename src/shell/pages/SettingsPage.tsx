@@ -1,3 +1,4 @@
+import { SETUP_OPEN } from "../onboarding/SetupHost";
 import { useCallback, useEffect, useState } from "react";
 
 import { useLocale, useSetLocale, useT } from "../../renderer/i18n";
@@ -17,7 +18,8 @@ import { useComposerSettings } from "../composer/useComposerSettings";
 import { DexFace } from "../dex/DexFace";
 import { openConfirmDialog } from "../kit/dialogs";
 import { notice, openModal } from "../kit/layers";
-import { notBuiltYet } from "../port/reportPortFailure";
+import { useLibraryActions } from "../nav/useLibraryActions";
+import { attempt, notBuiltYet } from "../port/reportPortFailure";
 import { SETTINGS_SECTIONS, type SettingsSectionId } from "../state/shellReducer";
 import { useShell } from "../state/ShellContext";
 import {
@@ -308,8 +310,7 @@ function General({ settings, save }: { settings: UserSettings; save: (patch: Par
               body: <p>{t("dx.settings.guideConfirmBody")}</p>,
               action: t("dx.settings.guideConfirmAction"),
               onConfirm: () => {
-                save({ onboardingCompletedAt: null });
-                notice(t("dx.settings.guideScheduled"));
+                window.dispatchEvent(new CustomEvent(SETUP_OPEN));
               },
             })
           }
@@ -325,6 +326,24 @@ function General({ settings, save }: { settings: UserSettings; save: (patch: Par
 
 function Files({ location }: { location: string }) {
   const t = useT();
+  const api = useDesktopApi();
+  const library = useLibraryActions();
+  const { reload } = useShell();
+  const showDrafts = () => void attempt(async () => {
+    const drafts = await api.listDocumentDrafts?.() ?? [];
+    openModal({ title: t("dx.settings.recovery"), render: (close) => <>
+      <p>{t(drafts.length ? "dx.settings.draftsSafe" : "dx.settings.noDrafts")}</p>
+      {drafts.map((draft) => <div className="dx-row" key={draft.id}>
+        <span>{draft.name} · {new Date(draft.updatedAt).toLocaleString()}</span>
+        <button type="button" className="dx-btn" onClick={() => void attempt(async () => {
+          const path = await api.restoreDocumentDraft?.(draft.id);
+          if (!path) return;
+          const file = await api.importLocalFile(path);
+          await reload(); close(); await library.openLocalFile(file.id);
+        })}>{t("dx.menu.restore")}</button>
+      </div>)}
+    </> });
+  });
   const missing = (feature: string, key: string) => () => notBuiltYet(feature, t(key));
   return (
     <>
@@ -344,7 +363,7 @@ function Files({ location }: { location: string }) {
           type="button"
           className="dx-btn"
           data-act="defaults"
-          onClick={missing("settings.defaultApps", "dx.notBuilt.defaultApps")}
+          onClick={() => window.dispatchEvent(new CustomEvent(SETUP_OPEN, { detail: "defaults" }))}
         >
           {t("dx.settings.manageFormats")}
         </button>
@@ -357,7 +376,7 @@ function Files({ location }: { location: string }) {
           type="button"
           className="dx-btn"
           data-act="recovery"
-          onClick={missing("settings.recovery", "dx.notBuilt.recovery")}
+          onClick={showDrafts}
         >
           {t("dx.settings.viewDrafts")}
         </button>
@@ -891,8 +910,18 @@ function AboutBody({
   }, [api]);
 
   const { status, release, phase } = appUpdate;
+  const [switchingChannel, setSwitchingChannel] = useState(false);
+  const changeChannel = async (channel: "stable" | "beta") => {
+    setSwitchingChannel(true);
+    try {
+      await update({ updateChannel: channel });
+      await appUpdate.check();
+    } catch { /* useSettings renders persistence/backend failures. */ }
+    finally { setSwitchingChannel(false); }
+  };
   const ready = phase === "downloaded" || phase === "installing";
   const updates =
+    status.lastError ? status.lastError :
     release && ready
       ? t("dx.settings.updatesReady", { version: release.version })
       : release && status.updateAvailable
@@ -935,6 +964,18 @@ function AboutBody({
         <strong>{t("settings.about.productName")}</strong>
         <span className="dx-pill">{t("dx.settings.version", { version: version || status.currentVersion })}</span>
       </div>
+      <Row title={t("dx.settings.updateChannel")} desc={t("dx.settings.updateChannelDesc")}>
+        <select
+          aria-label={t("dx.settings.updateChannel")}
+          data-act="update-channel"
+          value={settings.updateChannel ?? status.updateChannel ?? "stable"}
+          disabled={switchingChannel || ["checking", "downloading", "installing"].includes(phase) || status.downloading}
+          onChange={(event) => void changeChannel(event.target.value as "stable" | "beta")}
+        >
+          <option value="stable">{t("dx.settings.updateChannelStable")}</option>
+          <option value="beta">{t("dx.settings.updateChannelBeta")}</option>
+        </select>
+      </Row>
       <Row title={t("dx.settings.updates")} desc={updates}>
         <button type="button" className="dx-btn" data-act="update-check" onClick={() => openUpdate(t)}>
           {t("dx.settings.checkUpdates")}

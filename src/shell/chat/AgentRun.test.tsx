@@ -115,7 +115,7 @@ describe("Stop", () => {
       queued: [{ id: "queued:1", text: "And a budget spreadsheet" }],
     }));
     const rows = [...run.card().querySelectorAll(".dx-agent-queued li")].map((row) => row.textContent ?? "");
-    expect(rows).toEqual(["Queued · And a budget spreadsheet"]);
+    expect(rows).toEqual(["Queued · And a budget spreadsheetRemove"]);
     // Stop is still the only action: the queue is not a run yet.
     expect(run.actions()).toEqual(["task-stop"]);
   });

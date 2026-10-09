@@ -70,6 +70,7 @@ export const UNSTYLED_BY_DESIGN = Object.freeze({
    * tooling find elements by them.
    */
   "dx-local-recent": "Local's Recent section; `-cards` and `-card` carry the layout",
+  "dx-agent-queued": "queued-message list test hook; native list layout, rows use dx-metadata and dx-btn",
   "dx-agent-run-actions": "a run's button row; laid out by `.dx-actions`, which it always sits beside",
   "dx-mention-menu": "the @ list; it is a `.dx-menu`, this names which one",
   "spreadsheet-header-markers": "legacy sheet canvas: positioned by inline style",

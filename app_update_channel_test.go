@@ -112,3 +112,31 @@ func TestDefaultManifestURLsAreHTTPS(t *testing.T) {
 		}
 	}
 }
+
+func TestSelectedChannelOverridesPackageDefault(t *testing.T) {
+	t.Setenv(config.UpdateManifestURLEnv, "")
+	channel, url := resolveUpdateManifestURL("beta")
+	if channel != "beta" || url != betaUpdateManifestURL {
+		t.Fatalf("selected channel not applied: %s %s", channel, url)
+	}
+	t.Setenv(config.UpdateManifestURLEnv, "https://example.test/custom.json")
+	_, url = resolveUpdateManifestURL("beta")
+	if url != "https://example.test/custom.json" {
+		t.Fatal("lost developer URL override")
+	}
+}
+
+func TestBetaPackageRespectsExplicitStablePreference(t *testing.T) {
+	t.Setenv(config.UpdateManifestURLEnv, "")
+	previous := appUpdateChannel
+	appUpdateChannel = updateChannelBeta
+	t.Cleanup(func() { appUpdateChannel = previous })
+	channel, url := resolveUpdateManifestURL("")
+	if channel != updateChannelBeta || url != betaUpdateManifestURL {
+		t.Fatal("fresh test installation must use beta")
+	}
+	channel, url = resolveUpdateManifestURL("stable")
+	if channel != updateChannelStable || url != stableUpdateManifestURL {
+		t.Fatal("explicit user preference must win over the package default")
+	}
+}

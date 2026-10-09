@@ -97,6 +97,9 @@ func (s *Store) Reload() (types.UserSettings, error) {
 // leave the corresponding field unchanged; non-nil pointers overwrite. Use
 // Patch.ClearLlmProvider to explicitly remove the provider.
 func (s *Store) Update(patch Patch) (types.UserSettings, error) {
+	if patch.UpdateChannel != nil && *patch.UpdateChannel != "stable" && *patch.UpdateChannel != "beta" {
+		return types.UserSettings{}, errors.New("settings: unknown update channel")
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	current, err := s.loadLocked()
@@ -170,8 +173,9 @@ func (s *Store) warn(msg string, err error) {
 // wire shape camelCase so the Wails-generated TypeScript matches the rest of
 // the renderer-facing types.
 type Patch struct {
-	Defaults     *GenerateDefaultsPatch `json:"defaults,omitempty"`
-	WorkspaceDir *string                `json:"workspaceDir,omitempty"`
+	UpdateChannel *string                `json:"updateChannel,omitempty"`
+	Defaults      *GenerateDefaultsPatch `json:"defaults,omitempty"`
+	WorkspaceDir  *string                `json:"workspaceDir,omitempty"`
 	// OutputDir is a deprecated alias for WorkspaceDir kept for older Wails
 	// bindings and persisted settings.
 	OutputDir             *string                       `json:"outputDir,omitempty"`
@@ -203,6 +207,9 @@ type GenerateDefaultsPatch struct {
 
 func applyPatch(base types.UserSettings, patch Patch) types.UserSettings {
 	out := base
+	if patch.UpdateChannel != nil {
+		out.UpdateChannel = *patch.UpdateChannel
+	}
 	if patch.Defaults != nil {
 		d := patch.Defaults
 		if d.DocumentType != nil {
@@ -263,6 +270,7 @@ func applyPatch(base types.UserSettings, patch Patch) types.UserSettings {
 // rawSettings mirrors the on-disk JSON with every field optional, so we can
 // distinguish "missing field" from "explicit zero" during sanitize.
 type rawSettings struct {
+	UpdateChannel         *string                    `json:"updateChannel,omitempty"`
 	Version               *int                       `json:"version,omitempty"`
 	Defaults              *rawGenerateDefaults       `json:"defaults,omitempty"`
 	WorkspaceDir          *string                    `json:"workspaceDir,omitempty"`
@@ -331,6 +339,9 @@ func sanitizeRaw(raw rawSettings) types.UserSettings {
 	out.OutputDir = nil
 	out.BridgeBinaryPath = trimNullable(raw.BridgeBinaryPath)
 	out.LlmProvider = sanitizeRawProvider(raw.LlmProvider)
+	if raw.UpdateChannel != nil {
+		out.UpdateChannel = sanitizeUpdateChannel(*raw.UpdateChannel)
+	}
 	out.OnboardingCompletedAt = trimNullable(raw.OnboardingCompletedAt)
 	out.SupportReportEndpoint = trimNullable(raw.SupportReportEndpoint)
 	out.SupportReportToken = trimNullable(raw.SupportReportToken)
@@ -373,6 +384,7 @@ func sanitizeCanonical(s types.UserSettings) types.UserSettings {
 	out.OutputDir = nil
 	out.BridgeBinaryPath = trimNullable(s.BridgeBinaryPath)
 	out.LlmProvider = sanitizeCanonicalProvider(s.LlmProvider)
+	out.UpdateChannel = sanitizeUpdateChannel(s.UpdateChannel)
 	out.OnboardingCompletedAt = trimNullable(s.OnboardingCompletedAt)
 	out.SupportReportEndpoint = trimNullable(s.SupportReportEndpoint)
 	out.SupportReportToken = trimNullable(s.SupportReportToken)
@@ -534,4 +546,11 @@ func sanitizeImageWatermarkPreferenceSource(value string) string {
 	default:
 		return "system"
 	}
+}
+
+func sanitizeUpdateChannel(channel string) string {
+	if channel == "stable" || channel == "beta" {
+		return channel
+	}
+	return ""
 }

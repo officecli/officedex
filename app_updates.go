@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -38,11 +37,8 @@ func (a *App) CheckAppUpdate() (AppUpdateCheckResult, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	rel, err := a.appUpdateMgr.CheckLatest(ctx)
-	if err != nil {
-		return AppUpdateCheckResult{Status: a.appUpdateMgr.Status()}, err
-	}
-	return AppUpdateCheckResult{Release: rel, Status: a.appUpdateMgr.Status()}, nil
+	rel, status, err := a.appUpdateMgr.CheckLatestStatus(ctx)
+	return AppUpdateCheckResult{Release: rel, Status: status}, err
 }
 
 // DownloadAppUpdate fetches the asset for the current platform and returns
@@ -65,25 +61,22 @@ func (a *App) CancelAppUpdate() error {
 // way then quits the current process so the installer can replace files.
 // Returns an error when no download has completed.
 func (a *App) InstallAppUpdate() error {
-	dp := a.appUpdateMgr.DownloadedPath()
-	if dp == nil {
-		return errors.New("appupdate: not downloaded")
-	}
-	path := *dp
-	if _, err := os.Stat(path); err != nil {
-		return fmt.Errorf("appupdate: installer file missing: %w", err)
-	}
-	if err := launchInstaller(path); err != nil {
-		return fmt.Errorf("appupdate: launch installer: %w", err)
-	}
-	rel := a.appUpdateMgr.LatestRelease()
-	if rel != nil {
-		a.appUpdateMgr.MarkInstalled(rel.Version)
-	}
-	if a.ctx != nil {
-		wailsruntime.Quit(a.ctx)
-	}
-	return nil
+	return a.appUpdateMgr.InstallDownloaded(func(path string) error {
+		if _, err := os.Stat(path); err != nil {
+			return fmt.Errorf("appupdate: installer file missing: %w", err)
+		}
+		if err := launchInstaller(path); err != nil {
+			return fmt.Errorf("appupdate: launch installer: %w", err)
+		}
+		rel := a.appUpdateMgr.LatestRelease()
+		if rel != nil {
+			a.appUpdateMgr.MarkInstalled(rel.Version)
+		}
+		if a.ctx != nil {
+			wailsruntime.Quit(a.ctx)
+		}
+		return nil
+	})
 }
 
 // ─── Runtime (OfficeCLI) update bindings ───────────────────────────────────

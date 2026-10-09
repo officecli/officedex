@@ -11,6 +11,7 @@ import {
   describeUnlocatedQuote,
   enumeratesWholeDeck,
   resolveEditScope,
+  replacementTargetText,
   scopedPrompt,
 } from "./pptxEditScope";
 
@@ -94,8 +95,11 @@ export function createPptxEditRunner(deps: PptxEditDeps) {
      * and "it translated the whole deck again" is only answerable if the run
      * left behind which rule fired and what it decided. `basis` is that record.
      */
-    const { scope, basis } = resolveEditScope(before, {
-      preferSelection: request.preferSelection,
+    const namedText = !request.preferSelection ? replacementTargetText(before, instruction) : undefined;
+    const scopedBefore = namedText ? { ...before, selectedShapes: [], selectedSlideIds: [] } : before;
+    const { scope, basis } = resolveEditScope(scopedBefore, {
+      preferSelection: request.preferSelection || Boolean(namedText),
+      ...(namedText ? { quotedText: namedText } : {}),
       ...(request.selection?.text ? { quotedText: request.selection.text } : {}),
     });
     logShellEvent("pptx-edit.scope", {
@@ -169,7 +173,7 @@ export function createPptxEditRunner(deps: PptxEditDeps) {
         : [];
     const flagged = plan.requires_confirmation === true || plan.confidence === "low";
     const dangerous = Boolean(breach) || unlocatedWalk.length > 0;
-    if (dangerous || flagged) {
+    if (dangerous || flagged || request.requireReview) {
       const detail = breach
         ? describeScopeBreach(breach, scope)
         : unlocatedWalk.length > 0

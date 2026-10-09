@@ -29,6 +29,7 @@ interface TextEdit {
 }
 
 interface EditPlan {
+  question?: string;
   summary: string;
   edits: TextEdit[];
 }
@@ -107,7 +108,7 @@ function eachOccursOnce(haystack: string, needles: string[]): boolean {
 }
 
 export function createDocxEditRunner(deps: DocxEditDeps) {
-  return async function editDocument(request: DocumentEditRequest): Promise<DocumentEditResult> {
+  return async function editDocument(request: DocumentEditRequest, questions = 0): Promise<DocumentEditResult> {
     const instruction = request.instruction.trim();
     if (!instruction) throw new Error(translate("shell.edit.noInstruction"));
 
@@ -187,6 +188,14 @@ export function createDocxEditRunner(deps: DocxEditDeps) {
       throw new Error(translate("shell.edit.unreadablePlan"));
     }
 
+    if (plan.question?.trim()) {
+      if (!request.onQuestion || questions >= 5) throw new Error(plan.question);
+      if (plan.edits.length) throw new Error("A clarification cannot apply document edits.");
+      const answer = await request.onQuestion(plan.question);
+      assertLive(request.signal);
+      return editDocument({ ...request, instruction: `${instruction}\n\nQuestion: ${plan.question}\nUser answer: ${answer}` }, questions + 1);
+    }
+
     // No edits is an answer, not an error: the planner returns an empty list
     // and explains itself in `summary` when it needs a clarification or when
     // the request asks for formatting it cannot do.
@@ -194,6 +203,13 @@ export function createDocxEditRunner(deps: DocxEditDeps) {
       return { summary: plan.summary, applied: 0, undo: null, scope, saveError: null };
     }
 
+    if (request.requireReview) {
+      if (!request.onConfirm) throw new Error(translate("shell.edit.confirm"));
+      const approved = await request.onConfirm({ text: plan.summary,
+        detail: plan.edits.map((edit) => `${edit.query} → ${edit.replacement}`).join("\n") });
+      assertLive(request.signal);
+      if (!approved) return { summary: translate("shell.edit.deckCancelled"), applied: 0, undo: null, scope, saveError: null };
+    }
     request.onPhase?.("applying");
     const { replaced } = await deps.editor.apply(captured.id, plan.edits);
 

@@ -43,9 +43,7 @@ type authStatusJSON struct {
 }
 
 // GetCreditStatus spawns `officecli auth status --json`, waits for exit, and
-// decodes the quota report. A non-zero exit is treated as an unauthenticated /
-// anonymous state — the caller gets a zero-value CreditStatus (Mode=anonymous)
-// rather than an error, mirroring GetWhoAmI's tolerance.
+// decodes the quota report. A non-zero exit is an unknown state, never a confirmed anonymous or zero balance.
 func GetCreditStatus(ctx context.Context, opts ManagerOptions) (types.CreditStatus, error) {
 	stdout, _, code, err := runOnce(ctx, opts, []string{"auth", "status", "--json"})
 	if err != nil {
@@ -56,15 +54,12 @@ func GetCreditStatus(ctx context.Context, opts ManagerOptions) (types.CreditStat
 
 // ParseCreditStatus decodes what `officecli auth status --json` printed.
 //
-// A non-zero exit short-circuits to anonymous, as before: the CLI exits non-zero
-// when it cannot reach the license service at all, and there is nothing to
-// report. Malformed output on a zero exit is a real error, though — the previous
-// prose parser could only shrug at it and return zeros, which is how a rewording
-// went unnoticed.
+// Query failures remain errors so callers can offer Retry without claiming
+// the account is anonymous or has exhausted its credits.
 func ParseCreditStatus(stdout string, exitCode int) (types.CreditStatus, error) {
 	result := types.CreditStatus{Mode: types.WhoAmIAnonymous, Raw: stdout}
 	if exitCode != 0 {
-		return result, nil
+		return result, fmt.Errorf("credit status unavailable (officecli exited %d)", exitCode)
 	}
 	trimmed := strings.TrimSpace(stdout)
 	if trimmed == "" {

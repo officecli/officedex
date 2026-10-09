@@ -369,6 +369,7 @@ type SaveDocxInput struct {
 	PreviewToken   string `json:"previewToken"`
 	ExpectedSHA256 string `json:"expectedSHA256,omitempty"`
 	SaveAsCopy     bool   `json:"saveAsCopy,omitempty"`
+	RecoveryOnly   bool   `json:"recoveryOnly,omitempty"`
 }
 
 type SaveDocxResult struct {
@@ -392,17 +393,30 @@ func (a *App) SaveDocx(input SaveDocxInput) (SaveDocxResult, error) {
 	if err != nil {
 		return SaveDocxResult{}, err
 	}
+	if input.RecoveryOnly {
+		path, err := a.retainDocumentDraft(dest, data)
+		if err != nil {
+			return SaveDocxResult{}, err
+		}
+		return SaveDocxResult{FilePath: path, SHA256: sha256Hex(data)}, nil
+	}
 	if !input.SaveAsCopy && strings.TrimSpace(input.ExpectedSHA256) != "" {
 		current, readErr := os.ReadFile(dest)
 		if readErr != nil {
 			return SaveDocxResult{}, fmt.Errorf("save docx: read current file: %w", readErr)
 		}
 		if !strings.EqualFold(sha256Hex(current), strings.TrimSpace(input.ExpectedSHA256)) {
-			return SaveDocxResult{}, errors.New("save docx: source file changed outside OfficeDex; reopen it before saving")
+			if _, err := a.retainDocumentDraft(dest, data); err != nil {
+				return SaveDocxResult{}, fmt.Errorf("save docx: source changed outside OfficeDex; recovery export failed: %w", err)
+			}
+			return SaveDocxResult{}, errors.New("save docx: source file changed outside OfficeDex; your edits are available in Settings > Files > View drafts")
 		}
 	}
 	if err := atomicfile.WriteFile(dest, data, 0o644); err != nil {
-		return SaveDocxResult{}, fmt.Errorf("save docx: write: %w", err)
+		if _, backupErr := a.retainDocumentDraft(dest, data); backupErr != nil {
+			return SaveDocxResult{}, fmt.Errorf("save docx: %v; recovery export failed: %w", err, backupErr)
+		}
+		return SaveDocxResult{}, fmt.Errorf("save docx: write: %w; edits retained in Settings > Files > View drafts", err)
 	}
 	a.sourceDigests.remember(dest, sha256Hex(data))
 	if a.previewReg != nil {

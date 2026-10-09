@@ -14,8 +14,34 @@
   },
   "info": {
     "productName": "OfficeDex",
-    "productVersion": "1.0.13",
+    "productVersion": "1.0.15",
     "copyright": "",
-    "comments": "OfficeDex desktop app (Wails v2 + Go)"
+    "comments": "OfficeDex desktop app (Wails v2 + Go)",
+    "fileAssociations": [
+      {
+        "ext": "docx",
+        "name": "Word Document",
+        "role": "Editor",
+        "iconName": "appicon"
+      },
+      {
+        "ext": "xlsx",
+        "name": "Excel Workbook",
+        "role": "Editor",
+        "iconName": "appicon"
+      },
+      {
+        "ext": "pptx",
+        "name": "PowerPoint Presentation",
+        "role": "Editor",
+        "iconName": "appicon"
+      }
+    ],
+    "protocols": [
+      {
+        "scheme": "officedex",
+        "role": "Viewer"
+      }
+    ]
   }
 }

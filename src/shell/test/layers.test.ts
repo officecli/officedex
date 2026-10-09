@@ -393,6 +393,13 @@ interface ZIndexSite extends Site {
 }
 
 const Z_INDEX_SITES: ZIndexSite[] = [
+  {
+    file: "src/shell/onboarding/setup.css",
+    selector: "#shell .setup-overlay",
+    rung: "--shell-z-gate",
+    context: "root",
+    note: "Setup covers the inert workspace; it is a sibling inside #shell. Its confirmation sorts within this overlay by document order.",
+  },
   // ---- the design's workspace, bottom to top ------------------------------
   {
     file: V12,

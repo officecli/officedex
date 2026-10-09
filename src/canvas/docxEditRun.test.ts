@@ -283,3 +283,29 @@ describe("createDocxEditRunner", () => {
     expect(result.saveError).toBeNull();
   });
 });
+
+it("keeps a review-mode edit unapplied until the user approves", async () => {
+  const writer = editor("It is very important to note that we ship on Friday.");
+  const run = createDocxEditRunner({ api: api(ONE_EDIT), editor: writer, hasSelection: () => false });
+  let approve!: (value: boolean) => void;
+  const confirm = vi.fn(() => new Promise<boolean>((resolve) => { approve = resolve; }));
+  const pending = run({ instruction: "Shorten the opening", preferSelection: false, requireReview: true, onConfirm: confirm });
+  await vi.waitFor(() => expect(confirm).toHaveBeenCalledOnce());
+  expect(writer.apply).not.toHaveBeenCalled();
+  approve(true);
+  const result = await pending;
+  expect(result.applied).toBe(1);
+  expect(writer.apply).toHaveBeenCalledOnce();
+});
+
+it("asks for a choice without edits and resumes with the actual answer", async () => {
+ const writer = editor("Alpha");
+ const desktop = api(null, { getAgentRun: vi.fn()
+   .mockResolvedValueOnce({ id: "run-1", status: "completed", result: { summary: "Waiting", question: "Delta or Epsilon?", edits: [] }, events: [] })
+   .mockResolvedValueOnce({ id: "run-2", status: "completed", result: { summary: "Changed", question: "", edits: [{ query: "Alpha", replacement: "Delta" }] }, events: [] }) });
+ const run = createDocxEditRunner({ api: desktop, editor: writer, hasSelection: () => false });
+ const onQuestion = vi.fn(async () => { expect(writer.apply).not.toHaveBeenCalled(); return "Delta"; });
+ expect((await run({ instruction: "Ask which title first", preferSelection: false, onQuestion })).applied).toBe(1);
+ expect(onQuestion).toHaveBeenCalledWith("Delta or Epsilon?");
+ expect(desktop.startAgentRun).toHaveBeenLastCalledWith(expect.objectContaining({ input: { parameters: expect.objectContaining({ prompt: expect.stringContaining("User answer: Delta") }) } }));
+});

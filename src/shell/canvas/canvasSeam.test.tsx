@@ -284,7 +284,7 @@ describe("canvas selection → composer reference", () => {
    * editor's one tracked edit scope. So the chip is a label until the message
    * is sent, and the words are fetched once, then.
    */
-  it("fetches the quoted text when the message goes out, not before", async () => {
+  it("previews the selected text and refreshes it when the message goes out", async () => {
     const { adapter, select, resolveSelection } = createTestCanvasAdapter();
     const shell = await renderShell({ canvas: adapter, fastAgent: true });
     const send = vi.spyOn(shell.port.agent, "send");
@@ -294,7 +294,8 @@ describe("canvas selection → composer reference", () => {
       select({ ...selection, text: "" });
     });
     await waitFor(() => expect(dexQuote(shell.view.container)).not.toBeNull());
-    expect(resolveSelection).not.toHaveBeenCalled();
+    expect(resolveSelection).toHaveBeenCalledOnce();
+    expect(dexQuote(shell.view.container)?.textContent).toContain("A better everyday workspace");
 
     const input = dexInput(shell.view.container);
     await act(async () => {
@@ -305,14 +306,14 @@ describe("canvas selection → composer reference", () => {
     });
 
     await waitFor(() => expect(send).toHaveBeenCalled());
-    expect(resolveSelection).toHaveBeenCalledOnce();
+    expect(resolveSelection).toHaveBeenCalledTimes(2);
     expect(send.mock.calls[0]?.[0].reference?.text).toBe("A better everyday workspace");
   });
 
   // A reference that could not be read must not take the message down with it.
   it("still sends when the editor cannot produce the text", async () => {
     const { adapter, select, resolveSelection } = createTestCanvasAdapter();
-    resolveSelection.mockRejectedValueOnce(new Error("The selection is empty."));
+    resolveSelection.mockRejectedValue(new Error("The selection is empty."));
     const shell = await renderShell({ canvas: adapter, fastAgent: true });
     const send = vi.spyOn(shell.port.agent, "send");
     await shell.dispatch({ type: "open-file", fileId: SEED_ACTIVE_FILE_ID });
@@ -416,6 +417,47 @@ describe("in-place document edit", () => {
     expect(request.instruction).toBe("Tighten the summary");
     // Nothing was selected, so the scope is the whole document.
     expect(request.preferSelection).toBe(false);
+  });
+
+  it("queues a second local edit and runs it only after the first finishes", async () => {
+    const canvas = createTestCanvasAdapter({ inPlace: {} });
+    const original = canvas.editDocument.getMockImplementation()!;
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => { release = resolve; });
+    canvas.editDocument.mockImplementationOnce(async (request) => {
+      await pending;
+      return original(request);
+    });
+    const { shell, send, type } = await askTheDocument(canvas, "Tighten the summary");
+    await type();
+    await waitFor(() => expect(canvas.editDocument).toHaveBeenCalledOnce());
+    const input = dexInput(shell.view.container);
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "Translate the conclusion" } });
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
+    expect(canvas.editDocument).toHaveBeenCalledOnce();
+    await act(async () => { release(); });
+    await waitFor(() => expect(canvas.editDocument).toHaveBeenCalledTimes(2));
+    expect(canvas.editDocument.mock.calls[1][0].instruction).toBe("Translate the conclusion");
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("keeps a finished background edit in its own document conversation", async () => {
+    const canvas = createTestCanvasAdapter({ inPlace: {} });
+    const original = canvas.editDocument.getMockImplementation()!;
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => { release = resolve; });
+    canvas.editDocument.mockImplementationOnce(async (request) => { await pending; return original(request); });
+    const { shell, type } = await askTheDocument(canvas, "Tighten the summary");
+    await type();
+    await waitFor(() => expect(canvas.editDocument).toHaveBeenCalledOnce());
+    await shell.dispatch({ type: "open-file", fileId: "file-brief" });
+    await act(async () => { release(); });
+    expect(shell.view.container.querySelector("[data-task]")).toBeNull();
+    await shell.dispatch({ type: "open-file", fileId: SEED_ACTIVE_FILE_ID });
+    await waitFor(() => expect(shell.view.container.querySelector("[data-task]")).not.toBeNull());
+    expect(shell.view.container.textContent).toContain("Tighten the summary");
   });
 
   it("narrows the edit to the quoted passage", async () => {

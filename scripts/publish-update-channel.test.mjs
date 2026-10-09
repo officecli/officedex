@@ -169,3 +169,34 @@ test("the stable channel is never published to OBS", async () => {
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /not published to OBS/);
 });
+
+test("beta publishes a signed isolated manifest without touching stable or legacy", async () => {
+  const { zip, dist, publicKey, keyArgs } = await setup();
+  const before = await readFile(path.join(dist, "manifest.json"), "utf8");
+  const legacy = path.join(dist, "channels/1.0");
+  await mkdir(legacy, {recursive:true});
+  await writeFile(path.join(legacy, "manifest.json"), "frozen");
+  const result = run(["--channel", "beta", "--version", "1.0.1", "--darwin-arm64", zip, "--dist", dist, ...keyArgs]);
+  assert.equal(result.status, 0, result.stderr);
+  const {manifest} = await readSigned(path.join(dist, "channels/beta"), publicKey);
+  assert.match(manifest.assets["darwin-arm64"].url, /^https:\/\/github.com\/officecli\/officedex\/releases\/download/);
+  assert.equal(await readFile(path.join(dist, "manifest.json"), "utf8"), before);
+  assert.equal(await readFile(path.join(legacy, "manifest.json"), "utf8"), "frozen");
+});
+
+test("channel commit refuses an existing index without changing or unstaging it", async () => {
+  const { zip, dist, keyArgs } = await setup();
+  const git = (...args) => {
+    const result = spawnSync("git", args, {cwd:dist, encoding:"utf8"});
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout;
+  };
+  git("init", "-q");
+  await writeFile(path.join(dist, "unrelated.txt"), "keep staged");
+  git("add", "unrelated.txt");
+  const result = run(["--channel", "beta", "--version", "1.0.1", "--darwin-arm64", zip, "--dist", dist, "--commit", ...keyArgs]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /has staged changes/);
+  assert.equal(git("diff", "--cached", "--name-only").trim(), "unrelated.txt");
+  await assert.rejects(readFile(path.join(dist, "channels/beta/manifest.json")));
+});

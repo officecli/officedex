@@ -385,7 +385,13 @@ export function useFileActions() {
         { label: t("dx.menu.details"), onSelect: () => details(file) },
         "-",
         { label: t("dx.menu.rename"), onSelect: () => rename(file) },
-        { label: t("dx.menu.saveAs"), onSelect: missing("file.saveAs", "dx.notBuilt.saveAs") },
+        { label: t("dx.menu.saveAs"), onSelect: () => void attempt(async () => {
+          if (file.dirty && !(await save(file))) return;
+          const path = await port.images?.saveCopy(file.id);
+          if (!path) return;
+          const copy = await port.files.openDropped(path);
+          if (copy) { await reload(); await library.openLocalFile(copy.id); }
+        }) },
         {
           label: t("dx.menu.saveCopy"),
           onSelect: () =>
@@ -420,7 +426,7 @@ export function useFileActions() {
       ];
       openMenu(anchor, items);
     },
-    [t, state.chat, library, details, rename, share, removeFromAssets, trash, save, activeFile],
+    [t, state.chat, library, details, rename, share, removeFromAssets, trash, save, activeFile, port, reload],
   );
 
   const statusOf = useCallback(

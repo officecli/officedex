@@ -280,6 +280,7 @@ export function DocxCanvas({
             return;
           }
           onFileFailure(file.id, describeFailure("open", error));
+          setSession(null);
         }}
       />
     </DesktopApiProvider>

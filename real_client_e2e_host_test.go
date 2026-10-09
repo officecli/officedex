@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"officedex/internal/atomicfile"
+	"officedex/internal/onboarding"
 	"officedex/internal/settings"
 	"officedex/internal/types"
 )
@@ -570,6 +571,22 @@ func (h *realClientE2EHost) call(method string, raw json.RawMessage) (any, error
 			return nil, err
 		}
 		return h.app.Redeem(code)
+	case "GetSetupState":
+		return h.app.GetSetupState()
+	case "SaveSetupState":
+		var state onboarding.State
+		if err := decodeRealClientInput(raw, &state); err != nil {
+			return nil, err
+		}
+		return nil, h.app.SaveSetupState(state)
+	case "SetSetupWindow":
+		return nil, nil // Browser host has no native window.
+	case "GetDefaultDocumentApps":
+		return h.app.GetDefaultDocumentApps(), nil
+	case "SetDefaultDocumentApps":
+		return nil, fmt.Errorf("system associations must be tested in the packaged app")
+	case "TakeNativeOpenFiles":
+		return h.app.TakeNativeOpenFiles(), nil
 	case "GetSettings":
 		return h.app.GetSettings()
 	case "UpdateSettings":
@@ -672,6 +689,23 @@ func (h *realClientE2EHost) call(method string, raw json.RawMessage) (any, error
 			return nil, err
 		}
 		return h.app.RenameDocument(input.DocumentID, input.Name)
+	case "ListDocumentDrafts":
+		return h.app.ListDocumentDrafts()
+	case "RestoreDocumentDraft":
+		var id string
+		if err := json.Unmarshal(raw, &id); err != nil {
+			return nil, err
+		}
+		return h.app.RestoreDocumentDraft(id)
+	case "MoveConversation":
+		var input struct {
+			ConversationID string `json:"conversationId"`
+			FolderID       string `json:"folderId"`
+		}
+		if err := json.Unmarshal(raw, &input); err != nil {
+			return nil, err
+		}
+		return nil, h.app.MoveConversation(input.ConversationID, input.FolderID)
 	case "MoveDocument":
 		var input struct {
 			DocumentID string `json:"documentId"`

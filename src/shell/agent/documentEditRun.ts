@@ -23,6 +23,7 @@ import { translate } from "../../renderer/i18n";
  */
 
 export interface DocumentEditRunInput {
+  requireReview?: boolean;
   instruction: string;
   folderId: string;
   fileId: string;
@@ -157,6 +158,7 @@ export function startDocumentEditRun(
   const task: AgentTask = {
     id,
     title: title(input.instruction),
+    targetFileName: input.fileName,
     folderId: input.folderId,
     documentType: input.documentType,
     status: "reading",
@@ -243,9 +245,23 @@ export function startDocumentEditRun(
       };
     });
 
+  const askInput = (text: string): Promise<string> => new Promise((resolve) => {
+    task.status = "awaiting-review";
+    task.question = { id: nextId("question"), text, options: [], allowFreeform: true };
+    task.messages.push({ id: nextId("message"), role: "agent", text, createdAt: now() });
+    pendingAnswer = (answer) => {
+      pendingAnswer = null; task.question = null;
+      task.messages.push({ id: nextId("message"), role: "user", text: answer, createdAt: now() });
+      task.status = "writing"; emit(); resolve(answer);
+    };
+    emit();
+  });
+  controller.signal.addEventListener("abort", () => pendingAnswer?.("cancel"), { once: true });
+
   const answer = (input: { optionId?: string; text?: string }) => {
-    // Free text is not an option list; the closest reading is "yes".
-    const optionId = input.optionId ?? (input.text?.trim() ? "apply" : "cancel");
+    // A clarification accepts text; applying a reviewed plan requires its explicit option.
+    const optionId = task.question?.allowFreeform ? (input.text?.trim() ?? input.optionId ?? "") : (input.optionId ?? "cancel");
+    if (!optionId) return;
     pendingAnswer?.(optionId);
   };
 
@@ -293,6 +309,8 @@ export function startDocumentEditRun(
       const result = await deps.canvas.editDocument!({
         instruction: input.instruction,
         onConfirm: ask,
+        onQuestion: askInput,
+        requireReview: input.requireReview,
         // A quoted passage is the user pointing at part of the document, and
         // it is the same selection the editor still has tracked. Without one,
         // the whole document is the scope.

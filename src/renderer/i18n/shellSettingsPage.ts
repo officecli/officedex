@@ -218,6 +218,10 @@ export const shellSettingsPageEn: Record<string, string> = {
 
   "dx.settings.version": "Version {version}",
   "dx.settings.channel": "Update channel: {channel}",
+  "dx.settings.updateChannel": "Update channel",
+  "dx.settings.updateChannelStable": "Stable",
+  "dx.settings.updateChannelBeta": "Test",
+  "dx.settings.updateChannelDesc": "Test builds offer early features and may be unstable. Switching back to Stable waits for a newer version; it does not downgrade the app.",
   "dx.settings.updates": "Updates",
   "dx.settings.updatesIdle": "Check for available updates.",
   "dx.settings.updatesCurrent": "The latest update is installed.",
@@ -499,6 +503,10 @@ export const shellSettingsPageZh: Record<string, string> = {
 
   "dx.settings.version": "版本 {version}",
   "dx.settings.channel": "更新渠道：{channel}",
+  "dx.settings.updateChannel": "更新渠道",
+  "dx.settings.updateChannelStable": "稳定版",
+  "dx.settings.updateChannelBeta": "测试版",
+  "dx.settings.updateChannelDesc": "测试版可提前体验新功能，可能不稳定。切回稳定版后，仅在有更高版本时更新，不会自动降级。",
   "dx.settings.updates": "更新",
   "dx.settings.updatesIdle": "检查是否有可用更新。",
   "dx.settings.updatesCurrent": "已安装最新版本。",

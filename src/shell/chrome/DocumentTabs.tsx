@@ -76,7 +76,7 @@ export function DocumentTabs({ workingFileIds }: { workingFileIds: ReadonlySet<s
   useEffect(() => {
     if (!activeFile) return;
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (!isCloseTabShortcut(event)) return;
+      if (document.getElementById("dx-workspace")?.inert || !isCloseTabShortcut(event)) return;
       event.preventDefault();
       fileActions.close(activeFile);
     };

@@ -57,20 +57,22 @@ export function useProjectAssets(): FileMeta[] {
  * beside it. Enter and Space do the same. The checkbox selects for the batch
  * actions; it never opens.
  */
-export function AssetsPage() {
+export function AssetsPage({ scope = "project" }: { scope?: "project" | "local" }) {
   const t = useT();
-  const { state, folders, chats } = useShell();
+  const { state, folders, chats, files } = useShell();
   const agent = useAgent();
   const library = useLibraryActions();
   const fileActions = useFileActions();
-  const assets = useProjectAssets();
+  const projectAssets = useProjectAssets();
+  const assets = scope === "local" ? files : projectAssets;
+  const openFile = scope === "local" ? library.openLocalFile : library.openFile;
   const [format, setFormat] = useState<Format>("all");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [sort, setSort] = useState<Sort>("updated");
   const [layout, setLayout] = useState<"list" | "grid">("list");
   const [selection, setSelection] = useState<string[]>([]);
 
-  const chatKey = `${state.chat?.folderId ?? ""}:${state.chat?.conversationId ?? ""}`;
+  const chatKey = `${scope}:${state.chat?.folderId ?? ""}:${state.chat?.conversationId ?? ""}`;
   // Entering a conversation starts from the whole library, as a list (§16).
   useEffect(() => {
     setFormat("all");
@@ -105,7 +107,7 @@ export function AssetsPage() {
   }, [assets, format, status, sort, touched]);
 
   const project = folders.find((folder) => folder.id === state.chat?.folderId);
-  const heading = project && !project.isDefault ? project.name : t("dx.nav.unfiledShort");
+  const heading = scope === "local" ? t("dx.nav.local") : project && !project.isDefault ? project.name : t("dx.nav.unfiledShort");
   const selected = list.filter((file) => selection.includes(file.id));
   const filtered = format !== "all" || status !== "all";
 
@@ -118,7 +120,7 @@ export function AssetsPage() {
     if (event.target !== event.currentTarget) return;
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      void library.openFile(file.id);
+      void openFile(file.id);
     } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       const rows = [...document.querySelectorAll<HTMLElement>("#dx-file-results [data-row]")];
@@ -135,7 +137,7 @@ export function AssetsPage() {
       title={t("dx.file.optionsFor", { name: file.name })}
       data-act="file-menu"
       data-id={file.id}
-      onClick={(event) => fileActions.fileMenu(file, event.currentTarget)}
+      onClick={(event) => fileActions.fileMenu(file, event.currentTarget, { open: () => void openFile(file.id) })}
     >
       <Icon name="MoreHorizontal" />
     </button>
@@ -147,8 +149,9 @@ export function AssetsPage() {
     list.length === 0 ? (
       <div className="dx-empty">
         <Icon name="Folder" />
-        <h2>{t(filtered ? "dx.local.noMatch" : "dx.assets.empty")}</h2>
-        <p>{t(filtered ? "dx.assets.noMatchHint" : "dx.assets.emptyHint")}</p>
+        <h2>{t(filtered ? "dx.local.noMatch" : scope === "local" ? "dx.local.empty" : "dx.assets.empty")}</h2>
+        <p>{t(filtered ? "dx.assets.noMatchHint" : scope === "local" ? "dx.local.emptyHint" : "dx.assets.emptyHint")}</p>
+        {scope === "local" && !filtered && <button type="button" className="dx-btn" onClick={() => void library.openFromDisk()}>{t("dx.local.openFile")}</button>}
         {filtered ? (
           <div className="dx-actions">
             <button
@@ -177,7 +180,7 @@ export function AssetsPage() {
               if ((event.target as HTMLElement).closest("input,button,a,label")) return;
               setSelection([file.id]);
             }}
-            onDoubleClick={() => void library.openFile(file.id)}
+            onDoubleClick={() => void openFile(file.id)}
             onKeyDown={(event) => onRowKeyDown(event, file)}
           >
             <label>
@@ -192,7 +195,7 @@ export function AssetsPage() {
             <div className="dx-preview">
               <FileIcon ext={extensionOf(file)} size={48} />
             </div>
-            <button type="button" className="dx-name-button" data-act="open-file" data-id={file.id} title={file.name} onClick={() => void library.openFile(file.id)}>
+            <button type="button" className="dx-name-button" data-act="open-file" data-id={file.id} title={file.name} onClick={() => void openFile(file.id)}>
               <span className="dx-ellipsis">{file.name}</span>
             </button>
             <div className="dx-metadata">
@@ -219,12 +222,12 @@ export function AssetsPage() {
                   onChange={(event) => setSelection(event.target.checked ? list.map((file) => file.id) : [])}
                 />
               </th>
-              <th>{t("dx.column.name")}</th>
+              <th aria-sort={sort === "name" ? "ascending" : undefined}>{t("dx.column.name")}{sort === "name" ? " ↑" : ""}</th>
               <th className="dx-format-col">{t("dx.column.format")}</th>
-              <th className="dx-origin-col">{t("dx.column.fromChat")}</th>
+              {scope === "project" && <th className="dx-origin-col">{t("dx.column.fromChat")}</th>}
               <th className="dx-source-col">{t("dx.column.source")}</th>
-              <th className="dx-time-col" aria-sort="descending">
-                {t("dx.column.lastUpdated")} ↓
+              <th className="dx-time-col" aria-sort={sort === "name" ? undefined : "descending"}>
+                {t(sort === "opened" ? "dx.column.lastOpened" : "dx.column.modified")}{sort === "name" ? "" : " ↓"}
               </th>
               <th>{t("dx.column.status")}</th>
               <th />
@@ -244,7 +247,7 @@ export function AssetsPage() {
                   aria-selected={isSelected}
                   onClick={(event) => {
                     if ((event.target as HTMLElement).closest("input,button,a,label,select,textarea")) return;
-                    void library.openFile(file.id);
+                    void openFile(file.id);
                   }}
                   onKeyDown={(event) => onRowKeyDown(event, file)}
                 >
@@ -258,16 +261,16 @@ export function AssetsPage() {
                     />
                   </td>
                   <td className="dx-name-col">
-                    <button type="button" className="dx-name-button" data-act="open-file" data-id={file.id} title={file.name} onClick={() => void library.openFile(file.id)}>
+                    <button type="button" className="dx-name-button" data-act="open-file" data-id={file.id} title={file.name} onClick={() => void openFile(file.id)}>
                       <FileIcon ext={extensionOf(file)} />
                       <span className="dx-ellipsis">{file.name}</span>
                       {file.pinned ? <Icon name="Bookmark" /> : null}
                     </button>
                   </td>
                   <td className="dx-format-col dx-metadata">{extensionOf(file).toUpperCase()}</td>
-                  <td className="dx-origin-col dx-metadata">{originOf(file)}</td>
+                  {scope === "project" && <td className="dx-origin-col dx-metadata">{originOf(file)}</td>}
                   <td className="dx-source-col dx-metadata">{sourceOf(file)}</td>
-                  <td className="dx-time-col dx-metadata">{formatDateTime(file.updatedAt)}</td>
+                  <td className="dx-time-col dx-metadata">{formatDateTime(sort === "opened" ? file.lastOpenedAt : file.updatedAt)}</td>
                   <td className="dx-metadata">{t(statusKeyOf(statusOf(file), file, true))}</td>
                   <td>{more(file)}</td>
                 </tr>
@@ -285,6 +288,7 @@ export function AssetsPage() {
           <h1>{t("dx.assets.title")}</h1>
           <p>{heading}</p>
         </div>
+        {scope === "local" && <button type="button" className="dx-btn" onClick={() => void library.openFromDisk()}><Icon name="FolderOpen" />{t("dx.action.open")}</button>}
       </header>
       <OfflineBanner />
       <div className="dx-toolbar">
@@ -302,11 +306,14 @@ export function AssetsPage() {
           <option value="saved">{t("dx.status.saved")}</option>
           <option value="attention">{t("dx.status.attention")}</option>
         </select>
-        <select aria-label={t("dx.assets.sortAria")} data-filter="sort" value={sort} onChange={(event) => setSort(event.target.value as Sort)}>
-          <option value="updated">{t("dx.column.lastUpdated")}</option>
-          <option value="opened">{t("dx.column.lastOpened")}</option>
-          <option value="name">{t("dx.column.name")}</option>
-        </select>
+        <label className="dx-local-sort">
+          <span>{t("dx.local.sortBy")}</span>
+          <select aria-label={t(scope === "local" ? "dx.local.sortAria" : "dx.assets.sortAria")} data-filter="sort" value={sort} onChange={(event) => setSort(event.target.value as Sort)}>
+            <option value="updated">{t("dx.column.modified")}</option>
+            <option value="opened">{t("dx.column.lastOpened")}</option>
+            <option value="name">{t("dx.column.name")}</option>
+          </select><Icon name="ChevronDown" size={14} />
+        </label>
         <div className="dx-actions dx-end">
           {(["list", "grid"] as const).map((value) => (
             <button

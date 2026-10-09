@@ -40,8 +40,16 @@
             <string>{{.Name}}</string>
             <key>CFBundleTypeRole</key>
             <string>{{.Role}}</string>
+            <key>LSHandlerRank</key>
+            <string>Alternate</string>
+            <key>LSItemContentTypes</key>
+            <array>
+              {{if eq .Ext "docx"}}<string>org.openxmlformats.wordprocessingml.document</string>{{end}}
+              {{if eq .Ext "xlsx"}}<string>org.openxmlformats.spreadsheetml.sheet</string>{{end}}
+              {{if eq .Ext "pptx"}}<string>org.openxmlformats.presentationml.presentation</string>{{end}}
+            </array>
             <key>CFBundleTypeIconFile</key>
-            <string>{{.IconName}}</string>
+            <string>{{if .IconName}}{{.IconName}}{{else}}iconfile{{end}}</string>
           </dict>
           {{end}}
         </array>

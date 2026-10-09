@@ -15,12 +15,13 @@ import { useFileActions } from "./useFileActions";
  * Shortcuts that belong to an editor — and ⌘F, which searches whatever has
  * focus — are left to whatever has focus.
  */
-export function useKeyboardShortcuts({ onNew }: { onNew: () => void }) {
+export function useKeyboardShortcuts({ onNew, enabled = true }: { onNew: () => void; enabled?: boolean }) {
   const library = useLibraryActions();
   const { dispatch, activeFile } = useShell();
   const { save } = useFileActions();
 
   useEffect(() => {
+    if (!enabled) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.isComposing || !(event.metaKey || event.ctrlKey) || event.altKey) return;
       const key = event.key.toLowerCase();
@@ -44,5 +45,5 @@ export function useKeyboardShortcuts({ onNew }: { onNew: () => void }) {
     // Capture: the chord has to work while focus is inside a mounted editor.
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [library, dispatch, activeFile, save, onNew]);
+  }, [library, dispatch, activeFile, save, onNew, enabled]);
 }

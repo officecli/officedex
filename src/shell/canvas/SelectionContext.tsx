@@ -38,7 +38,16 @@ export function SelectionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!canvas) return;
-    return canvas.onSelection(setSelection);
+    let revision = 0;
+    const unsubscribe = canvas.onSelection((next) => {
+      const current = ++revision;
+      setSelection(next);
+      if (!next || next.text || !canvas.resolveSelection) return;
+      void canvas.resolveSelection().then((resolved) => {
+        if (current === revision && resolved) setSelection(resolved);
+      }).catch(() => { /* Keep the label when the editor cannot read the passage. */ });
+    });
+    return () => { revision++; unsubscribe(); };
   }, [canvas]);
 
   return (

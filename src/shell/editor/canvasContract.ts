@@ -96,6 +96,8 @@ export type DocumentEditPhase = "reading" | "drafting" | "applying" | "saving";
  * and the editor's own undo stack is still theirs.
  */
 export interface DocumentEditRequest {
+  requireReview?: boolean;
+  onQuestion?(text: string): Promise<string>;
   instruction: string;
   /**
    * Narrow the edit to whatever the user has selected, when they have selected

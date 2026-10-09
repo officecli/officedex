@@ -1,3 +1,4 @@
+import { setupBindings } from "./setupBindings";
 // The production transport: the Wails-generated bindings over the Go App.
 import type { AppUpdateEvent, Artifact, AgentClientToolReassignInput, AgentClientToolResultInput, AgentRun, AgentRunApproveInput, AgentRunRespondInput, AgentRunStartInput, ArtifactStageRuntimeInput, ArtifactSuggestionFileInput, AuthEvent, BinaryFileData, BridgeEvent, BridgeRuntimeSnapshot, CreditStatus, CreateImageTemplatePublishRequestInput, CreateUserImageTemplateInput, DesktopAPI, GenerateInput, ImageTemplatePublishRequest, ImagePromptTemplate, InviteInfo, LoginInput, PlanPptxJSResult, ModifyInput, PeekReportContextResult, CreateWorkbookFromSheetInput, DrawingAsset, FileDropPoint, CaptureTimelineNodeInput, TimelineCapturedNode, PreparePptxEditorResult, PptxTemplateProgress, SavePptxEditorSnapshotInput, SavePptxEditorAssetInput, SavePptxEditorVideoInput, ExportPptxEditorInput, ClosePptxEditorInput, PptxEditorSaveResult, PptxEditorSaveAssetResult, PptxEditorVideoSaveResult, PrepareXlsxEditorResult, PreviewGrant, ProviderTestInput, ProviderTestResult, RedeemResult, RecentFile, ReportCapabilityResult, RendererLogInput, CloseXlsxEditorInput, SpreadsheetPlanFieldsResult, SaveDocxResult, SaveXlsxEditorInput, StageXlsxEditorImageInput, SaveXlsxEditorResult, SubmitReportInput, SubmitReportResult, TaskHistoryEntry, UserSettings, WhoAmIResult } from "../../shared/types";
 import type { JiraConnectionSummary, JiraProbeResult, LiquipediaConnectionSummary, LiquipediaProbeResult, MarketingCampaignPlanResult, CampaignImageResult } from "../../shared/verticals";
@@ -53,6 +54,12 @@ function subscribeFileDrop(callback: (paths: string[], point?: FileDropPoint) =>
 
 export function createWailsAPI(): DesktopAPI {
   return {
+    getSetupState: () => setupBindings().GetSetupState(),
+    saveSetupState: (state) => setupBindings().SaveSetupState(state),
+    setSetupWindow: (stage) => setupBindings().SetSetupWindow(stage),
+    getDefaultDocumentApps: () => setupBindings().GetDefaultDocumentApps(),
+    setDefaultDocumentApps: (extensions) => setupBindings().SetDefaultDocumentApps(extensions),
+    takeNativeOpenFiles: () => setupBindings().TakeNativeOpenFiles(),
     getPptxTaskStatus: async (taskId) => {
       const fn = optionalWailsFunction<(arg: never) => Promise<unknown>>("GetPptxTaskStatus");
       if (!fn) throw new Error("Task status checking requires a newer OfficeDex runtime.");
@@ -250,6 +257,7 @@ export function createWailsAPI(): DesktopAPI {
     removeFolder: (folderId: string) => WailsApp.RemoveFolder(folderId),
     folderPath: (folderId: string) => WailsApp.FolderPath(folderId),
     renameDocument: (documentId: string, name: string) => WailsApp.RenameDocument(documentId, name),
+    moveConversation: (id, folder) => optionalWailsFunction<(id: string, folder: string) => Promise<void>>("MoveConversation")!(id, folder),
     moveDocument: (documentId: string, folderId: string) => WailsApp.MoveDocument(documentId, folderId),
     duplicateDocument: (documentId: string) => WailsApp.DuplicateDocument(documentId),
     // A cancelled picker comes back as a zero record; null is what the interface
@@ -336,6 +344,8 @@ export function createWailsAPI(): DesktopAPI {
         targetFilePath: options.targetFilePath,
       }));
     },
+    listDocumentDrafts: () => optionalWailsFunction<() => Promise<Array<{ id: string; name: string; updatedAt: string }>>>("ListDocumentDrafts")!(),
+    restoreDocumentDraft: (id) => optionalWailsFunction<(id: string) => Promise<string>>("RestoreDocumentDraft")!(id),
     saveDocx: async (data, fileName, options): Promise<SaveDocxResult> => {
       const fn = optionalWailsFunction<(arg: never) => Promise<SaveDocxResult>>("SaveDocx");
       if (!fn) throw new Error("DOCX editing requires a newer OfficeDex runtime.");
@@ -345,6 +355,7 @@ export function createWailsAPI(): DesktopAPI {
         previewToken: options.previewToken,
         expectedSHA256: options.expectedSHA256,
         saveAsCopy: options.saveAsCopy,
+        recoveryOnly: options.recoveryOnly,
       }));
     },
     planPptxJS: async (input) => {

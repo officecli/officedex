@@ -273,6 +273,8 @@ export type AgentOutcome = "completed" | "failed" | "stopped" | "partial" | "int
 export interface AgentTask {
   id: string;
   title: string;
+  /** The source file remains visible in task details even when editing fails. */
+  targetFileName?: string;
   /**
    * The conversation this run belongs to.
    *
@@ -344,6 +346,7 @@ export interface AgentTask {
    * order; this is what lets the card say "Queued".
    */
   queued?: AgentQueuedMessage[];
+  batch?: Array<{ fileId: string; name: string; taskId?: string; status: "queued" | "running" | "completed" | "failed" | "stopped"; error?: string; suggestion: AgentSuggestion | null }>;
 }
 
 export interface AgentQueuedMessage {
@@ -600,6 +603,11 @@ export interface AgentPort {
    * card's: the card knows which run it is showing.
    */
   finish(taskId?: string): Promise<void>;
+  retry?(taskId: string): Promise<void>;
+  moveConversation?(conversationId: string, folderId: string): Promise<void>;
+  retryBatch?(taskId: string): Promise<void>;
+  sendQueued?(taskId: string): Promise<void>;
+  removeQueued?(taskId: string, messageId: string): Promise<void>;
   /**
    * Picks a failed run up from its `recovery`: finished pages are kept and only
    * the unfinished ones are written again, as a new run.

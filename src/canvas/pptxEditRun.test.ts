@@ -9,6 +9,7 @@ import {
   describeScopeBreach,
   enumeratesWholeDeck,
   resolveEditScope,
+  replacementTargetText,
   scanSource,
   type PptxPlannerContext,
 } from "./pptxEditScope";
@@ -1020,4 +1021,11 @@ describe("a reference that could not be placed", () => {
     expect(enumeratesWholeDeck('p.slides.load("items/id");')).toEqual(["slides.load"]);
     expect(enumeratesWholeDeck("const { slides } = p;")).toEqual(["{ slides }"]);
   });
+});
+
+it("resolves the literal Alpha target instead of the document title", () => {
+ const context: PresentationEditorContext = { slides: [{ ...slide("s1", 0, "OD13-agent-slides"), shapes: [...slide("s1",0,"OD13-agent-slides").shapes, { ...slide("s2",0,"Alpha").shapes[0], id:"alpha" }] }], selectedSlideIds:["s1"], selectedShapes:[] };
+ expect(replacementTargetText(context,"把第一张标题 Alpha 改为 Alpha Revised")).toBe("Alpha");
+ expect(replacementTargetText(context,'Change title "Alpha" to "Alpha Revised"')).toBe("Alpha");
+ expect(replacementTargetText(context,"Add a conclusion to the deck")).toBeUndefined();
 });

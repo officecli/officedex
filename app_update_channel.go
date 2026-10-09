@@ -11,11 +11,13 @@ import (
 
 const (
 	updateChannelStable = "stable"
+	updateChannelBeta   = "beta"
 	updateChannel10     = "1.0"
 
-	// stable is the only live channel: the manifest lives in officedex-dist and
+	// stable and beta are independent channels: the manifest lives in officedex-dist and
 	// the assets on GitHub Releases. Keep in step with MANIFEST_URLS in
 	// scripts/update-channel.mjs (a test checks it).
+	betaUpdateManifestURL   = "https://raw.githubusercontent.com/officecli/officedex-dist/main/channels/beta/manifest.json"
 	stableUpdateManifestURL = "https://raw.githubusercontent.com/officecli/officedex-dist/main/manifest.json"
 	// 1.0 is the legacy prerelease channel on Huawei Cloud OBS. Builds 1.0.6
 	// through 1.0.12 still poll it; it was written one last time to hand them
@@ -61,9 +63,8 @@ func resolveUpdateManifestPublicKey() (ed25519.PublicKey, error) {
 
 // appUpdateChannel is injected at build time via
 // `-ldflags "-X main.appUpdateChannel=<channel>"`. The default is stable:
-// since 1.0.13 every build polls the production manifest in officedex-dist.
-// The 1.0 (OBS) channel can still be baked explicitly, but only the one-off
-// bridge release that moved its clients onto stable ever needed that.
+// test packages bake beta. A persisted user selection overrides this default.
+// The legacy 1.0 (OBS) feed remains frozen.
 var appUpdateChannel = updateChannelStable
 
 func resolvedUpdateChannel() string {
@@ -76,6 +77,8 @@ func resolvedUpdateChannel() string {
 
 func defaultManifestURLForChannel(channel string) string {
 	switch strings.TrimSpace(channel) {
+	case updateChannelBeta:
+		return betaUpdateManifestURL
 	case updateChannel10:
 		return channel10UpdateManifestURL
 	default:
@@ -86,8 +89,11 @@ func defaultManifestURLForChannel(channel string) string {
 // resolveUpdateManifestURL returns the baked channel name and the manifest
 // URL the updater will poll. OFFICEDEX_UPDATE_MANIFEST_URL wins over the
 // channel default so developers can still point a build at a staging file.
-func resolveUpdateManifestURL() (channel string, manifestURL string) {
+func resolveUpdateManifestURL(preferred ...string) (channel string, manifestURL string) {
 	channel = resolvedUpdateChannel()
+	if len(preferred) > 0 && (preferred[0] == updateChannelStable || preferred[0] == updateChannelBeta) {
+		channel = preferred[0]
+	}
 	if override := config.Trimmed(config.UpdateManifestURLEnv); override != "" {
 		return channel, override
 	}

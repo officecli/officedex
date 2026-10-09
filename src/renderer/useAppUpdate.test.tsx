@@ -86,6 +86,7 @@ beforeEach(() => {
     installAppUpdate: officecli.installAppUpdate,
     cancelAppUpdate: officecli.cancelAppUpdate,
     onAppUpdateEvent: officecli.onAppUpdateEvent,
+    getAppUpdateStatus: officecli.getAppUpdateStatus,
   };
   harness = installAppUpdateMocks();
 });
@@ -194,4 +195,33 @@ describe("useAppUpdate", () => {
     expect(result.current.progress).toEqual({ bytesDone: 512, bytesTotal: 2048 });
     expect(result.current.phase).toBe("downloading");
   });
+});
+
+
+it("loads the selected channel before the first network check", async () => {
+  const initial = { currentVersion: "1.0.14", latestVersion: null, updateAvailable: false, mandatory: false, downloading: false, downloadedPath: null, lastCheckedAt: null, lastError: null, updateChannel: "beta" };
+  officecli.getAppUpdateStatus = vi.fn(async () => initial);
+  const { result } = renderHook(() => useAppUpdate());
+  await flush();
+  expect(result.current.status.updateChannel).toBe("beta");
+  expect(harness.checkSpy).not.toHaveBeenCalled();
+});
+
+it("drops a downloaded archive and ignores an old check response after a channel switch", async () => {
+  const stable = { currentVersion: "1.0.13", latestVersion: "1.0.14", updateAvailable: true, mandatory: false, downloading: false, downloadedPath: null, lastCheckedAt: null, lastError: null, updateChannel: "stable" };
+  officecli.getAppUpdateStatus = vi.fn(async () => stable);
+  let resolve!: (value: unknown) => void;
+  harness.checkSpy.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
+  const { result } = renderHook(() => useAppUpdate());
+  await flush();
+  let pending!: Promise<void>;
+  act(() => { pending = result.current.check(); });
+  act(() => harness.emit({type: "downloaded", downloadedPath: "/tmp/stable.zip"}));
+  expect(result.current.phase).toBe("downloaded");
+  act(() => harness.emit({type: "status", status: {...stable, updateChannel: "beta", latestVersion: null, updateAvailable: false}}));
+  expect(result.current.phase).toBe("idle");
+  expect(result.current.status.downloadedPath).toBeNull();
+  await act(async () => { resolve({status: stable, release: {version: "1.0.14"}}); await pending; });
+  expect(result.current.status.updateChannel).toBe("beta");
+  expect(result.current.release).toBeNull();
 });

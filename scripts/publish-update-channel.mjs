@@ -53,6 +53,7 @@ import {
   distArchiveDir,
   distManifestPath,
   forbiddenGitPaths,
+  gitAddPaths,
   obsArchiveKey,
   obsAssetBaseUrl,
   obsAssetKey,
@@ -277,6 +278,9 @@ async function publishToObs({ channel, version, prefix, assets, incoming, signer
 
 async function writeDist({ args, channel, version, incoming, signer, merge }) {
   const distRoot = path.resolve(OFFICEDEX_ROOT, args.dist || "../officedex-dist");
+  if (args.commit && run("git", ["diff", "--cached", "--name-only"], distRoot).trim()) {
+    throw new Error("officedex-dist has staged changes; commit or unstage them before publishing a channel");
+  }
   const manifestRel = distManifestPath(channel);
   const archiveRel = distArchiveDir(channel);
   const outPath = path.join(distRoot, manifestRel);
@@ -301,12 +305,12 @@ async function writeDist({ args, channel, version, incoming, signer, merge }) {
 
   if (!args.commit) return;
 
-  const addPaths = channel === CHANNEL_10 ? ["channels/1.0/"] : ["manifest.json", `manifest.json${SIGNATURE_SUFFIX}`, "archive/"];
+  const addPaths = gitAddPaths(channel);
   run("git", ["add", "--", ...addPaths], distRoot);
   const staged = run("git", ["diff", "--cached", "--name-only"], distRoot).split("\n").filter(Boolean);
   for (const prefix of forbiddenGitPaths(channel)) {
     if (staged.some((name) => name === prefix || name.startsWith(prefix))) {
-      run("git", ["reset", "HEAD", "--", ...staged], distRoot);
+      run("git", ["reset", "HEAD", "--", ...addPaths], distRoot);
       throw new Error(`channel ${channel} refused to modify ${prefix}`);
     }
   }

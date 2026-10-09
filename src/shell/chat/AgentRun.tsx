@@ -129,21 +129,12 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
     task.startedAt !== undefined ? formatElapsed((task.finishedAt ?? Date.now()) - task.startedAt) : "";
 
   const retry = () => {
+    if (task.batch) { void agent.retryBatch(task.id); return; }
     if (task.recovery) {
       void agent.resumeFailed(task.id);
       return;
     }
-    const request = [...task.messages].reverse().find((message) => message.role === "user");
-    if (!request) return;
-    void agent.send({
-      text: request.text,
-      folderId: task.folderId,
-      mentions: [],
-      attachments: [],
-      activeFileId: null,
-      ...(request.reference ? { reference: request.reference } : {}),
-      ...(task.documentType ? { documentType: task.documentType } : {}),
-    });
+    void agent.retry(task.id);
   };
 
   const review = () => {
@@ -224,12 +215,14 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
               {settings.models.find((model) => model.id === settings.value.selectedModelId)?.name ??
                 t("settings.about.productName")}
             </dd>
+            <dt>Task ID</dt>
+            <dd>{task.id}</dd>
             <dt>{t("dx.run.started")}</dt>
             <dd>{task.startedAt ? formatDateTime(task.startedAt) : "—"}</dd>
             <dt>{t("dx.run.attempts")}</dt>
             <dd>{task.attempt ?? 1}</dd>
             <dt>{t("dx.run.files")}</dt>
-            <dd>{[artifact?.name, reviewTarget?.name].filter(Boolean).join(", ") || t("dx.run.newResult")}</dd>
+            <dd>{[...new Set([task.targetFileName, artifact?.name, reviewTarget?.name, ...(task.batch?.map((item) => item.name) ?? [])].filter(Boolean))].join(", ") || t("dx.run.newResult")}</dd>
           </dl>
           {task.error ? <p className="dx-error">{task.error}</p> : null}
           <div className="dx-actions">
@@ -317,13 +310,27 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
 
       {task.queued && task.queued.length > 0 ? (
         <ul className="dx-agent-queued" aria-label={t("dx.run.queued")}>
-          {task.queued.map((message) => (
+          {task.queued.map((message, index) => (
             <li key={message.id} className="dx-metadata" data-status="queued">
               <strong>{t("dx.run.queued")}</strong> · {message.text}
+              {!running && index === 0 ? <button type="button" className="dx-btn" onClick={() => void agent.sendQueued(task.id)}>{t("dx.run.sendQueued")}</button> : null}
+              <button type="button" className="dx-btn" onClick={() => void agent.removeQueued(task.id, message.id)}>{t("dx.menu.remove")}</button>
             </li>
           ))}
         </ul>
       ) : null}
+
+      {task.batch ? <div className="dx-agent-results" aria-label={t("dx.run.batch")}>
+        {task.batch.map((item) => {
+          const result = files.find((file) => file.artifactTaskId === item.taskId);
+          return <div key={item.fileId} className="dx-agent-result">
+            <span><strong>{item.name}</strong><small>{t(`dx.run.batch.${item.status}`)}</small>{item.error ? <small>{item.error}</small> : null}</span>
+            {result ? <button type="button" className="dx-btn" onClick={() => void library.openFile(result.id)}>{t("dx.menu.open")}</button> : null}
+            {item.suggestion && !item.suggestion.applied ? <button type="button" className="dx-btn" onClick={() => void agent.applySuggestion(item.suggestion!.id)}>{t("dx.review.apply")}</button> : null}
+          </div>;
+        })}
+        {!running && task.batch.some((item) => item.status !== "completed") ? <button type="button" className="dx-btn" onClick={() => void agent.retryBatch(task.id)}>{t("dx.run.retryRemaining")}</button> : null}
+      </div> : null}
 
       {artifact || (task.suggestion && reviewTarget) ? (
         <div className="dx-agent-results" aria-label={t("dx.run.results")}>

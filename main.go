@@ -37,12 +37,22 @@ func main() {
 }
 
 func newWailsAppOptions(app *App) *options.App {
+	width, height, minWidth, minHeight := 1320, 860, 1040, 720
+	if app != nil {
+		if state, err := app.GetSetupState(); err == nil && state.Status == "pending" {
+			width, height = 1120, 720
+			if state.Step == "welcome" {
+				width, height, minWidth, minHeight = 600, 700, 600, 700
+			}
+			app.setupWindow = &setupWindowState{Width: 1320, Height: 860, Fresh: true}
+		}
+	}
 	return &options.App{
 		Title:     "OfficeDex",
-		Width:     1320,
-		Height:    860,
-		MinWidth:  1040,
-		MinHeight: 720,
+		Width:     width,
+		Height:    height,
+		MinWidth:  minWidth,
+		MinHeight: minHeight,
 		AssetServer: &assetserver.Options{
 			Assets:  assets,
 			Handler: newAssetFallbackHandler(app),
@@ -60,7 +70,9 @@ func newWailsAppOptions(app *App) *options.App {
 		// anyway and the extra reserved height reads as a gap. Windows keeps its
 		// native frame — this option is macOS-only.
 		Mac: &mac.Options{
-			TitleBar: mac.TitleBarHidden(),
+			TitleBar:   mac.TitleBarHidden(),
+			OnFileOpen: app.queueNativeFile,
+			OnUrlOpen:  app.handleNativeURL,
 		},
 		OnStartup:  app.startup,
 		OnShutdown: app.shutdown,

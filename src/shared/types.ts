@@ -897,11 +897,11 @@ export interface RedeemResult {
   expires_at?: string | null;
 }
 
-export type AuthEvent =
+export type AuthEvent = { flowId?: string } & (
   | { type: "url"; url: string }
   | { type: "success" }
   | { type: "failure"; message: string }
-  | { type: "exit"; code: number | null; signal: NodeJS.Signals | null };
+  | { type: "exit"; code: number | null; signal: NodeJS.Signals | null });
 
 export interface GenerateDefaults {
   documentType: DocumentType;
@@ -943,6 +943,8 @@ export interface ProviderTestInput {
 }
 
 export interface UserSettings {
+  /** Absent uses the package default; an explicit choice survives upgrades. */
+  updateChannel?: "stable" | "beta";
   version: number;
   defaults: GenerateDefaults;
   workspaceDir: string | null;
@@ -1063,6 +1065,7 @@ export interface PeekReportContextResult {
 }
 
 export interface LoginInput {
+  flowId?: string;
   inviteCode?: string;
 }
 
@@ -1082,6 +1085,7 @@ export interface SavePptxOptions {
 }
 
 export interface SaveDocxOptions {
+  recoveryOnly?: boolean;
   previewToken: string;
   expectedSHA256?: string;
   saveAsCopy?: boolean;
@@ -1345,7 +1349,23 @@ export interface FileDropPoint {
   y: number;
 }
 
+export interface SetupState {
+  version: 1;
+  status: "pending" | "completed" | "skipped" | "migrated";
+  step: "welcome" | "introduction" | "ai" | "preferences" | "defaults";
+  startMode: "agent" | "local";
+}
+export interface DefaultDocumentApp { extension: string; isDefault: boolean; error?: string }
 export interface DesktopAPI extends DesktopVerticalAPI {
+  listDocumentDrafts?(): Promise<Array<{ id: string; name: string; updatedAt: string }>>;
+  restoreDocumentDraft?(id: string): Promise<string>;
+  getSetupState(): Promise<SetupState>;
+  saveSetupState(state: SetupState): Promise<void>;
+  setSetupWindow(stage: "welcome" | "setup" | "workspace"): Promise<void>;
+  getDefaultDocumentApps(): Promise<DefaultDocumentApp[]>;
+  setDefaultDocumentApps(extensions: string[]): Promise<DefaultDocumentApp[]>;
+  takeNativeOpenFiles(): Promise<string[]>;
+
   /**
    * The document projection. Maintained on every write since it landed and
    * unreadable until now — these four are the missing half.
@@ -1384,6 +1404,7 @@ export interface DesktopAPI extends DesktopVerticalAPI {
    * them — the path is an attribute of a document, not its identity.
    */
   renameDocument(documentId: string, name: string): Promise<DocumentRecord>;
+  moveConversation?(conversationId: string, folderId: string): Promise<void>;
   moveDocument(documentId: string, folderId: string): Promise<DocumentRecord>;
   /** The copy is a document of its own, with a new id. */
   duplicateDocument(documentId: string): Promise<DocumentRecord>;

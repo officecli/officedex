@@ -1,0 +1,24 @@
+/* Explicit outer-UI regions: never use a root font-size or scale the editor. */
+#shell [data-ui-scope="officedex"],
+#shell :is(.dx-btn,.dx-menu,.dx-new-popover,.dx-setting-row,.dx-definition,.dx-helper),
+#shell [data-ui-scope="officedex"] :is(button,input,select,textarea) { font:var(--dx-type-ui); }
+#shell :is(.dx-page-scroll,.dx-chat-scroll) { background:var(--dx-surface); }
+#shell :is(.dx-btn.dx-primary,.dx-primary,.dx-composer .dx-send) { background:var(--dx-primary); border-color:var(--dx-primary); }
+#shell .dx-home h1 { font:var(--dx-type-hero); }
+#shell :is(.dx-page-header h1,.dx-new-popover h2,.dx-modal-head h2,.dx-modal header h2) { font:var(--dx-type-title); }
+#shell :is(.dx-settings-content h2,.dx-empty h2,.dx-plan-card h3) { font:var(--dx-type-section); }
+#shell :is(.dx-section-heading h2,.dx-chat-heading h2,.dx-model-card h3,.dx-task-card h3,.dx-asset-pane-heading h3,.dx-conversation-title) { font:var(--dx-type-label); }
+#shell :is(.dx-setting-row,.dx-definition,.dx-empty p,.dx-home>.dx-subhead,.dx-helper) { font:var(--dx-type-ui); }
+#shell :is(.dx-message,.dx-message p,.dx-message li,.dx-composer textarea) { font:var(--dx-type-chat); }
+#shell .dx-message .dx-author { font:var(--dx-type-author); }
+#shell :is(.dx-message code,.dx-message pre,.dx-diff pre,.dx-diff code) { font:var(--dx-type-code); }
+#shell .dx-metadata { font:var(--dx-type-meta); }
+#shell .dx-settings-content select { min-height:36px; }
+#shell .dx-local-sort { position:relative; display:flex; align-items:center; height:32px; padding:0 8px; gap:6px; border:0; border-radius:6px; background:transparent; box-shadow:none; transition:background-color 120ms ease; }
+#shell .dx-local-sort>span { font:var(--dx-type-meta); color:var(--dx-sort-muted); }
+#shell .dx-local-sort select { appearance:none; -webkit-appearance:none; width:auto; max-width:none; min-height:32px; height:32px; padding:0 22px 0 4px; border:0; border-radius:4px; background:transparent; color:var(--dx-text); font:var(--dx-type-ui); cursor:pointer; }
+#shell .dx-local-sort>.dx-icon { position:absolute; right:10px; top:9px; width:14px; height:14px; pointer-events:none; color:var(--dx-sort-muted); }
+#shell .dx-local-sort:hover,#shell .dx-local-sort:focus-within { background:var(--dx-sort-hover); }
+#shell .dx-local-sort select:focus-visible { outline:2px solid var(--dx-sort-muted); outline-offset:2px; box-shadow:none; }
+@media(prefers-reduced-motion:reduce) { #shell .dx-local-sort { transition:none; } }
+#shell .dx-page-header>button:last-child { margin-left:auto; }

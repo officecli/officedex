@@ -38,9 +38,8 @@ export interface WriterEditorFrameProps {
   fileName: string;
   /**
    * Which toolbar Writer lays out, `full` (its two-row ribbon) unless said
-   * otherwise. Read once, when the frame mounts: it travels on the iframe URL,
-   * and changing the URL of a mounted frame reloads the document. A different
-   * profile for the same file needs a fresh frame — see `createDesktopCanvas`.
+   * otherwise. The initial profile travels on the URL; subsequent changes use
+   * the host channel so switching Chat/Local preserves unsaved edits.
    */
   toolbarProfile?: WriterToolbarProfile;
   /** Opens the document without a save path; Writer hides its save action. */
@@ -128,7 +127,7 @@ export async function hasWriterComponent(fetcher: typeof fetch = fetch): Promise
 export function WriterEditorFrame({
   previewToken,
   fileName,
-  toolbarProfile,
+  toolbarProfile = "full",
   readOnly = false,
   onDirtyChange,
   onSelectionChange,
@@ -157,8 +156,8 @@ export function WriterEditorFrame({
   // The agent's read_selection tool answers from here rather than a round trip:
   // the embed pushes every change already, so a pull would only add latency.
   const selectionRef = useRef<WriterSelectionSummary>(UNKNOWN_SELECTION);
-  // Fixed at mount; see the prop. A later value is deliberately not read.
   const toolbarProfileRef = useRef(toolbarProfile);
+  toolbarProfileRef.current = toolbarProfile;
   // Host-initiated saves (the docx.editor.save agent tool) wait here until the
   // embed has exported and the host has written the file.
   const requestsRef = useRef(new PendingRequests({ idPrefix: "writer" }));
@@ -184,6 +183,10 @@ export function WriterEditorFrame({
   const post = useCallback((message: WriterHostCommand, transfer: Transferable[] = []) => {
     frameRef.current?.contentWindow?.postMessage(message, "*", transfer);
   }, []);
+
+  useEffect(() => {
+    if (readyRef.current) post({ type: "writer:toolbar-profile", profile: toolbarProfile });
+  }, [post, toolbarProfile]);
 
   useEffect(() => {
     let cancelled = false;
@@ -230,7 +233,7 @@ export function WriterEditorFrame({
 
   const autosave = useIdleAutosave({
     idleMs: autosaveIdleMs,
-    canSchedule: () => loadedRef.current && !readOnly && !conflictRef.current,
+    canSchedule: () => loadedRef.current && !readOnly,
     isDirty: () => dirtyRef.current,
     save: async () => {
       await requestSave(false);
@@ -352,6 +355,7 @@ export function WriterEditorFrame({
           return;
         }
         case "writer:document-loaded":
+          post({ type: "writer:toolbar-profile", profile: toolbarProfileRef.current });
           loadedRef.current = true;
           dirtyRef.current = false;
           conflictRef.current = false;
@@ -391,6 +395,7 @@ export function WriterEditorFrame({
           return;
         case "writer:save": {
           const saveAsCopy = event.saveAsCopy === true;
+          const recoveryOnly = conflictRef.current && !saveAsCopy;
           try {
             // App.SaveDocx keeps its existing contract: it validates the ZIP
             // package, resolves the destination, and rejects the write when the
@@ -399,7 +404,14 @@ export function WriterEditorFrame({
               previewToken,
               expectedSHA256: fingerprintRef.current,
               saveAsCopy,
+              ...(recoveryOnly ? { recoveryOnly: true } : {}),
             });
+            if (recoveryOnly) {
+              const conflict = new Error("Edits retained in Settings > Files > View drafts. The source still has an external conflict.");
+              respond(event.requestId, undefined, conflict);
+              requestsRef.current.reject(event.requestId, conflict);
+              return;
+            }
             if (!saveAsCopy) {
               fingerprintRef.current = result.sha256;
               dirtyRef.current = false;

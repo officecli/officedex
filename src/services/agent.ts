@@ -9,7 +9,7 @@ import { NotImplementedError } from "../shared/notImplemented";
 import { applyTaskEvent, attachTaskContext, attachUserInput, createInitialTaskState, type TaskState } from "../renderer/taskState";
 import { errorMessage } from "../renderer/utils/values";
 import { taskTitle } from "../renderer/taskTitle";
-import { inferHomeTaskRoute, outputFileStem, requestedFileName } from "../renderer/homeIntake";
+import { inferHomeTaskRoute, outputFileStem, requestedFileName, requestsNewFile } from "../renderer/homeIntake";
 import { planModeRequested } from "./planMode";
 import { DEFAULT_FOLDER_ID } from "./files";
 import { translate } from "../renderer/i18n";
@@ -482,6 +482,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
   const listeners = new Set<(event: AgentEvent) => void>();
 
   const emit = (event: AgentEvent) => {
+    if (event.kind === "task") persistPending();
     for (const listener of listeners) listener(event);
   };
 
@@ -507,6 +508,53 @@ export function createAgentService(api: DesktopAPI): AgentPort {
    */
   const queues = new Map<string, QueuedSend[]>();
   let queueSerial = 0;
+  const heldQueues = new Set<string>();
+  const retryInputs = new Map<string, SendInput>();
+  type BatchItem = { fileId: string; name: string; input: SendInput; taskId?: string; error?: string; attempt?: number };
+  const batches = new Map<string, BatchItem[]>();
+  const batchInputs = new WeakMap<SendInput, BatchItem>();
+  const draining = new Set<string>();
+  const attempts = new Map<string, number>();
+  const pendingKey = "officedex.agent.pending.v1";
+  const validInput = (value: unknown): value is SendInput => {
+    const input = value as SendInput | null;
+    return Boolean(input && typeof input.text === "string" && typeof input.folderId === "string" && Array.isArray(input.mentions) && Array.isArray(input.attachments));
+  };
+  const persistPending = () => {
+    try {
+      localStorage.setItem(pendingKey, JSON.stringify({
+        queues: [...queues], held: [...heldQueues], batches: [...batches],
+        retries: [...retryInputs].slice(-100), attempts: [...attempts].slice(-100), serial: queueSerial,
+      }));
+    } catch { /* An unavailable store must not interrupt a running task. */ }
+  };
+  try {
+    const saved = JSON.parse(localStorage.getItem(pendingKey) ?? "null");
+    if (saved) {
+      queueSerial = Number.isSafeInteger(saved.serial) ? saved.serial : 0;
+      for (const [id, entries] of saved.batches ?? []) {
+        if (typeof id !== "string" || !Array.isArray(entries)) continue;
+        const items = entries.filter((item) => typeof item.fileId === "string" && typeof item.name === "string" && validInput(item.input)) as BatchItem[];
+        batches.set(id, items);
+        for (const item of items) batchInputs.set(item.input, item);
+      }
+      for (const [id, entries] of saved.queues ?? []) {
+        if (typeof id !== "string" || !Array.isArray(entries)) continue;
+        const waiting = entries.filter((entry) => typeof entry.id === "string" && validInput(entry.input)) as QueuedSend[];
+        for (const entry of waiting) {
+          entry.conversationId = id;
+          const item = batches.get(id)?.find((item) => item.fileId === entry.input.activeFileId && item.input.text === entry.input.text);
+          if (item) entry.input = item.input;
+        }
+        queues.set(id, waiting);
+        // A restart never silently starts a queued paid run.
+        heldQueues.add(id);
+      }
+      for (const [id, input] of saved.retries ?? []) if (typeof id === "string" && validInput(input)) retryInputs.set(id, input);
+      for (const [id, count] of saved.attempts ?? []) if (typeof id === "string" && Number.isSafeInteger(count)) attempts.set(id, count);
+    }
+  } catch { /* Invalid or absent recovery data does not prevent launch. */ }
+
 
   /**
    * Failures already announced, as `taskId + message`.
@@ -710,6 +758,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
   const project = (task: DesktopTask): AgentTask => {
     const result = toAgentTaskWithReview(task, reviewArtifacts.get(task.id));
     const conversationId = conversationOf(task);
+    const batchItems = batches.get(conversationId)?.some((item) => item.taskId === task.id) ? batches.get(conversationId) : undefined;
     const image = imageSeries(task);
     if (image) return { ...result, conversationId, image };
     /*
@@ -725,6 +774,16 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     const queued = (queues.get(conversationId) ?? []).map((entry) => ({ id: entry.id, text: entry.input.text.trim() }));
     return {
       ...result,
+      attempt: attempts.get(task.id) ?? 1,
+      targetFileName: sentRuns.get(task.id)?.target?.fileName,
+      ...(batchItems ? { batch: batchItems.map((item) => {
+        const run = item.taskId ? state.tasks[item.taskId] : undefined;
+        return { fileId: item.fileId, name: item.name, taskId: item.taskId,
+          status: item.error ? "failed" as const : run?.status === "completed" ? "completed" as const : run?.status === "failed" ? "failed" as const : run?.status === "cancelled" ? "stopped" as const : run ? "running" as const : "queued" as const,
+          error: item.error ?? run?.error,
+          suggestion: run ? toAgentTaskWithReview(run, reviewArtifacts.get(run.id)).suggestion : null };
+      }) } : {}),
+      ...(result.status === "done" && batchItems?.some((item) => item.error || (item.taskId && state.tasks[item.taskId]?.status === "failed")) ? { outcome: "partial" as const } : {}),
       conversationId,
       messages: conversationMessages(conversationId),
       ...(queued.length > 0 ? { queued } : {}),
@@ -745,27 +804,47 @@ export function createAgentService(api: DesktopAPI): AgentPort {
    * Completed or failed: the next message goes out, as typed, into the same
    * conversation — a failure is the runtime's answer to the first message, not
    * a reason to drop the second. Stopped: the user pulled the plug, and the
-   * messages behind it are dropped rather than started on their behalf; they
-   * are told how many.
+   * messages behind it remain visible until the user continues or removes them.
    */
   const settleQueue = (task: DesktopTask) => {
     if (!isTerminalStatus(task.status)) return;
     const conversationId = conversationOf(task);
     const waiting = queues.get(conversationId);
-    if (!waiting || waiting.length === 0) return;
+    if (!waiting || waiting.length === 0 || draining.has(conversationId)) return;
     const head = headOf(conversationId);
     if (head && ACTIVE_STATUSES.includes(head.status)) return;
-    if (task.status === "cancelled") {
-      queues.delete(conversationId);
-      emit({ kind: "notice", message: translate(waiting.length === 1 ? "shell.service.queue.droppedOne" : "shell.service.queue.droppedMany", { count: waiting.length }) });
-      return;
-    }
+    if (task.status === "cancelled") heldQueues.add(conversationId);
+    if (heldQueues.has(conversationId)) return;
     const [next, ...rest] = waiting;
     if (rest.length > 0) queues.set(conversationId, rest);
     else queues.delete(conversationId);
+    draining.add(conversationId);
     void dispatch(next.input, next.conversationId).catch((reason) => {
+      const item = batchInputs.get(next.input);
+      if (item) recordBatchFailure(item, next.conversationId, reason);
       emit({ kind: "error", message: errorMessage(reason) });
+    }).finally(() => {
+      draining.delete(conversationId);
+      const head = headOf(conversationId);
+      if (head) { emit({ kind: "task", task: project(head), focused: isFocused(head) }); settleQueue(head); }
     });
+  };
+
+  // Dispatch can fail before the runtime allocates a task (for example an
+  // unreadable attachment). Keep that file's failure and continue the batch.
+  const recordBatchFailure = (item: BatchItem, conversationId: string, reason: unknown) => {
+    const id = `batch-failed:${conversationId}:${++queueSerial}`;
+    item.taskId = id;
+    item.error = errorMessage(reason);
+    retryInputs.set(id, item.input);
+    attempts.set(id, item.attempt ?? 1);
+    state = attachUserInput(state, id, { prompt: item.input.text }, undefined, { conversationId,
+      createdAt: new Date().toISOString(), workspaceId: item.input.folderId });
+    state = applyTaskEvent(state, { event_id: `${id}:failed`, task_id: id, type: "task.failed",
+      ts: new Date().toISOString(), payload: { message: item.error } });
+    const thread = threads.get(item.input.folderId);
+    if (!thread?.conversationId || thread.conversationId === conversationId) threads.set(item.input.folderId, { conversationId, fresh: false });
+    emit({ kind: "task", task: project(state.tasks[id]), focused: isFocused(state.tasks[id]) });
   };
 
   /**
@@ -1026,6 +1105,9 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     const withContext = (prompt: string) => (context ? `${prompt}\n\n${context}` : prompt);
     const started = (taskId: string, sentPrompt: string, target?: SentRun["target"]) => {
       const joined = conversationId ?? taskId;
+      retryInputs.set(taskId, input);
+      const batchItem = batchInputs.get(input);
+      if (batchItem) { batchItem.taskId = taskId; batchItem.error = undefined; attempts.set(taskId, batchItem.attempt ?? 1); }
       sentRuns.set(taskId, { conversationId: joined, ...(parentTaskId ? { parentTaskId } : {}), prompt: text, ...(target ? { target } : {}) });
       /*
        * On the panel now, not at the first bridge event.
@@ -1070,7 +1152,9 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     const modifyDocument = async (record: DocumentRecord, explicit: boolean) => {
       const dropped = unsupportedParts(input, "modify");
       if (dropped.length > 0) emit({ kind: "notice", message: droppedNotice(dropped) });
-      const prompt = withContext(promptWithComposerContext(text, input));
+      const batchItem = batchInputs.get(input);
+      const scopedText = batchItem ? `${text}\n\nThis is one item of a batch. Modify only the source file ${record.fileName} in this run. Other referenced files are handled separately. Do not create a different document type.` : text;
+      const prompt = withContext(promptWithComposerContext(scopedText, input));
       const result = await api.modify({
         documentType: record.documentType as GenerateInput["documentType"],
         sourceFile: record.filePath,
@@ -1095,11 +1179,16 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     }
 
     const settings = await api.getSettings();
+    const requestedRoute = inferHomeTaskRoute({ prompt: text, documentType: input.documentType });
+    if (requestedRoute.kind === "unsupported_format") {
+      throw new Error(translate("shell.service.unsupportedFormat", { format: requestedRoute.format, supported: SUPPORTED_OUTPUTS }));
+    }
+    const newFile = Boolean(input.documentType) || requestsNewFile(text);
 
     // Editing what is open, or starting something new. A stated document type
     // is the composer saying "a new one" — it clears `activeFileId` on the way
     // out, so this branch is reached only when the user left the choice alone.
-    if (input.activeFileId) {
+    if (input.activeFileId && !newFile) {
       const record = await api.getDocument(input.activeFileId);
       await modifyDocument(record, true);
       return;
@@ -1112,10 +1201,10 @@ export function createAgentService(api: DesktopAPI): AgentPort {
      * only as a line of prompt text, and the target was chosen by the
      * fallback below — so "change one sentence in @report.docx" edited the
      * deck the conversation had made earlier and never touched the report.
-     * One editable file named is the target, frozen here; more than one is
-     * ambiguous and nothing is edited on a guess.
+     * One editable file names its target; multiple editable files form a
+     * sequential batch with one frozen target per run.
      */
-    if (!input.documentType) {
+    if (!newFile) {
       const named = referencedFileIds(input);
       if (named.length > 0) {
         const records = await Promise.all(named.map((id) => api.getDocument(id).catch(() => null)));
@@ -1127,7 +1216,18 @@ export function createAgentService(api: DesktopAPI): AgentPort {
           return;
         }
         if (editable.length > 1) {
-          emit({ kind: "notice", message: translate("shell.service.target.ambiguous", { files: editable.map((record) => record.fileName).join(", ") }) });
+          const joined = conversationId ?? `batch:${Date.now()}:${++queueSerial}`;
+          const items = editable.map((record): BatchItem => ({ fileId: record.id, name: record.fileName,
+            input: { ...input, activeFileId: record.id, conversationId: joined, newConversation: false } }));
+          batches.set(joined, items);
+          for (const item of items) batchInputs.set(item.input, item);
+          queues.set(joined, [...items.slice(1).map((item) => ({ id: `queued:${joined}:${++queueSerial}`, conversationId: joined, input: item.input, at: Date.now() })), ...(queues.get(joined) ?? [])]);
+          try { await dispatch(items[0].input, joined); }
+          catch (reason) {
+            recordBatchFailure(items[0], joined, reason);
+            settleQueue(state.tasks[items[0].taskId!]);
+          }
+          return;
         }
       }
     }
@@ -1140,7 +1240,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
      * a new file, and a message that names files has said what it is about,
      * so both go the generate way below.
      */
-    if (conversationId && !input.documentType && !namesAnything(input)) {
+    if (conversationId && !newFile && !namesAnything(input)) {
       const made = [...conversationTasks(conversationId)]
         .reverse()
         .find((task) => task.status === "completed" && task.artifact?.filePath && MODIFIABLE.has(task.artifact.documentType || task.documentType || ""));
@@ -1473,6 +1573,66 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       await api.resumePptxLive(task.id);
     },
 
+    async moveConversation(conversationId, folderId) {
+      if (!api.moveConversation) throw new Error("Moving chats requires the desktop app.");
+      await api.moveConversation(conversationId, folderId === DEFAULT_FOLDER_ID ? "" : folderId);
+      for (const task of conversationTasks(conversationId)) task.workspaceId = folderId === DEFAULT_FOLDER_ID ? undefined : folderId;
+      for (const entry of queues.get(conversationId) ?? []) entry.input.folderId = folderId;
+      for (const item of batches.get(conversationId) ?? []) item.input.folderId = folderId;
+      threads.set(folderId, { conversationId, fresh: false });
+    },
+
+    async retryBatch(taskId) {
+      const task = state.tasks[taskId];
+      if (!task) return;
+      const joined = conversationOf(task);
+      if (headOf(joined) && ACTIVE_STATUSES.includes(headOf(joined)!.status)) return;
+      const pending = (batches.get(joined) ?? []).filter((item) => !item.taskId || state.tasks[item.taskId]?.status !== "completed");
+      if (!pending.length) return;
+      const other = (queues.get(joined) ?? []).filter((entry) => !batchInputs.has(entry.input));
+      for (const item of pending) { item.attempt = (item.attempt ?? 1) + (item.taskId ? 1 : 0); item.error = undefined; item.taskId = undefined; }
+      queues.set(joined, [...pending.slice(1).map((item) => ({ id: `queued:${joined}:${++queueSerial}`, conversationId: joined, input: item.input, at: Date.now() })), ...other]);
+      heldQueues.delete(joined);
+      try { await dispatch(pending[0].input, joined); }
+      catch (reason) {
+        recordBatchFailure(pending[0], joined, reason);
+        settleQueue(state.tasks[pending[0].taskId!]);
+      }
+    },
+
+    async retry(taskId) {
+      const original = retryInputs.get(taskId);
+      const task = state.tasks[taskId];
+      if (!original || !task) throw new Error(translate("shell.service.nothingToResume"));
+      await dispatch(original, conversationOf(task));
+      const next = headOf(conversationOf(task));
+      if (next && next.id !== taskId) {
+        attempts.set(next.id, (attempts.get(taskId) ?? 1) + 1);
+        emit({ kind: "task", task: project(next), focused: isFocused(next) });
+      }
+    },
+
+    async sendQueued(taskId) {
+      const task = state.tasks[taskId];
+      if (!task || !isTerminalStatus(task.status)) return;
+      heldQueues.delete(conversationOf(task));
+      persistPending();
+      // A cancelled run is a queue gate only until the user chooses to continue.
+      settleQueue({ ...task, status: "completed" });
+    },
+
+    async removeQueued(taskId, messageId) {
+      const task = state.tasks[taskId];
+      if (!task) return;
+      const conversationId = conversationOf(task);
+      const waiting = queues.get(conversationId) ?? [];
+      const removed = waiting.find((entry) => entry.id === messageId);
+      const batchItem = removed && batchInputs.get(removed.input);
+      if (batchItem) batches.set(conversationId, (batches.get(conversationId) ?? []).filter((item) => item !== batchItem));
+      queues.set(conversationId, waiting.filter((entry) => entry.id !== messageId));
+      emit({ kind: "task", task: project(task), focused: isFocused(task) });
+    },
+
     async finish(taskId) {
       /*
        * The card's Stop names its run. Without the id this acted on the
@@ -1527,13 +1687,22 @@ export function createAgentService(api: DesktopAPI): AgentPort {
         ...(input.sourceFile ? { sourceFile: input.sourceFile } : {}),
         ...(input.templateId ? { templateId: input.templateId, templateVersion: input.templateVersion, templateAssetDir: input.templateAssetDir } : {}),
         ...(task.workspaceId ? { workspaceId: task.workspaceId } : { noProject: true }),
+        conversationId: conversationOf(task),
+        parentTaskId: task.id,
         resumeCheckpoint: checkpoint,
         enableImages: images ?? settings.defaults.enableImages,
         // No web search: the research the pages were written from is part of
         // the checkpoint and is reused as it is.
         imageQuality: settings.defaults.imageQuality,
       });
+      const joined = conversationOf(task);
+      sentRuns.set(result.taskId, { conversationId: joined, parentTaskId: task.id, prompt: stripConversationContext(input.prompt) });
+      attempts.set(result.taskId, (attempts.get(task.id) ?? 1) + 1);
+      state = attachUserInput(state, result.taskId, input, task.id, {
+        conversationId: joined, createdAt: new Date().toISOString(), workspaceId: task.workspaceId,
+      });
       activeTaskId = result.taskId;
+      emit({ kind: "task", task: project(state.tasks[result.taskId]), focused: isFocused(state.tasks[result.taskId]) });
     },
 
     async applySuggestion(id) {

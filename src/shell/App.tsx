@@ -1,3 +1,4 @@
+import { SetupHost } from "./onboarding/SetupHost";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ToastHost } from "../renderer/ui";
@@ -48,6 +49,7 @@ import "./styles/workspace-v12.css";
 import "./styles/attention.css";
 import "./styles/workspace-structure.css";
 import "./styles/product.css";
+import "./styles/typography.css";
 
 /**
  * The shell — OD-UI-1.2 (r10).
@@ -94,6 +96,7 @@ function Workspace() {
   const shell = useRef<HTMLDivElement>(null);
   const editorWrapper = useRef<HTMLElement>(null);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [setupVisible, setSetupVisible] = useState(false);
   const [resizing, setResizing] = useState(false);
   const [peek, setPeek] = useState(false);
   const [newAnchor, setNewAnchor] = useState<HTMLElement | null>(null);
@@ -101,7 +104,7 @@ function Workspace() {
 
   useCanvasDirty(canvas, activeFile?.id ?? null);
   useDocumentDraft(canvas, agent.task, activeFile?.id ?? null, agent.applySuggestion);
-  useKeyboardShortcuts({ onNew: () => openNew(null) });
+  useKeyboardShortcuts({ onNew: () => openNew(null), enabled: !setupVisible });
 
   /* ---- the hidden sidebar's temporary reveal (§03) ------------------------ */
   const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -238,7 +241,7 @@ function Workspace() {
       data-loaded={String(loaded)}
       style={{ "--dx-chat": `${state.chatWidth}px` } as React.CSSProperties}
     >
-      <div id="dx-workspace" className={classes}>
+      <div id="dx-workspace" className={classes} inert={setupVisible}>
         <GlobalControls onPeek={startPeek} onPeekEnd={endPeek} />
 
         <Sidebar
@@ -342,6 +345,7 @@ function Workspace() {
       <Layers />
       <ToastHost />
       <UsageNotice />
+      <SetupHost onVisibility={setSetupVisible} onAccountChanged={account.refresh} />
 
       {/*
         The sign-in page covers the window rather than replacing the shell, so

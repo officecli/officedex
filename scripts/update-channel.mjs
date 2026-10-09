@@ -9,10 +9,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const CHANNEL_STABLE = "stable";
+export const CHANNEL_BETA = "beta";
 export const CHANNEL_10 = "1.0";
 
-// stable is the only live channel: manifest in officedex-dist, assets on
-// GitHub Releases. Since 1.0.13 every build bakes it and its versions are
+// stable and beta have independent feeds: manifest in officedex-dist, assets on
+// GitHub Releases. Stable is the default; test packages bake beta. Versions are
 // plain x.y.z (the 0.x.y / 1.0.N split ended when develop/1.0 merged to main).
 //
 // 1.0 is the legacy prerelease channel on Huawei Cloud OBS (public-read
@@ -25,6 +26,7 @@ export const OBS_PREFIX = "officedex";
 export const OBS_ORIGIN = `https://${OBS_BUCKET}.obs.${OBS_REGION}.myhuaweicloud.com`;
 
 export const MANIFEST_URLS = {
+  [CHANNEL_BETA]: "https://raw.githubusercontent.com/officecli/officedex-dist/main/channels/beta/manifest.json",
   [CHANNEL_STABLE]: "https://raw.githubusercontent.com/officecli/officedex-dist/main/manifest.json",
   [CHANNEL_10]: `${OBS_ORIGIN}/${OBS_PREFIX}/channels/1.0/manifest.json`,
 };
@@ -54,7 +56,7 @@ export function obsAssetKey(version, fileName, prefix = OBS_PREFIX) {
   return `${prefix}/releases/download/v${normalizeVersion(version)}/${fileName}`;
 }
 
-const CHANNELS = new Set([CHANNEL_STABLE, CHANNEL_10]);
+const CHANNELS = new Set([CHANNEL_STABLE, CHANNEL_BETA, CHANNEL_10]);
 
 export function normalizeChannel(channel) {
   return String(channel ?? "").trim();
@@ -67,7 +69,7 @@ export function normalizeVersion(version) {
 export function assertKnownChannel(channel) {
   const name = normalizeChannel(channel);
   if (!CHANNELS.has(name)) {
-    throw new Error(`unknown update channel ${JSON.stringify(channel)}; expected ${CHANNEL_STABLE} or ${CHANNEL_10}`);
+    throw new Error(`unknown update channel ${JSON.stringify(channel)}; expected stable, beta or legacy 1.0`);
   }
   return name;
 }
@@ -85,32 +87,33 @@ export function assertVersionMatchesChannel(channel, version) {
     return { channel: name, version: ver };
   }
   if (!/^\d+\.\d+\.\d+$/.test(ver)) {
-    throw new Error(`channel ${CHANNEL_STABLE} requires a plain version x.y.z, got ${JSON.stringify(version)}`);
+    throw new Error(`channel ${name} requires a plain version x.y.z, got ${JSON.stringify(version)}`);
   }
   return { channel: name, version: ver };
 }
 
 export function distManifestPath(channel) {
   const name = assertKnownChannel(channel);
-  return name === CHANNEL_10 ? "channels/1.0/manifest.json" : "manifest.json";
+  return name === CHANNEL_STABLE ? "manifest.json" : `channels/${name}/manifest.json`;
 }
 
 export function distArchiveDir(channel) {
   const name = assertKnownChannel(channel);
-  return name === CHANNEL_10 ? "channels/1.0/archive" : "archive";
+  return name === CHANNEL_STABLE ? "archive" : `channels/${name}/archive`;
 }
 
 export function isPrereleaseChannel(channel) {
-  return assertKnownChannel(channel) === CHANNEL_10;
+  return assertKnownChannel(channel) !== CHANNEL_STABLE;
 }
 
 export function gitAddPaths(channel) {
   const name = assertKnownChannel(channel);
-  return name === CHANNEL_10 ? ["channels/1.0/"] : ["manifest.json", "archive/"];
+  return name === CHANNEL_STABLE ? ["manifest.json", "manifest.json.sig", "archive/"] : [`channels/${name}/`];
 }
 
 export function forbiddenGitPaths(channel) {
   const name = assertKnownChannel(channel);
+  if (name === CHANNEL_BETA) return ["manifest.json", "manifest.json.sig", "archive/", "channels/1.0/"];
   return name === CHANNEL_10 ? ["manifest.json"] : ["channels/"];
 }
 
@@ -150,8 +153,8 @@ function main() {
     }));
     return;
   }
-  console.error("Usage: node scripts/update-channel.mjs --assert --channel <stable|1.0> --version <x.y.z>");
-  console.error("       node scripts/update-channel.mjs --paths --channel <stable|1.0>");
+  console.error("Usage: node scripts/update-channel.mjs --assert --channel <stable|beta|1.0> --version <x.y.z>");
+  console.error("       node scripts/update-channel.mjs --paths --channel <stable|beta|1.0>");
   process.exit(2);
 }
 

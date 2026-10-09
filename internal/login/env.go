@@ -29,6 +29,7 @@ func BuildBridgeEnv(extra []string) []string {
 		"OFFICECLI_SKIP_PUBLISH_SETUP=1",
 		"OFFICECLI_SKIP_UPDATE_CHECK=1",
 		"OFFICECLI_NO_BROWSER=1",
+		"OFFICECLI_LOGIN_CLIENT=officedex",
 	}
 	merged := append([]string{}, os.Environ()...)
 	merged = append(merged, defaults...)

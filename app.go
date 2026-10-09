@@ -44,6 +44,7 @@ import (
 	"officedex/internal/mophttp"
 	"officedex/internal/netproxy"
 	"officedex/internal/office2modoc"
+	"officedex/internal/onboarding"
 	"officedex/internal/opstelemetry"
 	"officedex/internal/pptxeditor"
 	"officedex/internal/pptxtemplate"
@@ -74,7 +75,7 @@ func sha256Hex(data []byte) string {
 
 // appVersion is injected at build time via `-ldflags "-X main.appVersion=<v>"`.
 // The default "dev" sentinel makes `go run` / `wails dev` work without flags.
-// Pair it with `-X main.appUpdateChannel=<stable|1.0>` on packaged builds.
+// Pair it with `-X main.appUpdateChannel=<stable|beta>` on packaged builds.
 var appVersion = "dev"
 
 type DesktopNotificationInput struct {
@@ -224,7 +225,10 @@ func (wailsDesktopNotificationRuntime) SendNotification(ctx context.Context, opt
 
 // App is the Wails-bound object surfaced to the renderer.
 type App struct {
-	ctx context.Context
+	ctx             context.Context
+	setupMu         sync.Mutex
+	nativeOpenFiles []string
+	setupWindow     *setupWindowState
 
 	userDataDir       string
 	workspaceDir      string
@@ -282,6 +286,7 @@ type App struct {
 	loginManager        *login.Manager
 	loginUnsub          func()
 	pendingLoginURL     string
+	loginFlowID         string
 	preview             previewRestore
 	appUpdateMgr        *appupdate.Manager
 	runtimeMgr          *runtimemgr.Manager
@@ -321,6 +326,9 @@ func NewApp() (*App, error) {
 	}
 	if err := os.MkdirAll(userDataDir, 0o755); err != nil {
 		return nil, fmt.Errorf("mkdir user data dir: %w", err)
+	}
+	if err := onboarding.Initialize(userDataDir); err != nil {
+		return nil, fmt.Errorf("initialize setup: %w", err)
 	}
 	// Before anything that can fail: everything NewApp reports about a broken
 	// install -- a missing converter, an unstaged runtime -- is emitted here,
@@ -449,7 +457,7 @@ func NewApp() (*App, error) {
 
 	app.demoFlow = demoflow.New(demoflow.Options{Recorder: app})
 
-	updateChannel, manifestURL := resolveUpdateManifestURL()
+	updateChannel, manifestURL := resolveUpdateManifestURL(cached.UpdateChannel)
 	manifestPublicKey, err := resolveUpdateManifestPublicKey()
 	if err != nil {
 		return nil, fmt.Errorf("appupdate manager: %w", err)

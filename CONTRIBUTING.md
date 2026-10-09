@@ -125,7 +125,7 @@ CI must be green before review. Maintainers will squash-merge once approved.
 
 ## Release flow
 
-There is one live update channel, `stable`: the signed manifest lives at `officedex-dist/manifest.json` and the installers / updater zips are GitHub Release assets on `officecli/officedex`. Every build since 1.0.13 bakes this channel. Releases are compiled, signed and notarized on the release machine; GitHub Actions is a manual fallback only (`release.yml` has no tag trigger).
+There are two selectable update channels: `stable` at `officedex-dist/manifest.json`, and `beta` (shown as **Test**) at `officedex-dist/channels/beta/manifest.json`. Each has its own signature and archive directory; both use GitHub Release assets on `officecli/officedex`. Stable remains the build default. Releases are compiled, signed and notarized locally; do not publish through GitHub Actions.
 
 Versions are plain `x.y.z`; the client compares three numeric segments and ignores a `-beta` suffix, so pre-release suffixes never trigger an update and are refused by the publish scripts.
 
@@ -150,6 +150,30 @@ Versions are plain `x.y.z`; the client compares three numeric segments and ignor
 5. Check anonymously that `manifest.json` and `manifest.json.sig` are both served (`?cb=<random>` to skip caches) and that the release assets download.
 
 Clients on 0.6.x poll the same root manifest and upgrade straight to the current version. Clients on 1.0.6–1.0.12 polled the legacy OBS channel; it was written one last time (`--channel 1.0`) with a stable-channel build and is frozen. `officedex-dist/channels/1.0/` is the even older bridge for 1.0.1–1.0.5 and stays untouched.
+
+### Building and testing a test-channel package
+
+1. Allocate the next unused plain `x.y.z` version across **both** channels. Set `package.json`, the root versions in `package-lock.json`, and `wails.json`. Never reuse a version for different bytes, or use `-beta.N`: clients compare numeric versions only.
+2. Build locally with `UPDATE_CHANNEL=beta TARGET_ARCH=arm64 bash scripts/build-mac-dmg.sh`. This bakes the test feed; it does not publish anything. Share the resulting signed, notarized DMG for installation testing.
+3. In **Settings → About & support → Update channel**, choose Stable or Test. The choice is persisted and overrides the package default on future launches. Existing installations without a choice follow the package default. Checks, downloads and installation hand-offs must finish before changing channels. A successful switch clears the previous feed's release/download references and checks the selected feed immediately.
+4. Switching back to Stable does **not** downgrade a newer test build. The next strictly higher stable version will be offered. Promoting the exact same tested bytes requires a newly numbered stable build if test installations must receive it through the updater.
+
+For local acceptance before publishing a feed, switching to Test can report a missing/unavailable manifest; that is expected. There is no fallback to another channel. The first testers on older clients without the selector must install this DMG manually. Both channels still require Ed25519 manifest signatures, HTTPS and SHA-256 asset verification. `OFFICEDEX_UPDATE_MANIFEST_URL` remains a developer override; channel changes are refused while it is set.
+
+Only when test-channel publication is explicitly requested:
+
+```bash
+# Keep test releases out of releases/latest and the stable manifest.
+gh release create vX.Y.Z --prerelease --latest=false --title "OfficeDex X.Y.Z (Test)" \
+  dist-artifacts/OfficeDex-X.Y.Z-darwin-arm64.dmg \
+  dist-artifacts/OfficeDex-vX.Y.Z-darwin-arm64.zip
+node scripts/publish-update-channel.mjs --channel beta --version X.Y.Z \
+  --darwin-arm64 dist-artifacts/OfficeDex-vX.Y.Z-darwin-arm64.zip \
+  --dist ../officedex-dist --commit
+git -C ../officedex-dist push
+```
+
+The publisher stages only `channels/beta/` for Test, or the root manifest/signature and `archive/` for Stable. It refuses a nonempty Git index before publication with `--commit`. Do not write new versions to OBS or either legacy `channels/1.0/` location. A local-only validation can use `--dry-run --out-dir <scratch-dir>` to generate and verify signatures without changing any feed.
 
 ### What the updater refuses
 

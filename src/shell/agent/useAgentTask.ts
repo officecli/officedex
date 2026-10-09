@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { usePort } from "../port/PortContext";
+import { requestsNewFile, inferHomeTaskRoute } from "../../renderer/homeIntake";
 import { translate } from "../../renderer/i18n";
 import type { AgentMessage, AgentOutlinePage, AgentTask } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
@@ -101,6 +102,26 @@ export function useAgentTask() {
   const localRun = useRef<DocumentEditRunHandle | null>(null);
   /** The newest snapshot of the local edit, for handing to the conversation when it ends. */
   const localSnapshot = useRef<AgentTask | null>(null);
+  const lastLocalSubmission = useRef<ComposerSubmission | null>(null);
+  const localAttempt = useRef(1);
+  const [localQueue, setLocalQueue] = useState<Array<{ id: string; input: ComposerSubmission }>>([]);
+  const queueRef = useRef(localQueue);
+  queueRef.current = localQueue;
+  const sendRef = useRef<(input: ComposerSubmission) => Promise<void>>(async () => {});
+  const visibleScope = useRef(scopeKey);
+  visibleScope.current = scopeKey;
+  const localSessions = useRef(new Map<string, { task: AgentTask | null; run: DocumentEditRunHandle | null; queue: typeof localQueue; submission: ComposerSubmission | null; attempt: number }>());
+  const rememberQueue = (queue: typeof localQueue) => {
+    const session = localSessions.current.get(visibleScope.current);
+    if (session) session.queue = queue;
+  };
+  const takeLocalQueued = () => {
+    const [next, ...rest] = queueRef.current;
+    queueRef.current = rest;
+    setLocalQueue(rest);
+    rememberQueue(rest);
+    return next;
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -140,8 +161,14 @@ export function useAgentTask() {
   // document in the same folder — and what they find there should be that
   // conversation's, not the last document edit wherever it happened.
   useEffect(() => {
-    localRun.current = null;
-    setLocalTask(null);
+    const session = localSessions.current.get(scopeKey);
+    localRun.current = session?.run ?? null;
+    localSnapshot.current = session?.task ?? null;
+    lastLocalSubmission.current = session?.submission ?? null;
+    localAttempt.current = session?.attempt ?? 1;
+    queueRef.current = session?.queue ?? [];
+    setLocalQueue(queueRef.current);
+    setLocalTask(session?.task ?? null);
   }, [scopeKey]);
 
   useEffect(
@@ -206,13 +233,22 @@ export function useAgentTask() {
    * started editing by hand. That task is history; the edit is now.
    */
   const shown: AgentTask | null = localTask
-    ? { ...localTask, messages: mergeMessages(task?.messages ?? [], localTask.messages) }
+    ? { ...localTask, messages: mergeMessages(task?.messages ?? [], localTask.messages), queued: localQueue.map((entry) => ({ id: entry.id, text: entry.input.text })) }
     : task;
   const busy =
     shown?.status === "working" || shown?.status === "reading" || shown?.status === "writing";
 
   const send = useCallback(
     async (submission: ComposerSubmission & { newConversation?: boolean }) => {
+      if (localRun.current && localSnapshot.current?.question?.allowFreeform) {
+        localRun.current.answer({ text: submission.text });
+        return;
+      }
+      if (isLive(localSnapshot.current)) {
+        const next = [...queueRef.current, { id: `local-queued:${Date.now()}:${queueRef.current.length}`, input: submission }];
+        queueRef.current = next; setLocalQueue(next); rememberQueue(next);
+        return;
+      }
       const target = submission.activeFileId
         ? (files.find((file) => file.id === submission.activeFileId) ?? null)
         : null;
@@ -231,8 +267,12 @@ export function useAgentTask() {
         setChatMeta(addressed, { folderId: scopeFolderId, fileId, createdAt: Date.now() });
       }
       const addressing = addressed ? { conversationId: addressed } : {};
+      const addressedScope = addressed ? `conversation:${scopeFolderId}:${addressed}` : scopeKey;
+      const isVisible = () => visibleScope.current === scopeKey || visibleScope.current === addressedScope;
 
-      const editableAs = inPlaceEditorFor(target, canvas);
+      const route = inferHomeTaskRoute({ prompt: submission.text });
+      const newFile = Boolean(submission.documentType) || requestsNewFile(submission.text) || route.kind === "unsupported_format";
+      const editableAs = newFile ? null : inPlaceEditorFor(target, canvas);
       /*
        * Which way this instruction went, and why.
        *
@@ -252,22 +292,34 @@ export function useAgentTask() {
         // mounted — a run's stage, or an editor that is still coming up.
         canvasCanEditInPlace: Boolean(canvas?.canEditDocument?.()),
       });
-      if (!submission.imageGeneration && !submission.newConversation && editableAs && target && canvas) {
+      if (!submission.imageGeneration && !submission.newConversation && submission.mentions.filter((mention) => mention.kind === "file").length < 2 && editableAs && target && canvas) {
         // One at a time. A second instruction into the same document while the
         // first is mid-`apply` would capture a scope the first one is holding,
         // and the editor would reject whichever arrived second.
         localRun.current?.abort();
+        if (lastLocalSubmission.current !== submission) localAttempt.current = 1;
+        lastLocalSubmission.current = submission;
         const folderId = submission.folderId || scopeFolderId;
+        let finishedLocal: AgentTask | null = null;
+        const localSession = { task: null as AgentTask | null, run: null as DocumentEditRunHandle | null, queue: queueRef.current, submission, attempt: localAttempt.current };
+        localSessions.current.set(scopeKey, localSession);
+        localSessions.current.set(addressedScope, localSession);
         const run = startDocumentEditRun(
           {
             canvas,
             onTask: (next) => {
-              localSnapshot.current = next;
-              setLocalTask(next);
+              next.attempt = localSession.attempt;
+              finishedLocal = next;
+              localSession.task = next;
+              if (isVisible()) {
+                localSnapshot.current = next;
+                setLocalTask(next);
+              }
             },
           },
           {
             instruction: submission.text,
+            requireReview: settings.value.permission !== "full" || /先审阅|先审核|先确认|review.*first|before.*apply|approval/i.test(submission.text),
             folderId: submission.folderId || scopeFolderId,
             fileId: target.id,
             fileName: target.name,
@@ -275,6 +327,7 @@ export function useAgentTask() {
             ...(submission.reference ? { reference: submission.reference } : {}),
           },
         );
+        localSession.run = run;
         localRun.current = run;
         await run.done;
         /*
@@ -282,27 +335,40 @@ export function useAgentTask() {
          * over, so the thread still has it after the next message goes to the
          * runtime — and the runtime is told it happened.
          */
-        const finished = localSnapshot.current;
+        const finished = finishedLocal as AgentTask | null;
         if (finished?.messages.length) {
           await attempt(() => port.agent.recordExchange({ folderId, ...addressing, messages: finished.messages }));
         }
         // The document changed under the library's feet: the editor wrote it,
         // so nothing else knows its size or its modified time has moved.
         await reload();
+        if (isVisible() && finished?.outcome !== "stopped") {
+          const next = takeLocalQueued();
+          if (next) void sendRef.current(next.input);
+        }
         return;
       }
 
       localRun.current?.abort();
       localRun.current = null;
+      localSnapshot.current = null;
+      localSessions.current.delete(scopeKey);
+      localSessions.current.delete(addressedScope);
       setLocalTask(null);
       await attempt(() =>
         port.agent.send({
           ...submission,
+          ...(submission.mentions.filter((mention) => mention.kind === "file").length > 1 ? { activeFileId: null } : {}),
           ...addressing,
           modelId: settings.value.selectedModelId,
           permission: settings.value.permission,
         }),
       );
+      while (queueRef.current.length) {
+        const next = takeLocalQueued();
+        if (next) await attempt(() => port.agent.send({ ...next.input, ...addressing,
+          modelId: settings.value.selectedModelId, permission: settings.value.permission }));
+      }
     },
     [
       port,
@@ -313,11 +379,14 @@ export function useAgentTask() {
       fileId,
       conversationId,
       scopeFolderId,
+      scopeKey,
       setChatMeta,
       settings.value.selectedModelId,
       settings.value.permission,
     ],
   );
+
+  sendRef.current = send;
 
   const applySuggestion = useCallback(
     async (id: string) => {
@@ -401,6 +470,22 @@ export function useAgentTask() {
     undoSuggestion,
     pause: useCallback(async () => void (await attempt(() => port.agent.pause())), [port]),
     resume: useCallback(async () => void (await attempt(() => port.agent.resume())), [port]),
+    retryBatch: useCallback(async (taskId: string) => void (await attempt(async () => { await port.agent.retryBatch?.(taskId); })), [port]),
+    retry: useCallback(async (taskId: string) => {
+      if (localSnapshot.current?.id === taskId && lastLocalSubmission.current) {
+        localAttempt.current += 1;
+        await sendRef.current(lastLocalSubmission.current);
+      } else await attempt(async () => { await port.agent.retry?.(taskId); });
+    }, [port]),
+    sendQueued: useCallback(async (taskId: string) => {
+      if (localSnapshot.current?.id === taskId) { const next = takeLocalQueued(); if (next) await sendRef.current(next.input); }
+      else await attempt(async () => { await port.agent.sendQueued?.(taskId); });
+    }, [port]),
+    removeQueued: useCallback(async (taskId: string, messageId: string) => {
+      if (localSnapshot.current?.id === taskId) {
+        queueRef.current = queueRef.current.filter((entry) => entry.id !== messageId); setLocalQueue(queueRef.current); rememberQueue(queueRef.current);
+      } else await attempt(async () => { await port.agent.removeQueued?.(taskId, messageId); });
+    }, [port]),
     resumeFailed: useCallback(
       async (taskId: string) => void (await attempt(() => port.agent.resumeFailed(taskId))),
       [port],
@@ -411,11 +496,15 @@ export function useAgentTask() {
       if (localRun.current) {
         localRun.current.abort();
         localRun.current = null;
+        localSnapshot.current = null;
+        for (const [key, session] of localSessions.current) {
+          if (session.task?.id === localTask?.id) localSessions.current.delete(key);
+        }
         setLocalTask(null);
         return;
       }
       await attempt(() => port.agent.finish());
-    }, [port]),
+    }, [port, localTask]),
     stop,
   };
 }
@@ -451,7 +540,7 @@ export const recentToasts = {
 };
 
 function isLive(task: AgentTask | null): boolean {
-  return task?.status === "working" || task?.status === "reading" || task?.status === "writing";
+  return task?.status === "working" || task?.status === "reading" || task?.status === "writing" || Boolean(task?.question);
 }
 
 /** The conversation a task belongs to; a run that names none is its own. */

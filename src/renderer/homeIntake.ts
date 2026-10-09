@@ -44,7 +44,7 @@ function isCatalogCleanupIntent(prompt: string) {
 }
 
 export function inferHomeTaskRoute(input: HomeTaskIntake, fallback: DocumentType = "pptx"): HomeTaskRoute {
-  const prompt = input.prompt.trim();
+  const prompt = positiveFormatIntent(input.prompt.trim());
   const sourceFile = input.sourceFile?.trim() || undefined;
   const extension = fileExtension(sourceFile);
   const hasPptxTemplate = Boolean(input.templateId || input.templateAssetDir);
@@ -98,6 +98,12 @@ export function inferHomeTaskRoute(input: HomeTaskIntake, fallback: DocumentType
     return { kind: "generate", documentType: input.documentType, sourceFile };
   }
 
+  // An explicit output suffix wins over incidental mentions of input formats.
+  const output = /(?:生成|新建|创建|另存为|保存为|输出为|create|generate|save(?: it)? as|output(?: as)?)[^。\n;；]{0,100}?\.?(txt|markdown|rtf|html?|pdf)\b/i.exec(prompt);
+  const named = requestedFileName(prompt);
+  const unsupported = unsupportedOutputFormat(named ?? output?.[1] ?? "");
+  if (unsupported) return { kind: "unsupported_format", format: unsupported };
+
   if (/(gif|动图|动画图)/i.test(prompt)) return { kind: "generate", documentType: "gif", sourceFile };
   if (/(slides?|pptx?|presentation|deck|演示|幻灯片|路演)/i.test(prompt)) return { kind: "generate", documentType: "pptx", sourceFile };
   if (/(image|poster|banner|illustration|图片|海报|封面|配图)/i.test(prompt)) return { kind: "generate", documentType: "img", sourceFile };
@@ -114,8 +120,8 @@ export function inferHomeTaskRoute(input: HomeTaskIntake, fallback: DocumentType
   // No type the product makes was named. Before falling back to the default,
   // check whether a type it does *not* make was — that is a refusal, not a
   // guess.
-  const unsupported = unsupportedOutputFormat(prompt);
-  if (unsupported) return { kind: "unsupported_format", format: unsupported };
+  const unsupportedFallback = unsupportedOutputFormat(prompt);
+  if (unsupportedFallback) return { kind: "unsupported_format", format: unsupportedFallback };
 
   return { kind: "generate", documentType: fallback, sourceFile };
 }
@@ -198,4 +204,14 @@ export function outputFileStem(requested: string | null): string | null {
   if (!stem || [...stem].length > OUTPUT_FILE_STEM_MAX) return null;
   if (!/[\p{L}\p{N}]/u.test(stem)) return null;
   return stem;
+}
+
+/** Ignore explicitly excluded output formats while inferring a new file's type. */
+function positiveFormatIntent(prompt: string): string {
+  return prompt.replace(/(?:不要|不需要|禁止|无需|别|do not|don't|without|no)\s*(?:生成|创建|新建|制作|输出|generate|create|make)?\s*(?:(?:a|an|any)\s+)?(?:pptx?|slides?|presentations?|decks?|演示文稿|幻灯片|docx?|word|xlsx?|excel|pdf|txt)(?=$|[\s,，。.;；!！?？])/gi, "");
+}
+
+/** A new deliverable must not silently mutate the file left open from the last run. */
+export function requestsNewFile(prompt: string): boolean {
+  return /(?:新建|创建|生成|另做|另外做|再做|另存为|保存为|输出为)[^。\n]{0,80}(?:文档|文件|报告|演示|幻灯片|表格|工作簿|docx?|pptx?|xlsx?|txt|markdown|pdf|html|rtf)|(?:create|generate|make|write)\s+(?:(?:me|a|an|another|new|separate|fresh)\s+)+(?:[^.\n]{0,70}\s)?(?:document|file|report|deck|slides?|presentation|spreadsheet|workbook|docx?|pptx?|xlsx?|txt|markdown|pdf|html|rtf)\b|\b(?:new|another|separate)\s+(?:docx?|pptx?|xlsx?|document|file|deck|spreadsheet)\b/i.test(positiveFormatIntent(prompt));
 }

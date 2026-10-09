@@ -696,3 +696,15 @@ export function describeUnlocatedQuote(scope: PptxEditScope, slideCount: number)
   const shown = quoted.length > 80 ? `${quoted.slice(0, 80)}…` : quoted;
   return translate("shell.edit.scope.unlocated", { quote: shown, slides: count(slideCount, "slide") });
 }
+
+/** A literal replacement request names content more precisely than the caret. */
+export function replacementTargetText(before: PresentationEditorContext, instruction: string): string | undefined {
+  const boundary = /改为|改成|替换为|换成|→|\b(?:to|with)\b/i.exec(instruction);
+  if (!boundary) return undefined;
+  const target = instruction.slice(0, boundary.index).trim();
+  if (!/替换|标题|把|将|\b(?:replace|change|rename|title)\b/i.test(target)) return undefined;
+  const candidates = before.slides.flatMap((slide) => slide.shapes).map((shape) => shape.text?.trim() ?? "")
+    .filter((text) => text.length >= 3 && target.replace(/["”'’\s]+$/, "").endsWith(text));
+  const longest = candidates.sort((a, b) => b.length - a.length)[0];
+  return longest && candidates.filter((text) => text === longest).length === 1 ? longest : undefined;
+}

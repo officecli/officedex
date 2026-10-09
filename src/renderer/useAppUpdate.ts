@@ -56,13 +56,31 @@ export function useAppUpdate(): UseAppUpdateValue {
   const [dismissed, setDismissed] = useState(false);
   const lastCheckedAtRef = useRef<number>(0);
   const autoInstallTriggeredRef = useRef(false);
+  const requestEpoch = useRef(0);
+  const observedEventRef = useRef(false);
+  const channelRef = useRef<string | undefined>(undefined);
+  const acceptStatus = useCallback((next: AppUpdateStatus) => {
+    if (next.updateChannel && channelRef.current && next.updateChannel !== channelRef.current) {
+      requestEpoch.current += 1;
+      setRelease(null);
+      setPhase(next.downloading ? "downloading" : next.downloadedPath ? "downloaded" : next.updateAvailable ? "available" : "idle");
+      setError(null);
+      setProgress({ bytesDone: 0, bytesTotal: 0 });
+      setDismissed(false);
+      autoInstallTriggeredRef.current = false;
+    }
+    channelRef.current = next.updateChannel;
+    setStatus(next);
+  }, []);
 
   const check = useCallback(async () => {
-    setPhase((current) => (current === "downloading" ? current : "checking"));
+    const epoch = requestEpoch.current;
+    setPhase((current) => (["downloading", "downloaded", "installing"].includes(current) ? current : "checking"));
     try {
       const result = await api.checkAppUpdate();
+      if (epoch !== requestEpoch.current) return;
       lastCheckedAtRef.current = Date.now();
-      setStatus(result.status);
+      acceptStatus(result.status);
       setRelease(result.release);
       setError(null);
       if (result.status.mandatory) {
@@ -75,6 +93,7 @@ export function useAppUpdate(): UseAppUpdateValue {
         return result.status.updateAvailable ? "available" : "idle";
       });
     } catch (err) {
+      if (epoch !== requestEpoch.current) return;
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
       setPhase("error");
@@ -127,9 +146,10 @@ export function useAppUpdate(): UseAppUpdateValue {
   // Event subscription.
   useEffect(() => {
     const off = api.onAppUpdateEvent((event: AppUpdateEvent) => {
+      observedEventRef.current = true;
       switch (event.type) {
         case "status":
-          if (event.status) setStatus(event.status);
+          if (event.status) acceptStatus(event.status);
           if (event.release) setRelease(event.release);
           return;
         case "progress":
@@ -163,6 +183,17 @@ export function useAppUpdate(): UseAppUpdateValue {
     });
     return off;
   }, []);
+
+  // Read the baked/persisted channel before the delayed network check, including
+  // offline starts. Do not overwrite a newer event with a delayed bridge reply.
+  useEffect(() => {
+    let live = true;
+    const epoch = requestEpoch.current;
+    void api.getAppUpdateStatus().then((next) => {
+      if (live && epoch === requestEpoch.current && !observedEventRef.current) acceptStatus(next);
+    }).catch(() => undefined);
+    return () => { live = false; };
+  }, [api, acceptStatus]);
 
   // Auto-install on force-update + downloaded.
   useEffect(() => {

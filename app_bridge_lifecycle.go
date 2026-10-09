@@ -75,13 +75,18 @@ func (a *App) bridgeEventListener(client *bridge.Client) bridge.EventListener {
 		}
 		// The renderer sees the event immediately; persistence goes to the
 		// writer goroutine so this reader can get back to the pipe.
-		emit(ctx, bridgeEventChannel, event)
+		if event.Type != types.EventTaskCompleted {
+			emit(ctx, bridgeEventChannel, event)
+		}
 		persisted := event
 		a.queueEventWrite(func() {
 			if err := a.recordTaskEvent(persisted); err != nil {
 				applog.Logger().Warn("record task event",
 					slog.String("event_type", persisted.Type),
 					applog.Task(persisted.TaskID), applog.Request(persisted.RequestID), applog.Err(err))
+			}
+			if persisted.Type == types.EventTaskCompleted {
+				emit(ctx, bridgeEventChannel, persisted)
 			}
 			// Credit bookkeeping is a SQLite write too; it used to run on the
 			// reader inline, right after the queue was introduced to keep
@@ -313,24 +318,25 @@ func (a *App) ensureLoginManagerLocked() *login.Manager {
 		URLTimeout: 30 * time.Second,
 	})
 	ctx := a.ctx
+	flowID := a.loginFlowID
 	unsub := manager.OnEvent(func(event login.LoginEvent) {
+		a.mu.Lock()
+		current := a.loginManager == manager
+		if current {
+			a.pendingLoginURL = ""
+		}
+		a.mu.Unlock()
+		if !current {
+			return
+		}
 		switch event.Type {
 		case login.EventSuccess:
-			a.mu.Lock()
-			a.pendingLoginURL = ""
-			a.mu.Unlock()
 			a.resetBridgeRuntime()
-			emit(ctx, authEventChannel, types.AuthEvent{Type: types.AuthEventSuccess})
+			emit(ctx, authEventChannel, types.AuthEvent{FlowID: flowID, Type: types.AuthEventSuccess})
 		case login.EventFailure:
-			a.mu.Lock()
-			a.pendingLoginURL = ""
-			a.mu.Unlock()
-			emit(ctx, authEventChannel, types.AuthEvent{Type: types.AuthEventFailure, Message: event.Message})
+			emit(ctx, authEventChannel, types.AuthEvent{FlowID: flowID, Type: types.AuthEventFailure, Message: event.Message})
 		case login.EventExit:
-			a.mu.Lock()
-			a.pendingLoginURL = ""
-			a.mu.Unlock()
-			emit(ctx, authEventChannel, types.AuthEvent{Type: types.AuthEventExit, Code: event.Code, Signal: event.Signal})
+			emit(ctx, authEventChannel, types.AuthEvent{FlowID: flowID, Type: types.AuthEventExit, Code: event.Code, Signal: event.Signal})
 		}
 	})
 	a.loginManager = manager

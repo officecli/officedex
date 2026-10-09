@@ -117,7 +117,7 @@ type Status struct {
 	// the Settings → Diagnostics panel can render a timeline. The buffer is
 	// capped at maxErrorHistory.
 	LastErrors []ErrorEntry `json:"lastErrors,omitempty"`
-	// UpdateChannel is the baked release line (stable, 1.0). Empty when the
+	// UpdateChannel is the selected release channel (stable, beta). Empty when the
 	// caller did not set Options.Channel.
 	UpdateChannel string `json:"updateChannel,omitempty"`
 	// ManifestURL is the URL CheckLatest polls. Always populated.
@@ -162,7 +162,7 @@ type Options struct {
 	// ManifestPublicKey is the Ed25519 key manifests must be signed with.
 	// Required: a manager without a key refuses every manifest.
 	ManifestPublicKey ed25519.PublicKey
-	// Channel is the named release line this manager belongs to (stable, 1.0).
+	// Channel is the named release line this manager belongs to (stable, beta).
 	// It is echoed on Status so Settings / diagnostics can show which feed
 	// the binary is polling. Empty is allowed.
 	Channel        string
@@ -195,6 +195,7 @@ type Manager struct {
 	now            func() time.Time
 	listener       func(Event)
 
+	operationMu    sync.Mutex // serializes checks, downloads, installs and channel changes
 	mu             sync.Mutex
 	latestVersion  *string
 	latestRelease  *ReleaseInfo
@@ -302,6 +303,20 @@ func (m *Manager) statusLocked() Status {
 // network call is skipped and a not-available snapshot is returned so
 // developers don't see spurious update banners.
 func (m *Manager) CheckLatest(ctx context.Context) (*ReleaseInfo, error) {
+	release, _, err := m.CheckLatestStatus(ctx)
+	return release, err
+}
+
+// CheckLatestStatus returns an atomic release/status pair for the bridge, even
+// when the user switches channels immediately after the request completes.
+func (m *Manager) CheckLatestStatus(ctx context.Context) (*ReleaseInfo, Status, error) {
+	m.operationMu.Lock()
+	defer m.operationMu.Unlock()
+	release, err := m.checkLatest(ctx)
+	return release, m.Status(), err
+}
+
+func (m *Manager) checkLatest(ctx context.Context) (*ReleaseInfo, error) {
 	if strings.TrimSpace(m.currentVersion) == "dev" {
 		m.mu.Lock()
 		m.lastError = nil
@@ -386,6 +401,10 @@ func (m *Manager) failCheck(err error, manifestURL string, latency time.Duration
 // An asset without a sha256, with a malformed one, or served over anything
 // but https is refused before any bytes are fetched.
 func (m *Manager) DownloadUpdate(ctx context.Context) (string, error) {
+	if !m.operationMu.TryLock() {
+		return "", errors.New("appupdate: update already in progress")
+	}
+	defer m.operationMu.Unlock()
 	m.mu.Lock()
 	if m.downloading {
 		m.mu.Unlock()
@@ -774,4 +793,48 @@ func (c *cancelReader) Close() error {
 		c.cancel = nil
 	}
 	return err
+}
+
+// SwitchChannel persists the choice before replacing the feed. A failed write
+// leaves the existing updater intact. Holding operationMu through event delivery
+// prevents an old request from publishing a release after the reset event.
+func (m *Manager) SwitchChannel(channel, manifestURL string, persist func() error) error {
+	if channel != "stable" && channel != "beta" {
+		return errors.New("appupdate: unknown update channel")
+	}
+	if err := requireHTTPS("manifest url", manifestURL); err != nil {
+		return err
+	}
+	if !m.operationMu.TryLock() {
+		return errors.New("appupdate: an update operation is in progress; try again when it finishes")
+	}
+	defer m.operationMu.Unlock()
+	m.mu.Lock()
+	if err := persist(); err != nil {
+		m.mu.Unlock()
+		return err
+	}
+	if m.channel == channel && m.manifestURL == manifestURL {
+		m.mu.Unlock()
+		return nil
+	}
+	m.channel, m.manifestURL = channel, manifestURL
+	m.latestVersion, m.latestRelease, m.downloadedPath = nil, nil, nil
+	m.lastCheckedAt, m.lastError, m.lastErrors = nil, nil, nil
+	status := m.statusLocked()
+	m.mu.Unlock()
+	m.emit(Event{Type: EventStatus, Status: &status})
+	return nil
+}
+
+// InstallDownloaded keeps the selected feed and verified archive stable until
+// the OS installer has accepted the hand-off.
+func (m *Manager) InstallDownloaded(install func(string) error) error {
+	m.operationMu.Lock()
+	defer m.operationMu.Unlock()
+	path := m.DownloadedPath()
+	if path == nil {
+		return errors.New("appupdate: not downloaded")
+	}
+	return install(*path)
 }

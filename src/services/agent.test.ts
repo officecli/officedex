@@ -8,7 +8,7 @@
  * (send, bridge events, Stop) and asserts on the calls the desktop received
  * and the events the panel got.
  */
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { BridgeEvent, DesktopAPI, DocumentRecord, GenerateInput, ModifyInput } from "../shared/types";
 import type { AgentEvent, AgentTask, SendInput } from "../shared/uiPort";
@@ -22,11 +22,11 @@ interface Scripted {
   addDocument: (record: Partial<DocumentRecord> & Pick<DocumentRecord, "id" | "filePath" | "documentType">) => DocumentRecord;
 }
 
-function scripted(): Scripted {
+function scripted(startSerial = 0): Scripted {
   const listeners: Array<(event: BridgeEvent) => void> = [];
   const documents = new Map<string, DocumentRecord>();
   const calls: Scripted["calls"] = { generate: [], modify: [], cancel: [] };
-  let serial = 0;
+  let serial = startSerial;
   const api = {
     onBridgeEvent(callback: (event: BridgeEvent) => void) {
       listeners.push(callback);
@@ -147,7 +147,7 @@ async function conversationWithDeck(desk: Scripted) {
 }
 
 afterEach(() => {
-  // Nothing global is touched; each test builds its own service and API.
+  localStorage.clear();
 });
 
 describe("F02 — which file a follow-up edits", () => {
@@ -215,17 +215,26 @@ describe("F02 — which file a follow-up edits", () => {
     expect(desk.calls.generate).toHaveLength(2);
   });
 
-  it("edits nothing on a guess when two editable files are named", async () => {
+  it("modifies multiple targets sequentially without generating an unrelated file", async () => {
     const desk = scripted();
     const { service, panel } = await conversationWithDeck(desk);
     const a = desk.addDocument({ id: "doc-a", filePath: "/p/A.docx", documentType: "docx" });
     const b = desk.addDocument({ id: "doc-b", filePath: "/p/B.docx", documentType: "docx" });
 
-    await service.send(message("Merge these", { mentions: [{ kind: "file", id: a.id, label: "A.docx" }, { kind: "file", id: b.id, label: "B.docx" }] }));
-
-    expect(desk.calls.modify).toHaveLength(0);
-    expect(desk.calls.generate).toHaveLength(2);
-    expect(panel.notices().some((notice) => notice.includes("A.docx, B.docx"))).toBe(true);
+    await service.send(message("Update these, do not create a PPT", { mentions: [{ kind: "file", id: a.id, label: "A.docx" }, { kind: "file", id: b.id, label: "B.docx" }] }));
+    expect(desk.calls.modify).toHaveLength(1);
+    expect(desk.calls.modify[0].sourceFile).toBe("/p/A.docx");
+    desk.push({ event_id: "fail-a", task_id: "task-2", type: "task.failed", ts: new Date().toISOString(), payload: { message: "corrupt DOCX" } });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(desk.calls.modify).toHaveLength(2);
+    expect(desk.calls.modify[1].sourceFile).toBe("/p/B.docx");
+    desk.push(completed("task-3", "/p/B.modified.docx", "docx"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(panel.last()?.batch?.map((item) => item.status)).toEqual(["failed", "completed"]);
+    await service.retryBatch!("task-3");
+    expect(desk.calls.modify).toHaveLength(3);
+    expect(desk.calls.modify[2].sourceFile).toBe("/p/A.docx");
+    expect(desk.calls.generate).toHaveLength(1);
   });
 
   it("keeps the open file as the target over a mention", async () => {
@@ -237,6 +246,34 @@ describe("F02 — which file a follow-up edits", () => {
     await service.send(message("Use the tone of the other one", { activeFileId: open.id, mentions: [{ kind: "file", id: other.id, label: "Other.docx" }] }));
 
     expect(desk.calls.modify.map((call) => call.sourceFile)).toEqual([open.filePath]);
+  });
+
+  it("does not retry a batch file the user removed from the queue", async () => {
+    const desk = scripted();
+    const { service, panel } = await conversationWithDeck(desk);
+    const a = desk.addDocument({ id: "doc-a", filePath: "/p/A.docx", documentType: "docx" });
+    const b = desk.addDocument({ id: "doc-b", filePath: "/p/B.docx", documentType: "docx" });
+    await service.send(message("Update these", { mentions: [{ kind: "file", id: a.id, label: "A.docx" }, { kind: "file", id: b.id, label: "B.docx" }] }));
+    await service.removeQueued!("task-2", panel.last()!.queued![0].id);
+    desk.push({ event_id: "fail-a", task_id: "task-2", type: "task.failed", ts: new Date().toISOString(), payload: { message: "failed" } });
+    await service.retryBatch!("task-2");
+    desk.push(completed("task-3", "/p/A.modified.docx", "docx"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(desk.calls.modify.map((call) => call.sourceFile)).toEqual(["/p/A.docx", "/p/A.docx"]);
+  });
+
+  it("continues a batch when the first file fails before allocating a runtime task", async () => {
+    const desk = scripted();
+    const { service, panel } = await conversationWithDeck(desk);
+    const a = desk.addDocument({ id: "doc-a", filePath: "/p/A.docx", documentType: "docx" });
+    const b = desk.addDocument({ id: "doc-b", filePath: "/p/B.docx", documentType: "docx" });
+    vi.spyOn(desk.api, "modify").mockRejectedValueOnce(new Error("Cannot read A.docx"));
+    await service.send(message("Update these", { mentions: [{ kind: "file", id: a.id, label: "A.docx" }, { kind: "file", id: b.id, label: "B.docx" }] }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(desk.calls.modify.map((call) => call.sourceFile)).toEqual(["/p/B.docx"]);
+    desk.push(completed("task-2", "/p/B.modified.docx", "docx"));
+    expect(panel.last()?.batch?.map((item) => item.status)).toEqual(["failed", "completed"]);
+    expect(panel.last()?.batch?.[0].error).toBe("Cannot read A.docx");
   });
 
   it("collects each referenced file once", () => {
@@ -413,7 +450,7 @@ describe("F05 — each run is its own", () => {
     expect(panel.last()?.queued).toBeUndefined();
   });
 
-  it("drops the queue when the run is stopped, and says how many", async () => {
+  it("retains the queue after stop and dispatches only on explicit continue", async () => {
     const desk = scripted();
     const service = createAgentService(desk.api);
     const panel = listen(service);
@@ -424,7 +461,11 @@ describe("F05 — each run is its own", () => {
     await service.finish("task-1");
 
     expect(desk.calls.generate).toHaveLength(1);
-    expect(panel.notices().some((notice) => notice.includes("1 message waiting"))).toBe(true);
+    expect(panel.last()?.queued?.[0].text).toBe("And a budget spreadsheet");
+    await service.sendQueued!("task-1");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(desk.calls.generate).toHaveLength(2);
+    expect(desk.calls.generate[1].documentType).toBe("xlsx");
     expect(panel.last()?.queued).toBeUndefined();
   });
 
@@ -476,4 +517,55 @@ describe("F05 — each run is its own", () => {
     expect(desk.calls.cancel).toEqual(["task-1"]);
     expect(panel.last()?.outcome).toBe("stopped");
   });
+});
+
+describe("1.0.13 routing regression", () => {
+  it.each(["新建一个 DOCX 文档，命名为 OD13-agent-exact.docx", "Create a new document called OD13-agent-exact.docx"])("creates a fresh file with an old document open: %s", async (text) => {
+    const desk = scripted();
+    const service = createAgentService(desk.api);
+    desk.addDocument({ id: "old", filePath: "/p/old.docx", documentType: "docx" });
+    await service.send(message(text, { activeFileId: "old" }));
+    expect(desk.calls.modify).toHaveLength(0);
+    expect(desk.calls.generate[0]).toMatchObject({ documentType: "docx", outputFileName: "OD13-agent-exact" });
+  });
+  it("refuses TXT even when a PPT remains open", async () => {
+    const desk = scripted();
+    const service = createAgentService(desk.api);
+    desk.addDocument({ id: "old", filePath: "/p/old.pptx", documentType: "pptx" });
+    await expect(service.send(message("生成三行 TXT 文件 QA.txt，不支持就说明", { activeFileId: "old" }))).rejects.toThrow(/TXT/);
+    expect(desk.calls.modify).toHaveLength(0);
+    expect(desk.calls.generate).toHaveLength(0);
+  });
+  it("retries the original instruction rather than a queued message", async () => {
+    const desk = scripted();
+    const service = createAgentService(desk.api);
+    const panel = listen(service);
+    await service.send(message("Create a new document", { documentType: "docx", newConversation: true }));
+    desk.push(running("task-1"));
+    await service.send(message("And a budget spreadsheet"));
+    await service.finish("task-1");
+    await service.retry!("task-1");
+    expect(desk.calls.generate[1].documentType).toBe("docx");
+    expect(panel.last()?.attempt).toBe(2);
+    expect(panel.last()?.queued?.[0].text).toBe("And a budget spreadsheet");
+  });
+});
+
+it("restores queued messages after a restart and waits for Continue", async () => {
+ const first = scripted();
+ const service = createAgentService(first.api);
+ await service.send(message("Make a deck", { newConversation: true }));
+ first.push(running("task-1"));
+ await service.send(message("Create a new workbook"));
+ await service.finish("task-1");
+ const second = scripted(50);
+ const restored = createAgentService(second.api);
+ const panel = listen(restored);
+ second.push(running("task-1"));
+ await restored.finish("task-1");
+ expect(panel.last()?.queued?.[0].text).toBe("Create a new workbook");
+ expect(second.calls.generate).toHaveLength(0);
+ await restored.sendQueued!("task-1");
+ await new Promise((resolve) => setTimeout(resolve, 0));
+ expect(second.calls.generate[0].documentType).toBe("xlsx");
 });

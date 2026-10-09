@@ -54,6 +54,7 @@ export interface WriterSelectionContent extends WriterSelectionSummary {
 export type WriterToolbarProfile = "full" | "compact";
 
 export type WriterHostCommand =
+  | { type: "writer:toolbar-profile"; profile: "compact" | "full" }
   | { type: "writer:capture-edit"; requestId: string; scope: "selection" | "document" }
   | { type: "writer:apply-edit"; requestId: string; id: string; edits: { query: string; replacement: string }[] }
   | {

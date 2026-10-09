@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -674,5 +675,100 @@ func signedManifestWith(body string, priv ed25519.PrivateKey, keyIDOf ed25519.Pu
 			return sig, nil
 		}
 		return manifest, nil
+	}
+}
+
+func TestSwitchChannelResetsStateAndPersistsAtomically(t *testing.T) {
+	m := mustManager(t, withFetchManifest(staticManifest(`{"version":"0.2.0","mandatory":true}`)))
+	if _, err := m.CheckLatest(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	cached := "/tmp/old-channel.zip"
+	m.downloadedPath = &cached
+	before := m.Status()
+	if err := m.SwitchChannel("beta", "https://example.test/beta.json", func() error { return errors.New("disk full") }); err == nil {
+		t.Fatal("expected persistence failure")
+	}
+	if got := m.Status(); got.ManifestURL != before.ManifestURL || got.DownloadedPath == nil {
+		t.Fatalf("failed write changed updater: %+v", got)
+	}
+	persisted := false
+	if err := m.SwitchChannel("beta", "https://example.test/beta.json", func() error { persisted = true; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	s := m.Status()
+	if !persisted || s.UpdateChannel != "beta" || s.LatestVersion != nil || s.DownloadedPath != nil || s.Mandatory || s.LastCheckedAt != nil {
+		t.Fatalf("stale state after switch: %+v", s)
+	}
+	if err := m.InstallDownloaded(func(string) error { t.Fatal("old archive must not be installed"); return nil }); err == nil {
+		t.Fatal("install must require a new download")
+	}
+}
+
+func TestSwitchChannelRefusesInFlightCheck(t *testing.T) {
+	started, resume, done := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	m := mustManager(t, withFetchManifest(func(ctx context.Context, url string) ([]byte, error) {
+		close(started)
+		<-resume
+		return nil, errors.New("offline")
+	}))
+	go func() { defer close(done); _, _ = m.CheckLatest(context.Background()) }()
+	<-started
+	err := m.SwitchChannel("beta", "https://example.test/beta.json", func() error { t.Error("must not persist while busy"); return nil })
+	close(resume)
+	<-done
+	if err == nil {
+		t.Fatal("expected busy error")
+	}
+	if err := m.SwitchChannel("beta", "https://example.test/beta.json", func() error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if s := m.Status(); s.LastError != nil || len(s.LastErrors) != 0 {
+		t.Fatalf("old errors survived: %+v", s)
+	}
+}
+
+func TestSwitchBackToStableDoesNotOfferDowngrade(t *testing.T) {
+	m := mustManager(t, func(o *Options) { o.CurrentVersion = "1.0.14" }, withFetchManifest(staticManifest(`{"version":"1.0.13","mandatory":true}`)))
+	if err := m.SwitchChannel("stable", "https://example.test/manifest.json", func() error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.CheckLatest(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if s := m.Status(); s.UpdateAvailable || s.Mandatory {
+		t.Fatalf("offered a downgrade: %+v", s)
+	}
+}
+
+func TestSwitchChannelRefusesDownloadAndInstall(t *testing.T) {
+	for _, operation := range []string{"download", "install"} {
+		t.Run(operation, func(t *testing.T) {
+			started, resume, done := make(chan struct{}), make(chan struct{}), make(chan struct{})
+			m := mustManager(t)
+			if operation == "download" {
+				m.latestRelease = &ReleaseInfo{Version: "0.2.0", Assets: map[string]Asset{"darwin-arm64": {URL: "https://example.test/app.zip", SHA256: strings.Repeat("a", 64)}}}
+				m.fetchDownload = func(ctx context.Context, url string) (io.ReadCloser, int64, error) {
+					close(started)
+					<-resume
+					return nil, 0, errors.New("test cancellation")
+				}
+				go func() { defer close(done); _, _ = m.DownloadUpdate(context.Background()) }()
+			} else {
+				archive := "/tmp/test.zip"
+				m.downloadedPath = &archive
+				go func() {
+					defer close(done)
+					_ = m.InstallDownloaded(func(string) error { close(started); <-resume; return nil })
+				}()
+			}
+			<-started
+			err := m.SwitchChannel("beta", "https://example.test/beta.json", func() error { t.Error("persisted while busy"); return nil })
+			close(resume)
+			<-done
+			if err == nil {
+				t.Fatal("expected busy error")
+			}
+		})
 	}
 }

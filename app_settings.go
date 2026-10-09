@@ -12,6 +12,7 @@ import (
 
 	"officedex/internal/applog"
 	"officedex/internal/bridge"
+	"officedex/internal/config"
 	"officedex/internal/login"
 	"officedex/internal/settings"
 	"officedex/internal/types"
@@ -32,7 +33,23 @@ func (a *App) UpdateSettings(patch settings.Patch) (types.UserSettings, error) {
 			return types.UserSettings{}, err
 		}
 	}
-	merged, err := a.settingsStore.Update(patch)
+	var merged types.UserSettings
+	var err error
+	if patch.UpdateChannel != nil {
+		if config.Trimmed(config.UpdateManifestURLEnv) != "" {
+			return merged, errors.New("update channel is controlled by OFFICEDEX_UPDATE_MANIFEST_URL; restart without the override to switch")
+		}
+		if a.appUpdateMgr == nil {
+			return merged, errors.New("app updater is unavailable")
+		}
+		err = a.appUpdateMgr.SwitchChannel(*patch.UpdateChannel, defaultManifestURLForChannel(*patch.UpdateChannel), func() error {
+			var saveErr error
+			merged, saveErr = a.settingsStore.Update(patch)
+			return saveErr
+		})
+	} else {
+		merged, err = a.settingsStore.Update(patch)
+	}
 	if err != nil {
 		return types.UserSettings{}, err
 	}

@@ -87,7 +87,7 @@ export function NewPopover({
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     const step = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 3, ArrowUp: -3 }[event.key];
     if (step === undefined && event.key !== "Home" && event.key !== "End") return;
-    const buttons = [...(panel.current?.querySelectorAll<HTMLButtonElement>("button") ?? [])];
+    const buttons = [...(panel.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? [])];
     const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
     if (index < 0) return;
     event.preventDefault();
@@ -122,9 +122,10 @@ export function NewPopover({
         {NEW_GROUPS.map((group, index) => (
           <section key={group.id} aria-labelledby={`dx-new-group-${index}`}>
             <h3 id={`dx-new-group-${index}`}>{t(group.labelKey)}</h3>
+            {group.id === "more" ? <p className="dx-helper">{t("dx.new.unsupported")}</p> : null}
             <div className="dx-new-type-grid">
               {group.types.map((type) => (
-                <button key={type} type="button" data-act="create-local" data-id={type} title={t(`dx.type.${type}`)} onClick={() => onCreate(type)}>
+                <button key={type} type="button" data-act="create-local" data-id={type} disabled={group.id === "more"} title={group.id === "more" ? t("dx.new.unsupported") : t(`dx.type.${type}`)} onClick={() => onCreate(type)}>
                   <FileIcon ext={type} size={32} />
                   <span>{t(`dx.type.${type}`)}</span>
                 </button>

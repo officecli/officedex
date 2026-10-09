@@ -73,6 +73,12 @@ export function createRealE2EAPI(endpoint: string): DesktopAPI {
     };
   };
   return {
+    getSetupState: () => rpc("GetSetupState"),
+    saveSetupState: (state) => rpc("SaveSetupState", state),
+    setSetupWindow: (stage) => rpc("SetSetupWindow", stage),
+    getDefaultDocumentApps: () => rpc("GetDefaultDocumentApps"),
+    setDefaultDocumentApps: (extensions) => rpc("SetDefaultDocumentApps", extensions),
+    takeNativeOpenFiles: () => rpc("TakeNativeOpenFiles"),
     initialize: async () => decodeRealE2ERawBytes(await rpc<unknown>("Initialize")),
     getCapabilities: async () => decodeRealE2ERawBytes(await rpc<unknown>("GetCapabilities")),
     startAgentRun: (input: AgentRunStartInput) => rpc<AgentRun>("StartAgentRun", stampOriginClientId(input)),
@@ -114,6 +120,9 @@ export function createRealE2EAPI(endpoint: string): DesktopAPI {
     folderPath: (folderId: string) => rpc<string>("FolderPath", folderId),
     renameDocument: (documentId: string, name: string) =>
       rpc<DocumentRecord>("RenameDocument", { documentId, name }),
+    moveConversation: (conversationId, folderId) => rpc<void>("MoveConversation", { conversationId, folderId }),
+    listDocumentDrafts: () => rpc<Array<{ id: string; name: string; updatedAt: string }>>("ListDocumentDrafts"),
+    restoreDocumentDraft: (id) => rpc<string>("RestoreDocumentDraft", id),
     moveDocument: (documentId: string, folderId: string) =>
       rpc<DocumentRecord>("MoveDocument", { documentId, folderId }),
     duplicateDocument: (documentId: string) => rpc<DocumentRecord>("DuplicateDocument", documentId),
@@ -166,6 +175,7 @@ export function createRealE2EAPI(endpoint: string): DesktopAPI {
         previewToken: options.previewToken,
         expectedSHA256: options.expectedSHA256,
         saveAsCopy: options.saveAsCopy,
+        recoveryOnly: options.recoveryOnly,
       }),
     planPptxJS: (input) => rpc<PlanPptxJSResult>("PlanPptxJS", input),
     previewArtifact: (artifact: Artifact) => rpc<void>("PreviewArtifact", artifact),

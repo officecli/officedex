@@ -51,6 +51,12 @@ export function createBrowserPreviewAPI(): DesktopAPI {
   ];
   let browserRecentFiles: RecentFile[] = [];
   return {
+    getSetupState: async () => ({ version: 1, status: "migrated", step: "welcome", startMode: "agent" }),
+    saveSetupState: async () => undefined,
+    setSetupWindow: async () => undefined,
+    getDefaultDocumentApps: async () => ["docx", "xlsx", "pptx"].map(extension => ({ extension, isDefault: false, error: "Requires the desktop app." })),
+    setDefaultDocumentApps: async () => { throw new Error("Default apps require the desktop app."); },
+    takeNativeOpenFiles: async () => [],
     initialize: async () => ({ browserPreview: true }),
     getCapabilities: async () => ({ browserPreview: true }),
     startAgentRun: async () => { throw new Error("Agent Runtime requires the OfficeDex bridge."); },

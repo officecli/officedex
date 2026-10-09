@@ -62,6 +62,11 @@ resolve_arch() {
 }
 resolve_arch
 
+if ! command -v create-dmg >/dev/null 2>&1; then
+  echo "[${LOG}] create-dmg is required to preserve the installer layout; install with brew install create-dmg" >&2
+  exit 1
+fi
+
 APP_PATH="${OFFICEDEX_DIR}/build/bin/OfficeDex.app"
 OUT_DIR="${OFFICEDEX_DIR}/dist-artifacts"
 IDENTITY="${CODESIGN_IDENTITY:-Developer ID Application: ChuXin Tec Co., Ltd. (Z35T9799TW)}"
@@ -150,7 +155,11 @@ notarize_with_retry() {
     if [[ "${target}" == *.app ]]; then
       assert_production_binary "${target}"
     fi
-    if node scripts/notarize.mjs "${target}"; then
+    # npm/downloads may need the local proxy; direct Apple uploads must not
+    # inherit it. This changes only the notarization process environment.
+    if env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY \
+      -u http_proxy -u https_proxy -u all_proxy \
+      node scripts/notarize.mjs "${target}"; then
       return 0
     fi
     if (( attempt == max )); then
@@ -189,6 +198,12 @@ trap 'rm -rf "${LOCK_DIR}"' EXIT
 refuse_while_wails_dev_runs
 
 APP_VERSION="$(node -p 'require("./package.json").version')"
+UPDATE_CHANNEL="${UPDATE_CHANNEL:-stable}"
+case "${UPDATE_CHANNEL}" in
+  stable|beta) ;;
+  *) echo "Only stable and beta builds are supported; legacy 1.0 is frozen." >&2; exit 1 ;;
+esac
+node scripts/update-channel.mjs --assert --channel "${UPDATE_CHANNEL}" --version "${APP_VERSION}"
 OFFICECLI_RELEASE_VERSION="$(node -p 'require("./package.json").officecliVersion')"
 DMG_PATH="${OUT_DIR}/OfficeDex-${APP_VERSION}-darwin-${TARGET_ARCH}.dmg"
 
@@ -493,24 +508,24 @@ trap 'rm -rf "${STAGING}" "${LOCK_DIR}"' EXIT
 cp -R "${APP_PATH}" "${STAGING}/"
 # The copy is what goes into the image; check the copy.
 assert_production_binary "${STAGING}/OfficeDex.app"
-ln -s /Applications "${STAGING}/Applications"
+# create-dmg --app-drop-link creates this symlink; precreating it makes ln
+# follow it into /Applications and creates an unintended nested link.
 
-if command -v create-dmg >/dev/null 2>&1; then
-  create-dmg \
-    --volname "OfficeDex ${APP_VERSION}" \
-    --window-pos 200 120 --window-size 600 400 --icon-size 100 \
-    --icon "OfficeDex.app" 175 200 --hide-extension "OfficeDex.app" \
-    --app-drop-link 425 200 --no-internet-enable \
-    "${DMG_PATH}" "${STAGING}" || true
-fi
-
-# create-dmg is optional; hdiutil ships with macOS and is the fallback so this
-# script works on a machine without Homebrew.
-if [[ ! -f "${DMG_PATH}" ]]; then
-  echo "[${LOG}] create-dmg unavailable or failed; using hdiutil"
-  hdiutil create -volname "OfficeDex ${APP_VERSION}" \
-    -srcfolder "${STAGING}" -ov -format UDZO "${DMG_PATH}"
-fi
+# A plain hdiutil fallback loses the approved Finder layout. Fail instead of
+# silently shipping an unconfigured installer window.
+# Finder cannot resolve a hidden image filename as its background picture.
+DMG_BACKGROUND="${OUT_DIR}/dmg-background.tiff"
+tiffutil -cathidpicheck \
+  "${OFFICEDEX_DIR}/resources/dmg/background.png" \
+  "${OFFICEDEX_DIR}/resources/dmg/background@2x.png" -out "${DMG_BACKGROUND}"
+create-dmg \
+  --volname "OfficeDex" \
+  --window-pos 200 120 --window-size 720 480 --icon-size 96 \
+  --background "${DMG_BACKGROUND}" \
+  --icon "OfficeDex.app" 180 250 --hide-extension "OfficeDex.app" \
+  --app-drop-link 540 250 --hide-extension "Applications" \
+  --no-internet-enable \
+  "${DMG_PATH}" "${STAGING}"
 
 if [[ "${SKIP_SIGN}" == "1" ]]; then
   echo "[${LOG}] skipping Developer ID signing + notarization of DMG"

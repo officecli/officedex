@@ -533,6 +533,7 @@ const (
 )
 
 type AuthEvent struct {
+	FlowID  string        `json:"flowId,omitempty"`
 	Type    AuthEventType `json:"type"`
 	URL     string        `json:"url,omitempty"`
 	Message string        `json:"message,omitempty"`
@@ -619,6 +620,8 @@ type ProviderTestInput struct {
 }
 
 type UserSettings struct {
+	// Empty preserves the package default until the user selects a channel.
+	UpdateChannel         string                 `json:"updateChannel,omitempty"`
 	Version               int                    `json:"version"`
 	Defaults              GenerateDefaults       `json:"defaults"`
 	WorkspaceDir          *string                `json:"workspaceDir"`

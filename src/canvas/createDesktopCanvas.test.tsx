@@ -354,22 +354,19 @@ describe("desktop canvas adapter", () => {
   // The text is read on demand, once, because reading it re-targets Writer's
   // tracked edit scope — see the note on `resolveSelection`.
   /*
-   * The profile is on Writer's iframe URL, and `hide()` / a repeat `show()`
-   * keep the editor alive on purpose, so it is decided when a file is first
-   * shown and held until a different file is. A file opened from Local and
-   * opened again from a conversation keeps the full toolbar.
+   * The profile follows the surface even when the document remains mounted.
    */
-  it("fixes the Word toolbar profile when the file is first shown", () => {
+  it("updates the Word toolbar profile when moving the same file between Chat and Local", () => {
     const { adapter } = mounted();
 
     act(() => adapter.show(file("memo", "doc"), { toolbarProfile: "compact" }));
     expect(lastDocProps!.toolbarProfile).toBe("compact");
 
     act(() => adapter.show(file("memo", "doc"), { toolbarProfile: "full" }));
-    expect(lastDocProps!.toolbarProfile).toBe("compact");
+    expect(lastDocProps!.toolbarProfile).toBe("full");
 
     act(() => adapter.reopen!(file("memo", "doc")));
-    expect(lastDocProps!.toolbarProfile).toBe("compact");
+    expect(lastDocProps!.toolbarProfile).toBe("full");
 
     act(() => adapter.show(file("notes", "doc"), { toolbarProfile: "full" }));
     expect(lastDocProps!.toolbarProfile).toBe("full");
