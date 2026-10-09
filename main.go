@@ -9,6 +9,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 
 	"officedex/internal/applog"
 	"officedex/internal/word2mowhttp"
@@ -73,6 +74,31 @@ func newWailsAppOptions(app *App) *options.App {
 			TitleBar:   mac.TitleBarHidden(),
 			OnFileOpen: app.queueNativeFile,
 			OnUrlOpen:  app.handleNativeURL,
+		},
+		// Windows keeps the native frame (see windowChrome.ts), so nothing here
+		// touches the chrome. What is set:
+		//
+		//   - Theme follows the system. The shell ships the light theme only
+		//     (OD-UI-1.2 r10), but the native title bar and the WebView2
+		//     scrollbars are the OS's, and forcing them light on a dark desktop
+		//     reads as a bug rather than a design.
+		//   - WebView2 user data stays at the default %APPDATA%\officedex.exe,
+		//     which the NSIS uninstaller already removes.
+		//
+		// How WebView2 itself gets onto the machine is not an option here but a
+		// build tag: `wails build -webview2 embed` (scripts/dist-win.mjs) bakes
+		// Microsoft's ~2MB bootstrapper into the exe, so a Windows 10 machine
+		// without the runtime is prompted to install it without the app first
+		// having to download the bootstrapper. The default "download" fetches
+		// the bootstrapper over the network at first start; in the locked-down
+		// environments that lack WebView2 in the first place that fetch is the
+		// step most likely to be blocked, and 2MB in a 300MB package is cheap.
+		// The runtime itself (~150MB) is downloaded by the bootstrapper either
+		// way; only "browser" / a fixed-version runtime would avoid that, and
+		// shipping a fixed WebView2 is a licensing and update burden this
+		// project has not taken on.
+		Windows: &windows.Options{
+			Theme: windows.SystemDefault,
 		},
 		OnStartup:  app.startup,
 		OnShutdown: app.shutdown,

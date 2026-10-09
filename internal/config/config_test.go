@@ -6,8 +6,14 @@ import (
 	"testing"
 )
 
+// writeExecutable creates a file ExecutablePath must accept: executable bits
+// on Unix, an executable extension on Windows (ExecutableName adds it to a
+// bare name; a caller that already passed one keeps it).
 func writeExecutable(t *testing.T, dir, name string) string {
 	t.Helper()
+	if filepath.Ext(name) == "" {
+		name = ExecutableName(name)
+	}
 	path := filepath.Join(dir, name)
 	if err := os.WriteFile(path, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
@@ -23,13 +29,13 @@ func TestExecutablePathIsAlwaysAbsolute(t *testing.T) {
 	dir := t.TempDir()
 	writeExecutable(t, dir, "mop-convert")
 	t.Chdir(dir)
-	t.Setenv(MOPConvertBinEnv, "./mop-convert")
+	t.Setenv(MOPConvertBinEnv, "./"+ExecutableName("mop-convert"))
 
 	got := ExecutablePath(MOPConvertBinEnv)
 	if !filepath.IsAbs(got) {
 		t.Fatalf("ExecutablePath returned %q, want an absolute path", got)
 	}
-	if filepath.Base(got) != "mop-convert" {
+	if filepath.Base(got) != ExecutableName("mop-convert") {
 		t.Fatalf("ExecutablePath returned %q", got)
 	}
 }
@@ -147,5 +153,17 @@ func TestMopConvertBinaryReportsNothingWhenNoBuildStagedIt(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	if got := MopConvertBinary(t.TempDir(), t.TempDir()); got != "" {
 		t.Fatalf("MopConvertBinary = %q, want \"\"", got)
+	}
+}
+
+// A name that already carries the suffix is left alone, so callers can pass
+// either form without producing mop-convert.exe.exe.
+func TestExecutableNameIsIdempotent(t *testing.T) {
+	once := ExecutableName("mop-convert")
+	if got := ExecutableName(once); got != once {
+		t.Fatalf("ExecutableName(%q) = %q, want unchanged", once, got)
+	}
+	if ExecutableName("mop-convert") == "mop-convert.exe.exe" {
+		t.Fatal("suffix doubled")
 	}
 }

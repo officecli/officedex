@@ -135,6 +135,12 @@ const LITERAL_BY_DESIGN = new Set(["#ff5f57", "#ffbd2e", "#28c840", "#0001", "#2
 const FONT_SIZES = new Set([9, 12, 13, 14, 16, 20, 22, 24, 26, 28]);
 
 /**
+ * `-apple-system, BlinkMacSystemFont, ...` through the trailing generic family.
+ * Every variant the prototype writes starts with those two names.
+ */
+const SYSTEM_FONT_STACK = /-apple-system,\s*BlinkMacSystemFont(?:,\s*(?:'[^']*'|"[^"]*"|[\w-]+))*/g;
+
+/**
  * z-index → rung. The same number can be two rungs (30 is both the window
  * controls and the floating chat), so the choice is by selector.
  */
@@ -264,6 +270,13 @@ function rewriteValue(decl, selector) {
     return `var(${token})`;
   });
 
+  // The prototype spells the UI family out as Apple's stack; the shell's
+  // `--dx-font` is that stack plus the Windows fallbacks (Segoe UI, Microsoft
+  // YaHei), so the literal becomes the token wherever it appears -- in
+  // `font-family` and inside the `font` shorthand alike.
+  if (decl.prop === "font-family" || decl.prop === "font") {
+    value = value.replace(SYSTEM_FONT_STACK, "var(--dx-font)");
+  }
   if (decl.prop === "font-size") {
     value = value.replace(/^(\d+)px/, (match, size) => {
       if (!FONT_SIZES.has(Number(size))) throw new Error(`off-scale font-size ${match} on ${selector}`);

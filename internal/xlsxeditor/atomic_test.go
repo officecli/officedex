@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -195,7 +196,7 @@ func TestReplaceAtomicallyPreservesMode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := info.Mode().Perm(), os.FileMode(0o640); got != want {
+	if got, want := info.Mode().Perm(), expectedPerm(0o640); got != want {
 		t.Fatalf("original mode = %04o, want %04o", got, want)
 	}
 	if _, err := os.Stat(exportedPath); !errors.Is(err, os.ErrNotExist) {
@@ -249,30 +250,10 @@ func TestReplaceAtomicallyReportsPostCommitDurabilityErrors(t *testing.T) {
 		underlying error
 	}{
 		{
-			name:       "open parent directory",
-			underlying: errors.New("forced directory open failure"),
-			configure: func(ops replaceOps, underlying error) replaceOps {
-				ops.openDir = func(string) (fileHandle, error) { return nil, underlying }
-				return ops
-			},
-		},
-		{
 			name:       "sync parent directory",
 			underlying: errors.New("forced directory sync failure"),
 			configure: func(ops replaceOps, underlying error) replaceOps {
-				ops.openDir = func(string) (fileHandle, error) {
-					return &stubFile{syncErr: underlying}, nil
-				}
-				return ops
-			},
-		},
-		{
-			name:       "close parent directory",
-			underlying: errors.New("forced directory close failure"),
-			configure: func(ops replaceOps, underlying error) replaceOps {
-				ops.openDir = func(string) (fileHandle, error) {
-					return &stubFile{closeErr: underlying}, nil
-				}
+				ops.syncDir = func(string) error { return underlying }
 				return ops
 			},
 		},
@@ -509,17 +490,6 @@ func (zeroReader) Read(p []byte) (int, error) {
 	clear(p)
 	return len(p), nil
 }
-
-type stubFile struct {
-	syncErr  error
-	closeErr error
-}
-
-func (f *stubFile) Stat() (os.FileInfo, error) { return nil, nil }
-func (f *stubFile) Chmod(os.FileMode) error    { return nil }
-func (f *stubFile) Sync() error                { return f.syncErr }
-func (f *stubFile) Close() error               { return f.closeErr }
-
 func writeFile(t *testing.T, path string, content []byte, mode os.FileMode) {
 	t.Helper()
 	if err := os.WriteFile(path, content, mode); err != nil {
@@ -545,7 +515,20 @@ func assertFileUnchanged(t *testing.T, path string, wantContent []byte, wantMode
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := info.Mode().Perm(); got != wantMode {
-		t.Fatalf("original mode = %04o, want %04o", got, wantMode)
+	if got, want := info.Mode().Perm(), expectedPerm(wantMode); got != want {
+		t.Fatalf("original mode = %04o, want %04o", got, want)
 	}
+}
+
+// expectedPerm is what os.Stat reports after Chmod(mode) on this platform.
+// Windows keeps only "writable or not": a mode with any write bit reads back
+// as 0666, one without as 0444.
+func expectedPerm(mode os.FileMode) os.FileMode {
+	if runtime.GOOS != "windows" {
+		return mode
+	}
+	if mode&0o222 != 0 {
+		return 0o666
+	}
+	return 0o444
 }

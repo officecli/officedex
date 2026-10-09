@@ -71,9 +71,12 @@ test("the OFL faces writer bundles are all covered", async () => {
     "NotoSerifJP-Regular.woff",
     "Amiri-BoldItalic.woff",
     "SourceCodePro.woff",
+    // writer 435030b added STIX Two Math for formula layout; a fresh
+    // stage:writer-fonts failed the gate until the family was recorded.
+    "STIXTwoMath-Regular.otf",
   );
   const result = await verifyBundledFonts([root]);
-  assert.equal(result.checked, 6);
+  assert.equal(result.checked, 7);
   assert.deepEqual(result.pending, []);
 });
 
@@ -81,4 +84,5 @@ test("family detection strips the build hash and the weight suffix", () => {
   assert.equal(fontFamilyOf("inter-latin-600-BvOeHRLc.woff2"), "inter");
   assert.equal(fontFamilyOf("KaTeX_Main-Regular-B22Nviop.woff2"), "katex");
   assert.equal(fontFamilyOf("hy-kai-ti-Cx95UuP2.woff"), "hy");
+  assert.equal(fontFamilyOf("STIXTwoMath-Regular.otf"), "stixtwomath");
 });

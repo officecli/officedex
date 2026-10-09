@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -1853,7 +1854,7 @@ func TestRecordedTimestampsAreAllFixedWidth(t *testing.T) {
 		t.Fatalf("RecordEvent: %v", err)
 	}
 	if err := store.RecordArtifact(types.Artifact{
-		FilePath: "/tmp/deck.pptx", FileName: "deck.pptx", DocumentType: "pptx", TaskID: "task-1",
+		FilePath: absTestPath("deck.pptx"), FileName: "deck.pptx", DocumentType: "pptx", TaskID: "task-1",
 	}); err != nil {
 		t.Fatalf("RecordArtifact: %v", err)
 	}
@@ -1861,7 +1862,7 @@ func TestRecordedTimestampsAreAllFixedWidth(t *testing.T) {
 		t.Fatalf("EnsureWorkspace: %v", err)
 	}
 	if err := store.UpsertRecentFile(ctx, types.RecentFile{
-		FilePath: "/tmp/deck.pptx", FileName: "deck.pptx", DocumentType: "pptx", Source: "generated",
+		FilePath: absTestPath("deck.pptx"), FileName: "deck.pptx", DocumentType: "pptx", Source: "generated",
 	}); err != nil {
 		t.Fatalf("UpsertRecentFile: %v", err)
 	}
@@ -2247,7 +2248,7 @@ func TestSetDocumentWorkspaceFilesAndUnfilesADocument(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	local, err := store.RegisterLocalDocument(ctx, "/Users/me/Desktop/brief.docx", "brief.docx", "docx", "")
+	local, err := store.RegisterLocalDocument(ctx, absTestPath("brief.docx"), "brief.docx", "docx", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2380,7 +2381,7 @@ func TestRemoveWorkspaceUnfilesItsDocuments(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	local, err := store.RegisterLocalDocument(ctx, "/Users/me/Desktop/brief.docx", "brief.docx", "docx", project.ID)
+	local, err := store.RegisterLocalDocument(ctx, absTestPath("brief.docx"), "brief.docx", "docx", project.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2398,4 +2399,13 @@ func TestRemoveWorkspaceUnfilesItsDocuments(t *testing.T) {
 	if err != nil || len(recents) != 1 || recents[0].WorkspaceID != "" {
 		t.Errorf("recent file after removing its workspace = %+v, %v; want no workspace", recents, err)
 	}
+}
+
+// absTestPath is an absolute document path on this platform; the store
+// rejects anything else, and "/tmp/x" is not absolute on Windows.
+func absTestPath(name string) string {
+	if runtime.GOOS == "windows" {
+		return filepath.Join(`C:\`, "tmp", name)
+	}
+	return filepath.Join("/tmp", name)
 }

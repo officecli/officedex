@@ -12,6 +12,8 @@ func TestOfficeProductGraphRoundTrip(t *testing.T) {
 	if err := store.Open(ctx); err != nil {
 		t.Fatal(err)
 	}
+	// Windows cannot remove an open database file; TempDir cleanup needs it closed.
+	t.Cleanup(func() { _ = store.Close() })
 	if err := store.UpsertOfficeProject(OfficeProject{ID: "p1", Name: "Sales"}); err != nil {
 		t.Fatal(err)
 	}

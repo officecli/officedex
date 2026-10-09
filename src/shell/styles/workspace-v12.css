@@ -1376,7 +1376,7 @@
   background: var(--dx-tooltip);
   color: var(--dx-white);
   box-shadow: 0 3px 12px var(--dx-shade-14);
-  font: 400 var(--dx-fs-12)/18px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font: 400 var(--dx-fs-12)/18px var(--dx-font);
   pointer-events: none;
 }
 

@@ -103,6 +103,7 @@ func TestPrepareSaveAndExportPptxSession(t *testing.T) {
 func TestSaveVideoWritesRevisionCheckedArtifactToDownloads(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("HOME", root)
+	t.Setenv("USERPROFILE", root) // os.UserHomeDir on Windows
 	sourcePath := filepath.Join(root, "deck.pptx")
 	writeTestPptx(t, sourcePath)
 	service := NewService(&fakeResolver{entries: map[string]preview.ArtifactEntry{

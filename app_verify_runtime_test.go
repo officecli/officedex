@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -40,6 +41,16 @@ func stagePresentationRuntime(t *testing.T, root string, withConverter bool) {
 	}
 	if err := os.WriteFile(binary, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// requireShellFakes skips a test whose runtime fakes are /bin/sh scripts:
+// Windows cannot start them, and the real node.exe is exercised there by
+// `officedex.exe --verify-runtime` in the Windows smoke run instead.
+func requireShellFakes(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("runtime fakes are /bin/sh scripts; see the Windows smoke run for the real node.exe")
 	}
 }
 
@@ -82,6 +93,7 @@ func isolateRuntimeLookup(t *testing.T) string {
 // presentation checkout beside the repository. That is the layout this check
 // exists for, and the packaged-tree gate cannot see it.
 func TestVerifyRuntimeDepsAcceptsACheckoutBesideTheRepository(t *testing.T) {
+	requireShellFakes(t)
 	workdir := isolateRuntimeLookup(t)
 	stagePresentationRuntime(t, filepath.Join(workdir, "presentation"), true)
 
@@ -97,6 +109,7 @@ func TestVerifyRuntimeDepsAcceptsACheckoutBesideTheRepository(t *testing.T) {
 // The bundle that shipped without a converter had a complete runtime tree, so
 // every presence check passed. Only asking for the converter itself catches it.
 func TestVerifyRuntimeDepsRejectsARuntimeWithoutTheConverter(t *testing.T) {
+	requireShellFakes(t)
 	workdir := isolateRuntimeLookup(t)
 	stagePresentationRuntime(t, filepath.Join(workdir, "presentation"), false)
 
@@ -116,6 +129,7 @@ func TestVerifyRuntimeDepsRejectsARuntimeWithoutTheConverter(t *testing.T) {
 // The Writer payloads are staged by packaging alone. Reporting them is useful;
 // failing a local build over them is not.
 func TestVerifyRuntimeDepsToleratesMissingWriterPayloads(t *testing.T) {
+	requireShellFakes(t)
 	workdir := isolateRuntimeLookup(t)
 	stagePresentationRuntime(t, filepath.Join(workdir, "presentation"), true)
 
@@ -134,6 +148,7 @@ func TestVerifyRuntimeDepsToleratesMissingWriterPayloads(t *testing.T) {
 // aborts on start. Presence said yes for four days of builds while every PPTX
 // generation died in the worker.
 func TestVerifyRuntimeDepsRejectsANodeThatDoesNotStart(t *testing.T) {
+	requireShellFakes(t)
 	workdir := isolateRuntimeLookup(t)
 	stagePresentationRuntime(t, filepath.Join(workdir, "presentation"), true)
 	t.Setenv(config.SkillNodeEnv, stageNode(t, abortingNode))
@@ -153,6 +168,7 @@ func TestVerifyRuntimeDepsRejectsANodeThatDoesNotStart(t *testing.T) {
 // Naming the version is what makes "which Node won" answerable on a user's
 // machine, which is the question this incident turned on.
 func TestVerifyRuntimeDepsNamesTheNodeAndItsVersion(t *testing.T) {
+	requireShellFakes(t)
 	workdir := isolateRuntimeLookup(t)
 	stagePresentationRuntime(t, filepath.Join(workdir, "presentation"), true)
 	node := stageNode(t, workingNode)
@@ -173,6 +189,7 @@ func TestVerifyRuntimeDepsNamesTheNodeAndItsVersion(t *testing.T) {
 // fall back the same way rather than declaring the app broken over a stale
 // variable. What cannot happen is the line going missing.
 func TestVerifyRuntimeDepsFallsBackWhenTheOverrideIsUnusable(t *testing.T) {
+	requireShellFakes(t)
 	workdir := isolateRuntimeLookup(t)
 	stagePresentationRuntime(t, filepath.Join(workdir, "presentation"), true)
 	absent := filepath.Join(t.TempDir(), "absent-node")
@@ -186,5 +203,24 @@ func TestVerifyRuntimeDepsFallsBackWhenTheOverrideIsUnusable(t *testing.T) {
 	}
 	if strings.Contains(report, absent) {
 		t.Fatalf("report names an override that cannot be run:\n%s", report)
+	}
+}
+
+// The report names the office2modoc library the app would load, which is how
+// the Windows smoke checks a packaged app loads its own copy; a checkout
+// without one says so instead of failing.
+func TestResolveOffice2modocLibraryReportsOnlyAnExistingLibrary(t *testing.T) {
+	t.Setenv(config.Office2ModocFFIEnv, "")
+	repoRoot := t.TempDir()
+	if got := resolveOffice2modocLibrary(repoRoot); got != "" {
+		t.Fatalf("empty checkout reported %q", got)
+	}
+	library := filepath.Join(repoRoot, "ffi.lib")
+	if err := os.WriteFile(library, []byte("ffi"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(config.Office2ModocFFIEnv, library)
+	if got := resolveOffice2modocLibrary(repoRoot); got != library {
+		t.Fatalf("got %q, want %q", got, library)
 	}
 }

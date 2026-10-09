@@ -60,7 +60,11 @@ func stagedConvertBinary(t *testing.T) string {
 	if !ok {
 		t.Fatal("runtime.Caller failed")
 	}
-	binary := filepath.Join(filepath.Dir(file), "..", "..", "build", "writer-convert", "convert")
+	name := "convert"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	binary := filepath.Join(filepath.Dir(file), "..", "..", "build", "writer-convert", name)
 	info, err := os.Stat(binary)
 	if err != nil || info.IsDir() {
 		t.Fatalf("staged convert binary missing at %s: %v", binary, err)
@@ -274,4 +278,3 @@ func tableDocx(t *testing.T, cellText string) []byte {
 		"word/document.xml": document,
 	})
 }
-

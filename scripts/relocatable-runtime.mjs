@@ -18,11 +18,21 @@
 // its recorded dependencies name nothing outside the OS, and it executes from
 // a directory that is not the one it was staged from.
 
+//
+// A package built for another operating system cannot be proven that way on the
+// build host: a Mac cannot start node.exe. For that case `probe: false` falls
+// back to what the file itself can tell -- a real file, not a symlink, a 64-bit
+// PE image for the right CPU -- and reports *that it did not run*, so the
+// bundle records an unverified runtime instead of a verified one. The run that
+// does prove it is the Windows smoke workflow.
+
 import { cp, lstat, mkdtemp, rm } from "node:fs/promises";
 import { execFile as execFileCallback } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+
+import { assertPortableExecutable } from "./pe-executable.mjs";
 
 const execFile = promisify(execFileCallback);
 
@@ -36,6 +46,24 @@ export const SYSTEM_DEPENDENCY_PREFIXES = Object.freeze([
 
 export function nodeExecutableName(platform = process.platform) {
   return platform === "win32" ? "node.exe" : "node";
+}
+
+/**
+ * Whether a runtime built for `targetPlatform` can be executed on this host.
+ * Rosetta lets an arm64 Mac run an x64 darwin Node, so the platform is what
+ * decides, not the architecture.
+ */
+export function canExecuteRuntime(targetPlatform, hostPlatform = process.platform) {
+  return targetPlatform === hostPlatform;
+}
+
+/** The sentence runtime.json carries when the runtime was staged but never started. */
+export function unverifiedRuntimeReason(targetPlatform, hostPlatform = process.platform) {
+  return (
+    `cross-build: a ${hostPlatform} host cannot execute a ${targetPlatform} Node; ` +
+    "only file-level checks ran (regular file, not a symlink, PE32+ image for the target CPU). " +
+    "Run verify-packaged-runtime on a " + targetPlatform + " host (windows-smoke workflow) to prove relocation"
+  );
 }
 
 /**
@@ -72,12 +100,23 @@ export function foreignDependencies(dependencies) {
  * to leave behind. A packaged runtime is already at its destination, so it is
  * run where it sits, which is exactly where the app will run it.
  *
+ * `probe` decides whether the runtime is started at all. It defaults to "yes
+ * when the host can", and is false for a cross-build; then the executable is
+ * checked as a file (for Windows, as a PE32+ image for `arch`) and the result
+ * says `probed: false` with the reason, so nothing downstream can mistake
+ * "present and well-formed" for "ran".
+ *
  * Returns the version the runtime reported and the dependencies it names.
  */
 export async function verifyRelocatableRuntime(runtimeDir, options = {}) {
   const {
     platform = process.platform,
+    arch = os.arch(),
+    // The build host; a parameter so the cross-build rules can be tested on
+    // any machine.
+    hostPlatform = process.platform,
     relocate = false,
+    probe = canExecuteRuntime(platform, hostPlatform),
     readDependencies = readMachODependencies,
     run = execFile,
   } = options;
@@ -109,8 +148,28 @@ export async function verifyRelocatableRuntime(runtimeDir, options = {}) {
     }
   }
 
+  if (!probe) {
+    if (!canExecuteRuntime(platform, hostPlatform)) {
+      // The one thing a header can prove: the right kind of image for the
+      // target. A Mach-O or an i386 PE copied into a win32-x64 slice fails here.
+      const fileChecks = { symlink: false, regularFile: true };
+      if (platform === "win32") Object.assign(fileChecks, await assertPortableExecutable(executable, arch));
+      return {
+        executable,
+        version: null,
+        provenFrom: null,
+        probed: false,
+        unverifiedReason: unverifiedRuntimeReason(platform, hostPlatform),
+        fileChecks,
+      };
+    }
+    throw new Error(
+      `refusing to skip the execution probe for ${platform} on a ${hostPlatform} host: the runtime can be run here, so run it`,
+    );
+  }
+
   const { version, from } = await probeRuntime(runtimeDir, { platform, relocate, run });
-  return { executable, version, provenFrom: from };
+  return { executable, version, provenFrom: from, probed: true };
 }
 
 /**
