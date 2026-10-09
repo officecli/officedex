@@ -1,19 +1,24 @@
 package atomicfile
 
 import (
-	"errors"
-	"syscall"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
-func TestIsDirSyncUnsupportedDistinguishesCannotFromFailed(t *testing.T) {
-	if !IsDirSyncUnsupported(syscall.EINVAL) {
-		t.Fatal("EINVAL from a directory Sync means the filesystem cannot fsync directories")
+// WriteFile's rename is followed by SyncDir on every platform; on all of them
+// an atomic write into a real directory must simply succeed.
+func TestWriteFileSurvivesDirectorySyncOnThisPlatform(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "identity.json")
+	if err := WriteFile(target, []byte("{}"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
 	}
-	if IsDirSyncUnsupported(errors.New("forced directory sync failure")) {
-		t.Fatal("an arbitrary error is a failed sync, not an unsupported one")
+	data, err := os.ReadFile(target)
+	if err != nil || string(data) != "{}" {
+		t.Fatalf("read back %q, %v", data, err)
 	}
-	if IsDirSyncUnsupported(nil) {
-		t.Fatal("nil is not an error")
+	if err := SyncDir(dir); err != nil {
+		t.Fatalf("SyncDir on an existing directory: %v", err)
 	}
 }

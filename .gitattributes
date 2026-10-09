@@ -21,3 +21,7 @@ build/bin/**             linguist-generated=true
 
 # Project documentation is not the project's language
 *.md                     linguist-documentation=true
+
+# Signed fixtures are verified byte for byte; a CRLF checkout on Windows must not rewrite them.
+internal/appupdate/testdata/** -text
+*.sig -text

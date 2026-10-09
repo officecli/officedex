@@ -30,22 +30,24 @@ type replaceOps struct {
 	lstat    func(string) (os.FileInfo, error)
 	openFile func(string) (fileHandle, error)
 	rename   func(string, string) error
-	openDir  func(string) (fileHandle, error)
+	// syncDir makes the rename durable; atomicfile.SyncDir knows which
+	// platforms can fsync a directory at all (Windows cannot, and must not try).
+	syncDir  func(string) error
 	sameFile func(os.FileInfo, os.FileInfo) bool
 }
 
 func defaultReplaceOps() replaceOps {
 	return replaceOps{
 		lstat: os.Lstat,
+		// Read-write, not os.Open: the export is fsync'd through this handle,
+		// and on Windows FlushFileBuffers on a read-only handle fails with
+		// "Access is denied" -- which made every XLSX save fail there.
 		openFile: func(path string) (fileHandle, error) {
-			file, err := os.Open(path)
+			file, err := os.OpenFile(path, os.O_RDWR, 0)
 			return file, err
 		},
-		rename: os.Rename,
-		openDir: func(path string) (fileHandle, error) {
-			file, err := os.Open(path)
-			return file, err
-		},
+		rename:   os.Rename,
+		syncDir:  atomicfile.SyncDir,
 		sameFile: os.SameFile,
 	}
 }
@@ -235,16 +237,8 @@ func replaceAtomicallyWithOps(originalPath, exportedPath string, ops replaceOps)
 		return fmt.Errorf("rename exported XLSX: %w", err)
 	}
 
-	directory, err := ops.openDir(filepath.Dir(originalPath))
-	if err != nil {
-		return postCommitError("open XLSX parent directory for sync", err)
-	}
-	if err := directory.Sync(); err != nil && !atomicfile.IsDirSyncUnsupported(err) {
-		_ = directory.Close()
+	if err := ops.syncDir(filepath.Dir(originalPath)); err != nil {
 		return postCommitError("sync XLSX parent directory", err)
-	}
-	if err := directory.Close(); err != nil {
-		return postCommitError("close XLSX parent directory after sync", err)
 	}
 	return nil
 }

@@ -2,19 +2,15 @@
 
 package atomicfile
 
-import (
-	"errors"
-	"syscall"
-)
-
-// Windows has no directory fsync. os.Open opens a directory for reading only,
-// so FlushFileBuffers on it fails with ERROR_ACCESS_DENIED (and on some
-// filesystems ERROR_INVALID_FUNCTION); NTFS journals the directory update
-// itself. Either answer means "cannot sync a directory here", not "the sync
-// failed", and the rename that preceded it stands.
-func isDirSyncUnsupported(err error) bool {
-	return errors.Is(err, syscall.ERROR_ACCESS_DENIED) ||
-		errors.Is(err, syscall.Errno(1)) || // ERROR_INVALID_FUNCTION
-		errors.Is(err, syscall.EINVAL) ||
-		errors.Is(err, syscall.ENOTSUP)
+// SyncDir is a no-op on Windows, and does not open the directory.
+//
+// Go has no usable directory fsync here: os.Open yields a read-only directory
+// handle, and FlushFileBuffers on it fails with ERROR_ACCESS_DENIED -- which is
+// exactly how the first native Windows run died, in NewApp, with "write
+// OfficeDex instance identity: sync ...: Access is denied", after the rename
+// had already succeeded. NTFS records the rename in its metadata journal, so
+// the durability the Unix sync buys is already there; a directory handle that
+// cannot be flushed has nothing to add.
+func SyncDir(string) error {
+	return nil
 }

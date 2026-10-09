@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -13,14 +14,23 @@ import (
 
 func ptr(s string) *string { return &s }
 
+// abs turns a Unix-style absolute test path into one this platform calls
+// absolute: unchanged on Unix, rooted on a drive on Windows.
+func abs(s string) string {
+	if runtime.GOOS == "windows" {
+		return filepath.Clean(`C:` + filepath.FromSlash(s))
+	}
+	return s
+}
+
 func TestCleanDirRequiresAnAbsolutePathWithoutNUL(t *testing.T) {
-	if got, err := CleanDir("  /tmp/ws  "); err != nil || got != "/tmp/ws" {
+	if got, err := CleanDir("  " + abs("/tmp/ws") + "  "); err != nil || got != abs("/tmp/ws") {
 		t.Fatalf("CleanDir = %q, %v", got, err)
 	}
 	if _, err := CleanDir("relative/ws"); err == nil || !strings.Contains(err.Error(), "absolute") {
 		t.Fatalf("relative path accepted: %v", err)
 	}
-	if _, err := CleanDir("/tmp/ws\x00x"); err == nil || !strings.Contains(err.Error(), "invalid") {
+	if _, err := CleanDir(abs("/tmp/ws") + "\x00x"); err == nil || !strings.Contains(err.Error(), "invalid") {
 		t.Fatalf("NUL accepted: %v", err)
 	}
 	if _, err := CleanOutputDir("relative"); err == nil || !strings.Contains(err.Error(), "generate output dir") {
@@ -46,19 +56,19 @@ func TestCleanExistingDirRejectsMissingPathsAndFiles(t *testing.T) {
 }
 
 func TestSamePathCleansBeforeComparing(t *testing.T) {
-	if !SamePath("/a/b/../b", "/a/b/") {
+	if !SamePath(abs("/a/b/../b"), abs("/a/b/")) {
 		t.Fatal("equivalent paths not recognised")
 	}
-	if SamePath("", "/a") || SamePath("/a", "  ") {
+	if SamePath("", abs("/a")) || SamePath(abs("/a"), "  ") {
 		t.Fatal("an empty side never matches")
 	}
 }
 
 func TestSettingsDirPrefersWorkspaceDirOverLegacyOutputDir(t *testing.T) {
-	if got, ok := SettingsDir(types.UserSettings{WorkspaceDir: ptr("/ws"), OutputDir: ptr("/out")}); !ok || got != "/ws" {
+	if got, ok := SettingsDir(types.UserSettings{WorkspaceDir: ptr(abs("/ws")), OutputDir: ptr(abs("/out"))}); !ok || got != abs("/ws") {
 		t.Fatalf("SettingsDir = %q, %v", got, ok)
 	}
-	if got, ok := SettingsDir(types.UserSettings{WorkspaceDir: ptr("  "), OutputDir: ptr("/out")}); !ok || got != "/out" {
+	if got, ok := SettingsDir(types.UserSettings{WorkspaceDir: ptr("  "), OutputDir: ptr(abs("/out"))}); !ok || got != abs("/out") {
 		t.Fatalf("blank WorkspaceDir must fall back to OutputDir: %q, %v", got, ok)
 	}
 	if _, ok := SettingsDir(types.UserSettings{}); ok {
@@ -73,10 +83,10 @@ func TestHasInvalidSettingsDirOnlyFlagsAConfiguredBadPath(t *testing.T) {
 	if HasInvalidSettingsDir(types.UserSettings{}) {
 		t.Fatal("unset is not invalid")
 	}
-	if HasInvalidSettingsDir(types.UserSettings{WorkspaceDir: ptr("/ws")}) {
+	if HasInvalidSettingsDir(types.UserSettings{WorkspaceDir: ptr(abs("/ws"))}) {
 		t.Fatal("a valid dir flagged")
 	}
-	if !HasInvalidSettingsDir(types.UserSettings{WorkspaceDir: ptr("relative"), OutputDir: ptr("/out")}) {
+	if !HasInvalidSettingsDir(types.UserSettings{WorkspaceDir: ptr("relative"), OutputDir: ptr(abs("/out"))}) {
 		t.Fatal("an invalid WorkspaceDir must be flagged even when OutputDir is fine: WorkspaceDir is what the user chose")
 	}
 	if !HasInvalidSettingsDir(types.UserSettings{OutputDir: ptr("relative")}) {
@@ -85,13 +95,13 @@ func TestHasInvalidSettingsDirOnlyFlagsAConfiguredBadPath(t *testing.T) {
 }
 
 func TestTrustedRootsAlwaysIncludeTheDefaultWorkspace(t *testing.T) {
-	if got := TrustedRoots("/default", types.UserSettings{}); !reflect.DeepEqual(got, []string{"/default"}) {
+	if got := TrustedRoots(abs("/default"), types.UserSettings{}); !reflect.DeepEqual(got, []string{abs("/default")}) {
 		t.Fatalf("TrustedRoots = %v", got)
 	}
-	if got := TrustedRoots("/default", types.UserSettings{WorkspaceDir: ptr("/custom")}); !reflect.DeepEqual(got, []string{"/default", "/custom"}) {
+	if got := TrustedRoots(abs("/default"), types.UserSettings{WorkspaceDir: ptr(abs("/custom"))}); !reflect.DeepEqual(got, []string{abs("/default"), abs("/custom")}) {
 		t.Fatalf("TrustedRoots = %v", got)
 	}
-	if got := TrustedRoots("/default", types.UserSettings{WorkspaceDir: ptr("bad")}); !reflect.DeepEqual(got, []string{"/default"}) {
+	if got := TrustedRoots(abs("/default"), types.UserSettings{WorkspaceDir: ptr("bad")}); !reflect.DeepEqual(got, []string{abs("/default")}) {
 		t.Fatalf("an invalid custom dir must not become a trusted root: %v", got)
 	}
 }
