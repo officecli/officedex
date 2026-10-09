@@ -12,6 +12,8 @@ import {
   inputPaths,
   parseArgs,
   planSteps,
+  MAX_RELATIVE_PATH,
+  findOverlongPaths,
   resolveMakensis,
   resolveOffice2modocWindows,
 } from "./dist-win.mjs";
@@ -142,4 +144,18 @@ test("makensis is found under Program Files on Windows, overridden by OFFICEDEX_
     resolveMakensis({ platform: "darwin", env: { OFFICEDEX_MAKENSIS: "scripts/nsis/makensis-docker.sh" }, root: "/repo" }),
     path.resolve("/repo", "scripts/nsis/makensis-docker.sh"),
   );
+});
+
+test("files deeper than the MAX_PATH budget are reported, longest first", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "deep-"));
+  const deep = path.join(root, ...Array.from({ length: 12 }, (_, i) => `segment-${i}-abcdefghij`));
+  await mkdir(deep, { recursive: true });
+  await writeFile(path.join(deep, "leaf.js"), "");
+  await writeFile(path.join(root, "shallow.js"), "");
+  const found = await findOverlongPaths(root);
+  assert.equal(found.length, 1);
+  assert.ok(found[0].length > MAX_RELATIVE_PATH);
+  assert.ok(found[0].path.endsWith("leaf.js"));
+  assert.deepEqual(await findOverlongPaths(root, 10_000), []);
+  await rm(root, { recursive: true, force: true });
 });
