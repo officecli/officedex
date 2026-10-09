@@ -139,7 +139,10 @@ export RUSTFLAGS="-Cdlltool=/opt/homebrew/opt/llvm/bin/llvm-dlltool $remaps"
 cargo zigbuild -p word2mow --bin convert --release --target x86_64-pc-windows-gnu
 #   -> target/x86_64-pc-windows-gnu/release/convert.exe
 
-# ppt2mop: the shipped "mop-convert" is the pptx2mop binary under the release-desktop profile
+# ppt2mop: the shipped "mop-convert" is the pptx2mop binary under the release-desktop profile.
+# Build from a revision that includes fix/windows-replace-open-pptx (c1fb188): earlier builds
+# fail every export on Windows ("replace generated PPTX ...: Access is denied"), because the
+# generated file's read handle was still open when the repaired copy was moved over it.
 cargo zigbuild --profile release-desktop -p pptx2mop --bin pptx2mop --target x86_64-pc-windows-gnu
 #   -> target/x86_64-pc-windows-gnu/release-desktop/pptx2mop.exe, copied as mop-convert.exe
 ```

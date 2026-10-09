@@ -72,9 +72,13 @@ export const DEFAULT_ARCH = "x64";
  */
 export const PINNED_CONVERTER_BUILDS = Object.freeze({
   "mop-convert": Object.freeze({
+    // ppt2mop fix/windows-replace-open-pptx (c1fb188, on feat/release-desktop
+    // 4e047c64): closes the generated PPTX's read handle before replacing it,
+    // which Windows requires; the 4e047c64 build failed every export there
+    // with "replace generated PPTX ...: Access is denied (os error 5)".
     "win32-x64": Object.freeze({
-      sha256: "0a6256df61618d9330127602a828f7d2a928545a3cacd1b21f1579e7630547e1",
-      revision: "4e047c64b0ffe898dcc0317885861045a91cc032",
+      sha256: "3c1c1b162499fdb74ff3bd7fdb7740667af1db2241986277257c29abfbb89e1d",
+      revision: "c1fb188c192b3ebbc03a7dc270a0d1bfa885d3d1",
       toolchain: "cargo-zigbuild 0.23.4, zig 0.17.0, x86_64-pc-windows-gnu, release-desktop profile",
     }),
   }),
