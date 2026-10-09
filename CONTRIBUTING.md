@@ -151,6 +151,30 @@ Versions are plain `x.y.z`; the client compares three numeric segments and ignor
 
 Clients on 0.6.x poll the same root manifest and upgrade straight to the current version. Clients on 1.0.6–1.0.12 polled the legacy OBS channel; it was written one last time (`--channel 1.0`) with a stable-channel build and is frozen. `officedex-dist/channels/1.0/` is the even older bridge for 1.0.1–1.0.5 and stays untouched.
 
+### App icon resources and macOS appearance
+
+The icon master is `resources/dmg/app-icon.svg`. Run `bash scripts/generate-app-icons.sh`
+on macOS with `rsvg-convert` installed to regenerate `build/appicon.png`,
+`build/icon.png`, and `build/icon.icns`. Wails builds the bundled ICNS from
+`build/appicon.png`.
+
+The circular logo touches all four sides of a white rounded tile; the area outside
+the tile stays transparent. This is intentional: macOS 26 adds a gray tile around
+the old circle-only icon. Checking PNG transparency or decoding the ICNS does not
+reveal that system treatment. Do not replace this with Finder custom-icon metadata,
+which fails strict code-signature verification.
+
+Before publishing an icon change, mount the final DMG and inspect the actual
+system-resolved appearance (use the mounted app's real path):
+
+```bash
+swift scripts/preview-mac-app-icon.swift "/Volumes/OfficeDex/OfficeDex.app" /tmp/officedex-system-icon.png
+```
+
+Check the rendered PNG for a white tile and a logo filling its width. macOS may
+apply its own lighting effects. Also inspect the mounted installer in Finder and
+the app extracted from the update ZIP; source-image inspection alone is insufficient.
+
 ### Building and testing a test-channel package
 
 1. Allocate the next unused plain `x.y.z` version across **both** channels. Set `package.json`, the root versions in `package-lock.json`, and `wails.json`. Never reuse a version for different bytes, or use `-beta.N`: clients compare numeric versions only.
