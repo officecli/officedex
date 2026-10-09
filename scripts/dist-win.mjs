@@ -476,10 +476,7 @@ export async function distWin(options) {
           `-DWAILS_INSTALL_SCOPE=${options.installScope}`,
           `-DREQUEST_EXECUTION_LEVEL=${options.installScope === "user" ? "user" : "admin"}`,
         ];
-        // OFFICEDEX_MAKENSIS names another compiler command -- on a Mac,
-        // scripts/nsis/makensis-docker.sh, because Homebrew's makensis aborts
-        // on start (see scripts/nsis/Dockerfile). windows-latest has makensis.
-        const makensis = process.env.OFFICEDEX_MAKENSIS?.trim() ? path.resolve(ROOT, process.env.OFFICEDEX_MAKENSIS.trim()) : "makensis";
+        const makensis = resolveMakensis();
         run(makensis, [...defines, "project.nsi"], { cwd: installerDir });
         if (!existsSync(installer)) throw new Error(`makensis did not produce ${installer}`);
         summary.artifacts.installer = await describeArtifact(installer);
@@ -512,6 +509,26 @@ export async function distWin(options) {
   await writeFile(summaryPath, JSON.stringify(summary, null, 2) + "\n", "utf8");
   log("", `summary written to ${summaryPath}`);
   return { steps, summary };
+}
+
+/**
+ * The NSIS compiler to run. OFFICEDEX_MAKENSIS names another command -- on a
+ * Mac, scripts/nsis/makensis-docker.sh, because Homebrew's makensis aborts on
+ * start (see scripts/nsis/Dockerfile). On Windows the NSIS installer puts
+ * makensis.exe under Program Files without adding it to PATH (GitHub's
+ * windows-latest image included), so the usual locations are tried before
+ * falling back to PATH.
+ */
+export function resolveMakensis({ platform = process.platform, env = process.env, exists = existsSync, root = ROOT } = {}) {
+  if (env.OFFICEDEX_MAKENSIS?.trim()) return path.resolve(root, env.OFFICEDEX_MAKENSIS.trim());
+  if (platform === "win32") {
+    for (const programFiles of [env["ProgramFiles(x86)"], env.ProgramFiles, "C:\\Program Files (x86)", "C:\\Program Files"]) {
+      if (!programFiles) continue;
+      const candidate = path.join(programFiles, "NSIS", "makensis.exe");
+      if (exists(candidate)) return candidate;
+    }
+  }
+  return "makensis";
 }
 
 async function pinConverter(name, file, slice) {

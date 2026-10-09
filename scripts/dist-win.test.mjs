@@ -12,6 +12,7 @@ import {
   inputPaths,
   parseArgs,
   planSteps,
+  resolveMakensis,
   resolveOffice2modocWindows,
 } from "./dist-win.mjs";
 import { KNOWN_CONVERT_BUILDS } from "./prefetch-word2mow-convert.mjs";
@@ -127,4 +128,18 @@ test("the office2modoc DLL is found in build/cache and pinned by the manifest or
 
   await assert.rejects(resolveOffice2modocWindows({ root, version: "9.9.9", env: {} }), /not found/);
   await rm(root, { recursive: true, force: true });
+});
+
+test("makensis is found under Program Files on Windows, overridden by OFFICEDEX_MAKENSIS, PATH otherwise", () => {
+  const nsis = path.join("C:\\Program Files (x86)", "NSIS", "makensis.exe");
+  assert.equal(
+    resolveMakensis({ platform: "win32", env: { "ProgramFiles(x86)": "C:\\Program Files (x86)" }, exists: (p) => p === nsis }),
+    nsis,
+  );
+  assert.equal(resolveMakensis({ platform: "win32", env: {}, exists: () => false }), "makensis");
+  assert.equal(resolveMakensis({ platform: "darwin", env: {}, exists: () => true }), "makensis");
+  assert.equal(
+    resolveMakensis({ platform: "darwin", env: { OFFICEDEX_MAKENSIS: "scripts/nsis/makensis-docker.sh" }, root: "/repo" }),
+    path.resolve("/repo", "scripts/nsis/makensis-docker.sh"),
+  );
 });
