@@ -63,11 +63,42 @@ export function tarExecutable(platform = process.platform, env = process.env) {
   return existsSync(system) ? system : "tar";
 }
 
-/** Runs tar with the archive named relative to its own directory, for the same reason. */
+/**
+ * Runs tar with the archive named relative to its own directory, for the same
+ * reason. COPYFILE_DISABLE stops macOS's tar from adding AppleDouble `._*`
+ * entries for extended attributes: extracted on Windows they become real
+ * files, and `._Amiri-Regular.woff` then fails the bundled-font licence gate.
+ */
 export function runTar(args, archive, { cwd } = {}) {
   const archiveDir = path.dirname(archive);
   const resolved = args.map((arg) => (arg === archive ? path.basename(archive) : arg));
-  return spawnSync(tarExecutable(), resolved, { cwd: cwd || archiveDir, stdio: "inherit" });
+  return spawnSync(tarExecutable(), resolved, {
+    cwd: cwd || archiveDir,
+    stdio: "inherit",
+    env: { ...process.env, COPYFILE_DISABLE: "1" },
+  });
+}
+
+/** macOS metadata files that have no business in a package: AppleDouble and Finder droppings. */
+export function isHostMetadataFile(name) {
+  return name.startsWith("._") || name === ".DS_Store";
+}
+
+/** Removes host metadata files anywhere under dir; returns what was removed. */
+export async function removeHostMetadataFiles(dir) {
+  const removed = [];
+  const walk = async (current) => {
+    for (const entry of await readdir(current, { withFileTypes: true })) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) await walk(full);
+      else if (isHostMetadataFile(entry.name)) {
+        await rm(full, { force: true });
+        removed.push(path.relative(dir, full));
+      }
+    }
+  };
+  await walk(dir);
+  return removed.sort();
 }
 
 async function listFiles(dir) {
@@ -100,7 +131,7 @@ export async function buildManifest(stagingDir, { root = ROOT, slice = "win32-x6
   const files = [];
   for (const file of await listFiles(stagingDir)) {
     const relative = path.relative(stagingDir, file).split(path.sep).join("/");
-    if (relative === "manifest.json") continue;
+    if (relative === "manifest.json" || isHostMetadataFile(path.basename(file))) continue;
     files.push({ path: relative, size: (await stat(file)).size, sha256: await sha256(file) });
   }
   let presentation = null;
@@ -178,13 +209,16 @@ export async function unpackInputs({ archive, dest = path.join(ROOT, "build", "w
   await mkdir(dest, { recursive: true });
   const tar = runTar(["-xzf", archive, "-C", dest], archive);
   if (tar.status !== 0) throw new Error(`tar exited with ${tar.status}`);
+  // An archive packed before COPYFILE_DISABLE was set carries `._*` entries;
+  // they are never in the manifest and never wanted.
+  const strayMetadata = await removeHostMetadataFiles(dest);
   const manifestPath = path.join(dest, "manifest.json");
   if (!existsSync(manifestPath)) throw new Error(`${archive} has no manifest.json; not a windows-inputs archive`);
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
   if (manifest.format !== INPUTS_FORMAT) throw new Error(`inputs archive format ${manifest.format}; this script reads format ${INPUTS_FORMAT}`);
   const problems = await verifyManifest(dest, manifest);
   if (problems.length > 0) throw new Error(`inputs archive did not unpack intact:\n  ${problems.join("\n  ")}`);
-  return { dest, sha256: actual, manifest };
+  return { dest, sha256: actual, manifest, strayMetadata };
 }
 
 function parseArgs(argv) {

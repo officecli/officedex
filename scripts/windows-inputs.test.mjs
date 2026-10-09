@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { fakePortableExecutable } from "./pe-executable.mjs";
-import { INPUTS_FORMAT, buildManifest, inputEntries, packInputs, runTar, tarExecutable, unpackInputs, verifyManifest } from "./windows-inputs.mjs";
+import { INPUTS_FORMAT, buildManifest, inputEntries, isHostMetadataFile, packInputs, removeHostMetadataFiles, runTar, tarExecutable, unpackInputs, verifyManifest } from "./windows-inputs.mjs";
 
 /** A repository with every input present and staged for win32-x64. */
 async function fakeRepo() {
@@ -115,4 +115,25 @@ test("tar is the system bsdtar on Windows and plain tar elsewhere", () => {
   assert.equal(tarExecutable("linux"), "tar");
   const onWindows = tarExecutable("win32", { SystemRoot: "C:\\Windows" });
   assert.ok(onWindows === "tar" || onWindows.endsWith(path.join("System32", "tar.exe")));
+});
+
+test("AppleDouble and Finder metadata never survive an unpack", async () => {
+  // macOS tar writes `._name` entries for extended attributes unless
+  // COPYFILE_DISABLE is set; on Windows they extract as real files and a
+  // `._Amiri-Regular.woff` fails the font licence gate. pack sets the variable;
+  // unpack also sweeps them, for archives made before it did.
+  const root = await mkdtemp(path.join(os.tmpdir(), "win-inputs-"));
+  const tree = path.join(root, "tree");
+  await mkdir(path.join(tree, "writer-fonts", "files"), { recursive: true });
+  await writeFile(path.join(tree, "writer-fonts", "files", "Amiri-Regular.woff"), "font");
+  await writeFile(path.join(tree, "writer-fonts", "files", "._Amiri-Regular.woff"), "apple double");
+  await writeFile(path.join(tree, ".DS_Store"), "finder");
+  const manifest = await buildManifest(tree, { root });
+  assert.deepEqual(manifest.files.map((file) => file.path), ["writer-fonts/files/Amiri-Regular.woff"]);
+  const removed = await removeHostMetadataFiles(tree);
+  assert.deepEqual(removed, [".DS_Store", path.join("writer-fonts", "files", "._Amiri-Regular.woff")]);
+  assert.ok(existsSync(path.join(tree, "writer-fonts", "files", "Amiri-Regular.woff")));
+  assert.equal(isHostMetadataFile("._x"), true);
+  assert.equal(isHostMetadataFile("x.woff"), false);
+  await rm(root, { recursive: true, force: true });
 });
