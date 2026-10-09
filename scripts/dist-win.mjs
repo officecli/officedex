@@ -54,6 +54,7 @@ import { prefetchWord2MowConvert, sha256File } from "./prefetch-word2mow-convert
 import { mainCheckoutRoot, stagePresentationRuntime } from "./stage-presentation-runtime.mjs";
 import { stageMopRuntime } from "./stage-mop-runtime.mjs";
 import { verifyPackagedRuntime } from "./verify-packaged-runtime.mjs";
+import { assertNoHostMetadataFiles } from "./windows-inputs.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
@@ -437,6 +438,10 @@ export async function distWin(options) {
         break;
 
       case "verify": {
+        // Nothing from the build host's filesystem rides along: AppleDouble
+        // files carry quarantine and where-from attributes, and a `._x.woff`
+        // is also what the font licence gate trips over.
+        await assertNoHostMetadataFiles(out, "the assembled Windows package");
         const result = await verifyPackagedRuntime(out, { platform: TARGET_PLATFORM, arch });
         log(step, `${result.present.length} payload(s) present`);
         for (const entry of result.degraded) log(step, `shipping without ${entry.split("\n")[0]}`);

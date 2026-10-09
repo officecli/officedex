@@ -84,23 +84,6 @@ export function isHostMetadataFile(name) {
   return name.startsWith("._") || name === ".DS_Store";
 }
 
-/** Removes host metadata files anywhere under dir; returns what was removed. */
-export async function removeHostMetadataFiles(dir) {
-  const removed = [];
-  const walk = async (current) => {
-    for (const entry of await readdir(current, { withFileTypes: true })) {
-      const full = path.join(current, entry.name);
-      if (entry.isDirectory()) await walk(full);
-      else if (isHostMetadataFile(entry.name)) {
-        await rm(full, { force: true });
-        removed.push(path.relative(dir, full));
-      }
-    }
-  };
-  await walk(dir);
-  return removed.sort();
-}
-
 async function listFiles(dir) {
   const files = [];
   const walk = async (current) => {
@@ -122,16 +105,40 @@ function gitRevision(root) {
   }
 }
 
+/** Host metadata files anywhere under dir, relative to it, sorted. */
+export async function findHostMetadataFiles(dir) {
+  const found = [];
+  const walk = async (current) => {
+    for (const entry of await readdir(current, { withFileTypes: true })) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) await walk(full);
+      else if (isHostMetadataFile(entry.name)) found.push(path.relative(dir, full));
+    }
+  };
+  await walk(dir);
+  return found.sort();
+}
+
 /**
- * Builds the manifest for a staging directory laid out like the archive:
- * every file with its digest, so unpack can prove the tree arrived intact
- * even when the archive itself was not pinned.
+ * Fails when a tree carries host metadata files. Fail closed rather than
+ * sweep: AppleDouble files can hold com.apple.quarantine and
+ * kMDItemWhereFroms from the packing machine, and silently deleting them
+ * would also hide whatever other source puts junk in a package next time.
  */
+export async function assertNoHostMetadataFiles(dir, what) {
+  const found = await findHostMetadataFiles(dir);
+  if (found.length > 0) {
+    throw new Error(
+      `${what} carries macOS metadata files, which must not ship (pack with COPYFILE_DISABLE=1 and rebuild):\n  ${found.join("\n  ")}`,
+    );
+  }
+}
+
 export async function buildManifest(stagingDir, { root = ROOT, slice = "win32-x64" } = {}) {
   const files = [];
   for (const file of await listFiles(stagingDir)) {
     const relative = path.relative(stagingDir, file).split(path.sep).join("/");
-    if (relative === "manifest.json" || isHostMetadataFile(path.basename(file))) continue;
+    if (relative === "manifest.json") continue;
     files.push({ path: relative, size: (await stat(file)).size, sha256: await sha256(file) });
   }
   let presentation = null;
@@ -185,6 +192,7 @@ export async function packInputs({ root = ROOT, out = "", slice = "win32-x64", e
       await mkdir(path.dirname(to), { recursive: true });
       await cp(entry.from, to, { recursive: entry.kind === "tree", dereference: true });
     }
+    await assertNoHostMetadataFiles(staging, "the inputs staging tree");
     const manifest = await buildManifest(staging, { root, slice });
     await writeFile(path.join(staging, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n", "utf8");
 
@@ -210,15 +218,15 @@ export async function unpackInputs({ archive, dest = path.join(ROOT, "build", "w
   const tar = runTar(["-xzf", archive, "-C", dest], archive);
   if (tar.status !== 0) throw new Error(`tar exited with ${tar.status}`);
   // An archive packed before COPYFILE_DISABLE was set carries `._*` entries;
-  // they are never in the manifest and never wanted.
-  const strayMetadata = await removeHostMetadataFiles(dest);
+  // they are never in the manifest and never wanted. Refuse the archive.
+  await assertNoHostMetadataFiles(dest, `inputs archive ${path.basename(archive)}`);
   const manifestPath = path.join(dest, "manifest.json");
   if (!existsSync(manifestPath)) throw new Error(`${archive} has no manifest.json; not a windows-inputs archive`);
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
   if (manifest.format !== INPUTS_FORMAT) throw new Error(`inputs archive format ${manifest.format}; this script reads format ${INPUTS_FORMAT}`);
   const problems = await verifyManifest(dest, manifest);
   if (problems.length > 0) throw new Error(`inputs archive did not unpack intact:\n  ${problems.join("\n  ")}`);
-  return { dest, sha256: actual, manifest, strayMetadata };
+  return { dest, sha256: actual, manifest };
 }
 
 function parseArgs(argv) {

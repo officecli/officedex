@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { fakePortableExecutable } from "./pe-executable.mjs";
-import { INPUTS_FORMAT, buildManifest, inputEntries, isHostMetadataFile, packInputs, removeHostMetadataFiles, runTar, tarExecutable, unpackInputs, verifyManifest } from "./windows-inputs.mjs";
+import { INPUTS_FORMAT, buildManifest, inputEntries, assertNoHostMetadataFiles, findHostMetadataFiles, isHostMetadataFile, packInputs, runTar, tarExecutable, unpackInputs, verifyManifest } from "./windows-inputs.mjs";
 
 /** A repository with every input present and staged for win32-x64. */
 async function fakeRepo() {
@@ -117,23 +117,46 @@ test("tar is the system bsdtar on Windows and plain tar elsewhere", () => {
   assert.ok(onWindows === "tar" || onWindows.endsWith(path.join("System32", "tar.exe")));
 });
 
-test("AppleDouble and Finder metadata never survive an unpack", async () => {
+test("AppleDouble and Finder metadata fail the pack and the unpack by name, never silently", async () => {
   // macOS tar writes `._name` entries for extended attributes unless
   // COPYFILE_DISABLE is set; on Windows they extract as real files and a
-  // `._Amiri-Regular.woff` fails the font licence gate. pack sets the variable;
-  // unpack also sweeps them, for archives made before it did.
+  // `._Amiri-Regular.woff` fails the font licence gate. They can also carry
+  // quarantine and where-from attributes of the packing machine, so a tree
+  // that has them is refused outright rather than cleaned.
   const root = await mkdtemp(path.join(os.tmpdir(), "win-inputs-"));
   const tree = path.join(root, "tree");
   await mkdir(path.join(tree, "writer-fonts", "files"), { recursive: true });
   await writeFile(path.join(tree, "writer-fonts", "files", "Amiri-Regular.woff"), "font");
   await writeFile(path.join(tree, "writer-fonts", "files", "._Amiri-Regular.woff"), "apple double");
   await writeFile(path.join(tree, ".DS_Store"), "finder");
-  const manifest = await buildManifest(tree, { root });
-  assert.deepEqual(manifest.files.map((file) => file.path), ["writer-fonts/files/Amiri-Regular.woff"]);
-  const removed = await removeHostMetadataFiles(tree);
-  assert.deepEqual(removed, [".DS_Store", path.join("writer-fonts", "files", "._Amiri-Regular.woff")]);
-  assert.ok(existsSync(path.join(tree, "writer-fonts", "files", "Amiri-Regular.woff")));
+  assert.deepEqual(await findHostMetadataFiles(tree), [".DS_Store", path.join("writer-fonts", "files", "._Amiri-Regular.woff")]);
+  await assert.rejects(assertNoHostMetadataFiles(tree, "the tree"), (error) => {
+    assert.match(error.message, /the tree carries macOS metadata files/);
+    assert.match(error.message, /\._Amiri-Regular\.woff/);
+    assert.match(error.message, /\.DS_Store/);
+    assert.match(error.message, /COPYFILE_DISABLE/);
+    return true;
+  });
+  assert.ok(existsSync(path.join(tree, "writer-fonts", "files", "._Amiri-Regular.woff")), "nothing is deleted");
   assert.equal(isHostMetadataFile("._x"), true);
   assert.equal(isHostMetadataFile("x.woff"), false);
+
+  // An archive that carries one is refused on unpack, by name. (Not on macOS:
+  // its bsdtar turns a `._` entry back into extended attributes on extraction
+  // instead of a file, which is exactly why the problem only shows on
+  // Windows and Linux.)
+  if (process.platform !== "darwin") {
+    const archive = path.join(root, "polluted.tar.gz");
+    await writeFile(path.join(tree, "manifest.json"), JSON.stringify({ format: INPUTS_FORMAT, files: [] }));
+    runTar(["-czf", archive, "-C", tree, "."], archive);
+    await assert.rejects(unpackInputs({ archive, dest: path.join(root, "out") }), /polluted\.tar\.gz carries macOS metadata files[\s\S]*_Amiri-Regular\.woff/);
+  }
+
+  // A real pack from a clean repository adds none (COPYFILE_DISABLE).
+  const repo = await fakeRepo();
+  const packed = await packInputs({ root: repo, out: path.join(repo, "x.tar.gz") });
+  const listing = (await import("node:child_process")).spawnSync(tarExecutable(), ["-tzf", path.basename(packed.archive)], { cwd: path.dirname(packed.archive), encoding: "utf8" }).stdout;
+  assert.equal(listing.split("\n").filter((line) => /\/\._|\.DS_Store/.test(line)).length, 0, listing);
+  await rm(repo, { recursive: true, force: true });
   await rm(root, { recursive: true, force: true });
 });
