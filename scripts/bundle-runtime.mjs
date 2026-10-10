@@ -13,6 +13,7 @@
 // Everything below is expressed once against a resolved destination root so the
 // two layouts cannot drift apart.
 
+import { verifyWriterFontsMatch } from "./stage-writer-fonts.mjs";
 import { chmod, copyFile, cp, mkdir, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -121,6 +122,8 @@ async function main() {
     path.join(resources, "presentation"),
     "MOP presentation runtime",
   );
+
+  await verifyWriterFontsMatch();
 
   // Writer's default-font closure. It stays out of dist/ (and therefore out of
   // `//go:embed all:dist`); internal/writerfonts serves it from here.

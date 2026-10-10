@@ -9,7 +9,7 @@
 # dist into build/writer/dist, and syncs it. Nothing here imports writer source.
 #
 # The default-font closure inside that dist stays out of public/writer; it is
-# staged separately by `npm run stage:writer-fonts`.
+# staged with this artifact on both cache hits and rebuilds.
 #
 # The build is cached: scripts/writer-embed-cache.mjs fingerprints the writer
 # checkout and the officedex-side build scripts, and the synced public/writer.
@@ -66,6 +66,7 @@ cache_status="$(node "${ROOT}/scripts/writer-embed-cache.mjs" check \
   --dist "${DIST_DIRECTORY}" \
   --record "${CACHE_RECORD}" 2>/dev/null || echo "miss:error")"
 if [[ "${cache_status}" == "hit" ]]; then
+  node "${ROOT}/scripts/stage-writer-fonts.mjs"
   echo "[build-embedded-writer] writer embed cache hit; reusing ${PUBLIC_DIRECTORY}"
   echo "[build-embedded-writer] synchronized public/writer at ${REVISION} (cached)"
   exit 0
@@ -136,6 +137,8 @@ if [[ -d "${FONT_CLOSURE}" ]]; then
   fi
   echo "[build-embedded-writer] font closure $(( closure_kb / 1024 ))MB, no unlicensed glyphs"
 fi
+
+node "${ROOT}/scripts/stage-writer-fonts.mjs"
 
 node "${ROOT}/scripts/writer-embed-cache.mjs" write \
   --source "${SOURCE}" \

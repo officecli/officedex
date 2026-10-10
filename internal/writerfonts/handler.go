@@ -28,8 +28,9 @@ const RoutePrefix = "/writer-next-default-fonts/"
 
 var (
 	// prebuiltNamePattern matches the content-addressed metric bundles. Their
-	// name is their hash, which is why they can be served immutable.
-	prebuiltNamePattern = regexp.MustCompile(`^[0-9a-f]{64}\.json$`)
+	// name is their hash, which is why they can be served immutable. Writer
+	// now emits binary metrics; retain JSON for older staged closures.
+	prebuiltNamePattern = regexp.MustCompile(`^[0-9a-f]{64}\.(?:bin|json)$`)
 	// assetNamePattern is deliberately flat: files/ and draw/ hold one level of
 	// font files, so a separator, a NUL, or a re-encoded escape is a probe
 	// rather than a legitimate request.

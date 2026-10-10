@@ -107,9 +107,10 @@ export default defineConfig({
     // The Writer embed talks to /api/import, /api/export and
     // /writer-next-default-fonts/**, which internal/word2mowhttp and
     // internal/writerfonts answer in a packaged app. The dev server never
-    // reaches Go, so it answers them here instead.
-    word2mowDevConverter({ convertPath: resolveWord2MowConvert() }),
-    writerFontsDevAssets({ root: resolveWriterFontsDir() }),
+    // reaches Go, so it answers them here instead. Real E2E proxies to the
+    // packaged Go handlers: a permissive dev middleware hid binary-font 404s.
+    !realE2EEndpoint && word2mowDevConverter({ convertPath: resolveWord2MowConvert() }),
+    !realE2EEndpoint && writerFontsDevAssets({ root: resolveWriterFontsDir() }),
     react(),
   ],
   root: ".",
@@ -121,6 +122,9 @@ export default defineConfig({
   server: realE2EEndpoint ? {
     ...(realE2ENoHMR ? { hmr: false } : {}),
     proxy: {
+      "/writer-next-default-fonts/": { target: realE2EEndpoint, changeOrigin: true },
+      "/api/import": { target: realE2EEndpoint, changeOrigin: true },
+      "/api/export": { target: realE2EEndpoint, changeOrigin: true },
       "/__officedex_bridge": {
         target: realE2EEndpoint,
         changeOrigin: true,

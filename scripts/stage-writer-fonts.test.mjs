@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { WRITER_FONT_DIRECTORY } from "./sync-writer-component.mjs";
-import { stageWriterFonts, WRITER_FONT_ROOTS } from "./stage-writer-fonts.mjs";
+import { stageWriterFonts, verifyWriterFontsMatch, WRITER_FONT_ROOTS } from "./stage-writer-fonts.mjs";
 
 async function fixtureDist({ roots = WRITER_FONT_ROOTS } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "officedex-writer-fonts-"));
@@ -53,4 +53,18 @@ test("fails when the closure is incomplete", async () => {
   const { distDir, dest } = await fixtureDist({ roots: ["prebuilt"] });
 
   await assert.rejects(stageWriterFonts({ distDir, dest }), /incomplete .*missing files, draw/s);
+});
+
+test("rejects stale font bytes even when all three directories exist", async () => {
+  const { distDir, dest } = await fixtureDist();
+  await stageWriterFonts({ distDir, dest });
+  await verifyWriterFontsMatch({ distDir, dest });
+  // A new Writer artifact replaces JSON metrics with binary metrics.
+  const binary = "c".repeat(64) + ".bin";
+  await writeFile(path.join(distDir, WRITER_FONT_DIRECTORY, "prebuilt", binary), Buffer.from([0, 255, 42]));
+  await assert.rejects(verifyWriterFontsMatch({ distDir, dest }), /closure mismatch/);
+  await stageWriterFonts({ distDir, dest });
+  await verifyWriterFontsMatch({ distDir, dest });
+  await writeFile(path.join(dest, "prebuilt", binary), Buffer.from([0, 255, 43]));
+  await assert.rejects(verifyWriterFontsMatch({ distDir, dest }), /closure mismatch/);
 });

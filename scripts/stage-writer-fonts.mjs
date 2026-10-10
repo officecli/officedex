@@ -11,6 +11,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { computeDirectoryFingerprint } from "./writer-embed-cache.mjs";
 import { WRITER_FONT_DIRECTORY } from "./sync-writer-component.mjs";
 import { resolveWriterEmbedDist } from "./writer-source.mjs";
 
@@ -51,6 +52,17 @@ export async function stageWriterFonts({ distDir, dest = DEFAULT_DEST } = {}) {
     `${JSON.stringify({ name: "writer-next-default-fonts", source, ...files }, null, 2)}\n`,
   );
   return { source, dest, ...files };
+}
+
+// A directory existing says nothing about whether it belongs to this editor.
+// Compare every resource byte against the exact Writer artifact being bundled.
+export async function verifyWriterFontsMatch({ distDir = resolveWriterEmbedDist(), dest = DEFAULT_DEST } = {}) {
+  const source = path.join(distDir, WRITER_FONT_DIRECTORY);
+  for (const name of WRITER_FONT_ROOTS) {
+    const expected = await computeDirectoryFingerprint({ dir: path.join(source, name) });
+    const actual = await computeDirectoryFingerprint({ dir: path.join(dest, name) });
+    if (actual !== expected) throw new Error(`Writer font closure mismatch in ${name}; rebuild/stage the matching Writer artifact`);
+  }
 }
 
 async function countFiles(root) {

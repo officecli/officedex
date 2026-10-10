@@ -11,6 +11,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"officedex/internal/word2mowhttp"
+	"officedex/internal/writerfonts"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -186,6 +188,9 @@ func newRealClientE2EHost(t *testing.T, app *App, reportServer *realReportServer
 
 func (h *realClientE2EHost) routes() http.Handler {
 	mux := http.NewServeMux()
+	mux.Handle("/writer-next-default-fonts/", writerfonts.New(writerfonts.Options{Root: resolveWriterFontsRoot()}))
+	mux.Handle("/api/import", word2mowhttp.New(word2mowhttp.Options{Converter: word2mowhttp.NewCLIConverter(resolveWord2MowConvert()), TempDir: os.TempDir()}))
+	mux.Handle("/api/export", word2mowhttp.New(word2mowhttp.Options{Converter: word2mowhttp.NewCLIConverter(resolveWord2MowConvert()), TempDir: os.TempDir()}))
 	mux.HandleFunc("/rpc/", h.handleRPC)
 	mux.HandleFunc("/events", h.handleEvents)
 	mux.HandleFunc("/control/file-dialog", h.handleFileDialogControl)

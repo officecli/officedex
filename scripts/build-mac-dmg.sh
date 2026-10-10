@@ -426,6 +426,11 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
   # the frontend through its default script.
   echo "[${LOG}] building desktop frontend (host fonts, no bundled CJK)"
   npm run build:frontend:desktop
+  # Run against the just-built embeds and production Go resource handlers.
+  # Browser-only dev middleware previously concealed missing native font assets.
+  echo "[${LOG}] verifying foreground editor paint and resource delivery"
+  OFFICEDEX_E2E_SKIP_PREFETCH=1 OFFICEDEX_E2E_BROWSER=webkit \
+    node scripts/run-real-e2e.mjs e2e/qa24-render-real.spec.ts --workers=1
 
   echo "[${LOG}] building OfficeDex.app (darwin/${GO_ARCH})"
   # Build with the checked-in module graph. Automatic tidy also scans archived

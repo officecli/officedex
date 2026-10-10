@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-const prebuiltName = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.json"
+const prebuiltName = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.bin"
 
 func stageClosure(t *testing.T) string {
 	t.Helper()
@@ -76,6 +76,9 @@ func TestPrebuiltIsImmutableAndIdentityByDefault(t *testing.T) {
 	}
 	if got := recorder.Header().Get("Content-Encoding"); got != "" {
 		t.Fatalf("content-encoding = %q, want identity (absent)", got)
+	}
+	if got := recorder.Header().Get("Content-Type"); got != "application/octet-stream" {
+		t.Fatalf("binary content-type = %q", got)
 	}
 	if recorder.Body.String() != `{"metrics":1}` {
 		t.Fatalf("body = %q", recorder.Body)
@@ -181,6 +184,8 @@ func TestUnsafePathsAreRefused(t *testing.T) {
 		RoutePrefix + "files/%2e%2e%2fpasswd",
 		RoutePrefix + "files/nested/Arial.woff",
 		RoutePrefix + "prebuilt/not-a-hash.json",
+		RoutePrefix + "prebuilt/not-a-hash.bin",
+		RoutePrefix + "prebuilt/" + prebuiltName + ".exe",
 		RoutePrefix + "secrets/key.pem",
 		RoutePrefix + "files/",
 	} {
