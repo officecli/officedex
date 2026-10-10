@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { BridgeEvent, DesktopAPI, DocumentRecord, GenerateInput, ModifyInput } from "../shared/types";
 import type { AgentEvent, AgentTask, SendInput } from "../shared/uiPort";
-import { createAgentService, referencedFileIds, reviewRequestedBy } from "./agent";
+import { createAgentService, referencedFileIds, requestsFormatChoice, reviewRequestedBy } from "./agent";
 
 interface Scripted {
   api: DesktopAPI;
@@ -639,6 +639,13 @@ describe("acceptance failure isolation", () => {
 });
 
 describe("1.0.18 acceptance regressions", () => {
+  it.each([
+    "先问我演示文稿的主题，等我回答再创建。",
+    "Create a PowerPoint presentation. Ask me for the topic and wait for my answer.",
+    "Ask me about the Word document content and wait.",
+  ])("does not mistake a question about one format for a format choice: %s", prompt => {
+    expect(requestsFormatChoice(prompt)).toBe(false);
+  });
   const choiceRequest = "I need a NEW office file, but have not chosen Word, Excel, or PowerPoint. Ask me which of those three formats to use and WAIT for my answer before creating or editing any file. Do not choose a format yourself.";
   it.each([
     ["[OD20-FORMAT-10] Help me create a small fictional office checklist. FIRST ask me whether I want a Word document or a PowerPoint presentation and WAIT for my answer. Do not create or modify any file before I answer the question. Ask the question in English.", ["docx", "pptx"], "pptx"],

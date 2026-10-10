@@ -50,7 +50,7 @@ export { agentErrorSummary } from "../renderer/agentError";
  */
 
 const FORMAT_CHOICES = [
-  { id: "docx", label: "Word (.docx)", pattern: /\b(?:word|docx)\b|文档|文稿/i },
+  { id: "docx", label: "Word (.docx)", pattern: /\b(?:word|docx)\b|文档|(?<!演示)文稿/i },
   { id: "xlsx", label: "Excel (.xlsx)", pattern: /\b(?:excel|xlsx)\b|表格|工作簿/i },
   { id: "pptx", label: "PowerPoint (.pptx)", pattern: /\b(?:powerpoint|pptx?)\b|幻灯片|演示文稿/i },
 ];
