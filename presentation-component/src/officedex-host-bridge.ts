@@ -467,8 +467,10 @@ export interface EditorSaveState {
  */
 export interface EditorWorkbenchHandle {
   readonly fileId: string;
-  /** The mounted workbench; identity only, so a detach can name which one left. */
-  readonly workbench?: object;
+  /** Mounted workbench identity and its pending notes input buffer. */
+  readonly workbench?: {
+    core?: { view?: { notesArea?: { flushPendingNotesText?(): void } } };
+  };
   flush(reason?: "explicit-save" | "export" | "close"): Promise<number>;
   getSaveState?(): EditorSaveState | undefined;
   subscribeSaveState?(listener: (state: EditorSaveState) => void): () => void;
@@ -588,6 +590,10 @@ export function createEditorSaveBridge(
     },
     async flush() {
       const handle = await waitForWorkbench();
+      // Notes debounce input by 100ms. Saving immediately after typing must
+      // commit that buffer before the session snapshots the document, without
+      // blurring the editor or requiring a second Cmd+S.
+      handle.workbench?.core?.view?.notesArea?.flushPendingNotesText?.();
       const revision = await handle.flush("explicit-save");
       // The session's state subscription says "saved" on its own; reading it
       // here as well means the host never sees a flush succeed while the

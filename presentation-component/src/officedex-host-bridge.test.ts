@@ -185,6 +185,21 @@ describe("editor save bridge", () => {
     bridge.dispose();
   });
 
+  it("commits the debounced notes buffer before saving, even while session state is clean", async () => {
+    const bridge = createEditorSaveBridge(window, vi.fn());
+    const editor = workbench(clean, 8);
+    let persisted = "old notes";
+    let model = "old notes";
+    Object.assign(editor.handle, { workbench: { core: { view: { notesArea: {
+      flushPendingNotesText: () => { model = "last keystroke"; },
+    } } } } });
+    vi.mocked(editor.handle.flush).mockImplementation(async () => { persisted = model; return 8; });
+    editor.mount();
+    await expect(bridge.flush()).resolves.toEqual({ revision: 8 });
+    expect(persisted).toBe("last keystroke");
+    bridge.dispose();
+  });
+
   it("waits for a workbench that is still mounting, and gives up on one that never does", async () => {
     vi.useFakeTimers();
     const post = vi.fn();
