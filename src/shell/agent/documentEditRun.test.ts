@@ -103,7 +103,8 @@ describe("startDocumentEditRun", () => {
 
     const last = snapshots.at(-1)!;
     expect(last.suggestion).toBeNull();
-    expect(last.phase).toBe("No changes were needed");
+    expect(last.phase).toBe("No changes were made");
+    expect(last.noChanges).toBe(true);
     expect(last.messages.at(-1)?.text).toBe("Which of the two tables did you mean?");
   });
 

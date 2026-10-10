@@ -337,8 +337,9 @@ export function startDocumentEditRun(
          * is what a summary-only check would do — would be the app claiming a
          * change the document never received.
          */
+        task.noChanges = true;
         say(result.summary || translate("shell.edit.nothingToChange"));
-        finish(translate("shell.edit.noChangesNeeded"));
+        finish(translate("shell.edit.noChangesMade"));
         emit();
         return;
       }

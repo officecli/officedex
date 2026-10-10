@@ -393,3 +393,18 @@ it("shows raw per-file failures only after opening Details", async () => {
   await waitFor(() => expect(document.querySelector(".dx-dialog")?.textContent ?? document.body.textContent).toContain(raw));
   expect(run.card().textContent).not.toContain(raw);
 });
+
+it("keeps the previous failure actionable after the next result completes", async () => {
+  const shell = await stage("complete", task => ({...task,history:[{...prototypeRun("failed",Date.now())!,id:"old-failed",title:"OD21-long.pptx",recovery:{readyPages:13,totalPages:24}}]}));
+  const old = shell.view.container.querySelector('[data-task="old-failed"]') ?? [...shell.view.container.querySelectorAll(".dx-agent-run")].find(card=>card.textContent?.includes("OD21-long.pptx"));
+  expect(old?.textContent).toContain("Retry remaining");
+  expect(shell.view.container.querySelectorAll(".dx-agent-run")).toHaveLength(2);
+  const resume = vi.spyOn(shell.port.agent, "resumeFailed").mockResolvedValue();
+  fireEvent.click(old!.querySelector<HTMLButtonElement>('[data-act="task-retry"]')!);
+  await waitFor(() => expect(resume).toHaveBeenCalledWith("old-failed"));
+});
+it("does not claim files are ready when the editor applied no changes", async () => {
+  const run = await stage("complete",task=>({...task,noChanges:true,suggestion:null,artifact:null}));
+  expect(run.status()).toContain("No changes were made");
+  expect(run.card().textContent).not.toContain("Your files are ready");
+});

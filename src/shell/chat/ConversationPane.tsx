@@ -164,12 +164,16 @@ export function ConversationPane() {
         {state.panel === "assets" ? (
           <CompactAssets />
         ) : task && imageTask ? (
-          <ImageTranscript agent={agent} />
+          <>
+            {task.history?.map(run => <AgentRun key={run.id} task={run} agent={agent} />)}
+            <ImageTranscript agent={agent} />
+          </>
         ) : task && (task.messages.length > 0 || task.status !== "idle") ? (
           <>
             {task.messages.map((message) => (
               <Message key={message.id} message={message} />
             ))}
+            {task.history?.map(run => <AgentRun key={run.id} task={run} agent={agent} />)}
             <AgentRun task={task} agent={agent} />
           </>
         ) : (

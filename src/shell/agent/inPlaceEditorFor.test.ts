@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { inPlaceEditorFor } from "./useAgentTask";
+import { hasExplicitFileTargets, inPlaceEditorFor } from "./useAgentTask";
 
 /**
  * Which instruction goes where.
@@ -54,4 +54,12 @@ describe("in-place editing", () => {
     // in place must not be asked, and must not throw.
     expect(inPlaceEditorFor(slides, {} as never)).toBeNull();
   });
+});
+
+it("routes explicit attachments and mentions away from the implicit active editor", () => {
+  const base = {activeFileId:"review",mentions:[],attachments:[]};
+  expect(hasExplicitFileTargets(base)).toBe(false);
+  expect(hasExplicitFileTargets({...base,attachments:[{id:"batch",name:"batch.docx",size:1,path:"/p/batch.docx"}]})).toBe(true);
+  expect(hasExplicitFileTargets({...base,mentions:[{kind:"file",id:"batch",label:"batch.docx"},{kind:"file",id:"bad",label:"bad.docx"}]})).toBe(true);
+  expect(hasExplicitFileTargets({...base,reference:{fileId:"review",label:"selected text",text:"selection"}})).toBe(false);
 });

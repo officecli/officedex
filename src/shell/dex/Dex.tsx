@@ -454,7 +454,8 @@ export function Dex({ host, editorKind }: { host: RefObject<HTMLElement | null>;
                       {message.text}
                     </div>
                   ))}
-                <AgentRun task={task} agent={agent} />
+                {task.history?.map(run => <AgentRun key={run.id} task={run} agent={agent} />)}
+            <AgentRun task={task} agent={agent} />
               </>
             ) : (
               <div className="dx-dex-empty">

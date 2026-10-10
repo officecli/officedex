@@ -22,7 +22,7 @@ const DEFAULT_LIMIT = 8;
  * does not appear, which is a shape the band already has (an empty list renders
  * nothing at all).
  */
-export function useAgentTasks(limit: number = DEFAULT_LIMIT) {
+export function useAgentTasks(limit: number = DEFAULT_LIMIT, individualRuns = false) {
   const port = usePort();
   const [tasks, setTasks] = useState<AgentTaskSummary[]>([]);
 
@@ -30,7 +30,7 @@ export function useAgentTasks(limit: number = DEFAULT_LIMIT) {
     let cancelled = false;
     void (async () => {
       try {
-        const rows = await port.agent.list({ limit });
+        const rows = await port.agent.list({ limit, ...(individualRuns ? { individualRuns } : {}) });
         if (!cancelled) setTasks(rows);
       } catch (reason) {
         if (cancelled) return;
@@ -55,7 +55,7 @@ export function useAgentTasks(limit: number = DEFAULT_LIMIT) {
     return () => {
       cancelled = true;
     };
-  }, [port, limit]);
+  }, [port, limit, individualRuns]);
 
   useEffect(
     () =>
@@ -64,9 +64,12 @@ export function useAgentTasks(limit: number = DEFAULT_LIMIT) {
         // once. Two subscribers reporting the same rejection is two toasts for
         // one failure, and this one has no run of its own to speak for.
         if (event.kind !== "task") return;
-        setTasks((rows) => merge(rows, event.task, limit));
+        if (individualRuns) {
+          const task = event.task;
+          setTasks(rows => [{ id: task.id, title: task.title, folderId: task.folderId, conversationId: task.conversationId, status: task.status, phase: task.phase, outcome: task.outcome }, ...rows.filter(row => row.id !== task.id)].slice(0,limit));
+        } else setTasks((rows) => merge(rows, event.task, limit));
       }),
-    [port, limit],
+    [port, limit, individualRuns],
   );
 
   // No `refresh` here on purpose. The port's own event stream is what keeps

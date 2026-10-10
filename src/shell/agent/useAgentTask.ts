@@ -77,6 +77,10 @@ export function inPlaceEditorFor(
   return null;
 }
 
+export function hasExplicitFileTargets(submission: Pick<ComposerSubmission, "attachments" | "mentions" | "reference" | "activeFileId">): boolean {
+  return submission.attachments.length > 0 || submission.mentions.filter(mention => mention.kind === "file").length > 1 || Boolean(submission.reference && submission.reference.fileId !== submission.activeFileId);
+}
+
 export function useAgentTask() {
   const port = usePort();
   const canvas = useCanvas();
@@ -233,7 +237,7 @@ export function useAgentTask() {
    * started editing by hand. That task is history; the edit is now.
    */
   const shown: AgentTask | null = localTask
-    ? { ...localTask, messages: mergeMessages(task?.messages ?? [], localTask.messages), queued: localQueue.map((entry) => ({ id: entry.id, text: entry.input.text })) }
+    ? { ...localTask, history: task ? [...(task.history ?? []), { ...task, history: undefined }] : [], messages: mergeMessages(task?.messages ?? [], localTask.messages), queued: localQueue.map((entry) => ({ id: entry.id, text: entry.input.text })) }
     : task;
   const busy =
     shown?.status === "working" || shown?.status === "reading" || shown?.status === "writing";
@@ -249,7 +253,8 @@ export function useAgentTask() {
         queueRef.current = next; setLocalQueue(next); rememberQueue(next);
         return;
       }
-      const target = submission.activeFileId
+      const explicitTargets = hasExplicitFileTargets(submission);
+      const target = !explicitTargets && submission.activeFileId
         ? (files.find((file) => file.id === submission.activeFileId) ?? null)
         : null;
 
@@ -358,7 +363,7 @@ export function useAgentTask() {
       await attempt(() =>
         port.agent.send({
           ...submission,
-          ...(submission.mentions.filter((mention) => mention.kind === "file").length > 1 ? { activeFileId: null } : {}),
+          ...(explicitTargets ? { activeFileId: null } : {}),
           ...addressing,
           modelId: settings.value.selectedModelId,
           permission: settings.value.permission,

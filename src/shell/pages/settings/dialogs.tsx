@@ -797,7 +797,7 @@ function Activity() {
   const t = useT();
   const port = usePort();
   const { dispatch } = useShell();
-  const { tasks } = useAgentTasks(20);
+  const { tasks } = useAgentTasks(100, true);
 
   if (tasks.length === 0) return <p>{t("dx.settings.activityEmpty")}</p>;
   return (
@@ -822,7 +822,7 @@ function Activity() {
             >
               <span className="dx-ellipsis">{task.title}</span>
             </button>
-            <span className="dx-pill">{t(`shell.agentStatus.${STATUS_KEY[task.status] ?? "idle"}`)}</span>
+            <span className="dx-pill">{t(task.outcome === "failed" ? "dx.run.failed" : task.outcome === "partial" ? "dx.run.partial" : task.outcome === "stopped" ? "dx.run.stopped" : `shell.agentStatus.${STATUS_KEY[task.status] ?? "idle"}`)}</span>
           </div>
         );
       })}

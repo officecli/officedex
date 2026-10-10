@@ -271,6 +271,9 @@ export interface AgentOutlinePage {
 export type AgentOutcome = "completed" | "failed" | "stopped" | "partial" | "interrupted";
 
 export interface AgentTask {
+  /** Earlier result cards in this conversation, retaining task-specific recovery actions. */
+  history?: AgentTask[];
+  noChanges?: boolean;
   /** Stable user request identity; id is the current execution attempt. */
   logicalTaskId?: string;
   id: string;
@@ -530,6 +533,7 @@ export interface ImagePort {
  * cheap with three tasks and unusable with three hundred.
  */
 export interface AgentTaskSummary {
+  outcome?: AgentOutcome;
   id: string;
   title: string;
   /** One row per conversation; see `AgentTask.conversationId`. */
@@ -573,7 +577,7 @@ export interface AgentPort {
    * folder chip would hide it the moment they switched. Includes finished runs
    * — "what was I doing" is mostly a question about work that already stopped.
    */
-  list(options?: { limit?: number }): Promise<AgentTaskSummary[]>;
+  list(options?: { limit?: number; individualRuns?: boolean }): Promise<AgentTaskSummary[]>;
   send(input: SendInput): Promise<void>;
   /**
    * Answers the pending question and lets the run continue.

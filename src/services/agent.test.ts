@@ -753,3 +753,41 @@ it.each([
   expect(task.messages.some(message => message.text === raw)).toBe(false);
   expect(events.filter(event => event.kind === "error").some(event => event.message === raw)).toBe(false);
 });
+
+
+describe("1.0.21 report regressions", () => {
+  it("freezes attachment targets even with an unrelated active editor", async () => {
+    const desk = scripted(); const service = createAgentService(desk.api); const panel = listen(service);
+    desk.addDocument({ id: "review", filePath: "/p/OD21-review.docx", documentType: "docx" });
+    desk.addDocument({ id: "good", filePath: "/p/OD21-batch.docx", documentType: "docx" });
+    await service.send(message('Process ONLY the two attached QA DOCX files independently. Replace Beta with Delta. Do not create unrelated files.', {
+      activeFileId: "review",
+      attachments: [{id:"good",name:"OD21-batch.docx",path:"/p/OD21-batch.docx",size:100},{id:"bad",name:"OD21-corrupt.docx",path:"/p/OD21-corrupt.docx",size:100}],
+    }));
+    expect(desk.calls.modify.map(call => call.sourceFile)).toEqual(["/p/OD21-batch.docx"]);
+    desk.push(completed("task-1", "/p/OD21-batch.modified.docx", "docx"));
+    await vi.waitFor(() => expect(panel.last()?.batch?.map(item => item.status)).toEqual(["completed", "failed"]));
+    expect(panel.last()?.outcome).not.toBe("completed");
+    expect(desk.calls.generate).toHaveLength(0);
+  });
+  it("retains the failed run and its retry identity after a queued result finishes", async () => {
+    const desk = scripted(); const service = createAgentService(desk.api); const panel = listen(service);
+    await service.send(message('Create a NEW 24-slide PPTX OD21-long.pptx', {newConversation:true}));
+    desk.push(running("task-1"));
+    await service.send(message('Create a NEW Word DOCX OD21-queued.docx'));
+    desk.push({event_id:"fail-long",task_id:"task-1",type:"task.failed",ts:new Date().toISOString(),payload:{message:"PPTX expansion is incomplete"}});
+    await vi.waitFor(() => expect(desk.calls.generate).toHaveLength(2));
+    desk.push(completed("task-2", "/p/OD21-queued.docx", "docx"));
+    expect(panel.last()?.history?.[0]).toMatchObject({id:"task-1",outcome:"failed"});
+    const activity = await service.list({individualRuns:true});
+    expect(activity.map(row=>row.id)).toContain("task-1");
+    expect(activity.find(row=>row.id==="task-1")?.outcome).toBe("failed");
+    await service.retry!("task-1");
+    expect(desk.calls.generate.at(-1)?.prompt).toContain("OD21-long.pptx");
+    desk.push({event_id:"fail-retry",task_id:"task-3",type:"task.failed",ts:new Date().toISOString(),payload:{message:"PPTX expansion is incomplete"}});
+    await service.send(message("Create a NEW Word file after retry"));
+    desk.push(completed("task-4","/p/after.docx","docx"));
+    expect(panel.last()?.history?.map(run=>run.id)).toContain("task-3");
+    expect(panel.last()?.history?.map(run=>run.id)).not.toContain("task-1");
+  });
+});

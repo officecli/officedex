@@ -806,12 +806,13 @@ export function createAgentService(api: DesktopAPI): AgentPort {
   };
 
   /** The contract's view of a desktop task, with everything this closure knows added. */
-  const project = (task: DesktopTask): AgentTask => {
+  const project = (task: DesktopTask, includeHistory = true): AgentTask => {
     const result = toAgentTaskWithReview(task, reviewArtifacts.get(task.id));
     const conversationId = conversationOf(task);
     const batchItems = batchFor(task);
     const image = imageSeries(task);
-    if (image) return { ...result, conversationId, image };
+    const runs = includeHistory ? conversationTasks(conversationId) : [];
+    const latestByRoot = new Map(runs.map(run => [attemptRoots.get(run.id)?.id ?? run.id, run.id]));
     /*
      * A follow-up is a run of its own, but the panel is the conversation: the
      * messages are every run's. The title is this run's own.
@@ -826,6 +827,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     return {
       ...result,
       title: displayTitle(task),
+      ...(image ? { image } : {}),
       attempt: attempts.get(task.id) ?? 1,
       logicalTaskId: attemptRoots.get(task.id)?.id ?? task.id,
       startedAt: attemptRoots.get(task.id)?.startedAt ?? result.startedAt,
@@ -840,8 +842,13 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       }) } : {}),
       ...(result.status === "done" && batchItems?.some((item) => item.error || (item.taskId && state.tasks[item.taskId]?.status === "failed")) ? { outcome: "partial" as const } : {}),
       conversationId,
-      messages: conversationMessages(conversationId),
-      ...(queued.length > 0 ? { queued } : {}),
+      messages: includeHistory ? conversationMessages(conversationId) : result.messages,
+      ...(includeHistory ? { history: runs
+        .filter(run => run.id !== task.id && isTerminalStatus(run.status) && !batchItems?.some(item => item.taskId === run.id))
+        .filter(run => !batchFor(run) || batchFor(run)?.at(-1)?.taskId === run.id)
+        .filter(run => latestByRoot.get(attemptRoots.get(run.id)?.id ?? run.id) === run.id)
+        .map(run => project(run, false)) } : {}),
+      ...(includeHistory && queued.length > 0 ? { queued } : {}),
     };
   };
 
@@ -1270,7 +1277,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     // Editing what is open, or starting something new. A stated document type
     // is the composer saying "a new one" — it clears `activeFileId` on the way
     // out, so this branch is reached only when the user left the choice alone.
-    if (input.activeFileId && !newFile) {
+    if (input.activeFileId && !newFile && ((input.attachments.length === 0 && input.mentions.filter(mention => mention.kind === "file").length < 2) || batchInputs.has(input))) {
       const record = await api.getDocument(input.activeFileId);
       await modifyDocument(record, true);
       return;
@@ -1520,7 +1527,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
         .filter((task): task is DesktopTask => Boolean(task))
         .sort((left, right) => updatedAtOf(right) - updatedAtOf(left))
         .filter((task) => {
-          const key = conversationOf(task);
+          const key = options?.individualRuns ? task.id : conversationOf(task);
           if (seen.has(key)) return false;
           seen.add(key);
           return true;
@@ -1528,6 +1535,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
         .slice(0, options?.limit ?? LIST_LIMIT)
         .map((task) => {
           const conversationId = conversationOf(task);
+          if (options?.individualRuns) return { ...toSummary(task), title: displayTitle(task), conversationId, outcome: project(task, false).outcome };
           const first = conversationTasks(conversationId)[0];
           const runs = conversationTasks(conversationId);
           const summary: AgentTaskSummary = {

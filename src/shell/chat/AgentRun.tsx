@@ -40,6 +40,7 @@ const STATUS_ICON: Record<RunState, IconName | "spinner"> = {
 };
 
 function summaryOf(state: RunState, task: AgentTask, artifact: FileMeta | null, t: Translate): string {
+  if (task.noChanges) return t("shell.edit.noChangesMade");
   switch (state) {
     case "queued":
       return t("dx.run.summary.queued");
@@ -209,7 +210,7 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
         <>
           <dl className="dx-definition">
             <dt>{t("dx.file.status")}</dt>
-            <dd>{t(RUN_TITLE_KEY[state])}</dd>
+            <dd>{t(task.noChanges ? "shell.edit.noChangesMade" : RUN_TITLE_KEY[state])}</dd>
             <dt>{t("dx.composer.model")}</dt>
             <dd>
               {settings.models.find((model) => model.id === settings.value.selectedModelId)?.name ??
@@ -251,6 +252,7 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
   const gate = task.question && isOutlineGate(task);
   const online = useOnline();
   const onReconnect = useReconnect();
+  const otherTaskRunning = agent.busy && agent.task?.id !== task.id;
   const canRetry = state === "failed" || state === "partial" || state === "offline" || state === "stopped";
   // The row is drawn only when it has something in it: an empty one still takes its gap.
   const hasActions =
@@ -261,7 +263,7 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
       className="dx-task-card dx-agent-run"
       data-task={task.id}
       data-status={RUN_DATA_STATUS[state]}
-      aria-label={`${t(RUN_TITLE_KEY[state])}: ${task.title}`}
+      aria-label={`${t(task.noChanges ? "shell.edit.noChangesMade" : RUN_TITLE_KEY[state])}: ${task.title}`}
     >
       <div className="dx-agent-run-heading">
         <DexFace variant="tiny" />
@@ -272,9 +274,10 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
       </div>
       <div className="dx-agent-run-status" role="status">
         {icon === "spinner" ? <span className="dx-spinner" /> : <Icon name={icon} />}
-        <span>{t(RUN_TITLE_KEY[state])}</span>
+        <span>{t(task.noChanges ? "shell.edit.noChangesMade" : RUN_TITLE_KEY[state])}</span>
         {(task.attempt ?? 1) > 1 ? <small>{t("dx.run.attempt", { count: task.attempt ?? 1 })}</small> : null}
       </div>
+      <p className="dx-metadata dx-agent-target">{task.targetFileName ?? task.title}</p>
       <p className="dx-agent-summary">{summaryOf(state, task, artifact, t)}</p>
 
       {steps.length > 0 ? (
@@ -329,13 +332,13 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
       {task.batch ? <div className="dx-agent-results" aria-label={t("dx.run.batch")}>
         {task.batch.map((item) => {
           const result = files.find((file) => file.artifactTaskId === item.taskId);
-          return <div key={item.fileId} className="dx-agent-result">
+          return <div key={item.fileId} className="dx-agent-result dx-agent-batch-result">
             <span><strong>{item.name}</strong><small>{item.suggestion && !item.suggestion.applied ? t("dx.status.review") : t(`dx.run.batch.${item.status}`)}</small>{item.error ? <small>{item.error}</small> : null}</span>
             {result ? <button type="button" className="dx-btn" onClick={() => void library.openFile(result.id)}>{t("dx.menu.open")}</button> : null}
             {item.suggestion ? <button type="button" className="dx-btn" onClick={() => reviewSuggestion(item.suggestion!, files.find(file => file.id === item.fileId) ?? null)}>{t(item.suggestion.applied ? "dx.review.applied" : "dx.run.reviewAction")}</button> : null}
           </div>;
         })}
-        {!running && task.batch.some((item) => item.status !== "completed") ? <button type="button" className="dx-btn" onClick={() => void agent.retryBatch(task.id)}>{t("dx.run.retryRemaining")}</button> : null}
+        {!running && task.batch.some((item) => item.status !== "completed") ? <button type="button" className="dx-btn" disabled={otherTaskRunning} onClick={() => void agent.retryBatch(task.id)}>{t("dx.run.retryRemaining")}</button> : null}
       </div> : null}
 
       {artifact || (task.suggestion && reviewTarget) ? (
@@ -380,11 +383,12 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
           <button
             type="button"
             className="dx-btn dx-primary"
+            disabled={otherTaskRunning}
             data-act="task-retry"
             data-id={task.id}
             onClick={() => (task.status === "paused" ? void agent.resume() : retry())}
           >
-            {t(state === "stopped" ? "dx.run.resume" : state === "partial" ? "dx.run.retryRemaining" : "dx.run.retry")}
+            {t(state === "stopped" ? "dx.run.resume" : state === "partial" || task.recovery ? "dx.run.retryRemaining" : "dx.run.retry")}
           </button>
         ) : null}
         {state === "offline" && !online ? (

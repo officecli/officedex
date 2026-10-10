@@ -283,3 +283,15 @@
   border: 1px solid var(--shell-line);
   box-shadow: var(--shell-shadow-paper);
 }
+
+/* Batch rows have no icon column. Keep their text full width at 320px. */
+#dx-workspace .dx-agent-result.dx-agent-batch-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+}
+.dx-agent-batch-result > span {
+  flex: 1 0 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
