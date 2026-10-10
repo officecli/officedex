@@ -24,3 +24,11 @@ describe("instructions and literal document content", () => {
 
 it.each(["Save a modified copy; keep the original unchanged", "请另存为副本", "Do not overwrite the source", "Save each as a separate modified copy"])("preserves originals for %s", prompt => expect(requestsCopyOnly(prompt)).toBe(true));
 it("does not interpret quoted copy instructions as permission", () => expect(requestsCopyOnly('Replace “save a modified copy” with “done”.')).toBe(false));
+
+it("treats command words in a quoted filename as data while retaining its type", () => {
+  const prompt = 'Edit "create a document.docx": fix the typo.';
+  expect(requestsNewFile(prompt)).toBe(false);
+  expect(reviewRequestedBy('Edit "do not apply.docx" now.')).toBe(false);
+  expect(requestsCopyOnly('Edit "save a copy.docx" now.')).toBe(false);
+  expect(inferHomeTaskRoute({prompt})).toMatchObject({documentType:"docx"});
+});

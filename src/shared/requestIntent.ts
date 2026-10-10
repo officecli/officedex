@@ -4,11 +4,12 @@ export function instructionText(prompt: string): string {
   return prompt
     .replace(/```[\s\S]*?```|~~~[\s\S]*?~~~/g, mask)
     .replace(/“[^”]*”|「[^」]*」|『[^』]*』|"(?:\\.|[^"\\])*"|`[^`]*`|(?<![\p{L}\p{N}])'(?:\\.|[^'\\])*'(?![\p{L}\p{N}])/gu, (literal) => {
-      // Quoted file names still carry an explicit output type. Quoted prose
-      // and code remain available in the original prompt sent to the worker.
+      // Keep only the type from a quoted filename. Its basename may itself
+      // contain words like "create a document" or "do not apply". The full
+      // name and all literal text remain in the original worker prompt.
       const inner = literal.slice(1, -1).trim();
       return /^[^\n"'<>:]+\.(?:docx?|pptx?|xlsx?|png|jpe?g|gif|txt|md|pdf|html?)$/i.test(inner)
-        ? literal : mask(literal);
+        ? `file${inner.slice(inner.lastIndexOf("."))}` : mask(literal);
     });
 }
 

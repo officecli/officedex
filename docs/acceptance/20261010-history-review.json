@@ -1378,7 +1378,7 @@
     "exit_code": 0,
     "vitest": {
       "files": 149,
-      "tests": 1615,
+      "tests": 1616,
       "failed": 0
     },
     "browser_and_style": {
@@ -1396,6 +1396,8 @@
       "RTF",
       "HTML",
       "PDF"
-    ]
+    ],
+    "final_followup": "After the full gate, quoted filename routing and Word whitespace preservation were tightened; lint + all 1616 renderer tests and affected DOCX/modify/CLI Go tests passed again.",
+    "officecli_revision": "66b8a2a"
   }
 }
