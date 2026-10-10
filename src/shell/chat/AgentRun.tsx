@@ -49,8 +49,8 @@ function summaryOf(state: RunState, task: AgentTask, artifact: FileMeta | null, 
     case "review":
       return t("dx.run.summary.review");
     case "complete":
-      if (artifact) return t("dx.run.summary.fileReady");
       if (task.suggestion?.applied) return t("dx.run.summary.applied");
+      if (artifact || task.artifact) return t("dx.run.summary.fileReady");
       return t("dx.run.summary.finished");
     case "failed":
     case "partial":
@@ -118,6 +118,8 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
     () => (task.suggestion ? (files.find((file) => file.id === task.suggestion!.targetFileId) ?? null) : null),
     [files, task.suggestion],
   );
+
+  const resultName = artifact?.name ?? task.artifact?.name ?? task.artifact?.path.split(/[\\/]/).pop();
 
   if (!state) return null;
 
@@ -341,29 +343,29 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
         {!running && task.batch.some((item) => item.status !== "completed") ? <button type="button" className="dx-btn" disabled={otherTaskRunning} onClick={() => void agent.retryBatch(task.id)}>{t("dx.run.retryRemaining")}</button> : null}
       </div> : null}
 
-      {artifact || (task.suggestion && reviewTarget) ? (
+      {artifact || task.artifact || task.suggestion ? (
         <div className="dx-agent-results" aria-label={t("dx.run.results")}>
-          {task.suggestion && reviewTarget ? (
+          {task.suggestion ? (
             <button type="button" className="dx-agent-result" data-act="review-task" data-id={task.id} onClick={review}>
-              <FileIcon ext={extensionOf(reviewTarget)} size={24} />
+              <FileIcon ext={reviewTarget ? extensionOf(reviewTarget) : task.documentType ?? "docx"} size={24} />
               <span>
-                <strong>{reviewTarget.name}</strong>
+                <strong>{reviewTarget?.name ?? task.targetFileName ?? t("shell.task.theFile")}</strong>
                 <small>{t(task.suggestion.applied ? "dx.run.changesApplied" : "dx.run.changesReady")}</small>
               </span>
               <Icon name="ChevronRight" size={16} />
             </button>
           ) : null}
-          {artifact ? (
+          {artifact || task.artifact ? (
             <button
               type="button"
               className="dx-agent-result"
               data-act="open-file"
-              data-id={artifact.id}
-              onClick={() => void library.openFile(artifact.id)}
+              data-id={artifact?.id}
+              onClick={() => { if (artifact) void library.openFile(artifact.id); else if (task.artifact) void library.openArtifact(task.artifact.path); }}
             >
-              <FileIcon ext={extensionOf(artifact)} size={24} />
+              <FileIcon ext={artifact ? extensionOf(artifact) : task.documentType ?? "docx"} size={24} />
               <span>
-                <strong>{artifact.name}</strong>
+                <strong>{resultName}</strong>
                 <small>{t("dx.run.readyToOpen")}</small>
               </span>
               <Icon name="ArrowUpRight" size={16} />

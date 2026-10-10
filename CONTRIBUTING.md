@@ -82,6 +82,7 @@ npm run dist:win           # Windows amd64
 
 ```bash
 npm run lint               # tsc --noEmit (strict TypeScript)
+npm run test:acceptance:regressions # historical edit/review/routing/save regressions
 npx vitest run             # renderer unit tests
 go test ./... -count=1     # Go tests
 npm run test:e2e           # Playwright (requires `npm run test:e2e:install` first)
@@ -89,6 +90,21 @@ npm run test:all           # everything in one shot
 ```
 
 CI runs lint + vitest + `go test` on every PR. E2E is currently local-only.
+
+Fresh macOS builds also run lint and the acceptance regression suite before
+building. Its browser test needs the Playwright Chromium installed by
+`npx playwright install chromium`; it opens isolated pages without a dev server.
+Repackaging an already built app (`--skip-build`) does not rerun source checks.
+
+An acceptance issue is closed only for the paths actually verified. Preserve
+the original prompt and source/result bytes, and distinguish “not reproduced”
+from “fixed”. For edits, cover attachment, mention, selected text and active
+document, both Full access and Review, single and batch targets, Apply/Reject/
+Undo, failed writes, queue transitions and restart recovery. Verify source
+contents after reopening; a completed worker or an artifact card alone is not
+proof of a saved edit. For embedded editors, verify shortcuts with focus in the
+title/body/notes as well as the shell; clicking Save does not cover the shortcut.
+Source-level and browser tests do not replace native signed-client acceptance.
 
 ### i18n contract
 

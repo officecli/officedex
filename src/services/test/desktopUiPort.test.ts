@@ -6,6 +6,10 @@ import { NotImplementedError } from "../../shared/notImplemented";
 import type { BridgeEvent, TaskHistoryEntry } from "../../shared/types";
 import type { WindowControls } from "../window";
 
+// Every fake API starts task ids at task-1; persisted task state belongs to
+// that fake instance, not to a different test using the same ids.
+beforeEach(() => localStorage.clear());
+
 function stubWindow(): WindowControls {
   return {
     close() {},

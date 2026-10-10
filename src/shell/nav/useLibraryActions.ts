@@ -43,6 +43,17 @@ export function useLibraryActions() {
     [port, dispatch, reload],
   );
 
+  /** A task result may not have reached the currently loaded library page. */
+  const openArtifact = useCallback(async (path: string) => {
+    try {
+      const file = await port.files.openDropped(path);
+      dispatch({ type: "open-file", fileId: file.id });
+      await reload();
+    } catch (reason) {
+      reportPortFailure(reason);
+    }
+  }, [port, dispatch, reload]);
+
   /** Opens as Local: Home's Recent, the Local page, Quick start. */
   const openLocalFile = useCallback(
     async (fileId: string) => {
@@ -186,6 +197,7 @@ export function useLibraryActions() {
   );
 
   return {
+    openArtifact,
     openFile,
     openLocalFile,
     createLocalFile,

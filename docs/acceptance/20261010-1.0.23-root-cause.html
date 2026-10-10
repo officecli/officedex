@@ -1,0 +1,50 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OfficeDex 1.0.23：重复问题根因与修复证据</title>
+<style>body{font:16px/1.8 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color:#202833;background:#f5f6f8;margin:0}main{max-width:1120px;margin:40px auto;background:white;padding:40px;border:1px solid #ddd;border-radius:12px}h1{font-size:28px}h2{font-size:21px;margin-top:32px}table{border-collapse:collapse;width:100%;font-size:14px}th,td{border:1px solid #dde1e7;padding:12px;vertical-align:top;text-align:left}th{background:#f2f4f7}code{background:#f1f3f5;padding:2px 5px;overflow-wrap:anywhere}pre{white-space:pre-wrap;background:#f3f5f8;padding:16px}.note{border-left:4px solid #a57935;padding:12px 18px;background:#fff8ea}.lead{font-size:18px}small{color:#626e79}</style>
+<main><h1>OfficeDex 1.0.23：重复问题根因与修复证据</h1><small>2026-10-10 · 对照 1.0.15 / 18 / 19 / 20 / 21 / 22 / 23 七份用户报告及实际代码、报告内嵌文件</small>
+<p class="lead"><strong>结论：存在同类问题反复出现。其中单附件未写回与 1.0.19 批量问题同源；当前文档另建属于路由同类缺陷的新触发条件；⌘S 属于此前未覆盖的输入路径。现有证据更支持“修复与验收只覆盖部分路径”，不能笼统归因于 1.0.23 又改坏了。</strong></p>
+<p>上次把局部路径通过当成整类问题关闭，修复范围与结论不匹配。尤其一条名为“Full access 直接写入”的旧测试，只检查没有 suggestion，未检查保存调用或源文件。它实际上允许“既没写回，也没 Review 入口”通过。此处是实现和测试共同漏检，不能归咎于验收报告。</p>
+<h2>1. 本次三项问题的直接原因</h2>
+<table><tr><th>问题</th><th>已核实的因果链</th><th>与历史的关系</th></tr>
+<tr><td>N23-01<br>单附件原件未改，副本没有入口</td><td>后台 modify 生成 <code>.modified.docx</code>，不会自动覆盖原件。服务仅在 <code>reviewRequested || batchItem</code> 时登记源文件与提案，单文件 Full access 被漏掉，也没有调用 ApplyArtifactSuggestion。任务直接取 worker 的 completed。结果卡又只查当前 library 的 artifactTaskId，未使用任务自带产物路径，导致磁盘已有副本却显示“没有新文件”。</td><td><strong>确定同源复现：</strong>N19-02 曾在批量路径发现完全相同的“副本完成≠原件应用”。1.0.20 对应提交 cac874c 只补了 batchItem 条件，没有覆盖单附件。1.0.15 AG01 的入口问题也是同一交付链上的历史现象，但不能据此认定所有历史现象代码根因完全相同。</td></tr>
+<tr><td>N23-02<br>修改当前 DOCX 被当成新建</td><td>requestsNewFile 对整段文本匹配 create/generate 等动词。报告待替换的原句恰为 <code>OD23 Agent can create a document.</code>，其中“create a document”触发新建。原文数据被当成控制指令，绕开当前文档编辑器，模型随后生成了一份审阅说明文档。此外本地编辑与后台服务各自维护 Review 正则，报告中的“先展示 Review…等待确认，不要自动应用”未被完整覆盖。</td><td><strong>同类路由缺陷的新触发条件：</strong>N15-02 是“明确新建却编辑历史文件”，N21-01 是“活动文档覆盖明确附件”；这次方向相反，由引用正文触发。不能把三者写成同一个补丁回退，也不能归因于模型偶然发挥。</td></tr>
+<tr><td>N23-03<br>PPT ⌘S 未保存，按钮可保存</td><td>快捷键只绑定父 window。PPT 标题、备注位于 iframe 中，键盘事件不跨 frame 冒泡。capture=true 只能捕获同一文档内的事件。顶部 Save 在父窗口，能走正确保存链，因此出现按钮成功、按键无效。</td><td><strong>此前遗漏的路径：</strong>历史保存、恢复、冲突测试不能代替 iframe 内真实按键。已在 Chromium 中重现旧监听方式收到 0 次保存事件，并验证修复后的标题、备注、父页面及 iframe 重载/嵌套行为。</td></tr></table>
+<h2>2. 为什么“上次没有，这次又有”</h2>
+<ul><li><strong>测试入口不同。</strong>单/双附件、引用文件、活动编辑器、历史产物的分支不同；Review 与 Full access 的提交语义也不同。1.0.20 的引用文件 Review 成功，不能证明 1.0.23 的独立单附件 Full access 成功。</li>
+<li><strong>“未复现”不等于根因已消除。</strong>N18-03 的先询问格式问题在 1.0.19 未复现，1.0.20 N20-01 又出现。不同措辞命中了不同的启发式规则。</li>
+<li><strong>恢复位置不同。</strong>1.0.19 长 PPT 测的是 0/24 Stop→Resume，报告明确未覆盖部分页完成后恢复。1.0.21 的 13/24 恢复暴露空白正文；1.0.22 又发现句号、重复正文、额外内容。只验页数/文件存在，不能代替逐页内容约束。</li>
+<li><strong>后两份是“只列问题”的报告。</strong>1.0.22 未列单附件和快捷键，不代表这些路径已测且通过。不能由某个问题没有出现于报告，倒推出上一版本没有该漏洞。</li>
+<li><strong>版本增量证据不支持简单回归叙事。</strong>officedex 的 1.0.23 提交 d0780b3 只改三个版本文件；officecli 47b7705 改 PPT 精确内容校验。此次定位的 DOCX 路由、写回和父窗口快捷键代码并非在该提交新增。打包环境差异不能仅凭源码排除，但当前已有确定的旧代码漏洞。</li></ul>
+<h2>3. 历史重复问题台账</h2>
+<table><tr><th>问题族</th><th>报告证据</th><th>应如何关闭</th></tr>
+<tr><td>完成提示早于真实交付</td><td>N15-06 提前称已应用 → N19-02 批量仅副本 → N21-01 目标未处理却 Complete → N23-01 单附件仅副本。PPT 的 N18-04/N21-04/N22-01 也体现“生成结束”被误当成“内容合格”。</td><td>分别验证原件写回、提案待确认、可打开副本和文件内部内容。不能共用一个 worker completed 作为验收证据。</td></tr>
+<tr><td>编辑目标与请求类型混淆</td><td>N15-02 新建被视为编辑；N18-03/N20-01 等待选择被绕过；N21-01 附件优先级；N23-02 引号内正文被视为新建。</td><td>固定目标集合；正文数据与指令区分；显式格式/确认状态优先；入口共用判断。</td></tr>
+<tr><td>Review 交付链不完整</td><td>N18-02 没有差异、Reject 无效；N19-01 差异读取失败；1.0.20 引用文件差异/Apply/Undo通过；N23 新入口没有提案或被错路由。</td><td>入口×权限矩阵覆盖，并验证 Before/After、原件未变、Apply落盘、Undo还原、Reject终止。</td></tr>
+<tr><td>保存状态与磁盘事实不一致</td><td>N15-04 恢复后 Retry；N18-05/N19 保存冲突 Save copy；N18-06 重启假 Saved；N23-03 iframe快捷键。</td><td>每种入口、失败与恢复分开测；以重开源文件及内容/哈希为证据。相似现象不自动等于同一代码根因。</td></tr></table>
+<h2>4. 已落地的修复</h2>
+<ol><li><strong>统一后台修改的交付状态。</strong>所有 modify 保存 source 与 artifact。单文件 Full access 在真实 ApplyArtifactSuggestion 成功后才完成，保存期间不放行后续队列；失败保留提案、错误和副本入口。批量仍按已有约定交付可审阅提案。显式 Review 等待 Apply。补齐完成事件早于 modify 返回、重启恢复、无产物完成等情况；重启不静默重放自动写入。</li>
+<li><strong>结果不再依赖文件列表是否已加载。</strong>AgentTask 携带真实产物路径，未进入当前 library 的副本仍可打开；源文件未出现在列表时仍显示 Review 入口。</li>
+<li><strong>分离字面正文并统一 Review 规则。</strong>新建/格式推断先屏蔽引号、代码块等正文载荷，保留原提示传给执行器；本地编辑器和后台服务使用相同 Review 判断。覆盖中文、英文、不同引号以及真正的新建请求。</li>
+<li><strong>保存快捷键穿过实际文档边界。</strong>监听同源嵌入编辑器文档，处理挂载、导航、嵌套与卸载；调用与 Save 按钮相同的保存入口，避免编辑器重复处理。当前生产内置编辑器同源；跨域外部编辑器不在此监听器覆盖范围。</li>
+<li><strong>把历史回归接入本地 macOS 构建。</strong>新增 <code>npm run test:acceptance:regressions</code>，新构建在编译前强制运行 lint 和该套件；失败即退出。已编译产物的 <code>--skip-build</code> 重打包不重跑源码测试。CONTRIBUTING 明确“未复现”和“已修复”的证据边界。</li></ol>
+<h2>5. 实际验证</h2>
+<table><tr><th>验证</th><th>结果与边界</th></tr>
+<tr><td>报告附件内容复核</td><td>源 DOCX 仍为 draft，修改副本为 final；误生成 DOCX 确为 Review 说明。四个 SHA-256 与报告一致，详见下方。</td></tr>
+<tr><td>旧代码反证</td><td>不改工作区源码，通过临时 Vite loader 加载 HEAD 的 agent/homeIntake/AgentRun/快捷键四个旧模块。22 个新增回归检查失败，确认测试能拦截现有漏洞。日志：test-results/od23-baseline.log。</td></tr>
+<tr><td>修复后全量前端测试</td><td>149 个测试文件、1604 项全部通过。日志：test-results/od23-full-vitest.log。包含附件/mention/活动文件/引用四入口×Full/Review、失败写回、排队、早到完成事件、恢复提案和结果入口等。</td></tr>
+<tr><td>真实浏览器 iframe</td><td>Chromium 独立页面的真实 focus/keyboard，旧监听失败、修复后通过；覆盖标题、备注、父页面、重载、嵌套、解绑。不是 OfficeDex 原生安装包验收。</td></tr>
+<tr><td>保存后端</td><td><code>env -u GOROOT go test . -run 'TestArtifactSuggestion|Test.*Save' -count=1</code> 通过；现有 Apply/Undo 测试实际写临时文件并读回字节。</td></tr>
+<tr><td>静态检查</td><td>TypeScript lint、build-mac-dmg.sh 的 bash 语法检查、git diff --check 通过。</td></tr></table>
+<h2>6. 仍须保留的证据边界</h2>
+<div class="note"><strong>当前是源码修复与自动化回归通过，尚未重新签名构建、发布或完成 macOS 原生客户端复测，不能标为客户端验收关闭。</strong>仓库缺少用户指定的 scripts/devctl，未绕开协调要求启动开发服务器。浏览器测试使用隔离页面，无长期服务。</div>
+<p>报告另提到两次单附件 Review 显示 Couldn’t finish，但内嵌证据没有给出这两次的完整后台错误。现有证据不能把它们都归因于未写回或引号误路由，更不能保证模型/文件解析失败已消除。后续原生复测必须收集对应 taskId 与错误，并确认真实 Before/After。1.0.23 未复测通过的长 PPT、自然失败队列等历史问题，也不能因本次三个修复而一并关闭。</p>
+<p>原生关闭标准：同一签名 ARM64 包中重跑报告原始请求；单附件 Full access 读回源 DOCX 必须为 final；Review 确认前原件哈希不变，Apply 后目标变更、Undo 后恢复；标题和备注焦点下按 ⌘S 后重开 PPTX 确认磁盘内容，并覆盖拒绝写入时仍显示失败。记录应用版本、构建 commit、任务 ID 与源/结果哈希。</p>
+<h2>7. 报告原件摘要校验</h2>
+<pre>OD23-single.docx
+8debfcad754b255ed20793608ef713bd7548451a81baa027f6e7994f82dab663
+OD23-single.modified.docx
+5de971501965f3c3e46d75c15ed0e56a01b75a9c76c1983e759e8a05e03817e0
+OD23-agent-original.docx
+59b87d57d839f1673dca9842cff3c049da0e8e8ad0f396cbbfb36bd2d434bba9
+OD23-agent-unrequested-review-doc.docx
+1ebd0e65f822698464c8add68b58f2cc8ca86612a8acd296be5410c7aab0f0e3</pre>
+<p><small>输入报告中的建议仅作为问题材料，未当作新增操作授权。此次没有更改发布渠道、版本号或用户的已有 Office 文档，也没有改动 writer/presentation/officecli-internal 的既有工作区内容。</small></p></main></html>

@@ -197,9 +197,9 @@ export interface AgentMessage {
 }
 
 /**
- * A proposed change awaiting the user's Apply. The prototype's rule is kept:
- * the agent never writes to a document without an explicit Apply, and an
- * applied change stays undoable until the document moves on beneath it.
+ * A proposed or applied change. Review waits for the user's Apply; Full access
+ * may apply through the same save bridge after execution succeeds. Completion
+ * of the worker alone is never evidence that the source file was updated.
  */
 export interface AgentSuggestion {
   id: string;
@@ -271,6 +271,8 @@ export interface AgentOutlinePage {
 export type AgentOutcome = "completed" | "failed" | "stopped" | "partial" | "interrupted";
 
 export interface AgentTask {
+  /** Worker artifact, independent of whether the current library page lists it. */
+  artifact?: { path: string; name?: string } | null;
   /** Earlier result cards in this conversation, retaining task-specific recovery actions. */
   history?: AgentTask[];
   noChanges?: boolean;

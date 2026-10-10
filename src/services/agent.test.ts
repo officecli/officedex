@@ -325,6 +325,7 @@ describe("F02 — review before the change lands", () => {
 
   it("writes directly on full access when nothing asks for a review", async () => {
     const desk = scripted();
+    const apply = vi.spyOn(desk.api, "applyArtifactSuggestion");
     const service = createAgentService(desk.api);
     const panel = listen(service);
     const report = desk.addDocument({ id: "doc-report", filePath: "/p/Q3 report.docx", documentType: "docx" });
@@ -333,7 +334,8 @@ describe("F02 — review before the change lands", () => {
     desk.push(running("task-1"));
     desk.push(completed("task-1", "/p/Q3 report.modified.docx", "docx"));
 
-    expect(panel.last()?.suggestion).toBeNull();
+    await vi.waitFor(() => expect(panel.last()?.suggestion).toMatchObject({ applied: true, undoable: true }));
+    expect(apply).toHaveBeenCalledWith({ suggestionId: "task-1", sourceFile: report.filePath, artifactFile: "/p/Q3 report.modified.docx" });
   });
 
   it("recognises review requests in both languages and little else", () => {
@@ -790,4 +792,126 @@ describe("1.0.21 report regressions", () => {
     expect(panel.last()?.history?.map(run=>run.id)).toContain("task-3");
     expect(panel.last()?.history?.map(run=>run.id)).not.toContain("task-1");
   });
+});
+
+
+describe("N23 — every file-edit entry point has a delivery contract", () => {
+  for (const route of ["attachment", "mention", "active", "reference"] as const) {
+    for (const review of [false, true]) {
+      it(`${route}: ${review ? "review leaves source untouched until Apply" : "full access waits for source save"}`, async () => {
+        const desk = scripted();
+        const file = desk.addDocument({ id: "source", filePath: "/external/OD23-single.docx", documentType: "docx" });
+        let finish!: () => void;
+        const apply = vi.fn(() => new Promise<void>(resolve => { finish = resolve; }));
+        desk.api.applyArtifactSuggestion = apply;
+        const undo = vi.spyOn(desk.api, "undoArtifactSuggestion");
+        const service = createAgentService(desk.api); const panel = listen(service);
+        const targets: Partial<SendInput> = route === "attachment" ? { attachments: [{ id: "a", name: file.fileName, path: file.filePath, size: 10 }] }
+          : route === "mention" ? { mentions: [{ kind: "file", id: file.id, label: file.fileName }] }
+          : route === "reference" ? { reference: { fileId: file.id, label: file.fileName, text: "The status is draft." } }
+          : { activeFileId: file.id };
+        await service.send(message('Edit the existing DOCX in place: replace “The status is draft.” with “The status is final.”. ' + (review ? "先展示 Review 差异，等待我确认，不要自动应用。" : "Apply the change now."), targets));
+        expect(desk.calls.generate).toHaveLength(0);
+        desk.push(completed("task-1", "/external/OD23-single.modified.docx", "docx"));
+        let applying: Promise<void> | undefined;
+        if (review) {
+          expect(apply).not.toHaveBeenCalled();
+          expect(panel.last()?.suggestion).toMatchObject({ applied: false, targetFileId: file.id });
+          applying = service.applySuggestion("task-1");
+        } else {
+          expect(panel.last()?.status).not.toBe("done");
+          expect(panel.last()?.outcome).toBeUndefined();
+        }
+        expect(apply).toHaveBeenCalledExactlyOnceWith({ suggestionId: "task-1", sourceFile: file.filePath, artifactFile: "/external/OD23-single.modified.docx" });
+        finish(); await applying;
+        await vi.waitFor(() => expect(panel.last()?.suggestion).toMatchObject({ applied: true, undoable: true }));
+        expect(panel.last()?.outcome).toBe("completed");
+        expect(panel.last()?.artifact?.path).toBe("/external/OD23-single.modified.docx");
+        await service.undoSuggestion("task-1");
+        expect(undo).toHaveBeenCalledOnce();
+        expect(panel.last()?.suggestion).toMatchObject({ applied: false, undoable: false });
+      });
+    }
+  }
+
+  it("does not turn quoted document content into a new-file instruction", async () => {
+    const desk = scripted(); desk.addDocument({ id: "source", filePath: "/p/OD23-simple.docx", documentType: "docx" });
+    const service = createAgentService(desk.api); const panel = listen(service);
+    await service.send(message('请修改当前打开的 OD23-simple.docx：把唯一正文行“OD23 Agent can create a document.”改成“OD23 Agent can revise a document.”。先展示 Review 差异，等待我确认，不要自动应用。', { activeFileId: "source" }));
+    expect(desk.calls.generate).toHaveLength(0);
+    expect(desk.calls.modify).toHaveLength(1);
+    desk.push(completed("task-1", "/p/OD23-simple.modified.docx", "docx"));
+    expect(panel.last()?.suggestion?.applied).toBe(false);
+  });
+
+  it("reports a failed source write and keeps the artifact available for retry", async () => {
+    const desk = scripted(); desk.addDocument({ id: "source", filePath: "/p/a.docx", documentType: "docx" });
+    const apply = vi.fn(async () => {}).mockRejectedValueOnce(new Error("disk is read-only"));
+    desk.api.applyArtifactSuggestion = apply;
+    const service = createAgentService(desk.api); const panel = listen(service);
+    await service.send(message("Fix the typo", { activeFileId: "source" }));
+    desk.push(completed("task-1", "/p/a.modified.docx", "docx"));
+    await vi.waitFor(() => expect(panel.last()?.outcome).toBe("failed"));
+    expect(panel.last()?.suggestion).toMatchObject({ applied: false, undoable: false });
+    expect(panel.last()?.artifact?.path).toBe("/p/a.modified.docx");
+    expect(panel.last()?.errorDetail).toBe("disk is read-only");
+    await service.applySuggestion("task-1");
+    expect(apply).toHaveBeenCalledTimes(2);
+    expect(panel.last()?.outcome).toBe("completed");
+  });
+
+  it("registers the source even when completion arrives before modify resolves", async () => {
+    const desk = scripted(); desk.addDocument({ id: "source", filePath: "/p/a.docx", documentType: "docx" });
+    const original = desk.api.modify;
+    vi.spyOn(desk.api, "modify").mockImplementation(async input => {
+      const result = await original(input);
+      desk.push(completed(result.taskId, "/p/a.modified.docx", "docx"));
+      return result;
+    });
+    const apply = vi.spyOn(desk.api, "applyArtifactSuggestion");
+    const service = createAgentService(desk.api); const panel = listen(service);
+    await service.send(message("Fix the typo", { activeFileId: "source" }));
+    await vi.waitFor(() => expect(panel.last()?.suggestion?.applied).toBe(true));
+    expect(apply).toHaveBeenCalledOnce();
+    expect(panel.tasks().filter(task => task.outcome === "completed").every(task => task.suggestion?.applied)).toBe(true);
+  });
+});
+
+it("does not start a queued edit until the preceding source write finishes", async () => {
+  const desk = scripted(); desk.addDocument({ id: "source", filePath: "/p/a.docx", documentType: "docx" });
+  let finish!: () => void;
+  desk.api.applyArtifactSuggestion = vi.fn(() => new Promise<void>(resolve => { finish = resolve; }));
+  const service = createAgentService(desk.api); const panel = listen(service);
+  await service.send(message("Fix first typo", { activeFileId: "source", conversationId: "save-queue" }));
+  desk.push(running("task-1"));
+  await service.send(message("Fix second typo", { activeFileId: "source", conversationId: "save-queue" }));
+  desk.push(completed("task-1", "/p/a.modified.docx", "docx"));
+  expect(desk.calls.modify).toHaveLength(1);
+  expect(panel.last()?.outcome).toBeUndefined();
+  finish();
+  await vi.waitFor(() => expect(desk.calls.modify).toHaveLength(2));
+});
+
+it("does not call a modification complete if the worker returned no artifact", async () => {
+  const desk = scripted(); desk.addDocument({ id: "source", filePath: "/p/a.docx", documentType: "docx" });
+  const service = createAgentService(desk.api); const panel = listen(service);
+  await service.send(message("Fix the typo", { activeFileId: "source" }));
+  desk.push({ ...completed("task-1", "", "docx"), payload: {} });
+  expect(panel.last()?.outcome).toBe("failed");
+  expect(panel.last()?.suggestion).toBeNull();
+});
+
+
+it("recovers an unapplied proposal after restart without silently replaying a write", async () => {
+  const desk = scripted();
+  localStorage.setItem("officedex.agent.reviews.v1", JSON.stringify([["task-1", {
+    sourceFileId: "source", sourceFile: "/p/a.docx", autoApply: true, applying: true, applied: false, undoable: false,
+  }]]));
+  const apply = vi.spyOn(desk.api, "applyArtifactSuggestion");
+  const service = createAgentService(desk.api); const panel = listen(service);
+  desk.push(completed("task-1", "/p/a.modified.docx", "docx"));
+  expect(panel.last()?.suggestion).toMatchObject({ targetFileId: "source", applied: false });
+  expect(apply).not.toHaveBeenCalled();
+  await service.applySuggestion("task-1");
+  expect(apply).toHaveBeenCalledOnce();
 });

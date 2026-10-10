@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { listenToShortcutDocuments } from "./shortcutDocuments";
 
 import { useLibraryActions } from "../nav/useLibraryActions";
 import { useShell } from "../state/ShellContext";
@@ -23,7 +24,7 @@ export function useKeyboardShortcuts({ onNew, enabled = true }: { onNew: () => v
   useEffect(() => {
     if (!enabled) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.isComposing || !(event.metaKey || event.ctrlKey) || event.altKey) return;
+      if (event.defaultPrevented || event.isComposing || event.repeat || !(event.metaKey || event.ctrlKey) || event.altKey) return;
       const key = event.key.toLowerCase();
       if (key === "o") {
         event.preventDefault();
@@ -36,14 +37,14 @@ export function useKeyboardShortcuts({ onNew, enabled = true }: { onNew: () => v
         dispatch({ type: "go", page: "settings" });
       } else if (key === "s" && !event.shiftKey && activeFile) {
         event.preventDefault();
+        // The shell owns persistence; prevent a second editor-local save.
+        event.stopPropagation();
         // The same path as the Save button, so a refused write is recorded
         // against the file and shown with a Retry rather than lost; quiet,
         // because ⌘S has never announced itself.
         void save(activeFile, { quiet: true });
       }
     };
-    // Capture: the chord has to work while focus is inside a mounted editor.
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
+    return listenToShortcutDocuments(window, onKeyDown);
   }, [library, dispatch, activeFile, save, onNew, enabled]);
 }

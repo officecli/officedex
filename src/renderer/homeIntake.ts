@@ -1,4 +1,5 @@
 import type { DocumentType, ImageRatio } from "../shared/types";
+import { instructionText } from "../shared/requestIntent";
 import { fileExtension } from "./utils/path";
 
 export interface HomeTaskIntake {
@@ -217,7 +218,7 @@ export function outputFileStem(requested: string | null): string | null {
 
 /** Ignore explicitly excluded output formats while inferring a new file's type. */
 function positiveFormatIntent(prompt: string): string {
-  return prompt.replace(/(?:do not|don't|不要|禁止|别)\s*(?:create|generate|make|创建|生成|新建)\b[^\n;；。.!?]*(?=[\n;；。.!?]|$)/gi, "").replace(/(?:不要|不需要|禁止|无需|别|do not|don't|without|no)\s*(?:生成|创建|新建|制作|输出|generate|create|make)?\s*(?:(?:a|an|any)\s+)?(?:pptx?|powerpoint|slides?|presentations?|decks?|演示文稿|幻灯片|docx?|word|xlsx?|excel|pdf|txt)(?=$|[\s,，。.;；!！?？])/gi, "");
+  return instructionText(prompt).replace(/(?:do not|don't|不要|禁止|别)\s*(?:create|generate|make|创建|生成|新建)\b[^\n;；。.!?]*(?=[\n;；。.!?]|$)/gi, "").replace(/(?:不要|不需要|禁止|无需|别|do not|don't|without|no)\s*(?:生成|创建|新建|制作|输出|generate|create|make)?\s*(?:(?:a|an|any)\s+)?(?:pptx?|powerpoint|slides?|presentations?|decks?|演示文稿|幻灯片|docx?|word|xlsx?|excel|pdf|txt)(?=$|[\s,，。.;；!！?？])/gi, "");
 }
 
 /** A new deliverable must not silently mutate the file left open from the last run. */

@@ -408,3 +408,19 @@ it("does not claim files are ready when the editor applied no changes", async ()
   expect(run.status()).toContain("No changes were made");
   expect(run.card().textContent).not.toContain("Your files are ready");
 });
+
+it("shows and opens a worker artifact even when it is absent from the library page", async () => {
+  const run = await stage("complete", task => ({ ...task, id: "unlisted-result", artifact: { path: "/external/OD23-single.modified.docx", name: "OD23-single.modified.docx" } }));
+  expect(run.card().textContent).toContain("Your file is ready to open");
+  expect(run.card().textContent).not.toContain("without a new file");
+  const open = vi.spyOn(run.port.files, "openDropped").mockResolvedValue(prototypeFiles(Date.now())[0]);
+  fireEvent.click(run.card().querySelector<HTMLButtonElement>('[data-act="open-file"]')!);
+  await waitFor(() => expect(open).toHaveBeenCalledWith("/external/OD23-single.modified.docx"));
+});
+
+it("keeps the source review visible even before the imported file appears in the library", async () => {
+  const run = await stage("review", task => ({ ...task, targetFileName: "OD23-single.docx", suggestion: { ...task.suggestion!, targetFileId: "not-in-library" } }));
+  expect(run.status()).toBe("Ready for review");
+  expect(run.card().querySelector(".dx-agent-results")?.textContent).toContain("OD23-single.docx");
+  expect(run.action("review-task")).toBeTruthy();
+});

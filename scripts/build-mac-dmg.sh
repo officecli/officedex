@@ -289,6 +289,12 @@ if [[ "${SKIP_NOTARIZE:-}" != "1" ]]; then
 fi
 
 if [[ "${SKIP_BUILD}" -eq 0 ]]; then
+  # Historical QA failures must stay executable across entry points. A worker
+  # finishing is not evidence that an edit was saved or an iframe received ⌘S.
+  echo "[${LOG}] checking acceptance regressions before building"
+  npm run lint
+  npm run test:acceptance:regressions
+
   echo "[${LOG}] prefetching officecli"
   npm run prefetch:officecli
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { usePort } from "../port/PortContext";
+import { reviewRequestedBy } from "../../shared/requestIntent";
 import { requestsNewFile, inferHomeTaskRoute } from "../../renderer/homeIntake";
 import { translate } from "../../renderer/i18n";
 import type { AgentMessage, AgentOutlinePage, AgentTask } from "../../shared/uiPort";
@@ -324,7 +325,7 @@ export function useAgentTask() {
           },
           {
             instruction: submission.text,
-            requireReview: settings.value.permission !== "full" || /先审阅|先审核|先确认|review.*first|before.*apply|approval/i.test(submission.text),
+            requireReview: settings.value.permission !== "full" || reviewRequestedBy(submission.text),
             folderId: submission.folderId || scopeFolderId,
             fileId: target.id,
             fileName: target.name,

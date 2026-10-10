@@ -1,3 +1,5 @@
+import { instructionText, reviewRequestedBy } from "../shared/requestIntent";
+export { reviewRequestedBy } from "../shared/requestIntent";
 import { readSuggestionChanges } from "./suggestionDiff";
 import type { BridgeEvent, DesktopAPI, DesktopTask, DocumentRecord, GenerateInput, TaskHistoryEntry } from "../shared/types";
 import { OUTLINE_GATE_KIND, type AgentEvent, type AgentImageRun, type AgentImageSeries, type AgentMessage, type AgentOutlinePage, type AgentPort, type AgentRecovery, type AgentStatus, type AgentStep, type AgentTask, type AgentTaskSummary, type ImageGenerationInput, type SendInput } from "../shared/uiPort";
@@ -44,9 +46,9 @@ export { agentErrorSummary } from "../renderer/agentError";
  *      existing prompt, which preserves its meaning without changing the
  *      runtime protocol.
  *
- * Full-access runs still have no suggestion. Review/custom runs that edit an
- * existing file retain the completed artifact as a real, file-level suggestion
- * and use the desktop snapshot bridge for Apply/Undo.
+ * Every modification retains its source and artifact. Full access applies the
+ * artifact through the same snapshot bridge as Review, and completion waits
+ * for that write; worker completion alone never means the source was saved.
  */
 
 const FORMAT_CHOICES = [
@@ -56,6 +58,7 @@ const FORMAT_CHOICES = [
 ];
 
 export function requestsFormatChoice(text: string): boolean {
+  text = instructionText(text);
   return FORMAT_CHOICES.filter(choice => choice.pattern.test(text)).length >= 2
     && /(?:ask me|先[询问]|问我|询问我)/i.test(text)
     && /(?:wait|等待|等我|等.*回答)/i.test(text);
@@ -338,7 +341,7 @@ function toAgentTask(task: DesktopTask): AgentTask {
     steps: toSteps(task),
     messages: toMessages(task),
     outline,
-    // No desktop model for proposed-then-applied changes; see the header.
+    ...(task.artifact?.filePath ? { artifact: { path: task.artifact.filePath, name: task.artifact.fileName } } : {}),
     suggestion: null,
     question: toQuestion(task),
     ...outcomeOf(task, recovery),
@@ -376,6 +379,9 @@ function outcomeOf(
 }
 
 interface ReviewArtifactState {
+  autoApply?: boolean;
+  applying?: boolean;
+  applyError?: string;
   rejected?: boolean;
   sourceFileId: string;
   sourceFile: string;
@@ -386,7 +392,9 @@ interface ReviewArtifactState {
 
 function toAgentTaskWithReview(task: DesktopTask, review?: ReviewArtifactState): AgentTask {
   const result = toAgentTask(task);
-  if (!review || !review.artifactFile) return result;
+  if (review?.applyError) Object.assign(result, { status: "done", outcome: "failed", error: agentErrorSummary(review.applyError), errorDetail: review.applyError });
+  if (review?.applying) Object.assign(result, { status: "writing", outcome: undefined, finishedAt: undefined });
+  if (!review || !review.artifactFile || review.applying) return result;
   if (review.rejected) return { ...result, outcome: "stopped", suggestion: null };
   return {
     ...result,
@@ -502,13 +510,17 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     if (Array.isArray(saved)) for (const [id, review] of saved) {
       if (typeof id === "string" && typeof review?.sourceFileId === "string" && typeof review?.sourceFile === "string") {
         // Backend Undo snapshots do not survive a process restart.
-        reviewArtifacts.set(id, { ...review, undoable: false });
+        reviewArtifacts.set(id, { ...review, undoable: false, autoApply: false, applying: false });
       }
     }
   } catch { /* Older or unavailable storage. */ }
   const persistReviews = () => {
     try { localStorage.setItem(reviewKey, JSON.stringify([...reviewArtifacts])); } catch { /* Keep session state. */ }
   };
+  // A worker can finish before modify() returns its task id. Defer publishing
+  // those events until their source/permission contract has been registered.
+  let modificationsStarting = 0;
+  const deferredModifications = new Set<string>();
   const listeners = new Set<(event: AgentEvent) => void>();
 
   const emit = (event: AgentEvent) => {
@@ -805,9 +817,19 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     return batch ? clip(batch[0].input.text, 120) : taskTitle(task, translate("shell.service.untitledTask"));
   };
 
+  const reviewForTask = (task: DesktopTask) => {
+    const review = reviewArtifacts.get(task.id);
+    // History can contain a completion that arrived while the window was
+    // closed. Recover the proposal, but never replay an automatic write.
+    if (review && !review.artifactFile && task.status === "completed" && task.artifact?.filePath) {
+      review.artifactFile = task.artifact.filePath;
+    }
+    return review;
+  };
+
   /** The contract's view of a desktop task, with everything this closure knows added. */
   const project = (task: DesktopTask, includeHistory = true): AgentTask => {
-    const result = toAgentTaskWithReview(task, reviewArtifacts.get(task.id));
+    const result = toAgentTaskWithReview(task, reviewForTask(task));
     const conversationId = conversationOf(task);
     const batchItems = batchFor(task);
     const image = imageSeries(task);
@@ -838,7 +860,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
           status: item.error ? "failed" as const : run?.status === "completed" ? "completed" as const : run?.status === "failed" ? "failed" as const : run?.status === "cancelled" ? "stopped" as const : run ? "running" as const : "queued" as const,
           error: item.error || run?.error ? agentErrorSummary(item.error ?? run!.error!) : undefined,
           errorDetail: item.error ?? run?.error,
-          suggestion: run ? toAgentTaskWithReview(run, reviewArtifacts.get(run.id)).suggestion : null };
+          suggestion: run ? toAgentTaskWithReview(run, reviewForTask(run)).suggestion : null };
       }) } : {}),
       ...(result.status === "done" && batchItems?.some((item) => item.error || (item.taskId && state.tasks[item.taskId]?.status === "failed")) ? { outcome: "partial" as const } : {}),
       conversationId,
@@ -1056,23 +1078,61 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     }
   };
 
-  // Subscribed for the service's whole life rather than per listener: task
-  // state has to keep up with the bridge even while nothing is watching, or a
-  // run started before the first subscriber would be invisible afterwards.
+  const publishTask = (task: DesktopTask) => {
+    settleQueue(task);
+    emit({ kind: "task", task: project(task), focused: isFocused(task) });
+  };
+
+  const completeModification = (task: DesktopTask): boolean => {
+    const review = reviewArtifacts.get(task.id);
+    if (!review) return false;
+    if (review.applying) { task.status = "running"; return true; }
+    if (task.status !== "completed") return false;
+    review.artifactFile = task.artifact?.filePath;
+    if (!review.artifactFile) {
+      review.applyError = translate("shell.service.suggestionUnavailable");
+      task.status = "failed";
+      task.error = review.applyError;
+    } else if (review.autoApply && !review.applied && !review.applyError && !review.rejected) {
+      review.applying = true;
+      task.status = "running";
+      // No Complete state and no queued follow-up before the source write ends.
+      void (async () => {
+        try {
+          if (!api.applyArtifactSuggestion) throw new Error(translate("shell.service.suggestionUnavailable"));
+          await api.applyArtifactSuggestion({ suggestionId: task.id, sourceFile: review.sourceFile, artifactFile: review.artifactFile! });
+          review.applied = true;
+          review.undoable = true;
+        } catch (reason) {
+          review.applyError = errorMessage(reason);
+        } finally {
+          review.applying = false;
+          review.autoApply = false;
+          const latest = state.tasks[task.id];
+          latest.status = review.applyError ? "failed" : "completed";
+          latest.error = review.applyError;
+          persistReviews();
+          publishTask(latest);
+        }
+      })();
+    }
+    persistReviews();
+    return true;
+  };
+
+  // Track events even when the conversation is not visible.
   api.onBridgeEvent((event: BridgeEvent) => {
     if (!event.task_id) return;
     state = applyTaskEvent(state, event);
     const task = state.tasks[event.task_id];
     if (!task) return;
+    if (modificationsStarting && !sentRuns.has(task.id)) {
+      deferredModifications.add(task.id);
+      return;
+    }
+    completeModification(task);
     if (ACTIVE_STATUSES.includes(task.status)) adoptActive(task.id);
-    const review = reviewArtifacts.get(task.id);
-    if (review && task.status === "completed" && task.artifact?.filePath) { review.artifactFile = task.artifact.filePath; persistReviews(); }
-    // Before the task is projected: a dropped queue must not be drawn once more.
-    settleQueue(task);
-    emit({ kind: "task", task: project(task), focused: isFocused(task) });
-    // The contract has no failed status, so a failure is reported twice: the
-    // task turns `done`, and this says why — once per failure, not once per
-    // event that arrives after it (see `reportedErrors`).
+    publishTask(task);
     if (task.status === "failed" && task.error) {
       const key = `${task.id}\n${task.error}`;
       if (!reportedErrors.has(key)) {
@@ -1242,24 +1302,38 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       const batchItem = batchInputs.get(input);
       const scopedText = batchItem ? `${text}\n\nThis is one item of a batch. Modify only the source file ${record.fileName} in this run. Other referenced files are handled separately. Do not create a different document type.` : text;
       const prompt = explicit ? promptWithComposerContext(scopedText, input) : withContext(promptWithComposerContext(scopedText, input));
-      const result = await api.modify({
-        documentType: record.documentType as GenerateInput["documentType"],
-        sourceFile: record.filePath,
-        prompt,
-        ...(workspaceId ? { workspaceId } : { noProject: true }),
-        ...lineage,
-      });
-      // Batch modifications always produce proposals. A completed worker has
-      // not written the source, even when the composer grants full access.
-      if (reviewRequested || batchItem) {
+      modificationsStarting += 1;
+      try {
+        const result = await api.modify({
+          documentType: record.documentType as GenerateInput["documentType"],
+          sourceFile: record.filePath,
+          prompt,
+          ...(workspaceId ? { workspaceId } : { noProject: true }),
+          ...lineage,
+        });
         reviewArtifacts.set(result.taskId, {
           sourceFileId: record.id,
           sourceFile: record.filePath,
+          autoApply: !reviewRequested && !batchItem,
           applied: false,
           undoable: false,
         });
+        persistReviews();
+        // Reconcile early completion before started() can publish a result.
+        const early = state.tasks[result.taskId];
+        if (early) completeModification(early);
+        started(result.taskId, prompt, { fileName: record.fileName, explicit });
+      } finally {
+        modificationsStarting -= 1;
+        if (!modificationsStarting) {
+          const pending = [...deferredModifications];
+          deferredModifications.clear();
+          for (const id of pending) {
+            const task = state.tasks[id];
+            if (task) { completeModification(task); publishTask(task); }
+          }
+        }
       }
-      started(result.taskId, prompt, { fileName: record.fileName, explicit });
     };
 
     if (input.imageGeneration) {
@@ -1856,7 +1930,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
 
     async rejectSuggestion(id) {
       const review = reviewArtifacts.get(id);
-      if (!review || review.applied) throw new Error(translate("shell.service.suggestionUnavailable"));
+      if (!review || review.applied || review.applying) throw new Error(translate("shell.service.suggestionUnavailable"));
       review.rejected = true;
       review.undoable = false;
       persistReviews();
@@ -1866,12 +1940,15 @@ export function createAgentService(api: DesktopAPI): AgentPort {
 
     async applySuggestion(id) {
       const review = reviewArtifacts.get(id);
-      if (!review?.artifactFile || review.rejected || !api.applyArtifactSuggestion) {
+      if (!review?.artifactFile || review.rejected || review.applying || !api.applyArtifactSuggestion) {
         throw new NotImplementedError("agent.applySuggestion", translate("shell.service.suggestionUnavailable"));
       }
       await api.applyArtifactSuggestion({ suggestionId: id, sourceFile: review.sourceFile, artifactFile: review.artifactFile });
       review.applied = true;
       review.undoable = true;
+      review.applyError = undefined;
+      const appliedTask = state.tasks[id];
+      if (appliedTask) { appliedTask.status = "completed"; appliedTask.error = undefined; }
       persistReviews();
       const task = state.tasks[id];
       if (task) emit({ kind: "task", task: project(task) });
@@ -1967,19 +2044,6 @@ export function referencedFileIds(input: Pick<SendInput, "mentions" | "reference
 /** Whether the message points at anything at all — a file, a folder, a quoted passage. */
 function namesAnything(input: Pick<SendInput, "mentions" | "reference" | "attachments">): boolean {
   return input.mentions.length > 0 || input.attachments.length > 0 || Boolean(input.reference);
-}
-
-/**
- * Words that ask to see the change before it is applied.
- *
- * Deliberately narrow: a false positive turns a direct edit into a review
- * card, which costs a click; a false negative is the original bug.
- */
-const REVIEW_INTENT =
-  /先审阅|审阅后|审阅一下|先看一下|先看看|先给我看|看过再|确认后再|确认再|先别(?:改|写|保存|应用)|不要直接(?:改|写|保存|应用)|review (?:it |them |this |that )?(?:first|before)|let me review|for (?:my )?review|before (?:you )?apply(?:ing)?|do(?: not|n't) apply/i;
-
-export function reviewRequestedBy(text: string): boolean {
-  return REVIEW_INTENT.test(text);
 }
 
 /** How the refusal names what *is* supported. Product names, not type ids. */
