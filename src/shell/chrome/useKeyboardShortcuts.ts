@@ -25,8 +25,11 @@ export function useKeyboardShortcuts({ onNew, enabled = true }: { onNew: () => v
   useEffect(() => {
     if (!enabled) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.isComposing || event.repeat || !(event.metaKey || event.ctrlKey) || event.altKey) return;
+      if (event.isComposing || event.repeat || !(event.metaKey || event.ctrlKey) || event.altKey) return;
       const key = event.key.toLowerCase();
+      // The embedded editor may already prevent Cmd+S while flushing its
+      // session. That is not a disk save: the shell must still export it.
+      if (event.defaultPrevented && !(key === "s" && !event.shiftKey && activeFile)) return;
       if (key === "o") {
         event.preventDefault();
         void library.openFromDisk();
@@ -39,11 +42,13 @@ export function useKeyboardShortcuts({ onNew, enabled = true }: { onNew: () => v
       } else if (key === "s" && !event.shiftKey && activeFile) {
         event.preventDefault();
         // The shell owns persistence; prevent a second editor-local save.
-        event.stopPropagation();
+        event.stopImmediatePropagation();
         // The same path as the Save button, so a refused write is recorded
         // against the file and shown with a Retry rather than lost; quiet,
         // because ⌘S has never announced itself.
-        void save(activeFile, { quiet: true });
+        // WKWebView rejects Go bindings called on an iframe key event stack.
+        // Start persistence in a fresh task owned by the top-level window.
+        window.setTimeout(() => { void save(activeFile, { quiet: true }); }, 0);
       }
     };
     const disposeKeys = listenToShortcutDocuments(window, onKeyDown);

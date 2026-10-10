@@ -22,7 +22,8 @@ it("saves through the same host action from slide title, notes and shell focus, 
   for (const target of [frame.contentDocument!.querySelector("div")!, frame.contentDocument!.querySelector("textarea")!, document.body]) {
     expect(press(target).defaultPrevented).toBe(true);
   }
-  expect(mocks.save).toHaveBeenCalledTimes(3);
+  expect(mocks.save).not.toHaveBeenCalled(); // no binding on the iframe event stack
+  await waitFor(() => expect(mocks.save).toHaveBeenCalledTimes(3));
   expect(mocks.save).toHaveBeenLastCalledWith(mocks.file, { quiet: true });
   expect(editorSave).not.toHaveBeenCalled();
   press(document.body, { shiftKey: true }); press(document.body, { altKey: true }); press(document.body, { isComposing: true });
@@ -50,4 +51,19 @@ it("N24-04 native menu Save reaches the same action with editor focus and unsubs
     expect(mocks.save).toHaveBeenCalledWith(mocks.file, { quiet: true });
     hook.unmount(); expect(dispose).toHaveBeenCalledOnce();
   } finally { Object.assign(window, { runtime: original }); }
+});
+
+
+it("exports even when the editor has already claimed Cmd+S for its own session flush", async () => {
+  const frame = document.createElement("iframe"); document.body.append(frame);
+  frame.contentDocument!.body.innerHTML = '<textarea>Notes</textarea>';
+  const editorFlush = vi.fn((event: KeyboardEvent) => event.preventDefault());
+  frame.contentWindow!.addEventListener("keydown", editorFlush, true);
+  renderHook(() => useKeyboardShortcuts({ onNew: vi.fn() }));
+  const event = new KeyboardEvent("keydown", { key: "s", metaKey: true, bubbles: true, cancelable: true });
+  frame.contentDocument!.querySelector("textarea")!.dispatchEvent(event);
+  expect(editorFlush).toHaveBeenCalledOnce();
+  expect(event.defaultPrevented).toBe(true);
+  expect(mocks.save).not.toHaveBeenCalled();
+  await waitFor(() => expect(mocks.save).toHaveBeenCalledExactlyOnceWith(mocks.file, { quiet: true }));
 });
