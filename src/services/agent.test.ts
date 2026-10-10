@@ -8,6 +8,7 @@
  * (send, bridge events, Stop) and asserts on the calls the desktop received
  * and the events the panel got.
  */
+import { strToU8, zipSync } from "fflate";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { BridgeEvent, DesktopAPI, DocumentRecord, GenerateInput, ModifyInput } from "../shared/types";
@@ -59,7 +60,7 @@ function scripted(startSerial = 0): Scripted {
     async modify(input: ModifyInput) {
       calls.modify.push(input);
       serial += 1;
-      return { taskId: `task-${serial}`, sessionId: "session", status: "running" };
+      return { taskId: `task-${serial}`, sessionId: "session", status: "running", sourceSHA256: "a".repeat(64) };
     },
     async cancel(taskId: string) {
       calls.cancel.push(taskId);
@@ -335,7 +336,7 @@ describe("F02 — review before the change lands", () => {
     desk.push(completed("task-1", "/p/Q3 report.modified.docx", "docx"));
 
     await vi.waitFor(() => expect(panel.last()?.suggestion).toMatchObject({ applied: true, undoable: true }));
-    expect(apply).toHaveBeenCalledWith({ suggestionId: "task-1", sourceFile: report.filePath, artifactFile: "/p/Q3 report.modified.docx" });
+    expect(apply).toHaveBeenCalledWith({ suggestionId: "task-1", sourceFile: report.filePath, artifactFile: "/p/Q3 report.modified.docx", expectedSourceSHA256: "a".repeat(64) });
   });
 
   it("recognises review requests in both languages and little else", () => {
@@ -730,7 +731,7 @@ it("keeps full-access batch proposals reviewable across a failure, apply, undo a
   expect(panel.last()?.batch?.[0].suggestion).toMatchObject({ id: "task-1", targetFileId: "good", applied: false });
   expect(apply).not.toHaveBeenCalled();
   await service.applySuggestion("task-1");
-  expect(apply).toHaveBeenCalledWith({ suggestionId: "task-1", sourceFile: "/external/good.docx", artifactFile: "/external/good.modified.docx" });
+  expect(apply).toHaveBeenCalledWith({ suggestionId: "task-1", sourceFile: "/external/good.docx", artifactFile: "/external/good.modified.docx", expectedSourceSHA256: "a".repeat(64) });
   expect(panel.last()?.batch?.[0].suggestion).toMatchObject({ applied: true, undoable: true });
   await service.undoSuggestion("task-1");
   expect(panel.last()?.batch?.[0].suggestion).toMatchObject({ applied: false, undoable: false });
@@ -822,7 +823,7 @@ describe("N23 — every file-edit entry point has a delivery contract", () => {
           expect(panel.last()?.status).not.toBe("done");
           expect(panel.last()?.outcome).toBeUndefined();
         }
-        expect(apply).toHaveBeenCalledExactlyOnceWith({ suggestionId: "task-1", sourceFile: file.filePath, artifactFile: "/external/OD23-single.modified.docx" });
+        expect(apply).toHaveBeenCalledExactlyOnceWith({ suggestionId: "task-1", sourceFile: file.filePath, artifactFile: "/external/OD23-single.modified.docx", expectedSourceSHA256: "a".repeat(64) });
         finish(); await applying;
         await vi.waitFor(() => expect(panel.last()?.suggestion).toMatchObject({ applied: true, undoable: true }));
         expect(panel.last()?.outcome).toBe("completed");
@@ -914,4 +915,35 @@ it("recovers an unapplied proposal after restart without silently replaying a wr
   expect(apply).not.toHaveBeenCalled();
   await service.applySuggestion("task-1");
   expect(apply).toHaveBeenCalledOnce();
+});
+
+
+describe("historical scope boundaries", () => {
+  it.each(["Save a separate modified copy", "另存副本，保留原件"])("never auto-applies %s", async prompt => {
+    const desk = scripted(); desk.addDocument({id:"source",filePath:"/p/a.docx",documentType:"docx"});
+    const apply = vi.spyOn(desk.api,"applyArtifactSuggestion");
+    const service = createAgentService(desk.api); const panel = listen(service);
+    await service.send(message(`Fix the typo. ${prompt}`, {activeFileId:"source"}));
+    desk.push(completed("task-1","/p/copy.docx","docx"));
+    await vi.waitFor(() => expect(panel.last()?.outcome).toBe("completed"));
+    expect(apply).not.toHaveBeenCalled();
+    expect(panel.last()?.artifact?.path).toBe("/p/copy.docx");
+  });
+  it.each([false, true])("read-only attachment answers without modification; malicious edits=%s", async malicious => {
+    const desk = scripted(); const file=desk.addDocument({id:"source",filePath:"/p/a.docx",documentType:"docx"});
+    desk.api.issuePreviewToken = vi.fn(async () => ({token:"read",fileName:"a.docx",documentType:"docx"})) as DesktopAPI["issuePreviewToken"];
+    desk.api.readArtifactFile = vi.fn(async () => ({data:zipSync({"word/document.xml":strToU8('<w:document xmlns:w="urn:word"><w:p><w:r><w:t>Alpha.</w:t></w:r></w:p></w:document>')})})) as DesktopAPI["readArtifactFile"];
+    desk.api.revokePreviewToken = vi.fn(async () => {});
+    desk.api.startAgentRun = vi.fn(async () => ({id:"reader",status:"running",workflow:"office.docx.edit.v1",created_at:"",updated_at:""})) as DesktopAPI["startAgentRun"];
+    desk.api.getAgentRun = vi.fn(async () => ({id:"reader",status:"completed",workflow:"office.docx.edit.v1",created_at:"",updated_at:"",result:{summary:"LOCAL-A-19",edits:malicious?[{query:"Alpha.",replacement:"Beta."}]:[]}})) as DesktopAPI["getAgentRun"];
+    desk.api.cancelAgentRun = vi.fn(async () => {});
+    const apply=vi.spyOn(desk.api,"applyArtifactSuggestion");
+    const service=createAgentService(desk.api); const panel=listen(service);
+    await service.send(message('Reply exactly "LOCAL-A-19". Do not create or edit any file.', {attachments:[{id:"a",name:file.fileName,path:file.filePath,size:1}]}));
+    expect(desk.calls.modify).toHaveLength(0);expect(desk.calls.generate).toHaveLength(0);expect(apply).not.toHaveBeenCalled();
+    expect(desk.api.startAgentRun).toHaveBeenCalledWith(expect.objectContaining({input:{parameters:expect.objectContaining({text:"Alpha.",read_only:true})}}));
+    expect(desk.api.revokePreviewToken).toHaveBeenCalledWith("read");
+    expect(panel.last()?.outcome).toBe(malicious?"failed":"completed");
+    if (!malicious) expect(panel.last()?.messages.some(item=>item.text==="LOCAL-A-19")).toBe(true);
+  });
 });

@@ -352,6 +352,7 @@ export interface ModifyInput {
 
 /** Applies or restores a completed agent artifact without exposing raw bytes to the renderer. */
 export interface ArtifactSuggestionFileInput {
+  expectedSourceSHA256?: string;
   suggestionId: string;
   sourceFile: string;
   artifactFile: string;
@@ -1456,7 +1457,7 @@ export interface DesktopAPI extends DesktopVerticalAPI {
   createImageTemplatePublishRequest(input: CreateImageTemplatePublishRequestInput): Promise<ImageTemplatePublishRequest>;
   generate(input: GenerateInput): Promise<{ taskId: string; sessionId: string; status: string }>;
   planSpreadsheetFields(input: SpreadsheetPlanFieldsInput & { headerRowIndex: number }): Promise<SpreadsheetPlanFieldsResult>;
-  modify(input: ModifyInput): Promise<{ taskId: string; sessionId: string; status: string }>;
+  modify(input: ModifyInput): Promise<{ taskId: string; sessionId: string; status: string; sourceSHA256?: string }>;
   applyArtifactSuggestion?(input: ArtifactSuggestionFileInput): Promise<void>;
   undoArtifactSuggestion?(input: ArtifactSuggestionFileInput): Promise<void>;
   artifactStageEdit?(input: ArtifactStageRuntimeInput): Promise<{ taskId: string; sessionId: string; status: string }>;

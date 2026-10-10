@@ -1,6 +1,8 @@
-import { instructionText, reviewRequestedBy } from "../shared/requestIntent";
+import { requestsReadOnlyAnswer } from "../canvas/documentReadOnly";
+import { createDocxEditRunner } from "../canvas/docxEditRun";
+import { instructionText, reviewRequestedBy, requestsCopyOnly } from "../shared/requestIntent";
 export { reviewRequestedBy } from "../shared/requestIntent";
-import { readSuggestionChanges } from "./suggestionDiff";
+import { readOfficeTextParts, readSuggestionChanges } from "./suggestionDiff";
 import type { BridgeEvent, DesktopAPI, DesktopTask, DocumentRecord, GenerateInput, TaskHistoryEntry } from "../shared/types";
 import { OUTLINE_GATE_KIND, type AgentEvent, type AgentImageRun, type AgentImageSeries, type AgentMessage, type AgentOutlinePage, type AgentPort, type AgentRecovery, type AgentStatus, type AgentStep, type AgentTask, type AgentTaskSummary, type ImageGenerationInput, type SendInput } from "../shared/uiPort";
 import { imageDimensions, imageStyleText, isReferenceImagePath, ratioBucket } from "../shared/imageGeneration";
@@ -379,6 +381,7 @@ function outcomeOf(
 }
 
 interface ReviewArtifactState {
+  sourceSHA256?: string;
   autoApply?: boolean;
   applying?: boolean;
   applyError?: string;
@@ -641,6 +644,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
    * `orphanKey` and joins whichever conversation the next message starts.
    */
   const localTurns = new Map<string, LocalTurn[]>();
+  const readOnlyRuns = new Map<string, AbortController>();
   const orphanKey = (folderId: string) => `orphan:${folderId}`;
 
   /** Every run of a conversation, oldest first. */
@@ -1061,6 +1065,8 @@ export function createAgentService(api: DesktopAPI): AgentPort {
   };
 
   const cancelTask = async (taskId: string) => {
+    const reading = readOnlyRuns.get(taskId);
+    if (reading) { reading.abort(); return; }
     if (formatGates.has(taskId)) {
       formatGates.delete(taskId);
       const task = state.tasks[taskId];
@@ -1100,7 +1106,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       void (async () => {
         try {
           if (!api.applyArtifactSuggestion) throw new Error(translate("shell.service.suggestionUnavailable"));
-          await api.applyArtifactSuggestion({ suggestionId: task.id, sourceFile: review.sourceFile, artifactFile: review.artifactFile! });
+          await api.applyArtifactSuggestion({ suggestionId: task.id, sourceFile: review.sourceFile, artifactFile: review.artifactFile!, expectedSourceSHA256: review.sourceSHA256 });
           review.applied = true;
           review.undoable = true;
         } catch (reason) {
@@ -1297,6 +1303,33 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     const reviewRequested = input.permission !== "full" || reviewRequestedBy(text);
 
     const modifyDocument = async (record: DocumentRecord, explicit: boolean) => {
+      if (requestsReadOnlyAnswer(text)) {
+        const id = `read-only:${crypto.randomUUID()}`;
+        const controller = new AbortController();
+        readOnlyRuns.set(id, controller);
+        started(id, text, { fileName: record.fileName, explicit });
+        state.tasks[id].status = "running";
+        publishTask(state.tasks[id]);
+        try {
+          const parts = await readOfficeTextParts(api, record.filePath);
+          const run = createDocxEditRunner({ api, filePath: record.filePath, hasSelection: () => false,
+            editor: {
+              capture: async () => ({ text: [...parts.values()].join("\n"), scope: "document", id }),
+              apply: async () => { throw new Error("Read-only requests cannot modify files"); },
+              save: async () => { throw new Error("Read-only requests cannot save files"); },
+              readSelection: async () => { throw new Error("No editor selection in a file read"); },
+            },
+          });
+          const result = await run({ instruction: text, preferSelection: false, signal: controller.signal });
+          state.tasks[id].status = "completed";
+          await service.recordExchange?.({ folderId: input.folderId, conversationId: conversationId ?? id,
+            messages: [{ id: `${id}:answer`, role: "agent", text: result.summary, createdAt: Date.now() }] });
+        } catch (reason) {
+          state.tasks[id].status = controller.signal.aborted ? "cancelled" : "failed";
+          state.tasks[id].error = controller.signal.aborted ? undefined : errorMessage(reason);
+        } finally { readOnlyRuns.delete(id); publishTask(state.tasks[id]); }
+        return;
+      }
       const dropped = unsupportedParts(input, "modify");
       if (dropped.length > 0) emit({ kind: "notice", message: droppedNotice(dropped) });
       const batchItem = batchInputs.get(input);
@@ -1314,7 +1347,8 @@ export function createAgentService(api: DesktopAPI): AgentPort {
         reviewArtifacts.set(result.taskId, {
           sourceFileId: record.id,
           sourceFile: record.filePath,
-          autoApply: !reviewRequested && !batchItem,
+          sourceSHA256: result.sourceSHA256,
+          autoApply: !reviewRequested && !batchItem && !requestsCopyOnly(text),
           applied: false,
           undoable: false,
         });
@@ -1943,7 +1977,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       if (!review?.artifactFile || review.rejected || review.applying || !api.applyArtifactSuggestion) {
         throw new NotImplementedError("agent.applySuggestion", translate("shell.service.suggestionUnavailable"));
       }
-      await api.applyArtifactSuggestion({ suggestionId: id, sourceFile: review.sourceFile, artifactFile: review.artifactFile });
+      await api.applyArtifactSuggestion({ suggestionId: id, sourceFile: review.sourceFile, artifactFile: review.artifactFile, expectedSourceSHA256: review.sourceSHA256 });
       review.applied = true;
       review.undoable = true;
       review.applyError = undefined;
@@ -1959,7 +1993,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       if (!review?.undoable || !review.artifactFile || !api.undoArtifactSuggestion) {
         throw new NotImplementedError("agent.undoSuggestion", translate("shell.service.suggestionNotUndoable"));
       }
-      await api.undoArtifactSuggestion({ suggestionId: id, sourceFile: review.sourceFile, artifactFile: review.artifactFile });
+      await api.undoArtifactSuggestion({ suggestionId: id, sourceFile: review.sourceFile, artifactFile: review.artifactFile, expectedSourceSHA256: review.sourceSHA256 });
       review.applied = false;
       review.undoable = false;
       persistReviews();

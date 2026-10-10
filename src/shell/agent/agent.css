@@ -257,3 +257,10 @@
  * line would turn a three-line plan into a form, and the thing being reviewed is
  * the plan, not the form.
  */
+
+/* A long external filename must wrap inside the review card's available width. */
+.dx-agent-target {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}

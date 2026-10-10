@@ -1,0 +1,1401 @@
+{
+  "date": "2026-10-10",
+  "scope": "修复现有功能；TXT、Markdown、RTF、HTML、PDF 新增能力另做",
+  "reports": [
+    {
+      "name": "OfficeDex-1.0.15-功能验收与历史问题复测-20261009.html",
+      "sha256": "24c1ee4d13750b8ac42fa68706e806fc8e8cfbcc6c58efd7e32571326675cf3b"
+    },
+    {
+      "name": "OfficeDex-1.0.18-功能验收与历史问题复测-20261009.html",
+      "sha256": "cfcbced151b90a784115e578188447343d6502a6a37d2f17b28215d2cf7b63b1"
+    },
+    {
+      "name": "OfficeDex-1.0.19-功能验收与历史问题复测-20261009.html",
+      "sha256": "dfad4268296f7505f2afd35e2da92b8e3f8cafca9461f12add89d38ffd1a4ed8"
+    },
+    {
+      "name": "OfficeDex-1.0.20-功能验收与历史问题复测-20261010.html",
+      "sha256": "ebbc6743e32fef7a0a4caeb9f6a3a7dbdcad50c7202e4aef5948deb65db8457b"
+    },
+    {
+      "name": "OfficeDex-1.0.21-问题走查报告-20261010.html",
+      "sha256": "01bd3e18e9002161068624fb9033d5d5e1aeea53f67ba6e0c05262c02831b3ff"
+    },
+    {
+      "name": "OfficeDex-1.0.22-问题走查报告-20261010.html",
+      "sha256": "cc2906413c49d34d5a56e03406a077d8938b7ab72faba742b504b1f0d9fb1a0e"
+    },
+    {
+      "name": "OfficeDex-1.0.23-问题走查报告-20261010.html",
+      "sha256": "5f55d8b9beaa62929bdc588acfe79dcb226ebcef74bcaedb9f7a750003ff7f8e"
+    }
+  ],
+  "groups": {
+    "routing": {
+      "title": "目标、格式与审批路由",
+      "ids": [
+        "N15-01",
+        "N15-02",
+        "N18-03",
+        "N20-01",
+        "N21-01",
+        "N23-02"
+      ],
+      "cause": "旧代码按整段自然语言匹配，将引用正文当指令；活动编辑器、显式附件、历史文件及格式选择分支各自判断。不同入口通过不代表该类缺陷已关闭。",
+      "fix": "共享正文屏蔽与审批判断；固定显式目标；格式确认阻止派发；只读问答和仅输出副本不自动写原件。",
+      "tests": [
+        "src/renderer/acceptance1015.test.ts",
+        "src/renderer/homeIntake.test.ts",
+        "src/shared/requestIntent.test.ts",
+        "src/shell/agent/inPlaceEditorFor.test.ts",
+        "src/services/agent.test.ts"
+      ]
+    },
+    "delivery": {
+      "title": "DOCX 正文、Review 与实际落盘",
+      "ids": [
+        "AG01",
+        "N18-02",
+        "N19-01",
+        "N19-02",
+        "N23-01"
+      ],
+      "cause": "生成副本与原件写回是两步；先前只给 Review／批量分支登记提案，Full 单附件直接信任 worker 完成。副本路径复用、段落索引与预览不一致，又让后续任务覆盖旧提案或改错段落。",
+      "fix": "完成状态等待写回；结果路径可打开；源文件基线、只读保护、Undo 冲突校验；每次修改独立副本；精确替换保留其他 XML；部分修改失败拒绝完成。",
+      "tests": [
+        "src/services/agent.test.ts",
+        "src/services/suggestionDiff.test.ts",
+        "src/shell/chat/AgentRun.test.tsx",
+        "src/renderer/bridge/wails.agent.test.ts",
+        "app_document_files_test.go",
+        "../officecli-internal/pkg/ooxmledit/docx_modify_regression_test.go",
+        "../officecli-internal/internal/runtime/modify/docx_exact_test.go",
+        "../officecli-internal/internal/cli/modify_runner_test.go"
+      ]
+    },
+    "scope": {
+      "title": "编辑范围、审批、语言与只读答案",
+      "ids": [
+        "AG02",
+        "N15-06",
+        "N19-03",
+        "N19-04"
+      ],
+      "cause": "编辑器与后台任务使用不同契约，审批、选择范围和只读答案容易被统一的完成卡掩盖。",
+      "fix": "沿用已修复的编辑器确认／保存契约并复核；后台只读请求只读取真实文本并返回答案，拒绝模型夹带写操作；权限与文档正文分离。",
+      "tests": [
+        "src/canvas/docxEditRun.test.ts",
+        "src/canvas/documentReadOnly.test.ts",
+        "src/shell/agent/documentEditRun.test.ts",
+        "src/services/agent.test.ts"
+      ]
+    },
+    "save": {
+      "title": "冲突、恢复副本、Recent 状态与快捷键",
+      "ids": [
+        "N15-04",
+        "N18-05",
+        "N18-06",
+        "N23-03"
+      ],
+      "cause": "恢复副本、源文件和编辑器脏状态并非同一份数据；父窗口键盘事件无法收到 iframe 内的按键。",
+      "fix": "保留既有冲突草稿和 Save copy 修复；快捷键绑定各层 iframe；本轮加固真实 Apply／Undo 文件检查，拒绝覆盖后续外部编辑。",
+      "tests": [
+        "app_document_recovery_test.go",
+        "app_docx_editor_test.go",
+        "app_source_digest_test.go",
+        "src/renderer/word/WriterEditorFrame.test.tsx",
+        "src/renderer/presentation/presentationSaveFlush.test.tsx",
+        "src/services/files.failure.test.ts",
+        "src/shell/chrome/useKeyboardShortcuts.test.tsx",
+        "scripts/verify-editor-shortcuts.browser.test.mjs"
+      ]
+    },
+    "identity": {
+      "title": "后台任务与当前文档身份",
+      "ids": [
+        "N18-01",
+        "N20-02"
+      ],
+      "cause": "异步响应、旧编辑器实例和当前选中文档身份可以跨越同一次状态切换，单文件串行走查无法覆盖该竞态。",
+      "fix": "复核已有文档身份与异步响应隔离，纳入累计门禁。",
+      "tests": [
+        "src/renderer/presentation/presentationDocumentIdentity.test.tsx",
+        "src/renderer/presentation/presentationEmbedHandshake.test.tsx",
+        "src/canvas/docxCanvasRouting.test.tsx"
+      ]
+    },
+    "queue": {
+      "title": "排队、Retry、Resume 与任务标题",
+      "ids": [
+        "AG03",
+        "N15-03",
+        "N20-03",
+        "N21-02"
+      ],
+      "cause": "队列、对话、单次任务的身份曾混用；把批处理内部提示或后续成功任务当成原任务标题与结果。",
+      "fix": "复核固定原始请求、失败任务保留和断点重试；本轮明确“部分操作成功”不等于任务成功。AG03 历史未复现，继续保留回归而非重新宣称修复。",
+      "tests": [
+        "src/services/agent.test.ts",
+        "src/services/test/agentRecovery.test.ts",
+        "src/shell/chat/runState.test.ts",
+        "../officecli-internal/internal/runtime/pptx_expansion_recovery_test.go",
+        "../officecli-internal/internal/runtime/pptx_resume_test.go"
+      ]
+    },
+    "ppt": {
+      "title": "PPT 页数、备注、完整正文与精确文本",
+      "ids": [
+        "N18-04",
+        "N21-04",
+        "N22-01"
+      ],
+      "cause": "页数或 ready 标记无法证明正文正确；恢复旧 ready 页面仍可能沿用缺内容页面，转换时还可能改标点、插入文件名或重复正文。",
+      "fix": "沿用逐页内容和导出包验收，加入报告原始错误 PPT 固定负样本，避免依赖临时文件／环境变量才运行。使用真实转换器验证备注、24 页精确正文、Stop／Resume。",
+      "tests": [
+        "../officecli-internal/internal/runtime/pptx_content_requirements_test.go",
+        "../officecli-internal/internal/runtime/pptx_sentence_contract_test.go",
+        "../officecli-internal/internal/runtime/pptx_exact_text_test.go"
+      ]
+    },
+    "ui": {
+      "title": "Local、布局与错误反馈",
+      "ids": [
+        "N15-05",
+        "N15-07",
+        "N20-04",
+        "N21-03"
+      ],
+      "cause": "布局基线和默认窄 Chat 宽度没有进入功能验收；原始异常被直接投射给用户。",
+      "fix": "复核 Local 搜索／目录／Recent／普通打开及历史错误归一化；补齐本次发现的 Review 目标文件名样式，长文件名在卡片内换行。",
+      "tests": [
+        "src/shell/pages/pages.test.tsx",
+        "src/shell/chat/AgentRun.test.tsx",
+        "src/services/agent.test.ts",
+        "scripts/verify-shell-styles.test.mjs"
+      ]
+    }
+  },
+  "issues": [
+    {
+      "id": "AG01",
+      "title": "外部DOCX结果入口恢复，但正文错误",
+      "reports": [
+        "1.0.15",
+        "1.0.18"
+      ],
+      "group": "delivery",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "AG02",
+      "title": "打开PPT后的精确文本框修改正确，范围提示仍误报",
+      "reports": [
+        "1.0.15",
+        "1.0.18"
+      ],
+      "group": "scope",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "AG03",
+      "title": "Stop后队列丢失本轮未复现",
+      "reports": [
+        "1.0.15",
+        "1.0.18"
+      ],
+      "group": "queue",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N15-01",
+      "title": "Auto把明确DOCX新建请求变成PNG",
+      "reports": [
+        "1.0.15",
+        "1.0.18"
+      ],
+      "group": "routing",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N15-02",
+      "title": "已有历史产物时，新建PPT被当成编辑上一文件",
+      "reports": [
+        "1.0.15",
+        "1.0.18"
+      ],
+      "group": "routing",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N15-03",
+      "title": "自然队列首项渲染失败，次项2页变12页",
+      "reports": [
+        "1.0.15",
+        "1.0.18"
+      ],
+      "group": "queue",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N15-04",
+      "title": "恢复副本后Retry save回到原文档旧内容",
+      "reports": [
+        "1.0.15",
+        "1.0.18"
+      ],
+      "group": "save",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N15-05",
+      "title": "Local结构偏离现行设计基线",
+      "reports": [
+        "1.0.15",
+        "1.0.18"
+      ],
+      "group": "ui",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N15-06",
+      "title": "审批步骤重复、文案先于真正应用",
+      "reports": [
+        "1.0.15",
+        "1.0.18"
+      ],
+      "group": "scope",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N15-07",
+      "title": "Projects标题与图标列未对齐",
+      "reports": [
+        "1.0.15",
+        "1.0.18"
+      ],
+      "group": "ui",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N18-01",
+      "title": "后台PPT内容进入Local DOCX编辑区",
+      "reports": [
+        "1.0.18",
+        "1.0.19"
+      ],
+      "group": "identity",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N18-02",
+      "title": "Review无内容差异，Reject未生效",
+      "reports": [
+        "1.0.18"
+      ],
+      "group": "delivery",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N18-03",
+      "title": "明确要求等待格式选择仍生成文件",
+      "reports": [
+        "1.0.18",
+        "1.0.19"
+      ],
+      "group": "routing",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N18-04",
+      "title": "长PPT页数与备注约束不满足",
+      "reports": [
+        "1.0.18",
+        "1.0.19"
+      ],
+      "group": "ppt",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N18-05",
+      "title": "外部冲突后Save copy失败",
+      "reports": [
+        "1.0.18",
+        "1.0.19"
+      ],
+      "group": "save",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N18-06",
+      "title": "失败文件在重启后的Recent显示Saved",
+      "reports": [
+        "1.0.18",
+        "1.0.19"
+      ],
+      "group": "save",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N19-01",
+      "title": "Review 无法显示具体内容差异",
+      "reports": [
+        "1.0.19"
+      ],
+      "group": "delivery",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N19-02",
+      "title": "批量任务将提案副本标为 Complete，源文件未应用",
+      "reports": [
+        "1.0.19"
+      ],
+      "group": "delivery",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N19-03",
+      "title": "英文上下文的 Needs input 返回法语",
+      "reports": [
+        "1.0.19"
+      ],
+      "group": "scope",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N19-04",
+      "title": "Local Dex 只读问答没有返回答案",
+      "reports": [
+        "1.0.19"
+      ],
+      "group": "scope",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N20-01",
+      "title": "明确要求先询问格式并等待，仍直接生成9页PPT",
+      "reports": [
+        "1.0.20"
+      ],
+      "group": "routing",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N20-02",
+      "title": "后台PPT修改完成与打开另一PPT重叠时，标签与编辑内容错配",
+      "reports": [
+        "1.0.20"
+      ],
+      "group": "identity",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N20-03",
+      "title": "批量任务标题带入另一目标与内部执行指令",
+      "reports": [
+        "1.0.20"
+      ],
+      "group": "queue",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N20-04",
+      "title": "Agent错误反馈直接显示底层异常和本机路径",
+      "reports": [
+        "1.0.20"
+      ],
+      "group": "ui",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N21-01",
+      "title": "活动文档覆盖明确附件范围，未处理却显示完成",
+      "reports": [
+        "1.0.21"
+      ],
+      "group": "routing",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N21-02",
+      "title": "后续队列完成后，先前失败任务缺少可找回的重试入口",
+      "reports": [
+        "1.0.21"
+      ],
+      "group": "queue",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N21-03",
+      "title": "批量失败卡片极窄换行，默认 Chat 宽度下难以阅读",
+      "reports": [
+        "1.0.21"
+      ],
+      "group": "ui",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N21-04",
+      "title": "PPT 标记完成，但逐页内容不完整且未遵守简短内容约束",
+      "reports": [
+        "1.0.21"
+      ],
+      "group": "ppt",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N22-01",
+      "title": "PPT 缺标点、重复正文及额外文件名",
+      "reports": [
+        "1.0.22"
+      ],
+      "group": "ppt",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N23-01",
+      "title": "单附件未写回、副本入口缺失及 Review 失败",
+      "reports": [
+        "1.0.23"
+      ],
+      "group": "delivery",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N23-02",
+      "title": "引用正文被误当作新建指令",
+      "reports": [
+        "1.0.23"
+      ],
+      "group": "routing",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    },
+    {
+      "id": "N23-03",
+      "title": "iframe 标题／备注焦点下 Cmd+S 未保存",
+      "reports": [
+        "1.0.23"
+      ],
+      "group": "save",
+      "status": "源码修复或已有修复已回归；原生签名客户端未关闭"
+    }
+  ],
+  "matrix_nonpassed_observations": [
+    {
+      "report": "1.0.15",
+      "id": "T007",
+      "title": "New、Local 左对齐普通配色",
+      "status": "不适用",
+      "boundary": "本轮未读取原生样式值。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T010",
+      "title": "礼盒图形",
+      "status": "不适用",
+      "boundary": "保留独立设计交互专项报告，不混入功能通过数。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T011",
+      "title": "Logo / 文件行完整键盘路径",
+      "status": "局部已验证",
+      "boundary": ""
+    },
+    {
+      "report": "1.0.15",
+      "id": "T012",
+      "title": "页面结构",
+      "status": "缺失",
+      "boundary": "以现行1.0.11交互基线判定缺失；新布局尚无用户批准替代记录。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T013",
+      "title": "实时搜索与无结果",
+      "status": "缺失",
+      "boundary": "以现行1.0.11交互基线判定缺失；新布局尚无用户批准替代记录。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T016",
+      "title": "文件夹优先与返回",
+      "status": "缺失",
+      "boundary": "以现行1.0.11交互基线判定缺失；新布局尚无用户批准替代记录。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T017",
+      "title": "空文件夹",
+      "status": "缺失",
+      "boundary": "以现行1.0.11交互基线判定缺失；新布局尚无用户批准替代记录。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T018",
+      "title": "Local 无批量勾选",
+      "status": "差异",
+      "boundary": ""
+    },
+    {
+      "report": "1.0.15",
+      "id": "T019",
+      "title": "未知大小显示 —",
+      "status": "缺失",
+      "boundary": ""
+    },
+    {
+      "report": "1.0.15",
+      "id": "T022",
+      "title": "超大文件、批量部分失败",
+      "status": "局部已验证",
+      "boundary": "未成功形成可核验的多文件输入，故批量部分失败不计通过；填充体积不等同复杂文档负载。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T035",
+      "title": "Add 成功后的可见一致性",
+      "status": "局部已验证",
+      "boundary": "未单独保留A2在该次Add后、Remove前的即时截图。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T040",
+      "title": "白色内容顶部",
+      "status": "不适用",
+      "boundary": "保留独立设计交互专项报告，不混入功能通过数。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T047",
+      "title": "身份头像与任务分离",
+      "status": "局部已验证",
+      "boundary": "未覆盖所有任务状态与头像组合。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T056",
+      "title": "Local Dex 对话隔离",
+      "status": "局部已验证",
+      "boundary": "未分别在两个Local文件发送真实消息，不能证明消息持久归属的全部路径。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T058",
+      "title": "选区引用原文",
+      "status": "差异",
+      "boundary": ""
+    },
+    {
+      "report": "1.0.15",
+      "id": "T061",
+      "title": "Dex 拖动、独立位置记忆与 Home 复位",
+      "status": "局部已验证",
+      "boundary": "Chat气泡拖动、两套位置独立持久本轮未完整覆盖。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T062",
+      "title": "DOCX 编辑脏状态",
+      "status": "局部已验证",
+      "boundary": "XLSX截图曾同时出现Unsaved与Saved toast，随后转Saved，不据此外推DOCX脏状态。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T071",
+      "title": "Chat DOCX 工具栏模式",
+      "status": "局部已验证",
+      "boundary": "单行形态已实测；两行合计72的原生精确高度未读取，不计整条通过。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T073",
+      "title": "TXT 打开与创建",
+      "status": "缺失",
+      "boundary": "边界表达改善，不计格式能力通过。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T074",
+      "title": "MD 打开与创建",
+      "status": "缺失",
+      "boundary": "边界表达改善，不计格式能力通过。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T075",
+      "title": "RTF 打开与创建",
+      "status": "缺失",
+      "boundary": "边界表达改善，不计格式能力通过。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T076",
+      "title": "HTML 打开与创建",
+      "status": "缺失",
+      "boundary": "边界表达改善，不计格式能力通过。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T077",
+      "title": "PDF 打开与创建",
+      "status": "缺失",
+      "boundary": "边界表达改善，不计格式能力通过。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T078",
+      "title": "旧 Office 格式与图像 AI",
+      "status": "局部已验证",
+      "boundary": "没有有效旧XLS/PPT样本，未用改后缀伪造格式成功。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T079",
+      "title": "保存失败、冲突、Undo 与恢复",
+      "status": "差异",
+      "boundary": "异常恢复本轮已执行且有效；权限恢复→已恢复副本→Retry save的原文件回退问题仍需修复。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T082",
+      "title": "引用 DOCX 局部修改与先审阅",
+      "status": "差异",
+      "boundary": "更早REVIEW-03同时带PPT选区，不计唯一DOCX条件。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T084",
+      "title": "显式三页 PPTX 生成",
+      "status": "差异",
+      "boundary": "文件内容及同目录另一同字节PPT在agent-ppt-exact.json。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T085",
+      "title": "任务记录与阶段身份",
+      "status": "差异",
+      "boundary": "Task ID变化不能独立证明后台重复执行；只判身份连续性不满足原预期。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T086",
+      "title": "忙碌期间第二请求排队",
+      "status": "差异",
+      "boundary": "任务连续执行与输出语义正确分开判断。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T089",
+      "title": "当前任务结果可打开与实际落盘",
+      "status": "差异",
+      "boundary": "原AG01结果入口缺失本轮未复现；内容正确性失败，不能判交付通过。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T091",
+      "title": "授权 Allow / Use copies 真实门槛",
+      "status": "局部已验证",
+      "boundary": "无法据现有可访问目录证明授权拒绝或Use copies路径；不擅自扩大系统权限。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T093",
+      "title": "Preparing / Checking 独立阶段",
+      "status": "局部已验证",
+      "boundary": "独立顶层Preparing没有充分捕获；页面细分进度不替代全部生命周期测试。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T094",
+      "title": "真实 Review / Apply / Reject / Undo",
+      "status": "局部已验证",
+      "boundary": "未出现独立Review/Apply/Reject状态；Needs input承载审批。仅引用未打开目标仍错误生成PPT。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T095",
+      "title": "Partly complete / Retry remaining",
+      "status": "差异",
+      "boundary": ""
+    },
+    {
+      "report": "1.0.15",
+      "id": "T096",
+      "title": "Connection lost / Reconnect / Retry",
+      "status": "阻塞",
+      "boundary": "Connection lost/Reconnect和断网期间本地编辑待专用故障注入环境；不是额度阻塞。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T097",
+      "title": "真实 Resume 幂等性",
+      "status": "差异",
+      "boundary": "同目录两份同SHA的PPT为输出别名，不能据此断言模型执行重复；仅判身份连续性不满足。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T098",
+      "title": "输入彩光",
+      "status": "不适用",
+      "boundary": "保留独立设计交互专项报告，不混入功能通过数。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T099",
+      "title": "处理范围彩框、框内草稿与工作光标",
+      "status": "不适用",
+      "boundary": "保留独立设计交互专项报告，不混入功能通过数。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T100",
+      "title": "图标资源逐项一致",
+      "status": "不适用",
+      "boundary": "保留独立设计交互专项报告，不混入功能通过数。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T101",
+      "title": "读屏、Reduced motion、输入法组合",
+      "status": "不适用",
+      "boundary": "保留独立设计交互专项报告，不混入功能通过数。"
+    },
+    {
+      "report": "1.0.15",
+      "id": "T102",
+      "title": "多视口与精确像素对齐",
+      "status": "不适用",
+      "boundary": "保留独立设计交互专项报告，不混入功能通过数。"
+    },
+    {
+      "report": "1.0.18",
+      "id": "T007",
+      "title": "New、Local 左对齐普通配色",
+      "status": "不适用",
+      "boundary": "原生CSS/DPR、源图标逐项、读屏/Reduced motion/输入法组合未全量验收。"
+    },
+    {
+      "report": "1.0.18",
+      "id": "T010",
+      "title": "礼盒图形",
+      "status": "不适用",
+      "boundary": "原生CSS/DPR、源图标逐项、读屏/Reduced motion/输入法组合未全量验收。"
+    },
+    {
+      "report": "1.0.18",
+      "id": "T011",
+      "title": "Logo / 文件行完整键盘路径",
+      "status": "局部已验证",
+      "boundary": "不将其他控件键盘通过外推为完整键盘路径通过。"
+    },
+    {
+      "report": "1.0.18",
+      "id": "T020",
+      "title": "打开 Office 三种文件",
+      "status": "差异",
+      "boundary": ""
+    },
+    {
+      "report": "1.0.18",
+      "id": "T022",
+      "title": "超大文件、批量部分失败",
+      "status": "局部已验证",
+      "boundary": "未验证有效64MiB文档渲染，也未获得真正多文件导入回执，不能判批量部分失败通过。"
+    },
+    {
+      "report": "1.0.18",
+      "id": "T023",
+      "title": "损坏 DOCX 失败反馈",
+      "status": "差异",
+      "boundary": ""
+    },
+    {
+      "report": "1.0.18",
+      "id": "T040",
+      "title": "白色内容顶部",
+      "status": "不适用",
+      "boundary": "原生CSS/DPR、源图标逐项、读屏/Reduced motion/输入法组合未全量验收。"
+    },
+    {
+      "report": "1.0.18",
+      "id": "T048",
+      "title": "系统默认文件关联",
+      "status": "局部已验证",
+      "boundary": "未提交更改 macOS 默认关联，不声称系统关联已生效。"
+    },
+    {
+      "report": "1.0.18",
+      "id": "T056",
+      "title": "Local Dex 对话隔离",
+      "status": "局部已验证",
+      "boundary": "未向两个 Local Dex 分别发送消息，历史消息隔离未形成完整复测证据。"
+    },
+    {
+      "report": "1.0.18",
+      "id": "T060",
+      "title": "Chat Dex 选区表情",
+      "status": "局部已验证",
+      "boundary": "未对表情动画逐帧取样。"
+    },
+    {
+      "report": "1.0.18",
+      "id": "T061",
+      "title": "Dex 拖动、独立位置记忆与 Home 复位",
+      "status": "局部已验证",
+      "boundary": "边缘姿态和所有箭头方向未全量覆盖。"
+    },
+    {
+      "report": "1.0.18",
+      "id": "T062",
+      "title": "DOCX 编辑脏状态",
+      "status": "局部已验证",
+      "boundary": ""
+    },
+    {
+      "report": "1.0.18",
+      "id": "T070",
+      "title": "Save as",
+      "status": "局部已验证",
+      "boundary": "未完成新的另存路径提交。"
+    },
+    {
+      "report": "1.0.18",
+      "id": "T073",
+      "title": "TXT 打开与创建",
+      "status": "不适用",
+      "boundary": "不列缺陷、不列未测试；范围调整前产生的a018/a019仅保留过程证据，不计统计。"
+    },
+    {
+      "report": "1.0.18",
+      "id": "T074",
+      "title": "MD 打开与创建",
+      "status": "不适用",
+      "boundary": "不列缺陷、不列未测试；范围调整前产生的a018/a019仅保留过程证据，不计统计。"
+    },
+    {
+      "report": "1.0.18",
+      "id": "T075",
+      "title": "RTF 打开与创建",
+      "status": "不适用",
+      "boundary": "不列缺陷、不列未测试；范围调整前产生的a018/a019仅保留过程证据，不计统计。"
+    },
+    {
+      "report": "1.0.18",
+      "id": "T076",
+      "title": "HTML 打开与创建",
+      "status": "不适用",
+      "boundary": "不列缺陷、不列未测试；范围调整前产生的a018/a019仅保留过程证据，不计统计。"
+    },
+    {
+      "report": "1.0.18",
+      "id": "T077",
+      "title": "PDF 打开与创建",
+      "status": "不适用",
+      "boundary": "不列缺陷、不列未测试；范围调整前产生的a018/a019仅保留过程证据，不计统计。"
+    },
+    {
+      "report": "1.0.18",
+      "id": "T078",
+      "title": "旧 Office 格式与图像 AI",
+      "status": "局部已验证",
+      "boundary": "旧 DOC/XLS/PPT 格式未提供有效样本，本轮不外推兼容性。"
+    },
+    {
+      "report": "1.0.18",
+      "id": "T079",
+      "title": "保存失败、冲突、Undo 与恢复",
+      "status": "差异",
+      "boundary": ""
+    },
+    {
+      "report": "1.0.18",
+      "id": "T081",
+      "title": "按请求生成 TXT",
+      "status": "不适用",
+      "boundary": "不列缺陷、不列未测试；范围调整前产生的a018/a019仅保留过程证据，不计统计。"
+    },
+    {
+      "report": "1.0.18",
+      "id": "T082",
+      "title": "引用 DOCX 局部修改与先审阅",
+      "status": "差异",
+      "boundary": ""
+    },
+    {
+      "report": "1.0.18",
+      "id": "T086",
+      "title": "忙碌期间第二请求排队",
+      "status": "局部已验证",
+      "boundary": "第一组自然队列第二次发送时可能首项已结束，未捕获Queued，故不判无人干预自动推进全路径通过。"
+    },
+    {
+      "report": "1.0.18",
+      "id": "T091",
+      "title": "授权 Allow / Use copies 真实门槛",
+      "status": "局部已验证",
+      "boundary": "未触发独立Allow/Use copies门槛；未重置用户既有授权，不能据此声称该门槛已通过。"
+    },
+    {
+      "report": "1.0.18",
+      "id": "T092",
+      "title": "Needs input 与 Continue",
+      "status": "差异",
+      "boundary": ""
+    },
+    {
+      "report": "1.0.18",
+      "id": "T094",
+      "title": "真实 Review / Apply / Reject / Undo",
+      "status": "差异",
+      "boundary": ""
+    },
+    {
+      "report": "1.0.18",
+      "id": "T096",
+      "title": "Connection lost / Reconnect / Retry",
+      "status": "阻塞",
+      "boundary": "需要可控代理/故障注入环境，未执行不计通过。"
+    },
+    {
+      "report": "1.0.18",
+      "id": "T097",
+      "title": "真实 Resume 幂等性",
+      "status": "局部已验证",
+      "boundary": "未将同一任务ID外推为不会重复内容；完整产物见queue-products-final.json。"
+    },
+    {
+      "report": "1.0.18",
+      "id": "T098",
+      "title": "输入彩光",
+      "status": "不适用",
+      "boundary": "原生CSS/DPR、源图标逐项、读屏/Reduced motion/输入法组合未全量验收。"
+    },
+    {
+      "report": "1.0.18",
+      "id": "T099",
+      "title": "处理范围彩框、框内草稿与工作光标",
+      "status": "不适用",
+      "boundary": "原生CSS/DPR、源图标逐项、读屏/Reduced motion/输入法组合未全量验收。"
+    },
+    {
+      "report": "1.0.18",
+      "id": "T100",
+      "title": "图标资源逐项一致",
+      "status": "不适用",
+      "boundary": "原生CSS/DPR、源图标逐项、读屏/Reduced motion/输入法组合未全量验收。"
+    },
+    {
+      "report": "1.0.18",
+      "id": "T101",
+      "title": "读屏、Reduced motion、输入法组合",
+      "status": "不适用",
+      "boundary": "原生CSS/DPR、源图标逐项、读屏/Reduced motion/输入法组合未全量验收。"
+    },
+    {
+      "report": "1.0.18",
+      "id": "T102",
+      "title": "多视口与精确像素对齐",
+      "status": "不适用",
+      "boundary": "原生CSS/DPR、源图标逐项、读屏/Reduced motion/输入法组合未全量验收。"
+    },
+    {
+      "report": "1.0.19",
+      "id": "T007",
+      "title": "New、Local 左对齐普通配色",
+      "status": "不适用",
+      "boundary": "原生CSS/DPR、源图标逐项、读屏/Reduced motion/输入法组合未全量验收。"
+    },
+    {
+      "report": "1.0.19",
+      "id": "T010",
+      "title": "礼盒图形",
+      "status": "不适用",
+      "boundary": "原生CSS/DPR、源图标逐项、读屏/Reduced motion/输入法组合未全量验收。"
+    },
+    {
+      "report": "1.0.19",
+      "id": "T022",
+      "title": "超大文件、批量部分失败",
+      "status": "局部已验证",
+      "boundary": "这是文件字节体积压力样本，不是复杂长文档性能测试；未形成真正多文件打开，不能判断部分成功处理。"
+    },
+    {
+      "report": "1.0.19",
+      "id": "T040",
+      "title": "白色内容顶部",
+      "status": "不适用",
+      "boundary": "原生CSS/DPR、源图标逐项、读屏/Reduced motion/输入法组合未全量验收。"
+    },
+    {
+      "report": "1.0.19",
+      "id": "T048",
+      "title": "系统默认文件关联",
+      "status": "局部已验证",
+      "boundary": "只读进入并关闭，未改变用户默认文件关联。"
+    },
+    {
+      "report": "1.0.19",
+      "id": "T061",
+      "title": "Dex 拖动、独立位置记忆与 Home 复位",
+      "status": "局部已验证",
+      "boundary": "未覆盖两个Chat、Local/Chat全组合的独立位置记忆和各边缘姿态；只计已执行位置操作。"
+    },
+    {
+      "report": "1.0.19",
+      "id": "T071",
+      "title": "Chat DOCX 工具栏模式",
+      "status": "局部已验证",
+      "boundary": "原生72px总高度没有精确测量。"
+    },
+    {
+      "report": "1.0.19",
+      "id": "T073",
+      "title": "TXT 打开与创建",
+      "status": "不适用",
+      "boundary": "本轮从开始即排除；不列缺陷、不列漏测，也不沿用历史请求作为本轮证据。"
+    },
+    {
+      "report": "1.0.19",
+      "id": "T074",
+      "title": "MD 打开与创建",
+      "status": "不适用",
+      "boundary": "本轮从开始即排除；不列缺陷、不列漏测，也不沿用历史请求作为本轮证据。"
+    },
+    {
+      "report": "1.0.19",
+      "id": "T075",
+      "title": "RTF 打开与创建",
+      "status": "不适用",
+      "boundary": "本轮从开始即排除；不列缺陷、不列漏测，也不沿用历史请求作为本轮证据。"
+    },
+    {
+      "report": "1.0.19",
+      "id": "T076",
+      "title": "HTML 打开与创建",
+      "status": "不适用",
+      "boundary": "本轮从开始即排除；不列缺陷、不列漏测，也不沿用历史请求作为本轮证据。"
+    },
+    {
+      "report": "1.0.19",
+      "id": "T077",
+      "title": "PDF 打开与创建",
+      "status": "不适用",
+      "boundary": "本轮从开始即排除；不列缺陷、不列漏测，也不沿用历史请求作为本轮证据。"
+    },
+    {
+      "report": "1.0.19",
+      "id": "T079",
+      "title": "保存失败、冲突、Undo 与恢复",
+      "status": "差异",
+      "boundary": "强退样本为只读保存失败后的未保存草稿；外部冲突与强退组合未覆盖。磁盘证据见 readonly/conflict/crash/final-file-verification。"
+    },
+    {
+      "report": "1.0.19",
+      "id": "T081",
+      "title": "按请求生成 TXT",
+      "status": "不适用",
+      "boundary": "本轮从开始即排除；不列缺陷、不列漏测，也不沿用历史请求作为本轮证据。"
+    },
+    {
+      "report": "1.0.19",
+      "id": "T082",
+      "title": "引用 DOCX 局部修改与先审阅",
+      "status": "差异",
+      "boundary": "与文件落盘结果分开记录。"
+    },
+    {
+      "report": "1.0.19",
+      "id": "T085",
+      "title": "任务记录与阶段身份",
+      "status": "局部已验证",
+      "boundary": "连续请求的完整历史记录身份仍需补核。"
+    },
+    {
+      "report": "1.0.19",
+      "id": "T088",
+      "title": "失败记录可恢复入口",
+      "status": "局部已验证",
+      "boundary": "错误暴露extract docx/OOXML zip内部细节；成功文件未Apply的问题见T095。"
+    },
+    {
+      "report": "1.0.19",
+      "id": "T091",
+      "title": "授权 Allow / Use copies 真实门槛",
+      "status": "局部已验证",
+      "boundary": "未自然触发Allow/Use copies门槛，不重置用户授权强造状态。"
+    },
+    {
+      "report": "1.0.19",
+      "id": "T094",
+      "title": "真实 Review / Apply / Reject / Undo",
+      "status": "差异",
+      "boundary": ""
+    },
+    {
+      "report": "1.0.19",
+      "id": "T095",
+      "title": "Partly complete / Retry remaining",
+      "status": "差异",
+      "boundary": "产物解析见partial-proposal-verification.json；成功标记与实际应用状态不一致。"
+    },
+    {
+      "report": "1.0.19",
+      "id": "T096",
+      "title": "Connection lost / Reconnect / Retry",
+      "status": "阻塞",
+      "boundary": "Connection lost/Reconnect/Retry 完整链路未执行。"
+    },
+    {
+      "report": "1.0.19",
+      "id": "T097",
+      "title": "真实 Resume 幂等性",
+      "status": "局部已验证",
+      "boundary": "本次在0/24停止，尚未证明已生成部分页后的幂等恢复。备注约200词，实际200至279词。"
+    },
+    {
+      "report": "1.0.19",
+      "id": "T098",
+      "title": "输入彩光",
+      "status": "不适用",
+      "boundary": "原生CSS/DPR、源图标逐项、读屏/Reduced motion/输入法组合未全量验收。"
+    },
+    {
+      "report": "1.0.19",
+      "id": "T099",
+      "title": "处理范围彩框、框内草稿与工作光标",
+      "status": "不适用",
+      "boundary": "原生CSS/DPR、源图标逐项、读屏/Reduced motion/输入法组合未全量验收。"
+    },
+    {
+      "report": "1.0.19",
+      "id": "T100",
+      "title": "图标资源逐项一致",
+      "status": "不适用",
+      "boundary": "原生CSS/DPR、源图标逐项、读屏/Reduced motion/输入法组合未全量验收。"
+    },
+    {
+      "report": "1.0.19",
+      "id": "T101",
+      "title": "读屏、Reduced motion、输入法组合",
+      "status": "不适用",
+      "boundary": "原生CSS/DPR、源图标逐项、读屏/Reduced motion/输入法组合未全量验收。"
+    },
+    {
+      "report": "1.0.19",
+      "id": "T102",
+      "title": "多视口与精确像素对齐",
+      "status": "不适用",
+      "boundary": "原生CSS/DPR、源图标逐项、读屏/Reduced motion/输入法组合未全量验收。"
+    },
+    {
+      "report": "1.0.20",
+      "id": "T007",
+      "title": "New、Local 左对齐普通配色",
+      "status": "不适用",
+      "boundary": "原生CSS/DPR、源图标逐项、读屏/Reduced motion/输入法组合未全量验收。"
+    },
+    {
+      "report": "1.0.20",
+      "id": "T010",
+      "title": "礼盒图形",
+      "status": "不适用",
+      "boundary": "原生CSS/DPR、源图标逐项、读屏/Reduced motion/输入法组合未全量验收。"
+    },
+    {
+      "report": "1.0.20",
+      "id": "T020",
+      "title": "打开 Office 三种文件",
+      "status": "差异",
+      "boundary": "关闭全部PPT标签后恢复；空闲时独立单页PPT正常。未证明文件串写。"
+    },
+    {
+      "report": "1.0.20",
+      "id": "T022",
+      "title": "超大文件、批量部分失败",
+      "status": "局部已验证",
+      "boundary": "批量部分打开失败路径未覆盖；大文件仅字节压力，非复杂排版性能基准。"
+    },
+    {
+      "report": "1.0.20",
+      "id": "T040",
+      "title": "白色内容顶部",
+      "status": "不适用",
+      "boundary": "原生CSS/DPR、源图标逐项、读屏/Reduced motion/输入法组合未全量验收。"
+    },
+    {
+      "report": "1.0.20",
+      "id": "T056",
+      "title": "Local Dex 对话隔离",
+      "status": "局部已验证",
+      "boundary": "面板只展示当前轮，完整历史隔离无法从当前UI核实。"
+    },
+    {
+      "report": "1.0.20",
+      "id": "T071",
+      "title": "Chat DOCX 工具栏模式",
+      "status": "局部已验证",
+      "boundary": "未做精确72px或受保护编辑器样式实现验证。"
+    },
+    {
+      "report": "1.0.20",
+      "id": "T073",
+      "title": "TXT 打开与创建",
+      "status": "不适用",
+      "boundary": "本轮从开始即排除；不列缺陷、不列漏测，也不沿用历史请求作为本轮证据。"
+    },
+    {
+      "report": "1.0.20",
+      "id": "T074",
+      "title": "MD 打开与创建",
+      "status": "不适用",
+      "boundary": "本轮从开始即排除；不列缺陷、不列漏测，也不沿用历史请求作为本轮证据。"
+    },
+    {
+      "report": "1.0.20",
+      "id": "T075",
+      "title": "RTF 打开与创建",
+      "status": "不适用",
+      "boundary": "本轮从开始即排除；不列缺陷、不列漏测，也不沿用历史请求作为本轮证据。"
+    },
+    {
+      "report": "1.0.20",
+      "id": "T076",
+      "title": "HTML 打开与创建",
+      "status": "不适用",
+      "boundary": "本轮从开始即排除；不列缺陷、不列漏测，也不沿用历史请求作为本轮证据。"
+    },
+    {
+      "report": "1.0.20",
+      "id": "T077",
+      "title": "PDF 打开与创建",
+      "status": "不适用",
+      "boundary": "本轮从开始即排除；不列缺陷、不列漏测，也不沿用历史请求作为本轮证据。"
+    },
+    {
+      "report": "1.0.20",
+      "id": "T078",
+      "title": "旧 Office 格式与图像 AI",
+      "status": "局部已验证",
+      "boundary": "未验证旧XLS/PPT；拒绝信息称不是Word文件，未明确解释旧格式边界。"
+    },
+    {
+      "report": "1.0.20",
+      "id": "T081",
+      "title": "按请求生成 TXT",
+      "status": "不适用",
+      "boundary": "本轮从开始即排除；不列缺陷、不列漏测，也不沿用历史请求作为本轮证据。"
+    },
+    {
+      "report": "1.0.20",
+      "id": "T085",
+      "title": "任务记录与阶段身份",
+      "status": "差异",
+      "boundary": "未取得Stop前后全部taskId对照，不能声明身份完全幂等。"
+    },
+    {
+      "report": "1.0.20",
+      "id": "T088",
+      "title": "失败记录可恢复入口",
+      "status": "局部已验证",
+      "boundary": "Agent错误正文仍含原始OOXML/HTTP EOF/本机证据路径，缺少用户化解释。"
+    },
+    {
+      "report": "1.0.20",
+      "id": "T091",
+      "title": "授权 Allow / Use copies 真实门槛",
+      "status": "局部已验证",
+      "boundary": "未自然触发Allow/Use copies授权门槛，不重置用户授权强造状态。"
+    },
+    {
+      "report": "1.0.20",
+      "id": "T092",
+      "title": "Needs input 与 Continue",
+      "status": "差异",
+      "boundary": "本轮未完成同一Needs input卡的Continue分支；失败请求完整保留。"
+    },
+    {
+      "report": "1.0.20",
+      "id": "T093",
+      "title": "Preparing / Checking 独立阶段",
+      "status": "局部已验证",
+      "boundary": "未独立捕获所有Preparing/Checking瞬态分支。"
+    },
+    {
+      "report": "1.0.20",
+      "id": "T096",
+      "title": "Connection lost / Reconnect / Retry",
+      "status": "局部已验证",
+      "boundary": "未改变网络设置；未测试Reconnect独立按钮和受控完全断网。"
+    },
+    {
+      "report": "1.0.20",
+      "id": "T097",
+      "title": "真实 Resume 幂等性",
+      "status": "局部已验证",
+      "boundary": "无Stop前后完整taskId及已完成页内容对照，不能证明部分页面计算不重做。"
+    },
+    {
+      "report": "1.0.20",
+      "id": "T098",
+      "title": "输入彩光",
+      "status": "不适用",
+      "boundary": "原生CSS/DPR、源图标逐项、读屏/Reduced motion/输入法组合未全量验收。"
+    },
+    {
+      "report": "1.0.20",
+      "id": "T099",
+      "title": "处理范围彩框、框内草稿与工作光标",
+      "status": "不适用",
+      "boundary": "原生CSS/DPR、源图标逐项、读屏/Reduced motion/输入法组合未全量验收。"
+    },
+    {
+      "report": "1.0.20",
+      "id": "T100",
+      "title": "图标资源逐项一致",
+      "status": "不适用",
+      "boundary": "原生CSS/DPR、源图标逐项、读屏/Reduced motion/输入法组合未全量验收。"
+    },
+    {
+      "report": "1.0.20",
+      "id": "T101",
+      "title": "读屏、Reduced motion、输入法组合",
+      "status": "不适用",
+      "boundary": "原生CSS/DPR、源图标逐项、读屏/Reduced motion/输入法组合未全量验收。"
+    },
+    {
+      "report": "1.0.20",
+      "id": "T102",
+      "title": "多视口与精确像素对齐",
+      "status": "不适用",
+      "boundary": "原生CSS/DPR、源图标逐项、读屏/Reduced motion/输入法组合未全量验收。"
+    }
+  ],
+  "validation": {
+    "gate": "npm run lint && npm run test:acceptance:regressions",
+    "exit_code": 0,
+    "vitest": {
+      "files": 149,
+      "tests": 1615,
+      "failed": 0
+    },
+    "browser_and_style": {
+      "tests": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    "go": "go test . ./internal/... -count=1 passed (source packages; release source archives excluded)",
+    "officecli": "DOCX/modify, original QA21/22 negative fixtures, 2/12/24-page speaker notes, 24-page exact text, Stop/Resume and expansion recovery passed with real MOP converter",
+    "native_signed_client": "not run; required scripts/devctl missing in checkout",
+    "release": "not published",
+    "scope_excluded": [
+      "TXT",
+      "Markdown",
+      "RTF",
+      "HTML",
+      "PDF"
+    ]
+  }
+}

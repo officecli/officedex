@@ -84,7 +84,7 @@ npm run dist:win           # Windows amd64
 npm run lint               # tsc --noEmit (strict TypeScript)
 npm run test:acceptance:regressions # historical edit/review/routing/save regressions
 npx vitest run             # renderer unit tests
-go test ./... -count=1     # Go tests
+go test . ./internal/... -count=1 # owned Go sources, excluding release archives
 npm run test:e2e           # Playwright (requires `npm run test:e2e:install` first)
 npm run test:all           # everything in one shot
 ```
@@ -94,7 +94,13 @@ CI runs lint + vitest + `go test` on every PR. E2E is currently local-only.
 Fresh macOS builds also run lint and the acceptance regression suite before
 building. Its browser test needs the Playwright Chromium installed by
 `npx playwright install chromium`; it opens isolated pages without a dev server.
-Repackaging an already built app (`--skip-build`) does not rerun source checks.
+The cumulative gate runs all renderer tests, Go source tests, actual browser
+shortcut/style checks, and the sibling officecli DOCX/modify/PPTX conversion and
+recovery tests. It requires the matching officecli checkout and real MOP runtime;
+missing prerequisites fail the gate. Original QA21/22 negative PPTX packages and
+QA23 DOCX before/after packages are checked in as regression fixtures.
+Repackaging an already built app (`--skip-build`) does not rerun source checks;
+it is only valid for the unchanged binary that already passed this gate.
 
 An acceptance issue is closed only for the paths actually verified. Preserve
 the original prompt and source/result bytes, and distinguish “not reproduced”

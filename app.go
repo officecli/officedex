@@ -264,7 +264,7 @@ type App struct {
 	// artifactSuggestionBackups holds one guarded snapshot per applied Agent
 	// suggestion. It is process-local by design: a restart invalidates an
 	// in-memory undo affordance instead of pretending a stale snapshot is safe.
-	artifactSuggestionBackups map[string]string
+	artifactSuggestionBackups map[string]artifactSuggestionBackup
 	demoFlow                  *demoflow.Engine
 
 	mu             sync.Mutex
@@ -380,7 +380,7 @@ func NewApp() (*App, error) {
 		localStore:                localStore,
 		previewReg:                previewReg,
 		sourceDigests:             newSourceDigests(),
-		artifactSuggestionBackups: make(map[string]string),
+		artifactSuggestionBackups: make(map[string]artifactSuggestionBackup),
 		cachedSettings:            cached,
 		proxyPool:                 proxyPool,
 	}
@@ -887,9 +887,10 @@ func (a *App) CreateImageTemplatePublishRequest(input types.CreateImageTemplateP
 
 // GenerateResult is the renderer-facing shape of a task invocation result.
 type GenerateResult struct {
-	TaskID    string `json:"taskId"`
-	SessionID string `json:"sessionId"`
-	Status    string `json:"status"`
+	SourceSHA256 string `json:"sourceSHA256,omitempty"`
+	TaskID       string `json:"taskId"`
+	SessionID    string `json:"sessionId"`
+	Status       string `json:"status"`
 }
 
 // Generate dispatches `office.generate` against the agent bridge after
@@ -977,6 +978,14 @@ func (a *App) Modify(input types.ModifyInput) (GenerateResult, error) {
 	if strings.TrimSpace(input.Prompt) == "" {
 		return GenerateResult{}, errors.New("modify: prompt is required")
 	}
+	if err := requireRegularSuggestionFile(input.SourceFile); err != nil {
+		return GenerateResult{}, fmt.Errorf("modify source: %w", err)
+	}
+	sourceBytes, err := os.ReadFile(input.SourceFile)
+	if err != nil {
+		return GenerateResult{}, fmt.Errorf("read modify source: %w", err)
+	}
+	sourceSHA256 := sha256Hex(sourceBytes)
 	resolved := input
 	if strings.TrimSpace(resolved.OutputDir) == "" {
 		resolved.OutputDir = filepath.Dir(input.SourceFile)
@@ -1006,7 +1015,7 @@ func (a *App) Modify(input types.ModifyInput) (GenerateResult, error) {
 			},
 		})
 	}
-	return GenerateResult{TaskID: result.TaskID, SessionID: result.SessionID, Status: result.Status}, nil
+	return GenerateResult{TaskID: result.TaskID, SessionID: result.SessionID, Status: result.Status, SourceSHA256: sourceSHA256}, nil
 }
 
 func (a *App) ArtifactStageEdit(input types.ArtifactStageEditInput) (GenerateResult, error) {

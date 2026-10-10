@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { instructionText, reviewRequestedBy } from "./requestIntent";
+import { instructionText, reviewRequestedBy, requestsCopyOnly } from "./requestIntent";
 import { inferHomeTaskRoute, requestsNewFile } from "../renderer/homeIntake";
 
 describe("instructions and literal document content", () => {
@@ -21,3 +21,6 @@ describe("instructions and literal document content", () => {
     expect(instructionText("Don't apply yet")).toBe("Don't apply yet");
   });
 });
+
+it.each(["Save a modified copy; keep the original unchanged", "请另存为副本", "Do not overwrite the source", "Save each as a separate modified copy"])("preserves originals for %s", prompt => expect(requestsCopyOnly(prompt)).toBe(true));
+it("does not interpret quoted copy instructions as permission", () => expect(requestsCopyOnly('Replace “save a modified copy” with “done”.')).toBe(false));

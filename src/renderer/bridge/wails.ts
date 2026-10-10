@@ -274,7 +274,7 @@ export function createWailsAPI(): DesktopAPI {
     },
     modify: async (input: ModifyInput) => {
       const result = await WailsApp.Modify(toWails(input));
-      return { taskId: result.taskId, sessionId: result.sessionId, status: result.status };
+      return { taskId: result.taskId, sessionId: result.sessionId, status: result.status, sourceSHA256: result.sourceSHA256 };
     },
     applyArtifactSuggestion: async (input: ArtifactSuggestionFileInput) => {
       const fn = optionalWailsFunction<(arg: never) => Promise<void>>("ApplyArtifactSuggestion");

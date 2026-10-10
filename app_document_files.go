@@ -14,24 +14,35 @@ import (
 // ArtifactSuggestionFileInput is the renderer-facing, path-only contract for
 // the shell's Review/Apply/Undo flow. Bytes never cross the Wails boundary.
 type ArtifactSuggestionFileInput struct {
-	SuggestionID string `json:"suggestionId"`
-	SourceFile   string `json:"sourceFile"`
-	ArtifactFile string `json:"artifactFile"`
+	SuggestionID         string `json:"suggestionId"`
+	SourceFile           string `json:"sourceFile"`
+	ArtifactFile         string `json:"artifactFile"`
+	ExpectedSourceSHA256 string `json:"expectedSourceSHA256,omitempty"`
 }
 
-// ApplyArtifactSuggestion replaces the source with a completed agent artifact
-// and keeps a process-local snapshot for Undo. The source remains untouched
-// until this method is called, which is the meaningful distinction between
-// Review and Full access in the shell.
+type artifactSuggestionBackup struct {
+	Path          string
+	Source        string
+	AppliedSHA256 string
+}
+
+// Apply is a guarded commit of the worker's proposal, not worker completion.
+// Capture the baseline at Modify dispatch, so an external edit during the run
+// cannot be silently overwritten by either Full access or a later Review.
 func (a *App) ApplyArtifactSuggestion(input ArtifactSuggestionFileInput) error {
 	key := strings.TrimSpace(input.SuggestionID)
 	source := filepath.Clean(strings.TrimSpace(input.SourceFile))
 	artifact := filepath.Clean(strings.TrimSpace(input.ArtifactFile))
-	if key == "" || source == "." || artifact == "." {
-		return errors.New("suggestion id, source file, and artifact file are required")
+	if key == "" || source == "." || artifact == "." || input.ExpectedSourceSHA256 == "" {
+		return errors.New("suggestion source baseline is unavailable; run the edit again before applying")
 	}
-	if filepath.Ext(source) == "" || !strings.EqualFold(filepath.Ext(source), filepath.Ext(artifact)) {
-		return errors.New("suggestion source and artifact must have the same file type")
+	if canonicalPath(source) == canonicalPath(artifact) || filepath.Ext(source) == "" || !strings.EqualFold(filepath.Ext(source), filepath.Ext(artifact)) {
+		return errors.New("suggestion source and artifact must be different files of the same type")
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if _, exists := a.artifactSuggestionBackups[key]; exists {
+		return errors.New("suggestion has already been applied")
 	}
 	if err := requireRegularSuggestionFile(source); err != nil {
 		return fmt.Errorf("source file: %w", err)
@@ -39,51 +50,66 @@ func (a *App) ApplyArtifactSuggestion(input ArtifactSuggestionFileInput) error {
 	if err := requireRegularSuggestionFile(artifact); err != nil {
 		return fmt.Errorf("artifact file: %w", err)
 	}
-	backup := filepath.Join(os.TempDir(), "officedex-suggestion-"+sha256Hex([]byte(key))+".bak")
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if _, exists := a.artifactSuggestionBackups[key]; exists {
-		return errors.New("suggestion has already been applied")
+	before, err := os.ReadFile(source)
+	if err != nil {
+		return err
 	}
-	if err := copyFileReplacing(source, backup); err != nil {
-		return fmt.Errorf("snapshot source file: %w", err)
+	if sha256Hex(before) != input.ExpectedSourceSHA256 {
+		return errSourceChangedExternally
 	}
-	if err := copyFileReplacing(artifact, source); err != nil {
-		_ = os.Remove(backup)
+	after, err := os.ReadFile(artifact)
+	if err != nil {
+		return err
+	}
+	backup, err := os.CreateTemp("", "officedex-suggestion-*.bak")
+	if err != nil {
+		return err
+	}
+	backupPath := backup.Name()
+	if _, err = backup.Write(before); err != nil {
+		backup.Close()
+		os.Remove(backupPath)
+		return err
+	}
+	if err = backup.Close(); err != nil {
+		os.Remove(backupPath)
+		return err
+	}
+	if err := replaceSuggestionBytes(source, after, input.ExpectedSourceSHA256); err != nil {
+		os.Remove(backupPath)
 		return fmt.Errorf("apply artifact: %w", err)
 	}
-	a.artifactSuggestionBackups[key] = backup
+	if a.artifactSuggestionBackups == nil {
+		a.artifactSuggestionBackups = make(map[string]artifactSuggestionBackup)
+	}
+	a.artifactSuggestionBackups[key] = artifactSuggestionBackup{Path: backupPath, Source: canonicalPath(source), AppliedSHA256: sha256Hex(after)}
 	return nil
 }
 
-// UndoArtifactSuggestion restores the exact bytes captured by Apply. It is
-// refused after the process has lost the snapshot, rather than guessing from
-// a newer artifact or silently overwriting user edits.
+// Undo can only restore the original target, while it still contains exactly
+// the bytes this suggestion applied. It must never discard a later user edit.
 func (a *App) UndoArtifactSuggestion(input ArtifactSuggestionFileInput) error {
-	key := strings.TrimSpace(input.SuggestionID)
-	source := filepath.Clean(strings.TrimSpace(input.SourceFile))
-	if key == "" || source == "." {
-		return errors.New("suggestion id and source file are required")
-	}
-	if err := requireRegularSuggestionFile(source); err != nil {
-		return fmt.Errorf("source file: %w", err)
-	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	backup, ok := a.artifactSuggestionBackups[key]
+	backup, ok := a.artifactSuggestionBackups[strings.TrimSpace(input.SuggestionID)]
 	if !ok {
 		return errors.New("suggestion is no longer undoable")
 	}
-	if err := requireRegularSuggestionFile(backup); err != nil {
-		return fmt.Errorf("suggestion snapshot: %w", err)
+	if backup.Source != canonicalPath(input.SourceFile) {
+		return errors.New("suggestion target does not match its saved source")
 	}
-	if err := copyFileReplacing(backup, source); err != nil {
+	if err := requireRegularSuggestionFile(backup.Path); err != nil {
+		return err
+	}
+	before, err := os.ReadFile(backup.Path)
+	if err != nil {
+		return err
+	}
+	if err := replaceSuggestionBytes(input.SourceFile, before, backup.AppliedSHA256); err != nil {
 		return fmt.Errorf("restore source file: %w", err)
 	}
-	if err := os.Remove(backup); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("remove suggestion snapshot: %w", err)
-	}
-	delete(a.artifactSuggestionBackups, key)
+	delete(a.artifactSuggestionBackups, strings.TrimSpace(input.SuggestionID))
+	_ = os.Remove(backup.Path)
 	return nil
 }
 
@@ -98,39 +124,58 @@ func requireRegularSuggestionFile(path string) error {
 	return nil
 }
 
-func copyFileReplacing(source, destination string) error {
-	if source == destination {
-		return errors.New("source and destination must differ")
+func replaceSuggestionBytes(destination string, data []byte, expectedSHA256 string) error {
+	if err := requireRegularSuggestionFile(destination); err != nil {
+		return err
 	}
-	dir := filepath.Dir(destination)
-	temporary, err := os.CreateTemp(dir, ".officedex-suggestion-*")
+	info, err := os.Stat(destination)
 	if err != nil {
 		return err
 	}
-	temporaryPath := temporary.Name()
-	defer os.Remove(temporaryPath)
-	if err := temporary.Chmod(0o644); err != nil {
-		_ = temporary.Close()
-		return err
+	// Rename would otherwise replace a read-only file as long as its directory
+	// is writable. Respect both its mode bits and the OS ACL/access decision.
+	if info.Mode().Perm()&0o222 == 0 {
+		return os.ErrPermission
 	}
-	input, err := os.Open(source)
+	writable, err := os.OpenFile(destination, os.O_WRONLY, 0)
 	if err != nil {
-		_ = temporary.Close()
 		return err
 	}
-	_, copyErr := io.Copy(temporary, input)
-	closeInputErr := input.Close()
-	closeOutputErr := temporary.Close()
-	if copyErr != nil {
-		return copyErr
+	if err := writable.Close(); err != nil {
+		return err
 	}
-	if closeInputErr != nil {
-		return closeInputErr
+	temporary, err := os.CreateTemp(filepath.Dir(destination), ".officedex-suggestion-*")
+	if err != nil {
+		return err
 	}
-	if closeOutputErr != nil {
-		return closeOutputErr
+	defer os.Remove(temporary.Name())
+	if err := temporary.Chmod(info.Mode().Perm()); err != nil {
+		temporary.Close()
+		return err
 	}
-	return os.Rename(temporaryPath, destination)
+	if _, err := temporary.Write(data); err != nil {
+		temporary.Close()
+		return err
+	}
+	if err := temporary.Sync(); err != nil {
+		temporary.Close()
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	// Recheck after staging bytes, immediately before the atomic replacement.
+	if err := requireRegularSuggestionFile(destination); err != nil {
+		return err
+	}
+	current, err := os.ReadFile(destination)
+	if err != nil {
+		return err
+	}
+	if sha256Hex(current) != expectedSHA256 {
+		return errSourceChangedExternally
+	}
+	return os.Rename(temporary.Name(), destination)
 }
 
 // ─── Document file operations ───────────────────────────────────────────────

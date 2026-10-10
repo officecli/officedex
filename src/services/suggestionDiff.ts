@@ -20,19 +20,7 @@ export function officeTextParts(data: Uint8Array): Map<string, string> {
 }
 
 export async function readSuggestionChanges(api: DesktopAPI, source: string, artifact: string): Promise<SuggestionChange[]> {
-  const read = async (filePath: string) => {
-    // A modification of a selected external file lives beside that file.
-    // Its sibling proposal is outside preview roots and has not been opened
-    // yet. Review explicitly opens these two files; register each exact path
-    // through the same import boundary as Open, never trust its whole folder.
-    await api.importLocalFile(filePath);
-    const grant = await api.issuePreviewToken({ filePath, fileName: filePath.split(/[\\/]/).pop()!, documentType: filePath.split(".").pop()! });
-    try {
-      const { data } = await api.readArtifactFile(grant.token);
-      return officeTextParts(data instanceof Uint8Array ? data : new Uint8Array(data));
-    } finally { await api.revokePreviewToken(grant.token); }
-  };
-  const [before, after] = await Promise.all([read(source), read(artifact)]);
+  const [before, after] = await Promise.all([readOfficeTextParts(api, source), readOfficeTextParts(api, artifact)]);
   return [...new Set([...before.keys(), ...after.keys()])].flatMap(part => {
     const old = before.get(part) ?? "", next = after.get(part) ?? "";
     if (old === next) return [];
@@ -44,4 +32,17 @@ export async function readSuggestionChanges(api: DesktopAPI, source: string, art
     while (endA > start && endB > start && a[endA - 1] === b[endB - 1]) { endA--; endB--; }
     return [{ part, before: a.slice(start, endA).join("\n"), after: b.slice(start, endB).join("\n") }];
   });
+}
+
+export async function readOfficeTextParts(api: DesktopAPI, filePath: string): Promise<Map<string, string>> {
+    // A modification of a selected external file lives beside that file.
+    // Its sibling proposal is outside preview roots and has not been opened
+    // yet. Review explicitly opens these two files; register each exact path
+    // through the same import boundary as Open, never trust its whole folder.
+    await api.importLocalFile(filePath);
+    const grant = await api.issuePreviewToken({ filePath, fileName: filePath.split(/[\\/]/).pop()!, documentType: filePath.split(".").pop()! });
+    try {
+      const { data } = await api.readArtifactFile(grant.token);
+      return officeTextParts(data instanceof Uint8Array ? data : new Uint8Array(data));
+    } finally { await api.revokePreviewToken(grant.token); }
 }

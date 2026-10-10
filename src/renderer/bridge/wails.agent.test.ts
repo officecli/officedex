@@ -19,3 +19,15 @@ it("calls generated desktop bindings through the DOCX agent lifecycle", async ()
   await api.cancelAgentRun("run-1");
   expect(app.CancelAgentRun).toHaveBeenCalledWith("run-1");
 });
+
+
+it("carries the source baseline across real generated modify/apply bindings", async () => {
+  const baseline = "a".repeat(64);
+  const app = { Modify: vi.fn().mockResolvedValue({taskId:"m",sessionId:"s",status:"running",sourceSHA256:baseline}), ApplyArtifactSuggestion:vi.fn().mockResolvedValue(undefined) };
+  vi.stubGlobal("go", {main:{App:app}});
+  const api = createWailsAPI();
+  const result = await api.modify({sourceFile:"/p/a.docx",documentType:"docx",prompt:"fix"});
+  expect(result.sourceSHA256).toBe(baseline);
+  await api.applyArtifactSuggestion!({suggestionId:result.taskId,sourceFile:"/p/a.docx",artifactFile:"/p/b.docx",expectedSourceSHA256:result.sourceSHA256});
+  expect(app.ApplyArtifactSuggestion).toHaveBeenCalledWith(expect.objectContaining({expectedSourceSHA256:baseline}));
+});

@@ -12,5 +12,6 @@ describe("explicit read-only document requests", () => {
     "Replace Beta with Delta. Do not modify the file until I approve.",
     "Propose a replacement. Do not save the file yet.",
     "Translate this document into French.",
+    'Replace “Read-only” with “Writable”.',
   ])("keeps actual edits reviewable: %s", prompt => expect(requestsReadOnlyAnswer(prompt)).toBe(false));
 });

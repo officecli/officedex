@@ -297,8 +297,8 @@ func TestArtifactSuggestionApplyAndUndoRestoresSource(t *testing.T) {
 	if err := os.WriteFile(artifact, []byte("after"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	app := &App{artifactSuggestionBackups: make(map[string]string)}
-	input := ArtifactSuggestionFileInput{SuggestionID: "task-1", SourceFile: source, ArtifactFile: artifact}
+	app := &App{artifactSuggestionBackups: make(map[string]artifactSuggestionBackup)}
+	input := ArtifactSuggestionFileInput{SuggestionID: "task-1", SourceFile: source, ArtifactFile: artifact, ExpectedSourceSHA256: sha256Hex([]byte("before"))}
 	if err := app.ApplyArtifactSuggestion(input); err != nil {
 		t.Fatal(err)
 	}
@@ -321,5 +321,138 @@ func TestArtifactSuggestionApplyAndUndoRestoresSource(t *testing.T) {
 	}
 	if err := app.UndoArtifactSuggestion(input); err == nil {
 		t.Fatal("second undo unexpectedly succeeded")
+	}
+}
+
+func TestArtifactSuggestionProtectsSourceAndUndo(t *testing.T) {
+	for _, scenario := range []string{"changed-before-apply", "readonly-apply", "changed-before-undo", "wrong-undo-target", "preserve-mode", "no-baseline"} {
+		t.Run(scenario, func(t *testing.T) {
+			dir := t.TempDir()
+			source, artifact := filepath.Join(dir, "source.docx"), filepath.Join(dir, "source.modified.docx")
+			if err := os.WriteFile(source, []byte("original"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(artifact, []byte("proposal"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			app := &App{}
+			input := ArtifactSuggestionFileInput{SuggestionID: t.Name(), SourceFile: source, ArtifactFile: artifact, ExpectedSourceSHA256: sha256Hex([]byte("original"))}
+			assertContent := func(want string) {
+				t.Helper()
+				got, err := os.ReadFile(source)
+				if err != nil || string(got) != want {
+					t.Fatalf("source = %q, %v; want %q", got, err, want)
+				}
+			}
+			switch scenario {
+			case "changed-before-apply":
+				if err := os.WriteFile(source, []byte("external"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				if err := app.ApplyArtifactSuggestion(input); err == nil {
+					t.Fatal("overwrote external change")
+				}
+				assertContent("external")
+			case "readonly-apply":
+				if err := os.Chmod(source, 0o444); err != nil {
+					t.Fatal(err)
+				}
+				if err := app.ApplyArtifactSuggestion(input); err == nil {
+					t.Fatal("replaced read-only source")
+				}
+				assertContent("original")
+			case "no-baseline":
+				input.ExpectedSourceSHA256 = ""
+				if err := app.ApplyArtifactSuggestion(input); err == nil {
+					t.Fatal("applied without source baseline")
+				}
+				assertContent("original")
+			default:
+				if err := app.ApplyArtifactSuggestion(input); err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() {
+					for _, backup := range app.artifactSuggestionBackups {
+						os.Remove(backup.Path)
+					}
+				})
+				assertContent("proposal")
+				if scenario == "changed-before-undo" {
+					if err := os.WriteFile(source, []byte("later edit"), 0o600); err != nil {
+						t.Fatal(err)
+					}
+					if err := app.UndoArtifactSuggestion(input); err == nil {
+						t.Fatal("undo discarded later edit")
+					}
+					assertContent("later edit")
+				} else if scenario == "wrong-undo-target" {
+					other := filepath.Join(dir, "other.docx")
+					if err := os.WriteFile(other, []byte("unrelated"), 0o600); err != nil {
+						t.Fatal(err)
+					}
+					wrong := input
+					wrong.SourceFile = other
+					if err := app.UndoArtifactSuggestion(wrong); err == nil {
+						t.Fatal("undo wrote another target")
+					}
+					data, _ := os.ReadFile(other)
+					if string(data) != "unrelated" {
+						t.Fatal("other file changed")
+					}
+				} else {
+					info, _ := os.Stat(source)
+					if info.Mode().Perm() != 0o600 {
+						t.Fatalf("mode changed: %v", info.Mode())
+					}
+					if err := app.UndoArtifactSuggestion(input); err != nil {
+						t.Fatal(err)
+					}
+					assertContent("original")
+				}
+			}
+		})
+	}
+}
+
+func TestArtifactSuggestionReport23RealDOCXRoundTrip(t *testing.T) {
+	before, err := os.ReadFile("testdata/acceptance/OD23-single.docx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile("testdata/acceptance/OD23-single.modified.docx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sha256Hex(before) != "8debfcad754b255ed20793608ef713bd7548451a81baa027f6e7994f82dab663" || sha256Hex(after) != "5de971501965f3c3e46d75c15ed0e56a01b75a9c76c1983e759e8a05e03817e0" {
+		t.Fatal("QA evidence changed")
+	}
+	dir := t.TempDir()
+	source, artifact := filepath.Join(dir, "original.docx"), filepath.Join(dir, "proposal.docx")
+	if err := os.WriteFile(source, before, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(artifact, after, 0600); err != nil {
+		t.Fatal(err)
+	}
+	app := &App{}
+	input := ArtifactSuggestionFileInput{SuggestionID: "real-docx", SourceFile: source, ArtifactFile: artifact, ExpectedSourceSHA256: sha256Hex(before)}
+	if err := app.ApplyArtifactSuggestion(input); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		for _, b := range app.artifactSuggestionBackups {
+			os.Remove(b.Path)
+		}
+	})
+	saved, _ := os.ReadFile(source)
+	if sha256Hex(saved) != sha256Hex(after) {
+		t.Fatal("Complete without actual source write")
+	}
+	if err := app.UndoArtifactSuggestion(input); err != nil {
+		t.Fatal(err)
+	}
+	restored, _ := os.ReadFile(source)
+	if sha256Hex(restored) != sha256Hex(before) {
+		t.Fatal("Undo did not restore original package")
 	}
 }

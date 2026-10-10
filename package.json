@@ -62,7 +62,7 @@
     "lint": "tsc --noEmit",
     "verify:bridge:types": "node scripts/verify-bridge-types.mjs",
     "verify:shell:styles": "node --test scripts/verify-shell-styles.test.mjs",
-    "test:acceptance:regressions": "vitest run src/services/agent.test.ts src/shared/requestIntent.test.ts src/renderer/homeIntake.test.ts src/shell/agent src/shell/chat/AgentRun.test.tsx src/shell/chrome/useKeyboardShortcuts.test.tsx && node --test scripts/verify-editor-shortcuts.browser.test.mjs"
+    "test:acceptance:regressions": "bash scripts/verify-acceptance-regressions.sh"
   },
   "dependencies": {
     "@shimo/editor-sdk-core": "0.0.1-124-jsapi.51",
