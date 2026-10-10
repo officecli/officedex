@@ -1,3 +1,4 @@
+import { EMBEDDED_FRAME_CLOCK_FILE, EMBEDDED_FRAME_CLOCK_SOURCE, withEmbeddedFrameClock } from "./embedded-frame-clock.mjs";
 // Copies the Writer embed artifact (writer's apps/officedex-embed/dist) into
 // public/writer, and writes the host manifest WriterEditorFrame checks before
 // it mounts the iframe.
@@ -254,7 +255,8 @@ export async function syncWriterComponent({ distDir, publicDir, sourceDir, sourc
   // The copy above brought the build's own index.html; this is the one change
   // the host makes to it.
   await buildHostRuntime(path.join(publicDir, HOST_RUNTIME_FILE), resources);
-  await writeFile(path.join(publicDir, "index.html"), injectHostRuntime(index));
+  await writeFile(path.join(publicDir, EMBEDDED_FRAME_CLOCK_FILE), EMBEDDED_FRAME_CLOCK_SOURCE);
+  await writeFile(path.join(publicDir, "index.html"), withEmbeddedFrameClock(injectHostRuntime(index)));
   await writeFile(
     path.join(publicDir, "officedex-component.json"),
     `${JSON.stringify(

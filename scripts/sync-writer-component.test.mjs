@@ -1,3 +1,4 @@
+import { EMBEDDED_FRAME_CLOCK_SOURCE } from "./embedded-frame-clock.mjs";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -41,6 +42,8 @@ test("syncWriterComponent copies the build and writes the host manifest", async 
 
   await syncWriterComponent({ distDir, publicDir, sourceDir, sourceRevision: "18bf54a" });
 
+  assert.equal(await readFile(path.join(publicDir, "officedex-frame-clock.js"), "utf8"), EMBEDDED_FRAME_CLOCK_SOURCE);
+  assert.match(await readFile(path.join(publicDir, "index.html"), "utf8"), /officedex-frame-clock\.js[\s\S]*type="module"/);
   const manifest = JSON.parse(
     await readFile(path.join(publicDir, "officedex-component.json"), "utf8"),
   );
@@ -84,6 +87,7 @@ test("syncWriterComponent leaves the default-font closure out of public/", async
     HOST_RUNTIME_FILE,
     "index.html",
     "officedex-component.json",
+    "officedex-frame-clock.js",
   ].sort());
 });
 

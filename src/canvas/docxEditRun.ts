@@ -212,6 +212,7 @@ export function createDocxEditRunner(deps: DocxEditDeps) {
     if (request.requireReview) {
       if (!request.onConfirm) throw new Error(translate("shell.edit.confirm"));
       const approved = await request.onConfirm({ text: plan.summary,
+        changes: plan.edits.map((edit) => ({ before: edit.query, after: edit.replacement })),
         detail: plan.edits.map((edit) => `${edit.query} → ${edit.replacement}`).join("\n") });
       assertLive(request.signal);
       if (!approved) return { summary: translate("shell.edit.documentCancelled"), applied: 0, undo: null, scope, saveError: null };

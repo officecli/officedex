@@ -624,6 +624,20 @@ function Question({ task, agent }: { task: AgentTask; agent: Agent }) {
     void agent.answer({ text });
   };
 
+  if (question.kind === "document_edit_review" && question.changes?.length) {
+    return <section className="dx-agent-question" data-review="document-edit" aria-label={t("dx.review.title")}>
+      <p>{task.targetFileName}</p><p>{question.text}</p>
+      <div className="dx-review-diff">{question.changes.map((change, index) => <section key={index}>
+        <strong>{t("dx.review.before")}</strong><pre>{change.before || "—"}</pre>
+        <strong>{t("dx.review.after")}</strong><pre>{change.after || "—"}</pre>
+      </section>)}</div>
+      <div className="dx-actions">
+        <button type="button" className="dx-btn dx-primary" data-act="apply-reviewed-edit" onClick={() => void agent.answer({ optionId: "review-apply" })}>{t("shell.edit.applyChange")}</button>
+        <button type="button" className="dx-btn" onClick={() => void agent.answer({ optionId: "review-cancel" })}>{t("ui.text.Cancel")}</button>
+      </div>
+    </section>;
+  }
+
   return (
     <form className="dx-agent-question" data-form="task-input" data-id={task.id} onSubmit={submit}>
       <label htmlFor={inputId}>{question.text || t("shell.task.questionFallback")}</label>

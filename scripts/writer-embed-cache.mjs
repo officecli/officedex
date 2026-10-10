@@ -35,6 +35,7 @@ const GIT_MAX_BUFFER = 512 * 1024 * 1024;
 const OFFICEDEX_SCRIPT_FILES = [
   "build-embedded-writer.sh",
   "sync-writer-component.mjs",
+  "embedded-frame-clock.mjs",
 ];
 
 function runGit(sourceDir, args, { quiet = false } = {}) {

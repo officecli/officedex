@@ -100,7 +100,7 @@ try {
 
   const vitePort = Number(process.env.OFFICEDEX_E2E_VITE_PORT || 0) || await getFreePort();
   viteURL = `http://127.0.0.1:${vitePort}`;
-  const vite = spawnLogged("npx", ["vite", "--host", "127.0.0.1", "--port", String(vitePort), "--strictPort"], {
+  const vite = spawnLogged("npx", ["vite", "--force", "--host", "127.0.0.1", "--port", String(vitePort), "--strictPort"], {
     env: {
       ...process.env,
       VITE_OFFICEDEX_REAL_E2E_ENDPOINT: bridgeEndpoint,

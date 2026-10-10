@@ -11,11 +11,11 @@ if [[ ! -f "${cli}/internal/runtime/modify/docx_exact_test.go" ]]; then
 fi
 ./node_modules/.bin/vitest run
 node scripts/verify-bridge-types.mjs
-node --test scripts/verify-editor-shortcuts.browser.test.mjs scripts/verify-shell-styles.test.mjs
+node --test scripts/embedded-frame-clock.test.mjs scripts/sync-writer-component.test.mjs scripts/sync-presentation-component.test.mjs scripts/verify-editor-shortcuts.browser.test.mjs scripts/verify-shell-styles.test.mjs
 # ./... also traverses local dist-artifacts source archives. Test owned sources.
 env -u GOROOT go test . ./internal/... -count=1
 (
   cd "${cli}"
   env -u GOROOT go test ./pkg/ooxmledit ./internal/runtime/modify ./internal/cli ./internal/runtime \
-    -run 'DOCX|Docx|Modify|PPTX.*(Exact|Resume|Recovery|Content|Notes|Sentence|Requirement|Incomplete|Expansion)|Test(Expansion|ConcurrencyLimit|ResumeRequests|ResumeReuses|GenerateResume)' -count=1
+    -run 'DOCX|Docx|Modify|PPTX.*(Exact|Resume|Recovery|Content|Notes|Sentence|Requirement|Incomplete|Expansion)|Test(BuildRenderJobPreservesExact|Expansion|ConcurrencyLimit|ResumeRequests|ResumeReuses|GenerateResume)' -count=1
 )

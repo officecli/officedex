@@ -39,3 +39,15 @@ it("removes listeners from unmounted editor frames", async () => {
   frame.remove();
   await waitFor(() => expect(remove).toHaveBeenCalledWith("keydown", expect.any(Function), true));
 });
+
+it("N24-04 native menu Save reaches the same action with editor focus and unsubscribes", () => {
+  const dispose = vi.fn(); let callback!: () => void;
+  const original = (window as unknown as { runtime?: unknown }).runtime;
+  Object.assign(window, { runtime: { EventsOnMultiple: vi.fn((_name, cb) => { callback = cb; return dispose; }) } });
+  try {
+    const hook = renderHook(() => useKeyboardShortcuts({ onNew: vi.fn() }));
+    callback();
+    expect(mocks.save).toHaveBeenCalledWith(mocks.file, { quiet: true });
+    hook.unmount(); expect(dispose).toHaveBeenCalledOnce();
+  } finally { Object.assign(window, { runtime: original }); }
+});

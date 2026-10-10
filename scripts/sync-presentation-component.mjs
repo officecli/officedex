@@ -1,3 +1,4 @@
+import { EMBEDDED_FRAME_CLOCK_FILE, EMBEDDED_FRAME_CLOCK_SOURCE, withEmbeddedFrameClock } from "./embedded-frame-clock.mjs";
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,6 +27,8 @@ export async function syncPresentationComponent({
   await rm(publicDir, { recursive: true, force: true });
   await mkdir(path.dirname(publicDir), { recursive: true });
   await cp(distDir, publicDir, { recursive: true });
+  await writeFile(path.join(publicDir, EMBEDDED_FRAME_CLOCK_FILE), EMBEDDED_FRAME_CLOCK_SOURCE);
+  await writeFile(path.join(publicDir, "index.html"), withEmbeddedFrameClock(index));
   await writeFile(
     path.join(publicDir, "officedex-component.json"),
     `${JSON.stringify({

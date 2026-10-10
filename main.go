@@ -5,8 +5,11 @@ import (
 	"embed"
 	"net/http"
 	"os"
+	"runtime"
 
 	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/menu"
+	"github.com/wailsapp/wails/v2/pkg/menu/keys"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
@@ -51,6 +54,7 @@ func newWailsAppOptions(app *App) *options.App {
 	}
 	return &options.App{
 		Title:     "OfficeDex",
+		Menu:      nativeMenu(app),
 		Width:     width,
 		Height:    height,
 		MinWidth:  minWidth,
@@ -101,4 +105,23 @@ func newAssetFallbackHandler(app *App) http.Handler {
 			app.mopHTTPHandler.ServeHTTP(w, r)
 		}
 	})
+}
+
+// Cocoa key equivalents are handled before WKWebView DOM keydown, including
+// focus inside an editor iframe. Save uses the same host action as the toolbar.
+func nativeMenu(app *App) *menu.Menu {
+	if runtime.GOOS != "darwin" {
+		return nil
+	}
+	m := menu.NewMenu()
+	m.Append(menu.AppMenu())
+	file := m.AddSubmenu("File")
+	file.AddText("Save", keys.CmdOrCtrl("s"), func(_ *menu.CallbackData) {
+		if app != nil {
+			emit(app.ctx, "officedex:save", nil)
+		}
+	})
+	m.Append(menu.EditMenu())
+	m.Append(menu.WindowMenu())
+	return m
 }

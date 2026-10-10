@@ -501,3 +501,21 @@ describe("a run that asks first", () => {
     await run.done;
   });
 });
+
+it("N24-02 only Review Apply releases a concrete diff; Continue cannot write", async () => {
+  const { snapshots, onTask } = collect();
+  const write = vi.fn();
+  const run = startDocumentEditRun({ onTask, canvas: { editDocument: async request => {
+    const approved = await request.onConfirm!({ text: "Proposed replacement", changes: [{ before: "The status is final.", after: "The status is approved." }] });
+    if (approved) write();
+    return { applied: approved ? 1 : 0, summary: "Done", scope: "document", undo: null, saveError: null };
+  } } }, { ...input, requireReview: true });
+  expect(snapshots.at(-1)?.question).toMatchObject({ kind: "document_edit_review", options: [], changes: [{ before: "The status is final.", after: "The status is approved." }] });
+  run.answer({ optionId: "apply" });
+  run.answer({ text: "Continue" });
+  await Promise.resolve();
+  expect(write).not.toHaveBeenCalled();
+  run.answer({ optionId: "review-apply" });
+  await run.done;
+  expect(write).toHaveBeenCalledOnce();
+});

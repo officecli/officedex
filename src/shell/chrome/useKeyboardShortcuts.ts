@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { EventsOn } from "../../renderer/generated/wailsjs/runtime";
 import { listenToShortcutDocuments } from "./shortcutDocuments";
 
 import { useLibraryActions } from "../nav/useLibraryActions";
@@ -45,6 +46,10 @@ export function useKeyboardShortcuts({ onNew, enabled = true }: { onNew: () => v
         void save(activeFile, { quiet: true });
       }
     };
-    return listenToShortcutDocuments(window, onKeyDown);
+    const disposeKeys = listenToShortcutDocuments(window, onKeyDown);
+    const disposeNative = (window as unknown as { runtime?: { EventsOnMultiple?: unknown } }).runtime?.EventsOnMultiple
+      ? EventsOn("officedex:save", () => { if (activeFile) void save(activeFile, { quiet: true }); })
+      : undefined;
+    return () => { disposeKeys(); disposeNative?.(); };
   }, [library, dispatch, activeFile, save, onNew, enabled]);
 }

@@ -204,7 +204,7 @@ export function startDocumentEditRun(
    */
   let pendingAnswer: ((optionId: string) => void) | null = null;
 
-  const ask = (question: { text: string; detail?: string; danger?: boolean }): Promise<boolean> =>
+  const ask = (question: { text: string; detail?: string; danger?: boolean; changes?: Array<{ before: string; after: string }> }): Promise<boolean> =>
     new Promise<boolean>((resolve) => {
       /*
        * `awaiting-review`, not a "question" status — there is no such member.
@@ -217,6 +217,7 @@ export function startDocumentEditRun(
       task.question = {
         id: nextId("question"),
         text: question.text,
+        ...(question.changes ? { kind: "document_edit_review", changes: question.changes } : {}),
         /*
          * Which answer is offered first is not decoration on a dangerous
          * question. Recommending Apply on "this plan changes the whole deck,
@@ -226,7 +227,7 @@ export function startDocumentEditRun(
          * has to be chosen deliberately; the planner's own "are you sure" keeps
          * the old default, because there the app has no reason to doubt it.
          */
-        options: question.danger
+        options: question.changes ? [] : question.danger
           ? [
               { id: "apply", label: translate("shell.edit.applyAnyway") },
               { id: "cancel", label: translate("ui.text.Cancel"), recommended: true },
@@ -243,7 +244,7 @@ export function startDocumentEditRun(
         task.question = null;
         task.status = "writing";
         emit();
-        resolve(optionId === "apply");
+        resolve(optionId === (question.changes ? "review-apply" : "apply"));
       };
     });
 
@@ -261,6 +262,7 @@ export function startDocumentEditRun(
   controller.signal.addEventListener("abort", () => pendingAnswer?.("cancel"), { once: true });
 
   const answer = (input: { optionId?: string; text?: string }) => {
+    if (task.question?.kind === "document_edit_review" && !["review-apply", "review-cancel"].includes(input.optionId ?? "")) return;
     // A clarification accepts text; applying a reviewed plan requires its explicit option.
     const optionId = task.question?.allowFreeform ? (input.text?.trim() ?? input.optionId ?? "") : (input.optionId ?? "cancel");
     if (!optionId) return;

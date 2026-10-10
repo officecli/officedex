@@ -146,7 +146,7 @@ export interface DocumentEditRequest {
    * everybody clicks through is not a gate. Absent is an ordinary "are you
    * sure", where the recommendation is the planner's own caution.
    */
-  onConfirm?(question: { text: string; detail?: string; danger?: boolean }): Promise<boolean>;
+  onConfirm?(question: { text: string; detail?: string; danger?: boolean; changes?: Array<{ before: string; after: string }> }): Promise<boolean>;
   signal?: AbortSignal;
 }
 

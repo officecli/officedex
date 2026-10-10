@@ -424,3 +424,17 @@ it("keeps the source review visible even before the imported file appears in the
   expect(run.card().querySelector(".dx-agent-results")?.textContent).toContain("OD23-single.docx");
   expect(run.action("review-task")).toBeTruthy();
 });
+
+it("N24-02 displays Before/After with a dedicated Apply and no Continue", async () => {
+  const run = await stage("input", task => ({ ...task, question: {
+    id: "review-24", kind: "document_edit_review", text: "Proposed replacement", options: [], allowFreeform: false,
+    changes: [{ before: "The status is final.", after: "The status is approved." }],
+  }}));
+  const card = run.card();
+  expect(card.querySelector('[data-review="document-edit"]')?.textContent).toContain("The status is final.");
+  expect(card.querySelector('[data-review="document-edit"]')?.textContent).toContain("The status is approved.");
+  expect(card.querySelector('form[data-form="task-input"]')).toBeNull();
+  const answer = vi.spyOn(run.port.agent, "answer");
+  fireEvent.click(card.querySelector('[data-act="apply-reviewed-edit"]')!);
+  expect(answer).toHaveBeenCalledWith(expect.objectContaining({optionId:"review-apply"}));
+});

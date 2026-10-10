@@ -1,3 +1,4 @@
+import { EMBEDDED_FRAME_CLOCK_SOURCE } from "./embedded-frame-clock.mjs";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -26,6 +27,8 @@ test("syncPresentationComponent copies the build and writes the host manifest", 
     sourceRevision: "a10c147",
   });
 
+  assert.equal(await readFile(path.join(publicDir, "officedex-frame-clock.js"), "utf8"), EMBEDDED_FRAME_CLOCK_SOURCE);
+  assert.match(await readFile(path.join(publicDir, "index.html"), "utf8"), /officedex-frame-clock\.js[\s\S]*type="module"/);
   const manifest = JSON.parse(
     await readFile(path.join(publicDir, "officedex-component.json"), "utf8"),
   );

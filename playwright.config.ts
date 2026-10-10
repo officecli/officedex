@@ -50,8 +50,8 @@ export default defineConfig({
   },
   projects: [
     {
-      name: "chromium",
-      use: { browserName: "chromium" },
+      name: process.env.OFFICEDEX_E2E_BROWSER || "chromium",
+      use: { browserName: process.env.OFFICEDEX_E2E_BROWSER === "webkit" ? "webkit" : "chromium" },
     },
   ],
 });

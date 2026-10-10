@@ -226,6 +226,8 @@ export interface AgentQuestionOption {
  * stayed blocked forever, which is worse than a button that does nothing.
  */
 export interface AgentQuestion {
+  /** Concrete proposed edits; only the Review Apply action may approve these. */
+  changes?: Array<{ before: string; after: string }>;
   id: string;
   text: string;
   /**
