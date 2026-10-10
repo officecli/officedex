@@ -71,9 +71,10 @@ test("the OFL faces writer bundles are all covered", async () => {
     "NotoSerifJP-Regular.woff",
     "Amiri-BoldItalic.woff",
     "SourceCodePro.woff",
+    "STIXTwoMath-Regular.otf",
   );
   const result = await verifyBundledFonts([root]);
-  assert.equal(result.checked, 6);
+  assert.equal(result.checked, 7);
   assert.deepEqual(result.pending, []);
 });
 

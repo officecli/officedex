@@ -13,11 +13,13 @@ async function createSourceFixture() {
   await writeFile(path.join(rootDir, "NOTICE"), "OfficeDex notice\n");
   await writeFile(path.join(rootDir, "THIRD_PARTY_NOTICES.md"), "Third-party notices\n");
   await writeFile(path.join(rootDir, "third_party", "officecli", "LICENSE"), "OfficeCLI MIT\n");
+  await mkdir(path.join(rootDir, "third_party", "fonts"), { recursive: true });
+  await writeFile(path.join(rootDir, "third_party", "fonts", "STIXTwoMath-Regular.OFL.txt"), "STIX OFL\n");
   return rootDir;
 }
 
 async function assertBundleContents(destination) {
-  for (const relativePath of ["OfficeDex-GPL-3.0.txt", "OfficeDex-NOTICE.txt", "THIRD_PARTY_NOTICES.md", "OfficeCLI-MIT.txt"]) {
+  for (const relativePath of ["OfficeDex-GPL-3.0.txt", "OfficeDex-NOTICE.txt", "THIRD_PARTY_NOTICES.md", "OfficeCLI-MIT.txt", "STIXTwoMath-Regular.OFL.txt"]) {
     assert.ok((await readFile(path.join(destination, relativePath), "utf8")).length > 0, relativePath);
   }
 }

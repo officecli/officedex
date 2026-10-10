@@ -16,6 +16,7 @@ export async function bundleLicenses({ rootDir, target }) {
     ["NOTICE", "OfficeDex-NOTICE.txt"],
     ["THIRD_PARTY_NOTICES.md", "THIRD_PARTY_NOTICES.md"],
     [path.join("third_party", "officecli", "LICENSE"), "OfficeCLI-MIT.txt"],
+    [path.join("third_party", "fonts", "STIXTwoMath-Regular.OFL.txt"), "STIXTwoMath-Regular.OFL.txt"],
   ];
   for (const [source, name] of files) {
     await cp(path.join(rootDir, source), path.join(destination, name));
