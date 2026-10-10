@@ -126,7 +126,14 @@ async function hasPresentationComponent(
   }
 }
 
-export function PresentationEditorFrame({
+export function PresentationEditorFrame(props: PresentationEditorFrameProps) {
+  const locale = useCanvasLocale() ?? getCurrentLocale();
+  // The embed handshakes only on boot. Reusing its window for another token
+  // closed the old host session but left the old deck visible and editable.
+  return <PresentationEditorSession key={`${props.previewToken}:${locale}`} {...props} />;
+}
+
+function PresentationEditorSession({
   previewToken,
   fileName,
   onDirtyChange,
@@ -174,12 +181,13 @@ export function PresentationEditorFrame({
   }, []);
 
   const markUnavailable = useCallback((error?: string) => {
-    if (unavailableRef.current) return;
+    if (disposedRef.current || unavailableRef.current) return;
     unavailableRef.current = true;
     callbacksRef.current.onUnavailable(error);
   }, []);
 
   const post = useCallback((message: PresentationHostCommand, transfer: Transferable[] = []) => {
+    if (disposedRef.current) return;
     frameRef.current?.contentWindow?.postMessage(message, "*", transfer);
   }, []);
 
@@ -297,11 +305,13 @@ export function PresentationEditorFrame({
     const sessionId = sessionIdRef.current;
     if (!sessionId) throw new Error("PPTX editor session is not ready.");
     await flushEdits();
+    if (disposedRef.current) throw new Error("The presentation editor was closed.");
     const result = await api.exportPptxEditor({
       previewToken,
       sessionId,
       revision: revisionRef.current,
     });
+    if (disposedRef.current) throw new Error("The presentation editor was closed.");
     revisionRef.current = result.revision;
     unexportedSnapshotRef.current = false;
     reportDirty();
@@ -311,12 +321,14 @@ export function PresentationEditorFrame({
   }, [flushEdits, previewToken, reportDirty]);
 
   useEffect(() => {
+    let active = true;
     const respond = (
       requestId: string,
       result?: unknown,
       error?: unknown,
       transfer: Transferable[] = [],
     ) => {
+      if (!active || disposedRef.current) return;
       post(
         {
           type: "presentation:response",
@@ -330,6 +342,10 @@ export function PresentationEditorFrame({
     };
 
     const handleRequest = async (event: PresentationEmbedEvent) => {
+      if ("sessionId" in event && event.sessionId !== sessionIdRef.current) {
+        if ("requestId" in event) respond(event.requestId, undefined, new Error("The presentation session has changed."));
+        return;
+      }
       switch (event.type) {
         case "presentation:embed-ready": {
           readyRef.current = true;
@@ -341,7 +357,10 @@ export function PresentationEditorFrame({
           }
           try {
             const prepared = await api.preparePptxEditor(previewToken);
-            if (disposedRef.current) return;
+            if (!active || disposedRef.current) {
+              void api.closePptxEditor({ previewToken, sessionId: prepared.sessionId }).catch(() => undefined);
+              return;
+            }
             sessionIdRef.current = prepared.sessionId;
             revisionRef.current = prepared.documentRevision;
             unregisterClientToolsRef.current?.();
@@ -384,7 +403,7 @@ export function PresentationEditorFrame({
               swapDocument,
             });
           } catch (error) {
-            markUnavailable(errorMessage(error));
+            if (active) markUnavailable(errorMessage(error));
           }
           return;
         }
@@ -426,6 +445,7 @@ export function PresentationEditorFrame({
               baseRevision: event.baseRevision,
               revision: event.revision,
             });
+            if (!active || disposedRef.current) return;
             revisionRef.current = result.revision;
             // The snapshot is newer than the file now; only an export catches
             // the file up. The embed used to say dirty here and the host
@@ -476,8 +496,10 @@ export function PresentationEditorFrame({
               sessionId: event.sessionId,
               revision: event.revision,
             });
+            if (!active || disposedRef.current) return;
             revisionRef.current = result.revision;
             const artifact = await api.readArtifactFile(previewToken);
+            if (!active || disposedRef.current) return;
             const data = toTransferableBuffer(artifact.data);
             unexportedSnapshotRef.current = false;
             reportDirty();
@@ -494,12 +516,16 @@ export function PresentationEditorFrame({
     };
 
     const onMessage = (event: MessageEvent) => {
+      if (!active || disposedRef.current) return;
       if (event.source !== frameRef.current?.contentWindow) return;
       if (!isPresentationEmbedEvent(event.data)) return;
       void handleRequest(event.data);
     };
     window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
+    return () => {
+      active = false;
+      window.removeEventListener("message", onMessage);
+    };
   }, [executeScript, fileName, flushEdits, markUnavailable, post, previewToken, reportDirty, saveToDisk]);
 
   /**

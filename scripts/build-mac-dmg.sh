@@ -422,7 +422,9 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
   npm run build:frontend:desktop
 
   echo "[${LOG}] building OfficeDex.app (darwin/${GO_ARCH})"
-  env -u GOROOT wails build -platform "darwin/${GO_ARCH}" -trimpath -s \
+  # Build with the checked-in module graph. Automatic tidy also scans archived
+  # source under dist-artifacts and can add unrelated dependencies mid-release.
+  env -u GOROOT wails build -m -platform "darwin/${GO_ARCH}" -trimpath -s \
     -ldflags "-X main.appVersion=${APP_VERSION} -X main.appUpdateChannel=${UPDATE_CHANNEL:-stable}"
   # Pin the build this step produced; every later check compares against it.
   assert_production_binary "${APP_PATH}"

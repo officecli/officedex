@@ -379,3 +379,17 @@ it("opens a batch proposal in Review with a real diff and apply/reject actions",
   expect(document.querySelector('[data-act="apply-change"]')).not.toBeNull();
   expect(document.querySelector('[data-act="reject-change"]')).not.toBeNull();
 });
+
+it("shows raw per-file failures only after opening Details", async () => {
+  const raw = "failed to open OOXML zip at /Users/test/workspace/broken.docx";
+  const run = await stage("partial", task => ({ ...task, error: "A file could not be read. Choose a valid copy and retry.", errorDetail: undefined, batch: [
+    { fileId: "bad", name: "Broken.docx", status: "failed", error: "This file could not be read.", errorDetail: raw, suggestion: null },
+    { fileId: "good", name: "Ready.docx", status: "completed", suggestion: null },
+  ] }));
+  expect(run.card().textContent).toContain("This file could not be read.");
+  expect(document.body.textContent).not.toContain(raw);
+  const details = [...run.card().querySelectorAll("button")].find(button => button.textContent === "Details")!;
+  fireEvent.click(details);
+  await waitFor(() => expect(document.querySelector(".dx-dialog")?.textContent ?? document.body.textContent).toContain(raw));
+  expect(run.card().textContent).not.toContain(raw);
+});

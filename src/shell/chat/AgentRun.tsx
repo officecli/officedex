@@ -225,6 +225,12 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
             <dd>{[...new Set([task.targetFileName, artifact?.name, reviewTarget?.name, ...(task.batch?.map((item) => item.name) ?? [])].filter(Boolean))].join(", ") || t("dx.run.newResult")}</dd>
           </dl>
           {task.errorDetail || task.error ? <pre className="dx-error">{task.errorDetail ?? task.error}</pre> : null}
+          {task.batch?.filter(item => item.errorDetail).map(item => (
+            <section key={item.fileId}>
+              <strong>{item.name}</strong>
+              <pre className="dx-error">{item.errorDetail}</pre>
+            </section>
+          ))}
           <div className="dx-actions">
             <button
               type="button"

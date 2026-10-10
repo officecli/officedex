@@ -350,7 +350,7 @@ export interface AgentTask {
    * order; this is what lets the card say "Queued".
    */
   queued?: AgentQueuedMessage[];
-  batch?: Array<{ fileId: string; name: string; taskId?: string; status: "queued" | "running" | "completed" | "failed" | "stopped"; error?: string; suggestion: AgentSuggestion | null }>;
+  batch?: Array<{ fileId: string; name: string; taskId?: string; status: "queued" | "running" | "completed" | "failed" | "stopped"; error?: string; errorDetail?: string; suggestion: AgentSuggestion | null }>;
 }
 
 export interface AgentQueuedMessage {

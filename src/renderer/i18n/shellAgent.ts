@@ -5,7 +5,7 @@
  * Merged in `index.tsx`.
  */
 export const shellAgentEn: Record<string, string> = {
-  "shell.service.chooseFormat": "Which format should I use: Word, Excel, or PowerPoint?",
+  "shell.service.chooseFormat": "Which file format should I use? Choose a format to continue.",
   "shell.edit.step.read": "Read the document",
   "shell.edit.step.draft": "Draft the change",
   "shell.edit.step.answer": "Answer the question",
@@ -84,11 +84,16 @@ export const shellAgentEn: Record<string, string> = {
   "shell.misc.personalAccessToken": "Personal Access Token",
   "shell.misc.unknownError": "unknown error",
   "shell.agent.technicalFailure": "The task could not finish. Retry, or open Details for diagnostic information.",
+  "shell.agent.error.network": "The connection was interrupted. Check your connection and retry the task.",
+  "shell.agent.error.document": "This file could not be read. It may be damaged or in an unsupported format. Choose a valid copy and retry.",
+  "shell.agent.error.access": "The file could not be accessed. Check its file and folder permissions, then retry.",
+  "shell.agent.error.partialSlides": "Some slides could not be completed. Keep the ready pages and use Retry remaining to finish the rest.",
+  "shell.agent.error.timeout": "The task took too long to respond. Retry, or check Details if it happens again.",
   "shell.canvas.stillLoading": "The editor is still loading. Retry saving when it is ready.",
 };
 
 export const shellAgentZh: Record<string, string> = {
-  "shell.service.chooseFormat": "请选择文件格式：Word、Excel 或 PowerPoint。",
+  "shell.service.chooseFormat": "你希望使用哪种文件格式？选择后再继续。",
   "shell.edit.step.read": "读取文档",
   "shell.edit.step.draft": "拟定改动",
   "shell.edit.step.answer": "回答问题",
@@ -167,5 +172,10 @@ export const shellAgentZh: Record<string, string> = {
   "shell.misc.personalAccessToken": "个人访问令牌",
   "shell.misc.unknownError": "未知错误",
   "shell.agent.technicalFailure": "任务未能完成。请重试，或打开详情查看诊断信息。",
+  "shell.agent.error.network": "连接已中断。请检查网络连接后重试任务。",
+  "shell.agent.error.document": "无法读取此文件，文件可能损坏或格式不受支持。请选择有效副本后重试。",
+  "shell.agent.error.access": "无法访问文件。请检查文件和文件夹的权限后重试。",
+  "shell.agent.error.partialSlides": "部分幻灯片未能完成。已完成页面可保留，请使用“重试剩余项”继续。",
+  "shell.agent.error.timeout": "任务响应超时。请重试；若再次发生，可查看详情。",
   "shell.canvas.stillLoading": "编辑器仍在加载，请加载完成后重试保存。",
 };

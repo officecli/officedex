@@ -224,6 +224,7 @@ export function CanvasContent({
   if (open.type === "slides") {
     return (
       <PresentationCanvas
+        key={openAttempt}
         api={api}
         file={open}
         onDirtyChange={onDirtyChange}

@@ -14,6 +14,8 @@ import { inferHomeTaskRoute, outputFileStem, requestedFileName, requestsNewFile 
 import { planModeRequested } from "./planMode";
 import { DEFAULT_FOLDER_ID } from "./files";
 import { translate } from "../renderer/i18n";
+import { agentErrorSummary } from "../renderer/agentError";
+export { agentErrorSummary } from "../renderer/agentError";
 
 /**
  * The agent surface over the desktop's task model.
@@ -47,15 +49,14 @@ import { translate } from "../renderer/i18n";
  * and use the desktop snapshot bridge for Apply/Undo.
  */
 
-/** Keep native/worker stack traces in Details, not conversation messages. */
-export function agentErrorSummary(error: string): string {
-  return /(?:\n\s*at\s|thread .+panicked|stack backtrace|Traceback|HideLastTransition must be bool|\.wasm:|RuntimeError:)/i.test(error) || error.length > 600
-    ? translate("shell.agent.technicalFailure") : error;
-}
+const FORMAT_CHOICES = [
+  { id: "docx", label: "Word (.docx)", pattern: /\b(?:word|docx)\b|文档|文稿/i },
+  { id: "xlsx", label: "Excel (.xlsx)", pattern: /\b(?:excel|xlsx)\b|表格|工作簿/i },
+  { id: "pptx", label: "PowerPoint (.pptx)", pattern: /\b(?:powerpoint|pptx?)\b|幻灯片|演示文稿/i },
+];
 
 export function requestsFormatChoice(text: string): boolean {
-  return /(?:word|docx|文档)/i.test(text) && /(?:excel|xlsx|表格)/i.test(text)
-    && /(?:powerpoint|pptx?|幻灯片)/i.test(text)
+  return FORMAT_CHOICES.filter(choice => choice.pattern.test(text)).length >= 2
     && /(?:ask me|先[询问]|问我|询问我)/i.test(text)
     && /(?:wait|等待|等我|等.*回答)/i.test(text);
 }
@@ -153,7 +154,7 @@ function phaseOf(task: DesktopTask): string {
   if (active) return active.label;
   if (task.status === "question") return translate("shell.service.phase.question");
   if (task.status === "plan_review") return translate("shell.service.phase.review");
-  if (task.status === "failed") return task.error?.trim() || translate("shell.service.phase.failed");
+  if (task.status === "failed") return task.error?.trim() ? agentErrorSummary(task.error) : translate("shell.service.phase.failed");
   if (task.status === "completed") return translate("shell.service.phase.done");
   return "";
 }
@@ -679,7 +680,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       const at = Date.parse(run.createdAt ?? "") || Date.parse(run.events[0]?.ts ?? "") || previous;
       previous = at;
       const sent = sentRuns.get(run.id);
-      const known = sent?.prompt;
+      const known = sent?.prompt ?? retryInputs.get(run.id)?.text;
       const messages = toMessages(run).map((message) =>
         known && message.id === `${run.id}:instruction` ? { ...message, text: known } : message,
       );
@@ -787,17 +788,28 @@ export function createAgentService(api: DesktopAPI): AgentPort {
           status: runStatus(run),
           prompt: known?.prompt ?? run.userInput?.prompt ?? "",
           ...(baseTaskId ? { baseTaskId } : {}),
-          ...(run.status === "failed" && run.error ? { error: run.error } : {}),
+          ...(run.status === "failed" && run.error ? { error: agentErrorSummary(run.error) } : {}),
         };
       }),
     };
+  };
+
+  const batchFor = (task: DesktopTask) => {
+    const items = batches.get(conversationOf(task));
+    return items?.some(item => item.taskId === task.id) ? items : undefined;
+  };
+  // The worker receives a per-file execution prompt. Titles come from the
+  // original user request, including after Retry or restoring pending state.
+  const displayTitle = (task: DesktopTask) => {
+    const batch = batchFor(task);
+    return batch ? clip(batch[0].input.text, 120) : taskTitle(task, translate("shell.service.untitledTask"));
   };
 
   /** The contract's view of a desktop task, with everything this closure knows added. */
   const project = (task: DesktopTask): AgentTask => {
     const result = toAgentTaskWithReview(task, reviewArtifacts.get(task.id));
     const conversationId = conversationOf(task);
-    const batchItems = batches.get(conversationId)?.some((item) => item.taskId === task.id) ? batches.get(conversationId) : undefined;
+    const batchItems = batchFor(task);
     const image = imageSeries(task);
     if (image) return { ...result, conversationId, image };
     /*
@@ -813,6 +825,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     const queued = (queues.get(conversationId) ?? []).map((entry) => ({ id: entry.id, text: entry.input.text.trim() }));
     return {
       ...result,
+      title: displayTitle(task),
       attempt: attempts.get(task.id) ?? 1,
       logicalTaskId: attemptRoots.get(task.id)?.id ?? task.id,
       startedAt: attemptRoots.get(task.id)?.startedAt ?? result.startedAt,
@@ -822,6 +835,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
         return { fileId: item.fileId, name: item.name, taskId: item.taskId,
           status: item.error ? "failed" as const : run?.status === "completed" ? "completed" as const : run?.status === "failed" ? "failed" as const : run?.status === "cancelled" ? "stopped" as const : run ? "running" as const : "queued" as const,
           error: item.error || run?.error ? agentErrorSummary(item.error ?? run!.error!) : undefined,
+          errorDetail: item.error ?? run?.error,
           suggestion: run ? toAgentTaskWithReview(run, reviewArtifacts.get(run.id)).suggestion : null };
       }) } : {}),
       ...(result.status === "done" && batchItems?.some((item) => item.error || (item.taskId && state.tasks[item.taskId]?.status === "failed")) ? { outcome: "partial" as const } : {}),
@@ -863,7 +877,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     void dispatch(next.input, next.conversationId).catch((reason) => {
       const item = batchInputs.get(next.input);
       if (item) recordBatchFailure(item, next.conversationId, reason);
-      emit({ kind: "error", message: errorMessage(reason) });
+      emit({ kind: "error", message: agentErrorSummary(errorMessage(reason)) });
     }).finally(() => {
       draining.delete(conversationId);
       const head = headOf(conversationId);
@@ -1148,7 +1162,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
         id, conversationId: joined, workspaceId, status: "question", topic: text,
         createdAt: new Date().toISOString(), events: [], userInput: { prompt: text },
         question: { id: `${id}:question`, question: translate("shell.service.chooseFormat"),
-          options: [{ id: "docx", label: "Word (.docx)" }, { id: "xlsx", label: "Excel (.xlsx)" }, { id: "pptx", label: "PowerPoint (.pptx)" }], allowFreeform: true },
+          options: FORMAT_CHOICES.filter(choice => choice.pattern.test(text)).map(({ id, label }) => ({ id, label })), allowFreeform: true },
       };
       formatGates.set(id, input);
       state = { ...state, tasks: { ...state.tasks, [id]: task }, taskOrder: [id, ...state.taskOrder] };
@@ -1522,7 +1536,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
             conversationId,
             // The row is the conversation, so it keeps the name the first
             // message gave it; the cards say what each run is (`project`).
-            ...(first && first.id !== task.id ? { title: taskTitle(first, translate("shell.service.untitledTask")) } : {}),
+            title: displayTitle(first ?? task),
             // Every run's id, so a file stamped with a later run's id can still
             // be traced to this conversation (`FileMeta.artifactTaskId`).
             runTaskIds: runs.map((run) => run.id),
@@ -1564,8 +1578,11 @@ export function createAgentService(api: DesktopAPI): AgentPort {
           { type: "pptx" as const, pattern: /^(?:powerpoint|pptx?|幻灯片|演示文稿)(?:\s*\(\.pptx\))?$/i },
         ];
         const type = choices.find(choice => choice.pattern.test(answer))?.type;
-        if (!type) { emit({ kind: "notice", message: translate("shell.service.chooseFormat") }); return; }
+        if (!type || !FORMAT_CHOICES.some(choice => choice.id === type && choice.pattern.test(gate.text))) {
+          emit({ kind: "notice", message: translate("shell.service.chooseFormat") }); return;
+        }
         const task = state.tasks[pending.taskId];
+        const question = task.question;
         task.status = "completed";
         task.question = undefined;
         formatGates.delete(task.id);
@@ -1577,7 +1594,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
           persistPending();
         } catch (error) {
           task.status = "question";
-          task.question = { id: `${task.id}:question`, question: translate("shell.service.chooseFormat"), options: [], allowFreeform: true };
+          task.question = question;
           formatGates.set(task.id, gate);
           activeTaskId = task.id;
           emit({ kind: "task", task: project(task) });
@@ -2031,8 +2048,7 @@ interface LocalTurn {
 
 /** The instruction as typed, without the conversation block `send` appended. */
 export function stripConversationContext(prompt: string): string {
-  const index = prompt.indexOf(`\n\n${CONVERSATION_CONTEXT_MARKER}`);
-  return index < 0 ? prompt : prompt.slice(0, index);
+  return prompt.split(`\n\n${CONVERSATION_CONTEXT_MARKER}`)[0].split("\n\nThis is one item of a batch.")[0];
 }
 
 function clip(text: string, limit: number): string {

@@ -1,4 +1,4 @@
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DesktopAPI, DocumentRecord } from "../shared/types";
@@ -88,6 +88,22 @@ beforeEach(() => {
   frameProps.length = 0;
 });
 afterEach(cleanup);
+
+it("hides the previous deck while the new file's preview grant is pending", async () => {
+  const api = stubApi();
+  let resolveSecond!: (record: DocumentRecord) => void;
+  const second = new Promise<DocumentRecord>(resolve => { resolveSecond = resolve; });
+  vi.mocked(api.getDocument).mockImplementation(async id => id === "second" ? second : record());
+  vi.mocked(api.issuePreviewToken).mockImplementation(async input => ({ token: input.filePath, fileName: input.fileName, documentType: "pptx" }));
+  const view = (target: FileMeta) => <PresentationCanvas api={api} file={target} onDirtyChange={noop} onSelectionChange={noop} onResolveSelection={noop} onController={noop} onEditRunner={noop} onUnavailable={noop} />;
+  const rendered = render(view(file()));
+  await waitFor(() => expect(rendered.queryByTestId("presentation-frame")).not.toBeNull());
+  rendered.rerender(view({ ...file(), id: "second", name: "second.pptx" }));
+  expect(rendered.queryByTestId("presentation-frame")).toBeNull();
+  await act(async () => { resolveSecond(record({ id: "second", filePath: "/tmp/second.pptx", fileName: "second.pptx" })); });
+  await waitFor(() => expect(frameProps.at(-1)?.fileName).toBe("second.pptx"));
+  expect(frameProps.at(-1)?.previewToken).toBe("/tmp/second.pptx");
+});
 
 /** Mounts, waits for the frame, and hands the controller in. */
 async function mounted(executeScript: (source: string) => Promise<{ result: unknown }>) {

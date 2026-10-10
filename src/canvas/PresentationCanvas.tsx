@@ -25,9 +25,8 @@ import type { DocumentEditRunner } from "./DocxCanvas";
  * document by id, and resolving an id to somewhere on disk is a desktop
  * concern. `getDocument` is the only place that translation happens.
  *
- * Switching to another deck changes `previewToken`, which the frame keys its
- * session effect on, so the component is reused in place. Remounting it would
- * boot the whole presentation runtime again for what is a document change.
+ * A preview token owns one iframe and one editor session. Until the new file's
+ * token arrives, the previous document must not appear under its tab.
  */
 export interface PresentationCanvasProps {
   api: DesktopAPI;
@@ -203,7 +202,7 @@ export function PresentationCanvas({
 
   // Nothing to show until the token is in. The host keeps its skeleton visible
   // underneath, so this is a gap of a few hundred milliseconds, not a blank.
-  if (!session) return null;
+  if (!session || session.fileId !== file.id) return null;
 
   return (
     <DesktopApiProvider api={api}>

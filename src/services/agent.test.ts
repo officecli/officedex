@@ -640,6 +640,25 @@ describe("acceptance failure isolation", () => {
 
 describe("1.0.18 acceptance regressions", () => {
   const choiceRequest = "I need a NEW office file, but have not chosen Word, Excel, or PowerPoint. Ask me which of those three formats to use and WAIT for my answer before creating or editing any file. Do not choose a format yourself.";
+  it.each([
+    ["[OD20-FORMAT-10] Help me create a small fictional office checklist. FIRST ask me whether I want a Word document or a PowerPoint presentation and WAIT for my answer. Do not create or modify any file before I answer the question. Ask the question in English.", ["docx", "pptx"], "pptx"],
+    ["Create a report. Ask me whether to use Word or Excel and wait for my answer.", ["docx", "xlsx"], "xlsx"],
+    ["先问我使用 Excel 还是 PPT，等我回答再创建。", ["xlsx", "pptx"], "xlsx"],
+  ])("holds a two-format choice before any file operation: %s", async (prompt, ids, answer) => {
+    const desk = scripted(); const service = createAgentService(desk.api); const panel = listen(service);
+    await service.send(message(prompt as string, { newConversation: true }));
+    expect(panel.last()?.question?.options.map(option => option.id)).toEqual(ids);
+    expect(desk.calls.generate).toHaveLength(0);
+    expect(desk.calls.modify).toHaveLength(0);
+    const gate = panel.last()!;
+    const restarted = createAgentService(desk.api);
+    await restarted.openConversation(FOLDER, gate.conversationId!);
+    await restarted.answer({ text: "not yet" });
+    expect(desk.calls.generate).toHaveLength(0);
+    await restarted.answer({ optionId: answer as string });
+    expect(desk.calls.generate).toHaveLength(1);
+    expect(desk.calls.generate[0].documentType).toBe(answer);
+  });
   it("asks for a format without creating a file, then continues with the selected format", async () => {
     const desk = scripted(); const service = createAgentService(desk.api); const panel = listen(service);
     await service.send(message(choiceRequest, { newConversation: true }));
@@ -696,6 +715,9 @@ it("keeps full-access batch proposals reviewable across a failure, apply, undo a
   desk.push(completed("task-1", "/external/good.modified.docx", "docx"));
   await vi.waitFor(() => expect(desk.calls.modify).toHaveLength(2));
   desk.push({ event_id: "bad-failed", task_id: "task-2", type: "task.failed", ts: new Date().toISOString(), payload: { message: "invalid DOCX" } });
+  desk.push({ event_id: "bad-title", task_id: "task-2", type: "task.title", payload: { topic: desk.calls.modify[1].prompt } });
+  expect(panel.last()?.title).toBe("Replace Beta with Delta independently in both files");
+  expect((await service.list())[0].title).not.toContain("This is one item of a batch");
   expect(panel.last()?.batch?.[0].suggestion).toMatchObject({ id: "task-1", targetFileId: "good", applied: false });
   expect(apply).not.toHaveBeenCalled();
   await service.applySuggestion("task-1");
@@ -705,4 +727,22 @@ it("keeps full-access batch proposals reviewable across a failure, apply, undo a
   expect(panel.last()?.batch?.[0].suggestion).toMatchObject({ applied: false, undoable: false });
   await service.retryBatch!("task-2");
   expect(desk.calls.modify.map(call => call.sourceFile)).toEqual(["/external/good.docx", "/external/bad.docx", "/external/bad.docx"]);
+  expect(panel.last()?.title).toBe("Replace Beta with Delta independently in both files");
+});
+
+it.each([
+  'content generation failed: Post "https://platform.officecli.io/api/llm/v1/json": EOF',
+  'extract docx content: failed to open OOXML zip: zip: not a valid zip file',
+  'content generation failed: PPTX expansion is incomplete; retained completed pages: 23/24 ready (page_failed); evidence: /Users/test/workspace/.mop-assets/officecli-expansion-123',
+])("keeps short technical diagnostics out of messages, phases and notices: %s", async (raw) => {
+  const desk = scripted(); const service = createAgentService(desk.api); const panel = listen(service);
+  const events: AgentEvent[] = []; service.subscribe(event => events.push(event));
+  await service.send(message("Create a NEW Word document."));
+  desk.push({ event_id: "failed", task_id: "task-1", type: "task.failed", ts: new Date().toISOString(), payload: { message: raw } });
+  const task = panel.last()!;
+  expect(task.errorDetail).toBe(raw);
+  expect(task.error).not.toBe(raw);
+  expect(task.phase).not.toBe(raw);
+  expect(task.messages.some(message => message.text === raw)).toBe(false);
+  expect(events.filter(event => event.kind === "error").some(event => event.message === raw)).toBe(false);
 });

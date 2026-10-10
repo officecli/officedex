@@ -1,6 +1,7 @@
 import type { AgentTask, AgentReference } from "../../shared/uiPort";
 import type { CanvasAdapter, DocumentEditPhase } from "../editor/canvasContract";
 import { translate } from "../../renderer/i18n";
+import { agentErrorSummary } from "../../renderer/agentError";
 import { requestsReadOnlyAnswer } from "../../canvas/documentReadOnly";
 
 /**
@@ -296,7 +297,7 @@ export function startDocumentEditRun(
     task.phase = phase;
     task.outcome = outcome;
     task.finishedAt = Date.now();
-    if (error) task.error = error;
+    if (error) { task.error = agentErrorSummary(error); task.errorDetail = error; }
     task.steps.forEach((step) => {
       if (completed) step.state = "done";
       else if (step.state === "active") step.state = "pending";
@@ -348,7 +349,7 @@ export function startDocumentEditRun(
         id: suggestionId,
         targetFileId: input.fileId,
         summary: result.saveError
-          ? translate("shell.edit.notSaved", { applied: appliedLine(result.applied, result.scope, input.documentType), error: result.saveError })
+          ? translate("shell.edit.notSaved", { applied: appliedLine(result.applied, result.scope, input.documentType), error: agentErrorSummary(result.saveError) })
           : appliedLine(result.applied, result.scope, input.documentType),
         applied: true,
         // The card's Undo is disabled rather than hidden when a change cannot
@@ -366,6 +367,7 @@ export function startDocumentEditRun(
        * failure and the document was quietly left dirty behind the message.
        */
       finish(result.saveError ? translate("shell.edit.changedNotSaved") : translate("shell.edit.changesApplied"));
+      if (result.saveError) task.errorDetail = result.saveError;
       emit();
     } catch (reason) {
       if (controller.signal.aborted) {
@@ -375,7 +377,7 @@ export function startDocumentEditRun(
         return;
       }
       const message = reason instanceof Error ? reason.message : String(reason);
-      say(message);
+      say(agentErrorSummary(message));
       finish(translate("shell.edit.editStopped"), false, "failed", message);
       emit();
     }
@@ -410,10 +412,11 @@ export function startDocumentEditRun(
       // the write's failure is a qualifier on it — not a replacement for it.
       say(
         saveError
-          ? translate("shell.edit.putBack", { name: input.fileName, error: saveError })
+          ? translate("shell.edit.putBack", { name: input.fileName, error: agentErrorSummary(saveError) })
           : translate("shell.edit.reverted", { name: input.fileName }),
       );
       task.phase = saveError ? translate("shell.edit.revertedNotSaved") : translate("shell.edit.changeReverted");
+      if (saveError) task.errorDetail = saveError;
       emit();
     },
   };
