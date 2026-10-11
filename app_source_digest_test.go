@@ -154,3 +154,25 @@ func TestSourceChangedErrorKeepsItsMarker(t *testing.T) {
 		t.Fatalf("error %q no longer carries %q", err, SourceChangedMarker)
 	}
 }
+
+func TestSourceDigestRelocationPreservesExternalConflict(t *testing.T) {
+	dir := t.TempDir()
+	old := filepath.Join(dir, "old.docx")
+	next := filepath.Join(dir, "new.docx")
+	if err := os.WriteFile(old, []byte("baseline"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	d := newSourceDigests()
+	d.remember(old, sha256Hex([]byte("baseline")))
+	oldCanonical := canonicalPath(old)
+	if err := os.WriteFile(old, []byte("external"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(old, next); err != nil {
+		t.Fatal(err)
+	}
+	d.relocate(oldCanonical, canonicalPath(next))
+	if err := d.assertUnchanged(next); err == nil {
+		t.Fatal("rename erased conflict baseline")
+	}
+}

@@ -100,3 +100,15 @@ func canonicalPath(path string) string {
 	}
 	return filepath.Clean(path)
 }
+
+func (d *sourceDigests) relocate(oldPath, newPath string) {
+	if d == nil {
+		return
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if baseline, ok := d.byPath[oldPath]; ok {
+		delete(d.byPath, oldPath)
+		d.byPath[newPath] = baseline
+	}
+}

@@ -394,3 +394,51 @@ func TestExtensionLowercased(t *testing.T) {
 		t.Errorf("DocumentType = %q, want lowercase pptx", grant.DocumentType)
 	}
 }
+
+func TestRelocateFileTransfersSelectedFileCapabilitiesOnly(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	old := filepath.Join(outside, "before.docx")
+	next := filepath.Join(outside, "after.docx")
+	if err := os.WriteFile(old, []byte("docx"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := New(RegistryOptions{TrustedRoots: []string{root}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := types.Artifact{FilePath: old, DocumentType: "docx"}
+	if err = reg.AllowSelectedArtifact(a); err != nil {
+		t.Fatal(err)
+	}
+	grants := []types.PreviewGrant{}
+	for i := 0; i < 2; i++ {
+		g, e := reg.IssueToken(a)
+		if e != nil {
+			t.Fatal(e)
+		}
+		grants = append(grants, g)
+	}
+	canonicalOld, _ := filepath.EvalSymlinks(old)
+	if err = os.Rename(old, next); err != nil {
+		t.Fatal(err)
+	}
+	canonicalNext, _ := filepath.EvalSymlinks(next)
+	reg.RelocateFile(canonicalOld, canonicalNext)
+	for _, g := range grants {
+		entry, e := reg.ResolveToken(g.Token)
+		if e != nil || entry.FilePath != canonicalNext || entry.FileName != "after.docx" {
+			t.Fatalf("relocated token: %+v %v", entry, e)
+		}
+	}
+	if _, e := reg.IssueToken(types.Artifact{FilePath: next, DocumentType: "docx"}); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := reg.IssueToken(a); e == nil {
+		t.Fatal("old path remains authorized")
+	}
+	sibling := filepath.Join(outside, "other.docx")
+	if e := reg.AllowArtifact(types.Artifact{FilePath: sibling, DocumentType: "docx"}); e == nil {
+		t.Fatal("rename authorized a sibling")
+	}
+}

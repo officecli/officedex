@@ -73,6 +73,8 @@ type CloseXlsxEditorInput struct {
 }
 
 func (a *App) PrepareXlsxEditor(previewToken string) (xlsxeditor.PrepareResult, error) {
+	a.documentRelocationMu.RLock()
+	defer a.documentRelocationMu.RUnlock()
 	if a.xlsxEditorService == nil {
 		return xlsxeditor.PrepareResult{}, errXlsxEditorUnavailable
 	}
@@ -84,6 +86,8 @@ func (a *App) PrepareXlsxEditor(previewToken string) (xlsxeditor.PrepareResult, 
 }
 
 func (a *App) SaveXlsxEditor(input SaveXlsxEditorInput) (xlsxeditor.SaveResult, error) {
+	a.documentRelocationMu.RLock()
+	defer a.documentRelocationMu.RUnlock()
 	if a.xlsxEditorService == nil {
 		return xlsxeditor.SaveResult{}, errXlsxEditorUnavailable
 	}
@@ -95,6 +99,8 @@ func (a *App) SaveXlsxEditor(input SaveXlsxEditorInput) (xlsxeditor.SaveResult, 
 }
 
 func (a *App) StageXlsxEditorImage(input StageXlsxEditorImageInput) (xlsxeditor.StageImageResult, error) {
+	a.documentRelocationMu.RLock()
+	defer a.documentRelocationMu.RUnlock()
 	if a.xlsxEditorService == nil {
 		return xlsxeditor.StageImageResult{}, errXlsxEditorUnavailable
 	}
@@ -171,6 +177,8 @@ type ClosePptxEditorInput struct {
 // PreparePptxEditor opens an editing session for a granted preview token and
 // returns the deck the embedded editor should load.
 func (a *App) PreparePptxEditor(previewToken string) (pptxeditor.PrepareResult, error) {
+	a.documentRelocationMu.RLock()
+	defer a.documentRelocationMu.RUnlock()
 	if a.pptxEditorService == nil {
 		return pptxeditor.PrepareResult{}, errPptxEditorUnavailable
 	}
@@ -183,6 +191,8 @@ func (a *App) PreparePptxEditor(previewToken string) (pptxeditor.PrepareResult, 
 
 // SavePptxEditorSnapshot persists the editor's current document revision.
 func (a *App) SavePptxEditorSnapshot(input SavePptxEditorSnapshotInput) (pptxeditor.SaveResult, error) {
+	a.documentRelocationMu.RLock()
+	defer a.documentRelocationMu.RUnlock()
 	if a.pptxEditorService == nil {
 		return pptxeditor.SaveResult{}, errPptxEditorUnavailable
 	}
@@ -195,6 +205,8 @@ func (a *App) SavePptxEditorSnapshot(input SavePptxEditorSnapshotInput) (pptxedi
 
 // SavePptxEditorAsset stores one resource the editor added to the deck.
 func (a *App) SavePptxEditorAsset(input SavePptxEditorAssetInput) (pptxeditor.SaveAssetResult, error) {
+	a.documentRelocationMu.RLock()
+	defer a.documentRelocationMu.RUnlock()
 	if a.pptxEditorService == nil {
 		return pptxeditor.SaveAssetResult{}, errPptxEditorUnavailable
 	}
@@ -209,6 +221,8 @@ func (a *App) SavePptxEditorAsset(input SavePptxEditorAssetInput) (pptxeditor.Sa
 // editor. The FFmpeg/WASM encoder remains in the client; Go only performs the
 // revision check and atomic file write in the user's Downloads directory.
 func (a *App) SavePptxEditorVideo(input SavePptxEditorVideoInput) (pptxeditor.VideoSaveResult, error) {
+	a.documentRelocationMu.RLock()
+	defer a.documentRelocationMu.RUnlock()
 	if a.pptxEditorService == nil {
 		return pptxeditor.VideoSaveResult{}, errPptxEditorUnavailable
 	}
@@ -222,6 +236,8 @@ func (a *App) SavePptxEditorVideo(input SavePptxEditorVideoInput) (pptxeditor.Vi
 // ExportPptxEditor writes the edited deck back to the file the preview token
 // granted access to.
 func (a *App) ExportPptxEditor(input ExportPptxEditorInput) (pptxeditor.SaveResult, error) {
+	a.documentRelocationMu.RLock()
+	defer a.documentRelocationMu.RUnlock()
 	if a.pptxEditorService == nil {
 		return pptxeditor.SaveResult{}, errPptxEditorUnavailable
 	}
@@ -345,6 +361,8 @@ type ArtifactFile struct {
 
 // ReadArtifactFile returns the raw bytes for a granted preview token.
 func (a *App) ReadArtifactFile(previewToken string) (ArtifactFile, error) {
+	a.documentRelocationMu.RLock()
+	defer a.documentRelocationMu.RUnlock()
 	entry, err := a.previewReg.ResolveToken(previewToken)
 	if err != nil {
 		return ArtifactFile{}, err
@@ -378,6 +396,8 @@ type SaveDocxResult struct {
 }
 
 func (a *App) SaveDocx(input SaveDocxInput) (SaveDocxResult, error) {
+	a.documentRelocationMu.RLock()
+	defer a.documentRelocationMu.RUnlock()
 	if strings.TrimSpace(input.DataBase64) == "" {
 		return SaveDocxResult{}, errors.New("save docx: empty data")
 	}

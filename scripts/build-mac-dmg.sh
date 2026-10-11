@@ -430,7 +430,11 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
   # Browser-only dev middleware previously concealed missing native font assets.
   echo "[${LOG}] verifying foreground editor paint and resource delivery"
   OFFICEDEX_E2E_SKIP_PREFETCH=1 OFFICEDEX_E2E_BROWSER=webkit \
-    node scripts/run-real-e2e.mjs e2e/qa24-render-real.spec.ts --workers=1
+    node scripts/run-real-e2e.mjs e2e/qa24-render-real.spec.ts e2e/qa26-rename-real.spec.ts --grep-invert "N26-01 xlsx" --workers=1
+  # Playwright WebKit currently fails during sheet SDK boot, before rename.
+  # Run the sheet path in Chromium and verify native WKWebView before release.
+  OFFICEDEX_E2E_SKIP_PREFETCH=1 OFFICEDEX_E2E_BROWSER=chromium \
+    node scripts/run-real-e2e.mjs e2e/qa26-rename-real.spec.ts --grep "N26-01 xlsx" --workers=1
 
   echo "[${LOG}] building OfficeDex.app (darwin/${GO_ARCH})"
   # Build with the checked-in module graph. Automatic tidy also scans archived

@@ -740,3 +740,16 @@ func validatePptx(path string) error {
 	}
 	return nil
 }
+
+// RelocateFile preserves the working package, revision and source fingerprint.
+// The App relocation barrier excludes concurrent Prepare/Save during the move;
+// do not refresh the fingerprint here, which would conceal external edits.
+func (s *Service) RelocateFile(oldPath, newPath string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, session := range s.sessions {
+		if session.filePath == oldPath {
+			session.filePath = newPath
+		}
+	}
+}

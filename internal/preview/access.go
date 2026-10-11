@@ -269,3 +269,29 @@ func isWithinRoot(filePath, root string) bool {
 	}
 	return true
 }
+
+// RelocateFile transfers only existing capabilities to an app-renamed file.
+// Paths are canonicalized by the caller BEFORE the source is moved. Keeping
+// tokens stable preserves mounted editors and does not grant sibling access.
+func (r *Registry) RelocateFile(oldPath, newPath string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	relocate := func(entry ArtifactEntry) ArtifactEntry {
+		entry.FilePath = newPath
+		entry.FileName = filepath.Base(newPath)
+		return entry
+	}
+	if entry, ok := r.allowedArtifacts[oldPath]; ok {
+		delete(r.allowedArtifacts, oldPath)
+		r.allowedArtifacts[newPath] = relocate(entry)
+	}
+	if _, ok := r.allowedFiles[oldPath]; ok {
+		delete(r.allowedFiles, oldPath)
+		r.allowedFiles[newPath] = struct{}{}
+	}
+	for token, entry := range r.tokens {
+		if entry.FilePath == oldPath {
+			r.tokens[token] = relocate(entry)
+		}
+	}
+}

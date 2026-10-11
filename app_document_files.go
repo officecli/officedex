@@ -296,6 +296,8 @@ func uniqueDestination(directory, base, ext string) (string, error) {
 // RenameDocument renames the file on disk and every row that remembers it. The
 // extension is preserved: a .pptx renamed to "Q3 review" is still a .pptx.
 func (a *App) RenameDocument(documentID, name string) (types.DocumentRecord, error) {
+	a.documentRelocationMu.Lock()
+	defer a.documentRelocationMu.Unlock()
 	name, err := sanitizeFileName(name)
 	if err != nil {
 		return types.DocumentRecord{}, err
@@ -322,16 +324,31 @@ func (a *App) RenameDocument(documentID, name string) (types.DocumentRecord, err
 	if _, err := os.Stat(record.FilePath); err != nil {
 		return types.DocumentRecord{}, fmt.Errorf("document file is unavailable: %w", err)
 	}
-	if err := moveFile(record.FilePath, destination); err != nil {
-		return types.DocumentRecord{}, fmt.Errorf("rename %s: %w", record.FileName, err)
-	}
 	ctx, err := a.documentStoreContext()
 	if err != nil {
 		return types.DocumentRecord{}, err
 	}
-	if err := a.localStore.RelocateDocument(ctx, record.ID, destination, name+ext); err != nil {
-		return types.DocumentRecord{}, err
+	// Resolve aliases while the source still exists (/var vs /private/var on macOS).
+	oldCanonical := canonicalPath(record.FilePath)
+	if err := moveFile(record.FilePath, destination); err != nil {
+		return types.DocumentRecord{}, fmt.Errorf("rename %s: %w", record.FileName, err)
 	}
+	if err := a.localStore.RelocateDocument(ctx, record.ID, destination, name+ext); err != nil {
+		rollbackErr := moveFile(destination, record.FilePath)
+		return types.DocumentRecord{}, errors.Join(err, rollbackErr)
+	}
+	newCanonical := canonicalPath(destination)
+	if a.previewReg != nil {
+		a.previewReg.RelocateFile(oldCanonical, newCanonical)
+	}
+	if a.pptxEditorService != nil {
+		a.pptxEditorService.RelocateFile(oldCanonical, newCanonical)
+	}
+	if a.xlsxEditorService != nil {
+		a.xlsxEditorService.RelocateFile(oldCanonical, newCanonical)
+	}
+	a.sourceDigests.relocate(oldCanonical, newCanonical)
+
 	return a.GetDocument(record.ID)
 }
 

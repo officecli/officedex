@@ -219,3 +219,5 @@ func writeFileForAppTest(t *testing.T, path string, content []byte) {
 		t.Fatal(err)
 	}
 }
+
+func (s *fakeXlsxEditorService) RelocateFile(oldPath, newPath string) {}

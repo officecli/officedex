@@ -148,6 +148,7 @@ func (a *App) PlanPptxJS(input PlanPptxJSInput) (PlanPptxJSResult, error) {
 }
 
 type xlsxEditorService interface {
+	RelocateFile(string, string)
 	Prepare(context.Context, string) (xlsxeditor.PrepareResult, error)
 	Save(context.Context, string, string, string, []xlsxeditor.ManagedSheet) (xlsxeditor.SaveResult, error)
 	StageImage(string, string, []byte, string, string, int, int, int) (xlsxeditor.StageImageResult, error)
@@ -189,6 +190,7 @@ func (a *App) editorSessions() []editorSession {
 }
 
 type pptxEditorService interface {
+	RelocateFile(string, string)
 	Prepare(context.Context, string) (pptxeditor.PrepareResult, error)
 	ImportTemplate(context.Context, string, string) error
 	TemplateAssets(string) ([]pptxeditor.Asset, error)
@@ -225,10 +227,13 @@ func (wailsDesktopNotificationRuntime) SendNotification(ctx context.Context, opt
 
 // App is the Wails-bound object surfaced to the renderer.
 type App struct {
-	ctx             context.Context
-	setupMu         sync.Mutex
-	nativeOpenFiles []string
-	setupWindow     *setupWindowState
+	// Rename excludes prepare/save while disk, records and open sessions move.
+	// Readers stay concurrent so importing one document does not freeze others.
+	documentRelocationMu sync.RWMutex
+	ctx                  context.Context
+	setupMu              sync.Mutex
+	nativeOpenFiles      []string
+	setupWindow          *setupWindowState
 
 	userDataDir       string
 	workspaceDir      string

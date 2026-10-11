@@ -306,3 +306,5 @@ func TestShutdownClosesAllPptxSessions(t *testing.T) {
 		t.Fatalf("CloseAll calls = %d, want 1", service.closeAllCalls)
 	}
 }
+
+func (s *fakePptxEditorService) RelocateFile(oldPath, newPath string) {}
