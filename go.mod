@@ -1,12 +1,12 @@
 module officedex
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/google/uuid v1.6.0
 	github.com/wailsapp/wails/v2 v2.12.0
 	github.com/xuri/excelize/v2 v2.10.1
-	golang.org/x/sys v0.42.0
+	golang.org/x/sys v0.49.0
 	modernc.org/sqlite v1.50.1
 )
 
