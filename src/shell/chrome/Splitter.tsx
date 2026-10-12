@@ -1,6 +1,7 @@
-import { useRef, type KeyboardEvent, type PointerEvent } from "react";
+import { useEffect, useRef, type KeyboardEvent, type PointerEvent } from "react";
 
 import { useT } from "../../renderer/i18n";
+import { holdTextSelection } from "../kit/dragSelection";
 import { Icon } from "../kit/Icon";
 import { useShell } from "../state/ShellContext";
 import { CHAT_KEYBOARD_STEP, CHAT_MAX_WIDTH, CHAT_MIN_WIDTH } from "../state/shellReducer";
@@ -20,13 +21,18 @@ import { CHAT_KEYBOARD_STEP, CHAT_MAX_WIDTH, CHAT_MIN_WIDTH } from "../state/she
 export function Splitter({ onResizing }: { onResizing: (active: boolean) => void }) {
   const t = useT();
   const { state, dispatch } = useShell();
-  const drag = useRef<{ pointerId: number; x: number; width: number } | null>(null);
+  const drag = useRef<{ pointerId: number; x: number; width: number; release: () => void } | null>(null);
 
   const sign = state.chatPosition === "right" ? -1 : 1;
+  // A divider that goes away mid-drag must not leave the whole app unselectable.
+  useEffect(() => () => drag.current?.release(), []);
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
-    drag.current = { pointerId: event.pointerId, x: event.clientX, width: state.chatWidth };
+    // No selection starts under the pointer; focus still lands on the handle.
+    event.preventDefault();
+    event.currentTarget.focus();
+    drag.current = { pointerId: event.pointerId, x: event.clientX, width: state.chatWidth, release: holdTextSelection() };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
@@ -41,6 +47,7 @@ export function Splitter({ onResizing }: { onResizing: (active: boolean) => void
     const current = drag.current;
     if (!current || current.pointerId !== event.pointerId) return;
     if (event.type === "pointercancel") dispatch({ type: "set-chat-width", width: current.width });
+    current.release();
     drag.current = null;
     onResizing(false);
   };
@@ -50,6 +57,7 @@ export function Splitter({ onResizing }: { onResizing: (active: boolean) => void
       event.preventDefault();
       dispatch({ type: "set-chat-width", width: drag.current.width });
       event.currentTarget.releasePointerCapture(drag.current.pointerId);
+      drag.current.release();
       drag.current = null;
       onResizing(false);
       return;

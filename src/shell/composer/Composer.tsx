@@ -3,7 +3,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 
 import { toast } from "../../renderer/ui";
 import { translate, useT } from "../../renderer/i18n";
-import { referenceRequests } from "../chrome/useFileActions";
+import { contextRequests, referenceRequests } from "../chrome/useFileActions";
 import { useCanvas } from "../canvas/CanvasContext";
 import { useCanvasSelection, selectionForFile } from "../canvas/SelectionContext";
 import type { Attachment, FileType, Mention, SendInput } from "../../shared/uiPort";
@@ -107,6 +107,7 @@ const drafts = new Map<string, Draft>();
 export function resetComposerDrafts(): void {
   drafts.clear();
   lastSent = null;
+  restoredByStop = null;
 }
 
 /**
@@ -125,6 +126,24 @@ export function resetComposerDrafts(): void {
  * old message.
  */
 let lastSent: Draft | null = null;
+
+/**
+ * The message Stop put back, until something else happens to it.
+ *
+ * Continuing the stopped run from its card sends that same request again, and
+ * the copy in the input then looked like a second, unsent task — one Enter
+ * from a duplicate (UX28-09). When a run starts while the input still holds
+ * exactly what Stop restored, that copy has been sent and is cleared; anything
+ * the user typed over it is theirs and stays.
+ */
+let restoredByStop: Draft | null = null;
+
+const sameMessage = (left: Draft, right: Draft) =>
+  left.text === right.text &&
+  left.mentions.length === right.mentions.length &&
+  left.mentions.every((mention, index) => mention.kind === right.mentions[index]?.kind && mention.id === right.mentions[index]?.id) &&
+  left.attachments.length === right.attachments.length &&
+  left.attachments.every((attachment, index) => attachment.id === right.attachments[index]?.id);
 
 /** Everything the composer gathers; the caller adds model and permission. */
 export type ComposerSubmission = Pick<
@@ -354,6 +373,11 @@ export function Composer({ placement, draftKey = "", imageOnly = false, busy = f
   const wasBusy = useRef(busy);
   useEffect(() => {
     if (wasBusy.current && !busy) lastSent = null;
+    if (!wasBusy.current && busy && restoredByStop) {
+      const restored = restoredByStop;
+      restoredByStop = null;
+      patchDraft((current) => (sameMessage(current, restored) ? { text: "", mentions: [], attachments: [] } : {}));
+    }
     wasBusy.current = busy;
   }, [busy]);
 
@@ -367,11 +391,11 @@ export function Composer({ placement, draftKey = "", imageOnly = false, busy = f
     lastSent = null;
     // Only into an empty input: anything typed while the stop was in flight is
     // newer than the message coming back, and is not the user's to lose.
-    patchDraft((current) =>
-      current.text.trim() || current.mentions.length > 0 || current.attachments.length > 0
-        ? {}
-        : { ...sent, modeFileId: documentOnScreen ? (activeFile?.id ?? null) : null },
-    );
+    patchDraft((current) => {
+      if (current.text.trim() || current.mentions.length > 0 || current.attachments.length > 0) return {};
+      restoredByStop = sent;
+      return { ...sent, modeFileId: documentOnScreen ? (activeFile?.id ?? null) : null };
+    });
     queueMicrotask(() => {
       const input = inputRef.current;
       input?.focus();
@@ -674,6 +698,7 @@ export function Composer({ placement, draftKey = "", imageOnly = false, busy = f
 
     // Kept whole, before any of it is cleared, so Stop can put it back.
     lastSent = draft;
+    restoredByStop = null;
     setText("");
     setMentions([]);
     setAttachments([]);
@@ -791,6 +816,10 @@ export function Composer({ placement, draftKey = "", imageOnly = false, busy = f
     [files],
   );
 
+  // A failed run asks for another input file: open the same dialog as "add".
+  // Resubscribed each render so it always sees this render's selection.
+  useEffect(() => contextRequests.subscribe(() => chooseContext()));
+
   /** The "add" button: which files this message may use, and what it should make. */
   function chooseContext() {
     openTaskContext({
@@ -800,6 +829,7 @@ export function Composer({ placement, draftKey = "", imageOnly = false, busy = f
       attachments,
       output,
       provider: settings.models.find((model) => model.id === settings.value.selectedModelId)?.provider ?? "",
+      pathOf: port.files.pathOf ? (id) => port.files.pathOf!(id) : undefined,
       onChooseFromDisk: () =>
         void pickNativeAttachments().then((picked) => {
           if (!picked) fileInputRef.current?.click();

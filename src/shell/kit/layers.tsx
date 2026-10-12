@@ -37,6 +37,11 @@ export interface MenuEntry {
   /** Shown right-aligned, e.g. "⌘S". */
   shortcut?: string;
   disabled?: boolean;
+  /**
+   * Why a disabled row cannot be used: shown beside the label and on hover, so
+   * the menu says it before the click rather than after.
+   */
+  unavailable?: { hint: string; reason: string };
   /** Present on a choice; the row becomes a radio item and shows a check when true. */
   checked?: boolean;
   /** A leading element, e.g. a file icon in the @-mention list. */
@@ -271,6 +276,7 @@ function MenuLayer({ request }: { request: MenuRequest }) {
             role={item.checked === undefined ? itemRole : "menuitemradio"}
             aria-checked={item.checked}
             disabled={item.disabled}
+            title={item.unavailable?.reason}
             onClick={() => {
               closeMenu(request.takeFocus);
               item.onSelect();
@@ -279,6 +285,7 @@ function MenuLayer({ request }: { request: MenuRequest }) {
             {item.leading}
             {item.leading ? <span className="dx-ellipsis">{item.label}</span> : item.label}
             {item.shortcut ? <span className="dx-key">{item.shortcut}</span> : null}
+            {item.unavailable ? <span className="dx-key">{item.unavailable.hint}</span> : null}
             {item.checked ? (
               <span className="dx-selection-mark" aria-hidden="true">
                 <Icon name="Check" />

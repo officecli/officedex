@@ -102,11 +102,7 @@ const UNWIRED: Record<string, string> = {
   reassignAgentClientTool: LEGACY_ONLY,
   showItemInFolder: LEGACY_ONLY,
   openExternal: LEGACY_ONLY,
-  openFileDialog: LEGACY_ONLY,
   openDirectoryDialog: LEGACY_ONLY,
-  deletePptxTemplate: LEGACY_ONLY,
-  onPptxTemplateProgress: LEGACY_ONLY,
-  importPptxTemplate: LEGACY_ONLY,
   savePptx: LEGACY_ONLY,
   planPptxJS: LEGACY_ONLY,
   createWorkbookFromSheet: LEGACY_ONLY,
@@ -291,6 +287,6 @@ describe("DesktopAPI reachability", () => {
   // asks for — those capabilities are out of the shell's reach until it grows
   // a surface for them, and the list is where that debt is written down.
   it("the unwired list does not grow", () => {
-    expect(Object.keys(UNWIRED)).toHaveLength(64);
+    expect(Object.keys(UNWIRED)).toHaveLength(60);
   });
 });

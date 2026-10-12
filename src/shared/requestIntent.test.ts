@@ -32,3 +32,17 @@ it("treats command words in a quoted filename as data while retaining its type",
   expect(requestsCopyOnly('Edit "save a copy.docx" now.')).toBe(false);
   expect(inferHomeTaskRoute({prompt})).toMatchObject({documentType:"docx"});
 });
+
+describe("UX28-02: a negated new file or copy is a review of the source", () => {
+  const attachment = "仅处理附件 UX28-review.docx。把 Alpha is settled. 改为 Alpha is reviewed.，保留其他内容。先展示 Review 差异并等待我确认，不要直接写回，也不要生成说明文档或副本。";
+  const current = "在当前文档把 Alpha is settled. 改为 Alpha is reviewed.，其他内容不变。先展示 Review 差异，等待我点击应用；不要新建文档。";
+  it.each([attachment, current])("edits the source with review for %s", prompt => {
+    expect(requestsNewFile(prompt)).toBe(false);
+    expect(requestsCopyOnly(prompt)).toBe(false);
+    expect(reviewRequestedBy(prompt)).toBe(true);
+  });
+  it("still reads a positive request for a new document", () => {
+    expect(requestsNewFile("新建一个文档写周报")).toBe(true);
+    expect(requestsNewFile("不要改原文，生成一份新文档")).toBe(true);
+  });
+});

@@ -12,6 +12,7 @@ import { notBuiltYet } from "../port/reportPortFailure";
 import type { FileMeta } from "../../shared/uiPort";
 import { useShell } from "../state/ShellContext";
 import { FeatureHighlights } from "./FeatureHighlights";
+import { PptxTemplatesButton } from "./PptxTemplates";
 import { CREATABLE, NEW_GROUPS, recentFiles, type NewType } from "./fileRows";
 
 /** Home's Recent has no run beside it, so nothing is working or under review. */
@@ -25,7 +26,7 @@ const RECENT_LIMIT = 8;
  *
  * One heading, one input, then three ways in: Quick start (straight to a Local
  * editor, no conversation), Hot and fresh features, and Recent. There is no
- * subtitle and no Templates button, and neither leaves a gap where it was.
+ * subtitle. The template library opens a separate generation flow.
  */
 export function Home({ onQuickStart }: { onQuickStart: (type: NewType) => void }) {
   const t = useT();
@@ -54,6 +55,7 @@ export function Home({ onQuickStart }: { onQuickStart: (type: NewType) => void }
         </div>
 
         <div className="dx-quick-start">
+          <PptxTemplatesButton />
           <div className="dx-quick-new" role="group" aria-label={t("dx.home.quickStart")}>
             <span className="dx-quick-start-label">{t("dx.home.quickStart")}</span>
             <span className="dx-quick-separator" role="separator" aria-orientation="vertical" />

@@ -324,9 +324,10 @@ export interface AgentTask {
   errorDetail?: string;
   /**
    * What kind of thing went wrong, when the runtime said. `model` failures are
-   * the ones a trip to Settings → Models can fix.
+   * the ones a trip to Settings → Models can fix; `input` ones need a different
+   * file, not the same request again.
    */
-  failureKind?: "model" | "network" | "other";
+  failureKind?: "model" | "network" | "input" | "other";
   /** Epoch ms the newest attempt started, and when it ended. */
   startedAt?: number;
   finishedAt?: number;
@@ -425,6 +426,8 @@ export interface Attachment {
 }
 
 export interface SendInput {
+  pptxTemplate?: { id: string; version: number; localAssetDir: string };
+  generationMode?: "fast" | "plan";
   text: string;
   /** The scope chip in the composer. Decision 2: scope is a property of the
    *  message being composed, not a piece of global app state. */
@@ -740,6 +743,7 @@ export interface WindowPort {
 /* ------------------------------------------------------------------- port */
 
 export interface UiPort {
+  pptxTemplates?: PptxTemplatePort;
   folders: FolderPort;
   files: FilePort;
   agent: AgentPort;
@@ -749,4 +753,10 @@ export interface UiPort {
   /** Native multi-file picker, when the shell is running in the desktop app. */
   pickAttachmentPaths?: () => Promise<string[] | null>;
   images?: ImagePort;
+}
+
+export interface PptxTemplatePort {
+  list(): Promise<import("./pptxTemplates").PptxTemplateAssetSummary[]>;
+  import(onProgress: (progress: import("./types").PptxTemplateProgress) => void): Promise<import("./pptxTemplates").PptxTemplateAssetSummary | null>;
+  remove(id: string): Promise<void>;
 }

@@ -344,6 +344,18 @@ func (h *realClientE2EHost) call(method string, raw json.RawMessage) (any, error
 		}
 		h.recordAction("openExternal", value)
 		return nil, nil
+	case "ImportPptxTemplate":
+		var input ImportPptxTemplateInput
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return h.app.ImportPptxTemplate(input)
+	case "DeletePptxTemplate":
+		value, err := decodeRealClientString(raw)
+		if err != nil {
+			return nil, err
+		}
+		return nil, h.app.DeletePptxTemplate(value)
 	case "OpenFileDialog":
 		return h.popFileDialog(false), nil
 	case "OpenDirectoryDialog":

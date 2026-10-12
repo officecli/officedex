@@ -49,6 +49,7 @@ export function DocumentTabs({ workingFileIds }: { workingFileIds: ReadonlySet<s
   const fileActions = useFileActions();
   const canvas = useCanvas();
   const dragged = useRef<string | null>(null);
+  const tablist = useRef<HTMLDivElement>(null);
 
   // The editor's own failures land here because this row is where they show:
   // the tab keeps its dot, the status reads "Save failed", Retry sits beside it.
@@ -83,6 +84,26 @@ export function DocumentTabs({ workingFileIds }: { workingFileIds: ReadonlySet<s
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [activeFile, fileActions]);
+
+  /*
+   * The tab on screen is always in view (UX28-08). Opening or creating a file
+   * with several tabs already open switched the document but left the strip
+   * scrolled to its start, so the active tab — the only place the file's name
+   * shows — sat out of sight. Only the strip scrolls; nothing around it moves.
+   */
+  useEffect(() => {
+    if (!selectedId) return;
+    const frame = requestAnimationFrame(() => {
+      const list = tablist.current;
+      const tab = list?.querySelector<HTMLElement>(`[data-tab="${CSS.escape(selectedId)}"]`);
+      if (!list || !tab) return;
+      const bounds = list.getBoundingClientRect();
+      const box = tab.getBoundingClientRect();
+      if (box.left < bounds.left) list.scrollLeft -= bounds.left - box.left;
+      else if (box.right > bounds.right) list.scrollLeft += box.right - bounds.right;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [selectedId, state.openFileIds.length]);
 
   if (!showsTabStrip(state)) return <div className="dx-home-top" />;
 
@@ -122,7 +143,7 @@ export function DocumentTabs({ workingFileIds }: { workingFileIds: ReadonlySet<s
 
   return (
     <div className="dx-tabs-strip" data-ui-scope="officedex">
-      <div className="dx-document-tabs" role="tablist" aria-label={t("dx.tab.listAria")}>
+      <div ref={tablist} className="dx-document-tabs" role="tablist" aria-label={t("dx.tab.listAria")}>
         {open.map((file, index) => {
           const active = file.id === selectedId;
           const chatTab = tabIsChat(state, file.id);
@@ -248,7 +269,8 @@ export function DocumentTabs({ workingFileIds }: { workingFileIds: ReadonlySet<s
               data-act="editor-command"
               data-id="present"
               aria-label={t("dx.editor.present")}
-              title={t("dx.editor.present")}
+              title={t("dx.notBuilt.present")}
+              aria-disabled="true"
               onClick={() => notBuiltYet("editor.present", t("dx.notBuilt.present"))}
             >
               <img src={presentIcon} alt="" />

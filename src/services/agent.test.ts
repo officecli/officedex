@@ -998,3 +998,20 @@ describe("N27-01 public results never deliver the review staging file", () => {
     expect(panel.last()?.suggestion).toBeNull();
   });
 });
+
+describe("template generation entry", () => {
+  it.each(["fast", "plan"] as const)("keeps template binding and explicit %s mode", async generationMode => {
+    const desk = scripted();
+    const service = createAgentService(desk.api);
+    await service.send(message("季度经营方案", {
+      newConversation: true, generationMode,
+      pptxTemplate: { id: "tpl-company", version: 2, localAssetDir: "/templates/company" },
+    }));
+    expect(desk.calls.generate).toHaveLength(1);
+    expect(desk.calls.generate[0]).toMatchObject({
+      documentType: "pptx", generationMode,
+      templateId: "tpl-company", templateVersion: 2, templateAssetDir: "/templates/company",
+    });
+    expect(desk.calls.modify).toHaveLength(0);
+  });
+});

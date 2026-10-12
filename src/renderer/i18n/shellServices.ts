@@ -44,6 +44,11 @@ export const shellServicesEn: Record<string, string> = {
   "shell.service.model.builtinNotEditable": "The built-in model cannot be edited.",
   "shell.service.model.builtinNotRemovable": "The built-in model cannot be removed.",
   "shell.service.model.notConfigured": "That model is no longer configured. Add it again to use it.",
+  "shell.service.target.failed": "Could not finish with {file}.",
+  "shell.service.target.reading": "Reading {file}.",
+  "shell.service.target.read": "Read {file}.",
+  "shell.task.step.read-file": "Read the file",
+  "shell.task.step.finish": "Finish the task",
 };
 
 export const shellServicesZh: Record<string, string> = {
@@ -87,4 +92,9 @@ export const shellServicesZh: Record<string, string> = {
   "shell.service.model.builtinNotEditable": "内置模型不可编辑。",
   "shell.service.model.builtinNotRemovable": "内置模型不可移除。",
   "shell.service.model.notConfigured": "该模型已不再配置，请重新添加后使用。",
+  "shell.service.target.failed": "未能完成对 {file} 的处理。",
+  "shell.service.target.reading": "正在读取 {file}。",
+  "shell.service.target.read": "已读取 {file}。",
+  "shell.task.step.read-file": "读取文件",
+  "shell.task.step.finish": "完成任务",
 };

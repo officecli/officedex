@@ -35,6 +35,13 @@
   padding: 8px 0;
 }
 
+/* A same-named file's name over where it came from (UX28-06). */
+.dx-context-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 .dx-context-more {
   margin-top: 16px;
   justify-content: space-between;
@@ -258,3 +265,49 @@
 
 .dx-review-diff { max-height: 45vh; overflow: auto; }
 .dx-review-diff pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; padding: 8px; background: var(--dx-canvas); }
+
+/* A control with no backend yet looks unavailable before it is pressed (UX28-04). */
+#dx-workspace .dx-source-title-button[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: default;
+}
+#dx-workspace .dx-source-title-button[aria-disabled="true"]:hover {
+  background: transparent;
+}
+
+/*
+ * Narrow content area (UX28-07). The viewport breakpoints above cannot see the
+ * sidebar and the conversation column: at 1040×720 with both open the table
+ * has under 480px, and its right-hand columns, the row menu included, were cut
+ * off. The table measures its own width instead and lets low-priority columns
+ * go first, so the name, the status and the row menu stay reachable.
+ */
+.dx-table-wrap {
+  container-type: inline-size;
+  min-width: 0;
+}
+@container (max-width: 760px) {
+  .dx-table-wrap .dx-source-col,
+  .dx-table-wrap .dx-origin-col {
+    display: none;
+  }
+}
+@container (max-width: 600px) {
+  .dx-table-wrap table {
+    min-width: 0;
+  }
+  .dx-table-wrap .dx-time-col,
+  .dx-table-wrap .dx-format-col {
+    display: none;
+  }
+  .dx-file-row .dx-name-button .dx-ellipsis {
+    max-width: 160px;
+  }
+}
+
+/* A layout drag in progress selects nothing (UX28-11); see kit/dragSelection.ts. */
+.dx-dragging,
+.dx-dragging * {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}

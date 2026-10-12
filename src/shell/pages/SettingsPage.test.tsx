@@ -264,7 +264,7 @@ describe("a control with nothing behind it", () => {
 
   const buttons: Array<[SettingsSectionId, string, string]> = [
     ["files", "storage-folder", "Choosing another workspace location is not available in this version."],
-    ["files", "trash", "Trash is not available in this version. Removing a file asks first."],
+    ["files", "trash", "Trash is not available in this version. Files removed from OfficeDex stay on disk where they were and can be opened again."],
     ["license", "license-form", "Requesting a commercial license from the app is not available in this version."],
   ];
 

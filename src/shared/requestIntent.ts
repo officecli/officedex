@@ -20,5 +20,9 @@ export function reviewRequestedBy(prompt: string): boolean {
 
 /** An output copy is a deliverable, not permission to overwrite its source. */
 export function requestsCopyOnly(prompt: string): boolean {
-  return /(?:另存|保存|生成|输出).{0,12}(?:副本|拷贝)|(?:保留|不改|不覆盖|不要覆盖|保持).{0,8}(?:原件|原文件|原文档)|(?:save|create|write|produce|return).{0,35}\b(?:copies|copy)\b|\b(?:keep|leave|preserve).{0,20}\boriginals?\b|\b(?:do not|don't|never)\s+overwrite\b/i.test(instructionText(prompt));
+  const text = instructionText(prompt);
+  // 「不要生成说明文档或副本」 forbids a copy; it must not ask for one.
+  const positive = text.replace(/(?:不要|不需要|无需|不用|不必|禁止|别|do not|don't|never|no need to)\s*(?:再|也|直接|另外)?\s*(?:另存|保存|生成|输出|创建|新建|save|create|write|produce|return|make)[^\n;；。.!?]*/gi, "");
+  return /(?:另存|保存|生成|输出).{0,12}(?:副本|拷贝)|(?:save|create|write|produce|return).{0,35}\b(?:copies|copy)\b/i.test(positive)
+    || /(?:保留|不改|不覆盖|不要覆盖|保持).{0,8}(?:原件|原文件|原文档)|\b(?:keep|leave|preserve).{0,20}\boriginals?\b|\b(?:do not|don't|never)\s+overwrite\b/i.test(text);
 }

@@ -19,7 +19,7 @@ import { inferHomeTaskRoute, outputFileStem, requestedFileName, requestsNewFile 
 import { planModeRequested } from "./planMode";
 import { DEFAULT_FOLDER_ID } from "./files";
 import { translate } from "../renderer/i18n";
-import { agentErrorSummary } from "../renderer/agentError";
+import { agentErrorSummary, isDocumentError } from "../renderer/agentError";
 export { agentErrorSummary } from "../renderer/agentError";
 
 /**
@@ -148,11 +148,18 @@ function toStatus(task: DesktopTask): AgentStatus {
 }
 
 function toSteps(task: DesktopTask): AgentStep[] {
-  return (task.stages ?? []).map((stage) => ({
+  const steps: AgentStep[] = (task.stages ?? []).map((stage) => ({
     id: stage.id,
     label: stage.label,
     state: stage.status === "completed" ? "done" : stage.status === "active" ? "active" : "pending",
   }));
+  // A run that failed after every reported stage finished still failed somewhere.
+  // Without this the card read "1/1 steps completed" under a failure (UX28-05).
+  if (task.status === "failed" && steps.length > 0 && steps.every((step) => step.state === "done")) {
+    const id = isDocumentError(`${task.failure?.reason ?? ""} ${task.error ?? ""}`) ? "read-file" : "finish";
+    steps.push({ id, label: translate(`shell.task.step.${id}`), state: "active" });
+  }
+  return steps;
 }
 
 function phaseOf(task: DesktopTask): string {
@@ -371,13 +378,14 @@ function outcomeOf(
   const network =
     task.failure?.stage === "transport" || /network|offline|econn|enotfound|timed? ?out|socket|dns|\beof\b|connection (?:lost|reset|refused)|fetch failed/.test(text);
   const model = /auth|api[ _-]?key|unauthori[sz]ed|quota|credit|rate[ _-]?limit|model|provider|401|403|429/.test(text);
+  const input = !network && isDocumentError(text);
   // Finished pages that can be kept make this a partial result, not a loss.
   const kept = (recovery?.readyPages ?? 0) > 0;
   return {
     ...ended,
     outcome: network ? "interrupted" : kept ? "partial" : "failed",
     ...(error ? { error: agentErrorSummary(error), errorDetail: error } : {}),
-    failureKind: network ? "network" : model ? "model" : "other",
+    failureKind: network ? "network" : input ? "input" : model ? "model" : "other",
   };
 }
 
@@ -703,14 +711,18 @@ export function createAgentService(api: DesktopAPI): AgentPort {
   const conversationMessages = (conversationId: string): AgentMessage[] => {
     const groups: Array<{ at: number; messages: AgentMessage[] }> = [];
     let previous = 0;
-    for (const run of conversationTasks(conversationId)) {
+    const runs = conversationTasks(conversationId);
+    for (const run of runs) {
       const at = Date.parse(run.createdAt ?? "") || Date.parse(run.events[0]?.ts ?? "") || previous;
       previous = at;
       const sent = sentRuns.get(run.id);
       const known = sent?.prompt ?? retryInputs.get(run.id)?.text;
-      const messages = toMessages(run).map((message) =>
-        known && message.id === `${run.id}:instruction` ? { ...message, text: known } : message,
-      );
+      // A retry or a resume is the same request tried again: the card counts
+      // the attempt, and the user's message is not repeated (UX28-09).
+      const reattempt = attemptRoots.has(run.id);
+      const messages = toMessages(run)
+        .filter((message) => !(reattempt && message.id === `${run.id}:instruction`))
+        .map((message) => (known && message.id === `${run.id}:instruction` ? { ...message, text: known } : message));
       /*
        * Which file an edit is aimed at, said out loud.
        *
@@ -720,13 +732,22 @@ export function createAgentService(api: DesktopAPI): AgentPort {
        * because the message named none) that silence is the whole bug: the
        * user asked for a change and could not tell what was being changed.
        */
-      if (sent?.target) {
+      if (sent?.target && !reattempt) {
+        // The newest attempt decides the tense of the line its first one shows.
+        const latest = runs.filter((other) => attemptRoots.get(other.id)?.id === run.id).at(-1) ?? run;
         messages.push({
           id: `${run.id}:target`,
           role: "agent",
-          text: translate(sent.target.explicit ? "shell.service.target.explicit" : "shell.service.target.inferred", {
-            file: sent.target.fileName,
-          }),
+          // Said in the tense the run is in: a read is not an edit, and a run
+          // that failed is no longer "editing" anything (UX28-05).
+          text: translate(
+            latest.status === "failed"
+              ? "shell.service.target.failed"
+              : run.id.startsWith("read-only:")
+                ? latest.status === "completed" ? "shell.service.target.read" : "shell.service.target.reading"
+                : sent.target.explicit ? "shell.service.target.explicit" : "shell.service.target.inferred",
+            { file: sent.target.fileName },
+          ),
           createdAt: at + 1,
         });
       }
@@ -1400,11 +1421,11 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     }
 
     const settings = await api.getSettings();
-    const requestedRoute = inferHomeTaskRoute({ prompt: text, documentType: input.documentType });
+    const requestedRoute = inferHomeTaskRoute({ prompt: text, documentType: input.documentType, templateId: input.pptxTemplate?.id });
     if (requestedRoute.kind === "unsupported_format") {
       throw new Error(translate("shell.service.unsupportedFormat", { format: requestedRoute.format, supported: SUPPORTED_OUTPUTS }));
     }
-    const newFile = Boolean(input.documentType) || requestsNewFile(text);
+    const newFile = Boolean(input.documentType || input.pptxTemplate) || requestsNewFile(text);
 
     // Editing what is open, or starting something new. A stated document type
     // is the composer saying "a new one" — it clears `activeFileId` on the way
@@ -1512,7 +1533,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
      * the route unchanged.
      */
     const route = inferHomeTaskRoute(
-      { prompt: text, ...(input.documentType ? { documentType: input.documentType } : {}) },
+      { prompt: text, templateId: input.pptxTemplate?.id, ...(input.documentType ? { documentType: input.documentType } : {}) },
       settings.defaults.documentType,
     );
     if (route.kind === "needs_source") {
@@ -1549,25 +1570,14 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       ...lineage,
       ...(route.sourceFile ? { sourceFile: route.sourceFile } : {}),
       ...(workspaceId ? { workspaceId } : { noProject: true }),
-      /*
-       * `plan` is what makes the run stop at the outline; without it the
-       * gate is unreachable.
-       *
-       * The runtime wires its one confirmation stop only for an interactive
-       * best-mode run, and the bridge produces that only for
-       * `generationMode: "plan"` (`officeGenerateModeArgs`). Nothing here has
-       * ever set the field, so every run is `fast` and the outline gate — a
-       * feature that exists on both sides, with a card, a decision payload
-       * and tests — has never appeared in front of anyone.
-       *
-       * Whether it *should* appear is a product question, not a defect:
-       * turning it on puts a mandatory pause in front of every deck. So this
-       * is opt-in and off, and the switch exists so the question can be
-       * answered by trying it rather than by imagining it. `?planMode=1` on
-       * the shell URL, or `officedex.planMode` in localStorage for a
-       * packaged build, which has no address bar.
-       */
-      ...(planModeRequested() ? { generationMode: "plan" as const } : {}),
+      // An explicit choice in the template dialog wins over the developer override.
+      ...(input.generationMode ? { generationMode: input.generationMode }
+        : planModeRequested() ? { generationMode: "plan" as const } : {}),
+      ...(input.pptxTemplate ? {
+        templateId: input.pptxTemplate.id,
+        templateVersion: input.pptxTemplate.version,
+        templateAssetDir: input.pptxTemplate.localAssetDir,
+      } : {}),
       enableImages: /(?:no|without|do not (?:add|include|create|generate))\s+(?:any\s+)?images?\b|不要(?:添加|生成|包含)?图片|无图片|纯文字/i.test(text) ? false : settings.defaults.enableImages,
       // Only sent when the setting is on. An explicit false would suppress
       // request wording such as "联网搜索…"; omitting it leaves that path

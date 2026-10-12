@@ -210,8 +210,8 @@ function FormActions({ action, busy }: { action: string; busy: boolean }) {
   );
 }
 
-const FormError = ({ message }: { message: string }) => (
-  <p className="dx-error" role="alert" data-form-error>
+const FormError = ({ message, id }: { message: string; id?: string }) => (
+  <p className="dx-error" role="alert" data-form-error id={id}>
     {message}
   </p>
 );
@@ -561,16 +561,32 @@ function ModelForm({
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [error, setError] = useState("");
+  /** The field the error is about; it is marked, described and focused. */
+  const [invalidField, setInvalidField] = useState<"endpoint" | "modelId" | "key" | null>(null);
   const [busy, setBusy] = useState(false);
   const hasKey = Boolean(remote?.apiKey);
+  const errorId = "dx-model-form-error";
 
-  const submit = async (event: FormEvent) => {
+  /*
+   * Checked here, in the app's language, rather than by the browser: WebKit's
+   * own bubble said "Fill out this field" in English under a Chinese UI and
+   * never named the field (UX28-13). The form is `noValidate` for that reason.
+   */
+  const invalid = (field: "endpoint" | "modelId" | "key", message: string, form: HTMLFormElement) => {
+    setError(message);
+    setInvalidField(field);
+    (form.elements.namedItem(field) as HTMLInputElement | null)?.focus();
+  };
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (busy) return;
-    if (!/^https?:\/\/\S+$/i.test(baseUrl.trim())) {
-      setError(t("dx.settings.modelUrlInvalid"));
-      return;
-    }
+    const form = event.currentTarget;
+    if (!baseUrl.trim()) return invalid("endpoint", t("dx.settings.modelUrlRequired"), form);
+    if (!/^https?:\/\/\S+$/i.test(baseUrl.trim())) return invalid("endpoint", t("dx.settings.modelUrlInvalid"), form);
+    if (!model.trim()) return invalid("modelId", t("dx.settings.modelIdRequired"), form);
+    if (!hasKey && !apiKey.trim()) return invalid("key", t("dx.settings.modelKeyRequired"), form);
+    setInvalidField(null);
     setBusy(true);
     try {
       await onSave({
@@ -589,7 +605,7 @@ function ModelForm({
   };
 
   return (
-    <form data-form="model" onSubmit={(event) => void submit(event)}>
+    <form data-form="model" noValidate onSubmit={(event) => void submit(event)}>
       <Field
         label={t("dx.settings.modelUrl")}
         name="endpoint"
@@ -600,10 +616,12 @@ function ModelForm({
         spellCheck={false}
         placeholder="https://api.example.com/v1"
         value={baseUrl}
-        invalid={Boolean(error)}
+        invalid={invalidField === "endpoint" || (Boolean(error) && invalidField === null)}
+        aria-describedby={invalidField === "endpoint" ? errorId : undefined}
         onChange={(event) => {
           setBaseUrl(event.target.value);
           setError("");
+          setInvalidField(null);
         }}
       />
       <Field
@@ -615,7 +633,12 @@ function ModelForm({
         autoCorrect="off"
         spellCheck={false}
         value={model}
-        onChange={(event) => setModel(event.target.value)}
+        invalid={invalidField === "modelId"}
+        aria-describedby={invalidField === "modelId" ? errorId : undefined}
+        onChange={(event) => {
+          setModel(event.target.value);
+          if (invalidField === "modelId") { setError(""); setInvalidField(null); }
+        }}
       />
       <Field
         label={t("dx.settings.modelKey")}
@@ -628,7 +651,12 @@ function ModelForm({
         spellCheck={false}
         placeholder={hasKey ? t("dx.settings.modelKeyKept") : undefined}
         value={apiKey}
-        onChange={(event) => setApiKey(event.target.value)}
+        invalid={invalidField === "key"}
+        aria-describedby={invalidField === "key" ? errorId : undefined}
+        onChange={(event) => {
+          setApiKey(event.target.value);
+          if (invalidField === "key") { setError(""); setInvalidField(null); }
+        }}
       />
       <label className="dx-row">
         <input type="checkbox" data-show-key checked={showKey} onChange={(event) => setShowKey(event.target.checked)} />
@@ -636,7 +664,7 @@ function ModelForm({
       </label>
       <p className="dx-helper">{t("onboarding.provider.customEndpointHint")}</p>
       <FormActions action={t("dx.settings.modelSave")} busy={busy} />
-      <FormError message={error} />
+      <FormError message={error} id={errorId} />
     </form>
   );
 }

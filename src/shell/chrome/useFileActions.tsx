@@ -369,11 +369,12 @@ export function useFileActions() {
         title: t("dx.file.trashTitle"),
         body: (
           <>
+            <p>{t("dx.file.trashNames", { names: targets.map((file) => file.name).join(", ") })}</p>
             <p>{t("dx.file.trashBody", { count: targets.length })}</p>
             <p>{t("dx.file.trashDiffers")}</p>
           </>
         ),
-        action: t("dx.menu.trash"),
+        action: t("dx.menu.remove"),
         onConfirm: async () => {
           for (const file of targets) {
             await port.files.remove(file.id);
@@ -389,10 +390,16 @@ export function useFileActions() {
   const fileMenu = useCallback(
     (file: FileMeta, anchor: HTMLElement, options: { open?: () => void } = {}) => {
       const missing = (feature: string, key: string) => () => notBuiltYet(feature, t(key));
+      // No backend yet: the row keeps its place but says so before the click.
+      const unavailable = (feature: string, key: string) => ({
+        onSelect: missing(feature, key),
+        disabled: true,
+        unavailable: { hint: t("dx.menu.unavailable"), reason: t(key) },
+      });
       const inProject = state.chat !== null;
       const items: MenuItem[] = [
         { label: t("dx.menu.open"), onSelect: options.open ?? (() => void library.openFile(file.id)) },
-        { label: t("dx.menu.preview"), onSelect: missing("file.preview", "dx.notBuilt.preview") },
+        { label: t("dx.menu.preview"), ...unavailable("file.preview", "dx.notBuilt.preview") },
         { label: t("dx.menu.details"), onSelect: () => details(file) },
         "-",
         { label: t("dx.menu.rename"), onSelect: () => rename(file) },
@@ -434,18 +441,18 @@ export function useFileActions() {
               if (copy) notice(t("dx.file.copySaved", { name: copy.name }));
             })(),
         },
-        { label: t("dx.menu.export"), onSelect: missing("file.export", "dx.notBuilt.export") },
-        { label: t("dx.menu.print"), onSelect: missing("file.print", "dx.notBuilt.print") },
+        { label: t("dx.menu.export"), ...unavailable("file.export", "dx.notBuilt.export") },
+        { label: t("dx.menu.print"), ...unavailable("file.print", "dx.notBuilt.print") },
         { label: t("dx.menu.share"), onSelect: () => share(file) },
         "-",
         {
           label: t(file.pinned ? "dx.menu.unfavorite" : "dx.menu.favorite"),
           onSelect: () => void library.setFavorite(file.id, !file.pinned),
         },
-        { label: t("dx.menu.history"), onSelect: missing("file.history", "dx.notBuilt.history") },
+        { label: t("dx.menu.history"), ...unavailable("file.history", "dx.notBuilt.history") },
         { label: t("dx.menu.reference"), onSelect: () => referenceRequests.emit(file.id) },
-        { label: t("dx.menu.saveTemplate"), onSelect: missing("file.template", "dx.notBuilt.template") },
-        { label: t("dx.menu.newWindow"), onSelect: missing("file.newWindow", "dx.notBuilt.newWindow") },
+        { label: t("dx.menu.saveTemplate"), ...unavailable("file.template", "dx.notBuilt.template") },
+        { label: t("dx.menu.newWindow"), ...unavailable("file.newWindow", "dx.notBuilt.newWindow") },
         ...(inProject ? [{ label: t("dx.menu.remove"), onSelect: () => removeFromAssets([file]) }] : []),
         { label: t("dx.menu.trash"), onSelect: () => trash([file]) },
       ];
@@ -476,6 +483,23 @@ export function useFileActions() {
  * screen. A tiny bus rather than shell state: a reference belongs to the
  * message being written, and the composer owns that.
  */
+/**
+ * "Pick different files for this message", from a failed run whose input could
+ * not be read, to the composer on screen (UX28-05). Same shape as below.
+ */
+const contextListeners = new Set<() => void>();
+export const contextRequests = {
+  emit() {
+    contextListeners.forEach((listener) => listener());
+  },
+  subscribe(listener: () => void) {
+    contextListeners.add(listener);
+    return () => {
+      contextListeners.delete(listener);
+    };
+  },
+};
+
 type ReferenceListener = (fileId: string) => void;
 const referenceListeners = new Set<ReferenceListener>();
 export const referenceRequests = {

@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { translate, useT } from "../../renderer/i18n";
+import { formatDateTime } from "../kit/format";
 import { FileIcon, extensionOf } from "../kit/Icon";
 import { closeModal, openModal } from "../kit/layers";
 import type { Attachment, FileMeta, FileType } from "../../shared/uiPort";
@@ -18,6 +19,8 @@ interface TaskContextRequest {
   /** Who receives what is sent, as the model list names them. */
   provider: string;
   onChooseFromDisk: () => void;
+  /** Where a file lives on disk, to tell same-named files apart. */
+  pathOf?: (id: string) => Promise<string>;
   onApply: (next: { fileIds: string[]; output: OutputChoice }) => void;
 }
 
@@ -49,6 +52,34 @@ function TaskContextBody({ request }: { request: TaskContextRequest }) {
 
   const others = files.filter((file) => file.id !== currentFile?.id && file.type !== "image");
 
+  /*
+   * Same-named files look identical as a name and an icon: an original and an
+   * Agent result called UX28-review.docx were indistinguishable (UX28-06).
+   * Those rows also say where the file came from, when it changed and which
+   * folder it is in, so the one sent is the one meant.
+   */
+  const counts = new Map<string, number>();
+  for (const file of currentFile ? [currentFile, ...others] : others) {
+    const key = file.name.toLowerCase();
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  const ambiguous = (file: FileMeta) => (counts.get(file.name.toLowerCase()) ?? 0) > 1;
+  const [paths, setPaths] = useState<Record<string, string>>({});
+  const ambiguousIds = others.filter(ambiguous).map((file) => file.id).join("\n");
+  useEffect(() => {
+    const pathOf = request.pathOf;
+    if (!pathOf || !ambiguousIds) return;
+    let live = true;
+    for (const id of ambiguousIds.split("\n")) {
+      void pathOf(id).then(
+        (path) => { if (live) setPaths((current) => ({ ...current, [id]: path })); },
+        () => undefined,
+      );
+    }
+    return () => { live = false; };
+  }, [ambiguousIds, request.pathOf]);
+  const folderOf = (path: string | undefined) => path?.replace(/[\\/][^\\/]*$/, "") ?? "";
+
   return (
     <>
       <p>{t("dx.context.intro")}</p>
@@ -77,7 +108,20 @@ function TaskContextBody({ request }: { request: TaskContextRequest }) {
               onChange={(event) => toggle(file.id, event.target.checked)}
             />
             <FileIcon ext={extensionOf(file)} />
-            {file.name}
+            {ambiguous(file) ? (
+              <span className="dx-context-name" title={paths[file.id]}>
+                <span className="dx-ellipsis">{file.name}</span>
+                <small className="dx-metadata dx-ellipsis">
+                  {[
+                    t(file.artifactTaskId ? "dx.context.fromAgent" : "dx.context.fromFile"),
+                    file.updatedAt ? t("dx.context.modified", { time: formatDateTime(file.updatedAt) }) : "",
+                    folderOf(paths[file.id]),
+                  ].filter(Boolean).join(" · ")}
+                </small>
+              </span>
+            ) : (
+              file.name
+            )}
           </label>
         ))}
       </div>

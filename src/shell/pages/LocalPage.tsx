@@ -167,8 +167,14 @@ export function LocalPage() {
         <table aria-label={t("dx.local.myFiles")}>
           <thead>
             <tr>
-              <th aria-sort={sort === "name" ? "ascending" : undefined}>{t("dx.column.name")}</th>
-              <th>{t("dx.column.size")}</th>
+              <th aria-sort={sort === "name" ? "ascending" : undefined}>
+                {t("dx.column.name")}
+                {sort === "name" ? " ↑" : ""}
+              </th>
+              <th aria-sort={sort === "size" ? "descending" : undefined}>
+                {t("dx.column.size")}
+                {sort === "size" ? " ↓" : ""}
+              </th>
               <th aria-sort={sort === "modified" ? "descending" : undefined}>
                 {t("dx.column.modified")}
                 {sort === "modified" ? " ↓" : ""}
@@ -279,6 +285,8 @@ export function LocalPage() {
                 <option value="name">{t("dx.column.name")}</option>
                 <option value="size">{t("dx.local.sortSize")}</option>
               </select>
+              {/* One chevron says it opens; the direction is the column header's (UX28-12). */}
+              <Icon name="ChevronDown" size={14} />
             </label>
             <div className="dx-local-view-switch">
               {(["list", "grid"] as const).map((value) => (

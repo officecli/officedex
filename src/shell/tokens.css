@@ -532,6 +532,16 @@
   --dx-error: #ffa9a5;
   --dx-success: #90ccab;
   --dx-warning: #e0bd79;
+
+  /* Surfaces with one owner follow the same theme as the text on them. Without
+     these the sidebar kept its light fill under light-on-dark text. */
+  --dx-sidebar: var(--dx-canvas);
+  --dx-chrome: var(--dx-dark-chrome);
+  --dx-home-tab: var(--dx-dark-home-tab);
+  --dx-home-tab-hover: var(--dx-hover);
+  --dx-card-preview: var(--dx-dark-chrome);
+  --dx-card-hover-line: var(--dx-control);
+  --dx-canvas-veil: #191e23ed;
 }
 
 @media (prefers-reduced-motion: reduce) {

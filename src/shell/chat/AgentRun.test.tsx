@@ -394,6 +394,21 @@ it("shows raw per-file failures only after opening Details", async () => {
   expect(run.card().textContent).not.toContain(raw);
 });
 
+it("offers one retry for the unfinished part of a batch (UX28-14)", async () => {
+  const run = await stage("partial", task => ({ ...task, batch: [
+    { fileId: "bad", name: "Broken.docx", status: "failed", error: "This file could not be read.", suggestion: null },
+    { fileId: "good", name: "Ready.docx", status: "completed", suggestion: null },
+  ] }));
+  const retries = [...run.card().querySelectorAll("button")].filter(button => button.textContent === "Retry remaining");
+  expect(retries).toHaveLength(1);
+});
+
+it("asks for another file when the input itself could not be read (UX28-05)", async () => {
+  const run = await stage("failed", task => ({ ...task, failureKind: "input" }));
+  expect(run.card().querySelector('[data-act="task-replace-file"]')?.textContent).toBe("Choose another file");
+  expect(run.card().querySelector('[data-act="task-retry"]')).toBeNull();
+});
+
 it("keeps the previous failure actionable after the next result completes", async () => {
   const shell = await stage("complete", task => ({...task,history:[{...prototypeRun("failed",Date.now())!,id:"old-failed",title:"OD21-long.pptx",recovery:{readyPages:13,totalPages:24}}]}));
   const old = shell.view.container.querySelector('[data-task="old-failed"]') ?? [...shell.view.container.querySelectorAll(".dx-agent-run")].find(card=>card.textContent?.includes("OD21-long.pptx"));

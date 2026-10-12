@@ -119,6 +119,10 @@ export function DocxCanvas({
   const [session, setSession] = useState<Session | null>(null);
   const editorRef = useRef<WriterAgentEditor | null>(null);
   const labelRef = useRef<string>(file.name);
+  // The name the file has now. The editor session keeps the name it was opened
+  // under, and a rename does not restart it, so labels read it from here (UX28-10).
+  const nameRef = useRef(file.name);
+  nameRef.current = file.name;
   /**
    * Whether there is a selection to narrow an edit to, read at the moment an
    * instruction is sent rather than captured when it was written.
@@ -246,7 +250,7 @@ export function DocxCanvas({
             return;
           }
           hasSelectionRef.current = true;
-          const label = selectionLabel(session.fileName, summary.paragraphs);
+          const label = selectionLabel(nameRef.current, summary.paragraphs);
           labelRef.current = label;
           // Anything that gets this far is a range the user dragged out, which
           // is what `CanvasSelection.block` means. The carets are filtered out

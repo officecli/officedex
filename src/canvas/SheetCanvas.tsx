@@ -93,6 +93,10 @@ export function SheetCanvas({
   const saveErrorRef = useRef<string | undefined>(undefined);
   const readSaveError = useCallback(() => saveErrorRef.current, []);
   const labelRef = useRef<string>(file.name);
+  // The name the file has now. The editor session keeps the name it was opened
+  // under, and a rename does not restart it, so labels read it from here (UX28-10).
+  const nameRef = useRef(file.name);
+  nameRef.current = file.name;
 
   /*
    * The workbook's own footer, told to the shell.
@@ -200,7 +204,7 @@ export function SheetCanvas({
             onSelectionChange(null);
             return;
           }
-          labelRef.current = `${session.artifact.fileName} · ${rangeAddress(address)}`;
+          labelRef.current = `${nameRef.current} · ${rangeAddress(address)}`;
           onSelectionChange({
             fileId: file.id,
             label: labelRef.current,

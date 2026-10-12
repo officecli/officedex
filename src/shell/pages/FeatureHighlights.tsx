@@ -4,7 +4,6 @@ import sheetPoster from "../assets/highlights/sheet.jpg";
 import slidesPoster from "../assets/highlights/slides.jpg";
 import wordPoster from "../assets/highlights/word.jpg";
 import { Icon } from "../kit/Icon";
-import { notBuiltYet } from "../port/reportPortFailure";
 import { useShell } from "../state/ShellContext";
 
 const HIGHLIGHTS = [
@@ -17,9 +16,8 @@ const HIGHLIGHTS = [
 /**
  * Hot and fresh features — OD-UI-1.2 §21.
  *
- * Four small 16:9 thumbnails, a title and a subtitle each on one line. A video
- * plays only when asked for, in a dialog, with its own controls; nothing
- * autoplays with sound. The X folds the whole section into the gift button
+ * Four small 16:9 thumbnails, a title and a subtitle each on one line. This
+ * version ships no videos, so the cards describe and do not offer to play. The X folds the whole section into the gift button
  * beside Settings, and Home does not keep a gap where it was.
  */
 export function FeatureHighlights({ onHide }: { onHide?: () => void }) {
@@ -27,9 +25,7 @@ export function FeatureHighlights({ onHide }: { onHide?: () => void }) {
   const { dispatch } = useShell();
 
   // The introduction videos are not shipped with the app (they are 9MB of
-  // media the repository does not carry), so a card says so rather than
-  // opening a player with nothing in it.
-  const play = () => notBuiltYet("features.video", t("dx.notBuilt.featureVideo"));
+  // media the repository does not carry), so the cards carry no play control.
 
   return (
     <section
@@ -54,26 +50,17 @@ export function FeatureHighlights({ onHide }: { onHide?: () => void }) {
         {HIGHLIGHTS.map((highlight) => {
           const title = t(highlight.titleKey);
           return (
-            <button
-              key={highlight.id}
-              type="button"
-              className="dx-highlight"
-              data-act="video"
-              data-id={highlight.id}
-              aria-label={t("dx.features.play", { title })}
-              onClick={play}
-            >
+            // No video ships with the app, so a card is a description: no
+            // play glyph, and nothing to press that would only say so.
+            <div key={highlight.id} className="dx-highlight" data-id={highlight.id} role="group" aria-label={title}>
               <span className="dx-thumb">
                 <img src={highlight.poster} alt="" />
-                <span className="dx-play">
-                  <Icon name="Play" />
-                </span>
               </span>
               <span className="dx-title" title={title}>
                 {title}
               </span>
               <span className="dx-subtitle">{t(highlight.subtitleKey)}</span>
-            </button>
+            </div>
           );
         })}
       </div>

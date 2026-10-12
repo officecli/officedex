@@ -71,6 +71,10 @@ export function PresentationCanvas({
   const [session, setSession] = useState<Session | null>(null);
   const controllerRef = useRef<PresentationEditorController | null>(null);
   const labelRef = useRef<string>(file.name);
+  // The name the file has now. The editor session keeps the name it was opened
+  // under, and a rename does not restart it, so labels read it from here (UX28-10).
+  const nameRef = useRef(file.name);
+  nameRef.current = file.name;
   /**
    * How to re-read the selection, published by the effect that owns the read.
    *
@@ -167,7 +171,7 @@ export function PresentationCanvas({
           onSelectionChange(null);
           return;
         }
-        labelRef.current = `${session.fileName} · ${label}`;
+        labelRef.current = `${nameRef.current} · ${label}`;
         onSelectionChange({
           fileId: session.fileId,
           label: labelRef.current,
@@ -235,7 +239,7 @@ export function PresentationCanvas({
                   if (!label || !selection.text?.trim()) return null;
                   return {
                     fileId: file.id,
-                    label: `${session.fileName} · ${label}`,
+                    label: `${nameRef.current} · ${label}`,
                     text: selection.text,
                     block: selection.shapes.length > 0,
                   };

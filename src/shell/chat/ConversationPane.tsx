@@ -4,6 +4,7 @@ import { useT } from "../../renderer/i18n";
 import { useAgent } from "../agent/AgentContext";
 import { Composer } from "../composer/Composer";
 import { DexFace } from "../dex/DexFace";
+import { holdTextSelection } from "../kit/dragSelection";
 import { Icon } from "../kit/Icon";
 import { ImageTranscript } from "../image/ImageTranscript";
 import { logShellEvent } from "../port/shellLog";
@@ -43,7 +44,7 @@ export function ConversationPane() {
   const following = useRef(true);
   const [behind, setBehind] = useState(false);
   const [point, setPoint] = useState<{ x: number; y: number } | null>(null);
-  const drag = useRef<{ id: number; x: number; y: number; left: number; top: number } | null>(null);
+  const drag = useRef<{ id: number; x: number; y: number; left: number; top: number; release: () => void } | null>(null);
 
   const chat = state.chat;
   const key = `${chat?.folderId ?? ""}:${chat?.conversationId ?? ""}:${state.panel}`;
@@ -103,7 +104,8 @@ export function ConversationPane() {
   const onHeaderPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (!state.chatFloating || event.button !== 0 || (event.target as HTMLElement).closest("button")) return;
     const rect = pane.current!.getBoundingClientRect();
-    drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, left: rect.left, top: rect.top };
+    event.preventDefault();
+    drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, left: rect.left, top: rect.top, release: holdTextSelection() };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
   const onHeaderPointerMove = (event: PointerEvent<HTMLDivElement>) => {
@@ -111,7 +113,10 @@ export function ConversationPane() {
     if (!current || current.id !== event.pointerId) return;
     setPoint({ x: current.left + event.clientX - current.x, y: current.top + event.clientY - current.y });
   };
+  // A pane that goes away mid-drag must not leave the whole app unselectable.
+  useEffect(() => () => drag.current?.release(), []);
   const endDrag = () => {
+    drag.current?.release();
     drag.current = null;
   };
 

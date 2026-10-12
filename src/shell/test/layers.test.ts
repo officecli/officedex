@@ -819,6 +819,11 @@ describe("the z-index ladder", () => {
       "src/shell/image/composer/imageComposer.css  .shell-ig-tool:disabled, .shell-ig-mode-close:disabled { opacity }",
       'src/shell/image/composer/imageComposer.css  .shell-ig-tool[aria-expanded="true"] > .shell-ig-chevron { transform }',
       "src/shell/image/imageWorkspace.css  .shell-image-action:disabled { opacity }",
+      // A dimmed leaf button with no backend yet, and the file table's own
+      // width query. The table wrapper already scrolls, and the row menu it
+      // holds a button for is portaled to the menu host, not positioned inside.
+      'src/shell/styles/product.css  #dx-workspace .dx-source-title-button[aria-disabled="true"] { opacity }',
+      "src/shell/styles/product.css  .dx-table-wrap { container-type }",
     ]);
   });
 

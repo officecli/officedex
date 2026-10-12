@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { useT } from "../../renderer/i18n";
 import type { Agent } from "../agent/AgentContext";
+import { contextRequests } from "../chrome/useFileActions";
 import { DexFace } from "../dex/DexFace";
 import { formatDateTime, formatElapsed } from "../kit/format";
 import { FileIcon, Icon, extensionOf, type IconName } from "../kit/Icon";
@@ -255,7 +256,10 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
   const online = useOnline();
   const onReconnect = useReconnect();
   const otherTaskRunning = agent.busy && agent.task?.id !== task.id;
-  const canRetry = state === "failed" || state === "partial" || state === "offline" || state === "stopped";
+  // A batch with unfinished items retries from the one action row below; the
+  // results list used to draw a second, identically named button (UX28-14).
+  const batchUnfinished = Boolean(task.batch?.some((item) => item.status !== "completed")) && !running;
+  const canRetry = state === "failed" || state === "partial" || state === "offline" || state === "stopped" || batchUnfinished;
   // The row is drawn only when it has something in it: an empty one still takes its gap.
   const hasActions =
     running || state === "queued" || canRetry || task.failureKind === "model" || Boolean(task.suggestion);
@@ -340,7 +344,6 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
             {item.suggestion ? <button type="button" className="dx-btn" onClick={() => reviewSuggestion(item.suggestion!, files.find(file => file.id === item.fileId) ?? null)}>{t(item.suggestion.applied ? "dx.review.applied" : "dx.run.reviewAction")}</button> : null}
           </div>;
         })}
-        {!running && task.batch.some((item) => item.status !== "completed") ? <button type="button" className="dx-btn" disabled={otherTaskRunning} onClick={() => void agent.retryBatch(task.id)}>{t("dx.run.retryRemaining")}</button> : null}
       </div> : null}
 
       {artifact || task.artifact || task.suggestion ? (
@@ -385,7 +388,18 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
             {t(state === "queued" ? "dx.action.cancel" : "dx.run.stop")}
           </button>
         ) : null}
-        {canRetry ? (
+        {canRetry && task.failureKind === "input" ? (
+          // The same unreadable file would fail again; the way on is a different one.
+          <button
+            type="button"
+            className="dx-btn dx-primary"
+            data-act="task-replace-file"
+            data-id={task.id}
+            onClick={() => contextRequests.emit()}
+          >
+            {t("dx.run.replaceFile")}
+          </button>
+        ) : canRetry ? (
           <button
             type="button"
             className="dx-btn dx-primary"
@@ -394,7 +408,7 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
             data-id={task.id}
             onClick={() => (task.status === "paused" ? void agent.resume() : retry())}
           >
-            {t(state === "stopped" ? "dx.run.resume" : state === "partial" || task.recovery ? "dx.run.retryRemaining" : "dx.run.retry")}
+            {t(state === "stopped" && !task.batch ? "dx.run.resume" : state === "partial" || task.recovery || batchUnfinished ? "dx.run.retryRemaining" : "dx.run.retry")}
           </button>
         ) : null}
         {state === "offline" && !online ? (

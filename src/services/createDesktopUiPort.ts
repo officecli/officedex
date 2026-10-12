@@ -24,6 +24,7 @@ import { createFileService } from "./files";
 import { createSettingsService } from "./settings";
 import { createModelService } from "./models";
 import { createAgentService } from "./agent";
+import { createPptxTemplateService } from "./pptxTemplates";
 import type { WindowControls } from "./window";
 import { createWindowService } from "./window";
 
@@ -43,6 +44,7 @@ export function createDesktopUiPort({ api, window }: DesktopUiPortOptions): UiPo
     folders: createFolderService(api, files),
     files,
     agent: createAgentService(api),
+    pptxTemplates: createPptxTemplateService(api),
     models: createModelService(api),
     settings: createSettingsService(api),
     window: createWindowService(window),
