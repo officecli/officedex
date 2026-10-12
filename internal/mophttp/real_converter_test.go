@@ -2,6 +2,7 @@ package mophttp
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"mime/multipart"
 	"net/http"
@@ -138,6 +139,42 @@ try {
 		t.Error("export did not produce a ZIP container")
 	}
 	t.Logf("exported %d bytes of PPTX", exportResponse.Body.Len())
+}
+
+// TestRealConverterImportsDeckWithUnreviewedFields runs the real converter over
+// a deck it refuses on its own (set OFFICEDEX_TEST_UNREVIEWED_PPTX to one) and
+// checks that the import still yields a readable package.
+func TestRealConverterImportsDeckWithUnreviewedFields(t *testing.T) {
+	converterBinary := locateRealConverter(t)
+	if converterBinary == "" {
+		t.Skip("no mop-convert binary is available")
+	}
+	samplePath := strings.TrimSpace(os.Getenv("OFFICEDEX_TEST_UNREVIEWED_PPTX"))
+	if samplePath == "" {
+		t.Skip("set OFFICEDEX_TEST_UNREVIEWED_PPTX to a deck mop-convert refuses to run this")
+	}
+	converter := NewCLIConverter(converterBinary)
+
+	strict := t.TempDir()
+	err := converter.run(context.Background(), importOperation,
+		"import", "--input", samplePath, "--mop", strict, "--format", "json")
+	if err == nil {
+		t.Skipf("%s imports cleanly; it does not exercise the degraded path", samplePath)
+	}
+	t.Logf("strict import refused the deck: %s", converterDetail(err))
+
+	packageDirectory := t.TempDir()
+	if err := converter.Import(context.Background(), samplePath, packageDirectory); err != nil {
+		t.Fatalf("degraded import failed: %v", err)
+	}
+	content, err := os.ReadFile(filepath.Join(packageDirectory, "content.json"))
+	if err != nil {
+		t.Fatalf("degraded import produced no content.json: %v", err)
+	}
+	if !json.Valid(content) {
+		t.Fatal("content.json is not valid JSON")
+	}
+	t.Logf("degraded import produced %d bytes of content.json", len(content))
 }
 
 func locateRealConverter(t *testing.T) string {

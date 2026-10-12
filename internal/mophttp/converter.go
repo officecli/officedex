@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"officedex/internal/config"
+	"officedex/internal/pptxdegrade"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -42,10 +44,50 @@ var (
 )
 
 func (c *CLIConverter) Import(ctx context.Context, inputPath, packageDirectory string) error {
-	if err := c.run(ctx, importOperation, "import", "--input", inputPath, "--mop", packageDirectory, "--format", "json"); err != nil {
+	// The converter refuses a whole deck over a single unreviewed field;
+	// pptxdegrade retries on a copy with just those fields dropped.
+	removals, err := pptxdegrade.Import(ctx, inputPath, func(ctx context.Context, path string) error {
+		if path != inputPath {
+			// The failed attempt can leave a partial package behind.
+			if err := resetPackageDirectory(packageDirectory); err != nil {
+				return err
+			}
+		}
+		return c.run(ctx, importOperation, "import", "--input", path, "--mop", packageDirectory, "--format", "json")
+	}, converterDetail)
+	if err != nil {
 		return err
 	}
+	for _, removal := range removals {
+		log.Printf("mop-convert import: dropped unsupported markup from %s: %s", filepath.Base(inputPath), removal)
+	}
 	return normalizeLegacyConverterPackage(packageDirectory)
+}
+
+func converterDetail(err error) string {
+	var failure *apiError
+	if errors.As(err, &failure) {
+		return failure.detail
+	}
+	return err.Error()
+}
+
+// resetPackageDirectory empties the import target between attempts without
+// removing the directory itself, which the caller owns.
+func resetPackageDirectory(directory string) error {
+	entries, err := os.ReadDir(directory)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if err := os.RemoveAll(filepath.Join(directory, entry.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *CLIConverter) Export(ctx context.Context, packageDirectory, outputPath string) error {

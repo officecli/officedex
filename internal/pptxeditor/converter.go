@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"officedex/internal/config"
+	"officedex/internal/pptxdegrade"
 	"officedex/internal/subprocess"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -38,7 +41,42 @@ func (c *CLIConverter) ImportPptx(ctx context.Context, sourcePath, mopDirectory 
 	if strings.TrimSpace(c.binary) == "" {
 		return errors.New("mop-convert is unavailable; set OFFICEDEX_MOP_CONVERT_BIN or PRESENTATION_SOURCE_DIR")
 	}
-	return c.run(ctx, "import", "--input", sourcePath, "--mop", mopDirectory, "--format", "json")
+	// The converter refuses a whole deck over a single unreviewed field;
+	// pptxdegrade retries on a copy with just those fields dropped.
+	removals, err := pptxdegrade.Import(ctx, sourcePath, func(ctx context.Context, path string) error {
+		if path != sourcePath {
+			// The failed attempt can leave a partial package behind.
+			if err := resetMopDirectory(mopDirectory); err != nil {
+				return err
+			}
+		}
+		return c.run(ctx, "import", "--input", path, "--mop", mopDirectory, "--format", "json")
+	}, func(err error) string { return err.Error() })
+	if err != nil {
+		return err
+	}
+	for _, removal := range removals {
+		log.Printf("mop-convert import: dropped unsupported markup from %s: %s", filepath.Base(sourcePath), removal)
+	}
+	return nil
+}
+
+// resetMopDirectory empties the import target between attempts without
+// removing the directory itself, which the caller owns.
+func resetMopDirectory(directory string) error {
+	entries, err := os.ReadDir(directory)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if err := os.RemoveAll(filepath.Join(directory, entry.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *CLIConverter) ExportPptx(ctx context.Context, mopDirectory, outputPath string) error {

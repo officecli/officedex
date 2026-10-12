@@ -1,12 +1,14 @@
 package mophttp
 
 import (
+	"archive/zip"
 	"context"
 	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -144,5 +146,67 @@ func TestImportRejectsConflictingTimingAttributes(t *testing.T) {
 
 	if err := converter.Import(context.Background(), "in.pptx", packageDirectory); err == nil {
 		t.Fatal("conflicting timing attributes were silently reconciled")
+	}
+}
+
+func TestImportRetriesWithoutFieldsTheConverterHasNotReviewed(t *testing.T) {
+	// mop-convert refuses a whole deck over one unreviewed field. Real
+	// templates carry plenty of those (creation ids, laser pointer colour), so
+	// the import must retry on a copy without them instead of failing.
+	deck := filepath.Join(t.TempDir(), "deck.pptx")
+	file, err := os.Create(deck)
+	if err != nil {
+		t.Fatalf("create deck: %v", err)
+	}
+	archive := zip.NewWriter(file)
+	entry, err := archive.Create("ppt/slides/slide9.xml")
+	if err != nil {
+		t.Fatalf("create slide: %v", err)
+	}
+	if _, err := entry.Write([]byte(`<p:sld><p:sp><p:spPr><a:extLst><a:ext uri="{x}"/></a:extLst></p:spPr></p:sp></p:sld>`)); err != nil {
+		t.Fatalf("write slide: %v", err)
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatalf("close archive: %v", err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("close deck: %v", err)
+	}
+
+	// Arguments: import --input <pptx> --mop <dir> --format json. The stub
+	// leaves a partial package behind when it refuses, as the real one can.
+	binary := writeScript(t, `
+if unzip -p "$3" ppt/slides/slide9.xml | grep -q extLst; then
+  echo partial > "$5/stale.json"
+  echo "Error: conversion stopped with 1 unsupported typed field(s)" >&2
+  echo "import /ppt/slides/slide9.xml CTSlide.cSld.spTree.children[2].sp.spPr.extLst[0] shape renderingAndEditing: shape property extension is not a reviewed hidden property" >&2
+  exit 1
+fi
+echo '{"slides":[]}' > "$5/content.json"`)
+	packageDirectory := t.TempDir()
+
+	if err := NewCLIConverter(binary).Import(context.Background(), deck, packageDirectory); err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(packageDirectory, "content.json")); err != nil {
+		t.Errorf("the retried import produced no package: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(packageDirectory, "stale.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Error("the refused attempt's partial package was not cleared before the retry")
+	}
+}
+
+func TestImportStillReportsFailuresItCannotDegrade(t *testing.T) {
+	binary := writeScript(t, `echo "Error: conversion stopped with 1 unsupported typed field(s)" >&2
+echo "import /ppt/slides/slide1.xml CTSlide.cSld.spTree.children[0].sp.somethingNew shape: not mapped" >&2
+exit 1`)
+
+	err := NewCLIConverter(binary).Import(context.Background(), filepath.Join(t.TempDir(), "deck.pptx"), t.TempDir())
+	var typed *apiError
+	if !errors.As(err, &typed) || typed.code != "PPTX_CONVERSION_FAILED" {
+		t.Fatalf("error = %v, want PPTX_CONVERSION_FAILED", err)
+	}
+	if !strings.Contains(typed.detail, "somethingNew") {
+		t.Errorf("detail = %q, want the converter's own report", typed.detail)
 	}
 }
