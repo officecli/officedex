@@ -1,3 +1,4 @@
+import { isInternalProposal } from "../shared/artifactPaths";
 import { requestsReadOnlyAnswer } from "../canvas/documentReadOnly";
 import { createDocxEditRunner } from "../canvas/docxEditRun";
 import { instructionText, reviewRequestedBy, requestsCopyOnly } from "../shared/requestIntent";
@@ -343,7 +344,7 @@ function toAgentTask(task: DesktopTask): AgentTask {
     steps: toSteps(task),
     messages: toMessages(task),
     outline,
-    ...(task.artifact?.filePath ? { artifact: { path: task.artifact.filePath, name: task.artifact.fileName } } : {}),
+    ...(task.artifact?.filePath && !isInternalProposal(task.artifact.filePath) ? { artifact: { path: task.artifact.filePath, name: task.artifact.fileName } } : {}),
     suggestion: null,
     question: toQuestion(task),
     ...outcomeOf(task, recovery),
@@ -381,6 +382,9 @@ function outcomeOf(
 }
 
 interface ReviewArtifactState {
+  copyOnly?: boolean;
+  autoPublishCopy?: boolean;
+  deliveredCopy?: string;
   sourceSHA256?: string;
   autoApply?: boolean;
   applying?: boolean;
@@ -395,9 +399,16 @@ interface ReviewArtifactState {
 
 function toAgentTaskWithReview(task: DesktopTask, review?: ReviewArtifactState): AgentTask {
   const result = toAgentTask(task);
+  // Keep the proposal privately in ReviewArtifactState for diff/apply/undo.
+  // Public output is the saved source, and only after Apply succeeds.
+  if (review?.copyOnly) {
+    if (review.deliveredCopy) result.artifact = { path: review.deliveredCopy };
+  } else if (review) result.artifact = review.applied
+    ? { path: review.sourceFile, name: review.sourceFile.split(/[\\/]/).pop() }
+    : undefined;
   if (review?.applyError) Object.assign(result, { status: "done", outcome: "failed", error: agentErrorSummary(review.applyError), errorDetail: review.applyError });
   if (review?.applying) Object.assign(result, { status: "writing", outcome: undefined, finishedAt: undefined });
-  if (!review || !review.artifactFile || review.applying) return result;
+  if (!review || !review.artifactFile || review.applying || review.copyOnly) return result;
   if (review.rejected) return { ...result, outcome: "stopped", suggestion: null };
   return {
     ...result,
@@ -513,7 +524,7 @@ export function createAgentService(api: DesktopAPI): AgentPort {
     if (Array.isArray(saved)) for (const [id, review] of saved) {
       if (typeof id === "string" && typeof review?.sourceFileId === "string" && typeof review?.sourceFile === "string") {
         // Backend Undo snapshots do not survive a process restart.
-        reviewArtifacts.set(id, { ...review, undoable: false, autoApply: false, applying: false });
+        reviewArtifacts.set(id, { ...review, undoable: false, autoApply: false, autoPublishCopy: false, applying: false });
       }
     }
   } catch { /* Older or unavailable storage. */ }
@@ -1013,10 +1024,12 @@ export function createAgentService(api: DesktopAPI): AgentPort {
 
   /** The library's record of the file a run wrote, if it is still there. */
   const documentMadeBy = async (task: DesktopTask): Promise<DocumentRecord | undefined> => {
+    const review = reviewArtifacts.get(task.id);
+    if (review && !review.copyOnly) return api.getDocument(review.sourceFileId).catch(() => undefined);
     const page = await api
       .listDocuments({ ...(task.workspaceId ? { workspaceId: task.workspaceId } : {}), limit: 200 })
       .catch(() => null);
-    return page?.items.find((record) => record.currentArtifactTaskId === task.id || record.filePath === task.artifact?.filePath);
+    return page?.items.find((record) => record.currentArtifactTaskId === task.id || record.filePath === (review?.deliveredCopy ?? task.artifact?.filePath));
   };
 
   /** The active run and its question, when it is blocked on one. */
@@ -1099,21 +1112,30 @@ export function createAgentService(api: DesktopAPI): AgentPort {
       review.applyError = translate("shell.service.suggestionUnavailable");
       task.status = "failed";
       task.error = review.applyError;
-    } else if (review.autoApply && !review.applied && !review.applyError && !review.rejected) {
+    } else if ((review.autoApply || review.autoPublishCopy) && !review.applied && !review.deliveredCopy && !review.applyError && !review.rejected) {
       review.applying = true;
       task.status = "running";
       // No Complete state and no queued follow-up before the source write ends.
       void (async () => {
         try {
-          if (!api.applyArtifactSuggestion) throw new Error(translate("shell.service.suggestionUnavailable"));
-          await api.applyArtifactSuggestion({ suggestionId: task.id, sourceFile: review.sourceFile, artifactFile: review.artifactFile!, expectedSourceSHA256: review.sourceSHA256 });
-          review.applied = true;
-          review.undoable = true;
+          if (review.copyOnly) {
+            if (isInternalProposal(review.artifactFile!)) {
+              if (!api.publishArtifactCopy) throw new Error(translate("shell.service.suggestionUnavailable"));
+              const artifact = await api.publishArtifactCopy({ suggestionId: task.id, sourceFile: review.sourceFile, artifactFile: review.artifactFile! });
+              review.deliveredCopy = artifact.filePath;
+            } else review.deliveredCopy = review.artifactFile;
+          } else {
+            if (!api.applyArtifactSuggestion) throw new Error(translate("shell.service.suggestionUnavailable"));
+            await api.applyArtifactSuggestion({ suggestionId: task.id, sourceFile: review.sourceFile, artifactFile: review.artifactFile!, expectedSourceSHA256: review.sourceSHA256 });
+            review.applied = true;
+            review.undoable = true;
+          }
         } catch (reason) {
           review.applyError = errorMessage(reason);
         } finally {
           review.applying = false;
           review.autoApply = false;
+          review.autoPublishCopy = false;
           const latest = state.tasks[task.id];
           latest.status = review.applyError ? "failed" : "completed";
           latest.error = review.applyError;
@@ -1345,6 +1367,8 @@ export function createAgentService(api: DesktopAPI): AgentPort {
           ...lineage,
         });
         reviewArtifacts.set(result.taskId, {
+          copyOnly: requestsCopyOnly(text),
+          autoPublishCopy: requestsCopyOnly(text),
           sourceFileId: record.id,
           sourceFile: record.filePath,
           sourceSHA256: result.sourceSHA256,

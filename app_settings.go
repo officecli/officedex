@@ -256,6 +256,9 @@ func (a *App) RenameWorkspace(workspaceID, name string) (types.WorkspaceSummary,
 }
 
 func (a *App) OpenRecentFile(file types.RecentFile) (types.Artifact, error) {
+	if types.IsInternalProposal(file.FilePath) {
+		return types.Artifact{}, errors.New("this is an internal edit proposal; open the original document instead")
+	}
 	filePath := filepath.Clean(strings.TrimSpace(file.FilePath))
 	if filePath == "." || filePath == "" || !filepath.IsAbs(filePath) {
 		return types.Artifact{}, errors.New("recent file path must be absolute")

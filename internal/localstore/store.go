@@ -1690,6 +1690,9 @@ func (s *Store) RenameWorkspace(ctx context.Context, workspaceID, name string) (
 }
 
 func (s *Store) UpsertRecentFile(ctx context.Context, file types.RecentFile) error {
+	if types.IsInternalProposal(file.FilePath) {
+		return nil
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
@@ -1742,10 +1745,10 @@ func (s *Store) QueryRecentFiles(ctx context.Context, workspaceID string, limit 
 	}
 	workspaceID = strings.TrimSpace(workspaceID)
 	query := `SELECT file_path, file_name, document_type, source, workspace_id, task_id, conversation_id, last_opened_at
-		FROM recent_files`
+		FROM recent_files WHERE ` + publicDocumentPathPredicate
 	args := []any{}
 	if workspaceID != "" {
-		query += ` WHERE workspace_id = ?`
+		query += ` AND workspace_id = ?`
 		args = append(args, workspaceID)
 	}
 	query += ` ORDER BY last_opened_at DESC, file_path ASC LIMIT ?`
@@ -2612,6 +2615,10 @@ func scanDocument(rows *sql.Rows) (types.DocumentRecord, error) {
 	return record, err
 }
 
+// Query filtering also hides legacy staging rows on upgrade, without deleting
+// user data. Filter before LIMIT so those rows cannot starve pagination.
+const publicDocumentPathPredicate = `replace(file_path, '\', '/') NOT GLOB '*/.officedex-proposal-?*/*'`
+
 func (s *Store) QueryDocuments(ctx context.Context, input types.DocumentListInput) (types.DocumentPage, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -2623,7 +2630,7 @@ func (s *Store) QueryDocuments(ctx context.Context, input types.DocumentListInpu
 		return types.DocumentPage{}, err
 	}
 	limit := clampDocumentLimit(input.Limit)
-	query := `SELECT id, file_path, file_name, document_type, COALESCE(current_artifact_task_id, ''), COALESCE(workspace_id, ''), created_at, updated_at, migration_source, pinned FROM documents WHERE 1=1`
+	query := `SELECT id, file_path, file_name, document_type, COALESCE(current_artifact_task_id, ''), COALESCE(workspace_id, ''), created_at, updated_at, migration_source, pinned FROM documents WHERE ` + publicDocumentPathPredicate
 	args := []any{}
 	if workspaceID := strings.TrimSpace(input.WorkspaceID); workspaceID != "" {
 		query += ` AND workspace_id = ?`
@@ -3288,6 +3295,9 @@ func scanEvents(rows *sql.Rows) ([]types.BridgeEvent, error) {
 
 // RecordArtifact upserts a row into the artifacts table keyed by file_path.
 func (s *Store) RecordArtifact(artifact types.Artifact) error {
+	if types.IsInternalProposal(artifact.FilePath) {
+		return nil
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
@@ -3404,7 +3414,7 @@ func (s *Store) QueryOfficeOutputs(ctx context.Context, projectID, workbookID st
 	if s.db == nil {
 		return nil, fmt.Errorf("localstore: not open")
 	}
-	query := `SELECT id,project_id,output_type,title,file_path,version,status,workbook_id,view_ids_json,source_ids_json,workbook_fingerprint,lineage_captured_at,manually_edited,updated_at FROM office_outputs WHERE (?='' OR project_id=?) AND (?='' OR workbook_id=?) ORDER BY updated_at DESC`
+	query := `SELECT id,project_id,output_type,title,file_path,version,status,workbook_id,view_ids_json,source_ids_json,workbook_fingerprint,lineage_captured_at,manually_edited,updated_at FROM office_outputs WHERE (?='' OR project_id=?) AND (?='' OR workbook_id=?) AND ` + publicDocumentPathPredicate + ` ORDER BY updated_at DESC`
 	rows, err := s.db.QueryContext(ctx, query, projectID, projectID, workbookID, workbookID)
 	if err != nil {
 		return nil, fmt.Errorf("localstore: query office outputs: %w", err)

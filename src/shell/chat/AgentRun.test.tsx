@@ -438,3 +438,24 @@ it("N24-02 displays Before/After with a dedicated Apply and no Continue", async 
   fireEvent.click(card.querySelector('[data-act="apply-reviewed-edit"]')!);
   expect(answer).toHaveBeenCalledWith(expect.objectContaining({optionId:"review-apply"}));
 });
+
+// N27-01: the library can still contain a legacy staging record. The edit is
+// one result regardless of whether that older record has been reconciled.
+for (const applied of [false, true]) it(`N27-01 shows one ${applied ? "saved" : "review"} result for an in-place edit`, async () => {
+  const run = await stage("complete", task => ({ ...task,
+    artifact: { path: "/p/.officedex-proposal-123/OD27-attachment.modified.docx", name: "OD27-attachment.modified.docx" },
+    targetFileName: "OD27-attachment.docx",
+    suggestion: { id: task.id, targetFileId: "readme", summary: "Edit original", applied, undoable: applied },
+  }));
+  expect(run.card().querySelectorAll(".dx-agent-results .dx-agent-result")).toHaveLength(1);
+  expect(run.card().querySelector(".dx-agent-results")?.textContent).not.toContain("Ready to open");
+  expect(run.card().querySelector(".dx-agent-results")?.textContent).toContain(applied ? "Changes applied" : "Changes ready for review");
+  const result = run.card().querySelector<HTMLButtonElement>(".dx-agent-result")!;
+  expect(result.dataset.act).toBe(applied ? "open-file" : "review-task");
+  if (applied) {
+    const open = vi.spyOn(run.port.files, "open");
+    fireEvent.click(result);
+    await waitFor(() => expect(open).toHaveBeenCalledWith("readme"));
+    expect(run.actions()).toContain("undo-task");
+  }
+});

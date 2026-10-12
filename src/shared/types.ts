@@ -1458,6 +1458,7 @@ export interface DesktopAPI extends DesktopVerticalAPI {
   generate(input: GenerateInput): Promise<{ taskId: string; sessionId: string; status: string }>;
   planSpreadsheetFields(input: SpreadsheetPlanFieldsInput & { headerRowIndex: number }): Promise<SpreadsheetPlanFieldsResult>;
   modify(input: ModifyInput): Promise<{ taskId: string; sessionId: string; status: string; sourceSHA256?: string }>;
+  publishArtifactCopy?(input: ArtifactSuggestionFileInput): Promise<Artifact>;
   applyArtifactSuggestion?(input: ArtifactSuggestionFileInput): Promise<void>;
   undoArtifactSuggestion?(input: ArtifactSuggestionFileInput): Promise<void>;
   artifactStageEdit?(input: ArtifactStageRuntimeInput): Promise<{ taskId: string; sessionId: string; status: string }>;

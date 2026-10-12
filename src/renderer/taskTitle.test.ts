@@ -28,3 +28,11 @@ describe('asynchronous presentation naming', () => {
     expect(taskTitle({ ...task, topic: 'New slides' }, 'Untitled')).toBe('Untitled');
   });
 });
+
+it('N27-01 names an edit after its source, never its private proposal', () => {
+ const task = [
+  {task_id:'edit',type:'task.started',payload:{source_file:'/external/OD27-attachment.docx',document_type:'docx',tool:'office.modify'}},
+  {task_id:'edit',type:'task.completed',payload:{output_file:'/external/.officedex-proposal-123/OD27-attachment.modified.docx',document_type:'docx'}},
+ ].reduce(applyTaskEvent,createInitialTaskState()).tasks.edit;
+ expect(taskTitle(task,'Untitled')).toBe('OD27-attachment.docx');
+});

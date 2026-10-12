@@ -1215,10 +1215,16 @@ func (a *App) AllowArtifact(artifact types.Artifact) error {
 	if a.previewReg == nil {
 		return nil
 	}
+	if types.IsInternalProposal(artifact.FilePath) {
+		return a.previewReg.AllowSelectedArtifact(artifact)
+	}
 	return a.previewReg.AllowArtifact(artifact)
 }
 
 func (a *App) RecordArtifact(artifact types.Artifact) error {
+	if types.IsInternalProposal(artifact.FilePath) {
+		return nil
+	}
 	if a.localStore == nil {
 		return nil
 	}

@@ -758,6 +758,12 @@ func (h *realClientE2EHost) call(method string, raw json.RawMessage) (any, error
 	// and both were reachable only through the Wails binding — under this
 	// harness the shell's Apply button answered "unknown real e2e rpc method",
 	// so the round trip had never run end to end.
+	case "PublishArtifactCopy":
+		var input ArtifactSuggestionFileInput
+		if err := decodeRealClientInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return h.app.PublishArtifactCopy(input)
 	case "ApplyArtifactSuggestion":
 		var input ArtifactSuggestionFileInput
 		if err := decodeRealClientInput(raw, &input); err != nil {

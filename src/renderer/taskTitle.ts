@@ -1,3 +1,4 @@
+import { isInternalProposal } from "../shared/artifactPaths";
 import type { DesktopTask } from '../shared/types';
 
 /**
@@ -16,6 +17,10 @@ export const PRESENTATION_PLACEHOLDER_TOPIC = 'New slides';
  * has to stay short enough for a sidebar row, and the brief is not a name.
  */
 export function taskTitle(task: DesktopTask, fallback: string, fileName = task.artifact?.fileName): string {
+  if (task.artifact?.filePath && isInternalProposal(task.artifact.filePath)) {
+    const source = task.events.find(event => typeof event.payload?.source_file === 'string')?.payload?.source_file;
+    fileName = typeof source === 'string' ? source.split(/[\\/]/).pop() : undefined;
+  }
   const named = [...task.events].reverse().find(event => event.type === 'task.title' && typeof event.payload?.topic === 'string');
   const title = typeof named?.payload?.topic === 'string' ? named.payload.topic.trim() : '';
   const topic = task.topic?.trim();

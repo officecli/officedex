@@ -1,0 +1,1 @@
+Use only the attached DOCX file OD27-attachment.docx. Replace the exact sentence "Gamma pending." with "Gamma approved." Keep "Delta unchanged." unchanged. Apply the edit to that same attached original file in place, not to a new copy. Do not create another document. When complete, show the actual file result and state whether the attached source file was saved.

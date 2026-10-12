@@ -20,3 +20,17 @@ describe("actual proposal diff", () => {
     expect(revoke).toHaveBeenCalledTimes(2);
   });
 });
+
+it("N27-01 Review reads an authorized proposal without importing a second document", async () => {
+  const imported = vi.fn(async () => ({})); const revoke = vi.fn();
+  const source = "/external/OD27-attachment.docx";
+  const proposal = "/external/.officedex-proposal-123/OD27-attachment.modified.docx";
+  const api = { importLocalFile: imported,
+    issuePreviewToken: async ({filePath}: {filePath: string}) => ({token:filePath}),
+    readArtifactFile: async (token: string) => ({data:doc(token===source?"Gamma pending.":"Gamma approved.")}),
+    revokePreviewToken: revoke,
+  } as unknown as DesktopAPI;
+  expect(await readSuggestionChanges(api,source,proposal)).toEqual([{part:"word/document.xml",before:"Gamma pending.",after:"Gamma approved."}]);
+  expect(imported).toHaveBeenCalledExactlyOnceWith(source);
+  expect(revoke).toHaveBeenCalledTimes(2);
+});

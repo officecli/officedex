@@ -333,7 +333,7 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
 
       {task.batch ? <div className="dx-agent-results" aria-label={t("dx.run.batch")}>
         {task.batch.map((item) => {
-          const result = files.find((file) => file.artifactTaskId === item.taskId);
+          const result = item.suggestion ? (item.suggestion.applied ? files.find(file => file.id === item.fileId) : null) : files.find((file) => file.artifactTaskId === item.taskId);
           return <div key={item.fileId} className="dx-agent-result dx-agent-batch-result">
             <span><strong>{item.name}</strong><small>{item.suggestion && !item.suggestion.applied ? t("dx.status.review") : t(`dx.run.batch.${item.status}`)}</small>{item.error ? <small>{item.error}</small> : null}</span>
             {result ? <button type="button" className="dx-btn" onClick={() => void library.openFile(result.id)}>{t("dx.menu.open")}</button> : null}
@@ -346,7 +346,11 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
       {artifact || task.artifact || task.suggestion ? (
         <div className="dx-agent-results" aria-label={t("dx.run.results")}>
           {task.suggestion ? (
-            <button type="button" className="dx-agent-result" data-act="review-task" data-id={task.id} onClick={review}>
+            <button type="button" className="dx-agent-result" data-act={task.suggestion.applied ? "open-file" : "review-task"} data-id={task.suggestion.applied ? task.suggestion.targetFileId : task.id} onClick={() => {
+              if (!task.suggestion?.applied) review();
+              else if (reviewTarget) void library.openFile(reviewTarget.id);
+              else if (task.artifact) void library.openArtifact(task.artifact.path);
+            }}>
               <FileIcon ext={reviewTarget ? extensionOf(reviewTarget) : task.documentType ?? "docx"} size={24} />
               <span>
                 <strong>{reviewTarget?.name ?? task.targetFileName ?? t("shell.task.theFile")}</strong>
@@ -355,7 +359,7 @@ export function AgentRun({ task, agent }: { task: AgentTask; agent: Agent }) {
               <Icon name="ChevronRight" size={16} />
             </button>
           ) : null}
-          {artifact || task.artifact ? (
+          {!task.suggestion && (artifact || task.artifact) ? (
             <button
               type="button"
               className="dx-agent-result"

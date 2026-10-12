@@ -827,7 +827,7 @@ describe("N23 — every file-edit entry point has a delivery contract", () => {
         finish(); await applying;
         await vi.waitFor(() => expect(panel.last()?.suggestion).toMatchObject({ applied: true, undoable: true }));
         expect(panel.last()?.outcome).toBe("completed");
-        expect(panel.last()?.artifact?.path).toBe("/external/OD23-single.modified.docx");
+        expect(panel.last()?.artifact?.path).toBe(file.filePath);
         await service.undoSuggestion("task-1");
         expect(undo).toHaveBeenCalledOnce();
         expect(panel.last()?.suggestion).toMatchObject({ applied: false, undoable: false });
@@ -854,7 +854,7 @@ describe("N23 — every file-edit entry point has a delivery contract", () => {
     desk.push(completed("task-1", "/p/a.modified.docx", "docx"));
     await vi.waitFor(() => expect(panel.last()?.outcome).toBe("failed"));
     expect(panel.last()?.suggestion).toMatchObject({ applied: false, undoable: false });
-    expect(panel.last()?.artifact?.path).toBe("/p/a.modified.docx");
+    expect(panel.last()?.artifact).toBeUndefined();
     expect(panel.last()?.errorDetail).toBe("disk is read-only");
     await service.applySuggestion("task-1");
     expect(apply).toHaveBeenCalledTimes(2);
@@ -945,5 +945,56 @@ describe("historical scope boundaries", () => {
     expect(desk.api.revokePreviewToken).toHaveBeenCalledWith("read");
     expect(panel.last()?.outcome).toBe(malicious?"failed":"completed");
     if (!malicious) expect(panel.last()?.messages.some(item=>item.text==="LOCAL-A-19")).toBe(true);
+  });
+});
+
+
+describe("N27-01 public results never deliver the review staging file", () => {
+  const source = "/external/OD27-attachment.docx";
+  const proposal = "/external/.officedex-proposal-3299282633/OD27-attachment.modified.docx";
+  it("the original attachment prompt delivers only the saved source, including replay and Undo", async () => {
+    const { readFileSync } = await import("node:fs");
+    const prompt = readFileSync("e2e/fixtures/qa27/prompt.txt", "utf8");
+    const desk = scripted(); desk.addDocument({ id: "original", filePath: source, documentType: "docx" });
+    const service = createAgentService(desk.api); const panel = listen(service);
+    await service.send(message(prompt, { attachments: [{id:"a",path:source,name:"OD27-attachment.docx",size:41411}] }));
+    expect(desk.calls.generate).toHaveLength(0);
+    expect(desk.calls.modify).toHaveLength(1);
+    desk.push({...completed("task-1", proposal, "docx"), event_id:"output", type:"task.output"});
+    expect(panel.last()?.artifact).toBeUndefined();
+    desk.push(completed("task-1", proposal, "docx"));
+    await vi.waitFor(() => expect(panel.last()?.suggestion?.applied).toBe(true));
+    expect(panel.last()?.artifact?.path).toBe(source);
+    // A follow-up still targets the original after the staging library row is gone.
+    await service.send(message("Fix another typo"));
+    expect(desk.calls.modify.at(-1)?.sourceFile).toBe(source);
+    expect(desk.calls.generate).toHaveLength(0);
+    const restored = createAgentService(desk.api); const replay = listen(restored);
+    desk.push({...completed("task-1", proposal, "docx"), event_id:"replay"});
+    expect(replay.last()?.artifact?.path).toBe(source);
+    expect(replay.last()?.suggestion?.undoable).toBe(false);
+    await service.undoSuggestion("task-1");
+    expect(panel.last()?.artifact).toBeUndefined();
+    expect(panel.last()?.suggestion?.applied).toBe(false);
+    await service.rejectSuggestion!("task-1");
+    expect(panel.last()?.artifact).toBeUndefined();
+    expect(panel.last()?.suggestion).toBeNull();
+  });
+  it("keeps proposal bytes private even if review state is unavailable", () => {
+    const desk = scripted(); const service = createAgentService(desk.api); const panel = listen(service);
+    desk.push(completed("task-1", proposal, "docx"));
+    expect(panel.last()?.artifact).toBeUndefined();
+  });
+  it("publishes an explicitly requested copy without applying it to the source", async () => {
+    const desk = scripted(); desk.addDocument({id:"original",filePath:source,documentType:"docx"});
+    const publish = vi.fn(async () => ({filePath:"/external/OD27-attachment.modified.docx",fileName:"OD27-attachment.modified.docx",documentType:"docx"}));
+    desk.api.publishArtifactCopy = publish;
+    const apply = vi.spyOn(desk.api,"applyArtifactSuggestion");
+    const service = createAgentService(desk.api); const panel = listen(service);
+    await service.send(message("Edit the file and save a separate modified copy", {activeFileId:"original"}));
+    desk.push(completed("task-1",proposal,"docx"));
+    await vi.waitFor(() => expect(panel.last()?.artifact?.path).toBe("/external/OD27-attachment.modified.docx"));
+    expect(publish).toHaveBeenCalledOnce();expect(apply).not.toHaveBeenCalled();
+    expect(panel.last()?.suggestion).toBeNull();
   });
 });

@@ -137,6 +137,7 @@ export function createRealE2EAPI(endpoint: string): DesktopAPI {
       rpc<DocumentRecord>("CreateBlankDocument", { documentType, workspaceId }),
     modify: (input: ModifyInput) =>
       rpc<{ taskId: string; sessionId: string; status: string }>("Modify", input),
+    publishArtifactCopy: (input) => rpc<Artifact>("PublishArtifactCopy", input),
     applyArtifactSuggestion: (input: ArtifactSuggestionFileInput) =>
       rpc<void>("ApplyArtifactSuggestion", input),
     undoArtifactSuggestion: (input: ArtifactSuggestionFileInput) =>

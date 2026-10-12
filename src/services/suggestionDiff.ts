@@ -1,3 +1,4 @@
+import { isInternalProposal } from "../shared/artifactPaths";
 import { strFromU8, unzipSync } from "fflate";
 import type { DesktopAPI } from "../shared/types";
 
@@ -35,11 +36,9 @@ export async function readSuggestionChanges(api: DesktopAPI, source: string, art
 }
 
 export async function readOfficeTextParts(api: DesktopAPI, filePath: string): Promise<Map<string, string>> {
-    // A modification of a selected external file lives beside that file.
-    // Its sibling proposal is outside preview roots and has not been opened
-    // yet. Review explicitly opens these two files; register each exact path
-    // through the same import boundary as Open, never trust its whole folder.
-    await api.importLocalFile(filePath);
+    // The completion/history listener grants the exact proposal path. Importing
+    // it here would turn a Review read into a second library document (N27-01).
+    if (!isInternalProposal(filePath)) await api.importLocalFile(filePath);
     const grant = await api.issuePreviewToken({ filePath, fileName: filePath.split(/[\\/]/).pop()!, documentType: filePath.split(".").pop()! });
     try {
       const { data } = await api.readArtifactFile(grant.token);

@@ -427,3 +427,42 @@ func (a *App) DuplicateDocument(documentID string) (types.DocumentRecord, error)
 	}
 	return copied, nil
 }
+
+// PublishArtifactCopy is used only when the user explicitly asks for a copy.
+// A private proposal must be materialized outside its reserved directory before
+// it becomes an independently editable result. Never overwrite an existing file.
+func (a *App) PublishArtifactCopy(input ArtifactSuggestionFileInput) (types.Artifact, error) {
+	if !filepath.IsAbs(input.SourceFile) || !filepath.IsAbs(input.ArtifactFile) || strings.TrimSpace(input.SuggestionID) == "" {
+		return types.Artifact{}, errors.New("copy requires a task and absolute paths")
+	}
+	if err := requireRegularSuggestionFile(input.SourceFile); err != nil {
+		return types.Artifact{}, err
+	}
+	if !types.IsInternalProposal(input.ArtifactFile) || types.IsInternalProposal(input.SourceFile) {
+		return types.Artifact{}, errors.New("invalid proposal copy paths")
+	}
+	if err := requireRegularSuggestionFile(input.ArtifactFile); err != nil {
+		return types.Artifact{}, err
+	}
+	ext := filepath.Ext(input.SourceFile)
+	if !strings.EqualFold(ext, filepath.Ext(input.ArtifactFile)) {
+		return types.Artifact{}, errors.New("proposal type does not match source")
+	}
+	destination, err := uniqueDestination(filepath.Dir(input.SourceFile), strings.TrimSuffix(filepath.Base(input.SourceFile), ext)+".modified", ext)
+	if err != nil {
+		return types.Artifact{}, err
+	}
+	if err := copyFile(input.ArtifactFile, destination); err != nil {
+		return types.Artifact{}, err
+	}
+	artifact := types.Artifact{TaskID: input.SuggestionID, FilePath: destination, FileName: filepath.Base(destination), DocumentType: strings.TrimPrefix(strings.ToLower(ext), ".")}
+	if a.previewReg != nil {
+		if err := a.previewReg.AllowSelectedArtifact(artifact); err != nil {
+			return types.Artifact{}, err
+		}
+	}
+	if err := a.RecordArtifact(artifact); err != nil {
+		return types.Artifact{}, err
+	}
+	return artifact, nil
+}

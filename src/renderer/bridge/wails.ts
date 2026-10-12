@@ -276,6 +276,11 @@ export function createWailsAPI(): DesktopAPI {
       const result = await WailsApp.Modify(toWails(input));
       return { taskId: result.taskId, sessionId: result.sessionId, status: result.status, sourceSHA256: result.sourceSHA256 };
     },
+    publishArtifactCopy: async (input) => {
+      const fn = optionalWailsFunction<(arg: never) => Promise<Artifact>>("PublishArtifactCopy");
+      if (!fn) throw new Error("Saving an edited copy is unavailable");
+      return fn(input as never);
+    },
     applyArtifactSuggestion: async (input: ArtifactSuggestionFileInput) => {
       const fn = optionalWailsFunction<(arg: never) => Promise<void>>("ApplyArtifactSuggestion");
       if (!fn) throw new Error("Applying an agent suggestion requires a newer OfficeDex runtime.");
