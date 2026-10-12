@@ -10,6 +10,7 @@ if [[ ! -f "${cli}/internal/runtime/modify/docx_exact_test.go" ]]; then
   exit 1
 fi
 ./node_modules/.bin/vitest run
+node --test scripts/verify-running-engine.test.mjs
 node scripts/verify-bridge-types.mjs
 node --test scripts/stage-writer-fonts.test.mjs scripts/embedded-frame-clock.test.mjs scripts/sync-writer-component.test.mjs scripts/sync-presentation-component.test.mjs scripts/verify-editor-shortcuts.browser.test.mjs scripts/verify-shell-styles.test.mjs
 # ./... also traverses local dist-artifacts source archives. Test owned sources.

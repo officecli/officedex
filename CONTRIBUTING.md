@@ -153,6 +153,30 @@ Versions are plain `x.y.z`; the client compares three numeric segments and ignor
 
 ### Shipping a release (macOS arm64 today; Intel and Windows are "coming soon")
 
+Before final-package acceptance **and again before publishing a Release or update
+manifest**, launch the exact signed app being accepted and trigger an engine
+operation (for example, run a minimal document-generation smoke task). Inspect its PID and
+run the following check with the active profile's settings file:
+
+```bash
+ps -axo pid=,ppid=,comm=
+node scripts/verify-running-engine.mjs \
+  --app /absolute/path/OfficeDex.app --pid <app-pid> \
+  --settings "$HOME/Library/Application Support/OfficeDex/settings.json" \
+  --expected-version X.Y.Z --out /absolute/path/engine-verification.json
+```
+
+This gate requires an actual OfficeCLI descendant of the selected app, rejects
+engines outside that bundle and persisted `bridgeBinaryPath` overrides, and
+records app/engine paths, PIDs, SHA-256 and the engine's full build version. Clear
+obsolete overrides while the app is stopped, then restart it; do not pin settings
+to a release-specific path. Preserve the JSON with the source revision and final
+package provenance. Re-run after any restart, settings change or bundle rebuild.
+For browser E2E, also record its explicitly selected engine; that isolated host
+does not validate the native app's profile. On 2026-10-12 an old native profile
+selected a September build while E2E correctly used the October bundled engine.
+An app version label or a standalone `officecli version` is insufficient.
+
 1. Bump `version` in `package.json` and `productVersion` in `wails.json`.
 2. Compile and notarize on this machine: `bash scripts/build-mac-dmg.sh` (Intel: `TARGET_ARCH=x64`). That writes `dist-artifacts/OfficeDex-<v>-darwin-<arch>.dmg` and the updater zip `OfficeDex-v<v>-darwin-<arch>.zip`.
 3. Create the GitHub Release with both files, keeping the file names (the manifest derives asset URLs from `releases/download/v<v>/<basename>`). Not a pre-release: `releases/latest` must move to it.
