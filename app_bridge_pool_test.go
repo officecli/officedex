@@ -147,6 +147,15 @@ func TestEnsureBridgeForCwdStartsOneClientWhenCalledConcurrently(t *testing.T) {
 	for _, transport := range started {
 		_ = transport.Kill()
 	}
+	// Close the pooled client the way shutdown does, so its bridge log file
+	// under userDataDir is released before TempDir's cleanup: Windows cannot
+	// delete a file another handle still has open.
+	app.mu.Lock()
+	clients := app.takeBridgeClientsLocked()
+	app.mu.Unlock()
+	for _, client := range clients {
+		client.Close()
+	}
 	app.drainEventWrites()
 }
 

@@ -18,7 +18,7 @@
 
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { chmod, copyFile, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -336,7 +336,15 @@ async function sha256File(filePath) {
 }
 
 function runTar(tarballPath, dest) {
-  const result = spawnSync("tar", ["-xzf", tarballPath, "-C", dest], { stdio: "inherit" });
+  // On Windows prefer the system bsdtar: Git's GNU tar, first on PATH in a
+  // bash step, reads `C:\...` as a remote host. The archive is named relative
+  // to its directory for the same reason.
+  let tar = "tar";
+  if (process.platform === "win32") {
+    const system = path.join(process.env.SystemRoot || "C:\\Windows", "System32", "tar.exe");
+    if (existsSync(system)) tar = system;
+  }
+  const result = spawnSync(tar, ["-xzf", path.basename(tarballPath), "-C", dest], { cwd: path.dirname(tarballPath), stdio: "inherit" });
   if (result.status !== 0) {
     fail(`tar -xzf ${tarballPath} exited with code ${result.status}`);
   }

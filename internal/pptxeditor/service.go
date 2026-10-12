@@ -712,11 +712,7 @@ func replacePptxAtomically(originalPath, exportedPath string) error {
 	if err := os.Rename(exportedPath, originalPath); err != nil {
 		return err
 	}
-	if directory, err := os.Open(filepath.Dir(originalPath)); err == nil {
-		defer directory.Close()
-		return directory.Sync()
-	}
-	return nil
+	return atomicfile.SyncDir(filepath.Dir(originalPath))
 }
 
 func validatePptx(path string) error {
