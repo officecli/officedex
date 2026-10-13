@@ -20,8 +20,10 @@ const PPTX_CONTENT_TYPE =
   "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
 interface LoadedPresentation {
-  /** data: URI → original mop-asset:/ URI, applied before content reaches the host. */
+  /** Inlined URI → original mop-asset:/ URI, applied before content reaches the host. */
   assetUriRestore: Map<string, string>;
+  /** Object URLs minted for assets too large to inline; revoked when replaced. */
+  assetObjectUrls: string[];
   sessionId: string;
   fileId: string;
   title: string;
@@ -140,7 +142,17 @@ function mopEndpoint(url: URL): string | undefined {
  * images render in every context (canvas, SVG defs, the thumbnail worker);
  * restoreAssetUris swaps them back before content reaches the host so the
  * mop-convert export keeps its mop-asset:/ contract.
+ *
+ * The document codec refuses any single string over 8 MiB, and one such
+ * string fails the whole deck ("resource limit exceeded for string bytes"), so
+ * a deck with one large photo could not be opened at all. An asset whose data:
+ * URI would come near that is handed over as a blob: object URL instead, which
+ * the engine also accepts. It is a few dozen characters long, at the cost that
+ * a context which cannot follow external references (an SVG rasterised on its
+ * own) draws that picture blank.
  */
+export const INLINE_ASSET_BYTE_LIMIT = 4 * 1024 * 1024;
+
 function base64FromBytes(data: Uint8Array): string {
   let binary = "";
   const CHUNK = 0x8000;
@@ -167,9 +179,10 @@ function visitResourceUris(node: unknown, replace: (uri: string) => string | und
 export function inlineAssetUris(
   content: Uint8Array,
   assets: Map<string, { contentType: string; data: Uint8Array }>,
-): { content: Uint8Array; restore: Map<string, string> } {
+): { content: Uint8Array; restore: Map<string, string>; objectUrls: string[] } {
   const restore = new Map<string, string>();
-  if (assets.size === 0) return { content, restore };
+  const objectUrls: string[] = [];
+  if (assets.size === 0) return { content, restore, objectUrls };
   try {
     const document = JSON.parse(new TextDecoder().decode(content));
     const inlined = new Map<string, string>();
@@ -179,16 +192,28 @@ export function inlineAssetUris(
       if (cached) return cached;
       const asset = assets.get(uri.slice("mop-asset:/".length));
       if (!asset) return undefined;
-      const dataUri = `data:${asset.contentType || "application/octet-stream"};base64,${base64FromBytes(asset.data)}`;
-      inlined.set(uri, dataUri);
-      restore.set(dataUri, uri);
-      return dataUri;
+      const contentType = asset.contentType || "application/octet-stream";
+      let inlineUri: string;
+      if (asset.data.byteLength > INLINE_ASSET_BYTE_LIMIT) {
+        inlineUri = URL.createObjectURL(new Blob([asset.data.slice()], { type: contentType }));
+        objectUrls.push(inlineUri);
+      } else {
+        inlineUri = `data:${contentType};base64,${base64FromBytes(asset.data)}`;
+      }
+      inlined.set(uri, inlineUri);
+      restore.set(inlineUri, uri);
+      return inlineUri;
     });
-    if (restore.size === 0) return { content, restore };
-    return { content: new TextEncoder().encode(JSON.stringify(document)), restore };
+    if (restore.size === 0) return { content, restore, objectUrls };
+    return { content: new TextEncoder().encode(JSON.stringify(document)), restore, objectUrls };
   } catch {
-    return { content, restore };
+    revokeAssetObjectUrls(objectUrls);
+    return { content, restore: new Map(), objectUrls: [] };
   }
+}
+
+export function revokeAssetObjectUrls(objectUrls: string[]) {
+  for (const url of objectUrls) URL.revokeObjectURL(url);
 }
 
 export function restoreAssetUris(content: Uint8Array, restore: Map<string, string>): Uint8Array {
@@ -359,7 +384,7 @@ function waitForPresentation(): Promise<LoadedPresentation> {
           data: new Uint8Array(asset.data),
         });
       }
-      const { content: inlinedContent, restore } = inlineAssetUris(new Uint8Array(message.content), assets);
+      const { content: inlinedContent, restore, objectUrls } = inlineAssetUris(new Uint8Array(message.content), assets);
       loaded = {
         sessionId: message.sessionId,
         fileId: message.fileId,
@@ -369,6 +394,7 @@ function waitForPresentation(): Promise<LoadedPresentation> {
         documentRevision: message.documentRevision ?? 0,
         assets,
         assetUriRestore: restore,
+        assetObjectUrls: objectUrls,
       };
       window.history.replaceState(
         {},
@@ -694,7 +720,32 @@ async function swapDocument(message: Record<string, unknown>): Promise<number> {
     assets.set(entry.path, { contentType: entry.contentType, data: new Uint8Array(entry.data) });
   }
   const revision = Number(message.documentRevision ?? 0);
-  const { content, restore } = inlineAssetUris(new Uint8Array(message.content as ArrayBuffer), assets);
+  const { content, restore, objectUrls } = inlineAssetUris(new Uint8Array(message.content as ArrayBuffer), assets);
+  try {
+    await replaceDocument(host, state, content, revision, message);
+  } catch (error) {
+    revokeAssetObjectUrls(objectUrls);
+    throw error;
+  }
+  // Only once the editor holds the new document does it become what this
+  // session serves and saves; a failed swap must leave the old one in place.
+  revokeAssetObjectUrls(state.assetObjectUrls);
+  state.content = content;
+  state.assets = assets;
+  state.assetUriRestore = restore;
+  state.assetObjectUrls = objectUrls;
+  state.documentRevision = revision;
+  if (typeof message.title === "string" && message.title) state.title = message.title;
+  return revision;
+}
+
+async function replaceDocument(
+  host: Awaited<ReturnType<typeof waitForDocumentHost>>,
+  state: LoadedPresentation,
+  content: Uint8Array,
+  revision: number,
+  message: Record<string, unknown>,
+) {
   await host.replace(
     {
       content,
@@ -709,14 +760,6 @@ async function swapDocument(message: Record<string, unknown>): Promise<number> {
       activeSlide: typeof message.activeSlide === "number" ? message.activeSlide : undefined,
     },
   );
-  // Only once the editor holds the new document does it become what this
-  // session serves and saves; a failed swap must leave the old one in place.
-  state.content = content;
-  state.assets = assets;
-  state.assetUriRestore = restore;
-  state.documentRevision = revision;
-  if (typeof message.title === "string" && message.title) state.title = message.title;
-  return revision;
 }
 
 function installDocumentSwapBridge() {
